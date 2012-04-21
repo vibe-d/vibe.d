@@ -8,14 +8,15 @@
 module vibe.vpm.vpm;
 
 // todo: cleanup imports.
-import std.array;
-import std.file;
-import std.exception;
 import std.algorithm;
-import std.zip;
-import std.typecons;
-import std.string;
+import std.array;
 import std.conv;
+import std.exception;
+import std.file;
+import std.path;
+import std.string;
+import std.typecons;
+import std.zip;
 
 import vibe.core.log;
 import vibe.core.file;
@@ -66,7 +67,7 @@ private class Application {
 	/// Gathers information
 	string info() const {
 		if(!m_main) 
-			return "-Unregocgnized application in '"~to!string(m_root)~"'";
+			return "-Unregocgnized application in '"~to!string(m_root)~"' (properly no package.json in this directory)";
 		string s = "-Application identifier: " ~ m_main.name;
 		s ~= "\n" ~ m_main.info();
 		s ~= "\n-Installed modules:";
@@ -94,9 +95,16 @@ private class Application {
 			m_main = new Package(m_root);
 			if(exists(to!string(m_root~"modules"))) {
 				foreach( string pkg; dirEntries(to!string(m_root ~ "modules"), SpanMode.shallow) ) {
-					enforce( pkg !in m_packages );
-					auto p = new Package( Path(pkg) );
-					m_packages[p.name] = p;
+					if( !isDir(pkg) ) continue;
+					try {
+						auto p = new Package( Path(pkg) );
+						enforce( p.name !in m_packages, "Duplicate package: " ~ p.name );
+						m_packages[p.name] = p;
+					}
+					catch(Throwable e) {
+						logWarn("The module '%s' in '%s' was not identified as a vibe package.", Path(pkg).head, pkg);
+						continue;
+					}
 				}
 			}
 		}
@@ -223,6 +231,52 @@ private class Application {
 		
 		return actions;
 	}
+	
+	void createZip(string destination) {
+		string[] ignores;
+		auto ignoreFile = to!string(m_root~"vpm.ignore.txt");
+		if(exists(ignoreFile)){
+			auto iFile = openFile(ignoreFile);
+			scope(exit) iFile.close();
+			while(!iFile.empty) 
+				ignores ~= to!string(cast(char[])iFile.readLine());
+			logDebug("Using '%s' found by the application.", ignoreFile);
+		}
+		else {
+			ignores ~= ".svn/*";
+			ignores ~= ".git/*";
+			ignores ~= ".hg/*";
+			logDebug("The '%s' file was not found, defaulting to ignore:", ignoreFile);
+		}
+		ignores ~= "modules/*"; // modules will not be included
+		foreach(string i; ignores)
+			logDebug(" " ~ i);
+		
+		logDebug("Creating zip file from application: " ~ m_main.name);
+		auto archive = new ZipArchive();
+		foreach( string file; dirEntries(to!string(m_root), SpanMode.depth) ) {
+			enforce( Path(file).startsWith(m_root) );
+			auto p = Path(file);
+			p = p[m_root.length..p.length];
+			if(isDir(file)) continue;
+			foreach(string ignore; ignores) 
+				if(globMatch(file, ignore))
+					would work, as I see it;
+					continue;
+			logDebug(" Adding member: %s", p);
+			ArchiveMember am = new ArchiveMember();
+			am.name = to!string(p);
+			auto f = openFile(file);
+			scope(exit) f.close();
+			am.expandedData = f.readAll();
+			archive.addMember(am);
+		}
+		
+		logDebug(" Writing zip: %s", destination);
+		auto dst = openFile(destination, FileMode.CreateTrunc);
+		scope(exit) dst.close();
+		dst.write(cast(ubyte[])archive.build());
+	}
 }
 
 /// The default supplier for packages, which is the registry
@@ -235,6 +289,12 @@ PackageSupplier defaultPackageSupplier() {
 /// The Vpm or Vibe Package Manager helps in getting the applications
 /// dependencies up and running.
 class Vpm {
+	private {
+		Path m_root;
+		Application m_app;
+		PackageSupplier m_packageSupplier;
+	}
+	
 	/// Initiales the package manager for the vibe application
 	/// under root. 
 	this(Path root, PackageSupplier ps = defaultPackageSupplier()) {
@@ -261,6 +321,11 @@ class Vpm {
 		scope(exit) file.close();
 		string deps = source~"\n"~views;
 		file.write(cast(ubyte[])deps);
+	}
+	
+	/// Lists all installed modules
+	void list() {
+		logInfo(m_app.info());
 	}
 	
 	/// Performs installation and uninstallation as necessary for
@@ -314,16 +379,15 @@ class Vpm {
 		return newActions.length == 0;
 	}
 	
+	/// Creates a zip from the application.
+	void createZip(string zipFile) {
+		m_app.createZip(zipFile);
+	}
+	
 	/// Prints some information to the log.
 	void info() {
 		logInfo("Status for %s", m_root);
 		logInfo("\n" ~ m_app.info());
-	}
-	
-	private {
-		Path m_root;
-		Application m_app;
-		PackageSupplier m_packageSupplier;
 	}
 
 	/// Installs the package matching the dependency into the application.

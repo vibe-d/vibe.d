@@ -2,6 +2,9 @@
 export VIBEPATH=$(dirname $(readlink $(which $0)))
 export LIBS="-L-levent -L-levent_openssl -L-lssl -L-lcrypto"
 export DFLAGS="-g -w -property --force"
+
+rdmd $2 $1 $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource $VIBEPATH/vpm.d
+
 if [ -f "deps.txt" ]; then
 	rdmd $2 $1 $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource @deps.txt source/app.d
 else
