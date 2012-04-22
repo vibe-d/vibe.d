@@ -73,6 +73,7 @@ void runTask(void delegate() task)
 			logTrace("entering task.");
 			task();
 			logTrace("exiting task.");
+			clearTaskLocals();
 		});
 	s_tasks ~= f;
 	logDebug("initial task call");
@@ -211,6 +212,13 @@ package event_base* vibeGetEventLoop()
 package evdns_base* vibeGetDnsBase()
 {
 	return s_dnsBase;
+}
+
+private void clearTaskLocals()
+{
+	auto self = Fiber.getThis();
+	auto ptls = self in s_taskLocalStorage;
+	if( ptls ) s_taskLocalStorage.remove(self);
 }
 
 /// private
