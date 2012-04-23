@@ -106,9 +106,9 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 				foreach( ctx; g_contexts ){
 					if( ctx.settings.port != settings.port ) continue;
 					if( countUntil(ctx.settings.bindAddresses, addr) < 0 ) continue;
-					enforce(ctx.settings.hostName != settings.hostName,
+					/*enforce(ctx.settings.hostName != settings.hostName,
 						"A server with the host name '"~settings.hostName~"' is already "
-						"listening on "~addr~":"~to!string(settings.port)~".");
+						"listening on "~addr~":"~to!string(settings.port)~".");*/
 				}
 				found_listener = true;
 				break;

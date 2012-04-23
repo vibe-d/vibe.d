@@ -75,6 +75,7 @@ void processCommandLineArgs(ref string[] args)
 	if( verbose ) setLogLevel(LogLevel.Trace);
 
 	setVibeDistHost(disthost, distport);
+	startListening();
 
 	if( !setUID(uid, gid) ){
 		logError("Failed to set UID=%d, GID=%d", uid, gid);
