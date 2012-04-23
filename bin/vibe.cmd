@@ -4,7 +4,9 @@ set BINDIR=%~dp0..\lib\bin
 set LIBS=ws2_32.lib %LIBDIR%\event2.lib %LIBDIR%\eay.lib %LIBDIR%\ssl.lib
 set DFLAGS=-debug -g -w -property --force
 set EXEDIR=%TEMP%\.rdmd\source
-mkdir %EXEDIR%
+if NOT EXIST %EXEDIR% (
+	mkdir %EXEDIR%
+)
 copy %~dp0*.dll %EXEDIR% > nul 2>&1
 
 rem Update the application.
