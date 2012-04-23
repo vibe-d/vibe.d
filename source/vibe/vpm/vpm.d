@@ -233,6 +233,8 @@ private class Application {
 	}
 	
 	void createZip(string destination) {
+		assert(false); // not properly implemented
+		/*
 		string[] ignores;
 		auto ignoreFile = to!string(m_root~"vpm.ignore.txt");
 		if(exists(ignoreFile)){
@@ -276,6 +278,7 @@ private class Application {
 		auto dst = openFile(destination, FileMode.CreateTrunc);
 		scope(exit) dst.close();
 		dst.write(cast(ubyte[])archive.build());
+		*/
 	}
 }
 
