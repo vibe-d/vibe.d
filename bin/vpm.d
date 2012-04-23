@@ -27,7 +27,7 @@ static this() {
 	Vpm vpm = new Vpm(Path(appPath), new RegistryPS(url));
 	logDebug("Initialized");
 	
-	vpm.update(true);
+	vpm.update();
 	vpm.createDepsTxt();
 	//vpm.createZip("testApp.zip");
 

@@ -441,29 +441,45 @@ class Vpm {
 		// In a github zip, the actual contents are in a subfolder
 		auto prefixInPackage = getPrefix(archive);
 		
+		Path getCleanedPath(string fileName) {
+			auto path = Path(fileName);
+			if(prefixInPackage != Path() && !path.startsWith(prefixInPackage)) return Path();
+			return path[prefixInPackage.length..path.length];
+		}
+		
 		// install
 		mkdirRecurse(to!string(destination));
 		Journal journal = new Journal;
 		foreach(ArchiveMember a; archive.directory) {
-			auto path = Path(a.name);
-			if(prefixInPackage != Path() && !path.startsWith(prefixInPackage)) continue;
-			auto cleanedPath = path[prefixInPackage.length..path.length];
+			if(!isPathFromZip(a.name)) continue;
+			
+			auto cleanedPath = getCleanedPath(a.name);
+			if(cleanedPath.empty) continue;
+			auto fileName = to!string(destination~cleanedPath);
+			
+			if( exists(fileName) && isDir(fileName) ) continue;
+			
+			logDebug("Creating %s", fileName);
+			mkdirRecurse(fileName);
+			auto subPath = cleanedPath;
+			for(size_t i=0; i<subPath.length; ++i)
+				journal.add(Journal.Entry(Journal.Type.Directory, subPath[0..i+1]));
+		}
+		
+		foreach(ArchiveMember a; archive.directory) {
+			if(isPathFromZip(a.name)) continue;
+
+			auto cleanedPath = getCleanedPath(a.name);
 			if(cleanedPath.empty) continue;
 			
 			auto fileName = destination~cleanedPath;
-			if(isPathFromZip(a.name)) {
-				mkdirRecurse(to!string(to!string(fileName)));
-				auto subPath = cleanedPath;
-				for(size_t i=0; i<subPath.length; ++i)
-					journal.add(Journal.Entry(Journal.Type.Directory, subPath[0..i+1]));
-			}
-			else {
-				enforce(exists(to!string(fileName.parentPath)));
-				auto dstFile = openFile(to!string(fileName), FileMode.CreateTrunc);
-				scope(exit) dstFile.close();
-				dstFile.write(archive.expand(a));
-				journal.add(Journal.Entry(Journal.Type.RegularFile, cleanedPath));
-			}
+			
+			logDebug("Creating %s", fileName);
+			enforce(exists(to!string(fileName.parentPath)));
+			auto dstFile = openFile(to!string(fileName), FileMode.CreateTrunc);
+			scope(exit) dstFile.close();
+			dstFile.write(archive.expand(a));
+			journal.add(Journal.Entry(Journal.Type.RegularFile, cleanedPath));
 		}
 		
 		// Write journal
