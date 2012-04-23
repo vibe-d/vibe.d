@@ -342,11 +342,11 @@ private struct DietParser {
 		ret = endString(in_string);
 		ret ~= StreamVariableName ~ ".write(\"\\n\", false);\n";
 		if( line.length >= 1 && line[0] == '=' ){
-			ret ~= StreamVariableName ~ ".write(htmlEscape(toString(";
+			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
 			ret ~= line[1 .. $];
 			ret ~= ")";
 		} else if( line.length >= 2 && line[0 .. 2] == "!=" ){
-			ret ~= StreamVariableName ~ ".write(toString(";
+			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= line[2 .. $];
 		} else {
 			ret ~= StreamVariableName ~ ".write(htmlEscape(";
@@ -415,9 +415,9 @@ private struct DietParser {
 		string textstring;
 		bool textstring_isdynamic = true;
 		if( i < line.length && line[i] == '=' ){
-			textstring = "htmlEscape(toString("~ctstrip(line[i+1 .. line.length])~"))";
+			textstring = "htmlEscape(_toString("~ctstrip(line[i+1 .. line.length])~"))";
 		} else if( i+1 < line.length && line[i .. i+2] == "!=" ){
-			textstring = "toString("~ctstrip(line[i+2 .. line.length])~")";
+			textstring = "_toString("~ctstrip(line[i+2 .. line.length])~")";
 		} else {
 			if( hasInterpolations(line[i .. line.length]) ){
 				textstring = "htmlEscape("~buildInterpolatedString(line[i .. line.length], false, false)~")";
@@ -512,7 +512,7 @@ private struct DietParser {
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
-					ret ~= "toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
+					ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
 					i++;
 					start = i;
 				} else assertp(false, "# must be followed by '{' or '#'.");
@@ -747,7 +747,7 @@ private bool isAlpha(char ch)
 	return ch == ' ';
 }*/
 
-private string toString(T)(T v)
+private string _toString(T)(T v)
 {
 	static if( is(T == string) ) return v;
 	else static if( __traits(compiles, v.opCast!string()) ) return cast(string)v;
