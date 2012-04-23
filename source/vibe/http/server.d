@@ -806,7 +806,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 			// Url parsing if desired
 			if( settings.options & HttpServerOption.ParseURL ){
 				auto url = Url.parse(req.url);
-				req.path = url.path.toString();
+				req.path = url.pathString;
 				req.querystring = url.querystring;
 				req.username = url.username;
 				req.password = url.password;

@@ -137,7 +137,7 @@ class UrlRouter : IHttpServerRequestHandler {
 		
 		foreach( ref r; *pr ){
 			if( r.matches(req.path, req.params) ){
-				logTrace("route match: %s %s", req.method, r.pattern);
+				logTrace("route match: %s -> %s %s", req.path, req.method, r.pattern);
 				// .. parse fields ..
 				r.cb(req, res);
 				if( res.headerWritten )

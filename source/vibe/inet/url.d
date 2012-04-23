@@ -19,6 +19,7 @@ import std.string;
 */
 struct Url {
 	string schema;
+	string pathString;
 	Path path;
 	string host;
 	ushort port;
@@ -91,6 +92,7 @@ struct Url {
 			str = str[0 .. qi];
 		}
 
+		ret.pathString = str;
 		ret.path = Path(str);
 
 		return ret;
