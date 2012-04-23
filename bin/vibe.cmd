@@ -8,7 +8,7 @@ mkdir %EXEDIR%
 copy %~dp0*.dll %EXEDIR% > nul 2>&1
 
 rem Update the application.
-rdmd %DFLAGS% -I%~dp0..\source -Jviews -Isource %LIBS% %~dp0\vpm.d
+rdmd %DFLAGS% -of%EXEDIR%\vpm.exe -I%~dp0..\source %LIBS% %~dp0.\vpm.d
 
 rem Run the application.
 if EXIST deps.txt. (
