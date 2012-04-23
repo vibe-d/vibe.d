@@ -14,7 +14,7 @@ Contents
 
  - Install DMD using the installer on http://dlang.org/download.html
  - Unzip the vibe archive
- - Run any vibe apps using "vibe app.d"
+ - Run any vibe apps using "vibe"
 
 
 
@@ -29,7 +29,7 @@ Contents
 		brew install libevent
  - Install DMD using the installer on <http://dlang.org/download.html>
  - Unzip the vibe archive
- - Run any vibe apps using "vibe app.d"
+ - Run any vibe apps using "vibe"
 
 1-2 Installation on Mac using the install script
 ================================================
@@ -37,7 +37,7 @@ Contents
  - Install DMD using the installer on <http://dlang.org/download.html>
  - Unzip the vibe archive
  - Run the `./install.sh` script
- - Run any vibe apps using "vibe app.d"
+ - Run any vibe apps using "vibe"
 
 
 
