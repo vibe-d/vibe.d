@@ -39,3 +39,5 @@ PACKAGE MANAGER
 
  - package signing
  - third party packages
+ - custom paths in deps.txt
+ - create deps.txt in temp directory
