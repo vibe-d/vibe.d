@@ -550,7 +550,8 @@ final class HttpServerResponse : HttpResponse {
 	/**
 		Renders the given template and makes all ALIASES available to the template.
 
-		This currently suffers from multiple DMD compiler bugs.
+		This currently suffers from multiple DMD compiler bugs - use renderCompat() instead for the
+		time being.
 
 		Examples:
 			---
@@ -569,14 +570,20 @@ final class HttpServerResponse : HttpResponse {
 		Compatibility version of render() that takes a list of explicit names and types instead
 		of variable aliases.
 
-		Note that the variables are copied inside of the template - any modification you do on them
-		from within the template will get lost.
+		This version of render() works around a compiler bug in DMD (Issue 2962). You should use
+		this method instead of render() as long as this bug is not fixed.
+
+		Note that the variables are copied and not referenced inside of the template - any
+		modification you do on them from within the template will get lost.
 
 		Examples:
 			---
 			string title = "Hello, World!";
 			int pageNumber = 1;
-			res.renderCompat!("mytemplate.jd", string, "title", int, "pageNumber")(title, pageNumber);
+			res.renderCompat!("mytemplate.jd",
+				string, "title",
+				int, "pageNumber")
+				(Variant(title), Variant(pageNumber));
 			---
 	*/
 	void renderCompat(string template_file, TYPES_AND_NAMES...)(Variant[] args...)
