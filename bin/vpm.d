@@ -16,12 +16,13 @@ import vibe.vpm.registry;
 /// Starts the VPM and updates the application in the current working directory
 /// and writes the deps.txt afterwards, so that the application can start proper.
 static this() {
-	setLogLevel(LogLevel.Debug);
-	
+	setLogLevel(LogLevel.Info);
+
 	auto appPath = getcwd();
 	logInfo("Updating application in '%s'", appPath);
 	
-	Url url = Url.parse("http://127.0.0.1:8080/registry/");
+	Url url = Url.parse("http://registry.vibed.org/");
+	//Url url = Url.parse("http://127.0.0.1:8005/");
 	logDebug("Using registry url '%s'", url);
 	
 	Vpm vpm = new Vpm(Path(appPath), new RegistryPS(url));

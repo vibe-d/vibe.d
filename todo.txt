@@ -21,6 +21,7 @@ GENERAL
  - Use the event_set_*_callback functions to log libevent messages
  - Analyze all code for memory leaks (e.g. SSLContext)
  - Add template arguments to API docs
+ - UTF files including byte order mark cannot be parsed, currently
 
 DIET TEMPLATES
 ==============
