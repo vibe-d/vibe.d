@@ -313,8 +313,7 @@ class Vpm {
 		string ipaths(bool t) { 
 			string ret;
 			foreach(s; m_app.includePaths(t)) {
-				if(ret == "") ret = (t?"-J":"-I")~s;
-				else ret ~= ";"~s;
+				ret ~= (t?"-J":"-I")~s~"\r\n";
 			}
 			return ret;
 		}
@@ -322,7 +321,7 @@ class Vpm {
 		string views = ipaths(true);
 		auto file = openFile("deps.txt", FileMode.CreateTrunc);
 		scope(exit) file.close();
-		string deps = source~"\n"~views;
+		string deps = source~views;
 		file.write(cast(ubyte[])deps);
 	}
 	
