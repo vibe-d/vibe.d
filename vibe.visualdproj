@@ -250,7 +250,7 @@
    <File path="source\vibe\stream\zlib.d" />
   </Folder>
   <Folder name="templ">
-   <File path="source\vibe\templ\dlight.d" />
+   <File path="source\vibe\templ\diet.d" />
   </Folder>
   <Folder name="textfilter">
    <File path="source\vibe\textfilter\ddoc.d" />
