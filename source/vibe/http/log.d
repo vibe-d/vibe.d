@@ -214,13 +214,13 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						ln.put(to!string(d.total!"seconds"));
 						break;
 					case 'u': //Remote user
-						ln.put(req.username);
+						ln.put(req.username.length ? req.username : "-");
 						break;
 					case 'U': //The URL path without query string
 						ln.put(req.path);
 						break;
 					case 'v': //Server name
-						ln.put(settings.hostName);
+						ln.put(settings.hostName.length ? settings.hostName : "-");
 						break;
 					default:
 						throw new Exception("Unknown directive '" ~ format[0] ~ "' in log format string");
