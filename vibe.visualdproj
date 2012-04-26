@@ -290,6 +290,7 @@
    <File path="source\vibe\core\core.d" />
    <File path="source\vibe\core\file.d" />
    <File path="source\vibe\core\log.d" />
+   <File path="source\vibe\core\mutex.d" />
    <File path="source\vibe\core\signal.d" />
    <File path="source\vibe\core\tcp.d" />
   </Folder>
