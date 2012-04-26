@@ -113,6 +113,7 @@ struct Url {
 				dst.put("//");
 				break;
 		}
+		dst.put(host);
 		dst.put(path.toString());
 		if( querystring.length ){
 			dst.put('?');
