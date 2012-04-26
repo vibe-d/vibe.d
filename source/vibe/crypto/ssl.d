@@ -9,7 +9,6 @@ module vibe.crypto.ssl;
 
 import vibe.core.log;
 
-import intf.event2.bufferevent_ssl;
 import intf.openssl;
 
 import std.exception;

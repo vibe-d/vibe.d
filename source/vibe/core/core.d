@@ -7,13 +7,15 @@
 */
 module vibe.core.core;
 
+public import vibe.core.driver;
+
 import vibe.core.log;
-import intf.event2.dns;
-import intf.event2.event;
 import std.conv;
 import std.exception;
 import std.variant;
 import core.thread;
+
+import vibe.core.drivers.libevent2;
 
 version(Posix){
 	import core.sys.posix.signal;
@@ -49,7 +51,7 @@ int start(int num_worker_threads = 1)
 	assert(num_worker_threads == 1);
 	s_eventLoopRunning = true;
 	scope(exit) s_eventLoopRunning = false;
-	if( auto err = event_base_loop(s_eventLoop, 0) != 0){
+	if( auto err = s_driver.runEventLoop() != 0){
 		if( err == 1 ){
 			logDebug("No events active, exiting message loop.");
 			return 0;
@@ -77,7 +79,7 @@ void runTask(void delegate() task)
 		});
 	s_tasks ~= f;
 	logDebug("initial task call");
-	vibeResumeTask(f);
+	s_core.resumeTask(f);
 	logDebug("run task out");
 }
 
@@ -91,7 +93,8 @@ void runTask(void delegate() task)
 */
 void yield()
 {
-	vibeYieldForEvent();
+	//s_core.yieldForEvent();
+	assert(false);
 }
 
 /**
@@ -99,7 +102,13 @@ void yield()
 */
 void sleep(double seconds)
 {
-	assert(false);
+	s_driver.sleep(seconds);
+}
+
+/// Returns the active event driver
+EventDriver getEventDriver()
+{
+	return s_driver;
 }
 
 /**
@@ -157,61 +166,53 @@ private extern(C) void extrap()
 	logTrace("exception trap");
 }
 
-package void vibeResumeTask(Fiber f, Exception event_exception = null)
-{
-	assert(f.state == Fiber.State.HOLD, "Resuming task that is " ~ (f.state == Fiber.state.TERM ? "terminated" : "running"));
-
-	if( event_exception ){
-		extrap();
-		s_exceptions[f] = event_exception;
-	}
-	
-	auto uncaught_exception = f.call(false);
-	if( uncaught_exception ){
-		extrap();
-		assert(f.state == Fiber.State.TERM);
-		logError("Task terminated with unhandled exception: %s", uncaught_exception.toString());
-	}
-	
-	if( f.state == Fiber.State.TERM ){
-		s_tasks.removeFromArray(f);
-	}
-}
-
-package void vibeYieldForEvent()
-{
-	auto fiber = Fiber.getThis();
-	if( fiber ){
-		logTrace("yield");
-		Fiber.yield();
-		logTrace("resume");
-		auto pe = fiber in s_exceptions;
-		if( pe ){
-			auto e = *pe;
-			s_exceptions.remove(fiber);
-			throw e;
-		}
-	} else {
-		assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-		if( auto err = event_base_loop(s_eventLoop, EVLOOP_ONCE) != 0){
-			if( err == 1 ){
-				logDebug("No events registered, exiting event loop.");
-				throw new Exception("No events registered in vibeYieldForEvent.");
+class VibeDriverCore : DriverCore {
+	void yieldForEvent()
+	{
+		auto fiber = Fiber.getThis();
+		if( fiber ){
+			logTrace("yield");
+			Fiber.yield();
+			logTrace("resume");
+			auto pe = fiber in s_exceptions;
+			if( pe ){
+				auto e = *pe;
+				s_exceptions.remove(fiber);
+				throw e;
 			}
-			logError("Error running event loop: %d", err);
-			throw new Exception("Error waiting for events.");
+		} else {
+			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
+			if( auto err = s_driver.processEvents() != 0){
+				if( err == 1 ){
+					logDebug("No events registered, exiting event loop.");
+					throw new Exception("No events registered in vibeYieldForEvent.");
+				}
+				logError("Error running event loop: %d", err);
+				throw new Exception("Error waiting for events.");
+			}
 		}
 	}
-}
 
-package event_base* vibeGetEventLoop()
-{
-	return s_eventLoop;
-}
+	void resumeTask(Fiber fiber, Exception event_exception = null)
+	{
+		assert(fiber.state == Fiber.State.HOLD, "Resuming task that is " ~ (fiber.state == Fiber.State.TERM ? "terminated" : "running"));
 
-package evdns_base* vibeGetDnsBase()
-{
-	return s_dnsBase;
+		if( event_exception ){
+			extrap();
+			s_exceptions[fiber] = event_exception;
+		}
+		
+		auto uncaught_exception = fiber.call(false);
+		if( uncaught_exception ){
+			extrap();
+			assert(fiber.state == Fiber.State.TERM);
+			logError("Task terminated with unhandled exception: %s", uncaught_exception.toString());
+		}
+		
+		if( fiber.state == Fiber.State.TERM ){
+			s_tasks.removeFromArray(fiber);
+		}
+	}
 }
 
 private void clearTaskLocals()
@@ -237,11 +238,11 @@ package void removeFromArray(T)(ref T[] array, T item)
 /**************************************************************************************************/
 
 private {
-	event_base* s_eventLoop;
-	evdns_base* s_dnsBase;
 	Fiber[] s_tasks;
 	Exception[Fiber] s_exceptions;
 	bool s_eventLoopRunning = false;
+	VibeDriverCore s_core;
+	EventDriver s_driver;
 }
 
 shared static this()
@@ -255,18 +256,8 @@ shared static this()
 	}
 	
 	logTrace("event_set_mem_functions");
-	// set the malloc/free versions of our runtime so we don't run into trouble
-	// because the libevent DLL uses a different one.
-	import core.stdc.stdlib;
-	event_set_mem_functions(&malloc, &realloc, &free);
-
-	// initialize libevent
-	logDebug("libevent version: %s", to!string(event_get_version()));
-	s_eventLoop = event_base_new();
-	logDebug("libevent is using %s for events.", to!string(event_base_get_method(s_eventLoop)));
-	
-	s_dnsBase = evdns_base_new(s_eventLoop, 1);
-	if( !s_dnsBase ) logError("Failed to initialize DNS lookup.");
+	s_core = new VibeDriverCore;
+	s_driver = new Libevent2Driver(s_core);
 	
 	version(Posix){
 		// support proper shutdown using signals
@@ -286,7 +277,7 @@ version(Posix){
 	{
 		logInfo("Received signal %d. Shutting down.", signal);
 
-		if( event_base_loopexit(s_eventLoop, null) ){
+		if( s_driver.exitEventLoop() ){
 			logError("Error shutting down server");
 		}
 	}

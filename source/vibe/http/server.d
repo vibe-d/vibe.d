@@ -11,6 +11,7 @@ public import vibe.core.tcp;
 public import vibe.http.common;
 public import vibe.http.session;
 
+import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
 import vibe.http.dist;
