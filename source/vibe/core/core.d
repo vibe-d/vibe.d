@@ -261,9 +261,9 @@ shared static this()
 	event_set_mem_functions(&malloc, &realloc, &free);
 
 	// initialize libevent
-	logInfo("libevent version: %s", to!string(event_get_version()));
+	logDebug("libevent version: %s", to!string(event_get_version()));
 	s_eventLoop = event_base_new();
-	logInfo("libevent is using %s for events.", to!string(event_base_get_method(s_eventLoop)));
+	logDebug("libevent is using %s for events.", to!string(event_base_get_method(s_eventLoop)));
 	
 	s_dnsBase = evdns_base_new(s_eventLoop, 1);
 	if( !s_dnsBase ) logError("Failed to initialize DNS lookup.");

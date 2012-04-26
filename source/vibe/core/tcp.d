@@ -251,12 +251,12 @@ class TcpConnection : Stream {
 		m_fiber = Fiber.getThis();
 		m_ctx = ctx;
 
-		/*char buf[64];
+		char buf[64];
 		if( ctx.remote_addr4.sin_family == AF_INET )
-			evutil_inet_ntop(AF_INET, &ctx.remote_addr4, buf.ptr, buf.length);
+			evutil_inet_ntop(AF_INET, &ctx.remote_addr4.sin_addr, buf.ptr, buf.length);
 		else
-			evutil_inet_ntop(AF_INET6, &ctx.remote_addr6, buf.ptr, buf.length);
-		m_peerAddress = to!string(buf.ptr).idup;*/
+			evutil_inet_ntop(AF_INET6, &ctx.remote_addr6.sin6_addr, buf.ptr, buf.length);
+		m_peerAddress = to!string(buf.ptr).idup;
 	}
 	
 	~this()

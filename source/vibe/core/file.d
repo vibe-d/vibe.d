@@ -54,7 +54,8 @@ private {
 
 enum FileMode {
 	Read,
-	CreateTrunc
+	CreateTrunc,
+	Append
 }
 
 FileStream openFile(string path, FileMode mode = FileMode.Read)
@@ -73,10 +74,17 @@ class FileStream : Stream {
 	protected this(string path, FileMode mode)
 	{
 		m_mode = mode;
-		if( mode == FileMode.Read )
-			m_fileDescriptor = open(path.toStringz(), O_RDONLY|O_BINARY);
-		else
-			m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY);
+		final switch(m_mode){
+			case FileMode.Read:
+				m_fileDescriptor = open(path.toStringz(), O_RDONLY|O_BINARY);
+				break;
+			case FileMode.CreateTrunc:
+				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY);
+				break;
+			case FileMode.Append:
+				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY);
+				break;
+		}
 		if( m_fileDescriptor < 0 )
 			throw new Exception("Failed to open '"~path~"' for reading.");
 			
@@ -136,7 +144,7 @@ class FileStream : Stream {
 
 	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
 
-
+	alias Stream.write write;
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{
 		assert(this.writable);

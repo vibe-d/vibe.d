@@ -30,6 +30,7 @@ HttpServerRequestDelegate performBasicAuth(string realm, bool delegate(string us
 			string password = user_pw[idx+1 .. $];
 
 			if( pwcheck(user, password) ){
+				req.username = user;
 				// let the next stage handle the request
 				return;
 			}
@@ -55,8 +56,10 @@ string performBasicAuth(HttpServerRequest req, HttpServerResponse res, string re
 		string user = user_pw[0 .. idx];
 		string password = user_pw[idx+1 .. $];
 
-		if( pwcheck(user, password) )
+		if( pwcheck(user, password) ){
+			req.username = user;
 			return user;
+		}
 	}
 
 	res.headers["WWW-Authenticate"] = "Basic realm=\""~realm~"\"";
