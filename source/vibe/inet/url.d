@@ -111,8 +111,11 @@ struct Url {
 	@property void host(string v) { m_host = v; }
 
 	@property ushort port() const { return m_port; }
+	@property port(ushort v) { m_port = v; }
 	@property string username() const { return m_username; }
+	@property void username(string v) { m_username = v; }
 	@property string password() const { return m_password; }
+	@property void password(string v) { m_password = v; }
 	@property string querystring() const { return m_querystring; }
 	@property string anchor() const { return m_anchor; }
 
@@ -137,6 +140,17 @@ struct Url {
 
 		m_pathString = str;
 		m_path = Path(str);
+	}
+
+	@property Url parentUrl() const {
+		Url ret;
+		ret.schema = schema;
+		ret.host = host;
+		ret.port = port;
+		ret.username = username;
+		ret.password = password;
+		ret.path = path.parentPath;
+		return ret;
 	}
 
 
