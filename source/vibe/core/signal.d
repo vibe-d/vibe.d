@@ -18,3 +18,7 @@ class SignalException : Exception {
 	this() { super("Signal emitted."); }
 }
 
+Signal createSignal()
+{
+	return getEventDriver().createSignal();
+}

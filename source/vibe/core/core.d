@@ -93,8 +93,17 @@ void runTask(void delegate() task)
 */
 void yield()
 {
-	//s_core.yieldForEvent();
 	assert(false);
+}
+
+
+/** Yields execution of this task until an event wakes it up again.
+
+	Beware that the task will starve if no event wakes it up.
+*/
+void rawYield()
+{
+	s_core.yieldForEvent();
 }
 
 /**
