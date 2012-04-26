@@ -286,8 +286,6 @@ version(Posix){
 	{
 		logInfo("Received signal %d. Shutting down.", signal);
 
-		if( s_driver.exitEventLoop() ){
-			logError("Error shutting down server");
-		}
+		s_driver.exitEventLoop();
 	}
 }
