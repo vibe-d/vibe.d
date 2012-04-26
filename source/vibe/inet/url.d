@@ -131,15 +131,15 @@ unittest {
 	auto url = Url.parse("https://www.example.net/index.html");
 	assert(url.schema == "https", url.schema);
 	assert(url.host == "www.example.net", url.host);
-	assert(url.path == "/index.html", url.path);
+	assert(url.path == Path("/index.html"), url.path.toString());
 	
 	url = Url.parse("http://jo.doe:password@sub.www.example.net:4711/sub2/index.html?query#anchor");
 	assert(url.schema == "http", url.schema);
 	assert(url.username == "jo.doe", url.username);
 	assert(url.password == "password", url.password);
-	assert(url.port == "4711", url.port);
+	assert(url.port == 4711, to!string(url.port));
 	assert(url.host == "sub.www.example.net", url.host);
-	assert(url.path == "/sub2/index.html", url.path);
+	assert(url.path.toString() == "/sub2/index.html", url.path.toString());
 	assert(url.querystring == "query", url.querystring);
 	assert(url.anchor == "anchor", url.anchor);
 }
