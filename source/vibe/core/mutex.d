@@ -1,5 +1,5 @@
 /**
-	Mutex locking functionality. This works only for the interfiber locking not for multithreading locking. 
+	Mutex locking functionality.
 
 	Copyright: © 2012 Sönke Ludwig
 	Authors: Leonid Kramer
@@ -16,12 +16,17 @@ enum LockMode{
 	Defer
 }
 
+
+/** RAII lock for the Mutex class.
+*/
 struct ScopedLock {
 	private {
 		Mutex m_mutex;
 		bool m_locked;
 		LockMode m_mode;
 	}
+
+	@disable this(this);
 
 	this(Mutex mutex, LockMode mode=LockMode.Lock)
 	{
@@ -63,10 +68,13 @@ struct ScopedLock {
 		enforce(m_locked);
 		m_mutex.unlock();
 	}
-
-	@disable this(this);
 }
 
+/** Mutex implementation for fibers.
+
+	Note that this mutex is suitable only for synchronizing different fibers. If you need inter
+	thread synchronization, go for core.sync.mutex instead.
+*/
 class Mutex {
 	private {
 		bool m_locked = false;

@@ -97,7 +97,8 @@ void yield()
 }
 
 
-/** Yields execution of this task until an event wakes it up again.
+/**
+	Yields execution of this task until an event wakes it up again.
 
 	Beware that the task will starve if no event wakes it up.
 */
@@ -114,7 +115,9 @@ void sleep(double seconds)
 	s_driver.sleep(seconds);
 }
 
-/// Returns the active event driver
+/**
+	Returns the active event driver
+*/
 EventDriver getEventDriver()
 {
 	return s_driver;
@@ -157,25 +160,17 @@ bool isTaskLocalSet(string name)
 	return pvar !is null;
 }
 
-/// A version string representing the current vibe version
+/**
+	A version string representing the current vibe version
+*/
 enum VibeVersionString = "0.8";
 
 
 /**************************************************************************************************/
-/* vibe internal functions                                                                        */
+/* private types                                                                                  */
 /**************************************************************************************************/
-private {
-	Variant[string][Fiber] s_taskLocalStorage;
-	//Variant[string] s_currentTaskStorage;
-}
 
-
-private extern(C) void extrap()
-{
-	logTrace("exception trap");
-}
-
-class VibeDriverCore : DriverCore {
+private class VibeDriverCore : DriverCore {
 	void yieldForEvent()
 	{
 		auto fiber = Fiber.getThis();
@@ -224,23 +219,6 @@ class VibeDriverCore : DriverCore {
 	}
 }
 
-private void clearTaskLocals()
-{
-	auto self = Fiber.getThis();
-	auto ptls = self in s_taskLocalStorage;
-	if( ptls ) s_taskLocalStorage.remove(self);
-}
-
-/// private
-package void removeFromArray(T)(ref T[] array, T item)
-{
-	foreach( i; 0 .. array.length )
-		if( array[i] is item ){
-			array = array[0 .. i] ~ array[i+1 .. $];
-			return;
-		}
-}
-
 
 /**************************************************************************************************/
 /* private functions                                                                              */
@@ -252,6 +230,8 @@ private {
 	bool s_eventLoopRunning = false;
 	VibeDriverCore s_core;
 	EventDriver s_driver;
+	Variant[string][Fiber] s_taskLocalStorage;
+	//Variant[string] s_currentTaskStorage;
 }
 
 shared static this()
@@ -279,6 +259,29 @@ shared static this()
 		sigaction(SIGINT, &siginfo, null);
 		sigaction(SIGTERM, &siginfo, null);
 	}
+}
+
+private extern(C) void extrap()
+{
+	logTrace("exception trap");
+}
+
+
+private void clearTaskLocals()
+{
+	auto self = Fiber.getThis();
+	auto ptls = self in s_taskLocalStorage;
+	if( ptls ) s_taskLocalStorage.remove(self);
+}
+
+/// private
+package void removeFromArray(T)(ref T[] array, T item)
+{
+	foreach( i; 0 .. array.length )
+		if( array[i] is item ){
+			array = array[0 .. i] ~ array[i+1 .. $];
+			return;
+		}
 }
 
 version(Posix){

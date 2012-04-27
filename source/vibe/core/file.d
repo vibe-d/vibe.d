@@ -11,6 +11,9 @@ public import vibe.core.driver;
 
 import vibe.core.core;
 
+
+/** Opens a file stream with the specified mode.
+*/
 FileStream openFile(string path, FileMode mode = FileMode.Read)
 {
 	return getEventDriver().openFile(path, mode);

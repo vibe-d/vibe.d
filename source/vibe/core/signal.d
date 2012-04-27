@@ -11,13 +11,14 @@ public import vibe.core.driver;
 
 import vibe.core.core;
 
-import core.thread;
-
 
 class SignalException : Exception {
 	this() { super("Signal emitted."); }
 }
 
+
+/** Creates a new signal that can be shared between fibers.
+*/
 Signal createSignal()
 {
 	return getEventDriver().createSignal();
