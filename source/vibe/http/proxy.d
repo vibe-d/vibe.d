@@ -67,6 +67,20 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		if( "Content-Length" !in res.headers && "Transfer-Encoding" !in res.headers ){
 			res.writeVoidBody();
 		} else {
+			// enforce compatibility with HTTP/1.0 (Squid and some other proxies)
+			if( req.httpVersion == HttpVersion.HTTP_1_0 ){
+				res.httpVersion = HttpVersion.HTTP_1_0;
+				if( "Transfer-Encoding" in res.headers ) res.headers.remove("Transfer-Encoding");
+				if( "Content-Encoding" in res.headers ) res.headers.remove("Content-Encoding");
+				if( "Content-Length" !in res.headers ){
+					auto content = cres.bodyReader.readAll(1024*1024);
+					res.headers["Content-Length"] = to!string(content.length);
+					res.bodyWriter.write(content);
+					return;
+				}
+			}
+
+			// by default, just forward the body
 			res.bodyWriter();
 			while( !cres.bodyReader.empty )
 				res.bodyWriter.write(cres.bodyReader, cres.bodyReader.leastSize);
