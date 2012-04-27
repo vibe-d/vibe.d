@@ -35,6 +35,14 @@ final class Session {
 			m_id = cast(immutable)Base64.encode(rnd.data);			
 		}
 	}
+
+	int opApply(int delegate(ref string key, ref string value) del)
+	{
+		foreach( key, ref value; m_store.iterateSession(m_id) )
+			if( auto ret = del(key, value) != 0 )
+				return ret;
+		return 0;
+	}
 	
 	/// Returns the unique session id of this session.
 	@property string id() const { return m_id; }
@@ -64,6 +72,7 @@ interface SessionStore {
 	string get(string id, string name, string defaultVal = null) const;
 	bool isKeySet(string id, string key) const;
 	void destroy(string id);
+	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id);
 }
 
 
@@ -108,6 +117,17 @@ final class MemorySessionStore : SessionStore {
 	void destroy(string id)
 	{
 		m_sessions.remove(id);
+	}
+
+	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id)
+	{
+		assert(id in m_sessions, "session not in store");
+		return (int delegate(ref string, ref string) del){
+			foreach( key, ref value; m_sessions[id] )
+				if( auto ret = del(key, value) != 0 )
+					return ret;
+			return 0;
+		};
 	}
 
 }
