@@ -332,6 +332,13 @@ struct StrMapCI {
 		}
 		return 0;
 	}
+
+	@property StrMapCI dup()
+	const {
+		StrMapCI ret;
+		foreach( v; m_map ) ret[v[0]] = v[1];
+		return ret;
+	}
 }
 
 string toRFC822DateTimeString(SysTime time)

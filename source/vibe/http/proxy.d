@@ -7,6 +7,7 @@
 */
 module vibe.http.proxy;
 
+import vibe.core.log;
 import vibe.http.client;
 import vibe.http.server;
 
@@ -44,38 +45,41 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		auto cli = new HttpClient;
 		cli.connect(destination_host, destination_port);
 
-		string encoding;
-		if( auto ptce = "Transfer-Encoding" in req.headers )
-			encoding = *ptce;
-		ulong req_length = 0;
-		if( auto pcl = "Content-Length" in req.headers )
-			req_length = to!ulong(*pcl);
-
 		auto cres = cli.request((HttpClientRequest creq){
 				creq.method = req.method;
 				creq.url = req.url;
-				creq.headers = req.headers;
+				creq.headers = req.headers.dup;
 				creq.headers["Host"] = destination_host;
 				while( !req.bodyReader.empty )
 					creq.bodyWriter.write(req.bodyReader, req.bodyReader.leastSize);
 			});
 		
-		res.httpVersion = cres.httpVersion;
+		// copy the response to the original requester
 		res.statusCode = cres.statusCode;
-		res.headers = cres.headers;
 
+		// copy all headers. the content-encoding header must stay as it was originally
+		// request by the client
+		string cenc;
+		if( auto pcenc = "Content-Encoding" in res.headers ) cenc = *pcenc;
+		res.headers = cres.headers.dup;
+		if( cenc ) res.headers["Content-Encoding"] = cenc;
+		else if( "Content-Encoding" in res.headers ) res.headers.remove("Content-Encoding");
+
+
+		// copy the response body if any
 		if( "Content-Length" !in res.headers && "Transfer-Encoding" !in res.headers ){
 			res.writeVoidBody();
 		} else {
 			// enforce compatibility with HTTP/1.0 (Squid and some other proxies)
-			if( req.httpVersion == HttpVersion.HTTP_1_0 ){
-				res.httpVersion = HttpVersion.HTTP_1_0;
+			if( res.httpVersion == HttpVersion.HTTP_1_0 ){
 				if( "Transfer-Encoding" in res.headers ) res.headers.remove("Transfer-Encoding");
-				if( "Content-Encoding" in res.headers ) res.headers.remove("Content-Encoding");
 				if( "Content-Length" !in res.headers ){
 					auto content = cres.bodyReader.readAll(1024*1024);
 					res.headers["Content-Length"] = to!string(content.length);
 					res.bodyWriter.write(content);
+					logInfo("HV: %s, %s", req.httpVersion, res.httpVersion);
+					logInfo("RH: %s", req.headers["connection"]);
+					assert(!req.persistent);
 					return;
 				}
 			}
