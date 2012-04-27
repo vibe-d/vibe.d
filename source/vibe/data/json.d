@@ -425,7 +425,9 @@ struct Json {
 		assert(false);
 	}
 	/// ditto
-	Json opBinary(string op)(Json other){
+	Json opBinary(string op)(Json other)
+		if( op == "~" )
+	{
 		static if( op == "~" ){
 			if( m_type == Type.String ) return Json(m_string ~ other.m_string);
 			else if( m_type == Type.Array ) return Json(m_array ~ other.m_array);
