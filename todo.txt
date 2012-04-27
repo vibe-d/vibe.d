@@ -27,12 +27,14 @@ GENERAL
  - Benchmark
  - HTTP server comparison to nginx
  - Make an automated interface->REST API generator
+ - Add commands to 'vibe', e.g. 'vibe build', 'vibe init' and 'vibe update'
  
 
 DIET TEMPLATES
 ==============
 
  - comments
+ - detect indent style and support spaces in addition to tabs
  
 MARKDOWN FILTER
 ===============
