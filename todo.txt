@@ -6,12 +6,14 @@ HTTP
  - Keep-Alive: timeout=x
  - Defer the decision of "chunked" or not until the second write or finalize()
  - ETag/If-None-Match
+ - implement maxRequestTime
 
 TCP
 ===
 
  - Asynchronous File sending support (currently reading is synchronous)
  - Active TCP connections are not disconnected and the event loop keeps running
+ - Add a DoS barrier that closes old connections in case of high connection counts
 
 GENERAL
 =======
@@ -22,6 +24,10 @@ GENERAL
  - Analyze all code for memory leaks (e.g. SSLContext)
  - Add template arguments to API docs
  - UTF files including byte order mark cannot be parsed, currently
+ - Benchmark
+ - HTTP server comparison to nginx
+ - Make an automated interface->REST API generator
+ 
 
 DIET TEMPLATES
 ==============
