@@ -76,19 +76,23 @@ private @property string dietParser(string template_file)()
 {
 	// Preprocess the source for extensions
 	static immutable text = removeEmptyLines(import(template_file), template_file);
+	static immutable text_indent_style = detectIndentStyle(text);
 	static immutable extname = extractExtensionName(text);
 	static if( extname.length > 0 ){
 		static immutable parsed_file = extname;
 		static immutable parsed_text = removeEmptyLines(import(extname), extname);
-		static immutable blocks = extractBlocks(text, parsed_text);
+		static immutable indent_style = detectIndentStyle(parsed_text);
+		static immutable blocks = extractBlocks(text, text_indent_style, parsed_text, indent_style);
 	} else {
 		static immutable parsed_file = template_file;
 		static immutable parsed_text = text;
+		static immutable indent_style = text_indent_style;
 		static immutable DietBlock[] blocks = [];
 	}
 
 	DietParser parser;
 	parser.lines = parsed_text;
+	parser.indentStyle = indent_style;
 	parser.blocks = blocks;
 	return parser.buildWriter();
 }
@@ -124,6 +128,7 @@ private string extractExtensionName(in Line[] text)
 private struct DietBlock {
 	string name;
 	Line[] text;
+	string indentStyle;
 }
 
 private struct Line {
@@ -134,19 +139,21 @@ private struct Line {
 
 private void assert_ln(Line ln, bool cond, string text = null, string file = __FILE__, int line = __LINE__)
 {
-	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)~": "~text~"("~file~":"~cttostring(line)~")");
+	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)
+		~": "~text~"("~file~":"~cttostring(line)~")");
 }
 
 
 
-private DietBlock[] extractBlocks(in Line[] template_text, in Line[] parent_text)
+private DietBlock[] extractBlocks(in Line[] template_text, string indent_style,
+	in Line[] parent_text, string parent_indent_style)
 {
 	string[] names;
 	DietBlock[] blocks;
-	extractBlocksFromExtension(template_text[1 .. template_text.length], names, blocks);
+	extractBlocksFromExtension(template_text[1 .. template_text.length], names, blocks, indent_style);
 
 	string[] used_names;
-	extractBlocksFromParent(parent_text, used_names);
+	extractBlocksFromParent(parent_text, used_names, parent_indent_style);
 
 	DietBlock[] ret;
 	foreach( name; used_names ){
@@ -162,7 +169,7 @@ private DietBlock[] extractBlocks(in Line[] template_text, in Line[] parent_text
 	return ret;
 }
 
-private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref DietBlock[] blocks)
+private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref DietBlock[] blocks, string indent_style)
 {
 	for( size_t i = 0; i < text.length; ){
 		string ln = text[i].text;
@@ -174,24 +181,46 @@ private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref 
 		while( i < text.length ){
 			auto bln = text[i];
 			assert_ln(bln, bln.text.length > 0); // empty lines should be removed here!
-			if( bln.text[0] != '\t' ) break;
+			if( bln.text[0] != '\t' && bln.text[0] != ' ' ) break;
 			block ~= bln;
 			i++;
 		}
 		names ~= name;
-		blocks ~= DietBlock(name, block);
+		blocks ~= DietBlock(name, block, indent_style);
 	}
 }
 
-private void extractBlocksFromParent(in Line[] text, ref string[] names)
+private void extractBlocksFromParent(in Line[] text, ref string[] names, string indent)
 {
 	for( size_t i = 0; i < text.length; i++ ){
-		string ln = unindent(text[i].text);
+		string ln = unindent(text[i].text, indent);
 		if( ln.length > 6 && ln[0 .. 6] == "block " ){
 			auto name = ln[6 .. ln.length];
 			names ~= name;		
 		}
 	}
+}
+
+private string detectIndentStyle(in Line[] lines)
+{
+	// search for the first indented line
+	foreach( i; 0 .. lines.length ){
+		// empty lines should have been removed
+		assert(lines[0].text.length > 0);
+
+		// tabs are used
+		if( lines[i].text[0] == '\t' ) return "\t";
+
+		// spaces are used -> count the number
+		if( lines[i].text[0] == ' ' ){
+			size_t cnt = 0;
+			while( lines[i].text[cnt] == ' ' ) cnt++;
+			return lines[i].text[0 .. cnt];
+		}
+	}
+
+	// default to tabs if there are no indented lines
+	return "\t";
 }
 
 private string lineMarker(Line ln)
@@ -207,6 +236,7 @@ private struct DietParser {
 		size_t curline = 0;
 		const(Line)[] lines;
 		const(DietBlock)[] blocks;
+		string indentStyle = "\t";
 	}
 
 	this(in Line[] lines_, in DietBlock[] blocks_)
@@ -225,7 +255,7 @@ private struct DietParser {
 		string[] node_stack;
 		curline++;
 
-		auto next_indent_level = indentLevel(lines[curline].text);
+		auto next_indent_level = indentLevel(lines[curline].text, indentStyle);
 		assertp(next_indent_level == 0, "Indentation must start at level zero.");
 
 		ret ~= buildBodyWriter(node_stack, next_indent_level, in_string);
@@ -255,11 +285,11 @@ private struct DietParser {
 			auto current_line = lines[curline];
 
 			if( !in_string ) ret ~= lineMarker(lines[curline]);
-			auto level = indentLevel(lines[curline].text) + base_level;
+			auto level = indentLevel(lines[curline].text, indentStyle) + base_level;
 			assertp(level <= node_stack.length+1);
-			auto ln = unindent(lines[curline].text);
+			auto ln = unindent(lines[curline].text, indentStyle);
 			assertp(ln.length > 0);
-			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text) : 0) + base_level;
+			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
 
 			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
 			assertp(next_indent_level <= level+1, "Indentations may not skip child levels.");
@@ -282,6 +312,7 @@ private struct DietParser {
 						if( blocks[blockidx].text.length ){
 							DietParser parser;
 							parser.lines = blocks[blockidx].text;
+							parser.indentStyle = blocks[blockidx].indentStyle;
 							ret ~= endString(in_string);
 							ret ~= lineMarker(blocks[blockidx].text[0]);
 							ret ~= parser.buildBodyWriter(node_stack, level, in_string);
@@ -701,23 +732,24 @@ private string htmlEscape(string str)
 
 
 
-private string unindent(string str)
+private string unindent(string str, string indent)
 {
-	size_t i = 0;
-	while( i < str.length && str[i] == '\t' ) i++;
-	return str[i .. str.length];
+	size_t lvl = indentLevel(str, indent);
+	return str[lvl*indent.length .. $];
 }
 
-private int indentLevel(string s)
+private int indentLevel(string s, string indent)
 {
+	if( indent.length == 0 ) return 0;
 	int l = 0;
-	while( l < s.length && s[l] == '\t' ) l++;
-	return l;
+	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
+		l += indent.length;
+	return l / indent.length;
 }
 
-private int indentLevel(in Line[] ln)
+private int indentLevel(in Line[] ln, string indent)
 {
-	return ln.length == 0 ? 0 : indentLevel(ln[0].text);
+	return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
 }
 
 private bool isAlpha(char ch)
@@ -758,8 +790,8 @@ private string _toString(T)(T v)
 private string ctstrip(string s)
 {
 	size_t strt = 0, end = s.length;
-	while( strt < s.length && s[strt] == ' ' ) strt++;
-	while( end > 0 && s[end-1] == ' ' ) end--;
+	while( strt < s.length && (s[strt] == ' ' || s[strt] == '\t') ) strt++;
+	while( end > 0 && (s[end-1] == ' ' || s[end-1] == '\t') ) end--;
 	return strt < end ? s[strt .. end] : null;
 }
 
@@ -778,35 +810,33 @@ private string cttostring(T)(T x)
 	}
 }
 
-private string firstLine(string str)
-{
-	foreach( i; 0 .. str.length )
-		if( str[i] == '\r' || str[i] == '\n' )
-			return str[0 .. i];
-	return str;
-}
-
-private string remainingLines(string str)
-{
-	for( size_t i = 0; i < str.length; i++ )
-		if( str[i] == '\r' || str[i] == '\n' ){
-			if( i+1 < str.length && (str[i+1] == '\n' || str[i+1] == '\r') && str[i] != str[i+1] )
-				i++;
-			return str[i+1 .. $];
-		}
-	return null;
-}
-
 private Line[] removeEmptyLines(string text, string file)
 {
 	Line[] ret;
 	int num = 1;
-	while(text.length > 0){
-		auto ln = firstLine(text);
-		if( unindent(ln).length > 0 ){
-			ret ~= Line(file, num, ln);
+	size_t idx = 0;
+
+	while(idx < text.length){
+		// start end end markers for the current line
+		size_t start_idx = idx;
+		size_t end_idx = text.length;
+
+		// search for EOL
+		while( idx < text.length ){
+			if( text[idx] == '\r' || text[idx] == '\n' ){
+				end_idx = idx;
+				if( idx+1 < text.length && text[idx .. idx+2] == "\r\n" ) idx++;
+				idx++;
+				break;
+			}
+			idx++;
 		}
-		text = remainingLines(text);
+
+		// add the line if not empty
+		auto ln = text[start_idx .. end_idx];
+		if( ctstrip(ln).length > 0 )
+			ret ~= Line(file, num, ln);
+		
 		num++;
 	}
 	return ret;
