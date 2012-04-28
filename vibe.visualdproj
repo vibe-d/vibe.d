@@ -287,7 +287,13 @@
  </Config>
  <Folder name="vibe">
   <Folder name="core">
+   <Folder name="drivers">
+    <File path="source\vibe\core\drivers\libevent2.d" />
+    <File path="source\vibe\core\drivers\libevent2_tcp.d" />
+    <File path="source\vibe\core\drivers\threadedfile.d" />
+   </Folder>
    <File path="source\vibe\core\core.d" />
+   <File path="source\vibe\core\driver.d" />
    <File path="source\vibe\core\file.d" />
    <File path="source\vibe\core\log.d" />
    <File path="source\vibe\core\mutex.d" />
