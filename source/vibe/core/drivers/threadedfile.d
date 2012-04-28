@@ -12,6 +12,7 @@ import vibe.core.log;
 import vibe.core.driver;
 
 import std.algorithm;
+import std.conv;
 import std.exception;
 import std.string;
 
@@ -69,14 +70,16 @@ class ThreadedFileStream : FileStream {
 				m_fileDescriptor = open(path.toStringz(), O_RDONLY|O_BINARY);
 				break;
 			case FileMode.CreateTrunc:
-				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY);
+				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY, octal!644);
 				break;
 			case FileMode.Append:
-				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY);
+				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
 				break;
 		}
 		if( m_fileDescriptor < 0 )
-			throw new Exception("Failed to open '"~path~"' for reading.");
+			throw new Exception("Failed to open '"~path~"' for " ~ (m_mode == FileMode.Read ?		 "reading.":
+			                                                        m_mode == FileMode.CreateTrunc ? "writing." : 
+			                                                                                         "appending."));
 			
 		version(linux){
 			// stat_t seems to be defined wrong on linux/64
