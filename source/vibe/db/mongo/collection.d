@@ -17,6 +17,32 @@ import std.algorithm : countUntil;
 
 /**
 	Represents a single collection inside a MongoDB.
+
+	All methods take arbitrary types for Bson arguments. serializeToBson() is implicitly called on
+	them before they are send to the database. The following example shows some possible ways
+	to specify objects.
+
+	Examples:
+
+	---
+	MongoDB db = connectMongoDB("127.0.0.1");
+	MongoCollection users = m_db["myapp.users"];
+
+	// canonical version using a Bson object
+	users.insert(Bson(["name": Bson("admin"), "password": Bson("secret")]));
+
+	// short version using a string[string] AA that is automatically
+	// serialized to Bson
+	users.insert(["name": "admin", "password": "secret"]);
+
+	// BSON specific types are also serialized automatically
+	BsonObjectId uid = ...;
+	Bson usr = users.find(["_id": uid]);
+
+	// JSON is another possibility
+	Json jusr = parseJson("{\"name\": \"admin\", \"password\": \"secret\"}");
+	users.insert(jusr);
+	---
 */
 struct MongoCollection {
 	private {
