@@ -26,6 +26,7 @@ import std.variant;
 		htmlEscape is necessary in a few places to avoid corrupted html (e.g. in buildInterpolatedString)
 		to!string and htmlEscape should not be used in conjunction with ~ at run time. instead,
 		use filterHtmlEncode().
+		implement general :filters instead of the two special cases :javascript and :css
 */
 
 
@@ -282,8 +283,6 @@ private struct DietParser {
 		assertp(node_stack.length >= base_level);
 
 		for( ; curline < lines.length; curline++ ){
-			auto current_line = lines[curline];
-
 			if( !in_string ) ret ~= lineMarker(lines[curline]);
 			auto level = indentLevel(lines[curline].text, indentStyle) + base_level;
 			assertp(level <= node_stack.length+1);
@@ -298,7 +297,7 @@ private struct DietParser {
 			else if( ln[0] == '|' ) ret ~= buildTextNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
 			else {
 				size_t j = 0;
-				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
+				auto tag = isAlpha(ln[0]) || ln[0] == '/' || ln[0] == ':' ? skipIdent(ln, j, "/:-_") : "div";
 				switch(tag){
 					default:
 						ret ~= buildHtmlNodeWriter(node_stack, tag, ln[j .. $], level, in_string, next_indent_level > level);
@@ -323,6 +322,21 @@ private struct DietParser {
 						skipWhitespace(ln, j);
 						ret ~= buildSpecialTag!(node_stack)("!--[if "~ln[j .. $]~"]", level, in_string);
 						node_stack ~= "<![endif]-->";
+						break;
+					case ":css":
+					case ":javascript":
+					case "script":
+					case "style":
+						// pass all child lines to buildRawTag and continue with the next sibling
+						size_t next_tag = curline+1;
+						while( next_tag < lines.length &&
+							indentLevel(lines[next_tag].text, indentStyle) > level-base_level )
+						{
+							next_tag++;
+						}
+						ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
+							in_string, lines[curline+1 .. next_tag]);
+						curline = next_tag-1;
 						break;
 					case "//":
 					case "//-":
@@ -390,8 +404,12 @@ private struct DietParser {
 
 	string buildHtmlNodeWriter(ref string[] node_stack, string tag, string line, int level, ref bool in_string, bool has_child_nodes)
 	{
-		size_t i = 0;
+		// parse the HTML tag, leaving any trailing text as line[i .. $]
+		size_t i;
+		Tuple!(string, string)[] attribs;
+		parseHtmlTag(line, i, attribs);
 
+		// determine if we need a closing tag
 		bool has_children = true;
 		switch(tag){
 			case "br", "hr", "img", "link":
@@ -399,49 +417,8 @@ private struct DietParser {
 				break;
 			default:
 		}
-
-		assertp(has_children || !has_child_nodes, "Singular HTML tag '"~tag~"' may now have children.");
-
-		string id;
-		string classes;
+		assertp(has_children || !has_child_nodes, "Singular HTML tag '"~tag~"' may not have children.");
 		
-		// parse #id and .classes
-		while( i < line.length ){
-			if( line[i] == '#' ){
-				i++;
-				assertp(id.length == 0, "Id may only be set once.");
-				id = skipIdent(line, i, "-");
-			} else if( line[i] == '.' ){
-				i++;
-				auto cls = skipIdent(line, i, "-");
-				if( classes.length == 0 ) classes = cls;
-				else classes ~= " " ~ cls;
-			} else break;
-		}
-		
-		// put #id and .classes into the attribs list
-		Tuple!(string, string)[] attribs;
-		if( id.length ) attribs ~= tuple("id", id);
-		if( classes.length ) attribs ~= tuple("class", classes);
-		
-		// parse other attributes
-		if( i < line.length && line[i] == '(' ){
-			i++;
-			string attribstring = skipUntilClosingClamp(line, i);
-			parseAttributes(attribstring, attribs);
-			i++;
-		}
-
-		// write the tag
-		string tagstring = "\\n";
-		assertp(node_stack.length >= level);
-		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
-		tagstring ~= "<" ~ tag;
-		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~htmlAttribEscape("~buildInterpolatedString(att[1])~")~\"\\\"";
-		tagstring ~= ">";
-		
-		skipWhitespace(line, i);
-
 		// parse any text contents (either using "= code" or as plain text)
 		string textstring;
 		bool textstring_isdynamic = true;
@@ -464,14 +441,110 @@ private struct DietParser {
 		
 		if( has_child_nodes ) node_stack ~= tag;
 		
-		string ret = startString(in_string) ~ tagstring;
+		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs);
 		if( textstring_isdynamic ){
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName~".write(" ~ textstring ~ ", false);\n";
-		} else ret ~= textstring;
+		} else ret ~= startString(in_string) ~ textstring;
 		if( tail.length ) ret ~= startString(in_string) ~ tail;
 			
 		return ret;
+	}
+
+	string buildRawNodeWriter(ref string[] node_stack, string tag, string tagline, int level,
+			int base_level, ref bool in_string, in Line[] lines)
+	{
+		// parse the HTML tag leaving any trailing text as tagline[i .. $]
+		size_t i;
+		Tuple!(string, string)[] attribs;
+		parseHtmlTag(tagline, i, attribs);
+
+		// special case some jade "filters" - they are not yet implemented as filters
+		switch(tag){
+			default: assert(false);
+			case "script": break;
+			case "style": break;
+			case ":javascript":
+				tag = "script";
+				attribs ~= tuple("type", "text/javascript");
+				break;
+			case ":css":
+				tag = "style";
+				attribs ~= tuple("type", "text/css");
+				break;
+		}
+
+		// write the tag
+		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs);
+
+		string indent_string = "\\t";
+		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) indent_string ~= "\\t";
+
+		// write the block contents wrapped in a CDATA for old browsers
+		ret ~= startString(in_string);
+		if( tag == "script" ) ret ~= "\\n"~indent_string~"//<![CDATA[\\n";
+		else ret ~= "\\n"~indent_string~"<!--\\n";
+
+		// write out all lines
+		if( i < tagline.length )
+			ret ~= indent_string ~ dstringEscape(tagline[i .. $]) ~ "\\n";
+		foreach( ln; lines ){
+			// remove indentation
+			string lnstr = ln.text[(level-base_level+1)*indentStyle.length .. $];
+			ret ~= indent_string ~ dstringEscape(lnstr) ~ "\\n";
+		}
+		if( tag == "script" ) ret ~= indent_string~"//]]>\\n";
+		else ret ~= indent_string~"-->\\n";
+		ret ~= indent_string[0 .. $-2] ~ "</" ~ tag ~ ">";
+		return ret;
+	}
+
+	void parseHtmlTag(string line, out size_t i, out Tuple!(string, string)[] attribs)
+	{
+		i = 0;
+
+		string id;
+		string classes;
+		
+		// parse #id and .classes
+		while( i < line.length ){
+			if( line[i] == '#' ){
+				i++;
+				assertp(id.length == 0, "Id may only be set once.");
+				id = skipIdent(line, i, "-");
+			} else if( line[i] == '.' ){
+				i++;
+				auto cls = skipIdent(line, i, "-");
+				if( classes.length == 0 ) classes = cls;
+				else classes ~= " " ~ cls;
+			} else break;
+		}
+		
+		// put #id and .classes into the attribs list
+		if( id.length ) attribs ~= tuple("id", id);
+		if( classes.length ) attribs ~= tuple("class", classes);
+		
+		// parse other attributes
+		if( i < line.length && line[i] == '(' ){
+			i++;
+			string attribstring = skipUntilClosingClamp(line, i);
+			parseAttributes(attribstring, attribs);
+			i++;
+		}
+
+		// skip until the optional tag text contents begin
+		skipWhitespace(line, i);
+	}
+
+	string buildHtmlTag(ref string[] node_stack, string tag, int level, ref bool in_string, ref Tuple!(string, string)[] attribs)
+	{
+		string tagstring = startString(in_string) ~ "\\n";
+		assertp(node_stack.length >= level);
+		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
+		tagstring ~= "<" ~ tag;
+		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~htmlAttribEscape("~buildInterpolatedString(att[1])~")~\"\\\"";
+		tagstring ~= ">";
+		return tagstring;
 	}
 
 	void parseAttributes(string str, ref Tuple!(string, string)[] attribs)
