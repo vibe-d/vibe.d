@@ -181,6 +181,28 @@ void startListening()
 	}
 }
 
+/**
+	Renders the given template and makes all ALIASES available to the template.
+
+	This currently suffers from multiple DMD bugs - use renderCompat() instead for the time being.
+
+	You can call this function as a member of HttpServerResponse using D's uniform function
+	call syntax.
+
+	Examples:
+		---
+		string title = "Hello, World!";
+		int pageNumber = 1;
+		res.render!("mytemplate.jd", title, pageNumber);
+		---
+*/
+@property void render(string template_file, ALIASES...)(HttpServerRequest req)
+{
+	req.headers["Content-Type"] = "text/html; charset=UTF-8";
+	parseDietFile!(template_file, ALIASES)(req.bodyWriter);
+}
+
+
 /**************************************************************************************************/
 /* Public types                                                                                   */
 /**************************************************************************************************/
@@ -560,25 +582,6 @@ final class HttpServerResponse : HttpResponse {
 		return m_countingWriter.bytesWritten;
 	}
 	
-	/**
-		Renders the given template and makes all ALIASES available to the template.
-
-		This currently suffers from multiple DMD compiler bugs - use renderCompat() instead for the
-		time being.
-
-		Examples:
-			---
-			string title = "Hello, World!";
-			int pageNumber = 1;
-			res.render!("mytemplate.jd", title, pageNumber);
-			---
-	*/
-	@property void render(string template_file, ALIASES...)()
-	{
-		headers["Content-Type"] = "text/html; charset=UTF-8";
-		parseDietFile!(template_file, ALIASES)(bodyWriter);
-	}
-
 	/**
 		Compatibility version of render() that takes a list of explicit names and types instead
 		of variable aliases.
