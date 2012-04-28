@@ -196,10 +196,10 @@ void startListening()
 		res.render!("mytemplate.jd", title, pageNumber);
 		---
 */
-@property void render(string template_file, ALIASES...)(HttpServerRequest req)
+@property void render(string template_file, ALIASES...)(HttpServerResponse res)
 {
-	req.headers["Content-Type"] = "text/html; charset=UTF-8";
-	parseDietFile!(template_file, ALIASES)(req.bodyWriter);
+	res.headers["Content-Type"] = "text/html; charset=UTF-8";
+	parseDietFile!(template_file, ALIASES)(res.bodyWriter);
 }
 
 
