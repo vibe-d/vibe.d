@@ -7,7 +7,7 @@
 */
 import std.file;
 
-import vibe.d;
+import vibe.vibe;
 import vibe.core.log;
 import vibe.inet.url;
 import vibe.vpm.vpm;
@@ -15,7 +15,8 @@ import vibe.vpm.registry;
 
 /// Starts the VPM and updates the application in the current working directory
 /// and writes the deps.txt afterwards, so that the application can start proper.
-static this() {
+int main()
+{
 	setLogLevel(LogLevel.Info);
 
 	auto appPath = getcwd();
@@ -32,8 +33,6 @@ static this() {
 	vpm.createDepsTxt();
 	//vpm.createZip("testApp.zip");
 
-
-	// TODO: way to quit vibe needed
-	throw new Exception("quit vibe");
+	return 0;
 }
 
