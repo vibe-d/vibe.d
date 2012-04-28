@@ -76,16 +76,17 @@ private @property string dietParser(string template_file)()
 {
 	// Preprocess the source for extensions
 	static immutable text = removeEmptyLines(import(template_file), template_file);
+	static immutable text_indent_style = detectIndentStyle(text);
 	static immutable extname = extractExtensionName(text);
 	static if( extname.length > 0 ){
 		static immutable parsed_file = extname;
 		static immutable parsed_text = removeEmptyLines(import(extname), extname);
-		static immutable indent_style = "\t"; // detectIndentStyle(parsed_text);
-		static immutable blocks = extractBlocks(text, parsed_text, indent_style);
+		static immutable indent_style = detectIndentStyle(parsed_text);
+		static immutable blocks = extractBlocks(text, text_indent_style, parsed_text, indent_style);
 	} else {
 		static immutable parsed_file = template_file;
 		static immutable parsed_text = text;
-		static immutable indent_style = "\t"; // detectIndentStyle(parsed_text);
+		static immutable indent_style = text_indent_style;
 		static immutable DietBlock[] blocks = [];
 	}
 
@@ -127,6 +128,7 @@ private string extractExtensionName(in Line[] text)
 private struct DietBlock {
 	string name;
 	Line[] text;
+	string indentStyle;
 }
 
 private struct Line {
@@ -137,19 +139,21 @@ private struct Line {
 
 private void assert_ln(Line ln, bool cond, string text = null, string file = __FILE__, int line = __LINE__)
 {
-	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)~": "~text~"("~file~":"~cttostring(line)~")");
+	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)
+		~": "~text~"("~file~":"~cttostring(line)~")");
 }
 
 
 
-private DietBlock[] extractBlocks(in Line[] template_text, in Line[] parent_text, string indent)
+private DietBlock[] extractBlocks(in Line[] template_text, string indent_style,
+	in Line[] parent_text, string parent_indent_style)
 {
 	string[] names;
 	DietBlock[] blocks;
-	extractBlocksFromExtension(template_text[1 .. template_text.length], names, blocks);
+	extractBlocksFromExtension(template_text[1 .. template_text.length], names, blocks, indent_style);
 
 	string[] used_names;
-	extractBlocksFromParent(parent_text, used_names, indent);
+	extractBlocksFromParent(parent_text, used_names, parent_indent_style);
 
 	DietBlock[] ret;
 	foreach( name; used_names ){
@@ -165,7 +169,7 @@ private DietBlock[] extractBlocks(in Line[] template_text, in Line[] parent_text
 	return ret;
 }
 
-private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref DietBlock[] blocks)
+private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref DietBlock[] blocks, string indent_style)
 {
 	for( size_t i = 0; i < text.length; ){
 		string ln = text[i].text;
@@ -182,7 +186,7 @@ private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref 
 			i++;
 		}
 		names ~= name;
-		blocks ~= DietBlock(name, block);
+		blocks ~= DietBlock(name, block, indent_style);
 	}
 }
 
@@ -197,9 +201,26 @@ private void extractBlocksFromParent(in Line[] text, ref string[] names, string 
 	}
 }
 
-private string detectIndentStyle(in Line[] text)
+private string detectIndentStyle(in Line[] lines)
 {
-	assert(false);
+	// search for the first indented line
+	foreach( i; 0 .. lines.length ){
+		// empty lines should have been removed
+		assert(lines[0].text.length > 0);
+
+		// tabs are used
+		if( lines[i].text[0] == '\t' ) return "\t";
+
+		// spaces are used -> count the number
+		if( lines[i].text[0] == ' ' ){
+			size_t cnt = 0;
+			while( lines[i].text[cnt] == ' ' ) cnt++;
+			return lines[i].text[0 .. cnt];
+		}
+	}
+
+	// default to tabs if there are no indented lines
+	return "\t";
 }
 
 private string lineMarker(Line ln)
@@ -291,6 +312,7 @@ private struct DietParser {
 						if( blocks[blockidx].text.length ){
 							DietParser parser;
 							parser.lines = blocks[blockidx].text;
+							parser.indentStyle = blocks[blockidx].indentStyle;
 							ret ~= endString(in_string);
 							ret ~= lineMarker(blocks[blockidx].text[0]);
 							ret ~= parser.buildBodyWriter(node_stack, level, in_string);
