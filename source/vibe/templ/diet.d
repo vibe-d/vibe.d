@@ -817,7 +817,7 @@ private int indentLevel(string s, string indent)
 	int l = 0;
 	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
 		l += cast(int)indent.length;
-	return l / indent.length;
+	return l / cast(int)indent.length;
 }
 
 private int indentLevel(in Line[] ln, string indent)
