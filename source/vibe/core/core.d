@@ -34,21 +34,9 @@ version(Posix){
 
 	The event loop will continue running during the whole life time of the application.
 	Tasks will be started and handled from within the event loop.
-	
-	The 'num_worker_threads' parameter allows to specify the number of threads
-	that are used to handle incoming connections. Increasing the number of threads
-	can be useful for server applications that perform a considerable amount of
-	CPU work. In this case it is recommended to set the number of worker threads
-	equal to the number of CPU cores in the system for optimum performance.
-	
-	In some cases it may be desirable to specify a number that is higher
-	than the actual CPU core count to decrease the maximum wait time for lengthy
-	CPU operations. However, if at all possible, such operations should instead
-	be broken up into small chunks with calls to vibeYield() inbetween.
 */
-int start(int num_worker_threads = 1)
+int start()
 {
-	assert(num_worker_threads == 1);
 	s_eventLoopRunning = true;
 	scope(exit) s_eventLoopRunning = false;
 	if( auto err = s_driver.runEventLoop() != 0){
