@@ -26,7 +26,7 @@ version(Windows){
 	private {
 		extern(C){
 			alias long off_t;
-			int open(in char* name, int mode);
+			int open(in char* name, int mode, ...);
 			int chmod(in char* name, int mode);
 			int close(int fd);
 			int read(int fd, void *buffer, uint count);
