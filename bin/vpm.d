@@ -6,6 +6,7 @@
 	Authors: Matthias Dondorff
 */
 import std.file;
+import std.c.stdlib;
 
 import vibe.d;
 import vibe.core.log;
@@ -33,7 +34,6 @@ static this() {
 	//vpm.createZip("testApp.zip");
 
 
-	// TODO: way to quit vibe needed
-	throw new Exception("quit vibe");
+	exit(0);
 }
 
