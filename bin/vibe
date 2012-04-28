@@ -1,6 +1,6 @@
 #!/bin/sh
-export VIEBBINARY=$(readlink $(which $0))
-if [ ! -n "$VIBEPATH" ]; then VIBEBINARY=$0; fi
+export VIBEBINARY=$(readlink $(which $0))
+if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY=$0; fi
 export VIBEPATH=$(dirname $VIBEBINARY)
 export LIBS="-L-levent -L-levent_openssl -L-lssl -L-lcrypto"
 export DFLAGS="-g -w -property --force"
