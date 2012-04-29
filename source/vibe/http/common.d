@@ -301,7 +301,11 @@ struct StrMapCI {
 		m_map.remove(toLower(key));
 	}
 
-	string opIndex(string key){ return m_map[toLower(key)][1]; }
+	string opIndex(string key){
+		auto pv = toLower(key) in m_map;
+		enforce(pv !is null, "Accessing non-existant key '"~key~"'.");
+		return (*pv)[1];
+	}
 	string opIndexAssign(string val, string key){ m_map[toLower(key)] = tuple(key, val); return val; }
 
 	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
