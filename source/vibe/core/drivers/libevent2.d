@@ -64,7 +64,7 @@ class Libevent2Driver : EventDriver {
 
 	void exitEventLoop()
 	{
-		enforce(event_base_loopexit(m_eventLoop, null) == 0, "Failed to exit libevent event loop.");
+		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
 
 	void sleep(double seconds)
