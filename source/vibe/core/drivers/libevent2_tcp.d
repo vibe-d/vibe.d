@@ -50,6 +50,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		bufferevent* m_baseEvent;
 		bufferevent* m_event;
 		bufferevent* m_sslEvent;
+		bool m_timeout_triggered;
 		TcpContext* m_ctx;
 		Fiber m_fiber;
 		string m_peerAddress;
@@ -110,6 +111,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		foreach( ref ctx; s_tcpContexts )
 			if( ctx.socketfd == fd )
 				ctx.shutdown = true;
+		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
 		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
 		logTrace("Closing socket %d...", fd);
@@ -230,6 +232,23 @@ package class Libevent2TcpConnection : TcpConnection {
 	}
 
 	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
+
+
+	bool waitForData(int secs) {
+		if( dataAvailableForRead ) return true;
+		m_timeout_triggered = false;
+		event* timeout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
+		timeval t;
+		t.tv_sec = secs;
+		event_add(timeout, &t);
+		while( connected ) {
+			if( dataAvailableForRead || m_timeout_triggered ) break;
+			rawYield();
+		}
+		event_del(timeout);
+		event_free(timeout);
+		return !m_timeout_triggered;
+	}
 
 	alias Stream.write write;
 
@@ -365,6 +384,7 @@ package extern(C)
 				client_ctx.shutdown = true;
 				if( client_ctx.event ){
 					logTrace("initiate lazy active disconnect (fd %d)", client_ctx.socketfd);
+					bufferevent_flush(client_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 					bufferevent_flush(client_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
 					bufferevent_setwatermark(client_ctx.event, EV_WRITE, 1, 0);
 				}
@@ -484,6 +504,13 @@ package extern(C)
 				ctx.core.resumeTask(ctx.task);
 			}
 		}
+	}
+
+	private extern(C) void onTimeout(evutil_socket_t, short events, void* userptr)
+	{
+		auto conn = cast(Libevent2TcpConnection)userptr;
+		conn.m_timeout_triggered = true;
+		conn.m_ctx.core.resumeTask(conn.m_fiber);
 	}
 }
 
