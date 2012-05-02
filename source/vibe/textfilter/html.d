@@ -31,7 +31,8 @@ void filterHtmlEscape(R)(ref R dst, string str)
 			case 'A': .. case 'Z': goto case;
 			case '0': .. case '9': goto case;
 			case ' ', '\t', '-', '_', '.', ':', ',', ';',
-			     '#', '+', '*', '?', '=', '(', ')', '/', '!':
+			     '#', '+', '*', '?', '=', '(', ')', '/', '!',
+			     '%' , '{', '}', '[', ']':
 			    dst.put(to!string(ch));
 				break;
 			case '\"': dst.put("&quot;"); break;

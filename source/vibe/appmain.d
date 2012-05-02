@@ -32,7 +32,6 @@ int main(string[] args)
 	processCommandLineArgs(args);
 
 	//logInfo("Starting HTTP listening...");
-	startListening();
 
 	logInfo("Running event loop...");
 	try {

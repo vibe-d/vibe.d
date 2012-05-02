@@ -325,8 +325,7 @@ class Vpm {
 		string ipaths(bool t) { 
 			string ret;
 			foreach(s; m_app.includePaths(t)) {
-				if(ret == "") ret = (t?"-J":"-I")~s;
-				else ret ~= ";"~s;
+				ret ~= (t?"-J":"-I")~s~"\r\n";
 			}
 			return ret;
 		}
@@ -334,7 +333,7 @@ class Vpm {
 		string views = ipaths(true);
 		auto file = openFile("deps.txt", FileMode.CreateTrunc);
 		scope(exit) file.close();
-		string deps = source~"\n"~views;
+		string deps = source~views;
 		file.write(cast(ubyte[])deps);
 	}
 	
@@ -487,7 +486,7 @@ class Vpm {
 			
 			auto fileName = destination~cleanedPath;
 			
-			logDebug("Creating %s", fileName);
+			logDebug("Creating %s", fileName.head);
 			enforce(exists(to!string(fileName.parentPath)));
 			auto dstFile = openFile(to!string(fileName), FileMode.CreateTrunc);
 			scope(exit) dstFile.close();
@@ -496,10 +495,12 @@ class Vpm {
 		}
 		
 		// Write journal
+		logTrace("Saving installation journal...");
 		journal.add(Journal.Entry(Journal.Type.RegularFile, Path("journal.json")));
 		journal.save(destination ~ "journal.json");
 		
-		logInfo(packageId ~ " has been installed with version %s", (new Package(destination)).vers);
+		if(exists( to!string(destination~"package.json")))
+			logInfo(packageId ~ " has been installed with version %s", (new Package(destination)).vers);
 	}
 	
 	/// Uninstalls a given package from the list of installed modules.

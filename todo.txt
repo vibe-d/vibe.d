@@ -6,24 +6,35 @@ HTTP
  - Keep-Alive: timeout=x
  - Defer the decision of "chunked" or not until the second write or finalize()
  - ETag/If-None-Match
+ - implement maxRequestTime
 
 TCP
 ===
 
  - Asynchronous File sending support (currently reading is synchronous)
  - Active TCP connections are not disconnected and the event loop keeps running
+ - Add a DoS barrier that closes old connections in case of high connection counts
 
 GENERAL
 =======
 
+ - Asynchronous file I/O
  - Load balancer with support for seemless recompile
  - Use the event_set_*_callback functions to log libevent messages
- - Research all code for memory leaks (e.g. SSLContext)
+ - Analyze all code for memory leaks (e.g. SSLContext)
+ - Add template arguments to API docs
+ - UTF files including byte order mark cannot be parsed, currently
+ - Benchmark
+ - HTTP server comparison to nginx
+ - Make an automated interface->REST API generator
+ - Add commands to 'vibe', e.g. 'vibe build', 'vibe init' and 'vibe update'
+ 
 
 DIET TEMPLATES
 ==============
 
  - comments
+ - detect indent style and support spaces in addition to tabs
  
 MARKDOWN FILTER
 ===============
@@ -35,3 +46,6 @@ PACKAGE MANAGER
 ===============
 
  - package signing
+ - third party packages
+ - custom paths in deps.txt
+ - create deps.txt in temp directory

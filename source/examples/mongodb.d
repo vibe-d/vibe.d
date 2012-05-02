@@ -13,12 +13,12 @@ static this()
 		auto coll = db["test.test"];
 
 		logInfo("Querying DB...");
-		BSON query = BSON(["name" : BSON("hans")]);
+		Bson query = Bson(["name" : Bson("hans")]);
 		auto result = coll.find(query);
 
 		logInfo("Iterating results...");
 		foreach( i, doc; result ){
-			logInfo("Item %d: %s", i, (cast(JSON)doc).toString());
+			logInfo("Item %d: %s", i, (cast(Json)doc).toString());
 		}
 	});
 }

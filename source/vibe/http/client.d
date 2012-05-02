@@ -10,6 +10,7 @@ module vibe.http.client;
 public import vibe.core.tcp;
 public import vibe.http.common;
 
+import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
 import vibe.inet.url;

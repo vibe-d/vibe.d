@@ -1,11 +1,10 @@
-module examples.redis;
-
 import vibe.d;
-import vibe.log;
+
 import vibe.db.redis.redis;
 
 
-static this() {
+static this()
+{
 	setLogLevel(LogLevel.Info);
 
 	runTask({

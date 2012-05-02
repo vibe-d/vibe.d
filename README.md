@@ -1,15 +1,21 @@
 Contents
 ========
 
-1 Installation
-1-1 Windows
-1-2 Mac using Brew
-1-3 Mac using the install script
-1-4 Linux on Ubuntu
-1-5 Linux using the install script
+1. About
+2. Installation
+	1. Windows
+	2. Mac using Brew
+	3. Mac using the install script
+	4. Linux on Ubuntu
+	5. Linux using the install script
 
+1 About
+=======
 
-1-1 Installation on Windows
+vibe.d is an asynchronouse I/O and web framework written in D. Visit
+the website at http://vibed.org/ for more information.
+
+2-1 Installation on Windows
 ===========================
 
  - Install DMD using the installer on http://dlang.org/download.html
@@ -18,7 +24,7 @@ Contents
 
 
 
-1-2 Installation on Mac using brew
+2-2 Installation on Mac using brew
 ==================================
  - If you don't have brew installed, install it according to their install
 	instructions at <https://github.com/mxcl/homebrew/wiki/installation>
@@ -31,7 +37,7 @@ Contents
  - Unzip the vibe archive
  - Run any vibe apps using "vibe"
 
-1-2 Installation on Mac using the install script
+2-3 Installation on Mac using the install script
 ================================================
 
  - Install DMD using the installer on <http://dlang.org/download.html>
@@ -41,7 +47,7 @@ Contents
 
 
 
-1-2 Installation on Linux on Ubuntu
+2-4 Installation on Linux on Ubuntu
 ===================================
 
  - On 32-bit linux: Install DMD-i386
@@ -60,7 +66,7 @@ Contents
  - Unzip the vibe archive and use the 'vibe' script to run applications
 
 
-1-2 Installation on Linux using the install script
+2-5 Installation on Linux using the install script
 ==================================================
 
  - Install DMD from <http://dlang.org/download.html>

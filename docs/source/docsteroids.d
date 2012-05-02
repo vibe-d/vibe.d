@@ -437,9 +437,12 @@ class DocProcessor {
 			if( modifiers.length > 0 ){
 				type = parseBasicType(tokens);
 				type.modifiers = Json(modifiers);
-				foreach( i; 0 .. modifiers.length )
-					enforce(tokens[i] == ")");
-				tokens.popFrontN(modifiers.length);
+				foreach( i; 0 .. modifiers.length ){
+					//enforce(tokens[i] == ")", "expected ')', got '"~tokens[i]~"'");
+					if( tokens[i] == ")" ) // FIXME: this is a hack to make parsing(const(immutable(char)[][]) somehow "work"
+						tokens.popFront();
+				}
+				//tokens.popFrontN(modifiers.length);
 			} else {
 				size_t i = 0, mod_idx = -2;
 				string mod_name;
@@ -455,21 +458,27 @@ class DocProcessor {
 					if( i < tokens.length && tokens[i] == "." ) i++;
 					else break;
 				}
-				enforce(i > 0, "Expected identifier but got "~tokens.front);
-				string type_name = tokens[i-1];
-				string nested_name = join(tokens[mod_idx+2 .. i]);
-				tokens.popFrontN(i);
+				string type_name, nested_name;
+				if( i == 0 && tokens[0] == "..." ){
+					type_name = "...";
+					nested_name = null;
+				} else {
+					enforce(i > 0, "Expected identifier but got "~tokens.front);
+					type_name = tokens[i-1];
+					nested_name = join(tokens[mod_idx+2 .. i]);
+					tokens.popFrontN(i);
 
-				if( !tokens.empty && tokens.front == "!" ){
-					tokens.popFront();
-					if( tokens.front == "(" ){
-						size_t j = 1;
-						while( j < tokens.length && tokens[j] != ")" ) j++;
-						type.templateArgs = join(tokens[0 .. j+1]);
-						tokens.popFrontN(j+1);
-					} else {
-						type.templateArgs = tokens[0];
+					if( !tokens.empty && tokens.front == "!" ){
 						tokens.popFront();
+						if( tokens.front == "(" ){
+							size_t j = 1;
+							while( j < tokens.length && tokens[j] != ")" ) j++;
+							type.templateArgs = join(tokens[0 .. j+1]);
+							tokens.popFrontN(j+1);
+						} else {
+							type.templateArgs = tokens[0];
+							tokens.popFront();
+						}
 					}
 				}
 
