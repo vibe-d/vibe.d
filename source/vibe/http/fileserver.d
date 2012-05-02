@@ -58,8 +58,56 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 
 		string path = local_path ~ rel_path;
 
-		if( !exists(path) ) return;
+		DirEntry dirent;
+		try dirent = dirEntry(path);
+		catch(FileException){
+			// return if the file does not exist
+			return;
+		}
 
+		auto lastModified = toRFC822DateTimeString(dirent.timeLastModified.toUTC());
+		
+		if( auto pv = "If-Modified-Since" in req.headers ) {
+			if( *pv == lastModified ) {
+				res.statusCode = HttpStatus.NotModified;
+				res.writeVoidBody();
+				return;
+			}
+		}
+
+		// simple etag generation
+		auto etag = "\"" ~ md5(path ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)) ~ "\"";
+		if( auto pv = "If-None-Match" in req.headers ) {
+			if ( *pv == etag ) {
+				res.statusCode = HttpStatus.NotModified;
+				res.writeVoidBody();
+				return;
+			}
+		}
+
+		res.headers["Etag"] = etag;
+
+		auto mimetype = getMimeTypeForFile(path);
+		// avoid double-compression
+		if( isCompressedFormat(mimetype) && "Content-Encoding" in res.headers )
+			res.headers.remove("Content-Encoding");
+		res.headers["Content-Type"] = mimetype;
+		res.headers["Content-Length"] = to!string(dirent.size);
+		
+		res.headers["Last-Modified"] = lastModified;
+		auto expireTime = Clock.currTime().toUTC() + dur!"seconds"(settings.maxAge);
+		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
+		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
+
+		// for HEAD responses, stop here
+		if( res.isHeadResponse() ){
+			res.writeVoidBody();
+			assert(res.headerWritten);
+			logDebug("sent file header %d, %s!", dirent.size, res.headers["Content-Type"]);
+			return;
+		}
+		
+		// else write out the file contents
 		logTrace("Open file '%s' -> '%s'", srv_path, path);
 		FileStream fil;
 		try {
@@ -71,52 +119,6 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		}
 		scope(exit) fil.close();
 
-		auto lastModified = toRFC822DateTimeString(timeLastModified(path).toUTC());
-		
-		if( auto pv = "If-Modified-Since" in req.headers ) {
-			if( *pv == lastModified ) {
-				res.statusCode = HttpStatus.NotModified;
-				res.writeVoidBody();
-				return;
-			}
-		}
-
-		// simple etag generation
-		auto etag = "\"" ~ md5(path ~ ":" ~ lastModified ~ ":" ~ to!string(fil.size)) ~ "\"";
-		if( auto pv = "If-None-Match" in req.headers ) {
-			if ( *pv == etag ) {
-				res.statusCode = HttpStatus.NotModified;
-				res.writeVoidBody();
-				return;
-			}
-		}
-
-
-		res.headers["Etag"] = etag;
-
-		auto mimetype = getMimeTypeForFile(path);
-		// avoid double-compression
-		if( isCompressedFormat(mimetype) && "Content-Encoding" in res.headers )
-			res.headers.remove("Content-Encoding");
-		res.headers["Content-Type"] = mimetype;
-		res.headers["Content-Length"] = to!string(fil.size);
-		
-		res.headers["Last-Modified"] = lastModified;
-		auto expireTime = Clock.currTime().toUTC() + dur!"seconds"(settings.maxAge);
-		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
-		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
-
-		
-
-		// for HEAD responses, stop here
-		if( res.isHeadResponse() ){
-			res.writeVoidBody();
-			assert(res.headerWritten);
-			logDebug("sent file header %d, %s!", fil.size, res.headers["Content-Type"]);
-			return;
-		}
-		
-		// else write out the file contents
 		res.bodyWriter.write(fil);
 		logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
 	}
