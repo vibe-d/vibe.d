@@ -8,13 +8,7 @@ if NOT EXIST %EXEDIR% (
 	mkdir %EXEDIR%
 )
 copy %~dp0*.dll %EXEDIR% > nul 2>&1
+copy %~dp0.\vpm.d %EXEDIR% > nul 2>&1
 
-rem Update the application using VPM.
-rdmd %DFLAGS% -of%EXEDIR%\vpm.exe -I%~dp0..\source %LIBS% %~dp0.\vpm.d
-
-rem Run the application.
-if EXIST deps.txt. (
-	rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d %1 %2 %3 %4 %5 %6
-) else (
-	rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource %LIBS% source\app.d %1 %2 %3 %4 %5 %6
-)
+rem Run, execute, do everything.. but when you do it, do it with the vibe!
+rdmd --force %DFLAGS% -of%EXEDIR%\vpm.exe -I%~dp0..\source %LIBS% %EXEDIR%.\vpm.d %~dp0 %1 %2 %3 %4 %5 %6 %7 %8 %9

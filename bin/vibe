@@ -5,10 +5,5 @@ export VIBEPATH=$(dirname $VIBEBINARY)
 export LIBS="-L-levent -L-levent_openssl -L-lssl -L-lcrypto"
 export DFLAGS="-g -w -property"
 
-rdmd $2 $1 $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource $VIBEPATH/vpm.d
-
-if [ -f "deps.txt" ]; then
-	rdmd --force $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource @deps.txt source/app.d $1 $2 $3 $4
-else
-	rdmd --force $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource source/app.d $1 $2 $3 $4
-fi
+rem Run, execute, do everything.. but when you do it, do it with the vibe!
+rdmd $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource $VIBEPATH/vpm.d $VIBEPATH %1 %2 %3 %4 %5 %6 %7 %8 %9
