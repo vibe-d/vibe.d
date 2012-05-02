@@ -11,6 +11,7 @@ import vibe.core.log;
 import vibe.textfilter.html;
 import vibe.utils.string;
 
+import std.algorithm;
 import std.array;
 import std.conv;
 import std.string;
@@ -18,7 +19,6 @@ import std.string;
 /*
 	TODO:
 		detect inline HTML tags
-		detect block HTML tags
 		no p inside li when there is no newline
 */
 
@@ -52,7 +52,8 @@ void filterMarkdown(R)(ref R dst, string src)
 	bool skip_next_line = false;
 
 	MarkdownState[] state = [];
-	foreach( lnidx, ln; lines ){
+	for( size_t lnidx = 0; lnidx < lines.length; lnidx++ ){
+		string ln = lines[lnidx];
 		logTrace("[line %d: %s]", lnidx+1, ln);
 		// skips Setext style headers...
 		if( skip_next_line ){
@@ -83,10 +84,23 @@ void filterMarkdown(R)(ref R dst, string src)
 		} else if( isHlineLine(ln) ){
 			is_hline = true;
 			is_blank = true;
-		} /* TODO:  else if( isHtmlBlockLine(ln) ){
-			exit all states;
-			output raw html until closing tag is reached!
-		}*/
+		}
+
+		// detect HTML block tags
+		if( !is_indented && isHtmlBlockLine(ln) ){
+			int depth = 1;
+			dst.put(ln);
+			dst.put('\n');
+			string openingtag = getHtmlTagName(ln);
+			while( depth > 0 ){
+				ln = lines[++lnidx];
+				dst.put(ln);
+				dst.put('\n');
+				if( isHtmlBlockLine(ln) && getHtmlTagName(ln) == openingtag ) depth++;
+				else if( isHtmlBlockCloseLine(ln) && getHtmlTagName(ln) == openingtag) depth--;
+			}
+			continue;
+		}
 
 		// determine the type of this line
 		MarkdownState newstate;
@@ -223,6 +237,11 @@ void filterMarkdown(R)(ref R dst, string src)
 	foreach_reverse( st; state ) exitState(dst, st);
 }
 
+
+private {
+	immutable s_blockTags = ["div", "ol", "p", "pre", "section", "table", "ul"];
+}
+
 private enum MarkdownState {
 	Blank,
 	Text,
@@ -277,7 +296,7 @@ private void outputLine(R)(ref R dst, string ln, MarkdownState state, in LinkRef
 				ln = ln[1 .. $].stripLeft();
 			goto case MarkdownState.Text;
 		case MarkdownState.OList: // skip bullets and output using normal escaping
-			auto idx = ln.indexOf('.');
+			auto idx = ln.countUntil('.');
 			assert(idx > 0);
 			ln = ln[idx+1 .. $].stripLeft();
 			goto case MarkdownState.Text;
@@ -489,7 +508,7 @@ private bool isUListLine(string ln)
 {
 	ln = stripLeft(ln);
 	if( ln.length < 1 ) return false;
-	return "*+-".indexOf(ln[0]) >= 0;
+	return "*+-".countUntil(ln[0]) >= 0;
 }
 
 private bool isOListLine(string ln)
@@ -501,6 +520,61 @@ private bool isOListLine(string ln)
 	while( ln.length > 0 && ln[0] >= '0' && ln[0] <= '9' )
 		ln = ln[1 .. $];
 	return ln.length > 0 && ln[0] == '.';
+}
+
+
+auto parseHtmlBlockLine(string ln)
+{
+	struct HtmlBlockInfo {
+		bool isHtmlBlock;
+		string tagName;
+		bool open;
+	}
+
+	HtmlBlockInfo ret;
+	ret.isHtmlBlock = false;
+	ret.open = true;
+
+	ln = strip(ln);
+	if( ln.length < 3 ) return ret;
+	if( ln[0] != '<' ) return ret;
+	if( ln[1] == '/' ){
+		ret.open = false;
+		ln = ln[1 .. $];
+	}
+	if( !isAlpha(ln[1]) ) return ret;
+	ln = ln[1 .. $];
+	size_t idx = 0;
+	while( idx < ln.length && ln[idx] != ' ' && ln[idx] != '>' )
+		idx++;
+	ret.tagName = ln[0 .. idx];
+	ln = ln[idx .. $];
+
+	auto eidx = ln.countUntil(">");
+	if( eidx < 0 ) return ret;
+	if( eidx != ln.length-1 ) return ret;
+
+	if( s_blockTags.countUntil(ret.tagName) < 0 ) return ret;
+
+	ret.isHtmlBlock = true;
+	return ret;
+}
+
+bool isHtmlBlockLine(string ln)
+{
+	auto bi = parseHtmlBlockLine(ln);
+	return bi.isHtmlBlock && bi.open;
+}
+
+bool isHtmlBlockCloseLine(string ln)
+{
+	auto bi = parseHtmlBlockLine(ln);
+	return bi.isHtmlBlock && !bi.open;
+}
+
+string getHtmlTagName(string ln)
+{
+	return parseHtmlBlockLine(ln).tagName;
 }
 
 private bool isLineIndented(string ln)
@@ -531,7 +605,7 @@ private int parseEmphasis(ref string str, ref string text)
 
 	pstr = pstr[ctag.length .. $];
 
-	auto cidx = pstr.indexOf(ctag);
+	auto cidx = pstr.countUntil(ctag);
 	if( cidx < 1 ) return false;
 
 	text = pstr[0 .. cidx];
@@ -550,7 +624,7 @@ private bool parseInlineCode(ref string str, ref string code)
 	else return false;
 	pstr = pstr[ctag.length .. $];
 
-	auto cidx = pstr.indexOf(ctag);
+	auto cidx = pstr.countUntil(ctag);
 	if( cidx < 1 ) return false;
 
 	code = pstr[0 .. cidx];
@@ -568,7 +642,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	// parse the text part [text]
 	if( pstr[0] != '[' ) return false;
 	pstr = pstr[1 .. $];
-	auto cidx = pstr.indexOf(']');
+	auto cidx = pstr.countUntil(']');
 	if( cidx < 1 ) return false;
 	string refid;
 	dst.text = pstr[0 .. cidx];
@@ -578,8 +652,8 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	if( pstr.length < 3 ) return false;
 	if( pstr[0] == '('){
 		pstr = pstr[1 .. $];
-		cidx = pstr.indexOf(')');
-		auto spidx = pstr.indexOf(' ');
+		cidx = pstr.countUntil(')');
+		auto spidx = pstr.countUntil(' ');
 		if( spidx > 0 && spidx < cidx ){
 			dst.url = pstr[0 .. spidx];
 			dst.title = pstr[spidx+1 .. cidx];
@@ -595,7 +669,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
 		if( pstr[0] != '[' ) return false;
 		pstr = pstr[1 .. $];
-		cidx = pstr.indexOf("]");
+		cidx = pstr.countUntil("]");
 		if( cidx < 0 ) return false;
 		if( cidx == 0 ) refid = dst.text;
 		else refid = pstr[0 .. cidx];
@@ -623,12 +697,12 @@ bool parseAutoLink(ref string str, ref string url)
 	if( pstr.length < 3 ) return false;
 	if( pstr[0] != '<' ) return false;
 	pstr = pstr[1 .. $];
-	auto cidx = pstr.indexOf('>');
+	auto cidx = pstr.countUntil('>');
 	if( cidx < 0 ) return false;
 	url = pstr[0 .. cidx];
 	if( anyOf(url, " \t") ) return false;
 	str = pstr[cidx+1 .. $];
-	if( url.indexOf('@') > 0 ) url = "mailto:"~url;
+	if( url.countUntil('@') > 0 ) url = "mailto:"~url;
 	return true;
 }
 
@@ -648,24 +722,24 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 		if( !ln.startsWith("[") ) continue;
 		ln = ln[1 .. $];
 
-		auto idx = ln.indexOf("]:");
+		auto idx = ln.countUntil("]:");
 		if( idx < 0 ) continue;
 		string refid = ln[0 .. idx];
 		ln = stripLeft(ln[idx+2 .. $]);
 
 		string url;
 		if( ln.startsWith("<") ){
-			idx = ln.indexOf(">");
+			idx = ln.countUntil(">");
 			if( idx < 0 ) continue;
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
 		} else {
-			idx = ln.indexOf(' ');
+			idx = ln.countUntil(' ');
 			if( idx > 0 ){
 				url = ln[0 .. idx];
 				ln = ln[idx+1 .. $];
 			} else {
-				idx = ln.indexOf('\t');
+				idx = ln.countUntil('\t');
 				if( idx < 0 ){
 					url = ln;
 					ln = ln[$ .. $];

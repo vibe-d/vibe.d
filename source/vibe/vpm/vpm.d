@@ -126,7 +126,7 @@ private class Application {
 	}
 	
 	/// Actions which can be performed to update the application.
-	Action[] actions(PackageSupplier packageSupplier) const {
+	Action[] actions(PackageSupplier packageSupplier, int option) const {
 		if(!m_main) {
 			Action[] a;
 			return a;
@@ -142,7 +142,8 @@ private class Application {
 				foreach(string pkg, reqDep; missing) {
 					auto o = pkg in oldMissing;
 					if(o && reqDep.dependency != o.dependency) {
-						different = true; break;
+						different = true; 
+						break;
 					}
 				}
 				if(!different) {
@@ -204,6 +205,7 @@ private class Application {
 	
 		// Check against installed and add install actions
 		Action[] actions;
+		Action[] uninstalls;
 		foreach( string pkg, d; graph.needed() ) {
 			auto p = pkg in installed;
 			// TODO: auto update to latest head revision
@@ -213,13 +215,18 @@ private class Application {
 				actions ~= Action(Action.ActionId.InstallUpdate, pkg, d.dependency, d.packages);
 			} else {
 				logDebug("Required package '"~pkg~"' found with version '"~p.vers~"'");
+				if( option & UpdateOptions.Reinstall ) {
+					Dependency[string] em;
+					uninstalls ~= Action( Action.ActionId.Uninstall, pkg, new Dependency("==" ~ p.vers), em);
+					actions ~= Action(Action.ActionId.InstallUpdate, pkg, d.dependency, d.packages);
+				}
+				
 				if( (pkg in unused) !is null )
 					unused.remove(pkg);
 			}
 		}
 		
 		// Add uninstall actions
-		Action[] uninstalls;
 		foreach( string pkg, p; unused ) {
 			logDebug("Superfluous package found: '"~pkg~"', version '"~p.vers~"'");
 			Dependency[string] em;
@@ -285,9 +292,15 @@ private class Application {
 /// The default supplier for packages, which is the registry
 /// hosted by vibed.org.
 PackageSupplier defaultPackageSupplier() {
-	Url url = Url.parse("http://127.0.0.1:8080/registry/");
+	Url url = Url.parse("http://registry.vibed.org/");
 	return new RegistryPS(url);
 }
+
+enum UpdateOptions
+{
+	JustAnnotate = 1<<0,
+	Reinstall = 1<<1
+};
 
 /// The Vpm or Vibe Package Manager helps in getting the applications
 /// dependencies up and running.
@@ -332,8 +345,9 @@ class Vpm {
 	
 	/// Performs installation and uninstallation as necessary for
 	/// the application.
-	bool update(bool justAnnotate=false) {
-		Action[] actions = m_app.actions(m_packageSupplier);
+	/// @param options bit combination of UpdateOptions
+	bool update(int options) {
+		Action[] actions = m_app.actions(m_packageSupplier, options);
 		if( actions.length == 0 ) {
 			logInfo("You are up to date");
 			return true;
@@ -351,7 +365,7 @@ class Vpm {
 			}
 		}
 		
-		if( conflictedOrFailed || justAnnotate )
+		if( conflictedOrFailed || options & UpdateOptions.JustAnnotate )
 			return conflictedOrFailed;
 		
 		// Uninstall first
@@ -369,7 +383,7 @@ class Vpm {
 				install(a.packageId, a.vers);
 		
 		m_app.reinit();
-		Action[] newActions = m_app.actions(m_packageSupplier);
+		Action[] newActions = m_app.actions(m_packageSupplier, 0);
 		if(newActions.length > 0) {
 			logInfo("There are still some actions to perform:");
 			foreach(Action a; newActions)

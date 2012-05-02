@@ -6,6 +6,7 @@
 	Authors: Matthias Dondorff
 */
 import std.file;
+import std.algorithm;
 
 import vibe.vibe;
 import vibe.core.log;
@@ -15,7 +16,13 @@ import vibe.vpm.registry;
 
 /// Starts the VPM and updates the application in the current working directory
 /// and writes the deps.txt afterwards, so that the application can start proper.
-int main()
+///
+/// Command line arguments:
+///
+/// - reinstall: performs a regular update and uninstalls and reinstalls any
+/// installed packages
+/// - keepDepsTxt: does not write out the deps.txt
+int main(string[] args)
 {
 	setLogLevel(LogLevel.Info);
 
@@ -23,15 +30,19 @@ int main()
 	logInfo("Updating application in '%s'", appPath);
 	
 	Url url = Url.parse("http://registry.vibed.org/");
-	//Url url = Url.parse("http://127.0.0.1:8005/");
 	logDebug("Using registry url '%s'", url);
 	
 	Vpm vpm = new Vpm(Path(appPath), new RegistryPS(url));
 	logDebug("Initialized");
 	
-	vpm.update();
-	vpm.createDepsTxt();
-	//vpm.createZip("testApp.zip");
+	int options = 0;
+	if(canFind(args, "reinstall"))
+		options = options | UpdateOptions.Reinstall;
+		
+	vpm.update(options);
+	
+	if(!canFind(args, "keepDepsTxt"))
+		vpm.createDepsTxt();
 
 	return 0;
 }

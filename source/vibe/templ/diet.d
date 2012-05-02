@@ -14,6 +14,8 @@ module vibe.templ.diet;
 
 public import vibe.stream.stream;
 
+import vibe.utils.string;
+
 import std.array;
 import std.conv;
 import std.format;
@@ -823,16 +825,6 @@ private int indentLevel(string s, string indent)
 private int indentLevel(in Line[] ln, string indent)
 {
 	return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
-}
-
-private bool isAlpha(char ch)
-{
-	switch( ch ){
-		default: return false;
-		case 'a': .. case 'z'+1: break;
-		case 'A': .. case 'Z'+1: break;
-	}
-	return true;
 }
 
 /*private bool isAlphanum(char ch)

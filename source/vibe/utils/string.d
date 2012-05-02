@@ -71,3 +71,12 @@ bool anyOf(string str, string chars)
 	return false;
 }
 
+bool isAlpha(char ch)
+{
+	switch( ch ){
+		default: return false;
+		case 'a': .. case 'z'+1: break;
+		case 'A': .. case 'Z'+1: break;
+	}
+	return true;
+}
