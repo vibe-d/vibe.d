@@ -126,7 +126,7 @@ private class Application {
 	}
 	
 	/// Actions which can be performed to update the application.
-	Action[] actions(PackageSupplier packageSupplier, UpdateOptions option) const {
+	Action[] actions(PackageSupplier packageSupplier, int option) const {
 		if(!m_main) {
 			Action[] a;
 			return a;
@@ -215,7 +215,8 @@ private class Application {
 				actions ~= Action(Action.ActionId.InstallUpdate, pkg, d.dependency, d.packages);
 			} else {
 				logDebug("Required package '"~pkg~"' found with version '"~p.vers~"'");
-				if( option & Reinstall ) {
+				if( option & UpdateOptions.Reinstall ) {
+					Dependency[string] em;
 					uninstalls ~= Action( Action.ActionId.Uninstall, pkg, new Dependency("==" ~ p.vers), em);
 					actions ~= Action(Action.ActionId.InstallUpdate, pkg, d.dependency, d.packages);
 				}
@@ -346,7 +347,7 @@ class Vpm {
 	/// the application.
 	/// @param options bit combination of UpdateOptions
 	bool update(int options) {
-		Action[] actions = m_app.actions(m_packageSupplier);
+		Action[] actions = m_app.actions(m_packageSupplier, options);
 		if( actions.length == 0 ) {
 			logInfo("You are up to date");
 			return true;
@@ -382,7 +383,7 @@ class Vpm {
 				install(a.packageId, a.vers);
 		
 		m_app.reinit();
-		Action[] newActions = m_app.actions(m_packageSupplier);
+		Action[] newActions = m_app.actions(m_packageSupplier, 0);
 		if(newActions.length > 0) {
 			logInfo("There are still some actions to perform:");
 			foreach(Action a; newActions)
