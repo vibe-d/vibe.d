@@ -201,6 +201,11 @@ class LimitedInputStream : InputStream {
 	
 	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
 	{
+		if( max_bytes != 0 && max_bytes < m_sizeLimit ){
+			auto ret = m_input.readLine(max_bytes, linesep);
+			m_sizeLimit -= ret.length + linesep.length;
+			return ret;
+		}
 		return readLineDefault(max_bytes, linesep);
 	}
 
