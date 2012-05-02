@@ -753,7 +753,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 			}
 
 		// Create the response object
-		auto res = new HttpServerResponse(conn, settings);
+		scope res = new HttpServerResponse(conn, settings);
 
 		// Error page handler
 		void errorOut(int code, string msg, string debug_msg){
@@ -764,7 +764,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 
 			res.statusCode = code;
 			if( settings && settings.errorPageHandler ){
-				auto err = new HttpServerErrorInfo;
+				scope err = new HttpServerErrorInfo;
 				err.code = code;
 				err.message = msg;
 				err.debugMessage = debug_msg;
@@ -882,6 +882,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 			if( settings.serverString.length )
 				res.headers["Server"] = settings.serverString;
 			res.headers["Date"] = toRFC822DateTimeString(Clock.currTime().toUTC());
+			if( req.persistent ) res.headers["Keep-Alive"] = "timeout=5";
 
 
 			logTrace("handle request (body %d)", req.bodyReader.leastSize);
