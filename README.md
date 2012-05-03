@@ -57,25 +57,27 @@ instructions](https://github.com/mxcl/homebrew/wiki/installation).
 2-4 Installation on Linux on Ubuntu
 ===================================
 
- - On 32-bit linux: Install DMD-i386
 
-	sudo apt-get install g++ xdg-util
-	wget "http://ftp.digitalmars.com/dmd_2.058-0_i386.deb"
-	sudo dpkg -i dmd_2.058-0_i386.deb
+Install vibe dependencies
 
-
- - On 64-bit linux: Install DMD-amd64
-
-	sudo apt-get install g++ xdg-util
-	wget "http://ftp.digitalmars.com/dmd_2.058-0_amd64.deb"
-	sudo dpkg -i dmd_2.058-0_amd64.deb
+    sudo apt-get install libevent-dev libssl-dev
 
 
- - Install vibe dependencies
+On 32-bit linux: Install DMD-i386
 
-    sudo apt-get install libevent-dev libssl-dev"
+    sudo apt-get install g++ xdg-util
+    wget "http://ftp.digitalmars.com/dmd_2.058-0_i386.deb"
+    sudo dpkg -i dmd_2.058-0_i386.deb
 
- - Unzip the vibe archive and use the `'vibe` script to run applications
+
+On 64-bit linux: Install DMD-amd64
+
+    sudo apt-get install g++ xdg-util
+    wget "http://ftp.digitalmars.com/dmd_2.058-0_amd64.deb"
+    sudo dpkg -i dmd_2.058-0_amd64.deb
+
+
+Unzip the vibe archive and use the `'vibe` script to run applications
 
 
 2-5 Installation on Linux using the install script
