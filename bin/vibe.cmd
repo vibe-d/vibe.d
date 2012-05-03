@@ -10,6 +10,7 @@ if NOT EXIST %EXEDIR% (
 	mkdir %EXEDIR%
 )
 copy %~dp0*.dll %EXEDIR% > nul 2>&1
+copy %~dp0*.dll . > nul 2>&1
 copy %~dp0.\vpm.d %EXEDIR% > nul 2>&1
 
 rem Run, execute, do everything.. but when you do it, do it with the vibe!
