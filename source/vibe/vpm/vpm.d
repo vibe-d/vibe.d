@@ -293,6 +293,7 @@ private class Application {
 /// hosted by vibed.org.
 PackageSupplier defaultPackageSupplier() {
 	Url url = Url.parse("http://registry.vibed.org/");
+	logDebug("Using the registry from %s", url);
 	return new RegistryPS(url);
 }
 
@@ -423,9 +424,11 @@ class Vpm {
 			if(!exists(to!string(dload)))
 				mkdirRecurse(to!string(dload));
 			auto tempFile = m_root ~ ("temp/downloads/"~packageId~".zip");
-			enforce(!exists(to!string(tempFile)), "Want to download package, but a file is occupying that space already: '"~to!string(tempFile)~"'");
+			string sTempFile = to!string(tempFile);
+			enforce(!exists(sTempFile), "Want to download package, but a file is occupying that space already: '"~sTempFile~"'");
+			if(exists(sTempFile)) remove(sTempFile);
 			m_packageSupplier.storePackage(tempFile, packageId, dep); // Q: continue on fail?
-			scope(exit) remove(to!string(tempFile));
+			scope(exit) remove(sTempFile);
 			
 			// unpack 
 			auto f = openFile(to!string(tempFile), FileMode.Read);
