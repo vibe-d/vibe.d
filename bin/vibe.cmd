@@ -13,7 +13,7 @@ copy %~dp0*.dll %EXEDIR% > nul 2>&1
 copy %~dp0.\vpm.d %EXEDIR% > nul 2>&1
 
 rem Run, execute, do everything.. but when you do it, do it with the vibe!
-rdmd --force %DFLAGS% -of%EXEDIR%\vpm.exe -I%~dp0..\source %LIBS% %EXEDIR%.\vpm.d %~dp0 %START_SCRIPT% %1 %2 %3 %4 %5 %6 %7 %8 %9
+rdmd %DFLAGS% -of%EXEDIR%\vpm.exe -I%~dp0..\source %LIBS% %EXEDIR%.\vpm.d %~dp0 %START_SCRIPT% %1 %2 %3 %4 %5 %6 %7 %8 %9
 
 rem Finally, start the app, if vpm succeded.
 if ERRORLEVEL 0 %START_SCRIPT%
