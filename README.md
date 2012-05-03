@@ -26,16 +26,21 @@ the website at http://vibed.org/ for more information.
 
 2-2 Installation on Mac using brew
 ==================================
- - If you don't have brew installed, install it according to their install
-	instructions at <https://github.com/mxcl/homebrew/wiki/installation>
-	(only install, if you do not have MacPorts installed as they will conflict)
-		/usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
+
+If you don't have brew installed, install it according to their [install
+instructions](https://github.com/mxcl/homebrew/wiki/installation)
+(only install, if you do not have MacPorts installed as they will conflict)
+
+    /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
 		
  - Install dependencies:
-		brew install libevent
+
+    brew install libevent
+
  - Install DMD using the installer on <http://dlang.org/download.html>
  - Unzip the vibe archive
  - Run any vibe apps using "vibe"
+
 
 2-3 Installation on Mac using the install script
 ================================================
@@ -51,19 +56,24 @@ the website at http://vibed.org/ for more information.
 ===================================
 
  - On 32-bit linux: Install DMD-i386
-		sudo apt-get install g++ xdg-util
-		wget "http://ftp.digitalmars.com/dmd_2.058-0_i386.deb"
-		sudo dpkg -i dmd_2.058-0_i386.deb
-		
+
+	sudo apt-get install g++ xdg-util
+	wget "http://ftp.digitalmars.com/dmd_2.058-0_i386.deb"
+	sudo dpkg -i dmd_2.058-0_i386.deb
+
+
  - On 64-bit linux: Install DMD-amd64
-		sudo apt-get install g++ xdg-util
-		wget "http://ftp.digitalmars.com/dmd_2.058-0_amd64.deb"
-		sudo dpkg -i dmd_2.058-0_amd64.deb
-		
+
+	sudo apt-get install g++ xdg-util
+	wget "http://ftp.digitalmars.com/dmd_2.058-0_amd64.deb"
+	sudo dpkg -i dmd_2.058-0_amd64.deb
+
+
  - Install vibe dependencies
-		sudo apt-get install libevent-dev libssl-dev"
-		
- - Unzip the vibe archive and use the 'vibe' script to run applications
+
+    sudo apt-get install libevent-dev libssl-dev"
+
+ - Unzip the vibe archive and use the `'vibe` script to run applications
 
 
 2-5 Installation on Linux using the install script
