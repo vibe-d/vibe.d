@@ -4,6 +4,12 @@ if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY=$0; fi
 export VIBEPATH=$(dirname $VIBEBINARY)
 export LIBS="-L-levent -L-levent_openssl -L-lssl -L-lcrypto"
 export DFLAGS="-g -w -property"
+export EXEDIR=$TEMP/.rdmd/source
+export START_SCRIPT=%EXEDIR%/appStart 
+if [ ! -n "$EXEDIR" ]; then mkdir $EXEDIR; fi
+copy $VIBEPATH/vpm.d $EXEDIR/vpm.d
 
-rem Run, execute, do everything.. but when you do it, do it with the vibe!
-rdmd $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource $VIBEPATH/vpm.d $VIBEPATH %1 %2 %3 %4 %5 %6 %7 %8 %9
+rdmd $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource $EXEDIR/vpm.d $VIBEPATH $START_SCRIPT %1 %2 %3 %4 %5 %6 %7 %8 %9
+
+; "Errorlevel" checking?
+$START_SCRIPT

@@ -13,7 +13,6 @@ import std.conv;
 import std.exception;
 import std.string;
 
-
 /**
 	Represents a URL decomposed into its components.
 */
@@ -280,6 +279,22 @@ struct Path {
 		return ret.data;
 	}
 	
+	string toNativeString() const {
+		Appender!string ret;
+		
+		// for absolute unix paths start with /
+		version(Posix) { if(absolute) ret.put('/'); }
+		
+		foreach( i, f; m_nodes ){
+			version(Windows) { if( i > 0 ) ret.put('\\'); }
+			version(Posix) { if( i > 0 ) ret.put('/'); }
+			else { enforce("Unsupported OS"); }
+			ret.put(f.toString());
+		}
+		
+		return ret.data;
+	}
+	
 	bool startsWith(const Path rhs) const {
 		if( rhs.m_nodes.length > m_nodes.length ) return false;
 		foreach( i; 0 .. rhs.m_nodes.length )
@@ -298,7 +313,6 @@ struct Path {
 		ret ~= Path(m_nodes[parentPath.length-nup .. $], false);
 		return ret;
 	}
-	
 	
 	@property PathEntry head() const { enforce(m_nodes.length > 0); return m_nodes[$-1]; }
 	@property Path parentPath() const { return this[0 .. length-1]; }
