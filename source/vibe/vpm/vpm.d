@@ -425,7 +425,6 @@ class Vpm {
 				mkdirRecurse(to!string(dload));
 			auto tempFile = m_root ~ ("temp/downloads/"~packageId~".zip");
 			string sTempFile = to!string(tempFile);
-			enforce(!exists(sTempFile), "Want to download package, but a file is occupying that space already: '"~sTempFile~"'");
 			if(exists(sTempFile)) remove(sTempFile);
 			m_packageSupplier.storePackage(tempFile, packageId, dep); // Q: continue on fail?
 			scope(exit) remove(sTempFile);
