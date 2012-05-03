@@ -5,7 +5,6 @@
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Matthias Dondorff
 */
-	
 import std.algorithm;
 import std.exception;
 import std.file;
@@ -142,7 +141,6 @@ private int parseOptions(string[] args)
 		options = options | UpdateOptions.Reinstall;
 	if(canFind(args, "annotate"))
 		options = options | UpdateOptions.JustAnnotate;
-	logInfo("Options: %s", options);
 	return options;
 }
 
