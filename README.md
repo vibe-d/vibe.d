@@ -28,11 +28,13 @@ the website at http://vibed.org/ for more information.
 ==================================
 
 If you don't have brew installed, install it according to their [install
-instructions](https://github.com/mxcl/homebrew/wiki/installation)
-(only install, if you do not have MacPorts installed as they will conflict)
+instructions](https://github.com/mxcl/homebrew/wiki/installation). 
 
     /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
-		
+
+(Note: Install brew only if you do not have macports, as they will conflict)
+
+
  - Install dependencies:
 
     brew install libevent
