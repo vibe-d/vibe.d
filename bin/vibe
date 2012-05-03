@@ -5,11 +5,13 @@ VIBEPATH=$(dirname $VIBEBINARY)
 LIBS="-L-levent -L-levent_openssl -L-lssl -L-lcrypto"
 DFLAGS="-g -w -property"
 START_SCRIPT=`mktemp`
-cp $VIBEPATH/vpm.d /tmp/vpm.d
+cp -p $VIBEPATH/vpm.d /tmp/vpm.d
 
 rdmd $DFLAGS -I$VIBEPATH/../source $LIBS -Jviews -Isource /tmp/vpm.d $VIBEPATH $START_SCRIPT $1 $2 $3 $4 $5 $6 $7 $8 $9
 
 if [ $? = 0 ]
 then
+	chmod +x $START_SCRIPT
 	$START_SCRIPT
+	rm $START_SCRIPT
 fi
