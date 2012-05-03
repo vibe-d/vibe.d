@@ -108,6 +108,9 @@ interface TcpConnection : Stream, EventedObject {
 
 	/// Accepts an SSL connection from a client.
 	void acceptSSL(SSLContext ctx);
+
+	/// Sets a timeout  until data has to be availabe for read. Returns false on timeout.
+	bool waitForData(int secs);
 }
 
 /**
