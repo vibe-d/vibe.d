@@ -13,6 +13,7 @@ import vibe.core.log;
 import std.conv;
 import std.exception;
 import std.variant;
+import core.stdc.stdlib;
 import core.thread;
 
 import vibe.core.drivers.libevent2;
@@ -277,6 +278,7 @@ version(Posix){
 	{
 		logInfo("Received signal %d. Shutting down.", signal);
 
-		s_driver.exitEventLoop();
+		if( s_eventLoopRunning ) s_driver.exitEventLoop();
+		else exit(1);
 	}
 }
