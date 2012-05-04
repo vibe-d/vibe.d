@@ -69,7 +69,7 @@ int main(string[] args)
 		Path vibedDir = Path(args[1]);
 		Path dstScript = Path(args[2]);
 		string[] vpmArgs = args[3..$];
-		int vpmArg = lastVpmArg(vpmArgs);
+		auto vpmArg = lastVpmArg(vpmArgs);
 		string[] appArgs;
 		if(vpmArg < vpmArgs.length)
 			appArgs = vpmArgs[vpmArg..$];
@@ -133,7 +133,7 @@ int main(string[] args)
 	}
 }
 
-private int lastVpmArg(string[] args)
+private size_t lastVpmArg(string[] args)
 {
 	string[] vpmArgs = 
 	[
