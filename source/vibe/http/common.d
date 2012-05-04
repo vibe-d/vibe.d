@@ -352,7 +352,7 @@ string toRFC822DateTimeString(SysTime time)
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 	formattedWrite(ret, "%s, %02d %s %d %02d:%02d:%02d %s", dayStrings[time.dayOfWeek],
-		time.day, monthStrings[time.month], time.year, time.hour, time.minute, time.second, "GMT");
+		time.day, monthStrings[time.month-1], time.year, time.hour, time.minute, time.second, "GMT");
 	return ret.data;
 }
 
@@ -371,7 +371,7 @@ string toRFC822DateString(SysTime time)
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 	formattedWrite(ret, "%s, %02d %s %d", dayStrings[time.dayOfWeek],
-		time.day, monthStrings[time.month], time.year);
+		time.day, monthStrings[time.month-1], time.year);
 	return ret.data;
 }
 
