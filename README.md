@@ -9,7 +9,7 @@ Installation on Windows
 -----------------------
 
  - Install DMD using the installer on http://dlang.org/download.html
- - Unzip the vibe archive and add the bin/ subfolder to your PATH variable
+ - Unzip the vibe archive (or git clone) and add the bin/ subfolder to your PATH variable
  - Run any vibe apps using "vibe" from the application's root directory
 
 
@@ -27,7 +27,7 @@ install libevent.
 
 Install DMD using the installer on <http://dlang.org/download.html>.
  
-Unzip the vibe archive and use the "vibe" script to run applications.
+Unzip the vibe archive (or git clone) and use the "vibe" script to run applications.
  
 Optionally, it's recommended to create a symlink in /usr/bin so you don't
 have to specify the path everytime:
@@ -57,7 +57,7 @@ On 64-bit linux: Install DMD-amd64
     sudo dpkg -i dmd_2.058-0_amd64.deb
 
 
-Unzip the vibe archive and use the "vibe" script to run applications
+Unzip the vibe archive (or git clone) and use the "vibe" script to run applications
 
 Optionally, it's recommended to create a symlink in /usr/bin so you don't
 have to specify the path everytime:
