@@ -19,53 +19,72 @@ import std.traits;
 /**
 	Generates registers a REST interface and connects it the the given instance.
 
-	Each method is mapped to the corresponing HTTP verb.
+	Each method is mapped to the corresponing HTTP verb. Property methods are mapped to GET/PUT and
+	all other methods are mapped according to their prefix verb. If the method has no known prefix,
+	POST is used. The following table lists the mappings from prefix verb to HTTP verb:
 
-	The following example makes MyApi available using HTTP requests. Valid requests are:
+	<table>
+		<tr><th>Prefix</th><th>HTTP verb</th></tr>
+		<tr><td>get</td><td>GET</td></tr>
+		<tr><td>set</td><td>PUT</td></tr>
+		<tr><td>put</td><td>PUT</td></tr>
+		<tr><td>update</td><td>PATCH</td></tr>
+		<tr><td>patch</td><td>PATCH</td></tr>
+		<tr><td>add</td><td>POST</td></tr>
+		<tr><td>create</td><td>POST</td></tr>
+		<tr><td>post</td><td>POST</td></tr>
+	</table>
 
-	 - GET /api/status -> "OK"
-	 - GET /api/greeting -> "current greeting"
-	 - PUT /api/greeting <- {"text": "new text"}
-	 - POST /api/new_user <- {"name": "new user name"}
-	 - GET /api/users -> ["user 1", "user 2"]
+	Examples:
 
-	---
-	import vibe.d;
+		The following example makes MyApi available using HTTP requests. Valid requests are:
 
-	interface IMyApi {
-		string getStatus();
+		<ul>
+		  $(LI GET /api/status &rarr; "OK")
+		  $(LI GET /api/greeting &rarr; "&lt;current greeting&gt;")
+		  $(LI PUT /api/greeting &larr; {"text": "&lt;new text&gt;"})
+		  $(LI POST /api/new_user &larr; {"name": "&lt;new user name&gt;"})
+		  $(LI GET /api/users &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
+		</ul>
+		---
+		import vibe.d;
 
-		@property string greeting();
-		@property void greeting(string text);
+		interface IMyApi {
+			string getStatus();
 
-		void addNewUser(string name);
-		@property string[] users();
-	}
+			@property string greeting();
+			@property void greeting(string text);
 
-	class MyApiImpl : IMyApi {
-		private string m_greeting;
-		private string[] m_users;
+			void addNewUser(string name);
+			@property string[] users();
+		}
 
-		string getStatus() { return "OK"; }
+		class MyApiImpl : IMyApi {
+			private string m_greeting;
+			private string[] m_users;
 
-		@property string greeting() { return m_greeting; }
-		@property void greeting(string text) { m_greeting = text; }
+			string getStatus() { return "OK"; }
 
-		void addNewUser(string name) { m_users ~= name; }
-		@property string[] users() { return m_users, }
-	}
+			@property string greeting() { return m_greeting; }
+			@property void greeting(string text) { m_greeting = text; }
 
-	static this()
-	{
-		auto routes = new UrlRouter;
+			void addNewUser(string name) { m_users ~= name; }
+			@property string[] users() { return m_users, }
+		}
 
-		registerRestInterface(routes, new MyApi, "/api/", MethodStyle.LowerUnderscored);
+		static this()
+		{
+			auto routes = new UrlRouter;
 
-		listenHttp(new HttpServerSettings, routes);
-	}
-	---
+			registerRestInterface(routes, new MyApi, "/api/", MethodStyle.LowerUnderscored);
 
-	See the RestInterfaceClient class for a seemless way to acces such a generated API.
+			listenHttp(new HttpServerSettings, routes);
+		}
+		---
+
+	See_Also:
+	
+		RestInterfaceClient class for a seemless way to acces such a generated API
 */
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
 		MethodStyle style = MethodStyle.Unaltered)
@@ -117,33 +136,35 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 	interface that is passed as a template argument. It can be used as a drop-in replacement
 	of the real implementation of the API this way.
 
-	An example client that accesses the API defined in the registerRestInterface() example:
+	Examples:
+	
+		An example client that accesses the API defined in the registerRestInterface() example:
 
-	---
-	import vibe.d;
+		---
+		import vibe.d;
 
-	interface IMyApi {
-		string getStatus();
+		interface IMyApi {
+			string getStatus();
 
-		@property string greeting();
-		@property void greeting(string text);
-		
-		void addNewUser(string name);
-		@property string[] users();
-	}
+			@property string greeting();
+			@property void greeting(string text);
+			
+			void addNewUser(string name);
+			@property string[] users();
+		}
 
-	static this()
-	{
-		auto api = new RestInterfaceClient!IMyApi(Url.parse("http://127.0.0.1/api/"), MethodStyle.LowerUnderlined);
+		static this()
+		{
+			auto api = new RestInterfaceClient!IMyApi(Url.parse("http://127.0.0.1/api/"), MethodStyle.LowerUnderlined);
 
-		logInfo("Status: ", api.getStatus());
-		api.greeting = "Hello, World!";
-		logInfo("Greeting message: %s", api.greeting);
-		api.addUser("Peter");
-		api.addUser("Igor");
-		logInfo("Users: %s", api.users);
-	}
-	---
+			logInfo("Status: ", api.getStatus());
+			api.greeting = "Hello, World!";
+			logInfo("Greeting message: %s", api.greeting);
+			api.addUser("Peter");
+			api.addUser("Igor");
+			logInfo("Users: %s", api.users);
+		}
+		---
 */
 class RestInterfaceClient(I) : I
 {
