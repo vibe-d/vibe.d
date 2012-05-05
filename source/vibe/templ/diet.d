@@ -582,15 +582,14 @@ private struct DietParser {
                     i++;
                     skipWhitespace(str, i);
                 } else if(name == "class") { //Support special-case class
-                    value = skipTo(str, i, " ,");
-                    assertp(isAlpha(value[0]), "Unexpected character '"~value[0]~"' following '='");
+                    value = skipIdent(str, i, "_.");
                     value = "#{join("~value~",\" \")}";
                 } else {
                     assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
                 }
 			}
 			
-			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str~"'");
+			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
 			if( i < str.length ){
 				i++;
 				skipWhitespace(str, i);
@@ -679,25 +678,6 @@ private struct DietParser {
 				}
 			}
 		}
-		assertp(start != idx, "Expected identifier but got nothing.");
-		return s[start .. idx];
-	}
-
-	string skipTo(string s, ref size_t idx, string chars = null)
-	{
-		size_t start = idx;
-        while( idx < s.length ){
-            bool done = false;
-            foreach( ch; chars )
-                if( s[idx] != ch ){
-                    idx++;
-                    break;
-                } else {
-                    done = true;
-                }
-            if (done)
-                break;
-        }
 		assertp(start != idx, "Expected identifier but got nothing.");
 		return s[start .. idx];
 	}
