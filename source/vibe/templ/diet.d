@@ -524,7 +524,6 @@ private struct DietParser {
 		
 		// put #id and .classes into the attribs list
 		if( id.length ) attribs ~= tuple("id", id);
-		if( classes.length ) attribs ~= tuple("class", classes);
 		
 		// parse other attributes
 		if( i < line.length && line[i] == '(' ){
@@ -533,6 +532,21 @@ private struct DietParser {
 			parseAttributes(attribstring, attribs);
 			i++;
 		}
+
+        // Add extra classes
+        bool has_classes = false;
+        if (attribs.length) {
+            foreach (idx, att; attribs) {
+                if (att[0] == "class") {
+                    if( classes.length )
+                        attribs[idx] = tuple("class", att[1]~" "~classes);
+                    has_classes = true;
+                    break;
+                }
+            }
+        }
+
+        if (!has_classes && classes.length ) attribs ~= tuple("class", classes);
 
 		// skip until the optional tag text contents begin
 		skipWhitespace(line, i);
@@ -561,12 +575,19 @@ private struct DietParser {
 				i++;
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
-				assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
-				auto delimiter = str[i];
-				i++;
-				value = skipAttribString(str, i, delimiter);
-				i++;
-				skipWhitespace(str, i);
+                if (str[i] == '\'' || str[i] == '"') {
+                    auto delimiter = str[i];
+                    i++;
+                    value = skipAttribString(str, i, delimiter);
+                    i++;
+                    skipWhitespace(str, i);
+                } else if(name == "class") { //Support special-case class
+                    value = skipTo(str, i, " ,");
+                    assertp(isAlpha(value[0]), "Unexpected character '"~value[0]~"' following '='");
+                    value = "#{join("~value~",\" \")}";
+                } else {
+                    assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
+                }
 			}
 			
 			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str~"'");
@@ -658,6 +679,25 @@ private struct DietParser {
 				}
 			}
 		}
+		assertp(start != idx, "Expected identifier but got nothing.");
+		return s[start .. idx];
+	}
+
+	string skipTo(string s, ref size_t idx, string chars = null)
+	{
+		size_t start = idx;
+        while( idx < s.length ){
+            bool done = false;
+            foreach( ch; chars )
+                if( s[idx] != ch ){
+                    idx++;
+                    break;
+                } else {
+                    done = true;
+                }
+            if (done)
+                break;
+        }
 		assertp(start != idx, "Expected identifier but got nothing.");
 		return s[start .. idx];
 	}
