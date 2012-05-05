@@ -254,7 +254,7 @@ class DocProcessor {
 		Json dst = processMember(al, sc);
 		dst.kind = "class";
 		dst.members = processMembers(al.members, dst.nestedName.get!string);
-		dst.base = processType(al.base);
+		dst.base = processType("base" in al ? al.base : Json("Object"));
 		Json[] interfaces;
 		if( "interfaces" in al ){
 			foreach( intf; al.interfaces )
@@ -284,7 +284,8 @@ class DocProcessor {
 	{
 		Json dst = processMember(al, sc);
 		dst.kind = "variable";
-		dst["type"] = processType(al["type"]);
+		if( "type" in al )
+			dst["type"] = processType(al["type"]);
 		return dst;
 	}
 
@@ -294,7 +295,7 @@ class DocProcessor {
 		dst.kind = "template";
 		if( "type" in al )
 			dst["type"] = processType(al["type"]);
-			dst.members = processMembers(al.members, dst.nestedName.get!string);
+		dst.members = processMembers(al.members, dst.nestedName.get!string);
 		return dst;
 	}
 
@@ -461,6 +462,9 @@ class DocProcessor {
 				string type_name, nested_name;
 				if( i == 0 && tokens[0] == "..." ){
 					type_name = "...";
+					nested_name = null;
+				} else if( i == 0 && tokens[0] == "(" ){
+					type_name = "constructor";
 					nested_name = null;
 				} else {
 					enforce(i > 0, "Expected identifier but got "~tokens.front);
