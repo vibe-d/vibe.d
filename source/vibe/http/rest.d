@@ -20,6 +20,52 @@ import std.traits;
 	Generates registers a REST interface and connects it the the given instance.
 
 	Each method is mapped to the corresponing HTTP verb.
+
+	The following example makes MyApi available using HTTP requests. Valid requests are:
+
+	 - GET /api/status -> "OK"
+	 - GET /api/greeting -> "current greeting"
+	 - PUT /api/greeting <- {"text": "new text"}
+	 - POST /api/new_user <- {"name": "new user name"}
+	 - GET /api/users -> ["user 1", "user 2"]
+
+	---
+	import vibe.d;
+
+	interface IMyApi {
+		string getStatus();
+
+		@property string greeting();
+		@property void greeting(string text);
+
+		void addNewUser(string name);
+		@property string[] users();
+	}
+
+	class MyApiImpl : IMyApi {
+		private string m_greeting;
+		private string[] m_users;
+
+		string getStatus() { return "OK"; }
+
+		@property string greeting() { return m_greeting; }
+		@property void greeting(string text) { m_greeting = text; }
+
+		void addNewUser(string name) { m_users ~= name; }
+		@property string[] users() { return m_users, }
+	}
+
+	static this()
+	{
+		auto routes = new UrlRouter;
+
+		registerRestInterface(routes, new MyApi, "/api/", MethodStyle.LowerUnderscored);
+
+		listenHttp(new HttpServerSettings, routes);
+	}
+	---
+
+	See the RestInterfaceClient class for a seemless way to acces such a generated API.
 */
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
 		MethodStyle style = MethodStyle.Unaltered)
@@ -43,6 +89,8 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 
 	Each function is callable with either GET or POST using form encoded parameters. Complex
 	parameters are encoded as JSON strings.
+
+	Note that this function is currently not fully implemented.
 */
 void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 		MethodStyle style = MethodStyle.Unaltered)
@@ -65,7 +113,37 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 	Implements the given interface by forwarding all public methods to a REST server.
 
 	The server must talk the same protocol as registerRestInterface() generates. Be sure to set
-	the matching method style for this.
+	the matching method style for this. The RestInterfaceClient class will derive from the
+	interface that is passed as a template argument. It can be used as a drop-in replacement
+	of the real implementation of the API this way.
+
+	An example client that accesses the API defined in the registerRestInterface() example:
+
+	---
+	import vibe.d;
+
+	interface IMyApi {
+		string getStatus();
+
+		@property string greeting();
+		@property void greeting(string text);
+		
+		void addNewUser(string name);
+		@property string[] users();
+	}
+
+	static this()
+	{
+		auto api = new RestInterfaceClient!IMyApi(Url.parse("http://127.0.0.1/api/"), MethodStyle.LowerUnderlined);
+
+		logInfo("Status: ", api.getStatus());
+		api.greeting = "Hello, World!";
+		logInfo("Greeting message: %s", api.greeting);
+		api.addUser("Peter");
+		api.addUser("Igor");
+		logInfo("Users: %s", api.users);
+	}
+	---
 */
 class RestInterfaceClient(I) : I
 {
