@@ -28,8 +28,8 @@ import std.traits;
 	behave mostly like values in ECMA script in the way that you can
 	transparently perform operations on them. However, strict typechecking is
 	done, so that operations between differently typed JSON values will throw
-	and exception. Additionally, an explicit cast is required to convert a
-	JSON value the the corresponding static D type.
+	an exception. Additionally, an explicit cast or using get!() or to!() is 
+	required to convert a JSON value to the corresponding static D type.
 */
 struct Json {
 	/** Represents the run time type of a JSON value.
