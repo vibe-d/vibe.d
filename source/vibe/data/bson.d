@@ -540,6 +540,11 @@ struct BsonObjectID {
 		return false;
 	}
 
+	int opCmp(ref const BsonObjectID other) const {
+		if( m_bytes == other.m_bytes) return 0;
+		return m_bytes < other.m_bytes ? -1 : 1;
+	}
+
 	string toString() const {
 		enum hexdigits = "0123456789abcdef";
 		auto ret = new char[24];
