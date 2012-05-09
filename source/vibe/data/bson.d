@@ -563,7 +563,7 @@ struct BsonDate {
         this(SysTime(date));
     }
 
-    this(Datetime date) {
+    this(DateTime date) {
         this(SysTime(date));
     }
 
