@@ -30,6 +30,16 @@ struct Url {
 		string m_localURI;
 	}
 
+	this(string schema, string host, ushort port, Path path)
+	{
+		m_schema = schema;
+		m_host = host;
+		m_port = port;
+		m_path = path;
+		m_pathString = path.toString(true);
+		m_localURI = m_pathString;
+	}
+
 	// TODO: additional validation required (e.g. valid host and user names and port)
 	static Url parse(string str)
 	{
@@ -190,8 +200,8 @@ struct Url {
 		return path.startsWith(rhs.m_path);
 	}
 
-	Url opBinary(string OP)(Path rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_path ~ rhs); }
-	Url opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_path ~ rhs); }
+	Url opBinary(string OP)(Path rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_port, m_path ~ rhs); }
+	Url opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_port, m_path ~ rhs); }
 	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { m_path ~= rhs; }
 	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { m_path ~= rhs; }
 

@@ -96,6 +96,13 @@ class UrlRouter : IHttpServerRequestHandler {
 	/// ditto
 	UrlRouter delete_(string url_match, HttpServerRequestDelegate cb) { addRoute("DELETE", url_match, cb); return this; }
 
+	/// Adds a new route for PATCH requests matching the specified pattern.
+	UrlRouter patch(string url_match, IHttpServerRequestHandler cb) { addRoute("PATCH", url_match, cb); return this; }
+	/// ditto
+	UrlRouter patch(string url_match, HttpServerRequestFunction cb) { addRoute("PATCH", url_match, cb); return this; }
+	/// ditto
+	UrlRouter patch(string url_match, HttpServerRequestDelegate cb) { addRoute("PATCH", url_match, cb); return this; }
+
 	/// Adds a new route for requests matching the specified pattern.
 	UrlRouter any(string url_match, IHttpServerRequestHandler cb) { any(url_match, &cb.handleRequest); return this; }
 	/// ditto
@@ -107,20 +114,21 @@ class UrlRouter : IHttpServerRequestHandler {
 		post(url_match, cb);
 		put(url_match, cb);
 		delete_(url_match, cb);
+		patch(url_match, cb);
 		return this;
 	}
 
-	protected void addRoute(string method, string path, IHttpServerRequestHandler cb)
+	void addRoute(string method, string path, IHttpServerRequestHandler cb)
 	{
 		addRoute(method, path, &cb.handleRequest);
 	}
 
-	protected void addRoute(string method, string path, HttpServerRequestFunction cb)
+	void addRoute(string method, string path, HttpServerRequestFunction cb)
 	{
 		addRoute(method, path, toDelegate(cb));
 	}
 
-	protected void addRoute(string method, string path, HttpServerRequestDelegate cb)
+	void addRoute(string method, string path, HttpServerRequestDelegate cb)
 	{
 		m_routes[method] ~= Route(path, cb);
 	}

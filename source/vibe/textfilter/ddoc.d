@@ -204,13 +204,25 @@ private void renderTextLine(R)(ref R dst, string line, string[string] macros, st
 		line = line[1 .. $];
 		if( line.length < 1) continue;
 
-		if( line[0] >= '0' && line[0] <= '9' ){
-			int pidx = line[0]-'0';
+		if( line[0] == '0'){
+			foreach( i, p; params ){
+				if( i > 0 ) dst.put(' ');
+				dst.put(p);
+			}
+			line = line[1 .. $];
+		} else if( line[0] >= '1' && line[0] <= '9' ){
+			int pidx = line[0]-'1';
 			if( pidx < params.length )
 				dst.put(params[pidx]);
 			line = line[1 .. $];
 		} else if( line[0] == '+' ){
+			bool got_comma = false;
 			foreach( i, p; params ){
+				if( !got_comma ){
+					if( p == "," )
+						got_comma = true;
+					continue;
+				}
 				if( i > 0 ) dst.put(' ');
 				dst.put(p);
 			}
@@ -219,8 +231,8 @@ private void renderTextLine(R)(ref R dst, string line, string[string] macros, st
 			auto cidx = line.countUntil(')');
 			if( cidx < 0 ) continue;
 			auto args = splitParams(line[1 .. cidx]);
-			logInfo("PARAMS: %s", args);
-			logInfo("MACROS: %s", macros);
+			logDebug("PARAMS: %s", args);
+			logDebug("MACROS: %s", macros);
 			line = line[cidx+1 .. $];
 
 			if( args.length < 1 ) continue;

@@ -45,7 +45,7 @@ struct Json {
 		Object
 	}
 
-	enum Json Undefined = Json();
+	static @property Json Undefined() { return Json(); }
 	static @property Json EmptyObject() { return Json(cast(Json[string])null); }
 	static @property Json EmptyArray() { return Json(cast(Json[])null); }
 
@@ -739,11 +739,11 @@ void deserializeJson(T)(ref T dst, Json src)
 {
 	static if( is(T == Json) ) dst = src;
 	else static if( is(T == typeof(null)) ){ }
-	else static if( is(T == bool) ) return cast(bool)src;
-	else static if( is(T == float) ) return cast(double)src;
-	else static if( is(T == double) ) return cast(double)src;
-	else static if( is(T : long) ) return cast(T)cast(long)src;
-	else static if( is(T == string) ) return cast(string)src;
+	else static if( is(T == bool) ) dst = src.get!bool;
+	else static if( is(T == float) ) dst = src.get!float;
+	else static if( is(T == double) ) dst = src.get!double;
+	else static if( is(T : long) ) dst = cast(T)src.get!long;
+	else static if( is(T == string) ) dst = src.get!string;
 	else static if( isArray!T ){
 		dst.length = src.length;
 		foreach( size_t i, v; src )
