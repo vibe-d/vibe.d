@@ -369,7 +369,7 @@ final class HttpServerRequest : HttpRequest {
 		string password;
 		string querystring;
 
-		// enabled if HeetServerOption.ParseCookies is set
+		// enabled if HttpServerOption.ParseCookies is set
 		string[string] cookies;
 		
 		// enabled if HttpServerOption.ParseQueryString is set
