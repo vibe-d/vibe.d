@@ -7,6 +7,7 @@
 */
 module vibe.core.drivers.libev;
 
+import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
@@ -14,7 +15,9 @@ import vibe.core.log;
 import intf.libev;
 
 import std.algorithm : min;
+import std.array;
 import std.exception;
+import std.conv;
 import std.string;
 
 import core.memory;
@@ -22,17 +25,20 @@ import core.sys.posix.netinet.tcp;
 import core.thread;
 
 version(Windows){
-  public import std.c.windows.winsock;
+	import std.c.windows.winsock;
 } else {
-  public import core.sys.posix.sys.socket;
-  public import core.sys.posix.sys.time;
-  public import core.sys.posix.netdb;
-  public import core.sys.posix.netinet.in_;
+	import core.sys.posix.sys.socket;
+	import core.sys.posix.sys.time;
+ 	import core.sys.posix.fcntl;
+	import core.sys.posix.netdb;
+	import core.sys.posix.netinet.in_;
+	import core.sys.posix.unistd;
+	import core.stdc.errno;
 }
 
 
 private extern(C){
-	void* myrealloc(void* p, int newsize);//{ return GC.realloc(p, newsize); }
+	void* myrealloc(void* p, int newsize){ return GC.realloc(p, newsize); }
 }
 
 
@@ -49,12 +55,15 @@ class LibevDriver : EventDriver {
 		ev_set_allocator(&myrealloc);
 		m_loop = ev_loop_new(EVFLAG_AUTO);
 		enforce(m_loop !is null, "Failed to create libev loop");
+		logInfo("Got libev backend: %d", ev_backend(m_loop));
 	}
 
 	int runEventLoop()
 	{
 		while(!m_break)
-			ev_run(m_loop, 0);
+			ev_run(m_loop, EVRUN_ONCE);
+		m_break = false;
+		logInfo("Event loop exit", m_break);
 		return 0;
 	}
 	
@@ -66,6 +75,8 @@ class LibevDriver : EventDriver {
 	
 	void exitEventLoop()
 	{
+		logInfo("Exiting (%s)", m_break);
+		m_break = true;
 		ev_break(m_loop, EVBREAK_ALL);
 	}
 	
@@ -140,7 +151,8 @@ class LibevDriver : EventDriver {
 			logError("Error enabling socket address reuse on listening socket");
 			return -1;
 		}
-		if( bind(listenfd, cast(sockaddr*)sock_addr, SOCKADDR.sizeof) ){
+		if( bind(listenfd, cast(
+sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 			logError("Error binding listening socket");
 			return -1;
 		}
@@ -155,9 +167,28 @@ class LibevDriver : EventDriver {
 		auto w_accept = new ev_io;
 		ev_io_init(w_accept, &accept_cb, listenfd, EV_READ);
 		ev_io_start(m_loop, w_accept);
+		
+		w_accept.data = cast(void*)this;
+		addEventReceiver(m_core, listenfd, new TcpListener(connection_callback));
 
 		return 0;
 	}
+}
+
+class TcpListener : EventedObject {
+	private {
+		void delegate(TcpConnection conn) m_connectionCallback;
+	}
+
+	this(void delegate(TcpConnection conn) connection_callback)
+	{
+		m_connectionCallback = connection_callback;
+	}
+	
+	@property void delegate(TcpConnection conn) connectionCallback() { return m_connectionCallback; }
+	
+	void acquire() { assert(false); }
+	void release() { assert(false); }
 }
 
 class LibevTcpConnection : TcpConnection {
@@ -166,13 +197,20 @@ class LibevTcpConnection : TcpConnection {
 		int m_socket;
 		ubyte[64*1024] m_readBuffer;
 		ubyte[] m_readBufferContent;
+		ev_io* m_readWatcher;
+		ev_io* m_writeWatcher;
+		int m_eventsExpected = 0;
+		Appender!(ubyte[]) m_writeBuffer;
 	}
 	
-	this(LibevDriver driver, int fd)
+	this(LibevDriver driver, int fd, ev_io* read_watcher, ev_io* write_watcher)
 	{
 		assert(fd >= 0);
 		m_driver = driver;
 		m_socket = fd;
+		m_readWatcher = read_watcher;
+		m_writeWatcher = write_watcher;
+		//logInfo("fd %d %d", fd, watcher.fd);
 	}
 	
 	@property void tcpNoDelay(bool enabled)
@@ -183,6 +221,29 @@ class LibevTcpConnection : TcpConnection {
 	
 	void close()
 	{
+		//logTrace("closing");
+		enforce(m_socket >= 0);
+		//logInfo("shut %d", m_socket);
+		shutdown(m_socket, SHUT_WR);
+		while(true){
+			ubyte[1024] buffer;
+		//logInfo("shutrecv %d", m_socket);
+			auto ret = recv(m_socket, buffer.ptr, buffer.length, 0);
+			if( ret == 0 ) break;
+			int err = errno;
+			//logInfo("shutrecv %d: %d %d", m_socket, ret, err);
+			if( err != EWOULDBLOCK && err != EAGAIN ){
+				//logInfo("Socket error on shutdown: %d", err);
+				break;
+			}
+			//logInfo("shutyield %d", m_socket);
+			yieldFor(EV_READ);
+		}
+		stopYield();
+		//logInfo("close %d", m_socket);
+		.close(m_socket);
+		m_socket = -1;
+
 	}
 	
 	@property bool connected() const { return m_socket >= 0; }
@@ -208,6 +269,7 @@ class LibevTcpConnection : TcpConnection {
 	{
 		//ev_timer timer;
 		//ev_timer_set(&timer, tst, rtst);
+		//eventsExpected = EV_READ;
 		assert(false);
 	}
 	
@@ -227,7 +289,7 @@ class LibevTcpConnection : TcpConnection {
 	{
 		if( m_readBufferContent.length == 0 ){
 			readChunk();
-			assert(m_readBufferContent.length > 0);
+			//assert(m_readBufferContent.length > 0);
 		}
 		return m_readBufferContent.length;
 	}
@@ -235,8 +297,9 @@ class LibevTcpConnection : TcpConnection {
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
-			if( !m_readBufferContent.length )
-				readChunk();
+			checkConnected();
+			if( !m_readBufferContent.length ) readChunk();
+			enforce(m_readBufferContent.length > 0, "Remote end hung up during read.");
 			size_t n = min(dst.length, m_readBufferContent.length);
 			dst[0 .. n] = m_readBufferContent[0 .. n];
 			dst = dst[n .. $];
@@ -244,9 +307,52 @@ class LibevTcpConnection : TcpConnection {
 		}
 	}
 	
+	const(ubyte)[] peek(size_t nbytes = 0)
+	{
+		if( !m_readBufferContent.length ) readChunk();
+		return m_readBufferContent;
+	}
+	
+	void drain(size_t nbytes){
+		while( nbytes > 0 ){
+			if( m_readBufferContent.length == 0 ) readChunk();
+			size_t amt = min(nbytes, m_readBufferContent.length);
+			m_readBufferContent = m_readBufferContent[amt .. $];
+			nbytes -= amt;
+		}
+	}
+	
 	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
 	{
-		return readLineDefault(max_bytes, linesep);
+		logTrace("readln");
+		assert(linesep.length >= 1);
+		auto dst = appender!(ubyte[])();
+		size_t matchcount = 0;
+		bool first = true;
+		while(true){
+			logTrace("readln peek");
+			auto data = peek();
+			enforce(data.length > 0, "Remote end hung up before line was read.");
+			size_t remaining = min(data.length, max_bytes - dst.data.length);
+			foreach( didx; 0 .. remaining ){
+				if( data[didx] == linesep[matchcount] ){
+					matchcount++;
+					if( matchcount == linesep.length ){
+						dst.put(data[0 .. didx+1]);
+						drain(didx+1);
+						if( first ) return data[0 .. didx+1-linesep.length].dup;
+						auto ret = dst.data();
+						return ret[0 .. $-linesep.length];
+					}
+				} else matchcount = 0;
+			}
+			logTrace("readln drain");
+			first = false;
+			dst.put(data[0 .. remaining]);
+			drain(remaining);
+			enforce(dst.data.length+linesep.length <= max_bytes, "Line too long.");
+		}
+//		return readLineDefault(max_bytes, linesep);
 	}
 	
 	ubyte[] readAll(size_t max_bytes = 0)
@@ -256,22 +362,34 @@ class LibevTcpConnection : TcpConnection {
 	
 	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
-		const(ubyte)[] bytes = bytes_;
-		while( bytes.length > 0 ){
-			size_t nbytes = send(m_socket, bytes.ptr, bytes.length, 0);
-			enforce(nbytes >= 0, "Error sending data");
-			enforce(nbytes > 0, "Conn closed while sending?");
-			bytes = bytes[nbytes .. $];
-			m_driver.m_core.yieldForEvent();
-		}
+		m_writeBuffer.put(bytes_);
+		
+		/*if( do_flush )*/ flush();
 	}
 	
 	void flush()
 	{
+		const(ubyte)[] bytes = m_writeBuffer.data();//bytes_;
+		scope(exit) m_writeBuffer.clear();
+		scope(exit) stopYield();
+		while( bytes.length > 0 ){
+			checkConnected();
+			logTrace("send %d: %s", bytes.length,cast(string)bytes);
+			auto nbytes = send(m_socket, bytes.ptr, bytes.length, 0);
+			logTrace(" .. got %d", nbytes);
+			if( nbytes == bytes.length ) break;
+			if( nbytes < 0 ){
+				int err = errno;
+				enforce(err != EPIPE, "Remote end hung before all data was sent.");
+				enforce(err == EAGAIN || err == EWOULDBLOCK, "Error sending data: "~to!string(errno));
+			} else bytes = bytes[nbytes .. $];
+			if( bytes.length > 0 ) yieldFor(EV_WRITE);
+		}
 	}
 	
 	void finalize()
 	{
+		flush();
 	}
 	
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
@@ -281,11 +399,51 @@ class LibevTcpConnection : TcpConnection {
 	
 	private void readChunk()
 	{
+		checkConnected();
+		logTrace("Reading next chunk!");
 		assert(m_readBufferContent.length == 0);
-		auto nbytes = recv(m_socket, m_readBuffer.ptr, m_readBuffer.length, 0);
-		enforce(nbytes >= 0, "Socket error on read");
-		enforce(nbytes == 0, "Socket closed by peer on read");
+		ptrdiff_t nbytes;
+		scope(exit) stopYield();
+		while(true){
+			nbytes = recv(m_socket, m_readBuffer.ptr, m_readBuffer.length, 0);
+			logTrace(" .. got %d, %d", nbytes, errno);
+			if( nbytes >= 0 ) break;
+			int err = errno;
+			enforce(err == EWOULDBLOCK || err == EAGAIN, "Socket error on read: "~to!string(err));
+			yieldFor(EV_READ);
+		}
+		
+		logTrace(" <%s>", cast(string)m_readBuffer[0 .. nbytes]);
+		if( nbytes == 0 ){
+			logInfo("detected connection close during read!");
+			/*close();
+			return;*/
+		}
 		m_readBufferContent = m_readBuffer[0 .. nbytes];
+	}
+	
+	private void checkConnected()
+	{
+		enforce(m_socket >= 0, "Operating on closed connection.");
+	}
+	
+	private void yieldFor(int events)
+	{
+		if( m_eventsExpected != events ){
+			if( events & EV_READ ) ev_io_start(m_driver.m_loop, m_readWatcher);
+			if( events & EV_WRITE ) ev_io_start(m_driver.m_loop, m_writeWatcher);
+			m_eventsExpected = events;
+		}
+		m_driver.m_core.yieldForEvent();
+	}
+	
+	private void stopYield()
+	{
+		if( m_eventsExpected ){
+			if( m_eventsExpected & EV_READ ) ev_io_stop(m_driver.m_loop, m_readWatcher);
+			if( m_eventsExpected & EV_WRITE ) ev_io_stop(m_driver.m_loop, m_writeWatcher);
+			m_eventsExpected = 0;
+		}
 	}
 }
 
@@ -297,6 +455,15 @@ private {
 			Fiber[] m_tasks;
 			EventedObject m_object;
 		}
+
+		this(DriverCore core, long fd, EventedObject object)
+		{
+			m_core = core;
+			m_fd = fd;
+			m_object = object;
+			auto self = Fiber.getThis();
+			if( self ) m_tasks ~= self;
+		}
 		
 		void wakeUpTasks(Exception e = null)
 		{
@@ -304,14 +471,32 @@ private {
 				m_core.resumeTask(t, e);
 		}
 		
-		EventedObject eventObject() { return m_object; }
+		@property EventedObject eventObject() { return m_object; }
 	}
 	EventSlot[long] m_eventReceivers;
+	
+	void addEventReceiver(DriverCore core, long fd, EventedObject object)
+	{
+		m_eventReceivers[fd] = new EventSlot(core, fd, object);
+	}
+	
+	void removeEventReceiver(long fd)
+	{
+		m_eventReceivers.remove(fd);
+	}
+	
+	EventedObject getEventedObjectForFd(long fd)
+	{
+		auto sl = fd in m_eventReceivers;
+		return sl ? sl.m_object : null;
+	}
 }
 
 private extern(C){
 	void accept_cb(ev_loop_t *loop, ev_io *watcher, int revents)
 	{
+		auto driver = cast(LibevDriver)watcher.data;
+	
 		sockaddr_in client_addr;
 		socklen_t client_len = client_addr.sizeof;
 		enforce((EV_ERROR & revents) == 0);
@@ -324,24 +509,52 @@ private extern(C){
 
 		logDebug("client %d connected.", client_sd);
 
-		ev_io* r_client = new ev_io;
-		ev_io_init(r_client, &read_cb, client_sd, EV_READ);
-		ev_io_start(loop, r_client);
-
-		ev_io* w_client = new ev_io;
+		/*ev_io* w_client = new ev_io;
 		ev_io_init(w_client, &write_cb, client_sd, EV_WRITE);
-		ev_io_start(loop, w_client);
+		ev_io_start(loop, w_client);*/
+		
+		auto obj = cast(TcpListener)getEventedObjectForFd(watcher.fd);
+		
+		void client_task()
+		{
+			ev_io* r_client = new ev_io;
+			ev_io* w_client = new ev_io;
+			ev_io_init(r_client, &read_cb, client_sd, EV_READ);
+			ev_io_init(w_client, &read_cb, client_sd, EV_WRITE);
+
+			auto conn = new LibevTcpConnection(driver, client_sd, r_client, w_client);
+			logTrace("client task in");
+			addEventReceiver(driver.m_core, client_sd, conn);
+			logTrace("calling connection callback");
+			try {
+				obj.connectionCallback()(conn);
+			} catch( Exception e ){
+				logWarn("Unhandled exception in connection handler: %s", e.toString());
+			}
+			logTrace("client task out");
+			if( conn.connected ) conn.close();
+			removeEventReceiver(client_sd);
+		}
+		
+		runTask(&client_task);
 	}
 	
 	void read_cb(ev_loop_t *loop, ev_io *watcher, int revents)
 	{
+		logTrace("i/o event on %d: %d", watcher.fd, revents);
 		auto rec = watcher.fd in m_eventReceivers;
-		rec.wakeUpTasks();
+		//assert(rec !is null);
+		if( rec is null ) return;
+		
+		if( ((cast(LibevTcpConnection)rec.eventObject).m_eventsExpected & revents) != 0 )
+			rec.wakeUpTasks();
 	}
 
 	void write_cb(ev_loop_t *loop, ev_io *watcher, int revents)
 	{
+		logTrace("write event on %d: %d", watcher.fd, revents);
 		auto rec = watcher.fd in m_eventReceivers;
+		assert(rec !is null);
 		rec.wakeUpTasks();
 	}
 }
