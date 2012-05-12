@@ -160,7 +160,7 @@ class Libevent2Driver : EventDriver {
 			logError("Error binding listening socket");
 			return -1;
 		}
-		if( listen(listenfd, 8) ){
+		if( listen(listenfd, 128) ){
 			logError("Error listening to listening socket");
 			return -1;
 		}
