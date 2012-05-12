@@ -10,6 +10,7 @@ module vibe.core.core;
 public import vibe.core.driver;
 
 import vibe.core.log;
+import vibe.utils.array;
 import std.conv;
 import std.exception;
 import std.range;
@@ -297,16 +298,6 @@ private void clearTaskLocals()
 	auto self = Fiber.getThis();
 	auto ptls = self in s_taskLocalStorage;
 	if( ptls ) s_taskLocalStorage.remove(self);
-}
-
-/// private
-package void removeFromArray(T)(ref T[] array, T item)
-{
-	foreach( i; 0 .. array.length )
-		if( array[i] is item ){
-			array = array[0 .. i] ~ array[i+1 .. $];
-			return;
-		}
 }
 
 version(Posix){

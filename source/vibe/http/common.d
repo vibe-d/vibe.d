@@ -11,6 +11,7 @@ public import vibe.http.status;
 
 import vibe.core.log;
 import vibe.core.tcp;
+import vibe.utils.array;
 
 import std.algorithm;
 import std.array;
@@ -294,34 +295,57 @@ final class Cookie {
 */
 struct StrMapCI {
 	private {
-		Tuple!(string, string)[string] m_map;
+		Tuple!(string, string)[64] m_fields;
+		size_t m_fieldCount = 0;
+		Tuple!(string, string)[] m_extendedFields;
 		static char[256] s_keyBuffer;
 	}
 
 	void remove(string key){
-		m_map.remove(makeTmpKey(key));
+		auto idx = getIndex(m_fields[0 .. m_fieldCount], key);
+		if( idx >= 0 ){
+			removeFromArrayIdx(m_fields[0 .. m_fieldCount], idx);
+			m_fieldCount--;
+		} else {
+			idx = getIndex(m_extendedFields, key);
+			enforce(idx >= 0);
+			removeFromArrayIdx(m_extendedFields, idx);
+		}
 	}
 
 	string opIndex(string key){
-		auto pv = makeTmpKey(key) in m_map;
-		enforce(pv !is null, "Accessing non-existant key '"~key~"'.");
-		return (*pv)[1];
+		auto pitm = key in this;
+		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
+		return *pitm;
 	}
-	string opIndexAssign(string val, string key){ m_map[toLower(key)] = tuple(key, val); return val; }
+	string opIndexAssign(string val, string key){
+		auto pitm = key in this;
+		if( pitm ) *pitm = val;
+		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = tuple(key, val);
+		else m_extendedFields ~= tuple(key, val);
+		return val;
+	}
 
 	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
-		auto p = makeTmpKey(key) in m_map;
-		if( p is null ) return null;
-		return &(*p)[1];
+		auto idx = getIndex(m_fields[0 .. m_fieldCount], key);
+		if( idx >= 0 ) return &m_fields[idx][1];
+		idx = getIndex(m_extendedFields, key);
+		if( idx >= 0 ) return &m_extendedFields[idx][1];
+		return null;
 	}
 
 	bool opBinaryRight(string op)(string key) inout if(op == "!in") {
-		return makeTmpKey(key) !in m_map;
+		return !(key in this);
 	}
 
 	int opApply(int delegate(ref string key, ref string val) del)
 	{
-		foreach( ref kv; m_map ){
+		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
+			string kcopy = kv[0];
+			if( auto ret = del(kcopy, kv[1]) )
+				return ret;
+		}
+		foreach( ref kv; m_extendedFields ){
 			string kcopy = kv[0];
 			if( auto ret = del(kcopy, kv[1]) )
 				return ret;
@@ -331,7 +355,11 @@ struct StrMapCI {
 
 	int opApply(int delegate(ref string val) del)
 	{
-		foreach( ref kv; m_map ){
+		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
+			if( auto ret = del(kv[1]) )
+				return ret;
+		}
+		foreach( ref kv; m_extendedFields ){
 			if( auto ret = del(kv[1]) )
 				return ret;
 		}
@@ -341,19 +369,18 @@ struct StrMapCI {
 	@property StrMapCI dup()
 	const {
 		StrMapCI ret;
-		foreach( v; m_map ) ret[v[0]] = v[1];
+		ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
+		ret.m_fieldCount = m_fieldCount;
+		ret.m_extendedFields = m_extendedFields.dup;
 		return ret;
 	}
-	
-	private static string makeTmpKey(string key)
-	{
-		if( key.length < s_keyBuffer.length ){
-			auto tmp = s_keyBuffer[0 .. key.length];
-			tmp[] = key;
-			toLowerInPlace(tmp);
-			key = cast(immutable)tmp;
-		} else key = toLower(key);
-		return key;
+
+	private ptrdiff_t getIndex(in Tuple!(string, string)[] map, string key)
+	const {
+		foreach( i, ref const(Tuple!(string, string)) entry; map )
+			if( icmp(entry[0], key) == 0 )
+				return i;
+		return -1;
 	}
 }
 
