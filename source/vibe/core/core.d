@@ -12,11 +12,13 @@ public import vibe.core.driver;
 import vibe.core.log;
 import std.conv;
 import std.exception;
+import std.range;
 import std.variant;
 import core.stdc.stdlib;
 import core.thread;
 
 import vibe.core.drivers.libevent2;
+//import vibe.core.drivers.libev;
 
 version(Posix){
 	import core.sys.posix.signal;
@@ -60,14 +62,19 @@ int start()
 */
 void runTask(void delegate() task)
 {
-	auto f = new Fiber({
-			logTrace("entering task.");
-			task();
-			logTrace("exiting task.");
-			clearTaskLocals();
-		});
-	s_tasks ~= f;
+	// if there is no fiber available, create one.
+	if( s_availableFibersCount == 0 ){
+		if( s_availableFibers.length == 0 ) s_availableFibers.length = 1024;
+		logDebug("Creating new fiber...");
+		s_fiberCount++;
+		s_availableFibers[s_availableFibersCount++] = new Fiber(&defaultFiberFunc);
+	}
+	
+	// pick the first available fiber
+	auto f = s_availableFibers[--s_availableFibersCount];
+	s_taskFuncs[f] = task;
 	logDebug("initial task call");
+	s_tasks ~= f;
 	s_core.resumeTask(f);
 	logDebug("run task out");
 }
@@ -221,6 +228,10 @@ private {
 	EventDriver s_driver;
 	Variant[string][Fiber] s_taskLocalStorage;
 	//Variant[string] s_currentTaskStorage;
+	Fiber[] s_availableFibers;
+	size_t s_availableFibersCount;
+	size_t s_fiberCount;
+	void delegate()[Fiber] s_taskFuncs;
 }
 
 shared static this()
@@ -236,6 +247,7 @@ shared static this()
 	logTrace("event_set_mem_functions");
 	s_core = new VibeDriverCore;
 	s_driver = new Libevent2Driver(s_core);
+	//s_driver = new LibevDriver(s_core);
 	
 	version(Posix){
 		// support proper shutdown using signals
@@ -247,6 +259,30 @@ shared static this()
 		siginfo.sa_flags = SA_RESTART;
 		sigaction(SIGINT, &siginfo, null);
 		sigaction(SIGTERM, &siginfo, null);
+		
+		siginfo.sa_handler = &onBrokenPipe;
+		sigaction(SIGPIPE, &siginfo, null);
+	}
+}
+
+private void defaultFiberFunc()
+{
+	while(true){
+		auto task = s_taskFuncs[Fiber.getThis()];
+		try {
+			logTrace("entering task.");
+			task();
+			logTrace("exiting task.");
+		} catch( Exception e ){
+			logDebug("task terminated with exception: %s", e.toString());
+		}
+		clearTaskLocals();
+		
+		// make the fiber available for the next task
+		if( s_availableFibers.length <= s_availableFibersCount )
+			s_availableFibers.length = 2*s_availableFibers.length;
+		s_availableFibers[s_availableFibersCount++] = Fiber.getThis();
+		s_core.yieldForEvent();
 	}
 }
 
@@ -280,5 +316,9 @@ version(Posix){
 
 		if( s_eventLoopRunning ) s_driver.exitEventLoop();
 		else exit(1);
+	}
+	
+	private extern(C) void onBrokenPipe(int signal)
+	{
 	}
 }
