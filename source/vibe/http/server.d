@@ -938,13 +938,13 @@ private HttpServerRequest parseRequest(TcpConnection conn)
 	logTrace("req: %s", reqln);
 	
 	//Method
-	auto pos = reqln.indexOf(" ");
+	auto pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request method" );
 
 	req.method = reqln[0 .. pos];
 	reqln = reqln[pos+1 .. $];
 	//Path
-	pos = reqln.indexOf(" ");
+	pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request path" );
 
 	req.url = reqln[0 .. pos];
@@ -954,9 +954,9 @@ private HttpServerRequest parseRequest(TcpConnection conn)
 	
 	//headers
 	string ln;
-	while( (ln = cast(string)stream.readLine(MaxHttpHeaderLineLength)) != "" ){
-	logTrace("hdr: %s", ln);
-		auto colonpos = ln.indexOf(":");
+	while( (ln = cast(string)stream.readLine(MaxHttpHeaderLineLength)).length > 0 ){
+		logTrace("hdr: %s", ln);
+		auto colonpos = ln.indexOf(':');
 		if( colonpos > 0 && colonpos < ln.length - 1 ) {
 			auto name = ln[0..colonpos].strip();
 			auto value = ln[colonpos+1..$].strip();

@@ -295,27 +295,28 @@ final class Cookie {
 struct StrMapCI {
 	private {
 		Tuple!(string, string)[string] m_map;
+		static char[256] s_keyBuffer;
 	}
 
 	void remove(string key){
-		m_map.remove(toLower(key));
+		m_map.remove(makeTmpKey(key));
 	}
 
 	string opIndex(string key){
-		auto pv = toLower(key) in m_map;
+		auto pv = makeTmpKey(key) in m_map;
 		enforce(pv !is null, "Accessing non-existant key '"~key~"'.");
 		return (*pv)[1];
 	}
 	string opIndexAssign(string val, string key){ m_map[toLower(key)] = tuple(key, val); return val; }
 
 	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
-		auto p = toLower(key) in m_map;
+		auto p = makeTmpKey(key) in m_map;
 		if( p is null ) return null;
 		return &(*p)[1];
 	}
 
 	bool opBinaryRight(string op)(string key) inout if(op == "!in") {
-		return toLower(key) !in m_map;
+		return makeTmpKey(key) !in m_map;
 	}
 
 	int opApply(int delegate(ref string key, ref string val) del)
@@ -342,6 +343,17 @@ struct StrMapCI {
 		StrMapCI ret;
 		foreach( v; m_map ) ret[v[0]] = v[1];
 		return ret;
+	}
+	
+	private static string makeTmpKey(string key)
+	{
+		if( key.length < s_keyBuffer.length ){
+			auto tmp = s_keyBuffer[0 .. key.length];
+			tmp[] = key;
+			toLowerInPlace(tmp);
+			key = cast(immutable)tmp;
+		} else key = toLower(key);
+		return key;
 	}
 }
 
