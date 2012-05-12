@@ -559,6 +559,14 @@ struct BsonObjectID {
 struct BsonDate {
 	private long m_time; // milliseconds since UTC unix epoch
 
+    this(Date date) {
+        this(SysTime(date));
+    }
+
+    this(DateTime date) {
+        this(SysTime(date));
+    }
+
 	this(long time){
 		m_time = time;
 	}
@@ -567,6 +575,7 @@ struct BsonDate {
 		auto zero = unixTimeToStdTime(0);
 		m_time = (time.stdTime() - zero) / 10_000L;
 	}
+
 
 	SysTime toSysTime() const {
 		auto zero = unixTimeToStdTime(0);
