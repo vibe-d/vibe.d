@@ -1,0 +1,21 @@
+!!! 5
+html
+	head
+		title Benchmark site
+	body
+		h1 Available tests:
+		ol
+			li
+				a(href="empty") Empty response
+			li
+				a(href="static/10") 10B static page
+			li
+				a(href="static/1k") 1kB static page
+			li
+				a(href="static/10k") 10kB static page
+			li
+				a(href="file/10") 10B file
+			li
+				a(href="file/1k") 1kB file
+			li
+				a(href="file/10k") 10kB file
