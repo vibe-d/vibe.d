@@ -12,6 +12,7 @@ public import vibe.http.status;
 import vibe.core.log;
 import vibe.core.tcp;
 import vibe.utils.array;
+import vibe.utils.string;
 
 import std.algorithm;
 import std.array;
@@ -378,7 +379,7 @@ struct StrMapCI {
 	private ptrdiff_t getIndex(in Tuple!(string, string)[] map, string key)
 	const {
 		foreach( i, ref const(Tuple!(string, string)) entry; map )
-			if( icmp(entry[0], key) == 0 )
+			if( icmp2(entry[0], key) == 0 )
 				return i;
 		return -1;
 	}
@@ -388,6 +389,7 @@ string toRFC822DateTimeString(SysTime time)
 {
 	assert(time.timezone == UTC());
 	auto ret = appender!string();
+	ret.reserve(29);
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 	formattedWrite(ret, "%s, %02d %s %d %02d:%02d:%02d %s", dayStrings[time.dayOfWeek],
@@ -399,6 +401,7 @@ string toRFC822TimeString(SysTime time)
 {
 	assert(time.timezone == UTC());
 	auto ret = appender!string();
+	ret.reserve(12);
 	formattedWrite(ret, "%02d:%02d:%02d %s", time.hour, time.minute, time.second, "GMT");
 	return ret.data;
 }
@@ -407,6 +410,7 @@ string toRFC822DateString(SysTime time)
 {
 	assert(time.timezone == UTC());
 	auto ret = appender!string();
+	ret.reserve(16);
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 	formattedWrite(ret, "%s, %02d %s %d", dayStrings[time.dayOfWeek],

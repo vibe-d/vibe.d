@@ -10,6 +10,8 @@ module vibe.utils.string;
 public import std.string;
 
 import std.array;
+import std.uni;
+import std.utf;
 import core.exception;
 
 
@@ -79,4 +81,36 @@ bool isAlpha(char ch)
 		case 'A': .. case 'Z'+1: break;
 	}
 	return true;
+}
+
+int icmp2(string a, string b)
+{
+	size_t i = 0, j = 0;
+	while( i < a.length && j < b.length ){
+		char ac = a[i];
+		char bc = b[i];
+		if( ac < 128 && bc < 128 ){
+			i++;
+			j++;
+			if( ac != bc ){
+				if( ac >= 'A' && ac <= 'Z' ) ac += 'a' - 'A';
+				if( bc >= 'A' && bc <= 'Z' ) bc += 'a' - 'A';
+				if( ac < bc ) return -1;
+				else if( ac > bc ) return 1;
+			}
+		} else {
+			dchar acp = decode(a, i);
+			dchar bcp = decode(b, j);
+			if( acp != bcp ){
+				acp = toLower(acp);
+				bcp = toLower(bcp);
+				if( acp < bcp ) return -1;
+				else if( acp > bcp ) return 1;
+			}
+		}
+	}
+
+	if( i < a.length ) return 1;
+	else if( j < b.length ) return -1;
+	return 0;
 }

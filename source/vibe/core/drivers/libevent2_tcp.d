@@ -108,9 +108,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		checkConnected();
 		auto fd = bufferevent_getfd(m_baseEvent);
-		foreach( ref ctx; s_tcpContexts )
-			if( ctx.socketfd == fd )
-				ctx.shutdown = true;
+		m_ctx.shutdown = true;
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
 		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
@@ -225,8 +223,7 @@ package class Libevent2TcpConnection : TcpConnection {
 			m_ctx.core.yieldForEvent();
 		}
 		
-		auto ret = (cast(ubyte*)ln)[0 .. nbytes].dup;
-		free(ln);
+		auto ret = (cast(ubyte*)ln)[0 .. nbytes];
 		logTrace("TCPConnection.readline return data (%d)", nbytes);
 		return ret;
 	}
@@ -277,7 +274,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		checkConnected();
 		logTrace("bufferevent_flush");
-		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
+		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 	}
 
 	void finalize()
@@ -343,10 +340,6 @@ package struct TcpContext
 /**************************************************************************************************/
 /* Private functions                                                                              */
 /**************************************************************************************************/
-
-package {
-	TcpContext*[] s_tcpContexts;
-}
 
 package extern(C)
 {
@@ -423,13 +416,11 @@ package extern(C)
 			}
 			
 			auto cctx = new TcpContext(ctx.core, ctx.eventLoop, null, sockfd, buf_event, remote_addr);
-			s_tcpContexts ~= cctx;
 			bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 			timeval toread = {tv_sec: 60, tv_usec: 0};
 			bufferevent_set_timeouts(buf_event, &toread, null);
 			if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
 				logError("Error enabling buffered I/O event for fd %d.", sockfd);
-				s_tcpContexts.removeFromArray(cctx);
 				return;
 			}
 			
@@ -458,7 +449,6 @@ package extern(C)
 			else shutdown(ctx.socketfd, SHUT_WR);
 			bufferevent_free(buf_event);
 			ctx.event = null;
-			s_tcpContexts.removeFromArray(ctx);
 		} else if( ctx.task && ctx.task.state != Fiber.State.TERM ){
 			bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 			ctx.core.resumeTask(ctx.task);
@@ -492,7 +482,6 @@ package extern(C)
 		if( free_event || (status & BEV_EVENT_ERROR) ){	
 			bufferevent_free(buf_event);
 			ctx.event = null;
-			s_tcpContexts.removeFromArray(ctx);
 		}
 
 		if( !ctx.shutdown && ctx.task && ctx.task.state != Fiber.State.TERM ){

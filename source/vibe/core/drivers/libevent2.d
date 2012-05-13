@@ -17,11 +17,18 @@ import intf.event2.dns;
 import intf.event2.event;
 import intf.event2.util;
 
+import core.memory;
 import core.sys.posix.netinet.tcp;
 import core.thread;
 import std.conv;
 import std.exception;
 import std.string;
+
+private extern(C){
+	void* myalloc(size_t size){ return GC.malloc(size); }
+	void* myrealloc(void* p, size_t newsize){ return GC.realloc(p, newsize); }
+	void myfree(void* p){ GC.free(p); }
+}
 
 
 class Libevent2Driver : EventDriver {
@@ -37,8 +44,7 @@ class Libevent2Driver : EventDriver {
 
 		// set the malloc/free versions of our runtime so we don't run into trouble
 		// because the libevent DLL uses a different one.
-		import core.stdc.stdlib;
-		event_set_mem_functions(&malloc, &realloc, &free);
+		event_set_mem_functions(&myalloc, &myrealloc, &myfree);
 
 		// initialize libevent
 		logDebug("libevent version: %s", to!string(event_get_version()));
@@ -91,7 +97,6 @@ class Libevent2Driver : EventDriver {
 
 		auto cctx = new TcpContext(m_core, m_eventLoop, null, sockfd, buf_event);
 		cctx.task = Fiber.getThis();
-		s_tcpContexts ~= cctx;
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		timeval toread = {tv_sec: 60, tv_usec: 0};
 		bufferevent_set_timeouts(buf_event, &toread, null);
@@ -175,7 +180,6 @@ class Libevent2Driver : EventDriver {
 
 		// Add an event to wait for connections
 		auto ctx = new TcpContext(m_core, m_eventLoop, connection_callback, listenfd, null, *sock_addr);
-		s_tcpContexts ~= ctx;
 		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 		if( event_add(connect_event, null) ){
 			logError("Error scheduling connection event on the event loop.");

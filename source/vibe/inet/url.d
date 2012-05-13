@@ -434,16 +434,17 @@ PathEntry[] splitPath(string path)
 	if( path[$-1] != '/' && path[$-1] != '\\' ) nelements++;
 	
 	// reserve space for the elements
-	PathEntry[] elements;
-	elements.reserve(nelements);
+	auto elements = new PathEntry[nelements];
 
 	// read and return the elements
 	size_t startidx = 0;
+	size_t eidx = 0;
 	foreach( i, char ch; path )
 		if( ch == '\\' || ch == '/' ){
-			elements ~= PathEntry(path[startidx .. i]);
+			elements[eidx++] = PathEntry(path[startidx .. i]);
 			startidx = i+1;
 		}
-	if( startidx < path.length ) elements ~= PathEntry(path[startidx .. $]);
+	if( startidx < path.length ) elements[eidx++] = PathEntry(path[startidx .. $]);
+	assert(eidx == nelements);
 	return elements;
 }

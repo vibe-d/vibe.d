@@ -47,6 +47,7 @@ void logError(T...)(string fmt, T args) { log(LogLevel.Error, fmt, args); }
 /// ditto
 void log(T...)(LogLevel level, string fmt, T args)
 {
+	if( level < s_minLevel ) return;
 	string pref;
 	final switch( level ){
 		case LogLevel.Trace: pref = "trc"; break;
@@ -57,7 +58,6 @@ void log(T...)(LogLevel level, string fmt, T args)
 		case LogLevel.Fatal: pref = "FATAL"; break;
 	}
 	
-	if( level < s_minLevel ) return;
 	writef("[%08X:%08X %s] ", cast(void*)Thread.getThis(), cast(size_t)cast(void*)Fiber.getThis(), pref);
 	writefln(fmt, args);
 }
