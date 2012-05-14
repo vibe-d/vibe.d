@@ -51,7 +51,7 @@ void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
 
 	// Generate the D source code for the diet template
 	mixin(dietParser!template_file);
-	#line 52 "diet.d"
+	#line 55 "diet.d"
 }
 
 /**
@@ -72,7 +72,7 @@ void parseDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream 
 
 	// Generate the D source code for the diet template
 	mixin(dietParser!template_file);
-	#line 73 "diet.d"
+	#line 76 "diet.d"
 }
 
 private @property string dietParser(string template_file)()
@@ -624,7 +624,7 @@ private struct DietParser {
 		static immutable exit_string = ["", "\"", ""];
 		size_t start = 0, i = 0;
 		while( i < str.length ){
-			if( str[i] == '#' ){
+			if( str[i] == '#' && str.length >= 2){
 				if( i > start ){
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
