@@ -640,6 +640,7 @@ final class HttpServerResponse : HttpResponse {
 		foreach( n, v; this.headers ){
 			app.put(n);
 			app.put(':');
+			app.put(' ');
 			app.put(v);
 			app.put("\r\n");
 		}
