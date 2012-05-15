@@ -361,6 +361,7 @@
    <File path="source\vibe\textfilter\urlencode.d" />
   </Folder>
   <Folder name="utils">
+   <File path="source\vibe\utils\array.d" />
    <File path="source\vibe\utils\string.d" />
   </Folder>
  </Folder>
