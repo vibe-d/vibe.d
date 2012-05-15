@@ -638,6 +638,7 @@ Bson serializeToBson(T)(T value)
 	else static if( is(T == double) ) return Bson(value);
 	else static if( is(T : long) ) return Bson(cast(long)value);
 	else static if( is(T == string) ) return Bson(value);
+	else static if( is(T : const(ubyte)[]) ) return Bson(BsonBinData(BsonBinData.Type.Generic, value.idup));
 	else static if( isArray!T ){
 		auto ret = new Bson[value.length];
 		foreach( i; 0 .. value.length )
@@ -689,6 +690,7 @@ void deserializeBson(T)(ref T dst, Bson src)
 	else static if( is(T == double) ) dst = cast(double)src;
 	else static if( is(T : long) ) dst = cast(T)cast(long)src;
 	else static if( is(T == string) ) dst = cast(string)src;
+	else static if( is(T : const(ubyte)[]) ) dst = cast(T)src.get!BsonBinData.rawData.dup;
 	else static if( isArray!T ){
 		dst.length = src.length;
 		foreach( size_t i, v; cast(Bson[])src )
