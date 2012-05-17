@@ -414,7 +414,8 @@ private struct DietParser {
 		// determine if we need a closing tag
 		bool has_children = true;
 		switch(tag){
-			case "br", "hr", "img", "link", "meta":
+			case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
+					"link", "keygen", "meta", "param", "source", "track", "wbr":
 				has_children = false;
 				break;
 			default:
