@@ -897,6 +897,10 @@ private string cttostring(T)(T x)
 
 private Line[] removeEmptyLines(string text, string file)
 {
+	// Strip UTF-8 BOM
+	if( text.length >= 3 && text[0 .. 3] == [0xEF, 0xBB, 0xBF] )
+		text = text[3 .. $];
+
 	Line[] ret;
 	int num = 1;
 	size_t idx = 0;
