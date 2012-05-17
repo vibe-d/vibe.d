@@ -79,10 +79,10 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 	conn.write("HELO "~settings.localname~"\r\n");
 	expectStatus(conn, SmtpStatus.Success);
 
-	conn.write("MAIL FROM:"~mail.headers["From"]~"\r\n");
+	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
 	expectStatus(conn, SmtpStatus.Success);
 
-	conn.write("RCPT TO:"~mail.headers["To"]~"\r\n"); // TODO: support multiple recipients
+	conn.write("RCPT TO:"~addressMailPart(mail.headers["To"])~"\r\n"); // TODO: support multiple recipients
 	expectStatus(conn, SmtpStatus.Success);
 
 	conn.write("DATA\r\n");
@@ -114,4 +114,13 @@ private int recvStatus(TcpConnection conn)
 	auto sp = ln.countUntil(' ');
 	if( sp < 0 ) sp = ln.length;
 	return to!int(ln[0 .. sp]);
+}
+
+private string addressMailPart(string str)
+{
+	auto idx = str.countUntil('<');
+	if( idx < 0 ) return str;
+	str = str[idx .. $];
+	enforce(str[$-1] == '>', "Malformed email address field: '"~str~"'.");
+	return str;
 }
