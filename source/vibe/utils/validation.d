@@ -30,10 +30,10 @@ string validateEmail(string str, size_t max_length = 64)
 	enforce(at_idx > 0, "Email is missing the '@'.");
 	validateIdent(str[0 .. at_idx], "!#$%&'*+-/=?^_`{|}~.(),:;<>@[\\]", "An email user name");
 	
-	str = str[at_idx+1 .. $];
-	auto dot_idx = str.countUntil('.');
+	auto domain = str[at_idx+1 .. $];
+	auto dot_idx = domain.countUntil('.');
 	enforce(dot_idx > 0 && dot_idx < str.length-2, "The email domain is not valid.");
-	enforce(!str.anyOf(" @,[](){}<>!\"'%&/\\?*#;:|"), "The email domain contains invalid characters.");
+	enforce(!domain.anyOf(" @,[](){}<>!\"'%&/\\?*#;:|"), "The email domain contains invalid characters.");
 	
 	// does not link!?
 	//enforce(isEmail(str) == EmailStatusCode.valid, "The email address is invalid.");
