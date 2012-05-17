@@ -38,7 +38,7 @@ void listenTcpS(ushort port, void function(TcpConnection conn) connection_callba
 void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
 {
 	listenTcp(port, connection_callback, "0.0.0.0");
-	listenTcp(port, connection_callback, ":::0");
+	listenTcp(port, connection_callback, "::");
 }
 
 /// ditto
