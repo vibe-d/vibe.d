@@ -110,11 +110,11 @@ int main(string[] args)
 				"--force " ~
 				"-of" ~ binName ~ " " ~
 				(canFind(vpmArgs, "build")? "--build-only " : " ") ~
-				getDflags() ~ " " ~
 				"-I" ~ (vibedDir ~ ".." ~ "source").toNativeString() ~ " " ~
 				"-Jviews -Isource " ~
 				(exists("deps.txt")? "@deps.txt " : " ") ~
 				getLibs(vibedDir) ~ " " ~
+				getDflags() ~ " " ~
 				(Path("source") ~ "app.d").toNativeString() ~
 				reduce!("a ~ ' ' ~ b")("", appArgs);
 		}
