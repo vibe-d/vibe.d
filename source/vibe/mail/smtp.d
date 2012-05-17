@@ -49,10 +49,10 @@ enum SmtpStatus {
 }
 
 class SmtpClientSettings {
-	string host;
-	ushort port;
+	string host = "127.0.0.1";
+	ushort port = 25;
 	string localname = "localhost";
-	SmtpConnectionType connectionType;
+	SmtpConnectionType connectionType = SmtpConnectionType.Plain;
 
 	this() {}
 	this(string host, ushort port) { this.host = host; this.port = port; }
@@ -65,7 +65,13 @@ class Mail {
 
 void sendMail(SmtpClientSettings settings, Mail mail)
 {
-	auto conn = connectTcp(settings.host, settings.port);
+	TcpConnection conn;
+	try {
+		conn = connectTcp(settings.host, settings.port);
+	} catch(Exception e){
+		throw new Exception("Failed to connect to SMTP server at "~settings.host~" port "
+			~to!string(settings.port), e);
+	}
 	scope(exit) conn.close();
 
 	expectStatus(conn, SmtpStatus.ServiceReady);
