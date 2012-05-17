@@ -433,6 +433,8 @@ struct Bson {
 		Allows to access existing fields of a JSON object using dot syntax.
 	*/
 	@property inout(Bson) opDispatch(string prop)() inout { return opIndex(prop); }
+	/// ditto
+	@property void opDispatch(string prop, T)(T val) { opIndexAssign(Bson(val), prop); }
 
 	bool opEquals(ref const Bson other) const {
 		if( m_type != other.m_type ) return false;
