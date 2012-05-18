@@ -8,9 +8,8 @@ if "%1"=="" (
 	popd
 ) else (
 	echo Running %1...
-	SET LIBDIR=%dp0..\lib\win-i386
 	SET DFLAGS=-debug -g -property -w
-	SET LIBS=ws2_32.lib %LIBDIR%\event2.lib %LIBDIR%\ssl.lib %LIBDIR%\eay.lib
+	SET LIBS=ws2_32.lib ..\lib\win-i386\event2.lib ..\lib\win-i386\ssl.lib ..\lib\win-i386\eay.lib
 	echo %2 %3 %DFLAGS% -Jviews -I..\source %LIBS% ..\source\examples\%1.d
 	rdmd %2 %3 %DFLAGS% -Jviews -I..\source %LIBS% ..\source\examples\%1.d
 )
