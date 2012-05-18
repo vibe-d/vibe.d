@@ -114,3 +114,10 @@ int icmp2(string a, string b)
 	else if( j < b.length ) return -1;
 	return 0;
 }
+
+string stripBom(string str)
+{
+	if( str.length >= 3 && str[0 .. 3] == [0xEF, 0xBB, 0xBF] )
+		return str[3 ..$];
+	return str;
+}
