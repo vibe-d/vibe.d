@@ -102,6 +102,11 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		m_ctx.task = null;
 	}
+
+	bool isOwner()
+	{
+		return m_ctx.task !is null && m_ctx.task is Fiber.getThis();
+	}
 	
 	/// Closes the connection.
 	void close()

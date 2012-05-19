@@ -57,6 +57,10 @@ interface EventDriver {
 	/** Creates a new signal (a single-threaded condition variable).
 	*/
 	Signal createSignal();
+
+	/** 
+	*/
+	Timer createTimer(void delegate() callback);
 }
 
 /**
@@ -82,6 +86,9 @@ interface EventedObject {
 
 	/// Acquires the ownership of an unowned object.
 	void acquire();
+
+	/// Returns true if the calling fiber owns this object
+	bool isOwner();
 }
 
 /**
@@ -142,13 +149,22 @@ interface FileStream : Stream, EventedObject {
 	void seek(ulong offset);
 }
 
-/**
+/** A cross-fiber signal
+
+	Note: the ownership can be shared between multiple fibers.
 */
-interface Signal {
+interface Signal : EventedObject {
 	@property int emitCount() const;
 	void emit();
 	void wait();
-	void registerSelf();
-	void unregisterSelf();
-	bool isSelfRegistered();
+}
+
+/**
+*/
+interface Timer : EventedObject {
+	@property bool pending();
+	
+	void rearm(Duration dur, bool periodic = false);
+	void stop();
+	void wait();
 }

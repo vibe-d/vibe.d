@@ -115,6 +115,12 @@ class ThreadedFileStream : FileStream {
 		// TODO: store the owner and throw an exception if illegal calls happen
 	}
 
+	bool isOwner()
+	{
+		// TODO: really check ownership
+		return true;
+	}
+
 	void seek(ulong offset)
 	{
 		enforce(.lseek(m_fileDescriptor, offset, SEEK_SET) == offset, "Failed to seek in file.");

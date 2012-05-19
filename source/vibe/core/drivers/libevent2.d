@@ -149,6 +149,11 @@ class Libevent2Driver : EventDriver {
 		return new Libevent2Signal(this);
 	}
 
+	Libevent2Timer createTimer(void delegate() callback)
+	{
+		return new Libevent2Timer(this, callback);
+	}
+
 	private int listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
 	{
 		auto listenfd = socket(af, SOCK_STREAM, 0);
@@ -218,33 +223,89 @@ class Libevent2Signal : Signal {
 
 	void wait()
 	{
-		assert(!isSelfRegistered());
+		assert(!isOwner());
 		auto self = Fiber.getThis();
-		registerSelf();
+		acquire();
+		scope(exit) release();
 		auto start_count = m_emitCount;
 		while( m_emitCount == start_count )
 			m_driver.m_core.yieldForEvent();
-		unregisterSelf();
 	}
 
-	void registerSelf()
+	void acquire()
 	{
 		m_listeners[Fiber.getThis()] = true;
 	}
 
-	void unregisterSelf()
+	void release()
 	{
 		auto self = Fiber.getThis();
-		if( isSelfRegistered() )
+		if( isOwner() )
 			m_listeners.remove(self);
 	}
 
-	bool isSelfRegistered()
+	bool isOwner()
 	{
 		return (Fiber.getThis() in m_listeners) !is null;
 	}
 
 	@property int emitCount() const { return m_emitCount; }
+}
+
+class Libevent2Timer : Timer {
+	private {
+		Libevent2Driver m_driver;
+		Fiber m_owner;
+		void delegate() m_callback;
+	}
+
+	this(Libevent2Driver driver, void delegate() callback)
+	{
+		m_driver = driver;
+		m_callback = callback;
+	}
+
+	void acquire()
+	{
+		assert(m_owner is null);
+		m_owner = Fiber.getThis();
+	}
+
+	void release()
+	{
+		assert(m_owner is Fiber.getThis());
+		m_owner = null;
+	}
+
+	bool isOwner()
+	{
+		return m_owner !is null && m_owner is Fiber.getThis();
+	}
+
+	@property bool pending()
+	{
+		// ...
+		return true;
+	}
+
+	void rearm(Duration dur, bool periodic = false)
+	{
+		// ...
+	}
+
+	void stop()
+	{
+		// ...
+	}
+
+	void wait()
+	{
+		acquire();
+		scope(exit) release();
+
+		while( pending )
+			m_driver.m_core.yieldForEvent();
+	}
 }
 
 private extern(C) void onSignalTriggered(evutil_socket_t, short events, void* userptr)
