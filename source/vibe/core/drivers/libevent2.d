@@ -257,12 +257,21 @@ class Libevent2Timer : Timer {
 		Libevent2Driver m_driver;
 		Fiber m_owner;
 		void delegate() m_callback;
+		event* m_event;
+		bool m_pending;
+		bool m_periodic;
+		timeval m_timeout;
 	}
 
 	this(Libevent2Driver driver, void delegate() callback)
 	{
 		m_driver = driver;
 		m_callback = callback;
+	}
+
+	~this()
+	{
+		stop();
 	}
 
 	void acquire()
@@ -284,18 +293,30 @@ class Libevent2Timer : Timer {
 
 	@property bool pending()
 	{
-		// ...
-		return true;
+		return m_pending;
 	}
 
-	void rearm(Duration dur, bool periodic = false)
+	void rearm(Duration timeout, bool periodic = false)
 	{
-		// ...
+		stop();
+
+		m_event = event_new(m_driver.eventLoop, -1, 0, &onTimerTimeout, cast(void*)this);
+		assert(timeout.total!"seconds"() <= int.max);
+		m_timeout.tv_sec = cast(int)timeout.total!"seconds"();
+		m_timeout.tv_usec = timeout.fracSec().usecs();
+		event_add(m_event, &m_timeout);
+		m_pending = true;
+		m_periodic = periodic;
 	}
 
 	void stop()
 	{
-		// ...
+		if( m_event ){
+			event_del(m_event);
+			event_free(m_event);
+			m_event = null;
+		}
+		m_pending = false;
 	}
 
 	void wait()
@@ -318,4 +339,16 @@ private extern(C) void onSignalTriggered(evutil_socket_t, short events, void* us
 	
 	foreach( l, _; lst )
 		sig.m_driver.m_core.resumeTask(l);
+}
+
+private extern(C) void onTimerTimeout(evutil_socket_t, short events, void* userptr)
+{
+	auto tm = cast(Libevent2Timer)userptr;
+	if( tm.m_periodic ){
+		event_add(tm.m_event, &tm.m_timeout);
+	} else {
+		tm.stop();
+	}
+
+	runTask(tm.m_callback);
 }
