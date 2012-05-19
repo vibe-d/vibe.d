@@ -380,7 +380,7 @@ struct Bson {
 		return Bson(null);
 	}
 
-	void opIndexAssign(Bson value, string idx){
+	void opIndexAssign(T)(T value, string idx){
 		auto newcont = appender!bdata_t();
 		checkType(Type.Object);
 		auto d = m_data[4 .. $];
@@ -400,9 +400,14 @@ struct Bson {
 			}
 		}
 
-		newcont.put(cast(ubyte)value.type);
+		static if( is(T == Bson) )
+			alias value bval;
+		else
+			auto bval = Bson(value);
+
+		newcont.put(cast(ubyte)bval.type);
 		putCString(newcont, idx);
-		newcont.put(value.data);
+		newcont.put(bval.data);
 
 		auto newdata = appender!bdata_t();
 		newdata.put(toBsonData(cast(uint)(newcont.data.length + 5)));
