@@ -2,8 +2,6 @@ import vibe.d;
 
 static this()
 {
-	//setLogLevel(LogLevel.Trace);
-
 	auto res = download("http://golem.de/");
 
 

@@ -2,8 +2,6 @@ import vibe.d;
 
 static this()
 {
-	setLogLevel(LogLevel.Trace);
-
 	runTask({
 		auto client = new HttpClient;
 		client.connect("www.google.com", 80);

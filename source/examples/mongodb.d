@@ -5,8 +5,6 @@ import std.array;
 
 static this()
 {
-//	setLogLevel(LogLevel.Trace);
-
 	runTask({
 		logInfo("Connecting to DB...");
 		auto db = connectMongoDB("localhost");

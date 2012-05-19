@@ -8,7 +8,6 @@ void handleRequest(HttpServerRequest req, HttpServerResponse res)
 
 static this()
 {
-	setLogLevel(LogLevel.Trace);
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;
 	

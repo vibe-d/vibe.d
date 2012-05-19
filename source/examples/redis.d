@@ -5,8 +5,6 @@ import vibe.db.redis.redis;
 
 static this()
 {
-	setLogLevel(LogLevel.Info);
-
 	runTask({
 		auto redis = new RedisClient();
 		redis.connect();
