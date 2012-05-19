@@ -291,8 +291,8 @@ class HttpServerSettings {
 		HttpServerOption.ParseMultiPartBody |
 		HttpServerOption.ParseCookies;
 	
-	/// Time [s] of a request after which the connection is closed with an error; not supported yet
-	uint maxRequestTime = 0; 
+	/// Time of a request after which the connection is closed with an error; not supported yet
+	Duration maxRequestTime = dur!"seconds"(0);
 	
 	/// Maximum number of transferred bytes per request after which the connection is closed with
 	/// an error; not supported yet
