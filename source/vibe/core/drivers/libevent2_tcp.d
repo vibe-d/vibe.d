@@ -236,19 +236,22 @@ package class Libevent2TcpConnection : TcpConnection {
 	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
 
 
-	bool waitForData(int secs) {
+	bool waitForData(Duration timeout)
+	{
 		if( dataAvailableForRead ) return true;
 		m_timeout_triggered = false;
-		event* timeout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
+		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 		timeval t;
-		t.tv_sec = secs;
-		event_add(timeout, &t);
+		assert(timeout.total!"seconds"() <= int.max);
+		t.tv_sec = cast(int)timeout.total!"seconds"();
+		t.tv_usec = timeout.fracSec().usecs();
+		event_add(evtmout, &t);
 		while( connected ) {
 			if( dataAvailableForRead || m_timeout_triggered ) break;
 			rawYield();
 		}
-		event_del(timeout);
-		event_free(timeout);
+		event_del(evtmout);
+		event_free(evtmout);
 		return !m_timeout_triggered;
 	}
 

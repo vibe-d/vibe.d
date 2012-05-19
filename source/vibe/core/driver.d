@@ -116,8 +116,8 @@ interface TcpConnection : Stream, EventedObject {
 	/// Accepts an SSL connection from a client.
 	void acceptSSL(SSLContext ctx);
 
-	/// Sets a timeout  until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(int secs);
+	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
+	bool waitForData(Duration timeout);
 }
 
 /**
@@ -163,7 +163,7 @@ interface Signal : EventedObject {
 */
 interface Timer : EventedObject {
 	@property bool pending();
-	
+
 	void rearm(Duration dur, bool periodic = false);
 	void stop();
 	void wait();
