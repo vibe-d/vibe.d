@@ -126,10 +126,10 @@ EventDriver getEventDriver()
 /**
 	Returns a new armed timer.
 */
-Timer setTimer(Duration timeout, void delegate() callback)
+Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false)
 {
 	auto tm = s_driver.createTimer(callback);
-	tm.rearm(timeout);
+	tm.rearm(timeout, periodic);
 	return tm;
 }
 
@@ -173,7 +173,7 @@ bool isTaskLocalSet(string name)
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.8";
+enum VibeVersionString = "0.7.2-pre";
 
 
 /**************************************************************************************************/
