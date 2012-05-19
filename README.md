@@ -24,7 +24,7 @@ If you don't have brew installed, install it according to their [install
 instructions](<https://github.com/mxcl/homebrew/wiki/installation>) and
 install libevent.
 
-    /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/gist/323731)"
+    /usr/bin/ruby -e "$(curl -fsSL https://raw.github.com/mxcl/homebrew/master/Library/Contributions/install_homebrew.rb)"
     brew install libevent
 
 (Note: Install brew only if you do not have macports, as they will conflict)
