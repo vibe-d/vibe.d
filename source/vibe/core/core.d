@@ -107,9 +107,11 @@ void rawYield()
 /**
 	Suspends the execution of the calling task for the specified amount of time.
 */
-void sleep(double seconds)
+void sleep(Duration timeout)
 {
-	s_driver.sleep(seconds);
+	auto tm = s_driver.createTimer({});
+	tm.rearm(timeout);
+	tm.wait();
 }
 
 /**
@@ -118,6 +120,17 @@ void sleep(double seconds)
 EventDriver getEventDriver()
 {
 	return s_driver;
+}
+
+
+/**
+	Returns a new armed timer.
+*/
+Timer setTimer(Duration timeout, void delegate() callback)
+{
+	auto tm = s_driver.createTimer(callback);
+	tm.rearm(timeout);
+	return tm;
 }
 
 /**
