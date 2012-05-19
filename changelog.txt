@@ -1,0 +1,21 @@
+Changelog
+=========
+
+v0.7.2 - 
+-------------------
+
+ - Added support for timers and sleep()
+ - Setting DFLAGS to change compiler options now actually works
+ - Changed the type for durations from int/double to Duration
+
+v0.7.1 - 18.05.2012
+-------------------
+
+ - Performance tuning
+ - Added vibe.utils.validation
+ - Various fixes and improvements
+
+v0.7.0 - 06.05.2012
+-------------------
+
+ - Initial development release version
