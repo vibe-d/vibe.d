@@ -219,14 +219,17 @@ package class Libevent2TcpConnection : TcpConnection {
 		assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
 		t.tv_sec = cast(int)timeout.total!"seconds"();
 		t.tv_usec = timeout.fracSec().usecs();
+		logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
 		event_add(evtmout, &t);
+		logTrace("wait for data");
 		while( connected ) {
 			if( dataAvailableForRead || m_timeout_triggered ) break;
 			rawYield();
 		}
+		logTrace(" -> timeout = %s", m_timeout_triggered);
 		event_del(evtmout);
 		event_free(evtmout);
-		return !m_timeout_triggered;
+		return dataAvailableForRead;
 	}
 
 	alias Stream.write write;
@@ -479,6 +482,7 @@ package extern(C)
 
 	private extern(C) void onTimeout(evutil_socket_t, short events, void* userptr)
 	{
+		logTrace("data wait timeout");
 		auto conn = cast(Libevent2TcpConnection)userptr;
 		conn.m_timeout_triggered = true;
 		conn.m_ctx.core.resumeTask(conn.m_fiber);

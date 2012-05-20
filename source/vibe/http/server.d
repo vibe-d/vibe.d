@@ -294,6 +294,9 @@ class HttpServerSettings {
 	
 	/// Time of a request after which the connection is closed with an error; not supported yet
 	Duration maxRequestTime = dur!"seconds"(0);
+
+	/// Maximum time between two request on a keep-alive connection
+	Duration keepAliveTimeout = dur!"seconds"(10);
 	
 	/// Maximum number of transferred bytes per request after which the connection is closed with
 	/// an error; not supported yet
@@ -896,7 +899,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			if( settings.serverString.length )
 				res.headers["Server"] = settings.serverString;
 			res.headers["Date"] = toRFC822DateTimeString(Clock.currTime().toUTC());
-			if( req.persistent ) res.headers["Keep-Alive"] = "timeout=5";
+			if( req.persistent ) res.headers["Keep-Alive"] = "timeout="~to!string(settings.keepAliveTimeout.total!"seconds"());
 
 
 			logTrace("handle request (body %d)", req.bodyReader.leastSize);
@@ -940,12 +943,12 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 		foreach( log; context.loggers )
 			log.log(req, res);
 
-		if( req.persistent && !conn_.waitForData(dur!"seconds"(10)) ) {
+		if( req.persistent && !conn_.waitForData(settings.keepAliveTimeout) ) {
 			logDebug("persistent connection timeout!");
 			break;
 		}
 
-	} while( req.persistent );
+	} while( req.persistent && conn_.connected );
 }
 
 private HttpServerRequest parseRequest(Stream conn)

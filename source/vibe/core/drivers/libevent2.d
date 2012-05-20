@@ -57,6 +57,12 @@ class Libevent2Driver : EventDriver {
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
 	}
 
+	/*~this()
+	{
+		evdns_base_free(m_dnsBase, 1);
+		event_base_free(m_eventLoop);
+	}*/
+
 	@property event_base* eventLoop() { return m_eventLoop; }
 	@property evdns_base* dnsEngine() { return m_dnsBase; }
 
