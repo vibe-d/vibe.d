@@ -26,6 +26,7 @@ import std.string;
 
 import core.stdc.errno;
 import core.thread;
+import core.sys.posix.netinet.in_;
 import core.sys.posix.netinet.tcp;
 import core.sys.posix.sys.socket;
 

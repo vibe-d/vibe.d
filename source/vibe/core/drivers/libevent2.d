@@ -18,8 +18,9 @@ import deimos.event2.event;
 import deimos.event2.util;
 
 import core.memory;
+import core.sys.posix.netinet.in_;
 import core.sys.posix.netinet.tcp;
-import std.c.windows.winsock;
+version(Windows) import std.c.windows.winsock;
 import core.thread;
 import std.conv;
 import std.exception;
