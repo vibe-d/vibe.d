@@ -12,13 +12,14 @@ import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
 
-import intf.event2.bufferevent;
-import intf.event2.dns;
-import intf.event2.event;
-import intf.event2.util;
+import deimos.event2.bufferevent;
+import deimos.event2.dns;
+import deimos.event2.event;
+import deimos.event2.util;
 
 import core.memory;
 import core.sys.posix.netinet.tcp;
+import std.c.windows.winsock;
 import core.thread;
 import std.conv;
 import std.exception;

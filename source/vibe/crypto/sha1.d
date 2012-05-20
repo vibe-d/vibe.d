@@ -1,6 +1,6 @@
 module vibe.crypto.sha1;
 
-import intf.openssl;
+import deimos.openssl.sha;
 
 ubyte[20] sha1(in char[] str) 
 {

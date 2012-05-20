@@ -111,10 +111,10 @@ interface TcpConnection : Stream, EventedObject {
 	@property string peerAddress() const;
 
 	/// Initiates an SSL connection (client).
-	void initiateSSL(SSLContext ctx);
+	void initiateSSL(SslContext ctx);
 
 	/// Accepts an SSL connection from a client.
-	void acceptSSL(SSLContext ctx);
+	void acceptSSL(SslContext ctx);
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
 	bool waitForData(Duration timeout);

@@ -65,7 +65,7 @@ class HttpClient {
 		string m_server;
 		ushort m_port;
 		TcpConnection m_conn;
-		SSLContext m_ssl;
+		SslContext m_ssl;
 		NullOutputStream m_sink;
 		InputStream m_bodyReader;
 	}
@@ -80,7 +80,7 @@ class HttpClient {
 		m_conn = null;
 		m_server = server;
 		m_port = port;
-		m_ssl = ssl ? new SSLContext() : null;
+		m_ssl = ssl ? new SslContext() : null;
 	}
 
 	void disconnect()

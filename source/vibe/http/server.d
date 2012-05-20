@@ -730,11 +730,11 @@ private {
 /// private
 private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_info)
 {
-	SSLContext ssl_ctx;
+	SslContext ssl_ctx;
 	if( listen_info.sslCertFile.length || listen_info.sslKeyFile.length ){
 		logDebug("Creating SSL context...");
 		assert(listen_info.sslCertFile.length && listen_info.sslKeyFile.length);
-		ssl_ctx = new SSLContext(listen_info.sslCertFile, listen_info.sslKeyFile);
+		ssl_ctx = new SslContext(listen_info.sslCertFile, listen_info.sslKeyFile);
 		logDebug("... done");
 	}
 

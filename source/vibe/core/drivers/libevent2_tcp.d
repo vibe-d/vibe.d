@@ -13,11 +13,11 @@ public import vibe.stream.stream;
 
 import vibe.core.log;
 
-import intf.event2.buffer;
-import intf.event2.bufferevent;
-import intf.event2.bufferevent_ssl;
-import intf.event2.event;
-import intf.event2.util;
+import deimos.event2.buffer;
+import deimos.event2.bufferevent;
+import deimos.event2.bufferevent_ssl;
+import deimos.event2.event;
+import deimos.event2.util;
 
 import std.algorithm;
 import std.exception;
@@ -27,10 +27,12 @@ import std.string;
 import core.stdc.errno;
 import core.thread;
 import core.sys.posix.netinet.tcp;
+import core.sys.posix.sys.socket;
 
 
 private {
 	version(Windows){
+		import std.c.windows.winsock;
 		enum EWOULDBLOCK = WSAEWOULDBLOCK;
 
 		// make some neccessary parts of the socket interface public
@@ -150,14 +152,14 @@ package class Libevent2TcpConnection : TcpConnection {
 
 		After this call, all subsequent reads/writes will be encrypted.
 	*/
-	void initiateSSL(SSLContext ctx)
+	void initiateSSL(SslContext ctx)
 	{
 		checkConnected();
 		assert(m_event is m_baseEvent);
 		auto client_ctx = ctx.createClientCtx();
 		int options = bufferevent_options.BEV_OPT_CLOSE_ON_FREE;
 		auto state = bufferevent_ssl_state.BUFFEREVENT_SSL_CONNECTING;
-		m_sslEvent = bufferevent_openssl_filter_new(m_ctx.eventLoop, m_baseEvent, client_ctx, state, options);
+		m_sslEvent = bufferevent_openssl_filter_new(m_ctx.eventLoop, m_baseEvent, cast(deimos.event2.bufferevent_ssl.ssl_st*)client_ctx, state, options);
 		assert(m_sslEvent !is null);
 		bufferevent_setcb(m_sslEvent, &onSocketRead, null, null, m_ctx);
 		bufferevent_enable(m_sslEvent, EV_READ|EV_WRITE);
@@ -168,14 +170,14 @@ package class Libevent2TcpConnection : TcpConnection {
 
 		After this call, all subsequent reads/writes will be encrypted.
 	*/
-	void acceptSSL(SSLContext ctx)
+	void acceptSSL(SslContext ctx)
 	{
 		checkConnected();
 		assert(m_event is m_baseEvent);
 		auto client_ctx = ctx.createClientCtx();
 		int options = bufferevent_options.BEV_OPT_CLOSE_ON_FREE;
 		auto state = bufferevent_ssl_state.BUFFEREVENT_SSL_ACCEPTING;
-		m_sslEvent = bufferevent_openssl_filter_new(m_ctx.eventLoop, m_baseEvent, client_ctx, state, options);
+		m_sslEvent = bufferevent_openssl_filter_new(m_ctx.eventLoop, m_baseEvent, cast(deimos.event2.bufferevent_ssl.ssl_st*)client_ctx, state, options);
 		assert(m_sslEvent !is null);
 		bufferevent_setcb(m_sslEvent, &onSocketRead, null, null, m_ctx);
 		bufferevent_enable(m_sslEvent, EV_READ|EV_WRITE);

@@ -9,7 +9,8 @@ module vibe.crypto.ssl;
 
 import vibe.core.log;
 
-import intf.openssl;
+import deimos.openssl.rand;
+import deimos.openssl.ssl;
 
 import std.exception;
 import std.string;
@@ -27,7 +28,7 @@ import std.string;
 /* Public types                                                                                   */
 /**************************************************************************************************/
 
-class SSLContext {
+class SslContext {
 	private {
 		ssl_ctx_st* m_ctx;
 	}
@@ -35,7 +36,7 @@ class SSLContext {
 	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.SSLv23)
 	{
 		version(SSL){
-			SSL_METHOD* method;
+			const(SSL_METHOD)* method;
 			final switch(ver){
 				case SSLVersion.SSLv23: method = SSLv23_server_method(); break;
 				case SSLVersion.SSLv3: method = SSLv3_server_method(); break;
@@ -53,7 +54,7 @@ class SSLContext {
 	this(SSLVersion ver = SSLVersion.SSLv23)
 	{
 		version(SSL){
-			SSL_METHOD* method;
+			const(SSL_METHOD)* method;
 			final switch(ver){
 				case SSLVersion.SSLv23: method = SSLv23_client_method(); break;
 				case SSLVersion.SSLv3: method = SSLv3_client_method(); break;
