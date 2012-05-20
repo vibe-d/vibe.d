@@ -98,11 +98,11 @@ struct Frame {
 
 class OutgoingWebSocketMessage : OutputStream {
 	private {
-		TcpConnection m_conn;
+		Stream m_conn;
 		Appender!(ubyte[]) m_buffer;
 	}
 
-	this( TcpConnection conn ) {
+	this( Stream conn ) {
 		assert(conn !is null);
 		m_conn = conn;
 	}
@@ -135,11 +135,11 @@ class OutgoingWebSocketMessage : OutputStream {
 
 class IncommingWebSocketMessage : InputStream {
 	private {
-		TcpConnection m_conn;
+		Stream m_conn;
 		Frame m_currentFrame;
 	}
 
-	this(TcpConnection conn)
+	this(Stream conn)
 	{
 		assert(conn !is null);
 		m_conn = conn;
@@ -149,6 +149,8 @@ class IncommingWebSocketMessage : InputStream {
 	@property bool empty() const { return m_currentFrame.payload.length == 0; }
 
 	@property ulong leastSize() const { return m_currentFrame.payload.length; }
+
+	@property bool dataAvailableForRead() { return true; }
 
 	void read(ubyte[] dst)
 	{
@@ -199,15 +201,15 @@ class IncommingWebSocketMessage : InputStream {
 
 class WebSocket {
 	private {
-		TcpConnection m_conn;
+		Stream m_conn;
 	}
 
-	this(TcpConnection conn)
+	this(Stream conn)
 	{
 		m_conn = conn;
 	}
 
-	@property bool connected() const { return m_conn.connected; }
+	@property bool connected() { return !m_conn.empty; }
 	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead; }
 
 	void send(ubyte[] data)
@@ -268,7 +270,7 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 		auto accept = cast(string)Base64.encode(sha1(*pKey ~ s_webSocketGuid));
 		res.headers["Sec-WebSocket-Accept"] = accept;
 		res.headers["Connection"] = "Upgrade";
-		TcpConnection conn = res.switchProtocol("websocket");
+		Stream conn = res.switchProtocol("websocket");
 
 		auto socket = new WebSocket(conn);
 		onHandshake(socket);

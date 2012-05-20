@@ -14,6 +14,7 @@ import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
 import vibe.inet.url;
+import vibe.stream.ssl;
 import vibe.stream.zlib;
 
 import std.array;
@@ -65,6 +66,7 @@ class HttpClient {
 		string m_server;
 		ushort m_port;
 		TcpConnection m_conn;
+		Stream m_stream;
 		SslContext m_ssl;
 		NullOutputStream m_sink;
 		InputStream m_bodyReader;
@@ -95,14 +97,18 @@ class HttpClient {
 	{
 		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTcp(m_server, m_port);
-			if( m_ssl ) m_conn.initiateSSL(m_ssl);
+			m_stream = m_conn;
+			if( m_ssl ){
+				//m_conn.initiateSSL(m_ssl);
+				m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
+			}
 		} else if( m_bodyReader ){
 			// dropy any existing body that was not read by the caller
 			m_sink.write(m_bodyReader, 0);
 			logDebug("dropped unread body.");
 		}
 
-		auto req = new HttpClientRequest(m_conn);
+		auto req = new HttpClientRequest(m_stream);
 		req.headers["User-Agent"] = "vibe.d/"~VibeVersionString; // TODO: maybe add OS and library versions
 		requester(req);
 		req.headers["Connection"] = "keep-alive";
@@ -114,7 +120,7 @@ class HttpClient {
 		auto res = new HttpClientResponse;
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
-		string stln = cast(string)m_conn.readLine(MaxHttpHeaderLineLength);
+		string stln = cast(string)m_stream.readLine(MaxHttpHeaderLineLength);
 		logTrace("stln: %s", stln);
 		res.httpVersion = parseHttpVersion(stln);
 		enforce(stln.startsWith(" "));
@@ -128,7 +134,7 @@ class HttpClient {
 		
 		// read headers until an empty line is hit
 		while(true){
-			string ln = cast(string)m_conn.readLine(MaxHttpHeaderLineLength);
+			string ln = cast(string)m_stream.readLine(MaxHttpHeaderLineLength);
 			logTrace("hdr: %s", ln);
 			if( ln.length == 0 ) break;
 			auto idx = ln.indexOf(":");
@@ -143,11 +149,11 @@ class HttpClient {
 		} else {
 			if( auto pte = "Transfer-Encoding" in res.headers ){
 				enforce(*pte == "chunked");
-				res.bodyReader = new ChunkedInputStream(m_conn);
+				res.bodyReader = new ChunkedInputStream(m_stream);
 			} else {
 				if( auto pcl = "Content-Length" in res.headers )
-					res.bodyReader = new LimitedInputStream(m_conn, to!ulong(*pcl));
-				else res.bodyReader = m_conn;
+					res.bodyReader = new LimitedInputStream(m_stream, to!ulong(*pcl));
+				else res.bodyReader = m_stream;
 			}
 			// TODO: handle content-encoding: deflate, gzip
 		}
@@ -169,7 +175,7 @@ final class HttpClientRequest : HttpRequest {
 		OutputStream m_bodyWriter;
 	}
 
-	private this(TcpConnection conn)
+	private this(Stream conn)
 	{
 		super(conn);
 	}

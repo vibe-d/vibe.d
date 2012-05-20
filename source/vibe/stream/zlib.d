@@ -132,6 +132,11 @@ class ZlibInputStream : InputStream {
 		return m_buffer.length;
 	}
 
+	@property bool dataAvailableForRead()
+	{
+		return m_buffer.length > 0 || m_in.dataAvailableForRead;
+	}
+
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){

@@ -28,6 +28,9 @@ interface InputStream {
 	*/
 	@property ulong leastSize();
 
+	/// Queries if there is data available for immediate, non-blocking read.
+	@property bool dataAvailableForRead();
+
 	/**	Fills the preallocated array 'bytes' with data from the stream.
 
 		Throws: An exception if the operation reads past the end of the stream
@@ -192,6 +195,8 @@ class LimitedInputStream : InputStream {
 
 	@property ulong leastSize() { return m_silentLimit ? m_input.leastSize : m_sizeLimit; }
 
+	@property bool dataAvailableForRead() { return m_input.dataAvailableForRead; }
+
 	void read(ubyte[] dst)
 	{
 		if (dst.length > m_sizeLimit) onSizeLimitReached();
@@ -264,6 +269,7 @@ class CountingInputStream : InputStream {
 
 	@property bool empty() { enforce(m_in !is null, "InputStream missing"); return m_in.empty(); }
 	@property ulong leastSize() { enforce(m_in !is null, "InputStream missing"); return m_in.leastSize();  }
+	@property bool dataAvailableForRead() { return m_in.dataAvailableForRead; }
 
 	void read(ubyte[] dst)
 	{

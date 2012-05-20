@@ -34,7 +34,7 @@ enum HttpVersion {
 */
 class HttpRequest {
 	protected {
-		TcpConnection m_conn;
+		Stream m_conn;
 	}
 	
 	public {
@@ -44,7 +44,7 @@ class HttpRequest {
 		StrMapCI headers;
 	}
 	
-	protected this(TcpConnection conn)
+	protected this(Stream conn)
 	{
 		m_conn = conn;
 	}
@@ -141,6 +141,8 @@ final class ChunkedInputStream : InputStream {
 	@property bool empty() const { return m_empty; }
 
 	@property ulong leastSize() const { return m_bytesInCurrentChunk; }
+
+	@property bool dataAvailableForRead() { return m_in.dataAvailableForRead; }
 
 	void read(ubyte[] dst)
 	{

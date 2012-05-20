@@ -7,6 +7,7 @@
 */
 module vibe.stream.ssl;
 
+import vibe.core.log;
 import vibe.crypto.ssl;
 import vibe.stream.stream;
 
@@ -35,6 +36,8 @@ class SslStream : Stream {
 
 	this(Stream underlying, SslContext ctx, SslStreamState state)
 	{
+		m_stream = underlying;
+		m_state = state;
 		m_sslCtx = ctx;
 		m_ssl = ctx.createClientCtx();
 
@@ -75,9 +78,20 @@ class SslStream : Stream {
 		return SSL_pending(m_ssl);
 	}
 
+	@property bool dataAvailableForRead()
+	{
+		return SSL_pending(m_ssl) > 0 || m_stream.dataAvailableForRead;
+	}
+
 	void read(ubyte[] dst)
 	{
-		SSL_read(m_ssl, dst.ptr, dst.length);
+		while( dst.length > 0 ){
+			auto ret = SSL_read(m_ssl, dst.ptr, dst.length);
+			enforce(ret != 0, "SSL_read was unsuccessful with ret 0");
+			enforce(ret >= 0, "SSL_read returned an error.");
+			logTrace("SSL read %d/%d", ret, dst.length);
+			dst = dst[ret .. $];
+		}
 	}
 
 	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
@@ -90,9 +104,17 @@ class SslStream : Stream {
 		return readAllDefault(max_bytes);
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
-		SSL_write(m_ssl, bytes.ptr, bytes.length);
+		const(ubyte)[] bytes = bytes_;
+		while( bytes.length > 0 ){
+			auto ret = SSL_write(m_ssl, bytes.ptr, bytes.length);
+			enforce(ret != 0, "SSL_write was unsuccessful with ret 0");
+			enforce(ret >= 0, "SSL_write returned an error.");
+			logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
+			bytes = bytes[ret .. $];
+		}
+		if( do_flush ) flush();
 	}
 
 	void flush()

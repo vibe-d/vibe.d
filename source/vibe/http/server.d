@@ -17,6 +17,7 @@ import vibe.data.json;
 import vibe.http.dist;
 import vibe.http.log;
 import vibe.inet.url;
+import vibe.stream.ssl;
 import vibe.stream.zlib;
 import vibe.templ.diet;
 import vibe.textfilter.urlencode;
@@ -423,7 +424,7 @@ final class HttpServerRequest : HttpRequest {
 */
 final class HttpServerResponse : HttpResponse {
 	private {
-		TcpConnection m_conn;
+		Stream m_conn;
 		OutputStream m_bodyWriter;
 		ChunkedOutputStream m_chunkedBodyWriter;
 		CountingOutputStream m_countingWriter;
@@ -434,7 +435,7 @@ final class HttpServerResponse : HttpResponse {
 		SysTime m_timeFinalized;
 	}
 	
-	private this(TcpConnection conn, HttpServerSettings settings)
+	private this(Stream conn, HttpServerSettings settings)
 	{
 		m_conn = conn;
 		m_countingWriter = new CountingOutputStream(conn);
@@ -538,7 +539,7 @@ final class HttpServerResponse : HttpResponse {
 		bodyWriter.write("redirecting...");
 	}
 
-	TcpConnection switchProtocol(string protocol) {
+	Stream switchProtocol(string protocol) {
 		statusCode = HttpStatus.SwitchingProtocols;
 		headers["Upgrade"] = protocol;
 		writeVoidBody();
@@ -728,7 +729,7 @@ private {
 }
 
 /// private
-private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_info)
+private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen_info)
 {
 	SslContext ssl_ctx;
 	if( listen_info.sslCertFile.length || listen_info.sslKeyFile.length ){
@@ -738,13 +739,14 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 		logDebug("... done");
 	}
 
+	Stream conn;
 	HttpServerRequest req;
 
 	// If this is a HTTPS server, initiate SSL
 	if( ssl_ctx ){
 		logTrace("accept ssl");
-		conn.acceptSSL(ssl_ctx);
-	}
+		conn = new SslStream(conn_, ssl_ctx, SslStreamState.Accepting);
+	} else conn = conn_;
 
 	do {
 		// Default to the first virtual host for this listener
@@ -794,7 +796,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 
 			// basic request parsing
 			req = parseRequest(conn);
-			req.peer = conn.peerAddress;
+			req.peer = conn_.peerAddress;
 			logTrace("Got request header.");
 
 			// find the matching virtual host
@@ -908,7 +910,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 				logDebug("http error thrown: %s", err.toString());
 				if( !res.headerWritten ) errorOut(err.status, err.msg, err.toString());
 				if (justifiesConnectionClose(err.status)) {
-					conn.close();
+					conn_.close();
 					break;
 				}
 			} catch (Throwable e) {
@@ -922,7 +924,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 			if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString());
 			else logError("HttpServerError after page has been written: %s", err.toString());
 			if (justifiesConnectionClose(err.status)) {
-				conn.close();
+				conn_.close();
 				break;
 			}
 		} catch (Throwable e) {
@@ -941,7 +943,7 @@ private void handleHttpConnection(TcpConnection conn, HTTPServerListener listen_
 	} while( req.persistent );
 }
 
-private HttpServerRequest parseRequest(TcpConnection conn)
+private HttpServerRequest parseRequest(Stream conn)
 {
 	auto req = new HttpServerRequest;
 	auto stream = new LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
