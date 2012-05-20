@@ -42,6 +42,7 @@ import core.stdc.string;
 import core.stdc.stdint;
 version (Posix) {
   public import core.sys.posix.sys.time : timeval;
+  public import core.sys.posix.sys.socket;
 } else version (Windows) {
   public import std.c.windows.winsock;
 } else static assert(false, "Don't know timeval on this platform.");
