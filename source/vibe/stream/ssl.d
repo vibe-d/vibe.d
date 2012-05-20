@@ -1,5 +1,5 @@
 ﻿/**
-	SSL/TLS streams
+	SSL/TLS stream implementation
 
 	Copyright: © 2012 Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -12,8 +12,11 @@ import vibe.crypto.ssl;
 import vibe.stream.stream;
 
 import deimos.openssl.bio;
+import deimos.openssl.err;
 import deimos.openssl.ssl;
 
+import std.algorithm;
+import std.conv;
 import std.exception;
 
 import core.stdc.string : strlen;
@@ -75,7 +78,8 @@ class SslStream : Stream {
 
 	@property ulong leastSize()
 	{
-		return SSL_pending(m_ssl);
+		auto ret = SSL_pending(m_ssl);
+		return ret > 0 ? ret : m_stream.empty ? 0 : 1;
 	}
 
 	@property bool dataAvailableForRead()
@@ -88,8 +92,8 @@ class SslStream : Stream {
 		while( dst.length > 0 ){
 			auto ret = SSL_read(m_ssl, dst.ptr, dst.length);
 			enforce(ret != 0, "SSL_read was unsuccessful with ret 0");
-			enforce(ret >= 0, "SSL_read returned an error.");
-			logTrace("SSL read %d/%d", ret, dst.length);
+			enforce(ret >= 0, "SSL_read returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
+			//logTrace("SSL read %d/%d", ret, dst.length);
 			dst = dst[ret .. $];
 		}
 	}
@@ -109,8 +113,19 @@ class SslStream : Stream {
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
 			auto ret = SSL_write(m_ssl, bytes.ptr, bytes.length);
+			
+			const(char)* file = null, data = null;
+			int line;
+			int flags;
+			size_t eret;
+			char[120] ebuf;
+			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
+				ERR_error_string(eret, ebuf.ptr);
+				logWarn("SSL error %s at %s:%d: %s", to!string(ebuf.ptr), to!string(file), line, flags & ERR_TXT_STRING ? to!string(data) : "-");
+				if( flags & ERR_TXT_MALLOCED ) OPENSSL_free(cast(void*)data);
+			}
 			enforce(ret != 0, "SSL_write was unsuccessful with ret 0");
-			enforce(ret >= 0, "SSL_write returned an error.");
+			enforce(ret >= 0, "SSL_write returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
 			logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
 		}
@@ -124,6 +139,7 @@ class SslStream : Stream {
 
 	void finalize()
 	{
+		logTrace("SslStream finalize");
 		SSL_shutdown(m_ssl);
 	}
 
@@ -159,7 +175,8 @@ private extern(C)
 	int onBioRead(BIO *b, char *outb, int outlen)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
-		// TODO: use m_stream.leastSize?
+		
+		outlen = min(outlen, stream.m_stream.leastSize);
 		stream.m_stream.read(cast(ubyte[])outb[0 .. outlen]);
 		return outlen;
 	}
@@ -178,7 +195,10 @@ private extern(C)
 
 		switch(cmd){
 			case BIO_CTRL_GET_CLOSE: ret = b.shutdown; break;
-			case BIO_CTRL_SET_CLOSE: b.shutdown = cast(int)num; break;
+			case BIO_CTRL_SET_CLOSE:
+				logTrace("SSL set close %d", num);
+				b.shutdown = cast(int)num;
+				break;
 			case BIO_CTRL_PENDING:
 				auto sz = stream.m_stream.leastSize;
 				return sz <= int.max ? cast(int)sz : int.max;

@@ -246,7 +246,7 @@ final class ChunkedOutputStream : OutputStream {
 	void finalize() {
 		flush();
 		m_out.write("0\r\n\r\n");
-		m_out.finalize();
+		m_out.flush();
 	}
 	private void writeChunkSize(long length) {
 		m_out.write(format("%x\r\n", length), false);

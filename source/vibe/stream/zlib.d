@@ -72,7 +72,7 @@ class ZlibOutputStream : OutputStream {
 		auto ret = m_comp.flush(Z_FINISH);
 		if( ret.length > 0 )
 			m_out.write(cast(ubyte[])ret);
-		m_out.finalize();
+		m_out.flush();
 	}
 }
 

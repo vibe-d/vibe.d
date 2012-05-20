@@ -105,7 +105,7 @@ interface OutputStream {
 	*/
 	final void write(in char[] bytes, bool do_flush = true)
 	{
-		write(cast(ubyte[])bytes, do_flush);
+		write(cast(const(ubyte)[])bytes, do_flush);
 	}
 
 	/** Pipes an InputStream directly into this OutputStream.
@@ -250,7 +250,7 @@ class CountingOutputStream : OutputStream {
 	}
 
 	void flush() { enforce(m_out !is null, "OutputStream missing"); m_out.flush(); }
-	void finalize() { enforce(m_out !is null, "OutputStream missing"); m_out.finalize(); }
+	void finalize() { enforce(m_out !is null, "OutputStream missing"); m_out.flush(); }
 }
 
 /**
