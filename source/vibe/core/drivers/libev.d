@@ -255,16 +255,6 @@ class LibevTcpConnection : TcpConnection {
 		return "xxx";
 	}
 	
-	void initiateSSL(SSLContext ctx)
-	{
-		assert(false);
-	}
-	
-	void acceptSSL(SSLContext ctx)
-	{
-		assert(false);
-	}
-	
 	bool waitForData(int secs)
 	{
 		//ev_timer timer;

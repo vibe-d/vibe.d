@@ -104,17 +104,8 @@ interface TcpConnection : Stream, EventedObject {
 	/// The current connection status
 	@property bool connected() const;
 
-	/// Queries if there is data available for immediate, non-blocking read.
-	@property bool dataAvailableForRead();
-
 	/// Returns the IP address of the connected peer.
 	@property string peerAddress() const;
-
-	/// Initiates an SSL connection (client).
-	void initiateSSL(SslContext ctx);
-
-	/// Accepts an SSL connection from a client.
-	void acceptSSL(SslContext ctx);
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
 	bool waitForData(Duration timeout);

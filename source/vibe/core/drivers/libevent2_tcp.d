@@ -149,43 +149,6 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	@property string peerAddress() const { return m_peerAddress; }
 
-	/** Initiates an SSL encrypted connection.
-
-		After this call, all subsequent reads/writes will be encrypted.
-	*/
-	void initiateSSL(SslContext ctx)
-	{
-		checkConnected();
-		assert(m_event is m_baseEvent);
-		auto client_ctx = ctx.createClientCtx();
-		int options = bufferevent_options.BEV_OPT_CLOSE_ON_FREE;
-		auto state = bufferevent_ssl_state.BUFFEREVENT_SSL_CONNECTING;
-		m_sslEvent = bufferevent_openssl_filter_new(m_ctx.eventLoop, m_baseEvent, cast(deimos.event2.bufferevent_ssl.ssl_st*)client_ctx, state, options);
-		assert(m_sslEvent !is null);
-		bufferevent_setcb(m_sslEvent, &onSocketRead, null, null, m_ctx);
-		bufferevent_enable(m_sslEvent, EV_READ|EV_WRITE);
-		m_event = m_sslEvent;
-	}
-
-	/** Accepts an SSL intiation from the remote peer.
-
-		After this call, all subsequent reads/writes will be encrypted.
-	*/
-	void acceptSSL(SslContext ctx)
-	{
-		checkConnected();
-		assert(m_event is m_baseEvent);
-		auto client_ctx = ctx.createClientCtx();
-		int options = bufferevent_options.BEV_OPT_CLOSE_ON_FREE;
-		auto state = bufferevent_ssl_state.BUFFEREVENT_SSL_ACCEPTING;
-		m_sslEvent = bufferevent_openssl_filter_new(m_ctx.eventLoop, m_baseEvent, cast(deimos.event2.bufferevent_ssl.ssl_st*)client_ctx, state, options);
-		assert(m_sslEvent !is null);
-		bufferevent_setcb(m_sslEvent, &onSocketRead, null, null, m_ctx);
-		bufferevent_enable(m_sslEvent, EV_READ|EV_WRITE);
-		m_event = m_sslEvent;
-	}
-	
-
 	/** Reads as many bytes as 'dst' can hold.
 	*/
 	void read(ubyte[] dst)
