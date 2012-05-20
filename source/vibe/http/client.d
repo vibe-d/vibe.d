@@ -88,8 +88,10 @@ class HttpClient {
 	void disconnect()
 	{
 		if( m_conn ){
+			m_stream.finalize();
 			m_conn.close();
 			m_conn = null;
+			m_stream = null;
 		}
 	}
 
@@ -99,11 +101,10 @@ class HttpClient {
 			m_conn = connectTcp(m_server, m_port);
 			m_stream = m_conn;
 			if( m_ssl ){
-				//m_conn.initiateSSL(m_ssl);
 				m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
 			}
 		} else if( m_bodyReader ){
-			// dropy any existing body that was not read by the caller
+			// drop any existing body that was not read by the caller
 			m_sink.write(m_bodyReader, 0);
 			logDebug("dropped unread body.");
 		}
