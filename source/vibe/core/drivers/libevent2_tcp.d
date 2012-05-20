@@ -57,6 +57,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		TcpContext* m_ctx;
 		Fiber m_fiber;
 		string m_peerAddress;
+		ubyte[64] m_peekBuffer;
 	}
 	
 	this(TcpContext* ctx)
@@ -148,6 +149,13 @@ package class Libevent2TcpConnection : TcpConnection {
 	}
 
 	@property string peerAddress() const { return m_peerAddress; }
+
+	const(ubyte)[] peek()
+	{
+		//auto buf = bufferevent_get_input(m_event);
+		//evbuffer_peek
+		return null;
+	}
 
 	/** Reads as many bytes as 'dst' can hold.
 	*/

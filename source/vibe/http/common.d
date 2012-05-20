@@ -144,6 +144,12 @@ final class ChunkedInputStream : InputStream {
 
 	@property bool dataAvailableForRead() { return m_in.dataAvailableForRead; }
 
+	const(ubyte)[] peek()
+	{
+		auto dt = m_in.peek();
+		return dt[0 .. min(dt.length, m_bytesInCurrentChunk)];
+	}
+
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){

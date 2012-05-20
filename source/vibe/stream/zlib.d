@@ -137,6 +137,11 @@ class ZlibInputStream : InputStream {
 		return m_buffer.length > 0 || m_in.dataAvailableForRead;
 	}
 
+	const(ubyte)[] peek()
+	{
+		return m_buffer;
+	}
+
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){

@@ -152,6 +152,8 @@ class IncommingWebSocketMessage : InputStream {
 
 	@property bool dataAvailableForRead() { return true; }
 
+	const(ubyte)[] peek() { return m_currentFrame.payload; }
+
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ) {

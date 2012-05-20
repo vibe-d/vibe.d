@@ -139,6 +139,11 @@ class ThreadedFileStream : FileStream {
 	@property ulong leastSize() const { assert(this.readable); return m_size - m_ptr; }
 	@property bool dataAvailableForRead() { return true; }
 
+	const(ubyte)[] peek()
+	{
+		return null;
+	}
+
 	void read(ubyte[] dst)
 	{
 		assert(this.readable);

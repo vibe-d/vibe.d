@@ -35,6 +35,7 @@ class SslStream : Stream {
 		SslStreamState m_state;
 		BIO* m_bio;
 		ssl_st* m_ssl;
+		ubyte m_peekBuffer[64];
 	}
 
 	this(Stream underlying, SslContext ctx, SslStreamState state)
@@ -85,6 +86,12 @@ class SslStream : Stream {
 	@property bool dataAvailableForRead()
 	{
 		return SSL_pending(m_ssl) > 0 || m_stream.dataAvailableForRead;
+	}
+
+	const(ubyte)[] peek()
+	{
+		auto ret = SSL_peek(m_ssl, m_peekBuffer.ptr, m_peekBuffer.length);
+		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
 
 	void read(ubyte[] dst)
