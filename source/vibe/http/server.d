@@ -940,6 +940,11 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 		foreach( log; context.loggers )
 			log.log(req, res);
 
+		if( req.persistent && !conn_.waitForData(dur!"seconds"(10)) ) {
+			logDebug("persistent connection timeout!");
+			break;
+		}
+
 	} while( req.persistent );
 }
 
