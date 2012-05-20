@@ -85,7 +85,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		auto fd = bufferevent_getfd(m_baseEvent);
 		ubyte opt = enabled;
-		assert(fd <= int.max);
+		assert(fd <= int.max, "Socket descriptor > int.max");
 		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, &opt, opt.sizeof);
 	}
 
@@ -216,7 +216,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		m_timeout_triggered = false;
 		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 		timeval t;
-		assert(timeout.total!"seconds"() <= int.max);
+		assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
 		t.tv_sec = cast(int)timeout.total!"seconds"();
 		t.tv_usec = timeout.fracSec().usecs();
 		event_add(evtmout, &t);
@@ -347,7 +347,7 @@ package extern(C)
 			return {
 				client_ctx.task = Fiber.getThis();
 				auto conn = new Libevent2TcpConnection(client_ctx);
-				assert(conn.connected);
+				assert(conn.connected, "Connection closed directly after accept?!");
 				logDebug("start task (fd %d).", client_ctx.socketfd);
 				try {
 					listen_ctx.connectionCallback(conn);
@@ -371,7 +371,7 @@ package extern(C)
 		// Accept and configure incoming connections (up to 10 connections in one go)
 		for(i = 0; i < 10; i++) {
 			logTrace("accept");
-			assert(listenfd < int.max);
+			assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
 			sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
 			logTrace("accepted %d", sockfd);
 			if(sockfd < 0) {
@@ -424,7 +424,7 @@ package extern(C)
 	void onSocketWrite(bufferevent *buf_event, void *arg)
 	{
 		auto ctx = cast(TcpContext*)arg;
-		assert(ctx.event is buf_event);
+		assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TcpContext");
 		logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
 		if( ctx.shutdown ){
 			version(Windows) shutdown(ctx.socketfd, SD_SEND);
@@ -442,7 +442,7 @@ package extern(C)
 		auto ctx = cast(TcpContext*)arg;
 		ctx.status = status;
 		logDebug("Socket event on fd %d: %d", ctx.socketfd, status);
-		assert(ctx.event is buf_event);
+		assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TcpContext");
 		
 		bool free_event = false;
 		
