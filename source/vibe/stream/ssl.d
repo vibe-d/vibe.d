@@ -36,6 +36,7 @@ class SslStream : Stream {
 		BIO* m_bio;
 		ssl_st* m_ssl;
 		ubyte m_peekBuffer[64];
+		Exception[] m_exceptions;
 	}
 
 	this(Stream underlying, SslContext ctx, SslStreamState state)
@@ -65,6 +66,7 @@ class SslStream : Stream {
 			case SslStreamState.Connected:
 				break;
 		}
+		checkExceptions();
 	}
 
 	~this()
@@ -91,6 +93,7 @@ class SslStream : Stream {
 	const(ubyte)[] peek()
 	{
 		auto ret = SSL_peek(m_ssl, m_peekBuffer.ptr, m_peekBuffer.length);
+		checkExceptions();
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
 
@@ -98,6 +101,7 @@ class SslStream : Stream {
 	{
 		while( dst.length > 0 ){
 			auto ret = SSL_read(m_ssl, dst.ptr, dst.length);
+			checkExceptions();
 			enforce(ret != 0, "SSL_read was unsuccessful with ret 0");
 			enforce(ret >= 0, "SSL_read returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
 			//logTrace("SSL read %d/%d", ret, dst.length);
@@ -120,6 +124,7 @@ class SslStream : Stream {
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
 			auto ret = SSL_write(m_ssl, bytes.ptr, bytes.length);
+			checkExceptions();
 			
 			const(char)* file = null, data = null;
 			int line;
@@ -148,17 +153,27 @@ class SslStream : Stream {
 	{
 		logTrace("SslStream finalize");
 		SSL_shutdown(m_ssl);
+		checkExceptions();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
 		writeDefault(stream, nbytes, do_flush);
 	}
+
+	private void checkExceptions()
+	{
+		if( m_exceptions.length > 0 ){
+			foreach( e; m_exceptions )
+				logWarn("Exception occured on SSL source stream: %s", e.toString());
+			throw m_exceptions[0];
+		}
+	}
 }
 
-private extern(C)
+private nothrow extern(C)
 {
-	int onBioNew(BIO *b)
+	int onBioNew(BIO *b) nothrow
 	{
 		b.init_ = 0;
 		b.num = -1;
@@ -183,15 +198,25 @@ private extern(C)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
 		
-		outlen = min(outlen, stream.m_stream.leastSize);
-		stream.m_stream.read(cast(ubyte[])outb[0 .. outlen]);
+		try {
+			outlen = min(outlen, stream.m_stream.leastSize);
+			stream.m_stream.read(cast(ubyte[])outb[0 .. outlen]);
+		} catch(Exception e){
+			stream.m_exceptions ~= e;
+			return -1;
+		}
 		return outlen;
 	}
 
 	int onBioWrite(BIO *b, const(char) *inb, int inlen)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
-		stream.m_stream.write(inb[0 .. inlen]);
+		try {
+			stream.m_stream.write(inb[0 .. inlen]);
+		} catch(Exception e){
+			stream.m_exceptions ~= e;
+			return -1;
+		}
 		return inlen;
 	}
 
@@ -207,8 +232,13 @@ private extern(C)
 				b.shutdown = cast(int)num;
 				break;
 			case BIO_CTRL_PENDING:
-				auto sz = stream.m_stream.leastSize;
-				return sz <= int.max ? cast(int)sz : int.max;
+				try {
+					auto sz = stream.m_stream.leastSize;
+					return sz <= int.max ? cast(int)sz : int.max;
+				} catch( Exception e ){
+					stream.m_exceptions ~= e;
+					return -1;
+				}
 			case BIO_CTRL_WPENDING: return 0;
 			case BIO_CTRL_DUP:
 			case BIO_CTRL_FLUSH:

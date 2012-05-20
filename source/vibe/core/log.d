@@ -23,7 +23,7 @@ enum LogLevel {
 private LogLevel s_minLevel = LogLevel.Info;
 
 /// Sets the minimum log level to be printed.
-void setLogLevel(LogLevel level)
+void setLogLevel(LogLevel level) nothrow
 {
 	s_minLevel = level;
 }
@@ -35,18 +35,18 @@ void setLogLevel(LogLevel level)
 		level = The log level for the logged message
 		fmt = See http://dlang.org/phobos/std_format.html#format-string
 */
-void logTrace(T...)(string fmt, T args) { log(LogLevel.Trace, fmt, args); }
+void logTrace(T...)(string fmt, T args) nothrow { log(LogLevel.Trace, fmt, args); }
 /// ditto
-void logDebug(T...)(string fmt, T args) { log(LogLevel.Debug, fmt, args); }
+void logDebug(T...)(string fmt, T args) nothrow { log(LogLevel.Debug, fmt, args); }
 /// ditto
-void logInfo(T...)(string fmt, T args) { log(LogLevel.Info, fmt, args); }
+void logInfo(T...)(string fmt, T args) nothrow { log(LogLevel.Info, fmt, args); }
 /// ditto
-void logWarn(T...)(string fmt, T args) { log(LogLevel.Warn, fmt, args); }
+void logWarn(T...)(string fmt, T args) nothrow { log(LogLevel.Warn, fmt, args); }
 /// ditto
-void logError(T...)(string fmt, T args) { log(LogLevel.Error, fmt, args); }
+void logError(T...)(string fmt, T args) nothrow { log(LogLevel.Error, fmt, args); }
 /// ditto
 void log(T...)(LogLevel level, string fmt, T args)
-{
+nothrow {
 	if( level < s_minLevel ) return;
 	string pref;
 	final switch( level ){
@@ -57,7 +57,9 @@ void log(T...)(LogLevel level, string fmt, T args)
 		case LogLevel.Error: pref = "ERR"; break;
 		case LogLevel.Fatal: pref = "FATAL"; break;
 	}
-	
-	writef("[%08X:%08X %s] ", cast(void*)Thread.getThis(), cast(size_t)cast(void*)Fiber.getThis(), pref);
-	writefln(fmt, args);
+
+	try {
+		writef("[%08X:%08X %s] ", cast(void*)Thread.getThis(), cast(size_t)cast(void*)Fiber.getThis(), pref);
+		writefln(fmt, args);
+	} catch( Exception e ){}
 }
