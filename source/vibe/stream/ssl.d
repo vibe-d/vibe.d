@@ -220,7 +220,7 @@ private nothrow extern(C)
 		return inlen;
 	}
 
-	sizediff_t onBioCtrl(BIO *b, int cmd, int num, void *ptr)
+	sizediff_t onBioCtrl(BIO *b, int cmd, sizediff_t num, void *ptr)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
 		sizediff_t ret = 1;
