@@ -371,7 +371,7 @@ final class HttpServerRequest : HttpRequest {
 		string path;
 		string username;
 		string password;
-		string querystring;
+		string queryString;
 
 		// enabled if HttpServerOption.ParseCookies is set
 		string[string] cookies;
@@ -851,7 +851,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			if( settings.options & HttpServerOption.ParseURL ){
 				auto url = Url.parse(req.url);
 				req.path = url.pathString;
-				req.querystring = url.querystring;
+				req.queryString = url.queryString;
 				req.username = url.username;
 				req.password = url.password;
 			}
@@ -860,7 +860,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			if( settings.options & HttpServerOption.ParseQueryString ){
 				if( !(settings.options & HttpServerOption.ParseURL) )
 					logWarn("Query string parsing requested but URL parsing is disabled!");
-				parseFormData(req.querystring, req.query);
+				parseFormData(req.queryString, req.query);
 			}
 
 			// cookie parsing if desired

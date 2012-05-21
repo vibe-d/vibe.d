@@ -7,11 +7,15 @@
 */
 module vibe.http.rest;
 
+import vibe.core.log;
 import vibe.data.json;
 import vibe.http.client;
 import vibe.http.router;
 import vibe.inet.url;
+import vibe.textfilter.urlencode;
 
+import std.array;
+import std.conv;
 import std.string;
 import std.traits;
 
@@ -26,6 +30,7 @@ import std.traits;
 	<table>
 		<tr><th>Prefix</th><th>HTTP verb</th></tr>
 		<tr><td>get</td><td>GET</td></tr>
+		<tr><td>query</td><td>GET</td></tr>
 		<tr><td>set</td><td>PUT</td></tr>
 		<tr><td>put</td><td>PUT</td></tr>
 		<tr><td>update</td><td>PATCH</td></tr>
@@ -34,6 +39,10 @@ import std.traits;
 		<tr><td>create</td><td>POST</td></tr>
 		<tr><td>post</td><td>POST</td></tr>
 	</table>
+
+	A method named 'index' is mapped to the root URL (e.g. GET /api/). If a method has its first
+	parameter named 'id', it will be mapped to ':id/method' and 'id' is expected to be part of the
+	URL instead of a JSON request.
 
 	Examples:
 
@@ -45,6 +54,8 @@ import std.traits;
 		  $(LI PUT /api/greeting &larr; {"text": "&lt;new text&gt;"})
 		  $(LI POST /api/new_user &larr; {"name": "&lt;new user name&gt;"})
 		  $(LI GET /api/users &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
+		  $(LI GET /api/ &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
+		  $(LI GET /api/:id/name &rarr; ["&lt;user name for id&gt;"])
 		</ul>
 		---
 		import vibe.d;
@@ -57,6 +68,8 @@ import std.traits;
 
 			void addNewUser(string name);
 			@property string[] users();
+			string[] index();
+			string getName(int id);
 		}
 
 		class MyApiImpl : IMyApi {
@@ -69,14 +82,16 @@ import std.traits;
 			@property void greeting(string text) { m_greeting = text; }
 
 			void addNewUser(string name) { m_users ~= name; }
-			@property string[] users() { return m_users, }
+			@property string[] users() { return m_users; }
+			string[] index() { return m_users; }
+			string getName(int id) { return m_users[id]; }
 		}
 
 		static this()
 		{
 			auto routes = new UrlRouter;
 
-			registerRestInterface(routes, new MyApi, "/api/", MethodStyle.LowerUnderscored);
+			registerRestInterface(routes, new MyApiImpl, "/api/");
 
 			listenHttp(new HttpServerSettings, routes);
 		}
@@ -87,7 +102,7 @@ import std.traits;
 		RestInterfaceClient class for a seemless way to acces such a generated API
 */
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
-		MethodStyle style = MethodStyle.Unaltered)
+		MethodStyle style = MethodStyle.LowerUnderscored)
 {
 	string url(string name, size_t nskip){
 		return url_prefix ~ adjustMethodStyle(name[nskip .. $], style);
@@ -95,10 +110,16 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 
 	foreach( method; __traits(allMembers, T) ){
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
+			auto param_names = parameterNames!(typeof(&overload))();
 			auto handler = jsonMethodHandler!(T, method, typeof(&overload))(instance);
 			string http_verb, rest_name;
 			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
-			router.addRoute(http_verb, url_prefix ~ adjustMethodStyle(rest_name, style), handler);
+			string rest_name_adj = adjustMethodStyle(rest_name, style);
+			string id_supplement;
+			size_t skip = 0;
+			if( param_names.length && param_names[0] == "id" )
+				id_supplement = ":id" ~ (rest_name.length ? "/" : "");
+			router.addRoute(http_verb, url_prefix ~ id_supplement ~ rest_name_adj, handler);
 		}
 	}
 }
@@ -151,17 +172,19 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 			
 			void addNewUser(string name);
 			@property string[] users();
+			string[] index();
+			string getName(int id);
 		}
 
 		static this()
 		{
-			auto api = new RestInterfaceClient!IMyApi(Url.parse("http://127.0.0.1/api/"), MethodStyle.LowerUnderlined);
+			auto api = new RestInterfaceClient!IMyApi("http://127.0.0.1/api/");
 
-			logInfo("Status: ", api.getStatus());
+			logInfo("Status: %s", api.getStatus());
 			api.greeting = "Hello, World!";
 			logInfo("Greeting message: %s", api.greeting);
-			api.addUser("Peter");
-			api.addUser("Igor");
+			api.addNewUser("Peter");
+			api.addNewUser("Igor");
 			logInfo("Users: %s", api.users);
 		}
 		---
@@ -173,7 +196,13 @@ class RestInterfaceClient(I) : I
 		MethodStyle m_methodStyle;
 	}
 
-	this(Url base_url, MethodStyle style = MethodStyle.Unaltered)
+	this(string base_url, MethodStyle style = MethodStyle.LowerUnderscored)
+	{
+		m_baseUrl = Url.parse(base_url);
+		m_methodStyle = style;
+	}
+
+	this(Url base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = base_url;
 		m_methodStyle = style;
@@ -184,18 +213,34 @@ class RestInterfaceClient(I) : I
 
 	protected Json request(string verb, string name, Json params)
 	const {
-		Url url = m_baseUrl ~ PathEntry(adjustMethodStyle(name, m_methodStyle));
+		Url url = m_baseUrl;
+		if( name.length ) url ~= PathEntry(adjustMethodStyle(name, m_methodStyle));
+
+		if( (verb == "GET" || verb == "HEAD") && params.length > 0 ){
+			auto queryString = appender!string();
+			bool first = true;
+			foreach( string pname, p; params ){
+				if( !first ) queryString.put('&');
+				else first = false;
+				filterUrlEncode(queryString, pname);
+				queryString.put('=');
+				auto valapp = appender!string();
+				toJson(valapp, p);
+				filterUrlEncode(queryString, valapp.data());
+			}
+			url.queryString = queryString.data();
+		}
+
 		auto res = requestHttp(url, (req){
 				req.method = verb;
-				if( verb == "GET" || verb == "HEAD" ){
-					assert(params.length == 0, "Getter functions with parameters not yet supported");
-					// TODO:
-					//url.queryString = ...;
-				} else {
+				if( verb != "GET" && verb != "HEAD" )
 					req.writeJsonBody(params);
-				}
 			});
-		return res.readJson();
+		auto ret = res.readJson();
+		logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
+		if( res.statusCode != HttpStatus.OK )
+			throw new Exception("REST API returned an error"); // TODO: better message!
+		return ret;
 	}
 }
 
@@ -257,17 +302,28 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 		auto jparams = req.json;
 		ParameterTypes params;
 
-		auto param_names = parameterNames!FT();
-		foreach( i, P; ParameterTypes )
-			deserializeJson(params[i], jparams[param_names[i]]);
+		static immutable param_names = parameterNames!FT();
+		foreach( i, P; ParameterTypes ){
+			static if( i == 0 && param_names[i] == "id" )
+				deserializeJson(params[i], parseJson(req.params["id"]));
+			else static if( method == "GET" )
+				deserializeJson(params[i], deserializeJson(req.query[param_names[i]]));
+			else
+				deserializeJson(params[i], jparams[param_names[i]]);
+		}
 
-
-		static if( is(RetType == void) ){
-			__traits(getMember, inst, method)(params);
-			res.writeJsonBody(Json.EmptyObject);
-		} else {
-			auto ret = __traits(getMember, inst, method)(params);
-			res.writeJsonBody(serializeToJson(ret));
+		try {
+			static if( is(RetType == void) ){
+				__traits(getMember, inst, method)(params);
+				res.writeJsonBody(Json.EmptyObject);
+			} else {
+				auto ret = __traits(getMember, inst, method)(params);
+				res.writeJsonBody(serializeToJson(ret));
+			}
+		} catch( Exception e ){
+			// TODO: better error description!
+			res.statusCode = HttpStatus.InternalServerError;
+			res.writeBody("Error!");
 		}
 	}
 
@@ -314,9 +370,16 @@ private @property string generateRestInterfaceMethods(I)()
 
 			ret ~= " {\n";
 			ret ~= "\tJson jparams__ = Json.EmptyObject;\n";
+			string path_supplement;
+			size_t skip = 0;
+			if( param_names.length > 0 && param_names[0] == "id" ){
+				path_supplement = "to!string(id)~\"/\"~";
+				skip = 1;
+			}
 			foreach( i, PT; PTypes )
-				ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
-			ret ~= "\tauto jret__ = request(\""~http_verb~"\", \""~rest_name~"\", jparams__);\n";
+				if( i >= skip )
+					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
+			ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"\""~rest_name~"\", jparams__);\n";
 			static if( !is(RT == void) ){
 				ret ~= "\t"~RT.stringof~" ret__;\n";
 				ret ~= "\tdeserializeJson(ret__, jret__);\n";
@@ -335,6 +398,7 @@ private void getRestMethodName(T)(string method, out string http_verb, out strin
 	if( isPropertyGetter!T )               { http_verb = "GET"; rest_name = method; }
 	else if( isPropertySetter!T )          { http_verb = "PUT"; rest_name = method; }
 	else if( method.startsWith("get") )    { http_verb = "GET"; rest_name = method[3 .. $]; }
+	else if( method.startsWith("query") )  { http_verb = "GET"; rest_name = method[5 .. $]; }
 	else if( method.startsWith("set") )    { http_verb = "PUT"; rest_name = method[3 .. $]; }
 	else if( method.startsWith("put") )    { http_verb = "PUT"; rest_name = method[3 .. $]; }
 	else if( method.startsWith("update") ) { http_verb = "PATCH"; rest_name = method[6 .. $]; }
@@ -342,6 +406,7 @@ private void getRestMethodName(T)(string method, out string http_verb, out strin
 	else if( method.startsWith("add") )    { http_verb = "POST"; rest_name = method[3 .. $]; }
 	else if( method.startsWith("create") ) { http_verb = "POST"; rest_name = method[6 .. $]; }
 	else if( method.startsWith("post") )   { http_verb = "POST"; rest_name = method[4 .. $]; }
+	else if( method == "index" )           { http_verb = "GET"; rest_name = ""; }
 	else { http_verb = "POST"; rest_name = method; }
 }
 

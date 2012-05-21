@@ -100,7 +100,8 @@ class SslStream : Stream {
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
-			auto ret = SSL_read(m_ssl, dst.ptr, dst.length);
+			int readlen = min(dst.length, int.max);
+			auto ret = SSL_read(m_ssl, dst.ptr, readlen);
 			checkExceptions();
 			enforce(ret != 0, "SSL_read was unsuccessful with ret 0");
 			enforce(ret >= 0, "SSL_read returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
@@ -123,7 +124,8 @@ class SslStream : Stream {
 	{
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
-			auto ret = SSL_write(m_ssl, bytes.ptr, bytes.length);
+			int writelen = min(bytes.length, int.max);
+			auto ret = SSL_write(m_ssl, bytes.ptr, writelen);
 			checkExceptions();
 			
 			const(char)* file = null, data = null;
@@ -220,10 +222,10 @@ private nothrow extern(C)
 		return inlen;
 	}
 
-	int onBioCtrl(BIO *b, int cmd, int num, void *ptr)
+	sizediff_t onBioCtrl(BIO *b, int cmd, sizediff_t num, void *ptr)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
-		int ret = 1;
+		sizediff_t ret = 1;
 
 		switch(cmd){
 			case BIO_CTRL_GET_CLOSE: ret = b.shutdown; break;
@@ -234,7 +236,7 @@ private nothrow extern(C)
 			case BIO_CTRL_PENDING:
 				try {
 					auto sz = stream.m_stream.leastSize;
-					return sz <= int.max ? cast(int)sz : int.max;
+					return sz <= sizediff_t.max ? cast(sizediff_t)sz : int.max;
 				} catch( Exception e ){
 					stream.m_exceptions ~= e;
 					return -1;
@@ -253,7 +255,7 @@ private nothrow extern(C)
 
 	int onBioPuts(BIO *b, const(char) *s)
 	{
-		return onBioWrite(b, s, strlen(s));
+		return onBioWrite(b, s, cast(int)strlen(s));
 	}
 }
 
