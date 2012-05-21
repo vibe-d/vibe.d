@@ -25,7 +25,7 @@ struct Url {
 		ushort m_port;
 		string m_username;
 		string m_password;
-		string m_querystring;
+		string m_queryString;
 		string m_anchor;
 		string m_localURI;
 	}
@@ -125,7 +125,8 @@ struct Url {
 	@property void username(string v) { m_username = v; }
 	@property string password() const { return m_password; }
 	@property void password(string v) { m_password = v; }
-	@property string querystring() const { return m_querystring; }
+	@property string queryString() const { return m_queryString; }
+	@property void queryString(string v) { m_queryString = v; }
 	@property string anchor() const { return m_anchor; }
 
 	/// The path part plus query string and anchor
@@ -143,7 +144,7 @@ struct Url {
 
 		auto qi = str.countUntil('?');
 		if( qi >= 0 ){
-			m_querystring = str[qi+1 .. $];
+			m_queryString = str[qi+1 .. $];
 			str = str[0 .. qi];
 		}
 
@@ -181,9 +182,9 @@ struct Url {
 		}
 		dst.put(host);
 		dst.put(path.toString(true));
-		if( querystring.length ){
+		if( m_queryString.length ){
 			dst.put('?');
-			dst.put(querystring);
+			dst.put(m_queryString);
 		}
 
 		if( anchor.length ){
@@ -233,7 +234,7 @@ unittest {
 	assert(url.port == 4711, to!string(url.port));
 	assert(url.host == "sub.www.example.net", url.host);
 	assert(url.path.toString() == "/sub2/index.html", url.path.toString());
-	assert(url.querystring == "query", url.querystring);
+	assert(url.queryString == "query", url.queryString);
 	assert(url.anchor == "anchor", url.anchor);
 }
 
@@ -248,6 +249,7 @@ struct Path {
 	private {
 		immutable(PathEntry)[] m_nodes;
 		bool m_absolute = false;
+		bool m_endsWithSlash = false;
 	}
 	
 	this(string pathstr)
@@ -256,6 +258,10 @@ struct Path {
 		m_nodes = cast(immutable)splitPath(pathstr);
 		assert(!pathstr.startsWith("/") || m_nodes[0].toString() == "");
 		if( pathstr.startsWith("/") ) m_nodes = m_nodes[1 .. $];
+		if( m_nodes.length > 0 && !m_nodes[$-1].toString().length ){
+			m_endsWithSlash = true;
+			m_nodes = m_nodes[0 .. $-1];
+		}
 		
 		foreach( e; m_nodes ) assert(e.toString().length > 0);
 	}
@@ -285,6 +291,9 @@ struct Path {
 			if( i > 0 ) ret.put('/');
 			ret.put(f.toString());
 		}
+
+		if( m_nodes.length > 0 && m_endsWithSlash )
+			ret.put('/');
 		
 		return ret.data;
 	}
@@ -300,6 +309,11 @@ struct Path {
 			version(Posix) { if( i > 0 ) ret.put('/'); }
 			else { enforce("Unsupported OS"); }
 			ret.put(f.toString());
+		}
+		
+		if( m_nodes.length > 0 && m_endsWithSlash ){
+			version(Windows) { ret.put('\\'); }
+			version(Posix) { ret.put('/'); }
 		}
 		
 		return ret.data;
@@ -319,6 +333,7 @@ struct Path {
 			nup++;
 		}
 		Path ret = Path(null, false);
+		ret.m_endsWithSlash = true;
 		foreach( i; 0 .. nup ) ret ~= "..";
 		ret ~= Path(m_nodes[parentPath.length-nup .. $], false);
 		return ret;
@@ -334,7 +349,11 @@ struct Path {
 	@property bool external() const { return !m_absolute && m_nodes.length > 0 && m_nodes[0].m_name == ".."; }
 		
 	PathEntry opIndex(size_t idx) const { return m_nodes[idx]; }
-	Path opSlice(size_t start, size_t end) const { return Path(m_nodes[start .. end], start == 0 ? absolute : false); }
+	Path opSlice(size_t start, size_t end) const {
+		auto ret = Path(m_nodes[start .. end], start == 0 ? absolute : false);
+		if( end == m_nodes.length ) ret.m_endsWithSlash = m_endsWithSlash;
+		return ret;
+	}
 	size_t opDollar(int dim)() const if(dim == 0) { return m_nodes.length; }
 	
 	
@@ -342,6 +361,7 @@ struct Path {
 		Path ret;
 		ret.m_nodes = m_nodes;
 		ret.m_absolute = m_absolute;
+		ret.m_endsWithSlash = rhs.m_endsWithSlash;
 		
 		assert(!rhs.absolute);
 		size_t idx = m_nodes.length;
@@ -364,10 +384,11 @@ struct Path {
 	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { assert(rhs.toString().length > 0); return opBinary!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { assert(rhs.length > 0); opOpAssign!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { assert(rhs.toString().length > 0); opOpAssign!"~"(Path(rhs)); }
-	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { auto p = this ~ rhs; m_nodes = p.m_nodes; }
+	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { auto p = this ~ rhs; m_nodes = p.m_nodes; m_endsWithSlash = rhs.m_endsWithSlash; }
 	
 	bool opEquals(ref const Path rhs) const {
 		if( m_absolute != rhs.m_absolute ) return false;
+		if( m_endsWithSlash != rhs.m_endsWithSlash ) return false;
 		if( m_nodes.length != rhs.length ) return false;
 		foreach( i; 0 .. m_nodes.length )
 			if( m_nodes[i] != rhs.m_nodes[i] )
@@ -431,7 +452,7 @@ PathEntry[] splitPath(string path)
 	foreach( i, char ch; path )
 		if( ch == '\\' || ch == '/' )
 			nelements++;
-	if( path[$-1] != '/' && path[$-1] != '\\' ) nelements++;
+	nelements++;
 	
 	// reserve space for the elements
 	auto elements = new PathEntry[nelements];
@@ -444,7 +465,7 @@ PathEntry[] splitPath(string path)
 			elements[eidx++] = PathEntry(path[startidx .. i]);
 			startidx = i+1;
 		}
-	if( startidx < path.length ) elements[eidx++] = PathEntry(path[startidx .. $]);
+	elements[eidx++] = PathEntry(path[startidx .. $]);
 	assert(eidx == nelements);
 	return elements;
 }
