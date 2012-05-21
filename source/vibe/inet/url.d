@@ -27,7 +27,6 @@ struct Url {
 		string m_password;
 		string m_queryString;
 		string m_anchor;
-		string m_localURI;
 	}
 
 	this(string schema, string host, ushort port, Path path)
@@ -37,7 +36,6 @@ struct Url {
 		m_port = port;
 		m_path = path;
 		m_pathString = path.toString(true);
-		m_localURI = m_pathString;
 	}
 
 	// TODO: additional validation required (e.g. valid host and user names and port)
@@ -110,7 +108,6 @@ struct Url {
 	{
 		m_path = p;
 		auto pstr = p.toString();
-		m_localURI = pstr ~ m_localURI[m_pathString.length .. $];
 		m_pathString = pstr;
 	}
 
@@ -130,12 +127,23 @@ struct Url {
 	@property string anchor() const { return m_anchor; }
 
 	/// The path part plus query string and anchor
-	@property string localURI() const { return m_localURI; }
-	/// ditto
+	@property string localURI() const 
+	{ 
+		auto str = appender!string();
+		str.put(path.toString());
+		if( queryString.length ) {
+			str.put("&");
+			str.put(queryString);
+		} 
+		if( anchor.length ) {
+			str.put("#");
+			str.put(anchor);
+		}
+		return str.data;
+	}
+
 	@property void localURI(string str)
 	{
-		m_localURI = str;
-
 		auto ai = str.countUntil('#');
 		if( ai >= 0 ){
 			m_anchor = str[ai+1 .. $];
@@ -181,17 +189,8 @@ struct Url {
 				break;
 		}
 		dst.put(host);
-		dst.put(path.toString(true));
-		if( m_queryString.length ){
-			dst.put('?');
-			dst.put(m_queryString);
-		}
-
-		if( anchor.length ){
-			dst.put('#');
-			dst.put(anchor);
-		}
-		return dst.data;
+		dst.put(localURI);
+ 		return dst.data;
 	}
 
 	bool startsWith(const Url rhs) const {
