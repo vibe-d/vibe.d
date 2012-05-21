@@ -198,7 +198,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						break;
 					//case 'P': //Process ID
 					case 'q': //query string (with prepending '?')
-						ln.put("?" ~ req.querystring);
+						ln.put("?" ~ req.queryString);
 						break;
 					case 'r': //First line of Request
 						ln.put(req.method ~ " " ~ req.url ~ " " ~ getHttpVersionString(req.httpVersion));
