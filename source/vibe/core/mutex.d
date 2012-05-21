@@ -93,7 +93,7 @@ class Mutex {
 	private void lock()
 	{
 		if(m_locked){
-			m_signal.registerSelf();
+			m_signal.acquire();
 			do{ m_signal.wait(); } while(m_locked);
 		}
 		m_locked = true;
