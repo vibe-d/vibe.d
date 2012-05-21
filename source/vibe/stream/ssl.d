@@ -100,7 +100,8 @@ class SslStream : Stream {
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
-			auto ret = SSL_read(m_ssl, dst.ptr, dst.length);
+			int readlen = min(dst.length, int.max);
+			auto ret = SSL_read(m_ssl, dst.ptr, readlen);
 			checkExceptions();
 			enforce(ret != 0, "SSL_read was unsuccessful with ret 0");
 			enforce(ret >= 0, "SSL_read returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
@@ -123,7 +124,8 @@ class SslStream : Stream {
 	{
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
-			auto ret = SSL_write(m_ssl, bytes.ptr, bytes.length);
+			int writelen = min(bytes.length, int.max);
+			auto ret = SSL_write(m_ssl, bytes.ptr, writelen);
 			checkExceptions();
 			
 			const(char)* file = null, data = null;
@@ -253,7 +255,7 @@ private nothrow extern(C)
 
 	int onBioPuts(BIO *b, const(char) *s)
 	{
-		return onBioWrite(b, s, strlen(s));
+		return onBioWrite(b, s, cast(int)strlen(s));
 	}
 }
 
