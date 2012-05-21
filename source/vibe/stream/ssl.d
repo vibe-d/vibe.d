@@ -220,10 +220,10 @@ private nothrow extern(C)
 		return inlen;
 	}
 
-	c_long onBioCtrl(BIO *b, int cmd, int num, void *ptr)
+	sizediff_t onBioCtrl(BIO *b, int cmd, int num, void *ptr)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
-		c_long ret = 1;
+		sizediff_t ret = 1;
 
 		switch(cmd){
 			case BIO_CTRL_GET_CLOSE: ret = b.shutdown; break;
@@ -234,7 +234,7 @@ private nothrow extern(C)
 			case BIO_CTRL_PENDING:
 				try {
 					auto sz = stream.m_stream.leastSize;
-					return sz <= c_long.max ? cast(c_long)sz : int.max;
+					return sz <= sizediff_t.max ? cast(sizediff_t)sz : int.max;
 				} catch( Exception e ){
 					stream.m_exceptions ~= e;
 					return -1;
