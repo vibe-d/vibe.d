@@ -352,7 +352,9 @@ private extern(C) void onSignalTriggered(evutil_socket_t, short events, void* us
 private extern(C) void onTimerTimeout(evutil_socket_t, short events, void* userptr)
 {
 	auto tm = cast(Libevent2Timer)userptr;
+	if( !tm.m_pending ) return;
 	if( tm.m_periodic ){
+		event_del(tm.m_event);
 		event_add(tm.m_event, &tm.m_timeout);
 	} else {
 		tm.stop();
