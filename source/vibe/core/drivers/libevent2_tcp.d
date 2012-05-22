@@ -371,9 +371,8 @@ package extern(C)
 			};
 		}
 
-
-		// Accept and configure incoming connections (up to 10 connections in one go)
-		for(i = 0; i < 10; i++) {
+		bool tryAccept()
+		{
 			logTrace("accept");
 			assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
 			sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
@@ -387,7 +386,7 @@ package extern(C)
 					else
 						logError("Error accepting an incoming connection: %d", err);
 				}
-				break;
+				return false;
 			}
 
 			if( evutil_make_socket_nonblocking(sockfd) ){
@@ -398,20 +397,28 @@ package extern(C)
 			auto buf_event = bufferevent_socket_new(ctx.eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 			if( !buf_event ){
 				logError("Error initializing buffered I/O event for fd %d.", sockfd);
-				return;
+				return false;
 			}
 			
 			auto cctx = new TcpContext(ctx.core, ctx.eventLoop, null, sockfd, buf_event, remote_addr);
+			assert(cctx.event !is null, "event is null although it was just != null?");
 			bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 			timeval toread = {tv_sec: 60, tv_usec: 0};
 			bufferevent_set_timeouts(buf_event, &toread, null);
 			if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
 				logError("Error enabling buffered I/O event for fd %d.", sockfd);
-				return;
+				return false;
 			}
 			
 			runTask(client_task(ctx, cctx));
+			return true;
 		}
+
+
+		// Accept and configure incoming connections (up to 10 connections in one go)
+		for(i = 0; i < 10; i++)
+			if( !tryAccept() )
+				break;
 		logTrace("handled incoming connections...");
 	}
 
