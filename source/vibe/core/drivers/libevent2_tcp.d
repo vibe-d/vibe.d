@@ -332,11 +332,6 @@ package extern(C)
 	{
 		auto ctx = cast(TcpContext*)arg;
 
-		sockaddr_in6 remote_addr;
-		socklen_t addrlen = remote_addr.sizeof;
-		int sockfd;
-		int i;
-
 		if( !(evtype & EV_READ) ){
 			logError("Unknown event type in connect callback: 0x%hx", evtype);
 			return;
@@ -371,11 +366,13 @@ package extern(C)
 			};
 		}
 
-		bool tryAccept()
+		static bool tryAccept(evutil_socket_t listenfd, TcpContext* ctx)
 		{
 			logTrace("accept");
 			assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
-			sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
+			sockaddr_in6 remote_addr;
+			socklen_t addrlen = remote_addr.sizeof;
+			auto sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
 			logTrace("accepted %d", sockfd);
 			if(sockfd < 0) {
 				version(Windows) auto err = evutil_socket_geterror(sockfd);
@@ -416,8 +413,8 @@ package extern(C)
 
 
 		// Accept and configure incoming connections (up to 10 connections in one go)
-		for(i = 0; i < 10; i++)
-			if( !tryAccept() )
+		foreach( i; 0 .. 10 )
+			if( !tryAccept(listenfd, ctx) )
 				break;
 		logTrace("handled incoming connections...");
 	}
