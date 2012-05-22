@@ -348,6 +348,7 @@ package extern(C)
 		static void delegate() client_task(TcpContext* listen_ctx, TcpContext* client_ctx)
 		{
 			return {
+				assert(client_ctx.event !is null, "Client task called without event!?");
 				client_ctx.task = Fiber.getThis();
 				auto conn = new Libevent2TcpConnection(client_ctx);
 				assert(conn.connected, "Connection closed directly after accept?!");
