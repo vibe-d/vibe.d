@@ -310,6 +310,8 @@ struct StrMapCI {
 		Tuple!(string, string)[] m_extendedFields;
 		static char[256] s_keyBuffer;
 	}
+	
+	@property size_t length() const { return m_fieldCount + m_extendedFields.length; }
 
 	void remove(string key){
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key);
