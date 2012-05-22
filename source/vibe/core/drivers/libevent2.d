@@ -81,11 +81,6 @@ class Libevent2Driver : EventDriver {
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
 
-	void sleep(double seconds)
-	{
-		assert(false);
-	}
-
 	FileStream openFile(string path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);

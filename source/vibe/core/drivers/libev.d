@@ -80,11 +80,6 @@ class LibevDriver : EventDriver {
 		ev_break(m_loop, EVBREAK_ALL);
 	}
 	
-	void sleep(double seconds)
-	{
-		assert(false);
-	}
-	
 	FileStream openFile(string path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);

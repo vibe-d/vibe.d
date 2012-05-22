@@ -33,10 +33,6 @@ interface EventDriver {
 	*/
 	void exitEventLoop();
 
-	/** Sleeps for the specified amount of time.
-	*/
-	void sleep(double seconds);
-
 	/** Opens a file on disk with the speficied file mode.
 	*/
 	FileStream openFile(string path, FileMode mode);
