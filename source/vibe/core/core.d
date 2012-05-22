@@ -281,8 +281,13 @@ shared static this()
 
 private void defaultFiberFunc()
 {
+	auto fthis = Fiber.getThis();
 	while(true){
-		auto task = s_taskFuncs[Fiber.getThis()];
+		while( fthis !in s_taskFuncs )
+			s_core.yieldForEvent();
+
+		auto task = s_taskFuncs[fthis];
+		s_taskFuncs.remove(fthis);
 		try {
 			logTrace("entering task.");
 			task();
@@ -295,8 +300,7 @@ private void defaultFiberFunc()
 		// make the fiber available for the next task
 		if( s_availableFibers.length <= s_availableFibersCount )
 			s_availableFibers.length = 2*s_availableFibers.length;
-		s_availableFibers[s_availableFibersCount++] = Fiber.getThis();
-		s_core.yieldForEvent();
+		s_availableFibers[s_availableFibersCount++] = fthis;
 	}
 }
 
