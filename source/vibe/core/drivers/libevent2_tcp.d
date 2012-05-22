@@ -407,6 +407,7 @@ package extern(C)
 				return false;
 			}
 			
+			assert(cctx.event !is null, "event is null just before runTask although it was just != null?");
 			runTask(client_task(ctx, cctx));
 			return true;
 		}
