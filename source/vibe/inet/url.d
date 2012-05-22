@@ -127,10 +127,10 @@ struct Url {
 	@property string anchor() const { return m_anchor; }
 
 	/// The path part plus query string and anchor
-	@property string localURI() const 
-	{ 
+	@property string localURI()
+	const { 
 		auto str = appender!string();
-		str.put(path.toString());
+		str.put(path.toString(true));
 		if( queryString.length ) {
 			str.put("&");
 			str.put(queryString);
