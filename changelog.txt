@@ -1,6 +1,11 @@
 Changelog
 =========
 
+v0.7.3 - 22.05.2012
+-------------------
+
+ - Hotfix release, fixes a bug that could cause a connection to be dropped immediately after accept
+
 v0.7.2 - 22.05.2012
 -------------------
 

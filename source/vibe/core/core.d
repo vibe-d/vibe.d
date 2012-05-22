@@ -173,7 +173,7 @@ bool isTaskLocalSet(string name)
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.2";
+enum VibeVersionString = "0.7.3";
 
 
 /**************************************************************************************************/
