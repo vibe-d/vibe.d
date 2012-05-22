@@ -121,6 +121,7 @@ class HttpClient {
 		auto res = new HttpClientResponse;
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
+		logTrace("HTTP client reading status line");
 		string stln = cast(string)m_stream.readLine(MaxHttpHeaderLineLength);
 		logTrace("stln: %s", stln);
 		res.httpVersion = parseHttpVersion(stln);

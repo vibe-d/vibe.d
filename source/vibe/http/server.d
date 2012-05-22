@@ -616,6 +616,7 @@ final class HttpServerResponse : HttpResponse {
 	private void finalize() 
 	{
 		if( m_bodyWriter ) m_bodyWriter.finalize();
+		if( m_chunkedBodyWriter && m_chunkedBodyWriter !is m_bodyWriter ) m_chunkedBodyWriter.finalize();
 		m_conn.flush();
 		m_timeFinalized = Clock.currTime().toUTC();
 	}
@@ -956,6 +957,7 @@ private HttpServerRequest parseRequest(Stream conn)
 	auto req = new HttpServerRequest;
 	auto stream = new LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
 
+	logTrace("HTTP server reading status line");
 	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength);
 	logTrace("req: %s", reqln);
 	
