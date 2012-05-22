@@ -537,7 +537,7 @@ final class HttpServerResponse : HttpResponse {
 	void redirect(string url, int status = HttpStatus.Found)
 	{
 		statusCode = status;
-		headers["location"] = url;
+		headers["Location"] = url;
 		headers["Content-Length"] = "14";
 		bodyWriter.write("redirecting...");
 	}

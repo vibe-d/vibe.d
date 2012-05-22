@@ -66,7 +66,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		// copy all headers that may pass from upstream to client
 		foreach( n, v; cres.headers ){
 			if( n !in non_forward_headers_map )
-				cres.headers[n] = v;
+				res.headers[n] = v;
 		}
 
 		// copy the response body if any
