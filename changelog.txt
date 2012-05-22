@@ -1,13 +1,14 @@
 Changelog
 =========
 
-v0.7.2 - 
+v0.7.2 - 22.05.2012
 -------------------
 
  - Added support for timers and sleep()
  - Proper timeout handling for Connection: keep-alive is in place - fixes "Operating on closed connection" errors
  - Setting DFLAGS to change compiler options now actually works
  - Implemented SslStream, wich is now used instead of libevent's SSL code - fixes a hang on Linux/libevent-2.0.16
+ - The REST interface generator now supports index() methods and 'id' parameters to customize the protocol
  - Changed the type for durations from int/double to Duration
  - Using Deimos bindings now instead of the custom ones
 
