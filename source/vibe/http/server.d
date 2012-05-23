@@ -16,6 +16,7 @@ import vibe.core.log;
 import vibe.data.json;
 import vibe.http.dist;
 import vibe.http.log;
+import vibe.inet.rfc5322;
 import vibe.inet.url;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
@@ -977,31 +978,7 @@ private HttpServerRequest parseRequest(Stream conn)
 	req.httpVersion = parseHttpVersion(reqln);
 	
 	//headers
-	string ln;
-	string hdr;
-	string hdrvalue;
-	void addPreviousHeader(){
-		if( !hdr.length ) return;
-		if( auto pv = hdr in req.headers ) {
-			*pv ~= "," ~ hdrvalue;
-		} else {
-			req.headers[hdr] = hdrvalue;
-		}
-	}
-	while( (ln = cast(string)stream.readLine(MaxHttpHeaderLineLength)).length > 0 ){
-		logTrace("hdr: %s", ln);
-		if( ln[0] != ' ' ){
-			addPreviousHeader();
-
-			auto colonpos = ln.indexOf(':');
-			enforce(colonpos > 0 && colonpos < ln.length-1, "Header is missing ':'.");
-			hdr = ln[0..colonpos].strip();
-			hdrvalue = ln[colonpos+1..$].strip();
-		} else {
-			hdrvalue ~= " " ~ ln.strip();
-		}
-	}
-	addPreviousHeader();
+	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength);
 
 	//handle Expect-Header
 	if( auto pv = "Expect" in req.headers) {
