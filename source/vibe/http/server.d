@@ -978,20 +978,30 @@ private HttpServerRequest parseRequest(Stream conn)
 	
 	//headers
 	string ln;
-	while( (ln = cast(string)stream.readLine(MaxHttpHeaderLineLength)).length > 0 ){
-		logTrace("hdr: %s", ln);
-		auto colonpos = ln.indexOf(':');
-		if( colonpos > 0 && colonpos < ln.length - 1 ) {
-			auto name = ln[0..colonpos].strip();
-			auto value = ln[colonpos+1..$].strip();
-
-			if( auto pv = name in req.headers ) {
-				*pv ~= "," ~ value;
-			} else {
-				req.headers[name] = value;
-			}
+	string hdr;
+	string hdrvalue;
+	void addPreviousHeader(){
+		if( !hdr.length ) return;
+		if( auto pv = hdr in req.headers ) {
+			*pv ~= "," ~ hdrvalue;
+		} else {
+			req.headers[hdr] = hdrvalue;
 		}
 	}
+	while( (ln = cast(string)stream.readLine(MaxHttpHeaderLineLength)).length > 0 ){
+		logTrace("hdr: %s", ln);
+		if( ln[0] != ' ' ){
+			addPreviousHeader();
+
+			auto colonpos = ln.indexOf(':');
+			enforce(colonpos > 0 && colonpos < ln.length-1, "Header is missing ':'.");
+			hdr = ln[0..colonpos].strip();
+			hdrvalue = ln[colonpos+1..$].strip();
+		} else {
+			hdrvalue ~= " " ~ ln.strip();
+		}
+	}
+	addPreviousHeader();
 
 	//handle Expect-Header
 	if( auto pv = "Expect" in req.headers) {
