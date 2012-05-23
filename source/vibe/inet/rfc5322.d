@@ -14,11 +14,12 @@ import vibe.stream.stream;
 import std.exception;
 import std.string;
 
+alias StrMapCI InetHeaderMap;
 
 /**
 	Parses an internet header according to RFC5322 (with RFC822 compatibility).
 */
-void parseRfc5322Header(InputStream input, ref StrMapCI dst, size_t max_line_length = 1000)
+void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000)
 {
 	string hdr, hdrvalue;
 
