@@ -13,6 +13,7 @@ public import vibe.http.common;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
+import vibe.inet.rfc5322;
 import vibe.inet.url;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
@@ -135,17 +136,9 @@ class HttpClient {
 		}
 		
 		// read headers until an empty line is hit
-		while(true){
-			string ln = cast(string)m_stream.readLine(MaxHttpHeaderLineLength);
-			logTrace("hdr: %s", ln);
-			if( ln.length == 0 ) break;
-			auto idx = ln.indexOf(":");
-			auto name = ln[0 .. idx];
-			ln = stripLeft(ln[idx+1 .. $]);
-			if( auto ph = name in res.headers ) *ph ~= ", " ~ ln;
-			else res.headers[name] = ln;
-		}
+		parseRfc5322Header(m_stream, res.headers, MaxHttpHeaderLineLength);
 
+		// prepare body the reader
 		if( req.method == "HEAD" ){
 			res.bodyReader = new LimitedInputStream(null, 0);
 		} else {
