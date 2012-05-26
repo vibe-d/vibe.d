@@ -4,10 +4,15 @@ import vibe.mail.smtp;
 
 static this()
 {
-	auto settings = new SmtpClientSettings("outerproduct.org", 25);
+	auto settings = new SmtpClientSettings("smtp.isp.com", 25);
+	settings.useTLS = true;
+	settings.authType = SmtpAuthType.Plain;
+	settings.username = "username";
+	settings.password = "secret";
+
 	auto mail = new Mail;
-	mail.headers["From"] = "<sludwig@outerproduct.org>";
-	mail.headers["To"] = "<sdas@outerproduct.org>";
+	mail.headers["From"] = "<user@isp.com>";
+	mail.headers["To"] = "<recipient@domain.com>";
 	mail.headers["Subject"] = "Testmail";
 	mail.bodyText = "Hello, World!";
 	sendMail(settings, mail);

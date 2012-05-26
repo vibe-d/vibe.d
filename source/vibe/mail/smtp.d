@@ -7,10 +7,13 @@
 */
 module vibe.mail.smtp;
 
+import vibe.core.log;
 import vibe.core.tcp;
 import vibe.http.common : StrMapCI;
+import vibe.stream.ssl;
 
 import std.algorithm;
+import std.base64;
 import std.conv;
 import std.exception;
 
@@ -29,6 +32,7 @@ enum SmtpStatus {
 	ServiceClosing = 221,
 	Success = 250,
 	Forwarding = 251,
+	ServerAuthReady = 334,
 	StartMailInput = 354,
 	ServiceUnavailable = 421,
 	MailboxTemporarilyUnavailable = 450,
@@ -48,11 +52,22 @@ enum SmtpStatus {
 	TransactionFailed = 554,
 }
 
+enum SmtpAuthType {
+	None,
+	Plain,
+	Login,
+	CramMd5
+}
+
 class SmtpClientSettings {
 	string host = "127.0.0.1";
 	ushort port = 25;
+	bool useTLS = false;
 	string localname = "localhost";
 	SmtpConnectionType connectionType = SmtpConnectionType.Plain;
+	SmtpAuthType authType = SmtpAuthType.None;
+	string username;
+	string password;
 
 	this() {}
 	this(string host, ushort port) { this.host = host; this.port = port; }
@@ -65,19 +80,65 @@ class Mail {
 
 void sendMail(SmtpClientSettings settings, Mail mail)
 {
-	TcpConnection conn;
+	TcpConnection raw_conn;
 	try {
-		conn = connectTcp(settings.host, settings.port);
+		raw_conn = connectTcp(settings.host, settings.port);
 	} catch(Exception e){
 		throw new Exception("Failed to connect to SMTP server at "~settings.host~" port "
 			~to!string(settings.port), e);
 	}
-	scope(exit) conn.close();
+	scope(exit) raw_conn.close();
+
+	Stream conn = raw_conn;
 
 	expectStatus(conn, SmtpStatus.ServiceReady);
 
-	conn.write("HELO "~settings.localname~"\r\n");
-	expectStatus(conn, SmtpStatus.Success);
+	void greet(){
+		conn.write("EHLO "~settings.localname~"\r\n");
+		while(true){ // simple skipping of 
+			auto ln = cast(string)conn.readLine();
+			logDebug("EHLO response: %s", ln);
+			auto sidx = ln.countUntil(' ');
+			auto didx = ln.countUntil('-');
+			if( sidx > 0 && (didx < 0 || didx > sidx) ){
+				enforce(ln[0 .. sidx] == "250", "Server not ready (response "~ln[0 .. sidx]~")");
+				break;
+			}
+		}
+	}
+
+	greet();
+
+	if( settings.useTLS ){
+		conn.write("STARTTLS\r\n");
+		expectStatus(conn, SmtpStatus.ServiceReady);
+		auto ctx = new SslContext();
+		conn = new SslStream(raw_conn, ctx, SslStreamState.Connecting);
+		greet();
+	}
+
+	final switch(settings.authType){
+		case SmtpAuthType.None: break;
+		case SmtpAuthType.Plain:
+			logDebug("seding auth");
+			conn.write("AUTH PLAIN\r\n");
+			expectStatus(conn, SmtpStatus.ServerAuthReady);
+			logDebug("seding auth info");
+			conn.write(Base64.encode(cast(ubyte[])("\0"~settings.username~"\0"~settings.password)));
+			conn.write("\r\n");
+			expectStatus(conn, 235);
+			logDebug("authed");
+			break;
+		case SmtpAuthType.Login:
+			conn.write("AUTH LOGIN\r\n");
+			expectStatus(conn, SmtpStatus.ServerAuthReady);
+			conn.write(Base64.encode(cast(ubyte[])settings.username) ~ "\r\n");
+			expectStatus(conn, SmtpStatus.ServerAuthReady);
+			conn.write(Base64.encode(cast(ubyte[])settings.password) ~ "\r\n");
+			expectStatus(conn, 235);
+			break;
+		case SmtpAuthType.CramMd5: assert(false, "TODO!");
+	}
 
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
 	expectStatus(conn, SmtpStatus.Success);
@@ -99,7 +160,7 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 	expectStatus(conn, SmtpStatus.ServiceClosing);
 }
 
-private void expectStatus(TcpConnection conn, int expected_status)
+private void expectStatus(InputStream conn, int expected_status)
 {
 	string ln = cast(string)conn.readLine();
 	auto sp = ln.countUntil(' ');
@@ -108,7 +169,7 @@ private void expectStatus(TcpConnection conn, int expected_status)
 	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" got "~to!string(status)~": "~ln[sp .. $]);
 }
 
-private int recvStatus(TcpConnection conn)
+private int recvStatus(InputStream conn)
 {
 	string ln = cast(string)conn.readLine();
 	auto sp = ln.countUntil(' ');
