@@ -227,6 +227,8 @@ class HttpServerErrorInfo {
 	string message;
 	/// Extended error message with debug information such as a stack trace
 	string debugMessage;
+	/// The error exception, if any
+	Throwable exception;
 }
 
 /// Delegate type used for user defined error page generator callbacks.
@@ -775,7 +777,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 		scope res = new HttpServerResponse(conn, settings);
 
 		// Error page handler
-		void errorOut(int code, string msg, string debug_msg){
+		void errorOut(int code, string msg, string debug_msg, Throwable ex){
 			assert(!res.headerWritten);
 
 			// stack traces sometimes contain random bytes - make sure they are replaced
@@ -787,6 +789,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 				err.code = code;
 				err.message = msg;
 				err.debugMessage = debug_msg;
+				err.exception = ex;
 				settings.errorPageHandler(req, res, err);
 			} else {
 				res.contentType = "text/plain";
@@ -794,6 +797,8 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			}
 			assert(res.headerWritten);
 		}
+
+		bool parsed = false;
 
 		// parse the request
 		try {
@@ -903,53 +908,45 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			res.headers["Date"] = toRFC822DateTimeString(Clock.currTime().toUTC());
 			if( req.persistent ) res.headers["Keep-Alive"] = "timeout="~to!string(settings.keepAliveTimeout.total!"seconds"());
 
-
-			logTrace("handle request (body %d)", req.bodyReader.leastSize);
-
+			// finished parsing the request
+			parsed = true;
 
 			// handle the request
-			try {
-				res.httpVersion = req.httpVersion;
-				request_task(req, res);
-			} catch (HttpServerError err) {
-				logDebug("http error thrown: %s", err.toString());
-				if( !res.headerWritten ) errorOut(err.status, err.msg, err.toString());
-				if (justifiesConnectionClose(err.status)) {
-					conn_.close();
-					break;
-				}
-			} catch (Throwable e) {
-				logDebug("exception thrown during request handling: %s", e.toString());
-				if( !res.headerWritten ) errorOut(HttpStatus.InternalServerError, "Error handling request.", e.toString());
-				else logError("Error after page has been written: %s", e.toString());
-				logDebug("Exception while handling request: %s", e.toString());
-			} 
+			logTrace("handle request (body %d)", req.bodyReader.leastSize);
+			res.httpVersion = req.httpVersion;
+			request_task(req, res);
 		} catch(HttpServerError err) {
 			logDebug("http error thrown: %s", err.toString());
-			if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString());
+			if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
 			else logError("HttpServerError after page has been written: %s", err.toString());
 			if (justifiesConnectionClose(err.status)) {
 				conn_.close();
 				break;
 			}
+			logDebug("Exception while handling request: %s", err.toString());
 		} catch (Throwable e) {
 			logDebug("Exception while parsing request: %s", e.toString());
-			if( !res.headerWritten ) errorOut(HttpStatus.BadRequest, "Invalid request format.", e.toString());
+			if( !res.headerWritten ) errorOut(parsed ? HttpStatus.InternalServerError :
+				HttpStatus.BadRequest, "Invalid request format.", e.toString(), e);
 			else logError("Error after page has been written: %s", e.toString());
+			logDebug("Exception while handling request: %s", e.toString());
 		}
 
-		if( !res.headerWritten ) errorOut(HttpStatus.NotFound, "Not found.", "");
+		// if no one has written anything, return 404
+		if( !res.headerWritten ) errorOut(HttpStatus.NotFound, "Not found.", "", null);
 
-		res.finalize();	
+		// finalize (e.g. for chunked encoding)
+		res.finalize();
 
+		// log the request to access log
 		foreach( log; context.loggers )
 			log.log(req, res);
 
+		// wait for another possible request on a keep-alive connection
 		if( req.persistent && !conn_.waitForData(settings.keepAliveTimeout) ) {
 			logDebug("persistent connection timeout!");
 			break;
 		}
-
 	} while( req.persistent && conn_.connected );
 }
 
