@@ -42,3 +42,4 @@ PACKAGE MANAGER
  - package signing
  - custom paths in deps.txt
  - create deps.txt in temp directory
+ - only query the VPM registry if there are unmet dependecies or if an upgrade is requested
