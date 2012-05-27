@@ -98,12 +98,15 @@ package class Libevent2TcpConnection : TcpConnection {
 	*/
 	void acquire()
 	{
+		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
 		m_ctx.task = Fiber.getThis();
 	}
 
 	/// Makes this connection unowned so that no events are handled anymore.
 	void release()
 	{
+		assert(m_ctx.task !is null, "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
 		m_ctx.task = null;
 	}
 
