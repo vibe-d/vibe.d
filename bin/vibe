@@ -1,5 +1,5 @@
 #!/bin/sh
-VIBEBINARY=$(readlink $(which "$0"))
+VIBEBINARY=$(readlink "$0")
 if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY="$0"; fi
 VIBEPATH=$(dirname "$VIBEBINARY")
 
