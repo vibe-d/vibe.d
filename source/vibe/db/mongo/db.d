@@ -9,8 +9,9 @@ module vibe.db.mongo.db;
 
 public import vibe.db.mongo.collection;
 
-import vibe.db.mongo.connection;
+import vibe.core.connectionpool;
 import vibe.core.log;
+import vibe.db.mongo.connection;
 
 import core.thread;
 
@@ -22,9 +23,7 @@ class MongoDB {
 	private {
 		string m_host;
 		ushort m_port;
-		MongoConnection[] m_connections;
-		MongoConnection[Fiber] m_locks;
-		int[MongoConnection] m_lockCount;
+		ConnectionPool!MongoConnection m_connections;
 	}
 
 	enum defaultPort = 27017;
@@ -33,6 +32,11 @@ class MongoDB {
 	{
 		m_host = host;
 		m_port = port;
+		m_connections = new ConnectionPool!MongoConnection({
+				auto ret = new MongoConnection(m_host, m_port);
+				ret.connect();
+				return ret;
+			});
 	}
 
 	/**
@@ -59,80 +63,7 @@ class MongoDB {
 
 		Throws: Exception if a DB communication error occured.
 	*/
-	MongoCollection opIndex(string name){
-		return MongoCollection(this, name);
-	}
+	MongoCollection opIndex(string name) { return MongoCollection(this, name); }
 
-	package LockedConnection lockConnection()
-	{
-		auto fthis = Fiber.getThis();
-		if( auto pconn = fthis in m_locks ){
-			m_lockCount[*pconn]++;
-			return LockedConnection(this, *pconn);
-		}
-
-		size_t cidx = size_t.max;
-		foreach( i, c; m_connections )
-			if( c !in m_lockCount ){
-				cidx = i;
-				break;
-			}
-
-		if( cidx == size_t.max ){
-			m_connections ~= new MongoConnection(m_host, m_port);
-			cidx = m_connections.length-1;
-			m_connections[cidx].connect();
-			if( fthis ) m_connections[cidx].release();
-		}
-		logDebug("returning mongo connection %d of %d", cidx, m_connections.length);
-		auto conn = m_connections[cidx];
-		if( fthis ) conn.acquire();
-		m_locks[fthis] = conn;
-		m_lockCount[conn] = 1;
-		auto ret = LockedConnection(this, m_connections[cidx]);
-		return ret;
-	}
-}
-
-
-package struct LockedConnection {
-	private {
-		MongoDB m_db;
-		Fiber m_fiber;
-	}
-		MongoConnection m_conn;
-
-	alias m_conn this;
-
-	private this(MongoDB db, MongoConnection conn)
-	{
-		m_db = db;
-		m_conn = conn;
-		m_fiber = Fiber.getThis();
-	}
-
-	this(this)
-	{
-		if( m_conn ){
-			auto fthis = Fiber.getThis();
-			assert(fthis is m_fiber);
-			m_db.m_lockCount[m_conn]++;
-			logTrace("conn %s copy %d", cast(void*)m_conn, m_db.m_lockCount[m_conn]);
-		}
-	}
-
-	~this()
-	{
-		if( m_conn ){
-			auto fthis = Fiber.getThis();
-			assert(fthis is m_fiber);
-			logTrace("conn %s destroy %d", cast(void*)m_conn, m_db.m_lockCount[m_conn]-1);
-			if( --m_db.m_lockCount[m_conn] == 0 ){
-				m_db.m_locks.remove(m_fiber);
-				m_db.m_lockCount.remove(m_conn);
-				if( fthis ) m_conn.release();
-				m_conn = null;
-			}
-		}
-	}
+	package auto lockConnection() { return m_connections.lockConnection(); }
 }
