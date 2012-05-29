@@ -172,14 +172,6 @@ final class ChunkedInputStream : InputStream {
 		}
 	}
 
-	ubyte[] readLine(size_t max_bytes, string line_sep = "\r\n")
-	{
-		return readLineDefault(max_bytes, line_sep);
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
-
-
 	private void readChunk()
 	{
 		// read chunk header

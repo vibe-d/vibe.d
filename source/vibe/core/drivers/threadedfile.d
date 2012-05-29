@@ -152,13 +152,6 @@ class ThreadedFileStream : FileStream {
 		m_ptr += dst.length;
 	}
 
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
-	{
-		return readLineDefault(max_bytes, linesep);
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
-
 	alias Stream.write write;
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{

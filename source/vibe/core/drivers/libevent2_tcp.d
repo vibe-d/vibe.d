@@ -180,41 +180,6 @@ package class Libevent2TcpConnection : TcpConnection {
 		logTrace("read data");
 	}
 	
-	/** Reads one line terminated by CRLF.
-	*/
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
-	{
-		import core.stdc.stdlib;
-
-		evbuffer_eol_style style;
-		switch( linesep ){
-			default: assert(false, "Unsupported line style.");
-			case "\r\n": style = evbuffer_eol_style.EVBUFFER_EOL_CRLF_STRICT; break;
-			case "\n": style = evbuffer_eol_style.EVBUFFER_EOL_LF; break;
-		}
-
-		size_t nbytes;
-		char* ln;
-		while(true){
-			checkConnected();
-			logTrace("evbuffer_readln (fd %d)", bufferevent_getfd(m_baseEvent));
-			ln = evbuffer_readln(bufferevent_get_input(m_event), &nbytes, style);
-			if( ln ) break;
-			
-			enforce(!max_bytes || evbuffer_get_length(bufferevent_get_input(m_event)) < max_bytes,
-				"Line is too long!");
-
-			m_ctx.core.yieldForEvent();
-		}
-		
-		auto ret = (cast(ubyte*)ln)[0 .. nbytes];
-		logTrace("TCPConnection.readline return data (%d)", nbytes);
-		return ret;
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
-
-
 	bool waitForData(Duration timeout)
 	{
 		if( dataAvailableForRead ) return true;

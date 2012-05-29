@@ -153,14 +153,6 @@ class ZlibInputStream : InputStream {
 		}
 	}
 
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
-	{
-		return readLineDefault(max_bytes, linesep);
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
-
-
 	private void readChunk()
 	{
 		assert(m_buffer.length == 0);

@@ -14,7 +14,26 @@ import std.algorithm;
 import std.exception;
 import std.datetime;
 
-ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_length = 0)
+/**
+	Reads and returns a single line from the stream.
+
+	Throws:
+		An exception if either the stream end was hit without hitting a newline first, or
+		if more than max_bytes have been read from the stream in case of max_bytes != 0.
+*/
+ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\n") /*@ufcs*/
+{
+	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes);
+}
+
+/**
+	Reads all data of a stream until the specified end marker is detected.
+
+	Throws:
+		An exception if either the stream end was hit without hitting a marker first, or
+		if more than max_bytes have been read from the stream in case of max_bytes != 0.
+*/
+ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 0) /*@ufcs*/
 {
 	// TODO: implement a more efficient algorithm for long end_markers such as a Boyer-Moore variant
 	auto ret = appender!(ubyte[])();
@@ -34,7 +53,6 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_length =
 		size_t nread = 0;
 		auto least_size = stream.leastSize(); // NOTE: blocks until data is available
 		auto str = stream.peek(); // try to get some data for free
-		logInfo("peek <%s>", cast(string)str);	
 		if( str.length == 0 ){ // if not, read as much as possible without reading past the end
 			nread = min(least_size, end_marker.length-nmatched, buf.length);
 			stream.read(buf[0 .. nread]);
@@ -44,22 +62,18 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_length =
 		foreach( i, ch; str ){
 			if( ch == end_marker[nmatched] ){
 				nmatched++;
-				logInfo("match %d %d/%d", ch, nmatched, end_marker.length);
 				if( nmatched == end_marker.length ){
-					logInfo("skip %d-%d", nread, i);
 					skip(i+1-nread);
-					logInfo("RU GOT %s", cast(string)ret.data);
 					return ret.data;
 				}
 			} else {
-				enforce(max_length == 0 || ret.data.length < max_length,
+				enforce(max_bytes == 0 || ret.data.length < max_bytes,
 					"Maximum number of bytes read before reading the end marker.");
 				if( nmatched > 0 ){
 					ret.put(end_marker[0 .. nmatched]);
 					nmatched = 0;
 				}
 				ret.put(ch);
-				logInfo("put %d", ch);
 			}
 		}
 
@@ -69,20 +83,26 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_length =
 	return ret.data();
 }
 
-/*ubyte[] readAll(InputStream stream, size_t max_bytes = 0)
+/**
+	Reads the complete contents of a stream, optionally limited by max_bytes.
+
+	Throws:
+		An exception is thrown if max_bytes != 0 and the stream contains more than max_bytes data.
+*/
+ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 {
 	auto dst = appender!(ubyte[])();
 	auto buffer = new ubyte[64*1024];
 	size_t n = 0, m = 0;
-	while( !empty ){
+	while( !stream.empty ){
 		enforce(!max_bytes || n++ < max_bytes, "Data too long!");
-		size_t chunk = cast(size_t)min(leastSize, buffer.length);
+		size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
 		logTrace("read pipe chunk %d", chunk);
-		read(buffer[0 .. chunk]);
+		stream.read(buffer[0 .. chunk]);
 		dst.put(buffer[0 .. chunk]);
 	}
 	return dst.data;
-}*/
+}
 
 /**
 	Interface for all classes implementing readable streams.
@@ -116,53 +136,6 @@ interface InputStream {
 		Throws: An exception if the operation reads past the end of the stream
 	*/
 	void read(ubyte[] dst);
-
-	/**	Reads and returns a single line from the stream.
-
-		Throws: An exception if either the stream end was hit without hitting a newline first, or
-			if more than max_bytes have been read from the stream in case of max_bytes != 0.
-	*/
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n");
-
-	/** Reads the remaining contents of the stream into a memory buffer and returns it.
-	*/
-	ubyte[] readAll(size_t max_bytes = 0);
-
-	protected final ubyte[] readLineDefault(size_t max_bytes = 0, in string linesep = "\r\n")
-	{
-		return .readUntil(this, cast(ubyte[])linesep, max_bytes);
-		/*auto dst = appender!(ubyte[])();
-		size_t n = 0, m = 0;
-		while(true){
-			enforce(!max_bytes || n++ < max_bytes, "Line too long!");
-			enforce(!empty, "Unterminated line!");
-			ubyte[1] bt;
-			read(bt);
-			if( bt[0] == linesep[m] ) m++;
-			else {
-				dst.put(cast(ubyte[])linesep[0 .. m]);
-				dst.put(bt[]);
-				m = 0;
-			}
-			if( m >= linesep.length ) break;
-		}
-		return dst.data;*/
-	}
-
-	protected final ubyte[] readAllDefault(size_t max_bytes)
-	{
-		auto dst = appender!(ubyte[])();
-		auto buffer = new ubyte[64*1024];
-		size_t n = 0, m = 0;
-		while( !empty ){
-			enforce(!max_bytes || n++ < max_bytes, "Data too long!");
-			size_t chunk = cast(size_t)min(leastSize, buffer.length);
-			logTrace("read pipe chunk %d", chunk);
-			read(buffer[0 .. chunk]);
-			dst.put(buffer[0 .. chunk]);
-		}
-		return dst.data;
-	}
 }
 
 /**
@@ -289,18 +262,6 @@ class LimitedInputStream : InputStream {
 		m_sizeLimit -= dst.length;
 	}
 	
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
-	{
-		if( max_bytes != 0 && max_bytes < m_sizeLimit ){
-			auto ret = m_input.readLine(max_bytes, linesep);
-			m_sizeLimit -= ret.length + linesep.length;
-			return ret;
-		}
-		return readLineDefault(max_bytes, linesep);
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
-
 	protected void onSizeLimitReached() {
 		throw new Exception("Size limit reached");
 	}
@@ -363,14 +324,4 @@ class CountingInputStream : InputStream {
 		m_in.read(dst);
 		m_bytesRead += dst.length;
 	}
-	
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
-	{
-		enforce(m_in !is null, "InputStream missing");
-		auto ln = m_in.readLine(max_bytes, linesep);
-		m_bytesRead += ln.length + linesep.length;
-		return ln;
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) { return readAllDefault(max_bytes); }
 }

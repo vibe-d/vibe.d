@@ -306,45 +306,7 @@ class LibevTcpConnection : TcpConnection {
 			nbytes -= amt;
 		}
 	}
-	
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n")
-	{
-		logTrace("readln");
-		assert(linesep.length >= 1);
-		auto dst = appender!(ubyte[])();
-		size_t matchcount = 0;
-		bool first = true;
-		while(true){
-			logTrace("readln peek");
-			auto data = peek();
-			enforce(data.length > 0, "Remote end hung up before line was read.");
-			size_t remaining = min(data.length, max_bytes - dst.data.length);
-			foreach( didx; 0 .. remaining ){
-				if( data[didx] == linesep[matchcount] ){
-					matchcount++;
-					if( matchcount == linesep.length ){
-						dst.put(data[0 .. didx+1]);
-						drain(didx+1);
-						if( first ) return data[0 .. didx+1-linesep.length].dup;
-						auto ret = dst.data();
-						return ret[0 .. $-linesep.length];
-					}
-				} else matchcount = 0;
-			}
-			logTrace("readln drain");
-			first = false;
-			dst.put(data[0 .. remaining]);
-			drain(remaining);
-			enforce(dst.data.length+linesep.length <= max_bytes, "Line too long.");
-		}
-//		return readLineDefault(max_bytes, linesep);
-	}
-	
-	ubyte[] readAll(size_t max_bytes = 0)
-	{
-		return readAllDefault(max_bytes);
-	}
-	
+		
 	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
 		m_writeBuffer.put(bytes_);

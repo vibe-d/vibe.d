@@ -169,14 +169,6 @@ class IncommingWebSocketMessage : InputStream {
 		}
 	}
 
-	ubyte[] readLine(size_t max_bytes = 0, string linesep = "\r\n") {
-		return readLineDefault(max_bytes, linesep);
-	}
-
-	ubyte[] readAll(size_t max_bytes = 0) {
-		return readAllDefault(max_bytes);
-	}
-
 	private void readFrame() {
 		Frame frame;
 		do {
