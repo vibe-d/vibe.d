@@ -158,8 +158,6 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 			continue;
 		}
 
-		logInfo("LINE %s", ln.unindented);
-
 		if( ln.indent != base_indent ){
 			if( ln.indent.length < base_indent.length || ln.indent[0 .. base_indent.length] != base_indent )
 				return;
@@ -171,7 +169,6 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 				while( !lines.empty && lines.front.indent.length >= cindent.length
 						&& lines.front.indent[0 .. cindent.length] == cindent)
 				{
-					logInfo("CLINE %s", lines.front.unindented);
 					cblock.text ~= lines.front.unindent(cindent.length);
 					lines.popFront();
 				}
