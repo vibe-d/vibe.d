@@ -155,9 +155,11 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	const(ubyte)[] peek()
 	{
-		//auto buf = bufferevent_get_input(m_event);
-		//evbuffer_peek
-		return null;
+		auto buf = bufferevent_get_input(m_event);
+		evbuffer_iovec iovec;
+		if( evbuffer_peek(buf, -1, null, &iovec, 1) == 0 )
+			return null;
+		return (cast(ubyte*)iovec.iov_base)[0 .. iovec.iov_len];
 	}
 
 	/** Reads as many bytes as 'dst' can hold.
