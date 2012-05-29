@@ -21,7 +21,7 @@ import std.exception;
 
 	Note that a MongoConnection my only be used from one fiber/thread at a time.
 */
-class MongoConnection {
+class MongoConnection : EventedObject {
 	private {
 		string m_host;
 		ushort m_port;
@@ -37,8 +37,9 @@ class MongoConnection {
 	}
 
 	// changes the ownership of this connection
-	void acquire() { if( m_conn ) m_conn.acquire(); }
-	void release() { if( m_conn ) m_conn.release(); }
+	override void acquire() { if( m_conn ) m_conn.acquire(); }
+	override void release() { if( m_conn ) m_conn.release(); }
+	override bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
 
 	void connect()
 	{

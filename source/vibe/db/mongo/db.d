@@ -82,10 +82,11 @@ class MongoDB {
 			m_connections ~= new MongoConnection(m_host, m_port);
 			cidx = m_connections.length-1;
 			m_connections[cidx].connect();
+			if( fthis ) m_connections[cidx].release();
 		}
 		logDebug("returning mongo connection %d of %d", cidx, m_connections.length);
 		auto conn = m_connections[cidx];
-		conn.acquire();
+		if( fthis ) conn.acquire();
 		m_locks[fthis] = conn;
 		m_lockCount[conn] = 1;
 		auto ret = LockedConnection(this, m_connections[cidx]);
@@ -129,7 +130,7 @@ package struct LockedConnection {
 			if( --m_db.m_lockCount[m_conn] == 0 ){
 				m_db.m_locks.remove(m_fiber);
 				m_db.m_lockCount.remove(m_conn);
-				m_conn.release();
+				if( fthis ) m_conn.release();
 				m_conn = null;
 			}
 		}
