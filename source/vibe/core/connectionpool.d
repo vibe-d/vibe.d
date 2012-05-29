@@ -13,6 +13,14 @@ import vibe.core.driver;
 import core.thread;
 
 
+/**
+	Generic connection pool class.
+
+	The connection pool is creating connections using the supplied factory function as needed
+	whenever lockConnection() is called. Connections are associated to the calling fiber, as long
+	as any copy of the returned LockedConnection object still exists. Connections that are not
+	associated 
+*/
 class ConnectionPool(Connection : EventedObject)
 {
 	private {
@@ -27,12 +35,12 @@ class ConnectionPool(Connection : EventedObject)
 		m_connectionFactory = connection_factory;
 	}
 
-	LockedConnection lockConnection()
+	LockedConnection!Connection lockConnection()
 	{
 		auto fthis = Fiber.getThis();
 		if( auto pconn = fthis in m_locks ){
 			m_lockCount[*pconn]++;
-			return LockedConnection(this, *pconn);
+			return LockedConnection!Connection(this, *pconn);
 		}
 
 		size_t cidx = size_t.max;
@@ -52,50 +60,85 @@ class ConnectionPool(Connection : EventedObject)
 		if( fthis ) conn.acquire();
 		m_locks[fthis] = conn;
 		m_lockCount[conn] = 1;
-		auto ret = LockedConnection(this, m_connections[cidx]);
+		auto ret = LockedConnection!Connection(this, m_connections[cidx]);
 		return ret;
 	}
+}
 
-	static struct LockedConnection {
-		private {
-			ConnectionPool m_pool;
-			Fiber m_fiber;
+struct LockedConnection(Connection : EventedObject) {
+	private {
+		ConnectionPool!Connection m_pool;
+		Fiber m_fiber;
+	}
+	
+	Connection m_conn;
+
+	alias m_conn this;
+
+	private this(ConnectionPool!Connection pool, Connection conn)
+	{
+		m_pool = pool;
+		m_conn = conn;
+		m_fiber = Fiber.getThis();
+	}
+
+	this(this)
+	{
+		if( m_conn ){
+			auto fthis = Fiber.getThis();
+			assert(fthis is m_fiber);
+			m_pool.m_lockCount[m_conn]++;
+			logTrace("conn %s copy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]);
 		}
-		
-		Connection m_conn;
+	}
 
-		alias m_conn this;
-
-		private this(ConnectionPool pool, Connection conn)
-		{
-			m_pool = pool;
-			m_conn = conn;
-			m_fiber = Fiber.getThis();
-		}
-
-		this(this)
-		{
-			if( m_conn ){
-				auto fthis = Fiber.getThis();
-				assert(fthis is m_fiber);
-				m_pool.m_lockCount[m_conn]++;
-				logTrace("conn %s copy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]);
+	~this()
+	{
+		if( m_conn ){
+			auto fthis = Fiber.getThis();
+			assert(fthis is m_fiber);
+			logTrace("conn %s destroy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]-1);
+			if( --m_pool.m_lockCount[m_conn] == 0 ){
+				m_pool.m_locks.remove(m_fiber);
+				m_pool.m_lockCount.remove(m_conn);
+				if( fthis ) m_conn.release();
+				m_conn = null;
 			}
 		}
+	}
+}
 
-		~this()
-		{
-			if( m_conn ){
-				auto fthis = Fiber.getThis();
-				assert(fthis is m_fiber);
-				logTrace("conn %s destroy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]-1);
-				if( --m_pool.m_lockCount[m_conn] == 0 ){
-					m_pool.m_locks.remove(m_fiber);
-					m_pool.m_lockCount.remove(m_conn);
-					if( fthis ) m_conn.release();
-					m_conn = null;
-				}
-			}
+/**
+	Wraps an InputStream and automatically unlocks a locked connection as soon as all data has been
+	read.
+*/
+class LockedInputStream(Connection : EventedObject) : InputStream {
+	private {
+		LockedConnection!Connection m_lock;
+		InputStream m_stream;
+	}
+
+
+	this(LockedConnection!Connection conn, InputStream str)
+	{
+		m_lock = conn;
+		m_stream = str;
+	}
+
+	@property bool empty() { return m_stream.empty; }
+
+	@property ulong leastSize() { return m_stream.leastSize; }
+
+	@property bool dataAvailableForRead() { return m_stream.dataAvailableForRead; }
+
+	const(ubyte)[] peek() { return m_stream.peek(); }
+
+	void read(ubyte[] dst)
+	{
+		m_stream.read(dst);
+		if( this.empty ){
+			LockedConnection!Connection unl;
+			m_lock = unl;
 		}
 	}
 }
