@@ -14,12 +14,12 @@ import vibe.utils.string;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.range;
 import std.string;
 
 /*
 	TODO:
 		detect inline HTML tags
-		no p inside li when there is no newline
 */
 
 version(MarkdownTest)
@@ -46,277 +46,310 @@ string filterMarkdown()(string str)
 
 void filterMarkdown(R)(ref R dst, string src)
 {
-	auto lines = splitLines(src);
-	auto references = scanForReferences(lines);
-
-	bool skip_next_line = false;
-
-	MarkdownState[] state = [];
-	for( size_t lnidx = 0; lnidx < lines.length; lnidx++ ){
-		string ln = lines[lnidx];
-		logTrace("[line %d: %s]", lnidx+1, ln);
-		// skips Setext style headers...
-		if( skip_next_line ){
-			logTrace("[skipping line %d: %s]", lnidx+1, ln);
-			skip_next_line = false;
-			continue;
-		}
-
-		// gather some basic information about the line and unindent if indented
-		bool is_indented = isLineIndented(ln);
-		bool is_blank = isLineBlank(ln);
-		bool list_ended = !is_blank && !is_indented && state.length == 1;
-		bool is_atx_header = false;
-		bool is_hline = false;
-		if( is_indented ){
-			ln = unindentLine(ln);
-
-			// if we are inside a list, indentation is one level deeper
-			if( state.length > 0 && (state[0] == MarkdownState.OList || state[0] == MarkdownState.UList) )
-			{
-				is_indented = isLineIndented(ln);
-				if( is_indented)
-					ln = unindentLine(ln);
-			}
-		} else if( isAtxHeaderLine(ln) ){
-			is_atx_header = isAtxHeaderLine(ln);
-			is_blank = true;
-		} else if( isHlineLine(ln) ){
-			is_hline = true;
-			is_blank = true;
-		}
-
-		// detect HTML block tags
-		if( !is_indented && isHtmlBlockLine(ln) ){
-			int depth = 1;
-			dst.put(ln);
-			dst.put('\n');
-			string openingtag = getHtmlTagName(ln);
-			while( depth > 0 ){
-				ln = lines[++lnidx];
-				dst.put(ln);
-				dst.put('\n');
-				if( isHtmlBlockLine(ln) && getHtmlTagName(ln) == openingtag ) depth++;
-				else if( isHtmlBlockCloseLine(ln) && getHtmlTagName(ln) == openingtag) depth--;
-			}
-			continue;
-		}
-
-		// determine the type of this line
-		MarkdownState newstate;
-		if( is_indented ) newstate = MarkdownState.Code;
-		else if( is_blank ) newstate = MarkdownState.Blank;
-		else if( isQuoteLine(ln) ) newstate = cast(MarkdownState)(MarkdownState.Quote0 + getQuoteLevel(ln));
-		else if( isUListLine(ln) ) newstate = MarkdownState.UList;
-		else if( isOListLine(ln) ) newstate = MarkdownState.OList;
-		else newstate = MarkdownState.Text;
-
-		logTrace("[detected state after %s: %s]", state, newstate);
-		// if the next line is a Setext style header, exit all states, output the header and skip the next line
-		if( newstate == MarkdownState.Text && lnidx+1 < lines.length && isSetextHeaderLine(lines[lnidx+1]) ){
-			logTrace("[header at line %d: %s]", lnidx+1, ln);
-			foreach_reverse( st; state ) exitState(dst, st);
-			state.length = 0;
-			outputHeaderLine(dst, ln, lines[lnidx+1]);
-			skip_next_line = true;
-			continue;
-		}
-
-		// behave according the the state transition table:
-		//
-		//                 Blank   Text          Code          QuoteM          OList
-		//[Text]           []      [Text]        [Code]        [QuoteM]        [OList Text]
-		//[Code]           []      [Text]        [Code]        [QuoteM]        [OList Text]
-		//[QuoteN]         []      [Text]        [Code]        [QuoteM]        [OList Text]
-		//[OList]          [OList] [OList, Text] [OList, Code] [OList, QuoteM] [OList Text]
-		//[OList, Text]    [OList] [OList, Text] [OList, Code] [OList, QuoteM] [OList Text]
-		//[OList, QuoteN]  [OList] [OList, Text] [OList, Code] [OList, QuoteM] [OList Text]
-		//[OList, Code]    [OList] [OList, Text] [OList, Code] [OList, QuoteM] [OList Text]
-		//[UList]          [UList] [UList, Text] [UList, Code] [UList, QuoteM] [OList Text]
-		//[UList, Text]    [UList] [UList, Text] [UList, Code] [UList, QuoteM] [OList Text]
-		//[UList, QuoteN]  [UList] [UList, Text] [UList, Code] [UList, QuoteM] [OList Text]
-		//[UList, Code]    [UList] [UList, Text] [UList, Code] [UList, QuoteM] [OList Text]
-
-		// if we have a list bullet or number, start a new list or make a new list item
-		if( newstate == MarkdownState.OList || newstate == MarkdownState.UList ){
-			if( state.length == 0 || state[0] != newstate ){
-				logTrace("[enter list at line %d: %s]", lnidx+1, ln);
-				foreach_reverse( st; state ) exitState(dst, st);
-				state = [enterState(dst, newstate)];
-				state ~= enterState(dst, MarkdownState.Text);
-			} else {
-				logTrace("[new list item at line %d: %s]", lnidx+1, ln);
-				if( state.length > 1 ){
-					exitState(dst, state[$-1]);
-					state = state[0 .. $-1];
-				}
-				dst.put("</li>\n\t<li>");
-				state ~= enterState(dst, MarkdownState.Text);
-			}
-			outputLine(dst, ln, newstate, references);
-			continue;
-		}
-
-		// unchanged states just potentially output the line's text
-		if( state.length > 0 && state[$-1] == newstate ){
-			logTrace("[neutral at line %d: %s]", lnidx+1, ln);
-			outputLine(dst, ln, newstate, references);
-			continue;
-		}
-
-		// blank lines terminate the innermost state, except if we are in a list outside of text
-		// special lines (headers, hr lines) always terminate the whole state
-		if( newstate == MarkdownState.Blank ){
-			if( is_atx_header || is_hline ){
-				foreach_reverse( s; state ) exitState(dst, s);
-				state.length = 0;
-	
-				if( is_atx_header ){
-					outputHeaderLine(dst, ln, null);
-				} else if( is_hline ){
-					dst.put("<hr>\n");
-				}
-			} else if( state.length > 0 && state[$-1] != MarkdownState.OList && state[$-1] != MarkdownState.UList ){
-				logTrace("[exit non-list at line %d: %s]", lnidx+1, ln);
-				exitState(dst, state[$-1]);
-				state = state[0 .. $-1];
-			}
-			continue;
-		}
-
-		// if we are in list state and the list is closed, exit all states -> neutral state
-		if( state.length > 0 && (state[0] == MarkdownState.OList || state[0] == MarkdownState.UList)
-			&& newstate != state[0] && list_ended )
-		{
-			logTrace("[exit list at line %d: %s]", lnidx+1, ln);
-			foreach_reverse( st; state ) exitState(dst, st);
-			state.length = 0;
-		}
-
-		// if we are in neutral state, just enter the new state
-		if( state.length == 0 ){
-			logTrace("[enter new state %s at line %d: %s]", newstate, lnidx+1, ln);
-			state ~= enterState(dst, newstate);
-			if( newstate == MarkdownState.OList || newstate == MarkdownState.UList  )
-				state ~= enterState(dst, MarkdownState.Text);
-			outputLine(dst, ln, newstate, references);
-			continue;
-		}
-
-
-		// handle nested quote level transitions
-		if( state[$-1] > MarkdownState.Quote0 && newstate > MarkdownState.Quote0 ){
-			logTrace("[quote level changed at line %d: %s]", lnidx+1, ln);
-			if( newstate > state[$-1] ){
-				foreach( i; 0 .. newstate-state[$-1] )
-					enterBlockQuote(dst);
-			}
-			if( newstate < state[$-1] ){
-				foreach( i; 0 .. state[$-1]-newstate )
-					exitBlockQuote(dst);
-			}
-			outputLine(dst, ln, newstate, references);
-			state[$-1] = newstate;
-			continue;
-		}
-
-		// for the rest, exit the deepest state and enter the new state
-		if( (state[0] == MarkdownState.UList || state[0] == MarkdownState.OList) && state.length == 1){
-			logTrace("[inner state pushed at line %d: %s -> %s]", lnidx+1, state, newstate);
-			state ~= enterState(dst, newstate);
-		} else {
-			logTrace("[inner state changed at line %d: %s -> %s]", lnidx+1, state, newstate);
-			exitState(dst, state[$-1]);
-			state[$-1] = enterState(dst, newstate);
-		}
-		outputLine(dst, ln, newstate, references);
-	}
-
-	logTrace("[all lines processed]");
-	// exit all states after all lines have been processed
-	foreach_reverse( st; state ) exitState(dst, st);
+	auto all_lines = splitLines(src);
+	auto links = scanForReferences(all_lines);
+	auto lines = parseLines(all_lines);
+	Block root_block;
+	parseBlocks(root_block, lines, null);
+	writeBlock(dst, root_block, links);
 }
-
 
 private {
 	immutable s_blockTags = ["div", "ol", "p", "pre", "section", "table", "ul"];
 }
 
-private enum MarkdownState {
+private enum IndentType {
+	White,
+	Quote
+}
+
+private enum LineType {
+	Undefined,
 	Blank,
-	Text,
-	Code,
+	Plain,
+	Hline,
+	AtxHeader,
+	SetextHeader,
+	UList,
+	OList
+}
+
+private struct Line {
+	LineType type;
+	IndentType[] indent;
+	string text;
+	string unindented;
+
+	string unindent(size_t n)
+	{
+		// ...
+		return unindented;
+	}
+}
+
+private Line[] parseLines(ref string[] lines)
+{
+	Line[] ret;
+	while( !lines.empty ){
+		auto ln = lines.front;
+		lines.popFront();
+
+		Line lninfo;
+		lninfo.text = ln;
+
+		while( ln.length > 0 ){
+			if( ln[0] == '\t' ){
+				lninfo.indent ~= IndentType.White;
+				ln.popFront();
+			} else if( ln.startsWith("    ") ){
+				lninfo.indent ~= IndentType.White;
+				ln.popFrontN(4);
+			} else {
+				ln = ln.stripLeft();
+				if( ln.startsWith(">") ){
+					lninfo.indent ~= IndentType.Quote;
+					ln.popFront();
+				} else break;
+			}
+		}
+		lninfo.unindented = ln;
+
+		if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
+		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
+		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
+		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
+		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
+		else if( isLineBlank(ln) ) lninfo.type = LineType.Blank;
+		else lninfo.type = LineType.Plain;
+
+		ret ~= lninfo;
+	}
+	return ret;
+}
+
+private enum BlockType {
+	Plain,
+	Paragraph,
+	Header,
 	OList,
 	UList,
-	Quote0,
-	Quote1,
+	ListItem,
+	Code,
+	Quote
 }
 
-private MarkdownState enterState(R)(ref R dst, MarkdownState state)
+private struct Block {
+	BlockType type;
+	string[] text;
+	Block[] blocks;
+	size_t headerLevel;
+}
+
+private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent)
 {
-	switch(state){
-		default:
-			assert(state > MarkdownState.Quote0);
-			foreach( i; 0 .. state - MarkdownState.Quote0 )
-				dst.put("<blockquote>\n");
-			break;
-		case MarkdownState.Blank: break;
-		case MarkdownState.Text: dst.put("<p>"); break;
-		case MarkdownState.Code: dst.put("<pre><code>"); break;
-		case MarkdownState.OList: dst.put("<ol>\n\t<li>"); break;
-		case MarkdownState.UList: dst.put("<ul>\n\t<li>"); break;
+	if( base_indent.length == 0 ) root.type = BlockType.Plain;
+	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
+
+	while( !lines.empty ){
+		auto ln = lines.front;
+
+		if( ln.type == LineType.Blank ){
+			lines.popFront();
+			continue;
+		}
+
+		logInfo("LINE %s", ln.unindented);
+
+		if( ln.indent != base_indent ){
+			if( ln.indent.length < base_indent.length || ln.indent[0 .. base_indent.length] != base_indent )
+				return;
+
+			auto cindent = base_indent ~ IndentType.White;
+			if( ln.indent == cindent ){
+				Block cblock;
+				cblock.type = BlockType.Code;
+				while( !lines.empty && lines.front.indent.length >= cindent.length
+						&& lines.front.indent[0 .. cindent.length] == cindent)
+				{
+					logInfo("CLINE %s", lines.front.unindented);
+					cblock.text ~= lines.front.unindent(cindent.length);
+					lines.popFront();
+				}
+				root.blocks ~= cblock;
+			} else {
+				Block subblock;
+				parseBlocks(subblock, lines, ln.indent[0 .. base_indent.length+1]);
+				root.blocks ~= subblock;
+			}
+		} else {
+			Block b;
+			final switch(ln.type){
+				case LineType.Undefined: assert(false);
+				case LineType.Blank: assert(false);
+				case LineType.Plain:
+					if( lines.length >= 2 && lines[1].type == LineType.SetextHeader ){
+						auto setln = lines[1].unindented;
+						b.type = BlockType.Header;
+						b.text = [ln.unindented];
+						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
+						lines.popFrontN(2);
+					} else {
+						b.type = BlockType.Paragraph;
+						b.text = skipText(lines, base_indent);
+					}
+					break;
+				case LineType.Hline:
+					b.type = BlockType.Plain;
+					b.text = ["<hr>"];
+					lines.popFront();
+					break;
+				case LineType.AtxHeader:
+					b.type = BlockType.Header;
+					string hl = ln.unindented;
+					b.headerLevel = 0;
+					while( hl.length > 0 && hl[0] == '#' ){
+						b.headerLevel++;
+						hl = hl[1 .. $];
+					}
+					while( hl.length > 0 && (hl[$-1] == '#' || hl[$-1] == ' ') )
+						hl = hl[0 .. $-1];
+					b.text = [hl];
+					lines.popFront();
+					break;
+				case LineType.SetextHeader: assert(false);
+				case LineType.UList:
+				case LineType.OList:
+					b.type = ln.type == LineType.UList ? BlockType.UList : BlockType.OList;
+					auto itemindent = base_indent ~ IndentType.White;
+					bool firstItem = true, paraMode = false;
+					while(!lines.empty && lines.front.type == ln.type && lines.front.indent == base_indent ){
+						Block itm;
+						itm.text = skipText(lines, itemindent);
+						itm.text[0] = removeListPrefix(itm.text[0], ln.type);
+
+						// emit <p></p> if there are blank lines between the items
+						if( firstItem && !lines.empty && lines.front.type == LineType.Blank )
+							paraMode = true;
+						firstItem = false;
+						if( paraMode ){
+							Block para;
+							para.type = BlockType.Paragraph;
+							para.text = itm.text;
+							itm.blocks ~= para;
+							itm.text = null;
+						}
+
+						parseBlocks(itm, lines, itemindent);
+						itm.type = BlockType.ListItem;
+						b.blocks ~= itm;
+					}
+					break;
+			}
+			root.blocks ~= b;
+		}
 	}
-	return state;
 }
 
-private void exitState(R)(ref R dst, MarkdownState state)
+private string[] skipText(ref Line[] lines, IndentType[] indent)
 {
-	switch(state){
-		default:
-			assert(state > MarkdownState.Quote0);
-			foreach( i; 0 .. state - MarkdownState.Quote0 )
-				dst.put("</blockquote>\n");
-			break;
-		case MarkdownState.Blank: break;
-		case MarkdownState.Text: dst.put("</p>\n"); break;
-		case MarkdownState.Code: dst.put("</code></pre>\n"); break;
-		case MarkdownState.OList: dst.put("</li>\n</ol>\n"); break;
-		case MarkdownState.UList: dst.put("</li>\n</ul>\n"); break;
+	string[] ret;
+
+	static bool matchesIndent(IndentType[] indent, IndentType[] base_indent)
+	{
+		if( indent > base_indent ) return false;
+		if( indent != base_indent[0 .. indent.length] ) return false;
+		// TODO: check that no quote indents are removed!
+		return true;
+	}
+
+	while(true){
+		ret ~= lines.front.unindent(indent.length);
+		lines.popFront();
+
+		if( lines.empty || !matchesIndent(lines.front.indent, indent) || lines.front.type != LineType.Plain )
+			return ret;
 	}
 }
 
-private void outputLine(R)(ref R dst, string ln, MarkdownState state, in LinkRef[string] linkrefs)
+private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links)
 {
-	switch(state){
-		case MarkdownState.Blank: break;
-		default:
-			assert(state > MarkdownState.Quote0);
-			ln = stripLeft(ln);
-			while( ln.length > 0 && ln[0] == '>' )
-				ln = ln[1 .. $].stripLeft();
-			goto case MarkdownState.Text;
-		case MarkdownState.OList: // skip bullets and output using normal escaping
-			auto idx = ln.countUntil('.');
-			assert(idx > 0);
-			ln = ln[idx+1 .. $].stripLeft();
-			goto case MarkdownState.Text;
-		case MarkdownState.UList:
-			ln = stripLeft(ln.stripLeft()[1 .. $]);
-			goto case MarkdownState.Text;
-		case MarkdownState.Text: // output using normal escaping
-			writeMarkdownEscaped(dst, ln, linkrefs);
-			if( ln.endsWith("  ") ) dst.put("<br>");
-			dst.put('\n');
+	final switch(block.type){
+		case BlockType.Plain:
+			foreach( ln; block.text ){
+				writeMarkdownEscaped(dst, ln, links);
+				dst.put("\n");
+			}
+			foreach(b; block.blocks)
+				writeBlock(dst, b, links);
 			break;
-		case MarkdownState.Code: // output without escaping
-			filterHtmlEscape(dst, ln);
-			dst.put('\n');
+		case BlockType.Paragraph:
+			assert(block.blocks.length == 0);
+			dst.put("<p>");
+			foreach( ln; block.text ){
+				writeMarkdownEscaped(dst, ln, links);
+				dst.put("\n");
+			}
+			dst.put("</p>\n");
+			break;
+		case BlockType.Header:
+			assert(block.blocks.length == 0);
+			auto nstr = to!string(block.headerLevel);
+			dst.put("<h");
+			dst.put(nstr);
+			dst.put(">");
+			assert(block.text.length == 1);
+			writeMarkdownEscaped(dst, block.text[0], links);
+			dst.put("</h");
+			dst.put(nstr);
+			dst.put(">\n");
+			break;
+		case BlockType.OList:
+			dst.put("<ol>\n");
+			foreach(b; block.blocks)
+				writeBlock(dst, b, links);
+			dst.put("</ol>\n");
+			break;
+		case BlockType.UList:
+			dst.put("<ul>\n");
+			foreach(b; block.blocks)
+				writeBlock(dst, b, links);
+			dst.put("</ul>\n");
+			break;
+		case BlockType.ListItem:
+			dst.put("<li>");
+			foreach(ln; block.text){
+				writeMarkdownEscaped(dst, ln, links);
+				dst.put("\n");
+			}
+			foreach(b; block.blocks)
+				writeBlock(dst, b, links);
+			dst.put("</li>\n");
+			break;
+		case BlockType.Code:
+			assert(block.blocks.length == 0);
+			dst.put("<code><pre>");
+			foreach(ln; block.text){
+				filterHtmlEscape(dst, ln);
+				dst.put("\n");
+			}
+			dst.put("</pre></code>");
+			break;
+		case BlockType.Quote:
+			dst.put("<quot>");
+			foreach(ln; block.text){
+				writeMarkdownEscaped(dst, ln, links);
+				dst.put("\n");
+			}
+			foreach(b; block.blocks)
+				writeBlock(dst, b, links);
+			dst.put("</quot>\n");
 			break;
 	}
 }
 
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs)
 {
+	bool br = ln.endsWith("  ");
 	while( ln.length > 0 ){
 		switch( ln[0] ){
 			default:
@@ -424,6 +457,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 		}
 	}
+	if( br ) dst.put("<br>");
 }
 
 private void outputHeaderLine(R)(ref R dst, string ln, string hln)
@@ -520,6 +554,19 @@ private bool isOListLine(string ln)
 	while( ln.length > 0 && ln[0] >= '0' && ln[0] <= '9' )
 		ln = ln[1 .. $];
 	return ln.length > 0 && ln[0] == '.';
+}
+
+private string removeListPrefix(string str, LineType tp)
+{
+	switch(tp){
+		default: assert(false);
+		case LineType.OList: // skip bullets and output using normal escaping
+			auto idx = str.countUntil('.');
+			assert(idx > 0);
+			return str[idx+1 .. $].stripLeft();
+		case LineType.UList:
+			return stripLeft(str.stripLeft()[1 .. $]);
+	}
 }
 
 
@@ -709,7 +756,7 @@ bool parseAutoLink(ref string str, ref string url)
 private LinkRef[string] scanForReferences(ref string[] lines)
 {
 	LinkRef[string] ret;
-	size_t[] reflines;
+	bool[size_t] reflines;
 
 	// search for reference definitions:
 	//   [refid] link "opt text"
@@ -758,14 +805,18 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 		}
 
 		ret[toLower(refid)] = LinkRef(refid, url, title);
-		reflines ~= lnidx;
+		reflines[lnidx] = true;
 
 		logTrace("[detected ref on line %d]", lnidx+1);
 	}
 
 	// remove all lines containing references
-	foreach_reverse( i; reflines )
-		lines = lines[0 .. i] ~ lines[i+1 .. $];
+	auto nonreflines = appender!(string[])();
+	nonreflines.reserve(lines.length);
+	foreach( i, ln; lines )
+		if( i !in reflines )
+			nonreflines.put(ln);
+	lines = nonreflines.data();
 
 	return ret;
 }
