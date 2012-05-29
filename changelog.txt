@@ -4,7 +4,12 @@
 v0.7.4 -
 -------------------
 
+ - Rewrote the Markdown parser - it now does not emit paragraphs inside list elements if no blank lines are present
  - The SMTP client supports STARTTLS and PLAIN/LOGIN authentication
+ - Removed InputStream.readAll() and readLine() and replaced them by UFCS-able global functions + added readUntil()
+ - The static HTTP file server now resolves paths with '.' and '..' instead of simply refusing them
+ - On *nix now uses pkg-config to find linker dependencies if possible (dawgfoto)
+ - Libevent2TcpConnection now enforces proper use of acquire()/release()
 
 v0.7.3 - 22.05.2012
 -------------------

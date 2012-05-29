@@ -3,13 +3,12 @@ HTTP
 
  - (partially done) add limits for header line length, body size, number of headers or request size and request time to avoid DoS
  - defer writing the header of server responses to the second written chunk in case of using bodyWriter() - if only one chunk is ever written, write non-chunked instead
- - ETag/If-None-Match
  - implement maxRequestTime
 
 TCP
 ===
 
- - Active TCP connections are not disconnected and the event loop keeps running
+ - Find out what makes the libevent event loop continue to run after all connections have been disconnected
  - Add a DoS barrier that closes old connections in case of high connection counts
 
 GENERAL
@@ -40,6 +39,6 @@ PACKAGE MANAGER
 ===============
 
  - package signing
- - custom paths in deps.txt
- - create deps.txt in temp directory
+ - add support for a dflags[] field in package.json
+ - do not create deps.txt at all
  - only query the VPM registry if there are unmet dependecies or if an upgrade is requested
