@@ -1,7 +1,7 @@
 #!/bin/sh
-VIBEBINARY=$(readlink $(which $0))
-if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY=$0; fi
-VIBEPATH=$(dirname $VIBEBINARY)
+VIBEBINARY=$(readlink $(which "$0"))
+if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY="$0"; fi
+VIBEPATH=$(dirname "$VIBEBINARY")
 
 #use pkg-config or fallback to default flags
 LIBS=$(pkg-config --libs libevent libevent_openssl 2>/dev/null || echo "-levent_openssl -levent")
@@ -9,13 +9,13 @@ LIBS=$(echo "$LIBS" | sed 's/^-L/-L-L/; s/ -L/ -L-L/g; s/^-l/-L-l/; s/ -l/ -L-l/
 export LIBS
 
 START_SCRIPT=`mktemp -t vpm.start.XXXXXXXX`
-cp -p $VIBEPATH/vpm.d /tmp/vpm.d
+cp -p "$VIBEPATH"/vpm.d /tmp/vpm.d
 
-rdmd -g -w -property -I$VIBEPATH/../source $LIBS -Jviews -Isource /tmp/vpm.d $VIBEPATH $START_SCRIPT $1 $2 $3 $4 $5 $6 $7 $8 $9
+rdmd -g -w -property -I"$VIBEPATH"/../source $LIBS -Jviews -Isource /tmp/vpm.d "$VIBEPATH" "$START_SCRIPT" $1 $2 $3 $4 $5 $6 $7 $8 $9
 
 if [ $? = 0 ]
 then
-	chmod +x $START_SCRIPT
-	$START_SCRIPT
-	rm $START_SCRIPT
+	chmod +x "$START_SCRIPT"
+	"$START_SCRIPT"
+	rm "$START_SCRIPT"
 fi
