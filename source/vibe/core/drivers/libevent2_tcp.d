@@ -55,7 +55,6 @@ package class Libevent2TcpConnection : TcpConnection {
 		bufferevent* m_sslEvent;
 		bool m_timeout_triggered;
 		TcpContext* m_ctx;
-		Fiber m_fiber;
 		string m_peerAddress;
 		ubyte[64] m_peekBuffer;
 	}
@@ -64,8 +63,9 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		m_baseEvent = ctx.event;
 		m_event = ctx.event;
-		m_fiber = Fiber.getThis();
 		m_ctx = ctx;
+
+		assert(Fiber.getThis() is m_ctx.task);
 
 		char buf[64];
 		if( ctx.remote_addr4.sin_family == AF_INET )
@@ -461,7 +461,7 @@ package extern(C)
 		logTrace("data wait timeout");
 		auto conn = cast(Libevent2TcpConnection)userptr;
 		conn.m_timeout_triggered = true;
-		conn.m_ctx.core.resumeTask(conn.m_fiber);
+		conn.m_ctx.core.resumeTask(conn.m_ctx.task);
 	}
 }
 
