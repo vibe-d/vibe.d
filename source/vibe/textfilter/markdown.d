@@ -550,7 +550,11 @@ private bool isOListLine(string ln)
 	ln = ln[1 .. $];
 	while( ln.length > 0 && ln[0] >= '0' && ln[0] <= '9' )
 		ln = ln[1 .. $];
-	return ln.length > 0 && ln[0] == '.';
+	if( ln.length < 2 ) return false;
+	if( ln[0] != '.' ) return false;
+	if( ln[1] != ' ' && ln[1] != '\t' )
+		return false;
+	return true;
 }
 
 private string removeListPrefix(string str, LineType tp)
