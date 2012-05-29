@@ -2,7 +2,12 @@
 VIBEBINARY=$(readlink $(which $0))
 if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY=$0; fi
 VIBEPATH=$(dirname $VIBEBINARY)
-LIBS="-L-levent -L-levent_openssl -L-lssl -L-lcrypto"
+
+#use pkg-config or fallback to default flags
+LIBS=$(pkg-config --libs libevent libevent_openssl 2>/dev/null || echo "-levent_openssl -levent")
+LIBS=$(echo "$LIBS" | sed 's/^-L/-L-L/; s/ -L/ -L-L/g; s/^-l/-L-l/; s/ -l/ -L-l/g')
+export LIBS
+
 START_SCRIPT=`mktemp -t vpm.start.XXXXXXXX`
 cp -p $VIBEPATH/vpm.d /tmp/vpm.d
 
