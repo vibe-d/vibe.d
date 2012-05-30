@@ -21,7 +21,7 @@ class MemoryOutputStream : OutputStream {
 		m_destination.clear();
 	}
 
-	ubyte[] getData() { return m_destination.data(); }
+	@property ubyte[] data() { return m_destination.data(); }
 
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{

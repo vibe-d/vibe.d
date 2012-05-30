@@ -8,6 +8,7 @@
 module vibe.stream.stream;
 
 import vibe.core.log;
+import vibe.stream.memory : MemoryOutputStream;
 
 import std.array;
 import std.algorithm;
@@ -35,8 +36,14 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\
 */
 ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 0) /*@ufcs*/
 {
+	auto output = new MemoryOutputStream();
+	readUntil(stream, output, end_marker, max_bytes);
+	return output.data();
+}
+/// ditto
+void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = 0) /*@ufcs*/
+{
 	// TODO: implement a more efficient algorithm for long end_markers such as a Boyer-Moore variant
-	auto ret = appender!(ubyte[])();
 	size_t nmatched = 0;
 	ubyte[128] buf;
 
@@ -48,6 +55,8 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 			nbytes -= n;
 		}
 	}
+
+	ulong bytes_written = 0;
 
 	while( !stream.empty ){
 		size_t nread = 0;
@@ -64,23 +73,24 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 				nmatched++;
 				if( nmatched == end_marker.length ){
 					skip(i+1-nread);
-					return ret.data;
+					return;
 				}
 			} else {
-				enforce(max_bytes == 0 || ret.data.length < max_bytes,
+				enforce(max_bytes == 0 || bytes_written < max_bytes,
 					"Maximum number of bytes read before reading the end marker.");
 				if( nmatched > 0 ){
-					ret.put(end_marker[0 .. nmatched]);
+					dst.write(end_marker[0 .. nmatched]);
+					bytes_written += nmatched;
 					nmatched = 0;
 				}
-				ret.put(ch);
+				dst.write((&ch)[0 .. 1]);
+				bytes_written++;
 			}
 		}
 
 		skip(str.length - nread);
 	}
 	enforce(false, "Reached EOF before reaching end marker.");
-	return ret.data();
 }
 
 /**
