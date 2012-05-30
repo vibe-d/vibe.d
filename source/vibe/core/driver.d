@@ -10,6 +10,8 @@ module vibe.core.driver;
 public import vibe.crypto.ssl;
 public import vibe.stream.stream;
 
+import vibe.inet.url;
+
 import core.thread;
 
 
@@ -120,8 +122,8 @@ enum FileMode {
 	Accesses the contents of a file as a stream.
 */
 interface FileStream : Stream, EventedObject {
-	/// Closes the file handle.
-	void close();
+	/// The path of the file.
+	@property Path path() const;
 
 	/// Returns the total size of the file.
 	@property ulong size() const;
@@ -131,6 +133,9 @@ interface FileStream : Stream, EventedObject {
 
 	/// Determines if this stream is writable.
 	@property bool writable() const;
+
+	/// Closes the file handle.
+	void close();
 
 	/// Seeks to a specific position in the file if supported by the stream.
 	void seek(ulong offset);
