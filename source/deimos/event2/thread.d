@@ -49,6 +49,7 @@ extern (C):
 nothrow:
 
 import deimos.event2._d_util;
+import deimos.event2.event_struct;
 
 /**
    @name Flags passed to lock functions
@@ -124,8 +125,6 @@ struct evthread_lock_callbacks {
 int evthread_set_lock_callbacks(const(evthread_lock_callbacks)*);
 
 enum EVTHREAD_CONDITION_API_VERSION = 1;
-
-struct timeval;
 
 /** This structure describes the interface a threading library uses for
  * condition variables.  It's used to tell evthread_set_condition_callbacks
@@ -215,7 +214,6 @@ version (Posix) {
  **/
 void evthread_enable_lock_debuging();
 
-struct event_base;
 /** Make sure it's safe to tell an event base to wake up from another thread
     or a signal handler.
 
