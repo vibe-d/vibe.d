@@ -433,9 +433,9 @@ package extern(C)
 			free_event = true;
 		} else if( status & BEV_EVENT_ERROR ){
 			version(Windows){
-				logWarn("A socket error occurred on fd %d: %d (%s)", ctx.socketfd, status, to!string(evutil_socket_error_to_string(status)));
+				logDebug("A socket error occurred on fd %d: %d (%s)", ctx.socketfd, status, to!string(evutil_socket_error_to_string(status)));
 			} else {
-				logWarn("A socket error occurred on fd %d: %d", ctx.socketfd, status);
+				logDebug("A socket error occurred on fd %d: %d", ctx.socketfd, status);
 			}
 			free_event = true;
 		}

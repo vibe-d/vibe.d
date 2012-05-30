@@ -941,7 +941,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			logDebug("Exception while parsing request: %s", e.toString());
 			if( !res.headerWritten ) errorOut(parsed ? HttpStatus.InternalServerError :
 				HttpStatus.BadRequest, "Invalid request format.", e.toString(), e);
-			else logError("Error after page has been written: %s", e.toString());
+			else logError("Error after page has been written: %s", e.msg);
 			logDebug("Exception while handling request: %s", e.toString());
 		}
 
