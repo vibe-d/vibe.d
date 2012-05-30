@@ -391,6 +391,7 @@ final class HttpServerRequest : HttpRequest {
 		ubyte[] data;
 		Json json; // only set if HttpServerOption.ParseJsonBoxy is set
 		string[string] form; // only set if HttpServerOption.ParseFormBody is set
+		FilePart[string] files; // only set if HttpServerOption.ParseFormBody is set
 
 		/*
 			body types:
@@ -889,8 +890,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 			if( settings.options & HttpServerOption.ParseFormBody ){
 				auto ptype = "Content-Type" in req.headers;				
-				FilePart[string] files;
-				if( ptype ) parseFormData(req.form, files, *ptype, req.bodyReader);
+				if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader);
 			}
 
 			if( settings.options & HttpServerOption.ParseJsonBody ){

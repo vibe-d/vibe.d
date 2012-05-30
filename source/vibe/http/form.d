@@ -8,25 +8,24 @@
 module vibe.http.form;
 
 import vibe.core.driver;
+import vibe.core.file;
 import vibe.core.log;
 import vibe.inet.rfc5322;
 import vibe.inet.url;
 import vibe.textfilter.urlencode;
 
-import std.c.stdio;
 import std.exception;
 import std.string;
 
 
 struct FilePart  {
 	InetHeaderMap headers;
-	string filename;
+	PathEntry filename;
 	Path tempPath;
 }
 
-
 /**
-	Parses the form given by 
+	Parses the form given by 'content_type' and 'body_reader'.
 */
 bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader)
 {
@@ -42,7 +41,9 @@ bool parseFormData(ref string[string] fields, ref FilePart[string] files, string
 	return false;
 }
 
-
+/**
+	Parses a url encoded form (query string format) and puts the key/value pairs into params.
+*/
 void parseUrlEncodedForm(string str, ref string[string] params)
 {
 	while(str.length > 0){
@@ -97,18 +98,17 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	if( filename.length > 0 ) {
 		FilePart fp;
 		fp.headers = headers;
-		fp.filename = filename;
+		fp.filename = PathEntry(filename);
 
-		char[] tmp = new char[L_tmpnam];
-		tmpnam(tmp.ptr);
-		logDebug("tmp %s", tmp);
-		//TODO store upload in tempfile and pass path in FilePart struct.
-		//fp.tempPath = Path(cast(string)tmp);
-		//auto file = openFile(fp.tempPath.toString());
-		//file.write(stream.readUntil(cast(ubyte[])boundary));
-		stream.readUntil(cast(ubyte[])boundary);
-		//logDebug("file: %s", fp.tempPath.toString());
-		//file.close();
+		auto file = createTempFile();
+		fp.tempPath = file.path;
+		stream.readUntil(file, cast(ubyte[])boundary);
+		logDebug("file: %s", fp.tempPath.toString());
+		file.close();
+
+		files[name] = fp;
+
+		// TODO: temp files must be deleted after the request has been processed!
 	} else {
 		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
 		form[name] = data;
