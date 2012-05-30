@@ -10,6 +10,7 @@ module vibe.core.drivers.threadedfile;
 
 import vibe.core.log;
 import vibe.core.driver;
+import vibe.inet.url;
 
 import std.algorithm;
 import std.conv;
@@ -57,6 +58,7 @@ private {
 class ThreadedFileStream : FileStream {
 	private {
 		int m_fileDescriptor;
+		Path m_path;
 		ulong m_size;
 		ulong m_ptr = 0;
 		FileMode m_mode;
@@ -64,6 +66,7 @@ class ThreadedFileStream : FileStream {
 	
 	this(string path, FileMode mode)
 	{
+		m_path = Path(path);
 		m_mode = mode;
 		final switch(m_mode){
 			case FileMode.Read:
@@ -101,6 +104,7 @@ class ThreadedFileStream : FileStream {
 	}
 	
 	@property int fd() { return m_fileDescriptor; }
+	@property Path path() const { return m_path; }
 	@property ulong size() const { return m_size; }
 	@property bool readable() const { return m_mode == FileMode.Read; }
 	@property bool writable() const { return m_mode != FileMode.Read; }
