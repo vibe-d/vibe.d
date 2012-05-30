@@ -15,6 +15,7 @@ import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
 import vibe.http.dist;
+import vibe.http.form;
 import vibe.http.log;
 import vibe.inet.rfc5322;
 import vibe.inet.url;
@@ -35,7 +36,6 @@ import std.functional;
 import std.string;
 import std.uri;
 public import std.variant;
-import std.c.stdio;
 
 
 /**************************************************************************************************/
@@ -869,7 +869,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			if( settings.options & HttpServerOption.ParseQueryString ){
 				if( !(settings.options & HttpServerOption.ParseURL) )
 					logWarn("Query string parsing requested but URL parsing is disabled!");
-				parseFormData(req.queryString, req.query);
+				parseUrlEncodedForm(req.queryString, req.query);
 			}
 
 			// cookie parsing if desired
@@ -889,21 +889,8 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 			if( settings.options & HttpServerOption.ParseFormBody ){
 				auto ptype = "Content-Type" in req.headers;				
-				if( ptype && *ptype == "application/x-www-form-urlencoded" ){
-					auto bodyStr = cast(string)req.bodyReader.readAll();
-					parseFormData(bodyStr, req.form);
-				}
-				if( ptype && startsWith(*ptype, "multipart/form-data") ){
-					auto hdr = *ptype;
-					auto pos = hdr.indexOf("boundary=");			
-					enforce(pos >= 0 , "no boundary for multipart form found");
-					auto boundary = hdr[pos+9 .. $];
-					auto firstBoundary = cast(string)req.bodyReader.readLine();
-					enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
-
-					FilePart[string] files;
-					while( parseMultipartFormPart(req.bodyReader, req.form, files,  "\r\n--" ~ boundary) ) {}
-				}
+				FilePart[string] files;
+				if( ptype ) parseFormData(req.form, files, *ptype, req.bodyReader);
 			}
 
 			if( settings.options & HttpServerOption.ParseJsonBody ){
@@ -999,73 +986,6 @@ private HttpServerRequest parseRequest(Stream conn)
 	}
 
 	return req;
-}
-
-struct FilePart  {
-	InetHeaderMap headers;
-	string filename;
-	Path tempPath;
-}
-
-private void parseFormData(string str, ref string[string] params)
-{
-	while(str.length > 0){
-		// name part
-		auto idx = str.indexOf('=');
-		enforce(idx > 0, "Expected ident=value.");
-		string name = urlDecode(str[0 .. idx]);
-		str = str[idx+1 .. $];
-
-		// value part
-		for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
-		string value = urlDecode(str[0 .. idx]);
-		params[name] = value;
-		str = idx < str.length ? str[idx+1 .. $] : null;
-	}
-}
-
-private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary)
-{
-	InetHeaderMap headers;
-	stream.parseRfc5322Header(headers);
-	auto pv = "Content-Disposition" in headers;
-	enforce(pv, "invalid multipart");
-	auto cd = *pv;
-	string name;
-	auto pos = cd.indexOf("name=\"");
-	if( pos >= 0 ) {
-		cd = cd[pos+6 .. $];
-		pos = cd.indexOf("\"");
-		name = cd[0 .. pos];
-	}
-	string filename;
-	pos = cd.indexOf("filename=\"");
-	if( pos >= 0 ) {
-		cd = cd[pos+10 .. $];
-		pos = cd.indexOf("\"");
-		filename = cd[0 .. pos];
-	}
-
-	if( filename.length > 0 ) {
-		FilePart fp;
-		fp.headers = headers;
-		fp.filename = filename;
-
-		char[] tmp = new char[L_tmpnam];
-		tmpnam(tmp.ptr);
-		logDebug("tmp %s", tmp);
-		//TODO store upload in tempfile and pass path in FilePart struct.
-		//fp.tempPath = Path(cast(string)tmp);
-		//auto file = openFile(fp.tempPath.toString());
-		//file.write(stream.readUntil(cast(ubyte[])boundary));
-		stream.readUntil(cast(ubyte[])boundary);
-		//logDebug("file: %s", fp.tempPath.toString());
-		//file.close();
-	} else {
-		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
-		form[name] = data;
-	}
-	return stream.readLine() != "--";
 }
 
 private void parseCookies(string str, ref string[string] cookies) 
