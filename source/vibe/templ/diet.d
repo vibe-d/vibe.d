@@ -507,21 +507,6 @@ private struct DietParser {
 		Tuple!(string, string)[] attribs;
 		parseHtmlTag(tagline, i, attribs);
 
-		// special case some jade "filters" - they are not yet implemented as filters
-		switch(tag){
-			default: assert(false);
-			case "script": break;
-			case "style": break;
-			case ":javascript":
-				tag = "script";
-				attribs ~= tuple("type", "text/javascript");
-				break;
-			case ":css":
-				tag = "style";
-				attribs ~= tuple("type", "text/css");
-				break;
-		}
-
 		// write the tag
 		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs);
 

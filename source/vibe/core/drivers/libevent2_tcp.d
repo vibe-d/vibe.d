@@ -8,7 +8,6 @@
 module vibe.core.drivers.libevent2_tcp;
 
 public import vibe.core.core;
-public import vibe.crypto.ssl;
 public import vibe.stream.stream;
 
 import vibe.core.log;
