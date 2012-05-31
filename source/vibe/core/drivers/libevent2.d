@@ -19,7 +19,10 @@ import deimos.event2.thread;
 import deimos.event2.util;
 
 import core.memory;
+import core.stdc.stdlib;
+import core.sync.condition;
 import core.sync.mutex;
+import core.sync.rwmutex;
 import core.sys.posix.netinet.in_;
 import core.sys.posix.netinet.tcp;
 version(Windows) import std.c.windows.winsock;
@@ -29,11 +32,82 @@ import std.exception;
 import std.range;
 import std.string;
 
+struct LevMutex {
+	Mutex mutex;
+	ReadWriteMutex rwmutex;
+}
+
+struct LevCondition {
+	Condition cond;
+	LevMutex* mutex;
+}
 
 private extern(C){
-	void* myalloc(size_t size){ return GC.malloc(size); }
-	void* myrealloc(void* p, size_t newsize){ return GC.realloc(p, newsize); }
-	void myfree(void* p){ GC.free(p); }
+	void* lev_alloc(size_t size){ return GC.malloc(size); }
+	void* lev_realloc(void* p, size_t newsize){ return GC.realloc(p, newsize); }
+	void lev_free(void* p){ GC.free(p); }
+
+	void* lev_alloc_mutex(uint locktype) {
+		auto ret = cast(LevMutex*)calloc(1, LevMutex.sizeof);
+		GC.addRange(ret, LevMutex.sizeof);
+		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = new ReadWriteMutex;
+		else ret.mutex = new Mutex;
+		return ret;
+	}
+	void lev_free_mutex(void* lock, uint locktype) { GC.removeRange(lock); free(lock); }
+	int lev_lock_mutex(uint mode, void* lock) {
+		auto mtx = cast(LevMutex*)lock;
+		
+		if( mode & EVTHREAD_WRITE ){
+			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
+			else mtx.rwmutex.writer().lock();
+		} else if( mode & EVTHREAD_READ ){
+			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
+			else mtx.rwmutex.reader().lock();
+		} else {
+			if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
+			else mtx.mutex.lock();
+		}
+		return 0;
+	}
+	int lev_unlock_mutex(uint mode, void* lock) {
+		auto mtx = cast(LevMutex*)lock;
+
+		if( mode & EVTHREAD_WRITE ){
+			mtx.rwmutex.writer().unlock();
+		} else if( mode & EVTHREAD_READ ){
+			mtx.rwmutex.reader().unlock();
+		} else {
+			mtx.mutex.unlock();
+		}
+		return 0;
+	}
+
+	void* lev_alloc_condition(uint condtype) {
+		auto ret = cast(LevCondition*)calloc(1, LevCondition.sizeof);
+		GC.addRange(ret, LevCondition.sizeof);
+		return ret;
+	}
+	void lev_free_condition(void* cond) { GC.removeRange(cond); free(cond); }
+	int lev_signal_condition(void* cond, int broadcast) {
+		auto c = cast(LevCondition*)cond;
+		if( c.cond ) c.cond.notifyAll();
+		return 0;
+	}
+	int lev_wait_condition(void* cond, void* lock, const(timeval)* timeout) {
+		auto c = cast(LevCondition*)cond;
+		if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
+		assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
+		assert(c.mutex is lock);
+		if( c.cond is null ) c.cond = new Condition(c.mutex.mutex);
+		if( timeout ){
+			if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
+				return 1;
+		} else c.cond.wait();
+		return 0;
+	}
+
+	size_t lev_get_thread_id() { return cast(size_t)cast(void*)Thread.getThis(); }
 }
 
 class Libevent2Driver : EventDriver {
@@ -51,15 +125,26 @@ class Libevent2Driver : EventDriver {
 
 		// set the malloc/free versions of our runtime so we don't run into trouble
 		// because the libevent DLL uses a different one.
-		event_set_mem_functions(&myalloc, &myrealloc, &myfree);
+		event_set_mem_functions(&lev_alloc, &lev_realloc, &lev_free);
 
-		/*version(Windows){
-			enforce(evthread_use_windows_threads() == 0, "Failed to setup libevent multi-threading");
-		} else version(Posix){
-			enforce(evthread_use_pthreads() == 0, "Failed to setup libevent multi-threading");
-		} else {
-			static assert(false, "Platform not supported.");
-		}*/
+		evthread_lock_callbacks lcb;
+		lcb.lock_api_version = EVTHREAD_LOCK_API_VERSION;
+		lcb.supported_locktypes = EVTHREAD_LOCKTYPE_RECURSIVE|EVTHREAD_LOCKTYPE_READWRITE;
+		lcb.alloc = &lev_alloc_mutex;
+		lcb.free = &lev_free_mutex;
+		lcb.lock = &lev_lock_mutex;
+		lcb.unlock = &lev_unlock_mutex;
+		evthread_set_lock_callbacks(&lcb);
+
+		evthread_condition_callbacks ccb;
+		ccb.condition_api_version = EVTHREAD_CONDITION_API_VERSION;
+		ccb.alloc_condition = &lev_alloc_condition;
+		ccb.free_condition = &lev_free_condition;
+		ccb.signal_condition = &lev_signal_condition;
+		ccb.wait_condition = &lev_wait_condition;
+		evthread_set_condition_callbacks(&ccb);
+
+		evthread_set_id_callback(&lev_get_thread_id);
 
 		// initialize libevent
 		logDebug("libevent version: %s", to!string(event_get_version()));
@@ -138,6 +223,7 @@ class Libevent2Driver : EventDriver {
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
 
+logInfo("Connect to '%s'", host);
 		if( bufferevent_socket_connect_hostname(buf_event, m_dnsBase, af, toStringz(host), port) )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
 
