@@ -56,7 +56,9 @@ class Libevent2Driver : EventDriver {
 		version(Windows){
 			enforce(evthread_use_windows_threads() == 0, "Failed to setup libevent multi-threading");
 		} else version(Posix){
-			enforce(evthread_use_posix_threads() == 0, "Failed to setup libevent multi-threading");
+			enforce(evthread_use_pthreads() == 0, "Failed to setup libevent multi-threading");
+		} else {
+			static assert(false, "Platform not supported.");
 		}
 
 		// initialize libevent
