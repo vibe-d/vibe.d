@@ -86,11 +86,12 @@ enum SSLVersion {
 
 version(SSL)
 {
-	static this()
+	shared static this()
 	{
 		logDebug("Initializing OpenSSL...");
 		SSL_load_error_strings();
 		SSL_library_init();
+		// TODO: call thread safety functions!
 		/* We MUST have entropy, or else there's no point to crypto. */
 		auto ret = RAND_poll();
 		assert(ret);

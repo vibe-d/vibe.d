@@ -15,8 +15,8 @@ import std.stdio;
 import core.thread;
 
 private {
-	LogLevel s_minLevel = LogLevel.Info;
-	LogLevel s_logFileLevel;
+	shared LogLevel s_minLevel = LogLevel.Info;
+	shared LogLevel s_logFileLevel;
 	FileStream s_logFile;
 }
 

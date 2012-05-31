@@ -731,11 +731,11 @@ private class LimitedHttpInputStream : LimitedInputStream {
 /**************************************************************************************************/
 
 private {
-	__gshared string s_distHost;
-	__gshared ushort s_distPort = 11000;
-	bool s_listenersStarted = false;
-	HTTPServerContext[] g_contexts;
-	HTTPServerListener[] g_listeners;
+	shared string s_distHost;
+	shared ushort s_distPort = 11000;
+	shared bool s_listenersStarted = false;
+	__gshared HTTPServerContext[] g_contexts;
+	__gshared HTTPServerListener[] g_listeners;
 }
 
 /// private
