@@ -12,6 +12,7 @@ public import vibe.crypto.ssl;
 public import vibe.stream.stream;
 
 import vibe.core.log;
+import vibe.core.drivers.libevent2;
 
 import deimos.event2.buffer;
 import deimos.event2.bufferevent;
@@ -300,6 +301,7 @@ package extern(C)
 {
 	void onConnect(evutil_socket_t listenfd, short evtype, void *arg)
 	{
+		logTrace("connect callback");
 		auto ctx = cast(TcpContext*)arg;
 
 		if( !(evtype & EV_READ) ){
@@ -310,9 +312,34 @@ package extern(C)
 		// NOTE: we need to return the delegate from a function because
 		//       otherwise multiple iterations of the for loop will share the
 		//       same stack frame.
-		static void delegate() client_task(TcpContext* listen_ctx, TcpContext* client_ctx)
+		static void delegate() client_task(TcpContext* listen_ctx, sockaddr_in6 remote_addr, int sockfd)
 		{
 			return {
+				if( evutil_make_socket_nonblocking(sockfd) ){
+					logError("Error setting non-blocking I/O on an incoming connection.");
+				}
+
+				auto eventloop = getThreadLibeventEventLoop();
+				auto drivercore = getThreadLibeventDriverCore();
+
+				// Initialize a buffered I/O event
+				auto buf_event = bufferevent_socket_new(eventloop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
+				if( !buf_event ){
+					logError("Error initializing buffered I/O event for fd %d.", sockfd);
+					return;
+				}
+				
+				auto client_ctx = new TcpContext(drivercore, eventloop, null, sockfd, buf_event, remote_addr);
+				assert(client_ctx.event !is null, "event is null although it was just != null?");
+				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
+				timeval toread = {tv_sec: 60, tv_usec: 0};
+				bufferevent_set_timeouts(buf_event, &toread, null);
+				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
+					bufferevent_free(buf_event);
+					logError("Error enabling buffered I/O event for fd %d.", sockfd);
+					return;
+				}
+
 				assert(client_ctx.event !is null, "Client task called without event!?");
 				client_ctx.task = Fiber.getThis();
 				auto conn = new Libevent2TcpConnection(client_ctx);
@@ -355,30 +382,12 @@ package extern(C)
 				}
 				return false;
 			}
-
-			if( evutil_make_socket_nonblocking(sockfd) ){
-				logError("Error setting non-blocking I/O on an incoming connection.");
-			}
-
-			// Initialize a buffered I/O event
-			auto buf_event = bufferevent_socket_new(ctx.eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
-			if( !buf_event ){
-				logError("Error initializing buffered I/O event for fd %d.", sockfd);
-				return false;
-			}
 			
-			auto cctx = new TcpContext(ctx.core, ctx.eventLoop, null, sockfd, buf_event, remote_addr);
-			assert(cctx.event !is null, "event is null although it was just != null?");
-			bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
-			timeval toread = {tv_sec: 60, tv_usec: 0};
-			bufferevent_set_timeouts(buf_event, &toread, null);
-			if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
-				logError("Error enabling buffered I/O event for fd %d.", sockfd);
-				return false;
+			version(MultiThreadTest){
+				runWorkerTask(client_task(ctx, remote_addr, sockfd));
+			} else {
+				runTask(client_task(ctx, remote_addr, sockfd));
 			}
-			
-			assert(cctx.event !is null, "event is null just before runTask although it was just != null?");
-			runTask(client_task(ctx, cctx));
 			return true;
 		}
 

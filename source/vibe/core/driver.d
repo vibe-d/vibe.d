@@ -7,7 +7,6 @@
 */
 module vibe.core.driver;
 
-public import vibe.crypto.ssl;
 public import vibe.stream.stream;
 
 import vibe.inet.url;
@@ -34,6 +33,10 @@ interface EventDriver {
 	/** Exits any running event loop.
 	*/
 	void exitEventLoop();
+
+	/** Passes the given task to a worker thread and executes it
+	*/
+	void runWorkerTask(void delegate() f);
 
 	/** Opens a file on disk with the speficied file mode.
 	*/

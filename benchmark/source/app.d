@@ -2,7 +2,7 @@ import vibe.d;
 
 import vibe.http.rest;
 
-char[] data;
+shared string data;
 
 void empty(HttpServerRequest req, HttpServerResponse res)
 {
@@ -34,15 +34,22 @@ void staticAnswer(TcpConnection conn)
 	conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
 }
 
-static this()
+pure char[] generateData()
 {
-	//setLogLevel(LogLevel.Debug);
-
+	char[] data;
 	data.length = 100_000;
 	foreach( i; 0 .. data.length ){
 		data[i] = (i % 10) + '0';
 		if( i % 100 == 99 ) data[i] = '\n';
 	}
+	return data;
+}
+
+
+shared static this()
+{
+	//setLogLevel(LogLevel.Trace);
+	data = generateData();
 
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;
