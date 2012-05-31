@@ -328,15 +328,6 @@ private struct DietParser {
 			} else if( ln[0] == '|' ){ // plain text node
 				ret ~= buildTextNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
 			} else if( ln[0] == ':' ){ // filter node (filtered raw text)
-				// find all filters
-				size_t j = 0;
-				string[] filters;
-				do {
-					j++;
-					filters ~= skipIdent(ln, j);
-					skipWhitespace(ln, j);
-				} while( j < ln.length && ln[j] == ':' );
-
 				// find all child lines
 				size_t next_tag = curline+1;
 				while( next_tag < lines.length &&
@@ -345,39 +336,11 @@ private struct DietParser {
 					next_tag++;
 				}
 
-				// assemble child lines to one string
-				string content = ln[j .. $];
-				foreach( cln; lines[curline+1 .. next_tag] ){
-					if( content.length ) content ~= '\n';
-					content ~= cln.text[(level-base_level+1)*indentStyle.length .. $];
-				}
-
-				// determine the current HTML indent level
-				int indent = 0;
-				foreach( i; 0 .. level ) if( node_stack[i][0] != '-' ) indent++;
-
-				// compile-time filter whats possible
-				filter_loop:
-				foreach_reverse( f; filters ){
-					switch(f){
-						default: break filter_loop;
-						case "css": content = filterCSS(content, indent); break;
-						case "javascript": content = filterJavaScript(content, indent); break;
-						case "markdown": content = filterMarkdown(content, indent); break;
-					}
-					filters.length = filters.length-1;
-				}
-
-				// the rest of the filtering will happen at run time
-				ret ~= endString(in_string) ~ StreamVariableName~".write(";
-				string filter_expr;
-				foreach_reverse( flt; filters ) ret ~= "s_filters[\""~dstringEscape(flt)~"\"](";
-				ret ~= "\"" ~ dstringEscape(content) ~ "\"";
-				foreach( i; 0 .. filters.length ) ret ~= ", "~cttostring(indent)~")";
-				ret ~= ");\n";
+				ret ~= buildFilterNodeWriter(node_stack, ln, level, base_level, in_string,
+						lines[curline+1 .. next_tag]);
 
 				// skip to the next tag
-				node_stack ~= "-";
+				//node_stack ~= "-";
 				curline = next_tag-1;
 				next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
 			} else {
@@ -581,6 +544,54 @@ private struct DietParser {
 		if( tag == "script" ) ret ~= indent_string~"//]]>\\n";
 		else ret ~= indent_string~"-->\\n";
 		ret ~= indent_string[0 .. $-2] ~ "</" ~ tag ~ ">";
+		return ret;
+	}
+
+	string buildFilterNodeWriter(ref string[] node_stack, string tagline, int level,
+			int base_level, ref bool in_string, in Line[] lines)
+	{
+		string ret;
+
+		// find all filters
+		size_t j = 0;
+		string[] filters;
+		do {
+			j++;
+			filters ~= skipIdent(tagline, j);
+			skipWhitespace(tagline, j);
+		} while( j < tagline.length && tagline[j] == ':' );
+
+		// assemble child lines to one string
+		string content = tagline[j .. $];
+		foreach( cln; lines ){
+			if( content.length ) content ~= '\n';
+			content ~= cln.text[(level-base_level+1)*indentStyle.length .. $];
+		}
+
+		// determine the current HTML indent level
+		int indent = 0;
+		foreach( i; 0 .. level ) if( node_stack[i][0] != '-' ) indent++;
+
+		// compile-time filter whats possible
+		filter_loop:
+		foreach_reverse( f; filters ){
+			switch(f){
+				default: break filter_loop;
+				case "css": content = filterCSS(content, indent); break;
+				case "javascript": content = filterJavaScript(content, indent); break;
+				case "markdown": content = filterMarkdown(content, indent); break;
+			}
+			filters.length = filters.length-1;
+		}
+
+		// the rest of the filtering will happen at run time
+		ret ~= endString(in_string) ~ StreamVariableName~".write(";
+		string filter_expr;
+		foreach_reverse( flt; filters ) ret ~= "s_filters[\""~dstringEscape(flt)~"\"](";
+		ret ~= "\"" ~ dstringEscape(content) ~ "\"";
+		foreach( i; 0 .. filters.length ) ret ~= ", "~cttostring(indent)~")";
+		ret ~= ");\n";
+
 		return ret;
 	}
 
