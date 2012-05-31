@@ -59,7 +59,7 @@ enum EVLIST_INIT = 0x80;
 /* EVLIST_X_ Private space: 0x1000-0xf000 */
 enum EVLIST_ALL = (0xf000 | 0x9f);
 
-struct event_base;
+struct event_base {}
 struct event {
 	TAILQ_ENTRY!event ev_active_next;
 	TAILQ_ENTRY!event ev_next;
