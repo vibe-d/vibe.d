@@ -38,7 +38,10 @@ MARKDOWN FILTER
 PACKAGE MANAGER
 ===============
 
- - package signing
- - add support for a dflags[] field in package.json
- - do not create deps.txt at all
  - only query the VPM registry if there are unmet dependecies or if an upgrade is requested
+ - do not create deps.txt at all
+ - pass a flag -version=VPM_package_xxx to the compiler if module xxx is installed (replace special characters by _)
+ - add support for a dflags[] field in package.json
+ - allow the specification of optional dependencies (the user will just get a message)
+ - implement outputting of a generated vpm_versions.d module that contains the version of each installed package
+ - package signing

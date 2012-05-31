@@ -4,9 +4,10 @@
 v0.7.4 -
 -------------------
 
- - Added support for multipart/form-data (for file uploads)
+ - Added support for multipart/form-data and file uploads
  - Rewrote the Markdown parser - it now does not emit paragraphs inside list elements if no blank lines are present
  - The SMTP client supports STARTTLS and PLAIN/LOGIN authentication
+ - The Diet parser now supports generic :filters using registerDietTextFilter() - :css, :javascript and :markdown are already built-in
  - Removed InputStream.readAll() and readLine() and replaced them by UFCS-able global functions + added readUntil()
  - Added ConnectionPool to generically manage reuse of persistent connections (e.g. for databases)
  - The HttpClient (and thus the reverse proxy) now uses a connection pool to avoid continuous reconnects
