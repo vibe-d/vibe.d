@@ -9,6 +9,7 @@ module vibe.utils.string;
 
 public import std.string;
 
+import std.algorithm;
 import std.array;
 import std.uni;
 import std.utf;
@@ -57,7 +58,7 @@ string joinLines(string[] strs, string linesep = "\n")
 bool allOf(string str, string chars)
 {
 	foreach( ch; str )
-		if( chars.indexOf(ch) < 0 )
+		if( chars.countUntil(ch) < 0 )
 			return false;
 	return true;
 }
@@ -68,7 +69,7 @@ bool allOf(string str, string chars)
 bool anyOf(string str, string chars)
 {
 	foreach( ch; str )
-		if( chars.indexOf(ch) >= 0 )
+		if( chars.countUntil(ch) >= 0 )
 			return true;
 	return false;
 }
