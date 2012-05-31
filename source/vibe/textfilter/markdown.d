@@ -253,7 +253,7 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 
 	static bool matchesIndent(IndentType[] indent, IndentType[] base_indent)
 	{
-		if( indent > base_indent ) return false;
+		if( indent.length > base_indent.length ) return false;
 		if( indent != base_indent[0 .. indent.length] ) return false;
 		// TODO: check that no quote indents are removed!
 		return true;
