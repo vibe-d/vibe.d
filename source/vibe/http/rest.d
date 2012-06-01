@@ -406,6 +406,9 @@ private void getRestMethodName(T)(string method, out string http_verb, out strin
 	else if( method.startsWith("add") )    { http_verb = "POST"; rest_name = method[3 .. $]; }
 	else if( method.startsWith("create") ) { http_verb = "POST"; rest_name = method[6 .. $]; }
 	else if( method.startsWith("post") )   { http_verb = "POST"; rest_name = method[4 .. $]; }
+	else if( method.startsWith("remove") ) { http_verb = "DELETE"; rest_name = method[6 .. $]; }
+	else if( method.startsWith("erase") ) { http_verb = "DELETE"; rest_name = method[5 .. $]; }
+	else if( method.startsWith("delete") ) { http_verb = "DELETE"; rest_name = method[6 .. $]; }
 	else if( method == "index" )           { http_verb = "GET"; rest_name = ""; }
 	else { http_verb = "POST"; rest_name = method; }
 }
