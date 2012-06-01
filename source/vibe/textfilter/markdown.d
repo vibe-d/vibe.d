@@ -20,6 +20,7 @@ import std.string;
 /*
 	TODO:
 		detect inline HTML tags
+		make Line.unindent() work
 */
 
 version(MarkdownTest)
@@ -71,7 +72,8 @@ private enum LineType {
 	AtxHeader,
 	SetextHeader,
 	UList,
-	OList
+	OList,
+	HtmlBlock
 }
 
 private struct Line {
@@ -120,6 +122,7 @@ private Line[] parseLines(ref string[] lines)
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
 		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isLineBlank(ln) ) lninfo.type = LineType.Blank;
+		else if( isHtmlBlockLine(ln) ) lninfo.type = LineType.HtmlBlock;
 		else lninfo.type = LineType.Plain;
 
 		ret ~= lninfo;
@@ -129,6 +132,7 @@ private Line[] parseLines(ref string[] lines)
 
 private enum BlockType {
 	Plain,
+	Text,
 	Paragraph,
 	Header,
 	OList,
@@ -147,7 +151,7 @@ private struct Block {
 
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent)
 {
-	if( base_indent.length == 0 ) root.type = BlockType.Plain;
+	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
 
 	while( !lines.empty ){
@@ -241,6 +245,26 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 						b.blocks ~= itm;
 					}
 					break;
+				case LineType.HtmlBlock:
+					int nestlevel = 0;
+					auto starttag = parseHtmlBlockLine(ln.unindented);
+					if( !starttag.isHtmlBlock || !starttag.open )
+						break;
+
+					b.type = BlockType.Plain;
+					while(!lines.empty){
+						if( lines.front.indent.length < base_indent.length ) break;
+						if( lines.front.indent[0 .. base_indent.length] != base_indent ) break;
+
+						auto str = lines.front.unindent(base_indent.length);
+						auto taginfo = parseHtmlBlockLine(str);
+						b.text ~= lines.front.unindent(base_indent.length);
+						lines.popFront();
+						if( taginfo.isHtmlBlock && taginfo.tagName == starttag.tagName )
+							nestlevel += taginfo.open ? 1 : -1;
+						if( nestlevel <= 0 ) break;
+					}
+					break;
 			}
 			root.blocks ~= b;
 		}
@@ -249,8 +273,6 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 
 private string[] skipText(ref Line[] lines, IndentType[] indent)
 {
-	string[] ret;
-
 	static bool matchesIndent(IndentType[] indent, IndentType[] base_indent)
 	{
 		if( indent.length > base_indent.length ) return false;
@@ -262,6 +284,8 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 		}
 		return true;
 	}
+
+	string[] ret;
 
 	while(true){
 		ret ~= lines.front.unindent(indent.length);
@@ -276,6 +300,13 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 {
 	final switch(block.type){
 		case BlockType.Plain:
+			assert(block.blocks.length == 0);
+			foreach( ln; block.text ){
+				dst.put(ln);
+				dst.put("\n");
+			}
+			break;
+		case BlockType.Text:
 			foreach( ln; block.text ){
 				writeMarkdownEscaped(dst, ln, links);
 				dst.put("\n");
