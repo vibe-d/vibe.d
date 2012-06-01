@@ -957,7 +957,7 @@ string filterCSS(string text, int indent)
 	auto lines = splitLines(text);
 
 	string indent_string = "\n";
-	while( indent > 0 ) indent_string ~= '\t';
+	while( indent-- > 0 ) indent_string ~= '\t';
 
 	string ret = indent_string~"<style type=\"text/css\"><!--";
 	indent_string = indent_string ~ '\t';
