@@ -20,7 +20,6 @@ import std.string;
 /*
 	TODO:
 		detect inline HTML tags
-		make Line.unindent() work
 */
 
 version(MarkdownTest)
@@ -84,8 +83,20 @@ private struct Line {
 
 	string unindent(size_t n)
 	{
-		// ...
-		return unindented;
+		assert(n <= indent.length);
+		string ln = text;
+		foreach( i; 0 .. n ){
+			final switch(indent[i]){
+				case IndentType.White:
+					if( ln[0] == ' ' ) ln = ln[4 .. $];
+					else ln = ln[1 .. $];
+					break;
+				case IndentType.Quote:
+					ln = ln.stripLeft()[1 .. $];
+					break;
+			}
+		}
+		return ln;
 	}
 }
 
@@ -288,7 +299,7 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 	string[] ret;
 
 	while(true){
-		ret ~= lines.front.unindent(indent.length);
+		ret ~= lines.front.unindent(min(indent.length, lines.front.indent.length));
 		lines.popFront();
 
 		if( lines.empty || !matchesIndent(lines.front.indent, indent) || lines.front.type != LineType.Plain )
@@ -300,11 +311,12 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 {
 	final switch(block.type){
 		case BlockType.Plain:
-			assert(block.blocks.length == 0);
 			foreach( ln; block.text ){
 				dst.put(ln);
 				dst.put("\n");
 			}
+			foreach(b; block.blocks)
+				writeBlock(dst, b, links);
 			break;
 		case BlockType.Text:
 			foreach( ln; block.text ){
