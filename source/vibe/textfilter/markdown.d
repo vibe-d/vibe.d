@@ -255,7 +255,11 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 	{
 		if( indent.length > base_indent.length ) return false;
 		if( indent != base_indent[0 .. indent.length] ) return false;
-		// TODO: check that no quote indents are removed!
+		auto qidx = base_indent.retro().countUntil(IndentType.Quote);
+		if( qidx >= 0 ){
+			qidx = base_indent.length-1 - qidx;
+			if( indent.length <= qidx ) return false;
+		}
 		return true;
 	}
 
