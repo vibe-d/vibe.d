@@ -221,7 +221,7 @@ interface Stream : InputStream, OutputStream {
 */
 class NullOutputStream : OutputStream {
 	void write(in ubyte[] bytes, bool do_flush = true) {}
-	void write(InputStream stream, ulong nbytes, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
 		writeDefault(stream, nbytes, do_flush);
 	}

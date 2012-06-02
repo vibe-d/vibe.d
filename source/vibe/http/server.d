@@ -726,6 +726,41 @@ private class LimitedHttpInputStream : LimitedInputStream {
 	}
 }
 
+private class TimeoutHttpInputStream : InputStream {
+	private {
+		SysTime m_timeref;
+		Duration m_timeleft;
+		InputStream m_in;
+	}
+
+	this(InputStream stream, Duration timeleft) {
+		enforce(timeleft > dur!"seconds"(0), "Timeout required");
+		m_in = stream;
+		m_timeleft = timeleft;
+		m_timeref = Clock.currTime();
+	}
+
+	@property bool empty() { enforce(m_in !is null, "InputStream missing"); return m_in.empty(); }
+	@property ulong leastSize() { enforce(m_in !is null, "InputStream missing"); return m_in.leastSize();  }
+	@property bool dataAvailableForRead() {  enforce(m_in !is null, "InputStream missing"); return m_in.dataAvailableForRead; }
+	const(ubyte)[] peek() { return m_in.peek(); }
+
+	void read(ubyte[] dst)
+	{
+		enforce(m_in !is null, "InputStream missing");
+		checkTimeout();
+		m_in.read(dst);
+	}
+
+	private void checkTimeout() {
+		SysTime curr = Clock.currTime();
+		auto diff = curr - m_timeref;
+		if( diff > m_timeleft ) throw new HttpServerError(HttpStatus.RequestTimeout);
+		m_timeleft -= diff;
+		m_timeref = curr;
+	}
+}
+
 /**************************************************************************************************/
 /* Private functions                                                                              */
 /**************************************************************************************************/
@@ -741,6 +776,7 @@ private {
 /// private
 private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen_info)
 {
+	NullOutputStream nullWriter = new NullOutputStream();
 	SslContext ssl_ctx;
 	if( listen_info.sslCertFile.length || listen_info.sslKeyFile.length ){
 		logDebug("Creating SSL context...");
@@ -807,10 +843,22 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 		try {
 			logTrace("reading request..");
 
+			InputStream reqReader;
+			if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = conn;
+			else reqReader = new TimeoutHttpInputStream(conn, settings.maxRequestTime);
+
 			// basic request parsing
-			req = parseRequest(conn);
+			req = parseRequest(reqReader);
 			req.peer = conn_.peerAddress;
 			logTrace("Got request header.");
+
+			//handle Expect-Header
+			if( auto pv = "Expect" in req.headers) {
+				if( *pv == "100-continue" ) {
+					logTrace("sending 100 continue");
+					conn.write("HTTP/1.1 100 Continue\r\n");
+				}
+			}
 
 			// find the matching virtual host
 			foreach( ctx; g_contexts )
@@ -843,17 +891,17 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 				auto contentLength = parse!ulong(v); // DMDBUG: to! thinks there is a H in the string
 				enforce(v.length == 0, "Invalid content-length");
 				enforce(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
-				req.bodyReader = new LimitedHttpInputStream(conn, contentLength);
+				req.bodyReader = new LimitedHttpInputStream(reqReader, contentLength);
 			} else {
 				if( auto pt = "Transfer-Encoding" in req.headers ){
 					enforce(*pt == "chunked");
-					req.bodyReader = new LimitedHttpInputStream(new ChunkedInputStream(conn), settings.maxRequestSize, true);
+					req.bodyReader = new LimitedHttpInputStream(new ChunkedInputStream(reqReader), settings.maxRequestSize, true);
 				} else {
 					auto pc = "Connection" in req.headers;
 					if( pc && *pc == "close" )
-						req.bodyReader = new LimitedHttpInputStream(conn, settings.maxRequestSize, true);
+						req.bodyReader = new LimitedHttpInputStream(reqReader, settings.maxRequestSize, true);
 					else
-						req.bodyReader = new LimitedHttpInputStream(conn, 0);
+						req.bodyReader = new LimitedHttpInputStream(reqReader, 0);
 				}
 			}
 
@@ -919,21 +967,27 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			logDebug("http error thrown: %s", err.toString());
 			if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
 			else logError("HttpServerError after page has been written: %s", err.toString());
-			if (justifiesConnectionClose(err.status)) {
+			logDebug("Exception while handling request: %s", err.toString());
+			if ( !parsed || justifiesConnectionClose(err.status) ) {
 				conn_.close();
 				break;
 			}
-			logDebug("Exception while handling request: %s", err.toString());
 		} catch (Throwable e) {
 			logDebug("Exception while parsing request: %s", e.toString());
 			if( !res.headerWritten ) errorOut(parsed ? HttpStatus.InternalServerError :
 				HttpStatus.BadRequest, "Invalid request format.", e.toString(), e);
 			else logError("Error after page has been written: %s", e.msg);
 			logDebug("Exception while handling request: %s", e.toString());
+			if ( !parsed ) {
+				conn_.close();
+				break;
+			}
 		}
 
 		// if no one has written anything, return 404
 		if( !res.headerWritten ) errorOut(HttpStatus.NotFound, "Not found.", "", null);
+
+		nullWriter.write(req.bodyReader);
 
 		// finalize (e.g. for chunked encoding)
 		res.finalize();
@@ -957,7 +1011,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 	} while( req.persistent && conn_.connected );
 }
 
-private HttpServerRequest parseRequest(Stream conn)
+private HttpServerRequest parseRequest(InputStream conn)
 {
 	auto req = new HttpServerRequest;
 	auto stream = new LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
@@ -983,14 +1037,6 @@ private HttpServerRequest parseRequest(Stream conn)
 	
 	//headers
 	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength);
-
-	//handle Expect-Header
-	if( auto pv = "Expect" in req.headers) {
-		if( *pv == "100-continue" ) {
-			logTrace("sending 100 continue");
-			conn.write("HTTP/1.1 100 Continue\r\n");
-		}
-	}
 
 	return req;
 }
