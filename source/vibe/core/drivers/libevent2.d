@@ -43,9 +43,9 @@ struct LevCondition {
 }
 
 private extern(C){
-	void* lev_alloc(size_t size){ return GC.malloc(size); }
-	void* lev_realloc(void* p, size_t newsize){ return GC.realloc(p, newsize); }
-	void lev_free(void* p){ GC.free(p); }
+	void* lev_alloc(size_t size){ return malloc(size); }
+	void* lev_realloc(void* p, size_t newsize){ return realloc(p, newsize); }
+	void lev_free(void* p){ free(p); }
 
 	void* lev_alloc_mutex(uint locktype) {
 		auto ret = cast(LevMutex*)calloc(1, LevMutex.sizeof);
@@ -162,11 +162,11 @@ class Libevent2Driver : EventDriver {
 		}
 	}
 
-	/*~this()
+	~this()
 	{
 		evdns_base_free(m_dnsBase, 1);
 		event_base_free(m_eventLoop);
-	}*/
+	}
 
 	@property event_base* eventLoop() { return m_eventLoop; }
 	@property evdns_base* dnsEngine() { return m_dnsBase; }
@@ -223,7 +223,6 @@ class Libevent2Driver : EventDriver {
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
 
-logInfo("Connect to '%s'", host);
 		if( bufferevent_socket_connect_hostname(buf_event, m_dnsBase, af, toStringz(host), port) )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
 
@@ -397,8 +396,8 @@ class Libevent2WorkerThread {
 			logDebug("Finished worker loop..");
 
 			event_free(m_wakeEvent);
-			//evdns_base_free(m_dnsBase, false);
-			//event_base_free(m_eventLoop);
+			evdns_base_free(m_dnsBase, false);
+			event_base_free(m_eventLoop);
 		} catch( Throwable e ){
 			logError("Worker thread failed with uncaught exception: %s", e.toString());
 		}
