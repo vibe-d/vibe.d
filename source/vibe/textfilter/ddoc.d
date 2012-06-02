@@ -147,7 +147,7 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 				i = j;
 				break;
 			case CODE:
-				dst.put("<pre class=\"code prettyprint lang-d\">");
+				dst.put("<pre class=\"code prettyprint\">");
 				auto j = skipCodeBlock(i);
 				auto base_indent = baseIndent(lines[i+1 .. j]);
 				foreach( ln; lines[i+1 .. j] ){
