@@ -13,8 +13,10 @@ v0.7.4 -
  - The HttpClient (and thus the reverse proxy) now uses a connection pool to avoid continuous reconnects
  - On *nix now uses pkg-config to find linker dependencies if possible (dawgfoto)
  - The static HTTP file server now resolves paths with '.' and '..' instead of simply refusing them
+ - Implemented handling of HttpServerSettings.maxRequestTime
  - Libevent2TcpConnection now enforces proper use of acquire()/release()
  - Added setLogFile()
+ - Improved stability in conjunction with TCP connections
  - Upgraded libevent to 2.0.19 on Windows
 
 v0.7.3 - 22.05.2012

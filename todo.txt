@@ -3,7 +3,6 @@ HTTP
 
  - (partially done) add limits for header line length, body size, number of headers or request size and request time to avoid DoS
  - defer writing the header of server responses to the second written chunk in case of using bodyWriter() - if only one chunk is ever written, write non-chunked instead
- - implement maxRequestTime
  - implement generators for http.rest to generate a JavaScript client and "documentation" with all possible requests.
 
 TCP

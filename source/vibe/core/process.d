@@ -16,7 +16,7 @@ import core.sys.windows.windows;
 
 version(Windows)
 {
-	extern(Windows){
+	private extern(Windows){
 		struct SECURITY_ATTRIBUTES;
 		struct STARTUPINFOW {
 			DWORD  cb;
