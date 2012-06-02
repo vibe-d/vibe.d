@@ -295,11 +295,14 @@
     <File path="source\vibe\core\drivers\libevent2_tcp.d" />
     <File path="source\vibe\core\drivers\threadedfile.d" />
    </Folder>
+   <File path="source\vibe\core\args.d" />
+   <File path="source\vibe\core\connectionpool.d" />
    <File path="source\vibe\core\core.d" />
    <File path="source\vibe\core\driver.d" />
    <File path="source\vibe\core\file.d" />
    <File path="source\vibe\core\log.d" />
    <File path="source\vibe\core\mutex.d" />
+   <File path="source\vibe\core\process.d" />
    <File path="source\vibe\core\signal.d" />
    <File path="source\vibe\core\tcp.d" />
   </Folder>
@@ -334,7 +337,10 @@
    <File path="source\vibe\http\dist.d" />
    <File path="source\vibe\http\fileserver.d" />
    <File path="source\vibe\http\filterstack.d" />
+   <File path="source\vibe\http\form.d" />
+   <File path="source\vibe\http\log.d" />
    <File path="source\vibe\http\proxy.d" />
+   <File path="source\vibe\http\rest.d" />
    <File path="source\vibe\http\router.d" />
    <File path="source\vibe\http\server.d" />
    <File path="source\vibe\http\session.d" />
@@ -343,6 +349,7 @@
   </Folder>
   <Folder name="inet">
    <File path="source\vibe\inet\mimetypes.d" />
+   <File path="source\vibe\inet\rfc5322.d" />
    <File path="source\vibe\inet\url.d" />
    <File path="source\vibe\inet\urltransfer.d" />
   </Folder>
