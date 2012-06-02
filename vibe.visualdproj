@@ -367,7 +367,9 @@
   </Folder>
   <Folder name="utils">
    <File path="source\vibe\utils\array.d" />
+   <File path="source\vibe\utils\memory.d" />
    <File path="source\vibe\utils\string.d" />
+   <File path="source\vibe\utils\validation.d" />
   </Folder>
  </Folder>
 </DProject>
