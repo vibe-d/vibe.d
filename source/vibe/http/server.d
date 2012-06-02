@@ -938,6 +938,13 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 		// finalize (e.g. for chunked encoding)
 		res.finalize();
 
+		foreach( k, v ; req.files ){
+			if( existsFile(v.tempPath) ) {
+				removeFile(v.tempPath); 
+				logDebug("Deleted upload tempfile %s", v.tempPath.toString()); 
+			}
+		}
+
 		// log the request to access log
 		foreach( log; context.loggers )
 			log.log(req, res);
