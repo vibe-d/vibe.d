@@ -8,7 +8,7 @@
 module vibe.stream.stream;
 
 import vibe.core.log;
-import vibe.stream.memory : MemoryOutputStream;
+import vibe.stream.memory;
 
 import std.array;
 import std.algorithm;
