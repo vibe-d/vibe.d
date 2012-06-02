@@ -11,6 +11,7 @@ import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
+import vibe.utils.memory;
 
 import deimos.event2.bufferevent;
 import deimos.event2.dns;
@@ -215,7 +216,7 @@ class Libevent2Driver : EventDriver {
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = new TcpContext(m_core, m_eventLoop, null, sockfd, buf_event);
+		auto cctx = heap_new!TcpContext(m_core, m_eventLoop, sockfd, buf_event);
 		cctx.task = Fiber.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		timeval toread = {tv_sec: 60, tv_usec: 0};
@@ -310,7 +311,8 @@ class Libevent2Driver : EventDriver {
 		version(Windows){} else evutil_make_listen_socket_reuseable(listenfd);
 
 		// Add an event to wait for connections
-		auto ctx = new TcpContext(m_core, m_eventLoop, connection_callback, listenfd, null, *sock_addr);
+		auto ctx = heap_new!TcpContext(m_core, m_eventLoop, listenfd, null, *sock_addr);
+		ctx.connectionCallback = connection_callback;
 		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 		if( event_add(connect_event, null) ){
 			logError("Error scheduling connection event on the event loop.");

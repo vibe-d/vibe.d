@@ -12,6 +12,7 @@ public import vibe.stream.stream;
 
 import vibe.core.log;
 import vibe.core.drivers.libevent2;
+import vibe.utils.memory;
 
 import deimos.event2.buffer;
 import deimos.event2.bufferevent;
@@ -50,9 +51,7 @@ private {
 
 package class Libevent2TcpConnection : TcpConnection {
 	private {
-		bufferevent* m_baseEvent;
 		bufferevent* m_event;
-		bufferevent* m_sslEvent;
 		bool m_timeout_triggered;
 		TcpContext* m_ctx;
 		string m_peerAddress;
@@ -61,7 +60,6 @@ package class Libevent2TcpConnection : TcpConnection {
 	
 	this(TcpContext* ctx)
 	{
-		m_baseEvent = ctx.event;
 		m_event = ctx.event;
 		m_ctx = ctx;
 
@@ -77,13 +75,13 @@ package class Libevent2TcpConnection : TcpConnection {
 	
 	~this()
 	{
-		//evbuffer_free(m_buffer);
+		//assert(m_ctx is null, "Leaking TcpContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
 	}
 	
 	/// Enables/disables Nagle's algorithm for this connection (enabled by default).
 	@property void tcpNoDelay(bool enabled)
 	{
-		auto fd = bufferevent_getfd(m_baseEvent);
+		auto fd = bufferevent_getfd(m_event);
 		ubyte opt = enabled;
 		assert(fd <= int.max, "Socket descriptor > int.max");
 		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, &opt, opt.sizeof);
@@ -119,16 +117,20 @@ package class Libevent2TcpConnection : TcpConnection {
 	void close()
 	{
 		checkConnected();
-		auto fd = bufferevent_getfd(m_baseEvent);
+		auto fd = bufferevent_getfd(m_event);
 		m_ctx.shutdown = true;
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
 		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
 		logTrace("Closing socket %d...", fd);
+		while( m_ctx.event )
+			m_ctx.core.yieldForEvent();
+		heap_delete(m_ctx);
+		m_ctx = null;
 	}
 
 	/// The 'connected' status of this connection
-	@property bool connected() const { return m_ctx.event !is null; }
+	@property bool connected() const { return m_ctx !is null && m_ctx.event !is null; }
 
 	@property bool empty() { return leastSize == 0; }
 
@@ -168,7 +170,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		while( dst.length > 0 ){
 			checkConnected();
-			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, bufferevent_getfd(m_baseEvent));
+			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, bufferevent_getfd(m_event));
 			auto nbytes = bufferevent_read(m_event, dst.ptr, dst.length);
 			logTrace(" .. got %d bytes", nbytes);
 			dst = dst[nbytes .. $];
@@ -209,9 +211,9 @@ package class Libevent2TcpConnection : TcpConnection {
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{	
 		checkConnected();
-		//logTrace("evbuffer_add (fd %d): %s", bufferevent_getfd(m_baseEvent), bytes);
-		//logTrace("evbuffer_add (fd %d): <%s>", bufferevent_getfd(m_baseEvent), cast(string)bytes);
-		logTrace("evbuffer_add (fd %d): %d B", bufferevent_getfd(m_baseEvent), bytes.length);
+		//logTrace("evbuffer_add (fd %d): %s", bufferevent_getfd(m_event), bytes);
+		//logTrace("evbuffer_add (fd %d): <%s>", bufferevent_getfd(m_event), cast(string)bytes);
+		logTrace("evbuffer_add (fd %d): %d B", bufferevent_getfd(m_event), bytes.length);
 		if( bufferevent_write(m_event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
 			
@@ -239,7 +241,12 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	private void checkConnected()
 	{
-		enforce(m_ctx.event !is null, "Operating on closed TCPConnection.");
+		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
+		if( m_ctx.event is null ){
+			heap_delete(m_ctx);
+			m_ctx = null;
+			enforce(false, "Remote hung up while operating on TCPConnection.");
+		}
 		enforce(m_ctx.task is Fiber.getThis(), "Operating on TcpConnection owned by a different fiber!");
 	}
 }
@@ -251,28 +258,25 @@ package class Libevent2TcpConnection : TcpConnection {
 
 package struct TcpContext
 {
-	this(DriverCore c, event_base* evbase, void delegate(TcpConnection conn) cb, int sock, bufferevent* evt, sockaddr_in6 peeraddr){
+	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, sockaddr_in6 peeraddr){
 		core = c;
 		eventLoop = evbase;
-		connectionCallback = cb;
 		socketfd = sock;
 		event = evt;
 		remote_addr6 = peeraddr;
 	}
 
-	this(DriverCore c, event_base* evbase, void delegate(TcpConnection conn) cb, int sock, bufferevent* evt, sockaddr_in peeraddr){
+	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, sockaddr_in peeraddr){
 		core = c;
 		eventLoop = evbase;
-		connectionCallback = cb;
 		socketfd = sock;
 		event = evt;
 		remote_addr4 = peeraddr;
 	}
 
-	this(DriverCore c, event_base* evbase, void delegate(TcpConnection conn) cb, int sock, bufferevent* evt){
+	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt){
 		core = c;
 		eventLoop = evbase;
-		connectionCallback = cb;
 		socketfd = sock;
 		event = evt;
 	}
@@ -328,13 +332,14 @@ package extern(C)
 					return;
 				}
 				
-				auto client_ctx = new TcpContext(drivercore, eventloop, null, sockfd, buf_event, remote_addr);
+				auto client_ctx = heap_new!TcpContext(drivercore, eventloop, sockfd, buf_event, remote_addr);
 				assert(client_ctx.event !is null, "event is null although it was just != null?");
 				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
 				timeval toread = {tv_sec: 60, tv_usec: 0};
 				bufferevent_set_timeouts(buf_event, &toread, null);
 				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
 					bufferevent_free(buf_event);
+					heap_delete(client_ctx);
 					logError("Error enabling buffered I/O event for fd %d.", sockfd);
 					return;
 				}
@@ -351,13 +356,7 @@ package extern(C)
 					logWarn("Handling of connection failed: %s", e.msg);
 					logDebug("%s", e.toString());
 				}
-				client_ctx.shutdown = true;
-				if( client_ctx.event ){
-					logTrace("initiate lazy active disconnect (fd %d)", client_ctx.socketfd);
-					bufferevent_flush(client_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
-					bufferevent_flush(client_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
-					bufferevent_setwatermark(client_ctx.event, EV_WRITE, 1, 0);
-				}
+				if( conn.connected ) conn.close();
 				logDebug("task finished.");
 			};
 		}
@@ -420,19 +419,20 @@ package extern(C)
 			ctx.event = null;
 		} else if( ctx.task && ctx.task.state != Fiber.State.TERM ){
 			bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
-			ctx.core.resumeTask(ctx.task);
 		}
+		if( ctx.task ) ctx.core.resumeTask(ctx.task);
 	}
 		
 	void onSocketEvent(bufferevent *buf_event, short status, void *arg)
 	{
 		auto ctx = cast(TcpContext*)arg;
 		ctx.status = status;
-		logDebug("Socket event on fd %d: %d", ctx.socketfd, status);
+		logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
 		assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TcpContext");
 		
 		bool free_event = false;
 		
+		string errorMessage;
 		if( status & BEV_EVENT_EOF ){
 			logDebug("Connection was closed (fd %d).", ctx.socketfd);
 			free_event = true;
@@ -446,6 +446,9 @@ package extern(C)
 				logDebug("A socket error occurred on fd %d: %d", ctx.socketfd, status);
 			}
 			free_event = true;
+			if( status & BEV_EVENT_READING ) errorMessage = "Error reading data from socket. Remote hung up?";
+			else if( status & BEV_EVENT_WRITING ) errorMessage = "Error writing data to socket. Remote hung up?";
+			else errorMessage = "Socket error: "~to!string(status);
 		}
 
 		if( free_event || (status & BEV_EVENT_ERROR) ){	
@@ -456,7 +459,7 @@ package extern(C)
 		if( !ctx.shutdown && ctx.task && ctx.task.state != Fiber.State.TERM ){
 			if( status & BEV_EVENT_ERROR ){
 				logTrace("resuming corresponding task with exception...");
-				ctx.core.resumeTask(ctx.task, new Exception("socket error "~to!string(status)));
+				ctx.core.resumeTask(ctx.task, new Exception(errorMessage));
 			} else {
 				logTrace("resuming corresponding task...");
 				ctx.core.resumeTask(ctx.task);
