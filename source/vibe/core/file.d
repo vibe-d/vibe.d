@@ -57,3 +57,27 @@ void moveFile(string from, string to)
 {
 	std.file.rename(from, to);
 }
+
+/**
+	Removes a file
+*/
+void removeFile(Path path)
+{
+	removeFile(path.toNativeString());
+}
+
+void removeFile(string path) {
+	std.file.remove(path);
+}
+
+/**
+	Checks if a file exists
+*/
+bool existsFile(Path path) {
+	return existsFile(path.toNativeString());
+}
+
+bool existsFile(string path)
+{
+	return std.file.exists(path);
+}
