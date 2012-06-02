@@ -193,14 +193,16 @@ package class Libevent2TcpConnection : TcpConnection {
 		t.tv_usec = timeout.fracSec().usecs();
 		logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
 		event_add(evtmout, &t);
+		scope(exit){
+			event_del(evtmout);
+			event_free(evtmout);
+		}
 		logTrace("wait for data");
 		while( connected ) {
 			if( dataAvailableForRead || m_timeout_triggered ) break;
 			rawYield();
 		}
 		logTrace(" -> timeout = %s", m_timeout_triggered);
-		event_del(evtmout);
-		event_free(evtmout);
 		return dataAvailableForRead;
 	}
 
@@ -456,7 +458,7 @@ package extern(C)
 			ctx.event = null;
 		}
 
-		if( !ctx.shutdown && ctx.task && ctx.task.state != Fiber.State.TERM ){
+		if( ctx.task && ctx.task.state != Fiber.State.TERM ){
 			if( status & BEV_EVENT_ERROR ){
 				logTrace("resuming corresponding task with exception...");
 				ctx.core.resumeTask(ctx.task, new Exception(errorMessage));
@@ -472,7 +474,8 @@ package extern(C)
 		logTrace("data wait timeout");
 		auto conn = cast(Libevent2TcpConnection)userptr;
 		conn.m_timeout_triggered = true;
-		conn.m_ctx.core.resumeTask(conn.m_ctx.task);
+		if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.task);
+		else logDebug("waitForData timeout after connection was closed!");
 	}
 }
 
