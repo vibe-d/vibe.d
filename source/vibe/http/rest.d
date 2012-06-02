@@ -196,6 +196,8 @@ class RestInterfaceClient(I) : I
 		MethodStyle m_methodStyle;
 	}
 
+	alias I BaseInterface;
+
 	this(string base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = Url.parse(base_url);
@@ -355,10 +357,10 @@ private @property string generateRestInterfaceMethods(I)()
 			auto param_names = parameterNames!FT();
 			string http_verb, rest_name;
 			getRestMethodName!FT(method, http_verb, rest_name);
-			ret ~= "override "~RT.stringof~" "~method~"(";
+			ret ~= "override "~getReturnTypeString!(overload)~" "~method~"(";
 			foreach( i, PT; PTypes ){
 				if( i > 0 ) ret ~= ", ";
-				ret ~= PT.stringof;
+				ret ~= getParameterTypeString!(overload, i);
 				ret ~= " " ~ param_names[i];
 			}
 			ret ~= ")";
@@ -381,7 +383,7 @@ private @property string generateRestInterfaceMethods(I)()
 					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
 			ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"\""~rest_name~"\", jparams__);\n";
 			static if( !is(RT == void) ){
-				ret ~= "\t"~RT.stringof~" ret__;\n";
+				ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
 				ret ~= "\tdeserializeJson(ret__, jret__);\n";
 				ret ~= "\treturn ret__;\n";
 			}
@@ -390,6 +392,23 @@ private @property string generateRestInterfaceMethods(I)()
 	}
 
 	return ret;
+}
+
+/// private
+private @property string getReturnTypeString(alias F)()
+{
+	/*if( __traits(compiles, ReturnType!(F).stringof~" x;") )
+	   return ReturnType!(F).stringof;
+	else*/ return "ReturnType!(typeof(&BaseInterface."~__traits(identifier, F)~"))";
+}
+
+/// private
+private @property string getParameterTypeString(alias F, int i)()
+{
+	alias ParameterTypeTuple!(F)[i] T;
+	/*if( __traits(compiles, T.stringof~" x;") )
+		return T.stringof;
+	else*/ return "ParameterTypeTuple!(typeof(&BaseInterface."~__traits(identifier, F)~"))["~to!string(i)~"]";
 }
 
 /// private
@@ -428,14 +447,14 @@ private string[] parameterNames(T)()
 			funcStr = funcStr[0 .. i];
 			break;
 		}
-       
+	   
 	if( funcStr.length == 0 ) return null;
 	
 	funcStr ~= secondPattern;
-       
+	   
 	string token;
 	string[] arr;
-       
+	   
 	foreach( c; funcStr )
 	{
 		if( c != firstPattern && c != secondPattern ) token ~= c;
@@ -449,7 +468,7 @@ private string[] parameterNames(T)()
 	
 	string[] result;
 	bool skip = false;
-       
+	   
 	foreach( str; arr ){
 		skip = !skip;
 		if( skip ) continue;
