@@ -109,20 +109,23 @@ private class Application {
 			}
 		}
 	}
-	
-	/// Include paths for all installed modules
-	string[] includePaths(bool views) const {
-		// Assumeed that there is a \source folder
-		string[] includes;
-		string ipath() { return (views?"views":"source"); }
-		foreach(string s, pkg; m_packages) {
-			auto path = "modules/"~pkg.name~"/"~ipath();
-			if( exists(path) && path.isDir )
-				includes ~= path;
+
+	@property string[] dflags() const {
+		auto ret = appender!(string[])();
+		ret.put(m_main.dflags());
+		ret.put("-Isource");
+		ret.put("-Jviews");
+		foreach( string s, pkg; m_packages ){
+			void addPath(string prefix, string name){
+				auto path = "modules/"~pkg.name~"/"~name;
+				if( exists(path) )
+					ret.put(prefix ~ path);
+			}
+			ret.put(pkg.dflags());
+			addPath("-I", "source");
+			addPath("-J", "views");
 		}
-		if( exists(ipath()) && ipath().isDir )
-			includes ~= ipath(); // app sources/templates
-		return includes;
+		return ret.data();
 	}
 	
 	/// Actions which can be performed to update the application.
@@ -323,21 +326,7 @@ class Vpm {
 	
 	/// Creates the deps.txt file, which is used by vibe to execute
 	/// the application.
-	void createDepsTxt() {
-		string ipaths(bool t) { 
-			string ret;
-			foreach(s; m_app.includePaths(t)) {
-				ret ~= (t?"-J":"-I")~s~"\r\n";
-			}
-			return ret;
-		}
-		string source = ipaths(false);
-		string views = ipaths(true);
-		auto file = openFile("deps.txt", FileMode.CreateTrunc);
-		scope(exit) file.close();
-		string deps = source~views;
-		file.write(cast(ubyte[])deps);
-	}
+	@property string[] dflags() { return m_app.dflags; }
 	
 	/// Lists all installed modules
 	void list() {
