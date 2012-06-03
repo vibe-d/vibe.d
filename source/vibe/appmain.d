@@ -13,7 +13,7 @@
 	that any global configuration is not applied in this case and features such as priviledge
 	lowering are not in place.
 
-	Copyright: © 2012 Sönke Ludwig
+	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */

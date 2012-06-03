@@ -6,7 +6,7 @@
 	$(LINK https://github.com/visionmedia/jade) and provides a good overview of all the supported
 	features, as well as some that are not yet implemented for Diet templates.
 
-	Copyright: © 2012 Sönke Ludwig
+	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
