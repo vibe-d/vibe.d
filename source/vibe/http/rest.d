@@ -384,7 +384,7 @@ private @property string generateRestInterfaceMethods(I)()
 			foreach( i, PT; PTypes )
 				if( i >= skip )
 					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
-			ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"~adjustMethodStyle(\""~rest_name~"\", m_methodStyle)", jparams__);\n";
+			ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
 			static if( !is(RT == void) ){
 				ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
 				ret ~= "\tdeserializeJson(ret__, jret__);\n";
