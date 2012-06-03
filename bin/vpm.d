@@ -105,6 +105,7 @@ int main(string[] args)
 			string[] flags = ["--force", "-of"~binName];
 			if( canFind(vpmArgs, "build") )
 				flags ~= "--build-only";
+			flags ~= "-g";
 			flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
 			flags ~= "-Isource";
 			flags ~= "-Jviews";
