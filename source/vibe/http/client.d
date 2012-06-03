@@ -65,6 +65,7 @@ HttpClientResponse requestHttp(Url url, void delegate(HttpClientRequest req) req
 auto connectHttp(string host, ushort port = 0, bool ssl = false)
 {
 	static ConnectionPool!HttpClient[string] s_connections;
+	if( port == 0 ) port = ssl ? 443 : 80;
 	string cstring = host ~ ':' ~ to!string(port) ~ ':' ~ to!string(ssl);
 
 	ConnectionPool!HttpClient pool;
@@ -111,6 +112,7 @@ class HttpClient : EventedObject {
 
 	void connect(string server, ushort port = 80, bool ssl = false)
 	{
+		assert(port != 0);
 		m_conn = null;
 		m_server = server;
 		m_port = port;
