@@ -136,51 +136,10 @@ private class Application {
 		}
 		
 		auto graph = new DependencyGraph(m_main);
-		RequestedDependency[string] missing = graph.missing();
-		RequestedDependency[string] oldMissing;
-		bool gatherFailed = false;
-		while( missing.length > 0 ) {
-			if(missing.length == oldMissing.length) {
-				bool different = false;
-				foreach(string pkg, reqDep; missing) {
-					auto o = pkg in oldMissing;
-					if(o && reqDep.dependency != o.dependency) {
-						different = true; 
-						break;
-					}
-				}
-				if(!different) {
-					logWarn("Could not resolve dependencies");
-					gatherFailed = true;
-					break;
-				}
-			}
-			
-			oldMissing = missing.dup;
-			logTrace("There are %s packages missing.", missing.length);
-			foreach(string pkg, reqDep; missing) {
-				if(!reqDep.dependency.valid()) {
-					logTrace("Dependency to "~pkg~" is invalid. Trying to fix by modifying others.");
-					continue;
-				}
-				
-				logTrace("Adding package to graph: "~pkg);
-				try {
-					graph.insert(new Package(packageSupplier.packageJson(pkg, reqDep.dependency)));
-				}
-				catch(Throwable e) {
-					// catch?
-					logError("Trying to get package metadata failed, exception: %s", e.toString());
-				}
-			}
-			graph.clearUnused();
-			missing = graph.missing();
-		}
-		
-		if(gatherFailed) {
+		if(!gatherMissingDependencies(packageSupplier, graph)  || graph.missing().length > 0) {
 			logError("The dependency graph could not be filled.");
 			Action[] actions;
-			foreach( string pkg, rdp; missing)
+			foreach( string pkg, rdp; graph.missing())
 				actions ~= Action(Action.ActionId.Failure, pkg, rdp.dependency, rdp.packages);
 			return actions;
 		}
@@ -290,6 +249,69 @@ private class Application {
 		dst.write(cast(ubyte[])archive.build());
 		*/
 	}
+	
+	private bool gatherMissingDependencies(PackageSupplier packageSupplier, DependencyGraph graph) const {
+		RequestedDependency[string] missing = graph.missing();
+		RequestedDependency[string] oldMissing;
+		while( missing.length > 0 ) {
+			if(missing.length == oldMissing.length) {
+				bool different = false;
+				foreach(string pkg, reqDep; missing) {
+					auto o = pkg in oldMissing;
+					if(o && reqDep.dependency != o.dependency) {
+						different = true; 
+						break;
+					}
+				}
+				if(!different) {
+					logWarn("Could not resolve dependencies");
+					return false;
+				}
+			}
+			
+			oldMissing = missing.dup;
+			logTrace("There are %s packages missing.", missing.length);
+			foreach(string pkg, reqDep; missing) {
+				if(!reqDep.dependency.valid()) {
+					logTrace("Dependency to "~pkg~" is invalid. Trying to fix by modifying others.");
+					continue;
+				}
+				
+				// TODO: auto update and update interval by time
+				logTrace("Adding package to graph: "~pkg);
+				Package p = null;
+				
+				// Try an already installed package first
+				try {					
+					auto json = jsonFromFile( m_root ~ Path("modules") ~ Path(pkg) ~ "package.json");
+					auto vers = Version(json["version"].get!string);
+					if( reqDep.dependency.matches( vers ) )
+						p = new Package(json);
+					logTrace("Using already installed package with version: %s", vers);
+				}
+				catch(Throwable e) {
+					// not yet installed, try the supplied PS
+					logTrace("An installed package was not found");
+				}
+				if(!p) {
+					try {
+						p = new Package(packageSupplier.packageJson(pkg, reqDep.dependency));
+						logTrace("using package from registry");
+					}
+					catch(Throwable e) {
+						logError("Trying to get package metadata failed, exception: %s", e.toString());
+					}
+				}
+				
+				if(p)
+					graph.insert(p);
+			}
+			graph.clearUnused();
+			missing = graph.missing();
+		}
+		
+		return true;
+	}
 }
 
 /// The default supplier for packages, which is the registry
@@ -324,8 +346,8 @@ class Vpm {
 		m_app = new Application(root);
 	}
 	
-	/// Creates the deps.txt file, which is used by vibe to execute
-	/// the application.
+	/// Returns a list of flags which the application needs to be compiled
+	/// properly.
 	@property string[] dflags() { return m_app.dflags; }
 	
 	/// Lists all installed modules
