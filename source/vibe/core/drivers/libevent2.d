@@ -165,6 +165,7 @@ class Libevent2Driver : EventDriver {
 
 	~this()
 	{
+		s_alreadyDeinitialized = true;
 		evdns_base_free(m_dnsBase, 1);
 		event_base_free(m_eventLoop);
 	}
@@ -447,7 +448,8 @@ class Libevent2Signal : Signal {
 
 	~this()
 	{
-		event_free(m_event);
+		if( !s_alreadyDeinitialized )
+			event_free(m_event);
 	}
 
 	void emit()
@@ -501,11 +503,15 @@ class Libevent2Timer : Timer {
 	{
 		m_driver = driver;
 		m_callback = callback;
+		m_event = event_new(m_driver.eventLoop, -1, 0, &onTimerTimeout, cast(void*)this);
 	}
 
 	~this()
 	{
-		stop();
+		if( !s_alreadyDeinitialized ){
+			stop();
+			event_free(m_event);
+		}
 	}
 
 	void acquire()
@@ -534,11 +540,12 @@ class Libevent2Timer : Timer {
 	{
 		stop();
 
-		m_event = event_new(m_driver.eventLoop, -1, 0, &onTimerTimeout, cast(void*)this);
 		assert(timeout.total!"seconds"() <= int.max);
 		m_timeout.tv_sec = cast(int)timeout.total!"seconds"();
 		m_timeout.tv_usec = timeout.fracSec().usecs();
+		assert(m_timeout.tv_sec > 0 || m_timeout.tv_usec > 0);
 		event_add(m_event, &m_timeout);
+		assert(event_pending(m_event, EV_TIMEOUT, null));
 		m_pending = true;
 		m_periodic = periodic;
 	}
@@ -547,8 +554,6 @@ class Libevent2Timer : Timer {
 	{
 		if( m_event ){
 			event_del(m_event);
-			event_free(m_event);
-			m_event = null;
 		}
 		m_pending = false;
 	}
@@ -566,6 +571,7 @@ class Libevent2Timer : Timer {
 private {
 	event_base* s_eventLoop; // TLS
 	__gshared DriverCore s_driverCore;
+	shared s_alreadyDeinitialized = false;
 }
 
 package event_base* getThreadLibeventEventLoop()
