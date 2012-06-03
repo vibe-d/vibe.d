@@ -11,6 +11,7 @@ module vibe.vpm.vpm;
 import std.algorithm;
 import std.array;
 import std.conv;
+import std.datetime;
 import std.exception;
 import std.file;
 import std.path;
@@ -129,7 +130,7 @@ private class Application {
 	}
 	
 	/// Actions which can be performed to update the application.
-	Action[] actions(PackageSupplier packageSupplier, int option) const {
+	Action[] actions(PackageSupplier packageSupplier, int option) {
 		if(!m_main) {
 			Action[] a;
 			return a;
@@ -154,15 +155,15 @@ private class Application {
 		}
 		
 		// Gather installed
-		Rebindable!(const Package)[string] installed;
+		Package[string] installed;
 		installed[m_main.name] = m_main;
-		foreach(string pkg, ref const Package p; m_packages) {
+		foreach(string pkg, ref Package p; m_packages) {
 			enforce( pkg !in installed, "The package '"~pkg~"' is installed more than once." );
 			installed[pkg] = p;
 		}
 		
 		// To see, which could be uninstalled
-		Rebindable!(const Package)[string] unused = installed.dup;
+		Package[string] unused = installed.dup;
 		unused.remove( m_main.name );
 	
 		// Check against installed and add install actions
@@ -250,7 +251,7 @@ private class Application {
 		*/
 	}
 	
-	private bool gatherMissingDependencies(PackageSupplier packageSupplier, DependencyGraph graph) const {
+	private bool gatherMissingDependencies(PackageSupplier packageSupplier, DependencyGraph graph) {
 		RequestedDependency[string] missing = graph.missing();
 		RequestedDependency[string] oldMissing;
 		while( missing.length > 0 ) {
@@ -282,21 +283,24 @@ private class Application {
 				Package p = null;
 				
 				// Try an already installed package first
-				try {					
-					auto json = jsonFromFile( m_root ~ Path("modules") ~ Path(pkg) ~ "package.json");
-					auto vers = Version(json["version"].get!string);
-					if( reqDep.dependency.matches( vers ) )
-						p = new Package(json);
-					logTrace("Using already installed package with version: %s", vers);
-				}
-				catch(Throwable e) {
-					// not yet installed, try the supplied PS
-					logTrace("An installed package was not found");
+				if(!needsUpToDateCheck(pkg)) {
+					try {
+						auto json = jsonFromFile( m_root ~ Path("modules") ~ Path(pkg) ~ "package.json");
+						auto vers = Version(json["version"].get!string);
+						if( reqDep.dependency.matches( vers ) )
+							p = new Package(json);
+						logTrace("Using already installed package with version: %s", vers);
+					}
+					catch(Throwable e) {
+						// not yet installed, try the supplied PS
+						logTrace("An installed package was not found");
+					}
 				}
 				if(!p) {
 					try {
 						p = new Package(packageSupplier.packageJson(pkg, reqDep.dependency));
 						logTrace("using package from registry");
+						markUpToDate(pkg);
 					}
 					catch(Throwable e) {
 						logError("Trying to get package metadata failed, exception: %s", e.toString());
@@ -312,6 +316,33 @@ private class Application {
 		
 		return true;
 	}
+	
+	bool needsUpToDateCheck(string packageId) {
+		try {
+			Json vpm = m_main.json["vpm"]["lastUpdate"][packageId];
+			return (Clock.currTime() - SysTime.fromISOExtString(vpm.to!string)) > dur!"days"(1);
+		}
+		catch(Throwable t) {
+			logDebug("Reason: %s", t);
+			return true;
+		}
+	}
+	
+	void markUpToDate(string packageId) {
+		Json getOrCreate(Json json, string object) {
+			auto d = object in json;
+			if(d is null) {
+				Json[string] o;
+				json[object] = o;
+			}
+			return json[object];
+		}
+		
+		auto vpm = getOrCreate(m_main.json, "vpm");
+		auto lastUpdate = getOrCreate(vpm, "lastUpdate");
+		lastUpdate[packageId] = Json( Clock.currTime().toISOExtString() );
+		m_main.writeJson(m_root);
+	}	
 }
 
 /// The default supplier for packages, which is the registry
