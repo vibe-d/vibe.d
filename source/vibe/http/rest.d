@@ -306,9 +306,12 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 
 		static immutable param_names = parameterNames!FT();
 		foreach( i, P; ParameterTypes ){
-			static if( i == 0 && param_names[i] == "id" )
-				deserializeJson(params[i], parseJson(req.params["id"]));
-			else static if( method == "GET" )
+			static if( i == 0 && param_names[i] == "id" ){
+				static if( __traits(compiles, P.fromString("")) )
+					params[i] = P.fromString(req.params["id"]);
+				else
+					params[i] = to!P(req.params["id"]);
+			} else static if( method == "GET" )
 				deserializeJson(params[i], deserializeJson(req.query[param_names[i]]));
 			else
 				deserializeJson(params[i], jparams[param_names[i]]);
