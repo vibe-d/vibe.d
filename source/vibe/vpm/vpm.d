@@ -56,6 +56,7 @@ private struct Action {
 private class Application {
 	private {
 		Path m_root;
+		Json m_json;
 		Package m_main;
 		Package[string] m_packages;
 	}
@@ -88,6 +89,14 @@ private class Application {
 	void reinit() {
 		m_packages.clear();
 		m_main = null;
+		
+		try {
+			m_json = jsonFromFile(m_root ~ "vpm.json");
+		}
+		catch(Throwable t) {
+			Json[string] j;
+			m_json = j;
+		}
 		
 		if(!exists(to!string(m_root~"package.json"))) {
 			logWarn("There was no 'package.json' found for the application in '%s'.", m_root);
@@ -131,6 +140,8 @@ private class Application {
 	
 	/// Actions which can be performed to update the application.
 	Action[] actions(PackageSupplier packageSupplier, int option) {
+		scope(exit) writeVpmJson();
+		
 		if(!m_main) {
 			Action[] a;
 			return a;
@@ -317,19 +328,19 @@ private class Application {
 		return true;
 	}
 	
-	bool needsUpToDateCheck(string packageId) {
+	private bool needsUpToDateCheck(string packageId) {
 		try {
-			Json vpm = m_main.json["vpm"]["lastUpdate"][packageId];
-			return (Clock.currTime() - SysTime.fromISOExtString(vpm.to!string)) > dur!"days"(1);
+			auto time = m_json["vpm"]["lastUpdate"][packageId].to!string;
+			return (Clock.currTime() - SysTime.fromISOExtString(time)) > dur!"days"(1);
 		}
 		catch(Throwable t) {
-			logDebug("Reason: %s", t);
 			return true;
 		}
 	}
 	
-	void markUpToDate(string packageId) {
-		Json getOrCreate(Json json, string object) {
+	private void markUpToDate(string packageId) {
+		logTrace("markUpToDate(%s)", packageId);
+		Json create(Json json, string object) {
 			auto d = object in json;
 			if(d is null) {
 				Json[string] o;
@@ -337,12 +348,21 @@ private class Application {
 			}
 			return json[object];
 		}
+		create(m_json, "vpm");
+		create(m_json["vpm"], "lastUpdate");
+		m_json["vpm"]["lastUpdate"][packageId] = Json( Clock.currTime().toISOExtString() );
 		
-		auto vpm = getOrCreate(m_main.json, "vpm");
-		auto lastUpdate = getOrCreate(vpm, "lastUpdate");
-		lastUpdate[packageId] = Json( Clock.currTime().toISOExtString() );
-		m_main.writeJson(m_root);
-	}	
+		writeVpmJson();
+	}
+	
+	private void writeVpmJson() {
+		logTrace("writeVpmJson");
+		auto dstFile = openFile((m_root~"vpm.json").toString(), FileMode.CreateTrunc);
+		scope(exit) dstFile.close();
+		Appender!string js;
+		toPrettyJson(js, m_json);
+		dstFile.write( js.data );
+	}
 }
 
 /// The default supplier for packages, which is the registry
