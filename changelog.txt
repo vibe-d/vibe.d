@@ -9,6 +9,7 @@ v0.7.4 - 2012-06-03
  - Rewrote the Markdown parser - it now does not emit paragraphs inside list elements if no blank lines are present and handles markdown nested in quotes properly
  - The SMTP client supports STARTTLS and PLAIN/LOGIN authentication
  - The Diet parser now supports generic :filters using registerDietTextFilter() - :css, :javascript and :markdown are already built-in
+ - VPM now can automatically updates dependencies and does not query the registry at every run anymore
  - Added vibe.templ.utils.inject which allows to flexibly stack together request processors and inject variables into the final HTML template (thanks to simendsjo for the kick-off implementation)
  - Removed InputStream.readAll() and readLine() and replaced them by UFCS-able global functions + added readUntil()
  - Added ConnectionPool to generically manage reuse of persistent connections (e.g. for databases)
@@ -16,8 +17,9 @@ v0.7.4 - 2012-06-03
  - On *nix now uses pkg-config to find linker dependencies if possible (dawgfoto)
  - The static HTTP file server now resolves paths with '.' and '..' instead of simply refusing them
  - Implemented handling of HttpServerSettings.maxRequestTime
- - Libevent2TcpConnection now enforces proper use of acquire()/release()
  - Added setLogFile()
+ - The vibe.cmp script now works with paths containing spaces
+ - Libevent2TcpConnection now enforces proper use of acquire()/release()
  - Improved stability in conjunction with TCP connections
  - Upgraded libevent to 2.0.19 on Windows
 
