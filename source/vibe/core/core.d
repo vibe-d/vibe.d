@@ -293,6 +293,13 @@ shared static this()
 	}
 }
 
+shared static ~this()
+{
+	// TODO: use destroy instead
+	delete s_driver;
+	delete s_core;
+}
+
 private void defaultFiberFunc()
 {
 	auto fthis = Fiber.getThis();
