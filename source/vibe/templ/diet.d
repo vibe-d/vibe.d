@@ -2,9 +2,8 @@
 	Implements a compile-time Diet template parser.
 
 	Diet templates are an more or less compatible incarnation of Jade templates but with
-	embedded D source instead of JavaScript. The Jade language specification is found at
-	$(LINK https://github.com/visionmedia/jade) and provides a good overview of all the supported
-	features, as well as some that are not yet implemented for Diet templates.
+	embedded D source instead of JavaScript. The Diet syntax reference is found at
+	$(LINK http://vibed.org/templates).
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
