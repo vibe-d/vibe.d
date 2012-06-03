@@ -16,6 +16,7 @@ import vibe.core.log;
 import vibe.data.json;
 import vibe.inet.rfc5322;
 import vibe.inet.url;
+import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
 

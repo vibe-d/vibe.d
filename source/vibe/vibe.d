@@ -36,6 +36,7 @@ public import vibe.inet.url;
 public import vibe.inet.urltransfer;
 public import vibe.mail.smtp;
 //public import vibe.stream.base64;
+public import vibe.stream.counting;
 public import vibe.stream.memory;
 public import vibe.stream.stream;
 public import vibe.stream.ssl;

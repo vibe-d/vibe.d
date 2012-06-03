@@ -19,6 +19,7 @@ import vibe.http.form;
 import vibe.http.log;
 import vibe.inet.rfc5322;
 import vibe.inet.url;
+import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
 import vibe.templ.diet;

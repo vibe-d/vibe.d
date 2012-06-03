@@ -358,6 +358,7 @@
   </Folder>
   <Folder name="stream">
    <File path="source\vibe\stream\base64.d" />
+   <File path="source\vibe\stream\counting.d" />
    <File path="source\vibe\stream\memory.d" />
    <File path="source\vibe\stream\ssl.d" />
    <File path="source\vibe\stream\stream.d" />
