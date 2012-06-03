@@ -1,4 +1,4 @@
-rem @echo off
+@echo off
 set VIBE_BIN=%~dps0
 set LIBDIR=%VIBE_BIN%..\lib\win-i386
 set BINDIR=%VIBE_BIN%..\lib\bin
