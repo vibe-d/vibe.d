@@ -112,7 +112,7 @@ private class Application {
 
 	@property string[] dflags() const {
 		auto ret = appender!(string[])();
-		ret.put(m_main.dflags());
+		if( m_main ) ret.put(m_main.dflags());
 		ret.put("-Isource");
 		ret.put("-Jviews");
 		foreach( string s, pkg; m_packages ){
