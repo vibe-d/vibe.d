@@ -69,8 +69,10 @@ nothrow {
 		formattedWrite(txt, "[%08X:%08X %s] ", cast(void*)Thread.getThis(), cast(size_t)cast(void*)Fiber.getThis(), pref);
 		formattedWrite(txt, fmt, args);
 
-		if( level >= s_minLevel )
+		if( level >= s_minLevel ){
 			writeln(txt.data());
+			stdout.flush();
+		}
 
 		if( level >= s_logFileLevel && s_logFile ){
 			s_logFile.write(txt.data(), false);
