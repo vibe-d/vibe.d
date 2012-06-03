@@ -681,7 +681,7 @@ Json parseJson(R)(ref R range, int* line = null)
 			ret = obj;
 			break;
 		default: 
-			enforce(false, "Expected valid json token, got '"~range[0 .. 12]~"'.");
+			enforce(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. range.length>12?12:range.length]~"'.");
 	}
 	
 	assert(ret.type != Json.Type.Undefined);
