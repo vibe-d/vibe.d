@@ -59,7 +59,9 @@ interface EventDriver {
 	*/
 	Signal createSignal();
 
-	/** 
+	/** Creates a new timer.
+
+		The timer can be started by calling rearm() with a timeout.
 	*/
 	Timer createTimer(void delegate() callback);
 }

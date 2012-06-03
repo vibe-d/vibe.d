@@ -607,6 +607,7 @@ private extern(C) nothrow
 	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
 	{
 		auto tm = cast(Libevent2Timer)userptr;
+		logTrace("Timer event %s/%s", tm.m_pending, tm.m_periodic);
 		if( !tm.m_pending ) return;
 		try {
 			if( tm.m_periodic ){
@@ -617,9 +618,9 @@ private extern(C) nothrow
 			}
 
 			runTask(tm.m_callback);
-			} catch( Exception e ){
-				logError("Exception while handling timer event: %s", e.msg);
-				debug assert(false);
-			}
+		} catch( Exception e ){
+			logError("Exception while handling timer event: %s", e.msg);
+			debug assert(false);
+		}
 	}
 }
