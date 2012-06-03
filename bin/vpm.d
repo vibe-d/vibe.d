@@ -180,6 +180,6 @@ private string[] getLibs(Path vibedDir)
 	}
 	version(Posix)
 	{
-		return split(environment.get("LIBS", "-L-levent_openssl -L-levent"), ' ');
+		return split(environment.get("LIBS", "-L-levent_openssl -L-levent"));
 	}
 }
