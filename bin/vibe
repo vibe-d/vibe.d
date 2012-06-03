@@ -11,6 +11,7 @@ export LIBS
 
 START_SCRIPT=`mktemp -t vpm.start.XXXXXXXX`
 cp -p "$VIBEPATH"/vpm.d /tmp/vpm.d
+chmod 666 /tmp/vpm.d
 
 rdmd -g -w -property -I"$VIBEPATH"/../source $LIBS -Jviews -Isource /tmp/vpm.d "$VIBEPATH" "$START_SCRIPT" $1 $2 $3 $4 $5 $6 $7 $8 $9
 

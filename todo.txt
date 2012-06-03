@@ -22,7 +22,7 @@ GENERAL
  - UTF files including byte order mark cannot be parsed, currently
  - Benchmark
  - HTTP server comparison to nginx
- 
+ - Mention the API used for Diet templates on the /templates page
 
 DIET TEMPLATES
 ==============
