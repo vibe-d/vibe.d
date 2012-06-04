@@ -10,6 +10,7 @@ TCP
 
  - Find out what makes the libevent event loop continue to run after all connections have been disconnected
  - Add a DoS barrier that closes old connections in case of high connection counts
+ - Remove the general read timeout of 60s and add a property for controlling the timeout
 
 GENERAL
 =======
@@ -23,6 +24,7 @@ GENERAL
  - Benchmark
  - HTTP server comparison to nginx
  - Mention the API used for Diet templates on the /templates page
+ - Implement a soft-shutdown in case of catching an Error (in conjunction with vibedist)
 
 DIET TEMPLATES
 ==============
