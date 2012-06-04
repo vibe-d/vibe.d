@@ -43,6 +43,8 @@ import std.traits;
 	A method named 'index' is mapped to the root URL (e.g. GET /api/). If a method has its first
 	parameter named 'id', it will be mapped to ':id/method' and 'id' is expected to be part of the
 	URL instead of a JSON request.
+	
+	Any interface that you return from a getter will be made available with the base url and its name appended.
 
 	Examples:
 
@@ -56,9 +58,16 @@ import std.traits;
 		  $(LI GET /api/users &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
 		  $(LI GET /api/ &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
 		  $(LI GET /api/:id/name &rarr; ["&lt;user name for id&gt;"])
+		  $(LI GET /api/items/text &rarr; "Hello, World")
+		  $(LI GET /api/items/:id/index &rarr; &lt;item index&gt;)
 		</ul>
 		---
 		import vibe.d;
+		
+		interface IMyItemsApi {
+			string getText();
+			int getIndex(int id);
+		}
 
 		interface IMyApi {
 			string getStatus();
@@ -70,11 +79,21 @@ import std.traits;
 			@property string[] users();
 			string[] index();
 			string getName(int id);
+			
+			IMyItemsApi items();
+		}
+		
+		class MyItemsApiImpl : IMyItemsApi {
+			string getText() { return "Hello, World"; }
+			int getIndex(int id) { return id; }
 		}
 
 		class MyApiImpl : IMyApi {
 			private string m_greeting;
 			private string[] m_users;
+			private MyItemsApiImpl m_items;
+			
+			this() { m_items = new MyItemsApiImpl; }
 
 			string getStatus() { return "OK"; }
 
@@ -85,6 +104,8 @@ import std.traits;
 			@property string[] users() { return m_users; }
 			string[] index() { return m_users; }
 			string getName(int id) { return m_users[id]; }
+			
+			MyItemsApiImpl getItems() { return m_items; }
 		}
 
 		static this()
@@ -110,16 +131,23 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 
 	foreach( method; __traits(allMembers, T) ){
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
+			alias ReturnType!overload RetType;
 			auto param_names = parameterNames!(typeof(&overload))();
-			auto handler = jsonMethodHandler!(T, method, typeof(&overload))(instance);
 			string http_verb, rest_name;
 			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
 			string rest_name_adj = adjustMethodStyle(rest_name, style);
-			string id_supplement;
-			size_t skip = 0;
-			if( param_names.length && param_names[0] == "id" )
-				id_supplement = ":id" ~ (rest_name.length ? "/" : "");
-			router.addRoute(http_verb, url_prefix ~ id_supplement ~ rest_name_adj, handler);
+			static if( is(RetType == interface) ){
+				static assert(ParameterTypeTuple!overload.length == 0, "Interfaces may only be returned from parameter-less functions!");
+				registerRestInterface!RetType(router, __traits(getMember, instance, method)(), url_prefix ~ rest_name_adj ~ "/");
+			} else {
+				auto handler = jsonMethodHandler!(T, method, typeof(&overload))(instance);
+				string id_supplement;
+				size_t skip = 0;
+				if( param_names.length && param_names[0] == "id" )
+					id_supplement = ":id" ~ (rest_name.length ? "/" : "");
+				router.addRoute(http_verb, url_prefix ~ id_supplement ~ rest_name_adj, handler);
+				logDebug("REST route: %s %s", http_verb, url_prefix ~ id_supplement ~ rest_name_adj);
+			}
 		}
 	}
 }
@@ -202,16 +230,21 @@ class RestInterfaceClient(I) : I
 	{
 		m_baseUrl = Url.parse(base_url);
 		m_methodStyle = style;
+		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
 
 	this(Url base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = base_url;
 		m_methodStyle = style;
+		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
 
+	//pragma(msg, generateRestInterfaceSubInterfaces!(I)());
+	mixin(generateRestInterfaceSubInterfaces!(I));
+
 	//pragma(msg, generateRestInterfaceMethods!(I)());
-	mixin(generateRestInterfaceMethods!(I)());
+	mixin(generateRestInterfaceMethods!(I));
 
 	protected Json request(string verb, string name, Json params)
 	const {
@@ -347,6 +380,56 @@ private HttpServerRequestDelegate formMethodHandler(T)(T func)
 }
 
 /// private
+private @property string generateRestInterfaceSubInterfaces(I)()
+{
+	string ret;
+	string[] tps;
+	foreach( method; __traits(allMembers, I) ){
+		foreach( overload; MemberFunctionsTuple!(I, method) ){
+			alias typeof(&overload) FT;
+			alias ParameterTypeTuple!FT PTypes;
+			alias ReturnType!FT RT;
+			static if( is(RT == interface) ){
+				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
+				if( tps.countUntil(RT.stringof) < 0 ){
+					tps ~= RT.stringof;
+					string implname = RT.stringof~"Impl";
+					ret ~= "alias RestInterfaceClient!("~getReturnTypeString!(overload)~") "
+							~implname~";\n";
+					ret ~= "private "~implname~" m_"~implname~";\n";
+				}
+			}
+		}
+	}
+	return ret;
+}
+
+/// private
+private @property string generateRestInterfaceSubInterfaceInstances(I)()
+{
+	string ret;
+	string[] tps;
+	foreach( method; __traits(allMembers, I) ){
+		foreach( overload; MemberFunctionsTuple!(I, method) ){
+			alias typeof(&overload) FT;
+			alias ParameterTypeTuple!FT PTypes;
+			alias ReturnType!FT RT;
+			static if( is(RT == interface) ){
+				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
+				if( tps.countUntil(RT.stringof) < 0 ){
+					tps ~= RT.stringof;
+					string implname = RT.stringof~"Impl";
+					string http_verb, rest_name;
+					getRestMethodName!FT(method, http_verb, rest_name);
+					ret ~= "m_"~implname~" = new "~implname~"(m_baseUrl~PathEntry(\""~rest_name~"\"), m_methodStyle);\n";
+				}
+			}
+		}
+	}
+	return ret;
+}
+
+/// private
 private @property string generateRestInterfaceMethods(I)()
 {
 	string ret;
@@ -373,24 +456,28 @@ private @property string generateRestInterfaceMethods(I)()
 			//if( is(FT == immutable) ) ret ~= " immutable";
 			if( attribs & FunctionAttribute.property ) ret ~= " @property";
 
-			ret ~= " {\n";
-			ret ~= "\tJson jparams__ = Json.EmptyObject;\n";
-			string path_supplement;
-			size_t skip = 0;
-			if( param_names.length > 0 && param_names[0] == "id" ){
-				path_supplement = "to!string(id)~\"/\"~";
-				skip = 1;
+			static if( is(RT == interface) ){
+				ret ~= "{ return m_"~RT.stringof~"Impl; }\n";
+			} else {
+				ret ~= " {\n";
+				ret ~= "\tJson jparams__ = Json.EmptyObject;\n";
+				string path_supplement;
+				size_t skip = 0;
+				if( param_names.length > 0 && param_names[0] == "id" ){
+					path_supplement = "to!string(id)~\"/\"~";
+					skip = 1;
+				}
+				foreach( i, PT; PTypes )
+					if( i >= skip )
+						ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
+				ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
+				static if( !is(RT == void) ){
+					ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
+					ret ~= "\tdeserializeJson(ret__, jret__);\n";
+					ret ~= "\treturn ret__;\n";
+				}
+				ret ~= "}\n";
 			}
-			foreach( i, PT; PTypes )
-				if( i >= skip )
-					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
-			ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
-			static if( !is(RT == void) ){
-				ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
-				ret ~= "\tdeserializeJson(ret__, jret__);\n";
-				ret ~= "\treturn ret__;\n";
-			}
-			ret ~= "}\n";
 		}
 	}
 
