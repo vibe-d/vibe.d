@@ -7,6 +7,7 @@
 */
 module vibe.templ.utils;
 
+
 /**
 	Allows to pass additional variables to a function that renders a templated page.
 
@@ -14,6 +15,9 @@ module vibe.templ.utils;
 	be available to your views, such as authentication. This function allows to define variables
 	that should be usable from templates using so called "injectors". Each injector is a template
 	function that can add its own parameters.
+
+	If you should need explicit access to one of the parameters of an upstream injector, you can use
+	the Params!() template.
 
 	NOTE: this function requires at least DMD 2.060, as it suffers from DMD BUG 2962.
 
@@ -24,24 +28,23 @@ module vibe.templ.utils;
 		'authInjector' and 'somethingInjector' can process the request and decide what to do.
 
 		---
-		void authInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
+		void authInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
 			Next!(Vars, userinfo)(req, res);
 		}
 
-		void somethingInjector(alias Next, Vars...)(HttpServerRequest req,
-		HttpServerResponse res)
+		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
 		{
 			string something_else;
 			Next!(Vars, something_else)(req, res);
 		}
 
-		void page(VARS...)(HttpServerRequest req, HttpServerResponse res)
+		void page(Aliases...)(HttpServerRequest req, HttpServerResponse res)
 		{
 			string message = "Welcome to the example page!"
-			res.render!("home.dt", VARS, message);
+			res.render!("home.dt", Aliases, message);
 		}
 
 		static this()
@@ -56,8 +59,80 @@ module vibe.templ.utils;
 	return &injectReverse!(Injectors, reqInjector, Page);
 }
 
+/**
+	Makes the variable aliases passed to one of the injectors of the inject!() template accessible
+	to the local function.
+
+	Examples:
+		---
+		void authInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		{
+			string userinfo;
+			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
+			Next!(Vars, userinfo)(req, res);
+		}
+
+		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		{
+			// access the userinfo variable:
+			if( Params!Vars.userinfo.length == 0 ) return;
+
+			// it's also possible to declare a pseudo-
+			// variable like this to access the parameters:
+			Params!Vars params;
+			if( params.userinfo == "peter" )
+				throw Exception("Not allowed!")
+
+			Next!(Vars)(req, res);
+		}
+		---
+*/
+struct Params(Aliases)
+{
+	mixin(localAliases(Aliases));
+}
+
+/// When mixed in, makes all ALIASES available in the local scope
+template localAliases(int i, ALIASES...)
+{
+	static if( i < ALIASES.length ){
+		enum string localAliases = "alias ALIASES["~cttostring(i)~"] "~__traits(identifier, ALIASES[i])~";\n"
+			~localAliases!(i+1, ALIASES);
+	} else {
+		enum string localAliases = "";
+	}
+}
+
+/// When mixed in, makes all ALIASES available in the local scope. Note that there must be a
+/// Variant[] args__ available that matches TYPES_AND_NAMES
+template localAliasesCompat(int i, TYPES_AND_NAMES...)
+{
+	static if( i+1 < TYPES_AND_NAMES.length ){
+		enum string localAliasesCompat = "auto "~TYPES_AND_NAMES[i+1]~" = *args__["~cttostring(i/2)~"].peek!(TYPES_AND_NAMES["~cttostring(i)~"])();\n"
+			~localAliasesCompat!(i+2, TYPES_AND_NAMES);
+	} else {
+		enum string localAliasesCompat = "";
+	}
+}
+
 /// private
-template injectReverse(Injectors...)
+package string cttostring(T)(T x)
+{
+	static if( is(T == string) ) return x;
+	else static if( is(T : long) || is(T : ulong) ){
+		string s;
+		do {
+			s = cast(char)('0' + (x%10)) ~ s;
+			x /= 10;
+		} while (x>0);
+		return s;
+	} else {
+		static assert(false, "Invalid type for cttostring: "~T.stringof);
+	}
+}
+
+/// private
+private template injectReverse(Injectors...)
 {
 	alias Injectors[0] First;
 	alias Injectors[1 .. $] Rest;
@@ -65,7 +140,7 @@ template injectReverse(Injectors...)
 }
 
 /// private
-void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
+private void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
 {
 	Next!(Vars, req)(req, res);
 }

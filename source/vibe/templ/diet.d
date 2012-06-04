@@ -14,6 +14,7 @@ module vibe.templ.diet;
 public import vibe.stream.stream;
 
 import vibe.core.file;
+import vibe.templ.utils;
 import vibe.textfilter.html;
 import vibe.textfilter.markdown;
 import vibe.utils.string;
@@ -125,26 +126,6 @@ private @property string dietParser(string template_file)()
 	parser.indentStyle = indent_style;
 	parser.blocks = blocks;
 	return parser.buildWriter();
-}
-
-private template localAliases(int i, ALIASES...)
-{
-	static if( i < ALIASES.length ){
-		enum string localAliases = "alias ALIASES["~cttostring(i)~"] "~__traits(identifier, ALIASES[i])~";\n"
-			~localAliases!(i+1, ALIASES);
-	} else {
-		enum string localAliases = "";
-	}
-}
-
-private template localAliasesCompat(int i, TYPES_AND_NAMES...)
-{
-	static if( i+1 < TYPES_AND_NAMES.length ){
-		enum string localAliasesCompat = "auto "~TYPES_AND_NAMES[i+1]~" = *args__["~cttostring(i/2)~"].peek!(TYPES_AND_NAMES["~cttostring(i)~"])();\n"
-			~localAliasesCompat!(i+2, TYPES_AND_NAMES);
-	} else {
-		enum string localAliasesCompat = "";
-	}
 }
 
 private string extractExtensionName(in Line[] text)
@@ -894,21 +875,6 @@ private string ctstrip(string s)
 	while( strt < s.length && (s[strt] == ' ' || s[strt] == '\t') ) strt++;
 	while( end > 0 && (s[end-1] == ' ' || s[end-1] == '\t') ) end--;
 	return strt < end ? s[strt .. end] : null;
-}
-
-private string cttostring(T)(T x)
-{
-	static if( is(T == string) ) return x;
-	else static if( is(T : long) || is(T : ulong) ){
-		string s;
-		do {
-			s = cast(char)('0' + (x%10)) ~ s;
-			x /= 10;
-		} while (x>0);
-		return s;
-	} else {
-		static assert(false, "Invalid type for cttostring: "~T.stringof);
-	}
 }
 
 private Line[] removeEmptyLines(string text, string file)
