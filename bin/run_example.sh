@@ -7,5 +7,5 @@ if [ "$1" = "" ]; then
 else
 	cd ../examples/$1
 	vibe
-	cd ../bin
+	cd ../../bin
 fi
