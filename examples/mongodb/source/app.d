@@ -1,6 +1,5 @@
-module examples.mongodb;
+import vibe.vibe;
 
-import vibe.d;
 import std.array;
 
 void main()

@@ -1,4 +1,4 @@
-import vibe.d;
+import vibe.vibe;
 
 import vibe.db.redis.redis;
 

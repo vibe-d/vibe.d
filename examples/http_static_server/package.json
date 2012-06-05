@@ -1,7 +1,7 @@
-{
+﻿{
     "name": "http-static-server-example",
 	"description": "Simple HTTP server that serves static files.",
-    "authors": [ "S�nke Ludwig" ],
+    "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",
     "dependencies": {}
 }

@@ -1,7 +1,7 @@
-{
+﻿{
     "name": "diet-example",
 	"description": "Displays a page using a Diet template.",
-    "authors": [ "S�nke Ludwig" ],
+    "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",
     "dependencies": {}
 }

@@ -1,7 +1,7 @@
-{
+﻿{
     "name": "json-example",
 	"description": "Implementation of a minimal echo server.",
-    "authors": [ "S�nke Ludwig" ],
+    "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",
     "dependencies": {}
 }

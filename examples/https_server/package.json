@@ -1,7 +1,7 @@
-{
+﻿{
     "name": "https-server-example",
 	"description": "Uses the HTTPS protocol for serving requests.",
-    "authors": [ "S�nke Ludwig" ],
+    "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",
     "dependencies": {}
 }
