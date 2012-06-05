@@ -44,6 +44,7 @@ Where OPT is one of
 	Advanced options:
 		-annotate: without actually updating, check for the status of the application
 		-verbose: prints out lots of debug information
+		-vverbose: even more debug output
 
 APP_OP will be passed on to the application to be run.");
 }
@@ -82,8 +83,8 @@ int main(string[] args)
 		else {
 			if(canFind(vpmArgs, "-verbose"))
 				setLogLevel(LogLevel.Debug);
-			else
-				setLogLevel(LogLevel.Info);
+			if(canFind(vpmArgs, "-vverbose"))
+				setLogLevel(LogLevel.Trace);
 
 			auto appPath = getcwd();
 			logInfo("Updating application in '%s'", appPath);
@@ -145,6 +146,7 @@ private size_t lastVpmArg(string[] args)
 		"-annotate",
 		"-keepDepsTxt",
 		"-verbose"
+		"-vverbose"
 	];
 	foreach(k,s; args) 
 		if( false == reduce!((bool a, string b) => a || s.startsWith(b))(false, vpmArgs) )

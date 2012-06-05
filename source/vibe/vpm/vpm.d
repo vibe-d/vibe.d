@@ -314,7 +314,7 @@ private class Application {
 						markUpToDate(pkg);
 					}
 					catch(Throwable e) {
-						logError("Trying to get package metadata failed, exception: %s", e.toString());
+						logError("Geting package metadata for %s failed, exception: %s", pkg, e.toString());
 					}
 				}
 				
