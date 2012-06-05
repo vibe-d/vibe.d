@@ -12,6 +12,7 @@ import vibe.utils.string;
 import std.algorithm;
 import std.exception;
 import std.conv;
+import std.utf;
 //import std.net.isemail; // does not link
 
 
@@ -96,7 +97,7 @@ string validatePassword(string str, string str_confirm, size_t min_length = 8, s
 
 string validateString(string str, size_t min_length = 0, size_t max_length = 0, string entity_name = "String")
 {
-	validateUTF(str);
+	std.utf.validate(str);
 	enforce(str.length >= min_length,
 		entity_name~" must be at least "~to!string(min_length)~" characters long.");
 	enforce(!max_length || str.length <= max_length,
