@@ -5,7 +5,7 @@ if [ "$1" = "" ]; then
 	echo "Possible examples:"
 	for i in ../examples/*; do echo $i | sed "s/^[a-zA-Z._\/]*\//  /g"; done
 else
-	pushd ../examples/$1
+	cd ../examples/$1
 	vibe
-	popd
+	cd ../bin
 fi
