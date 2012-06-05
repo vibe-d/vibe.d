@@ -40,6 +40,17 @@ string sanitizeUTF8(in ubyte[] str)
 }
 
 /**
+	Strips the byte order mark of an UTF8 encoded string.
+	This is useful when the string is coming from a file.
+*/
+string stripUTF8Bom(string str)
+{
+	if( str.length >= 3 && str[0 .. 3] == [0xEF, 0xBB, 0xBF] )
+		return str[3 ..$];
+	return str;
+}
+
+/**
 	Joins an array of strings using 'linesep' as the line separator (\n by default).
 */
 string joinLines(string[] strs, string linesep = "\n")
@@ -114,11 +125,4 @@ int icmp2(string a, string b)
 	if( i < a.length ) return 1;
 	else if( j < b.length ) return -1;
 	return 0;
-}
-
-string stripBom(string str)
-{
-	if( str.length >= 3 && str[0 .. 3] == [0xEF, 0xBB, 0xBF] )
-		return str[3 ..$];
-	return str;
 }
