@@ -80,7 +80,7 @@ import std.traits;
 			string[] index();
 			string getName(int id);
 			
-			IMyItemsApi items();
+			@property IMyItemsApi items();
 		}
 		
 		class MyItemsApiImpl : IMyItemsApi {
@@ -105,7 +105,7 @@ import std.traits;
 			string[] index() { return m_users; }
 			string getName(int id) { return m_users[id]; }
 			
-			MyItemsApiImpl getItems() { return m_items; }
+			@property MyItemsApiImpl items() { return m_items; }
 		}
 
 		static this()
@@ -487,18 +487,21 @@ private @property string generateRestInterfaceMethods(I)()
 /// private
 private @property string getReturnTypeString(alias F)()
 {
-	/*if( __traits(compiles, ReturnType!(F).stringof~" x;") )
-	   return ReturnType!(F).stringof;
-	else*/ return "ReturnType!(typeof(&BaseInterface."~__traits(identifier, F)~"))";
+	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
+	alias ReturnType!F T;
+	static if( is(T == void) || __traits(compiles, testTempl!T) )
+	   return T.stringof;
+	else return "ReturnType!(typeof(&BaseInterface."~__traits(identifier, F)~"))";
 }
 
 /// private
 private @property string getParameterTypeString(alias F, int i)()
 {
+	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
 	alias ParameterTypeTuple!(F)[i] T;
-	/*if( __traits(compiles, T.stringof~" x;") )
+	static if( is(T == void) || __traits(compiles, testTempl!T) )
 		return T.stringof;
-	else*/ return "ParameterTypeTuple!(typeof(&BaseInterface."~__traits(identifier, F)~"))["~to!string(i)~"]";
+	else return "ParameterTypeTuple!(typeof(&BaseInterface."~__traits(identifier, F)~"))["~to!string(i)~"]";
 }
 
 /// private
