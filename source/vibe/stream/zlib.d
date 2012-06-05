@@ -168,9 +168,9 @@ class ZlibInputStream : InputStream {
 			m_buffer = cast(ubyte[])m_uncomp.uncompress(chunk[0 .. sz]);
 		}
 
-		//if( m_buffer.length == 0 ){
+		if( m_buffer.length == 0 ){
 			m_buffer = cast(ubyte[])m_uncomp.flush();
 			m_finished = true;
-		//}
+		}
 	}
 }
