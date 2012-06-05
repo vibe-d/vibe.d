@@ -356,12 +356,19 @@ private class Application {
 	}
 	
 	private void writeVpmJson() {
-		logTrace("writeVpmJson");
-		auto dstFile = openFile((m_root~"vpm.json").toString(), FileMode.CreateTrunc);
-		scope(exit) dstFile.close();
-		Appender!string js;
-		toPrettyJson(js, m_json);
-		dstFile.write( js.data );
+		// don't bother to write an empty file
+		if( m_json.length == 0 ) return;
+
+		try {
+			logTrace("writeVpmJson");
+			auto dstFile = openFile((m_root~"vpm.json").toString(), FileMode.CreateTrunc);
+			scope(exit) dstFile.close();
+			Appender!string js;
+			toPrettyJson(js, m_json);
+			dstFile.write( js.data );
+		} catch( Exception e ){
+			logWarn("Could not write vpm.json.");
+		}
 	}
 }
 

@@ -10,7 +10,7 @@ if NOT EXIST %EXEDIR% (
 	mkdir %EXEDIR%
 )
 copy "%VIBE_BIN%*.dll" %EXEDIR% > nul 2>&1
-copy "%VIBE_BIN%*.dll" . > nul 2>&1
+if "%1" == "build" copy "%VIBE_BIN%*.dll" . > nul 2>&1
 copy "%VIBE_BIN%vpm.d" %EXEDIR% > nul 2>&1
 
 rem Run, execute, do everything.. but when you do it, do it with the vibe!

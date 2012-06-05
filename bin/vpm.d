@@ -102,9 +102,11 @@ int main(string[] args)
 			// Create start script, which will be used by the calling bash/cmd script.			
 			// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
 			// or with "/" instead of "\"
-			string[] flags = ["--force", "-of"~binName];
-			if( canFind(vpmArgs, "build") )
+			string[] flags = ["--force"];
+			if( canFind(vpmArgs, "build") ){
 				flags ~= "--build-only";
+				flags ~= "-of"~binName;
+			}
 			flags ~= "-g";
 			flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
 			flags ~= "-Isource";
