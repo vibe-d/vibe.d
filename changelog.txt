@@ -7,6 +7,8 @@ v0.7.5 - 2012-06-05
 
  - Restructured the examples - each example is now a regular vibe.d application (also fixes compilation using run_example)
  - The REST interface generator now supports sub interfaces which are mapped to sub paths in the URL
+ - Added InjectedParams!() to access parameters injected using inject!()
+ - The vibe script and VPM now do not write to the application directory anymore if not necessary
  - Implement more robust type handling in the REST client generator
 
 
