@@ -10,13 +10,23 @@ interface IMyApi {
 	@property string[] users();
 	string[] index();
 	string getName(int id);
+	
+	@property IMyItemsApi items();
+}
+
+interface IMyItemsApi {
+	string getText();
+	int getIndex(int id);
 }
 
 class MyApiImpl : IMyApi {
 	private {
 		string m_greeting;
 		string[] m_users;
+		MyItemsApiImpl m_items;
 	}
+	
+	this() { m_items = new MyItemsApiImpl; }
 
 	string getStatus() { return "OK"; }
 
@@ -27,7 +37,15 @@ class MyApiImpl : IMyApi {
 	@property string[] users() { return m_users; }
 	string[] index() { return m_users; }
 	string getName(int id) { return m_users[id]; }
+
+	@property MyItemsApiImpl items() { return m_items; }
 }
+
+class MyItemsApiImpl : IMyItemsApi {
+	string getText() { return "Hello, World"; }
+	int getIndex(int id) { return id; }
+}
+
 
 static this()
 {
@@ -47,5 +65,6 @@ static this()
 			api.addNewUser("Igor");
 			logInfo("Users: %s", api.users);
 			logInfo("User index: %s", api.index());
+			logInfo("Items text: %s", api.items.getText());
 		});
 }

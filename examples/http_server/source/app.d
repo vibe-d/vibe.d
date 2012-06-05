@@ -8,7 +8,7 @@ void handleRequest(HttpServerRequest req, HttpServerResponse res)
 static this()
 {
 	auto settings = new HttpServerSettings;
-	settings.port = 80;
+	settings.port = 8080;
 	
 	listenHttp(settings, &handleRequest);
 }

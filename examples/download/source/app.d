@@ -2,12 +2,8 @@ import vibe.vibe;
 
 void main()
 {
-	auto res = download("http://golem.de/");
+	auto res = download("http://google.com/");
 
 
-	logInfo("Response:");
-	while( !res.empty ){
-		auto ln = res.readLine();
-		logInfo("%s", cast(string)ln);
-	}
+	logInfo("Response: %s", cast(string)res.readAll());
 }

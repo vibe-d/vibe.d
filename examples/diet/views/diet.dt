@@ -3,7 +3,7 @@ html(lang="en")
 	head
 		title= "pageTitle" ~ "X<Y> "
 	body
-		h1#caption Jade test page #{2+2}X
+		h1#caption Diet test page #{2+2}X
 		p.first
 			b First Paragraph!
 		p(style='color: red;', class="HELLO") This

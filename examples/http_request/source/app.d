@@ -13,5 +13,6 @@ void main()
 	foreach( k, v; res.headers )
 		logInfo("Header: %s: %s", k, v);
 
+	(new NullOutputStream).write(res.bodyReader);
 	client.disconnect();
 }

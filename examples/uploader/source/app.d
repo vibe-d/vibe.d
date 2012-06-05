@@ -11,8 +11,6 @@ void uploadFile(HttpServerRequest req, HttpServerResponse res)
 
 static this()
 {
-	setLogLevel(LogLevel.Debug);
-
 	auto router = new UrlRouter;
 	router.get("/", staticTemplate!"upload_form.dt");
 	router.post("/upload", &uploadFile);
