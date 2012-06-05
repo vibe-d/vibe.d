@@ -1,0 +1,7 @@
+{
+    "name": "daytime-example",
+	"description": "Requests the current time using the daytime protocol.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

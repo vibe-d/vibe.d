@@ -1,0 +1,7 @@
+{
+    "name": "uploader-example",
+	"description": "Simple form based file upload example.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

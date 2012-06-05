@@ -1,0 +1,7 @@
+{
+    "name": "download-example",
+	"description": "Requests a page using the download() function.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

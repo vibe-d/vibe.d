@@ -1,0 +1,7 @@
+{
+    "name": "http-server-example",
+	"description": "A minimal HTTP server.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

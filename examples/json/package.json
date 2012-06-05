@@ -1,0 +1,7 @@
+{
+    "name": "json-example",
+	"description": "Performs some simple operations using the Json type.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

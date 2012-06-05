@@ -1,0 +1,7 @@
+{
+    "name": "http-reverse-proxy-example",
+	"description": "Sets up a simple reverse proxy to a foreign server.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

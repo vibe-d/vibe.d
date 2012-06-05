@@ -1,0 +1,7 @@
+{
+    "name": "http-request-example",
+	"description": "Performs a custom HTTP request.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

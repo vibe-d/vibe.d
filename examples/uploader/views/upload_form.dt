@@ -1,0 +1,11 @@
+!!! 5
+html(lang="en")
+	head
+		title Uploader
+	body
+		h1 Uploader
+		form(method="POST", action="/upload", enctype="multipart/form-data")
+			p File:
+				input(type="file", name="file", size="50", maxlength="100000")
+			input(type="submit", value="Upload!")
+			
