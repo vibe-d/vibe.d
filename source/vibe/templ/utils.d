@@ -17,7 +17,7 @@ module vibe.templ.utils;
 	function that can add its own parameters.
 
 	If you should need explicit access to one of the parameters of an upstream injector, you can use
-	the Params!() template.
+	the InjectedParams!() template.
 
 	NOTE: this function requires at least DMD 2.060, as it suffers from DMD BUG 2962.
 
@@ -75,11 +75,11 @@ module vibe.templ.utils;
 		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
 		{
 			// access the userinfo variable:
-			if( Params!Vars.userinfo.length == 0 ) return;
+			if( InjectedParams!Aliases.userinfo.length == 0 ) return;
 
 			// it's also possible to declare a pseudo-
 			// variable like this to access the parameters:
-			Params!Vars params;
+			InjectedParams!Aliases params;
 			if( params.userinfo == "peter" )
 				throw Exception("Not allowed!")
 
@@ -87,7 +87,7 @@ module vibe.templ.utils;
 		}
 		---
 */
-struct Params(Aliases)
+struct InjectedParams(Aliases)
 {
 	mixin(localAliases(Aliases));
 }
