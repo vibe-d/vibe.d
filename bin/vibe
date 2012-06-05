@@ -1,4 +1,8 @@
 #!/bin/sh
+
+#delete old vpm.d if another run left it in /tmp
+rm /tmp/vpm.d
+
 set -e
 VIBEBINARY=$(readlink "$0")
 if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY="$0"; fi
@@ -10,14 +14,16 @@ LIBS=$(echo "$LIBS" | sed 's/^-L/-L-L/; s/ -L/ -L-L/g; s/^-l/-L-l/; s/ -l/ -L-l/
 export LIBS
 
 START_SCRIPT=`mktemp -t vpm.start.XXXXXXXX`
+
+# copy vpm.d to /tmp and make it deletable by anyone
 cp -p "$VIBEPATH"/vpm.d /tmp/vpm.d
 chmod 666 /tmp/vpm.d
 
+# run VPM and delete the vpm.d file again, VPM will output the compile/run script
 rdmd -g -w -property -I"$VIBEPATH"/../source $LIBS -Jviews -Isource /tmp/vpm.d "$VIBEPATH" "$START_SCRIPT" $1 $2 $3 $4 $5 $6 $7 $8 $9
+rm /tmp/vpm.d
 
-if [ $? = 0 ]
-then
-	chmod +x "$START_SCRIPT"
-	"$START_SCRIPT"
-	rm "$START_SCRIPT"
-fi
+# compile/run the application
+chmod +x "$START_SCRIPT"
+"$START_SCRIPT"
+rm "$START_SCRIPT"
