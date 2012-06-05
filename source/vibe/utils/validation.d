@@ -93,3 +93,13 @@ string validatePassword(string str, string str_confirm, size_t min_length = 8, s
 	enforce(str == str_confirm, "The password and the confirmation differ.");
 	return str;
 }
+
+string validateString(string str, size_t min_length = 0, size_t max_length = 0, string entity_name = "String")
+{
+	validateUTF(str);
+	enforce(str.length >= min_length,
+		entity_name~" must be at least "~to!string(min_length)~" characters long.");
+	enforce(!max_length || str.length <= max_length,
+		entity_name~" must not be longer than "~to!string(min_length)~" characters.");
+	return str;
+}
