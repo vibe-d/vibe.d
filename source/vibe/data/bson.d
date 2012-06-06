@@ -493,7 +493,7 @@ struct BsonObjectID {
 		m_bytes[] = bytes;
 	}
 
-	static BsonObjectID fromHexString(string str)
+	static BsonObjectID fromString(string str)
 	{
 		assert(str.length == 24, "BSON Object ID string s must be 24 characters.");
 		BsonObjectID ret = void;
@@ -514,6 +514,8 @@ struct BsonObjectID {
 		}
 		return ret;
 	}
+
+	alias fromString fromHexString;
 
 	static BsonObjectID generate()
 	{
