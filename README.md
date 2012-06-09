@@ -81,7 +81,7 @@ have to specify the path everytime:
     sudo ln -s /path/to/vibe/bin/vibe /usr/bin/vibe
 
 
-Installation on Linux (general)
+Installation on Linux (generic)
 -------------------------------
 
 You need to have the following dependencies installed:
@@ -101,4 +101,4 @@ or
 
     su -c ln -s /path/to/vibe/bin/vibe /usr/bin/vibe
 
-(*) Note that some current linux distributions such as Debian squeeze or CentOS 6 may only ship libevent 1.4, in this case you will have to manually compile the latest 2.0.x version by hand.
+(*) Note that some current linux distributions such as Debian squeeze or CentOS 6 may only ship libevent 1.4, in this case you will have to manually compile the latest 2.0.x versio.
