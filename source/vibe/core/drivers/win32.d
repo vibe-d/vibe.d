@@ -13,13 +13,18 @@ import vibe.inet.url;
 
 import core.sys.windows.windows;
 import core.time;
+import core.thread;
 import std.c.windows.windows;
 import std.c.windows.winsock;
 import std.exception;
 
 private extern(System)
 {
-	DWORD MsgWaitForMultipleObjectsW(DWORD nCount, const(HANDLE) *pHandles, BOOL bWaitAll, DWORD dwMilliseconds, DWORD dwWakeMask);
+	DWORD MsgWaitForMultipleObjects(DWORD nCount, const(HANDLE) *pHandles, BOOL bWaitAll, DWORD dwMilliseconds, DWORD dwWakeMask);
+	HANDLE CreateFileW(LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+							DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
+					 void function(DWORD, DWORD, OVERLAPPED) lpCompletionRoutine);
 	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
 	LONG DispatchMessageW(MSG *lpMsg);
 	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
@@ -111,7 +116,7 @@ class Win32EventDriver : EventDriver {
 	{
 		m_exit = false;
 		while( !m_exit ){
-			MsgWaitForMultipleObjectsW(0, null, INFINITE, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
+			waitForEvents(INFINITE);
 			processEvents();
 		}
 		return 0;
@@ -119,6 +124,7 @@ class Win32EventDriver : EventDriver {
 
 	int processEvents()
 	{
+		waitForEvents(0);
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
 			if( msg.message == WM_QUIT ) return 0;
@@ -127,6 +133,11 @@ class Win32EventDriver : EventDriver {
 		}
 		//m_core.notifyIdle();
 		return 0;
+	}
+
+	private void waitForEvents(uint timeout)
+	{
+		MsgWaitForMultipleObjects(0, null, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 	}
 
 	void exitEventLoop()
@@ -142,7 +153,7 @@ class Win32EventDriver : EventDriver {
 
 	Win32FileStream openFile(string path, FileMode mode)
 	{
-		return new Win32FileStream(Path(path), mode);
+		return new Win32FileStream(m_core, Path(path), mode);
 	}
 
 	Win32TcpConnection connectTcp(string host, ushort port)
@@ -270,14 +281,38 @@ class Win32Timer : Timer {
 
 class Win32FileStream : FileStream {
 
-	this(Path path, FileMode mode){}
+	private{
+		Path m_path;
+		HANDLE m_handle;
+		FileMode m_mode;
+		DriverCore m_driver;
+		Fiber m_fiber;
+	}
+
+	this(DriverCore driver, Path path, FileMode mode)
+	{
+		m_path = path;
+		m_mode = mode;
+		m_driver = driver;
+		m_fiber = Fiber.getThis();
+		m_handle = CreateFileW(
+					cast(immutable(char)*)(m_path.toNativeString()),
+					m_mode == (m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append) ? GENERIC_READ : GENERIC_WRITE,
+					m_mode == FileMode.Read ? FILE_SHARE_READ : 0,
+					null,
+					m_mode == FileMode.CreateTrunc ? TRUNCATE_EXISTING : OPEN_ALWAYS,
+					FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+					null);
+	}
 
 	void release()
 	{
+		this.m_fiber = null;
 	}
 
 	void acquire()
 	{
+		this.m_fiber.getThis();
 	}
 
 	bool isOwner()
@@ -291,7 +326,7 @@ class Win32FileStream : FileStream {
 
 	@property Path path()
 	const{
-		assert(false);
+		return m_path;
 	}
 
 	@property ulong size()
@@ -301,12 +336,12 @@ class Win32FileStream : FileStream {
 
 	@property bool readable()
 	const {
-		assert(false);
+		return m_mode == FileMode.Read;
 	}
 
 	@property bool writable()
 	const {
-		assert(false);
+		return m_mode == FileMode.Append || m_mode == FileMode.CreateTrunc;
 	}
 
 	void seek(ulong offset)
@@ -315,7 +350,7 @@ class Win32FileStream : FileStream {
 
 	@property bool empty()
 	{
-		assert(false);
+		return false;
 	}
 
 	@property ulong leastSize(){
@@ -335,14 +370,26 @@ class Win32FileStream : FileStream {
 	}
 
 	void write(in ubyte[] bytes, bool do_flush = true){
-		assert(false);
+
+		OVERLAPPED overlapped;
+		overlapped.Internal = 0;
+		overlapped.InternalHigh = 0;
+		overlapped.Offset = 0;
+		overlapped.OffsetHigh = 0;
+		overlapped.hEvent = cast(HANDLE)cast(void*)this;
+		WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &fileStreamOperationComplete);
+
+		m_driver.yieldForEvent();
 	}
 
 	void flush(){}
 
 	void finalize(){}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true){}
+	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	{
+		writeDefault(stream, nbytes, do_flush);
+	}
 }
 
 class Win32TcpConnection : TcpConnection {
@@ -426,4 +473,18 @@ class Win32TcpConnection : TcpConnection {
 	{
 		assert(false);
 	}
+}
+
+private extern(System)
+{
+	void fileStreamOperationComplete(DWORD errorCode, DWORD numberOfBytesTransfered, OVERLAPPED overlapped)
+	{
+		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
+		fileStream.m_driver.resumeTask(fileStream.m_fiber);
+		//resume fiber
+		// set flag operation done
+
+		logInfo("fileStreamOperationComplete");
+	}
+
 }
