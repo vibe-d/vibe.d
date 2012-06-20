@@ -713,7 +713,7 @@ Json serializeToJson(T)(T value)
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
 			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) ){
-				auto mn = __traits(identifier, m);
+				auto mn = m;
 				auto mv = __traits(getMember, value, m);
 				ret[mn] = serializeToJson(mv);
 			}
@@ -724,7 +724,7 @@ Json serializeToJson(T)(T value)
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
 			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) ){
-				auto mn = __traits(identifier, m);
+				auto mn = m;
 				auto mv = __traits(getMember, value, m);
 				ret[mn] = serializeToJson(mv);
 			}
@@ -756,14 +756,14 @@ void deserializeJson(T)(ref T dst, Json src)
 		}
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
-			auto mn = __traits(identifier, m);
+			auto mn = m;
 			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) )
 				deserializeJson(__traits(getMember, value, m), value[mn]);
 		}
 	} else static if( is(T == class) ){
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
-			auto mn = __traits(identifier, m);
+			auto mn = m;
 			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) )
 				deserializeJson(__traits(getMember, value, m), value[mn]);
 		}
