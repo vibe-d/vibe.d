@@ -344,10 +344,16 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 					params[i] = P.fromString(req.params["id"]);
 				else
 					params[i] = to!P(req.params["id"]);
-			} else static if( method == "GET" )
+			} else static if( param_names[i].startsWith("_") ){
+				static if( __traits(compiles, P.fromString("")) )
+					params[i] = P.fromString(req.params[param_names[i][1 .. $]]);
+				else
+					params[i] = to!P(req.params[param_names[i][1 .. $]]);
+			} static if( method == "GET" ){
 				deserializeJson(params[i], deserializeJson(req.query[param_names[i]]));
-			else
+			} else {
 				deserializeJson(params[i], jparams[param_names[i]]);
+			}
 		}
 
 		try {
@@ -461,15 +467,20 @@ private @property string generateRestInterfaceMethods(I)()
 			} else {
 				ret ~= " {\n";
 				ret ~= "\tJson jparams__ = Json.EmptyObject;\n";
+
+				// serialize all parameters
 				string path_supplement;
-				size_t skip = 0;
-				if( param_names.length > 0 && param_names[0] == "id" ){
-					path_supplement = "to!string(id)~\"/\"~";
-					skip = 1;
+				foreach( i, PT; PTypes ){
+					if( i == 0 && param_names[0] == "id" ){
+						path_supplement = "to!string(id)~\"/\"~";
+						continue;
+					}
+					// underscore parameters are sourced from the HttpServerRequest.params map
+					if( param_names[i].startsWith("_") ) continue;
+
+					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
 				}
-				foreach( i, PT; PTypes )
-					if( i >= skip )
-						ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
+
 				ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
 				static if( !is(RT == void) ){
 					ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
