@@ -819,7 +819,7 @@ void toJson(R)(ref R dst, in Json json)
 }
 
 /// ditto
-void toPrettyJson(R)(ref R dst, ref const(Json) json, int level = 0)
+void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
