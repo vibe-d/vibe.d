@@ -60,11 +60,13 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 
 		string path = (lpath ~ rpath).toNativeString();
 
+		// return if the file does not exist
+		if( !exists(path) ) return;
+
 		DirEntry dirent;
 		try dirent = dirEntry(path);
 		catch(FileException){
-			// return if the file does not exist
-			return;
+			throw new HttpServerError(HttpStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
 		}
 
 		auto lastModified = toRFC822DateTimeString(dirent.timeLastModified.toUTC());
