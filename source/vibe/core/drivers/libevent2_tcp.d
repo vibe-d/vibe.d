@@ -56,6 +56,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		TcpContext* m_ctx;
 		string m_peerAddress;
 		ubyte[64] m_peekBuffer;
+
 	}
 	
 	this(TcpContext* ctx)
@@ -119,14 +120,20 @@ package class Libevent2TcpConnection : TcpConnection {
 		checkConnected();
 		auto fd = bufferevent_getfd(m_event);
 		m_ctx.shutdown = true;
+		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
-		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
 		logTrace("Closing socket %d...", fd);
-		while( m_ctx.event )
+		auto buf = bufferevent_get_output(m_ctx.event);
+		while( m_ctx.event && evbuffer_get_length(buf) > 0 )
 			m_ctx.core.yieldForEvent();
+
+		version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
+		else shutdown(m_ctx.socketfd, SHUT_WR);
+		bufferevent_free(m_ctx.event);
 		heap_delete(m_ctx);
 		m_ctx = null;
+		logTrace("...socket %d closed.", fd);
 	}
 
 	/// The 'connected' status of this connection
@@ -414,12 +421,7 @@ package extern(C)
 		auto ctx = cast(TcpContext*)arg;
 		assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TcpContext");
 		logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
-		if( ctx.shutdown ){
-			version(Windows) shutdown(ctx.socketfd, SD_SEND);
-			else shutdown(ctx.socketfd, SHUT_WR);
-			bufferevent_free(buf_event);
-			ctx.event = null;
-		} else if( ctx.task && ctx.task.state != Fiber.State.TERM ){
+		if( ctx.task && ctx.task.state != Fiber.State.TERM ){
 			bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 		}
 		if( ctx.task ) ctx.core.resumeTask(ctx.task);
