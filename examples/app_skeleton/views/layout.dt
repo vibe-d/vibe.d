@@ -1,0 +1,9 @@
+!!! 5
+html
+	head
+		link(rel="stylesheet", href="styles/common.css")
+		block title
+		title #{title} - Empty project
+	body
+		h1= title
+		block body

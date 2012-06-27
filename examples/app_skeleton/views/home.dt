@@ -1,0 +1,9 @@
+extends layout
+
+block title
+	- auto title = "Home";
+
+block body
+	p This is the homepage of the new empty project.
+	p
+		a(href="/about") About

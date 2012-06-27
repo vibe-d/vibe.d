@@ -1,0 +1,7 @@
+extends layout
+
+block title
+	- auto title = "About";
+
+block body
+	p This is a new project with no content.
