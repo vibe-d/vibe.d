@@ -437,8 +437,10 @@ final class HttpServerResponse : HttpResponse {
 	private {
 		Stream m_conn;
 		OutputStream m_bodyWriter;
-		ChunkedOutputStream m_chunkedBodyWriter;
-		CountingOutputStream m_countingWriter;
+		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
+		FreeListRef!CountingOutputStream m_countingWriter;
+		FreeListRef!GzipOutputStream m_gzipOutputStream;
+		FreeListRef!DeflateOutputStream m_deflateOutputStream;
 		HttpServerSettings m_settings;
 		Session m_session;
 		bool m_headerWritten = false;
@@ -449,7 +451,7 @@ final class HttpServerResponse : HttpResponse {
 	this(Stream conn, HttpServerSettings settings)
 	{
 		m_conn = conn;
-		m_countingWriter = new CountingOutputStream(conn);
+		m_countingWriter = FreeListRef!CountingOutputStream(conn);
 		m_settings = settings;
 	}
 	
@@ -524,15 +526,17 @@ final class HttpServerResponse : HttpResponse {
 		} else {
 			headers["Transfer-Encoding"] = "chunked";
 			writeHeader();
-			m_chunkedBodyWriter = new ChunkedOutputStream(m_countingWriter);
+			m_chunkedBodyWriter = FreeListRef!ChunkedOutputStream(m_countingWriter);
 			m_bodyWriter = m_chunkedBodyWriter;
 		}
 
 		if( auto pce = "Content-Encoding" in headers ){
 			if( *pce == "gzip" ){
-				m_bodyWriter = new GzipOutputStream(m_bodyWriter);
+				m_gzipOutputStream = FreeListRef!GzipOutputStream(m_bodyWriter);
+				m_bodyWriter = m_gzipOutputStream; 
 			} else if( *pce == "deflate" ){
-				m_bodyWriter = new DeflateOutputStream(m_bodyWriter);
+				m_deflateOutputStream = FreeListRef!DeflateOutputStream(m_bodyWriter);
+				m_bodyWriter = m_deflateOutputStream;
 			} else {
 				logWarn("Unsupported Content-Encoding set in response: '"~*pce~"'");
 			}

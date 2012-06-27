@@ -359,7 +359,7 @@ package extern(C)
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
 				client_ctx.task = Fiber.getThis();
-				auto conn = new Libevent2TcpConnection(client_ctx);
+				auto conn = FreeListRef!Libevent2TcpConnection(client_ctx);
 				assert(conn.connected, "Connection closed directly after accept?!");
 				logDebug("start task (fd %d).", client_ctx.socketfd);
 				try {

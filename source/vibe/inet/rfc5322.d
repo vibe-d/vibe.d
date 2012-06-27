@@ -10,6 +10,7 @@ module vibe.inet.rfc5322;
 import vibe.core.log;
 import vibe.http.common : StrMapCI;
 import vibe.stream.stream;
+import vibe.utils.string;
 
 import std.exception;
 import std.string;
@@ -40,10 +41,10 @@ void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 
 			auto colonpos = ln.indexOf(':');
 			enforce(colonpos > 0 && colonpos < ln.length-1, "Header is missing ':'.");
-			hdr = ln[0..colonpos].strip();
-			hdrvalue = ln[colonpos+1..$].strip();
+			hdr = ln[0..colonpos].stripA();
+			hdrvalue = ln[colonpos+1..$].stripA();
 		} else {
-			hdrvalue ~= " " ~ ln.strip();
+			hdrvalue ~= " " ~ ln.stripA();
 		}
 	}
 	addPreviousHeader();

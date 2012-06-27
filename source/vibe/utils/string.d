@@ -95,21 +95,46 @@ bool isAlpha(char ch)
 	return true;
 }
 
+string stripLeftA(string s)
+{
+	while( s[0] == ' ' || s[0] == '\t' )
+		s = s[1 .. $];
+	return s;
+}
+
+string stripRightA(string s)
+{
+	while( s[$-1] == ' ' || s[$-1] == '\t' )
+		s = s[0 .. $-1];
+	return s;
+}
+
+string stripA(string s)
+{
+	return stripLeftA(stripRightA(s));
+}
+
 int icmp2(string a, string b)
 {
 	size_t i = 0, j = 0;
-	while( i < a.length && j < b.length ){
-		char ac = a[i];
-		char bc = b[i];
-		if( ac < 128 && bc < 128 ){
+	
+	// fast skip equal prefix
+	size_t min_len = min(a.length, b.length);
+	while( i < min_len && a[i] == b[i] ) i++;
+	if( i > 0 && a[i-1] >= 128 ) i--; // don't stop half-way in a UTF-8 sequence
+	j = i;
+
+	// compare the differing character
+	if( i < a.length && j < b.length ){
+		uint ac = cast(uint)a[i];
+		uint bc = cast(uint)b[j];
+		if( !((ac | bc) & 0xF0) ){
 			i++;
 			j++;
-			if( ac != bc ){
-				if( ac >= 'A' && ac <= 'Z' ) ac += 'a' - 'A';
-				if( bc >= 'A' && bc <= 'Z' ) bc += 'a' - 'A';
-				if( ac < bc ) return -1;
-				else if( ac > bc ) return 1;
-			}
+			if( ac >= 'A' && ac <= 'Z' ) ac += 'a' - 'A';
+			if( bc >= 'A' && bc <= 'Z' ) bc += 'a' - 'A';
+			if( ac < bc ) return -1;
+			else if( ac > bc ) return 1;
 		} else {
 			dchar acp = decode(a, i);
 			dchar bcp = decode(b, j);
@@ -120,6 +145,8 @@ int icmp2(string a, string b)
 				else if( acp > bcp ) return 1;
 			}
 		}
+
+		assert(i == a.length || j == b.length);
 	}
 
 	if( i < a.length ) return 1;

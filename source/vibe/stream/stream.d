@@ -42,7 +42,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\
 */
 ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 0) /*@ufcs*/
 {
-	auto output = new MemoryOutputStream();
+	auto output = FreeListRef!MemoryOutputStream();
 	readUntil(stream, output, end_marker, max_bytes);
 	return output.data();
 }
@@ -74,24 +74,30 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 			str = buf[0 .. nread];
 		}
 
-		foreach( i, ch; str ){
-			if( ch == end_marker[nmatched] ){
-				nmatched++;
-				if( nmatched == end_marker.length ){
-					skip(i+1-nread);
-					return;
-				}
-			} else {
-				enforce(max_bytes == 0 || bytes_written < max_bytes,
-					"Maximum number of bytes read before reading the end marker.");
-				if( nmatched > 0 ){
-					dst.write(end_marker[0 .. nmatched]);
-					bytes_written += nmatched;
-					nmatched = 0;
-				}
-				dst.write((&ch)[0 .. 1]);
-				bytes_written++;
+		auto mpart = min(end_marker.length - nmatched, str.length);
+		if( str[0 .. mpart] == end_marker[nmatched .. nmatched+mpart] ){
+			nmatched += mpart;
+			if( nmatched == end_marker.length ){
+				skip(mpart-nread);
+				return;
 			}
+		} else {
+			if( nmatched > 0 ){
+				dst.write(end_marker[0 .. nmatched]);
+				nmatched = 0;
+			}
+			foreach( i, ch; str ){
+				if( ch == end_marker[nmatched] ){
+					if( ++nmatched == end_marker.length ){
+						if( i+1 > end_marker.length )
+							dst.write(str[0 .. i+1-end_marker.length]);
+						skip(i+1-nread);
+						return;
+					}
+				} else nmatched = 0;
+			}
+
+			dst.write(str[0 .. str.length-nmatched]);
 		}
 
 		skip(str.length - nread);
@@ -108,7 +114,9 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 {
 	auto dst = appender!(ubyte[])();
-	auto buffer = new ubyte[64*1024];
+	static struct Buffer { ubyte[64*1024] bytes; }
+	auto bufferobj = FreeListRef!(Buffer, false)();
+	auto buffer = bufferobj.bytes[];
 	size_t n = 0, m = 0;
 	while( !stream.empty ){
 		enforce(!max_bytes || n++ < max_bytes, "Data too long!");

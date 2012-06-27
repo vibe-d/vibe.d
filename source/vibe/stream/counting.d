@@ -33,6 +33,7 @@ class LimitedInputStream : InputStream {
 	*/
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	{
+		assert(stream !is null);
 		m_input = stream;
 		m_sizeLimit = byte_limit;
 		m_silentLimit = silent_limit;
@@ -69,7 +70,9 @@ class CountingOutputStream : OutputStream {
 		ulong m_bytesWritten;
 		OutputStream m_out;
 	}
-	this(OutputStream stream) {
+	this(OutputStream stream)
+	{
+		assert(stream !is null);
 		m_out = stream;
 	}
 
@@ -77,19 +80,17 @@ class CountingOutputStream : OutputStream {
 
 	void write(in ubyte[] bytes, bool do_flush = true) 
 	{
-		enforce(m_out !is null, "OutputStream missing");
 		m_out.write(bytes, do_flush);
 		m_bytesWritten += bytes.length;
 	}
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
-		enforce(m_out !is null, "OutputStream missing");
 		writeDefault(stream, nbytes, do_flush);
 	}
 
-	void flush() { enforce(m_out !is null, "OutputStream missing"); m_out.flush(); }
-	void finalize() { enforce(m_out !is null, "OutputStream missing"); m_out.flush(); }
+	void flush() { m_out.flush(); }
+	void finalize() { m_out.flush(); }
 }
 
 /**
@@ -100,20 +101,21 @@ class CountingInputStream : InputStream {
 		ulong m_bytesRead;
 		InputStream m_in;
 	}
-	this(InputStream stream) {
+	this(InputStream stream)
+	{
+		assert(stream !is null);
 		m_in = stream;
 	}
 
 	@property ulong bytesRead() const { return m_bytesRead; }
 
-	@property bool empty() { enforce(m_in !is null, "InputStream missing"); return m_in.empty(); }
-	@property ulong leastSize() { enforce(m_in !is null, "InputStream missing"); return m_in.leastSize();  }
+	@property bool empty() { return m_in.empty(); }
+	@property ulong leastSize() { return m_in.leastSize();  }
 	@property bool dataAvailableForRead() { return m_in.dataAvailableForRead; }
 	const(ubyte)[] peek() { return m_in.peek(); }
 
 	void read(ubyte[] dst)
 	{
-		enforce(m_in !is null, "InputStream missing");
 		m_in.read(dst);
 		m_bytesRead += dst.length;
 	}
