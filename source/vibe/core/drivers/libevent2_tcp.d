@@ -97,6 +97,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	*/
 	void acquire()
 	{
+		assert(m_ctx, "Trying to acquire a closed TCP connection.");
 		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
 		m_ctx.task = Fiber.getThis();
 	}
@@ -104,6 +105,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	/// Makes this connection unowned so that no events are handled anymore.
 	void release()
 	{
+		if( !m_ctx ) return;
 		assert(m_ctx.task !is null, "Trying to release a TCP connection that is not owned.");
 		assert(m_ctx.task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
 		m_ctx.task = null;
@@ -111,12 +113,14 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	bool isOwner()
 	{
-		return m_ctx.task !is null && m_ctx.task is Fiber.getThis();
+		return m_ctx !is null && m_ctx.task !is null && m_ctx.task is Fiber.getThis();
 	}
 	
 	/// Closes the connection.
 	void close()
 	{
+		assert(m_ctx, "Closing an already closed TCP connection.");
+
 		checkConnected();
 		auto fd = bufferevent_getfd(m_event);
 		m_ctx.shutdown = true;
