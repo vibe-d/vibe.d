@@ -42,7 +42,7 @@ class MongoConnection : EventedObject {
 		if( m_conn && m_conn.connected ) m_conn.acquire();
 		else connect();
 	}
-	
+
 	override void release()
 	{
 		if( m_conn && m_conn.connected )
@@ -60,7 +60,7 @@ class MongoConnection : EventedObject {
 	void disconnect()
 	{
 		if( m_conn ){
-			m_conn.close();
+			if( m_conn.connected ) m_conn.close();
 			m_conn = null;
 		}
 	}
