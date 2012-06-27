@@ -24,6 +24,7 @@ import vibe.stream.ssl;
 import vibe.stream.zlib;
 import vibe.templ.diet;
 import vibe.textfilter.urlencode;
+import vibe.utils.memory;
 import vibe.utils.string;
 import vibe.core.file;
 
@@ -407,7 +408,7 @@ final class HttpServerRequest : HttpRequest {
 		SysTime m_timeCreated;
 	}
 
-	private this()
+	this()
 	{
 		m_timeCreated = Clock.currTime().toUTC();
 	}
@@ -444,8 +445,8 @@ final class HttpServerResponse : HttpResponse {
 		bool m_isHeadResponse = false;
 		SysTime m_timeFinalized;
 	}
-	
-	private this(Stream conn, HttpServerSettings settings)
+
+	this(Stream conn, HttpServerSettings settings)
 	{
 		m_conn = conn;
 		m_countingWriter = new CountingOutputStream(conn);
@@ -787,7 +788,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 	}
 
 	Stream conn;
-	HttpServerRequest req;
+	FreeListRef!HttpServerRequest req;
 
 	// If this is a HTTPS server, initiate SSL
 	if( ssl_ctx ){
@@ -796,6 +797,12 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 	} else conn = conn_;
 
 	do {
+		// some instances that live only while the request is running
+		FreeListRef!TimeoutHttpInputStream timeout_http_input_stream;
+		FreeListRef!LimitedHttpInputStream limited_http_input_stream;
+		FreeListRef!ChunkedInputStream chunked_input_stream;
+		req.clear();
+
 		// Default to the first virtual host for this listener
 		HttpServerSettings settings;
 		HttpServerRequestDelegate request_task;
@@ -814,7 +821,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			}
 
 		// Create the response object
-		scope res = new HttpServerResponse(conn, settings);
+		auto res = FreeListRef!HttpServerResponse(conn, settings);
 
 		// Error page handler
 		void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -846,7 +853,10 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 			InputStream reqReader;
 			if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = conn;
-			else reqReader = new TimeoutHttpInputStream(conn, settings.maxRequestTime);
+			else {
+				timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(conn, settings.maxRequestTime);
+				reqReader = timeout_http_input_stream;
+			}
 
 			// basic request parsing
 			req = parseRequest(reqReader);
@@ -892,19 +902,19 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 				auto contentLength = parse!ulong(v); // DMDBUG: to! thinks there is a H in the string
 				enforce(v.length == 0, "Invalid content-length");
 				enforce(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
-				req.bodyReader = new LimitedHttpInputStream(reqReader, contentLength);
+				limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, contentLength);
+			} else if( auto pt = "Transfer-Encoding" in req.headers ){
+				enforce(*pt == "chunked");
+				chunked_input_stream = FreeListRef!ChunkedInputStream(reqReader);
+				limited_http_input_stream = FreeListRef!LimitedHttpInputStream(chunked_input_stream, settings.maxRequestSize, true);
 			} else {
-				if( auto pt = "Transfer-Encoding" in req.headers ){
-					enforce(*pt == "chunked");
-					req.bodyReader = new LimitedHttpInputStream(new ChunkedInputStream(reqReader), settings.maxRequestSize, true);
-				} else {
-					auto pc = "Connection" in req.headers;
-					if( pc && *pc == "close" )
-						req.bodyReader = new LimitedHttpInputStream(reqReader, settings.maxRequestSize, true);
-					else
-						req.bodyReader = new LimitedHttpInputStream(reqReader, 0);
-				}
+				auto pc = "Connection" in req.headers;
+				if( pc && *pc == "close" )
+					limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, settings.maxRequestSize, true);
+				else
+					limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, 0);
 			}
+			req.bodyReader = limited_http_input_stream;
 
 			// Url parsing if desired
 			if( settings.options & HttpServerOption.ParseURL ){
@@ -1012,10 +1022,10 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 	} while( req.persistent && conn_.connected );
 }
 
-private HttpServerRequest parseRequest(InputStream conn)
+private FreeListRef!HttpServerRequest parseRequest(InputStream conn)
 {
-	auto req = new HttpServerRequest;
-	auto stream = new LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
+	auto req = FreeListRef!HttpServerRequest();
+	auto stream = FreeListRef!LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
 
 	logTrace("HTTP server reading status line");
 	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength);

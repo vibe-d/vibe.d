@@ -9,6 +9,7 @@ module vibe.stream.stream;
 
 import vibe.core.log;
 import vibe.stream.memory;
+import vibe.utils.memory;
 
 import std.array;
 import std.algorithm;
@@ -194,7 +195,10 @@ interface OutputStream {
 
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
-		auto buffer = new ubyte[64*1024];
+		static struct Buffer { ubyte[64*1024] bytes; }
+		auto bufferobj = FreeListRef!(Buffer, false)();
+		auto buffer = bufferobj.bytes[];
+
 		logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);
 		if( nbytes == 0 ){
 			while( !stream.empty ){

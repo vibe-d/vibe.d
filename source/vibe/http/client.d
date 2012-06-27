@@ -37,12 +37,12 @@ import std.string;
 	The 'requester' parameter allows to customize the request and to specify the request body for
 	non-GET requests.
 */
-HttpClientResponse requestHttp(string url, void delegate(HttpClientRequest req) requester = null)
+HttpClientResponse requestHttp(string url, scope void delegate(HttpClientRequest req) requester = null)
 {
 	return requestHttp(Url.parse(url), requester);
 }
 /// ditto
-HttpClientResponse requestHttp(Url url, void delegate(HttpClientRequest req) requester = null)
+HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest req) requester = null)
 {
 	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
 	enforce(url.host.length > 0, "Url must contain a host name.");
@@ -130,7 +130,7 @@ class HttpClient : EventedObject {
 		}
 	}
 
-	HttpClientResponse request(void delegate(HttpClientRequest req) requester)
+	HttpClientResponse request(scope void delegate(HttpClientRequest req) requester)
 	{
 		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTcp(m_server, m_port);
