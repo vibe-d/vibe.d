@@ -604,7 +604,10 @@ struct Json {
 /******************************************************************************/
 
 /**
-	Parses the given range as a JSON string and returns the corresponding JSON object.
+	Parses the given range as a JSON string and returns the corresponding Json object.
+
+	The range is shrunk during parsing, leaving any remaining text that is now part of
+	the JSON contents.
 
 	Throws an Exception if any parsing error occured.
 */
@@ -686,6 +689,18 @@ Json parseJson(R)(ref R range, int* line = null)
 	
 	assert(ret.type != Json.Type.Undefined);
 	version(JsonLineNumbers) ret.line = curline;
+	return ret;
+}
+
+/**
+	Parses the given JSON string and returns the corresponding Json object.
+	
+	Throws an Exception if any parsing error occurs.
+*/
+Json parseJsonString(string str)
+{
+	auto ret = parseJson(str);
+	enforce(str.strip().length == 0, "Expected end of string after JSON value.");
 	return ret;
 }
 
@@ -819,7 +834,7 @@ void toJson(R)(ref R dst, in Json json)
 }
 
 /// ditto
-void toPrettyJson(R)(ref R dst, ref const(Json) json, int level = 0)
+void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
