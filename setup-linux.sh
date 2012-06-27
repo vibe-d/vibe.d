@@ -55,4 +55,4 @@ echo -e '{
 
 # if everything went fine
 echo "Setup finished successfully."
-echo "You can now run 'vibe' from any vibe.d application directory to run an app (e.g. in examples/simple_http/)."
+echo "You can now run 'vibe' from any vibe.d application directory to run an app (e.g. in examples/http_server/)."
