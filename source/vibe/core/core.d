@@ -314,7 +314,7 @@ private void defaultFiberFunc()
 			task();
 			logTrace("exiting task.");
 		} catch( Exception e ){
-			logDebug("task terminated with exception: %s", e.toString());
+			logError("Task terminated with exception: %s", e.toString());
 		}
 		clearTaskLocals();
 		
