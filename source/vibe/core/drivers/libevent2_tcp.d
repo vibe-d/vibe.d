@@ -135,7 +135,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
 		else shutdown(m_ctx.socketfd, SHUT_WR);
 		bufferevent_free(m_ctx.event);
-		heap_delete(m_ctx);
+		TcpContext.Alloc.free(m_ctx);
 		m_ctx = null;
 		logTrace("...socket %d closed.", fd);
 	}
@@ -256,7 +256,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if( m_ctx.event is null ){
-			heap_delete(m_ctx);
+			TcpContext.Alloc.free(m_ctx);
 			m_ctx = null;
 			enforce(false, "Remote hung up while operating on TCPConnection.");
 		}
@@ -306,6 +306,8 @@ package struct TcpContext
 	int socketfd = -1;
 	int status = 0;
 	Task task;
+
+	alias FreeListObjectAlloc!(TcpContext, false, true) Alloc;
 }
 
 
@@ -345,14 +347,14 @@ package extern(C)
 					return;
 				}
 				
-				auto client_ctx = heap_new!TcpContext(drivercore, eventloop, sockfd, buf_event, remote_addr);
+				auto client_ctx = TcpContext.Alloc.alloc(drivercore, eventloop, sockfd, buf_event, remote_addr);
 				assert(client_ctx.event !is null, "event is null although it was just != null?");
 				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
 				timeval toread = {tv_sec: 60, tv_usec: 0};
 				bufferevent_set_timeouts(buf_event, &toread, null);
 				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
 					bufferevent_free(buf_event);
-					heap_delete(client_ctx);
+					TcpContext.Alloc.free(client_ctx);
 					logError("Error enabling buffered I/O event for fd %d.", sockfd);
 					return;
 				}

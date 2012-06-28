@@ -34,12 +34,14 @@ import std.range;
 import std.string;
 
 struct LevMutex {
-	Mutex mutex;
-	ReadWriteMutex rwmutex;
+	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
+	FreeListRef!Mutex mutex;
+	FreeListRef!ReadWriteMutex rwmutex;
 }
 
 struct LevCondition {
-	Condition cond;
+	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
+	FreeListRef!Condition cond;
 	LevMutex* mutex;
 }
 
@@ -49,13 +51,12 @@ private extern(C){
 	void lev_free(void* p){ free(p); }
 
 	void* lev_alloc_mutex(uint locktype) {
-		auto ret = cast(LevMutex*)calloc(1, LevMutex.sizeof);
-		GC.addRange(ret, LevMutex.sizeof);
-		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = new ReadWriteMutex;
-		else ret.mutex = new Mutex;
+		auto ret = LevMutex.Alloc.alloc();
+		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
+		else ret.mutex = FreeListRef!Mutex();
 		return ret;
 	}
-	void lev_free_mutex(void* lock, uint locktype) { GC.removeRange(lock); free(lock); }
+	void lev_free_mutex(void* lock, uint locktype) { LevMutex.Alloc.free(cast(LevMutex*)lock); }
 	int lev_lock_mutex(uint mode, void* lock) {
 		auto mtx = cast(LevMutex*)lock;
 		
@@ -84,12 +85,8 @@ private extern(C){
 		return 0;
 	}
 
-	void* lev_alloc_condition(uint condtype) {
-		auto ret = cast(LevCondition*)calloc(1, LevCondition.sizeof);
-		GC.addRange(ret, LevCondition.sizeof);
-		return ret;
-	}
-	void lev_free_condition(void* cond) { GC.removeRange(cond); free(cond); }
+	void* lev_alloc_condition(uint condtype) { return LevCondition.Alloc.alloc(); }
+	void lev_free_condition(void* cond) { LevCondition.Alloc.free(cast(LevCondition*)cond); }
 	int lev_signal_condition(void* cond, int broadcast) {
 		auto c = cast(LevCondition*)cond;
 		if( c.cond ) c.cond.notifyAll();
@@ -100,7 +97,7 @@ private extern(C){
 		if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
 		assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
 		assert(c.mutex is lock);
-		if( c.cond is null ) c.cond = new Condition(c.mutex.mutex);
+		if( c.cond is null ) c.cond = FreeListRef!Condition(c.mutex.mutex);
 		if( timeout ){
 			if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
 				return 1;
@@ -217,7 +214,7 @@ class Libevent2Driver : EventDriver {
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = heap_new!TcpContext(m_core, m_eventLoop, sockfd, buf_event);
+		auto cctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, sockfd, buf_event);
 		cctx.task = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		timeval toread = {tv_sec: 60, tv_usec: 0};
@@ -312,7 +309,7 @@ class Libevent2Driver : EventDriver {
 		version(Windows){} else evutil_make_listen_socket_reuseable(listenfd);
 
 		// Add an event to wait for connections
-		auto ctx = heap_new!TcpContext(m_core, m_eventLoop, listenfd, null, *sock_addr);
+		auto ctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, listenfd, null, *sock_addr);
 		ctx.connectionCallback = connection_callback;
 		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 		if( event_add(connect_event, null) ){
