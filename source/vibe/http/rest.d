@@ -521,22 +521,22 @@ private @property string getParameterTypeString(alias F, int i)()
 /// private
 private void getRestMethodName(T)(string method, out HttpMethod http_verb, out string rest_name)
 {
-	if( isPropertyGetter!T )               { http_verb = httpMethodFromString("GET"); rest_name = method; }
-	else if( isPropertySetter!T )          { http_verb = httpMethodFromString("PUT"); rest_name = method; }
-	else if( method.startsWith("get") )    { http_verb = httpMethodFromString("GET"); rest_name = method[3 .. $]; }
-	else if( method.startsWith("query") )  { http_verb = httpMethodFromString("GET"); rest_name = method[5 .. $]; }
-	else if( method.startsWith("set") )    { http_verb = httpMethodFromString("PUT"); rest_name = method[3 .. $]; }
-	else if( method.startsWith("put") )    { http_verb = httpMethodFromString("PUT"); rest_name = method[3 .. $]; }
-	else if( method.startsWith("update") ) { http_verb = httpMethodFromString("PATCH"); rest_name = method[6 .. $]; }
-	else if( method.startsWith("patch") )  { http_verb = httpMethodFromString("PATCH"); rest_name = method[5 .. $]; }
-	else if( method.startsWith("add") )    { http_verb = httpMethodFromString("POST"); rest_name = method[3 .. $]; }
-	else if( method.startsWith("create") ) { http_verb = httpMethodFromString("POST"); rest_name = method[6 .. $]; }
-	else if( method.startsWith("post") )   { http_verb = httpMethodFromString("POST"); rest_name = method[4 .. $]; }
-	else if( method.startsWith("remove") ) { http_verb = httpMethodFromString("DELETE"); rest_name = method[6 .. $]; }
-	else if( method.startsWith("erase") )  { http_verb = httpMethodFromString("DELETE"); rest_name = method[5 .. $]; }
-	else if( method.startsWith("delete") ) { http_verb = httpMethodFromString("DELETE"); rest_name = method[6 .. $]; }
-	else if( method == "index" )           { http_verb = httpMethodFromString("GET"); rest_name = ""; }
-	else { http_verb = httpMethodFromString("POST"); rest_name = method; }
+	if( isPropertyGetter!T )               { http_verb = HttpMethod.GET; rest_name = method; }
+	else if( isPropertySetter!T )          { http_verb = HttpMethod.PUT; rest_name = method; }
+	else if( method.startsWith("get") )    { http_verb = HttpMethod.GET; rest_name = method[3 .. $]; }
+	else if( method.startsWith("query") )  { http_verb = HttpMethod.GET; rest_name = method[5 .. $]; }
+	else if( method.startsWith("set") )    { http_verb = HttpMethod.PUT; rest_name = method[3 .. $]; }
+	else if( method.startsWith("put") )    { http_verb = HttpMethod.PUT; rest_name = method[3 .. $]; }
+	else if( method.startsWith("update") ) { http_verb = HttpMethod.PATCH; rest_name = method[6 .. $]; }
+	else if( method.startsWith("patch") )  { http_verb = HttpMethod.PATCH; rest_name = method[5 .. $]; }
+	else if( method.startsWith("add") )    { http_verb = HttpMethod.POST; rest_name = method[3 .. $]; }
+	else if( method.startsWith("create") ) { http_verb = HttpMethod.POST; rest_name = method[6 .. $]; }
+	else if( method.startsWith("post") )   { http_verb = HttpMethod.POST; rest_name = method[4 .. $]; }
+	else if( method.startsWith("remove") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
+	else if( method.startsWith("erase") )  { http_verb = HttpMethod.DELETE; rest_name = method[5 .. $]; }
+	else if( method.startsWith("delete") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
+	else if( method == "index" )           { http_verb = HttpMethod.GET; rest_name = ""; }
+	else { http_verb = HttpMethod.POST; rest_name = method; }
 }
 
 /// private
