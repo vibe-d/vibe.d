@@ -133,7 +133,8 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
 			alias ReturnType!overload RetType;
 			auto param_names = parameterNames!(typeof(&overload))();
-			string http_verb, rest_name;
+			HttpMethod http_verb;
+			string rest_name;
 			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
 			string rest_name_adj = adjustMethodStyle(rest_name, style);
 			static if( is(RetType == interface) ){
@@ -267,7 +268,7 @@ class RestInterfaceClient(I) : I
 		}
 
 		auto res = requestHttp(url, (req){
-				req.method = verb;
+				req.method = httpMethodFromString(verb);
 				if( verb != "GET" && verb != "HEAD" )
 					req.writeJsonBody(params);
 			});
@@ -425,7 +426,8 @@ private @property string generateRestInterfaceSubInterfaceInstances(I)()
 				if( tps.countUntil(RT.stringof) < 0 ){
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
-					string http_verb, rest_name;
+					HttpMethod http_verb;
+					string rest_name;
 					getRestMethodName!FT(method, http_verb, rest_name);
 					ret ~= "m_"~implname~" = new "~implname~"(m_baseUrl~PathEntry(\""~rest_name~"\"), m_methodStyle);\n";
 				}
@@ -447,7 +449,8 @@ private @property string generateRestInterfaceMethods(I)()
 			alias ReturnType!FT RT;
 
 			auto param_names = parameterNames!FT();
-			string http_verb, rest_name;
+			HttpMethod http_verb; 
+			string rest_name;
 			getRestMethodName!FT(method, http_verb, rest_name);
 			ret ~= "override "~getReturnTypeString!(overload)~" "~method~"(";
 			foreach( i, PT; PTypes ){
@@ -481,7 +484,7 @@ private @property string generateRestInterfaceMethods(I)()
 					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
 				}
 
-				ret ~= "\tauto jret__ = request(\""~http_verb~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
+				ret ~= "\tauto jret__ = request(\""~ httpMethodString(http_verb)~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
 				static if( !is(RT == void) ){
 					ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
 					ret ~= "\tdeserializeJson(ret__, jret__);\n";
@@ -516,24 +519,24 @@ private @property string getParameterTypeString(alias F, int i)()
 }
 
 /// private
-private void getRestMethodName(T)(string method, out string http_verb, out string rest_name)
+private void getRestMethodName(T)(string method, out HttpMethod http_verb, out string rest_name)
 {
-	if( isPropertyGetter!T )               { http_verb = "GET"; rest_name = method; }
-	else if( isPropertySetter!T )          { http_verb = "PUT"; rest_name = method; }
-	else if( method.startsWith("get") )    { http_verb = "GET"; rest_name = method[3 .. $]; }
-	else if( method.startsWith("query") )  { http_verb = "GET"; rest_name = method[5 .. $]; }
-	else if( method.startsWith("set") )    { http_verb = "PUT"; rest_name = method[3 .. $]; }
-	else if( method.startsWith("put") )    { http_verb = "PUT"; rest_name = method[3 .. $]; }
-	else if( method.startsWith("update") ) { http_verb = "PATCH"; rest_name = method[6 .. $]; }
-	else if( method.startsWith("patch") )  { http_verb = "PATCH"; rest_name = method[5 .. $]; }
-	else if( method.startsWith("add") )    { http_verb = "POST"; rest_name = method[3 .. $]; }
-	else if( method.startsWith("create") ) { http_verb = "POST"; rest_name = method[6 .. $]; }
-	else if( method.startsWith("post") )   { http_verb = "POST"; rest_name = method[4 .. $]; }
-	else if( method.startsWith("remove") ) { http_verb = "DELETE"; rest_name = method[6 .. $]; }
-	else if( method.startsWith("erase") ) { http_verb = "DELETE"; rest_name = method[5 .. $]; }
-	else if( method.startsWith("delete") ) { http_verb = "DELETE"; rest_name = method[6 .. $]; }
-	else if( method == "index" )           { http_verb = "GET"; rest_name = ""; }
-	else { http_verb = "POST"; rest_name = method; }
+	if( isPropertyGetter!T )               { http_verb = httpMethodFromString("GET"); rest_name = method; }
+	else if( isPropertySetter!T )          { http_verb = httpMethodFromString("PUT"); rest_name = method; }
+	else if( method.startsWith("get") )    { http_verb = httpMethodFromString("GET"); rest_name = method[3 .. $]; }
+	else if( method.startsWith("query") )  { http_verb = httpMethodFromString("GET"); rest_name = method[5 .. $]; }
+	else if( method.startsWith("set") )    { http_verb = httpMethodFromString("PUT"); rest_name = method[3 .. $]; }
+	else if( method.startsWith("put") )    { http_verb = httpMethodFromString("PUT"); rest_name = method[3 .. $]; }
+	else if( method.startsWith("update") ) { http_verb = httpMethodFromString("PATCH"); rest_name = method[6 .. $]; }
+	else if( method.startsWith("patch") )  { http_verb = httpMethodFromString("PATCH"); rest_name = method[5 .. $]; }
+	else if( method.startsWith("add") )    { http_verb = httpMethodFromString("POST"); rest_name = method[3 .. $]; }
+	else if( method.startsWith("create") ) { http_verb = httpMethodFromString("POST"); rest_name = method[6 .. $]; }
+	else if( method.startsWith("post") )   { http_verb = httpMethodFromString("POST"); rest_name = method[4 .. $]; }
+	else if( method.startsWith("remove") ) { http_verb = httpMethodFromString("DELETE"); rest_name = method[6 .. $]; }
+	else if( method.startsWith("erase") )  { http_verb = httpMethodFromString("DELETE"); rest_name = method[5 .. $]; }
+	else if( method.startsWith("delete") ) { http_verb = httpMethodFromString("DELETE"); rest_name = method[6 .. $]; }
+	else if( method == "index" )           { http_verb = httpMethodFromString("GET"); rest_name = ""; }
+	else { http_verb = httpMethodFromString("POST"); rest_name = method; }
 }
 
 /// private
