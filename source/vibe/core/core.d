@@ -61,19 +61,19 @@ int start()
 	continue to run until vibeYield() or any of the I/O or wait functions is
 	called.
 */
-Fiber runTask(void delegate() task)
+Task runTask(void delegate() task)
 {
 	// if there is no fiber available, create one.
 	if( s_availableFibersCount == 0 ){
 		if( s_availableFibers.length == 0 ) s_availableFibers.length = 1024;
 		logDebug("Creating new fiber...");
 		s_fiberCount++;
-		s_availableFibers[s_availableFibersCount++] = new Fiber(&defaultFiberFunc);
+		s_availableFibers[s_availableFibersCount++] = new CoreTask;
 	}
 	
 	// pick the first available fiber
 	auto f = s_availableFibers[--s_availableFibersCount];
-	s_taskFuncs[f] = task;
+	f.m_taskFunc = task;
 	logDebug("initial task call");
 	s_tasks ~= f;
 	s_core.resumeTask(f);
@@ -152,13 +152,8 @@ Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false
 */
 void setTaskLocal(T)(string name, T value)
 {
-	auto self = Fiber.getThis();
-	auto ptls = self in s_taskLocalStorage;
-	if( !ptls ){
-		s_taskLocalStorage[self] = null;
-		ptls = self in s_taskLocalStorage;
-	}
-	(*ptls)[name] = Variant(value);
+	auto self = cast(CoreTask)Fiber.getThis();
+	self.m_taskLocalStorage[name] = Variant(value);
 }
 
 /**
@@ -166,9 +161,8 @@ void setTaskLocal(T)(string name, T value)
 */
 T getTaskLocal(T)(string name)
 {
-	auto self = Fiber.getThis();
-	auto ptls = self in s_taskLocalStorage;
-	auto pvar = ptls ? name in *ptls : null;
+	auto self = cast(CoreTask)Fiber.getThis();
+	auto pvar = name in self.m_taskLocalStorage;
 	enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
 	return pvar.get!T();
 }
@@ -178,16 +172,57 @@ T getTaskLocal(T)(string name)
 */
 bool isTaskLocalSet(string name)
 {
-	auto self = Fiber.getThis();
-	auto ptls = self in s_taskLocalStorage;
-	auto pvar = ptls ? name in *ptls : null;
+	auto self = cast(CoreTask)Fiber.getThis();
+	auto pvar = name in self.m_taskLocalStorage;
 	return pvar !is null;
 }
 
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.5";
+enum VibeVersionString = "0.7.6";
+
+
+/**************************************************************************************************/
+/* public types                                                                                   */
+/**************************************************************************************************/
+
+class CoreTask : Task {
+	private {
+		void delegate() m_taskFunc;
+		Variant[string] m_taskLocalStorage;
+		Exception m_exception;
+	}
+
+	this()
+	{
+		super(&run);
+	}
+
+	private void run()
+	{
+		while(true){
+			while( !m_taskFunc )
+				s_core.yieldForEvent();
+
+			auto task = m_taskFunc;
+			m_taskFunc = null;
+			try {
+				logTrace("entering task.");
+				task();
+				logTrace("exiting task.");
+			} catch( Exception e ){
+				logError("Task terminated with exception: %s", e.toString());
+			}
+			m_taskLocalStorage = null;
+			
+			// make the fiber available for the next task
+			if( s_availableFibers.length <= s_availableFibersCount )
+				s_availableFibers.length = 2*s_availableFibers.length;
+			s_availableFibers[s_availableFibersCount++] = this;
+		}
+	}
+}
 
 
 /**************************************************************************************************/
@@ -197,15 +232,14 @@ enum VibeVersionString = "0.7.5";
 private class VibeDriverCore : DriverCore {
 	void yieldForEvent()
 	{
-		auto fiber = Fiber.getThis();
+		auto fiber = cast(CoreTask)Fiber.getThis();
 		if( fiber ){
 			logTrace("yield");
 			Fiber.yield();
 			logTrace("resume");
-			auto pe = fiber in s_exceptions;
-			if( pe ){
-				auto e = *pe;
-				s_exceptions.remove(fiber);
+			auto e = fiber.m_exception;
+			if( e ){
+				fiber.m_exception = null;
 				throw e;
 			}
 		} else {
@@ -221,24 +255,25 @@ private class VibeDriverCore : DriverCore {
 		}
 	}
 
-	void resumeTask(Fiber fiber, Exception event_exception = null)
+	void resumeTask(Task task, Exception event_exception = null)
 	{
-		assert(fiber.state == Fiber.State.HOLD, "Resuming task that is " ~ (fiber.state == Fiber.State.TERM ? "terminated" : "running"));
+		CoreTask ctask = cast(CoreTask)task;
+		assert(task.state == Fiber.State.HOLD, "Resuming task that is " ~ (task.state == Fiber.State.TERM ? "terminated" : "running"));
 
 		if( event_exception ){
 			extrap();
-			s_exceptions[fiber] = event_exception;
+			ctask.m_exception = event_exception;
 		}
 		
-		auto uncaught_exception = fiber.call(false);
+		auto uncaught_exception = task.call(false);
 		if( uncaught_exception ){
 			extrap();
-			assert(fiber.state == Fiber.State.TERM);
+			assert(task.state == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", uncaught_exception.toString());
 		}
 		
-		if( fiber.state == Fiber.State.TERM ){
-			s_tasks.removeFromArray(fiber);
+		if( task.state == Fiber.State.TERM ){
+			s_tasks.removeFromArray(ctask);
 		}
 	}
 }
@@ -249,17 +284,14 @@ private class VibeDriverCore : DriverCore {
 /**************************************************************************************************/
 
 private {
-	Fiber[] s_tasks;
-	Exception[Fiber] s_exceptions;
+	CoreTask[] s_tasks;
 	bool s_eventLoopRunning = false;
 	__gshared VibeDriverCore s_core;
 	EventDriver s_driver;
-	Variant[string][Fiber] s_taskLocalStorage;
 	//Variant[string] s_currentTaskStorage;
-	Fiber[] s_availableFibers;
+	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
-	void delegate()[Fiber] s_taskFuncs;
 }
 
 shared static this()
@@ -300,42 +332,9 @@ shared static ~this()
 	delete s_core;
 }
 
-private void defaultFiberFunc()
-{
-	auto fthis = Fiber.getThis();
-	while(true){
-		while( fthis !in s_taskFuncs )
-			s_core.yieldForEvent();
-
-		auto task = s_taskFuncs[fthis];
-		s_taskFuncs.remove(fthis);
-		try {
-			logTrace("entering task.");
-			task();
-			logTrace("exiting task.");
-		} catch( Exception e ){
-			logError("Task terminated with exception: %s", e.toString());
-		}
-		clearTaskLocals();
-		
-		// make the fiber available for the next task
-		if( s_availableFibers.length <= s_availableFibersCount )
-			s_availableFibers.length = 2*s_availableFibers.length;
-		s_availableFibers[s_availableFibersCount++] = fthis;
-	}
-}
-
 private extern(C) void extrap()
 {
 	logTrace("exception trap");
-}
-
-
-private void clearTaskLocals()
-{
-	auto self = Fiber.getThis();
-	auto ptls = self in s_taskLocalStorage;
-	if( ptls ) s_taskLocalStorage.remove(self);
 }
 
 version(Posix){

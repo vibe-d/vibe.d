@@ -71,7 +71,7 @@ package class Libevent2TcpConnection : TcpConnection {
 			evutil_inet_ntop(AF_INET, &ctx.remote_addr4.sin_addr, buf.ptr, buf.length);
 		else
 			evutil_inet_ntop(AF_INET6, &ctx.remote_addr6.sin6_addr, buf.ptr, buf.length);
-		m_peerAddress = to!string(buf.ptr).idup;
+		m_peerAddress = to!string(buf.ptr);
 	}
 	
 	~this()
@@ -99,7 +99,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
 		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
-		m_ctx.task = Fiber.getThis();
+		m_ctx.task = Task.getThis();
 	}
 
 	/// Makes this connection unowned so that no events are handled anymore.
@@ -305,7 +305,7 @@ package struct TcpContext
 	bool shutdown = false;
 	int socketfd = -1;
 	int status = 0;
-	Fiber task;
+	Task task;
 }
 
 
@@ -358,7 +358,7 @@ package extern(C)
 				}
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
-				client_ctx.task = Fiber.getThis();
+				client_ctx.task = Task.getThis();
 				auto conn = FreeListRef!Libevent2TcpConnection(client_ctx);
 				assert(conn.connected, "Connection closed directly after accept?!");
 				logDebug("start task (fd %d).", client_ctx.socketfd);

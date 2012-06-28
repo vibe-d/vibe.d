@@ -218,7 +218,7 @@ class Libevent2Driver : EventDriver {
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
 		auto cctx = heap_new!TcpContext(m_core, m_eventLoop, sockfd, buf_event);
-		cctx.task = Fiber.getThis();
+		cctx.task = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		timeval toread = {tv_sec: 60, tv_usec: 0};
 		bufferevent_set_timeouts(buf_event, &toread, null);
@@ -435,7 +435,7 @@ class Libevent2Signal : Signal {
 	private {
 		Libevent2Driver m_driver;
 		event* m_event;
-		bool[Fiber] m_listeners;
+		bool[Task] m_listeners;
 		int m_emitCount = 0;
 	}
 
@@ -470,19 +470,19 @@ class Libevent2Signal : Signal {
 
 	void acquire()
 	{
-		m_listeners[Fiber.getThis()] = true;
+		m_listeners[Task.getThis()] = true;
 	}
 
 	void release()
 	{
-		auto self = Fiber.getThis();
+		auto self = Task.getThis();
 		if( isOwner() )
 			m_listeners.remove(self);
 	}
 
 	bool isOwner()
 	{
-		return (Fiber.getThis() in m_listeners) !is null;
+		return (Task.getThis() in m_listeners) !is null;
 	}
 
 	@property int emitCount() const { return m_emitCount; }
@@ -491,7 +491,7 @@ class Libevent2Signal : Signal {
 class Libevent2Timer : Timer {
 	private {
 		Libevent2Driver m_driver;
-		Fiber m_owner;
+		Task m_owner;
 		void delegate() m_callback;
 		event* m_event;
 		bool m_pending;
@@ -517,7 +517,7 @@ class Libevent2Timer : Timer {
 	void acquire()
 	{
 		assert(m_owner is null);
-		m_owner = Fiber.getThis();
+		m_owner = Task.getThis();
 	}
 
 	void release()
@@ -593,7 +593,7 @@ private extern(C) nothrow
 
 		sig.m_emitCount++;
 
-		bool[Fiber] lst;
+		bool[Task] lst;
 		try {
 			lst = sig.m_listeners.dup;
 			foreach( l, _; lst )

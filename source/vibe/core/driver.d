@@ -71,7 +71,16 @@ interface EventDriver {
 */
 interface DriverCore {
 	void yieldForEvent();
-	void resumeTask(Fiber f, Exception event_exception = null);
+	void resumeTask(Task f, Exception event_exception = null);
+}
+
+class Task : Fiber {
+	protected this(void delegate() fun)
+	{
+		super(fun);
+	}
+
+	static Task getThis(){ return cast(Task)Fiber.getThis(); }
 }
 
 
