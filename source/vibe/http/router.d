@@ -65,43 +65,43 @@ import std.functional;
 +/
 class UrlRouter : IHttpServerRequestHandler {
 	private {
-		Route[][string] m_routes;
+		Route[][HttpMethod.max+1] m_routes;
 	}
 
 	/// Adds a new route for GET requests matching the specified pattern.
-	UrlRouter get(string url_match, IHttpServerRequestHandler cb) { addRoute("GET", url_match, cb); return this; }
+	UrlRouter get(string url_match, IHttpServerRequestHandler cb) { addRoute(HttpMethod.GET, url_match, cb); return this; }
 	/// ditto
-	UrlRouter get(string url_match, HttpServerRequestFunction cb) { addRoute("GET", url_match, cb); return this; }
+	UrlRouter get(string url_match, HttpServerRequestFunction cb) { addRoute(HttpMethod.GET, url_match, cb); return this; }
 	/// ditto
-	UrlRouter get(string url_match, HttpServerRequestDelegate cb) { addRoute("GET", url_match, cb); return this; }
+	UrlRouter get(string url_match, HttpServerRequestDelegate cb) { addRoute(HttpMethod.GET, url_match, cb); return this; }
 
 	/// Adds a new route for POST requests matching the specified pattern.
-	UrlRouter post(string url_match, IHttpServerRequestHandler cb) { addRoute("POST", url_match, cb); return this; }
+	UrlRouter post(string url_match, IHttpServerRequestHandler cb) { addRoute(HttpMethod.POST, url_match, cb); return this; }
 	/// ditto
-	UrlRouter post(string url_match, HttpServerRequestFunction cb) { addRoute("POST", url_match, cb); return this; }
+	UrlRouter post(string url_match, HttpServerRequestFunction cb) { addRoute(HttpMethod.POST, url_match, cb); return this; }
 	/// ditto
-	UrlRouter post(string url_match, HttpServerRequestDelegate cb) { addRoute("POST", url_match, cb); return this; }
+	UrlRouter post(string url_match, HttpServerRequestDelegate cb) { addRoute(HttpMethod.POST, url_match, cb); return this; }
 
 	/// Adds a new route for PUT requests matching the specified pattern.
-	UrlRouter put(string url_match, IHttpServerRequestHandler cb) { addRoute("PUT", url_match, cb); return this; }
+	UrlRouter put(string url_match, IHttpServerRequestHandler cb) { addRoute(HttpMethod.PUT, url_match, cb); return this; }
 	/// ditto
-	UrlRouter put(string url_match, HttpServerRequestFunction cb) { addRoute("PUT", url_match, cb); return this; }
+	UrlRouter put(string url_match, HttpServerRequestFunction cb) { addRoute(HttpMethod.PUT, url_match, cb); return this; }
 	/// ditto
-	UrlRouter put(string url_match, HttpServerRequestDelegate cb) { addRoute("PUT", url_match, cb); return this; }
+	UrlRouter put(string url_match, HttpServerRequestDelegate cb) { addRoute(HttpMethod.PUT, url_match, cb); return this; }
 
 	/// Adds a new route for DELETE requests matching the specified pattern.
-	UrlRouter delete_(string url_match, IHttpServerRequestHandler cb) { addRoute("DELETE", url_match, cb); return this; }
+	UrlRouter delete_(string url_match, IHttpServerRequestHandler cb) { addRoute(HttpMethod.DELETE, url_match, cb); return this; }
 	/// ditto
-	UrlRouter delete_(string url_match, HttpServerRequestFunction cb) { addRoute("DELETE", url_match, cb); return this; }
+	UrlRouter delete_(string url_match, HttpServerRequestFunction cb) { addRoute(HttpMethod.DELETE, url_match, cb); return this; }
 	/// ditto
-	UrlRouter delete_(string url_match, HttpServerRequestDelegate cb) { addRoute("DELETE", url_match, cb); return this; }
+	UrlRouter delete_(string url_match, HttpServerRequestDelegate cb) { addRoute(HttpMethod.DELETE, url_match, cb); return this; }
 
 	/// Adds a new route for PATCH requests matching the specified pattern.
-	UrlRouter patch(string url_match, IHttpServerRequestHandler cb) { addRoute("PATCH", url_match, cb); return this; }
+	UrlRouter patch(string url_match, IHttpServerRequestHandler cb) { addRoute(HttpMethod.PATCH, url_match, cb); return this; }
 	/// ditto
-	UrlRouter patch(string url_match, HttpServerRequestFunction cb) { addRoute("PATCH", url_match, cb); return this; }
+	UrlRouter patch(string url_match, HttpServerRequestFunction cb) { addRoute(HttpMethod.PATCH, url_match, cb); return this; }
 	/// ditto
-	UrlRouter patch(string url_match, HttpServerRequestDelegate cb) { addRoute("PATCH", url_match, cb); return this; }
+	UrlRouter patch(string url_match, HttpServerRequestDelegate cb) { addRoute(HttpMethod.PATCH, url_match, cb); return this; }
 
 	/// Adds a new route for requests matching the specified pattern.
 	UrlRouter any(string url_match, IHttpServerRequestHandler cb) { any(url_match, &cb.handleRequest); return this; }
@@ -118,17 +118,17 @@ class UrlRouter : IHttpServerRequestHandler {
 		return this;
 	}
 
-	void addRoute(string method, string path, IHttpServerRequestHandler cb)
+	void addRoute(HttpMethod method, string path, IHttpServerRequestHandler cb)
 	{
 		addRoute(method, path, &cb.handleRequest);
 	}
 
-	void addRoute(string method, string path, HttpServerRequestFunction cb)
+	void addRoute(HttpMethod method, string path, HttpServerRequestFunction cb)
 	{
 		addRoute(method, path, toDelegate(cb));
 	}
 
-	void addRoute(string method, string path, HttpServerRequestDelegate cb)
+	void addRoute(HttpMethod method, string path, HttpServerRequestDelegate cb)
 	{
 		m_routes[method] ~= Route(path, cb);
 	}
@@ -136,10 +136,10 @@ class UrlRouter : IHttpServerRequestHandler {
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	{
-		auto pr = req.method in m_routes;
+		auto pr = &m_routes[req.method];
 		if( pr is null ){
-			if( req.method == "HEAD" )
-				pr = "GET" in m_routes;
+			if( req.method == HttpMethod.HEAD )
+				pr = &m_routes[HttpMethod.GET];
 			if( pr is null )
 				return;
 		}

@@ -186,7 +186,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						else ln.put("-");
 						break;
 					case 'm': //Request method
-						ln.put(req.method);
+						ln.put(httpMethodString(req.method));
 						break;
 					case 'o': //Response header {header}						
 						enforce(key, "header name missing");
@@ -201,7 +201,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						ln.put("?" ~ req.queryString);
 						break;
 					case 'r': //First line of Request
-						ln.put(req.method ~ " " ~ req.url ~ " " ~ getHttpVersionString(req.httpVersion));
+						ln.put(httpMethodString(req.method) ~ " " ~ req.url ~ " " ~ getHttpVersionString(req.httpVersion));
 						break;
 					case 's': //Status
 						ln.put(to!string(res.statusCode));

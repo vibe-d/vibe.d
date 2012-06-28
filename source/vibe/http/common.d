@@ -29,6 +29,41 @@ enum HttpVersion {
 	HTTP_1_1
 }
 
+enum HttpMethod {
+	GET,
+	HEAD,
+	PUT,
+	POST,
+	PATCH,
+	DELETE,
+	OPTIONS,
+	TRACE,
+	CONNECT
+}
+
+string httpMethodString(HttpMethod m)
+{
+	static immutable strings = ["GET", "HEAD", "PUT", "POST", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"];
+	static assert(m.max+1 == strings.length);
+	return strings[m];
+}
+
+HttpMethod httpMethodFromString(string str)
+{
+	switch(str){
+		default: throw new Exception("Invalid HTTP method: "~str);
+		case "GET": return HttpMethod.GET;
+		case "HEAD": return HttpMethod.HEAD;
+		case "PUT": return HttpMethod.PUT;
+		case "POST": return HttpMethod.POST;
+		case "PATCH": return HttpMethod.PATCH;
+		case "DELETE": return HttpMethod.DELETE;
+		case "OPTIONS": return HttpMethod.OPTIONS;
+		case "TRACE": return HttpMethod.TRACE;
+		case "CONNECT": return HttpMethod.CONNECT;
+	}
+}
+
 /**
 	Represents an HTTP request made to a server.
 */
@@ -39,7 +74,7 @@ class HttpRequest {
 	
 	public {
 		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
-		string method = "GET";
+		HttpMethod method = HttpMethod.GET;
 		string url = "/";
 		StrMapCI headers;
 	}

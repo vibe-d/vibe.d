@@ -965,7 +965,7 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 			}
 
 			// write default headers
-			if( req.method == "HEAD" ) res.m_isHeadResponse = true;
+			if( req.method == HttpMethod.HEAD ) res.m_isHeadResponse = true;
 			if( settings.serverString.length )
 				res.headers["Server"] = settings.serverString;
 			res.headers["Date"] = toRFC822DateTimeString(Clock.currTime().toUTC());
@@ -1039,7 +1039,7 @@ private FreeListRef!HttpServerRequest parseRequest(InputStream conn)
 	auto pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request method" );
 
-	req.method = reqln[0 .. pos];
+	req.method = httpMethodFromString(reqln[0 .. pos]);
 	reqln = reqln[pos+1 .. $];
 	//Path
 	pos = reqln.indexOf(' ');

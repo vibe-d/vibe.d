@@ -173,7 +173,7 @@ class HttpClient : EventedObject {
 		parseRfc5322Header(m_stream, res.headers, MaxHttpHeaderLineLength);
 
 		// prepare body the reader
-		if( req.method == "HEAD" ){
+		if( req.method == HttpMethod.HEAD ){
 			res.bodyReader = new LimitedInputStream(null, 0);
 		} else {
 			if( auto pte = "Transfer-Encoding" in res.headers ){
@@ -248,7 +248,7 @@ final class HttpClientRequest : HttpRequest {
 	private void writeHeader()
 	{
 		auto app = appender!string();
-		formattedWrite(app, "%s %s %s\r\n", method, url, getHttpVersionString(httpVersion));
+		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), url, getHttpVersionString(httpVersion));
 		m_conn.write(app.data, false);
 		
 		foreach( k, v; headers ){
