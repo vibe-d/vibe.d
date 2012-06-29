@@ -121,7 +121,7 @@ int icmp2(string a, string b)
 	// fast skip equal prefix
 	size_t min_len = min(a.length, b.length);
 	while( i < min_len && a[i] == b[i] ) i++;
-	if( i > 0 && a[i-1] >= 128 ) i--; // don't stop half-way in a UTF-8 sequence
+	if( i > 0 && (a[i-1] & 0x80) ) i--; // don't stop half-way in a UTF-8 sequence
 	j = i;
 
 	// compare the differing character
@@ -146,10 +146,11 @@ int icmp2(string a, string b)
 			}
 		}
 
-		assert(i == a.length || j == b.length);
 	}
 
 	if( i < a.length ) return 1;
 	else if( j < b.length ) return -1;
+
+	assert(i == a.length || j == b.length, "Strings equal but we didn't fully compare them!?");
 	return 0;
 }
