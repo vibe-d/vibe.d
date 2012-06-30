@@ -15,9 +15,9 @@ SYMLINK_FILE="/usr/bin/vibe"
 
 # remove user, group and configuration file
 if [ "$1" = "-r" ] ;then
-	echo "Removing user '$SUER_NAME'..."
+	echo "Removing user '$USER_NAME'..."
 	/usr/sbin/userdel $USER_NAME 2>/dev/null || true
-	echo "Removing group '$SUER_NAME'..."
+	echo "Removing group '$GROUP_NAME'..."
 	/usr/sbin/groupdel $GROUP_NAME 2>/dev/null || true
 	echo "Removing configuration file $CONFIG_FILE..."
 	rm -f $CONFIG_FILE
@@ -46,7 +46,7 @@ fi
 # create/overwrite configuration file
 echo "Creating new config file in $CONFIG_FILE..."
 USER_ID=$(getent passwd $USER_NAME | cut -d: -f3)
-GROUP_ID=$(getent group $USER_NAME | cut -d: -f3)
+GROUP_ID=$(getent group $GROUP_NAME | cut -d: -f3)
 mkdir -p $(dirname $CONFIG_FILE)
 echo -e '{
 	"uid": '$USER_ID',
