@@ -34,15 +34,15 @@ import std.range;
 import std.string;
 
 struct LevMutex {
-	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
 	FreeListRef!Mutex mutex;
 	FreeListRef!ReadWriteMutex rwmutex;
+	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
 }
 
 struct LevCondition {
-	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
 	FreeListRef!Condition cond;
 	LevMutex* mutex;
+	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
 }
 
 private extern(C){
