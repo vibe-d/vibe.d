@@ -15,9 +15,9 @@ SYMLINK_FILE="/usr/bin/vibe"
 
 # remove user, group and configuration file
 if [ "$1" = "-r" ] ;then
-	echo "Removing user '$SUER_NAME'..."
+	echo "Removing user '$USER_NAME'..."
 	/usr/sbin/userdel $USER_NAME 2>/dev/null || true
-	echo "Removing group '$SUER_NAME'..."
+	echo "Removing group '$USER_NAME'..."
 	/usr/sbin/groupdel $GROUP_NAME 2>/dev/null || true
 	echo "Removing configuration file $CONFIG_FILE..."
 	rm -f $CONFIG_FILE
