@@ -110,6 +110,11 @@ void listenHttp(HttpServerSettings settings, IHttpServerRequestHandler request_h
 */
 void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
 {
+	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
+	{
+		listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+	}
+
 	// Check for every bind address/port, if a new listening socket needs to be created and
 	// check for conflicting servers
 	foreach( addr; settings.bindAddresses ){
@@ -134,7 +139,7 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 		if( !found_listener ){
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslCertFile, settings.sslKeyFile);
 			g_listeners ~= listener;
-			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+			doListen(settings, listener, addr); // DMD BUG 2043
 		}
 	}
 }
