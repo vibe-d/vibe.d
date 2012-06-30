@@ -331,21 +331,23 @@ final class Cookie {
 */
 struct StrMapCI {
 	private {
-		Tuple!(string, string)[64] m_fields;
+		static struct Field { uint keyCheckSum; string key; string value; }
+		Field[64] m_fields;
 		size_t m_fieldCount = 0;
-		Tuple!(string, string)[] m_extendedFields;
+		Field[] m_extendedFields;
 		static char[256] s_keyBuffer;
 	}
 	
 	@property size_t length() const { return m_fieldCount + m_extendedFields.length; }
 
 	void remove(string key){
-		auto idx = getIndex(m_fields[0 .. m_fieldCount], key);
+		auto keysum = computeCheckSumI(key);
+		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ){
 			removeFromArrayIdx(m_fields[0 .. m_fieldCount], idx);
 			m_fieldCount--;
 		} else {
-			idx = getIndex(m_extendedFields, key);
+			idx = getIndex(m_extendedFields, key, keysum);
 			enforce(idx >= 0);
 			removeFromArrayIdx(m_extendedFields, idx);
 		}
@@ -359,16 +361,17 @@ struct StrMapCI {
 	string opIndexAssign(string val, string key){
 		auto pitm = key in this;
 		if( pitm ) *pitm = val;
-		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = tuple(key, val);
-		else m_extendedFields ~= tuple(key, val);
+		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = Field(computeCheckSumI(key), key, val);
+		else m_extendedFields ~= Field(computeCheckSumI(key), key, val);
 		return val;
 	}
 
 	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
-		auto idx = getIndex(m_fields[0 .. m_fieldCount], key);
-		if( idx >= 0 ) return &m_fields[idx][1];
-		idx = getIndex(m_extendedFields, key);
-		if( idx >= 0 ) return &m_extendedFields[idx][1];
+		uint keysum = computeCheckSumI(key);
+		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
+		if( idx >= 0 ) return &m_fields[idx].value;
+		idx = getIndex(m_extendedFields, key, keysum);
+		if( idx >= 0 ) return &m_extendedFields[idx].value;
 		return null;
 	}
 
@@ -379,13 +382,13 @@ struct StrMapCI {
 	int opApply(int delegate(ref string key, ref string val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			string kcopy = kv[0];
-			if( auto ret = del(kcopy, kv[1]) )
+			string kcopy = kv.key;
+			if( auto ret = del(kcopy, kv.value) )
 				return ret;
 		}
 		foreach( ref kv; m_extendedFields ){
-			string kcopy = kv[0];
-			if( auto ret = del(kcopy, kv[1]) )
+			string kcopy = kv.key;
+			if( auto ret = del(kcopy, kv.value) )
 				return ret;
 		}
 		return 0;
@@ -394,11 +397,11 @@ struct StrMapCI {
 	int opApply(int delegate(ref string val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			if( auto ret = del(kv[1]) )
+			if( auto ret = del(kv.value) )
 				return ret;
 		}
 		foreach( ref kv; m_extendedFields ){
-			if( auto ret = del(kv[1]) )
+			if( auto ret = del(kv.value) )
 				return ret;
 		}
 		return 0;
@@ -413,12 +416,25 @@ struct StrMapCI {
 		return ret;
 	}
 
-	private ptrdiff_t getIndex(in Tuple!(string, string)[] map, string key)
+	private ptrdiff_t getIndex(in Field[] map, string key, uint keysum)
 	const {
-		foreach( i, ref const(Tuple!(string, string)) entry; map )
-			if( icmp2(entry[0], key) == 0 )
+		foreach( i, ref Field entry; map ){
+			if( entry.keyCheckSum != keysum ) continue;
+			if( icmp2(entry.key, key) == 0 )
 				return i;
+		}
 		return -1;
+	}
+	
+	// very simple check sum function with a good chance to match
+	// strings with different case equal
+	private static uint computeCheckSumI(string s)
+	{
+		import std.uni;
+		uint csum = 0;
+		foreach( i; 0 .. s.length )
+			csum += 357*(s[i]&0x1011_1111);
+		return csum;
 	}
 }
 
