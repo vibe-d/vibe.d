@@ -12,6 +12,7 @@ public import vibe.http.status;
 import vibe.core.log;
 import vibe.core.tcp;
 import vibe.utils.array;
+import vibe.utils.memory;
 import vibe.utils.string;
 
 import std.algorithm;
