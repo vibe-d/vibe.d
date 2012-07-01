@@ -14,6 +14,163 @@ import core.memory;
 import std.conv;
 import std.traits;
 
+struct PoolAllocator {
+	static struct Pool { Pool* next; void[] data; void[] remaining; }
+	static struct Destructor { Destructor* next; void function(void*) destructor; void* object; }
+	private {
+		Pool* m_freePools;
+		Pool* m_fullPools;
+		Destructor* m_destructors;
+		size_t m_poolSize;
+	}
+
+	this(size_t pool_size)
+	{
+		m_poolSize = pool_size;
+	}
+
+	void[] alloc(size_t sz)
+	{
+		Pool* pprev = null;
+		Pool* p = m_freePools;
+		while( p && p.remaining.length < sz ){
+			pprev = p;
+			p = p.next;
+		}
+
+		if( !p ){
+			p = new Pool;
+			p.data = new void[sz <= m_poolSize ? m_poolSize : sz];
+			p.remaining = p.data;
+			p.next = m_freePools;
+			m_freePools = p;
+			pprev = null;
+		}
+
+		auto ret = p.remaining[0 .. sz];
+		p.remaining = p.remaining[sz .. $];
+		if( !p.remaining.length ){
+			if( pprev ){
+				pprev.next = p.next;
+			} else {
+				m_freePools = p.next;
+			}
+			p.next = m_fullPools;
+			m_fullPools = p;
+		}
+
+		return ret;
+	}
+
+	auto allocObject(T, bool INIT = true, ARGS...)(ARGS args)
+	{
+		auto mem = alloc(AllocSize!T);
+		static if( INIT ){
+			auto ret = emplace!T(mem, args);
+			Destructor des;
+			des.next = m_destructors;
+			des.destructor = &destroy!T;
+			des.object = mem.ptr;
+			m_destructors = des;
+		}
+		else static if( is(T == class) ) return cast(T)mem.ptr;
+		else return cast(T*)mem.ptr;
+	}
+
+	T[] allocArray(T, bool INIT = true)(size_t n)
+	{
+		auto ret = cast(T[])alloc(T.sizeof * n);
+		static if( INIT ){
+			// TODO: use memset for class, pointers and scalars
+			foreach( ref el; ret ){
+				emplace(cast(void*)&el);
+				Destructor des;
+				des.next = m_destructors;
+				des.destructor = &destroy!T;
+				des.object = &el;
+				m_destructors = des;
+			}
+		}
+		return ret;
+	}
+
+	void freeAll()
+	{
+		// destroy all initialized objects
+		for( auto d = m_destructors; d; d = d.next )
+			d.destructor(d.object);
+		m_destructors = null;
+
+		// put all full Pools into the free pools list
+		for( Pool* p = m_fullPools, pnext; p; p = pnext ){
+			pnext = p.next;
+			p.next = m_freePools;
+			m_freePools = p;
+		}
+
+		// free up all pools
+		for( Pool* p = m_freePools; p; p = p.next )
+			p.remaining = p.data;
+	}
+
+	private static destroy(T)(void* ptr)
+	{
+		static if( is(T == class) ) .clear(cast(T)ptr);
+		else .clear(*cast(T*)ptr);
+	}
+}
+
+class FixedAppender(ArrayType : E[], size_t NELEM, E) {
+	alias Unqual!E ElemType;
+	private {
+		ElemType[NELEM] m_data;
+		ElemType[] m_remaining;
+	}
+
+	this()
+	{
+		m_remaining = m_data;
+	}
+
+	void put(ElemType el)
+	{
+		m_remaining[0] = el;
+		m_remaining = m_remaining[1 .. $];
+	}
+
+	static if( is(ElemType == char) ){
+		void put(dchar el)
+		{
+			if( el < 128 ) put(cast(char)el);
+			else {
+				char[4] buf;
+				auto len = std.utf.encode(buf, el);
+				put(cast(ArrayType)buf[0 .. len]);
+			}
+		}
+	}
+
+	static if( is(ElemType == wchar) ){
+		void put(dchar el)
+		{
+			if( el < 128 ) put(cast(wchar)el);
+			else {
+				wchar[3] buf;
+				auto len = std.utf.encode(buf, el);
+				put(cast(ArrayType)buf[0 .. len]);
+			}
+		}
+	}
+
+	void put(ArrayType arr)
+	{
+		m_remaining[0 .. arr.length] = cast(ElemType[])arr;
+		m_remaining = m_remaining[arr.length .. $];
+	}
+
+	@property ArrayType data() { return cast(ArrayType)m_data[0 .. $-m_remaining.length]; }
+}
+
 template FreeListAlloc(size_t SZ, bool USE_GC = true)
 {
 	private struct FreeListSlot { FreeListSlot* next; }
