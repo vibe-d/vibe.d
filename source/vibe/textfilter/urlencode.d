@@ -43,7 +43,7 @@ void filterUrlEncode(R)(ref R dst, string str)
 				dst.put(str[0]);
 				break;
 			default:
-				formattedWrite(dst, "%%%02x", str[0]);
+				formattedWrite(dst, "%%%02X", str[0]);
 		}
 		str = str[1 .. $];
 	}
@@ -73,3 +73,20 @@ void filterUrlDecode(R)(ref R dst, string str)
 	}
 }
 
+
+unittest
+{
+	assert(urlEncode("\r\n") == "%0D%0A"); // github #65
+	assert(urlEncode("This-is~a_test") == "This-is~a_test");
+	assert(urlEncode("This is a test") == "This+is+a+test");
+	assert(urlEncode("%") == "%25");
+	assert(urlEncode("!") == "%21");
+	assert(urlDecode("%0D%0a") == "\r\n");
+	assert(urlDecode("%c2%aE") == "®");
+	assert(urlDecode("This+is%20a+test") == "This is a test");
+
+	string a = "This~is a-test!\r\nHello, Wörld.. ";
+	string aenc = urlEncode(a);
+	assert(aenc == "This~is+a-test%21%0D%0AHello%2C+W%C3%B6rld..+");
+	assert(urlDecode(urlEncode(a)) == a);
+}
