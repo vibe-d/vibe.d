@@ -43,6 +43,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\
 ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 0) /*@ufcs*/
 {
 	auto output = FreeListRef!MemoryOutputStream();
+	output.reserve(max_bytes ? max_bytes < 128 ? max_bytes : 128 : 128);
 	readUntil(stream, output, end_marker, max_bytes);
 	return output.data();
 }
@@ -51,7 +52,8 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 {
 	// TODO: implement a more efficient algorithm for long end_markers such as a Boyer-Moore variant
 	size_t nmatched = 0;
-	ubyte[128] buf;
+	auto bufferobj = FreeListRef!(Buffer, false)();
+	auto buf = bufferobj.bytes[];
 
 	void skip(size_t nbytes)
 	{
@@ -114,7 +116,6 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 {
 	auto dst = appender!(ubyte[])();
-	static struct Buffer { ubyte[64*1024] bytes; }
 	auto bufferobj = FreeListRef!(Buffer, false)();
 	auto buffer = bufferobj.bytes[];
 	size_t n = 0, m = 0;
@@ -128,6 +129,7 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 	return dst.data;
 }
 
+private struct Buffer { ubyte[64*1024] bytes; }
 
 /**************************************************************************************************/
 /* Public types                                                                                   */

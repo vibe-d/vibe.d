@@ -21,6 +21,11 @@ class MemoryOutputStream : OutputStream {
 		m_destination.clear();
 	}
 
+	void reserve(size_t nbytes)
+	{
+		m_destination.reserve(nbytes);
+	}
+
 	@property ubyte[] data() { return m_destination.data(); }
 
 	void write(in ubyte[] bytes, bool do_flush = true)
