@@ -134,7 +134,7 @@ package class Libevent2TcpConnection : TcpConnection {
 
 		version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
 		else shutdown(m_ctx.socketfd, SHUT_WR);
-		bufferevent_free(m_ctx.event);
+		if( m_ctx.event ) bufferevent_free(m_ctx.event);
 		TcpContext.Alloc.free(m_ctx);
 		m_ctx = null;
 		logTrace("...socket %d closed.", fd);
