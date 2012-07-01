@@ -438,36 +438,83 @@ struct StrMapCI {
 	}
 }
 
-string toRFC822DateTimeString(SysTime time)
+void writeRFC822DateString(R)(ref R dst, SysTime time)
 {
 	assert(time.timezone == UTC());
-	auto ret = appender!string();
-	ret.reserve(29);
+
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-	formattedWrite(ret, "%s, %02d %s %d %02d:%02d:%02d %s", dayStrings[time.dayOfWeek],
-		time.day, monthStrings[time.month-1], time.year, time.hour, time.minute, time.second, "GMT");
-	return ret.data;
+	dst.put(dayStrings[time.dayOfWeek]);
+	dst.put(", ");
+	writeDecimal2(dst, time.day);
+	dst.put(' ');
+	dst.put(monthStrings[time.month-1]);
+	dst.put(' ');
+	writeDecimal(dst, time.year);
+}
+
+void writeRFC822TimeString(R)(ref R dst, SysTime time)
+{
+	assert(time.timezone == UTC());
+	writeDecimal2(dst, time.hour);
+	dst.put(':');
+	writeDecimal2(dst, time.minute);
+	dst.put(':');
+	writeDecimal2(dst, time.second);
+	dst.put(" GMT");
+}
+
+void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
+{
+	writeRFC822DateString(dst, time);
+	dst.put(' ');
+	writeRFC822TimeString(dst, time);
 }
 
 string toRFC822TimeString(SysTime time)
 {
-	assert(time.timezone == UTC());
-	auto ret = appender!string();
-	ret.reserve(12);
-	formattedWrite(ret, "%02d:%02d:%02d %s", time.hour, time.minute, time.second, "GMT");
+	auto ret = new FixedAppender!(string, 12);
+	writeRFC822TimeString(ret, time);
 	return ret.data;
 }
 
 string toRFC822DateString(SysTime time)
 {
-	assert(time.timezone == UTC());
-	auto ret = appender!string();
-	ret.reserve(16);
-	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-	formattedWrite(ret, "%s, %02d %s %d", dayStrings[time.dayOfWeek],
-		time.day, monthStrings[time.month-1], time.year);
+	auto ret = new FixedAppender!(string, 16);
+	writeRFC822DateString(ret, time);
 	return ret.data;
 }
 
+string toRFC822DateTimeString(SysTime time)
+{
+	auto ret = new FixedAppender!(string, 29);
+	writeRFC822DateTimeString(ret, time);
+	return ret.data;
+}
+
+private void writeDecimal2(R)(ref R dst, uint n)
+{
+	auto d1 = n % 10;
+	auto d2 = (n / 10) % 10;
+	dst.put(cast(char)(d2 + '0'));
+	dst.put(cast(char)(d1 + '0'));
+}
+
+private void writeDecimal(R)(ref R dst, uint n)
+{
+	if( n == 0 ){
+		dst.put('0');
+		return;
+	}
+
+	// determine all digits
+	uint[10] digits;
+	int i = 0;
+	while( n > 0 ){
+		digits[i++] = n % 10;
+		n /= 10;
+	}
+
+	// write out the digits in reverse order
+	while( i > 0 ) dst.put(cast(char)(digits[--i] + '0'));
+}
