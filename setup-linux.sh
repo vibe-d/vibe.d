@@ -39,7 +39,7 @@ fi
 
 # creating user if he isn't already there
 if ! getent passwd $USER_NAME >/dev/null; then
-	echo "Creating user $GROUP_NAME..."
+	echo "Creating user $USER_NAME..."
 	/usr/sbin/useradd -r -g $GROUP_NAME -c "$USER_COMMENT" $USER_NAME >/dev/null
 fi
 
