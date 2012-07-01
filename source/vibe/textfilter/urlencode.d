@@ -16,6 +16,7 @@ import std.format;
 string urlEncode(string str)
 {
 	auto dst = appender!string();
+	dst.reserve(str.length);
 	filterUrlEncode(dst, str);
 	return dst.data;
 }
@@ -23,6 +24,7 @@ string urlEncode(string str)
 string urlDecode(string str)
 {
 	auto dst = appender!string();
+	dst.reserve(str.length);
 	filterUrlDecode(dst, str);
 	return dst.data;
 }
@@ -37,11 +39,11 @@ void filterUrlEncode(R)(ref R dst, string str)
 			case 'A': .. case 'Z'+1:
 			case 'a': .. case 'z'+1:
 			case '0': .. case '9'+1:
-			case '-': case '_': case '.': case '~':			
+			case '-': case '_': case '.': case '~':
 				dst.put(str[0]);
 				break;
 			default:
-				formattedWrite(dst, "%%%x", str[0]);
+				formattedWrite(dst, "%%%02x", str[0]);
 		}
 		str = str[1 .. $];
 	}
