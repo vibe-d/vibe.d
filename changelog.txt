@@ -5,10 +5,13 @@ v0.7.6 - 2012-
 -------------------
 
  - Fixed TcpConnection.close() for the libevent driver - this caused hanging page loads in some browsers
+ - A good amount of performance tuning of the HTTP server
  - Added an setup-linux.sh script that sets up a local vibe user, as well as a symlink in /usr/bin (Thanks to Jordi Sayol)
+ - Installed VPM modules are now passed as version identifiers VPM_package_xyz to the application to allow for optional features
  - Fixed MongoDB connection handling to avoid secondary assertions being triggered in case of exceptions during the communication
  - Fixed JSON (de)serialization of structs and classes (member names were wrong)
  - Improved the vibe shell script
+ - Fixed (filter)urlEncode for character values < 0x10
 
 v0.7.5 - 2012-06-05
 -------------------
