@@ -78,6 +78,7 @@ nothrow:
 
 public import deimos.event2.event_struct;
 import deimos.event2.dns;
+import deimos.event2.buffer;
 /* For int types. */
 public import deimos.event2.util;
 import deimos.event2._d_util;
@@ -102,7 +103,6 @@ enum BEV_EVENT_CONNECTED = 0x80;	/**< connect operation finished. */
    @see event2/bufferevent.h
  */
 struct bufferevent;
-struct evbuffer;
 
 /**
    A read or write callback for a bufferevent.
