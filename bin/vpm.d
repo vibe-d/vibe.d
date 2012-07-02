@@ -189,11 +189,20 @@ private string[] getLibs(Path vibedDir)
 	}
 }
 
+private string stripDlangSpecialChars(string s) {
+	char[] ret = s.dup;
+	string blackList = " /=.&|-+<>!()[]{}?,;:$*%^~@#";
+	for(int i=0; i<ret.length; ++i)
+		if(blackList.canFind(ret[i])) 
+			ret[i] = '_';
+	return to!string(ret);
+}
+
 private string[] getPackagesAsVersion(const Vpm vpm) 
 {
 	string[] ret;
 	string[string] pkgs = vpm.installedPackages();
 	foreach(id, vers; pkgs) 
-		ret ~= "-version=VPM_package_" ~ id;
+		ret ~= "-version=VPM_package_" ~ stripDlangSpecialChars(id);
 	return ret;
 }
