@@ -131,7 +131,7 @@ class PoolAllocator : Allocator {
 	{
 		bool last_in_pool = m_freePools && arr.ptr+arr.length == m_freePools.remaining.ptr;
 		if( last_in_pool && m_freePools.remaining.length+arr.length >= newsize ){
-			m_freePools.remaining = arr[newsize .. m_freePools.remaining.length+arr.length-newsize];
+			m_freePools.remaining = arr.ptr[newsize .. m_freePools.remaining.length+arr.length-newsize];
 			arr = arr.ptr[0 .. newsize];
 			return arr;
 		} else {
