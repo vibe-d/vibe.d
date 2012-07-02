@@ -114,6 +114,7 @@ int main(string[] args)
 			flags ~= "-Jviews";
 			flags ~= vpm.dflags;
 			flags ~= getLibs(vibedDir);
+			flags ~= getPackagesAsVersion(vpm);
 			flags ~= (Path("source") ~ "app.d").toNativeString();
 			flags ~= appArgs;
 
@@ -186,4 +187,13 @@ private string[] getLibs(Path vibedDir)
 	{
 		return split(environment.get("LIBS", "-L-levent_openssl -L-levent"));
 	}
+}
+
+private string[] getPackagesAsVersion(const Vpm vpm) 
+{
+	string[] ret;
+	string[string] pkgs = vpm.installedPackages();
+	foreach(id, vers; pkgs) 
+		ret ~= "-version=VPM_package_" ~ id;
+	return ret;
 }

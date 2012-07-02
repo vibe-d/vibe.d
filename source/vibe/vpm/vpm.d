@@ -78,6 +78,14 @@ private class Application {
 		return s;
 	}
 	
+	/// Gets all installed packages as a "packageId" = "version" associative array
+	string[string] installedPackages() const {
+		string[string] pkgs;
+		foreach(k, p; m_packages)
+			pkgs[k] = p.vers;
+		return pkgs;
+	}
+	
 	/// Writes the application's metadata to the package.json file
 	/// in it's root folder.
 	void writeMetadata() const {
@@ -476,6 +484,9 @@ class Vpm {
 		logInfo("\n" ~ m_app.info());
 	}
 
+	/// Gets all installed packages as a "packageId" = "version" associative array
+	string[string] installedPackages() const { return m_app.installedPackages(); }
+	
 	/// Installs the package matching the dependency into the application.
 	/// @param addToApplication if true, this will also add an entry in the
 	/// list of dependencies in the application's package.json
