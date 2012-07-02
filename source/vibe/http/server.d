@@ -36,6 +36,7 @@ import std.exception;
 import std.format;
 import std.functional;
 import std.string;
+import std.typecons;
 import std.uri;
 public import std.variant;
 
@@ -442,6 +443,7 @@ final class HttpServerResponse : HttpResponse {
 	private {
 		Stream m_conn;
 		OutputStream m_bodyWriter;
+		Allocator m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
 		FreeListRef!CountingOutputStream m_countingWriter;
 		FreeListRef!GzipOutputStream m_gzipOutputStream;
@@ -453,11 +455,12 @@ final class HttpServerResponse : HttpResponse {
 		SysTime m_timeFinalized;
 	}
 
-	this(Stream conn, HttpServerSettings settings)
+	this(Stream conn, HttpServerSettings settings, Allocator req_alloc)
 	{
 		m_conn = conn;
 		m_countingWriter = FreeListRef!CountingOutputStream(conn);
 		m_settings = settings;
+		m_requestAlloc = req_alloc;
 	}
 	
 	@property bool headerWritten() const { return m_headerWritten; }
@@ -468,7 +471,7 @@ final class HttpServerResponse : HttpResponse {
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
 		if( content_type ) headers["Content-Type"] = content_type;
-		headers["Content-Length"] = to!string(data.length);
+		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", data.length);
 		bodyWriter.write(data);
 	}
 
@@ -667,8 +670,15 @@ final class HttpServerResponse : HttpResponse {
 			app.put("\r\n");
 		}
 
+		// NOTE: AA.length is very slow so this helper function is used to determine if an AA is empty.
+		static bool empty(AA)(AA aa)
+		{
+			foreach( _; aa ) return true;
+			return false;
+		}
+
 		// write cookies
-		if ( cookies.length > 0 ) {
+		if( !empty(cookies) ) {
 			foreach( n, cookie; this.cookies ) {
 				app.put("Set-Cookie: ");
 				app.put(n);
@@ -821,6 +831,9 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 private bool handleRequest(Stream conn, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings)
 {
+	auto base_allocator = scoped!AutoFreeListAllocator();
+	auto request_allocator = scoped!PoolAllocator(1024, base_allocator.Scoped_payload);
+
 	// some instances that live only while the request is running
 	FreeListRef!NullOutputStream nullWriter = FreeListRef!NullOutputStream();
 	FreeListRef!HttpServerRequest req = FreeListRef!HttpServerRequest();
@@ -845,7 +858,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 	// Create the response object
-	auto res = FreeListRef!HttpServerResponse(conn, settings);
+	auto res = FreeListRef!HttpServerResponse(conn, settings, request_allocator.Scoped_payload);
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -883,7 +896,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 		// basic request parsing
-		req = parseRequest(reqReader);
+		req = parseRequest(reqReader, request_allocator);
 		req.peer = peer_address;
 		logTrace("Got request header.");
 
@@ -989,7 +1002,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if( settings.serverString.length )
 			res.headers["Server"] = settings.serverString;
 		res.headers["Date"] = toRFC822DateTimeString(Clock.currTime().toUTC());
-		if( req.persistent ) res.headers["Keep-Alive"] = "timeout="~to!string(settings.keepAliveTimeout.total!"seconds"());
+		if( req.persistent ) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request
 		parsed = true;
@@ -1038,13 +1051,13 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 }
 
 
-private FreeListRef!HttpServerRequest parseRequest(InputStream conn)
+private FreeListRef!HttpServerRequest parseRequest(InputStream conn, Allocator alloc)
 {
 	auto req = FreeListRef!HttpServerRequest();
 	auto stream = FreeListRef!LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
 
 	logTrace("HTTP server reading status line");
-	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength);
+	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength, "\r\n", alloc);
 	logTrace("req: %s", reqln);
 	
 	//Method
@@ -1063,7 +1076,7 @@ private FreeListRef!HttpServerRequest parseRequest(InputStream conn)
 	req.httpVersion = parseHttpVersion(reqln);
 	
 	//headers
-	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength);
+	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
 
 	return req;
 }
@@ -1081,4 +1094,11 @@ private void parseCookies(string str, ref string[string] cookies)
 		cookies[name] = urlDecode(value);
 		str = idx < str.length ? str[idx+1 .. $] : null;
 	}
+}
+
+private string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
+{
+	auto app = AllocAppender!string(alloc);
+	formattedWrite(&app, fmt, args);
+	return app.data;
 }

@@ -11,10 +11,11 @@ import vibe.core.log;
 import vibe.stream.memory;
 import vibe.utils.memory;
 
-import std.array;
 import std.algorithm;
-import std.exception;
+import std.array;
 import std.datetime;
+import std.exception;
+import std.typecons;
 
 
 /**************************************************************************************************/
@@ -28,9 +29,9 @@ import std.datetime;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream in case of max_bytes != 0.
 */
-ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\n") /*@ufcs*/
+ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
-	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes);
+	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes, alloc);
 }
 
 /**
@@ -40,9 +41,9 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\
 		An exception if either the stream end was hit without hitting a marker first, or
 		if more than max_bytes have been read from the stream in case of max_bytes != 0.
 */
-ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 0) /*@ufcs*/
+ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 0, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
-	auto output = FreeListRef!MemoryOutputStream();
+	auto output = scoped!MemoryOutputStream(alloc);
 	output.reserve(max_bytes ? max_bytes < 128 ? max_bytes : 128 : 128);
 	readUntil(stream, output, end_marker, max_bytes);
 	return output.data();

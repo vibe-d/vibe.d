@@ -52,6 +52,7 @@ private {
 package class Libevent2TcpConnection : TcpConnection {
 	private {
 		bufferevent* m_event;
+		evbuffer* m_inputBuffer;
 		bool m_timeout_triggered;
 		TcpContext* m_ctx;
 		string m_peerAddress;
@@ -63,6 +64,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		m_event = ctx.event;
 		m_ctx = ctx;
+		m_inputBuffer = bufferevent_get_input(m_event);
 
 		assert(Fiber.getThis() is m_ctx.task);
 
@@ -82,7 +84,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	/// Enables/disables Nagle's algorithm for this connection (enabled by default).
 	@property void tcpNoDelay(bool enabled)
 	{
-		auto fd = bufferevent_getfd(m_event);
+		auto fd = m_ctx.socketfd;
 		ubyte opt = enabled;
 		assert(fd <= int.max, "Socket descriptor > int.max");
 		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, &opt, opt.sizeof);
@@ -122,7 +124,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		assert(m_ctx, "Closing an already closed TCP connection.");
 
 		checkConnected();
-		auto fd = bufferevent_getfd(m_event);
+		auto fd = m_ctx.socketfd;
 		m_ctx.shutdown = true;
 		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
@@ -148,7 +150,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	@property ulong leastSize()
 	{
 		size_t len;
-		auto buf = bufferevent_get_input(m_event);
+		auto buf = m_inputBuffer;
 		while( (len = evbuffer_get_length(buf)) == 0 ){
 			if( !connected ) return 0;
 			logTrace("leastSize waiting for new data.");
@@ -160,7 +162,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	@property bool dataAvailableForRead()
 	{
 		size_t len;
-		auto buf = bufferevent_get_input(m_event);
+		auto buf = m_inputBuffer;
 		return evbuffer_get_length(buf) > 0;
 	}
 
@@ -168,7 +170,7 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	const(ubyte)[] peek()
 	{
-		auto buf = bufferevent_get_input(m_event);
+		auto buf = m_inputBuffer;
 		evbuffer_iovec iovec;
 		if( evbuffer_peek(buf, -1, null, &iovec, 1) == 0 )
 			return null;
@@ -181,7 +183,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		while( dst.length > 0 ){
 			checkConnected();
-			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, bufferevent_getfd(m_event));
+			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, m_ctx.socketfd);
 			auto nbytes = bufferevent_read(m_event, dst.ptr, dst.length);
 			logTrace(" .. got %d bytes", nbytes);
 			dst = dst[nbytes .. $];
@@ -224,9 +226,9 @@ package class Libevent2TcpConnection : TcpConnection {
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{	
 		checkConnected();
-		//logTrace("evbuffer_add (fd %d): %s", bufferevent_getfd(m_event), bytes);
-		//logTrace("evbuffer_add (fd %d): <%s>", bufferevent_getfd(m_event), cast(string)bytes);
-		logTrace("evbuffer_add (fd %d): %d B", bufferevent_getfd(m_event), bytes.length);
+		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
+		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
+		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
 		if( bufferevent_write(m_event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
 			
@@ -327,12 +329,13 @@ package extern(C)
 			return;
 		}
 
-		// NOTE: we need to return the delegate from a function because
-		//       otherwise multiple iterations of the for loop will share the
-		//       same stack frame.
-		static void delegate() client_task(TcpContext* listen_ctx, sockaddr_in6 remote_addr, int sockfd)
-		{
-			return {
+		static struct ClientTask {
+			TcpContext* listen_ctx;
+			sockaddr_in6 remote_addr;
+			int sockfd;
+
+			void execute()
+			{
 				if( evutil_make_socket_nonblocking(sockfd) ){
 					logError("Error setting non-blocking I/O on an incoming connection.");
 				}
@@ -346,7 +349,7 @@ package extern(C)
 					logError("Error initializing buffered I/O event for fd %d.", sockfd);
 					return;
 				}
-				
+
 				auto client_ctx = TcpContext.Alloc.alloc(drivercore, eventloop, sockfd, buf_event, remote_addr);
 				assert(client_ctx.event !is null, "event is null although it was just != null?");
 				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
@@ -372,12 +375,14 @@ package extern(C)
 					logDebug("%s", e.toString());
 				}
 				if( conn.connected ) conn.close();
+
+				FreeListObjectAlloc!ClientTask.free(&this);
 				logDebug("task finished.");
-			};
+			}
 		}
 
-		static bool tryAccept(evutil_socket_t listenfd, TcpContext* ctx)
-		{
+		// Accept and configure incoming connections (up to 10 connections in one go)
+		foreach( i; 0 .. 10 ){
 			logTrace("accept");
 			assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
 			sockaddr_in6 remote_addr;
@@ -393,22 +398,21 @@ package extern(C)
 					else
 						logError("Error accepting an incoming connection: %d", err);
 				}
-				return false;
+				break;
 			}
-			
+
+			auto task = FreeListObjectAlloc!ClientTask.alloc();
+			task.listen_ctx = ctx;
+			task.remote_addr = remote_addr;
+			task.sockfd = sockfd;
+
 			version(MultiThreadTest){
-				runWorkerTask(client_task(ctx, remote_addr, sockfd));
+				runWorkerTask(&task.execute);
 			} else {
-				runTask(client_task(ctx, remote_addr, sockfd));
+				runTask(&task.execute);
 			}
-			return true;
 		}
 
-
-		// Accept and configure incoming connections (up to 10 connections in one go)
-		foreach( i; 0 .. 10 )
-			if( !tryAccept(listenfd, ctx) )
-				break;
 		logTrace("handled incoming connections...");
 	}
 

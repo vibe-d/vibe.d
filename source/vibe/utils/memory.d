@@ -1,6 +1,9 @@
 /**
 	Utiltiy functions for memory management
 
+	Note that this module currently is a big sand box for testing allocation related stuff.
+	Nothing here, including the interfaces, is final but rather a lot of experimentation.
+
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
@@ -13,20 +16,80 @@ import core.stdc.stdlib;
 import core.memory;
 import std.conv;
 import std.traits;
+import std.algorithm;
 
-struct PoolAllocator {
+interface Allocator {
+	void[] alloc(size_t sz);
+	void[] realloc(void[] mem, size_t new_sz);
+	void free(void[] mem);
+}
+
+Allocator defaultAllocator()
+{
+	static Allocator alloc;
+	if( !alloc ) alloc = new GCAllocator;
+	return alloc;
+}
+
+class GCAllocator : Allocator {
+	void[] alloc(size_t sz) { return GC.malloc(sz)[0 .. sz]; }
+	void[] realloc(void[] mem, size_t new_size) { return GC.realloc(mem.ptr, new_size)[0 .. new_size]; }
+	void free(void[] mem) { GC.free(mem.ptr); }
+}
+
+class AutoFreeListAllocator : Allocator {
+	void[] alloc(size_t sz)
+	{
+		if( sz < 8 ) return FreeListAlloc!8.alloc()[0 .. sz];
+		if( sz < 16 ) return FreeListAlloc!16.alloc()[0 .. sz];
+		if( sz < 32 ) return FreeListAlloc!32.alloc()[0 .. sz];
+		if( sz < 64 ) return FreeListAlloc!64.alloc()[0 .. sz];
+		if( sz < 128 ) return FreeListAlloc!128.alloc()[0 .. sz];
+		if( sz < 256 ) return FreeListAlloc!256.alloc()[0 .. sz];
+		if( sz < 512 ) return FreeListAlloc!512.alloc()[0 .. sz];
+		if( sz < 1024 ) return FreeListAlloc!1024.alloc()[0 .. sz];
+		if( sz < 2048 ) return FreeListAlloc!2048.alloc()[0 .. sz];
+		return GC.malloc(sz)[0 .. sz];
+	}
+
+	void[] realloc(void[] data, size_t sz)
+	{
+		auto newd = alloc(sz);
+		auto len = min(data.length, sz);
+		newd[0 .. len] = data[0 .. len];
+		return newd;
+	}
+
+	void free(void[] data)
+	{
+		if( data.length < 8 ) FreeListAlloc!8.free(data.ptr);
+		if( data.length < 16 ) FreeListAlloc!16.free(data.ptr);
+		if( data.length < 32 ) FreeListAlloc!32.free(data.ptr);
+		if( data.length < 64 ) FreeListAlloc!64.free(data.ptr);
+		if( data.length < 128 ) FreeListAlloc!128.free(data.ptr);
+		if( data.length < 256 ) FreeListAlloc!256.free(data.ptr);
+		if( data.length < 512 ) FreeListAlloc!512.free(data.ptr);
+		if( data.length < 1024 ) FreeListAlloc!1024.free(data.ptr);
+		if( data.length < 2048 ) FreeListAlloc!2048.free(data.ptr);
+		GC.free(data.ptr);
+	}
+}
+
+class PoolAllocator : Allocator {
 	static struct Pool { Pool* next; void[] data; void[] remaining; }
 	static struct Destructor { Destructor* next; void function(void*) destructor; void* object; }
 	private {
+		Allocator m_baseAllocator;
 		Pool* m_freePools;
 		Pool* m_fullPools;
 		Destructor* m_destructors;
 		size_t m_poolSize;
 	}
 
-	this(size_t pool_size)
+	this(size_t pool_size, Allocator base = defaultAllocator())
 	{
 		m_poolSize = pool_size;
+		m_baseAllocator = base;
 	}
 
 	void[] alloc(size_t sz)
@@ -39,8 +102,10 @@ struct PoolAllocator {
 		}
 
 		if( !p ){
-			p = new Pool;
-			p.data = new void[sz <= m_poolSize ? m_poolSize : sz];
+			auto pmem = m_baseAllocator.alloc(AllocSize!Pool);
+
+			p = emplace!Pool(pmem);
+			p.data = m_baseAllocator.alloc(sz <= m_poolSize ? m_poolSize : sz);
 			p.remaining = p.data;
 			p.next = m_freePools;
 			m_freePools = p;
@@ -62,10 +127,29 @@ struct PoolAllocator {
 		return ret;
 	}
 
-	auto allocObject(T, bool INIT = true, ARGS...)(ARGS args)
+	void[] realloc(void[] arr, size_t newsize)
 	{
-		auto mem = alloc(AllocSize!T);
-		static if( INIT ){
+		bool last_in_pool = m_freePools && arr.ptr+arr.length == m_freePools.remaining.ptr;
+		if( last_in_pool && m_freePools.remaining.length+arr.length >= newsize ){
+			m_freePools.remaining = arr[newsize .. m_freePools.remaining.length+arr.length-newsize];
+			arr = arr.ptr[0 .. newsize];
+			return arr;
+		} else {
+			auto ret = alloc(newsize);
+			ret[0 .. min(arr.length, newsize)] = arr[0 .. min(arr.length, newsize)];
+			return ret;
+		}
+	}
+
+	void free(void[] mem)
+	{
+	}
+
+	auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args)
+	{
+		auto mem = allocator.alloc(AllocSize!T);
+		static if( MANAGED ){
+			GC.addRange(mem.ptr, mem.length);
 			auto ret = emplace!T(mem, args);
 			Destructor des;
 			des.next = m_destructors;
@@ -77,10 +161,12 @@ struct PoolAllocator {
 		else return cast(T*)mem.ptr;
 	}
 
-	T[] allocArray(T, bool INIT = true)(size_t n)
+	T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 	{
-		auto ret = cast(T[])alloc(T.sizeof * n);
-		static if( INIT ){
+		auto mem = allocator.alloc(T.sizeof * n);
+		auto ret = cast(T[])mem;
+		static if( MANAGED ){
+			GC.addRange(mem.ptr, mem.length);
 			// TODO: use memset for class, pointers and scalars
 			foreach( ref el; ret ){
 				emplace(cast(void*)&el);
@@ -120,6 +206,90 @@ struct PoolAllocator {
 	}
 }
 
+struct AllocAppender(ArrayType : E[], E) {
+	alias Unqual!E ElemType;
+	private {
+		ElemType[] m_data;
+		ElemType[] m_remaining;
+		Allocator m_alloc;
+	}
+
+	this(Allocator alloc)
+	{
+		m_alloc = alloc;
+	}
+
+	void reserve(size_t amt)
+	{
+		size_t nelems = m_data.length - m_remaining.length;
+		if( !m_data.length ){
+			m_data = cast(ElemType[])m_alloc.alloc(amt*E.sizeof);
+		}
+		if( m_remaining.length < amt ){
+			size_t n = m_data.length - m_remaining.length;
+			m_data = cast(ElemType[])m_alloc.realloc(m_data, (n+amt)*E.sizeof);
+		}
+		m_remaining = m_data[nelems .. m_data.length];
+	}
+
+	void put(E el)
+	{
+		if( m_remaining.length == 0 ) grow(1);
+		m_remaining[0] = el;
+		m_remaining = m_remaining[1 .. $];
+	}
+
+	void put(ArrayType arr)
+	{
+		if( m_remaining.length < arr.length ) grow(arr.length);
+		m_remaining[0 .. arr.length] = arr;
+		m_remaining = m_remaining[arr.length .. $];
+	}
+
+	static if( !hasAliasing!E ){
+		void put(in ElemType[] arr){
+			put(cast(ArrayType)arr);
+		}
+	}
+
+	static if( is(ElemType == char) ){
+		void put(dchar el)
+		{
+			if( el < 128 ) put(cast(char)el);
+			else {
+				char[4] buf;
+				auto len = std.utf.encode(buf, el);
+				put(cast(ArrayType)buf[0 .. len]);
+			}
+		}
+	}
+
+	static if( is(ElemType == wchar) ){
+		void put(dchar el)
+		{
+			if( el < 128 ) put(cast(wchar)el);
+			else {
+				wchar[3] buf;
+				auto len = std.utf.encode(buf, el);
+				put(cast(ArrayType)buf[0 .. len]);
+			}
+		}
+	}
+
+	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_data.length - m_remaining.length]; }
+
+	void grow(size_t min_free)
+	{
+		if( !m_data.length && min_free < 16 ) min_free = 16;
+
+		auto min_size = m_data.length + min_free;
+		auto new_size = max(m_data.length, 16);
+		while( new_size < min_size )
+			new_size = (new_size * 3) / 2;
+		reserve(new_size - m_data.length);
+	}
+}
+
 class FixedAppender(ArrayType : E[], size_t NELEM, E) {
 	alias Unqual!E ElemType;
 	private {
@@ -132,7 +302,7 @@ class FixedAppender(ArrayType : E[], size_t NELEM, E) {
 		m_remaining = m_data;
 	}
 
-	void put(ElemType el)
+	void put(E el)
 	{
 		m_remaining[0] = el;
 		m_remaining = m_remaining[1 .. $];
