@@ -22,3 +22,42 @@ void removeFromArrayIdx(T)(ref T[] array, size_t idx)
 		array[j-1] = array[j];
 	array.length = array.length-1;
 }
+
+/*struct SparseAppender(T : E[], E)
+{
+	static struct Entry {
+		Entry* prev;
+		T data;
+	}
+
+	private {
+		size_t m_length = 0;
+		Entry* m_entries;
+		E[] m_buf;
+		size_t m_bufFill = 0;
+	}
+
+	void put(T arr)
+	{
+		if( m_bufFill.length > 0 ){
+			
+		}
+		Entry e;
+		e.prev = m_entries;
+		e.data = arr;
+		m_entries = e;
+		m_length += arr.length;
+	}
+
+	void put(E itm)
+	{
+		if( m_bufFill >= m_buf.length ) put(null);
+
+		m_buf[m_bufFill++] = itm;
+	}
+
+	private void merge()
+	{
+		if( m_
+	}
+}*/

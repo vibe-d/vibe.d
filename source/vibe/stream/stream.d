@@ -108,6 +108,8 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 {
 	auto dst = appender!(ubyte[])();
 	auto buffer = new ubyte[64*1024];
+	if( max_bytes ) dst.reserve(min(stream.leastSize, max_bytes));
+	else dst.reserve(min(stream.leastSize, size_t.max));
 	size_t n = 0, m = 0;
 	while( !stream.empty ){
 		enforce(!max_bytes || n++ < max_bytes, "Data too long!");

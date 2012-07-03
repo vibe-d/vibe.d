@@ -16,6 +16,7 @@ import std.format;
 string urlEncode(string str)
 {
 	auto dst = appender!string();
+	dst.reserve(str.length);
 	filterUrlEncode(dst, str);
 	return dst.data;
 }
@@ -23,6 +24,7 @@ string urlEncode(string str)
 string urlDecode(string str)
 {
 	auto dst = appender!string();
+	dst.reserve(str.length);
 	filterUrlDecode(dst, str);
 	return dst.data;
 }

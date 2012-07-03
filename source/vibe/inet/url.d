@@ -130,6 +130,7 @@ struct Url {
 	@property string localURI()
 	const { 
 		auto str = appender!string();
+		str.reserve(m_pathString.length + 2 + queryString.length + anchor.length);
 		str.put(path.toString(true));
 		if( queryString.length ) {
 			str.put("&");

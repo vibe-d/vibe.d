@@ -66,6 +66,7 @@ nothrow {
 
 	try {
 		auto txt = appender!string();
+		txt.reserve(26+fmt.length+64);
 		formattedWrite(txt, "[%08X:%08X %s] ", cast(void*)Thread.getThis(), cast(size_t)cast(void*)Fiber.getThis(), pref);
 		formattedWrite(txt, fmt, args);
 

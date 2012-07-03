@@ -88,6 +88,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 	string statusStr;
 	string key = "";
 	auto ln = appender!string();
+	ln.reserve(500);
 	while( format.length > 0 ) {
 		final switch(state) {
 			case State.Init:
