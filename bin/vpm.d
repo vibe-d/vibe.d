@@ -191,9 +191,8 @@ private string[] getLibs(Path vibedDir)
 
 private string stripDlangSpecialChars(string s) {
 	char[] ret = s.dup;
-	string blackList = " /=.&|-+<>!()[]{}?,;:$*%^~@#";
 	for(int i=0; i<ret.length; ++i)
-		if(blackList.canFind(ret[i])) 
+		if(!isAlpha(ret[i])) 
 			ret[i] = '_';
 	return to!string(ret);
 }
