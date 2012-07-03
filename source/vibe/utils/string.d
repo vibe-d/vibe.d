@@ -24,6 +24,7 @@ string sanitizeUTF8(in ubyte[] str)
 {
 	import std.utf;
 	auto ret = appender!string();
+	ret.reserve(str.length);
 
 	size_t i = 0;
 	while( i < str.length ){
@@ -55,7 +56,13 @@ string stripUTF8Bom(string str)
 */
 string joinLines(string[] strs, string linesep = "\n")
 {
+	auto len = 0;
+	foreach( i, s; strs ){
+		if( i > 0 ) len += linesep.length;
+		len += s.length;
+	}
 	auto ret = appender!string();
+	ret.reserve(len);
 	foreach( i, s; strs ){
 		if( i > 0 ) ret.put(linesep);
 		ret.put(s);
