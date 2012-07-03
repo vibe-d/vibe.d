@@ -177,7 +177,7 @@ class Libevent2Driver : EventDriver {
 
 	int processEvents()
 	{
-		return event_base_loop(m_eventLoop, EVLOOP_ONCE);
+		return event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
 	}
 
 	void exitEventLoop()

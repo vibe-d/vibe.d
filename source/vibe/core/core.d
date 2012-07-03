@@ -55,6 +55,15 @@ int start()
 }
 
 /**
+	Process all pending events. Checks if events are ready to trigger immediately, and run their callbacks if so.
+*/
+
+int processEvents()
+{
+	return s_driver.processEvents();
+}
+
+/**
 	Runs a new asynchronous task.
 
 	task will be called synchronously from within the vibeRunTask call. It will
