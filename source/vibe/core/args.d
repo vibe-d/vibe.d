@@ -12,6 +12,7 @@ import vibe.data.json;
 import vibe.http.server;
 
 import std.getopt;
+import std.exception;
 import std.file;
 
 
@@ -23,9 +24,12 @@ version(Posix)
 
 	private bool setUID(int uid, int gid)
 	{
-		if( gid >= 0 && setegid(gid) != 0 ) return false;
-		//if( initgroups(const char *user, gid_t group);
-		if( uid >= 0 && seteuid(uid) != 0 ) return false;
+		if( geteuid() == 0 && (uid >= 0 || gid >= 0) ){
+			logInfo("Vibe was run as root, lowering priviledges to uid=%d, gid=%d...", uid, gid);
+			if( gid >= 0 && setegid(gid) != 0 ) return false;
+			//if( initgroups(const char *user, gid_t group);
+			if( uid >= 0 && seteuid(uid) != 0 ) return false;
+		}
 		return true;
 	}
 
@@ -55,13 +59,17 @@ void processCommandLineArgs(ref string[] args)
 	string disthost;
 	ushort distport = 11000;
 
-	try {
-		auto config = readText(configPath);
-		auto cnf = parseJson(config);
-		if( auto pv = "uid" in cnf ) uid = cast(int)*pv;
-		if( auto pv = "gid" in cnf ) gid = cast(int)*pv;
-	} catch(Exception e){
-		logWarn("Failed to parse config file %s: %s", configPath, e.msg);
+	if( exists(configPath) ){
+		try {
+			auto config = readText(configPath);
+			auto cnf = parseJson(config);
+			if( auto pv = "uid" in cnf ) uid = cast(int)*pv;
+			if( auto pv = "gid" in cnf ) gid = cast(int)*pv;
+		} catch(Exception e){
+			logWarn("Failed to parse config file %s: %s", configPath, e.msg);
+		}
+	} else {
+		logDebug("No config file found at %s", configPath);
 	}
 
 	getopt(args,
@@ -77,8 +85,5 @@ void processCommandLineArgs(ref string[] args)
 	setVibeDistHost(disthost, distport);
 	startListening();
 
-	if( !setUID(uid, gid) ){
-		logError("Failed to set UID=%d, GID=%d", uid, gid);
-		throw new Exception("Error lowering privileges!");
-	}
+	enforce(setUID(uid, gid), "Error lowering privileges!");
 }
