@@ -419,7 +419,7 @@ struct StrMapCI {
 
 	private ptrdiff_t getIndex(in Field[] map, string key, uint keysum)
 	const {
-		foreach( i, ref Field entry; map ){
+		foreach( i, ref const(Field) entry; map ){
 			if( entry.keyCheckSum != keysum ) continue;
 			if( icmp2(entry.key, key) == 0 )
 				return i;
