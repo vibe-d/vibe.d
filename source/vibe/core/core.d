@@ -11,6 +11,7 @@ public import vibe.core.driver;
 
 import vibe.core.log;
 import vibe.utils.array;
+import std.algorithm;
 import std.conv;
 import std.exception;
 import std.range;
@@ -55,9 +56,10 @@ int start()
 }
 
 /**
-	Process all pending events. Checks if events are ready to trigger immediately, and run their callbacks if so.
-*/
+	Process all pending events without blocking.
 
+	Checks if events are ready to trigger immediately, and run their callbacks if so.
+*/
 int processEvents()
 {
 	return s_driver.processEvents();
@@ -113,7 +115,8 @@ void runWorkerTask(void delegate() task)
 */
 void yield()
 {
-	assert(false);
+	s_yieldedTasks ~= cast(Task)Fiber.getThis();
+	rawYield();
 }
 
 
@@ -285,6 +288,17 @@ private class VibeDriverCore : DriverCore {
 			s_tasks.removeFromArray(ctask);
 		}
 	}
+
+	void notifyIdle()
+	{
+		while(true){
+			Task[] tmp;
+			swap(s_yieldedTasks, tmp);
+			foreach(t; tmp) resumeTask(t);
+			if( s_yieldedTasks.length == 0 ) break;
+			processEvents();
+		}
+	}
 }
 
 
@@ -294,6 +308,7 @@ private class VibeDriverCore : DriverCore {
 
 private {
 	CoreTask[] s_tasks;
+	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	__gshared VibeDriverCore s_core;
 	EventDriver s_driver;

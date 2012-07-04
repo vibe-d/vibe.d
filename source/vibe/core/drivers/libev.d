@@ -60,8 +60,10 @@ class LibevDriver : EventDriver {
 
 	int runEventLoop()
 	{
-		while(!m_break)
+		while(!m_break){
 			ev_run(m_loop, EVRUN_ONCE);
+			m_core.notifyIdle();
+		}
 		m_break = false;
 		logInfo("Event loop exit", m_break);
 		return 0;
@@ -69,7 +71,8 @@ class LibevDriver : EventDriver {
 	
 	int processEvents()
 	{
-		ev_run(m_loop, EVRUN_ONCE);
+		ev_run(m_loop, EVRUN_NOWAIT);
+		m_core.notifyIdle();
 		return 0;
 	}
 	

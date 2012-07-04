@@ -131,7 +131,7 @@ class Win32EventDriver : EventDriver {
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
-		//m_core.notifyIdle();
+		m_core.notifyIdle();
 		return 0;
 	}
 

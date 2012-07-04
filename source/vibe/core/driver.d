@@ -72,6 +72,7 @@ interface EventDriver {
 interface DriverCore {
 	void yieldForEvent();
 	void resumeTask(Task f, Exception event_exception = null);
+	void notifyIdle();
 }
 
 class Task : Fiber {
