@@ -114,6 +114,7 @@ class Libevent2Driver : EventDriver {
 		event_base* m_eventLoop;
 		evdns_base* m_dnsBase;
 		Libevent2WorkerThread[] m_workerThreads;
+		bool m_exit = false;
 	}
 
 	this(DriverCore core)
@@ -173,7 +174,7 @@ class Libevent2Driver : EventDriver {
 	int runEventLoop()
 	{
 		int ret;
-		while( (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0 )
+		while( !m_exit && (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0 )
 			s_driverCore.notifyIdle();
 		return ret;
 	}
@@ -187,6 +188,7 @@ class Libevent2Driver : EventDriver {
 
 	void exitEventLoop()
 	{
+		m_exit = true;
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 		foreach( loop; m_workerThreads )
 			loop.exit();
