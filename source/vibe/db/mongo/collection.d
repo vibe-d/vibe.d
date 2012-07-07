@@ -93,7 +93,7 @@ struct MongoCollection {
 	MongoCursor find(T, U = typeof(null))(T query, U returnFieldSelector = null, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		auto conn = m_db.lockConnection();
-		auto reply = conn.query(m_collection, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? serializeToBson(returnFieldSelector) : Bson(null));
+		auto reply = conn.query(m_collection, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
 		return MongoCursor(m_db, m_collection, num_docs_per_chunk, reply);
 	}
 
