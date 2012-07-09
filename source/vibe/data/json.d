@@ -772,15 +772,15 @@ void deserializeJson(T)(ref T dst, Json src)
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			auto mn = m;
-			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) )
-				deserializeJson(__traits(getMember, value, m), value[mn]);
+			static if( __traits(compiles, __traits(getMember, dst, m) = __traits(getMember, dst, m)) )
+				deserializeJson(__traits(getMember, dst, m), src[mn]);
 		}
 	} else static if( is(T == class) ){
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			auto mn = m;
-			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) )
-				deserializeJson(__traits(getMember, value, m), value[mn]);
+			static if( __traits(compiles, __traits(getMember, dst, m) = __traits(getMember, dst, m)) )
+				deserializeJson(__traits(getMember, dst, m), src[mn]);
 		}
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
