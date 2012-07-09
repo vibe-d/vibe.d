@@ -836,7 +836,7 @@ private Bson jsonToBson(Json value)
 
 private string skipCString(ref bdata_t data)
 {
-	auto idx = data.indexOf(0);
+	auto idx = data.countUntil(0);
 	enforce(idx >= 0, "Unterminated BSON C-string.");
 	auto ret = data[0 .. idx];
 	data = data[idx+1 .. $];

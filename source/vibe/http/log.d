@@ -92,7 +92,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 	while( format.length > 0 ) {
 		final switch(state) {
 			case State.Init:
-				auto idx = format.indexOf("%");
+				auto idx = format.countUntil("%");
 				if( idx < 0 ) {
 					ln.put( format );
 					format = "";
@@ -142,7 +142,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 				}
 				break;
 			case State.Key:
-				auto idx = format.indexOf("}");
+				auto idx = format.countUntil("}");
 				enforce(idx > -1, "Missing '}'");
 				key = format[0 .. idx];
 				format = format[idx+1 .. $];
