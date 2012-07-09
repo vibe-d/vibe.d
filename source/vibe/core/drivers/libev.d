@@ -7,6 +7,8 @@
 */
 module vibe.core.drivers.libev;
 
+version(VibeLibevDriver):
+
 import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.drivers.threadedfile;

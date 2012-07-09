@@ -7,6 +7,8 @@
 */
 module vibe.core.drivers.winrt;
 
+version(VibeWinrtDriver):
+
 class WinRtEventDriver : EventDriver {
 	private {
 		DriverCore m_core;

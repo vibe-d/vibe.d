@@ -7,6 +7,8 @@
 */
 module vibe.core.drivers.win32;
 
+version(VibeWin32Driver):
+
 import vibe.core.driver;
 import vibe.core.log;
 import vibe.inet.url;
