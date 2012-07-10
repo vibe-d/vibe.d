@@ -9,6 +9,8 @@ module vibe.data.json;
 
 public import vibe.stream.stream;
 
+import vibe.data.utils;
+
 import std.array;
 import std.conv;
 import std.exception;
@@ -704,6 +706,17 @@ Json parseJsonString(string str)
 	return ret;
 }
 
+unittest {
+	assert(parseJsonString("null") == Json(null));
+	assert(parseJsonString("true") == Json(true));
+	assert(parseJsonString("false") == Json(false));
+	assert(parseJsonString("1") == Json(1));
+	assert(parseJsonString("2.0") == Json(2.0));
+	assert(parseJsonString("\"test\"") == Json("test"));
+	assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
+	assert(parseJsonString("{\"a\": 1}") == Json(["a": Json(1)]));
+}
+
 
 Json serializeToJson(T)(T value)
 {
@@ -727,10 +740,9 @@ Json serializeToJson(T)(T value)
 	} else static if( is(T == struct) ){
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) ){
-				auto mn = m;
+			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[mn] = serializeToJson(mv);
+				ret[m] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
@@ -738,10 +750,9 @@ Json serializeToJson(T)(T value)
 		if( value is null ) return Json(null);
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) ){
-				auto mn = m;
+			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[mn] = serializeToJson(mv);
+				ret[m] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
@@ -771,21 +782,60 @@ void deserializeJson(T)(ref T dst, Json src)
 		}
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
-			auto mn = m;
-			static if( __traits(compiles, __traits(getMember, dst, m) = __traits(getMember, dst, m)) )
-				deserializeJson(__traits(getMember, dst, m), src[mn]);
+			static if( isRWPlainField!(T, m) ){
+				deserializeJson(__traits(getMember, dst, m), src[m]);
+			} else static if( isRWField!(T, m) ){
+				typeof(__traits(getMember, dst, m)) v;
+				deserializeJson(v, src[m]);
+				__traits(getMember, dst, m) = v;
+			}
 		}
 	} else static if( is(T == class) ){
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
-			auto mn = m;
-			static if( __traits(compiles, __traits(getMember, dst, m) = __traits(getMember, dst, m)) )
-				deserializeJson(__traits(getMember, dst, m), src[mn]);
+			static if( isRWPlainField!(T, m) ){
+				deserializeJson(__traits(getMember, dst, m), src[m]);
+			} else static if( isRWField!(T, m) ){
+				typeof(__traits(getMember, dst, m)()) v;
+				deserializeJson(v, src[m]);
+				__traits(getMember, dst, m) = v;
+			}
 		}
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
 }
+
+unittest {
+	import std.stdio;
+	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
+	S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max};
+	S u;
+	deserializeJson(u, serializeToJson(t));
+	assert(t == u);
+}
+
+unittest {
+	static class C {
+		int a;
+		private int _b;
+		@property int b() const { return _b; }
+		@property void b(int v) { _b = v; }
+
+		@property int test() const { return 10; }
+
+		void test2() {}
+	}
+	C c = new C;
+	c.a = 1;
+	c.b = 2;
+
+	C d;
+	deserializeJson(d, serializeToJson(c));
+	assert(c.a == d.a);
+	assert(c.b == d.b);
+}
+
 
 /**
 	Writes the given JSON object as a JSON string into the destination range.
