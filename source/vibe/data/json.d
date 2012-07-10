@@ -809,10 +809,19 @@ void deserializeJson(T)(ref T dst, Json src)
 unittest {
 	import std.stdio;
 	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max};
+	S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
 	S u;
 	deserializeJson(u, serializeToJson(t));
-	assert(t == u);
+	assert(t.a == u.a);
+	assert(t.b == u.b);
+	assert(t.c == u.c);
+	assert(t.d == u.d);
+	assert(t.e == u.e);
+	assert(t.f == u.f);
+	assert(t.g == u.g);
+	assert(t.h == u.h);
+	assert(t.i == u.i);
+	assert(t.j == u.j);
 }
 
 unittest {
