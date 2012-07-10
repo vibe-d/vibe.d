@@ -9,6 +9,7 @@ module vibe.data.bson;
 
 public import vibe.data.json;
 import vibe.core.log;
+import vibe.data.utils;
 
 import std.algorithm;
 import std.array;
@@ -661,10 +662,9 @@ Bson serializeToBson(T)(T value)
 	} else static if( is(T == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) ){
-				auto mn = m;
+			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[mn] = serializeToBson(mv);
+				ret[m] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -672,10 +672,9 @@ Bson serializeToBson(T)(T value)
 		if( value is null ) return Bson(null);
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( __traits(compiles, __traits(getMember, value, m) = __traits(getMember, value, m)) ){
-				auto mn = m;
+			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[mn] = serializeToBson(mv);
+				ret[m] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -712,18 +711,67 @@ void deserializeBson(T)(ref T dst, Bson src)
 		}
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
-			static if( __traits(compiles, __traits(getMember, dst, m) = __traits(getMember, dst, m)) )
+			static if( isRWPlainField!(T, m) ){
 				deserializeBson(__traits(getMember, dst, m), src[m]);
+			} else static if( isRWField!(T, m) ){
+				typeof(__traits(getMember, dst, m)) v;
+				deserializeBson(v, src[m]);
+				__traits(getMember, dst, m) = v;
+			}
 		}
 	} else static if( is(T == class) ){
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
-			static if( __traits(compiles, __traits(getMember, dst, m) = __traits(getMember, dst, m)) )
+			static if( isRWPlainField!(T, m) ){
 				deserializeBson(__traits(getMember, dst, m), src[m]);
+			} else static if( isRWField!(T, m) ){
+				typeof(__traits(getMember, dst, m)) v;
+				deserializeBson(v, src[m]);
+				__traits(getMember, dst, m) = v;
+			}
 		}
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
+}
+
+unittest {
+	import std.stdio;
+	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
+	S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	S u;
+	deserializeBson(u, serializeToBson(t));
+	assert(t.a == u.a);
+	assert(t.b == u.b);
+	assert(t.c == u.c);
+	assert(t.d == u.d);
+	assert(t.e == u.e);
+	assert(t.f == u.f);
+	assert(t.g == u.g);
+	assert(t.h == u.h);
+	assert(t.i == u.i);
+	assert(t.j == u.j);
+}
+
+unittest {
+	static class C {
+		int a;
+		private int _b;
+		@property int b() const { return _b; }
+		@property void b(int v) { _b = v; }
+
+		@property int test() const { return 10; }
+
+		void test2() {}
+	}
+	C c = new C;
+	c.a = 1;
+	c.b = 2;
+
+	C d;
+	deserializeBson(d, serializeToBson(c));
+	assert(c.a == d.a);
+	assert(c.b == d.b);
 }
 
 
