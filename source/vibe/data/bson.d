@@ -53,6 +53,7 @@ struct Bson {
 		MaxKey     = 0x7f
 	}
 
+	/// Returns a new, empty Bson value of type Object.
 	static @property Bson EmptyObject(){ return Bson(cast(Bson[string])null); }
 
 	private {
@@ -137,8 +138,8 @@ struct Bson {
 	void opAssign(Bson other)
 	{
 		m_data = other.m_data;
- 		m_type = other.m_type;
- 	}
+		m_type = other.m_type;
+	}
 	/// ditto
 	void opAssign(double value)
 	{
@@ -526,21 +527,21 @@ struct BsonObjectID {
 
 		if( ms_pid == -1 ) ms_pid = getpid();
 		if( MACHINE_ID == 0 ) MACHINE_ID = uniform(0, 0xffffff);
-	  	auto unixTime = Clock.currTime(UTC()).toUnixTime();
+		auto unixTime = Clock.currTime(UTC()).toUnixTime();
 
-	  	BsonObjectID ret = void;
-	  	ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)unixTime);
-	  	ret.m_bytes[4 .. 7] = toBsonData(MACHINE_ID)[0 .. 3];
-	  	ret.m_bytes[7 .. 9] = toBsonData(cast(ushort)ms_pid);
-	  	ret.m_bytes[9 .. 12] = toBigEndianData(ms_inc++)[1 .. 4];
-	  	return ret;
+		BsonObjectID ret = void;
+		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)unixTime);
+		ret.m_bytes[4 .. 7] = toBsonData(MACHINE_ID)[0 .. 3];
+		ret.m_bytes[7 .. 9] = toBsonData(cast(ushort)ms_pid);
+		ret.m_bytes[9 .. 12] = toBigEndianData(ms_inc++)[1 .. 4];
+		return ret;
 	}
 
 	static BsonObjectID createDateID(SysTime date)
 	{
-	  	BsonObjectID ret;
-	  	ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)date.toUnixTime());
-	  	return ret;
+		BsonObjectID ret;
+		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)date.toUnixTime());
+		return ret;
 	}
 
 	@property bool valid() const {
@@ -569,13 +570,13 @@ struct BsonObjectID {
 struct BsonDate {
 	private long m_time; // milliseconds since UTC unix epoch
 
-    this(Date date) {
-        this(SysTime(date));
-    }
+	this(Date date) {
+		this(SysTime(date));
+	}
 
-    this(DateTime date) {
-        this(SysTime(date));
-    }
+	this(DateTime date) {
+		this(SysTime(date));
+	}
 
 	this(long time){
 		m_time = time;
@@ -832,31 +833,31 @@ private Json bsonToJson(Bson value)
 {
 	switch( value.type ){
 		default: assert(false);
-	    case Bson.Type.Double: return Json(cast(double)value);
-	    case Bson.Type.String: return Json(cast(string)value);
-	    case Bson.Type.Object:
-	    	Json[string] ret;
-	    	foreach( k, v; cast(Bson[string])value )
-	    		ret[k] = bsonToJson(v);
-	    	return Json(ret);
-	    case Bson.Type.Array:
-	    	auto ret = new Json[value.length];
-	    	foreach( i, v; cast(Bson[])value )
-	    		ret[i] = bsonToJson(v);
-	    	return Json(ret);
-	    case Bson.Type.BinData: assert(false, "TODO");
-	    case Bson.Type.ObjectID: return Json((cast(BsonObjectID)value).toString());
-	    case Bson.Type.Bool: return Json(cast(bool)value);
-	    case Bson.Type.Date: return Json((cast(BsonDate)value).m_time);
-	    case Bson.Type.Null: return Json(null);
-	    case Bson.Type.Regex: assert(false, "TODO");
-	    case Bson.Type.DBRef: assert(false, "TODO");
-	    case Bson.Type.Code: return Json(cast(string)value);
-	    case Bson.Type.Symbol: return Json(cast(string)value);
-	    case Bson.Type.CodeWScope: assert(false, "TODO");
-	    case Bson.Type.Int: return Json(cast(int)value);
-	    case Bson.Type.Timestamp: return Json((cast(BsonTimestamp)value).m_time);
-	    case Bson.Type.Long: return Json(cast(long)value);
+		case Bson.Type.Double: return Json(cast(double)value);
+		case Bson.Type.String: return Json(cast(string)value);
+		case Bson.Type.Object:
+			Json[string] ret;
+			foreach( k, v; cast(Bson[string])value )
+				ret[k] = bsonToJson(v);
+			return Json(ret);
+		case Bson.Type.Array:
+			auto ret = new Json[value.length];
+			foreach( i, v; cast(Bson[])value )
+				ret[i] = bsonToJson(v);
+			return Json(ret);
+		case Bson.Type.BinData: assert(false, "TODO");
+		case Bson.Type.ObjectID: return Json((cast(BsonObjectID)value).toString());
+		case Bson.Type.Bool: return Json(cast(bool)value);
+		case Bson.Type.Date: return Json((cast(BsonDate)value).m_time);
+		case Bson.Type.Null: return Json(null);
+		case Bson.Type.Regex: assert(false, "TODO");
+		case Bson.Type.DBRef: assert(false, "TODO");
+		case Bson.Type.Code: return Json(cast(string)value);
+		case Bson.Type.Symbol: return Json(cast(string)value);
+		case Bson.Type.CodeWScope: assert(false, "TODO");
+		case Bson.Type.Int: return Json(cast(int)value);
+		case Bson.Type.Timestamp: return Json((cast(BsonTimestamp)value).m_time);
+		case Bson.Type.Long: return Json(cast(long)value);
 	}
 }
 
