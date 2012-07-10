@@ -72,6 +72,9 @@ class ThreadedFileStream : FileStream {
 			case FileMode.Read:
 				m_fileDescriptor = open(path.toStringz(), O_RDONLY|O_BINARY);
 				break;
+			case FileMode.ReadWrite:
+				m_fileDescriptor = open(path.toStringz(), O_BINARY);
+				break;
 			case FileMode.CreateTrunc:
 				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY, octal!644);
 				break;
@@ -130,6 +133,8 @@ class ThreadedFileStream : FileStream {
 		enforce(.lseek(m_fileDescriptor, offset, SEEK_SET) == offset, "Failed to seek in file.");
 		m_ptr = offset;
 	}
+
+	ulong tell() { return m_ptr; }
 	
 	void close()
 	{

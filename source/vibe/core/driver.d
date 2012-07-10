@@ -129,6 +129,7 @@ interface TcpConnection : Stream, EventedObject {
 */
 enum FileMode {
 	Read,
+	ReadWrite,
 	CreateTrunc,
 	Append
 }
@@ -154,6 +155,9 @@ interface FileStream : Stream, EventedObject {
 
 	/// Seeks to a specific position in the file if supported by the stream.
 	void seek(ulong offset);
+
+	/// Returns the current offset of the file pointer
+	ulong tell();
 }
 
 /** A cross-fiber signal
