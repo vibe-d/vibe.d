@@ -315,6 +315,7 @@
   <Folder name="data">
    <File path="source\vibe\data\bson.d" />
    <File path="source\vibe\data\json.d" />
+   <File path="source\vibe\data\utils.d" />
   </Folder>
   <Folder name="db">
    <Folder name="mongo">
