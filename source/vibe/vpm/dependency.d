@@ -22,6 +22,9 @@ import vibe.inet.url;
 
 import vibe.vpm.utils;
 
+static import std.compiler;
+
+
 Dependency[string] dependencies(const Json json)
 {
 	if( "dependencies" !in json ) return null;
@@ -148,11 +151,24 @@ class Dependency {
 		}
 		return r;
 	}
-	
-	override bool opEquals(Object b) {
-		if (this is b) return true; if (b is null) return false; if (typeid(this) != typeid(b)) return false;
-		Dependency o = cast(Dependency) b;
-		return o.m_cmpA == m_cmpA && o.m_cmpB == m_cmpB && o.m_versA == m_versA && o.m_versB == m_versB;
+
+	// compatibility fix for DMD 2.059, will be removed at some point	
+	static if( std.compiler.vendor == std.compiler.Vendor.digitalMars &&
+		std.compiler.version_major == 2 && std.compiler.version_minor <= 59 )
+	{
+		override bool opEquals(Object b)
+		{
+			if (this is b) return true; if (b is null) return false; if (typeid(this) != typeid(b)) return false;
+			Dependency o = cast(Dependency) b;
+			return o.m_cmpA == m_cmpA && o.m_cmpB == m_cmpB && o.m_versA == m_versA && o.m_versB == m_versB;
+		}
+	} else {
+		override bool opEquals(in Object b)
+		const {
+			if (this is b) return true; if (b is null) return false; if (typeid(this) != typeid(b)) return false;
+			Dependency o = cast(Dependency) b;
+			return o.m_cmpA == m_cmpA && o.m_cmpB == m_cmpB && o.m_versA == m_versA && o.m_versB == m_versB;
+		}
 	}
 	
 	bool valid() const {
