@@ -98,6 +98,19 @@ FileInfo getFileInfo(string path)
 	return getFileInfo(Path(path));
 }
 
+/**
+	Creates a new directory.
+*/
+void createDirectory(Path path)
+{
+	mkdir(path.toNativeString());
+}
+/// ditto
+void createDirectory(string path)
+{
+	createDirectory(Path(path));
+}
+
 /** Enumerates all files in the specified directory. */
 void listDirectory(Path path, bool delegate(FileInfo info) del)
 {
