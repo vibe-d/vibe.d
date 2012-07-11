@@ -7,6 +7,7 @@
 */
 module vibe.textfilter.urlencode;
 
+import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
@@ -29,7 +30,7 @@ string urlDecode(string str)
 	return dst.data;
 }
 
-void filterUrlEncode(R)(ref R dst, string str) 
+void filterUrlEncode(R)(ref R dst, string str, string allowed_chars = null) 
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
@@ -43,7 +44,8 @@ void filterUrlEncode(R)(ref R dst, string str)
 				dst.put(str[0]);
 				break;
 			default:
-				formattedWrite(dst, "%%%02X", str[0]);
+				if( allowed_chars.countUntil(str[0]) >= 0 ) dst.put(str[0]);
+				else formattedWrite(dst, "%%%02X", str[0]);
 		}
 		str = str[1 .. $];
 	}

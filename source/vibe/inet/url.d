@@ -7,6 +7,8 @@
 */
 module vibe.inet.url;
 
+import vibe.textfilter.urlencode;
+
 import std.algorithm;
 import std.array;
 import std.conv;
@@ -49,6 +51,7 @@ struct Url {
 			enforce(idx > 0, "No schema in URL:"~str);
 			ret.m_schema = str[0 .. idx];
 			str = str[idx+1 .. $];
+			bool requires_host = false;
 
 			switch(ret.schema){
 				case "http":
@@ -59,6 +62,7 @@ struct Url {
 				case "file":
 					// proto://server/path style
 					enforce(str.startsWith("//"), "URL must start with proto://...");
+					requires_host = true;
 					str = str[2 .. $];
 					goto default;
 				default:
@@ -84,7 +88,8 @@ struct Url {
 						ret.m_host = ret.host[0 .. pi];
 					}
 
-					enforce(ret.schema == "file" || ret.m_host.length > 0, "Empty server name in URL.");
+					enforce(!requires_host || ret.schema == "file" || ret.m_host.length > 0,
+							"Empty server name in URL.");
 					str = str[si .. $];
 			}
 		}
@@ -131,7 +136,7 @@ struct Url {
 	const { 
 		auto str = appender!string();
 		str.reserve(m_pathString.length + 2 + queryString.length + anchor.length);
-		str.put(path.toString(true));
+		filterUrlEncode(str, path.toString(true), "/");
 		if( queryString.length ) {
 			str.put("&");
 			str.put(queryString);
@@ -158,7 +163,7 @@ struct Url {
 		}
 
 		m_pathString = str;
-		m_path = Path(str);
+		m_path = Path(urlDecode(str));
 	}
 
 	@property Url parentUrl() const {
@@ -191,7 +196,7 @@ struct Url {
 		}
 		dst.put(host);
 		dst.put(localURI);
- 		return dst.data;
+		return dst.data;
 	}
 
 	bool startsWith(const Url rhs) const {
