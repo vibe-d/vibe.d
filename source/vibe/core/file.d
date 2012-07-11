@@ -17,6 +17,7 @@ import std.conv;
 import std.c.stdio;
 import std.datetime;
 import std.file;
+import std.path;
 import std.string;
 
 
@@ -137,7 +138,7 @@ struct FileInfo {
 private FileInfo makeFileInfo(DirEntry ent)
 {
 	FileInfo ret;
-	ret.name = ent.name;
+	ret.name = baseName(ent.name);
 	ret.size = ent.size;
 	ret.timeModified = ent.timeLastModified;
 	ret.timeCreated = ent.timeCreated;
