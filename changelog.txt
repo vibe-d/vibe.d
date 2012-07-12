@@ -1,13 +1,16 @@
 Changelog
 =========
 
-v0.7.6 - 2012-
+v0.7.6 - 2012-07-
 -------------------
 
  - Fixed TcpConnection.close() for the libevent driver - this caused hanging page loads in some browsers
  - A good amount of performance tuning of the HTTP server
- - Added an setup-linux.sh script that sets up a local vibe user, as well as a symlink in /usr/bin (Thanks to Jordi Sayol)
+ - Implemented vibe.core.core.yield(); this can be used to break up long computations into smaller parts to reduce latency for other tasks
+ - Added setup-linux.sh and setup-mac.sh scripts that set a symlink in /usr/bin and a config file in /etc/vibe (Thanks to Jordi Sayol)
  - Installed VPM modules are now passed as version identifiers VPM_package_xyz to the application to allow for optional features
+ - Improved serialization of structs/classes to Json/Bson - properties are now serialized and all non-field/property members are now ignored
+ - Added directory handling functions to vibe.core.file (not using asynchronous operations, yet)
  - Fixed MongoDB connection handling to avoid secondary assertions being triggered in case of exceptions during the communication
  - Fixed JSON (de)serialization of structs and classes (member names were wrong)
  - Improved the vibe shell script
