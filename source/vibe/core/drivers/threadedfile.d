@@ -11,11 +11,13 @@ module vibe.core.drivers.threadedfile;
 import vibe.core.log;
 import vibe.core.driver;
 import vibe.inet.url;
+import vibe.utils.string;
 
 import std.algorithm;
 import std.conv;
 import std.exception;
 import std.string;
+import core.stdc.errno;
 
 version(Posix){
 	import core.sys.posix.fcntl;
@@ -83,9 +85,8 @@ class ThreadedFileStream : FileStream {
 				break;
 		}
 		if( m_fileDescriptor < 0 )
-			throw new Exception("Failed to open '"~path~"' for " ~ (m_mode == FileMode.Read ?		 "reading.":
-			                                                        m_mode == FileMode.CreateTrunc ? "writing." : 
-			                                                                                         "appending."));
+			throw new Exception(formatString("Failed to open '%s' with %s: %d", path, cast(int)mode, errno));
+		
 			
 		version(linux){
 			// stat_t seems to be defined wrong on linux/64
@@ -104,6 +105,11 @@ class ThreadedFileStream : FileStream {
 		lseek(m_fileDescriptor, 0, SEEK_SET);
 		
 		logDebug("opened file %s with %d bytes as %d", path, m_size, m_fileDescriptor);
+	}
+
+	~this()
+	{
+		close();
 	}
 	
 	@property int fd() { return m_fileDescriptor; }

@@ -11,6 +11,7 @@ public import std.string;
 
 import std.algorithm;
 import std.array;
+import std.format;
 import std.uni;
 import std.utf;
 import core.exception;
@@ -119,6 +120,13 @@ string stripRightA(string s)
 string stripA(string s)
 {
 	return stripLeftA(stripRightA(s));
+}
+
+string formatString(ARGS...)(string format, ARGS args)
+{
+	auto dst = appender!string();
+	formattedWrite(dst, format, args);
+	return dst.data;
 }
 
 int icmp2(string a, string b)
