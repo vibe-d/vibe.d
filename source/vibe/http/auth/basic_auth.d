@@ -63,7 +63,7 @@ string performBasicAuth(HttpServerRequest req, HttpServerResponse res, string re
 	}
 
 	res.headers["WWW-Authenticate"] = "Basic realm=\""~realm~"\"";
-	throw new HttpServerError(HttpStatus.Unauthorized);
+	throw new HttpStatusException(HttpStatus.Unauthorized);
 }
 
 void addBasicAuth(HttpRequest req, string user, string password)

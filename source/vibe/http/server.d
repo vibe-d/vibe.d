@@ -358,15 +358,17 @@ class HttpServerSettings {
 }
 
 
-/// Throwing this exception from within a request handler will produce a matching error page.
-class HttpServerError : Exception {
+/**
+	Throwing this exception from within a request handler will produce a matching error page.
+*/
+class HttpStatusException : Exception {
 	private {
 		int m_status;
 	}
 
-	this(int status, string message = null)
+	this(int status, string message = null, Throwable next = null, string file = __FILE__, int line = __LINE__)
 	{
-		super(message ? message : httpStatusText(status));
+		super(message ? message : httpStatusText(status), file, line, next);
 		m_status = status;
 	}
 	
@@ -743,7 +745,7 @@ private class LimitedHttpInputStream : LimitedInputStream {
 		super(stream, byte_limit, silent_limit);
 	}
 	override void onSizeLimitReached() {
-		throw new HttpServerError(HttpStatus.RequestEntityTooLarge);
+		throw new HttpStatusException(HttpStatus.RequestEntityTooLarge);
 	}
 }
 
@@ -776,7 +778,7 @@ private class TimeoutHttpInputStream : InputStream {
 	private void checkTimeout() {
 		SysTime curr = Clock.currTime();
 		auto diff = curr - m_timeref;
-		if( diff > m_timeleft ) throw new HttpServerError(HttpStatus.RequestTimeout);
+		if( diff > m_timeleft ) throw new HttpStatusException(HttpStatus.RequestTimeout);
 		m_timeleft -= diff;
 		m_timeref = curr;
 	}
@@ -1011,10 +1013,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		logTrace("handle request (body %d)", req.bodyReader.leastSize);
 		res.httpVersion = req.httpVersion;
 		request_task(req, res);
-	} catch(HttpServerError err) {
+
+		// if no one has written anything, return 404
+		if( !res.headerWritten )
+			throw new HttpStatusException(HttpStatus.NotFound);
+	} catch(HttpStatusException err) {
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
-		else logError("HttpServerError after page has been written: %s", err.toString());
+		else logError("HttpStatusException after page has been written: %s", err.toString());
 		logDebug("Exception while handling request: %s", err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			return false;
@@ -1027,9 +1033,6 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if ( !parsed )
 			return false;
 	}
-
-	// if no one has written anything, return 404
-	if( !res.headerWritten ) errorOut(HttpStatus.NotFound, "Not found.", "", null);
 
 	nullWriter.write(req.bodyReader);
 

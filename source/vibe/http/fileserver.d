@@ -66,7 +66,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		DirEntry dirent;
 		try dirent = dirEntry(path);
 		catch(FileException){
-			throw new HttpServerError(HttpStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
+			throw new HttpStatusException(HttpStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
 		}
 
 		auto lastModified = toRFC822DateTimeString(dirent.timeLastModified.toUTC());
