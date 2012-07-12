@@ -85,7 +85,8 @@ class ThreadedFileStream : FileStream {
 				break;
 		}
 		if( m_fileDescriptor < 0 )
-			throw new Exception(formatString("Failed to open '%s' with %s: %d", path, cast(int)mode, errno));
+			//throw new Exception(formatString("Failed to open '%s' with %s: %d", path, cast(int)mode, errno));
+			throw new Exception("Failed to open "~path);
 		
 			
 		version(linux){
