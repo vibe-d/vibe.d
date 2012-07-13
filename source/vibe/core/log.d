@@ -10,6 +10,7 @@ module vibe.core.log;
 import vibe.core.file;
 
 import std.array;
+import std.datetime;
 import std.format;
 import std.stdio;
 import core.thread;
@@ -62,25 +63,41 @@ nothrow {
 		case LogLevel.Warn: pref = "WRN"; break;
 		case LogLevel.Error: pref = "ERR"; break;
 		case LogLevel.Fatal: pref = "FATAL"; break;
+		case LogLevel.None: assert(false);
 	}
 
 	try {
 		auto txt = appender!string();
-		txt.reserve(26+fmt.length+64);
-		formattedWrite(txt, "[%08X:%08X %s] ", cast(void*)Thread.getThis(), cast(size_t)cast(void*)Fiber.getThis(), pref);
+		txt.reserve(256);
 		formattedWrite(txt, fmt, args);
 
+		auto threadid = cast(ulong)cast(void*)Thread.getThis();
+		auto fiberid = cast(ulong)cast(void*)Fiber.getThis();
+		threadid ^= threadid >> 32;
+		fiberid ^= fiberid >> 32;
+
 		if( level >= s_minLevel ){
-			writeln(txt.data());
+			writefln("[%08X:%08X %s] %s", threadid, fiberid, pref, txt.data());
 			stdout.flush();
 		}
 
 		if( level >= s_logFileLevel && s_logFile ){
+			auto ptxt = appender!string();
+			ptxt.reserve(50);
+
+			auto tm = Clock.currTime();
+			formattedWrite(ptxt, "[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
+				cast(uint)(threadid ^ (threadid>>32)), cast(uint)(fiberid ^ (fiberid>>32)), 
+				tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,
+				pref);
+
+			s_logFile.write(ptxt.data(), false);
 			s_logFile.write(txt.data(), false);
 			s_logFile.write("\n");
 		}
 	} catch( Exception e ){
 		// this is bad but what can we do..
+		debug assert(false);
 	}
 }
 
@@ -91,6 +108,7 @@ enum LogLevel {
 	Info,
 	Warn,
 	Error,
-	Fatal
+	Fatal,
+	None
 }
 
