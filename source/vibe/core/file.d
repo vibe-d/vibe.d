@@ -141,7 +141,8 @@ private FileInfo makeFileInfo(DirEntry ent)
 	ret.name = baseName(ent.name);
 	ret.size = ent.size;
 	ret.timeModified = ent.timeLastModified;
-	ret.timeCreated = ent.timeCreated;
+	version(Windows) ret.timeCreated = ent.timeCreated;
+	else ret.timeCreated = ent.timeLastModified;
 	ret.isSymlink = ent.isSymlink;
 	ret.isDirectory = ent.isDir;
 	return ret;
