@@ -224,8 +224,6 @@ class Libevent2Driver : EventDriver {
 		auto cctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, sockfd, buf_event);
 		cctx.task = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
-		timeval toread = {tv_sec: 60, tv_usec: 0};
-		bufferevent_set_timeouts(buf_event, &toread, null);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
 

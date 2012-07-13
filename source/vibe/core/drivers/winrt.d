@@ -181,6 +181,11 @@ class WinRtFile : FileStream {
 }
 
 class WinRtTcpConnection : TcpConnection {
+	private {
+		bool m_tcpNoDelay;
+		Duration m_readTimeout;
+	}
+
 	void release()
 	{
 	}
@@ -195,7 +200,16 @@ class WinRtTcpConnection : TcpConnection {
 
 	@property void tcpNoDelay(bool enabled)
 	{
+		m_readTimeout = enabled;
+		assert(false);
 	}
+	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
+
+	@property void readTimeout(Duration v){
+		m_readTimeout = v;
+		assert(false);
+	}
+	@property Duration readTimeout() const { return m_readTimeout; }
 
 	void close()
 	{

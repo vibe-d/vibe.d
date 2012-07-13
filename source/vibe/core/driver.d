@@ -110,6 +110,14 @@ interface EventedObject {
 interface TcpConnection : Stream, EventedObject {
 	/// Used to disable Nagle's algorithm
 	@property void tcpNoDelay(bool enabled);
+	/// ditto
+	@property bool tcpNoDelay() const;
+
+	/// Controls the read time out after which the connection is closed automatically
+	@property void readTimeout(Duration duration)
+		in { assert(duration >= dur!"seconds"(0)); }
+	/// ditto
+	@property Duration readTimeout() const;
 
 	/// Actively closes the connection.
 	void close();

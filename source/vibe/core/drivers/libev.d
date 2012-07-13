@@ -201,6 +201,8 @@ class LibevTcpConnection : TcpConnection {
 		ev_io* m_writeWatcher;
 		int m_eventsExpected = 0;
 		Appender!(ubyte[]) m_writeBuffer;
+		bool m_tcpNoDelay = false;
+		Duration m_readTimeout;
 	}
 	
 	this(LibevDriver driver, int fd, ev_io* read_watcher, ev_io* write_watcher)
@@ -215,9 +217,22 @@ class LibevTcpConnection : TcpConnection {
 	
 	@property void tcpNoDelay(bool enabled)
 	{
+		m_tcpNoDelay = enabled;
 		ubyte opt = enabled;
 		setsockopt(m_socket, IPPROTO_TCP, TCP_NODELAY, &opt, opt.sizeof);
 	}
+	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
+
+	@property void readTimeout(Duration v)
+	{
+		m_readTimeout = v;
+		if( v == dur!"seconds"(0) ){
+			// ...
+		} else {
+			assert(false);
+		}
+	}
+	@property Duration readTimeout() const { return m_readTimeout; }
 	
 	void close()
 	{

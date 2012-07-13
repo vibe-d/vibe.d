@@ -57,7 +57,8 @@ package class Libevent2TcpConnection : TcpConnection {
 		TcpContext* m_ctx;
 		string m_peerAddress;
 		ubyte[64] m_peekBuffer;
-
+		bool m_tcpNoDelay = false;
+		Duration m_readTimeout;
 	}
 	
 	this(TcpContext* ctx)
@@ -81,22 +82,29 @@ package class Libevent2TcpConnection : TcpConnection {
 		//assert(m_ctx is null, "Leaking TcpContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
 	}
 	
-	/// Enables/disables Nagle's algorithm for this connection (enabled by default).
 	@property void tcpNoDelay(bool enabled)
 	{
+		m_tcpNoDelay = enabled;
 		auto fd = m_ctx.socketfd;
 		ubyte opt = enabled;
 		assert(fd <= int.max, "Socket descriptor > int.max");
 		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, &opt, opt.sizeof);
 	}
+	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
-	/**
-		Makes the current task the sole owner of this connection.
+	@property void readTimeout(Duration v)
+	{
+		m_readTimeout = v;
+		if( v == dur!"seconds"(0) ){
+			bufferevent_set_timeouts(m_event, null, null);
+		} else {
+			assert(v.total!"seconds" <= int.max);
+			timeval toread = {tv_sec: cast(int)v.total!"seconds", tv_usec: v.fracSec.usecs};
+			bufferevent_set_timeouts(m_event, &toread, null);
+		}
+	}
+	@property Duration readTimeout() const { return m_readTimeout; }
 
-		All events specific to this connection will go to the current task afterwards.
-		Note that any other method of TcpConnection may only be called after
-		acquire() has been called, if the connection was not already owned by the task.
-	*/
 	void acquire()
 	{
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
@@ -104,7 +112,6 @@ package class Libevent2TcpConnection : TcpConnection {
 		m_ctx.task = Task.getThis();
 	}
 
-	/// Makes this connection unowned so that no events are handled anymore.
 	void release()
 	{
 		if( !m_ctx ) return;
@@ -353,8 +360,6 @@ package extern(C)
 				auto client_ctx = TcpContext.Alloc.alloc(drivercore, eventloop, sockfd, buf_event, remote_addr);
 				assert(client_ctx.event !is null, "event is null although it was just != null?");
 				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
-				timeval toread = {tv_sec: 60, tv_usec: 0};
-				bufferevent_set_timeouts(buf_event, &toread, null);
 				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
 					bufferevent_free(buf_event);
 					TcpContext.Alloc.free(client_ctx);
