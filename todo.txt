@@ -23,7 +23,7 @@ GENERAL
  - Mention the API used for Diet templates on the /templates page
  - Implement a soft-shutdown in case of catching an Error (in conjunction with vibedist)
  - Add support for an entry "lowerPriviledges" to package.json which will use the system's 'vibe' user for priviledge lowering
- - Add idle GC collection using a timer.
+ - Document the different -version specifiers that are possible
 
 DIET TEMPLATES
 ==============

@@ -19,8 +19,10 @@ import std.variant;
 import core.stdc.stdlib;
 import core.thread;
 
+import vibe.core.drivers.libev;
 import vibe.core.drivers.libevent2;
-//import vibe.core.drivers.libev;
+import vibe.core.drivers.win32;
+import vibe.core.drivers.winrt;
 
 version(Posix){
 	import core.sys.posix.signal;
@@ -242,6 +244,18 @@ class CoreTask : Task {
 /**************************************************************************************************/
 
 private class VibeDriverCore : DriverCore {
+	private {
+		Duration m_gcCollectTimeout;
+		Timer m_gcTimer;
+		bool m_ignoreIdleForGC = false;
+	}
+
+	private void setupGcTimer()
+	{
+		m_gcTimer = s_driver.createTimer(&collectGarbage);
+		m_gcCollectTimeout = dur!"seconds"(2);
+	}
+
 	void yieldForEvent()
 	{
 		auto fiber = cast(CoreTask)Fiber.getThis();
@@ -298,6 +312,18 @@ private class VibeDriverCore : DriverCore {
 			if( s_yieldedTasks.length == 0 ) break;
 			processEvents();
 		}
+
+		if( !m_ignoreIdleForGC && m_gcTimer ){
+			m_gcTimer.rearm(m_gcCollectTimeout);
+		} else m_ignoreIdleForGC = false;
+	}
+
+	private void collectGarbage()
+	{
+		import core.memory;
+		logTrace("gc idle collect");
+		GC.collect();
+		m_ignoreIdleForGC = true;
 	}
 }
 
@@ -328,12 +354,22 @@ shared static this()
 		WSAStartup(0x0202, &data);
 	}
 	
-	logTrace("event_set_mem_functions");
+	logTrace("create driver core");
 	s_core = new VibeDriverCore;
-	s_driver = new Libevent2Driver(s_core);
-	//s_driver = new LibevDriver(s_core);
+
+	logTrace("create driver");
+	version(VibeWin32Driver) s_driver = new Win32EventDriver(s_core);
+	else version(VibeWinrtDriver) s_driver = new WinRtEventDriver(s_core);
+	else version(VibeLibevDriver) s_driver = new LibevDriver(s_core);
+	else s_driver = new Libevent2Driver(s_core);
+
+	version(VibeIdleCollect){
+		logTrace("setup gc");
+		s_core.setupGcTimer();
+	}
 	
 	version(Posix){
+		logTrace("setup signal handler");
 		// support proper shutdown using signals
 		sigset_t sigset;
 		sigemptyset(&sigset);

@@ -7,7 +7,8 @@
 */
 module vibe.core.drivers.win32;
 
-version(VibeWin32Driver):
+version(VibeWin32Driver)
+{
 
 import vibe.core.driver;
 import vibe.core.log;
@@ -415,7 +416,7 @@ class Win32TcpConnection : TcpConnection {
 
 	@property void tcpNoDelay(bool enabled)
 	{
-		m_readTimeout = enabled;
+		m_tcpNoDelay = enabled;
 		assert(false);
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
@@ -504,3 +505,5 @@ private extern(System)
 	}
 
 }
+
+} // version(VibeWin32Driver)

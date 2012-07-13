@@ -7,7 +7,14 @@
 */
 module vibe.core.drivers.winrt;
 
-version(VibeWinrtDriver):
+version(VibeWinrtDriver)
+{
+
+import vibe.core.driver;
+import vibe.inet.url;
+
+import core.time;
+
 
 class WinRtEventDriver : EventDriver {
 	private {
@@ -31,6 +38,10 @@ class WinRtEventDriver : EventDriver {
 	}
 
 	void exitEventLoop()
+	{
+	}
+
+	void runWorkerTask(void delegate() f)
 	{
 	}
 
@@ -71,10 +82,12 @@ class WinRtSignal : Signal {
 
 	bool isOwner()
 	{
+		assert(false);
 	}
 
 	@property int emitCount()
 	const {
+		assert(false);
 	}
 
 	void emit()
@@ -89,12 +102,12 @@ class WinRtSignal : Signal {
 class WinRtTimer : Timer {
 	private {
 		WinRtEventDriver m_driver;
-		void delegate() callback;
+		void delegate() m_callback;
 		bool m_pending;
 		bool m_periodic;
 	}
 
-	this(Win32EventDriver driver, void delegate() callback)
+	this(WinRtEventDriver driver, void delegate() callback)
 	{
 		m_driver = driver;
 		m_callback = callback;
@@ -110,6 +123,7 @@ class WinRtTimer : Timer {
 
 	bool isOwner()
 	{
+		assert(false);
 	}
 
 	@property bool pending() { return m_pending; }
@@ -118,13 +132,13 @@ class WinRtTimer : Timer {
 	{
 		if( m_pending ) stop();
 		m_periodic = periodic;
-		SetTimer(m_hwnd, id, seconds.total!"msecs"(), &timerProc);
+		//SetTimer(m_hwnd, id, seconds.total!"msecs"(), &timerProc);
 	}
 
 	void stop()
 	{
 		assert(m_pending);
-		KillTimer(m_driver.m_hwnd, cast(size_t)cast(void*)this);
+		//KillTimer(m_driver.m_hwnd, cast(size_t)cast(void*)this);
 	}
 
 	void wait()
@@ -132,21 +146,14 @@ class WinRtTimer : Timer {
 		while( m_pending )
 			m_driver.m_core.yieldForEvent();
 	}
-
-	private static extern(Windows) nothrow
-	void onTimer(HWND hwnd, UINT msg, size_t id, uint time)
-	{
-		auto timer = cast(Timer)cast(void*)id;
-		if( timer.m_periodic ){
-			timer.rearm(m_timer.m_timeout, true);
-		} else {
-			timer.m_pending = false;
-		}
-		timer.m_callback();
-	}
 }
 
-class WinRtFile : FileStream {
+class WinRtFileStream : FileStream {
+	this(string path, FileMode mode)
+	{
+		assert(false);
+	}
+
 	void release()
 	{
 	}
@@ -157,26 +164,66 @@ class WinRtFile : FileStream {
 
 	bool isOwner()
 	{
+		assert(false);
 	}
 
 	void close()
 	{
 	}
 
+	@property Path path() const { assert(false); }
+
 	@property ulong size()
 	const {
+		assert(false);
 	}
 
 	@property bool readable()
 	const {
+		assert(false);
 	}
 
 	@property bool writable()
 	const {
+		assert(false);
 	}
 
 	void seek(ulong offset)
 	{
+	}
+
+	ulong tell()
+	{
+		assert(false);
+	}
+
+	@property bool empty() { assert(false); }
+
+	@property ulong leastSize() { assert(false); }
+
+	@property bool dataAvailableForRead() { assert(false); }
+
+	const(ubyte)[] peek() { assert(false); }
+
+	void read(ubyte[] dst)
+	{
+	}
+
+	void write(in ubyte[] bytes, bool do_flush = true)
+	{
+	}
+
+	void flush()
+	{
+	}
+
+	void finalize()
+	{
+	}
+
+	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	{
+		writeDefault(stream, nbytes, do_flush);
 	}
 }
 
@@ -196,11 +243,12 @@ class WinRtTcpConnection : TcpConnection {
 
 	bool isOwner()
 	{
+		assert(false);
 	}
 
 	@property void tcpNoDelay(bool enabled)
 	{
-		m_readTimeout = enabled;
+		m_tcpNoDelay = enabled;
 		assert(false);
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
@@ -217,13 +265,47 @@ class WinRtTcpConnection : TcpConnection {
 
 	@property bool connected()
 	const {
+		assert(false);
 	}
 
 	@property string peerAddress()
 	const {
+		assert(false);
 	}
 
 	bool waitForData(Duration timeout)
 	{
+		assert(false);
+	}
+
+	@property bool empty() { assert(false); }
+
+	@property ulong leastSize() { assert(false); }
+
+	@property bool dataAvailableForRead() { assert(false); }
+
+	const(ubyte)[] peek() { assert(false); }
+
+	void read(ubyte[] dst)
+	{
+	}
+
+	void write(in ubyte[] bytes, bool do_flush = true)
+	{
+	}
+
+	void flush()
+	{
+	}
+
+	void finalize()
+	{
+	}
+
+	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	{
+		writeDefault(stream, nbytes, do_flush);
 	}
 }
+
+} // version(VibeWinrtDriver)

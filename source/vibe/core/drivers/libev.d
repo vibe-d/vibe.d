@@ -7,14 +7,15 @@
 */
 module vibe.core.drivers.libev;
 
-version(VibeLibevDriver):
+version(VibeLibevDriver)
+{
 
 import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
 
-import intf.libev;
+import deimos.ev;
 
 import std.algorithm : min;
 import std.array;
@@ -538,3 +539,5 @@ private void setNonBlocking(int fd)
 		fcntl(fd, F_SETFL, flags);
 	}
 }
+
+} // version(VibeLibevDriver)
