@@ -721,6 +721,7 @@ void deserializeBson(T)(ref T dst, Bson src)
 			}
 		}
 	} else static if( is(T == class) ){
+		if (src.isNull()) return;
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
