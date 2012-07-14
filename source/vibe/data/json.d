@@ -791,6 +791,7 @@ void deserializeJson(T)(ref T dst, Json src)
 			}
 		}
 	} else static if( is(T == class) ){
+		if( src.type == Json.Type.Null ) return;
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
