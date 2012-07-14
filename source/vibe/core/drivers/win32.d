@@ -28,6 +28,9 @@ private extern(System)
 							DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
 	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
 					 void function(DWORD, DWORD, OVERLAPPED) lpCompletionRoutine);
+	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
+					 void function(DWORD, DWORD, OVERLAPPED) lpCompletionRoutine);
+	BOOL GetFileSizeEx(HANDLE hFile, long *lpFileSize);
 	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
 	LONG DispatchMessageW(MSG *lpMsg);
 	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
@@ -290,6 +293,8 @@ class Win32FileStream : FileStream {
 		FileMode m_mode;
 		DriverCore m_driver;
 		Fiber m_fiber;
+		ulong m_size;
+		ulong m_ptr = 0;
 	}
 
 	this(DriverCore driver, Path path, FileMode mode)
@@ -298,6 +303,8 @@ class Win32FileStream : FileStream {
 		m_mode = mode;
 		m_driver = driver;
 		m_fiber = Fiber.getThis();
+		auto nstr = m_path.toNativeString();
+
 		m_handle = CreateFileW(
 					cast(immutable(char)*)(m_path.toNativeString()),
 					m_mode == (m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append) ? GENERIC_READ : GENERIC_WRITE,
@@ -306,6 +313,12 @@ class Win32FileStream : FileStream {
 					m_mode == FileMode.CreateTrunc ? TRUNCATE_EXISTING : OPEN_ALWAYS,
 					FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
 					null);
+		auto errorcode = GetLastError();
+
+		long size;
+		auto succeeded = GetFileSizeEx(m_handle, &size);
+		enforce(succeeded);
+		m_size = size;
 	}
 
 	void release()
@@ -327,6 +340,11 @@ class Win32FileStream : FileStream {
 	{
 	}
 
+	ulong tell()
+	{
+		return m_ptr;
+	}
+
 	@property Path path()
 	const{
 		return m_path;
@@ -334,7 +352,7 @@ class Win32FileStream : FileStream {
 
 	@property ulong size()
 	const {
-		assert(false);
+		return m_size;
 	}
 
 	@property bool readable()
@@ -349,19 +367,14 @@ class Win32FileStream : FileStream {
 
 	void seek(ulong offset)
 	{
+		m_ptr = offset;
 	}
 
-	@property bool empty()
-	{
-		return false;
-	}
 
-	@property ulong leastSize(){
-		assert(false);
-	}
-
+	@property bool empty() const { assert(this.readable); return m_ptr >= m_size; }
+	@property ulong leastSize() const { assert(this.readable); return m_size - m_ptr; }
 	@property bool dataAvailableForRead(){
-		assert(false);
+		return leastSize() > 0;
 	}
 
 	const(ubyte)[] peek(){
@@ -369,16 +382,26 @@ class Win32FileStream : FileStream {
 	}
 
 	void read(ubyte[] dst){
-		assert(false);
-	}
-
-	void write(in ubyte[] bytes, bool do_flush = true){
-
+		assert(this.readable);
+		enforce(dst.length <= leastSize);
 		OVERLAPPED overlapped;
 		overlapped.Internal = 0;
 		overlapped.InternalHigh = 0;
-		overlapped.Offset = 0;
-		overlapped.OffsetHigh = 0;
+		overlapped.Offset = cast(uint)(m_ptr & 0xFFFF);
+		overlapped.OffsetHigh = cast(uint)(m_ptr << 4);
+		overlapped.hEvent = cast(HANDLE)cast(void*)this;
+		ReadFileEx(m_handle, cast(void*)dst, dst.length, &overlapped, &fileStreamOperationComplete);
+
+		m_driver.yieldForEvent();
+	}
+
+	void write(in ubyte[] bytes, bool do_flush = true){
+		assert(this.writable);
+		OVERLAPPED overlapped;
+		overlapped.Internal = 0;
+		overlapped.InternalHigh = 0;
+		overlapped.Offset = cast(uint)(m_ptr & 0xFFFF);
+		overlapped.OffsetHigh = cast(uint)(m_ptr << 4);
 		overlapped.hEvent = cast(HANDLE)cast(void*)this;
 		WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &fileStreamOperationComplete);
 
@@ -497,7 +520,7 @@ private extern(System)
 	void fileStreamOperationComplete(DWORD errorCode, DWORD numberOfBytesTransfered, OVERLAPPED overlapped)
 	{
 		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
-		fileStream.m_driver.resumeTask(fileStream.m_fiber);
+		fileStream.m_driver.resumeTask(cast(Task)fileStream.m_fiber);
 		//resume fiber
 		// set flag operation done
 
