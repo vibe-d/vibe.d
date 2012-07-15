@@ -434,7 +434,7 @@ struct StrMapCI {
 		import std.uni;
 		uint csum = 0;
 		foreach( i; 0 .. s.length )
-			csum += 357*(s[i]&0x1011_1111);
+			csum += 357*(s[i]&0x1101_1111);
 		return csum;
 	}
 }

@@ -139,11 +139,11 @@ int icmp2(string a, string b)
 	if( i > 0 && (a[i-1] & 0x80) ) i--; // don't stop half-way in a UTF-8 sequence
 	j = i;
 
-	// compare the differing character
-	if( i < a.length && j < b.length ){
+	// compare the differing character and the rest of the string
+	while(i < a.length && j < b.length){
 		uint ac = cast(uint)a[i];
 		uint bc = cast(uint)b[j];
-		if( !((ac | bc) & 0xF0) ){
+		if( !((ac | bc) & 0x80) ){
 			i++;
 			j++;
 			if( ac >= 'A' && ac <= 'Z' ) ac += 'a' - 'A';
@@ -160,7 +160,6 @@ int icmp2(string a, string b)
 				else if( acp > bcp ) return 1;
 			}
 		}
-
 	}
 
 	if( i < a.length ) return 1;
