@@ -339,9 +339,9 @@ class HttpServerSettings {
 
 	/*
 		Log format using Apache custom log format directives. E.g. NCSA combined:
-		"%h - %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\""
+		"%h - %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\""
 	*/
-	string accessLogFormat = "%h - %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-agent}i\"";
+	string accessLogFormat = "%h - %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\"";
 	string accessLogFile = "";
 	bool accessLogToConsole = false;
 
