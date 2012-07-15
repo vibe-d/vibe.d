@@ -72,6 +72,13 @@ class LibevDriver : EventDriver {
 		return 0;
 	}
 	
+	int runEventLoopOnce()
+	{
+		ev_run(m_loop, EVRUN_ONCE);
+		m_core.notifyIdle();
+		return 0;
+	}
+
 	int processEvents()
 	{
 		ev_run(m_loop, EVRUN_NOWAIT);

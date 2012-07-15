@@ -270,7 +270,7 @@ private class VibeDriverCore : DriverCore {
 			}
 		} else {
 			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			if( auto err = s_driver.processEvents() != 0){
+			if( auto err = s_driver.runEventLoopOnce() ){
 				if( err == 1 ){
 					logDebug("No events registered, exiting event loop.");
 					throw new Exception("No events registered in vibeYieldForEvent.");

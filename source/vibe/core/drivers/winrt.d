@@ -32,6 +32,11 @@ class WinRtEventDriver : EventDriver {
 		return 0;
 	}
 
+	int runEventLoopOnce()
+	{
+		return 0;
+	}
+
 	int processEvents()
 	{
 		return 0;

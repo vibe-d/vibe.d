@@ -25,8 +25,11 @@ interface EventDriver {
 	*/
 	int runEventLoop();
 
-	/** Processes all outstanding events, potentially blocking until the first event comes
-		available.
+	/* Processes all outstanding events, potentially blocking to wait for the first event.
+	*/
+	int runEventLoopOnce();
+
+	/** Processes all outstanding events if any, does not block.
 	*/
 	int processEvents();
 

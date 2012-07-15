@@ -179,6 +179,13 @@ class Libevent2Driver : EventDriver {
 		return ret;
 	}
 
+	int runEventLoopOnce()
+	{
+		auto ret = event_base_loop(m_eventLoop, EVLOOP_ONCE);
+		m_core.notifyIdle();
+		return ret;
+	}
+
 	int processEvents()
 	{
 		auto ret = event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);

@@ -131,6 +131,11 @@ class Win32EventDriver : EventDriver {
 	int processEvents()
 	{
 		waitForEvents(0);
+		return processEvents();
+	}
+
+	int processEvents()
+	{
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
 			if( msg.message == WM_QUIT ) return 0;
