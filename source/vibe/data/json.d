@@ -34,23 +34,6 @@ import std.traits;
 	required to convert a JSON value to the corresponding static D type.
 */
 struct Json {
-	/** Represents the run time type of a JSON value.
-	*/
-	enum Type {
-		Undefined,
-		Null,
-		Bool,
-		Int,
-		Float,
-		String,
-		Array,
-		Object
-	}
-
-	static @property Json Undefined() { return Json(); }
-	static @property Json EmptyObject() { return Json(cast(Json[string])null); }
-	static @property Json EmptyArray() { return Json(cast(Json[])null); }
-
 	private {
 		union {
 			bool m_bool;
@@ -62,6 +45,37 @@ struct Json {
 		};
 		Type m_type = Type.Undefined;
 	}
+
+	/** Represents the run time type of a JSON value.
+	*/
+	enum Type {
+		/// A non-existent value in a JSON object
+		Undefined,
+		/// Null value
+		Null,
+		/// Boolean value
+		Bool,
+		/// 64-bit integer value
+		Int,
+		/// 64-bit floating point value
+		Float,
+		/// UTF-8 string
+		String,
+		/// Array of JSON values
+		Array,
+		/// JSON object aka. dictionary from string to Json
+		Object
+	}
+
+	/// New JSON value of Type.Undefined
+	static @property Json Undefined() { return Json(); }
+
+	/// New JSON value of Type.Object
+	static @property Json EmptyObject() { return Json(cast(Json[string])null); }
+
+	/// New JSON value of Type.Array
+	static @property Json EmptyArray() { return Json(cast(Json[])null); }
+
 	version(JsonLineNumbers) int line;
 
 	/**
@@ -718,6 +732,27 @@ unittest {
 }
 
 
+/**
+	Serializes the given value to JSON.
+
+	The following types of values are supported:
+
+	$(DL
+		$(DT Json)            $(DD Used as-is)
+		$(DT null)            $(DD Converted to Bson.Type.Null)
+		$(DT bool)            $(DD Converted to Bson.Type.Bool)
+		$(DT float, double)   $(DD Converted to Bson.Type.Double)
+		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Bson.Type.Int)
+		$(DT string)          $(DD Converted to Bson.Type.String)
+		$(DT T[])             $(DD Converted to Bson.Type.Array)
+		$(DT T[string])       $(DD Converted to Bson.Type.Object)
+		$(DT struct)          $(DD Converted to Bson.Type.Object)
+		$(DT class)           $(DD Converted to Bson.Type.Object or Bson.Type.Null)
+	)
+
+	All entries of an array or an associative array, as well as all R/W properties and
+	all fields of a struct/class are recursively serialized using the same rules.
+*/
 Json serializeToJson(T)(T value)
 {
 	static if( is(T == Json) ) return value;
@@ -761,6 +796,12 @@ Json serializeToJson(T)(T value)
 	}
 }
 
+
+/**
+	Deserializes a JSON value into the destination variable.
+
+	The same types as for serializeToJson() are supported and handled inversely.
+*/
 void deserializeJson(T)(ref T dst, Json src)
 {
 	static if( is(T == Json) ) dst = src;
