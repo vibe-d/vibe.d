@@ -122,6 +122,14 @@ string stripA(string s)
 	return stripLeftA(stripRightA(s));
 }
 
+sizediff_t countUntilAny(string str, string chars)
+{
+	foreach( i, char ch; str )
+		if( chars.countUntil(ch) >= 0 )
+			return i;
+	return -1;
+}
+
 string formatString(ARGS...)(string format, ARGS args)
 {
 	auto dst = appender!string();

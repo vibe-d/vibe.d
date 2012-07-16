@@ -139,10 +139,7 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 			case TEXT:
 				dst.put("<p>");
 				auto j = skipBlock(i);
-				foreach( ln; lines[i .. j] ){
-					renderTextLine(dst, ln, macros);
-					dst.put("\n");
-				}
+				renderTextLine(dst, lines[i .. j].join("\n"), macros);
 				dst.put("</p>\n");
 				i = j;
 				break;
@@ -228,18 +225,44 @@ private void renderTextLine(R)(ref R dst, string line, string[string] macros, st
 			}
 			line = line[1 .. $];
 		} else if( line[0] == '(' ){
-			auto cidx = line.countUntil(')');
-			if( cidx < 0 ) continue;
-			auto args = splitParams(line[1 .. cidx]);
-			logDebug("PARAMS: %s", args);
-			logDebug("MACROS: %s", macros);
-			line = line[cidx+1 .. $];
-
-			if( args.length < 1 ) continue;
-
-			if( auto pm = args[0] in macros ){
-				renderTextLine(dst, *pm, macros, args[1 .. $]);
+			line = line[1 .. $];
+			int l = 1;
+			size_t cidx = 0;
+			for( cidx = 0; cidx < line.length && l > 0; cidx++ ){
+				if( line[cidx] == '(' ) l++;
+				else if( line[cidx] == ')' ) l--;
 			}
+			if( l > 0 ){
+				logDebug("Unmatched parenthesis in DDOC comment.");
+				continue;
+			}
+			if( cidx < 1 ){
+				logDebug("Missing macro name in DDOC comment.");
+				continue;
+			}
+
+			auto mnameidx = line[0 .. cidx-1].countUntilAny(" \t\r\n");
+
+			if( mnameidx < 0 ){
+				logDebug("Macro call in DDOC comment is missing macro name.");
+				continue;
+			}
+			auto mname = line[0 .. mnameidx];
+
+			auto argstext = appender!string();
+			string[] args;
+			if( mnameidx+1 < cidx ){
+				renderTextLine(argstext, line[mnameidx+1 .. cidx-1], macros, params);
+				args = splitParams(argstext.data());
+			}
+
+			logTrace("PARAMS: (%s) %s", mname, args);
+			logTrace("MACROS: %s", macros);
+			line = line[cidx .. $];
+
+			if( auto pm = mname in macros )
+				renderTextLine(dst, *pm, macros, args);
+			else logDebug("Macro '%s' not found.", mname);
 		}
 	}
 }
