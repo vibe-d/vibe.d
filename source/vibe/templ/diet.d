@@ -403,7 +403,9 @@ private struct DietParser {
 
 	string buildCodeNodeWriter(ref string[] node_stack, string line, int level, ref bool in_string)
 	{
-		string ret = endString(in_string) ~ ctstrip(line) ~ "{\n";
+		line = ctstrip(line);
+		assertp(line.length == 0 || line[$-1] != '{', "Use indentation to nest D statements instead of braces.");
+		string ret = endString(in_string) ~ line ~ "{\n";
 		node_stack ~= "-}";
 		return ret;
 	}
