@@ -68,6 +68,14 @@ int processEvents()
 }
 
 /**
+	Sets a callback that is called whenever no events are left in the event queue.
+*/
+void setIdleHandler(void delegate() del)
+{
+	s_idleHandler = del;
+}
+
+/**
 	Runs a new asynchronous task.
 
 	task will be called synchronously from within the vibeRunTask call. It will
@@ -313,6 +321,8 @@ private class VibeDriverCore : DriverCore {
 			processEvents();
 		}
 
+		if( s_idleHandler ) s_idleHandler();
+
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
 		} else m_ignoreIdleForGC = false;
@@ -342,6 +352,7 @@ private {
 	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
+	void delegate() s_idleHandler;
 }
 
 shared static this()
