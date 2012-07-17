@@ -20,11 +20,12 @@ import core.thread;
 import std.c.windows.windows;
 import std.c.windows.winsock;
 import std.exception;
+import std.utf;
 
 private extern(System)
 {
 	DWORD MsgWaitForMultipleObjects(DWORD nCount, const(HANDLE) *pHandles, BOOL bWaitAll, DWORD dwMilliseconds, DWORD dwWakeMask);
-	HANDLE CreateFileW(LPCTSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+	HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 							DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
 	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
 					 void function(DWORD, DWORD, OVERLAPPED) lpCompletionRoutine);
@@ -128,7 +129,7 @@ class Win32EventDriver : EventDriver {
 		return 0;
 	}
 
-	int processEvents()
+	int runEventLoopOnce()
 	{
 		waitForEvents(0);
 		return processEvents();
@@ -311,7 +312,7 @@ class Win32FileStream : FileStream {
 		auto nstr = m_path.toNativeString();
 
 		m_handle = CreateFileW(
-					cast(immutable(char)*)(m_path.toNativeString()),
+					toUTF16z(m_path.toNativeString()),
 					m_mode == (m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append) ? GENERIC_READ : GENERIC_WRITE,
 					m_mode == FileMode.Read ? FILE_SHARE_READ : 0,
 					null,
@@ -397,6 +398,7 @@ class Win32FileStream : FileStream {
 		overlapped.hEvent = cast(HANDLE)cast(void*)this;
 		ReadFileEx(m_handle, cast(void*)dst, dst.length, &overlapped, &fileStreamOperationComplete);
 
+		m_ptr += dst.length;
 		m_driver.yieldForEvent();
 	}
 
@@ -410,6 +412,7 @@ class Win32FileStream : FileStream {
 		overlapped.hEvent = cast(HANDLE)cast(void*)this;
 		WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &fileStreamOperationComplete);
 
+		m_ptr += bytes.length;
 		m_driver.yieldForEvent();
 	}
 
