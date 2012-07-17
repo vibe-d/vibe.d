@@ -24,13 +24,13 @@ import std.utf;
 
 private extern(System)
 {
-	DWORD MsgWaitForMultipleObjects(DWORD nCount, const(HANDLE) *pHandles, BOOL bWaitAll, DWORD dwMilliseconds, DWORD dwWakeMask);
+	DWORD MsgWaitForMultipleObjectsEx(DWORD nCount, const(HANDLE) *pHandles, DWORD dwMilliseconds, DWORD dwWakeMask, DWORD dwFlags);
 	HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 							DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
 	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
-					 void function(DWORD, DWORD, OVERLAPPED) lpCompletionRoutine);
+					 void function(DWORD, DWORD, OVERLAPPED*) lpCompletionRoutine);
 	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
-					 void function(DWORD, DWORD, OVERLAPPED) lpCompletionRoutine);
+					 void function(DWORD, DWORD, OVERLAPPED*) lpCompletionRoutine);
 	BOOL GetFileSizeEx(HANDLE hFile, long *lpFileSize);
 	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
 	LONG DispatchMessageW(MSG *lpMsg);
@@ -131,7 +131,7 @@ class Win32EventDriver : EventDriver {
 
 	int runEventLoopOnce()
 	{
-		waitForEvents(0);
+		waitForEvents(INFINITE);
 		return processEvents();
 	}
 
@@ -149,7 +149,7 @@ class Win32EventDriver : EventDriver {
 
 	private void waitForEvents(uint timeout)
 	{
-		MsgWaitForMultipleObjects(0, null, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
+		MsgWaitForMultipleObjectsEx(0, null, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 	}
 
 	void exitEventLoop()
@@ -301,6 +301,7 @@ class Win32FileStream : FileStream {
 		Fiber m_fiber;
 		ulong m_size;
 		ulong m_ptr = 0;
+		bool m_ready = false;
 	}
 
 	this(DriverCore driver, Path path, FileMode mode)
@@ -389,17 +390,22 @@ class Win32FileStream : FileStream {
 
 	void read(ubyte[] dst){
 		assert(this.readable);
+
+
 		enforce(dst.length <= leastSize);
 		OVERLAPPED overlapped;
 		overlapped.Internal = 0;
 		overlapped.InternalHigh = 0;
-		overlapped.Offset = cast(uint)(m_ptr & 0xFFFF);
-		overlapped.OffsetHigh = cast(uint)(m_ptr << 4);
+		overlapped.Offset = cast(uint)(m_ptr & 0xFFFFFFFF);
+		overlapped.OffsetHigh = cast(uint)(m_ptr >> 32);
 		overlapped.hEvent = cast(HANDLE)cast(void*)this;
 		ReadFileEx(m_handle, cast(void*)dst, dst.length, &overlapped, &fileStreamOperationComplete);
 
+		while(!m_ready)
+			m_driver.yieldForEvent();
+
+		m_ready = false;
 		m_ptr += dst.length;
-		m_driver.yieldForEvent();
 	}
 
 	void write(in ubyte[] bytes, bool do_flush = true){
@@ -407,13 +413,16 @@ class Win32FileStream : FileStream {
 		OVERLAPPED overlapped;
 		overlapped.Internal = 0;
 		overlapped.InternalHigh = 0;
-		overlapped.Offset = cast(uint)(m_ptr & 0xFFFF);
-		overlapped.OffsetHigh = cast(uint)(m_ptr << 4);
+		overlapped.Offset = cast(uint)(m_ptr & 0xFFFFFFFF);
+		overlapped.OffsetHigh = cast(uint)(m_ptr >> 32);
 		overlapped.hEvent = cast(HANDLE)cast(void*)this;
 		WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &fileStreamOperationComplete);
 
+		while(!m_ready)
+			m_driver.yieldForEvent();
+
+		m_ready = false;
 		m_ptr += bytes.length;
-		m_driver.yieldForEvent();
 	}
 
 	void flush(){}
@@ -525,14 +534,15 @@ class Win32TcpConnection : TcpConnection {
 
 private extern(System)
 {
-	void fileStreamOperationComplete(DWORD errorCode, DWORD numberOfBytesTransfered, OVERLAPPED overlapped)
+	void fileStreamOperationComplete(DWORD errorCode, DWORD numberOfBytesTransfered, OVERLAPPED* overlapped)
 	{
-		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
-		fileStream.m_driver.resumeTask(cast(Task)fileStream.m_fiber);
-		//resume fiber
 		// set flag operation done
+		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
+		fileStream.m_ready = true;
 
-		logInfo("fileStreamOperationComplete");
+		// resume fiber if it's not null
+		if(fileStream.m_fiber)
+			fileStream.m_driver.resumeTask(cast(Task)fileStream.m_fiber);
 	}
 
 }
