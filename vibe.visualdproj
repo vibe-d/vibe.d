@@ -6,7 +6,7 @@
   <lib>1</lib>
   <subsystem>0</subsystem>
   <multiobj>0</multiobj>
-  <singleFileCompilation>0</singleFileCompilation>
+  <singleFileCompilation>1</singleFileCompilation>
   <oneobj>0</oneobj>
   <trace>0</trace>
   <quiet>0</quiet>
@@ -65,7 +65,7 @@
   <debuglevel>0</debuglevel>
   <debugids />
   <versionlevel>0</versionlevel>
-  <versionids />
+  <versionids>VibeWin32Driver</versionids>
   <dump_source>0</dump_source>
   <mapverbosity>0</mapverbosity>
   <createImplib>0</createImplib>
@@ -291,9 +291,12 @@
  <Folder name="vibe">
   <Folder name="core">
    <Folder name="drivers">
+    <File path="source\vibe\core\drivers\libev.d" />
     <File path="source\vibe\core\drivers\libevent2.d" />
     <File path="source\vibe\core\drivers\libevent2_tcp.d" />
     <File path="source\vibe\core\drivers\threadedfile.d" />
+    <File path="source\vibe\core\drivers\win32.d" />
+    <File path="source\vibe\core\drivers\winrt.d" />
    </Folder>
    <File path="source\vibe\core\args.d" />
    <File path="source\vibe\core\connectionpool.d" />
