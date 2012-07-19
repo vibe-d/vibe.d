@@ -35,7 +35,7 @@ int main(string[] args)
 
 	logInfo("Running event loop...");
 	try {
-		return start();
+		return runEventLoop();
 	} catch( Throwable th ){
 		logError("Unhandled exception in event loop: %s", th.toString());
 		return 1;

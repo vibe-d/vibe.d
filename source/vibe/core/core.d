@@ -42,7 +42,7 @@ version(Posix){
 	The event loop will continue running during the whole life time of the application.
 	Tasks will be started and handled from within the event loop.
 */
-int start()
+int runEventLoop()
 {
 	s_eventLoopRunning = true;
 	scope(exit) s_eventLoopRunning = false;
@@ -55,6 +55,20 @@ int start()
 		return 1;
 	}
 	return 0;
+}
+
+deprecated int start() { return runEventLoop(); }
+
+/**
+	Stops the currently running event loop.
+
+	Calling this function will cause the event loop to stop event processing and
+	the corresponding call to runEventLoop() will return to its caller.
+*/
+void exitEventLoop()
+{
+	assert(s_eventLoopRunning);
+	s_driver.exitEventLoop();
 }
 
 /**
@@ -413,7 +427,7 @@ version(Posix){
 	{
 		logInfo("Received signal %d. Shutting down.", signal);
 
-		if( s_eventLoopRunning ) s_driver.exitEventLoop();
+		if( s_eventLoopRunning ) exitEventLoop();
 		else exit(1);
 	}
 	
