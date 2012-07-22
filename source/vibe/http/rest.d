@@ -220,9 +220,11 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 */
 class RestInterfaceClient(I) : I
 {
+	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
 		Url m_baseUrl;
 		MethodStyle m_methodStyle;
+		RequestFilter m_requestFilter;
 	}
 
 	alias I BaseInterface;
@@ -240,6 +242,9 @@ class RestInterfaceClient(I) : I
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
+
+	@property RequestFilter requestFilter() { return m_requestFilter; }
+	@property void requestFilter(RequestFilter v) { m_requestFilter = v; }
 
 	//pragma(msg, generateRestInterfaceSubInterfaces!(I)());
 	mixin(generateRestInterfaceSubInterfaces!(I));
@@ -269,13 +274,17 @@ class RestInterfaceClient(I) : I
 
 		auto res = requestHttp(url, (req){
 				req.method = httpMethodFromString(verb);
+				if( m_requestFilter ) m_requestFilter(req);
 				if( verb != "GET" && verb != "HEAD" )
 					req.writeJsonBody(params);
 			});
 		auto ret = res.readJson();
 		logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
-		if( res.statusCode != HttpStatus.OK )
-			throw new Exception("REST API returned an error"); // TODO: better message!
+		if( res.statusCode != HttpStatus.OK ){
+			if( ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String )
+				throw new Exception(ret.statusMessage.get!string);
+			else throw new Exception(httpStatusText(res.statusCode));
+		}
 		return ret;
 	}
 }
@@ -350,10 +359,13 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 					params[i] = P.fromString(req.params[param_names[i][1 .. $]]);
 				else
 					params[i] = to!P(req.params[param_names[i][1 .. $]]);
-			} static if( method == "GET" ){
-				deserializeJson(params[i], deserializeJson(req.query[param_names[i]]));
 			} else {
-				deserializeJson(params[i], jparams[param_names[i]]);
+				if( req.method == HttpMethod.GET ){
+					deserializeJson(params[i], parseJson(req.query[param_names[i]]));
+				} else {
+					logDebug("%s %s", method, param_names[i]);
+					deserializeJson(params[i], jparams[param_names[i]]);
+				}
 			}
 		}
 
@@ -368,7 +380,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 		} catch( Exception e ){
 			// TODO: better error description!
 			res.statusCode = HttpStatus.InternalServerError;
-			res.writeBody("Error!");
+			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": e.toString()]);
 		}
 	}
 
