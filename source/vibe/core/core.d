@@ -220,10 +220,10 @@ enum VibeVersionString = "0.7.6";
 
 
 /**************************************************************************************************/
-/* public types                                                                                   */
+/* private types                                                                                  */
 /**************************************************************************************************/
 
-class CoreTask : Task {
+private class CoreTask : Task {
 	private {
 		void delegate() m_taskFunc;
 		Variant[string] m_taskLocalStorage;
@@ -260,10 +260,6 @@ class CoreTask : Task {
 	}
 }
 
-
-/**************************************************************************************************/
-/* private types                                                                                  */
-/**************************************************************************************************/
 
 private class VibeDriverCore : DriverCore {
 	private {
