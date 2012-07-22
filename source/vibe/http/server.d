@@ -675,8 +675,8 @@ final class HttpServerResponse : HttpResponse {
 		// NOTE: AA.length is very slow so this helper function is used to determine if an AA is empty.
 		static bool empty(AA)(AA aa)
 		{
-			foreach( _; aa ) return true;
-			return false;
+			foreach( _; aa ) return false;
+			return true;
 		}
 
 		// write cookies
@@ -885,6 +885,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	}
 
 	bool parsed = false;
+	bool keep_alive = false;
 
 	// parse the request
 	try {
@@ -1008,6 +1009,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// finished parsing the request
 		parsed = true;
+		keep_alive = req.persistent;
 
 		// handle the request
 		logTrace("handle request (body %d)", req.bodyReader.leastSize);
@@ -1023,15 +1025,15 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		else logError("HttpStatusException after page has been written: %s", err.toString());
 		logDebug("Exception while handling request: %s", err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
-			return false;
+			keep_alive = false;
 	} catch (Throwable e) {
 		logDebug("Exception while parsing request: %s", e.toString());
-		if( !res.headerWritten ) errorOut(parsed ? HttpStatus.InternalServerError :
-			HttpStatus.BadRequest, "Invalid request format.", e.toString(), e);
+		auto status = parsed ? HttpStatus.InternalServerError : HttpStatus.BadRequest;
+		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logError("Error after page has been written: %s", e.msg);
 		logDebug("Exception while handling request: %s", e.toString());
 		if ( !parsed )
-			return false;
+			keep_alive = false;
 	}
 
 	nullWriter.write(req.bodyReader);
@@ -1050,7 +1052,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	foreach( log; context.loggers )
 		log.log(req, res);
 
-	return req.persistent;
+	return keep_alive;
 }
 
 
