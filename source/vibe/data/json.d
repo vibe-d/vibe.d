@@ -772,6 +772,8 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
+	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
+		return Json(value.toString());
 	} else static if( is(T == struct) ){
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
@@ -821,6 +823,8 @@ void deserializeJson(T)(ref T dst, Json src)
 			deserializeJson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
+		dst = T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
