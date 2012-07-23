@@ -13,6 +13,7 @@ import vibe.http.client;
 import vibe.http.router;
 import vibe.inet.url;
 import vibe.textfilter.urlencode;
+import vibe.utils.string;
 
 import std.array;
 import std.conv;
@@ -244,7 +245,10 @@ class RestInterfaceClient(I) : I
 	}
 
 	@property RequestFilter requestFilter() { return m_requestFilter; }
-	@property void requestFilter(RequestFilter v) { m_requestFilter = v; }
+	@property void requestFilter(RequestFilter v) {
+		m_requestFilter = v;
+		mixin(generateRestInterfaceSubInterfaceRequestFilter!I);
+	}
 
 	//pragma(msg, generateRestInterfaceSubInterfaces!(I)());
 	mixin(generateRestInterfaceSubInterfaces!(I));
@@ -379,8 +383,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 			}
 		} catch( Exception e ){
 			// TODO: better error description!
-			res.statusCode = HttpStatus.InternalServerError;
-			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": e.toString()]);
+			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString())], HttpStatus.InternalServerError);
 		}
 	}
 
@@ -442,6 +445,32 @@ private @property string generateRestInterfaceSubInterfaceInstances(I)()
 					string rest_name;
 					getRestMethodName!FT(method, http_verb, rest_name);
 					ret ~= "m_"~implname~" = new "~implname~"(m_baseUrl~PathEntry(\""~rest_name~"\"), m_methodStyle);\n";
+				}
+			}
+		}
+	}
+	return ret;
+}
+
+/// private
+private @property string generateRestInterfaceSubInterfaceRequestFilter(I)()
+{
+	string ret;
+	string[] tps;
+	foreach( method; __traits(allMembers, I) ){
+		foreach( overload; MemberFunctionsTuple!(I, method) ){
+			alias typeof(&overload) FT;
+			alias ParameterTypeTuple!FT PTypes;
+			alias ReturnType!FT RT;
+			static if( is(RT == interface) ){
+				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
+				if( tps.countUntil(RT.stringof) < 0 ){
+					tps ~= RT.stringof;
+					string implname = RT.stringof~"Impl";
+					HttpMethod http_verb;
+					string rest_name;
+					getRestMethodName!FT(method, http_verb, rest_name);
+					ret ~= "m_"~implname~".requestFilter = m_requestFilter;\n";
 				}
 			}
 		}

@@ -55,7 +55,7 @@ class ConnectionPool(Connection : EventedObject)
 			cidx = m_connections.length-1;
 			if( fthis ) m_connections[cidx].release();
 		}
-		logDebug("returning mongo connection %d of %d", cidx, m_connections.length);
+		logDebug("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
 		auto conn = m_connections[cidx];
 		if( fthis ) conn.acquire();
 		m_locks[fthis] = conn;
