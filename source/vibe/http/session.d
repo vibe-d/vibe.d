@@ -98,12 +98,12 @@ final class MemorySessionStore : SessionStore {
 	}
 	void set(string id, string name, string value) {
 		m_sessions[id][name] = value;
-		foreach(k,v; m_sessions[id]) logInfo("Csession[%s][%s] = %s", id, k, v);
+		foreach(k,v; m_sessions[id]) logTrace("Csession[%s][%s] = %s", id, k, v);
 	}
 	string get(string id, string name, string defaultVal=null)
 	const {
 		assert(id in m_sessions, "session not in store");
-		foreach(k,v; m_sessions[id]) logInfo("Dsession[%s][%s] = %s", id, k, v);
+		foreach(k,v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
 		if (auto pv = name in m_sessions[id]) {
 			return *pv;			
 		} else {
