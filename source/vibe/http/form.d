@@ -48,19 +48,33 @@ void parseUrlEncodedForm(string str, ref string[string] params)
 {
 	while(str.length > 0){
 		// name part
-		auto idx = str.indexOf('=');
+		auto idx = str.indexOf("=");
 		if( idx == -1 ) {
-			params[urlDecode(str[0 .. $])] = "";
-			return;
+			idx = str.indexOf("&");
+			if( idx == -1 ) {
+				params[urlDecode(str[0 .. $])] = "";
+				return;
+			} else {
+				params[urlDecode(str[0 .. idx])] = "";
+				str = str[idx+1 .. $];
+				continue;
+			}
+		} else {
+			auto idx_amp = str.indexOf("&");
+			if( idx_amp > -1 && idx_amp < idx ) {
+				params[urlDecode(str[0 .. idx_amp])] = "";
+				str = str[idx_amp+1 .. $];
+				continue;				
+			} else {
+				string name = urlDecode(str[0 .. idx]);
+				str = str[idx+1 .. $];
+				// value part
+				for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
+				string value = urlDecode(str[0 .. idx]);
+				params[name] = value;
+				str = idx < str.length ? str[idx+1 .. $] : null;
+			}
 		}
-		string name = urlDecode(str[0 .. idx]);
-		str = str[idx+1 .. $];
-
-		// value part
-		for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
-		string value = urlDecode(str[0 .. idx]);
-		params[name] = value;
-		str = idx < str.length ? str[idx+1 .. $] : null;
 	}
 }
 
