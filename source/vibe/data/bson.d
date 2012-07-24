@@ -130,34 +130,34 @@ struct Bson {
 		m_type = type;
 	}
 	/// ditto
-	this(Bson[string] value) { opAssign(value); }
+	this(in Bson[string] value) { opAssign(value); }
 	/// ditto
-	this(Bson[] value) { opAssign(value); }
+	this(in Bson[] value) { opAssign(value); }
 	/// ditto
-	this(BsonBinData value) { opAssign(value); }
+	this(in BsonBinData value) { opAssign(value); }
 	/// ditto
-	this(BsonObjectID value) { opAssign(value); }
+	this(in BsonObjectID value) { opAssign(value); }
 	/// ditto
 	this(bool value) { opAssign(value); }
 	/// ditto
-	this(BsonDate value) { opAssign(value); }
+	this(in BsonDate value) { opAssign(value); }
 	/// ditto
 	this(typeof(null)) { opAssign(null); }
 	/// ditto
-	this(BsonRegex value) { opAssign(value); }
+	this(in BsonRegex value) { opAssign(value); }
 	/// ditto
 	this(int value) { opAssign(value); }
 	/// ditto
-	this(BsonTimestamp value) { opAssign(value); }
+	this(in BsonTimestamp value) { opAssign(value); }
 	/// ditto
 	this(long value) { opAssign(value); }
 	/// ditto
-	this(Json value) { opAssign(value); }
+	this(in Json value) { opAssign(value); }
 
 	/**
 		Assigns a D type to a BSON value.
 	*/
-	void opAssign(Bson other)
+	void opAssign(in Bson other)
 	{
 		m_data = other.m_data;
 		m_type = other.m_type;
@@ -213,7 +213,7 @@ struct Bson {
 		m_type = Type.Array;
 	}
 	/// ditto
-	void opAssign(BsonBinData value)
+	void opAssign(in BsonBinData value)
 	{
 		auto app = appender!bdata_t();
 		app.put(toBsonData(cast(int)value.rawData.length));
@@ -224,7 +224,7 @@ struct Bson {
 		m_type = Type.BinData;
 	}
 	/// ditto
-	void opAssign(BsonObjectID value)
+	void opAssign(in BsonObjectID value)
 	{
 		m_data = value.m_bytes.idup;
 		m_type = Type.ObjectID;
@@ -236,7 +236,7 @@ struct Bson {
 		m_type = Type.Bool;
 	}
 	/// ditto
-	void opAssign(BsonDate value)
+	void opAssign(in BsonDate value)
 	{
 		m_data = toBsonData(value.m_time).idup;
 		m_type = Type.Date;
@@ -248,7 +248,7 @@ struct Bson {
 		m_type = Type.Null;
 	}
 	/// ditto
-	void opAssign(BsonRegex value)
+	void opAssign(in BsonRegex value)
 	{
 		auto app = appender!bdata_t();
 		putCString(app, value.expression);
@@ -263,7 +263,7 @@ struct Bson {
 		m_type = Type.Int;
 	}
 	/// ditto
-	void opAssign(BsonTimestamp value)
+	void opAssign(in BsonTimestamp value)
 	{
 		m_data = toBsonData(value.m_time).idup;
 		m_type = Type.Timestamp;
@@ -275,7 +275,7 @@ struct Bson {
 		m_type = Type.Long;
 	}
 	/// ditto
-	void opAssign(Json value)
+	void opAssign(in Json value)
 	{
 		auto app = appender!bdata_t();
 		m_type = writeBson(app, value);
@@ -481,7 +481,7 @@ struct Bson {
 		return m_data == other.m_data;
 	}
 
-	private void checkType(Type[] valid_types...)
+	private void checkType(in Type[] valid_types...)
 	const {
 		foreach( t; valid_types )
 			if( m_type == t )
@@ -592,7 +592,7 @@ struct BsonObjectID {
 		this date part is only 32-bit wide and is limited to the same timespan as a
 		32-bit Unix timestamp.
 	*/
-	static BsonObjectID createDateID(SysTime date)
+	static BsonObjectID createDateID(in SysTime date)
 	{
 		BsonObjectID ret;
 		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)date.toUnixTime());
@@ -635,11 +635,11 @@ struct BsonObjectID {
 struct BsonDate {
 	private long m_time; // milliseconds since UTC unix epoch
 
-	this(Date date) {
+	this(in Date date) {
 		this(SysTime(date));
 	}
 
-	this(DateTime date) {
+	this(in DateTime date) {
 		this(SysTime(date));
 	}
 
@@ -647,7 +647,7 @@ struct BsonDate {
 		m_time = time;
 	}
 
-	this(SysTime time){
+	this(in SysTime time){
 		auto zero = unixTimeToStdTime(0);
 		m_time = (time.stdTime() - zero) / 10_000L;
 	}
