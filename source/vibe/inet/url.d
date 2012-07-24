@@ -368,6 +368,8 @@ struct Path {
 	@property immutable(PathEntry)[] nodes() const { return m_nodes; }
 	@property size_t length() const { return m_nodes.length; }
 	@property bool empty() const { return m_nodes.length == 0; }
+	@property bool endsWithSlash() const { return m_endsWithSlash; }
+	@property void endsWithSlash(bool v) { m_endsWithSlash = v; }
 
 	/// Determines if this path goes outside of its base path (i.e. begins with '..').
 	@property bool external() const { return !m_absolute && m_nodes.length > 0 && m_nodes[0].m_name == ".."; }

@@ -809,8 +809,8 @@ void deserializeJson(T)(ref T dst, Json src)
 	static if( is(T == Json) ) dst = src;
 	else static if( is(T == typeof(null)) ){ }
 	else static if( is(T == bool) ) dst = src.get!bool;
-	else static if( is(T == float) ) dst = src.get!float;
-	else static if( is(T == double) ) dst = src.get!double;
+	else static if( is(T == float) ) dst = src.to!float;   // since doubles are frequently serialized without
+	else static if( is(T == double) ) dst = src.to!double; // a decimal point, we allow conversions here
 	else static if( is(T : long) ) dst = cast(T)src.get!long;
 	else static if( is(T == string) ) dst = src.get!string;
 	else static if( isArray!T ){

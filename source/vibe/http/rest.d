@@ -126,8 +126,10 @@ import std.traits;
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
 		MethodStyle style = MethodStyle.LowerUnderscored)
 {
-	string url(string name, size_t nskip){
-		return url_prefix ~ adjustMethodStyle(name[nskip .. $], style);
+	void addRoute(HttpMethod http_verb, string url, HttpServerRequestDelegate handler)
+	{
+		router.addRoute(http_verb, url, handler);
+		logDebug("REST route: %s %s", http_verb, url);
 	}
 
 	foreach( method; __traits(allMembers, T) ){
@@ -145,10 +147,12 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 				auto handler = jsonMethodHandler!(T, method, typeof(&overload))(instance);
 				string id_supplement;
 				size_t skip = 0;
-				if( param_names.length && param_names[0] == "id" )
-					id_supplement = ":id" ~ (rest_name.length ? "/" : "");
-				router.addRoute(http_verb, url_prefix ~ id_supplement ~ rest_name_adj, handler);
-				logDebug("REST route: %s %s", http_verb, url_prefix ~ id_supplement ~ rest_name_adj);
+				string url;
+				if( param_names.length && param_names[0] == "id" ){
+					addRoute(http_verb, url_prefix ~ ":id/" ~ rest_name_adj, handler);
+					if( rest_name_adj.length == 0 )
+						addRoute(http_verb, url_prefix ~ ":id", handler);
+				} else addRoute	(http_verb, url_prefix ~ rest_name_adj, handler);
 			}
 		}
 	}
@@ -260,6 +264,11 @@ class RestInterfaceClient(I) : I
 	const {
 		Url url = m_baseUrl;
 		if( name.length ) url ~= Path(name);
+		else if( !url.path.endsWithSlash ){
+			auto p = url.path;
+			p.endsWithSlash = true;
+			url.path = p;
+		}
 
 		if( (verb == "GET" || verb == "HEAD") && params.length > 0 ){
 			auto queryString = appender!string();

@@ -52,6 +52,7 @@ struct MongoCollection {
 
 	this(MongoDB db, string collection_name)
 	{
+		assert(db !is null);
 		m_db = db;
 		m_collection = collection_name;
 	}
