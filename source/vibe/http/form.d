@@ -49,7 +49,10 @@ void parseUrlEncodedForm(string str, ref string[string] params)
 	while(str.length > 0){
 		// name part
 		auto idx = str.indexOf('=');
-		enforce(idx > 0, "Expected ident=value.");
+		if( idx == -1 ) {
+			params[urlDecode(str[0 .. $])] = "";
+			return;
+		}
 		string name = urlDecode(str[0 .. idx]);
 		str = str[idx+1 .. $];
 
