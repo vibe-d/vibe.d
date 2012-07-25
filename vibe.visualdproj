@@ -6,7 +6,7 @@
   <lib>1</lib>
   <subsystem>0</subsystem>
   <multiobj>0</multiobj>
-  <singleFileCompilation>1</singleFileCompilation>
+  <singleFileCompilation>0</singleFileCompilation>
   <oneobj>0</oneobj>
   <trace>0</trace>
   <quiet>0</quiet>
