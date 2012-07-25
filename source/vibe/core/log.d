@@ -97,7 +97,7 @@ nothrow {
 		}
 	} catch( Exception e ){
 		// this is bad but what can we do..
-		debug assert(false);
+		debug assert(false, e.msg);
 	}
 }
 
