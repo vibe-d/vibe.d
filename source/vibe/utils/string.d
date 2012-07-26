@@ -105,14 +105,14 @@ bool isAlpha(char ch)
 
 string stripLeftA(string s)
 {
-	while( s[0] == ' ' || s[0] == '\t' )
+	while( s.length > 0 && (s[0] == ' ' || s[0] == '\t') )
 		s = s[1 .. $];
 	return s;
 }
 
 string stripRightA(string s)
 {
-	while( s[$-1] == ' ' || s[$-1] == '\t' )
+	while( s.length > 0 && (s[$-1] == ' ' || s[$-1] == '\t') )
 		s = s[0 .. $-1];
 	return s;
 }
