@@ -138,7 +138,7 @@ struct Url {
 		str.reserve(m_pathString.length + 2 + queryString.length + anchor.length);
 		filterUrlEncode(str, path.toString(true), "/");
 		if( queryString.length ) {
-			str.put("&");
+			str.put("?");
 			str.put(queryString);
 		} 
 		if( anchor.length ) {
