@@ -9,6 +9,7 @@ module vibe.db.mongo.mongo;
 
 public import vibe.db.mongo.db;
 
+import std.algorithm;
 
 /**
 	Connects to a MongoDB instance.
@@ -22,6 +23,12 @@ public import vibe.db.mongo.db;
 */
 MongoDB connectMongoDB(string host, ushort port = MongoDB.defaultPort)
 {
-	return new MongoDB(host, port);
+	/* If this looks like a URL try to parse it that way. */
+	if(host.startsWith("mongodb://")) 
+	{
+		return new MongoDB(host);
+	} else {
+		return new MongoDB(host, port);
+	}
 }
 

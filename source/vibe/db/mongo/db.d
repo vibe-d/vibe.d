@@ -15,14 +15,14 @@ import vibe.db.mongo.connection;
 
 import core.thread;
 
+import std.conv;
 
 /**
 	Represents a single remote MongoDB.
 */
 class MongoDB {
 	private {
-		string m_host;
-		ushort m_port;
+		MongoConnectionConfig config;
 		ConnectionPool!MongoConnection m_connections;
 	}
 
@@ -30,10 +30,26 @@ class MongoDB {
 
 	package this(string host, ushort port = defaultPort)
 	{
-		m_host = host;
-		m_port = port;
+		this("mongodb://" ~ host ~ ":" ~ to!string(port));
+	}
+	
+	/**
+	 * Throws an exception if the URL cannot be parsed as a valid MongoDB URL. 
+	 * 
+	 * Url must be in the form documented at
+	 * http://www.mongodb.org/display/DOCS/Connections which is:
+	 * 
+	 * mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
+	 *
+	 */
+	package this(string url)
+	{
+		auto goodUrl = parseMongoDBUrl(config, url);
+		
+		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
+			
 		m_connections = new ConnectionPool!MongoConnection({
-				auto ret = new MongoConnection(m_host, m_port);
+				auto ret = new MongoConnection(config);
 				ret.connect();
 				return ret;
 			});
