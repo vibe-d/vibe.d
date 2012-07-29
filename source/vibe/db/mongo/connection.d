@@ -12,9 +12,12 @@ public import vibe.data.bson;
 import vibe.core.log;
 import vibe.core.tcp;
 
+import std.algorithm;
 import std.array;
+import std.conv;
 import std.exception;
-
+import std.regex;
+import std.string;
 
 /**
 	Provides low-level mongodb protocol access.
@@ -23,8 +26,7 @@ import std.exception;
 */
 class MongoConnection : EventedObject {
 	private {
-		string m_host;
-		ushort m_port;
+		MongoConnectionConfig config;
 		TcpConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
@@ -32,8 +34,23 @@ class MongoConnection : EventedObject {
 
 	this(string server, ushort port = 27017)
 	{
-		m_host = server;
-		m_port = port;
+		config.hosts ~= MongoHost(server, port);
+	}
+	
+	this(MongoConnectionConfig cfg)
+	{
+		config = cfg;
+		
+		// Now let's check for features that are not yet supported.
+		if(config.hosts.length > 1)
+			logWarn("Multiple mongodb hosts are not yet supported. Using first one: {}:{}",
+				config.hosts[0].name, config.hosts[0].port);
+		if(config.username != "")
+			logWarn("MongoDB username is not yet supported. Ignoring username: {}", config.username);
+		if(config.password != "")
+			logWarn("MongoDB password is not yet supported. Ignoring password.");
+		if(config.database != "")
+			logWarn("MongoDB database is not yet supported. Ignoring database value: {}", config.database);
 	}
 
 	// changes the ownership of this connection
@@ -53,7 +70,11 @@ class MongoConnection : EventedObject {
 
 	void connect()
 	{
-		m_conn = connectTcp(m_host, m_port);
+		/* 
+		 * TODO: Connect to one of the specified hosts taking into consideration
+		 * options such as connect timeouts and so on.
+		 */
+		m_conn = connectTcp(config.hosts[0].name, config.hosts[0].port);
 		m_bytesRead = 0;
 	}
 
@@ -96,7 +117,7 @@ class MongoConnection : EventedObject {
 	{
 		scope(failure) disconnect();
 		scope msg = new Message(OpCode.Query);
-		msg.addInt(flags);
+		msg.addInt(flags | config.defQueryFlags);
 		msg.addCString(collection_name);
 		msg.addInt(nskip);
 		msg.addInt(nret);
@@ -215,6 +236,227 @@ class MongoConnection : EventedObject {
 	private int nextMessageId() { return m_msgid++; }
 }
 
+/**
+ * Parses the given string as a mongodb URL. Url must be in the form documented at
+ * http://www.mongodb.org/display/DOCS/Connections which is:
+ * 
+ * mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
+ *
+ * Returns true if the URL was successfully parsed. Returns false if the URL can not be parsed.
+ * If the URL is successfully parsed the MongoConfig struct will contain the parsed data. 
+ * If the URL is not successfully parsed the information in the MongoConfig struct may be 
+ * incomplete and should not be used. 
+ */
+bool parseMongoDBUrl(out MongoConnectionConfig cfg, string url)
+{
+	string tmpUrl = url[0..$]; // Slice of the url (not a copy)
+	
+	if(!startsWith(tmpUrl, "mongodb://"))
+	{
+		return false;
+	}
+
+	// Reslice to get rid of 'mongodb://'
+    tmpUrl = tmpUrl[10..$];
+		
+	auto slashIndex = countUntil(tmpUrl, "/");
+	if( slashIndex == -1 ) slashIndex = tmpUrl.length; 
+	auto authIndex = tmpUrl[0 .. slashIndex].countUntil('@');
+	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
+		
+	// Parse out the username and optional password. 
+	if( authIndex != -1 )
+	{
+		// Set the host start to after the '@'
+		hostIndex = authIndex + 1;
+		
+		auto colonIndex = tmpUrl[0..authIndex].countUntil(':');
+		if(colonIndex != -1)
+		{
+			cfg.username = tmpUrl[0..colonIndex];
+			cfg.password = tmpUrl[colonIndex + 1 .. authIndex];
+		} else {
+			cfg.username = tmpUrl[0..authIndex];
+		}
+			
+		// Make sure the username is not empty. If it is then the parse failed. 
+		if(cfg.username.length == 0)
+		{ 
+			return false;
+		}
+	}
+		
+	// Parse the hosts section. 
+	try 
+	{
+		auto hostPortEntries = splitter(tmpUrl[hostIndex..slashIndex], ",");
+		foreach(entry; hostPortEntries)
+		{
+			auto hostPort = splitter(entry, ":");
+			string host = hostPort.front;
+			hostPort.popFront();
+			ushort port = 27017; // default port
+			if(!hostPort.empty)
+			{ 
+				port = to!ushort(hostPort.front);
+			}
+			
+			cfg.hosts ~= MongoHost(host, port);
+		}
+	} catch ( Exception e) {
+		return  false; // Probably failed converting the port to ushort.
+	}		
+		
+	// If we couldn't parse a host we failed.
+	if(cfg.hosts.length == 0)
+	{
+		return false;
+	}
+	
+	if(slashIndex == tmpUrl.length)
+	{
+		// We're done parsing. 
+		return true;
+	}
+	
+	auto queryIndex = tmpUrl[slashIndex..$].countUntil("?");
+	if(queryIndex == -1){
+		// No query string. Remaining string is the database
+		queryIndex = tmpUrl.length;  
+	} else {
+		queryIndex += slashIndex;
+	}
+	
+	cfg.database = tmpUrl[slashIndex+1..queryIndex];
+	if(queryIndex != tmpUrl.length)
+	{
+		// Parse options if any. They may be separated by ';' or '&'
+		auto optionRegex = ctRegex!(`(?P<option>[^=&;]+=[^=&;]+)(?:[&;])?`, "g");
+		auto optionMatch = match(tmpUrl[queryIndex+1..$], optionRegex);
+		foreach(c; optionMatch)
+		{
+			auto optionString = c["option"];
+			auto separatorIndex = countUntil(optionString, "="); 
+			// Per the mongo docs the option names are case insensitive. 
+			auto option = optionString[0 .. separatorIndex].toLower();
+			auto value = optionString[(separatorIndex+1) .. $];
+			switch(option)
+			{	
+				case "slaveok":
+					try 
+					{
+					 	auto setting = to!bool(value);
+						if(setting)	cfg.defQueryFlags |= QueryFlags.SlaveOk;				
+					} catch (Exception e) {
+						logError("Value for slaveOk must be true or false but was {}", value);
+					}
+				break;	
+				
+				case "replicaset":	
+				case "safe":
+				case "w":
+				case "wtimeoutms":
+				case "fsync":
+				case "journal":
+				case "connecttimeoutms":					
+				case "sockettimeoutms":
+					logWarn("MongoDB option {} not yet implemented.", option);
+				break;
+					
+				// Catch-all				
+				default:
+					logWarn("Unknown MongoDB option {}", option);
+			}
+			
+			// Store the options in string format in case we want them later.
+			cfg.options[option] = value;
+		}	
+	}
+	
+	return true;
+}
+
+/* Test for parseMongoDBUrl */
+unittest 
+{
+	MongoConnectionConfig cfg;
+	
+	assert(parseMongoDBUrl(cfg, "mongodb://localhost"));
+	assert(cfg.hosts.length == 1);
+	assert(cfg.database == "");
+	assert(cfg.options.length == 0);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+	
+	cfg = MongoConnectionConfig.init;	
+	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
+	assert(cfg.username == "fred");
+	assert(cfg.password == "foobar");
+	assert(cfg.hosts.length == 1);
+	assert(cfg.database == "");
+	assert(cfg.options.length == 0);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+	
+	cfg = MongoConnectionConfig.init;	
+	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/baz"));
+	assert(cfg.username == "fred");
+	assert(cfg.password == "");
+	assert(cfg.database == "baz");
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+	assert(cfg.options.length == 0);
+	assert(cfg.defQueryFlags == QueryFlags.None);
+	
+	cfg = MongoConnectionConfig.init;		
+	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=false"));
+	assert(cfg.username == "");
+	assert(cfg.password == "");
+	assert(cfg.database == "");
+	assert(cfg.hosts.length == 3);
+	assert(cfg.hosts[0].name == "host1");
+	assert(cfg.hosts[0].port == 27017);
+	assert(cfg.hosts[1].name == "host2");
+	assert(cfg.hosts[1].port == 27017);
+	assert(cfg.hosts[2].name == "host3");
+	assert(cfg.hosts[2].port == 27017);
+	assert(cfg.options.length == 3);
+	assert(cfg.options["safe"] == "true");
+	assert(cfg.options["w"] == "2");
+	assert(cfg.options["wtimeoutms"] == "2000");
+	assert(cfg.options["slaveok"] == "false");
+	assert(cfg.defQueryFlags == QueryFlags.None);
+	
+	cfg = MongoConnectionConfig.init;		
+	assert(parseMongoDBUrl(cfg, 
+		"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
+		"27019/mydb?safe=true;w=2;wtimeoutMS=2000;slaveok=true"));
+	assert(cfg.username == "fred");
+	assert(cfg.password == "flinstone");
+	assert(cfg.database == "mydb");
+	assert(cfg.hosts.length == 3);
+	assert(cfg.hosts[0].name == "host1.example.com");
+	assert(cfg.hosts[0].port == 27017);
+	assert(cfg.hosts[1].name == "host2.other.example.com");
+	assert(cfg.hosts[1].port == 27108);
+	assert(cfg.hosts[2].name == "host3");
+	assert(cfg.hosts[2].port == 27019);
+	assert(cfg.options.length == 3);
+	assert(cfg.options["safe"] == "true");
+	assert(cfg.options["w"] == "2");
+	assert(cfg.options["wtimeoutms"] == "2000");
+	assert(cfg.options["slaveok"] == "true");
+	assert(cfg.defQueryFlags & QueryFlags.SlaveOk);
+	
+	// Invalid URLs - these should fail to parse
+	cfg = MongoConnectionConfig.init;		
+	assert(! (parseMongoDBUrl(cfg, "localhost:27018")));
+	assert(! (parseMongoDBUrl(cfg, "http://blah")));
+	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
+	assert(! (parseMongoDBUrl(cfg, "mongodb://:thepass@localhost")));
+	assert(! (parseMongoDBUrl(cfg, "mongodb://:badport/")));
+}
 
 /// private
 private enum OpCode : int {
@@ -289,3 +531,24 @@ private class Message {
 	void addBSON(Bson v) { m_data.put(v.data); }
 }
 
+struct MongoConnectionConfig
+{
+	string username;
+	string password;
+	MongoHost[] hosts;
+	string database;
+	string[string] options;
+	QueryFlags defQueryFlags = QueryFlags.None;
+}
+
+struct MongoHost
+{
+	string name;
+	ushort port;
+	
+	this(string hostName, ushort mongoPort)
+	{
+		name = hostName;
+		port = mongoPort;
+	}
+}
