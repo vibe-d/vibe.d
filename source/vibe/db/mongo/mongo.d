@@ -16,10 +16,15 @@ import std.algorithm;
 
 	Examples:
 	---
-	auto db = connectMongoDB("127.0.0.1")
+	auto db = connectMongoDB("127.0.0.1");
 	auto users = db["users"];
 	users.insert(BSON("peter"));
 	---
+ 
+ 	A mongodb URL can also be used as specified by http://www.mongodb.org/display/DOCS/Connections
+    ---
+    auto db = connectMongoDB("mongodb://localhost/?slaveOk=true");
+    ---
 */
 MongoDB connectMongoDB(string host, ushort port = MongoDB.defaultPort)
 {
