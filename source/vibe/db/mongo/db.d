@@ -22,7 +22,7 @@ import std.conv;
 */
 class MongoDB {
 	private {
-		MongoConnectionConfig config;
+		MongoClientSettings config;
 		ConnectionPool!MongoConnection m_connections;
 	}
 

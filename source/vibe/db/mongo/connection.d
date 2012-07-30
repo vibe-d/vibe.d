@@ -26,7 +26,7 @@ import std.string;
 */
 class MongoConnection : EventedObject {
 	private {
-		MongoConnectionConfig config;
+		MongoClientSettings config;
 		TcpConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
@@ -34,10 +34,11 @@ class MongoConnection : EventedObject {
 
 	this(string server, ushort port = 27017)
 	{
-		config.hosts ~= MongoHost(server, port);
+		config = new MongoClientSettings();
+		config.hosts ~= new MongoHost(server, port);
 	}
 	
-	this(MongoConnectionConfig cfg)
+	this(MongoClientSettings cfg)
 	{
 		config = cfg;
 		
@@ -247,8 +248,10 @@ class MongoConnection : EventedObject {
  * If the URL is not successfully parsed the information in the MongoConfig struct may be 
  * incomplete and should not be used. 
  */
-bool parseMongoDBUrl(out MongoConnectionConfig cfg, string url)
+bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 {
+	cfg = new MongoClientSettings();
+	
 	string tmpUrl = url[0..$]; // Slice of the url (not a copy)
 	
 	if(!startsWith(tmpUrl, "mongodb://"))
@@ -301,7 +304,7 @@ bool parseMongoDBUrl(out MongoConnectionConfig cfg, string url)
 				port = to!ushort(hostPort.front);
 			}
 			
-			cfg.hosts ~= MongoHost(host, port);
+			cfg.hosts ~= new MongoHost(host, port);
 		}
 	} catch ( Exception e) {
 		return  false; // Probably failed converting the port to ushort.
@@ -379,7 +382,7 @@ bool parseMongoDBUrl(out MongoConnectionConfig cfg, string url)
 /* Test for parseMongoDBUrl */
 unittest 
 {
-	MongoConnectionConfig cfg;
+	MongoClientSettings cfg;
 	
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost"));
 	assert(cfg.hosts.length == 1);
@@ -388,7 +391,7 @@ unittest
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
 	
-	cfg = MongoConnectionConfig.init;	
+	cfg = MongoClientSettings.init;	
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
 	assert(cfg.username == "fred");
 	assert(cfg.password == "foobar");
@@ -398,7 +401,7 @@ unittest
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
 	
-	cfg = MongoConnectionConfig.init;	
+	cfg = MongoClientSettings.init;	
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/baz"));
 	assert(cfg.username == "fred");
 	assert(cfg.password == "");
@@ -409,7 +412,7 @@ unittest
 	assert(cfg.options.length == 0);
 	assert(cfg.defQueryFlags == QueryFlags.None);
 	
-	cfg = MongoConnectionConfig.init;		
+	cfg = MongoClientSettings.init;		
 	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=false"));
 	assert(cfg.username == "");
 	assert(cfg.password == "");
@@ -428,7 +431,7 @@ unittest
 	assert(cfg.options["slaveok"] == "false");
 	assert(cfg.defQueryFlags == QueryFlags.None);
 	
-	cfg = MongoConnectionConfig.init;		
+	cfg = MongoClientSettings.init;		
 	assert(parseMongoDBUrl(cfg, 
 		"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
 		"27019/mydb?safe=true;w=2;wtimeoutMS=2000;slaveok=true"));
@@ -450,7 +453,7 @@ unittest
 	assert(cfg.defQueryFlags & QueryFlags.SlaveOk);
 	
 	// Invalid URLs - these should fail to parse
-	cfg = MongoConnectionConfig.init;		
+	cfg = MongoClientSettings.init;		
 	assert(! (parseMongoDBUrl(cfg, "localhost:27018")));
 	assert(! (parseMongoDBUrl(cfg, "http://blah")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
@@ -531,7 +534,7 @@ private class Message {
 	void addBSON(Bson v) { m_data.put(v.data); }
 }
 
-struct MongoConnectionConfig
+class MongoClientSettings
 {
 	string username;
 	string password;
@@ -541,7 +544,7 @@ struct MongoConnectionConfig
 	QueryFlags defQueryFlags = QueryFlags.None;
 }
 
-struct MongoHost
+class MongoHost
 {
 	string name;
 	ushort port;
