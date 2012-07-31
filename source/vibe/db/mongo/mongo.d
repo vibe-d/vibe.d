@@ -25,6 +25,9 @@ import std.algorithm;
     ---
     auto db = connectMongoDB("mongodb://localhost/?slaveOk=true");
     ---
+  
+ 	Throws: an exception if a mongodb:// URL is given and the URL cannot be parsed. 
+ 	An exception will not be thrown if called with a hostname and port. 
 */
 MongoDB connectMongoDB(string host, ushort port = MongoDB.defaultPort)
 {
