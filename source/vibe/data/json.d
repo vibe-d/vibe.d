@@ -14,6 +14,7 @@ import vibe.data.utils;
 import std.array;
 import std.conv;
 import std.exception;
+import std.format;
 import std.string;
 import std.range;
 import std.traits;
@@ -907,8 +908,8 @@ void toJson(R)(ref R dst, in Json json)
 		case Json.Type.Undefined: dst.put("undefined"); break;
 		case Json.Type.Null: dst.put("null"); break;
 		case Json.Type.Bool: dst.put(cast(bool)json ? "true" : "false"); break;
-		case Json.Type.Int: dst.put(to!string(cast(long)json)); break;
-		case Json.Type.Float: dst.put(to!string(cast(double)json)); break;
+		case Json.Type.Int: formattedWrite(dst, "%d", json.get!long); break;
+		case Json.Type.Float: formattedWrite(dst, "%.16g", json.get!double); break;
 		case Json.Type.String:
 			dst.put("\"");
 			jsonEscape(dst, cast(string)json);
@@ -946,8 +947,8 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 		case Json.Type.Undefined: dst.put("undefined"); break;
 		case Json.Type.Null: dst.put("null"); break;
 		case Json.Type.Bool: dst.put(cast(bool)json ? "true" : "false"); break;
-		case Json.Type.Int: dst.put(to!string(cast(long)json)); break;
-		case Json.Type.Float: dst.put(to!string(cast(double)json)); break;
+		case Json.Type.Int: formattedWrite(dst, "%d", json.get!long); break;
+		case Json.Type.Float: formattedWrite(dst, "%.16g", json.get!double); break;
 		case Json.Type.String:
 			dst.put("\"");
 			jsonEscape(dst, cast(string)json);
