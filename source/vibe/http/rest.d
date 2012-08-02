@@ -374,6 +374,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 					params[i] = to!P(req.params[param_names[i][1 .. $]]);
 			} else {
 				if( req.method == HttpMethod.GET ){
+					logDebug("query %s of %s" ,param_names[i], req.query);
 					deserializeJson(params[i], parseJson(req.query[param_names[i]]));
 				} else {
 					logDebug("%s %s", method, param_names[i]);
@@ -592,47 +593,107 @@ private void getRestMethodName(T)(string method, out HttpMethod http_verb, out s
 /// private
 private string[] parameterNames(T)()
 {
-	string funcStr = T.stringof;
+	auto str = extractParameters(T.stringof);
 	//pragma(msg, T.stringof);
- 
-	const firstPattern = ' ';
-	const secondPattern = ',';
-	
-	while( funcStr[0] != '(' ) funcStr = funcStr[1 .. $];
-	foreach( i; 0 .. funcStr.length )
-		if( funcStr[i] == ')' ){
-			funcStr = funcStr[0 .. i];
-			break;
+
+	string[] ret;
+	for( size_t i = 0; i < str.length; ){
+		skipWhitespace(str, i);
+		skipType(str, i);
+		skipWhitespace(str, i);
+		ret ~= skipIdent(str, i);
+		skipWhitespace(str, i);
+		if( i >= str.length ) break;
+		if( str[i] == '=' ){
+			i++;
+			skipWhitespace(str, i);
+			skipBalancedUntil(",", str, i);
+			if( i >= str.length ) break;
 		}
-	   
-	if( funcStr.length == 0 ) return null;
-	
-	funcStr ~= secondPattern;
-	   
-	string token;
-	string[] arr;
-	   
-	foreach( c; funcStr )
-	{
-		if( c != firstPattern && c != secondPattern ) token ~= c;
-		else {
-			if( token ) arr ~= token;
-			token = null;
+		assert(str[i] == ',');
+		i++;
+	}
+
+	return ret;
+}
+
+/// private
+private string[] parameterDefaultValues(T)()
+{
+	auto str = extractParameters(T.stringof);
+	//pragma(msg, T.stringof);
+
+	string[] ret;
+	for( size_t i = 0; i < str.length; ){
+		skipWhitespace(str, i);
+		skipType(str, i);
+		skipWhitespace(str, i);
+		skipIdent(str, i);
+		skipWhitespace(str, i);
+		if( i >= str.length ) break;
+		if( str[i] == '=' ){
+			i++;
+			skipWhitespace(str, i);
+			ret ~= skipBalancedUntil(",", str, i);
+			if( i >= str.length ) break;
+		}
+		assert(str[i] == ',');
+		i++;
+	}
+
+	return ret;
+}
+
+private string extractParameters(string str)
+{
+	size_t start = 0, end = str.length-1;
+	while( str[start] != '(' ) start++;
+	while( str[end] != ')' ) end--;
+	return str[start+1 .. end];
+}
+
+private void skipWhitespace(string str, ref size_t i)
+{
+	while( i < str.length && str[i] == ' ' ) i++;
+}
+
+private string skipIdent(string str, ref size_t i)
+{
+	size_t start = i;
+	while( i < str.length ){
+		switch( str[i] ){
+			default:
+				i++;
+				break;
+			case ' ',  ',', '(', ')', '=', '[', ']':
+				return str[start .. i];
 		}
 	}
-	
-	if( arr.length == 1 ) return arr;
-	
-	string[] result;
-	bool skip = false;
-	   
-	foreach( str; arr ){
-		skip = !skip;
-		if( skip ) continue;
-		result ~= str;
+	return str[start .. $];
+}
+
+private void skipType(string str, ref size_t i)
+{
+	skipIdent(str, i);
+	if( i < str.length && (str[i] == '(' || str[i] == '[') ){
+		int depth = 1;
+		for( ++i; i < str.length && depth > 0; i++ ){
+			if( str[i] == '(' || str[i] == '[' ) depth++;
+			else if( str[i] == ')' || str[i] == ']' ) depth--;
+		}
 	}
-	
-	return result;
+}
+
+private string skipBalancedUntil(string chars, string str, ref size_t i)
+{
+	int depth = 0;
+	size_t start = i;
+	while( i < str.length && (depth > 0 || chars.countUntil(str[i]) < 0) ){
+		if( str[i] == '(' || str[i] == '[' ) depth++;
+		else if( str[i] == ')' || str[i] == ']' ) depth--;
+		i++;
+	}
+	return str[start .. i];
 }
 
 /// private
