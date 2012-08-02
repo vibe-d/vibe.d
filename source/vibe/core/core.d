@@ -189,7 +189,8 @@ Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false
 void setTaskLocal(T)(string name, T value)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	self.m_taskLocalStorage[name] = Variant(value);
+	if( self ) self.m_taskLocalStorage[name] = Variant(value);
+	else s_taskLocalStorageGlobal[name] = Variant(value);
 }
 
 /**
@@ -198,7 +199,9 @@ void setTaskLocal(T)(string name, T value)
 T getTaskLocal(T)(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	auto pvar = name in self.m_taskLocalStorage;
+	Variant* pvar;
+	if( self ) pvar = name in self.m_taskLocalStorage;
+	else pvar = name in s_taskLocalStorageGlobal;
 	enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
 	return pvar.get!T();
 }
@@ -209,7 +212,9 @@ T getTaskLocal(T)(string name)
 bool isTaskLocalSet(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	auto pvar = name in self.m_taskLocalStorage;
+	Variant* pvar;
+	if( self ) pvar = name in self.m_taskLocalStorage;
+	else pvar = name in s_taskLocalStorageGlobal;
 	return pvar !is null;
 }
 
@@ -358,7 +363,7 @@ private {
 	bool s_eventLoopRunning = false;
 	__gshared VibeDriverCore s_core;
 	EventDriver s_driver;
-	//Variant[string] s_currentTaskStorage;
+	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
 	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
