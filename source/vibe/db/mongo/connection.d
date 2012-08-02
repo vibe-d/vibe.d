@@ -32,7 +32,9 @@ class MongoConnection : EventedObject {
 		int m_msgid = 1;
 	}
 
-	this(string server, ushort port = 27017)
+	enum defaultPort = 27017;
+
+	this(string server, ushort port = defaultPort)
 	{
 		settings = new MongoClientSettings();
 		settings.hosts ~= new MongoHost(server, port);
@@ -330,11 +332,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			auto hostPort = splitter(entry, ":");
 			string host = hostPort.front;
 			hostPort.popFront();
-			ushort port = 27017; // default port
-			if(!hostPort.empty)
-			{ 
-				port = to!ushort(hostPort.front);
-			}
+			ushort port = hostPort.empty ? MongoConnection.defaultPort : to!ushort(hostPort.front);
 			
 			cfg.hosts ~= new MongoHost(host, port);
 		}
@@ -373,41 +371,46 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			auto optionString = c["option"];
 			auto separatorIndex = countUntil(optionString, "="); 
 			// Per the mongo docs the option names are case insensitive. 
-			auto option = optionString[0 .. separatorIndex].toLower();
+			auto option = optionString[0 .. separatorIndex];
 			auto value = optionString[(separatorIndex+1) .. $];
-			switch(option)
-			{	
-				case "slaveok":
-					try 
-					{
-					 	auto setting = to!bool(value);
-						if(setting)	cfg.defQueryFlags |= QueryFlags.SlaveOk;				
-					} catch (Exception e) {
-						logError("Value for slaveOk must be true or false but was %s", value);
-					}
-				break;	
-				
-				// These options aren't implemented yet so we'll warn on them.		
-				case "replicaset":	
-					cfg.replicaSet = value;
-					
-					logWarn("MongoDB option %s not yet implemented.", option);
-				break;
-					
-				case "safe":
-					try 
-					{
-					 	cfg.safe = to!bool(value);
-					} catch (Exception e) {
-						logError("Value for safe must be true or false but was %s", value);
-					}
-				break;
-					
+
+			bool setBool(ref bool dst){
+				try {
+					dst = to!bool(value);
+					return true;
+				} catch( Exception e ){
+					logError("Value for '%s' must be 'true' or 'false' but was '%s'.", option, value);
+					return false;
+				}
+			}
+
+			bool setLong(ref long dst){
+				try {
+					dst = to!long(value);
+					return true;
+				} catch( Exception e ){
+					logError("Value for '%s' must be an integer but was '%s'.", option, value);
+					return false;
+				}
+			}
+
+			void warnNotImplemented(){
+				logWarn("MongoDB option %s not yet implemented.", option);
+			}
+
+			switch( option.toLower() ){
+				default: logWarn("Unknown MongoDB option %s", option); break;
+				case "slaveok": bool v; if( setBool(v) && v ) cfg.defQueryFlags |= QueryFlags.SlaveOk; break;
+				case "replicaset": cfg.replicaSet = value; warnNotImplemented(); break;
+				case "safe": setBool(cfg.safe); break;
+				case "fsync": setBool(cfg.fsync); break;
+				case "journal": setBool(cfg.journal); break;
+				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); warnNotImplemented(); break;
+				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
+				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
 				case "w":
-					try 
-					{
-						if(icmp(value, "majority") == 0)
-						{
+					try {
+						if(icmp(value, "majority") == 0){
 							cfg.w = Bson("majority");
 						} else {
 							cfg.w = Bson(to!long(value));
@@ -415,64 +418,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 					} catch (Exception e) {
 						logError("Invalid w value: [%s] Should be an integer number or 'majority'", value);
 					}
-					
-				break;
-				
-				case "wtimeoutms":
-					try 
-					{
-						cfg.wTimeoutMS = to!long(value);
-					} catch (Exception e) {
-						logError("Invalid wTimeoutMS value: [%s] Should be an integer number", value);
-					}
-					
-				break;
-					
-				case "fsync":
-					try 
-					{
-					 	cfg.fsync = to!bool(value);
-					} catch (Exception e) {
-						logError("Value for fsync must be true or false but was %s", value);
-					}
-					
-				break;
-					
-				case "journal":
-					try 
-					{
-					 	cfg.journal = to!bool(value);
-					} catch (Exception e) {
-						logError("Value for journal must be true or false but was %s", value);
-					}
-					
-				break;
-					
-				case "connecttimeoutms":
-					try 
-					{
-						cfg.connectTimeoutMS = to!long(value);
-					} catch (Exception e) {
-						logError("Invalid connectTimeoutMS value: [%s] Should be an integer number", value);
-					}	
-					
-					logWarn("MongoDB option %s not yet implemented.", option);
-				break;				
-					
-				case "sockettimeoutms":
-					try 
-					{
-						cfg.socketTimeoutMS = to!long(value);
-					} catch (Exception e) {
-						logError("Invalid socketTimeoutMS value: [%s] Should be an integer number", value);
-					}
-					
-					logWarn("MongoDB option %s not yet implemented.", option);
-				break;
-					
-				// Catch-all				
-				default:
-					logWarn("Unknown MongoDB option %s", option);
+					break;
 			}
 		}	
 		

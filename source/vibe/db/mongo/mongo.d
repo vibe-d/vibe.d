@@ -29,7 +29,7 @@ import std.algorithm;
  	Throws: an exception if a mongodb:// URL is given and the URL cannot be parsed. 
  	An exception will not be thrown if called with a hostname and port. 
 */
-MongoDB connectMongoDB(string host, ushort port = MongoDB.defaultPort)
+MongoDB connectMongoDB(string host, ushort port = MongoConnection.defaultPort)
 {
 	/* If this looks like a URL try to parse it that way. */
 	if(host.startsWith("mongodb://")) 

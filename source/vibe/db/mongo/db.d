@@ -27,9 +27,7 @@ class MongoDB {
 		ConnectionPool!MongoConnection m_connections;
 	}
 
-	enum defaultPort = 27017;
-
-	package this(string host, ushort port = defaultPort)
+	package this(string host, ushort port = MongoConnection.defaultPort)
 	{
 		this("mongodb://" ~ host ~ ":" ~ to!string(port));
 	}
