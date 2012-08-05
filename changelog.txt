@@ -1,6 +1,26 @@
 Changelog
 =========
 
+v0.7.7 - 2012-08-05
+-------------------
+
+### Features and improvements ###
+
+ - Compiles with DMD 2.060
+ - Some considerable improvements and fixes for the REST interface generator - it is now also actually used and tested in another project
+ - MongoDB supports mongodb:// URLs for specifying various connection settings instead of just host/port (by David Eagen)
+ - Added RestInterfaceClient.requestFilter to enable authentication and similar add-on functionality
+ - JSON floating-point numbers are now stringified with higher precision
+ - Improved const-correctness if the Bson struct (by cybevnm)
+ - Added setIdleHandler() to enable tasks that run when all events have been processed
+ - Putting a '{' at the end of a D statement in a Diet template instead of using indentation for nesting will now give an error
+ - API documentation improvements
+
+### Bug Fixes ### 
+
+ - The HTTP server now allows query strings that are not valid forms (github issue #73)
+
+
 v0.7.6 - 2012-07-15
 -------------------
 
