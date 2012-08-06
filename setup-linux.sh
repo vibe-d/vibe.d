@@ -81,7 +81,7 @@ mkdir -p $(dirname $CONFIG_FILE)
 echo "Creating new config file in $CONFIG_FILE..."
 USER_ID=$(getent passwd $USER_NAME | cut -d: -f3)
 GROUP_ID=$(getent group $GROUP_NAME | cut -d: -f3)
-echo -e '{
+echo '{
 	"uid": '$USER_ID',
 	"gid": '$GROUP_ID'
 }' >$CONFIG_FILE
