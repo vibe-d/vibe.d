@@ -4,7 +4,6 @@
   <obj>0</obj>
   <link>0</link>
   <lib>1</lib>
-  <subsystem>0</subsystem>
   <multiobj>0</multiobj>
   <singleFileCompilation>0</singleFileCompilation>
   <oneobj>0</oneobj>
@@ -100,7 +99,6 @@
   <obj>0</obj>
   <link>0</link>
   <lib>1</lib>
-  <subsystem>0</subsystem>
   <multiobj>0</multiobj>
   <singleFileCompilation>0</singleFileCompilation>
   <oneobj>0</oneobj>
@@ -196,7 +194,6 @@
   <obj>0</obj>
   <link>0</link>
   <lib>1</lib>
-  <subsystem>0</subsystem>
   <multiobj>0</multiobj>
   <singleFileCompilation>0</singleFileCompilation>
   <oneobj>0</oneobj>
