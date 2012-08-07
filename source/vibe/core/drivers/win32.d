@@ -17,6 +17,7 @@ import vibe.inet.url;
 import core.sys.windows.windows;
 import core.time;
 import core.thread;
+import std.conv;
 import std.c.windows.windows;
 import std.c.windows.winsock;
 import std.exception;
@@ -321,6 +322,7 @@ class Win32FileStream : FileStream {
 					FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
 					null);
 		auto errorcode = GetLastError();
+		enforce(m_handle != INVALID_HANDLE_VALUE, "Failed to open "~path.toNativeString()~": "~to!string(errorcode));
 
 		long size;
 		auto succeeded = GetFileSizeEx(m_handle, &size);
