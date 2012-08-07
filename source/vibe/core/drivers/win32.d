@@ -26,6 +26,7 @@ import std.utf;
 private extern(System)
 {
 	DWORD MsgWaitForMultipleObjectsEx(DWORD nCount, const(HANDLE) *pHandles, DWORD dwMilliseconds, DWORD dwWakeMask, DWORD dwFlags);
+	BOOL CloseHandle(HANDLE hObject);
 	HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 							DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
 	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
@@ -36,6 +37,7 @@ private extern(System)
 	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
 	LONG DispatchMessageW(MSG *lpMsg);
 	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
+	BOOL SetEndOfFile(HANDLE hFile);
 	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
 
 	enum{
@@ -70,6 +72,8 @@ private extern(System)
 		int ChainLen;                   
 		DWORD ChainEntries[MAX_PROTOCOL_CHAIN];
 	};
+
+	const uint ERROR_ALREADY_EXISTS = 183;
 
 	struct GUID
 	{
@@ -315,14 +319,22 @@ class Win32FileStream : FileStream {
 
 		m_handle = CreateFileW(
 					toUTF16z(m_path.toNativeString()),
-					m_mode == (m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append) ? GENERIC_READ : GENERIC_WRITE,
+					(m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append) ? GENERIC_WRITE : GENERIC_READ,
 					m_mode == FileMode.Read ? FILE_SHARE_READ : 0,
 					null,
-					m_mode == FileMode.CreateTrunc ? TRUNCATE_EXISTING : OPEN_ALWAYS,
+					m_mode == FileMode.CreateTrunc ? CREATE_ALWAYS : OPEN_ALWAYS,
 					FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
 					null);
 		auto errorcode = GetLastError();
 		enforce(m_handle != INVALID_HANDLE_VALUE, "Failed to open "~path.toNativeString()~": "~to!string(errorcode));
+		if(mode == FileMode.CreateTrunc && errorcode == ERROR_ALREADY_EXISTS)
+		{
+			// truncate file
+			// TODO: seek to start pos?
+			BOOL ret = SetEndOfFile(m_handle);
+			errorcode = GetLastError();
+			enforce(ret, "Failed to call SetFileEndPos for path "~path.toNativeString()~", Error: " ~ to!string(errorcode));
+		}
 
 		long size;
 		auto succeeded = GetFileSizeEx(m_handle, &size);
@@ -347,6 +359,10 @@ class Win32FileStream : FileStream {
 
 	void close()
 	{
+		if(m_handle == INVALID_HANDLE_VALUE)
+			return;
+		CloseHandle(m_handle);
+		m_handle = INVALID_HANDLE_VALUE;
 	}
 
 	ulong tell()
