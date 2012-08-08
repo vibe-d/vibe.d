@@ -259,15 +259,9 @@ struct Path {
 	
 	this(string pathstr)
 	{
-		m_absolute = (pathstr.startsWith("/") || pathstr.length >= 2 && pathstr[1] == ':');
 		m_nodes = cast(immutable)splitPath(pathstr);
-		assert(!pathstr.startsWith("/") || m_nodes[0].toString() == "");
-		if( pathstr.startsWith("/") ) m_nodes = m_nodes[1 .. $];
-		if( m_nodes.length > 0 && !m_nodes[$-1].toString().length ){
-			m_endsWithSlash = true;
-			m_nodes = m_nodes[0 .. $-1];
-		}
-		
+		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && m_nodes[0].toString().countUntil(':')>0);
+		m_endsWithSlash = pathstr.endsWith("/");
 		foreach( e; m_nodes ) assert(e.toString().length > 0);
 	}
 	
@@ -473,8 +467,10 @@ string joinPath(string basepath, string subpath)
 /// Splits up a path string into its elements/folders
 PathEntry[] splitPath(string path)
 {
+	if( path.startsWith("/") ) path = path[1 .. $];
 	if( path.empty ) return null;
-	
+	if( path.endsWith("/") ) path = path[0 .. $-1];
+
 	// count the number of path nodes
 	size_t nelements = 0;
 	foreach( i, char ch; path )
@@ -490,10 +486,12 @@ PathEntry[] splitPath(string path)
 	size_t eidx = 0;
 	foreach( i, char ch; path )
 		if( ch == '\\' || ch == '/' ){
+			enforce(i - startidx > 0, "Empty path entries not allowed.");
 			elements[eidx++] = PathEntry(path[startidx .. i]);
 			startidx = i+1;
 		}
 	elements[eidx++] = PathEntry(path[startidx .. $]);
+	enforce(path.length - startidx > 0, "Empty path entries not allowed.");
 	assert(eidx == nelements);
 	return elements;
 }
