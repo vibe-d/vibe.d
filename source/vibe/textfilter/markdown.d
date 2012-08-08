@@ -645,7 +645,7 @@ auto parseHtmlBlockLine(string ln)
 	ret.tagName = ln[0 .. idx];
 	ln = ln[idx .. $];
 
-	auto eidx = ln.countUntil(">");
+	auto eidx = ln.countUntil('>');
 	if( eidx < 0 ) return ret;
 	if( eidx != ln.length-1 ) return ret;
 
