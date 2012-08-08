@@ -10,10 +10,13 @@ module vibe.core.drivers.win32;
 version(VibeWin32Driver)
 {
 
+import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.log;
 import vibe.inet.url;
 
+import core.atomic;
+import core.sync.mutex;
 import core.sys.windows.windows;
 import core.time;
 import core.thread;
@@ -25,6 +28,8 @@ import std.utf;
 
 private extern(System)
 {
+	DWORD GetCurrentThreadId();
+	BOOL PostThreadMessageW(DWORD idThread, UINT Msg, WPARAM wParam, LPARAM lParam);
 	DWORD MsgWaitForMultipleObjectsEx(DWORD nCount, const(HANDLE) *pHandles, DWORD dwMilliseconds, DWORD dwWakeMask, DWORD dwFlags);
 	BOOL CloseHandle(HANDLE hObject);
 	HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
@@ -83,7 +88,10 @@ private extern(System)
 		ubyte  Data4[8];
 	};
 
-	enum{
+	enum WM_USER = 0x0400;
+	enum WM_USER_SIGNAL = WM_USER+101;
+
+	enum {
 		QS_ALLPOSTMESSAGE = 0x0100,
 		QS_HOTKEY = 0x0080,
 		QS_KEY = 0x0001,
@@ -101,7 +109,7 @@ private extern(System)
 		QS_ALLINPUT = (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE),
 	};
 
-	enum{
+	enum {
 		MWMO_ALERTABLE = 0x0002,
 		MWMO_INPUTAVAILABLE = 0x0004,
 		MWMO_WAITALL = 0x0001,
@@ -111,6 +119,7 @@ private extern(System)
 class Win32EventDriver : EventDriver {
 	private {
 		HWND m_hwnd;
+		DWORD m_tid;
 		DriverCore m_core;
 		bool m_exit = false;
 		int m_timerIdCounter = 0;
@@ -119,6 +128,7 @@ class Win32EventDriver : EventDriver {
 	this(DriverCore core)
 	{
 		m_core = core;
+		m_tid = GetCurrentThreadId();
 
 		WSADATA wd;
 		enforce(WSAStartup(0x0202, &wd) == 0, "Failed to initialize WinSock");
@@ -142,9 +152,17 @@ class Win32EventDriver : EventDriver {
 
 	int processEvents()
 	{
+		assert(m_tid == GetCurrentThreadId());
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
 			if( msg.message == WM_QUIT ) return 0;
+			if( msg.message == WM_USER_SIGNAL ){
+				auto sig = cast(Win32Signal)cast(void*)msg.lParam;
+				auto lst = sig.m_listeners;
+				foreach( task, tid; lst )
+					if( tid == m_tid && task )
+						m_core.resumeTask(task);
+			}
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
@@ -160,21 +178,18 @@ class Win32EventDriver : EventDriver {
 	void exitEventLoop()
 	{
 		m_exit = true;
-		PostMessageW(m_hwnd, WM_QUIT, 0, 0);
-	}
-
-	void runWorkerTask(void delegate() f)
-	{
-
+		PostThreadMessageW(m_tid, WM_QUIT, 0, 0);
 	}
 
 	Win32FileStream openFile(string path, FileMode mode)
 	{
+		assert(m_tid == GetCurrentThreadId());
 		return new Win32FileStream(m_core, Path(path), mode);
 	}
 
 	Win32TcpConnection connectTcp(string host, ushort port)
 	{
+		assert(m_tid == GetCurrentThreadId());
 		//getaddrinfo();
 		//auto sock = WSASocketW(AF_INET, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
 		//enforce(sock != INVALID_SOCKET, "Failed to create socket.");
@@ -184,46 +199,76 @@ class Win32EventDriver : EventDriver {
 
 	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address)
 	{
+		assert(m_tid == GetCurrentThreadId());
 
 	}
 
 	Win32Signal createSignal()
 	{
-		assert(false);
+		assert(m_tid == GetCurrentThreadId());
+		return new Win32Signal(this);
 	}
 
 	Win32Timer createTimer(void delegate() callback)
 	{
+		assert(m_tid == GetCurrentThreadId());
 		return new Win32Timer(this, callback);
 	}
 }
 
 class Win32Signal : Signal {
-	void release()
-	{
+	private {
+		DWORD m_threadid;
+		Win32EventDriver m_driver;
+		DWORD[Task] m_listeners;
+		shared int m_emitCount = 0;
 	}
 
-	void acquire()
+	this(Win32EventDriver driver)
 	{
-	}
-
-	bool isOwner()
-	{
-		assert(false);
-	}
-
-	@property int emitCount()
-	const {
-		assert(false);
+		m_driver = driver;
 	}
 
 	void emit()
 	{
+		atomicOp!"+="(m_emitCount, 1);
+		foreach( th; m_listeners )
+			PostThreadMessageW(th, WM_USER_SIGNAL, 0, cast(LPARAM)cast(void*)this);
 	}
 
 	void wait()
 	{
+		wait(emitCount);
 	}
+
+	void wait(int reference_emit_count)
+	{
+		assert(!isOwner());
+		auto self = Fiber.getThis();
+		acquire();
+		scope(exit) release();
+		while( atomicOp!"=="(m_emitCount, reference_emit_count) )
+			m_driver.m_core.yieldForEvent();
+	}
+
+	void acquire()
+	{
+		m_listeners[Task.getThis()] = GetCurrentThreadId();
+	}
+
+	void release()
+	{
+		auto self = Task.getThis();
+		if( isOwner() )
+			m_listeners.remove(self);
+	}
+
+	bool isOwner()
+	{
+		return (Task.getThis() in m_listeners) !is null;
+	}
+
+	@property int emitCount() const { return atomicLoad(m_emitCount); }
 }
 
 class Win32Timer : Timer {

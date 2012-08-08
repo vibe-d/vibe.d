@@ -113,7 +113,6 @@ class Libevent2Driver : EventDriver {
 		DriverCore m_core;
 		event_base* m_eventLoop;
 		evdns_base* m_dnsBase;
-		Libevent2WorkerThread[] m_workerThreads;
 		bool m_exit = false;
 	}
 
@@ -154,11 +153,6 @@ class Libevent2Driver : EventDriver {
 		
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
-
-		version(MultiThreadTest){
-			foreach( i; 0 .. 4 )
-				startWorkerThread();
-		}
 	}
 
 	~this()
@@ -197,18 +191,6 @@ class Libevent2Driver : EventDriver {
 	{
 		m_exit = true;
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
-		foreach( loop; m_workerThreads )
-			loop.exit();
-	}
-
-	void runWorkerTask(void delegate() f)
-	{
-		if( m_workerThreads.length == 0 ){
-			runTask(f);
-		} else {
-			// TODO: do some meaningful scheduling!
-			m_workerThreads[0].addTask(f);
-		}
 	}
 
 	FileStream openFile(string path, FileMode mode)
@@ -285,12 +267,6 @@ class Libevent2Driver : EventDriver {
 		return new Libevent2Timer(this, callback);
 	}
 
-	private void startWorkerThread()
-	{
-		auto thr = new Libevent2WorkerThread;
-		m_workerThreads ~= thr;
-	}
-
 	private int listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
 	{
 		auto listenfd = socket(af, SOCK_STREAM, 0);
@@ -334,112 +310,6 @@ class Libevent2Driver : EventDriver {
 	}
 }
 
-class Libevent2WorkerThread {
-	private {
-		Thread m_thread;
-		event_base* m_eventLoop;
-		evdns_base* m_dnsBase;
-		void delegate()[] m_taskQueue;
-		Mutex m_taskQueueMutex;
-		event* m_wakeEvent;
-	}
-
-	this()
-	{
-		m_taskQueueMutex = new Mutex;
-		m_thread = new Thread(&workerLoop);
-		m_thread.name = "libevent worker thread";
-		m_thread.start();
-	}
-
-	void exit()
-	{
-		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent worker loop.");
-	}
-
-	void addTask(void delegate() f)
-	{
-		synchronized(m_taskQueueMutex){
-			m_taskQueue ~= f;
-		}
-		wakeUp();
-	}
-
-	void wakeUp()
-	{
-		event_active(m_wakeEvent, 0, 0);
-	}
-
-	private void workerLoop()
-	{
-		scope(exit) logInfo("Worker thread exit");
-		try {
-			logTrace("creating worker loop");
-			m_eventLoop = event_base_new();
-			if(m_eventLoop is null){
-				logError("Failed to create worker loop.");
-				return;
-			}
-			s_eventLoop = m_eventLoop;
-			logTrace("created worker loop");
-
-			logDebug("libevent worker is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
-			evthread_make_base_notifiable(m_eventLoop);
-
-			logTrace("creating worker dns base");
-			
-			m_dnsBase = evdns_base_new(m_eventLoop, 1);
-			if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
-
-			logTrace("creating worker wake event");
-
-			m_wakeEvent = event_new(m_eventLoop, -1, EV_PERSIST, &onNewTask, cast(void*)this);
-			if( m_wakeEvent is null ) logDebug("Failed to create dummy event");
-
-			logTrace("adding worker wake event");
-			if( event_add(m_wakeEvent, null) != 0 )
-				logDebug("Failed to add dummy event");
-
-			logDebug("Starting worker loop..");
-			if( auto ret = event_base_loop(m_eventLoop, 0) != 0){
-				logError("Failed to run worker loop: %d", ret);
-				return;
-			}
-			logDebug("Finished worker loop..");
-
-			event_free(m_wakeEvent);
-			evdns_base_free(m_dnsBase, false);
-			event_base_free(m_eventLoop);
-		} catch( Throwable e ){
-			logError("Worker thread failed with uncaught exception: %s", e.toString());
-		}
-	}
-
-	private void runTasks()
-	{
-		while(true){
-			void delegate() task;
-			synchronized(m_taskQueueMutex){
-				if( m_taskQueue.empty ) break;
-				task = m_taskQueue.front;
-				m_taskQueue.popFront();
-			}
-			runTask(task);
-		}
-	}
-
-	private static extern(C) nothrow
-	void onNewTask(evutil_socket_t, short events, void* userptr)
-	{
-		auto thr = cast(Libevent2WorkerThread)userptr;
-		try {
-			thr.runTasks();
-		} catch( Throwable e ){	
-			logError("Error running worker tasks: %s", e.msg);
-		}
-	}
-}
-
 class Libevent2Signal : Signal {
 	private {
 		Libevent2Driver m_driver;
@@ -468,12 +338,16 @@ class Libevent2Signal : Signal {
 
 	void wait()
 	{
+		wait(m_emitCount);
+	}
+
+	void wait(int reference_emit_count)
+	{
 		assert(!isOwner());
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
-		auto start_count = m_emitCount;
-		while( m_emitCount == start_count )
+		while( m_emitCount == reference_emit_count )
 			m_driver.m_core.yieldForEvent();
 	}
 

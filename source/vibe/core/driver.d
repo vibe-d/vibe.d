@@ -37,10 +37,6 @@ interface EventDriver {
 	*/
 	void exitEventLoop();
 
-	/** Passes the given task to a worker thread and executes it
-	*/
-	void runWorkerTask(void delegate() f);
-
 	/** Opens a file on disk with the speficied file mode.
 	*/
 	FileStream openFile(string path, FileMode mode);
@@ -179,6 +175,7 @@ interface Signal : EventedObject {
 	@property int emitCount() const;
 	void emit();
 	void wait();
+	void wait(int reference_emit_count);
 }
 
 /**

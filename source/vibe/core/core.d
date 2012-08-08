@@ -14,8 +14,10 @@ import vibe.utils.array;
 import std.algorithm;
 import std.conv;
 import std.exception;
+import std.functional;
 import std.range;
 import std.variant;
+import core.sync.mutex;
 import core.stdc.stdlib;
 import core.thread;
 
@@ -126,7 +128,14 @@ Task runTask(void delegate() task)
 */
 void runWorkerTask(void delegate() task)
 {
-	s_driver.runWorkerTask(task);
+	version(VibeMultiThreadTest){
+		synchronized(st_workerTaskMutex){
+			st_workerTasks ~= task;
+		}
+		st_workerTaskSignal.emit();
+	} else {
+		runTask(task);
+	}
 }
 
 /**
@@ -368,8 +377,13 @@ private {
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
 	void delegate() s_idleHandler;
+
+	__gshared Mutex st_workerTaskMutex;
+	__gshared void delegate()[] st_workerTasks;
+	__gshared Signal st_workerTaskSignal;
 }
 
+// per process setup
 shared static this()
 {
 	version(Windows){
@@ -383,17 +397,6 @@ shared static this()
 	logTrace("create driver core");
 	s_core = new VibeDriverCore;
 
-	logTrace("create driver");
-	version(VibeWin32Driver) s_driver = new Win32EventDriver(s_core);
-	else version(VibeWinrtDriver) s_driver = new WinRtEventDriver(s_core);
-	else version(VibeLibevDriver) s_driver = new LibevDriver(s_core);
-	else s_driver = new Libevent2Driver(s_core);
-
-	version(VibeIdleCollect){
-		logTrace("setup gc");
-		s_core.setupGcTimer();
-	}
-	
 	version(Posix){
 		logTrace("setup signal handler");
 		// support proper shutdown using signals
@@ -405,17 +408,93 @@ shared static this()
 		siginfo.sa_flags = SA_RESTART;
 		sigaction(SIGINT, &siginfo, null);
 		sigaction(SIGTERM, &siginfo, null);
-		
+
 		siginfo.sa_handler = &onBrokenPipe;
 		sigaction(SIGPIPE, &siginfo, null);
+	}
+
+	version(VibeMultiThreadTest){
+		st_workerTaskMutex = new Mutex;
+
+		foreach( i; 0 .. 4 ){
+			auto thr = new Thread(&workerThreadFunc);
+			thr.name = "Vibe Task Worker";
+			thr.start();
+		}
 	}
 }
 
 shared static ~this()
 {
+	bool tasks_left = false;
+	synchronized(st_workerTaskMutex){
+		if( !st_workerTasks.empty ) tasks_left = true;
+	}
+	if( !s_yieldedTasks.empty ) tasks_left = true;
+	if( tasks_left ) logWarn("There are still tasks running at exit.");
+
+	delete s_core;
+}
+
+// per thread setup
+static this()
+{
+	assert(s_core !is null);
+
+	logTrace("create driver");
+	version(VibeWin32Driver) s_driver = new Win32EventDriver(s_core);
+	else version(VibeWinrtDriver) s_driver = new WinRtEventDriver(s_core);
+	else version(VibeLibevDriver) s_driver = new LibevDriver(s_core);
+	else s_driver = new Libevent2Driver(s_core);
+
+	version(VibeIdleCollect){
+		logTrace("setup gc");
+		s_core.setupGcTimer();
+	}
+
+	version(VibeMultiThreadTest){
+		synchronized(st_workerTaskMutex)
+		{
+			if( !st_workerTaskSignal ){
+				st_workerTaskSignal = s_driver.createSignal();
+				st_workerTaskSignal.release();
+				assert(!st_workerTaskSignal.isOwner());
+			}
+		}
+	}
+}
+
+static ~this()
+{
 	// TODO: use destroy instead
 	delete s_driver;
-	delete s_core;
+}
+
+private void workerThreadFunc()
+{
+	runTask(toDelegate(&handleWorkerTasks));
+	runEventLoop();
+}
+
+private void handleWorkerTasks()
+{
+	yield();
+
+	assert(!st_workerTaskSignal.isOwner());
+	while(true){
+		void delegate() t;
+		auto emit_count = st_workerTaskSignal.emitCount;
+		synchronized(st_workerTaskMutex){
+			if( st_workerTasks.length ){
+				t = st_workerTasks.front;
+				st_workerTasks.popFront();
+			}
+		}
+		assert(!st_workerTaskSignal.isOwner());
+		if( t ) runTask(t);
+		else st_workerTaskSignal.wait(emit_count);
+		assert(!st_workerTaskSignal.isOwner());
+	}
 }
 
 private extern(C) void extrap()
