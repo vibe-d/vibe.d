@@ -158,7 +158,8 @@ class Win32EventDriver : EventDriver {
 			if( msg.message == WM_QUIT ) return 0;
 			if( msg.message == WM_USER_SIGNAL ){
 				auto sig = cast(Win32Signal)cast(void*)msg.lParam;
-				auto lst = sig.m_listeners;
+				DWORD[Task] lst;
+				synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
 				foreach( task, tid; lst )
 					if( tid == m_tid && task )
 						m_core.resumeTask(task);
@@ -218,7 +219,7 @@ class Win32EventDriver : EventDriver {
 
 class Win32Signal : Signal {
 	private {
-		DWORD m_threadid;
+		Mutex m_mutex;
 		Win32EventDriver m_driver;
 		DWORD[Task] m_listeners;
 		shared int m_emitCount = 0;
@@ -226,13 +227,21 @@ class Win32Signal : Signal {
 
 	this(Win32EventDriver driver)
 	{
+		m_mutex = new Mutex;
 		m_driver = driver;
 	}
 
 	void emit()
 	{
-		atomicOp!"+="(m_emitCount, 1);
-		foreach( th; m_listeners )
+		auto newcnt = atomicOp!"+="(m_emitCount, 1);
+		logDebug("Signal %s emit %s", cast(void*)this, newcnt);
+		bool[DWORD] threads;
+		synchronized(m_mutex)
+		{
+			foreach( th; m_listeners )
+				threads[th] = true;
+		}
+		foreach( th, _; threads )
 			PostThreadMessageW(th, WM_USER_SIGNAL, 0, cast(LPARAM)cast(void*)this);
 	}
 
@@ -243,29 +252,40 @@ class Win32Signal : Signal {
 
 	void wait(int reference_emit_count)
 	{
+		logDebug("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
 		assert(!isOwner());
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
 		while( atomicOp!"=="(m_emitCount, reference_emit_count) )
 			m_driver.m_core.yieldForEvent();
+		logDebug("Signal %s wait leave %s", cast(void*)this, m_emitCount);
 	}
 
 	void acquire()
 	{
-		m_listeners[Task.getThis()] = GetCurrentThreadId();
+		synchronized(m_mutex)
+		{
+			m_listeners[Task.getThis()] = GetCurrentThreadId();
+		}
 	}
 
 	void release()
 	{
 		auto self = Task.getThis();
-		if( isOwner() )
-			m_listeners.remove(self);
+		synchronized(m_mutex)
+		{
+			if( self in m_listeners )
+				m_listeners.remove(self);
+		}
 	}
 
 	bool isOwner()
 	{
-		return (Task.getThis() in m_listeners) !is null;
+		synchronized(m_mutex)
+		{
+			return (Task.getThis() in m_listeners) !is null;
+		}
 	}
 
 	@property int emitCount() const { return atomicLoad(m_emitCount); }

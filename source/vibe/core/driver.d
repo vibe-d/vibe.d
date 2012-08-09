@@ -75,7 +75,7 @@ interface DriverCore {
 }
 
 class Task : Fiber {
-	protected this(void delegate() fun)
+	protected this(void delegate() fun, size_t stack_size)
 	{
 		super(fun);
 	}

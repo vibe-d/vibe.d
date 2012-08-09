@@ -48,6 +48,10 @@ int runEventLoop()
 {
 	s_eventLoopRunning = true;
 	scope(exit) s_eventLoopRunning = false;
+
+	// runs any yield()ed tasks first
+	s_core.notifyIdle();
+
 	if( auto err = s_driver.runEventLoop() != 0){
 		if( err == 1 ){
 			logDebug("No events active, exiting message loop.");
@@ -128,7 +132,7 @@ Task runTask(void delegate() task)
 */
 void runWorkerTask(void delegate() task)
 {
-	version(VibeMultiThreadTest){
+	if( st_workerTaskMutex ){
 		synchronized(st_workerTaskMutex){
 			st_workerTasks ~= task;
 		}
@@ -228,6 +232,40 @@ bool isTaskLocalSet(string name)
 }
 
 /**
+	Sets the stack size for tasks.
+
+	The default stack size is set to 16 KiB, which is sufficient for most tasks. Tuning this value
+	can be used to reduce memory usage for great numbers of concurrent tasks or to allow applications
+	with heavy stack use.
+
+	Note that this function must be called before any task is started to have an effect.
+*/
+void setTaskStackSize(size_t sz)
+{
+	s_taskStackSize = sz;
+}
+
+/**
+	Enables multithreaded worker task processing.
+
+	This function will start up a number of worker threads that will process tasks started using
+	runWorkerTask(). runTask() will still execute tasks on the calling thread.
+
+	Note that this functionality is experimental right now and is not recommended for general use.
+*/
+void enableWorkerThreads()
+{
+	assert(st_workerTaskMutex is null);
+	st_workerTaskMutex = new Mutex;
+
+	foreach( i; 0 .. 4 ){
+		auto thr = new Thread(&workerThreadFunc);
+		thr.name = "Vibe Task Worker";
+		thr.start();
+	}
+}
+
+/**
 	A version string representing the current vibe version
 */
 enum VibeVersionString = "0.7.7";
@@ -246,7 +284,7 @@ private class CoreTask : Task {
 
 	this()
 	{
-		super(&run);
+		super(&run, s_taskStackSize);
 	}
 
 	private void run()
@@ -367,6 +405,7 @@ private class VibeDriverCore : DriverCore {
 /**************************************************************************************************/
 
 private {
+	__gshared size_t s_taskStackSize = 4*4096;
 	CoreTask[] s_tasks;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
@@ -412,16 +451,6 @@ shared static this()
 		siginfo.sa_handler = &onBrokenPipe;
 		sigaction(SIGPIPE, &siginfo, null);
 	}
-
-	version(VibeMultiThreadTest){
-		st_workerTaskMutex = new Mutex;
-
-		foreach( i; 0 .. 4 ){
-			auto thr = new Thread(&workerThreadFunc);
-			thr.name = "Vibe Task Worker";
-			thr.start();
-		}
-	}
 }
 
 shared static ~this()
@@ -452,7 +481,7 @@ static this()
 		s_core.setupGcTimer();
 	}
 
-	version(VibeMultiThreadTest){
+	if( st_workerTaskMutex ){
 		synchronized(st_workerTaskMutex)
 		{
 			if( !st_workerTaskSignal ){
@@ -472,20 +501,26 @@ static ~this()
 
 private void workerThreadFunc()
 {
+	logDebug("entering worker thread");
 	runTask(toDelegate(&handleWorkerTasks));
+	logDebug("running event loop");
 	runEventLoop();
 }
 
 private void handleWorkerTasks()
 {
+	logDebug("worker task enter");
 	yield();
 
+	logDebug("worker task loop enter");
 	assert(!st_workerTaskSignal.isOwner());
 	while(true){
 		void delegate() t;
 		auto emit_count = st_workerTaskSignal.emitCount;
 		synchronized(st_workerTaskMutex){
+			logDebug("worker task check");
 			if( st_workerTasks.length ){
+				logDebug("worker task got");
 				t = st_workerTasks.front;
 				st_workerTasks.popFront();
 			}
