@@ -256,7 +256,8 @@ void setTaskStackSize(size_t sz)
 void enableWorkerThreads()
 {
 	assert(st_workerTaskMutex is null);
-	st_workerTaskMutex = new Mutex;
+
+	st_workerTaskMutex = new Mutex;	
 
 	foreach( i; 0 .. 4 ){
 		auto thr = new Thread(&workerThreadFunc);
@@ -431,9 +432,11 @@ shared static this()
 		import std.c.windows.winsock;
 		WSADATA data;
 		WSAStartup(0x0202, &data);
+
 	}
 	
 	logTrace("create driver core");
+	
 	s_core = new VibeDriverCore;
 
 	version(Posix){
@@ -451,14 +454,22 @@ shared static this()
 		siginfo.sa_handler = &onBrokenPipe;
 		sigaction(SIGPIPE, &siginfo, null);
 	}
+
 }
 
 shared static ~this()
 {
 	bool tasks_left = false;
-	synchronized(st_workerTaskMutex){
+
+	if(st_workerTaskMutex !is null) { //This mutex is experimentally in enableWorkerThreads
+		synchronized(st_workerTaskMutex){ 
+			if( !st_workerTasks.empty ) tasks_left = true;
+		}	
+	} else {
 		if( !st_workerTasks.empty ) tasks_left = true;
 	}
+
+	
 	if( !s_yieldedTasks.empty ) tasks_left = true;
 	if( tasks_left ) logWarn("There are still tasks running at exit.");
 
@@ -468,6 +479,7 @@ shared static ~this()
 // per thread setup
 static this()
 {
+	
 	assert(s_core !is null);
 
 	logTrace("create driver");
