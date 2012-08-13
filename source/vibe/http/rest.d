@@ -646,7 +646,14 @@ private string[] parameterDefaultValues(T)()
 
 private string extractParameters(string str)
 {
-	size_t start = 0, end = str.length-1;
+	auto i1 = str.countUntil("function");
+	auto i2 = str.countUntil("delegate");
+	assert(i1 >= 0 || i2 >= 0);
+	size_t start;
+	if( i1 >= 0 && i2 >= 0) start = min(i1, i2);
+	else if( i1 >= 0 ) start = i1;
+	else start = i2;
+	size_t end = str.length-1;
 	while( str[start] != '(' ) start++;
 	while( str[end] != ')' ) end--;
 	return str[start+1 .. end];
