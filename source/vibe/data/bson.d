@@ -394,19 +394,9 @@ struct Bson {
 		Returns a null value if the specified field does not exist.
 	*/
 	inout(Bson) opIndex(string idx) inout {
-		checkType(Type.Object);
-		auto d = m_data[4 .. $];
-		while( d.length > 0 ){
-			auto tp = cast(Type)d[0];
-			if( tp == Type.End ) break;
-			d = d[1 .. $];
-			auto key = skipCString(d);
-			auto value = Bson(tp, d);
-			d = d[value.data.length .. $];
-
+		foreach( string key, v; this )
 			if( key == idx )
-				return value;
-		}
+				return v;
 		return Bson(null);
 	}
 	/// ditto
@@ -451,6 +441,38 @@ struct Bson {
 		Returns a null value if the index is out of bounds.
 	*/
 	inout(Bson) opIndex(size_t idx) inout {
+		foreach( size_t i, v; this )
+			if( i == idx )
+				return v;
+		return Bson(null);
+	}
+
+	/**
+		Allows foreach iterating over BSON objects and arrays.
+
+		Note that although D requires to provide a 'ref' argument for
+		opApply, in-place editing of the array/object fields is not possible.
+		Any modification attempty will work on a temporary, even if the
+		loop variable is declared 'ref'.
+	*/
+	int opApply(int delegate(ref Bson obj) del)
+	const {
+		checkType(Type.Array, Type.Object);
+		if( m_type == Type.Array ){
+			foreach( size_t idx, v; this )
+				if( auto ret = del(v) )
+					return ret;
+			return 0;
+		} else {
+			foreach( string idx, v; this )
+				if( auto ret = del(v) )
+					return ret;
+			return 0;
+		}
+	}
+	/// ditto
+	int opApply(int delegate(ref size_t idx, ref Bson obj) del)
+	const {
 		checkType(Type.Array);
 		auto d = m_data[4 .. $];
 		size_t i = 0;
@@ -462,10 +484,31 @@ struct Bson {
 			auto value = Bson(tp, d);
 			d = d[value.data.length .. $];
 
-			if( i == idx ) return value;
+			auto icopy = i;
+			if( auto ret = del(icopy, value) )
+				return ret;
+
 			i++;
 		}
-		return Bson(null);
+		return 0;
+	}
+	/// ditto
+	int opApply(int delegate(ref string idx, ref Bson obj) del)
+	const {
+		checkType(Type.Object);
+		auto d = m_data[4 .. $];
+		while( d.length > 0 ){
+			auto tp = cast(Type)d[0];
+			if( tp == Type.End ) break;
+			d = d[1 .. $];
+			auto key = skipCString(d);
+			auto value = Bson(tp, d);
+			d = d[value.data.length .. $];
+
+			if( auto ret = del(key, value) )
+				return ret;
+		}
+		return 0;
 	}
 
 	/** Allows to access existing fields of a JSON object using dot syntax.
