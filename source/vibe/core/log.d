@@ -41,18 +41,18 @@ void setLogFile(string filename, LogLevel min_level = LogLevel.Error)
 		level = The log level for the logged message
 		fmt = See http://dlang.org/phobos/std_format.html#format-string
 */
-void logTrace(T...)(string fmt, T args) nothrow { log(LogLevel.Trace, fmt, args); }
+void logTrace(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Trace, fmt, args); }
 /// ditto
-void logDebug(T...)(string fmt, T args) nothrow { log(LogLevel.Debug, fmt, args); }
+void logDebug(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Debug, fmt, args); }
 /// ditto
-void logInfo(T...)(string fmt, T args) nothrow { log(LogLevel.Info, fmt, args); }
+void logInfo(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Info, fmt, args); }
 /// ditto
-void logWarn(T...)(string fmt, T args) nothrow { log(LogLevel.Warn, fmt, args); }
+void logWarn(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Warn, fmt, args); }
 /// ditto
-void logError(T...)(string fmt, T args) nothrow { log(LogLevel.Error, fmt, args); }
+void logError(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Error, fmt, args); }
 
 /// ditto
-void log(T...)(LogLevel level, string fmt, T args)
+void log(T...)(LogLevel level, string fmt, auto ref T args)
 nothrow {
 	if( level < s_minLevel && (level < s_logFileLevel || !s_logFile) ) return;
 	string pref;
