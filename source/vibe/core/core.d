@@ -406,7 +406,7 @@ private class VibeDriverCore : DriverCore {
 /**************************************************************************************************/
 
 private {
-	__gshared size_t s_taskStackSize = 4*4096;
+	__gshared size_t s_taskStackSize = 16*4096;
 	CoreTask[] s_tasks;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
