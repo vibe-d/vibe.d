@@ -10,9 +10,11 @@ module vibe.db.mongo.collection;
 public import vibe.db.mongo.cursor;
 public import vibe.db.mongo.connection;
 
+import vibe.core.log;
 import vibe.db.mongo.db;
 
 import std.algorithm : countUntil;
+import std.exception;
 
 
 /**
@@ -135,13 +137,36 @@ struct MongoCollection {
 		auto cidx = m_collection.countUntil('.');
 		string dbstr = m_collection[0 .. cidx];
 		string collstr = m_collection[cidx+1 .. $];
-		Bson[string] cmd;
+		Bson cmd = Bson.EmptyObject;
 		cmd["findAndModify"] = Bson(collstr);
 		cmd["query"] = serializeToBson(query);
 		cmd["update"] = serializeToBson(update);
 		if( returnFieldSelector != null )
 			cmd["fields"] = serializeToBson(returnFieldSelector);
-		return m_db.runCommand(dbstr, cmd);
+		auto ret = m_db.runCommand(dbstr, cmd);
+		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
+		return ret.value;
+	}
+
+	/**
+		Counts the results of the specified query expression.
+
+		Throws Exception if a DB communication error occured.
+		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQueries-{{count%28%29}})
+	*/
+	ulong count(T)(T query)
+	{
+		auto cidx = m_collection.countUntil('.');
+		string dbstr = m_collection[0 .. cidx];
+		string collstr = m_collection[cidx+1 .. $];
+
+		Bson cmd = Bson.EmptyObject;
+		cmd["count"] = Bson(collstr);
+		cmd["query"] = serializeToBson(query);
+		cmd["fields"] = Bson(null);
+		auto reply = m_db.runCommand(dbstr, cmd);
+		enforce(reply.ok.get!double == 1, "Count command failed.");
+		return cast(ulong)reply.n.get!double;
 	}
 }
 
