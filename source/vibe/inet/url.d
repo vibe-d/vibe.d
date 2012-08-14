@@ -467,9 +467,9 @@ string joinPath(string basepath, string subpath)
 /// Splits up a path string into its elements/folders
 PathEntry[] splitPath(string path)
 {
-	if( path.startsWith("/") ) path = path[1 .. $];
+	if( path.startsWith("/") || path.startsWith("\\") ) path = path[1 .. $];
 	if( path.empty ) return null;
-	if( path.endsWith("/") ) path = path[0 .. $-1];
+	if( path.endsWith("/") || path.endsWith("\\") ) path = path[0 .. $-1];
 
 	// count the number of path nodes
 	size_t nelements = 0;
