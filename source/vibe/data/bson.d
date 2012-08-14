@@ -13,6 +13,7 @@ import vibe.data.utils;
 
 import std.algorithm;
 import std.array;
+import std.base64;
 import std.bitmanip;
 import std.conv;
 import std.datetime;
@@ -994,7 +995,7 @@ private Json bsonToJson(Bson value)
 			foreach( i, v; cast(Bson[])value )
 				ret[i] = bsonToJson(v);
 			return Json(ret);
-		case Bson.Type.BinData: assert(false, "TODO");
+		case Bson.Type.BinData: return Json(cast(string)Base64.encode(value.get!BsonBinData.rawData));
 		case Bson.Type.ObjectID: return Json((cast(BsonObjectID)value).toString());
 		case Bson.Type.Bool: return Json(cast(bool)value);
 		case Bson.Type.Date: return Json((cast(BsonDate)value).m_time);
