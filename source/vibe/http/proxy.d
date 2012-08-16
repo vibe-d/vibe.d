@@ -56,6 +56,8 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 				creq.url = req.url;
 				creq.headers = req.headers.dup;
 				creq.headers["Host"] = destination_host;
+				creq.headers["X-Forwarded-Host"] = req.headers["Host"];
+				creq.headers["X-Forwarded-For"] = req.peer;
 				while( !req.bodyReader.empty )
 					creq.bodyWriter.write(req.bodyReader, req.bodyReader.leastSize);
 			});
