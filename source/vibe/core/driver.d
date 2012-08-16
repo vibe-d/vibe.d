@@ -77,7 +77,7 @@ interface DriverCore {
 class Task : Fiber {
 	protected this(void delegate() fun, size_t stack_size)
 	{
-		super(fun);
+		super(fun, stack_size);
 	}
 
 	static Task getThis(){ return cast(Task)Fiber.getThis(); }
