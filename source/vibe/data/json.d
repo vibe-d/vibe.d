@@ -819,7 +819,7 @@ void deserializeJson(T)(ref T dst, Json src)
 		foreach( size_t i, v; src )
 			deserializeJson(dst[i], v);
 	} else static if( isAssociativeArray!T ){
-		typeof(dst.keys[0]) val;
+		typeof(dst.values[0]) val;
 		foreach( string key, value; src ){
 			deserializeJson(val, value);
 			dst[key] = val;
