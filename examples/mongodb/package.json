@@ -1,5 +1,5 @@
 ﻿{
-    "name": "mongodb-example",
+    "name": "mongodbExample",
 	"description": "Basic MongoDB usage example.",
     "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",

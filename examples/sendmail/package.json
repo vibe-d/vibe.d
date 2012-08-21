@@ -1,5 +1,5 @@
 ﻿{
-    "name": "sendmail-example",
+    "name": "sendmailExample",
 	"description": "Sends a mail (be sure to adjust addresses before running).",
     "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",

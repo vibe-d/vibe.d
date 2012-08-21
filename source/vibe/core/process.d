@@ -11,8 +11,9 @@ import vibe.core.log;
 
 import std.array;
 import std.exception;
-import std.utf;
-import core.sys.windows.windows;
+import std.utf; 
+version(Windows) {
+import core.sys.windows.windows; }
 
 version(Windows)
 {

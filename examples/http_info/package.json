@@ -1,5 +1,5 @@
 ﻿{
-    "name": "http-info-example",
+    "name": "httpInfoExample",
 	"description": "Displays request information using a Diet template.",
     "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",
