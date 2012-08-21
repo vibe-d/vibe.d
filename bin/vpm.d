@@ -40,7 +40,7 @@ Where OPT is one of
 		(not yet implemented)
 	install: installs a specified package
 		install:packageId[,packageId]
-		
+
 	Advanced options:
 		-annotate: without actually updating, check for the status of the application
 		-verbose: prints out lots of debug information
@@ -54,17 +54,17 @@ APP_OP will be passed on to the application to be run.");
 // 2: scriptDestination
 // Therefore the real usage is:
 // vpm.d vibeDir scriptDestination <everythingElseFromPrintHelp>
-// 
+//
 // vibeDir: the installation folder of the vibe installation
-// startupScriptFile: destination of the script, which can be used to run the app 
-// 
+// startupScriptFile: destination of the script, which can be used to run the app
+//
 // However, this should be taken care of the scripts.
 int main(string[] args)
-{	
+{
 	try {
 		if(args.length < 3)
 			throw new Exception("Too few parameters");
-		
+
 		enforce(isDir(args[1]));
 		Path vibedDir = Path(args[1]);
 		Path dstScript = Path(args[2]);
@@ -74,7 +74,7 @@ int main(string[] args)
 		if(vpmArg < vpmArgs.length)
 			appArgs = vpmArgs[vpmArg..$];
 		vpmArgs = vpmArgs[0..vpmArg];
-	
+
 		string appStartScript;
 		if(canFind(vpmArgs, "help")) {
 			printHelp();
@@ -88,19 +88,24 @@ int main(string[] args)
 
 			auto appPath = getcwd();
 			logInfo("Updating application in '%s'", appPath);
-			
+
 			Url url = Url.parse("http://registry.vibed.org/");
 			logDebug("Using vpm registry url '%s'", url);
-			
+
 			Vpm vpm = new Vpm(Path(appPath), new RegistryPS(url));
 			logDebug("vpm initialized");
-			
-			vpm.update(parseOptions(vpmArgs));
-			
-			string binName = (Path(".") ~ "app").toNativeString();
-			version(Windows) { binName ~= ".exe"; }
 
-			// Create start script, which will be used by the calling bash/cmd script.			
+			vpm.update(parseOptions(vpmArgs));
+
+			//Added check for existance of [AppNameInPackagejson].d
+			//If exists, use that as the starting file.
+			string binName = getBinName(vpm);
+			version(Windows) { string appName = binName[0..$-4]; 	}
+			version(Posix)   { string appName = binName; 			}
+
+			logDebug("Application Name is '%s'", binName);
+
+			// Create start script, which will be used by the calling bash/cmd script.
 			// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
 			// or with "/" instead of "\"
 			string[] flags = ["--force"];
@@ -115,7 +120,7 @@ int main(string[] args)
 			flags ~= vpm.dflags;
 			flags ~= getLibs(vibedDir);
 			flags ~= getPackagesAsVersion(vpm);
-			flags ~= (Path("source") ~ "app.d").toNativeString();
+			flags ~= (Path("source") ~ appName).toNativeString();
 			flags ~= appArgs;
 
 			appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
@@ -124,10 +129,10 @@ int main(string[] args)
 		auto script = openFile(to!string(dstScript), FileMode.CreateTrunc);
 		scope(exit) script.close();
 		script.write(appStartScript);
-		
+
 		return 0;
 	}
-	catch(Throwable e) 
+	catch(Throwable e)
 	{
 		logError("Failed to perform properly: \n" ~ to!string(e) ~ "\nShowing the help, just in case ...");
 		printHelp();
@@ -137,7 +142,7 @@ int main(string[] args)
 
 private size_t lastVpmArg(string[] args)
 {
-	string[] vpmArgs = 
+	string[] vpmArgs =
 	[
 		"help",
 		"upgrade",
@@ -149,7 +154,7 @@ private size_t lastVpmArg(string[] args)
 		"-verbose"
 		"-vverbose"
 	];
-	foreach(k,s; args) 
+	foreach(k,s; args)
 		if( false == reduce!((bool a, string b) => a || s.startsWith(b))(false, vpmArgs) )
 			return k;
 	return args.length;
@@ -168,17 +173,17 @@ private int parseOptions(string[] args)
 private string getDflags()
 {
 	auto globVibedDflags = environment.get("DFLAGS");
-	if(globVibedDflags == null) 
+	if(globVibedDflags == null)
 		globVibedDflags = "-debug -g -w -property";
 	return globVibedDflags;
 }
 
-private string[] getLibs(Path vibedDir) 
+private string[] getLibs(Path vibedDir)
 {
 	version(Windows)
 	{
 		auto libDir = vibedDir ~ "..\\lib\\win-i386";
-		return ["ws2_32.lib", 
+		return ["ws2_32.lib",
 			(libDir ~ "event2.lib").toNativeString(),
 			(libDir ~ "eay.lib").toNativeString(),
 			(libDir ~ "ssl.lib").toNativeString()];
@@ -192,16 +197,29 @@ private string[] getLibs(Path vibedDir)
 private string stripDlangSpecialChars(string s) {
 	char[] ret = s.dup;
 	for(int i=0; i<ret.length; ++i)
-		if(!isAlpha(ret[i])) 
+		if(!isAlpha(ret[i]))
 			ret[i] = '_';
 	return to!string(ret);
 }
 
-private string[] getPackagesAsVersion(const Vpm vpm) 
+private string[] getPackagesAsVersion(const Vpm vpm)
 {
 	string[] ret;
 	string[string] pkgs = vpm.installedPackages();
-	foreach(id, vers; pkgs) 
+	foreach(id, vers; pkgs)
 		ret ~= "-version=VPM_package_" ~ stripDlangSpecialChars(id);
+	return ret;
+}
+
+private string getBinName(const Vpm vpm)
+{
+	string ret;
+	if(existsFile(Path("source") ~ (vpm.packageName() ~ ".d")))
+		ret = vpm.packageName();
+	//Otherwise fallback to source/app.d
+	else
+		ret = (Path(".") ~ "app").toNativeString();
+	version(Windows) { ret ~= ".exe"; }
+
 	return ret;
 }
