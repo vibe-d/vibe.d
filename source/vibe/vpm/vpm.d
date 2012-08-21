@@ -128,6 +128,10 @@ private class Application {
 		}
 	}
 
+	/// Returns the applications name.
+	@property string name() const { return m_main.name; }
+
+	/// Returns the DFLAGS
 	@property string[] dflags() const {
 		auto ret = appender!(string[])();
 		if( m_main ) ret.put(m_main.dflags());
@@ -411,7 +415,11 @@ class Vpm {
 		m_packageSupplier = ps;
 		m_app = new Application(root);
 	}
-	
+
+	/// Returns the name listed in the package.json of the current
+	/// application.
+	@property string packageName() { return m_app.name; }
+
 	/// Returns a list of flags which the application needs to be compiled
 	/// properly.
 	@property string[] dflags() { return m_app.dflags; }
