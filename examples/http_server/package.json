@@ -1,5 +1,5 @@
 ﻿{
-    "name": "http-server-example",
+    "name": "httpServerExample",
 	"description": "A minimal HTTP server.",
     "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",

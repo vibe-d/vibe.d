@@ -1,5 +1,5 @@
 ﻿{
-    "name": "redis-example",
+    "name": "redisExample",
 	"description": "Basic Redis usage example.",
     "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",

@@ -1,5 +1,5 @@
 ﻿{
-    "name": "rest-example",
+    "name": "restExample",
 	"description": "Shows how the REST interface generator can be used for RPC communication.",
     "authors": [ "Sönke Ludwig" ],
     "version": "0.0.1",
