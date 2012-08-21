@@ -96,9 +96,12 @@ int main(string[] args)
 			logDebug("vpm initialized");
 			
 			vpm.update(parseOptions(vpmArgs));
-			
-			string binName = (Path(".") ~ "app").toNativeString();
-			version(Windows) { binName ~= ".exe"; }
+
+			//Added check for existance of [AppNameInPackagejson].d
+			//If exists, use that as the starting file.
+			string binName = getBinName(vpm);
+
+			logDebug("Application Name is '%s'", binName);
 
 			// Create start script, which will be used by the calling bash/cmd script.			
 			// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
@@ -106,7 +109,7 @@ int main(string[] args)
 			string[] flags = ["--force"];
 			if( canFind(vpmArgs, "build") ){
 				flags ~= "--build-only";
-				flags ~= "-of"~binName;
+				flags ~= "-of"~getBinName(vpm);
 			}
 			flags ~= "-g";
 			flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
@@ -115,7 +118,7 @@ int main(string[] args)
 			flags ~= vpm.dflags;
 			flags ~= getLibs(vibedDir);
 			flags ~= getPackagesAsVersion(vpm);
-			flags ~= (Path("source") ~ "app.d").toNativeString();
+			flags ~= (Path("source") ~ getPackageName(vpm)).toNativeString();
 			flags ~= appArgs;
 
 			appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
@@ -203,5 +206,28 @@ private string[] getPackagesAsVersion(const Vpm vpm)
 	string[string] pkgs = vpm.installedPackages();
 	foreach(id, vers; pkgs) 
 		ret ~= "-version=VPM_package_" ~ stripDlangSpecialChars(id);
+	return ret;
+}
+
+private string getPackageName(Vpm vpm)
+{
+	//Does DMD perform tailcall optimization?
+	version(Windows)
+	{ return getBinName(vpm)[0..$-4]; }
+
+	version(Posix)
+	{ return getBinName(vpm); }
+}
+
+private string getBinName(Vpm vpm)
+{
+	string ret;
+	if(existsFile(Path("source") ~ (vpm.packageName ~ ".d")))
+		ret = vpm.packageName;
+	//Otherwise fallback to source/app.d
+	else
+		ret = (Path(".") ~ "app").toNativeString();
+	version(Windows) { ret ~= ".exe"; }
+
 	return ret;
 }
