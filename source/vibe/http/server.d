@@ -1036,7 +1036,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			keep_alive = false;
 	}
 
-	nullWriter.write(req.bodyReader);
+	if( req.bodyReader && !req.bodyReader.empty )
+		nullWriter.write(req.bodyReader);
 
 	// finalize (e.g. for chunked encoding)
 	res.finalize();
