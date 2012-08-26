@@ -26,11 +26,19 @@ html(lang="en")
 		- else
 			p No session.
 			
+		h2 Query fields
+		p Query string: #{req.queryString}
+		dl
+			- foreach( name, value; req.query )
+				dt=name
+				dd=value
+				
 		h2 Form Data
 		dl
 			- foreach( name, value; req.form )
 				dt=name
 				dd=value
+				
 		form( action="/", method="POST" )
 			input(type="text", name="message")
 			input(type="submit")
