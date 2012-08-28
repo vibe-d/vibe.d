@@ -234,6 +234,21 @@ private string detectIndentStyle(in Line[] lines)
 	return "\t";
 }
 
+private string unindent(string str, string indent)
+{
+	size_t lvl = indentLevel(str, indent);
+	return str[lvl*indent.length .. $];
+}
+
+private int indentLevel(string s, string indent)
+{
+	if( indent.length == 0 ) return 0;
+	int l = 0;
+	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
+		l += cast(int)indent.length;
+	return l / cast(int)indent.length;
+}
+
 private string lineMarker(Line ln)
 {
 	return "#line "~cttostring(ln.number)~" \""~ln.file~"\"\n";
@@ -298,7 +313,7 @@ private struct DietParser {
 			assertp(level <= node_stack.length+1);
 			auto ln = unindent(lines[curline].text, indentStyle);
 			assertp(ln.length > 0);
-			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
+			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 
 			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
 			assertp(next_indent_level <= level+1, "Indentations may not skip child levels.");
@@ -311,7 +326,7 @@ private struct DietParser {
 				// find all child lines
 				size_t next_tag = curline+1;
 				while( next_tag < lines.length &&
-					indentLevel(lines[next_tag].text, indentStyle) > level-base_level )
+					indentLevel(lines[next_tag].text, indentStyle, false) > level-base_level )
 				{
 					next_tag++;
 				}
@@ -322,7 +337,7 @@ private struct DietParser {
 				// skip to the next tag
 				//node_stack ~= "-";
 				curline = next_tag-1;
-				next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
+				next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 			} else {
 				size_t j = 0;
 				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
@@ -356,14 +371,14 @@ private struct DietParser {
 						// pass all child lines to buildRawTag and continue with the next sibling
 						size_t next_tag = curline+1;
 						while( next_tag < lines.length &&
-							indentLevel(lines[next_tag].text, indentStyle) > level-base_level )
+							indentLevel(lines[next_tag].text, indentStyle, false) > level-base_level )
 						{
 							next_tag++;
 						}
 						ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
 							in_string, lines[curline+1 .. next_tag]);
 						curline = next_tag-1;
-						next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
+						next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 						break;
 					case "//":
 					case "//-":
@@ -819,6 +834,27 @@ private struct DietParser {
 		}
 		return ret;
 	}
+
+	private string unindent(string str, string indent)
+	{
+		size_t lvl = indentLevel(str, indent);
+		return str[lvl*indent.length .. $];
+	}
+
+	private int indentLevel(string s, string indent, bool strict = true)
+	{
+		if( indent.length == 0 ) return 0;
+		int l = 0;
+		while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
+			l += cast(int)indent.length;
+		assertp(!strict || s[l] != ' ', "Indent is not a multiple of '"~indent~"'");
+		return l / cast(int)indent.length;
+	}
+
+	private int indentLevel(in Line[] ln, string indent)
+	{
+		return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
+	}
 }
 
 
@@ -864,26 +900,6 @@ private string dstringEscape(string str)
 	string ret;
 	foreach( ch; str ) ret ~= dstringEscape(ch);
 	return ret;
-}
-
-private string unindent(string str, string indent)
-{
-	size_t lvl = indentLevel(str, indent);
-	return str[lvl*indent.length .. $];
-}
-
-private int indentLevel(string s, string indent)
-{
-	if( indent.length == 0 ) return 0;
-	int l = 0;
-	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
-		l += cast(int)indent.length;
-	return l / cast(int)indent.length;
-}
-
-private int indentLevel(in Line[] ln, string indent)
-{
-	return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
 }
 
 private string _toString(T)(T v)
