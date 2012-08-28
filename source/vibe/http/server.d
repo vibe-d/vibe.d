@@ -1030,7 +1030,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		logDebug("Exception while parsing request: %s", e.toString());
 		auto status = parsed ? HttpStatus.InternalServerError : HttpStatus.BadRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
-		else logError("Error after page has been written: %s", e.msg);
+		else logError("Error after page has been written: %s", e.toString());
 		logDebug("Exception while handling request: %s", e.toString());
 		if ( !parsed )
 			keep_alive = false;
