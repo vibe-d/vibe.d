@@ -129,7 +129,7 @@ private class Application {
 	}
 
 	/// Returns the applications name.
-	@property string name() const { return m_main.name; }
+	@property string name() const { return m_main ? m_main.name : "app"; }
 
 	/// Returns the DFLAGS
 	@property string[] dflags() const {

@@ -899,8 +899,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 		// basic request parsing
-		req = parseRequest(reqReader, request_allocator);
 		req.peer = peer_address;
+		parseRequest(req, reqReader, request_allocator);
 		logTrace("Got request header.");
 
 		//handle Expect-Header
@@ -1030,13 +1030,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		logDebug("Exception while parsing request: %s", e.toString());
 		auto status = parsed ? HttpStatus.InternalServerError : HttpStatus.BadRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
-		else logError("Error after page has been written: %s", e.msg);
+		else logError("Error after page has been written: %s", e.toString());
 		logDebug("Exception while handling request: %s", e.toString());
 		if ( !parsed )
 			keep_alive = false;
 	}
 
-	nullWriter.write(req.bodyReader);
+	if( req.bodyReader && !req.bodyReader.empty )
+		nullWriter.write(req.bodyReader);
 
 	// finalize (e.g. for chunked encoding)
 	res.finalize();
@@ -1056,9 +1057,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 }
 
 
-private FreeListRef!HttpServerRequest parseRequest(InputStream conn, Allocator alloc)
+private void parseRequest(HttpServerRequest req, InputStream conn, Allocator alloc)
 {
-	auto req = FreeListRef!HttpServerRequest();
 	auto stream = FreeListRef!LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
 
 	logTrace("HTTP server reading status line");
@@ -1082,8 +1082,6 @@ private FreeListRef!HttpServerRequest parseRequest(InputStream conn, Allocator a
 	
 	//headers
 	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
-
-	return req;
 }
 
 private void parseCookies(string str, ref string[string] cookies) 

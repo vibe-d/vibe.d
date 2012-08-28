@@ -696,13 +696,13 @@ struct BsonDate {
 		m_time = (time.stdTime() - zero) / 10_000L;
 	}
 
+	static BsonDate fromString(string iso_ext_string) { return BsonDate(SysTime.fromISOExtString(iso_ext_string)); }
+
+	string toString() const { return toSysTime().toISOExtString(); }
+
 	SysTime toSysTime() const {
 		auto zero = unixTimeToStdTime(0);
 		return SysTime(zero + m_time * 10_000L, UTC());
-	}
-
-	string toString() const {
-		return toSysTime().toString();
 	}
 
 	bool opEquals(ref const BsonDate other) const { return m_time == other.m_time; }
