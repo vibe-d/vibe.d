@@ -28,7 +28,7 @@ import std.variant;
 
 /*
 	TODO:
-		htmlEscape is necessary in a few places to avoid corrupted html (e.g. in buildInterpolatedString)
+		support string interpolations in filter blocks
 		to!string and htmlEscape should not be used in conjunction with ~ at run time. instead,
 		use filterHtmlEncode().
 */
@@ -418,7 +418,7 @@ private struct DietParser {
 		if( line.length >= 1 && line[0] == '=' ){
 			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
 			ret ~= line[1 .. $];
-			ret ~= ")";
+			ret ~= "))";
 		} else if( line.length >= 2 && line[0 .. 2] == "!=" ){
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= line[2 .. $];
@@ -501,12 +501,17 @@ private struct DietParser {
 		else ret ~= "\\n"~indent_string~"<!--\\n";
 
 		// write out all lines
-		if( i < tagline.length )
-			ret ~= indent_string ~ dstringEscape(tagline[i .. $]) ~ "\\n";
+		void writeLine(string str){
+			if( !hasInterpolations(str) )
+				ret ~= indent_string ~ dstringEscape(str) ~ "\\n";
+			else
+				ret ~= indent_string ~ "\"" ~ buildInterpolatedString(str, true, true) ~ "\"\\n";
+		}
+		if( i < tagline.length ) writeLine(tagline[i .. $]);
 		foreach( ln; lines ){
 			// remove indentation
 			string lnstr = ln.text[(level-base_level+1)*indentStyle.length .. $];
-			ret ~= indent_string ~ dstringEscape(lnstr) ~ "\\n";
+			writeLine(lnstr);
 		}
 		if( tag == "script" ) ret ~= indent_string~"//]]>\\n";
 		else ret ~= indent_string~"-->\\n";
@@ -664,14 +669,19 @@ private struct DietParser {
 	{
 		size_t i = 0;
 		while( i < str.length ){
-			if( str[i] == '#' ){
-				if( str[i+1] == '#' ){
+			if( str[i] == '\\' ){
+				i += 2;
+				continue;
+			}
+			if( i+1 < str.length && (str[i] == '#' || str[i] == '!') ){
+				if( str[i+1] == str[i] ){
 					i += 2;
-				} else {
-					assertp(str[i+1] == '{', "# must be followed by '{' or '#'.");
+					continue;
+				} else if( str[i+1] == '{' ){
 					return true;
 				}
-			} else i++;
+			}
+			i++;
 		}
 		return false;
 	}
@@ -696,13 +706,13 @@ private struct DietParser {
 				continue;
 			}
 
-			if( (str[i] == '#' || str[i] == '!') && str.length >= 2){
+			if( (str[i] == '#' || str[i] == '!') && i+1 < str.length ){
 				bool escape = str[i] == '#';
 				if( i > start ){
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
 				}
-				if( str[i+1] == '#' ){ // just keeping for compatibility reasons
+				if( str[i+1] == str[i] ){ // just keeping alternative escaping for compatibility reasons
 					ret ~= enter_string[state] ~ "#";
 					state = 1;
 					i += 2;
@@ -715,7 +725,7 @@ private struct DietParser {
 					else ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
 					i++;
 					start = i;
-				} else assertp(false, "# must be followed by '{' or '#'.");
+				} else i++;
 			} else i++;
 		}
 		if( i > start ){
