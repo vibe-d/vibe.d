@@ -899,8 +899,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 		// basic request parsing
-		req = parseRequest(reqReader, request_allocator);
 		req.peer = peer_address;
+		parseRequest(req, reqReader, request_allocator);
 		logTrace("Got request header.");
 
 		//handle Expect-Header
@@ -1057,9 +1057,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 }
 
 
-private FreeListRef!HttpServerRequest parseRequest(InputStream conn, Allocator alloc)
+private void parseRequest(HttpServerRequest req, InputStream conn, Allocator alloc)
 {
-	auto req = FreeListRef!HttpServerRequest();
 	auto stream = FreeListRef!LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
 
 	logTrace("HTTP server reading status line");
@@ -1083,8 +1082,6 @@ private FreeListRef!HttpServerRequest parseRequest(InputStream conn, Allocator a
 	
 	//headers
 	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
-
-	return req;
 }
 
 private void parseCookies(string str, ref string[string] cookies) 
