@@ -316,7 +316,7 @@ private struct DietParser {
 			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 
 			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
-			assertp(next_indent_level <= level+1, "Indentations may not skip child levels.");
+			assertp(next_indent_level <= level+1, "The next line is indented by more than one level deeper. Please unindent accordingly.");
 
 			if( ln[0] == '-' ){ // embedded D code
 				ret ~= buildCodeNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
