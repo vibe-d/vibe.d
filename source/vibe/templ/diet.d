@@ -423,10 +423,10 @@ private struct DietParser {
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= line[2 .. $];
 		} else {
-			ret ~= StreamVariableName ~ ".write(htmlEscape(";
+			ret ~= StreamVariableName ~ ".write(";
 			ret ~= buildInterpolatedString(line, false, false);
 		}
-		ret ~= "), false);\n";
+		ret ~= ", false);\n";
 		node_stack ~= "-";
 		return ret;
 	}
@@ -458,9 +458,9 @@ private struct DietParser {
 			textstring = "_toString("~ctstrip(line[i+2 .. line.length])~")";
 		} else {
 			if( hasInterpolations(line[i .. line.length]) ){
-				textstring = "htmlEscape("~buildInterpolatedString(line[i .. line.length], false, false)~")";
+				textstring = buildInterpolatedString(line[i .. line.length], false, false);
 			} else {
-				textstring = dstringEscape(htmlEscape(line[i .. line.length]));
+				textstring = dstringEscape(line[i .. line.length]);
 				textstring_isdynamic = false;
 			}
 		}
@@ -594,20 +594,20 @@ private struct DietParser {
 			i++;
 		}
 
-        // Add extra classes
-        bool has_classes = false;
-        if (attribs.length) {
-            foreach (idx, att; attribs) {
-                if (att[0] == "class") {
-                    if( classes.length )
-                        attribs[idx] = tuple("class", att[1]~" "~classes);
-                    has_classes = true;
-                    break;
-                }
-            }
-        }
+		// Add extra classes
+		bool has_classes = false;
+		if (attribs.length) {
+			foreach (idx, att; attribs) {
+				if (att[0] == "class") {
+					if( classes.length )
+						attribs[idx] = tuple("class", att[1]~" "~classes);
+					has_classes = true;
+					break;
+				}
+			}
+		}
 
-        if (!has_classes && classes.length ) attribs ~= tuple("class", classes);
+		if (!has_classes && classes.length ) attribs ~= tuple("class", classes);
 
 		// skip until the optional tag text contents begin
 		skipWhitespace(line, i);
@@ -636,18 +636,18 @@ private struct DietParser {
 				i++;
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
-                if (str[i] == '\'' || str[i] == '"') {
-                    auto delimiter = str[i];
-                    i++;
-                    value = skipAttribString(str, i, delimiter);
-                    i++;
-                    skipWhitespace(str, i);
-                } else if(name == "class") { //Support special-case class
-                    value = skipIdent(str, i, "_.");
-                    value = "#{join("~value~",\" \")}";
-                } else {
-                    assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
-                }
+				if (str[i] == '\'' || str[i] == '"') {
+					auto delimiter = str[i];
+					i++;
+					value = skipAttribString(str, i, delimiter);
+					i++;
+					skipWhitespace(str, i);
+				} else if(name == "class") { //Support special-case class
+					value = skipIdent(str, i, "_.");
+					value = "#{join("~value~",\" \")}";
+				} else {
+					assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
+				}
 			}
 			
 			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
@@ -685,12 +685,24 @@ private struct DietParser {
 		static immutable exit_string = ["", "\"", ""];
 		size_t start = 0, i = 0;
 		while( i < str.length ){
-			if( str[i] == '#' && str.length >= 2){
+			// check for escaped characters
+			if( str[i] == '\\' ){
+				i++;
+				if( i < str.length ){
+					ret ~= enter_string[state] ~ str[i+1];
+					state = 1;
+					i++;
+				}
+				continue;
+			}
+
+			if( (str[i] == '#' || str[i] == '!') && str.length >= 2){
+				bool escape = str[i] == '#';
 				if( i > start ){
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
 				}
-				if( str[i+1] == '#' ){
+				if( str[i+1] == '#' ){ // just keeping for compatibility reasons
 					ret ~= enter_string[state] ~ "#";
 					state = 1;
 					i += 2;
@@ -699,7 +711,8 @@ private struct DietParser {
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
-					ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
+					if( escape ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
+					else ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
 					i++;
 					start = i;
 				} else assertp(false, "# must be followed by '{' or '#'.");
