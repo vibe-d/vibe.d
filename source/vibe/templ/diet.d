@@ -28,7 +28,7 @@ import std.variant;
 
 /*
 	TODO:
-		htmlEscape is necessary in a few places to avoid corrupted html (e.g. in buildInterpolatedString)
+		support string interpolations in filter blocks
 		to!string and htmlEscape should not be used in conjunction with ~ at run time. instead,
 		use filterHtmlEncode().
 */
@@ -234,6 +234,21 @@ private string detectIndentStyle(in Line[] lines)
 	return "\t";
 }
 
+private string unindent(string str, string indent)
+{
+	size_t lvl = indentLevel(str, indent);
+	return str[lvl*indent.length .. $];
+}
+
+private int indentLevel(string s, string indent)
+{
+	if( indent.length == 0 ) return 0;
+	int l = 0;
+	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
+		l += cast(int)indent.length;
+	return l / cast(int)indent.length;
+}
+
 private string lineMarker(Line ln)
 {
 	return "#line "~cttostring(ln.number)~" \""~ln.file~"\"\n";
@@ -298,10 +313,10 @@ private struct DietParser {
 			assertp(level <= node_stack.length+1);
 			auto ln = unindent(lines[curline].text, indentStyle);
 			assertp(ln.length > 0);
-			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
+			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 
 			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
-			assertp(next_indent_level <= level+1, "Indentations may not skip child levels.");
+			assertp(next_indent_level <= level+1, "The next line is indented by more than one level deeper. Please unindent accordingly.");
 
 			if( ln[0] == '-' ){ // embedded D code
 				ret ~= buildCodeNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
@@ -311,7 +326,7 @@ private struct DietParser {
 				// find all child lines
 				size_t next_tag = curline+1;
 				while( next_tag < lines.length &&
-					indentLevel(lines[next_tag].text, indentStyle) > level-base_level )
+					indentLevel(lines[next_tag].text, indentStyle, false) > level-base_level )
 				{
 					next_tag++;
 				}
@@ -322,7 +337,7 @@ private struct DietParser {
 				// skip to the next tag
 				//node_stack ~= "-";
 				curline = next_tag-1;
-				next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
+				next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 			} else {
 				size_t j = 0;
 				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
@@ -356,14 +371,14 @@ private struct DietParser {
 						// pass all child lines to buildRawTag and continue with the next sibling
 						size_t next_tag = curline+1;
 						while( next_tag < lines.length &&
-							indentLevel(lines[next_tag].text, indentStyle) > level-base_level )
+							indentLevel(lines[next_tag].text, indentStyle, false) > level-base_level )
 						{
 							next_tag++;
 						}
 						ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
 							in_string, lines[curline+1 .. next_tag]);
 						curline = next_tag-1;
-						next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle) : 0) + base_level;
+						next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
 						break;
 					case "//":
 					case "//-":
@@ -418,15 +433,15 @@ private struct DietParser {
 		if( line.length >= 1 && line[0] == '=' ){
 			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
 			ret ~= line[1 .. $];
-			ret ~= ")";
+			ret ~= "))";
 		} else if( line.length >= 2 && line[0 .. 2] == "!=" ){
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= line[2 .. $];
 		} else {
-			ret ~= StreamVariableName ~ ".write(htmlEscape(";
+			ret ~= StreamVariableName ~ ".write(";
 			ret ~= buildInterpolatedString(line, false, false);
 		}
-		ret ~= "), false);\n";
+		ret ~= ", false);\n";
 		node_stack ~= "-";
 		return ret;
 	}
@@ -458,9 +473,9 @@ private struct DietParser {
 			textstring = "_toString("~ctstrip(line[i+2 .. line.length])~")";
 		} else {
 			if( hasInterpolations(line[i .. line.length]) ){
-				textstring = "htmlEscape("~buildInterpolatedString(line[i .. line.length], false, false)~")";
+				textstring = buildInterpolatedString(line[i .. line.length], false, false);
 			} else {
-				textstring = dstringEscape(htmlEscape(line[i .. line.length]));
+				textstring = dstringEscape(line[i .. line.length]);
 				textstring_isdynamic = false;
 			}
 		}
@@ -501,12 +516,17 @@ private struct DietParser {
 		else ret ~= "\\n"~indent_string~"<!--\\n";
 
 		// write out all lines
-		if( i < tagline.length )
-			ret ~= indent_string ~ dstringEscape(tagline[i .. $]) ~ "\\n";
+		void writeLine(string str){
+			if( !hasInterpolations(str) )
+				ret ~= indent_string ~ dstringEscape(str) ~ "\\n";
+			else
+				ret ~= indent_string ~ "\"" ~ buildInterpolatedString(str, true, true) ~ "\"\\n";
+		}
+		if( i < tagline.length ) writeLine(tagline[i .. $]);
 		foreach( ln; lines ){
 			// remove indentation
 			string lnstr = ln.text[(level-base_level+1)*indentStyle.length .. $];
-			ret ~= indent_string ~ dstringEscape(lnstr) ~ "\\n";
+			writeLine(lnstr);
 		}
 		if( tag == "script" ) ret ~= indent_string~"//]]>\\n";
 		else ret ~= indent_string~"-->\\n";
@@ -594,20 +614,20 @@ private struct DietParser {
 			i++;
 		}
 
-        // Add extra classes
-        bool has_classes = false;
-        if (attribs.length) {
-            foreach (idx, att; attribs) {
-                if (att[0] == "class") {
-                    if( classes.length )
-                        attribs[idx] = tuple("class", att[1]~" "~classes);
-                    has_classes = true;
-                    break;
-                }
-            }
-        }
+		// Add extra classes
+		bool has_classes = false;
+		if (attribs.length) {
+			foreach (idx, att; attribs) {
+				if (att[0] == "class") {
+					if( classes.length )
+						attribs[idx] = tuple("class", att[1]~" "~classes);
+					has_classes = true;
+					break;
+				}
+			}
+		}
 
-        if (!has_classes && classes.length ) attribs ~= tuple("class", classes);
+		if (!has_classes && classes.length ) attribs ~= tuple("class", classes);
 
 		// skip until the optional tag text contents begin
 		skipWhitespace(line, i);
@@ -636,18 +656,18 @@ private struct DietParser {
 				i++;
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
-                if (str[i] == '\'' || str[i] == '"') {
-                    auto delimiter = str[i];
-                    i++;
-                    value = skipAttribString(str, i, delimiter);
-                    i++;
-                    skipWhitespace(str, i);
-                } else if(name == "class") { //Support special-case class
-                    value = skipIdent(str, i, "_.");
-                    value = "#{join("~value~",\" \")}";
-                } else {
-                    assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
-                }
+				if (str[i] == '\'' || str[i] == '"') {
+					auto delimiter = str[i];
+					i++;
+					value = skipAttribString(str, i, delimiter);
+					i++;
+					skipWhitespace(str, i);
+				} else if(name == "class") { //Support special-case class
+					value = skipIdent(str, i, "_.");
+					value = "#{join("~value~",\" \")}";
+				} else {
+					assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
+				}
 			}
 			
 			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
@@ -664,14 +684,19 @@ private struct DietParser {
 	{
 		size_t i = 0;
 		while( i < str.length ){
-			if( str[i] == '#' ){
-				if( str[i+1] == '#' ){
+			if( str[i] == '\\' ){
+				i += 2;
+				continue;
+			}
+			if( i+1 < str.length && (str[i] == '#' || str[i] == '!') ){
+				if( str[i+1] == str[i] ){
 					i += 2;
-				} else {
-					assertp(str[i+1] == '{', "# must be followed by '{' or '#'.");
+					continue;
+				} else if( str[i+1] == '{' ){
 					return true;
 				}
-			} else i++;
+			}
+			i++;
 		}
 		return false;
 	}
@@ -685,12 +710,24 @@ private struct DietParser {
 		static immutable exit_string = ["", "\"", ""];
 		size_t start = 0, i = 0;
 		while( i < str.length ){
-			if( str[i] == '#' && str.length >= 2){
+			// check for escaped characters
+			if( str[i] == '\\' ){
+				i++;
+				if( i < str.length ){
+					ret ~= enter_string[state] ~ str[i+1];
+					state = 1;
+					i++;
+				}
+				continue;
+			}
+
+			if( (str[i] == '#' || str[i] == '!') && i+1 < str.length ){
+				bool escape = str[i] == '#';
 				if( i > start ){
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
 				}
-				if( str[i+1] == '#' ){
+				if( str[i+1] == str[i] ){ // just keeping alternative escaping for compatibility reasons
 					ret ~= enter_string[state] ~ "#";
 					state = 1;
 					i += 2;
@@ -699,10 +736,11 @@ private struct DietParser {
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
-					ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
+					if( escape ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
+					else ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
 					i++;
 					start = i;
-				} else assertp(false, "# must be followed by '{' or '#'.");
+				} else i++;
 			} else i++;
 		}
 		if( i > start ){
@@ -796,6 +834,27 @@ private struct DietParser {
 		}
 		return ret;
 	}
+
+	private string unindent(string str, string indent)
+	{
+		size_t lvl = indentLevel(str, indent);
+		return str[lvl*indent.length .. $];
+	}
+
+	private int indentLevel(string s, string indent, bool strict = true)
+	{
+		if( indent.length == 0 ) return 0;
+		int l = 0;
+		while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
+			l += cast(int)indent.length;
+		assertp(!strict || s[l] != ' ', "Indent is not a multiple of '"~indent~"'");
+		return l / cast(int)indent.length;
+	}
+
+	private int indentLevel(in Line[] ln, string indent)
+	{
+		return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
+	}
 }
 
 
@@ -841,26 +900,6 @@ private string dstringEscape(string str)
 	string ret;
 	foreach( ch; str ) ret ~= dstringEscape(ch);
 	return ret;
-}
-
-private string unindent(string str, string indent)
-{
-	size_t lvl = indentLevel(str, indent);
-	return str[lvl*indent.length .. $];
-}
-
-private int indentLevel(string s, string indent)
-{
-	if( indent.length == 0 ) return 0;
-	int l = 0;
-	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
-		l += cast(int)indent.length;
-	return l / cast(int)indent.length;
-}
-
-private int indentLevel(in Line[] ln, string indent)
-{
-	return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
 }
 
 private string _toString(T)(T v)

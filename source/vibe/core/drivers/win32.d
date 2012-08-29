@@ -2,7 +2,7 @@
 	Win32 driver implementation using I/O completion ports
 
 	Copyright: © 2012 Sönke Ludwig
-	Authors: Sönke Ludwig
+	Authors: Sönke Ludwig, Leonid Kramer
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
 module vibe.core.drivers.win32;
@@ -26,95 +26,6 @@ import std.c.windows.winsock;
 import std.exception;
 import std.utf;
 
-private extern(System)
-{
-	DWORD GetCurrentThreadId();
-	BOOL PostThreadMessageW(DWORD idThread, UINT Msg, WPARAM wParam, LPARAM lParam);
-	DWORD MsgWaitForMultipleObjectsEx(DWORD nCount, const(HANDLE) *pHandles, DWORD dwMilliseconds, DWORD dwWakeMask, DWORD dwFlags);
-	BOOL CloseHandle(HANDLE hObject);
-	HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
-							DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
-					 void function(DWORD, DWORD, OVERLAPPED*) lpCompletionRoutine);
-	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
-					 void function(DWORD, DWORD, OVERLAPPED*) lpCompletionRoutine);
-	BOOL GetFileSizeEx(HANDLE hFile, long *lpFileSize);
-	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
-	LONG DispatchMessageW(MSG *lpMsg);
-	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
-	BOOL SetEndOfFile(HANDLE hFile);
-	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
-
-	enum{
-		WSAPROTOCOL_LEN  = 255,
-		MAX_PROTOCOL_CHAIN = 7
-	};
-
-	struct WSAPROTOCOL_INFOW {
-		DWORD            dwServiceFlags1;
-		DWORD            dwServiceFlags2;
-		DWORD            dwServiceFlags3;
-		DWORD            dwServiceFlags4;
-		DWORD            dwProviderFlags;
-		GUID             ProviderId;
-		DWORD            dwCatalogEntryId;
-		WSAPROTOCOLCHAIN ProtocolChain;
-		int              iVersion;
-		int              iAddressFamily;
-		int              iMaxSockAddr;
-		int              iMinSockAddr;
-		int              iSocketType;
-		int              iProtocol;
-		int              iProtocolMaxOffset;
-		int              iNetworkByteOrder;
-		int              iSecurityScheme;
-		DWORD            dwMessageSize;
-		DWORD            dwProviderReserved;
-		wchar            szProtocol[WSAPROTOCOL_LEN+1];
-	};
-
-	struct WSAPROTOCOLCHAIN {
-		int ChainLen;                   
-		DWORD ChainEntries[MAX_PROTOCOL_CHAIN];
-	};
-
-	const uint ERROR_ALREADY_EXISTS = 183;
-
-	struct GUID
-	{
-		size_t  Data1;
-		ushort Data2;
-		ushort Data3;
-		ubyte  Data4[8];
-	};
-
-	enum WM_USER = 0x0400;
-	enum WM_USER_SIGNAL = WM_USER+101;
-
-	enum {
-		QS_ALLPOSTMESSAGE = 0x0100,
-		QS_HOTKEY = 0x0080,
-		QS_KEY = 0x0001,
-		QS_MOUSEBUTTON = 0x0004,
-		QS_MOUSEMOVE = 0x0002,
-		QS_PAINT = 0x0020,
-		QS_POSTMESSAGE = 0x0008,
-		QS_RAWINPUT = 0x0400,
-		QS_SENDMESSAGE = 0x0040,
-		QS_TIMER = 0x0010, 
-
-		QS_MOUSE = (QS_MOUSEMOVE | QS_MOUSEBUTTON),
-		QS_INPUT = (QS_MOUSE | QS_KEY | QS_RAWINPUT),
-		QS_ALLEVENTS = (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY),
-		QS_ALLINPUT = (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE),
-	};
-
-	enum {
-		MWMO_ALERTABLE = 0x0002,
-		MWMO_INPUTAVAILABLE = 0x0004,
-		MWMO_WAITALL = 0x0001,
-	};
-}
 
 class Win32EventDriver : EventDriver {
 	private {
@@ -298,6 +209,7 @@ class Win32Timer : Timer {
 		bool m_pending;
 		bool m_periodic;
 		Duration m_timeout;
+		UINT_PTR m_id;
 	}
 
 	this(Win32EventDriver driver, void delegate() callback)
@@ -306,17 +218,24 @@ class Win32Timer : Timer {
 		m_callback = callback;
 	}
 
+	~this()
+	{
+		if( m_pending ) stop();
+	}
+
 	void release()
 	{
+		assert(false, "not supported");
 	}
 
 	void acquire()
 	{
+		assert(false, "not supported");
 	}
 
 	bool isOwner()
 	{
-		assert(false);
+		assert(false, "not supported");
 	}
 
 	@property bool pending() { return m_pending; }
@@ -326,15 +245,17 @@ class Win32Timer : Timer {
 		m_timeout = dur;
 		if( m_pending ) stop();
 		m_periodic = periodic;
-		//SetTimer(m_hwnd, id, seconds.total!"msecs"(), &timerProc);
-		assert(false);
+		auto msecs = dur.total!"msecs"();
+		assert(msecs < UINT.max, "Timeout is too large for windows timers!");
+		m_id = SetTimer(null, 0, cast(UINT)msecs, &onTimer);
+		s_timers[m_id] = this;
+		m_pending = true;
 	}
 
 	void stop()
 	{
 		assert(m_pending);
-		//KillTimer(m_driver.m_hwnd, cast(size_t)cast(void*)this);
-		assert(false);
+		KillTimer(null, m_id);
 	}
 
 	void wait()
@@ -344,19 +265,22 @@ class Win32Timer : Timer {
 	}
 
 	private static extern(Windows) nothrow
-	void onTimer(HWND hwnd, UINT msg, size_t id, uint time)
+	void onTimer(HWND hwnd, UINT msg, UINT_PTR id, uint time)
 	{
 		try{
-			auto timer = cast(Win32Timer)cast(void*)id;
+			auto timer = id in s_timers;
+			if( !timer ){
+				logWarn("timer %d not registered", id);
+				return;
+			}
 			if( timer.m_periodic ){
 				timer.rearm(timer.m_timeout, true);
 			} else {
 				timer.m_pending = false;
 			}
 			timer.m_callback();
-		} catch(Exception e)
-		{
-			logError("onTimer Exception: %s", e);
+		} catch(Exception e){
+			logError("Exception in onTimer: %s", e);
 		}
 	}
 }
@@ -368,10 +292,10 @@ class Win32FileStream : FileStream {
 		HANDLE m_handle;
 		FileMode m_mode;
 		DriverCore m_driver;
-		Fiber m_fiber;
+		Task m_task;
 		ulong m_size;
 		ulong m_ptr = 0;
-		bool m_ready = false;
+		DWORD m_bytesTransferred;
 	}
 
 	this(DriverCore driver, Path path, FileMode mode)
@@ -379,7 +303,7 @@ class Win32FileStream : FileStream {
 		m_path = path;
 		m_mode = mode;
 		m_driver = driver;
-		m_fiber = Fiber.getThis();
+		m_task = Task.getThis();
 		auto nstr = m_path.toNativeString();
 
 		m_handle = CreateFileW(
@@ -409,17 +333,19 @@ class Win32FileStream : FileStream {
 
 	void release()
 	{
-		this.m_fiber = null;
+		assert(m_task is Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
+		m_task = null;
 	}
 
 	void acquire()
 	{
-		this.m_fiber.getThis();
+		assert(m_task is null, "Acquiring FileStream that is already owned.");
+		m_task = Task.getThis();
 	}
 
 	bool isOwner()
 	{
-		assert(false);
+		return m_task is Task.getThis();
 	}
 
 	void close()
@@ -474,38 +400,52 @@ class Win32FileStream : FileStream {
 	void read(ubyte[] dst){
 		assert(this.readable);
 
+		while( dst.length > 0 ){
+			enforce(dst.length <= leastSize);
+			OVERLAPPED overlapped;
+			overlapped.Internal = 0;
+			overlapped.InternalHigh = 0;
+			overlapped.Offset = cast(uint)(m_ptr & 0xFFFFFFFF);
+			overlapped.OffsetHigh = cast(uint)(m_ptr >> 32);
+			overlapped.hEvent = cast(HANDLE)cast(void*)this;
+			m_bytesTransferred = 0;
 
-		enforce(dst.length <= leastSize);
-		OVERLAPPED overlapped;
-		overlapped.Internal = 0;
-		overlapped.InternalHigh = 0;
-		overlapped.Offset = cast(uint)(m_ptr & 0xFFFFFFFF);
-		overlapped.OffsetHigh = cast(uint)(m_ptr >> 32);
-		overlapped.hEvent = cast(HANDLE)cast(void*)this;
-		ReadFileEx(m_handle, cast(void*)dst, dst.length, &overlapped, &fileStreamOperationComplete);
+			// request to write the data
+			ReadFileEx(m_handle, cast(void*)dst, dst.length, &overlapped, &onIOCompleted);
+			
+			// yield until the data is read
+			while( !m_bytesTransferred ) m_driver.yieldForEvent();
 
-		while(!m_ready)
-			m_driver.yieldForEvent();
-
-		m_ready = false;
-		m_ptr += dst.length;
+			assert(m_bytesTransferred <= dst.length, "More bytes read than requested!?");
+			dst = dst[m_bytesTransferred .. $];
+			m_ptr += m_bytesTransferred;
+		}
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true){
+	void write(in ubyte[] bytes_, bool do_flush = true){
 		assert(this.writable);
-		OVERLAPPED overlapped;
-		overlapped.Internal = 0;
-		overlapped.InternalHigh = 0;
-		overlapped.Offset = cast(uint)(m_ptr & 0xFFFFFFFF);
-		overlapped.OffsetHigh = cast(uint)(m_ptr >> 32);
-		overlapped.hEvent = cast(HANDLE)cast(void*)this;
-		WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &fileStreamOperationComplete);
 
-		while(!m_ready)
-			m_driver.yieldForEvent();
+		const(ubyte)[] bytes = bytes_;
 
-		m_ready = false;
-		m_ptr += bytes.length;
+		while( bytes.length > 0 ){
+			OVERLAPPED overlapped;
+			overlapped.Internal = 0;
+			overlapped.InternalHigh = 0;
+			overlapped.Offset = cast(uint)(m_ptr & 0xFFFFFFFF);
+			overlapped.OffsetHigh = cast(uint)(m_ptr >> 32);
+			overlapped.hEvent = cast(HANDLE)cast(void*)this;
+			m_bytesTransferred = 0;
+
+			// request to write the data
+			WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &onIOCompleted);
+
+			// yield until the data is written
+			while( !m_bytesTransferred ) m_driver.yieldForEvent();
+
+			assert(m_bytesTransferred <= bytes.length, "More bytes written than requested!?");
+			bytes = bytes[m_bytesTransferred .. $];
+			m_ptr += m_bytesTransferred;
+		}
 	}
 
 	void flush(){}
@@ -516,56 +456,73 @@ class Win32FileStream : FileStream {
 	{
 		writeDefault(stream, nbytes, do_flush);
 	}
+
+	private static extern(System)
+	void onIOCompleted(DWORD dwError, DWORD cbTransferred, OVERLAPPED* overlapped)
+	{
+		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
+		fileStream.m_bytesTransferred = cbTransferred;
+		if( fileStream.m_task ){
+			Exception ex;
+			if( dwError != 0 ) ex = new Exception("File I/O error: "~to!string(dwError));
+			fileStream.m_driver.resumeTask(fileStream.m_task, ex);
+		}
+	}
 }
 
 class Win32TcpConnection : TcpConnection {
 	private {
+		DriverCore m_driver;
+		Task m_task;
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
+		SOCKET m_socket;
+		DWORD m_bytesTransferred;
+	}
+
+	this(DriverCore driver, SOCKET sock)
+	{
+		m_driver = driver;
+		m_socket = sock;
+		m_task = Task.getThis();
 	}
 
 	void release()
 	{
+		assert(m_task is Task.getThis(), "Releasing TCP connection that is not owned by the calling task.");
+		m_task = null;
 	}
 
 	void acquire()
 	{
+		assert(m_task is null, "Acquiring TCP connection that is currently owned.");
+		m_task = Task.getThis();
 	}
 
-	bool isOwner()
-	{
-		assert(false);
-	}
+	bool isOwner() { return Task.getThis() is m_task; }
 
 	@property void tcpNoDelay(bool enabled)
 	{
 		m_tcpNoDelay = enabled;
+		BOOL eni = enabled;
+		setsockopt(m_socket, IPPROTO_TCP, TCP_NODELAY, &eni, eni.sizeof);
 		assert(false);
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
 	@property void readTimeout(Duration v){
 		m_readTimeout = v;
-		assert(false);
+		auto msecs = v.total!"msecs"();
+		assert(msecs < DWORD.max);
+		DWORD vdw = cast(DWORD)msecs;
+		setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, &vdw, vdw.sizeof);
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
 
-	void close()
-	{
-	}
-
-	@property bool connected()
-	const {
-		assert(false);
-	}
+	@property bool connected() const { return m_socket != -1; }
 
 	@property string peerAddress()
 	const {
-		assert(false);
-	}
-
-	bool waitForData(Duration timeout)
-	{
 		assert(false);
 	}
 
@@ -576,10 +533,23 @@ class Win32TcpConnection : TcpConnection {
 
 	@property ulong leastSize()
 	{
+		//WSAIoctl(m_socket, FIONREAD, null, 0, &v, &vsize, &overlapped, &onIOCompleted);
 		assert(false);
 	}
 
 	@property bool dataAvailableForRead()
+	{
+		assert(false);
+	}
+
+	void close()
+	{
+		WSASendDisconnect(m_socket, null);
+		closesocket(m_socket);
+		m_socket = -1;
+	}
+
+	bool waitForData(Duration timeout)
 	{
 		assert(false);
 	}
@@ -591,12 +561,58 @@ class Win32TcpConnection : TcpConnection {
 
 	void read(ubyte[] dst)
 	{
-		assert(false);
+		while( dst.length > 0 ){
+			WSABUF buf;
+			buf.len = dst.length;
+			buf.buf = dst.ptr;
+			DWORD flags = 0;
+
+			WSAOVERLAPPEDX overlapped;
+			overlapped.Internal = 0;
+			overlapped.InternalHigh = 0;
+			overlapped.Offset = 0;
+			overlapped.OffsetHigh = 0;
+			overlapped.hEvent = cast(HANDLE)cast(void*)this;
+
+			m_bytesTransferred = 0;
+			auto ret = WSARecv(m_socket, &buf, 1, null, &flags, &overlapped, &onIOCompleted);
+			if( ret == SOCKET_ERROR ){
+				auto err = WSAGetLastError();
+				enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
+			}
+			while( !m_bytesTransferred ) m_driver.yieldForEvent();
+
+			assert(m_bytesTransferred <= dst.length, "More data received than requested!?");
+			dst = dst[m_bytesTransferred .. $];
+		}
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
-		assert(false);
+		const(ubyte)[] bytes = bytes_;
+		while( bytes.length > 0 ){
+			WSABUF buf;
+			buf.len = bytes.length;
+			buf.buf = cast(ubyte*)bytes.ptr;
+
+			WSAOVERLAPPEDX overlapped;
+			overlapped.Internal = 0;
+			overlapped.InternalHigh = 0;
+			overlapped.Offset = 0;
+			overlapped.OffsetHigh = 0;
+			overlapped.hEvent = cast(HANDLE)cast(void*)this;
+
+			m_bytesTransferred = 0;
+			auto ret = WSASend(m_socket, &buf, 1, null, 0, &overlapped, &onIOCompleted);
+			if( ret == SOCKET_ERROR ){
+				auto err = WSAGetLastError();
+				enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
+			}
+			while( !m_bytesTransferred ) m_driver.yieldForEvent();
+
+			assert(m_bytesTransferred <= bytes.length, "More data sent than requested!?");
+			bytes = bytes[m_bytesTransferred .. $];
+		}
 	}
 
 	void flush()
@@ -613,21 +629,142 @@ class Win32TcpConnection : TcpConnection {
 	{
 		assert(false);
 	}
+
+	private static extern(System)
+	void onIOCompleted(DWORD dwError, DWORD cbTransferred, WSAOVERLAPPEDX* lpOverlapped, DWORD dwFlags)
+	{
+		auto fileStream = cast(Win32FileStream)(lpOverlapped.hEvent);
+		fileStream.m_bytesTransferred = cbTransferred;
+		if( fileStream.m_task ){
+			Exception ex;
+			if( dwError != 0 ) ex = new Exception("Socket I/O error: "~to!string(dwError));
+			fileStream.m_driver.resumeTask(fileStream.m_task, ex);
+		}
+	}
 }
+
+private {
+	Win32Timer[UINT_PTR] s_timers;
+}
+
 
 private extern(System)
 {
-	void fileStreamOperationComplete(DWORD errorCode, DWORD numberOfBytesTransfered, OVERLAPPED* overlapped)
-	{
-		// set flag operation done
-		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
-		fileStream.m_ready = true;
+	alias void function(DWORD, DWORD, OVERLAPPED*) LPOVERLAPPED_COMPLETION_ROUTINE;
 
-		// resume fiber if it's not null
-		if(fileStream.m_fiber)
-			fileStream.m_driver.resumeTask(cast(Task)fileStream.m_fiber);
+	DWORD GetCurrentThreadId();
+	BOOL PostThreadMessageW(DWORD idThread, UINT Msg, WPARAM wParam, LPARAM lParam);
+	DWORD MsgWaitForMultipleObjectsEx(DWORD nCount, const(HANDLE) *pHandles, DWORD dwMilliseconds, DWORD dwWakeMask, DWORD dwFlags);
+	BOOL CloseHandle(HANDLE hObject);
+	HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
+					   DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
+	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
+					LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
+					LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
+	BOOL GetFileSizeEx(HANDLE hFile, long *lpFileSize);
+	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+	LONG DispatchMessageW(MSG *lpMsg);
+	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
+	BOOL SetEndOfFile(HANDLE hFile);
+	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
+
+	enum{
+		WSAPROTOCOL_LEN  = 255,
+		MAX_PROTOCOL_CHAIN = 7,
+	};
+
+	enum WSA_IO_PENDING = 997;
+
+	struct WSAPROTOCOL_INFOW {
+		DWORD            dwServiceFlags1;
+		DWORD            dwServiceFlags2;
+		DWORD            dwServiceFlags3;
+		DWORD            dwServiceFlags4;
+		DWORD            dwProviderFlags;
+		GUID             ProviderId;
+		DWORD            dwCatalogEntryId;
+		WSAPROTOCOLCHAIN ProtocolChain;
+		int              iVersion;
+		int              iAddressFamily;
+		int              iMaxSockAddr;
+		int              iMinSockAddr;
+		int              iSocketType;
+		int              iProtocol;
+		int              iProtocolMaxOffset;
+		int              iNetworkByteOrder;
+		int              iSecurityScheme;
+		DWORD            dwMessageSize;
+		DWORD            dwProviderReserved;
+		wchar            szProtocol[WSAPROTOCOL_LEN+1];
+	};
+
+	struct WSAPROTOCOLCHAIN {
+		int ChainLen;                   
+		DWORD ChainEntries[MAX_PROTOCOL_CHAIN];
+	};
+
+	struct WSABUF {
+		size_t   len;
+		ubyte *buf;
 	}
 
+	struct WSAOVERLAPPEDX {
+		ULONG_PTR Internal;
+		ULONG_PTR InternalHigh;
+		union {
+			struct {
+				DWORD Offset;
+				DWORD OffsetHigh;
+			}
+			PVOID  Pointer;
+		}
+		HANDLE hEvent;
+	}
+
+	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
+
+	int WSARecv(SOCKET s, WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesRecvd, DWORD* lpFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
+	int WSASend(SOCKET s, in WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesSent, DWORD dwFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
+	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
+
+
+	const uint ERROR_ALREADY_EXISTS = 183;
+
+	struct GUID
+	{
+		uint Data1;
+		ushort Data2;
+		ushort Data3;
+		ubyte  Data4[8];
+	};
+
+	enum WM_USER = 0x0400;
+	enum WM_USER_SIGNAL = WM_USER+101;
+
+	enum {
+		QS_ALLPOSTMESSAGE = 0x0100,
+		QS_HOTKEY = 0x0080,
+		QS_KEY = 0x0001,
+		QS_MOUSEBUTTON = 0x0004,
+		QS_MOUSEMOVE = 0x0002,
+		QS_PAINT = 0x0020,
+		QS_POSTMESSAGE = 0x0008,
+		QS_RAWINPUT = 0x0400,
+		QS_SENDMESSAGE = 0x0040,
+		QS_TIMER = 0x0010, 
+
+		QS_MOUSE = (QS_MOUSEMOVE | QS_MOUSEBUTTON),
+		QS_INPUT = (QS_MOUSE | QS_KEY | QS_RAWINPUT),
+		QS_ALLEVENTS = (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY),
+		QS_ALLINPUT = (QS_INPUT | QS_POSTMESSAGE | QS_TIMER | QS_PAINT | QS_HOTKEY | QS_SENDMESSAGE),
+	};
+
+	enum {
+		MWMO_ALERTABLE = 0x0002,
+		MWMO_INPUTAVAILABLE = 0x0004,
+		MWMO_WAITALL = 0x0001,
+	};
 }
 
 } // version(VibeWin32Driver)
