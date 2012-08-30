@@ -90,15 +90,21 @@ struct MongoCollection {
 	/**
 		Queries the collection for existing documents.
 
+		If no arguments are passed to find(), all documents of the collection will be returned.
+
 		Throws: Exception if a DB communication error or a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	*/
-	MongoCursor find(T, U = typeof(null))(T query, U returnFieldSelector = null, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	MongoCursor find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		auto conn = m_db.lockConnection();
 		auto reply = conn.query(m_collection, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
 		return MongoCursor(m_db, m_collection, num_docs_per_chunk, reply);
 	}
+	/// ditto
+	MongoCursor find(T)(T query) { return find(query, null); }
+	/// ditto
+	MongoCursor find()() { return find(T.EmptyObject, null); }
 
 	/**
 		Queries the collection for existing documents.
