@@ -457,7 +457,7 @@ private struct DietParser {
 		bool has_children = true;
 		switch(tag){
 			case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
-					"link", "keygen", "meta", "param", "source", "track", "wbr":
+					"link", "meta", "keygen", "meta", "param", "source", "track", "wbr":
 				has_children = false;
 				break;
 			default:
