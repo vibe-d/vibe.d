@@ -17,6 +17,7 @@ import vibe.utils.string;
 
 import std.array;
 import std.conv;
+import std.exception;
 import std.string;
 import std.traits;
 
@@ -357,7 +358,6 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 
 	void handler(HttpServerRequest req, HttpServerResponse res)
 	{
-		auto jparams = req.json;
 		ParameterTypes params;
 
 		static immutable param_names = parameterNames!FT();
@@ -378,7 +378,11 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 					deserializeJson(params[i], parseJson(req.query[param_names[i]]));
 				} else {
 					logDebug("%s %s", method, param_names[i]);
-					deserializeJson(params[i], jparams[param_names[i]]);
+					enforce(req.headers["Content-Type"] == "application/json", "The Content-Type header needs to be set to application/json.");
+					enforce(req.json.type != Json.Type.Undefined, "The request body does not contain a valid JSON value.");
+					enforce(req.json.type == Json.Type.Object, "The request body must contain a JSON object with an entry for each parameter.");
+					enforce(req.json[param_names[i]].type != Json.Type.Undefined, "Missing parameter "~param_names[i]~".");
+					deserializeJson(params[i], req.json[param_names[i]]);
 				}
 			}
 		}

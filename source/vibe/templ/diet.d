@@ -454,15 +454,15 @@ private struct DietParser {
 		parseHtmlTag(line, i, attribs);
 
 		// determine if we need a closing tag
-		bool has_children = true;
+		bool is_singular_tag = false;
 		switch(tag){
 			case "area", "base", "basefont", "br", "col", "embed", "frame",	"hr", "img", "input",
-					"link", "keygen", "meta", "param", "source", "track", "wbr":
-				has_children = false;
+					"keygen", "link", "meta", "param", "source", "track", "wbr":
+				is_singular_tag = true;
 				break;
 			default:
 		}
-		assertp(has_children || !has_child_nodes, "Singular HTML tag '"~tag~"' may not have children.");
+		assertp(!(is_singular_tag && has_child_nodes), "Singular HTML element '"~tag~"' may not have children.");
 		
 		// parse any text contents (either using "= code" or as plain text)
 		string textstring;
@@ -481,12 +481,12 @@ private struct DietParser {
 		}
 		
 		string tail;
-		if( has_child_nodes || !has_children ) tail = "";
-		else tail = "</" ~ tag ~ ">";
+		if( has_child_nodes ){
+			node_stack ~= tag;
+			tail = "";
+		} else if( !is_singular_tag ) tail = "</" ~ tag ~ ">";
 		
-		if( has_child_nodes ) node_stack ~= tag;
-		
-		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs);
+		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs, is_singular_tag);
 		if( textstring_isdynamic ){
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName~".write(" ~ textstring ~ ", false);\n";
@@ -505,7 +505,7 @@ private struct DietParser {
 		parseHtmlTag(tagline, i, attribs);
 
 		// write the tag
-		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs);
+		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs, false);
 
 		string indent_string = "\\t";
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) indent_string ~= "\\t";
@@ -633,14 +633,14 @@ private struct DietParser {
 		skipWhitespace(line, i);
 	}
 
-	string buildHtmlTag(ref string[] node_stack, string tag, int level, ref bool in_string, ref Tuple!(string, string)[] attribs)
+	string buildHtmlTag(ref string[] node_stack, string tag, int level, ref bool in_string, ref Tuple!(string, string)[] attribs, bool is_singular_tag)
 	{
 		string tagstring = startString(in_string) ~ "\\n";
 		assertp(node_stack.length >= level);
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
 		tagstring ~= "<" ~ tag;
 		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~htmlAttribEscape("~buildInterpolatedString(att[1])~")~\"\\\"";
-		tagstring ~= ">";
+		tagstring ~= is_singular_tag ? "/>" : ">";
 		return tagstring;
 	}
 
