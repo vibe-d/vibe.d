@@ -57,7 +57,7 @@ class LimitedInputStream : InputStream {
 	}
 	
 	protected void onSizeLimitReached() {
-		throw new Exception("Size limit reached");
+		throw new LimitException("Size limit reached", m_sizeLimit);
 	}
 }
 
@@ -119,4 +119,15 @@ class CountingInputStream : InputStream {
 		m_in.read(dst);
 		m_bytesRead += dst.length;
 	}
+}
+
+class LimitException : Exception {
+	private ulong m_limit;
+
+	this(string message, ulong limit, Throwable next = null, string file = __FILE__, int line = __LINE__)
+	{
+		super(message, next, file, line);
+	}
+
+	@property ulong limit() const { return m_limit; }
 }
