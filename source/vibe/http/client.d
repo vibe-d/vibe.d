@@ -7,7 +7,7 @@
 */
 module vibe.http.client;
 
-public import vibe.core.tcp;
+public import vibe.core.net;
 public import vibe.http.common;
 
 import vibe.core.connectionpool;

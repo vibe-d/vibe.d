@@ -8,7 +8,7 @@
 module vibe.mail.smtp;
 
 import vibe.core.log;
-import vibe.core.tcp;
+import vibe.core.net;
 import vibe.http.common : StrMapCI;
 import vibe.stream.ssl;
 

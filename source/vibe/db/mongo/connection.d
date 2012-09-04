@@ -10,7 +10,7 @@ module vibe.db.mongo.connection;
 public import vibe.data.bson;
 
 import vibe.core.log;
-import vibe.core.tcp;
+import vibe.core.net;
 
 import std.algorithm;
 import std.array;
