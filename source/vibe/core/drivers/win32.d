@@ -99,6 +99,11 @@ class Win32EventDriver : EventDriver {
 		return new Win32FileStream(m_core, Path(path), mode);
 	}
 
+	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
+	{
+		assert(false);
+	}
+
 	Win32TcpConnection connectTcp(string host, ushort port)
 	{
 		assert(m_tid == GetCurrentThreadId());
@@ -113,6 +118,11 @@ class Win32EventDriver : EventDriver {
 	{
 		assert(m_tid == GetCurrentThreadId());
 
+	}
+
+	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	{
+		assert(false);
 	}
 
 	Win32Signal createSignal()
