@@ -1,6 +1,6 @@
 module vibe.db.redis.redis;
 
-public import vibe.core.tcp;
+public import vibe.core.net;
 
 import vibe.core.log;
 import std.string;

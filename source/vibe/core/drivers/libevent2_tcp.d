@@ -70,10 +70,10 @@ package class Libevent2TcpConnection : TcpConnection {
 		assert(Fiber.getThis() is m_ctx.task);
 
 		char buf[64];
-		if( ctx.remote_addr4.sin_family == AF_INET )
-			evutil_inet_ntop(AF_INET, &ctx.remote_addr4.sin_addr, buf.ptr, buf.length);
-		else
-			evutil_inet_ntop(AF_INET6, &ctx.remote_addr6.sin6_addr, buf.ptr, buf.length);
+		void* ptr;
+		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
+		else ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr;
+		evutil_inet_ntop(ctx.remote_addr.family, ptr, buf.ptr, buf.length);
 		m_peerAddress = to!string(buf.ptr);
 	}
 	
@@ -280,20 +280,12 @@ package class Libevent2TcpConnection : TcpConnection {
 
 package struct TcpContext
 {
-	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, sockaddr_in6 peeraddr){
+	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, NetworkAddress peeraddr){
 		core = c;
 		eventLoop = evbase;
 		socketfd = sock;
 		event = evt;
-		remote_addr6 = peeraddr;
-	}
-
-	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, sockaddr_in peeraddr){
-		core = c;
-		eventLoop = evbase;
-		socketfd = sock;
-		event = evt;
-		remote_addr4 = peeraddr;
+		remote_addr = peeraddr;
 	}
 
 	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt){
@@ -307,10 +299,7 @@ package struct TcpContext
 	event_base* eventLoop;
 	void delegate(TcpConnection conn) connectionCallback;
 	bufferevent* event;
-	union {
-		sockaddr_in6 remote_addr6;
-		sockaddr_in remote_addr4;
-	}
+	NetworkAddress remote_addr;
 	bool shutdown = false;
 	int socketfd = -1;
 	int status = 0;
@@ -338,7 +327,7 @@ package extern(C)
 
 		static struct ClientTask {
 			TcpContext* listen_ctx;
-			sockaddr_in6 remote_addr;
+			NetworkAddress remote_addr;
 			int sockfd;
 
 			void execute()
@@ -408,7 +397,7 @@ package extern(C)
 
 			auto task = FreeListObjectAlloc!ClientTask.alloc();
 			task.listen_ctx = ctx;
-			task.remote_addr = remote_addr;
+			*cast(sockaddr_in6*)task.remote_addr.sockAddr = remote_addr;
 			task.sockfd = sockfd;
 
 			version(MultiThreadTest){

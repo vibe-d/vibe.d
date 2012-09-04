@@ -29,6 +29,9 @@ import vibe.core.drivers.winrt;
 version(Posix){
 	import core.sys.posix.signal;
 }
+version(Windows){
+	import core.stdc.signal;
+}
 
 
 /**************************************************************************************************/
@@ -172,7 +175,7 @@ void rawYield()
 */
 void sleep(Duration timeout)
 {
-	auto tm = s_driver.createTimer({});
+	auto tm = s_driver.createTimer(null);
 	tm.rearm(timeout);
 	tm.wait();
 }
@@ -455,6 +458,11 @@ shared static this()
 		sigaction(SIGPIPE, &siginfo, null);
 	}
 
+	version(Windows){
+		signal(SIGABRT, &onSignal);
+		signal(SIGTERM, &onSignal);
+		signal(SIGINT, &onSignal);
+	}
 }
 
 shared static ~this()
@@ -544,21 +552,22 @@ private void handleWorkerTasks()
 	}
 }
 
-private extern(C) void extrap()
+private extern(C) nothrow
 {
-	logTrace("exception trap");
-}
+	void extrap()
+	{
+		logTrace("exception trap");
+	}
 
-version(Posix){
-	private extern(C) void onSignal(int signal)
+	nothrow void onSignal(int signal)
 	{
 		logInfo("Received signal %d. Shutting down.", signal);
 
-		if( s_eventLoopRunning ) exitEventLoop();
+		if( s_eventLoopRunning ) try exitEventLoop(); catch(Exception e) {}
 		else exit(1);
 	}
-	
-	private extern(C) void onBrokenPipe(int signal)
+
+	void onBrokenPipe(int signal)
 	{
 	}
 }

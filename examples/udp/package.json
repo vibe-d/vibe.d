@@ -1,0 +1,7 @@
+﻿{
+    "name": "udp",
+	"description": "Sends UDP packets from one socket to another.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

@@ -7,7 +7,7 @@
 */
 module vibe.http.server;
 
-public import vibe.core.tcp;
+public import vibe.core.net;
 public import vibe.http.common;
 public import vibe.http.session;
 
@@ -113,7 +113,8 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 {
 	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
 	{
-		listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+		try listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+		catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
 	// Check for every bind address/port, if a new listening socket needs to be created and

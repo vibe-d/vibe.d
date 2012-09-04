@@ -183,7 +183,6 @@ class Libevent2Driver : EventDriver {
 	int processEvents()
 	{
 		auto ret = event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
-		m_core.notifyIdle();
 		return ret;
 	}
 
@@ -198,10 +197,49 @@ class Libevent2Driver : EventDriver {
 		return new ThreadedFileStream(path, mode);
 	}
 
+	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
+	{
+		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
+
+		NetworkAddress addr;
+		// first try to decode as IP address
+		foreach( af; addrfamilies ){
+			if( family != af && family != AF_UNSPEC ) continue;
+			addr.family = af;
+			void* ptr;
+			if( af == AF_INET ) ptr = &addr.sockAddrInet4.sin_addr;
+			else ptr = &addr.sockAddrInet6.sin6_addr;
+			auto ret = evutil_inet_pton(af, toStringz(host), ptr);
+			if( ret == 1 ) return addr;
+		}
+
+		enforce(!no_dns, "Invalid IP address string: "~host);
+
+		// then try a DNS lookup
+		foreach( af; addrfamilies ){
+			DnsLookupInfo dnsinfo;
+			dnsinfo.core = m_core;
+			dnsinfo.task = Task.getThis();
+			dnsinfo.addr = &addr;
+			addr.family = af;
+
+			evdns_request* dnsreq;
+			if( af == AF_INET ) dnsreq = evdns_base_resolve_ipv4(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
+			else dnsreq = evdns_base_resolve_ipv6(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
+
+			while( !dnsinfo.done ) m_core.yieldForEvent();
+			if( dnsinfo.status == DNS_ERR_NONE ) return addr;
+		}
+
+		throw new Exception("Failed to lookup host: "~host);
+	}
+
 	TcpConnection connectTcp(string host, ushort port)
 	{
-		auto af = AF_INET;
-		auto sockfd = socket(af, SOCK_STREAM, 0);
+		auto addr = resolveHost(host);
+		addr.port = port;
+
+		auto sockfd = socket(addr.family, SOCK_STREAM, 0);
 		enforce(sockfd != -1, "Failed to create socket.");
 		
 		if( evutil_make_socket_nonblocking(sockfd) )
@@ -210,13 +248,13 @@ class Libevent2Driver : EventDriver {
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, sockfd, buf_event);
+		auto cctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
 		cctx.task = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
 
-		if( bufferevent_socket_connect_hostname(buf_event, m_dnsBase, af, toStringz(host), port) )
+		if( bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
 
 	// TODO: cctx.remove_addr6 = ...;
@@ -234,27 +272,39 @@ class Libevent2Driver : EventDriver {
 
 	void listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address)
 	{
-		sockaddr_in addr_ip4;
-		addr_ip4.sin_family = AF_INET;
-		addr_ip4.sin_port = htons(port);
-		auto ret = evutil_inet_pton(AF_INET, toStringz(address), &addr_ip4.sin_addr);
-		if( ret == 1 ){
-			auto rc = listenTcpGeneric(AF_INET, &addr_ip4, port, connection_callback);
-			logInfo("Listening on %s port %d %s", address, port, (rc==0?"succeeded":"failed"));
-			return;
-		}
+		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
+		bind_addr.port = port;
 
-		sockaddr_in6 addr_ip6;
-		addr_ip6.sin6_family = AF_INET6;
-		addr_ip6.sin6_port = htons(port);
-		ret = evutil_inet_pton(AF_INET6, toStringz(address), &addr_ip6.sin6_addr);
-		if( ret == 1 ){
-			auto rc = listenTcpGeneric(AF_INET6, &addr_ip6, port, connection_callback);
-			logInfo("Listening on %s port %d %s", address, port, (rc==0?"succeeded":"failed"));
-			return;
-		}
+		auto listenfd = socket(bind_addr.family, SOCK_STREAM, 0);
+		enforce(listenfd != -1, "Error creating listening socket");
+		int tmp_reuse = 1; 
+		enforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
+			"Error enabling socket address reuse on listening socket");
+		enforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
+			"Error binding listening socket");
+		enforce(listen(listenfd, 128) == 0,
+			"Error listening to listening socket");
 
-		enforce(false, "Invalid IP address string: '"~address~"'");
+		// Set socket for non-blocking I/O
+		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
+			"Error setting listening socket to non-blocking I/O.");
+		
+		// Add an event to wait for connections
+		auto ctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
+		ctx.connectionCallback = connection_callback;
+		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+		enforce(event_add(connect_event, null) == 0,
+			"Error scheduling connection event on the event loop.");
+		
+		// TODO: do something with connect_event (at least store somewhere for clean up)
+	}
+
+	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	{
+		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, true);
+		bindaddr.port = port;
+
+		return new Libevent2UdpConnection(bindaddr, this);
 	}
 
 	Libevent2Signal createSignal()
@@ -267,46 +317,26 @@ class Libevent2Driver : EventDriver {
 		return new Libevent2Timer(this, callback);
 	}
 
-	private int listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
+	static struct DnsLookupInfo {
+		NetworkAddress* addr;
+		Task task;
+		DriverCore core;
+		bool done = false;
+		int status = 0;
+	}
+
+	private static extern(C) void onDnsResult(int result, char type, int count, int ttl, void* addresses, void* arg)
 	{
-		auto listenfd = socket(af, SOCK_STREAM, 0);
-		if( listenfd == -1 ){
-			logError("Error creating listening socket> %s", af);
-			return -1;
+		assert(count >= 1);
+		auto info = cast(DnsLookupInfo*)arg;
+		info.done = true;
+		info.status = result;
+		switch( info.addr.family ){
+			default: assert(false, "Unimplmeneted address family");
+			case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
+			case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
 		}
-		int tmp_reuse = 1; 
-		if( setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) ){
-			logError("Error enabling socket address reuse on listening socket");
-			return -1;
-		}
-		if( bind(listenfd, cast(sockaddr*)sock_addr, SOCKADDR.sizeof) ){
-			logError("Error binding listening socket");
-			return -1;
-		}
-		if( listen(listenfd, 128) ){
-			logError("Error listening to listening socket");
-			return -1;
-		}
-
-		// Set socket for non-blocking I/O
-		if( evutil_make_socket_nonblocking(listenfd) ){
-			logError("Error setting listening socket to non-blocking I/O.");
-			return -1;
-		}
-		
-		version(Windows){} else evutil_make_listen_socket_reuseable(listenfd);
-
-		// Add an event to wait for connections
-		auto ctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, listenfd, null, *sock_addr);
-		ctx.connectionCallback = connection_callback;
-		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
-		if( event_add(connect_event, null) ){
-			logError("Error scheduling connection event on the event loop.");
-		}
-		
-		// TODO: do something with connect_event (at least store somewhere for clean up)
-		
-		return 0;
+		if( info.task && info.task.state != Fiber.State.TERM ) info.core.resumeTask(info.task);
 	}
 }
 
@@ -369,6 +399,24 @@ class Libevent2Signal : Signal {
 	}
 
 	@property int emitCount() const { return m_emitCount; }
+
+	private static extern(C)
+	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
+	{
+		auto sig = cast(Libevent2Signal)userptr;
+
+		sig.m_emitCount++;
+
+		bool[Task] lst;
+		try {
+			lst = sig.m_listeners.dup;
+			foreach( l, _; lst )
+				sig.m_driver.m_core.resumeTask(l);
+		} catch( Exception e ){
+			logError("Exception while handling signal event: %s", e.msg);
+			debug assert(false);
+		}
+	}
 }
 
 class Libevent2Timer : Timer {
@@ -386,7 +434,7 @@ class Libevent2Timer : Timer {
 	{
 		m_driver = driver;
 		m_callback = callback;
-		m_event = event_new(m_driver.eventLoop, -1, 0, &onTimerTimeout, cast(void*)this);
+		m_event = event_new(m_driver.eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
 	}
 
 	~this()
@@ -449,6 +497,151 @@ class Libevent2Timer : Timer {
 		while( pending )
 			m_driver.m_core.yieldForEvent();
 	}
+
+	private static extern(C)
+	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
+	{
+		auto tm = cast(Libevent2Timer)userptr;
+		logTrace("Timer event %s/%s", tm.m_pending, tm.m_periodic);
+		if( !tm.m_pending ) return;
+		try {
+			if( tm.m_periodic ){
+				event_del(tm.m_event);
+				event_add(tm.m_event, &tm.m_timeout);
+			} else {
+				tm.stop();
+			}
+
+			if( tm.m_owner ) tm.m_driver.m_core.resumeTask(tm.m_owner);
+			if( tm.m_callback ) runTask(tm.m_callback);
+		} catch( Exception e ){
+			logError("Exception while handling timer event: %s", e.msg);
+			debug assert(false);
+		}
+	}
+}
+
+class Libevent2UdpConnection : UdpConnection {
+	private {
+		Libevent2Driver m_driver;
+		TcpContext* m_ctx;
+		string m_bindAddress;
+		bool m_canBroadcast = false;
+	}
+
+	this(NetworkAddress bind_addr, Libevent2Driver driver)
+	{
+		m_driver = driver;
+
+		char buf[64];
+		void* ptr;
+		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
+		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
+		evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length);
+		m_bindAddress = to!string(buf.ptr);
+
+		auto sockfd = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
+		enforce(sockfd != -1, "Failed to create socket.");
+		
+		enforce(evutil_make_socket_nonblocking(sockfd) == 0, "Failed to make socket non-blocking.");
+
+		int tmp_reuse = 1;
+		enforce(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
+			"Error enabling socket address reuse on listening socket");
+
+		if( bind_addr.port )
+			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
+		
+		m_ctx = TcpContext.Alloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
+		m_ctx.task = Task.getThis();
+
+		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUdpRead, m_ctx);
+		if( !evt ) throw new Exception("Failed to create buffer event for socket.");
+
+		enforce(event_add(evt, null) == 0);
+	}
+
+	@property string bindAddress() const { return m_bindAddress; }
+
+	@property bool canBroadcast() const { return m_canBroadcast; }
+	@property void canBroadcast(bool val)
+	{
+		int tmp_broad = val;
+		enforce(setsockopt(m_ctx.socketfd, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
+			"Failed to change the socket broadcast flag.");
+		m_canBroadcast = val;
+	}
+
+
+	bool isOwner() {
+		return m_ctx !is null && m_ctx.task !is null && m_ctx.task is Fiber.getThis();
+	}
+
+	void acquire()
+	{
+		assert(m_ctx, "Trying to acquire a closed TCP connection.");
+		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
+		m_ctx.task = Task.getThis();
+	}
+
+	void release()
+	{
+		if( !m_ctx ) return;
+		assert(m_ctx.task !is null, "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
+		m_ctx.task = null;
+	}
+
+	void connect(string host, ushort port)
+	{
+		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.remote_addr.family);
+		addr.port = port;
+		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
+	}
+
+	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
+	{
+		int ret;
+		if( peer_address ){
+			ret = .sendto(m_ctx.socketfd, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
+		} else {
+			ret = .send(m_ctx.socketfd, data.ptr, data.length, 0);
+		}
+		logTrace("send ret: %s, %s", ret, WSAGetLastError());
+		enforce(ret >= 0, "Error sending UDP packet.");
+		enforce(ret == data.length, "Unable to send full packet.");
+	}
+
+	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
+	{
+		if( buf.length == 0 ) buf.length = 65507;
+		NetworkAddress from;
+		from.family = m_ctx.remote_addr.family;
+		while(true){
+			uint addr_len = from.sockAddrLen;
+			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, buf.length, 0, from.sockAddr, &addr_len);
+			if( ret > 0 ){
+				if( peer_address ) *peer_address = from;
+				return buf[0 .. ret];
+			}
+			if( ret < 0 ){
+				auto err = WSAGetLastError();
+				logDebug("UDP recv err: %s", err);
+				enforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet.");
+			}
+			m_ctx.core.yieldForEvent();
+		}
+	}
+
+	private static extern(C) void onUdpRead(evutil_socket_t sockfd, short evts, void* arg)
+	{
+		auto ctx = cast(TcpContext*)arg;
+		logTrace("udp socket %d read event!", ctx.socketfd);
+
+		auto f = ctx.task;
+		if( f && f.state != Fiber.State.TERM )
+			ctx.core.resumeTask(f);
+	}
 }
 
 private {
@@ -465,45 +658,4 @@ package event_base* getThreadLibeventEventLoop()
 package DriverCore getThreadLibeventDriverCore()
 {
 	return s_driverCore;
-}
-
-
-private extern(C) nothrow
-{
-	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
-	{
-		auto sig = cast(Libevent2Signal)userptr;
-
-		sig.m_emitCount++;
-
-		bool[Task] lst;
-		try {
-			lst = sig.m_listeners.dup;
-			foreach( l, _; lst )
-				sig.m_driver.m_core.resumeTask(l);
-		} catch( Exception e ){
-			logError("Exception while handling signal event: %s", e.msg);
-			debug assert(false);
-		}
-	}
-
-	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
-	{
-		auto tm = cast(Libevent2Timer)userptr;
-		logTrace("Timer event %s/%s", tm.m_pending, tm.m_periodic);
-		if( !tm.m_pending ) return;
-		try {
-			if( tm.m_periodic ){
-				event_del(tm.m_event);
-				event_add(tm.m_event, &tm.m_timeout);
-			} else {
-				tm.stop();
-			}
-
-			runTask(tm.m_callback);
-		} catch( Exception e ){
-			logError("Exception while handling timer event: %s", e.msg);
-			debug assert(false);
-		}
-	}
 }
