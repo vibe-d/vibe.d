@@ -207,6 +207,12 @@ interface UdpConnection : EventedObject {
 	*/
 	@property string bindAddress() const;
 
+	/** Determines if the socket is allowed to send to broadcast addresses.
+	*/
+	@property bool canBroadcast() const;
+	/// ditto
+	@property void canBroadcast(bool val);
+
 	/** Locks the UDP connection to a certain peer.
 
 		Once connected, the UdpConnection can only communicate with the specified peer.

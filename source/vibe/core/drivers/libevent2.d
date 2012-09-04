@@ -526,6 +526,7 @@ class Libevent2UdpConnection : UdpConnection {
 		Libevent2Driver m_driver;
 		TcpContext* m_ctx;
 		string m_bindAddress;
+		bool m_canBroadcast = false;
 	}
 
 	this(NetworkAddress bind_addr, Libevent2Driver driver)
@@ -560,11 +561,21 @@ class Libevent2UdpConnection : UdpConnection {
 		enforce(event_add(evt, null) == 0);
 	}
 
+	@property string bindAddress() const { return m_bindAddress; }
+
+	@property bool canBroadcast() const { return m_canBroadcast; }
+	@property void canBroadcast(bool val)
+	{
+		int tmp_broad = val;
+		enforce(setsockopt(m_ctx.socketfd, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
+			"Failed to change the socket broadcast flag.");
+		m_canBroadcast = val;
+	}
+
+
 	bool isOwner() {
 		return m_ctx !is null && m_ctx.task !is null && m_ctx.task is Fiber.getThis();
 	}
-
-	@property string bindAddress() const { return m_bindAddress; }
 
 	void acquire()
 	{
