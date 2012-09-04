@@ -215,8 +215,11 @@ interface UdpConnection : EventedObject {
 	void connect(string host, ushort port);
 
 	/** Sends a single packet.
+
+		If peer_address is given, the packet is send to that address. Otherwise the packet
+		will be sent to the address specified by a call to connect().
 	*/
-	void send(in ubyte[] data);
+	void send(in ubyte[] data, in NetworkAddress* peer_address = null);
 
 	/** Receives a single packet.
 

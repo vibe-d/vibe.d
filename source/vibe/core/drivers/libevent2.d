@@ -584,12 +584,18 @@ class Libevent2UdpConnection : UdpConnection {
 	void connect(string host, ushort port)
 	{
 		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.remote_addr.family);
+		addr.port = port;
 		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
 	}
 
-	void send(in ubyte[] data)
+	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
 	{
-		auto ret = .send(m_ctx.socketfd, data.ptr, data.length, 0);
+		int ret;
+		if( peer_address ){
+			ret = .sendto(m_ctx.socketfd, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
+		} else {
+			ret = .send(m_ctx.socketfd, data.ptr, data.length, 0);
+		}
 		logTrace("send ret: %s, %s", ret, WSAGetLastError());
 		enforce(ret >= 0, "Error sending UDP packet.");
 		enforce(ret == data.length, "Unable to send full packet.");
