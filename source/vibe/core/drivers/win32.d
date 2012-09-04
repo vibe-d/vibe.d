@@ -48,21 +48,26 @@ class Win32EventDriver : EventDriver {
 	int runEventLoop()
 	{
 		m_exit = false;
-		while( !m_exit ){
-			waitForEvents(INFINITE);
-			processEvents();
-		}
+		while( !m_exit )
+			runEventLoopOnce();
 		return 0;
 	}
 
 	int runEventLoopOnce()
 	{
-		waitForEvents(INFINITE);
-		return processEvents();
+		auto ret = doProcessEvents(INFINITE);
+		m_core.notifyIdle();
+		return ret;
 	}
 
 	int processEvents()
 	{
+		return doProcessEvents(0);
+	}
+
+	int doProcessEvents(uint timeout)
+	{
+		waitForEvents(timeout);
 		assert(m_tid == GetCurrentThreadId());
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
@@ -78,7 +83,6 @@ class Win32EventDriver : EventDriver {
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
-		m_core.notifyIdle();
 		return 0;
 	}
 
