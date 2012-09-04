@@ -172,7 +172,7 @@ void rawYield()
 */
 void sleep(Duration timeout)
 {
-	auto tm = s_driver.createTimer({});
+	auto tm = s_driver.createTimer(null);
 	tm.rearm(timeout);
 	tm.wait();
 }

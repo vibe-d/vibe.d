@@ -54,3 +54,10 @@ TcpConnection connectTcp(string host, ushort port)
 {
 	return getEventDriver().connectTcp(host, port);
 }
+
+/** Creates a bound UDP socket suitable for sending and receiving packets.
+*/
+UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+{
+	return getEventDriver().listenUdp(port, bind_address);
+}
