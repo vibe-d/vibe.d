@@ -27,6 +27,7 @@ GENERAL
  - Add code to generate a static version of vibed.org suitable for inclusion as docs in the download package
  - Inherited members should appear in the documentation of a derived class
  - See why find([""]) and find(Bson()) resets the connection and maybe detect their use before sending the command to the server
+ - Add proper documentation for types supported by the REST interface generator
 
 DIET TEMPLATES
 ==============
