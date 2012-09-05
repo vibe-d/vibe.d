@@ -55,7 +55,7 @@ int runEventLoop()
 	// runs any yield()ed tasks first
 	s_core.notifyIdle();
 
-	if( auto err = s_driver.runEventLoop() != 0){
+	if( auto err = getEventDriver().runEventLoop() != 0){
 		if( err == 1 ){
 			logDebug("No events active, exiting message loop.");
 			return 0;
@@ -77,7 +77,7 @@ deprecated int start() { return runEventLoop(); }
 void exitEventLoop()
 {
 	assert(s_eventLoopRunning);
-	s_driver.exitEventLoop();
+	getEventDriver().exitEventLoop();
 }
 
 /**
@@ -87,7 +87,7 @@ void exitEventLoop()
 */
 int processEvents()
 {
-	return s_driver.processEvents();
+	return getEventDriver().processEvents();
 }
 
 /**
@@ -175,17 +175,9 @@ void rawYield()
 */
 void sleep(Duration timeout)
 {
-	auto tm = s_driver.createTimer(null);
+	auto tm = getEventDriver().createTimer(null);
 	tm.rearm(timeout);
 	tm.wait();
-}
-
-/**
-	Returns the active event driver
-*/
-EventDriver getEventDriver()
-{
-	return s_driver;
 }
 
 
@@ -194,7 +186,7 @@ EventDriver getEventDriver()
 */
 Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false)
 {
-	auto tm = s_driver.createTimer(callback);
+	auto tm = getEventDriver().createTimer(callback);
 	tm.rearm(timeout, periodic);
 	return tm;
 }
@@ -326,7 +318,7 @@ private class VibeDriverCore : DriverCore {
 
 	private void setupGcTimer()
 	{
-		m_gcTimer = s_driver.createTimer(&collectGarbage);
+		m_gcTimer = getEventDriver().createTimer(&collectGarbage);
 		m_gcCollectTimeout = dur!"seconds"(2);
 	}
 
@@ -344,7 +336,7 @@ private class VibeDriverCore : DriverCore {
 			}
 		} else {
 			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			if( auto err = s_driver.runEventLoopOnce() ){
+			if( auto err = getEventDriver().runEventLoopOnce() ){
 				if( err == 1 ){
 					logDebug("No events registered, exiting event loop.");
 					throw new Exception("No events registered in vibeYieldForEvent.");
@@ -414,7 +406,6 @@ private {
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	__gshared VibeDriverCore s_core;
-	EventDriver s_driver;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
 	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
@@ -491,10 +482,10 @@ static this()
 	assert(s_core !is null);
 
 	logTrace("create driver");
-	version(VibeWin32Driver) s_driver = new Win32EventDriver(s_core);
-	else version(VibeWinrtDriver) s_driver = new WinRtEventDriver(s_core);
-	else version(VibeLibevDriver) s_driver = new LibevDriver(s_core);
-	else s_driver = new Libevent2Driver(s_core);
+	version(VibeWin32Driver) setEventDriver(new Win32EventDriver(s_core));
+	else version(VibeWinrtDriver) setEventDriver(new WinRtEventDriver(s_core));
+	else version(VibeLibevDriver) setEventDriver(new LibevDriver(s_core));
+	else setEventDriver(new Libevent2Driver(s_core));
 
 	version(VibeIdleCollect){
 		logTrace("setup gc");
@@ -505,7 +496,7 @@ static this()
 		synchronized(st_workerTaskMutex)
 		{
 			if( !st_workerTaskSignal ){
-				st_workerTaskSignal = s_driver.createSignal();
+				st_workerTaskSignal = getEventDriver().createSignal();
 				st_workerTaskSignal.release();
 				assert(!st_workerTaskSignal.isOwner());
 			}
@@ -515,8 +506,7 @@ static this()
 
 static ~this()
 {
-	// TODO: use destroy instead
-	delete s_driver;
+	deleteEventDriver();
 }
 
 private void workerThreadFunc()

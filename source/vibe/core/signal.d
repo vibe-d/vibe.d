@@ -9,13 +9,6 @@ module vibe.core.signal;
 
 public import vibe.core.driver;
 
-import vibe.core.core;
-
-
-class SignalException : Exception {
-	this() { super("Signal emitted."); }
-}
-
 
 /** Creates a new signal that can be shared between fibers.
 */
@@ -23,3 +16,19 @@ Signal createSignal()
 {
 	return getEventDriver().createSignal();
 }
+
+/** A cross-fiber signal
+
+	Note: the ownership can be shared between multiple fibers.
+*/
+interface Signal : EventedObject {
+	@property int emitCount() const;
+	void emit();
+	void wait();
+	void wait(int reference_emit_count);
+}
+
+class SignalException : Exception {
+	this() { super("Signal emitted."); }
+}
+

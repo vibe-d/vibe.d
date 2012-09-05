@@ -10,7 +10,6 @@ module vibe.core.file;
 public import vibe.core.driver;
 public import vibe.inet.url;
 
-import vibe.core.core;
 import vibe.core.log;
 
 import std.conv;
@@ -135,6 +134,42 @@ struct FileInfo {
 	bool isDirectory;
 }
 
+/**
+	Specifies how a file is manipulated on disk.
+*/
+enum FileMode {
+	Read,
+	ReadWrite,
+	CreateTrunc,
+	Append
+}
+
+/**
+	Accesses the contents of a file as a stream.
+*/
+interface FileStream : Stream, EventedObject {
+	/// The path of the file.
+	@property Path path() const;
+
+	/// Returns the total size of the file.
+	@property ulong size() const;
+
+	/// Determines if this stream is readable.
+	@property bool readable() const;
+
+	/// Determines if this stream is writable.
+	@property bool writable() const;
+
+	/// Closes the file handle.
+	void close();
+
+	/// Seeks to a specific position in the file if supported by the stream.
+	void seek(ulong offset);
+
+	/// Returns the current offset of the file pointer
+	ulong tell();
+}
+
 private FileInfo makeFileInfo(DirEntry ent)
 {
 	FileInfo ret;
@@ -147,3 +182,4 @@ private FileInfo makeFileInfo(DirEntry ent)
 	ret.isDirectory = ent.isDir;
 	return ret;
 }
+
