@@ -20,6 +20,7 @@ import deimos.event2.thread;
 import deimos.event2.util;
 
 import core.memory;
+import core.stdc.errno;
 import core.stdc.stdlib;
 import core.sync.condition;
 import core.sync.mutex;
@@ -32,6 +33,12 @@ import std.conv;
 import std.exception;
 import std.range;
 import std.string;
+
+
+version(Windows)
+{
+	alias WSAEWOULDBLOCK EWOULDBLOCK;
+}
 
 struct LevMutex {
 	FreeListRef!Mutex mutex;
@@ -596,7 +603,7 @@ class Libevent2UdpConnection : UdpConnection {
 	{
 		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.remote_addr.family);
 		addr.port = port;
-		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
+		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(getLastSocketError()));
 	}
 
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
@@ -607,7 +614,7 @@ class Libevent2UdpConnection : UdpConnection {
 		} else {
 			ret = .send(m_ctx.socketfd, data.ptr, data.length, 0);
 		}
-		logTrace("send ret: %s, %s", ret, WSAGetLastError());
+		logTrace("send ret: %s, %s", ret, getLastSocketError());
 		enforce(ret >= 0, "Error sending UDP packet.");
 		enforce(ret == data.length, "Unable to send full packet.");
 	}
@@ -625,9 +632,9 @@ class Libevent2UdpConnection : UdpConnection {
 				return buf[0 .. ret];
 			}
 			if( ret < 0 ){
-				auto err = WSAGetLastError();
+				auto err = getLastSocketError();
 				logDebug("UDP recv err: %s", err);
-				enforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet.");
+				enforce(err == EWOULDBLOCK, "Error receiving UDP packet.");
 			}
 			m_ctx.core.yieldForEvent();
 		}
@@ -658,4 +665,13 @@ package event_base* getThreadLibeventEventLoop()
 package DriverCore getThreadLibeventDriverCore()
 {
 	return s_driverCore;
+}
+
+private int getLastSocketError()
+{
+	version(Windows) return WSAGetLastError();
+	else {
+		import core.stdc.errno;
+		return errno;
+	}
 }
