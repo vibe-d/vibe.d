@@ -120,7 +120,7 @@ struct NetworkAddress {
 
 	/** Size of the sockaddr struct that is returned by sockAddr().
 	*/
-	@property size_t sockAddrLen() const {
+	@property int sockAddrLen() const {
 		switch(this.family){
 			default: assert(false, "sockAddrLen() called for invalid address family.");
 			case AF_INET: return addr_ip4.sizeof;

@@ -608,7 +608,7 @@ class Libevent2UdpConnection : UdpConnection {
 
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
 	{
-		int ret;
+		long ret;
 		if( peer_address ){
 			ret = .sendto(m_ctx.socketfd, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
 		} else {
