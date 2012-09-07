@@ -294,7 +294,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	}
 
 	// Reslice to get rid of 'mongodb://'
-    tmpUrl = tmpUrl[10..$];
+	tmpUrl = tmpUrl[10..$];
 		
 	auto slashIndex = countUntil(tmpUrl, "/");
 	if( slashIndex == -1 ) slashIndex = tmpUrl.length; 
@@ -473,7 +473,7 @@ unittest
 	assert(cfg.hosts[0].port == 27017);
 	
 	cfg = MongoClientSettings.init;		
-	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=false"));
+	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true"));
 	assert(cfg.username == "");
 	assert(cfg.password == "");
 	assert(cfg.database == "");
@@ -485,14 +485,14 @@ unittest
 	assert(cfg.hosts[2].name == "host3");
 	assert(cfg.hosts[2].port == 27017);
 	assert(cfg.safe == true);
-	assert(cfg.w == Bson(2));
+	assert(cfg.w == Bson(2L));
 	assert(cfg.wTimeoutMS == 2000);
 	assert(cfg.defQueryFlags == QueryFlags.SlaveOk);
 	
 	cfg = MongoClientSettings.init;		
 	assert(parseMongoDBUrl(cfg, 
 		"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
-		"27019/mydb?journal=true;fsync=true;connectMS=1500;sockettimeoutMs=1000;w=majority"));
+		"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
 	assert(cfg.password == "flinstone");
 	assert(cfg.database == "mydb");
@@ -502,7 +502,7 @@ unittest
 	assert(cfg.hosts[1].name == "host2.other.example.com");
 	assert(cfg.hosts[1].port == 27108);
 	assert(cfg.hosts[2].name == "host3");
-	assert(cfg.hosts[2].port == 27019);assert(cfg.fsync == false);
+	assert(cfg.hosts[2].port == 27019);
 	assert(cfg.fsync == true);
 	assert(cfg.journal == true);
 	assert(cfg.connectTimeoutMS == 1500);
