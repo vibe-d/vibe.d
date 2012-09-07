@@ -80,7 +80,7 @@ int main(string[] args)
 			printHelp();
 			appStartScript = ""; // make sure the script is empty, so that the app is not run
 		} else if(canFind(vpmArgs, "init")) {
-                initDirectory();
+                    initDirectory();
             } else {
 			if(canFind(vpmArgs, "-verbose"))
 				setLogLevel(LogLevel.Debug);
