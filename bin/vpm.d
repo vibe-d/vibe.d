@@ -80,8 +80,8 @@ int main(string[] args)
 			printHelp();
 			appStartScript = ""; // make sure the script is empty, so that the app is not run
 		} else if(canFind(vpmArgs, "init")) {
-                    initDirectory();
-            } else {
+                            initDirectory();
+                } else {
 			if(canFind(vpmArgs, "-verbose"))
 				setLogLevel(LogLevel.Debug);
 			if(canFind(vpmArgs, "-vverbose"))
@@ -150,7 +150,7 @@ private size_t lastVpmArg(string[] args)
 		"install",
 		"run",
 		"build", 
-            "init",
+               "init",
 		"-annotate",
 		"-keepDepsTxt",
 		"-verbose"
