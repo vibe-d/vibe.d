@@ -40,7 +40,7 @@ Where OPT is one of
 		(not yet implemented)
 	install: installs a specified package
 		install:packageId[,packageId]
-
+    init: 'initializes' an empty directory by creating the basic file layout
 	Advanced options:
 		-annotate: without actually updating, check for the status of the application
 		-verbose: prints out lots of debug information
@@ -79,8 +79,9 @@ int main(string[] args)
 		if(canFind(vpmArgs, "help")) {
 			printHelp();
 			appStartScript = ""; // make sure the script is empty, so that the app is not run
-		}
-		else {
+		} else if(canFind(vpmArgs, "init")) {
+                initDirectory();
+        } else {
 			if(canFind(vpmArgs, "-verbose"))
 				setLogLevel(LogLevel.Debug);
 			if(canFind(vpmArgs, "-vverbose"))
@@ -148,7 +149,8 @@ private size_t lastVpmArg(string[] args)
 		"upgrade",
 		"install",
 		"run",
-		"build",
+		"build", 
+        "init",
 		"-annotate",
 		"-keepDepsTxt",
 		"-verbose"
@@ -194,7 +196,8 @@ private string[] getLibs(Path vibedDir)
 	}
 }
 
-private string stripDlangSpecialChars(string s) {
+private string stripDlangSpecialChars(string s) 
+{
 	char[] ret = s.dup;
 	for(int i=0; i<ret.length; ++i)
 		if(!isAlpha(ret[i]))
@@ -222,4 +225,29 @@ private string getBinName(const Vpm vpm)
 	version(Windows) { ret ~= ".exe"; }
 
 	return ret;
+} 
+
+private void initDirectory()
+{   
+    auto cwd = Path(".");
+    //Make sure we do not overwrite anything accidentally
+    if( (existsFile(cwd ~ "package.json"))        ||
+        (existsFile(cwd ~ "source"      ))        ||
+        (existsFile(cwd ~ "views"       ))        || 
+        (existsFile(cwd ~ "public"     )))
+    {
+        logInfo("The current directory is not empty.\n"
+                "vibe init aborted.");
+        //Exit Immediately. 
+        std.c.stdlib.exit(1);
+    }
+    //Create the common directories.
+    createDirectory(cwd ~ "source");
+    createDirectory(cwd ~ "views" );
+    createDirectory(cwd ~ "public");
+    //Create the common files. 
+    openFile(cwd ~ "package.json", FileMode.Append).write(" ");
+    openFile(cwd ~ "source/app.d", FileMode.Append).write(" ");     
+    //Act smug to the user. 
+    logInfo("Successfully created empty project.");
 }
