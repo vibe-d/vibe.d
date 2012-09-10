@@ -391,6 +391,7 @@ private class VibeDriverCore : DriverCore {
 		import core.memory;
 		logTrace("gc idle collect");
 		GC.collect();
+		GC.minimize();
 		m_ignoreIdleForGC = true;
 	}
 }
