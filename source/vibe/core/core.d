@@ -119,7 +119,6 @@ Task runTask(void delegate() task)
 	auto f = s_availableFibers[--s_availableFibersCount];
 	f.m_taskFunc = task;
 	logDebug("initial task call");
-	s_tasks ~= f;
 	s_core.resumeTask(f);
 	logDebug("run task out");
 	return f;
@@ -363,10 +362,6 @@ private class VibeDriverCore : DriverCore {
 			assert(task.state == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", uncaught_exception.toString());
 		}
-		
-		if( task.state == Fiber.State.TERM ){
-			s_tasks.removeFromArray(ctask);
-		}
 	}
 
 	void notifyIdle()
@@ -403,7 +398,6 @@ private class VibeDriverCore : DriverCore {
 
 private {
 	__gshared size_t s_taskStackSize = 16*4096;
-	CoreTask[] s_tasks;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	__gshared VibeDriverCore s_core;
