@@ -52,10 +52,28 @@ struct LevCondition {
 	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
 }
 
-private extern(C){
-	void* lev_alloc(size_t size){ return malloc(size); }
-	void* lev_realloc(void* p, size_t newsize){ return realloc(p, newsize); }
-	void lev_free(void* p){ free(p); }
+private extern(C)
+{
+	void* lev_alloc(size_t size)
+	{
+		auto mem = defaultAllocator().alloc(size+size_t.sizeof);
+		*cast(size_t*)mem.ptr = size;
+		return mem.ptr + size_t.sizeof;
+	}
+	void* lev_realloc(void* p, size_t newsize)
+	{
+		auto oldsize = *cast(size_t*)(p-size_t.sizeof);
+		auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
+		auto newmem = defaultAllocator().realloc(oldmem, newsize+size_t.sizeof);
+		*cast(size_t*)newmem.ptr = newsize;
+		return newmem.ptr + size_t.sizeof;
+	}
+	void lev_free(void* p)
+	{
+		auto size = *cast(size_t*)(p-size_t.sizeof);
+		auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
+		defaultAllocator().free(mem);
+	}
 
 	void* lev_alloc_mutex(uint locktype) {
 		auto ret = LevMutex.Alloc.alloc();
