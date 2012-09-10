@@ -18,17 +18,122 @@ import std.conv;
 import std.traits;
 import std.algorithm;
 
+Allocator defaultAllocator()
+{
+	static Allocator alloc;
+	if( !alloc ){
+		//alloc = new GCAllocator;
+		alloc = new MallocAllocator;
+		alloc = new AutoFreeListAllocator(alloc);
+		//alloc = new DebugAllocator(alloc);
+	}
+	return alloc;
+}
+
+auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args)
+{
+	auto mem = allocator.alloc(AllocSize!T);
+	static if( MANAGED ){
+		static if( hasIndirections!T ) 
+			GC.addRange(mem.ptr, mem.length);
+		auto ret = emplace!T(mem, args);
+		Destructor des;
+		des.next = m_destructors;
+		des.destructor = &destroy!T;
+		des.object = mem.ptr;
+		m_destructors = des;
+	}
+	else static if( is(T == class) ) return cast(T)mem.ptr;
+	else return cast(T*)mem.ptr;
+}
+
+T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
+{
+	auto mem = allocator.alloc(T.sizeof * n);
+	auto ret = cast(T[])mem;
+	static if( MANAGED ){
+		static if( hasIndirections!T ) 
+			GC.addRange(mem.ptr, mem.length);
+		// TODO: use memset for class, pointers and scalars
+		foreach( ref el; ret ){
+			emplace(cast(void*)&el);
+			Destructor des;
+			des.next = m_destructors;
+			des.destructor = &destroy!T;
+			des.object = &el;
+			m_destructors = des;
+		}
+	}
+	return ret;
+}
+
+
 interface Allocator {
 	void[] alloc(size_t sz);
 	void[] realloc(void[] mem, size_t new_sz);
 	void free(void[] mem);
 }
 
-Allocator defaultAllocator()
-{
-	static Allocator alloc;
-	if( !alloc ) alloc = new GCAllocator;
-	return alloc;
+class DebugAllocator : Allocator {
+	private {
+		Allocator m_baseAlloc;
+		size_t[void*] m_blocks;
+		size_t m_bytes;
+		size_t m_maxBytes;
+	}
+
+	this(Allocator base_allocator)
+	{
+		m_baseAlloc = base_allocator;
+	}
+
+	@property size_t allocatedBlockCount() const { return m_blocks.length; }
+	@property size_t bytesAllocated() const { return m_bytes; }
+	@property size_t maxBytesAllocated() const { return m_maxBytes; }
+
+	void[] alloc(size_t sz)
+	{
+		auto ret = m_baseAlloc.alloc(sz);
+		assert(ret.length == sz, "base.alloc() returned block with wrong size.");
+		assert(ret !in m_blocks, "base.alloc() returned block that is already allocated.");
+		m_blocks[ret.ptr] = sz;
+		m_bytes += sz;
+		if( m_bytes > m_maxBytes ){
+			m_maxBytes = m_bytes;
+			logDebug("New allocation maximum: %d (%d blocks)", m_maxBytes, m_blocks.length);
+		}
+		return ret;
+	}
+
+	void[] realloc(void[] mem, size_t new_size)
+	{
+		auto pb = mem.ptr in m_blocks;
+		assert(pb, "realloc() called with non-allocated pointer.");
+		assert(*pb == mem.length, "realloc() called with block of wrong size.");
+		auto ret = m_baseAlloc.realloc(mem, new_size);
+		assert(ret.length == new_size, "base.realloc() returned block with wrong size.");
+		assert(ret.ptr !in m_blocks, "base.realloc() returned block that is already allocated.");
+		m_bytes -= *pb;
+		m_blocks.remove(mem.ptr);
+		m_blocks[ret.ptr] = new_size;
+		m_bytes += new_size;
+		return ret;
+	}
+	void free(void[] mem)
+	{
+		auto pb = mem.ptr in m_blocks;
+		assert(pb, "free() called with non-allocated object.");
+		assert(*pb == mem.length, "free() called with block of wrong size.");
+		m_baseAlloc.free(mem);
+		m_bytes -= *pb;
+		m_blocks.remove(mem.ptr);
+	}
+}
+
+class MallocAllocator : Allocator {
+	void[] alloc(size_t sz) { return .malloc(sz)[0 .. sz]; }
+	void[] realloc(void[] mem, size_t new_size) { return .realloc(mem.ptr, new_size)[0 .. new_size]; }
+	void free(void[] mem) { .free(mem.ptr); }
 }
 
 class GCAllocator : Allocator {
@@ -38,40 +143,53 @@ class GCAllocator : Allocator {
 }
 
 class AutoFreeListAllocator : Allocator {
+	private {
+		FreeListAlloc[] m_freeLists;
+		Allocator m_baseAlloc;
+	}
+
+	this(Allocator base_allocator)
+	{
+		m_baseAlloc = base_allocator;
+		foreach( i; 3 .. 12 )
+			m_freeLists ~= new FreeListAlloc(1<<i, m_baseAlloc);
+		m_freeLists ~= new FreeListAlloc(65540, m_baseAlloc);
+	}
+
 	void[] alloc(size_t sz)
 	{
-		if( sz < 8 ) return FreeListAlloc!8.alloc()[0 .. sz];
-		if( sz < 16 ) return FreeListAlloc!16.alloc()[0 .. sz];
-		if( sz < 32 ) return FreeListAlloc!32.alloc()[0 .. sz];
-		if( sz < 64 ) return FreeListAlloc!64.alloc()[0 .. sz];
-		if( sz < 128 ) return FreeListAlloc!128.alloc()[0 .. sz];
-		if( sz < 256 ) return FreeListAlloc!256.alloc()[0 .. sz];
-		if( sz < 512 ) return FreeListAlloc!512.alloc()[0 .. sz];
-		if( sz < 1024 ) return FreeListAlloc!1024.alloc()[0 .. sz];
-		if( sz < 2048 ) return FreeListAlloc!2048.alloc()[0 .. sz];
-		return GC.malloc(sz)[0 .. sz];
+		void[] ret;
+		foreach( fl; m_freeLists )
+			if( sz <= fl.elementSize ){
+				ret = fl.alloc(fl.elementSize)[0 .. sz];
+				break;
+			}
+		if( !ret ) ret = m_baseAlloc.alloc(sz);
+		//logTrace("AFL alloc %08X(%d)", ret.ptr, sz);
+		return ret;
 	}
 
 	void[] realloc(void[] data, size_t sz)
 	{
+		// TODO: optimize!
+		//logTrace("AFL realloc");
 		auto newd = alloc(sz);
+		assert(newd.ptr+sz <= data.ptr || newd.ptr >= data.ptr+data.length, "New block overlaps old one!?");
 		auto len = min(data.length, sz);
 		newd[0 .. len] = data[0 .. len];
+		free(data);
 		return newd;
 	}
 
 	void free(void[] data)
 	{
-		if( data.length < 8 ) FreeListAlloc!8.free(data.ptr);
-		if( data.length < 16 ) FreeListAlloc!16.free(data.ptr);
-		if( data.length < 32 ) FreeListAlloc!32.free(data.ptr);
-		if( data.length < 64 ) FreeListAlloc!64.free(data.ptr);
-		if( data.length < 128 ) FreeListAlloc!128.free(data.ptr);
-		if( data.length < 256 ) FreeListAlloc!256.free(data.ptr);
-		if( data.length < 512 ) FreeListAlloc!512.free(data.ptr);
-		if( data.length < 1024 ) FreeListAlloc!1024.free(data.ptr);
-		if( data.length < 2048 ) FreeListAlloc!2048.free(data.ptr);
-		GC.free(data.ptr);
+		//logTrace("AFL free %08X(%s)", data.ptr, data.length);
+		foreach( fl; m_freeLists )
+			if( data.length <= fl.elementSize ){
+				fl.free(data.ptr[0 .. fl.elementSize]);
+				return;
+			}
+		return m_baseAlloc.free(data);
 	}
 }
 
@@ -86,7 +204,7 @@ class PoolAllocator : Allocator {
 		size_t m_poolSize;
 	}
 
-	this(size_t pool_size, Allocator base = defaultAllocator())
+	this(size_t pool_size, Allocator base)
 	{
 		m_poolSize = pool_size;
 		m_baseAllocator = base;
@@ -136,6 +254,7 @@ class PoolAllocator : Allocator {
 			return arr;
 		} else {
 			auto ret = alloc(newsize);
+			assert(ret.ptr >= arr.ptr+arr.length, "New block overlaps old one!?");
 			ret[0 .. min(arr.length, newsize)] = arr[0 .. min(arr.length, newsize)];
 			return ret;
 		}
@@ -143,41 +262,6 @@ class PoolAllocator : Allocator {
 
 	void free(void[] mem)
 	{
-	}
-
-	auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args)
-	{
-		auto mem = allocator.alloc(AllocSize!T);
-		static if( MANAGED ){
-			GC.addRange(mem.ptr, mem.length);
-			auto ret = emplace!T(mem, args);
-			Destructor des;
-			des.next = m_destructors;
-			des.destructor = &destroy!T;
-			des.object = mem.ptr;
-			m_destructors = des;
-		}
-		else static if( is(T == class) ) return cast(T)mem.ptr;
-		else return cast(T*)mem.ptr;
-	}
-
-	T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
-	{
-		auto mem = allocator.alloc(T.sizeof * n);
-		auto ret = cast(T[])mem;
-		static if( MANAGED ){
-			GC.addRange(mem.ptr, mem.length);
-			// TODO: use memset for class, pointers and scalars
-			foreach( ref el; ret ){
-				emplace(cast(void*)&el);
-				Destructor des;
-				des.next = m_destructors;
-				des.destructor = &destroy!T;
-				des.object = &el;
-				m_destructors = des;
-			}
-		}
-		return ret;
 	}
 
 	void freeAll()
@@ -199,6 +283,18 @@ class PoolAllocator : Allocator {
 			p.remaining = p.data;
 	}
 
+	void reset()
+	{
+		freeAll();
+		Pool* pnext;
+		for( auto p = m_freePools; p; p = pnext ){
+			pnext = p.next;
+			m_baseAllocator.free(p.data);
+			m_baseAllocator.free((cast(void*)p)[0 .. AllocSize!Pool]);
+		}
+		m_freePools = null;
+	}
+
 	private static destroy(T)(void* ptr)
 	{
 		static if( is(T == class) ) .clear(cast(T)ptr);
@@ -206,181 +302,67 @@ class PoolAllocator : Allocator {
 	}
 }
 
-struct AllocAppender(ArrayType : E[], E) {
-	alias Unqual!E ElemType;
-	private {
-		ElemType[] m_data;
-		ElemType[] m_remaining;
-		Allocator m_alloc;
-	}
-
-	this(Allocator alloc)
-	{
-		m_alloc = alloc;
-	}
-
-	void reserve(size_t amt)
-	{
-		size_t nelems = m_data.length - m_remaining.length;
-		if( !m_data.length ){
-			m_data = cast(ElemType[])m_alloc.alloc(amt*E.sizeof);
-		}
-		if( m_remaining.length < amt ){
-			size_t n = m_data.length - m_remaining.length;
-			m_data = cast(ElemType[])m_alloc.realloc(m_data, (n+amt)*E.sizeof);
-		}
-		m_remaining = m_data[nelems .. m_data.length];
-	}
-
-	void put(E el)
-	{
-		if( m_remaining.length == 0 ) grow(1);
-		m_remaining[0] = el;
-		m_remaining = m_remaining[1 .. $];
-	}
-
-	void put(ArrayType arr)
-	{
-		if( m_remaining.length < arr.length ) grow(arr.length);
-		m_remaining[0 .. arr.length] = arr;
-		m_remaining = m_remaining[arr.length .. $];
-	}
-
-	static if( !hasAliasing!E ){
-		void put(in ElemType[] arr){
-			put(cast(ArrayType)arr);
-		}
-	}
-
-	static if( is(ElemType == char) ){
-		void put(dchar el)
-		{
-			if( el < 128 ) put(cast(char)el);
-			else {
-				char[4] buf;
-				auto len = std.utf.encode(buf, el);
-				put(cast(ArrayType)buf[0 .. len]);
-			}
-		}
-	}
-
-	static if( is(ElemType == wchar) ){
-		void put(dchar el)
-		{
-			if( el < 128 ) put(cast(wchar)el);
-			else {
-				wchar[3] buf;
-				auto len = std.utf.encode(buf, el);
-				put(cast(ArrayType)buf[0 .. len]);
-			}
-		}
-	}
-
-	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_data.length - m_remaining.length]; }
-
-	void grow(size_t min_free)
-	{
-		if( !m_data.length && min_free < 16 ) min_free = 16;
-
-		auto min_size = m_data.length + min_free;
-		auto new_size = max(m_data.length, 16);
-		while( new_size < min_size )
-			new_size = (new_size * 3) / 2;
-		reserve(new_size - m_data.length);
-	}
-}
-
-class FixedAppender(ArrayType : E[], size_t NELEM, E) {
-	alias Unqual!E ElemType;
-	private {
-		ElemType[NELEM] m_data;
-		ElemType[] m_remaining;
-	}
-
-	this()
-	{
-		m_remaining = m_data;
-	}
-
-	void put(E el)
-	{
-		m_remaining[0] = el;
-		m_remaining = m_remaining[1 .. $];
-	}
-
-	static if( is(ElemType == char) ){
-		void put(dchar el)
-		{
-			if( el < 128 ) put(cast(char)el);
-			else {
-				char[4] buf;
-				auto len = std.utf.encode(buf, el);
-				put(cast(ArrayType)buf[0 .. len]);
-			}
-		}
-	}
-
-	static if( is(ElemType == wchar) ){
-		void put(dchar el)
-		{
-			if( el < 128 ) put(cast(wchar)el);
-			else {
-				wchar[3] buf;
-				auto len = std.utf.encode(buf, el);
-				put(cast(ArrayType)buf[0 .. len]);
-			}
-		}
-	}
-
-	void put(ArrayType arr)
-	{
-		m_remaining[0 .. arr.length] = cast(ElemType[])arr;
-		m_remaining = m_remaining[arr.length .. $];
-	}
-
-	@property ArrayType data() { return cast(ArrayType)m_data[0 .. $-m_remaining.length]; }
-}
-
-template FreeListAlloc(size_t SZ, bool USE_GC = true)
+class FreeListAlloc : Allocator
 {
-	private struct FreeListSlot { FreeListSlot* next; }
-	static assert(SZ >= size_t.sizeof);
-	static FreeListSlot* s_firstFree = null;
-	size_t s_nalloc = 0;
-	size_t s_nfree = 0;
-
-	void* alloc()
-	{
-		void* ptr;
-		if( s_firstFree ){
-			auto slot = s_firstFree;
-			s_firstFree = slot.next;
-			slot.next = null;
-			ptr = cast(void*)slot;
-			s_nfree--;
-		} else {
-			static if( USE_GC ) ptr = GC.malloc(SZ);
-			else ptr = malloc(SZ);
-		}
-		s_nalloc++;
-		//logInfo("Alloc %d bytes: alloc: %d, free: %d", SZ, s_nalloc, s_nfree);
-		return ptr;
+	private static struct FreeListSlot { FreeListSlot* next; }
+	private {
+		immutable size_t m_elemSize;
+		Allocator m_baseAlloc;
+		FreeListSlot* m_firstFree = null;
+		size_t m_nalloc = 0;
+		size_t m_nfree = 0;
 	}
 
-	void free(void* mem)
+	this(size_t elem_size, Allocator base_allocator)
 	{
-		auto s = cast(FreeListSlot*)mem;
-		s.next = s_firstFree;
-		s_firstFree = s;
-		s_nalloc--;
-		s_nfree++;
+		assert(elem_size >= size_t.sizeof);
+		m_elemSize = elem_size;
+		m_baseAlloc = base_allocator;
+		logDebug("Create FreeListAlloc %d", m_elemSize);
+	}
+
+	@property size_t elementSize() const { return m_elemSize; }
+
+	void[] alloc(size_t sz)
+	{
+		assert(sz == m_elemSize, "Invalid allocation size.");
+		void[] mem;
+		if( m_firstFree ){
+			auto slot = m_firstFree;
+			m_firstFree = slot.next;
+			slot.next = null;
+			mem = (cast(void*)slot)[0 .. m_elemSize];
+			m_nfree--;
+		} else {
+			mem = m_baseAlloc.alloc(m_elemSize);
+			//logInfo("Alloc %d bytes: alloc: %d, free: %d", SZ, s_nalloc, s_nfree);
+		}
+		m_nalloc++;
+		//logInfo("Alloc %d bytes: alloc: %d, free: %d", SZ, s_nalloc, s_nfree);
+		return mem;
+	}
+
+	void[] realloc(void[] mem, size_t sz)
+	{
+		assert(mem.length == m_elemSize);
+		assert(sz == m_elemSize);
+		return mem;
+	}
+
+	void free(void[] mem)
+	{
+		assert(mem.length == m_elemSize, "Memory block passed to free has wrong size.");
+		auto s = cast(FreeListSlot*)mem.ptr;
+		s.next = m_firstFree;
+		m_firstFree = s;
+		m_nalloc--;
+		m_nfree++;
 	}
 }
 
 template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 {
 	enum ElemSize = AllocSize!T;
-	alias FreeListAlloc!(ElemSize, USE_GC) Alloc;
 
 	static if( is(T == class) ){
 		alias T TR;
@@ -391,10 +373,10 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 	TR alloc(ARGS...)(ARGS args)
 	{
 		//logInfo("alloc %s/%d", T.stringof, ElemSize);
-		auto ptr = Alloc.alloc();
-		static if( hasIndirections!T ) GC.addRange(ptr, ElemSize);
-		static if( INIT ) return emplace!T(ptr[0 .. ElemSize], args);
-		else return cast(TR)ptr;
+		auto mem = defaultAllocator().alloc(ElemSize);
+		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
+		static if( INIT ) return emplace!T(mem, args);
+		else return cast(TR)mem.ptr;
 	}
 
 	void free(TR obj)
@@ -404,7 +386,7 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 			.clear(objc);//typeid(T).destroy(cast(void*)obj);
 		}
 		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
-		Alloc.free(cast(void*)obj);
+		defaultAllocator().free((cast(void*)obj)[0 .. ElemSize]);
 	}
 }
 
@@ -417,7 +399,6 @@ template AllocSize(T)
 struct FreeListRef(T, bool INIT = true)
 {
 	enum ElemSize = AllocSize!T;
-	alias FreeListAlloc!(ElemSize + int.sizeof) Alloc;
 
 	static if( is(T == class) ){
 		alias T TR;
@@ -431,11 +412,11 @@ struct FreeListRef(T, bool INIT = true)
 	static FreeListRef opCall(ARGS...)(ARGS args)
 	{
 		//logInfo("refalloc %s/%d", T.stringof, ElemSize);
-		void* ptr = Alloc.alloc();
-
 		FreeListRef ret;
-		static if( INIT ) ret.m_object = emplace!T(ptr[0 .. ElemSize], args);	
-		else ret.m_object = cast(TR)ptr;
+		auto mem = defaultAllocator().alloc(ElemSize + int.sizeof);
+		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
+		static if( INIT ) ret.m_object = emplace!T(mem, args);	
+		else ret.m_object = cast(TR)mem.ptr;
 		ret.refCount = 1;
 		return ret;
 	}
@@ -483,7 +464,8 @@ struct FreeListRef(T, bool INIT = true)
 						.clear(objc);
 						//logInfo("ref %s destroyed", T.stringof);
 					}
-					Alloc.free(cast(void*)m_object);
+					static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
+					defaultAllocator().free((cast(void*)m_object)[0 .. ElemSize+int.sizeof]);
 				}
 			}
 		}
