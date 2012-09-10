@@ -17,7 +17,7 @@ version(Windows) import std.c.windows.winsock;
 
 /**
 	Resolves the given host name/IP address string.
-	
+
 	Setting use_dns to false will only allow IP address strings but also guarantees
 	that the call will not block.
 */
@@ -33,7 +33,7 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	'connection_callback' will be called for each client that connects to the
 	server socket. The 'stream' parameter then allows to perform pseudo-blocking
 	i/o on the client socket.
-	
+
 	The 'ip4_addr' or 'ip6_addr' parameters can be used to specify the network
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
@@ -114,13 +114,13 @@ struct NetworkAddress {
 		}
 	}
 
-	/** A poiter to a sockaddr struct suitable for passing to socket functions.
+	/** A pointer to a sockaddr struct suitable for passing to socket functions.
 	*/
 	@property inout(sockaddr)* sockAddr() inout { return &addr; }
 
 	/** Size of the sockaddr struct that is returned by sockAddr().
 	*/
-	@property size_t sockAddrLen() const {
+	@property int sockAddrLen() const {
 		switch(this.family){
 			default: assert(false, "sockAddrLen() called for invalid address family.");
 			case AF_INET: return addr_ip4.sizeof;
