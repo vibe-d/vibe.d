@@ -62,6 +62,7 @@ private extern(C)
 	}
 	void* lev_realloc(void* p, size_t newsize)
 	{
+		if( !p ) return lev_alloc(newsize);
 		auto oldsize = *cast(size_t*)(p-size_t.sizeof);
 		auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
 		auto newmem = defaultAllocator().realloc(oldmem, newsize+size_t.sizeof);
