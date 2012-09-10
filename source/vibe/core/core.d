@@ -455,6 +455,24 @@ shared static this()
 		signal(SIGTERM, &onSignal);
 		signal(SIGINT, &onSignal);
 	}
+
+	setupDriver();
+
+	version(VibeIdleCollect){
+		logTrace("setup gc");
+		s_core.setupGcTimer();
+	}
+
+	if( st_workerTaskMutex ){
+		synchronized(st_workerTaskMutex)
+		{
+			if( !st_workerTaskSignal ){
+				st_workerTaskSignal = getEventDriver().createSignal();
+				st_workerTaskSignal.release();
+				assert(!st_workerTaskSignal.isOwner());
+			}
+		}
+	}
 }
 
 shared static ~this()
@@ -482,32 +500,23 @@ static this()
 	
 	assert(s_core !is null);
 
-	logTrace("create driver");
-	version(VibeWin32Driver) setEventDriver(new Win32EventDriver(s_core));
-	else version(VibeWinrtDriver) setEventDriver(new WinRtEventDriver(s_core));
-	else version(VibeLibevDriver) setEventDriver(new LibevDriver(s_core));
-	else setEventDriver(new Libevent2Driver(s_core));
-
-	version(VibeIdleCollect){
-		logTrace("setup gc");
-		s_core.setupGcTimer();
-	}
-
-	if( st_workerTaskMutex ){
-		synchronized(st_workerTaskMutex)
-		{
-			if( !st_workerTaskSignal ){
-				st_workerTaskSignal = getEventDriver().createSignal();
-				st_workerTaskSignal.release();
-				assert(!st_workerTaskSignal.isOwner());
-			}
-		}
-	}
+	setupDriver();
 }
 
 static ~this()
 {
 	deleteEventDriver();
+}
+
+private void setupDriver()
+{
+	if( getEventDriver() !is null ) return;
+
+	logTrace("create driver");
+	version(VibeWin32Driver) setEventDriver(new Win32EventDriver(s_core));
+	else version(VibeWinrtDriver) setEventDriver(new WinRtEventDriver(s_core));
+	else version(VibeLibevDriver) setEventDriver(new LibevDriver(s_core));
+	else setEventDriver(new Libevent2Driver(s_core));
 }
 
 private void workerThreadFunc()
