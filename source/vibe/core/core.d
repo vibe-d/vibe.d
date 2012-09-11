@@ -456,17 +456,6 @@ shared static this()
 		logTrace("setup gc");
 		s_core.setupGcTimer();
 	}
-
-	if( st_workerTaskMutex ){
-		synchronized(st_workerTaskMutex)
-		{
-			if( !st_workerTaskSignal ){
-				st_workerTaskSignal = getEventDriver().createSignal();
-				st_workerTaskSignal.release();
-				assert(!st_workerTaskSignal.isOwner());
-			}
-		}
-	}
 }
 
 shared static ~this()
@@ -491,10 +480,20 @@ shared static ~this()
 // per thread setup
 static this()
 {
-	
 	assert(s_core !is null);
 
 	setupDriver();
+
+	if( st_workerTaskMutex ){
+		synchronized(st_workerTaskMutex)
+		{
+			if( !st_workerTaskSignal ){
+				st_workerTaskSignal = getEventDriver().createSignal();
+				st_workerTaskSignal.release();
+				assert(!st_workerTaskSignal.isOwner());
+			}
+		}
+	}
 }
 
 static ~this()
