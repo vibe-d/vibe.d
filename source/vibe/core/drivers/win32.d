@@ -218,6 +218,7 @@ class Win32Signal : Signal {
 
 class Win32Timer : Timer {
 	private {
+		Task m_owner;
 		Win32EventDriver m_driver;
 		void delegate() m_callback;
 		bool m_pending;
@@ -230,6 +231,7 @@ class Win32Timer : Timer {
 	{
 		m_driver = driver;
 		m_callback = callback;
+		m_owner = Task.getThis();
 	}
 
 	~this()
@@ -292,7 +294,8 @@ class Win32Timer : Timer {
 			} else {
 				timer.m_pending = false;
 			}
-			timer.m_callback();
+			if( timer.m_owner ) timer.m_driver.m_core.resumeTask(timer.m_owner);
+			if( timer.m_callback ) timer.m_callback();
 		} catch(Exception e){
 			logError("Exception in onTimer: %s", e);
 		}
