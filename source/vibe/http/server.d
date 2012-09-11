@@ -24,6 +24,7 @@ import vibe.stream.ssl;
 import vibe.stream.zlib;
 import vibe.templ.diet;
 import vibe.textfilter.urlencode;
+import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
 import vibe.core.file;
@@ -834,8 +835,8 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 private bool handleRequest(Stream conn, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings)
 {
-	auto base_allocator = scoped!AutoFreeListAllocator();
-	auto request_allocator = scoped!PoolAllocator(1024, base_allocator.Scoped_payload);
+	auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
+	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
 	FreeListRef!NullOutputStream nullWriter = FreeListRef!NullOutputStream();

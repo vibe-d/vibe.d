@@ -6,11 +6,18 @@ v0.7.8 - 2012-09-
 
 ### Features and improvements ###
 
+ - Added support for UDP sockets
  - The reverse proxy now adds the headers "X-Forwarded-For" and "X-Forwarded-Host"
  - MongoCollection.findAndModify returns the resulting object only now instead of the full reply of the protocol
+ - Calling MongoCollection.find() without arguments now returns all documents of the collection
  - The application's main module can now also be named after the package name instead of 'app.d' (by 1100110)
  - The default user/group used on Linux for priviledge lowering has been renamed to 'www-vibe' to avoid name clashes with possibly existing users named 'vibe' (by Jordy Sayol)
  - BsonBinData is now converted to a Base-64 encoded string when the Bson value is converted to a Json value
+ - BsonDate now has toString/fromString for an ISO extended representation so that its JSON serialization is now a string
+ - The Diet parser now supports string interpolations inside of style and script tags.
+ - The Diet parser now enforces proper indentation (i.e. the number of spaces used for an indentation level has to be a multiple of the base indent)
+ - Upgraded libevent to v2.0.20 and OpenSSL to v1.0.1c on Windows
+ - The Win32 driver now has a working Timer implementation 
  - The logging functions use 'auto ref' instead of 'lazy' now to avoid errors of the kind "this(this) is not nothrow"
 
 ### Bug fixes ###
@@ -20,6 +27,10 @@ v0.7.8 - 2012-09-
  - Fixed parameter name parsing in the REST interface generator for functions with type modifiers on their return type (will be obsolete once __traits(parameterNames) works)
  - Fixed a too strict checking of email adresses and using std.net.isemail now to perform proper checking on DMD 2.060 and up
  - Fixed Json deserialization of associative arrays with a value type different than 'string'
+ - Fixed empty peer fields in HttpServerRequest when the request failed to parse properly
+ - Fixed yield() calls to avoid stack overflows and missing I/O events due to improper recursion
+ - Fixed the Diet parser to allow inline HTML as it should
+ - Fixed the Diet parser to actually output singular HTML elements as singular elements
 
 
 v0.7.7 - 2012-08-05

@@ -204,6 +204,21 @@ interface OutputStream {
 	*/
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true);
 
+	/** These methods provide an output range interface.
+
+		Note that these functions do not flush the output stream for performance reasons. flush()
+		needs to be called manually afterwards.
+
+		See_Also: $(LINK http://dlang.org/phobos/std_range.html#isOutputRange)
+	*/
+	final void put(ubyte elem) { write((&elem)[0 .. 1], false); }
+	/// ditto
+	final void put(in ubyte[] elems) { write(elems, false); }
+	/// ditto
+	final void put(char elem) { write((&elem)[0 .. 1], false); }
+	/// ditto
+	final void put(in char[] elems) { write(elems, false); }
+
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
 		static struct Buffer { ubyte[64*1024] bytes; }

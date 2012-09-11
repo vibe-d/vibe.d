@@ -20,6 +20,7 @@ import deimos.event2.thread;
 import deimos.event2.util;
 
 import core.memory;
+import core.stdc.errno;
 import core.stdc.stdlib;
 import core.sync.condition;
 import core.sync.mutex;
@@ -33,80 +34,11 @@ import std.exception;
 import std.range;
 import std.string;
 
-struct LevMutex {
-	FreeListRef!Mutex mutex;
-	FreeListRef!ReadWriteMutex rwmutex;
-	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
+version(Windows)
+{
+	alias WSAEWOULDBLOCK EWOULDBLOCK;
 }
 
-struct LevCondition {
-	FreeListRef!Condition cond;
-	LevMutex* mutex;
-	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
-}
-
-private extern(C){
-	void* lev_alloc(size_t size){ return malloc(size); }
-	void* lev_realloc(void* p, size_t newsize){ return realloc(p, newsize); }
-	void lev_free(void* p){ free(p); }
-
-	void* lev_alloc_mutex(uint locktype) {
-		auto ret = LevMutex.Alloc.alloc();
-		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
-		else ret.mutex = FreeListRef!Mutex();
-		return ret;
-	}
-	void lev_free_mutex(void* lock, uint locktype) { LevMutex.Alloc.free(cast(LevMutex*)lock); }
-	int lev_lock_mutex(uint mode, void* lock) {
-		auto mtx = cast(LevMutex*)lock;
-		
-		if( mode & EVTHREAD_WRITE ){
-			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
-			else mtx.rwmutex.writer().lock();
-		} else if( mode & EVTHREAD_READ ){
-			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
-			else mtx.rwmutex.reader().lock();
-		} else {
-			if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
-			else mtx.mutex.lock();
-		}
-		return 0;
-	}
-	int lev_unlock_mutex(uint mode, void* lock) {
-		auto mtx = cast(LevMutex*)lock;
-
-		if( mode & EVTHREAD_WRITE ){
-			mtx.rwmutex.writer().unlock();
-		} else if( mode & EVTHREAD_READ ){
-			mtx.rwmutex.reader().unlock();
-		} else {
-			mtx.mutex.unlock();
-		}
-		return 0;
-	}
-
-	void* lev_alloc_condition(uint condtype) { return LevCondition.Alloc.alloc(); }
-	void lev_free_condition(void* cond) { LevCondition.Alloc.free(cast(LevCondition*)cond); }
-	int lev_signal_condition(void* cond, int broadcast) {
-		auto c = cast(LevCondition*)cond;
-		if( c.cond ) c.cond.notifyAll();
-		return 0;
-	}
-	int lev_wait_condition(void* cond, void* lock, const(timeval)* timeout) {
-		auto c = cast(LevCondition*)cond;
-		if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
-		assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
-		assert(c.mutex is lock);
-		if( c.cond is null ) c.cond = FreeListRef!Condition(c.mutex.mutex);
-		if( timeout ){
-			if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
-				return 1;
-		} else c.cond.wait();
-		return 0;
-	}
-
-	size_t lev_get_thread_id() { return cast(size_t)cast(void*)Thread.getThis(); }
-}
 
 class Libevent2Driver : EventDriver {
 	private {
@@ -596,18 +528,18 @@ class Libevent2UdpConnection : UdpConnection {
 	{
 		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.remote_addr.family);
 		addr.port = port;
-		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
+		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(getLastSocketError()));
 	}
 
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
 	{
-		int ret;
+		sizediff_t ret;
 		if( peer_address ){
 			ret = .sendto(m_ctx.socketfd, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
 		} else {
 			ret = .send(m_ctx.socketfd, data.ptr, data.length, 0);
 		}
-		logTrace("send ret: %s, %s", ret, WSAGetLastError());
+		logTrace("send ret: %s, %s", ret, getLastSocketError());
 		enforce(ret >= 0, "Error sending UDP packet.");
 		enforce(ret == data.length, "Unable to send full packet.");
 	}
@@ -625,9 +557,9 @@ class Libevent2UdpConnection : UdpConnection {
 				return buf[0 .. ret];
 			}
 			if( ret < 0 ){
-				auto err = WSAGetLastError();
+				auto err = getLastSocketError();
 				logDebug("UDP recv err: %s", err);
-				enforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet.");
+				enforce(err == EWOULDBLOCK, "Error receiving UDP packet.");
 			}
 			m_ctx.core.yieldForEvent();
 		}
@@ -658,4 +590,107 @@ package event_base* getThreadLibeventEventLoop()
 package DriverCore getThreadLibeventDriverCore()
 {
 	return s_driverCore;
+}
+
+private int getLastSocketError()
+{
+	version(Windows) return WSAGetLastError();
+	else {
+		import core.stdc.errno;
+		return errno;
+	}
+}
+
+struct LevMutex {
+	FreeListRef!Mutex mutex;
+	FreeListRef!ReadWriteMutex rwmutex;
+	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
+}
+
+struct LevCondition {
+	FreeListRef!Condition cond;
+	LevMutex* mutex;
+	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
+}
+
+private extern(C)
+{
+	void* lev_alloc(size_t size)
+	{
+		auto mem = manualAllocator().alloc(size+size_t.sizeof);
+		*cast(size_t*)mem.ptr = size;
+		return mem.ptr + size_t.sizeof;
+	}
+	void* lev_realloc(void* p, size_t newsize)
+	{
+		if( !p ) return lev_alloc(newsize);
+		auto oldsize = *cast(size_t*)(p-size_t.sizeof);
+		auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
+		auto newmem = manualAllocator().realloc(oldmem, newsize+size_t.sizeof);
+		*cast(size_t*)newmem.ptr = newsize;
+		return newmem.ptr + size_t.sizeof;
+	}
+	void lev_free(void* p)
+	{
+		auto size = *cast(size_t*)(p-size_t.sizeof);
+		auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
+		manualAllocator().free(mem);
+	}
+
+	void* lev_alloc_mutex(uint locktype) {
+		auto ret = LevMutex.Alloc.alloc();
+		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
+		else ret.mutex = FreeListRef!Mutex();
+		return ret;
+	}
+	void lev_free_mutex(void* lock, uint locktype) { LevMutex.Alloc.free(cast(LevMutex*)lock); }
+	int lev_lock_mutex(uint mode, void* lock) {
+		auto mtx = cast(LevMutex*)lock;
+		
+		if( mode & EVTHREAD_WRITE ){
+			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
+			else mtx.rwmutex.writer().lock();
+		} else if( mode & EVTHREAD_READ ){
+			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
+			else mtx.rwmutex.reader().lock();
+		} else {
+			if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
+			else mtx.mutex.lock();
+		}
+		return 0;
+	}
+	int lev_unlock_mutex(uint mode, void* lock) {
+		auto mtx = cast(LevMutex*)lock;
+
+		if( mode & EVTHREAD_WRITE ){
+			mtx.rwmutex.writer().unlock();
+		} else if( mode & EVTHREAD_READ ){
+			mtx.rwmutex.reader().unlock();
+		} else {
+			mtx.mutex.unlock();
+		}
+		return 0;
+	}
+
+	void* lev_alloc_condition(uint condtype) { return LevCondition.Alloc.alloc(); }
+	void lev_free_condition(void* cond) { LevCondition.Alloc.free(cast(LevCondition*)cond); }
+	int lev_signal_condition(void* cond, int broadcast) {
+		auto c = cast(LevCondition*)cond;
+		if( c.cond ) c.cond.notifyAll();
+		return 0;
+	}
+	int lev_wait_condition(void* cond, void* lock, const(timeval)* timeout) {
+		auto c = cast(LevCondition*)cond;
+		if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
+		assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
+		assert(c.mutex is lock);
+		if( c.cond is null ) c.cond = FreeListRef!Condition(c.mutex.mutex);
+		if( timeout ){
+			if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
+				return 1;
+		} else c.cond.wait();
+		return 0;
+	}
+
+	size_t lev_get_thread_id() { return cast(size_t)cast(void*)Thread.getThis(); }
 }
