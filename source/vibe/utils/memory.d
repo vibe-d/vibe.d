@@ -20,12 +20,24 @@ import std.algorithm;
 
 Allocator defaultAllocator()
 {
+	version(VibeManualMemoryManagement){
+		return manualAllocator();
+	} else {
+		static Allocator alloc;
+		if( !alloc ){
+			alloc = new GCAllocator;
+			alloc = new AutoFreeListAllocator(alloc);
+			//alloc = new DebugAllocator(alloc);
+		}
+		return alloc;
+	}
+}
+
+Allocator manualAllocator()
+{
 	static Allocator alloc;
 	if( !alloc ){
-		version(VibeManualMemoryManagement)
-			alloc = new MallocAllocator;
-		else
-			alloc = new GCAllocator;
+		alloc = new MallocAllocator;
 		alloc = new AutoFreeListAllocator(alloc);
 		//alloc = new DebugAllocator(alloc);
 	}
@@ -379,7 +391,7 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 	TR alloc(ARGS...)(ARGS args)
 	{
 		//logInfo("alloc %s/%d", T.stringof, ElemSize);
-		auto mem = defaultAllocator().alloc(ElemSize);
+		auto mem = manualAllocator().alloc(ElemSize);
 		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
 		static if( INIT ) return emplace!T(mem, args);
 		else return cast(TR)mem.ptr;
@@ -392,7 +404,7 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 			.clear(objc);//typeid(T).destroy(cast(void*)obj);
 		}
 		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
-		defaultAllocator().free((cast(void*)obj)[0 .. ElemSize]);
+		manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
 	}
 }
 
@@ -419,7 +431,7 @@ struct FreeListRef(T, bool INIT = true)
 	{
 		//logInfo("refalloc %s/%d", T.stringof, ElemSize);
 		FreeListRef ret;
-		auto mem = defaultAllocator().alloc(ElemSize + int.sizeof);
+		auto mem = manualAllocator().alloc(ElemSize + int.sizeof);
 		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
 		static if( INIT ) ret.m_object = emplace!T(mem, args);	
 		else ret.m_object = cast(TR)mem.ptr;
@@ -471,7 +483,7 @@ struct FreeListRef(T, bool INIT = true)
 						//logInfo("ref %s destroyed", T.stringof);
 					}
 					static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
-					defaultAllocator().free((cast(void*)m_object)[0 .. ElemSize+int.sizeof]);
+					manualAllocator().free((cast(void*)m_object)[0 .. ElemSize+int.sizeof]);
 				}
 			}
 		}
