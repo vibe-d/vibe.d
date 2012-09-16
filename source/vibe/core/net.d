@@ -92,7 +92,7 @@ struct NetworkAddress {
 	*/
 	@property ushort family() const { return addr.sa_family; }
 	/// ditto
-	@property void family(ushort val) { addr.sa_family = val; }
+	@property void family(ushort val) { addr.sa_family = cast(ubyte)val; }
 
 	/** The port in host byte order.
 	*/
