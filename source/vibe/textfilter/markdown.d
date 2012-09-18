@@ -501,7 +501,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 		}
 	}
-	if( br ) dst.put("<br>");
+	if( br ) dst.put("<br/>");
 }
 
 private void outputHeaderLine(R)(ref R dst, string ln, string hln)

@@ -1082,7 +1082,7 @@ private string skipNumber(ref string s, out bool is_float)
 
 private string skipJsonString(ref string s, int* line = null)
 {
-	enforce(s.length > 2 && s[0] == '\"', "too small: '" ~ s ~ "'");
+	enforce(s.length >= 2 && s[0] == '\"', "too small: '" ~ s ~ "'");
 	s = s[1 .. $];
 	string ret = jsonUnescape(s);
 	enforce(s.length > 0 && s[0] == '\"', "Unterminated string literal.");
