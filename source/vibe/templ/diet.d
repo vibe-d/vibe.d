@@ -639,7 +639,7 @@ private struct DietParser {
 		assertp(node_stack.length >= level);
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
 		tagstring ~= "<" ~ tag;
-		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~htmlAttribEscape("~buildInterpolatedString(att[1])~")~\"\\\"";
+		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1])~"~\"\\\"";
 		tagstring ~= is_singular_tag ? "/>" : ">";
 		return tagstring;
 	}
