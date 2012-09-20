@@ -794,6 +794,9 @@ Json serializeToJson(T)(T value)
 			}
 		}
 		return Json(ret);
+	} else static if( isPointer!T ){
+		if( value is null ) return Json(null);
+		return serializeToJson(*value);
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
@@ -848,6 +851,10 @@ void deserializeJson(T)(ref T dst, Json src)
 				__traits(getMember, dst, m) = v;
 			}
 		}
+	} else static if( isPointer!T ){
+		if( src.type == Json.Type.Null ) return;
+		dst = new typeof(*T.init);
+		deserializeJson(*dst, src);
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}

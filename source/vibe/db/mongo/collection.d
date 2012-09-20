@@ -104,7 +104,7 @@ struct MongoCollection {
 	/// ditto
 	MongoCursor find(T)(T query) { return find(query, null); }
 	/// ditto
-	MongoCursor find()() { return find(T.EmptyObject, null); }
+	MongoCursor find()() { return find(Bson.EmptyObject, null); }
 
 	/**
 		Queries the collection for existing documents.
