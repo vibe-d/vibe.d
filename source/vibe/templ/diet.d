@@ -639,7 +639,7 @@ private struct DietParser {
 		assertp(node_stack.length >= level);
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
 		tagstring ~= "<" ~ tag;
-		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1])~"~\"\\\"";
+		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1], false, false, true)~"~\"\\\"";
 		tagstring ~= is_singular_tag ? "/>" : ">";
 		return tagstring;
 	}
@@ -701,7 +701,7 @@ private struct DietParser {
 		return false;
 	}
 
-	string buildInterpolatedString(string str, bool prevconcat = false, bool nextconcat = false)
+	string buildInterpolatedString(string str, bool prevconcat = false, bool nextconcat = false, bool escape_quotes = false)
 	{
 		string ret;
 		int state = 0; // 0 == start, 1 == in string, 2 == out of string
@@ -736,7 +736,8 @@ private struct DietParser {
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
-					if( escape ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
+					if( escape && !escape_quotes ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
+					else if( escape ) ret ~= "htmlAttribEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
 					else ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
 					i++;
 					start = i;
