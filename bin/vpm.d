@@ -81,7 +81,7 @@ int main(string[] args)
 			printHelp();
 			appStartScript = ""; // make sure the script is empty, so that the app is not run
 		} else if(canFind(vpmArgs, "init")) {
-				initDirectory();
+				initDirectory(args[$-1]);
         } else {
 			if(canFind(vpmArgs, "-verbose"))
 				setLogLevel(LogLevel.Debug);
@@ -228,9 +228,42 @@ private string getBinName(const Vpm vpm)
 	return ret;
 } 
 
-private void initDirectory()
-{   
-	auto cwd = Path(".");
+private void initDirectory(string fName)
+{ 
+    Path cwd; 
+    //Check to see if a target directory is specified.
+    if(fName != "init") {
+        if(!existsFile(fName))  
+            createDirectory(fName);
+        cwd = Path(fName);  
+    } 
+    //Otherwise use the current directory.
+    else 
+        cwd = Path("."); 
+    
+    //raw strings must be unindented. 
+    immutable packageJson = 
+`{
+    "name": "edit",
+    "version": "1.0.0",
+    "description": "An example project skeleton",
+    "homepage": "http://my-project.org",
+    "copyright": "Copyright © 2000, Edit Me",
+    "authors": [
+        "Your Name"
+    ],
+    "dependencies": {
+    }
+}
+`;
+    immutable appFile =
+`import vibe.d;
+
+static this()
+{ 
+    logInfo("Edit source/app.d to start your project.");
+}
+`;
 	//Make sure we do not overwrite anything accidentally
 	if( (existsFile(cwd ~ "package.json"))        ||
 		(existsFile(cwd ~ "source"      ))        ||
@@ -247,8 +280,8 @@ private void initDirectory()
 	createDirectory(cwd ~ "views" );
 	createDirectory(cwd ~ "public");
 	//Create the common files. 
-	openFile(cwd ~ "package.json", FileMode.Append).write(" ");
-	openFile(cwd ~ "source/app.d", FileMode.Append).write(" ");     
+	openFile(cwd ~ "package.json", FileMode.Append).write(packageJson);
+	openFile(cwd ~ "source/app.d", FileMode.Append).write(appFile);     
 	//Act smug to the user. 
 	logInfo("Successfully created empty project.");
 }
