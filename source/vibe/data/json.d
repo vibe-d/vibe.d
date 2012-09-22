@@ -97,6 +97,18 @@ struct Json {
 	this(Json[] v) { m_type = Type.Array; m_array = v; }
 	/// ditto
 	this(Json[string] v) { m_type = Type.Object; m_object = v; }
+	/// ditto
+	this(Type type) { m_type = type; }
+
+	/**
+		Helper function to construct an empty object,
+		equivalent of javascript {}
+	*/
+
+	static Json emptyObject()
+	{
+		return Json(Type.Object);
+	}
 
 	/**
 		Allows assignment of D values to a JSON value.
