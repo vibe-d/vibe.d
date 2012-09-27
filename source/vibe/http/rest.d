@@ -256,12 +256,16 @@ class RestInterfaceClient(I) : I
 	}
 
 	//pragma(msg, generateRestInterfaceSubInterfaces!(I)());
+	#line 1 "subinterfaces"
 	mixin(generateRestInterfaceSubInterfaces!(I));
 
+	//pragma(msg, "restinterface:");
 	//pragma(msg, generateRestInterfaceMethods!(I)());
+	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
-	protected Json request(string verb, string name, Json params)
+	#line 268 "rest.d"
+	protected Json request(string verb, string name, Json params, bool[string] param_is_json)
 	const {
 		Url url = m_baseUrl;
 		if( name.length ) url ~= Path(name);
@@ -279,9 +283,7 @@ class RestInterfaceClient(I) : I
 				else first = false;
 				filterUrlEncode(queryString, pname);
 				queryString.put('=');
-				auto valapp = appender!string();
-				toJson(valapp, p);
-				filterUrlEncode(queryString, valapp.data());
+				filterUrlEncode(queryString, param_is_json[pname] ? p.toString() : toRestString(p));
 			}
 			url.queryString = queryString.data();
 		}
@@ -363,19 +365,15 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 		static immutable param_names = parameterNames!FT();
 		foreach( i, P; ParameterTypes ){
 			static if( i == 0 && param_names[i] == "id" ){
-				static if( __traits(compiles, P.fromString("")) )
-					params[i] = P.fromString(req.params["id"]);
-				else
-					params[i] = to!P(req.params["id"]);
+				params[i] = fromRestString!P(req.params["id"]);
 			} else static if( param_names[i].startsWith("_") ){
-				static if( __traits(compiles, P.fromString("")) )
-					params[i] = P.fromString(req.params[param_names[i][1 .. $]]);
-				else
-					params[i] = to!P(req.params[param_names[i][1 .. $]]);
+				static if( param_names[i] != "_dummy"){
+					params[i] = fromRestString!P(req.params[param_names[i][1 .. $]]);
+				}
 			} else {
 				if( req.method == HttpMethod.GET ){
 					logDebug("query %s of %s" ,param_names[i], req.query);
-					deserializeJson(params[i], parseJson(req.query[param_names[i]]));
+					params[i] = fromRestString!P(req.query[param_names[i]]);
 				} else {
 					logDebug("%s %s", method, param_names[i]);
 					enforce(req.headers["Content-Type"] == "application/json", "The Content-Type header needs to be set to application/json.");
@@ -525,21 +523,24 @@ private @property string generateRestInterfaceMethods(I)()
 			} else {
 				ret ~= " {\n";
 				ret ~= "\tJson jparams__ = Json.EmptyObject;\n";
+				ret ~= "\tbool[string] jparamsj__;\n";
 
 				// serialize all parameters
 				string path_supplement;
 				foreach( i, PT; PTypes ){
 					if( i == 0 && param_names[0] == "id" ){
-						path_supplement = "to!string(id)~\"/\"~";
+						static if( is(PT == Json) ) path_supplement = "urlEncode(id.toString())~\"/\"~";
+						else path_supplement = "urlEncode(toRestString(serializeToJson(id)))~\"/\"~";
 						continue;
 					}
 					// underscore parameters are sourced from the HttpServerRequest.params map
 					if( param_names[i].startsWith("_") ) continue;
 
 					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
+					ret ~= "\tjparamsj__[\""~param_names[i]~"\"] = "~(is(PT == Json) ? "true" : "false")~";\n";
 				}
 
-				ret ~= "\tauto jret__ = request(\""~ httpMethodString(http_verb)~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__);\n";
+				ret ~= "\tauto jret__ = request(\""~ httpMethodString(http_verb)~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__, jparamsj__);\n";
 				static if( !is(RT == void) ){
 					ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
 					ret ~= "\tdeserializeJson(ret__, jret__);\n";
@@ -719,4 +720,31 @@ private template isPropertySetter(T)
 {
 	enum isPropertySetter = (functionAttributes!(T) & FunctionAttribute.property) != 0
 		&& is(ReturnType!T == void);
+}
+
+/// private
+private string toRestString(Json value)
+{
+	switch( value.type ){
+		default: return value.toString();
+		case Json.Type.Bool: return value.get!bool ? "true" : "false";
+		case Json.Type.Int: return to!string(value.get!long);
+		case Json.Type.Float: return to!string(value.get!double);
+		case Json.Type.String: return value.get!string;
+	}
+}
+
+/// private
+private T fromRestString(T)(string value)
+{
+	static if( is(T == bool) ) return value == "true";
+	else static if( is(T : int) ) return to!T(value);
+	else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
+	else static if( is(T : string) ) return value;
+	else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
+	else {
+		T ret;
+		deserializeJson(ret, parseJson(value));
+		return ret;
+	}
 }
