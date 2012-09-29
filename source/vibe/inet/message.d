@@ -127,7 +127,7 @@ SysTime parseRFC822DateTimeString(string str)
 	int month = -1;
 	foreach( i, ms; monthStrings )
 		if( str.startsWith(ms) ){
-			month = i+1;
+			month = cast(int)i+1;
 			break;
 		}
 	enforce(month > 0);
