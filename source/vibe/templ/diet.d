@@ -712,12 +712,17 @@ private struct DietParser {
 		while( i < str.length ){
 			// check for escaped characters
 			if( str[i] == '\\' ){
+				if( i > start ){
+					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
+					state = 1;
+				}
 				i++;
 				if( i < str.length ){
-					ret ~= enter_string[state] ~ str[i+1];
+					ret ~= enter_string[state] ~ str[i];
 					state = 1;
 					i++;
 				}
+				start = i;
 				continue;
 			}
 
@@ -826,6 +831,7 @@ private struct DietParser {
 		string ret;
 		while( idx < s.length ){
 			if( s[idx] == '\\' ){
+				ret ~= s[idx]; // pass escape character through - will be handled later by buildInterpolatedString
 				idx++;
 				assertp(idx < s.length, "'\\' must be followed by something (escaped character)!");
 				ret ~= s[idx];
