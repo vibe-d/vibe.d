@@ -10,6 +10,7 @@ module vibe.http.router;
 public import vibe.http.server;
 
 import vibe.core.log;
+import vibe.textfilter.urlencode;
 
 import std.functional;
 
@@ -174,7 +175,7 @@ private struct Route {
 				j++;
 				string name = skipPathNode(pattern, j);
 				string match = skipPathNode(url, i);
-				params[name] = match;
+				params[name] = urlDecode(match);
 			} else return false;
 		}
 
