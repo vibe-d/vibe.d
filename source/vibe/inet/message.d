@@ -1,11 +1,11 @@
 /**
-	Mime header parsing according to RFC5322
+	Internet message handling according to RFC822/RFC5322
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
-module vibe.inet.rfc5322;
+module vibe.inet.message;
 
 import vibe.core.log;
 import vibe.http.common : StrMapCI;

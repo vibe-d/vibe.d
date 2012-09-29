@@ -8,7 +8,6 @@
 module vibe.http.common;
 
 public import vibe.http.status;
-public import vibe.inet.rfc5322;
 
 import vibe.core.log;
 import vibe.core.net;

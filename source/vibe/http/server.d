@@ -17,7 +17,7 @@ import vibe.data.json;
 import vibe.http.dist;
 import vibe.http.form;
 import vibe.http.log;
-import vibe.inet.rfc5322;
+import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
 import vibe.stream.ssl;

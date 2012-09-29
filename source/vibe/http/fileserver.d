@@ -10,6 +10,7 @@ module vibe.http.fileserver;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.http.server;
+import vibe.inet.message;
 import vibe.inet.mimetypes;
 import vibe.inet.url;
 import vibe.crypto.md5;

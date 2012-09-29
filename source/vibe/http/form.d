@@ -10,7 +10,7 @@ module vibe.http.form;
 import vibe.core.driver;
 import vibe.core.file;
 import vibe.core.log;
-import vibe.inet.rfc5322;
+import vibe.inet.message;
 import vibe.inet.url;
 import vibe.textfilter.urlencode;
 
