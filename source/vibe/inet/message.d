@@ -59,8 +59,6 @@ private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul
 
 void writeRFC822DateString(R)(ref R dst, SysTime time)
 {
-	assert(time.timezone == UTC());
-
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	dst.put(dayStrings[time.dayOfWeek]);
 	dst.put(", ");
@@ -73,13 +71,21 @@ void writeRFC822DateString(R)(ref R dst, SysTime time)
 
 void writeRFC822TimeString(R)(ref R dst, SysTime time)
 {
-	assert(time.timezone == UTC());
 	writeDecimal2(dst, time.hour);
 	dst.put(':');
 	writeDecimal2(dst, time.minute);
 	dst.put(':');
 	writeDecimal2(dst, time.second);
-	dst.put(" GMT");
+	if( time.timezone == UTC() ) dst.put(" GMT");
+	else {
+		auto now = Clock.currTime().stdTime();
+		auto offset = cast(int)((time.timezone.utcToTZ(now) - now) / 600_000_000);
+		dst.put(' ');
+		dst.put(offset >= 0 ? '+' : '-');
+		if( offset < 0 ) offset = -offset;
+		writeDecimal2(dst, offset / 60);
+		writeDecimal2(dst, offset % 60);
+	}
 }
 
 void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
@@ -91,7 +97,7 @@ void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
 
 string toRFC822TimeString(SysTime time)
 {
-	auto ret = new FixedAppender!(string, 12);
+	auto ret = new FixedAppender!(string, 14);
 	writeRFC822TimeString(ret, time);
 	return ret.data;
 }
@@ -105,7 +111,7 @@ string toRFC822DateString(SysTime time)
 
 string toRFC822DateTimeString(SysTime time)
 {
-	auto ret = new FixedAppender!(string, 29);
+	auto ret = new FixedAppender!(string, 31);
 	writeRFC822DateTimeString(ret, time);
 	return ret.data;
 }
