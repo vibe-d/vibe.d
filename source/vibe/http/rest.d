@@ -373,6 +373,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 			} else {
 				if( req.method == HttpMethod.GET ){
 					logDebug("query %s of %s" ,param_names[i], req.query);
+					enforce(param_names[i] in req.query, "Missing query parameter '"~param_names[i]~"'");
 					params[i] = fromRestString!P(req.query[param_names[i]]);
 				} else {
 					logDebug("%s %s", method, param_names[i]);
