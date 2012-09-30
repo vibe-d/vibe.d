@@ -687,6 +687,10 @@ private string skipIdent(string str, ref size_t i)
 
 private void skipType(string str, ref size_t i)
 {
+	if (str[i..$].startsWith("ref")) {
+		i += 3;
+		skipWhitespace(str, i);
+	}
 	skipIdent(str, i);
 	if( i < str.length && (str[i] == '(' || str[i] == '[') ){
 		int depth = 1;
