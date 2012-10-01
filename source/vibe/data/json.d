@@ -1040,6 +1040,7 @@ private string jsonUnescape(R)(ref R range)
 							uch *= 16;
 							enforce(!range.empty, "Unicode sequence must be '\\uXXXX'.");
 							auto dc = range.front;
+							range.popFront();
 							if( dc >= '0' && dc <= '9' ) uch += dc - '0';
 							else if( dc >= 'a' && dc <= 'f' ) uch += dc - 'a' + 10;
 							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
