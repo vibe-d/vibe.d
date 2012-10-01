@@ -437,6 +437,7 @@ private struct DietParser {
 		} else if( line.length >= 2 && line[0 .. 2] == "!=" ){
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= line[2 .. $];
+			ret ~= ")";
 		} else {
 			ret ~= StreamVariableName ~ ".write(";
 			ret ~= buildInterpolatedString(line, false, false);
