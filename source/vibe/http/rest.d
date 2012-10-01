@@ -556,14 +556,91 @@ private @property string generateRestInterfaceMethods(I)()
 }
 
 /// private
-private @property string getReturnTypeString(alias F)()
+private @property string fullyQualifiedTypename(T)()
 {
-	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
+	string result;
+	static if ( isBasicType!T )
+	{   
+		result = T.stringof;
+	}   
+	else static if ( isAggregateType!T )
+	{   
+		result = fullyQualifiedName!T;
+	}   
+	else static if ( isArray!T )
+	{   
+		result = fullyQualifiedTypename!(typeof(T.init[0])) ~ "[]";
+	}   
+	else static if ( isAssociativeArray!T )
+	{   
+		result = fullyQualifiedTypename!(ValueType!T) ~ "[" ~ fullyQualifiedTypename!(KeyType!T) ~ "]";
+	}   
+	else static if ( isSomeFunction!T )
+	{   
+		static assert(9, "Function types currently not supported");
+	}   
+	else
+		static assert(0, "Can't convert type to fully qualified string");
+
+	static if (is(T == const))
+	{   
+		result = "const(" ~ result ~ ")";
+	}   
+	static if (is(T == immutable))
+	{   
+		result = "immutable(" ~ result ~ ")";
+	}   
+	static if (is(T == shared))
+	{   
+		result = "shared(" ~ result ~ ")";
+	}   
+
+	return result;
+}
+
+/// private
+private template returnsRef(alias f)
+{
+	enum bool returnsRef = is(typeof(
+	{
+		ParameterTypeTuple!f param;
+		auto ptr = &f(param);
+	}));
+}
+
+/// private
+private @property string getReturnTypeString(alias F)()
+{   
+	static void testTempl(T)(){ mixin(fullyQualifiedTypename!T~" x;"); }
 	alias ReturnType!F T;
 	static if( is(T == void) || __traits(compiles, testTempl!T) )
-	   return T.stringof;
-	else return "ReturnType!(typeof(&BaseInterface."~__traits(identifier, F)~"))";
+	{
+		static if (returnsRef!F)
+			return "ref " ~ fullyQualifiedTypename!T;
+		else
+			return fullyQualifiedTypename!T;
+	}
+	else 
+		static assert(0);
 }
+
+version(unittest)
+{
+	struct Outer
+	{
+		struct Inner
+		{
+		}
+
+		ref const(Inner[string]) func();
+	}
+}
+
+unittest
+{
+	static assert(getReturnTypeString!(Outer.func) == "ref const(const(vibe.http.rest.Outer.Inner)[immutable(immutable(char))[]])");
+}
+
 
 /// private
 private @property string getParameterTypeString(alias F, int i)()
