@@ -197,32 +197,70 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 			case SECTION:
 				auto pidx = lines[i].countUntil(':');
 				auto sect = strip(lines[i][0 .. pidx]);
+				auto j = skipBlock(i);
+				auto sect_lines = lines[i+1 .. j];
 
-				if( sect == "Macros" ){
-					auto j = skipBlock(i);
-					parseMacros(macros, lines[i+1 .. j]);
-					i = j;
-					break;
+				void putHeader(string hdr){
+					dst.put("<section><h"~to!string(hlevel)~">");
+					dst.put(hdr);
+					dst.put("</h"~to!string(hlevel)~">\n");
+				}
+
+				void putFooter(){
+					dst.put("</section>\n");
 				}
 
 				skip_section = display_section && !display_section(sect);
-				if( !skip_section ){
-					dst.put("<h"~to!string(hlevel)~">");
-					dst.put(sect);
-					dst.put("</h"~to!string(hlevel)~">\n");
+
+				switch( sect ){
+					default:
+						if( skip_section ) break;
+						putHeader(sect);
+						dst.put("<p>\n");
+						auto rest = strip(lines[i][pidx+1 .. $]);
+						if( rest.length ){
+							renderTextLine(dst, rest, macros);
+							dst.put("\n");
+						}
+						foreach( ln; sect_lines ){
+							renderTextLine(dst, ln, macros);
+							dst.put("\n");
+						}
+						dst.put("</p>\n");
+						putFooter();
+						break;
+					case "Macros":
+						parseMacros(macros, sect_lines);
+						break;
+					case "Params":
+						if( skip_section ) break;
+						putHeader("Parameters");
+						dst.put("<dl>\n");
+						bool in_dt = false;
+						foreach( ln; sect_lines ){
+							auto eidx = ln.countUntil("=");
+							if( eidx < 0 ){
+								if( in_dt ){
+									dst.put(' ');
+									dst.put(ln.strip());
+								} else logWarn("Out of place text in param section: %s", ln.strip());
+							} else {
+								auto pname = ln[0 .. eidx].strip();
+								auto pdesc = ln[eidx+1 .. $].strip();
+								if( in_dt ) dst.put("</dd>\n");
+								dst.put("<dt>");
+								dst.put(pname);
+								dst.put("</dt>\n<dd>");
+								dst.put(pdesc);
+								in_dt = true;
+							}
+						}
+						if( in_dt ) dst.put("</dd>\n");
+						dst.put("</dl>\n");
+						putFooter();
+						break;
 				}
-				auto rest = strip(lines[i][pidx+1 .. $]);
-				auto j = skipBlock(i);
-				if( rest.length && !skip_section ){
-					dst.put("<p>\n");
-					renderTextLine(dst, rest, macros);
-					dst.put("\n");
-					foreach( ln; lines[i+1 .. j] ){
-						renderTextLine(dst, ln, macros);
-						dst.put("\n");
-					}
-					dst.put("</p>\n");
-				}
+
 				i = j;
 				break;
 		}
