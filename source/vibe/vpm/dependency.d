@@ -114,7 +114,7 @@ class Dependency {
 			}
 			else {
 				// Converts "==" to ">=a&&<=a", which makes merging easier
-				m_versA = m_versB = Version(ves);
+				m_versA = m_versB = Version(ves == "MASTER"? HEAD : ves);
 				m_cmpA = ">=";
 				m_cmpB = "<=";
 			}
