@@ -136,7 +136,7 @@ int main(string[] args)
 	}
 	catch(Throwable e)
 	{
-		logError("Failed to perform properly: \n" ~ to!string(e) ~ "\nShowing the help, just in case ...");
+		logError("Failed to perform properly: \n" ~ sanitizeUTF8(cast(ubyte[])e.toString()) ~ "\nShowing the help, just in case ...");
 		printHelp();
 		return -1;
 	}
