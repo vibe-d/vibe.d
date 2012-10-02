@@ -240,7 +240,7 @@ private void parseSection(R)(ref R dst, string sect, string[] lines, int hlevel,
 	switch( sect ){
 		default:
 			putHeader(sect);
-			size_t i = 0;
+			int i = 0;
 			while( i < lines.length ){
 				int lntype = getLineType(i);
 
