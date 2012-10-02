@@ -352,12 +352,8 @@ private class Application {
 
 	private void markUpToDate(string packageId) {
 		logTrace("markUpToDate(%s)", packageId);
-		Json create(Json json, string object) {
-			auto d = object in json;
-			if(d is null) {
-				Json[string] o;
-				json[object] = o;
-			}
+		Json create(ref Json json, string object) {
+			if( object !in json ) json[object] = Json.EmptyObject;
 			return json[object];
 		}
 		create(m_json, "vpm");
