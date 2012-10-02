@@ -27,6 +27,8 @@ bool isKind(string kind, Json n){ return n.kind == kind; }
 /// ditto
 Json[] getItemsForKind(string prot, string kind, Json n){ Json[] ret; foreach( dg; n.members[multi(kind)].opt!(Json[]) ) ret ~= dg.get!(Json[]); return ret; }
 /// ditto
+Json[] getItemGroupsForKind(string prot, string kind, Json n){ Json[] ret; foreach( dg; n.members[multi(kind)].opt!(Json[]) ) ret ~= dg; return ret; }
+/// ditto
 bool hasItemsForKind(string prot, string kind, Json n){ return (multi(kind) in n.members) !is null; }
 
 /// ditto
