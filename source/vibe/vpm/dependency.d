@@ -43,18 +43,27 @@ struct Version {
 	static const Version RELEASE = Version("0.0.0");
 	static const Version HEAD = Version(to!string(MAX_VERS)~"."~to!string(MAX_VERS)~"."~to!string(MAX_VERS));
 	static const Version INVALID = Version();
+	static const Version MASTER = Version(MASTER_STRING);
+	static const string MASTER_STRING = "$master";
 	
 	private { 
 		static const size_t MAX_VERS = 9999;
+		static const size_t MASTER_VERS = cast(size_t)(-1);
 		size_t[] v; 
 	}
 	
 	this(string vers) {
-		enforce( count(vers, ".") == 2);
-		string[] tkns = split(vers, ".");
-		v = new size_t[tkns.length];
-		for(size_t i=0; i<tkns.length; ++i)
-			v[i] = to!size_t(tkns[i]);
+		enforce( vers == MASTER_STRING || count(vers, ".") == 2);
+		if(vers == MASTER_STRING) {
+			v = new size_t[3];
+			v[0] = v[1] = v[2] = MASTER_VERS;
+		}			
+		else {
+			string[] tkns = split(vers, ".");
+			v = new size_t[tkns.length];
+			for(size_t i=0; i<tkns.length; ++i)
+				v[i] = to!size_t(tkns[i]);
+		}
 	}
 	
 	this(const Version o) {
@@ -82,6 +91,9 @@ struct Version {
 	}
 	
 	string toString() const {
+		enforce( v.length == 3 && (v[0] != MASTER_VERS || v[1] == v[2] && v[1] == MASTER_VERS) );
+		if(v[0] == MASTER_VERS) 
+			return MASTER_STRING;
 		string r;
 		for(size_t i=0; i<v.length; ++i) {
 			if(i!=0) r ~= ".";
@@ -114,7 +126,7 @@ class Dependency {
 			}
 			else {
 				// Converts "==" to ">=a&&<=a", which makes merging easier
-				m_versA = m_versB = Version(ves == "MASTER"? HEAD : ves);
+				m_versA = m_versB = Version(ves);
 				m_cmpA = ">=";
 				m_cmpB = "<=";
 			}
