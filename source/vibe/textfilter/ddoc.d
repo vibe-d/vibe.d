@@ -119,7 +119,7 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 	{
 		auto ln = strip(lines[i]);
 		if( ln.length == 0 ) return BLANK;
-		else if( ln.allOf("-") ) return CODE;
+		else if( ln.length >= 3 && ln.allOf("-") ) return CODE;
 		else if( ln.countUntil(':') > 0 && !ln[0 .. ln.countUntil(':')].anyOf(" \t") ) return SECTION;
 		return TEXT;
 	}
