@@ -113,7 +113,7 @@ class Dependency {
 		if(ves == Version.MASTER_STRING) {
 			m_cmpA = ">=";
 			m_cmpB = "<=";
-			m_versA = m_versB = Version.MASTER;
+			m_versA = m_versB = Version(Version.MASTER);
 		}
 		else {
 			m_cmpA = skipComp(ves);
