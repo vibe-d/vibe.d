@@ -110,38 +110,45 @@ class Dependency {
 	this( string ves ) {
 		enforce( ves.length > 0);
 		string orig = ves;
-		m_cmpA = skipComp(ves);
-		size_t idx2 = std.string.indexOf(ves, " ");
-		if( idx2 == -1 ) {
-			if( m_cmpA == "<=" || m_cmpA == "<" ) {
-				m_versA = Version(Version.RELEASE);
-				m_cmpB = m_cmpA;
-				m_cmpA = ">=";
-				m_versB = Version(ves);
+		if(ves == Version.MASTER_STRING) {
+			m_cmpA = ">=";
+			m_cmpB = "<=";
+			m_versA = m_versB = Version.MASTER;
+		}
+		else {
+			m_cmpA = skipComp(ves);
+			size_t idx2 = std.string.indexOf(ves, " ");
+			if( idx2 == -1 ) {
+				if( m_cmpA == "<=" || m_cmpA == "<" ) {
+					m_versA = Version(Version.RELEASE);
+					m_cmpB = m_cmpA;
+					m_cmpA = ">=";
+					m_versB = Version(ves);
+				}
+				else if( m_cmpA == ">=" || m_cmpA == ">" ) {
+					m_versA = Version(ves);
+					m_versB = Version(Version.HEAD);
+					m_cmpB = "<=";
+				}
+				else {
+					// Converts "==" to ">=a&&<=a", which makes merging easier
+					m_versA = m_versB = Version(ves);
+					m_cmpA = ">=";
+					m_cmpB = "<=";
+				}
+			} else {
+				enforce( ves[idx2+1] == ' ' );
+				m_versA = Version(ves[0..idx2]);
+				string v2 = ves[idx2+2..$];
+				m_cmpB = skipComp(v2);
+				m_versB = Version(v2);
+				
+				if( m_versB < m_versA ) {
+					swap(m_versA, m_versB);
+					swap(m_cmpA, m_cmpB);
+				}
+				enforce( m_cmpA != "==" && m_cmpB != "==", "For equality, please specify a single version.");
 			}
-			else if( m_cmpA == ">=" || m_cmpA == ">" ) {
-				m_versA = Version(ves);
-				m_versB = Version(Version.HEAD);
-				m_cmpB = "<=";
-			}
-			else {
-				// Converts "==" to ">=a&&<=a", which makes merging easier
-				m_versA = m_versB = Version(ves);
-				m_cmpA = ">=";
-				m_cmpB = "<=";
-			}
-		} else {
-			enforce( ves[idx2+1] == ' ' );
-			m_versA = Version(ves[0..idx2]);
-			string v2 = ves[idx2+2..$];
-			m_cmpB = skipComp(v2);
-			m_versB = Version(v2);
-			
-			if( m_versB < m_versA ) {
-				swap(m_versA, m_versB);
-				swap(m_cmpA, m_cmpB);
-			}
-			enforce( m_cmpA != "==" && m_cmpB != "==", "For equality, please specify a single version.");
 		}
 	}
 	
@@ -179,6 +186,9 @@ class Dependency {
 	bool matches(const string vers) const { return matches(Version(vers)); }
 	bool matches(ref const(Version) v) const {
 		//logTrace(" try match: %s with: %s", v, this);
+		// Master only matches master
+		if(m_versA == Version.MASTER || v == Version.MASTER)
+			return m_versA == v;
 		if( !doCmp(m_cmpA, v, m_versA) )
 			return false;
 		if( !doCmp(m_cmpB, v, m_versB) )
