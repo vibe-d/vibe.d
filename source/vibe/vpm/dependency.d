@@ -44,7 +44,7 @@ struct Version {
 	static const Version HEAD = Version(to!string(MAX_VERS)~"."~to!string(MAX_VERS)~"."~to!string(MAX_VERS));
 	static const Version INVALID = Version();
 	static const Version MASTER = Version(MASTER_STRING);
-	static const string MASTER_STRING = "$master";
+	static const string MASTER_STRING = "~master";
 	
 	private { 
 		static const size_t MAX_VERS = 9999;
