@@ -235,7 +235,7 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 					case "Params":
 						if( skip_section ) break;
 						putHeader("Parameters");
-						dst.put("<dl>\n");
+						dst.put("<table><col class=\"caption\"><tr><th>Parameter name</th><th>Description</th></tr>\n");
 						bool in_dt = false;
 						foreach( ln; sect_lines ){
 							auto eidx = ln.countUntil("=");
@@ -247,16 +247,16 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 							} else {
 								auto pname = ln[0 .. eidx].strip();
 								auto pdesc = ln[eidx+1 .. $].strip();
-								if( in_dt ) dst.put("</dd>\n");
-								dst.put("<dt>");
+								if( in_dt ) dst.put("</td></tr>\n");
+								dst.put("<tr><td>");
 								dst.put(pname);
-								dst.put("</dt>\n<dd>");
+								dst.put("</td><td>\n");
 								dst.put(pdesc);
 								in_dt = true;
 							}
 						}
-						if( in_dt ) dst.put("</dd>\n");
-						dst.put("</dl>\n");
+						if( in_dt ) dst.put("</td>\n");
+						dst.put("</tr></table>\n");
 						putFooter();
 						break;
 				}
