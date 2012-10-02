@@ -115,11 +115,101 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 	string[string] macros;
 	parseMacros(macros, s_standardMacros);
 
-	enum {
-		BLANK,
-		TEXT,
-		CODE,
-		SECTION
+	int getLineType(int i)
+	{
+		auto ln = strip(lines[i]);
+		if( ln.length == 0 ) return BLANK;
+		else if( ln.allOf("-") ) return CODE;
+		else if( ln.countUntil(':') > 0 && !ln[0 .. ln.countUntil(':')].anyOf(" \t") ) return SECTION;
+		return TEXT;
+	}
+
+	int skipCodeBlock(int start)
+	{
+		do {
+			start++;
+		} while(start < lines.length && getLineType(start) != CODE);
+		return start+1;
+	}
+
+	int skipSection(int start)
+	{
+		while(start < lines.length && getLineType(start) != SECTION){
+			if( getLineType(start) == CODE )
+				start = skipCodeBlock(start);
+			else start++;
+		}
+		return start;
+	}
+
+	int skipBlock(int start)
+	{
+		do {
+			start++;
+		} while(start < lines.length && getLineType(start) == TEXT);
+		return start;
+	}
+
+
+	int i = 0;
+
+	// special case short description on the first line
+	while( i < lines.length && getLineType(i) == BLANK ) i++;
+	if( i < lines.length && getLineType(i) == TEXT ){
+		auto j = skipBlock(i);
+		if( !display_section || display_section("$Short") ){
+			foreach( l; lines[i .. j] ){
+				dst.put(l);
+				dst.put("\n");
+			}
+		}
+		i = j;
+	}
+
+	// first section is implicitly the long description
+	{
+		auto j = skipSection(i);
+		if( !display_section || display_section("$Long") )
+			parseSection(dst, "$Long", lines[i .. j], hlevel, macros);
+		i = j;
+	}
+
+	// parse all other sections
+	while( i < lines.length ){
+		assert(getLineType(i) == SECTION);
+		auto j = skipSection(i+1);
+		auto pidx = lines[i].countUntil(':');
+		auto sect = strip(lines[i][0 .. pidx]);
+		lines[i] = strip(lines[i][pidx+1 .. $]);
+		if( lines[i].empty ) i++;
+		if( !display_section || display_section(sect) )
+			parseSection(dst, sect, lines[i .. j], hlevel, macros);
+		i = j;
+	}
+}
+
+private enum {
+	BLANK,
+	TEXT,
+	CODE,
+	SECTION
+}
+
+
+/// private
+private void parseSection(R)(ref R dst, string sect, string[] lines, int hlevel, string[string] macros)
+{
+	void putHeader(string hdr){
+		dst.put("<section>");
+		if( sect.length > 0 && sect[0] != '$' ){
+			dst.put("<h"~to!string(hlevel)~">");
+			dst.put(hdr);
+			dst.put("</h"~to!string(hlevel)~">\n");
+		}
+	}
+
+	void putFooter(){
+		dst.put("</section>\n");
 	}
 
 	int getLineType(int i)
@@ -147,126 +237,70 @@ void filterDdocComment(R)(ref R dst, string ddoc, int hlevel = 2, bool delegate(
 		return start;
 	}
 
-	int i = 0;
+	switch( sect ){
+		default:
+			putHeader(sect);
+			size_t i = 0;
+			while( i < lines.length ){
+				int lntype = getLineType(i);
 
-	// special case short description on the first line
-	while( i < lines.length && getLineType(i) == BLANK ) i++;
-	if( i < lines.length && getLineType(i) == TEXT ){
-		auto j = skipBlock(i);
-		if( !display_section || display_section("$Short") ){
-			foreach( l; lines[i .. j] ){
-				dst.put(l);
-				dst.put("\n");
-			}
-		}
-		i = j;
-	}
+				if( lntype == BLANK ){ i++; continue; }
 
-	bool skip_section;
-
-	// first section is implicitly the long description
-	while( i < lines.length && getLineType(i) == BLANK ) i++;
-	if( i < lines.length && getLineType(i) != SECTION ){
-		skip_section = display_section && !display_section("$Long");
-	}
-
-	while( i < lines.length ){
-		int lntype = getLineType(i);
-
-		if( lntype == BLANK ){ i++; continue; }
-		if( lntype != SECTION && skip_section ){ i++; continue; }
-
-		switch( lntype ){
-			default: assert(false);
-			case TEXT:
-				dst.put("<p>");
-				auto j = skipBlock(i);
-				renderTextLine(dst, lines[i .. j].join("\n"), macros);
-				dst.put("</p>\n");
-				i = j;
-				break;
-			case CODE:
-				dst.put("<pre class=\"code prettyprint\">");
-				auto j = skipCodeBlock(i);
-				auto base_indent = baseIndent(lines[i+1 .. j]);
-				foreach( ln; lines[i+1 .. j] ){
-					dst.put(ln.unindent(base_indent));
-					dst.put("\n");
-				}
-				dst.put("</pre>\n");
-				i = j+1;
-				break;
-			case SECTION:
-				auto pidx = lines[i].countUntil(':');
-				auto sect = strip(lines[i][0 .. pidx]);
-				auto j = skipBlock(i);
-				auto sect_lines = lines[i+1 .. j];
-
-				void putHeader(string hdr){
-					dst.put("<section><h"~to!string(hlevel)~">");
-					dst.put(hdr);
-					dst.put("</h"~to!string(hlevel)~">\n");
-				}
-
-				void putFooter(){
-					dst.put("</section>\n");
-				}
-
-				skip_section = display_section && !display_section(sect);
-
-				switch( sect ){
-					default:
-						if( skip_section ) break;
-						putHeader(sect);
-						dst.put("<p>\n");
-						auto rest = strip(lines[i][pidx+1 .. $]);
-						if( rest.length ){
-							renderTextLine(dst, rest, macros);
-							dst.put("\n");
-						}
-						foreach( ln; sect_lines ){
-							renderTextLine(dst, ln, macros);
-							dst.put("\n");
-						}
+				switch( lntype ){
+					default: assert(false);
+					case TEXT:
+						dst.put("<p>");
+						auto j = skipBlock(i);
+						renderTextLine(dst, lines[i .. j].join("\n"), macros);
 						dst.put("</p>\n");
-						putFooter();
+						i = j;
 						break;
-					case "Macros":
-						parseMacros(macros, sect_lines);
-						break;
-					case "Params":
-						if( skip_section ) break;
-						putHeader("Parameters");
-						dst.put("<table><col class=\"caption\"><tr><th>Parameter name</th><th>Description</th></tr>\n");
-						bool in_dt = false;
-						foreach( ln; sect_lines ){
-							auto eidx = ln.countUntil("=");
-							if( eidx < 0 ){
-								if( in_dt ){
-									dst.put(' ');
-									dst.put(ln.strip());
-								} else logWarn("Out of place text in param section: %s", ln.strip());
-							} else {
-								auto pname = ln[0 .. eidx].strip();
-								auto pdesc = ln[eidx+1 .. $].strip();
-								if( in_dt ) dst.put("</td></tr>\n");
-								dst.put("<tr><td>");
-								dst.put(pname);
-								dst.put("</td><td>\n");
-								dst.put(pdesc);
-								in_dt = true;
-							}
+					case CODE:
+						dst.put("<pre class=\"code prettyprint\">");
+						auto j = skipCodeBlock(i);
+						auto base_indent = baseIndent(lines[i+1 .. j]);
+						foreach( ln; lines[i+1 .. j] ){
+							dst.put(ln.unindent(base_indent));
+							dst.put("\n");
 						}
-						if( in_dt ) dst.put("</td>\n");
-						dst.put("</tr></table>\n");
-						putFooter();
+						dst.put("</pre>\n");
+						i = j+1;
 						break;
 				}
-
-				i = j;
-				break;
-		}
+			}
+			putFooter();
+			break;
+		case "Macros":
+			parseMacros(macros, lines);
+			break;
+		case "Params":
+			putHeader("Parameters");
+			dst.put("<table><col class=\"caption\"><tr><th>Parameter name</th><th>Description</th></tr>\n");
+			bool in_dt = false;
+			foreach( ln; lines ){
+				auto eidx = ln.countUntil("=");
+				if( eidx < 0 ){
+					if( in_dt ){
+						dst.put(' ');
+						dst.put(ln.strip());
+					} else logWarn("Out of place text in param section: %s", ln.strip());
+				} else {
+					auto pname = ln[0 .. eidx].strip();
+					auto pdesc = ln[eidx+1 .. $].strip();
+					if( in_dt ) dst.put("</td></tr>\n");
+					dst.put("<tr><td>");
+					dst.put(pname);
+					dst.put("</td><td>\n");
+					dst.put(pdesc);
+					in_dt = true;
+				}
+			}
+			if( in_dt ) dst.put("</td>\n");
+			dst.put("</tr></table>\n");
+			putFooter();
+			break;
 	}
+
 }
 
 /// private
