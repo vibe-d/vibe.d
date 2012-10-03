@@ -604,14 +604,14 @@ private int getLastSocketError()
 struct LevMutex {
 	FreeListRef!Mutex mutex;
 	FreeListRef!ReadWriteMutex rwmutex;
+	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
 }
-alias FreeListObjectAlloc!(LevMutex, false, true) LevMutexAlloc;
 
 struct LevCondition {
 	FreeListRef!Condition cond;
 	LevMutex* mutex;
+	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
 }
-alias FreeListObjectAlloc!(LevCondition, false, true) LevConditionAlloc;
 
 private extern(C)
 {
@@ -638,12 +638,12 @@ private extern(C)
 	}
 
 	void* lev_alloc_mutex(uint locktype) {
-		auto ret = LevMutexAlloc.alloc();
+		auto ret = LevMutex.Alloc.alloc();
 		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
 		else ret.mutex = FreeListRef!Mutex();
 		return ret;
 	}
-	void lev_free_mutex(void* lock, uint locktype) { LevMutexAlloc.free(cast(LevMutex*)lock); }
+	void lev_free_mutex(void* lock, uint locktype) { LevMutex.Alloc.free(cast(LevMutex*)lock); }
 	int lev_lock_mutex(uint mode, void* lock) {
 		auto mtx = cast(LevMutex*)lock;
 		
@@ -672,8 +672,8 @@ private extern(C)
 		return 0;
 	}
 
-	void* lev_alloc_condition(uint condtype) { return LevConditionAlloc.alloc(); }
-	void lev_free_condition(void* cond) { LevConditionAlloc.free(cast(LevCondition*)cond); }
+	void* lev_alloc_condition(uint condtype) { return LevCondition.Alloc.alloc(); }
+	void lev_free_condition(void* cond) { LevCondition.Alloc.free(cast(LevCondition*)cond); }
 	int lev_signal_condition(void* cond, int broadcast) {
 		auto c = cast(LevCondition*)cond;
 		if( c.cond ) c.cond.notifyAll();
