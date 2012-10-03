@@ -376,7 +376,7 @@ private struct DietCompiler {
 								// output defaults
 							}
 							auto blockcompiler = DietCompiler(block, files);
-							ret ~= blockcompiler.buildWriter(node_stack, in_string, node_stack.length);
+							ret ~= blockcompiler.buildWriter(node_stack, in_string, cast(int)node_stack.length);
 
 							if( block.mode == -1 ){
 								// output defaults
