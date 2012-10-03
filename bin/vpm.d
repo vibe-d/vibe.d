@@ -5,17 +5,22 @@
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Matthias Dondorff
 */
-import std.algorithm;
-import std.exception;
-import std.file;
-import std.process;
+module vpm;
 
-import vibe.vibe;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.inet.url;
 import vibe.vpm.vpm;
 import vibe.vpm.registry;
+import vibe.utils.string;
+
+import std.algorithm;
+import std.array;
+import std.conv;
+import std.exception;
+import std.file;
+import std.process;
+
 
 void printHelp()
 {
