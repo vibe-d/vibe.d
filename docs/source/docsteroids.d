@@ -373,7 +373,7 @@ class DocProcessor {
 		
 		while( tokens.length > 0 && (tokens[0] == "function" || tokens[0] == "delegate" || tokens[0] == "(") ){
 			Json ret = Json.EmptyObject;
-			ret.typeclass = tokens.front == "(" ? "function" : tokens.front;
+			ret.typeClass = tokens.front == "(" ? "function" : tokens.front;
 			ret.returnType = basic_type;
 			if( tokens.front != "(" ) tokens.popFront();
 			enforce(tokens.front == "(");
