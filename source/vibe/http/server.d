@@ -22,7 +22,6 @@ import vibe.inet.url;
 import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
-import vibe.templ.diet;
 import vibe.textfilter.urlencode;
 import vibe.utils.array;
 import vibe.utils.memory;
@@ -153,6 +152,7 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 */
 @property HttpServerRequestDelegate staticTemplate(string template_file)()
 {
+	import vibe.templ.diet;
 	return (HttpServerRequest req, HttpServerResponse res){
 		//res.render!(template_file, req);
 		//res.headers["Content-Type"] = "text/html; charset=UTF-8";
@@ -212,6 +212,7 @@ void startListening()
 */
 @property void render(string template_file, ALIASES...)(HttpServerResponse res)
 {
+	import vibe.templ.diet;
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
 	parseDietFile!(template_file, ALIASES)(res.bodyWriter);
 }
@@ -632,8 +633,9 @@ final class HttpServerResponse : HttpResponse {
 	*/
 	void renderCompat(string template_file, TYPES_AND_NAMES...)(Variant[] args...)
 	{
+		import vibe.templ.diet;
 		headers["Content-Type"] = "text/html; charset=UTF-8";
-		.parseDietFileCompat!(template_file, TYPES_AND_NAMES)(bodyWriter, args);
+		parseDietFileCompat!(template_file, TYPES_AND_NAMES)(bodyWriter, args);
 	}
 
 	/// Finalizes the response. This is called automatically by the server.
