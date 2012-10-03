@@ -226,6 +226,8 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 */
 class RestInterfaceClient(I) : I
 {
+    mixin("import "~(moduleName!I)~";");
+
 	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
 		Url m_baseUrl;
@@ -260,7 +262,7 @@ class RestInterfaceClient(I) : I
 	mixin(generateRestInterfaceSubInterfaces!(I));
 
 	//pragma(msg, "restinterface:");
-	//pragma(msg, generateRestInterfaceMethods!(I)());
+	pragma(msg, generateRestInterfaceMethods!(I)());
 	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
