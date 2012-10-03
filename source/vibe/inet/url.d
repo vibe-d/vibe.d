@@ -111,9 +111,10 @@ struct Url {
 	/// ditto
 	@property void schema(string v) { m_schema = v; }
 
-	/// The path part of the URL
+	/// The path part of the URL in the original string form
 	@property string pathString() const { return m_pathString; }
-	/// ditto
+
+	/// The path part of the URL
 	@property Path path() const { return m_path; }
 	/// ditto
 	@property void path(Path p)
