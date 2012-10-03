@@ -157,7 +157,7 @@
   <debuglevel>0</debuglevel>
   <debugids />
   <versionlevel>0</versionlevel>
-  <versionids />
+  <versionids>VibeWin32Driver</versionids>
   <dump_source>0</dump_source>
   <mapverbosity>0</mapverbosity>
   <createImplib>0</createImplib>
@@ -340,8 +340,8 @@
    <File path="source\vibe\http\websockets.d" />
   </Folder>
   <Folder name="inet">
+   <File path="source\vibe\inet\message.d" />
    <File path="source\vibe\inet\mimetypes.d" />
-   <File path="source\vibe\inet\rfc5322.d" />
    <File path="source\vibe\inet\url.d" />
    <File path="source\vibe\inet\urltransfer.d" />
   </Folder>

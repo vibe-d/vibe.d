@@ -149,8 +149,7 @@ private class MongoCursorData {
 		m_documents = reply.documents;
 		m_currentDoc = 0;
 
-		if( reply.documents.length == 0 ){
+		if( reply.cursor == 0 )
 			destroy();
-		}
 	}
 }

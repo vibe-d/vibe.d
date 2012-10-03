@@ -17,7 +17,7 @@ import vibe.data.json;
 import vibe.http.dist;
 import vibe.http.form;
 import vibe.http.log;
-import vibe.inet.rfc5322;
+import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
 import vibe.stream.ssl;
@@ -905,14 +905,6 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		parseRequest(req, reqReader, request_allocator);
 		logTrace("Got request header.");
 
-		//handle Expect-Header
-		if( auto pv = "Expect" in req.headers) {
-			if( *pv == "100-continue" ) {
-				logTrace("sending 100 continue");
-				conn.write("HTTP/1.1 100 Continue\r\n");
-			}
-		}
-
 		// find the matching virtual host
 		foreach( ctx; g_contexts )
 			if( ctx.settings.hostName == req.host ){
@@ -957,6 +949,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 				limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, 0);
 		}
 		req.bodyReader = limited_http_input_stream;
+
+		// handle Expect header
+		if( auto pv = "Expect" in req.headers) {
+			if( *pv == "100-continue" ) {
+				logTrace("sending 100 continue");
+				conn.write("HTTP/1.1 100 Continue\r\n\r\n");
+			}
+		}
 
 		// Url parsing if desired
 		if( settings.options & HttpServerOption.ParseURL ){

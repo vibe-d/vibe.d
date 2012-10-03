@@ -794,6 +794,9 @@ Json serializeToJson(T)(T value)
 			}
 		}
 		return Json(ret);
+	} else static if( isPointer!T ){
+		if( value is null ) return Json(null);
+		return serializeToJson(*value);
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
@@ -848,6 +851,10 @@ void deserializeJson(T)(ref T dst, Json src)
 				__traits(getMember, dst, m) = v;
 			}
 		}
+	} else static if( isPointer!T ){
+		if( src.type == Json.Type.Null ) return;
+		dst = new typeof(*T.init);
+		deserializeJson(*dst, src);
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
@@ -1033,6 +1040,7 @@ private string jsonUnescape(R)(ref R range)
 							uch *= 16;
 							enforce(!range.empty, "Unicode sequence must be '\\uXXXX'.");
 							auto dc = range.front;
+							range.popFront();
 							if( dc >= '0' && dc <= '9' ) uch += dc - '0';
 							else if( dc >= 'a' && dc <= 'f' ) uch += dc - 'a' + 10;
 							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
@@ -1082,7 +1090,7 @@ private string skipNumber(ref string s, out bool is_float)
 
 private string skipJsonString(ref string s, int* line = null)
 {
-	enforce(s.length > 2 && s[0] == '\"', "too small: '" ~ s ~ "'");
+	enforce(s.length >= 2 && s[0] == '\"', "too small: '" ~ s ~ "'");
 	s = s[1 .. $];
 	string ret = jsonUnescape(s);
 	enforce(s.length > 0 && s[0] == '\"', "Unterminated string literal.");

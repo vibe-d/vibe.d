@@ -228,7 +228,9 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 					b.text = [hl];
 					lines.popFront();
 					break;
-				case LineType.SetextHeader: assert(false);
+				case LineType.SetextHeader:
+					lines.popFront();
+					break;
 				case LineType.UList:
 				case LineType.OList:
 					b.type = ln.type == LineType.UList ? BlockType.UList : BlockType.OList;
@@ -501,7 +503,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				break;
 		}
 	}
-	if( br ) dst.put("<br>");
+	if( br ) dst.put("<br/>");
 }
 
 private void outputHeaderLine(R)(ref R dst, string ln, string hln)
@@ -585,8 +587,10 @@ private size_t getQuoteLevel(string ln)
 private bool isUListLine(string ln)
 {
 	ln = stripLeft(ln);
-	if( ln.length < 1 ) return false;
-	return "*+-".countUntil(ln[0]) >= 0;
+	if( ln.length < 2 ) return false;
+	if( "*+-".countUntil(ln[0]) < 0 ) return false;
+	if( ln[1] != ' ' && ln[1] != '\t' ) return false;
+	return true;
 }
 
 private bool isOListLine(string ln)

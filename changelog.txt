@@ -1,7 +1,7 @@
-Changelog
+﻿Changelog
 =========
 
-v0.7.8 - 2012-09-
+v0.7.8 - 2012-10-01
 -------------------
 
 ### Features and improvements ###
@@ -10,15 +10,22 @@ v0.7.8 - 2012-09-
  - The reverse proxy now adds the headers "X-Forwarded-For" and "X-Forwarded-Host"
  - MongoCollection.findAndModify returns the resulting object only now instead of the full reply of the protocol
  - Calling MongoCollection.find() without arguments now returns all documents of the collection
+ - Implemented "vibe init" to generate a new app skeleton (by 1100110)
  - The application's main module can now also be named after the package name instead of 'app.d' (by 1100110)
  - The default user/group used on Linux for priviledge lowering has been renamed to 'www-vibe' to avoid name clashes with possibly existing users named 'vibe' (by Jordy Sayol)
  - BsonBinData is now converted to a Base-64 encoded string when the Bson value is converted to a Json value
  - BsonDate now has toString/fromString for an ISO extended representation so that its JSON serialization is now a string
  - The Diet parser now supports string interpolations inside of style and script tags.
  - The Diet parser now enforces proper indentation (i.e. the number of spaces used for an indentation level has to be a multiple of the base indent)
+ - The Diet parser now supports unescaped string interpolations using !{}
+ - The JSON de(serializer) now supports pointer types
  - Upgraded libevent to v2.0.20 and OpenSSL to v1.0.1c on Windows
- - The Win32 driver now has a working Timer implementation 
+ - The Win32 driver now has a working Timer implementation
+ - OutputStream now has an output range interface for the types ubyte and char
  - The logging functions use 'auto ref' instead of 'lazy' now to avoid errors of the kind "this(this) is not nothrow"
+ - The markdown text filter now emits XHTML compatible <br/> tags instead of <br> (by cybevnm)
+ - The REST interface generator now uses plain strings instead of JSON for query strings and path parameters, if possible
+ - The UrlRouter now URL-decodes all path parameters
 
 ### Bug fixes ###
 
@@ -31,6 +38,17 @@ v0.7.8 - 2012-09-
  - Fixed yield() calls to avoid stack overflows and missing I/O events due to improper recursion
  - Fixed the Diet parser to allow inline HTML as it should
  - Fixed the Diet parser to actually output singular HTML elements as singular elements
+ - Fixed tight loops with yield() not causing I/O to stop in the win32 back end
+ - Fixed code running from within static this() not being able to use vibe.d I/O functions
+ - Fixed a "memory leak" (an indefinitely growing array)
+ - Fixed parsing of one-character JSON strings (by Михаил Страшун)
+ - Fixed the Diet parser to not HTML escape attributes and to properly escape quotation marks (complying with Jade's behavior)
+ - Fixed the Diet parser to accept an escaped hash (\#) as a way to avoid string interpolations 
+ - Fixed a bug in MongoDB cursor end detection causing spurious exceptions
+ - Fixed the Markdown parser to now recognize emphasis at the start of a line as an unordered list
+ - Fixed the form parsing to to not reject a content type with character set specification
+ - Fixed parsing of unicode character sequences in JSON strings
+ - Fixed the 100-continue response to end with an empty line
 
 
 v0.7.7 - 2012-08-05

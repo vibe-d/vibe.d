@@ -218,6 +218,7 @@ class Win32Signal : Signal {
 
 class Win32Timer : Timer {
 	private {
+		Task m_owner;
 		Win32EventDriver m_driver;
 		void delegate() m_callback;
 		bool m_pending;
@@ -230,6 +231,7 @@ class Win32Timer : Timer {
 	{
 		m_driver = driver;
 		m_callback = callback;
+		m_owner = Task.getThis();
 	}
 
 	~this()
@@ -292,7 +294,8 @@ class Win32Timer : Timer {
 			} else {
 				timer.m_pending = false;
 			}
-			timer.m_callback();
+			if( timer.m_owner ) timer.m_driver.m_core.resumeTask(timer.m_owner);
+			if( timer.m_callback ) timer.m_callback();
 		} catch(Exception e){
 			logError("Exception in onTimer: %s", e);
 		}
@@ -320,14 +323,22 @@ class Win32FileStream : FileStream {
 		m_task = Task.getThis();
 		auto nstr = m_path.toNativeString();
 
+		auto access = m_mode == FileMode.ReadWrite? (GENERIC_WRITE | GENERIC_READ) :
+						(m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append)? GENERIC_WRITE : GENERIC_READ;
+
+		auto shareMode = m_mode == FileMode.Read? FILE_SHARE_READ : 0;
+
+		auto creation = m_mode == FileMode.CreateTrunc? CREATE_ALWAYS : m_mode == FileMode.Append? OPEN_ALWAYS : OPEN_EXISTING;
+
 		m_handle = CreateFileW(
 					toUTF16z(m_path.toNativeString()),
-					(m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append) ? GENERIC_WRITE : GENERIC_READ,
-					m_mode == FileMode.Read ? FILE_SHARE_READ : 0,
+					access,
+					shareMode,
 					null,
-					m_mode == FileMode.CreateTrunc ? CREATE_ALWAYS : OPEN_ALWAYS,
+					creation,
 					FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
 					null);
+
 		auto errorcode = GetLastError();
 		enforce(m_handle != INVALID_HANDLE_VALUE, "Failed to open "~path.toNativeString()~": "~to!string(errorcode));
 		if(mode == FileMode.CreateTrunc && errorcode == ERROR_ALREADY_EXISTS)
@@ -387,12 +398,12 @@ class Win32FileStream : FileStream {
 
 	@property bool readable()
 	const {
-		return m_mode == FileMode.Read;
+		return m_mode == FileMode.Read || m_mode == FileMode.ReadWrite;
 	}
 
 	@property bool writable()
 	const {
-		return m_mode == FileMode.Append || m_mode == FileMode.CreateTrunc;
+		return m_mode == FileMode.Append || m_mode == FileMode.CreateTrunc || m_mode == FileMode.ReadWrite;
 	}
 
 	void seek(ulong offset)
@@ -460,6 +471,7 @@ class Win32FileStream : FileStream {
 			bytes = bytes[m_bytesTransferred .. $];
 			m_ptr += m_bytesTransferred;
 		}
+		if(m_ptr > m_size) m_size = m_ptr;
 	}
 
 	void flush(){}

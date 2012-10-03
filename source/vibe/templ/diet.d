@@ -437,6 +437,7 @@ private struct DietParser {
 		} else if( line.length >= 2 && line[0 .. 2] == "!=" ){
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= line[2 .. $];
+			ret ~= ")";
 		} else {
 			ret ~= StreamVariableName ~ ".write(";
 			ret ~= buildInterpolatedString(line, false, false);
@@ -639,7 +640,7 @@ private struct DietParser {
 		assertp(node_stack.length >= level);
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
 		tagstring ~= "<" ~ tag;
-		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~htmlAttribEscape("~buildInterpolatedString(att[1])~")~\"\\\"";
+		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1], false, false, true)~"~\"\\\"";
 		tagstring ~= is_singular_tag ? "/>" : ">";
 		return tagstring;
 	}
@@ -701,7 +702,7 @@ private struct DietParser {
 		return false;
 	}
 
-	string buildInterpolatedString(string str, bool prevconcat = false, bool nextconcat = false)
+	string buildInterpolatedString(string str, bool prevconcat = false, bool nextconcat = false, bool escape_quotes = false)
 	{
 		string ret;
 		int state = 0; // 0 == start, 1 == in string, 2 == out of string
@@ -712,12 +713,17 @@ private struct DietParser {
 		while( i < str.length ){
 			// check for escaped characters
 			if( str[i] == '\\' ){
+				if( i > start ){
+					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
+					state = 1;
+				}
 				i++;
 				if( i < str.length ){
-					ret ~= enter_string[state] ~ str[i+1];
+					ret ~= enter_string[state] ~ str[i];
 					state = 1;
 					i++;
 				}
+				start = i;
 				continue;
 			}
 
@@ -736,7 +742,8 @@ private struct DietParser {
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
-					if( escape ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
+					if( escape && !escape_quotes ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
+					else if( escape ) ret ~= "htmlAttribEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
 					else ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
 					i++;
 					start = i;
@@ -825,6 +832,7 @@ private struct DietParser {
 		string ret;
 		while( idx < s.length ){
 			if( s[idx] == '\\' ){
+				ret ~= s[idx]; // pass escape character through - will be handled later by buildInterpolatedString
 				idx++;
 				assertp(idx < s.length, "'\\' must be followed by something (escaped character)!");
 				ret ~= s[idx];

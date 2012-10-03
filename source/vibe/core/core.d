@@ -182,6 +182,14 @@ void sleep(Duration timeout)
 
 /**
 	Returns a new armed timer.
+
+	Params:
+		timeout = Determines the minimum amount of time that elapses before the timer fires.
+		callback = This delegate will be called when the timer fires
+		periodic = Speficies if the timer fires repeatedly or only once
+
+	Returns:
+		Returns a Timer object that can be used to identify and modify the timer.
 */
 Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false)
 {
@@ -263,7 +271,7 @@ void enableWorkerThreads()
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.7";
+enum VibeVersionString = "0.7.8";
 
 
 /**************************************************************************************************/
