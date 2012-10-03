@@ -7,6 +7,8 @@
 */
 module vibe.templ.utils;
 
+import vibe.http.server;
+
 
 /**
 	Allows to pass additional variables to a function that renders a templated page.
@@ -32,13 +34,13 @@ module vibe.templ.utils;
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
-			Next!(Vars, userinfo)(req, res);
+			Next!(Aliases, userinfo)(req, res);
 		}
 
 		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
 		{
 			string something_else;
-			Next!(Vars, something_else)(req, res);
+			Next!(Aliases, something_else)(req, res);
 		}
 
 		void page(Aliases...)(HttpServerRequest req, HttpServerResponse res)
@@ -69,7 +71,7 @@ module vibe.templ.utils;
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
-			Next!(Vars, userinfo)(req, res);
+			Next!(Aliases, userinfo)(req, res);
 		}
 
 		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
@@ -83,7 +85,7 @@ module vibe.templ.utils;
 			if( params.userinfo == "peter" )
 				throw Exception("Not allowed!")
 
-			Next!(Vars)(req, res);
+			Next!(Aliases)(req, res);
 		}
 		---
 */
@@ -140,7 +142,7 @@ private template injectReverse(Injectors...)
 }
 
 /// private
-private void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
+void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
 {
 	Next!(Vars, req)(req, res);
 }
