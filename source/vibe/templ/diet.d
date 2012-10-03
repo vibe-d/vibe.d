@@ -88,11 +88,13 @@ void registerDietTextFilter(string name, string function(string, int indent) fil
 	s_filters[name] = filter;
 }
 
+
 /**************************************************************************************************/
 /* private functions                                                                              */
 /**************************************************************************************************/
 
 private {
+	enum string StreamVariableName = "stream__";
 	string function(string, int indent)[string] s_filters;
 }
 
@@ -103,44 +105,27 @@ static this()
 	registerDietTextFilter("markdown", &filterMarkdown);
 }
 
-private @property string dietParser(string template_file)()
-{
-	// Preprocess the source for extensions
-	static immutable text = removeEmptyLines(import(template_file), template_file);
-	static immutable text_indent_style = detectIndentStyle(text);
-	static immutable extname = extractExtensionName(text);
-	static if( extname.length > 0 ){
-		static immutable parsed_file = extname;
-		static immutable parsed_text = removeEmptyLines(import(extname), extname);
-		static immutable indent_style = detectIndentStyle(parsed_text);
-		static immutable blocks = extractBlocks(text, text_indent_style, parsed_text, indent_style);
-	} else {
-		static immutable parsed_file = template_file;
-		static immutable parsed_text = text;
-		static immutable indent_style = text_indent_style;
-		static immutable DietBlock[] blocks = [];
-	}
 
-	DietParser parser;
-	parser.lines = parsed_text;
-	parser.indentStyle = indent_style;
-	parser.blocks = blocks;
-	return parser.buildWriter();
+@property string dietParser(string template_file)()
+{
+	TemplateBlock[] files;
+	readFileRec!(template_file)(files);
+	auto compiler = DietCompiler(&files[0], &files);
+	return compiler.buildWriter();
 }
 
-private string extractExtensionName(in Line[] text)
-{
-	auto header = text[0].text;
-	if( header.length >= 8 && header[0 .. 8] == "extends " )
-		return header[8 .. header.length] ~ ".dt";
-	return "";
-}
 
-private struct DietBlock {
+/******************************************************************************/
+/* Reading of input files                                                     */
+/******************************************************************************/
+
+private struct TemplateBlock {
 	string name;
-	Line[] text;
+	int mode = 0; // -1: prepend, 0: replace, 1: append
 	string indentStyle;
+	Line[] lines;
 }
+
 
 private struct Line {
 	string file;
@@ -148,71 +133,47 @@ private struct Line {
 	string text;
 }
 
-private void assert_ln(Line ln, bool cond, string text = null, string file = __FILE__, int line = __LINE__)
+void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 {
-	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)
-		~": "~text~"("~file~":"~cttostring(line)~")");
+	static if( !isPartOf!(FILE, ALREADY_READ)() ){
+		enum LINES = removeEmptyLines(import(FILE), FILE);
+
+		TemplateBlock ret;
+		ret.name = FILE;
+		ret.lines = LINES;
+		ret.indentStyle = detectIndentStyle(ret.lines);
+
+		enum DEPS = extractDependencies(LINES);
+		dst ~= ret;
+		readFilesRec!(DEPS, ALREADY_READ, FILE)(dst);
+	}
 }
-
-
-
-private DietBlock[] extractBlocks(in Line[] template_text, string indent_style,
-	in Line[] parent_text, string parent_indent_style)
+void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 {
-	string[] names;
-	DietBlock[] blocks;
-	extractBlocksFromExtension(template_text[1 .. template_text.length], names, blocks, indent_style);
-
-	string[] used_names;
-	extractBlocksFromParent(parent_text, used_names, parent_indent_style);
-
-	DietBlock[] ret;
-	foreach( name; used_names ){
-		bool found = false;
-		foreach( i; 0 .. names.length )
-			if( names[i] == name ){
-				ret ~= blocks[i];
-				found = true;
-				break;
-			}
-		if( !found ) ret ~= DietBlock(name, null); // empty block if not given
+	static if( FILES.length > 0 ){
+		readFileRec!(FILES[0], ALREADY_READ)(dst);
+		readFilesRec!(FILES[1 .. $], ALREADY_READ, FILES[0])(dst);
+	}
+}
+bool isPartOf(string str, STRINGS...)()
+{
+	foreach( s; STRINGS )
+		if( str == s )
+			return true;
+	return false;
+}
+string[] extractDependencies(in Line[] lines)
+{
+	string[] ret;
+	foreach( ref ln; lines ){
+		auto lnstr = ln.text.ctstrip();
+		if( lnstr.startsWith("extends ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
+		else if( lnstr.startsWith("include ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
 	}
 	return ret;
 }
 
-private void extractBlocksFromExtension(in Line[] text, ref string[] names, ref DietBlock[] blocks, string indent_style)
-{
-	for( size_t i = 0; i < text.length; ){
-		string ln = text[i].text;
-		assert_ln(text[i], ln.length > 6 && ln[0 .. 6] == "block ",
-			"Inside an extension template, only 'block' tags are allowed at root level.");
-		auto name = ln[6 .. ln.length];
-		i++;
-		Line[] block;
-		while( i < text.length ){
-			auto bln = text[i];
-			assert_ln(bln, bln.text.length > 0); // empty lines should be removed here!
-			if( bln.text[0] != '\t' && bln.text[0] != ' ' ) break;
-			block ~= bln;
-			i++;
-		}
-		names ~= name;
-		blocks ~= DietBlock(name, block, indent_style);
-	}
-}
-
-private void extractBlocksFromParent(in Line[] text, ref string[] names, string indent)
-{
-	for( size_t i = 0; i < text.length; i++ ){
-		string ln = unindent(text[i].text, indent);
-		if( ln.length > 6 && ln[0 .. 6] == "block " ){
-			auto name = ln[6 .. ln.length];
-			names ~= name;		
-		}
-	}
-}
-
-private string detectIndentStyle(in Line[] lines)
+private string detectIndentStyle(in ref Line[] lines)
 {
 	// search for the first indented line
 	foreach( i; 0 .. lines.length ){
@@ -234,161 +195,224 @@ private string detectIndentStyle(in Line[] lines)
 	return "\t";
 }
 
-private string unindent(string str, string indent)
-{
-	size_t lvl = indentLevel(str, indent);
-	return str[lvl*indent.length .. $];
-}
 
-private int indentLevel(string s, string indent)
-{
-	if( indent.length == 0 ) return 0;
-	int l = 0;
-	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
-		l += cast(int)indent.length;
-	return l / cast(int)indent.length;
-}
+/******************************************************************************/
+/* The Diet compiler                                                          */
+/******************************************************************************/
 
-private string lineMarker(Line ln)
-{
-	return "#line "~cttostring(ln.number)~" \""~ln.file~"\"\n";
-}
-
-
-private enum string StreamVariableName = "stream__";
-
-private struct DietParser {
+private struct DietCompiler {
 	private {
-		size_t curline = 0;
-		const(Line)[] lines;
-		const(DietBlock)[] blocks;
-		string indentStyle = "\t";
+		size_t m_lineIndex = 0;
+		TemplateBlock* block;
+		TemplateBlock[]* files;
+		TemplateBlock[]* blocks;
 	}
 
-	this(in Line[] lines_, in DietBlock[] blocks_)
+	@property ref string indentStyle() { return block.indentStyle; }
+	@property size_t lineCount() { return block.lines.length; }
+	ref Line line(size_t ln) { return block.lines[ln]; }
+	ref Line currLine() { return block.lines[m_lineIndex]; }
+	ref string currLineText() { return block.lines[m_lineIndex].text; }
+	Line[] lineRange(size_t from, size_t to) { return block.lines[from .. to]; }
+
+	@disable this();
+
+	this(TemplateBlock* block, TemplateBlock[]* files)
 	{
-		this.lines = lines_;
-		this.blocks = blocks_;
+		this.block = block;
+		this.files = files;
 	}
 
 	string buildWriter()
 	{
-		const header = lines[curline].text;
-		assertp(header == "!!! 5", "Only HTML 5 is supported ('!!! 5')!");
-		string ret = lineMarker(lines[curline]);
-		ret ~= StreamVariableName ~ ".write(\"<!DOCTYPE html>";
-		bool in_string = true;
+		bool in_string = false;
 		string[] node_stack;
-		curline++;
-
-		auto next_indent_level = indentLevel(lines[curline].text, indentStyle);
-		assertp(next_indent_level == 0, "Indentation must start at level zero.");
-
-		ret ~= buildBodyWriter(node_stack, next_indent_level, in_string);
-		
-		ret ~= endString(in_string);
-		
+		auto ret = buildWriter(node_stack, in_string, 0);
 		assert(node_stack.length == 0);
-
 		return ret;
 	}
 
-	void assertp(bool cond, string text = null, string file = __FILE__, int line = __LINE__)
+	string buildWriter(ref string[] node_stack, ref bool in_string, int base_level)
 	{
-		Line ln;
-		if( curline < lines.length ) ln = lines[curline];
-		assert(cond, "template "~ln.file~" line "~cttostring(ln.number)~": "~text~"("~file~":"~cttostring(line)~")");
+		if( lineCount == 0 ) return null;
+
+		auto firstline = line(m_lineIndex);
+		auto firstlinetext = firstline.text;
+
+		string ret;
+		ret ~= endString(in_string);
+		ret ~= lineMarker(firstline);
+
+		if( firstlinetext.startsWith("extends ") ){
+			string layout_file = firstlinetext[8 .. $].ctstrip() ~ ".dt";
+			auto extfile = getFile(layout_file);
+			m_lineIndex++;
+
+			// extract all blocks
+			TemplateBlock[] subblocks;
+			while( m_lineIndex < lineCount ){
+				TemplateBlock subblock;
+
+				// read block header
+				string blockheader = line(m_lineIndex).text;
+				size_t spidx = 0;
+				auto mode = skipIdent(line(m_lineIndex).text, spidx, "");
+				assertp(spidx > 0, "Expected block/append/prepend.");
+				subblock.name = blockheader[spidx .. $].ctstrip();
+				if( mode == "block" ) subblock.mode = 0;
+				else if( mode == "append" ) subblock.mode = 1;
+				else if( mode == "prepend" ) subblock.mode = -1;
+				else assertp(false, "Expected block/append/prepend.");
+				m_lineIndex++;
+
+				// skip to next block
+				auto block_start = m_lineIndex;
+				while( m_lineIndex < lineCount ){
+					auto lvl = indentLevel(line(m_lineIndex).text, indentStyle);
+					if( lvl == 0 ) break;
+					m_lineIndex++;
+				}
+
+				// append block to compiler
+				subblock.lines = block.lines[block_start .. m_lineIndex];
+				subblock.indentStyle = indentStyle;
+				subblocks ~= subblock;
+			}
+
+			// execute compiler on layout file
+			auto layoutcompiler = DietCompiler(extfile, files);
+			layoutcompiler.blocks = &subblocks;
+			ret ~= layoutcompiler.buildWriter(node_stack, in_string, base_level);
+		} else {
+			auto start_indent_level = indentLevel(firstlinetext, indentStyle);
+			//assertp(start_indent_level == 0, "Indentation must start at level zero.");
+			ret ~= buildBodyWriter(node_stack, in_string, base_level, start_indent_level);
+		}
+
+		ret ~= endString(in_string);
+		return ret;
 	}
 
-	string buildBodyWriter(ref string[] node_stack, int base_level, ref bool in_string)
+	private string buildBodyWriter(ref string[] node_stack, ref bool in_string, int base_level, int start_indent_level)
 	{
 		string ret;
-		size_t blockidx = 0;
 
 		assertp(node_stack.length >= base_level);
 
-		for( ; curline < lines.length; curline++ ){
-			if( !in_string ) ret ~= lineMarker(lines[curline]);
-			auto level = indentLevel(lines[curline].text, indentStyle) + base_level;
+		for( ; m_lineIndex < lineCount; m_lineIndex++ ){
+			auto curline = line(m_lineIndex);
+			if( !in_string ) ret ~= lineMarker(curline);
+			auto level = indentLevel(curline.text, indentStyle) - start_indent_level + base_level;
 			assertp(level <= node_stack.length+1);
-			auto ln = unindent(lines[curline].text, indentStyle);
+			auto ln = unindent(curline.text, indentStyle);
 			assertp(ln.length > 0);
-			int next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
+			int next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
 
 			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
 			assertp(next_indent_level <= level+1, "The next line is indented by more than one level deeper. Please unindent accordingly.");
 
 			if( ln[0] == '-' ){ // embedded D code
-				ret ~= buildCodeNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
+				assertp(ln[$-1] != '{', "Use indentation to nest D statements instead of braces.");
+				ret ~= endString(in_string) ~ ln[1 .. $] ~ "{\n";
+				node_stack ~= "-}";
 			} else if( ln[0] == '|' ){ // plain text node
 				ret ~= buildTextNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
 			} else if( ln[0] == ':' ){ // filter node (filtered raw text)
 				// find all child lines
-				size_t next_tag = curline+1;
-				while( next_tag < lines.length &&
-					indentLevel(lines[next_tag].text, indentStyle, false) > level-base_level )
+				size_t next_tag = m_lineIndex+1;
+				while( next_tag < lineCount &&
+					indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
 				{
 					next_tag++;
 				}
 
 				ret ~= buildFilterNodeWriter(node_stack, ln, level, base_level, in_string,
-						lines[curline+1 .. next_tag]);
+						lineRange(m_lineIndex+1, next_tag));
 
 				// skip to the next tag
 				//node_stack ~= "-";
-				curline = next_tag-1;
-				next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
+				m_lineIndex = next_tag-1;
+				next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
 			} else {
 				size_t j = 0;
 				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
+				if( ln.startsWith("!!! ") ) tag = "!!!";
 				switch(tag){
 					default:
 						ret ~= buildHtmlNodeWriter(node_stack, tag, ln[j .. $], level, in_string, next_indent_level > level);
 						break;
-					case "block":
-						// if this assertion triggers, we are probably inside a block and the block tries to insert another block
-						assertp(!blocks.length || blockidx < blocks.length, "Blocks inside of extensions are not supported.");
-						// but this should never happen:
-						assertp(blockidx < blocks.length, "Less blocks than in template?!");
-						node_stack ~= "-";
-						if( blocks[blockidx].text.length ){
-							DietParser parser;
-							parser.lines = blocks[blockidx].text;
-							parser.indentStyle = blocks[blockidx].indentStyle;
-							ret ~= endString(in_string);
-							ret ~= lineMarker(blocks[blockidx].text[0]);
-							ret ~= parser.buildBodyWriter(node_stack, level, in_string);
-						}
-						blockidx++;
+					case "!!!": // HTML Doctype header
+						ret ~= buildSpecialTag!(node_stack)("!DOCTYPE html", level, in_string);
 						break;
-					case "//if":
+					case "//": // HTML comment
+						skipWhitespace(ln, j);
+						ret ~= startString(in_string) ~ "<!--" ~ ln[j .. $] ~ "\n";
+						node_stack ~= "-->";
+						break;
+					case "//-": // non-output comment
+						// find all child lines
+						size_t next_tag = m_lineIndex+1;
+						while( next_tag < lineCount &&
+							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+						{
+							next_tag++;
+						}
+
+						// skip to the next tag
+						m_lineIndex = next_tag-1;
+						next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
+						break;
+					case "//if": // IE conditional comment
 						skipWhitespace(ln, j);
 						ret ~= buildSpecialTag!(node_stack)("!--[if "~ln[j .. $]~"]", level, in_string);
 						node_stack ~= "<![endif]-->";
 						break;
+					case "block": // Block insertion place
+						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
+						node_stack ~= "-";
+						auto block = getBlock(ln[6 .. $].ctstrip());
+						if( block ){
+							if( block.mode == 1 ){
+								// output defaults
+							}
+							auto blockcompiler = DietCompiler(block, files);
+							ret ~= blockcompiler.buildWriter(node_stack, in_string, node_stack.length);
+
+							if( block.mode == -1 ){
+								// output defaults
+							}
+						} else {
+							// output defaults
+						}
+						break;
+					case "include": // Diet file include
+						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
+						auto filename = ln[8 .. $].ctstrip() ~ ".dt";
+						auto file = getFile(filename);
+						auto includecompiler = DietCompiler(file, files);
+						ret ~= includecompiler.buildWriter(node_stack, in_string, level);
+						break;
 					case "script":
 					case "style":
 						// pass all child lines to buildRawTag and continue with the next sibling
-						size_t next_tag = curline+1;
-						while( next_tag < lines.length &&
-							indentLevel(lines[next_tag].text, indentStyle, false) > level-base_level )
+						size_t next_tag = m_lineIndex+1;
+						while( next_tag < lineCount &&
+							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
 						{
 							next_tag++;
 						}
 						ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
-							in_string, lines[curline+1 .. next_tag]);
-						curline = next_tag-1;
-						next_indent_level = (curline+1 < lines.length ? indentLevel(lines[curline+1].text, indentStyle, false) : 0) + base_level;
+							in_string, lineRange(m_lineIndex+1, next_tag));
+						m_lineIndex = next_tag-1;
+						next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
 						break;
-					case "//":
-					case "//-":
 					case "each":
 					case "for":
 					case "if":
 					case "unless":
 					case "mixin":
-					case "include":
 						assertp(false, "'"~tag~"' is not supported.");
+						break;
 				}
 			}
 			
@@ -405,49 +429,40 @@ private struct DietParser {
 						str = "\n";
 						foreach( j; 0 .. node_stack.length-1 ) if( node_stack[j][0] != '-' ) str ~= "\t";
 					}
-					str ~= node_stack[$-1][0] == '<' ? node_stack[$-1] : "</" ~ node_stack[$-1] ~ ">";
+					str ~= node_stack[$-1];
 					ret ~= startString(in_string);
 					ret ~= dstringEscape(str);
 				}
-				node_stack = node_stack[0 .. $-1];
+				node_stack.length = node_stack.length-1;
 			}
 		}
 
 		return ret;
 	}
 
-	string buildCodeNodeWriter(ref string[] node_stack, string line, int level, ref bool in_string)
-	{
-		line = ctstrip(line);
-		assertp(line.length == 0 || line[$-1] != '{', "Use indentation to nest D statements instead of braces.");
-		string ret = endString(in_string) ~ line ~ "{\n";
-		node_stack ~= "-}";
-		return ret;
-	}
-
-	string buildTextNodeWriter(ref string[] node_stack, string line, int level, ref bool in_string)
+	private string buildTextNodeWriter(ref string[] node_stack, in string textline, int level, ref bool in_string)
 	{
 		string ret;
 		ret = endString(in_string);
 		ret ~= StreamVariableName ~ ".write(\"\\n\", false);\n";
-		if( line.length >= 1 && line[0] == '=' ){
+		if( textline.length >= 1 && textline[0] == '=' ){
 			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
-			ret ~= line[1 .. $];
+			ret ~= textline[1 .. $];
 			ret ~= "))";
-		} else if( line.length >= 2 && line[0 .. 2] == "!=" ){
+		} else if( textline.length >= 2 && textline[0 .. 2] == "!=" ){
 			ret ~= StreamVariableName ~ ".write(_toString(";
-			ret ~= line[2 .. $];
+			ret ~= textline[2 .. $];
 			ret ~= ")";
 		} else {
 			ret ~= StreamVariableName ~ ".write(";
-			ret ~= buildInterpolatedString(line, false, false);
+			ret ~= buildInterpolatedString(textline, false, false);
 		}
 		ret ~= ", false);\n";
 		node_stack ~= "-";
 		return ret;
 	}
 
-	string buildHtmlNodeWriter(ref string[] node_stack, string tag, string line, int level, ref bool in_string, bool has_child_nodes)
+	private string buildHtmlNodeWriter(ref string[] node_stack, in ref string tag, in string line, int level, ref bool in_string, bool has_child_nodes)
 	{
 		// parse the HTML tag, leaving any trailing text as line[i .. $]
 		size_t i;
@@ -483,7 +498,7 @@ private struct DietParser {
 		
 		string tail;
 		if( has_child_nodes ){
-			node_stack ~= tag;
+			node_stack ~= "</"~tag~">";
 			tail = "";
 		} else if( !is_singular_tag ) tail = "</" ~ tag ~ ">";
 		
@@ -497,7 +512,7 @@ private struct DietParser {
 		return ret;
 	}
 
-	string buildRawNodeWriter(ref string[] node_stack, string tag, string tagline, int level,
+	private string buildRawNodeWriter(ref string[] node_stack, in ref string tag, in string tagline, int level,
 			int base_level, ref bool in_string, in Line[] lines)
 	{
 		// parse the HTML tag leaving any trailing text as tagline[i .. $]
@@ -535,7 +550,7 @@ private struct DietParser {
 		return ret;
 	}
 
-	string buildFilterNodeWriter(ref string[] node_stack, string tagline, int level,
+	private string buildFilterNodeWriter(ref string[] node_stack, in ref string tagline, int level,
 			int base_level, ref bool in_string, in Line[] lines)
 	{
 		string ret;
@@ -583,7 +598,7 @@ private struct DietParser {
 		return ret;
 	}
 
-	void parseHtmlTag(string line, out size_t i, out Tuple!(string, string)[] attribs)
+	private void parseHtmlTag(in ref string line, out size_t i, out Tuple!(string, string)[] attribs)
 	{
 		i = 0;
 
@@ -634,7 +649,7 @@ private struct DietParser {
 		skipWhitespace(line, i);
 	}
 
-	string buildHtmlTag(ref string[] node_stack, string tag, int level, ref bool in_string, ref Tuple!(string, string)[] attribs, bool is_singular_tag)
+	private string buildHtmlTag(ref string[] node_stack, in ref string tag, int level, ref bool in_string, ref Tuple!(string, string)[] attribs, bool is_singular_tag)
 	{
 		string tagstring = startString(in_string) ~ "\\n";
 		assertp(node_stack.length >= level);
@@ -645,7 +660,7 @@ private struct DietParser {
 		return tagstring;
 	}
 
-	void parseAttributes(string str, ref Tuple!(string, string)[] attribs)
+	private void parseAttributes(in ref string str, ref Tuple!(string, string)[] attribs)
 	{
 		size_t i = 0;
 		skipWhitespace(str, i);
@@ -681,7 +696,7 @@ private struct DietParser {
 		}
 	}
 
-	bool hasInterpolations(string str)
+	private bool hasInterpolations(in ref string str)
 	{
 		size_t i = 0;
 		while( i < str.length ){
@@ -702,7 +717,7 @@ private struct DietParser {
 		return false;
 	}
 
-	string buildInterpolatedString(string str, bool prevconcat = false, bool nextconcat = false, bool escape_quotes = false)
+	private string buildInterpolatedString(in ref string str, bool prevconcat = false, bool nextconcat = false, bool escape_quotes = false)
 	{
 		string ret;
 		int state = 0; // 0 == start, 1 == in string, 2 == out of string
@@ -764,7 +779,7 @@ private struct DietParser {
 		return (prevconcat?"~":"") ~ ret ~ (nextconcat?"~":"");
 	}
 
-	string skipIdent(string s, ref size_t idx, string additional_chars = null)
+	private string skipIdent(in ref string s, ref size_t idx, string additional_chars = null)
 	{
 		size_t start = idx;
 		while( idx < s.length ){
@@ -788,7 +803,7 @@ private struct DietParser {
 		return s[start .. idx];
 	}
 
-	string skipWhitespace(string s, ref size_t idx)
+	private string skipWhitespace(in ref string s, ref size_t idx)
 	{
 		size_t start = idx;
 		while( idx < s.length ){
@@ -798,7 +813,7 @@ private struct DietParser {
 		return s[start .. idx];
 	}
 
-	string skipUntilClosingBrace(string s, ref size_t idx)
+	private string skipUntilClosingBrace(in ref string s, ref size_t idx)
 	{
 		int level = 0;
 		auto start = idx;
@@ -812,7 +827,7 @@ private struct DietParser {
 		assert(false);
 	}
 
-	string skipUntilClosingClamp(string s, ref size_t idx)
+	private string skipUntilClosingClamp(in ref string s, ref size_t idx)
 	{
 		int level = 0;
 		auto start = idx;
@@ -826,7 +841,7 @@ private struct DietParser {
 		assert(false);
 	}
 
-	string skipAttribString(string s, ref size_t idx, char delimiter)
+	private string skipAttribString(in ref string s, ref size_t idx, char delimiter)
 	{
 		size_t start = idx;
 		string ret;
@@ -843,13 +858,13 @@ private struct DietParser {
 		return ret;
 	}
 
-	private string unindent(string str, string indent)
+	private string unindent(in ref string str, in ref string indent)
 	{
 		size_t lvl = indentLevel(str, indent);
 		return str[lvl*indent.length .. $];
 	}
 
-	private int indentLevel(string s, string indent, bool strict = true)
+	private int indentLevel(in ref string s, in ref string indent, bool strict = true)
 	{
 		if( indent.length == 0 ) return 0;
 		int l = 0;
@@ -859,9 +874,33 @@ private struct DietParser {
 		return l / cast(int)indent.length;
 	}
 
-	private int indentLevel(in Line[] ln, string indent)
+	private int indentLevel(in ref Line[] ln, string indent)
 	{
 		return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
+	}
+
+	private void assertp(bool cond, string text = null, string file = __FILE__, int cline = __LINE__)
+	{
+		Line ln;
+		if( m_lineIndex < lineCount ) ln = line(m_lineIndex);
+		assert(cond, "template "~ln.file~" line "~cttostring(ln.number)~": "~text~"("~file~":"~cttostring(cline)~")");
+	}
+
+	private TemplateBlock* getFile(string filename)
+	{
+		foreach( i; 0 .. files.length )
+			if( (*files)[i].name == filename )
+				return &(*files)[i];
+		assertp(false, "Bug: include input file "~filename~" not found in internal list!?");
+		assert(false);
+	}
+	
+	private TemplateBlock* getBlock(string name)
+	{
+		foreach( i; 0 .. blocks.length )
+			if( (*blocks)[i].name == name )
+				return &(*blocks)[i];
+		return null;
 	}
 }
 
@@ -889,6 +928,32 @@ private @property string endString(ref bool in_string){
 }
 
 
+private void assert_ln(in ref Line ln, bool cond, string text = null, string file = __FILE__, int line = __LINE__)
+{
+	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)
+		~": "~text~"("~file~":"~cttostring(line)~")");
+}
+
+
+private string unindent(in ref string str, in ref string indent)
+{
+	size_t lvl = indentLevel(str, indent);
+	return str[lvl*indent.length .. $];
+}
+
+private int indentLevel(in ref string s, in ref string indent)
+{
+	if( indent.length == 0 ) return 0;
+	int l = 0;
+	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
+		l += cast(int)indent.length;
+	return l / cast(int)indent.length;
+}
+
+private string lineMarker(in ref Line ln)
+{
+	return "#line "~cttostring(ln.number)~" \""~ln.file~"\"\n";
+}
 
 
 
@@ -903,7 +968,7 @@ private string dstringEscape(char ch)
 		case '\"': return "\\\"";
 	}
 }
-private string dstringEscape(string str)
+private string dstringEscape(in ref string str)
 {
 	string ret;
 	foreach( ch; str ) ret ~= dstringEscape(ch);
