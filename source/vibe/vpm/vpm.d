@@ -195,7 +195,7 @@ private class Application {
 		foreach( string pkg, d; graph.needed() ) {
 			auto p = pkg in installed;
 			// TODO: auto update to latest head revision
-			if(!p || !d.dependency.matches(p.vers)) {
+			if(!p || (!d.dependency.matches(p.vers) && !d.dependency.matches(Version.MASTER))) {
 				if(!p) logDebug("Application not complete, required package '"~pkg~"', which was not found.");
 				else logDebug("Application not complete, required package '"~pkg~"', invalid version. Required '%s', available '%s'.", d.dependency, p.vers);
 				actions ~= Action(Action.ActionId.InstallUpdate, pkg, d.dependency, d.packages);
