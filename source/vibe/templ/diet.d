@@ -299,6 +299,10 @@ private struct DietCompiler {
 
 		assertp(node_stack.length >= base_level);
 
+		int computeNextIndentLevel(){
+			return (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
+		}
+
 		for( ; m_lineIndex < lineCount; m_lineIndex++ ){
 			auto curline = line(m_lineIndex);
 			if( !in_string ) ret ~= lineMarker(curline);
@@ -306,7 +310,7 @@ private struct DietCompiler {
 			assertp(level <= node_stack.length+1);
 			auto ln = unindent(curline.text, indentStyle);
 			assertp(ln.length > 0);
-			int next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
+			int next_indent_level = computeNextIndentLevel();
 
 			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
 			assertp(next_indent_level <= level+1, "The next line is indented by more than one level deeper. Please unindent accordingly.");
@@ -326,13 +330,13 @@ private struct DietCompiler {
 					next_tag++;
 				}
 
-				ret ~= buildFilterNodeWriter(node_stack, ln, level, base_level, in_string,
+				ret ~= buildFilterNodeWriter(node_stack, ln, curline.number, level + start_indent_level - base_level, in_string,
 						lineRange(m_lineIndex+1, next_tag));
 
 				// skip to the next tag
 				//node_stack ~= "-";
 				m_lineIndex = next_tag-1;
-				next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
+				next_indent_level = computeNextIndentLevel();
 			} else {
 				size_t j = 0;
 				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
@@ -360,7 +364,7 @@ private struct DietCompiler {
 
 						// skip to the next tag
 						m_lineIndex = next_tag-1;
-						next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
+						next_indent_level = computeNextIndentLevel();
 						break;
 					case "//if": // IE conditional comment
 						skipWhitespace(ln, j);
@@ -404,7 +408,7 @@ private struct DietCompiler {
 						ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
 							in_string, lineRange(m_lineIndex+1, next_tag));
 						m_lineIndex = next_tag-1;
-						next_indent_level = (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
+						next_indent_level = computeNextIndentLevel();
 						break;
 					case "each":
 					case "for":
@@ -425,7 +429,7 @@ private struct DietCompiler {
 					}
 				} else if( node_stack[$-1].length ){
 					string str;
-					if( node_stack[$-1] != "pre" ){
+					if( node_stack[$-1] != "</pre>" ){
 						str = "\n";
 						foreach( j; 0 .. node_stack.length-1 ) if( node_stack[j][0] != '-' ) str ~= "\t";
 					}
@@ -550,8 +554,8 @@ private struct DietCompiler {
 		return ret;
 	}
 
-	private string buildFilterNodeWriter(ref string[] node_stack, in ref string tagline, int level,
-			int base_level, ref bool in_string, in Line[] lines)
+	private string buildFilterNodeWriter(ref string[] node_stack, in ref string tagline, int tagline_number,
+		int indent, ref bool in_string, in Line[] lines)
 	{
 		string ret;
 
@@ -566,14 +570,14 @@ private struct DietCompiler {
 
 		// assemble child lines to one string
 		string content = tagline[j .. $];
-		foreach( cln; lines ){
-			if( content.length ) content ~= '\n';
-			content ~= cln.text[(level-base_level+1)*indentStyle.length .. $];
+		int lc = content.length ? tagline_number : tagline_number+1;
+		foreach( i; 0 .. lines.length ){
+			while( lc < lines[i].number ){ // DMDBUG: while(lc++ < lines[i].number) silently loops and only executes the last iteration
+				content ~= '\n';
+				lc++;
+			}
+			content ~= lines[i].text[(indent+1)*indentStyle.length .. $];
 		}
-
-		// determine the current HTML indent level
-		int indent = 0;
-		foreach( i; 0 .. level ) if( node_stack[i][0] != '-' ) indent++;
 
 		// compile-time filter whats possible
 		filter_loop:
