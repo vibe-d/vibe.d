@@ -103,6 +103,7 @@ static this()
 	registerDietTextFilter("css", &filterCSS);
 	registerDietTextFilter("javascript", &filterJavaScript);
 	registerDietTextFilter("markdown", &filterMarkdown);
+	registerDietTextFilter("htmlescape", &filterHtmlEscape);
 }
 
 
@@ -268,7 +269,7 @@ private struct DietCompiler {
 				// skip to next block
 				auto block_start = m_lineIndex;
 				while( m_lineIndex < lineCount ){
-					auto lvl = indentLevel(line(m_lineIndex).text, indentStyle);
+					auto lvl = indentLevel(line(m_lineIndex).text, indentStyle, false);
 					if( lvl == 0 ) break;
 					m_lineIndex++;
 				}
@@ -751,6 +752,7 @@ private struct DietCompiler {
 				if( i > start ){
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
+					start = i;
 				}
 				if( str[i+1] == str[i] ){ // just keeping alternative escaping for compatibility reasons
 					ret ~= enter_string[state] ~ "#";
@@ -1068,4 +1070,9 @@ string filterJavaScript(string text, int indent)
 string filterMarkdown(string text, int indent)
 {
 	return vibe.textfilter.markdown.filterMarkdown(text);
+}
+
+string filterHtmlEscape(string text, int indent)
+{
+	return htmlEscape(text);
 }
