@@ -58,7 +58,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		logTrace("Processing '%s'", srv_path);
 		rpath.normalize();
 		logDebug("Path '%s' -> '%s'", rel_path, rpath.toNativeString());
-		if( rpath[0] == ".." ) return; // don't respond to relative paths outside of the root path
+		if( !rpath.empty && rpath[0] == ".." ) return; // don't respond to relative paths outside of the root path
 
 		string path = (lpath ~ rpath).toNativeString();
 
