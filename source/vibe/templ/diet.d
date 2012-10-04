@@ -754,12 +754,8 @@ private struct DietCompiler {
 					state = 1;
 					start = i;
 				}
-				if( str[i+1] == str[i] ){ // just keeping alternative escaping for compatibility reasons
-					ret ~= enter_string[state] ~ "#";
-					state = 1;
-					i += 2;
-					start = i;
-				} else if( str[i+1] == '{' ){
+				assertp(str[i+1] != str[i], "Please use \\ to escape # or ! instead of ## or !!.");
+				if( str[i+1] == '{' ){
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
