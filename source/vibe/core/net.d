@@ -38,16 +38,6 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
 */
-void listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
-{
-	listenTcp(port, (TcpConnection conn){ connection_callback(conn); });
-}
-/// ditto
-void listenTcpS(ushort port, void function(TcpConnection conn) connection_callback, string address)
-{
-	listenTcp(port, (TcpConnection conn){ connection_callback(conn); }, address);
-}
-/// ditto
 void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
 {
 	listenTcp(port, connection_callback, "0.0.0.0");
@@ -59,6 +49,20 @@ void listenTcp(ushort port, void delegate(TcpConnection conn) connection_callbac
 	getEventDriver().listenTcp(port, connection_callback, address);
 }
 
+/**
+	Starts listening on the specified port.
+
+	This function is the same as listenTcp() but takes a function callback instead of a delegate.
+*/
+void listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
+{
+	listenTcp(port, (TcpConnection conn){ connection_callback(conn); });
+}
+/// ditto
+void listenTcpS(ushort port, void function(TcpConnection conn) connection_callback, string address)
+{
+	listenTcp(port, (TcpConnection conn){ connection_callback(conn); }, address);
+}
 
 /**
 	Establishes a connection to the given host/port.
