@@ -20,6 +20,10 @@ import std.datetime;
 import std.file;
 import std.string;
 
+
+/**
+	Configuration options for the static file server.
+*/
 class HttpFileServerSettings {
 	string serverPathPrefix = "/";
 	long maxAge = 60*60*24*30; // 30 days
@@ -33,6 +37,9 @@ class HttpFileServerSettings {
 	}
 } 
 
+/**
+	Returns a request handler that serves files from the specified directory.
+*/
 HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSettings settings = null)
 {
 	if( !settings ) settings = new HttpFileServerSettings;

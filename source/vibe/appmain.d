@@ -26,6 +26,9 @@ import vibe.http.server;
 
 /**
 	The predefined vibe.d application entry point.
+
+	This function will automatically be executed if you import the module vibe.d in your code. It
+	will perform default command line parsing and starts the event loop.
 */
 int main(string[] args)
 {

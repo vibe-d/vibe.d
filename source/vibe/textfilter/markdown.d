@@ -37,6 +37,8 @@ version(MarkdownTest)
 	}
 }
 
+/** Returns a Markdown filtered HTML string.
+*/
 string filterMarkdown()(string str)
 {
 	auto dst = appender!string();
@@ -44,6 +46,9 @@ string filterMarkdown()(string str)
 	return dst.data;
 }
 
+
+/** Markdown filters the given string and writes the corresponding HTML to an output range.
+*/
 void filterMarkdown(R)(ref R dst, string src)
 {
 	auto all_lines = splitLines(src);
@@ -622,7 +627,7 @@ private string removeListPrefix(string str, LineType tp)
 }
 
 
-auto parseHtmlBlockLine(string ln)
+private auto parseHtmlBlockLine(string ln)
 {
 	struct HtmlBlockInfo {
 		bool isHtmlBlock;
@@ -659,19 +664,19 @@ auto parseHtmlBlockLine(string ln)
 	return ret;
 }
 
-bool isHtmlBlockLine(string ln)
+private bool isHtmlBlockLine(string ln)
 {
 	auto bi = parseHtmlBlockLine(ln);
 	return bi.isHtmlBlock && bi.open;
 }
 
-bool isHtmlBlockCloseLine(string ln)
+private bool isHtmlBlockCloseLine(string ln)
 {
 	auto bi = parseHtmlBlockLine(ln);
 	return bi.isHtmlBlock && !bi.open;
 }
 
-string getHtmlTagName(string ln)
+private string getHtmlTagName(string ln)
 {
 	return parseHtmlBlockLine(ln).tagName;
 }
@@ -790,7 +795,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	return true;
 }
 
-bool parseAutoLink(ref string str, ref string url)
+private bool parseAutoLink(ref string str, ref string url)
 {
 	string pstr = str;
 	if( pstr.length < 3 ) return false;

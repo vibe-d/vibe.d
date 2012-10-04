@@ -3,7 +3,7 @@
 
 	Diet templates are an more or less compatible incarnation of Jade templates but with
 	embedded D source instead of JavaScript. The Diet syntax reference is found at
-	$(LINK http://vibed.org/templates).
+	$(LINK http://vibed.org/templates/diet).
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -107,7 +107,7 @@ static this()
 }
 
 
-@property string dietParser(string template_file)()
+private @property string dietParser(string template_file)()
 {
 	TemplateBlock[] files;
 	readFileRec!(template_file)(files);
@@ -134,7 +134,8 @@ private struct Line {
 	string text;
 }
 
-void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
+/// private
+private void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 {
 	static if( !isPartOf!(FILE, ALREADY_READ)() ){
 		enum LINES = removeEmptyLines(import(FILE), FILE);
@@ -149,21 +150,26 @@ void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 		readFilesRec!(DEPS, ALREADY_READ, FILE)(dst);
 	}
 }
-void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
+
+/// private
+private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 {
 	static if( FILES.length > 0 ){
 		readFileRec!(FILES[0], ALREADY_READ)(dst);
 		readFilesRec!(FILES[1 .. $], ALREADY_READ, FILES[0])(dst);
 	}
 }
-bool isPartOf(string str, STRINGS...)()
+
+/// private
+private bool isPartOf(string str, STRINGS...)()
 {
 	foreach( s; STRINGS )
 		if( str == s )
 			return true;
 	return false;
 }
-string[] extractDependencies(in Line[] lines)
+
+private string[] extractDependencies(in Line[] lines)
 {
 	string[] ret;
 	foreach( ref ln; lines ){
@@ -907,6 +913,7 @@ private struct DietCompiler {
 }
 
 
+/// private
 private string buildSpecialTag(alias node_stack)(string tag, int level, ref bool in_string)
 {
 	// write the tag
@@ -977,6 +984,7 @@ private string dstringEscape(in ref string str)
 	return ret;
 }
 
+/// private
 private string _toString(T)(T v)
 {
 	static if( is(T == string) ) return v;
@@ -1031,7 +1039,7 @@ private Line[] removeEmptyLines(string text, string file)
 /* Compile time filters                                                                           */
 /**************************************************************************************************/
 
-string filterCSS(string text, int indent)
+private string filterCSS(string text, int indent)
 {
 	auto lines = splitLines(text);
 
@@ -1048,7 +1056,7 @@ string filterCSS(string text, int indent)
 }
 
 
-string filterJavaScript(string text, int indent)
+private string filterJavaScript(string text, int indent)
 {
 	auto lines = splitLines(text);
 
@@ -1063,12 +1071,12 @@ string filterJavaScript(string text, int indent)
 	return ret;
 }
 
-string filterMarkdown(string text, int indent)
+private string filterMarkdown(string text, int indent)
 {
 	return vibe.textfilter.markdown.filterMarkdown(text);
 }
 
-string filterHtmlEscape(string text, int indent)
+private string filterHtmlEscape(string text, int indent)
 {
 	return htmlEscape(text);
 }

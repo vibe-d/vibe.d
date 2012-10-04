@@ -63,10 +63,22 @@ InputStream download(string url_, HttpClient client = null)
 }
 
 /// ditto
+InputStream download(Url url, HttpClient client = null)
+{
+	return download(url.toString(), client);
+}
+
+/// ditto
 void download(string url, string filename)
 {
 	auto input = download(url);
 	auto fil = openFile(filename, FileMode.CreateTrunc);
 	scope(exit) fil.close();
 	fil.write(input);
+}
+
+/// ditto
+void download(Url url, Path filename)
+{
+	download(url.toString(), filename.toNativeString());
 }

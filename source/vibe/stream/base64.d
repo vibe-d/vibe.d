@@ -9,6 +9,9 @@ module vibe.stream.base64;
 
 import vibe.stream.stream;
 
+
+/**
+*/
 class Base64OutputStream : OutputStream {
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{

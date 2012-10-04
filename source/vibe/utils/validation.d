@@ -98,6 +98,8 @@ string validatePassword(string str, string str_confirm, size_t min_length = 8, s
 	return str;
 }
 
+/** Checks if a string falls within the specified length range.
+*/
 string validateString(string str, size_t min_length = 0, size_t max_length = 0, string entity_name = "String")
 {
 	std.utf.validate(str);

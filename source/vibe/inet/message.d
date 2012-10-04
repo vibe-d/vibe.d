@@ -57,6 +57,9 @@ void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 
 private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
+/**
+	Writes an RFC-822/5322 date string to the given output range.
+*/
 void writeRFC822DateString(R)(ref R dst, SysTime time)
 {
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -69,6 +72,9 @@ void writeRFC822DateString(R)(ref R dst, SysTime time)
 	writeDecimal(dst, time.year);
 }
 
+/**
+	Writes an RFC-822 time string to the given output range.
+*/
 void writeRFC822TimeString(R)(ref R dst, SysTime time)
 {
 	writeDecimal2(dst, time.hour);
@@ -88,6 +94,9 @@ void writeRFC822TimeString(R)(ref R dst, SysTime time)
 	}
 }
 
+/**
+	Writes an RFC-822 date+time string to the given output range.
+*/
 void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
 {
 	writeRFC822DateString(dst, time);
@@ -95,6 +104,9 @@ void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
 	writeRFC822TimeString(dst, time);
 }
 
+/**
+	Returns the RFC-822 time string representation of the given time.
+*/
 string toRFC822TimeString(SysTime time)
 {
 	auto ret = new FixedAppender!(string, 14);
@@ -102,6 +114,9 @@ string toRFC822TimeString(SysTime time)
 	return ret.data;
 }
 
+/**
+	Returns the RFC-822/5322 date string representation of the given time.
+*/
 string toRFC822DateString(SysTime time)
 {
 	auto ret = new FixedAppender!(string, 16);
@@ -109,6 +124,9 @@ string toRFC822DateString(SysTime time)
 	return ret.data;
 }
 
+/**
+	Returns the RFC-822 date+time string representation of the given time.
+*/
 string toRFC822DateTimeString(SysTime time)
 {
 	auto ret = new FixedAppender!(string, 31);
@@ -116,6 +134,9 @@ string toRFC822DateTimeString(SysTime time)
 	return ret.data;
 }
 
+/**
+	Parses a date+time string according to RFC-822/5322.
+*/
 SysTime parseRFC822DateTimeString(string str)
 {
 	auto idx = str.indexOf(',');

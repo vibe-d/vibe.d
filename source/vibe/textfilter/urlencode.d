@@ -14,6 +14,8 @@ import std.exception;
 import std.format;
 
 
+/** Returns the URL encoded version of a given string.
+*/
 string urlEncode(string str)
 {
 	auto dst = appender!string();
@@ -22,6 +24,8 @@ string urlEncode(string str)
 	return dst.data;
 }
 
+/** Returns the decoded version of a given URL encoded string.
+*/
 string urlDecode(string str)
 {
 	auto dst = appender!string();
@@ -30,6 +34,8 @@ string urlDecode(string str)
 	return dst.data;
 }
 
+/** Writes the URL encoded version of the given string to an output range.
+*/
 void filterUrlEncode(R)(ref R dst, string str, string allowed_chars = null) 
 {
 	while( str.length > 0 ) {
@@ -52,6 +58,8 @@ void filterUrlEncode(R)(ref R dst, string str, string allowed_chars = null)
 }
 
 
+/** Writes the decoded version of the given URL encoded string to an output range.
+*/
 void filterUrlDecode(R)(ref R dst, string str) 
 {
 	while( str.length > 0 ) {

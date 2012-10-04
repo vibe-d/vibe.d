@@ -17,6 +17,9 @@ private struct StringAppender {
 	void put(char ch) { data ~= ch; }
 }
 
+
+/** Returns the HTML escaped version of a given string.
+*/
 string htmlEscape(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
@@ -30,12 +33,17 @@ string htmlEscape(string str)
 	}
 }
 
+
+/** Writes the HTML escaped version of a given string to an output range.
+*/
 void filterHtmlEscape(R)(ref R dst, string str)
 {
 	foreach( dchar ch; str )
 		filterHtmlEscape(dst, ch, false);
 }
 
+/** Returns the HTML escaped version of a given string (also escapes double quotes).
+*/
 string htmlAttribEscape(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
@@ -49,12 +57,16 @@ string htmlAttribEscape(string str)
 	}
 }
 
+/** Writes the HTML escaped version of a given string to an output range (also escapes double quotes).
+*/
 void filterHtmlAttribEscape(R)(ref R dst, string str)
 {
 	foreach( dchar ch; str )
 		filterHtmlEscape(dst, ch, true);
 }
 
+/** Returns the HTML escaped version of a given string (escapes every character).
+*/
 string filterHtmlAllEscape()(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
@@ -68,6 +80,8 @@ string filterHtmlAllEscape()(string str)
 	}
 }
 
+/** Writes the HTML escaped version of a given string to an output range (escapes every character).
+*/
 void filterHtmlAllEscape(R)(ref R dst, string str)
 {
 	foreach( dchar ch; str ){
@@ -77,6 +91,8 @@ void filterHtmlAllEscape(R)(ref R dst, string str)
 	}
 }
 
+/** Writes the HTML escaped version of a character to an output range.
+*/
 void filterHtmlEscape(R)(ref R dst, dchar ch, bool escape_quotes = false)
 {
 	switch(ch){

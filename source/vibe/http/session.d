@@ -66,12 +66,25 @@ final class Session {
 	session.
 */
 interface SessionStore {
+	/// Creates a new session.
 	Session create();
+
+	/// Opens an existing session.
 	Session open(string id);
+
+	/// Sets a name/value pair for a given session.
 	void set(string id, string name, string value);
+
+	/// Returns the value for a given session key.
 	string get(string id, string name, string defaultVal = null) const;
+
+	/// Determines if a certain session key is set.
 	bool isKeySet(string id, string key) const;
+
+	/// Terminates the given sessiom.
 	void destroy(string id);
+
+	/// Iterates all key/value pairs stored in the given session. 
 	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id);
 }
 
