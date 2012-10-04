@@ -493,9 +493,9 @@ private struct DietCompiler {
 		} else if( i+1 < line.length && line[i .. i+2] == "!=" ){
 			textstring = "_toString("~ctstrip(line[i+2 .. line.length])~")";
 		} else {
-			if( hasInterpolations(line[i .. line.length]) ){
+			if( true || hasInterpolations(line[i .. line.length]) ){
 				textstring = buildInterpolatedString(line[i .. line.length], false, false);
-			} else {
+			} else { // FIXME: need to unescape \# ## etc.
 				textstring = dstringEscape(line[i .. line.length]);
 				textstring_isdynamic = false;
 			}
