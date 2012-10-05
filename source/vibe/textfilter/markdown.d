@@ -314,6 +314,7 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 	}
 }
 
+/// private
 private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links)
 {
 	final switch(block.type){
@@ -398,6 +399,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 	}
 }
 
+/// private
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs)
 {
 	bool br = ln.endsWith("  ");
@@ -511,6 +513,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 	if( br ) dst.put("<br/>");
 }
 
+/// private
 private void outputHeaderLine(R)(ref R dst, string ln, string hln)
 {
 	hln = stripLeft(hln);
@@ -536,11 +539,13 @@ private void outputHeaderLine(R)(ref R dst, string ln, string hln)
 	dst.put(">\n");
 }
 
+/// private
 private void enterBlockQuote(R)(ref R dst)
 {
 	dst.put("<blockquote>");
 }
 
+/// private
 private void exitBlockQuote(R)(ref R dst)
 {
 	dst.put("</blockquote>");
