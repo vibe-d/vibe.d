@@ -10,11 +10,12 @@ module vibe.core.driver;
 public import vibe.core.file;
 public import vibe.core.net;
 public import vibe.core.signal;
+public import vibe.core.task;
 public import vibe.stream.stream;
 
 import vibe.inet.url;
 
-import core.thread;
+import core.time;
 import std.exception;
 
 
@@ -106,6 +107,7 @@ interface EventDriver {
 	Timer createTimer(void delegate() callback);
 }
 
+
 /**
 	Provides an event driver with core functions for task/fiber control.
 */
@@ -113,15 +115,6 @@ interface DriverCore {
 	void yieldForEvent();
 	void resumeTask(Task f, Exception event_exception = null);
 	void notifyIdle();
-}
-
-class Task : Fiber {
-	protected this(void delegate() fun, size_t stack_size)
-	{
-		super(fun, stack_size);
-	}
-
-	static Task getThis(){ return cast(Task)Fiber.getThis(); }
 }
 
 
