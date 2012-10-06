@@ -3,5 +3,5 @@ set FLAGS=..\lib\win-i386\event2.lib ..\lib\win-i386\eay.lib ..\lib\win-i386\ssl
 rdmd --build-only --force -D -Dd. -X -Xfdocs.json -I..\source ..\source\vibe\d.d
 rem >nul 2>&1
 del *.html
-..\..\ddox\app filter docs.json --ex deimos. --ex vibe.core.drivers.
+..\..\ddox\app filter docs.json --min-protection=Public --ex deimos. --ex vibe.core.drivers. --ex etc. --ex std. --ex core.
 copy docs.json ..\..\vibed.org\docs.json
