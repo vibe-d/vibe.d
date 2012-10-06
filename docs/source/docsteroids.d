@@ -97,7 +97,7 @@ class DocProcessor {
 	Json processMembers(Json members, string sc)
 	{
 		writefln("Members, line %d", members.line);
-		Json[] aliases, functions, constructors, enums, structs, classes, interfaces, variables, templates;
+		Json[] aliases, functions, constructors, enums, enummembers, structs, classes, interfaces, variables, templates;
 
 		Json[]* docgrouparr = null;
 		Json[] docgroup;
@@ -131,11 +131,12 @@ class DocProcessor {
 		
 		foreach( m; members ){
 			switch( m.kind.get!string ){
-				default: enforce(false, "Unknown module member kind: "~m.kind.get!string); break;
+				default: enforce(false, "Unknown module member kind for "~m.name.opt!string~": "~m.kind.get!string); break;
 				case "alias": add(aliases, processAlias(m, sc)); break;
 				case "constructor": add(constructors, processConstructor(m, sc)); break;
 				case "function": add(functions, processFunction(m, sc)); break;
 				case "enum": add(enums, processEnum(m, sc)); break;
+				case "enum member": enummembers ~= processEnumMember(m, sc); break;
 				case "struct": add(structs, processStruct(m, sc)); break;
 				case "class": add(classes, processClass(m, sc)); break;
 				case "interface": add(interfaces, processInterface(m, sc)); break;
@@ -150,6 +151,7 @@ class DocProcessor {
 							case "constructor": repmember = processConstructor(mmem, sc); add(constructors, repmember, m); break;
 							case "function": repmember = processFunction(mmem, sc); add(functions, repmember, m); break;
 							case "enum": repmember = processEnum(mmem, sc); add(enums, repmember, m); break;
+							case "enum member": repmember = processEnumMember(mmem, sc); enummembers ~= repmember; break;
 							case "struct": repmember = processStruct(mmem, sc); add(structs, repmember, m); break;
 							case "class": repmember = processClass(mmem, sc); add(classes, repmember, m); break;
 							case "interface": repmember = processInterface(mmem, sc); add(interfaces, repmember, m); break;
@@ -175,6 +177,7 @@ class DocProcessor {
 		if( aliases.length ) dst.aliases = aliases;
 		if( constructors.length ) dst.constructors = constructors;
 		if( functions.length ) dst.functions = functions;
+		if( enummembers.length ) enums ~= Json([makeGlobalEnum(enummembers)]);
 		if( enums.length ) dst.enums = enums;
 		if( structs.length ) dst.structs = structs;
 		if( classes.length ) dst.classes = classes;
@@ -236,6 +239,26 @@ class DocProcessor {
 		}
 		dst.members = Json(members);
 		if( sc.empty ) addType(dst.name.get!string, Json.EmptyObject);
+		return dst;
+	}
+
+	Json processEnumMember(Json al, string sc)
+	{
+		Json dst = processMember(al, sc);
+		dst.kind = "enum member";
+		return dst;
+	}
+
+	Json makeGlobalEnum(Json[] members)
+	{
+		Json dst = Json.EmptyObject;
+		dst.kind = "enum";
+		dst.baseType = processType(Json("void"));
+		dst.name = "$global";
+		dst.nestedName = "$global";
+		dst.protection = "public";
+		dst.line = members[0].line;
+		dst.members = members;
 		return dst;
 	}
 
@@ -373,7 +396,7 @@ class DocProcessor {
 		
 		while( tokens.length > 0 && (tokens[0] == "function" || tokens[0] == "delegate" || tokens[0] == "(") ){
 			Json ret = Json.EmptyObject;
-			ret.typeclass = tokens.front == "(" ? "function" : tokens.front;
+			ret.typeClass = tokens.front == "(" ? "function" : tokens.front;
 			ret.returnType = basic_type;
 			if( tokens.front != "(" ) tokens.popFront();
 			enforce(tokens.front == "(");
@@ -495,43 +518,43 @@ class DocProcessor {
 			}
 		}
 		
-		while( !tokens.empty && tokens.front == "*" ){
-			Json ptr = Json.EmptyObject;
-			ptr.kind = "type";
-			ptr.typeClass = "pointer";
-			ptr.elementType = type;
-			type = ptr;
-			tokens.popFront();
-		}
-
-		while( !tokens.empty && tokens.front == "[" ){
-			tokens.popFront();
-			if( tokens.front == "]" ){
-				Json arr = Json.EmptyObject;
-				arr.kind = "type";
-				arr.typeClass = "array";
-				arr.elementType = type;
-				type = arr;
-			} else if( isDigit(tokens.front[0]) ){
-				Json arr = Json.EmptyObject;
-				arr.kind = "type";
-				arr.typeClass = "static array";
-				arr.elementType = type;
-				arr.elementCount = to!int(tokens.front);
+		while( !tokens.empty ){
+			if( tokens.front == "*" ){
+				Json ptr = Json.EmptyObject;
+				ptr.kind = "type";
+				ptr.typeClass = "pointer";
+				ptr.elementType = type;
+				type = ptr;
 				tokens.popFront();
-				type = arr;
-			} else {
-				auto keytp = parseType(tokens);
-				writefln("GOT TYPE: %s", keytp.toString());
-				Json aa = Json.EmptyObject;
-				aa.kind = "type";
-				aa.typeClass = "associative array";
-				aa.elementType = type;
-				aa.keyType = keytp;
-				type = aa;
-			}
-			enforce(tokens.front == "]", "Expected '[', got '"~tokens.front~"'.");
-			tokens.popFront();
+			} else if( tokens.front == "[" ){
+				tokens.popFront();
+				if( tokens.front == "]" ){
+					Json arr = Json.EmptyObject;
+					arr.kind = "type";
+					arr.typeClass = "array";
+					arr.elementType = type;
+					type = arr;
+				} else if( isDigit(tokens.front[0]) ){
+					Json arr = Json.EmptyObject;
+					arr.kind = "type";
+					arr.typeClass = "static array";
+					arr.elementType = type;
+					arr.elementCount = to!int(tokens.front);
+					tokens.popFront();
+					type = arr;
+				} else {
+					auto keytp = parseType(tokens);
+					writefln("GOT TYPE: %s", keytp.toString());
+					Json aa = Json.EmptyObject;
+					aa.kind = "type";
+					aa.typeClass = "associative array";
+					aa.elementType = type;
+					aa.keyType = keytp;
+					type = aa;
+				}
+				enforce(tokens.front == "]", "Expected '[', got '"~tokens.front~"'.");
+				tokens.popFront();
+			} else break;
 		}
 		
 		return type;

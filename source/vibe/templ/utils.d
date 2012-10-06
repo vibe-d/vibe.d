@@ -7,6 +7,10 @@
 */
 module vibe.templ.utils;
 
+import vibe.http.server;
+
+import std.traits;
+
 
 /**
 	Allows to pass additional variables to a function that renders a templated page.
@@ -32,13 +36,13 @@ module vibe.templ.utils;
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
-			Next!(Vars, userinfo)(req, res);
+			Next!(Aliases, userinfo)(req, res);
 		}
 
 		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
 		{
 			string something_else;
-			Next!(Vars, something_else)(req, res);
+			Next!(Aliases, something_else)(req, res);
 		}
 
 		void page(Aliases...)(HttpServerRequest req, HttpServerResponse res)
@@ -69,7 +73,7 @@ module vibe.templ.utils;
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
-			Next!(Vars, userinfo)(req, res);
+			Next!(Aliases, userinfo)(req, res);
 		}
 
 		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
@@ -83,7 +87,7 @@ module vibe.templ.utils;
 			if( params.userinfo == "peter" )
 				throw Exception("Not allowed!")
 
-			Next!(Vars)(req, res);
+			Next!(Aliases)(req, res);
 		}
 		---
 */
@@ -120,11 +124,12 @@ package string cttostring(T)(T x)
 {
 	static if( is(T == string) ) return x;
 	else static if( is(T : long) || is(T : ulong) ){
+		Unqual!T tmp = x;
 		string s;
 		do {
-			s = cast(char)('0' + (x%10)) ~ s;
-			x /= 10;
-		} while (x>0);
+			s = cast(char)('0' + (tmp%10)) ~ s;
+			tmp /= 10;
+		} while(tmp > 0);
 		return s;
 	} else {
 		static assert(false, "Invalid type for cttostring: "~T.stringof);
@@ -140,7 +145,7 @@ private template injectReverse(Injectors...)
 }
 
 /// private
-private void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
+void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
 {
 	Next!(Vars, req)(req, res);
 }

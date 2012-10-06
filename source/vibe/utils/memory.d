@@ -492,7 +492,8 @@ struct FreeListRef(T, bool INIT = true)
 		m_magic = 0x1EE75817;
 	}
 
-	@property inout(TR) get() inout { return m_object; }
+	@property const(TR) get() const { return m_object; }
+	@property TR get() { return m_object; }
 	alias get this;
 
 	private @property ref int refCount()

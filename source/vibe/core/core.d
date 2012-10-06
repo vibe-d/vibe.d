@@ -182,6 +182,14 @@ void sleep(Duration timeout)
 
 /**
 	Returns a new armed timer.
+
+	Params:
+		timeout = Determines the minimum amount of time that elapses before the timer fires.
+		callback = This delegate will be called when the timer fires
+		periodic = Speficies if the timer fires repeatedly or only once
+
+	Returns:
+		Returns a Timer object that can be used to identify and modify the timer.
 */
 Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false)
 {
@@ -192,37 +200,46 @@ Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false
 
 /**
 	Sets a variable specific to the calling task/fiber.
+
+	Remarks:
+		This function also works if called from outside if a fiber. In this case, it will work
+		on a thread local storage.
 */
 void setTaskLocal(T)(string name, T value)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	if( self ) self.m_taskLocalStorage[name] = Variant(value);
-	else s_taskLocalStorageGlobal[name] = Variant(value);
+	if( self ) self.set(name, value);
+	s_taskLocalStorageGlobal[name] = Variant(value);
 }
 
 /**
 	Returns a task/fiber specific variable.
+
+	Remarks:
+		This function also works if called from outside if a fiber. In this case, it will work
+		on a thread local storage.
 */
 T getTaskLocal(T)(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	Variant* pvar;
-	if( self ) pvar = name in self.m_taskLocalStorage;
-	else pvar = name in s_taskLocalStorageGlobal;
+	if( self ) return self.get(name);
+	auto pvar = name in s_taskLocalStorageGlobal;
 	enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
 	return pvar.get!T();
 }
 
 /**
 	Returns a task/fiber specific variable.
+
+	Remarks:
+		This function also works if called from outside if a fiber. In this case, it will work
+		on a thread local storage.
 */
 bool isTaskLocalSet(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	Variant* pvar;
-	if( self ) pvar = name in self.m_taskLocalStorage;
-	else pvar = name in s_taskLocalStorageGlobal;
-	return pvar !is null;
+	if( self ) return self.isSet(name);
+	return (name in s_taskLocalStorageGlobal) !is null;
 }
 
 /**
@@ -263,7 +280,7 @@ void enableWorkerThreads()
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.7";
+enum VibeVersionString = "0.7.8";
 
 
 /**************************************************************************************************/
@@ -273,7 +290,6 @@ enum VibeVersionString = "0.7.7";
 private class CoreTask : Task {
 	private {
 		void delegate() m_taskFunc;
-		Variant[string] m_taskLocalStorage;
 		Exception m_exception;
 	}
 
@@ -297,7 +313,7 @@ private class CoreTask : Task {
 			} catch( Exception e ){
 				logError("Task terminated with exception: %s", e.toString());
 			}
-			m_taskLocalStorage = null;
+			resetLocalStorage();
 			
 			// make the fiber available for the next task
 			if( s_availableFibers.length <= s_availableFibersCount )

@@ -328,7 +328,7 @@ class Win32FileStream : FileStream {
 
 		auto shareMode = m_mode == FileMode.Read? FILE_SHARE_READ : 0;
 
-		auto creation = m_mode == FileMode.CreateTrunc? CREATE_ALWAYS : OPEN_ALWAYS;
+		auto creation = m_mode == FileMode.CreateTrunc? CREATE_ALWAYS : m_mode == FileMode.Append? OPEN_ALWAYS : OPEN_EXISTING;
 
 		m_handle = CreateFileW(
 					toUTF16z(m_path.toNativeString()),

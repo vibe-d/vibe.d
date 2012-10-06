@@ -150,8 +150,7 @@ interface InputStream {
 	*/
 	@property ulong leastSize();
 
-	/**
-		Queries if there is data available for immediate, non-blocking read.
+	/** Queries if there is data available for immediate, non-blocking read.
 	*/
 	@property bool dataAvailableForRead();
 

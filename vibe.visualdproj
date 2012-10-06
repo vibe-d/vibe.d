@@ -340,8 +340,8 @@
    <File path="source\vibe\http\websockets.d" />
   </Folder>
   <Folder name="inet">
+   <File path="source\vibe\inet\message.d" />
    <File path="source\vibe\inet\mimetypes.d" />
-   <File path="source\vibe\inet\rfc5322.d" />
    <File path="source\vibe\inet\url.d" />
    <File path="source\vibe\inet\urltransfer.d" />
   </Folder>

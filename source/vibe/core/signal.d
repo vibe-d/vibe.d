@@ -22,9 +22,16 @@ Signal createSignal()
 	Note: the ownership can be shared between multiple fibers.
 */
 interface Signal : EventedObject {
+	/// A counter that is increased with every emit() call
 	@property int emitCount() const;
+
+	/// Emits the signal, waking up all owners of the signal.
 	void emit();
+
+	/// Acquires ownership and waits until the signal is emitted.
 	void wait();
+
+	/// Acquires ownership and waits until the signal is emitted if no emit has happened since the given reference emit count.
 	void wait(int reference_emit_count);
 }
 

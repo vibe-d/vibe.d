@@ -5,17 +5,22 @@
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Matthias Dondorff
 */
-import std.algorithm;
-import std.exception;
-import std.file;
-import std.process;
+module vpm;
 
-import vibe.vibe;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.inet.url;
 import vibe.vpm.vpm;
 import vibe.vpm.registry;
+import vibe.utils.string;
+
+import std.algorithm;
+import std.array;
+import std.conv;
+import std.exception;
+import std.file;
+import std.process;
+
 
 void printHelp()
 {
@@ -136,7 +141,7 @@ int main(string[] args)
 	}
 	catch(Throwable e)
 	{
-		logError("Failed to perform properly: \n" ~ to!string(e) ~ "\nShowing the help, just in case ...");
+		logError("Failed to perform properly: \n" ~ sanitizeUTF8(cast(ubyte[])e.toString()) ~ "\nShowing the help, just in case ...");
 		printHelp();
 		return -1;
 	}
