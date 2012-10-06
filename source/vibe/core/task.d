@@ -51,9 +51,7 @@ class Task : Fiber {
 	*/
 	bool isSet(string name)
 	{
-		Variant* pvar;
-		pvar = name in m_taskLocalStorage;
-		return pvar !is null;
+		return (name in m_taskLocalStorage) !is null;
 	}
 
 	/** Clears all task local variables.

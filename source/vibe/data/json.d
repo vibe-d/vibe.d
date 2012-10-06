@@ -279,9 +279,17 @@ struct Json {
 		else static assert("JSON can only be casted to (bool, long, double, string, JSON[] or JSON[string]. Not "~T.stringof~".");
 	}
 	/// ditto
-	@property const(T) opt(T)(const(T) def = T.init) const { try return get!T; catch(Exception) return def; }
+	@property const(T) opt(T)(const(T) def = T.init)
+	const {
+		if( typeId!T != m_type ) return def;
+		return get!T;
+	}
 	/// ditto
-	@property T opt(T)(T def = T.init) { try return get!T; catch(Exception) return def; }
+	@property T opt(T)(T def = T.init)
+	{
+		if( typeId!T != m_type ) return def;
+		return get!T;
+	}
 
 	/**
 		Converts the JSON value to the corresponding D type - types are converted as neccessary.
