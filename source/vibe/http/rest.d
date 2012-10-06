@@ -226,6 +226,8 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 */
 class RestInterfaceClient(I) : I
 {
+    mixin("import "~(moduleName!I)~";");
+
 	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
 		Url m_baseUrl;
@@ -556,23 +558,114 @@ private @property string generateRestInterfaceMethods(I)()
 }
 
 /// private
-private @property string getReturnTypeString(alias F)()
+private @property string fullyQualifiedTypename(T)()
 {
-	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
+	string result;
+	static if ( isBasicType!T )
+	{   
+		result = T.stringof;
+	}   
+	else static if ( isAggregateType!T )
+	{   
+		result = fullyQualifiedName!T;
+	}   
+	else static if ( isArray!T )
+	{   
+		result = fullyQualifiedTypename!(typeof(T.init[0])) ~ "[]";
+	}   
+	else static if ( isAssociativeArray!T )
+	{   
+		result = fullyQualifiedTypename!(ValueType!T) ~ "[" ~ fullyQualifiedTypename!(KeyType!T) ~ "]";
+	}   
+	else static if ( isSomeFunction!T )
+	{   
+		static assert(9, "Function types currently not supported");
+	}   
+	else
+		static assert(0, "Can't convert type to fully qualified string");
+
+	static if (is(T == const))
+	{   
+		result = "const(" ~ result ~ ")";
+	}   
+	static if (is(T == immutable))
+	{   
+		result = "immutable(" ~ result ~ ")";
+	}   
+	static if (is(T == shared))
+	{   
+		result = "shared(" ~ result ~ ")";
+	}   
+
+	return result;
+}
+
+/// private
+// thanks to jerro@newsgroup for this snippet, should really be in phobos :(
+private template returnsRef(alias f)
+{
+	enum bool returnsRef = is(typeof(
+	{
+		ParameterTypeTuple!f param;
+		auto ptr = &f(param);
+	}));
+}
+
+/// private
+private @property string getReturnTypeString(alias F)()
+{   
 	alias ReturnType!F T;
-	static if( is(T == void) || __traits(compiles, testTempl!T) )
-	   return T.stringof;
-	else return "ReturnType!(typeof(&BaseInterface."~__traits(identifier, F)~"))";
+    static if (returnsRef!F)
+        return "ref " ~ fullyQualifiedTypename!T;
+    else
+        return fullyQualifiedTypename!T;
 }
 
 /// private
 private @property string getParameterTypeString(alias F, int i)()
 {
-	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
-	alias ParameterTypeTuple!(F)[i] T;
-	static if( is(T == void) || __traits(compiles, testTempl!T) )
-		return T.stringof;
-	else return "ParameterTypeTuple!(typeof(&BaseInterface."~__traits(identifier, F)~"))["~to!string(i)~"]";
+	alias ParameterTypeTuple!(F) T;
+    alias ParameterStorageClassTuple!(F) storage_classes;
+    static assert(T.length > i);
+    static assert(storage_classes.length > i);
+    enum is_ref = (storage_classes[i] & ParameterStorageClass.ref_);
+    enum is_out = (storage_classes[i] & ParameterStorageClass.out_);
+    enum is_lazy = (storage_classes[i] & ParameterStorageClass.lazy_);
+    enum is_scope = (storage_classes[i] & ParameterStorageClass.scope_);
+    string prefix = "";
+    if (is_ref)
+        prefix = "ref " ~ prefix;
+    if (is_out)
+        prefix = "out " ~ prefix;
+    if (is_lazy)
+        prefix = "lazy " ~ prefix;
+    if (is_scope)
+        prefix = "scope " ~ prefix;
+    return prefix ~ fullyQualifiedTypename!(T[i]);
+}
+
+version(unittest)
+{
+	struct Outer
+	{
+		struct Inner
+		{
+		}
+
+		ref const(Inner[string]) func( ref Inner var1, lazy scope string var2 )
+        {
+            return data;
+        }
+
+        const(Inner[string]) data;
+	}    
+}
+
+unittest
+{
+	static assert(getReturnTypeString!(Outer.func) == "ref const(const(vibe.http.rest.Outer.Inner)[immutable(immutable(char))[]])");
+    static assert(getParameterTypeString!(Outer.func, 0) == "ref vibe.http.rest.Outer.Inner");
+    static assert(getParameterTypeString!(Outer.func, 1) == "scope lazy immutable(immutable(char))[]");
 }
 
 /// private
@@ -687,6 +780,10 @@ private string skipIdent(string str, ref size_t i)
 
 private void skipType(string str, ref size_t i)
 {
+	if (str[i..$].startsWith("ref")) {
+		i += 3;
+		skipWhitespace(str, i);
+	}
 	skipIdent(str, i);
 	if( i < str.length && (str[i] == '(' || str[i] == '[') ){
 		int depth = 1;
