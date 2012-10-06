@@ -173,12 +173,13 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 	string url(string name){
 		return url_prefix ~ adjustMethodStyle(name, style);
 	}
-
-	foreach( method; __traits(allMembers, T) ){
-		foreach( overload; MemberFunctionsTuple!(T, method) ){
-			auto handler = formMethodHandler(overload);
-			router.get(url(method), handler);
-			router.post(url(method), handler);
+	
+	foreach( method; __traits(allMembers, I) ){
+		static if(isFormMethodValid(method)!=null) {
+			string rmethod=isFormMethodValid(method);	
+			auto handler=formMethodHandler!(I, method)(instance);
+			router.get(url(rmethod), handler);
+			router.post(url(rmethod), handler);
 		}
 	}
 }
@@ -404,11 +405,41 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 }
 
 /// private
-private HttpServerRequestDelegate formMethodHandler(T)(T func)
+private HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 {
 	void handler(HttpServerRequest req, HttpServerResponse res)
 	{
-		assert(false, "TODO!");
+		import std.traits;
+		string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+		alias MemberFunctionsTuple!(T, method) overloads;
+		overload_loop: foreach(func; overloads) {
+			alias ParameterTypeTuple!func ParameterTypes;
+			ParameterTypes args;
+			int count=0;
+			foreach(i, item; args) {
+				static if(is(ParameterTypes[i] : HttpServerRequest)) {
+					args[i] = req;
+				} 
+				else static if(is(ParameterTypes[i] : HttpServerResponse)) {
+					args[i] = res;
+				}
+				else {
+					count++;
+				}
+			}
+			if(count!=form.length)
+				continue;
+			foreach(i, item; ParameterIdentifierTuple!func) {
+				static if(!is( typeof(args[i]) : HttpServerRequest) && !is( typeof(args[i]) : HttpServerResponse)) {
+					if(item !in form)
+						continue overload_loop;
+					args[i] = to!(typeof(args[i]))(form[item]);
+				}
+			}
+			__traits(getMember, inst, method)(args);
+			return;
+		}
+		assert(false, "No method found that matches the found form data.");
 	}
 
 	return &handler;
@@ -580,22 +611,34 @@ private void getRestMethodName(T)(string method, out HttpMethod http_verb, out s
 {
 	if( isPropertyGetter!T )               { http_verb = HttpMethod.GET; rest_name = method; }
 	else if( isPropertySetter!T )          { http_verb = HttpMethod.PUT; rest_name = method; }
-	else if( method.startsWith("get") )    { http_verb = HttpMethod.GET; rest_name = method[3 .. $]; }
-	else if( method.startsWith("query") )  { http_verb = HttpMethod.GET; rest_name = method[5 .. $]; }
+	else if( getRestMethodNameForm(method, http_verb, rest_name) ) {}
 	else if( method.startsWith("set") )    { http_verb = HttpMethod.PUT; rest_name = method[3 .. $]; }
 	else if( method.startsWith("put") )    { http_verb = HttpMethod.PUT; rest_name = method[3 .. $]; }
 	else if( method.startsWith("update") ) { http_verb = HttpMethod.PATCH; rest_name = method[6 .. $]; }
 	else if( method.startsWith("patch") )  { http_verb = HttpMethod.PATCH; rest_name = method[5 .. $]; }
-	else if( method.startsWith("add") )    { http_verb = HttpMethod.POST; rest_name = method[3 .. $]; }
-	else if( method.startsWith("create") ) { http_verb = HttpMethod.POST; rest_name = method[6 .. $]; }
-	else if( method.startsWith("post") )   { http_verb = HttpMethod.POST; rest_name = method[4 .. $]; }
 	else if( method.startsWith("remove") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
 	else if( method.startsWith("erase") )  { http_verb = HttpMethod.DELETE; rest_name = method[5 .. $]; }
 	else if( method.startsWith("delete") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
-	else if( method == "index" )           { http_verb = HttpMethod.GET; rest_name = ""; }
 	else { http_verb = HttpMethod.POST; rest_name = method; }
 }
-
+/// private
+private bool getRestMethodNameForm(string method, out HttpMethod http_verb, out string rest_name) {
+	if( method.startsWith("get") )    { http_verb = HttpMethod.GET; rest_name = method[3 .. $]; }
+	else if( method.startsWith("query") )  { http_verb = HttpMethod.GET; rest_name = method[5 .. $]; }
+	else if( method.startsWith("add") )    { http_verb = HttpMethod.POST; rest_name = method[3 .. $]; }
+	else if( method.startsWith("create") ) { http_verb = HttpMethod.POST; rest_name = method[6 .. $]; }
+	else if( method.startsWith("post") )   { http_verb = HttpMethod.POST; rest_name = method[4 .. $]; }
+	else if( method == "index" )           { http_verb = HttpMethod.GET; rest_name = ""; }
+	else return false;
+	return true;
+}
+/// Returns rest of method name or null if method was not valid.
+private string isFormMethodValid(string method) {
+	string rest=null;
+	HttpMethod dummy;
+	getRestMethodNameForm(method, dummy, rest);
+	return rest;	
+}
 /// private
 private string[] parameterNames(T)()
 {
