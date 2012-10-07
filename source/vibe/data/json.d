@@ -932,8 +932,11 @@ void toJson(R)(ref R dst, in Json json)
 			break;
 		case Json.Type.Array:
 			dst.put("[");
-			foreach( size_t i, ref const Json e; json ){
-				if( i > 0 ) dst.put(",");
+			bool first = true;
+			foreach( ref const Json e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
+				if( !first ) dst.put(",");
+				first = false;
 				toJson(dst, e);
 			}
 			dst.put("]");
@@ -942,6 +945,7 @@ void toJson(R)(ref R dst, in Json json)
 			dst.put("{");
 			bool first = true;
 			foreach( string k, ref const Json e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
 				if( !first ) dst.put(",");
 				first = false;
 				dst.put("\"");
@@ -971,8 +975,11 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 			break;
 		case Json.Type.Array:
 			dst.put("[");
-			foreach( size_t i, e; json ){
-				if( i > 0 ) dst.put(",");
+			bool first = true;
+			foreach( e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
+				if( !first ) dst.put(",");
+				first = false;
 				dst.put("\n");
 				foreach( tab; 0 .. level ) dst.put('\t');
 				toPrettyJson(dst, e, level+1);
@@ -987,6 +994,7 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 			dst.put("{");
 			bool first = true;
 			foreach( string k, e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
 				if( !first ) dst.put(",");
 				dst.put("\n");
 				first = false;
