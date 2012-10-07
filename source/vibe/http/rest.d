@@ -439,7 +439,7 @@ private HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 			__traits(getMember, inst, method)(args);
 			return;
 		}
-		assert(false, "No method found that matches the found form data.");
+		enforce(false, "No method found that matches the found form data.");
 	}
 
 	return &handler;
