@@ -42,6 +42,10 @@ enum HttpMethod {
 	CONNECT
 }
 
+
+/**
+	Returns the string representation of the given HttpMethod.
+*/
 string httpMethodString(HttpMethod m)
 {
 	static immutable strings = ["GET", "HEAD", "PUT", "POST", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"];
@@ -49,6 +53,10 @@ string httpMethodString(HttpMethod m)
 	return strings[m];
 }
 
+
+/**
+	Returns the HttpMethod value matching the given HTTP method string.
+*/
 HttpMethod httpMethodFromString(string str)
 {
 	switch(str){
@@ -74,9 +82,16 @@ class HttpRequest {
 	}
 	
 	public {
+		/// The HTTP protocol version used for the request
 		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
+
+		/// The HTTP method of the request
 		HttpMethod method = HttpMethod.GET;
+
+		/// The full request URL
 		string url = "/";
+
+		/// All request headers
 		StrMapCI headers;
 	}
 	
@@ -89,9 +104,14 @@ class HttpRequest {
 	{
 	}
 	
+	/** Shortcut to the 'Host' header (always present for HTTP 1.1)
+	*/
 	@property string host() const { auto ph = "Host" in headers; return ph ? *ph : null; }
+	/// ditto
 	@property void host(string v) { headers["Host"] = v; }
 
+	/** Determines if the connection persists across requests.
+	*/
 	@property bool persistent() const 
 	{ 
 		auto ph = "connection" in headers;
@@ -122,7 +142,10 @@ class HttpResponse {
 		Cookie[string] cookies;
 	}
 
+	/** Shortcut to the "Content-Type" header
+	*/
 	@property string contentType() const { auto pct = "Content-Type" in headers; return pct ? *pct : "application/octet-stream"; }
+	/// ditto
 	@property void contentType(string ct) { headers["Content-Type"] = ct; }
 }
 
