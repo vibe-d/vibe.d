@@ -1,6 +1,38 @@
 /**
 	JSON serialization and value handling.
 
+	This module provides the Json struct for reading, writing and manipulating JSON values in a seemless,
+	JavaScript like way. De(serialization) of arbitrary D types is also supported.
+
+	Examples:
+
+	---
+	void manipulateJson(Json j)
+	{
+		// object members can be accessed using member syntax, just like in JavaScript
+		j = Json.EmptyObject;
+		j.name = "Example";
+		j.id = 1;
+
+		// retrieving the values is done using get()
+		assert(j["name"].get!string == "Example");
+		assert(j["id"].get!int == 1);
+
+		// semantic convertions can be done using to()
+		assert(j.id.to!string == "1");
+
+		// prints:
+		// name: "Example"
+		// id: 1
+		foreach( string key, value; j ){
+			writefln("%s: %s", key, value);
+		}
+
+		// print out as JSON: {"name": "Example", "id": 1}
+		writefln("JSON: %s", j.toString());
+	}
+	---
+
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
