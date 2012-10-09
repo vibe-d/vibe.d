@@ -44,7 +44,6 @@ public import vibe.stream.ssl;
 public import vibe.stream.zlib;
 public import vibe.templ.diet;
 public import vibe.templ.utils;
-public import vibe.textfilter.ddoc;
 public import vibe.textfilter.html;
 public import vibe.textfilter.markdown;
 public import vibe.textfilter.urlencode;

@@ -43,18 +43,27 @@ struct Version {
 	static const Version RELEASE = Version("0.0.0");
 	static const Version HEAD = Version(to!string(MAX_VERS)~"."~to!string(MAX_VERS)~"."~to!string(MAX_VERS));
 	static const Version INVALID = Version();
+	static const Version MASTER = Version(MASTER_STRING);
+	static const string MASTER_STRING = "~master";
 	
 	private { 
 		static const size_t MAX_VERS = 9999;
+		static const size_t MASTER_VERS = cast(size_t)(-1);
 		size_t[] v; 
 	}
 	
 	this(string vers) {
-		enforce( count(vers, ".") == 2);
-		string[] tkns = split(vers, ".");
-		v = new size_t[tkns.length];
-		for(size_t i=0; i<tkns.length; ++i)
-			v[i] = to!size_t(tkns[i]);
+		enforce( vers == MASTER_STRING || count(vers, ".") == 2);
+		if(vers == MASTER_STRING) {
+			v = new size_t[3];
+			v[0] = v[1] = v[2] = MASTER_VERS;
+		}			
+		else {
+			string[] tkns = split(vers, ".");
+			v = new size_t[tkns.length];
+			for(size_t i=0; i<tkns.length; ++i)
+				v[i] = to!size_t(tkns[i]);
+		}
 	}
 	
 	this(const Version o) {
@@ -82,6 +91,9 @@ struct Version {
 	}
 	
 	string toString() const {
+		enforce( v.length == 3 && (v[0] != MASTER_VERS || v[1] == v[2] && v[1] == MASTER_VERS) );
+		if(v[0] == MASTER_VERS) 
+			return MASTER_STRING;
 		string r;
 		for(size_t i=0; i<v.length; ++i) {
 			if(i!=0) r ~= ".";
@@ -98,38 +110,45 @@ class Dependency {
 	this( string ves ) {
 		enforce( ves.length > 0);
 		string orig = ves;
-		m_cmpA = skipComp(ves);
-		size_t idx2 = std.string.indexOf(ves, " ");
-		if( idx2 == -1 ) {
-			if( m_cmpA == "<=" || m_cmpA == "<" ) {
-				m_versA = Version(Version.RELEASE);
-				m_cmpB = m_cmpA;
-				m_cmpA = ">=";
-				m_versB = Version(ves);
+		if(ves == Version.MASTER_STRING) {
+			m_cmpA = ">=";
+			m_cmpB = "<=";
+			m_versA = m_versB = Version(Version.MASTER);
+		}
+		else {
+			m_cmpA = skipComp(ves);
+			size_t idx2 = std.string.indexOf(ves, " ");
+			if( idx2 == -1 ) {
+				if( m_cmpA == "<=" || m_cmpA == "<" ) {
+					m_versA = Version(Version.RELEASE);
+					m_cmpB = m_cmpA;
+					m_cmpA = ">=";
+					m_versB = Version(ves);
+				}
+				else if( m_cmpA == ">=" || m_cmpA == ">" ) {
+					m_versA = Version(ves);
+					m_versB = Version(Version.HEAD);
+					m_cmpB = "<=";
+				}
+				else {
+					// Converts "==" to ">=a&&<=a", which makes merging easier
+					m_versA = m_versB = Version(ves);
+					m_cmpA = ">=";
+					m_cmpB = "<=";
+				}
+			} else {
+				enforce( ves[idx2+1] == ' ' );
+				m_versA = Version(ves[0..idx2]);
+				string v2 = ves[idx2+2..$];
+				m_cmpB = skipComp(v2);
+				m_versB = Version(v2);
+				
+				if( m_versB < m_versA ) {
+					swap(m_versA, m_versB);
+					swap(m_cmpA, m_cmpB);
+				}
+				enforce( m_cmpA != "==" && m_cmpB != "==", "For equality, please specify a single version.");
 			}
-			else if( m_cmpA == ">=" || m_cmpA == ">" ) {
-				m_versA = Version(ves);
-				m_versB = Version(Version.HEAD);
-				m_cmpB = "<=";
-			}
-			else {
-				// Converts "==" to ">=a&&<=a", which makes merging easier
-				m_versA = m_versB = Version(ves);
-				m_cmpA = ">=";
-				m_cmpB = "<=";
-			}
-		} else {
-			enforce( ves[idx2+1] == ' ' );
-			m_versA = Version(ves[0..idx2]);
-			string v2 = ves[idx2+2..$];
-			m_cmpB = skipComp(v2);
-			m_versB = Version(v2);
-			
-			if( m_versB < m_versA ) {
-				swap(m_versA, m_versB);
-				swap(m_cmpA, m_cmpB);
-			}
-			enforce( m_cmpA != "==" && m_cmpB != "==", "For equality, please specify a single version.");
 		}
 	}
 	
@@ -167,6 +186,9 @@ class Dependency {
 	bool matches(const string vers) const { return matches(Version(vers)); }
 	bool matches(ref const(Version) v) const {
 		//logTrace(" try match: %s with: %s", v, this);
+		// Master only matches master
+		if(m_versA == Version.MASTER || v == Version.MASTER)
+			return m_versA == v;
 		if( !doCmp(m_cmpA, v, m_versA) )
 			return false;
 		if( !doCmp(m_cmpB, v, m_versB) )

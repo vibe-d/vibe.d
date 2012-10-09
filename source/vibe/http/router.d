@@ -10,6 +10,7 @@ module vibe.http.router;
 public import vibe.http.server;
 
 import vibe.core.log;
+import vibe.textfilter.urlencode;
 
 import std.functional;
 
@@ -118,20 +119,15 @@ class UrlRouter : IHttpServerRequestHandler {
 		return this;
 	}
 
-	void addRoute(HttpMethod method, string path, IHttpServerRequestHandler cb)
-	{
-		addRoute(method, path, &cb.handleRequest);
-	}
+	/// Adds a new route for requests matching the specified HTTP method and pattern.
+	void match(HttpMethod method, string path, IHttpServerRequestHandler cb) { match(method, path, &cb.handleRequest); }
+	/// ditto
+	void match(HttpMethod method, string path, HttpServerRequestFunction cb) { match(method, path, toDelegate(cb)); }
+	/// ditto
+	void match(HttpMethod method, string path, HttpServerRequestDelegate cb) { m_routes[method] ~= Route(path, cb); }
 
-	void addRoute(HttpMethod method, string path, HttpServerRequestFunction cb)
-	{
-		addRoute(method, path, toDelegate(cb));
-	}
-
-	void addRoute(HttpMethod method, string path, HttpServerRequestDelegate cb)
-	{
-		m_routes[method] ~= Route(path, cb);
-	}
+	/// Alias for backwards compatibility
+	alias match addRoute;
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
@@ -174,7 +170,7 @@ private struct Route {
 				j++;
 				string name = skipPathNode(pattern, j);
 				string match = skipPathNode(url, i);
-				params[name] = match;
+				params[name] = urlDecode(match);
 			} else return false;
 		}
 

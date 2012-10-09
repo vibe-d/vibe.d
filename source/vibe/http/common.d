@@ -42,6 +42,10 @@ enum HttpMethod {
 	CONNECT
 }
 
+
+/**
+	Returns the string representation of the given HttpMethod.
+*/
 string httpMethodString(HttpMethod m)
 {
 	static immutable strings = ["GET", "HEAD", "PUT", "POST", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"];
@@ -49,6 +53,10 @@ string httpMethodString(HttpMethod m)
 	return strings[m];
 }
 
+
+/**
+	Returns the HttpMethod value matching the given HTTP method string.
+*/
 HttpMethod httpMethodFromString(string str)
 {
 	switch(str){
@@ -74,9 +82,16 @@ class HttpRequest {
 	}
 	
 	public {
+		/// The HTTP protocol version used for the request
 		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
+
+		/// The HTTP method of the request
 		HttpMethod method = HttpMethod.GET;
+
+		/// The full request URL
 		string url = "/";
+
+		/// All request headers
 		StrMapCI headers;
 	}
 	
@@ -89,9 +104,14 @@ class HttpRequest {
 	{
 	}
 	
+	/** Shortcut to the 'Host' header (always present for HTTP 1.1)
+	*/
 	@property string host() const { auto ph = "Host" in headers; return ph ? *ph : null; }
+	/// ditto
 	@property void host(string v) { headers["Host"] = v; }
 
+	/** Determines if the connection persists across requests.
+	*/
 	@property bool persistent() const 
 	{ 
 		auto ph = "connection" in headers;
@@ -122,7 +142,10 @@ class HttpResponse {
 		Cookie[string] cookies;
 	}
 
+	/** Shortcut to the "Content-Type" header
+	*/
 	@property string contentType() const { auto pct = "Content-Type" in headers; return pct ? *pct : "application/octet-stream"; }
+	/// ditto
 	@property void contentType(string ct) { headers["Content-Type"] = ct; }
 }
 
@@ -437,85 +460,4 @@ struct StrMapCI {
 			csum += 357*(s[i]&0x1101_1111);
 		return csum;
 	}
-}
-
-void writeRFC822DateString(R)(ref R dst, SysTime time)
-{
-	assert(time.timezone == UTC());
-
-	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-	static immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-	dst.put(dayStrings[time.dayOfWeek]);
-	dst.put(", ");
-	writeDecimal2(dst, time.day);
-	dst.put(' ');
-	dst.put(monthStrings[time.month-1]);
-	dst.put(' ');
-	writeDecimal(dst, time.year);
-}
-
-void writeRFC822TimeString(R)(ref R dst, SysTime time)
-{
-	assert(time.timezone == UTC());
-	writeDecimal2(dst, time.hour);
-	dst.put(':');
-	writeDecimal2(dst, time.minute);
-	dst.put(':');
-	writeDecimal2(dst, time.second);
-	dst.put(" GMT");
-}
-
-void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
-{
-	writeRFC822DateString(dst, time);
-	dst.put(' ');
-	writeRFC822TimeString(dst, time);
-}
-
-string toRFC822TimeString(SysTime time)
-{
-	auto ret = new FixedAppender!(string, 12);
-	writeRFC822TimeString(ret, time);
-	return ret.data;
-}
-
-string toRFC822DateString(SysTime time)
-{
-	auto ret = new FixedAppender!(string, 16);
-	writeRFC822DateString(ret, time);
-	return ret.data;
-}
-
-string toRFC822DateTimeString(SysTime time)
-{
-	auto ret = new FixedAppender!(string, 29);
-	writeRFC822DateTimeString(ret, time);
-	return ret.data;
-}
-
-private void writeDecimal2(R)(ref R dst, uint n)
-{
-	auto d1 = n % 10;
-	auto d2 = (n / 10) % 10;
-	dst.put(cast(char)(d2 + '0'));
-	dst.put(cast(char)(d1 + '0'));
-}
-
-private void writeDecimal(R)(ref R dst, uint n)
-{
-	if( n == 0 ){
-		dst.put('0');
-		return;
-	}
-
-	// determine all digits
-	uint[10] digits;
-	int i = 0;
-	while( n > 0 ){
-		digits[i++] = n % 10;
-		n /= 10;
-	}
-
-	// write out the digits in reverse order
-	while( i > 0 ) dst.put(cast(char)(digits[--i] + '0'));
 }

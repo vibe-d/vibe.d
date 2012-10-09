@@ -10,6 +10,7 @@ module vibe.http.fileserver;
 import vibe.core.file;
 import vibe.core.log;
 import vibe.http.server;
+import vibe.inet.message;
 import vibe.inet.mimetypes;
 import vibe.inet.url;
 import vibe.crypto.md5;
@@ -19,6 +20,10 @@ import std.datetime;
 import std.file;
 import std.string;
 
+
+/**
+	Configuration options for the static file server.
+*/
 class HttpFileServerSettings {
 	string serverPathPrefix = "/";
 	long maxAge = 60*60*24*30; // 30 days
@@ -32,6 +37,9 @@ class HttpFileServerSettings {
 	}
 } 
 
+/**
+	Returns a request handler that serves files from the specified directory.
+*/
 HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSettings settings = null)
 {
 	if( !settings ) settings = new HttpFileServerSettings;
@@ -57,7 +65,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		logTrace("Processing '%s'", srv_path);
 		rpath.normalize();
 		logDebug("Path '%s' -> '%s'", rel_path, rpath.toNativeString());
-		if( rpath[0] == ".." ) return; // don't respond to relative paths outside of the root path
+		if( !rpath.empty && rpath[0] == ".." ) return; // don't respond to relative paths outside of the root path
 
 		string path = (lpath ~ rpath).toNativeString();
 

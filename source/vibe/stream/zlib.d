@@ -129,8 +129,12 @@ class ZlibInputStream : InputStream {
 	@property ulong leastSize()
 	{
 		if( m_buffer.length ) return m_buffer.length;
-		if( m_in.empty ) return 0;
+		if( m_finished ){
+			assert(m_in.empty);
+			return 0;
+		}
 		readChunk();
+		assert(m_buffer.length || empty);
 		return m_buffer.length;
 	}
 
@@ -153,8 +157,10 @@ class ZlibInputStream : InputStream {
 			dst[0 .. sz] = m_buffer[0 .. sz];
 			dst = dst[sz .. $];
 			m_buffer = m_buffer[sz .. $];
-			if( !m_buffer.length && !m_finished )
-				readChunk();
+			if( !m_buffer.length ){
+				assert(!dst.length || !m_finished, "Bug: UnCompress returned an empty buffer but more is still to be read.");
+				if( !m_finished ) readChunk();
+			}
 		}
 	}
 

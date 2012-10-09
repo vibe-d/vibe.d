@@ -1,6 +1,38 @@
 /**
 	JSON serialization and value handling.
 
+	This module provides the Json struct for reading, writing and manipulating JSON values in a seemless,
+	JavaScript like way. De(serialization) of arbitrary D types is also supported.
+
+	Examples:
+
+	---
+	void manipulateJson(Json j)
+	{
+		// object members can be accessed using member syntax, just like in JavaScript
+		j = Json.EmptyObject;
+		j.name = "Example";
+		j.id = 1;
+
+		// retrieving the values is done using get()
+		assert(j["name"].get!string == "Example");
+		assert(j["id"].get!int == 1);
+
+		// semantic convertions can be done using to()
+		assert(j.id.to!string == "1");
+
+		// prints:
+		// name: "Example"
+		// id: 1
+		foreach( string key, value; j ){
+			writefln("%s: %s", key, value);
+		}
+
+		// print out as JSON: {"name": "Example", "id": 1}
+		writefln("JSON: %s", j.toString());
+	}
+	---
+
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
@@ -279,9 +311,17 @@ struct Json {
 		else static assert("JSON can only be casted to (bool, long, double, string, JSON[] or JSON[string]. Not "~T.stringof~".");
 	}
 	/// ditto
-	@property const(T) opt(T)(const(T) def = T.init) const { try return get!T; catch(Exception) return def; }
+	@property const(T) opt(T)(const(T) def = T.init)
+	const {
+		if( typeId!T != m_type ) return def;
+		return get!T;
+	}
 	/// ditto
-	@property T opt(T)(T def = T.init) { try return get!T; catch(Exception) return def; }
+	@property T opt(T)(T def = T.init)
+	{
+		if( typeId!T != m_type ) return def;
+		return get!T;
+	}
 
 	/**
 		Converts the JSON value to the corresponding D type - types are converted as neccessary.
@@ -924,8 +964,11 @@ void toJson(R)(ref R dst, in Json json)
 			break;
 		case Json.Type.Array:
 			dst.put("[");
-			foreach( size_t i, ref const Json e; json ){
-				if( i > 0 ) dst.put(",");
+			bool first = true;
+			foreach( ref const Json e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
+				if( !first ) dst.put(",");
+				first = false;
 				toJson(dst, e);
 			}
 			dst.put("]");
@@ -934,6 +977,7 @@ void toJson(R)(ref R dst, in Json json)
 			dst.put("{");
 			bool first = true;
 			foreach( string k, ref const Json e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
 				if( !first ) dst.put(",");
 				first = false;
 				dst.put("\"");
@@ -963,8 +1007,11 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 			break;
 		case Json.Type.Array:
 			dst.put("[");
-			foreach( size_t i, e; json ){
-				if( i > 0 ) dst.put(",");
+			bool first = true;
+			foreach( e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
+				if( !first ) dst.put(",");
+				first = false;
 				dst.put("\n");
 				foreach( tab; 0 .. level ) dst.put('\t');
 				toPrettyJson(dst, e, level+1);
@@ -979,6 +1026,7 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 			dst.put("{");
 			bool first = true;
 			foreach( string k, e; json ){
+				if( e.type == Json.Type.Undefined ) continue;
 				if( !first ) dst.put(",");
 				dst.put("\n");
 				first = false;
@@ -1040,6 +1088,7 @@ private string jsonUnescape(R)(ref R range)
 							uch *= 16;
 							enforce(!range.empty, "Unicode sequence must be '\\uXXXX'.");
 							auto dc = range.front;
+							range.popFront();
 							if( dc >= '0' && dc <= '9' ) uch += dc - '0';
 							else if( dc >= 'a' && dc <= 'f' ) uch += dc - 'a' + 10;
 							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;

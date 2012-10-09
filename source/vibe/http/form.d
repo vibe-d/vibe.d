@@ -10,10 +10,11 @@ module vibe.http.form;
 import vibe.core.driver;
 import vibe.core.file;
 import vibe.core.log;
-import vibe.inet.rfc5322;
+import vibe.inet.message;
 import vibe.inet.url;
 import vibe.textfilter.urlencode;
 
+import std.array;
 import std.exception;
 import std.string;
 
@@ -29,12 +30,15 @@ struct FilePart  {
 */
 bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader)
 {
-	if( content_type == "application/x-www-form-urlencoded" ){
+	auto ct_entries = content_type.split(";");
+	if( !ct_entries.length ) return false;
+
+	if( ct_entries[0].strip() == "application/x-www-form-urlencoded" ){
 		auto bodyStr = cast(string)body_reader.readAll();
 		parseUrlEncodedForm(bodyStr, fields);
 		return true;
 	}
-	if( content_type.startsWith("multipart/form-data") ){
+	if( ct_entries[0].strip() == "multipart/form-data" ){
 		parseMultiPartForm(fields, files, content_type, body_reader);
 		return true;
 	}

@@ -296,6 +296,7 @@
    <File path="source\vibe\core\net.d" />
    <File path="source\vibe\core\process.d" />
    <File path="source\vibe\core\signal.d" />
+   <File path="source\vibe\core\task.d" />
   </Folder>
   <Folder name="crypto">
    <File path="source\vibe\crypto\md5.d" />
@@ -328,7 +329,6 @@
    <File path="source\vibe\http\common.d" />
    <File path="source\vibe\http\dist.d" />
    <File path="source\vibe\http\fileserver.d" />
-   <File path="source\vibe\http\filterstack.d" />
    <File path="source\vibe\http\form.d" />
    <File path="source\vibe\http\log.d" />
    <File path="source\vibe\http\proxy.d" />
@@ -340,8 +340,9 @@
    <File path="source\vibe\http\websockets.d" />
   </Folder>
   <Folder name="inet">
+   <File path="source\vibe\inet\message.d" />
    <File path="source\vibe\inet\mimetypes.d" />
-   <File path="source\vibe\inet\rfc5322.d" />
+   <File path="source\vibe\inet\path.d" />
    <File path="source\vibe\inet\url.d" />
    <File path="source\vibe\inet\urltransfer.d" />
   </Folder>
@@ -360,7 +361,6 @@
    <File path="source\vibe\templ\diet.d" />
   </Folder>
   <Folder name="textfilter">
-   <File path="source\vibe\textfilter\ddoc.d" />
    <File path="source\vibe\textfilter\html.d" />
    <File path="source\vibe\textfilter\markdown.d" />
    <File path="source\vibe\textfilter\urlencode.d" />

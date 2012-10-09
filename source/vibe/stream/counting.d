@@ -39,6 +39,7 @@ class LimitedInputStream : InputStream {
 		m_silentLimit = silent_limit;
 	}
 
+	/// The stream that is wrapped by this one
 	@property inout(InputStream) sourceStream() inout { return m_input; }
 
 	@property bool empty() { return m_silentLimit ? m_input.empty : m_sizeLimit == 0; }
@@ -129,5 +130,6 @@ class LimitException : Exception {
 		super(message, next, file, line);
 	}
 
+	/// The byte limit of the stream that emitted the exception
 	@property ulong limit() const { return m_limit; }
 }

@@ -156,10 +156,13 @@ class Libevent2Driver : EventDriver {
 			addr.family = af;
 
 			evdns_request* dnsreq;
+logDebug("dnsresolve");
 			if( af == AF_INET ) dnsreq = evdns_base_resolve_ipv4(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
 			else dnsreq = evdns_base_resolve_ipv6(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
 
+logDebug("dnsresolve yield");
 			while( !dnsinfo.done ) m_core.yieldForEvent();
+logDebug("dnsresolve ret %s", dnsinfo.status);
 			if( dnsinfo.status == DNS_ERR_NONE ) return addr;
 		}
 
@@ -180,7 +183,7 @@ class Libevent2Driver : EventDriver {
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
+		auto cctx = TcpContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
 		cctx.task = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
@@ -222,7 +225,7 @@ class Libevent2Driver : EventDriver {
 			"Error setting listening socket to non-blocking I/O.");
 		
 		// Add an event to wait for connections
-		auto ctx = TcpContext.Alloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
+		auto ctx = TcpContextAlloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
 		ctx.connectionCallback = connection_callback;
 		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 		enforce(event_add(connect_event, null) == 0,
@@ -259,8 +262,12 @@ class Libevent2Driver : EventDriver {
 
 	private static extern(C) void onDnsResult(int result, char type, int count, int ttl, void* addresses, void* arg)
 	{
-		assert(count >= 1);
 		auto info = cast(DnsLookupInfo*)arg;
+		if( count <= 0 ){
+			info.done = true;
+			info.status = result;
+			return;
+		}
 		info.done = true;
 		info.status = result;
 		switch( info.addr.family ){
@@ -484,7 +491,7 @@ class Libevent2UdpConnection : UdpConnection {
 		if( bind_addr.port )
 			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
-		m_ctx = TcpContext.Alloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
+		m_ctx = TcpContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
 		m_ctx.task = Task.getThis();
 
 		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUdpRead, m_ctx);
@@ -604,14 +611,14 @@ private int getLastSocketError()
 struct LevMutex {
 	FreeListRef!Mutex mutex;
 	FreeListRef!ReadWriteMutex rwmutex;
-	alias FreeListObjectAlloc!(LevMutex, false, true) Alloc;
 }
+alias FreeListObjectAlloc!(LevMutex, false, true) LevMutexAlloc;
 
 struct LevCondition {
 	FreeListRef!Condition cond;
 	LevMutex* mutex;
-	alias FreeListObjectAlloc!(LevCondition, false, true) Alloc;
 }
+alias FreeListObjectAlloc!(LevCondition, false, true) LevConditionAlloc;
 
 private extern(C)
 {
@@ -638,12 +645,12 @@ private extern(C)
 	}
 
 	void* lev_alloc_mutex(uint locktype) {
-		auto ret = LevMutex.Alloc.alloc();
+		auto ret = LevMutexAlloc.alloc();
 		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
 		else ret.mutex = FreeListRef!Mutex();
 		return ret;
 	}
-	void lev_free_mutex(void* lock, uint locktype) { LevMutex.Alloc.free(cast(LevMutex*)lock); }
+	void lev_free_mutex(void* lock, uint locktype) { LevMutexAlloc.free(cast(LevMutex*)lock); }
 	int lev_lock_mutex(uint mode, void* lock) {
 		auto mtx = cast(LevMutex*)lock;
 		
@@ -672,8 +679,8 @@ private extern(C)
 		return 0;
 	}
 
-	void* lev_alloc_condition(uint condtype) { return LevCondition.Alloc.alloc(); }
-	void lev_free_condition(void* cond) { LevCondition.Alloc.free(cast(LevCondition*)cond); }
+	void* lev_alloc_condition(uint condtype) { return LevConditionAlloc.alloc(); }
+	void lev_free_condition(void* cond) { LevConditionAlloc.free(cast(LevCondition*)cond); }
 	int lev_signal_condition(void* cond, int broadcast) {
 		auto c = cast(LevCondition*)cond;
 		if( c.cond ) c.cond.notifyAll();

@@ -17,12 +17,11 @@ import vibe.data.json;
 import vibe.http.dist;
 import vibe.http.form;
 import vibe.http.log;
-import vibe.inet.rfc5322;
+import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
-import vibe.templ.diet;
 import vibe.textfilter.urlencode;
 import vibe.utils.array;
 import vibe.utils.memory;
@@ -153,6 +152,7 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 */
 @property HttpServerRequestDelegate staticTemplate(string template_file)()
 {
+	import vibe.templ.diet;
 	return (HttpServerRequest req, HttpServerResponse res){
 		//res.render!(template_file, req);
 		//res.headers["Content-Type"] = "text/html; charset=UTF-8";
@@ -212,6 +212,7 @@ void startListening()
 */
 @property void render(string template_file, ALIASES...)(HttpServerResponse res)
 {
+	import vibe.templ.diet;
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
 	parseDietFile!(template_file, ALIASES)(res.bodyWriter);
 }
@@ -632,8 +633,9 @@ final class HttpServerResponse : HttpResponse {
 	*/
 	void renderCompat(string template_file, TYPES_AND_NAMES...)(Variant[] args...)
 	{
+		import vibe.templ.diet;
 		headers["Content-Type"] = "text/html; charset=UTF-8";
-		.parseDietFileCompat!(template_file, TYPES_AND_NAMES)(bodyWriter, args);
+		parseDietFileCompat!(template_file, TYPES_AND_NAMES)(bodyWriter, args);
 	}
 
 	/// Finalizes the response. This is called automatically by the server.
@@ -905,14 +907,6 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		parseRequest(req, reqReader, request_allocator);
 		logTrace("Got request header.");
 
-		//handle Expect-Header
-		if( auto pv = "Expect" in req.headers) {
-			if( *pv == "100-continue" ) {
-				logTrace("sending 100 continue");
-				conn.write("HTTP/1.1 100 Continue\r\n");
-			}
-		}
-
 		// find the matching virtual host
 		foreach( ctx; g_contexts )
 			if( ctx.settings.hostName == req.host ){
@@ -957,6 +951,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 				limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, 0);
 		}
 		req.bodyReader = limited_http_input_stream;
+
+		// handle Expect header
+		if( auto pv = "Expect" in req.headers) {
+			if( *pv == "100-continue" ) {
+				logTrace("sending 100 continue");
+				conn.write("HTTP/1.1 100 Continue\r\n\r\n");
+			}
+		}
 
 		// Url parsing if desired
 		if( settings.options & HttpServerOption.ParseURL ){

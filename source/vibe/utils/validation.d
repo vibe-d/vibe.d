@@ -77,10 +77,10 @@ string validateIdent(string str, string additional_chars = "_", string entity_na
 		if( ch >= 'a' && ch <= 'z' ) continue;
 		if( ch >= 'A' && ch <= 'Z' ) continue;
 		if( i > 0 && ch >= '0' && ch <= '9' ) continue;
-		if( additional_chars.countUntil(ch) >= 0 ) continue;
-		if( no_number_start && ch >= '0' && ch <= '9' )
-			throw new Exception(entity_name~" must not begin with a number.");
-		throw new Exception(entity_name~" may only contain numbers, letters and one of ("~additional_chars~")");
+		if( additional_chars.countUntil(ch) >= 0 ) continue; 
+		if( no_number_start && ch >= '0' && ch <= '9' ) 
+	    	throw new Exception(entity_name~" must not begin with a number."); 
+		//throw new Exception(entity_name~" may only contain numbers, letters and one of ("~additional_chars~")");
 	}
 	
 	return str;
@@ -98,6 +98,8 @@ string validatePassword(string str, string str_confirm, size_t min_length = 8, s
 	return str;
 }
 
+/** Checks if a string falls within the specified length range.
+*/
 string validateString(string str, size_t min_length = 0, size_t max_length = 0, string entity_name = "String")
 {
 	std.utf.validate(str);

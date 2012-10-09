@@ -18,12 +18,18 @@ import std.conv;
 import std.exception;
 
 
+/**
+	Determines the (encryption) type of an SMTP connection.
+*/
 enum SmtpConnectionType {
 	Plain,
 	SSL,
 	StartTLS
 }
 
+
+/** Represents the different status codes for SMTP replies.
+*/
 enum SmtpStatus {
 	_Success = 200,
 	SystemStatus = 211,
@@ -52,6 +58,9 @@ enum SmtpStatus {
 	TransactionFailed = 554,
 }
 
+/**
+	Represents the authentication mechanism used by the SMTP client.
+*/
 enum SmtpAuthType {
 	None,
 	Plain,
@@ -59,6 +68,9 @@ enum SmtpAuthType {
 	CramMd5
 }
 
+/**
+	Configuration options for the SMTP client.
+*/
 class SmtpClientSettings {
 	string host = "127.0.0.1";
 	ushort port = 25;
@@ -73,11 +85,17 @@ class SmtpClientSettings {
 	this(string host, ushort port) { this.host = host; this.port = port; }
 }
 
+/**
+	Represents an email message, including its headers.
+*/
 class Mail {
 	StrMapCI headers;
 	string bodyText;
 }
 
+/**
+	Sends am email using the given settings.
+*/
 void sendMail(SmtpClientSettings settings, Mail mail)
 {
 	TcpConnection raw_conn;

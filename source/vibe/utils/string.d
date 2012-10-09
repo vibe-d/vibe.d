@@ -93,6 +93,7 @@ bool anyOf(string str, string chars)
 	return false;
 }
 
+/// ASCII alpha character check
 bool isAlpha(char ch)
 {
 	switch( ch ){
@@ -103,6 +104,7 @@ bool isAlpha(char ch)
 	return true;
 }
 
+/// ASCII whitespace trimming (space and tab)
 string stripLeftA(string s)
 {
 	while( s.length > 0 && (s[0] == ' ' || s[0] == '\t') )
@@ -110,6 +112,7 @@ string stripLeftA(string s)
 	return s;
 }
 
+/// ASCII whitespace trimming (space and tab)
 string stripRightA(string s)
 {
 	while( s.length > 0 && (s[$-1] == ' ' || s[$-1] == '\t') )
@@ -117,11 +120,13 @@ string stripRightA(string s)
 	return s;
 }
 
+/// ASCII whitespace trimming (space and tab)
 string stripA(string s)
 {
 	return stripLeftA(stripRightA(s));
 }
 
+/// Finds the first occurence of any of the characters in `chars`
 sizediff_t countUntilAny(string str, string chars)
 {
 	foreach( i, char ch; str )
@@ -130,6 +135,7 @@ sizediff_t countUntilAny(string str, string chars)
 	return -1;
 }
 
+/// Formats a string using formattedWrite() and returns it.
 string formatString(ARGS...)(string format, ARGS args)
 {
 	auto dst = appender!string();
@@ -137,6 +143,7 @@ string formatString(ARGS...)(string format, ARGS args)
 	return dst.data;
 }
 
+/// Special version of icmp() with optimization for ASCII characters
 int icmp2(string a, string b)
 {
 	size_t i = 0, j = 0;

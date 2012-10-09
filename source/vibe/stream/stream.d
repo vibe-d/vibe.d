@@ -130,6 +130,34 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 	return dst.data;
 }
 
+/**
+	Reads the complete contents of a stream, assuming UTF-8 encoding.
+
+	Params:
+		stream = Specifies the stream from which to read.
+		sanitize = If true, the input data will not be validated but will instead be made valid UTF-8.
+		max_bytes = Optional size limit of the data that is read.
+
+	Returns:
+		The full contents of the stream, excluding a possible BOM, are returned as a UTF-8 string.
+
+	Throws:
+		An exception is thrown if max_bytes != 0 and the stream contains more than max_bytes data.
+		If the sanitize parameter is fals and the stream contains invalid UTF-8 code sequences,
+		a UtfException is thrown.
+*/
+string readAllUtf8(InputStream stream, bool sanitize = false, size_t max_bytes = 0)
+{
+	import std.utf;
+	import vibe.utils.string;
+	auto data = readAll(stream, max_bytes);
+	if( sanitize ) return stripUTF8Bom(sanitizeUTF8(data));
+	else {
+		validate(cast(string)data);
+		return stripUTF8Bom(cast(string)data);
+	}
+}
+
 private struct Buffer { ubyte[64*1024] bytes; }
 
 /**************************************************************************************************/
@@ -150,8 +178,7 @@ interface InputStream {
 	*/
 	@property ulong leastSize();
 
-	/**
-		Queries if there is data available for immediate, non-blocking read.
+	/** Queries if there is data available for immediate, non-blocking read.
 	*/
 	@property bool dataAvailableForRead();
 
@@ -252,6 +279,26 @@ interface OutputStream {
 interface Stream : InputStream, OutputStream {
 }
 
+
+/**
+	Interface for all streams supporting random access.
+*/
+interface RandomAccessStream : Stream {
+	/// Returns the total size of the file.
+	@property ulong size() const;
+
+	/// Determines if this stream is readable.
+	@property bool readable() const;
+
+	/// Determines if this stream is writable.
+	@property bool writable() const;
+
+	/// Seeks to a specific position in the file if supported by the stream.
+	void seek(ulong offset);
+
+	/// Returns the current offset of the file pointer
+	ulong tell();
+}
 
 /**
 	Stream implementation acting as a sink with no function.
