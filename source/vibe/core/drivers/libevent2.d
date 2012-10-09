@@ -156,10 +156,13 @@ class Libevent2Driver : EventDriver {
 			addr.family = af;
 
 			evdns_request* dnsreq;
+logDebug("dnsresolve");
 			if( af == AF_INET ) dnsreq = evdns_base_resolve_ipv4(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
 			else dnsreq = evdns_base_resolve_ipv6(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
 
+logDebug("dnsresolve yield");
 			while( !dnsinfo.done ) m_core.yieldForEvent();
+logDebug("dnsresolve ret %s", dnsinfo.status);
 			if( dnsinfo.status == DNS_ERR_NONE ) return addr;
 		}
 
@@ -259,8 +262,12 @@ class Libevent2Driver : EventDriver {
 
 	private static extern(C) void onDnsResult(int result, char type, int count, int ttl, void* addresses, void* arg)
 	{
-		assert(count >= 1);
 		auto info = cast(DnsLookupInfo*)arg;
+		if( count <= 0 ){
+			info.done = true;
+			info.status = result;
+			return;
+		}
 		info.done = true;
 		info.status = result;
 		switch( info.addr.family ){
