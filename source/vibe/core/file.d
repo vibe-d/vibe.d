@@ -149,16 +149,16 @@ enum FileMode {
 */
 interface FileStream : Stream, EventedObject {
 	/// The path of the file.
-	@property Path path() const;
+	@property Path path() const nothrow;
 
 	/// Returns the total size of the file.
-	@property ulong size() const;
+	@property ulong size() const nothrow;
 
 	/// Determines if this stream is readable.
-	@property bool readable() const;
+	@property bool readable() const nothrow;
 
 	/// Determines if this stream is writable.
-	@property bool writable() const;
+	@property bool writable() const nothrow;
 
 	/// Closes the file handle.
 	void close();
@@ -167,13 +167,15 @@ interface FileStream : Stream, EventedObject {
 	void seek(ulong offset);
 
 	/// Returns the current offset of the file pointer
-	ulong tell();
+	ulong tell() nothrow;
 }
 
 private FileInfo makeFileInfo(DirEntry ent)
 {
 	FileInfo ret;
 	ret.name = baseName(ent.name);
+	if( ret.name.length == 0 ) ret.name = ent.name;
+	assert(ret.name.length > 0);
 	ret.size = ent.size;
 	ret.timeModified = ent.timeLastModified;
 	version(Windows) ret.timeCreated = ent.timeCreated;

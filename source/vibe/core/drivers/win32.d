@@ -356,6 +356,11 @@ class Win32FileStream : FileStream {
 		m_size = size;
 	}
 
+	~this()
+	{
+		close();
+	}
+
 	void release()
 	{
 		assert(m_task is Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
