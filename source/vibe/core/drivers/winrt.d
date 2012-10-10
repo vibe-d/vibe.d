@@ -55,6 +55,11 @@ class WinRtEventDriver : EventDriver {
 		return new WinRtFileStream(path, mode);
 	}
 
+	DiretoryWatcher watchDirectory(Path path, bool recursive)
+	{
+		assert(false);
+	}
+
 	WinRtTcpConnection connectTcp(string host, ushort port)
 	{
 		assert(false);
