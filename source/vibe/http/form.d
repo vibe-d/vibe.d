@@ -204,6 +204,7 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 	router.post(url(method), handler);
 }
 
+
 /**
 	Generate a HttpServerRequestDelegate from a generic function with arbitrary arguments.
 	The arbitrary arguments will be filled in with data from the form in req. For details see applyParametersFromAssociativeArrays.
@@ -225,7 +226,7 @@ HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(
 }
 
 /**
-	Create a delegate handling form data for any matchin overload of T.method.
+	Create a delegate handling form data for any matching overload of T.method.
 
 	T is some class or struct. Method some probably overloaded method of T. The returned delegate will try all overloads
 	of the passed method with the given method and will only raise an error if no conforming overload is found.
@@ -237,7 +238,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 	{
 		import std.traits;
 		string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
-		alias MemberFunctionsTuple!(T, method) overloads;
+//		alias MemberFunctionsTuple!(T, method) overloads;
 		string errors;
 		foreach(func; __traits(getOverloads, T, method)) {
 			string error;
@@ -308,7 +309,7 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 				}
 			}
 			if(count!=form.length) {
-				error="The form has "~to!string(form.length)~" elements, but "~to!string(count)~" parameters need to be supplied.";
+				error="The form had "~to!string(form.length)~" element(s), but "~to!string(count)~" parameter(s) need to be supplied.";
 				return false;
 			}
 			foreach(i, item; ParameterIdentifierTuple!Overload) {
