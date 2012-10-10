@@ -222,7 +222,7 @@ void setTaskLocal(T)(string name, T value)
 T getTaskLocal(T)(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
-	if( self ) return self.get(name);
+	if( self ) return self.get!T(name);
 	auto pvar = name in s_taskLocalStorageGlobal;
 	enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
 	return pvar.get!T();
