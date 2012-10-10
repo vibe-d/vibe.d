@@ -124,9 +124,14 @@ class Libevent2Driver : EventDriver {
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
 
-	FileStream openFile(string path, FileMode mode)
+	FileStream openFile(Path path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);
+	}
+
+	DirectoryWatcher watchDirectory(Path path, bool recursive)
+	{
+		assert(false);
 	}
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)

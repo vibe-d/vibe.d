@@ -70,7 +70,11 @@ interface EventDriver {
 
 	/** Opens a file on disk with the speficied file mode.
 	*/
-	FileStream openFile(string path, FileMode mode);
+	FileStream openFile(Path path, FileMode mode);
+
+	/** Starts watching a directory for changes.
+	*/
+	DirectoryWatcher watchDirectory(Path path, bool recursive);
 
 	/** Resolves the given host name or IP address string.
 	*/

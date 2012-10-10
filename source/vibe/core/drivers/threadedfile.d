@@ -66,27 +66,28 @@ class ThreadedFileStream : FileStream {
 		FileMode m_mode;
 	}
 	
-	this(string path, FileMode mode)
+	this(Path path, FileMode mode)
 	{
-		m_path = Path(path);
+		m_path = path;
 		m_mode = mode;
+		auto pathstr = m_path.toString();
 		final switch(m_mode){
 			case FileMode.Read:
-				m_fileDescriptor = open(path.toStringz(), O_RDONLY|O_BINARY);
+				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
 				break;
 			case FileMode.ReadWrite:
-				m_fileDescriptor = open(path.toStringz(), O_BINARY);
+				m_fileDescriptor = open(pathstr.toStringz(), O_BINARY);
 				break;
 			case FileMode.CreateTrunc:
-				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY, octal!644);
+				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY, octal!644);
 				break;
 			case FileMode.Append:
-				m_fileDescriptor = open(path.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
+				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
 				break;
 		}
 		if( m_fileDescriptor < 0 )
-			//throw new Exception(formatString("Failed to open '%s' with %s: %d", path, cast(int)mode, errno));
-			throw new Exception("Failed to open "~path);
+			//throw new Exception(formatString("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
+			throw new Exception("Failed to open "~pathstr);
 		
 			
 		version(linux){
@@ -100,12 +101,12 @@ class ThreadedFileStream : FileStream {
 			// (at least) on windows, the created file is write protected
 			version(Windows){
 				if( mode == FileMode.CreateTrunc )
-					chmod(path.toStringz(), S_IREAD|S_IWRITE);
+					chmod(pathstr.toStringz(), S_IREAD|S_IWRITE);
 			}
 		}
 		lseek(m_fileDescriptor, 0, SEEK_SET);
 		
-		logDebug("opened file %s with %d bytes as %d", path, m_size, m_fileDescriptor);
+		logDebug("opened file %s with %d bytes as %d", pathstr, m_size, m_fileDescriptor);
 	}
 
 	~this()

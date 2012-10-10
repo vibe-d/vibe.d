@@ -93,11 +93,16 @@ class LibevDriver : EventDriver {
 		ev_break(m_loop, EVBREAK_ALL);
 	}
 	
-	FileStream openFile(string path, FileMode mode)
+	FileStream openFile(Path path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);
 	}
 	
+	DiretoryWatcher watchDirectory(Path path, bool recursive)
+	{
+		assert(false);
+	}
+
 	TcpConnection connectTcp(string host, ushort port)
 	{
 		assert(false);
