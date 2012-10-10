@@ -25,12 +25,12 @@ import std.string;
 */
 FileStream openFile(Path path, FileMode mode = FileMode.Read)
 {
-	return openFile(path, mode);
+	return getEventDriver().openFile(path, mode);
 }
 /// ditto
 FileStream openFile(string path, FileMode mode = FileMode.Read)
 {
-	return getEventDriver().openFile(Path(path), mode);
+	return openFile(Path(path), mode);
 }
 
 /**
@@ -201,28 +201,20 @@ interface DirectoryWatcher {
 	/// Indicates if the directory is watched recursively
 	@property bool recursive() const;
 
-	/** Waits until a change event occurs in the directory.
-
-		Params:
-			timeout = Optional timeout after which the call returns with false if no event occured
-
-		Returns:
-			If the wait was successful, true is returned. If either the timeout elapsed before an event 
-			occured or a condition arised making it impossible to track changes, false is returned.
-	*/
-	bool waitForChange();
-	/// ditto
-	bool waitForChange(Duration timeout);
-
 	/** Fills the destination array with all changes that occured since the last call.
+
+		The function will blok until either directory changes have occured or until the
+		tiout has elapsed. Specifying a negative duration will cause the function to
+		wait without a timeout.
 
 		Params:
 			dst = The destination array to which the changes will be appended
+			timeout = Optional timeout for the read operation
 
 		Returns:
 			If the call completed successfully, true is returned.
 	*/
-	bool getChanges(ref DirectoryChange[] dst);
+	bool readChanges(ref DirectoryChange[] dst, Duration timeout = dur!"seconds"(-1));
 }
 
 
