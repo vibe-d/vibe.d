@@ -147,27 +147,12 @@ enum FileMode {
 /**
 	Accesses the contents of a file as a stream.
 */
-interface FileStream : Stream, EventedObject {
+interface FileStream : RandomAccessStream, EventedObject {
 	/// The path of the file.
 	@property Path path() const nothrow;
 
-	/// Returns the total size of the file.
-	@property ulong size() const nothrow;
-
-	/// Determines if this stream is readable.
-	@property bool readable() const nothrow;
-
-	/// Determines if this stream is writable.
-	@property bool writable() const nothrow;
-
 	/// Closes the file handle.
 	void close();
-
-	/// Seeks to a specific position in the file if supported by the stream.
-	void seek(ulong offset);
-
-	/// Returns the current offset of the file pointer
-	ulong tell() nothrow;
 }
 
 private FileInfo makeFileInfo(DirEntry ent)

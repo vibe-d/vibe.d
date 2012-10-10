@@ -281,6 +281,26 @@ interface Stream : InputStream, OutputStream {
 
 
 /**
+	Interface for all streams supporting random access.
+*/
+interface RandomAccessStream : Stream {
+	/// Returns the total size of the file.
+	@property ulong size() const nothrow;
+
+	/// Determines if this stream is readable.
+	@property bool readable() const nothrow;
+
+	/// Determines if this stream is writable.
+	@property bool writable() const nothrow;
+
+	/// Seeks to a specific position in the file if supported by the stream.
+	void seek(ulong offset);
+
+	/// Returns the current offset of the file pointer
+	ulong tell() nothrow;
+}
+
+/**
 	Stream implementation acting as a sink with no function.
 
 	Any data written to the stream will be ignored and discarded. This stream type is useful if
