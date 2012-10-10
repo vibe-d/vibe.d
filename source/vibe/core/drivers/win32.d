@@ -580,8 +580,9 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 			return false;
 		}
 
+		// FIXME: obey timeout!
+		assert(timeout.isNegative());
 		while( !m_bytesTransferred ) m_core.yieldForEvent();
-		
 
 		ubyte[] result = m_buffer[0 .. bytesReturned];
 		do {
