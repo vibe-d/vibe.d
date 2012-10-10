@@ -568,7 +568,10 @@ private bool isSetextHeaderLine(string ln)
 private bool isAtxHeaderLine(string ln)
 {
 	ln = stripLeft(ln);
-	return ln.startsWith("#");
+	size_t i = 0;
+	while( i < ln.length && ln[i] == '#' ) i++;
+	if( i < 1 || i > 6 || i >= ln.length ) return false;
+	return ln[i] == ' ';
 }
 
 private bool isHlineLine(string ln)
