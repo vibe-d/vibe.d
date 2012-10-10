@@ -106,7 +106,7 @@ class Win32EventDriver : EventDriver {
 	DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
 		assert(m_tid == GetCurrentThreadId());
-		assert(false);
+		return new Win32DirectoryWatcher(m_core, path, recursive);
 	}
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
@@ -507,6 +507,124 @@ class Win32FileStream : FileStream {
 	}
 }
 
+class Win32DirectoryWatcher : DirectoryWatcher {
+	private {
+		Path m_path;
+		bool m_recursive;
+		HANDLE m_handle;
+		DWORD m_bytesTransferred;
+		DriverCore m_core;
+		ubyte[16384] m_buffer;
+		UINT m_notifications = FILE_NOTIFY_CHANGE_FILE_NAME|FILE_NOTIFY_CHANGE_DIR_NAME|
+			FILE_NOTIFY_CHANGE_SIZE|FILE_NOTIFY_CHANGE_LAST_WRITE;
+		Task m_task;
+	}
+
+	this(DriverCore core, Path path, bool recursive)
+	{
+		m_core = core;
+		m_path = path;
+		m_recursive = recursive;
+		m_task = Task.getThis();
+
+		auto pstr = m_path.toString();
+		m_handle = CreateFileW(toUTFz!(const(wchar)*)(pstr),
+							   FILE_LIST_DIRECTORY,
+							   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+							   null,
+							   OPEN_EXISTING,
+							   FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+							   null);
+	}
+
+	~this()
+	{
+		CloseHandle(m_handle);
+	}
+
+	@property Path path() const { return m_path; }
+	@property bool recursive() const { return m_recursive; }
+
+	void release()
+	{
+		assert(m_task is Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
+		m_task = null;
+	}
+
+	void acquire()
+	{
+		assert(m_task is null, "Acquiring FileStream that is already owned.");
+		m_task = Task.getThis();
+	}
+
+	bool isOwner()
+	{
+		return m_task is Task.getThis();
+	}
+
+	bool readChanges(ref DirectoryChange[] dst, Duration timeout)
+	{
+		OVERLAPPED overlapped;
+		overlapped.Internal = 0;
+		overlapped.InternalHigh = 0;
+		overlapped.Offset = 0;
+		overlapped.OffsetHigh = 0;
+		overlapped.hEvent = cast(HANDLE)cast(void*)this;
+
+		m_bytesTransferred = 0;
+		DWORD bytesReturned;
+		if( !ReadDirectoryChangesW(m_handle, m_buffer.ptr, m_buffer.length, m_recursive,
+								   m_notifications, &bytesReturned, &overlapped, &onIOCompleted) )
+		{
+			logError("Failed to read directory changes in '{}'", m_path);
+			return false;
+		}
+
+		while( !m_bytesTransferred ) m_core.yieldForEvent();
+		
+
+		ubyte[] result = m_buffer[0 .. bytesReturned];
+		do {
+			assert(result.length >= FILE_NOTIFY_INFORMATION.sizeof);
+			auto fni = cast(FILE_NOTIFY_INFORMATION*)result.ptr;
+			DirectoryChangeType kind;
+			switch( fni.Action ){
+				default: kind = DirectoryChangeType.Modified; break;
+				case 0x1: kind = DirectoryChangeType.Added; break;
+				case 0x2: kind = DirectoryChangeType.Removed; break;
+				case 0x3: kind = DirectoryChangeType.Modified; break;
+				case 0x4: kind = DirectoryChangeType.Removed; break;
+				case 0x5: kind = DirectoryChangeType.Added; break;
+			}
+			string filename = to!string(fni.FileName.ptr[0 .. fni.FileNameLength/2]);
+			dst ~= DirectoryChange(kind, Path(filename));
+			//logTrace("File changed: %s", fni.FileName.ptr[0 .. fni.FileNameLength/2]);
+			if( fni.NextEntryOffset == 0 ) break;
+			result = result[fni.NextEntryOffset .. $];
+		} while(result.length > 0);
+
+		return true;
+	}
+
+	static nothrow extern(System)
+	{
+		void onIOCompleted(DWORD dwError, DWORD cbTransferred, OVERLAPPED* overlapped)
+		{
+			try {
+				auto watcher = cast(Win32DirectoryWatcher)overlapped.hEvent;
+				watcher.m_bytesTransferred = cbTransferred;
+				if( watcher.m_task ){
+					Exception ex;
+					if( dwError != 0 ) ex = new Exception("Diretory watcher error: "~to!string(dwError));
+					watcher.m_core.resumeTask(watcher.m_task, ex);
+				}
+			} catch( Throwable th ){
+				logWarn("Exception in directory watcher callback: %s", th.msg);
+			}
+		}
+	}
+}
+
 class Win32TcpConnection : TcpConnection {
 	private {
 		DriverCore m_driver;
@@ -704,7 +822,17 @@ private extern(System)
 	LONG DispatchMessageW(MSG *lpMsg);
 	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
 	BOOL SetEndOfFile(HANDLE hFile);
-	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
+
+	struct FILE_NOTIFY_INFORMATION {
+		DWORD NextEntryOffset;
+		DWORD Action;
+		DWORD FileNameLength;
+		WCHAR FileName[1];
+	}
+
+	BOOL ReadDirectoryChangesW(HANDLE hDirectory, void* lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, void* lpOverlapped, void* lpCompletionRoutine);
+	HANDLE FindFirstChangeNotificationW(LPCWSTR lpPathName, BOOL bWatchSubtree, DWORD dwNotifyFilter);
+	HANDLE FindNextChangeNotification(HANDLE hChangeHandle);
 
 	enum{
 		WSAPROTOCOL_LEN  = 255,
@@ -761,6 +889,7 @@ private extern(System)
 
 	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
 
+	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
 	int WSARecv(SOCKET s, WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesRecvd, DWORD* lpFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASend(SOCKET s, in WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesSent, DWORD dwFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
