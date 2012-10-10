@@ -97,10 +97,16 @@ class Win32EventDriver : EventDriver {
 		PostThreadMessageW(m_tid, WM_QUIT, 0, 0);
 	}
 
-	Win32FileStream openFile(string path, FileMode mode)
+	Win32FileStream openFile(Path path, FileMode mode)
 	{
 		assert(m_tid == GetCurrentThreadId());
-		return new Win32FileStream(m_core, Path(path), mode);
+		return new Win32FileStream(m_core, path, mode);
+	}
+
+	DirectoryWatcher watchDirectory(Path path, bool recursive)
+	{
+		assert(m_tid == GetCurrentThreadId());
+		assert(false);
 	}
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
@@ -354,6 +360,11 @@ class Win32FileStream : FileStream {
 		auto succeeded = GetFileSizeEx(m_handle, &size);
 		enforce(succeeded);
 		m_size = size;
+	}
+
+	~this()
+	{
+		close();
 	}
 
 	void release()

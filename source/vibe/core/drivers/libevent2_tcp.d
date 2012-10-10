@@ -312,7 +312,7 @@ alias FreeListObjectAlloc!(TcpContext, false, true) TcpContextAlloc;
 /* Private functions                                                                              */
 /**************************************************************************************************/
 
-package extern(C)
+package nothrow extern(C)
 {
 	void onConnect(evutil_socket_t listenfd, short evtype, void *arg)
 	{
@@ -374,36 +374,40 @@ package extern(C)
 			}
 		}
 
-		// Accept and configure incoming connections (up to 10 connections in one go)
-		foreach( i; 0 .. 10 ){
-			logTrace("accept");
-			assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
-			sockaddr_in6 remote_addr;
-			socklen_t addrlen = remote_addr.sizeof;
-			auto sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
-			logTrace("accepted %d", sockfd);
-			if(sockfd < 0) {
-				version(Windows) auto err = evutil_socket_geterror(sockfd);
-				else auto err = errno;
-				if( err != EWOULDBLOCK && err != EAGAIN && err != 0 ){
-					version(Windows)
-						logError("Error accepting an incoming connection: %s", to!string(evutil_socket_error_to_string(err)));
-					else
-						logError("Error accepting an incoming connection: %d", err);
+		try {
+			// Accept and configure incoming connections (up to 10 connections in one go)
+			foreach( i; 0 .. 10 ){
+				logTrace("accept");
+				assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
+				sockaddr_in6 remote_addr;
+				socklen_t addrlen = remote_addr.sizeof;
+				auto sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
+				logTrace("accepted %d", sockfd);
+				if(sockfd < 0) {
+					version(Windows) auto err = evutil_socket_geterror(sockfd);
+					else auto err = errno;
+					if( err != EWOULDBLOCK && err != EAGAIN && err != 0 ){
+						version(Windows)
+							logError("Error accepting an incoming connection: %s", to!string(evutil_socket_error_to_string(err)));
+						else
+							logError("Error accepting an incoming connection: %d", err);
+					}
+					break;
 				}
-				break;
-			}
 
-			auto task = FreeListObjectAlloc!ClientTask.alloc();
-			task.listen_ctx = ctx;
-			*cast(sockaddr_in6*)task.remote_addr.sockAddr = remote_addr;
-			task.sockfd = sockfd;
+				auto task = FreeListObjectAlloc!ClientTask.alloc();
+				task.listen_ctx = ctx;
+				*cast(sockaddr_in6*)task.remote_addr.sockAddr = remote_addr;
+				task.sockfd = sockfd;
 
-			version(MultiThreadTest){
-				runWorkerTask(&task.execute);
-			} else {
-				runTask(&task.execute);
+				version(MultiThreadTest){
+					runWorkerTask(&task.execute);
+				} else {
+					runTask(&task.execute);
+				}
 			}
+		} catch( Throwable e ){
+			logWarn("Got exception while accepting new connections: %s", e.msg);
 		}
 
 		logTrace("handled incoming connections...");
@@ -415,72 +419,88 @@ package extern(C)
 		logTrace("socket %d read event!", ctx.socketfd);
 
 		auto f = ctx.task;
-		if( f && f.state != Fiber.State.TERM )
-			ctx.core.resumeTask(f);
+		try {
+			if( f && f.state != Fiber.State.TERM )
+				ctx.core.resumeTask(f);
+		} catch( Throwable e ){
+			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
+		}
 	}
 
 	void onSocketWrite(bufferevent *buf_event, void *arg)
 	{
-		auto ctx = cast(TcpContext*)arg;
-		assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TcpContext");
-		logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
-		if( ctx.task && ctx.task.state != Fiber.State.TERM ){
-			bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
+		try {
+			auto ctx = cast(TcpContext*)arg;
+			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TcpContext");
+			logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
+			if( ctx.task && ctx.task.state != Fiber.State.TERM ){
+				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
+			}
+			if( ctx.task ) ctx.core.resumeTask(ctx.task);
+		} catch( Throwable e ){
+			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
 		}
-		if( ctx.task ) ctx.core.resumeTask(ctx.task);
 	}
 		
 	void onSocketEvent(bufferevent *buf_event, short status, void *arg)
 	{
-		auto ctx = cast(TcpContext*)arg;
-		ctx.status = status;
-		logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
-		assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TcpContext");
-		
-		bool free_event = false;
-		
-		string errorMessage;
-		if( status & BEV_EVENT_EOF ){
-			logDebug("Connection was closed (fd %d).", ctx.socketfd);
-			free_event = true;
-		} else if( status & BEV_EVENT_TIMEOUT ){
-			logDebug("Remote host on fd %d timed out.", ctx.socketfd);
-			free_event = true;
-		} else if( status & BEV_EVENT_ERROR ){
-			version(Windows){
-				logDebug("A socket error occurred on fd %d: %d (%s)", ctx.socketfd, status, to!string(evutil_socket_error_to_string(status)));
-			} else {
-				logDebug("A socket error occurred on fd %d: %d", ctx.socketfd, status);
+		try {
+			auto ctx = cast(TcpContext*)arg;
+			ctx.status = status;
+			logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
+			assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TcpContext");
+	
+			bool free_event = false;
+			
+			string errorMessage;
+			if( status & BEV_EVENT_EOF ){
+				logDebug("Connection was closed (fd %d).", ctx.socketfd);
+				free_event = true;
+			} else if( status & BEV_EVENT_TIMEOUT ){
+				logDebug("Remote host on fd %d timed out.", ctx.socketfd);
+				free_event = true;
+			} else if( status & BEV_EVENT_ERROR ){
+				version(Windows){
+					logDebug("A socket error occurred on fd %d: %d (%s)", ctx.socketfd, status, to!string(evutil_socket_error_to_string(status)));
+				} else {
+					logDebug("A socket error occurred on fd %d: %d", ctx.socketfd, status);
+				}
+				free_event = true;
+				if( status & BEV_EVENT_READING ) errorMessage = "Error reading data from socket. Remote hung up?";
+				else if( status & BEV_EVENT_WRITING ) errorMessage = "Error writing data to socket. Remote hung up?";
+				else errorMessage = "Socket error: "~to!string(status);
 			}
-			free_event = true;
-			if( status & BEV_EVENT_READING ) errorMessage = "Error reading data from socket. Remote hung up?";
-			else if( status & BEV_EVENT_WRITING ) errorMessage = "Error writing data to socket. Remote hung up?";
-			else errorMessage = "Socket error: "~to!string(status);
-		}
 
-		if( free_event || (status & BEV_EVENT_ERROR) ){	
-			bufferevent_free(buf_event);
-			ctx.event = null;
-		}
-
-		if( ctx.task && ctx.task.state != Fiber.State.TERM ){
-			if( status & BEV_EVENT_ERROR ){
-				logTrace("resuming corresponding task with exception...");
-				ctx.core.resumeTask(ctx.task, new Exception(errorMessage));
-			} else {
-				logTrace("resuming corresponding task...");
-				ctx.core.resumeTask(ctx.task);
+			if( free_event || (status & BEV_EVENT_ERROR) ){	
+				bufferevent_free(buf_event);
+				ctx.event = null;
 			}
+
+			if( ctx.task && ctx.task.state != Fiber.State.TERM ){
+				if( status & BEV_EVENT_ERROR ){
+					logTrace("resuming corresponding task with exception...");
+					ctx.core.resumeTask(ctx.task, new Exception(errorMessage));
+				} else {
+					logTrace("resuming corresponding task...");
+					ctx.core.resumeTask(ctx.task);
+				}
+			}
+		} catch( Throwable e ){
+			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
 		}
 	}
 
 	private extern(C) void onTimeout(evutil_socket_t, short events, void* userptr)
 	{
-		logTrace("data wait timeout");
-		auto conn = cast(Libevent2TcpConnection)userptr;
-		conn.m_timeout_triggered = true;
-		if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.task);
-		else logDebug("waitForData timeout after connection was closed!");
+		try {
+			logTrace("data wait timeout");
+			auto conn = cast(Libevent2TcpConnection)userptr;
+			conn.m_timeout_triggered = true;
+			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.task);
+			else logDebug("waitForData timeout after connection was closed!");
+		} catch( Throwable e ){
+			logWarn("Exception onTimeout: %s", e.msg);
+		}
 	}
 }
 

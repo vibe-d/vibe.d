@@ -124,9 +124,14 @@ class Libevent2Driver : EventDriver {
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
 
-	FileStream openFile(string path, FileMode mode)
+	FileStream openFile(Path path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);
+	}
+
+	DirectoryWatcher watchDirectory(Path path, bool recursive)
+	{
+		assert(false);
 	}
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
@@ -260,7 +265,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		int status = 0;
 	}
 
-	private static extern(C) void onDnsResult(int result, char type, int count, int ttl, void* addresses, void* arg)
+	private static nothrow extern(C) void onDnsResult(int result, char type, int count, int ttl, void* addresses, void* arg)
 	{
 		auto info = cast(DnsLookupInfo*)arg;
 		if( count <= 0 ){
@@ -270,12 +275,16 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		}
 		info.done = true;
 		info.status = result;
-		switch( info.addr.family ){
-			default: assert(false, "Unimplmeneted address family");
-			case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
-			case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
+		try {
+			switch( info.addr.family ){
+				default: assert(false, "Unimplmeneted address family");
+				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
+				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
+			}
+			if( info.task && info.task.state != Fiber.State.TERM ) info.core.resumeTask(info.task);
+		} catch( Throwable e ){
+			logWarn("Got exception while getting DNS results: %s", e.msg);
 		}
-		if( info.task && info.task.state != Fiber.State.TERM ) info.core.resumeTask(info.task);
 	}
 }
 
@@ -339,7 +348,7 @@ class Libevent2Signal : Signal {
 
 	@property int emitCount() const { return m_emitCount; }
 
-	private static extern(C)
+	private static nothrow extern(C)
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
 		auto sig = cast(Libevent2Signal)userptr;
@@ -351,7 +360,7 @@ class Libevent2Signal : Signal {
 			lst = sig.m_listeners.dup;
 			foreach( l, _; lst )
 				sig.m_driver.m_core.resumeTask(l);
-		} catch( Exception e ){
+		} catch( Throwable e ){
 			logError("Exception while handling signal event: %s", e.msg);
 			debug assert(false);
 		}
@@ -437,7 +446,7 @@ class Libevent2Timer : Timer {
 			m_driver.m_core.yieldForEvent();
 	}
 
-	private static extern(C)
+	private static nothrow extern(C)
 	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
 	{
 		auto tm = cast(Libevent2Timer)userptr;
@@ -453,7 +462,7 @@ class Libevent2Timer : Timer {
 
 			if( tm.m_owner ) tm.m_driver.m_core.resumeTask(tm.m_owner);
 			if( tm.m_callback ) runTask(tm.m_callback);
-		} catch( Exception e ){
+		} catch( Throwable e ){
 			logError("Exception while handling timer event: %s", e.msg);
 			debug assert(false);
 		}
@@ -572,14 +581,19 @@ class Libevent2UdpConnection : UdpConnection {
 		}
 	}
 
-	private static extern(C) void onUdpRead(evutil_socket_t sockfd, short evts, void* arg)
+	private static nothrow extern(C) void onUdpRead(evutil_socket_t sockfd, short evts, void* arg)
 	{
 		auto ctx = cast(TcpContext*)arg;
 		logTrace("udp socket %d read event!", ctx.socketfd);
 
-		auto f = ctx.task;
-		if( f && f.state != Fiber.State.TERM )
-			ctx.core.resumeTask(f);
+		try {
+			auto f = ctx.task;
+			if( f && f.state != Fiber.State.TERM )
+				ctx.core.resumeTask(f);
+		} catch( Throwable e ){
+			logError("Exception onUdpRead: %s", e.msg);
+			debug assert(false);
+		}
 	}
 }
 
@@ -620,84 +634,160 @@ struct LevCondition {
 }
 alias FreeListObjectAlloc!(LevCondition, false, true) LevConditionAlloc;
 
-private extern(C)
+private nothrow extern(C)
 {
 	void* lev_alloc(size_t size)
 	{
-		auto mem = manualAllocator().alloc(size+size_t.sizeof);
-		*cast(size_t*)mem.ptr = size;
-		return mem.ptr + size_t.sizeof;
+		try {
+			auto mem = manualAllocator().alloc(size+size_t.sizeof);
+			*cast(size_t*)mem.ptr = size;
+			return mem.ptr + size_t.sizeof;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_alloc: %s", th.msg);
+			return null;
+		}
 	}
 	void* lev_realloc(void* p, size_t newsize)
 	{
-		if( !p ) return lev_alloc(newsize);
-		auto oldsize = *cast(size_t*)(p-size_t.sizeof);
-		auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
-		auto newmem = manualAllocator().realloc(oldmem, newsize+size_t.sizeof);
-		*cast(size_t*)newmem.ptr = newsize;
-		return newmem.ptr + size_t.sizeof;
+		try {
+			if( !p ) return lev_alloc(newsize);
+			auto oldsize = *cast(size_t*)(p-size_t.sizeof);
+			auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
+			auto newmem = manualAllocator().realloc(oldmem, newsize+size_t.sizeof);
+			*cast(size_t*)newmem.ptr = newsize;
+			return newmem.ptr + size_t.sizeof;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_realloc: %s", th.msg);
+			return null;
+		}
 	}
 	void lev_free(void* p)
 	{
-		auto size = *cast(size_t*)(p-size_t.sizeof);
-		auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
-		manualAllocator().free(mem);
-	}
-
-	void* lev_alloc_mutex(uint locktype) {
-		auto ret = LevMutexAlloc.alloc();
-		if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
-		else ret.mutex = FreeListRef!Mutex();
-		return ret;
-	}
-	void lev_free_mutex(void* lock, uint locktype) { LevMutexAlloc.free(cast(LevMutex*)lock); }
-	int lev_lock_mutex(uint mode, void* lock) {
-		auto mtx = cast(LevMutex*)lock;
-		
-		if( mode & EVTHREAD_WRITE ){
-			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
-			else mtx.rwmutex.writer().lock();
-		} else if( mode & EVTHREAD_READ ){
-			if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
-			else mtx.rwmutex.reader().lock();
-		} else {
-			if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
-			else mtx.mutex.lock();
+		try {
+			auto size = *cast(size_t*)(p-size_t.sizeof);
+			auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
+			manualAllocator().free(mem);
+		} catch( Throwable th ){
+			logWarn("Exception in lev_free: %s", th.msg);
 		}
-		return 0;
 	}
-	int lev_unlock_mutex(uint mode, void* lock) {
-		auto mtx = cast(LevMutex*)lock;
 
-		if( mode & EVTHREAD_WRITE ){
-			mtx.rwmutex.writer().unlock();
-		} else if( mode & EVTHREAD_READ ){
-			mtx.rwmutex.reader().unlock();
-		} else {
-			mtx.mutex.unlock();
+	void* lev_alloc_mutex(uint locktype)
+	{
+		try {
+			auto ret = LevMutexAlloc.alloc();
+			if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
+			else ret.mutex = FreeListRef!Mutex();
+			return ret;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_alloc_mutex: %s", th.msg);
+			return null;
 		}
-		return 0;
 	}
 
-	void* lev_alloc_condition(uint condtype) { return LevConditionAlloc.alloc(); }
-	void lev_free_condition(void* cond) { LevConditionAlloc.free(cast(LevCondition*)cond); }
-	int lev_signal_condition(void* cond, int broadcast) {
-		auto c = cast(LevCondition*)cond;
-		if( c.cond ) c.cond.notifyAll();
-		return 0;
-	}
-	int lev_wait_condition(void* cond, void* lock, const(timeval)* timeout) {
-		auto c = cast(LevCondition*)cond;
-		if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
-		assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
-		assert(c.mutex is lock);
-		if( c.cond is null ) c.cond = FreeListRef!Condition(c.mutex.mutex);
-		if( timeout ){
-			if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
-				return 1;
-		} else c.cond.wait();
-		return 0;
+	void lev_free_mutex(void* lock, uint locktype)
+	{
+		try LevMutexAlloc.free(cast(LevMutex*)lock);
+		catch( Throwable th ){
+			logWarn("Exception in lev_free_mutex: %s", th.msg);
+		}
 	}
 
-	size_t lev_get_thread_id() { return cast(size_t)cast(void*)Thread.getThis(); }
+	int lev_lock_mutex(uint mode, void* lock)
+	{
+		try {
+			auto mtx = cast(LevMutex*)lock;
+			
+			if( mode & EVTHREAD_WRITE ){
+				if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
+				else mtx.rwmutex.writer().lock();
+			} else if( mode & EVTHREAD_READ ){
+				if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
+				else mtx.rwmutex.reader().lock();
+			} else {
+				if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
+				else mtx.mutex.lock();
+			}
+			return 0;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_lock_mutex: %s", th.msg);
+			return -1;
+		}
+	}
+
+	int lev_unlock_mutex(uint mode, void* lock)
+	{
+		try {
+			auto mtx = cast(LevMutex*)lock;
+
+			if( mode & EVTHREAD_WRITE ){
+				mtx.rwmutex.writer().unlock();
+			} else if( mode & EVTHREAD_READ ){
+				mtx.rwmutex.reader().unlock();
+			} else {
+				mtx.mutex.unlock();
+			}
+			return 0;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_unlock_mutex: %s", th.msg);
+			return -1;
+		}
+	}
+
+	void* lev_alloc_condition(uint condtype)
+	{
+		try return LevConditionAlloc.alloc();
+		catch( Throwable th ){
+			logWarn("Exception in lev_alloc_condition: %s", th.msg);
+			return null;
+		}
+	}
+
+	void lev_free_condition(void* cond)
+	{
+		try LevConditionAlloc.free(cast(LevCondition*)cond);
+		catch( Throwable th ){
+			logWarn("Exception in lev_free_condition: %s", th.msg);
+		}
+	}
+
+	int lev_signal_condition(void* cond, int broadcast)
+	{
+		try {
+			auto c = cast(LevCondition*)cond;
+			if( c.cond ) c.cond.notifyAll();
+			return 0;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_signal_condition: %s", th.msg);
+			return -1;
+		}
+	}
+
+	int lev_wait_condition(void* cond, void* lock, const(timeval)* timeout)
+	{
+		try {
+			auto c = cast(LevCondition*)cond;
+			if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
+			assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
+			assert(c.mutex is lock);
+			if( c.cond is null ) c.cond = FreeListRef!Condition(c.mutex.mutex);
+			if( timeout ){
+				if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
+					return 1;
+			} else c.cond.wait();
+			return 0;
+		} catch( Throwable th ){
+			logWarn("Exception in lev_wait_condition: %s", th.msg);
+			return -1;
+		}
+	}
+
+	size_t lev_get_thread_id()
+	{
+		try return cast(size_t)cast(void*)Thread.getThis();
+		catch( Throwable th ){
+			logWarn("Exception in lev_get_thread_id: %s", th.msg);
+			return 0;
+		}
+	}
 }

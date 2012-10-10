@@ -285,19 +285,19 @@ interface Stream : InputStream, OutputStream {
 */
 interface RandomAccessStream : Stream {
 	/// Returns the total size of the file.
-	@property ulong size() const;
+	@property ulong size() const nothrow;
 
 	/// Determines if this stream is readable.
-	@property bool readable() const;
+	@property bool readable() const nothrow;
 
 	/// Determines if this stream is writable.
-	@property bool writable() const;
+	@property bool writable() const nothrow;
 
 	/// Seeks to a specific position in the file if supported by the stream.
 	void seek(ulong offset);
 
 	/// Returns the current offset of the file pointer
-	ulong tell();
+	ulong tell() nothrow;
 }
 
 /**
