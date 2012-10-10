@@ -550,9 +550,9 @@ private struct DietCompiler {
 				ret ~= indent_string ~ "\"" ~ buildInterpolatedString(str, true, true) ~ "\"\\n";
 		}
 		if( i < tagline.length ) writeLine(tagline[i .. $]);
-		foreach( ln; lines ){
+		foreach( j; 0 .. lines.length ){
 			// remove indentation
-			string lnstr = ln.text[(level-base_level+1)*indentStyle.length .. $];
+			string lnstr = lines[j].text[(level-base_level+1)*indentStyle.length .. $];
 			writeLine(lnstr);
 		}
 		if( tag == "script" ) ret ~= indent_string~"//]]>\\n";
