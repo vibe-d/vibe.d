@@ -8,6 +8,7 @@
 module vibe.core.task;
 
 import core.thread;
+import std.exception;
 import std.variant;
 
 
