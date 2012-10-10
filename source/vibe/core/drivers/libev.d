@@ -98,7 +98,7 @@ class LibevDriver : EventDriver {
 		return new ThreadedFileStream(path, mode);
 	}
 	
-	DiretoryWatcher watchDirectory(Path path, bool recursive)
+	DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
 		assert(false);
 	}

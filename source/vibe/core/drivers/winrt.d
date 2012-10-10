@@ -55,7 +55,7 @@ class WinRtEventDriver : EventDriver {
 		return new WinRtFileStream(path, mode);
 	}
 
-	DiretoryWatcher watchDirectory(Path path, bool recursive)
+	DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
 		assert(false);
 	}

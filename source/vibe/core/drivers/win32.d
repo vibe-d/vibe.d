@@ -103,7 +103,7 @@ class Win32EventDriver : EventDriver {
 		return new Win32FileStream(m_core, path, mode);
 	}
 
-	DiretoryWatcher watchDirectory(Path path, bool recursive)
+	DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		assert(false);
