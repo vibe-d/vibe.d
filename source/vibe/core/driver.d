@@ -143,11 +143,21 @@ interface EventedObject {
 
 
 /**
+	Represents a timer.
 */
 interface Timer : EventedObject {
+	/// True if the timer is yet to fire.
 	@property bool pending();
 
+	/** Resets the timer to the specified timeout
+	*/
 	void rearm(Duration dur, bool periodic = false);
+
+	/** Resets the timer and avoids any firing.
+	*/
 	void stop();
+
+	/** Waits until the timer fires.
+	*/
 	void wait();
 }
