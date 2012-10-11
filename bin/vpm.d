@@ -48,7 +48,7 @@ int main(string[] args)
 			"nodeps", &nodeps,
 			"annotate", &annotate
 			);
-		
+
 		if( vverbose ) loglevel = LogLevel.Trace;
 		else if( verbose ) loglevel = LogLevel.Debug;
 		else if( vquiet ) loglevel = LogLevel.None;
@@ -70,6 +70,9 @@ int main(string[] args)
 			cmd = "run";
 			args = args[0] ~ args[3 .. $];
 		}
+
+		// contrary to the documentation, getopt does not remove --
+		if( args.length >= 2 && args[1] == "--" ) args = args[0] ~ args[2 .. $];
 
 		// display help if requested
 		if( help ){
