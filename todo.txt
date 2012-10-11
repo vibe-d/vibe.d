@@ -18,23 +18,19 @@ GENERAL
  - Load balancer with support for seemless recompile
  - Use the event_set_*_callback functions to log libevent messages
  - Analyze all code for memory leaks (e.g. SSLContext)
- - Add template arguments to API docs
  - HTTP server comparison to nginx
  - Mention the API used for Diet templates on the /templates page
  - Implement a soft-shutdown in case of catching an Error (in conjunction with vibedist)
  - Add support for an entry "lowerPriviledges" to package.json which will use the system's 'vibe' user for priviledge lowering
  - Document the different -version specifiers that are possible
- - Add code to generate a static version of vibed.org suitable for inclusion as docs in the download package
- - Inherited members should appear in the documentation of a derived class
  - See why find([""]) and find(Bson()) resets the connection and maybe detect their use before sending the command to the server
  - Add proper documentation for types supported by the REST interface generator
 
 DIET TEMPLATES
 ==============
 
- - comments
+ - block comments
  - block default contents
- - Detect lines that are mis-indented by just some spaces instead of a full tab stop
  
 MARKDOWN FILTER
 ===============
@@ -48,3 +44,9 @@ PACKAGE MANAGER
  - allow the specification of optional dependencies (the user will just get a message that its possible to extend a package by installing the dependency)
  - implement outputting of a generated vpm_versions.d module that contains the version of each installed package
  - package signing
+
+For next release
+================
+
+ - include offline API documentation
+ - make vibedist work
