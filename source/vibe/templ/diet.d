@@ -357,7 +357,7 @@ private struct DietCompiler {
 						break;
 					case "//": // HTML comment
 						skipWhitespace(ln, j);
-						ret ~= startString(in_string) ~ "<!--" ~ ln[j .. $] ~ "\n";
+						ret ~= startString(in_string) ~ "<!--\n" ~ htmlEscape(ln[j .. $]) ~ "\n";
 						node_stack ~= "-->";
 						break;
 					case "//-": // non-output comment
@@ -743,12 +743,9 @@ private struct DietCompiler {
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
 				}
-				i++;
-				if( i < str.length ){
-					ret ~= enter_string[state] ~ str[i];
-					state = 1;
-					i++;
-				}
+				ret ~= enter_string[state] ~ str[i .. i+2]; // NOTE: we are puttign an already escaped string into the dstring
+				state = 1;
+				i += 2;
 				start = i;
 				continue;
 			}
@@ -765,9 +762,10 @@ private struct DietCompiler {
 					i += 2;
 					ret ~= enter_non_string[state];
 					state = 2;
-					if( escape && !escape_quotes ) ret ~= "htmlEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
-					else if( escape ) ret ~= "htmlAttribEscape(_toString(" ~ skipUntilClosingBrace(str, i) ~ "))";
-					else ret ~= "_toString(" ~ skipUntilClosingBrace(str, i) ~ ")";
+					auto expr = dstringUnescape(skipUntilClosingBrace(str, i));
+					if( escape && !escape_quotes ) ret ~= "htmlEscape(_toString("~expr~"))";
+					else if( escape ) ret ~= "htmlAttribEscape(_toString("~expr~"))";
+					else ret ~= "_toString("~expr~")";
 					i++;
 					start = i;
 				} else i++;
@@ -981,6 +979,33 @@ private string dstringEscape(in ref string str)
 {
 	string ret;
 	foreach( ch; str ) ret ~= dstringEscape(ch);
+	return ret;
+}
+
+private string dstringUnescape(in string str)
+{
+	string ret;
+	size_t i, start = 0;
+	for( i = 0; i < str.length; i++ )
+		if( str[i] == '\\' ){
+			if( i > start ){
+				if( start > 0 ) ret ~= str[start .. i];
+				else ret = str[0 .. i];
+			}
+			switch(str[i+1]){
+				default: ret ~= str[i+1]; break;
+				case 'r': ret ~= '\r'; break;
+				case 'n': ret ~= '\n'; break;
+				case 't': ret ~= '\t'; break;
+			}
+			i++;
+			start = i+1;
+		}
+	
+	if( i > start ){
+		if( start == 0 ) return str;
+		else ret ~= str[start .. i];
+	}
 	return ret;
 }
 
