@@ -226,6 +226,8 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 */
 class RestInterfaceClient(I) : I
 {
+    mixin("static import "~(moduleName!I)~";");
+
 	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
 		Url m_baseUrl;
@@ -264,7 +266,7 @@ class RestInterfaceClient(I) : I
 	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
-	#line 268 "rest.d"
+	#line 270 "rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] param_is_json)
 	const {
 		Url url = m_baseUrl;
@@ -556,23 +558,209 @@ private @property string generateRestInterfaceMethods(I)()
 }
 
 /// private
-private @property string getReturnTypeString(alias F)()
+// https://github.com/D-Programming-Language/phobos/pull/862
+private template returnsRef(alias f)
 {
-	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
+	enum bool returnsRef = is(typeof(
+	{
+		ParameterTypeTuple!f param;
+		auto ptr = &f(param);
+	}));
+}
+
+/// private
+private @property string getReturnTypeString(alias F)()
+{   
 	alias ReturnType!F T;
-	static if( is(T == void) || __traits(compiles, testTempl!T) )
-	   return T.stringof;
-	else return "ReturnType!(typeof(&BaseInterface."~__traits(identifier, F)~"))";
+	static if (returnsRef!F)	
+		return "ref " ~ fullyQualifiedTypeName!T;
+	else
+		return fullyQualifiedTypeName!T;
 }
 
 /// private
 private @property string getParameterTypeString(alias F, int i)()
 {
-	static void testTempl(T)(){ mixin(T.stringof~" x;"); }
-	alias ParameterTypeTuple!(F)[i] T;
-	static if( is(T == void) || __traits(compiles, testTempl!T) )
-		return T.stringof;
-	else return "ParameterTypeTuple!(typeof(&BaseInterface."~__traits(identifier, F)~"))["~to!string(i)~"]";
+	alias ParameterTypeTuple!(F) T;
+	alias ParameterStorageClassTuple!(F) storage_classes;
+	static assert(T.length > i);
+	static assert(storage_classes.length > i);
+
+	enum is_ref = (storage_classes[i] & ParameterStorageClass.ref_);
+	enum is_out = (storage_classes[i] & ParameterStorageClass.out_);
+	enum is_lazy = (storage_classes[i] & ParameterStorageClass.lazy_);
+	enum is_scope = (storage_classes[i] & ParameterStorageClass.scope_);
+
+	string prefix = "";
+	if (is_ref)
+		prefix = "ref " ~ prefix;
+	if (is_out)
+		prefix = "out " ~ prefix;
+	if (is_lazy)
+		prefix = "lazy " ~ prefix;
+	if (is_scope)
+		prefix = "scope " ~ prefix;
+
+	return prefix ~ fullyQualifiedTypeName!(T[i]);
+}
+
+/// private
+private template fullyQualifiedTypeNameImpl(T,
+    bool already_const, bool already_immutable, bool already_shared)
+{
+	import std.typetuple;
+	
+    // Convinience tags
+    enum {
+        _const = 0,
+        _immutable = 1,
+        _shared = 2
+    }
+    
+    alias TypeTuple!(is(T == const), is(T == immutable), is(T == shared)) qualifiers;
+    alias TypeTuple!(false, false, false) no_qualifiers;
+
+    template parametersTypeString(T)
+    {
+        import std.array;
+        import std.algorithm;
+
+        alias ParameterTypeTuple!(T) parameters;
+        enum parametersTypeString = join([staticMap!(fullyQualifiedTypeName, parameters)], ", ");
+    }
+
+    template addQualifiers(string type_string,
+        bool add_const, bool add_immutable, bool add_shared)
+    {
+        static if (add_const)
+            enum addQualifiers = addQualifiers!("const(" ~ type_string ~ ")",
+                false, add_immutable, add_shared);
+        else static if (add_immutable)
+            enum addQualifiers = addQualifiers!("immutable(" ~ type_string ~ ")",
+                add_const, false, add_shared);
+        else static if (add_shared)
+            enum addQualifiers = addQualifiers!("shared(" ~ type_string ~ ")",
+                add_const, add_immutable, false);
+        else
+            enum addQualifiers = type_string;
+    }
+
+    // Convenience template to avoid copy-paste
+    template chain(string current)
+    {
+        enum chain = addQualifiers!(current,
+            qualifiers[_const]     && !already_const,
+            qualifiers[_immutable] && !already_immutable,
+            qualifiers[_shared]    && !already_shared);
+    }
+    
+    static if (isBasicType!T || is(T == enum))
+    {   
+        enum fullyQualifiedTypeNameImpl = chain!((Unqual!T).stringof);
+    }   
+    else static if (isAggregateType!T)
+    {   
+        enum fullyQualifiedTypeNameImpl = chain!(fullyQualifiedName!T);
+    }  
+    else static if (isStaticArray!T)
+    {
+        enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(typeof(T.init[0]), qualifiers) ~ "["~to!string(T.length)~"]"
+        );
+    }
+    else static if (isArray!T)
+    {   
+        enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(typeof(T.init[0]), qualifiers) ~ "[]"
+        );
+    }   
+    else static if (isAssociativeArray!T)
+    {   
+        enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(ValueType!T, qualifiers) 
+            ~ "["
+            ~ fullyQualifiedTypeNameImpl!(KeyType!T, qualifiers)
+            ~ "]"
+        );
+    }   
+    else static if (isSomeFunction!T)
+    {   
+        enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(ReturnType!T, no_qualifiers)
+            ~ "("
+            ~ parametersTypeString!(T)
+            ~ ")"
+        );
+    }   
+    else
+        // In case something is forgotten
+        static assert(0, "Unrecognized type " ~ T.stringof ~ ", can't convert to fully qualified string");
+}
+
+/// private
+// https://github.com/D-Programming-Language/phobos/pull/863
+private template fullyQualifiedTypeName(T)
+{
+    static assert(is(T), "Template parameter must be a type");
+    enum fullyQualifiedTypeName = fullyQualifiedTypeNameImpl!(T, false, false, false);
+}
+	
+version(unittest)
+{
+    struct QualifiedNameTests
+    {
+        struct Inner
+        {
+        }
+
+        ref const(Inner[string]) func( ref Inner var1, lazy scope string var2 );        
+
+        shared(const(Inner[string])[]) data;
+        
+        Inner delegate(double, string) deleg;
+
+        Inner[] array;
+        Inner[16] sarray;
+        Inner[Inner] aarray;
+
+        Json external_type;
+        Json[] ext_array;
+        Json[16] ext_sarray;
+        Json[Json] ext_aarray;
+    }
+}
+
+unittest
+{
+    static assert(fullyQualifiedTypeName!(string) == "immutable(char)[]");
+    static assert(fullyQualifiedTypeName!(Json)
+		== "vibe.data.json.Json");
+    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_array))
+        == "vibe.data.json.Json[]");
+    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_sarray))
+    	== "vibe.data.json.Json[16]");
+    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_aarray))
+    	== "vibe.data.json.Json[vibe.data.json.Json]");
+
+    // these currently fail because fullyQualifiedName!T returns nonsense for inner types
+    version(none){
+	    static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
+			== "vibe.http.rest.QualifiedNameTests.Inner");
+	    static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
+			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.func))
+			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])(vibe.http.rest.QualifiedNameTests.Inner, immutable(char)[])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.data))
+			== "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.deleg))
+			== "vibe.http.rest.QualifiedNameTests.Inner(double, immutable(char)[])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.array))
+	    	== "vibe.http.rest.QualifiedNameTests.Inner[]");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.sarray))
+	    	== "vibe.http.rest.QualifiedNameTests.Inner[16]");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.aarray))
+	    	== "vibe.http.rest.QualifiedNameTests.Inner[vibe.http.rest.QualifiedNameTests.Inner]");
+	}
 }
 
 /// private
@@ -687,6 +875,10 @@ private string skipIdent(string str, ref size_t i)
 
 private void skipType(string str, ref size_t i)
 {
+	if (str[i..$].startsWith("ref")) {
+		i += 3;
+		skipWhitespace(str, i);
+	}
 	skipIdent(str, i);
 	if( i < str.length && (str[i] == '(' || str[i] == '[') ){
 		int depth = 1;

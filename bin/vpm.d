@@ -19,118 +19,125 @@ import std.array;
 import std.conv;
 import std.exception;
 import std.file;
+import std.getopt;
 import std.process;
 
 
-void printHelp()
-{
-	// This help is actually a mixup of help for this application and the
-	// supporting vibe script / .cmd file.
-	logInfo("
-Starts vibe.d for the application in the current working directory
-
-Command line arguments:
-
-vibe [OPT,...[,APP_OP]]
-
-Where OPT is one of
-	help: you watch this currently
-	run: (default) makes sure everything is set up correctly and runs
-		the application afterwards
-	build: makes sure everything is set up, but does not run the application
-	upgrade: performs a regular update and uninstalls and reinstalls all
-		installed packages
-		or
-		upgrade:packageId[,packageId] to perform it only on one single package
-		(not yet implemented)
-	install: installs a specified package
-		install:packageId[,packageId]
-	init: 'initializes' an empty directory by creating the basic file layout
-	
-	Advanced options:
-		-annotate: without actually updating, check for the status of the application
-		-verbose: prints out lots of debug information
-		-vverbose: even more debug output
-
-APP_OP will be passed on to the application to be run.");
-}
-
-// Applications needed arguments are
-// 1: vibeDir
-// 2: scriptDestination
-// Therefore the real usage is:
-// vpm.d vibeDir scriptDestination <everythingElseFromPrintHelp>
-//
-// vibeDir: the installation folder of the vibe installation
-// startupScriptFile: destination of the script, which can be used to run the app
-//
-// However, this should be taken care of the scripts.
 int main(string[] args)
 {
-	try {
-		if(args.length < 3)
-			throw new Exception("Too few parameters");
+	string cmd;
 
-		enforce(isDir(args[1]));
+	try {
+		if( args.length < 3 ){
+			logError("Usage: %s <vibe-binary-path> <start-script-output-file> [<command>] [args...] [-- [applicatio args]]\n", args[0]);
+			// vibe-binary-path: the installation folder of the vibe installation
+			// start-script-output-file: destination of the script, which can be used to run the app
+			return 1;
+		}
+
+		// parse general options
+		bool verbose, vverbose, quiet, vquiet;
+		bool help, nodeps, annotate;
+		LogLevel loglevel = LogLevel.Info;
+		getopt(args,
+			"v|verbose", &verbose,
+			"vverbose", &vverbose,
+			"q|quiet", &quiet,
+			"vquiet", &vquiet,
+			"h|help", &help,
+			"nodeps", &nodeps,
+			"annotate", &annotate
+			);
+
+		if( vverbose ) loglevel = LogLevel.Trace;
+		else if( verbose ) loglevel = LogLevel.Debug;
+		else if( vquiet ) loglevel = LogLevel.None;
+		else if( quiet ) loglevel = LogLevel.Warn;
+		setLogLevel(loglevel);
+		if( loglevel >= LogLevel.Info ) setPlainLogging(true);
+
+
+		// extract the destination paths
+		enforce(isDir(args[1]), "Specified binary path is not a directory.");
 		Path vibedDir = Path(args[1]);
 		Path dstScript = Path(args[2]);
-		string[] vpmArgs = args[3..$];
-		auto vpmArg = lastVpmArg(vpmArgs);
-		string[] appArgs;
-		if(vpmArg < vpmArgs.length)
-			appArgs = vpmArgs[vpmArg..$];
-		vpmArgs = vpmArgs[0..vpmArg];
 
+		// extract the command
+		if( args.length > 3 && !args[3].startsWith("-") ){
+			cmd = args[3];
+			args = args[0] ~ args[4 .. $];
+		} else {
+			cmd = "run";
+			args = args[0] ~ args[3 .. $];
+		}
+
+		// contrary to the documentation, getopt does not remove --
+		if( args.length >= 2 && args[1] == "--" ) args = args[0] ~ args[2 .. $];
+
+		// display help if requested
+		if( help ){
+			showHelp(cmd);
+			return 0;
+		}
+
+		auto appPath = getcwd();
 		string appStartScript;
-		if(canFind(vpmArgs, "help")) {
-			printHelp();
-			appStartScript = ""; // make sure the script is empty, so that the app is not run
-		} else if(canFind(vpmArgs, "init")) {
-				initDirectory(args[$-1]);
-        } else {
-			if(canFind(vpmArgs, "-verbose"))
-				setLogLevel(LogLevel.Debug);
-			if(canFind(vpmArgs, "-vverbose"))
-				setLogLevel(LogLevel.Trace);
+		Url registryUrl = Url.parse("http://registry.vibed.org/");
+		logDebug("Using vpm registry url '%s'", registryUrl);
 
-			auto appPath = getcwd();
-			logInfo("Updating application in '%s'", appPath);
+		// handle the command
+		switch( cmd ){
+			default:
+				enforce(false, "Command is unknown.");
+				assert(false);
+			case "init":
+				string dir = ".";
+				if( args.length >= 2 ) dir = args[2];
+				initDirectory(dir);
+				break;
+			case "run":
+			case "build":
+				Vpm vpm = new Vpm(Path(appPath), new RegistryPS(registryUrl));
+				if( !nodeps ){
+					logInfo("Checking dependencies in '%s'", appPath);
+					logDebug("vpm initialized");
+					vpm.update(annotate ? UpdateOptions.JustAnnotate : UpdateOptions.None);
+				}
 
-			Url url = Url.parse("http://registry.vibed.org/");
-			logDebug("Using vpm registry url '%s'", url);
+				//Added check for existance of [AppNameInPackagejson].d
+				//If exists, use that as the starting file.
+				string binName = getBinName(vpm);
+				version(Windows) { string appName = binName[0..$-4]; 	}
+				version(Posix)   { string appName = binName; 			}
 
-			Vpm vpm = new Vpm(Path(appPath), new RegistryPS(url));
-			logDebug("vpm initialized");
+				logDebug("Application Name is '%s'", binName);
 
-			vpm.update(parseOptions(vpmArgs));
+				// Create start script, which will be used by the calling bash/cmd script.
+				// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
+				// or with "/" instead of "\"
+				string[] flags = ["--force"];
+				if( cmd == "build" ){
+					flags ~= "--build-only";
+					flags ~= "-of"~binName;
+				}
+				flags ~= "-g";
+				flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
+				flags ~= "-Isource";
+				flags ~= "-Jviews";
+				flags ~= vpm.dflags;
+				flags ~= getLibs(vibedDir);
+				flags ~= getPackagesAsVersion(vpm);
+				flags ~= (Path("source") ~ appName).toNativeString();
+				flags ~= args[1 .. $];
 
-			//Added check for existance of [AppNameInPackagejson].d
-			//If exists, use that as the starting file.
-			string binName = getBinName(vpm);
-			version(Windows) { string appName = binName[0..$-4]; 	}
-			version(Posix)   { string appName = binName; 			}
-
-			logDebug("Application Name is '%s'", binName);
-
-			// Create start script, which will be used by the calling bash/cmd script.
-			// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
-			// or with "/" instead of "\"
-			string[] flags = ["--force"];
-			if( canFind(vpmArgs, "build") ){
-				flags ~= "--build-only";
-				flags ~= "-of"~binName;
-			}
-			flags ~= "-g";
-			flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
-			flags ~= "-Isource";
-			flags ~= "-Jviews";
-			flags ~= vpm.dflags;
-			flags ~= getLibs(vibedDir);
-			flags ~= getPackagesAsVersion(vpm);
-			flags ~= (Path("source") ~ appName).toNativeString();
-			flags ~= appArgs;
-
-			appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
+				appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
+				break;
+			case "upgrade":
+				logInfo("Upgrading application in '%s'", appPath);
+				Vpm vpm = new Vpm(Path(appPath), new RegistryPS(registryUrl));
+				logDebug("vpm initialized");
+				vpm.update(UpdateOptions.Reinstall | (annotate ? UpdateOptions.JustAnnotate : UpdateOptions.None));
+				break;
 		}
 
 		auto script = openFile(to!string(dstScript), FileMode.CreateTrunc);
@@ -141,42 +148,41 @@ int main(string[] args)
 	}
 	catch(Throwable e)
 	{
-		logError("Failed to perform properly: \n" ~ sanitizeUTF8(cast(ubyte[])e.toString()) ~ "\nShowing the help, just in case ...");
-		printHelp();
+		logError("Error executing command '%s': %s\n", cmd, e.msg);
+		logDebug("Full exception: %s", sanitizeUTF8(cast(ubyte[])e.toString()));
+		showHelp(cmd);
 		return -1;
 	}
 }
 
-private size_t lastVpmArg(string[] args)
+
+private void showHelp(string command)
 {
-	string[] vpmArgs =
-	[
-		"help",
-		"upgrade",
-		"install",
-		"run",
-		"build", 
-		"init",
-		"-annotate",
-		"-keepDepsTxt",
-		"-verbose"
-		"-vverbose"
-	];
-	foreach(k,s; args)
-		if( false == reduce!((bool a, string b) => a || s.startsWith(b))(false, vpmArgs) )
-			return k;
-	return args.length;
+	// This help is actually a mixup of help for this application and the
+	// supporting vibe script / .cmd file.
+	logInfo(
+"Usage: vibe [<command>] [<vibe options...>] [-- <application options...>]
+
+Manages the vibe.d application in the current directory. A single -- can be used
+to separate vibe options from options passed to the application.
+
+Possible commands:
+    init [<directory>]   Initializes an empy project in the specified directory
+    run                  Compiles and runs the application
+    build                Just compiles the application in the project directory
+    upgrade              Forces an upgrade of all dependencies
+
+Options:
+    -v  --verbose        Also output debug messages
+        --vverbose       Also output trace messages (produces a lot of output)
+    -q  --quiet          Only output warnings and errors
+        --vquiet         No output
+    -h  --help           Print this help screen
+        --nodeps         Do not check dependencies for 'run' or 'build'
+        --annotate       Do not execute dependency installations, just print
+");
 }
 
-private int parseOptions(string[] args)
-{
-	int options = 0;
-	if(canFind(args, "upgrade"))
-		options = options | UpdateOptions.Reinstall;
-	if(canFind(args, "-annotate"))
-		options = options | UpdateOptions.JustAnnotate;
-	return options;
-}
 
 private string getDflags()
 {
@@ -249,7 +255,7 @@ private void initDirectory(string fName)
     //raw strings must be unindented. 
     immutable packageJson = 
 `{
-    "name": "edit",
+    "name": "my-project",
     "version": "1.0.0",
     "description": "An example project skeleton",
     "homepage": "http://my-project.org",
@@ -278,7 +284,7 @@ static this()
 		logInfo("The current directory is not empty.\n"
 				"vibe init aborted.");
 		//Exit Immediately. 
-		std.c.stdlib.exit(1);
+		return;
 	}
 	//Create the common directories.
 	createDirectory(cwd ~ "source");

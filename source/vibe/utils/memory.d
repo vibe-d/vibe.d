@@ -261,14 +261,18 @@ class PoolAllocator : Allocator {
 
 	void[] realloc(void[] arr, size_t newsize)
 	{
-		bool last_in_pool = m_freePools && arr.ptr+arr.length == m_freePools.remaining.ptr;
-		if( last_in_pool && m_freePools.remaining.length+arr.length >= newsize ){
-			m_freePools.remaining = arr.ptr[newsize .. m_freePools.remaining.length+arr.length-newsize];
+		if( newsize <= arr.length ) return arr;
+
+		auto pool = m_freePools;
+		bool last_in_pool = pool && arr.ptr+arr.length == pool.remaining.ptr;
+		if( last_in_pool && pool.remaining.length+arr.length >= newsize ){
+			pool.remaining = pool.remaining[newsize-arr.length .. $];
 			arr = arr.ptr[0 .. newsize];
+			assert(arr.ptr+arr.length == pool.remaining.ptr, "Last block does not align with the remaining space!?");
 			return arr;
 		} else {
 			auto ret = alloc(newsize);
-			assert(ret.ptr >= arr.ptr+arr.length, "New block overlaps old one!?");
+			assert(ret.ptr >= arr.ptr+arr.length || ret.ptr+ret.length <= arr.ptr, "New block overlaps old one!?");
 			ret[0 .. min(arr.length, newsize)] = arr[0 .. min(arr.length, newsize)];
 			return ret;
 		}

@@ -198,9 +198,11 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
 
 	// TODO: cctx.remove_addr6 = ...;
-			
-		while( cctx.status == 0 )
-			m_core.yieldForEvent();
+		
+		try {
+			while( cctx.status == 0 )
+				m_core.yieldForEvent();
+		} catch( Exception ){}
 			
 		logTrace("Connect result status: %d", cctx.status);
 		

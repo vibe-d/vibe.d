@@ -113,8 +113,10 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 {
 	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
 	{
-		try listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
-		catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
+		try {
+			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+			logInfo("Listening for HTTP requests on %s:%s", addr, settings.port);
+		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
 	// Check for every bind address/port, if a new listening socket needs to be created and

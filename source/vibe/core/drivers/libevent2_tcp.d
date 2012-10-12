@@ -220,7 +220,10 @@ package class Libevent2TcpConnection : TcpConnection {
 		logTrace("wait for data");
 		while( connected ) {
 			if( dataAvailableForRead || m_timeout_triggered ) break;
-			rawYield();
+			try rawYield();
+			catch( Exception e ){
+				logDebug("Connection error during waitForData: %s", e.toString());
+			}
 		}
 		logTrace(" -> timeout = %s", m_timeout_triggered);
 		return dataAvailableForRead;
