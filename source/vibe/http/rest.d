@@ -573,9 +573,9 @@ private @property string getReturnTypeString(alias F)()
 {   
 	alias ReturnType!F T;
 	static if (returnsRef!F)	
-		return "ref " ~ fullyQualifiedTypename!T;
+		return "ref " ~ fullyQualifiedTypeName!T;
 	else
-		return fullyQualifiedTypename!T;
+		return fullyQualifiedTypeName!T;
 }
 
 /// private
@@ -601,7 +601,7 @@ private @property string getParameterTypeString(alias F, int i)()
 	if (is_scope)
 		prefix = "scope " ~ prefix;
 
-	return prefix ~ fullyQualifiedTypename!(T[i]);
+	return prefix ~ fullyQualifiedTypeName!(T[i]);
 }
 
 /// private
