@@ -730,15 +730,8 @@ version(unittest)
     }
 }
 
-template test(T){ pragma(msg, fullyQualifiedName!T); int test; }
 unittest
 {
-	test!Json = 1;
-	test!(Json.Type) = 1;
-    pragma(msg, fullyQualifiedTypeName!(Json.Type));
-    pragma(msg, fullyQualifiedTypeName!(Json));
-    pragma(msg, fullyQualifiedTypeName!(QualifiedNameTests.Inner));
-
     static assert(fullyQualifiedTypeName!(string) == "immutable(char)[]");
     static assert(fullyQualifiedTypeName!(Json)
 		== "vibe.data.json.Json");
@@ -749,7 +742,7 @@ unittest
     static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_aarray))
     	== "vibe.data.json.Json[vibe.data.json.Json]");
 
-    // these currently fail because .stringof returns nonsense for inner types
+    // these currently fail because fullyQualifiedName!T returns nonsense for inner types
     version(none){
 	    static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
 			== "vibe.http.rest.QualifiedNameTests.Inner");
