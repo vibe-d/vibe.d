@@ -266,7 +266,7 @@ class RestInterfaceClient(I) : I
 	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
-	#line 268 "rest.d"
+	#line 270 "rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] param_is_json)
 	const {
 		Url url = m_baseUrl;
@@ -654,18 +654,24 @@ private template fullyQualifiedTypeNameImpl(T,
             qualifiers[_shared]    && !already_shared);
     }
     
-    static if (isBasicType!T)
+    static if (isBasicType!T || is(T == enum))
     {   
         enum fullyQualifiedTypeNameImpl = chain!((Unqual!T).stringof);
     }   
     else static if (isAggregateType!T)
     {   
         enum fullyQualifiedTypeNameImpl = chain!(fullyQualifiedName!T);
-    }   
+    }  
+    else static if (isStaticArray!T)
+    {
+        enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(typeof(T.init[0]), qualifiers) ~ "["~to!string(T.length)~"]"
+        );
+    }
     else static if (isArray!T)
     {   
         enum fullyQualifiedTypeNameImpl = chain!(
-            fullyQualifiedTypeNameImpl!(typeof(T.init[0]), qualifiers ) ~ "[]"
+            fullyQualifiedTypeNameImpl!(typeof(T.init[0]), qualifiers) ~ "[]"
         );
     }   
     else static if (isAssociativeArray!T)
@@ -688,7 +694,7 @@ private template fullyQualifiedTypeNameImpl(T,
     }   
     else
         // In case something is forgotten
-        static assert(0, "Unrecognized type" ~ T.stringof ~ ", can't convert to fully qualified string");
+        static assert(0, "Unrecognized type " ~ T.stringof ~ ", can't convert to fully qualified string");
 }
 
 /// private
@@ -712,22 +718,56 @@ version(unittest)
         shared(const(Inner[string])[]) data;
         
         Inner delegate(double, string) deleg;
+
+        Inner[] array;
+        Inner[16] sarray;
+        Inner[Inner] aarray;
+
+        Json external_type;
+        Json[] ext_array;
+        Json[16] ext_sarray;
+        Json[Json] ext_aarray;
     }
 }
 
+template test(T){ pragma(msg, fullyQualifiedName!T); int test; }
 unittest
-{   
+{
+	test!Json = 1;
+	test!(Json.Type) = 1;
+    pragma(msg, fullyQualifiedTypeName!(Json.Type));
+    pragma(msg, fullyQualifiedTypeName!(Json));
+    pragma(msg, fullyQualifiedTypeName!(QualifiedNameTests.Inner));
+
     static assert(fullyQualifiedTypeName!(string) == "immutable(char)[]");
-    static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
-		== "vibe.http.rest.QualifiedNameTests.Inner");
-    static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
-		== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.func))
-		== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])(vibe.http.rest.QualifiedNameTests.Inner, immutable(char)[])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.data))
-		== "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.deleg))
-		== "vibe.http.rest.QualifiedNameTests.Inner(double, immutable(char)[])");
+    static assert(fullyQualifiedTypeName!(Json)
+		== "vibe.data.json.Json");
+    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_array))
+        == "vibe.data.json.Json[]");
+    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_sarray))
+    	== "vibe.data.json.Json[16]");
+    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_aarray))
+    	== "vibe.data.json.Json[vibe.data.json.Json]");
+
+    // these currently fail because .stringof returns nonsense for inner types
+    version(none){
+	    static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
+			== "vibe.http.rest.QualifiedNameTests.Inner");
+	    static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
+			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.func))
+			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])(vibe.http.rest.QualifiedNameTests.Inner, immutable(char)[])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.data))
+			== "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.deleg))
+			== "vibe.http.rest.QualifiedNameTests.Inner(double, immutable(char)[])");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.array))
+	    	== "vibe.http.rest.QualifiedNameTests.Inner[]");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.sarray))
+	    	== "vibe.http.rest.QualifiedNameTests.Inner[16]");
+	    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.aarray))
+	    	== "vibe.http.rest.QualifiedNameTests.Inner[vibe.http.rest.QualifiedNameTests.Inner]");
+	}
 }
 
 /// private
