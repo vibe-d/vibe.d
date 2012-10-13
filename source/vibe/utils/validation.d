@@ -106,6 +106,6 @@ string validateString(string str, size_t min_length = 0, size_t max_length = 0, 
 	enforce(str.length >= min_length,
 		entity_name~" must be at least "~to!string(min_length)~" characters long.");
 	enforce(!max_length || str.length <= max_length,
-		entity_name~" must not be longer than "~to!string(min_length)~" characters.");
+		entity_name~" must not be longer than "~to!string(max_length)~" characters.");
 	return str;
 }
