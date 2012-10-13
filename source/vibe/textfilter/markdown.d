@@ -398,7 +398,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.Code:
 			assert(block.blocks.length == 0);
-			dst.put("<code class=\"prettyprint\"><pre>");
+			dst.put("<code><pre class=\"prettyprint\">");
 			foreach(ln; block.text){
 				filterHtmlEscape(dst, ln);
 				dst.put("\n");
