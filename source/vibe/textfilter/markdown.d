@@ -39,24 +39,24 @@ version(MarkdownTest)
 
 /** Returns a Markdown filtered HTML string.
 */
-string filterMarkdown()(string str)
+string filterMarkdown()(string str, bool coding_variant = false)
 {
 	auto dst = appender!string();
-	filterMarkdown(dst, str);
+	filterMarkdown(dst, str, coding_variant);
 	return dst.data;
 }
 
 
 /** Markdown filters the given string and writes the corresponding HTML to an output range.
 */
-void filterMarkdown(R)(ref R dst, string src)
+void filterMarkdown(R)(ref R dst, string src, bool coding_variant = false)
 {
 	auto all_lines = splitLines(src);
 	auto links = scanForReferences(all_lines);
-	auto lines = parseLines(all_lines);
+	auto lines = parseLines(all_lines, coding_variant);
 	Block root_block;
-	parseBlocks(root_block, lines, null);
-	writeBlock(dst, root_block, links);
+	parseBlocks(root_block, lines, null, coding_variant);
+	writeBlock(dst, root_block, links, coding_variant);
 }
 
 private {
@@ -77,7 +77,8 @@ private enum LineType {
 	SetextHeader,
 	UList,
 	OList,
-	HtmlBlock
+	HtmlBlock,
+	CodeBlockDelimiter
 }
 
 private struct Line {
@@ -105,7 +106,7 @@ private struct Line {
 	}
 }
 
-private Line[] parseLines(ref string[] lines)
+private Line[] parseLines(ref string[] lines, bool coding_variant)
 {
 	Line[] ret;
 	while( !lines.empty ){
@@ -132,7 +133,8 @@ private Line[] parseLines(ref string[] lines)
 		}
 		lninfo.unindented = ln;
 
-		if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
+		if( coding_variant && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
+		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
 		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
@@ -165,7 +167,7 @@ private struct Block {
 	size_t headerLevel;
 }
 
-private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent)
+private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, bool coding_variant)
 {
 	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
@@ -195,7 +197,7 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 				root.blocks ~= cblock;
 			} else {
 				Block subblock;
-				parseBlocks(subblock, lines, ln.indent[0 .. base_indent.length+1]);
+				parseBlocks(subblock, lines, ln.indent[0 .. base_indent.length+1], coding_variant);
 				root.blocks ~= subblock;
 			}
 		} else {
@@ -258,7 +260,7 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 							itm.text = null;
 						}
 
-						parseBlocks(itm, lines, itemindent);
+						parseBlocks(itm, lines, itemindent, coding_variant);
 						itm.type = BlockType.ListItem;
 						b.blocks ~= itm;
 					}
@@ -281,6 +283,20 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 						if( taginfo.isHtmlBlock && taginfo.tagName == starttag.tagName )
 							nestlevel += taginfo.open ? 1 : -1;
 						if( nestlevel <= 0 ) break;
+					}
+					break;
+				case LineType.CodeBlockDelimiter:
+					lines.popFront(); // TODO: get language from line
+					b.type = BlockType.Code;
+					while(!lines.empty){
+						if( lines.front.indent.length < base_indent.length ) break;
+						if( lines.front.indent[0 .. base_indent.length] != base_indent ) break;
+						if( lines.front.type == LineType.CodeBlockDelimiter ){
+							lines.popFront();
+							break;
+						}
+						b.text ~= lines.front.unindent(base_indent.length);
+						lines.popFront();
 					}
 					break;
 			}
@@ -315,7 +331,7 @@ private string[] skipText(ref Line[] lines, IndentType[] indent)
 }
 
 /// private
-private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links)
+private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, bool coding_variant)
 {
 	final switch(block.type){
 		case BlockType.Plain:
@@ -324,21 +340,23 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links);
+				writeBlock(dst, b, links, coding_variant);
 			break;
 		case BlockType.Text:
 			foreach( ln; block.text ){
 				writeMarkdownEscaped(dst, ln, links);
+				if( coding_variant ) dst.put("<br>");
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links);
+				writeBlock(dst, b, links, coding_variant);
 			break;
 		case BlockType.Paragraph:
 			assert(block.blocks.length == 0);
 			dst.put("<p>");
 			foreach( ln; block.text ){
 				writeMarkdownEscaped(dst, ln, links);
+				if( coding_variant ) dst.put("<br>");
 				dst.put("\n");
 			}
 			dst.put("</p>\n");
@@ -358,23 +376,24 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 		case BlockType.OList:
 			dst.put("<ol>\n");
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links);
+				writeBlock(dst, b, links, coding_variant);
 			dst.put("</ol>\n");
 			break;
 		case BlockType.UList:
 			dst.put("<ul>\n");
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links);
+				writeBlock(dst, b, links, coding_variant);
 			dst.put("</ul>\n");
 			break;
 		case BlockType.ListItem:
 			dst.put("<li>");
 			foreach(ln; block.text){
 				writeMarkdownEscaped(dst, ln, links);
+				if( coding_variant ) dst.put("<br>");
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links);
+				writeBlock(dst, b, links, coding_variant);
 			dst.put("</li>\n");
 			break;
 		case BlockType.Code:
@@ -390,10 +409,11 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			dst.put("<quot>");
 			foreach(ln; block.text){
 				writeMarkdownEscaped(dst, ln, links);
+				if( coding_variant ) dst.put("<br>");
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links);
+				writeBlock(dst, b, links, coding_variant);
 			dst.put("</quot>\n");
 			break;
 	}
@@ -682,6 +702,11 @@ private bool isHtmlBlockCloseLine(string ln)
 {
 	auto bi = parseHtmlBlockLine(ln);
 	return bi.isHtmlBlock && !bi.open;
+}
+
+private bool isCodeBlockDelimiter(string ln)
+{
+	return ln.startsWith("```");
 }
 
 private string getHtmlTagName(string ln)
