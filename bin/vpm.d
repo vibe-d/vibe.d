@@ -255,10 +255,10 @@ private void initDirectory(string fName)
     //raw strings must be unindented. 
     immutable packageJson = 
 `{
-    "name": "my-project",
-    "version": "1.0.0",
+    "name": "`~(fName == "." ? "my-project" : fName)~`",
+    "version": "0.0.1",
     "description": "An example project skeleton",
-    "homepage": "http://my-project.org",
+    "homepage": "http://example.org",
     "copyright": "Copyright © 2000, Edit Me",
     "authors": [
         "Your Name"
