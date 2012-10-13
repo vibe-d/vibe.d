@@ -67,7 +67,7 @@ void filterHtmlAttribEscape(R)(ref R dst, string str)
 
 /** Returns the HTML escaped version of a given string (escapes every character).
 */
-string filterHtmlAllEscape()(string str)
+string htmlAllEscape()(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
