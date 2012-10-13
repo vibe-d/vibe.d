@@ -792,7 +792,20 @@ unittest {
 	)
 
 	All entries of an array or an associative array, as well as all R/W properties and
-	all fields of a struct/class are recursively serialized using the same rules.
+	all public fields of a struct/class are recursively serialized using the same rules.
+
+	The following methods can be used to customize the serialization of structs/classes:
+
+	---
+	Json toJson() const;
+	static T fromJson(Json src);
+
+	string toString() const;
+	static T fromString(string src);
+	---
+
+	The methods will have to be defined in pairs. The first pair that is implemented by
+	the type will be used for serialization (i.e. toJson overrides toString).
 */
 Json serializeToJson(T)(T value)
 {
@@ -813,6 +826,8 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
+	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+		return value.toJson();
 	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
 		return Json(value.toString());
 	} else static if( is(T == struct) ){
@@ -867,6 +882,8 @@ void deserializeJson(T)(ref T dst, Json src)
 			deserializeJson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
+		dst = T.fromJson(src);
 	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
 		dst = T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
