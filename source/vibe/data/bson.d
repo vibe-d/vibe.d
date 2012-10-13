@@ -777,6 +777,10 @@ struct BsonRegex {
 	All entries of an array or an associative array, as well as all R/W properties and
 	all fields of a struct/class are recursively serialized using the same rules.
 
+	Fields ending with an underscore will have the last underscore stripped in the
+	serialized output. This makes it possible to use fields with D keywords as their name
+	by simply appending an underscore.
+
 	The following methods can be used to customize the serialization of structs/classes:
 
 	---
@@ -830,7 +834,7 @@ Bson serializeToBson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToBson(mv);
+				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -840,7 +844,7 @@ Bson serializeToBson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToBson(mv);
+				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -890,10 +894,10 @@ void deserializeBson(T)(ref T dst, Bson src)
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[m]);
+				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[m]);
+				deserializeBson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -902,10 +906,10 @@ void deserializeBson(T)(ref T dst, Bson src)
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[m]);
+				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[m]);
+				deserializeBson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -1102,5 +1106,11 @@ ubyte[] toBigEndianData(T)(T v)
 	static ubyte[T.sizeof] ret;
 	ret = nativeToBigEndian(v);
 	return ret;
+}
+
+private string underscoreStrip(string field_name)
+{
+	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
+	else return field_name[0 .. $-1];
 }
 
