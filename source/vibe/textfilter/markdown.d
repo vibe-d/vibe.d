@@ -398,7 +398,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.Code:
 			assert(block.blocks.length == 0);
-			dst.put("<code><pre>");
+			dst.put("<code class=\"prettyprint\"><pre>");
 			foreach(ln; block.text){
 				filterHtmlEscape(dst, ln);
 				dst.put("\n");
@@ -462,7 +462,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 			case '`':
 				string code;
 				if( parseInlineCode(ln, code) ){
-					dst.put("<code>");
+					dst.put("<code class=\"prettyprint\">");
 					filterHtmlEscape(dst, code);
 					dst.put("</code>");
 				} else {
