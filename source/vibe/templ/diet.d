@@ -743,7 +743,7 @@ private struct DietCompiler {
 					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
 					state = 1;
 				}
-				ret ~= enter_string[state] ~ str[i .. i+2]; // NOTE: we are puttign an already escaped string into the dstring
+				ret ~= enter_string[state] ~ sanitizeEscaping(str[i .. i+2]);
 				state = 1;
 				i += 2;
 				start = i;
@@ -975,6 +975,13 @@ private string dstringEscape(char ch)
 		case '\"': return "\\\"";
 	}
 }
+
+private string sanitizeEscaping(string str)
+{
+	str = dstringUnescape(str);
+	return dstringEscape(str);
+}
+
 private string dstringEscape(in ref string str)
 {
 	string ret;
