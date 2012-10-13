@@ -92,7 +92,7 @@ int main(string[] args)
 				assert(false);
 			case "init":
 				string dir = ".";
-				if( args.length >= 2 ) dir = args[2];
+				if( args.length >= 2 ) dir = args[1];
 				initDirectory(dir);
 				break;
 			case "run":
@@ -243,7 +243,7 @@ private void initDirectory(string fName)
 { 
     Path cwd; 
     //Check to see if a target directory is specified.
-    if(fName != "init") {
+    if(fName != ".") {
         if(!existsFile(fName))  
             createDirectory(fName);
         cwd = Path(fName);  
