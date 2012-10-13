@@ -776,6 +776,22 @@ struct BsonRegex {
 
 	All entries of an array or an associative array, as well as all R/W properties and
 	all fields of a struct/class are recursively serialized using the same rules.
+
+	The following methods can be used to customize the serialization of structs/classes:
+
+	---
+	Bson toBson() const;
+	static T fromBson(Bson src);
+
+	Json toJson() const;
+	static T fromJson(Json src);
+
+	string toString() const;
+	static T fromString(string src);
+	---
+
+	The methods will have to be defined in pairs. The first pair that is implemented by
+	the type will be used for serialization (i.e. toBson overrides toJson).
 */
 Bson serializeToBson(T)(T value)
 {
@@ -803,6 +819,12 @@ Bson serializeToBson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToBson(value);
 		return Bson(ret);
+	} else static if( __traits(compiles, value = T.fromBson(value.toBson())) ){
+		return value.toBson();
+	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+		return jsonToBson(value.toJson());
+	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
+		return Bson(value.toString());
 	} else static if( is(T == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
@@ -859,6 +881,12 @@ void deserializeBson(T)(ref T dst, Bson src)
 			deserializeBson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromBson(dst.toBson())) ){
+		dst = T.fromBson(value);
+	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
+		dst = T.fromJson(bsonToJson(src));
+	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
+		dst = T.fromString(cast(string)src);
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
