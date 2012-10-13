@@ -838,6 +838,7 @@ private bool parseAutoLink(ref string str, ref string url)
 	if( cidx < 0 ) return false;
 	url = pstr[0 .. cidx];
 	if( anyOf(url, " \t") ) return false;
+	if( !anyOf(url, ":@") ) return false;
 	str = pstr[cidx+1 .. $];
 	if( url.countUntil('@') > 0 ) url = "mailto:"~url;
 	return true;
