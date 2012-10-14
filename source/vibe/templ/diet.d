@@ -471,13 +471,14 @@ private struct DietCompiler {
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
 			ret ~= textline[1 .. $];
-			ret ~= "))";
+			ret ~= "));\n";
 		} else if( textline.length >= 2 && textline[0 .. 2] == "!=" ){
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= textline[2 .. $];
-			ret ~= ")";
+			ret ~= "));\n";
 		} else {
+			ret ~= "\"";
 			ret ~= buildInterpolatedString(textline, true, true);
 			ret ~= "\"";
 		}
