@@ -471,7 +471,7 @@ private struct DietCompiler {
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
 			ret ~= textline[1 .. $];
-			ret ~= "));\n";
+			ret ~= ")));\n";
 		} else if( textline.length >= 2 && textline[0 .. 2] == "!=" ){
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName ~ ".write(_toString(";
@@ -514,7 +514,7 @@ private struct DietCompiler {
 		} else {
 			if( hasInterpolations(line[i .. line.length]) ){
 				textstring = buildInterpolatedString(line[i .. line.length], false, false);
-			} else { // FIXME: need to unescape \# ## etc.
+			} else {
 				textstring = sanitizeEscaping(line[i .. line.length]);
 				textstring_isdynamic = false;
 			}
@@ -527,9 +527,11 @@ private struct DietCompiler {
 		} else if( !is_singular_tag ) tail = "</" ~ tag ~ ">";
 		
 		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs, is_singular_tag);
-		if( textstring_isdynamic && textstring != "\"\"" ){
-			ret ~= endString(in_string);
-			ret ~= StreamVariableName~".write(" ~ textstring ~ ", false);\n";
+		if( textstring_isdynamic ){
+			if( textstring != "\"\"" ){
+				ret ~= endString(in_string);
+				ret ~= StreamVariableName~".write(" ~ textstring ~ ", false);\n";
+			}
 		} else ret ~= startString(in_string) ~ textstring;
 		if( tail.length ) ret ~= startString(in_string) ~ tail;
 			
