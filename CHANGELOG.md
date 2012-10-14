@@ -11,12 +11,12 @@ v0.7.9 - 2012-
  - The REST interface now uses fully qualified names and local imports to resolve parameter/return types, making it much more robust (by Михаил Страшун aka mist)
  - Implemented TCP/UDP sockets for the Win32 driver
  - Implemented a directory watcher for the Win32 driver
- - Removed vibe.textfilter.ddoc - now in <http://github.com/rejectedsoftware/ddox>
+ - Removed `vibe.textfilter.ddoc` - now in <http://github.com/rejectedsoftware/ddox>
  - Cleaned up command line handling (e.g. application parameters are now separated from vibe parameters by --)
  - Dependencies in package.json can now have "~master" as the version field to take the lastest master version instead of a tagged version
- - Renamed `UrlRouter.addRoute()` to UrlRouter.match()
- - Moved Path into its own module (vibe.inet.path)
- - Task local storage is now handled directly by Task instead of in vibe.core.core
+ - Renamed `UrlRouter.addRoute()` to `UrlRouter.match()`
+ - Moved Path into its own module (`vibe.inet.path`)
+ - Task local storage is now handled directly by `Task` instead of in `vibe.core.core`
  - (de)serialze(To)(Json/Bson) now support type customization using (to/from)(Json/Bson) mmethods
  - (de)serialze(To)(Json/Bson) now strip a trailing underscore in field names, if present - allows to use keywords as field names
  - `Json.opt!()` is now much faster in case of non-existent fields
@@ -30,9 +30,9 @@ v0.7.9 - 2012-
 
 ### Bug fixes ###
 
- - Fixed a possible endless loop in `ZlibInputStream` - now triggers anassertion instead. Still sufferign from <http://d.puremagic.com/issues/show_bug.cgi?id=8779>
- - Fixed handling of escaped characters in Diet templates and dissallowed ## to escape #
- - Fixed 'undefined' appearing in the stringified version of JSON arrays or objects (they are now filtered out)
+ - Fixed a possible endless loop in `ZlibInputStream` - now triggers anassertion instead; Still suffering from <http://d.puremagic.com/issues/show_bug.cgi?id=8779>
+ - Fixed handling of escaped characters in Diet templates and dissallowed use of "##" to escape "#"
+ - Fixed "undefined" appearing in the stringified version of JSON arrays or objects (they are now filtered out)
  - Fixed the error message for failed connection attempts
  - Fixed a bug in `PoolAllocator.realloc()` that could cause a range violation or corrupted memory
 
