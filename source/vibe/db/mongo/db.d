@@ -52,6 +52,9 @@ class MongoDB {
 				ret.connect();
 				return ret;
 			});
+
+		// force a connection to cause an exception for wrong URLs
+		lockConnection();
 	}
 
 	/**
