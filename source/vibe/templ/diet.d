@@ -111,7 +111,7 @@ private @property string dietParser(string template_file)()
 {
 	TemplateBlock[] files;
 	readFileRec!(template_file)(files);
-	auto compiler = DietCompiler(&files[0], &files);
+	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
 	return compiler.buildWriter();
 }
 
@@ -125,6 +125,10 @@ private struct TemplateBlock {
 	int mode = 0; // -1: prepend, 0: replace, 1: append
 	string indentStyle;
 	Line[] lines;
+}
+
+private class BlockStore {
+	TemplateBlock[] blocks;
 }
 
 
@@ -210,24 +214,25 @@ private string detectIndentStyle(in ref Line[] lines)
 private struct DietCompiler {
 	private {
 		size_t m_lineIndex = 0;
-		TemplateBlock* block;
-		TemplateBlock[]* files;
-		TemplateBlock[]* blocks;
+		TemplateBlock* m_block;
+		TemplateBlock[]* m_files;
+		BlockStore m_blocks;
 	}
 
-	@property ref string indentStyle() { return block.indentStyle; }
-	@property size_t lineCount() { return block.lines.length; }
-	ref Line line(size_t ln) { return block.lines[ln]; }
-	ref Line currLine() { return block.lines[m_lineIndex]; }
-	ref string currLineText() { return block.lines[m_lineIndex].text; }
-	Line[] lineRange(size_t from, size_t to) { return block.lines[from .. to]; }
+	@property ref string indentStyle() { return m_block.indentStyle; }
+	@property size_t lineCount() { return m_block.lines.length; }
+	ref Line line(size_t ln) { return m_block.lines[ln]; }
+	ref Line currLine() { return m_block.lines[m_lineIndex]; }
+	ref string currLineText() { return m_block.lines[m_lineIndex].text; }
+	Line[] lineRange(size_t from, size_t to) { return m_block.lines[from .. to]; }
 
 	@disable this();
 
-	this(TemplateBlock* block, TemplateBlock[]* files)
+	this(TemplateBlock* block, TemplateBlock[]* files, BlockStore blocks)
 	{
-		this.block = block;
-		this.files = files;
+		m_block = block;
+		m_files = files;
+		m_blocks = blocks;
 	}
 
 	string buildWriter()
@@ -241,59 +246,60 @@ private struct DietCompiler {
 
 	string buildWriter(ref string[] node_stack, ref bool in_string, int base_level)
 	{
-		if( lineCount == 0 ) return null;
-
-		auto firstline = line(m_lineIndex);
-		auto firstlinetext = firstline.text;
-
+		assert(m_blocks !is null);
 		string ret;
-		ret ~= endString(in_string);
-		ret ~= lineMarker(firstline);
 
-		if( firstlinetext.startsWith("extends ") ){
-			string layout_file = firstlinetext[8 .. $].ctstrip() ~ ".dt";
-			auto extfile = getFile(layout_file);
-			m_lineIndex++;
+		while(true){
+			if( lineCount == 0 ) return ret;
+			auto firstline = line(m_lineIndex);
+			auto firstlinetext = firstline.text;
 
-			// extract all blocks
-			TemplateBlock[] subblocks;
-			while( m_lineIndex < lineCount ){
-				TemplateBlock subblock;
-
-				// read block header
-				string blockheader = line(m_lineIndex).text;
-				size_t spidx = 0;
-				auto mode = skipIdent(line(m_lineIndex).text, spidx, "");
-				assertp(spidx > 0, "Expected block/append/prepend.");
-				subblock.name = blockheader[spidx .. $].ctstrip();
-				if( mode == "block" ) subblock.mode = 0;
-				else if( mode == "append" ) subblock.mode = 1;
-				else if( mode == "prepend" ) subblock.mode = -1;
-				else assertp(false, "Expected block/append/prepend.");
+			if( firstlinetext.startsWith("extends ") ){
+				string layout_file = firstlinetext[8 .. $].ctstrip() ~ ".dt";
+				auto extfile = getFile(layout_file);
 				m_lineIndex++;
 
-				// skip to next block
-				auto block_start = m_lineIndex;
+				// extract all blocks
 				while( m_lineIndex < lineCount ){
-					auto lvl = indentLevel(line(m_lineIndex).text, indentStyle, false);
-					if( lvl == 0 ) break;
+					TemplateBlock subblock;
+
+					// read block header
+					string blockheader = line(m_lineIndex).text;
+					size_t spidx = 0;
+					auto mode = skipIdent(line(m_lineIndex).text, spidx, "");
+					assertp(spidx > 0, "Expected block/append/prepend.");
+					subblock.name = blockheader[spidx .. $].ctstrip();
+					if( mode == "block" ) subblock.mode = 0;
+					else if( mode == "append" ) subblock.mode = 1;
+					else if( mode == "prepend" ) subblock.mode = -1;
+					else assertp(false, "Expected block/append/prepend.");
 					m_lineIndex++;
+
+					// skip to next block
+					auto block_start = m_lineIndex;
+					while( m_lineIndex < lineCount ){
+						auto lvl = indentLevel(line(m_lineIndex).text, indentStyle, false);
+						if( lvl == 0 ) break;
+						m_lineIndex++;
+					}
+
+					// append block to compiler
+					subblock.lines = lineRange(block_start, m_lineIndex);
+					subblock.indentStyle = indentStyle;
+					m_blocks.blocks ~= subblock;
+
+					//ret ~= startString(in_string) ~ "<!-- found block "~subblock.name~" in "~line(0).file ~ "-->\n";
 				}
 
-				// append block to compiler
-				subblock.lines = block.lines[block_start .. m_lineIndex];
-				subblock.indentStyle = indentStyle;
-				subblocks ~= subblock;
+				// change to layout file and start over
+				m_block = extfile;
+				m_lineIndex = 0;
+			} else {
+				auto start_indent_level = indentLevel(firstlinetext, indentStyle);
+				//assertp(start_indent_level == 0, "Indentation must start at level zero.");
+				ret ~= buildBodyWriter(node_stack, in_string, base_level, start_indent_level);
+				break;
 			}
-
-			// execute compiler on layout file
-			auto layoutcompiler = DietCompiler(extfile, files);
-			layoutcompiler.blocks = &subblocks;
-			ret ~= layoutcompiler.buildWriter(node_stack, in_string, base_level);
-		} else {
-			auto start_indent_level = indentLevel(firstlinetext, indentStyle);
-			//assertp(start_indent_level == 0, "Indentation must start at level zero.");
-			ret ~= buildBodyWriter(node_stack, in_string, base_level, start_indent_level);
 		}
 
 		ret ~= endString(in_string);
@@ -302,6 +308,7 @@ private struct DietCompiler {
 
 	private string buildBodyWriter(ref string[] node_stack, ref bool in_string, int base_level, int start_indent_level)
 	{
+		assert(m_blocks !is null);
 		string ret;
 
 		assertp(node_stack.length >= base_level);
@@ -383,10 +390,13 @@ private struct DietCompiler {
 						node_stack ~= "-";
 						auto block = getBlock(ln[6 .. $].ctstrip());
 						if( block ){
+							ret ~= startString(in_string) ~ "<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->";
 							if( block.mode == 1 ){
 								// output defaults
 							}
-							auto blockcompiler = DietCompiler(block, files);
+							auto blockcompiler = new DietCompiler(block, m_files, m_blocks);
+							/*blockcompiler.m_block = block;
+							blockcompiler.m_blocks = m_blocks;*/
 							ret ~= blockcompiler.buildWriter(node_stack, in_string, cast(int)node_stack.length);
 
 							if( block.mode == -1 ){
@@ -394,13 +404,15 @@ private struct DietCompiler {
 							}
 						} else {
 							// output defaults
+							ret ~= startString(in_string) ~ "<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->";
 						}
 						break;
 					case "include": // Diet file include
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
 						auto filename = ln[8 .. $].ctstrip() ~ ".dt";
 						auto file = getFile(filename);
-						auto includecompiler = DietCompiler(file, files);
+						auto includecompiler = new DietCompiler(file, m_files, m_blocks);
+						//includecompiler.m_blocks = m_blocks;
 						ret ~= includecompiler.buildWriter(node_stack, in_string, level);
 						break;
 					case "script":
@@ -453,22 +465,22 @@ private struct DietCompiler {
 
 	private string buildTextNodeWriter(ref string[] node_stack, in string textline, int level, ref bool in_string)
 	{
-		string ret;
-		ret = endString(in_string);
-		ret ~= StreamVariableName ~ ".write(\"\\n\", false);\n";
+		string ret = startString(in_string);
+		ret ~= "\\n";
 		if( textline.length >= 1 && textline[0] == '=' ){
+			ret ~= endString(in_string);
 			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
 			ret ~= textline[1 .. $];
 			ret ~= "))";
 		} else if( textline.length >= 2 && textline[0 .. 2] == "!=" ){
+			ret ~= endString(in_string);
 			ret ~= StreamVariableName ~ ".write(_toString(";
 			ret ~= textline[2 .. $];
 			ret ~= ")";
 		} else {
-			ret ~= StreamVariableName ~ ".write(";
-			ret ~= buildInterpolatedString(textline, false, false);
+			ret ~= buildInterpolatedString(textline, true, true);
+			ret ~= "\"";
 		}
-		ret ~= ", false);\n";
 		node_stack ~= "-";
 		return ret;
 	}
@@ -499,10 +511,10 @@ private struct DietCompiler {
 		} else if( i+1 < line.length && line[i .. i+2] == "!=" ){
 			textstring = "_toString("~ctstrip(line[i+2 .. line.length])~")";
 		} else {
-			if( true || hasInterpolations(line[i .. line.length]) ){
+			if( hasInterpolations(line[i .. line.length]) ){
 				textstring = buildInterpolatedString(line[i .. line.length], false, false);
 			} else { // FIXME: need to unescape \# ## etc.
-				textstring = dstringEscape(line[i .. line.length]);
+				textstring = sanitizeEscaping(line[i .. line.length]);
 				textstring_isdynamic = false;
 			}
 		}
@@ -514,7 +526,7 @@ private struct DietCompiler {
 		} else if( !is_singular_tag ) tail = "</" ~ tag ~ ">";
 		
 		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs, is_singular_tag);
-		if( textstring_isdynamic ){
+		if( textstring_isdynamic && textstring != "\"\"" ){
 			ret ~= endString(in_string);
 			ret ~= StreamVariableName~".write(" ~ textstring ~ ", false);\n";
 		} else ret ~= startString(in_string) ~ textstring;
@@ -666,7 +678,10 @@ private struct DietCompiler {
 		assertp(node_stack.length >= level);
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
 		tagstring ~= "<" ~ tag;
-		foreach( att; attribs ) tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1], false, false, true)~"~\"\\\"";
+		foreach( att; attribs ){
+			if( !hasInterpolations(att[1]) ) tagstring ~= " "~att[0]~"=\\\""~dstringEscape(att[1])~"\\\"";
+			else tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1], false, false, true)~"~\"\\\"";
+		}
 		tagstring ~= is_singular_tag ? "/>" : ">";
 		return tagstring;
 	}
@@ -894,18 +909,18 @@ private struct DietCompiler {
 
 	private TemplateBlock* getFile(string filename)
 	{
-		foreach( i; 0 .. files.length )
-			if( (*files)[i].name == filename )
-				return &(*files)[i];
+		foreach( i; 0 .. m_files.length )
+			if( (*m_files)[i].name == filename )
+				return &(*m_files)[i];
 		assertp(false, "Bug: include input file "~filename~" not found in internal list!?");
 		assert(false);
 	}
 	
 	private TemplateBlock* getBlock(string name)
 	{
-		foreach( i; 0 .. blocks.length )
-			if( (*blocks)[i].name == name )
-				return &(*blocks)[i];
+		foreach( i; 0 .. m_blocks.blocks.length )
+			if( m_blocks.blocks[i].name == name )
+				return &m_blocks.blocks[i];
 		return null;
 	}
 }
