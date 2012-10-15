@@ -26,7 +26,7 @@ import std.string;
 */
 class HttpFileServerSettings {
 	string serverPathPrefix = "/";
-	long maxAge = 60*60*24*7; // 7 days
+	long maxAge = 60*60*24; // 24 hours
 	bool failIfNotFound = false;
 
 	this() {}
