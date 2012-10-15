@@ -17,7 +17,7 @@ v0.7.9 - 2012-
  - Renamed `UrlRouter.addRoute()` to `UrlRouter.match()`
  - Moved Path into its own module (`vibe.inet.path`)
  - Task local storage is now handled directly by `Task` instead of in `vibe.core.core`
- - (de)serialze(To)(Json/Bson) now support type customization using (to/from)(Json/Bson) mmethods
+ - (de)serialze(To)(Json/Bson) now support type customization using (to/from)(Json/Bson) methods
  - (de)serialze(To)(Json/Bson) now strip a trailing underscore in field names, if present - allows to use keywords as field names
  - `Json.opt!()` is now much faster in case of non-existent fields
  - Implemented `InputStream.readAllUtf8()` - strips BOM and sanitizes or validates the input
@@ -30,7 +30,7 @@ v0.7.9 - 2012-
 
 ### Bug fixes ###
 
- - Fixed a possible endless loop in `ZlibInputStream` - now triggers anassertion instead; Still suffering from <http://d.puremagic.com/issues/show_bug.cgi?id=8779>
+ - Fixed a possible endless loop in `ZlibInputStream` - now triggers an assertion instead; Still suffering from [DMD bug 8779](http://d.puremagic.com/issues/show_bug.cgi?id=8779)
  - Fixed handling of escaped characters in Diet templates and dissallowed use of "##" to escape "#"
  - Fixed "undefined" appearing in the stringified version of JSON arrays or objects (they are now filtered out)
  - Fixed the error message for failed connection attempts
