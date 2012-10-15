@@ -237,13 +237,15 @@ class RestInterfaceClient(I) : I
 
 	alias I BaseInterface;
 
+	/** Creates a new REST implementation of I
+	*/
 	this(string base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = Url.parse(base_url);
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
-
+	/// ditto
 	this(Url base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = base_url;
@@ -251,7 +253,10 @@ class RestInterfaceClient(I) : I
 		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
 
+	/** An optional request filter that allows to modify each request before it is made.
+	*/
 	@property RequestFilter requestFilter() { return m_requestFilter; }
+	/// ditto
 	@property void requestFilter(RequestFilter v) {
 		m_requestFilter = v;
 		mixin(generateRestInterfaceSubInterfaceRequestFilter!I);
