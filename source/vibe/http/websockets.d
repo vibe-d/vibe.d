@@ -29,6 +29,7 @@ module vibe.http.websockets;
 import vibe.http.server;
 import vibe.crypto.sha1;
 import vibe.core.log;
+import vibe.core.net;
 
 import std.conv;
 import std.array;
@@ -214,15 +215,16 @@ class IncommingWebSocketMessage : InputStream {
 
 class WebSocket {
 	private {
-		Stream m_conn;
+		TcpConnection m_conn;
 	}
 
 	this(Stream conn)
 	{
-		m_conn = conn;
+		m_conn = cast(TcpConnection)conn;
+		assert(m_conn);
 	}
 
-	@property bool connected() { return !m_conn.empty; }
+	@property bool connected() { return m_conn.connected; }
 	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead; }
 
 	void send(ubyte[] data)
