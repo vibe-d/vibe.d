@@ -116,7 +116,7 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 	{
 		try {
 			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
-			logInfo("Listening for HTTP requests on %s:%s", addr, settings.port);
+			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslKeyFile.length || settings.sslCertFile.length ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
