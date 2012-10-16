@@ -792,7 +792,24 @@ unittest {
 	)
 
 	All entries of an array or an associative array, as well as all R/W properties and
-	all fields of a struct/class are recursively serialized using the same rules.
+	all public fields of a struct/class are recursively serialized using the same rules.
+
+	Fields ending with an underscore will have the last underscore stripped in the
+	serialized output. This makes it possible to use fields with D keywords as their name
+	by simply appending an underscore.
+
+	The following methods can be used to customize the serialization of structs/classes:
+
+	---
+	Json toJson() const;
+	static T fromJson(Json src);
+
+	string toString() const;
+	static T fromString(string src);
+	---
+
+	The methods will have to be defined in pairs. The first pair that is implemented by
+	the type will be used for serialization (i.e. toJson overrides toString).
 */
 Json serializeToJson(T)(T value)
 {
@@ -813,6 +830,8 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
+	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+		return value.toJson();
 	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
 		return Json(value.toString());
 	} else static if( is(T == struct) ){
@@ -820,7 +839,7 @@ Json serializeToJson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToJson(mv);
+				ret[underscoreStrip(m)] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
@@ -830,7 +849,7 @@ Json serializeToJson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToJson(mv);
+				ret[underscoreStrip(m)] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
@@ -867,15 +886,17 @@ void deserializeJson(T)(ref T dst, Json src)
 			deserializeJson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
+		dst = T.fromJson(src);
 	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
 		dst = T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeJson(__traits(getMember, dst, m), src[m]);
+				deserializeJson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeJson(v, src[m]);
+				deserializeJson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -884,10 +905,10 @@ void deserializeJson(T)(ref T dst, Json src)
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeJson(__traits(getMember, dst, m), src[m]);
+				deserializeJson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)()) v;
-				deserializeJson(v, src[m]);
+				deserializeJson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -1168,3 +1189,9 @@ private void skipWhitespace(ref string s, int* line = null)
 
 /// private
 private bool isDigit(T)(T ch){ return ch >= '0' && ch <= '9'; }
+
+private string underscoreStrip(string field_name)
+{
+	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
+	else return field_name[0 .. $-1];
+}

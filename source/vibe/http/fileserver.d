@@ -26,7 +26,7 @@ import std.string;
 */
 class HttpFileServerSettings {
 	string serverPathPrefix = "/";
-	long maxAge = 60*60*24*30; // 30 days
+	long maxAge = 60*60*24; // 24 hours
 	bool failIfNotFound = false;
 
 	this() {}
@@ -65,7 +65,10 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		logTrace("Processing '%s'", srv_path);
 		rpath.normalize();
 		logDebug("Path '%s' -> '%s'", rel_path, rpath.toNativeString());
-		if( !rpath.empty && rpath[0] == ".." ) return; // don't respond to relative paths outside of the root path
+		if( rpath.empty ){
+			// TODO: support searching for an index file
+			return;
+		} else if( rpath[0] == ".." ) return; // don't respond to relative paths outside of the root path
 
 		string path = (lpath ~ rpath).toNativeString();
 

@@ -776,6 +776,26 @@ struct BsonRegex {
 
 	All entries of an array or an associative array, as well as all R/W properties and
 	all fields of a struct/class are recursively serialized using the same rules.
+
+	Fields ending with an underscore will have the last underscore stripped in the
+	serialized output. This makes it possible to use fields with D keywords as their name
+	by simply appending an underscore.
+
+	The following methods can be used to customize the serialization of structs/classes:
+
+	---
+	Bson toBson() const;
+	static T fromBson(Bson src);
+
+	Json toJson() const;
+	static T fromJson(Json src);
+
+	string toString() const;
+	static T fromString(string src);
+	---
+
+	The methods will have to be defined in pairs. The first pair that is implemented by
+	the type will be used for serialization (i.e. toBson overrides toJson).
 */
 Bson serializeToBson(T)(T value)
 {
@@ -803,12 +823,18 @@ Bson serializeToBson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToBson(value);
 		return Bson(ret);
+	} else static if( __traits(compiles, value = T.fromBson(value.toBson())) ){
+		return value.toBson();
+	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+		return jsonToBson(value.toJson());
+	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
+		return Bson(value.toString());
 	} else static if( is(T == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToBson(mv);
+				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -818,7 +844,7 @@ Bson serializeToBson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToBson(mv);
+				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -859,13 +885,19 @@ void deserializeBson(T)(ref T dst, Bson src)
 			deserializeBson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromBson(dst.toBson())) ){
+		dst = T.fromBson(value);
+	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
+		dst = T.fromJson(bsonToJson(src));
+	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
+		dst = T.fromString(cast(string)src);
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[m]);
+				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[m]);
+				deserializeBson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -874,10 +906,10 @@ void deserializeBson(T)(ref T dst, Bson src)
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[m]);
+				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[m]);
+				deserializeBson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -1074,5 +1106,11 @@ ubyte[] toBigEndianData(T)(T v)
 	static ubyte[T.sizeof] ret;
 	ret = nativeToBigEndian(v);
 	return ret;
+}
+
+private string underscoreStrip(string field_name)
+{
+	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
+	else return field_name[0 .. $-1];
 }
 

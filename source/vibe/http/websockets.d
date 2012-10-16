@@ -1,5 +1,24 @@
 /**
-	WebSocket support and fallbacks for older browsers.
+	Implements WebSocket support and fallbacks for older browsers.
+
+	Examples:
+	---
+	void handleConn(WebSocket sock)
+	{
+		// simple echo server
+		while( sock.connected ){
+			auto msg = sock.receive();
+			sock.send(msg);
+		}
+	}
+
+	static this {
+		auto router = new UrlRouter;
+		router.get("/websocket", handleWebSockets(&handleConn))
+		
+		// Start HTTP server...
+	}
+	---
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.

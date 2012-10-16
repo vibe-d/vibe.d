@@ -63,6 +63,7 @@ private class Application {
 
 	this(Path rootFolder) {
 		m_root = rootFolder;
+		m_json = Json.EmptyObject;
 		reinit();
 	}
 
@@ -98,18 +99,12 @@ private class Application {
 		m_packages.clear();
 		m_main = null;
 
-		try {
-			m_json = jsonFromFile(m_root ~ "vpm.json");
-		}
-		catch(Throwable t) {
-			Json[string] j;
-			m_json = j;
-		}
+		try m_json = jsonFromFile(m_root ~ "vpm.json");
+		catch(Exception t) logDebug("Could not open vpm.json: %s", t.msg);
 
 		if(!exists(to!string(m_root~"package.json"))) {
 			logWarn("There was no 'package.json' found for the application in '%s'.", m_root);
-		}
-		else {
+		} else {
 			m_main = new Package(m_root);
 			if(exists(to!string(m_root~"modules"))) {
 				foreach( string pkg; dirEntries(to!string(m_root ~ "modules"), SpanMode.shallow) ) {
@@ -390,6 +385,7 @@ PackageSupplier defaultPackageSupplier() {
 
 enum UpdateOptions
 {
+	None = 0,
 	JustAnnotate = 1<<0,
 	Reinstall = 1<<1
 };
@@ -428,12 +424,9 @@ class Vpm {
 	/// Performs installation and uninstallation as necessary for
 	/// the application.
 	/// @param options bit combination of UpdateOptions
-	bool update(int options) {
+	bool update(UpdateOptions options) {
 		Action[] actions = m_app.actions(m_packageSupplier, options);
-		if( actions.length == 0 ) {
-			logInfo("You are up to date");
-			return true;
-		}
+		if( actions.length == 0 ) return true;
 
 		logInfo("The following changes could be performed:");
 		bool conflictedOrFailed = false;

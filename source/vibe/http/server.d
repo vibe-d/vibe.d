@@ -48,23 +48,24 @@ public import std.variant;
 /**
 	Starts a HTTP server listening on the specified port.
 
-	'request_task' will be called for each HTTP request that is made. The
-	'res' parameter of the callback then has to be filled with the response
+	request_handler will be called for each HTTP request that is made. The
+	res parameter of the callback then has to be filled with the response
 	data.
 	
-	The 'ip4_addr' or 'ip6_addr' parameters can be used to specify the network
-	interface on which the server socket is supposed to listen for connections.
-	By default, all IPv4 and IPv6 interfaces will be used.
-	
-	request_task can be either HttpServerRequestDelegate/HttpServerRequestFunction
+	request_handler can be either HttpServerRequestDelegate/HttpServerRequestFunction
 	or a class/struct with a member function 'handleRequest' that has the same
-	signature as HttpServerRequestDelegate/Function.
+	signature.
 
 	Note that if the application has been started with the --disthost command line
 	switch, listenHttp() will automatically listen on the specified VibeDist host
 	instead of locally. This allows for a seemless switch from single-host to 
 	multi-host scenarios without changing the code. If you need to listen locally,
 	use listenHttpPlain() instead.
+
+	Params:
+		settings = Customizes the HTTP servers functionality.
+		request_handler = This callback is invoked for each incoming request and is responsible
+			for generating the response.
 */
 void listenHttp(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
 {
@@ -113,8 +114,10 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 {
 	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
 	{
-		try listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
-		catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
+		try {
+			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+			logInfo("Listening for HTTP requests on %s:%s", addr, settings.port);
+		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
 	// Check for every bind address/port, if a new listening socket needs to be created and

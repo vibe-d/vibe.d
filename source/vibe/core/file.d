@@ -15,6 +15,7 @@ import vibe.core.log;
 import std.conv;
 import std.c.stdio;
 import std.datetime;
+import std.exception;
 import std.file;
 import std.path;
 import std.string;
@@ -57,6 +58,40 @@ void moveFile(Path from, Path to)
 void moveFile(string from, string to)
 {
 	std.file.rename(from, to);
+}
+
+/**
+	Copies a file.
+
+	Note that attributes and time stamps are currently not retained.
+
+	Params:
+		from = Path of the source file
+		to = Path for the destination file
+		overwrite = If true, any file existing at the destination path will be
+			overwritten. If this is false, an excpetion will be thrown should
+			a file already exist at the destination path.
+
+	Throws:
+		An Exception if the copy operation fails for some reason.
+*/
+void copyFile(Path from, Path to, bool overwrite = false)
+{
+	{
+		auto src = openFile(from, FileMode.Read);
+		scope(exit) src.close();
+		enforce(overwrite || !existsFile(to), "Destination file already exists.");
+		auto dst = openFile(to, FileMode.CreateTrunc);
+		scope(exit) dst.close();
+		dst.write(src);
+	}
+
+	// TODO: retain attributes and time stamps
+}
+/// ditto
+void copyFile(string from, string to)
+{
+	copyFile(Path(from), Path(to));
 }
 
 /**
