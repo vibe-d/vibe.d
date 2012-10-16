@@ -29,7 +29,7 @@ class MongoDB {
 
 	package this(string host, ushort port = MongoConnection.defaultPort)
 	{
-		this("mongodb://" ~ host ~ ":" ~ to!string(port));
+		this("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
 	}
 	
 	/**
