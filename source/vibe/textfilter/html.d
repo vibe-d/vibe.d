@@ -110,7 +110,7 @@ void filterHtmlEscape(R)(ref R dst, dchar ch, bool escape_quotes = false)
 		case '0': .. case '9': goto case;
 		case ' ', '\t', '-', '_', '.', ':', ',', ';',
 		     '#', '+', '*', '?', '=', '(', ')', '/', '!',
-		     '%' , '{', '}', '[', ']':
+		     '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
 		    dst.put(cast(char)ch);
 			break;
 		case '<': dst.put("&lt;"); break;
