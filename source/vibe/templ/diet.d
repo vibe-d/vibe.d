@@ -364,8 +364,8 @@ private struct DietCompiler {
 						break;
 					case "//": // HTML comment
 						skipWhitespace(ln, j);
-						ret ~= startString(in_string) ~ "<!--\n" ~ htmlEscape(ln[j .. $]) ~ "\n";
-						node_stack ~= "-->";
+						ret ~= startString(in_string) ~ "<!-- " ~ htmlEscape(ln[j .. $]);
+						node_stack ~= " -->";
 						break;
 					case "//-": // non-output comment
 						// find all child lines
