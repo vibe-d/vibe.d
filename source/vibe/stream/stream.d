@@ -29,7 +29,7 @@ import std.typecons;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream in case of max_bytes != 0.
 */
-ubyte[] readLine(InputStream stream, size_t max_bytes = 0, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes, alloc);
 }
@@ -81,6 +81,7 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 /// ditto
 void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
 {
+	assert(max_bytes > 0 && end_marker.length > 0);
 	auto nmatchoffset = new size_t[end_marker.length];
 	nmatchoffset[0] = 0;
 	foreach( i; 1 .. end_marker.length ){
@@ -167,6 +168,7 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 		// otherwise skip this block in the stream
 		skip(str.length - nread);
 	}
+
 	enforce(false, "Reached EOF before reaching end marker.");
 }
 
@@ -174,7 +176,7 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 unittest {
 	import vibe.stream.memory;
 
-	auto text = "123123412311122312333422111111222123133312312312312312321312311111111111";
+	auto text = "1231234123111223123334221111112221231333123123123123123213123111111111114";
 	auto stream = new MemoryStream(cast(ubyte[])text);
 	void test(string s, size_t expected){
 		stream.seek(0);
@@ -197,7 +199,8 @@ unittest {
 		test("3123", 2);
 		test("11223", 11);
 		test("11222", 28);
-		test("11111111111", 61);
+		test("114", 70);
+		test("111111111114", 61);
 	}
 	// TODO: test 
 }
