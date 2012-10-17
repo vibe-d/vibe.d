@@ -372,9 +372,11 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 		static immutable param_names = parameterNames!FT();
 		foreach( i, P; ParameterTypes ){
 			static if( i == 0 && param_names[i] == "id" ){
+				logDebug("id %s", req.params["id"]);
 				params[i] = fromRestString!P(req.params["id"]);
 			} else static if( param_names[i].startsWith("_") ){
 				static if( param_names[i] != "_dummy"){
+					logDebug("param %s %s", param_names[i], req.params[param_names[i][1 .. $]]);
 					params[i] = fromRestString!P(req.params[param_names[i][1 .. $]]);
 				}
 			} else {
@@ -696,7 +698,14 @@ private template fullyQualifiedTypeNameImpl(T,
             ~ parametersTypeString!(T)
             ~ ")"
         );
-    }   
+    }
+    else static if (isPointer!T)
+    {
+    	enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(PointerTarget!T, qualifiers)
+            ~ "*"
+    	);
+    }
     else
         // In case something is forgotten
         static assert(0, "Unrecognized type " ~ T.stringof ~ ", can't convert to fully qualified string");
