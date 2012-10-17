@@ -996,7 +996,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		if( settings.options & HttpServerOption.ParseFormBody ){
 			auto ptype = "Content-Type" in req.headers;				
-			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader);
+			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHttpHeaderLineLength);
 		}
 
 		if( settings.options & HttpServerOption.ParseJsonBody ){

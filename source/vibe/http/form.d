@@ -28,7 +28,7 @@ struct FilePart  {
 /**
 	Parses the form given by 'content_type' and 'body_reader'.
 */
-bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader)
+bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader, size_t max_line_length)
 {
 	auto ct_entries = content_type.split(";");
 	if( !ct_entries.length ) return false;
@@ -39,7 +39,7 @@ bool parseFormData(ref string[string] fields, ref FilePart[string] files, string
 		return true;
 	}
 	if( ct_entries[0].strip() == "multipart/form-data" ){
-		parseMultiPartForm(fields, files, content_type, body_reader);
+		parseMultiPartForm(fields, files, content_type, body_reader, max_line_length);
 		return true;
 	}
 	return false;
@@ -83,18 +83,18 @@ void parseUrlEncodedForm(string str, ref string[string] params)
 }
 
 private void parseMultiPartForm(ref string[string] fields, ref FilePart[string] files,
-	string content_type, InputStream body_reader)
+	string content_type, InputStream body_reader, size_t max_line_length)
 {
 	auto pos = content_type.indexOf("boundary=");			
 	enforce(pos >= 0 , "no boundary for multipart form found");
 	auto boundary = content_type[pos+9 .. $];
-	auto firstBoundary = cast(string)body_reader.readLine();
+	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
 	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
 
-	while( parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary) ) {}
+	while( parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary, max_line_length) ) {}
 }
 
-private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary)
+private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary, size_t max_line_length)
 {
 	InetHeaderMap headers;
 	stream.parseRfc5322Header(headers);
@@ -134,6 +134,6 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
 		form[name] = data;
 	}
-	return stream.readLine() != "--";
+	return stream.readLine(max_line_length) != "--";
 }
 
