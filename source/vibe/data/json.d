@@ -735,7 +735,7 @@ Json parseJson(R)(ref R range, int* line = null)
 				Json itm = parseJson(range, line);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforce(range.length > 0 && (range[0] == ',' || range[0] == '}'), "Expected '}' or ','.");
+				enforce(range.length > 0 && (range[0] == ',' || range[0] == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
 			}
 			range = range[1 .. $];
 			ret = obj;
@@ -1149,7 +1149,7 @@ private string skipNumber(ref string s, out bool is_float)
 		if( idx < s.length && (s[idx] == '+' || s[idx] == '-') ) idx++;
 		enforce( idx < s.length && isDigit(s[idx]), "Expected exponent." ~ s[0 .. idx]);
 		idx++;
-		while( idx < s.length && isDigit(idx) ) idx++;
+		while( idx < s.length && isDigit(s[idx]) ) idx++;
 	}
 
 	string ret = s[0 .. idx];
