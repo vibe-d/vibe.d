@@ -362,7 +362,7 @@ struct Bson {
 		else static if( is(T == int) ){ checkType(Type.Int); return fromBsonData!int(m_data); }
 		else static if( is(T == BsonTimestamp) ){ checkType(Type.Timestamp); return BsonTimestamp(fromBsonData!long(m_data)); }
 		else static if( is(T == long) ){ checkType(Type.Long); return fromBsonData!long(m_data); }
-		else static if( is(T == Json) ){ return bsonToJson(this); }
+		else static if( is(T == Json) ){ return this.toJson(); }
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
 
@@ -389,6 +389,68 @@ struct Bson {
 		}
 		assert(false);
 	}
+
+	/** Converts a given JSON value to the corresponding BSON value.
+	*/
+	static Bson fromJson(in Json value)
+	{
+		final switch( value.type ){
+			case Json.Type.Undefined: return Bson();
+			case Json.Type.Null: return Bson(null);
+			case Json.Type.Bool: return Bson(value.get!bool());
+			case Json.Type.Int: return Bson(value.get!long());
+			case Json.Type.Float: return Bson(value.get!double());
+			case Json.Type.String: return Bson(value.get!string());
+			case Json.Type.Array:
+				Bson[] ret = new Bson[value.length];
+				foreach( size_t i, v; value )
+					ret[i] = fromJson(v);
+				return Bson(ret);
+			case Json.Type.Object:
+				Bson[string] ret;
+				foreach( string k, v; value )
+					ret[k] = fromJson(v);
+				return Bson(ret);
+		}
+	}
+
+	/** Converts a BSON value to a JSON value.
+		
+		All BSON types that cannot be exactly represented as JSON, will
+		be converted to a string.
+	*/
+	Json toJson()
+	const {
+		switch( this.type ){
+			default: assert(false);
+			case Bson.Type.Double: return Json(get!double());
+			case Bson.Type.String: return Json(get!string());
+			case Bson.Type.Object:
+				Json[string] ret;
+				foreach( k, v; get!(Bson[string])() )
+					ret[k] = v.toJson();
+				return Json(ret);
+			case Bson.Type.Array:
+				auto ret = new Json[this.length];
+				foreach( i, v; get!(Bson[])() )
+					ret[i] = v.toJson();
+				return Json(ret);
+			case Bson.Type.BinData: return Json(cast(string)Base64.encode(get!BsonBinData.rawData));
+			case Bson.Type.ObjectID: return Json(get!BsonObjectID().toString());
+			case Bson.Type.Bool: return Json(get!bool());
+			case Bson.Type.Date: return Json(get!BsonDate.toString());
+			case Bson.Type.Null: return Json(null);
+			case Bson.Type.Regex: assert(false, "TODO");
+			case Bson.Type.DBRef: assert(false, "TODO");
+			case Bson.Type.Code: return Json(get!string());
+			case Bson.Type.Symbol: return Json(get!string());
+			case Bson.Type.CodeWScope: assert(false, "TODO");
+			case Bson.Type.Int: return Json(get!int());
+			case Bson.Type.Timestamp: return Json(get!BsonTimestamp().m_time);
+			case Bson.Type.Long: return Json(get!long());
+		}
+	}
+
 
 	/** Allows accessing fields of a BSON object using [].
 
@@ -800,7 +862,7 @@ struct BsonRegex {
 Bson serializeToBson(T)(T value)
 {
 	static if( is(T == Bson) ) return value;
-	else static if( is(T == Json) ) return jsonToBson(value);
+	else static if( is(T == Json) ) return Bson.fromJson(value);
 	else static if( is(T == BsonBinData) ) return Bson(value);
 	else static if( is(T == BsonObjectID) ) return Bson(value);
 	else static if( is(T == BsonDate) ) return Bson(value);
@@ -826,7 +888,7 @@ Bson serializeToBson(T)(T value)
 	} else static if( __traits(compiles, value = T.fromBson(value.toBson())) ){
 		return value.toBson();
 	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
-		return jsonToBson(value.toJson());
+		return Bson.fromJson(value.toJson());
 	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
 		return Bson(value.toString());
 	} else static if( is(T == struct) ){
@@ -862,7 +924,7 @@ Bson serializeToBson(T)(T value)
 void deserializeBson(T)(ref T dst, Bson src)
 {
 	static if( is(T == Bson) ) dst = src;
-	else static if( is(T == Json) ) dst = bsonToJson(value);
+	else static if( is(T == Json) ) dst = value.toJson();
 	else static if( is(T == BsonBinData) ) dst = cast(T)src;
 	else static if( is(T == BsonObjectID) ) dst = cast(T)src;
 	else static if( is(T == BsonDate) ) dst = cast(T)src;
@@ -888,7 +950,7 @@ void deserializeBson(T)(ref T dst, Bson src)
 	} else static if( __traits(compiles, dst = T.fromBson(dst.toBson())) ){
 		dst = T.fromBson(value);
 	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
-		dst = T.fromJson(bsonToJson(src));
+		dst = T.fromJson(src.toJson());
 	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
 		dst = T.fromString(cast(string)src);
 	} else static if( is(T == struct) ){
@@ -1008,60 +1070,6 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			dst.put(app.data);
 			dst.put(cast(ubyte)0);
 			return Bson.Type.Object;
-	}
-}
-
-private Json bsonToJson(Bson value)
-{
-	switch( value.type ){
-		default: assert(false);
-		case Bson.Type.Double: return Json(cast(double)value);
-		case Bson.Type.String: return Json(cast(string)value);
-		case Bson.Type.Object:
-			Json[string] ret;
-			foreach( k, v; cast(Bson[string])value )
-				ret[k] = bsonToJson(v);
-			return Json(ret);
-		case Bson.Type.Array:
-			auto ret = new Json[value.length];
-			foreach( i, v; cast(Bson[])value )
-				ret[i] = bsonToJson(v);
-			return Json(ret);
-		case Bson.Type.BinData: return Json(cast(string)Base64.encode(value.get!BsonBinData.rawData));
-		case Bson.Type.ObjectID: return Json((cast(BsonObjectID)value).toString());
-		case Bson.Type.Bool: return Json(cast(bool)value);
-		case Bson.Type.Date: return Json((cast(BsonDate)value).m_time);
-		case Bson.Type.Null: return Json(null);
-		case Bson.Type.Regex: assert(false, "TODO");
-		case Bson.Type.DBRef: assert(false, "TODO");
-		case Bson.Type.Code: return Json(cast(string)value);
-		case Bson.Type.Symbol: return Json(cast(string)value);
-		case Bson.Type.CodeWScope: assert(false, "TODO");
-		case Bson.Type.Int: return Json(cast(int)value);
-		case Bson.Type.Timestamp: return Json((cast(BsonTimestamp)value).m_time);
-		case Bson.Type.Long: return Json(cast(long)value);
-	}
-}
-
-private Bson jsonToBson(Json value)
-{
-	final switch( value.type ){
-		case Json.Type.Undefined: return Bson();
-		case Json.Type.Null: return Bson(null);
-		case Json.Type.Bool: return Bson(cast(bool)value);
-		case Json.Type.Int: return Bson(cast(long)value);
-		case Json.Type.Float: return Bson(cast(double)value);
-		case Json.Type.String: return Bson(cast(string)value);
-		case Json.Type.Array:
-			Bson[] ret = new Bson[value.length];
-			foreach( size_t i, v; value )
-				ret[i] = jsonToBson(v);
-			return Bson(ret);
-		case Json.Type.Object:
-			Bson[string] ret;
-			foreach( string k, v; value )
-				ret[k] = jsonToBson(v);
-			return Bson(ret);
 	}
 }
 
