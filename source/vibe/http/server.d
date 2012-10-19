@@ -28,7 +28,7 @@ import vibe.utils.memory;
 import vibe.utils.string;
 import vibe.core.file;
 
-import std.algorithm : countUntil, min;
+import std.algorithm : countUntil, map, min;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -1001,7 +1001,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		if( settings.options & HttpServerOption.ParseJsonBody ){
 			auto ptype = "Content-Type" in req.headers;				
-			if( ptype && *ptype == "application/json" ){
+			if( ptype && split(*ptype, ";").map!(a => a.strip())().startsWith("application/json") ){
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				req.json = parseJson(bodyStr);
 			}
