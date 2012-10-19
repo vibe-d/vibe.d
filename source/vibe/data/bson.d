@@ -106,11 +106,11 @@ struct Bson {
 			case Type.Bool: m_data = m_data[0 .. 1]; break;
 			case Type.Date: m_data = m_data[0 .. 8]; break;
 			case Type.Null: m_data = null; break;
-			case Type.Regex: m_data = m_data[0 .. 0]; assert(false); break;
-			case Type.DBRef: m_data = m_data[0 .. 0]; assert(false); break;
+			case Type.Regex: m_data = m_data[0 .. 0]; assert(false);
+			case Type.DBRef: m_data = m_data[0 .. 0]; assert(false);
 			case Type.Code: m_data = m_data[0 .. 4 + fromBsonData!int(m_data)]; break;
 			case Type.Symbol: m_data = m_data[0 .. 4 + fromBsonData!int(m_data)]; break;
-			case Type.CodeWScope: m_data = m_data[0 .. 0]; assert(false); break;
+			case Type.CodeWScope: m_data = m_data[0 .. 0]; assert(false);
 			case Type.Int: m_data = m_data[0 .. 4]; break;
 			case Type.Timestamp: m_data = m_data[0 .. 8]; break;
 			case Type.Long: m_data = m_data[0 .. 8]; break;
@@ -849,7 +849,7 @@ Bson serializeToBson(T)(T value)
 		}
 		return Bson(ret);
 	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
+		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
 	}
 }
 
@@ -914,7 +914,7 @@ void deserializeBson(T)(ref T dst, Bson src)
 			}
 		}
 	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
+		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
 	}
 }
 
