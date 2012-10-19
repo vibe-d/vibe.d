@@ -164,7 +164,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 
 	See_Also: registerFormMethod
 
-	Parameters:
+	Params:
 		router = The router the found methods are registered with.
 
 		instance = The instance which methods should be called via the registered URLs.
@@ -189,7 +189,7 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 	same, but instead of registering found methods that match a scheme it just
 	registers the method specified.  See_Also: registerFormInterface
 
-	Parameters:
+	Params:
 		method = The name of the method to register. It might be
 		overloaded, any overload has to match any given form data.
 */
@@ -324,7 +324,8 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 			func(args);
 			return true;
 }
-/// private helper range which filters method names.
+/// helper range which filters method names.
+/// private
 private struct FormMethodRange(InputRange) if(isInputRange!InputRange) {
 	this(InputRange input) {
 		input_=input;
@@ -351,7 +352,8 @@ private:
 	}
 	InputRange input_;
 }
-/// private creator method:
+/// creator method:
+/// private
 private auto formMethodRange(InputRange)(InputRange range) {
 	return FormMethodRange!InputRange(range);
 }
