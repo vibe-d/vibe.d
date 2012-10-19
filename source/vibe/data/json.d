@@ -59,7 +59,7 @@ import std.traits;
 /**
 	Represents a single JSON value.
 
-	JSON values can have one of the types defined in the JSON.Type enum. They
+	Json values can have one of the types defined in the Json.Type enum. They
 	behave mostly like values in ECMA script in the way that you can
 	transparently perform operations on them. However, strict typechecking is
 	done, so that operations between differently typed JSON values will throw
@@ -780,15 +780,15 @@ unittest {
 
 	$(DL
 		$(DT Json)            $(DD Used as-is)
-		$(DT null)            $(DD Converted to Bson.Type.Null)
-		$(DT bool)            $(DD Converted to Bson.Type.Bool)
-		$(DT float, double)   $(DD Converted to Bson.Type.Double)
-		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Bson.Type.Int)
-		$(DT string)          $(DD Converted to Bson.Type.String)
-		$(DT T[])             $(DD Converted to Bson.Type.Array)
-		$(DT T[string])       $(DD Converted to Bson.Type.Object)
-		$(DT struct)          $(DD Converted to Bson.Type.Object)
-		$(DT class)           $(DD Converted to Bson.Type.Object or Bson.Type.Null)
+		$(DT null)            $(DD Converted to Json.Type.Null)
+		$(DT bool)            $(DD Converted to Json.Type.Bool)
+		$(DT float, double)   $(DD Converted to Json.Type.Double)
+		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Json.Type.Int)
+		$(DT string)          $(DD Converted to Json.Type.String)
+		$(DT T[])             $(DD Converted to Json.Type.Array)
+		$(DT T[string])       $(DD Converted to Json.Type.Object)
+		$(DT struct)          $(DD Converted to Json.Type.Object)
+		$(DT class)           $(DD Converted to Json.Type.Object or Json.Type.Null)
 	)
 
 	All entries of an array or an associative array, as well as all R/W properties and

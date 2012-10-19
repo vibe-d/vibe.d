@@ -25,7 +25,7 @@ import std.algorithm;
 		// connecting with default settings:
 		auto db = connectMongoDB("127.0.0.1");
 		auto users = db["users"];
-		users.insert(BSON("peter"));
+		users.insert(Bson("peter"));
 		---
 
 		---
