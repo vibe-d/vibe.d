@@ -304,9 +304,6 @@ struct Bson {
 	/// ditto
 	@property T get(T)()
 	const {
-		static if( is(this == const) && !is(T == const) || is(T == immutable) ){
-			static assert(false, "Invalid const combination.");
-		}
 		static if( is(T == double) ){ checkType(Type.Double); return fromBsonData!double(m_data); }
 		else static if( is(T == string) ){
 			checkType(Type.String, Type.Code, Type.Symbol);
@@ -362,7 +359,10 @@ struct Bson {
 		else static if( is(T == int) ){ checkType(Type.Int); return fromBsonData!int(m_data); }
 		else static if( is(T == BsonTimestamp) ){ checkType(Type.Timestamp); return BsonTimestamp(fromBsonData!long(m_data)); }
 		else static if( is(T == long) ){ checkType(Type.Long); return fromBsonData!long(m_data); }
-		else static if( is(T == Json) ){ return this.toJson(); }
+		else static if( is(T == Json) ){
+			pragma(msg, "Bson.get!Json() and Bson.opCast!Json() will soon be removed. Please use Bson.toJson() instead.");
+			return this.toJson();
+		}
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
 
