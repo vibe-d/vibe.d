@@ -407,12 +407,12 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.Code:
 			assert(block.blocks.length == 0);
-			dst.put("<code><pre class=\"prettyprint\">");
+			dst.put("<pre class=\"prettyprint\"><code>");
 			foreach(ln; block.text){
 				filterHtmlEscape(dst, ln);
 				dst.put("\n");
 			}
-			dst.put("</pre></code>");
+			dst.put("</code></pre>");
 			break;
 		case BlockType.Quote:
 			dst.put("<quot>");
