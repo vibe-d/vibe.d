@@ -415,7 +415,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			dst.put("</code></pre>");
 			break;
 		case BlockType.Quote:
-			dst.put("<quot>");
+			dst.put("<blockquote>");
 			foreach(ln; block.text){
 				writeMarkdownEscaped(dst, ln, links, flags);
 				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
@@ -423,7 +423,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			}
 			foreach(b; block.blocks)
 				writeBlock(dst, b, links, flags);
-			dst.put("</quot>\n");
+			dst.put("</blockquote>\n");
 			break;
 	}
 }
@@ -572,18 +572,6 @@ private void outputHeaderLine(R)(ref R dst, string ln, string hln)
 	dst.put("</h");
 	dst.put(htype);
 	dst.put(">\n");
-}
-
-/// private
-private void enterBlockQuote(R)(ref R dst)
-{
-	dst.put("<blockquote>");
-}
-
-/// private
-private void exitBlockQuote(R)(ref R dst)
-{
-	dst.put("</blockquote>");
 }
 
 private bool isLineBlank(string ln)
