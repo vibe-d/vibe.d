@@ -394,24 +394,9 @@ struct Bson {
 	*/
 	static Bson fromJson(in Json value)
 	{
-		final switch( value.type ){
-			case Json.Type.Undefined: return Bson();
-			case Json.Type.Null: return Bson(null);
-			case Json.Type.Bool: return Bson(value.get!bool());
-			case Json.Type.Int: return Bson(value.get!long());
-			case Json.Type.Float: return Bson(value.get!double());
-			case Json.Type.String: return Bson(value.get!string());
-			case Json.Type.Array:
-				Bson[] ret = new Bson[value.length];
-				foreach( size_t i, v; value )
-					ret[i] = fromJson(v);
-				return Bson(ret);
-			case Json.Type.Object:
-				Bson[string] ret;
-				foreach( string k, v; value )
-					ret[k] = fromJson(v);
-				return Bson(ret);
-		}
+		auto app = appender!bdata_t();
+		auto tp = writeBson(app, value);
+		return Bson(tp, app.data);
 	}
 
 	/** Converts a BSON value to a JSON value.
