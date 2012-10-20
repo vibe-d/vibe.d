@@ -524,6 +524,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 			case '>':
 				if( flags & MarkdownFlags.noInlineHtml ) dst.put("&gt;");
 				else dst.put(ln[0]);
+				ln = ln[1 .. $];
 				break;
 			case '<':
 				string url;
