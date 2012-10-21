@@ -307,9 +307,9 @@ struct Bson {
 		static if( is(T == double) ){ checkType(Type.Double); return fromBsonData!double(m_data); }
 		else static if( is(T == string) ){
 			checkType(Type.String, Type.Code, Type.Symbol);
-			return cast(string)m_data[4 .. 4+fromBsonData!int(m_data)-1];
+			return cast(string)m_data[4 .. 4+fromBsonData!int(m_data)];
 		}
-		else static if( is(Unqual!T == Bson[string]) || is(Unqual!T == const(Bson)[string])  ){
+		else static if( is(Unqual!T == Bson[string]) || is(Unqual!T == const(Bson)[string]) ){
 			checkType(Type.Object);
 			Bson[string] ret;
 			auto d = m_data[4 .. $];
@@ -1008,6 +1008,17 @@ unittest {
 private Bson.Type writeBson(R)(ref R dst, in Json value)
 	if( isOutputRange!(R, ubyte) )
 {
+    static immutable uint[] JsonIDToBsonID = [
+        Bson.Type.Undefined,
+        Bson.Type.Null,
+        Bson.Type.Bool,
+        Bson.Type.Int,
+        Bson.Type.Double,
+        Bson.Type.String,
+        Bson.Type.Array,
+        Bson.Type.Object
+    ];
+    
 	final switch(value.type){
 		case Json.Type.Undefined:
 			return Bson.Type.Undefined;
@@ -1034,28 +1045,40 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 		case Json.Type.Array:
 			auto app = appender!bdata_t();
 			foreach( size_t i, ref const Json v; value ){
-				app.put(cast(ubyte)v.type);
+				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
 				putCString(app, to!string(i));
-				writeBson(dst, v);
+				writeBson(app, v);
 			}
 
-			dst.put(toBsonData(cast(int)app.data.length));
+            dst.put(toBsonData(cast(int)(app.data.length + int.sizeof + 1)));
 			dst.put(app.data);
 			dst.put(cast(ubyte)0);
 			return Bson.Type.Array;
 		case Json.Type.Object:
 			auto app = appender!bdata_t();
 			foreach( string k, ref const Json v; value ){
-				app.put(cast(ubyte)v.type);
+				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
 				putCString(app, k);
-				writeBson(dst, v);
+				writeBson(app, v);
 			}
 
-			dst.put(toBsonData(cast(int)app.data.length));
+			dst.put(toBsonData(cast(int)(app.data.length + int.sizeof + 1)));
 			dst.put(app.data);
 			dst.put(cast(ubyte)0);
 			return Bson.Type.Object;
 	}
+}
+
+unittest
+{
+    Json jsvalue = parseJsonString("{\"key\" : \"Value\"}");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
+    
+    jsvalue = parseJsonString("{\"key\" : [{\"key\" : \"Value\"}, {\"key2\" : \"Value2\"}] }");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
+    
+    jsvalue = parseJsonString("[ 1 , 2 , 3]");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
 }
 
 private string skipCString(ref bdata_t data)
