@@ -307,7 +307,7 @@ struct Bson {
 		static if( is(T == double) ){ checkType(Type.Double); return fromBsonData!double(m_data); }
 		else static if( is(T == string) ){
 			checkType(Type.String, Type.Code, Type.Symbol);
-			return cast(string)m_data[4 .. 4+fromBsonData!int(m_data)];
+			return cast(string)m_data[4 .. 4+fromBsonData!int(m_data)-1];
 		}
 		else static if( is(Unqual!T == Bson[string]) || is(Unqual!T == const(Bson)[string]) ){
 			checkType(Type.Object);
@@ -1041,6 +1041,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 		case Json.Type.String:
 			dst.put(toBsonData(cast(uint)value.length));
 			dst.put(cast(bdata_t)cast(string)value);
+			dst.put(cast(ubyte)0);
 			return Bson.Type.String;
 		case Json.Type.Array:
 			auto app = appender!bdata_t();
