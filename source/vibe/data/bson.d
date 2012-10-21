@@ -1047,7 +1047,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			foreach( size_t i, ref const Json v; value ){
 				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
 				putCString(app, to!string(i));
-				writeBson(dst, v);
+				writeBson(app, v);
 			}
 
             dst.put(toBsonData(cast(int)(app.data.length + int.sizeof + 1)));
@@ -1067,6 +1067,18 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			dst.put(cast(ubyte)0);
 			return Bson.Type.Object;
 	}
+}
+
+unittest
+{
+    Json jsvalue = parseJsonString("{\"key\" : \"Value\"}");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
+    
+    jsvalue = parseJsonString("{\"key\" : [{\"key\" : \"Value\"}, {\"key2\" : \"Value2\"}] }");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
+    
+    jsvalue = parseJsonString("[ 1 , 2 , 3]");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
 }
 
 private string skipCString(ref bdata_t data)
