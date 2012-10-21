@@ -1039,7 +1039,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			dst.put(toBsonData(cast(double)value));
 			return Bson.Type.Double;
 		case Json.Type.String:
-			dst.put(toBsonData(cast(uint)value.length));
+			dst.put(toBsonData(cast(uint)value.length+1));
 			dst.put(cast(bdata_t)cast(string)value);
 			dst.put(cast(ubyte)0);
 			return Bson.Type.String;
