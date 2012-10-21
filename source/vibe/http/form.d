@@ -174,12 +174,17 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 		"/mywebapp/welcomePage/getWelcomePage" if MethodStyle is Unaltered.
 
 		style = How the url part representing the method name should be altered.
+
 */
 void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 		MethodStyle style = MethodStyle.Unaltered)
 {
-	foreach( method; formMethodRange(__traits(allMembers, I)) ){
-		registerFormMethod(router, instance, url_prefix, method, style);
+	foreach( method; __traits(allMembers, I) ){
+
+		static if( method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
+					|| method.startsWith("create") || method.startsWith("post") || method == "index" )  {
+			registerFormMethod!method(router, instance, url_prefix, style);
+		}
 	}
 }
 /**
@@ -191,7 +196,7 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 
 	Params:
 		method = The name of the method to register. It might be
-		overloaded, any overload has to match any given form data.
+		overloaded, one overload has to match any given form data, otherwise an error is triggered.
 */
 void registerFormMethod(string method, I)(UrlRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered) 
 {
@@ -200,8 +205,9 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 	}
 	
 	auto handler=formMethodHandler!(I, method)(instance);
-	router.get(url(method), handler);
-	router.post(url(method), handler);
+	string url_method= method=="index" ? "" : method;
+	router.get(url(url_method), handler);
+	router.post(url(url_method), handler);
 }
 
 
@@ -215,6 +221,8 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 
 	Returns: A HttpServerRequestDelegate which passes over any form data to the given function.
 */
+/// This is private because untested and I am also not sure whether it a) works and b) if it is useful at all.
+/// private
 HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(isCallable!DelegateType) 
 {
 	void handler(HttpServerRequest req, HttpServerResponse res)
@@ -229,7 +237,7 @@ HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(
 	Create a delegate handling form data for any matching overload of T.method.
 
 	T is some class or struct. Method some probably overloaded method of T. The returned delegate will try all overloads
-	of the passed method with the given method and will only raise an error if no conforming overload is found.
+	of the passed method and will only raise an error if no conforming overload is found.
 */
 HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 {
@@ -288,10 +296,12 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 
 	Returns: true if successful, false otherwise.
 */
+/// private
 private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
 	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
 }
 /// Overload which takes additional parameter for handling overloads of func.
+/// private
 private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
 			alias ParameterTypeTuple!Overload ParameterTypes;
 			ParameterTypes args;
@@ -323,37 +333,4 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 			}
 			func(args);
 			return true;
-}
-/// helper range which filters method names.
-/// private
-private struct FormMethodRange(InputRange) if(isInputRange!InputRange) {
-	this(InputRange input) {
-		input_=input;
-		gotoNextValid();
-	}
-	@property front() {
-		input_.front();
-	}
-	void popFront() {
-		input_.popFront();
-		gotoNextValid();
-	}
-	@property empty() {
-		return input_.empty;
-	}
-private:
-	void gotoNextValid() {
-		string current=input_.front;
-		while( !(current.startsWith("get") || current.startsWith("query") || current.startsWith("add") 
-					|| current.startsWith("create") || current.startsWith("post") || current == "index" ))  {
-			input_.popFront();
-			current_=input_.front;
-		}
-	}
-	InputRange input_;
-}
-/// creator method:
-/// private
-private auto formMethodRange(InputRange)(InputRange range) {
-	return FormMethodRange!InputRange(range);
 }

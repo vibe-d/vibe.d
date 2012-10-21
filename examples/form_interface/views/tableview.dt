@@ -1,0 +1,26 @@
+extends layout
+prepend block head
+	title ="Welcome!"
+block content
+	.clear
+	h1 Welcome!
+	.datatable(id="datatable")
+		- static if(__traits(compiles, value)) 
+			- dataProvider.getData(req, res, field, value); 
+		- else
+			- dataProvider.getData(req, res); 
+	.filterbycontainer
+		form(onsubmit="{var req = new XMLHttpRequest(); req.open('GET', '/dataProvider/getData?field='+this.field.value+'&value='+this.value.value, false); req.send(); var tablediv=getElementById('datatable'); tablediv.innerHTML = req.responseText; return false;}", action='/getTable', method='GET')
+			table
+				tr
+					td Filter by:
+					td 
+						select(name="field")
+							option(value="nameid") Name
+							option(value="surnameid") Surname
+							option(value="addressid") Address
+				tr
+					td Value:
+					td 
+						input(type="text", width="160", name="value")
+		
