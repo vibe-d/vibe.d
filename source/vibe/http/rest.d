@@ -159,30 +159,6 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 	}
 }
 
-/**
-	Generates a form based interface to the given instance.
-
-	Each function is callable with either GET or POST using form encoded parameters. Complex
-	parameters are encoded as JSON strings.
-
-	Note that this function is currently not fully implemented.
-*/
-void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
-		MethodStyle style = MethodStyle.Unaltered)
-{
-	string url(string name){
-		return url_prefix ~ adjustMethodStyle(name, style);
-	}
-
-	foreach( method; __traits(allMembers, T) ){
-		foreach( overload; MemberFunctionsTuple!(T, method) ){
-			auto handler = formMethodHandler(overload);
-			router.get(url(method), handler);
-			router.post(url(method), handler);
-		}
-	}
-}
-
 
 /**
 	Implements the given interface by forwarding all public methods to a REST server.
@@ -407,17 +383,6 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 			// TODO: better error description!
 			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString())], HttpStatus.InternalServerError);
 		}
-	}
-
-	return &handler;
-}
-
-/// private
-private HttpServerRequestDelegate formMethodHandler(T)(T func)
-{
-	void handler(HttpServerRequest req, HttpServerResponse res)
-	{
-		assert(false, "TODO!");
 	}
 
 	return &handler;
