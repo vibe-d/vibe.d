@@ -162,6 +162,9 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	will throw an exception if no overload is found that is compatible with all
 	available form data fields.
 
+	For a thorough example of how to use this method, see the form_interface
+	example in the examples directory.
+
 	See_Also: registerFormMethod
 
 	Params:
