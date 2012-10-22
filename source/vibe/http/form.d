@@ -167,7 +167,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	Params:
 		router = The router the found methods are registered with.
 
-		instance = The instance which methods should be called via the registered URLs.
+		instance = The instance whose methods should be called via the registered URLs.
 
 		url_prefix = The prefix before the method name. A method named getWelcomePage
 		with a given url_prefix="/mywebapp/welcomePage/" would be made available as

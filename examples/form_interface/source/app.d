@@ -3,6 +3,18 @@ import std.stdio;
 import std.algorithm;
 import std.string;
 import vibe.http.form;
+/**
+  This example pretty well shows how registerFormInterface is meant to be used and what possibilities it offers.
+  The API that is exposed by DataProvider is conveniently usable by the methods in App and from JavaScript, with just
+  one line of code: 
+
+  ---
+		registerFormInterface(router, provider_, prefix~"dataProvider/");
+  ---
+
+  The tableview.dt uses JavaScript for just replacing the table if filter-data changes if no JavaScript is available
+  the whole site gets reloaded.
+*/
 
 /**
   * This class serves its users array as html table. Also have a look at views/createTable.dt.
@@ -18,11 +30,17 @@ class DataProvider {
 			auto table=users;
 			res.render!("createTable.dt", table)();
 		}
+		/**
+		  Overload that takes an enumeration for indexing the users array in a secure way and a value to filter on.
+		  Method code does not have to care about validating user data, no need to check that a field is actually present, no manual conversion, ...
+		  Say that this is not ingenious, I love D.
+		 */
 		void getData(HttpServerRequest req, HttpServerResponse res, Fields field, string value) {
 			auto table=users.filter!((a) => value.length==0 || a[field]==value)();
 			res.render!("createTable.dt", table)();
 		}
-		void postUser(HttpServerRequest req, HttpServerResponse res, string name, string surname, string address) {
+		/// Add a new user to the array, using this method from JavaScript is left as an exercise.
+		void addUser(string name, string surname, string address) {
 				users~=[name, surname, address];
 		}
 private:
@@ -35,7 +53,6 @@ class App {
 	this(UrlRouter router, string prefix="/") {
 		provider_=new DataProvider;
 		prefix_= prefix.length==0 || prefix[$-1]!='/' ?  prefix~"/" : prefix;
-		//router.get("/getTable", &app.getTable);
 		registerFormInterface(router, this, prefix);
 		registerFormInterface(router, provider_, prefix~"dataProvider/");
 	}
@@ -49,6 +66,10 @@ class App {
 	void getTable(HttpServerRequest req, HttpServerResponse res, DataProvider.Fields field, string value) {
 			res.headers["Content-Type"] = "text/html";
 			res.render!("tableview.dt", req, res, dataProvider, field, value)();
+	}
+	void addUser(HttpServerRequest req, HttpServerResponse res, string name, string surname, string address) {
+		dataProvider.addUser(name, surname, address);
+		res.redirect(prefix);	
 	}
 	@property string prefix() {
 		return prefix_;
