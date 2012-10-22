@@ -11,6 +11,9 @@ class DataProvider {
 		enum Fields {
 				nameid, surnameid, addressid
 		}
+		void index(HttpServerRequest req, HttpServerResponse res) {
+			getData(req, res);
+		}
 		void getData(HttpServerRequest req, HttpServerResponse res) {
 			auto table=users;
 			res.render!("createTable.dt", table)();
@@ -35,6 +38,9 @@ class App {
 		//router.get("/getTable", &app.getTable);
 		registerFormInterface(router, this, prefix);
 		registerFormInterface(router, provider_, prefix~"dataProvider/");
+	}
+	void index(HttpServerRequest req, HttpServerResponse res) {
+		getTable(req, res);
 	}
 	void getTable(HttpServerRequest req, HttpServerResponse res) {
 			res.headers["Content-Type"] = "text/html";
