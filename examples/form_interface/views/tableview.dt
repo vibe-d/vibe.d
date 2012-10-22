@@ -12,7 +12,7 @@ block content
 			- dataProvider.getData(req, res); 
 	.filterbycontainer
 		h2 Filter users by field value
-		form(onsubmit="{var req = new XMLHttpRequest(); req.open('GET', '/dataProvider/getData?field='+this.field.value+'&value='+this.value.value, false); req.send(); var tablediv=getElementById('datatable'); tablediv.innerHTML = req.responseText; return false;}", action='/getTable', method='GET')
+		form(onsubmit="return getTable(this.field.value, this.value.value)", action='/getTable', method='GET')
 			table
 				tr
 					td Filter by:
@@ -40,3 +40,12 @@ block content
 					td
 					td
 						input(type='submit', value="Add")
+	script
+		function getTable(field, value) {
+			var req = new XMLHttpRequest(); 
+			req.open('GET', '/dataProvider/getData?field='+field+'&value='+value, false);
+			req.send();
+			var tablediv=document.getElementById('datatable');
+			tablediv.innerHTML = req.responseText;
+			return false;
+		}
