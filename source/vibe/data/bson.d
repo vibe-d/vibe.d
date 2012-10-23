@@ -909,7 +909,7 @@ Bson serializeToBson(T)(T value)
 void deserializeBson(T)(ref T dst, Bson src)
 {
 	static if( is(T == Bson) ) dst = src;
-	else static if( is(T == Json) ) dst = value.toJson();
+	else static if( is(T == Json) ) dst = src.toJson();
 	else static if( is(T == BsonBinData) ) dst = cast(T)src;
 	else static if( is(T == BsonObjectID) ) dst = cast(T)src;
 	else static if( is(T == BsonDate) ) dst = cast(T)src;
@@ -933,7 +933,7 @@ void deserializeBson(T)(ref T dst, Bson src)
 			dst[key] = val;
 		}
 	} else static if( __traits(compiles, dst = T.fromBson(dst.toBson())) ){
-		dst = T.fromBson(value);
+		dst = T.fromBson(src);
 	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
 		dst = T.fromJson(src.toJson());
 	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
