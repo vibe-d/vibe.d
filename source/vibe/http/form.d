@@ -14,10 +14,19 @@ import vibe.inet.message;
 import vibe.inet.url;
 import vibe.textfilter.urlencode;
 
+// needed for registerFormInterface stuff:
+import vibe.http.rest;
+import vibe.http.server;
+import vibe.http.router;
+
+
 import std.array;
 import std.exception;
 import std.string;
 
+// needed for registerFormInterface stuff:
+import std.traits;
+import std.conv;
 
 struct FilePart  {
 	InetHeaderMap headers;
@@ -137,3 +146,194 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	return stream.readLine(max_line_length) != "--";
 }
 
+
+/**
+	Generates a form based interface to the given instance.
+
+	Each function is callable with either GET or POST using form encoded
+	parameters.  All methods of I that start with "get", "query", "add", "create",
+	"post" are made available via url: url_prefix~method_name.  A method named
+	"index" will be made available via url_prefix.  All these methods might take a
+	HttpServerRequest parameter and a HttpServerResponse parameter, but don't have
+	to.
+
+	All additional parameters will be filled with available form-data fields.
+	Every parameters name has to match a form field name. The registered handler
+	will throw an exception if no overload is found that is compatible with all
+	available form data fields.
+
+	For a thorough example of how to use this method, see the form_interface
+	example in the examples directory.
+
+	See_Also: registerFormMethod
+
+	Params:
+		router = The router the found methods are registered with.
+
+		instance = The instance whose methods should be called via the registered URLs.
+
+		url_prefix = The prefix before the method name. A method named getWelcomePage
+		with a given url_prefix="/mywebapp/welcomePage/" would be made available as
+		"/mywebapp/welcomePage/getWelcomePage" if MethodStyle is Unaltered.
+
+		style = How the url part representing the method name should be altered.
+
+*/
+void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
+		MethodStyle style = MethodStyle.Unaltered)
+{
+	foreach( method; __traits(allMembers, I) ){
+
+		static if( method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
+					|| method.startsWith("create") || method.startsWith("post") || method == "index" )  {
+			registerFormMethod!method(router, instance, url_prefix, style);
+		}
+	}
+}
+/**
+	Registers just a single method.
+
+	For details see registerFormInterface. This method does exactly the
+	same, but instead of registering found methods that match a scheme it just
+	registers the method specified.  See_Also: registerFormInterface
+
+	Params:
+		method = The name of the method to register. It might be
+		overloaded, one overload has to match any given form data, otherwise an error is triggered.
+*/
+void registerFormMethod(string method, I)(UrlRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered) 
+{
+	string url(string name) {
+		return url_prefix ~ adjustMethodStyle(name, style);
+	}
+	
+	auto handler=formMethodHandler!(I, method)(instance);
+	string url_method= method=="index" ? "" : method;
+	router.get(url(url_method), handler);
+	router.post(url(url_method), handler);
+}
+
+
+/**
+	Generate a HttpServerRequestDelegate from a generic function with arbitrary arguments.
+	The arbitrary arguments will be filled in with data from the form in req. For details see applyParametersFromAssociativeArrays.
+	See_Also: applyParametersFromAssociativeArrays
+	Params:
+		delegate = Some function, which some arguments which must be constructible from strings with to!ArgType(some_string), except one optional parameter
+		of type HttpServerRequest and one of type HttpServerResponse which are passed over.
+
+	Returns: A HttpServerRequestDelegate which passes over any form data to the given function.
+*/
+/// This is private because untested and I am also not sure whether it a) works and b) if it is useful at all.
+/// private
+HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(isCallable!DelegateType) 
+{
+	void handler(HttpServerRequest req, HttpServerResponse res)
+	{
+		string error;
+		enforce(applyParametersFromAssociativeArray(req, res, func, error), error);
+	}
+	return &handler;
+}
+
+/**
+	Create a delegate handling form data for any matching overload of T.method.
+
+	T is some class or struct. Method some probably overloaded method of T. The returned delegate will try all overloads
+	of the passed method and will only raise an error if no conforming overload is found.
+*/
+HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
+{
+	import std.stdio;
+	void handler(HttpServerRequest req, HttpServerResponse res)
+	{
+		import std.traits;
+		string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+//		alias MemberFunctionsTuple!(T, method) overloads;
+		string errors;
+		foreach(func; __traits(getOverloads, T, method)) {
+			string error;
+			ReturnType!func delegate(ParameterTypeTuple!func) myoverload=&__traits(getMember, inst, method);
+			if(applyParametersFromAssociativeArray!func(req, res, myoverload, error)) {
+				return;
+			}
+			errors~="Overload "~method~typeid(ParameterTypeTuple!func).toString()~" failed: "~error~"\n";
+		}
+		enforce(false, "No method found that matches the found form data:\n"~errors);
+	}
+	return &handler;
+}
+
+/**
+	Tries to apply all named arguments in args to func.
+
+	If it succeeds it calls the function with req, res (if it has one
+	parameter of type HttpServerRequest and one of type HttpServerResponse), and
+	all the values found in args. 
+
+	If any supplied argument could not be applied or the method has
+	requires more arguments than given, the method returns false and does not call
+	func.  In this case error gets filled with some string describing which
+	parameters could not be applied. Exceptions are not used in this situation,
+	because when traversing overloads this might be a quite common scenario.
+
+	Calls: applyParametersFromAssociativeArray!(Func,Func)(req, res, func, error),
+	if you want to handle overloads of func, use the second version of this method
+	and pass the overload alias as first template parameter. (For retrieving parameter names)
+	
+	See_Also: formMethodHandler
+
+	Params:
+		req = The HttpServerRequest object that gets queried for form
+		data (req.query for GET requests, req.form for POST requests) and that is
+		passed on to func, if func has a parameter of matching type. Each key in the
+		form data must match a parameter name, the corresponding value is then applied.
+		HttpServerRequest and HttpServerResponse arguments are excluded as they are
+		qrovided by the passed req and res objects.
+
+
+		res = The response object that gets passed on to func if func
+		has a parameter of matching type.
+
+		error = This string will be set to a descriptive message if not all parameters could be matched.
+
+	Returns: true if successful, false otherwise.
+*/
+/// private
+private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
+	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
+}
+/// Overload which takes additional parameter for handling overloads of func.
+/// private
+private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
+			alias ParameterTypeTuple!Overload ParameterTypes;
+			ParameterTypes args;
+			string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+			int count=0;
+			foreach(i, item; args) {
+				static if(is(ParameterTypes[i] : HttpServerRequest)) {
+					args[i] = req;
+				} 
+				else static if(is(ParameterTypes[i] : HttpServerResponse)) {
+					args[i] = res;
+				}
+				else {
+					count++;
+				}
+			}
+			if(count!=form.length) {
+				error="The form had "~to!string(form.length)~" element(s), but "~to!string(count)~" parameter(s) need to be supplied.";
+				return false;
+			}
+			foreach(i, item; ParameterIdentifierTuple!Overload) {
+				static if(!is( typeof(args[i]) : HttpServerRequest) && !is( typeof(args[i]) : HttpServerResponse)) {
+					if(item !in form) {
+						error="Form misses parameter: "~item;
+						return false;
+					}
+					args[i] = to!(typeof(args[i]))(form[item]);
+				}
+			}
+			func(args);
+			return true;
+}
