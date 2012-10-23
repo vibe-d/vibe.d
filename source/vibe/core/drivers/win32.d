@@ -583,7 +583,7 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 		while( !m_bytesTransferred ) m_core.yieldForEvent();
 		
 
-		ubyte[] result = m_buffer[0 .. bytesReturned];
+		ubyte[] result = m_buffer[0 .. m_bytesTransferred];
 		do {
 			assert(result.length >= FILE_NOTIFY_INFORMATION.sizeof);
 			auto fni = cast(FILE_NOTIFY_INFORMATION*)result.ptr;
