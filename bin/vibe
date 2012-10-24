@@ -5,7 +5,7 @@ set -e
 if [ $OSTYPE == "msys" ];
 then
     VIBECMD=$(echo $0 | sed 's/\//\\/g').cmd
-	cmd.exe //C $VIBECMD %*
+	cmd.exe //C $VIBECMD $*
 	exit
 fi
 
