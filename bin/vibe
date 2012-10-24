@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
 
+# hack for nightbuild server to work on windows
+if [ $OSTYPE == "msys" ];
+then
+    VIBECMD=$(echo $0 | sed 's/\//\\/g').cmd
+	cmd.exe //C $VIBECMD %*
+	exit
+fi
+
 # delete old vpm.d if another run left it in /tmp
 rm -f /tmp/vpm.d
 
