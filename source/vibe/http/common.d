@@ -85,13 +85,13 @@ class HttpRequest {
 		/// The HTTP protocol version used for the request
 		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
 
-		/// The HTTP method of the request
+		/// The HTTP _method of the request
 		HttpMethod method = HttpMethod.GET;
 
 		/// The full request URL
 		string url = "/";
 
-		/// All request headers
+		/// All request _headers
 		StrMapCI headers;
 	}
 	
@@ -135,10 +135,22 @@ class HttpRequest {
 */
 class HttpResponse {
 	public {
+		/// The protocol version of the response - should not be changed
 		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
+
+		/// The status code of the response, 200 by default
 		int statusCode = HttpStatus.OK;
+
+		/** The status phrase of the response
+
+			If no phrase is set, a default one corresponding to the status code will be used.
+		*/
 		string statusPhrase;
+
+		/// The response header fields
 		StrMapCI headers;
+
+		/// All cookies that shall be set on the client for this request
 		Cookie[string] cookies;
 	}
 
