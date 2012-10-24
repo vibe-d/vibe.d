@@ -182,6 +182,7 @@ struct Json {
 		checkType!(Json[string])();
 		if( auto pv = key in m_object ) return *pv;
 		Json ret = Json.Undefined;
+		ret.m_string = key;
 		return ret;
 	}
 	/// ditto
@@ -192,6 +193,7 @@ struct Json {
 		m_object[key] = Json();
 		m_object[key].m_type = Type.Undefined; // DMDBUG: AAs are teh $H1T!!!11
 		assert(m_object[key].type == Type.Undefined);
+		m_object[key].m_string = key;
 		return m_object[key];
 	}
 
@@ -646,7 +648,9 @@ struct Json {
 
 	private void checkType(T)()
 	const {
-		enforce(typeId!T == m_type, "Trying to access JSON of type "~.to!string(m_type)~" as "~T.stringof~".");
+		string dbg;
+		if( m_type == Type.Undefined ) dbg = " field "~m_string;
+		enforce(typeId!T == m_type, "Trying to access JSON"~dbg~" of type "~.to!string(m_type)~" as "~T.stringof~".");
 	}
 
 	/*invariant()
