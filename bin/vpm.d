@@ -151,7 +151,7 @@ int main(string[] args)
 		logError("Error executing command '%s': %s\n", cmd, e.msg);
 		logDebug("Full exception: %s", sanitizeUTF8(cast(ubyte[])e.toString()));
 		showHelp(cmd);
-		return -1;
+		return 2;
 	}
 }
 

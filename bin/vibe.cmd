@@ -13,8 +13,12 @@ copy "%VIBE_BIN%*.dll" %EXEDIR% > nul 2>&1
 if "%1" == "build" copy "%VIBE_BIN%*.dll" . > nul 2>&1
 copy "%VIBE_BIN%vpm.d" %EXEDIR% > nul 2>&1
 
+del %START_SCRIPT% >nul 2>&1
+
 rem Run, execute, do everything.. but when you do it, do it with the vibe!
 rdmd -debug -g -w -property -of%EXEDIR%\vpm.exe -I%VIBE_BIN%..\source %LIBS% %EXEDIR%\vpm.d %VIBE_BIN% %START_SCRIPT% %*
 
 rem Finally, start the app, if vpm succeded.
-if ERRORLEVEL 0 %START_SCRIPT%
+if %ERRORLEVEL% == 0 (
+	if EXIST %START_SCRIPT% %START_SCRIPT%
+)
