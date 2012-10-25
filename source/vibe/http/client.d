@@ -182,10 +182,11 @@ class HttpClient : EventedObject {
 			} else if( auto pcl = "Content-Length" in res.headers ){
 				res.bodyReader = new LimitedInputStream(m_stream, to!ulong(*pcl));
 			} else if( auto conn = "Connection" in res.headers ){
-				res.bodyReader = m_stream;
+				if( *conn == "close" ) res.bodyReader = m_stream;
 			} else if( res.httpVersion == HttpVersion.HTTP_1_0 ){
 				res.bodyReader = m_stream;
-			} else res.bodyReader = new LimitedInputStream(null, 0);
+			}
+			if( !res.bodyReader ) res.bodyReader = new LimitedInputStream(null, 0);
 			
 			// TODO: handle content-encoding: deflate, gzip
 		}
