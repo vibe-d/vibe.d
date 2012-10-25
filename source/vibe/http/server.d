@@ -460,7 +460,7 @@ final class HttpServerRequest : HttpRequest {
 		*/
 		Json json;
 
-		/** Contains the parsed parameters of a HTML _form request.
+		/** Contains the parsed parameters of a HTML POST _form request.
 
 			Remarks:
 				This field is only set if HttpServerOption.ParseFormBody is set.

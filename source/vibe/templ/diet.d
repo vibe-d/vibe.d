@@ -48,9 +48,11 @@ void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	import vibe.utils.string;
 
 	pragma(msg, "Compiling diet template '"~template_file~"'...");
-	pragma(msg, "Warning: using render!() or parseDietFile!() is unsafe, please consider using");
-	pragma(msg, "         renderCompat!()/parseDietFileCompat!() until DMD is fully stable");
-	pragma(msg, "         regarding local alias template arguments.");
+	static if( ALIASES.length > 0 ){
+		pragma(msg, "Warning: using render!() or parseDietFile!() with aliases is unsafe,");
+		pragma(msg, "         please consider using renderCompat!()/parseDietFileCompat!()");
+		pragma(msg, "         until DMD is fully stable regarding local alias template arguments.");
+	}
 	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
 
