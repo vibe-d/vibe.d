@@ -179,11 +179,14 @@ class HttpClient : EventedObject {
 			if( auto pte = "Transfer-Encoding" in res.headers ){
 				enforce(*pte == "chunked");
 				res.bodyReader = new ChunkedInputStream(m_stream);
-			} else {
-				if( auto pcl = "Content-Length" in res.headers )
-					res.bodyReader = new LimitedInputStream(m_stream, to!ulong(*pcl));
-				else res.bodyReader = m_stream;
-			}
+			} else if( auto pcl = "Content-Length" in res.headers ){
+				res.bodyReader = new LimitedInputStream(m_stream, to!ulong(*pcl));
+			} else if( auto conn = "Connection" in res.headers ){
+				res.bodyReader = m_stream;
+			} else if( res.httpVersion == HttpVersion.HTTP_1_0 ){
+				res.bodyReader = m_stream;
+			} else res.bodyReader = new LimitedInputStream(null, 0);
+			
 			// TODO: handle content-encoding: deflate, gzip
 		}
 
