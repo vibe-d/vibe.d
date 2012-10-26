@@ -92,7 +92,7 @@ int main(string[] args)
 				assert(false);
 			case "init":
 				string dir = ".";
-				if( args.length >= 2 ) dir = args[2];
+				if( args.length >= 2 ) dir = args[1];
 				initDirectory(dir);
 				break;
 			case "run":
@@ -151,7 +151,7 @@ int main(string[] args)
 		logError("Error executing command '%s': %s\n", cmd, e.msg);
 		logDebug("Full exception: %s", sanitizeUTF8(cast(ubyte[])e.toString()));
 		showHelp(cmd);
-		return -1;
+		return 2;
 	}
 }
 
@@ -243,7 +243,7 @@ private void initDirectory(string fName)
 { 
     Path cwd; 
     //Check to see if a target directory is specified.
-    if(fName != "init") {
+    if(fName != ".") {
         if(!existsFile(fName))  
             createDirectory(fName);
         cwd = Path(fName);  
@@ -255,10 +255,10 @@ private void initDirectory(string fName)
     //raw strings must be unindented. 
     immutable packageJson = 
 `{
-    "name": "my-project",
-    "version": "1.0.0",
+    "name": "`~(fName == "." ? "my-project" : fName)~`",
+    "version": "0.0.1",
     "description": "An example project skeleton",
-    "homepage": "http://my-project.org",
+    "homepage": "http://example.org",
     "copyright": "Copyright © 2000, Edit Me",
     "authors": [
         "Your Name"

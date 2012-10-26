@@ -4,7 +4,12 @@ void uploadFile(HttpServerRequest req, HttpServerResponse res)
 {
 	auto pf = "file" in req.files;
 	enforce(pf !is null, "No file uploaded!");
-	moveFile(pf.tempPath, Path(".")~pf.filename);
+	try moveFile(pf.tempPath, Path(".")~pf.filename);
+	catch( Exception e ){
+		logWarn("Failed to move file to destination folder: %s", e.msg);
+		logInfo("Performing copy+delete instead.");
+		copyFile(pf.tempPath, Path(".")~pf.filename);
+	}
 
 	res.writeBody("File uploaded!", "text/plain");
 }

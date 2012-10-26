@@ -28,7 +28,7 @@ import vibe.utils.memory;
 import vibe.utils.string;
 import vibe.core.file;
 
-import std.algorithm : countUntil, min;
+import std.algorithm : countUntil, map, min;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -48,23 +48,24 @@ public import std.variant;
 /**
 	Starts a HTTP server listening on the specified port.
 
-	'request_task' will be called for each HTTP request that is made. The
-	'res' parameter of the callback then has to be filled with the response
+	request_handler will be called for each HTTP request that is made. The
+	res parameter of the callback then has to be filled with the response
 	data.
 	
-	The 'ip4_addr' or 'ip6_addr' parameters can be used to specify the network
-	interface on which the server socket is supposed to listen for connections.
-	By default, all IPv4 and IPv6 interfaces will be used.
-	
-	request_task can be either HttpServerRequestDelegate/HttpServerRequestFunction
+	request_handler can be either HttpServerRequestDelegate/HttpServerRequestFunction
 	or a class/struct with a member function 'handleRequest' that has the same
-	signature as HttpServerRequestDelegate/Function.
+	signature.
 
 	Note that if the application has been started with the --disthost command line
 	switch, listenHttp() will automatically listen on the specified VibeDist host
 	instead of locally. This allows for a seemless switch from single-host to 
 	multi-host scenarios without changing the code. If you need to listen locally,
 	use listenHttpPlain() instead.
+
+	Params:
+		settings = Customizes the HTTP servers functionality.
+		request_handler = This callback is invoked for each incoming request and is responsible
+			for generating the response.
 */
 void listenHttp(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
 {
@@ -115,7 +116,7 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 	{
 		try {
 			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
-			logInfo("Listening for HTTP requests on %s:%s", addr, settings.port);
+			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslKeyFile.length || settings.sslCertFile.length ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
@@ -342,14 +343,23 @@ class HttpServerSettings {
 	///
 	string serverString = "vibe.d/" ~ VibeVersionString;
 
-	/*
-		Log format using Apache custom log format directives. E.g. NCSA combined:
+	/** Specifies the format used for the access log.
+
+		The log format is given using the Apache server syntax. By default NCSA combined is used.
+
+		---
 		"%h - %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\""
+		---
 	*/
 	string accessLogFormat = "%h - %u %t \"%r\" %s %b \"%{Referer}i\" \"%{User-Agent}i\"";
+
+	/// Spefifies the name of a file to which access log messages are appended.
 	string accessLogFile = "";
+
+	/// If set, access log entries will be output to the console.
 	bool accessLogToConsole = false;
 
+	/// Returns a duplicate of the settings object.
 	@property HttpServerSettings dup()
 	{
 		auto ret = new HttpServerSettings;
@@ -377,6 +387,7 @@ class HttpStatusException : Exception {
 		m_status = status;
 	}
 	
+	/// The HTTP status code
 	@property int status() const { return m_status; }
 }
 
@@ -385,36 +396,96 @@ class HttpStatusException : Exception {
 */
 final class HttpServerRequest : HttpRequest {
 	public {
+		/// The address of the _peer (in IP _form)
 		string peer;
 
-		// enabled if HttpServerOption.ParseURL is set
+		/** The _path part of the URL.
+
+			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+		*/
 		string path;
+
+		/** The user name part of the URL, if present.
+
+			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+		*/
 		string username;
+
+		/** The _password part of the URL, if present.
+
+			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+		*/
 		string password;
+
+		/** The _query string part of the URL.
+
+			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+		*/
 		string queryString;
 
-		// enabled if HttpServerOption.ParseCookies is set
+		/** Contains the list of _cookies that are stored on the client.
+
+			Remarks: This field is only set if HttpServerOption.ParseCookies is set.
+		*/
 		string[string] cookies;
 		
-		// enabled if HttpServerOption.ParseQueryString is set
+		/** Contains all _form fields supplied using the _query string.
+
+			Remarks: This field is only set if HttpServerOption.ParseQueryString is set.
+		*/
 		string[string] query;
-		// filled by certain middleware (vibe.http.router)
+
+		/** A map of general parameters for the request.
+
+			This map is supposed to be used by middleware functionality to store
+			information for later stages. For example vibe.http.router.UrlRouter uses this map
+			to store the value of any named placeholders.
+		*/
 		string[string] params;
 
-		// body
-		InputStream bodyReader;
-		ubyte[] data;
-		Json json; // only set if HttpServerOption.ParseJsonBoxy is set
-		string[string] form; // only set if HttpServerOption.ParseFormBody is set
-		FilePart[string] files; // only set if HttpServerOption.ParseFormBody is set
+		/** Supplies the request body as a stream.
 
-		/*
-			body types:
-				x-form-data
-				json
-				multi-part/files
+			If the body has not already been read because one of the body parsers has
+			processed it (e.g. HttpServerOption.ParseFormBody), it can be read from
+			this stream.
 		*/
+		InputStream bodyReader;
 
+		/** Contains the parsed Json for a JSON request.
+
+			Remarks:
+				This field is only set if HttpServerOption.ParseJsonBody is set.
+
+				A JSON request must have the Content-Type "application/json".
+		*/
+		Json json;
+
+		/** Contains the parsed parameters of a HTML POST _form request.
+
+			Remarks:
+				This field is only set if HttpServerOption.ParseFormBody is set.
+
+				A form request must either have the Content-Type
+				"application/x-www-form-urlencoded" or "multipart/form-data".
+		*/
+		string[string] form;
+
+		/** Contains information about any uploaded file for a HTML _form request.
+
+			Remarks:
+				This field is only set if HttpServerOption.ParseFormBody is set amd
+				if the Content-Type is "multipart/form-data".
+		*/
+		FilePart[string] files;
+
+		/** The current Session object.
+
+			This field is set if HttpServerResponse.startSession() has been called
+			on a previous response and if the client has sent back the matching
+			cookie.
+
+			Remarks: Requires the HttpServerOption.ParseCookies option.
+		*/
 		Session session;
 	}
 	private {
@@ -426,15 +497,21 @@ final class HttpServerRequest : HttpRequest {
 		m_timeCreated = Clock.currTime().toUTC();
 	}
 
-	@property SysTime timeCreated() {
-		return m_timeCreated;
-	}
+	@property inout(SysTime) timeCreated() inout { return m_timeCreated; }
 
 	MultiPart nextPart()
 	{
 		assert(false);
 	}
 
+	/** The relative path the the root folder.
+
+		Using this function instead of absolute URLs for embedded links can be
+		useful to avoid dead link when the site is piped through a
+		reverse-proxy.
+
+		The returned string always ends with a slash.
+	*/
 	@property string rootDir() const {
 		if( path.length == 0 ) return "./";
 		auto depth = count(path[1 .. $], '/');
@@ -470,18 +547,24 @@ final class HttpServerResponse : HttpResponse {
 		m_requestAlloc = req_alloc;
 	}
 	
+	@property SysTime timeFinalized() { return m_timeFinalized; }
+
+	/** Determines if the HTTP header has already been written.
+	*/
 	@property bool headerWritten() const { return m_headerWritten; }
 
+	/** Determines if the response does not need a body.
+	*/
 	bool isHeadResponse() const { return m_isHeadResponse; }
 
-	/// Writes the hole body of the response at once.
+	/// Writes the hole response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
 		if( content_type ) headers["Content-Type"] = content_type;
 		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", data.length);
 		bodyWriter.write(data);
 	}
-
+	/// ditto
 	void writeBody(string data, string content_type = "text/plain")
 	{
 		writeBody(cast(ubyte[])data, content_type);
@@ -569,6 +652,8 @@ final class HttpServerResponse : HttpResponse {
 		bodyWriter.write("redirecting...");
 	}
 
+	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
+	*/
 	Stream switchProtocol(string protocol) {
 		statusCode = HttpStatus.SwitchingProtocols;
 		headers["Upgrade"] = protocol;
@@ -640,7 +725,7 @@ final class HttpServerResponse : HttpResponse {
 		parseDietFileCompat!(template_file, TYPES_AND_NAMES)(bodyWriter, args);
 	}
 
-	/// Finalizes the response. This is called automatically by the server.
+	// Finalizes the response. This is called automatically by the server.
 	private void finalize() 
 	{
 		if( m_bodyWriter ) m_bodyWriter.finalize();
@@ -648,7 +733,6 @@ final class HttpServerResponse : HttpResponse {
 		m_conn.flush();
 		m_timeFinalized = Clock.currTime().toUTC();
 	}
-	@property SysTime timeFinalized() { return m_timeFinalized; }
 
 	private void writeHeader()
 	{
@@ -995,12 +1079,12 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		if( settings.options & HttpServerOption.ParseFormBody ){
 			auto ptype = "Content-Type" in req.headers;				
-			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader);
+			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHttpHeaderLineLength);
 		}
 
 		if( settings.options & HttpServerOption.ParseJsonBody ){
 			auto ptype = "Content-Type" in req.headers;				
-			if( ptype && *ptype == "application/json" ){
+			if( ptype && split(*ptype, ";").map!(a => a.strip())().startsWith("application/json") ){
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				req.json = parseJson(bodyStr);
 			}

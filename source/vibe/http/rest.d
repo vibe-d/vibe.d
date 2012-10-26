@@ -159,30 +159,6 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 	}
 }
 
-/**
-	Generates a form based interface to the given instance.
-
-	Each function is callable with either GET or POST using form encoded parameters. Complex
-	parameters are encoded as JSON strings.
-
-	Note that this function is currently not fully implemented.
-*/
-void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
-		MethodStyle style = MethodStyle.Unaltered)
-{
-	string url(string name){
-		return url_prefix ~ adjustMethodStyle(name, style);
-	}
-
-	foreach( method; __traits(allMembers, T) ){
-		foreach( overload; MemberFunctionsTuple!(T, method) ){
-			auto handler = formMethodHandler(overload);
-			router.get(url(method), handler);
-			router.post(url(method), handler);
-		}
-	}
-}
-
 
 /**
 	Implements the given interface by forwarding all public methods to a REST server.
@@ -237,13 +213,15 @@ class RestInterfaceClient(I) : I
 
 	alias I BaseInterface;
 
+	/** Creates a new REST implementation of I
+	*/
 	this(string base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = Url.parse(base_url);
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
-
+	/// ditto
 	this(Url base_url, MethodStyle style = MethodStyle.LowerUnderscored)
 	{
 		m_baseUrl = base_url;
@@ -251,7 +229,10 @@ class RestInterfaceClient(I) : I
 		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
 
+	/** An optional request filter that allows to modify each request before it is made.
+	*/
 	@property RequestFilter requestFilter() { return m_requestFilter; }
+	/// ditto
 	@property void requestFilter(RequestFilter v) {
 		m_requestFilter = v;
 		mixin(generateRestInterfaceSubInterfaceRequestFilter!I);
@@ -367,9 +348,11 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 		static immutable param_names = parameterNames!FT();
 		foreach( i, P; ParameterTypes ){
 			static if( i == 0 && param_names[i] == "id" ){
+				logDebug("id %s", req.params["id"]);
 				params[i] = fromRestString!P(req.params["id"]);
 			} else static if( param_names[i].startsWith("_") ){
 				static if( param_names[i] != "_dummy"){
+					logDebug("param %s %s", param_names[i], req.params[param_names[i][1 .. $]]);
 					params[i] = fromRestString!P(req.params[param_names[i][1 .. $]]);
 				}
 			} else {
@@ -400,17 +383,6 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 			// TODO: better error description!
 			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString())], HttpStatus.InternalServerError);
 		}
-	}
-
-	return &handler;
-}
-
-/// private
-private HttpServerRequestDelegate formMethodHandler(T)(T func)
-{
-	void handler(HttpServerRequest req, HttpServerResponse res)
-	{
-		assert(false, "TODO!");
 	}
 
 	return &handler;
@@ -691,7 +663,14 @@ private template fullyQualifiedTypeNameImpl(T,
             ~ parametersTypeString!(T)
             ~ ")"
         );
-    }   
+    }
+    else static if (isPointer!T)
+    {
+    	enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(PointerTarget!T, qualifiers)
+            ~ "*"
+    	);
+    }
     else
         // In case something is forgotten
         static assert(0, "Unrecognized type " ~ T.stringof ~ ", can't convert to fully qualified string");

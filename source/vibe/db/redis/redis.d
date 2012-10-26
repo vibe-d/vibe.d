@@ -33,7 +33,6 @@ final class RedisReply {
 				break;
 			case '-':
 				throw new Exception(ln[ 1 .. $ ]);
-				break;			
 			case ':':
 				m_data = cast(ubyte[])ln[ 1 .. $ ];
 				break;

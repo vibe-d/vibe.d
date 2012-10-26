@@ -59,7 +59,7 @@ import std.traits;
 /**
 	Represents a single JSON value.
 
-	JSON values can have one of the types defined in the JSON.Type enum. They
+	Json values can have one of the types defined in the Json.Type enum. They
 	behave mostly like values in ECMA script in the way that you can
 	transparently perform operations on them. However, strict typechecking is
 	done, so that operations between differently typed JSON values will throw
@@ -182,6 +182,7 @@ struct Json {
 		checkType!(Json[string])();
 		if( auto pv = key in m_object ) return *pv;
 		Json ret = Json.Undefined;
+		ret.m_string = key;
 		return ret;
 	}
 	/// ditto
@@ -192,6 +193,7 @@ struct Json {
 		m_object[key] = Json();
 		m_object[key].m_type = Type.Undefined; // DMDBUG: AAs are teh $H1T!!!11
 		assert(m_object[key].type == Type.Undefined);
+		m_object[key].m_string = key;
 		return m_object[key];
 	}
 
@@ -646,7 +648,9 @@ struct Json {
 
 	private void checkType(T)()
 	const {
-		enforce(typeId!T == m_type, "Trying to access JSON of type "~.to!string(m_type)~" as "~T.stringof~".");
+		string dbg;
+		if( m_type == Type.Undefined ) dbg = " field "~m_string;
+		enforce(typeId!T == m_type, "Trying to access JSON"~dbg~" of type "~.to!string(m_type)~" as "~T.stringof~".");
 	}
 
 	/*invariant()
@@ -735,7 +739,7 @@ Json parseJson(R)(ref R range, int* line = null)
 				Json itm = parseJson(range, line);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforce(range.length > 0 && (range[0] == ',' || range[0] == '}'), "Expected '}' or ','.");
+				enforce(range.length > 0 && (range[0] == ',' || range[0] == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
 			}
 			range = range[1 .. $];
 			ret = obj;
@@ -780,19 +784,36 @@ unittest {
 
 	$(DL
 		$(DT Json)            $(DD Used as-is)
-		$(DT null)            $(DD Converted to Bson.Type.Null)
-		$(DT bool)            $(DD Converted to Bson.Type.Bool)
-		$(DT float, double)   $(DD Converted to Bson.Type.Double)
-		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Bson.Type.Int)
-		$(DT string)          $(DD Converted to Bson.Type.String)
-		$(DT T[])             $(DD Converted to Bson.Type.Array)
-		$(DT T[string])       $(DD Converted to Bson.Type.Object)
-		$(DT struct)          $(DD Converted to Bson.Type.Object)
-		$(DT class)           $(DD Converted to Bson.Type.Object or Bson.Type.Null)
+		$(DT null)            $(DD Converted to Json.Type.Null)
+		$(DT bool)            $(DD Converted to Json.Type.Bool)
+		$(DT float, double)   $(DD Converted to Json.Type.Double)
+		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Json.Type.Int)
+		$(DT string)          $(DD Converted to Json.Type.String)
+		$(DT T[])             $(DD Converted to Json.Type.Array)
+		$(DT T[string])       $(DD Converted to Json.Type.Object)
+		$(DT struct)          $(DD Converted to Json.Type.Object)
+		$(DT class)           $(DD Converted to Json.Type.Object or Json.Type.Null)
 	)
 
 	All entries of an array or an associative array, as well as all R/W properties and
-	all fields of a struct/class are recursively serialized using the same rules.
+	all public fields of a struct/class are recursively serialized using the same rules.
+
+	Fields ending with an underscore will have the last underscore stripped in the
+	serialized output. This makes it possible to use fields with D keywords as their name
+	by simply appending an underscore.
+
+	The following methods can be used to customize the serialization of structs/classes:
+
+	---
+	Json toJson() const;
+	static T fromJson(Json src);
+
+	string toString() const;
+	static T fromString(string src);
+	---
+
+	The methods will have to be defined in pairs. The first pair that is implemented by
+	the type will be used for serialization (i.e. toJson overrides toString).
 */
 Json serializeToJson(T)(T value)
 {
@@ -813,6 +834,8 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
+	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+		return value.toJson();
 	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
 		return Json(value.toString());
 	} else static if( is(T == struct) ){
@@ -820,7 +843,7 @@ Json serializeToJson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToJson(mv);
+				ret[underscoreStrip(m)] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
@@ -830,7 +853,7 @@ Json serializeToJson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToJson(mv);
+				ret[underscoreStrip(m)] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
@@ -867,15 +890,17 @@ void deserializeJson(T)(ref T dst, Json src)
 			deserializeJson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
+		dst = T.fromJson(src);
 	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
 		dst = T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeJson(__traits(getMember, dst, m), src[m]);
+				deserializeJson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeJson(v, src[m]);
+				deserializeJson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -884,10 +909,10 @@ void deserializeJson(T)(ref T dst, Json src)
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeJson(__traits(getMember, dst, m), src[m]);
+				deserializeJson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)()) v;
-				deserializeJson(v, src[m]);
+				deserializeJson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -1128,7 +1153,7 @@ private string skipNumber(ref string s, out bool is_float)
 		if( idx < s.length && (s[idx] == '+' || s[idx] == '-') ) idx++;
 		enforce( idx < s.length && isDigit(s[idx]), "Expected exponent." ~ s[0 .. idx]);
 		idx++;
-		while( idx < s.length && isDigit(idx) ) idx++;
+		while( idx < s.length && isDigit(s[idx]) ) idx++;
 	}
 
 	string ret = s[0 .. idx];
@@ -1168,3 +1193,9 @@ private void skipWhitespace(ref string s, int* line = null)
 
 /// private
 private bool isDigit(T)(T ch){ return ch >= '0' && ch <= '9'; }
+
+private string underscoreStrip(string field_name)
+{
+	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
+	else return field_name[0 .. $-1];
+}

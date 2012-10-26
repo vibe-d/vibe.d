@@ -29,7 +29,7 @@ class MongoDB {
 
 	package this(string host, ushort port = MongoConnection.defaultPort)
 	{
-		this("mongodb://" ~ host ~ ":" ~ to!string(port));
+		this("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
 	}
 	
 	/**
@@ -52,6 +52,9 @@ class MongoDB {
 				ret.connect();
 				return ret;
 			});
+
+		// force a connection to cause an exception for wrong URLs
+		lockConnection();
 	}
 
 	/**

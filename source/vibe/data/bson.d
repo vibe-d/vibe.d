@@ -106,11 +106,11 @@ struct Bson {
 			case Type.Bool: m_data = m_data[0 .. 1]; break;
 			case Type.Date: m_data = m_data[0 .. 8]; break;
 			case Type.Null: m_data = null; break;
-			case Type.Regex: m_data = m_data[0 .. 0]; assert(false); break;
-			case Type.DBRef: m_data = m_data[0 .. 0]; assert(false); break;
+			case Type.Regex: m_data = m_data[0 .. 0]; assert(false);
+			case Type.DBRef: m_data = m_data[0 .. 0]; assert(false);
 			case Type.Code: m_data = m_data[0 .. 4 + fromBsonData!int(m_data)]; break;
 			case Type.Symbol: m_data = m_data[0 .. 4 + fromBsonData!int(m_data)]; break;
-			case Type.CodeWScope: m_data = m_data[0 .. 0]; assert(false); break;
+			case Type.CodeWScope: m_data = m_data[0 .. 0]; assert(false);
 			case Type.Int: m_data = m_data[0 .. 4]; break;
 			case Type.Timestamp: m_data = m_data[0 .. 8]; break;
 			case Type.Long: m_data = m_data[0 .. 8]; break;
@@ -304,15 +304,12 @@ struct Bson {
 	/// ditto
 	@property T get(T)()
 	const {
-		static if( is(this == const) && !is(T == const) || is(T == immutable) ){
-			static assert(false, "Invalid const combination.");
-		}
 		static if( is(T == double) ){ checkType(Type.Double); return fromBsonData!double(m_data); }
 		else static if( is(T == string) ){
 			checkType(Type.String, Type.Code, Type.Symbol);
 			return cast(string)m_data[4 .. 4+fromBsonData!int(m_data)-1];
 		}
-		else static if( is(Unqual!T == Bson[string]) || is(Unqual!T == const(Bson)[string])  ){
+		else static if( is(Unqual!T == Bson[string]) || is(Unqual!T == const(Bson)[string]) ){
 			checkType(Type.Object);
 			Bson[string] ret;
 			auto d = m_data[4 .. $];
@@ -362,7 +359,10 @@ struct Bson {
 		else static if( is(T == int) ){ checkType(Type.Int); return fromBsonData!int(m_data); }
 		else static if( is(T == BsonTimestamp) ){ checkType(Type.Timestamp); return BsonTimestamp(fromBsonData!long(m_data)); }
 		else static if( is(T == long) ){ checkType(Type.Long); return fromBsonData!long(m_data); }
-		else static if( is(T == Json) ){ return bsonToJson(this); }
+		else static if( is(T == Json) ){
+			pragma(msg, "Bson.get!Json() and Bson.opCast!Json() will soon be removed. Please use Bson.toJson() instead.");
+			return this.toJson();
+		}
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
 
@@ -389,6 +389,53 @@ struct Bson {
 		}
 		assert(false);
 	}
+
+	/** Converts a given JSON value to the corresponding BSON value.
+	*/
+	static Bson fromJson(in Json value)
+	{
+		auto app = appender!bdata_t();
+		auto tp = writeBson(app, value);
+		return Bson(tp, app.data);
+	}
+
+	/** Converts a BSON value to a JSON value.
+		
+		All BSON types that cannot be exactly represented as JSON, will
+		be converted to a string.
+	*/
+	Json toJson()
+	const {
+		switch( this.type ){
+			default: assert(false);
+			case Bson.Type.Double: return Json(get!double());
+			case Bson.Type.String: return Json(get!string());
+			case Bson.Type.Object:
+				Json[string] ret;
+				foreach( k, v; get!(Bson[string])() )
+					ret[k] = v.toJson();
+				return Json(ret);
+			case Bson.Type.Array:
+				auto ret = new Json[this.length];
+				foreach( i, v; get!(Bson[])() )
+					ret[i] = v.toJson();
+				return Json(ret);
+			case Bson.Type.BinData: return Json(cast(string)Base64.encode(get!BsonBinData.rawData));
+			case Bson.Type.ObjectID: return Json(get!BsonObjectID().toString());
+			case Bson.Type.Bool: return Json(get!bool());
+			case Bson.Type.Date: return Json(get!BsonDate.toString());
+			case Bson.Type.Null: return Json(null);
+			case Bson.Type.Regex: assert(false, "TODO");
+			case Bson.Type.DBRef: assert(false, "TODO");
+			case Bson.Type.Code: return Json(get!string());
+			case Bson.Type.Symbol: return Json(get!string());
+			case Bson.Type.CodeWScope: assert(false, "TODO");
+			case Bson.Type.Int: return Json(get!int());
+			case Bson.Type.Timestamp: return Json(get!BsonTimestamp().m_time);
+			case Bson.Type.Long: return Json(get!long());
+		}
+	}
+
 
 	/** Allows accessing fields of a BSON object using [].
 
@@ -776,11 +823,31 @@ struct BsonRegex {
 
 	All entries of an array or an associative array, as well as all R/W properties and
 	all fields of a struct/class are recursively serialized using the same rules.
+
+	Fields ending with an underscore will have the last underscore stripped in the
+	serialized output. This makes it possible to use fields with D keywords as their name
+	by simply appending an underscore.
+
+	The following methods can be used to customize the serialization of structs/classes:
+
+	---
+	Bson toBson() const;
+	static T fromBson(Bson src);
+
+	Json toJson() const;
+	static T fromJson(Json src);
+
+	string toString() const;
+	static T fromString(string src);
+	---
+
+	The methods will have to be defined in pairs. The first pair that is implemented by
+	the type will be used for serialization (i.e. toBson overrides toJson).
 */
 Bson serializeToBson(T)(T value)
 {
 	static if( is(T == Bson) ) return value;
-	else static if( is(T == Json) ) return jsonToBson(value);
+	else static if( is(T == Json) ) return Bson.fromJson(value);
 	else static if( is(T == BsonBinData) ) return Bson(value);
 	else static if( is(T == BsonObjectID) ) return Bson(value);
 	else static if( is(T == BsonDate) ) return Bson(value);
@@ -803,12 +870,18 @@ Bson serializeToBson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToBson(value);
 		return Bson(ret);
+	} else static if( __traits(compiles, value = T.fromBson(value.toBson())) ){
+		return value.toBson();
+	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+		return Bson.fromJson(value.toJson());
+	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
+		return Bson(value.toString());
 	} else static if( is(T == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToBson(mv);
+				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
@@ -818,12 +891,12 @@ Bson serializeToBson(T)(T value)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
 				auto mv = __traits(getMember, value, m);
-				ret[m] = serializeToBson(mv);
+				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
 		}
 		return Bson(ret);
 	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
+		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
 	}
 }
 
@@ -836,7 +909,7 @@ Bson serializeToBson(T)(T value)
 void deserializeBson(T)(ref T dst, Bson src)
 {
 	static if( is(T == Bson) ) dst = src;
-	else static if( is(T == Json) ) dst = bsonToJson(value);
+	else static if( is(T == Json) ) dst = src.toJson();
 	else static if( is(T == BsonBinData) ) dst = cast(T)src;
 	else static if( is(T == BsonObjectID) ) dst = cast(T)src;
 	else static if( is(T == BsonDate) ) dst = cast(T)src;
@@ -859,13 +932,19 @@ void deserializeBson(T)(ref T dst, Bson src)
 			deserializeBson(val, value);
 			dst[key] = val;
 		}
+	} else static if( __traits(compiles, dst = T.fromBson(dst.toBson())) ){
+		dst = T.fromBson(src);
+	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
+		dst = T.fromJson(src.toJson());
+	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
+		dst = T.fromString(cast(string)src);
 	} else static if( is(T == struct) ){
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[m]);
+				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[m]);
+				deserializeBson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
@@ -874,15 +953,15 @@ void deserializeBson(T)(ref T dst, Bson src)
 		dst = new T;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[m]);
+				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
 			} else static if( isRWField!(T, m) ){
 				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[m]);
+				deserializeBson(v, src[underscoreStrip(m)]);
 				__traits(getMember, dst, m) = v;
 			}
 		}
 	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
+		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
 	}
 }
 
@@ -929,6 +1008,17 @@ unittest {
 private Bson.Type writeBson(R)(ref R dst, in Json value)
 	if( isOutputRange!(R, ubyte) )
 {
+    static immutable uint[] JsonIDToBsonID = [
+        Bson.Type.Undefined,
+        Bson.Type.Null,
+        Bson.Type.Bool,
+        Bson.Type.Int,
+        Bson.Type.Double,
+        Bson.Type.String,
+        Bson.Type.Array,
+        Bson.Type.Object
+    ];
+    
 	final switch(value.type){
 		case Json.Type.Undefined:
 			return Bson.Type.Undefined;
@@ -949,88 +1039,47 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			dst.put(toBsonData(cast(double)value));
 			return Bson.Type.Double;
 		case Json.Type.String:
-			dst.put(toBsonData(cast(uint)value.length));
+			dst.put(toBsonData(cast(uint)value.length+1));
 			dst.put(cast(bdata_t)cast(string)value);
+			dst.put(cast(ubyte)0);
 			return Bson.Type.String;
 		case Json.Type.Array:
 			auto app = appender!bdata_t();
 			foreach( size_t i, ref const Json v; value ){
-				app.put(cast(ubyte)v.type);
+				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
 				putCString(app, to!string(i));
-				writeBson(dst, v);
+				writeBson(app, v);
 			}
 
-			dst.put(toBsonData(cast(int)app.data.length));
+            dst.put(toBsonData(cast(int)(app.data.length + int.sizeof + 1)));
 			dst.put(app.data);
 			dst.put(cast(ubyte)0);
 			return Bson.Type.Array;
 		case Json.Type.Object:
 			auto app = appender!bdata_t();
 			foreach( string k, ref const Json v; value ){
-				app.put(cast(ubyte)v.type);
+				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
 				putCString(app, k);
-				writeBson(dst, v);
+				writeBson(app, v);
 			}
 
-			dst.put(toBsonData(cast(int)app.data.length));
+			dst.put(toBsonData(cast(int)(app.data.length + int.sizeof + 1)));
 			dst.put(app.data);
 			dst.put(cast(ubyte)0);
 			return Bson.Type.Object;
 	}
 }
 
-private Json bsonToJson(Bson value)
+unittest
 {
-	switch( value.type ){
-		default: assert(false);
-		case Bson.Type.Double: return Json(cast(double)value);
-		case Bson.Type.String: return Json(cast(string)value);
-		case Bson.Type.Object:
-			Json[string] ret;
-			foreach( k, v; cast(Bson[string])value )
-				ret[k] = bsonToJson(v);
-			return Json(ret);
-		case Bson.Type.Array:
-			auto ret = new Json[value.length];
-			foreach( i, v; cast(Bson[])value )
-				ret[i] = bsonToJson(v);
-			return Json(ret);
-		case Bson.Type.BinData: return Json(cast(string)Base64.encode(value.get!BsonBinData.rawData));
-		case Bson.Type.ObjectID: return Json((cast(BsonObjectID)value).toString());
-		case Bson.Type.Bool: return Json(cast(bool)value);
-		case Bson.Type.Date: return Json((cast(BsonDate)value).m_time);
-		case Bson.Type.Null: return Json(null);
-		case Bson.Type.Regex: assert(false, "TODO");
-		case Bson.Type.DBRef: assert(false, "TODO");
-		case Bson.Type.Code: return Json(cast(string)value);
-		case Bson.Type.Symbol: return Json(cast(string)value);
-		case Bson.Type.CodeWScope: assert(false, "TODO");
-		case Bson.Type.Int: return Json(cast(int)value);
-		case Bson.Type.Timestamp: return Json((cast(BsonTimestamp)value).m_time);
-		case Bson.Type.Long: return Json(cast(long)value);
-	}
-}
-
-private Bson jsonToBson(Json value)
-{
-	final switch( value.type ){
-		case Json.Type.Undefined: return Bson();
-		case Json.Type.Null: return Bson(null);
-		case Json.Type.Bool: return Bson(cast(bool)value);
-		case Json.Type.Int: return Bson(cast(long)value);
-		case Json.Type.Float: return Bson(cast(double)value);
-		case Json.Type.String: return Bson(cast(string)value);
-		case Json.Type.Array:
-			Bson[] ret = new Bson[value.length];
-			foreach( size_t i, v; value )
-				ret[i] = jsonToBson(v);
-			return Bson(ret);
-		case Json.Type.Object:
-			Bson[string] ret;
-			foreach( string k, v; value )
-				ret[k] = jsonToBson(v);
-			return Bson(ret);
-	}
+    Json jsvalue = parseJsonString("{\"key\" : \"Value\"}");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
+    
+    jsvalue = parseJsonString("{\"key\" : [{\"key\" : \"Value\"}, {\"key2\" : \"Value2\"}] }");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
+    
+    jsvalue = parseJsonString("[ 1 , 2 , 3]");
+    assert(serializeToBson(jsvalue).toJson() == jsvalue);
 }
 
 private string skipCString(ref bdata_t data)
@@ -1074,5 +1123,11 @@ ubyte[] toBigEndianData(T)(T v)
 	static ubyte[T.sizeof] ret;
 	ret = nativeToBigEndian(v);
 	return ret;
+}
+
+private string underscoreStrip(string field_name)
+{
+	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
+	else return field_name[0 .. $-1];
 }
 

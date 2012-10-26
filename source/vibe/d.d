@@ -1,5 +1,5 @@
 /**
-	vibe.d is the default module for vibe.d based applications.
+	Provides the vibe.d API and a default main() function for the application.
 
 	Applications that import 'vibe.d' will have most of the vibe API available and will be provided
 	with an implicit application entry point (main). The resulting application parses command line

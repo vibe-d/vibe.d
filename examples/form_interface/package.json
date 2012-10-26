@@ -1,0 +1,7 @@
+{
+    "name": "form-interface-example",
+	"description": "Uses the registerFormInterface function for making functions available to JavaScript and to Diet templates.",
+    "authors": [ "Robert Klotzner" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}
