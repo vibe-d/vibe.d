@@ -229,11 +229,11 @@ class WebSocket {
 	@property bool connected() { return m_conn.connected; }
 	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead; }
 
-	void send(ubyte[] data)
+	void send(string data)
 	{
-		send( (message) { message.write(data); });
+		send( (message) { message.write(cast(ubyte[])data); });
 	}
-	void sendBinary(ubyte[] data)
+	void send(ubyte[] data)
 	{
 		send( (message) { message.write(data); }, FrameOpcode.Binary );
 	}
