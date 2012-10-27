@@ -271,7 +271,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 	parameter of type HttpServerRequest and one of type HttpServerResponse), and
 	all the values found in args. 
 
-	If any supplied argument could not be applied or the method has
+	If any supplied argument could not be applied or the method 
 	requires more arguments than given, the method returns false and does not call
 	func.  In this case error gets filled with some string describing which
 	parameters could not be applied. Exceptions are not used in this situation,
