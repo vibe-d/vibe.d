@@ -174,6 +174,8 @@ class IncommingWebSocketMessage : InputStream {
 
 	@property bool dataAvailableForRead() { return true; }
 
+	@property FrameOpcode frameOpcode() { return m_currentFrame.opcode; }
+
 	const(ubyte)[] peek() { return m_currentFrame.payload; }
 
 	void read(ubyte[] dst)
@@ -199,10 +201,8 @@ class IncommingWebSocketMessage : InputStream {
 				case FrameOpcode.Continuation:
 				case FrameOpcode.Text:
 				case FrameOpcode.Binary:
-					m_currentFrame = frame;
-					break;
 				case FrameOpcode.Close:
-					logInfo("Received closing frame");
+					m_currentFrame = frame;
 					break;
 				case FrameOpcode.Ping:
 					frame.opcode = FrameOpcode.Pong;
@@ -218,15 +218,17 @@ class IncommingWebSocketMessage : InputStream {
 class WebSocket {
 	private {
 		TcpConnection m_conn;
+		bool m_sentCloseFrame;
 	}
 
 	this(Stream conn)
 	{
 		m_conn = cast(TcpConnection)conn;
+		m_sentCloseFrame = false;
 		assert(m_conn);
 	}
 
-	@property bool connected() { return m_conn.connected; }
+	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
 	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead; }
 
 	void send(string data)
@@ -238,8 +240,16 @@ class WebSocket {
 		send( (message) { message.write(data); }, FrameOpcode.Binary );
 	}
 	void send(void delegate(OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.Text) {
+		if(m_sentCloseFrame) { throw new Exception("closed connection"); }
 		auto message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
 		sender(message);
+	}
+	void close() {
+		Frame frame;
+		frame.opcode = FrameOpcode.Close;
+		frame.fin = true;
+		frame.writeFrame(m_conn);
+		m_sentCloseFrame = true;
 	}
 
 	ubyte[] receive() {
@@ -251,7 +261,11 @@ class WebSocket {
 	}
 	void receive(void delegate(IncommingWebSocketMessage) receiver) {
 		auto message = new IncommingWebSocketMessage(m_conn);
-		receiver(message);
+		if(message.frameOpcode == FrameOpcode.Close) {
+			if(!m_sentCloseFrame) close();
+			m_conn.close();
+		}
+		else receiver(message);
 	}
 }
 
