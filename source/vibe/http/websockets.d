@@ -218,18 +218,28 @@ class IncommingWebSocketMessage : InputStream {
 class WebSocket {
 	private {
 		TcpConnection m_conn;
-		bool m_sentCloseFrame;
+		bool m_sentCloseFrame = false;
+		IncommingWebSocketMessage m_nextMessage = null;
 	}
 
 	this(Stream conn)
 	{
 		m_conn = cast(TcpConnection)conn;
-		m_sentCloseFrame = false;
 		assert(m_conn);
 	}
 
-	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
-	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead; }
+	@property bool connected() {
+		if(m_nextMessage is null && m_conn.dataAvailableForRead()){
+			m_nextMessage = new IncommingWebSocketMessage(m_conn);
+			if(m_nextMessage.frameOpcode == FrameOpcode.Close) {
+				if(!m_sentCloseFrame) close();
+				m_conn.close();
+				return false;
+			}
+		}
+		return m_conn.connected && !m_sentCloseFrame;
+	}
+	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead || m_nextMessage !is null; }
 
 	void send(string data)
 	{
@@ -259,13 +269,11 @@ class WebSocket {
 		});
 		return ret;
 	}
+
 	void receive(void delegate(IncommingWebSocketMessage) receiver) {
-		auto message = new IncommingWebSocketMessage(m_conn);
-		if(message.frameOpcode == FrameOpcode.Close) {
-			if(!m_sentCloseFrame) close();
-			m_conn.close();
-		}
-		else receiver(message);
+		if(m_nextMessage is null && connected() == false) { throw new Exception("closed connection"); }
+		receiver(m_nextMessage);
+		m_nextMessage = null;
 	}
 }
 
