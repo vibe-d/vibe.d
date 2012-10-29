@@ -2,7 +2,7 @@
 set -e
 
 # hack for nightbuild server to work on windows
-if [ $OSTYPE == "msys" ];
+if [ "$OSTYPE" = "msys" ];
 then
     VIBECMD=$(echo $0 | sed 's/\//\\/g').cmd
 	cmd.exe //C $VIBECMD $*

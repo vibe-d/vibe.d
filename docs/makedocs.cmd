@@ -5,3 +5,6 @@ rem >nul 2>&1
 del *.html
 ..\..\ddox\app filter docs.json --min-protection=Public --ex deimos. --ex vibe.core.drivers. --ex etc. --ex std. --ex core.
 copy docs.json ..\..\vibed.org\docs.json
+
+..\..\ddox\app generate-html docs.json .
+xcopy /e /y ..\..\ddox\public\* .

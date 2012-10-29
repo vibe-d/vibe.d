@@ -119,12 +119,14 @@ struct Frame {
 class OutgoingWebSocketMessage : OutputStream {
 	private {
 		Stream m_conn;
+		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
 	}
 
-	this( Stream conn ) {
+	this( Stream conn, FrameOpcode frameOpcode ) {
 		assert(conn !is null);
 		m_conn = conn;
+		m_frameOpcode = frameOpcode;
 	}
 
 	void write(in ubyte[] bytes, bool do_flush = true) {
@@ -133,7 +135,7 @@ class OutgoingWebSocketMessage : OutputStream {
 	}
 	void flush() {
 		Frame frame;
-		frame.opcode = FrameOpcode.Text;
+		frame.opcode = m_frameOpcode;
 		frame.fin = true;
 		frame.payload = m_buffer.data;
 		frame.writeFrame(m_conn);
@@ -142,9 +144,9 @@ class OutgoingWebSocketMessage : OutputStream {
 	void finalize() {
 		Frame frame;
 		frame.fin = true;
-		frame.opcode = FrameOpcode.Text;
+		frame.opcode = m_frameOpcode;
 		frame.payload = m_buffer.data;
-		frame.writeFrame(m_conn);		
+		frame.writeFrame(m_conn);
 		m_buffer.clear();
 	}
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true) {
@@ -172,6 +174,8 @@ class IncommingWebSocketMessage : InputStream {
 
 	@property bool dataAvailableForRead() { return true; }
 
+	@property FrameOpcode frameOpcode() { return m_currentFrame.opcode; }
+
 	const(ubyte)[] peek() { return m_currentFrame.payload; }
 
 	void read(ubyte[] dst)
@@ -197,10 +201,8 @@ class IncommingWebSocketMessage : InputStream {
 				case FrameOpcode.Continuation:
 				case FrameOpcode.Text:
 				case FrameOpcode.Binary:
-					m_currentFrame = frame;
-					break;
 				case FrameOpcode.Close:
-					logInfo("Received closing frame");
+					m_currentFrame = frame;
 					break;
 				case FrameOpcode.Ping:
 					frame.opcode = FrameOpcode.Pong;
@@ -216,6 +218,8 @@ class IncommingWebSocketMessage : InputStream {
 class WebSocket {
 	private {
 		TcpConnection m_conn;
+		bool m_sentCloseFrame = false;
+		IncommingWebSocketMessage m_nextMessage = null;
 	}
 
 	this(Stream conn)
@@ -224,16 +228,38 @@ class WebSocket {
 		assert(m_conn);
 	}
 
-	@property bool connected() { return m_conn.connected; }
-	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead; }
+	@property bool connected() {
+		if(m_nextMessage is null && m_conn.dataAvailableForRead()){
+			m_nextMessage = new IncommingWebSocketMessage(m_conn);
+			if(m_nextMessage.frameOpcode == FrameOpcode.Close) {
+				if(!m_sentCloseFrame) close();
+				m_conn.close();
+				return false;
+			}
+		}
+		return m_conn.connected && !m_sentCloseFrame;
+	}
+	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead || m_nextMessage !is null; }
 
+	void send(string data)
+	{
+		send( (message) { message.write(cast(ubyte[])data); });
+	}
 	void send(ubyte[] data)
 	{
-		send( (message) { message.write(data); });
+		send( (message) { message.write(data); }, FrameOpcode.Binary );
 	}
-	void send(void delegate(OutgoingWebSocketMessage) sender) {
-		auto message = new OutgoingWebSocketMessage(m_conn);
+	void send(void delegate(OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.Text) {
+		if(m_sentCloseFrame) { throw new Exception("closed connection"); }
+		auto message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
 		sender(message);
+	}
+	void close() {
+		Frame frame;
+		frame.opcode = FrameOpcode.Close;
+		frame.fin = true;
+		frame.writeFrame(m_conn);
+		m_sentCloseFrame = true;
 	}
 
 	ubyte[] receive() {
@@ -243,9 +269,11 @@ class WebSocket {
 		});
 		return ret;
 	}
+
 	void receive(void delegate(IncommingWebSocketMessage) receiver) {
-		auto message = new IncommingWebSocketMessage(m_conn);
-		receiver(message);
+		if(m_nextMessage is null && connected() == false) { throw new Exception("closed connection"); }
+		receiver(m_nextMessage);
+		m_nextMessage = null;
 	}
 }
 
