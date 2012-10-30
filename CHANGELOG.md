@@ -2,7 +2,7 @@
 =========
 
 
-v0.7.9 - 2012-10-
+v0.7.9 - 2012-10-30
 -------------------
 
 ### Features and improvements ###
@@ -10,6 +10,7 @@ v0.7.9 - 2012-10-
  - Implemented an automated HTML form interface generator in `vibe.http.form` (by Robert Klotzner aka eskimor)
  - The REST interface now uses fully qualified names and local imports to resolve parameter/return types, making it much more robust (by Михаил Страшун aka mist)
  - The Diet template compiler now supports includes and recursive extensions/layouts
+ - Added support for WebSocket binary messages and closing connections (by kyubuns)
  - Implemented a directory watcher for the Win32 driver
  - Removed `vibe.textfilter.ddoc` - now in <http://github.com/rejectedsoftware/ddox>
  - Cleaned up command line handling (e.g. application parameters are now separated from vibe parameters by --)
