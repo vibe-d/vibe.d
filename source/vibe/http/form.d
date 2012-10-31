@@ -35,7 +35,7 @@ struct FilePart  {
 }
 
 /**
-	Parses the form given by 'content_type' and 'body_reader'.
+	Parses the form given by content_type and body_reader.
 */
 bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader, size_t max_line_length)
 {
@@ -152,20 +152,22 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 
 	Each function is callable with either GET or POST using form encoded
 	parameters.  All methods of I that start with "get", "query", "add", "create",
-	"post" are made available via url: url_prefix~method_name.  A method named
-	"index" will be made available via url_prefix.  All these methods might take a
+	"post" are made available via the URL url_prefix~method_name. A method named
+	"index" will be made available via url_prefix. method_name is generated from
+	the original method name ba the same rules as for
+	vibe.http.rest.registerRestInterface. All these methods might take a
 	HttpServerRequest parameter and a HttpServerResponse parameter, but don't have
 	to.
 
 	All additional parameters will be filled with available form-data fields.
-	Every parameters name has to match a form field name. The registered handler
+	Every parameter name has to match a form field name. The registered handler
 	will throw an exception if no overload is found that is compatible with all
 	available form data fields.
 
 	For a thorough example of how to use this method, see the form_interface
 	example in the examples directory.
 
-	See_Also: registerFormMethod
+	See_Also: registerFormMethod, vibe.http.rest.registerRestInterface
 
 	Params:
 		router = The router the found methods are registered with.
@@ -177,6 +179,45 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 		"/mywebapp/welcomePage/getWelcomePage" if MethodStyle is Unaltered.
 
 		style = How the url part representing the method name should be altered.
+
+	Examples:
+
+	---
+	class FrontEnd {
+		// GET /
+		void index(HttpServerResponse res)
+		{
+			res.render!("index.dt");
+		}
+
+		/// GET /files?folder=...
+		void getFiles(HttpServerRequest req, HttpServerResponse res, string folder)
+		{
+			res.render!("files.dt", req, folder);
+		}
+
+		/// POST /login
+		void login(HttpServerRequest req, HttpServerResponse res, string username,
+			string password)
+		{
+			if( username != "tester" || password != "secret" )
+				throw new HttpStatusException(HttpStatus.Unauthorized);
+			auto session = req.session;
+			if( !session ) session = res.startSession();
+			session["username"] = username;
+			res.redirect("/");
+		}
+	}
+
+	static this()
+	{
+		auto settings = new HttpServerSettings;
+		settings.port = 8080;
+		auto router = new UrlRouter;
+		registerFormInterface(router, new FrontEnd);
+		listenHttp(settings, router);
+	}
+	---
 
 */
 void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
@@ -190,12 +231,16 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 		}
 	}
 }
+
+
 /**
 	Registers just a single method.
 
 	For details see registerFormInterface. This method does exactly the
 	same, but instead of registering found methods that match a scheme it just
-	registers the method specified.  See_Also: registerFormInterface
+	registers the method specified.
+
+	See_Also: registerFormInterface
 
 	Params:
 		method = The name of the method to register. It might be
@@ -214,7 +259,7 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 }
 
 
-/**
+/*
 	Generate a HttpServerRequestDelegate from a generic function with arbitrary arguments.
 	The arbitrary arguments will be filled in with data from the form in req. For details see applyParametersFromAssociativeArrays.
 	See_Also: applyParametersFromAssociativeArrays
@@ -224,7 +269,6 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 
 	Returns: A HttpServerRequestDelegate which passes over any form data to the given function.
 */
-/// This is private because untested and I am also not sure whether it a) works and b) if it is useful at all.
 /// private
 HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(isCallable!DelegateType) 
 {
@@ -236,12 +280,13 @@ HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(
 	return &handler;
 }
 
-/**
+/*
 	Create a delegate handling form data for any matching overload of T.method.
 
 	T is some class or struct. Method some probably overloaded method of T. The returned delegate will try all overloads
 	of the passed method and will only raise an error if no conforming overload is found.
 */
+/// private
 HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 {
 	import std.stdio;
@@ -264,7 +309,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 	return &handler;
 }
 
-/**
+/*
 	Tries to apply all named arguments in args to func.
 
 	If it succeeds it calls the function with req, res (if it has one
@@ -303,7 +348,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
 	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
 }
-/// Overload which takes additional parameter for handling overloads of func.
+// Overload which takes additional parameter for handling overloads of func.
 /// private
 private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
 			alias ParameterTypeTuple!Overload ParameterTypes;
