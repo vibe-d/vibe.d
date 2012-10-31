@@ -102,3 +102,15 @@ or
     su -c ln -s /path/to/vibe/bin/vibe /usr/bin/vibe
 
 (*) Note that some current linux distributions such as Debian squeeze or CentOS 6 may only ship libevent 1.4, in this case you will have to manually compile the latest 2.0.x version.
+
+
+Installation on FreeBSD
+-----------------------
+
+Install vibe dependencies by using portrupgrade or similar like that
+
+    sudo portupgrade -PN devel/libevent2 devel/pkg-config
+
+Run setup-freebsd.sh
+
+    sudo setup-freebsd.sh
