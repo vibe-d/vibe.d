@@ -4,8 +4,8 @@ import vibe.mail.smtp;
 
 void main()
 {
-	auto settings = new SmtpClientSettings("smtp.isp.com", 25);
-	settings.useTLS = true;
+	auto settings = new SmtpClientSettings("smtp.example.com", 25);
+	settings.connectionType = SmtpConnectionType.StartTLS;
 	settings.authType = SmtpAuthType.Plain;
 	settings.username = "username";
 	settings.password = "secret";
