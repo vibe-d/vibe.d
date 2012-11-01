@@ -422,17 +422,21 @@ private struct DietCompiler {
 						break;
 					case "script":
 					case "style":
-						// pass all child lines to buildRawTag and continue with the next sibling
-						size_t next_tag = m_lineIndex+1;
-						while( next_tag < lineCount &&
-							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
-						{
-							next_tag++;
+						if( tag == "script" && next_indent_level <= level){
+							ret ~= buildHtmlNodeWriter(node_stack, tag, ln[j .. $], level, in_string, false);
+						} else {
+							// pass all child lines to buildRawTag and continue with the next sibling
+							size_t next_tag = m_lineIndex+1;
+							while( next_tag < lineCount &&
+								indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+							{
+								next_tag++;
+							}
+							ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
+								in_string, lineRange(m_lineIndex+1, next_tag));
+							m_lineIndex = next_tag-1;
+							next_indent_level = computeNextIndentLevel();
 						}
-						ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
-							in_string, lineRange(m_lineIndex+1, next_tag));
-						m_lineIndex = next_tag-1;
-						next_indent_level = computeNextIndentLevel();
 						break;
 					case "each":
 					case "for":
