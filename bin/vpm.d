@@ -137,8 +137,10 @@ int main(string[] args)
 				flags ~= getPackagesAsVersion(vpm);
 				flags ~= (Path("source") ~ appName).toNativeString();
 				flags ~= args[1 .. $];
-
-				appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ") ~ "\r\n";
+                version(Windows)
+                    appStartScript = "rdmd" ~ getDflags() ~ " " ~ join(flags, " ") ~ "\r\n";
+                version(Posix)
+				    appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ") ~ "\n";
 				if( del_exe_file.length ) appStartScript ~= "del \""~del_exe_file~"\"";
 				break;
 			case "upgrade":
