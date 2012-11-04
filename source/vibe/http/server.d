@@ -404,7 +404,7 @@ class HttpStatusException : Exception {
 */
 final class HttpServerRequest : HttpRequest {
 	public {
-		/// The address of the _peer (in IP _form)
+		/// The IP address of the client
 		string peer;
 
 		/** The _path part of the URL.
