@@ -81,7 +81,6 @@ int main(string[] args)
 		}
 
 		auto appPath = getcwd();
-		string del_exe_file;
 		string appStartScript;
 		Url registryUrl = Url.parse("http://registry.vibed.org/");
 		logDebug("Using vpm registry url '%s'", registryUrl);
@@ -116,6 +115,7 @@ int main(string[] args)
 				// Create start script, which will be used by the calling bash/cmd script.
 				// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
 				// or with "/" instead of "\"
+				string del_exe_file; // only used on windows
 				string[] flags = ["--force"];
 				if( cmd == "build" ){
 					flags ~= "--build-only";
@@ -137,11 +137,8 @@ int main(string[] args)
 				flags ~= getPackagesAsVersion(vpm);
 				flags ~= (Path("source") ~ appName).toNativeString();
 				flags ~= args[1 .. $];
-                version(Windows)
-                    appStartScript = "rdmd" ~ getDflags() ~ " " ~ join(flags, " ") ~ "\r\n";
-                version(Posix)
-				    appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ") ~ "\n";
-				if( del_exe_file.length ) appStartScript ~= "del \""~del_exe_file~"\"";
+				appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
+				if( del_exe_file.length ) appStartScript ~= "\r\ndel \""~del_exe_file~"\"";
 				break;
 			case "upgrade":
 				logInfo("Upgrading application in '%s'", appPath);
