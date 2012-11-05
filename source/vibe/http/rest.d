@@ -202,7 +202,9 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 */
 class RestInterfaceClient(I) : I
 {
-    mixin("static import "~(moduleName!I)~";");
+	//pragma(msg, "imports for "~I.stringof~":");
+	//pragma(msg, generateModuleImports!(I)());
+    mixin(generateModuleImports!I);
 
 	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
@@ -386,6 +388,31 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 	}
 
 	return &handler;
+}
+
+/// private
+private @property string generateModuleImports(I)()
+{
+	bool[string] visited;
+	string ret;
+
+	void addModule(string mod){
+		if( mod !in visited ){
+			ret ~= "static import "~mod~";\n";
+			visited[mod] = true;
+		}
+	}
+
+	foreach( method; __traits(allMembers, I) )
+		foreach( overload; MemberFunctionsTuple!(I, method) ){
+			static if( __traits(compiles, moduleName!(ReturnType!overload)))
+				addModule(moduleName!(ReturnType!overload));
+			foreach( P; ParameterTypeTuple!overload )
+				static if( __traits(compiles, moduleName!(P)))
+					addModule(moduleName!(P));
+		}
+
+	return ret;
 }
 
 /// private
