@@ -26,6 +26,12 @@ import std.c.windows.winsock;
 import std.exception;
 import std.utf;
 
+enum WM_USER_SIGNAL = WM_USER+101;
+enum WM_USER_SOCKET = WM_USER+102;
+
+/******************************************************************************/
+/* class Win32EventDriver                                                     */
+/******************************************************************************/
 
 class Win32EventDriver : EventDriver {
 	private {
@@ -34,6 +40,8 @@ class Win32EventDriver : EventDriver {
 		DriverCore m_core;
 		bool m_exit = false;
 		int m_timerIdCounter = 0;
+		SocketEventHandler[SOCKET] m_socketHandlers;
+		HANDLE[] m_registeredEvents;
 	}
 
 	this(DriverCore core)
@@ -71,24 +79,38 @@ class Win32EventDriver : EventDriver {
 		assert(m_tid == GetCurrentThreadId());
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
-			if( msg.message == WM_QUIT ) return 0;
-			if( msg.message == WM_USER_SIGNAL ){
-				auto sig = cast(Win32Signal)cast(void*)msg.lParam;
-				DWORD[Task] lst;
-				synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
-				foreach( task, tid; lst )
-					if( tid == m_tid && task )
-						m_core.resumeTask(task);
+			switch(msg.message){
+				default:
+					TranslateMessage(&msg);
+					DispatchMessageW(&msg);
+					break;
+				case WM_QUIT:
+					return 0;
+				case WM_USER_SIGNAL:
+					auto sig = cast(Win32Signal)cast(void*)msg.lParam;
+					DWORD[Task] lst;
+					synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
+					foreach( task, tid; lst )
+						if( tid == m_tid && task )
+							m_core.resumeTask(task);
+					break;
+				case WM_USER_SOCKET:
+					SOCKET sock = cast(SOCKET)msg.wParam;
+					auto evt = LOWORD(msg.lParam);
+					auto err = HIWORD(msg.lParam);
+					auto ph = sock in m_socketHandlers;
+					if( ph is null ){
+						logWarn("Socket %s has no associated handler for event %s/%s", sock, evt, err);
+					} else ph.notifySocketEvent(sock, evt, err);
+					break;
 			}
-			TranslateMessage(&msg);
-			DispatchMessageW(&msg);
 		}
 		return 0;
 	}
 
 	private void waitForEvents(uint timeout)
 	{
-		MsgWaitForMultipleObjectsEx(0, null, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
+		MsgWaitForMultipleObjectsEx(m_registeredEvents.length, m_registeredEvents.ptr, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 	}
 
 	void exitEventLoop()
@@ -111,27 +133,51 @@ class Win32EventDriver : EventDriver {
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
 	{
+		static immutable ushort[] addrfamilies = [AF_INET6, AF_INET];
+
+		NetworkAddress addr;
+		foreach( af; addrfamilies ){
+			if( family != af && family != AF_UNSPEC ) continue;
+			addr.family = af;
+
+			INT addrlen = addr.sockAddrLen;
+			auto ret = WSAStringToAddressW(toUTFz!(immutable(wchar)*)(host), af, null, addr.sockAddr, &addrlen);
+			if( ret != 0 ) continue;
+			assert(addrlen == addr.sockAddrLen);
+		}
+
 		assert(false);
 	}
 
 	Win32TcpConnection connectTcp(string host, ushort port)
 	{
 		assert(m_tid == GetCurrentThreadId());
-		//getaddrinfo();
-		//auto sock = WSASocketW(AF_INET, IPPROTO_TCP, NULL, 0, WSA_FLAG_OVERLAPPED);
-		//enforce(sock != INVALID_SOCKET, "Failed to create socket.");
-		//enforce(WSAConnect(sock, &addr, addr.sizeof, null, null, null, null), "Failed to connect to host");
-		assert(false);
+		auto addr = resolveHost(host);
+		addr.port = port;
+
+		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
+		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
+
+		auto conn = new Win32TcpConnection(this, sock);
+		conn.connect(addr);
+		return conn;	
 	}
 
 	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address)
 	{
 		assert(m_tid == GetCurrentThreadId());
+		auto addr = resolveHost(bind_address);
+		addr.port = port;
 
+		assert(false);
 	}
 
 	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
 	{
+		assert(m_tid == GetCurrentThreadId());
+		auto addr = resolveHost(bind_address);
+		addr.port = port;
+
 		assert(false);
 	}
 
@@ -147,6 +193,15 @@ class Win32EventDriver : EventDriver {
 		return new Win32Timer(this, callback);
 	}
 }
+
+interface SocketEventHandler {
+	void notifySocketEvent(SOCKET sock, WORD event, WORD error);
+}
+
+
+/******************************************************************************/
+/* class Win32Signal                                                          */
+/******************************************************************************/
 
 class Win32Signal : Signal {
 	private {
@@ -221,6 +276,11 @@ class Win32Signal : Signal {
 
 	@property int emitCount() const { return atomicLoad(m_emitCount); }
 }
+
+
+/******************************************************************************/
+/* class Win32Timer                                                           */
+/******************************************************************************/
 
 class Win32Timer : Timer {
 	private {
@@ -308,9 +368,13 @@ class Win32Timer : Timer {
 	}
 }
 
-class Win32FileStream : FileStream {
 
-	private{
+/******************************************************************************/
+/* class Win32FileStream                                                      */
+/******************************************************************************/
+
+class Win32FileStream : FileStream {
+	private {
 		Path m_path;
 		HANDLE m_handle;
 		FileMode m_mode;
@@ -507,6 +571,11 @@ class Win32FileStream : FileStream {
 	}
 }
 
+
+/******************************************************************************/
+/* class Win32Directory Watcher                                               */
+/******************************************************************************/
+
 class Win32DirectoryWatcher : DirectoryWatcher {
 	private {
 		Path m_path;
@@ -626,21 +695,174 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 	}
 }
 
-class Win32TcpConnection : TcpConnection {
+
+/******************************************************************************/
+/* class Win32UdpConnection                                                   */
+/******************************************************************************/
+
+class Win32UdpConnection : UdpConnection, SocketEventHandler {
 	private {
-		DriverCore m_driver;
+		Task m_task;
+		Win32EventDriver m_driver;
+		SOCKET m_socket;
+		NetworkAddress m_bindAddress;
+		bool m_canBroadcast;
+	}
+
+	this(Win32EventDriver driver, SOCKET sock, NetworkAddress bind_addr)
+	{
+		m_driver = driver;
+		m_socket = sock;
+		m_task = Task.getThis();
+		m_bindAddress = bind_addr;
+
+		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
+
+		//bind...
+	}
+
+	@property string bindAddress() const {
+		wchar[64] buf;
+		WORD buf_len = 64;
+		WSAAddressToStringW(m_bindAddress.sockAddr, m_bindAddress.sockAddrLen, null, buf.ptr, &buf_len);
+		return to!string(buf[0 .. buf_len]);
+	}
+
+	@property bool canBroadcast() const { return m_canBroadcast; }
+	@property void canBroadcast(bool val)
+	{
+		int tmp_broad = val;
+		enforce(setsockopt(m_socket, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
+				"Failed to change the socket broadcast flag.");
+		m_canBroadcast = val;
+	}
+
+
+	bool isOwner() {
+		return m_task !is null && m_task is Fiber.getThis();
+	}
+
+	void acquire()
+	{
+		assert(m_task is null, "Trying to acquire a TCP connection that is currently owned.");
+		m_task = Task.getThis();
+	}
+
+	void release()
+	{
+		assert(m_task !is null, "Trying to release a TCP connection that is not owned.");
+		assert(m_task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
+		m_task = null;
+	}
+
+	void connect(string host, ushort port)
+	{
+		NetworkAddress addr = m_driver.resolveHost(host, m_bindAddress.family);
+		addr.port = port;
+		enforce(.connect(m_socket, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
+	}
+
+	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
+	{
+		sizediff_t ret;
+		if( peer_address ){
+			ret = .sendto(m_socket, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
+		} else {
+			ret = .send(m_socket, data.ptr, data.length, 0);
+		}
+		logTrace("send ret: %s, %s", ret, WSAGetLastError());
+		enforce(ret >= 0, "Error sending UDP packet.");
+		enforce(ret == data.length, "Unable to send full packet.");
+	}
+
+	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
+	{
+		if( buf.length == 0 ) buf.length = 65507;
+		NetworkAddress from;
+		from.family = m_bindAddress.family;
+		while(true){
+			uint addr_len = from.sockAddrLen;
+			auto ret = .recvfrom(m_socket, buf.ptr, buf.length, 0, from.sockAddr, &addr_len);
+			if( ret > 0 ){
+				if( peer_address ) *peer_address = from;
+				return buf[0 .. ret];
+			}
+			if( ret < 0 ){
+				auto err = WSAGetLastError();
+				logDebug("UDP recv err: %s", err);
+				enforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet.");
+			}
+			m_driver.m_core.yieldForEvent();
+		}
+	}
+
+	void notifySocketEvent(SOCKET sock, WORD event, WORD error)
+	{
+		assert(false);
+	}
+
+	private static nothrow extern(C) void onUdpRead(SOCKET sockfd, short evts, void* arg)
+	{
+		/*auto ctx = cast(TcpContext*)arg;
+		logTrace("udp socket %d read event!", ctx.socketfd);
+
+		try {
+			auto f = ctx.task;
+			if( f && f.state != Fiber.State.TERM )
+				ctx.core.resumeTask(f);
+		} catch( Throwable e ){
+			logError("Exception onUdpRead: %s", e.msg);
+			debug assert(false);
+		}*/
+	}
+}
+
+
+/******************************************************************************/
+/* class Win32TcpConnection                                                   */
+/******************************************************************************/
+
+enum ConnectionStatus { Initialized, Connected, Disconnected }
+
+class Win32TcpConnection : TcpConnection, SocketEventHandler {
+	private {
+		Win32EventDriver m_driver;
 		Task m_task;
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
 		SOCKET m_socket;
 		DWORD m_bytesTransferred;
+		ConnectionStatus m_status = ConnectionStatus.Initialized;
 	}
 
-	this(DriverCore driver, SOCKET sock)
+	this(Win32EventDriver driver, SOCKET sock)
 	{
 		m_driver = driver;
 		m_socket = sock;
 		m_task = Task.getThis();
+
+		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
+	}
+
+	~this()
+	{
+		/*if( m_socket != -1 ){
+			closesocket(m_socket);
+		}*/
+	}
+
+	void connect(NetworkAddress addr)
+	{
+		auto ret = .connect(m_socket, addr.sockAddr, addr.sockAddrLen);
+		//enforce(WSAConnect(m_socket, addr.sockAddr, addr.sockAddrLen, null, null, null, null), "Failed to connect to host");
+
+		if( ret == 0 ){
+			assert(m_status == ConnectionStatus.Connected);
+			return;
+		}
+
+		while( m_status == ConnectionStatus.Initialized )
+			m_driver.m_core.yieldForEvent();
 	}
 
 	void release()
@@ -736,7 +958,7 @@ class Win32TcpConnection : TcpConnection {
 				auto err = WSAGetLastError();
 				enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
 			}
-			while( !m_bytesTransferred ) m_driver.yieldForEvent();
+			while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
 
 			assert(m_bytesTransferred <= dst.length, "More data received than requested!?");
 			dst = dst[m_bytesTransferred .. $];
@@ -764,7 +986,7 @@ class Win32TcpConnection : TcpConnection {
 				auto err = WSAGetLastError();
 				enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
 			}
-			while( !m_bytesTransferred ) m_driver.yieldForEvent();
+			while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
 
 			assert(m_bytesTransferred <= bytes.length, "More data sent than requested!?");
 			bytes = bytes[m_bytesTransferred .. $];
@@ -773,17 +995,36 @@ class Win32TcpConnection : TcpConnection {
 
 	void flush()
 	{
-		assert(false);
+		checkConnected();
 	}
 
 	void finalize()
 	{
-		assert(false);
+		flush();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
-		assert(false);
+		writeDefault(stream, nbytes, do_flush);
+	}
+
+	void checkConnected()
+	{
+		// TODO!
+	}
+
+	void notifySocketEvent(SOCKET sock, WORD event, WORD error)
+	{
+		logDebug("Socket event for %s: %s, error: %s", sock, event, error);
+		assert(sock == m_socket);
+		Exception e;
+		switch(event){
+			default: break;
+			case FD_READ: break;
+			case FD_WRITE: break;
+			case FD_CLOSE: break;
+		}
+		m_driver.m_core.resumeTask(m_task, e);
 	}
 
 	private static extern(System)
@@ -888,12 +1129,36 @@ private extern(System)
 		HANDLE hEvent;
 	}
 
+	enum {
+		WSA_FLAG_OVERLAPPED = 0x01
+	}
+
+	enum {
+		FD_READ = 0x0001,
+		FD_WRITE = 0x0002,
+		FD_OOB = 0x0004,
+		FD_ACCEPT = 0x0008,
+		FD_CONNECT = 0x0010,
+		FD_CLOSE = 0x0020,
+		FD_QOS = 0x0040,
+		FD_GROUP_QOS = 0x0080,
+		FD_ROUTING_INTERFACE_CHANGE = 0x0100,
+		FD_ADDRESS_LIST_CHANGE = 0x0200
+	}
+
+
+	struct WSAPROTOCOL_INFO;
+	alias sockaddr SOCKADDR;
+
 	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
 
+	int WSAAsyncSelect(SOCKET s, HWND hWnd, uint wMsg, sizediff_t lEvent);
 	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
 	int WSARecv(SOCKET s, WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesRecvd, DWORD* lpFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASend(SOCKET s, in WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesSent, DWORD dwFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
+	INT WSAStringToAddressW(in LPWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
+	INT WSAAddressToStringW(in SOCKADDR* lpsaAddress, DWORD dwAddressLength, in WSAPROTOCOL_INFO* lpProtocolInfo, LPWSTR lpszAddressString, WORD* lpdwAddressStringLength);
 
 
 	const uint ERROR_ALREADY_EXISTS = 183;
@@ -907,7 +1172,6 @@ private extern(System)
 	};
 
 	enum WM_USER = 0x0400;
-	enum WM_USER_SIGNAL = WM_USER+101;
 
 	enum {
 		QS_ALLPOSTMESSAGE = 0x0100,
