@@ -220,6 +220,14 @@ void startListening()
 	parseDietFile!(template_file, ALIASES)(res.bodyWriter);
 }
 
+/**
+	Utility function that throws a HttpStatusException if the _condition is not met.
+*/
+void enforceHttp(T)(T condition, HttpStatus statusCode, string message = null)
+{
+	enforce(condition, new HttpStatusException(statusCode, message));
+}
+
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
@@ -396,7 +404,7 @@ class HttpStatusException : Exception {
 */
 final class HttpServerRequest : HttpRequest {
 	public {
-		/// The address of the _peer (in IP _form)
+		/// The IP address of the client
 		string peer;
 
 		/** The _path part of the URL.

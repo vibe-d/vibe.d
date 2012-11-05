@@ -115,10 +115,18 @@ int main(string[] args)
 				// Create start script, which will be used by the calling bash/cmd script.
 				// build "rdmd --force %DFLAGS% -I%~dp0..\source -Jviews -Isource @deps.txt %LIBS% source\app.d" ~ application arguments
 				// or with "/" instead of "\"
+				string del_exe_file; // only used on windows
 				string[] flags = ["--force"];
 				if( cmd == "build" ){
 					flags ~= "--build-only";
 					flags ~= "-of"~binName;
+				} else {
+					version(Windows){
+						import std.random;
+						auto rnd = to!string(uniform(uint.min, uint.max)) ~ "-";
+						del_exe_file = environment.get("TEMP")~"\\.rdmd\\source\\"~rnd~binName;
+						flags ~= "-of"~del_exe_file;
+					}
 				}
 				flags ~= "-g";
 				flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
@@ -129,8 +137,8 @@ int main(string[] args)
 				flags ~= getPackagesAsVersion(vpm);
 				flags ~= (Path("source") ~ appName).toNativeString();
 				flags ~= args[1 .. $];
-
 				appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
+				if( del_exe_file.length ) appStartScript ~= "\r\ndel \""~del_exe_file~"\"";
 				break;
 			case "upgrade":
 				logInfo("Upgrading application in '%s'", appPath);
@@ -232,8 +240,7 @@ private string getBinName(const Vpm vpm)
 	if(existsFile(Path("source") ~ (vpm.packageName() ~ ".d")))
 		ret = vpm.packageName();
 	//Otherwise fallback to source/app.d
-	else
-		ret = (Path(".") ~ "app").toNativeString();
+	else ret = "app";
 	version(Windows) { ret ~= ".exe"; }
 
 	return ret;
