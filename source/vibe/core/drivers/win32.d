@@ -133,7 +133,7 @@ class Win32EventDriver : EventDriver {
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
 	{
-		static immutable ushort[] addrfamilies = [AF_INET6, AF_INET];
+		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
 
 		NetworkAddress addr;
 		foreach( af; addrfamilies ){
@@ -144,9 +144,53 @@ class Win32EventDriver : EventDriver {
 			auto ret = WSAStringToAddressW(toUTFz!(immutable(wchar)*)(host), af, null, addr.sockAddr, &addrlen);
 			if( ret != 0 ) continue;
 			assert(addrlen == addr.sockAddrLen);
+			return addr;
 		}
 
-		assert(false);
+
+		LookupStatus status;
+		status.task = Task.getThis();
+		status.driver = this;
+		status.finished = false;
+
+		WSAOVERLAPPEDX overlapped;
+		overlapped.Internal = 0;
+		overlapped.InternalHigh = 0;
+		overlapped.hEvent = cast(HANDLE)cast(void*)&status;
+
+		void* aif;
+
+		version(none){ // Windows 8+
+			ADDRINFOEXW addr_hint;
+			ADDRINFOEXW* addr_ret;
+			addr_hint.ai_family = family;
+			addr_hint.ai_socktype = SOCK_STREAM;
+			addr_hint.ai_protocol = IPPROTO_TCP;
+
+			enforce(GetAddrInfoExW(toUTFz!(immutable(wchar)*)(host), null, NS_DNS, null, &addr_hint, &addr_ret, null, &overlapped, &onDnsResult, null) == 0, "Failed to lookup host");
+			while( !status.finished ) m_core.yieldForEvent();
+			enforce(!status.error, "Failed to lookup host: "~to!string(status.error));
+
+			aif = addr_ret;
+			addr.family = cast(ubyte)addr_ret.ai_family;
+			switch(addr.family){
+				default: assert(false, "Invalid address family returned from host lookup.");
+				case AF_INET: addr.sockAddrInet4 = *cast(sockaddr_in*)addr_ret.ai_addr; break;
+				case AF_INET6: addr.sockAddrInet6 = *cast(sockaddr_in6*)addr_ret.ai_addr; break;
+			}
+			FreeAddrInfoW(addr_ret);
+		} else {
+			auto he = gethostbyname(toUTFz!(immutable(char)*)(host));
+			enforce(he !is null, "Failed to look up host "~host~".");
+			addr.family = he.h_addrtype;
+			switch(addr.family){
+				default: assert(false, "Invalid address family returned from host lookup.");
+				case AF_INET: addr.sockAddrInet4.sin_addr = *cast(in_addr*)he.h_addr_list[0]; break;
+				case AF_INET6: addr.sockAddrInet6.sin6_addr = *cast(in6_addr*)he.h_addr_list[0]; break;
+			}
+		}
+
+		return addr;
 	}
 
 	Win32TcpConnection connectTcp(string host, ushort port)
@@ -192,6 +236,24 @@ class Win32EventDriver : EventDriver {
 		assert(m_tid == GetCurrentThreadId());
 		return new Win32Timer(this, callback);
 	}
+
+	static struct LookupStatus {
+		Task task;
+		DWORD error;
+		bool finished;
+		Win32EventDriver driver;
+	}
+
+	private static nothrow extern(System)
+	void onDnsResult(DWORD dwError, DWORD /*dwBytes*/, WSAOVERLAPPEDX* lpOverlapped)
+	{
+		auto stat = cast(LookupStatus*)cast(void*)lpOverlapped.hEvent;
+		stat.error = dwError;
+		stat.finished = true;
+		if( stat.task )
+			try stat.driver.m_core.resumeTask(stat.task);
+			catch( Throwable th ) logWarn("Resuming task for DNS lookup has thrown: %s", th.msg);
+	}   
 }
 
 interface SocketEventHandler {
@@ -857,6 +919,7 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 		//enforce(WSAConnect(m_socket, addr.sockAddr, addr.sockAddrLen, null, null, null, null), "Failed to connect to host");
 
 		if( ret == 0 ){
+m_status = ConnectionStatus.Connected;
 			assert(m_status == ConnectionStatus.Connected);
 			return;
 		}
@@ -1146,11 +1209,53 @@ private extern(System)
 		FD_ADDRESS_LIST_CHANGE = 0x0200
 	}
 
+	struct ADDRINFOEXW {
+		int ai_flags;
+		int ai_family;
+		int ai_socktype;
+		int ai_protocol;
+		size_t ai_addrlen;
+		LPCWSTR ai_canonname;
+		sockaddr* ai_addr;
+		void* ai_blob;
+		size_t ai_bloblen;
+		GUID* ai_provider;
+		ADDRINFOEXW* ai_next;
+	}
+
+	struct ADDRINFOA {
+		int ai_flags;
+		int ai_family;
+		int ai_socktype;
+		int ai_protocol;
+		size_t ai_addrlen;
+		LPSTR ai_canonname;
+		sockaddr* ai_addr;
+		ADDRINFOA* ai_next;
+	}
+
+	struct ADDRINFOW {
+		int ai_flags;
+		int ai_family;
+		int ai_socktype;
+		int ai_protocol;
+		size_t ai_addrlen;
+		LPWSTR ai_canonname;
+		sockaddr* ai_addr;
+		ADDRINFOW* ai_next;
+	}
+
+	enum {
+		NS_ALL = 0,
+		NS_DNS = 12
+	}
+
 
 	struct WSAPROTOCOL_INFO;
 	alias sockaddr SOCKADDR;
 
 	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
+	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*) LPLOOKUPSERVICE_COMPLETION_ROUTINE;
 
 	int WSAAsyncSelect(SOCKET s, HWND hWnd, uint wMsg, sizediff_t lEvent);
 	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
@@ -1159,6 +1264,11 @@ private extern(System)
 	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
 	INT WSAStringToAddressW(in LPWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
 	INT WSAAddressToStringW(in SOCKADDR* lpsaAddress, DWORD dwAddressLength, in WSAPROTOCOL_INFO* lpProtocolInfo, LPWSTR lpszAddressString, WORD* lpdwAddressStringLength);
+	int GetAddrInfoExW(LPCWSTR pName, LPCWSTR pServiceName, DWORD dwNameSpace, GUID* lpNspId, const ADDRINFOEXW *pHints, ADDRINFOEXW **ppResult, timeval *timeout, WSAOVERLAPPEDX* lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, HANDLE* lpNameHandle);
+	int GetAddrInfoW(LPCWSTR pName, LPCWSTR pServiceName, const ADDRINFOW *pHints, ADDRINFOW **ppResult);
+	int getaddrinfo(LPCSTR pName, LPCSTR pServiceName, const ADDRINFOA *pHints, ADDRINFOA **ppResult);
+	void FreeAddrInfoW(ADDRINFOEXW* pAddrInfo);
+	void freeaddrinfo(ADDRINFOA* ai);
 
 
 	const uint ERROR_ALREADY_EXISTS = 183;
