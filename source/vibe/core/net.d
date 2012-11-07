@@ -12,6 +12,7 @@ public import vibe.core.driver;
 import core.sys.posix.netinet.in_;
 import core.time;
 import std.exception;
+import std.functional;
 version(Windows) import std.c.windows.winsock;
 
 
@@ -31,10 +32,10 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	Starts listening on the specified port.
 
 	'connection_callback' will be called for each client that connects to the
-	server socket. The 'stream' parameter then allows to perform pseudo-blocking
-	i/o on the client socket.
+	server socket. Each new connection gets its own fiber. The stream parameter
+	then allows to perform blocking I/O on the client socket.
 
-	The 'ip4_addr' or 'ip6_addr' parameters can be used to specify the network
+	The address parameter can be used to specify the network
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
 */
@@ -44,7 +45,7 @@ void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callb
 	listenTcp(port, connection_callback, "::");
 }
 /// ditto
-void listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address)
+void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address)
 {
 	getEventDriver().listenTcp(port, connection_callback, address);
 }
@@ -52,16 +53,16 @@ void listenTcp(ushort port, void delegate(TcpConnection conn) connection_callbac
 /**
 	Starts listening on the specified port.
 
-	This function is the same as listenTcp() but takes a function callback instead of a delegate.
+	This function is the same as listenTcp but takes a function callback instead of a delegate.
 */
 void listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
 {
-	listenTcp(port, (TcpConnection conn){ connection_callback(conn); });
+	listenTcp(port, toDelegate(connection_callback));
 }
 /// ditto
-void listenTcpS(ushort port, void function(TcpConnection conn) connection_callback, string address)
+void listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, string address)
 {
-	listenTcp(port, (TcpConnection conn){ connection_callback(conn); }, address);
+	listenTcp(port, toDelegate(connection_callback), address);
 }
 
 /**
