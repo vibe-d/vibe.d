@@ -56,7 +56,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 				creq.url = req.url;
 				creq.headers = req.headers.dup;
 				creq.headers["Host"] = destination_host;
-				if( auto pfh = "X-Forwarded-Host" in req ) creq.headers["X-Forwarded-Host"] = *pfh;
+				if( auto pfh = "X-Forwarded-Host" in req.headers ) creq.headers["X-Forwarded-Host"] = *pfh;
 				else creq.headers["X-Forwarded-Host"] = req.headers["Host"];
 				if( auto pff = "X-Forwarded-For" in req.headers ) creq.headers["X-Forwarded-For"] = *pff ~ ", " ~ req.peer;
 				else creq.headers["X-Forwarded-For"] = req.peer;
