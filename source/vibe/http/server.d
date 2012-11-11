@@ -58,7 +58,7 @@ public import std.variant;
 
 	Note that if the application has been started with the --disthost command line
 	switch, listenHttp() will automatically listen on the specified VibeDist host
-	instead of locally. This allows for a seemless switch from single-host to 
+	instead of locally. This allows for a seamless switch from single-host to 
 	multi-host scenarios without changing the code. If you need to listen locally,
 	use listenHttpPlain() instead.
 

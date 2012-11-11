@@ -1,7 +1,7 @@
 /**
 	JSON serialization and value handling.
 
-	This module provides the Json struct for reading, writing and manipulating JSON values in a seemless,
+	This module provides the Json struct for reading, writing and manipulating JSON values in a seamless,
 	JavaScript like way. De(serialization) of arbitrary D types is also supported.
 
 	Examples:

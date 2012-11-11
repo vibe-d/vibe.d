@@ -122,7 +122,7 @@ import std.traits;
 
 	See_Also:
 	
-		RestInterfaceClient class for a seemless way to acces such a generated API
+		RestInterfaceClient class for a seamless way to acces such a generated API
 */
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
 		MethodStyle style = MethodStyle.LowerUnderscored)
