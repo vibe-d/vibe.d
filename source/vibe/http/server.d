@@ -581,6 +581,8 @@ final class HttpServerResponse : HttpResponse {
 	/// Writes a JSON message with the specified status
 	void writeJsonBody(T)(T data, int status = HttpStatus.OK)
 	{
+		assert(std.string.split(T.stringof, "!")[0] != "Appender");
+
 		statusCode = status;
 		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json");
 	}
