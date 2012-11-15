@@ -14,6 +14,7 @@ module vibe.vibe;
 public import vibe.core.core;
 public import vibe.core.file;
 public import vibe.core.log;
+public import vibe.core.mutex;
 public import vibe.core.net;
 public import vibe.core.process;
 public import vibe.core.signal;
