@@ -14,12 +14,14 @@ import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.log;
 import vibe.inet.url;
+import vibe.utils.array;
 
 import core.atomic;
 import core.sync.mutex;
 import core.sys.windows.windows;
 import core.time;
 import core.thread;
+import std.algorithm;
 import std.conv;
 import std.c.windows.windows;
 import std.c.windows.winsock;
@@ -46,11 +48,22 @@ class Win32EventDriver : EventDriver {
 
 	this(DriverCore core)
 	{
+		setupWindowClass();
+
 		m_core = core;
 		m_tid = GetCurrentThreadId();
+		m_hwnd = CreateWindowA("VibeWin32MessageWindow", "VibeWin32MessageWindow", 0, 0,0,0,0, HWND_MESSAGE,null,null,null);
+
+		SetWindowLongA(m_hwnd, GWLP_USERDATA, cast(ULONG_PTR)cast(void*)this);
+		assert( cast(Win32EventDriver)cast(void*)GetWindowLongA(m_hwnd, GWLP_USERDATA) == this );
 
 		WSADATA wd;
 		enforce(WSAStartup(0x0202, &wd) == 0, "Failed to initialize WinSock");
+	}
+
+	~this()
+	{
+//		DestroyWindow(m_hwnd);
 	}
 
 	int runEventLoop()
@@ -79,31 +92,9 @@ class Win32EventDriver : EventDriver {
 		assert(m_tid == GetCurrentThreadId());
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
-			switch(msg.message){
-				default:
-					TranslateMessage(&msg);
-					DispatchMessageW(&msg);
-					break;
-				case WM_QUIT:
-					return 0;
-				case WM_USER_SIGNAL:
-					auto sig = cast(Win32Signal)cast(void*)msg.lParam;
-					DWORD[Task] lst;
-					synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
-					foreach( task, tid; lst )
-						if( tid == m_tid && task )
-							m_core.resumeTask(task);
-					break;
-				case WM_USER_SOCKET:
-					SOCKET sock = cast(SOCKET)msg.wParam;
-					auto evt = LOWORD(msg.lParam);
-					auto err = HIWORD(msg.lParam);
-					auto ph = sock in m_socketHandlers;
-					if( ph is null ){
-						logWarn("Socket %s has no associated handler for event %s/%s", sock, evt, err);
-					} else ph.notifySocketEvent(sock, evt, err);
-					break;
-			}
+			if( msg.message == WM_QUIT ) break;
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
 		}
 		return 0;
 	}
@@ -203,6 +194,7 @@ class Win32EventDriver : EventDriver {
 		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
 
 		auto conn = new Win32TcpConnection(this, sock);
+		m_socketHandlers[conn.socket] = conn;
 		conn.connect(addr);
 		return conn;	
 	}
@@ -253,11 +245,44 @@ class Win32EventDriver : EventDriver {
 		if( stat.task )
 			try stat.driver.m_core.resumeTask(stat.task);
 			catch( Throwable th ) logWarn("Resuming task for DNS lookup has thrown: %s", th.msg);
-	}   
+	}
+
+	private static nothrow extern(System)
+	LRESULT onMessage(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam)
+	{
+		auto driver = cast(Win32EventDriver)cast(void*)GetWindowLongA(wnd, GWLP_USERDATA);
+		switch(msg){
+			default: break;
+			case WM_USER_SIGNAL:
+				auto sig = cast(Win32Signal)cast(void*)lparam;
+				DWORD[Task] lst;
+				try {
+					synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
+					foreach( task, tid; lst )
+						if( tid == driver.m_tid && task )
+							driver.m_core.resumeTask(task);
+				} catch(Throwable th){
+					logWarn("Failed to resume signal listeners: %s", th.msg);
+					return 0;
+				}
+				return 0;
+			case WM_USER_SOCKET:
+				SOCKET sock = cast(SOCKET)wparam;
+				auto evt = LOWORD(lparam);
+				auto err = HIWORD(lparam);
+				auto ph = sock in driver.m_socketHandlers;
+				if( ph is null ){
+					logWarn("Socket %s has no associated handler for event %s/%s", sock, evt, err);
+				} else ph.notifySocketEvent(sock, evt, err);
+				return 0;
+		}
+		return DefWindowProcA(wnd, msg, wparam, lparam);
+	}
 }
 
 interface SocketEventHandler {
-	void notifySocketEvent(SOCKET sock, WORD event, WORD error);
+	SOCKET socket() nothrow;
+	void notifySocketEvent(SOCKET sock, WORD event, WORD error) nothrow;
 }
 
 
@@ -620,15 +645,19 @@ class Win32FileStream : FileStream {
 		writeDefault(stream, nbytes, do_flush);
 	}
 
-	private static extern(System)
+	private static extern(System) nothrow
 	void onIOCompleted(DWORD dwError, DWORD cbTransferred, OVERLAPPED* overlapped)
 	{
-		auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
-		fileStream.m_bytesTransferred = cbTransferred;
-		if( fileStream.m_task ){
-			Exception ex;
-			if( dwError != 0 ) ex = new Exception("File I/O error: "~to!string(dwError));
-			fileStream.m_driver.resumeTask(fileStream.m_task, ex);
+		try {
+			auto fileStream = cast(Win32FileStream)(overlapped.hEvent);
+			fileStream.m_bytesTransferred = cbTransferred;
+			if( fileStream.m_task ){
+				Exception ex;
+				if( dwError != 0 ) ex = new Exception("File I/O error: "~to!string(dwError));
+				if( fileStream.m_task ) fileStream.m_driver.resumeTask(fileStream.m_task, ex);
+			}
+		} catch( Throwable e ){
+			logWarn("Exception while handling file I/O: %s", e.msg);
 		}
 	}
 }
@@ -748,7 +777,7 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 				if( watcher.m_task ){
 					Exception ex;
 					if( dwError != 0 ) ex = new Exception("Diretory watcher error: "~to!string(dwError));
-					watcher.m_core.resumeTask(watcher.m_task, ex);
+					if( watcher.m_task ) watcher.m_core.resumeTask(watcher.m_task, ex);
 				}
 			} catch( Throwable th ){
 				logWarn("Exception in directory watcher callback: %s", th.msg);
@@ -782,6 +811,8 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 
 		//bind...
 	}
+
+	@property SOCKET socket() { return m_socket; }
 
 	@property string bindAddress() const {
 		wchar[64] buf;
@@ -895,6 +926,7 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 		SOCKET m_socket;
 		DWORD m_bytesTransferred;
 		ConnectionStatus m_status = ConnectionStatus.Initialized;
+		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
 	}
 
 	this(Win32EventDriver driver, SOCKET sock)
@@ -912,6 +944,8 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 			closesocket(m_socket);
 		}*/
 	}
+
+	@property SOCKET socket() { return m_socket; }
 
 	void connect(NetworkAddress addr)
 	{
@@ -967,21 +1001,18 @@ m_status = ConnectionStatus.Connected;
 		assert(false);
 	}
 
-	@property bool empty()
-	{
-		assert(false);
-	}
+	@property bool empty() { return leastSize == 0; }
 
 	@property ulong leastSize()
 	{
-		//WSAIoctl(m_socket, FIONREAD, null, 0, &v, &vsize, &overlapped, &onIOCompleted);
-		assert(false);
+		while( m_readBuffer.empty ){
+			if( !connected ) return 0;
+			m_driver.m_core.yieldForEvent();
+		}
+		return m_readBuffer.length;
 	}
 
-	@property bool dataAvailableForRead()
-	{
-		assert(false);
-	}
+	@property bool dataAvailableForRead() { return !m_readBuffer.empty; }
 
 	void close()
 	{
@@ -992,45 +1023,37 @@ m_status = ConnectionStatus.Connected;
 
 	bool waitForData(Duration timeout)
 	{
-		assert(false);
+		auto tm = m_driver.createTimer(null);
+		tm.acquire();
+		tm.rearm(timeout);
+		while( m_readBuffer.empty ){
+			if( !connected ) return false;
+			m_driver.m_core.yieldForEvent();
+			if( !tm.pending ) return false;
+		}
+		return true;
 	}
 
-	const(ubyte)[] peek()
-	{
-		assert(false);
-	}
+	const(ubyte)[] peek() { return m_readBuffer.peek(); }
 
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
-			WSABUF buf;
-			buf.len = dst.length;
-			buf.buf = dst.ptr;
-			DWORD flags = 0;
-
-			WSAOVERLAPPEDX overlapped;
-			overlapped.Internal = 0;
-			overlapped.InternalHigh = 0;
-			overlapped.Offset = 0;
-			overlapped.OffsetHigh = 0;
-			overlapped.hEvent = cast(HANDLE)cast(void*)this;
-
-			m_bytesTransferred = 0;
-			auto ret = WSARecv(m_socket, &buf, 1, null, &flags, &overlapped, &onIOCompleted);
-			if( ret == SOCKET_ERROR ){
-				auto err = WSAGetLastError();
-				enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
+			while( m_readBuffer.empty ){
+				checkConnected();
+				m_driver.m_core.yieldForEvent();
 			}
-			while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
+			size_t amt = min(dst.length, m_readBuffer.length);
 
-			assert(m_bytesTransferred <= dst.length, "More data received than requested!?");
-			dst = dst[m_bytesTransferred .. $];
+			m_readBuffer.read(dst[0 .. amt]);
+			dst = dst[amt .. $];
 		}
 	}
 
 	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
 		const(ubyte)[] bytes = bytes_;
+		logTrace("TCP write with %s bytes called", bytes.length);
 		while( bytes.length > 0 ){
 			WSABUF buf;
 			buf.len = bytes.length;
@@ -1044,6 +1067,7 @@ m_status = ConnectionStatus.Connected;
 			overlapped.hEvent = cast(HANDLE)cast(void*)this;
 
 			m_bytesTransferred = 0;
+			logTrace("Sending %s bytes TCP", buf.len);
 			auto ret = WSASend(m_socket, &buf, 1, null, 0, &overlapped, &onIOCompleted);
 			if( ret == SOCKET_ERROR ){
 				auto err = WSAGetLastError();
@@ -1077,39 +1101,126 @@ m_status = ConnectionStatus.Connected;
 	}
 
 	void notifySocketEvent(SOCKET sock, WORD event, WORD error)
-	{
-		logDebug("Socket event for %s: %s, error: %s", sock, event, error);
-		assert(sock == m_socket);
-		Exception e;
-		switch(event){
-			default: break;
-			case FD_READ: break;
-			case FD_WRITE: break;
-			case FD_CLOSE: break;
+	nothrow {
+		try {
+			logDebug("Socket event for %s: %s, error: %s", sock, event, error);
+			assert(sock == m_socket);
+			Exception ex;
+			switch(event){
+				default: break;
+				case FD_READ:
+					logTrace("TCP read event");
+					while( m_readBuffer.freeSpace > 0 ){
+						auto dst = m_readBuffer.peekDst();
+						logTrace("Try to read up to %s bytes", dst.length);
+						auto ret = .recv(m_socket, dst.ptr, dst.length, 0);
+						if( ret >= 0 ){
+							logTrace("received %s bytes", ret);
+							if( ret == 0 ) break;
+							m_readBuffer.putN(ret);
+						} else {
+							auto err = WSAGetLastError();
+							if( err != WSAEWOULDBLOCK ){
+								logTrace("receive error %s", err);
+								ex = new Exception("Socket error: "~to!string(err));
+							}
+							break;
+						}
+					}
+
+					//m_driver.m_core.resumeTask(m_task, ex);
+					/*WSABUF buf;
+					buf.len = dst.length;
+					buf.buf = dst.ptr;
+					DWORD flags = 0;
+
+					WSAOVERLAPPEDX overlapped;
+					overlapped.Internal = 0;
+					overlapped.InternalHigh = 0;
+					overlapped.Offset = 0;
+					overlapped.OffsetHigh = 0;
+					overlapped.hEvent = cast(HANDLE)cast(void*)this;
+
+					m_bytesTransferred = 0;
+					auto ret = WSARecv(m_socket, &buf, 1, null, &flags, &overlapped, &onIOCompleted);
+					if( ret == SOCKET_ERROR ){
+						auto err = WSAGetLastError();
+						enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
+					}
+					while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
+
+					assert(m_bytesTransferred <= dst.length, "More data received than requested!?");
+					m_readBuffer.pushN(m_bytesTransferred);*/
+					break;
+				case FD_WRITE:
+					if( m_status == ConnectionStatus.Initialized ){
+						if( error ){
+							ex = new Exception("Failed to connect to host: "~to!string(error));
+						} else m_status = ConnectionStatus.Connected;
+					}
+					break;
+				case FD_CLOSE:
+					m_status = ConnectionStatus.Disconnected;
+					break;
+			}
+			if( m_task ) m_driver.m_core.resumeTask(m_task, ex);
+		} catch( Throwable th ){
+			logWarn("Exception while handling socket event: %s", th.msg);
 		}
-		m_driver.m_core.resumeTask(m_task, e);
 	}
 
-	private static extern(System)
+	private static extern(System) nothrow
 	void onIOCompleted(DWORD dwError, DWORD cbTransferred, WSAOVERLAPPEDX* lpOverlapped, DWORD dwFlags)
 	{
-		auto fileStream = cast(Win32FileStream)(lpOverlapped.hEvent);
-		fileStream.m_bytesTransferred = cbTransferred;
-		if( fileStream.m_task ){
-			Exception ex;
-			if( dwError != 0 ) ex = new Exception("Socket I/O error: "~to!string(dwError));
-			fileStream.m_driver.resumeTask(fileStream.m_task, ex);
+		logTrace("IO completed for TCP send: %s (error=%s)", cbTransferred, dwError);
+		try {
+			auto conn = cast(Win32TcpConnection)(lpOverlapped.hEvent);
+			conn.m_bytesTransferred = cbTransferred;
+			if( conn.m_task ){
+				Exception ex;
+				if( dwError != 0 ) ex = new Exception("Socket I/O error: "~to!string(dwError));
+				if( conn.m_task ) conn.m_driver.m_core.resumeTask(conn.m_task, ex);
+			}
+		} catch( Throwable th ){
+			logWarn("Exception while handline TCP I/O: %s", th.msg);
 		}
 	}
 }
 
 private {
 	Win32Timer[UINT_PTR] s_timers;
+	__gshared s_setupWindowClass = false;
+}
+
+void setupWindowClass()
+{
+	if( s_setupWindowClass ) return;
+	WNDCLASS wc;
+	wc.lpfnWndProc = &Win32EventDriver.onMessage;
+	wc.lpszClassName = "VibeWin32MessageWindow";
+	RegisterClassA(&wc);
+	s_setupWindowClass = true;
 }
 
 
-private extern(System)
+private extern(System) nothrow
 {
+	enum HWND HWND_MESSAGE = cast(HWND)-3;
+	enum {
+		GWLP_WNDPROC = -4,
+		GWLP_HINSTANCE = -6,
+		GWLP_HWNDPARENT = -8,
+		GWLP_USERDATA = -21,
+		GWLP_ID = -12,
+	}
+
+	LONG_PTR SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+	LONG_PTR SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+	LONG_PTR GetWindowLongPtrA(HWND hWnd, int nIndex);
+	LONG_PTR GetWindowLongPtrW(HWND hWnd, int nIndex);
+	LONG_PTR SetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong);
+	LONG_PTR GetWindowLongA(HWND hWnd, int nIndex);
+
 	alias void function(DWORD, DWORD, OVERLAPPED*) LPOVERLAPPED_COMPLETION_ROUTINE;
 
 	DWORD GetCurrentThreadId();
