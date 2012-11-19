@@ -107,9 +107,9 @@ or
 Installation on FreeBSD
 -----------------------
 
-Install vibe dependencies by using portrupgrade or similar like that
+Install vibe dependencies by using portupgrade or similar like that
 
-    sudo portupgrade -PN devel/libevent2 devel/pkg-config
+    sudo portupgrade -PN devel/libevent2 devel/pkgconf
 
 Run setup-freebsd.sh
 
