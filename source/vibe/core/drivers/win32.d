@@ -1019,6 +1019,7 @@ m_status = ConnectionStatus.Connected;
 		WSASendDisconnect(m_socket, null);
 		closesocket(m_socket);
 		m_socket = -1;
+		m_status = ConnectionStatus.Disconnected;
 	}
 
 	bool waitForData(Duration timeout)
@@ -1052,6 +1053,7 @@ m_status = ConnectionStatus.Connected;
 
 	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
+		checkConnected();
 		const(ubyte)[] bytes = bytes_;
 		logTrace("TCP write with %s bytes called", bytes.length);
 		while( bytes.length > 0 ){
@@ -1071,7 +1073,7 @@ m_status = ConnectionStatus.Connected;
 			auto ret = WSASend(m_socket, &buf, 1, null, 0, &overlapped, &onIOCompleted);
 			if( ret == SOCKET_ERROR ){
 				auto err = WSAGetLastError();
-				enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
+				enforce(err == WSA_IO_PENDING, "WSASend failed with error "~to!string(err));
 			}
 			while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
 
@@ -1161,6 +1163,8 @@ m_status = ConnectionStatus.Connected;
 					break;
 				case FD_CLOSE:
 					m_status = ConnectionStatus.Disconnected;
+					closesocket(m_socket);
+					m_socket = -1;
 					break;
 			}
 			if( m_task ) m_driver.m_core.resumeTask(m_task, ex);
