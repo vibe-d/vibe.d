@@ -873,53 +873,59 @@ Json serializeToJson(T)(T value)
 */
 void deserializeJson(T)(ref T dst, Json src)
 {
-	static if( is(T == Json) ) dst = src;
-	else static if( is(T == typeof(null)) ){ }
-	else static if( is(T == bool) ) dst = src.get!bool;
-	else static if( is(T == float) ) dst = src.to!float;   // since doubles are frequently serialized without
-	else static if( is(T == double) ) dst = src.to!double; // a decimal point, we allow conversions here
-	else static if( is(T : long) ) dst = cast(T)src.get!long;
-	else static if( is(T == string) ) dst = src.get!string;
+	dst = deserializeJson!T(src);
+}
+/// ditto
+T deserializeJson(T)(Json src)
+{
+	static if( is(T == Json) ) return src;
+	else static if( is(T == typeof(null)) ){ return null; }
+	else static if( is(T == bool) ) return src.get!bool;
+	else static if( is(T == float) ) return src.to!float;   // since doubles are frequently serialized without
+	else static if( is(T == double) ) return src.to!double; // a decimal point, we allow conversions here
+	else static if( is(T : long) ) return cast(T)src.get!long;
+	else static if( is(T == string) ) return src.get!string;
 	else static if( isArray!T ){
-		dst.length = src.length;
+		alias typeof(T.init[0]) TV;
+		auto dst = new Unqual!TV[src.length];
 		foreach( size_t i, v; src )
-			deserializeJson(dst[i], v);
+			dst[i] = deserializeJson!(Unqual!TV)(v);
+		return dst;
 	} else static if( isAssociativeArray!T ){
-		typeof(dst.values[0]) val;
-		foreach( string key, value; src ){
-			deserializeJson(val, value);
-			dst[key] = val;
-		}
-	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
-		dst = T.fromJson(src);
-	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
-		dst = T.fromString(src.get!string);
+		alias typeof(T.init.values[0]) TV;
+		Unqual!TV[string] dst;
+		foreach( string key, value; src )
+			dst[key] = deserializeJson!(Unqual!TV)(value);
+		return dst;
+	} else static if( __traits(compiles, { T dst; dst = T.fromJson(dst.toJson()); }()) ){
+		return T.fromJson(src);
+	} else static if( __traits(compiles, { T dst; dst = T.fromString(dst.toString()); }()) ){
+		return T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
+		T dst;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWPlainField!(T, m) ){
-				deserializeJson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
-			} else static if( isRWField!(T, m) ){
-				typeof(__traits(getMember, dst, m)) v;
-				deserializeJson(v, src[underscoreStrip(m)]);
-				__traits(getMember, dst, m) = v;
+			static if( isRWPlainField!(T, m) || isRWField!(T, m) ){
+				alias typeof(__traits(getMember, dst, m)) TM;
+				__traits(getMember, dst, m) = deserializeJson!TM(src[underscoreStrip(m)]);
 			}
 		}
+		return dst;
 	} else static if( is(T == class) ){
-		if( src.type == Json.Type.Null ) return;
-		dst = new T;
+		if( src.type == Json.Type.Null ) return null;
+		auto dst = new T;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWPlainField!(T, m) ){
-				deserializeJson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
-			} else static if( isRWField!(T, m) ){
-				typeof(__traits(getMember, dst, m)()) v;
-				deserializeJson(v, src[underscoreStrip(m)]);
-				__traits(getMember, dst, m) = v;
+			static if( isRWPlainField!(T, m) || isRWField!(T, m) ){
+				alias typeof(__traits(getMember, dst, m)) TM;
+				__traits(getMember, dst, m) = deserializeJson!TM(src[underscoreStrip(m)]);
 			}
 		}
+		return dst;
 	} else static if( isPointer!T ){
-		if( src.type == Json.Type.Null ) return;
-		dst = new typeof(*T.init);
-		deserializeJson(*dst, src);
+		if( src.type == Json.Type.Null ) return null;
+		alias typeof(*T.init) TD;
+		dst = new TD;
+		*dst = deserializeJson!TD(src);
+		return dst;
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
