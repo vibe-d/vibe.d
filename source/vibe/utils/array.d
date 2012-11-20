@@ -166,3 +166,58 @@ class FixedAppender(ArrayType : E[], size_t NELEM, E) {
 	@property ArrayType data() { return cast(ArrayType)m_data[0 .. $-m_remaining.length]; }
 }
 
+struct FixedRingBuffer(T, size_t N) {
+	private {
+		T[N] m_buffer;
+		size_t m_start = 0;
+		size_t m_fill = 0;
+	}
+
+	@property bool empty() const { return m_fill == 0; }
+
+	@property size_t length() const { return m_fill; }
+
+	@property size_t freeSpace() const { return N - m_fill; }
+	
+	void put(T itm) { assert(m_fill < N); m_buffer[(m_start + m_fill++) % N] = itm; }
+	void put(T[] itms)
+	{
+		if( !itms.length ) return;
+		assert(m_fill+itms.length <= N);
+		if( (m_start+m_fill)%N >= (m_start+m_fill+itms.length)%N ){
+			size_t chunk1 = N - (m_start+m_fill);
+			size_t chunk2 = itms.length - chunk1;
+			m_buffer[m_start+m_fill .. N] = itms[0 .. chunk1];
+			m_buffer[0 .. chunk2] = itms[chunk1 .. $];
+		} else {
+			m_buffer[m_start+m_fill .. m_start+m_fill+itms.length] = itms;
+		}
+		m_fill += itms.length;
+	}
+	void putN(size_t n) { assert(m_fill+n <= N); m_fill += n; }
+
+	@property ref inout(T) front() inout { assert(!empty); return m_buffer[m_start]; }
+
+	void popFront() { assert(!empty); m_start = (m_start+1) % N; m_fill--; }
+	void popFrontN(size_t n) { assert(length >= n); m_start = (m_start + n) % N; m_fill -= n; }
+
+	inout(T)[] peek() inout { return m_buffer[m_start .. min(m_start+m_fill, N)]; }
+	T[] peekDst() {
+		if( m_start + m_fill < N ) return m_buffer[m_start+m_fill .. $];
+		else return m_buffer[(m_start+m_fill)%N .. m_start];
+	}
+
+	void read(T[] dst)
+	{
+		assert(dst.length <= length);
+		if( m_start%N >= (m_start+dst.length)%N ){
+			size_t chunk1 = N - m_start;
+			size_t chunk2 = dst.length - chunk1;
+			dst[0 .. chunk1] = m_buffer[m_start .. $];
+			dst[chunk1 .. $] = m_buffer[0 .. chunk2];
+		} else {
+			dst[] = m_buffer[m_start .. m_start+dst.length];
+		}
+		popFrontN(dst.length);
+	}
+}
