@@ -25,7 +25,7 @@ version(Posix)
 	private bool setUID(int uid, int gid)
 	{
 		if( geteuid() == 0 && (uid >= 0 || gid >= 0) ){
-			logInfo("Vibe was run as root, lowering priviledges to uid=%d, gid=%d...", uid, gid);
+			logInfo("Vibe was run as root, lowering privileges to uid=%d, gid=%d...", uid, gid);
 			if( gid >= 0 && setegid(gid) != 0 ) return false;
 			//if( initgroups(const char *user, gid_t group);
 			if( uid >= 0 && seteuid(uid) != 0 ) return false;
