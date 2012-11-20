@@ -908,58 +908,68 @@ Bson serializeToBson(T)(T value)
 */
 void deserializeBson(T)(ref T dst, Bson src)
 {
-	static if( is(T == Bson) ) dst = src;
-	else static if( is(T == Json) ) dst = src.toJson();
-	else static if( is(T == BsonBinData) ) dst = cast(T)src;
-	else static if( is(T == BsonObjectID) ) dst = cast(T)src;
-	else static if( is(T == BsonDate) ) dst = cast(T)src;
-	else static if( is(T == BsonTimestamp) ) dst = cast(T)src;
-	else static if( is(T == BsonRegex) ) dst = cast(T)src;
-	else static if( is(T == typeof(null)) ){ }
-	else static if( is(T == bool) ) dst = cast(bool)src;
-	else static if( is(T == float) ) dst = cast(double)src;
-	else static if( is(T == double) ) dst = cast(double)src;
-	else static if( is(T : long) ) dst = cast(T)cast(long)src;
-	else static if( is(T == string) ) dst = cast(string)src;
-	else static if( is(T : const(ubyte)[]) ) dst = cast(T)src.get!BsonBinData.rawData.dup;
+	dst = deserializeBson!T(src);
+}
+/// ditto
+T deserializeBson(T)(Bson src)
+{
+	static if( is(T == Bson) ) return src;
+	else static if( is(T == Json) ) return src.toJson();
+	else static if( is(T == BsonBinData) ) return cast(T)src;
+	else static if( is(T == BsonObjectID) ) return cast(T)src;
+	else static if( is(T == BsonDate) ) return cast(T)src;
+	else static if( is(T == BsonTimestamp) ) return cast(T)src;
+	else static if( is(T == BsonRegex) ) return cast(T)src;
+	else static if( is(T == typeof(null)) ){ return null; }
+	else static if( is(T == bool) ) return cast(bool)src;
+	else static if( is(T == float) ) return cast(double)src;
+	else static if( is(T == double) ) return cast(double)src;
+	else static if( is(T : long) ) return cast(T)cast(long)src;
+	else static if( is(T == string) ) return cast(string)src;
+	else static if( is(T : const(ubyte)[]) ) return cast(T)src.get!BsonBinData.rawData.dup;
 	else static if( isArray!T ){
-		dst.length = src.length;
+		alias typeof(T.init[0]) TV;
+		auto ret = new Unqual!TV[src.length];
 		foreach( size_t i, v; cast(Bson[])src )
-			deserializeBson(dst[i], v);
+			ret[i] = deserializeBson!(Unqual!TV)(v);
+		return ret;
 	} else static if( isAssociativeArray!T ){
-		typeof(dst.values[0]) val;
-		foreach( string key, value; cast(Bson[string])src ){
-			deserializeBson(val, value);
-			dst[key] = val;
-		}
-	} else static if( __traits(compiles, dst = T.fromBson(dst.toBson())) ){
-		dst = T.fromBson(src);
-	} else static if( __traits(compiles, dst = T.fromJson(dst.toJson())) ){
-		dst = T.fromJson(src.toJson());
-	} else static if( __traits(compiles, dst = T.fromString(dst.toString())) ){
-		dst = T.fromString(cast(string)src);
+		alias typeof(T.init.values[0]) TV;
+		Unqual!TV[string] dst;
+		foreach( string key, value; cast(Bson[string])src )
+			dst[key] = deserializeBson!(Unqual!TV)(value);
+		return dst;
+	} else static if( __traits(compiles, { T dst; dst = T.fromBson(dst.toBson()); }) ){
+		return T.fromBson(src);
+	} else static if( __traits(compiles, { T dst; dst = T.fromJson(dst.toJson()); }) ){
+		return T.fromJson(src.toJson());
+	} else static if( __traits(compiles, { T dst; dst = T.fromString(dst.toString()); }) ){
+		return T.fromString(cast(string)src);
 	} else static if( is(T == struct) ){
+		T dst;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
-			} else static if( isRWField!(T, m) ){
-				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[underscoreStrip(m)]);
-				__traits(getMember, dst, m) = v;
+			static if( isRWPlainField!(T, m) || isRWField!(T, m) ){
+				alias typeof(__traits(getMember, dst, m)) TM;
+				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
 			}
 		}
+		return dst;
 	} else static if( is(T == class) ){
-		if (src.isNull()) return;
-		dst = new T;
+		if (src.isNull()) return null;
+		auto dst = new T;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWPlainField!(T, m) ){
-				deserializeBson(__traits(getMember, dst, m), src[underscoreStrip(m)]);
-			} else static if( isRWField!(T, m) ){
-				typeof(__traits(getMember, dst, m)) v;
-				deserializeBson(v, src[underscoreStrip(m)]);
-				__traits(getMember, dst, m) = v;
+			static if( isRWPlainField!(T, m) || isRWField!(T, m) ){
+				alias typeof(__traits(getMember, dst, m)) TM;
+				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
 			}
 		}
+		return dst;
+	} else static if( isPointer!T ){
+		if( src.type == Bson.Type.Null ) return null;
+		alias typeof(*T.init) TD;
+		dst = new TD;
+		*dst = deserializeBson!TD(src);
+		return dst;
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
 	}
@@ -1126,7 +1136,7 @@ ubyte[] toBigEndianData(T)(T v)
 }
 
 private string underscoreStrip(string field_name)
-{
+pure {
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
 	else return field_name[0 .. $-1];
 }
