@@ -42,7 +42,7 @@ have to specify the path everytime:
 Installation on Linux (Debian/Ubuntu, using apt)
 ------------------------------------------------
 
-Go to https://code.google.com/p/d-apt/wiki/APT_Repository and follow the
+Go to <https://code.google.com/p/d-apt/wiki/APT_Repository> and follow the
 instructions. This will setup the APT repository of Jordi Sayol, who maintains
 a number of D packages for Debian.
 
