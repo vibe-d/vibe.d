@@ -14,9 +14,10 @@ module vibe.templ.diet;
 public import vibe.stream.stream;
 
 import vibe.core.file;
+import vibe.templ.parsertools;
 import vibe.templ.utils;
 import vibe.textfilter.html;
-import vibe.textfilter.markdown;
+static import vibe.textfilter.markdown;
 import vibe.utils.string;
 
 import std.array;
@@ -136,12 +137,6 @@ private class BlockStore {
 	TemplateBlock[] blocks;
 }
 
-
-private struct Line {
-	string file;
-	int number;
-	string text;
-}
 
 /// private
 private void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
@@ -962,86 +957,6 @@ private @property string endString(ref bool in_string){
 }
 
 
-private void assert_ln(in ref Line ln, bool cond, string text = null, string file = __FILE__, int line = __LINE__)
-{
-	assert(cond, "Error in template "~ln.file~" line "~cttostring(ln.number)
-		~": "~text~"("~file~":"~cttostring(line)~")");
-}
-
-
-private string unindent(in ref string str, in ref string indent)
-{
-	size_t lvl = indentLevel(str, indent);
-	return str[lvl*indent.length .. $];
-}
-
-private int indentLevel(in ref string s, in ref string indent)
-{
-	if( indent.length == 0 ) return 0;
-	int l = 0;
-	while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
-		l += cast(int)indent.length;
-	return l / cast(int)indent.length;
-}
-
-private string lineMarker(in ref Line ln)
-{
-	return "#line "~cttostring(ln.number)~" \""~ln.file~"\"\n";
-}
-
-
-
-private string dstringEscape(char ch)
-{
-	switch(ch){
-		default: return ""~ch;
-		case '\\': return "\\\\";
-		case '\r': return "\\r";
-		case '\n': return "\\n";
-		case '\t': return "\\t";
-		case '\"': return "\\\"";
-	}
-}
-
-private string sanitizeEscaping(string str)
-{
-	str = dstringUnescape(str);
-	return dstringEscape(str);
-}
-
-private string dstringEscape(in ref string str)
-{
-	string ret;
-	foreach( ch; str ) ret ~= dstringEscape(ch);
-	return ret;
-}
-
-private string dstringUnescape(in string str)
-{
-	string ret;
-	size_t i, start = 0;
-	for( i = 0; i < str.length; i++ )
-		if( str[i] == '\\' ){
-			if( i > start ){
-				if( start > 0 ) ret ~= str[start .. i];
-				else ret = str[0 .. i];
-			}
-			switch(str[i+1]){
-				default: ret ~= str[i+1]; break;
-				case 'r': ret ~= '\r'; break;
-				case 'n': ret ~= '\n'; break;
-				case 't': ret ~= '\t'; break;
-			}
-			i++;
-			start = i+1;
-		}
-	
-	if( i > start ){
-		if( start == 0 ) return str;
-		else ret ~= str[start .. i];
-	}
-	return ret;
-}
 
 /// private
 private string _toString(T)(T v)
@@ -1052,47 +967,6 @@ private string _toString(T)(T v)
 	else return to!string(v);
 }
 
-private string ctstrip(string s)
-{
-	size_t strt = 0, end = s.length;
-	while( strt < s.length && (s[strt] == ' ' || s[strt] == '\t') ) strt++;
-	while( end > 0 && (s[end-1] == ' ' || s[end-1] == '\t') ) end--;
-	return strt < end ? s[strt .. end] : null;
-}
-
-private Line[] removeEmptyLines(string text, string file)
-{
-	text = stripUTF8Bom(text);
-
-	Line[] ret;
-	int num = 1;
-	size_t idx = 0;
-
-	while(idx < text.length){
-		// start end end markers for the current line
-		size_t start_idx = idx;
-		size_t end_idx = text.length;
-
-		// search for EOL
-		while( idx < text.length ){
-			if( text[idx] == '\r' || text[idx] == '\n' ){
-				end_idx = idx;
-				if( idx+1 < text.length && text[idx .. idx+2] == "\r\n" ) idx++;
-				idx++;
-				break;
-			}
-			idx++;
-		}
-
-		// add the line if not empty
-		auto ln = text[start_idx .. end_idx];
-		if( ctstrip(ln).length > 0 )
-			ret ~= Line(file, num, ln);
-		
-		num++;
-	}
-	return ret;
-}
 
 /**************************************************************************************************/
 /* Compile time filters                                                                           */
