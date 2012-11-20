@@ -994,7 +994,7 @@ m_status = ConnectionStatus.Connected;
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
 
-	@property bool connected() const { return m_socket != -1; }
+	@property bool connected() const { return m_status == ConnectionStatus.Connected; }
 
 	@property string peerAddress()
 	const {
@@ -1162,9 +1162,17 @@ m_status = ConnectionStatus.Connected;
 					}
 					break;
 				case FD_CLOSE:
-					m_status = ConnectionStatus.Disconnected;
-					closesocket(m_socket);
-					m_socket = -1;
+					if( error ){
+						if( m_status == ConnectionStatus.Initialized ){
+							ex = new Exception("Failed to connect to host: "~to!string(error));
+						} else {
+							ex = new Exception("The connection was closed with error: "~to!string(error));
+						}
+					} else {
+						m_status = ConnectionStatus.Disconnected;
+						closesocket(m_socket);
+						m_socket = -1;
+					}
 					break;
 			}
 			if( m_task ) m_driver.m_core.resumeTask(m_task, ex);
