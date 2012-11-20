@@ -249,7 +249,7 @@ class RestInterfaceClient(I) : I
 	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
-	#line 270 "rest.d"
+	#line 253 "rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] param_is_json)
 	const {
 		Url url = m_baseUrl;
@@ -354,6 +354,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 				params[i] = fromRestString!P(req.params["id"]);
 			} else static if( param_names[i].startsWith("_") ){
 				static if( param_names[i] != "_dummy"){
+					enforce(param_names[i][1 .. $] in req.params, "req.param[\""~param_names[i][1 .. $]~"\"] was not set!");
 					logDebug("param %s %s", param_names[i], req.params[param_names[i][1 .. $]]);
 					params[i] = fromRestString!P(req.params[param_names[i][1 .. $]]);
 				}
@@ -368,7 +369,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 					enforce(req.json.type != Json.Type.Undefined, "The request body does not contain a valid JSON value.");
 					enforce(req.json.type == Json.Type.Object, "The request body must contain a JSON object with an entry for each parameter.");
 					enforce(req.json[param_names[i]].type != Json.Type.Undefined, "Missing parameter "~param_names[i]~".");
-					deserializeJson(params[i], req.json[param_names[i]]);
+					params[i] = deserializeJson!P(req.json[param_names[i]]);
 				}
 			}
 		}
@@ -941,9 +942,5 @@ private T fromRestString(T)(string value)
 	else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
 	else static if( is(T : string) ) return value;
 	else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
-	else {
-		T ret;
-		deserializeJson(ret, parseJson(value));
-		return ret;
-	}
+	else return deserializeJson!T(parseJson(value));
 }
