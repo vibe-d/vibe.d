@@ -581,7 +581,8 @@ final class HttpServerResponse : HttpResponse {
 	/// Writes a JSON message with the specified status
 	void writeJsonBody(T)(T data, int status = HttpStatus.OK)
 	{
-		static if( is(typeof(data.data())) ){
+		import std.traits;
+		static if( is(typeof(data.data())) && isArray!(typeof(data.data())) ){
 			static assert(!is(T == Appender!(typeof(data.data()))), "Passed an Appender!T to writeJsonBody - this is most probably not doing what's indended.");
 		}
 
