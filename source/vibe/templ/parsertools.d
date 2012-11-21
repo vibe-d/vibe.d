@@ -110,6 +110,28 @@ string ctstrip(string s)
 	return strt < end ? s[strt .. end] : null;
 }
 
+string detectIndentStyle(in ref Line[] lines)
+{
+	// search for the first indented line
+	foreach( i; 0 .. lines.length ){
+		// empty lines should have been removed
+		assert(lines[0].text.length > 0);
+
+		// tabs are used
+		if( lines[i].text[0] == '\t' ) return "\t";
+
+		// spaces are used -> count the number
+		if( lines[i].text[0] == ' ' ){
+			size_t cnt = 0;
+			while( lines[i].text[cnt] == ' ' ) cnt++;
+			return lines[i].text[0 .. cnt];
+		}
+	}
+
+	// default to tabs if there are no indented lines
+	return "\t";
+}
+
 Line[] removeEmptyLines(string text, string file)
 {
 	text = stripUTF8Bom(text);
