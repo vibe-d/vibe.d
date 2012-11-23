@@ -384,15 +384,42 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 				else static if(is(ParameterTypes[i] : HttpServerResponse)) {
 					args[i] = res;
 				}
-				else {
-					count++;
+				else static if(is(ParameterTypes[i] == struct)) {
+					bool was_ok=false;
+					foreach(elem; __traits(allMembers, ParameterTypes[i])) {
+						static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})) {
+							count++;
+							was_ok=true;
+						}
+					}
+					if(!was_ok)
+						count++; // Count whole struct as one item.
 				}
+				else
+					count++;
 			}
 			if(count!=form.length) {
 				error="The form had "~to!string(form.length)~" element(s), but "~to!string(count)~" parameter(s) need to be supplied.";
 				return false;
 			}
 			foreach(i, item; ParameterIdentifierTuple!Overload) {
+				static if(is(typeof(args[i]) == struct)) {
+					bool was_ok=false;
+					foreach(elem; __traits(allMembers, typeof(args[i]))) {
+						static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})) { // Does not work (internal compiler error dmd-2.060)
+						//static if(!is(typeof(&__traits(getMember, args[i], elem)) == delegate)) {
+							string fname=item~"_"~elem;
+							if(fname !in form) {
+								error="Form misses parameter: "~item;
+								return false;
+							}
+							__traits(getMember, args[i], elem)=to!(typeof(__traits(getMember, args[i], elem)))(form[fname]);
+							was_ok=true;
+						}
+					}
+					if(was_ok)
+						continue;
+				}
 				static if(!is( typeof(args[i]) : HttpServerRequest) && !is( typeof(args[i]) : HttpServerResponse)) {
 					if(item !in form) {
 						error="Form misses parameter: "~item;
