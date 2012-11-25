@@ -406,6 +406,7 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 				static if(is(typeof(args[i]) == struct)) {
 					bool was_ok=false;
 					foreach(elem; __traits(allMembers, typeof(args[i]))) {
+						pragma(msg, "Compiles traits ("~elem~"): "~to!string(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})));
 						static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})) { // Does not work (internal compiler error dmd-2.060)
 						//static if(!is(typeof(&__traits(getMember, args[i], elem)) == delegate)) {
 							string fname=item~"_"~elem;
