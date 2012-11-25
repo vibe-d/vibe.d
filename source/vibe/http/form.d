@@ -197,7 +197,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 		}
 
 		/// POST /login
-		void login(HttpServerRequest req, HttpServerResponse res, string username,
+		void postLogin(HttpServerRequest req, HttpServerResponse res, string username,
 			string password)
 		{
 			if( username != "tester" || password != "secret" )
