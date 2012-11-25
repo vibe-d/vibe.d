@@ -224,12 +224,34 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 		MethodStyle style = MethodStyle.Unaltered)
 {
 	foreach( method; __traits(allMembers, I) ){
-
-		static if( __traits(compiles, {mixin("&instance.method");}) && !__traits(isStaticFunction, mixin("instance."~method)) && (method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
+		//pragma(msg, "What: "~"&instance."~method);
+		//pragma(msg, "Compiles: "~to!string(__traits(compiles, {mixin("auto dg=&instance."~method);}))); 
+		//pragma(msg, "Is function: "~to!string(is(typeof(mixin("I."~method)) == function )));
+		//pragma(msg, "Is delegate: "~to!string(is(typeof(mixin("I."~method)) == delegate )));
+		static if( is(typeof(mixin("I."~method)) == function) && !__traits(isStaticFunction, mixin("I."~method)) && (method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
 					|| method.startsWith("create") || method.startsWith("post") || method == "index" ))  {
 			registerFormMethod!method(router, instance, url_prefix, style);
 		}
 	}
+}
+unittest {
+	class Test {
+		static void f() {
+		}
+		int h(int a) {
+			return a;
+		}
+		void b()  {
+		}
+		int c;
+	}
+	static assert(is(typeof(Test.f) == function));
+	static assert(!is(typeof(Test.c) == function));
+	static assert(is(typeof(Test.h) == function));
+	static assert(is(typeof(Test.b) == function));
+	static assert(__traits(isStaticFunction, Test.f));
+	static assert(!__traits(isStaticFunction, Test.h));
+	static assert(!__traits(isStaticFunction, Test.b));
 }
 
 
