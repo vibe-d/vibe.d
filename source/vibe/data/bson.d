@@ -857,6 +857,7 @@ Bson serializeToBson(T)(T value)
 	else static if( is(T == bool) ) return Bson(value);
 	else static if( is(T == float) ) return Bson(cast(double)value);
 	else static if( is(T == double) ) return Bson(value);
+	else static if( is(T : int) ) return Bson(cast(int)value);
 	else static if( is(T : long) ) return Bson(cast(long)value);
 	else static if( is(T == string) ) return Bson(value);
 	else static if( is(T : const(ubyte)[]) ) return Bson(BsonBinData(BsonBinData.Type.Generic, value.idup));
@@ -924,6 +925,7 @@ T deserializeBson(T)(Bson src)
 	else static if( is(T == bool) ) return cast(bool)src;
 	else static if( is(T == float) ) return cast(double)src;
 	else static if( is(T == double) ) return cast(double)src;
+	else static if( is(T : int) ) return cast(T)cast(int)src;
 	else static if( is(T : long) ) return cast(T)cast(long)src;
 	else static if( is(T == string) ) return cast(string)src;
 	else static if( is(T : const(ubyte)[]) ) return cast(T)src.get!BsonBinData.rawData.dup;
