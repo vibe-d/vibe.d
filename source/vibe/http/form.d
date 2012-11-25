@@ -225,8 +225,8 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 {
 	foreach( method; __traits(allMembers, I) ){
 
-		static if( method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
-					|| method.startsWith("create") || method.startsWith("post") || method == "index" )  {
+		static if( __traits(compiles, {mixin("&instance.method");}) && !__traits(isStaticFunction, mixin("instance."~method)) && (method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
+					|| method.startsWith("create") || method.startsWith("post") || method == "index" ))  {
 			registerFormMethod!method(router, instance, url_prefix, style);
 		}
 	}
