@@ -324,7 +324,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 			if(applyParametersFromAssociativeArray!func(req, res, myoverload, error)) {
 				return;
 			}
-			errors~="Overload "~method~typeid(ParameterTypeTuple!func).toString()~" failed: "~error~"\n";
+			errors~="Overload "~method~typeid(ParameterTypeTuple!func).toString()~" failed: "~error~"\n\n";
 		}
 		enforce(false, "No method found that matches the found form data:\n"~errors);
 	}
@@ -343,6 +343,15 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 	func.  In this case error gets filled with some string describing which
 	parameters could not be applied. Exceptions are not used in this situation,
 	because when traversing overloads this might be a quite common scenario.
+
+	Applying data happens as follows: 
+	
+	1. All parameters are traversed
+	2. If parameter is of type HttpServerRequest or HttpServerResponse req/res will be applied.
+	3. If the parameters name is found in the form, the form data has to be convertible with conv.to to the parameters type, otherwise this method returns false.
+	4. If the parameters name is not found in the form, but is a struct, its fields are traversed and searched in the form. The form needs to contain keys in the form: parameterName_structField.
+		So if you have a struct paramter foo with a field bar and a field fooBar, the form would need to contain keys: foo_bar and foo_fooBar. The struct fields maybe datafields or properties.
+	5. If a struct field is not found in the form or the struct has no fields that are assignable, the method returns false.
 
 	Calls: applyParametersFromAssociativeArray!(Func,Func)(req, res, func, error),
 	if you want to handle overloads of func, use the second version of this method
@@ -377,57 +386,68 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 			ParameterTypes args;
 			string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
 			int count=0;
-			foreach(i, item; args) {
+			string[] missing_parameters;
+			foreach(i, item; ParameterIdentifierTuple!Overload) {
 				static if(is(ParameterTypes[i] : HttpServerRequest)) {
 					args[i] = req;
-				} 
+				}
 				else static if(is(ParameterTypes[i] : HttpServerResponse)) {
 					args[i] = res;
 				}
-				else static if(is(ParameterTypes[i] == struct)) {
-					bool was_ok=false;
-					foreach(elem; __traits(allMembers, ParameterTypes[i])) {
-						static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})) {
-							count++;
-							was_ok=true;
+				else {
+					auto found_item=item in form;
+					if(found_item) {
+						try {
+							args[i] = to!(typeof(args[i]))(*found_item);
+						}
+						catch(ConvException e) {
+							error~="Conversion of '"~item~"' failed, reason: "~e.msg~"\n";
+						}
+						count++;
+					}
+					else {
+						int old_count=count;
+						static if(is(typeof(args[i]) == struct)) {
+							foreach(elem; __traits(allMembers, typeof(args[i]))) {
+								//static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);}))   // Does not compile: _args_field_4 Internal error: e2ir.c 720
+								pragma(msg, "Compiles '__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})': "~to!string(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")));
+								static if(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")) {
+									string fname=item~"_"~elem;
+									auto found=fname in form;
+									if(found) {
+										try {
+											mixin("args[i]."~elem~"=to!(typeof(args[i]."~elem~"))(*found);");
+											//__traits(getMember, args[i], elem)=to!(typeof(__traits(getMember, args[i], elem)))(*found); // Does not compile: _args_field_4 Internal error: e2ir.c 720
+										}
+										catch(ConvException e) {
+											error~="Conversion of '"~fname~"' failed, reason: "~e.msg~"\n";
+										}
+										count++;
+									}
+									else
+										missing_parameters~=fname;
+								}
+							}
+							if(old_count==count) {
+								error~="struct parameter found, with no assignable or readable fields (make sure fields are accessible (public), assignable and readable): "~item~"\n";
+							}
+						}
+						else {
+							missing_parameters~=item;
 						}
 					}
-					if(!was_ok)
-						count++; // Count whole struct as one item.
 				}
-				else
-					count++;
+			}
+			if(missing_parameters.length) {
+				error~="The following parameters have not been found in the form data: "~to!string(missing_parameters)~"\n";
+				error~="Provied form data was: "~to!string(form.keys)~"\n";
 			}
 			if(count!=form.length) {
-				error="The form had "~to!string(form.length)~" element(s), but "~to!string(count)~" parameter(s) need to be supplied.";
-				return false;
+				error~="The form had "~to!string(form.length)~" element(s), of which "~to!string(count)~" element(s) were applicable.\n";
 			}
-			foreach(i, item; ParameterIdentifierTuple!Overload) {
-				static if(is(typeof(args[i]) == struct)) {
-					bool was_ok=false;
-					foreach(elem; __traits(allMembers, typeof(args[i]))) {
-						pragma(msg, "Compiles traits ("~elem~"): "~to!string(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})));
-						static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);})) { // Does not work (internal compiler error dmd-2.060)
-						//static if(!is(typeof(&__traits(getMember, args[i], elem)) == delegate)) {
-							string fname=item~"_"~elem;
-							if(fname !in form) {
-								error="Form misses parameter: "~item;
-								return false;
-							}
-							__traits(getMember, args[i], elem)=to!(typeof(__traits(getMember, args[i], elem)))(form[fname]);
-							was_ok=true;
-						}
-					}
-					if(was_ok)
-						continue;
-				}
-				static if(!is( typeof(args[i]) : HttpServerRequest) && !is( typeof(args[i]) : HttpServerResponse)) {
-					if(item !in form) {
-						error="Form misses parameter: "~item;
-						return false;
-					}
-					args[i] = to!(typeof(args[i]))(form[item]);
-				}
+			if(error) {
+				error="\n------\n"~error~"------";
+				return false;
 			}
 			func(args);
 			return true;
