@@ -154,15 +154,37 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	parameters.  All methods of I that start with "get", "query", "add", "create",
 	"post" are made available via the URL url_prefix~method_name. A method named
 	"index" will be made available via url_prefix. method_name is generated from
-	the original method name ba the same rules as for
+	the original method name by the same rules as for
 	vibe.http.rest.registerRestInterface. All these methods might take a
 	HttpServerRequest parameter and a HttpServerResponse parameter, but don't have
 	to.
 
 	All additional parameters will be filled with available form-data fields.
-	Every parameter name has to match a form field name. The registered handler
-	will throw an exception if no overload is found that is compatible with all
-	available form data fields.
+	Every parameter name has to match a form field name (or is a fillable
+	struct). The registered handler will throw an exception if no overload is
+	found that is compatible with all available form data fields.
+
+	If a parameter name is not found in the form data and the parameter is a
+	struct, all accessible fields of the struct (might also be properties) will
+	be searched in the form, with the parameter (struct) name prefixed. An underscore is
+	used as delimiter. So if you have a struct parameter with name 'foo' of type:
+	---
+	struct FooBar {
+		int bar;
+		int another_foo;
+	}
+	---
+	the form data must contain the keys 'foo_bar' and 'foo_another_foo'. Their
+	corresponding values will be applied to the structure's fields. If not all
+	fields of the struct are found, this is considered an error and the next
+	overload (if any) will be tried.
+	
+	The registered handler gives really good error messages if no appropriate
+	overload is found, but this comes at the price of some allocations for the
+	error messages, which are not used at all if eventually a valid overload is
+	found. So because of this and because the search for an appropriate
+	overload is done at run time (according to the provided form data) you
+	might want to avoid overloads for performance critical sites.
 
 	For a thorough example of how to use this method, see the form_interface
 	example in the examples directory.
