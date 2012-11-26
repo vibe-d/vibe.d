@@ -401,6 +401,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
 	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
 }
+
 // Overload which takes additional parameter for handling overloads of func.
 /// private
 private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
@@ -473,4 +474,98 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 			}
 			func(args);
 			return true;
+}
+
+/**
+  * Load form data into fields of a given struct.
+  *
+  * In comparison to registerFormInterface this method can be used in the case
+  * you have many, many optional form fields. It is not an error if not all
+  * fields of the struct are filled, but if it is present it must be
+  * convertible to the type of the corresponding struct field. It is also not
+  * an error if the form contains more data than applied, the method simply
+  * returns the form length and the number of applied elements, so you can
+  * decide what todo.
+  *
+  * The keys in the form must be named like "name_field", where name is the one
+  * passed to this function. If you pass "" for name then the form is queried
+  * for "field" where field is the identifier of a field in the struct, as
+  * before.
+  *
+  * If the struct contains other structs whose identifier can not be found in the form, its fields will be filled recursively.
+  *
+  * A little example:
+   ---
+   struct Address {
+		string street;
+		int door;
+		int zipCode;
+		string country;
+   }
+   struct Person {
+		string name;
+		string surname;
+		Address address;
+   }
+   // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"] 
+   void postPerson(HttpServerRequest req, HttpServerResponse res) {
+		Person p;
+		// We have a default value for country if not provided, so we don't care that it is not:
+		p.address.country="Important Country";
+		p.name="Jane";
+		enforce(loadFormData(req, p, "customer"), "More data than needed provided!");
+		// p will now contain the provided form data, non provided data stays untouched.
+		assert(p.address.country=="Important Country");
+		assert(p.name=="John");
+		assert(p.surname=="Smith");
+   }
+   --- 
+  * The mechanism is more useful in get requests, when you have good default values for unspecified parameters.
+  * Params:
+  *		req  = The HttpServerRequest that contains the form data. (req.query or req.form will be used depending on HttpMethod)
+  *		load_to = The struct you wan to be filled.
+  *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
+  */
+FormDataLoadResult loadFormData(StructType)(HttpServerRequest req, ref StructType load_to, string name) if(is(StructType == struct)) {
+	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+	int count=loadFormDataRecursive(form, load_to, prefix);
+	return FormDataLoadResult(form.length, count);
+}
+
+/// private
+private int loadFormDataRecursive(StructType)(string[string] form, ref StructType load_to, string name) if(is(StructType == struct)) {
+	int count=0;
+	foreach(elem; __traits(allMembers, typeof(load_to))) {
+		string fname=name.length ? name~"_"~elem : elem;
+		bool found=false;
+		static if(mixin("__traits(compiles, {load_to."~elem~"=load_to."~elem~";})")) {
+			found=fname in form;
+			if(found) {
+				mixin("args[i]."~elem~"=to!(typeof(args[i]."~elem~"))(*found);");
+				count++;
+			}
+		}
+		static if(mixin("is(typeof(load_to."~elem~") == struct)")) {
+			if(!found) {
+				count+=loadFormDataRecursive(form, mixin("load_to."~elem), fname, count);
+			}
+		}
+	}
+	return count;
+}
+/**
+  * struct that contains result from loadFormData.
+  *
+  * It is convertible to bool and will result to true if all form data has been applied.
+  */
+struct FormDataLoadResult {
+	/// The number of fields in the form
+	int formLength;
+	/// The number of actually applied fields.
+	int appliedCount;
+	alias fullApplied this;
+	/// Were all fields applied?
+	bool fullApplied() const {
+		return formLength==appliedCount;
+	}
 }
