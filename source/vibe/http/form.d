@@ -399,11 +399,11 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 					if(found_item) {
 						try {
 							args[i] = to!(typeof(args[i]))(*found_item);
+							count++;
 						}
 						catch(ConvException e) {
 							error~="Conversion of '"~item~"' failed, reason: "~e.msg~"\n";
 						}
-						count++;
 					}
 					else {
 						int old_count=count;
@@ -417,12 +417,12 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 									if(found) {
 										try {
 											mixin("args[i]."~elem~"=to!(typeof(args[i]."~elem~"))(*found);");
+											count++;
 											//__traits(getMember, args[i], elem)=to!(typeof(__traits(getMember, args[i], elem)))(*found); // Does not compile: _args_field_4 Internal error: e2ir.c 720
 										}
 										catch(ConvException e) {
 											error~="Conversion of '"~fname~"' failed, reason: "~e.msg~"\n";
 										}
-										count++;
 									}
 									else
 										missing_parameters~=fname;
