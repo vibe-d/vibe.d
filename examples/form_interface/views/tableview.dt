@@ -40,6 +40,26 @@ block content
 					td
 					td
 						input(type='submit', value="Add")
+	.additemcontainer
+		h2 Add new user (structured address)
+		form(action='/addUser', method='POST')
+			table
+				- import std.string;
+				- foreach ( item ; ["name", "surname"] )
+					tr
+						td= item[0..1].toUpper()~item[1..$]
+						td
+							input(type="text", width="160", name="#{item}")
+				tr
+				- foreach ( item ; ["street", "door", "zip_code"] )
+					tr
+						td= item[0..1].toUpper()~item[1..$]
+						td
+							input(type="text", width="160", name='#{"address_"~item}')
+				tr
+					td
+					td
+						input(type='submit', value="Add")
 	script
 		function getTable(field, value) {
 			var req = new XMLHttpRequest(); 

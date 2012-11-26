@@ -410,7 +410,7 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 						static if(is(typeof(args[i]) == struct)) {
 							foreach(elem; __traits(allMembers, typeof(args[i]))) {
 								//static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);}))   // Does not compile: _args_field_4 Internal error: e2ir.c 720
-								pragma(msg, "Compiles '__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})': "~to!string(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")));
+								//pragma(msg, "Compiles '__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})': "~to!string(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")));
 								static if(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")) {
 									string fname=item~"_"~elem;
 									auto found=fname in form;

@@ -3,6 +3,12 @@ import std.stdio;
 import std.algorithm;
 import std.string;
 import vibe.http.form;
+
+struct Address {
+	string street;
+	int door;
+	int zip_code;
+}
 /**
   This example pretty well shows how registerFormInterface is meant to be used and what possibilities it offers.
   The API that is exposed by DataProvider is conveniently usable by the methods in App and from JavaScript, with just
@@ -43,6 +49,11 @@ class DataProvider {
 		void addUser(string name, string surname, string address) {
 				users~=[name, surname, address];
 		}
+		/// Add user with structured address
+		/// Don't use ref Address at the moment (dmd 2.060) you'll get an ICE.
+		void addUser(string name, string surname, Address address) {
+			users~=[name, surname, address.street~" "~to!string(address.door)~"\n"~to!string(address.zip_code)];
+		}
 private:
 		string[][] users=[["Tina", "Muster", "Wassergasse 12"],
 				["Martina", "Maier", "Broadway 6"],
@@ -68,6 +79,10 @@ class App {
 			res.render!("tableview.dt", req, res, dataProvider, field, value)();
 	}
 	void addUser(HttpServerRequest req, HttpServerResponse res, string name, string surname, string address) {
+		dataProvider.addUser(name, surname, address);
+		res.redirect(prefix);	
+	}
+	void addUser(HttpServerRequest req, HttpServerResponse res, string name, string surname, Address address) {
 		dataProvider.addUser(name, surname, address);
 		res.redirect(prefix);	
 	}
