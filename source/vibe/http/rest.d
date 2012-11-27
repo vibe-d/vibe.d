@@ -504,7 +504,7 @@ private @property string generateRestInterfaceMethods(I)()
 			alias ParameterTypeTuple!FT PTypes;
 			alias ReturnType!FT RT;
 
-			auto param_names = parameterNames!FT();
+			enum param_names = parameterNames!FT();
 			HttpMethod http_verb; 
 			string rest_name;
 			getRestMethodName!FT(method, http_verb, rest_name);
@@ -531,16 +531,14 @@ private @property string generateRestInterfaceMethods(I)()
 				// serialize all parameters
 				string path_supplement;
 				foreach( i, PT; PTypes ){
-					if( i == 0 && param_names[0] == "id" ){
+					static if( i == 0 && param_names[0] == "id" ){
 						static if( is(PT == Json) ) path_supplement = "urlEncode(id.toString())~\"/\"~";
 						else path_supplement = "urlEncode(toRestString(serializeToJson(id)))~\"/\"~";
-						continue;
+					} else static if( !param_names[i].startsWith("_") ){
+						// underscore parameters are sourced from the HttpServerRequest.params map
+						ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
+						ret ~= "\tjparamsj__[\""~param_names[i]~"\"] = "~(is(PT == Json) ? "true" : "false")~";\n";
 					}
-					// underscore parameters are sourced from the HttpServerRequest.params map
-					if( param_names[i].startsWith("_") ) continue;
-
-					ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
-					ret ~= "\tjparamsj__[\""~param_names[i]~"\"] = "~(is(PT == Json) ? "true" : "false")~";\n";
 				}
 
 				ret ~= "\tauto jret__ = request(\""~ httpMethodString(http_verb)~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__, jparamsj__);\n";
