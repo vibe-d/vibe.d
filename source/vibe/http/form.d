@@ -27,6 +27,7 @@ import std.string;
 // needed for registerFormInterface stuff:
 import std.traits;
 import std.conv;
+import std.typecons;
 
 struct FilePart  {
 	InetHeaderMap headers;
@@ -405,94 +406,64 @@ private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, Ht
 // Overload which takes additional parameter for handling overloads of func.
 /// private
 private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
-			alias ParameterTypeTuple!Overload ParameterTypes;
-			ParameterTypes args;
-			string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
-			int count=0;
-			string[] missing_parameters;
-			foreach(i, item; ParameterIdentifierTuple!Overload) {
-				static if(is(ParameterTypes[i] : HttpServerRequest)) {
-					args[i] = req;
-				}
-				else static if(is(ParameterTypes[i] : HttpServerResponse)) {
-					args[i] = res;
-				}
-				else {
-					auto found_item=item in form;
-					if(found_item) {
-						try {
-							args[i] = to!(typeof(args[i]))(*found_item);
-							count++;
-						}
-						catch(ConvException e) {
-							error~="Conversion of '"~item~"' failed, reason: "~e.msg~"\n";
-						}
-					}
-					else {
-						int old_count=count;
-						static if(is(typeof(args[i]) == struct)) {
-							foreach(elem; __traits(allMembers, typeof(args[i]))) {
-								//static if(__traits(compiles, {__traits(getMember, args[i], elem)=__traits(getMember, args[i], elem);}))   // Does not compile: _args_field_4 Internal error: e2ir.c 720
-								//pragma(msg, "Compiles '__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})': "~to!string(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")));
-								static if(mixin("__traits(compiles, {args[i]."~elem~"=args[i]."~elem~";})")) {
-									string fname=item~"_"~elem;
-									auto found=fname in form;
-									if(found) {
-										try {
-											mixin("args[i]."~elem~"=to!(typeof(args[i]."~elem~"))(*found);");
-											count++;
-											//__traits(getMember, args[i], elem)=to!(typeof(__traits(getMember, args[i], elem)))(*found); // Does not compile: _args_field_4 Internal error: e2ir.c 720
-										}
-										catch(ConvException e) {
-											error~="Conversion of '"~fname~"' failed, reason: "~e.msg~"\n";
-										}
-									}
-									else
-										missing_parameters~=fname;
-								}
-							}
-							if(old_count==count) {
-								error~="struct parameter found, with no assignable or readable fields (make sure fields are accessible (public), assignable and readable): "~item~"\n";
-							}
-						}
-						else {
-							missing_parameters~=item;
-						}
-					}
-				}
-			}
-			if(missing_parameters.length) {
-				error~="The following parameters have not been found in the form data: "~to!string(missing_parameters)~"\n";
-				error~="Provied form data was: "~to!string(form.keys)~"\n";
-			}
-			if(count!=form.length) {
-				error~="The form had "~to!string(form.length)~" element(s), of which "~to!string(count)~" element(s) were applicable.\n";
-			}
-			if(error) {
-				error="\n------\n"~error~"------";
-				return false;
-			}
-			func(args);
-			return true;
+	alias ParameterTypeTuple!Overload ParameterTypes;
+	ParameterTypes args;
+	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+	int count=0;
+	Error e;
+	foreach(i, item; ParameterIdentifierTuple!Overload) {
+		static if(is(ParameterTypes[i] : HttpServerRequest)) {
+			args[i] = req;
+		}
+		else static if(is(ParameterTypes[i] : HttpServerResponse)) {
+			args[i] = res;
+		}
+		else {
+			count+=loadFormDataRecursiveSingle(form, args[i], item, e, Yes.strict);
+		}
+	}
+	error=e.message;
+	if(e.missing_parameters.length) {
+		error~="The following parameters have not been found in the form data: "~to!string(e.missing_parameters)~"\n";
+		error~="Provided form data was: "~to!string(form.keys)~"\n";
+	}
+	if(count!=form.length) {
+		error~="The form had "~to!string(form.length)~" element(s), of which "~to!string(count)~" element(s) were applicable.\n";
+	}
+	if(error) {
+		error="\n------\n"~error~"------";
+		return false;
+	}
+	func(args);
+	return true;
 }
 
 /**
-  * Load form data into fields of a given struct.
+  * Load form data into fields of a given struct or array.
   *
   * In comparison to registerFormInterface this method can be used in the case
-  * you have many, many optional form fields. It is not an error if not all
-  * fields of the struct are filled, but if it is present it must be
-  * convertible to the type of the corresponding struct field. It is also not
-  * an error if the form contains more data than applied, the method simply
-  * returns the form length and the number of applied elements, so you can
-  * decide what todo.
+  * you have many optional form fields. It is not an error if not all fields of
+  * the struct are filled, but if it is present it must be convertible to the
+  * type of the corresponding struct field (properties are not supported). It
+  * is also not an error if the form contains more data than applied, the
+  * method simply returns the form length and the number of applied elements,
+  * so you can decide what todo.
   *
-  * The keys in the form must be named like "name_field", where name is the one
-  * passed to this function. If you pass "" for name then the form is queried
-  * for "field" where field is the identifier of a field in the struct, as
-  * before.
+  * The keys in the form must be named like "name_field" for struct, where name
+  * is the one passed to this function. If you pass "" for name then the form
+  * is queried for "field" where field is the identifier of a field in the
+  * struct, as before.
   *
-  * If the struct contains other structs whose identifier can not be found in the form, its fields will be filled recursively.
+  * If you pass an array to the struct the elements get filled with elements from the form named like:
+  * "name0", "name1", ....
+  *
+  * If the struct/array contains structs/arrays whose identifier can not be
+  * found in the form, its fields will be filled recursively.
+  *
+  * Only dynamic arrays are supported. Their length will be expanded/reduced so
+  * the found form data matches exactly. For efficiency reason
+  * arr.assumeSafeAppend() gets called by the implementation if the length is
+  * reduced. So keep in mind that your data can be overridden.
   *
   * A little example:
    ---
@@ -526,32 +497,129 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(StructType)(HttpServerRequest req, ref StructType load_to, string name) if(is(StructType == struct)) {
+FormDataLoadResult loadFormData(T)(HttpServerRequest req, ref T load_to, string name) if(is(T == struct) || isDynamicArray!T) {
 	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
-	int count=loadFormDataRecursive(form, load_to, prefix);
+	if(form.length==0)
+		return FormDataLoadResult("", 0, 0);
+	Error error;
+	int count=loadFormDataRecursive(form, load_to, name, error, no!"strict");
+	if(error.message) { // Only serious errors are reported, so let's throw.
+		throw new Exception(error.message);
+	}
 	return FormDataLoadResult(form.length, count);
 }
 
 /// private
-private int loadFormDataRecursive(StructType)(string[string] form, ref StructType load_to, string name) if(is(StructType == struct)) {
+private int loadFormDataRecursive(StructType)(string[string] form, ref StructType load_to, string name, ref Error error, Flag!"strict" strict) if(is(StructType == struct)) {
 	int count=0;
+	int try_count=0;
 	foreach(elem; __traits(allMembers, typeof(load_to))) {
-		string fname=name.length ? name~"_"~elem : elem;
-		bool found=false;
-		static if(mixin("__traits(compiles, {load_to."~elem~"=load_to."~elem~";})")) {
-			found=fname in form;
-			if(found) {
-				mixin("args[i]."~elem~"=to!(typeof(args[i]."~elem~"))(*found);");
-				count++;
-			}
+		static if(is(typeof(elem)) && __traits(compiles, mixin("load_to."~elem~"=load_to."~elem))) {
+			try_count++;
+			string fname=name.length ? name~"_"~elem : elem;
+			count+=loadFormDataRecursiveSingle(form, mixin("load_to."~elem), fname, error, strict);
 		}
-		static if(mixin("is(typeof(load_to."~elem~") == struct)")) {
-			if(!found) {
-				count+=loadFormDataRecursive(form, mixin("load_to."~elem), fname, count);
+	}
+	if(!try_count) {
+		error.message~="struct parameter found, with no assignable fields (make sure fields are accessible (public) and assignable): "~name~"\n";
+	}
+	return count;
+}
+
+/// private
+private int loadFormDataRecursive(ArrayType)(string[string] form, ref ArrayType load_to, string name, ref Error error, Flag!"strict" strict) if(isDynamicArray!ArrayType && !is(ArrayType == string)) {
+	int count=0;
+	int i=0;
+	immutable arr_length=load_to.length;
+	for(i=0; i<arr_length; i++) {
+		int c=applyArrayElement(form, load_to, name, i, error, strict);
+		if(!c)
+			break;
+		count+=c;
+	}
+	if(i<arr_length) {
+		load_to.length=i+1;
+		load_to.assumeSafeAppend(); /// TODO: This has to be documented!
+	}
+	else {
+		for(; ; i++) {
+			load_to.length=load_to.length+1;
+			int c=applyArrayElement(form, load_to, name, i, error, strict);
+			if(!c)
+				break;
+			count+=c;
+		}
+	}
+	load_to.length=i; // Last item is invalid
+	load_to.assumeSafeAppend(); /// TODO: This has to be documented!
+	return count;
+}
+
+private int loadFormDataRecursive(T)(string[string] form, ref T load_to, string name, ref Error error, Flag!"strict" strict) if(!is(T == struct) && (!isDynamicArray!T || is(T == string))) {
+	static if( __traits(compiles, load_to=to!T("some_string"))) {
+		if(strict)
+			error.missing_parameters~=name;
+	}
+	else {
+		error.message~=name~" can not be parsed from string or is not assignable!\n";
+	}
+	return 0;
+}
+/// private
+private int applyArrayElement(ArrayType)(string[string] form, ref ArrayType load_to, string name, int index, ref Error error, Flag!"strict" strict) if(isDynamicArray!ArrayType) {
+	string[] backup=error.missing_parameters;
+	int count=loadFormDataRecursiveSingle(form, load_to[index], name~to!string(index), error, strict);
+	if(!count) { // Nothing found, index does not exist.
+		error.missing_parameters=backup; // Not interested in missing parameters. But we are interested in other errors.
+	}
+	return count;
+}
+
+/// private
+private int loadFormDataRecursiveSingle(T)(string[string] form, ref T elem, string fname, ref Error error, Flag!"strict" strict) {
+	static if( __traits(compiles, elem=to!T("some_string"))) {
+		auto found_item=fname in form;
+		if(found_item) {
+			try {
+				elem = to!T(*found_item);
+				return 1;
+			}
+			catch(ConvException e) {
+				error.message~="Conversion of '"~fname~"' failed, reason: "~e.msg~"\n";
+				return 0;
 			}
 		}
 	}
-	return count;
+	return loadFormDataRecursive(form, elem, fname, error, strict);
+}
+
+unittest {
+	struct Test1 {
+		int a;
+		float b;
+	}
+	struct Test {
+		int a;
+		int b;
+		int[] c;
+		Test1[] d;
+		Test1 e;
+	}
+	Test t;
+	t.b=8;
+	t.e.a=9;
+	string[string] form=[ "t_a" : "1", "t_b" : "2", "t_c0" : "3", "t_c1" : "4", "t_c2" : "5",
+	   "t_d0_a" : "6", "t_d0_b" : "7", "t_d1_a" : "9"	];
+	Error e;
+	assert(loadFormDataRecursive(form, t, "t", e, No.strict)==form.length);
+	assert(t.b==2);
+	assert(t.e.a==9);
+	assert(t.c.length==3);
+	assert(t.c[1]==4);
+	assert(t.d.length==2);
+	assert(t.d[0].a==6);
+	assert(t.d[0].b==7);
+	assert(t.d[1].a==9);
 }
 /**
   * struct that contains result from loadFormData.
@@ -568,4 +636,9 @@ struct FormDataLoadResult {
 	bool fullApplied() const {
 		return formLength==appliedCount;
 	}
+}
+
+struct Error {
+	string message;
+	string[] missing_parameters;
 }
