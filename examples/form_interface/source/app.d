@@ -92,6 +92,9 @@ class App {
 	@property DataProvider dataProvider() {
 			return provider_;
 	}
+	static void getSomethingStatic() { // static methods are ignored.
+		return;
+	}
 private:
 	string prefix_;
 	DataProvider provider_;
