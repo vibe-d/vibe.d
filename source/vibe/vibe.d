@@ -1,5 +1,5 @@
 /**
-	Central include for every vibe.d based application.
+	Provides the full vibe.d API as a single import module.
 
 	This file provides the majority of the vibe API through a single import. Note that typical
 	vibe.d applications will import 'vibe.d' instead to also get an implicit application entry
@@ -14,6 +14,7 @@ module vibe.vibe;
 public import vibe.core.core;
 public import vibe.core.file;
 public import vibe.core.log;
+public import vibe.core.mutex;
 public import vibe.core.net;
 public import vibe.core.process;
 public import vibe.core.signal;
@@ -33,6 +34,7 @@ public import vibe.http.rest;
 public import vibe.http.router;
 public import vibe.http.server;
 public import vibe.http.websockets;
+public import vibe.inet.message;
 public import vibe.inet.url;
 public import vibe.inet.urltransfer;
 public import vibe.mail.smtp;

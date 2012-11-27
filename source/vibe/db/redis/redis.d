@@ -33,7 +33,6 @@ final class RedisReply {
 				break;
 			case '-':
 				throw new Exception(ln[ 1 .. $ ]);
-				break;			
 			case ':':
 				m_data = cast(ubyte[])ln[ 1 .. $ ];
 				break;
@@ -104,7 +103,7 @@ final class RedisClient {
 		        static assert(i % 2 != 1 || isArray!T, "Values must be arrays.");
 		    }
 		    ubyte[][] ret;
-		    foreach( i, arg; args) list ~= cast(ubyte[])arg;
+		    foreach( i, arg; args) ret ~= cast(ubyte[])arg;
 		    return ret;
 		}
 	}

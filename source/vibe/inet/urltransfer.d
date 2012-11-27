@@ -43,13 +43,13 @@ InputStream download(string url_, HttpClient client = null)
 
 		switch( res.statusCode ){
 			default:
-				throw new Exception("Server reponded with code: "~httpStatusText(res.statusCode));
+				throw new Exception("Server responded with "~httpStatusText(res.statusCode)~" for "~url_);
 			case HttpStatus.OK:
 				return res.bodyReader;
 			case 300: .. case 400:
 	logTrace("Status code: %s", res.statusCode);
 				auto pv = "Location" in res.headers;
-				enforce(pv !is null, "Server reponded with redirect but did not specify the redirect location.");
+				enforce(pv !is null, "Server responded with redirect but did not specify the redirect location for "~url_);
 				logDebug("Redirect to '%s'", *pv);
 				if( startsWith((*pv), "http:") || startsWith((*pv), "https:") ){
 	logTrace("parsing %s", *pv);

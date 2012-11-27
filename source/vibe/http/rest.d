@@ -122,7 +122,7 @@ import std.traits;
 
 	See_Also:
 	
-		RestInterfaceClient class for a seemless way to acces such a generated API
+		RestInterfaceClient class for a seamless way to acces such a generated API
 */
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
 		MethodStyle style = MethodStyle.LowerUnderscored)
@@ -155,30 +155,6 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 						addRoute(http_verb, url_prefix ~ ":id", handler);
 				} else addRoute	(http_verb, url_prefix ~ rest_name_adj, handler);
 			}
-		}
-	}
-}
-
-/**
-	Generates a form based interface to the given instance.
-
-	Each function is callable with either GET or POST using form encoded parameters. Complex
-	parameters are encoded as JSON strings.
-
-	Note that this function is currently not fully implemented.
-*/
-void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
-		MethodStyle style = MethodStyle.Unaltered)
-{
-	string url(string name){
-		return url_prefix ~ adjustMethodStyle(name, style);
-	}
-
-	foreach( method; __traits(allMembers, T) ){
-		foreach( overload; MemberFunctionsTuple!(T, method) ){
-			auto handler = formMethodHandler(overload);
-			router.get(url(method), handler);
-			router.post(url(method), handler);
 		}
 	}
 }
@@ -226,7 +202,9 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 */
 class RestInterfaceClient(I) : I
 {
-    mixin("static import "~(moduleName!I)~";");
+	//pragma(msg, "imports for "~I.stringof~":");
+	//pragma(msg, generateModuleImports!(I)());
+    mixin(generateModuleImports!I);
 
 	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
@@ -271,7 +249,7 @@ class RestInterfaceClient(I) : I
 	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
-	#line 270 "rest.d"
+	#line 253 "rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] param_is_json)
 	const {
 		Url url = m_baseUrl;
@@ -372,9 +350,12 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 		static immutable param_names = parameterNames!FT();
 		foreach( i, P; ParameterTypes ){
 			static if( i == 0 && param_names[i] == "id" ){
+				logDebug("id %s", req.params["id"]);
 				params[i] = fromRestString!P(req.params["id"]);
 			} else static if( param_names[i].startsWith("_") ){
 				static if( param_names[i] != "_dummy"){
+					enforce(param_names[i][1 .. $] in req.params, "req.param[\""~param_names[i][1 .. $]~"\"] was not set!");
+					logDebug("param %s %s", param_names[i], req.params[param_names[i][1 .. $]]);
 					params[i] = fromRestString!P(req.params[param_names[i][1 .. $]]);
 				}
 			} else {
@@ -388,7 +369,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 					enforce(req.json.type != Json.Type.Undefined, "The request body does not contain a valid JSON value.");
 					enforce(req.json.type == Json.Type.Object, "The request body must contain a JSON object with an entry for each parameter.");
 					enforce(req.json[param_names[i]].type != Json.Type.Undefined, "Missing parameter "~param_names[i]~".");
-					deserializeJson(params[i], req.json[param_names[i]]);
+					params[i] = deserializeJson!P(req.json[param_names[i]]);
 				}
 			}
 		}
@@ -411,14 +392,28 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst
 }
 
 /// private
-private HttpServerRequestDelegate formMethodHandler(T)(T func)
+private @property string generateModuleImports(I)()
 {
-	void handler(HttpServerRequest req, HttpServerResponse res)
-	{
-		assert(false, "TODO!");
+	bool[string] visited;
+	string ret;
+
+	void addModule(string mod){
+		if( mod !in visited ){
+			ret ~= "static import "~mod~";\n";
+			visited[mod] = true;
+		}
 	}
 
-	return &handler;
+	foreach( method; __traits(allMembers, I) )
+		foreach( overload; MemberFunctionsTuple!(I, method) ){
+			static if( __traits(compiles, moduleName!(ReturnType!overload)))
+				addModule(moduleName!(ReturnType!overload));
+			foreach( P; ParameterTypeTuple!overload )
+				static if( __traits(compiles, moduleName!(P)))
+					addModule(moduleName!(P));
+		}
+
+	return ret;
 }
 
 /// private
@@ -696,7 +691,14 @@ private template fullyQualifiedTypeNameImpl(T,
             ~ parametersTypeString!(T)
             ~ ")"
         );
-    }   
+    }
+    else static if (isPointer!T)
+    {
+    	enum fullyQualifiedTypeNameImpl = chain!(
+            fullyQualifiedTypeNameImpl!(PointerTarget!T, qualifiers)
+            ~ "*"
+    	);
+    }
     else
         // In case something is forgotten
         static assert(0, "Unrecognized type " ~ T.stringof ~ ", can't convert to fully qualified string");
@@ -940,9 +942,5 @@ private T fromRestString(T)(string value)
 	else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
 	else static if( is(T : string) ) return value;
 	else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
-	else {
-		T ret;
-		deserializeJson(ret, parseJson(value));
-		return ret;
-	}
+	else return deserializeJson!T(parseJson(value));
 }

@@ -2,14 +2,15 @@
 =========
 
 
-v0.7.9 - 2012-
+v0.7.9 - 2012-10-30
 -------------------
 
 ### Features and improvements ###
 
- - The Diet template compiler now supports includes and recursive extensions/layouts
+ - Implemented an automated HTML form interface generator in `vibe.http.form` (by Robert Klotzner aka eskimor)
  - The REST interface now uses fully qualified names and local imports to resolve parameter/return types, making it much more robust (by Михаил Страшун aka mist)
- - Implemented TCP/UDP sockets for the Win32 driver
+ - The Diet template compiler now supports includes and recursive extensions/layouts
+ - Added support for WebSocket binary messages and closing connections (by kyubuns)
  - Implemented a directory watcher for the Win32 driver
  - Removed `vibe.textfilter.ddoc` - now in <http://github.com/rejectedsoftware/ddox>
  - Cleaned up command line handling (e.g. application parameters are now separated from vibe parameters by --)
@@ -20,13 +21,22 @@ v0.7.9 - 2012-
  - (de)serialze(To)(Json/Bson) now support type customization using (to/from)(Json/Bson) methods
  - (de)serialze(To)(Json/Bson) now strip a trailing underscore in field names, if present - allows to use keywords as field names
  - `Json.opt!()` is now much faster in case of non-existent fields
+ - Added `Bson.toJson()` and `Bson.fromJson()` and deprecated `Bson.get!Json()` and `cast(Json)bson`
  - Implemented `InputStream.readAllUtf8()` - strips BOM and sanitizes or validates the input
+ - Implemented `copyFile()` to supplement `moveFile()`
  - Added RandomAccessStream interface
  - Implemented a github like variant of Markdown more suitable for marking up conversation comments
+ - The Markdown parser now takes flags to control its behavior
  - Made ATX header and automatic link detection in the Markdown parser stricter to avoid false detections
  - Added `setPlainLogging()` - avoids output of thread and task id
  - Avoiding some bogous error messages in the HTTP server (when a peer closes a connection actively)
  - Renamed the string variant of `filterHtmlAllEscape()` to `htmlAllEscape()` to match similar functions
+ - `connectMongoDB()` will now throw if the connection is not possible - this was deferred to the first command up to now
+ - By default a `MongoDB` connection will now have the 'safe' flag set
+ - The default max cache age for the HTTP file server is now 1 day instead of 30 days
+ - Implemented `MemoryStream` - a rendom access stream operating on a `ubyte[]` array.
+ - The form parser in the HTTP server now enforces the maximum input line width
+ - A lot of documentation improvements
 
 ### Bug fixes ###
 
@@ -35,6 +45,10 @@ v0.7.9 - 2012-
  - Fixed "undefined" appearing in the stringified version of JSON arrays or objects (they are now filtered out)
  - Fixed the error message for failed connection attempts
  - Fixed a bug in `PoolAllocator.realloc()` that could cause a range violation or corrupted memory
+ - Fixed '//' comments in the Diet template compiler
+ - Fixed and optimized `readUntil` - it now also obeys the byte limit, if given
+ - Fixed parsing of floating-point numbers with exponents in the JSON parser
+ - Fixed some HTML output syntax errors in the Markdown compiler
 
 
 v0.7.8 - 2012-10-01

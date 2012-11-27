@@ -33,7 +33,6 @@ struct ScopedLock {
 		switch(mode){
 			default:
 				assert(false, "unsupported enum value");
-				break;
 			case LockMode.Lock: 
 				lock();
 				break;

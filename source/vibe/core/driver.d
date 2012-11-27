@@ -89,7 +89,8 @@ interface EventDriver {
 	/** Listens on the specified port and interface for TCP connections.
 
 		'bind_address' must be an IPv4 or IPv6 address string corresponding to a local network
-		interface.
+		interface. conn_callback is called for every incoming connection, each time from a
+		new task.
 	*/
 	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address);
 

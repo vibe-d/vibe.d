@@ -1,0 +1,12 @@
+!!! 5
+html(lang="en")
+	head
+		block head
+	body
+		block body
+		.content
+			block content
+		.sidebar
+			block sidebar
+		.footer
+			block footer

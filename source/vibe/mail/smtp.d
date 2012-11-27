@@ -74,7 +74,6 @@ enum SmtpAuthType {
 class SmtpClientSettings {
 	string host = "127.0.0.1";
 	ushort port = 25;
-	bool useTLS = false;
 	string localname = "localhost";
 	SmtpConnectionType connectionType = SmtpConnectionType.Plain;
 	SmtpAuthType authType = SmtpAuthType.None;
@@ -109,7 +108,7 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 
 	Stream conn = raw_conn;
 
-	expectStatus(conn, SmtpStatus.ServiceReady);
+	expectStatus(conn, SmtpStatus.ServiceReady, "connection establishment");
 
 	void greet(){
 		conn.write("EHLO "~settings.localname~"\r\n");
@@ -125,11 +124,16 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 		}
 	}
 
+	if( settings.connectionType == SmtpConnectionType.SSL ){
+		auto ctx = new SslContext();
+		conn = new SslStream(raw_conn, ctx, SslStreamState.Connecting);
+	}
+
 	greet();
 
-	if( settings.useTLS ){
+	if( settings.connectionType == SmtpConnectionType.StartTLS ){
 		conn.write("STARTTLS\r\n");
-		expectStatus(conn, SmtpStatus.ServiceReady);
+		expectStatus(conn, SmtpStatus.ServiceReady, "STARTTLS");
 		auto ctx = new SslContext();
 		conn = new SslStream(raw_conn, ctx, SslStreamState.Connecting);
 		greet();
@@ -140,51 +144,51 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 		case SmtpAuthType.Plain:
 			logDebug("seding auth");
 			conn.write("AUTH PLAIN\r\n");
-			expectStatus(conn, SmtpStatus.ServerAuthReady);
+			expectStatus(conn, SmtpStatus.ServerAuthReady, "AUTH PLAIN");
 			logDebug("seding auth info");
 			conn.write(Base64.encode(cast(ubyte[])("\0"~settings.username~"\0"~settings.password)));
 			conn.write("\r\n");
-			expectStatus(conn, 235);
+			expectStatus(conn, 235, "plain auth info");
 			logDebug("authed");
 			break;
 		case SmtpAuthType.Login:
 			conn.write("AUTH LOGIN\r\n");
-			expectStatus(conn, SmtpStatus.ServerAuthReady);
+			expectStatus(conn, SmtpStatus.ServerAuthReady, "AUTH LOGIN");
 			conn.write(Base64.encode(cast(ubyte[])settings.username) ~ "\r\n");
-			expectStatus(conn, SmtpStatus.ServerAuthReady);
+			expectStatus(conn, SmtpStatus.ServerAuthReady, "login user name");
 			conn.write(Base64.encode(cast(ubyte[])settings.password) ~ "\r\n");
-			expectStatus(conn, 235);
+			expectStatus(conn, 235, "login password");
 			break;
 		case SmtpAuthType.CramMd5: assert(false, "TODO!");
 	}
 
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
-	expectStatus(conn, SmtpStatus.Success);
+	expectStatus(conn, SmtpStatus.Success, "MAIL FROM");
 
 	conn.write("RCPT TO:"~addressMailPart(mail.headers["To"])~"\r\n"); // TODO: support multiple recipients
-	expectStatus(conn, SmtpStatus.Success);
+	expectStatus(conn, SmtpStatus.Success, "RCPT TO");
 
 	conn.write("DATA\r\n");
-	expectStatus(conn, SmtpStatus.StartMailInput);
+	expectStatus(conn, SmtpStatus.StartMailInput, "DATA");
 	foreach( name, value; mail.headers ){
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");
 	conn.write(mail.bodyText);
 	conn.write("\r\n.\r\n");
-	expectStatus(conn, SmtpStatus.Success);
+	expectStatus(conn, SmtpStatus.Success, "message body");
 
 	conn.write("QUIT\r\n");
-	expectStatus(conn, SmtpStatus.ServiceClosing);
+	expectStatus(conn, SmtpStatus.ServiceClosing, "QUIT");
 }
 
-private void expectStatus(InputStream conn, int expected_status)
+private void expectStatus(InputStream conn, int expected_status, string in_response_to)
 {
 	string ln = cast(string)conn.readLine();
 	auto sp = ln.countUntil(' ');
 	if( sp < 0 ) sp = ln.length;
 	auto status = to!int(ln[0 .. sp]);
-	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" got "~to!string(status)~": "~ln[sp .. $]);
+	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
 }
 
 private int recvStatus(InputStream conn)

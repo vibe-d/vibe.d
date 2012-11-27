@@ -1,6 +1,14 @@
 #!/bin/sh
 set -e
 
+# hack for nightbuild server to work on windows
+if [ "$OSTYPE" = "msys" ];
+then
+    VIBECMD=$(echo $0 | sed 's/\//\\/g').cmd
+	cmd.exe //C $VIBECMD $*
+	exit
+fi
+
 # delete old vpm.d if another run left it in /tmp
 rm -f /tmp/vpm.d
 
@@ -10,7 +18,9 @@ if [ ! -n "$VIBEBINARY" ]; then VIBEBINARY="$0"; fi
 VIBEPATH=$(dirname "$VIBEBINARY")
 
 # use pkg-config if possible or fallback to default flags
-LIBS=$(pkg-config --libs libevent libevent_pthreads libssl 2>/dev/null || echo "-levent_pthreads -levent -lssl -lcrypto")
+LIBEVENT=$(pkg-config --libs libevent libevent_pthreads 2>/dev/null || echo "-levent_pthreads -levent")
+LIBSSL=$(pkg-config --libs libssl 2>/dev/null || echo "-lssl -lcrypto")
+LIBS="$LIBEVENT $LIBSSL"
 LIBS=$(echo "$LIBS" | sed 's/^-L/-L-L/; s/ -L/ -L-L/g; s/^-l/-L-l/; s/ -l/ -L-l/g')
 export LIBS
 

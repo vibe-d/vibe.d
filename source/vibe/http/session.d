@@ -86,6 +86,12 @@ interface SessionStore {
 
 	/// Iterates all key/value pairs stored in the given session. 
 	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id);
+
+	/// Creates a new Session object which sources its contents from this store.
+	protected final Session createSessionInstance(string id = null)
+	{
+		return new Session(this, id);
+	}
 }
 
 
@@ -142,5 +148,4 @@ final class MemorySessionStore : SessionStore {
 			return 0;
 		};
 	}
-
 }
