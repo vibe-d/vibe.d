@@ -151,8 +151,8 @@ final class RedisClient {
 
 	//TODO sort
 
-	size_t ttl(string key) {
-		return request!size_t("TTL", cast(ubyte[])key);
+	long ttl(string key) {
+		return request!long("TTL", cast(ubyte[])key);
 	}
 
 	string type(string key) {
@@ -447,7 +447,7 @@ final class RedisClient {
 		return request!size_t("ZREMRANGEBYRANK", cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(stop));
 	}
 
-	size_t zremRangeByScore(string key,	double min, double max) {
+	size_t zremRangeByScore(string key, double min, double max) {
 		return request!size_t("ZREMRANGEBYSCORE", cast(ubyte[])key, cast(ubyte[])to!string(min), cast(ubyte[])to!string(max));
 	}	
 
