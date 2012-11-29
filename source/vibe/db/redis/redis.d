@@ -432,7 +432,18 @@ final class RedisClient {
 		return request("ZRANGE", args);
 	}
 
-	//TODO: zrangeByScore
+	RedisReply zrangeByScore(string key, size_t start, size_t end, bool withScores=false) {
+		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
+		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
+		return request("ZRANGEBYSCORE", args);
+	}
+
+	RedisReply zrangeByScore(string key, size_t start, size_t end, size_t offset, size_t count, bool withScores=false) {
+		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
+		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
+                args ~= cast(ubyte[])"LIMIT" ~ cast(ubyte[])to!string(offset) ~ cast(ubyte[])to!string(count);
+		return request("ZRANGEBYSCORE", args);
+	}
 
 	int zrank(string key, string member) {
 		auto str = request!string("ZRANK", cast(ubyte[]) key, cast(ubyte[]) member);
