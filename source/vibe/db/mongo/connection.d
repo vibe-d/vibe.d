@@ -19,6 +19,7 @@ import std.exception;
 import std.regex;
 import std.string;
 
+
 /**
 	Provides low-level mongodb protocol access.
 
@@ -101,7 +102,7 @@ class MongoConnection : EventedObject {
 		send(msg);
 		if(settings.safe)
 		{
-			safeModeLastError(collection_name);
+			checkForError(collection_name);
 		}
 	}
 
@@ -119,7 +120,7 @@ class MongoConnection : EventedObject {
 		
 		if(settings.safe)
 		{
-			safeModeLastError(collection_name);
+			checkForError(collection_name);
 		}
 	}
 
@@ -159,7 +160,7 @@ class MongoConnection : EventedObject {
 		send(msg);
 		if(settings.safe)
 		{
-			safeModeLastError(collection_name);
+			checkForError(collection_name);
 		}
 	}
 
@@ -249,9 +250,11 @@ class MongoConnection : EventedObject {
 
 	private int nextMessageId() { return m_msgid++; }
 	
-	private Reply safeModeLastError(string collection_name)
+	private void checkForError(string collection_name)
 	{
-		Bson[string] command_and_options = ["getlasterror": Bson(1)];
+		auto coll = collection_name.split(".")[0] ~ ".$cmd";
+
+		Bson[string] command_and_options = ["getlasterror": Bson(1.0)];
 		
 		if(settings.w != settings.w.init)
 			command_and_options["w"] = settings.w; // Already a Bson struct
@@ -262,11 +265,19 @@ class MongoConnection : EventedObject {
 		if(settings.fsync)
 			command_and_options["fsync"] = Bson(true);
 		
-		logTrace("Running safeModeLastError on %s", collection_name);
-			
-		Reply results = query(collection_name, QueryFlags.None | settings.defQueryFlags,
-										0, 0, serializeToBson(command_and_options));	
-		return results;
+		Reply results = query(coll, QueryFlags.None | settings.defQueryFlags,
+										0, 1, serializeToBson(command_and_options));	
+		enforce(!(results.flags & ReplyFlags.QueryFailure), "MongoDB error: getLastError call failed.");
+
+		logTrace("error result flags for %s: %s, cursor %s, documents %s", coll, results.flags, results.cursor, results.documents.length);
+
+		if( results.documents.length == 0 )
+			return;
+
+		enforce(results.documents.length == 1, "getLastError returned "~to!string(results.documents.length)~" documents instead of one!?");
+		auto res = results.documents[0];
+
+		enforce(res.err.type == Bson.Type.Null, "MongoDB getLastError error: "~res.err.get!string());
 	}
 }
 
