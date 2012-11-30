@@ -14,7 +14,10 @@ import vibe.core.log;
 import vibe.db.mongo.db;
 
 import std.algorithm : countUntil;
+import std.array;
+import std.conv;
 import std.exception;
+import std.string;
 
 
 /**
@@ -50,6 +53,8 @@ struct MongoCollection {
 	private {
 		MongoDB m_db;
 		string m_collection;
+		string m_dbName;
+		string m_collName;
 	}
 
 	this(MongoDB db, string collection_name)
@@ -57,7 +62,23 @@ struct MongoCollection {
 		assert(db !is null);
 		m_db = db;
 		m_collection = collection_name;
+
+		auto dotidx = collection_name.indexOf('.');
+		assert(dotidx > 0, "The collection name passed to MongoCollection must be of the form \"dbname.collectionname\".");
+
+		m_dbName = collection_name[0 .. dotidx];
+		m_collName = collection_name[dotidx+1 .. $];
 	}
+
+	/**
+		Returns the name of the database to which this collection belongs.
+	*/
+	@property string databaseName() const { return m_dbName; }
+
+	/**
+		Returns the name of this collection (excluding the database name).
+	*/
+	@property string name() const { return m_collName; }
 
 	/**
 		Performs an update operation on documents matching 'selector', updating them with 'update'.
@@ -174,5 +195,43 @@ struct MongoCollection {
 		enforce(reply.ok.get!double == 1, "Count command failed.");
 		return cast(ulong)reply.n.get!double;
 	}
+
+	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None)
+	{
+		// TODO: support 2d indexes
+
+		auto indexname = appender!string();
+		bool first = true;
+		foreach( f, d; field_orders ){
+			if( !first ) indexname.put('_');
+			else first = false;
+			indexname.put(f);
+			indexname.put('_');
+			indexname.put(to!string(d));
+		}
+
+		Bson[string] doc;
+		doc["v"] = 1;
+		doc["key"] = serializeToBson(field_orders);
+		doc["ns"] = m_collection;
+		doc["name"] = indexname.data;
+		if( flags & IndexFlags.Unique ) doc["unique"] = true;
+		if( flags & IndexFlags.DropDuplicates ) doc["dropDups"] = true;
+		if( flags & IndexFlags.Background ) doc["background"] = true;
+		if( flags & IndexFlags.Sparse ) doc["sparse"] = true;
+		m_db[databaseName ~ ".system.indexes"].insert(doc);
+	}
+
+	void dropIndex(string name)
+	{
+		assert(false);
+	}
 }
 
+enum IndexFlags {
+	None = 0,
+	Unique = 1<<0,
+	DropDuplicates = 1<<2,
+	Background = 1<<3,
+	Sparse = 1<<4
+}
