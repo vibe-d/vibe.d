@@ -25,7 +25,8 @@ final class Session {
 		string m_id;
 	}
 
-	private this(SessionStore store, string id=null) {
+	private this(SessionStore store, string id = null)
+	{
 		m_store = store;
 		if (id) {
 			m_id = id;
@@ -36,6 +37,26 @@ final class Session {
 		}
 	}
 
+	/// Returns the unique session id of this session.
+	@property string id() const { return m_id; }
+
+	/// Queries the session for the existence of a particular key.
+	bool isKeySet(string key) const { return m_store.isKeySet(m_id, key); }
+
+	/**
+		Enables foreach-iteration over all key/value pairs of the session.
+
+		Examples:
+		---
+		// sends all session entries to the requesting browser
+		void handleRequest(HttpServerRequest req, HttpServerResponse res)
+		{
+			res.contentType = "text/plain";
+			foreach(key, value; req.session)
+				res.bodyWriter.write(key ~ ": " ~ value ~ "\n");
+		}
+		---
+	*/
 	int opApply(int delegate(ref string key, ref string value) del)
 	{
 		foreach( key, ref value; m_store.iterateSession(m_id) )
@@ -44,16 +65,25 @@ final class Session {
 		return 0;
 	}
 	
-	/// Returns the unique session id of this session.
-	@property string id() const { return m_id; }
+	/**
+		Gets/sets a key/value pair stored within the session.
 
-	/// Gets/sets a key/value pair stored within the session.
+		Returns null if the specified key is not set.
+
+		Examples:
+		---
+		void handleRequest(HttpServerRequest req, HttpServerResponse res)
+		{
+			res.contentType = "text/plain";
+			res.bodyWriter.write("Username: " ~ req.session["userName"]);
+			res.bodyWriter.write("Request count: " ~ req.session["requestCount"]);
+			req.session["requestCount"] = to!string(req.session["requestCount"].to!int + 1);
+		}
+		---
+	*/
 	string opIndex(string name) const { return m_store.get(m_id, name); }
 	/// ditto
 	void opIndexAssign(string value, string name) { m_store.set(m_id, name, value); }
-
-	/// Queries the session for the existence of a particular key.
-	bool isKeySet(string key) const { return m_store.isKeySet(m_id, key); }
 
 	package void destroy() { m_store.destroy(m_id); }
 }
@@ -106,35 +136,42 @@ final class MemorySessionStore : SessionStore {
 	private {
 		string[string][string] m_sessions;
 	}
-	this() {}
 
-	Session create() {
+	Session create()
+	{
 		auto s = new Session(this);
 		m_sessions[s.id] = null;
 		return s;
 	}
-	Session open(string id) {
+
+	Session open(string id)
+	{
 		auto pv = id in m_sessions;
 		return pv ? new Session(this, id) : null;	
 	}
-	void set(string id, string name, string value) {
+
+	void set(string id, string name, string value)
+	{
 		m_sessions[id][name] = value;
-		foreach(k,v; m_sessions[id]) logTrace("Csession[%s][%s] = %s", id, k, v);
+		foreach(k, v; m_sessions[id]) logTrace("Csession[%s][%s] = %s", id, k, v);
 	}
+
 	string get(string id, string name, string defaultVal=null)
 	const {
 		assert(id in m_sessions, "session not in store");
-		foreach(k,v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
+		foreach(k, v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
 		if (auto pv = name in m_sessions[id]) {
 			return *pv;			
 		} else {
 			return defaultVal;
 		}
 	}
+
 	bool isKeySet(string id, string key)
 	const {
 		return (key in m_sessions[id]) !is null;
 	}
+
 	void destroy(string id)
 	{
 		m_sessions.remove(id);
@@ -143,11 +180,13 @@ final class MemorySessionStore : SessionStore {
 	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id)
 	{
 		assert(id in m_sessions, "session not in store");
-		return (int delegate(ref string, ref string) del){
+		int iterator(int delegate(ref string key, ref string value) del)
+		{
 			foreach( key, ref value; m_sessions[id] )
 				if( auto ret = del(key, value) != 0 )
 					return ret;
 			return 0;
-		};
+		}
+		return &iterator;
 	}
 }
