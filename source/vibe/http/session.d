@@ -109,7 +109,9 @@ final class MemorySessionStore : SessionStore {
 	this() {}
 
 	Session create() {
-		return new Session(this);
+		auto s = new Session(this);
+		m_sessions[s.id] = null;
+		return s;
 	}
 	Session open(string id) {
 		auto pv = id in m_sessions;
