@@ -40,18 +40,22 @@ version(Windows){
 		
 		enum O_RDONLY = 0;
 		enum O_WRONLY = 1;
-	    enum O_APPEND = 8;
-	    enum O_CREAT = 0x0100;
-	    enum O_TRUNC = 0x0200;
+		enum O_APPEND = 8;
+		enum O_CREAT = 0x0100;
+		enum O_TRUNC = 0x0200;
+		enum O_BINARY = 0x8000;
 
 		enum _S_IREAD = 0x0100;          /* read permission, owner */
 		enum _S_IWRITE = 0x0080;          /* write permission, owner */
 		alias struct_stat stat_t;
 	}
 }
+else
+{
+	enum O_BINARY = 0;
+}
 
 private {
-	enum O_BINARY = 0x8000;
 	enum SEEK_SET = 0;
 	enum SEEK_CUR = 1;
 	enum SEEK_END = 2;
