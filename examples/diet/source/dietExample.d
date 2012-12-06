@@ -9,7 +9,7 @@ void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	parseDietFile!("diet.dt", req, local_var)(output);
 }
 
-static this()
+shared static this()
 {
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;

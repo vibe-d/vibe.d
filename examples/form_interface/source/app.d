@@ -100,7 +100,7 @@ private:
 	DataProvider provider_;
 }
 
-static this()
+shared static this()
 {
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;

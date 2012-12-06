@@ -5,7 +5,7 @@ void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	res.redirect("/index.html");
 }
 
-static this()
+shared static this()
 {
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;

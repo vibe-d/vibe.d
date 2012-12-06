@@ -1,6 +1,6 @@
 import vibe.d;
 
-static this()
+shared static this()
 {
 	runTask({
 		auto udp_listener = listenUdp(1234);

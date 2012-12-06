@@ -8,7 +8,7 @@ void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	parseDietFile!("info.dt", req)(output);
 }
 
-static this()
+shared static this()
 {
 	auto settings = new HttpServerSettings;
 	settings.sessionStore = new MemorySessionStore();

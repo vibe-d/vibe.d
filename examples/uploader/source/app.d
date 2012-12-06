@@ -14,7 +14,7 @@ void uploadFile(HttpServerRequest req, HttpServerResponse res)
 	res.writeBody("File uploaded!", "text/plain");
 }
 
-static this()
+shared static this()
 {
 	auto router = new UrlRouter;
 	router.get("/", staticTemplate!"upload_form.dt");

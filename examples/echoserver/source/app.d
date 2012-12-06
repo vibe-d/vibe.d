@@ -1,6 +1,6 @@
 import vibe.d;
 
-static this()
+shared static this()
 {
 	listenTcp(7, conn => conn.write(conn));
 }

@@ -47,7 +47,7 @@ class MyItemsApiImpl : IMyItemsApi {
 }
 
 
-static this()
+shared static this()
 {
 	// start the rest server
 	auto routes = new UrlRouter;
