@@ -1126,7 +1126,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
 		else logError("HttpStatusException after page has been written: %s", err.toString());
-		logDebug("Exception while handling request: %s", err.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.url, err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
