@@ -701,9 +701,10 @@ struct BsonObjectID {
 
 	/** Allows for relational comparison of different IDs.
 	*/
-	int opCmp(ref const BsonObjectID other) const {
-		if( m_bytes == other.m_bytes) return 0;
-		return m_bytes < other.m_bytes ? -1 : 1;
+	int opCmp(ref const BsonObjectID other)
+	const {
+		import core.stdc.string;
+		return memcmp(m_bytes.ptr, other.m_bytes.ptr, m_bytes.length);
 	}
 
 	/** Converts the ID to its standard hexa-decimal string representation.
