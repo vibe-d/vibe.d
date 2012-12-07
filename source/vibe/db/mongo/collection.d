@@ -190,7 +190,7 @@ struct MongoCollection {
 		Bson cmd = Bson.EmptyObject;
 		cmd["count"] = Bson(collstr);
 		cmd["query"] = serializeToBson(query);
-		cmd["fields"] = Bson(null);
+		cmd["fields"] = Bson.EmptyObject;
 		auto reply = m_db.runCommand(dbstr, cmd);
 		enforce(reply.ok.get!double == 1, "Count command failed.");
 		return cast(ulong)reply.n.get!double;

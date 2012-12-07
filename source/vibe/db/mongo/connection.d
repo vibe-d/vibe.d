@@ -202,7 +202,7 @@ class MongoConnection : EventedObject {
 		} else if( m_bytesRead - bytes_read > msglen ){
 			logWarn("MongoDB reply was shorter than expected. Dropping connection.");
 			disconnect();
-			throw new Exception("MongoDB reply was too short for data.");
+			throw new MongoException("MongoDB reply was too short for data.");
 		}
 
 		auto msg = new Reply;
@@ -267,17 +267,17 @@ class MongoConnection : EventedObject {
 		
 		Reply results = query(coll, QueryFlags.None | settings.defQueryFlags,
 										0, 1, serializeToBson(command_and_options));	
-		enforce(!(results.flags & ReplyFlags.QueryFailure), "MongoDB error: getLastError call failed.");
+		enforce(!(results.flags & ReplyFlags.QueryFailure), new MongoException("MongoDB error: getLastError call failed."));
 
 		logTrace("error result flags for %s: %s, cursor %s, documents %s", coll, results.flags, results.cursor, results.documents.length);
 
 		if( results.documents.length == 0 )
 			return;
 
-		enforce(results.documents.length == 1, "getLastError returned "~to!string(results.documents.length)~" documents instead of one!?");
+		enforce(results.documents.length == 1, new MongoException("getLastError returned "~to!string(results.documents.length)~" documents instead of one!?"));
 		auto res = results.documents[0];
 
-		enforce(res.err.type == Bson.Type.Null, "MongoDB getLastError error: "~res.err.get!string());
+		enforce(res.err.type == Bson.Type.Null, new MongoException("MongoDB getLastError error: "~res.err.get!string()));
 	}
 }
 
@@ -629,5 +629,12 @@ class MongoHost
 	{
 		name = hostName;
 		port = mongoPort;
+	}
+}
+
+class MongoException : Exception {
+	this(string message, Throwable next = null, string file = __FILE__, int line = __LINE__)
+	{
+		super(message, file, line, next);
 	}
 }
