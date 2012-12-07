@@ -38,17 +38,20 @@ class ConnectionPool(Connection : EventedObject)
 	LockedConnection!Connection lockConnection()
 	{
 		auto fthis = Fiber.getThis();
-		if( auto pconn = fthis in m_locks ){
+		auto pconn = fthis in m_locks;
+		if( pconn && *pconn ){
 			m_lockCount[*pconn]++;
 			return LockedConnection!Connection(this, *pconn);
 		}
 
 		size_t cidx = size_t.max;
-		foreach( i, c; m_connections )
-			if( c !in m_lockCount ){
+		foreach( i, c; m_connections ){
+			auto plc = c in m_lockCount;
+			if( !plc || *plc == 0 ){
 				cidx = i;
 				break;
 			}
+		}
 
 		if( cidx == size_t.max ){
 			m_connections ~= m_connectionFactory();
@@ -99,8 +102,7 @@ struct LockedConnection(Connection : EventedObject) {
 			assert(fthis is m_fiber);
 			logTrace("conn %s destroy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]-1);
 			if( --m_pool.m_lockCount[m_conn] == 0 ){
-				m_pool.m_locks.remove(m_fiber);
-				m_pool.m_lockCount.remove(m_conn);
+				m_pool.m_locks[m_fiber] = null;
 				if( fthis ) m_conn.release();
 				m_conn = null;
 			}
