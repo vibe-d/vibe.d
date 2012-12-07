@@ -667,7 +667,7 @@ struct Json {
 /**
 	Parses the given range as a JSON string and returns the corresponding Json object.
 
-	The range is shrunk during parsing, leaving any remaining text that is now part of
+	The range is shrunk during parsing, leaving any remaining text that is not part of
 	the JSON contents.
 
 	Throws an Exception if any parsing error occured.
