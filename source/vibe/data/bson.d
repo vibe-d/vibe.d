@@ -699,6 +699,17 @@ struct BsonObjectID {
 		return false;
 	}
 
+	/** Extracts the time/date portion of the object ID.
+
+		For IDs created using the standard generation algorithm or using createDateID
+		this will return the associated time stamp.
+	*/
+	@property SysTime timeStamp()
+	{
+		ubyte[4] tm = m_bytes[0 .. 4];
+		return SysTime(unixTimeToStdTime(bigEndianToNative!uint(tm)));
+	}
+
 	/** Allows for relational comparison of different IDs.
 	*/
 	int opCmp(ref const BsonObjectID other)
