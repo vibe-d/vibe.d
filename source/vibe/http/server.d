@@ -718,6 +718,11 @@ final class HttpServerResponse : HttpResponse {
 		This version of render() works around a compiler bug in DMD (Issue 2962). You should use
 		this method instead of render() as long as this bug is not fixed.
 
+		The first template argument is the name of the template file. All following arguments
+		must be pairs of a type and a string, each specifying one parameter. Parameter values
+		can be passed either as a value of the same type as specified by the template
+		arguments, or as a Variant which has the same type stored.
+
 		Note that the variables are copied and not referenced inside of the template - any
 		modification you do on them from within the template will get lost.
 
@@ -728,14 +733,14 @@ final class HttpServerResponse : HttpResponse {
 			res.renderCompat!("mytemplate.jd",
 				string, "title",
 				int, "pageNumber")
-				(Variant(title), Variant(pageNumber));
+				(title, pageNumber);
 			---
 	*/
-	void renderCompat(string template_file, TYPES_AND_NAMES...)(Variant[] args...)
+	void renderCompat(string template_file, TYPES_AND_NAMES...)(...)
 	{
 		import vibe.templ.diet;
 		headers["Content-Type"] = "text/html; charset=UTF-8";
-		parseDietFileCompat!(template_file, TYPES_AND_NAMES)(bodyWriter, args);
+		parseDietFileCompatV!(template_file, TYPES_AND_NAMES)(bodyWriter, _argptr, _arguments);
 	}
 
 	// Finalizes the response. This is called automatically by the server.

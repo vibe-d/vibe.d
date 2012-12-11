@@ -59,7 +59,7 @@ void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
 
 	// Generate the D source code for the diet template
 	mixin(dietParser!template_file);
-	#line 57 "diet.d"
+	#line 63 "diet.d"
 }
 
 /**
@@ -68,11 +68,17 @@ void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	This function should only be called indiretly through HttpServerResponse.renderCompat().
 
 */
-void parseDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, Variant[] args__...)
+void parseDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
+{
+	parseDietFileCompatv!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
+}
+/// ditto
+void parseDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, void* _argptr, TypeInfo[] _arguments)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
 	import vibe.utils.string;
+	import core.vararg;
 
 	pragma(msg, "Compiling diet template '"~template_file~"' (compat)...");
 	//pragma(msg, localAliasesCompat!(0, TYPES_AND_NAMES));
@@ -80,7 +86,7 @@ void parseDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream 
 
 	// Generate the D source code for the diet template
 	mixin(dietParser!template_file);
-	#line 78 "diet.d"
+	#line 90 "diet.d"
 }
 
 /**

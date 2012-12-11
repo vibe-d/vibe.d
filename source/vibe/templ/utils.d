@@ -111,9 +111,20 @@ template localAliases(int i, ALIASES...)
 /// Variant[] args__ available that matches TYPES_AND_NAMES
 template localAliasesCompat(int i, TYPES_AND_NAMES...)
 {
+	import core.vararg;
 	static if( i+1 < TYPES_AND_NAMES.length ){
-		enum string localAliasesCompat = "auto "~TYPES_AND_NAMES[i+1]~" = *args__["~cttostring(i/2)~"].peek!(TYPES_AND_NAMES["~cttostring(i)~"])();\n"
-			~localAliasesCompat!(i+2, TYPES_AND_NAMES);
+		enum TYPE = "TYPES_AND_NAMES["~cttostring(i)~"]";
+		enum NAME = TYPES_AND_NAMES[i+1];
+		enum INDEX = cttostring(i/2);
+		enum string localAliasesCompat = 
+			TYPE~" "~NAME~";\n"~
+			"if( _arguments["~INDEX~"] == typeid(Variant) )\n"~
+			"\t"~NAME~" = *va_arg!Variant(_argptr).peek!("~TYPE~")();\n"~
+			"else {\n"~
+			"\tassert(_arguments["~INDEX~"] == typeid("~TYPE~"));\n"~
+			"\t"~NAME~" = va_arg!("~TYPE~")(_argptr);\n"~
+			"}\n"~
+			localAliasesCompat!(i+2, TYPES_AND_NAMES);
 	} else {
 		enum string localAliasesCompat = "";
 	}
