@@ -334,8 +334,6 @@ class HttpServerSettings {
 	/// the url and all headers. 
 	ulong maxRequestHeaderSize = 8192;
 
-	uint maxRequestHeaderCount = 100;
-
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	HttpServerErrorPageHandler errorPageHandler = null;
 
@@ -846,7 +844,6 @@ private struct HTTPServerListener {
 }
 
 private enum MaxHttpHeaderLineLength = 4096;
-private enum MaxHttpRequestHeaderSize = 8192;
 
 private class LimitedHttpInputStream : LimitedInputStream {
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false) {
@@ -999,6 +996,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	try {
 		logTrace("reading request..");
 
+		// limit the total request size
 		InputStream reqReader;
 		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = conn;
 		else {
@@ -1008,7 +1006,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// basic request parsing
 		req.peer = peer_address;
-		parseRequest(req, reqReader, request_allocator);
+		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
 		logTrace("Got request header.");
 
 		// find the matching virtual host
@@ -1165,9 +1163,9 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 }
 
 
-private void parseRequest(HttpServerRequest req, InputStream conn, Allocator alloc)
+private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocator alloc, ulong max_header_size)
 {
-	auto stream = FreeListRef!LimitedHttpInputStream(conn, MaxHttpRequestHeaderSize);
+	auto stream = FreeListRef!LimitedHttpInputStream(conn, max_header_size);
 
 	logTrace("HTTP server reading status line");
 	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength, "\r\n", alloc);
