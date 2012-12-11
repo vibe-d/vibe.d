@@ -1,22 +1,20 @@
 HTTP
 ====
 
- - (partially done) add limits for header line length, body size, number of headers or request size and request time to avoid DoS
  - defer writing the header of server responses to the second written chunk in case of using bodyWriter() - if only one chunk is ever written, write non-chunked instead
  - implement generators for http.rest to generate a JavaScript client and "documentation" with all possible requests.
- - add a usage example for web sockets to the api docs
 
 TCP
 ===
 
  - Find out what makes the libevent event loop continue to run after all connections have been disconnected
- - Add a DoS barrier that closes old connections in case of high connection counts
+ - Add a DoS barrier that closes old connections in case of high connection counts (e.g. Slowloris attack)
 
 GENERAL
 =======
 
- - Asynchronous file I/O
- - Load balancer with support for seemless recompile
+ - Asynchronous file I/O (already works for Win32)
+ - Load balancer with support for seemless recompile (vibedist)
  - Use the event_set_*_callback functions to log libevent messages
  - Analyze all code for memory leaks (e.g. SSLContext)
  - HTTP server comparison to nginx
@@ -45,9 +43,3 @@ PACKAGE MANAGER
  - allow the specification of optional dependencies (the user will just get a message that its possible to extend a package by installing the dependency)
  - implement outputting of a generated vpm_versions.d module that contains the version of each installed package
  - package signing
-
-For next release
-================
-
- - include offline API documentation
- - make vibedist work
