@@ -2,6 +2,35 @@
 =========
 
 
+v0.7.10 - 2012-12-
+--------------------
+
+### Features and improvements ###
+
+ - TCP sockets in the Win32 back end work now
+ - registerFormInterface now supports struct and array parameters (by Robert Klotzner aka eskimor)
+ - registerFormInterface now ignores static methods (by Robert Klotzner aka eskimor)
+ - Added RedisClient.zrangebyscore and fixed the return type of RedistClient.ttl (long) (by Simon Kerouack aka ekyo)
+ - renderCompat() does not require the parameter values to be wrapped in a Variant anymore
+ - Added a BsonObjectID.timeStamp property that extracts the unix time part
+ - Added a versions of deserialize(B/J)son that return the result instead of writing it to an out parameter
+ - The REST interface client now can handle more foreign types by searching for all needed module imports recursively
+ - The SMTP client now prints the last command whenever an error is returned from the server
+ - Documentation improvements
+ - All examples now use "shared static this" instead of "static this" so that they will behave correctly once multi-threading gets enabled
+
+### Bug fixes ###
+
+ - Fixed some cases of InvalidMemoryOperationError in ConnectionPool/LockedConnection
+ - Avoid passing 0x8000 (O_BINARY) on non-Windows systems to open(), as this may cause the call to fail (by Martin Nowak)
+ - Fixed creation of HTTP sessions (were not created before at least one key was set)
+ - Fixed the error detection code (safe mode) for the MongoDB client
+ - int values are now correctly serialized as Bson.Type.Int instead of Bson.Type.Long
+ - Fixed handling of the "X-Forwarded-For" header in the reverse proxy server in case of a proxy chain
+ - During the build, temporary executables are now built in %TEMP%/.rdmd/source so they pick up the right DLL versions
+ - Fixed the daytime example (readLine was called with a maximum line length of zero)
+
+
 v0.7.9 - 2012-10-30
 -------------------
 
