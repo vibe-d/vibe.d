@@ -70,7 +70,7 @@ void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
 */
 void parseDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
 {
-	parseDietFileCompatv!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
+	parseDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
 }
 /// ditto
 void parseDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, void* _argptr, TypeInfo[] _arguments)
