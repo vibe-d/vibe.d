@@ -729,6 +729,10 @@ struct BsonObjectID {
 		}
 		return cast(immutable)ret;
 	}
+
+	ubyte[] opCast() {
+		return m_bytes;
+	}
 }
 
 
