@@ -119,7 +119,10 @@ struct MongoCollection {
 	MongoCursor find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		auto conn = m_db.lockConnection();
-		auto reply = conn.query(m_collection, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
+		Reply reply;
+		static if( is(typeof(returnFieldSelector is null)) )
+			reply = conn.query(m_collection, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
+		else reply = conn.query(m_collection, flags, num_skip, num_docs_per_chunk, serializeToBson(query), serializeToBson(returnFieldSelector));
 		return MongoCursor(m_db, m_collection, num_docs_per_chunk, reply);
 	}
 	/// ditto
@@ -134,9 +137,16 @@ struct MongoCollection {
 		Throws: Exception if a DB communication error or a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	*/
-	Bson findOne(T, U = typeof(null))(T query, U returnFieldSelector = null, QueryFlags flags = QueryFlags.None)
+	Bson findOne(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
 	{
 		auto c = find(query, returnFieldSelector, flags, 0, 1);
+		foreach( doc; c ) return doc;
+		return Bson(null);
+	}
+	/// ditto
+	Bson findOne(T)(T query)
+	{
+		auto c = find(query, null, QueryFlags.None, 0, 1);
 		foreach( doc; c ) return doc;
 		return Bson(null);
 	}
@@ -159,7 +169,7 @@ struct MongoCollection {
 		Throws Exception if a DB communication error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/findAndModify+Command)
 	*/
-	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector = null)
+	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
 	{
 		auto cidx = m_collection.countUntil('.');
 		string dbstr = m_collection[0 .. cidx];
@@ -173,6 +183,11 @@ struct MongoCollection {
 		auto ret = m_db.runCommand(dbstr, cmd);
 		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
 		return ret.value;
+	}
+	/// ditto
+	Bson findAndModify(T, U)(T query, U update)
+	{
+		return findAndModify(query, update, null);
 	}
 
 	/**
