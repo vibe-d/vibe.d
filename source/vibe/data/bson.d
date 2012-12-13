@@ -378,13 +378,14 @@ struct Bson {
 		return def;
 	}
 
-	/** Returns the length of a BSON value of type String, Array or BinData.
+	/** Returns the length of a BSON value of type String, Array, Object or BinData.
 	*/
 	@property size_t length() const {
 		switch( m_type ){
 			default: enforce(false, "Bson objects of type "~to!string(m_type)~" do not have a length field."); break;
 			case Type.String, Type.Code, Type.Symbol: return (cast(string)this).length;
-			case Type.Array: return (cast(const(Bson)[])this).length;
+			case Type.Array: return (cast(const(Bson)[])this).length; // TODO: optimize!
+			case Type.Object: return (cast(const(Bson)[string])this).length; // TODO: optimize!
 			case Type.BinData: assert(false); //return (cast(BsonBinData)this).length; break;
 		}
 		assert(false);
@@ -968,6 +969,8 @@ T deserializeBson(T)(Bson src)
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) || isRWField!(T, m) ){
 				alias typeof(__traits(getMember, dst, m)) TM;
+				debug enforce(!src[underscoreStrip(m)].isNull() || is(TM == class) || isPointer!TM || is(TM == typeof(null)),
+					"Missing field '"~underscoreStrip(m)~"'.");
 				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
 			}
 		}
