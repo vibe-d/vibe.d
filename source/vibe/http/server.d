@@ -28,6 +28,7 @@ import vibe.utils.memory;
 import vibe.utils.string;
 import vibe.core.file;
 
+import core.vararg;
 import std.algorithm : countUntil, map, min;
 import std.array;
 import std.conv;
