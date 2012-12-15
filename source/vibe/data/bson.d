@@ -77,7 +77,10 @@ struct Bson {
 	}
 
 	/// Returns a new, empty Bson value of type Object.
-	static @property Bson EmptyObject(){ return Bson(cast(Bson[string])null); }
+	static @property Bson EmptyObject() { return Bson(cast(Bson[string])null); }
+
+	/// Returns a new, empty Bson value of type Object.
+	static @property Bson EmptyArray() { return Bson(cast(Bson[])null); }
 
 	private {
 		Type m_type = Type.Undefined;
