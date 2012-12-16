@@ -17,6 +17,7 @@ import vibe.utils.string;
 import std.conv;
 import std.datetime;
 import std.exception;
+import std.range;
 import std.string;
 
 
@@ -175,6 +176,115 @@ SysTime parseRFC822DateTimeString(string str)
 	if( tzoffset == 0 ) return SysTime(dt, UTC());
 	else return SysTime(dt, new SimpleTimeZone((tzoffset / 100) * 60 + tzoffset % 100));
 }
+
+
+/**
+	Decodes a string in encoded-word form.
+
+	See_Also: $(LINK http://tools.ietf.org/html/rfc2047#section-2)
+*/
+string decodeEncodedWords()(string encoded)
+{
+	import std.array;
+	auto dst = appender!string();
+	decodeEncodedWords(dst, encoded);
+	return dst.data;
+}
+/// ditto
+void decodeEncodedWords(R)(ref R dst, string encoded)
+{
+	import std.base64;
+	import std.encoding;
+
+	while(!encoded.empty){
+		auto idx = encoded.indexOf("=?");
+		if( idx >= 0 ){
+			auto end = encoded.indexOf("?=");
+			enforce(end > idx);
+			dst.put(encoded[0 .. idx]);
+			auto code = encoded[idx+2 .. end];
+			encoded = encoded[end+2 .. $];
+
+			idx = code.indexOf('?');
+			auto cs = code[0 .. idx];
+			auto enc = code[idx+1];
+			auto data = code[idx+3 .. $];
+			ubyte[] textenc;
+			switch(enc){
+				default: textenc = cast(ubyte[])data; break;
+				case 'B': textenc = Base64.decode(data); break;
+				case 'Q': textenc = QuotedPrintable.decode(data, true); break;
+			}
+
+			switch(cs){
+				default: dst.put(sanitizeUTF8(textenc)); break;
+				case "UTF-8": dst.put(cast(string)textenc); break;
+				case "ISO-8859-15": // hack...
+				case "ISO-8859-1":
+					string tmp;
+					transcode(cast(Latin1String)textenc, tmp);
+					dst.put(tmp);
+					break;
+			}
+		} else {
+			dst.put(encoded);
+			break;
+		}
+	}
+}
+
+
+/**
+	Decodes a From/To header value as it appears in emails.
+*/
+void decodeEmailAddressHeader(string header, out string name, out string address)
+{
+	import std.utf;
+
+	scope(failure) logDebug("emailbase %s", header);
+	header = decodeEncodedWords(header);
+	scope(failure) logDebug("emaildec %s", header);
+
+	if( header[$-1] == '>' ){
+		auto sidx = header.lastIndexOf('<');
+		enforce(sidx >= 0);
+		address = header[sidx+1 .. $-1];
+		header = header[0 .. sidx].strip();
+
+		if( header[0] == '"' ){
+			name = header[1 .. $-1];
+		} else {
+			name = header.strip();
+		}
+	} else {
+		name = header;
+		address = header;
+	}
+	validate(name);
+}
+
+
+/**
+	Performs quoted-printable decoding.
+*/
+struct QuotedPrintable {
+	static ubyte[] decode(in char[] input, bool in_header = false)
+	{
+		auto ret = appender!(ubyte[])();
+		for( size_t i = 0; i < input.length; i++ ){
+			if( input[i] == '=' ){
+				auto code = input[i+1 .. i+3];
+				i += 2;
+				if( code != cast(ubyte[])"\r\n" )
+					ret.put(code.parse!ubyte(16));
+			} else if( in_header && input[i] == '_') ret.put(' ');
+			else ret.put(input[i]);
+		}
+		return ret.data();
+	}
+}
+
+
 
 private void writeDecimal2(R)(ref R dst, uint n)
 {
