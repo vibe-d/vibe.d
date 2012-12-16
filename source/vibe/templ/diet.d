@@ -43,7 +43,7 @@ import std.variant;
 	Note that this function currently suffers from multiple DMD bugs in conjunction with local
 	variables passed as alias template parameters.
 */
-void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
+void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
@@ -63,18 +63,21 @@ void parseDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	#line 63 "diet.d"
 }
 
+/// compatibility alias
+alias compileDietFile parseDietFile;
+
 /**
 	Compatibility version of parseDietFile().
 
 	This function should only be called indiretly through HttpServerResponse.renderCompat().
 
 */
-void parseDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
+void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
 {
-	parseDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
+	compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
 }
 /// ditto
-void parseDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, void* _argptr, TypeInfo[] _arguments)
+void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, void* _argptr, TypeInfo[] _arguments)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
@@ -88,6 +91,38 @@ void parseDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream
 	// Generate the D source code for the diet template
 	mixin(dietParser!template_file);
 	#line 90 "diet.d"
+}
+
+/// compatibility alias
+alias compileDietFileCompat parseDietFileCompat;
+
+/**
+	Generates a diet template compiler to use as a mixin.
+
+	This can be used as an alternative to compileDietFile or compileDietFileCompat. It allows
+	the template to use all symbols visible in the enclosing scope. In situations where many
+	variables from the calling function's scope are used within the template, it can reduce the
+	amount of code required for invoking the template.
+
+	Note that even if this method of using diet templates can reduce the amount of source code. It
+	is generally recommended to use compileDietFile(Compat) instead, as those
+	facilitate a cleaner interface between D code and diet code by explicity documenting the
+	symbols usable inside of the template and thus avoiding unwanted, hidden dependencies. A
+	possible alternative for passing many variables is to pass a struct or class value to
+	compileDietFile(Compat).
+
+	Examples:
+	---
+	void handleRequest(HttpServerRequest req, HttpServerResponse res)
+	{
+		int this_variable_is_automatically_visible_to_the_template;
+		mixin(compileDietFileMixin!("index.dt", "res.bodyWriter"));
+	}
+	---
+*/
+template compileDietFileMixin(string template_file, string stream_variable)
+{
+	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file;
 }
 
 /**
@@ -929,12 +964,14 @@ private string buildSpecialTag(alias node_stack)(string tag, int level, ref bool
 	return startString(in_string) ~ tagstring;
 }
 
+/// private
 private @property string startString(ref bool in_string){
 	auto ret = in_string ? "" : StreamVariableName ~ ".write(\"";
 	in_string = true;
 	return ret;
 }
 
+/// private
 private @property string endString(ref bool in_string){
 	auto ret = in_string ? "\", false);\n" : "";
 	in_string = false;
@@ -942,9 +979,8 @@ private @property string endString(ref bool in_string){
 }
 
 
-
-/// private
-private string _toString(T)(T v)
+/// Internal function used for converting an interpolation expression to string
+string _toString(T)(T v)
 {
 	static if( is(T == string) ) return v;
 	else static if( __traits(compiles, v.opCast!string()) ) return cast(string)v;

@@ -739,7 +739,7 @@ final class HttpServerResponse : HttpResponse {
 	{
 		import vibe.templ.diet;
 		headers["Content-Type"] = "text/html; charset=UTF-8";
-		parseDietFileCompatV!(template_file, TYPES_AND_NAMES)(bodyWriter, _argptr, _arguments);
+		compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(bodyWriter, _argptr, _arguments);
 	}
 
 	// Finalizes the response. This is called automatically by the server.
