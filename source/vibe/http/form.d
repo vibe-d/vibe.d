@@ -577,7 +577,7 @@ private int applyArrayElement(ArrayType)(string[string] form, ref ArrayType load
 
 /// private
 private int loadFormDataRecursiveSingle(T)(string[string] form, ref T elem, string fname, ref Error error, Flag!"strict" strict) {
-	static if( __traits(compiles, elem=to!T("some_string"))) {
+	static if( (!isDynamicArray!T || __traits(compiles, {char b=elem[0];})) && __traits(compiles, elem=to!T("some_string"))) {
 		auto found_item=fname in form;
 		if(found_item) {
 			try {
