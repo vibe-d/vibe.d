@@ -497,16 +497,16 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(T)(HttpServerRequest req, ref T load_to, string name) if(is(T == struct) || isDynamicArray!T) {
+FormDataLoadResult loadFormData(T)(HttpServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T) {
 	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
 	if(form.length==0)
-		return FormDataLoadResult("", 0, 0);
+		return FormDataLoadResult(0, 0);
 	Error error;
-	int count=loadFormDataRecursive(form, load_to, name, error, no!"strict");
+	int count=loadFormDataRecursive(form, load_to, name, error, No.strict);
 	if(error.message) { // Only serious errors are reported, so let's throw.
 		throw new Exception(error.message);
 	}
-	return FormDataLoadResult(form.length, count);
+	return FormDataLoadResult(cast(int)form.length, count);
 }
 
 /// private
