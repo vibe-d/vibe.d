@@ -30,6 +30,9 @@ struct ScopedLock {
 
 	this(Mutex mutex, LockMode mode=LockMode.Lock)
 	{
+		assert(mutex !is null);
+		m_mutex = mutex;
+
 		switch(mode){
 			default:
 				assert(false, "unsupported enum value");
@@ -46,7 +49,8 @@ struct ScopedLock {
 
 	~this()
 	{
-		m_mutex.unlock();
+		if( m_locked )
+			m_mutex.unlock();
 	}
 
 	@property bool locked() const { return m_locked; }
@@ -54,30 +58,40 @@ struct ScopedLock {
 	bool tryLock()
 	{
 		enforce(!m_locked);
-		return m_mutex.tryLock();
+		return m_locked = m_mutex.tryLock();
 	}
 
 	void lock()
 	{
 		enforce(!m_locked);
+		m_locked = true;
 		m_mutex.lock();
 	}
 
-	void unlock(){
+	void unlock()
+	{
 		enforce(m_locked);
 		m_mutex.unlock();
+		m_locked = false;
 	}
 }
 
 /** Mutex implementation for fibers.
 
-	Note that this mutex is suitable only for synchronizing different fibers. If you need inter
-	thread synchronization, go for core.sync.mutex instead.
+	Note: 
+		This mutex is currently suitable only for synchronizing different
+		fibers. If you need inter-thread synchronization, go for
+		core.sync.mutex instead.
 */
 class Mutex {
 	private {
 		bool m_locked = false;
 		Signal m_signal;
+	}
+
+	this()
+	{
+		m_signal = createSignal();
 	}
 
 	private	@property bool locked() const { return m_locked; }
@@ -106,7 +120,7 @@ class Mutex {
 }
 
 unittest {
-	Mutex mutex;
+	Mutex mutex = new Mutex;
 
 	{
 		auto lock = ScopedLock(mutex);
