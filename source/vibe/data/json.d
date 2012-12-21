@@ -774,6 +774,7 @@ unittest {
 	assert(parseJsonString("\"test\"") == Json("test"));
 	assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
 	assert(parseJsonString("{\"a\": 1}") == Json(["a": Json(1)]));
+	assert(parseJsonString(`"\\\/\b\f\n\r\t\u1234"`).get!string == "\\/\b\f\n\r\t\u1234");
 }
 
 
@@ -1104,14 +1105,14 @@ private string jsonUnescape(R)(ref R range)
 				enforce(!range.empty, "Unterminated string escape sequence.");
 				switch(range.front){
 					default: enforce("Invalid string escape sequence."); break;
-					case '"': ret.put('\"'); break;
-					case '\\': ret.put('\\'); break;
-					case '/': ret.put('/'); break;
-					case 'b': ret.put('\b'); break;
-					case 'f': ret.put('\f'); break;
-					case 'n': ret.put('\n'); break;
-					case 'r': ret.put('\r'); break;
-					case 't': ret.put('\t'); break;
+					case '"': ret.put('\"'); range.popFront(); break;
+					case '\\': ret.put('\\'); range.popFront(); break;
+					case '/': ret.put('/'); range.popFront(); break;
+					case 'b': ret.put('\b'); range.popFront(); break;
+					case 'f': ret.put('\f'); range.popFront(); break;
+					case 'n': ret.put('\n'); range.popFront(); break;
+					case 'r': ret.put('\r'); range.popFront(); break;
+					case 't': ret.put('\t'); range.popFront(); break;
 					case 'u':
 						range.popFront();
 						dchar uch = 0;
@@ -1129,9 +1130,11 @@ private string jsonUnescape(R)(ref R range)
 						break;
 				}
 				break;
-			default: ret.put(ch); break;
+			default:
+				ret.put(ch);
+				range.popFront();
+				break;
 		}
-		range.popFront();
 	}
 	return ret.data;
 }
