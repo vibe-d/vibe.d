@@ -132,22 +132,23 @@ class UrlRouter : IHttpServerRequestHandler {
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	{
-		auto pr = &m_routes[req.method];
-		if( pr is null ){
-			if( req.method == HttpMethod.HEAD )
-				pr = &m_routes[HttpMethod.GET];
-			if( pr is null )
-				return;
-		}
-		
-		foreach( ref r; *pr ){
-			if( r.matches(req.path, req.params) ){
-				logTrace("route match: %s -> %s %s", req.path, req.method, r.pattern);
-				// .. parse fields ..
-				r.cb(req, res);
-				if( res.headerWritten )
-					return;
+		auto method = req.method;
+
+		while(true)
+		{
+			if( auto pr = &m_routes[method] ){
+				foreach( ref r; *pr ){
+					if( r.matches(req.path, req.params) ){
+						logTrace("route match: %s -> %s %s", req.path, req.method, r.pattern);
+						// .. parse fields ..
+						r.cb(req, res);
+						if( res.headerWritten )
+							return;
+					}
+				}
 			}
+			if( method == HttpMethod.HEAD ) method = HttpMethod.GET;
+			else break;
 		}
 
 		logTrace("no route match: %s %s", req.method, req.url);
