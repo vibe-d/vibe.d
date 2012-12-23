@@ -114,9 +114,11 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		res.headers["Content-Length"] = to!string(dirent.size);
 		
 		res.headers["Last-Modified"] = lastModified;
-		auto expireTime = Clock.currTime().toUTC() + dur!"seconds"(settings.maxAge);
-		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
-		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
+		if( settings.maxAge > 0 ){
+			auto expireTime = Clock.currTime().toUTC() + dur!"seconds"(settings.maxAge);
+			res.headers["Expires"] = toRFC822DateTimeString(expireTime);
+			res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
+		}
 
 		// for HEAD responses, stop here
 		if( res.isHeadResponse() ){
