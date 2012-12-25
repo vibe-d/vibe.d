@@ -660,10 +660,10 @@ private struct DietCompiler {
 			if( line[i] == '#' ){
 				i++;
 				assertp(id.length == 0, "Id may only be set once.");
-				id = skipIdent(line, i, "-");
+				id = skipIdent(line, i, "-_");
 			} else if( line[i] == '.' ){
 				i++;
-				auto cls = skipIdent(line, i, "-");
+				auto cls = skipIdent(line, i, "-_");
 				if( classes.length == 0 ) classes = cls;
 				else classes ~= " " ~ cls;
 			} else break;
