@@ -199,7 +199,7 @@ class Win32EventDriver : EventDriver {
 		return conn;	
 	}
 
-	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address)
+	Win32TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(bind_address);
@@ -1198,6 +1198,29 @@ m_status = ConnectionStatus.Connected;
 		}
 	}
 }
+
+/******************************************************************************/
+/* class Win32TcpListener                                                     */
+/******************************************************************************/
+
+class Win32TcpListener : TcpListener {
+	private {
+		SOCKET m_socket;
+	}
+
+	this(SOCKET sock)
+	{
+		m_socket = sock;
+	}
+
+	void stopListening()
+	{
+		if( m_socket == -1 ) return;
+		closesocket(m_socket);
+		m_socket = -1;
+	}
+}
+
 
 private {
 	Win32Timer[UINT_PTR] s_timers;
