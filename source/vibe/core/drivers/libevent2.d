@@ -212,7 +212,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2TcpConnection(cctx);
 	}
 
-	void listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address)
+	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address)
 	{
 		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
 		bind_addr.port = port;
@@ -234,11 +234,11 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		// Add an event to wait for connections
 		auto ctx = TcpContextAlloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
 		ctx.connectionCallback = connection_callback;
-		auto connect_event = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
-		enforce(event_add(connect_event, null) == 0,
+		ctx.listenEvent = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+		enforce(event_add(ctx.listenEvent, null) == 0,
 			"Error scheduling connection event on the event loop.");
 		
-		// TODO: do something with connect_event (at least store somewhere for clean up)
+		return new LibeventTcpListener(ctx);
 	}
 
 	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")

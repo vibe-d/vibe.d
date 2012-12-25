@@ -276,6 +276,27 @@ package class Libevent2TcpConnection : TcpConnection {
 	}
 }
 
+class LibeventTcpListener : TcpListener {
+	private {
+		TcpContext* m_ctx;
+	}
+
+	this(TcpContext* ctx)
+	{
+		m_ctx = ctx;
+	}
+
+	void stopListening()
+	{
+		if( !m_ctx ) return;
+
+		event_free(m_ctx.listenEvent);
+		evutil_closesocket(m_ctx.socketfd);
+		TcpContextAlloc.free(m_ctx);
+		m_ctx = null;
+	}
+}
+
 
 /**************************************************************************************************/
 /* Private types                                                                                  */
@@ -302,6 +323,7 @@ package struct TcpContext
 	event_base* eventLoop;
 	void delegate(TcpConnection conn) connectionCallback;
 	bufferevent* event;
+	deimos.event2.event_struct.event* listenEvent;
 	NetworkAddress remote_addr;
 	bool shutdown = false;
 	int socketfd = -1;

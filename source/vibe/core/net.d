@@ -39,15 +39,16 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
 */
-void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
+TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
 {
-	listenTcp(port, connection_callback, "0.0.0.0");
-	listenTcp(port, connection_callback, "::");
+	auto ret = listenTcp(port, connection_callback, "::");
+	if( !ret ) return listenTcp(port, connection_callback, "0.0.0.0");
+	return null;
 }
 /// ditto
-void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address)
+TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address)
 {
-	getEventDriver().listenTcp(port, connection_callback, address);
+	return getEventDriver().listenTcp(port, connection_callback, address);
 }
 
 /**
@@ -55,14 +56,14 @@ void listenTcp(ushort port, void delegate(TcpConnection stream) connection_callb
 
 	This function is the same as listenTcp but takes a function callback instead of a delegate.
 */
-void listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
+TcpListener listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
 {
-	listenTcp(port, toDelegate(connection_callback));
+	return listenTcp(port, toDelegate(connection_callback));
 }
 /// ditto
-void listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, string address)
+TcpListener listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, string address)
 {
-	listenTcp(port, toDelegate(connection_callback), address);
+	return listenTcp(port, toDelegate(connection_callback), address);
 }
 
 /**
@@ -164,6 +165,15 @@ interface TcpConnection : Stream, EventedObject {
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
 	bool waitForData(Duration timeout);
+}
+
+
+/**
+	Represents a listening TCP socket.
+*/
+interface TcpListener /*: EventedObject*/ {
+	/// Stops listening and closes the socket.
+	void stopListening();
 }
 
 
