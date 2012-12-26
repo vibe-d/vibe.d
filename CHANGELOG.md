@@ -2,33 +2,44 @@
 =========
 
 
-v0.7.10 - 2012-12-
+v0.7.10 - 2013-01-
 --------------------
 
 ### Features and improvements ###
 
  - TCP sockets in the Win32 back end work now
- - registerFormInterface now supports struct and array parameters (by Robert Klotzner aka eskimor)
- - registerFormInterface now ignores static methods (by Robert Klotzner aka eskimor)
- - Added RedisClient.zrangebyscore and fixed the return type of RedistClient.ttl (long) (by Simon Kerouack aka ekyo)
- - renderCompat() does not require the parameter values to be wrapped in a Variant anymore
- - Added a BsonObjectID.timeStamp property that extracts the unix time part
+ - `registerFormInterface` now supports struct and array parameters (by Robert Klotzner aka eskimor)
+ - `registerFormInterface` now ignores static methods (by Robert Klotzner aka eskimor)
+ - Added `RedisClient.zrangebyscore` and fixed the return type of `RedistClient.ttl` (`long`) (by Simon Kerouack aka ekyo)
+ - `renderCompat()` does not require the parameter values to be wrapped in a Variant anymore
+ - Added a `BsonObjectID.timeStamp` property that extracts the unix time part
  - Added a versions of deserialize(B/J)son that return the result instead of writing it to an out parameter
  - The REST interface client now can handle more foreign types by searching for all needed module imports recursively
+ - `listenTcp` now returns a `TcpListener` object that can be used to stop listening again
+ - Added `vibe.inet.message.decodeEncodedWords` and `decodeEmailAddressHeader`
+ - Added `compileDietFileMixin` usable for directly mixing in Diet templates (they are instantiated in the caller scope)
  - The SMTP client now prints the last command whenever an error is returned from the server
  - Documentation improvements
  - All examples now use "shared static this" instead of "static this" so that they will behave correctly once multi-threading gets enabled
+ - `vibe.core` now only depends on `vibe.inet` and `vibe.utils.memory` and thus is ready to be used as a stand-alone library
+ - `Bson.length` is now allowed for `Bson.Type.Object` and added `Bson.EmptyArray`
+ - Setting `HttpFileServerSettings.maxAge` to zero will cause the "Expires" and "Cache-Control" headers to be omitted
 
 ### Bug fixes ###
 
- - Fixed some cases of InvalidMemoryOperationError in ConnectionPool/LockedConnection
- - Avoid passing 0x8000 (O_BINARY) on non-Windows systems to open(), as this may cause the call to fail (by Martin Nowak)
+ - Fixed the Diet template parser to accept underscores in ID and class identifiers
+ - Fixed HEAD requests properly falling back to GET routes in the `UrlRouter`
+ - Fixed parsing of unicode escape sequences in the JSON parser
+ - Made `vibe.core.mutex.Mutex` actually pass its unit tests
+ - Fixed compile errors occuring when using the field selector parameter of `MongoDB.find/findOne/findAndModify`
+ - Fixed some cases of `InvalidMemoryOperationError` in ConnectionPool/LockedConnection
+ - Avoid passing `0x8000` (`O_BINARY`) on non-Windows systems to `open()`, as this may cause the call to fail (by Martin Nowak)
  - Fixed creation of HTTP sessions (were not created before at least one key was set)
  - Fixed the error detection code (safe mode) for the MongoDB client
- - int values are now correctly serialized as Bson.Type.Int instead of Bson.Type.Long
+ - `int` values are now correctly serialized as `Bson.Type.Int` instead of `Bson.Type.Long`
  - Fixed handling of the "X-Forwarded-For" header in the reverse proxy server in case of a proxy chain
- - During the build, temporary executables are now built in %TEMP%/.rdmd/source so they pick up the right DLL versions
- - Fixed the daytime example (readLine was called with a maximum line length of zero)
+ - During the build, temporary executables are now built in `%TEMP%/.rdmd/source` so they pick up the right DLL versions
+ - Fixed the daytime example (`readLine` was called with a maximum line length of zero)
 
 
 v0.7.9 - 2012-10-30
