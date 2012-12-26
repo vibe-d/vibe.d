@@ -29,14 +29,20 @@ class MemoryOutputStream : OutputStream {
 		m_destination = AllocAppender!(ubyte[])(alloc);
 	}
 
+	/// An array with all data written to the stream so far.
+	@property ubyte[] data() { return m_destination.data(); }
+
+	/// Resets the stream to its initial state containing no data.
+	void reset()
+	{
+		m_destination.reset();
+	}
+
 	/// Reserves space for data - useful for optimization.
 	void reserve(size_t nbytes)
 	{
 		m_destination.reserve(nbytes);
 	}
-
-	/// An array with all data written to the stream so far.
-	@property ubyte[] data() { return m_destination.data(); }
 
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{

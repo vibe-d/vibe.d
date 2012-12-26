@@ -44,6 +44,13 @@ struct AllocAppender(ArrayType : E[], E) {
 
 	@disable this(this);
 
+	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_data.length - m_remaining.length]; }
+
+	void reset()
+	{
+		m_remaining = m_data;
+	}
+
 	void reserve(size_t amt)
 	{
 		size_t nelems = m_data.length - m_remaining.length;
@@ -100,8 +107,6 @@ struct AllocAppender(ArrayType : E[], E) {
 			}
 		}
 	}
-
-	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_data.length - m_remaining.length]; }
 
 	void grow(size_t min_free)
 	{
