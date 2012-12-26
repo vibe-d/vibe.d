@@ -571,7 +571,13 @@ struct Bson {
 	/// ditto
 	@property void opDispatch(string prop, T)(T val) { opIndexAssign(Bson(val), prop); }
 
+	///
 	bool opEquals(ref const Bson other) const {
+		if( m_type != other.m_type ) return false;
+		return m_data == other.m_data;
+	}
+	/// ditto
+	bool opEquals(const Bson other) const {
 		if( m_type != other.m_type ) return false;
 		return m_data == other.m_data;
 	}
