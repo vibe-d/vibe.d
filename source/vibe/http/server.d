@@ -1135,11 +1135,10 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
-		logDebug("Exception while parsing request: %s", e.toString());
 		auto status = parsed ? HttpStatus.InternalServerError : HttpStatus.BadRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logError("Error after page has been written: %s", e.toString());
-		logDebug("Exception while handling request: %s", e.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.url, e.toString());
 		if ( !parsed )
 			keep_alive = false;
 	}
