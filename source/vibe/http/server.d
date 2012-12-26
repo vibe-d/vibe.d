@@ -20,6 +20,7 @@ import vibe.http.log;
 import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
+import vibe.stream.operations;
 import vibe.stream.ssl;
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;

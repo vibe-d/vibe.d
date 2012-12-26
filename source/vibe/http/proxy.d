@@ -10,6 +10,7 @@ module vibe.http.proxy;
 import vibe.core.log;
 import vibe.http.client;
 import vibe.http.server;
+import vibe.stream.operations;
 
 import std.conv;
 import std.exception;

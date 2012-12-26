@@ -7,7 +7,7 @@
 */
 module vibe.stream.base64;
 
-import vibe.stream.stream;
+import vibe.core.stream;
 
 
 /**

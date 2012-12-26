@@ -3,6 +3,7 @@ module vibe.db.redis.redis;
 public import vibe.core.net;
 
 import vibe.core.log;
+import vibe.stream.operations;
 import std.string;
 import std.conv;
 import std.exception;

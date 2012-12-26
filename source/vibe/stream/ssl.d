@@ -10,7 +10,7 @@ module vibe.stream.ssl;
 public import vibe.crypto.ssl;
 
 import vibe.core.log;
-import vibe.stream.stream;
+import vibe.core.stream;
 
 import deimos.openssl.bio;
 import deimos.openssl.err;

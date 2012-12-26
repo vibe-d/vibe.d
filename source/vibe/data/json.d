@@ -39,8 +39,6 @@
 */
 module vibe.data.json;
 
-public import vibe.stream.stream;
-
 import vibe.data.utils;
 
 import std.array;

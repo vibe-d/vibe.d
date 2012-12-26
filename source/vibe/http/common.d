@@ -11,6 +11,7 @@ public import vibe.http.status;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.stream.operations;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;

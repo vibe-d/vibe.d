@@ -9,7 +9,8 @@ module vibe.inet.message;
 
 import vibe.core.log;
 import vibe.http.common : StrMapCI;
-import vibe.stream.stream;
+import vibe.core.stream;
+import vibe.stream.operations;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;

@@ -8,7 +8,7 @@
 */
 module vibe.stream.counting;
 
-public import vibe.stream.stream;
+public import vibe.core.stream;
 
 import std.exception;
 

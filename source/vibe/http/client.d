@@ -18,6 +18,7 @@ import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
 import vibe.stream.ssl;
+import vibe.stream.operations;
 import vibe.stream.zlib;
 
 import std.array;

@@ -11,7 +11,7 @@ import vibe.core.log;
 import vibe.core.file;
 import vibe.http.client;
 import vibe.inet.url;
-import vibe.stream.stream;
+import vibe.core.stream;
 
 import std.exception;
 import std.string;

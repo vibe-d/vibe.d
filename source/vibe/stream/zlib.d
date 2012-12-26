@@ -7,7 +7,7 @@
 */
 module vibe.stream.zlib;
 
-import vibe.stream.stream;
+import vibe.core.stream;
 import vibe.utils.memory;
 
 import std.algorithm;

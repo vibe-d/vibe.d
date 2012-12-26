@@ -11,7 +11,7 @@
 */
 module vibe.templ.diet;
 
-public import vibe.stream.stream;
+public import vibe.core.stream;
 
 import vibe.core.file;
 import vibe.templ.parsertools;

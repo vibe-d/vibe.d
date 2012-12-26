@@ -12,6 +12,7 @@ import vibe.core.file;
 import vibe.core.log;
 import vibe.inet.message;
 import vibe.inet.url;
+import vibe.stream.operations;
 import vibe.textfilter.urlencode;
 
 // needed for registerFormInterface stuff:

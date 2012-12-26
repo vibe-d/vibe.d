@@ -7,7 +7,7 @@
 */
 module vibe.stream.memory;
 
-import vibe.stream.stream;
+import vibe.core.stream;
 import vibe.utils.array;
 import vibe.utils.memory;
 
