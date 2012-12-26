@@ -9,7 +9,7 @@ module vibe.core.stream;
 
 import vibe.utils.memory : FreeListRef;
 
-import std.algorithm : min;
+import std.algorithm;
 
 
 /**************************************************************************************************/

@@ -582,10 +582,16 @@ struct Json {
 		}
 	}
 	/// ditto
+	bool opEquals(const Json other) const { return opEquals(other); }
+	/// ditto
 	bool opEquals(typeof(null)) const { return m_type == Type.Null; }
+	/// ditto
 	bool opEquals(bool v) const { return m_type == Type.Bool && m_bool == v; }
+	/// ditto
 	bool opEquals(long v) const { return m_type == Type.Int && m_int == v; }
+	/// ditto
 	bool opEquals(double v) const { return m_type == Type.Float && m_float == v; }
+	/// ditto
 	bool opEquals(string v) const { return m_type == Type.String && m_string == v; }
 
 	/**

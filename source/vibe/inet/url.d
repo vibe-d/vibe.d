@@ -233,12 +233,15 @@ struct Url {
 	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { m_path ~= rhs; }
 	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { m_path ~= rhs; }
 
+	/// Tests two URLs for equality using '=='.
 	bool opEquals(ref const Url rhs) const {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
 		if( m_path != rhs.m_path ) return false;
 		return true;
 	}
+	/// ditto
+	bool opEquals(const Url other) const { return opEquals(other); }
 
 	int opCmp(ref const Url rhs) const {
 		if( m_schema != rhs.m_schema ) return m_schema.cmp(rhs.m_schema);

@@ -198,6 +198,7 @@ struct Path {
 	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { assert(rhs.toString().length > 0); opOpAssign!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { auto p = this ~ rhs; m_nodes = p.m_nodes; m_endsWithSlash = rhs.m_endsWithSlash; }
 	
+	/// Tests two paths for equality using '=='.
 	bool opEquals(ref const Path rhs) const {
 		if( m_absolute != rhs.m_absolute ) return false;
 		if( m_endsWithSlash != rhs.m_endsWithSlash ) return false;
@@ -207,6 +208,8 @@ struct Path {
 				return false;
 		return true;
 	}
+	/// ditto
+	bool opEquals(const Path other) const { return opEquals(other); }
 
 	int opCmp(ref const Path rhs) const {
 		if( m_absolute != rhs.m_absolute ) return cast(int)m_absolute - cast(int)rhs.m_absolute;
