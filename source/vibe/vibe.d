@@ -42,7 +42,6 @@ public import vibe.mail.smtp;
 public import vibe.stream.counting;
 public import vibe.stream.memory;
 public import vibe.stream.operations;
-public import vibe.stream.stream;
 public import vibe.stream.ssl;
 public import vibe.stream.zlib;
 public import vibe.templ.diet;

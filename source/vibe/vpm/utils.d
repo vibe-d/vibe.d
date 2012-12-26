@@ -20,6 +20,7 @@ import vibe.core.log;
 import vibe.core.file;
 import vibe.data.json;
 import vibe.inet.url;
+import vibe.stream.operations;
 import vibe.utils.string;
 
 package bool isEmptyDir(Path p) {

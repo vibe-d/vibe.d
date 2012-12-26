@@ -8,7 +8,6 @@
 module vibe.core.drivers.libevent2_tcp;
 
 public import vibe.core.core;
-public import vibe.stream.operations;
 
 import vibe.core.log;
 import vibe.core.drivers.libevent2;
