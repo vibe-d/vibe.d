@@ -221,7 +221,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						ln.put(req.path);
 						break;
 					case 'v': //Server name
-						ln.put(settings.hostName.length ? settings.hostName : "-");
+						ln.put(req.host.length ? req.host : "-");
 						break;
 					default:
 						throw new Exception("Unknown directive '" ~ format[0] ~ "' in log format string");
