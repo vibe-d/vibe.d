@@ -48,19 +48,18 @@ struct Url {
 	
 		TODO: additional validation required (e.g. valid host and user names and port)
 	*/
-	static Url parse(string str)
+	this(string url_string)
 	{
-		Url ret;
-
+		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
 		if( str[0] != '/' ){
 			auto idx = str.countUntil(':');
 			enforce(idx > 0, "No schema in URL:"~str);
-			ret.m_schema = str[0 .. idx];
+			m_schema = str[0 .. idx];
 			str = str[idx+1 .. $];
 			bool requires_host = false;
 
-			switch(ret.schema){
+			switch(m_schema){
 				case "http":
 				case "https":
 				case "ftp":
@@ -81,29 +80,32 @@ struct Url {
 						hs = ai+1;
 						auto ci = str[0 .. ai].countUntil(':');
 						if( ci >= 0 ){
-							ret.m_username = str[0 .. ci];
-							ret.m_password = str[ci+1 .. ai];
-						} else ret.m_username = str[0 .. ai];
-						enforce(ret.m_username.length > 0, "Empty user name in URL.");
+							m_username = str[0 .. ci];
+							m_password = str[ci+1 .. ai];
+						} else m_username = str[0 .. ai];
+						enforce(m_username.length > 0, "Empty user name in URL.");
 					}
 
-					ret.m_host = str[hs .. si];
-					auto pi = ret.host.countUntil(':');
+					m_host = str[hs .. si];
+					auto pi = m_host.countUntil(':');
 					if(pi > 0) {
-						enforce(pi < ret.m_host.length-1, "Empty port in URL.");
-						ret.m_port = to!ushort(ret.m_host[pi+1..$]);
-						ret.m_host = ret.host[0 .. pi];
+						enforce(pi < m_host.length-1, "Empty port in URL.");
+						m_port = to!ushort(m_host[pi+1..$]);
+						m_host = m_host[0 .. pi];
 					}
 
-					enforce(!requires_host || ret.schema == "file" || ret.m_host.length > 0,
+					enforce(!requires_host || m_schema == "file" || m_host.length > 0,
 							"Empty server name in URL.");
 					str = str[si .. $];
 			}
 		}
 
-		ret.localURI = str;
-
-		return ret;
+		this.localURI = str;
+	}
+	/// ditto
+	static Url parse(string url_string)
+	{
+		return Url(url_string);
 	}
 
 	/// The schema/protocol part of the URL
@@ -202,6 +204,7 @@ struct Url {
 	/// Converts this URL object to its string representation.
 	string toString()
 	const {
+		import std.format;
 		auto dst = appender!string();
 		dst.put(schema);
 		dst.put(":");
@@ -217,6 +220,7 @@ struct Url {
 				break;
 		}
 		dst.put(host);
+		if( m_port > 0 ) formattedWrite(dst, ":%d", m_port);
 		dst.put(localURI);
 		return dst.data;
 	}
