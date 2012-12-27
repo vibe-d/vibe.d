@@ -892,6 +892,8 @@ private void skipType(string str, ref size_t i)
 			else if( str[i] == ')' || str[i] == ']' ) depth--;
 		}
 	}
+
+	while( i < str.length && str[i] == '*' ) i++;
 }
 
 private string skipBalancedUntil(string chars, string str, ref size_t i)
