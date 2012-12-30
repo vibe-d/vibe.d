@@ -233,6 +233,103 @@ private string[] extractDependencies(in Line[] lines)
 /* The Diet compiler                                                          */
 /******************************************************************************/
 
+private class OutputContext {
+	enum State {
+		Code,
+		Expr,
+		String
+	}
+
+	State m_state = State.Code;
+	string[] m_nodeStack;
+	string m_result;
+	string m_file;
+	int m_line;
+
+	void markInputLine(in ref Line line)
+	{
+		if( m_state == State.Code ){
+			m_result ~= lineMarker(line);
+			m_line = -1;
+		} else {
+			m_file = line.file;
+			m_line = line.number;
+		}
+	}
+
+	@property size_t stackSize() const { return m_nodeStack.length; }
+
+	void pushNode(string str) { m_nodeStack ~= str; }
+	void pushDummyNode() { pushNode("-"); }
+
+	void popNodes(int next_indent_level)
+	{
+		// close all tags/blocks until we reach the level of the next line
+		while( m_nodeStack.length > next_indent_level ){
+			if( m_nodeStack[$-1][0] == '-' ){
+				if( m_nodeStack[$-1].length > 1 ){
+					writeCodeLine(m_nodeStack[$-1][1 .. $]);
+				}
+			} else if( m_nodeStack[$-1].length ){
+				string str;
+				if( m_nodeStack[$-1] != "</pre>" ){
+					str = "\n";
+					foreach( j; 0 .. m_nodeStack.length-1 ) if( m_nodeStack[j][0] != '-' ) str ~= "\t";
+				}
+				str ~= m_nodeStack[$-1];
+				writeString(str);
+			}
+			m_nodeStack.length--;
+		}
+	}
+
+	// TODO: avoid runtime allocations by replacing htmlEscape/_toString calls with
+	//       filtering functions
+	void writeRawString(string str) { enterState(State.String); m_result ~= str; }
+	void writeString(string str) { writeRawString(dstringEscape(str)); }
+	void writeStringHtmlEscaped(string str) { writeString(htmlEscape(str)); }
+
+	void writeStringExpr(string str) { enterState(State.Expr); m_result ~= str; }
+	void writeStringExprHtmlEscaped(string str) { writeStringExpr("htmlEscape("~str~")"); }
+	void writeStringExprHtmlAttribEscaped(string str) { writeStringExpr("htmlAttribEscape("~str~")"); }
+	
+	void writeExpr(string str) { writeStringExpr("_toString("~str~")"); }
+	void writeExprHtmlEscaped(string str) { writeStringExprHtmlEscaped("_toString("~str~")"); }
+	void writeExprHtmlAttribEscaped(string str) { writeStringExprHtmlAttribEscaped("_toString("~str~")"); }
+
+	void writeCodeLine(string stmt)
+	{
+		enterState(State.Code);
+		m_result ~= stmt ~ "\n";
+	}
+
+	private void enterState(State state)
+	{
+		if( state == m_state ) return;
+
+		if( state != m_state.Code ) enterState(State.Code);
+
+		final switch(state){
+			case State.Code:
+				if( m_state == State.String ) m_result ~= "\", false);\n";
+				else m_result ~= ", false);\n";
+				if( m_line >= 0 ){
+					m_result ~= lineMarker(Line(m_file, m_line, null));
+					m_line = -1;
+				}
+				break;
+			case State.Expr:
+				m_result ~= StreamVariableName ~ ".write(";
+				break;
+			case State.String:
+				m_result ~= StreamVariableName ~ ".write(\"";
+				break;
+		}
+
+		m_state = state;
+	}
+}
+
 private struct DietCompiler {
 	private {
 		size_t m_lineIndex = 0;
@@ -259,20 +356,18 @@ private struct DietCompiler {
 
 	string buildWriter()
 	{
-		bool in_string = false;
-		string[] node_stack;
-		auto ret = buildWriter(node_stack, in_string, 0);
-		assert(node_stack.length == 0);
-		return ret;
+		auto output = new OutputContext;
+		buildWriter(output, 0);
+		assert(output.m_nodeStack.length == 0);
+		return output.m_result;
 	}
 
-	string buildWriter(ref string[] node_stack, ref bool in_string, int base_level)
+	void buildWriter(OutputContext output, int base_level)
 	{
 		assert(m_blocks !is null);
-		string ret;
 
 		while(true){
-			if( lineCount == 0 ) return ret;
+			if( lineCount == 0 ) return;
 			auto firstline = line(m_lineIndex);
 			auto firstlinetext = firstline.text;
 
@@ -310,7 +405,7 @@ private struct DietCompiler {
 					subblock.indentStyle = indentStyle;
 					m_blocks.blocks ~= subblock;
 
-					//ret ~= startString(in_string) ~ "<!-- found block "~subblock.name~" in "~line(0).file ~ "-->\n";
+					//output.writeString("<!-- found block "~subblock.name~" in "~line(0).file ~ "-->\n");
 				}
 
 				// change to layout file and start over
@@ -319,21 +414,19 @@ private struct DietCompiler {
 			} else {
 				auto start_indent_level = indentLevel(firstlinetext, indentStyle);
 				//assertp(start_indent_level == 0, "Indentation must start at level zero.");
-				ret ~= buildBodyWriter(node_stack, in_string, base_level, start_indent_level);
+				buildBodyWriter(output, base_level, start_indent_level);
 				break;
 			}
 		}
 
-		ret ~= endString(in_string);
-		return ret;
+		output.enterState(OutputContext.State.Code);
 	}
 
-	private string buildBodyWriter(ref string[] node_stack, ref bool in_string, int base_level, int start_indent_level)
+	private void buildBodyWriter(OutputContext output, int base_level, int start_indent_level)
 	{
 		assert(m_blocks !is null);
-		string ret;
 
-		assertp(node_stack.length >= base_level);
+		assertp(output.stackSize >= base_level);
 
 		int computeNextIndentLevel(){
 			return (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
@@ -341,22 +434,22 @@ private struct DietCompiler {
 
 		for( ; m_lineIndex < lineCount; m_lineIndex++ ){
 			auto curline = line(m_lineIndex);
-			if( !in_string ) ret ~= lineMarker(curline);
+			output.markInputLine(curline);
 			auto level = indentLevel(curline.text, indentStyle) - start_indent_level + base_level;
-			assertp(level <= node_stack.length+1);
+			assertp(level <= output.stackSize+1);
 			auto ln = unindent(curline.text, indentStyle);
 			assertp(ln.length > 0);
 			int next_indent_level = computeNextIndentLevel();
 
-			assertp(node_stack.length >= level, cttostring(node_stack.length) ~ ">=" ~ cttostring(level));
+			assertp(output.stackSize >= level, cttostring(output.stackSize) ~ ">=" ~ cttostring(level));
 			assertp(next_indent_level <= level+1, "The next line is indented by more than one level deeper. Please unindent accordingly.");
 
 			if( ln[0] == '-' ){ // embedded D code
 				assertp(ln[$-1] != '{', "Use indentation to nest D statements instead of braces.");
-				ret ~= endString(in_string) ~ ln[1 .. $] ~ "{\n";
-				node_stack ~= "-}";
+				output.writeCodeLine(ln[1 .. $] ~ "{");
+				output.pushNode("-}");
 			} else if( ln[0] == '|' ){ // plain text node
-				ret ~= buildTextNodeWriter(node_stack, ln[1 .. ln.length], level, in_string);
+				buildTextNodeWriter(output, ln[1 .. ln.length], level);
 			} else if( ln[0] == ':' ){ // filter node (filtered raw text)
 				// find all child lines
 				size_t next_tag = m_lineIndex+1;
@@ -366,11 +459,11 @@ private struct DietCompiler {
 					next_tag++;
 				}
 
-				ret ~= buildFilterNodeWriter(node_stack, ln, curline.number, level + start_indent_level - base_level, in_string,
+				buildFilterNodeWriter(output, ln, curline.number, level + start_indent_level - base_level,
 						lineRange(m_lineIndex+1, next_tag));
 
 				// skip to the next tag
-				//node_stack ~= "-";
+				//output.pushDummyNode();
 				m_lineIndex = next_tag-1;
 				next_indent_level = computeNextIndentLevel();
 			} else {
@@ -379,15 +472,15 @@ private struct DietCompiler {
 				if( ln.startsWith("!!! ") ) tag = "!!!";
 				switch(tag){
 					default:
-						ret ~= buildHtmlNodeWriter(node_stack, tag, ln[j .. $], level, in_string, next_indent_level > level);
+						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level);
 						break;
 					case "!!!": // HTML Doctype header
-						ret ~= buildSpecialTag!(node_stack)("!DOCTYPE html", level, in_string);
+						buildSpecialTag(output, "!DOCTYPE html", level);
 						break;
 					case "//": // HTML comment
 						skipWhitespace(ln, j);
-						ret ~= startString(in_string) ~ "<!-- " ~ htmlEscape(ln[j .. $]);
-						node_stack ~= " -->";
+						output.writeString("<!-- " ~ htmlEscape(ln[j .. $]));
+						output.pushNode(" -->");
 						break;
 					case "//-": // non-output comment
 						// find all child lines
@@ -404,29 +497,29 @@ private struct DietCompiler {
 						break;
 					case "//if": // IE conditional comment
 						skipWhitespace(ln, j);
-						ret ~= buildSpecialTag!(node_stack)("!--[if "~ln[j .. $]~"]", level, in_string);
-						node_stack ~= "<![endif]-->";
+						buildSpecialTag(output, "!--[if "~ln[j .. $]~"]", level);
+						output.pushNode("<![endif]-->");
 						break;
 					case "block": // Block insertion place
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
-						node_stack ~= "-";
+						output.pushDummyNode();
 						auto block = getBlock(ln[6 .. $].ctstrip());
 						if( block ){
-							ret ~= startString(in_string) ~ "<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->";
+							output.writeString("<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
 							if( block.mode == 1 ){
 								// output defaults
 							}
 							auto blockcompiler = new DietCompiler(block, m_files, m_blocks);
 							/*blockcompiler.m_block = block;
 							blockcompiler.m_blocks = m_blocks;*/
-							ret ~= blockcompiler.buildWriter(node_stack, in_string, cast(int)node_stack.length);
+							blockcompiler.buildWriter(output, cast(int)output.m_nodeStack.length);
 
 							if( block.mode == -1 ){
 								// output defaults
 							}
 						} else {
 							// output defaults
-							ret ~= startString(in_string) ~ "<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->";
+							output.writeString("<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
 						}
 						break;
 					case "include": // Diet file include
@@ -435,12 +528,12 @@ private struct DietCompiler {
 						auto file = getFile(filename);
 						auto includecompiler = new DietCompiler(file, m_files, m_blocks);
 						//includecompiler.m_blocks = m_blocks;
-						ret ~= includecompiler.buildWriter(node_stack, in_string, level);
+						includecompiler.buildWriter(output, level);
 						break;
 					case "script":
 					case "style":
 						if( tag == "script" && next_indent_level <= level){
-							ret ~= buildHtmlNodeWriter(node_stack, tag, ln[j .. $], level, in_string, false);
+							buildHtmlNodeWriter(output, tag, ln[j .. $], level, false);
 						} else {
 							// pass all child lines to buildRawTag and continue with the next sibling
 							size_t next_tag = m_lineIndex+1;
@@ -449,8 +542,8 @@ private struct DietCompiler {
 							{
 								next_tag++;
 							}
-							ret ~= buildRawNodeWriter(node_stack, tag, ln[j .. $], level, base_level,
-								in_string, lineRange(m_lineIndex+1, next_tag));
+							buildRawNodeWriter(output, tag, ln[j .. $], level, base_level,
+								lineRange(m_lineIndex+1, next_tag));
 							m_lineIndex = next_tag-1;
 							next_indent_level = computeNextIndentLevel();
 						}
@@ -465,54 +558,24 @@ private struct DietCompiler {
 				}
 			}
 			
-			// close all tags/blocks until we reach the level of the next line
-			while( node_stack.length > next_indent_level ){
-				if( node_stack[$-1][0] == '-' ){
-					if( node_stack[$-1].length > 1 ){
-						ret ~= endString(in_string);
-						ret ~= node_stack[$-1][1 .. $] ~ "\n";
-					}
-				} else if( node_stack[$-1].length ){
-					string str;
-					if( node_stack[$-1] != "</pre>" ){
-						str = "\n";
-						foreach( j; 0 .. node_stack.length-1 ) if( node_stack[j][0] != '-' ) str ~= "\t";
-					}
-					str ~= node_stack[$-1];
-					ret ~= startString(in_string);
-					ret ~= dstringEscape(str);
-				}
-				node_stack.length = node_stack.length-1;
-			}
+			output.popNodes(next_indent_level);
 		}
-
-		return ret;
 	}
 
-	private string buildTextNodeWriter(ref string[] node_stack, in string textline, int level, ref bool in_string)
+	private void buildTextNodeWriter(OutputContext output, in string textline, int level)
 	{
-		string ret = startString(in_string);
-		ret ~= "\\n";
+		output.writeString("\n");
 		if( textline.length >= 1 && textline[0] == '=' ){
-			ret ~= endString(in_string);
-			ret ~= StreamVariableName ~ ".write(htmlEscape(_toString(";
-			ret ~= textline[1 .. $];
-			ret ~= ")));\n";
+			output.writeExprHtmlEscaped(textline[1 .. $]);
 		} else if( textline.length >= 2 && textline[0 .. 2] == "!=" ){
-			ret ~= endString(in_string);
-			ret ~= StreamVariableName ~ ".write(_toString(";
-			ret ~= textline[2 .. $];
-			ret ~= "));\n";
+			output.writeExpr(textline[2 .. $]);
 		} else {
-			ret ~= "\"";
-			ret ~= buildInterpolatedString(textline, true, true);
-			ret ~= "\"";
+			buildInterpolatedString(output, textline);
 		}
-		node_stack ~= "-";
-		return ret;
+		output.pushDummyNode();
 	}
 
-	private string buildHtmlNodeWriter(ref string[] node_stack, in ref string tag, in string line, int level, ref bool in_string, bool has_child_nodes)
+	private void buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes)
 	{
 		// parse the HTML tag, leaving any trailing text as line[i .. $]
 		size_t i;
@@ -530,42 +593,31 @@ private struct DietCompiler {
 		}
 		assertp(!(is_singular_tag && has_child_nodes), "Singular HTML element '"~tag~"' may not have children.");
 		
+		// opening tag
+		buildHtmlTag(output, tag, level, attribs, is_singular_tag);
+
 		// parse any text contents (either using "= code" or as plain text)
 		string textstring;
 		bool textstring_isdynamic = true;
 		if( i < line.length && line[i] == '=' ){
-			textstring = "htmlEscape(_toString("~ctstrip(line[i+1 .. line.length])~"))";
+			output.writeExprHtmlEscaped(ctstrip(line[i+1 .. line.length]));
 		} else if( i+1 < line.length && line[i .. i+2] == "!=" ){
-			textstring = "_toString("~ctstrip(line[i+2 .. line.length])~")";
+			output.writeExpr(ctstrip(line[i+2 .. line.length]));
 		} else {
 			if( hasInterpolations(line[i .. line.length]) ){
-				textstring = buildInterpolatedString(line[i .. line.length], false, false);
+				buildInterpolatedString(output, line[i .. line.length]);
 			} else {
-				textstring = sanitizeEscaping(line[i .. line.length]);
-				textstring_isdynamic = false;
+				output.writeRawString(sanitizeEscaping(line[i .. line.length]));
 			}
 		}
-		
-		string tail;
-		if( has_child_nodes ){
-			node_stack ~= "</"~tag~">";
-			tail = "";
-		} else if( !is_singular_tag ) tail = "</" ~ tag ~ ">";
-		
-		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs, is_singular_tag);
-		if( textstring_isdynamic ){
-			if( textstring != "\"\"" ){
-				ret ~= endString(in_string);
-				ret ~= StreamVariableName~".write(" ~ textstring ~ ", false);\n";
-			}
-		} else ret ~= startString(in_string) ~ textstring;
-		if( tail.length ) ret ~= startString(in_string) ~ tail;
-			
-		return ret;
+
+		// closing tag
+		if( has_child_nodes ) output.pushNode("</"~tag~">");
+		else if( !is_singular_tag ) output.writeString("</" ~ tag ~ ">");
 	}
 
-	private string buildRawNodeWriter(ref string[] node_stack, in ref string tag, in string tagline, int level,
-			int base_level, ref bool in_string, in Line[] lines)
+	private void buildRawNodeWriter(OutputContext output, in ref string tag, in string tagline, int level,
+			int base_level, in Line[] lines)
 	{
 		// parse the HTML tag leaving any trailing text as tagline[i .. $]
 		size_t i;
@@ -573,22 +625,23 @@ private struct DietCompiler {
 		parseHtmlTag(tagline, i, attribs);
 
 		// write the tag
-		string ret = buildHtmlTag(node_stack, tag, level, in_string, attribs, false);
+		buildHtmlTag(output, tag, level, attribs, false);
 
-		string indent_string = "\\t";
-		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) indent_string ~= "\\t";
+		string indent_string = "\t";
+		foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) indent_string ~= "\t";
 
 		// write the block contents wrapped in a CDATA for old browsers
-		ret ~= startString(in_string);
-		if( tag == "script" ) ret ~= "\\n"~indent_string~"//<![CDATA[\\n";
-		else ret ~= "\\n"~indent_string~"<!--\\n";
+		if( tag == "script" ) output.writeString("\n"~indent_string~"//<![CDATA[\n");
+		else output.writeString("\n"~indent_string~"<!--\n");
 
 		// write out all lines
 		void writeLine(string str){
-			if( !hasInterpolations(str) )
-				ret ~= indent_string ~ dstringEscape(str) ~ "\\n";
-			else
-				ret ~= indent_string ~ "\"" ~ buildInterpolatedString(str, true, true) ~ "\"\\n";
+			if( !hasInterpolations(str) ){
+				output.writeString(indent_string ~ str ~ "\n");
+			} else {
+				output.writeString(indent_string);
+				buildInterpolatedString(output, str);
+			}
 		}
 		if( i < tagline.length ) writeLine(tagline[i .. $]);
 		foreach( j; 0 .. lines.length ){
@@ -596,17 +649,14 @@ private struct DietCompiler {
 			string lnstr = lines[j].text[(level-base_level+1)*indentStyle.length .. $];
 			writeLine(lnstr);
 		}
-		if( tag == "script" ) ret ~= indent_string~"//]]>\\n";
-		else ret ~= indent_string~"-->\\n";
-		ret ~= indent_string[0 .. $-2] ~ "</" ~ tag ~ ">";
-		return ret;
+		if( tag == "script" ) output.writeString(indent_string~"//]]>\n");
+		else output.writeString(indent_string~"-->\n");
+		output.writeString(indent_string[0 .. $-2] ~ "</" ~ tag ~ ">");
 	}
 
-	private string buildFilterNodeWriter(ref string[] node_stack, in ref string tagline, int tagline_number,
-		int indent, ref bool in_string, in Line[] lines)
+	private void buildFilterNodeWriter(OutputContext output, in ref string tagline, int tagline_number,
+		int indent, in Line[] lines)
 	{
-		string ret;
-
 		// find all filters
 		size_t j = 0;
 		string[] filters;
@@ -640,14 +690,13 @@ private struct DietCompiler {
 		}
 
 		// the rest of the filtering will happen at run time
-		ret ~= endString(in_string) ~ StreamVariableName~".write(";
 		string filter_expr;
-		foreach_reverse( flt; filters ) ret ~= "s_filters[\""~dstringEscape(flt)~"\"](";
-		ret ~= "\"" ~ dstringEscape(content) ~ "\"";
-		foreach( i; 0 .. filters.length ) ret ~= ", "~cttostring(indent)~")";
-		ret ~= ");\n";
+		foreach_reverse( flt; filters ) filter_expr ~= "s_filters[\""~dstringEscape(flt)~"\"](";
+		filter_expr ~= "\"" ~ dstringEscape(content) ~ "\"";
+		foreach( i; 0 .. filters.length ) filter_expr ~= ", "~cttostring(indent)~")";
+		filter_expr ~= ");\n";
 
-		return ret;
+		output.writeStringExpr(filter_expr);
 	}
 
 	private void parseHtmlTag(in ref string line, out size_t i, out Tuple!(string, string)[] attribs)
@@ -682,56 +731,58 @@ private struct DietCompiler {
 			i++;
 		}
 
-		// Add extra classes
-		bool has_classes = false;
-		if (attribs.length) {
-			foreach (idx, att; attribs) {
-				if (att[0] == "class") {
-					if( classes.length )
-						attribs[idx] = tuple("class", att[1]~" "~classes);
-					has_classes = true;
+		// add special attribute for extra classes that is handled by buildHtmlTag
+		if( classes.length ){
+			bool has_class = false;
+			foreach( a; attribs )
+				if( a[0] == "class" ){
+					has_class = true;
 					break;
 				}
-			}
-		}
 
-		if (!has_classes && classes.length ) attribs ~= tuple("class", '"'~classes~'"');
+			if( has_class ) attribs ~= tuple("$class", classes);
+			else attribs ~= tuple("class", "\"" ~ classes ~ "\"");
+		}
 
 		// skip until the optional tag text contents begin
 		skipWhitespace(line, i);
 	}
 
-	private string buildHtmlTag(ref string[] node_stack, in ref string tag, int level, ref bool in_string, ref Tuple!(string, string)[] attribs, bool is_singular_tag)
+	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref Tuple!(string, string)[] attribs, bool is_singular_tag)
 	{
-		string tagstring = startString(in_string) ~ "\\n";
-		assertp(node_stack.length >= level);
-		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
-		tagstring ~= "<" ~ tag;
+		output.writeString("\n");
+		assertp(output.stackSize >= level);
+		foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) output.writeString("\t");
+		output.writeString("<" ~ tag);
 		foreach( att; attribs ){
+			if( att[0][0] == '$' ) continue; // ignore special attributes
 			if( isStringLiteral(att[1]) ){
-				tagstring ~= startString(in_string);
-				if( !hasInterpolations(att[1]) ) tagstring ~= " "~att[0]~"=\\\""~htmlEscape(att[1][1 .. $-1])~"\\\"";
-				else tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1][1 .. $-1], false, false, true)~"~\"\\\"";
-			} else {
-				tagstring ~= endString(in_string);
-				tagstring ~= "static if(is(typeof("~att[1]~") == bool)){\n";
-				tagstring ~= "\tif("~att[1]~") "~StreamVariableName~".write(\" "~att[0]~"=\\\""~att[0]~"\\\"\", false);\n";
-				tagstring ~= "} else {\n";
-				tagstring ~= "\t"~StreamVariableName~".write(\" "~att[0]~"=\\\"\"~htmlEscape(_toString("~att[1]~"))~\"\\\"\", false);\n";
-				tagstring ~= "}\n";
-			}
+				output.writeString(" "~att[0]~"=\"");
+				if( !hasInterpolations(att[1]) ) output.writeString(htmlEscape(dstringUnescape(att[1][1 .. $-1])));
+				else buildInterpolatedString(output, att[1][1 .. $-1], true);
 
-			/*if( isBooleanAttribute(att[0]) ){
-				tagstring ~= endString(in_string);
-				tagstring ~= "if("~att[1]~") " ~ startString(in_string) ~ att[0]~"=\\\""~att[0]~"\\\"\n";
-				tagstring ~= endString(in_string);
+				// output extra classes given as .class
+				if( att[0] == "class" ){
+					foreach( a; attribs )
+						if( a[0] == "$class" ){
+							output.writeString(" " ~ a[1]);
+							break;
+						}
+				}
+
+				output.writeString("\"");
 			} else {
-				tagstring ~= startString(in_string);
-				tagstring ~= " "~att[0]~"=\\\"~_toString("~dstringEscape(att[1])~")"~"\\\"";
-			}*/
+				output.writeCodeLine("static if(is(typeof("~att[1]~") == bool)){ if("~att[1]~"){");
+				output.writeString(` `~att[0]~`="`~att[0]~`"`);
+				output.writeCodeLine("}} else {\n");
+				output.writeString(` `~att[0]~`="`);
+				output.writeExprHtmlEscaped(att[1]);
+				output.writeString(`"`);
+				output.writeCodeLine("}");
+			}
 		}
-		tagstring ~= startString(in_string) ~ (is_singular_tag ? "/>" : ">");
-		return tagstring;
+
+		output.writeString(is_singular_tag ? "/>" : ">");
 	}
 
 	private void parseAttributes(in ref string str, ref Tuple!(string, string)[] attribs)
@@ -783,23 +834,14 @@ private struct DietCompiler {
 		return false;
 	}
 
-	private string buildInterpolatedString(in ref string str, bool prevconcat = false, bool nextconcat = false, bool escape_quotes = false)
+	private void buildInterpolatedString(OutputContext output, string str, bool escape_quotes = false)
 	{
-		string ret;
-		int state = 0; // 0 == start, 1 == in string, 2 == out of string
-		static immutable enter_string = ["\"", "", "~\""];
-		static immutable enter_non_string = ["", "\"~", "~"];
-		static immutable exit_string = ["", "\"", ""];
 		size_t start = 0, i = 0;
 		while( i < str.length ){
 			// check for escaped characters
 			if( str[i] == '\\' ){
-				if( i > start ){
-					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
-					state = 1;
-				}
-				ret ~= enter_string[state] ~ sanitizeEscaping(str[i .. i+2]);
-				state = 1;
+				if( i > start ) output.writeRawString(str[start .. i]);
+				output.writeRawString(sanitizeEscaping(str[i .. i+2]));
 				i += 2;
 				start = i;
 				continue;
@@ -808,36 +850,23 @@ private struct DietCompiler {
 			if( (str[i] == '#' || str[i] == '!') && i+1 < str.length ){
 				bool escape = str[i] == '#';
 				if( i > start ){
-					ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
-					state = 1;
+					output.writeString(str[start .. i]);
 					start = i;
 				}
 				assertp(str[i+1] != str[i], "Please use \\ to escape # or ! instead of ## or !!.");
 				if( str[i+1] == '{' ){
 					i += 2;
-					ret ~= enter_non_string[state];
-					state = 2;
 					auto expr = dstringUnescape(skipUntilClosingBrace(str, i));
-					if( escape && !escape_quotes ) ret ~= "htmlEscape(_toString("~expr~"))";
-					else if( escape ) ret ~= "htmlAttribEscape(_toString("~expr~"))";
-					else ret ~= "_toString("~expr~")";
+					if( escape && !escape_quotes ) output.writeExprHtmlEscaped(expr);
+					else if( escape ) output.writeExprHtmlAttribEscaped(expr);
+					else output.writeExpr(expr);
 					i++;
 					start = i;
 				} else i++;
 			} else i++;
 		}
-		if( i > start ){
-			ret ~= enter_string[state] ~ dstringEscape(str[start .. i]);
-			state = 1;
-		}
-		ret ~= exit_string[state];
 
-		if( ret.length == 0 ){
-			if( prevconcat && nextconcat ) return "~";
-			else if( !prevconcat && !nextconcat ) return "\"\"";
-			else return "";
-		}
-		return (prevconcat?"~":"") ~ ret ~ (nextconcat?"~":"");
+		if( i > start ) output.writeRawString(str[start .. i]);
 	}
 
 	private string skipIdent(in ref string s, ref size_t idx, string additional_chars = null)
@@ -997,14 +1026,11 @@ private struct DietCompiler {
 
 
 /// private
-private string buildSpecialTag(alias node_stack)(string tag, int level, ref bool in_string)
+private void buildSpecialTag(OutputContext output, string tag, int level)
 {
-	// write the tag
-	string tagstring = "\\n";
-	foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
-	tagstring ~= "<" ~ tag ~ ">";
-
-	return startString(in_string) ~ tagstring;
+	output.writeString("\n");
+	foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) output.writeString("\t");
+	output.writeString("<" ~ tag ~ ">");
 }
 
 private bool isStringLiteral(string str)
@@ -1020,30 +1046,6 @@ private bool isStringLiteral(string str)
 	}
 	return i < str.length;
 }
-
-private bool isBooleanAttribute(string name)
-{
-	switch(name){
-		default: return false;
-		case "hidden": return true;
-		case "selected": return true;
-	}
-}
-
-/// private
-private @property string startString(ref bool in_string){
-	auto ret = in_string ? "" : StreamVariableName ~ ".write(\"";
-	in_string = true;
-	return ret;
-}
-
-/// private
-private @property string endString(ref bool in_string){
-	auto ret = in_string ? "\", false);\n" : "";
-	in_string = false;
-	return ret;
-}
-
 
 /// Internal function used for converting an interpolation expression to string
 string _toString(T)(T v)
