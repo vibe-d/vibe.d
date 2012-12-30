@@ -692,7 +692,6 @@ private struct DietCompiler {
 		foreach_reverse( flt; filters ) filter_expr ~= "s_filters[\""~dstringEscape(flt)~"\"](";
 		filter_expr ~= "\"" ~ dstringEscape(content) ~ "\"";
 		foreach( i; 0 .. filters.length ) filter_expr ~= ", "~cttostring(indent)~")";
-		filter_expr ~= ");\n";
 
 		output.writeStringExpr(filter_expr);
 	}
@@ -838,7 +837,7 @@ private struct DietCompiler {
 		while( i < str.length ){
 			// check for escaped characters
 			if( str[i] == '\\' ){
-				if( i > start ) output.writeRawString(str[start .. i]);
+				if( i > start ) output.writeString(str[start .. i]);
 				output.writeRawString(sanitizeEscaping(str[i .. i+2]));
 				i += 2;
 				start = i;
@@ -864,7 +863,7 @@ private struct DietCompiler {
 			} else i++;
 		}
 
-		if( i > start ) output.writeRawString(str[start .. i]);
+		if( i > start ) output.writeString(str[start .. i]);
 	}
 
 	private string skipIdent(in ref string s, ref size_t idx, string additional_chars = null)
