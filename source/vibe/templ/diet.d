@@ -236,7 +236,6 @@ private string[] extractDependencies(in Line[] lines)
 private class OutputContext {
 	enum State {
 		Code,
-		Expr,
 		String
 	}
 
@@ -288,7 +287,7 @@ private class OutputContext {
 	void writeString(string str) { writeRawString(dstringEscape(str)); }
 	void writeStringHtmlEscaped(string str) { writeString(htmlEscape(str)); }
 
-	void writeStringExpr(string str) { enterState(State.Expr); m_result ~= str; }
+	void writeStringExpr(string str) { writeCodeLine(StreamVariableName~".write("~str~");"); }
 	void writeStringExprHtmlEscaped(string str) { writeStringExpr("htmlEscape("~str~")"); }
 	void writeStringExprHtmlAttribEscaped(string str) { writeStringExpr("htmlAttribEscape("~str~")"); }
 
@@ -314,9 +313,6 @@ private class OutputContext {
 				if( m_state == State.String ) m_result ~= "\", false);\n";
 				else m_result ~= ", false);\n";
 				if( m_line >= 0 ) m_result ~= lineMarker(Line(m_file, m_line, null));
-				break;
-			case State.Expr:
-				m_result ~= StreamVariableName ~ ".write(";
 				break;
 			case State.String:
 				m_result ~= StreamVariableName ~ ".write(\"";
