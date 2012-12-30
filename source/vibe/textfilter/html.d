@@ -151,6 +151,6 @@ private struct StringAppender {
 	void put(dchar ch) {
 		import std.utf;
 		char[4] dst;
-		data ~= dst[encode(dst, ch)];
+		data ~= dst[0 .. encode(dst, ch)];
 	}
 }
