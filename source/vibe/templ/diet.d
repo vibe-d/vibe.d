@@ -59,8 +59,9 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
+	pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
-	#line 63 "diet.d"
+	#line 65 "diet.d"
 }
 
 /// compatibility alias
@@ -89,8 +90,9 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	mixin(localAliasesCompat!(0, TYPES_AND_NAMES));
 
 	// Generate the D source code for the diet template
+	pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
-	#line 90 "diet.d"
+	#line 96 "diet.d"
 }
 
 /// compatibility alias
@@ -670,7 +672,7 @@ private struct DietCompiler {
 		}
 		
 		// put #id and .classes into the attribs list
-		if( id.length ) attribs ~= tuple("id", id);
+		if( id.length ) attribs ~= tuple("id", '"'~id~'"');
 		
 		// parse other attributes
 		if( i < line.length && line[i] == '(' ){
@@ -693,7 +695,7 @@ private struct DietCompiler {
 			}
 		}
 
-		if (!has_classes && classes.length ) attribs ~= tuple("class", classes);
+		if (!has_classes && classes.length ) attribs ~= tuple("class", '"'~classes~'"');
 
 		// skip until the optional tag text contents begin
 		skipWhitespace(line, i);
@@ -706,10 +708,29 @@ private struct DietCompiler {
 		foreach( j; 0 .. level ) if( node_stack[j][0] != '-' ) tagstring ~= "\\t";
 		tagstring ~= "<" ~ tag;
 		foreach( att; attribs ){
-			if( !hasInterpolations(att[1]) ) tagstring ~= " "~att[0]~"=\\\""~dstringEscape(att[1])~"\\\"";
-			else tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1], false, false, true)~"~\"\\\"";
+			if( isStringLiteral(att[1]) ){
+				tagstring ~= startString(in_string);
+				if( !hasInterpolations(att[1]) ) tagstring ~= " "~att[0]~"=\\\""~htmlEscape(att[1][1 .. $-1])~"\\\"";
+				else tagstring ~= " "~att[0]~"=\\\"\"~"~buildInterpolatedString(att[1][1 .. $-1], false, false, true)~"~\"\\\"";
+			} else {
+				tagstring ~= endString(in_string);
+				tagstring ~= "static if(is(typeof("~att[1]~") == bool)){\n";
+				tagstring ~= "\tif("~att[1]~") "~StreamVariableName~".write(\" "~att[0]~"=\\\""~att[0]~"\\\"\", false);\n";
+				tagstring ~= "} else {\n";
+				tagstring ~= "\t"~StreamVariableName~".write(\" "~att[0]~"=\\\"\"~htmlEscape(_toString("~att[1]~"))~\"\\\"\", false);\n";
+				tagstring ~= "}\n";
+			}
+
+			/*if( isBooleanAttribute(att[0]) ){
+				tagstring ~= endString(in_string);
+				tagstring ~= "if("~att[1]~") " ~ startString(in_string) ~ att[0]~"=\\\""~att[0]~"\\\"\n";
+				tagstring ~= endString(in_string);
+			} else {
+				tagstring ~= startString(in_string);
+				tagstring ~= " "~att[0]~"=\\\"~_toString("~dstringEscape(att[1])~")"~"\\\"";
+			}*/
 		}
-		tagstring ~= is_singular_tag ? "/>" : ">";
+		tagstring ~= startString(in_string) ~ (is_singular_tag ? "/>" : ">");
 		return tagstring;
 	}
 
@@ -725,19 +746,11 @@ private struct DietCompiler {
 				i++;
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
-				if (str[i] == '\'' || str[i] == '"') {
-					auto delimiter = str[i];
-					i++;
-					value = skipAttribString(str, i, delimiter);
-					i++;
-					skipWhitespace(str, i);
-				} else if(name == "class") { //Support special-case class
-					value = skipIdent(str, i, "_.");
-					value = "#{join("~value~",\" \")}";
-				} else {
-					assertp(str[i] == '\'' || str[i] == '"', "Expecting ''' or '\"' following '='.");
+				value = skipExpression(str, i);
+				if( isStringLiteral(value) && value[0] == '\'' ){
+					value = '"' ~ value[1 .. $-1] ~ '"';
 				}
-			}
+			} else value = "true";
 			
 			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
 			if( i < str.length ){
@@ -892,18 +905,48 @@ private struct DietCompiler {
 	private string skipAttribString(in ref string s, ref size_t idx, char delimiter)
 	{
 		size_t start = idx;
-		string ret;
 		while( idx < s.length ){
 			if( s[idx] == '\\' ){
-				ret ~= s[idx]; // pass escape character through - will be handled later by buildInterpolatedString
+				// pass escape character through - will be handled later by buildInterpolatedString
 				idx++;
 				assertp(idx < s.length, "'\\' must be followed by something (escaped character)!");
-				ret ~= s[idx];
 			} else if( s[idx] == delimiter ) break;
-			else ret ~= s[idx];
 			idx++;
 		}
-		return ret;
+		return s[start .. idx];
+	}
+
+	private string skipExpression(in ref string s, ref size_t idx)
+	{
+		string clamp_stack;
+		size_t start = idx;
+		while( idx < s.length ){
+			switch( s[idx] ){
+				default: break;
+				case ',':
+					if( clamp_stack.length == 0 )
+						return s[start .. idx];
+					break;
+				case '"', '\'':
+					idx++;
+					skipAttribString(s, idx, s[idx-1]);
+					break;
+				case '(': clamp_stack ~= ')'; break;
+				case '[': clamp_stack ~= ']'; break;
+				case '{': clamp_stack ~= '}'; break;
+				case ')', ']', '}':
+					if( s[idx] == ')' && clamp_stack.length == 0 )
+						return s[start .. idx];
+					assertp(clamp_stack.length > 0 && clamp_stack[$-1] == s[idx],
+						"Unexpected '"~s[idx]~"'");
+					clamp_stack.length--;
+					break;
+			}
+			idx++;
+		}
+
+		assertp(clamp_stack.length == 0, "Expected '"~clamp_stack[$-1]~"' before end of attribute expression.");
+		return s[start .. $];
 	}
 
 	private string unindent(in ref string str, in ref string indent)
@@ -927,7 +970,7 @@ private struct DietCompiler {
 		return ln.length == 0 ? 0 : indentLevel(ln[0].text, indent);
 	}
 
-	private void assertp(bool cond, string text = null, string file = __FILE__, int cline = __LINE__)
+	private void assertp(bool cond, lazy string text = null, string file = __FILE__, int cline = __LINE__)
 	{
 		Line ln;
 		if( m_lineIndex < lineCount ) ln = line(m_lineIndex);
@@ -962,6 +1005,29 @@ private string buildSpecialTag(alias node_stack)(string tag, int level, ref bool
 	tagstring ~= "<" ~ tag ~ ">";
 
 	return startString(in_string) ~ tagstring;
+}
+
+private bool isStringLiteral(string str)
+{
+	size_t i = 0;
+	while( i < str.length && (str[i] == ' ' || str[i] == '\t') ) i++;
+	if( i >= str.length ) return false;
+	char delimiter = str[i];
+	if( delimiter != '"' && delimiter != '\'' ) return false;
+	while( i < str.length && str[i] != delimiter ){
+		if( str[i] == '\\' ) i++;
+		i++;
+	}
+	return i < str.length;
+}
+
+private bool isBooleanAttribute(string name)
+{
+	switch(name){
+		default: return false;
+		case "hidden": return true;
+		case "selected": return true;
+	}
 }
 
 /// private
