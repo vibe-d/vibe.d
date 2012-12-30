@@ -59,7 +59,7 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
-	pragma(msg, dietParser!template_file());
+	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
 	#line 65 "diet.d"
 }
@@ -90,7 +90,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	mixin(localAliasesCompat!(0, TYPES_AND_NAMES));
 
 	// Generate the D source code for the diet template
-	pragma(msg, dietParser!template_file());
+	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
 	#line 96 "diet.d"
 }
@@ -250,7 +250,6 @@ private class OutputContext {
 	{
 		if( m_state == State.Code ){
 			m_result ~= lineMarker(line);
-			m_line = -1;
 		} else {
 			m_file = line.file;
 			m_line = line.number;
@@ -292,20 +291,21 @@ private class OutputContext {
 	void writeStringExpr(string str) { enterState(State.Expr); m_result ~= str; }
 	void writeStringExprHtmlEscaped(string str) { writeStringExpr("htmlEscape("~str~")"); }
 	void writeStringExprHtmlAttribEscaped(string str) { writeStringExpr("htmlAttribEscape("~str~")"); }
-	
+
 	void writeExpr(string str) { writeStringExpr("_toString("~str~")"); }
 	void writeExprHtmlEscaped(string str) { writeStringExprHtmlEscaped("_toString("~str~")"); }
 	void writeExprHtmlAttribEscaped(string str) { writeStringExprHtmlAttribEscaped("_toString("~str~")"); }
 
 	void writeCodeLine(string stmt)
 	{
-		enterState(State.Code);
+		if( !enterState(State.Code) )
+			m_result ~= lineMarker(Line(m_file, m_line, null));
 		m_result ~= stmt ~ "\n";
 	}
 
-	private void enterState(State state)
+	private bool enterState(State state)
 	{
-		if( state == m_state ) return;
+		if( state == m_state ) return false;
 
 		if( state != m_state.Code ) enterState(State.Code);
 
@@ -313,10 +313,7 @@ private class OutputContext {
 			case State.Code:
 				if( m_state == State.String ) m_result ~= "\", false);\n";
 				else m_result ~= ", false);\n";
-				if( m_line >= 0 ){
-					m_result ~= lineMarker(Line(m_file, m_line, null));
-					m_line = -1;
-				}
+				if( m_line >= 0 ) m_result ~= lineMarker(Line(m_file, m_line, null));
 				break;
 			case State.Expr:
 				m_result ~= StreamVariableName ~ ".write(";
@@ -327,6 +324,7 @@ private class OutputContext {
 		}
 
 		m_state = state;
+		return true;
 	}
 }
 
