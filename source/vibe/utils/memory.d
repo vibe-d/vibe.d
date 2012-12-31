@@ -83,9 +83,15 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 
 
 interface Allocator {
-	void[] alloc(size_t sz);
-	void[] realloc(void[] mem, size_t new_sz);
-	void free(void[] mem);
+	void[] alloc(size_t sz)
+		out { assert((cast(size_t)__result.ptr & 0xF) == 0, "alloc() returned misaligned data."); }
+	
+	void[] realloc(void[] mem, size_t new_sz)
+		in { assert((cast(size_t)mem.ptr & 0xF) == 0, "misaligned pointer passed to realloc()."); }
+		out { assert((cast(size_t)__result.ptr & 0xF) == 0, "realloc() returned misaligned data."); }
+
+	void free(void[] mem)
+		in { assert((cast(size_t)mem.ptr & 0xF) == 0, "misaligned pointer passed to free()."); }
 }
 
 class DebugAllocator : Allocator {
@@ -145,13 +151,27 @@ class DebugAllocator : Allocator {
 }
 
 class MallocAllocator : Allocator {
-	void[] alloc(size_t sz) { return .malloc(sz)[0 .. sz]; }
+	void[] alloc(size_t sz)
+	{
+		auto ptr = .malloc(sz);
+		auto misalign = cast(size_t)ptr & 0xF;
+		if( misalign != 0 ){
+			ptr = .realloc(ptr, sz + 0xF);
+			auto newmisalign = cast(size_t)ptr & 0xF;
+			ptr += 0x10 - newmisalign;
+		}
+		return ptr[0 .. sz];
+	}
 	void[] realloc(void[] mem, size_t new_size) { return .realloc(mem.ptr, new_size)[0 .. new_size]; }
 	void free(void[] mem) { .free(mem.ptr); }
 }
 
 class GCAllocator : Allocator {
-	void[] alloc(size_t sz) { return GC.malloc(sz)[0 .. sz]; }
+	void[] alloc(size_t sz)
+	{
+		auto ptr = GC.malloc(sz);
+		return ptr[0 .. sz];
+	}
 	void[] realloc(void[] mem, size_t new_size) { return GC.realloc(mem.ptr, new_size)[0 .. new_size]; }
 	void free(void[] mem) { GC.free(mem.ptr); }
 }
