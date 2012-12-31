@@ -242,16 +242,14 @@ private class OutputContext {
 	State m_state = State.Code;
 	string[] m_nodeStack;
 	string m_result;
-	string m_file;
-	int m_line;
+	Line m_line = Line(null, -1, null);
 
 	void markInputLine(in ref Line line)
 	{
 		if( m_state == State.Code ){
 			m_result ~= lineMarker(line);
 		} else {
-			m_file = line.file;
-			m_line = line.number;
+			m_line = Line(line.file, line.number, null);
 		}
 	}
 
@@ -298,7 +296,7 @@ private class OutputContext {
 	void writeCodeLine(string stmt)
 	{
 		if( !enterState(State.Code) )
-			m_result ~= lineMarker(Line(m_file, m_line, null));
+			m_result ~= lineMarker(m_line);
 		m_result ~= stmt ~ "\n";
 	}
 
@@ -312,7 +310,7 @@ private class OutputContext {
 			case State.Code:
 				if( m_state == State.String ) m_result ~= "\", false);\n";
 				else m_result ~= ", false);\n";
-				if( m_line >= 0 ) m_result ~= lineMarker(Line(m_file, m_line, null));
+				if( m_line.number >= 0 ) m_result ~= lineMarker(m_line);
 				break;
 			case State.String:
 				m_result ~= StreamVariableName ~ ".write(\"";

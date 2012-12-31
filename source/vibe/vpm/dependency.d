@@ -183,7 +183,8 @@ class Dependency {
 			|| (m_versA < m_versB && doCmp(m_cmpA, m_versB, m_versA) && doCmp(m_cmpB, m_versA, m_versB));
 	}
 	
-	bool matches(const string vers) const { return matches(Version(vers)); }
+	bool matches(string vers) const { return matches(Version(vers)); }
+	bool matches(const(Version) v) const { return matches(v); }
 	bool matches(ref const(Version) v) const {
 		//logTrace(" try match: %s with: %s", v, this);
 		// Master only matches master

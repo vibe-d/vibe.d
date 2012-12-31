@@ -239,6 +239,7 @@ struct PathEntry {
 	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Path(cast(immutable)[this, rhs], false); }
 	
 	bool opEquals(ref const PathEntry rhs) const { return m_name == rhs.m_name; }
+	bool opEquals(PathEntry rhs) const { return m_name == rhs.m_name; }
 	bool opEquals(string rhs) const { return m_name == rhs; }
 	int opCmp(ref const PathEntry rhs) const { return m_name.cmp(rhs.m_name); }
 	int opCmp(string rhs) const { return m_name.cmp(rhs); }
