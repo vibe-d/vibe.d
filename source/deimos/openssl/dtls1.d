@@ -71,7 +71,7 @@ public import deimos.openssl.pqueue;
 // #include <resource.h>
 // #include <sys/timeb.h>
 // #endif
-version (Win32) {
+version (Windows) {
 /* Needed for timeval */
 import std.c.windows.winsock;
 // #elif defined(OPENSSL_SYS_NETWARE) && !defined(_WINSOCK2API_)

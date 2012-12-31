@@ -69,7 +69,7 @@ import core.stdc.stdio;
 
 version (Posix) {
 	import core.sys.posix.netdb;
-} else version (Win32) {
+} else version (Windows) {
 	import std.c.windows.winsock;
 }
 

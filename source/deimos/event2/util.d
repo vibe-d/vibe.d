@@ -55,7 +55,7 @@ version (Posix) {
   import core.sys.posix.netdb;
 }
 
-version (Win32) {
+version (Windows) {
   import std.c.windows.winsock;
   extern(Windows) void WSASetLastError(int iError);
 } else {
@@ -108,7 +108,7 @@ alias intptr_t ev_intptr_t;
 
 alias ptrdiff_t ev_ssize_t;
 
-version (Win32) {
+version (Windows) {
   alias ev_int64_t ev_off_t;
 } else {
   alias off_t ev_off_t;
@@ -219,7 +219,7 @@ int evutil_closesocket(evutil_socket_t sock);
 alias evutil_closesocket EVUTIL_CLOSESOCKET;
 
 
-version (Win32) {
+version (Windows) {
   /** Return the most recent socket error.  Not idempotent on all platforms. */
   alias WSAGetLastError EVUTIL_SOCKET_ERROR;
   /** Replace the most recent socket error with errcode */
