@@ -8,8 +8,8 @@
 module vibe.crypto.passwordhash;
 
 import std.base64;
+import std.compiler;
 import std.exception;
-import std.md5;
 import std.random;
 
 
@@ -38,8 +38,7 @@ string generateSimplePasswordHash(string password, string additional_salt = null
 {
 	ubyte[4] salt;
 	foreach( i; 0 .. 4 ) salt[i] = cast(ubyte)uniform(0, 256);
-	ubyte[16] hash;
-	sum(hash, salt, password, additional_salt);
+	ubyte[16] hash = md5hash(salt, password, additional_salt);
 	return Base64.encode(salt ~ hash).idup;
 }
 
@@ -65,7 +64,26 @@ bool testSimplePasswordHash(string hashstring, string password, string additiona
 	enforce(upass.length == 20);
 	auto salt = upass[0 .. 4];
 	auto hashcmp = upass[4 .. 20];
-	ubyte[16] hash;
-	sum(hash, salt, password, additional_salt);
+	ubyte[16] hash = md5hash(salt, password, additional_salt);
 	return hash == hashcmp;
+}
+
+private ubyte[16] md5hash(ubyte[] salt, string[] strs...)
+{
+	static if(D_major > 2 || D_major == 2 && D_minor >= 61){
+		MD5 ctx;
+		ctx.start();
+		ctx.put(salt);
+		foreach( s; strs ) ctx.put(s);
+		return ctx.finish();
+	} else {
+		import std.md5;
+		ubyte[16] hash;
+		MD5_CTX ctx;
+		ctx.start();
+		ctx.update(salt);
+		foreach( s; strs ) ctx.update(s);
+		ctx.finish(hash);
+		return hash;
+	}
 }
