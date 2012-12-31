@@ -54,8 +54,8 @@ class Win32EventDriver : EventDriver {
 		m_tid = GetCurrentThreadId();
 		m_hwnd = CreateWindowA("VibeWin32MessageWindow", "VibeWin32MessageWindow", 0, 0,0,0,0, HWND_MESSAGE,null,null,null);
 
-		SetWindowLongA(m_hwnd, GWLP_USERDATA, cast(ULONG_PTR)cast(void*)this);
-		assert( cast(Win32EventDriver)cast(void*)GetWindowLongA(m_hwnd, GWLP_USERDATA) == this );
+		SetWindowLongPtrA(m_hwnd, GWLP_USERDATA, cast(ULONG_PTR)cast(void*)this);
+		assert( cast(Win32EventDriver)cast(void*)GetWindowLongPtrA(m_hwnd, GWLP_USERDATA) == this );
 
 		WSADATA wd;
 		enforce(WSAStartup(0x0202, &wd) == 0, "Failed to initialize WinSock");
@@ -101,7 +101,7 @@ class Win32EventDriver : EventDriver {
 
 	private void waitForEvents(uint timeout)
 	{
-		MsgWaitForMultipleObjectsEx(m_registeredEvents.length, m_registeredEvents.ptr, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
+		MsgWaitForMultipleObjectsEx(cast(DWORD)m_registeredEvents.length, m_registeredEvents.ptr, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 	}
 
 	void exitEventLoop()
@@ -250,7 +250,7 @@ class Win32EventDriver : EventDriver {
 	private static nothrow extern(System)
 	LRESULT onMessage(HWND wnd, UINT msg, WPARAM wparam, LPARAM lparam)
 	{
-		auto driver = cast(Win32EventDriver)cast(void*)GetWindowLongA(wnd, GWLP_USERDATA);
+		auto driver = cast(Win32EventDriver)cast(void*)GetWindowLongPtrA(wnd, GWLP_USERDATA);
 		switch(msg){
 			default: break;
 			case WM_USER_SIGNAL:
@@ -597,13 +597,15 @@ class Win32FileStream : FileStream {
 			overlapped.hEvent = cast(HANDLE)cast(void*)this;
 			m_bytesTransferred = 0;
 
+			auto to_read = min(dst.length, DWORD.max);
+
 			// request to write the data
-			ReadFileEx(m_handle, cast(void*)dst, dst.length, &overlapped, &onIOCompleted);
+			ReadFileEx(m_handle, cast(void*)dst, to_read, &overlapped, &onIOCompleted);
 			
 			// yield until the data is read
 			while( !m_bytesTransferred ) m_driver.yieldForEvent();
 
-			assert(m_bytesTransferred <= dst.length, "More bytes read than requested!?");
+			assert(m_bytesTransferred <= to_read, "More bytes read than requested!?");
 			dst = dst[m_bytesTransferred .. $];
 			m_ptr += m_bytesTransferred;
 		}
@@ -623,13 +625,15 @@ class Win32FileStream : FileStream {
 			overlapped.hEvent = cast(HANDLE)cast(void*)this;
 			m_bytesTransferred = 0;
 
+			auto to_write = min(bytes.length, DWORD.max);
+
 			// request to write the data
-			WriteFileEx(m_handle, cast(void*)bytes, bytes.length, &overlapped, &onIOCompleted);
+			WriteFileEx(m_handle, cast(void*)bytes, to_write, &overlapped, &onIOCompleted);
 
 			// yield until the data is written
 			while( !m_bytesTransferred ) m_driver.yieldForEvent();
 
-			assert(m_bytesTransferred <= bytes.length, "More bytes written than requested!?");
+			assert(m_bytesTransferred <= to_write, "More bytes written than requested!?");
 			bytes = bytes[m_bytesTransferred .. $];
 			m_ptr += m_bytesTransferred;
 		}
@@ -857,11 +861,12 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
 	{
+		assert(data.length <= int.max);
 		sizediff_t ret;
 		if( peer_address ){
-			ret = .sendto(m_socket, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
+			ret = .sendto(m_socket, data.ptr, cast(int)data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
 		} else {
-			ret = .send(m_socket, data.ptr, data.length, 0);
+			ret = .send(m_socket, data.ptr, cast(int)data.length, 0);
 		}
 		logTrace("send ret: %s, %s", ret, WSAGetLastError());
 		enforce(ret >= 0, "Error sending UDP packet.");
@@ -870,12 +875,13 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
+		assert(buf.length <= int.max);
 		if( buf.length == 0 ) buf.length = 65507;
 		NetworkAddress from;
 		from.family = m_bindAddress.family;
 		while(true){
 			uint addr_len = from.sockAddrLen;
-			auto ret = .recvfrom(m_socket, buf.ptr, buf.length, 0, from.sockAddr, &addr_len);
+			auto ret = .recvfrom(m_socket, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;
 				return buf[0 .. ret];
@@ -1114,8 +1120,9 @@ m_status = ConnectionStatus.Connected;
 					logTrace("TCP read event");
 					while( m_readBuffer.freeSpace > 0 ){
 						auto dst = m_readBuffer.peekDst();
+						assert(dst.length <= int.max);
 						logTrace("Try to read up to %s bytes", dst.length);
-						auto ret = .recv(m_socket, dst.ptr, dst.length, 0);
+						auto ret = .recv(m_socket, dst.ptr, cast(int)dst.length, 0);
 						if( ret >= 0 ){
 							logTrace("received %s bytes", ret);
 							if( ret == 0 ) break;
@@ -1249,9 +1256,14 @@ private extern(System) nothrow
 		GWLP_ID = -12,
 	}
 
-	LONG_PTR SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+	version(Win32){ // avoiding linking errors with out-of-the-box dmd
+		alias SetWindowLongA SetWindowLongPtrA;
+		alias GetWindowLongA GetWindowLongPtrA;
+	} else {
+		LONG_PTR SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
+		LONG_PTR GetWindowLongPtrA(HWND hWnd, int nIndex);
+	}
 	LONG_PTR SetWindowLongPtrW(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
-	LONG_PTR GetWindowLongPtrA(HWND hWnd, int nIndex);
 	LONG_PTR GetWindowLongPtrW(HWND hWnd, int nIndex);
 	LONG_PTR SetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong);
 	LONG_PTR GetWindowLongA(HWND hWnd, int nIndex);

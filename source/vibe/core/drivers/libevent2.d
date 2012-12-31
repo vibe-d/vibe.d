@@ -20,6 +20,7 @@ import deimos.event2.thread;
 import deimos.event2.util;
 
 import core.memory;
+import core.stdc.config;
 import core.stdc.errno;
 import core.stdc.stdlib;
 import core.sync.condition;
@@ -552,10 +553,11 @@ class Libevent2UdpConnection : UdpConnection {
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
 	{
 		sizediff_t ret;
+		assert(data.length <= int.max);
 		if( peer_address ){
-			ret = .sendto(m_ctx.socketfd, data.ptr, data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
+			ret = .sendto(m_ctx.socketfd, data.ptr, cast(int)data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
 		} else {
-			ret = .send(m_ctx.socketfd, data.ptr, data.length, 0);
+			ret = .send(m_ctx.socketfd, data.ptr, cast(int)data.length, 0);
 		}
 		logTrace("send ret: %s, %s", ret, getLastSocketError());
 		enforce(ret >= 0, "Error sending UDP packet.");
@@ -567,9 +569,10 @@ class Libevent2UdpConnection : UdpConnection {
 		if( buf.length == 0 ) buf.length = 65507;
 		NetworkAddress from;
 		from.family = m_ctx.remote_addr.family;
+		assert(buf.length <= int.max);
 		while(true){
 			uint addr_len = from.sockAddrLen;
-			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, buf.length, 0, from.sockAddr, &addr_len);
+			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;
 				return buf[0 .. ret];
@@ -784,9 +787,9 @@ private nothrow extern(C)
 		}
 	}
 
-	size_t lev_get_thread_id()
+	c_ulong lev_get_thread_id()
 	{
-		try return cast(size_t)cast(void*)Thread.getThis();
+		try return cast(c_ulong)cast(void*)Thread.getThis();
 		catch( Throwable th ){
 			logWarn("Exception in lev_get_thread_id: %s", th.msg);
 			return 0;

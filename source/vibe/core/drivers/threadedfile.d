@@ -168,8 +168,9 @@ class ThreadedFileStream : FileStream {
 	void read(ubyte[] dst)
 	{
 		assert(this.readable);
+		assert(dst.length <= int.max);
 		enforce(dst.length <= leastSize);
-		enforce(.read(m_fileDescriptor, dst.ptr, dst.length) == dst.length, "Failed to read data from disk.");
+		enforce(.read(m_fileDescriptor, dst.ptr, cast(int)dst.length) == dst.length, "Failed to read data from disk.");
 		m_ptr += dst.length;
 	}
 
@@ -177,7 +178,8 @@ class ThreadedFileStream : FileStream {
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{
 		assert(this.writable);
-		enforce(.write(m_fileDescriptor, bytes.ptr, bytes.length) == bytes.length, "Failed to write data to disk.");
+		assert(bytes.length <= int.max);
+		enforce(.write(m_fileDescriptor, bytes.ptr, cast(int)bytes.length) == bytes.length, "Failed to write data to disk.");
 		m_ptr += bytes.length;
 	}
 

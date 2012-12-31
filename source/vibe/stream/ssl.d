@@ -122,7 +122,7 @@ class SslStream : Stream {
 			const(char)* file = null, data = null;
 			int line;
 			int flags;
-			size_t eret;
+			c_ulong eret;
 			char[120] ebuf;
 			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
 				ERR_error_string(eret, ebuf.ptr);
@@ -166,6 +166,8 @@ class SslStream : Stream {
 
 private nothrow extern(C)
 {
+	import core.stdc.config;
+
 	int onBioNew(BIO *b) nothrow
 	{
 		b.init_ = 0;
@@ -213,10 +215,10 @@ private nothrow extern(C)
 		return inlen;
 	}
 
-	sizediff_t onBioCtrl(BIO *b, int cmd, sizediff_t num, void *ptr)
+	c_long onBioCtrl(BIO *b, int cmd, c_long num, void *ptr)
 	{
 		SslStream stream = cast(SslStream)b.ptr;
-		sizediff_t ret = 1;
+		c_long ret = 1;
 
 		switch(cmd){
 			case BIO_CTRL_GET_CLOSE: ret = b.shutdown; break;
@@ -227,7 +229,7 @@ private nothrow extern(C)
 			case BIO_CTRL_PENDING:
 				try {
 					auto sz = stream.m_stream.leastSize;
-					return sz <= sizediff_t.max ? cast(sizediff_t)sz : int.max;
+					return sz <= c_long.max ? cast(c_long)sz : c_long.max;
 				} catch( Exception e ){
 					stream.m_exceptions ~= e;
 					return -1;
