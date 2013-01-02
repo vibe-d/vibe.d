@@ -87,6 +87,7 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -179,6 +180,7 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -271,6 +273,7 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -287,6 +290,7 @@
     <File path="source\vibe\core\drivers\winrt.d" />
    </Folder>
    <File path="source\vibe\core\args.d" />
+   <File path="source\vibe\core\concurrency.d" />
    <File path="source\vibe\core\connectionpool.d" />
    <File path="source\vibe\core\core.d" />
    <File path="source\vibe\core\driver.d" />
@@ -354,8 +358,9 @@
    <File path="source\vibe\stream\base64.d" />
    <File path="source\vibe\stream\counting.d" />
    <File path="source\vibe\stream\memory.d" />
-   <File path="source\vibe\stream\ssl.d" />
    <File path="source\vibe\stream\operations.d" />
+   <File path="source\vibe\stream\ssl.d" />
+   <File path="source\vibe\stream\stream.d" />
    <File path="source\vibe\stream\zlib.d" />
   </Folder>
   <Folder name="templ">

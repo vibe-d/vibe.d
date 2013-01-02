@@ -11,6 +11,7 @@
 */
 module vibe.vibe;
 
+public import vibe.core.concurrency;
 public import vibe.core.core;
 public import vibe.core.file;
 public import vibe.core.log;
