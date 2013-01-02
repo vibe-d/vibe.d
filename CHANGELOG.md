@@ -2,14 +2,15 @@
 =========
 
 
-v0.7.10 - 2013-01-
+v0.7.10 - 2013-01-02
 --------------------
 
 ### Features and improvements ###
 
  - TCP sockets in the Win32 back end work now
- - `registerFormInterface` now supports struct and array parameters (by Robert Klotzner aka eskimor)
+ - Added support for struct and array parameters to `registerFormInterface` (by Robert Klotzner aka eskimor)
  - `registerFormInterface` now ignores static methods (by Robert Klotzner aka eskimor)
+ - Added support for arbitrary expressions for attributes in Diet templates
  - Added `RedisClient.zrangebyscore` and fixed the return type of `RedistClient.ttl` (`long`) (by Simon Kerouack aka ekyo)
  - `renderCompat()` does not require the parameter values to be wrapped in a Variant anymore
  - Added a `BsonObjectID.timeStamp` property that extracts the unix time part
@@ -24,9 +25,15 @@ v0.7.10 - 2013-01-
  - `vibe.core` now only depends on `vibe.inet` and `vibe.utils.memory` and thus is ready to be used as a stand-alone library
  - `Bson.length` is now allowed for `Bson.Type.Object` and added `Bson.EmptyArray`
  - Setting `HttpFileServerSettings.maxAge` to zero will cause the "Expires" and "Cache-Control" headers to be omitted
+ - `Url` can now be constructed as `Url(str)` in addition to `Url.parse(str)`
+ - The HTTP server logger now logs the requesting host name instead of the selected configuration's host name
+ - Using `ParameterIdentifierTuple` now for the REST interface generator, which makes the `_dummy` parameter hack unnecessary
+ - Compiles with DMD 2.061 and on Win64
+ - User and group names are now accepted in addition to UID/GID in /etc/vibe/vibe.conf
 
 ### Bug fixes ###
 
+ - Fixed forwarding of non-ASCII unicode characters in `htmlEscape`
  - Fixed the Diet template parser to accept underscores in ID and class identifiers
  - Fixed HEAD requests properly falling back to GET routes in the `UrlRouter`
  - Fixed parsing of unicode escape sequences in the JSON parser
