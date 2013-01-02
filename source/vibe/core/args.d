@@ -14,6 +14,7 @@ import vibe.http.server;
 import std.getopt;
 import std.exception;
 import std.file;
+import std.string;
 
 
 version(Posix)
@@ -24,14 +25,16 @@ version(Posix)
 	static if( __traits(compiles, {import core.sys.posix.grp;}) ){
 		import core.sys.posix.grp;
 	} else {
-	    struct group
-	    {
-	        char*   gr_name;
-	        char*   gr_passwd;
-	        gid_t   gr_gid;
-	        char**  gr_mem;
-	    }
-	    group* getgrnam(in char*);
+		extern(C){
+			struct group
+			{
+				char*   gr_name;
+				char*   gr_passwd;
+				gid_t   gr_gid;
+				char**  gr_mem;
+			}
+			group* getgrnam(in char*);
+		}
 	}
 
 	private enum configPath = "/etc/vibe/vibe.conf";
@@ -49,15 +52,15 @@ version(Posix)
 
 	private int getUID(string name)
 	{
-		auto pw = getpwnam(name.toUTFz());
+		auto pw = getpwnam(name.toStringz());
 		enforce(pw !is null, "Unknown user name: "~name);
 		return pw.pw_uid;
 	}
 
 	private int getGID(string name)
 	{
-		auto gr = getgrnam(name.toUTFz());
-		enforce(pw !is null, "Unknown group name: "~name);
+		auto gr = getgrnam(name.toStringz());
+		enforce(gr !is null, "Unknown group name: "~name);
 		return gr.gr_gid;
 	}
 } else version(Windows){
