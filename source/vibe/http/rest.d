@@ -15,6 +15,7 @@ import vibe.inet.url;
 import vibe.textfilter.urlencode;
 import vibe.utils.string;
 
+import std.algorithm : filter;
 import std.array;
 import std.conv;
 import std.exception;
@@ -127,16 +128,16 @@ import std.traits;
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
 		MethodStyle style = MethodStyle.LowerUnderscored)
 {
-	void addRoute(HttpMethod http_verb, string url, HttpServerRequestDelegate handler)
+	void addRoute(HttpMethod http_verb, string url, HttpServerRequestDelegate handler, string[] params)
 	{
 		router.addRoute(http_verb, url, handler);
-		logDebug("REST route: %s %s", http_verb, url);
+		logDebug("REST route: %s %s %s", http_verb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
 	}
 
 	foreach( method; __traits(allMembers, T) ){
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
 			alias ReturnType!overload RetType;
-			auto param_names = parameterNames!(typeof(&overload))();
+			auto param_names = parameterNames!overload();
 			HttpMethod http_verb;
 			string rest_name;
 			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
@@ -145,15 +146,15 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 				static assert(ParameterTypeTuple!overload.length == 0, "Interfaces may only be returned from parameter-less functions!");
 				registerRestInterface!RetType(router, __traits(getMember, instance, method)(), url_prefix ~ rest_name_adj ~ "/");
 			} else {
-				auto handler = jsonMethodHandler!(T, method, typeof(&overload))(instance);
+				auto handler = jsonMethodHandler!(T, method, overload)(instance);
 				string id_supplement;
 				size_t skip = 0;
 				string url;
 				if( param_names.length && param_names[0] == "id" ){
-					addRoute(http_verb, url_prefix ~ ":id/" ~ rest_name_adj, handler);
+					addRoute(http_verb, url_prefix ~ ":id/" ~ rest_name_adj, handler, param_names);
 					if( rest_name_adj.length == 0 )
-						addRoute(http_verb, url_prefix ~ ":id", handler);
-				} else addRoute	(http_verb, url_prefix ~ rest_name_adj, handler);
+						addRoute(http_verb, url_prefix ~ ":id", handler, param_names);
+				} else addRoute(http_verb, url_prefix ~ rest_name_adj, handler, param_names);
 			}
 		}
 	}
@@ -338,16 +339,16 @@ enum MethodStyle {
 
 
 /// private
-private HttpServerRequestDelegate jsonMethodHandler(T, string method, FT)(T inst)
+private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias FUNC)(T inst)
 {
-	alias ParameterTypeTuple!(FT) ParameterTypes;
-	alias ReturnType!(FT) RetType;
+	alias ParameterTypeTuple!FUNC ParameterTypes;
+	alias ReturnType!FUNC RetType;
 
 	void handler(HttpServerRequest req, HttpServerResponse res)
 	{
 		ParameterTypes params;
 
-		static immutable param_names = parameterNames!FT();
+		static immutable param_names = parameterNames!FUNC();
 		foreach( i, P; ParameterTypes ){
 			static if( i == 0 && param_names[i] == "id" ){
 				logDebug("id %s", req.params["id"]);
@@ -500,7 +501,7 @@ private @property string generateRestInterfaceMethods(I)()
 
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			alias typeof(&overload) FT;
+			alias overload FT;
 			alias ParameterTypeTuple!FT PTypes;
 			alias ReturnType!FT RT;
 
@@ -790,57 +791,37 @@ private void getRestMethodName(T)(string method, out HttpMethod http_verb, out s
 }
 
 /// private
-private string[] parameterNames(T)()
+private string[] parameterNames(alias FUNC)()
 {
-	auto str = extractParameters(T.stringof);
-	//pragma(msg, T.stringof);
+	static if( __traits(compiles, [ParameterIdentifierTuple!FUNC]) ){
+		import std.traits;
+		return[ParameterIdentifierTuple!FUNC];
+	} else {
+		pragma(msg, "Warning, using fallback method to get parameter names for the REST interface generator.");
+		pragma(msg, "Please consider upgrading to DMD 2.060 or later.");
+		auto str = extractParameters(typeof(&FUNC).stringof);
+		//pragma(msg, T.stringof);
 
-	string[] ret;
-	for( size_t i = 0; i < str.length; ){
-		skipWhitespace(str, i);
-		skipType(str, i);
-		skipWhitespace(str, i);
-		ret ~= skipIdent(str, i);
-		skipWhitespace(str, i);
-		if( i >= str.length ) break;
-		if( str[i] == '=' ){
-			i++;
+		string[] ret;
+		for( size_t i = 0; i < str.length; ){
 			skipWhitespace(str, i);
-			skipBalancedUntil(",", str, i);
-			if( i >= str.length ) break;
-		}
-		assert(str[i] == ',');
-		i++;
-	}
-
-	return ret;
-}
-
-/// private
-private string[] parameterDefaultValues(T)()
-{
-	auto str = extractParameters(T.stringof);
-	//pragma(msg, T.stringof);
-
-	string[] ret;
-	for( size_t i = 0; i < str.length; ){
-		skipWhitespace(str, i);
-		skipType(str, i);
-		skipWhitespace(str, i);
-		skipIdent(str, i);
-		skipWhitespace(str, i);
-		if( i >= str.length ) break;
-		if( str[i] == '=' ){
-			i++;
+			skipType(str, i);
 			skipWhitespace(str, i);
-			ret ~= skipBalancedUntil(",", str, i);
+			ret ~= skipIdent(str, i);
+			skipWhitespace(str, i);
 			if( i >= str.length ) break;
+			if( str[i] == '=' ){
+				i++;
+				skipWhitespace(str, i);
+				skipBalancedUntil(",", str, i);
+				if( i >= str.length ) break;
+			}
+			assert(str[i] == ',');
+			i++;
 		}
-		assert(str[i] == ',');
-		i++;
-	}
 
-	return ret;
+		return ret;
+	}
 }
 
 private string extractParameters(string str)

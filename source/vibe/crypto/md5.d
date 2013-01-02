@@ -7,16 +7,14 @@
 */
 module vibe.crypto.md5;
 
-import std.compiler;
-
-static if(D_major > 2 || D_major == 2 && D_minor >= 61){
+static if( __traits(compiles, {import std.digest.md;}) ){
 	import std.digest.md;
 
 	string md5(in char[] str) 
 	{
 		MD5 ctx;
 		ctx.start();
-		ctx.put(str);
+		ctx.put(cast(ubyte[])str);
 		return ctx.finish().toHexString();
 	}
 } else {

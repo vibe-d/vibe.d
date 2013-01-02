@@ -70,11 +70,12 @@ bool testSimplePasswordHash(string hashstring, string password, string additiona
 
 private ubyte[16] md5hash(ubyte[] salt, string[] strs...)
 {
-	static if(D_major > 2 || D_major == 2 && D_minor >= 61){
+	static if( __traits(compiles, {import std.digest.md;}) ){
+		import std.digest.md;
 		MD5 ctx;
 		ctx.start();
 		ctx.put(salt);
-		foreach( s; strs ) ctx.put(s);
+		foreach( s; strs ) ctx.put(cast(ubyte[])s);
 		return ctx.finish();
 	} else {
 		import std.md5;
