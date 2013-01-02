@@ -19,6 +19,20 @@ import std.file;
 version(Posix)
 {
 	import core.sys.posix.unistd;
+	import core.sys.posix.pwd;
+
+	static if( __traits(compiles, {import core.sys.posix.grp;}) ){
+		import core.sys.posix.grp;
+	} else {
+	    struct group
+	    {
+	        char*   gr_name;
+	        char*   gr_passwd;
+	        gid_t   gr_gid;
+	        char**  gr_mem;
+	    }
+	    group* getgrnam(in char*);
+	}
 
 	private enum configPath = "/etc/vibe/vibe.conf";
 
@@ -33,6 +47,19 @@ version(Posix)
 		return true;
 	}
 
+	private int getUID(string name)
+	{
+		auto pw = getpwnam(name.toUTFz());
+		enforce(pw !is null, "Unknown user name: "~name);
+		return pw.pw_uid;
+	}
+
+	private int getGID(string name)
+	{
+		auto gr = getgrnam(name.toUTFz());
+		enforce(pw !is null, "Unknown group name: "~name);
+		return gr.gr_gid;
+	}
 } else version(Windows){
 	private enum configPath = "vibe.conf";
 
@@ -42,6 +69,16 @@ version(Posix)
 		if( uid >= 0 || gid >= 0 )
 			return false;
 		return true;
+	}
+
+	private int getUID(string name)
+	{
+		assert(false, "Privilege lowering not supported on Windows.");
+	}
+
+	private int getGID(string name)
+	{
+		assert(false, "Privilege lowering not supported on Windows.");
 	}
 }
 
@@ -63,8 +100,8 @@ void processCommandLineArgs(ref string[] args)
 		try {
 			auto config = readText(configPath);
 			auto cnf = parseJson(config);
-			if( auto pv = "uid" in cnf ) uid = cast(int)*pv;
-			if( auto pv = "gid" in cnf ) gid = cast(int)*pv;
+			if( auto pv = "uid" in cnf ) uid = pv.type == Json.Type.String ? getUID(pv.get!string) : pv.get!int;
+			if( auto pv = "gid" in cnf ) gid = pv.type == Json.Type.String ? getUID(pv.get!string) : pv.get!int;
 		} catch(Exception e){
 			logWarn("Failed to parse config file %s: %s", configPath, e.msg);
 		}
