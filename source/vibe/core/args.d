@@ -33,21 +33,29 @@ version(Posix)
 				gid_t   gr_gid;
 				char**  gr_mem;
 			}
+			group* getgrgid(gid_t);
 			group* getgrnam(in char*);
 		}
 	}
 
 	private enum configPath = "/etc/vibe/vibe.conf";
 
-	private bool setUID(int uid, int gid)
+	private void setUID(int uid, int gid)
 	{
-		if( geteuid() == 0 && (uid >= 0 || gid >= 0) ){
+		if( geteuid() != 0 ) return;
+
+		if( uid >= 0 || gid >= 0 ){
 			logInfo("Vibe was run as root, lowering privileges to uid=%d, gid=%d...", uid, gid);
-			if( gid >= 0 && setegid(gid) != 0 ) return false;
+			if( gid >= 0 ){
+				enforce(getgrgid(gid) !is null, "Invalid group id!");
+				enforce(setegid(gid) == 0, "Error setting group id!");
+			}
 			//if( initgroups(const char *user, gid_t group);
-			if( uid >= 0 && seteuid(uid) != 0 ) return false;
-		}
-		return true;
+			if( uid >= 0 ){
+				enforce(getpwuid(uid) !is null, "Invalid user id!");
+				enforce(seteuid(uid) == 0, "Error setting user id!");
+			}
+		} else logWarn("Vibe was run as root, but no user/group has been specified in vibe.conf for privilege lowering.");
 	}
 
 	private int getUID(string name)
@@ -66,22 +74,21 @@ version(Posix)
 } else version(Windows){
 	private enum configPath = "vibe.conf";
 
-	private bool setUID(int uid, int gid)
+	private void setUID(int uid, int gid)
 	{
-		assert(uid < 0 && gid < 0, "UID/GID not supported on Windows.");
-		if( uid >= 0 || gid >= 0 )
-			return false;
-		return true;
+		enforce(uid < 0 && gid < 0, "UID/GID not supported on Windows.");
 	}
 
 	private int getUID(string name)
 	{
-		assert(false, "Privilege lowering not supported on Windows.");
+		enforce(false, "Privilege lowering not supported on Windows.");
+		assert(false);
 	}
 
 	private int getGID(string name)
 	{
-		assert(false, "Privilege lowering not supported on Windows.");
+		enforce(false, "Privilege lowering not supported on Windows.");
+		assert(false);
 	}
 }
 
@@ -103,10 +110,13 @@ void processCommandLineArgs(ref string[] args)
 		try {
 			auto config = readText(configPath);
 			auto cnf = parseJson(config);
-			if( auto pv = "uid" in cnf ) uid = pv.type == Json.Type.String ? getUID(pv.get!string) : pv.get!int;
-			if( auto pv = "gid" in cnf ) gid = pv.type == Json.Type.String ? getUID(pv.get!string) : pv.get!int;
+			if( auto pv = "uid" in cnf ) uid = pv.get!int;
+			if( auto pv = "gid" in cnf ) gid = pv.get!int;
+			if( auto pv = "user" in cnf ) uid = pv.type == Json.Type.String ? getUID(pv.get!string) : pv.get!int;
+			if( auto pv = "group" in cnf ) gid = pv.type == Json.Type.String ? getGID(pv.get!string) : pv.get!int;
 		} catch(Exception e){
-			logWarn("Failed to parse config file %s: %s", configPath, e.msg);
+			logError("Failed to parse config file %s: %s", configPath, e.msg);
+			throw e;
 		}
 	} else {
 		logDebug("No config file found at %s", configPath);
@@ -125,5 +135,5 @@ void processCommandLineArgs(ref string[] args)
 	setVibeDistHost(disthost, distport);
 	startListening();
 
-	enforce(setUID(uid, gid), "Error lowering privileges!");
+	setUID(uid, gid);
 }
