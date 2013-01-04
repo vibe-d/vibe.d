@@ -13,8 +13,7 @@ USER_COMMENT="Vibe user"
 CONFIG_FILE="/etc/vibe/vibe.conf"
 SYMLINK_FILE="$PREFIX/bin/vibe"
 LOG_FILE="/var/spool/vibe/install.log"
-MENU_DIR="$PREFIX/share/applications"
-MENU_FILE="$MENU_DIR/vibe.desktop"
+MENU_FILE="$PREFIX/share/applications/vibe.desktop"
 DEBIAN_USER="www-data"
 DEBIAN_GROUP="www-data"
 
@@ -76,12 +75,13 @@ fremove()
 	echo "Removing symlink $SYMLINK_FILE..."
 	rm -f $SYMLINK_FILE
 
+	# remove menu entry
+	rm -f $MENU_FILE
+	rmdir $(dirname $MENU_FILE) >/dev/null 2>&1 || :
+
 	# remove files
 	echo "Removing files in $BASE_DIR/..."
 	rm -Rf $BASE_DIR/
-
-	# remove menu entry
-	rm -f $MENU_FILE
 }
 
 
@@ -94,14 +94,19 @@ finstall()
 	cp -Rf {source/,docs/,examples/} $BASE_DIR/
 
 	# create menu entry
-	mkdir -p $MENU_DIR
-	echo "[Desktop Entry]" >$MENU_FILE
-	echo "Type=Application" >>$MENU_FILE
-	echo "Name=Vibe Documentation" >>$MENU_FILE
-	echo "Comment=Vibe web framework documentation" >>$MENU_FILE
-	echo "Exec=xdg-open $BASE_DIR/docs/index.html" >>$MENU_FILE
-	echo "Icon=html" >>$MENU_FILE
-	echo "Categories=Development;" >>$MENU_FILE
+	if [ -f $BASE_DIR/docs/index.html ]
+	then
+		mkdir -p $(dirname $MENU_FILE)
+		echo "[Desktop Entry]" >$MENU_FILE
+		echo "Type=Application" >>$MENU_FILE
+		echo "Name=Vibe Documentation" >>$MENU_FILE
+		echo "Comment=Vibe web framework documentation" >>$MENU_FILE
+		echo "Exec=xdg-open $BASE_DIR/docs/index.html" >>$MENU_FILE
+		echo "Icon=html" >>$MENU_FILE
+		echo "Categories=Development;" >>$MENU_FILE
+	else
+		unset MENU_FILE
+	fi
 
 	# create a symlink to the vibe script
 	echo "Creating symlink in $SYMLINK_FILE..."
@@ -140,9 +145,9 @@ finstall()
 	echo '}' >>$CONFIG_FILE
 
 	# set files/folders permissions
-	chmod -f 0755 $(find $BASE_DIR/ -type d) $(dirname $CONFIG_FILE)
-	chmod -f 0644 $(find $BASE_DIR/ ! -type d) $MENU_FILE $CONFIG_FILE
-	chmod -f 0755 $SYMLINK_FILE
+	chmod 0755 $(find $BASE_DIR/ -type d) $(dirname $CONFIG_FILE)
+	chmod 0644 $(find $BASE_DIR/ ! -type d) $CONFIG_FILE $MENU_FILE
+	chmod 0755 $SYMLINK_FILE
 
 	# if everything went fine
 	echo -e "\n \033[32;40;7;1m 'vibe' installed successfully! \033[0m\n"
@@ -176,7 +181,7 @@ case "$1" in
     fremove
     ;;
 "")
-    echo -e "$0: missing operand\nTry '$0 -h' for more information." >&2
+    echo -e "$0: missing argument\nTry '$0 -h' for more information." >&2
     exit 1
     ;;
 *)
