@@ -44,7 +44,7 @@ class LimitedInputStream : InputStream {
 
 	@property bool empty() { return m_silentLimit ? m_input.empty : m_sizeLimit == 0; }
 
-	@property ulong leastSize() { return m_silentLimit ? m_input.leastSize : m_sizeLimit; }
+	@property ulong leastSize() { if( m_silentLimit ) return m_input.leastSize; return m_sizeLimit; }
 
 	@property bool dataAvailableForRead() { return m_input.dataAvailableForRead; }
 
