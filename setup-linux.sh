@@ -13,7 +13,8 @@ USER_COMMENT="Vibe user"
 CONFIG_FILE="/etc/vibe/vibe.conf"
 SYMLINK_FILE="$PREFIX/bin/vibe"
 LOG_FILE="/var/spool/vibe/install.log"
-MENU_FILE="$PREFIX/share/applications/vibe.desktop"
+MENU_DIR="$PREFIX/share/applications"
+MENU_FILE="$MENU_DIR/vibe.desktop"
 DEBIAN_USER="www-data"
 DEBIAN_GROUP="www-data"
 
@@ -93,6 +94,7 @@ finstall()
 	cp -Rf {source/,docs/,examples/} $BASE_DIR/
 
 	# create menu entry
+	mkdir -p $MENU_DIR
 	echo "[Desktop Entry]" >$MENU_FILE
 	echo "Type=Application" >>$MENU_FILE
 	echo "Name=Vibe Documentation" >>$MENU_FILE
