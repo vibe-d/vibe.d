@@ -280,7 +280,7 @@ void enableWorkerThreads()
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.10";
+enum VibeVersionString = "0.7.11";
 
 
 /**************************************************************************************************/
