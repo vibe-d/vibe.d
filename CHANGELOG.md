@@ -1,6 +1,15 @@
 ﻿Changelog
 =========
 
+v0.7.11 - 2013-01-05
+--------------------
+
+### Bug fixes ###
+
+ - Fixed hanging HTTP 1.1 requests with "Connection: close" when no "Content-Length" or "Transfer-Encoding" header is set
+ - User/group for privilege lowering are now specified as "user"/"group" in vibe.conf instead of "uid"/"gid"
+ - Invalid uid/gid now actually cause the application startup to fail
+
 
 v0.7.10 - 2013-01-03
 --------------------
@@ -14,14 +23,14 @@ v0.7.10 - 2013-01-03
  - Added `RedisClient.zrangebyscore` and fixed the return type of `RedistClient.ttl` (`long`) (by Simon Kerouack aka ekyo)
  - `renderCompat()` does not require the parameter values to be wrapped in a Variant anymore
  - Added a `BsonObjectID.timeStamp` property that extracts the unix time part
- - Added a versions of deserialize(B/J)son that return the result instead of writing it to an out parameter
+ - Added a versions of `deserialize(B/J)son` that return the result instead of writing it to an out parameter
  - The REST interface client now can handle more foreign types by searching for all needed module imports recursively
  - `listenTcp` now returns a `TcpListener` object that can be used to stop listening again
  - Added `vibe.inet.message.decodeEncodedWords` and `decodeEmailAddressHeader`
  - Added `compileDietFileMixin` usable for directly mixing in Diet templates (they are instantiated in the caller scope)
  - The SMTP client now prints the last command whenever an error is returned from the server
  - Documentation improvements
- - All examples now use "shared static this" instead of "static this" so that they will behave correctly once multi-threading gets enabled
+ - All examples now use `shared static this` instead of `static this` so that they will behave correctly once multi-threading gets enabled
  - `vibe.core` now only depends on `vibe.inet` and `vibe.utils.memory` and thus is ready to be used as a stand-alone library
  - `Bson.length` is now allowed for `Bson.Type.Object` and added `Bson.EmptyArray`
  - Setting `HttpFileServerSettings.maxAge` to zero will cause the "Expires" and "Cache-Control" headers to be omitted
