@@ -7,20 +7,37 @@ set -e
 # set variables
 PREFIX="/usr/local"
 BASE_DIR="$PREFIX/share/vibe"
+SRC_DIR=$(dirname $0)
+CONFIG_DIR="/etc/vibe"
+CONFIG_FILE="$CONFIG_DIR/vibe.conf"
+SYMLINK_DIR="$PREFIX/bin"
+SYMLINK_FILE="$SYMLINK_DIR/vibe"
+LOG_DIR="/var/spool/vibe"
+LOG_FILE="$LOG_DIR/install.log"
+MENU_DIR="$PREFIX/share/applications"
+MENU_FILE="$MENU_DIR/vibe.desktop"
+
 USER_NAME="www-vibe"
 GROUP_NAME="www-vibe"
 USER_COMMENT="Vibe user"
-CONFIG_FILE="/etc/vibe/vibe.conf"
-SYMLINK_FILE="$PREFIX/bin/vibe"
-LOG_FILE="/var/spool/vibe/install.log"
-MENU_FILE="$PREFIX/share/applications/vibe.desktop"
 DEBIAN_USER="www-data"
 DEBIAN_GROUP="www-data"
 
 
+# throw error
+ferror()
+{
+	for I in "$@"
+	do
+		echo "$I" >&2
+	done
+	exit 1
+}
+
+
+# script help
 fhelp()
 {
-	# script help
 	echo "Script to install and remove 'vibe' on Linux."
 	echo
 	echo "Usage:"
@@ -35,10 +52,10 @@ fhelp()
 }
 
 
+# force to be root
 froot()
 {
-	# force to be root
-	test "root" != "$USER" && echo '"root" privileges required...' && exec sudo "$@"
+	test "root" != "$USER" && echo "'root' privileges required..." && exec sudo "$@"
 	echo -en "\033[0A                              \015"
 }
 
@@ -63,13 +80,13 @@ fremove()
 	if [ -f $LOG_FILE ] && [ -z $(tr -d '[ \t\r\n]' 2>/dev/null <$LOG_FILE) ]
 	then
 		rm -f $LOG_FILE
-		rmdir $(dirname $LOG_FILE) >/dev/null 2>&1 || :
 	fi
+	rmdir $LOG_DIR >/dev/null 2>&1 || :
 
 	# remove config file
 	echo "Removing configuration file $CONFIG_FILE..."
 	rm -f $CONFIG_FILE
-	rmdir $(dirname $CONFIG_FILE) >/dev/null 2>&1 || :
+	rmdir $CONFIG_DIR >/dev/null 2>&1 || :
 
 	# remove symlink
 	echo "Removing symlink $SYMLINK_FILE..."
@@ -77,26 +94,32 @@ fremove()
 
 	# remove menu entry
 	rm -f $MENU_FILE
-	rmdir $(dirname $MENU_FILE) >/dev/null 2>&1 || :
+	rmdir $MENU_DIR >/dev/null 2>&1 || :
 
 	# remove files
-	echo "Removing files in $BASE_DIR/..."
+	echo "Removing 'vibe' files in $BASE_DIR/..."
 	rm -Rf $BASE_DIR/
 }
 
 
 finstall()
 {
+	# check if vibe sources
+	if [ ! -f $SRC_DIR/bin/vibe ] || [ ! -f $SRC_DIR/source/vibe/vibe.d ]
+	then
+		ferror "$0: FATAL ERROR! missing 'vibe' sources!" "Try '$0 -h' for more information."
+	fi
+
 	# install files
-	echo "Installing files in $BASE_DIR/..."
+	echo "Installing 'vibe' files in $BASE_DIR/..."
 	mkdir -p $BASE_DIR/bin/
-	cp -Rf bin/{vibe,vpm.d} $BASE_DIR/bin/
-	cp -Rf {source/,docs/,examples/} $BASE_DIR/
+	cp -Rf $SRC_DIR/bin/{vibe,vpm.d} $BASE_DIR/bin/
+	cp -Rf $SRC_DIR/{source/,docs/,examples/} $BASE_DIR/
 
 	# create menu entry
 	if [ -f $BASE_DIR/docs/index.html ]
 	then
-		mkdir -p $(dirname $MENU_FILE)
+		mkdir -p $MENU_DIR
 		echo "[Desktop Entry]" >$MENU_FILE
 		echo "Type=Application" >>$MENU_FILE
 		echo "Name=Vibe Documentation" >>$MENU_FILE
@@ -105,52 +128,53 @@ finstall()
 		echo "Icon=html" >>$MENU_FILE
 		echo "Categories=Development;" >>$MENU_FILE
 	else
-		unset MENU_FILE
+		unset MENU_DIR MENU_FILE
 	fi
 
 	# create a symlink to the vibe script
-	echo "Creating symlink in $SYMLINK_FILE..."
+	echo "Creating symlink $SYMLINK_FILE..."
+	mkdir -p $SYMLINK_DIR
 	ln -sf $BASE_DIR/bin/vibe $SYMLINK_FILE
 
-	# creating group if he isn't already there
-	if getent group $DEBIAN_GROUP >/dev/null
+	# user/group administration
+	if getent group $DEBIAN_GROUP >/dev/null && getent passwd $DEBIAN_USER >/dev/null
 	then
 		GROUP_NAME=$DEBIAN_GROUP
-	elif ! getent group $GROUP_NAME >/dev/null
-	then
-		echo "Creating group $GROUP_NAME..."
-		/usr/sbin/groupadd -r $GROUP_NAME >/dev/null
-		mkdir -p $(dirname $LOG_FILE)
-		echo "group: $GROUP_NAME" >>$LOG_FILE
-	fi
-
-	# creating user if he isn't already there
-	if getent passwd $DEBIAN_USER >/dev/null
-	then
 		USER_NAME=$DEBIAN_USER
-	elif ! getent passwd $USER_NAME >/dev/null
-	then
-		echo "Creating user $USER_NAME..."
-		/usr/sbin/useradd -r -g $GROUP_NAME -c "$USER_COMMENT" $USER_NAME >/dev/null
-		mkdir -p $(dirname $LOG_FILE)
-		echo "user: $USER_NAME" >>$LOG_FILE
+	else
+		# creating group if he isn't already there
+		if ! getent group $GROUP_NAME >/dev/null
+		then
+			echo "Creating group $GROUP_NAME..."
+			/usr/sbin/groupadd -r $GROUP_NAME
+			mkdir -p $LOG_DIR
+			echo "group: $GROUP_NAME" >>$LOG_FILE
+		fi
+		# creating user if he isn't already there
+		if ! getent passwd $USER_NAME >/dev/null
+		then
+			echo "Creating user $USER_NAME..."
+			/usr/sbin/useradd -r -g $GROUP_NAME -c "$USER_COMMENT" $USER_NAME
+			mkdir -p $LOG_DIR
+			echo "user: $USER_NAME" >>$LOG_FILE
+		fi
 	fi
 
 	# create/update config file
-	echo "Creating new config file in $CONFIG_FILE..."
-	mkdir -p $(dirname $CONFIG_FILE)
+	echo "Creating config file $CONFIG_FILE..."
+	mkdir -p $CONFIG_DIR
 	echo '{' >$CONFIG_FILE
 	echo '	"user": "'$USER_NAME'",' >>$CONFIG_FILE
 	echo '	"group": "'$GROUP_NAME'"' >>$CONFIG_FILE
 	echo '}' >>$CONFIG_FILE
 
 	# set files/folders permissions
-	chmod 0755 $(find $BASE_DIR/ -type d) $(dirname $CONFIG_FILE)
+	chmod 0755 $(find $BASE_DIR/ -type d) $CONFIG_DIR $MENU_DIR
 	chmod 0644 $(find $BASE_DIR/ ! -type d) $CONFIG_FILE $MENU_FILE
 	chmod 0755 $SYMLINK_FILE
 
 	# if everything went fine
-	echo -e "\n \033[32;40;7;1m 'vibe' installed successfully! \033[0m\n"
+	echo -e "\n  \033[32;40;7;1m'vibe' installed successfully!\033[0m\n"
 	echo "You need to have the following dependencies installed:"
 	echo "  ·dmd 2.061 - http://dlang.org"
 	echo "  ·libssl (development files) - http://www.openssl.org/"
@@ -159,15 +183,14 @@ finstall()
 }
 
 
-# check if in vibe source root
-if [ ! -f bin/vibe ] || [ ! -f source/vibe/vibe.d ]
+# check if more than one argument
+if [ $# -gt 1 ]
 then
-	echo -e "Must be run from 'vibe' source root.\nExiting..." >&2
-	exit 1
+	ferror "$0: too many arguments" "Try '$0 -h' for more information."
 fi
 
 
-# check argument
+# check first argument
 case "$1" in
 -h|-H)
     fhelp
@@ -181,11 +204,9 @@ case "$1" in
     fremove
     ;;
 "")
-    echo -e "$0: missing argument\nTry '$0 -h' for more information." >&2
-    exit 1
+    ferror "$0: missing argument" "Try '$0 -h' for more information."
     ;;
 *)
-    echo -e "$0: unknown argument '$1'.\nTry '$0 -h' for more information." >&2
-    exit 1
+    ferror "$0: unknown argument '$1'" "Try '$0 -h' for more information."
     ;;
 esac
