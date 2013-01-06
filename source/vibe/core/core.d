@@ -291,6 +291,9 @@ private class CoreTask : Task {
 	private {
 		void delegate() m_taskFunc;
 		Exception m_exception;
+		Task[] m_yielders;
+		bool m_running = false;
+		size_t m_runCounter = 0;
 	}
 
 	this()
@@ -298,15 +301,21 @@ private class CoreTask : Task {
 		super(&run, s_taskStackSize);
 	}
 
+	override @property bool running() const { return m_running; }
+
 	private void run()
 	{
 		while(true){
 			while( !m_taskFunc )
 				s_core.yieldForEvent();
 
+			m_runCounter++;
+
 			auto task = m_taskFunc;
 			m_taskFunc = null;
 			try {
+				m_running = true;
+				scope(exit) m_running = false;
 				logTrace("entering task.");
 				task();
 				logTrace("exiting task.");
@@ -314,12 +323,39 @@ private class CoreTask : Task {
 				logError("Task terminated with exception: %s", e.toString());
 			}
 			resetLocalStorage();
+
+			foreach( t; m_yielders ) s_core.resumeTask(t);
 			
 			// make the fiber available for the next task
 			if( s_availableFibers.length <= s_availableFibersCount )
 				s_availableFibers.length = 2*s_availableFibers.length;
 			s_availableFibers[s_availableFibersCount++] = this;
 		}
+	}
+
+	override void join()
+	{
+		auto caller = Task.getThis();
+		assert(caller !is this, "A task cannot join itself.");
+		m_yielders ~= caller;
+		auto run_count = m_runCounter;
+		if( m_running && run_count == m_runCounter ){
+			s_core.resumeTask(this);
+			while( m_running && run_count == m_runCounter ) rawYield();
+		}
+	}
+
+	override void interrupt()
+	{
+		auto caller = Task.getThis();
+		assert(caller !is this, "A task cannot interrupt itself.");
+		assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
+		s_core.resumeTask(this, new InterruptException);
+	}
+
+	override void terminate()
+	{
+		assert(false, "Not implemented");
 	}
 }
 

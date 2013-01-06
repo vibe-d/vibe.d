@@ -19,17 +19,42 @@ import std.variant;
 */
 class Task : Fiber {
 	private {
+		Thread m_thread;
 		Variant[string] m_taskLocalStorage;
 	}
 
 	protected this(void delegate() fun, size_t stack_size)
 	{
 		super(fun, stack_size);
+		m_thread = Thread.getThis();
 	}
 
 	/** Returns the Task instance belonging to the calling task.
 	*/
 	static Task getThis(){ return cast(Task)Fiber.getThis(); }
+
+	/** Returns the thread that owns this task.
+	*/
+	@property inout(Thread) thread() inout { return m_thread; }
+
+	/** Determines if the task is still running.
+
+		Bugs: Note that Task objects are reused for later tasks so the returned
+		value may not be accurate. This may be improved in a later version.
+	*/
+	abstract @property bool running() const;
+
+	/** Blocks until the task has ended.
+	*/
+	abstract void join();
+
+	/** Throws an InterruptExeption within the task as soon as it calls a blocking function.
+	*/
+	abstract void interrupt();
+
+	/** Terminates the task without notice as soon as it calls a blocking function.
+	*/
+	abstract void terminate();
 
 	/** Sets a task local variable.
 	*/
@@ -64,3 +89,11 @@ class Task : Fiber {
 }
 
 
+/** Exception that is thrown by Task.interrupt.
+*/
+class InterruptException : Exception {
+	this()
+	{
+		super("Task interrupted.");
+	}
+}
