@@ -398,19 +398,19 @@ class Libevent2Timer : Timer {
 
 	void acquire()
 	{
-		assert(m_owner is null);
+		assert(m_owner == Task());
 		m_owner = Task.getThis();
 	}
 
 	void release()
 	{
-		assert(m_owner is Fiber.getThis());
-		m_owner = null;
+		assert(m_owner == Task.getThis());
+		m_owner = Task();
 	}
 
 	bool isOwner()
 	{
-		return m_owner !is null && m_owner is Fiber.getThis();
+		return m_owner != Task() && m_owner == Task.getThis();
 	}
 
 	@property bool pending()
@@ -525,7 +525,7 @@ class Libevent2UdpConnection : UdpConnection {
 
 
 	bool isOwner() {
-		return m_ctx !is null && m_ctx.task !is null && m_ctx.task is Fiber.getThis();
+		return m_ctx !is null && m_ctx.task != Task() && m_ctx.task == Task.getThis();
 	}
 
 	void acquire()
@@ -538,9 +538,9 @@ class Libevent2UdpConnection : UdpConnection {
 	void release()
 	{
 		if( !m_ctx ) return;
-		assert(m_ctx.task !is null, "Trying to release a TCP connection that is not owned.");
-		assert(m_ctx.task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
-		m_ctx.task = null;
+		assert(m_ctx.task != Task(), "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.task == Task.getThis(), "Trying to release a foreign TCP connection.");
+		m_ctx.task = Task();
 	}
 
 	void connect(string host, ushort port)

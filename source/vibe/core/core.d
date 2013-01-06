@@ -118,10 +118,12 @@ Task runTask(void delegate() task)
 	// pick the first available fiber
 	auto f = s_availableFibers[--s_availableFibersCount];
 	f.m_taskFunc = task;
+	f.m_taskCounter++;
+	auto handle = f.task();
 	logDebug("initial task call");
-	s_core.resumeTask(f);
+	s_core.resumeTask(handle);
 	logDebug("run task out");
-	return f;
+	return handle;
 }
 
 /**
@@ -154,7 +156,7 @@ void runWorkerTask(void delegate() task)
 */
 void yield()
 {
-	s_yieldedTasks ~= cast(Task)Fiber.getThis();
+	s_yieldedTasks ~= Task.getThis();
 	rawYield();
 }
 
@@ -287,13 +289,11 @@ enum VibeVersionString = "0.7.11";
 /* private types                                                                                  */
 /**************************************************************************************************/
 
-private class CoreTask : Task {
+private class CoreTask : TaskFiber {
 	private {
 		void delegate() m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
-		bool m_running = false;
-		size_t m_runCounter = 0;
 	}
 
 	this()
@@ -301,15 +301,11 @@ private class CoreTask : Task {
 		super(&run, s_taskStackSize);
 	}
 
-	override @property bool running() const { return m_running; }
-
 	private void run()
 	{
 		while(true){
 			while( !m_taskFunc )
 				s_core.yieldForEvent();
-
-			m_runCounter++;
 
 			auto task = m_taskFunc;
 			m_taskFunc = null;
@@ -338,19 +334,19 @@ private class CoreTask : Task {
 		auto caller = Task.getThis();
 		assert(caller !is this, "A task cannot join itself.");
 		m_yielders ~= caller;
-		auto run_count = m_runCounter;
-		if( m_running && run_count == m_runCounter ){
-			s_core.resumeTask(this);
-			while( m_running && run_count == m_runCounter ) rawYield();
+		auto run_count = m_taskCounter;
+		if( m_running && run_count == m_taskCounter ){
+			s_core.resumeTask(this.task);
+			while( m_running && run_count == m_taskCounter ) rawYield();
 		}
 	}
 
 	override void interrupt()
 	{
 		auto caller = Task.getThis();
-		assert(caller !is this, "A task cannot interrupt itself.");
+		assert(caller != this.task, "A task cannot interrupt itself.");
 		assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
-		s_core.resumeTask(this, new InterruptException);
+		s_core.resumeTask(this.task, new InterruptException);
 	}
 
 	override void terminate()

@@ -12,15 +12,62 @@ import std.exception;
 import std.variant;
 
 
+/** Represents a single task as started using vibe.core.runTask.
+
+	All methods of TaskFiber are also available as methods of Task.
+*/
+struct Task {
+	private {
+		TaskFiber m_fiber;
+		size_t m_taskCounter;
+	}
+
+	private this(TaskFiber fiber, size_t task_counter)
+	{
+		m_fiber = fiber;
+		m_taskCounter = task_counter;
+	}
+
+	/** Returns the Task instance belonging to the calling task.
+	*/
+	static Task getThis()
+	{
+		auto fiber = Fiber.getThis();
+		assert(fiber !is null, "Task.getThis() called outside of a task.");
+		auto tfiber = cast(TaskFiber)fiber;
+		assert(tfiber !is null, "Invalid or null fiber used to construct Task handle.");
+		return Task(tfiber, tfiber.m_taskCounter);
+	}
+
+	@property inout(TaskFiber) fiber() inout { return m_fiber; }
+	@property inout(Thread) thread() inout { if( m_fiber ) return m_fiber.thread; return null; }
+
+	/** Determines if the task is still running.
+	*/
+	@property bool running() const { assert(m_fiber, "Invalid task handle"); return m_fiber.m_running && m_fiber.m_taskCounter == m_taskCounter; }
+
+	bool opEquals(in ref Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
+	bool opEquals(in Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
+
+	/// Makes all methods of TaskFiber available for Task.
+	alias fiber this;
+}
+
+
 /** The base class for a task aka Fiber.
 
 	This class represents a single task that is executed concurrencly
 	with other tasks. Each task is owned by a single thread.
 */
-class Task : Fiber {
+class TaskFiber : Fiber {
 	private {
 		Thread m_thread;
 		Variant[string] m_taskLocalStorage;
+	}
+
+	protected {
+		size_t m_taskCounter;
+		bool m_running;
 	}
 
 	protected this(void delegate() fun, size_t stack_size)
@@ -29,20 +76,13 @@ class Task : Fiber {
 		m_thread = Thread.getThis();
 	}
 
-	/** Returns the Task instance belonging to the calling task.
-	*/
-	static Task getThis(){ return cast(Task)Fiber.getThis(); }
-
 	/** Returns the thread that owns this task.
 	*/
 	@property inout(Thread) thread() inout { return m_thread; }
 
-	/** Determines if the task is still running.
-
-		Bugs: Note that Task objects are reused for later tasks so the returned
-		value may not be accurate. This may be improved in a later version.
+	/** Returns the handle of the current Task running on this fiber.
 	*/
-	abstract @property bool running() const;
+	@property Task task() { return Task(this, m_taskCounter); }
 
 	/** Blocks until the task has ended.
 	*/

@@ -107,21 +107,21 @@ package class Libevent2TcpConnection : TcpConnection {
 	void acquire()
 	{
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
-		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
+		assert(m_ctx.task == Task(), "Trying to acquire a TCP connection that is currently owned.");
 		m_ctx.task = Task.getThis();
 	}
 
 	void release()
 	{
 		if( !m_ctx ) return;
-		assert(m_ctx.task !is null, "Trying to release a TCP connection that is not owned.");
-		assert(m_ctx.task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
-		m_ctx.task = null;
+		assert(m_ctx.task != Task(), "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.task == Task.getThis(), "Trying to release a foreign TCP connection.");
+		m_ctx.task = Task();
 	}
 
 	bool isOwner()
 	{
-		return m_ctx !is null && m_ctx.task !is null && m_ctx.task is Fiber.getThis();
+		return m_ctx !is null && m_ctx.task != Task() && m_ctx.task == Task.getThis();
 	}
 	
 	/// Closes the connection.
@@ -271,7 +271,7 @@ package class Libevent2TcpConnection : TcpConnection {
 			m_ctx = null;
 			enforce(false, "Remote hung up while operating on TCPConnection.");
 		}
-		enforce(m_ctx.task is Fiber.getThis(), "Operating on TcpConnection owned by a different fiber!");
+		enforce(m_ctx.task == Task.getThis(), "Operating on TcpConnection owned by a different fiber!");
 	}
 }
 
