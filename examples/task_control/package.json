@@ -1,0 +1,7 @@
+﻿{
+    "name": "task-control",
+	"description": "Task manipulation example.",
+    "authors": [ "Sönke Ludwig" ],
+    "version": "0.0.1",
+    "dependencies": {}
+}

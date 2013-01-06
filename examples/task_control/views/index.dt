@@ -1,0 +1,13 @@
+!!! 5
+html
+	head
+		title Task control test
+	body
+		h1 Task control test
+
+		- if( task.running )
+			p The task is still running.
+			form(action="interrupt", method="POST")
+				button(type="submit") Interrupt
+		- else
+			p The task has terminated.
