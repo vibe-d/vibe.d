@@ -28,6 +28,9 @@ struct Task {
 		m_taskCounter = task_counter;
 	}
 
+	/// Makes all methods of TaskFiber available for Task.
+	alias fiber this;
+
 	/** Returns the Task instance belonging to the calling task.
 	*/
 	static Task getThis()
@@ -39,6 +42,7 @@ struct Task {
 		return Task(tfiber, tfiber.m_taskCounter);
 	}
 
+	nothrow:
 	@property inout(TaskFiber) fiber() inout { return m_fiber; }
 	@property inout(Thread) thread() inout { if( m_fiber ) return m_fiber.thread; return null; }
 
@@ -48,10 +52,8 @@ struct Task {
 
 	bool opEquals(in ref Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
 	bool opEquals(in Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
-
-	/// Makes all methods of TaskFiber available for Task.
-	alias fiber this;
 }
+
 
 
 /** The base class for a task aka Fiber.
@@ -78,7 +80,7 @@ class TaskFiber : Fiber {
 
 	/** Returns the thread that owns this task.
 	*/
-	@property inout(Thread) thread() inout { return m_thread; }
+	@property inout(Thread) thread() inout nothrow { return m_thread; }
 
 	/** Returns the handle of the current Task running on this fiber.
 	*/

@@ -520,19 +520,19 @@ class Win32FileStream : FileStream {
 
 	void release()
 	{
-		assert(m_task is Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
-		m_task = null;
+		assert(m_task == Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
+		m_task = Task();
 	}
 
 	void acquire()
 	{
-		assert(m_task is null, "Acquiring FileStream that is already owned.");
+		assert(m_task == Task(), "Acquiring FileStream that is already owned.");
 		m_task = Task.getThis();
 	}
 
 	bool isOwner()
 	{
-		return m_task is Task.getThis();
+		return m_task == Task.getThis();
 	}
 
 	void close()
@@ -711,19 +711,19 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 
 	void release()
 	{
-		assert(m_task is Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
-		m_task = null;
+		assert(m_task == Task.getThis(), "Releasing FileStream that is not owned by the calling task.");
+		m_task = Task();
 	}
 
 	void acquire()
 	{
-		assert(m_task is null, "Acquiring FileStream that is already owned.");
+		assert(m_task == Task(), "Acquiring FileStream that is already owned.");
 		m_task = Task.getThis();
 	}
 
 	bool isOwner()
 	{
-		return m_task is Task.getThis();
+		return m_task == Task.getThis();
 	}
 
 	bool readChanges(ref DirectoryChange[] dst, Duration timeout)
@@ -836,20 +836,20 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 
 
 	bool isOwner() {
-		return m_task !is null && m_task is Fiber.getThis();
+		return m_task != Task() && m_task == Task.getThis();
 	}
 
 	void acquire()
 	{
-		assert(m_task is null, "Trying to acquire a TCP connection that is currently owned.");
+		assert(m_task == Task(), "Trying to acquire a TCP connection that is currently owned.");
 		m_task = Task.getThis();
 	}
 
 	void release()
 	{
-		assert(m_task !is null, "Trying to release a TCP connection that is not owned.");
-		assert(m_task is Fiber.getThis(), "Trying to release a foreign TCP connection.");
-		m_task = null;
+		assert(m_task != Task(), "Trying to release a TCP connection that is not owned.");
+		assert(m_task == Task.getThis(), "Trying to release a foreign TCP connection.");
+		m_task = Task();
 	}
 
 	void connect(string host, ushort port)
@@ -970,17 +970,17 @@ m_status = ConnectionStatus.Connected;
 
 	void release()
 	{
-		assert(m_task is Task.getThis(), "Releasing TCP connection that is not owned by the calling task.");
-		m_task = null;
+		assert(m_task == Task.getThis(), "Releasing TCP connection that is not owned by the calling task.");
+		m_task = Task();
 	}
 
 	void acquire()
 	{
-		assert(m_task is null, "Acquiring TCP connection that is currently owned.");
+		assert(m_task == Task(), "Acquiring TCP connection that is currently owned.");
 		m_task = Task.getThis();
 	}
 
-	bool isOwner() { return Task.getThis() is m_task; }
+	bool isOwner() { return Task.getThis() == m_task; }
 
 	@property void tcpNoDelay(bool enabled)
 	{
