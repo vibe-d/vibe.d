@@ -1,8 +1,20 @@
 ﻿Changelog
 =========
 
+v0.7.12 - 2013-
+---------------------
+
+### Features and improvements ###
+
+### Bug fixes ###
+
+
 v0.7.11 - 2013-01-05
 --------------------
+
+### Features and improvements ###
+
+ - The `setup-linux.sh` script now installs to `/usr/local/share` and uses any existing `www-data` user for its config if possible (by Jordi Sayol)
 
 ### Bug fixes ###
 
