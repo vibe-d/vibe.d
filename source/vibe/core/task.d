@@ -36,7 +36,7 @@ struct Task {
 	static Task getThis()
 	{
 		auto fiber = Fiber.getThis();
-		assert(fiber !is null, "Task.getThis() called outside of a task.");
+		if( !fiber ) return Task(null, 0);
 		auto tfiber = cast(TaskFiber)fiber;
 		assert(tfiber !is null, "Invalid or null fiber used to construct Task handle.");
 		return Task(tfiber, tfiber.m_taskCounter);
