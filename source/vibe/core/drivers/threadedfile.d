@@ -68,6 +68,7 @@ class ThreadedFileStream : FileStream {
 		ulong m_size;
 		ulong m_ptr = 0;
 		FileMode m_mode;
+		bool m_ownFD = true;
 	}
 	
 	this(Path path, FileMode mode)
@@ -140,6 +141,12 @@ class ThreadedFileStream : FileStream {
 		return true;
 	}
 
+	void takeOwnershipOfFD()
+	{
+		enforce(m_ownFD);
+		m_ownFD = false;
+	}
+
 	void seek(ulong offset)
 	{
 		enforce(.lseek(m_fileDescriptor, offset, SEEK_SET) == offset, "Failed to seek in file.");
@@ -150,7 +157,7 @@ class ThreadedFileStream : FileStream {
 	
 	void close()
 	{
-		if( m_fileDescriptor != -1 ){
+		if( m_fileDescriptor != -1 && m_ownFD ){
 			.close(m_fileDescriptor);
 			m_fileDescriptor = -1;
 		}

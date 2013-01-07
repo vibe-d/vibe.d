@@ -247,21 +247,18 @@ package class Libevent2TcpConnection : TcpConnection {
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
 		import vibe.core.drivers.threadedfile;
-		// special case sending of files
-		/*if( auto fstream = cast(ThreadedFileStream)stream ){
-			logInfo("Using sendfile! %s %s %s", fstream.fd, fstream.tell(), fstream.size);
-			m_ctx.writeFinished = false;
-			auto buf = bufferevent_get_output(m_event);
-			enforce(evbuffer_add_file(buf, fstream.fd, fstream.tell(), fstream.size-fstream.tell()) == 0,
-				"Failed to send file over TCP connection.");
-			logInfo("1");
-			if( do_flush ) flush();
-			logInfo("2");
-			while( !m_ctx.writeFinished )
-				rawYield();
-			logInfo("3");
-			return;
-		}*/
+		version(Posix){ // causes a crash on Windows
+			// special case sending of files
+			if( auto fstream = cast(ThreadedFileStream)stream ){
+				logInfo("Using sendfile! %s %s %s", fstream.fd, fstream.tell(), fstream.size);
+				fstream.takeOwnershipOfFD();
+				auto buf = bufferevent_get_output(m_event);
+				enforce(evbuffer_add_file(buf, fstream.fd, fstream.tell(), fstream.size-fstream.tell()) == 0,
+					"Failed to send file over TCP connection.");
+				if( do_flush ) flush();
+				return;
+			}
+		}
 
 		writeDefault(stream, nbytes, do_flush);
 	}
