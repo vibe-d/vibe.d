@@ -15,7 +15,7 @@ static if( __traits(compiles, {import std.digest.md;}) ){
 		MD5 ctx;
 		ctx.start();
 		ctx.put(cast(ubyte[])str);
-		return ctx.finish().toHexString();
+		return ctx.finish().toHexString().idup;
 	}
 } else {
 	import std.md5;
