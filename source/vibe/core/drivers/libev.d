@@ -108,7 +108,7 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 	
-	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string address)
+	LibevTcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string address)
 	{
 		sockaddr_in addr_ip4;
 		addr_ip4.sin_family = AF_INET;
@@ -120,15 +120,15 @@ class LibevDriver : EventDriver {
 			// FIXME: support IPv6
 			if( addr_ip4.sin_addr.s_addr  == INADDR_NONE ){
 				logError("Not an IPv4 address: '%s'", address);
-				return;
+				return null;
 			}
 		} else {
 			ret = inet_pton(AF_INET, toStringz(address), &addr_ip4.sin_addr);
 		}
 		if( ret == 1 ){
 			auto rc = listenTcpGeneric(AF_INET, &addr_ip4, port, conn_callback);
-			logInfo("Listening on %s port %d %s", address, port, (rc==0?"succeeded":"failed"));
-			return;
+			logInfo("Listening on %s port %d %s", address, port, (rc?"succeeded":"failed"));
+			return rc;
 		}
 
 		version(Windows){}
@@ -139,12 +139,13 @@ class LibevDriver : EventDriver {
 			ret = inet_pton(AF_INET6, toStringz(address), &addr_ip6.sin6_addr);
 			if( ret == 1 ){
 				auto rc = listenTcpGeneric(AF_INET6, &addr_ip6, port, conn_callback);
-				logInfo("Listening on %s port %d %s", address, port, (rc==0?"succeeded":"failed"));
-				return;
+				logInfo("Listening on %s port %d %s", address, port, (rc?"succeeded":"failed"));
+				return rc;
 			}
 		}
 
 		enforce(false, "Invalid IP address string: '"~address~"'");
+		assert(false);
 	}
 	
 	Signal createSignal()
@@ -152,7 +153,7 @@ class LibevDriver : EventDriver {
 		return null;
 	}
 
-	private LibeventTcpListener listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
+	private LibevTcpListener listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
 	{
 		auto listenfd = socket(af, SOCK_STREAM, 0);
 		if( listenfd == -1 ){
@@ -182,26 +183,32 @@ sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 		ev_io_start(m_loop, w_accept);
 		
 		w_accept.data = cast(void*)this;
-		addEventReceiver(m_core, listenfd, new TcpListener(connection_callback));
+		//addEventReceiver(m_core, listenfd, new LibevTcpListener(connection_callback));
 
-		return new LibevTcpListener(listenfd, w_accept);
+		return new LibevTcpListener(listenfd, w_accept, connection_callback);
 	}
 }
 
-class TcpListener : EventedObject {
+class LibevTcpListener : TcpListener {
 	private {
+		int m_socket;
+		ev_io* m_io;
 		void delegate(TcpConnection conn) m_connectionCallback;
 	}
 
-	this(void delegate(TcpConnection conn) connection_callback)
+	this(int sock, ev_io* io, void delegate(TcpConnection conn) connection_callback)
 	{
+		m_socket = sock;
+		m_io = io;
 		m_connectionCallback = connection_callback;
 	}
 	
 	@property void delegate(TcpConnection conn) connectionCallback() { return m_connectionCallback; }
-	
-	void acquire() { assert(false); }
-	void release() { assert(false); }
+
+	void stopListening()
+	{
+		// TODO!
+	}
 }
 
 class LibevTcpConnection : TcpConnection {
@@ -432,7 +439,7 @@ private {
 		private {
 			DriverCore m_core;
 			long m_fd;
-			Fiber[] m_tasks;
+			Task[] m_tasks;
 			EventedObject m_object;
 		}
 
@@ -441,7 +448,7 @@ private {
 			m_core = core;
 			m_fd = fd;
 			m_object = object;
-			auto self = Fiber.getThis();
+			auto self = Task.getThis();
 			if( self ) m_tasks ~= self;
 		}
 		
