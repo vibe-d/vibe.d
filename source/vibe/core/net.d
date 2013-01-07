@@ -39,11 +39,12 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
 */
-TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
+TcpListener[] listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
 {
-	auto ret = listenTcp(port, connection_callback, "::");
-	if( !ret ) return listenTcp(port, connection_callback, "0.0.0.0");
-	return null;
+	TcpListener[] ret;
+	if( auto l = listenTcp(port, connection_callback, "::") ) ret ~= l;
+	if( auto l = listenTcp(port, connection_callback, "0.0.0.0") ) ret ~= l;
+	return ret;
 }
 /// ditto
 TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address)
@@ -56,7 +57,7 @@ TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connectio
 
 	This function is the same as listenTcp but takes a function callback instead of a delegate.
 */
-TcpListener listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
+TcpListener[] listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
 {
 	return listenTcp(port, toDelegate(connection_callback));
 }
