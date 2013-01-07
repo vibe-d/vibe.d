@@ -250,7 +250,7 @@ class RestInterfaceClient(I) : I
 	#line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!(I));
 
-	#line 253 "rest.d"
+	#line 254 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] param_is_json)
 	const {
 		Url url = m_baseUrl;
@@ -508,7 +508,7 @@ private @property string generateRestInterfaceMethods(I)()
 			enum param_names = parameterNames!FT();
 			HttpMethod http_verb; 
 			string rest_name;
-			getRestMethodName!FT(method, http_verb, rest_name);
+			getRestMethodName!(typeof(&FT))(method, http_verb, rest_name);
 			ret ~= "override "~getReturnTypeString!(overload)~" "~method~"(";
 			foreach( i, PT; PTypes ){
 				if( i > 0 ) ret ~= ", ";
