@@ -246,6 +246,23 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
+		import vibe.core.drivers.threadedfile;
+		// special case sending of files
+		/*if( auto fstream = cast(ThreadedFileStream)stream ){
+			logInfo("Using sendfile! %s %s %s", fstream.fd, fstream.tell(), fstream.size);
+			m_ctx.writeFinished = false;
+			auto buf = bufferevent_get_output(m_event);
+			enforce(evbuffer_add_file(buf, fstream.fd, fstream.tell(), fstream.size-fstream.tell()) == 0,
+				"Failed to send file over TCP connection.");
+			logInfo("1");
+			if( do_flush ) flush();
+			logInfo("2");
+			while( !m_ctx.writeFinished )
+				rawYield();
+			logInfo("3");
+			return;
+		}*/
+
 		writeDefault(stream, nbytes, do_flush);
 	}
 		
@@ -328,6 +345,7 @@ package struct TcpContext
 	int socketfd = -1;
 	int status = 0;
 	Task task;
+	bool writeFinished;
 }
 alias FreeListObjectAlloc!(TcpContext, false, true) TcpContextAlloc;
 
@@ -460,6 +478,7 @@ package nothrow extern(C)
 			if( ctx.task && ctx.task.state != Fiber.State.TERM ){
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 			}
+			ctx.writeFinished = true;
 			if( ctx.task ) ctx.core.resumeTask(ctx.task);
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
