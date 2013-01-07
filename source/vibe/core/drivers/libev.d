@@ -103,6 +103,13 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 
+	/** Resolves the given host name or IP address string.
+	*/
+	NetworkAddress resolveHost(string host, ushort family, bool no_dns)
+	{
+		assert(false);
+	}
+
 	TcpConnection connectTcp(string host, ushort port)
 	{
 		assert(false);
@@ -148,9 +155,19 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 	
+	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	{
+		assert(false);
+	}
+
 	Signal createSignal()
 	{
-		return null;
+		assert(false);
+	}
+
+	Timer createTimer(void delegate() callback)
+	{
+		assert(false);
 	}
 
 	private LibevTcpListener listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
@@ -290,7 +307,7 @@ class LibevTcpConnection : TcpConnection {
 		return "xxx";
 	}
 	
-	bool waitForData(int secs)
+	bool waitForData(Duration secs)
 	{
 		//ev_timer timer;
 		//ev_timer_set(&timer, tst, rtst);
@@ -307,6 +324,11 @@ class LibevTcpConnection : TcpConnection {
 	{
 		assert(false);
 	}
+
+	bool isOwner()
+	{
+		assert(false);
+	}
 	
 	@property bool empty() { return leastSize == 0; }
 	
@@ -319,6 +341,11 @@ class LibevTcpConnection : TcpConnection {
 		return m_readBufferContent.length;
 	}
 	
+	const(ubyte)[] peek()
+	{
+		return null;
+	}
+
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
@@ -500,7 +527,7 @@ private extern(C){
 		ev_io_init(w_client, &write_cb, client_sd, EV_WRITE);
 		ev_io_start(loop, w_client);*/
 		
-		auto obj = cast(TcpListener)getEventedObjectForFd(watcher.fd);
+		auto obj = cast(LibevTcpListener)getEventedObjectForFd(watcher.fd);
 		
 		void client_task()
 		{
@@ -514,7 +541,7 @@ private extern(C){
 			addEventReceiver(driver.m_core, client_sd, conn);
 			logTrace("calling connection callback");
 			try {
-				obj.connectionCallback()(conn);
+				obj.m_connectionCallback(conn);
 			} catch( Exception e ){
 				logWarn("Unhandled exception in connection handler: %s", e.toString());
 			}
