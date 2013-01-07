@@ -438,6 +438,8 @@ class Win32Timer : Timer {
 
 	void wait()
 	{
+		acquire();
+		scope(exit) release();
 		while( m_pending )
 			m_driver.m_core.yieldForEvent();
 	}
