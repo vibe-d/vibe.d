@@ -577,6 +577,26 @@ final class HttpServerResponse : HttpResponse {
 	{
 		writeBody(cast(ubyte[])data, content_type);
 	}
+	
+	/** Writes the whole response body at once, without doing any further encoding.
+
+		The called has to make sure that the appropriate headers are set correctly
+		(i.e. Content-Type and Content-Encoding).
+	*/
+	void writeRawBody(RandomAccessStream stream)
+	{
+		assert(!m_headerWritten, "A body was already written!");
+
+		writeHeader();
+
+		if( m_isHeadResponse ) return;
+
+		auto bytes = stream.size - stream.tell();
+		if( "Transfer-Encoding" in headers ) headers.remove("Transfer-Encoding");
+		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", bytes);
+		m_conn.write(stream);
+		m_countingWriter.increment(bytes);
+	}
 
 	/// Writes a JSON message with the specified status
 	void writeJsonBody(T)(T data, int status = HttpStatus.OK)

@@ -48,6 +48,12 @@ class LimitedInputStream : InputStream {
 
 	@property bool dataAvailableForRead() { return m_input.dataAvailableForRead; }
 
+	void increment(ulong bytes)
+	{
+		if( bytes > m_sizeLimit ) onSizeLimitReached();
+		m_sizeLimit -= bytes;
+	}
+
 	const(ubyte)[] peek() { return m_input.peek(); }
 
 	void read(ubyte[] dst)
@@ -78,6 +84,11 @@ class CountingOutputStream : OutputStream {
 	}
 
 	@property ulong bytesWritten() const { return m_bytesWritten; }
+
+	void increment(ulong bytes)
+	{
+		m_bytesWritten += bytes;
+	}
 
 	void write(in ubyte[] bytes, bool do_flush = true) 
 	{
@@ -113,6 +124,12 @@ class CountingInputStream : InputStream {
 	@property bool empty() { return m_in.empty(); }
 	@property ulong leastSize() { return m_in.leastSize();  }
 	@property bool dataAvailableForRead() { return m_in.dataAvailableForRead; }
+
+	void increment(ulong bytes)
+	{
+		m_bytesRead += bytes;
+	}
+
 	const(ubyte)[] peek() { return m_in.peek(); }
 
 	void read(ubyte[] dst)

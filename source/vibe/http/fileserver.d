@@ -140,7 +140,9 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		}
 		scope(exit) fil.close();
 
-		res.bodyWriter.write(fil);
+		if( "Content-Encoding" in res.headers )
+			res.bodyWriter.write(fil);
+		else res.writeRawBody(fil);
 		logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
 	}
 	return &callback;
