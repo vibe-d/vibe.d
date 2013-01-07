@@ -360,11 +360,12 @@
    <File path="source\vibe\stream\memory.d" />
    <File path="source\vibe\stream\operations.d" />
    <File path="source\vibe\stream\ssl.d" />
-   <File path="source\vibe\stream\stream.d" />
    <File path="source\vibe\stream\zlib.d" />
   </Folder>
   <Folder name="templ">
    <File path="source\vibe\templ\diet.d" />
+   <File path="source\vibe\templ\parsertools.d" />
+   <File path="source\vibe\templ\utils.d" />
   </Folder>
   <Folder name="textfilter">
    <File path="source\vibe\textfilter\html.d" />
