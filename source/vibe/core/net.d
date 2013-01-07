@@ -96,9 +96,9 @@ struct NetworkAddress {
 
 	/** Family (AF_) of the socket address.
 	*/
-	@property ushort family() const { return addr.sa_family; }
+	@property ushort family() const nothrow { return addr.sa_family; }
 	/// ditto
-	@property void family(ushort val) { addr.sa_family = cast(ubyte)val; }
+	@property void family(ushort val) nothrow { addr.sa_family = cast(ubyte)val; }
 
 	/** The port in host byte order.
 	*/
@@ -122,11 +122,11 @@ struct NetworkAddress {
 
 	/** A pointer to a sockaddr struct suitable for passing to socket functions.
 	*/
-	@property inout(sockaddr)* sockAddr() inout { return &addr; }
+	@property inout(sockaddr)* sockAddr() inout nothrow { return &addr; }
 
 	/** Size of the sockaddr struct that is returned by sockAddr().
 	*/
-	@property int sockAddrLen() const {
+	@property int sockAddrLen() const nothrow {
 		switch(this.family){
 			default: assert(false, "sockAddrLen() called for invalid address family.");
 			case AF_INET: return addr_ip4.sizeof;

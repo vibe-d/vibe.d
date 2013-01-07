@@ -194,7 +194,6 @@ class Win32EventDriver : EventDriver {
 		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
 
 		auto conn = new Win32TcpConnection(this, sock);
-		m_socketHandlers[conn.socket] = conn;
 		conn.connect(addr);
 		return conn;	
 	}
@@ -205,7 +204,16 @@ class Win32EventDriver : EventDriver {
 		auto addr = resolveHost(bind_address);
 		addr.port = port;
 
-		assert(false);
+		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
+		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
+
+		enforce(bind(sock, addr.sockAddr, addr.sockAddrLen) == 0,
+			"Failed to bind listening socket.");
+
+		enforce(listen(sock, 128) == 0,
+			"Failed to listen.");
+
+		return new Win32TcpListener(this, sock, conn_callback);
 	}
 
 	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
@@ -384,7 +392,6 @@ class Win32Timer : Timer {
 	{
 		m_driver = driver;
 		m_callback = callback;
-		m_owner = Task.getThis();
 	}
 
 	~this()
@@ -392,19 +399,21 @@ class Win32Timer : Timer {
 		if( m_pending ) stop();
 	}
 
-	void release()
-	{
-		assert(false, "not supported");
-	}
-
 	void acquire()
 	{
-		assert(false, "not supported");
+		assert(m_owner == Task());
+		m_owner = Task.getThis();
+	}
+
+	void release()
+	{
+		assert(m_owner == Task.getThis());
+		m_owner = Task();
 	}
 
 	bool isOwner()
 	{
-		assert(false, "not supported");
+		return m_owner != Task() && m_owner == Task.getThis();
 	}
 
 	@property bool pending() { return m_pending; }
@@ -930,6 +939,7 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
 		SOCKET m_socket;
+		NetworkAddress m_peerAddress;
 		DWORD m_bytesTransferred;
 		ConnectionStatus m_status = ConnectionStatus.Initialized;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
@@ -940,8 +950,16 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 		m_driver = driver;
 		m_socket = sock;
 		m_task = Task.getThis();
+		m_driver.m_socketHandlers[sock] = this;
 
 		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
+	}
+
+	this(Win32EventDriver driver, SOCKET sock, NetworkAddress peer_address)
+	{
+		this(driver, sock);
+		m_peerAddress = peer_address;
+		m_status = ConnectionStatus.Connected;
 	}
 
 	~this()
@@ -953,7 +971,7 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 
 	@property SOCKET socket() { return m_socket; }
 
-	void connect(NetworkAddress addr)
+	private void connect(NetworkAddress addr)
 	{
 		auto ret = .connect(m_socket, addr.sockAddr, addr.sockAddrLen);
 		//enforce(WSAConnect(m_socket, addr.sockAddr, addr.sockAddrLen, null, null, null, null), "Failed to connect to host");
@@ -1004,7 +1022,8 @@ m_status = ConnectionStatus.Connected;
 
 	@property string peerAddress()
 	const {
-		assert(false);
+		//m_peerAddress
+		return "xxx";
 	}
 
 	@property bool empty() { return leastSize == 0; }
@@ -1210,14 +1229,21 @@ m_status = ConnectionStatus.Connected;
 /* class Win32TcpListener                                                     */
 /******************************************************************************/
 
-class Win32TcpListener : TcpListener {
+class Win32TcpListener : TcpListener, SocketEventHandler {
 	private {
+		Win32EventDriver m_driver;
 		SOCKET m_socket;
+		void delegate(TcpConnection conn) m_connectionCallback;
 	}
 
-	this(SOCKET sock)
+	this(Win32EventDriver driver, SOCKET sock, void delegate(TcpConnection conn) conn_callback)
 	{
+		m_driver = driver;
 		m_socket = sock;
+		m_connectionCallback = conn_callback;
+		m_driver.m_socketHandlers[sock] = this;
+
+		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_ACCEPT);
 	}
 
 	void stopListening()
@@ -1225,6 +1251,41 @@ class Win32TcpListener : TcpListener {
 		if( m_socket == -1 ) return;
 		closesocket(m_socket);
 		m_socket = -1;
+	}
+
+	SOCKET socket() nothrow { return m_socket; }
+
+	void notifySocketEvent(SOCKET sock, WORD event, WORD error)
+	nothrow {
+		assert(sock == m_socket);
+		switch(event){
+			default: assert(false);
+			case FD_ACCEPT:
+				try {
+					// TODO avoid GC allocations for delegate and Win32TcpConnection
+					runTask({
+						NetworkAddress addr;
+						addr.family = AF_INET6;
+						int addrlen = addr.sockAddrLen;
+						auto clientsock = WSAAccept(sock, addr.sockAddr, &addrlen, null, 0);
+						assert(addrlen == addr.sockAddrLen);
+						auto conn = new Win32TcpConnection(m_driver, clientsock, addr);
+						try {
+							m_connectionCallback(conn);
+							logDebug("task out (fd %d).", sock);
+						} catch( Exception e ){
+							logWarn("Handling of connection failed: %s", e.msg);
+							logDebug("%s", e.toString());
+						}
+						if( conn.connected ) conn.close();
+					});
+				} catch( Exception e ){
+					logWarn("Exception white accepting TCP connection: %s", e.msg);
+					try logDebug("Exception white accepting TCP connection: %s", e.toString());
+					catch( Exception ){}
+				}
+				break;
+		}
 	}
 }
 
@@ -1414,7 +1475,9 @@ private extern(System) nothrow
 
 	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
 	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*) LPLOOKUPSERVICE_COMPLETION_ROUTINE;
+	alias void* LPCONDITIONPROC;
 
+	SOCKET WSAAccept(SOCKET s, sockaddr *addr, INT* addrlen, LPCONDITIONPROC lpfnCondition, DWORD_PTR dwCallbackData);
 	int WSAAsyncSelect(SOCKET s, HWND hWnd, uint wMsg, sizediff_t lEvent);
 	SOCKET WSASocketW(int af, int type, int protocol, WSAPROTOCOL_INFOW *lpProtocolInfo, uint g, DWORD dwFlags);
 	int WSARecv(SOCKET s, WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesRecvd, DWORD* lpFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
