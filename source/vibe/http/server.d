@@ -1068,11 +1068,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			chunked_input_stream = FreeListRef!ChunkedInputStream(reqReader);
 			limited_http_input_stream = FreeListRef!LimitedHttpInputStream(chunked_input_stream, settings.maxRequestSize, true);
 		} else {
-			auto pc = "Connection" in req.headers;
-			if( pc && *pc == "close" && req.httpVersion == HttpVersion.HTTP_1_0 )
-				limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, settings.maxRequestSize, true);
-			else
-				limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, 0);
+			limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, 0);
 		}
 		req.bodyReader = limited_http_input_stream;
 
