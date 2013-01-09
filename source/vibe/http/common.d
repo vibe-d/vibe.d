@@ -111,6 +111,34 @@ class HttpRequest {
 	/// ditto
 	@property void host(string v) { headers["Host"] = v; }
 
+	/** Returns the mime type part of the 'Content-Type' header.
+
+		This function gets the pure mime type (e.g. "text/plain")
+		without any supplimentary parameters such as "charset=...".
+		Use contentTypeParameters to get any parameter string or
+		headers["Content-Type"] to get the raw value.
+	*/
+	@property string contentType()
+	const {
+		auto pv = "Content-Type" in headers;
+		if( !pv ) return null;
+		auto idx = std.string.indexOf(*pv, ';');
+		return idx >= 0 ? (*pv)[0 .. idx] : *pv;
+	}
+
+	/** Returns any supplementary parameters of the 'Content-Type' header.
+
+		This is a semicolon separated ist of key/value pairs. Usually, if set,
+		this contains the character set used for text based content types.
+	*/
+	@property string contentTypeParameters()
+	const {
+		auto pv = "Content-Type" in headers;
+		if( !pv ) return null;
+		auto idx = std.string.indexOf(*pv, ';');
+		return idx >= 0 ? (*pv)[idx+1 .. $] : null;
+	}
+
 	/** Determines if the connection persists across requests.
 	*/
 	@property bool persistent() const 

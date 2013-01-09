@@ -1117,8 +1117,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 		if( settings.options & HttpServerOption.ParseJsonBody ){
-			auto ptype = "Content-Type" in req.headers;				
-			if( ptype && split(*ptype, ";").map!(a => a.strip())().startsWith("application/json") ){
+			if( req.contentType == "application/json" ){
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				req.json = parseJson(bodyStr);
 			}
