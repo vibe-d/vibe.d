@@ -173,7 +173,7 @@ v0.7.8 - 2012-10-01
  - The Win32 driver now has a working Timer implementation
  - `OutputStream` now has an output range interface for the types ubyte and char
  - The logging functions use 'auto ref' instead of 'lazy' now to avoid errors of the kind "this(this) is not nothrow"
- - The markdown text filter now emits XHTML compatible &lt:br/&gt; tags instead of &lt;br&gt; (by cybevnm) - [issue #98][issue98]
+ - The markdown text filter now emits XHTML compatible &lt;br/&gt; tags instead of &lt;br&gt; (by cybevnm) - [issue #98][issue98]
  - The REST interface generator now uses plain strings instead of JSON for query strings and path parameters, if possible
  - The `UrlRouter` now URL-decodes all path parameters
 
