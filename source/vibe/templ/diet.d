@@ -310,7 +310,7 @@ private class OutputContext {
 			case State.Code:
 				if( m_state == State.String ) m_result ~= "\", false);\n";
 				else m_result ~= ", false);\n";
-				if( m_line.number >= 0 ) m_result ~= lineMarker(m_line);
+				m_result ~= lineMarker(m_line);
 				break;
 			case State.String:
 				m_result ~= StreamVariableName ~ ".write(\"";

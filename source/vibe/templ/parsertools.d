@@ -45,6 +45,7 @@ int indentLevel(in ref string s, in ref string indent)
 
 string lineMarker(in ref Line ln)
 {
+	if( ln.number < 0 ) return null;
 	return "#line "~_toString(ln.number)~" \""~ln.file~"\"\n";
 }
 
