@@ -45,7 +45,8 @@ import std.traits;
 
 	A method named 'index' is mapped to the root URL (e.g. GET /api/). If a method has its first
 	parameter named 'id', it will be mapped to ':id/method' and 'id' is expected to be part of the
-	URL instead of a JSON request.
+	URL instead of a JSON request. Parameters with default values will be optional in the
+	corresponding JSON request.
 	
 	Any interface that you return from a getter will be made available with the base url and its name appended.
 
@@ -137,7 +138,7 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 	foreach( method; __traits(allMembers, T) ){
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
 			alias ReturnType!overload RetType;
-			auto param_names = parameterNames!overload();
+			auto param_names = [ParameterIdentifierTuple!overload];
 			HttpMethod http_verb;
 			string rest_name;
 			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
@@ -343,12 +344,13 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias FUNC
 {
 	alias ParameterTypeTuple!FUNC ParameterTypes;
 	alias ReturnType!FUNC RetType;
+	alias ParameterDefaultValueTuple!FUNC DefaultValues;
+	enum param_names = [ParameterIdentifierTuple!FUNC];
 
 	void handler(HttpServerRequest req, HttpServerResponse res)
 	{
 		ParameterTypes params;
 
-		static immutable param_names = parameterNames!FUNC();
 		foreach( i, P; ParameterTypes ){
 			static if( i == 0 && param_names[i] == "id" ){
 				logDebug("id %s", req.params["id"]);
@@ -360,16 +362,31 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias FUNC
 					params[i] = fromRestString!P(req.params[param_names[i][1 .. $]]);
 				}
 			} else {
+				alias DefaultValues[i] DefVal;
 				if( req.method == HttpMethod.GET ){
 					logDebug("query %s of %s" ,param_names[i], req.query);
-					enforce(param_names[i] in req.query, "Missing query parameter '"~param_names[i]~"'");
+					static if( is(DefVal == void) ){
+						enforce(param_names[i] in req.query, "Missing query parameter '"~param_names[i]~"'");
+					} else {
+						if( param_names[i] !in req.query ){
+							params[i] = DefVal;
+							continue;
+						}
+					}
 					params[i] = fromRestString!P(req.query[param_names[i]]);
 				} else {
 					logDebug("%s %s", method, param_names[i]);
 					enforce(req.contentType == "application/json", "The Content-Type header needs to be set to application/json.");
 					enforce(req.json.type != Json.Type.Undefined, "The request body does not contain a valid JSON value.");
 					enforce(req.json.type == Json.Type.Object, "The request body must contain a JSON object with an entry for each parameter.");
-					enforce(req.json[param_names[i]].type != Json.Type.Undefined, "Missing parameter "~param_names[i]~".");
+					static if( is(DefVal == void) ){
+						enforce(req.json[param_names[i]].type != Json.Type.Undefined, "Missing parameter "~param_names[i]~".");
+					} else {
+						if( req.json[param_names[i]].type == Json.Type.Undefined ){
+							params[i] = DefVal;
+							continue;
+						}
+					}
 					params[i] = deserializeJson!P(req.json[param_names[i]]);
 				}
 			}
@@ -504,9 +521,9 @@ private @property string generateRestInterfaceMethods(I)()
 			alias overload FT;
 			alias ParameterTypeTuple!FT PTypes;
 			alias ReturnType!FT RT;
+			alias ParameterIdentifierTuple!FT param_names;
 
-			enum param_names = parameterNames!FT();
-			HttpMethod http_verb; 
+			HttpMethod http_verb;
 			string rest_name;
 			getRestMethodName!(typeof(&FT))(method, http_verb, rest_name);
 			ret ~= "override "~getReturnTypeString!(overload)~" "~method~"(";
@@ -788,105 +805,6 @@ private void getRestMethodName(T)(string method, out HttpMethod http_verb, out s
 	else if( method.startsWith("delete") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
 	else if( method == "index" )           { http_verb = HttpMethod.GET; rest_name = ""; }
 	else { http_verb = HttpMethod.POST; rest_name = method; }
-}
-
-/// private
-private string[] parameterNames(alias FUNC)()
-{
-	static if( __traits(compiles, [ParameterIdentifierTuple!FUNC]) ){
-		import std.traits;
-		return[ParameterIdentifierTuple!FUNC];
-	} else {
-		pragma(msg, "Warning, using fallback method to get parameter names for the REST interface generator.");
-		pragma(msg, "Please consider upgrading to DMD 2.060 or later.");
-		auto str = extractParameters(typeof(&FUNC).stringof);
-		//pragma(msg, T.stringof);
-
-		string[] ret;
-		for( size_t i = 0; i < str.length; ){
-			skipWhitespace(str, i);
-			skipType(str, i);
-			skipWhitespace(str, i);
-			ret ~= skipIdent(str, i);
-			skipWhitespace(str, i);
-			if( i >= str.length ) break;
-			if( str[i] == '=' ){
-				i++;
-				skipWhitespace(str, i);
-				skipBalancedUntil(",", str, i);
-				if( i >= str.length ) break;
-			}
-			assert(str[i] == ',');
-			i++;
-		}
-
-		return ret;
-	}
-}
-
-private string extractParameters(string str)
-{
-	auto i1 = str.countUntil("function");
-	auto i2 = str.countUntil("delegate");
-	assert(i1 >= 0 || i2 >= 0);
-	size_t start;
-	if( i1 >= 0 && i2 >= 0) start = min(i1, i2);
-	else if( i1 >= 0 ) start = i1;
-	else start = i2;
-	size_t end = str.length-1;
-	while( str[start] != '(' ) start++;
-	while( str[end] != ')' ) end--;
-	return str[start+1 .. end];
-}
-
-private void skipWhitespace(string str, ref size_t i)
-{
-	while( i < str.length && str[i] == ' ' ) i++;
-}
-
-private string skipIdent(string str, ref size_t i)
-{
-	size_t start = i;
-	while( i < str.length ){
-		switch( str[i] ){
-			default:
-				i++;
-				break;
-			case ' ',  ',', '(', ')', '=', '[', ']':
-				return str[start .. i];
-		}
-	}
-	return str[start .. $];
-}
-
-private void skipType(string str, ref size_t i)
-{
-	if (str[i..$].startsWith("ref")) {
-		i += 3;
-		skipWhitespace(str, i);
-	}
-	skipIdent(str, i);
-	if( i < str.length && (str[i] == '(' || str[i] == '[') ){
-		int depth = 1;
-		for( ++i; i < str.length && depth > 0; i++ ){
-			if( str[i] == '(' || str[i] == '[' ) depth++;
-			else if( str[i] == ')' || str[i] == ']' ) depth--;
-		}
-	}
-
-	while( i < str.length && str[i] == '*' ) i++;
-}
-
-private string skipBalancedUntil(string chars, string str, ref size_t i)
-{
-	int depth = 0;
-	size_t start = i;
-	while( i < str.length && (depth > 0 || chars.countUntil(str[i]) < 0) ){
-		if( str[i] == '(' || str[i] == '[' ) depth++;
-		else if( str[i] == ')' || str[i] == ']' ) depth--;
-		i++;
-	}
-	return str[start .. i];
 }
 
 /// private
