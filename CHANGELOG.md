@@ -166,7 +166,7 @@ v0.7.8 - 2012-10-01
  - `BsonBinData` is now converted to a Base-64 encoded string when the BSON value is converted to a JSON value
  - `BsonDate` now has `toString`/`fromString` for an ISO extended representation so that its JSON serialization is now a string
  - The Diet parser now supports string interpolations inside of style and script tags.
- - The Diet parser now enforces proper indentation (i.e. the number of spaces used for an indentation level has to be a multiple of the base indent) - [issue #]
+ - The Diet parser now enforces proper indentation (i.e. the number of spaces used for an indentation level has to be a multiple of the base indent) - see [issue #3][issue3]
  - The Diet parser now supports unescaped string interpolations using !{}
  - The JSON de(serializer) now supports pointer types
  - Upgraded libevent to v2.0.20 and OpenSSL to v1.0.1c on Windows
@@ -200,6 +200,7 @@ v0.7.8 - 2012-10-01
  - Fixed parsing of unicode character sequences in JSON strings
  - Fixed the 100-continue response to end with an empty line
 
+[issue3]: https://github.com/rejectedsoftware/vibe.d/issues/3
 [issue84]: https://github.com/rejectedsoftware/vibe.d/issues/84
 [issue88]: https://github.com/rejectedsoftware/vibe.d/issues/88
 [issue89]: https://github.com/rejectedsoftware/vibe.d/issues/89
