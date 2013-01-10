@@ -29,6 +29,7 @@ import std.string;
 import std.traits;
 import std.conv;
 import std.typecons;
+public import std.typecons : Yes, No;
 
 struct FilePart  {
 	InetHeaderMap headers;
@@ -203,6 +204,8 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 		"/mywebapp/welcomePage/getWelcomePage" if MethodStyle is Unaltered.
 
 		style = How the url part representing the method name should be altered.
+        strict = Yes.strict if you want missing parameters in the form to be an error. No.strict if you are happy with the types' default value in this case. 
+                (If you have overloads this might cause not the best matching overload to be chosen.)
 
 	Examples:
 
@@ -245,7 +248,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 
 */
 void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
-		MethodStyle style = MethodStyle.Unaltered)
+		MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict)
 {
 	foreach( method; __traits(allMembers, I) ){
 		//pragma(msg, "What: "~"&instance."~method);
@@ -254,7 +257,7 @@ void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
 		//pragma(msg, "Is delegate: "~to!string(is(typeof(mixin("I."~method)) == delegate )));
 		static if( is(typeof(mixin("I."~method)) == function) && !__traits(isStaticFunction, mixin("I."~method)) && (method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
 					|| method.startsWith("create") || method.startsWith("post") || method == "index" ))  {
-			registerFormMethod!method(router, instance, url_prefix, style);
+			registerFormMethod!method(router, instance, url_prefix, style, strict);
 		}
 	}
 }
@@ -292,13 +295,13 @@ unittest {
 		method = The name of the method to register. It might be
 		overloaded, one overload has to match any given form data, otherwise an error is triggered.
 */
-void registerFormMethod(string method, I)(UrlRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered) 
+void registerFormMethod(string method, I)(UrlRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
 {
 	string url(string name) {
 		return url_prefix ~ adjustMethodStyle(name, style);
 	}
 	
-	auto handler=formMethodHandler!(I, method)(instance);
+	auto handler=formMethodHandler!(I, method)(instance, strict);
 	string url_method= method=="index" ? "" : method;
 	router.get(url(url_method), handler);
 	router.post(url(url_method), handler);
@@ -316,12 +319,12 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 	Returns: A HttpServerRequestDelegate which passes over any form data to the given function.
 */
 /// private
-HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(isCallable!DelegateType) 
+HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
 {
 	void handler(HttpServerRequest req, HttpServerResponse res)
 	{
 		string error;
-		enforce(applyParametersFromAssociativeArray(req, res, func, error), error);
+		enforce(applyParametersFromAssociativeArray(req, res, func, error, strict), error);
 	}
 	return &handler;
 }
@@ -333,7 +336,7 @@ HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func) if(
 	of the passed method and will only raise an error if no conforming overload is found.
 */
 /// private
-HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
+HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
 {
 	import std.stdio;
 	void handler(HttpServerRequest req, HttpServerResponse res)
@@ -345,7 +348,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 		foreach(func; __traits(getOverloads, T, method)) {
 			string error;
 			ReturnType!func delegate(ParameterTypeTuple!func) myoverload=&__traits(getMember, inst, method);
-			if(applyParametersFromAssociativeArray!func(req, res, myoverload, error)) {
+			if(applyParametersFromAssociativeArray!func(req, res, myoverload, error, strict)) {
 				return;
 			}
 			errors~="Overload "~method~typeid(ParameterTypeTuple!func).toString()~" failed: "~error~"\n\n";
@@ -396,17 +399,18 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst)
 		has a parameter of matching type.
 
 		error = This string will be set to a descriptive message if not all parameters could be matched.
+        strict = Yes.strict if you want missing parameters in the form to be an error. No.strict if you are happy with the types default value in this case.
 
 	Returns: true if successful, false otherwise.
 */
 /// private
-private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
+private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
 }
 
 // Overload which takes additional parameter for handling overloads of func.
 /// private
-private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error) {
+private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	alias ParameterTypeTuple!Overload ParameterTypes;
 	ParameterTypes args;
 	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
@@ -420,7 +424,7 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 			args[i] = res;
 		}
 		else {
-			count+=loadFormDataRecursiveSingle(form, args[i], item, e, Yes.strict);
+			count+=loadFormDataRecursiveSingle(form, args[i], item, e, strict);
 		}
 	}
 	error=e.message;
