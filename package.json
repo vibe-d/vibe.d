@@ -8,6 +8,11 @@
 		"Matthias Dondorff",
 		"see github for more"
 	],
-	"dependencies": {
-	}
+	"dependencies": {},
+	"libs-posix" : ["event", "event_pthreads", "ssl"],
+	"dflags-windows-x86" : [
+		"$PACKAGE_DIR/lib/win-i386/eay.lib",
+		"$PACKAGE_DIR/lib/win-i386/ssl.lib",
+		"$PACKAGE_DIR/lib/win-i386/event2.lib"
+	]
 }
