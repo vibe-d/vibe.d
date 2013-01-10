@@ -1,0 +1,13 @@
+﻿{
+	"name": "vibe.d",
+	"description": "Asynchronous I/O framework",
+	"homepage": "http://vibed.org/",
+	"authors": [
+		"Sönke Ludwig",
+		"Jan Krüger",
+		"Matthias Dondorff",
+		"see github for more"
+	],
+	"dependencies": {
+	}
+}
