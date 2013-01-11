@@ -9,7 +9,7 @@
 		"see github for more"
 	],
 	"dependencies": {},
-	"libs-posix" : ["event", "event_pthreads", "ssl"],
+	"libs-posix" : ["event", "event_pthreads", "ssl", "crypto"],
 	"dflags-windows": ["wsock32.lib", "ws2_32.lib"],
 	"dflags-windows-x86" : [
 		"$PACKAGE_DIR/lib/win-i386/eay.lib",
