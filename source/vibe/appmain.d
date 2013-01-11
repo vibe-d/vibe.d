@@ -33,7 +33,7 @@ import vibe.http.server;
 int main(string[] args)
 {
 	version(unittest){
-		logInfo("All unit tests were successful.")
+		logInfo("All unit tests were successful.");
 		return 0;
 	} else {
 		processCommandLineArgs(args);
