@@ -836,13 +836,13 @@ private:
 }
 
 
-unittest
+/*unittest
 {
     auto p = pipe();
     p.writeEnd.writeln("Hello World");
     p.writeEnd.flush();
     assert (p.readEnd.readln().chomp() == "Hello World");
-}
+}*/
 
 
 
@@ -1358,7 +1358,7 @@ private:
 }
 
 
-unittest
+/*unittest
 {
     // New variable
     environment["std_process"] = "foo";
@@ -1400,4 +1400,4 @@ unittest
         auto rhs = environment[n];
         assert (v == rhs, format("key %s -- '%s' != '%s'", n, v, rhs));
     }
-}
+}*/
