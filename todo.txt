@@ -37,10 +37,3 @@ MARKDOWN FILTER
 
  - see markdown.d
  - add SmartyPants support
-
-PACKAGE MANAGER
-===============
-
- - allow the specification of optional dependencies (the user will just get a message that its possible to extend a package by installing the dependency)
- - implement outputting of a generated vpm_versions.d module that contains the version of each installed package
- - package signing
