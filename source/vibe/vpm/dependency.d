@@ -31,6 +31,7 @@ Dependency[string] dependencies(const Json json)
 	Dependency[string] dep;
 	foreach( string pkg, ref const Json vers; json["dependencies"] ) {
 		enforce( pkg !in dep, "The dependency '"~pkg~"' is specified more than once." );
+		if( pkg == "vibe.d" ) continue; // forward compatibility with DUB
 		dep[pkg] = new Dependency(cast(string)vers);
 	}
 	return dep;
