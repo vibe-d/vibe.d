@@ -32,15 +32,17 @@ import vibe.http.server;
 */
 int main(string[] args)
 {
-	processCommandLineArgs(args);
-
-	//logInfo("Starting HTTP listening...");
-
-	logInfo("Running event loop...");
-	try {
-		return runEventLoop();
-	} catch( Throwable th ){
-		logError("Unhandled exception in event loop: %s", th.toString());
-		return 1;
+	version(unittest){
+		logInfo("All unit tests were successful.")
+		return 0;
+	} else {
+		processCommandLineArgs(args);
+		logInfo("Running event loop...");
+		try {
+			return runEventLoop();
+		} catch( Throwable th ){
+			logError("Unhandled exception in event loop: %s", th.toString());
+			return 1;
+		}
 	}
 }
