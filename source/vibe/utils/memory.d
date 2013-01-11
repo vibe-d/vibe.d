@@ -153,17 +153,64 @@ class DebugAllocator : Allocator {
 class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
-		auto ptr = .malloc(sz);
-		auto misalign = cast(size_t)ptr & 0xF;
-		if( misalign != 0 ){
-			ptr = .realloc(ptr, sz + 0xF);
-			auto newmisalign = cast(size_t)ptr & 0xF;
-			ptr += 0x10 - newmisalign;
-		}
-		return ptr[0 .. sz];
+		return adjustBase(.malloc(sz + 0x10))[0 .. sz];
 	}
-	void[] realloc(void[] mem, size_t new_size) { return .realloc(mem.ptr, new_size)[0 .. new_size]; }
-	void free(void[] mem) { .free(mem.ptr); }
+
+	void[] realloc(void[] mem, size_t new_size)
+	{
+		auto p = extractOriginalPointer(mem.ptr);
+		auto pn = adjustBase(.realloc(p, new_size+0x10));
+		return pn[0 .. new_size];
+	}
+
+	void free(void[] mem)
+	{
+		.free(extractOriginalPointer(mem.ptr));
+	}
+
+	private static void* extractOriginalPointer(void* base)
+	{
+		ubyte misalign = *(cast(ubyte*)base-1);
+		assert(misalign <= 0x10);
+		return base - misalign;
+	}
+
+	private static void* adjustBase(void* base)
+	{
+		ubyte misalign = 0x10 - (cast(size_t)base & 0xF);
+		base += misalign;
+		*(cast(ubyte*)base-1) = misalign;
+		return base;
+	}
+
+	unittest {
+		void test_align(void* p, size_t adjustment) {
+			void* pa = adjustBase(p);
+			assert((cast(size_t)pa & 0xF) == 0, "Non-aligned pointer.");
+			assert(*(cast(ubyte*)pa-1) == adjustment, "Invalid adjustment "~to!string(p)~": "~to!string(*(cast(ubyte*)pa-1)));
+			void* pr = extractOriginalPointer(pa);
+			assert(pr == p, "Recovered base != original");
+		}
+		void* ptr = .malloc(0x40);
+		ptr += 0x10 - (cast(size_t)ptr & 0xF);
+		test_align(ptr++, 0x10);
+		test_align(ptr++, 0x0F);
+		test_align(ptr++, 0x0E);
+		test_align(ptr++, 0x0D);
+		test_align(ptr++, 0x0C);
+		test_align(ptr++, 0x0B);
+		test_align(ptr++, 0x0A);
+		test_align(ptr++, 0x09);
+		test_align(ptr++, 0x08);
+		test_align(ptr++, 0x07);
+		test_align(ptr++, 0x06);
+		test_align(ptr++, 0x05);
+		test_align(ptr++, 0x04);
+		test_align(ptr++, 0x03);
+		test_align(ptr++, 0x02);
+		test_align(ptr++, 0x01);
+		test_align(ptr++, 0x10);
+	}
 }
 
 class GCAllocator : Allocator {
