@@ -55,7 +55,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	{
 		auto rurl = url;
-		url.path = Path(req.url);
+		rurl.path = Path(req.url);
 		auto cres = requestHttp(rurl, (HttpClientRequest creq){
 				creq.method = req.method;
 				creq.headers = req.headers.dup;
@@ -79,7 +79,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		}
 
 		// copy the response body if any
-		if( "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers ){
+		if( "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HttpMethod.HEAD ){
 			res.writeVoidBody();
 		} else {
 			// enforce compatibility with HTTP/1.0 clients that do not support chunked encoding
