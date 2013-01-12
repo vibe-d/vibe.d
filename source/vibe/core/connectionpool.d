@@ -100,9 +100,13 @@ struct LockedConnection(Connection : EventedObject) {
 		if( m_conn ){
 			auto fthis = Fiber.getThis();
 			assert(fthis is m_fiber);
-			logTrace("conn %s destroy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]-1);
-			if( --m_pool.m_lockCount[m_conn] == 0 ){
-				m_pool.m_locks[m_fiber] = null;
+			auto plc = m_conn in m_pool.m_lockCount;
+			assert(plc !is null);
+			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
+			if( --*plc == 0 ){
+				auto pl = m_fiber in m_pool.m_locks;
+				assert(pl !is null);
+				*pl = null;
 				if( fthis ) m_conn.release();
 				m_conn = null;
 			}
