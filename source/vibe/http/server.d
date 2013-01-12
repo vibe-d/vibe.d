@@ -1033,7 +1033,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// find the matching virtual host
 		foreach( ctx; g_contexts )
-			if( ctx.settings.hostName == req.host ){
+			if( icmp2(ctx.settings.hostName, req.host) == 0 ){
 				if( ctx.settings.port != listen_info.bindPort ) continue;
 				bool found = false;
 				foreach( addr; ctx.settings.bindAddresses )
