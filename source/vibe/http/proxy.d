@@ -55,7 +55,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	{
 		auto rurl = url;
-		rurl.path = Path(req.url);
+		rurl.localURI = req.url;
 		auto cres = requestHttp(rurl, (HttpClientRequest creq){
 				creq.method = req.method;
 				creq.headers = req.headers.dup;
@@ -64,8 +64,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 				else creq.headers["X-Forwarded-Host"] = req.headers["Host"];
 				if( auto pff = "X-Forwarded-For" in req.headers ) creq.headers["X-Forwarded-For"] = *pff ~ ", " ~ req.peer;
 				else creq.headers["X-Forwarded-For"] = req.peer;
-				while( !req.bodyReader.empty )
-					creq.bodyWriter.write(req.bodyReader, req.bodyReader.leastSize);
+				creq.bodyWriter.write(req.bodyReader);
 			});
 		scope(exit) destroy(cres);
 		
