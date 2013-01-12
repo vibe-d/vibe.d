@@ -23,7 +23,7 @@ import std.string;
 	Any redirects will be followed until the actual file resource is reached or if the redirection
 	limit of 10 is reached. Note that only HTTP(S) is currently supported.
 */
-void download(string url_, void delegate(InputStream) callback, HttpClient client = null)
+void download(string url_, scope void delegate(scope InputStream) callback, HttpClient client = null)
 {
 	Url url = Url.parse(url_);
 	assert(url.username.length == 0 && url.password.length == 0, "Auth not supported yet.");
@@ -66,7 +66,7 @@ void download(string url_, void delegate(InputStream) callback, HttpClient clien
 }
 
 /// ditto
-void download(Url url, void delegate(InputStream) callback, HttpClient client = null)
+void download(Url url, scope void delegate(scope InputStream) callback, HttpClient client = null)
 {
 	download(url.toString(), callback, client);
 }
@@ -74,7 +74,7 @@ void download(Url url, void delegate(InputStream) callback, HttpClient client = 
 /// ditto
 void download(string url, string filename)
 {
-	download(url, (input){
+	download(url, (scope input){
 		auto fil = openFile(filename, FileMode.CreateTrunc);
 		scope(exit) fil.close();
 		fil.write(input);
