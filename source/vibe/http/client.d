@@ -55,7 +55,8 @@ HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest re
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		});
-	res.bodyReader = new LockedInputStream!HttpClient(cli, res.bodyReader);
+	res.lockedConnection = cli;
+	res.bodyReader = res.bodyReader;
 	return res;
 }
 
@@ -271,6 +272,7 @@ final class HttpClientRequest : HttpRequest {
 }
 
 final class HttpClientResponse : HttpResponse {
+	LockedConnection!HttpClient lockedConnection;
 	InputStream bodyReader;
 
 	Json readJson(){
