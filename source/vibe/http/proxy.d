@@ -47,11 +47,17 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		foreach( n; non_forward_headers )
 			non_forward_headers_map[n] = "";
 
+	Url url;
+	url.schema = "http";
+	url.host = destination_host;
+	url.port = destination_port;
+
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	{
-		auto cres = requestHttp((HttpClientRequest creq){
+		auto rurl = url;
+		url.path = Path(req.url);
+		auto cres = requestHttp(rurl, (HttpClientRequest creq){
 				creq.method = req.method;
-				creq.url = req.url;
 				creq.headers = req.headers.dup;
 				creq.headers["Host"] = destination_host;
 				if( auto pfh = "X-Forwarded-Host" in req.headers ) creq.headers["X-Forwarded-Host"] = *pfh;
