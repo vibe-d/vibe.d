@@ -156,7 +156,7 @@ class HttpClient : EventedObject {
 		req.finalize();
 		
 
-		auto res = new HttpClientResponse;
+		auto res = new HttpClientResponse(this);
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
 		logTrace("HTTP client reading status line");
@@ -285,13 +285,26 @@ final class HttpClientRequest : HttpRequest {
 
 final class HttpClientResponse : HttpResponse {
 	private {
+		HttpClient m_client;
 		LockedConnection!HttpClient lockedConnection;
 		FreeListRef!LimitedInputStream m_limitedInputStream;
 		FreeListRef!ChunkedInputStream m_chunkedInputStream;
 		FreeListRef!GzipInputStream m_gzipInputStream;
 		FreeListRef!DeflateInputStream m_deflateInputStream;
 	}
+
 	InputStream bodyReader;
+
+	private this(HttpClient client)
+	{
+		m_client = client;
+	}
+
+	~this()
+	{
+		assert(m_client.m_bodyReader is bodyReader);
+		m_client.m_bodyReader = null;
+	}
 
 	Json readJson(){
 		auto bdy = bodyReader.readAll();
