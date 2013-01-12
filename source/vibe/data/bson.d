@@ -569,7 +569,7 @@ struct Bson {
 	*/
 	@property inout(Bson) opDispatch(string prop)() inout { return opIndex(prop); }
 	/// ditto
-	@property void opDispatch(string prop, T)(T val) { opIndexAssign(Bson(val), prop); }
+	@property void opDispatch(string prop, T)(T val) { opIndexAssign(val, prop); }
 
 	///
 	bool opEquals(ref const Bson other) const {
