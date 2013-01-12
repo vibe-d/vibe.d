@@ -138,7 +138,7 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 	foreach( method; __traits(allMembers, T) ){
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
 			alias ReturnType!overload RetType;
-			auto param_names = [ParameterIdentifierTuple!overload];
+			string[] param_names = [ParameterIdentifierTuple!overload];
 			HttpMethod http_verb;
 			string rest_name;
 			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
