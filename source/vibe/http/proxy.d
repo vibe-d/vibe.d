@@ -49,10 +49,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 
 	void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	{
-		auto cli = new HttpClient;
-		cli.connect(destination_host, destination_port);
-
-		auto cres = cli.request((HttpClientRequest creq){
+		auto cres = requestHttp((HttpClientRequest creq){
 				creq.method = req.method;
 				creq.url = req.url;
 				creq.headers = req.headers.dup;
@@ -64,6 +61,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 				while( !req.bodyReader.empty )
 					creq.bodyWriter.write(req.bodyReader, req.bodyReader.leastSize);
 			});
+		scope(exit) destroy(cres);
 		
 		// copy the response to the original requester
 		res.statusCode = cres.statusCode;

@@ -281,6 +281,7 @@ class RestInterfaceClient(I) : I
 				if( verb != "GET" && verb != "HEAD" )
 					req.writeJsonBody(params);
 			});
+		scope(exit) destroy(res);
 		auto ret = res.readJson();
 		logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
 		if( res.statusCode != HttpStatus.OK ){

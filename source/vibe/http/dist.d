@@ -41,6 +41,7 @@ void listenHttpDist(HttpServerSettings settings, HttpServerRequestDelegate handl
 	auto res = requestHttp(Url.parse("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (req){
 			req.writeJsonBody(regmsg);
 		});
+	scope(exit) destroy(res);
 	enforce(res.statusCode == HttpStatus.OK, "Failed to register with load balancer.");
 }
 

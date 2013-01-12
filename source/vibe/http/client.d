@@ -20,6 +20,7 @@ import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.operations;
 import vibe.stream.zlib;
+import vibe.utils.memory;
 
 import std.array;
 import std.conv;
@@ -176,26 +177,37 @@ class HttpClient : EventedObject {
 
 		// prepare body the reader
 		if( req.method == HttpMethod.HEAD ){
-			res.bodyReader = new LimitedInputStream(m_stream, 0);
+			res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, 0);
+			res.bodyReader = res.m_limitedInputStream;
 		} else {
 			if( auto pte = "Transfer-Encoding" in res.headers ){
 				enforce(*pte == "chunked");
-				res.bodyReader = new ChunkedInputStream(m_stream);
+				res.m_chunkedInputStream = FreeListRef!ChunkedInputStream(m_stream);
+				res.bodyReader = res.m_chunkedInputStream;
 			} else if( auto pcl = "Content-Length" in res.headers ){
-				res.bodyReader = new LimitedInputStream(m_stream, to!ulong(*pcl));
+				res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, to!ulong(*pcl));
+				res.bodyReader = res.m_limitedInputStream;
 			} else if( auto conn = "Connection" in res.headers ){
 				if( *conn == "close" ) res.bodyReader = m_stream;
 			} else if( res.httpVersion == HttpVersion.HTTP_1_0 ){
 				res.bodyReader = m_stream;
 			}
-			if( !res.bodyReader ) res.bodyReader = new LimitedInputStream(m_stream, 0);
+			if( !res.bodyReader ){
+				res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, 0);
+				res.bodyReader = res.m_limitedInputStream;
+			}
 			
 			// TODO: handle content-encoding: deflate, gzip
 		}
 
 		if( auto pce = "Content-Encoding" in res.headers ){
-			if( *pce == "deflate" ) res.bodyReader = new DeflateInputStream(res.bodyReader);
-			else if( *pce == "gzip" ) res.bodyReader = new GzipInputStream(res.bodyReader);
+			if( *pce == "deflate" ){
+				res.m_deflateInputStream = FreeListRef!DeflateInputStream(res.bodyReader);
+				res.bodyReader = res.m_deflateInputStream;
+			} else if( *pce == "gzip" ){
+				res.m_gzipInputStream = FreeListRef!GzipInputStream(res.bodyReader);
+				res.bodyReader = res.m_gzipInputStream;
+			}
 			else enforce(false, "Unsuported content encoding: "~*pce);
 		}
 
@@ -272,7 +284,13 @@ final class HttpClientRequest : HttpRequest {
 }
 
 final class HttpClientResponse : HttpResponse {
-	LockedConnection!HttpClient lockedConnection;
+	private {
+		LockedConnection!HttpClient lockedConnection;
+		FreeListRef!LimitedInputStream m_limitedInputStream;
+		FreeListRef!ChunkedInputStream m_chunkedInputStream;
+		FreeListRef!GzipInputStream m_gzipInputStream;
+		FreeListRef!DeflateInputStream m_deflateInputStream;
+	}
 	InputStream bodyReader;
 
 	Json readJson(){
