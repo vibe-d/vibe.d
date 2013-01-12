@@ -101,15 +101,9 @@ class HttpClient : EventedObject {
 		TcpConnection m_conn;
 		Stream m_stream;
 		SslContext m_ssl;
-		NullOutputStream m_sink;
 		InputStream m_bodyReader;
 	}
 	
-	this()
-	{
-		m_sink = new NullOutputStream;
-	}
-
 	void acquire() { if( m_conn ) m_conn.acquire(); }
 	void release() { if( m_conn ) m_conn.release(); }
 	bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
@@ -141,10 +135,6 @@ class HttpClient : EventedObject {
 			if( m_ssl ){
 				m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
 			}
-		} else if( m_bodyReader ){
-			// drop any existing body that was not read by the caller
-			m_sink.write(m_bodyReader, 0);
-			logDebug("dropped unread body.");
 		}
 
 		auto req = new HttpClientRequest(m_stream);
@@ -187,17 +177,10 @@ class HttpClient : EventedObject {
 			} else if( auto pcl = "Content-Length" in res.headers ){
 				res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, to!ulong(*pcl));
 				res.bodyReader = res.m_limitedInputStream;
-			} else if( auto conn = "Connection" in res.headers ){
-				if( *conn == "close" ) res.bodyReader = m_stream;
-			} else if( res.httpVersion == HttpVersion.HTTP_1_0 ){
-				res.bodyReader = m_stream;
-			}
-			if( !res.bodyReader ){
+			} else {
 				res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, 0);
 				res.bodyReader = res.m_limitedInputStream;
 			}
-			
-			// TODO: handle content-encoding: deflate, gzip
 		}
 
 		if( auto pce = "Content-Encoding" in res.headers ){
@@ -303,6 +286,11 @@ final class HttpClientResponse : HttpResponse {
 	~this()
 	{
 		assert(m_client.m_bodyReader is bodyReader);
+		if( !s_sink ) s_sink = new NullOutputStream;
+		if( bodyReader && !bodyReader.empty ){
+			s_sink.write(bodyReader);
+			logDebug("dropped unread body.");
+		} 
 		m_client.m_bodyReader = null;
 	}
 
@@ -312,3 +300,5 @@ final class HttpClientResponse : HttpResponse {
 		return parseJson(str);
 	}
 }
+
+private NullOutputStream s_sink;
