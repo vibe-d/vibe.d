@@ -53,17 +53,18 @@ class ConnectionPool(Connection : EventedObject)
 			}
 		}
 
-		if( cidx == size_t.max ){
-			m_connections ~= m_connectionFactory();
-			cidx = m_connections.length-1;
-			if( fthis ) m_connections[cidx].release();
-		}
 		logDebug("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
-		auto conn = m_connections[cidx];
-		if( fthis ) conn.acquire();
+		Connection conn;
+		if( cidx != size_t.max ) conn = m_connections[cidx];
+		else {
+			conn = m_connectionFactory(); // NOTE: may block
+			if( fthis ) conn.release();
+		}
 		m_locks[fthis] = conn;
 		m_lockCount[conn] = 1;
-		auto ret = LockedConnection!Connection(this, m_connections[cidx]);
+		if( cidx == size_t.max ) m_connections ~= conn;
+		if( fthis ) conn.acquire();
+		auto ret = LockedConnection!Connection(this, conn);
 		return ret;
 	}
 }
