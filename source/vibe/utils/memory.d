@@ -176,12 +176,12 @@ class MallocAllocator : Allocator {
 class GCAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
-		return adjustPointerAlignment(GC.malloc(sz))[0 .. sz];
+		return adjustPointerAlignment(GC.malloc(sz+Allocator.alignment))[0 .. sz];
 	}
 	void[] realloc(void[] mem, size_t new_size)
 	{
 		auto p = extractUnalignedPointer(mem.ptr);
-		auto pn = adjustPointerAlignment(GC.realloc(p, new_size));
+		auto pn = adjustPointerAlignment(GC.realloc(p, new_size+Allocator.alignment));
 		return pn[0 .. new_size];
 	}
 	void free(void[] mem)
@@ -310,10 +310,10 @@ class PoolAllocator : Allocator {
 			assert(arr.ptr+arr.length == pool.remaining.ptr, "Last block does not align with the remaining space!?");
 			return arr[0 .. newsize];
 		} else {
-			auto ret = alloc(aligned_newsz);
+			auto ret = alloc(newsize);
 			assert(ret.ptr >= arr.ptr+aligned_sz || ret.ptr+ret.length <= arr.ptr, "New block overlaps old one!?");
 			ret[0 .. min(arr.length, newsize)] = arr[0 .. min(arr.length, newsize)];
-			return ret[0 .. newsize];
+			return ret;
 		}
 	}
 
