@@ -26,7 +26,7 @@ class ConnectionPool(Connection : EventedObject)
 	private {
 		Connection delegate() m_connectionFactory;
 		Connection[] m_connections;
-		Connection[Fiber] m_locks;
+		Connection[Task] m_locks;
 		int[Connection] m_lockCount;
 	}
 
@@ -37,7 +37,7 @@ class ConnectionPool(Connection : EventedObject)
 
 	LockedConnection!Connection lockConnection()
 	{
-		auto fthis = Fiber.getThis();
+		auto fthis = Task.getThis();
 		auto pconn = fthis in m_locks;
 		if( pconn && *pconn ){
 			m_lockCount[*pconn]++;
@@ -53,17 +53,21 @@ class ConnectionPool(Connection : EventedObject)
 			}
 		}
 
-		logDebug("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
 		Connection conn;
-		if( cidx != size_t.max ) conn = m_connections[cidx];
-		else {
+		if( cidx != size_t.max ){
+			logDebug("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
+			conn = m_connections[cidx];
+			if( fthis != Task() ) conn.acquire();
+		} else {
+			logDebug("creating %s new connection of %d", Connection.stringof, m_connections.length);
 			conn = m_connectionFactory(); // NOTE: may block
-			if( fthis ) conn.release();
 		}
 		m_locks[fthis] = conn;
 		m_lockCount[conn] = 1;
-		if( cidx == size_t.max ) m_connections ~= conn;
-		if( fthis ) conn.acquire();
+		if( cidx == size_t.max ){
+			m_connections ~= conn;
+			logDebug("Now got %d connections", m_connections.length);
+		}
 		auto ret = LockedConnection!Connection(this, conn);
 		return ret;
 	}
@@ -72,7 +76,7 @@ class ConnectionPool(Connection : EventedObject)
 struct LockedConnection(Connection : EventedObject) {
 	private {
 		ConnectionPool!Connection m_pool;
-		Fiber m_fiber;
+		Task m_task;
 	}
 	
 	Connection m_conn;
@@ -83,14 +87,14 @@ struct LockedConnection(Connection : EventedObject) {
 	{
 		m_pool = pool;
 		m_conn = conn;
-		m_fiber = Fiber.getThis();
+		m_task = Task.getThis();
 	}
 
 	this(this)
 	{
 		if( m_conn ){
 			auto fthis = Fiber.getThis();
-			assert(fthis is m_fiber);
+			assert(fthis is m_task);
 			m_pool.m_lockCount[m_conn]++;
 			logTrace("conn %s copy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]);
 		}
@@ -100,12 +104,12 @@ struct LockedConnection(Connection : EventedObject) {
 	{
 		if( m_conn ){
 			auto fthis = Fiber.getThis();
-			assert(fthis is m_fiber);
+			assert(fthis is m_task);
 			auto plc = m_conn in m_pool.m_lockCount;
 			assert(plc !is null);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
 			if( --*plc == 0 ){
-				auto pl = m_fiber in m_pool.m_locks;
+				auto pl = m_task in m_pool.m_locks;
 				assert(pl !is null);
 				*pl = null;
 				if( fthis ) m_conn.release();
