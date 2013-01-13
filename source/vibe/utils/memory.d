@@ -18,6 +18,7 @@ import std.conv;
 import std.traits;
 import std.algorithm;
 
+
 Allocator defaultAllocator()
 {
 	version(VibeManualMemoryManagement){
@@ -83,15 +84,18 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 
 
 interface Allocator {
+	enum size_t alignment = 0x10;
+	enum size_t alignmentMask = alignment-1;
+
 	void[] alloc(size_t sz)
-		out { assert((cast(size_t)__result.ptr & 0xF) == 0, "alloc() returned misaligned data."); }
+		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "alloc() returned misaligned data."); }
 	
 	void[] realloc(void[] mem, size_t new_sz)
-		in { assert((cast(size_t)mem.ptr & 0xF) == 0, "misaligned pointer passed to realloc()."); }
-		out { assert((cast(size_t)__result.ptr & 0xF) == 0, "realloc() returned misaligned data."); }
+		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc()."); }
+		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "realloc() returned misaligned data."); }
 
 	void free(void[] mem)
-		in { assert((cast(size_t)mem.ptr & 0xF) == 0, "misaligned pointer passed to free()."); }
+		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free()."); }
 }
 
 class DebugAllocator : Allocator {
@@ -153,13 +157,13 @@ class DebugAllocator : Allocator {
 class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
-		return adjustPointerAlignment(.malloc(sz + 0x10))[0 .. sz];
+		return adjustPointerAlignment(.malloc(sz + Allocator.alignment))[0 .. sz];
 	}
 
 	void[] realloc(void[] mem, size_t new_size)
 	{
 		auto p = extractUnalignedPointer(mem.ptr);
-		auto pn = adjustPointerAlignment(.realloc(p, new_size+0x10));
+		auto pn = adjustPointerAlignment(.realloc(p, new_size+Allocator.alignment));
 		return pn[0 .. new_size];
 	}
 
@@ -256,9 +260,11 @@ class PoolAllocator : Allocator {
 
 	void[] alloc(size_t sz)
 	{
+		auto aligned_sz = alignedSize(sz);
+
 		Pool* pprev = null;
 		Pool* p = m_freePools;
-		while( p && p.remaining.length < sz ){
+		while( p && p.remaining.length < aligned_sz ){
 			pprev = p;
 			p = p.next;
 		}
@@ -267,15 +273,15 @@ class PoolAllocator : Allocator {
 			auto pmem = m_baseAllocator.alloc(AllocSize!Pool);
 
 			p = emplace!Pool(pmem);
-			p.data = m_baseAllocator.alloc(sz <= m_poolSize ? m_poolSize : sz);
+			p.data = m_baseAllocator.alloc(max(aligned_sz, m_poolSize));
 			p.remaining = p.data;
 			p.next = m_freePools;
 			m_freePools = p;
 			pprev = null;
 		}
 
-		auto ret = p.remaining[0 .. sz];
-		p.remaining = p.remaining[sz .. $];
+		auto ret = p.remaining[0 .. aligned_sz];
+		p.remaining = p.remaining[aligned_sz .. $];
 		if( !p.remaining.length ){
 			if( pprev ){
 				pprev.next = p.next;
@@ -286,25 +292,28 @@ class PoolAllocator : Allocator {
 			m_fullPools = p;
 		}
 
-		return ret;
+		return ret[0 .. sz];
 	}
 
 	void[] realloc(void[] arr, size_t newsize)
 	{
-		if( newsize <= arr.length ) return arr;
+		auto aligned_sz = alignedSize(arr.length);
+		auto aligned_newsz = alignedSize(newsize);
+
+		if( aligned_newsz <= aligned_sz ) return arr[0 .. newsize]; // TODO: back up remaining
 
 		auto pool = m_freePools;
-		bool last_in_pool = pool && arr.ptr+arr.length == pool.remaining.ptr;
-		if( last_in_pool && pool.remaining.length+arr.length >= newsize ){
-			pool.remaining = pool.remaining[newsize-arr.length .. $];
-			arr = arr.ptr[0 .. newsize];
+		bool last_in_pool = pool && arr.ptr+aligned_sz == pool.remaining.ptr;
+		if( last_in_pool && pool.remaining.length+aligned_sz >= aligned_newsz ){
+			pool.remaining = pool.remaining[aligned_newsz-aligned_sz .. $];
+			arr = arr.ptr[0 .. aligned_newsz];
 			assert(arr.ptr+arr.length == pool.remaining.ptr, "Last block does not align with the remaining space!?");
-			return arr;
+			return arr[0 .. newsize];
 		} else {
-			auto ret = alloc(newsize);
-			assert(ret.ptr >= arr.ptr+arr.length || ret.ptr+ret.length <= arr.ptr, "New block overlaps old one!?");
+			auto ret = alloc(aligned_newsz);
+			assert(ret.ptr >= arr.ptr+aligned_sz || ret.ptr+ret.length <= arr.ptr, "New block overlaps old one!?");
 			ret[0 .. min(arr.length, newsize)] = arr[0 .. min(arr.length, newsize)];
-			return ret;
+			return ret[0 .. newsize];
 		}
 	}
 
@@ -541,13 +550,13 @@ struct FreeListRef(T, bool INIT = true)
 private void* extractUnalignedPointer(void* base)
 {
 	ubyte misalign = *(cast(ubyte*)base-1);
-	assert(misalign <= 0x10);
+	assert(misalign <= Allocator.alignment);
 	return base - misalign;
 }
 
 private void* adjustPointerAlignment(void* base)
 {
-	ubyte misalign = 0x10 - (cast(size_t)base & 0xF);
+	ubyte misalign = Allocator.alignment - (cast(size_t)base & Allocator.alignmentMask);
 	base += misalign;
 	*(cast(ubyte*)base-1) = misalign;
 	return base;
@@ -556,13 +565,13 @@ private void* adjustPointerAlignment(void* base)
 unittest {
 	void test_align(void* p, size_t adjustment) {
 		void* pa = adjustPointerAlignment(p);
-		assert((cast(size_t)pa & 0xF) == 0, "Non-aligned pointer.");
+		assert((cast(size_t)pa & Allocator.alignmentMask) == 0, "Non-aligned pointer.");
 		assert(*(cast(ubyte*)pa-1) == adjustment, "Invalid adjustment "~to!string(p)~": "~to!string(*(cast(ubyte*)pa-1)));
 		void* pr = extractUnalignedPointer(pa);
 		assert(pr == p, "Recovered base != original");
 	}
 	void* ptr = .malloc(0x40);
-	ptr += 0x10 - (cast(size_t)ptr & 0xF);
+	ptr += Allocator.alignment - (cast(size_t)ptr & Allocator.alignmentMask);
 	test_align(ptr++, 0x10);
 	test_align(ptr++, 0x0F);
 	test_align(ptr++, 0x0E);
@@ -580,4 +589,18 @@ unittest {
 	test_align(ptr++, 0x02);
 	test_align(ptr++, 0x01);
 	test_align(ptr++, 0x10);
+}
+
+private size_t alignedSize(size_t sz)
+{
+	return ((sz + Allocator.alignment - 1) / Allocator.alignment) * Allocator.alignment;
+}
+
+unittest {
+	foreach( i; 0 .. 20 ){
+		auto ia = alignedSize(i);
+		assert(ia >= i);
+		assert((ia & Allocator.alignmentMask) == 0);
+		assert(ia < i+Allocator.alignment);
+	}
 }
