@@ -599,6 +599,7 @@ final class HttpServerResponse : HttpResponse {
 			assert("Transfer-Encoding" !in headers);
 		}
 		assert(!headerWritten);
+		headers["Content-Length"] = "0";
 		writeHeader();
 	}
 
