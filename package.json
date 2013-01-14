@@ -11,9 +11,9 @@
 	"dependencies": {},
 	"libs-posix" : ["event", "event_pthreads", "ssl", "crypto"],
 	"dflags-windows": ["wsock32.lib", "ws2_32.lib"],
-	"dflags-windows-x86" : [
-		"$PACKAGE_DIR/lib/win-i386/eay.lib",
-		"$PACKAGE_DIR/lib/win-i386/ssl.lib",
-		"$PACKAGE_DIR/lib/win-i386/event2.lib"
+	"files-windows-x86" : [
+		"lib/win-i386/eay.lib",
+		"lib/win-i386/ssl.lib",
+		"lib/win-i386/event2.lib"
 	]
 }
