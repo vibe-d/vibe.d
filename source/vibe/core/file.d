@@ -149,16 +149,34 @@ void createDirectory(string path)
 /**
 	Enumerates all files in the specified directory.
 */
-void listDirectory(Path path, bool delegate(FileInfo info) del)
+void listDirectory(Path path, scope bool delegate(FileInfo info) del)
 {
 	foreach( DirEntry ent; dirEntries(path.toNativeString(), SpanMode.shallow) )
 		if( !del(makeFileInfo(ent)) )
 			break;
 }
 /// ditto
-void listDirectory(string path, bool delegate(FileInfo info) del)
+void listDirectory(string path, scope bool delegate(FileInfo info) del)
 {
 	listDirectory(Path(path), del);
+}
+/// ditto
+int delegate(scope int delegate(ref FileInfo)) iterateDirectory(Path path)
+{
+	int iterator(scope int delegate(ref FileInfo) del){
+		int ret = 0;
+		listDirectory(path, (fi){
+			ret = del(fi);
+			return ret == 0;
+		});
+		return ret;
+	}
+	return &iterator;
+}
+/// ditto
+int delegate(scope int delegate(ref FileInfo)) iterateDirectory(string path)
+{
+	return iterateDirectory(Path(path));
 }
 
 /**
