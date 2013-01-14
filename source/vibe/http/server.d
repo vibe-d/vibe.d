@@ -590,8 +590,13 @@ final class HttpServerResponse : HttpResponse {
 		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json");
 	}
 
-	/** Writes the response with no body.
-	*/
+	/**
+	 * Writes the response with no body.
+	 * 
+	 * This method should be used in situations where no body is
+	 * requested, such as a HEAD request. For an empty body, just use writeBody,
+	 * as this method causes problems with some keep-alive connections.
+	 */
 	void writeVoidBody()
 	{
 		if( !m_isHeadResponse ){
@@ -599,7 +604,6 @@ final class HttpServerResponse : HttpResponse {
 			assert("Transfer-Encoding" !in headers);
 		}
 		assert(!headerWritten);
-		headers["Content-Length"] = "0";
 		writeHeader();
 	}
 
