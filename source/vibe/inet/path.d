@@ -175,7 +175,7 @@ struct Path {
 		ret.m_absolute = m_absolute;
 		ret.m_endsWithSlash = rhs.m_endsWithSlash;
 		
-		assert(!rhs.absolute);
+		assert(!rhs.absolute, "Trying to append absolute path.");
 		size_t idx = m_nodes.length;
 		foreach(folder; rhs.m_nodes){
 			switch(folder.toString()){
