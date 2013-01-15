@@ -353,6 +353,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias FUNC
 		ParameterTypes params;
 
 		foreach( i, P; ParameterTypes ){
+			static assert(param_names[i].length, "Parameter "~i.stringof~" of "~method~" has no name");
 			static if( i == 0 && param_names[i] == "id" ){
 				logDebug("id %s", req.params["id"]);
 				params[i] = fromRestString!P(req.params["id"]);
@@ -550,6 +551,7 @@ private @property string generateRestInterfaceMethods(I)()
 				// serialize all parameters
 				string path_supplement;
 				foreach( i, PT; PTypes ){
+					static assert(param_names[i].length, "Parameter "~i.stringof~" of "~method~" has not name.");
 					static if( i == 0 && param_names[0] == "id" ){
 						static if( is(PT == Json) ) path_supplement = "urlEncode(id.toString())~\"/\"~";
 						else path_supplement = "urlEncode(toRestString(serializeToJson(id)))~\"/\"~";
