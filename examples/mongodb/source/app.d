@@ -14,6 +14,6 @@ void main()
 
 	logInfo("Iterating results...");
 	foreach( i, doc; result ){
-		logInfo("Item %d: %s", i, (cast(Json)doc).toString());
+		logInfo("Item %d: %s", i, doc.toJson().toString());
 	}
 }

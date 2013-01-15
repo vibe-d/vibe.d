@@ -1,6 +1,7 @@
 import vibe.d;
-import std.stdio;
+import std.array;
 import std.algorithm;
+import std.stdio;
 import std.string;
 import vibe.http.form;
 
@@ -34,7 +35,9 @@ class DataProvider {
 		}
 		void getData(HttpServerRequest req, HttpServerResponse res) {
 			auto table=users;
-			res.render!("createTable.dt", table)();
+			//res.render!("createTable.dt", table)();
+			res.renderCompat!("createTable.dt",
+				string[][], "table")(table);
 		}
 		/**
 		  Overload that takes an enumeration for indexing the users array in a secure way and a value to filter on.
@@ -42,8 +45,10 @@ class DataProvider {
 		  Say that this is not ingenious, I love D.
 		 */
 		void getData(HttpServerRequest req, HttpServerResponse res, Fields field, string value) {
-			auto table=users.filter!((a) => value.length==0 || a[field]==value)();
-			res.render!("createTable.dt", table)();
+			auto table=users.filter!((a) => value.length==0 || a[field]==value)().array();
+			//res.render!("createTable.dt", table)();
+			res.renderCompat!("createTable.dt",
+				string[][], "table")(table);
 		}
 		/// Add a new user to the array, using this method from JavaScript is left as an exercise.
 		void addUser(string name, string surname, string address) {
@@ -72,11 +77,21 @@ class App {
 	}
 	void getTable(HttpServerRequest req, HttpServerResponse res) {
 			res.headers["Content-Type"] = "text/html";
-			res.render!("tableview.dt", req, res, dataProvider)();
+			//res.render!("tableview.dt", req, res, dataProvider)();
+			res.renderCompat!("tableview.dt",
+				HttpServerRequest, "req",
+				HttpServerResponse, "res",
+				DataProvider, "dataProvider")(req, res, dataProvider);
 	}
 	void getTable(HttpServerRequest req, HttpServerResponse res, DataProvider.Fields field, string value) {
 			res.headers["Content-Type"] = "text/html";
-			res.render!("tableview.dt", req, res, dataProvider, field, value)();
+			//res.render!("tableview.dt", req, res, dataProvider, field, value)();
+			res.renderCompat!("tableview.dt",
+				HttpServerRequest, "req",
+				HttpServerResponse, "res",
+				DataProvider, "dataProvider",
+				DataProvider.Fields, "field",
+				string, "value")(req, res, dataProvider, field, value);
 	}
 	void addUser(HttpServerRequest req, HttpServerResponse res, string name, string surname, string address) {
 		dataProvider.addUser(name, surname, address);

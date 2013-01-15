@@ -3,8 +3,8 @@ import vibe.d;
 interface IMyApi {
 	string getStatus();
 
-	@property string greeting();
-	@property void greeting(string text);
+	/*@property*/ string greeting();
+	/*@property */void greeting(string text); // NOTE: @property breaks ParameterIdentifierTuple
 
 	void addNewUser(string name);
 	@property string[] users();
@@ -59,8 +59,8 @@ shared static this()
 			auto api = new RestInterfaceClient!IMyApi("http://127.0.0.1/api/");
 
 			logInfo("Status: %s", api.getStatus());
-			api.greeting = "Hello, World!";
-			logInfo("Greeting message: %s", api.greeting);
+			api.greeting("Hello, World!");
+			logInfo("Greeting message: %s", api.greeting());
 			api.addNewUser("Peter");
 			api.addNewUser("Igor");
 			logInfo("Users: %s", api.users);
