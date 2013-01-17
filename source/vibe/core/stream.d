@@ -97,6 +97,10 @@ interface OutputStream {
 	final void put(char elem) { write((&elem)[0 .. 1], false); }
 	/// ditto
 	final void put(in char[] elems) { write(elems, false); }
+	/// ditto
+	final void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
+	/// ditto
+	final void put(in dchar[] elems) { foreach( ch; elems ) put(ch); }
 
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
