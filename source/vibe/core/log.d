@@ -8,6 +8,7 @@
 module vibe.core.log;
 
 import vibe.core.file;
+import vibe.core.mutex;
 
 import std.array;
 import std.datetime;
@@ -20,6 +21,7 @@ private {
 	shared LogLevel s_logFileLevel;
 	shared bool s_plainLogging = false;
 	FileStream s_logFile;
+	Mutex s_mutex;
 }
 
 /// Sets the minimum log level to be printed.
@@ -74,6 +76,9 @@ nothrow {
 	}
 
 	try {
+		if( !s_mutex ) s_mutex = new Mutex;
+		auto lock = ScopedLock(s_mutex);
+
 		auto txt = appender!string();
 		txt.reserve(256);
 		formattedWrite(txt, fmt, args);
@@ -90,16 +95,12 @@ nothrow {
 		}
 
 		if( level >= s_logFileLevel && s_logFile ){
-			auto ptxt = appender!string();
-			ptxt.reserve(50);
-
 			auto tm = Clock.currTime();
-			formattedWrite(ptxt, "[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
+			formattedWrite(s_logFile, "[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
 				cast(uint)(threadid ^ (threadid>>32)), cast(uint)(fiberid ^ (fiberid>>32)), 
 				tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,
 				pref);
 
-			s_logFile.write(ptxt.data(), false);
 			s_logFile.write(txt.data(), false);
 			s_logFile.write("\n");
 		}
