@@ -493,6 +493,8 @@ class Vpm {
 		if(exists(to!string(destination)))
 			throw new Exception(packageId~" needs to be uninstalled prior installation.");
 
+		auto package_info = m_packageSupplier.packageJson(packageId, dep);
+
 		// download
 		ZipArchive archive;
 		{
@@ -573,6 +575,11 @@ class Vpm {
 			dstFile.write(archive.expand(a));
 			journal.add(Journal.Entry(Journal.Type.RegularFile, cleanedPath));
 		}
+
+		// overwrite package.json (this one includes a version field)
+		Json pi = jsonFromFile(destination~"package.json");
+		pi["version"] = package_info["version"];
+		writeJsonFile(destination~"package.json", pi);
 
 		// Write journal
 		logTrace("Saving installation journal...");

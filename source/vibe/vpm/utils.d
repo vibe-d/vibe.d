@@ -46,6 +46,13 @@ package Json jsonFromZip(string zip, string filename) {
 	return parseJson(text);
 }
 
+package void writeJsonFile(Path path, Json json)
+{
+	auto f = openFile(path, FileMode.CreateTrunc);
+	scope(exit) f.close();
+	toPrettyJson(f, json);
+}
+
 package bool isPathFromZip(string p) {
 	enforce(p.length > 0);
 	return p[$-1] == '/';
