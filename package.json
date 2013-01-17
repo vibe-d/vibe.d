@@ -1,5 +1,5 @@
 ﻿{
-	"name": "vibe.d",
+	"name": "vibe-d",
 	"description": "Asynchronous I/O framework",
 	"homepage": "http://vibed.org/",
 	"authors": [
