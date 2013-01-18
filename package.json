@@ -10,7 +10,8 @@
 	],
 	"dependencies": {},
 	"libs-posix" : ["event", "event_pthreads", "ssl", "crypto"],
-	"dflags-windows": ["wsock32.lib", "ws2_32.lib"],
+	"libs-windows": ["wsock32", "ws2_32"],
+	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/libevent.dll", "lib/win-i386/ssleay32.dll"],
 	"files-windows-x86" : [
 		"lib/win-i386/eay.lib",
 		"lib/win-i386/ssl.lib",
