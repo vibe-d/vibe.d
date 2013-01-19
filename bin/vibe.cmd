@@ -9,8 +9,8 @@ set START_SCRIPT=%EXEDIR%\vibe.cmd
 if NOT EXIST %EXEDIR% (
 	mkdir %EXEDIR%
 )
-copy "%LIBDIR%*.dll" %EXEDIR% > nul 2>&1
-if "%1" == "build" copy "%LIBDIR%*.dll" . > nul 2>&1
+copy "%LIBDIR%\*.dll" %EXEDIR% > nul 2>&1
+if "%1" == "build" copy "%LIBDIR%\*.dll" . > nul 2>&1
 copy "%VIBE_BIN%vpm.d" %EXEDIR% > nul 2>&1
 
 del %START_SCRIPT% >nul 2>&1
