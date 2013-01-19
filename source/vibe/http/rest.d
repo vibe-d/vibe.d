@@ -768,23 +768,27 @@ unittest
     static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.ext_aarray))
     	== "vibe.data.json.Json[vibe.data.json.Json]");
 
-    // these currently fail because fullyQualifiedName!T returns nonsense for inner types
-    static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
-        == "vibe.http.rest.QualifiedNameTests.Inner");
-    static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
-        == "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.func))
-        == "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])(vibe.http.rest.QualifiedNameTests.Inner, immutable(char)[])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.data))
-        == "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.deleg))
-        == "vibe.http.rest.QualifiedNameTests.Inner(double, immutable(char)[])");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.array))
-        == "vibe.http.rest.QualifiedNameTests.Inner[]");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.sarray))
-        == "vibe.http.rest.QualifiedNameTests.Inner[16]");
-    static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.aarray))
-        == "vibe.http.rest.QualifiedNameTests.Inner[vibe.http.rest.QualifiedNameTests.Inner]");
+	// the following tests fail on DMD < 2.061 - instanceOf was added in 2.061 and we
+	// use this fact to avoid failing on DMD 2.060
+	static if( __traits(compiles, { assert(isInstanceOf!(Appender, Appender!string)); }) ){
+		pragma(msg, "Runing additional tests");
+		static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
+			== "vibe.http.rest.QualifiedNameTests.Inner");
+		static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
+			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])");
+		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.func))
+			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])(vibe.http.rest.QualifiedNameTests.Inner, immutable(char)[])");
+		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.data))
+			== "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");
+		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.deleg))
+			== "vibe.http.rest.QualifiedNameTests.Inner(double, immutable(char)[])");
+		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.array))
+			== "vibe.http.rest.QualifiedNameTests.Inner[]");
+		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.sarray))
+			== "vibe.http.rest.QualifiedNameTests.Inner[16]");
+		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.aarray))
+			== "vibe.http.rest.QualifiedNameTests.Inner[vibe.http.rest.QualifiedNameTests.Inner]");
+	}
 }
 
 /// private
