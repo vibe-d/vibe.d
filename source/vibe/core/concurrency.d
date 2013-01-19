@@ -79,7 +79,7 @@ private extern (C) pure void _d_monitorexit(Object h);
 	}
 	---
 
-	See_Also: stdx.traits.isWeaklyIsolated
+	See_Also: core.concurrency.isWeaklyIsolated
 */
 ScopedLock!T lock(T)(shared(T) object)
 pure {

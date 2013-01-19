@@ -298,7 +298,6 @@
    <File path="source\vibe\core\log.d" />
    <File path="source\vibe\core\mutex.d" />
    <File path="source\vibe\core\net.d" />
-   <File path="source\vibe\core\process.d" />
    <File path="source\vibe\core\signal.d" />
    <File path="source\vibe\core\stream.d" />
    <File path="source\vibe\core\task.d" />
@@ -378,5 +377,6 @@
    <File path="source\vibe\utils\string.d" />
    <File path="source\vibe\utils\validation.d" />
   </Folder>
+  <File path="source\stdx\process.d" />
  </Folder>
 </DProject>
