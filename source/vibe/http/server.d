@@ -568,7 +568,7 @@ final class HttpServerResponse : HttpResponse {
 	*/
 	bool isHeadResponse() const { return m_isHeadResponse; }
 
-	/// Writes the hole response body at once.
+	/// Writes the entire response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
 		if( content_type ) headers["Content-Type"] = content_type;
