@@ -174,6 +174,7 @@ struct Path {
 		ret.m_nodes = m_nodes;
 		ret.m_absolute = m_absolute;
 		ret.m_endsWithSlash = rhs.m_endsWithSlash;
+		ret.normalize(); // needed to avoid "."~".." become "" instead of ".."
 		
 		assert(!rhs.absolute, "Trying to append absolute path.");
 		size_t idx = m_nodes.length;
