@@ -407,6 +407,9 @@ final class HttpServerRequest : HttpRequest {
 		/// The IP address of the client
 		string peer;
 
+		/// Determines if the request was issued over an SSL encrypted channel.
+		bool ssl;
+
 		/** The _path part of the URL.
 
 			Remarks: This field is only set if HttpServerOption.ParseURL is set.
@@ -990,6 +993,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			request_task = ctx.requestHandler;
 			break;
 		}
+	req.ssl = listen_info.sslCertFile.length || listen_info.sslKeyFile.length;
 
 	// Create the response object
 	auto res = FreeListRef!HttpServerResponse(conn, settings, request_allocator.Scoped_payload);
