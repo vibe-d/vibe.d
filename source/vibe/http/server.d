@@ -508,11 +508,32 @@ final class HttpServerRequest : HttpRequest {
 		m_timeCreated = Clock.currTime().toUTC();
 	}
 
+	/** Time when this request started processing.
+	*/
 	@property inout(SysTime) timeCreated() inout { return m_timeCreated; }
 
-	MultiPart nextPart()
-	{
-		assert(false);
+
+	/** The full URL that corresponds to this request.
+
+		The host URL includes the protocol, host and optionally the user
+		and password that was used for this request. This field is useful to
+		construct self referencing URLs.
+
+		Note that the port is currently not set, so that this only works if
+		the standard port is used.
+	*/
+	@property Url fullUrl()
+	const {
+		Url url;
+		url.schema = this.ssl ? "https" : "http";
+		auto pfh = "X-Forwarded-Host" in this.headers;
+		url.host = pfh ? *pfh : this.host;
+		// TODO: also include the port
+		url.username = this.username;
+		url.password = this.password;
+		url.path = Path(path);
+		url.queryString = queryString;
+		return url;
 	}
 
 	/** The relative path the the root folder.
