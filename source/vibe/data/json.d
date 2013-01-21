@@ -979,9 +979,9 @@ unittest {
 /**
 	Writes the given JSON object as a JSON string into the destination range.
 
-	The basic version will not output any whitespace and thus minizime the size of the string.
+	The basic version will not output any whitespace and thus minimize the size of the string.
 
-	toPrettyJSON() in the other hand will add newlines and indents to make the output human
+	toPrettyJson() in the other hand will add newlines and indents to make the output human
 	readable.
 */
 void toJson(R)(ref R dst, in Json json)
@@ -1080,6 +1080,14 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 			break;
 	}
 }
+/// ditto
+string toPrettyJson()(in Json json)
+{
+	auto ret = appender!string();
+	toPrettyJson(ret, json);
+	return ret.data;
+}
+
 
 /// private
 private void jsonEscape(R)(ref R dst, string s)
