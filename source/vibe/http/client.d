@@ -102,7 +102,10 @@ class HttpClient : EventedObject {
 		Stream m_stream;
 		SslContext m_ssl;
 		InputStream m_bodyReader;
+		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HttpClient, +http://vibed.org/)";
 	}
+
+	static void setUserAgentString(string str) { m_userAgent = str; }
 	
 	void acquire() { if( m_conn ) m_conn.acquire(); }
 	void release() { if( m_conn ) m_conn.release(); }
@@ -138,7 +141,7 @@ class HttpClient : EventedObject {
 		}
 
 		auto req = new HttpClientRequest(m_stream);
-		req.headers["User-Agent"] = "vibe.d/"~VibeVersionString; // TODO: maybe add OS and library versions
+		req.headers["User-Agent"] = m_userAgent;
 		requester(req);
 		req.headers["Connection"] = "keep-alive";
 		req.headers["Accept-Encoding"] = "gzip, deflate";
@@ -249,7 +252,7 @@ final class HttpClientRequest : HttpRequest {
 	private void writeHeader()
 	{
 		auto app = appender!string();
-		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), url, getHttpVersionString(httpVersion));
+		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
 		m_conn.write(app.data, false);
 		
 		foreach( k, v; headers ){
