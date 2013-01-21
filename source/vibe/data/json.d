@@ -660,7 +660,7 @@ struct Json {
 	*/
 	string toPrettyString(int level = 0) const {
 		auto ret = appender!string();
-		toPrettyJson(ret this, level);
+		toPrettyJson(ret, this, level);
 		return ret.data;
 	}
 
