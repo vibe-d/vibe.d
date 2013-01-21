@@ -426,11 +426,19 @@ private @property string generateModuleImports(I)()
 
 	foreach( method; __traits(allMembers, I) )
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			static if( __traits(compiles, moduleName!(ReturnType!overload)))
-				addModule(moduleName!(ReturnType!overload));
+            foreach( symbol; getSymbols!(ReturnType!overload))
+            {
+                static if( __traits(compiles, moduleName!(symbol)))
+                    addModule(moduleName!symbol);
+            }
 			foreach( P; ParameterTypeTuple!overload )
-				static if( __traits(compiles, moduleName!(P)))
-					addModule(moduleName!(P));
+            {
+                foreach( symbol; getSymbols!P )
+                {
+				    static if( __traits(compiles, moduleName!(symbol)))
+					    addModule(moduleName!(symbol));
+                }
+            }
 		}
 
 	return ret;
@@ -754,6 +762,44 @@ version(unittest)
         Json[16] ext_sarray;
         Json[Json] ext_aarray;
     }
+}
+
+/// private
+template getSymbols(T)
+{
+    import std.typetuple;
+
+    static if (isAggregateType!T || is(T == enum))
+    {   
+        alias getSymbols = TypeTuple!T;
+    }  
+    else static if (isStaticArray!T || isArray!T)
+    {
+        alias getSymbols = getSymbols!(typeof(T.init[0]));
+    }
+    else static if (isAssociativeArray!T)
+    {   
+        alias getSymbols = TypeTuple!( getSymbols!(ValueType!T) , getSymbols!(KeyType!T) );
+    }   
+    else static if (isPointer!T)
+    {
+    	alias getSymbols = getSymbols!(PointerTarget!T);
+    }
+    else
+        alias getSymbols = TypeTuple!();
+}
+
+unittest
+{   
+    import std.typetuple;
+    alias symbol = QualifiedNameTests.Inner;
+    enum target1 = TypeTuple!(symbol).stringof;
+    enum target2 = TypeTuple!(symbol, symbol).stringof;
+    static assert(getSymbols!(symbol[10]).stringof == target1);
+    static assert(getSymbols!(symbol[]).stringof == target1);
+    static assert(getSymbols!(symbol).stringof == target1);
+    static assert(getSymbols!(symbol[symbol]).stringof == target2);
+    static assert(getSymbols!(int).stringof == TypeTuple!().stringof);
 }
 
 unittest
