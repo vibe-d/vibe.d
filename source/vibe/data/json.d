@@ -61,7 +61,7 @@ import std.traits;
 	behave mostly like values in ECMA script in the way that you can
 	transparently perform operations on them. However, strict typechecking is
 	done, so that operations between differently typed JSON values will throw
-	an exception. Additionally, an explicit cast or using get!() or to!() is 
+	an exception. Additionally, an explicit cast or using get!() or to!() is
 	required to convert a JSON value to the corresponding static D type.
 */
 struct Json {
@@ -650,6 +650,20 @@ struct Json {
 		return ret.data;
 	}
 
+	/**
+		Returns the JSON object as a "pretty" string. Level specifies the indentation:
+
+		jsonObj.toPrettyString(2);
+		// {
+		//   "foo": "bar"
+		// }
+	*/
+	string toPrettyString(int level = 0) const {
+		auto ret = appender!string();
+		toPrettyJson(ret this, level);
+		return ret.data;
+	}
+
 	private void checkType(T)()
 	const {
 		string dbg;
@@ -685,7 +699,7 @@ Json parseJson(R)(ref R range, int* line = null)
 	skipWhitespace(range, line);
 
 	version(JsonLineNumbers) int curline = line ? *line : 0;
-	
+
 	switch( range[0] ){
 		case 'f':
 			enforce(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. 5]~"'.");
@@ -748,10 +762,10 @@ Json parseJson(R)(ref R range, int* line = null)
 			range = range[1 .. $];
 			ret = obj;
 			break;
-		default: 
+		default:
 			enforce(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. range.length>12?12:range.length]~"'.");
 	}
-	
+
 	assert(ret.type != Json.Type.Undefined);
 	version(JsonLineNumbers) ret.line = curline;
 	return ret;
@@ -759,7 +773,7 @@ Json parseJson(R)(ref R range, int* line = null)
 
 /**
 	Parses the given JSON string and returns the corresponding Json object.
-	
+
 	Throws an Exception if any parsing error occurs.
 */
 Json parseJsonString(string str)
@@ -1081,10 +1095,10 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 	}
 }
 /// ditto
-string toPrettyJson()(in Json json)
+string toPrettyJson()(in Json json, int level = 0)
 {
 	auto ret = appender!string();
-	toPrettyJson(ret, json);
+	toPrettyJson(ret, json, level);
 	return ret.data;
 }
 
@@ -1161,7 +1175,7 @@ private string skipNumber(ref string s, out bool is_float)
 		enforce(isDigit(s[idx++]), "Digit expected at beginning of number.");
 		while( idx < s.length && isDigit(s[idx]) ) idx++;
 	}
-	
+
 	if( idx < s.length && s[idx] == '.' ){
 		idx++;
 		is_float = true;
