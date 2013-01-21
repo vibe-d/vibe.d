@@ -792,7 +792,7 @@ template getSymbols(T)
 unittest
 {   
     import std.typetuple;
-    alias symbol = QualifiedNameTests.Inner;
+    alias QualifiedNameTests.Inner symbol;
     enum target1 = TypeTuple!(symbol).stringof;
     enum target2 = TypeTuple!(symbol, symbol).stringof;
     static assert(getSymbols!(symbol[10]).stringof == target1);
