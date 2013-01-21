@@ -89,8 +89,16 @@ class HttpRequest {
 		/// The HTTP _method of the request
 		HttpMethod method = HttpMethod.GET;
 
-		/// The full request URL
-		string url = "/";
+		/** The request URL
+
+			Note that the request URL usually does not include the global
+			'http://server' part, but only the local path and a query string.
+			A possible exception is a proxy server, which will get full URLs.
+		*/
+		string requestUrl = "/";
+
+		/// Please use requestUrl instead.
+		deprecated alias requestUrl url;
 
 		/// All request _headers
 		StrMapCI headers;
@@ -104,7 +112,8 @@ class HttpRequest {
 	protected this()
 	{
 	}
-	
+
+
 	/** Shortcut to the 'Host' header (always present for HTTP 1.1)
 	*/
 	@property string host() const { auto ph = "Host" in headers; return ph ? *ph : null; }
