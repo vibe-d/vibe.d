@@ -286,8 +286,8 @@ class RestInterfaceClient(I) : I
 		logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
 		if( res.statusCode != HttpStatus.OK ){
 			if( ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String )
-				throw new Exception(ret.statusMessage.get!string);
-			else throw new Exception(httpStatusText(res.statusCode));
+				throw new HttpStatusException(res.statusCode, ret.statusMessage.get!string);
+			else throw new HttpStatusException(res.statusCode, httpStatusText(res.statusCode));
 		}
 		return ret;
 	}
