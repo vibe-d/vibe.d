@@ -651,11 +651,11 @@ struct Json {
 	}
 
 	/**
-		Returns the JSON object as a "pretty" string. Level specifies the indentation:
+		Returns the JSON object as a "pretty" string.
 
-		jsonObj.toPrettyString(2);
+		jsonObj.toPrettyString(1);
 		// {
-		//   "foo": "bar"
+		//     "foo": "bar"
 		// }
 	*/
 	string toPrettyString(int level = 0) const {
