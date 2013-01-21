@@ -435,8 +435,8 @@ private @property string generateModuleImports(I)()
             {
                 foreach( symbol; getSymbols!P )
                 {
-				    static if( __traits(compiles, moduleName!(symbol)))
-					    addModule(moduleName!(symbol));
+		            static if( __traits(compiles, moduleName!(symbol)))
+                        addModule(moduleName!(symbol));
                 }
             }
 		}
