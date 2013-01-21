@@ -771,22 +771,22 @@ template getSymbols(T)
 
     static if (isAggregateType!T || is(T == enum))
     {   
-        alias getSymbols = TypeTuple!T;
+        alias TypeTuple!T getSymbols;
     }  
     else static if (isStaticArray!T || isArray!T)
     {
-        alias getSymbols = getSymbols!(typeof(T.init[0]));
+        alias getSymbols!(typeof(T.init[0])) getSymbols;
     }
     else static if (isAssociativeArray!T)
     {   
-        alias getSymbols = TypeTuple!( getSymbols!(ValueType!T) , getSymbols!(KeyType!T) );
+        alias TypeTuple!( getSymbols!(ValueType!T) , getSymbols!(KeyType!T) ) getSymbols;
     }   
     else static if (isPointer!T)
     {
-    	alias getSymbols = getSymbols!(PointerTarget!T);
+    	alias getSymbols!(PointerTarget!T) getSymbols;
     }
     else
-        alias getSymbols = TypeTuple!();
+        alias TypeTuple!() getSymbols;
 }
 
 unittest
