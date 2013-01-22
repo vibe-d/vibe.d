@@ -872,21 +872,22 @@ struct BsonRegex {
 */
 Bson serializeToBson(T)(T value)
 {
-	static if( is(T == Bson) ) return value;
-	else static if( is(T == Json) ) return Bson.fromJson(value);
-	else static if( is(T == BsonBinData) ) return Bson(value);
-	else static if( is(T == BsonObjectID) ) return Bson(value);
-	else static if( is(T == BsonDate) ) return Bson(value);
-	else static if( is(T == BsonTimestamp) ) return Bson(value);
-	else static if( is(T == BsonRegex) ) return Bson(value);
-	else static if( is(T == typeof(null)) ) return Bson(null);
-	else static if( is(T == bool) ) return Bson(value);
-	else static if( is(T == float) ) return Bson(cast(double)value);
-	else static if( is(T == double) ) return Bson(value);
-	else static if( is(T : int) ) return Bson(cast(int)value);
-	else static if( is(T : long) ) return Bson(cast(long)value);
-	else static if( is(T == string) ) return Bson(value);
-	else static if( is(T : const(ubyte)[]) ) return Bson(BsonBinData(BsonBinData.Type.Generic, value.idup));
+    alias Unqual!T Unqualified;
+	static if( is(Unqualified == Bson) ) return value;
+	else static if( is(Unqualified == Json) ) return Bson.fromJson(value);
+	else static if( is(Unqualified == BsonBinData) ) return Bson(value);
+	else static if( is(Unqualified == BsonObjectID) ) return Bson(value);
+	else static if( is(Unqualified == BsonDate) ) return Bson(value);
+	else static if( is(Unqualified == BsonTimestamp) ) return Bson(value);
+	else static if( is(Unqualified == BsonRegex) ) return Bson(value);
+	else static if( is(Unqualified == typeof(null)) ) return Bson(null);
+	else static if( is(Unqualified == bool) ) return Bson(value);
+	else static if( is(Unqualified == float) ) return Bson(cast(double)value);
+	else static if( is(Unqualified == double) ) return Bson(value);
+	else static if( is(Unqualified : int) ) return Bson(cast(int)value);
+	else static if( is(Unqualified : long) ) return Bson(cast(long)value);
+	else static if( is(Unqualified == string) ) return Bson(value);
+	else static if( is(Unqualified : const(ubyte)[]) ) return Bson(BsonBinData(BsonBinData.Type.Generic, value.idup));
 	else static if( isArray!T ){
 		auto ret = new Bson[value.length];
 		foreach( i; 0 .. value.length )
@@ -903,7 +904,7 @@ Bson serializeToBson(T)(T value)
 		return Bson.fromJson(value.toJson());
 	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
 		return Bson(value.toString());
-	} else static if( is(T == struct) ){
+	} else static if( is(Unqualified == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(T, m) ){
@@ -912,7 +913,7 @@ Bson serializeToBson(T)(T value)
 			}
 		}
 		return Bson(ret);
-	} else static if( is(T == class) ){
+	} else static if( is(Unqualified == class) ){
 		if( value is null ) return Bson(null);
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
@@ -1008,7 +1009,7 @@ T deserializeBson(T)(Bson src)
 unittest {
 	import std.stdio;
 	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	const S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
 	S u;
 	deserializeBson(u, serializeToBson(t));
 	assert(t.a == u.a);
