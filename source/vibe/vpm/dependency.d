@@ -352,9 +352,7 @@ class Package {
 	void writeJson(Path path) {
 		auto dstFile = openFile((path~"package.json").toString(), FileMode.CreateTrunc);
 		scope(exit) dstFile.close();
-		Appender!string js;
-		toPrettyJson(js, m_meta);
-		dstFile.write( js.data );
+		writePrettyJsonString(dstFile, m_meta);
 	}
 }
 

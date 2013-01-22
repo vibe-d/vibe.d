@@ -366,9 +366,7 @@ private class Application {
 			logTrace("writeVpmJson");
 			auto dstFile = openFile((m_root~"vpm.json").toString(), FileMode.CreateTrunc);
 			scope(exit) dstFile.close();
-			Appender!string js;
-			toPrettyJson(js, m_json);
-			dstFile.write( js.data );
+			writePrettyJsonString(dstFile, m_json);
 		} catch( Exception e ){
 			logWarn("Could not write vpm.json.");
 		}

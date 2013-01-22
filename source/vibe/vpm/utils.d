@@ -50,7 +50,7 @@ package void writeJsonFile(Path path, Json json)
 {
 	auto f = openFile(path, FileMode.CreateTrunc);
 	scope(exit) f.close();
-	toPrettyJson(f, json);
+	writePrettyJsonString(f, json);
 }
 
 package bool isPathFromZip(string p) {
