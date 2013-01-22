@@ -308,7 +308,7 @@ struct Json {
 		else static if( is(T == string) ) return m_string;
 		else static if( is(T == Json[]) ) return m_array;
 		else static if( is(T == Json[string]) ) return m_object;
-		else static assert("JSON can only be casted to (bool, long, double, string, JSON[] or JSON[string]. Not "~T.stringof~".");
+		else static assert("JSON can only be casted to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 	/// ditto
 	@property const(T) opt(T)(const(T) def = T.init)
@@ -399,7 +399,7 @@ struct Json {
 				default: return Json(["value": this]);
 				case Type.Object: return m_object;
 			}
-		} else static assert("JSON can only be casted to (bool, long, double, string, JSON[] or JSON[string]. Not "~T.stringof~".");
+		} else static assert("JSON can only be casted to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 
 	/**
@@ -423,8 +423,8 @@ struct Json {
 			checkType!bool();
 			return Json(~m_bool);
 		} else static if( op == "+" || op == "-" || op == "++" || op == "--" ){
-			if( m_type == Type.Int ) mixin("return JSON("~op~"m_int);");
-			else if( m_type == Type.Float ) mixin("return JSON("~op~"m_float);");
+			if( m_type == Type.Int ) mixin("return Json("~op~"m_int);");
+			else if( m_type == Type.Float ) mixin("return Json("~op~"m_float);");
 			else enforce(false, "'"~op~"' only allowed on scalar types, not on "~.to!string(m_type)~".");
 		} else static assert("Unsupported operator '"~op~"' for type JSON.");
 	}
@@ -635,31 +635,48 @@ struct Json {
 		else static if( is(T == string) ) return Type.String;
 		else static if( is(T == Json[]) ) return Type.Array;
 		else static if( is(T == Json[string]) ) return Type.Object;
-		else static assert(false, "Unsupported JSON type '"~T.stringof~"'. Only bool, long, double, string, JSON[] and JSON[string] are allowed.");
+		else static assert(false, "Unsupported JSON type '"~T.stringof~"'. Only bool, long, double, string, Json[] and Json[string] are allowed.");
 	}
 
 	/**
 		Returns the JSON object as a string.
 
-		For large JSON values use toJSON() instead as this function will store the whole string
-		in memory, whereas toJSON() writes it out bit for bit.
+		For large JSON values use writeJsonString instead as this function will store the whole string
+		in memory, whereas writeJsonString writes it out bit for bit.
+
+		See_Also: writeJsonString, toPrettyString
 	*/
-	string toString() const {
+	string toString()
+	const {
 		auto ret = appender!string();
-		toJson(ret, this);
+		writeJsonString(ret, this);
 		return ret.data;
 	}
 
 	/**
 		Returns the JSON object as a "pretty" string.
 
-		jsonObj.toPrettyString(1);
+		---
+		auto json = Json(["foo": Json("bar")]);
+		writeln(json.toPrettyString());
+
+		// output:
 		// {
 		//     "foo": "bar"
 		// }
+		---
+
+		Params:
+			level = Specifies the base amount of indentation for the output. Indentation  is always
+				done using tab characters.
+
+		See_Also: writePrettyJsonString, toString
 	*/
-	string toPrettyString(int level = 0) const {
-		return toPrettyJson(this, level);
+	string toPrettyString(int level = 0)
+	const {
+		auto ret = appender!string();
+		writePrettyJsonString(ret, this, level);
+		return ret.data;
 	}
 
 	private void checkType(T)()
@@ -991,12 +1008,17 @@ unittest {
 /**
 	Writes the given JSON object as a JSON string into the destination range.
 
-	The basic version will not output any whitespace and thus minimize the size of the string.
+	This function will convert the given JSON value to a string without adding
+	any white space between tokens (no newlines, no indentation and no padding).
+	The output size is thus minizized, at the cost of bad human readability.
 
-	toPrettyJson() in the other hand will add newlines and indents to make the output human
-	readable.
+	Params:
+		dst   = References the string output range to which the result is written.
+		json  = Specifies the JSON value that is to be stringified.
+
+	See_Also: Json.toString, writePrettyJsonString
 */
-void toJson(R)(ref R dst, in Json json)
+void writeJsonString(R)(ref R dst, in Json json)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
@@ -1017,7 +1039,7 @@ void toJson(R)(ref R dst, in Json json)
 				if( e.type == Json.Type.Undefined ) continue;
 				if( !first ) dst.put(",");
 				first = false;
-				toJson(dst, e);
+				writeJsonString(dst, e);
 			}
 			dst.put("]");
 			break;
@@ -1031,15 +1053,27 @@ void toJson(R)(ref R dst, in Json json)
 				dst.put("\"");
 				jsonEscape(dst, k);
 				dst.put("\":");
-				toJson(dst, e);
+				writeJsonString(dst, e);
 			}
 			dst.put("}");
 			break;
 	}
 }
 
-/// ditto
-void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
+/**
+	Writes the given JSON object as a prettified JSON string into the destination range.
+
+	The output will contain newlines and indents to make the output human readable.
+
+	Params:
+		dst   = References the string output range to which the result is written.
+		json  = Specifies the JSON value that is to be stringified.
+		level = Specifies the base amount of indentation for the output. Indentation  is always
+		        done using tab characters.
+
+	See_Also: Json.toPrettyString, writeJsonString
+*/
+void writePrettyJsonString(R)(ref R dst, in Json json, int level = 0)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
@@ -1062,7 +1096,7 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 				first = false;
 				dst.put("\n");
 				foreach( tab; 0 .. level ) dst.put('\t');
-				toPrettyJson(dst, e, level+1);
+				writePrettyJsonString(dst, e, level+1);
 			}
 			if( json.length > 0 ) {
 				dst.put('\n');
@@ -1082,7 +1116,7 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 				dst.put("\"");
 				jsonEscape(dst, k);
 				dst.put("\": ");
-				toPrettyJson(dst, e, level+1);
+				writePrettyJsonString(dst, e, level+1);
 			}
 			if( json.length > 0 ) {
 				dst.put('\n');
@@ -1092,13 +1126,16 @@ void toPrettyJson(R)(ref R dst, in Json json, int level = 0)
 			break;
 	}
 }
-/// ditto
-string toPrettyJson()(in Json json, int level = 0)
-{
-	auto ret = appender!string();
-	toPrettyJson(ret, json, level);
-	return ret.data;
-}
+
+
+/** Deprecated aliases for backwards compatibility.
+
+	Use writeJsonString and writePrettyJsonString instead. These aliases will 
+	be marked "deprecated" in the next release.
+*/
+/*deprecated*/ alias writeJsonString toJson;
+///
+/*deprecated*/ alias writePrettyJsonString toPrettyJson;
 
 
 /// private
