@@ -36,8 +36,8 @@ void download(string url_, scope void delegate(scope InputStream) callback, Http
 		client.connect(url.host, ssl ? 443 : 80, ssl);
 		logTrace("connect to %s", url.host);
 		auto res = client.request((HttpClientRequest req){
-				req.url = url.localURI;
-				logTrace("REQUESTING %s!", req.url);
+				req.requestUrl = url.localURI;
+				logTrace("REQUESTING %s!", req.requestUrl);
 			});
 		scope(exit) destroy(res);
 

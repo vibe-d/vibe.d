@@ -202,7 +202,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						ln.put("?" ~ req.queryString);
 						break;
 					case 'r': //First line of Request
-						ln.put(httpMethodString(req.method) ~ " " ~ req.url ~ " " ~ getHttpVersionString(req.httpVersion));
+						ln.put(httpMethodString(req.method) ~ " " ~ req.requestUrl ~ " " ~ getHttpVersionString(req.httpVersion));
 						break;
 					case 's': //Status
 						ln.put(to!string(res.statusCode));

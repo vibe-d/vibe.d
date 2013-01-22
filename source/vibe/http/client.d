@@ -52,7 +52,7 @@ HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest re
 	bool ssl = url.schema == "https";
 	auto cli = connectHttp(url.host, url.port, ssl);
 	auto res = cli.request((req){
-			req.url = url.localURI;
+			req.requestUrl = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		});

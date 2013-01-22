@@ -53,7 +53,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		string srv_path;
 		if( auto pp = "pathMatch" in req.params ) srv_path = *pp;
 		else if( req.path.length > 0 ) srv_path = req.path;
-		else srv_path = req.url;
+		else srv_path = req.requestUrl;
 
 		if( !srv_path.startsWith(settings.serverPathPrefix) ){
 			logDebug("path '%s' not starting with '%s'", srv_path, settings.serverPathPrefix);

@@ -151,7 +151,7 @@ class UrlRouter : IHttpServerRequestHandler {
 			else break;
 		}
 
-		logTrace("no route match: %s %s", req.method, req.url);
+		logTrace("no route match: %s %s", req.method, req.requestUrl);
 	}
 }
 

@@ -97,8 +97,8 @@ class HttpRequest {
 		*/
 		string requestUrl = "/";
 
-		/// Please use requestUrl instead.
-		deprecated alias requestUrl url;
+		/// Please use requestUrl instead. This alias will be deprecated after the next release.
+		/*deprecated*/ alias requestUrl url;
 
 		/// All request _headers
 		StrMapCI headers;

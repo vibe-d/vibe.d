@@ -1112,7 +1112,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// Url parsing if desired
 		if( settings.options & HttpServerOption.ParseURL ){
-			auto url = Url.parse(req.url);
+			auto url = Url.parse(req.requestUrl);
 			req.path = url.pathString;
 			req.queryString = url.queryString;
 			req.username = url.username;
@@ -1176,14 +1176,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
 		else logError("HttpStatusException after page has been written: %s", err.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.url, err.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
 		auto status = parsed ? HttpStatus.InternalServerError : HttpStatus.BadRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logError("Error after page has been written: %s", e.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.url, e.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, e.toString());
 		if ( !parsed )
 			keep_alive = false;
 	}
@@ -1227,7 +1227,7 @@ private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocat
 	pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request path" );
 
-	req.url = reqln[0 .. pos];
+	req.requestUrl = reqln[0 .. pos];
 	reqln = reqln[pos+1 .. $];
 
 	req.httpVersion = parseHttpVersion(reqln);
