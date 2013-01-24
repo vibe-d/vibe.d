@@ -202,7 +202,7 @@ class MongoConnection : EventedObject {
 		} else if( m_bytesRead - bytes_read > msglen ){
 			logWarn("MongoDB reply was shorter than expected. Dropping connection.");
 			disconnect();
-			throw new MongoException("MongoDB reply was too short for data.");
+			throw new MongoDriverException("MongoDB reply was too short for data.");
 		}
 
 		auto msg = new Reply;
@@ -267,17 +267,17 @@ class MongoConnection : EventedObject {
 		
 		Reply results = query(coll, QueryFlags.None | settings.defQueryFlags,
 										0, 1, serializeToBson(command_and_options));	
-		enforce(!(results.flags & ReplyFlags.QueryFailure), new MongoException("MongoDB error: getLastError call failed."));
+		enforce(!(results.flags & ReplyFlags.QueryFailure), new MongoDriverException("MongoDB error: getLastError call failed."));
 
 		logTrace("error result flags for %s: %s, cursor %s, documents %s", coll, results.flags, results.cursor, results.documents.length);
 
 		if( results.documents.length == 0 )
 			return;
 
-		enforce(results.documents.length == 1, new MongoException("getLastError returned "~to!string(results.documents.length)~" documents instead of one!?"));
+		enforce(results.documents.length == 1, new MongoDriverException("getLastError returned "~to!string(results.documents.length)~" documents instead of one!?"));
 		auto res = results.documents[0];
 
-		enforce(res.err.type == Bson.Type.Null, new MongoException("MongoDB getLastError error: "~res.err.get!string()));
+		enforce(res.err.type == Bson.Type.Null, new MongoDBException(res));
 	}
 }
 
@@ -632,9 +632,37 @@ class MongoHost
 	}
 }
 
+/// Base exception class for all mongo-related errors
 class MongoException : Exception {
-	this(string message, Throwable next = null, string file = __FILE__, int line = __LINE__)
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
+	}
+}
+
+/// Exceptions for driver-related issues, like unexpected protocol mismatch
+class MongoDriverException : MongoException
+{
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/// Exceptions that wrap error object retrieved after execution of usual mongo function
+class MongoDBException : MongoException
+{
+    int code;
+    int connectionId;
+    int n;
+    double ok;
+
+	this(Bson errorObj, Throwable next = null, string file = __FILE__, int line = __LINE__)
+	{
+		super(errorObj["err"].get!string(), file, line, next);
+        code = errorObj["code"].get!int();
+        connectionId = errorObj["connectionId"].get!int();
+        n = errorObj["n"].get!int();
+        ok = errorObj["ok"].get!double();
 	}
 }

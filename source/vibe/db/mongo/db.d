@@ -73,7 +73,8 @@ class MongoDB {
 	/// See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
 	Bson fsync(string db, bool async = false){ return runCommand(db, Bson(["fsync" : Bson(1), "async" : Bson(async)])); }
 
-	/// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
+	/// Similar to db.getLastErrorObj() in shell
+    /// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
 	Bson getLastError(string db){ return runCommand(db, Bson(["getlasterror" : Bson(1)])); }
 
 	/**
