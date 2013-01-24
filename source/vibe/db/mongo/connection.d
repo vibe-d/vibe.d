@@ -652,10 +652,10 @@ class MongoDriverException : MongoException
 /// Exceptions that wrap error object retrieved after execution of usual mongo function
 class MongoDBException : MongoException
 {
-    int code;
-    int connectionId;
-    int n;
-    double ok;
+    immutable int code;
+    immutable int connectionId;
+    immutable int n;
+    immutable double ok;
 
 	this(Bson errorObj, Throwable next = null, string file = __FILE__, int line = __LINE__)
 	{
