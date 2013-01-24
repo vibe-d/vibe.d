@@ -75,7 +75,10 @@ class MongoDB {
 
 	/// Similar to db.getLastErrorObj() in shell
     /// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
-	Bson getLastError(string db){ return runCommand(db, Bson(["getlasterror" : Bson(1)])); }
+	LastErrorDescription getLastError(string db)
+    {
+        return m_connections.lockConnection().getLastError();
+    }
 
 	/**
 		Accesses the collections inside this DB.
