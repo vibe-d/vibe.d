@@ -45,7 +45,7 @@ class MongoDB {
 	{
 		auto goodUrl = parseMongoDBUrl(settings, url);
 		
-		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
+		if(!goodUrl) throw new MongoDriverException("Unable to parse mongodb URL: " ~ url);
 			
 		m_connections = new ConnectionPool!MongoConnection({
 				auto ret = new MongoConnection(settings);
@@ -89,7 +89,7 @@ class MongoDB {
 	 	auto col = db["mydatabase.mycollection"];
 	 	---
 
-		Throws: Exception if a DB communication error occured.
+		Throws: MongoDriverException if a DB communication error occured.
 	*/
 	MongoCollection opIndex(string name) 
 	{ 

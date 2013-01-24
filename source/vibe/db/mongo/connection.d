@@ -347,7 +347,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			
 			cfg.hosts ~= new MongoHost(host, port);
 		}
-	} catch ( Exception e) {
+	} catch (Exception e) {
 		return  false; // Probably failed converting the port to ushort.
 	}		
 		
@@ -389,7 +389,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				try {
 					dst = to!bool(value);
 					return true;
-				} catch( Exception e ){
+				} catch(Exception e){
 					logError("Value for '%s' must be 'true' or 'false' but was '%s'.", option, value);
 					return false;
 				}
@@ -399,7 +399,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				try {
 					dst = to!long(value);
 					return true;
-				} catch( Exception e ){
+				} catch(Exception e){
 					logError("Value for '%s' must be an integer but was '%s'.", option, value);
 					return false;
 				}
@@ -657,7 +657,7 @@ class MongoDBException : MongoException
     immutable int n;
     immutable double ok;
 
-	this(Bson errorObj, Throwable next = null, string file = __FILE__, int line = __LINE__)
+	this(Bson errorObj, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
 		super(errorObj["err"].get!string(), file, line, next);
         code = errorObj["code"].get!int();
