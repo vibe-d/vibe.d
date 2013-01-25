@@ -10,6 +10,7 @@ module vibe.core.stream;
 import vibe.utils.memory : FreeListRef;
 
 import std.algorithm;
+import std.conv;
 
 
 /**************************************************************************************************/
@@ -29,7 +30,7 @@ interface InputStream {
 		reached EOS and empty() returns true, or leastSize() returns again a number > 0.
 	*/
 	@property ulong leastSize()
-		out { assert((__result == 0) == empty, "InputStream.leastSize not consistent with InputStream.empty!"); 	}
+		out { assert((__result == 0) == empty, "InputStream.leastSize not consistent with InputStream.empty: "~to!string(__result)~" vs. "~to!string(empty)~"!"); }
 
 	/** Queries if there is data available for immediate, non-blocking read.
 	*/
