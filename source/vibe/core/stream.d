@@ -28,7 +28,8 @@ interface InputStream {
 		end is reached. After leastSize() bytes have been read, the stream will either have
 		reached EOS and empty() returns true, or leastSize() returns again a number > 0.
 	*/
-	@property ulong leastSize();
+	@property ulong leastSize()
+		out { assert((__result == 0) == empty, "InputStream.leastSize not consistent with InputStream.empty!"); 	}
 
 	/** Queries if there is data available for immediate, non-blocking read.
 	*/
@@ -112,6 +113,7 @@ interface OutputStream {
 		if( nbytes == 0 ){
 			while( !stream.empty ){
 				size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
+				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
 				write(buffer[0 .. chunk], false);
@@ -119,6 +121,7 @@ interface OutputStream {
 		} else {
 			while( nbytes > 0 ){
 				size_t chunk = cast(size_t)min(nbytes, buffer.length);
+				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
 				write(buffer[0 .. chunk], false);
