@@ -29,8 +29,7 @@ interface InputStream {
 		end is reached. After leastSize() bytes have been read, the stream will either have
 		reached EOS and empty() returns true, or leastSize() returns again a number > 0.
 	*/
-	@property ulong leastSize()
-		out { assert((__result == 0) == empty, "InputStream.leastSize not consistent with InputStream.empty: "~to!string(__result)~" vs. "~to!string(empty)~"!"); }
+	@property ulong leastSize();
 
 	/** Queries if there is data available for immediate, non-blocking read.
 	*/

@@ -42,7 +42,7 @@ class LimitedInputStream : InputStream {
 	/// The stream that is wrapped by this one
 	@property inout(InputStream) sourceStream() inout { return m_input; }
 
-	@property bool empty() { return m_silentLimit ? m_input.empty : m_sizeLimit == 0; }
+	@property bool empty() { return m_silentLimit ? m_input.empty : (m_sizeLimit == 0); }
 
 	@property ulong leastSize() { if( m_silentLimit ) return m_input.leastSize; return m_sizeLimit; }
 
