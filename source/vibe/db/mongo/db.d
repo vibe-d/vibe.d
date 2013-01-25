@@ -58,29 +58,6 @@ class MongoDB {
 	}
 
 	/**
-		Runs a command on the specified database.
-
-		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Commands)
-	*/
-	Bson runCommand(string db, Bson command_and_options)
-	{
-		return getCollection(db~".$cmd").findOne(command_and_options);
-	}
-
-	/// See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command)
-	Bson getLog(string db, string mask){ return runCommand(db, Bson(["getLog" : Bson(mask)])); }
-
-	/// See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
-	Bson fsync(string db, bool async = false){ return runCommand(db, Bson(["fsync" : Bson(1), "async" : Bson(async)])); }
-
-	/// Similar to db.getLastErrorObj() in shell
-    /// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
-	LastErrorDescription getLastError(string db = "db")
-    {
-        return m_connections.lockConnection().getLastError(db);
-    }
-
-	/**
 		Accesses the collections inside this DB.
 	 
 	 	Examples:

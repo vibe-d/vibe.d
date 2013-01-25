@@ -183,9 +183,9 @@ class MongoConnection : EventedObject {
 		send(msg);
 	}
 
-    immutable(LastErrorDescription) getLastError(string db = "db")
+    immutable(LastErrorDescription) getLastError(string db)
     {
-        Bson[string] command_and_options = ["getlasterror": Bson(1.0)];
+        Bson[string] command_and_options = ["getLastError": Bson(1.0) ];
 		
 		if(settings.w != settings.w.init)
 			command_and_options["w"] = settings.w; // Already a Bson struct
@@ -194,10 +194,10 @@ class MongoConnection : EventedObject {
 		if(settings.journal)
 			command_and_options["j"] = Bson(true);
 		if(settings.fsync)
-			command_and_options["fsync"] = Bson(true);
+			command_and_options["fsync"] = Bson(true); 
 		
-		Reply reply = query(db, QueryFlags.None | settings.defQueryFlags,
-										0, 1, serializeToBson(command_and_options));	
+		Reply reply = query(db ~ ".$cmd", QueryFlags.None | settings.defQueryFlags,
+										0, -1, serializeToBson(command_and_options));	
 
 		enforce(
             !(reply.flags & ReplyFlags.QueryFailure),
@@ -316,7 +316,7 @@ class MongoConnection : EventedObject {
 	
 	private void checkForError(string collection_name)
 	{
-		auto coll = collection_name.split(".")[0] ~ ".$cmd";
+		auto coll = collection_name.split(".")[0];
         auto descr = getLastError(coll);
 		enforce(descr.code <= 0, new MongoDBException(descr));
 	}

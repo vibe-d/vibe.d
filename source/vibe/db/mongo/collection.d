@@ -183,7 +183,8 @@ struct MongoCollection {
 		auto ret = m_db.runCommand(dbstr, cmd);
 		if (!ret.ok.get!double )
         {
-            auto err = m_db.getLastError("db");
+            logInfo("here");
+            auto err = m_db.getLastError();
             throw new MongoDBException(err);
         }
 		return ret.value;
@@ -245,6 +246,31 @@ struct MongoCollection {
 	{
 		assert(false);
 	}
+
+  	// Does not actually run on this collection, but on some service collections
+    // of same db, like $cmd
+    private Bson runCommand(string collection, Bson command_and_options)
+	{
+		return m_db[m_dbName ~ "." ~ collection].findOne(command_and_options);
+	}
+
+    /// Runs in scope of all collections for this DB, no better class for it now
+    /// See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command)
+	Bson getLog(string mask){ return runCommand("adminCommand", Bson(["getLog" : Bson(mask)])); }
+
+    /// Runs in scope of all collections for this DB, no better class for it now
+	/// See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
+	Bson fsync(bool async = false){ return runCommand("$cmd", Bson(["fsync" : Bson(1), "async" : Bson(async)])); }
+
+	/// Similar to db.getLastErrorObj() in shell
+    /// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
+	immutable(LastErrorDescription) getLastError()
+    {
+        // runCommand is not used to keep parsing of error Bson
+        // localized to one function. And connection needs it
+        // anyway.
+        return m_db.lockConnection().getLastError(m_dbName);
+    }
 }
 
 enum IndexFlags {
