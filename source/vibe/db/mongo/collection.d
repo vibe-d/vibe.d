@@ -183,7 +183,6 @@ struct MongoCollection {
 		auto ret = m_db.runCommand(dbstr, cmd);
 		if (!ret.ok.get!double )
         {
-            logInfo("here");
             auto err = m_db.getLastError();
             throw new MongoDBException(err);
         }
