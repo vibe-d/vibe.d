@@ -75,9 +75,9 @@ class MongoDB {
 
 	/// Similar to db.getLastErrorObj() in shell
     /// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
-	LastErrorDescription getLastError(string db)
+	LastErrorDescription getLastError(string db = "db")
     {
-        return m_connections.lockConnection().getLastError();
+        return m_connections.lockConnection().getLastError(db);
     }
 
 	/**
