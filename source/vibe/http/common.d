@@ -235,7 +235,6 @@ HttpVersion parseHttpVersion(ref string str)
 final class ChunkedInputStream : InputStream {
 	private {
 		InputStream m_in;
-		bool m_empty = false;
 		ulong m_bytesInCurrentChunk = 0;
 	}
 
@@ -246,7 +245,7 @@ final class ChunkedInputStream : InputStream {
 		readChunk();
 	}
 
-	@property bool empty() const { return m_empty; }
+	@property bool empty() const { return m_bytesInCurrentChunk == 0; }
 
 	@property ulong leastSize() const { return m_bytesInCurrentChunk; }
 
@@ -261,8 +260,7 @@ final class ChunkedInputStream : InputStream {
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
-			enforce( !empty );
-			enforce( m_bytesInCurrentChunk > 0 );
+			enforce(m_bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
 
 			auto sz = cast(size_t)min(m_bytesInCurrentChunk, dst.length);
 			m_in.read(dst[0 .. sz]);
@@ -270,13 +268,12 @@ final class ChunkedInputStream : InputStream {
 			m_bytesInCurrentChunk -= sz;
 
 			if( m_bytesInCurrentChunk == 0 ){
-				// skipp current chunk footer
+				// skip current chunk footer and read next chunk
 				ubyte[2] crlf;
 				m_in.read(crlf);
 				enforce(crlf[0] == '\r' && crlf[1] == '\n');
 				readChunk();
 			}
-
 		}
 	}
 
@@ -290,8 +287,6 @@ final class ChunkedInputStream : InputStream {
 
 		if( m_bytesInCurrentChunk == 0 ){
 			// empty chunk denotes the end
-			m_empty = true;
-
 			// skip final chunk footer
 			ubyte[2] crlf;
 			m_in.read(crlf);
