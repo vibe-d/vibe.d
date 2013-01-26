@@ -907,7 +907,7 @@ Bson serializeToBson(T)(T value)
 	} else static if( is(Unqualified == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWField!(T, m) ){
+			static if( isRWField!(Unqualified, m) ){
 				auto mv = __traits(getMember, value, m);
 				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
@@ -917,7 +917,7 @@ Bson serializeToBson(T)(T value)
 		if( value is null ) return Bson(null);
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWField!(T, m) ){
+			static if( isRWField!(Unqualified, m) ){
 				auto mv = __traits(getMember, value, m);
 				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
@@ -1009,7 +1009,7 @@ T deserializeBson(T)(Bson src)
 unittest {
 	import std.stdio;
 	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	const S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
 	S u;
 	deserializeBson(u, serializeToBson(t));
 	assert(t.a == u.a);
