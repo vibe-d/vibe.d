@@ -172,7 +172,7 @@ struct MongoCollection {
 		Combines a modify and find operation to a single atomic operation.
 
 		Throws Exception if a DB communication error occured.
-		See_Also: $(LINK http://www.mongodb.org/display/DOCS/findAndModify+Command)
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	*/
 	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
 	{
