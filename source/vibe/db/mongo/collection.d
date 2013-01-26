@@ -83,7 +83,7 @@ struct MongoCollection {
 	/**
 		Performs an update operation on documents matching 'selector', updating them with 'update'.
 
-		Throws: Exception if a DB communication error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Updating)
 	*/
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
@@ -95,7 +95,7 @@ struct MongoCollection {
 	/**
 		Inserts new documents into the collection.
 
-		Throws: Exception if a DB communication error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Inserting)
 	*/
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
@@ -113,7 +113,7 @@ struct MongoCollection {
 
 		If no arguments are passed to find(), all documents of the collection will be returned.
 
-		Throws: Exception if a DB communication error or a query error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	*/
 	MongoCursor find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
@@ -134,7 +134,7 @@ struct MongoCollection {
 		Queries the collection for existing documents.
 
 		Returns: the first match or null
-		Throws: Exception if a DB communication error or a query error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	*/
 	Bson findOne(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
@@ -154,7 +154,7 @@ struct MongoCollection {
 	/**
 		Removes documents from the collection.
 
-		Throws: Exception if a DB communication error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Removing)
 	*/
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
@@ -166,7 +166,7 @@ struct MongoCollection {
 	/**
 		Combines a modify and find operation to a single atomic operation.
 
-		Throws Exception if a DB communication error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/findAndModify+Command)
 	*/
 	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
@@ -181,7 +181,11 @@ struct MongoCollection {
 		if( returnFieldSelector != null )
 			cmd["fields"] = serializeToBson(returnFieldSelector);
 		auto ret = m_db.runCommand(dbstr, cmd);
-		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
+		if (!ret.ok.get!double )
+        {
+            auto err = m_db.getLastError();
+            throw new MongoDBException(err);
+        }
 		return ret.value;
 	}
 	/// ditto
@@ -193,7 +197,7 @@ struct MongoCollection {
 	/**
 		Counts the results of the specified query expression.
 
-		Throws Exception if a DB communication error occured.
+		Throws: MongoDriverException in case of DB communication error. MongoDBException if a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQueries-{{count%28%29}})
 	*/
 	ulong count(T)(T query)
@@ -241,6 +245,31 @@ struct MongoCollection {
 	{
 		assert(false);
 	}
+
+  	// Does not actually run on this collection, but on some service collections
+    // of same db, like $cmd
+    private Bson runCommand(string collection, Bson command_and_options)
+	{
+		return m_db[m_dbName ~ "." ~ collection].findOne(command_and_options);
+	}
+
+    /// Runs in scope of all collections for this DB, no better class for it now
+    /// See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command)
+	Bson getLog(string mask){ return runCommand("adminCommand", Bson(["getLog" : Bson(mask)])); }
+
+    /// Runs in scope of all collections for this DB, no better class for it now
+	/// See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
+	Bson fsync(bool async = false){ return runCommand("$cmd", Bson(["fsync" : Bson(1), "async" : Bson(async)])); }
+
+	/// Similar to db.getLastErrorObj() in shell
+    /// See $(LINK http://www.mongodb.org/display/DOCS/getLastError+Command) 
+	immutable(LastErrorDescription) getLastError()
+    {
+        // runCommand is not used to keep parsing of error Bson
+        // localized to one function. And connection needs it
+        // anyway.
+        return m_db.lockConnection().getLastError(m_dbName);
+    }
 }
 
 enum IndexFlags {

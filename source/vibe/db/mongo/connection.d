@@ -19,6 +19,14 @@ import std.exception;
 import std.regex;
 import std.string;
 
+struct LastErrorDescription
+{
+    string message;
+    int code;
+    int connectionId;
+    int n;
+    double ok;
+}
 
 /**
 	Provides low-level mongodb protocol access.
@@ -175,6 +183,62 @@ class MongoConnection : EventedObject {
 		send(msg);
 	}
 
+    immutable(LastErrorDescription) getLastError(string db)
+    {
+        Bson[string] command_and_options = ["getLastError": Bson(1.0) ];
+		
+		if(settings.w != settings.w.init)
+			command_and_options["w"] = settings.w; // Already a Bson struct
+		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
+			command_and_options["wtimeout"] = Bson(settings.wTimeoutMS);
+		if(settings.journal)
+			command_and_options["j"] = Bson(true);
+		if(settings.fsync)
+			command_and_options["fsync"] = Bson(true); 
+		
+		Reply reply = query(db ~ ".$cmd", QueryFlags.None | settings.defQueryFlags,
+										0, -1, serializeToBson(command_and_options));	
+
+		enforce(
+            !(reply.flags & ReplyFlags.QueryFailure),
+            new MongoDriverException("MongoDB error: getLastError call failed.")
+        );
+		logTrace("error result flags for %s: %s, cursor %s, documents %s", db, reply.flags, reply.cursor, reply.documents.length);
+		enforce(
+            reply.documents.length == 1,
+            new MongoDriverException("getLastError returned "~to!string(reply.documents.length)~" documents instead of one!?")
+        );
+
+		auto error = reply.documents[0];
+
+        try
+        {
+            int code;
+            string msg;
+
+            try
+                code = error["code"].get!int();
+            catch (Exception)
+                code = -1;
+            try
+                msg = error["err"].get!string();
+            catch (Exception)
+                msg = "";
+
+            return LastErrorDescription(
+                msg,
+                code,
+                error["connectionId"].get!int(),
+                error["n"].get!int(),
+                error["ok"].get!double()
+            );
+        }
+        catch (Exception e)
+        {
+            throw new MongoDriverException(e.msg);
+        }
+    }
+
 	private Reply recvReply(int reqid)
 	{
 
@@ -202,7 +266,7 @@ class MongoConnection : EventedObject {
 		} else if( m_bytesRead - bytes_read > msglen ){
 			logWarn("MongoDB reply was shorter than expected. Dropping connection.");
 			disconnect();
-			throw new MongoException("MongoDB reply was too short for data.");
+			throw new MongoDriverException("MongoDB reply was too short for data.");
 		}
 
 		auto msg = new Reply;
@@ -252,32 +316,9 @@ class MongoConnection : EventedObject {
 	
 	private void checkForError(string collection_name)
 	{
-		auto coll = collection_name.split(".")[0] ~ ".$cmd";
-
-		Bson[string] command_and_options = ["getlasterror": Bson(1.0)];
-		
-		if(settings.w != settings.w.init)
-			command_and_options["w"] = settings.w; // Already a Bson struct
-		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
-			command_and_options["wtimeout"] = Bson(settings.wTimeoutMS);
-		if(settings.journal)
-			command_and_options["j"] = Bson(true);
-		if(settings.fsync)
-			command_and_options["fsync"] = Bson(true);
-		
-		Reply results = query(coll, QueryFlags.None | settings.defQueryFlags,
-										0, 1, serializeToBson(command_and_options));	
-		enforce(!(results.flags & ReplyFlags.QueryFailure), new MongoException("MongoDB error: getLastError call failed."));
-
-		logTrace("error result flags for %s: %s, cursor %s, documents %s", coll, results.flags, results.cursor, results.documents.length);
-
-		if( results.documents.length == 0 )
-			return;
-
-		enforce(results.documents.length == 1, new MongoException("getLastError returned "~to!string(results.documents.length)~" documents instead of one!?"));
-		auto res = results.documents[0];
-
-		enforce(res.err.type == Bson.Type.Null, new MongoException("MongoDB getLastError error: "~res.err.get!string()));
+		auto coll = collection_name.split(".")[0];
+        auto descr = getLastError(coll);
+		enforce(descr.code <= 0, new MongoDBException(descr));
 	}
 }
 
@@ -347,7 +388,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			
 			cfg.hosts ~= new MongoHost(host, port);
 		}
-	} catch ( Exception e) {
+	} catch (Exception e) {
 		return  false; // Probably failed converting the port to ushort.
 	}		
 		
@@ -389,7 +430,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				try {
 					dst = to!bool(value);
 					return true;
-				} catch( Exception e ){
+				} catch(Exception e){
 					logError("Value for '%s' must be 'true' or 'false' but was '%s'.", option, value);
 					return false;
 				}
@@ -399,7 +440,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				try {
 					dst = to!long(value);
 					return true;
-				} catch( Exception e ){
+				} catch(Exception e){
 					logError("Value for '%s' must be an integer but was '%s'.", option, value);
 					return false;
 				}
@@ -632,9 +673,37 @@ class MongoHost
 	}
 }
 
+/// Base exception class for all mongo-related errors
 class MongoException : Exception {
-	this(string message, Throwable next = null, string file = __FILE__, int line = __LINE__)
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
+	}
+}
+
+/// Exceptions for driver-related issues, like unexpected protocol mismatch
+class MongoDriverException : MongoException
+{
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/// Exceptions that wrap error object retrieved after execution of usual mongo function
+class MongoDBException : MongoException
+{
+    immutable int code;
+    immutable int connectionId;
+    immutable int n;
+    immutable double ok;
+
+	this(const ref LastErrorDescription errorDescr, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(errorDescr.message, file, line, next);
+        code = errorDescr.code;
+        connectionId = errorDescr.connectionId;
+        n = errorDescr.n;
+        ok = errorDescr.ok;
 	}
 }
