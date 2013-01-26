@@ -19,11 +19,70 @@ import std.exception;
 import std.regex;
 import std.string;
 
+private struct _MongoErrorDescription
+{
+    string message;
+    int code;
+    int connectionId;
+    int n;
+    double ok;
+}
 
 /**
-	Provides low-level mongodb protocol access.
+ * D POD representation of Mongo error object.
+ * For successful queries "code" is negative.
+ * Can be used also to check how many documents where updated upon
+ * a successful query via "n" field.
+ */
+alias immutable(_MongoErrorDescription) MongoErrorDescription;
 
-	Note that a MongoConnection my only be used from one fiber/thread at a time.
+/**
+ * Root class for vibe.d Mongo driver exception hierarchy.
+ */
+class MongoException : Exception
+{
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/**
+ * This is a generic class for all exception related to unhandled
+ * driver problems, i.e. protocol mismatch or unexpected mongo service
+ * behavior.
+ */
+class MongoDriverException : MongoException
+{
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/**
+ * This is a wrapper class for all inner mongo collection manipulation errors.
+ * It does not indicate problem with vibe.d driver itself. Most frequently this
+ * one is thrown when MongoConnection is in checked mode and getLastError() has something interesting.
+ */
+class MongoDBException : MongoException
+{
+    private MongoErrorDescription description;
+    alias description this;
+
+	this(MongoErrorDescription description, string file = __FILE__,
+        int line = __LINE__, Throwable next = null)
+	{
+		super(description.message, file, line, next);
+        this.description = description;
+	}
+}
+
+/**
+	Provides low-level mongodb protocol access. It is not intended for direct usage.
+    Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
+
+	Note that a MongoConnection may only be used from one fiber/thread at a time.
 */
 class MongoConnection : EventedObject {
 	private {
@@ -31,16 +90,17 @@ class MongoConnection : EventedObject {
 		TcpConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
+	    enum defaultPort = 27017;
 	}
 
-	enum defaultPort = 27017;
-
+    /// private
 	this(string server, ushort port = defaultPort)
 	{
 		settings = new MongoClientSettings();
-		settings.hosts ~= new MongoHost(server, port);
+		settings.hosts ~= MongoHost(server, port);
 	}
 	
+    /// private
 	this(MongoClientSettings cfg)
 	{
 		settings = cfg;
@@ -56,20 +116,24 @@ class MongoConnection : EventedObject {
 	}
 
 	// changes the ownership of this connection
+    /// private
 	override void acquire()
 	{
 		if( m_conn && m_conn.connected ) m_conn.acquire();
 		else connect();
 	}
 
+    /// private
 	override void release()
 	{
 		if( m_conn && m_conn.connected )
 			m_conn.release();
 	}
 
+    /// private
 	override bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
 
+    /// private
 	void connect()
 	{
 		/* 
@@ -80,6 +144,7 @@ class MongoConnection : EventedObject {
 		m_bytesRead = 0;
 	}
 
+    /// private
 	void disconnect()
 	{
 		if( m_conn ){
@@ -88,8 +153,10 @@ class MongoConnection : EventedObject {
 		}
 	}
 
+    /// private
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
+    /// private
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
 		scope(failure) disconnect();
@@ -106,6 +173,7 @@ class MongoConnection : EventedObject {
 		}
 	}
 
+    /// private
 	void insert(string collection_name, InsertFlags flags, Bson[] documents)
 	{
 		scope(failure) disconnect();
@@ -124,6 +192,7 @@ class MongoConnection : EventedObject {
 		}
 	}
 
+    /// private
 	Reply query(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
 	{
 		scope(failure) disconnect();
@@ -138,6 +207,7 @@ class MongoConnection : EventedObject {
 		return call(msg);
 	}
 
+    /// private
 	Reply getMore(string collection_name, int nret, long cursor_id)
 	{
 		scope(failure) disconnect();
@@ -149,6 +219,7 @@ class MongoConnection : EventedObject {
 		return call(msg);
 	}
 
+    /// private
 	void delete_(string collection_name, DeleteFlags flags, Bson selector)
 	{
 		scope(failure) disconnect();
@@ -164,6 +235,7 @@ class MongoConnection : EventedObject {
 		}
 	}
 
+    /// private
 	void killCursors(long[] cursors)
 	{
 		scope(failure) disconnect();
@@ -174,6 +246,69 @@ class MongoConnection : EventedObject {
 			msg.addLong(c);
 		send(msg);
 	}
+
+    /// private
+    // Though higher level abstraction level by concept, this function
+    // is implemented here to allow to check errors upon every request
+    // on conncetion level.
+    MongoErrorDescription getLastError(string db)
+    {
+        Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
+		
+		if(settings.w != settings.w.init)
+			command_and_options["w"] = settings.w; // Already a Bson struct
+		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
+			command_and_options["wtimeout"] = Bson(settings.wTimeoutMS);
+		if(settings.journal)
+			command_and_options["j"] = Bson(true);
+		if(settings.fsync)
+			command_and_options["fsync"] = Bson(true); 
+		
+		Reply reply = query(db ~ ".$cmd", QueryFlags.None | settings.defQueryFlags,
+										0, -1, serializeToBson(command_and_options));	
+
+		logTrace(
+            "getLastEror(%s)\n\tResult flags: %s\n\tCursor: %s\n\tDocument count: %s",
+            db,
+            reply.flags,
+            reply.cursor,
+            reply.documents.length
+        );
+
+		enforce(
+            !(reply.flags & ReplyFlags.QueryFailure),
+            new MongoDriverException(format(
+                "MongoDB error: getLastError(%s) call failed.",
+                db
+            ))
+        );
+
+		enforce(
+            reply.documents.length == 1,
+            new MongoDriverException(format(
+                    "getLastError(%s) returned %s documents instead of one.",
+                    db,
+                    to!string(reply.documents.length)
+            ))
+        );
+
+		auto error = reply.documents[0];
+
+        try
+        {
+           return MongoErrorDescription(
+                error.err.opt!string(""),
+                error.code.opt!int(-1),
+                error.connectionId.get!int(),
+                error.n.get!int(),
+                error.ok.get!double()
+            );
+        }
+        catch (Exception e)
+        {
+            throw new MongoDriverException(e.msg);
+        }
+    }
 
 	private Reply recvReply(int reqid)
 	{
@@ -202,7 +337,7 @@ class MongoConnection : EventedObject {
 		} else if( m_bytesRead - bytes_read > msglen ){
 			logWarn("MongoDB reply was shorter than expected. Dropping connection.");
 			disconnect();
-			throw new MongoException("MongoDB reply was too short for data.");
+			throw new MongoDriverException("MongoDB reply was too short for data.");
 		}
 
 		auto msg = new Reply;
@@ -249,35 +384,16 @@ class MongoConnection : EventedObject {
 	private void recv(ubyte[] dst) { enforce(m_conn); m_conn.read(dst); m_bytesRead += dst.length; }
 
 	private int nextMessageId() { return m_msgid++; }
-	
+
 	private void checkForError(string collection_name)
 	{
-		auto coll = collection_name.split(".")[0] ~ ".$cmd";
+		auto coll = collection_name.split(".")[0];
+        auto err = getLastError(coll);
 
-		Bson[string] command_and_options = ["getlasterror": Bson(1.0)];
-		
-		if(settings.w != settings.w.init)
-			command_and_options["w"] = settings.w; // Already a Bson struct
-		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
-			command_and_options["wtimeout"] = Bson(settings.wTimeoutMS);
-		if(settings.journal)
-			command_and_options["j"] = Bson(true);
-		if(settings.fsync)
-			command_and_options["fsync"] = Bson(true);
-		
-		Reply results = query(coll, QueryFlags.None | settings.defQueryFlags,
-										0, 1, serializeToBson(command_and_options));	
-		enforce(!(results.flags & ReplyFlags.QueryFailure), new MongoException("MongoDB error: getLastError call failed."));
-
-		logTrace("error result flags for %s: %s, cursor %s, documents %s", coll, results.flags, results.cursor, results.documents.length);
-
-		if( results.documents.length == 0 )
-			return;
-
-		enforce(results.documents.length == 1, new MongoException("getLastError returned "~to!string(results.documents.length)~" documents instead of one!?"));
-		auto res = results.documents[0];
-
-		enforce(res.err.type == Bson.Type.Null, new MongoException("MongoDB getLastError error: "~res.err.get!string()));
+		enforce(
+            err.code < 0,
+            new MongoDBException(err)
+        );
 	}
 }
 
@@ -345,9 +461,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			hostPort.popFront();
 			ushort port = hostPort.empty ? MongoConnection.defaultPort : to!ushort(hostPort.front);
 			
-			cfg.hosts ~= new MongoHost(host, port);
+			cfg.hosts ~= MongoHost(host, port);
 		}
-	} catch ( Exception e) {
+	} catch (Exception e) {
 		return  false; // Probably failed converting the port to ushort.
 	}		
 		
@@ -543,17 +659,20 @@ private enum OpCode : int {
 	KillCursors  = 2007
 }
 
+/// private
 enum UpdateFlags {
 	None         = 0,
 	Upsert       = 1<<0,
 	MultiUpdate  = 1<<1
 }
 
+/// private
 enum InsertFlags {
 	None             = 0,
 	ContinueOnError  = 1<<0
 }
 
+/// private
 enum QueryFlags {
 	None             = 0,
 	TailableCursor   = 1<<1,
@@ -565,11 +684,13 @@ enum QueryFlags {
 	Partial          = 1<<7
 }
 
+/// private
 enum DeleteFlags {
 	None          = 0,
 	SingleRemove  = 1<<0,
 }
 
+/// private
 enum ReplyFlags {
 	None              = 0,
 	CursorNotFound    = 1<<0,
@@ -578,6 +699,7 @@ enum ReplyFlags {
 	AwaitCapable      = 1<<3
 }
 
+/// private
 class Reply {
 	long cursor;
 	ReplyFlags flags;
@@ -603,6 +725,7 @@ private class Message {
 	void addBSON(Bson v) { m_data.put(v.data); }
 }
 
+/// private
 class MongoClientSettings
 {
 	string username;
@@ -620,21 +743,9 @@ class MongoClientSettings
 	long socketTimeoutMS;
 }
 
-class MongoHost
+/// private
+private struct MongoHost
 {
 	string name;
 	ushort port;
-	
-	this(string hostName, ushort mongoPort)
-	{
-		name = hostName;
-		port = mongoPort;
-	}
-}
-
-class MongoException : Exception {
-	this(string message, Throwable next = null, string file = __FILE__, int line = __LINE__)
-	{
-		super(message, file, line, next);
-	}
 }
