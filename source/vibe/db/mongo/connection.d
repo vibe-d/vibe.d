@@ -67,7 +67,7 @@ class MongoDriverException : MongoException
  */
 class MongoDBException : MongoException
 {
-    private MongoErrorDescription description;
+    MongoErrorDescription description;
     alias description this;
 
 	this(MongoErrorDescription description, string file = __FILE__,

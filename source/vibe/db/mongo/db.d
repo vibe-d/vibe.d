@@ -42,7 +42,7 @@ struct MongoDatabase
             return m_name;
         }
 
-        @property string client()
+        @property MongoClient client()
         {
             return m_client;
         }

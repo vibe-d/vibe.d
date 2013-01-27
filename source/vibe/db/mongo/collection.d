@@ -77,7 +77,7 @@ struct MongoCollection {
 		m_client = db.client;
 
         assert(
-            find(name, '.').length == 0,
+            std.algorithm.find(name, '.').length == 0,
             "Wanted database name, got path with ': " ~ name
         );
 
