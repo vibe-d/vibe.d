@@ -67,7 +67,7 @@ struct MongoCollection {
 		assert(dotidx > 0, "The collection name passed to MongoCollection must be of the form \"dbname.collectionname\".");
 
 		m_fullPath = fullPath;
-		m_db = m_client.getDB(fullPath[0 .. dotidx]);
+		m_db = m_client.getDatabase(fullPath[0 .. dotidx]);
 		m_name = fullPath[dotidx+1 .. $];
 	}
 
@@ -250,7 +250,7 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 		if( flags & IndexFlags.DropDuplicates ) doc["dropDups"] = true;
 		if( flags & IndexFlags.Background ) doc["background"] = true;
 		if( flags & IndexFlags.Sparse ) doc["sparse"] = true;
-		database["system.indexes").insert(doc);
+		database["system.indexes"].insert(doc);
 	}
 
 	void dropIndex(string name)

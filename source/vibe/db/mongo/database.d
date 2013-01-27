@@ -3,7 +3,7 @@
  * Technically it is very special collection with common query functions
  * disabled and some service commands provided.
  */
-module vibe.db.mongo.db;
+module vibe.db.mongo.database;
 
 import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
