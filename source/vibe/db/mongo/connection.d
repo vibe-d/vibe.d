@@ -81,7 +81,7 @@ class MongoDBException : MongoException
 }
 
 /**
-  Provides low-level mongodb protocol access.
+  [internal] Provides low-level mongodb protocol access.
 
   It is not intended for direct usage. Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
   Note that a MongoConnection may only be used from one fiber/thread at a time.
@@ -96,14 +96,13 @@ class MongoConnection : EventedObject {
 
 	enum defaultPort = 27017;
 
-	/// private
+	/// Simplified constructor overload, with no settings
 	this(string server, ushort port = defaultPort)
 	{
 		settings = new MongoClientSettings();
 		settings.hosts ~= MongoHost(server, port);
 	}
 
-	/// private
 	this(MongoClientSettings cfg)
 	{
 		settings = cfg;
@@ -118,25 +117,21 @@ class MongoConnection : EventedObject {
 			logWarn("MongoDB password is not yet supported. Ignoring password.");
 	}
 
-	// changes the ownership of this connection
-	/// private
+	/// Changes the ownership of this connection
 	override void acquire()
 	{
 		if( m_conn && m_conn.connected ) m_conn.acquire();
 		else connect();
 	}
 
-	/// private
 	override void release()
 	{
 		if( m_conn && m_conn.connected )
 			m_conn.release();
 	}
 
-	/// private
 	override bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
 
-	/// private
 	void connect()
 	{
 		/* 
@@ -147,7 +142,6 @@ class MongoConnection : EventedObject {
 		m_bytesRead = 0;
 	}
 
-	/// private
 	void disconnect()
 	{
 		if( m_conn ){
@@ -156,10 +150,8 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-	/// private
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
-	/// private
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
 		scope(failure) disconnect();
@@ -176,7 +168,6 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-	/// private
 	void insert(string collection_name, InsertFlags flags, Bson[] documents)
 	{
 		scope(failure) disconnect();
@@ -195,7 +186,6 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-	/// private
 	Reply query(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
 	{
 		scope(failure) disconnect();
@@ -210,7 +200,6 @@ class MongoConnection : EventedObject {
 		return call(msg);
 	}
 
-	/// private
 	Reply getMore(string collection_name, int nret, long cursor_id)
 	{
 		scope(failure) disconnect();
@@ -222,7 +211,6 @@ class MongoConnection : EventedObject {
 		return call(msg);
 	}
 
-	/// private
 	void delete_(string collection_name, DeleteFlags flags, Bson selector)
 	{
 		scope(failure) disconnect();
@@ -238,7 +226,6 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-	/// private
 	void killCursors(long[] cursors)
 	{
 		scope(failure) disconnect();
@@ -250,12 +237,12 @@ class MongoConnection : EventedObject {
 		send(msg);
 	}
 
-	/// private
-	// Though higher level abstraction level by concept, this function
-	// is implemented here to allow to check errors upon every request
-	// on conncetion level.
 	MongoErrorDescription getLastError(string db)
 	{
+		// Though higher level abstraction level by concept, this function
+		// is implemented here to allow to check errors upon every request
+		// on conncetion level.
+
 		Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
 
 		if(settings.w != settings.w.init)
@@ -674,7 +661,7 @@ enum InsertFlags {
 	ContinueOnError  = 1<<0
 }
 
-/// private
+/// [internal]
 enum QueryFlags {
 	None             = 0,
 	TailableCursor   = 1<<1,
@@ -727,7 +714,7 @@ private class Message {
 	void addBSON(Bson v) { m_data.put(v.data); }
 }
 
-/// private
+/// [internal]
 class MongoClientSettings
 {
 	string username;
@@ -745,7 +732,7 @@ class MongoClientSettings
 	long socketTimeoutMS;
 }
 
-/// private
+/// [internal]
 private struct MongoHost
 {
 	string name;
