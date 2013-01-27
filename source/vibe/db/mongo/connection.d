@@ -1,10 +1,10 @@
 /**
-	Low level mongodb protocol.
+  Low level mongodb protocol.
 
-	Copyright: © 2012 RejectedSoftware e.K.
-	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Sönke Ludwig
-*/
+Copyright: © 2012 RejectedSoftware e.K.
+License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+Authors: Sönke Ludwig
+ */
 module vibe.db.mongo.connection;
 
 public import vibe.data.bson;
@@ -21,15 +21,16 @@ import std.string;
 
 private struct _MongoErrorDescription
 {
-    string message;
-    int code;
-    int connectionId;
-    int n;
-    double ok;
+	string message;
+	int code;
+	int connectionId;
+	int n;
+	double ok;
 }
 
 /**
  * D POD representation of Mongo error object.
+ *
  * For successful queries "code" is negative.
  * Can be used also to check how many documents where updated upon
  * a successful query via "n" field.
@@ -48,9 +49,9 @@ class MongoException : Exception
 }
 
 /**
- * This is a generic class for all exception related to unhandled
- * driver problems, i.e. protocol mismatch or unexpected mongo service
- * behavior.
+ * Generic class for all exception related to unhandled driver problems.
+ *
+ * I.e.: protocol mismatch or unexpected mongo service behavior.
  */
 class MongoDriverException : MongoException
 {
@@ -61,54 +62,56 @@ class MongoDriverException : MongoException
 }
 
 /**
- * This is a wrapper class for all inner mongo collection manipulation errors.
+ * Wrapper class for all inner mongo collection manipulation errors.
+ *
  * It does not indicate problem with vibe.d driver itself. Most frequently this
  * one is thrown when MongoConnection is in checked mode and getLastError() has something interesting.
  */
 class MongoDBException : MongoException
 {
-    MongoErrorDescription description;
-    alias description this;
+	MongoErrorDescription description;
+	alias description this;
 
 	this(MongoErrorDescription description, string file = __FILE__,
-        int line = __LINE__, Throwable next = null)
+			int line = __LINE__, Throwable next = null)
 	{
 		super(description.message, file, line, next);
-        this.description = description;
+		this.description = description;
 	}
 }
 
 /**
-	Provides low-level mongodb protocol access. It is not intended for direct usage.
-    Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
+  Provides low-level mongodb protocol access.
 
-	Note that a MongoConnection may only be used from one fiber/thread at a time.
-*/
+  It is not intended for direct usage. Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
+  Note that a MongoConnection may only be used from one fiber/thread at a time.
+ */
 class MongoConnection : EventedObject {
 	private {
 		MongoClientSettings settings;
 		TcpConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
-	    enum defaultPort = 27017;
 	}
 
-    /// private
+	enum defaultPort = 27017;
+
+	/// private
 	this(string server, ushort port = defaultPort)
 	{
 		settings = new MongoClientSettings();
 		settings.hosts ~= MongoHost(server, port);
 	}
-	
-    /// private
+
+	/// private
 	this(MongoClientSettings cfg)
 	{
 		settings = cfg;
-		
+
 		// Now let's check for features that are not yet supported.
 		if(settings.hosts.length > 1)
 			logWarn("Multiple mongodb hosts are not yet supported. Using first one: %s:%s",
-				settings.hosts[0].name, settings.hosts[0].port);
+					settings.hosts[0].name, settings.hosts[0].port);
 		if(settings.username != string.init)
 			logWarn("MongoDB username is not yet supported. Ignoring username: %s", settings.username);
 		if(settings.password != string.init)
@@ -116,24 +119,24 @@ class MongoConnection : EventedObject {
 	}
 
 	// changes the ownership of this connection
-    /// private
+	/// private
 	override void acquire()
 	{
 		if( m_conn && m_conn.connected ) m_conn.acquire();
 		else connect();
 	}
 
-    /// private
+	/// private
 	override void release()
 	{
 		if( m_conn && m_conn.connected )
 			m_conn.release();
 	}
 
-    /// private
+	/// private
 	override bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
 
-    /// private
+	/// private
 	void connect()
 	{
 		/* 
@@ -144,7 +147,7 @@ class MongoConnection : EventedObject {
 		m_bytesRead = 0;
 	}
 
-    /// private
+	/// private
 	void disconnect()
 	{
 		if( m_conn ){
@@ -153,10 +156,10 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-    /// private
+	/// private
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
-    /// private
+	/// private
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
 		scope(failure) disconnect();
@@ -173,7 +176,7 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-    /// private
+	/// private
 	void insert(string collection_name, InsertFlags flags, Bson[] documents)
 	{
 		scope(failure) disconnect();
@@ -185,14 +188,14 @@ class MongoConnection : EventedObject {
 			msg.addBSON(d);
 		}
 		send(msg);
-		
+
 		if(settings.safe)
 		{
 			checkForError(collection_name);
 		}
 	}
 
-    /// private
+	/// private
 	Reply query(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
 	{
 		scope(failure) disconnect();
@@ -207,7 +210,7 @@ class MongoConnection : EventedObject {
 		return call(msg);
 	}
 
-    /// private
+	/// private
 	Reply getMore(string collection_name, int nret, long cursor_id)
 	{
 		scope(failure) disconnect();
@@ -219,7 +222,7 @@ class MongoConnection : EventedObject {
 		return call(msg);
 	}
 
-    /// private
+	/// private
 	void delete_(string collection_name, DeleteFlags flags, Bson selector)
 	{
 		scope(failure) disconnect();
@@ -235,7 +238,7 @@ class MongoConnection : EventedObject {
 		}
 	}
 
-    /// private
+	/// private
 	void killCursors(long[] cursors)
 	{
 		scope(failure) disconnect();
@@ -247,14 +250,14 @@ class MongoConnection : EventedObject {
 		send(msg);
 	}
 
-    /// private
-    // Though higher level abstraction level by concept, this function
-    // is implemented here to allow to check errors upon every request
-    // on conncetion level.
-    MongoErrorDescription getLastError(string db)
-    {
-        Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
-		
+	/// private
+	// Though higher level abstraction level by concept, this function
+	// is implemented here to allow to check errors upon every request
+	// on conncetion level.
+	MongoErrorDescription getLastError(string db)
+	{
+		Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
+
 		if(settings.w != settings.w.init)
 			command_and_options["w"] = settings.w; // Already a Bson struct
 		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
@@ -263,52 +266,52 @@ class MongoConnection : EventedObject {
 			command_and_options["j"] = Bson(true);
 		if(settings.fsync)
 			command_and_options["fsync"] = Bson(true); 
-		
+
 		Reply reply = query(db ~ ".$cmd", QueryFlags.None | settings.defQueryFlags,
-										0, -1, serializeToBson(command_and_options));	
+				0, -1, serializeToBson(command_and_options));	
 
 		logTrace(
-            "getLastEror(%s)\n\tResult flags: %s\n\tCursor: %s\n\tDocument count: %s",
-            db,
-            reply.flags,
-            reply.cursor,
-            reply.documents.length
-        );
+				"getLastEror(%s)\n\tResult flags: %s\n\tCursor: %s\n\tDocument count: %s",
+				db,
+				reply.flags,
+				reply.cursor,
+				reply.documents.length
+				);
 
 		enforce(
-            !(reply.flags & ReplyFlags.QueryFailure),
-            new MongoDriverException(format(
-                "MongoDB error: getLastError(%s) call failed.",
-                db
-            ))
-        );
+			!(reply.flags & ReplyFlags.QueryFailure),
+			new MongoDriverException(format(
+				"MongoDB error: getLastError(%s) call failed.",
+				db
+			))
+		);
 
 		enforce(
-            reply.documents.length == 1,
-            new MongoDriverException(format(
-                    "getLastError(%s) returned %s documents instead of one.",
-                    db,
-                    to!string(reply.documents.length)
-            ))
-        );
+			reply.documents.length == 1,
+			new MongoDriverException(format(
+				"getLastError(%s) returned %s documents instead of one.",
+				db,
+				to!string(reply.documents.length)
+			))
+		);
 
 		auto error = reply.documents[0];
 
-        try
-        {
-           return MongoErrorDescription(
-                error.err.opt!string(""),
-                error.code.opt!int(-1),
-                error.connectionId.get!int(),
-                error.n.get!int(),
-                error.ok.get!double()
-            );
-        }
-        catch (Exception e)
-        {
-            throw new MongoDriverException(e.msg);
-        }
-    }
+		try
+		{
+			return MongoErrorDescription(
+				error.err.opt!string(""),
+				error.code.opt!int(-1),
+				error.connectionId.get!int(),
+				error.n.get!int(),
+				error.ok.get!double()
+			);
+		}
+		catch (Exception e)
+		{
+			throw new MongoDriverException(e.msg);
+		}
+	}
 
 	private Reply recvReply(int reqid)
 	{
@@ -347,7 +350,6 @@ class MongoConnection : EventedObject {
 		msg.documents = docs;
 		return msg;
 	}
-
 
 	private Reply call(Message req)
 	{
@@ -388,12 +390,12 @@ class MongoConnection : EventedObject {
 	private void checkForError(string collection_name)
 	{
 		auto coll = collection_name.split(".")[0];
-        auto err = getLastError(coll);
+		auto err = getLastError(coll);
 
 		enforce(
-            err.code < 0,
-            new MongoDBException(err)
-        );
+			err.code < 0,
+			new MongoDBException(err)
+		);
 	}
 }
 
@@ -412,28 +414,28 @@ class MongoConnection : EventedObject {
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 {
 	cfg = new MongoClientSettings();
-	
+
 	string tmpUrl = url[0..$]; // Slice of the url (not a copy)
-	
-	if(!startsWith(tmpUrl, "mongodb://"))
+
+	if( !startsWith(tmpUrl, "mongodb://") )
 	{
 		return false;
 	}
 
 	// Reslice to get rid of 'mongodb://'
 	tmpUrl = tmpUrl[10..$];
-		
+
 	auto slashIndex = countUntil(tmpUrl, "/");
 	if( slashIndex == -1 ) slashIndex = tmpUrl.length; 
 	auto authIndex = tmpUrl[0 .. slashIndex].countUntil('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
-		
+
 	// Parse out the username and optional password. 
 	if( authIndex != -1 )
 	{
 		// Set the host start to after the '@'
 		hostIndex = authIndex + 1;
-		
+
 		auto colonIndex = tmpUrl[0..authIndex].countUntil(':');
 		if(colonIndex != -1)
 		{
@@ -442,14 +444,14 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 		} else {
 			cfg.username = tmpUrl[0..authIndex];
 		}
-			
+
 		// Make sure the username is not empty. If it is then the parse failed. 
 		if(cfg.username.length == 0)
 		{ 
 			return false;
 		}
 	}
-		
+
 	// Parse the hosts section. 
 	try 
 	{
@@ -460,25 +462,25 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			string host = hostPort.front;
 			hostPort.popFront();
 			ushort port = hostPort.empty ? MongoConnection.defaultPort : to!ushort(hostPort.front);
-			
+
 			cfg.hosts ~= MongoHost(host, port);
 		}
 	} catch (Exception e) {
 		return  false; // Probably failed converting the port to ushort.
 	}		
-		
+
 	// If we couldn't parse a host we failed.
 	if(cfg.hosts.length == 0)
 	{
 		return false;
 	}
-	
+
 	if(slashIndex == tmpUrl.length)
 	{
 		// We're done parsing. 
 		return true;
 	}
-	
+
 	auto queryIndex = tmpUrl[slashIndex..$].countUntil("?");
 	if(queryIndex == -1){
 		// No query string. Remaining string is the database
@@ -486,7 +488,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	} else {
 		queryIndex += slashIndex;
 	}
-	
+
 	cfg.database = tmpUrl[slashIndex+1..queryIndex];
 	if(queryIndex != tmpUrl.length)
 	{
@@ -545,20 +547,20 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 					} catch (Exception e) {
 						logError("Invalid w value: [%s] Should be an integer number or 'majority'", value);
 					}
-					break;
+				break;
 			}
-		}	
-		
+		}
+
 		/* Some settings imply safe. If they are set, set safe to true regardless
 		 * of what it was set to in the URL string 
 		 */
 		if( (cfg.w != Bson.init) || (cfg.wTimeoutMS != long.init) ||
-			 cfg.journal 	 	 || cfg.fsync )
+				cfg.journal 	 || cfg.fsync )
 		{
 			cfg.safe = true;
 		}
 	}
-	
+
 	return true;
 }
 
@@ -566,7 +568,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 unittest 
 {
 	MongoClientSettings cfg;
-	
+
 	assert(parseMongoDBUrl(cfg, "mongodb://localhost"));
 	assert(cfg.hosts.length == 1);
 	assert(cfg.database == "");
@@ -581,7 +583,7 @@ unittest
 	assert(cfg.journal == false);
 	assert(cfg.connectTimeoutMS == long.init);
 	assert(cfg.socketTimeoutMS == long.init);
-	
+
 	cfg = MongoClientSettings.init;	
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
 	assert(cfg.username == "fred");
@@ -589,7 +591,7 @@ unittest
 	assert(cfg.database == "");
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
-	
+
 	cfg = MongoClientSettings.init;	
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/baz"));
 	assert(cfg.username == "fred");
@@ -598,7 +600,7 @@ unittest
 	assert(cfg.hosts.length == 1);
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
-	
+
 	cfg = MongoClientSettings.init;		
 	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true"));
 	assert(cfg.username == "");
@@ -615,11 +617,11 @@ unittest
 	assert(cfg.w == Bson(2L));
 	assert(cfg.wTimeoutMS == 2000);
 	assert(cfg.defQueryFlags == QueryFlags.SlaveOk);
-	
+
 	cfg = MongoClientSettings.init;		
 	assert(parseMongoDBUrl(cfg, 
-		"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
-		"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
+				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
+				"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
 	assert(cfg.password == "flinstone");
 	assert(cfg.database == "mydb");
@@ -636,7 +638,7 @@ unittest
 	assert(cfg.socketTimeoutMS == 1000);
 	assert(cfg.w == Bson("majority"));
 	assert(cfg.safe == true);
-	
+
 	// Invalid URLs - these should fail to parse
 	cfg = MongoClientSettings.init;		
 	assert(! (parseMongoDBUrl(cfg, "localhost:27018")));
