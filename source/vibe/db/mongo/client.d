@@ -21,8 +21,8 @@ import std.conv;
 import std.string;
 
 /**
-  Represents a single remote MongoClient. Abstracts away management of connections
-  to mongo service.
+	Represents a single remote MongoClient. Abstracts away management of connections
+	to mongo service.
  */
 class MongoClient {
 	private {
@@ -32,7 +32,7 @@ class MongoClient {
 	package this(string host, ushort port = MongoConnection.defaultPort)
 	{
 		this("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
-  	}
+		}
 
 	/**
 	 * Throws: an exception if the URL cannot be parsed as a valid MongoDB URL. 
@@ -42,7 +42,7 @@ class MongoClient {
 	 * 
 	 * mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
 	 *
-   */
+	*/
 	package this(string url)
 	{
 		MongoClientSettings settings;
@@ -79,22 +79,22 @@ class MongoClient {
 	}
 
 	/**
-	 * Return: MongoDatabase instance representing requested database
-	 *
-	 * Access to database entity ( root for group of collection ).
-	 * Two main use cases:
-	 *  1) Accessing collections using relative path
-	 *  2) Performing service commands on database itself
-	 *
-	 * There is no performance gain in accessing collections via relative path
-	 * with comparison to getCollection() and absolute one.
-	 *
-	 * Example:
-	 * ---
-	 * auto db = client.getDatabase("test");
-	 * auto coll = db["collection"];
-	 * ---
-   */
+	* Return: MongoDatabase instance representing requested database
+	*
+	* Access to database entity ( root for group of collection ).
+	* Two main use cases:
+	*  1) Accessing collections using relative path
+	*  2) Performing service commands on database itself
+	*
+	* There is no performance gain in accessing collections via relative path
+	* with comparison to getCollection() and absolute one.
+	*
+	* Example:
+	* ---
+	* auto db = client.getDatabase("test");
+	* auto coll = db["collection"];
+	* ---
+*/
 	MongoDatabase getDatabase(string dbName)
 	{
 		return MongoDatabase(this, dbName);
