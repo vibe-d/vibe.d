@@ -1,0 +1,12 @@
+{
+    "name": "my-project",
+    "version": "0.0.1",
+    "description": "An example project skeleton",
+    "homepage": "http://example.org",
+    "copyright": "Copyright © 2000, Edit Me",
+    "authors": [
+        "Your Name"
+    ],
+    "dependencies": {
+    }
+}
