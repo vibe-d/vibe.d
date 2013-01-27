@@ -87,12 +87,12 @@ struct MongoCollection {
 	}
 
 	/**
-	  Returns the root database to which this collection belongs.
+	  Returns: Root database to which this collection belongs.
 	 */
 	@property MongoDatabase database() { return m_db; }
 
 	/**
-	  Returns the name of this collection (excluding the database name).
+	  Returns: Name of this collection (excluding the database name).
 	 */
 	@property string name() const { return m_name; }
 

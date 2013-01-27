@@ -68,6 +68,7 @@ package:
 		}
 
 		/* See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command)
+         *
 		 * Returns: Bson document with recent log messages from MongoDB service.
 		 * Params:
 		 *  mask = "global" or "rs" or "startupWarnings". Refer to official MongoDB docs.
@@ -78,6 +79,7 @@ package:
 		}
 
 		/* See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
+         *
 		 * Returns: check documentation
 	 	 */
 		Bson fsync(bool async = false)
