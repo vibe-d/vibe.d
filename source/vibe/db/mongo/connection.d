@@ -635,7 +635,6 @@ unittest
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:badport/")));
 }
 
-/// private
 private enum OpCode : int {
 	Reply        = 1, // sent only by DB
 	Msg          = 1000,
@@ -648,20 +647,17 @@ private enum OpCode : int {
 	KillCursors  = 2007
 }
 
-/// private
 enum UpdateFlags {
 	None         = 0,
 	Upsert       = 1<<0,
 	MultiUpdate  = 1<<1
 }
 
-/// private
 enum InsertFlags {
 	None             = 0,
 	ContinueOnError  = 1<<0
 }
 
-/// [internal]
 enum QueryFlags {
 	None             = 0,
 	TailableCursor   = 1<<1,
@@ -673,13 +669,11 @@ enum QueryFlags {
 	Partial          = 1<<7
 }
 
-/// private
 enum DeleteFlags {
 	None          = 0,
 	SingleRemove  = 1<<0,
 }
 
-/// private
 enum ReplyFlags {
 	None              = 0,
 	CursorNotFound    = 1<<0,
@@ -688,7 +682,7 @@ enum ReplyFlags {
 	AwaitCapable      = 1<<3
 }
 
-/// private
+/// [internal]
 class Reply {
 	long cursor;
 	ReplyFlags flags;
@@ -732,7 +726,6 @@ class MongoClientSettings
 	long socketTimeoutMS;
 }
 
-/// [internal]
 private struct MongoHost
 {
 	string name;
