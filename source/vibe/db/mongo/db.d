@@ -6,6 +6,7 @@
 module vibe.db.mongo.db;
 
 import vibe.db.mongo.client;
+import vibe.db.mongo.collection;
 import vibe.data.bson;
 
 struct MongoDatabase
@@ -40,7 +41,20 @@ struct MongoDatabase
         {
             return m_name;
         }
-	    
+
+        @property string client()
+        {
+            return m_client;
+        }
+
+        /**
+         * Returns: child collection of this database named "name"
+         */
+	    MongoCollection opIndex(string name)
+        {
+            return MongoCollection(this, name);
+        }
+        
         /**
          * Returns: struct storing data from MongoDB db.getLastErrorObj() object
          *

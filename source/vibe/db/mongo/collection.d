@@ -14,7 +14,7 @@ import vibe.db.mongo.client;
 
 import vibe.core.log;
 
-import std.algorithm : countUntil;
+import std.algorithm : countUntil, find;
 import std.array;
 import std.conv;
 import std.exception;
@@ -58,18 +58,33 @@ struct MongoCollection {
         string m_fullPath;
 	}
 
-	this(MongoClient client, string collection_name)
+	this(MongoClient client, string fullPath)
 	{
 		assert(client !is null);
 		m_client = client;
 
-		auto dotidx = collection_name.indexOf('.');
+		auto dotidx = fullPath.indexOf('.');
 		assert(dotidx > 0, "The collection name passed to MongoCollection must be of the form \"dbname.collectionname\".");
 
-        m_fullPath = collection_name;
-		m_db = m_client.getDB(collection_name[0 .. dotidx]);
-		m_name = collection_name[dotidx+1 .. $];
+        m_fullPath = fullPath;
+		m_db = m_client.getDB(fullPath[0 .. dotidx]);
+		m_name = fullPath[dotidx+1 .. $];
 	}
+
+	this(ref MongoDatabase db, string name)
+    { 
+        assert(db.client !is null);
+		m_client = db.client;
+
+        assert(
+            find(name, '.').length == 0,
+            "Wanted database name, got path with ': " ~ name
+        );
+
+        m_fullPath = db.name ~ "." ~ name;
+		m_db = db;
+        m_name = name;
+    }
 
 	/**
 		Returns the root database to which this collection belongs.
