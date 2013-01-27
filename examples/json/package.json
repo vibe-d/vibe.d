@@ -1,7 +1,8 @@
 ﻿{
-    "name": "json-example",
+	"name": "json-example",
 	"description": "Performs some simple operations using the Json type.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

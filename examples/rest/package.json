@@ -1,7 +1,8 @@
 ﻿{
-    "name": "rest-example",
+	"name": "rest-example",
 	"description": "Shows how the REST interface generator can be used for RPC communication.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

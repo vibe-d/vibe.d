@@ -1,7 +1,8 @@
 ﻿{
-    "name": "task-control",
+	"name": "task-control-example",
 	"description": "Task manipulation example.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

@@ -1,7 +1,8 @@
 ﻿{
-    "name": "sendmail-example",
+	"name": "sendmail-example",
 	"description": "Sends a mail (be sure to adjust addresses before running).",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

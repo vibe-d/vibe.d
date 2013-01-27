@@ -1,7 +1,8 @@
 ﻿{
-    "name": "udp",
+	"name": "udp-example",
 	"description": "Sends UDP packets from one socket to another.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

@@ -1,7 +1,8 @@
 ﻿{
-    "name": "mongodb-example",
+	"name": "mongodb-example",
 	"description": "Basic MongoDB usage example.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

@@ -1,7 +1,8 @@
 ﻿{
-    "name": "http-static-server-example",
+	"name": "http-static-server-example",
 	"description": "Simple HTTP server that serves static files.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

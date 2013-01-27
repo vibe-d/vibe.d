@@ -1,7 +1,8 @@
 ﻿{
-    "name": "http-server-example",
+	"name": "http-server-example",
 	"description": "A minimal HTTP server.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }
