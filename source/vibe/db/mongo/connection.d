@@ -254,7 +254,7 @@ class MongoConnection : EventedObject {
 		if(settings.fsync)
 			command_and_options["fsync"] = Bson(true); 
 
-		Reply reply = query(db ~ ".$cmd", QueryFlags.None | settings.defQueryFlags,
+		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | settings.defQueryFlags,
 				0, -1, serializeToBson(command_and_options));	
 
 		logTrace(
