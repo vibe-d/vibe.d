@@ -192,6 +192,14 @@ DirectoryWatcher watchDirectory(string path, bool recursive = true)
 	return watchDirectory(Path(path), recursive);
 }
 
+/**
+	Returns the current working directory.
+*/
+Path getWorkingDirectory()
+{
+	return Path(std.file.getcwd());
+}
+
 
 /** Contains general information about a file.
 */
