@@ -43,6 +43,11 @@ struct Url {
 		m_path = path;
 		m_pathString = path.toString(true);
 	}
+	/// ditto
+	this(string schema, Path path)
+	{
+		this(schema, null, 0, path);
+	}
 
 	/** Constructs a URL from its string representation.
 	
