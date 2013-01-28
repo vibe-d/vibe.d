@@ -75,7 +75,7 @@ class ThreadedFileStream : FileStream {
 	{
 		m_path = path;
 		m_mode = mode;
-		auto pathstr = m_path.toString();
+		auto pathstr = m_path.toNativeString();
 		final switch(m_mode){
 			case FileMode.Read:
 				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
