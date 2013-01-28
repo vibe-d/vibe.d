@@ -76,8 +76,9 @@ nothrow {
 	}
 
 	try {
-		if( !s_mutex ) s_mutex = new Mutex;
-		auto lock = ScopedLock(s_mutex);
+		if( !s_mutex && getEventDriver() ) s_mutex = new Mutex;
+		if( s_mutex ) s_mutex.lock();
+		scope(exit) if( s_mutex ) s_mutex.unlock();
 
 		auto txt = appender!string();
 		txt.reserve(256);
