@@ -42,18 +42,28 @@ struct MongoCursor {
 		}
 	}
 
+	/*
+		Access same cursor data via range interface
+	*/
+	@property MongoCursorRange range()
+	{
+		return MongoCursorRange(m_data);
+	}
+	
 	/**
 		Returns true if there are more documents for this cursor.
 
 		Throws: An exception if there is a query or communication error.
-	*/
-	bool empty() { return m_data ? !m_data.hasNext() : true; }
-
+	 */
+	@property bool empty()
+	{
+		return !m_data || !m_data.hasNext();
+	}
 	/**
 		Iterates over all remaining documents.
 
 		Throws: An exception if there is a query or communication error.
-	*/
+	 */
 	int opApply(int delegate(ref Bson doc) del)
 	{
 		if( !m_data ) return 0;
@@ -67,7 +77,7 @@ struct MongoCursor {
 	}
 
 	/**
-		Iterates over all remaining documents.
+		Iterates over all remaining documents providing also index.
 
 		Throws: An exception if there is a query or communication error.
 	*/
@@ -82,6 +92,60 @@ struct MongoCursor {
 				return ret;
 		}
 		return 0;
+	}
+}
+
+/*
+	InputRange interface for MongoCursor
+*/
+struct MongoCursorRange
+{
+	import std.range;
+	static assert (isInputRange!(typeof(this)));
+
+	private
+	{
+		MongoCursorData m_data;
+		bool m_empty;
+		Bson m_doc;
+	}
+
+	this(MongoCursorData data)
+	{
+		m_data = data;
+		m_empty = !data || !data.hasNext();
+		if (!m_empty)
+			m_doc = m_data.getNext();
+	}
+
+	/**
+		Returns true if there are more documents for this cursor.
+
+		Throws: An exception if there is a query or communication error.
+	 */
+	@property bool empty()
+	{
+		return !m_data || m_empty;
+	}
+
+	/**
+		Access last retrived Bson document
+	 */
+	@property const(Bson) front()
+	{
+		assert(!empty);
+		return m_doc;
+	}
+
+	/**
+		Move to the next Bson document
+	 */
+	void popFront()
+	{
+		assert(!empty);
+		m_empty = !m_data.hasNext();
+		if (!empty)
+			m_doc = m_data.getNext();
 	}
 }
 
