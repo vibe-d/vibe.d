@@ -47,7 +47,11 @@ struct MongoCursor {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	bool empty() { return m_data ? !m_data.hasNext() : true; }
+	@property bool empty() { return m_data ? m_data.empty() : true; }
+
+	@property Bson front() { return m_data.front; }
+
+	void popFront() { m_data.popFront(); }
 
 	/**
 		Iterates over all remaining documents.
@@ -58,8 +62,9 @@ struct MongoCursor {
 	{
 		if( !m_data ) return 0;
 
-		while( m_data.hasNext() ){
-			auto doc = m_data.getNext();
+		while( !m_data.empty ){
+			auto doc = m_data.front;
+			m_data.popFront();
 			if( auto ret = del(doc) )
 				return ret;
 		}
@@ -75,9 +80,10 @@ struct MongoCursor {
 	{
 		if( !m_data ) return 0;
 
-		while( m_data.hasNext() ){
-			auto idx = m_data.getNextIndex();
-			auto doc = m_data.getNext();
+		while( !m_data.empty ){
+			auto idx = m_data.index;
+			auto doc = m_data.front;
+			m_data.popFront();
 			if( auto ret = del(idx, doc) )
 				return ret;
 		}
@@ -110,26 +116,34 @@ private class MongoCursorData {
 		handleReply(first_chunk);
 	}
 
-	bool hasNext(){
+	@property bool empty()
+	{
 		if( m_currentDoc < m_documents.length )
-			return true;
-		if( m_cursor == 0 )
 			return false;
+		if( m_cursor == 0 )
+			return true;
 
 		auto conn = m_client.lockConnection();
 		auto reply = conn.getMore(m_collection, m_nret, m_cursor);
 		handleReply(reply);
-		return m_currentDoc < m_documents.length;
+		return m_currentDoc >= m_documents.length;
 	}
 
-	size_t getNextIndex(){
-		enforce(hasNext(), "Cursor has no more data.");
+	@property size_t index()
+	{
+		enforce(!empty(), "Cursor has no more data.");
 		return m_offset + m_currentDoc;
 	}
 
-	Bson getNext(){
-		enforce(hasNext(), "Cursor has no more data.");
-		return m_documents[m_currentDoc++];
+	@property Bson front()
+	{
+		enforce(!empty(), "Cursor has no more data.");
+		return m_documents[m_currentDoc];
+	}
+
+	void popFront()
+	{
+		m_currentDoc++;
 	}
 
 	private void destroy()
