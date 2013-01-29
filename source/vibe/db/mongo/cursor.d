@@ -49,12 +49,27 @@ struct MongoCursor {
 	*/
 	@property bool empty() { return m_data ? m_data.empty() : true; }
 
+	/**
+		Returns the current document of the response.
+
+		Use empty and popFront to iterate over the list of documents using an
+		input range interface. Note that calling this function is only allowed
+		if empty returns false.
+	*/
 	@property Bson front() { return m_data.front; }
 
+	/**
+		Advances the cursor to the next document of the response.
+
+		Note that calling this function is only allowed if empty returns false.
+	*/
 	void popFront() { m_data.popFront(); }
 
 	/**
 		Iterates over all remaining documents.
+
+		Note that iteration is one-way - elements that have already been visited
+		will not be visited again if another iteration is done.
 
 		Throws: An exception if there is a query or communication error.
 	*/
@@ -73,6 +88,9 @@ struct MongoCursor {
 
 	/**
 		Iterates over all remaining documents.
+
+		Note that iteration is one-way - elements that have already been visited
+		will not be visited again if another iteration is done.
 
 		Throws: An exception if there is a query or communication error.
 	*/
