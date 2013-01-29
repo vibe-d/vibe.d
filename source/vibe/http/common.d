@@ -200,6 +200,27 @@ class HttpResponse {
 }
 
 
+/**
+	Respresents a HTTP response status.
+	
+	Throwing this exception from within a request handler will produce a matching error page.
+*/
+class HttpStatusException : Exception {
+	private {
+		int m_status;
+	}
+
+	this(int status, string message = null, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message ? message : httpStatusText(status), file, line, next);
+		m_status = status;
+	}
+	
+	/// The HTTP status code
+	@property int status() const { return m_status; }
+}
+
+
 class MultiPart {
 	string contentType;
 	
