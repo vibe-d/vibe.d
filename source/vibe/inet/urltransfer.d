@@ -33,7 +33,7 @@ void download(string url_, scope void delegate(scope InputStream) callback, Http
 	
 	foreach( i; 0 .. 10 ){
 		bool ssl = url.schema == "https";
-		client.connect(url.host, ssl ? 443 : 80, ssl);
+		client.connect(url.host, url.port ? url.port : ssl ? 443 : 80, ssl);
 		logTrace("connect to %s", url.host);
 		auto res = client.request((HttpClientRequest req){
 				req.requestUrl = url.localURI;
