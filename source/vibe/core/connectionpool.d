@@ -26,8 +26,7 @@ class ConnectionPool(Connection : EventedObject)
 	private {
 		Connection delegate() m_connectionFactory;
 		Connection[] m_connections;
-		Connection[Task] m_locks;
-		int[Connection] m_lockCount;
+		int[const(Connection)] m_lockCount;
 	}
 
 	this(Connection delegate() connection_factory)
@@ -37,13 +36,6 @@ class ConnectionPool(Connection : EventedObject)
 
 	LockedConnection!Connection lockConnection()
 	{
-		auto fthis = Task.getThis();
-		auto pconn = fthis in m_locks;
-		if( pconn && *pconn ){
-			m_lockCount[*pconn]++;
-			return LockedConnection!Connection(this, *pconn);
-		}
-
 		size_t cidx = size_t.max;
 		foreach( i, c; m_connections ){
 			auto plc = c in m_lockCount;
@@ -57,12 +49,11 @@ class ConnectionPool(Connection : EventedObject)
 		if( cidx != size_t.max ){
 			logDebug("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
 			conn = m_connections[cidx];
-			if( fthis != Task() ) conn.acquire();
+			if( Task.getThis() != Task() ) conn.acquire();
 		} else {
 			logDebug("creating %s new connection of %d", Connection.stringof, m_connections.length);
 			conn = m_connectionFactory(); // NOTE: may block
 		}
-		m_locks[fthis] = conn;
 		m_lockCount[conn] = 1;
 		if( cidx == size_t.max ){
 			m_connections ~= conn;
@@ -109,14 +100,13 @@ struct LockedConnection(Connection : EventedObject) {
 			assert(plc !is null);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
 			if( --*plc == 0 ){
-				auto pl = m_task in m_pool.m_locks;
-				assert(pl !is null);
-				*pl = null;
 				if( fthis ) m_conn.release();
 				m_conn = null;
 			}
 		}
 	}
+
+	@property int __refCount() const { return m_pool.m_lockCount.get(m_conn, 0); }
 }
 
 /**
