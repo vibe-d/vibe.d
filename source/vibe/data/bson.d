@@ -880,6 +880,8 @@ Bson serializeToBson(T)(T value)
 	else static if( is(Unqualified == BsonDate) ) return Bson(value);
 	else static if( is(Unqualified == BsonTimestamp) ) return Bson(value);
 	else static if( is(Unqualified == BsonRegex) ) return Bson(value);
+	else static if( is(Unqualified == DateTime) ) return Bson(BsonDate(value));
+	else static if( is(Unqualified == SysTime) ) return Bson(BsonDate(value));
 	else static if( is(Unqualified == typeof(null)) ) return Bson(null);
 	else static if( is(Unqualified == bool) ) return Bson(value);
 	else static if( is(Unqualified == float) ) return Bson(cast(double)value);
@@ -948,6 +950,8 @@ T deserializeBson(T)(Bson src)
 	else static if( is(T == BsonDate) ) return cast(T)src;
 	else static if( is(T == BsonTimestamp) ) return cast(T)src;
 	else static if( is(T == BsonRegex) ) return cast(T)src;
+	else static if( is(T == SysTime) ) return src.get!BsonDate().toSysTime();
+	else static if( is(T == DateTime) ) return cast(DateTime)src.get!BsonDate().toSysTime();
 	else static if( is(T == typeof(null)) ){ return null; }
 	else static if( is(T == bool) ) return cast(bool)src;
 	else static if( is(T == float) ) return cast(double)src;

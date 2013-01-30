@@ -43,6 +43,7 @@ import vibe.data.utils;
 
 import std.array;
 import std.conv;
+import std.datetime;
 import std.exception;
 import std.format;
 import std.string;
@@ -857,6 +858,8 @@ Json serializeToJson(T)(T value)
 	else static if( is(TU == bool) ) return Json(value);
 	else static if( is(TU == float) ) return Json(cast(double)value);
 	else static if( is(TU == double) ) return Json(value);
+	else static if( is(TU == DateTime) ) return Json(value.toISOExtString());
+	else static if( is(TU == SysTime) ) return Json(value.toISOExtString());
 	else static if( is(TU : long) ) return Json(cast(long)value);
 	else static if( is(TU == string) ) return Json(value);
 	else static if( isArray!T ){
@@ -918,6 +921,8 @@ T deserializeJson(T)(Json src)
 	else static if( is(T == bool) ) return src.get!bool;
 	else static if( is(T == float) ) return src.to!float;   // since doubles are frequently serialized without
 	else static if( is(T == double) ) return src.to!double; // a decimal point, we allow conversions here
+	else static if( is(T == DateTime) ) return DateTime.fromISOExtString(src.get!string);
+	else static if( is(T == SysTime) ) return SysTime.fromISOExtString(src.get!string);
 	else static if( is(T : long) ) return cast(T)src.get!long;
 	else static if( is(T == string) ) return src.get!string;
 	else static if( isArray!T ){
