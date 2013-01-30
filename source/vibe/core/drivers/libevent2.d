@@ -463,7 +463,7 @@ class Libevent2Timer : Timer {
 				tm.stop();
 			}
 
-			if( tm.m_owner ) tm.m_driver.m_core.resumeTask(tm.m_owner);
+			if( tm.m_owner && tm.m_owner.running ) tm.m_driver.m_core.resumeTask(tm.m_owner);
 			if( tm.m_callback ) runTask(tm.m_callback);
 		} catch( Throwable e ){
 			logError("Exception while handling timer event: %s", e.msg);
