@@ -213,26 +213,50 @@ final class HttpClientRequest : HttpRequest {
 		super(conn);
 	}
 
+	/**
+		Writes the whole response body at once using raw bytes.
+	*/
+	void writeBody(RandomAccessStream data)
+	{
+		writeBody(data, data.size - data.tell());
+	}
+	/// ditto
+	void writeBody(InputStream data)
+	{
+		headers["Transfer-Encoding"] = "chunked";
+		bodyWriter.write(data);
+		m_bodyWriter = null;
+	}
+	/// ditto
 	void writeBody(InputStream data, ulong length)
 	{
 		headers["Content-Length"] = to!string(length);
 		bodyWriter.write(data, length);
+		m_bodyWriter = null;
 	}
-	
+	/// ditto
 	void writeBody(ubyte[] data, string content_type = null)
 	{
 		if( content_type ) headers["Content-Type"] = content_type;
 		headers["Content-Length"] = to!string(data.length);
 		bodyWriter.write(data);
+		m_bodyWriter = null;
 	}
-	
-	void writeBody(string[string] form)
+
+	/**
+		Writes the response body as form data.
+	*/
+	void writeFormBody(in string[string] form)
 	{
 		assert(false, "TODO");
 	}
 
+	/**
+		Writes the response body as JSON data.
+	*/
 	void writeJsonBody(T)(T data)
 	{
+		// TODO: avoid building up a string!
 		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json");
 	}
 
@@ -241,11 +265,21 @@ final class HttpClientRequest : HttpRequest {
 		assert(false, "TODO");
 	}
 
+	/**
+		An output stream suitable for writing the request body.
+
+		The first retrieval will cause the request header to be written, make sure
+		that all headers are set up in advance.s
+	*/
 	@property OutputStream bodyWriter()
 	{
 		if( m_bodyWriter ) return m_bodyWriter;
 		writeHeader();
 		m_bodyWriter = m_conn;
+
+		if( headers.get("Transfer-Encoding", null) == "chunked" )
+			m_bodyWriter = new ChunkedOutputStream(m_bodyWriter);
+
 		return m_bodyWriter;
 	}
 
@@ -279,6 +313,9 @@ final class HttpClientResponse : HttpResponse {
 		FreeListRef!DeflateInputStream m_deflateInputStream;
 	}
 
+	/**
+		An input stream suitable for reading the response body.
+	*/
 	InputStream bodyReader;
 
 	private this(HttpClient client)
@@ -297,6 +334,9 @@ final class HttpClientResponse : HttpResponse {
 		m_client.m_bodyReader = null;
 	}
 
+	/**
+		Reads the whole response body and tries to parse it as JSON.
+	*/
 	Json readJson(){
 		auto bdy = bodyReader.readAll();
 		auto str = cast(string)bdy;

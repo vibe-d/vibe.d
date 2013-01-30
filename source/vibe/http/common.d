@@ -202,7 +202,7 @@ class HttpResponse {
 
 /**
 	Respresents a HTTP response status.
-	
+
 	Throwing this exception from within a request handler will produce a matching error page.
 */
 class HttpStatusException : Exception {
@@ -443,12 +443,21 @@ struct StrMapCI {
 		}
 	}
 
-	string opIndex(string key){
+	string get(string key, string def_val = null)
+	const {
+		if( auto pv = key in this ) return *pv;
+		return def_val;
+	}
+
+	string opIndex(string key)
+	const {
 		auto pitm = key in this;
 		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
 		return *pitm;
 	}
-	string opIndexAssign(string val, string key){
+	
+	string opIndexAssign(string val, string key)
+	{
 		auto pitm = key in this;
 		if( pitm ) *pitm = val;
 		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = Field(computeCheckSumI(key), key, val);
