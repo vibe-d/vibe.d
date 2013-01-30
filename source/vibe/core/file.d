@@ -37,13 +37,14 @@ FileStream openFile(string path, FileMode mode = FileMode.Read)
 /**
 	Creates and opens a temporary file for writing.
 */
-FileStream createTempFile()
+FileStream createTempFile(string suffix = null)
 {
 	char[L_tmpnam] tmp;
 	tmpnam(tmp.ptr);
 	auto tmpname = to!string(tmp.ptr);
 	if( tmpname.startsWith("\\") ) tmpname = tmpname[1 .. $];
-	logDebug("tmp %s", tmp);
+	tmpname ~= suffix;
+	logDebug("tmp %s", tmpname);
 	return openFile(tmpname, FileMode.CreateTrunc);
 }
 
