@@ -48,7 +48,12 @@ struct Task {
 
 	/** Determines if the task is still running.
 	*/
-	@property bool running() const { assert(m_fiber, "Invalid task handle"); return m_fiber.m_running && m_fiber.m_taskCounter == m_taskCounter; }
+	@property bool running()
+	const {
+		assert(m_fiber, "Invalid task handle");
+		try if( m_fiber.state == Fiber.State.TERM ) return false; catch {}
+		return m_fiber.m_running && m_fiber.m_taskCounter == m_taskCounter;
+	}
 
 	bool opEquals(in ref Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
 	bool opEquals(in Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }

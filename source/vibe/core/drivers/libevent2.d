@@ -31,6 +31,7 @@ import core.sys.posix.netinet.tcp;
 version(Windows) import std.c.windows.winsock;
 import core.thread;
 import std.conv;
+import std.encoding : sanitize;
 import std.exception;
 import std.range;
 import std.string;
@@ -467,6 +468,7 @@ class Libevent2Timer : Timer {
 			if( tm.m_callback ) runTask(tm.m_callback);
 		} catch( Throwable e ){
 			logError("Exception while handling timer event: %s", e.msg);
+			try logDebug("Full exception: %s", sanitize(e.toString())); catch {}
 			debug assert(false);
 		}
 	}
