@@ -299,7 +299,9 @@ final class HttpClientRequest : HttpRequest {
 
 	private void finalize()
 	{
-		bodyWriter().flush();
+		if( m_bodyWriter !is m_conn ) bodyWriter().finalize();
+		else bodyWriter().flush();
+		m_conn.flush();
 	}
 }
 
