@@ -103,6 +103,7 @@ class HttpClient : EventedObject {
 		SslContext m_ssl;
 		InputStream m_bodyReader;
 		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HttpClient, +http://vibed.org/)";
+		bool m_requesting = false;
 	}
 
 	static void setUserAgentString(string str) { m_userAgent = str; }
@@ -132,6 +133,10 @@ class HttpClient : EventedObject {
 
 	HttpClientResponse request(scope void delegate(HttpClientRequest req) requester)
 	{
+		assert(!m_requesting && !m_bodyReader, "Interleaved request detected!");
+		m_requesting = true;
+		scope(exit) m_requesting = false;
+
 		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTcp(m_server, m_port);
 			m_stream = m_conn;
@@ -139,13 +144,12 @@ class HttpClient : EventedObject {
 				m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
 			}
 		}
-
 		auto req = new HttpClientRequest(m_stream);
 		req.headers["User-Agent"] = m_userAgent;
-		requester(req);
 		req.headers["Connection"] = "keep-alive";
 		req.headers["Accept-Encoding"] = "gzip, deflate";
-		if( "Host" !in req.headers ) req.headers["Host"] = m_server;
+		req.headers["Host"] = m_server;
+		requester(req);
 		req.finalize();
 		
 
@@ -197,6 +201,10 @@ class HttpClient : EventedObject {
 			else enforce(false, "Unsuported content encoding: "~*pce);
 		}
 
+		// be sure to free resouces as soon as the response has been read
+		res.m_endCallback = FreeListRef!EndCallbackInputStream(res.bodyReader, &res.finalize);
+		res.bodyReader = res.m_endCallback;
+
 		m_bodyReader = res.bodyReader;
 
 		return res;
@@ -206,6 +214,7 @@ class HttpClient : EventedObject {
 final class HttpClientRequest : HttpRequest {
 	private {
 		OutputStream m_bodyWriter;
+		bool m_headerWritten = false;
 	}
 
 	private this(Stream conn)
@@ -225,14 +234,14 @@ final class HttpClientRequest : HttpRequest {
 	{
 		headers["Transfer-Encoding"] = "chunked";
 		bodyWriter.write(data);
-		m_bodyWriter = null;
+		finalize();
 	}
 	/// ditto
 	void writeBody(InputStream data, ulong length)
 	{
 		headers["Content-Length"] = to!string(length);
 		bodyWriter.write(data, length);
-		m_bodyWriter = null;
+		finalize();
 	}
 	/// ditto
 	void writeBody(ubyte[] data, string content_type = null)
@@ -240,7 +249,7 @@ final class HttpClientRequest : HttpRequest {
 		if( content_type ) headers["Content-Type"] = content_type;
 		headers["Content-Length"] = to!string(data.length);
 		bodyWriter.write(data);
-		m_bodyWriter = null;
+		finalize();
 	}
 
 	/**
@@ -274,6 +283,7 @@ final class HttpClientRequest : HttpRequest {
 	@property OutputStream bodyWriter()
 	{
 		if( m_bodyWriter ) return m_bodyWriter;
+		assert(!m_headerWritten, "Trying to write request body after body was already written.");
 		writeHeader();
 		m_bodyWriter = m_conn;
 
@@ -285,6 +295,8 @@ final class HttpClientRequest : HttpRequest {
 
 	private void writeHeader()
 	{
+		assert(!m_headerWritten, "HttpClient tried to write headers twice.");
+		m_headerWritten = true;
 		auto app = appender!string();
 		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
 		m_conn.write(app.data, false);
@@ -299,9 +311,14 @@ final class HttpClientRequest : HttpRequest {
 
 	private void finalize()
 	{
+		// test if already finalized
+		if( m_headerWritten && !m_bodyWriter )
+			return;
+
 		if( m_bodyWriter !is m_conn ) bodyWriter().finalize();
 		else bodyWriter().flush();
 		m_conn.flush();
+		m_bodyWriter = null;
 	}
 }
 
@@ -313,6 +330,7 @@ final class HttpClientResponse : HttpResponse {
 		FreeListRef!ChunkedInputStream m_chunkedInputStream;
 		FreeListRef!GzipInputStream m_gzipInputStream;
 		FreeListRef!DeflateInputStream m_deflateInputStream;
+		FreeListRef!EndCallbackInputStream m_endCallback;
 	}
 
 	/**
@@ -327,13 +345,12 @@ final class HttpClientResponse : HttpResponse {
 
 	~this()
 	{
-		assert(m_client.m_bodyReader is bodyReader);
-		if( !s_sink ) s_sink = new NullOutputStream;
-		if( bodyReader && !bodyReader.empty ){
+		if( bodyReader ){
+			logDebug("Warning: dropping unread body.");
+			m_client.m_bodyReader = null;
+			if( !s_sink ) s_sink = new NullOutputStream;
 			s_sink.write(bodyReader);
-			logDebug("dropped unread body.");
-		} 
-		m_client.m_bodyReader = null;
+		}
 	}
 
 	/**
@@ -343,6 +360,18 @@ final class HttpClientResponse : HttpResponse {
 		auto bdy = bodyReader.readAll();
 		auto str = cast(string)bdy;
 		return parseJson(str);
+	}
+
+	private void finalize()
+	{
+		destroy(m_deflateInputStream);
+		destroy(m_gzipInputStream);
+		destroy(m_chunkedInputStream);
+		destroy(m_limitedInputStream);
+		destroy(lockedConnection);
+		m_client.m_bodyReader = null;
+		m_client = null;
+		bodyReader = null;
 	}
 }
 
