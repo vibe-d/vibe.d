@@ -188,6 +188,8 @@ final class Pid
 
         bool kill()
         {
+            if(_handle == INVALID_HANDLE_VALUE)
+                return false;
             return TerminateProcess(_handle, -1) != 0;
         }
 
