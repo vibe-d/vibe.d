@@ -139,6 +139,73 @@ class CountingInputStream : InputStream {
 	}
 }
 
+/**
+	Wraps an input stream and calls the given delegate once the stream is empty.
+
+	Note that this function will potentially block after each read operation to
+	see if the end has already been reached - this may take as long until either
+	new data has arrived or until the connection was closed.
+
+	The stream will also guarantee that the inner stream is not used after it
+	has been determined to be empty. It can thus be safely deleted once the
+	callback is invoked.
+*/
+class EndCallbackInputStream : InputStream {
+	private {
+		InputStream m_in;
+		bool m_eof = false;
+		void delegate() m_callback;
+	}
+
+	this(InputStream input, void delegate() callback)
+	{
+		m_in = input;
+		m_callback = callback;
+		checkEOF();
+	}
+
+	@property bool empty()
+	{
+		checkEOF();
+		return m_in is null;
+	}
+
+	@property ulong leastSize()
+	{
+		checkEOF();
+		if( m_in ) return m_in.leastSize();
+		return 0;
+	}
+
+	@property bool dataAvailableForRead()
+	{
+		if( !m_in ) return false;
+		return m_in.dataAvailableForRead;
+	}
+
+	const(ubyte)[] peek()
+	{
+		if( !m_in ) return null;
+		return m_in.peek();
+	}
+
+	void read(ubyte[] dst)
+	{
+		enforce(m_in !is null, "Reading past end of stream.");
+		m_in.read(dst);
+		checkEOF();
+	}
+
+	private void checkEOF()
+	{
+		if( !m_in ) return;
+		if( m_in.empty ){
+			m_in = null;
+			m_callback();
+		}
+	}
+}
+
 class LimitException : Exception {
 	private ulong m_limit;
 
