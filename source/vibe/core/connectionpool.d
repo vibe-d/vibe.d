@@ -95,7 +95,7 @@ struct LockedConnection(Connection : EventedObject) {
 	{
 		if( m_conn ){
 			auto fthis = Fiber.getThis();
-			assert(fthis is m_task);
+			assert(fthis is m_task, "Locked connection destroyed in foreign fiber.");
 			auto plc = m_conn in m_pool.m_lockCount;
 			assert(plc !is null);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
