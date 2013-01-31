@@ -75,6 +75,15 @@ HttpMethod httpMethodFromString(string str)
 }
 
 /**
+	Utility function that throws a HttpStatusException if the _condition is not met.
+*/
+void enforceHttp(T)(T condition, HttpStatus statusCode, string message = null)
+{
+	enforce(condition, new HttpStatusException(statusCode, message));
+}
+
+
+/**
 	Represents an HTTP request made to a server.
 */
 class HttpRequest {
