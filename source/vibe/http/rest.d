@@ -402,6 +402,8 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias FUNC
 				auto ret = __traits(getMember, inst, method)(params);
 				res.writeJsonBody(serializeToJson(ret));
 			}
+		} catch( HttpStatusException e) {
+			res.writeJsonBody(["statusMessage": e.msg], e.status);
 		} catch( Exception e ){
 			// TODO: better error description!
 			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString())], HttpStatus.InternalServerError);
