@@ -100,6 +100,7 @@ class Win32EventDriver : EventDriver {
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
 			if( msg.message == WM_QUIT ) break;
+			if( msg.message == WM_USER_SIGNAL ) msg.hwnd = m_hwnd;
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
@@ -350,7 +351,6 @@ class Win32Signal : Signal {
 	{
 		logDebug("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
 		assert(!isOwner());
-		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
 		while( atomicOp!"=="(m_emitCount, reference_emit_count) )
