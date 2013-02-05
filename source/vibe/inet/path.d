@@ -160,7 +160,7 @@ struct Path {
 	/// Determines if this path goes outside of its base path (i.e. begins with '..').
 	@property bool external() const { return !m_absolute && m_nodes.length > 0 && m_nodes[0].m_name == ".."; }
 		
-	PathEntry opIndex(size_t idx) const { return m_nodes[idx]; }
+	ref immutable(PathEntry) opIndex(size_t idx) const { return m_nodes[idx]; }
 	Path opSlice(size_t start, size_t end) const {
 		auto ret = Path(m_nodes[start .. end], start == 0 ? absolute : false);
 		if( end == m_nodes.length ) ret.m_endsWithSlash = m_endsWithSlash;
