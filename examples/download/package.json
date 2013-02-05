@@ -1,7 +1,8 @@
 ﻿{
-    "name": "download-example",
+	"name": "download-example",
 	"description": "Requests a page using the download() function.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

@@ -222,14 +222,6 @@ void startListening()
 	parseDietFile!(template_file, ALIASES)(res.bodyWriter);
 }
 
-/**
-	Utility function that throws a HttpStatusException if the _condition is not met.
-*/
-void enforceHttp(T)(T condition, HttpStatus statusCode, string message = null)
-{
-	enforce(condition, new HttpStatusException(statusCode, message));
-}
-
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
@@ -380,24 +372,6 @@ class HttpServerSettings {
 	}
 }
 
-
-/**
-	Throwing this exception from within a request handler will produce a matching error page.
-*/
-class HttpStatusException : Exception {
-	private {
-		int m_status;
-	}
-
-	this(int status, string message = null, Throwable next = null, string file = __FILE__, int line = __LINE__)
-	{
-		super(message ? message : httpStatusText(status), file, line, next);
-		m_status = status;
-	}
-	
-	/// The HTTP status code
-	@property int status() const { return m_status; }
-}
 
 /**
 	Represents a HTTP request as received by the server side.

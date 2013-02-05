@@ -7,7 +7,7 @@
 */
 module vibe.db.mongo.mongo;
 
-public import vibe.db.mongo.db;
+public import vibe.db.mongo.client;
 
 import std.algorithm;
 
@@ -23,14 +23,14 @@ import std.algorithm;
 	Examples:
 		---
 		// connecting with default settings:
-		auto db = connectMongoDB("127.0.0.1");
-		auto users = db["users"];
+		auto client = connectMongoDB("127.0.0.1");
+		auto users = client.getCollection("users");
 		users.insert(Bson("peter"));
 		---
 
 		---
 		// connectiong using the URL form with custom settings
-		auto db = connectMongoDB("mongodb://localhost/?slaveOk=true");
+		auto client = connectMongoDB("mongodb://localhost/?slaveOk=true");
 		---
 
 	Params:
@@ -39,25 +39,25 @@ import std.algorithm;
 		host_or_url = Can either be a host name, in which case the default port will be used, or a URL with the mongodb:// scheme.
 
 	Returns:
-		A new MongoDB instance that can be used to access the database.
+		A new MongoClient instance that can be used to access the database.
   
  	Throws:
  		Throws an exception if a mongodb:// URL is given and the URL cannot be parsed.
  		An exception will not be thrown if called with a hostname and port. 
 */
-MongoDB connectMongoDB(string host, ushort port)
+MongoClient connectMongoDB(string host, ushort port)
 {
 	assert(!host.startsWith("mongodb://"));
-	return new MongoDB(host, port);
+	return new MongoClient(host, port);
 }
 /// ditto
-MongoDB connectMongoDB(string host_or_url)
+MongoClient connectMongoDB(string host_or_url)
 {
 	/* If this looks like a URL try to parse it that way. */
 	if(host_or_url.startsWith("mongodb://")){
-		return new MongoDB(host_or_url);
+		return new MongoClient(host_or_url);
 	} else {
-		return new MongoDB(host_or_url, MongoConnection.defaultPort);
+		return new MongoClient(host_or_url, MongoConnection.defaultPort);
 	}
 }
 

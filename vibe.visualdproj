@@ -315,10 +315,11 @@
   </Folder>
   <Folder name="db">
    <Folder name="mongo">
+    <File path="source\vibe\db\mongo\client.d" />
     <File path="source\vibe\db\mongo\collection.d" />
     <File path="source\vibe\db\mongo\connection.d" />
     <File path="source\vibe\db\mongo\cursor.d" />
-    <File path="source\vibe\db\mongo\db.d" />
+    <File path="source\vibe\db\mongo\database.d" />
     <File path="source\vibe\db\mongo\mongo.d" />
    </Folder>
    <Folder name="redis">

@@ -263,7 +263,6 @@ private void initDirectory(string fName)
     immutable packageJson = 
 `{
     "name": "`~(fName == "." ? "my-project" : fName)~`",
-    "version": "0.0.1",
     "description": "An example project skeleton",
     "homepage": "http://example.org",
     "copyright": "Copyright © 2000, Edit Me",
@@ -271,6 +270,7 @@ private void initDirectory(string fName)
         "Your Name"
     ],
     "dependencies": {
+    	"vibe-d": ">=0.7.12"
     }
 }
 `;

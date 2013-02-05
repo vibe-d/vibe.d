@@ -10,7 +10,7 @@ module vibe.db.mongo.cursor;
 public import vibe.data.bson;
 
 import vibe.db.mongo.connection;
-import vibe.db.mongo.db;
+import vibe.db.mongo.client;
 
 import std.exception;
 
@@ -25,9 +25,9 @@ import std.exception;
 struct MongoCursor {
 	private MongoCursorData m_data;
 
-	package this(MongoDB db, string collection, int nret, Reply first_chunk)
+	package this(MongoClient client, string collection, int nret, Reply first_chunk)
 	{
-		m_data = new MongoCursorData(db, collection, nret, first_chunk);
+		m_data = new MongoCursorData(client, collection, nret, first_chunk);
 	}
 
 	this(this)
@@ -47,10 +47,29 @@ struct MongoCursor {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	bool empty() { return m_data ? !m_data.hasNext() : true; }
+	@property bool empty() { return m_data ? m_data.empty() : true; }
+
+	/**
+		Returns the current document of the response.
+
+		Use empty and popFront to iterate over the list of documents using an
+		input range interface. Note that calling this function is only allowed
+		if empty returns false.
+	*/
+	@property Bson front() { return m_data.front; }
+
+	/**
+		Advances the cursor to the next document of the response.
+
+		Note that calling this function is only allowed if empty returns false.
+	*/
+	void popFront() { m_data.popFront(); }
 
 	/**
 		Iterates over all remaining documents.
+
+		Note that iteration is one-way - elements that have already been visited
+		will not be visited again if another iteration is done.
 
 		Throws: An exception if there is a query or communication error.
 	*/
@@ -58,8 +77,9 @@ struct MongoCursor {
 	{
 		if( !m_data ) return 0;
 
-		while( m_data.hasNext() ){
-			auto doc = m_data.getNext();
+		while( !m_data.empty ){
+			auto doc = m_data.front;
+			m_data.popFront();
 			if( auto ret = del(doc) )
 				return ret;
 		}
@@ -69,15 +89,19 @@ struct MongoCursor {
 	/**
 		Iterates over all remaining documents.
 
+		Note that iteration is one-way - elements that have already been visited
+		will not be visited again if another iteration is done.
+
 		Throws: An exception if there is a query or communication error.
 	*/
 	int opApply(int delegate(ref size_t idx, ref Bson doc) del)
 	{
 		if( !m_data ) return 0;
 
-		while( m_data.hasNext() ){
-			auto idx = m_data.getNextIndex();
-			auto doc = m_data.getNext();
+		while( !m_data.empty ){
+			auto idx = m_data.index;
+			auto doc = m_data.front;
+			m_data.popFront();
 			if( auto ret = del(idx, doc) )
 				return ret;
 		}
@@ -92,7 +116,7 @@ struct MongoCursor {
 private class MongoCursorData {
 	private {
 		int m_refCount = 1;
-		MongoDB m_db;
+		MongoClient m_client;
 		string m_collection;
 		long m_cursor;
 		int m_nret;
@@ -101,41 +125,49 @@ private class MongoCursorData {
 		Bson[] m_documents;
 	}
 
-	this(MongoDB db, string collection, int nret, Reply first_chunk)
+	this(MongoClient client, string collection, int nret, Reply first_chunk)
 	{
-		m_db = db;
+		m_client = client;
 		m_collection = collection;
 		m_cursor = first_chunk.cursor;
 		m_nret = nret;
 		handleReply(first_chunk);
 	}
 
-	bool hasNext(){
+	@property bool empty()
+	{
 		if( m_currentDoc < m_documents.length )
-			return true;
-		if( m_cursor == 0 )
 			return false;
+		if( m_cursor == 0 )
+			return true;
 
-		auto conn = m_db.lockConnection();
+		auto conn = m_client.lockConnection();
 		auto reply = conn.getMore(m_collection, m_nret, m_cursor);
 		handleReply(reply);
-		return m_currentDoc < m_documents.length;
+		return m_currentDoc >= m_documents.length;
 	}
 
-	size_t getNextIndex(){
-		enforce(hasNext(), "Cursor has no more data.");
+	@property size_t index()
+	{
+		enforce(!empty(), "Cursor has no more data.");
 		return m_offset + m_currentDoc;
 	}
 
-	Bson getNext(){
-		enforce(hasNext(), "Cursor has no more data.");
-		return m_documents[m_currentDoc++];
+	@property Bson front()
+	{
+		enforce(!empty(), "Cursor has no more data.");
+		return m_documents[m_currentDoc];
+	}
+
+	void popFront()
+	{
+		m_currentDoc++;
 	}
 
 	private void destroy()
 	{
 		if( m_cursor == 0 ) return;
-		auto conn = m_db.lockConnection();
+		auto conn = m_client.lockConnection();
 		conn.killCursors((&m_cursor)[0 .. 1]);
 		m_cursor = 0;
 	}

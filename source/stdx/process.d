@@ -108,6 +108,8 @@ else version(Windows)
     // and POSIX, only the spawnProcessImpl() function has to be
     // different.
     private __gshared LPVOID environ = null;
+
+    extern(System) BOOL TerminateProcess(HANDLE hProcess, UINT uExitCode);
 }
 
 
@@ -128,35 +130,42 @@ final class Pid
 
 
     // See module-level wait() for documentation.
-    version(Posix) int wait()
-    {
-        if (_processID == terminated) return _exitCode;
-
-        int exitCode;
-        while(true)
+    version(Posix){
+        int wait()
         {
-            int status;
-            auto check = waitpid(processID, &status, 0);
-            enforce (check != -1  ||  errno != ECHILD,
-                "Process does not exist or is not a child process.");
+            if (_processID == terminated) return _exitCode;
 
-            if (WIFEXITED(status))
+            int exitCode;
+            while(true)
             {
-                exitCode = WEXITSTATUS(status);
-                break;
+                int status;
+                auto check = waitpid(processID, &status, 0);
+                enforce (check != -1  ||  errno != ECHILD,
+                    "Process does not exist or is not a child process.");
+
+                if (WIFEXITED(status))
+                {
+                    exitCode = WEXITSTATUS(status);
+                    break;
+                }
+                else if (WIFSIGNALED(status))
+                {
+                    exitCode = -WTERMSIG(status);
+                    break;
+                }
+                // Process has stopped, but not terminated, so we continue waiting.
             }
-            else if (WIFSIGNALED(status))
-            {
-                exitCode = -WTERMSIG(status);
-                break;
-            }
-            // Process has stopped, but not terminated, so we continue waiting.
+
+            // Mark Pid as terminated, and cache and return exit code.
+            _processID = terminated;
+            _exitCode = exitCode;
+            return exitCode;
         }
 
-        // Mark Pid as terminated, and cache and return exit code.
-        _processID = terminated;
-        _exitCode = exitCode;
-        return exitCode;
+        bool kill()
+        {
+            return .kill(_processID, SIGKILL) == 0;
+        }
     }
     else version(Windows)
     {
@@ -175,6 +184,13 @@ final class Pid
                 _processID = terminated;
             }
             return _exitCode;
+        }
+
+        bool kill()
+        {
+            if(_handle == INVALID_HANDLE_VALUE)
+                return false;
+            return TerminateProcess(_handle, -1) != 0;
         }
 
         ~this()

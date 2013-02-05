@@ -880,6 +880,8 @@ Bson serializeToBson(T)(T value)
 	else static if( is(Unqualified == BsonDate) ) return Bson(value);
 	else static if( is(Unqualified == BsonTimestamp) ) return Bson(value);
 	else static if( is(Unqualified == BsonRegex) ) return Bson(value);
+	else static if( is(Unqualified == DateTime) ) return Bson(BsonDate(value));
+	else static if( is(Unqualified == SysTime) ) return Bson(BsonDate(value));
 	else static if( is(Unqualified == typeof(null)) ) return Bson(null);
 	else static if( is(Unqualified == bool) ) return Bson(value);
 	else static if( is(Unqualified == float) ) return Bson(cast(double)value);
@@ -907,7 +909,7 @@ Bson serializeToBson(T)(T value)
 	} else static if( is(Unqualified == struct) ){
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWField!(T, m) ){
+			static if( isRWField!(Unqualified, m) ){
 				auto mv = __traits(getMember, value, m);
 				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
@@ -917,7 +919,7 @@ Bson serializeToBson(T)(T value)
 		if( value is null ) return Bson(null);
 		Bson[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWField!(T, m) ){
+			static if( isRWField!(Unqualified, m) ){
 				auto mv = __traits(getMember, value, m);
 				ret[underscoreStrip(m)] = serializeToBson(mv);
 			}
@@ -948,6 +950,8 @@ T deserializeBson(T)(Bson src)
 	else static if( is(T == BsonDate) ) return cast(T)src;
 	else static if( is(T == BsonTimestamp) ) return cast(T)src;
 	else static if( is(T == BsonRegex) ) return cast(T)src;
+	else static if( is(T == SysTime) ) return src.get!BsonDate().toSysTime();
+	else static if( is(T == DateTime) ) return cast(DateTime)src.get!BsonDate().toSysTime();
 	else static if( is(T == typeof(null)) ){ return null; }
 	else static if( is(T == bool) ) return cast(bool)src;
 	else static if( is(T == float) ) return cast(double)src;
@@ -1009,7 +1013,7 @@ T deserializeBson(T)(Bson src)
 unittest {
 	import std.stdio;
 	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	const S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
 	S u;
 	deserializeBson(u, serializeToBson(t));
 	assert(t.a == u.a);

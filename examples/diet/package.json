@@ -1,7 +1,8 @@
 ﻿{
-    "name": "dietExample",
+	"name": "diet-example",
 	"description": "Displays a page using a Diet template.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

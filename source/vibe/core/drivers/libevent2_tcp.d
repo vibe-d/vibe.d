@@ -516,7 +516,7 @@ package nothrow extern(C)
 				ctx.event = null;
 			}
 
-			if( ctx.task && ctx.task.state != Fiber.State.TERM ){
+			if( ctx.task && ctx.task.running ){
 				if( status & BEV_EVENT_ERROR ){
 					logTrace("resuming corresponding task with exception...");
 					ctx.core.resumeTask(ctx.task, new Exception(errorMessage));

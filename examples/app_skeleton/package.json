@@ -1,12 +1,12 @@
 ﻿{
-    "name": "app-skeleton",
-    "version": "1.0.0",
+	"name": "app-skeleton",
 	"description": "An example project skeleton",
 	"homepage": "http://my-project.org",
 	"copyright": "Copyright © 2000, Toni Tester",
-    "authors": [
+	"authors": [
 		"Toni Tester"
 	],
-    "dependencies": {
-    }
+	"dependencies": {
+		"vibe-d": ">=0.7.12"
+	}
 }

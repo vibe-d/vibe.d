@@ -41,7 +41,12 @@ struct Url {
 		m_host = host;
 		m_port = port;
 		m_path = path;
-		m_pathString = path.toString(true);
+		m_pathString = path.toString();
+	}
+	/// ditto
+	this(string schema, Path path)
+	{
+		this(schema, null, 0, path);
 	}
 
 	/** Constructs a URL from its string representation.
@@ -159,7 +164,7 @@ struct Url {
 	const { 
 		auto str = appender!string();
 		str.reserve(m_pathString.length + 2 + queryString.length + anchor.length);
-		filterUrlEncode(str, path.toString(true), "/");
+		filterUrlEncode(str, path.toString(), "/");
 		if( queryString.length ) {
 			str.put("?");
 			str.put(queryString);

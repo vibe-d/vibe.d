@@ -121,7 +121,7 @@ Task runTask(void delegate() task)
 	f.m_taskCounter++;
 	auto handle = f.task();
 	logDebug("initial task call");
-	s_core.resumeTask(handle);
+	s_core.resumeTask(handle, null, true);
 	logDebug("run task out");
 	return handle;
 }
@@ -303,9 +303,17 @@ private class CoreTask : TaskFiber {
 
 	private void run()
 	{
+		scope(failure) logError("CoreTaskFiber was terminated unexpectedly.");
+
 		while(true){
-			while( !m_taskFunc )
-				s_core.yieldForEvent();
+			while( !m_taskFunc ){
+				try {
+					s_core.yieldForEvent();
+				} catch( Exception e ){
+					logWarn("CorTaskFiber was resumed with exception but without active task!");
+					logDebug("Full error: %s", e.toString().sanitize());
+				}
+			}
 
 			auto task = m_taskFunc;
 			m_taskFunc = null;
@@ -396,8 +404,15 @@ private class VibeDriverCore : DriverCore {
 
 	void resumeTask(Task task, Exception event_exception = null)
 	{
-		CoreTask ctask = cast(CoreTask)task;
-		assert(task.state == Fiber.State.HOLD, "Resuming task that is " ~ (task.state == Fiber.State.TERM ? "terminated" : "running"));
+		resumeTask(task, event_exception, false);
+	}
+
+	void resumeTask(Task task, Exception event_exception, bool initial_resume)
+	{
+		CoreTask ctask = cast(CoreTask)task.fiber;
+		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ (ctask.state == Fiber.State.TERM ? "terminated" : "running"));
+
+		assert(initial_resume || task.running, "Resuming terminated task.");
 
 		if( event_exception ){
 			extrap();

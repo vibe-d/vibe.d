@@ -24,6 +24,9 @@ import vibe.core.core;
 import vibe.core.log;
 import vibe.http.server;
 
+// only include main if VibeCustomMain is not set
+version(VibeCustomMain) {} else:
+
 /**
 	The predefined vibe.d application entry point.
 

@@ -5,8 +5,8 @@ import std.array;
 void main()
 {
 	logInfo("Connecting to DB...");
-	auto db = connectMongoDB("localhost");
-	auto coll = db["test.test"];
+	auto db = connectMongoDB("localhost").getDatabase("test");
+	auto coll = db["test"];
 
 	logInfo("Querying DB...");
 	Bson query = Bson(["name" : Bson("hans")]);

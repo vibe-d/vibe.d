@@ -1,7 +1,8 @@
 ﻿{
-    "name": "http-reverse-proxy-example",
+	"name": "http-reverse-proxy-example",
 	"description": "Sets up a simple reverse proxy to a foreign server.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

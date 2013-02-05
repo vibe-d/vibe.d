@@ -75,6 +75,15 @@ HttpMethod httpMethodFromString(string str)
 }
 
 /**
+	Utility function that throws a HttpStatusException if the _condition is not met.
+*/
+void enforceHttp(T)(T condition, HttpStatus statusCode, string message = null)
+{
+	enforce(condition, new HttpStatusException(statusCode, message));
+}
+
+
+/**
 	Represents an HTTP request made to a server.
 */
 class HttpRequest {
@@ -197,6 +206,27 @@ class HttpResponse {
 	@property string contentType() const { auto pct = "Content-Type" in headers; return pct ? *pct : "application/octet-stream"; }
 	/// ditto
 	@property void contentType(string ct) { headers["Content-Type"] = ct; }
+}
+
+
+/**
+	Respresents a HTTP response status.
+
+	Throwing this exception from within a request handler will produce a matching error page.
+*/
+class HttpStatusException : Exception {
+	private {
+		int m_status;
+	}
+
+	this(int status, string message = null, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message ? message : httpStatusText(status), file, line, next);
+		m_status = status;
+	}
+	
+	/// The HTTP status code
+	@property int status() const { return m_status; }
 }
 
 
@@ -422,12 +452,21 @@ struct StrMapCI {
 		}
 	}
 
-	string opIndex(string key){
+	string get(string key, string def_val = null)
+	const {
+		if( auto pv = key in this ) return *pv;
+		return def_val;
+	}
+
+	string opIndex(string key)
+	const {
 		auto pitm = key in this;
 		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
 		return *pitm;
 	}
-	string opIndexAssign(string val, string key){
+	
+	string opIndexAssign(string val, string key)
+	{
 		auto pitm = key in this;
 		if( pitm ) *pitm = val;
 		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = Field(computeCheckSumI(key), key, val);

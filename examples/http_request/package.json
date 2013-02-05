@@ -1,7 +1,8 @@
 ﻿{
-    "name": "http-request-example",
+	"name": "http-request-example",
 	"description": "Performs a custom HTTP request.",
-    "authors": [ "Sönke Ludwig" ],
-    "version": "0.0.1",
-    "dependencies": {}
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
 }

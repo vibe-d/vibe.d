@@ -43,6 +43,7 @@ import vibe.data.utils;
 
 import std.array;
 import std.conv;
+import std.datetime;
 import std.exception;
 import std.format;
 import std.string;
@@ -851,19 +852,22 @@ unittest {
 */
 Json serializeToJson(T)(T value)
 {
-	static if( is(T == Json) ) return value;
-	else static if( is(T == typeof(null)) ) return Json(null);
-	else static if( is(T == bool) ) return Json(value);
-	else static if( is(T == float) ) return Json(cast(double)value);
-	else static if( is(T == double) ) return Json(value);
-	else static if( is(T : long) ) return Json(cast(long)value);
-	else static if( is(T == string) ) return Json(value);
+	alias Unqual!T TU;
+	static if( is(TU == Json) ) return value;
+	else static if( is(TU == typeof(null)) ) return Json(null);
+	else static if( is(TU == bool) ) return Json(value);
+	else static if( is(TU == float) ) return Json(cast(double)value);
+	else static if( is(TU == double) ) return Json(value);
+	else static if( is(TU == DateTime) ) return Json(value.toISOExtString());
+	else static if( is(TU == SysTime) ) return Json(value.toISOExtString());
+	else static if( is(TU : long) ) return Json(cast(long)value);
+	else static if( is(TU == string) ) return Json(value);
 	else static if( isArray!T ){
 		auto ret = new Json[value.length];
 		foreach( i; 0 .. value.length )
 			ret[i] = serializeToJson(value[i]);
 		return Json(ret);
-	} else static if( isAssociativeArray!T ){
+	} else static if( isAssociativeArray!TU ){
 		Json[string] ret;
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
@@ -872,26 +876,26 @@ Json serializeToJson(T)(T value)
 		return value.toJson();
 	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
 		return Json(value.toString());
-	} else static if( is(T == struct) ){
+	} else static if( is(TU == struct) ){
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWField!(T, m) ){
+			static if( isRWField!(TU, m) ){
 				auto mv = __traits(getMember, value, m);
 				ret[underscoreStrip(m)] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
-	} else static if( is(T == class) ){
+	} else static if( is(TU == class) ){
 		if( value is null ) return Json(null);
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
-			static if( isRWField!(T, m) ){
+			static if( isRWField!(TU, m) ){
 				auto mv = __traits(getMember, value, m);
 				ret[underscoreStrip(m)] = serializeToJson(mv);
 			}
 		}
 		return Json(ret);
-	} else static if( isPointer!T ){
+	} else static if( isPointer!TU ){
 		if( value is null ) return Json(null);
 		return serializeToJson(*value);
 	} else {
@@ -917,6 +921,8 @@ T deserializeJson(T)(Json src)
 	else static if( is(T == bool) ) return src.get!bool;
 	else static if( is(T == float) ) return src.to!float;   // since doubles are frequently serialized without
 	else static if( is(T == double) ) return src.to!double; // a decimal point, we allow conversions here
+	else static if( is(T == DateTime) ) return DateTime.fromISOExtString(src.get!string);
+	else static if( is(T == SysTime) ) return SysTime.fromISOExtString(src.get!string);
 	else static if( is(T : long) ) return cast(T)src.get!long;
 	else static if( is(T == string) ) return src.get!string;
 	else static if( isArray!T ){
@@ -968,7 +974,7 @@ T deserializeJson(T)(Json src)
 unittest {
 	import std.stdio;
 	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
 	S u;
 	deserializeJson(u, serializeToJson(t));
 	assert(t.a == u.a);

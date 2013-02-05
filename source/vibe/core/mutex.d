@@ -96,14 +96,14 @@ class Mutex {
 
 	private	@property bool locked() const { return m_locked; }
 
-	private bool tryLock()
+	bool tryLock()
 	{
 		if(m_locked) return false;
 		m_locked = true;
 		return true;
 	}
 
-	private void lock()
+	void lock()
 	{
 		if(m_locked){
 			m_signal.acquire();
@@ -112,7 +112,7 @@ class Mutex {
 		m_locked = true;
 	}
 
-	private void unlock()
+	void unlock()
 	{
 		enforce(m_locked);
 		m_locked = false;

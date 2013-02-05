@@ -74,13 +74,14 @@ struct Path {
 	}
 	
 	/// Converts the Path back to a string representation using slashes.
-	string toString(bool in_url = false) const {
+	string toString()
+	const {
 		if( m_nodes.empty ) return absolute ? "/" : "";
 		
 		Appender!string ret;
 		
-		// for absolute unix paths start with /
-		if( in_url || absolute && !m_nodes[0].toString().endsWith(":") ) ret.put('/');
+		// for absolute paths start with /
+		if( absolute ) ret.put('/');
 		
 		foreach( i, f; m_nodes ){
 			if( i > 0 ) ret.put('/');
@@ -94,7 +95,8 @@ struct Path {
 	}
 	
 	/// Converts the Path object to a native path string (backslash as path separator on Windows).
-	string toNativeString() const {
+	string toNativeString()
+	const {
 		Appender!string ret;
 		
 		// for absolute unix paths start with /
