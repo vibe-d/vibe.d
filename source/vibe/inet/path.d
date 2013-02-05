@@ -214,7 +214,6 @@ struct Path {
 
 	int opCmp(ref const Path rhs) const {
 		if( m_absolute != rhs.m_absolute ) return cast(int)m_absolute - cast(int)rhs.m_absolute;
-		if( m_nodes.length != rhs.length ) return false;
 		foreach( i; 0 .. min(m_nodes.length, rhs.m_nodes.length) )
 			if( m_nodes[i] != rhs.m_nodes[i] )
 				return m_nodes[i].opCmp(rhs.m_nodes[i]);
