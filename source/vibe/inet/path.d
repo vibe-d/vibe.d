@@ -140,7 +140,7 @@ struct Path {
 	}
 	
 	/// The last entry of the path
-	@property PathEntry head() const { enforce(m_nodes.length > 0); return m_nodes[$-1]; }
+	@property ref immutable(PathEntry) head() const { enforce(m_nodes.length > 0); return m_nodes[$-1]; }
 
 	/// The parent path
 	@property Path parentPath() const { return this[0 .. length-1]; }
