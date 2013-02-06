@@ -412,7 +412,7 @@ final class HttpServerRequest : HttpRequest {
 
 			Remarks: This field is only set if HttpServerOption.ParseCookies is set.
 		*/
-		string[string] cookies;
+		string[][string] cookies;
 		
 		/** Contains all _form fields supplied using the _query string.
 
@@ -1109,8 +1109,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		// lookup the session
 		if ( settings.sessionStore ) {
 			auto pv = settings.sessionIdCookie in req.cookies;
-			if (pv && *pv != "") {
-				req.session = settings.sessionStore.open(*pv);
+			if (pv && pv.length != 0) {
+				req.session = settings.sessionStore.open((*pv)[0]);
 				res.m_session = req.session;
 			}
 		}
@@ -1210,7 +1210,7 @@ private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocat
 	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
 }
 
-private void parseCookies(string str, ref string[string] cookies) 
+private void parseCookies(string str, ref string[][string] cookies) 
 {
 	while(str.length > 0) {
 		auto idx = str.indexOf('=');
@@ -1220,7 +1220,11 @@ private void parseCookies(string str, ref string[string] cookies)
 
 		for( idx = 0; idx < str.length && str[idx] != ';'; idx++) {}
 		string value = str[0 .. idx].strip();
-		cookies[name] = urlDecode(value);
+		value = urlDecode(value);
+		if(auto existingCookiesPtr = name in cookies)
+			*existingCookiesPtr ~= value;
+		else
+			cookies[name] = [value];
 		str = idx < str.length ? str[idx+1 .. $] : null;
 	}
 }

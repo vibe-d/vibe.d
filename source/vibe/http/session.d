@@ -147,6 +147,9 @@ final class MemorySessionStore : SessionStore {
 	Session open(string id)
 	{
 		auto pv = id in m_sessions;
+import semitwist.util.all;
+mixin(traceVal!"/+ vibed-git MemorySessionStore.open +/ id");
+mixin(traceVal!"/+ vibed-git MemorySessionStore.open +/ pv is null");
 		return pv ? new Session(this, id) : null;	
 	}
 

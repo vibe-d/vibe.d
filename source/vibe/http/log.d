@@ -166,7 +166,22 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 						break;
 					case 'C': //Cookie content {cookie}
 						enforce(key, "cookie name missing");
-						if( auto pv = key in req.cookies ) ln.put(*pv);
+						if( auto pv = key in req.cookies ) {
+							if(pv.length == 0)
+								ln.put("-");
+							else if(pv.length == 1)
+								ln.put((*pv)[0]);
+							else {
+								//TODO: I'm not sure what the proper formatting is for this
+								ln.put("[");
+								foreach(i, v; *pv) {
+									if(i > 0)
+										ln.put("; ");
+									ln.put(v);
+								}
+								ln.put("]");
+							}
+						}
 						else ln.put("-");
 						break;
 					case 'D': //The time taken to serve the request
