@@ -396,34 +396,41 @@ final class Cookie {
 		bool m_httpOnly; 
 	}
 
-	Cookie setValue(string value) { m_value = value; return this; }
 	@property void value(string value) { m_value = value; }
 	@property string value() { return m_value; }
 
-	Cookie setDomain(string domain) { m_domain = domain; return this; }
 	@property void domain(string value) { m_domain = value; }
 	@property string domain() { return m_domain; }
 
-	Cookie setPath(string path) { m_path = path; return this; }
 	@property void path(string value) { m_path = value; }
 	@property string path() { return m_path; }
 
-	Cookie setExpire(string expires) { m_expires = expires; return this; }
 	@property void expires(string value) { m_expires = value; }
 	@property string expires() { return m_expires; }
 
-	Cookie setMaxAge(long maxAge) { m_maxAge = maxAge; return this;}
 	@property void maxAge(long value) { m_maxAge = value; }
 	@property long maxAge() { return m_maxAge; }
 
-	Cookie setSecure(bool enabled) { m_secure = enabled; return this; }
 	@property void isSecure(bool value) { m_secure = value; }
 	@property bool isSecure() { return m_secure; }
 
-	Cookie setHttpOnly(bool enabled) { m_httpOnly = enabled; return this; }
 	@property void isHttpOnly(bool value) { m_httpOnly = value; }
 	@property bool isHttpOnly() { return m_httpOnly; }
 
+	/// These functions will get deprecated, please use the property setters instead.
+	Cookie setValue(string value) { m_value = value; return this; }
+	/// ditto
+	Cookie setDomain(string domain) { m_domain = domain; return this; }
+	/// ditto
+	Cookie setPath(string path) { m_path = path; return this; }
+	/// ditto
+	Cookie setExpire(string expires) { m_expires = expires; return this; }
+	/// ditto
+	Cookie setMaxAge(long maxAge) { m_maxAge = maxAge; return this;}
+	/// ditto
+	Cookie setSecure(bool enabled) { m_secure = enabled; return this; }
+	/// ditto
+	Cookie setHttpOnly(bool enabled) { m_httpOnly = enabled; return this; }
 }
 
 /**
