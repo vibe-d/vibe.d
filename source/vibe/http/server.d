@@ -1110,8 +1110,13 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if ( settings.sessionStore ) {
 			auto pv = settings.sessionIdCookie in req.cookies;
 			if (pv && pv.length != 0) {
-				req.session = settings.sessionStore.open((*pv)[0]);
-				res.m_session = req.session;
+				req.session = null;
+				foreach(id; *pv) {
+					req.session = settings.sessionStore.open(id);
+					res.m_session = req.session;
+					if(req.session)
+						break;
+				}
 			}
 		}
 
