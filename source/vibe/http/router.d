@@ -15,62 +15,61 @@ import vibe.textfilter.urlencode;
 import std.functional;
 
 
-/++
+/**
 	An interface for HTTP request routers.
-+/
-interface IHttpRouter {
-public:
+*/
+interface HttpRouter {
 	// Adds a new route for request that match the path and method
-	IHttpRouter match(HttpMethod method, string path, HttpServerRequestDelegate cb);
+	HttpRouter match(HttpMethod method, string path, HttpServerRequestDelegate cb);
 	// ditto
-	final IHttpRouter match(HttpMethod method, string path, IHttpServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
+	final HttpRouter match(HttpMethod method, string path, IHttpServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter match(HttpMethod method, string path, HttpServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
+	final HttpRouter match(HttpMethod method, string path, HttpServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
 
 	// Handles the Http request by dispatching it to the registered request handler
 	void handleRequest(HttpServerRequest req, HttpServerResponse res);
 
 	// Adds a new route for GET requests matching the specified pattern.
-	final IHttpRouter get(string url_match, IHttpServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
+	final HttpRouter get(string url_match, IHttpServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter get(string url_match, HttpServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
+	final HttpRouter get(string url_match, HttpServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
 	// ditto
-	final IHttpRouter get(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.GET, url_match, cb); }
+	final HttpRouter get(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.GET, url_match, cb); }
 
 	// Adds a new route for POST requests matching the specified pattern.
-	final IHttpRouter post(string url_match, IHttpServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
+	final HttpRouter post(string url_match, IHttpServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter post(string url_match, HttpServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
+	final HttpRouter post(string url_match, HttpServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
 	// ditto
-	final IHttpRouter post(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.POST, url_match, cb); }
+	final HttpRouter post(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.POST, url_match, cb); }
 
 	// Adds a new route for PUT requests matching the specified pattern.
-	final IHttpRouter put(string url_match, IHttpServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
+	final HttpRouter put(string url_match, IHttpServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter put(string url_match, HttpServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
+	final HttpRouter put(string url_match, HttpServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
 	// ditto
-	final IHttpRouter put(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PUT, url_match, cb); }
+	final HttpRouter put(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PUT, url_match, cb); }
 
 	// Adds a new route for DELETE requests matching the specified pattern.
-	final IHttpRouter delete_(string url_match, IHttpServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
+	final HttpRouter delete_(string url_match, IHttpServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter delete_(string url_match, HttpServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
+	final HttpRouter delete_(string url_match, HttpServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
 	// ditto
-	final IHttpRouter delete_(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.DELETE, url_match, cb); }
+	final HttpRouter delete_(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.DELETE, url_match, cb); }
 
 	// Adds a new route for PATCH requests matching the specified pattern.
-	final IHttpRouter patch(string url_match, IHttpServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
+	final HttpRouter patch(string url_match, IHttpServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter patch(string url_match, HttpServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
+	final HttpRouter patch(string url_match, HttpServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
 	// ditto
-	final IHttpRouter patch(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PATCH, url_match, cb); }
+	final HttpRouter patch(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PATCH, url_match, cb); }
 
 	// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
-	final IHttpRouter any(string url_match, IHttpServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
+	final HttpRouter any(string url_match, IHttpServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
 	// ditto
-	final IHttpRouter any(string url_match, HttpServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
+	final HttpRouter any(string url_match, HttpServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
 	// ditto
-	final IHttpRouter any(string url_match, HttpServerRequestDelegate cb)
+	final HttpRouter any(string url_match, HttpServerRequestDelegate cb)
 	{
 		return get(url_match, cb).post(url_match, cb)
 			.put(url_match, cb).delete_(url_match, cb).patch(url_match, cb);
@@ -126,7 +125,7 @@ public:
 	}
 	---
 +/
-class UrlRouter : IHttpServerRequestHandler, IHttpRouter {
+class UrlRouter : IHttpServerRequestHandler, HttpRouter {
 	private {
 		Route[][HttpMethod.max+1] m_routes;
 	}
