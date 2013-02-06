@@ -698,9 +698,11 @@ final class HttpServerResponse : HttpResponse {
 	}
 
 	/// Sets the specified cookie value.
-	Cookie setCookie(string name, string value) {
+	Cookie setCookie(string name, string value, string path = "/")
+	{
 		auto cookie = new Cookie();
-		cookie.setValue(value);
+		cookie.path = path;
+		cookie.value = value;
 		cookies[name] = cookie;
 		return cookie;
 	}
