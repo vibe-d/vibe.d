@@ -719,11 +719,14 @@ final class HttpServerResponse : HttpResponse {
 		creating the server. Depending on this, the session can be persistent
 		or temporary and specific to this server instance.
 	*/
-	Session startSession() {
+	Session startSession(string path = "/", bool secure = false)
+	{
 		assert(m_settings.sessionStore, "no session store set");
 		assert(!m_session, "Try to start a session, but already started one.");
 		m_session = m_settings.sessionStore.create();
-		setCookie(m_settings.sessionIdCookie, m_session.id);
+		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id);
+		cookie.path = path;
+		cookie.secure = secure;
 		return m_session;
 	}
 
