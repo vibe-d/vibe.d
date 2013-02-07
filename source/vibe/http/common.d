@@ -397,27 +397,32 @@ final class Cookie {
 	}
 
 	@property void value(string value) { m_value = value; }
-	@property string value() { return m_value; }
+	@property string value() const { return m_value; }
 
 	@property void domain(string value) { m_domain = value; }
-	@property string domain() { return m_domain; }
+	@property string domain() const { return m_domain; }
 
 	@property void path(string value) { m_path = value; }
-	@property string path() { return m_path; }
+	@property string path() const { return m_path; }
 
 	@property void expires(string value) { m_expires = value; }
-	@property string expires() { return m_expires; }
+	@property string expires() const { return m_expires; }
 
 	@property void maxAge(long value) { m_maxAge = value; }
-	@property long maxAge() { return m_maxAge; }
+	@property long maxAge() const { return m_maxAge; }
 
-	@property void isSecure(bool value) { m_secure = value; }
-	@property bool isSecure() { return m_secure; }
+	@property void secure(bool value) { m_secure = value; }
+	@property bool secure() const { return m_secure; }
 
-	@property void isHttpOnly(bool value) { m_httpOnly = value; }
-	@property bool isHttpOnly() { return m_httpOnly; }
+	@property void httpOnly(bool value) { m_httpOnly = value; }
+	@property bool httpOnly() const { return m_httpOnly; }
+
 
 	/// These functions will get deprecated, please use the property setters instead.
+	alias secure isSecure;
+	// ditto
+	alias httpOnly isHttpOnly;
+	// ditto
 	Cookie setValue(string value) { m_value = value; return this; }
 	/// ditto
 	Cookie setDomain(string domain) { m_domain = domain; return this; }
