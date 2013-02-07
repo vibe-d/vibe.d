@@ -559,3 +559,84 @@ struct StrMapCI {
 		return csum;
 	}
 }
+
+/** 
+*/
+struct CookieValueMap {
+	struct Cookie {
+		string name;
+		string value;
+	}
+
+	private {
+		Cookie[] m_entries;
+	}
+
+	string get(string name, string def_value = null)
+	const {
+		auto pv = name in this;
+		if( !pv ) return def_value;
+		return *pv;
+	}
+
+	string[] getAll(string name)
+	const {
+		string[] ret;
+		foreach(c; m_entries)
+			if( c.name == name )
+				ret ~= c.value;
+		return ret;
+	}
+
+	void opIndexAssign(string value, string name)
+	{
+		m_entries ~= Cookie(name, value);
+	}
+
+	string opIndex(string name)
+	const {
+		auto pv = name in this;
+		if( !pv ) throw new RangeError("Non-existent cookie: "~name);
+		return *pv;
+	}
+
+	int opApply(scope int delegate(ref Cookie) del)
+	{
+		foreach(ref c; m_entries)
+			if( auto ret = del(c) )
+				return ret;
+		return 0;
+	}
+
+	int opApply(scope int delegate(ref Cookie) del)
+	const {
+		foreach(Cookie c; m_entries)
+			if( auto ret = del(c) )
+				return ret;
+		return 0;
+	}
+
+	int opApply(scope int delegate(ref string name, ref string value) del)
+	{
+		foreach(ref c; m_entries)
+			if( auto ret = del(c.name, c.value) )
+				return ret;
+		return 0;
+	}
+
+	int opApply(scope int delegate(ref string name, ref string value) del)
+	const {
+		foreach(Cookie c; m_entries)
+			if( auto ret = del(c.name, c.value) )
+				return ret;
+		return 0;
+	}
+
+	inout(string)* opBinaryRight(string op)(string name) inout if(op == "in")
+	{
+		foreach(c; m_entries)
+			if( c.name == name )
+				return &c.value;
+		return null;
+	}
+}

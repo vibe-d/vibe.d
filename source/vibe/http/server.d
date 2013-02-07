@@ -410,9 +410,14 @@ final class HttpServerRequest : HttpRequest {
 
 		/** Contains the list of _cookies that are stored on the client.
 
+			Note that the a single cookie name may occur multiple times if multiple
+			cookies have that name but different paths or domains that all match
+			the request URI. By default, the first cookie will be returned, which is
+			the or one of the cookies with the closest path match.
+
 			Remarks: This field is only set if HttpServerOption.ParseCookies is set.
 		*/
-		string[string] cookies;
+		CookieValueMap cookies;
 		
 		/** Contains all _form fields supplied using the _query string.
 
@@ -1111,9 +1116,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		// lookup the session
 		if ( settings.sessionStore ) {
 			auto pv = settings.sessionIdCookie in req.cookies;
-			if (pv && *pv != "") {
-				req.session = settings.sessionStore.open(*pv);
-				res.m_session = req.session;
+			if( pv ){
+				// use the first cookie that contains a valid session ID in case
+				// of multiple matching session cookies
+				foreach(v; req.cookies.getAll(settings.sessionIdCookie)){
+					req.session = settings.sessionStore.open(v);
+					res.m_session = req.session;
+					if( req.session ) break;
+				}
 			}
 		}
 
@@ -1212,7 +1222,7 @@ private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocat
 	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
 }
 
-private void parseCookies(string str, ref string[string] cookies) 
+private void parseCookies(string str, ref CookieValueMap cookies) 
 {
 	while(str.length > 0) {
 		auto idx = str.indexOf('=');
