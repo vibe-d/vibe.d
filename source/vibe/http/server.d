@@ -232,10 +232,13 @@ alias void delegate(HttpServerRequest req, HttpServerResponse res) HttpServerReq
 /// Static function based request handler
 alias void function(HttpServerRequest req, HttpServerResponse res) HttpServerRequestFunction;
 /// Interface for class based request handlers
-interface IHttpServerRequestHandler {
+interface HttpServerRequestHandler {
 	/// Handles incoming HTTP requests
 	void handleRequest(HttpServerRequest req, HttpServerResponse res);
 }
+
+/// Compatibility alias, will be deprecated at some point.
+alias HttpServerRequestHandler IHttpServerRequestHandler;
 
 /// Aggregates all information about an HTTP error status.
 class HttpServerErrorInfo {
