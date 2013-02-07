@@ -724,6 +724,8 @@ final class HttpServerResponse : HttpResponse {
 		assert(m_settings.sessionStore, "no session store set");
 		assert(!m_session, "Try to start a session, but already started one.");
 		m_session = m_settings.sessionStore.create();
+		m_session["$sessionCookiePath"] = path;
+		m_session["$sessionCookieSecure"] = secure.to!string();
 		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id);
 		cookie.path = path;
 		cookie.secure = secure;
@@ -735,7 +737,9 @@ final class HttpServerResponse : HttpResponse {
 	*/
 	void terminateSession() {
 		assert(m_session, "Try to terminate a session, but none is started.");
-		setCookie(m_settings.sessionIdCookie, "");
+		auto cookie = setCookie(m_settings.sessionIdCookie, null);
+		cookie.path = m_session["$sessionCookiePath"];
+		cookie.secure = m_session["$sessionCookieSecure"].to!bool();
 		m_session.destroy();
 		m_session = null;
 	}
