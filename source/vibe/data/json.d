@@ -710,26 +710,30 @@ Json parseJson(R)(ref R range, int* line = null)
 	if( is(R == string) )
 {
 	Json ret;
-	enforce(range.length > 0, "JSON string is empty.");
+	enforce(!range.empty, "JSON string is empty.");
 
 	skipWhitespace(range, line);
 
-	version(JsonLineNumbers) int curline = line ? *line : 0;
+	version(JsonLineNumbers){
+		import vibe.core.log;
+		int curline = line ? *line : 0;
+		scope(failure) logError("Error in line: %d", curline);
+	}
 
-	switch( range[0] ){
+	switch( range.front ){
 		case 'f':
 			enforce(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. 5]~"'.");
-			range = range[5 .. $];
+			range.popFrontN(5);
 			ret = false;
 			break;
 		case 'n':
 			enforce(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. 4]~"'.");
-			range = range[4 .. $];
+			range.popFrontN(4);
 			ret = null;
 			break;
 		case 't':
 			enforce(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. 4]~"'.");
-			range = range[4 .. $];
+			range.popFrontN(4);
 			ret = true;
 			break;
 		case '0': .. case '9'+1:
@@ -745,37 +749,37 @@ Json parseJson(R)(ref R range, int* line = null)
 		case '[':
 			Json[] arr;
 			while(true) {
-				enforce(range.length > 0);
-				if(range[0] == ']') break;
-				range = range[1 .. $];
+				enforce(!range.empty);
+				if(range.front == ']') break;
+				range.popFront();
 				skipWhitespace(range, line);
 				if(range[0] == ']') break;
 				arr ~= parseJson(range, line);
 				skipWhitespace(range, line);
-				enforce(range.length > 0 && (range[0] == ',' || range[0] == ']'), "Expected ']' or ','.");
+				enforce(!range.empty && (range.front == ',' || range.front == ']'), "Expected ']' or ','.");
 			}
-			range = range[1 .. $];
+			range.popFront();
 			ret = arr;
 			break;
 		case '{':
 			Json[string] obj;
 			while(true) {
-				enforce(range.length > 0);
-				if(range[0] == '}') break;
-				range = range[1 .. $];
+				enforce(!range.empty);
+				if(range.front == '}') break;
+				range.popFront();
 				skipWhitespace(range, line);
-				if(range[0] == '}') break;
+				if(range.front == '}') break;
 				string key = skipJsonString(range);
 				skipWhitespace(range, line);
 				enforce(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'");
-				range = range[1 .. $];
+				range.popFront();
 				skipWhitespace(range, line);
 				Json itm = parseJson(range, line);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforce(range.length > 0 && (range[0] == ',' || range[0] == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
+				enforce(!range.empty && (range.front == ',' || range.front == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
 			}
-			range = range[1 .. $];
+			range.popFront();
 			ret = obj;
 			break;
 		default:
