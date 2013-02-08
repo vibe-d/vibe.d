@@ -365,19 +365,28 @@ final class HttpClientResponse : HttpResponse {
 	*/
 	void dropBody()
 	{
-		s_sink.write(bodyReader);
+		if( bodyReader ){
+			if( bodyReader.empty ){
+				finalize();
+			} else {
+				s_sink.write(bodyReader);
+				assert(!bodyReader);
+			}
+		}
 	}
 
 	private void finalize()
 	{
+		if( !m_client ) return;
+		logInfo("finalize");
+		m_client.m_bodyReader = null;
+		m_client = null;
+		bodyReader = null;
 		destroy(m_deflateInputStream);
 		destroy(m_gzipInputStream);
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
 		destroy(lockedConnection);
-		m_client.m_bodyReader = null;
-		m_client = null;
-		bodyReader = null;
 	}
 }
 
