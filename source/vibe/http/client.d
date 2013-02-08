@@ -347,9 +347,7 @@ final class HttpClientResponse : HttpResponse {
 	{
 		if( bodyReader ){
 			logDebug("Warning: dropping unread body.");
-			m_client.m_bodyReader = null;
-			if( !s_sink ) s_sink = new NullOutputStream;
-			s_sink.write(bodyReader);
+			dropBody();
 		}
 	}
 
@@ -360,6 +358,14 @@ final class HttpClientResponse : HttpResponse {
 		auto bdy = bodyReader.readAll();
 		auto str = cast(string)bdy;
 		return parseJson(str);
+	}
+
+	/**
+		Reads and discards the response body.
+	*/
+	void dropBody()
+	{
+		s_sink.write(bodyReader);
 	}
 
 	private void finalize()
@@ -376,3 +382,5 @@ final class HttpClientResponse : HttpResponse {
 }
 
 private NullOutputStream s_sink;
+
+static this() { s_sink = new NullOutputStream; }
