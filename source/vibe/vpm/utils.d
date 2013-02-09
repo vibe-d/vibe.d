@@ -30,7 +30,7 @@ package bool isEmptyDir(Path p) {
 }
 
 package Json jsonFromFile(Path file) {
-	auto f = openFile(to!string(file), FileMode.Read);
+	auto f = openFile(file, FileMode.Read);
 	scope(exit) f.close();
 	auto text = stripUTF8Bom(cast(string)f.readAll());
 	return parseJson(text);
