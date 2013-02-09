@@ -748,26 +748,26 @@ Json parseJson(R)(ref R range, int* line = null)
 			break;
 		case '[':
 			Json[] arr;
+			range.popFront();
 			while(true) {
+				skipWhitespace(range, line);
 				enforce(!range.empty);
 				if(range.front == ']') break;
-				range.popFront();
-				skipWhitespace(range, line);
-				if(range[0] == ']') break;
 				arr ~= parseJson(range, line);
 				skipWhitespace(range, line);
 				enforce(!range.empty && (range.front == ',' || range.front == ']'), "Expected ']' or ','.");
+				if( range.front == ']' ) break;
+				else range.popFront();
 			}
 			range.popFront();
 			ret = arr;
 			break;
 		case '{':
 			Json[string] obj;
+			range.popFront();
 			while(true) {
-				enforce(!range.empty);
-				if(range.front == '}') break;
-				range.popFront();
 				skipWhitespace(range, line);
+				enforce(!range.empty);
 				if(range.front == '}') break;
 				string key = skipJsonString(range);
 				skipWhitespace(range, line);
@@ -778,6 +778,8 @@ Json parseJson(R)(ref R range, int* line = null)
 				obj[key] = itm;
 				skipWhitespace(range, line);
 				enforce(!range.empty && (range.front == ',' || range.front == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
+				if( range.front == '}' ) break;
+				else range.popFront();
 			}
 			range.popFront();
 			ret = obj;
