@@ -73,8 +73,6 @@ class ThreadedFileStream : FileStream {
 	
 	this(Path path, FileMode mode)
 	{
-		m_path = path;
-		m_mode = mode;
 		auto pathstr = m_path.toNativeString();
 		final switch(m_mode){
 			case FileMode.Read:
@@ -94,7 +92,16 @@ class ThreadedFileStream : FileStream {
 			//throw new Exception(formatString("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
 			throw new Exception("Failed to open "~pathstr);
 		
-			
+		this(m_fileDescriptor, path, mode);
+	}
+
+	this(int fd, Path path, FileMode mode)
+	{
+		assert(fd >= 0);
+		m_fileDescriptor = fd;
+		m_path = path;
+		m_mode = mode;
+
 		version(linux){
 			// stat_t seems to be defined wrong on linux/64
 			m_size = .lseek(m_fileDescriptor, 0, SEEK_END);
@@ -106,12 +113,12 @@ class ThreadedFileStream : FileStream {
 			// (at least) on windows, the created file is write protected
 			version(Windows){
 				if( mode == FileMode.CreateTrunc )
-					chmod(pathstr.toStringz(), S_IREAD|S_IWRITE);
+					chmod(path.toNativeString().toStringz(), S_IREAD|S_IWRITE);
 			}
 		}
 		lseek(m_fileDescriptor, 0, SEEK_SET);
 		
-		logDebug("opened file %s with %d bytes as %d", pathstr, m_size, m_fileDescriptor);
+		logDebug("opened file %s with %d bytes as %d", path.toNativeString(), m_size, m_fileDescriptor);
 	}
 
 	~this()
