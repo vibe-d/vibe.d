@@ -218,7 +218,7 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 	auto dst = appender!(ubyte[])();
 	auto bufferobj = FreeListRef!(Buffer, false)();
 	auto buffer = bufferobj.bytes[];
-	size_t n = 0, m = 0;
+	size_t n = 0;
 	while( !stream.empty ){
 		enforce(!max_bytes || n++ < max_bytes, "Data too long!");
 		size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
