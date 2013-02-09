@@ -73,8 +73,8 @@ class ThreadedFileStream : FileStream {
 	
 	this(Path path, FileMode mode)
 	{
-		auto pathstr = m_path.toNativeString();
-		final switch(m_mode){
+		auto pathstr = path.toNativeString();
+		final switch(mode){
 			case FileMode.Read:
 				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
 				break;
@@ -89,8 +89,8 @@ class ThreadedFileStream : FileStream {
 				break;
 		}
 		if( m_fileDescriptor < 0 )
-			//throw new Exception(formatString("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
-			throw new Exception("Failed to open "~pathstr);
+			//throw new Exception(format("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
+			throw new Exception("Failed to open file '"~pathstr~"'.");
 		
 		this(m_fileDescriptor, path, mode);
 	}

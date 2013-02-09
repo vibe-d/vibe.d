@@ -23,7 +23,7 @@ import std.string;
 
 
 version(Posix){
-	int mkstemps(char* templ, int suffixlen);
+	private extern(C) int mkstemps(char* templ, int suffixlen);
 }
 
 
@@ -54,13 +54,15 @@ FileStream createTempFile(string suffix = null)
 		logDebug("tmp %s", tmpname);
 		return openFile(tmpname, FileMode.CreateTrunc);
 	} else {
-		auto templ = new char[7+suffix.length];
-		templ[0 .. 6] = 'X';
-		templ[6 .. $-1] = suffix;
+		enum pattern ="/tmp/vtmp.XXXXXX";
+		scope templ = new char[pattern.length+suffix.length+1];
+		templ[0 .. pattern.length] = pattern;
+		templ[pattern.length .. $-1] = suffix;
 		templ[$-1] = '\0';
-		auto fd = mkstemps(templ, suffix.length);
+		assert(suffix.length <= int.max);
+		auto fd = mkstemps(templ.ptr, cast(int)suffix.length);
 		enforce(fd >= 0, "Failed to create temporary file.");
-		return new ThreadedFile(fd, Path(templ), FileMode.CreateTrunc);
+		return new ThreadedFileStream(fd, Path(templ[0 .. $-1].idup), FileMode.CreateTrunc);
 	}
 }
 
