@@ -10,6 +10,7 @@ module vibe.core.file;
 public import vibe.core.driver;
 public import vibe.inet.url;
 
+import vibe.core.drivers.threadedfile;
 import vibe.core.log;
 
 import std.conv;
@@ -19,6 +20,11 @@ import std.exception;
 import std.file;
 import std.path;
 import std.string;
+
+
+version(Posix){
+	int mkstemps(char* templ, int suffixlen);
+}
 
 
 /**
@@ -39,13 +45,23 @@ FileStream openFile(string path, FileMode mode = FileMode.Read)
 */
 FileStream createTempFile(string suffix = null)
 {
-	char[L_tmpnam] tmp;
-	tmpnam(tmp.ptr);
-	auto tmpname = to!string(tmp.ptr);
-	if( tmpname.startsWith("\\") ) tmpname = tmpname[1 .. $];
-	tmpname ~= suffix;
-	logDebug("tmp %s", tmpname);
-	return openFile(tmpname, FileMode.CreateTrunc);
+	version(Windows){
+		char[L_tmpnam] tmp;
+		tmpnam(tmp.ptr);
+		auto tmpname = to!string(tmp.ptr);
+		if( tmpname.startsWith("\\") ) tmpname = tmpname[1 .. $];
+		tmpname ~= suffix;
+		logDebug("tmp %s", tmpname);
+		return openFile(tmpname, FileMode.CreateTrunc);
+	} else {
+		auto templ = new char[7+suffix.length];
+		templ[0 .. 6] = 'X';
+		templ[6 .. $-1] = suffix;
+		templ[$-1] = '\0';
+		auto fd = mkstemps(templ, suffix.length);
+		enforce(fd >= 0, "Failed to create temporary file.");
+		return new ThreadedFile(fd, Path(templ), FileMode.CreateTrunc);
+	}
 }
 
 /**
