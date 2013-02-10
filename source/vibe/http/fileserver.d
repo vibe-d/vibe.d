@@ -28,6 +28,16 @@ class HttpFileServerSettings {
 	string serverPathPrefix = "/";
 	Duration maxAge = hours(24);
 	bool failIfNotFound = false;
+	
+	/**
+		Called just before headers and data are sent.
+		Allows headers to be customized, or other custom processing to be performed.
+
+		Note: Any changes you make to the response, physicalPath, or anything
+		else during this function will NOT be verified by Vibe.d for correctness.
+		Make sure any alterations you make are complete and correct according to HTTP spec.
+	*/
+	void delegate(HttpServerRequest req, HttpServerResponse res, ref string physicalPath) preWriteCallback = null;
 
 	this() {}
 
@@ -119,7 +129,10 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 			res.headers["Expires"] = toRFC822DateTimeString(expireTime);
 			res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
 		}
-
+		
+		if(settings.preWriteCallback)
+			settings.preWriteCallback(req, res, path);
+		
 		// for HEAD responses, stop here
 		if( res.isHeadResponse() ){
 			res.writeVoidBody();
