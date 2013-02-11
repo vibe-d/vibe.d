@@ -378,7 +378,6 @@ final class HttpClientResponse : HttpResponse {
 	private void finalize()
 	{
 		if( !m_client ) return;
-		logInfo("finalize");
 		m_client.m_bodyReader = null;
 		m_client = null;
 		bodyReader = null;
