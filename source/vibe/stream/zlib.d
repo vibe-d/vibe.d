@@ -123,7 +123,10 @@ class ZlibInputStream : InputStream {
 	@property bool empty()
 	{
 		assert(!m_finished || m_in.empty);
-		return m_finished && m_buffer.length == 0;
+		if( m_buffer.length > 0 ) return false;
+		if( m_finished ) return true;
+		readChunk();
+		return m_buffer.length == 0;
 	}
 
 	@property ulong leastSize()
