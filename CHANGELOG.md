@@ -48,6 +48,7 @@ v0.7.12 - 2013-02-11
  - Fixed `WebSocket.connected` - [issue #169][issue169]
  - Fixed accepting of invalid JSON syntax - [issue #161][issue161]
  - Fixed use of `tmpnam` on Posix by replacing with `mkstemps`, still used on Windows - [issue #137][issue137]
+ - Fixed `ZlibInputStream.empty` to be consistent with `leastSize`
 
 [issue137]: https://github.com/rejectedsoftware/vibe.d/issues/137
 [issue143]: https://github.com/rejectedsoftware/vibe.d/issues/143
