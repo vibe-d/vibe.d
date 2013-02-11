@@ -965,20 +965,27 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 		conn = ssl_stream;
 	} else conn = conn_;
 
-	bool persistent;
 	do {
 		HttpServerSettings settings;
-		persistent = handleRequest(conn, conn_.peerAddress, listen_info, settings);
+		bool keep_alive;
+		handleRequest(conn, conn_.peerAddress, listen_info, settings, keep_alive);
+		if( !keep_alive ){
+			logTrace("No keep-alive");
+			break;
+		}
 
+		logTrace("Waiting for next request...");
 		// wait for another possible request on a keep-alive connection
-		if( persistent && !conn_.waitForData(settings.keepAliveTimeout) ) {
+		if( !conn_.waitForData(settings.keepAliveTimeout) ) {
 			logDebug("persistent connection timeout!");
 			break;
 		}
-	} while( persistent && conn_.connected );
+	} while(conn_.connected);
+	
+	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream conn, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings)
+private bool handleRequest(Stream conn, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
 {
 	auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
 	scope(exit) request_allocator.reset();
@@ -1033,7 +1040,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	}
 
 	bool parsed = false;
-	bool keep_alive = false;
+	/*bool*/ keep_alive = false;
 
 	// parse the request
 	try {
@@ -1158,6 +1165,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// finished parsing the request
 		parsed = true;
+		logTrace("persist: %s", req.persistent);
 		keep_alive = req.persistent;
 
 		// handle the request
@@ -1186,6 +1194,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 	if( req.bodyReader && !req.bodyReader.empty )
 		nullWriter.write(req.bodyReader);
+	logTrace("dropped body");
 
 	// finalize (e.g. for chunked encoding)
 	res.finalize();
@@ -1201,7 +1210,8 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	foreach( log; context.loggers )
 		log.log(req, res);
 
-	return keep_alive;
+	logTrace("return %s", keep_alive);
+	return keep_alive != false;
 }
 
 
