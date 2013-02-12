@@ -16,7 +16,7 @@ v0.7.12 - 2013-02-11
  - Partially implemented zero-copy file transfers (still disabled for libevent) - [issue #143][issue143]
  - Added `HttpRequest.contentType` and `contentTypeParameters` to avoid errors by direct comparison with the "Content-Type" header - [issue #154][issue154]
  - Added a small forward compatibility fix for [DUB](https://github.com/rejectedsoftware/dub) packages ("vibe.d" is ignored as a dependency)
- - Cleaned up the function names for writing out `Json` objects as a string and added convenience methods (partially done in [pull #166] by Joshua Niehus)
+ - Cleaned up the function names for writing out `Json` objects as a string and added convenience methods (partially done in [pull #166][issue166] by Joshua Niehus)
  - Renamed `HttpRequest.url` to `HttpRequest.requestUrl` and added `HttpRequest.fullUrl`
  - Added the possibility to write a request body in chunked transfer mode in the `HttpClient`
  - Added `HttpServerRequest.ssl` to determine if a request was sent encryted
