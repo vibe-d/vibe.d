@@ -58,11 +58,11 @@ class SslStream : Stream {
 		final switch (state) {
 			case SslStreamState.Accepting:
 				//SSL_set_accept_state(m_ssl);
-				SSL_accept(m_ssl);
+				enforceSsl(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
 				break;
 			case SslStreamState.Connecting:
 				//SSL_set_connect_state(m_ssl);
-				SSL_connect(m_ssl);
+				enforceSsl(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
 				break;
 			case SslStreamState.Connected:
 				break;
@@ -161,6 +161,15 @@ class SslStream : Stream {
 				logWarn("Exception occured on SSL source stream: %s", e.toString());
 			throw m_exceptions[0];
 		}
+	}
+
+	private int enforceSsl(int ret, string message)
+	{
+		if( ret <= 0 ){
+			auto errmsg = to!string(SSL_get_error(m_ssl, ret));
+			throw new Exception(message~": "~errmsg);
+		}
+		return ret;
 	}
 }
 
