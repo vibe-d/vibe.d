@@ -25,7 +25,8 @@ v0.7.12 - 2013-02-11
  - `SysTime` and `DateTime` are now specially treated by the JSON/BSON serialization code
  - Refactored the `Cookie` interface to properly use `@property` (by Nick Sabalausky aka Abcissa) - [pull #176][issue176]
  - Added `HttpRouter` as an interface for `UrlRouter` (by Laurie Clark-Michalek aka bluepeppers) - [pull #177][issue177]
- - Added `HttpFileServerSettings.preWriteCallback` (by Nick Sabalausky aka Abcissa) - [pull #180](issue180)
+ - Changed `HttpFileServerSettings.maxAge` from `long` to `Duration` (by Nick Sabalausky aka Abcissa) - [pull #178][issue178]
+ - Added `HttpFileServerSettings.preWriteCallback` (by Nick Sabalausky aka Abcissa) - [pull #180][issue180]
 
 ### Bug fixes ###
 
@@ -67,6 +68,7 @@ v0.7.12 - 2013-02-11
 [issue173]: https://github.com/rejectedsoftware/vibe.d/issues/173
 [issue176]: https://github.com/rejectedsoftware/vibe.d/issues/176
 [issue177]: https://github.com/rejectedsoftware/vibe.d/issues/177
+[issue178]: https://github.com/rejectedsoftware/vibe.d/issues/178
 [issue180]: https://github.com/rejectedsoftware/vibe.d/issues/180
 
 
