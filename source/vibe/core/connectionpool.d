@@ -47,7 +47,7 @@ class ConnectionPool(Connection : EventedObject)
 
 		Connection conn;
 		if( cidx != size_t.max ){
-			logDebug("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
+			logTrace("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
 			conn = m_connections[cidx];
 			if( Task.getThis() != Task() ) conn.acquire();
 		} else {
