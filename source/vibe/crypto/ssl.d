@@ -66,10 +66,20 @@ class SslContext {
 		} else enforce(false, "No SSL support compiled in!");
 	}
 
+	~this()
+	{
+		SSL_CTX_free(m_ctx);
+	}
+
 	ssl_st* createClientCtx()
 	{
 		version(SSL) return SSL_new(m_ctx);
 		else assert(false);
+	}
+
+	void freeClientCtx(ssl_st* ctx)
+	{
+		SSL_free(ctx);
 	}
 }
 

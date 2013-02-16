@@ -73,6 +73,7 @@ class SslStream : Stream {
 	~this()
 	{
 		BIO_free(m_bio);
+		m_sslCtx.freeClientCtx(m_ssl);
 	}
 
 	@property bool empty()
