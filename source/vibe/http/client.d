@@ -394,9 +394,7 @@ final class HttpClientResponse : HttpResponse {
 		destroy(m_gzipInputStream);
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
-		logTrace("Finalizing HttpClientResponse for conn %s", cast(void*)lockedConnection.__conn);
 		destroy(lockedConnection);
-		logTrace("Finalized HttpClientResponse.");
 	}
 }
 
