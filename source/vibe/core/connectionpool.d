@@ -51,8 +51,9 @@ class ConnectionPool(Connection : EventedObject)
 			conn = m_connections[cidx];
 			if( Task.getThis() != Task() ) conn.acquire();
 		} else {
-			logDebug("creating %s new connection of %d", Connection.stringof, m_connections.length);
+			logDebug("creating new %s connection, all %d are in use", Connection.stringof, m_connections.length);
 			conn = m_connectionFactory(); // NOTE: may block
+			logDebug(" ... %s", cast(void*)conn);
 		}
 		m_lockCount[conn] = 1;
 		if( cidx == size_t.max ){
@@ -68,14 +69,12 @@ struct LockedConnection(Connection : EventedObject) {
 	private {
 		ConnectionPool!Connection m_pool;
 		Task m_task;
+		Connection m_conn;
 	}
 	
-	Connection m_conn;
-
-	alias m_conn this;
-
 	private this(ConnectionPool!Connection pool, Connection conn)
 	{
+		assert(conn !is null);
 		m_pool = pool;
 		m_conn = conn;
 		m_task = Task.getThis();
@@ -98,48 +97,19 @@ struct LockedConnection(Connection : EventedObject) {
 			assert(fthis is m_task, "Locked connection destroyed in foreign fiber.");
 			auto plc = m_conn in m_pool.m_lockCount;
 			assert(plc !is null);
+			assert(*plc >= 1);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
 			if( --*plc == 0 ){
 				if( fthis ) m_conn.release();
-				m_conn = null;
+				//logTrace("conn %s release", cast(void*)m_conn);
 			}
+			m_conn = null;
 		}
 	}
+
 
 	@property int __refCount() const { return m_pool.m_lockCount.get(m_conn, 0); }
-}
+	@property inout(Connection) __conn() inout { return m_conn; }
 
-/**
-	Wraps an InputStream and automatically unlocks a locked connection as soon as all data has been
-	read.
-*/
-class LockedInputStream(Connection : EventedObject) : InputStream {
-	private {
-		LockedConnection!Connection m_lock;
-		InputStream m_stream;
-	}
-
-
-	this(LockedConnection!Connection conn, InputStream str)
-	{
-		m_lock = conn;
-		m_stream = str;
-	}
-
-	@property bool empty() { return m_stream.empty; }
-
-	@property ulong leastSize() { return m_stream.leastSize; }
-
-	@property bool dataAvailableForRead() { return m_stream.dataAvailableForRead; }
-
-	const(ubyte)[] peek() { return m_stream.peek(); }
-
-	void read(ubyte[] dst)
-	{
-		m_stream.read(dst);
-		if( this.empty ){
-			LockedConnection!Connection unl;
-			m_lock = unl;
-		}
-	}
+	alias __conn this;
 }
