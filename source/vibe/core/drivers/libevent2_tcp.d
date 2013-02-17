@@ -167,7 +167,6 @@ package class Libevent2TcpConnection : TcpConnection {
 
 	@property bool dataAvailableForRead()
 	{
-		size_t len;
 		auto buf = m_inputBuffer;
 		return evbuffer_get_length(buf) > 0;
 	}
