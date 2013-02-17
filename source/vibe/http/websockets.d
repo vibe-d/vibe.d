@@ -132,7 +132,7 @@ class WebSocket {
 	*/
 	void send(string data)
 	{
-		send((scope message){ message.write(cast(ubyte[])data); });
+		send(cast(ubyte[])data);
 	}
 
 	/**
