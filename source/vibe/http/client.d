@@ -56,8 +56,11 @@ HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest re
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		});
-	res.lockedConnection = cli;
-	res.bodyReader = res.bodyReader;
+
+	// make sure the connection stays locked if the body still needs to be read
+	if( !res.bodyReader.empty ) res.lockedConnection = cli;
+
+	logTrace("Returning HttpClientResponse for conn %s", cast(void*)res.lockedConnection.__conn);
 	return res;
 }
 
@@ -205,7 +208,9 @@ class HttpClient : EventedObject {
 		res.m_endCallback = FreeListRef!EndCallbackInputStream(res.bodyReader, &res.finalize);
 		res.bodyReader = res.m_endCallback;
 
-		m_bodyReader = res.bodyReader;
+		if( !res.bodyReader.empty ){
+			m_bodyReader = res.bodyReader;
+		} else assert(res.m_client is null);
 
 		return res;
 	}
@@ -315,8 +320,11 @@ final class HttpClientRequest : HttpRequest {
 		if( m_headerWritten && !m_bodyWriter )
 			return;
 
-		if( m_bodyWriter !is m_conn ) bodyWriter().finalize();
-		else bodyWriter().flush();
+		// force the request to be sent
+		if( !m_headerWritten ) bodyWriter();
+
+		if( m_bodyWriter !is m_conn ) m_bodyWriter.finalize();
+		else m_bodyWriter.flush();
 		m_conn.flush();
 		m_bodyWriter = null;
 	}
@@ -377,15 +385,18 @@ final class HttpClientResponse : HttpResponse {
 
 	private void finalize()
 	{
+		// ignore duplicate and too early calls to finalize
+		// (too early happesn for empty response bodies)
 		if( !m_client ) return;
 		m_client.m_bodyReader = null;
 		m_client = null;
-		bodyReader = null;
 		destroy(m_deflateInputStream);
 		destroy(m_gzipInputStream);
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
+		logTrace("Finalizing HttpClientResponse for conn %s", cast(void*)lockedConnection.__conn);
 		destroy(lockedConnection);
+		logTrace("Finalized HttpClientResponse.");
 	}
 }
 
