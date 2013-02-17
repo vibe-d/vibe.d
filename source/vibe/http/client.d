@@ -378,7 +378,7 @@ final class HttpClientResponse : HttpResponse {
 				finalize();
 			} else {
 				s_sink.write(bodyReader);
-				assert(!bodyReader);
+				assert(!lockedConnection.__conn);
 			}
 		}
 	}
