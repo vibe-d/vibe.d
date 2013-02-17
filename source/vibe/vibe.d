@@ -21,7 +21,6 @@ public import vibe.core.signal;
 public import vibe.crypto.md5;
 public import vibe.crypto.passwordhash;
 public import vibe.crypto.sha1;
-public import vibe.crypto.ssl;
 public import vibe.data.bson;
 public import vibe.data.json;
 public import vibe.db.mongo.mongo;

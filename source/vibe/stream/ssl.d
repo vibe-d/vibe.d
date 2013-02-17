@@ -7,27 +7,27 @@
 */
 module vibe.stream.ssl;
 
-public import vibe.crypto.ssl;
-
 import vibe.core.log;
 import vibe.core.stream;
 
 import deimos.openssl.bio;
 import deimos.openssl.err;
+import deimos.openssl.rand;
 import deimos.openssl.ssl;
 
 import std.algorithm;
 import std.conv;
 import std.exception;
+import std.string;
 
 import core.stdc.string : strlen;
 
+version = SSL;
 
-enum SslStreamState {
-	Connecting,
-	Accepting,
-	Connected
-}
+
+/**************************************************************************************************/
+/* Public types                                                                                   */
+/**************************************************************************************************/
 
 class SslStream : Stream {
 	private {
@@ -72,8 +72,10 @@ class SslStream : Stream {
 
 	~this()
 	{
-		BIO_free(m_bio);
-		m_sslCtx.freeClientCtx(m_ssl);
+		if( m_ssl ){
+			logDebug("Warning: SSL stream not finalized before reaching destructor.");
+			finalize();
+		}
 	}
 
 	@property bool empty()
@@ -145,8 +147,16 @@ class SslStream : Stream {
 
 	void finalize()
 	{
+		if( !m_ssl ) return;
 		logTrace("SslStream finalize");
+
 		SSL_shutdown(m_ssl);
+		SSL_free(m_ssl);
+		m_ssl = null;
+
+		BIO_free(m_bio);
+		m_bio = null;
+
 		checkExceptions();
 	}
 
@@ -172,6 +182,86 @@ class SslStream : Stream {
 		}
 		return ret;
 	}
+}
+
+enum SslStreamState {
+	Connecting,
+	Accepting,
+	Connected
+}
+
+class SslContext {
+	private {
+		ssl_ctx_st* m_ctx;
+	}
+
+	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.SSLv23)
+	{
+		version(SSL){
+			const(SSL_METHOD)* method;
+			final switch(ver){
+				case SSLVersion.SSLv23: method = SSLv23_server_method(); break;
+				case SSLVersion.SSLv3: method = SSLv3_server_method(); break;
+				case SSLVersion.TLSv1: method = TLSv1_server_method(); break;
+				case SSLVersion.DTLSv1: method = DTLSv1_server_method(); break;
+			}
+			m_ctx = SSL_CTX_new(method);
+			auto succ = SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(cert_file)) &&
+					SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(key_file), SSL_FILETYPE_PEM);
+			enforce(succ, "Failed to load server cert/key.");
+			SSL_CTX_set_options!()(m_ctx, SSL_OP_NO_SSLv2);
+		} else enforce(false, "No SSL support compiled in!");
+	}
+
+	this(SSLVersion ver = SSLVersion.SSLv23)
+	{
+		version(SSL){
+			const(SSL_METHOD)* method;
+			final switch(ver){
+				case SSLVersion.SSLv23: method = SSLv23_client_method(); break;
+				case SSLVersion.SSLv3: method = SSLv3_client_method(); break;
+				case SSLVersion.TLSv1: method = TLSv1_client_method(); break;
+				case SSLVersion.DTLSv1: method = DTLSv1_client_method(); break;
+			}
+			m_ctx = SSL_CTX_new(method);
+			SSL_CTX_set_options!()(m_ctx, SSL_OP_NO_SSLv2);
+		} else enforce(false, "No SSL support compiled in!");
+	}
+
+	~this()
+	{
+		SSL_CTX_free(m_ctx);
+	}
+
+	ssl_st* createClientCtx()
+	{
+		version(SSL) return SSL_new(m_ctx);
+		else assert(false);
+	}
+}
+
+enum SSLVersion {
+	SSLv23,
+	SSLv3,
+	TLSv1,
+	DTLSv1
+}
+
+
+/**************************************************************************************************/
+/* Private functions                                                                              */
+/**************************************************************************************************/
+
+shared static this()
+{
+	logDebug("Initializing OpenSSL...");
+	SSL_load_error_strings();
+	SSL_library_init();
+	// TODO: call thread safety functions!
+	/* We MUST have entropy, or else there's no point to crypto. */
+	auto ret = RAND_poll();
+	assert(ret);
+	logDebug("... done.");
 }
 
 private nothrow extern(C)
