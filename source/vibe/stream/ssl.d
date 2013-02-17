@@ -72,10 +72,8 @@ class SslStream : Stream {
 
 	~this()
 	{
-		if( m_ssl ){
-			logDebug("Warning: SSL stream not finalized before reaching destructor.");
-			finalize();
-		}
+		if( m_ssl ) SSL_free(m_ssl);
+		if( m_bio ) BIO_free(m_bio);
 	}
 
 	@property bool empty()
