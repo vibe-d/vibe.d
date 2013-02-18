@@ -39,18 +39,18 @@ class FSPackageSupplier : PackageSupplier {
 		enforce(path.absolute);
 		logInfo("Storing package '"~packageId~"', version requirements: %s", dep);
 		auto filename = bestPackageFile(packageId, dep);
-		enforce( exists(to!string(filename)) );
-		copy(to!string(filename), to!string(path));
+		enforce( existsFile(filename) );
+		copyFile(filename, path);
 	}
 	
 	Json packageJson(const string packageId, const Dependency dep) {
 		auto filename = bestPackageFile(packageId, dep);
-		return jsonFromZip(to!string(filename), "package.json");
+		return jsonFromZip(filename, "package.json");
 	}
 	
 	private Path bestPackageFile( const string packageId, const Dependency dep) const {
 		Version bestVersion = Version(Version.RELEASE);
-		foreach(DirEntry d; dirEntries(to!string(m_path), packageId~"*", SpanMode.shallow)) {
+		foreach(DirEntry d; dirEntries(m_path.toNativeString(), packageId~"*", SpanMode.shallow)) {
 			Path p = Path(d.name);
 			logTrace("Entry: %s", p);
 			enforce(to!string(p.head)[$-4..$] == ".zip");
@@ -64,7 +64,7 @@ class FSPackageSupplier : PackageSupplier {
 		
 		auto fileName = m_path ~ (packageId ~ "_" ~ to!string(bestVersion) ~ ".zip");
 		
-		if(bestVersion == Version.RELEASE || !exists(to!string(fileName)))
+		if(bestVersion == Version.RELEASE || !existsFile(fileName))
 			throw new Exception("No matching package found");
 		
 		logDebug("Found best matching package: '%s'", fileName);

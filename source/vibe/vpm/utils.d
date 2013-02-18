@@ -24,7 +24,7 @@ import vibe.stream.operations;
 import vibe.utils.string;
 
 package bool isEmptyDir(Path p) {
-	foreach(DirEntry e; dirEntries(to!string(p), SpanMode.shallow))
+	foreach(DirEntry e; dirEntries(p.toNativeString(), SpanMode.shallow))
 		return false;
 	return true;
 }
@@ -36,7 +36,7 @@ package Json jsonFromFile(Path file) {
 	return parseJson(text);
 }
 
-package Json jsonFromZip(string zip, string filename) {
+package Json jsonFromZip(Path zip, string filename) {
 	auto f = openFile(zip, FileMode.Read);
 	ubyte[] b = new ubyte[cast(uint)f.leastSize];
 	f.read(b);

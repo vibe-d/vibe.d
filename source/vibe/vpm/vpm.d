@@ -102,12 +102,12 @@ private class Application {
 		try m_json = jsonFromFile(m_root ~ "vpm.json");
 		catch(Exception t) logDebug("Could not open vpm.json: %s", t.msg);
 
-		if(!exists(to!string(m_root~"package.json"))) {
+		if(!existsFile(m_root~"package.json")) {
 			logWarn("There was no 'package.json' found for the application in '%s'.", m_root);
 		} else {
 			m_main = new Package(m_root);
-			if(exists(to!string(m_root~"modules"))) {
-				foreach( string pkg; dirEntries(to!string(m_root ~ "modules"), SpanMode.shallow) ) {
+			if(existsFile(m_root~"modules")) {
+				foreach( string pkg; dirEntries((m_root ~ "modules").toNativeString(), SpanMode.shallow) ) {
 					if( !isDir(pkg) ) continue;
 					try {
 						auto p = new Package( Path(pkg) );
@@ -224,7 +224,7 @@ private class Application {
 		assert(false); // not properly implemented
 		/*
 		string[] ignores;
-		auto ignoreFile = to!string(m_root~"vpm.ignore.txt");
+		auto ignoreFile = (m_root~"vpm.ignore.txt").toNativeString();
 		if(exists(ignoreFile)){
 			auto iFile = openFile(ignoreFile);
 			scope(exit) iFile.close();
@@ -244,7 +244,7 @@ private class Application {
 
 		logDebug("Creating zip file from application: " ~ m_main.name);
 		auto archive = new ZipArchive();
-		foreach( string file; dirEntries(to!string(m_root), SpanMode.depth) ) {
+		foreach( string file; dirEntries(m_root.toNativeString/), SpanMode.depth) ) {
 			enforce( Path(file).startsWith(m_root) );
 			auto p = Path(file);
 			p = p[m_root.length..p.length];
@@ -488,7 +488,7 @@ class Vpm {
 	void install(string packageId, const Dependency dep, bool addToApplication = false) {
 		logInfo("Installing "~packageId~"...");
 		auto destination = m_root ~ "modules" ~ packageId;
-		if(exists(to!string(destination)))
+		if(existsFile(destination))
 			throw new Exception(packageId~" needs to be uninstalled prior installation.");
 
 		auto package_info = m_packageSupplier.packageJson(packageId, dep);
@@ -498,16 +498,16 @@ class Vpm {
 		{
 			logDebug("Aquiring package zip file");
 			auto dload = m_root ~ "temp/downloads";
-			if(!exists(to!string(dload)))
-				mkdirRecurse(to!string(dload));
+			if(!existsFile(dload))
+				mkdirRecurse(dload.toNativeString());
 			auto tempFile = m_root ~ ("temp/downloads/"~packageId~".zip");
-			string sTempFile = to!string(tempFile);
+			string sTempFile = tempFile.toNativeString();
 			if(exists(sTempFile)) remove(sTempFile);
 			m_packageSupplier.storePackage(tempFile, packageId, dep); // Q: continue on fail?
 			scope(exit) remove(sTempFile);
 
 			// unpack
-			auto f = openFile(to!string(tempFile), FileMode.Read);
+			auto f = openFile(tempFile, FileMode.Read);
 			scope(exit) f.close();
 			ubyte[] b = new ubyte[cast(uint)f.leastSize];
 			f.read(b);
@@ -516,7 +516,7 @@ class Vpm {
 
 		Path getPrefix(ZipArchive a) {
 			foreach(ArchiveMember am; a.directory)
-				if( Path(am.name).head == PathEntry("package.json") )
+				if( Path(am.name).head == "package.json" )
 					return Path(am.name).parentPath;
 
 			// not correct zip packages HACK
@@ -540,14 +540,14 @@ class Vpm {
 		}
 
 		// install
-		mkdirRecurse(to!string(destination));
+		mkdirRecurse(destination.toNativeString());
 		Journal journal = new Journal;
 		foreach(ArchiveMember a; archive.directory) {
 			if(!isPathFromZip(a.name)) continue;
 
 			auto cleanedPath = getCleanedPath(a.name);
 			if(cleanedPath.empty) continue;
-			auto fileName = to!string(destination~cleanedPath);
+			auto fileName = (destination~cleanedPath).toNativeString();
 
 			if( exists(fileName) && isDir(fileName) ) continue;
 
@@ -567,8 +567,8 @@ class Vpm {
 			auto fileName = destination~cleanedPath;
 
 			logDebug("Creating %s", fileName.head);
-			enforce(exists(to!string(fileName.parentPath)));
-			auto dstFile = openFile(to!string(fileName), FileMode.CreateTrunc);
+			enforce(existsFile(fileName.parentPath));
+			auto dstFile = openFile(fileName, FileMode.CreateTrunc);
 			scope(exit) dstFile.close();
 			dstFile.write(archive.expand(a));
 			journal.add(Journal.Entry(Journal.Type.RegularFile, cleanedPath));
@@ -584,7 +584,7 @@ class Vpm {
 		journal.add(Journal.Entry(Journal.Type.RegularFile, Path("journal.json")));
 		journal.save(destination ~ "journal.json");
 
-		if(exists( to!string(destination~"package.json")))
+		if(existsFile(destination~"package.json"))
 			logInfo(packageId ~ " has been installed with version %s", (new Package(destination)).vers);
 	}
 
@@ -595,7 +595,7 @@ class Vpm {
 		logInfo("Uninstalling " ~ packageId);
 
 		auto journalFile = m_root~"modules"~packageId~"journal.json";
-		if( !exists(to!string(journalFile)) )
+		if( !existsFile(journalFile) )
 			throw new Exception("Uninstall failed, no journal found for '"~packageId~"'. Please uninstall manually.");
 
 		auto packagePath = m_root~"modules"~packageId;
@@ -604,12 +604,12 @@ class Vpm {
 		foreach( Journal.Entry e; filter!((Journal.Entry a) => a.type == Journal.Type.RegularFile)(journal.entries)) {
 			logTrace("Deleting file '%s'", e.relFilename);
 			auto absFile = packagePath~e.relFilename;
-			if(!exists(to!string(absFile))) {
+			if(!existsFile(absFile)) {
 				logWarn("Previously installed file not found for uninstalling: '%s'", absFile);
 				continue;
 			}
 
-			remove(to!string(absFile));
+			remove(absFile.toNativeString());
 		}
 
 		logDebug("Erasing directories");
@@ -619,17 +619,17 @@ class Vpm {
 		sort!("a.length>b.length")(allPaths); // sort to erase deepest paths first
 		foreach(Path p; allPaths) {
 			logTrace("Deleting folder '%s'", p);
-			if( !exists(to!string(p)) || !isDir(to!string(p)) || !isEmptyDir(p) ) {
+			if( !existsFile(p.toNativeString()) || !isDir(p.toNativeString()) || !isEmptyDir(p) ) {
 				logError("Alien files found, directory is not empty or is not a directory: '%s'", p);
 				continue;
 			}
-			rmdir( to!string(p) );
+			rmdir(p.toNativeString());
 		}
 
 		if(!isEmptyDir(packagePath))
-			throw new Exception("Alien files found in '"~to!string(packagePath)~"', manual uninstallation needed.");
+			throw new Exception("Alien files found in '"~packagePath.toNativeString()~"', manual uninstallation needed.");
 
-		rmdir(to!string(packagePath));
+		rmdir(packagePath.toNativeString());
 		logInfo("Uninstalled package: '"~packageId~"'");
 	}
 }

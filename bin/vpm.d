@@ -148,7 +148,7 @@ int main(string[] args)
 				break;
 		}
 
-		auto script = openFile(to!string(dstScript), FileMode.CreateTrunc);
+		auto script = openFile(dstScript, FileMode.CreateTrunc);
 		scope(exit) script.close();
 		script.write(appStartScript);
 
