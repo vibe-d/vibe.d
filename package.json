@@ -9,6 +9,7 @@
 		"see github for more"
 	],
 	"dependencies": {},
+	"versions": ["LIBEV4"],
 	"libs-posix" : ["event", "event_pthreads", "ssl", "crypto"],
 	"libs-windows": ["wsock32", "ws2_32"],
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/libevent.dll", "lib/win-i386/ssleay32.dll"],
