@@ -100,7 +100,8 @@ class Win32EventDriver : EventDriver {
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
 			if( msg.message == WM_QUIT ) break;
-			if( msg.message == WM_USER_SIGNAL ) msg.hwnd = m_hwnd;
+			if( msg.message == WM_USER_SIGNAL )
+				msg.hwnd = m_hwnd;
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
@@ -279,11 +280,11 @@ class Win32EventDriver : EventDriver {
 			default: break;
 			case WM_USER_SIGNAL:
 				auto sig = cast(Win32Signal)cast(void*)lparam;
-				DWORD[Task] lst;
+				Win32EventDriver[Task] lst;
 				try {
 					synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
 					foreach( task, tid; lst )
-						if( tid == driver.m_tid && task )
+						if( tid is driver && task )
 							driver.m_core.resumeTask(task);
 				} catch(Throwable th){
 					logWarn("Failed to resume signal listeners: %s", th.msg);
@@ -318,7 +319,7 @@ class Win32Signal : Signal {
 	private {
 		Mutex m_mutex;
 		Win32EventDriver m_driver;
-		DWORD[Task] m_listeners;
+		Win32EventDriver[Task] m_listeners;
 		shared int m_emitCount = 0;
 	}
 
@@ -332,14 +333,15 @@ class Win32Signal : Signal {
 	{
 		auto newcnt = atomicOp!"+="(m_emitCount, 1);
 		logDebug("Signal %s emit %s", cast(void*)this, newcnt);
-		bool[DWORD] threads;
+		bool[Win32EventDriver] threads;
 		synchronized(m_mutex)
 		{
 			foreach( th; m_listeners )
 				threads[th] = true;
 		}
 		foreach( th, _; threads )
-			PostThreadMessageW(th, WM_USER_SIGNAL, 0, cast(LPARAM)cast(void*)this);
+			if( !PostMessageW(th.m_hwnd, WM_USER_SIGNAL, 0, cast(LPARAM)cast(void*)this) )
+				logWarn("Failed to post thread message.");
 	}
 
 	void wait()
@@ -362,7 +364,7 @@ class Win32Signal : Signal {
 	{
 		synchronized(m_mutex)
 		{
-			m_listeners[Task.getThis()] = GetCurrentThreadId();
+			m_listeners[Task.getThis()] = cast(Win32EventDriver)getEventDriver();
 		}
 	}
 
