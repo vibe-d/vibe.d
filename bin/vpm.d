@@ -16,6 +16,7 @@ import vibe.utils.string;
 
 import std.algorithm;
 import std.array;
+import std.ascii;
 import std.conv;
 import std.exception;
 import std.file;
@@ -220,7 +221,7 @@ private string stripDlangSpecialChars(string s)
 {
 	char[] ret = s.dup;
 	for(int i=0; i<ret.length; ++i)
-		if(!isAlpha(ret[i]))
+		if(!std.ascii.isAlpha(ret[i]))
 			ret[i] = '_';
 	return to!string(ret);
 }
