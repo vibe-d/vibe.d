@@ -22,7 +22,7 @@ interface HttpRouter {
 	// Adds a new route for request that match the path and method
 	HttpRouter match(HttpMethod method, string path, HttpServerRequestDelegate cb);
 	// ditto
-	final HttpRouter match(HttpMethod method, string path, IHttpServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
+	final HttpRouter match(HttpMethod method, string path, HttpServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
 	// ditto
 	final HttpRouter match(HttpMethod method, string path, HttpServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
 
@@ -30,42 +30,42 @@ interface HttpRouter {
 	void handleRequest(HttpServerRequest req, HttpServerResponse res);
 
 	// Adds a new route for GET requests matching the specified pattern.
-	final HttpRouter get(string url_match, IHttpServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
+	final HttpRouter get(string url_match, HttpServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
 	// ditto
 	final HttpRouter get(string url_match, HttpServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
 	// ditto
 	final HttpRouter get(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.GET, url_match, cb); }
 
 	// Adds a new route for POST requests matching the specified pattern.
-	final HttpRouter post(string url_match, IHttpServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
+	final HttpRouter post(string url_match, HttpServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
 	// ditto
 	final HttpRouter post(string url_match, HttpServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
 	// ditto
 	final HttpRouter post(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.POST, url_match, cb); }
 
 	// Adds a new route for PUT requests matching the specified pattern.
-	final HttpRouter put(string url_match, IHttpServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
+	final HttpRouter put(string url_match, HttpServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
 	// ditto
 	final HttpRouter put(string url_match, HttpServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
 	// ditto
 	final HttpRouter put(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PUT, url_match, cb); }
 
 	// Adds a new route for DELETE requests matching the specified pattern.
-	final HttpRouter delete_(string url_match, IHttpServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
+	final HttpRouter delete_(string url_match, HttpServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
 	// ditto
 	final HttpRouter delete_(string url_match, HttpServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
 	// ditto
 	final HttpRouter delete_(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.DELETE, url_match, cb); }
 
 	// Adds a new route for PATCH requests matching the specified pattern.
-	final HttpRouter patch(string url_match, IHttpServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
+	final HttpRouter patch(string url_match, HttpServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
 	// ditto
 	final HttpRouter patch(string url_match, HttpServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
 	// ditto
 	final HttpRouter patch(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PATCH, url_match, cb); }
 
 	// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
-	final HttpRouter any(string url_match, IHttpServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
+	final HttpRouter any(string url_match, HttpServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
 	// ditto
 	final HttpRouter any(string url_match, HttpServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
 	// ditto
@@ -75,6 +75,7 @@ interface HttpRouter {
 			.put(url_match, cb).delete_(url_match, cb).patch(url_match, cb);
 	}
 }
+
 
 /++
 	Routes HTTP requests based on the request method and URL.
@@ -125,7 +126,7 @@ interface HttpRouter {
 	}
 	---
 +/
-class UrlRouter : IHttpServerRequestHandler, HttpRouter {
+class UrlRouter : HttpServerRequestHandler, HttpRouter {
 	private {
 		Route[][HttpMethod.max+1] m_routes;
 	}
@@ -138,6 +139,7 @@ class UrlRouter : IHttpServerRequestHandler, HttpRouter {
 	}
 
 	/// Alias for backwards compatibility
+	deprecated("Please use match instead.")
 	alias match addRoute;
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
@@ -166,6 +168,7 @@ class UrlRouter : IHttpServerRequestHandler, HttpRouter {
 	}
 }
 
+
 private struct Route {
 	string pattern;
 	HttpServerRequestDelegate cb;
@@ -192,6 +195,7 @@ private struct Route {
 		return i == url.length && j == pattern.length;
 	}
 }
+
 
 private string skipPathNode(string str, ref size_t idx)
 {
