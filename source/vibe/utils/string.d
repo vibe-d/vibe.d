@@ -11,6 +11,7 @@ public import std.string;
 
 import std.algorithm;
 import std.array;
+import std.ascii;
 import std.format;
 import std.uni;
 import std.utf;
@@ -55,6 +56,7 @@ string stripUTF8Bom(string str)
 /**
 	Joins an array of strings using 'linesep' as the line separator (\n by default).
 */
+deprecated("Please use std.array.join instead.")
 string joinLines(string[] strs, string linesep = "\n")
 {
 	auto len = 0;
@@ -94,15 +96,8 @@ bool anyOf(string str, string chars)
 }
 
 /// ASCII alpha character check
-bool isAlpha(char ch)
-{
-	switch( ch ){
-		default: return false;
-		case 'a': .. case 'z'+1: break;
-		case 'A': .. case 'Z'+1: break;
-	}
-	return true;
-}
+deprecated("Please use std.ascii.isAlpha instead.")
+alias isAlpha = std.ascii.isAlpha;
 
 /// ASCII whitespace trimming (space and tab)
 string stripLeftA(string s)
@@ -136,6 +131,7 @@ sizediff_t countUntilAny(string str, string chars)
 }
 
 /// Formats a string using formattedWrite() and returns it.
+deprecated("Please use std.string.format instead.")
 string formatString(ARGS...)(string format, ARGS args)
 {
 	auto dst = appender!string();
@@ -169,8 +165,8 @@ int icmp2(string a, string b)
 			dchar acp = decode(a, i);
 			dchar bcp = decode(b, j);
 			if( acp != bcp ){
-				acp = toLower(acp);
-				bcp = toLower(bcp);
+				acp = std.uni.toLower(acp);
+				bcp = std.uni.toLower(bcp);
 				if( acp < bcp ) return -1;
 				else if( acp > bcp ) return 1;
 			}
