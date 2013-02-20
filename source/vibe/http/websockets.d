@@ -28,16 +28,16 @@ module vibe.http.websockets;
 
 import vibe.core.log;
 import vibe.core.net;
-import vibe.crypto.sha1;
 import vibe.stream.operations;
 import vibe.http.server;
 
-import std.conv;
 import std.array;
-import std.bitmanip;
-import std.string;
 import std.base64;
+import std.conv;
 import std.exception;
+import std.bitmanip;
+import std.digest.sha;
+import std.string;
 
 
 
@@ -77,7 +77,7 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 			return;
 		}
 
-		auto accept = cast(string)Base64.encode(sha1(*pKey ~ s_webSocketGuid));
+		auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
 		res.headers["Sec-WebSocket-Accept"] = accept;
 		res.headers["Connection"] = "Upgrade";
 		Stream conn = res.switchProtocol("websocket");
@@ -129,6 +129,8 @@ class WebSocket {
 
 	/**
 		Sends a text message.
+
+		On the JavaScript side, the text will be available as message.data (type string).
 	*/
 	void send(string data)
 	{
@@ -137,6 +139,8 @@ class WebSocket {
 
 	/**
 		Sends a binary message.
+
+		On the JavaScript side, the text will be available as message.data (type Blob).
 	*/
 	void send(ubyte[] data)
 	{
@@ -329,13 +333,13 @@ struct Frame {
 		stream.write([firstByte], false);
 
 		if( payload.length < 126 ) {
-			stream.write(nativeToBigEndian(cast(ubyte)payload.length), false);
+			stream.write(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length), false);
 		} else if( payload.length <= 65536 ) {
 			stream.write(cast(ubyte[])[126], false);
-			stream.write(nativeToBigEndian(cast(ushort)payload.length), false);
+			stream.write(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length), false);
 		} else {
 			stream.write(cast(ubyte[])[127], false);
-			stream.write(nativeToBigEndian(payload.length), false);
+			stream.write(std.bitmanip.nativeToBigEndian(payload.length), false);
 		}
 		stream.write(payload);
 	}

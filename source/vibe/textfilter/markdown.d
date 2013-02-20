@@ -13,6 +13,7 @@ import vibe.utils.string;
 
 import std.algorithm;
 import std.array;
+import std.ascii : isAlpha;
 import std.conv;
 import std.range;
 import std.string;
@@ -677,7 +678,7 @@ private auto parseHtmlBlockLine(string ln)
 		ret.open = false;
 		ln = ln[1 .. $];
 	}
-	if( !isAlpha(ln[1]) ) return ret;
+	if( !std.ascii.isAlpha(ln[1]) ) return ret;
 	ln = ln[1 .. $];
 	size_t idx = 0;
 	while( idx < ln.length && ln[idx] != ' ' && ln[idx] != '>' )

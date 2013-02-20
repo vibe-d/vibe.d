@@ -21,6 +21,7 @@ static import vibe.textfilter.markdown;
 import vibe.utils.string;
 
 import core.vararg;
+import std.ascii : isAlpha;
 import std.array;
 import std.conv;
 import std.format;

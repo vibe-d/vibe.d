@@ -13,10 +13,10 @@ import vibe.http.server;
 import vibe.inet.message;
 import vibe.inet.mimetypes;
 import vibe.inet.url;
-import vibe.crypto.md5;
 
 import std.conv;
 import std.datetime;
+import std.digest.md;
 import std.file;
 import std.string;
 
@@ -105,7 +105,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		}
 
 		// simple etag generation
-		auto etag = "\"" ~ md5(path ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)) ~ "\"";
+		auto etag = "\"" ~ hexDigest!MD5(path ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)).idup ~ "\"";
 		if( auto pv = "If-None-Match" in req.headers ) {
 			if ( *pv == etag ) {
 				res.statusCode = HttpStatus.NotModified;
