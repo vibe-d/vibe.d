@@ -1,25 +1,25 @@
 /**
-	MD5 hashing functions.
+	Deprecated; MD5 hashing functions.
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger
 */
 module vibe.crypto.md5;
+pragma(msg, "Module vibe.crypto.md5 is deprecated, please import std.digest.md instead.");
 
 static if( __traits(compiles, {import std.digest.md;}) ){
 	import std.digest.md;
 
+	deprecated("Please use std.digest.hexDigest!MD5 instead.")
 	string md5(in char[] str) 
 	{
-		MD5 ctx;
-		ctx.start();
-		ctx.put(cast(ubyte[])str);
-		return ctx.finish().toHexString().idup;
+		return hexDigest!MD5(str).idup;
 	}
 } else {
 	import std.md5;
 
+	deprecated("Please use std.digest.hexDigest!MD5 instead.")
 	string md5(in char[] str) 
 	{
 		ubyte[16] digest;
