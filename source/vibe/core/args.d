@@ -22,7 +22,7 @@ version(Posix)
 	import core.sys.posix.unistd;
 	import core.sys.posix.pwd;
 
-	static if( __traits(compiles, {import core.sys.posix.grp;}) ){
+	static if( __traits(compiles, {import core.sys.posix.grp; getgrgid(0);}) ){
 		import core.sys.posix.grp;
 	} else {
 		extern(C){
