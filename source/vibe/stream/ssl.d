@@ -73,7 +73,6 @@ class SslStream : Stream {
 	~this()
 	{
 		if( m_ssl ) SSL_free(m_ssl);
-		if( m_bio ) BIO_free(m_bio);
 	}
 
 	@property bool empty()
@@ -152,9 +151,6 @@ class SslStream : Stream {
 		SSL_free(m_ssl);
 		m_ssl = null;
 
-		BIO_free(m_bio);
-		m_bio = null;
-
 		checkExceptions();
 	}
 
@@ -229,6 +225,7 @@ class SslContext {
 	~this()
 	{
 		SSL_CTX_free(m_ctx);
+		m_ctx = null;
 	}
 
 	ssl_st* createClientCtx()
