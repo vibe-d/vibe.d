@@ -106,8 +106,8 @@ class HttpRequest {
 		*/
 		string requestUrl = "/";
 
-		/// Please use requestUrl instead. This alias will be deprecated after the next release.
-		/*deprecated*/ alias requestUrl url;
+		/// Please use requestUrl instead.
+		deprecated("Please use requestUrl instead.") alias requestUrl url;
 
 		/// All request _headers
 		StrMapCI headers;
@@ -418,24 +418,24 @@ final class Cookie {
 	@property bool httpOnly() const { return m_httpOnly; }
 
 
-	/// These functions will get deprecated, please use the property setters instead.
-	alias secure isSecure;
+	/// Deprecated compatibility aliases
+	deprecated("Please use secure instead.") alias secure isSecure;
 	// ditto
-	alias httpOnly isHttpOnly;
+	deprecated("Please use httpOnly instead.") alias httpOnly isHttpOnly;
 	// ditto
-	Cookie setValue(string value) { m_value = value; return this; }
+	deprecated("Please use the 'value' property instead.") Cookie setValue(string value) { m_value = value; return this; }
 	/// ditto
-	Cookie setDomain(string domain) { m_domain = domain; return this; }
+	deprecated("Please use the 'domain' property instead.") Cookie setDomain(string domain) { m_domain = domain; return this; }
 	/// ditto
-	Cookie setPath(string path) { m_path = path; return this; }
+	deprecated("Please use the 'path' property instead.") Cookie setPath(string path) { m_path = path; return this; }
 	/// ditto
-	Cookie setExpire(string expires) { m_expires = expires; return this; }
+	deprecated("Please use the 'expire' property instead.") Cookie setExpire(string expires) { m_expires = expires; return this; }
 	/// ditto
-	Cookie setMaxAge(long maxAge) { m_maxAge = maxAge; return this;}
+	deprecated("Please use the 'maxAge' property instead.") Cookie setMaxAge(long maxAge) { m_maxAge = maxAge; return this;}
 	/// ditto
-	Cookie setSecure(bool enabled) { m_secure = enabled; return this; }
+	deprecated("Please use the 'secure' property instead.") Cookie setSecure(bool enabled) { m_secure = enabled; return this; }
 	/// ditto
-	Cookie setHttpOnly(bool enabled) { m_httpOnly = enabled; return this; }
+	deprecated("Please use the 'httpOnly' property instead.") Cookie setHttpOnly(bool enabled) { m_httpOnly = enabled; return this; }
 }
 
 /**

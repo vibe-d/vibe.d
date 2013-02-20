@@ -1142,12 +1142,11 @@ void writePrettyJsonString(R)(ref R dst, in Json json, int level = 0)
 
 /** Deprecated aliases for backwards compatibility.
 
-	Use writeJsonString and writePrettyJsonString instead. These aliases will 
-	be marked "deprecated" in the next release.
+	Use writeJsonString and writePrettyJsonString instead.
 */
-/*deprecated*/ alias writeJsonString toJson;
+deprecated("Please use writeJsonString instead.") alias writeJsonString toJson;
 ///
-/*deprecated*/ alias writePrettyJsonString toPrettyJson;
+deprecated("Please use writePrettyJsonString instead.") alias writePrettyJsonString toPrettyJson;
 
 
 /// private

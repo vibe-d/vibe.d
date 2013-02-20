@@ -237,7 +237,8 @@ interface HttpServerRequestHandler {
 	void handleRequest(HttpServerRequest req, HttpServerResponse res);
 }
 
-/// Compatibility alias, will be deprecated at some point.
+/// Compatibility alias.
+deprecated("Please use HttpServerRequestHandler instead.")
 alias HttpServerRequestHandler IHttpServerRequestHandler;
 
 /// Aggregates all information about an HTTP error status.

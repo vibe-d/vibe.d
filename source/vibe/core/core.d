@@ -66,8 +66,6 @@ int runEventLoop()
 	return 0;
 }
 
-deprecated int start() { return runEventLoop(); }
-
 /**
 	Stops the currently running event loop.
 
