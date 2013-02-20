@@ -9,6 +9,25 @@ supported in the form of [DUB modules](http://registry.vibed.org/).
 Visit the website at <http://vibed.org/> for more information.
 
 
+Recommended use is via DUB
+--------------------------
+
+Instead of installing vibe.d, it is now recommended to use 
+[DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
+applications. Once DUB is installed, you can use vibe.d by adding the following
+dependency to a `package.json` file in your project's directory:
+
+    {
+        "name": "your-project-identifier",
+        "dependencies": {
+            "vibe-d": ">=0.7.12"
+        }
+    }
+
+Invoking `dub` will then automatically download the latest vibe.d and compile
+and run the project.
+
+
 Installation on Windows
 -----------------------
 
