@@ -1,6 +1,31 @@
 ﻿Changelog
 =========
 
+v0.7.13 - 2013-02-
+--------------------
+
+### Features and improvements ###
+
+ - Compiles with the latest DUB, which is now the recommended way to build vibe.d projects
+ - Deprecated all hash modules in `vibe.crypto` in favour of `std.digest`
+ - Deprecated the `vibe.crypto.ssl` module (functionality moved to `vibe.stream.ssl`)
+ - Deprecated a number of functions that are available in Phobos
+ - Deprecated the setter methods in the `Cookie` class
+
+### Bug fixes ###
+
+ - Fixed connection unlocking in the `HttpClient`
+ - Fixed detection of unsuccessful SSL connection attempts
+ - Fixed freeing of SSL/BIO contexts
+ - Fixed some places in the deprecated VPM to use `Path.toNativeString()` instead of `Path.toString()`
+ - Fixed the `package.json` file of the benchmark project
+ - Fixed cross-thread incovations of `vibe.core.signal.Signal` in the Win32 driver
+ - Fixed compilation on DMD 2.062 - [issue #183][issue183], [issue #184][issue184]
+
+[issue183]: https://github.com/rejectedsoftware/vibe.d/issues/183
+[issue184]: https://github.com/rejectedsoftware/vibe.d/issues/184
+
+
 v0.7.12 - 2013-02-11
 --------------------
 
