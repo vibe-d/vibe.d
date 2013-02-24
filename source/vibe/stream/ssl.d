@@ -56,15 +56,15 @@ class SslStream : Stream {
 		SSL_set_bio(m_ssl, m_bio, m_bio);
 
 		final switch (state) {
-			case SslStreamState.Accepting:
+			case SslStreamState.accepting:
 				//SSL_set_accept_state(m_ssl);
 				enforceSsl(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
 				break;
-			case SslStreamState.Connecting:
+			case SslStreamState.connecting:
 				//SSL_set_connect_state(m_ssl);
 				enforceSsl(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
 				break;
-			case SslStreamState.Connected:
+			case SslStreamState.connected:
 				break;
 		}
 		checkExceptions();
@@ -179,9 +179,16 @@ class SslStream : Stream {
 }
 
 enum SslStreamState {
-	Connecting,
-	Accepting,
-	Connected
+	connecting,
+	accepting,
+	connected,
+
+	/// deprecated
+	Connecting = connecting,
+	/// deprecated
+	Accepting = accepting,
+	/// deprecated
+	Connected = connected
 }
 
 class SslContext {
@@ -189,15 +196,15 @@ class SslContext {
 		ssl_ctx_st* m_ctx;
 	}
 
-	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.SSLv23)
+	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.ssl23)
 	{
 		version(SSL){
 			const(SSL_METHOD)* method;
 			final switch(ver){
-				case SSLVersion.SSLv23: method = SSLv23_server_method(); break;
-				case SSLVersion.SSLv3: method = SSLv3_server_method(); break;
-				case SSLVersion.TLSv1: method = TLSv1_server_method(); break;
-				case SSLVersion.DTLSv1: method = DTLSv1_server_method(); break;
+				case SSLVersion.ssl23: method = SSLv23_server_method(); break;
+				case SSLVersion.ssl3: method = SSLv3_server_method(); break;
+				case SSLVersion.tls1: method = TLSv1_server_method(); break;
+				case SSLVersion.dtls1: method = DTLSv1_server_method(); break;
 			}
 			m_ctx = SSL_CTX_new(method);
 			auto succ = SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(cert_file)) &&
@@ -207,15 +214,15 @@ class SslContext {
 		} else enforce(false, "No SSL support compiled in!");
 	}
 
-	this(SSLVersion ver = SSLVersion.SSLv23)
+	this(SSLVersion ver = SSLVersion.ssl23)
 	{
 		version(SSL){
 			const(SSL_METHOD)* method;
 			final switch(ver){
-				case SSLVersion.SSLv23: method = SSLv23_client_method(); break;
-				case SSLVersion.SSLv3: method = SSLv3_client_method(); break;
-				case SSLVersion.TLSv1: method = TLSv1_client_method(); break;
-				case SSLVersion.DTLSv1: method = DTLSv1_client_method(); break;
+				case SSLVersion.ssl23: method = SSLv23_client_method(); break;
+				case SSLVersion.ssl3: method = SSLv3_client_method(); break;
+				case SSLVersion.tls1: method = TLSv1_client_method(); break;
+				case SSLVersion.dtls1: method = DTLSv1_client_method(); break;
 			}
 			m_ctx = SSL_CTX_new(method);
 			SSL_CTX_set_options!()(m_ctx, SSL_OP_NO_SSLv2);
@@ -236,10 +243,19 @@ class SslContext {
 }
 
 enum SSLVersion {
-	SSLv23,
-	SSLv3,
-	TLSv1,
-	DTLSv1
+	ssl23,
+	ssl3,
+	tls1,
+	dtls1,
+
+	/// deprecated
+	SSLv23 = ssl23,
+	/// deprecated
+	SSLv3 = ssl3,
+	/// deprecated
+	TLSv1 = tls1,
+	/// deprecated
+	DTLSv1 = dtls1
 }
 
 

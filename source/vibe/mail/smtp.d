@@ -23,50 +23,117 @@ import std.exception;
 	Determines the (encryption) type of an SMTP connection.
 */
 enum SmtpConnectionType {
-	Plain,
-	SSL,
-	StartTLS
+	plain,
+	ssl,
+	startTLS,
+
+	/// deprecated
+	Plain = plain,
+	/// deprecated
+	SSL = ssl,
+	/// deprecated
+	StartTLS = startTLS
 }
 
 
 /** Represents the different status codes for SMTP replies.
 */
 enum SmtpStatus {
-	_Success = 200,
-	SystemStatus = 211,
-	HelpMessage = 214,
-	ServiceReady = 220,
-	ServiceClosing = 221,
-	Success = 250,
-	Forwarding = 251,
-	ServerAuthReady = 334,
-	StartMailInput = 354,
-	ServiceUnavailable = 421,
-	MailboxTemporarilyUnavailable = 450,
-	ProcessingError = 451,
-	OutOfDiskSpace = 452,
-	CommandUnrecognized = 500,
-	InvalidParameters = 501,
-	CommandNotImplemented = 502,
-	BadCommandSequence = 503,
-	CommandParameterNotImplemented = 504,
-	DomainAcceptsNoMail = 521,
-	AccessDenied = 530,
-	MailboxUnavailable = 550,
-	UserNotLocal = 551,
-	ExceededStorageAllocation = 552,
-	MailboxNameNotAllowed = 553,
-	TransactionFailed = 554,
+	_success = 200,
+	systemStatus = 211,
+	helpMessage = 214,
+	serviceReady = 220,
+	serviceClosing = 221,
+	success = 250,
+	forwarding = 251,
+	serverAuthReady = 334,
+	startMailInput = 354,
+	serviceUnavailable = 421,
+	mailboxTemporarilyUnavailable = 450,
+	processingError = 451,
+	outOfDiskSpace = 452,
+	commandUnrecognized = 500,
+	invalidParameters = 501,
+	commandNotImplemented = 502,
+	badCommandSequence = 503,
+	commandParameterNotImplemented = 504,
+	domainAcceptsNoMail = 521,
+	accessDenied = 530,
+	mailboxUnavailable = 550,
+	userNotLocal = 551,
+	exceededStorageAllocation = 552,
+	mailboxNameNotAllowed = 553,
+	transactionFailed = 554,
+
+	/// deprecated
+	_Success = _success,
+	/// deprecated
+	SystemStatus = systemStatus,
+	/// deprecated
+	HelpMessage = helpMessage,
+	/// deprecated
+	ServiceReady = serviceReady,
+	/// deprecated
+	ServiceClosing = serviceClosing,
+	/// deprecated
+	Success = success,
+	/// deprecated
+	Forwarding = forwarding,
+	/// deprecated
+	ServerAuthReady = serverAuthReady,
+	/// deprecated
+	StartMailInput = startMailInput,
+	/// deprecated
+	ServiceUnavailable = serviceUnavailable,
+	/// deprecated
+	MailboxTemporarilyUnavailable = mailboxTemporarilyUnavailable,
+	/// deprecated
+	ProcessingError = processingError,
+	/// deprecated
+	OutOfDiskSpace = outOfDiskSpace,
+	/// deprecated
+	CommandUnrecognized = commandUnrecognized,
+	/// deprecated
+	InvalidParameters = invalidParameters,
+	/// deprecated
+	CommandNotImplemented = commandNotImplemented,
+	/// deprecated
+	BadCommandSequence = badCommandSequence,
+	/// deprecated
+	CommandParameterNotImplemented = commandParameterNotImplemented,
+	/// deprecated
+	DomainAcceptsNoMail = domainAcceptsNoMail,
+	/// deprecated
+	AccessDenied = accessDenied,
+	/// deprecated
+	MailboxUnavailable = mailboxUnavailable,
+	/// deprecated
+	UserNotLocal = userNotLocal,
+	/// deprecated
+	ExceededStorageAllocation = exceededStorageAllocation,
+	/// deprecated
+	MailboxNameNotAllowed = mailboxNameNotAllowed,
+	/// deprecated
+	TransactionFailed = transactionFailed,
 }
 
 /**
 	Represents the authentication mechanism used by the SMTP client.
 */
 enum SmtpAuthType {
-	None,
-	Plain,
-	Login,
-	CramMd5
+	none,
+	plain,
+	login,
+	cramMd5,
+
+	/// deprecated
+	None = none,
+	/// deprecated
+	Plain = plain,
+	/// deprecated
+	Login = login,
+	/// deprecated
+	CramMd5 = cramMd5
 }
 
 /**
@@ -76,8 +143,8 @@ class SmtpClientSettings {
 	string host = "127.0.0.1";
 	ushort port = 25;
 	string localname = "localhost";
-	SmtpConnectionType connectionType = SmtpConnectionType.Plain;
-	SmtpAuthType authType = SmtpAuthType.None;
+	SmtpConnectionType connectionType = SmtpConnectionType.plain;
+	SmtpAuthType authType = SmtpAuthType.none;
 	string username;
 	string password;
 
@@ -109,7 +176,7 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 
 	Stream conn = raw_conn;
 
-	expectStatus(conn, SmtpStatus.ServiceReady, "connection establishment");
+	expectStatus(conn, SmtpStatus.serviceReady, "connection establishment");
 
 	void greet(){
 		conn.write("EHLO "~settings.localname~"\r\n");
@@ -125,62 +192,62 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 		}
 	}
 
-	if( settings.connectionType == SmtpConnectionType.SSL ){
+	if( settings.connectionType == SmtpConnectionType.ssl ){
 		auto ctx = new SslContext();
-		conn = new SslStream(raw_conn, ctx, SslStreamState.Connecting);
+		conn = new SslStream(raw_conn, ctx, SslStreamState.connecting);
 	}
 
 	greet();
 
-	if( settings.connectionType == SmtpConnectionType.StartTLS ){
+	if( settings.connectionType == SmtpConnectionType.startTLS ){
 		conn.write("STARTTLS\r\n");
-		expectStatus(conn, SmtpStatus.ServiceReady, "STARTTLS");
+		expectStatus(conn, SmtpStatus.serviceReady, "STARTTLS");
 		auto ctx = new SslContext();
-		conn = new SslStream(raw_conn, ctx, SslStreamState.Connecting);
+		conn = new SslStream(raw_conn, ctx, SslStreamState.connecting);
 		greet();
 	}
 
 	final switch(settings.authType){
-		case SmtpAuthType.None: break;
-		case SmtpAuthType.Plain:
+		case SmtpAuthType.none: break;
+		case SmtpAuthType.plain:
 			logDebug("seding auth");
 			conn.write("AUTH PLAIN\r\n");
-			expectStatus(conn, SmtpStatus.ServerAuthReady, "AUTH PLAIN");
+			expectStatus(conn, SmtpStatus.serverAuthReady, "AUTH PLAIN");
 			logDebug("seding auth info");
 			conn.write(Base64.encode(cast(ubyte[])("\0"~settings.username~"\0"~settings.password)));
 			conn.write("\r\n");
 			expectStatus(conn, 235, "plain auth info");
 			logDebug("authed");
 			break;
-		case SmtpAuthType.Login:
+		case SmtpAuthType.login:
 			conn.write("AUTH LOGIN\r\n");
-			expectStatus(conn, SmtpStatus.ServerAuthReady, "AUTH LOGIN");
+			expectStatus(conn, SmtpStatus.serverAuthReady, "AUTH LOGIN");
 			conn.write(Base64.encode(cast(ubyte[])settings.username) ~ "\r\n");
-			expectStatus(conn, SmtpStatus.ServerAuthReady, "login user name");
+			expectStatus(conn, SmtpStatus.serverAuthReady, "login user name");
 			conn.write(Base64.encode(cast(ubyte[])settings.password) ~ "\r\n");
 			expectStatus(conn, 235, "login password");
 			break;
-		case SmtpAuthType.CramMd5: assert(false, "TODO!");
+		case SmtpAuthType.cramMd5: assert(false, "TODO!");
 	}
 
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
-	expectStatus(conn, SmtpStatus.Success, "MAIL FROM");
+	expectStatus(conn, SmtpStatus.success, "MAIL FROM");
 
 	conn.write("RCPT TO:"~addressMailPart(mail.headers["To"])~"\r\n"); // TODO: support multiple recipients
-	expectStatus(conn, SmtpStatus.Success, "RCPT TO");
+	expectStatus(conn, SmtpStatus.success, "RCPT TO");
 
 	conn.write("DATA\r\n");
-	expectStatus(conn, SmtpStatus.StartMailInput, "DATA");
+	expectStatus(conn, SmtpStatus.startMailInput, "DATA");
 	foreach( name, value; mail.headers ){
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");
 	conn.write(mail.bodyText);
 	conn.write("\r\n.\r\n");
-	expectStatus(conn, SmtpStatus.Success, "message body");
+	expectStatus(conn, SmtpStatus.success, "message body");
 
 	conn.write("QUIT\r\n");
-	expectStatus(conn, SmtpStatus.ServiceClosing, "QUIT");
+	expectStatus(conn, SmtpStatus.serviceClosing, "QUIT");
 }
 
 private void expectStatus(InputStream conn, int expected_status, string in_response_to)

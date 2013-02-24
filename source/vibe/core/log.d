@@ -17,7 +17,7 @@ import std.stdio;
 import core.thread;
 
 private {
-	shared LogLevel s_minLevel = LogLevel.Info;
+	shared LogLevel s_minLevel = LogLevel.info;
 	shared LogLevel s_logFileLevel;
 	shared bool s_plainLogging = false;
 	FileStream s_logFile;
@@ -37,7 +37,7 @@ void setPlainLogging(bool enable)
 }
 
 /// Sets a log file for disk logging
-void setLogFile(string filename, LogLevel min_level = LogLevel.Error)
+void setLogFile(string filename, LogLevel min_level = LogLevel.error)
 {
 	s_logFile = openFile(filename, FileMode.Append);
 	s_logFileLevel = min_level;
@@ -50,15 +50,15 @@ void setLogFile(string filename, LogLevel min_level = LogLevel.Error)
 		level = The log level for the logged message
 		fmt = See http://dlang.org/phobos/std_format.html#format-string
 */
-void logTrace(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Trace, fmt, args); }
+void logTrace(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.trace, fmt, args); }
 /// ditto
-void logDebug(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Debug, fmt, args); }
+void logDebug(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.debug_, fmt, args); }
 /// ditto
-void logInfo(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Info, fmt, args); }
+void logInfo(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.info, fmt, args); }
 /// ditto
-void logWarn(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Warn, fmt, args); }
+void logWarn(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.warn, fmt, args); }
 /// ditto
-void logError(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.Error, fmt, args); }
+void logError(T...)(string fmt, auto ref T args) nothrow { log(LogLevel.error, fmt, args); }
 
 /// ditto
 void log(T...)(LogLevel level, string fmt, auto ref T args)
@@ -66,13 +66,13 @@ nothrow {
 	if( level < s_minLevel && (level < s_logFileLevel || !s_logFile) ) return;
 	string pref;
 	final switch( level ){
-		case LogLevel.Trace: pref = "trc"; break;
-		case LogLevel.Debug: pref = "dbg"; break;
-		case LogLevel.Info: pref = "INF"; break;
-		case LogLevel.Warn: pref = "WRN"; break;
-		case LogLevel.Error: pref = "ERR"; break;
-		case LogLevel.Fatal: pref = "FATAL"; break;
-		case LogLevel.None: assert(false);
+		case LogLevel.trace: pref = "trc"; break;
+		case LogLevel.debug_: pref = "dbg"; break;
+		case LogLevel.info: pref = "INF"; break;
+		case LogLevel.warn: pref = "WRN"; break;
+		case LogLevel.error: pref = "ERR"; break;
+		case LogLevel.fatal: pref = "FATAL"; break;
+		case LogLevel.none: assert(false);
 	}
 
 	try {
@@ -113,12 +113,27 @@ nothrow {
 
 /// Specifies the log level for a particular log message.
 enum LogLevel {
-	Trace,
-	Debug,
-	Info,
-	Warn,
-	Error,
-	Fatal,
-	None
+	trace,
+	debug_,
+	info,
+	warn,
+	error,
+	fatal,
+	none,
+
+	/// deprecated
+	Trace = trace,
+	/// deprecated
+	Debug = debug_,
+	/// deprecated
+	Info = info,
+	/// deprecated
+	Warn = warn,
+	/// deprecated
+	Error = error,
+	/// deprecated
+	Fatal = fatal,
+	/// deprecated
+	None = none
 }
 

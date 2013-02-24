@@ -127,7 +127,7 @@ import std.traits;
 		RestInterfaceClient class for a seamless way to acces such a generated API
 */
 void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = "/",
-		MethodStyle style = MethodStyle.LowerUnderscored)
+		MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	void addRoute(HttpMethod http_verb, string url, HttpServerRequestDelegate handler, string[] params)
 	{
@@ -219,14 +219,14 @@ class RestInterfaceClient(I) : I
 
 	/** Creates a new REST implementation of I
 	*/
-	this(string base_url, MethodStyle style = MethodStyle.LowerUnderscored)
+	this(string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
 		m_baseUrl = Url.parse(base_url);
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I);
 	}
 	/// ditto
-	this(Url base_url, MethodStyle style = MethodStyle.LowerUnderscored)
+	this(Url base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
 		m_baseUrl = base_url;
 		m_methodStyle = style;
@@ -301,18 +301,18 @@ class RestInterfaceClient(I) : I
 string adjustMethodStyle(string name, MethodStyle style)
 {
 	final switch(style){
-		case MethodStyle.Unaltered:
+		case MethodStyle.unaltered:
 			return name;
-		case MethodStyle.CamelCase:
+		case MethodStyle.camelCase:
 			return toLower(name[0 .. 1]) ~ name[1 .. $];
-		case MethodStyle.PascalCase:
+		case MethodStyle.pascalCase:
 			return toUpper(name[0 .. 1]) ~ name[1 .. $];
-		case MethodStyle.LowerCase:
+		case MethodStyle.lowerCase:
 			return toLower(name);
-		case MethodStyle.UpperCase:
+		case MethodStyle.upperCase:
 			return toUpper(name);
-		case MethodStyle.LowerUnderscored:
-		case MethodStyle.UpperUnderscored:
+		case MethodStyle.lowerUnderscored:
+		case MethodStyle.upperUnderscored:
 			string ret;
 			size_t start = 0, i = 1;
 			while( i < name.length ){
@@ -322,7 +322,7 @@ string adjustMethodStyle(string name, MethodStyle style)
 				start = i++;
 			}
 			if( i < name.length ) ret ~= "_" ~ name[start .. $];
-			return style == MethodStyle.LowerUnderscored ? toLower(ret) : toUpper(ret);
+			return style == MethodStyle.lowerUnderscored ? toLower(ret) : toUpper(ret);
 	}
 }
 
@@ -330,13 +330,35 @@ string adjustMethodStyle(string name, MethodStyle style)
 	Determines the naming convention of an identifier.
 */
 enum MethodStyle {
-	Unaltered,        /// Special value for free-style conventions
-	CamelCase,        /// camelCaseNaming
-	PascalCase,       /// PascalCaseNaming
-	LowerCase,        /// lowercasenaming
-	UpperCase,        /// UPPERCASENAMING
-	LowerUnderscored, /// lower_case_naming
-	UpperUnderscored  /// UPPER_CASE_NAMING
+	/// Special value for free-style conventions
+	unaltered,
+	/// camelCaseNaming
+	camelCase,
+	/// PascalCaseNaming
+	pascalCase,
+	/// lowercasenaming
+	lowerCase,
+	/// UPPERCASENAMING
+	upperCase,
+	/// lower_case_naming
+	lowerUnderscored,
+	/// UPPER_CASE_NAMING
+	upperUnderscored,
+
+	/// deprecated
+	Unaltered = unaltered,
+	/// deprecated
+	CamelCase = camelCase,
+	/// deprecated
+	PascalCase = pascalCase,
+	/// deprecated
+	LowerCase = lowerCase,
+	/// deprecated
+	UpperCase = upperCase,
+	/// deprecated
+	LowerUnderscored = lowerUnderscored,
+	/// deprecated
+	UpperUnderscored = upperUnderscored,
 }
 
 

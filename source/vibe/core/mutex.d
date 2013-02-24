@@ -11,9 +11,16 @@ import std.exception;
 import vibe.core.signal;
 
 enum LockMode{
-	Lock,
-	Try,
-	Defer
+	lock,
+	tryLock,
+	defer,
+
+	/// deprecated
+	Lock = lock,
+	/// deprecated
+	Try = tryLock,
+	/// deprecated
+	Defer = defer
 }
 
 
@@ -28,7 +35,7 @@ struct ScopedLock {
 
 	@disable this(this);
 
-	this(Mutex mutex, LockMode mode=LockMode.Lock)
+	this(Mutex mutex, LockMode mode=LockMode.lock)
 	{
 		assert(mutex !is null);
 		m_mutex = mutex;
@@ -36,13 +43,13 @@ struct ScopedLock {
 		switch(mode){
 			default:
 				assert(false, "unsupported enum value");
-			case LockMode.Lock: 
+			case LockMode.lock: 
 				lock();
 				break;
-			case LockMode.Try: 
+			case LockMode.tryLock: 
 				tryLock();
 				break;
-			case LockMode.Defer: 
+			case LockMode.defer: 
 				break;
 		}
 	}
@@ -127,12 +134,12 @@ unittest {
 		assert(lock.locked);
 		assert(mutex.locked);
 
-		auto lock2 = ScopedLock(mutex, LockMode.Try);
+		auto lock2 = ScopedLock(mutex, LockMode.tryLock);
 		assert(!lock2.locked);
 	}
 	assert(!mutex.locked);
 
-	auto lock = ScopedLock(mutex, LockMode.Try);
+	auto lock = ScopedLock(mutex, LockMode.tryLock);
 	assert(lock.locked);
 	lock.unlock();
 	assert(!lock.locked);

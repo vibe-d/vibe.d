@@ -262,19 +262,34 @@ alias void delegate(HttpServerRequest req, HttpServerResponse res, HttpServerErr
 	Disabling unneeded features can speed up the server or reduce its memory usage.
 */
 enum HttpServerOption {
-	None                      = 0,
+	none                      = 0,
 	/// Fills the .path, .queryString fields in the request
-	ParseURL                  = 1<<0,
+	parseURL                  = 1<<0,
 	/// Fills the .query field in the request
-	ParseQueryString          = 1<<1 | ParseURL,
+	parseQueryString          = 1<<1 | parseURL,
 	/// Fills the .form field in the request
-	ParseFormBody             = 1<<2,
+	parseFormBody             = 1<<2,
 	/// Fills the .json field in the request
-	ParseJsonBody             = 1<<3,
+	parseJsonBody             = 1<<3,
 	/// Enables use of the .nextPart() method in the request
-	ParseMultiPartBody        = 1<<4, // todo
+	parseMultiPartBody        = 1<<4, // todo
 	/// Fills the .cookies field in the request
-	ParseCookies              = 1<<5,
+	parseCookies              = 1<<5,
+
+	/// deprecated
+	None = none,
+	/// deprecated
+	ParseURL = parseURL,
+	/// deprecated
+	ParseQueryString = parseQueryString,
+	/// deprecated
+	ParseFormBody = parseFormBody,
+	/// deprecated
+	ParseJsonBody = parseJsonBody,
+	/// deprecated
+	ParseMultiPartBody = parseMultiPartBody,
+	/// deprecated
+	ParseCookies = parseCookies
 }
 
 
@@ -310,12 +325,12 @@ class HttpServerSettings {
 		load in case of invalid or unwanted requests (DoS).
 	*/
 	HttpServerOption options =
-		HttpServerOption.ParseURL |
-		HttpServerOption.ParseQueryString |
-		HttpServerOption.ParseFormBody |
-		HttpServerOption.ParseJsonBody |
-		HttpServerOption.ParseMultiPartBody |
-		HttpServerOption.ParseCookies;
+		HttpServerOption.parseURL |
+		HttpServerOption.parseQueryString |
+		HttpServerOption.parseFormBody |
+		HttpServerOption.parseJsonBody |
+		HttpServerOption.parseMultiPartBody |
+		HttpServerOption.parseCookies;
 	
 	/// Time of a request after which the connection is closed with an error; not supported yet
 	Duration maxRequestTime = dur!"seconds"(0);
@@ -390,25 +405,25 @@ final class HttpServerRequest : HttpRequest {
 
 		/** The _path part of the URL.
 
-			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+			Remarks: This field is only set if HttpServerOption.parseURL is set.
 		*/
 		string path;
 
 		/** The user name part of the URL, if present.
 
-			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+			Remarks: This field is only set if HttpServerOption.parseURL is set.
 		*/
 		string username;
 
 		/** The _password part of the URL, if present.
 
-			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+			Remarks: This field is only set if HttpServerOption.parseURL is set.
 		*/
 		string password;
 
 		/** The _query string part of the URL.
 
-			Remarks: This field is only set if HttpServerOption.ParseURL is set.
+			Remarks: This field is only set if HttpServerOption.parseURL is set.
 		*/
 		string queryString;
 
@@ -419,13 +434,13 @@ final class HttpServerRequest : HttpRequest {
 			the request URI. By default, the first cookie will be returned, which is
 			the or one of the cookies with the closest path match.
 
-			Remarks: This field is only set if HttpServerOption.ParseCookies is set.
+			Remarks: This field is only set if HttpServerOption.parseCookies is set.
 		*/
 		CookieValueMap cookies;
 		
 		/** Contains all _form fields supplied using the _query string.
 
-			Remarks: This field is only set if HttpServerOption.ParseQueryString is set.
+			Remarks: This field is only set if HttpServerOption.parseQueryString is set.
 		*/
 		string[string] query;
 
@@ -440,7 +455,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Supplies the request body as a stream.
 
 			If the body has not already been read because one of the body parsers has
-			processed it (e.g. HttpServerOption.ParseFormBody), it can be read from
+			processed it (e.g. HttpServerOption.parseFormBody), it can be read from
 			this stream.
 		*/
 		InputStream bodyReader;
@@ -448,7 +463,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Contains the parsed Json for a JSON request.
 
 			Remarks:
-				This field is only set if HttpServerOption.ParseJsonBody is set.
+				This field is only set if HttpServerOption.parseJsonBody is set.
 
 				A JSON request must have the Content-Type "application/json".
 		*/
@@ -457,7 +472,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Contains the parsed parameters of a HTML POST _form request.
 
 			Remarks:
-				This field is only set if HttpServerOption.ParseFormBody is set.
+				This field is only set if HttpServerOption.parseFormBody is set.
 
 				A form request must either have the Content-Type
 				"application/x-www-form-urlencoded" or "multipart/form-data".
@@ -467,7 +482,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Contains information about any uploaded file for a HTML _form request.
 
 			Remarks:
-				This field is only set if HttpServerOption.ParseFormBody is set amd
+				This field is only set if HttpServerOption.parseFormBody is set amd
 				if the Content-Type is "multipart/form-data".
 		*/
 		FilePart[string] files;
@@ -478,7 +493,7 @@ final class HttpServerRequest : HttpRequest {
 			on a previous response and if the client has sent back the matching
 			cookie.
 
-			Remarks: Requires the HttpServerOption.ParseCookies option.
+			Remarks: Requires the HttpServerOption.parseCookies option.
 		*/
 		Session session;
 	}
@@ -1110,7 +1125,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 		// Url parsing if desired
-		if( settings.options & HttpServerOption.ParseURL ){
+		if( settings.options & HttpServerOption.parseURL ){
 			auto url = Url.parse(req.requestUrl);
 			req.path = url.pathString;
 			req.queryString = url.queryString;
@@ -1119,14 +1134,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		}
 
 		// query string parsing if desired
-		if( settings.options & HttpServerOption.ParseQueryString ){
-			if( !(settings.options & HttpServerOption.ParseURL) )
+		if( settings.options & HttpServerOption.parseQueryString ){
+			if( !(settings.options & HttpServerOption.parseURL) )
 				logWarn("Query string parsing requested but URL parsing is disabled!");
 			parseUrlEncodedForm(req.queryString, req.query);
 		}
 
 		// cookie parsing if desired
-		if( settings.options & HttpServerOption.ParseCookies ){
+		if( settings.options & HttpServerOption.parseCookies ){
 			auto pv = "cookie" in req.headers;
 			if ( pv ) parseCookies(*pv, req.cookies);
 		}
@@ -1145,12 +1160,12 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			}
 		}
 
-		if( settings.options & HttpServerOption.ParseFormBody ){
+		if( settings.options & HttpServerOption.parseFormBody ){
 			auto ptype = "Content-Type" in req.headers;				
 			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHttpHeaderLineLength);
 		}
 
-		if( settings.options & HttpServerOption.ParseJsonBody ){
+		if( settings.options & HttpServerOption.parseJsonBody ){
 			if( req.contentType == "application/json" ){
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				req.json = parseJson(bodyStr);

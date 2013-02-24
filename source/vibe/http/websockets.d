@@ -113,7 +113,7 @@ class WebSocket {
 	body {
 		if(m_nextMessage is null && !m_conn.empty){
 			m_nextMessage = new IncomingWebSocketMessage(m_conn);
-			if(m_nextMessage.frameOpcode == FrameOpcode.Close) {
+			if(m_nextMessage.frameOpcode == FrameOpcode.close) {
 				if(!m_sentCloseFrame) close();
 				m_conn.close();
 				return false;
@@ -144,13 +144,13 @@ class WebSocket {
 	*/
 	void send(ubyte[] data)
 	{
-		send((scope message){ message.write(data); }, FrameOpcode.Binary);
+		send((scope message){ message.write(data); }, FrameOpcode.binary);
 	}
 
 	/**
 		Sends a message using an output stream.
 	*/
-	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.Text)
+	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
 		if(m_sentCloseFrame) { throw new Exception("closed connection"); }
 		auto message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
@@ -163,7 +163,7 @@ class WebSocket {
 	void close()
 	{
 		Frame frame;
-		frame.opcode = FrameOpcode.Close;
+		frame.opcode = FrameOpcode.close;
 		frame.fin = true;
 		frame.writeFrame(m_conn);
 		m_sentCloseFrame = true;
@@ -290,20 +290,20 @@ class IncomingWebSocketMessage : InputStream {
 		do {
 			frame = Frame.readFrame(m_conn);
 			switch(frame.opcode) {
-				case FrameOpcode.Continuation:
-				case FrameOpcode.Text:
-				case FrameOpcode.Binary:
-				case FrameOpcode.Close:
+				case FrameOpcode.continuation:
+				case FrameOpcode.text:
+				case FrameOpcode.binary:
+				case FrameOpcode.close:
 					m_currentFrame = frame;
 					break;
-				case FrameOpcode.Ping:
-					frame.opcode = FrameOpcode.Pong;
+				case FrameOpcode.ping:
+					frame.opcode = FrameOpcode.pong;
 					frame.writeFrame(m_conn);
 					break;
 				default:
 					throw new Exception("unknown frame opcode");
 			}
-		} while( frame.opcode == FrameOpcode.Ping );
+		} while( frame.opcode == FrameOpcode.ping );
 	}
 }
 
@@ -311,12 +311,25 @@ class IncomingWebSocketMessage : InputStream {
 private immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 enum FrameOpcode {
-	Continuation = 0x0,
-	Text = 0x1,
-	Binary = 0x2,
-	Close = 0x8,
-	Ping = 0x9,
-	Pong = 0xA
+	continuation = 0x0,
+	text = 0x1,
+	binary = 0x2,
+	close = 0x8,
+	ping = 0x9,
+	pong = 0xA,
+
+	/// deprecated
+	Continuation = continuation,
+	/// deprecated
+	Text = text,
+	/// deprecated
+	Binary = binary,
+	/// deprecated
+	Close = close,
+	/// deprecated
+	Ping = ping,
+	/// deprecated
+	Pong = pong,
 }
 
 
