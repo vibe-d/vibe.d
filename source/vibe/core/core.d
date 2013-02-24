@@ -268,7 +268,7 @@ void enableWorkerThreads()
 {
 	assert(st_workerTaskMutex is null);
 
-	st_workerTaskMutex = new Mutex;	
+	st_workerTaskMutex = new core.sync.mutex.Mutex;	
 
 	foreach( i; 0 .. 4 ){
 		auto thr = new Thread(&workerThreadFunc);
@@ -468,7 +468,7 @@ private {
 	size_t s_fiberCount;
 	void delegate() s_idleHandler;
 
-	__gshared Mutex st_workerTaskMutex;
+	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
 	__gshared void delegate()[] st_workerTasks;
 	__gshared Signal st_workerTaskSignal;
 }

@@ -323,14 +323,18 @@ class Libevent2Signal : Signal {
 		wait(m_emitCount);
 	}
 
-	void wait(int reference_emit_count)
+	int wait(int reference_emit_count)
 	{
 		assert(!isOwner());
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
-		while( m_emitCount == reference_emit_count )
+		auto ec = m_emitCount;
+		while( ec == reference_emit_count ){
 			m_driver.m_core.yieldForEvent();
+			ec = m_emitCount;
+		}
+		return ec;
 	}
 
 	void acquire()
@@ -630,7 +634,7 @@ private int getLastSocketError()
 }
 
 struct LevMutex {
-	FreeListRef!Mutex mutex;
+	FreeListRef!(core.sync.mutex.Mutex) mutex;
 	FreeListRef!ReadWriteMutex rwmutex;
 }
 alias FreeListObjectAlloc!(LevMutex, false, true) LevMutexAlloc;
@@ -684,7 +688,7 @@ private nothrow extern(C)
 		try {
 			auto ret = LevMutexAlloc.alloc();
 			if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
-			else ret.mutex = FreeListRef!Mutex();
+			else ret.mutex = FreeListRef!(core.sync.mutex.Mutex)();
 			return ret;
 		} catch( Throwable th ){
 			logWarn("Exception in lev_alloc_mutex: %s", th.msg);

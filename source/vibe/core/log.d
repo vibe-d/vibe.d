@@ -21,7 +21,7 @@ private {
 	shared LogLevel s_logFileLevel;
 	shared bool s_plainLogging = false;
 	FileStream s_logFile;
-	Mutex s_mutex;
+	TaskMutex s_mutex;
 }
 
 /// Sets the minimum log level to be printed.
@@ -76,7 +76,7 @@ nothrow {
 	}
 
 	try {
-		if( !s_mutex && getEventDriver() ) s_mutex = new Mutex;
+		if( !s_mutex && getEventDriver() ) s_mutex = new TaskMutex;
 		if( s_mutex ) s_mutex.lock();
 		scope(exit) if( s_mutex ) s_mutex.unlock();
 
