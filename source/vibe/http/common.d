@@ -11,6 +11,7 @@ public import vibe.http.status;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.utils.array;
 import vibe.utils.memory;
@@ -438,132 +439,10 @@ final class Cookie {
 	deprecated("Please use the 'httpOnly' property instead.") Cookie setHttpOnly(bool enabled) { m_httpOnly = enabled; return this; }
 }
 
-/**
-	Behaves like string[string] but case does not matter for the key.
+/// Compatibility alias for vibe.inet.message.InetHeaderMap
+deprecated("please use vibe.inet.message.InetHeaderMap instead.")
+alias InetHeaderMap StrMapCI;
 
-	This kind of map is used for MIME headers (e.g. for HTTP), where the case of the key strings
-	does not matter.
-
-	Note that despite case not being relevant for matching keyse, iterating over the map will yield
-	the original case of the key that was put in.
-*/
-struct StrMapCI {
-	private {
-		static struct Field { uint keyCheckSum; string key; string value; }
-		Field[64] m_fields;
-		size_t m_fieldCount = 0;
-		Field[] m_extendedFields;
-		static char[256] s_keyBuffer;
-	}
-	
-	@property size_t length() const { return m_fieldCount + m_extendedFields.length; }
-
-	void remove(string key){
-		auto keysum = computeCheckSumI(key);
-		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
-		if( idx >= 0 ){
-			removeFromArrayIdx(m_fields[0 .. m_fieldCount], idx);
-			m_fieldCount--;
-		} else {
-			idx = getIndex(m_extendedFields, key, keysum);
-			enforce(idx >= 0);
-			removeFromArrayIdx(m_extendedFields, idx);
-		}
-	}
-
-	string get(string key, string def_val = null)
-	const {
-		if( auto pv = key in this ) return *pv;
-		return def_val;
-	}
-
-	string opIndex(string key)
-	const {
-		auto pitm = key in this;
-		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
-		return *pitm;
-	}
-	
-	string opIndexAssign(string val, string key)
-	{
-		auto pitm = key in this;
-		if( pitm ) *pitm = val;
-		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = Field(computeCheckSumI(key), key, val);
-		else m_extendedFields ~= Field(computeCheckSumI(key), key, val);
-		return val;
-	}
-
-	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
-		uint keysum = computeCheckSumI(key);
-		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
-		if( idx >= 0 ) return &m_fields[idx].value;
-		idx = getIndex(m_extendedFields, key, keysum);
-		if( idx >= 0 ) return &m_extendedFields[idx].value;
-		return null;
-	}
-
-	bool opBinaryRight(string op)(string key) inout if(op == "!in") {
-		return !(key in this);
-	}
-
-	int opApply(int delegate(ref string key, ref string val) del)
-	{
-		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
-				return ret;
-		}
-		foreach( ref kv; m_extendedFields ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
-				return ret;
-		}
-		return 0;
-	}
-
-	int opApply(int delegate(ref string val) del)
-	{
-		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			if( auto ret = del(kv.value) )
-				return ret;
-		}
-		foreach( ref kv; m_extendedFields ){
-			if( auto ret = del(kv.value) )
-				return ret;
-		}
-		return 0;
-	}
-
-	@property StrMapCI dup()
-	const {
-		StrMapCI ret;
-		ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
-		ret.m_fieldCount = m_fieldCount;
-		ret.m_extendedFields = m_extendedFields.dup;
-		return ret;
-	}
-
-	private ptrdiff_t getIndex(in Field[] map, string key, uint keysum)
-	const {
-		foreach( i, ref const(Field) entry; map ){
-			if( entry.keyCheckSum != keysum ) continue;
-			if( icmp2(entry.key, key) == 0 )
-				return i;
-		}
-		return -1;
-	}
-	
-	// very simple check sum function with a good chance to match
-	// strings with different case equal
-	private static uint computeCheckSumI(string s)
-	{
-		import std.uni;
-		uint csum = 0;
-		foreach( i; 0 .. s.length )
-			csum += 357*(s[i]&0x1101_1111);
-		return csum;
-	}
-}
 
 /** 
 */
