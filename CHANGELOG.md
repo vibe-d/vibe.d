@@ -1,13 +1,15 @@
 ﻿Changelog
 =========
 
-v0.7.13 - 2013-02-
+v0.7.13 - 2013-02-24
 --------------------
 
 ### Features and improvements ###
 
  - Compiles with the latest DUB, which is now the recommended way to build vibe.d projects
- - Deprecated all hash modules in `vibe.crypto` in favour of `std.digest`
+ - Changed all public enums to use Phobos' naming convention (except for JSON and BSON)
+ - Moved `vibe.http.common.StrMapCI` to `vibe.inet.nessage.InetHeaderMap`
+ - Deprecated all hash modules in `vibe.crypto` in favor of `std.digest`
  - Deprecated the `vibe.crypto.ssl` module (functionality moved to `vibe.stream.ssl`)
  - Deprecated a number of functions that are available in Phobos
  - Deprecated the setter methods in the `Cookie` class
