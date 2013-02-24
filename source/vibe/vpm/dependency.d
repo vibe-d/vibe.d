@@ -138,9 +138,9 @@ class Dependency {
 					m_cmpB = "<=";
 				}
 			} else {
-				enforce( ves[idx2+1] == ' ' );
+				enforce( ves[idx2] == ' ' );
 				m_versA = Version(ves[0..idx2]);
-				string v2 = ves[idx2+2..$];
+				string v2 = ves[idx2+1..$];
 				m_cmpB = skipComp(v2);
 				m_versB = Version(v2);
 				
