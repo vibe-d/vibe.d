@@ -111,7 +111,7 @@ class HttpRequest {
 		deprecated("Please use requestUrl instead.") alias requestUrl url;
 
 		/// All request _headers
-		StrMapCI headers;
+		InetHeaderMap headers;
 	}
 	
 	protected this(Stream conn)
@@ -196,7 +196,7 @@ class HttpResponse {
 		string statusPhrase;
 
 		/// The response header fields
-		StrMapCI headers;
+		InetHeaderMap headers;
 
 		/// All cookies that shall be set on the client for this request
 		Cookie[string] cookies;

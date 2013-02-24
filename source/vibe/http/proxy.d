@@ -10,6 +10,7 @@ module vibe.http.proxy;
 import vibe.core.log;
 import vibe.http.client;
 import vibe.http.server;
+import vibe.inet.message;
 import vibe.stream.operations;
 
 import std.conv;
@@ -42,7 +43,7 @@ void listenHttpReverseProxy(HttpServerSettings settings, string destination_host
 HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort destination_port)
 {
 	static immutable string[] non_forward_headers = ["Content-Length", "Transfer-Encoding", "Content-Encoding"];
-	static StrMapCI non_forward_headers_map;
+	static InetHeaderMap non_forward_headers_map;
 	if( non_forward_headers_map.length == 0 )
 		foreach( n; non_forward_headers )
 			non_forward_headers_map[n] = "";

@@ -9,7 +9,7 @@ module vibe.mail.smtp;
 
 import vibe.core.log;
 import vibe.core.net;
-import vibe.http.common : StrMapCI;
+import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.stream.ssl;
 
@@ -156,7 +156,7 @@ class SmtpClientSettings {
 	Represents an email message, including its headers.
 */
 class Mail {
-	StrMapCI headers;
+	InetHeaderMap headers;
 	string bodyText;
 }
 
