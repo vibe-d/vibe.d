@@ -67,7 +67,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 				else creq.headers["X-Forwarded-For"] = req.peer;
 				creq.bodyWriter.write(req.bodyReader);
 			});
-		scope(exit) destroy(cres);
+		scope(exit) cres.dropBody();
 		
 		// copy the response to the original requester
 		res.statusCode = cres.statusCode;
