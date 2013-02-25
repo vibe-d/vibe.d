@@ -100,7 +100,7 @@ void listenHttp(HttpServerSettings settings, HttpServerRequestFunction request_h
 	listenHttp(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHttp(HttpServerSettings settings, IHttpServerRequestHandler request_handler)
+void listenHttp(HttpServerSettings settings, HttpServerRequestHandler request_handler)
 {
 	listenHttp(settings, &request_handler.handleRequest);
 }
