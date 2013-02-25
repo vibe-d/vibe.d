@@ -48,7 +48,7 @@ enum HttpMethod {
 	COPY,
 	LOCK,
 	MKCOL,
-	MOVE
+	MOVE,
 	PROPFIND,
 	PROPPATCH,
 	UNLOCK
