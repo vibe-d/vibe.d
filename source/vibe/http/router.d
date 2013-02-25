@@ -18,7 +18,7 @@ import std.functional;
 /**
 	An interface for HTTP request routers.
 */
-interface HttpRouter {
+interface HttpRouter : HttpServerRequestHandler {
 	// Adds a new route for request that match the path and method
 	HttpRouter match(HttpMethod method, string path, HttpServerRequestDelegate cb);
 	// ditto
@@ -126,7 +126,7 @@ interface HttpRouter {
 	}
 	---
 +/
-class UrlRouter : HttpServerRequestHandler, HttpRouter {
+class UrlRouter : HttpRouter {
 	private {
 		Route[][HttpMethod.max+1] m_routes;
 	}
