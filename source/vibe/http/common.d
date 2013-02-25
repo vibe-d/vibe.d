@@ -33,6 +33,7 @@ enum HttpVersion {
 }
 
 enum HttpMethod {
+	// HTTP standard
 	GET,
 	HEAD,
 	PUT,
@@ -41,7 +42,16 @@ enum HttpMethod {
 	DELETE,
 	OPTIONS,
 	TRACE,
-	CONNECT
+	CONNECT,
+	
+	// WEBDAV extensions
+	COPY,
+	LOCK,
+	MKCOL,
+	MOVE
+	PROPFIND,
+	PROPPATCH,
+	UNLOCK
 }
 
 
@@ -50,11 +60,8 @@ enum HttpMethod {
 */
 string httpMethodString(HttpMethod m)
 {
-	static immutable strings = ["GET", "HEAD", "PUT", "POST", "PATCH", "DELETE", "OPTIONS", "TRACE", "CONNECT"];
-	static assert(m.max+1 == strings.length);
-	return strings[m];
+	return to!string(m);
 }
-
 
 /**
 	Returns the HttpMethod value matching the given HTTP method string.
@@ -72,8 +79,24 @@ HttpMethod httpMethodFromString(string str)
 		case "OPTIONS": return HttpMethod.OPTIONS;
 		case "TRACE": return HttpMethod.TRACE;
 		case "CONNECT": return HttpMethod.CONNECT;
+		case "COPY": return HttpMethod.COPY;
+		case "LOCK": return HttpMethod.LOCK;
+		case "MKCOL": return HttpMethod.MKCOL;
+		case "MOVE": return HttpMethod.MOVE;
+		case "PROPFIND": return HttpMethod.PROPFIND;
+		case "PROPPATCH": return HttpMethod.PROPPATCH;
+		case "UNLOCK": return HttpMethod.UNLOCK;
 	}
 }
+
+unittest 
+{
+	assert(httpMethodString(HttpMethod.GET) == "GET");
+	assert(httpMethodString(HttpMethod.UNLOCK) == "UNLOCK");
+	assert(httpMethodFromString("GET") == HttpMethod.GET);
+	assert(httpMethodFromString("UNLOCK") == HttpMethod.UNLOCK);
+}
+
 
 /**
 	Utility function that throws a HttpStatusException if the _condition is not met.
