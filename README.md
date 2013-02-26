@@ -109,7 +109,7 @@ Installation on Linux (generic)
 
 You need to have the following dependencies installed:
 
- - [DMD 2.059 or greater](http://dlang.org/download)
+ - [DMD 2.062 or greater](http://dlang.org/download)
  - [libssl](http://www.openssl.org/source/)
  - [libevent 2.0.x](http://libevent.org/) (*)
 
