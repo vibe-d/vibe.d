@@ -10,7 +10,12 @@
 */
 module vibe.core.concurrency;
 
+public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;
+
+import core.time;
 import std.typecons;
+import std.variant;
+import vibe.core.task;
 
 private extern (C) pure void _d_monitorenter(Object h);
 private extern (C) pure void _d_monitorexit(Object h);
@@ -130,7 +135,7 @@ struct ScopedLock(T)
 	//pragma(msg, isolatedRefMethods!T());
 	#line 1 "isolatedAggreateMethodsString"
 	//mixin(isolatedAggregateMethodsString!T());
-	#line 591 "typecons.d"
+	#line 138 "source/vibe/core/concurrency.d"
 
 	private Object getObject()
 		pure {
@@ -138,3 +143,54 @@ struct ScopedLock(T)
 			else return cast()m_ref;
 		}
 }
+
+alias Task Tid;
+
+void send(T...)(Tid tid, T args)
+{
+	static assert(args.length > 0, "Need to send at least one value.");
+	static if( args.length == 1 ) tid.messageQueue.send(Variant(args[0]));
+	else tid.messageQueue.send(Variant(tuple(args)));
+}
+
+void prioritySend(T...)(Tid tid, T args)
+{
+	static assert(args.length > 0, "Need to send at least one value.");
+	static if( args.length == 1 ) tid.messageQueue.prioritySend(Variant(args[0]));
+	else tid.messageQueue.prioritySend(Variant(tuple(args)));
+}
+
+// TODO: handle special exception types
+
+void receive(T...)(T ops)
+{
+	auto tid = Task.getThis();
+	tid.messageQueue.receive(ops);
+}
+
+auto receiveOnly(T...)()
+{
+	Tuple!T ret;
+
+	receive(
+		(T val){
+			ret = val;
+		},
+		(Variant val){
+			throw new Exception(format("Unexpected message type %s, expected %s.", val.type, T.stringof));
+		});
+
+	return ret;
+}
+
+bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
+{
+	auto tid = Task.getThis();
+	tid.messageQueue.receiveTimeout(ops);
+}
+
+void setMaxMailboxSize(Tid tid, uint messages, OnCrowding on_crowding)
+{
+
+}
+

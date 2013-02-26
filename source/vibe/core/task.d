@@ -7,8 +7,13 @@
 */
 module vibe.core.task;
 
+import vibe.core.sync;
+import vibe.utils.array;
+
 import core.thread;
 import std.exception;
+import std.traits;
+import std.typecons;
 import std.variant;
 
 
@@ -70,6 +75,7 @@ class TaskFiber : Fiber {
 	private {
 		Thread m_thread;
 		Variant[string] m_taskLocalStorage;
+		MessageQueue m_messageQueue;
 	}
 
 	protected {
@@ -81,6 +87,7 @@ class TaskFiber : Fiber {
 	{
 		super(fun, stack_size);
 		m_thread = Thread.getThis();
+		m_messageQueue = new MessageQueue;
 	}
 
 	/** Returns the thread that owns this task.
@@ -90,6 +97,8 @@ class TaskFiber : Fiber {
 	/** Returns the handle of the current Task running on this fiber.
 	*/
 	@property Task task() { return Task(this, m_taskCounter); }
+
+	@property inout(MessageQueue) messageQueue() inout { return m_messageQueue; }
 
 	/** Blocks until the task has ended.
 	*/
@@ -142,5 +151,115 @@ class InterruptException : Exception {
 	this()
 	{
 		super("Task interrupted.");
+	}
+}
+
+private class MessageQueue {
+	private {
+		TaskMutex m_mutex;
+		TaskCondition m_condition;
+		FixedRingBuffer!Variant m_queue;
+		FixedRingBuffer!Variant m_priorityQueue;
+	}
+
+	this()
+	{
+		m_mutex = new TaskMutex;
+		m_condition = new TaskCondition(m_mutex);
+		m_queue.capacity = 32;
+		m_priorityQueue.capacity = 32;
+	}
+
+	void clear()
+	{
+		synchronized(m_mutex){
+			m_queue.clear();
+			m_priorityQueue.clear();
+		}
+		m_condition.notifyAll();
+	}
+
+	void send(Variant msg)
+	{
+		synchronized(m_mutex){
+			m_queue.put(msg);
+		}
+		m_condition.notify();
+	}
+
+	void prioritySend(Variant msg)
+	{
+		synchronized(m_mutex){
+			m_priorityQueue.put(msg);
+		}
+		m_condition.notify();
+	}
+
+	void receive(OPS...)(OPS ops)
+	{
+		synchronized(m_mutex){
+			while(true){
+				import vibe.core.log;
+				logTrace("looking for messages");
+				if( receiveQueue(m_priorityQueue, ops) ) return;
+				if( receiveQueue(m_queue, ops) ) return;
+				logTrace("received no message, waiting..");
+				m_condition.wait();
+			}
+		}
+	}
+
+	void receiveTimeout(OPS...)(Duration timeout, OPS ops)
+	{
+		auto limit_time = Clock.currTime();
+		synchronized(m_mutex){
+			while(true){
+				if( receiveQueue(m_priorityQueue, ops) ) return true;
+				if( receiveQueue(m_queue, ops) ) return true;
+				auto now = Clock.currTime();
+				if( now > limit_time ) return false;
+				m_condition.wait(limit_time - now);
+			}
+		}
+		return false;
+	}
+
+	private static bool receiveQueue(OPS...)(ref FixedRingBuffer!Variant queue, OPS ops)
+	{
+		auto r = queue[];
+		while(!r.empty){
+			scope(failure) queue.removeAt(r);
+			auto msg = r.front;
+			bool matched;
+			foreach(i, TO; OPS){
+				alias ParameterTypeTuple!TO ArgTypes;
+
+				static if( ArgTypes.length == 1 ){
+					static if( is(ArgTypes[0] == Variant) )
+						matched = callOp(ops[i], msg);
+					else if( msg.convertsTo!(ArgTypes[0]) )
+						matched = callOp(ops[i], msg.get!(ArgTypes[0]));
+				} else if( msg.convertsTo!(Tuple!ArgTypes) ){
+					matched = callOp(ops[i], msg.get!(Tuple!ArgTypes).expand);
+				}
+				if( matched ) break;
+			}
+			if( matched ){
+				queue.removeAt(r);
+				return true;
+			}
+			r.popFront();
+		}
+		return false;
+	}
+
+	private static bool callOp(OP, ARGS...)(OP op, ARGS args)
+	{
+		static if( is(ReturnType!op == bool) ){
+			return op(args);
+		} else {
+			op(args);
+			return true;
+		}
 	}
 }
