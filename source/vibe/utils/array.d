@@ -191,6 +191,8 @@ struct FixedRingBuffer(T, size_t N = 0) {
 
 	@property bool empty() const { return m_fill == 0; }
 
+	@property bool full() const { return m_fill == m_buffer.length; }
+
 	@property size_t length() const { return m_fill; }
 
 	@property size_t freeSpace() const { return m_buffer.length - m_fill; }

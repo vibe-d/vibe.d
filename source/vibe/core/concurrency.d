@@ -144,6 +144,11 @@ struct ScopedLock(T)
 		}
 }
 
+
+/******************************************************************************/
+/* std.concurrency compatible interface for message passing                   */
+/******************************************************************************/
+
 alias Task Tid;
 
 void send(T...)(Tid tid, T args)
@@ -165,7 +170,7 @@ void prioritySend(T...)(Tid tid, T args)
 void receive(T...)(T ops)
 {
 	auto tid = Task.getThis();
-	tid.messageQueue.receive(ops);
+	tid.messageQueue.receive(ops, (Throwable th) { throw th; });
 }
 
 auto receiveOnly(T...)()
@@ -173,12 +178,11 @@ auto receiveOnly(T...)()
 	Tuple!T ret;
 
 	receive(
-		(T val){
-			ret = val;
-		},
-		(Variant val){
-			throw new Exception(format("Unexpected message type %s, expected %s.", val.type, T.stringof));
-		});
+		(T val) { ret = val; },
+		(LinkTerminated e) { throw e; },
+		(OwnerTerminated e) { throw e; },
+		(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, T.stringof)); }
+	);
 
 	return ret;
 }
@@ -189,8 +193,25 @@ bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
 	tid.messageQueue.receiveTimeout(ops);
 }
 
-void setMaxMailboxSize(Tid tid, uint messages, OnCrowding on_crowding)
+void setMaxMailboxSize(Tid tid, size_t messages, OnCrowding on_crowding)
 {
+	final switch(on_crowding){
+		case OnCrowding.block: setMaxMailboxSize(tid, messages, null); break;
+		case OnCrowding.throwException: setMaxMailboxSize(tid, messages, &onCrowdingThrow); break;
+		case OnCrowding.ignore: setMaxMailboxSize(tid, messages, &onCrowdingDrop); break;
+	}
+}
 
+void setMaxMailboxSize(Tid tid, size_t messages, bool function(Tid) on_crowding)
+{
+	tid.messageQueue.setMaxSize(messages, on_crowding);
+}
+
+private bool onCrowdingThrow(Task tid){
+	throw new MailboxFull(std.concurrency.Tid());
+}
+
+private bool onCrowdingDrop(Task tid){
+	return false;
 }
 

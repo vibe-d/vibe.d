@@ -154,12 +154,14 @@ class InterruptException : Exception {
 	}
 }
 
-private class MessageQueue {
+class MessageQueue {
 	private {
 		TaskMutex m_mutex;
 		TaskCondition m_condition;
 		FixedRingBuffer!Variant m_queue;
 		FixedRingBuffer!Variant m_priorityQueue;
+		size_t m_maxMailboxSize = 0;
+		bool function(Task) m_onCrowding;
 	}
 
 	this()
@@ -167,8 +169,10 @@ private class MessageQueue {
 		m_mutex = new TaskMutex;
 		m_condition = new TaskCondition(m_mutex);
 		m_queue.capacity = 32;
-		m_priorityQueue.capacity = 32;
+		m_priorityQueue.capacity = 8;
 	}
+
+	@property bool full() const { return m_maxMailboxSize > 0 && m_queue.length + m_priorityQueue.length >= m_maxMailboxSize; }
 
 	void clear()
 	{
@@ -179,9 +183,28 @@ private class MessageQueue {
 		m_condition.notifyAll();
 	}
 
+	void setMaxSize(size_t count, bool function(Task tid) action)
+	{
+		m_maxMailboxSize = count;
+		m_onCrowding = action;
+	}
+
 	void send(Variant msg)
 	{
 		synchronized(m_mutex){
+			if( this.full ){
+				if( !m_onCrowding ){
+					while(this.full)
+						m_condition.wait();
+				} else if( !m_onCrowding(Task.getThis()) ){
+					return;
+				}
+			}
+			assert(!this.full);
+
+			if( m_queue.full )
+				m_queue.capacity = (m_queue.capacity * 3) / 2;
+
 			m_queue.put(msg);
 		}
 		m_condition.notify();
@@ -190,6 +213,8 @@ private class MessageQueue {
 	void prioritySend(Variant msg)
 	{
 		synchronized(m_mutex){
+			if( m_priorityQueue.full )
+				m_priorityQueue.capacity = (m_priorityQueue.capacity * 3) / 2;
 			m_priorityQueue.put(msg);
 		}
 		m_condition.notify();
@@ -197,7 +222,10 @@ private class MessageQueue {
 
 	void receive(OPS...)(OPS ops)
 	{
+		bool notify;
+		scope(exit) if( notify ) m_condition.notify();
 		synchronized(m_mutex){
+			notify = this.full;
 			while(true){
 				import vibe.core.log;
 				logTrace("looking for messages");
@@ -209,10 +237,13 @@ private class MessageQueue {
 		}
 	}
 
-	void receiveTimeout(OPS...)(Duration timeout, OPS ops)
+	bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
 	{
+		bool notify;
+		scope(exit) if( notify ) m_condition.notify();
 		auto limit_time = Clock.currTime();
 		synchronized(m_mutex){
+			notify = this.full;
 			while(true){
 				if( receiveQueue(m_priorityQueue, ops) ) return true;
 				if( receiveQueue(m_queue, ops) ) return true;
