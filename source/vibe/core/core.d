@@ -301,37 +301,42 @@ private class CoreTask : TaskFiber {
 
 	private void run()
 	{
-		scope(failure) logError("CoreTaskFiber was terminated unexpectedly.");
+		try {
+			while(true){
+				while( !m_taskFunc ){
+					try {
+						s_core.yieldForEvent();
+					} catch( Exception e ){
+						logWarn("CorTaskFiber was resumed with exception but without active task!");
+						logDebug("Full error: %s", e.toString().sanitize());
+					}
+				}
 
-		while(true){
-			while( !m_taskFunc ){
+				auto task = m_taskFunc;
+				m_taskFunc = null;
 				try {
-					s_core.yieldForEvent();
+					m_running = true;
+					scope(exit) m_running = false;
+					logTrace("entering task.");
+					task();
+					logTrace("exiting task.");
 				} catch( Exception e ){
-					logWarn("CorTaskFiber was resumed with exception but without active task!");
+					import std.encoding;
+					logError("Task terminated with exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
-			}
+				resetLocalStorage();
 
-			auto task = m_taskFunc;
-			m_taskFunc = null;
-			try {
-				m_running = true;
-				scope(exit) m_running = false;
-				logTrace("entering task.");
-				task();
-				logTrace("exiting task.");
-			} catch( Exception e ){
-				logError("Task terminated with exception: %s", e.toString());
+				foreach( t; m_yielders ) s_core.resumeTask(t);
+				
+				// make the fiber available for the next task
+				if( s_availableFibers.length <= s_availableFibersCount )
+					s_availableFibers.length = 2*s_availableFibers.length;
+				s_availableFibers[s_availableFibersCount++] = this;
 			}
-			resetLocalStorage();
-
-			foreach( t; m_yielders ) s_core.resumeTask(t);
-			
-			// make the fiber available for the next task
-			if( s_availableFibers.length <= s_availableFibersCount )
-				s_availableFibers.length = 2*s_availableFibers.length;
-			s_availableFibers[s_availableFibersCount++] = this;
+		} catch(Throwable th){
+			logError("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
+			logDebug("Full error: %s", th.toString().sanitize());
 		}
 	}
 
