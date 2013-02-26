@@ -634,13 +634,13 @@ private int getLastSocketError()
 }
 
 struct LevMutex {
-	FreeListRef!(core.sync.mutex.Mutex) mutex;
-	FreeListRef!ReadWriteMutex rwmutex;
+	vibe.utils.memory.FreeListRef!(core.sync.mutex.Mutex) mutex;
+	vibe.utils.memory.FreeListRef!ReadWriteMutex rwmutex;
 }
 alias FreeListObjectAlloc!(LevMutex, false, true) LevMutexAlloc;
 
 struct LevCondition {
-	FreeListRef!Condition cond;
+	vibe.utils.memory.FreeListRef!Condition cond;
 	LevMutex* mutex;
 }
 alias FreeListObjectAlloc!(LevCondition, false, true) LevConditionAlloc;
