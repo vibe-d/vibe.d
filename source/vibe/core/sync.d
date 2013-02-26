@@ -186,9 +186,7 @@ class TaskCondition : core.sync.condition.Condition {
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
 		scope(failure) m_mutex.lock();
-
-		while(refcount == m_signal.emitCount)
-			rawYield();
+		m_signal.wait(refcount);
 		m_mutex.lock();
 	}
 
@@ -202,8 +200,11 @@ class TaskCondition : core.sync.condition.Condition {
 		scope(failure) m_mutex.lock();
 
 		m_timer.rearm(timeout);
+		m_signal.acquire();
+		scope(failure) m_signal.release();
 		while(refcount == m_signal.emitCount && m_timer.pending)
 			rawYield();
+		m_signal.release();
 		auto succ = refcount != m_signal.emitCount;
 		m_mutex.lock();
 		return succ;
