@@ -278,7 +278,7 @@ private void initDirectory(string fName)
     immutable appFile =
 `import vibe.d;
 
-static this()
+shared static this()
 { 
     logInfo("Edit source/app.d to start your project.");
 }
