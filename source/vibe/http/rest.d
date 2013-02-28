@@ -843,12 +843,12 @@ unittest
 	static if( __traits(compiles, { assert(isInstanceOf!(Appender, Appender!string)); }) ){
 		static assert(fullyQualifiedTypeName!(QualifiedNameTests.Inner)
 			== "vibe.http.rest.QualifiedNameTests.Inner");
-		static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
+		/*static assert(fullyQualifiedTypeName!(ReturnType!(QualifiedNameTests.func))
 			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])");
 		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.func))
 			== "const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])(vibe.http.rest.QualifiedNameTests.Inner, immutable(char)[])");
 		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.data))
-			== "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");
+			== "shared(const(vibe.http.rest.QualifiedNameTests.Inner[immutable(char)[]])[])");*/
 		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.deleg))
 			== "vibe.http.rest.QualifiedNameTests.Inner(double, immutable(char)[])");
 		static assert(fullyQualifiedTypeName!(typeof(QualifiedNameTests.array))
