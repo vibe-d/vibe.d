@@ -1,6 +1,6 @@
 import vibe.d;
 
-static this()
+shared static this()
 {
 	auto t1 = runTask({
 		while(true){
