@@ -355,9 +355,13 @@ class Win32Signal : Signal {
 		assert(!isOwner());
 		acquire();
 		scope(exit) release();
-		while( atomicOp!"=="(m_emitCount, reference_emit_count) )
+		auto ec = atomicLoad(m_emitCount);
+		while( ec == reference_emit_count ){
 			m_driver.m_core.yieldForEvent();
-		logDebug("Signal %s wait leave %s", cast(void*)this, m_emitCount);
+			ec = atomicLoad(m_emitCount);
+		}
+		logDebug("Signal %s wait leave %s", cast(void*)this, ec);
+		return ec;
 	}
 
 	void acquire()
