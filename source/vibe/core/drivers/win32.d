@@ -317,7 +317,7 @@ interface SocketEventHandler {
 
 class Win32Signal : Signal {
 	private {
-		Mutex m_mutex;
+		core.sync.mutex.Mutex m_mutex;
 		Win32EventDriver m_driver;
 		Win32EventDriver[Task] m_listeners;
 		shared int m_emitCount = 0;
@@ -325,7 +325,7 @@ class Win32Signal : Signal {
 
 	this(Win32EventDriver driver)
 	{
-		m_mutex = new Mutex;
+		m_mutex = new core.sync.mutex.Mutex;
 		m_driver = driver;
 	}
 
@@ -349,7 +349,7 @@ class Win32Signal : Signal {
 		wait(emitCount);
 	}
 
-	void wait(int reference_emit_count)
+	int wait(int reference_emit_count)
 	{
 		logDebug("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
 		assert(!isOwner());
