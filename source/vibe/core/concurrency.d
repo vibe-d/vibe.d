@@ -135,7 +135,7 @@ struct ScopedLock(T)
 	//pragma(msg, "In ScopedLock!("~T.stringof~")");
 	//pragma(msg, isolatedRefMethods!T());
 	#line 1 "isolatedAggreateMethodsString"
-	mixin(isolatedAggregateMethodsString!T());
+//	mixin(isolatedAggregateMethodsString!T());
 	#line 140 "source/vibe/core/concurrency.d"
 
 	private Object getObject()
@@ -853,13 +853,13 @@ private @property string generateModuleImportsImpl(T, TYPES...)(ref bool[string]
 					} else static if( !is(FunctionTypeOf!(__traits(getMember, T, member)) == function) ){
 						alias typeof(__traits(getMember, T, member)) mtype;
 						ret ~= generateModuleImportsImpl!(mtype, T, TYPES)(visited);
-					} else {
+					} else static if( is(T == class) || is(T == interface) ){
 						foreach( overload; MemberFunctionsTuple!(T, member) ){
 							ret ~= generateModuleImportsImpl!(ReturnType!overload, T, TYPES)(visited);
 							foreach( P; ParameterTypeTuple!overload )
 								ret ~= generateModuleImportsImpl!(P, T, TYPES)(visited);
 						}
-					}
+					} // TODO: handle structs!
 				//}
 			}
 		}

@@ -8,7 +8,7 @@
 module vibe.core.log;
 
 import vibe.core.file;
-import vibe.core.mutex;
+import vibe.core.sync;
 
 import std.array;
 import std.datetime;
