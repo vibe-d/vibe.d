@@ -87,7 +87,6 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
-  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -180,7 +179,6 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
-  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -273,7 +271,6 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
-  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -296,17 +293,13 @@
    <File path="source\vibe\core\driver.d" />
    <File path="source\vibe\core\file.d" />
    <File path="source\vibe\core\log.d" />
-   <File path="source\vibe\core\mutex.d" />
    <File path="source\vibe\core\net.d" />
-   <File path="source\vibe\core\signal.d" />
    <File path="source\vibe\core\stream.d" />
+   <File path="source\vibe\core\sync.d" />
    <File path="source\vibe\core\task.d" />
   </Folder>
   <Folder name="crypto">
-   <File path="source\vibe\crypto\md5.d" />
    <File path="source\vibe\crypto\passwordhash.d" />
-   <File path="source\vibe\crypto\sha1.d" />
-   <File path="source\vibe\crypto\ssl.d" />
   </Folder>
   <Folder name="data">
    <File path="source\vibe\data\bson.d" />
