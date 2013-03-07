@@ -139,23 +139,28 @@ void registerRestInterface(T)(UrlRouter router, T instance, string url_prefix = 
 		foreach( overload; MemberFunctionsTuple!(T, method) ){
 			alias ReturnType!overload RetType;
 			string[] param_names = [ParameterIdentifierTuple!overload];
-			HttpMethod http_verb;
-			string rest_name;
-			getRestMethodName!(typeof(&overload))(method, http_verb, rest_name);
-			string rest_name_adj = adjustMethodStyle(rest_name, style);
+
+			enum meta = extractHttpMethodAndName!(overload)();
+			enum pathOverriden = meta[0];
+			HttpMethod httpVerb = meta[1];
+			static if (pathOverriden)
+				string url = meta[2];
+			else
+				string url = adjustMethodStyle(meta[2], style);
+
 			static if( is(RetType == interface) ){
 				static assert(ParameterTypeTuple!overload.length == 0, "Interfaces may only be returned from parameter-less functions!");
-				registerRestInterface!RetType(router, __traits(getMember, instance, method)(), url_prefix ~ rest_name_adj ~ "/");
+				registerRestInterface!RetType(router, __traits(getMember, instance, method)(), url_prefix ~ url ~ "/");
 			} else {
 				auto handler = jsonMethodHandler!(T, method, overload)(instance);
 				string id_supplement;
 				size_t skip = 0;
 				string url;
 				if( param_names.length && param_names[0] == "id" ){
-					addRoute(http_verb, url_prefix ~ ":id/" ~ rest_name_adj, handler, param_names);
+					addRoute(httpVerb, url_prefix ~ ":id/" ~ url, handler, param_names);
 					if( rest_name_adj.length == 0 )
-						addRoute(http_verb, url_prefix ~ ":id", handler, param_names);
-				} else addRoute(http_verb, url_prefix ~ rest_name_adj, handler, param_names);
+						addRoute(httpVerb, url_prefix ~ ":id", handler, param_names);
+				} else addRoute(httpVerb, url_prefix ~ url, handler, param_names);
 			}
 		}
 	}
@@ -508,10 +513,11 @@ private @property string generateRestInterfaceSubInterfaceInstances(I)()
 				if( tps.countUntil(RT.stringof) < 0 ){
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
-					HttpMethod http_verb;
-					string rest_name;
-					getRestMethodName!FT(method, http_verb, rest_name);
-					ret ~= "m_"~implname~" = new "~implname~"(m_baseUrl~PathEntry(\""~rest_name~"\"), m_methodStyle);\n";
+
+					enum meta = extractHttpMethodAndName!(FT)();
+					string url = meta[2];
+
+					ret ~= "m_"~implname~" = new "~implname~"(m_baseUrl~PathEntry(\""~url~"\"), m_methodStyle);\n";
 				}
 			}
 		}
@@ -534,9 +540,6 @@ private @property string generateRestInterfaceSubInterfaceRequestFilter(I)()
 				if( tps.countUntil(RT.stringof) < 0 ){
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
-					HttpMethod http_verb;
-					string rest_name;
-					getRestMethodName!FT(method, http_verb, rest_name);
 					ret ~= "m_"~implname~".requestFilter = m_requestFilter;\n";
 				}
 			}
@@ -546,67 +549,134 @@ private @property string generateRestInterfaceSubInterfaceRequestFilter(I)()
 }
 
 /// private
-private @property string generateRestInterfaceMethods(I)()
+private string generateRestInterfaceMethods(I)()
 {
+	if (!__ctfe)
+		assert(false);
+	
 	string ret;
-
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			alias overload FT;
-			alias ParameterTypeTuple!FT PTypes;
-			alias ReturnType!FT RT;
-			alias ParameterIdentifierTuple!FT param_names;
-
-			HttpMethod http_verb;
-			string rest_name;
-			getRestMethodName!(typeof(&FT))(method, http_verb, rest_name);
-			ret ~= "override "~getReturnTypeString!(overload)~" "~method~"(";
-			foreach( i, PT; PTypes ){
-				if( i > 0 ) ret ~= ", ";
-				ret ~= getParameterTypeString!(overload, i);
-				ret ~= " " ~ param_names[i];
-			}
-			ret ~= ")";
-
-			auto attribs = functionAttributes!FT;
-			//if( is(FT == const) ) ret ~= " const"; // FIXME: do something that actually works here
-			//if( is(FT == immutable) ) ret ~= " immutable";
-			if( attribs & FunctionAttribute.property ) ret ~= " @property";
-
+			alias ParameterTypeTuple!overload PTypes;
+			alias ParameterIdentifierTuple!overload ParamNames;
+			
+			enum meta = extractHttpMethodAndName!(overload)();
+			enum pathOverriden = meta[0];
+			HttpMethod httpVerb = meta[1];
+			string url = meta[2];
+			
+			// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
+			
 			static if( is(RT == interface) ){
-				ret ~= "{ return m_"~RT.stringof~"Impl; }\n";
+				ret ~= format(
+					q{
+						override %s {
+							return m_%sImpl;
+						}
+					},
+					cloneFunction!overload,
+					RT.stringof
+					);
 			} else {
-				ret ~= " {\n";
-				ret ~= "\tJson jparams__ = Json.EmptyObject;\n";
-				ret ~= "\tbool[string] jparamsj__;\n";
-
-				// serialize all parameters
-				string path_supplement;
+				bool regexNeeded = false;
+				string paramHandlingStr;
+				string urlPrefix = `""`;
+				
+				// Block 2
 				foreach( i, PT; PTypes ){
-					static assert(param_names[i].length, "Parameter "~i.stringof~" of "~method~" has not name.");
-					static if( i == 0 && param_names[0] == "id" ){
-						static if( is(PT == Json) ) path_supplement = "urlEncode(id.toString())~\"/\"~";
-						else path_supplement = "urlEncode(toRestString(serializeToJson(id)))~\"/\"~";
-					} else static if( !param_names[i].startsWith("_") ){
-						// underscore parameters are sourced from the HttpServerRequest.params map
-						ret ~= "\tjparams__[\""~param_names[i]~"\"] = serializeToJson("~param_names[i]~");\n";
-						ret ~= "\tjparamsj__[\""~param_names[i]~"\"] = "~(is(PT == Json) ? "true" : "false")~";\n";
+					static assert(ParamNames[i].length, format("Parameter %s of %s has no name.", i, method));
+					
+					// legacy :id special case, left for backwards-compatibility reasons
+					static if( i == 0 && ParamNames[0] == "id" ){
+						static if( is(PT == Json) )
+						urlPrefix = q{urlEncode(id.toString())~"/"};
+						else
+						urlPrefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
+					}
+					else static if( !ParamNames[i].startsWith("_") ){
+						// underscore parameters are sourced from the HttpServerRequest.params map or from url itself
+						paramHandlingStr ~= format(
+							q{
+								jparams__["%s"] = serializeToJson("%s");
+								jparamsj__["%s"] = %s;
+							},
+							ParamNames[i],
+							ParamNames[i],
+							ParamNames[i],
+							is(PT == Json) ? "true" : "false"
+							);
+					}
+					else {
+						regexNeeded = true;
+						paramHandlingStr ~= format(
+							q{
+								url__ = replace(url__, regex("(^|/)(:%s)($|/)"), "$1" ~ %s ~ "$3");
+							},
+							ParamNames[i][1..$],
+							ParamNames[i]
+							);
 					}
 				}
-
-				ret ~= "\tauto jret__ = request(\""~ httpMethodString(http_verb)~"\", "~path_supplement~"adjustMethodStyle(\""~rest_name~"\", m_methodStyle), jparams__, jparamsj__);\n";
-				static if( !is(RT == void) ){
-					ret ~= "\t"~getReturnTypeString!(overload)~" ret__;\n";
-					ret ~= "\tdeserializeJson(ret__, jret__);\n";
-					ret ~= "\treturn ret__;\n";
+				
+				if( regexNeeded )
+					paramHandlingStr = format(
+						q{
+							import std.regex;
+							%s
+						},
+						paramHandlingStr
+						);
+				
+				// Block 3
+				string requestStr;
+				
+				static if( !pathOverriden ){
+					requestStr = format(
+						q{
+							url__ = %s ~ adjustMethodStyle(url__, m_methodStyle);
+						},
+						urlPrefix
+						);
 				}
-				ret ~= "}\n";
+				
+				requestStr ~= format(
+					q{
+						auto jret__ = request("%s", url__ , jparams__, jparamsj__);
+					},
+					httpMethodString(httpVerb)
+					);
+				
+				static if (!is(ReturnType!overload == void)){
+					requestStr ~= q{
+						typeof(return) ret__;
+						deserializeJson(ret__, jret__);
+						return ret__;
+					};
+				}
+				
+				// Block 1
+				ret ~= format(
+					q{
+						override %s {
+							Json jparams__ = Json.EmptyObject;
+							bool[string] jparamsj__;
+							string url__ = "%s";
+							%s
+							%s
+						}
+					},
+					cloneFunction!overload,
+					url,
+					paramHandlingStr,
+					requestStr
+					);
 			}
 		}
 	}
-
+	
 	return ret;
 }
+
 
 /// private
 // https://github.com/D-Programming-Language/phobos/pull/862
@@ -860,26 +930,180 @@ unittest
 	}
 }
 
-/// private
-private void getRestMethodName(T)(string method, out HttpMethod http_verb, out string rest_name)
+/**
+	User Defined Attribute interface to force specific HTTP method in REST interface
+	for function in question. Usual URL generation rules are still applied so if there
+	are ny "get", "query" or similar prefixes, they are filtered out.
+
+	Example:
+	---
+	interface IAPI
+	{
+		// Will be "POST /info" instead of default "GET /info"
+		@method(HttpMethod.POST) getInfo();
+	}
+	---	
+ */
+OverridenMethod method(HttpMethod data)
 {
-	if( isPropertyGetter!T )               { http_verb = HttpMethod.GET; rest_name = method; }
-	else if( isPropertySetter!T )          { http_verb = HttpMethod.PUT; rest_name = method; }
-	else if( method.startsWith("get") )    { http_verb = HttpMethod.GET; rest_name = method[3 .. $]; }
-	else if( method.startsWith("query") )  { http_verb = HttpMethod.GET; rest_name = method[5 .. $]; }
-	else if( method.startsWith("set") )    { http_verb = HttpMethod.PUT; rest_name = method[3 .. $]; }
-	else if( method.startsWith("put") )    { http_verb = HttpMethod.PUT; rest_name = method[3 .. $]; }
-	else if( method.startsWith("update") ) { http_verb = HttpMethod.PATCH; rest_name = method[6 .. $]; }
-	else if( method.startsWith("patch") )  { http_verb = HttpMethod.PATCH; rest_name = method[5 .. $]; }
-	else if( method.startsWith("add") )    { http_verb = HttpMethod.POST; rest_name = method[3 .. $]; }
-	else if( method.startsWith("create") ) { http_verb = HttpMethod.POST; rest_name = method[6 .. $]; }
-	else if( method.startsWith("post") )   { http_verb = HttpMethod.POST; rest_name = method[4 .. $]; }
-	else if( method.startsWith("remove") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
-	else if( method.startsWith("erase") )  { http_verb = HttpMethod.DELETE; rest_name = method[5 .. $]; }
-	else if( method.startsWith("delete") ) { http_verb = HttpMethod.DELETE; rest_name = method[6 .. $]; }
-	else if( method == "index" )           { http_verb = HttpMethod.GET; rest_name = ""; }
-	else { http_verb = HttpMethod.POST; rest_name = method; }
+	if (!__ctfe)
+		assert(false);
+	return OverridenMethod(data);
 }
+
+/// private
+struct OverridenMethod
+{
+	HttpMethod data;
+	alias data this;
+}
+
+/**
+	User Defined Attribute interface to force specific URL path n REST interface
+	for function in question. Path attribute is relative though, not absolute.
+
+	Example:
+	---
+	interface IAPI
+	{
+		@path("info2") getInfo();
+	}
+	
+	// ...
+	
+	shared static this()
+	{
+		registerRestInterface!IAPI(new UrlRouter(), new API(), "/root/");
+		// now IAPI.getInfo is tied to "GET /root/info2"
+	}
+	---	
+*/
+OverridenPath path(string data)
+{
+	if (!__ctfe)
+		assert(false);
+	return OverridenPath(data);
+}
+
+/// private
+struct OverridenPath
+{
+	string data;
+	alias data this;
+}
+
+/**
+	Uses given function symbol to determine what HTTP method and
+	what URL path should be used to access it in REST API.
+
+	Is designed for CTFE usage and will assert at run time.
+
+	Returns:
+		Tuple of three elements:
+			* flag "was UDA used to override path"
+			* HttpMethod extracted
+			* url path extracted
+ */
+private Tuple!(bool, HttpMethod, string) extractHttpMethodAndName(alias Func)()
+{   
+	if (!__ctfe)
+		assert(false);
+	
+	immutable httpMethodPrefixes = [
+		HttpMethod.GET    : [ "get", "query" ],
+		HttpMethod.PUT    : [ "put", "set" ],
+		HttpMethod.PATCH  : [ "update", "patch" ],
+		HttpMethod.POST   : [ "add", "create", "post" ],
+		HttpMethod.DELETE : [ "remove", "erase", "delete" ],
+	];
+	
+	string name = __traits(identifier, Func);
+	alias typeof(&Func) T;
+	alias TypeTuple!(__traits(getAttributes, Func)) udas;
+	
+	Nullable!HttpMethod udmethod;
+	Nullable!string udurl;
+	
+	// Cases may conflict and are listed in order of priority
+	foreach( uda; udas ){
+		static if (is(typeof(uda) == vibe.http.rest.OverridenMethod))
+			udmethod = uda.data;
+		else if (is(typeof(uda) == vibe.http.rest.OverridenPath))
+			udurl = uda.data;
+	}
+	
+	// Everything is overriden, no further analysis needed
+	if (!udmethod.isNull() && !udurl.isNull())
+		return tuple(true, udmethod.get(), udurl.get());
+	
+	// Anti-copy-paste delegate
+	typeof(return) udaOverride( HttpMethod method, string url ){
+		return tuple(
+			!udurl.isNull(),
+			udmethod.isNull() ? method : udmethod.get(), 
+			udurl.isNull() ? url : udurl.get()
+		);
+	}
+	
+	if (isPropertyGetter!T)
+		return udaOverride(HttpMethod.GET, name);
+	else if (isPropertySetter!T)
+		return udaOverride(HttpMethod.PUT, name);
+	
+	foreach( method, prefixes; httpMethodPrefixes ){
+		foreach( prefix; prefixes ){
+			if( name.startsWith(prefix) ){
+				string tmp = name[prefix.length..$];
+				return udaOverride(method, tmp);
+			}
+		}
+	}
+	
+	if (name == "index")
+		return udaOverride(HttpMethod.GET, "");
+	else
+		return udaOverride(HttpMethod.POST, name);
+}
+
+unittest
+{
+	interface Sample
+	{
+		string getInfo();
+		string updateDescription();
+		
+		@method(HttpMethod.DELETE)
+		string putInfo();
+		
+		@path("matters")
+		string getMattersnot();
+		
+		@path("compound/path") @method(HttpMethod.POST)
+		string mattersnot();
+	}
+	
+	enum ret1 = extractHttpMethodAndName!(Sample.getInfo);
+	static assert (ret1[0] == false);
+	static assert (ret1[1] == HttpMethod.GET);
+	static assert (ret1[2] == "Info");
+	enum ret2 = extractHttpMethodAndName!(Sample.updateDescription);
+	static assert (ret2[0] == false);
+	static assert (ret2[1] == HttpMethod.PATCH);
+	static assert (ret2[2] == "Description");
+	enum ret3 = extractHttpMethodAndName!(Sample.putInfo);
+	static assert (ret3[0] == false);
+	static assert (ret3[1] == HttpMethod.DELETE);
+	static assert (ret3[2] == "Info");
+	enum ret4 = extractHttpMethodAndName!(Sample.getMattersnot);
+	static assert (ret4[0] == true);
+	static assert (ret4[1] == HttpMethod.GET);
+	static assert (ret4[2] == "matters");
+	enum ret5 = extractHttpMethodAndName!(Sample.mattersnot);
+	static assert (ret5[0] == true);
+	static assert (ret5[1] == HttpMethod.POST);
+	static assert (ret5[2] == "compound/path");
+}
+
 
 /// private
 private template isPropertyGetter(T)
