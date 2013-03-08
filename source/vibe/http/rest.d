@@ -483,13 +483,13 @@ private string generateModuleImports(I)()
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
 			foreach( symbol; getSymbols!(ReturnType!overload) ){
-				static if( __traits(compiles, moduleName!(symbol)) )
-					addModule(moduleName!symbol);
+				static if( __traits(compiles, temporary_moduleName!(symbol)) )
+					addModule(temporary_moduleName!symbol);
 			}
 			foreach( P; ParameterTypeTuple!overload ){
 				foreach( symbol; getSymbols!P ){
-					static if( __traits(compiles, moduleName!(symbol)) )
-						addModule(moduleName!(symbol));
+					static if( __traits(compiles, temporary_moduleName!(symbol)) )
+						addModule(temporary_moduleName!(symbol));
 				}
 			}
 		}
@@ -508,7 +508,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 	string[] tps;
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			alias typeof(&overload) FT;
+			alias FunctionTypeOf!overload FT;
 			alias ParameterTypeTuple!FT PTypes;
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
@@ -582,7 +582,7 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	string[] tps;
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			alias typeof(&overload) FT;
+			alias FunctionTypeOf!overload FT;
 			alias ParameterTypeTuple!FT PTypes;
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
@@ -612,6 +612,8 @@ private string generateRestInterfaceMethods(I)()
 	string ret;
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
+			alias FunctionTypeOf!overload FT;
+			alias ReturnType!FT RT;
 			alias ParameterTypeTuple!overload PTypes;
 			alias ParameterIdentifierTuple!overload ParamNames;
 			
@@ -665,7 +667,7 @@ private string generateRestInterfaceMethods(I)()
 						regexNeeded = true;
 						paramHandlingStr ~= format(
 							q{
-								url__ = replace(url__, regex("(^|/)(:%s)($|/)"), "$1" ~ %s ~ "$3");
+								url__ = replace(url__, regex("(^|/)(:%s)($|/)"), "$1%s$3");
 							},
 							ParamNames[i][1..$],
 							ParamNames[i]

@@ -513,3 +513,36 @@ private template returnsRef(alias f)
 		auto ptr = &f(param);
 	}));
 }
+
+
+template temporary_packageName(alias T)
+{
+    static if (is(typeof(__traits(parent, T))))
+        enum parent = packageName!(__traits(parent, T));
+    else
+        enum string parent = null;
+
+    static if (T.stringof.startsWith("package "))
+        enum packageName = (parent ? parent ~ "." : "") ~ T.stringof[8 .. $];
+    else static if (parent)
+        enum packageName = parent;
+    else
+        static assert(false, T.stringof ~ " has no parent");
+}
+
+template temporary_moduleName(alias T)
+{
+    static assert(!T.stringof.startsWith("package "), "cannot get the module name for a package");
+
+    static if (T.stringof.startsWith("module "))
+    {
+        static if (__traits(compiles, packageName!T))
+            enum packagePrefix = packageName!T ~ '.';
+        else
+            enum packagePrefix = "";
+
+        enum temporary_moduleName = packagePrefix ~ T.stringof[7..$];
+    }
+    else
+        alias temporary_moduleName!(__traits(parent, T)) temporary_moduleName;
+}
