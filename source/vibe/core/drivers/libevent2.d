@@ -7,6 +7,9 @@
 */
 module vibe.core.drivers.libevent2;
 
+version(VibeLibeventDriver)
+{
+
 import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
@@ -801,4 +804,6 @@ private nothrow extern(C)
 			return 0;
 		}
 	}
+}
+
 }

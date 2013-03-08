@@ -7,6 +7,9 @@
 */
 module vibe.core.drivers.libevent2_tcp;
 
+version(VibeLibeventDriver)
+{
+
 public import vibe.core.core;
 
 import vibe.core.log;
@@ -551,4 +554,6 @@ package void removeFromArray(T)(ref T[] array, T item)
 			array = array[0 .. i] ~ array[i+1 .. $];
 			return;
 		}
+}
+
 }

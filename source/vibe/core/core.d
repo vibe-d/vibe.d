@@ -13,6 +13,7 @@ import vibe.core.log;
 import vibe.utils.array;
 import std.algorithm;
 import std.conv;
+import std.encoding;
 import std.exception;
 import std.functional;
 import std.range;
