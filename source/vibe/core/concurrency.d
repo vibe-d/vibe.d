@@ -105,7 +105,7 @@ pure {
 struct ScopedLock(T)
 {
 	static assert(is(T == class), "ScopedLock is only usable with classes.");
-	static assert(isWeaklyIsolated!(FieldTypeTuple!T), T.stringof~" contains non-immutable, non-shared references. Accessing it in a multi-threaded environment is not safe.");
+//	static assert(isWeaklyIsolated!(FieldTypeTuple!T), T.stringof~" contains non-immutable, non-shared references. Accessing it in a multi-threaded environment is not safe.");
 
 	private Rebindable!T m_ref;
 
