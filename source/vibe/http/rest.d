@@ -257,7 +257,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 260 "source/vibe/http/rest.d"
+#line 261 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		Url url = m_baseUrl;
@@ -517,7 +517,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					ret ~= format(
-						q{alias RestInterfaceClient!(%s) %s},
+						q{alias RestInterfaceClient!(%s) %s;},
 						ReturnTypeString!(overload),
 						implname
 					);
@@ -545,7 +545,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 	string[] tps;
 	foreach( method; __traits(allMembers, I) ){
 		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			alias typeof(&overload) FT;
+			alias FunctionTypeOf!overload FT;
 			alias ParameterTypeTuple!FT PTypes;
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
@@ -554,7 +554,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					
-					enum meta = extractHttpMethodAndName!(FT)();
+					enum meta = extractHttpMethodAndName!overload();
 					HttpMethod http_verb = meta[1];
 					string url = meta[2];
 					
@@ -872,20 +872,21 @@ private Tuple!(bool, HttpMethod, string) extractHttpMethodAndName(alias Func)()
 		return udaOverride(HttpMethod.GET, name);
 	else if(isPropertySetter!T)
 		return udaOverride(HttpMethod.PUT, name);
-	
-	foreach( method, prefixes; httpMethodPrefixes ){
-		foreach (prefix; prefixes){
-			if( name.startsWith(prefix) ){
-				string tmp = name[prefix.length..$];
-				return udaOverride(method, tmp);
+	else {
+		foreach( method, prefixes; httpMethodPrefixes ){
+			foreach (prefix; prefixes){
+				if( name.startsWith(prefix) ){
+					string tmp = name[prefix.length..$];
+					return udaOverride(method, tmp);
+				}
 			}
 		}
+		
+		if (name == "index")
+			return udaOverride(HttpMethod.GET, "");
+		else
+			return udaOverride(HttpMethod.POST, name);
 	}
-	
-	if (name == "index")
-		return udaOverride(HttpMethod.GET, "");
-	else
-		return udaOverride(HttpMethod.POST, name);
 }
 
 unittest

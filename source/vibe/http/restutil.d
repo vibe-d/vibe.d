@@ -56,7 +56,7 @@ template cloneFunction(alias Symbol)
 	if (isSomeFunction!(Symbol))
 {
 	private:
-		alias typeof(Symbol) T;
+		alias FunctionTypeOf!(Symbol) T;
 
 		static if (is(T F == delegate) || isFunctionPointer!T)
 			static assert(0, "Plain function or method symbol are expected");
@@ -66,7 +66,7 @@ template cloneFunction(alias Symbol)
 		static if ((D_major == 2) && (D_minor >= 62U))
 			alias std.traits.fulllyQualifiedName fqn;
 		else
-			alias vibe.http.restutil.legacyfulllyQualifiedName fqn;
+			alias vibe.http.restutil.legacyfullyQualifiedName fqn;
 
 		static string addTypeQualifiers(string type)
 		{
@@ -206,9 +206,9 @@ unittest
 }
 
 // Will be removed upon Phobos 2.063 release
-private template legacyfulllyQualifiedName(T)
+private template legacyfullyQualifiedName(T)
 {
-	enum legacyfulllyQualifiedName = legacyfulllyQualifiedNameImpl!(
+	enum legacyfullyQualifiedName = legacyfullyQualifiedNameImpl!(
 		T,
 		false,
 		false,
@@ -217,9 +217,9 @@ private template legacyfulllyQualifiedName(T)
 	);
 }
 
-// Same as legacyfulllyQualifiedName, it simply copies latest phobos implementation for now
+// Same as legacyfullyQualifiedName, it simply copies latest phobos implementation for now
 // Thus not tested separately only as part of cloneFunction
-private template legacyfulllyQualifiedNameImpl(T,
+private template legacyfullyQualifiedNameImpl(T,
 	bool alreadyConst, bool alreadyImmutable, bool alreadyShared, bool alreadyInout)
 {   
 	import std.string;
@@ -341,42 +341,42 @@ private template legacyfulllyQualifiedNameImpl(T,
 	
 	static if (is(T == string))
 	{
-		enum legacyfulllyQualifiedNameImpl = "string";
+		enum legacyfullyQualifiedNameImpl = "string";
 	}
 	else static if (is(T == wstring))
 	{
-		enum legacyfulllyQualifiedNameImpl = "wstring";
+		enum legacyfullyQualifiedNameImpl = "wstring";
 	}
 	else static if (is(T == dstring))
 	{
-		enum legacyfulllyQualifiedNameImpl = "dstring";
+		enum legacyfullyQualifiedNameImpl = "dstring";
 	}
 	else static if (isBasicType!T || is(T == enum))
 	{
-		enum legacyfulllyQualifiedNameImpl = chain!((Unqual!T).stringof);
+		enum legacyfullyQualifiedNameImpl = chain!((Unqual!T).stringof);
 	}
 	else static if (isAggregateType!T)
 	{
-		enum legacyfulllyQualifiedNameImpl = chain!(fullyQualifiedName!T);
+		enum legacyfullyQualifiedNameImpl = chain!(fullyQualifiedName!T);
 	}
 	else static if (isStaticArray!T)
 	{
 		import std.conv;
 		
-		enum legacyfulllyQualifiedNameImpl = chain!(
-			format("%s[%s]", legacyfulllyQualifiedNameImpl!(typeof(T.init[0]), qualifiers), T.length)
+		enum legacyfullyQualifiedNameImpl = chain!(
+			format("%s[%s]", legacyfullyQualifiedNameImpl!(typeof(T.init[0]), qualifiers), T.length)
 			);
 	}
 	else static if (isArray!T)
 	{
-		enum legacyfulllyQualifiedNameImpl = chain!(
-			format("%s[]", legacyfulllyQualifiedNameImpl!(typeof(T.init[0]), qualifiers))
+		enum legacyfullyQualifiedNameImpl = chain!(
+			format("%s[]", legacyfullyQualifiedNameImpl!(typeof(T.init[0]), qualifiers))
 			);
 	}
 	else static if (isAssociativeArray!T)
 	{
-		enum legacyfulllyQualifiedNameImpl = chain!(
-			format("%s[%s]", legacyfulllyQualifiedNameImpl!(ValueType!T, qualifiers), legacyfulllyQualifiedNameImpl!(KeyType!T, noQualifiers))
+		enum legacyfullyQualifiedNameImpl = chain!(
+			format("%s[%s]", legacyfullyQualifiedNameImpl!(ValueType!T, qualifiers), legacyfullyQualifiedNameImpl!(KeyType!T, noQualifiers))
 			);
 	}
 	else static if (isSomeFunction!T)
@@ -390,8 +390,8 @@ private template legacyfulllyQualifiedNameImpl(T,
 				is(F == const) ? " const" : ""
 			);
 			enum formatStr = "%s%s delegate(%s)%s%s";
-			enum legacyfulllyQualifiedNameImpl = chain!(
-				format(formatStr, linkageString!T, legacyfulllyQualifiedNameImpl!(ReturnType!T, noQualifiers),
+			enum legacyfullyQualifiedNameImpl = chain!(
+				format(formatStr, linkageString!T, legacyfullyQualifiedNameImpl!(ReturnType!T, noQualifiers),
 				parametersTypeString!(T), functionAttributeString!T, qualifierString)
 				);
 		}
@@ -402,16 +402,16 @@ private template legacyfulllyQualifiedNameImpl(T,
 			else
 				enum formatStr = "%s%s(%s)%s";
 			
-			enum legacyfulllyQualifiedNameImpl = chain!(
-				format(formatStr, linkageString!T, legacyfulllyQualifiedNameImpl!(ReturnType!T, noQualifiers),
+			enum legacyfullyQualifiedNameImpl = chain!(
+				format(formatStr, linkageString!T, legacyfullyQualifiedNameImpl!(ReturnType!T, noQualifiers),
 				parametersTypeString!(T), functionAttributeString!T)
 			);
 		}
 	}
 	else static if (isPointer!T)
 	{
-		enum legacyfulllyQualifiedNameImpl = chain!(
-			format("%s*", legacyfulllyQualifiedNameImpl!(PointerTarget!T, qualifiers))
+		enum legacyfullyQualifiedNameImpl = chain!(
+			format("%s*", legacyfullyQualifiedNameImpl!(PointerTarget!T, qualifiers))
 			);
 	}
 	else
@@ -494,4 +494,22 @@ version(unittest)
 			}
 			return result;
 		}
+}
+
+template ReturnTypeString(alias F)
+{   
+	alias ReturnType!F T;
+	static if (returnsRef!F)  
+		enum ReturnTypeString = "ref " ~ fullyQualifiedTypeName!T;
+	else
+		enum ReturnTypeString = legacyfullyQualifiedName!T;
+}
+
+private template returnsRef(alias f)
+{
+	enum bool returnsRef = is(typeof(
+	{
+		ParameterTypeTuple!f param;
+		auto ptr = &f(param);
+	}));
 }
