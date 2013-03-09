@@ -62,7 +62,7 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
-	#line 65 "diet.d"
+	#line 66 "diet.d"
 }
 
 /// compatibility alias
@@ -93,7 +93,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
-	#line 96 "diet.d"
+	#line 97 "diet.d"
 }
 
 /// compatibility alias
@@ -644,7 +644,7 @@ private struct DietCompiler {
 		}
 		if( tag == "script" ) output.writeString(indent_string~"//]]>\n");
 		else output.writeString(indent_string~"-->\n");
-		output.writeString(indent_string[0 .. $-2] ~ "</" ~ tag ~ ">");
+		output.writeString(indent_string[0 .. $-1] ~ "</" ~ tag ~ ">");
 	}
 
 	private void buildFilterNodeWriter(OutputContext output, in ref string tagline, int tagline_number,
