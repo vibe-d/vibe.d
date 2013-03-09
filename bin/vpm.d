@@ -136,6 +136,8 @@ int main(string[] args)
 				flags ~= vpm.dflags;
 				flags ~= getLibs(vibedDir);
 				flags ~= getPackagesAsVersion(vpm);
+				if( !flags.canFind!(f => f.startsWith("-version=Vibe") && f.endsWith("Driver"))() )
+					flags ~= "-version=VibeLibeventDriver";
 				flags ~= (Path("source") ~ appName).toNativeString();
 				flags ~= args[1 .. $];
 				appStartScript = "rdmd " ~ getDflags() ~ " " ~ join(flags, " ");
