@@ -26,7 +26,7 @@ import std.string;
 */
 class HttpFileServerSettings {
 	string serverPathPrefix = "/";
-	Duration maxAge = hours(24);
+	Duration maxAge = dur!"hours"(24);
 	bool failIfNotFound = false;
 	
 	/**
@@ -124,7 +124,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		res.headers["Content-Length"] = to!string(dirent.size);
 		
 		res.headers["Last-Modified"] = lastModified;
-		if( settings.maxAge > seconds(0) ){
+		if( settings.maxAge > dur!"seconds"(0) ){
 			auto expireTime = Clock.currTime().toUTC() + settings.maxAge;
 			res.headers["Expires"] = toRFC822DateTimeString(expireTime);
 			res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
