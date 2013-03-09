@@ -654,7 +654,7 @@ private string generateRestInterfaceMethods(I)()
 						// underscore parameters are sourced from the HttpServerRequest.params map or from url itself
 						paramHandlingStr ~= format(
 							q{
-								jparams__["%s"] = serializeToJson("%s");
+								jparams__["%s"] = serializeToJson(%s);
 								jparamsj__["%s"] = %s;
 							},
 							ParamNames[i],
