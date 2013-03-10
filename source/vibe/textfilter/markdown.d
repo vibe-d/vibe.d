@@ -146,9 +146,9 @@ private Line[] parseLines(ref string[] lines, MarkdownFlags flags)
 		if( (flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
 		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
 		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
+		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
-		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isLineBlank(ln) ) lninfo.type = LineType.Blank;
 		else if( !(flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln) ) lninfo.type = LineType.HtmlBlock;
 		else lninfo.type = LineType.Plain;
@@ -584,8 +584,14 @@ private bool isSetextHeaderLine(string ln)
 {
 	ln = stripLeft(ln);
 	if( ln.length < 1 ) return false;
-	if( ln[0] == '=' ) return allOf(ln, " \t=");
-	if( ln[0] == '-' ) return allOf(ln, " \t-");
+	if( ln[0] == '=' ){
+		while(!ln.empty && ln.front == '=') ln.popFront();
+		return allOf(ln, " \t");
+	}
+	if( ln[0] == '-' ){
+		while(!ln.empty && ln.front == '-') ln.popFront();
+		return allOf(ln, " \t");
+	}
 	return false;
 }
 
@@ -602,6 +608,7 @@ private bool isHlineLine(string ln)
 {
 	if( allOf(ln, " -") && count(ln, '-') >= 3 ) return true;
 	if( allOf(ln, " *") && count(ln, '*') >= 3 ) return true;
+	if( allOf(ln, " _") && count(ln, '_') >= 3 ) return true;
 	return false;
 }
 
