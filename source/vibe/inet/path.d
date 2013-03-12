@@ -195,10 +195,10 @@ struct Path {
 		return ret;
 	}
 	
-	Path opBinary(string OP)(string rhs) const if( OP == "~" ) { assert(rhs.length > 0); return opBinary!"~"(Path(rhs)); }
-	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { assert(rhs.toString().length > 0); return opBinary!"~"(Path(rhs)); }
-	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { assert(rhs.length > 0); opOpAssign!"~"(Path(rhs)); }
-	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { assert(rhs.toString().length > 0); opOpAssign!"~"(Path(rhs)); }
+	Path opBinary(string OP)(string rhs) const if( OP == "~" ) { return opBinary!"~"(Path(rhs)); }
+	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return opBinary!"~"(Path(rhs)); }
+	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
+	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { auto p = this ~ rhs; m_nodes = p.m_nodes; m_endsWithSlash = rhs.m_endsWithSlash; }
 	
 	/// Tests two paths for equality using '=='.
