@@ -310,7 +310,7 @@ class HttpServerSettings {
 		
 		By default, the server will listen on all IPv4 and IPv6 interfaces.
 	*/
-	string[] bindAddresses = ["0.0.0.0", "::"];
+	string[] bindAddresses = ["::", "0.0.0.0"];
 
 	/** Determines the server host name.
 
