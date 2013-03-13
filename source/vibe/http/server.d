@@ -1070,8 +1070,12 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			reqReader = timeout_http_input_stream;
 		}
 
+		// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+		if( peer_address.startsWith("::ffff:") && peer_address[7 .. $].indexOf(":") < 0 )
+			req.peer = peer_address[7 .. $];
+		else req.peer = peer_address;
+
 		// basic request parsing
-		req.peer = peer_address;
 		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
 		logTrace("Got request header.");
 
