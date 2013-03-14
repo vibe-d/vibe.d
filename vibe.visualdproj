@@ -87,6 +87,7 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -179,6 +180,7 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -271,6 +273,7 @@
   <deffile />
   <resfile />
   <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
   <additionalOptions />
   <preBuildCommand />
   <postBuildCommand />
@@ -331,6 +334,7 @@
    <File path="source\vibe\http\log.d" />
    <File path="source\vibe\http\proxy.d" />
    <File path="source\vibe\http\rest.d" />
+   <File path="source\vibe\http\restutil.d" />
    <File path="source\vibe\http\router.d" />
    <File path="source\vibe\http\server.d" />
    <File path="source\vibe\http\session.d" />
