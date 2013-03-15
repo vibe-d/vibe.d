@@ -342,7 +342,7 @@ string adjustMethodStyle(string name, MethodStyle style)
 		case MethodStyle.upperUnderscored:
 			string ret;
 			size_t start = 0, i = 1;
-			while( i < name.length ){
+			while( i <= name.length ){
 				while( i < name.length && !(name[i] >= 'A' && name[i] <= 'Z') ) i++;
 				if( ret.length > 0 ) ret ~= "_";
 				ret ~= name[start .. i];
