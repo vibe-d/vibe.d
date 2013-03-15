@@ -700,10 +700,11 @@ private string generateRestInterfaceMethods(I)()
 						regexNeeded = true;
 						paramHandlingStr ~= format(
 							q{
-								url__ = replace(url__, regex("(^|/)(:%s)($|/)"), "$1"~toRestString(serializeToJson(%s))~"$3");
+								auto ps%s = toRestString(serializeToJson(%s));
+								url__ = replace(url__, regex("(^|/)(:%s)($|/)"), "$1"~(ps%s.length ? "\\"~ps%s : "")~"$3");
 							},
-							ParamNames[i][1..$],
-							ParamNames[i]
+							ParamNames[i], ParamNames[i],
+							ParamNames[i][1 .. $], ParamNames[i], ParamNames[i]
 						);
 					}
 				}
