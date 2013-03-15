@@ -7,7 +7,7 @@
 	{
 		// simple echo server
 		while( sock.connected ){
-			auto msg = sock.receive();
+			auto msg = sock.receiveText();
 			sock.send(msg);
 		}
 	}
@@ -171,13 +171,34 @@ class WebSocket {
 
 	/**
 		Receives a new message and returns its contents as a newly allocated data array.
+
+		Params:
+			strict = If set, ensures the exact frame type (text/binary) is received and throws an execption otherwise.
 	*/
-	ubyte[] receive()
+	ubyte[] receiveBinary(bool strict = false)
 	{
 		ubyte[] ret;
-		receive((scope message){ ret = message.readAll(); });
+		receive((scope message){
+			enforce(!strict || message.frameOpcode == FrameOpcode.binary,
+				"Expected a binary message, got "~message.frameOpcode.to!string());
+			ret = message.readAll();
+		});
 		return ret;
 	}
+	/// ditto
+	string receiveText(bool strict = false)
+	{
+		string ret;
+		receive((scope message){
+			enforce(!strict || message.frameOpcode == FrameOpcode.text,
+				"Expected a text message, got "~message.frameOpcode.to!string());
+			ret = message.readAllUtf8();
+		});
+		return ret;
+	}
+
+	/// Compatibility alias for readBinary. Will be deprecated at some point.
+	alias receive = receiveBinary;
 
 	/**
 		Receives a new message using an InputStream.
