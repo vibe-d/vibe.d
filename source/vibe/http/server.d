@@ -150,6 +150,16 @@ void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate requ
 		}
 	}
 }
+/// ditto
+void listenHttpPlain(HttpServerSettings settings, HttpServerRequestFunction request_handler)
+{
+	listenHttpPlain(settings, toDelegate(request_handler));
+}
+/// ditto
+void listenHttpPlain(HttpServerSettings settings, HttpServerRequestHandler request_handler)
+{
+	listenHttpPlain(settings, &request_handler.handleRequest);
+}
 
 
 /**
