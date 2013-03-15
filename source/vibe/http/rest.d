@@ -323,7 +323,8 @@ unittest
 /**
 	Adjusts the naming convention for a given function name to the specified style.
 
-	The function name must be in lowerCamelCase (D-style) for the adjustment to work correctly.
+	The input name is assumed to be in lowerCamelCase (D-style) or PascalCase. Acronyms
+	(e.g. "HTML") should be written all caps
 */
 string adjustMethodStyle(string name, MethodStyle style)
 {
@@ -341,17 +342,49 @@ string adjustMethodStyle(string name, MethodStyle style)
 		case MethodStyle.lowerUnderscored:
 		case MethodStyle.upperUnderscored:
 			string ret;
-			size_t start = 0, i = 1;
+			size_t start = 0, i = 0;
 			while( i <= name.length ){
-				while( i < name.length && !(name[i] >= 'A' && name[i] <= 'Z') ) i++;
+				// skip acronyms
+				while (i < name.length && (i+1 >= name.length || (name[i+1] >= 'A' && name[i+1] <= 'Z'))) i++;
+
+				// skip the main (lowercase) part of a word
+				while (i < name.length && !(name[i] >= 'A' && name[i] <= 'Z')) i++;
+
+				// add a single word
 				if( ret.length > 0 ) ret ~= "_";
 				ret ~= name[start .. i];
+
+				// quick skip the capital and remember the start of the next word
 				start = i++;
 			}
 			if( i < name.length ) ret ~= "_" ~ name[start .. $];
 			return style == MethodStyle.lowerUnderscored ? toLower(ret) : toUpper(ret);
 	}
 }
+
+unittest
+{
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.unaltered) == "methodNameTest");
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.camelCase) == "methodNameTest");
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.pascalCase) == "MethodNameTest");
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.lowerCase) == "methodnametest");
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.upperCase) == "METHODNAMETEST");
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.lowerUnderscored) == "method_name_test");
+	assert(adjustMethodStyle("methodNameTest", MethodStyle.upperUnderscored) == "METHOD_NAME_TEST");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.unaltered) == "MethodNameTest");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.camelCase) == "methodNameTest");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.pascalCase) == "MethodNameTest");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.lowerCase) == "methodnametest");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.upperCase) == "METHODNAMETEST");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.lowerUnderscored) == "method_name_test");
+	assert(adjustMethodStyle("MethodNameTest", MethodStyle.upperUnderscored) == "METHOD_NAME_TEST");
+	assert(adjustMethodStyle("Q", MethodStyle.lowerUnderscored) == "q");
+	assert(adjustMethodStyle("getHTML", MethodStyle.lowerUnderscored) == "get_html");
+	assert(adjustMethodStyle("getHTMLEntity", MethodStyle.lowerUnderscored) == "get_html_entity");
+	assert(adjustMethodStyle("ID", MethodStyle.lowerUnderscored) == "id");
+	assert(adjustMethodStyle("ID", MethodStyle.pascalCase) == "ID");
+}
+
 
 /**
 	Determines the naming convention of an identifier.
