@@ -11,11 +11,9 @@ void runTests()
 	exitEventLoop();
 }
 
-extern(C) int getch();
 int main()
 {
 	setLogLevel(LogLevel.Debug);
-getch();
 	runTask(toDelegate(&runTests));
 	return runEventLoop();
 }
