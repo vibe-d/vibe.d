@@ -84,11 +84,11 @@ void listenHttp(HttpServerSettings settings, HttpServerRequestDelegate request_h
 
 	g_contexts ~= ctx;
 
-	if( !s_listenersStarted ) return;
+	if( !s_listenersStarted && !settings.disableDistHost ) return;
 
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
-	if( s_distHost.length ){
+	if( s_distHost.length && !settings.disableDistHost ){
 		listenHttpDist(settings, request_handler, s_distHost, s_distPort);
 	} else {
 		listenHttpPlain(settings, request_handler);
@@ -107,12 +107,12 @@ void listenHttp(HttpServerSettings settings, HttpServerRequestHandler request_ha
 
 
 /**
-	Starts a HTTP server listening on the specified port.
+	[private] Starts a HTTP server listening on the specified port.
 
 	This is the same as listenHttp() except that it does not use a VibeDist host for
 	remote listening, even if specified on the command line.
 */
-void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
+private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
 {
 	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
 	{
@@ -399,6 +399,9 @@ class HttpServerSettings {
 		}
 		return ret;
 	}
+
+	/// Disable support for VibeDist and instead start listening immediately.
+	bool disableDistHost = false;
 }
 
 
