@@ -261,7 +261,7 @@ class RestInterfaceClient(I) : I
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		Url url = m_baseUrl;
-		if( name.length ) url ~= vibe.inet.url.Path(name);
+		if( name.length ) url ~= Path(name);
 		else if( !url.path.endsWithSlash ){
 			auto p = url.path;
 			p.endsWithSlash = true;
@@ -668,7 +668,6 @@ private string generateRestInterfaceMethods(I)()
 					RT.stringof
 				);
 			} else {
-				bool regexNeeded = false;
 				string paramHandlingStr;
 				string urlPrefix = `""`;
 				
@@ -679,9 +678,9 @@ private string generateRestInterfaceMethods(I)()
 					// legacy :id special case, left for backwards-compatibility reasons
 					static if( i == 0 && ParamNames[0] == "id" ){
 						static if( is(PT == Json) )
-						urlPrefix = q{urlEncode(id.toString())~"/"};
+							urlPrefix = q{urlEncode(id.toString())~"/"};
 						else
-						urlPrefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
+							urlPrefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 					}
 					else static if( !ParamNames[i].startsWith("_") ){
 						// underscore parameters are sourced from the HttpServerRequest.params map or from url itself
@@ -696,27 +695,7 @@ private string generateRestInterfaceMethods(I)()
 							is(PT == Json) ? "true" : "false"
 						);
 					}
-					else {
-						regexNeeded = true;
-						paramHandlingStr ~= format(
-							q{
-								auto ps%s = toRestString(serializeToJson(%s));
-								url__ = replace(url__, regex("(^|/)(:%s)($|/)"), "$1"~(ps%s.length ? "\\"~ps%s : "")~"$3");
-							},
-							ParamNames[i], ParamNames[i],
-							ParamNames[i][1 .. $], ParamNames[i], ParamNames[i]
-						);
-					}
 				}
-				
-				if( regexNeeded )
-					paramHandlingStr = format(
-						q{
-							import std.regex;
-							%s
-						},
-						paramHandlingStr
-					);
 				
 				// Block 3
 				string requestStr;
@@ -728,6 +707,25 @@ private string generateRestInterfaceMethods(I)()
 						},
 						urlPrefix
 					);
+				} else {
+					auto parts = url.split("/");
+					requestStr ~= `url__ = ""`;
+					foreach (i, p; parts) {
+						if (i > 0) requestStr ~= `~"/"`;
+						bool match = false;
+						if( p.startsWith(":") ){
+							foreach (pn; ParamNames) {
+								if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
+									requestStr ~= `~urlEncode(toRestString(serializeToJson(`~pn~`)))`;
+									match = true;
+									break;
+								}
+							}
+						}
+						if (!match) requestStr ~= `~"`~p~`"`;
+					}
+
+					requestStr ~= ";\n";
 				}
 				
 				requestStr ~= format(
