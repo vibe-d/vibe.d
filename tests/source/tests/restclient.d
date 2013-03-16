@@ -9,24 +9,16 @@ interface ITestAPI
 	string getInfo();
 	@path("getCheck/:param/:param2") @method(HttpMethod.GET)
 	string customParameters(string _param, string _param2);
+	@path("getCheck2/:param/:param2") @method(HttpMethod.GET)
+	int customParameters2(int _param, bool _param2);
 }
 
 class TestAPI : ITestAPI
 {
-	string getInfo()
-	{
-		return "description";
-	}
-
-	string info()
-	{
-		return "description2";
-	}
-
-	string customParameters(string _param, string _param2)
-	{
-		return _param ~ _param2;
-	}
+	string getInfo() { return "description"; }
+	string info() { return "description2"; }
+	string customParameters(string _param, string _param2) { return _param ~ _param2; }
+	int customParameters2(int _param, bool _param2) { return _param2 ? _param : -_param; }
 }
 
 void test_rest_client()
@@ -43,4 +35,6 @@ void test_rest_client()
 	assert(api.getInfo() == "description");
 	assert(api.info() == "description2");
 	assert(api.customParameters("one", "two") == "onetwo");
+	assert(api.customParameters2(10, false) == -10);
+	assert(api.customParameters2(10, true) == 10);
 }
