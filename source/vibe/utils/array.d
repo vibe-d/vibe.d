@@ -133,6 +133,11 @@ class FixedAppender(ArrayType : E[], size_t NELEM, E) {
 		m_remaining = m_data;
 	}
 
+	void clear()
+	{
+		m_remaining = m_data[];
+	}
+
 	void put(E el)
 	{
 		m_remaining[0] = el;
