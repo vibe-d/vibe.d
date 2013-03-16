@@ -58,7 +58,7 @@ HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest re
 		});
 
 	// make sure the connection stays locked if the body still needs to be read
-	if( !res.bodyReader.empty ) res.lockedConnection = cli;
+	if( res.m_client ) res.lockedConnection = cli;
 
 	logTrace("Returning HttpClientResponse for conn %s", cast(void*)res.lockedConnection.__conn);
 	return res;
@@ -96,7 +96,8 @@ auto connectHttp(string host, ushort port = 0, bool ssl = false)
 /**************************************************************************************************/
 
 class HttpClient : EventedObject {
-	enum MaxHttpHeaderLineLength = 4096;
+	enum maxHttpHeaderLineLength = 4096;
+	deprecated enum MaxHttpHeaderLineLength = maxHttpHeaderLineLength;
 
 	private {
 		string m_server;
@@ -104,9 +105,8 @@ class HttpClient : EventedObject {
 		TcpConnection m_conn;
 		Stream m_stream;
 		SslContext m_ssl;
-		InputStream m_bodyReader;
 		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HttpClient, +http://vibed.org/)";
-		bool m_requesting = false;
+		bool m_requesting = false, m_responding = false;
 	}
 
 	static void setUserAgentString(string str) { m_userAgent = str; }
@@ -136,7 +136,7 @@ class HttpClient : EventedObject {
 
 	HttpClientResponse request(scope void delegate(HttpClientRequest req) requester)
 	{
-		assert(!m_requesting && !m_bodyReader, "Interleaved request detected!");
+		assert(!m_requesting && !m_responding, "Interleaved request detected!");
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
@@ -155,64 +155,8 @@ class HttpClient : EventedObject {
 		requester(req);
 		req.finalize();
 		
-
-		auto res = new HttpClientResponse(this);
-
-		// read and parse status line ("HTTP/#.# #[ $]\r\n")
-		logTrace("HTTP client reading status line");
-		string stln = cast(string)m_stream.readLine(MaxHttpHeaderLineLength);
-		logTrace("stln: %s", stln);
-		res.httpVersion = parseHttpVersion(stln);
-		enforce(stln.startsWith(" "));
-		stln = stln[1 .. $];
-		res.statusCode = parse!int(stln);
-		if( stln.length > 0 ){
-			enforce(stln.startsWith(" "));
-			stln = stln[1 .. $];
-			res.statusPhrase = stln;
-		}
-		
-		// read headers until an empty line is hit
-		parseRfc5322Header(m_stream, res.headers, MaxHttpHeaderLineLength);
-
-		// prepare body the reader
-		if( req.method == HttpMethod.HEAD ){
-			res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, 0);
-			res.bodyReader = res.m_limitedInputStream;
-		} else {
-			if( auto pte = "Transfer-Encoding" in res.headers ){
-				enforce(*pte == "chunked");
-				res.m_chunkedInputStream = FreeListRef!ChunkedInputStream(m_stream);
-				res.bodyReader = res.m_chunkedInputStream;
-			} else if( auto pcl = "Content-Length" in res.headers ){
-				res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, to!ulong(*pcl));
-				res.bodyReader = res.m_limitedInputStream;
-			} else {
-				res.m_limitedInputStream = FreeListRef!LimitedInputStream(m_stream, 0);
-				res.bodyReader = res.m_limitedInputStream;
-			}
-		}
-
-		if( auto pce = "Content-Encoding" in res.headers ){
-			if( *pce == "deflate" ){
-				res.m_deflateInputStream = FreeListRef!DeflateInputStream(res.bodyReader);
-				res.bodyReader = res.m_deflateInputStream;
-			} else if( *pce == "gzip" ){
-				res.m_gzipInputStream = FreeListRef!GzipInputStream(res.bodyReader);
-				res.bodyReader = res.m_gzipInputStream;
-			}
-			else enforce(false, "Unsuported content encoding: "~*pce);
-		}
-
-		// be sure to free resouces as soon as the response has been read
-		res.m_endCallback = FreeListRef!EndCallbackInputStream(res.bodyReader, &res.finalize);
-		res.bodyReader = res.m_endCallback;
-
-		if( !res.bodyReader.empty ){
-			m_bodyReader = res.bodyReader;
-		} else assert(res.m_client is null);
-
-		return res;
+		m_responding = true;
+		return new HttpClientResponse(this, req.method == HttpMethod.HEAD);
 	}
 }
 
@@ -305,13 +249,19 @@ final class HttpClientRequest : HttpRequest {
 		auto app = appender!string();
 		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
 		m_conn.write(app.data, false);
+		logTrace("--------------------");
+		logTrace("HTTP client request:");
+		logTrace("--------------------");
+		logTrace("%s %s %s", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
 		
 		foreach( k, v; headers ){
 			auto app2 = appender!string();
 			formattedWrite(app2, "%s: %s\r\n", k, v);
 			m_conn.write(app2.data, false);
+			logTrace("%s: %s", k, v);
 		}
 		m_conn.write("\r\n", true);
+		logTrace("--------------------");
 	}
 
 	private void finalize()
@@ -339,24 +289,108 @@ final class HttpClientResponse : HttpResponse {
 		FreeListRef!GzipInputStream m_gzipInputStream;
 		FreeListRef!DeflateInputStream m_deflateInputStream;
 		FreeListRef!EndCallbackInputStream m_endCallback;
+		InputStream m_bodyReader;
+		bool m_headResponse;
+	}
+
+	private this(HttpClient client, bool head_res)
+	{
+		m_client = client;
+		m_headResponse = head_res;
+
+		scope(failure) finalize();
+
+		// read and parse status line ("HTTP/#.# #[ $]\r\n")
+		logTrace("HTTP client reading status line");
+		string stln = cast(string)client.m_stream.readLine(HttpClient.maxHttpHeaderLineLength);
+		logTrace("stln: %s", stln);
+		this.httpVersion = parseHttpVersion(stln);
+		enforce(stln.startsWith(" "));
+		stln = stln[1 .. $];
+		this.statusCode = parse!int(stln);
+		if( stln.length > 0 ){
+			enforce(stln.startsWith(" "));
+			stln = stln[1 .. $];
+			this.statusPhrase = stln;
+		}
+		
+		// read headers until an empty line is hit
+		parseRfc5322Header(client.m_stream, this.headers, HttpClient.maxHttpHeaderLineLength);
+
+		logTrace("---------------------");
+		logTrace("HTTP client response:");
+		logTrace("---------------------");
+		logTrace("%s %s", getHttpVersionString(this.httpVersion), this.statusCode);
+		foreach (k, v; this.headers)
+			logTrace("%s: %s", k, v);
+		logTrace("---------------------");
+
+		if( head_res ) finalize();
+	}
+
+	~this()
+	{
+		assert (!m_client, "Stale HTTP response is finalized!");
+		if( m_client ){
+			logDebug("Warning: dropping unread body.");
+			dropBody();
+		}
 	}
 
 	/**
 		An input stream suitable for reading the response body.
 	*/
-	InputStream bodyReader;
-
-	private this(HttpClient client)
+	@property InputStream bodyReader()
 	{
-		m_client = client;
+		if( m_bodyReader ) return m_bodyReader;
+
+		assert (m_client, "Response was already read or no response body, may not use bodyReader.");
+
+		// prepare body the reader
+		if( auto pte = "Transfer-Encoding" in this.headers ){
+			enforce(*pte == "chunked");
+			m_chunkedInputStream = FreeListRef!ChunkedInputStream(m_client.m_stream);
+			m_bodyReader = this.m_chunkedInputStream;
+		} else if( auto pcl = "Content-Length" in this.headers ){
+			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.m_stream, to!ulong(*pcl));
+			m_bodyReader = m_limitedInputStream;
+		} else {
+			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.m_stream, 0);
+			m_bodyReader = m_limitedInputStream;
+		}
+
+		if( auto pce = "Content-Encoding" in this.headers ){
+			if( *pce == "deflate" ){
+				m_deflateInputStream = FreeListRef!DeflateInputStream(m_bodyReader);
+				m_bodyReader = m_deflateInputStream;
+			} else if( *pce == "gzip" ){
+				m_gzipInputStream = FreeListRef!GzipInputStream(m_bodyReader);
+				m_bodyReader = m_gzipInputStream;
+			}
+			else enforce(false, "Unsuported content encoding: "~*pce);
+		}
+
+		// be sure to free resouces as soon as the response has been read
+		m_endCallback = FreeListRef!EndCallbackInputStream(m_bodyReader, &this.finalize);
+		m_bodyReader = m_endCallback;
+
+		return m_bodyReader;
 	}
 
-	~this()
+	/**
+		Provides an unsafe maeans to read raw data from the connection.
+
+		No transfer decoding and no content decoding is done on the data.
+
+		Not that the provided delegate is required to consume the whole stream,
+		as the state of the response is unknown after raw bytes have been
+		taken.
+	*/
+	void readRawBody(scope void delegate(scope InputStream stream) del)
 	{
-		if( bodyReader ){
-			logDebug("Warning: dropping unread body.");
-			dropBody();
-		}
+		assert(!m_bodyReader, "May not mix use of readRawBody and bodyReader.");
+		del(m_client.m_stream);
+		finalize();
 	}
 
 	/**
@@ -373,7 +407,7 @@ final class HttpClientResponse : HttpResponse {
 	*/
 	void dropBody()
 	{
-		if( bodyReader ){
+		if( m_client ){
 			if( bodyReader.empty ){
 				finalize();
 			} else {
@@ -388,7 +422,7 @@ final class HttpClientResponse : HttpResponse {
 		// ignore duplicate and too early calls to finalize
 		// (too early happesn for empty response bodies)
 		if( !m_client ) return;
-		m_client.m_bodyReader = null;
+		m_client.m_responding = false;
 		m_client = null;
 		destroy(m_deflateInputStream);
 		destroy(m_gzipInputStream);
