@@ -726,7 +726,9 @@ string getMimeTypeForFile(string filename)
 		case "movie": return "video/x-sgi-movie";
 		case "ice": return "x-conference/x-cooltalk";
 
-	}		
+		case "gz": return "application/gzip";
+		case "tgz": return "application/gzip";
+	}
 }
 
 /**
