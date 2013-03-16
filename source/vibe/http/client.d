@@ -20,6 +20,7 @@ import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.operations;
 import vibe.stream.zlib;
+import vibe.utils.array;
 import vibe.utils.memory;
 
 import std.array;
@@ -27,6 +28,7 @@ import std.conv;
 import std.exception;
 import std.format;
 import std.string;
+import std.typecons;
 
 
 /**************************************************************************************************/
@@ -91,12 +93,13 @@ void requestHttp(Url url, scope void delegate(scope HttpClientRequest req) reque
 */
 auto connectHttp(string host, ushort port = 0, bool ssl = false)
 {
-	static ConnectionPool!HttpClient[string] s_connections;
+	static struct ConnInfo { string host; ushort port; bool ssl; }
+	static ConnectionPool!HttpClient[ConnInfo] s_connections;
 	if( port == 0 ) port = ssl ? 443 : 80;
-	string cstring = host ~ ':' ~ to!string(port) ~ ':' ~ to!string(ssl);
+	auto ckey = ConnInfo(host, port, ssl);
 
 	ConnectionPool!HttpClient pool;
-	if( auto pcp = cstring in s_connections )
+	if( auto pcp = ckey in s_connections )
 		pool = *pcp;
 	else {
 		pool = new ConnectionPool!HttpClient({
@@ -104,7 +107,7 @@ auto connectHttp(string host, ushort port = 0, bool ssl = false)
 				ret.connect(host, port, ssl);
 				return ret;
 			});
-		s_connections[cstring] = pool;
+		s_connections[ckey] = pool;
 	}
 
 	return pool.lockConnection();
@@ -149,17 +152,29 @@ class HttpClient : EventedObject {
 		if( m_conn ){
 			m_stream.finalize();
 			m_conn.close();
+			if (m_stream !is m_conn){
+				destroy(m_stream);
+				m_stream = null;
+			}
+			destroy(m_conn);
 			m_conn = null;
-			m_stream = null;
 		}
 	}
 
 	void request(scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse) responder)
 	{
+		//auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
+		//scope(exit) request_allocator.reset();
+		auto request_allocator = defaultAllocator();
+
 		bool has_body = doRequest(requester);
 		m_responding = true;
-		scope res = new HttpClientResponse(this, has_body);
-		scope(exit) res.dropBody();
+		auto res = scoped!HttpClientResponse(this, has_body, request_allocator);
+		scope(exit){
+			res.dropBody();
+			if (res.headers.get("Connection") == "close")
+				disconnect();
+		}
 		responder(res);
 	}
 
@@ -179,11 +194,9 @@ class HttpClient : EventedObject {
 		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTcp(m_server, m_port);
 			m_stream = m_conn;
-			if( m_ssl ){
-				m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
-			}
+			if( m_ssl ) m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
 		}
-		scope req = new HttpClientRequest(m_stream);
+		auto req = scoped!HttpClientRequest(m_stream);
 		req.headers["User-Agent"] = m_userAgent;
 		req.headers["Connection"] = "keep-alive";
 		req.headers["Accept-Encoding"] = "gzip, deflate";
@@ -199,9 +212,11 @@ final class HttpClientRequest : HttpRequest {
 	private {
 		OutputStream m_bodyWriter;
 		bool m_headerWritten = false;
+		FixedAppender!(string, 22) m_contentLengthBuffer;
 	}
 
-	private this(Stream conn)
+	/// private
+	this(Stream conn)
 	{
 		super(conn);
 	}
@@ -223,7 +238,7 @@ final class HttpClientRequest : HttpRequest {
 	/// ditto
 	void writeBody(InputStream data, ulong length)
 	{
-		headers["Content-Length"] = to!string(length);
+		headers["Content-Length"] = clengthString(length);
 		bodyWriter.write(data, length);
 		finalize();
 	}
@@ -231,7 +246,7 @@ final class HttpClientRequest : HttpRequest {
 	void writeBody(ubyte[] data, string content_type = null)
 	{
 		if( content_type ) headers["Content-Type"] = content_type;
-		headers["Content-Length"] = to!string(data.length);
+		headers["Content-Length"] = clengthString(data.length);
 		bodyWriter.write(data);
 		finalize();
 	}
@@ -281,21 +296,20 @@ final class HttpClientRequest : HttpRequest {
 	{
 		assert(!m_headerWritten, "HttpClient tried to write headers twice.");
 		m_headerWritten = true;
+
 		auto app = appender!string();
+		app.reserve(512);
 		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
-		m_conn.write(app.data, false);
 		logTrace("--------------------");
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
 		logTrace("%s %s %s", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
-		
 		foreach( k, v; headers ){
-			auto app2 = appender!string();
-			formattedWrite(app2, "%s: %s\r\n", k, v);
-			m_conn.write(app2.data, false);
+			formattedWrite(app, "%s: %s\r\n", k, v);
 			logTrace("%s: %s", k, v);
 		}
-		m_conn.write("\r\n", true);
+		app.put("\r\n");
+		m_conn.write(app.data, false);
 		logTrace("--------------------");
 	}
 
@@ -313,6 +327,13 @@ final class HttpClientRequest : HttpRequest {
 		m_conn.flush();
 		m_bodyWriter = null;
 	}
+
+	private string clengthString(ulong len)
+	{
+		m_contentLengthBuffer.clear();
+		formattedWrite(m_contentLengthBuffer, "%s", len);
+		return m_contentLengthBuffer.data;
+	}
 }
 
 final class HttpClientResponse : HttpResponse {
@@ -327,7 +348,8 @@ final class HttpClientResponse : HttpResponse {
 		InputStream m_bodyReader;
 	}
 
-	private this(HttpClient client, bool has_body)
+	/// private
+	this(HttpClient client, bool has_body, Allocator alloc = defaultAllocator())
 	{
 		m_client = client;
 
@@ -335,7 +357,7 @@ final class HttpClientResponse : HttpResponse {
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
 		logTrace("HTTP client reading status line");
-		string stln = cast(string)client.m_stream.readLine(HttpClient.maxHttpHeaderLineLength);
+		string stln = cast(string)client.m_stream.readLine(HttpClient.maxHttpHeaderLineLength, "\r\n", alloc);
 		logTrace("stln: %s", stln);
 		this.httpVersion = parseHttpVersion(stln);
 		enforce(stln.startsWith(" "));
@@ -348,7 +370,7 @@ final class HttpClientResponse : HttpResponse {
 		}
 		
 		// read headers until an empty line is hit
-		parseRfc5322Header(client.m_stream, this.headers, HttpClient.maxHttpHeaderLineLength);
+		parseRfc5322Header(client.m_stream, this.headers, HttpClient.maxHttpHeaderLineLength, alloc);
 
 		logTrace("---------------------");
 		logTrace("HTTP client response:");
