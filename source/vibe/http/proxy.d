@@ -57,7 +57,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 	{
 		auto rurl = url;
 		rurl.localURI = req.url;
-		auto cres = requestHttp(rurl, (HttpClientRequest creq){
+		auto cres = requestHttp(rurl, (scope creq){
 				creq.method = req.method;
 				creq.headers = req.headers.dup;
 				creq.headers["Connection"] = "keep-alive";

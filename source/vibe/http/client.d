@@ -39,12 +39,12 @@ import std.string;
 	The 'requester' parameter allows to customize the request and to specify the request body for
 	non-GET requests.
 */
-HttpClientResponse requestHttp(string url, scope void delegate(HttpClientRequest req) requester = null)
+HttpClientResponse requestHttp(string url, scope void delegate(scope HttpClientRequest req) requester = null)
 {
 	return requestHttp(Url.parse(url), requester);
 }
 /// ditto
-HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest req) requester = null)
+HttpClientResponse requestHttp(Url url, scope void delegate(scope HttpClientRequest req) requester = null)
 {
 	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
 	enforce(url.host.length > 0, "Url must contain a host name.");
@@ -63,6 +63,26 @@ HttpClientResponse requestHttp(Url url, scope void delegate(HttpClientRequest re
 	logTrace("Returning HttpClientResponse for conn %s", cast(void*)res.lockedConnection.__conn);
 	return res;
 }
+/// ditto
+void requestHttp(string url, scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse req) responder)
+{
+	requestHttp(Url(url), requester, responder);
+}
+/// ditto
+void requestHttp(Url url, scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse req) responder)
+{
+	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
+	enforce(url.host.length > 0, "Url must contain a host name.");
+
+	bool ssl = url.schema == "https";
+	auto cli = connectHttp(url.host, url.port, ssl);
+	cli.request((scope req){
+			req.requestUrl = url.localURI;
+			req.headers["Host"] = url.host;
+			if( requester ) requester(req);
+		}, responder);
+}
+
 
 /**
 	Returns a HttpClient proxy that is connected to the specified host.
@@ -134,7 +154,23 @@ class HttpClient : EventedObject {
 		}
 	}
 
-	HttpClientResponse request(scope void delegate(HttpClientRequest req) requester)
+	void request(scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse) responder)
+	{
+		bool has_body = doRequest(requester);
+		m_responding = true;
+		scope res = new HttpClientResponse(this, has_body);
+		scope(exit) res.dropBody();
+		responder(res);
+	}
+
+	HttpClientResponse request(scope void delegate(HttpClientRequest) requester)
+	{
+		bool has_body = doRequest(requester);
+		m_responding = true;
+		return new HttpClientResponse(this, has_body);
+	}
+
+	private bool doRequest(scope void delegate(HttpClientRequest req) requester)
 	{
 		assert(!m_requesting && !m_responding, "Interleaved request detected!");
 		m_requesting = true;
@@ -147,16 +183,15 @@ class HttpClient : EventedObject {
 				m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
 			}
 		}
-		auto req = new HttpClientRequest(m_stream);
+		scope req = new HttpClientRequest(m_stream);
 		req.headers["User-Agent"] = m_userAgent;
 		req.headers["Connection"] = "keep-alive";
 		req.headers["Accept-Encoding"] = "gzip, deflate";
 		req.headers["Host"] = m_server;
 		requester(req);
 		req.finalize();
-		
-		m_responding = true;
-		return new HttpClientResponse(this, req.method == HttpMethod.HEAD);
+
+		return req.method != HttpMethod.HEAD;
 	}
 }
 
@@ -290,13 +325,11 @@ final class HttpClientResponse : HttpResponse {
 		FreeListRef!DeflateInputStream m_deflateInputStream;
 		FreeListRef!EndCallbackInputStream m_endCallback;
 		InputStream m_bodyReader;
-		bool m_headResponse;
 	}
 
-	private this(HttpClient client, bool head_res)
+	private this(HttpClient client, bool has_body)
 	{
 		m_client = client;
-		m_headResponse = head_res;
 
 		scope(failure) finalize();
 
@@ -325,7 +358,7 @@ final class HttpClientResponse : HttpResponse {
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
 
-		if( head_res ) finalize();
+		if (!has_body) finalize();
 	}
 
 	~this()
