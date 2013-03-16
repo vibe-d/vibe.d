@@ -42,7 +42,7 @@ void listenHttpReverseProxy(HttpServerSettings settings, string destination_host
 */
 HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort destination_port)
 {
-	static immutable string[] non_forward_headers = ["Content-Length", "Transfer-Encoding", "Content-Encoding"];
+	static immutable string[] non_forward_headers = ["Content-Length", "Transfer-Encoding", "Content-Encoding", "Connection"];
 	static InetHeaderMap non_forward_headers_map;
 	if( non_forward_headers_map.length == 0 )
 		foreach( n; non_forward_headers )
@@ -60,6 +60,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		auto cres = requestHttp(rurl, (HttpClientRequest creq){
 				creq.method = req.method;
 				creq.headers = req.headers.dup;
+				creq.headers["Connection"] = "keep-alive";
 				creq.headers["Host"] = destination_host;
 				if( auto pfh = "X-Forwarded-Host" in req.headers ) creq.headers["X-Forwarded-Host"] = *pfh;
 				else creq.headers["X-Forwarded-Host"] = req.headers["Host"];
@@ -71,31 +72,50 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		
 		// copy the response to the original requester
 		res.statusCode = cres.statusCode;
-		
+
+		// special case for empty response bodies
+		if( "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HttpMethod.HEAD ){
+			res.writeVoidBody();
+			return;
+		}
+
+		// enforce compatibility with HTTP/1.0 clients that do not support chunked encoding
+		// (Squid and some other proxies)
+		if( res.httpVersion == HttpVersion.HTTP_1_0 && ("Transfer-Encoding" in cres.headers || "Content-Length" !in cres.headers) ){
+			// copy all headers that may pass from upstream to client
+			foreach( n, v; cres.headers ){
+				if( n !in non_forward_headers_map )
+					res.headers[n] = v;
+			}
+
+			if( "Transfer-Encoding" in res.headers ) res.headers.remove("Transfer-Encoding");
+			auto content = cres.bodyReader.readAll(1024*1024);
+			res.headers["Content-Length"] = to!string(content.length);
+			res.bodyWriter.write(content);
+			return;
+		}
+
+		// to perform a verbatim copy of the client response
+		if ("Content-Length" in cres.headers) {
+			import vibe.utils.string;
+			if( "Content-Encoding" in res.headers ) res.headers.remove("Content-Encoding");
+			foreach (key, value; cres.headers) {
+				if (icmp2(key, "Connection") != 0)
+					res.headers[key] = value;
+			}
+			auto size = cres.headers["Content-Length"].to!size_t();
+			cres.readRawBody((scope reader) { res.writeRawBody(reader, size); });
+			assert(res.headerWritten);
+			return;
+		}
+
+		// fall back to a generic re-encoding of the response
 		// copy all headers that may pass from upstream to client
 		foreach( n, v; cres.headers ){
 			if( n !in non_forward_headers_map )
 				res.headers[n] = v;
 		}
-
-		// copy the response body if any
-		if( "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HttpMethod.HEAD ){
-			res.writeVoidBody();
-		} else {
-			// enforce compatibility with HTTP/1.0 clients that do not support chunked encoding
-			// (Squid and some other proxies)
-			if( res.httpVersion == HttpVersion.HTTP_1_0 ){
-				if( "Transfer-Encoding" in res.headers ) res.headers.remove("Transfer-Encoding");
-				auto content = cres.bodyReader.readAll(1024*1024);
-				res.headers["Content-Length"] = to!string(content.length);
-				res.bodyWriter.write(content);
-				return;
-			}
-
-			// by default, just forward the body using chunked encoding
-			res.bodyWriter().write(cres.bodyReader);
-		}
-		assert(res.headerWritten);
+		res.bodyWriter.write(cres.bodyReader);
 	}
 
 	return &handleRequest;
