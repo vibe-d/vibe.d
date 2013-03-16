@@ -40,7 +40,6 @@ void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 
 	string ln;
 	while( (ln = cast(string)input.readLine(max_line_length, "\r\n", alloc)).length > 0 ){
-		logTrace("hdr: %s", ln);
 		if( ln[0] != ' ' && ln[0] != '\t' ){
 			addPreviousHeader();
 

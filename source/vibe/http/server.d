@@ -615,22 +615,32 @@ final class HttpServerResponse : HttpResponse {
 	
 	/** Writes the whole response body at once, without doing any further encoding.
 
-		The called has to make sure that the appropriate headers are set correctly
+		The caller has to make sure that the appropriate headers are set correctly
 		(i.e. Content-Type and Content-Encoding).
+
+		Note that the version taking a RandomAccessStream may perform additional
+		optimizations such as sending a file directly from the disk to the
+		network card using a DMA transfer.
+
 	*/
 	void writeRawBody(RandomAccessStream stream)
 	{
 		assert(!m_headerWritten, "A body was already written!");
-
 		writeHeader();
-
 		if( m_isHeadResponse ) return;
 
 		auto bytes = stream.size - stream.tell();
-		if( "Transfer-Encoding" in headers ) headers.remove("Transfer-Encoding");
-		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", bytes);
 		m_conn.write(stream);
 		m_countingWriter.increment(bytes);
+	}
+	/// ditto
+	void writeRawBody(InputStream stream, size_t num_bytes = 0)
+	{
+		assert(!m_headerWritten, "A body was already written!");
+		writeHeader();
+		if( m_isHeadResponse ) return;
+
+		m_countingWriter.write(stream, num_bytes);
 	}
 
 	/// Writes a JSON message with the specified status
@@ -832,7 +842,12 @@ final class HttpServerResponse : HttpResponse {
 		{
 			formattedWrite(app, fmt, args);
 			app.put("\r\n");
+			logTrace(fmt, args);
 		}
+
+		logTrace("---------------------");
+		logTrace("HTTP server response:");
+		logTrace("---------------------");
 
 		// write the status line
 		writeLine("%s %d %s", 
@@ -841,13 +856,10 @@ final class HttpServerResponse : HttpResponse {
 			this.statusPhrase.length ? this.statusPhrase : httpStatusText(this.statusCode));
 
 		// write all normal headers
-		foreach( n, v; this.headers ){
-			app.put(n);
-			app.put(':');
-			app.put(' ');
-			app.put(v);
-			app.put("\r\n");
-		}
+		foreach (k, v; this.headers)
+			writeLine("%s: %s", k, v);
+
+		logTrace("---------------------");
 
 		// NOTE: AA.length is very slow so this helper function is used to determine if an AA is empty.
 		static bool empty(AA)(AA aa)
@@ -1254,8 +1266,12 @@ private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocat
 
 	logTrace("HTTP server reading status line");
 	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength, "\r\n", alloc);
-	logTrace("req: %s", reqln);
-	
+
+	logTrace("--------------------");
+	logTrace("HTTP server request:");
+	logTrace("--------------------");
+	logTrace("%s", reqln);
+
 	//Method
 	auto pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request method" );
@@ -1273,6 +1289,10 @@ private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocat
 	
 	//headers
 	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
+
+	foreach (k, v; req.headers)
+		logTrace("%s: %s", k, v);
+	logTrace("--------------------");
 }
 
 private void parseCookies(string str, ref CookieValueMap cookies) 
