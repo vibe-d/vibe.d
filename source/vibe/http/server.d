@@ -638,9 +638,12 @@ final class HttpServerResponse : HttpResponse {
 	{
 		assert(!m_headerWritten, "A body was already written!");
 		writeHeader();
-		if( m_isHeadResponse ) return;
+		if (m_isHeadResponse) return;
 
-		m_countingWriter.write(stream, num_bytes);
+		if (num_bytes > 0) {
+			m_conn.write(stream, num_bytes);
+			m_countingWriter.increment(num_bytes);
+		} else  m_countingWriter.write(stream, num_bytes);
 	}
 
 	/// Writes a JSON message with the specified status
@@ -1074,7 +1077,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			err.exception = ex;
 			settings.errorPageHandler(req, res, err);
 		} else {
-			res.contentType = "text/plain";
+			res.contentType = "text/plain; charset=UTF-8";
 			res.bodyWriter.write(to!string(code) ~ " - " ~ httpStatusText(code) ~ "\n\n" ~ msg ~ "\n\nInternal error information:\n" ~ debug_msg);
 		}
 		assert(res.headerWritten);
