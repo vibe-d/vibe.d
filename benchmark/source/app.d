@@ -29,6 +29,12 @@ void static_100k(HttpServerRequest req, HttpServerResponse res)
 	res.writeBody(cast(string)data[0 .. 100_000]);
 }
 
+void quit(HttpServerRequest req, HttpServerResponse res)
+{
+	res.writeBody("Exiting event loop...");
+	exitEventLoop();
+}
+
 void staticAnswer(TcpConnection conn)
 {
 	conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
@@ -53,7 +59,7 @@ shared static this()
 
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;
-//	settings.options = HttpServerOption.None;
+	//settings.options = HttpServerOption.parseURL;
 	//settings.accessLogToConsole = true;
 
 	auto fsettings = new HttpFileServerSettings;
@@ -66,6 +72,7 @@ shared static this()
 	routes.get("/static/1k", &static_1k);
 	routes.get("/static/10k", &static_10k);
 	routes.get("/static/100k", &static_100k);
+	routes.get("/quit", &quit);
 	routes.get("/file/*", serveStaticFiles("./public", fsettings));
 
 	listenHttp(settings, routes);

@@ -19,3 +19,7 @@ html
 				a(href="file/1k") 1kB file
 			li
 				a(href="file/10k") 10kB file
+			li
+				a(href="http://127.0.0.1:8081/") static response
+			li
+				a(href="quit") Quit
