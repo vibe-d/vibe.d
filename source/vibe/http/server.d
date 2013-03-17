@@ -655,7 +655,7 @@ final class HttpServerResponse : HttpResponse {
 		}
 
 		statusCode = status;
-		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json");
+		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json; charset=utf-8");
 	}
 
 	/**
