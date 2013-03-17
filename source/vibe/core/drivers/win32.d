@@ -15,6 +15,7 @@ import vibe.core.driver;
 import vibe.core.log;
 import vibe.inet.url;
 import vibe.utils.array;
+import vibe.utils.hashmap;
 
 import core.atomic;
 import core.sync.mutex;
@@ -456,6 +457,7 @@ class Win32Timer : Timer {
 	{
 		assert(m_pending);
 		KillTimer(null, m_id);
+		s_timers.remove(m_id);
 	}
 
 	void wait()
@@ -1364,7 +1366,7 @@ class Win32TcpListener : TcpListener, SocketEventHandler {
 
 
 private {
-	Win32Timer[UINT_PTR] s_timers;
+	HashMap!(UINT_PTR, Win32Timer, UINT_PTR.max) s_timers;
 	__gshared s_setupWindowClass = false;
 }
 

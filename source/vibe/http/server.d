@@ -1089,7 +1089,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	try {
 		logTrace("reading request..");
 
-		// limit the total request size
+		// limit the total request time
 		InputStream reqReader;
 		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = conn;
 		else {
