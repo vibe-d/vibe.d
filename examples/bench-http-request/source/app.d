@@ -11,7 +11,14 @@ ulong nreqc = 1000;
 
 void request()
 {
-	try requestHttp("http://127.0.0.1:8080/empty", null, (scope res){ res.dropBody(); });
+	try requestHttp("http://127.0.0.1:8080/empty",
+			(scope req){
+				req.headers.remove("Accept-Encoding");
+			},
+			(scope res){
+				res.dropBody();
+			}
+		);
 	catch (Exception) { nerr++; }
 	nreq++;
 }
