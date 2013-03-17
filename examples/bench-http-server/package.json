@@ -1,6 +1,7 @@
 {
-	"name": "banch-http-server",
+	"name": "bench-http-server",
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
-	}
+	},
+	"versions": ["VibeManualMemoryManagement"]
 }
