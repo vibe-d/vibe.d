@@ -7,6 +7,8 @@
 */
 module vibe.textfilter.urlencode;
 
+import vibe.utils.string;
+
 import std.algorithm;
 import std.array;
 import std.conv;
@@ -28,6 +30,7 @@ string urlEncode(string str)
 */
 string urlDecode(string str)
 {
+	if( !str.anyOf("%+") ) return str;
 	auto dst = appender!string();
 	dst.reserve(str.length);
 	filterUrlDecode(dst, str);

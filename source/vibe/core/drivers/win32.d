@@ -26,6 +26,7 @@ import std.conv;
 import std.c.windows.windows;
 import std.c.windows.winsock;
 import std.exception;
+import std.typecons;
 import std.utf;
 
 enum WM_USER_SIGNAL = WM_USER+101;
@@ -966,6 +967,7 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 		DWORD m_bytesTransferred;
 		ConnectionStatus m_status = ConnectionStatus.Initialized;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
+		void delegate(TcpConnection) m_connectionCallback;
 
 		HANDLE m_transferredFile;
 		OVERLAPPED m_fileOverlapped;
@@ -1082,7 +1084,7 @@ m_status = ConnectionStatus.Connected;
 
 	bool waitForData(Duration timeout)
 	{
-		auto tm = m_driver.createTimer(null);
+		auto tm = scoped!Win32Timer(m_driver, cast(void delegate())null);
 		tm.acquire();
 		tm.rearm(timeout);
 		while( m_readBuffer.empty ){
@@ -1272,6 +1274,19 @@ m_status = ConnectionStatus.Connected;
 		}
 	}
 
+	void runConnectionCallback()
+	{
+		try {
+			acquire();
+			m_connectionCallback(this);
+			logDebug("task out (fd %d).", m_socket);
+		} catch( Exception e ){
+			logWarn("Handling of connection failed: %s", e.msg);
+			logDebug("%s", e.toString());
+		}
+		if( this.connected ) close();
+	}
+
 	private static extern(System) nothrow
 	void onIOCompleted(DWORD dwError, DWORD cbTransferred, WSAOVERLAPPEDX* lpOverlapped, DWORD dwFlags)
 	{
@@ -1327,23 +1342,16 @@ class Win32TcpListener : TcpListener, SocketEventHandler {
 			default: assert(false);
 			case FD_ACCEPT:
 				try {
+					NetworkAddress addr;
+					addr.family = AF_INET6;
+					int addrlen = addr.sockAddrLen;
+					auto clientsock = WSAAccept(sock, addr.sockAddr, &addrlen, null, 0);
+					assert(addrlen == addr.sockAddrLen);
 					// TODO avoid GC allocations for delegate and Win32TcpConnection
-					runTask({
-						NetworkAddress addr;
-						addr.family = AF_INET6;
-						int addrlen = addr.sockAddrLen;
-						auto clientsock = WSAAccept(sock, addr.sockAddr, &addrlen, null, 0);
-						assert(addrlen == addr.sockAddrLen);
-						auto conn = new Win32TcpConnection(m_driver, clientsock, addr);
-						try {
-							m_connectionCallback(conn);
-							logDebug("task out (fd %d).", sock);
-						} catch( Exception e ){
-							logWarn("Handling of connection failed: %s", e.msg);
-							logDebug("%s", e.toString());
-						}
-						if( conn.connected ) conn.close();
-					});
+					auto conn = new Win32TcpConnection(m_driver, clientsock, addr);
+					conn.m_connectionCallback = m_connectionCallback;
+					conn.release();
+					runTask(&conn.runConnectionCallback);
 				} catch( Exception e ){
 					logWarn("Exception white accepting TCP connection: %s", e.msg);
 					try logDebug("Exception white accepting TCP connection: %s", e.toString());

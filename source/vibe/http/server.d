@@ -1035,7 +1035,6 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
-	FreeListRef!NullOutputStream nullWriter = FreeListRef!NullOutputStream();
 	FreeListRef!HttpServerRequest req = FreeListRef!HttpServerRequest();
 	FreeListRef!TimeoutHttpInputStream timeout_http_input_stream;
 	FreeListRef!LimitedHttpInputStream limited_http_input_stream;
@@ -1223,7 +1222,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// if no one has written anything, return 404
 		if( !res.headerWritten )
-			throw new HttpStatusException(HttpStatus.NotFound);
+			throw new HttpStatusException(HttpStatus.notFound);
 	} catch(HttpStatusException err) {
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
@@ -1232,7 +1231,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
-		auto status = parsed ? HttpStatus.InternalServerError : HttpStatus.BadRequest;
+		auto status = parsed ? HttpStatus.internalServerError : HttpStatus.badRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logError("Error after page has been written: %s", e.toString());
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, e.toString());
@@ -1240,9 +1239,11 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			keep_alive = false;
 	}
 
-	if( req.bodyReader && !req.bodyReader.empty )
+	if( req.bodyReader && !req.bodyReader.empty ){
+		auto nullWriter = scoped!NullOutputStream();
 		nullWriter.write(req.bodyReader);
-	logTrace("dropped body");
+		logTrace("dropped body");
+	}
 
 	// finalize (e.g. for chunked encoding)
 	res.finalize();

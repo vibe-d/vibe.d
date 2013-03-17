@@ -23,6 +23,7 @@ import std.string;
 */
 struct Path {
 	private {
+		PathEntry[12] m_staticNodeStorage;
 		immutable(PathEntry)[] m_nodes;
 		bool m_absolute = false;
 		bool m_endsWithSlash = false;
@@ -31,10 +32,10 @@ struct Path {
 	/// Constructs a Path object by parsing a path string.
 	this(string pathstr)
 	{
-		m_nodes = cast(immutable)splitPath(pathstr);
+		m_nodes = cast(immutable)splitPath(pathstr, m_staticNodeStorage);
 		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && m_nodes[0].toString().countUntil(':')>0);
 		m_endsWithSlash = pathstr.endsWith("/");
-		foreach( e; m_nodes ) assert(e.toString().length > 0);
+		foreach( e; m_nodes ) assert(e.toString().length > 0, "Empty path nodes not allowed: "~pathstr);
 	}
 	
 	/// Constructs a path object from a list of PathEntry objects.
@@ -263,7 +264,7 @@ string joinPath(string basepath, string subpath)
 }
 
 /// Splits up a path string into its elements/folders
-PathEntry[] splitPath(string path)
+PathEntry[] splitPath(string path, PathEntry[] storage)
 {
 	if( path.startsWith("/") || path.startsWith("\\") ) path = path[1 .. $];
 	if( path.empty ) return null;
@@ -277,7 +278,8 @@ PathEntry[] splitPath(string path)
 	nelements++;
 	
 	// reserve space for the elements
-	auto elements = new PathEntry[nelements];
+	if( storage.length < nelements ) storage = new PathEntry[nelements];
+	else storage = storage[0 .. nelements];
 
 	// read and return the elements
 	size_t startidx = 0;
@@ -285,11 +287,11 @@ PathEntry[] splitPath(string path)
 	foreach( i, char ch; path )
 		if( ch == '\\' || ch == '/' ){
 			enforce(i - startidx > 0, "Empty path entries not allowed.");
-			elements[eidx++] = PathEntry(path[startidx .. i]);
+			storage[eidx++] = PathEntry(path[startidx .. i]);
 			startidx = i+1;
 		}
-	elements[eidx++] = PathEntry(path[startidx .. $]);
+	storage[eidx++] = PathEntry(path[startidx .. $]);
 	enforce(path.length - startidx > 0, "Empty path entries not allowed.");
 	assert(eidx == nelements);
-	return elements;
+	return storage;
 }
