@@ -838,12 +838,12 @@ final class HttpServerResponse : HttpResponse {
 	{
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
 		m_headerWritten = true;
-		auto app = appender!string();
+		auto app = AllocAppender!string(m_requestAlloc);
 		app.reserve(512);
 
 		void writeLine(T...)(string fmt, T args)
 		{
-			formattedWrite(app, fmt, args);
+			formattedWrite(&app, fmt, args);
 			app.put("\r\n");
 			logTrace(fmt, args);
 		}
@@ -877,7 +877,8 @@ final class HttpServerResponse : HttpResponse {
 				app.put("Set-Cookie: ");
 				app.put(n);
 				app.put('=');
-				filterUrlEncode(app, cookie.value);
+				auto appref = &app;
+				filterUrlEncode(appref, cookie.value);
 				if ( cookie.domain ) {
 					app.put("; Domain=");
 					app.put(cookie.domain);
@@ -892,7 +893,7 @@ final class HttpServerResponse : HttpResponse {
 				}
 				if ( cookie.maxAge ) {
 					app.put("; MaxAge=");
-					formattedWrite(app, "%s", cookie.maxAge);
+					formattedWrite(&app, "%s", cookie.maxAge);
 				}
 				if ( cookie.isSecure ) {
 					app.put("; Secure");
@@ -906,9 +907,8 @@ final class HttpServerResponse : HttpResponse {
 
 		// finalize reposonse header
 		app.put("\r\n");
-		m_conn.write(app.data(), true);
+		m_conn.write(app.data, true);
 	}
-
 }
 
 

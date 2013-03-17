@@ -356,13 +356,13 @@ final class ChunkedInputStream : InputStream {
 final class ChunkedOutputStream : OutputStream {
 	private {
 		OutputStream m_out;
-		Appender!(ubyte[]) m_buffer;
+		AllocAppender!(ubyte[]) m_buffer;
 	}
 	
-	this(OutputStream stream) 
+	this(OutputStream stream, Allocator alloc = defaultAllocator())
 	{
 		m_out = stream;
-		m_buffer = appender!(ubyte[])();
+		m_buffer = AllocAppender!(ubyte[])(alloc);
 	}
 
 	void write(in ubyte[] bytes, bool do_flush = true)
@@ -394,15 +394,16 @@ final class ChunkedOutputStream : OutputStream {
 			writeChunkSize(data.length);
 			m_out.write(data, false);
 			m_out.write("\r\n");
-			m_buffer.clear();
 		}
 		m_out.flush();
+		m_buffer.reset(AppenderResetMode.reuseData);
 	}
 
 	void finalize() {
 		flush();
 		m_out.write("0\r\n\r\n");
 		m_out.flush();
+		m_buffer.reset(AppenderResetMode.freeData);
 	}
 	private void writeChunkSize(long length) {
 		m_out.write(format("%x\r\n", length), false);

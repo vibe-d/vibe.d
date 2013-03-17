@@ -84,7 +84,14 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
-	auto nmatchoffset = new size_t[end_marker.length];
+	
+	// allocate internal jump table to optimize the number of comparisons
+	size_t[8] nmatchoffsetbuffer;
+	size_t[] nmatchoffset;
+	if (end_marker.length <= nmatchoffsetbuffer.length) nmatchoffset = nmatchoffsetbuffer[0 .. end_marker.length];
+	else nmatchoffset = new size_t[end_marker.length];
+	
+	// precompute the jump table
 	nmatchoffset[0] = 0;
 	foreach( i; 1 .. end_marker.length ){
 		nmatchoffset[i] = i;

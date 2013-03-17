@@ -30,6 +30,12 @@ void removeFromArrayIdx(T)(ref T[] array, size_t idx)
 	array.length = array.length-1;
 }
 
+enum AppenderResetMode {
+	keepData,
+	freeData,
+	reuseData
+}
+
 struct AllocAppender(ArrayType : E[], E) {
 	alias Unqual!E ElemType;
 	private {
@@ -47,8 +53,10 @@ struct AllocAppender(ArrayType : E[], E) {
 
 	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_data.length - m_remaining.length]; }
 
-	void reset()
+	void reset(AppenderResetMode reset_mode = AppenderResetMode.keepData)
 	{
+		if (reset_mode == AppenderResetMode.keepData) m_data = null;
+		else if( reset_mode == AppenderResetMode.freeData) { m_alloc.free(m_data); m_data = null; }
 		m_remaining = m_data;
 	}
 

@@ -1118,17 +1118,18 @@ m_status = ConnectionStatus.Connected;
 		checkConnected();
 		const(ubyte)[] bytes = bytes_;
 		logTrace("TCP write with %s bytes called", bytes.length);
+
+		WSAOVERLAPPEDX overlapped;
+		overlapped.Internal = 0;
+		overlapped.InternalHigh = 0;
+		overlapped.Offset = 0;
+		overlapped.OffsetHigh = 0;
+		overlapped.hEvent = cast(HANDLE)cast(void*)this;
+
 		while( bytes.length > 0 ){
 			WSABUF buf;
 			buf.len = bytes.length;
 			buf.buf = cast(ubyte*)bytes.ptr;
-
-			WSAOVERLAPPEDX overlapped;
-			overlapped.Internal = 0;
-			overlapped.InternalHigh = 0;
-			overlapped.Offset = 0;
-			overlapped.OffsetHigh = 0;
-			overlapped.hEvent = cast(HANDLE)cast(void*)this;
 
 			m_bytesTransferred = 0;
 			logTrace("Sending %s bytes TCP", buf.len);
