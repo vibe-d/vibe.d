@@ -281,23 +281,26 @@ class RestInterfaceClient(I) : I
 			url.queryString = queryString.data();
 		}
 		
-		auto res = requestHttp(url, (req){
-			req.method = httpMethodFromString(verb);
-			if( m_requestFilter ) m_requestFilter(req);
-			if( verb != "GET" && verb != "HEAD" )
-				req.writeJsonBody(params);
-		});
+		Json ret;
+
+		requestHttp(url,
+			(scope req){
+				req.method = httpMethodFromString(verb);
+				if( m_requestFilter ) m_requestFilter(req);
+				if( verb != "GET" && verb != "HEAD" )
+					req.writeJsonBody(params);
+			},
+			(scope res){
+				ret = res.readJson();
+				logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
+				if( res.statusCode != HttpStatus.OK ){
+					if( ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String )
+						throw new HttpStatusException(res.statusCode, ret.statusMessage.get!string);
+					else throw new HttpStatusException(res.statusCode, httpStatusText(res.statusCode));
+				}
+			}
+		);
 		
-		scope(exit)
-			destroy(res);
-		
-		auto ret = res.readJson();
-		logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
-		if( res.statusCode != HttpStatus.OK ){
-			if( ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String )
-				throw new HttpStatusException(res.statusCode, ret.statusMessage.get!string);
-			else throw new HttpStatusException(res.statusCode, httpStatusText(res.statusCode));
-		}
 		return ret;
 	}
 }
