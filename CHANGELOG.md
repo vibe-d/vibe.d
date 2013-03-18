@@ -1,6 +1,48 @@
 ﻿Changelog
 =========
 
+v0.7.14 - 2013-03-
+--------------------
+
+### Features and improvements ###
+
+ - Performance tuning for the HTTP server and client
+ - Stable memory usage even after millions
+ - Implemented new `TaskMutex` and `TaskCondition` classes deriving from Druntime's `Mutex` and `Condition` for drop-in replacement
+ - Added a simplified version of the `std.concurrency` API that works with vibe.d's tasks ()
+ - Added support for customizing the HTTP method and path using UDAs in the REST interface generator (by Михаил Страшун aka Dicebot) - [pull #189][issue189]
+ - `vibe.core.mutex` and `vibe.core.signal` have been deprecated
+ - Added support for WebDAV specific HTTP methods - see also [issue #109][issue109]
+ - Compiles on DMD 2.061/2.062 in unit test mode
+ - Added `Json.remove()` for JSON objects
+ - Added `Isolated!T` in preparation of a fully thread-safe API
+ - The package description now exposes a proper set of configurations
+ - VPM uses the new download URL schema instead of relying on a `"downloadUrl"` field in the package description to stay forward compatible with DUB
+ - The default order to listen is now IPv6 and then IPv4 to avoid the IPv4 listener blocking the IPv6 one on certain systems
+ - Added `HttpServerSettings.disableDistHost` to force `listenHttp` to listen immediately, even during initialization
+ - Added `WebSocket.receiveBinary` and `WebSocket.receiveText` - [issue #182][issue182]
+ - Added `HttpServerResponse.writeRawBody` and `HttpClientResponse.readRwaBody` to allow for verbatim forwarding
+ - ".gz" and ".tgz" are now recognized as compressed formats and are not transferred with a compressed "Content-Encoding"
+ - Added a pure scoped callback based version of `requestHttp` to allow GC-less operation and also automatic pipelining of requests in the future
+
+### Bug fixes ###
+
+ - Fixed some possible crashes and memory leaks in the `HttpClient`
+ - Fixed the `HttpRouter` interface to derive from `HttpServerRequestHandler`
+ - Fixed parsing of version ranges in the deprecated VPM
+ - Fixed some examples by added a `VibeCustomMain` version to their package.json
+ - Fixed a possible range violation in the Diet compiler for raw/filter nodes
+ - Fixed detection of horizontal lines in the Markdown parser
+ - Fixed handling of one character methods in the REST interface generator - [pull #195][issue195]
+ - Fixed the reverse proxy to not drop the "Content-Length" header
+ - Fixed `HttpClient` to obey "Connection: close" responses
+
+[issue109]: https://github.com/rejectedsoftware/vibe.d/issues/109
+[issue182]: https://github.com/rejectedsoftware/vibe.d/issues/182
+[issue189]: https://github.com/rejectedsoftware/vibe.d/issues/189
+[issue195]: https://github.com/rejectedsoftware/vibe.d/issues/195
+
+
 v0.7.13 - 2013-02-24
 --------------------
 
