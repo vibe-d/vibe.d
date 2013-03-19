@@ -258,6 +258,26 @@ class PoolAllocator : Allocator {
 		m_baseAllocator = base;
 	}
 
+	@property size_t totalSize()
+	{
+		size_t amt = 0;
+		for (auto p = m_fullPools; p; p = p.next)
+			amt += p.data.length;
+		for (auto p = m_freePools; p; p = p.next)
+			amt += p.data.length;
+		return amt;
+	}
+
+	@property size_t allocatedSize()
+	{
+		size_t amt = 0;
+		for (auto p = m_fullPools; p; p = p.next)
+			amt += p.data.length;
+		for (auto p = m_freePools; p; p = p.next)
+			amt += p.data.length - p.remaining.length;
+		return amt;
+	}
+
 	void[] alloc(size_t sz)
 	{
 		auto aligned_sz = alignedSize(sz);
