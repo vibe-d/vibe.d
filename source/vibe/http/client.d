@@ -172,6 +172,7 @@ class HttpClient : EventedObject {
 		auto res = scoped!HttpClientResponse(this, has_body, request_allocator);
 		scope(exit){
 			res.dropBody();
+			assert(!m_responding, "Still in responding state after dropping the response body!?");
 			if (res.headers.get("Connection") == "close")
 				disconnect();
 		}
