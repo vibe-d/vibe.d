@@ -65,6 +65,7 @@ struct AllocAppender(ArrayType : E[], E) {
 		size_t nelems = m_data.length - m_remaining.length;
 		if( !m_data.length ){
 			m_data = cast(ElemType[])m_alloc.alloc(amt*E.sizeof);
+			m_remaining = m_data;
 		}
 		if( m_remaining.length < amt ){
 			size_t n = m_data.length - m_remaining.length;
@@ -121,7 +122,7 @@ struct AllocAppender(ArrayType : E[], E) {
 	{
 		if( !m_data.length && min_free < 16 ) min_free = 16;
 
-		auto min_size = m_data.length + min_free;
+		auto min_size = m_data.length + min_free - m_remaining.length;
 		auto new_size = max(m_data.length, 16);
 		while( new_size < min_size )
 			new_size = (new_size * 3) / 2;

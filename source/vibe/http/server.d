@@ -118,7 +118,7 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 	{
 		try {
 			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
-			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslKeyFile.length || settings.sslCertFile.length ? "S" : "", addr, settings.port);
+			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
@@ -128,10 +128,9 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 		bool found_listener = false;
 		foreach( lst; g_listeners ){
 			if( lst.bindAddress == addr && lst.bindPort == settings.port ){
-				enforce(settings.sslKeyFile == lst.sslKeyFile
-					&& settings.sslCertFile == lst.sslCertFile,
+				enforce(settings.sslContext is lst.sslContext,
 					"A HTTP server is already listening on "~addr~":"~to!string(settings.port)~
-					" but the SSL mode differs.");
+					" but the SSL context differs.");
 				foreach( ctx; g_contexts ){
 					if( ctx.settings.port != settings.port ) continue;
 					if( countUntil(ctx.settings.bindAddresses, addr) < 0 ) continue;
@@ -144,7 +143,13 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 			}
 		}
 		if( !found_listener ){
-			auto listener = HTTPServerListener(addr, settings.port, settings.sslCertFile, settings.sslKeyFile);
+			if( (settings.sslKeyFile || settings.sslCertFile) && !settings.sslContext ){
+				logDebug("Creating SSL context...");
+				assert(settings.sslCertFile.length && settings.sslKeyFile.length);
+				settings.sslContext = new SslContext(settings.sslCertFile, settings.sslKeyFile);
+				logDebug("... done");
+			}
+			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
 			g_listeners ~= listener;
 			doListen(settings, listener, addr); // DMD BUG 2043
 		}
@@ -360,10 +365,16 @@ class HttpServerSettings {
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	HttpServerErrorPageHandler errorPageHandler = null;
 
-	/// If set, a HTTPS server will be started instead of plain HTTP
+	/** If set, a HTTPS server will be started instead of plain HTTP
+
+		Please use sslContext in new code instead of setting the key/cert file. Those fileds
+		will be deprecated at some point.
+	*/
 	string sslCertFile;
 	/// ditto
 	string sslKeyFile;
+	/// ditto
+	SslContext sslContext;
 
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
@@ -608,7 +619,7 @@ final class HttpServerResponse : HttpResponse {
 		bodyWriter.write(data);
 	}
 	/// ditto
-	void writeBody(string data, string content_type = "text/plain")
+	void writeBody(string data, string content_type = "text/plain; charset=UTF-8")
 	{
 		writeBody(cast(ubyte[])data, content_type);
 	}
@@ -655,7 +666,7 @@ final class HttpServerResponse : HttpResponse {
 		}
 
 		statusCode = status;
-		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json; charset=utf-8");
+		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json; charset=UTF-8");
 	}
 
 	/**
@@ -839,7 +850,7 @@ final class HttpServerResponse : HttpResponse {
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
 		m_headerWritten = true;
 		auto app = AllocAppender!string(m_requestAlloc);
-		app.reserve(512);
+		app.reserve(256);
 
 		void writeLine(T...)(string fmt, T args)
 		{
@@ -925,8 +936,7 @@ private struct HTTPServerContext {
 private struct HTTPServerListener {
 	string bindAddress;
 	ushort bindPort;
-	string sslCertFile;
-	string sslKeyFile;
+	SslContext sslContext;
 }
 
 private enum MaxHttpHeaderLineLength = 4096;
@@ -987,32 +997,22 @@ private {
 	__gshared HTTPServerListener[] g_listeners;
 }
 
-/// private
-private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen_info)
+private void handleHttpConnection(TcpConnection connection, HTTPServerListener listen_info)
 {
-	FreeListRef!SslContext ssl_ctx;
-	FreeListRef!SslContext ssl_context;
-	if( listen_info.sslCertFile.length || listen_info.sslKeyFile.length ){
-		logDebug("Creating SSL context...");
-		assert(listen_info.sslCertFile.length && listen_info.sslKeyFile.length);
-		ssl_ctx = FreeListRef!SslContext(listen_info.sslCertFile, listen_info.sslKeyFile);
-		logDebug("... done");
-	}
-
-	Stream conn;
+	Stream http_stream = connection;
 	FreeListRef!SslStream ssl_stream;
 
 	// If this is a HTTPS server, initiate SSL
-	if( ssl_ctx ){
+	if( listen_info.sslContext ){
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SslStream(conn_, ssl_ctx, SslStreamState.Accepting);
-		conn = ssl_stream;
-	} else conn = conn_;
+		ssl_stream = FreeListRef!SslStream(http_stream, listen_info.sslContext, SslStreamState.Accepting);
+		http_stream = ssl_stream;
+	}
 
 	do {
 		HttpServerSettings settings;
 		bool keep_alive;
-		handleRequest(conn, conn_.peerAddress, listen_info, settings, keep_alive);
+		handleRequest(http_stream, connection.peerAddress, listen_info, settings, keep_alive);
 		if( !keep_alive ){
 			logTrace("No keep-alive");
 			break;
@@ -1020,16 +1020,16 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 		logTrace("Waiting for next request...");
 		// wait for another possible request on a keep-alive connection
-		if( !conn_.waitForData(settings.keepAliveTimeout) ) {
+		if( !connection.waitForData(settings.keepAliveTimeout) ) {
 			logDebug("persistent connection timeout!");
 			break;
 		}
-	} while(conn_.connected);
+	} while(connection.connected);
 	
 	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream conn, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
+private bool handleRequest(Stream http_stream, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
 {
 	auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
 	scope(exit) request_allocator.reset();
@@ -1055,10 +1055,10 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			request_task = ctx.requestHandler;
 			break;
 		}
-	req.ssl = listen_info.sslCertFile.length || listen_info.sslKeyFile.length;
+	req.ssl = listen_info.sslContext !is null;
 
 	// Create the response object
-	auto res = FreeListRef!HttpServerResponse(conn, settings, request_allocator.Scoped_payload);
+	auto res = FreeListRef!HttpServerResponse(http_stream, settings, request_allocator.Scoped_payload);
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -1076,8 +1076,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			err.exception = ex;
 			settings.errorPageHandler(req, res, err);
 		} else {
-			res.contentType = "text/plain; charset=UTF-8";
-			res.bodyWriter.write(to!string(code) ~ " - " ~ httpStatusText(code) ~ "\n\n" ~ msg ~ "\n\nInternal error information:\n" ~ debug_msg);
+			res.writeBody(format("%s - %s\n\n%s\n\nInternal error information:\n%s", code, httpStatusText(code), msg, debug_msg));
 		}
 		assert(res.headerWritten);
 	}
@@ -1091,9 +1090,9 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// limit the total request time
 		InputStream reqReader;
-		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = conn;
+		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = http_stream;
 		else {
-			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(conn, settings.maxRequestTime);
+			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(http_stream, settings.maxRequestTime);
 			reqReader = timeout_http_input_stream;
 		}
 
@@ -1151,7 +1150,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if( auto pv = "Expect" in req.headers) {
 			if( *pv == "100-continue" ) {
 				logTrace("sending 100 continue");
-				conn.write("HTTP/1.1 100 Continue\r\n\r\n");
+				http_stream.write("HTTP/1.1 100 Continue\r\n\r\n");
 			}
 		}
 
@@ -1259,14 +1258,14 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	foreach( log; context.loggers )
 		log.log(req, res);
 
-	logTrace("return %s", keep_alive);
+	logTrace("return %s (used pool memory: %s/%s)", keep_alive, request_allocator.allocatedSize, request_allocator.totalSize);
 	return keep_alive != false;
 }
 
 
-private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocator alloc, ulong max_header_size)
+private void parseRequestHeader(HttpServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
 {
-	auto stream = FreeListRef!LimitedHttpInputStream(conn, max_header_size);
+	auto stream = FreeListRef!LimitedHttpInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");
 	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength, "\r\n", alloc);

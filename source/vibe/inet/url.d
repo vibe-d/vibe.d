@@ -25,7 +25,6 @@ struct Url {
 	private {
 		string m_schema;
 		string m_pathString;
-		Path m_path;
 		string m_host;
 		ushort m_port;
 		string m_username;
@@ -40,7 +39,6 @@ struct Url {
 		m_schema = schema;
 		m_host = host;
 		m_port = port;
-		m_path = path;
 		m_pathString = path.toString();
 	}
 	/// ditto
@@ -122,13 +120,12 @@ struct Url {
 	@property string pathString() const { return m_pathString; }
 
 	/// The path part of the URL
-	@property Path path() const { return m_path; }
+	@property Path path() const { return Path(urlDecode(m_pathString)); }
 	/// ditto
 	@property void path(Path p)
 	{
-		m_path = p;
 		auto pstr = p.toString();
-		m_pathString = pstr;
+		m_pathString = urlEncode(pstr);
 	}
 
 	/// The host part of the URL (depends on the schema)
@@ -191,7 +188,6 @@ struct Url {
 		}
 
 		m_pathString = str;
-		m_path = Path(urlDecode(str));
 	}
 
 	/// The URL to the parent path with query string and anchor stripped.
@@ -234,19 +230,19 @@ struct Url {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
 		// FIXME: also consider user, port, querystring, anchor etc
-		return path.startsWith(rhs.m_path);
+		return this.path.startsWith(rhs.path);
 	}
 
-	Url opBinary(string OP)(Path rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_port, m_path ~ rhs); }
-	Url opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_port, m_path ~ rhs); }
-	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { m_path ~= rhs; }
-	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { m_path ~= rhs; }
+	Url opBinary(string OP)(Path rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_port, this.path ~ rhs); }
+	Url opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Url(m_schema, m_host, m_port, this.path ~ rhs); }
+	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { this.path = this.path ~ rhs; }
+	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { this.path = this.path ~ rhs; }
 
 	/// Tests two URLs for equality using '=='.
 	bool opEquals(ref const Url rhs) const {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
-		if( m_path != rhs.m_path ) return false;
+		if( m_pathString != rhs.m_pathString ) return false;
 		return true;
 	}
 	/// ditto
@@ -255,7 +251,7 @@ struct Url {
 	int opCmp(ref const Url rhs) const {
 		if( m_schema != rhs.m_schema ) return m_schema.cmp(rhs.m_schema);
 		if( m_host != rhs.m_host ) return m_host.cmp(rhs.m_host);
-		if( m_path != rhs.m_path ) return m_path.opCmp(rhs.m_path);
+		if( m_pathString != rhs.m_pathString ) return cmp(m_pathString, rhs.m_pathString);
 		return true;
 	}
 }
