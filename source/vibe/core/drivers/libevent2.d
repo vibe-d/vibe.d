@@ -235,15 +235,20 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		// Set socket for non-blocking I/O
 		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
 			"Error setting listening socket to non-blocking I/O.");
+
+		auto ret = new LibeventTcpListener;
+
+		runWorkerTaskDist({
+			// Add an event to wait for connections
+			auto ctx = TcpContextAlloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
+			ctx.connectionCallback = connection_callback;
+			ctx.listenEvent = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+			enforce(event_add(ctx.listenEvent, null) == 0,
+				"Error scheduling connection event on the event loop.");
+			ret.addContext(ctx);
+		});
 		
-		// Add an event to wait for connections
-		auto ctx = TcpContextAlloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
-		ctx.connectionCallback = connection_callback;
-		ctx.listenEvent = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
-		enforce(event_add(ctx.listenEvent, null) == 0,
-			"Error scheduling connection event on the event loop.");
-		
-		return new LibeventTcpListener(ctx);
+		return ret;
 	}
 
 	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")

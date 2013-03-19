@@ -293,22 +293,25 @@ package class Libevent2TcpConnection : TcpConnection {
 
 class LibeventTcpListener : TcpListener {
 	private {
-		TcpContext* m_ctx;
+		TcpContext*[] m_ctx;
 	}
 
-	this(TcpContext* ctx)
+	void addContext(TcpContext* ctx)
 	{
-		m_ctx = ctx;
+		synchronized(this) m_ctx ~= ctx;
 	}
 
 	void stopListening()
 	{
-		if( !m_ctx ) return;
-
-		event_free(m_ctx.listenEvent);
-		evutil_closesocket(m_ctx.socketfd);
-		TcpContextAlloc.free(m_ctx);
-		m_ctx = null;
+		synchronized(this)
+		{
+			foreach (ctx; m_ctx) {
+				event_free(ctx.listenEvent);
+				evutil_closesocket(ctx.socketfd);
+				TcpContextAlloc.free(ctx);
+			}
+			m_ctx = null;
+		}
 	}
 }
 
