@@ -146,6 +146,22 @@ void runWorkerTask(void delegate() task)
 }
 
 /**
+	Runs a task in all worker threads concurrently.
+*/
+void runWorkerTaskDist(void delegate() task)
+{
+	if( st_workerTaskMutex ){
+		synchronized(st_workerTaskMutex){
+			foreach(ref queue; st_workerTasksThr)
+				queue ~= task;
+		}
+		st_workerTaskSignal.emit();
+	} else {
+		runTask(task);
+	}
+}
+
+/**
 	Suspends the execution of the calling task to let other tasks and events be
 	handled.
 	
@@ -271,9 +287,14 @@ void enableWorkerThreads()
 
 	st_workerTaskMutex = new core.sync.mutex.Mutex;	
 
+	st_workerTaskSignal = getEventDriver().createSignal();
+	st_workerTaskSignal.release();
+	assert(!st_workerTaskSignal.isOwner());
+
 	foreach( i; 0 .. 4 ){
 		auto thr = new Thread(&workerThreadFunc);
 		thr.name = "Vibe Task Worker";
+		st_workerTasksThr[thr] = null;
 		thr.start();
 	}
 }
@@ -476,6 +497,7 @@ private {
 
 	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
 	__gshared void delegate()[] st_workerTasks;
+	__gshared void delegate()[][Thread] st_workerTasksThr;
 	__gshared Signal st_workerTaskSignal;
 }
 
@@ -550,17 +572,6 @@ static this()
 	assert(s_core !is null);
 
 	setupDriver();
-
-	if( st_workerTaskMutex ){
-		synchronized(st_workerTaskMutex)
-		{
-			if( !st_workerTaskSignal ){
-				st_workerTaskSignal = getEventDriver().createSignal();
-				st_workerTaskSignal.release();
-				assert(!st_workerTaskSignal.isOwner());
-			}
-		}
-	}
 }
 
 static ~this()
@@ -593,6 +604,8 @@ private void handleWorkerTasks()
 	logDebug("worker task enter");
 	yield();
 
+	auto thisthr = Thread.getThis();
+
 	logDebug("worker task loop enter");
 	assert(!st_workerTaskSignal.isOwner());
 	while(true){
@@ -600,10 +613,14 @@ private void handleWorkerTasks()
 		auto emit_count = st_workerTaskSignal.emitCount;
 		synchronized(st_workerTaskMutex){
 			logDebug("worker task check");
-			if( st_workerTasks.length ){
+			if( !st_workerTasks.empty ){
 				logDebug("worker task got");
 				t = st_workerTasks.front;
 				st_workerTasks.popFront();
+			} else if( !st_workerTasksThr[thisthr].empty ){
+				logDebug("worker task got specific");
+				t = st_workerTasksThr[thisthr].front;
+				st_workerTasksThr[thisthr].popFront();
 			}
 		}
 		assert(!st_workerTaskSignal.isOwner());
