@@ -56,6 +56,7 @@ shared static this()
 {
 	//setLogLevel(LogLevel.Trace);
 	data = generateData();
+	enableWorkerThreads();
 
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;

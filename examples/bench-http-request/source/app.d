@@ -4,15 +4,15 @@ import std.datetime;
 import std.stdio;
 
 
-long nreq = 0;
-long nerr = 0;
-long nreqc = 1000;
-long nconn = 0;
+shared long nreq = 0;
+shared long nerr = 0;
+shared long nreqc = 1000;
+shared long nconn = 0;
 
-long g_concurrency = 1;
-long g_requestDelay = 0;
+shared long g_concurrency = 1;
+shared long g_requestDelay = 0;
 
-StopWatch sw;
+__gshared StopWatch sw;
 
 void request()
 {
@@ -30,7 +30,7 @@ void request()
 	catch (Exception) { nerr++; }
 	nconn--;
 	nreq++;
-	if (nreq >= nreqc) {
+	if (nreq >= nreqc && sw.peek.msecs() > 0) {
 		writefln("%s iterations: %s req/s, %s err/s (%s active conn)", nreq, (nreq*1_000)/sw.peek().msecs(), (nerr*1_000)/sw.peek().msecs(), nconn);
 		nreqc += 1000;
 	}
@@ -45,8 +45,7 @@ void benchmark()
 {
 	sw.start();
 	foreach (i; 0 .. g_concurrency){
-		runTask(toDelegate(&reqTask));
-		sleep(2.msecs());
+		runWorkerTask(toDelegate(&reqTask));
 	}
 	
 	while (true) {
@@ -63,6 +62,7 @@ void main(string[] args)
 		"d", &g_requestDelay
 		);
 
+	enableWorkerThreads();
 	processCommandLineArgs(args);
 	runTask(toDelegate(&benchmark));
 	runEventLoop();
