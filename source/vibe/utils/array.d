@@ -126,7 +126,7 @@ struct AllocAppender(ArrayType : E[], E) {
 		auto new_size = max(m_data.length, 16);
 		while( new_size < min_size )
 			new_size = (new_size * 3) / 2;
-		reserve(new_size - m_data.length);
+		reserve(new_size - m_data.length + m_remaining.length);
 	}
 }
 
