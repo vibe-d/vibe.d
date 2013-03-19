@@ -239,10 +239,11 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		auto ret = new LibeventTcpListener;
 
 		runWorkerTaskDist({
+			auto drv = cast(Libevent2Driver)getEventDriver();
 			// Add an event to wait for connections
-			auto ctx = TcpContextAlloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
+			auto ctx = TcpContextAlloc.alloc(m_core, drv.m_eventLoop, listenfd, null, bind_addr);
 			ctx.connectionCallback = connection_callback;
-			ctx.listenEvent = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+			ctx.listenEvent = event_new(drv.m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 			enforce(event_add(ctx.listenEvent, null) == 0,
 				"Error scheduling connection event on the event loop.");
 			ret.addContext(ctx);

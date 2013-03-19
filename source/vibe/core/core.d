@@ -283,6 +283,8 @@ void setTaskStackSize(size_t sz)
 */
 void enableWorkerThreads()
 {
+	setupDriver();
+
 	assert(st_workerTaskMutex is null);
 
 	st_workerTaskMutex = new core.sync.mutex.Mutex;	
