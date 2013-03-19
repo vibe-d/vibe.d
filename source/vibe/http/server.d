@@ -997,22 +997,22 @@ private {
 	__gshared HTTPServerListener[] g_listeners;
 }
 
-private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen_info)
+private void handleHttpConnection(TcpConnection connection, HTTPServerListener listen_info)
 {
-	Stream conn;
+	Stream http_stream;
 	FreeListRef!SslStream ssl_stream;
 
 	// If this is a HTTPS server, initiate SSL
 	if( listen_info.sslContext ){
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SslStream(conn_, listen_info.sslContext, SslStreamState.Accepting);
-		conn = ssl_stream;
-	} else conn = conn_;
+		ssl_stream = FreeListRef!SslStream(connection, listen_info.sslContext, SslStreamState.Accepting);
+		http_stream = ssl_stream;
+	} else http_stream = connection;
 
 	do {
 		HttpServerSettings settings;
 		bool keep_alive;
-		handleRequest(conn, conn_.peerAddress, listen_info, settings, keep_alive);
+		handleRequest(http_stream, connection.peerAddress, listen_info, settings, keep_alive);
 		if( !keep_alive ){
 			logTrace("No keep-alive");
 			break;
@@ -1020,16 +1020,16 @@ private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen
 
 		logTrace("Waiting for next request...");
 		// wait for another possible request on a keep-alive connection
-		if( !conn_.waitForData(settings.keepAliveTimeout) ) {
+		if( !connection.waitForData(settings.keepAliveTimeout) ) {
 			logDebug("persistent connection timeout!");
 			break;
 		}
-	} while(conn_.connected);
+	} while(connection.connected);
 	
 	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream conn, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
+private bool handleRequest(Stream http_stream, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
 {
 	auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
 	scope(exit) request_allocator.reset();
@@ -1058,7 +1058,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 	req.ssl = listen_info.sslContext !is null;
 
 	// Create the response object
-	auto res = FreeListRef!HttpServerResponse(conn, settings, request_allocator.Scoped_payload);
+	auto res = FreeListRef!HttpServerResponse(http_stream, settings, request_allocator.Scoped_payload);
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -1091,9 +1091,9 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 
 		// limit the total request time
 		InputStream reqReader;
-		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = conn;
+		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = http_stream;
 		else {
-			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(conn, settings.maxRequestTime);
+			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(http_stream, settings.maxRequestTime);
 			reqReader = timeout_http_input_stream;
 		}
 
@@ -1151,7 +1151,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 		if( auto pv = "Expect" in req.headers) {
 			if( *pv == "100-continue" ) {
 				logTrace("sending 100 continue");
-				conn.write("HTTP/1.1 100 Continue\r\n\r\n");
+				http_stream.write("HTTP/1.1 100 Continue\r\n\r\n");
 			}
 		}
 
@@ -1264,9 +1264,9 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 }
 
 
-private void parseRequestHeader(HttpServerRequest req, InputStream conn, Allocator alloc, ulong max_header_size)
+private void parseRequestHeader(HttpServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
 {
-	auto stream = FreeListRef!LimitedHttpInputStream(conn, max_header_size);
+	auto stream = FreeListRef!LimitedHttpInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");
 	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength, "\r\n", alloc);
