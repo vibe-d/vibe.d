@@ -619,7 +619,7 @@ final class HttpServerResponse : HttpResponse {
 		bodyWriter.write(data);
 	}
 	/// ditto
-	void writeBody(string data, string content_type = "text/plain")
+	void writeBody(string data, string content_type = "text/plain; charset=UTF-8")
 	{
 		writeBody(cast(ubyte[])data, content_type);
 	}
@@ -666,7 +666,7 @@ final class HttpServerResponse : HttpResponse {
 		}
 
 		statusCode = status;
-		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json; charset=utf-8");
+		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json; charset=UTF-8");
 	}
 
 	/**
@@ -999,15 +999,15 @@ private {
 
 private void handleHttpConnection(TcpConnection connection, HTTPServerListener listen_info)
 {
-	Stream http_stream;
+	Stream http_stream = connection;
 	FreeListRef!SslStream ssl_stream;
 
 	// If this is a HTTPS server, initiate SSL
 	if( listen_info.sslContext ){
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SslStream(connection, listen_info.sslContext, SslStreamState.Accepting);
+		ssl_stream = FreeListRef!SslStream(http_stream, listen_info.sslContext, SslStreamState.Accepting);
 		http_stream = ssl_stream;
-	} else http_stream = connection;
+	}
 
 	do {
 		HttpServerSettings settings;
@@ -1076,8 +1076,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 			err.exception = ex;
 			settings.errorPageHandler(req, res, err);
 		} else {
-			res.contentType = "text/plain; charset=UTF-8";
-			res.bodyWriter.write(to!string(code) ~ " - " ~ httpStatusText(code) ~ "\n\n" ~ msg ~ "\n\nInternal error information:\n" ~ debug_msg);
+			res.writeBody(format("%s - %s\n\n%s\n\nInternal error information:\n%s", code, httpStatusText(code), msg, debug_msg));
 		}
 		assert(res.headerWritten);
 	}
