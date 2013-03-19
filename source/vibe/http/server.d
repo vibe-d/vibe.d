@@ -850,7 +850,7 @@ final class HttpServerResponse : HttpResponse {
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
 		m_headerWritten = true;
 		auto app = AllocAppender!string(m_requestAlloc);
-		app.reserve(512);
+		app.reserve(256);
 
 		void writeLine(T...)(string fmt, T args)
 		{
@@ -1258,7 +1258,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 	foreach( log; context.loggers )
 		log.log(req, res);
 
-	logTrace("return %s", keep_alive);
+	logTrace("return %s (used pool memory: %s/%s)", keep_alive, request_allocator.allocatedSize, request_allocator.totalSize);
 	return keep_alive != false;
 }
 

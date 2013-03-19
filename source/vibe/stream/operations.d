@@ -76,7 +76,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string lines
 ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	auto output = scoped!MemoryOutputStream(alloc);
-	output.reserve(max_bytes < 128 ? max_bytes : 128);
+	output.reserve(max_bytes < 64 ? max_bytes : 64);
 	readUntil(stream, output, end_marker, max_bytes);
 	return output.data();
 }
