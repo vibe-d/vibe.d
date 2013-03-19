@@ -118,7 +118,7 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 	{
 		try {
 			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
-			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslKeyFile.length || settings.sslCertFile.length ? "S" : "", addr, settings.port);
+			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
 
@@ -128,10 +128,9 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 		bool found_listener = false;
 		foreach( lst; g_listeners ){
 			if( lst.bindAddress == addr && lst.bindPort == settings.port ){
-				enforce(settings.sslKeyFile == lst.sslKeyFile
-					&& settings.sslCertFile == lst.sslCertFile,
+				enforce(settings.sslContext is lst.sslContext,
 					"A HTTP server is already listening on "~addr~":"~to!string(settings.port)~
-					" but the SSL mode differs.");
+					" but the SSL context differs.");
 				foreach( ctx; g_contexts ){
 					if( ctx.settings.port != settings.port ) continue;
 					if( countUntil(ctx.settings.bindAddresses, addr) < 0 ) continue;
@@ -144,7 +143,13 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 			}
 		}
 		if( !found_listener ){
-			auto listener = HTTPServerListener(addr, settings.port, settings.sslCertFile, settings.sslKeyFile);
+			if( (settings.sslKeyFile || settings.sslCertFile) && !settings.sslContext ){
+				logDebug("Creating SSL context...");
+				assert(settings.sslCertFile.length && settings.sslKeyFile.length);
+				settings.sslContext = new SslContext(settings.sslCertFile, settings.sslKeyFile);
+				logDebug("... done");
+			}
+			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
 			g_listeners ~= listener;
 			doListen(settings, listener, addr); // DMD BUG 2043
 		}
@@ -360,10 +365,16 @@ class HttpServerSettings {
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	HttpServerErrorPageHandler errorPageHandler = null;
 
-	/// If set, a HTTPS server will be started instead of plain HTTP
+	/** If set, a HTTPS server will be started instead of plain HTTP
+
+		Please use sslContext in new code instead of setting the key/cert file. Those fileds
+		will be deprecated at some point.
+	*/
 	string sslCertFile;
 	/// ditto
 	string sslKeyFile;
+	/// ditto
+	SslContext sslContext;
 
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
@@ -925,8 +936,7 @@ private struct HTTPServerContext {
 private struct HTTPServerListener {
 	string bindAddress;
 	ushort bindPort;
-	string sslCertFile;
-	string sslKeyFile;
+	SslContext sslContext;
 }
 
 private enum MaxHttpHeaderLineLength = 4096;
@@ -987,25 +997,15 @@ private {
 	__gshared HTTPServerListener[] g_listeners;
 }
 
-/// private
 private void handleHttpConnection(TcpConnection conn_, HTTPServerListener listen_info)
 {
-	FreeListRef!SslContext ssl_ctx;
-	FreeListRef!SslContext ssl_context;
-	if( listen_info.sslCertFile.length || listen_info.sslKeyFile.length ){
-		logDebug("Creating SSL context...");
-		assert(listen_info.sslCertFile.length && listen_info.sslKeyFile.length);
-		ssl_ctx = FreeListRef!SslContext(listen_info.sslCertFile, listen_info.sslKeyFile);
-		logDebug("... done");
-	}
-
 	Stream conn;
 	FreeListRef!SslStream ssl_stream;
 
 	// If this is a HTTPS server, initiate SSL
-	if( ssl_ctx ){
+	if( listen_info.sslContext ){
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SslStream(conn_, ssl_ctx, SslStreamState.Accepting);
+		ssl_stream = FreeListRef!SslStream(conn_, listen_info.sslContext, SslStreamState.Accepting);
 		conn = ssl_stream;
 	} else conn = conn_;
 
@@ -1055,7 +1055,7 @@ private bool handleRequest(Stream conn, string peer_address, HTTPServerListener 
 			request_task = ctx.requestHandler;
 			break;
 		}
-	req.ssl = listen_info.sslCertFile.length || listen_info.sslKeyFile.length;
+	req.ssl = listen_info.sslContext !is null;
 
 	// Create the response object
 	auto res = FreeListRef!HttpServerResponse(conn, settings, request_allocator.Scoped_payload);
