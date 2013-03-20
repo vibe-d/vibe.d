@@ -525,9 +525,9 @@ final class HttpServerRequest : HttpRequest {
 		SysTime m_timeCreated;
 	}
 
-	this()
+	this(SysTime time)
 	{
-		m_timeCreated = Clock.currTime().toUTC();
+		m_timeCreated = time.toUTC();
 	}
 
 	/** Time when this request started processing.
@@ -842,7 +842,7 @@ final class HttpServerResponse : HttpResponse {
 		if( m_bodyWriter ) m_bodyWriter.finalize();
 		if( m_chunkedBodyWriter && m_chunkedBodyWriter !is m_bodyWriter ) m_chunkedBodyWriter.finalize();
 		m_conn.flush();
-		m_timeFinalized = Clock.currTime().toUTC();
+		m_timeFinalized = Clock.currTime(UTC());
 	}
 
 	private void writeHeader()
@@ -952,16 +952,16 @@ private class LimitedHttpInputStream : LimitedInputStream {
 
 private class TimeoutHttpInputStream : InputStream {
 	private {
-		SysTime m_timeref;
-		Duration m_timeleft;
+		long m_timeref;
+		long m_timeleft;
 		InputStream m_in;
 	}
 
-	this(InputStream stream, Duration timeleft) {
+	this(InputStream stream, Duration timeleft, SysTime reftime) {
 		enforce(timeleft > dur!"seconds"(0), "Timeout required");
 		m_in = stream;
-		m_timeleft = timeleft;
-		m_timeref = Clock.currTime();
+		m_timeleft = timeleft.total!"hnsecs"();
+		m_timeref = reftime.stdTime();
 	}
 
 	@property bool empty() { enforce(m_in !is null, "InputStream missing"); return m_in.empty(); }
@@ -977,7 +977,7 @@ private class TimeoutHttpInputStream : InputStream {
 	}
 
 	private void checkTimeout() {
-		SysTime curr = Clock.currTime();
+		auto curr = Clock.currStdTime();
 		auto diff = curr - m_timeref;
 		if( diff > m_timeleft ) throw new HttpStatusException(HttpStatus.RequestTimeout);
 		m_timeleft -= diff;
@@ -1031,11 +1031,13 @@ private void handleHttpConnection(TcpConnection connection, HTTPServerListener l
 
 private bool handleRequest(Stream http_stream, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
 {
+	SysTime reqtime = Clock.currTime(UTC());
+
 	auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
-	FreeListRef!HttpServerRequest req = FreeListRef!HttpServerRequest();
+	FreeListRef!HttpServerRequest req = FreeListRef!HttpServerRequest(reqtime);
 	FreeListRef!TimeoutHttpInputStream timeout_http_input_stream;
 	FreeListRef!LimitedHttpInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
@@ -1092,7 +1094,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		InputStream reqReader;
 		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = http_stream;
 		else {
-			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(http_stream, settings.maxRequestTime);
+			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(http_stream, settings.maxRequestTime, reqtime);
 			reqReader = timeout_http_input_stream;
 		}
 
@@ -1206,7 +1208,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		if( req.method == HttpMethod.HEAD ) res.m_isHeadResponse = true;
 		if( settings.serverString.length )
 			res.headers["Server"] = settings.serverString;
-		res.headers["Date"] = toRFC822DateTimeString(Clock.currTime().toUTC());
+		res.headers["Date"] = toRFC822DateTimeString(reqtime);
 		if( req.persistent ) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request

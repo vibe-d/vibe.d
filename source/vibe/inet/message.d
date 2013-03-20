@@ -83,7 +83,7 @@ void writeRFC822TimeString(R)(ref R dst, SysTime time)
 	writeDecimal2(dst, time.second);
 	if( time.timezone == UTC() ) dst.put(" GMT");
 	else {
-		auto now = Clock.currTime().stdTime();
+		auto now = Clock.currStdTime();
 		auto offset = cast(int)((time.timezone.utcToTZ(now) - now) / 600_000_000);
 		dst.put(' ');
 		dst.put(offset >= 0 ? '+' : '-');

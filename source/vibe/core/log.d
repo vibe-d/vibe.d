@@ -96,7 +96,7 @@ nothrow {
 		}
 
 		if( level >= s_logFileLevel && s_logFile ){
-			auto tm = Clock.currTime();
+			auto tm = Clock.currTime(UTC());
 			formattedWrite(s_logFile, "[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
 				cast(uint)(threadid ^ (threadid>>32)), cast(uint)(fiberid ^ (fiberid>>32)), 
 				tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,

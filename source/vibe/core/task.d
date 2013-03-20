@@ -241,13 +241,13 @@ class MessageQueue {
 	{
 		bool notify;
 		scope(exit) if( notify ) m_condition.notify();
-		auto limit_time = Clock.currTime();
+		auto limit_time = Clock.currTime(UTC());
 		synchronized(m_mutex){
 			notify = this.full;
 			while(true){
 				if( receiveQueue(m_priorityQueue, ops) ) return true;
 				if( receiveQueue(m_queue, ops) ) return true;
-				auto now = Clock.currTime();
+				auto now = Clock.currTime(UTC());
 				if( now > limit_time ) return false;
 				m_condition.wait(limit_time - now);
 			}

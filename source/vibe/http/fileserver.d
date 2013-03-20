@@ -125,7 +125,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		
 		res.headers["Last-Modified"] = lastModified;
 		if( settings.maxAge > seconds(0) ){
-			auto expireTime = Clock.currTime().toUTC() + settings.maxAge;
+			auto expireTime = Clock.currTime(UTC()) + settings.maxAge;
 			res.headers["Expires"] = toRFC822DateTimeString(expireTime);
 			res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
 		}
