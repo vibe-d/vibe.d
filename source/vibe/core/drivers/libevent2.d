@@ -32,6 +32,7 @@ import core.sync.rwmutex;
 import core.sys.posix.netinet.in_;
 import core.sys.posix.netinet.tcp;
 version(Windows) import std.c.windows.winsock;
+import core.atomic;
 import core.thread;
 import std.conv;
 import std.encoding : sanitize;
@@ -263,7 +264,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 	Libevent2Signal createSignal()
 	{
-		return new Libevent2Signal(this);
+		return new Libevent2Signal;
 	}
 
 	Libevent2Timer createTimer(void delegate() callback)
@@ -304,28 +305,37 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 class Libevent2Signal : Signal {
 	private {
-		Libevent2Driver m_driver;
-		event* m_event;
-		bool[Task] m_listeners;
-		int m_emitCount = 0;
+		struct ThreadSlot {
+			Libevent2Driver driver;
+			deimos.event2.event.event* event;
+			bool[Task] tasks;
+		}
+		shared int m_emitCount = 0;
+		__gshared core.sync.mutex.Mutex m_mutex;
+		__gshared ThreadSlot[Thread] m_waiters;
 	}
 
-	this(Libevent2Driver driver)
+	this()
 	{
-		m_driver = driver;
-		m_event = event_new(m_driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
-		event_add(m_event, null);
+		m_mutex = new core.sync.mutex.Mutex;
 	}
 
 	~this()
 	{
-		if( !s_alreadyDeinitialized )
-			event_free(m_event);
+		if( !s_alreadyDeinitialized ){
+			// FIXME: this is illegal (accessing GC memory)
+			foreach (ts; m_waiters)
+				event_free(ts.event);
+		}
 	}
 
 	void emit()
 	{
-		event_active(m_event, 0, 0);
+		atomicOp!"+="(m_emitCount, 1);
+		synchronized (m_mutex) {
+			foreach (sl; m_waiters)
+				event_active(sl.event, 0, 0);
+		}
 	}
 
 	void wait()
@@ -339,47 +349,72 @@ class Libevent2Signal : Signal {
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
-		auto ec = m_emitCount;
+		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
-			m_driver.m_core.yieldForEvent();
-			ec = m_emitCount;
+			getThreadLibeventDriverCore().yieldForEvent();
+			ec = this.emitCount;
 		}
 		return ec;
 	}
 
 	void acquire()
 	{
-		m_listeners[Task.getThis()] = true;
+		auto task = Task.getThis();
+		auto thread = task.thread;
+		synchronized (m_mutex) {
+			if (thread !in m_waiters) {
+				ThreadSlot slot;
+				slot.driver = cast(Libevent2Driver)getEventDriver();
+				slot.event = event_new(slot.driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
+				event_add(slot.event, null);
+				m_waiters[thread] = slot;
+			}
+			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
+			m_waiters[thread].tasks[task] = true;
+		}
 	}
 
 	void release()
 	{
 		auto self = Task.getThis();
-		if( isOwner() )
-			m_listeners.remove(self);
+		synchronized (m_mutex) {
+			assert(self.thread in m_waiters && self in m_waiters[self.thread].tasks,
+				"Releasing non-acquired signal.");
+			m_waiters[self.thread].tasks.remove(self);
+		}
 	}
 
 	bool isOwner()
 	{
-		return (Task.getThis() in m_listeners) !is null;
+		auto self = Task.getThis();
+		synchronized (m_mutex) {
+			if (self.thread !in m_waiters) return false;
+			return (self in m_waiters[self.thread].tasks) !is null;
+		}
 	}
 
-	@property int emitCount() const { return m_emitCount; }
+	@property int emitCount() const { return atomicLoad(m_emitCount); }
 
 	private static nothrow extern(C)
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
-		auto sig = cast(Libevent2Signal)userptr;
-
-		sig.m_emitCount++;
-
-		bool[Task] lst;
 		try {
-			lst = sig.m_listeners.dup;
-			foreach( l, _; lst )
-				sig.m_driver.m_core.resumeTask(l);
-		} catch( Throwable e ){
+			auto sig = cast(Libevent2Signal)userptr;
+			auto thread = Thread.getThis();
+			auto core = getThreadLibeventDriverCore();
+
+			bool[Task] lst;
+			synchronized (sig.m_mutex) {
+				assert(thread in sig.m_waiters);
+				lst = sig.m_waiters[thread].tasks.dup;
+			}
+
+			foreach (l; lst.byKey)
+				core.resumeTask(l);
+		} catch (Exception e) {
 			logError("Exception while handling signal event: %s", e.msg);
+			try logDebug("Full error: %s", sanitize(e.msg));
+			catch(Exception) {}
 			debug assert(false);
 		}
 	}

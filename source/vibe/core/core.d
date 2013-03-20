@@ -290,7 +290,6 @@ void enableWorkerThreads()
 	st_workerTaskMutex = new core.sync.mutex.Mutex;	
 
 	st_workerTaskSignal = getEventDriver().createSignal();
-	st_workerTaskSignal.release();
 	assert(!st_workerTaskSignal.isOwner());
 
 	foreach( i; 0 .. 4 ){
@@ -438,6 +437,7 @@ private class VibeDriverCore : DriverCore {
 	{
 		CoreTask ctask = cast(CoreTask)task.fiber;
 		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ (ctask.state == Fiber.State.TERM ? "terminated" : "running"));
+		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
 
 		assert(initial_resume || task.running, "Resuming terminated task.");
 
