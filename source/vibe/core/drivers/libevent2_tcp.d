@@ -76,7 +76,6 @@ package class Libevent2TcpConnection : TcpConnection {
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
 		else ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr;
 		evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length);
-		m_peerAddressBuf[0 .. 5] = "dmmy";
 		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
 	}
 	
