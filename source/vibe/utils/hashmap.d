@@ -112,7 +112,7 @@ struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
 		}
 
 		auto newsize = m_length + amount;
-		if (newsize < (m_table.length*4)/5) return;
+		if (newsize < (m_table.length*2)/3) return;
 		auto newcap = m_table.length ? m_table.length : 16;
 		while ((newcap*4)/5 <= newsize) newcap *= 2;
 		resize(newcap);
