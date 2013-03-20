@@ -420,6 +420,11 @@ class HttpServerSettings {
 	Represents a HTTP request as received by the server side.
 */
 final class HttpServerRequest : HttpRequest {
+	private {
+		SysTime m_timeCreated;
+		FixedAppender!(string, 31) m_dateAppender;
+	}
+
 	public {
 		/// The IP address of the client
 		string peer;
@@ -521,13 +526,13 @@ final class HttpServerRequest : HttpRequest {
 		*/
 		Session session;
 	}
-	private {
-		SysTime m_timeCreated;
-	}
+
 
 	this(SysTime time)
 	{
 		m_timeCreated = time.toUTC();
+		writeRFC822DateTimeString(m_dateAppender, time);
+		this.headers["Date"] = m_dateAppender.data();
 	}
 
 	/** Time when this request started processing.
@@ -1208,7 +1213,6 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		if( req.method == HttpMethod.HEAD ) res.m_isHeadResponse = true;
 		if( settings.serverString.length )
 			res.headers["Server"] = settings.serverString;
-		res.headers["Date"] = toRFC822DateTimeString(reqtime);
 		if( req.persistent ) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request

@@ -130,27 +130,21 @@ struct AllocAppender(ArrayType : E[], E) {
 	}
 }
 
-class FixedAppender(ArrayType : E[], size_t NELEM, E) {
+struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 	alias Unqual!E ElemType;
 	private {
 		ElemType[NELEM] m_data;
-		ElemType[] m_remaining;
-	}
-
-	this()
-	{
-		m_remaining = m_data;
+		size_t m_fill;
 	}
 
 	void clear()
 	{
-		m_remaining = m_data[];
+		m_fill = 0;
 	}
 
 	void put(E el)
 	{
-		m_remaining[0] = el;
-		m_remaining = m_remaining[1 .. $];
+		m_data[m_fill++] = el;
 	}
 
 	static if( is(ElemType == char) ){
@@ -179,11 +173,11 @@ class FixedAppender(ArrayType : E[], size_t NELEM, E) {
 
 	void put(ArrayType arr)
 	{
-		m_remaining[0 .. arr.length] = cast(ElemType[])arr;
-		m_remaining = m_remaining[arr.length .. $];
+		m_data[m_fill .. m_fill+arr.length] = cast(ElemType[])arr;
+		m_fill += arr.length;
 	}
 
-	@property ArrayType data() { return cast(ArrayType)m_data[0 .. $-m_remaining.length]; }
+	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_fill]; }
 }
 
 

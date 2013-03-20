@@ -61,6 +61,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		ubyte[64] m_peekBuffer;
 		bool m_tcpNoDelay = false;
 		Duration m_readTimeout;
+		char[64] m_peerAddressBuf;
 	}
 	
 	this(TcpContext* ctx)
@@ -71,12 +72,12 @@ package class Libevent2TcpConnection : TcpConnection {
 
 		assert(Fiber.getThis() is m_ctx.task);
 
-		char buf[64];
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
 		else ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr;
-		evutil_inet_ntop(ctx.remote_addr.family, ptr, buf.ptr, buf.length);
-		m_peerAddress = to!string(buf.ptr);
+		evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length);
+		m_peerAddressBuf[0 .. 5] = "dmmy";
+		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
 	}
 	
 	~this()
