@@ -60,7 +60,7 @@ shared static this()
 
 	auto settings = new HttpServerSettings;
 	settings.port = 8080;
-	//settings.options = HttpServerOption.parseURL;
+	settings.options = HttpServerOption.parseURL|HttpServerOption.distribute;
 	//settings.accessLogToConsole = true;
 
 	auto fsettings = new HttpFileServerSettings;

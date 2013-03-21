@@ -117,7 +117,8 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
 	{
 		try {
-			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr);
+			bool dist = (settings.options & HttpServerOption.distribute) != 0;
+			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr, dist ? TcpListenOptions.distribute : TcpListenOptions.defaults);
 			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
@@ -290,6 +291,8 @@ enum HttpServerOption {
 	parseMultiPartBody        = 1<<4, // todo
 	/// Fills the .cookies field in the request
 	parseCookies              = 1<<5,
+	/// Distributes request processing among worker threads
+	distribute                = 1<<6,
 
 	/// deprecated
 	None = none,
