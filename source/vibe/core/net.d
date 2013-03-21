@@ -39,17 +39,17 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
 */
-TcpListener[] listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback)
+TcpListener[] listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, TcpListenOptions options = TcpListenOptions.defaults)
 {
 	TcpListener[] ret;
-	if( auto l = listenTcp(port, connection_callback, "::") ) ret ~= l;
-	if( auto l = listenTcp(port, connection_callback, "0.0.0.0") ) ret ~= l;
+	if( auto l = listenTcp(port, connection_callback, "::", options) ) ret ~= l;
+	if( auto l = listenTcp(port, connection_callback, "0.0.0.0", options) ) ret ~= l;
 	return ret;
 }
 /// ditto
-TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address)
+TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address, TcpListenOptions options = TcpListenOptions.defaults)
 {
-	return getEventDriver().listenTcp(port, connection_callback, address);
+	return getEventDriver().listenTcp(port, connection_callback, address, options);
 }
 
 /**
@@ -57,14 +57,14 @@ TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connectio
 
 	This function is the same as listenTcp but takes a function callback instead of a delegate.
 */
-TcpListener[] listenTcpS(ushort port, void function(TcpConnection stream) connection_callback)
+TcpListener[] listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, TcpListenOptions options = TcpListenOptions.defaults)
 {
-	return listenTcp(port, toDelegate(connection_callback));
+	return listenTcp(port, toDelegate(connection_callback), options);
 }
 /// ditto
-TcpListener listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, string address)
+TcpListener listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, string address, TcpListenOptions options = TcpListenOptions.defaults)
 {
-	return listenTcp(port, toDelegate(connection_callback), address);
+	return listenTcp(port, toDelegate(connection_callback), address, options);
 }
 
 /**
@@ -213,3 +213,7 @@ interface UdpConnection : EventedObject {
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
 }
 
+enum TcpListenOptions {
+	defaults = 0,
+	distribute = 1<<0
+}

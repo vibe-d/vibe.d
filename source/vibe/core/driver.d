@@ -92,7 +92,7 @@ interface EventDriver {
 		interface. conn_callback is called for every incoming connection, each time from a
 		new task.
 	*/
-	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address);
+	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options);
 
 	/** Creates a new UDP socket and sets the specified address/port as the destination for packets.
 

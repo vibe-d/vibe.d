@@ -65,7 +65,7 @@ class WinRtEventDriver : EventDriver {
 		assert(false);
 	}
 
-	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address)
+	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options)
 	{
 		assert(false);
 	}

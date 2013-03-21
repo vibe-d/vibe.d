@@ -125,7 +125,7 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 	
-	LibevTcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string address)
+	LibevTcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string address, TcpListenOptions options)
 	{
 		sockaddr_in addr_ip4;
 		addr_ip4.sin_family = AF_INET;

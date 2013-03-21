@@ -217,7 +217,7 @@ class Win32EventDriver : EventDriver {
 		return conn;	
 	}
 
-	Win32TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address)
+	Win32TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(bind_address);

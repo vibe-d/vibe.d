@@ -218,7 +218,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2TcpConnection(cctx);
 	}
 
-	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address)
+	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address, TcpListenOptions options)
 	{
 		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
 		bind_addr.port = port;
@@ -239,7 +239,8 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 		auto ret = new LibeventTcpListener;
 
-		runWorkerTaskDist({
+		void setupConnectionHandler()
+		{
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
@@ -249,7 +250,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			enforce(event_add(ctx.listenEvent, null) == 0,
 				"Error scheduling connection event on the event loop.");
 			ret.addContext(ctx);
-		});
+		}
+
+		if (options & TcpListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
+		else setupConnectionHandler();
 		
 		return ret;
 	}
