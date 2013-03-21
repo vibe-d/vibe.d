@@ -162,3 +162,53 @@ interface Timer : EventedObject {
 	*/
 	void wait();
 }
+
+
+mixin template SingleOwnerEventedObject() {
+	protected {
+		Task m_owner;
+	}
+
+	void release()
+	{
+		assert(isOwner(), "Releasing evented object that is not owned by the calling task.");
+		m_owner = Task();
+	}
+
+	void acquire()
+	{
+		assert(m_owner == Task(), "Acquiring evented object that is already owned.");
+		m_owner = Task.getThis();
+	}
+
+	bool isOwner()
+	{
+		return m_owner != Task() && m_owner == Task.getThis();
+	}
+}
+
+mixin template MultiOwnerEventedObject() {
+	protected {
+		Task[] m_owners;
+	}
+
+	void release()
+	{
+		auto self = Task.getThis();
+		auto idx = m_owners.countUntil(self);
+		assert(idx >= 0, "Releasing evented object that is not owned by the calling task.");
+		m_owners = m_owners[0 .. idx] ~ m_owners[idx+1 .. $];
+	}
+
+	void acquire()
+	{
+		auto self = Task.getThis();
+		assert(!isOwner(), "Acquiring evented object that is already owned by the calling task.");
+		m_owners ~= self;
+	}
+
+	bool isOwner()
+	{
+		return m_owners.countUntil(Task.getThis()) >= 0;
+	}
+}
