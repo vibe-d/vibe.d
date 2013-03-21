@@ -1,15 +1,16 @@
 ﻿Changelog
 =========
 
-v0.7.14 - 2013-03-
+v0.7.14 - 2013-03-22
 --------------------
 
 ### Features and improvements ###
 
  - Performance tuning for the HTTP server and client
+ - Implemented distributed listening and HTTP server request processing (using worker threads to accept connections)
  - Stable memory usage for HTTP client and server (tested for 50 million requests)
  - Implemented new `TaskMutex` and `TaskCondition` classes deriving from Druntime's `Mutex` and `Condition` for drop-in replacement
- - Added a simplified version of the `std.concurrency` API that works with vibe.d's tasks ()
+ - Added a simplified version of the `std.concurrency` API that works with vibe.d's tasks (temporary drop-in replacement)
  - Added support for customizing the HTTP method and path using UDAs in the REST interface generator (by Михаил Страшун aka Dicebot) - [pull #189][issue189]
  - `vibe.core.mutex` and `vibe.core.signal` have been deprecated
  - Added support for WebDAV specific HTTP methods - see also [issue #109][issue109]
