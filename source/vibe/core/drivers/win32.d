@@ -775,7 +775,7 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 		if( !ReadDirectoryChangesW(m_handle, m_buffer.ptr, m_buffer.length, m_recursive,
 								   m_notifications, &bytesReturned, &overlapped, &onIOCompleted) )
 		{
-			logError("Failed to read directory changes in '{}'", m_path);
+			logError("Failed to read directory changes in '%s'", m_path);
 			return false;
 		}
 
