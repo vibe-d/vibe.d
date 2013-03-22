@@ -37,6 +37,7 @@ v0.7.14 - 2013-03-22
  - Fixed handling of one character methods in the REST interface generator - [pull #195][issue195]
  - Fixed the reverse proxy to not drop the "Content-Length" header
  - Fixed `HttpClient` to obey "Connection: close" responses
+ - Fixed `Libevent2Signal` to not move tasks between threads
 
 [issue109]: https://github.com/rejectedsoftware/vibe.d/issues/109
 [issue182]: https://github.com/rejectedsoftware/vibe.d/issues/182
