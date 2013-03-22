@@ -18,8 +18,8 @@ import std.typecons;
 import std.variant;
 import vibe.core.task;
 
-private extern (C) pure void _d_monitorenter(Object h);
-private extern (C) pure void _d_monitorexit(Object h);
+private extern (C) pure nothrow void _d_monitorenter(Object h);
+private extern (C) pure nothrow void _d_monitorexit(Object h);
 
 /**
 	Locks the given shared object and returns a ScopedLock for accessing any unshared members.
@@ -88,8 +88,14 @@ private extern (C) pure void _d_monitorexit(Object h);
 	See_Also: core.concurrency.isWeaklyIsolated
 */
 ScopedLock!T lock(T)(shared(T) object)
-pure {
+pure nothrow {
 	return ScopedLock!T(object);
+}
+/// ditto
+void lock(T)(shared(T) object, scope void delegate(scope T) accessor)
+nothrow {
+	auto l = lock(object);
+	accessor(l.unsafeGet());
 }
 
 
@@ -112,13 +118,13 @@ struct ScopedLock(T)
 	@disable this(this);
 
 	this(shared(T) obj)
-		pure {
+		pure nothrow {
 			assert(obj !is null, "Attempting to lock null object.");
 			m_ref = cast(T)obj;
 			_d_monitorenter(getObject());
 		}
 
-	pure ~this()
+	pure nothrow ~this()
 	{
 		_d_monitorexit(getObject());
 	}
@@ -129,7 +135,7 @@ struct ScopedLock(T)
 		Note that using this function breaks type safety. Be sure to not escape the reference beyond
 		the life time of the lock.
 	*/
-	@property inout(T) unsafeGet() inout { return m_ref; }
+	@property inout(T) unsafeGet() inout nothrow { return m_ref; }
 
 	alias unsafeGet this;
 	//pragma(msg, "In ScopedLock!("~T.stringof~")");
@@ -139,7 +145,7 @@ struct ScopedLock(T)
 	#line 140 "source/vibe/core/concurrency.d"
 
 	private Object getObject()
-		pure {
+		pure nothrow {
 			static if( is(Rebindable!T == struct) ) return cast()m_ref.get();
 			else return cast()m_ref;
 		}
