@@ -10,6 +10,7 @@ module vibe.core.log;
 import vibe.core.concurrency;
 import vibe.core.sync;
 
+import std.algorithm;
 import std.array;
 import std.datetime;
 import std.format;
@@ -90,7 +91,7 @@ void rawLog(/*string mod, string func,*/ string file, int line, LogLevel level, 
 nothrow {
 	static uint makeid(void* ptr) { return (cast(ulong)ptr & 0xFFFFFFFF) ^ (cast(ulong)ptr >> 32); }
 
-	LogMessage msg;
+	LogLine msg;
 	try {
 		msg.time = Clock.currTime(UTC());
 		//msg.mod = mod;
@@ -102,9 +103,11 @@ nothrow {
 		msg.threadID = makeid(cast(void*)msg.thread);
 		msg.fiber = Fiber.getThis();
 		msg.fiberID = makeid(cast(void*)msg.fiber);
-		msg.text = text;
 
-		foreach (l; ss_loggers) l.lock().log(msg);
+		foreach (ln; text.splitter("\n")) {
+			msg.text = ln;
+			foreach (l; ss_loggers) l.lock().log(msg);
+		}
 	} catch(Exception) assert(false);
 }
 
@@ -138,7 +141,7 @@ enum LogLevel {
 	None = none
 }
 
-struct LogMessage {
+struct LogLine {
 	string mod;
 	string func;
 	string file;
@@ -153,7 +156,7 @@ struct LogMessage {
 }
 
 class Logger {
-	abstract void log(in ref LogMessage message);
+	abstract void log(in ref LogLine message);
 }
 
 class FileLogger : Logger {
@@ -183,7 +186,7 @@ class FileLogger : Logger {
 		m_diagFile = m_infoFile;
 	}
 
-	override void log(in ref LogMessage msg)
+	override void log(in ref LogLine msg)
 	{
 		if (msg.level < this.minLevel) return;
 
