@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
-del docs.json || true
-rdmd --build-only --force -lib -version=VibeLibeventDriver -Dftemp.html -Xfdocs.json -I../source ../source/vibe\d.d
+rm docs.json >/dev/null 2>&1 || true
+rdmd --build-only --force -lib -version=VibeLibeventDriver -Dftemp.html -Xfdocs.json -I../source ../source/vibe/d.d
 rm temp.html
 rm d.a
 ../../ddox/ddox filter docs.json --min-protection=Public --ex deimos. --ex vibe.core.drivers. --ex etc. --ex std. --ex core.
