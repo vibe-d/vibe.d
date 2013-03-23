@@ -514,6 +514,8 @@ shared static this()
 		WSAStartup(0x0202, &data);
 
 	}
+
+	initializeLogModule();
 	
 	logTrace("create driver core");
 	

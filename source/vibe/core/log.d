@@ -377,7 +377,7 @@ private {
 	shared(FileLogger) ss_fileLogger;
 }
 
-shared static this()
+package void initializeLogModule()
 {
 	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
 	ss_loggers ~= ss_stdoutLogger;
