@@ -1,7 +1,7 @@
 /**
 	Contains interfaces and enums for evented I/O drivers.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -23,7 +23,7 @@ import std.variant;
 */
 struct Task {
 	private {
-		TaskFiber m_fiber;
+		__gshared TaskFiber m_fiber;
 		size_t m_taskCounter;
 	}
 
@@ -48,8 +48,8 @@ struct Task {
 	}
 
 	nothrow:
-	@property inout(TaskFiber) fiber() inout { return m_fiber; }
-	@property inout(Thread) thread() inout { if( m_fiber ) return m_fiber.thread; return null; }
+	@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
+	@property inout(Thread) thread() inout { if( m_fiber ) return cast(inout(Thread))m_fiber.thread; return null; }
 
 	/** Determines if the task is still running.
 	*/
