@@ -1,7 +1,7 @@
 ﻿/**
 	This module contains the core functionality of the vibe framework.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -91,8 +91,18 @@ int processEvents()
 
 /**
 	Sets a callback that is called whenever no events are left in the event queue.
+
+	The callback delegate is called whenever all events in the event queue have been
+	processed. Returning true from the callback will cause another idle event to
+	be triggered immediately after processing any events that have arrived in the
+	meantime. Returning fals will instead wait until another event has arrived first.
 */
 void setIdleHandler(void delegate() del)
+{
+	s_idleHandler = { del(); return false; };
+}
+/// ditto
+void setIdleHandler(bool delegate() del)
 {
 	s_idleHandler = del;
 }
@@ -456,6 +466,7 @@ private class VibeDriverCore : DriverCore {
 
 	void notifyIdle()
 	{
+		again:
 		while(true){
 			Task[] tmp;
 			swap(s_yieldedTasks, tmp);
@@ -464,7 +475,11 @@ private class VibeDriverCore : DriverCore {
 			processEvents();
 		}
 
-		if( s_idleHandler ) s_idleHandler();
+		if (s_idleHandler)
+			if (s_idleHandler()){
+				processEvents();
+				goto again;
+			}
 
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
@@ -495,7 +510,7 @@ private {
 	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
-	void delegate() s_idleHandler;
+	bool delegate() s_idleHandler;
 
 	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
 	__gshared void delegate()[] st_workerTasks;
