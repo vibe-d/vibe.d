@@ -297,18 +297,18 @@ class HtmlLogger : Logger {
 
 		div.timeStamp {
 			position: absolute;
-			width: 50pt;
+			width: 150pt;
 		}
 		div.threadName {
 			position: absolute;
 			top: 0pt;
-			left: 50pt;
+			left: 150pt;
 			width: 100pt;
 		}
 		div.message {
 			position: relative;
 			top: 0pt;
-			left: 150pt;
+			left: 250pt;
 		}
 		body {
 			font-family: Tahoma, Arial, sans-serif;
@@ -318,15 +318,12 @@ class HtmlLogger : Logger {
 	<script language="JavaScript">
 		function enableStyle(i){
 			var style = document.styleSheets[0].cssRules[i].style;
-			style.visibility = "visible";
-			style.height = "";
+			style.display = "block";
 		}
 
 		function disableStyle(i){
 			var style = document.styleSheets[0].cssRules[i].style;
-			style.visibility = "hidden";
-			style.overflow = "hidden";
-			style.height = "0pt";
+			style.display = "none";
 		}
 
 		function updateLevels(){
