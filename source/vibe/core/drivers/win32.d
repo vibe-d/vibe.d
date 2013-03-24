@@ -455,7 +455,8 @@ class Win32Timer : Timer {
 
 	void stop()
 	{
-		assert(m_pending);
+		if (!m_pending) return;
+		m_pending = false;
 		KillTimer(null, m_id);
 		s_timers.remove(m_id);
 	}
