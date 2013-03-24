@@ -23,13 +23,13 @@ import std.variant;
 */
 struct Task {
 	private {
-		__gshared TaskFiber m_fiber;
+		shared(TaskFiber) m_fiber;
 		size_t m_taskCounter;
 	}
 
 	private this(TaskFiber fiber, size_t task_counter)
 	{
-		m_fiber = fiber;
+		m_fiber = cast(shared)fiber;
 		m_taskCounter = task_counter;
 	}
 
@@ -49,15 +49,15 @@ struct Task {
 
 	nothrow:
 	@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
-	@property inout(Thread) thread() inout { if( m_fiber ) return cast(inout(Thread))m_fiber.thread; return null; }
+	@property inout(Thread) thread() inout { if( m_fiber ) return (cast(inout(TaskFiber))m_fiber).thread; return null; }
 
 	/** Determines if the task is still running.
 	*/
 	@property bool running()
 	const {
 		assert(m_fiber, "Invalid task handle");
-		try if( m_fiber.state == Fiber.State.TERM ) return false; catch {}
-		return m_fiber.m_running && m_fiber.m_taskCounter == m_taskCounter;
+		try if (this.fiber.state == Fiber.State.TERM ) return false; catch {}
+		return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
 	}
 
 	bool opEquals(in ref Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
@@ -79,8 +79,8 @@ class TaskFiber : Fiber {
 	}
 
 	protected {
-		size_t m_taskCounter;
-		bool m_running;
+		shared size_t m_taskCounter;
+		shared bool m_running;
 	}
 
 	protected this(void delegate() fun, size_t stack_size)
@@ -191,6 +191,8 @@ class MessageQueue {
 
 	void send(Variant msg)
 	{
+		import vibe.core.log;
+		logInfo("E");
 		synchronized(m_mutex){
 			if( this.full ){
 				if( !m_onCrowding ){
