@@ -17,6 +17,7 @@ import std.encoding;
 import std.exception;
 import std.functional;
 import std.range;
+import std.string;
 import std.variant;
 import core.sync.mutex;
 import core.stdc.stdlib;
@@ -304,7 +305,7 @@ void enableWorkerThreads()
 
 	foreach( i; 0 .. 4 ){
 		auto thr = new Thread(&workerThreadFunc);
-		thr.name = "Vibe Task Worker";
+		thr.name = format("Vibe Task Worker #%s", i);
 		st_workerTasksThr[thr] = null;
 		thr.start();
 	}
