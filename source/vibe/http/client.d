@@ -332,7 +332,7 @@ final class HttpClientRequest : HttpRequest {
 	private string clengthString(ulong len)
 	{
 		m_contentLengthBuffer.clear();
-		formattedWrite(m_contentLengthBuffer, "%s", len);
+		formattedWrite(&m_contentLengthBuffer, "%s", len);
 		return m_contentLengthBuffer.data;
 	}
 }
