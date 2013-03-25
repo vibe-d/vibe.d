@@ -750,7 +750,7 @@ private struct DietCompiler {
 			if( att[0][0] == '$' ) continue; // ignore special attributes
 			if( isStringLiteral(att[1]) ){
 				output.writeString(" "~att[0]~"=\"");
-				if( !hasInterpolations(att[1]) ) output.writeString(htmlEscape(dstringUnescape(att[1][1 .. $-1])));
+				if( !hasInterpolations(att[1]) ) output.writeString(htmlAttribEscape(dstringUnescape(att[1][1 .. $-1])));
 				else buildInterpolatedString(output, att[1][1 .. $-1], true);
 
 				// output extra classes given as .class
@@ -766,9 +766,13 @@ private struct DietCompiler {
 			} else {
 				output.writeCodeLine("static if(is(typeof("~att[1]~") == bool)){ if("~att[1]~"){");
 				output.writeString(` `~att[0]~`="`~att[0]~`"`);
-				output.writeCodeLine("}} else {\n");
+				output.writeCodeLine("}} else static if(is(typeof("~att[1]~") == string[])){\n");
 				output.writeString(` `~att[0]~`="`);
-				output.writeExprHtmlEscaped(att[1]);
+				output.writeExprHtmlAttribEscaped(`join(`~att[1]~`, " ")`);
+				output.writeString(`"`);
+				output.writeCodeLine("} else {");
+				output.writeString(` `~att[0]~`="`);
+				output.writeExprHtmlAttribEscaped(att[1]);
 				output.writeString(`"`);
 				output.writeCodeLine("}");
 			}
