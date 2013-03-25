@@ -455,7 +455,8 @@ class Win32Timer : Timer {
 
 	void stop()
 	{
-		assert(m_pending);
+		if (!m_pending) return;
+		m_pending = false;
 		KillTimer(null, m_id);
 		s_timers.remove(m_id);
 	}
@@ -472,18 +473,19 @@ class Win32Timer : Timer {
 	void onTimer(HWND hwnd, UINT msg, UINT_PTR id, uint time)
 	{
 		try{
-			auto timer = id in s_timers;
-			if( !timer ){
+			auto timer = s_timers.get(id);
+			if (!timer) {
 				logWarn("timer %d not registered", id);
 				return;
 			}
-			if( timer.m_periodic ){
+			assert(timer !is null, "Null timer detected.");
+			if (timer.m_periodic) {
 				timer.rearm(timer.m_timeout, true);
 			} else {
 				timer.m_pending = false;
 			}
-			if( timer.m_owner ) timer.m_driver.m_core.resumeTask(timer.m_owner);
-			if( timer.m_callback ) timer.m_callback();
+			if (timer.m_owner) timer.m_driver.m_core.resumeTask(timer.m_owner);
+			if (timer.m_callback) timer.m_callback();
 		} catch(Exception e){
 			logError("Exception in onTimer: %s", e);
 		}
@@ -1367,7 +1369,7 @@ class Win32TcpListener : TcpListener, SocketEventHandler {
 
 
 private {
-	HashMap!(UINT_PTR, Win32Timer, UINT_PTR.max) s_timers;
+	HashMap!(UINT_PTR, Win32Timer, { return UINT_PTR.max; }) s_timers;
 	__gshared s_setupWindowClass = false;
 }
 

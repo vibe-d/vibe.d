@@ -12,9 +12,7 @@ import vibe.utils.memory;
 import std.typecons;
 
 
-template InitValue(T) { enum InitValue = T.init; }
-
-struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
+struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 {
 	alias TableEntry = Tuple!(Key, Value);
 	private {
@@ -37,13 +35,13 @@ struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
 		auto idx = findIndex(key);
 		auto i = idx;
 		while (true) {
-			m_table[i][0] = ClearValue;
+			m_table[i][0] = ClearValue();
 			m_table[i][1] = Value.init;
 
 			size_t j = i, r;
 			do {
 				if (++i >= m_table.length) i -= m_table.length;
-				if (m_table[i][0] == ClearValue) {
+				if (m_table[i][0] == ClearValue()) {
 					m_length--;
 					return;
 				}
@@ -53,7 +51,7 @@ struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
 		}
 	}
 
-	inout(Value) get(Key key, lazy Value default_value)
+	inout(Value) get(Key key, lazy Value default_value = Value.init)
 	inout {
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return cast(inout)default_value;
@@ -62,13 +60,13 @@ struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
 
 	void opIndexAssign(Value value, Key key)
 	{
-		assert(key != ClearValue, "Inserting clear value into hash map.");
+		assert(key != ClearValue(), "Inserting clear value into hash map.");
 		grow(1);
 
 		auto hash = m_hasher(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
-		while (m_table[i][0] != ClearValue && m_table[i][0] != key) {
+		while (m_table[i][0] != ClearValue() && m_table[i][0] != key) {
 			if (++i >= m_table.length) i -= m_table.length;
 			assert (i != target, "No free bucket found, HashMap full!?");
 		}
@@ -96,7 +94,7 @@ struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
 		size_t start = m_hasher(key) & (m_table.length-1);
 		auto i = start;
 		while (m_table[i][0] != key) {
-			if (m_table[i][0] == ClearValue) return size_t.max;
+			if (m_table[i][0] == ClearValue()) return size_t.max;
 			if (++i >= m_table.length) i -= m_table.length;
 			if (i == start) return size_t.max;
 		}
@@ -126,13 +124,43 @@ struct HashMap(Key, Value, alias ClearValue = InitValue!Key)
 
 		auto oldtable = m_table;
 		m_table = new TableEntry[new_size];
-		static if (ClearValue != Key.init)
+		static if (ClearValue() != Key.init)
 			foreach (ref el; m_table)
-				el[0] = ClearValue;
+				el[0] = ClearValue();
 		m_length = 0;
 		foreach (ref el; oldtable)
-			if (el[0] != ClearValue)
+			if (el[0] != ClearValue())
 				this[el[0]] = el[1];
 		destroy(oldtable);
+	}
+}
+
+unittest {
+	import std.conv;
+
+	HashMap!(string, string) map;
+
+	foreach (i; 0 .. 100) {
+		map[to!string(i)] = to!string(i) ~ "+";
+		assert(map.length == i+1);
+	}
+
+	foreach (i; 0 .. 100) {
+		auto str = to!string(i);
+		auto pe = str in map;
+		assert(pe !is null && *pe == str ~ "+");
+		assert(map[str] == str ~ "+");
+	}
+
+	foreach (i; 0 .. 50) {
+		map.remove(to!string(i));
+		assert(map.length == 100-i-1);
+	}
+
+	foreach (i; 50 .. 100) {
+		auto str = to!string(i);
+		auto pe = str in map;
+		assert(pe !is null && *pe == str ~ "+");
+		assert(map[str] == str ~ "+");
 	}
 }
