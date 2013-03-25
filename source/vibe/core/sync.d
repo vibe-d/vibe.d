@@ -193,6 +193,7 @@ class TaskCondition : core.sync.condition.Condition {
 	override @trusted bool wait(Duration timeout)
 	{
 		assert(m_mutex.m_locked);
+		assert(!timeout.isNegative());
 		debug assert(m_mutex.m_owner == Task.getThis());
 
 		auto refcount = m_signal.emitCount;
@@ -200,11 +201,18 @@ class TaskCondition : core.sync.condition.Condition {
 		scope(failure) m_mutex.lock();
 
 		m_timer.rearm(timeout);
+		m_timer.acquire();
 		m_signal.acquire();
-		scope(failure) m_signal.release();
-		while(refcount == m_signal.emitCount && m_timer.pending)
+		scope (failure) {
+			m_signal.release();
+			m_timer.release();
+		}
+		while (refcount == m_signal.emitCount && m_timer.pending) {
 			rawYield();
+			refcount = m_signal.emitCount;
+		}
 		m_signal.release();
+		m_timer.release();
 		auto succ = refcount != m_signal.emitCount;
 		m_mutex.lock();
 		return succ;

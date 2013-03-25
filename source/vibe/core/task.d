@@ -245,7 +245,7 @@ class MessageQueue {
 
 		bool notify;
 		scope(exit) if( notify ) m_condition.notify();
-		auto limit_time = Clock.currTime(UTC());
+		auto limit_time = Clock.currTime(UTC()) + timeout;
 		synchronized(m_mutex){
 			notify = this.full;
 			while(true){
