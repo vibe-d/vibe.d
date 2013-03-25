@@ -1085,7 +1085,7 @@ auto receiveOnly(ARGS...)()
 bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
 {
 	auto tid = Task.getThis();
-	tid.messageQueue.receiveTimeout(ops);
+	return tid.messageQueue.receiveTimeout!OPS(timeout, ops);
 }
 
 void setMaxMailboxSize(Tid tid, size_t messages, OnCrowding on_crowding)

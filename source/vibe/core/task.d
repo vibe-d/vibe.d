@@ -239,6 +239,8 @@ class MessageQueue {
 
 	bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
 	{
+		import std.datetime;
+
 		bool notify;
 		scope(exit) if( notify ) m_condition.notify();
 		auto limit_time = Clock.currTime(UTC());
