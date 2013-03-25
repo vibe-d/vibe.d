@@ -34,31 +34,36 @@ void download(Url url, scope void delegate(scope InputStream) callback, HttpClie
 		bool ssl = url.schema == "https";
 		client.connect(url.host, url.port ? url.port : ssl ? 443 : 80, ssl);
 		logTrace("connect to %s", url.host);
-		auto res = client.request((HttpClientRequest req){
+		bool done = false;
+		client.request(
+			(scope HttpClientRequest req) {
 				req.requestUrl = url.localURI;
 				logTrace("REQUESTING %s!", req.requestUrl);
-			});
-		scope(exit) res.dropBody();
+			},
+			(scope HttpClientResponse res) {
+				logTrace("GOT ANSWER!");
 
-		logTrace("GOT ANSWER!");
-
-		switch( res.statusCode ){
-			default:
-				throw new HttpStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
-			case HttpStatus.OK:
-				callback(res.bodyReader);
-				return;
-			case 300: .. case 400:
-	logTrace("Status code: %s", res.statusCode);
-				auto pv = "Location" in res.headers;
-				enforce(pv !is null, "Server responded with redirect but did not specify the redirect location for "~url.toString());
-				logDebug("Redirect to '%s'", *pv);
-				if( startsWith((*pv), "http:") || startsWith((*pv), "https:") ){
-	logTrace("parsing %s", *pv);
-					url = Url.parse(*pv);
-				} else url.localURI = *pv;
-				break;
-		}
+				switch( res.statusCode ){
+					default:
+						throw new HttpStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
+					case HttpStatus.OK:
+						callback(res.bodyReader);
+						done = true;
+						break;
+					case 300: .. case 399:
+			logTrace("Status code: %s", res.statusCode);
+						auto pv = "Location" in res.headers;
+						enforce(pv !is null, "Server responded with redirect but did not specify the redirect location for "~url.toString());
+						logDebug("Redirect to '%s'", *pv);
+						if( startsWith((*pv), "http:") || startsWith((*pv), "https:") ){
+			logTrace("parsing %s", *pv);
+							url = Url.parse(*pv);
+						} else url.localURI = *pv;
+						break;
+				}
+			}
+		);
+		if (done) return;
 	}
 	enforce(false, "Too many redirects!");
 	assert(false);
