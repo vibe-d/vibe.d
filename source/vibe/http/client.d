@@ -29,6 +29,7 @@ import std.exception;
 import std.format;
 import std.string;
 import std.typecons;
+import std.datetime;
 
 
 /**************************************************************************************************/
@@ -130,6 +131,8 @@ class HttpClient : EventedObject {
 		SslContext m_ssl;
 		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HttpClient, +http://vibed.org/)";
 		bool m_requesting = false, m_responding = false;
+		SysTime m_keepAliveLimit; 
+		int m_timeout;
 	}
 
 	static void setUserAgentString(string str) { m_userAgent = str; }
@@ -192,11 +195,19 @@ class HttpClient : EventedObject {
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
+		if (Clock.currTime > m_keepAliveLimit){
+			logDebug("Disconnected to avoid timeout");
+			disconnect();
+		}
+
 		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTcp(m_server, m_port);
 			m_stream = m_conn;
 			if( m_ssl ) m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
 		}
+
+		m_keepAliveLimit = Clock.currTime(UTC());
+
 		auto req = scoped!HttpClientRequest(m_stream);
 		req.headers["User-Agent"] = m_userAgent;
 		req.headers["Connection"] = "keep-alive";
@@ -380,6 +391,16 @@ final class HttpClientResponse : HttpResponse {
 		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
+
+		foreach(s; headers["Keep-Alive"].split(",")){
+			auto pair = s.split("=");
+			if (icmp(pair[0].strip(), "timeout")) {
+				m_client.m_timeout = pair[1].to!int();
+				break;
+			}
+		}
+
+		m_client.m_keepAliveLimit += dur!"seconds"(m_client.m_timeout - 2);
 
 		if (!has_body) finalize();
 	}
