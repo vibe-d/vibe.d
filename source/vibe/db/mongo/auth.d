@@ -49,7 +49,7 @@ class MongoAuth
    */
   this(MongoClient client, string dbname, string username, string password)
   {
-    m_client = mongo;
+    m_client = client;
     bool res = auth(dbname, username, password);
     if (!res) throw new Exception("MongoAuth failed.");
   }
