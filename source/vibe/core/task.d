@@ -256,7 +256,6 @@ class MessageQueue {
 				m_condition.wait(limit_time - now);
 			}
 		}
-		return false;
 	}
 
 	private static bool receiveQueue(OPS...)(ref FixedRingBuffer!Variant queue, OPS ops)
