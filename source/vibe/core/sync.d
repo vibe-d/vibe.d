@@ -144,9 +144,6 @@ class TaskMutex : core.sync.mutex.Mutex {
 	}
 }
 
-deprecated("please use TaskMutex instead.")
-alias Mutex = TaskMutex;
-
 unittest {
 	auto mutex = new TaskMutex;
 
