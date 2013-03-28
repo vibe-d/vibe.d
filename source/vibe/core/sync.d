@@ -11,6 +11,7 @@ import std.exception;
 import vibe.core.core;
 public import vibe.core.driver;
 
+import core.atomic;
 import core.sync.mutex;
 import core.sync.condition;
 
@@ -95,8 +96,10 @@ struct ScopedMutexLock {
 		core.sync.mutex instead.
 */
 class TaskMutex : core.sync.mutex.Mutex {
+	import std.stdio;
 	private {
-		bool m_locked = false;
+		shared(bool) m_locked = false;
+		shared(uint) m_waiters = 0;
 		Signal m_signal;
 		debug Task m_owner;
 	}
@@ -106,31 +109,38 @@ class TaskMutex : core.sync.mutex.Mutex {
 		m_signal = createSignal();
 	}
 
-	private	@property bool locked() const { return m_locked; }
-
 	override @trusted bool tryLock()
 	{
-		if(m_locked) return false;
-		m_locked = true;
-		debug m_owner = Task.getThis();
-		return true;
+		if (cas(&m_locked, false, true)) {
+			debug m_owner = Task.getThis();
+			version(MutexPrint) writefln("mutex %s lock %s", cast(void*)this, atomicLoad(m_waiters));
+			return true;
+		}
+		return false;
 	}
 
 	override @trusted void lock()
 	{
-		if(m_locked){
-			m_signal.acquire();
-			do{ m_signal.wait(); } while(m_locked);
-		}
-		m_locked = true;
-		debug m_owner = Task.getThis();
+		if (tryLock()) return;
+		debug assert(m_owner != Task.getThis());
+		atomicOp!"+="(m_waiters, 1);
+		version(MutexPrint) writefln("mutex %s wait %s", cast(void*)this, atomicLoad(m_waiters));
+		scope(exit) atomicOp!"-="(m_waiters, 1);
+		auto ecnt = m_signal.emitCount();
+		while (!tryLock()) ecnt = m_signal.wait(ecnt);
 	}
 
 	override @trusted void unlock()
 	{
-		enforce(m_locked);
-		m_locked = false;
-		debug m_owner = Task();
+		assert(m_locked);
+		debug {
+			assert(m_owner == Task.getThis());
+			m_owner = Task();
+		}
+		atomicStore!(MemoryOrder.rel)(m_locked, false);
+		version(MutexPrint) writefln("mutex %s unlock %s", cast(void*)this, atomicLoad(m_waiters));
+		if (atomicLoad(m_waiters) > 0)
+			m_signal.emit();
 	}
 }
 
@@ -143,12 +153,12 @@ unittest {
 	{
 		auto lock = ScopedMutexLock(mutex);
 		assert(lock.locked);
-		assert(mutex.locked);
+		assert(mutex.m_locked);
 
 		auto lock2 = ScopedMutexLock(mutex, LockMode.tryLock);
 		assert(!lock2.locked);
 	}
-	assert(!mutex.locked);
+	assert(!mutex.m_locked);
 
 	auto lock = ScopedMutexLock(mutex, LockMode.tryLock);
 	assert(lock.locked);
@@ -207,10 +217,9 @@ class TaskCondition : core.sync.condition.Condition {
 			m_signal.release();
 			m_timer.release();
 		}
-		while (refcount == m_signal.emitCount && m_timer.pending) {
+		while (refcount == m_signal.emitCount && m_timer.pending)
 			rawYield();
-			refcount = m_signal.emitCount;
-		}
+
 		m_signal.release();
 		m_timer.release();
 		auto succ = refcount != m_signal.emitCount;
