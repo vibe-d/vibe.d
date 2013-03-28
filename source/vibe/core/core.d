@@ -294,6 +294,8 @@ void setTaskStackSize(size_t sz)
 */
 void enableWorkerThreads()
 {
+	import core.cpuid;
+
 	setupDriver();
 
 	assert(st_workerTaskMutex is null);
@@ -303,7 +305,7 @@ void enableWorkerThreads()
 	st_workerTaskSignal = getEventDriver().createSignal();
 	assert(!st_workerTaskSignal.isOwner());
 
-	foreach( i; 0 .. 4 ){
+	foreach (i; 0 .. threadsPerCPU) {
 		auto thr = new Thread(&workerThreadFunc);
 		thr.name = format("Vibe Task Worker #%s", i);
 		st_workerTasksThr[thr] = null;
