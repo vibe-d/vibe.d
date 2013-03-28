@@ -170,12 +170,12 @@ unittest {
 
 class TaskCondition : core.sync.condition.Condition {
 	private {
-		TaskMutex m_mutex;
+		Mutex m_mutex;
 		ManualEvent m_signal;
 		Timer m_timer;
 	}
 
-	this(TaskMutex mutex)
+	this(Mutex mutex)
 	{
 		super(mutex);
 		m_mutex = mutex;
@@ -183,12 +183,14 @@ class TaskCondition : core.sync.condition.Condition {
 		m_timer = getEventDriver().createTimer(null);
 	}
 
-	override @trusted @property TaskMutex mutex() { return m_mutex; }
+	override @trusted @property Mutex mutex() { return m_mutex; }
 
 	override @trusted void wait()
 	{
-		assert(m_mutex.m_locked);
-		debug assert(m_mutex.m_owner == Task.getThis());
+		if (auto tm = cast(TaskMutex)m_mutex) {
+			assert(tm.m_locked);
+			debug assert(tm.m_owner == Task.getThis());
+		}
 
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
@@ -199,9 +201,11 @@ class TaskCondition : core.sync.condition.Condition {
 
 	override @trusted bool wait(Duration timeout)
 	{
-		assert(m_mutex.m_locked);
 		assert(!timeout.isNegative());
-		debug assert(m_mutex.m_owner == Task.getThis());
+		if (auto tm = cast(TaskMutex)m_mutex) {
+			assert(tm.m_locked);
+			debug assert(tm.m_owner == Task.getThis());
+		}
 
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
