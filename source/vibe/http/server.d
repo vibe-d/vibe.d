@@ -1010,6 +1010,11 @@ private void handleHttpConnection(TcpConnection connection, HTTPServerListener l
 	Stream http_stream = connection;
 	FreeListRef!SslStream ssl_stream;
 
+	if (!connection.waitForData(10.seconds())) {
+		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
+		return;
+	}
+
 	// If this is a HTTPS server, initiate SSL
 	if( listen_info.sslContext ){
 		logTrace("accept ssl");
