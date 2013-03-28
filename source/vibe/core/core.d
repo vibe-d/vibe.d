@@ -302,7 +302,7 @@ void enableWorkerThreads()
 
 	st_workerTaskMutex = new core.sync.mutex.Mutex;	
 
-	st_workerTaskSignal = getEventDriver().createSignal();
+	st_workerTaskSignal = getEventDriver().createManualEvent();
 	assert(!st_workerTaskSignal.isOwner());
 
 	foreach (i; 0 .. threadsPerCPU) {
@@ -518,7 +518,7 @@ private {
 	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
 	__gshared void delegate()[] st_workerTasks;
 	__gshared void delegate()[][Thread] st_workerTasksThr;
-	__gshared Signal st_workerTaskSignal;
+	__gshared ManualEvent st_workerTaskSignal;
 }
 
 // per process setup

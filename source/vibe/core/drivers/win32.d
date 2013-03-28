@@ -244,10 +244,10 @@ class Win32EventDriver : EventDriver {
 		assert(false);
 	}
 
-	Win32Signal createSignal()
+	Win32ManualEvent createManualEvent()
 	{
 		assert(m_tid == GetCurrentThreadId());
-		return new Win32Signal(this);
+		return new Win32ManualEvent(this);
 	}
 
 	Win32Timer createTimer(void delegate() callback)
@@ -281,7 +281,7 @@ class Win32EventDriver : EventDriver {
 		switch(msg){
 			default: break;
 			case WM_USER_SIGNAL:
-				auto sig = cast(Win32Signal)cast(void*)lparam;
+				auto sig = cast(Win32ManualEvent)cast(void*)lparam;
 				Win32EventDriver[Task] lst;
 				try {
 					synchronized(sig.m_mutex) lst = sig.m_listeners.dup;
@@ -317,7 +317,7 @@ interface SocketEventHandler {
 /* class Win32Signal                                                          */
 /******************************************************************************/
 
-class Win32Signal : Signal {
+class Win32ManualEvent : ManualEvent {
 	private {
 		core.sync.mutex.Mutex m_mutex;
 		Win32EventDriver m_driver;

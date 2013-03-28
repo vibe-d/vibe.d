@@ -101,9 +101,12 @@ interface EventDriver {
 	*/
 	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0");
 
-	/** Creates a new signal (a single-threaded condition variable).
+	/** Creates a new manually triggered event.
 	*/
-	Signal createSignal();
+	ManualEvent createManualEvent();
+
+	/// Compatibility alias, will be deprecated soon.
+	alias createSignal = createManualEvent;
 
 	/** Creates a new timer.
 

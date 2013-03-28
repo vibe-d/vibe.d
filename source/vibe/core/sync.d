@@ -100,13 +100,13 @@ class TaskMutex : core.sync.mutex.Mutex {
 	private {
 		shared(bool) m_locked = false;
 		shared(uint) m_waiters = 0;
-		Signal m_signal;
+		ManualEvent m_signal;
 		debug Task m_owner;
 	}
 
 	this()
 	{
-		m_signal = createSignal();
+		m_signal = createManualEvent();
 	}
 
 	override @trusted bool tryLock()
@@ -171,7 +171,7 @@ unittest {
 class TaskCondition : core.sync.condition.Condition {
 	private {
 		TaskMutex m_mutex;
-		Signal m_signal;
+		ManualEvent m_signal;
 		Timer m_timer;
 	}
 
@@ -179,7 +179,7 @@ class TaskCondition : core.sync.condition.Condition {
 	{
 		super(mutex);
 		m_mutex = mutex;
-		m_signal = createSignal();
+		m_signal = createManualEvent();
 		m_timer = getEventDriver().createTimer(null);
 	}
 
@@ -237,16 +237,16 @@ class TaskCondition : core.sync.condition.Condition {
 
 /** Creates a new signal that can be shared between fibers.
 */
-Signal createSignal()
+Signal createManualEvent()
 {
-	return getEventDriver().createSignal();
+	return getEventDriver().createManualEvent();
 }
 
-/** A cross-fiber signal
+/** A manually triggered cross-fiber event
 
-	Note: the ownership can be shared between multiple fibers.
+	Note: the ownership can be shared between multiple fibers and threads.
 */
-interface Signal : EventedObject {
+interface ManualEvent : EventedObject {
 	/// A counter that is increased with every emit() call
 	@property int emitCount() const;
 
@@ -260,7 +260,12 @@ interface Signal : EventedObject {
 	int wait(int reference_emit_count);
 }
 
-class SignalException : Exception {
+/// Compatibility alias, will soon be deprecated.
+alias Signal = ManualEvent;
+/// ditto
+alias createSignal = createManualEvent;
+
+deprecated class SignalException : Exception {
 	this() { super("Signal emitted."); }
 }
 

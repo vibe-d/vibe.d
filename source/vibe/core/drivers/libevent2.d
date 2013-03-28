@@ -266,9 +266,9 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2UdpConnection(bindaddr, this);
 	}
 
-	Libevent2Signal createSignal()
+	Libevent2ManualEvent createManualEvent()
 	{
-		return new Libevent2Signal;
+		return new Libevent2ManualEvent;
 	}
 
 	Libevent2Timer createTimer(void delegate() callback)
@@ -307,7 +307,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 	}
 }
 
-class Libevent2Signal : Signal {
+class Libevent2ManualEvent : ManualEvent {
 	private {
 		struct ThreadSlot {
 			Libevent2Driver driver;
@@ -403,7 +403,7 @@ class Libevent2Signal : Signal {
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
 		try {
-			auto sig = cast(Libevent2Signal)userptr;
+			auto sig = cast(Libevent2ManualEvent)userptr;
 			auto thread = Thread.getThis();
 			auto core = getThreadLibeventDriverCore();
 

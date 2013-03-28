@@ -70,7 +70,7 @@ class WinRtEventDriver : EventDriver {
 		assert(false);
 	}
 
-	WinRtSignal createSignal()
+	WinRtManualEvent createManualEvent()
 	{
 		assert(false);
 	}
@@ -81,7 +81,7 @@ class WinRtEventDriver : EventDriver {
 	}
 }
 
-class WinRtSignal : Signal {
+class WinRtManualEvent : ManualEvent {
 	void release()
 	{
 	}
