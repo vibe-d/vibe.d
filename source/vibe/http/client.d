@@ -195,7 +195,9 @@ class HttpClient : EventedObject {
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
-		if (Clock.currTime > m_keepAliveLimit){
+		auto now = Clock.currTime(UTC());
+
+		if (now > m_keepAliveLimit){
 			logDebug("Disconnected to avoid timeout");
 			disconnect();
 		}
@@ -204,9 +206,11 @@ class HttpClient : EventedObject {
 			m_conn = connectTcp(m_server, m_port);
 			m_stream = m_conn;
 			if( m_ssl ) m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
+
+			now = Clock.currTime(UTC());
 		}
 
-		m_keepAliveLimit = Clock.currTime(UTC());
+		m_keepAliveLimit = now;
 
 		auto req = scoped!HttpClientRequest(m_stream);
 		req.headers["User-Agent"] = m_userAgent;
