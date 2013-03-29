@@ -79,10 +79,10 @@ void exitEventLoop(bool shutdown_workers = true)
 	assert(s_eventLoopRunning);
 	getEventDriver().exitEventLoop();
 	if (shutdown_workers) {
-		foreach (ref ctx; st_workerThreads) {
-			ctx.exit = true;
-			st_workerTaskSignal.emit();
-		}
+		synchronized (st_workerTaskMutex)
+			foreach (ref ctx; st_workerThreads)
+				ctx.exit = true;
+		st_workerTaskSignal.emit();
 	}
 }
 
