@@ -74,10 +74,16 @@ int runEventLoop()
 	Calling this function will cause the event loop to stop event processing and
 	the corresponding call to runEventLoop() will return to its caller.
 */
-void exitEventLoop()
+void exitEventLoop(bool shutdown_workers = true)
 {
 	assert(s_eventLoopRunning);
 	getEventDriver().exitEventLoop();
+	if (shutdown_workers) {
+		foreach (ref ctx; st_workerThreads) {
+			ctx.exit = true;
+			st_workerTaskSignal.emit();
+		}
+	}
 }
 
 /**
@@ -163,8 +169,8 @@ void runWorkerTaskDist(void delegate() task)
 {
 	if( st_workerTaskMutex ){
 		synchronized(st_workerTaskMutex){
-			foreach(ref queue; st_workerTasksThr)
-				queue ~= task;
+			foreach(ref ctx; st_workerThreads)
+				ctx.taskQueue ~= task;
 		}
 		st_workerTaskSignal.emit();
 	} else {
@@ -316,7 +322,7 @@ void enableWorkerThreads()
 	foreach (i; 0 .. threadsPerCPU) {
 		auto thr = new Thread(&workerThreadFunc);
 		thr.name = format("Vibe Task Worker #%s", i);
-		st_workerTasksThr[thr] = null;
+		st_workerThreads[thr] = WorkerThreadContext();
 		thr.start();
 	}
 }
@@ -507,26 +513,31 @@ private class VibeDriverCore : DriverCore {
 	}
 }
 
+private struct WorkerThreadContext {
+	void delegate()[] taskQueue;
+	bool exit = false;
+}
 
 /**************************************************************************************************/
 /* private functions                                                                              */
 /**************************************************************************************************/
 
 private {
+	__gshared VibeDriverCore s_core;
 	__gshared size_t s_taskStackSize = 16*4096;
+
+	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
+	__gshared void delegate()[] st_workerTasks;
+	__gshared WorkerThreadContext[Thread] st_workerThreads;
+	__gshared ManualEvent st_workerTaskSignal;
+
+	bool delegate() s_idleHandler;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
-	__gshared VibeDriverCore s_core;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
 	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
-	bool delegate() s_idleHandler;
-
-	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
-	__gshared void delegate()[] st_workerTasks;
-	__gshared void delegate()[][Thread] st_workerTasksThr;
-	__gshared ManualEvent st_workerTaskSignal;
 }
 
 // per process setup
@@ -643,21 +654,31 @@ private void handleWorkerTasks()
 		auto emit_count = st_workerTaskSignal.emitCount;
 		synchronized(st_workerTaskMutex){
 			logDebug("worker task check");
-			if( !st_workerTasks.empty ){
+			if (st_workerThreads[thisthr].exit) {
+				if (st_workerThreads[thisthr].taskQueue.length > 0)
+					logWarn("Worker thread shuts down with specific worker tasks left in its queue.");
+				if (st_workerThreads.length == 1 && st_workerTasks.length > 0)
+					logWarn("Worker threads shut down with worker tasks still left in the queue.");
+				st_workerThreads.remove(thisthr);
+				getEventDriver().exitEventLoop();
+				break;
+			}
+			if (!st_workerTasks.empty) {
 				logDebug("worker task got");
 				t = st_workerTasks.front;
 				st_workerTasks.popFront();
-			} else if( !st_workerTasksThr[thisthr].empty ){
+			} else if (!st_workerThreads[thisthr].taskQueue.empty) {
 				logDebug("worker task got specific");
-				t = st_workerTasksThr[thisthr].front;
-				st_workerTasksThr[thisthr].popFront();
+				t = st_workerThreads[thisthr].taskQueue.front;
+				st_workerThreads[thisthr].taskQueue.popFront();
 			}
 		}
 		assert(!st_workerTaskSignal.isOwner());
-		if( t ) runTask(t);
+		if (t) runTask(t);
 		else st_workerTaskSignal.wait(emit_count);
 		assert(!st_workerTaskSignal.isOwner());
 	}
+	logDebug("worker task exit");
 }
 
 private extern(C) nothrow
