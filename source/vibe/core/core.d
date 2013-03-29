@@ -357,8 +357,8 @@ private class CoreTask : TaskFiber {
 					try {
 						s_core.yieldForEvent();
 					} catch( Exception e ){
-						logWarn("CorTaskFiber was resumed with exception but without active task!");
-						logDebug("Full error: %s", e.toString().sanitize());
+						logWarn("CoreTaskFiber was resumed with exception but without active task!");
+						logDiagnostic("Full error: %s", e.toString().sanitize());
 					}
 				}
 
@@ -372,7 +372,7 @@ private class CoreTask : TaskFiber {
 					logTrace("exiting task.");
 				} catch( Exception e ){
 					import std.encoding;
-					logError("Task terminated with exception: %s", e.msg);
+					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
 				resetLocalStorage();
@@ -385,7 +385,7 @@ private class CoreTask : TaskFiber {
 				s_availableFibers[s_availableFibersCount++] = this;
 			}
 		} catch(Throwable th){
-			logError("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
+			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
 			logDebug("Full error: %s", th.toString().sanitize());
 		}
 	}
@@ -434,9 +434,9 @@ private class VibeDriverCore : DriverCore {
 	{
 		auto fiber = cast(CoreTask)Fiber.getThis();
 		if( fiber ){
-			logVerbose4("yield");
+			logTrace("yield");
 			Fiber.yield();
-			logVerbose4("resume");
+			logTrace("resume");
 			auto e = fiber.m_exception;
 			if( e ){
 				fiber.m_exception = null;

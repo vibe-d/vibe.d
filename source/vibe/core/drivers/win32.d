@@ -1287,7 +1287,7 @@ m_status = ConnectionStatus.Connected;
 			logDebug("task out (fd %d).", m_socket);
 		} catch( Exception e ){
 			logWarn("Handling of connection failed: %s", e.msg);
-			logDebug("%s", e.toString());
+			logDiagnostic("%s", e.toString());
 		}
 		if( this.connected ) close();
 	}
@@ -1359,7 +1359,7 @@ class Win32TcpListener : TcpListener, SocketEventHandler {
 					runTask(&conn.runConnectionCallback);
 				} catch( Exception e ){
 					logWarn("Exception white accepting TCP connection: %s", e.msg);
-					try logDebug("Exception white accepting TCP connection: %s", e.toString());
+					try logDiagnostic("Exception white accepting TCP connection: %s", e.toString());
 					catch( Exception ){}
 				}
 				break;
