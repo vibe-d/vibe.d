@@ -261,6 +261,14 @@ pure Isolated!(T[]) makeIsolatedArray(T)(size_t size)
 
 
 /**
+	Unsafe facility to assume that an existing reference is unique.
+*/
+Isolated!T assumeIsolated(T)(T object)
+{
+	return Isolated!T(object);
+}
+
+/**
 	Encapsulates the given type in a way that guarantees memory isolation.
 
 	See_Also: makeIsolated, makeIsolatedArray
@@ -969,7 +977,7 @@ template isWeaklyIsolated(T...)
 		else static if( is(HEAD == delegate) ) enum isWeaklyIsolated = false; // can't know to what a delegate points
 		else static if( isDynamicArray!HEAD ) enum isWeaklyIsolated = is(typeof(HEAD.init[0]) == immutable) && isWeaklyIsolated!TAIL;
 		else static if( isAssociativeArray!HEAD ) enum isWeaklyIsolated = false; // TODO: be less strict here
-		else static if( isSomeFunction!HEAD ) enum isWeaklyIsolated = isStronglyIsolated!TAIL; // functions are immutable
+		else static if( isSomeFunction!HEAD ) enum isWeaklyIsolated = isWeaklyIsolated!TAIL; // functions are immutable
 		else static if( isPointer!HEAD ) enum isWeaklyIsolated = is(typeof(*HEAD.init) == immutable) && isWeaklyIsolated!TAIL;
 		else static if( isAggregateType!HEAD ) enum isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!HEAD) && isWeaklyIsolated!TAIL;
 		else enum isWeaklyIsolated = isWeaklyIsolated!TAIL; //
@@ -1045,9 +1053,10 @@ alias Task Tid;
 
 void send(ARGS...)(Tid tid, ARGS args)
 {
+	assert (tid != Task(), "Invalid task handle");
 	static assert(args.length > 0, "Need to send at least one value.");
 	foreach(A; ARGS){
-		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent.");
+		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
 	}
 	static if( args.length == 1 ) tid.messageQueue.send(Variant(args[0]));
 	else tid.messageQueue.send(Variant(tuple(args)));
@@ -1055,7 +1064,11 @@ void send(ARGS...)(Tid tid, ARGS args)
 
 void prioritySend(ARGS...)(Tid tid, ARGS args)
 {
+	assert (tid != Task(), "Invalid task handle");
 	static assert(args.length > 0, "Need to send at least one value.");
+	foreach(A; ARGS){
+		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
+	}
 	static if( args.length == 1 ) tid.messageQueue.prioritySend(Variant(args[0]));
 	else tid.messageQueue.prioritySend(Variant(tuple(args)));
 }
