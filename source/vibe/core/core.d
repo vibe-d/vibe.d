@@ -227,6 +227,14 @@ Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false
 }
 
 /**
+	Creates a new timer without arming it.
+*/
+Timer createTimer(void delegate() callback)
+{
+	return getEventDriver().createTimer(callback);
+}
+
+/**
 	Sets a variable specific to the calling task/fiber.
 
 	Remarks:
@@ -420,9 +428,9 @@ private class VibeDriverCore : DriverCore {
 	{
 		auto fiber = cast(CoreTask)Fiber.getThis();
 		if( fiber ){
-			logTrace("yield");
+			logVerbose4("yield");
 			Fiber.yield();
-			logTrace("resume");
+			logVerbose4("resume");
 			auto e = fiber.m_exception;
 			if( e ){
 				fiber.m_exception = null;
