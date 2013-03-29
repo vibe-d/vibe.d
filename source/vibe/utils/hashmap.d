@@ -20,6 +20,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		size_t m_length;
 		Allocator m_allocator;
 		hash_t delegate(Key) m_hasher;
+		bool m_resizing;
 	}
 
 	this(Allocator allocator)
@@ -112,12 +113,16 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		auto newsize = m_length + amount;
 		if (newsize < (m_table.length*2)/3) return;
 		auto newcap = m_table.length ? m_table.length : 16;
-		while ((newcap*4)/5 <= newsize) newcap *= 2;
+		while (newsize >= (newcap*2)/3) newcap *= 2;
 		resize(newcap);
 	}
 
 	private void resize(size_t new_size)
 	{
+		assert(!m_resizing);
+		m_resizing = true;
+		scope(exit) m_resizing = false;
+
 		uint pot = 0;
 		while (new_size > 1) pot++, new_size /= 2;
 		new_size = 1 << pot;
