@@ -170,9 +170,9 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 
-	LibevSignal createSignal()
+	LibevManualEvent createManualEvent()
 	{
-		return new LibevSignal;
+		return new LibevManualEvent;
 	}
 
 	LibevTimer createTimer(void delegate() callback)
@@ -217,7 +217,7 @@ sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 }
 
 
-class LibevSignal : Signal {
+class LibevManualEvent : ManualEvent {
 	private {
 		struct ThreadSlot {
 			LibevDriver driver;
@@ -313,7 +313,7 @@ class LibevSignal : Signal {
 	void onSignal(ev_loop_t* loop, ev_async* w, int revents)
 	{
 		try {
-			auto sig = cast(LibevSignal)w.data;
+			auto sig = cast(LibevManualEvent)w.data;
 			auto thread = Thread.getThis();
 			auto core = LibevDriver.ms_core;
 

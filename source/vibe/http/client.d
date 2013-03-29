@@ -137,8 +137,8 @@ class HttpClient : EventedObject {
 
 	static void setUserAgentString(string str) { m_userAgent = str; }
 	
-	void acquire() { if( m_conn ) m_conn.acquire(); }
-	void release() { if( m_conn ) m_conn.release(); }
+	void acquire() { if( m_conn && m_conn.connected) m_conn.acquire(); }
+	void release() { if( m_conn && m_conn.connected ) m_conn.release(); }
 	bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
 
 	void connect(string server, ushort port = 80, bool ssl = false)
@@ -152,9 +152,11 @@ class HttpClient : EventedObject {
 
 	void disconnect()
 	{
-		if( m_conn ){
-			m_stream.finalize();
-			m_conn.close();
+		if( m_conn){
+			if (m_conn.connected){
+				m_stream.finalize();
+				m_conn.close();
+			}
 			if (m_stream !is m_conn){
 				destroy(m_stream);
 				m_stream = null;

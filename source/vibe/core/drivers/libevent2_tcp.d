@@ -223,7 +223,7 @@ package class Libevent2TcpConnection : TcpConnection {
 			if( dataAvailableForRead || m_timeout_triggered ) break;
 			try rawYield();
 			catch( Exception e ){
-				logDebug("Connection error during waitForData: %s", e.toString());
+				logDiagnostic("Connection error during waitForData: %s", e.toString());
 			}
 		}
 		logTrace(" -> timeout = %s", m_timeout_triggered);
@@ -409,7 +409,7 @@ package nothrow extern(C)
 					logDebug("task out (fd %d).", client_ctx.socketfd);
 				} catch( Exception e ){
 					logWarn("Handling of connection failed: %s", e.msg);
-					logDebug("%s", e.toString());
+					logDiagnostic("%s", e.toString());
 				}
 				if( conn.connected ) conn.close();
 

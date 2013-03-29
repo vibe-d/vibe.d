@@ -83,10 +83,10 @@ class Libevent2Driver : EventDriver {
 		evthread_set_id_callback(&lev_get_thread_id);
 
 		// initialize libevent
-		logDebug("libevent version: %s", to!string(event_get_version()));
+		logDiagnostic("libevent version: %s", to!string(event_get_version()));
 		m_eventLoop = event_base_new();
 		s_eventLoop = m_eventLoop;
-		logDebug("libevent is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
+		logDiagnostic("libevent is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
 		evthread_make_base_notifiable(m_eventLoop);
 		
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
@@ -266,9 +266,9 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2UdpConnection(bindaddr, this);
 	}
 
-	Libevent2Signal createSignal()
+	Libevent2ManualEvent createManualEvent()
 	{
-		return new Libevent2Signal;
+		return new Libevent2ManualEvent;
 	}
 
 	Libevent2Timer createTimer(void delegate() callback)
@@ -307,7 +307,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 	}
 }
 
-class Libevent2Signal : Signal {
+class Libevent2ManualEvent : ManualEvent {
 	private {
 		struct ThreadSlot {
 			Libevent2Driver driver;
@@ -403,7 +403,7 @@ class Libevent2Signal : Signal {
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
 		try {
-			auto sig = cast(Libevent2Signal)userptr;
+			auto sig = cast(Libevent2ManualEvent)userptr;
 			auto thread = Thread.getThis();
 			auto core = getThreadLibeventDriverCore();
 
@@ -417,7 +417,7 @@ class Libevent2Signal : Signal {
 				core.resumeTask(l);
 		} catch (Exception e) {
 			logError("Exception while handling signal event: %s", e.msg);
-			try logDebug("Full error: %s", sanitize(e.msg));
+			try logDiagnostic("Full error: %s", sanitize(e.msg));
 			catch(Exception) {}
 			debug assert(false);
 		}
@@ -521,7 +521,7 @@ class Libevent2Timer : Timer {
 			if( tm.m_callback ) runTask(tm.m_callback);
 		} catch( Throwable e ){
 			logError("Exception while handling timer event: %s", e.msg);
-			try logDebug("Full exception: %s", sanitize(e.toString())); catch {}
+			try logDiagnostic("Full exception: %s", sanitize(e.toString())); catch {}
 			debug assert(false);
 		}
 	}
@@ -634,7 +634,7 @@ class Libevent2UdpConnection : UdpConnection {
 			}
 			if( ret < 0 ){
 				auto err = getLastSocketError();
-				logDebug("UDP recv err: %s", err);
+				logDiagnostic("UDP recv err: %s", err);
 				enforce(err == EWOULDBLOCK, "Error receiving UDP packet.");
 			}
 			m_ctx.core.yieldForEvent();

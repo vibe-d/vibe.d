@@ -18,9 +18,9 @@ import std.stdio;
 import core.thread;
 
 /// Sets the minimum log level to be printed.
-void setLogLevel(LogLevel level) nothrow
-{
-	ss_minLevel = level;
+void setLogLevel(LogLevel level)
+nothrow {
+	ss_stdoutLogger.lock().minLevel = level;
 }
 
 /// Disables output of thread/task ids with each log message
@@ -59,25 +59,24 @@ void registerLogger(shared(Logger) logger)
 void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args)
 nothrow {
 	static assert(level != LogLevel.none);
-	if (level < ss_minLevel || ss_loggers.empty) return;
 	try {
-		auto app = appender!string();
-		formattedWrite(app, fmt, args);
-		rawLog(/*mod, func,*/ file, line, level, app.data);
+		foreach (l; ss_loggers)
+			if (l.lock().acceptsLevel(level)) {
+				auto app = appender!string();
+				formattedWrite(app, fmt, args);
+				rawLog(/*mod, func,*/ file, line, level, app.data);
+				break;
+			}
 	} catch(Exception) assert(false);
 }
 /// ditto
-void logVerbose4(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.verbose4/*, mod, func*/, file, line)(fmt, args); }
-/// ditto
-void logVerbose3(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.verbose3/*, mod, func*/, file, line)(fmt, args); }
-/// ditto
-void logVerbose2(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.verbose2/*, mod, func*/, file, line)(fmt, args); }
-/// ditto
-void logVerbose1(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.verbose1/*, mod, func*/, file, line)(fmt, args); }
-/// ditto
 void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
+void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
+/// ditto
 void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
+/// ditto
+void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
 void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
@@ -107,40 +106,40 @@ nothrow {
 
 		foreach (ln; text.splitter("\n")) {
 			msg.text = ln;
-			foreach (l; ss_loggers) l.lock().log(msg);
+			foreach (l; ss_loggers) {
+				auto ll = l.lock();
+				if (ll.acceptsLevel(msg.level))
+					ll.log(msg);
+			}
 		}
 	} catch(Exception) assert(false);
 }
 
 /// Specifies the log level for a particular log message.
 enum LogLevel {
-	verbose4,
-	verbose3,
-	verbose2,
-	verbose1,
-	trace = verbose2,
-	debug_ = verbose1,
-	info,
-	warn,
-	error,
-	critical,
-	fatal,
-	none,
+	trace,      /// Developer information for locating events when no useful stack traces are available
+	debugV,     /// Developer information useful for algorithm debugging - for verbose output
+	debug_,     /// Developer information useful for algorithm debugging
+	diagnostic, /// Extended user information (e.g. for more detailed error information)
+	info,       /// Informational message for normal user education
+	warn,       /// Unexpected condition that count indicate an error but has no direct consequences
+	error,      /// Normal error that is handled gracefully
+	critical,   /// Error that severely influences the execution of the application
+	fatal,      /// Error that forces the application to terminate
+	none,       /// Special value used to indicate no logging when set as the minimum log level
 
-	/// deprecated
-	Trace = trace,
-	/// deprecated
-	Debug = debug_,
-	/// deprecated
-	Info = info,
-	/// deprecated
-	Warn = warn,
-	/// deprecated
-	Error = error,
-	/// deprecated
-	Critical = critical,
-	/// deprecated
-	None = none
+	verbose1 = diagnostic, /// Alias for diagnostic messages
+	verbose2 = debug_,     /// Alias for debug messages
+	verbose3 = debugV,     /// Alias for verbose debug messages
+	verbose4 = trace,      /// Alias for trace messages
+
+	Trace = trace,       /// deprecated
+	Debug = debug_,      /// deprecated
+	Info = info,         /// deprecated
+	Warn = warn,         /// deprecated
+	Error = error,       /// deprecated
+	Critical = critical, /// deprecated
+	None = none          /// deprecated
 }
 
 struct LogLine {
@@ -159,6 +158,7 @@ struct LogLine {
 }
 
 class Logger {
+	abstract bool acceptsLevel(LogLevel level);
 	abstract void log(ref LogLine message);
 }
 
@@ -172,6 +172,7 @@ class FileLogger : Logger {
 	private {
 		File m_infoFile;
 		File m_diagFile;
+		LogLevel m_minLogLevel = LogLevel.info;
 	}
 
 	Format format = Format.thread;
@@ -189,6 +190,10 @@ class FileLogger : Logger {
 		m_diagFile = m_infoFile;
 	}
 
+	@property void minLogLevel(LogLevel value) { m_minLogLevel = value; }
+
+	override bool acceptsLevel(LogLevel value) { return value >= m_minLogLevel; }
+
 	override void log(ref LogLine msg)
 	{
 		if (msg.level < this.minLevel) return;
@@ -196,10 +201,10 @@ class FileLogger : Logger {
 		string pref;
 		File file;
 		final switch (msg.level) {
-			case LogLevel.verbose4: pref = "v4"; file = m_diagFile; break;
-			case LogLevel.verbose3: pref = "v3"; file = m_diagFile; break;
 			case LogLevel.trace: pref = "trc"; file = m_diagFile; break;
+			case LogLevel.debugV: pref = "dbv"; file = m_diagFile; break;
 			case LogLevel.debug_: pref = "dbg"; file = m_diagFile; break;
+			case LogLevel.diagnostic: pref = "dia"; file = m_diagFile; break;
 			case LogLevel.info: pref = "INF"; file = m_infoFile; break;
 			case LogLevel.warn: pref = "WRN"; file = m_diagFile; break;
 			case LogLevel.error: pref = "ERR"; file = m_diagFile; break;
@@ -227,6 +232,7 @@ class FileLogger : Logger {
 class HtmlLogger : Logger {
 	private {
 		File m_logFile;
+		LogLevel m_minLogLevel = LogLevel.min;
 	}
 
 	this(string filename = "log.html")
@@ -243,16 +249,20 @@ class HtmlLogger : Logger {
 		//version(FinalizerDebug) writeln("HtmlLogWritet.~this out");
 	}
 
+	@property void minLogLevel(LogLevel value) { m_minLogLevel = value; }
+
+	override bool acceptsLevel(LogLevel value) { return value >= m_minLogLevel; }
+
 	override void log(ref LogLine msg)
 	{
 		if( !m_logFile.isOpen ) return;
 
 		final switch (msg.level) {
 			case LogLevel.none: assert(false);
-			case LogLevel.verbose4: m_logFile.write(`<div class="verbose4">`); break;
-			case LogLevel.verbose3: m_logFile.write(`<div class="verbose3">`); break;
-			case LogLevel.verbose2: m_logFile.write(`<div class="verbose2">`); break;
-			case LogLevel.verbose1: m_logFile.write(`<div class="verbose1">`); break;
+			case LogLevel.trace: m_logFile.write(`<div class="trace">`); break;
+			case LogLevel.debugV: m_logFile.write(`<div class="debugv">`); break;
+			case LogLevel.debug_: m_logFile.write(`<div class="debug">`); break;
+			case LogLevel.diagnostic: m_logFile.write(`<div class="diagnostic">`); break;
 			case LogLevel.info: m_logFile.write(`<div class="info">`); break;
 			case LogLevel.warn: m_logFile.write(`<div class="warn">`); break;
 			case LogLevel.error: m_logFile.write(`<div class="error">`); break;
@@ -274,10 +284,10 @@ class HtmlLogger : Logger {
 <head>
 	<title>HTML Log</title>
 	<style content="text/css">
-		.verbose4 { position: relative; color: #E0E0E0; font-size: 9pt; }
-		.verbose3 { position: relative; color: #E0E0E0; font-size: 9pt; }
-		.verbose2 { position: relative; color: #E0E0E0; font-size: 9pt; }
-		.verbose1 { position: relative; color: #808080; }
+		.trace { position: relative; color: #E0E0E0; font-size: 9pt; }
+		.debugv { position: relative; color: #E0E0E0; font-size: 9pt; }
+		.debug { position: relative; color: #808080; }
+		.diagnostic { position: relative; color: #808080; }
 		.info { position: relative; color: black; }
 		.warn { position: relative; color: #E08000; }
 		.error { position: relative; color: red; }
@@ -339,10 +349,10 @@ class HtmlLogger : Logger {
 		<form style="margin: 0px;">
 			Minimum Log Level:
 			<select id="Level" onChange="updateLevels()">
-				<option value="0">Verbose 4</option>
-				<option value="1">Verbose 3</option>
-				<option value="2">Verbose 2</option>
-				<option value="3">Verbose 1</option>
+				<option value="0">Trace</option>
+				<option value="1">Verbose</option>
+				<option value="2">Debug</option>
+				<option value="3">Diagnostic</option>
 				<option value="4">Info</option>
 				<option value="5">Warn</option>
 				<option value="6">Error</option>
@@ -368,7 +378,6 @@ class HtmlLogger : Logger {
 }
 
 private {
-	shared LogLevel ss_minLevel = LogLevel.info;
 	shared Logger[] ss_loggers;
 	shared(FileLogger) ss_stdoutLogger;
 	shared(FileLogger) ss_fileLogger;
@@ -377,5 +386,6 @@ private {
 package void initializeLogModule()
 {
 	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
+	ss_stdoutLogger.lock().minLogLevel = LogLevel.info;
 	ss_loggers ~= ss_stdoutLogger;
 }

@@ -192,7 +192,6 @@ class MessageQueue {
 	void send(Variant msg)
 	{
 		import vibe.core.log;
-		logInfo("E");
 		synchronized(m_mutex){
 			if( this.full ){
 				if( !m_onCrowding ){
