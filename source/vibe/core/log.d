@@ -18,9 +18,9 @@ import std.stdio;
 import core.thread;
 
 /// Sets the minimum log level to be printed.
-void setLogLevel(LogLevel level) nothrow
-{
-	ss_minLevel = level;
+void setLogLevel(LogLevel level)
+nothrow {
+	ss_stdoutLogger.lock().minLevel = level;
 }
 
 /// Disables output of thread/task ids with each log message
@@ -59,11 +59,14 @@ void registerLogger(shared(Logger) logger)
 void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args)
 nothrow {
 	static assert(level != LogLevel.none);
-	if (level < ss_minLevel || ss_loggers.empty) return;
 	try {
-		auto app = appender!string();
-		formattedWrite(app, fmt, args);
-		rawLog(/*mod, func,*/ file, line, level, app.data);
+		foreach (l; ss_loggers)
+			if (l.lock().acceptsLevel(level)) {
+				auto app = appender!string();
+				formattedWrite(app, fmt, args);
+				rawLog(/*mod, func,*/ file, line, level, app.data);
+				break;
+			}
 	} catch(Exception) assert(false);
 }
 /// ditto
@@ -107,7 +110,11 @@ nothrow {
 
 		foreach (ln; text.splitter("\n")) {
 			msg.text = ln;
-			foreach (l; ss_loggers) l.lock().log(msg);
+			foreach (l; ss_loggers) {
+				auto ll = l.lock();
+				if (ll.acceptsLevel(msg.level))
+					ll.log(msg);
+			}
 		}
 	} catch(Exception) assert(false);
 }
@@ -118,7 +125,7 @@ enum LogLevel {
 	verbose3,
 	verbose2,
 	verbose1,
-	trace = verbose2,
+	trace = verbose4,
 	debug_ = verbose1,
 	info,
 	warn,
@@ -159,6 +166,7 @@ struct LogLine {
 }
 
 class Logger {
+	abstract bool acceptsLevel(LogLevel level);
 	abstract void log(ref LogLine message);
 }
 
@@ -172,6 +180,7 @@ class FileLogger : Logger {
 	private {
 		File m_infoFile;
 		File m_diagFile;
+		LogLevel m_minLogLevel = LogLevel.info;
 	}
 
 	Format format = Format.thread;
@@ -189,6 +198,10 @@ class FileLogger : Logger {
 		m_diagFile = m_infoFile;
 	}
 
+	@property void minLogLevel(LogLevel value) { m_minLogLevel = value; }
+
+	override bool acceptsLevel(LogLevel value) { return value >= m_minLogLevel; }
+
 	override void log(ref LogLine msg)
 	{
 		if (msg.level < this.minLevel) return;
@@ -198,8 +211,8 @@ class FileLogger : Logger {
 		final switch (msg.level) {
 			case LogLevel.verbose4: pref = "v4"; file = m_diagFile; break;
 			case LogLevel.verbose3: pref = "v3"; file = m_diagFile; break;
-			case LogLevel.trace: pref = "trc"; file = m_diagFile; break;
-			case LogLevel.debug_: pref = "dbg"; file = m_diagFile; break;
+			case LogLevel.verbose2: pref = "v2"; file = m_diagFile; break;
+			case LogLevel.verbose1: pref = "v1"; file = m_diagFile; break;
 			case LogLevel.info: pref = "INF"; file = m_infoFile; break;
 			case LogLevel.warn: pref = "WRN"; file = m_diagFile; break;
 			case LogLevel.error: pref = "ERR"; file = m_diagFile; break;
@@ -227,6 +240,7 @@ class FileLogger : Logger {
 class HtmlLogger : Logger {
 	private {
 		File m_logFile;
+		LogLevel m_minLogLevel = LogLevel.min;
 	}
 
 	this(string filename = "log.html")
@@ -242,6 +256,10 @@ class HtmlLogger : Logger {
 		m_logFile.close();
 		//version(FinalizerDebug) writeln("HtmlLogWritet.~this out");
 	}
+
+	@property void minLogLevel(LogLevel value) { m_minLogLevel = value; }
+
+	override bool acceptsLevel(LogLevel value) { return value >= m_minLogLevel; }
 
 	override void log(ref LogLine msg)
 	{
@@ -368,7 +386,6 @@ class HtmlLogger : Logger {
 }
 
 private {
-	shared LogLevel ss_minLevel = LogLevel.info;
 	shared Logger[] ss_loggers;
 	shared(FileLogger) ss_stdoutLogger;
 	shared(FileLogger) ss_fileLogger;
@@ -377,5 +394,6 @@ private {
 package void initializeLogModule()
 {
 	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
+	ss_stdoutLogger.lock().minLogLevel = LogLevel.info;
 	ss_loggers ~= ss_stdoutLogger;
 }
