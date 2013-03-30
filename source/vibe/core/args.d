@@ -102,7 +102,7 @@ void processCommandLineArgs(ref string[] args)
 {
 	int uid = -1;
 	int gid = -1;
-	bool verbose = false, vverbose = false;
+	bool verbose[4];
 	string disthost;
 	ushort distport = 11000;
 
@@ -125,14 +125,19 @@ void processCommandLineArgs(ref string[] args)
 	getopt(args,
 		"uid", &uid,
 		"gid", &gid,
-		"verbose|v", &verbose,
-		"vverbose", &vverbose,
+		"verbose|v", &verbose[0],
+		"vverbose|vv", &verbose[1],
+		"vvv", &verbose[2],
+		"vvvv", &verbose[3],
 		"disthost|d", &disthost,
 		"disport", &distport
 		);
 
-	if( vverbose ) setLogLevel(LogLevel.Trace);
-	else if( verbose ) setLogLevel(LogLevel.Debug);
+	foreach_reverse (i, v; verbose)
+		if (v) {
+			setLogLevel(cast(LogLevel)(LogLevel.diagnostic - i));
+			break;
+		}
 
 	setVibeDistHost(disthost, distport);
 	startListening();
