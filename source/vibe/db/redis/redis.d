@@ -112,7 +112,7 @@ private final class RedisConnection : EventedObject {
 	}
 
 	T request(T=RedisReply)(string command, in ubyte[][] args...) {
-		if( !m_conn /*|| !m_conn.connected*/ ){
+		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTcp(m_host, m_port);
 		}
 		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
