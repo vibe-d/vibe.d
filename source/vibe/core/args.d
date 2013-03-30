@@ -130,7 +130,7 @@ void processCommandLineArgs(ref string[] args)
 		"vvv", &verbose[2],
 		"vvvv", &verbose[3],
 		"disthost|d", &disthost,
-		"disport", &distport
+		"distport", &distport
 		);
 
 	foreach_reverse (i, v; verbose)
