@@ -228,7 +228,7 @@ class FileLogger : Logger {
 }
 
 
-class HtmlLogger : Logger {
+class HTMLLogger : Logger {
 	private {
 		File m_logFile;
 		LogLevel m_minLogLevel = LogLevel.min;
@@ -270,7 +270,13 @@ class HtmlLogger : Logger {
 		}
 		m_logFile.writef(`<div class="timeStamp">%s</div>`, msg.time.toISOExtString());
 		m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
-		m_logFile.writef(`<div class="message">%s</div>`, msg.text);
+		m_logFile.write(`<div class="message">`);
+		{
+			import vibe.textfilter.html;
+			auto dst = m_logFile.lockingTextWriter();
+			filterHtmlEscape(dst, msg.text);
+		}
+		m_logFile.write(`</div>`, msg.text);
 		m_logFile.writeln(`</div>`);
 		m_logFile.flush();
 	}
