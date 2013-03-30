@@ -11,7 +11,6 @@ public import vibe.inet.path;
 
 import vibe.textfilter.urlencode;
 
-import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
@@ -56,7 +55,7 @@ struct Url {
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
 		if( str[0] != '/' ){
-			auto idx = str.countUntil(':');
+			auto idx = str.indexOf(':');
 			enforce(idx > 0, "No schema in URL:"~str);
 			m_schema = str[0 .. idx];
 			str = str[idx+1 .. $];
@@ -75,13 +74,13 @@ struct Url {
 					str = str[2 .. $];
 					goto default;
 				default:
-					auto si = str.countUntil('/');
+					auto si = str.indexOf('/');
 					if( si < 0 ) si = str.length;
-					auto ai = str[0 .. si].countUntil('@');
+					auto ai = str[0 .. si].indexOf('@');
 					sizediff_t hs = 0;
 					if( ai >= 0 ){
 						hs = ai+1;
-						auto ci = str[0 .. ai].countUntil(':');
+						auto ci = str[0 .. ai].indexOf(':');
 						if( ci >= 0 ){
 							m_username = str[0 .. ci];
 							m_password = str[ci+1 .. ai];
@@ -90,7 +89,7 @@ struct Url {
 					}
 
 					m_host = str[hs .. si];
-					auto pi = m_host.countUntil(':');
+					auto pi = m_host.indexOf(':');
 					if(pi > 0) {
 						enforce(pi < m_host.length-1, "Empty port in URL.");
 						m_port = to!ushort(m_host[pi+1..$]);
@@ -175,13 +174,13 @@ struct Url {
 	/// ditto
 	@property void localURI(string str)
 	{
-		auto ai = str.countUntil('#');
+		auto ai = str.indexOf('#');
 		if( ai >= 0 ){
 			m_anchor = str[ai+1 .. $];
 			str = str[0 .. ai];
 		}
 
-		auto qi = str.countUntil('?');
+		auto qi = str.indexOf('?');
 		if( qi >= 0 ){
 			m_queryString = str[qi+1 .. $];
 			str = str[0 .. qi];

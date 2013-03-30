@@ -30,7 +30,7 @@ import vibe.utils.string;
 import vibe.core.file;
 
 import core.vararg;
-import std.algorithm : countUntil, map, min;
+import std.algorithm : canFind, map, min;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -132,9 +132,9 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 				enforce(settings.sslContext is lst.sslContext,
 					"A HTTP server is already listening on "~addr~":"~to!string(settings.port)~
 					" but the SSL context differs.");
-				foreach( ctx; g_contexts ){
-					if( ctx.settings.port != settings.port ) continue;
-					if( countUntil(ctx.settings.bindAddresses, addr) < 0 ) continue;
+				foreach (ctx; g_contexts) {
+					if (ctx.settings.port != settings.port) continue;
+					if (!ctx.settings.bindAddresses.canFind(addr)) continue;
 					/*enforce(ctx.settings.hostName != settings.hostName,
 						"A server with the host name '"~settings.hostName~"' is already "
 						"listening on "~addr~":"~to!string(settings.port)~".");*/
@@ -1138,9 +1138,9 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 
 		// setup compressed output
 		if( auto pae = "Accept-Encoding" in req.headers ){
-			if( countUntil(*pae, "gzip") >= 0 ){
+			if (canFind(*pae, "gzip")) {
 				res.headers["Content-Encoding"] = "gzip";
-			} else if( countUntil(*pae, "deflate") >= 0 ){
+			} else if (canFind(*pae, "deflate")) {
 				res.headers["Content-Encoding"] = "deflate";
 			}
 		}

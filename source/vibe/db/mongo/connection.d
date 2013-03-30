@@ -12,7 +12,7 @@ public import vibe.data.bson;
 import vibe.core.log;
 import vibe.core.net;
 
-import std.algorithm;
+import std.algorithm : splitter;
 import std.array;
 import std.conv;
 import std.exception;
@@ -412,9 +412,9 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	// Reslice to get rid of 'mongodb://'
 	tmpUrl = tmpUrl[10..$];
 
-	auto slashIndex = countUntil(tmpUrl, "/");
+	auto slashIndex = tmpUrl.indexOf("/");
 	if( slashIndex == -1 ) slashIndex = tmpUrl.length; 
-	auto authIndex = tmpUrl[0 .. slashIndex].countUntil('@');
+	auto authIndex = tmpUrl[0 .. slashIndex].indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
 
 	// Parse out the username and optional password. 
@@ -423,7 +423,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 		// Set the host start to after the '@'
 		hostIndex = authIndex + 1;
 
-		auto colonIndex = tmpUrl[0..authIndex].countUntil(':');
+		auto colonIndex = tmpUrl[0..authIndex].indexOf(':');
 		if(colonIndex != -1)
 		{
 			cfg.username = tmpUrl[0..colonIndex];
@@ -468,7 +468,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 		return true;
 	}
 
-	auto queryIndex = tmpUrl[slashIndex..$].countUntil("?");
+	auto queryIndex = tmpUrl[slashIndex..$].indexOf("?");
 	if(queryIndex == -1){
 		// No query string. Remaining string is the database
 		queryIndex = tmpUrl.length;  
@@ -485,7 +485,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 		foreach(c; optionMatch)
 		{
 			auto optionString = c["option"];
-			auto separatorIndex = countUntil(optionString, "="); 
+			auto separatorIndex = optionString.indexOf("="); 
 			// Per the mongo docs the option names are case insensitive. 
 			auto option = optionString[0 .. separatorIndex];
 			auto value = optionString[(separatorIndex+1) .. $];

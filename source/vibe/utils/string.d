@@ -78,8 +78,8 @@ string joinLines(string[] strs, string linesep = "\n")
 */
 bool allOf(string str, string chars)
 {
-	foreach( ch; str )
-		if( chars.countUntil(ch) < 0 )
+	foreach (ch; str)
+		if (!chars.canFind(ch))
 			return false;
 	return true;
 }
@@ -89,8 +89,8 @@ bool allOf(string str, string chars)
 */
 bool anyOf(string str, string chars)
 {
-	foreach( ch; str )
-		if( chars.countUntil(ch) >= 0 )
+	foreach (ch; str)
+		if (chars.canFind(ch))
 			return true;
 	return false;
 }
@@ -124,8 +124,8 @@ string stripA(string s)
 /// Finds the first occurence of any of the characters in `chars`
 sizediff_t countUntilAny(string str, string chars)
 {
-	foreach( i, char ch; str )
-		if( chars.countUntil(ch) >= 0 )
+	foreach (i, char ch; str)
+		if (chars.canFind(ch))
 			return i;
 	return -1;
 }

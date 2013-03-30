@@ -13,10 +13,10 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.stream.ssl;
 
-import std.algorithm;
 import std.base64;
 import std.conv;
 import std.exception;
+import std.string;
 
 
 /**
@@ -183,8 +183,8 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 		while(true){ // simple skipping of 
 			auto ln = cast(string)conn.readLine();
 			logDebug("EHLO response: %s", ln);
-			auto sidx = ln.countUntil(' ');
-			auto didx = ln.countUntil('-');
+			auto sidx = ln.indexOf(' ');
+			auto didx = ln.indexOf('-');
 			if( sidx > 0 && (didx < 0 || didx > sidx) ){
 				enforce(ln[0 .. sidx] == "250", "Server not ready (response "~ln[0 .. sidx]~")");
 				break;
@@ -253,7 +253,7 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 private void expectStatus(InputStream conn, int expected_status, string in_response_to)
 {
 	string ln = cast(string)conn.readLine();
-	auto sp = ln.countUntil(' ');
+	auto sp = ln.indexOf(' ');
 	if( sp < 0 ) sp = ln.length;
 	auto status = to!int(ln[0 .. sp]);
 	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
@@ -262,14 +262,14 @@ private void expectStatus(InputStream conn, int expected_status, string in_respo
 private int recvStatus(InputStream conn)
 {
 	string ln = cast(string)conn.readLine();
-	auto sp = ln.countUntil(' ');
+	auto sp = ln.indexOf(' ');
 	if( sp < 0 ) sp = ln.length;
 	return to!int(ln[0 .. sp]);
 }
 
 private string addressMailPart(string str)
 {
-	auto idx = str.countUntil('<');
+	auto idx = str.indexOf('<');
 	if( idx < 0 ) return str;
 	str = str[idx .. $];
 	enforce(str[$-1] == '>', "Malformed email address field: '"~str~"'.");

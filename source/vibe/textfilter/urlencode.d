@@ -53,7 +53,7 @@ void filterUrlEncode(R)(ref R dst, string str, string allowed_chars = null)
 				dst.put(str[0]);
 				break;
 			default:
-				if( allowed_chars.countUntil(str[0]) >= 0 ) dst.put(str[0]);
+				if (allowed_chars.canFind(str[0])) dst.put(str[0]);
 				else formattedWrite(dst, "%%%02X", str[0]);
 		}
 		str = str[1 .. $];

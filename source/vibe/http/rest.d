@@ -549,7 +549,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
 				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
-				if( tps.countUntil(RT.stringof) < 0 ){
+				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					ret ~= format(
@@ -586,7 +586,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
 				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
-				if( tps.countUntil(RT.stringof) < 0 ){
+				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					
@@ -623,7 +623,7 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
 				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
-				if( tps.countUntil(RT.stringof) < 0 ){
+				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					

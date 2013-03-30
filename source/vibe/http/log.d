@@ -11,10 +11,10 @@ import vibe.core.file;
 import vibe.core.log;
 import vibe.http.server;
 
-import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
+import std.string;
 
 
 class HttpConsoleLogger : HttpLogger {
@@ -92,7 +92,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 	while( format.length > 0 ) {
 		final switch(state) {
 			case State.Init:
-				auto idx = format.countUntil('%');
+				auto idx = format.indexOf('%');
 				if( idx < 0 ) {
 					ln.put( format );
 					format = "";
@@ -142,7 +142,7 @@ string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse 
 				}
 				break;
 			case State.Key:
-				auto idx = format.countUntil('}');
+				auto idx = format.indexOf('}');
 				enforce(idx > -1, "Missing '}'");
 				key = format[0 .. idx];
 				format = format[idx+1 .. $];
