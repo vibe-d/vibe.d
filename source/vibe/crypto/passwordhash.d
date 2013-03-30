@@ -14,7 +14,7 @@ import std.random;
 
 
 /**
-	Generates a psasword hash using MD5 together with a 32-bit salt.
+	Generates a password hash using MD5 together with a 32-bit salt.
 
 	Params:
 		password = The password for which a one-way hash is to be computed
@@ -28,7 +28,7 @@ import std.random;
 
 	Remarks:
 		MD5 is not considered safe and is computationally cheap. Although the
-		use of salt helps a bit, using this fuction is discouraged for systems
+		use of salt helps a bit, using this function is discouraged for systems
 		where security matters.
 
 	See_Also:
@@ -53,7 +53,7 @@ string generateSimplePasswordHash(string password, string additional_salt = null
 			call to generateSimplePasswordHash
 
 	Returns:
-		Returns true iff the password matches the specified hash.
+		Returns true if the password matches the specified hash.
 
 	See_Also:
 		generateSimplePasswordHash, vibe.crypto.md5
