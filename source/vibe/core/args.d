@@ -128,7 +128,7 @@ void processCommandLineArgs(ref string[] args)
 		"verbose|v", &verbose,
 		"vverbose", &vverbose,
 		"disthost|d", &disthost,
-		"disport", &distport
+		"distport", &distport
 		);
 
 	if( vverbose ) setLogLevel(LogLevel.Trace);
