@@ -16,7 +16,7 @@ import vibe.inet.url;
 import core.time;
 
 
-class WinRtEventDriver : EventDriver {
+class WinRTEventDriver : EventDriver {
 	private {
 		DriverCore m_core;
 	}
@@ -50,9 +50,9 @@ class WinRtEventDriver : EventDriver {
 	{
 	}
 
-	WinRtFileStream openFile(string path, FileMode mode)
+	WinRTFileStream openFile(string path, FileMode mode)
 	{
-		return new WinRtFileStream(path, mode);
+		return new WinRTFileStream(path, mode);
 	}
 
 	DirectoryWatcher watchDirectory(Path path, bool recursive)
@@ -60,28 +60,28 @@ class WinRtEventDriver : EventDriver {
 		assert(false);
 	}
 
-	WinRtTcpConnection connectTcp(string host, ushort port)
+	WinRTTCPConnection connectTCP(string host, ushort port)
 	{
 		assert(false);
 	}
 
-	void listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options)
+	void listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
 	{
 		assert(false);
 	}
 
-	WinRtManualEvent createManualEvent()
+	WinRTManualEvent createManualEvent()
 	{
 		assert(false);
 	}
 
-	WinRtTimer createTimer(void delegate() callback)
+	WinRTTimer createTimer(void delegate() callback)
 	{
-		return new WinRtTimer(this, callback);
+		return new WinRTTimer(this, callback);
 	}
 }
 
-class WinRtManualEvent : ManualEvent {
+class WinRTManualEvent : ManualEvent {
 	void release()
 	{
 	}
@@ -109,15 +109,15 @@ class WinRtManualEvent : ManualEvent {
 	}
 }
 
-class WinRtTimer : Timer {
+class WinRTTimer : Timer {
 	private {
-		WinRtEventDriver m_driver;
+		WinRTEventDriver m_driver;
 		void delegate() m_callback;
 		bool m_pending;
 		bool m_periodic;
 	}
 
-	this(WinRtEventDriver driver, void delegate() callback)
+	this(WinRTEventDriver driver, void delegate() callback)
 	{
 		m_driver = driver;
 		m_callback = callback;
@@ -158,7 +158,7 @@ class WinRtTimer : Timer {
 	}
 }
 
-class WinRtFileStream : FileStream {
+class WinRTFileStream : FileStream {
 	this(string path, FileMode mode)
 	{
 		assert(false);
@@ -237,7 +237,7 @@ class WinRtFileStream : FileStream {
 	}
 }
 
-class WinRtTcpConnection : TcpConnection {
+class WinRTTCPConnection : TCPConnection {
 	private {
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;

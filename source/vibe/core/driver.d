@@ -84,7 +84,10 @@ interface EventDriver {
 
 		'host' can be a DNS name or an IPv4 or IPv6 address string.
 	*/
-	TcpConnection connectTcp(string host, ushort port);
+	TCPConnection connectTCP(string host, ushort port);
+
+	/// Compatibility alias, will be deprecated soon.
+	alias connectTcp = connectTCP;
 
 	/** Listens on the specified port and interface for TCP connections.
 
@@ -92,14 +95,20 @@ interface EventDriver {
 		interface. conn_callback is called for every incoming connection, each time from a
 		new task.
 	*/
-	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options);
+	TCPListener listenTCP(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options);
+
+	/// Compatibility alias, will be deprecated soon.
+	alias listenTcp = listenTCP;
 
 	/** Creates a new UDP socket and sets the specified address/port as the destination for packets.
 
 		If a bind port is specified, the socket will be able to receive UDP packets on that port.
 		Otherwise, a random bind port is chosen.
 	*/
-	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0");
+	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0");
+
+	/// Compatibility alias, will be deprecated soon.
+	alias listenUdp = listenUDP;
 
 	/** Creates a new manually triggered event.
 	*/

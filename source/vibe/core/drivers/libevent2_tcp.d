@@ -51,12 +51,12 @@ private {
 	}
 }
 
-package class Libevent2TcpConnection : TcpConnection {
+package class Libevent2TCPConnection : TCPConnection {
 	private {
 		bufferevent* m_event;
 		evbuffer* m_inputBuffer;
 		bool m_timeout_triggered;
-		TcpContext* m_ctx;
+		TCPContext* m_ctx;
 		string m_peerAddress;
 		ubyte[64] m_peekBuffer;
 		bool m_tcpNoDelay = false;
@@ -64,7 +64,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		char[64] m_peerAddressBuf;
 	}
 	
-	this(TcpContext* ctx)
+	this(TCPContext* ctx)
 	{
 		m_event = ctx.event;
 		m_ctx = ctx;
@@ -81,7 +81,7 @@ package class Libevent2TcpConnection : TcpConnection {
 	
 	~this()
 	{
-		//assert(m_ctx is null, "Leaking TcpContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
+		//assert(m_ctx is null, "Leaking TCPContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
 	}
 	
 	@property void tcpNoDelay(bool enabled)
@@ -146,7 +146,7 @@ package class Libevent2TcpConnection : TcpConnection {
 		version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
 		else shutdown(m_ctx.socketfd, SHUT_WR);
 		if( m_ctx.event ) bufferevent_free(m_ctx.event);
-		TcpContextAlloc.free(m_ctx);
+		TCPContextAlloc.free(m_ctx);
 		m_ctx = null;
 		logTrace("...socket %d closed.", fd);
 	}
@@ -283,20 +283,20 @@ package class Libevent2TcpConnection : TcpConnection {
 	{
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if( m_ctx.event is null ){
-			TcpContextAlloc.free(m_ctx);
+			TCPContextAlloc.free(m_ctx);
 			m_ctx = null;
 			enforce(false, "Remote hung up while operating on TCPConnection.");
 		}
-		enforce(m_ctx.task == Task.getThis(), "Operating on TcpConnection owned by a different fiber!");
+		enforce(m_ctx.task == Task.getThis(), "Operating on TCPConnection owned by a different fiber!");
 	}
 }
 
-class LibeventTcpListener : TcpListener {
+class LibeventTCPListener : TCPListener {
 	private {
-		TcpContext*[] m_ctx;
+		TCPContext*[] m_ctx;
 	}
 
-	void addContext(TcpContext* ctx)
+	void addContext(TCPContext* ctx)
 	{
 		synchronized(this) m_ctx ~= ctx;
 	}
@@ -308,7 +308,7 @@ class LibeventTcpListener : TcpListener {
 			foreach (ctx; m_ctx) {
 				event_free(ctx.listenEvent);
 				evutil_closesocket(ctx.socketfd);
-				TcpContextAlloc.free(ctx);
+				TCPContextAlloc.free(ctx);
 			}
 			m_ctx = null;
 		}
@@ -320,7 +320,7 @@ class LibeventTcpListener : TcpListener {
 /* Private types                                                                                  */
 /**************************************************************************************************/
 
-package struct TcpContext
+package struct TCPContext
 {
 	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, NetworkAddress peeraddr){
 		core = c;
@@ -339,7 +339,7 @@ package struct TcpContext
 
 	DriverCore core;
 	event_base* eventLoop;
-	void delegate(TcpConnection conn) connectionCallback;
+	void delegate(TCPConnection conn) connectionCallback;
 	bufferevent* event;
 	deimos.event2.event_struct.event* listenEvent;
 	NetworkAddress remote_addr;
@@ -349,7 +349,7 @@ package struct TcpContext
 	Task task;
 	bool writeFinished;
 }
-alias FreeListObjectAlloc!(TcpContext, false, true) TcpContextAlloc;
+alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
 
 
 /**************************************************************************************************/
@@ -361,7 +361,7 @@ package nothrow extern(C)
 	void onConnect(evutil_socket_t listenfd, short evtype, void *arg)
 	{
 		logTrace("connect callback");
-		auto ctx = cast(TcpContext*)arg;
+		auto ctx = cast(TCPContext*)arg;
 
 		if( !(evtype & EV_READ) ){
 			logError("Unknown event type in connect callback: 0x%hx", evtype);
@@ -369,7 +369,7 @@ package nothrow extern(C)
 		}
 
 		static struct ClientTask {
-			TcpContext* listen_ctx;
+			TCPContext* listen_ctx;
 			NetworkAddress remote_addr;
 			int sockfd;
 
@@ -389,19 +389,19 @@ package nothrow extern(C)
 					return;
 				}
 
-				auto client_ctx = TcpContextAlloc.alloc(drivercore, eventloop, sockfd, buf_event, remote_addr);
+				auto client_ctx = TCPContextAlloc.alloc(drivercore, eventloop, sockfd, buf_event, remote_addr);
 				assert(client_ctx.event !is null, "event is null although it was just != null?");
 				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
 				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
 					bufferevent_free(buf_event);
-					TcpContextAlloc.free(client_ctx);
+					TCPContextAlloc.free(client_ctx);
 					logError("Error enabling buffered I/O event for fd %d.", sockfd);
 					return;
 				}
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
 				client_ctx.task = Task.getThis();
-				auto conn = FreeListRef!Libevent2TcpConnection(client_ctx);
+				auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
 				assert(conn.connected, "Connection closed directly after accept?!");
 				logDebug("start task (fd %d).", client_ctx.socketfd);
 				try {
@@ -459,7 +459,7 @@ package nothrow extern(C)
 
 	void onSocketRead(bufferevent *buf_event, void *arg)
 	{
-		auto ctx = cast(TcpContext*)arg;
+		auto ctx = cast(TCPContext*)arg;
 		logTrace("socket %d read event!", ctx.socketfd);
 
 		auto f = ctx.task;
@@ -474,8 +474,8 @@ package nothrow extern(C)
 	void onSocketWrite(bufferevent *buf_event, void *arg)
 	{
 		try {
-			auto ctx = cast(TcpContext*)arg;
-			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TcpContext");
+			auto ctx = cast(TCPContext*)arg;
+			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TCPContext");
 			logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
 			if( ctx.task && ctx.task.state != Fiber.State.TERM ){
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
@@ -490,10 +490,10 @@ package nothrow extern(C)
 	void onSocketEvent(bufferevent *buf_event, short status, void *arg)
 	{
 		try {
-			auto ctx = cast(TcpContext*)arg;
+			auto ctx = cast(TCPContext*)arg;
 			ctx.status = status;
 			logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
-			assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TcpContext");
+			assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TCPContext");
 	
 			bool free_event = false;
 			
@@ -539,7 +539,7 @@ package nothrow extern(C)
 	{
 		try {
 			logTrace("data wait timeout");
-			auto conn = cast(Libevent2TcpConnection)userptr;
+			auto conn = cast(Libevent2TCPConnection)userptr;
 			conn.m_timeout_triggered = true;
 			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.task);
 			else logDebug("waitForData timeout after connection was closed!");

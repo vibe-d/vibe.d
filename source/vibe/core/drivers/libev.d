@@ -120,12 +120,12 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 
-	TcpConnection connectTcp(string host, ushort port)
+	TCPConnection connectTCP(string host, ushort port)
 	{
 		assert(false);
 	}
 	
-	LibevTcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string address, TcpListenOptions options)
+	LibevTCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string address, TCPListenOptions options)
 	{
 		sockaddr_in addr_ip4;
 		addr_ip4.sin_family = AF_INET;
@@ -143,7 +143,7 @@ class LibevDriver : EventDriver {
 			ret = inet_pton(AF_INET, toStringz(address), &addr_ip4.sin_addr);
 		}
 		if( ret == 1 ){
-			auto rc = listenTcpGeneric(AF_INET, &addr_ip4, port, conn_callback);
+			auto rc = listenTCPGeneric(AF_INET, &addr_ip4, port, conn_callback);
 			logInfo("Listening on %s port %d %s", address, port, (rc?"succeeded":"failed"));
 			return rc;
 		}
@@ -155,7 +155,7 @@ class LibevDriver : EventDriver {
 			addr_ip6.sin6_port = htons(port);
 			ret = inet_pton(AF_INET6, toStringz(address), &addr_ip6.sin6_addr);
 			if( ret == 1 ){
-				auto rc = listenTcpGeneric(AF_INET6, &addr_ip6, port, conn_callback);
+				auto rc = listenTCPGeneric(AF_INET6, &addr_ip6, port, conn_callback);
 				logInfo("Listening on %s port %d %s", address, port, (rc?"succeeded":"failed"));
 				return rc;
 			}
@@ -165,7 +165,7 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 	
-	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(false);
 	}
@@ -180,7 +180,7 @@ class LibevDriver : EventDriver {
 		return new LibevTimer(this, callback);
 	}
 
-	private LibevTcpListener listenTcpGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TcpConnection conn) connection_callback)
+	private LibevTCPListener listenTCPGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TCPConnection conn) connection_callback)
 	{
 		auto listenfd = socket(af, SOCK_STREAM, 0);
 		if( listenfd == -1 ){
@@ -210,9 +210,9 @@ sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 		ev_io_start(m_loop, w_accept);
 		
 		w_accept.data = cast(void*)this;
-		//addEventReceiver(m_core, listenfd, new LibevTcpListener(connection_callback));
+		//addEventReceiver(m_core, listenfd, new LibevTCPListener(connection_callback));
 
-		return new LibevTcpListener(this, listenfd, w_accept, connection_callback);
+		return new LibevTCPListener(this, listenfd, w_accept, connection_callback);
 	}
 }
 
@@ -398,15 +398,15 @@ class LibevTimer : Timer {
 }
 
 
-class LibevTcpListener : TcpListener {
+class LibevTCPListener : TCPListener {
 	private {
 		LibevDriver m_driver;
 		int m_socket;
 		ev_io* m_io;
-		void delegate(TcpConnection conn) m_connectionCallback;
+		void delegate(TCPConnection conn) m_connectionCallback;
 	}
 
-	this(LibevDriver driver, int sock, ev_io* io, void delegate(TcpConnection conn) connection_callback)
+	this(LibevDriver driver, int sock, ev_io* io, void delegate(TCPConnection conn) connection_callback)
 	{
 		m_driver = driver;
 		m_socket = sock;
@@ -415,7 +415,7 @@ class LibevTcpListener : TcpListener {
 		m_io.data = cast(void*)this;
 	}
 	
-	@property void delegate(TcpConnection conn) connectionCallback() { return m_connectionCallback; }
+	@property void delegate(TCPConnection conn) connectionCallback() { return m_connectionCallback; }
 
 	void stopListening()
 	{
@@ -423,7 +423,7 @@ class LibevTcpListener : TcpListener {
 	}
 }
 
-class LibevTcpConnection : TcpConnection {
+class LibevTCPConnection : TCPConnection {
 	mixin SingleOwnerEventedObject;
 
 	private {
@@ -676,7 +676,7 @@ private extern(C){
 		ev_io_init(w_client, &write_cb, client_sd, EV_WRITE);
 		ev_io_start(loop, w_client);*/
 		
-		auto obj = cast(LibevTcpListener)watcher.data;
+		auto obj = cast(LibevTCPListener)watcher.data;
 		auto driver = obj.m_driver;
 		
 		void client_task()
@@ -686,7 +686,7 @@ private extern(C){
 			ev_io_init(r_client, &read_cb, client_sd, EV_READ);
 			ev_io_init(w_client, &read_cb, client_sd, EV_WRITE);
 
-			auto conn = new LibevTcpConnection(driver, client_sd, r_client, w_client);
+			auto conn = new LibevTCPConnection(driver, client_sd, r_client, w_client);
 			logTrace("client task in");
 			logTrace("calling connection callback");
 			try {
@@ -704,7 +704,7 @@ private extern(C){
 	void read_cb(ev_loop_t *loop, ev_io *watcher, int revents)
 	{
 		logTrace("i/o event on %d: %d", watcher.fd, revents);
-		auto conn = cast(LibevTcpConnection)watcher.data;
+		auto conn = cast(LibevTCPConnection)watcher.data;
 		
 		if( (conn.m_eventsExpected & revents) != 0 )
 			LibevDriver.ms_core.resumeTask(conn.m_owner);
@@ -713,7 +713,7 @@ private extern(C){
 	void write_cb(ev_loop_t *loop, ev_io *watcher, int revents)
 	{
 		logTrace("write event on %d: %d", watcher.fd, revents);
-		auto conn = cast(LibevTcpConnection)watcher.data;
+		auto conn = cast(LibevTCPConnection)watcher.data;
 		LibevDriver.ms_core.resumeTask(conn.m_owner);
 	}
 }
