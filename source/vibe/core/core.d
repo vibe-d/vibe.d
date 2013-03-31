@@ -9,6 +9,7 @@ module vibe.core.core;
 
 public import vibe.core.driver;
 
+import vibe.core.concurrency;
 import vibe.core.log;
 import vibe.utils.array;
 import std.algorithm;
@@ -136,45 +137,71 @@ Task runTask(void delegate() task)
 	f.m_taskFunc = task;
 	f.m_taskCounter++;
 	auto handle = f.task();
-	logDebug("initial task call");
+	logTrace("initial task call");
 	s_core.resumeTask(handle, null, true);
-	logDebug("run task out");
+	logTrace("run task out");
 	return handle;
 }
 
 /**
 	Runs a new asynchronous task in a worker thread.
 
-	NOTE: the interface of this function will change in the future to ensure that no unprotected
-	data is passed between threads!
-
-	NOTE: You should not use this function yet and it currently behaves just like runTask.
+	Only function pointers with weakly isolated arguments are allowed to be
+	able to guarantee thread-safety.
 */
-void runWorkerTask(void delegate() task)
+void runWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
 {
-	if( st_workerTaskMutex ){
-		synchronized(st_workerTaskMutex){
-			st_workerTasks ~= task;
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	runWorkerTask_unsafe({ func(args); });
+}
+/// ditto
+void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
+{
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	runWorkerTask_unsafe({ object.method(args); });
+}
+
+private void runWorkerTask_unsafe(void delegate() del)
+{
+	if (st_workerTaskMutex) {
+		synchronized (st_workerTaskMutex) {
+			st_workerTasks ~= del;
 		}
 		st_workerTaskSignal.emit();
 	} else {
-		runTask(task);
+		runTask(del);
 	}
 }
 
 /**
-	Runs a task in all worker threads concurrently.
+	Runs a new asynchronous task in all worker threads concurrently.
+
+	This function is mainly useful for long-living tasks that distribute their
+	work across all CPU cores. Only function pointers with weakly isolated
+	arguments are allowed to be able to guarantee thread-safety.
 */
-void runWorkerTaskDist(void delegate() task)
+void runWorkerTaskDist(R, ARGS...)(R function(ARGS) func, ARGS args)
 {
-	if( st_workerTaskMutex ){
-		synchronized(st_workerTaskMutex){
-			foreach(ref ctx; st_workerThreads)
-				ctx.taskQueue ~= task;
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	runWorkerTaskDist_unsafe({ func(args); });
+}
+/// ditto
+void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
+{
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	runWorkerTaskDist_unsafe({ object.method(args); });
+}
+
+private void runWorkerTaskDist_unsafe(void delegate() del)
+{
+	if (st_workerTaskMutex) {
+		synchronized (st_workerTaskMutex) {
+			foreach (ref ctx; st_workerThreads)
+				ctx.taskQueue ~= del;
 		}
 		st_workerTaskSignal.emit();
 	} else {
-		runTask(task);
+		runTask(del);
 	}
 }
 

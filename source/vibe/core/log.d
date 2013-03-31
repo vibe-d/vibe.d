@@ -276,7 +276,7 @@ class HTMLLogger : Logger {
 			auto dst = m_logFile.lockingTextWriter();
 			filterHtmlEscape(dst, msg.text);
 		}
-		m_logFile.write(`</div>`, msg.text);
+		m_logFile.write(`</div>`);
 		m_logFile.writeln(`</div>`);
 		m_logFile.flush();
 	}
