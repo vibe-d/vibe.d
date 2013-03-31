@@ -94,14 +94,14 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 */
 class WebSocket {
 	private {
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 	}
 
 	this(Stream conn)
 	{
-		m_conn = cast(TcpConnection)conn;
+		m_conn = cast(TCPConnection)conn;
 		assert(m_conn);
 	}
 

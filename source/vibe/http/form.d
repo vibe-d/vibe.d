@@ -162,7 +162,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	"index" will be made available via url_prefix. method_name is generated from
 	the original method name by the same rules as for
 	vibe.http.rest.registerRestInterface. All these methods might take a
-	HttpServerRequest parameter and a HttpServerResponse parameter, but don't have
+	HTTPServerRequest parameter and a HTTPServerResponse parameter, but don't have
 	to.
 
 	All additional parameters will be filled with available form-data fields.
@@ -215,23 +215,23 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	---
 	class FrontEnd {
 		// GET /
-		void index(HttpServerResponse res)
+		void index(HTTPServerResponse res)
 		{
 			res.render!("index.dt");
 		}
 
 		/// GET /files?folder=...
-		void getFiles(HttpServerRequest req, HttpServerResponse res, string folder)
+		void getFiles(HTTPServerRequest req, HTTPServerResponse res, string folder)
 		{
 			res.render!("files.dt", req, folder);
 		}
 
 		/// POST /login
-		void postLogin(HttpServerRequest req, HttpServerResponse res, string username,
+		void postLogin(HTTPServerRequest req, HTTPServerResponse res, string username,
 			string password)
 		{
 			if( username != "tester" || password != "secret" )
-				throw new HttpStatusException(HttpStatus.Unauthorized);
+				throw new HTTPStatusException(HTTPStatus.Unauthorized);
 			auto session = req.session;
 			if( !session ) session = res.startSession();
 			session["username"] = username;
@@ -241,11 +241,11 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 
 	static this()
 	{
-		auto settings = new HttpServerSettings;
+		auto settings = new HTTPServerSettings;
 		settings.port = 8080;
 		auto router = new URLRouter;
 		registerFormInterface(router, new FrontEnd);
-		listenHttp(settings, router);
+		listenHTTP(settings, router);
 	}
 	---
 
@@ -312,19 +312,19 @@ void registerFormMethod(string method, I)(URLRouter router, I instance, string u
 
 
 /*
-	Generate a HttpServerRequestDelegate from a generic function with arbitrary arguments.
+	Generate a HTTPServerRequestDelegate from a generic function with arbitrary arguments.
 	The arbitrary arguments will be filled in with data from the form in req. For details see applyParametersFromAssociativeArrays.
 	See_Also: applyParametersFromAssociativeArrays
 	Params:
 		delegate = Some function, which some arguments which must be constructible from strings with to!ArgType(some_string), except one optional parameter
-		of type HttpServerRequest and one of type HttpServerResponse which are passed over.
+		of type HTTPServerRequest and one of type HTTPServerResponse which are passed over.
 
-	Returns: A HttpServerRequestDelegate which passes over any form data to the given function.
+	Returns: A HTTPServerRequestDelegate which passes over any form data to the given function.
 */
 /// private
-HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
+HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
 {
-	void handler(HttpServerRequest req, HttpServerResponse res)
+	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		string error;
 		enforce(applyParametersFromAssociativeArray(req, res, func, error, strict), error);
@@ -339,13 +339,13 @@ HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Fla
 	of the passed method and will only raise an error if no conforming overload is found.
 */
 /// private
-HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
+HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
 {
 	import std.stdio;
-	void handler(HttpServerRequest req, HttpServerResponse res)
+	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		import std.traits;
-		string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+		string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
 //		alias MemberFunctionsTuple!(T, method) overloads;
 		string errors;
 		foreach(func; __traits(getOverloads, T, method)) {
@@ -365,7 +365,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	Tries to apply all named arguments in args to func.
 
 	If it succeeds it calls the function with req, res (if it has one
-	parameter of type HttpServerRequest and one of type HttpServerResponse), and
+	parameter of type HTTPServerRequest and one of type HTTPServerResponse), and
 	all the values found in args. 
 
 	If any supplied argument could not be applied or the method 
@@ -377,7 +377,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	Applying data happens as follows: 
 	
 	1. All parameters are traversed
-	2. If parameter is of type HttpServerRequest or HttpServerResponse req/res will be applied.
+	2. If parameter is of type HTTPServerRequest or HTTPServerResponse req/res will be applied.
 	3. If the parameters name is found in the form, the form data has to be convertible with conv.to to the parameters type, otherwise this method returns false.
 	4. If the parameters name is not found in the form, but is a struct, its fields are traversed and searched in the form. The form needs to contain keys in the form: parameterName_structField.
 		So if you have a struct paramter foo with a field bar and a field fooBar, the form would need to contain keys: foo_bar and foo_fooBar. The struct fields maybe datafields or properties.
@@ -390,11 +390,11 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	See_Also: formMethodHandler
 
 	Params:
-		req = The HttpServerRequest object that gets queried for form
+		req = The HTTPServerRequest object that gets queried for form
 		data (req.query for GET requests, req.form for POST requests) and that is
 		passed on to func, if func has a parameter of matching type. Each key in the
 		form data must match a parameter name, the corresponding value is then applied.
-		HttpServerRequest and HttpServerResponse arguments are excluded as they are
+		HTTPServerRequest and HTTPServerResponse arguments are excluded as they are
 		qrovided by the passed req and res objects.
 
 
@@ -407,23 +407,23 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	Returns: true if successful, false otherwise.
 */
 /// private
-private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error, Flag!"strict" strict) {
+private bool applyParametersFromAssociativeArray(Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
 }
 
 // Overload which takes additional parameter for handling overloads of func.
 /// private
-private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error, Flag!"strict" strict) {
+private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	alias ParameterTypeTuple!Overload ParameterTypes;
 	ParameterTypes args;
-	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+	string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
 	int count=0;
 	Error e;
 	foreach(i, item; ParameterIdentifierTuple!Overload) {
-		static if(is(ParameterTypes[i] : HttpServerRequest)) {
+		static if(is(ParameterTypes[i] : HTTPServerRequest)) {
 			args[i] = req;
 		}
-		else static if(is(ParameterTypes[i] : HttpServerResponse)) {
+		else static if(is(ParameterTypes[i] : HTTPServerResponse)) {
 			args[i] = res;
 		}
 		else {
@@ -487,7 +487,7 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 		Address address;
    }
    // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"] 
-   void postPerson(HttpServerRequest req, HttpServerResponse res) {
+   void postPerson(HTTPServerRequest req, HTTPServerResponse res) {
 		Person p;
 		// We have a default value for country if not provided, so we don't care that it is not:
 		p.address.country="Important Country";
@@ -501,12 +501,12 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
    --- 
   * The mechanism is more useful in get requests, when you have good default values for unspecified parameters.
   * Params:
-  *		req  = The HttpServerRequest that contains the form data. (req.query or req.form will be used depending on HttpMethod)
+  *		req  = The HTTPServerRequest that contains the form data. (req.query or req.form will be used depending on HTTPMethod)
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(T)(HttpServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T) {
-	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T) {
+	string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
 	if(form.length==0)
 		return FormDataLoadResult(0, 0);
 	Error error;

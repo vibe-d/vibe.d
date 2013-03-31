@@ -71,7 +71,7 @@ alias compileDietFile parseDietFile;
 /**
 	Compatibility version of parseDietFile().
 
-	This function should only be called indiretly through HttpServerResponse.renderCompat().
+	This function should only be called indirectly through HTTPServerResponse.renderCompat().
 
 */
 void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
@@ -116,7 +116,7 @@ alias compileDietFileCompat parseDietFileCompat;
 
 	Examples:
 	---
-	void handleRequest(HttpServerRequest req, HttpServerResponse res)
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		int this_variable_is_automatically_visible_to_the_template;
 		mixin(compileDietFileMixin!("index.dt", "res.bodyWriter"));

@@ -95,7 +95,7 @@ interface EventDriver {
 		interface. conn_callback is called for every incoming connection, each time from a
 		new task.
 	*/
-	TCPListener listenTCP(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options);
+	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options);
 
 	/// Compatibility alias, will be deprecated soon.
 	alias listenTcp = listenTCP;

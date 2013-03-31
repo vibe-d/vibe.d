@@ -376,7 +376,7 @@ private class Application {
 /// The default supplier for packages, which is the registry
 /// hosted by vibed.org.
 PackageSupplier defaultPackageSupplier() {
-	Url url = Url.parse("http://registry.vibed.org/");
+	URL url = URL("http://registry.vibed.org/");
 	logDebug("Using the registry from %s", url);
 	return new RegistryPS(url);
 }

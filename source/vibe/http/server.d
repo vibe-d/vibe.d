@@ -121,7 +121,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 	{
 		try {
 			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
-			listenTcp(settings.port, (TcpConnection conn){ handleHTTPConnection(conn, listener); }, addr, dist ? TcpListenOptions.distribute : TcpListenOptions.defaults);
+			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, listener); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
 			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
@@ -932,7 +932,7 @@ final class HTTPServerResponse : HTTPResponse {
 				app.put(n);
 				app.put('=');
 				auto appref = &app;
-				filterUrlEncode(appref, cookie.value);
+				filterURLEncode(appref, cookie.value);
 				if ( cookie.domain ) {
 					app.put("; Domain=");
 					app.put(cookie.domain);
@@ -1043,7 +1043,7 @@ private {
 	__gshared HTTPServerListener[] g_listeners;
 }
 
-private void handleHTTPConnection(TcpConnection connection, HTTPServerListener listen_info)
+private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
 {
 	Stream http_stream = connection;
 	FreeListRef!SslStream ssl_stream;

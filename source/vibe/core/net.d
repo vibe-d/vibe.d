@@ -41,15 +41,15 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 */
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	TcpListener[] ret;
-	if( auto l = listenTcp(port, connection_callback, "::", options) ) ret ~= l;
-	if( auto l = listenTcp(port, connection_callback, "0.0.0.0", options) ) ret ~= l;
+	TCPListener[] ret;
+	if (auto l = listenTCP(port, connection_callback, "::", options)) ret ~= l;
+	if (auto l = listenTCP(port, connection_callback, "0.0.0.0", options)) ret ~= l;
 	return ret;
 }
 /// ditto
 TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) connection_callback, string address, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	return getEventDriver().listenTcp(port, connection_callback, address, options);
+	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -58,16 +58,16 @@ alias listenTcp = listenTCP;
 /**
 	Starts listening on the specified port.
 
-	This function is the same as listenTcp but takes a function callback instead of a delegate.
+	This function is the same as listenTCP but takes a function callback instead of a delegate.
 */
 TCPListener[] listenTCP_s(ushort port, void function(TCPConnection stream) connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	return listenTcp(port, toDelegate(connection_callback), options);
+	return listenTCP(port, toDelegate(connection_callback), options);
 }
 /// ditto
 TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connection_callback, string address, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	return listenTcp(port, toDelegate(connection_callback), address, options);
+	return listenTCP(port, toDelegate(connection_callback), address, options);
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -78,7 +78,7 @@ alias listenTcpS = listenTCP_s;
 */
 TCPConnection connectTCP(string host, ushort port)
 {
-	return getEventDriver().connectTcp(host, port);
+	return getEventDriver().connectTCP(host, port);
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -90,7 +90,7 @@ alias connectTcp = connectTCP;
 */
 UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 {
-	return getEventDriver().listenUdp(port, bind_address);
+	return getEventDriver().listenUDP(port, bind_address);
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -212,7 +212,7 @@ interface UDPConnection : EventedObject {
 
 	/** Locks the UDP connection to a certain peer.
 
-		Once connected, the UdpConnection can only communicate with the specified peer.
+		Once connected, the UDPConnection can only communicate with the specified peer.
 		Otherwise communication with any reachable peer is possible.
 	*/
 	void connect(string host, ushort port);

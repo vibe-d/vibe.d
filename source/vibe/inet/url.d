@@ -161,7 +161,7 @@ struct URL {
 	const { 
 		auto str = appender!string();
 		str.reserve(m_pathString.length + 2 + queryString.length + anchor.length);
-		filterUrlEncode(str, path.toString(), "/");
+		filterURLEncode(str, path.toString(), "/");
 		if( queryString.length ) {
 			str.put("?");
 			str.put(queryString);

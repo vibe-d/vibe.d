@@ -32,20 +32,20 @@ import std.traits;
 		'authInjector' and 'somethingInjector' can process the request and decide what to do.
 
 		---
-		void authInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void authInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
 			Next!(Aliases, userinfo)(req, res);
 		}
 
-		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void somethingInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string something_else;
 			Next!(Aliases, something_else)(req, res);
 		}
 
-		void page(Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void page(Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string message = "Welcome to the example page!"
 			res.render!("home.dt", Aliases, message);
@@ -53,7 +53,7 @@ import std.traits;
 
 		static this()
 		{
-			auto router = new UrlRouter;
+			auto router = new URLRouter;
 			router.get("/", inject!(page, authInjector, somethingInjector));
 		} 
 		---
@@ -69,14 +69,14 @@ import std.traits;
 
 	Examples:
 		---
-		void authInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void authInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
 			Next!(Aliases, userinfo)(req, res);
 		}
 
-		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void somethingInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			// access the userinfo variable:
 			if( InjectedParams!Aliases.userinfo.length == 0 ) return;
@@ -156,7 +156,7 @@ private template injectReverse(Injectors...)
 }
 
 /// private
-void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
+void reqInjector(alias Next, Vars...)(HTTPServerRequest req, HTTPServerResponse res)
 {
 	Next!(Vars, req)(req, res);
 }

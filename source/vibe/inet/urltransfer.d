@@ -37,8 +37,8 @@ void download(URL url, scope void delegate(scope InputStream) callback, HTTPClie
 		bool done = false;
 		client.request(
 			(scope HTTPClientRequest req) {
-				req.requestUrl = url.localURI;
-				logTrace("REQUESTING %s!", req.requestUrl);
+				req.requestURL = url.localURI;
+				logTrace("REQUESTING %s!", req.requestURL);
 			},
 			(scope HTTPClientResponse res) {
 				logTrace("GOT ANSWER!");
@@ -57,7 +57,7 @@ void download(URL url, scope void delegate(scope InputStream) callback, HTTPClie
 						logDebug("Redirect to '%s'", *pv);
 						if( startsWith((*pv), "http:") || startsWith((*pv), "https:") ){
 			logTrace("parsing %s", *pv);
-							url = Url.parse(*pv);
+							url = URL(*pv);
 						} else url.localURI = *pv;
 						break;
 				}
@@ -72,7 +72,7 @@ void download(URL url, scope void delegate(scope InputStream) callback, HTTPClie
 /// ditto
 void download(string url, scope void delegate(scope InputStream) callback, HTTPClient client = null)
 {
-	download(Url(url), callback, client);
+	download(URL(url), callback, client);
 }
 
 /// ditto

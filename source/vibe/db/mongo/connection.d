@@ -89,7 +89,7 @@ class MongoDBException : MongoException
 class MongoConnection : EventedObject {
 	private {
 		MongoClientSettings settings;
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
 	}
@@ -138,7 +138,7 @@ class MongoConnection : EventedObject {
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
 		 */
-		m_conn = connectTcp(settings.hosts[0].name, settings.hosts[0].port);
+		m_conn = connectTCP(settings.hosts[0].name, settings.hosts[0].port);
 		m_bytesRead = 0;
 	}
 
@@ -387,7 +387,7 @@ class MongoConnection : EventedObject {
 }
 
 /**
- * Parses the given string as a mongodb URL. Url must be in the form documented at
+ * Parses the given string as a mongodb URL. The URL must be in the form documented at
  * $(LINK http://www.mongodb.org/display/DOCS/Connections) which is:
  * 
  * mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
