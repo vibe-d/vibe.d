@@ -208,8 +208,8 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	}
 
 	if( settings.connectionType == SMTPConnectionType.ssl ){
-		auto ctx = new SslContext();
-		conn = new SslStream(raw_conn, ctx, SslStreamState.connecting);
+		auto ctx = new SSLContext();
+		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
 	greet();
@@ -217,8 +217,8 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	if( settings.connectionType == SMTPConnectionType.startTLS ){
 		conn.write("STARTTLS\r\n");
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
-		auto ctx = new SslContext();
-		conn = new SslStream(raw_conn, ctx, SslStreamState.connecting);
+		auto ctx = new SSLContext();
+		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 		greet();
 	}
 

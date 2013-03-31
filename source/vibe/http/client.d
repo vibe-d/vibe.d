@@ -136,7 +136,7 @@ class HTTPClient : EventedObject {
 		ushort m_port;
 		TCPConnection m_conn;
 		Stream m_stream;
-		SslContext m_ssl;
+		SSLContext m_ssl;
 		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit; 
@@ -155,7 +155,7 @@ class HTTPClient : EventedObject {
 		m_conn = null;
 		m_server = server;
 		m_port = port;
-		m_ssl = ssl ? new SslContext() : null;
+		m_ssl = ssl ? new SSLContext() : null;
 	}
 
 	void disconnect()
@@ -215,7 +215,7 @@ class HTTPClient : EventedObject {
 		if( !m_conn || !m_conn.connected ){
 			m_conn = connectTCP(m_server, m_port);
 			m_stream = m_conn;
-			if( m_ssl ) m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
+			if( m_ssl ) m_stream = new SSLStream(m_conn, m_ssl, SSLStreamState.connecting);
 
 			now = Clock.currTime(UTC());
 		}

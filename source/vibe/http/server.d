@@ -150,7 +150,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 			if( (settings.sslKeyFile || settings.sslCertFile) && !settings.sslContext ){
 				logDebug("Creating SSL context...");
 				assert(settings.sslCertFile.length && settings.sslKeyFile.length);
-				settings.sslContext = new SslContext(settings.sslCertFile, settings.sslKeyFile);
+				settings.sslContext = new SSLContext(settings.sslCertFile, settings.sslKeyFile);
 				logDebug("... done");
 			}
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
@@ -403,7 +403,7 @@ class HTTPServerSettings {
 	/// ditto
 	string sslKeyFile;
 	/// ditto
-	SslContext sslContext;
+	SSLContext sslContext;
 
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
@@ -982,7 +982,7 @@ private struct HTTPServerContext {
 private struct HTTPServerListener {
 	string bindAddress;
 	ushort bindPort;
-	SslContext sslContext;
+	SSLContext sslContext;
 }
 
 private enum MaxHTTPHeaderLineLength = 4096;
@@ -1046,7 +1046,7 @@ private {
 private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
 {
 	Stream http_stream = connection;
-	FreeListRef!SslStream ssl_stream;
+	FreeListRef!SSLStream ssl_stream;
 
 	if (!connection.waitForData(10.seconds())) {
 		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
@@ -1056,7 +1056,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	// If this is a HTTPS server, initiate SSL
 	if( listen_info.sslContext ){
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SslStream(http_stream, listen_info.sslContext, SslStreamState.Accepting);
+		ssl_stream = FreeListRef!SSLStream(http_stream, listen_info.sslContext, SSLStreamState.accepting);
 		http_stream = ssl_stream;
 	}
 
