@@ -49,7 +49,7 @@ final class Session {
 		Examples:
 		---
 		// sends all session entries to the requesting browser
-		void handleRequest(HttpServerRequest req, HttpServerResponse res)
+		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			res.contentType = "text/plain";
 			foreach(key, value; req.session)
@@ -72,7 +72,7 @@ final class Session {
 
 		Examples:
 		---
-		void handleRequest(HttpServerRequest req, HttpServerResponse res)
+		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			res.contentType = "text/plain";
 			res.bodyWriter.write("Username: " ~ req.session["userName"]);

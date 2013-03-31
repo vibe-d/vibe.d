@@ -18,63 +18,66 @@ import std.functional;
 /**
 	An interface for HTTP request routers.
 */
-interface HttpRouter : HttpServerRequestHandler {
+interface HTTPRouter : HTTPServerRequestHandler {
 	// Adds a new route for request that match the path and method
-	HttpRouter match(HttpMethod method, string path, HttpServerRequestDelegate cb);
+	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
 	// ditto
-	final HttpRouter match(HttpMethod method, string path, HttpServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
+	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
 	// ditto
-	final HttpRouter match(HttpMethod method, string path, HttpServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
+	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
 
-	// Handles the Http request by dispatching it to the registered request handler
-	void handleRequest(HttpServerRequest req, HttpServerResponse res);
+	// Handles the HTTP request by dispatching it to the registered request handlers.
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
 
 	// Adds a new route for GET requests matching the specified pattern.
-	final HttpRouter get(string url_match, HttpServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
+	final HTTPRouter get(string url_match, HTTPServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
 	// ditto
-	final HttpRouter get(string url_match, HttpServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
+	final HTTPRouter get(string url_match, HTTPServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
 	// ditto
-	final HttpRouter get(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.GET, url_match, cb); }
+	final HTTPRouter get(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.GET, url_match, cb); }
 
 	// Adds a new route for POST requests matching the specified pattern.
-	final HttpRouter post(string url_match, HttpServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
+	final HTTPRouter post(string url_match, HTTPServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
 	// ditto
-	final HttpRouter post(string url_match, HttpServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
+	final HTTPRouter post(string url_match, HTTPServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
 	// ditto
-	final HttpRouter post(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.POST, url_match, cb); }
+	final HTTPRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
 
 	// Adds a new route for PUT requests matching the specified pattern.
-	final HttpRouter put(string url_match, HttpServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
+	final HTTPRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
 	// ditto
-	final HttpRouter put(string url_match, HttpServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
+	final HTTPRouter put(string url_match, HTTPServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
 	// ditto
-	final HttpRouter put(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PUT, url_match, cb); }
+	final HTTPRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
 
 	// Adds a new route for DELETE requests matching the specified pattern.
-	final HttpRouter delete_(string url_match, HttpServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
+	final HTTPRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
 	// ditto
-	final HttpRouter delete_(string url_match, HttpServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
+	final HTTPRouter delete_(string url_match, HTTPServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
 	// ditto
-	final HttpRouter delete_(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.DELETE, url_match, cb); }
+	final HTTPRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
 
 	// Adds a new route for PATCH requests matching the specified pattern.
-	final HttpRouter patch(string url_match, HttpServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
+	final HTTPRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
 	// ditto
-	final HttpRouter patch(string url_match, HttpServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
+	final HTTPRouter patch(string url_match, HTTPServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
 	// ditto
-	final HttpRouter patch(string url_match, HttpServerRequestDelegate cb) { return match(HttpMethod.PATCH, url_match, cb); }
+	final HTTPRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
 
 	// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
-	final HttpRouter any(string url_match, HttpServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
+	final HTTPRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
 	// ditto
-	final HttpRouter any(string url_match, HttpServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
+	final HTTPRouter any(string url_match, HTTPServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
 	// ditto
-	final HttpRouter any(string url_match, HttpServerRequestDelegate cb)
+	final HTTPRouter any(string url_match, HTTPServerRequestDelegate cb)
 	{
 		return get(url_match, cb).post(url_match, cb)
 			.put(url_match, cb).delete_(url_match, cb).patch(url_match, cb);
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias HttpRouter = HTTPRouter;
 
 
 /++
@@ -90,7 +93,7 @@ interface HttpRouter : HttpServerRequestHandler {
 	a 404 error.
 
 	---
-	void addGroup(HttpServerRequest req, HttpServerResponse res)
+	void addGroup(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		// Route variables are accessible via the params map
 		logInfo("Getting group %s for user %s.", req.params["groupname"], req.params["username"]);
@@ -117,22 +120,22 @@ interface HttpRouter : HttpServerRequestHandler {
 		router.get("/static/*", &serveStaticFiles)
 
 		// Setup a HTTP server...
-		auto settings = new HttpServerSettings;
+		auto settings = new HTTPServerSettings;
 		// ...
 
-		// The router can be directly passed to the listenHttp function as
+		// The router can be directly passed to the listenHTTP function as
 		// the main request handler.
-		listenHttp(settings, router);
+		listenHTTP(settings, router);
 	}
 	---
 +/
-class UrlRouter : HttpRouter {
+class URLRouter : HTTPRouter {
 	private {
-		Route[][HttpMethod.max+1] m_routes;
+		Route[][HTTPMethod.max+1] m_routes;
 	}
 
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
-	UrlRouter match(HttpMethod method, string path, HttpServerRequestDelegate cb)
+	UrlRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
 		m_routes[method] ~= Route(path, cb);
 		return this;
@@ -143,7 +146,7 @@ class UrlRouter : HttpRouter {
 	alias match addRoute;
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
-	void handleRequest(HttpServerRequest req, HttpServerResponse res)
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto method = req.method;
 
@@ -160,7 +163,7 @@ class UrlRouter : HttpRouter {
 					}
 				}
 			}
-			if( method == HttpMethod.HEAD ) method = HttpMethod.GET;
+			if( method == HTTPMethod.HEAD ) method = HTTPMethod.GET;
 			else break;
 		}
 
@@ -168,10 +171,13 @@ class UrlRouter : HttpRouter {
 	}
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias UrlRouter = URLRouter;
+
 
 private struct Route {
 	string pattern;
-	HttpServerRequestDelegate cb;
+	HTTPServerRequestDelegate cb;
 	
 	bool matches(string url, ref string[string] params)
 	const {

@@ -17,8 +17,8 @@ import std.exception;
 import std.string;
 
 
-class HttpConsoleLogger : HttpLogger {
-	this(HttpServerSettings settings, string format)
+class HTTPConsoleLogger : HTTPLogger {
+	this(HTTPServerSettings settings, string format)
 	{
 		super(settings, format);
 	}
@@ -29,12 +29,12 @@ class HttpConsoleLogger : HttpLogger {
 	}
 }
 
-class HttpFileLogger : HttpLogger {
+class HTTPFileLogger : HTTPLogger {
 	private {
 		FileStream m_stream;
 	}
 
-	this(HttpServerSettings settings, string format, string filename)
+	this(HTTPServerSettings settings, string format, string filename)
 	{
 		m_stream = openFile(filename, FileMode.Append);
 		super(settings, format);
@@ -54,13 +54,13 @@ class HttpFileLogger : HttpLogger {
 	}
 }
 
-class HttpLogger {
+class HTTPLogger {
 	private {
 		string m_format;
-		HttpServerSettings m_settings;
+		HTTPServerSettings m_settings;
 	}
 
-	this(HttpServerSettings settings, string format)
+	this(HTTPServerSettings settings, string format)
 	{
 		m_format = format;
 		m_settings = settings;
@@ -68,7 +68,7 @@ class HttpLogger {
 
 	void close() {}
 
-	void log(HttpServerRequest req, HttpServerResponse res)
+	void log(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto ln = formatApacheLog(m_format, req, res, m_settings);
 		writeLine(ln);
@@ -77,7 +77,7 @@ class HttpLogger {
 	protected abstract void writeLine(string ln);
 }
 
-string formatApacheLog(string format, HttpServerRequest req, HttpServerResponse res, HttpServerSettings settings)
+string formatApacheLog(string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
 {
 	enum State {Init, Directive, Status, Key, Command}
 

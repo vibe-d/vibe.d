@@ -44,9 +44,9 @@ import std.string;
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
+HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 {
-	void callback(HttpServerRequest req, HttpServerResponse res)
+	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
@@ -72,7 +72,7 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
-			res.statusCode = HttpStatus.BadRequest;
+			res.statusCode = HTTPStatus.BadRequest;
 			res.writeVoidBody();
 			return;
 		}

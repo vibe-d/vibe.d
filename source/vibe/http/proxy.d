@@ -30,17 +30,21 @@ import std.exception;
 	You can use the hostName field in the 'settings' to combine multiple internal HTTP servers
 	into one public web server with multiple virtual hosts.
 */
-void listenHttpReverseProxy(HttpServerSettings settings, string destination_host, ushort destination_port)
+void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host, ushort destination_port)
 {
 	// disable all advanced parsing in the server
-	settings.options = HttpServerOption.None;
-	listenHttp(settings, reverseProxyRequest(destination_host, destination_port));
+	settings.options = HTTPServerOption.None;
+	listenHTTP(settings, reverseProxyRequest(destination_host, destination_port));
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenHttpReverseProxy = listenHTTPReverseProxy;
+
 
 /**
 	Returns a HTTP request handler that forwards any request to the specified host/port.
 */
-HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort destination_port)
+HTTPServerRequestDelegate reverseProxyRequest(string destination_host, ushort destination_port)
 {
 	static immutable string[] non_forward_headers = ["Content-Length", "Transfer-Encoding", "Content-Encoding", "Connection"];
 	static InetHeaderMap non_forward_headers_map;
@@ -53,7 +57,7 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 	url.host = destination_host;
 	url.port = destination_port;
 
-	void handleRequest(HttpServerRequest req, HttpServerResponse res)
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto rurl = url;
 		rurl.localURI = req.url;
@@ -74,14 +78,14 @@ HttpServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		res.statusCode = cres.statusCode;
 
 		// special case for empty response bodies
-		if( "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HttpMethod.HEAD ){
+		if( "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HTTPMethod.HEAD ){
 			res.writeVoidBody();
 			return;
 		}
 
 		// enforce compatibility with HTTP/1.0 clients that do not support chunked encoding
 		// (Squid and some other proxies)
-		if( res.httpVersion == HttpVersion.HTTP_1_0 && ("Transfer-Encoding" in cres.headers || "Content-Length" !in cres.headers) ){
+		if( res.httpVersion == HTTPVersion.HTTP_1_0 && ("Transfer-Encoding" in cres.headers || "Content-Length" !in cres.headers) ){
 			// copy all headers that may pass from upstream to client
 			foreach( n, v; cres.headers ){
 				if( n !in non_forward_headers_map )

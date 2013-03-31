@@ -24,7 +24,7 @@ import std.string;
 /**
 	Configuration options for the static file server.
 */
-class HttpFileServerSettings {
+class HTTPFileServerSettings {
 	string serverPathPrefix = "/";
 	Duration maxAge = hours(24);
 	bool failIfNotFound = false;
@@ -37,7 +37,7 @@ class HttpFileServerSettings {
 		else during this function will NOT be verified by Vibe.d for correctness.
 		Make sure any alterations you make are complete and correct according to HTTP spec.
 	*/
-	void delegate(HttpServerRequest req, HttpServerResponse res, ref string physicalPath) preWriteCallback = null;
+	void delegate(HTTPServerRequest req, HTTPServerResponse res, ref string physicalPath) preWriteCallback = null;
 
 	this() {}
 
@@ -47,18 +47,22 @@ class HttpFileServerSettings {
 	}
 } 
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpFileServerSettings = HTTPFileServerSettings;
+
+
 /**
 	Returns a request handler that serves files from the specified directory.
 */
-HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSettings settings = null)
+HTTPServerRequestDelegate serveStaticFiles(string local_path, HTTPFileServerSettings settings = null)
 {
-	if( !settings ) settings = new HttpFileServerSettings;
+	if( !settings ) settings = new HTTPFileServerSettings;
 	if( !local_path.endsWith("/") ) local_path ~= "/";
 	if( !settings.serverPathPrefix.endsWith("/") ) settings.serverPathPrefix ~= "/";
 
 	auto lpath = Path(local_path);
 
-	void callback(HttpServerRequest req, HttpServerResponse res)
+	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		string srv_path;
 		if( auto pp = "pathMatch" in req.params ) srv_path = *pp;
@@ -84,21 +88,21 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 
 		// return if the file does not exist
 		if( !exists(path) ){
-			if( settings.failIfNotFound ) throw new HttpStatusException(HttpStatus.NotFound);
+			if( settings.failIfNotFound ) throw new HTTPStatusException(HTTPStatus.NotFound);
 			else return;
 		}
 
 		DirEntry dirent;
 		try dirent = dirEntry(path);
 		catch(FileException){
-			throw new HttpStatusException(HttpStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
+			throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
 		}
 
 		auto lastModified = toRFC822DateTimeString(dirent.timeLastModified.toUTC());
 		
 		if( auto pv = "If-Modified-Since" in req.headers ) {
 			if( *pv == lastModified ) {
-				res.statusCode = HttpStatus.NotModified;
+				res.statusCode = HTTPStatus.NotModified;
 				res.writeVoidBody();
 				return;
 			}
@@ -108,7 +112,7 @@ HttpServerRequestDelegate serveStaticFiles(string local_path, HttpFileServerSett
 		auto etag = "\"" ~ hexDigest!MD5(path ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)).idup ~ "\"";
 		if( auto pv = "If-None-Match" in req.headers ) {
 			if ( *pv == etag ) {
-				res.statusCode = HttpStatus.NotModified;
+				res.statusCode = HTTPStatus.NotModified;
 				res.writeVoidBody();
 				return;
 			}
