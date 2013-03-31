@@ -18,11 +18,11 @@ string htmlEscape(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
-		filterHtmlEscape(dst, str);
+		filterHTMLEscape(dst, str);
 		return dst.data;
 	} else {
 		auto dst = appender!string();
-		filterHtmlEscape(dst, str);
+		filterHTMLEscape(dst, str);
 		return dst.data;
 	}
 }
@@ -30,11 +30,15 @@ string htmlEscape(string str)
 
 /** Writes the HTML escaped version of a given string to an output range.
 */
-void filterHtmlEscape(R)(ref R dst, string str)
+void filterHTMLEscape(R)(ref R dst, string str)
 {
 	foreach( dchar ch; str )
-		filterHtmlEscape(dst, ch, HtmlEscapeFlags.escapeNewline);
+		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeNewline);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias filterHtmlEscape = filterHTMLEscape;
+
 
 /** Returns the HTML escaped version of a given string (also escapes double quotes).
 */
@@ -42,22 +46,26 @@ string htmlAttribEscape(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
-		filterHtmlAttribEscape(dst, str);
+		filterHTMLAttribEscape(dst, str);
 		return dst.data;
 	} else {
 		auto dst = appender!string();
-		filterHtmlAttribEscape(dst, str);
+		filterHTMLAttribEscape(dst, str);
 		return dst.data;
 	}
 }
 
 /** Writes the HTML escaped version of a given string to an output range (also escapes double quotes).
 */
-void filterHtmlAttribEscape(R)(ref R dst, string str)
+void filterHTMLAttribEscape(R)(ref R dst, string str)
 {
 	foreach( dchar ch; str )
-		filterHtmlEscape(dst, ch, HtmlEscapeFlags.escapeNewline|HtmlEscapeFlags.escapeQuotes);
+		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias filterHtmlAttribEscape = filterHTMLAttribEscape;
+
 
 /** Returns the HTML escaped version of a given string (escapes every character).
 */
@@ -65,18 +73,18 @@ string htmlAllEscape()(string str)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
-		filterHtmlAllEscape(dst, str);
+		filterHTMLAllEscape(dst, str);
 		return dst.data;
 	} else {
 		auto dst = appender!string();
-		filterHtmlAllEscape(dst, str);
+		filterHTMLAllEscape(dst, str);
 		return dst.data;
 	}
 }
 
 /** Writes the HTML escaped version of a given string to an output range (escapes every character).
 */
-void filterHtmlAllEscape(R)(ref R dst, string str)
+void filterHTMLAllEscape(R)(ref R dst, string str)
 {
 	foreach( dchar ch; str ){
 		dst.put("&#");
@@ -84,6 +92,9 @@ void filterHtmlAllEscape(R)(ref R dst, string str)
 		dst.put(';');
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias filterHtmlAllEscape = filterHTMLAllEscape;
 
 
 /**
@@ -93,7 +104,7 @@ string htmlEscapeMin(string str)
 {
 	auto dst = appender!string();
 	foreach( dchar ch; str )
-		filterHtmlEscape(dst, ch, HtmlEscapeFlags.escapeMinimal);
+		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeMinimal);
 	return dst.data();
 }
 
@@ -101,22 +112,22 @@ string htmlEscapeMin(string str)
 /**
 	Writes the HTML escaped version of a character to an output range.
 */
-void filterHtmlEscape(R)(ref R dst, dchar ch, HtmlEscapeFlags flags = HtmlEscapeFlags.escapeNewline )
+void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscapeFlags.escapeNewline )
 {
 	switch(ch){
 		default:
-			if( flags & HtmlEscapeFlags.escapeUnknown ){
+			if( flags & HTMLEscapeFlags.escapeUnknown ){
 				dst.put("&#");
 				dst.put(to!string(cast(int)ch)); 
 				dst.put(';');
 			} else dst.put(ch);
 			break;
 		case '"':
-			if( flags & HtmlEscapeFlags.escapeQuotes ) dst.put("&quot;");
+			if( flags & HTMLEscapeFlags.escapeQuotes ) dst.put("&quot;");
 			else dst.put('"');
 			break;
 		case '\r', '\n':
-			if( flags & HtmlEscapeFlags.escapeNewline ){
+			if( flags & HTMLEscapeFlags.escapeNewline ){
 				dst.put("&#");
 				dst.put(to!string(cast(int)ch)); 
 				dst.put(';');
@@ -137,12 +148,15 @@ void filterHtmlEscape(R)(ref R dst, dchar ch, HtmlEscapeFlags flags = HtmlEscape
 }
 
 
-enum HtmlEscapeFlags {
+enum HTMLEscapeFlags {
 	escapeMinimal = 0,
 	escapeQuotes = 1<<0,
 	escapeNewline = 1<<1,
 	escapeUnknown = 1<<2
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias HtmlEscapeFlags = HTMLEscapeFlags;
 
 private struct StringAppender {
 	string data;
