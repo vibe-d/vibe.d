@@ -39,7 +39,7 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 
 	logInfo("Listening for VibeDist connections on port %d", local_settings.port);
 
-	auto res = requestHTTP(Url.parse("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
+	auto res = requestHTTP(URL("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
 			req.writeJsonBody(regmsg);
 		});
 	scope(exit) destroy(res);

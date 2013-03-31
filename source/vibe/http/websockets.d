@@ -13,7 +13,7 @@
 	}
 
 	static this {
-		auto router = new UrlRouter;
+		auto router = new URLRouter;
 		router.get("/websocket", handleWebSockets(&handleConn))
 		
 		// Start HTTP server...

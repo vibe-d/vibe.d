@@ -44,18 +44,18 @@ import std.datetime;
 */
 HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null)
 {
-	return requestHTTP(Url.parse(url), requester);
+	return requestHTTP(URL.parse(url), requester);
 }
 /// ditto
-HTTPClientResponse requestHTTP(Url url, scope void delegate(scope HTTPClientRequest req) requester = null)
+HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null)
 {
-	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
-	enforce(url.host.length > 0, "Url must contain a host name.");
+	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	enforce(url.host.length > 0, "URL must contain a host name.");
 
 	bool ssl = url.schema == "https";
 	auto cli = connectHTTP(url.host, url.port, ssl);
 	auto res = cli.request((req){
-			req.requestUrl = url.localURI;
+			req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		});
@@ -69,18 +69,18 @@ HTTPClientResponse requestHTTP(Url url, scope void delegate(scope HTTPClientRequ
 /// ditto
 void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
 {
-	requestHTTP(Url(url), requester, responder);
+	requestHTTP(URL(url), requester, responder);
 }
 /// ditto
-void requestHTTP(Url url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
+void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
 {
-	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
-	enforce(url.host.length > 0, "Url must contain a host name.");
+	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	enforce(url.host.length > 0, "URL must contain a host name.");
 
 	bool ssl = url.schema == "https";
 	auto cli = connectHTTP(url.host, url.port, ssl);
 	cli.request((scope req){
-			req.requestUrl = url.localURI;
+			req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		}, responder);
@@ -329,11 +329,11 @@ final class HTTPClientRequest : HTTPRequest {
 
 		auto app = appender!string();
 		app.reserve(512);
-		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestUrl, getHTTPVersionString(httpVersion));
+		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		logTrace("--------------------");
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
-		logTrace("%s %s %s", httpMethodString(method), requestUrl, getHTTPVersionString(httpVersion));
+		logTrace("%s %s %s", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		foreach( k, v; headers ){
 			formattedWrite(app, "%s: %s\r\n", k, v);
 			logTrace("%s: %s", k, v);

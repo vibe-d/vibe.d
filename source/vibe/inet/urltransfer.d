@@ -23,12 +23,12 @@ import std.string;
 	Any redirects will be followed until the actual file resource is reached or if the redirection
 	limit of 10 is reached. Note that only HTTP(S) is currently supported.
 */
-void download(Url url, scope void delegate(scope InputStream) callback, HttpClient client = null)
+void download(URL url, scope void delegate(scope InputStream) callback, HTTPClient client = null)
 {
 	assert(url.username.length == 0 && url.password.length == 0, "Auth not supported yet.");
 	assert(url.schema == "http" || url.schema == "https", "Only http(s):// supported for now.");
 
-	if(!client) client = new HttpClient();
+	if(!client) client = new HTTPClient();
 	
 	foreach( i; 0 .. 10 ){
 		bool ssl = url.schema == "https";
@@ -36,17 +36,17 @@ void download(Url url, scope void delegate(scope InputStream) callback, HttpClie
 		logTrace("connect to %s", url.host);
 		bool done = false;
 		client.request(
-			(scope HttpClientRequest req) {
+			(scope HTTPClientRequest req) {
 				req.requestUrl = url.localURI;
 				logTrace("REQUESTING %s!", req.requestUrl);
 			},
-			(scope HttpClientResponse res) {
+			(scope HTTPClientResponse res) {
 				logTrace("GOT ANSWER!");
 
 				switch( res.statusCode ){
 					default:
-						throw new HttpStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
-					case HttpStatus.OK:
+						throw new HTTPStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
+					case HTTPStatus.OK:
 						callback(res.bodyReader);
 						done = true;
 						break;
@@ -70,7 +70,7 @@ void download(Url url, scope void delegate(scope InputStream) callback, HttpClie
 }
 
 /// ditto
-void download(string url, scope void delegate(scope InputStream) callback, HttpClient client = null)
+void download(string url, scope void delegate(scope InputStream) callback, HTTPClient client = null)
 {
 	download(Url(url), callback, client);
 }
@@ -86,7 +86,7 @@ void download(string url, string filename)
 }
 
 /// ditto
-void download(Url url, Path filename)
+void download(URL url, Path filename)
 {
 	download(url.toString(), filename.toNativeString());
 }

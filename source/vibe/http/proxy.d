@@ -52,7 +52,7 @@ HTTPServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 		foreach( n; non_forward_headers )
 			non_forward_headers_map[n] = "";
 
-	Url url;
+	URL url;
 	url.schema = "http";
 	url.host = destination_host;
 	url.port = destination_port;

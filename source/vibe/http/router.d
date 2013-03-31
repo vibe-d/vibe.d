@@ -101,7 +101,7 @@ alias HttpRouter = HTTPRouter;
 
 	static this()
 	{
-		auto router = new UrlRouter;
+		auto router = new URLRouter;
 		// Matches all GET requests for /users/*/groups/* and places
 		// the place holders in req.params as 'username' and 'groupname'.
 		router.get("/users/:username/groups/:groupname", &addGroup);
@@ -135,7 +135,7 @@ class URLRouter : HTTPRouter {
 	}
 
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
-	UrlRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
 		m_routes[method] ~= Route(path, cb);
 		return this;
@@ -167,7 +167,7 @@ class URLRouter : HTTPRouter {
 			else break;
 		}
 
-		logTrace("no route match: %s %s", req.method, req.requestUrl);
+		logTrace("no route match: %s %s", req.method, req.requestURL);
 	}
 }
 

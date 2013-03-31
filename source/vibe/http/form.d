@@ -47,7 +47,7 @@ bool parseFormData(ref string[string] fields, ref FilePart[string] files, string
 
 	if( ct_entries[0].strip() == "application/x-www-form-urlencoded" ){
 		auto bodyStr = cast(string)body_reader.readAll();
-		parseUrlEncodedForm(bodyStr, fields);
+		parseURLEncodedForm(bodyStr, fields);
 		return true;
 	}
 	if( ct_entries[0].strip() == "multipart/form-data" ){
@@ -60,7 +60,7 @@ bool parseFormData(ref string[string] fields, ref FilePart[string] files, string
 /**
 	Parses a url encoded form (query string format) and puts the key/value pairs into params.
 */
-void parseUrlEncodedForm(string str, ref string[string] params)
+void parseURLEncodedForm(string str, ref string[string] params)
 {
 	while(str.length > 0){
 		// name part
@@ -93,6 +93,9 @@ void parseUrlEncodedForm(string str, ref string[string] params)
 		}
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias parseUrlEncodedForm = parseURLEncodedForm;
 
 private void parseMultiPartForm(ref string[string] fields, ref FilePart[string] files,
 	string content_type, InputStream body_reader, size_t max_line_length)
@@ -240,14 +243,14 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	{
 		auto settings = new HttpServerSettings;
 		settings.port = 8080;
-		auto router = new UrlRouter;
+		auto router = new URLRouter;
 		registerFormInterface(router, new FrontEnd);
 		listenHttp(settings, router);
 	}
 	---
 
 */
-void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
+void registerFormInterface(I)(URLRouter router, I instance, string url_prefix,
 		MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict)
 {
 	foreach( method; __traits(allMembers, I) ){
@@ -295,7 +298,7 @@ unittest {
 		method = The name of the method to register. It might be
 		overloaded, one overload has to match any given form data, otherwise an error is triggered.
 */
-void registerFormMethod(string method, I)(UrlRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
+void registerFormMethod(string method, I)(URLRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
 {
 	string url(string name) {
 		return url_prefix ~ adjustMethodStyle(name, style);

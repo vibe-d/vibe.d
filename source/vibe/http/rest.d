@@ -115,7 +115,7 @@ import std.traits;
 
 		static this()
 		{
-			auto routes = new UrlRouter;
+			auto routes = new URLRouter;
 
 			registerRestInterface(routes, new MyApiImpl, "/api/");
 
@@ -127,7 +127,7 @@ import std.traits;
 	
 		RestInterfaceClient class for a seamless way to acces such a generated API
 */
-void registerRestInterface(T)(UrlRouter router, T instance, string urlPrefix = "/",
+void registerRestInterface(T)(URLRouter router, T instance, string urlPrefix = "/",
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	void addRoute(HttpMethod httpVerb, string url, HttpServerRequestDelegate handler, string[] params)
@@ -216,7 +216,7 @@ class RestInterfaceClient(I) : I
 	
 	alias void delegate(HttpClientRequest req) RequestFilter;
 	private {
-		Url m_baseUrl;
+		URL m_baseURL;
 		MethodStyle m_methodStyle;
 		RequestFilter m_requestFilter;
 	}
@@ -225,16 +225,16 @@ class RestInterfaceClient(I) : I
 	
 	/** Creates a new REST implementation of I
 	*/
-	this(string baseUrl, MethodStyle style = MethodStyle.lowerUnderscored)
+	this(string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseUrl = Url.parse(baseUrl);
+		m_baseURL = URL.parse(base_url);
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I());
 	}
 	/// ditto
-	this(Url baseUrl, MethodStyle style = MethodStyle.lowerUnderscored)
+	this(URL base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseUrl = baseUrl;
+		m_baseURL = base_url;
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I());
 	}
@@ -260,7 +260,7 @@ class RestInterfaceClient(I) : I
 #line 261 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
-		Url url = m_baseUrl;
+		URL url = m_baseURL;
 		if( name.length ) url ~= Path(name);
 		else if( !url.path.endsWithSlash ){
 			auto p = url.path;
@@ -595,7 +595,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					string url = meta[2];
 					
 					ret ~= format(
-						q{m_%s = new %s(m_baseUrl~PathEntry("%s"), m_methodStyle);},
+						q{m_%s = new %s(m_baseURL~PathEntry("%s"), m_methodStyle);},
 						implname,
 						implname,
 						url
@@ -833,7 +833,7 @@ struct OverridenMethod
 	
 	shared static this()
 	{
-		registerRestInterface!IAPI(new UrlRouter(), new API(), "/root/");
+		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
 		// now IAPI.getInfo is tied to "GET /root/info2"
 	}
 	---	

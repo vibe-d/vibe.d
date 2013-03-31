@@ -25,7 +25,7 @@ import std.string;
 /**
 	Parses an internet header according to RFC5322 (with RFC822 compatibility).
 */
-void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator())
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator())
 {
 	string hdr, hdrvalue;
 
@@ -53,6 +53,10 @@ void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 	}
 	addPreviousHeader();
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias parseRfc5322Header = parseRFC5322Header;
+
 
 private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 

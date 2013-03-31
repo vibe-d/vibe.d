@@ -508,7 +508,7 @@ final class HTTPServerRequest : HTTPRequest {
 		/** A map of general parameters for the request.
 
 			This map is supposed to be used by middleware functionality to store
-			information for later stages. For example vibe.http.router.UrlRouter uses this map
+			information for later stages. For example vibe.http.router.URLRouter uses this map
 			to store the value of any named placeholders.
 		*/
 		string[string] params;
@@ -581,9 +581,9 @@ final class HTTPServerRequest : HTTPRequest {
 		Note that the port is currently not set, so that this only works if
 		the standard port is used.
 	*/
-	@property Url fullUrl()
+	@property URL fullURL()
 	const {
-		Url url;
+		URL url;
 		url.schema = this.ssl ? "https" : "http";
 		auto pfh = "X-Forwarded-Host" in this.headers;
 		url.host = pfh ? *pfh : this.host;
@@ -594,6 +594,9 @@ final class HTTPServerRequest : HTTPRequest {
 		url.queryString = queryString;
 		return url;
 	}
+
+	/// Compatibility alias, will be deprecated soon.
+	alias fullUrl = fullURL;
 
 	/** The relative path the the root folder.
 
@@ -1204,9 +1207,9 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 			}
 		}
 
-		// Url parsing if desired
+		// URL parsing if desired
 		if( settings.options & HTTPServerOption.parseURL ){
-			auto url = Url.parse(req.requestUrl);
+			auto url = URL.parse(req.requestURL);
 			req.path = url.pathString;
 			req.queryString = url.queryString;
 			req.username = url.username;
@@ -1217,7 +1220,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		if( settings.options & HTTPServerOption.parseQueryString ){
 			if( !(settings.options & HTTPServerOption.parseURL) )
 				logWarn("Query string parsing requested but URL parsing is disabled!");
-			parseUrlEncodedForm(req.queryString, req.query);
+			parseURLEncodedForm(req.queryString, req.query);
 		}
 
 		// cookie parsing if desired
@@ -1275,14 +1278,14 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
 		else logError("HTTPStatusException after page has been written: %s", err.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, err.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logError("Error after page has been written: %s", e.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, e.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString());
 		if ( !parsed )
 			keep_alive = false;
 	}
@@ -1334,7 +1337,7 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 	pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request path" );
 
-	req.requestUrl = reqln[0 .. pos];
+	req.requestURL = reqln[0 .. pos];
 	reqln = reqln[pos+1 .. $];
 
 	req.httpVersion = parseHTTPVersion(reqln);

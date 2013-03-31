@@ -138,10 +138,13 @@ class HTTPRequest {
 			'http://server' part, but only the local path and a query string.
 			A possible exception is a proxy server, which will get full URLs.
 		*/
-		string requestUrl = "/";
+		string requestURL = "/";
 
-		/// Please use requestUrl instead.
-		deprecated("Please use requestUrl instead.") alias requestUrl url;
+		/// Compatibility alias, will be deprecated soon.
+		alias requestUrl = requestURL;
+
+		/// Please use requestURL instead.
+		deprecated("Please use requestURL instead.") alias url = requestURL;
 
 		/// All request _headers
 		InetHeaderMap headers;
