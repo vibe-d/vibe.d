@@ -202,6 +202,9 @@ struct URL {
 		return ret;
 	}
 
+	/// Compatibility alias, will be deprecated soon.
+	alias parentUrl = parentURL;
+
 	/// Converts this URL object to its string representation.
 	string toString()
 	const {
