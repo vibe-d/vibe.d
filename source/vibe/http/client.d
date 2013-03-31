@@ -398,11 +398,13 @@ final class HttpClientResponse : HttpResponse {
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
 
-		foreach(s; headers["Keep-Alive"].split(",")){
-			auto pair = s.split("=");
-			if (icmp(pair[0].strip(), "timeout")) {
-				m_client.m_timeout = pair[1].to!int();
-				break;
+		if (auto pka = "Keep-Alive" in headers) {
+			foreach(s; split(*pka, ",")){
+				auto pair = s.split("=");
+				if (icmp(pair[0].strip(), "timeout")) {
+					m_client.m_timeout = pair[1].to!int();
+					break;
+				}
 			}
 		}
 
