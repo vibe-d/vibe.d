@@ -10,6 +10,7 @@ module vibe.inet.url;
 public import vibe.inet.path;
 
 import vibe.textfilter.urlencode;
+import vibe.utils.string;
 
 import std.array;
 import std.conv;
@@ -55,7 +56,7 @@ struct Url {
 		auto str = url_string;
 		enforce(str.length > 0, "Empty URL.");
 		if( str[0] != '/' ){
-			auto idx = str.indexOf(':');
+			auto idx = str.indexOfCT(':');
 			enforce(idx > 0, "No schema in URL:"~str);
 			m_schema = str[0 .. idx];
 			str = str[idx+1 .. $];
@@ -74,13 +75,13 @@ struct Url {
 					str = str[2 .. $];
 					goto default;
 				default:
-					auto si = str.indexOf('/');
+					auto si = str.indexOfCT('/');
 					if( si < 0 ) si = str.length;
-					auto ai = str[0 .. si].indexOf('@');
+					auto ai = str[0 .. si].indexOfCT('@');
 					sizediff_t hs = 0;
 					if( ai >= 0 ){
 						hs = ai+1;
-						auto ci = str[0 .. ai].indexOf(':');
+						auto ci = str[0 .. ai].indexOfCT(':');
 						if( ci >= 0 ){
 							m_username = str[0 .. ci];
 							m_password = str[ci+1 .. ai];
@@ -89,7 +90,7 @@ struct Url {
 					}
 
 					m_host = str[hs .. si];
-					auto pi = m_host.indexOf(':');
+					auto pi = m_host.indexOfCT(':');
 					if(pi > 0) {
 						enforce(pi < m_host.length-1, "Empty port in URL.");
 						m_port = to!ushort(m_host[pi+1..$]);
@@ -174,13 +175,13 @@ struct Url {
 	/// ditto
 	@property void localURI(string str)
 	{
-		auto ai = str.indexOf('#');
+		auto ai = str.indexOfCT('#');
 		if( ai >= 0 ){
 			m_anchor = str[ai+1 .. $];
 			str = str[0 .. ai];
 		}
 
-		auto qi = str.indexOf('?');
+		auto qi = str.indexOfCT('?');
 		if( qi >= 0 ){
 			m_queryString = str[qi+1 .. $];
 			str = str[0 .. qi];

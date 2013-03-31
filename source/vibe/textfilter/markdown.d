@@ -790,7 +790,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	// parse the text part [text]
 	if( pstr[0] != '[' ) return false;
 	pstr = pstr[1 .. $];
-	auto cidx = pstr.indexOf(']');
+	auto cidx = pstr.indexOfCT(']');
 	if( cidx < 1 ) return false;
 	string refid;
 	dst.text = pstr[0 .. cidx];
@@ -800,8 +800,8 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	if( pstr.length < 3 ) return false;
 	if( pstr[0] == '('){
 		pstr = pstr[1 .. $];
-		cidx = pstr.indexOf(')');
-		auto spidx = pstr.indexOf(' ');
+		cidx = pstr.indexOfCT(')');
+		auto spidx = pstr.indexOfCT(' ');
 		if( spidx > 0 && spidx < cidx ){
 			dst.url = pstr[0 .. spidx];
 			dst.title = pstr[spidx+1 .. cidx];
@@ -817,7 +817,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
 		if( pstr[0] != '[' ) return false;
 		pstr = pstr[1 .. $];
-		cidx = pstr.indexOf("]");
+		cidx = pstr.indexOfCT(']');
 		if( cidx < 0 ) return false;
 		if( cidx == 0 ) refid = dst.text;
 		else refid = pstr[0 .. cidx];
