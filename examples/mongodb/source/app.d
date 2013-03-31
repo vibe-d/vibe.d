@@ -13,7 +13,6 @@ void main()
 	auto result = coll.find(query);
 
 	logInfo("Iterating results...");
-	foreach( i, doc; result ){
+	foreach (i, doc; result)
 		logInfo("Item %d: %s", i, doc.toJson().toString());
-	}
 }

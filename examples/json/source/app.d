@@ -16,6 +16,5 @@ void main()
 	obj["item2"] = "Object";
 	Json parent = obj;
 	parent.remove("item1");
-	foreach(i; obj) 
-		writeln(i);
+	foreach (i; obj) writeln(i);
 }

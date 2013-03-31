@@ -1,6 +1,6 @@
 import vibe.d;
 
-void handleRequest(HttpServerRequest req, HttpServerResponse res)
+void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 {
 	string local_var = "Hello, World!";
 	res.headers["Content-Type"] = "text/html";
@@ -8,14 +8,14 @@ void handleRequest(HttpServerRequest req, HttpServerResponse res)
 	auto output = res.bodyWriter();
 	//parseDietFile!("diet.dt", req, local_var)(output);
 	res.renderCompat!("diet.dt",
-		HttpServerRequest, "req",
+		HTTPServerRequest, "req",
 		string, "local_var")(req, local_var);
 }
 
 shared static this()
 {
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	
-	listenHttp(settings, &handleRequest);
+	listenHTTP(settings, &handleRequest);
 }

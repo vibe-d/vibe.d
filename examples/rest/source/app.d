@@ -50,9 +50,9 @@ class MyItemsApiImpl : IMyItemsApi {
 shared static this()
 {
 	// start the rest server
-	auto routes = new UrlRouter;
+	auto routes = new URLRouter;
 	registerRestInterface!IMyApi(routes, new MyApiImpl, "/api/");
-	listenHttp(new HttpServerSettings, routes);
+	listenHTTP(new HTTPServerSettings, routes);
 
 	// use a timer to let the listen socket be setup before we try to connect
 	setTimer(dur!"seconds"(1), {
