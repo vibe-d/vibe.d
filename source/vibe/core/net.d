@@ -94,7 +94,7 @@ UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 }
 
 /// Compatibility alias, will be deprecated soon.
-alias listenZdp = listenUDP;
+alias listenUdp = listenUDP;
 
 
 /**
