@@ -19,56 +19,56 @@ import std.functional;
 	An interface for HTTP request routers.
 */
 interface HTTPRouter : HTTPServerRequestHandler {
-	// Adds a new route for request that match the path and method
+	/// Adds a new route for request that match the path and method
 	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
-	// ditto
+	/// ditto
 	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
 
-	// Handles the HTTP request by dispatching it to the registered request handlers.
+	/// Handles the HTTP request by dispatching it to the registered request handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
 
-	// Adds a new route for GET requests matching the specified pattern.
+	/// Adds a new route for GET requests matching the specified pattern.
 	final HTTPRouter get(string url_match, HTTPServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter get(string url_match, HTTPServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
-	// ditto
+	/// ditto
 	final HTTPRouter get(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.GET, url_match, cb); }
 
-	// Adds a new route for POST requests matching the specified pattern.
+	/// Adds a new route for POST requests matching the specified pattern.
 	final HTTPRouter post(string url_match, HTTPServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter post(string url_match, HTTPServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
-	// ditto
+	/// ditto
 	final HTTPRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
 
-	// Adds a new route for PUT requests matching the specified pattern.
+	/// Adds a new route for PUT requests matching the specified pattern.
 	final HTTPRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter put(string url_match, HTTPServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
-	// ditto
+	/// ditto
 	final HTTPRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
 
-	// Adds a new route for DELETE requests matching the specified pattern.
+	/// Adds a new route for DELETE requests matching the specified pattern.
 	final HTTPRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter delete_(string url_match, HTTPServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
-	// ditto
+	/// ditto
 	final HTTPRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
 
-	// Adds a new route for PATCH requests matching the specified pattern.
+	/// Adds a new route for PATCH requests matching the specified pattern.
 	final HTTPRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter patch(string url_match, HTTPServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
-	// ditto
+	/// ditto
 	final HTTPRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
 
-	// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
+	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
 	final HTTPRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
-	// ditto
+	/// ditto
 	final HTTPRouter any(string url_match, HTTPServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
-	// ditto
+	/// ditto
 	final HTTPRouter any(string url_match, HTTPServerRequestDelegate cb)
 	{
 		return get(url_match, cb).post(url_match, cb)
