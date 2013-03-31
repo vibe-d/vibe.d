@@ -657,7 +657,7 @@ private string removeListPrefix(string str, LineType tp)
 	switch(tp){
 		default: assert(false);
 		case LineType.OList: // skip bullets and output using normal escaping
-			auto idx = str.indexOf('.');
+			auto idx = str.indexOfCT('.');
 			assert(idx > 0);
 			return str[idx+1 .. $].stripLeft();
 		case LineType.UList:
