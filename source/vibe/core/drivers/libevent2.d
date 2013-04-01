@@ -252,9 +252,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			ret.addContext(ctx);
 		}
 
-		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
-		else setupConnectionHandler();
-		
+		// FIXME: runWorkerTaskDist now forbids delegates and non-weakly-isolated arguments
+		/+if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
+		else +/setupConnectionHandler();
+
 		return ret;
 	}
 
