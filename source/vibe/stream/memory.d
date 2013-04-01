@@ -105,7 +105,7 @@ class MemoryStream : RandomAccessStream {
 	ulong tell() nothrow { return m_ptr; }
 	const(ubyte)[] peek() { return m_data[m_ptr .. min(m_data.length, m_ptr+m_peekWindow)]; }
 	void read(ubyte[] dst) { assert(dst.length <= leastSize); dst[] = m_data[m_ptr .. m_ptr+dst.length]; m_ptr += dst.length; }
-	void write(in ubyte[] bytes, bool do_flush = true) { assert(writable); assert(bytes.length <= leastSize); m_data[m_ptr .. m_ptr+bytes.length] = bytes; m_ptr += bytes.length; }
+	void write(in ubyte[] bytes, bool do_flush = true) { assert(writable); assert(bytes.length <= leastSize); m_data[m_ptr .. m_ptr+bytes.length] = bytes[]; m_ptr += bytes.length; }
 	void flush() {}
 	void finalize() {}
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true) { writeDefault(stream, nbytes, do_flush); }
