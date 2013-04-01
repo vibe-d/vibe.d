@@ -296,7 +296,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		info.status = result;
 		try {
 			switch( info.addr.family ){
-				default: assert(false, "Unimplmeneted address family");
+				default: assert(false, "Unimplemented address family");
 				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
 				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
 			}
