@@ -375,6 +375,7 @@ package nothrow extern(C)
 
 			void execute()
 			{
+				assert(sockfd > 0);
 				if( evutil_make_socket_nonblocking(sockfd) ){
 					logError("Error setting non-blocking I/O on an incoming connection.");
 				}
@@ -427,7 +428,9 @@ package nothrow extern(C)
 				socklen_t addrlen = remote_addr.sizeof;
 				auto sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
 				logTrace("accepted %d", sockfd);
-				if(sockfd < 0) {
+				version(Windows) auto isValid = sockfd != INVALID_SOCKET;
+				else auto isValid = sockfd >= 0;
+				if(!isValid) {
 					version(Windows) auto err = evutil_socket_geterror(sockfd);
 					else auto err = errno;
 					if( err != EWOULDBLOCK && err != EAGAIN && err != 0 ){
