@@ -809,7 +809,7 @@ private struct DietCompiler {
 		}
 	}
 
-	private bool hasInterpolations(in ref string str)
+	private bool hasInterpolations(in char[] str)
 	{
 		size_t i = 0;
 		while( i < str.length ){

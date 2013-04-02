@@ -252,9 +252,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			ret.addContext(ctx);
 		}
 
-		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
-		else setupConnectionHandler();
-		
+		// FIXME: runWorkerTaskDist now forbids delegates and non-weakly-isolated arguments
+		/+if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
+		else +/setupConnectionHandler();
+
 		return ret;
 	}
 
@@ -296,7 +297,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		info.status = result;
 		try {
 			switch( info.addr.family ){
-				default: assert(false, "Unimplmeneted address family");
+				default: assert(false, "Unimplemented address family");
 				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
 				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
 			}
@@ -626,7 +627,7 @@ class Libevent2UDPConnection : UDPConnection {
 		from.family = m_ctx.remote_addr.family;
 		assert(buf.length <= int.max);
 		while(true){
-			uint addr_len = from.sockAddrLen;
+			socklen_t addr_len = from.sockAddrLen;
 			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;
