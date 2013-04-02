@@ -1,5 +1,5 @@
 /**
-	Utiltiy functions for array processing
+	Utility functions for array processing
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -84,7 +84,7 @@ struct AllocAppender(ArrayType : E[], E) {
 	void put(ArrayType arr)
 	{
 		if( m_remaining.length < arr.length ) grow(arr.length);
-		m_remaining[0 .. arr.length] = arr;
+		m_remaining[0 .. arr.length] = arr[];
 		m_remaining = m_remaining[arr.length .. $];
 	}
 
@@ -173,7 +173,7 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 
 	void put(ArrayType arr)
 	{
-		m_data[m_fill .. m_fill+arr.length] = cast(ElemType[])arr;
+		m_data[m_fill .. m_fill+arr.length] = (cast(ElemType[])arr)[];
 		m_fill += arr.length;
 	}
 
@@ -237,7 +237,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 			m_buffer[m_start+m_fill .. m_buffer.length] = itms[0 .. chunk1];
 			m_buffer[0 .. chunk2] = itms[chunk1 .. $];
 		} else {
-			m_buffer[m_start+m_fill .. m_start+m_fill+itms.length] = itms;
+			m_buffer[m_start+m_fill .. m_start+m_fill+itms.length] = itms[];
 		}
 		m_fill += itms.length;
 	}

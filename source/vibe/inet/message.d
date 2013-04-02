@@ -290,7 +290,8 @@ struct InetHeaderMap {
 		auto keysum = computeCheckSumI(key);
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ){
-			removeFromArrayIdx(m_fields[0 .. m_fieldCount], idx);
+			auto slice = m_fields[0 .. m_fieldCount];
+			removeFromArrayIdx(slice, idx);
 			m_fieldCount--;
 		} else {
 			idx = getIndex(m_extendedFields, key, keysum);

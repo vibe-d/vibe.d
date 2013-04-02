@@ -1,5 +1,5 @@
 /**
-	Utiltiy functions for memory management
+	Utility functions for memory management
 
 	Note that this module currently is a big sand box for testing allocation related stuff.
 	Nothing here, including the interfaces, is final but rather a lot of experimentation.

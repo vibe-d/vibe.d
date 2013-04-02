@@ -636,7 +636,7 @@ struct BsonObjectID {
 	*/
 	this( in ubyte[] bytes ){
 		assert(bytes.length == 12);
-		m_bytes[] = bytes;
+		m_bytes[] = bytes[];
 	}
 
 	/** Creates an on object ID from a string in standard hexa-decimal form.
@@ -656,7 +656,7 @@ struct BsonObjectID {
 			b += n;
 			if( i % 8 == 7 ){
 				auto j = i / 8;
-				ret.m_bytes[j*4 .. (j+1)*4] = toBigEndianData(b);
+				ret.m_bytes[j*4 .. (j+1)*4] = toBigEndianData(b)[];
 				b = 0;
 			}
 		}
@@ -678,9 +678,9 @@ struct BsonObjectID {
 		auto unixTime = Clock.currTime(UTC()).toUnixTime();
 
 		BsonObjectID ret = void;
-		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)unixTime);
+		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)unixTime)[];
 		ret.m_bytes[4 .. 7] = toBsonData(MACHINE_ID)[0 .. 3];
-		ret.m_bytes[7 .. 9] = toBsonData(cast(ushort)ms_pid);
+		ret.m_bytes[7 .. 9] = toBsonData(cast(ushort)ms_pid)[];
 		ret.m_bytes[9 .. 12] = toBigEndianData(ms_inc++)[1 .. 4];
 		return ret;
 	}
@@ -696,7 +696,7 @@ struct BsonObjectID {
 	static BsonObjectID createDateID(in SysTime date)
 	{
 		BsonObjectID ret;
-		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)date.toUnixTime());
+		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)date.toUnixTime())[];
 		return ret;
 	}
 

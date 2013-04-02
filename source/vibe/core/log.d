@@ -227,6 +227,7 @@ class FileLogger : Logger {
 	}
 }
 
+import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=7016
 
 class HTMLLogger : Logger {
 	private {
@@ -272,7 +273,6 @@ class HTMLLogger : Logger {
 		m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
 		m_logFile.write(`<div class="message">`);
 		{
-			import vibe.textfilter.html;
 			auto dst = m_logFile.lockingTextWriter();
 			filterHtmlEscape(dst, msg.text);
 		}

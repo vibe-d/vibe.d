@@ -47,7 +47,7 @@ final class RedisReply {
 					return;
 				}
 				m_multi = true;
-				m_length = parse!size_t(ln[ 1 .. $ ]);
+				m_length = to!size_t(ln[ 1 .. $ ]);
 				break;
 			default:
 				assert(false, "Unknown reply type");
@@ -57,7 +57,7 @@ final class RedisReply {
 	private ubyte[] readBulk( string sizeLn )	
 	{
 		if ( sizeLn.startsWith("$-1") ) return null;
-		auto size = parse!size_t( sizeLn[1 .. $] );
+		auto size = to!size_t( sizeLn[1 .. $] );
 		auto data = new ubyte[size];
 		m_conn.read(data);
 		m_conn.readLine();
