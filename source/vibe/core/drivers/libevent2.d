@@ -239,22 +239,22 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 		auto ret = new LibeventTCPListener;
 
-		void setupConnectionHandler()
+		static void setupConnectionHandler(shared(LibeventTCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback)
 		{
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
 			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr);
-			ctx.connectionCallback = connection_callback;
+			ctx.connectionCallback = cast()connection_callback;
 			ctx.listenEvent = event_new(evloop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 			enforce(event_add(ctx.listenEvent, null) == 0,
 				"Error scheduling connection event on the event loop.");
-			ret.addContext(ctx);
+			(cast()listener).addContext(ctx);
 		}
 
-		// FIXME: runWorkerTaskDist now forbids delegates and non-weakly-isolated arguments
-		/+if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
-		else +/setupConnectionHandler();
+		// FIXME: the API needs improvement with proper shared annotations, so the the following casts are not necessary
+		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
+		else setupConnectionHandler(cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
 
 		return ret;
 	}
