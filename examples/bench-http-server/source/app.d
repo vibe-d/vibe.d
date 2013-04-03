@@ -1,6 +1,11 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.core;
+import vibe.http.fileserver;
+import vibe.http.router;
+import vibe.http.server;
 
-import vibe.http.rest;
+import std.functional;
+
 
 shared string data;
 

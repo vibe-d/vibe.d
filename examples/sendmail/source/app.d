@@ -1,6 +1,6 @@
-import vibe.vibe;
-
+import vibe.core.log;
 import vibe.mail.smtp;
+
 
 void main()
 {

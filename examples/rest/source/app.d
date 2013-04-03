@@ -1,4 +1,12 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.http.rest;
+import vibe.http.router;
+import vibe.http.server;
+
+import core.time;
+
 
 interface IMyApi {
 	string getStatus();

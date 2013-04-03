@@ -12,12 +12,16 @@
 */
 module app;
 
-import vibe.d;
+import vibe.appmain;
+import vibe.http.form;
+import vibe.http.router;
+import vibe.http.server;
 
 import std.array;
 import std.algorithm;
 import std.stdio;
 import std.string;
+
 
 struct Address {
 	string street;

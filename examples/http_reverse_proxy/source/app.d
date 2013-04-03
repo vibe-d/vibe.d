@@ -1,4 +1,7 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.http.proxy;
+import vibe.http.server;
+
 
 shared static this()
 {

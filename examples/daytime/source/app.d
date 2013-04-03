@@ -1,4 +1,6 @@
-import vibe.vibe;
+import vibe.core.log;
+import vibe.core.net;
+import vibe.stream.operations;
 
 void main()
 {

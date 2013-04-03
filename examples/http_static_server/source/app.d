@@ -1,4 +1,7 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.http.fileserver;
+import vibe.http.router;
+import vibe.http.server;
 
 void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 {

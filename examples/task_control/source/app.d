@@ -1,4 +1,11 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.http.router;
+import vibe.http.server;
+
+import core.time;
+
 
 Task g_task;
 

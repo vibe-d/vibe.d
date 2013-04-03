@@ -1,4 +1,4 @@
-import vibe.vibe;
+import vibe.data.json;
 
 import std.stdio;
 

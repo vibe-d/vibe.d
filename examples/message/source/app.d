@@ -1,4 +1,9 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.core.concurrency;
+import core.time;
+
 
 shared static this()
 {

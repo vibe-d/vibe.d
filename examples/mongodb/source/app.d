@@ -1,4 +1,5 @@
-import vibe.vibe;
+import vibe.core.log;
+import vibe.db.mongo.mongo;
 
 import std.array;
 

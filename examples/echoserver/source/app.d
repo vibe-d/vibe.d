@@ -1,4 +1,5 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.net;
 
 shared static this()
 {
