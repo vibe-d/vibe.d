@@ -139,13 +139,14 @@ string stripA(string s)
 }
 
 /// Finds the first occurence of any of the characters in `chars`
-sizediff_t countUntilAny(string str, string chars)
+sizediff_t indexOfAny(string str, string chars)
 {
 	foreach (i, char ch; str)
 		if (chars.canFind(ch))
 			return i;
 	return -1;
 }
+alias indexOfAny countUntilAny;
 
 /// Formats a string using formattedWrite() and returns it.
 deprecated("Please use std.string.format instead.")
