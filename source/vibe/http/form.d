@@ -1,5 +1,5 @@
 /**
-	Contains HTTP form parsing and construction routines.
+	Routines for automated implementation of HTML form based interfaces.
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -7,150 +7,21 @@
 */
 module vibe.http.form;
 
-import vibe.core.driver;
-import vibe.core.file;
-import vibe.core.log;
-import vibe.inet.message;
-import vibe.inet.url;
-import vibe.stream.operations;
-import vibe.textfilter.urlencode;
-
-// needed for registerFormInterface stuff:
-import vibe.http.rest;
-import vibe.http.server;
-import vibe.http.router;
-
-
-import std.array;
-import std.exception;
-import std.string;
-
-// needed for registerFormInterface stuff:
-import std.traits;
-import std.conv;
-import std.typecons;
+public import vibe.inet.webform;
 public import std.typecons : Yes, No;
 
-struct FilePart  {
-	InetHeaderMap headers;
-	PathEntry filename;
-	Path tempPath;
-}
+import vibe.core.log;
+import vibe.http.rest;
+import vibe.http.router;
+import vibe.http.server;
+import vibe.inet.url;
 
-/**
-	Parses the form given by content_type and body_reader.
-*/
-bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader, size_t max_line_length)
-{
-	auto ct_entries = content_type.split(";");
-	if( !ct_entries.length ) return false;
-
-	if( ct_entries[0].strip() == "application/x-www-form-urlencoded" ){
-		auto bodyStr = cast(string)body_reader.readAll();
-		parseURLEncodedForm(bodyStr, fields);
-		return true;
-	}
-	if( ct_entries[0].strip() == "multipart/form-data" ){
-		parseMultiPartForm(fields, files, content_type, body_reader, max_line_length);
-		return true;
-	}
-	return false;
-}
-
-/**
-	Parses a url encoded form (query string format) and puts the key/value pairs into params.
-*/
-void parseURLEncodedForm(string str, ref string[string] params)
-{
-	while(str.length > 0){
-		// name part
-		auto idx = str.indexOf("=");
-		if( idx == -1 ) {
-			idx = str.indexOf("&");
-			if( idx == -1 ) {
-				params[urlDecode(str[0 .. $])] = "";
-				return;
-			} else {
-				params[urlDecode(str[0 .. idx])] = "";
-				str = str[idx+1 .. $];
-				continue;
-			}
-		} else {
-			auto idx_amp = str.indexOf("&");
-			if( idx_amp > -1 && idx_amp < idx ) {
-				params[urlDecode(str[0 .. idx_amp])] = "";
-				str = str[idx_amp+1 .. $];
-				continue;				
-			} else {
-				string name = urlDecode(str[0 .. idx]);
-				str = str[idx+1 .. $];
-				// value part
-				for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
-				string value = urlDecode(str[0 .. idx]);
-				params[name] = value;
-				str = idx < str.length ? str[idx+1 .. $] : null;
-			}
-		}
-	}
-}
-
-/// Compatibility alias, will be deprecated soon.
-alias parseUrlEncodedForm = parseURLEncodedForm;
-
-private void parseMultiPartForm(ref string[string] fields, ref FilePart[string] files,
-	string content_type, InputStream body_reader, size_t max_line_length)
-{
-	auto pos = content_type.indexOf("boundary=");			
-	enforce(pos >= 0 , "no boundary for multipart form found");
-	auto boundary = content_type[pos+9 .. $];
-	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
-	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
-
-	while( parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary, max_line_length) ) {}
-}
-
-private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary, size_t max_line_length)
-{
-	InetHeaderMap headers;
-	stream.parseRfc5322Header(headers);
-	auto pv = "Content-Disposition" in headers;
-	enforce(pv, "invalid multipart");
-	auto cd = *pv;
-	string name;
-	auto pos = cd.indexOf("name=\"");
-	if( pos >= 0 ) {
-		cd = cd[pos+6 .. $];
-		pos = cd.indexOf("\"");
-		name = cd[0 .. pos];
-	}
-	string filename;
-	pos = cd.indexOf("filename=\"");
-	if( pos >= 0 ) {
-		cd = cd[pos+10 .. $];
-		pos = cd.indexOf("\"");
-		filename = cd[0 .. pos];
-	}
-
-	if( filename.length > 0 ) {
-		FilePart fp;
-		fp.headers = headers;
-		fp.filename = PathEntry(filename);
-
-		auto file = createTempFile();
-		fp.tempPath = file.path;
-		stream.readUntil(file, cast(ubyte[])boundary);
-		logDebug("file: %s", fp.tempPath.toString());
-		file.close();
-
-		files[name] = fp;
-
-		// TODO: temp files must be deleted after the request has been processed!
-	} else {
-		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
-		form[name] = data;
-	}
-	return stream.readLine(max_line_length) != "--";
-}
+import std.array;
+import std.conv;
+import std.exception;
+import std.string;
+import std.traits;
+import std.typecons;
 
 
 /**

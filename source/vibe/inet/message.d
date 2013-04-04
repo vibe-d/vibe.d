@@ -8,7 +8,6 @@
 module vibe.inet.message;
 
 import vibe.core.log;
-import vibe.http.common : StrMapCI;
 import vibe.core.stream;
 import vibe.stream.operations;
 import vibe.utils.array;
@@ -363,9 +362,9 @@ struct InetHeaderMap {
 		return 0;
 	}
 
-	@property StrMapCI dup()
+	@property InetHeaderMap dup()
 	const {
-		StrMapCI ret;
+		InetHeaderMap ret;
 		ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
 		ret.m_fieldCount = m_fieldCount;
 		ret.m_extendedFields = m_extendedFields.dup;
