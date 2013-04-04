@@ -257,7 +257,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 261 "source/vibe/http/rest.d"
+#line 260 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;
@@ -591,14 +591,24 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					string implname = RT.stringof~"Impl";
 					
 					enum meta = extractHTTPMethodAndName!overload();
+                    bool pathOverriden = meta[0];
 					HTTPMethod http_verb = meta[1];
 					string url = meta[2];
 					
 					ret ~= format(
-						q{m_%s = new %s(m_baseURL~PathEntry("%s"), m_methodStyle);},
+						q{
+							string url__;
+							if (%s)
+								url__ = m_baseURL.toString() ~ PathEntry("%s").toString();
+							else
+								url__ = m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString(), m_methodStyle);
+							m_%s = new %s(url__, m_methodStyle);
+						},
+						pathOverriden,
+						url,
+						url,
 						implname,
 						implname,
-						url
 					);
 					ret ~= "\n";
 				}
