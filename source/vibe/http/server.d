@@ -12,13 +12,14 @@ public import vibe.http.common;
 public import vibe.http.session;
 
 import vibe.core.core;
+import vibe.core.file;
 import vibe.core.log;
 import vibe.data.json;
 import vibe.http.dist;
-import vibe.http.form;
 import vibe.http.log;
 import vibe.inet.message;
 import vibe.inet.url;
+import vibe.inet.webform;
 import vibe.stream.counting;
 import vibe.stream.operations;
 import vibe.stream.ssl;
@@ -27,7 +28,6 @@ import vibe.textfilter.urlencode;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
-import vibe.core.file;
 
 import core.vararg;
 import std.algorithm : canFind, map, min;
@@ -40,7 +40,6 @@ import std.functional;
 import std.string;
 import std.typecons;
 import std.uri;
-public import std.variant;
 
 
 /**************************************************************************************************/
@@ -184,7 +183,7 @@ alias listenHttpPlain = listenHTTPPlain;
 		//res.render!(template_file, req);
 		//res.headers["Content-Type"] = "text/html; charset=UTF-8";
 		//parseDietFile!(template_file, req)(res.bodyWriter);
-		res.renderCompat!(template_file, HTTPServerRequest, "req")(Variant(req));
+		res.renderCompat!(template_file, HTTPServerRequest, "req")(req);
 	};
 }
 
