@@ -11,13 +11,14 @@ public import vibe.data.bson;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.inet.webform;
 
 import std.algorithm : splitter;
 import std.array;
 import std.conv;
 import std.exception;
-import std.regex;
 import std.string;
+
 
 private struct _MongoErrorDescription
 {
@@ -88,7 +89,7 @@ class MongoDBException : MongoException
  */
 class MongoConnection : EventedObject {
 	private {
-		MongoClientSettings settings;
+		MongoClientSettings m_settings;
 		TCPConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
@@ -96,24 +97,24 @@ class MongoConnection : EventedObject {
 
 	enum defaultPort = 27017;
 
-	/// Simplified constructor overload, with no settings
+	/// Simplified constructor overload, with no m_settings
 	this(string server, ushort port = defaultPort)
 	{
-		settings = new MongoClientSettings();
-		settings.hosts ~= MongoHost(server, port);
+		m_settings = new MongoClientSettings();
+		m_settings.hosts ~= MongoHost(server, port);
 	}
 
 	this(MongoClientSettings cfg)
 	{
-		settings = cfg;
+		m_settings = cfg;
 
 		// Now let's check for features that are not yet supported.
-		if(settings.hosts.length > 1)
+		if(m_settings.hosts.length > 1)
 			logWarn("Multiple mongodb hosts are not yet supported. Using first one: %s:%s",
-					settings.hosts[0].name, settings.hosts[0].port);
-		if(settings.username != string.init)
-			logWarn("MongoDB username is not yet supported. Ignoring username: %s", settings.username);
-		if(settings.password != string.init)
+					m_settings.hosts[0].name, m_settings.hosts[0].port);
+		if(m_settings.username != string.init)
+			logWarn("MongoDB username is not yet supported. Ignoring username: %s", m_settings.username);
+		if(m_settings.password != string.init)
 			logWarn("MongoDB password is not yet supported. Ignoring password.");
 	}
 
@@ -138,7 +139,7 @@ class MongoConnection : EventedObject {
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
 		 */
-		m_conn = connectTCP(settings.hosts[0].name, settings.hosts[0].port);
+		m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
 		m_bytesRead = 0;
 	}
 
@@ -162,7 +163,7 @@ class MongoConnection : EventedObject {
 		msg.addBSON(selector);
 		msg.addBSON(update);
 		send(msg);
-		if(settings.safe)
+		if(m_settings.safe)
 		{
 			checkForError(collection_name);
 		}
@@ -180,7 +181,7 @@ class MongoConnection : EventedObject {
 		}
 		send(msg);
 
-		if(settings.safe)
+		if(m_settings.safe)
 		{
 			checkForError(collection_name);
 		}
@@ -190,7 +191,7 @@ class MongoConnection : EventedObject {
 	{
 		scope(failure) disconnect();
 		scope msg = new Message(OpCode.Query);
-		msg.addInt(flags | settings.defQueryFlags);
+		msg.addInt(flags | m_settings.defQueryFlags);
 		msg.addCString(collection_name);
 		msg.addInt(nskip);
 		msg.addInt(nret);
@@ -220,7 +221,7 @@ class MongoConnection : EventedObject {
 		msg.addInt(flags);
 		msg.addBSON(selector);
 		send(msg);
-		if(settings.safe)
+		if(m_settings.safe)
 		{
 			checkForError(collection_name);
 		}
@@ -245,16 +246,16 @@ class MongoConnection : EventedObject {
 
 		Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
 
-		if(settings.w != settings.w.init)
-			command_and_options["w"] = settings.w; // Already a Bson struct
-		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
-			command_and_options["wtimeout"] = Bson(settings.wTimeoutMS);
-		if(settings.journal)
+		if(m_settings.w != m_settings.w.init)
+			command_and_options["w"] = m_settings.w; // Already a Bson struct
+		if(m_settings.wTimeoutMS != m_settings.wTimeoutMS.init)
+			command_and_options["wtimeout"] = Bson(m_settings.wTimeoutMS);
+		if(m_settings.journal)
 			command_and_options["j"] = Bson(true);
-		if(settings.fsync)
+		if(m_settings.fsync)
 			command_and_options["fsync"] = Bson(true); 
 
-		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | settings.defQueryFlags,
+		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
 				0, -1, serializeToBson(command_and_options));	
 
 		logTrace(
@@ -442,14 +443,17 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	// Parse the hosts section. 
 	try 
 	{
-		auto hostPortEntries = splitter(tmpUrl[hostIndex..slashIndex], ",");
-		foreach(entry; hostPortEntries)
+		foreach(entry; splitter(tmpUrl[hostIndex..slashIndex], ","))
 		{
 			auto hostPort = splitter(entry, ":");
 			string host = hostPort.front;
 			hostPort.popFront();
-			ushort port = hostPort.empty ? MongoConnection.defaultPort : to!ushort(hostPort.front);
-
+			ushort port = MongoConnection.defaultPort;
+			if (!hostPort.empty) {
+				port = to!ushort(hostPort.front);
+				hostPort.popFront();
+			}
+			enforce(hostPort.empty, "Host specifications are expected to be of the form \"HOST:PORT,HOST:PORT,...\".");
 			cfg.hosts ~= MongoHost(host, port);
 		}
 	} catch (Exception e) {
@@ -479,18 +483,11 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	cfg.database = tmpUrl[slashIndex+1..queryIndex];
 	if(queryIndex != tmpUrl.length)
 	{
-		// Parse options if any. They may be separated by ';' or '&'
-		auto optionRegex = ctRegex!(`(?P<option>[^=&;]+=[^=&;]+)(?:[&;])?`, "g");
-		auto optionMatch = match(tmpUrl[queryIndex+1..$], optionRegex);
-		foreach(c; optionMatch)
-		{
-			auto optionString = c["option"];
-			auto separatorIndex = optionString.indexOf("="); 
-			// Per the mongo docs the option names are case insensitive. 
-			auto option = optionString[0 .. separatorIndex];
-			auto value = optionString[(separatorIndex+1) .. $];
-
-			bool setBool(ref bool dst){
+		string[string] options;
+		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
+		foreach (option, value; options) {
+			bool setBool(ref bool dst)
+			{
 				try {
 					dst = to!bool(value);
 					return true;
@@ -500,7 +497,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
-			bool setLong(ref long dst){
+			bool setLong(ref long dst)
+			{
 				try {
 					dst = to!long(value);
 					return true;
@@ -510,7 +508,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
-			void warnNotImplemented(){
+			void warnNotImplemented()
+			{
 				logWarn("MongoDB option %s not yet implemented.", option);
 			}
 
@@ -538,7 +537,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			}
 		}
 
-		/* Some settings imply safe. If they are set, set safe to true regardless
+		/* Some m_settings imply safe. If they are set, set safe to true regardless
 		 * of what it was set to in the URL string 
 		 */
 		if( (cfg.w != Bson.init) || (cfg.wTimeoutMS != long.init) ||
