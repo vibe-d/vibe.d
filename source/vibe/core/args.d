@@ -2,6 +2,11 @@
 	Parses and allows querying the command line arguments and configuration
 	file.
 
+	The optional configuration file (vibe.conf) is a JSON file, containing an
+	object with the keys corresponding to option names, and values corresponding
+	to their values. It is searched for in the local directory, user's home
+	directory, or /etc/vibe/ (POSIX only), whichever is found first.
+
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Vladimir Panteleev
@@ -14,15 +19,10 @@ import vibe.data.json;
 import std.exception;
 import std.file;
 import std.getopt;
+import std.path;
 import std.string;
 
 import core.runtime;
-
-version (Posix)
-	private enum configPath = "/etc/vibe/vibe.conf";
-else
-version (Windows)
-	private enum configPath = "vibe.conf";
 
 /// Deprecated. Currently does nothing - Vibe will parse arguments
 /// automatically on startup. Call $(D finalizeCommandLineArgs) from your
@@ -84,6 +84,19 @@ void finalizeCommandLineArgs()
 
 private:
 
+enum configName = "vibe.conf";
+
+string[] getConfigPaths()
+{
+	string[] result = [""];
+	import std.process : environment;
+	version (Windows)
+		result ~= environment.get("USERPROFILE");
+	else
+		result ~= [environment.get("HOME"), "/etc/vibe/"];
+	return result;
+}
+
 shared static this()
 {
 	if (!args)
@@ -94,15 +107,21 @@ void init()
 {
 	args = Runtime.args;
 
-	if (configPath.exists)
+	auto searchPaths = getConfigPaths();
+	foreach (searchPath; searchPaths)
 	{
-		scope(failure) logError("Failed to parse config file %s:", configPath);
-		auto configText = configPath.readText();
-		config = configText.parseJson();
-		haveConfig = true;
+		auto configPath = buildPath(searchPath, configName);
+		if (configPath.exists)
+		{
+			scope(failure) logError("Failed to parse config file %s:", configPath);
+			auto configText = configPath.readText();
+			config = configText.parseJson();
+			haveConfig = true;
+		}
 	}
-	else
-		logDebug("No config file found at %s", configPath);
+
+	if (!haveConfig)
+		logDebug("No config file found in %s", searchPaths);
 }
 
 template ValueTuple(T...) { alias T ValueTuple; }
