@@ -30,7 +30,7 @@ int main(string[] args)
 
 	try {
 		if( args.length < 3 ){
-			logError("Usage: %s <vibe-binary-path> <start-script-output-file> [<command>] [args...] [-- [applicatio args]]\n", args[0]);
+			logError("Usage: %s <vibe-binary-path> <start-script-output-file> [<command>] [args...] [-- [application args]]\n", args[0]);
 			// vibe-binary-path: the installation folder of the vibe installation
 			// start-script-output-file: destination of the script, which can be used to run the app
 			return 1;
