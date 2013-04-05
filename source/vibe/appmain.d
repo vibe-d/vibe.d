@@ -41,11 +41,15 @@ int main(string[] args)
 	} else {
 		processCommandLineArgs(args);
 		logInfo("Running event loop...");
-		try {
+		debug {
 			return runEventLoop();
-		} catch( Throwable th ){
-			logError("Unhandled exception in event loop: %s", th.toString());
-			return 1;
+		} else {
+			try {
+				return runEventLoop();
+			} catch( Throwable th ){
+				logError("Unhandled exception in event loop: %s", th.toString());
+				return 1;
+			}
 		}
 	}
 }
