@@ -13,16 +13,16 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.stream.ssl;
 
-import std.algorithm;
 import std.base64;
 import std.conv;
 import std.exception;
+import std.string;
 
 
 /**
 	Determines the (encryption) type of an SMTP connection.
 */
-enum SmtpConnectionType {
+enum SMTPConnectionType {
 	plain,
 	ssl,
 	startTLS,
@@ -35,10 +35,13 @@ enum SmtpConnectionType {
 	StartTLS = startTLS
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias SmtpConnectionType = SMTPConnectionType;
+
 
 /** Represents the different status codes for SMTP replies.
 */
-enum SmtpStatus {
+enum SMTPStatus {
 	_success = 200,
 	systemStatus = 211,
 	helpMessage = 214,
@@ -117,10 +120,14 @@ enum SmtpStatus {
 	TransactionFailed = transactionFailed,
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias SmtpStatus = SMTPStatus;
+
+
 /**
 	Represents the authentication mechanism used by the SMTP client.
 */
-enum SmtpAuthType {
+enum SMTPAuthType {
 	none,
 	plain,
 	login,
@@ -136,21 +143,29 @@ enum SmtpAuthType {
 	CramMd5 = cramMd5
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias SmtpAuthType = SMTPAuthType;
+
+
 /**
 	Configuration options for the SMTP client.
 */
-class SmtpClientSettings {
+class SMTPClientSettings {
 	string host = "127.0.0.1";
 	ushort port = 25;
 	string localname = "localhost";
-	SmtpConnectionType connectionType = SmtpConnectionType.plain;
-	SmtpAuthType authType = SmtpAuthType.none;
+	SMTPConnectionType connectionType = SMTPConnectionType.plain;
+	SMTPAuthType authType = SMTPAuthType.none;
 	string username;
 	string password;
 
 	this() {}
 	this(string host, ushort port) { this.host = host; this.port = port; }
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias SmtpClientSettings = SMTPClientSettings;
+
 
 /**
 	Represents an email message, including its headers.
@@ -163,7 +178,7 @@ class Mail {
 /**
 	Sends am email using the given settings.
 */
-void sendMail(SmtpClientSettings settings, Mail mail)
+void sendMail(SMTPClientSettings settings, Mail mail)
 {
 	TcpConnection raw_conn;
 	try {
@@ -176,15 +191,15 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 
 	Stream conn = raw_conn;
 
-	expectStatus(conn, SmtpStatus.serviceReady, "connection establishment");
+	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
 
 	void greet(){
 		conn.write("EHLO "~settings.localname~"\r\n");
 		while(true){ // simple skipping of 
 			auto ln = cast(string)conn.readLine();
 			logDebug("EHLO response: %s", ln);
-			auto sidx = ln.countUntil(' ');
-			auto didx = ln.countUntil('-');
+			auto sidx = ln.indexOf(' ');
+			auto didx = ln.indexOf('-');
 			if( sidx > 0 && (didx < 0 || didx > sidx) ){
 				enforce(ln[0 .. sidx] == "250", "Server not ready (response "~ln[0 .. sidx]~")");
 				break;
@@ -192,68 +207,68 @@ void sendMail(SmtpClientSettings settings, Mail mail)
 		}
 	}
 
-	if( settings.connectionType == SmtpConnectionType.ssl ){
-		auto ctx = new SslContext();
-		conn = new SslStream(raw_conn, ctx, SslStreamState.connecting);
+	if( settings.connectionType == SMTPConnectionType.ssl ){
+		auto ctx = new SSLContext();
+		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
 	greet();
 
-	if( settings.connectionType == SmtpConnectionType.startTLS ){
+	if( settings.connectionType == SMTPConnectionType.startTLS ){
 		conn.write("STARTTLS\r\n");
-		expectStatus(conn, SmtpStatus.serviceReady, "STARTTLS");
-		auto ctx = new SslContext();
-		conn = new SslStream(raw_conn, ctx, SslStreamState.connecting);
+		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
+		auto ctx = new SSLContext();
+		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 		greet();
 	}
 
 	final switch(settings.authType){
-		case SmtpAuthType.none: break;
-		case SmtpAuthType.plain:
+		case SMTPAuthType.none: break;
+		case SMTPAuthType.plain:
 			logDebug("seding auth");
 			conn.write("AUTH PLAIN\r\n");
-			expectStatus(conn, SmtpStatus.serverAuthReady, "AUTH PLAIN");
+			expectStatus(conn, SMTPStatus.serverAuthReady, "AUTH PLAIN");
 			logDebug("seding auth info");
 			conn.write(Base64.encode(cast(ubyte[])("\0"~settings.username~"\0"~settings.password)));
 			conn.write("\r\n");
 			expectStatus(conn, 235, "plain auth info");
 			logDebug("authed");
 			break;
-		case SmtpAuthType.login:
+		case SMTPAuthType.login:
 			conn.write("AUTH LOGIN\r\n");
-			expectStatus(conn, SmtpStatus.serverAuthReady, "AUTH LOGIN");
+			expectStatus(conn, SMTPStatus.serverAuthReady, "AUTH LOGIN");
 			conn.write(Base64.encode(cast(ubyte[])settings.username) ~ "\r\n");
-			expectStatus(conn, SmtpStatus.serverAuthReady, "login user name");
+			expectStatus(conn, SMTPStatus.serverAuthReady, "login user name");
 			conn.write(Base64.encode(cast(ubyte[])settings.password) ~ "\r\n");
 			expectStatus(conn, 235, "login password");
 			break;
-		case SmtpAuthType.cramMd5: assert(false, "TODO!");
+		case SMTPAuthType.cramMd5: assert(false, "TODO!");
 	}
 
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
-	expectStatus(conn, SmtpStatus.success, "MAIL FROM");
+	expectStatus(conn, SMTPStatus.success, "MAIL FROM");
 
 	conn.write("RCPT TO:"~addressMailPart(mail.headers["To"])~"\r\n"); // TODO: support multiple recipients
-	expectStatus(conn, SmtpStatus.success, "RCPT TO");
+	expectStatus(conn, SMTPStatus.success, "RCPT TO");
 
 	conn.write("DATA\r\n");
-	expectStatus(conn, SmtpStatus.startMailInput, "DATA");
+	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
 	foreach( name, value; mail.headers ){
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");
 	conn.write(mail.bodyText);
 	conn.write("\r\n.\r\n");
-	expectStatus(conn, SmtpStatus.success, "message body");
+	expectStatus(conn, SMTPStatus.success, "message body");
 
 	conn.write("QUIT\r\n");
-	expectStatus(conn, SmtpStatus.serviceClosing, "QUIT");
+	expectStatus(conn, SMTPStatus.serviceClosing, "QUIT");
 }
 
 private void expectStatus(InputStream conn, int expected_status, string in_response_to)
 {
 	string ln = cast(string)conn.readLine();
-	auto sp = ln.countUntil(' ');
+	auto sp = ln.indexOf(' ');
 	if( sp < 0 ) sp = ln.length;
 	auto status = to!int(ln[0 .. sp]);
 	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
@@ -262,14 +277,14 @@ private void expectStatus(InputStream conn, int expected_status, string in_respo
 private int recvStatus(InputStream conn)
 {
 	string ln = cast(string)conn.readLine();
-	auto sp = ln.countUntil(' ');
+	auto sp = ln.indexOf(' ');
 	if( sp < 0 ) sp = ln.length;
 	return to!int(ln[0 .. sp]);
 }
 
 private string addressMailPart(string str)
 {
-	auto idx = str.countUntil('<');
+	auto idx = str.indexOf('<');
 	if( idx < 0 ) return str;
 	str = str[idx .. $];
 	enforce(str[$-1] == '>', "Malformed email address field: '"~str~"'.");

@@ -250,9 +250,9 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 	Throws:
 		An exception is thrown if max_bytes != 0 and the stream contains more than max_bytes data.
 		If the sanitize parameter is fals and the stream contains invalid UTF-8 code sequences,
-		a UtfException is thrown.
+		a UTFException is thrown.
 */
-string readAllUtf8(InputStream stream, bool sanitize = false, size_t max_bytes = 0)
+string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes = 0)
 {
 	import std.utf;
 	import vibe.utils.string;
@@ -263,5 +263,8 @@ string readAllUtf8(InputStream stream, bool sanitize = false, size_t max_bytes =
 		return stripUTF8Bom(cast(string)data);
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias readAllUtf8 = readAllUTF8;
 
 private struct Buffer { ubyte[64*1024] bytes; }

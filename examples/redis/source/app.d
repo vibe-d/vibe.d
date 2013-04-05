@@ -1,5 +1,4 @@
-import vibe.vibe;
-
+import vibe.core.log;
 import vibe.db.redis.redis;
 
 void main()

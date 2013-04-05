@@ -42,20 +42,20 @@ import std.datetime;
 	The 'requester' parameter allows to customize the request and to specify the request body for
 	non-GET requests.
 */
-HttpClientResponse requestHttp(string url, scope void delegate(scope HttpClientRequest req) requester = null)
+HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null)
 {
-	return requestHttp(Url.parse(url), requester);
+	return requestHTTP(URL.parse(url), requester);
 }
 /// ditto
-HttpClientResponse requestHttp(Url url, scope void delegate(scope HttpClientRequest req) requester = null)
+HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null)
 {
-	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
-	enforce(url.host.length > 0, "Url must contain a host name.");
+	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	enforce(url.host.length > 0, "URL must contain a host name.");
 
 	bool ssl = url.schema == "https";
-	auto cli = connectHttp(url.host, url.port, ssl);
+	auto cli = connectHTTP(url.host, url.port, ssl);
 	auto res = cli.request((req){
-			req.requestUrl = url.localURI;
+			req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		});
@@ -63,28 +63,31 @@ HttpClientResponse requestHttp(Url url, scope void delegate(scope HttpClientRequ
 	// make sure the connection stays locked if the body still needs to be read
 	if( res.m_client ) res.lockedConnection = cli;
 
-	logTrace("Returning HttpClientResponse for conn %s", cast(void*)res.lockedConnection.__conn);
+	logTrace("Returning HTTPClientResponse for conn %s", cast(void*)res.lockedConnection.__conn);
 	return res;
 }
 /// ditto
-void requestHttp(string url, scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse req) responder)
+void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
 {
-	requestHttp(Url(url), requester, responder);
+	requestHTTP(URL(url), requester, responder);
 }
 /// ditto
-void requestHttp(Url url, scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse req) responder)
+void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
 {
-	enforce(url.schema == "http" || url.schema == "https", "Url schema must be http(s).");
-	enforce(url.host.length > 0, "Url must contain a host name.");
+	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	enforce(url.host.length > 0, "URL must contain a host name.");
 
 	bool ssl = url.schema == "https";
-	auto cli = connectHttp(url.host, url.port, ssl);
+	auto cli = connectHTTP(url.host, url.port, ssl);
 	cli.request((scope req){
-			req.requestUrl = url.localURI;
+			req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		}, responder);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias requestHttp = requestHTTP;
 
 
 /**
@@ -92,19 +95,19 @@ void requestHttp(Url url, scope void delegate(scope HttpClientRequest req) reque
 
 	Internally, a connection pool is used to reuse already existing connections.
 */
-auto connectHttp(string host, ushort port = 0, bool ssl = false)
+auto connectHTTP(string host, ushort port = 0, bool ssl = false)
 {
 	static struct ConnInfo { string host; ushort port; bool ssl; }
-	static ConnectionPool!HttpClient[ConnInfo] s_connections;
+	static ConnectionPool!HTTPClient[ConnInfo] s_connections;
 	if( port == 0 ) port = ssl ? 443 : 80;
 	auto ckey = ConnInfo(host, port, ssl);
 
-	ConnectionPool!HttpClient pool;
+	ConnectionPool!HTTPClient pool;
 	if( auto pcp = ckey in s_connections )
 		pool = *pcp;
 	else {
-		pool = new ConnectionPool!HttpClient({
-				auto ret = new HttpClient;
+		pool = new ConnectionPool!HTTPClient({
+				auto ret = new HTTPClient;
 				ret.connect(host, port, ssl);
 				return ret;
 			});
@@ -114,22 +117,27 @@ auto connectHttp(string host, ushort port = 0, bool ssl = false)
 	return pool.lockConnection();
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias connectHttp = connectHTTP;
+
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
 /**************************************************************************************************/
 
-class HttpClient : EventedObject {
-	enum maxHttpHeaderLineLength = 4096;
-	deprecated enum MaxHttpHeaderLineLength = maxHttpHeaderLineLength;
+class HTTPClient : EventedObject {
+	enum maxHeaderLineLength = 4096;
+	deprecated enum MaxHttpHeaderLineLength = maxHeaderLineLength;
+	/// Compatibility alias, will be deprecated soon.
+	enum maxHttpHeaderLineLength = maxHeaderLineLength;
 
 	private {
 		string m_server;
 		ushort m_port;
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 		Stream m_stream;
-		SslContext m_ssl;
-		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HttpClient, +http://vibed.org/)";
+		SSLContext m_ssl;
+		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit; 
 		int m_timeout;
@@ -147,7 +155,7 @@ class HttpClient : EventedObject {
 		m_conn = null;
 		m_server = server;
 		m_port = port;
-		m_ssl = ssl ? new SslContext() : null;
+		m_ssl = ssl ? new SSLContext() : null;
 	}
 
 	void disconnect()
@@ -166,7 +174,7 @@ class HttpClient : EventedObject {
 		}
 	}
 
-	void request(scope void delegate(scope HttpClientRequest req) requester, scope void delegate(scope HttpClientResponse) responder)
+	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	{
 		//auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
 		//scope(exit) request_allocator.reset();
@@ -174,7 +182,7 @@ class HttpClient : EventedObject {
 
 		bool has_body = doRequest(requester);
 		m_responding = true;
-		auto res = scoped!HttpClientResponse(this, has_body, request_allocator);
+		auto res = scoped!HTTPClientResponse(this, has_body, request_allocator);
 		scope(exit){
 			res.dropBody();
 			assert(!m_responding, "Still in responding state after dropping the response body!?");
@@ -184,14 +192,14 @@ class HttpClient : EventedObject {
 		responder(res);
 	}
 
-	HttpClientResponse request(scope void delegate(HttpClientRequest) requester)
+	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
 	{
 		bool has_body = doRequest(requester);
 		m_responding = true;
-		return new HttpClientResponse(this, has_body);
+		return new HTTPClientResponse(this, has_body);
 	}
 
-	private bool doRequest(scope void delegate(HttpClientRequest req) requester)
+	private bool doRequest(scope void delegate(HTTPClientRequest req) requester)
 	{
 		assert(!m_requesting && !m_responding, "Interleaved request detected!");
 		m_requesting = true;
@@ -205,16 +213,16 @@ class HttpClient : EventedObject {
 		}
 
 		if( !m_conn || !m_conn.connected ){
-			m_conn = connectTcp(m_server, m_port);
+			m_conn = connectTCP(m_server, m_port);
 			m_stream = m_conn;
-			if( m_ssl ) m_stream = new SslStream(m_conn, m_ssl, SslStreamState.Connecting);
+			if( m_ssl ) m_stream = new SSLStream(m_conn, m_ssl, SSLStreamState.connecting);
 
 			now = Clock.currTime(UTC());
 		}
 
 		m_keepAliveLimit = now;
 
-		auto req = scoped!HttpClientRequest(m_stream);
+		auto req = scoped!HTTPClientRequest(m_stream);
 		req.headers["User-Agent"] = m_userAgent;
 		req.headers["Connection"] = "keep-alive";
 		req.headers["Accept-Encoding"] = "gzip, deflate";
@@ -222,11 +230,15 @@ class HttpClient : EventedObject {
 		requester(req);
 		req.finalize();
 
-		return req.method != HttpMethod.HEAD;
+		return req.method != HTTPMethod.HEAD;
 	}
 }
 
-final class HttpClientRequest : HttpRequest {
+/// Compatibility alias, will be deprecated soon.
+alias HttpClient = HTTPClient;
+
+
+final class HTTPClientRequest : HTTPRequest {
 	private {
 		OutputStream m_bodyWriter;
 		bool m_headerWritten = false;
@@ -312,16 +324,16 @@ final class HttpClientRequest : HttpRequest {
 
 	private void writeHeader()
 	{
-		assert(!m_headerWritten, "HttpClient tried to write headers twice.");
+		assert(!m_headerWritten, "HTTPClient tried to write headers twice.");
 		m_headerWritten = true;
 
 		auto app = appender!string();
 		app.reserve(512);
-		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
+		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		logTrace("--------------------");
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
-		logTrace("%s %s %s", httpMethodString(method), requestUrl, getHttpVersionString(httpVersion));
+		logTrace("%s %s %s", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		foreach( k, v; headers ){
 			formattedWrite(app, "%s: %s\r\n", k, v);
 			logTrace("%s: %s", k, v);
@@ -354,10 +366,14 @@ final class HttpClientRequest : HttpRequest {
 	}
 }
 
-final class HttpClientResponse : HttpResponse {
+/// Compatibility alias, will be deprecated soon.
+alias HttpClientRequest = HTTPClientRequest;
+
+
+final class HTTPClientResponse : HTTPResponse {
 	private {
-		HttpClient m_client;
-		LockedConnection!HttpClient lockedConnection;
+		HTTPClient m_client;
+		LockedConnection!HTTPClient lockedConnection;
 		FreeListRef!LimitedInputStream m_limitedInputStream;
 		FreeListRef!ChunkedInputStream m_chunkedInputStream;
 		FreeListRef!GzipInputStream m_gzipInputStream;
@@ -367,7 +383,7 @@ final class HttpClientResponse : HttpResponse {
 	}
 
 	/// private
-	this(HttpClient client, bool has_body, Allocator alloc = defaultAllocator())
+	this(HTTPClient client, bool has_body, Allocator alloc = defaultAllocator())
 	{
 		m_client = client;
 
@@ -375,7 +391,7 @@ final class HttpClientResponse : HttpResponse {
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
 		logTrace("HTTP client reading status line");
-		string stln = cast(string)client.m_stream.readLine(HttpClient.maxHttpHeaderLineLength, "\r\n", alloc);
+		string stln = cast(string)client.m_stream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", alloc);
 		logTrace("stln: %s", stln);
 		this.httpVersion = parseHttpVersion(stln);
 		enforce(stln.startsWith(" "));
@@ -388,7 +404,7 @@ final class HttpClientResponse : HttpResponse {
 		}
 		
 		// read headers until an empty line is hit
-		parseRfc5322Header(client.m_stream, this.headers, HttpClient.maxHttpHeaderLineLength, alloc);
+		parseRfc5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc);
 
 		logTrace("---------------------");
 		logTrace("HTTP client response:");
@@ -398,11 +414,13 @@ final class HttpClientResponse : HttpResponse {
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
 
-		foreach(s; headers["Keep-Alive"].split(",")){
-			auto pair = s.split("=");
-			if (icmp(pair[0].strip(), "timeout")) {
-				m_client.m_timeout = pair[1].to!int();
-				break;
+		if (auto pka = "Keep-Alive" in headers) {
+			foreach(s; split(*pka, ",")){
+				auto pair = s.split("=");
+				if (icmp(pair[0].strip(), "timeout")) {
+					m_client.m_timeout = pair[1].to!int();
+					break;
+				}
 			}
 		}
 
@@ -514,6 +532,10 @@ final class HttpClientResponse : HttpResponse {
 		destroy(lockedConnection);
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias HttpClientResponse = HTTPClientResponse;
+
 
 private NullOutputStream s_sink;
 

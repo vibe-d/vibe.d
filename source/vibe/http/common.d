@@ -27,12 +27,16 @@ import std.string;
 import std.typecons;
 
 
-enum HttpVersion {
+enum HTTPVersion {
 	HTTP_1_0,
 	HTTP_1_1
 }
 
-enum HttpMethod {
+/// Compatibility alias, will be deprecated soon.
+alias HttpVersion = HTTPVersion;
+
+
+enum HTTPMethod {
 	// HTTP standard
 	GET,
 	HEAD,
@@ -54,11 +58,14 @@ enum HttpMethod {
 	UNLOCK
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpMethod = HTTPMethod;
+
 
 /**
 	Returns the string representation of the given HttpMethod.
 */
-string httpMethodString(HttpMethod m)
+string httpMethodString(HTTPMethod m)
 {
 	return to!string(m);
 }
@@ -66,61 +73,64 @@ string httpMethodString(HttpMethod m)
 /**
 	Returns the HttpMethod value matching the given HTTP method string.
 */
-HttpMethod httpMethodFromString(string str)
+HTTPMethod httpMethodFromString(string str)
 {
 	switch(str){
 		default: throw new Exception("Invalid HTTP method: "~str);
-		case "GET": return HttpMethod.GET;
-		case "HEAD": return HttpMethod.HEAD;
-		case "PUT": return HttpMethod.PUT;
-		case "POST": return HttpMethod.POST;
-		case "PATCH": return HttpMethod.PATCH;
-		case "DELETE": return HttpMethod.DELETE;
-		case "OPTIONS": return HttpMethod.OPTIONS;
-		case "TRACE": return HttpMethod.TRACE;
-		case "CONNECT": return HttpMethod.CONNECT;
-		case "COPY": return HttpMethod.COPY;
-		case "LOCK": return HttpMethod.LOCK;
-		case "MKCOL": return HttpMethod.MKCOL;
-		case "MOVE": return HttpMethod.MOVE;
-		case "PROPFIND": return HttpMethod.PROPFIND;
-		case "PROPPATCH": return HttpMethod.PROPPATCH;
-		case "UNLOCK": return HttpMethod.UNLOCK;
+		case "GET": return HTTPMethod.GET;
+		case "HEAD": return HTTPMethod.HEAD;
+		case "PUT": return HTTPMethod.PUT;
+		case "POST": return HTTPMethod.POST;
+		case "PATCH": return HTTPMethod.PATCH;
+		case "DELETE": return HTTPMethod.DELETE;
+		case "OPTIONS": return HTTPMethod.OPTIONS;
+		case "TRACE": return HTTPMethod.TRACE;
+		case "CONNECT": return HTTPMethod.CONNECT;
+		case "COPY": return HTTPMethod.COPY;
+		case "LOCK": return HTTPMethod.LOCK;
+		case "MKCOL": return HTTPMethod.MKCOL;
+		case "MOVE": return HTTPMethod.MOVE;
+		case "PROPFIND": return HTTPMethod.PROPFIND;
+		case "PROPPATCH": return HTTPMethod.PROPPATCH;
+		case "UNLOCK": return HTTPMethod.UNLOCK;
 	}
 }
 
 unittest 
 {
-	assert(httpMethodString(HttpMethod.GET) == "GET");
-	assert(httpMethodString(HttpMethod.UNLOCK) == "UNLOCK");
-	assert(httpMethodFromString("GET") == HttpMethod.GET);
-	assert(httpMethodFromString("UNLOCK") == HttpMethod.UNLOCK);
+	assert(httpMethodString(HTTPMethod.GET) == "GET");
+	assert(httpMethodString(HTTPMethod.UNLOCK) == "UNLOCK");
+	assert(httpMethodFromString("GET") == HTTPMethod.GET);
+	assert(httpMethodFromString("UNLOCK") == HTTPMethod.UNLOCK);
 }
 
 
 /**
-	Utility function that throws a HttpStatusException if the _condition is not met.
+	Utility function that throws a HTTPStatusException if the _condition is not met.
 */
-void enforceHttp(T)(T condition, HttpStatus statusCode, string message = null)
+void enforceHTTP(T)(T condition, HTTPStatus statusCode, string message = null)
 {
-	enforce(condition, new HttpStatusException(statusCode, message));
+	enforce(condition, new HTTPStatusException(statusCode, message));
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias enforceHttp = enforceHTTP;
 
 
 /**
 	Represents an HTTP request made to a server.
 */
-class HttpRequest {
+class HTTPRequest {
 	protected {
 		Stream m_conn;
 	}
 	
 	public {
 		/// The HTTP protocol version used for the request
-		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
+		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
 
 		/// The HTTP _method of the request
-		HttpMethod method = HttpMethod.GET;
+		HTTPMethod method = HTTPMethod.GET;
 
 		/** The request URL
 
@@ -128,10 +138,13 @@ class HttpRequest {
 			'http://server' part, but only the local path and a query string.
 			A possible exception is a proxy server, which will get full URLs.
 		*/
-		string requestUrl = "/";
+		string requestURL = "/";
 
-		/// Please use requestUrl instead.
-		deprecated("Please use requestUrl instead.") alias requestUrl url;
+		/// Compatibility alias, will be deprecated soon.
+		alias requestUrl = requestURL;
+
+		/// Please use requestURL instead.
+		deprecated("Please use requestURL instead.") alias url = requestURL;
 
 		/// All request _headers
 		InetHeaderMap headers;
@@ -187,10 +200,10 @@ class HttpRequest {
 	{ 
 		auto ph = "connection" in headers;
 		switch(httpVersion) {
-			case HttpVersion.HTTP_1_0:
+			case HTTPVersion.HTTP_1_0:
 				if (ph && toLower(*ph) == "keep-alive") return true;
 				return false;
-			case HttpVersion.HTTP_1_1:
+			case HTTPVersion.HTTP_1_1:
 				if (ph && toLower(*ph) == "close") return false;
 				return true;
 			default: 
@@ -200,17 +213,20 @@ class HttpRequest {
 	
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpRequest = HTTPRequest;
+
 
 /**
 	Represents the HTTP response from the server back to the client.
 */
-class HttpResponse {
+class HTTPResponse {
 	public {
 		/// The protocol version of the response - should not be changed
-		HttpVersion httpVersion = HttpVersion.HTTP_1_1;
+		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
 
 		/// The status code of the response, 200 by default
-		int statusCode = HttpStatus.OK;
+		int statusCode = HTTPStatus.OK;
 
 		/** The status phrase of the response
 
@@ -232,13 +248,16 @@ class HttpResponse {
 	@property void contentType(string ct) { headers["Content-Type"] = ct; }
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpResponse = HTTPResponse;
+
 
 /**
 	Respresents a HTTP response status.
 
 	Throwing this exception from within a request handler will produce a matching error page.
 */
-class HttpStatusException : Exception {
+class HTTPStatusException : Exception {
 	private {
 		int m_status;
 	}
@@ -253,6 +272,9 @@ class HttpStatusException : Exception {
 	@property int status() const { return m_status; }
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpStatusException = HTTPStatusException;
+
 
 class MultiPart {
 	string contentType;
@@ -262,15 +284,19 @@ class MultiPart {
 	string[string] form;
 }
 
-string getHttpVersionString(HttpVersion ver)
+string getHTTPVersionString(HTTPVersion ver)
 {
 	final switch(ver){
-		case HttpVersion.HTTP_1_0: return "HTTP/1.0";
-		case HttpVersion.HTTP_1_1: return "HTTP/1.1";
+		case HTTPVersion.HTTP_1_0: return "HTTP/1.0";
+		case HTTPVersion.HTTP_1_1: return "HTTP/1.1";
 	}
 }
 
-HttpVersion parseHttpVersion(ref string str)
+/// Compatibility alias, will be deprecated soon.
+alias getHttpVersionString = getHTTPVersionString;
+
+
+HTTPVersion parseHTTPVersion(ref string str)
 {
 	enforce(str.startsWith("HTTP/"));
 	str = str[5 .. $];
@@ -280,8 +306,12 @@ HttpVersion parseHttpVersion(ref string str)
 	int minorVersion = parse!int(str);
 	
 	enforce( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
-	return minorVersion == 0 ? HttpVersion.HTTP_1_0 : HttpVersion.HTTP_1_1;
+	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias parseHttpVersion = parseHTTPVersion;
+
 
 /**
 	Takes an input stream that contains data in HTTP chunked format and outputs the raw data.

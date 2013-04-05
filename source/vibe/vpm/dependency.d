@@ -326,7 +326,7 @@ class Package {
 	
 	@property string name() const { return cast(string)m_meta["name"]; }
 	@property string vers() const { return cast(string)m_meta["version"]; }
-	@property const(Url) url() const { return Url.parse(cast(string)m_meta["url"]); }
+	@property const(URL) url() const { return URL.parse(cast(string)m_meta["url"]); }
 	@property const(Dependency[string]) dependencies() const { return m_dependencies; }
 	@property string[] dflags() const {
 		if( "dflags" !in m_meta ) return null;

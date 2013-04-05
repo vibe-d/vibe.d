@@ -172,7 +172,6 @@ class FileLogger : Logger {
 	private {
 		File m_infoFile;
 		File m_diagFile;
-		LogLevel m_minLogLevel = LogLevel.info;
 	}
 
 	Format format = Format.thread;
@@ -190,14 +189,10 @@ class FileLogger : Logger {
 		m_diagFile = m_infoFile;
 	}
 
-	@property void minLogLevel(LogLevel value) { m_minLogLevel = value; }
-
-	override bool acceptsLevel(LogLevel value) { return value >= m_minLogLevel; }
+	override bool acceptsLevel(LogLevel value) { return value >= this.minLevel; }
 
 	override void log(ref LogLine msg)
 	{
-		if (msg.level < this.minLevel) return;
-
 		string pref;
 		File file;
 		final switch (msg.level) {
@@ -213,8 +208,12 @@ class FileLogger : Logger {
 			case LogLevel.none: assert(false);
 		}
 
-		final switch (this.format) {
-			case Format.plain: file.write(msg.text); break;
+		auto fmt = this.format;
+		// force informational output to be in plain form
+		if (file !is m_diagFile) fmt = Format.plain;
+
+		final switch (fmt) {
+			case Format.plain: file.writeln(msg.text); break;
 			case Format.thread: file.writefln("[%08X:%08X %s] %s", msg.threadID, msg.fiberID, pref, msg.text); break;
 			case Format.threadTime:
 				auto tm = msg.time;
@@ -228,8 +227,9 @@ class FileLogger : Logger {
 	}
 }
 
+import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=7016
 
-class HtmlLogger : Logger {
+class HTMLLogger : Logger {
 	private {
 		File m_logFile;
 		LogLevel m_minLogLevel = LogLevel.min;
@@ -271,7 +271,12 @@ class HtmlLogger : Logger {
 		}
 		m_logFile.writef(`<div class="timeStamp">%s</div>`, msg.time.toISOExtString());
 		m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
-		m_logFile.writef(`<div class="message">%s</div>`, msg.text);
+		m_logFile.write(`<div class="message">`);
+		{
+			auto dst = m_logFile.lockingTextWriter();
+			filterHtmlEscape(dst, msg.text);
+		}
+		m_logFile.write(`</div>`);
 		m_logFile.writeln(`</div>`);
 		m_logFile.flush();
 	}
@@ -386,6 +391,6 @@ private {
 package void initializeLogModule()
 {
 	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
-	ss_stdoutLogger.lock().minLogLevel = LogLevel.info;
+	ss_stdoutLogger.lock().minLevel = LogLevel.info;
 	ss_loggers ~= ss_stdoutLogger;
 }

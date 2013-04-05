@@ -39,50 +39,62 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
 */
-TcpListener[] listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, TcpListenOptions options = TcpListenOptions.defaults)
+TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	TcpListener[] ret;
-	if( auto l = listenTcp(port, connection_callback, "::", options) ) ret ~= l;
-	if( auto l = listenTcp(port, connection_callback, "0.0.0.0", options) ) ret ~= l;
+	TCPListener[] ret;
+	if (auto l = listenTCP(port, connection_callback, "::", options)) ret ~= l;
+	if (auto l = listenTCP(port, connection_callback, "0.0.0.0", options)) ret ~= l;
 	return ret;
 }
 /// ditto
-TcpListener listenTcp(ushort port, void delegate(TcpConnection stream) connection_callback, string address, TcpListenOptions options = TcpListenOptions.defaults)
+TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) connection_callback, string address, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	return getEventDriver().listenTcp(port, connection_callback, address, options);
+	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenTcp = listenTCP;
 
 /**
 	Starts listening on the specified port.
 
-	This function is the same as listenTcp but takes a function callback instead of a delegate.
+	This function is the same as listenTCP but takes a function callback instead of a delegate.
 */
-TcpListener[] listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, TcpListenOptions options = TcpListenOptions.defaults)
+TCPListener[] listenTCP_s(ushort port, void function(TCPConnection stream) connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	return listenTcp(port, toDelegate(connection_callback), options);
+	return listenTCP(port, toDelegate(connection_callback), options);
 }
 /// ditto
-TcpListener listenTcpS(ushort port, void function(TcpConnection stream) connection_callback, string address, TcpListenOptions options = TcpListenOptions.defaults)
+TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connection_callback, string address, TCPListenOptions options = TCPListenOptions.defaults)
 {
-	return listenTcp(port, toDelegate(connection_callback), address, options);
+	return listenTCP(port, toDelegate(connection_callback), address, options);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenTcpS = listenTCP_s;
 
 /**
 	Establishes a connection to the given host/port.
 */
-TcpConnection connectTcp(string host, ushort port)
+TCPConnection connectTCP(string host, ushort port)
 {
-	return getEventDriver().connectTcp(host, port);
+	return getEventDriver().connectTCP(host, port);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias connectTcp = connectTCP;
 
 
 /**
 	Creates a bound UDP socket suitable for sending and receiving packets.
 */
-UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 {
-	return getEventDriver().listenUdp(port, bind_address);
+	return getEventDriver().listenUDP(port, bind_address);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenUdp = listenUDP;
 
 
 /**
@@ -143,7 +155,7 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TcpConnection : Stream, EventedObject {
+interface TCPConnection : Stream, EventedObject {
 	/// Used to disable Nagle's algorithm
 	@property void tcpNoDelay(bool enabled);
 	/// ditto
@@ -168,20 +180,26 @@ interface TcpConnection : Stream, EventedObject {
 	bool waitForData(Duration timeout);
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias TcpConnection = TCPConnection;
+
 
 /**
 	Represents a listening TCP socket.
 */
-interface TcpListener /*: EventedObject*/ {
+interface TCPListener /*: EventedObject*/ {
 	/// Stops listening and closes the socket.
 	void stopListening();
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias TcpListener = TCPListener;
 
 
 /**
 	Represents a bound and possibly 'connected' UDP socket.
 */
-interface UdpConnection : EventedObject {
+interface UDPConnection : EventedObject {
 	/** Returns the address to which the UDP socket is bound.
 	*/
 	@property string bindAddress() const;
@@ -194,7 +212,7 @@ interface UdpConnection : EventedObject {
 
 	/** Locks the UDP connection to a certain peer.
 
-		Once connected, the UdpConnection can only communicate with the specified peer.
+		Once connected, the UDPConnection can only communicate with the specified peer.
 		Otherwise communication with any reachable peer is possible.
 	*/
 	void connect(string host, ushort port);
@@ -213,7 +231,14 @@ interface UdpConnection : EventedObject {
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
 }
 
-enum TcpListenOptions {
+/// Compatibility alias, will be deprecated soon.
+alias UdpConnection = UDPConnection;
+
+
+enum TCPListenOptions {
 	defaults = 0,
 	distribute = 1<<0
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias TcpListenOptions = TCPListenOptions;

@@ -1,10 +1,11 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.http.server;
 
 shared static this()
 {
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.sessionStore = new MemorySessionStore();
 	settings.port = 8080;
 	
-	listenHttp(settings, staticTemplate!("info.dt"));
+	listenHTTP(settings, staticTemplate!("info.dt"));
 }

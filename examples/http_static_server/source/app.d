@@ -1,18 +1,21 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.http.fileserver;
+import vibe.http.router;
+import vibe.http.server;
 
-void handleRequest(HttpServerRequest req, HttpServerResponse res)
+void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 {
 	res.redirect("/index.html");
 }
 
 shared static this()
 {
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	
-	auto router = new UrlRouter;
+	auto router = new URLRouter;
 	router.get("/", &handleRequest);
 	router.get("*", serveStaticFiles("./public/"));
 	
-	listenHttp(settings, router);
+	listenHTTP(settings, router);
 }

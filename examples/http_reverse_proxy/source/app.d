@@ -1,9 +1,12 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.http.proxy;
+import vibe.http.server;
+
 
 shared static this()
 {
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 
-	listenHttpReverseProxy(settings, "www.heise.de", 80);
+	listenHTTPReverseProxy(settings, "www.heise.de", 80);
 }

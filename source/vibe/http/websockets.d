@@ -13,7 +13,7 @@
 	}
 
 	static this {
-		auto router = new UrlRouter;
+		auto router = new URLRouter;
 		router.get("/websocket", handleWebSockets(&handleConn))
 		
 		// Start HTTP server...
@@ -44,9 +44,9 @@ import std.string;
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
+HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 {
-	void callback(HttpServerRequest req, HttpServerResponse res)
+	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
@@ -72,7 +72,7 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
-			res.statusCode = HttpStatus.BadRequest;
+			res.statusCode = HTTPStatus.BadRequest;
 			res.writeVoidBody();
 			return;
 		}
@@ -94,14 +94,14 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 */
 class WebSocket {
 	private {
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 	}
 
 	this(Stream conn)
 	{
-		m_conn = cast(TcpConnection)conn;
+		m_conn = cast(TCPConnection)conn;
 		assert(m_conn);
 	}
 

@@ -115,11 +115,11 @@ import std.traits;
 
 		static this()
 		{
-			auto routes = new UrlRouter;
+			auto routes = new URLRouter;
 
 			registerRestInterface(routes, new MyApiImpl, "/api/");
 
-			listenHttp(new HttpServerSettings, routes);
+			listenHTTP(new HTTPServerSettings, routes);
 		}
 		---
 
@@ -127,10 +127,10 @@ import std.traits;
 	
 		RestInterfaceClient class for a seamless way to acces such a generated API
 */
-void registerRestInterface(T)(UrlRouter router, T instance, string urlPrefix = "/",
+void registerRestInterface(T)(URLRouter router, T instance, string urlPrefix = "/",
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
-	void addRoute(HttpMethod httpVerb, string url, HttpServerRequestDelegate handler, string[] params)
+	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
 	{
 		router.addRoute(httpVerb, url, handler);
 		logDebug("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
@@ -141,9 +141,9 @@ void registerRestInterface(T)(UrlRouter router, T instance, string urlPrefix = "
 			alias ReturnType!overload RetType;
 			string[] paramNames = [ParameterIdentifierTuple!overload];
 			
-			enum meta = extractHttpMethodAndName!(overload)();
+			enum meta = extractHTTPMethodAndName!(overload)();
 			enum pathOverriden = meta[0];
-			HttpMethod httpVerb = meta[1];
+			HTTPMethod httpVerb = meta[1];
 			static if (pathOverriden)
 				string url = meta[2];
 			else
@@ -214,9 +214,9 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateModuleImports!(I)());
 	mixin(generateModuleImports!I());
 	
-	alias void delegate(HttpClientRequest req) RequestFilter;
+	alias void delegate(HTTPClientRequest req) RequestFilter;
 	private {
-		Url m_baseUrl;
+		URL m_baseURL;
 		MethodStyle m_methodStyle;
 		RequestFilter m_requestFilter;
 	}
@@ -225,16 +225,16 @@ class RestInterfaceClient(I) : I
 	
 	/** Creates a new REST implementation of I
 	*/
-	this(string baseUrl, MethodStyle style = MethodStyle.lowerUnderscored)
+	this(string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseUrl = Url.parse(baseUrl);
+		m_baseURL = URL.parse(base_url);
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I());
 	}
 	/// ditto
-	this(Url baseUrl, MethodStyle style = MethodStyle.lowerUnderscored)
+	this(URL base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseUrl = baseUrl;
+		m_baseURL = base_url;
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I());
 	}
@@ -260,7 +260,7 @@ class RestInterfaceClient(I) : I
 #line 261 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
-		Url url = m_baseUrl;
+		URL url = m_baseURL;
 		if( name.length ) url ~= Path(name);
 		else if( !url.path.endsWithSlash ){
 			auto p = url.path;
@@ -274,16 +274,16 @@ class RestInterfaceClient(I) : I
 			foreach( string pname, p; params ){
 				if( !first ) queryString.put('&');
 				else first = false;
-				filterUrlEncode(queryString, pname);
+				filterURLEncode(queryString, pname);
 				queryString.put('=');
-				filterUrlEncode(queryString, paramIsJson[pname] ? p.toString() : toRestString(p));
+				filterURLEncode(queryString, paramIsJson[pname] ? p.toString() : toRestString(p));
 			}
 			url.queryString = queryString.data();
 		}
 		
 		Json ret;
 
-		requestHttp(url,
+		requestHTTP(url,
 			(scope req){
 				req.method = httpMethodFromString(verb);
 				if( m_requestFilter ) m_requestFilter(req);
@@ -293,10 +293,10 @@ class RestInterfaceClient(I) : I
 			(scope res){
 				ret = res.readJson();
 				logDebug("REST call: %s %s -> %d, %s", verb, url.toString(), res.statusCode, ret.toString());
-				if( res.statusCode != HttpStatus.OK ){
+				if( res.statusCode != HTTPStatus.OK ){
 					if( ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String )
-						throw new HttpStatusException(res.statusCode, ret.statusMessage.get!string);
-					else throw new HttpStatusException(res.statusCode, httpStatusText(res.statusCode));
+						throw new HTTPStatusException(res.statusCode, ret.statusMessage.get!string);
+					else throw new HTTPStatusException(res.statusCode, httpStatusText(res.statusCode));
 				}
 			}
 		);
@@ -312,7 +312,7 @@ unittest
 	{	
 		string getInfo();
 		
-		@method(HttpMethod.DELETE)
+		@method(HTTPMethod.DELETE)
 		double[] setSomething(int num);
 		
 		@path("/process/:param/:param2/please")
@@ -425,14 +425,14 @@ enum MethodStyle {
 }
 
 /// private
-private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst)
+private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst)
 {
 	alias ParameterTypeTuple!Func ParameterTypes;
 	alias ReturnType!Func RetType;
 	alias ParameterDefaultValueTuple!Func DefaultValues;
 	enum paramNames = [ParameterIdentifierTuple!Func];
 	
-	void handler(HttpServerRequest req, HttpServerResponse res)
+	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		ParameterTypes params;
 		
@@ -449,7 +449,7 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				}
 			} else {
 				alias DefaultValues[i] DefVal;
-				if( req.method == HttpMethod.GET ){
+				if( req.method == HTTPMethod.GET ){
 					logDebug("query %s of %s" ,paramNames[i], req.query);
 					static if( is(DefVal == void) ){
 						enforce(paramNames[i] in req.query, "Missing query parameter '"~paramNames[i]~"'");
@@ -486,11 +486,11 @@ private HttpServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				auto ret = __traits(getMember, inst, method)(params);
 				res.writeJsonBody(serializeToJson(ret));
 			}
-		} catch( HttpStatusException e) {
+		} catch( HTTPStatusException e) {
 			res.writeJsonBody(["statusMessage": e.msg], e.status);
 		} catch( Exception e ){
 			// TODO: better error description!
-			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString())], HttpStatus.InternalServerError);
+			res.writeJsonBody(["statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString())], HTTPStatus.internalServerError);
 		}
 	}
 	
@@ -549,7 +549,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
 				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
-				if( tps.countUntil(RT.stringof) < 0 ){
+				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					ret ~= format(
@@ -586,19 +586,29 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
 				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
-				if( tps.countUntil(RT.stringof) < 0 ){
+				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					
-					enum meta = extractHttpMethodAndName!overload();
-					HttpMethod http_verb = meta[1];
+					enum meta = extractHTTPMethodAndName!overload();
+                    bool pathOverriden = meta[0];
+					HTTPMethod http_verb = meta[1];
 					string url = meta[2];
 					
 					ret ~= format(
-						q{m_%s = new %s(m_baseUrl~PathEntry("%s"), m_methodStyle);},
+						q{
+							string url__;
+							if (%s)
+								url__ = m_baseURL.toString() ~ PathEntry("%s").toString();
+							else
+								url__ = m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString(), m_methodStyle);
+							m_%s = new %s(url__, m_methodStyle);
+						},
+						pathOverriden,
+						url,
+						url,
 						implname,
 						implname,
-						url
 					);
 					ret ~= "\n";
 				}
@@ -623,7 +633,7 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 			alias ReturnType!FT RT;
 			static if( is(RT == interface) ){
 				static assert(PTypes.length == 0, "Interface getters may not have parameters.");
-				if( tps.countUntil(RT.stringof) < 0 ){
+				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof~"Impl";
 					
@@ -653,9 +663,9 @@ private string generateRestInterfaceMethods(I)()
 			alias ParameterTypeTuple!overload PTypes;
 			alias ParameterIdentifierTuple!overload ParamNames;
 			
-			enum meta = extractHttpMethodAndName!(overload)();
+			enum meta = extractHTTPMethodAndName!(overload)();
 			enum pathOverriden = meta[0];
-			HttpMethod httpVerb = meta[1];
+			HTTPMethod httpVerb = meta[1];
 			string url = meta[2];
 			
 			// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
@@ -686,7 +696,7 @@ private string generateRestInterfaceMethods(I)()
 							urlPrefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 					}
 					else static if( !ParamNames[i].startsWith("_") ){
-						// underscore parameters are sourced from the HttpServerRequest.params map or from url itself
+						// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
 						paramHandlingStr ~= format(
 							q{
 								jparams__["%s"] = serializeToJson(%s);
@@ -800,11 +810,11 @@ private T fromRestString(T)(string value)
 	interface IAPI
 	{
 		// Will be "POST /info" instead of default "GET /info"
-		@method(HttpMethod.POST) getInfo();
+		@method(HTTPMethod.POST) getInfo();
 	}
 	---	
  */
-OverridenMethod method(HttpMethod data)
+OverridenMethod method(HTTPMethod data)
 {
 	if (!__ctfe)
 		assert(false);
@@ -814,7 +824,7 @@ OverridenMethod method(HttpMethod data)
 /// private
 struct OverridenMethod
 {
-	HttpMethod data;
+	HTTPMethod data;
 	alias data this;
 }
 
@@ -833,7 +843,7 @@ struct OverridenMethod
 	
 	shared static this()
 	{
-		registerRestInterface!IAPI(new UrlRouter(), new API(), "/root/");
+		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
 		// now IAPI.getInfo is tied to "GET /root/info2"
 	}
 	---	
@@ -861,27 +871,27 @@ struct OverridenPath
 	Returns:
 		Tuple of three elements:
 			* flag "was UDA used to override path"
-			* HttpMethod extracted
+			* HTTPMethod extracted
 			* url path extracted
  */
-private Tuple!(bool, HttpMethod, string) extractHttpMethodAndName(alias Func)()
+private Tuple!(bool, HTTPMethod, string) extractHTTPMethodAndName(alias Func)()
 {   
 	if (!__ctfe)
 		assert(false);
 	
 	immutable httpMethodPrefixes = [
-		HttpMethod.GET    : [ "get", "query" ],
-		HttpMethod.PUT    : [ "put", "set" ],
-		HttpMethod.PATCH  : [ "update", "patch" ],
-		HttpMethod.POST   : [ "add", "create", "post" ],
-		HttpMethod.DELETE : [ "remove", "erase", "delete" ],
+		HTTPMethod.GET    : [ "get", "query" ],
+		HTTPMethod.PUT    : [ "put", "set" ],
+		HTTPMethod.PATCH  : [ "update", "patch" ],
+		HTTPMethod.POST   : [ "add", "create", "post" ],
+		HTTPMethod.DELETE : [ "remove", "erase", "delete" ],
 	];
 	
 	string name = __traits(identifier, Func);
 	alias typeof(&Func) T;
 	alias TypeTuple!(__traits(getAttributes, Func)) udas;
 	
-	Nullable!HttpMethod udmethod;
+	Nullable!HTTPMethod udmethod;
 	Nullable!string udurl;
 	
 	// Cases may conflict and are listed in order of priority
@@ -897,7 +907,7 @@ private Tuple!(bool, HttpMethod, string) extractHttpMethodAndName(alias Func)()
 		return tuple(true, udmethod.get(), udurl.get());
 	
 	// Anti-copy-paste delegate
-	typeof(return) udaOverride( HttpMethod method, string url ){
+	typeof(return) udaOverride( HTTPMethod method, string url ){
 		return tuple(
 			!udurl.isNull(),
 			udmethod.isNull() ? method : udmethod.get(), 
@@ -906,9 +916,9 @@ private Tuple!(bool, HttpMethod, string) extractHttpMethodAndName(alias Func)()
 	}
 	
 	if (isPropertyGetter!T)
-		return udaOverride(HttpMethod.GET, name);
+		return udaOverride(HTTPMethod.GET, name);
 	else if(isPropertySetter!T)
-		return udaOverride(HttpMethod.PUT, name);
+		return udaOverride(HTTPMethod.PUT, name);
 	else {
 		foreach( method, prefixes; httpMethodPrefixes ){
 			foreach (prefix; prefixes){
@@ -920,9 +930,9 @@ private Tuple!(bool, HttpMethod, string) extractHttpMethodAndName(alias Func)()
 		}
 		
 		if (name == "index")
-			return udaOverride(HttpMethod.GET, "");
+			return udaOverride(HTTPMethod.GET, "");
 		else
-			return udaOverride(HttpMethod.POST, name);
+			return udaOverride(HTTPMethod.POST, name);
 	}
 }
 
@@ -933,34 +943,34 @@ unittest
 		string getInfo();
 		string updateDescription();
 		
-		@method(HttpMethod.DELETE)
+		@method(HTTPMethod.DELETE)
 		string putInfo();
 		
 		@path("matters")
 		string getMattersnot();
 		
-		@path("compound/path") @method(HttpMethod.POST)
+		@path("compound/path") @method(HTTPMethod.POST)
 		string mattersnot();
 	}
 	
-	enum ret1 = extractHttpMethodAndName!(Sample.getInfo);
+	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo);
 	static assert (ret1[0] == false);
-	static assert (ret1[1] == HttpMethod.GET);
+	static assert (ret1[1] == HTTPMethod.GET);
 	static assert (ret1[2] == "Info");
-	enum ret2 = extractHttpMethodAndName!(Sample.updateDescription);
+	enum ret2 = extractHTTPMethodAndName!(Sample.updateDescription);
 	static assert (ret2[0] == false);
-	static assert (ret2[1] == HttpMethod.PATCH);
+	static assert (ret2[1] == HTTPMethod.PATCH);
 	static assert (ret2[2] == "Description");
-	enum ret3 = extractHttpMethodAndName!(Sample.putInfo);
+	enum ret3 = extractHTTPMethodAndName!(Sample.putInfo);
 	static assert (ret3[0] == false);
-	static assert (ret3[1] == HttpMethod.DELETE);
+	static assert (ret3[1] == HTTPMethod.DELETE);
 	static assert (ret3[2] == "Info");
-	enum ret4 = extractHttpMethodAndName!(Sample.getMattersnot);
+	enum ret4 = extractHTTPMethodAndName!(Sample.getMattersnot);
 	static assert (ret4[0] == true);
-	static assert (ret4[1] == HttpMethod.GET);
+	static assert (ret4[1] == HTTPMethod.GET);
 	static assert (ret4[2] == "matters");
-	enum ret5 = extractHttpMethodAndName!(Sample.mattersnot);
+	enum ret5 = extractHTTPMethodAndName!(Sample.mattersnot);
 	static assert (ret5[0] == true);
-	static assert (ret5[1] == HttpMethod.POST);
+	static assert (ret5[1] == HTTPMethod.POST);
 	static assert (ret5[2] == "compound/path");
 }

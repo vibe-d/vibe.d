@@ -12,13 +12,14 @@ public import vibe.http.common;
 public import vibe.http.session;
 
 import vibe.core.core;
+import vibe.core.file;
 import vibe.core.log;
 import vibe.data.json;
 import vibe.http.dist;
-import vibe.http.form;
 import vibe.http.log;
 import vibe.inet.message;
 import vibe.inet.url;
+import vibe.inet.webform;
 import vibe.stream.counting;
 import vibe.stream.operations;
 import vibe.stream.ssl;
@@ -27,10 +28,9 @@ import vibe.textfilter.urlencode;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
-import vibe.core.file;
 
 import core.vararg;
-import std.algorithm : countUntil, map, min;
+import std.algorithm : canFind, map, min;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -40,7 +40,6 @@ import std.functional;
 import std.string;
 import std.typecons;
 import std.uri;
-public import std.variant;
 
 
 /**************************************************************************************************/
@@ -54,22 +53,22 @@ public import std.variant;
 	res parameter of the callback then has to be filled with the response
 	data.
 	
-	request_handler can be either HttpServerRequestDelegate/HttpServerRequestFunction
+	request_handler can be either HTTPServerRequestDelegate/HTTPServerRequestFunction
 	or a class/struct with a member function 'handleRequest' that has the same
 	signature.
 
 	Note that if the application has been started with the --disthost command line
-	switch, listenHttp() will automatically listen on the specified VibeDist host
+	switch, listenHTTP() will automatically listen on the specified VibeDist host
 	instead of locally. This allows for a seamless switch from single-host to 
 	multi-host scenarios without changing the code. If you need to listen locally,
-	use listenHttpPlain() instead.
+	use listenHTTPPlain() instead.
 
 	Params:
 		settings = Customizes the HTTP servers functionality.
 		request_handler = This callback is invoked for each incoming request and is responsible
 			for generating the response.
 */
-void listenHttp(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
+void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 {
 	enforce(settings.bindAddresses.length, "Must provide at least one bind address for a HTTP server.");
 
@@ -78,9 +77,9 @@ void listenHttp(HttpServerSettings settings, HttpServerRequestDelegate request_h
 	ctx.requestHandler = request_handler;
 
 	if( settings.accessLogToConsole )
-		ctx.loggers ~= new HttpConsoleLogger(settings, settings.accessLogFormat);
+		ctx.loggers ~= new HTTPConsoleLogger(settings, settings.accessLogFormat);
 	if( settings.accessLogFile.length )
-		ctx.loggers ~= new HttpFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
+		ctx.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
 
 	g_contexts ~= ctx;
 
@@ -89,36 +88,39 @@ void listenHttp(HttpServerSettings settings, HttpServerRequestDelegate request_h
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
 	if( s_distHost.length && !settings.disableDistHost ){
-		listenHttpDist(settings, request_handler, s_distHost, s_distPort);
+		listenHTTPDist(settings, request_handler, s_distHost, s_distPort);
 	} else {
-		listenHttpPlain(settings, request_handler);
+		listenHTTPPlain(settings, request_handler);
 	}
 }
 /// ditto
-void listenHttp(HttpServerSettings settings, HttpServerRequestFunction request_handler)
+void listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
 {
-	listenHttp(settings, toDelegate(request_handler));
+	listenHTTP(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHttp(HttpServerSettings settings, HttpServerRequestHandler request_handler)
+void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
 {
-	listenHttp(settings, &request_handler.handleRequest);
+	listenHTTP(settings, &request_handler.handleRequest);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenHttp = listenHTTP;
 
 
 /**
 	[private] Starts a HTTP server listening on the specified port.
 
-	This is the same as listenHttp() except that it does not use a VibeDist host for
+	This is the same as listenHTTP() except that it does not use a VibeDist host for
 	remote listening, even if specified on the command line.
 */
-private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDelegate request_handler)
+private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 {
-	static void doListen(HttpServerSettings settings, HTTPServerListener listener, string addr)
+	static void doListen(HTTPServerSettings settings, HTTPServerListener listener, string addr)
 	{
 		try {
-			bool dist = (settings.options & HttpServerOption.distribute) != 0;
-			listenTcp(settings.port, (TcpConnection conn){ handleHttpConnection(conn, listener); }, addr, dist ? TcpListenOptions.distribute : TcpListenOptions.defaults);
+			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
+			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, listener); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
 			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
 	}
@@ -132,9 +134,9 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 				enforce(settings.sslContext is lst.sslContext,
 					"A HTTP server is already listening on "~addr~":"~to!string(settings.port)~
 					" but the SSL context differs.");
-				foreach( ctx; g_contexts ){
-					if( ctx.settings.port != settings.port ) continue;
-					if( countUntil(ctx.settings.bindAddresses, addr) < 0 ) continue;
+				foreach (ctx; g_contexts) {
+					if (ctx.settings.port != settings.port) continue;
+					if (!ctx.settings.bindAddresses.canFind(addr)) continue;
 					/*enforce(ctx.settings.hostName != settings.hostName,
 						"A server with the host name '"~settings.hostName~"' is already "
 						"listening on "~addr~":"~to!string(settings.port)~".");*/
@@ -147,7 +149,7 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 			if( (settings.sslKeyFile || settings.sslCertFile) && !settings.sslContext ){
 				logDebug("Creating SSL context...");
 				assert(settings.sslCertFile.length && settings.sslKeyFile.length);
-				settings.sslContext = new SslContext(settings.sslCertFile, settings.sslKeyFile);
+				settings.sslContext = new SSLContext(settings.sslCertFile, settings.sslKeyFile);
 				logDebug("... done");
 			}
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
@@ -157,37 +159,40 @@ private void listenHttpPlain(HttpServerSettings settings, HttpServerRequestDeleg
 	}
 }
 /// ditto
-void listenHttpPlain(HttpServerSettings settings, HttpServerRequestFunction request_handler)
+void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
 {
-	listenHttpPlain(settings, toDelegate(request_handler));
+	listenHTTPPlain(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHttpPlain(HttpServerSettings settings, HttpServerRequestHandler request_handler)
+void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
 {
-	listenHttpPlain(settings, &request_handler.handleRequest);
+	listenHTTPPlain(settings, &request_handler.handleRequest);
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenHttpPlain = listenHTTPPlain;
 
 
 /**
 	Provides a HTTP request handler that responds with a static Diet template.
 */
-@property HttpServerRequestDelegate staticTemplate(string template_file)()
+@property HTTPServerRequestDelegate staticTemplate(string template_file)()
 {
 	import vibe.templ.diet;
-	return (HttpServerRequest req, HttpServerResponse res){
+	return (HTTPServerRequest req, HTTPServerResponse res){
 		//res.render!(template_file, req);
 		//res.headers["Content-Type"] = "text/html; charset=UTF-8";
 		//parseDietFile!(template_file, req)(res.bodyWriter);
-		res.renderCompat!(template_file, HttpServerRequest, "req")(Variant(req));
+		res.renderCompat!(template_file, HTTPServerRequest, "req")(req);
 	};
 }
 
 /**
 	Provides a HTTP request handler that responds with a static redirection to the specified URL.
 */
-HttpServerRequestDelegate staticRedirect(string url)
+HTTPServerRequestDelegate staticRedirect(string url)
 {
-	return (HttpServerRequest req, HttpServerResponse res){
+	return (HTTPServerRequest req, HTTPServerResponse res){
 		res.redirect(url);
 	};
 }
@@ -209,9 +214,9 @@ void startListening()
 		// if a VibeDist host was specified on the command line, register there instead of listening
 		// directly.
 		if( s_distHost.length ){
-			listenHttpDist(ctx.settings, ctx.requestHandler, s_distHost, s_distPort);
+			listenHTTPDist(ctx.settings, ctx.requestHandler, s_distHost, s_distPort);
 		} else {
-			listenHttpPlain(ctx.settings, ctx.requestHandler);
+			listenHTTPPlain(ctx.settings, ctx.requestHandler);
 		}
 	}
 }
@@ -221,7 +226,7 @@ void startListening()
 
 	This currently suffers from multiple DMD bugs - use renderCompat() instead for the time being.
 
-	You can call this function as a member of HttpServerResponse using D's uniform function
+	You can call this function as a member of HTTPServerResponse using D's uniform function
 	call syntax.
 
 	Examples:
@@ -231,7 +236,7 @@ void startListening()
 		res.render!("mytemplate.jd", title, pageNumber);
 		---
 */
-@property void render(string template_file, ALIASES...)(HttpServerResponse res)
+@property void render(string template_file, ALIASES...)(HTTPServerResponse res)
 {
 	import vibe.templ.diet;
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
@@ -244,21 +249,30 @@ void startListening()
 /**************************************************************************************************/
 
 /// Delegate based request handler
-alias void delegate(HttpServerRequest req, HttpServerResponse res) HttpServerRequestDelegate;
+alias HTTPServerRequestDelegate = void delegate(HTTPServerRequest req, HTTPServerResponse res);
 /// Static function based request handler
-alias void function(HttpServerRequest req, HttpServerResponse res) HttpServerRequestFunction;
+alias HTTPServerRequestFunction = void function(HTTPServerRequest req, HTTPServerResponse res);
 /// Interface for class based request handlers
-interface HttpServerRequestHandler {
+interface HTTPServerRequestHandler {
 	/// Handles incoming HTTP requests
-	void handleRequest(HttpServerRequest req, HttpServerResponse res);
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
 }
 
+
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerRequestDelegate = HTTPServerRequestDelegate;
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerRequestFunction = HTTPServerRequestFunction;
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerRequestHandler = HTTPServerRequestHandler;
+
 /// Compatibility alias.
-deprecated("Please use HttpServerRequestHandler instead.")
-alias HttpServerRequestHandler IHttpServerRequestHandler;
+deprecated("Please use HTTPServerRequestHandler instead.")
+alias IHttpServerRequestHandler = HTTPServerRequestHandler;
+
 
 /// Aggregates all information about an HTTP error status.
-class HttpServerErrorInfo {
+class HTTPServerErrorInfo {
 	/// The HTTP status code
 	int code;
 	/// The error message
@@ -269,15 +283,23 @@ class HttpServerErrorInfo {
 	Throwable exception;
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerErrorInfo = HTTPServerErrorInfo;
+
+
 /// Delegate type used for user defined error page generator callbacks.
-alias void delegate(HttpServerRequest req, HttpServerResponse res, HttpServerErrorInfo error) HttpServerErrorPageHandler;
+alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error);
+
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerErrorPageHandler = HTTPServerErrorPageHandler;
+
 
 /**
 	Specifies optional features of the HTTP server.
 
 	Disabling unneeded features can speed up the server or reduce its memory usage.
 */
-enum HttpServerOption {
+enum HTTPServerOption {
 	none                      = 0,
 	/// Fills the .path, .queryString fields in the request
 	parseURL                  = 1<<0,
@@ -310,13 +332,16 @@ enum HttpServerOption {
 	ParseCookies = parseCookies
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerOption = HTTPServerOption;
+
 
 /**
 	Contains all settings for configuring a basic HTTP server.
 
 	The defaults are sufficient for most normal uses.
 */
-class HttpServerSettings {
+class HTTPServerSettings {
 	/** The port on which the HTTP server is listening.
 
 		The default value is 80. If you are running a SSL enabled server you may want to set this
@@ -342,13 +367,13 @@ class HttpServerSettings {
 		Disabling unneeded features can improve performance or reduce the server
 		load in case of invalid or unwanted requests (DoS).
 	*/
-	HttpServerOption options =
-		HttpServerOption.parseURL |
-		HttpServerOption.parseQueryString |
-		HttpServerOption.parseFormBody |
-		HttpServerOption.parseJsonBody |
-		HttpServerOption.parseMultiPartBody |
-		HttpServerOption.parseCookies;
+	HTTPServerOption options =
+		HTTPServerOption.parseURL |
+		HTTPServerOption.parseQueryString |
+		HTTPServerOption.parseFormBody |
+		HTTPServerOption.parseJsonBody |
+		HTTPServerOption.parseMultiPartBody |
+		HTTPServerOption.parseCookies;
 	
 	/// Time of a request after which the connection is closed with an error; not supported yet
 	Duration maxRequestTime = dur!"seconds"(0);
@@ -366,7 +391,7 @@ class HttpServerSettings {
 	ulong maxRequestHeaderSize = 8192;
 
 	/// Sets a custom handler for displaying error pages for HTTP errors
-	HttpServerErrorPageHandler errorPageHandler = null;
+	HTTPServerErrorPageHandler errorPageHandler = null;
 
 	/** If set, a HTTPS server will be started instead of plain HTTP
 
@@ -377,7 +402,7 @@ class HttpServerSettings {
 	/// ditto
 	string sslKeyFile;
 	/// ditto
-	SslContext sslContext;
+	SSLContext sslContext;
 
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
@@ -403,10 +428,10 @@ class HttpServerSettings {
 	bool accessLogToConsole = false;
 
 	/// Returns a duplicate of the settings object.
-	@property HttpServerSettings dup()
+	@property HTTPServerSettings dup()
 	{
-		auto ret = new HttpServerSettings;
-		foreach( mem; __traits(allMembers, HttpServerSettings) ){
+		auto ret = new HTTPServerSettings;
+		foreach( mem; __traits(allMembers, HTTPServerSettings) ){
 			static if( mem == "bindAddresses" ) ret.bindAddresses = bindAddresses.dup;
 			else static if( __traits(compiles, __traits(getMember, ret, mem) = __traits(getMember, this, mem)) )
 				__traits(getMember, ret, mem) = __traits(getMember, this, mem);
@@ -418,11 +443,14 @@ class HttpServerSettings {
 	bool disableDistHost = false;
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerSettings = HTTPServerSettings;
+
 
 /**
 	Represents a HTTP request as received by the server side.
 */
-final class HttpServerRequest : HttpRequest {
+final class HTTPServerRequest : HTTPRequest {
 	private {
 		SysTime m_timeCreated;
 		FixedAppender!(string, 31) m_dateAppender;
@@ -437,25 +465,25 @@ final class HttpServerRequest : HttpRequest {
 
 		/** The _path part of the URL.
 
-			Remarks: This field is only set if HttpServerOption.parseURL is set.
+			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string path;
 
 		/** The user name part of the URL, if present.
 
-			Remarks: This field is only set if HttpServerOption.parseURL is set.
+			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string username;
 
 		/** The _password part of the URL, if present.
 
-			Remarks: This field is only set if HttpServerOption.parseURL is set.
+			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string password;
 
 		/** The _query string part of the URL.
 
-			Remarks: This field is only set if HttpServerOption.parseURL is set.
+			Remarks: This field is only set if HTTPServerOption.parseURL is set.
 		*/
 		string queryString;
 
@@ -466,20 +494,20 @@ final class HttpServerRequest : HttpRequest {
 			the request URI. By default, the first cookie will be returned, which is
 			the or one of the cookies with the closest path match.
 
-			Remarks: This field is only set if HttpServerOption.parseCookies is set.
+			Remarks: This field is only set if HTTPServerOption.parseCookies is set.
 		*/
 		CookieValueMap cookies;
 		
 		/** Contains all _form fields supplied using the _query string.
 
-			Remarks: This field is only set if HttpServerOption.parseQueryString is set.
+			Remarks: This field is only set if HTTPServerOption.parseQueryString is set.
 		*/
 		string[string] query;
 
 		/** A map of general parameters for the request.
 
 			This map is supposed to be used by middleware functionality to store
-			information for later stages. For example vibe.http.router.UrlRouter uses this map
+			information for later stages. For example vibe.http.router.URLRouter uses this map
 			to store the value of any named placeholders.
 		*/
 		string[string] params;
@@ -487,7 +515,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Supplies the request body as a stream.
 
 			If the body has not already been read because one of the body parsers has
-			processed it (e.g. HttpServerOption.parseFormBody), it can be read from
+			processed it (e.g. HTTPServerOption.parseFormBody), it can be read from
 			this stream.
 		*/
 		InputStream bodyReader;
@@ -495,7 +523,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Contains the parsed Json for a JSON request.
 
 			Remarks:
-				This field is only set if HttpServerOption.parseJsonBody is set.
+				This field is only set if HTTPServerOption.parseJsonBody is set.
 
 				A JSON request must have the Content-Type "application/json".
 		*/
@@ -504,7 +532,7 @@ final class HttpServerRequest : HttpRequest {
 		/** Contains the parsed parameters of a HTML POST _form request.
 
 			Remarks:
-				This field is only set if HttpServerOption.parseFormBody is set.
+				This field is only set if HTTPServerOption.parseFormBody is set.
 
 				A form request must either have the Content-Type
 				"application/x-www-form-urlencoded" or "multipart/form-data".
@@ -514,18 +542,18 @@ final class HttpServerRequest : HttpRequest {
 		/** Contains information about any uploaded file for a HTML _form request.
 
 			Remarks:
-				This field is only set if HttpServerOption.parseFormBody is set amd
+				This field is only set if HTTPServerOption.parseFormBody is set amd
 				if the Content-Type is "multipart/form-data".
 		*/
 		FilePart[string] files;
 
 		/** The current Session object.
 
-			This field is set if HttpServerResponse.startSession() has been called
+			This field is set if HTTPServerResponse.startSession() has been called
 			on a previous response and if the client has sent back the matching
 			cookie.
 
-			Remarks: Requires the HttpServerOption.parseCookies option.
+			Remarks: Requires the HTTPServerOption.parseCookies option.
 		*/
 		Session session;
 	}
@@ -552,9 +580,9 @@ final class HttpServerRequest : HttpRequest {
 		Note that the port is currently not set, so that this only works if
 		the standard port is used.
 	*/
-	@property Url fullUrl()
+	@property URL fullURL()
 	const {
-		Url url;
+		URL url;
 		url.schema = this.ssl ? "https" : "http";
 		auto pfh = "X-Forwarded-Host" in this.headers;
 		url.host = pfh ? *pfh : this.host;
@@ -565,6 +593,9 @@ final class HttpServerRequest : HttpRequest {
 		url.queryString = queryString;
 		return url;
 	}
+
+	/// Compatibility alias, will be deprecated soon.
+	alias fullUrl = fullURL;
 
 	/** The relative path the the root folder.
 
@@ -581,11 +612,14 @@ final class HttpServerRequest : HttpRequest {
 	}
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerRequest = HTTPServerRequest;
+
 
 /**
 	Represents a HTTP response as sent from the server side.
 */
-final class HttpServerResponse : HttpResponse {
+final class HTTPServerResponse : HTTPResponse {
 	private {
 		Stream m_conn;
 		OutputStream m_bodyWriter;
@@ -594,14 +628,14 @@ final class HttpServerResponse : HttpResponse {
 		FreeListRef!CountingOutputStream m_countingWriter;
 		FreeListRef!GzipOutputStream m_gzipOutputStream;
 		FreeListRef!DeflateOutputStream m_deflateOutputStream;
-		HttpServerSettings m_settings;
+		HTTPServerSettings m_settings;
 		Session m_session;
 		bool m_headerWritten = false;
 		bool m_isHeadResponse = false;
 		SysTime m_timeFinalized;
 	}
 
-	this(Stream conn, HttpServerSettings settings, Allocator req_alloc)
+	this(Stream conn, HTTPServerSettings settings, Allocator req_alloc)
 	{
 		m_conn = conn;
 		m_countingWriter = FreeListRef!CountingOutputStream(conn);
@@ -666,7 +700,7 @@ final class HttpServerResponse : HttpResponse {
 	}
 
 	/// Writes a JSON message with the specified status
-	void writeJsonBody(T)(T data, int status = HttpStatus.OK)
+	void writeJsonBody(T)(T data, int status = HTTPStatus.OK)
 	{
 		import std.traits;
 		static if( is(typeof(data.data())) && isArray!(typeof(data.data())) ){
@@ -749,7 +783,7 @@ final class HttpServerResponse : HttpResponse {
 	}	
 
 	/// Sends a redirect request to the client.
-	void redirect(string url, int status = HttpStatus.Found)
+	void redirect(string url, int status = HTTPStatus.Found)
 	{
 		statusCode = status;
 		headers["Location"] = url;
@@ -760,7 +794,7 @@ final class HttpServerResponse : HttpResponse {
 	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
 	*/
 	Stream switchProtocol(string protocol) {
-		statusCode = HttpStatus.SwitchingProtocols;
+		statusCode = HTTPStatus.SwitchingProtocols;
 		headers["Upgrade"] = protocol;
 		writeVoidBody();
 		return m_conn;
@@ -873,7 +907,7 @@ final class HttpServerResponse : HttpResponse {
 
 		// write the status line
 		writeLine("%s %d %s", 
-			getHttpVersionString(this.httpVersion), 
+			getHTTPVersionString(this.httpVersion), 
 			this.statusCode,
 			this.statusPhrase.length ? this.statusPhrase : httpStatusText(this.statusCode));
 
@@ -897,7 +931,7 @@ final class HttpServerResponse : HttpResponse {
 				app.put(n);
 				app.put('=');
 				auto appref = &app;
-				filterUrlEncode(appref, cookie.value);
+				filterURLEncode(appref, cookie.value);
 				if ( cookie.domain ) {
 					app.put("; Domain=");
 					app.put(cookie.domain);
@@ -917,7 +951,7 @@ final class HttpServerResponse : HttpResponse {
 				if ( cookie.isSecure ) {
 					app.put("; Secure");
 				}
-				if ( cookie.isHttpOnly ) {
+				if ( cookie.httpOnly ) {
 					app.put("; HttpOnly");
 				}
 				app.put("\r\n");
@@ -930,35 +964,38 @@ final class HttpServerResponse : HttpResponse {
 	}
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpServerResponse = HTTPServerResponse;
+
 
 /**************************************************************************************************/
 /* Private types                                                                                  */
 /**************************************************************************************************/
 
 private struct HTTPServerContext {
-	HttpServerRequestDelegate requestHandler;
-	HttpServerSettings settings;
-	HttpLogger[] loggers;
+	HTTPServerRequestDelegate requestHandler;
+	HTTPServerSettings settings;
+	HTTPLogger[] loggers;
 }
 
 private struct HTTPServerListener {
 	string bindAddress;
 	ushort bindPort;
-	SslContext sslContext;
+	SSLContext sslContext;
 }
 
-private enum MaxHttpHeaderLineLength = 4096;
+private enum MaxHTTPHeaderLineLength = 4096;
 
-private class LimitedHttpInputStream : LimitedInputStream {
+private class LimitedHTTPInputStream : LimitedInputStream {
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false) {
 		super(stream, byte_limit, silent_limit);
 	}
 	override void onSizeLimitReached() {
-		throw new HttpStatusException(HttpStatus.RequestEntityTooLarge);
+		throw new HTTPStatusException(HTTPStatus.requestEntityTooLarge);
 	}
 }
 
-private class TimeoutHttpInputStream : InputStream {
+private class TimeoutHTTPInputStream : InputStream {
 	private {
 		long m_timeref;
 		long m_timeleft;
@@ -987,7 +1024,7 @@ private class TimeoutHttpInputStream : InputStream {
 	private void checkTimeout() {
 		auto curr = Clock.currStdTime();
 		auto diff = curr - m_timeref;
-		if( diff > m_timeleft ) throw new HttpStatusException(HttpStatus.RequestTimeout);
+		if( diff > m_timeleft ) throw new HTTPStatusException(HTTPStatus.RequestTimeout);
 		m_timeleft -= diff;
 		m_timeref = curr;
 	}
@@ -1005,10 +1042,10 @@ private {
 	__gshared HTTPServerListener[] g_listeners;
 }
 
-private void handleHttpConnection(TcpConnection connection, HTTPServerListener listen_info)
+private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
 {
 	Stream http_stream = connection;
-	FreeListRef!SslStream ssl_stream;
+	FreeListRef!SSLStream ssl_stream;
 
 	if (!connection.waitForData(10.seconds())) {
 		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
@@ -1018,12 +1055,12 @@ private void handleHttpConnection(TcpConnection connection, HTTPServerListener l
 	// If this is a HTTPS server, initiate SSL
 	if( listen_info.sslContext ){
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SslStream(http_stream, listen_info.sslContext, SslStreamState.Accepting);
+		ssl_stream = FreeListRef!SSLStream(http_stream, listen_info.sslContext, SSLStreamState.accepting);
 		http_stream = ssl_stream;
 	}
 
 	do {
-		HttpServerSettings settings;
+		HTTPServerSettings settings;
 		bool keep_alive;
 		handleRequest(http_stream, connection.peerAddress, listen_info, settings, keep_alive);
 		if( !keep_alive ){
@@ -1042,7 +1079,7 @@ private void handleHttpConnection(TcpConnection connection, HTTPServerListener l
 	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream http_stream, string peer_address, HTTPServerListener listen_info, ref HttpServerSettings settings, ref bool keep_alive)
+private bool handleRequest(Stream http_stream, string peer_address, HTTPServerListener listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
 	SysTime reqtime = Clock.currTime(UTC());
 
@@ -1050,13 +1087,13 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
-	FreeListRef!HttpServerRequest req = FreeListRef!HttpServerRequest(reqtime);
-	FreeListRef!TimeoutHttpInputStream timeout_http_input_stream;
-	FreeListRef!LimitedHttpInputStream limited_http_input_stream;
+	FreeListRef!HTTPServerRequest req = FreeListRef!HTTPServerRequest(reqtime);
+	FreeListRef!TimeoutHTTPInputStream timeout_http_input_stream;
+	FreeListRef!LimitedHTTPInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
 
 	// Default to the first virtual host for this listener
-	HttpServerRequestDelegate request_task;
+	HTTPServerRequestDelegate request_task;
 	HTTPServerContext context;
 	foreach( ctx; g_contexts )
 		if( ctx.settings.port == listen_info.bindPort ){
@@ -1073,7 +1110,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 	req.ssl = listen_info.sslContext !is null;
 
 	// Create the response object
-	auto res = FreeListRef!HttpServerResponse(http_stream, settings, request_allocator.Scoped_payload);
+	auto res = FreeListRef!HTTPServerResponse(http_stream, settings, request_allocator.Scoped_payload);
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -1084,7 +1121,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 
 		res.statusCode = code;
 		if( settings && settings.errorPageHandler ){
-			scope err = new HttpServerErrorInfo;
+			scope err = new HTTPServerErrorInfo;
 			err.code = code;
 			err.message = msg;
 			err.debugMessage = debug_msg;
@@ -1107,7 +1144,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		InputStream reqReader;
 		if( settings.maxRequestTime == dur!"seconds"(0) ) reqReader = http_stream;
 		else {
-			timeout_http_input_stream = FreeListRef!TimeoutHttpInputStream(http_stream, settings.maxRequestTime, reqtime);
+			timeout_http_input_stream = FreeListRef!TimeoutHTTPInputStream(http_stream, settings.maxRequestTime, reqtime);
 			reqReader = timeout_http_input_stream;
 		}
 
@@ -1138,9 +1175,9 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 
 		// setup compressed output
 		if( auto pae = "Accept-Encoding" in req.headers ){
-			if( countUntil(*pae, "gzip") >= 0 ){
+			if (canFind(*pae, "gzip")) {
 				res.headers["Content-Encoding"] = "gzip";
-			} else if( countUntil(*pae, "deflate") >= 0 ){
+			} else if (canFind(*pae, "deflate")) {
 				res.headers["Content-Encoding"] = "deflate";
 			}
 		}
@@ -1151,13 +1188,13 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 			auto contentLength = parse!ulong(v); // DMDBUG: to! thinks there is a H in the string
 			enforce(v.length == 0, "Invalid content-length");
 			enforce(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
-			limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, contentLength);
+			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(reqReader, contentLength);
 		} else if( auto pt = "Transfer-Encoding" in req.headers ){
 			enforce(*pt == "chunked");
 			chunked_input_stream = FreeListRef!ChunkedInputStream(reqReader);
-			limited_http_input_stream = FreeListRef!LimitedHttpInputStream(chunked_input_stream, settings.maxRequestSize, true);
+			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(chunked_input_stream, settings.maxRequestSize, true);
 		} else {
-			limited_http_input_stream = FreeListRef!LimitedHttpInputStream(reqReader, 0);
+			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(reqReader, 0);
 		}
 		req.bodyReader = limited_http_input_stream;
 
@@ -1169,9 +1206,9 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 			}
 		}
 
-		// Url parsing if desired
-		if( settings.options & HttpServerOption.parseURL ){
-			auto url = Url.parse(req.requestUrl);
+		// URL parsing if desired
+		if( settings.options & HTTPServerOption.parseURL ){
+			auto url = URL.parse(req.requestURL);
 			req.path = url.pathString;
 			req.queryString = url.queryString;
 			req.username = url.username;
@@ -1179,14 +1216,14 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		}
 
 		// query string parsing if desired
-		if( settings.options & HttpServerOption.parseQueryString ){
-			if( !(settings.options & HttpServerOption.parseURL) )
+		if( settings.options & HTTPServerOption.parseQueryString ){
+			if( !(settings.options & HTTPServerOption.parseURL) )
 				logWarn("Query string parsing requested but URL parsing is disabled!");
-			parseUrlEncodedForm(req.queryString, req.query);
+			parseURLEncodedForm(req.queryString, req.query);
 		}
 
 		// cookie parsing if desired
-		if( settings.options & HttpServerOption.parseCookies ){
+		if( settings.options & HTTPServerOption.parseCookies ){
 			auto pv = "cookie" in req.headers;
 			if ( pv ) parseCookies(*pv, req.cookies);
 		}
@@ -1205,12 +1242,12 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 			}
 		}
 
-		if( settings.options & HttpServerOption.parseFormBody ){
+		if( settings.options & HTTPServerOption.parseFormBody ){
 			auto ptype = "Content-Type" in req.headers;				
-			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHttpHeaderLineLength);
+			if( ptype ) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHTTPHeaderLineLength);
 		}
 
-		if( settings.options & HttpServerOption.parseJsonBody ){
+		if( settings.options & HTTPServerOption.parseJsonBody ){
 			if( req.contentType == "application/json" ){
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				req.json = parseJson(bodyStr);
@@ -1218,7 +1255,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		}
 
 		// write default headers
-		if( req.method == HttpMethod.HEAD ) res.m_isHeadResponse = true;
+		if( req.method == HTTPMethod.HEAD ) res.m_isHeadResponse = true;
 		if( settings.serverString.length )
 			res.headers["Server"] = settings.serverString;
 		if( req.persistent ) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
@@ -1235,19 +1272,19 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 
 		// if no one has written anything, return 404
 		if( !res.headerWritten )
-			throw new HttpStatusException(HttpStatus.notFound);
-	} catch(HttpStatusException err) {
+			throw new HTTPStatusException(HTTPStatus.notFound);
+	} catch(HTTPStatusException err) {
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
-		else logError("HttpStatusException after page has been written: %s", err.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, err.toString());
+		else logError("HTTPStatusException after page has been written: %s", err.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
-		auto status = parsed ? HttpStatus.internalServerError : HttpStatus.badRequest;
+		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logError("Error after page has been written: %s", e.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestUrl, e.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString());
 		if ( !parsed )
 			keep_alive = false;
 	}
@@ -1277,12 +1314,12 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 }
 
 
-private void parseRequestHeader(HttpServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
+private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
 {
-	auto stream = FreeListRef!LimitedHttpInputStream(http_stream, max_header_size);
+	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");
-	auto reqln = cast(string)stream.readLine(MaxHttpHeaderLineLength, "\r\n", alloc);
+	auto reqln = cast(string)stream.readLine(MaxHTTPHeaderLineLength, "\r\n", alloc);
 
 	logTrace("--------------------");
 	logTrace("HTTP server request:");
@@ -1299,13 +1336,13 @@ private void parseRequestHeader(HttpServerRequest req, InputStream http_stream, 
 	pos = reqln.indexOf(' ');
 	enforce( pos >= 0, "invalid request path" );
 
-	req.requestUrl = reqln[0 .. pos];
+	req.requestURL = reqln[0 .. pos];
 	reqln = reqln[pos+1 .. $];
 
-	req.httpVersion = parseHttpVersion(reqln);
+	req.httpVersion = parseHTTPVersion(reqln);
 	
 	//headers
-	parseRfc5322Header(stream, req.headers, MaxHttpHeaderLineLength, alloc);
+	parseRfc5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc);
 
 	foreach (k, v; req.headers)
 		logTrace("%s: %s", k, v);

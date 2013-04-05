@@ -78,10 +78,27 @@ string joinLines(string[] strs, string linesep = "\n")
 */
 bool allOf(string str, string chars)
 {
-	foreach( ch; str )
-		if( chars.countUntil(ch) < 0 )
+	foreach (ch; str)
+		if (!chars.canFind(ch))
 			return false;
 	return true;
+}
+
+ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive.yes)
+{
+	if (__ctfe) {
+		if (cs == CaseSensitive.yes) {
+			foreach (i, dchar ch; s)
+				if (ch == c)
+					return i;
+		} else {
+			c = std.uni.toLower(c);
+			foreach (i, dchar ch; s)
+				if (std.uni.toLower(ch) == c)
+					return i;
+		}
+		return -1;
+	} else return std.string.indexOf(s, c, cs);
 }
 
 /**
@@ -89,8 +106,8 @@ bool allOf(string str, string chars)
 */
 bool anyOf(string str, string chars)
 {
-	foreach( ch; str )
-		if( chars.countUntil(ch) >= 0 )
+	foreach (ch; str)
+		if (chars.canFind(ch))
 			return true;
 	return false;
 }
@@ -122,13 +139,14 @@ string stripA(string s)
 }
 
 /// Finds the first occurence of any of the characters in `chars`
-sizediff_t countUntilAny(string str, string chars)
+sizediff_t indexOfAny(string str, string chars)
 {
-	foreach( i, char ch; str )
-		if( chars.countUntil(ch) >= 0 )
+	foreach (i, char ch; str)
+		if (chars.canFind(ch))
 			return i;
 	return -1;
 }
+alias indexOfAny countUntilAny;
 
 /// Formats a string using formattedWrite() and returns it.
 deprecated("Please use std.string.format instead.")

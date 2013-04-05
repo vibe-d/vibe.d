@@ -180,7 +180,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		throw new Exception("Failed to lookup host: "~host);
 	}
 
-	TcpConnection connectTcp(string host, ushort port)
+	TCPConnection connectTCP(string host, ushort port)
 	{
 		auto addr = resolveHost(host);
 		addr.port = port;
@@ -194,7 +194,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = TcpContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
+		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
 		cctx.task = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
@@ -215,10 +215,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		if( cctx.status != BEV_EVENT_CONNECTED )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port)~": "~to!string(cctx.status));
 
-		return new Libevent2TcpConnection(cctx);
+		return new Libevent2TCPConnection(cctx);
 	}
 
-	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address, TcpListenOptions options)
+	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
 	{
 		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
 		bind_addr.port = port;
@@ -237,33 +237,34 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
 			"Error setting listening socket to non-blocking I/O.");
 
-		auto ret = new LibeventTcpListener;
+		auto ret = new LibeventTCPListener;
 
-		void setupConnectionHandler()
+		static void setupConnectionHandler(shared(LibeventTCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback)
 		{
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
-			auto ctx = TcpContextAlloc.alloc(core, evloop, listenfd, null, bind_addr);
-			ctx.connectionCallback = connection_callback;
+			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr);
+			ctx.connectionCallback = cast()connection_callback;
 			ctx.listenEvent = event_new(evloop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 			enforce(event_add(ctx.listenEvent, null) == 0,
 				"Error scheduling connection event on the event loop.");
-			ret.addContext(ctx);
+			(cast()listener).addContext(ctx);
 		}
 
-		if (options & TcpListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler);
-		else setupConnectionHandler();
-		
+		// FIXME: the API needs improvement with proper shared annotations, so the the following casts are not necessary
+		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
+		else setupConnectionHandler(cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
+
 		return ret;
 	}
 
-	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, true);
 		bindaddr.port = port;
 
-		return new Libevent2UdpConnection(bindaddr, this);
+		return new Libevent2UDPConnection(bindaddr, this);
 	}
 
 	Libevent2ManualEvent createManualEvent()
@@ -296,7 +297,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		info.status = result;
 		try {
 			switch( info.addr.family ){
-				default: assert(false, "Unimplmeneted address family");
+				default: assert(false, "Unimplemented address family");
 				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
 				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
 			}
@@ -527,10 +528,10 @@ class Libevent2Timer : Timer {
 	}
 }
 
-class Libevent2UdpConnection : UdpConnection {
+class Libevent2UDPConnection : UDPConnection {
 	private {
 		Libevent2Driver m_driver;
-		TcpContext* m_ctx;
+		TCPContext* m_ctx;
 		string m_bindAddress;
 		bool m_canBroadcast = false;
 	}
@@ -558,10 +559,10 @@ class Libevent2UdpConnection : UdpConnection {
 		if( bind_addr.port )
 			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
-		m_ctx = TcpContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
+		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
 		m_ctx.task = Task.getThis();
 
-		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUdpRead, m_ctx);
+		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
 		if( !evt ) throw new Exception("Failed to create buffer event for socket.");
 
 		enforce(event_add(evt, null) == 0);
@@ -626,7 +627,7 @@ class Libevent2UdpConnection : UdpConnection {
 		from.family = m_ctx.remote_addr.family;
 		assert(buf.length <= int.max);
 		while(true){
-			uint addr_len = from.sockAddrLen;
+			socklen_t addr_len = from.sockAddrLen;
 			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;
@@ -641,9 +642,9 @@ class Libevent2UdpConnection : UdpConnection {
 		}
 	}
 
-	private static nothrow extern(C) void onUdpRead(evutil_socket_t sockfd, short evts, void* arg)
+	private static nothrow extern(C) void onUDPRead(evutil_socket_t sockfd, short evts, void* arg)
 	{
-		auto ctx = cast(TcpContext*)arg;
+		auto ctx = cast(TCPContext*)arg;
 		logTrace("udp socket %d read event!", ctx.socketfd);
 
 		try {
@@ -651,7 +652,7 @@ class Libevent2UdpConnection : UdpConnection {
 			if( f && f.state != Fiber.State.TERM )
 				ctx.core.resumeTask(f);
 		} catch( Throwable e ){
-			logError("Exception onUdpRead: %s", e.msg);
+			logError("Exception onUDPRead: %s", e.msg);
 			debug assert(false);
 		}
 	}

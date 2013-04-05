@@ -49,7 +49,7 @@ class Win32EventDriver : EventDriver {
 		SocketEventHandler[SOCKET] m_socketHandlers;
 		HANDLE[] m_registeredEvents;
 		HANDLE m_fileCompletionEvent;
-		bool[Win32TcpConnection] m_fileWriters;
+		bool[Win32TCPConnection] m_fileWriters;
 	}
 
 	this(DriverCore core)
@@ -114,7 +114,7 @@ class Win32EventDriver : EventDriver {
 	{
 		auto ret = MsgWaitForMultipleObjectsEx(cast(DWORD)m_registeredEvents.length, m_registeredEvents.ptr, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 		if( ret == WAIT_OBJECT_0 ){
-			Win32TcpConnection[] to_remove;
+			Win32TCPConnection[] to_remove;
 			foreach( fw; m_fileWriters.byKey )
 				if( fw.testFileWritten() )
 					to_remove ~= fw;
@@ -203,7 +203,7 @@ class Win32EventDriver : EventDriver {
 		return addr;
 	}
 
-	Win32TcpConnection connectTcp(string host, ushort port)
+	Win32TCPConnection connectTCP(string host, ushort port)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(host);
@@ -212,12 +212,12 @@ class Win32EventDriver : EventDriver {
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
 		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
 
-		auto conn = new Win32TcpConnection(this, sock);
+		auto conn = new Win32TCPConnection(this, sock);
 		conn.connect(addr);
 		return conn;	
 	}
 
-	Win32TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) conn_callback, string bind_address, TcpListenOptions options)
+	Win32TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(bind_address);
@@ -232,10 +232,10 @@ class Win32EventDriver : EventDriver {
 		enforce(listen(sock, 128) == 0,
 			"Failed to listen.");
 
-		return new Win32TcpListener(this, sock, conn_callback);
+		return new Win32TCPListener(this, sock, conn_callback);
 	}
 
-	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(bind_address);
@@ -829,10 +829,10 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 
 
 /******************************************************************************/
-/* class Win32UdpConnection                                                   */
+/* class Win32UDPConnection                                                   */
 /******************************************************************************/
 
-class Win32UdpConnection : UdpConnection, SocketEventHandler {
+class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	private {
 		Task m_task;
 		Win32EventDriver m_driver;
@@ -937,9 +937,9 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 		assert(false);
 	}
 
-	private static nothrow extern(C) void onUdpRead(SOCKET sockfd, short evts, void* arg)
+	private static nothrow extern(C) void onUDPRead(SOCKET sockfd, short evts, void* arg)
 	{
-		/*auto ctx = cast(TcpContext*)arg;
+		/*auto ctx = cast(TCPContext*)arg;
 		logTrace("udp socket %d read event!", ctx.socketfd);
 
 		try {
@@ -947,7 +947,7 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 			if( f && f.state != Fiber.State.TERM )
 				ctx.core.resumeTask(f);
 		} catch( Throwable e ){
-			logError("Exception onUdpRead: %s", e.msg);
+			logError("Exception onUDPRead: %s", e.msg);
 			debug assert(false);
 		}*/
 	}
@@ -955,12 +955,12 @@ class Win32UdpConnection : UdpConnection, SocketEventHandler {
 
 
 /******************************************************************************/
-/* class Win32TcpConnection                                                   */
+/* class Win32TCPConnection                                                   */
 /******************************************************************************/
 
 enum ConnectionStatus { Initialized, Connected, Disconnected }
 
-class Win32TcpConnection : TcpConnection, SocketEventHandler {
+class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	private {
 		Win32EventDriver m_driver;
 		Task m_task;
@@ -971,7 +971,7 @@ class Win32TcpConnection : TcpConnection, SocketEventHandler {
 		DWORD m_bytesTransferred;
 		ConnectionStatus m_status = ConnectionStatus.Initialized;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
-		void delegate(TcpConnection) m_connectionCallback;
+		void delegate(TCPConnection) m_connectionCallback;
 
 		HANDLE m_transferredFile;
 		OVERLAPPED m_fileOverlapped;
@@ -1297,7 +1297,7 @@ m_status = ConnectionStatus.Connected;
 	{
 		logTrace("IO completed for TCP send: %s (error=%s)", cbTransferred, dwError);
 		try {
-			auto conn = cast(Win32TcpConnection)(lpOverlapped.hEvent);
+			auto conn = cast(Win32TCPConnection)(lpOverlapped.hEvent);
 			conn.m_bytesTransferred = cbTransferred;
 			if( conn.m_task ){
 				Exception ex;
@@ -1311,17 +1311,17 @@ m_status = ConnectionStatus.Connected;
 }
 
 /******************************************************************************/
-/* class Win32TcpListener                                                     */
+/* class Win32TCPListener                                                     */
 /******************************************************************************/
 
-class Win32TcpListener : TcpListener, SocketEventHandler {
+class Win32TCPListener : TCPListener, SocketEventHandler {
 	private {
 		Win32EventDriver m_driver;
 		SOCKET m_socket;
-		void delegate(TcpConnection conn) m_connectionCallback;
+		void delegate(TCPConnection conn) m_connectionCallback;
 	}
 
-	this(Win32EventDriver driver, SOCKET sock, void delegate(TcpConnection conn) conn_callback)
+	this(Win32EventDriver driver, SOCKET sock, void delegate(TCPConnection conn) conn_callback)
 	{
 		m_driver = driver;
 		m_socket = sock;
@@ -1352,8 +1352,8 @@ class Win32TcpListener : TcpListener, SocketEventHandler {
 					int addrlen = addr.sockAddrLen;
 					auto clientsock = WSAAccept(sock, addr.sockAddr, &addrlen, null, 0);
 					assert(addrlen == addr.sockAddrLen);
-					// TODO avoid GC allocations for delegate and Win32TcpConnection
-					auto conn = new Win32TcpConnection(m_driver, clientsock, addr);
+					// TODO avoid GC allocations for delegate and Win32TCPConnection
+					auto conn = new Win32TCPConnection(m_driver, clientsock, addr);
 					conn.m_connectionCallback = m_connectionCallback;
 					conn.release();
 					runTask(&conn.runConnectionCallback);

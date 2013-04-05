@@ -7,7 +7,7 @@
 */
 module vibe.inet.path;
 
-import std.algorithm;
+import std.algorithm : canFind, min;
 import std.array;
 import std.conv;
 import std.exception;
@@ -32,7 +32,7 @@ struct Path {
 	this(string pathstr)
 	{
 		m_nodes = cast(immutable)splitPath(pathstr);
-		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && m_nodes[0].toString().countUntil(':')>0);
+		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && m_nodes[0].toString().indexOf(':')>0);
 		m_endsWithSlash = pathstr.endsWith("/");
 		foreach( e; m_nodes ) assert(e.toString().length > 0, "Empty path nodes not allowed: "~pathstr);
 	}
@@ -232,7 +232,7 @@ struct PathEntry {
 	
 	this(string str)
 	{
-		assert(str.countUntil('/') < 0 && str.countUntil('\\') < 0);
+		assert(!str.canFind('/') && !str.canFind('\\'));
 		m_name = str;
 	}
 	

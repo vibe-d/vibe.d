@@ -1,5 +1,5 @@
 /**
-	URL-encode implementation
+	URL-encoding implementation
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -22,7 +22,7 @@ string urlEncode(string str)
 {
 	auto dst = appender!string();
 	dst.reserve(str.length);
-	filterUrlEncode(dst, str);
+	filterURLEncode(dst, str);
 	return dst.data;
 }
 
@@ -33,13 +33,13 @@ string urlDecode(string str)
 	if( !str.anyOf("%+") ) return str;
 	auto dst = appender!string();
 	dst.reserve(str.length);
-	filterUrlDecode(dst, str);
+	filterURLDecode(dst, str);
 	return dst.data;
 }
 
 /** Writes the URL encoded version of the given string to an output range.
 */
-void filterUrlEncode(R)(ref R dst, string str, string allowed_chars = null) 
+void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null) 
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
@@ -53,17 +53,20 @@ void filterUrlEncode(R)(ref R dst, string str, string allowed_chars = null)
 				dst.put(str[0]);
 				break;
 			default:
-				if( allowed_chars.countUntil(str[0]) >= 0 ) dst.put(str[0]);
+				if (allowed_chars.canFind(str[0])) dst.put(str[0]);
 				else formattedWrite(dst, "%%%02X", str[0]);
 		}
 		str = str[1 .. $];
 	}
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias filterUrlEncode = filterURLEncode;
+
 
 /** Writes the decoded version of the given URL encoded string to an output range.
 */
-void filterUrlDecode(R)(ref R dst, string str) 
+void filterURLDecode(R)(ref R dst, string str) 
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
@@ -85,6 +88,9 @@ void filterUrlDecode(R)(ref R dst, string str)
 		}
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias filterUrlDecode = filterURLDecode;
 
 
 unittest
