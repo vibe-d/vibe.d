@@ -52,6 +52,9 @@ import std.string;
 
 import core.stdc.string : strlen;
 
+pragma(lib, "ssl");
+version (Windows) pragma(lib, "eay");
+
 version = SSL;
 
 
