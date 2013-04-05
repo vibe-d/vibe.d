@@ -1,6 +1,7 @@
 import vibe.core.args;
 import vibe.core.core;
 import vibe.http.client;
+
 import std.datetime;
 import std.functional;
 import std.stdio;
