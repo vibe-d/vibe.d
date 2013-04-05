@@ -39,7 +39,7 @@ int main(string[] args)
 		logInfo("All unit tests were successful.");
 		return 0;
 	} else {
-		processCommandLineArgs(args);
+		finalizeCommandLineArgs();
 		logInfo("Running event loop...");
 		debug {
 			return runEventLoop();
