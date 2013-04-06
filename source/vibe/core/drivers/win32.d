@@ -1,5 +1,5 @@
 /**
-	Win32 driver implementation using I/O completion ports
+	Win32 driver implementation using WSAAsyncSelect
 
 	Copyright: © 2012 Sönke Ludwig
 	Authors: Sönke Ludwig, Leonid Kramer
