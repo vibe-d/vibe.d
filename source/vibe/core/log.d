@@ -7,6 +7,7 @@
 */
 module vibe.core.log;
 
+import vibe.core.args;
 import vibe.core.concurrency;
 import vibe.core.sync;
 
@@ -393,4 +394,16 @@ package void initializeLogModule()
 	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
 	ss_stdoutLogger.lock().minLevel = LogLevel.info;
 	ss_loggers ~= ss_stdoutLogger;
+
+	bool[4] verbose;
+	getOption("verbose|v"  , &verbose[0]);
+	getOption("vverbose|vv", &verbose[1]);
+	getOption("vvv"        , &verbose[2]);
+	getOption("vvvv"       , &verbose[3]);
+
+	foreach_reverse (i, v; verbose)
+		if (v) {
+			setLogLevel(cast(LogLevel)(LogLevel.diagnostic - i));
+			break;
+		}
 }
