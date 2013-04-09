@@ -347,6 +347,7 @@
    <File path="source\vibe\inet\path.d" />
    <File path="source\vibe\inet\url.d" />
    <File path="source\vibe\inet\urltransfer.d" />
+   <File path="source\vibe\inet\webform.d" />
   </Folder>
   <Folder name="mail">
    <File path="source\vibe\mail\smtp.d" />
