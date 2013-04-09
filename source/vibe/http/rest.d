@@ -127,15 +127,17 @@ import std.traits;
 	
 		RestInterfaceClient class for a seamless way to acces such a generated API
 */
-void registerRestInterface(T)(URLRouter router, T instance, string urlPrefix = "/",
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPrefix = "/",
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
 	{
 		router.match(httpVerb, url, handler);
 		logDebug("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
-	}       
-	
+	}
+
+	alias T = reduceToInterface!TImpl;
+
 	foreach( method; __traits(allMembers, T) ) {
 		foreach( overload; MemberFunctionsTuple!(T, method) ) {
 			alias ReturnType!overload RetType;
@@ -885,18 +887,14 @@ private Tuple!(bool, HTTPMethod, string) extractHTTPMethodAndName(alias Func)()
 	
 	string name = __traits(identifier, Func);
 	alias typeof(&Func) T;
-	alias TypeTuple!(__traits(getAttributes, Func)) udas;
 	
 	Nullable!HTTPMethod udmethod;
 	Nullable!string udurl;
 	
 	// Cases may conflict and are listed in order of priority
-	foreach ( uda; udas ){
-		static if (is(typeof(uda) == vibe.http.rest.OverridenMethod))
-			udmethod = uda.data;
-		else if (is(typeof(uda) == vibe.http.rest.OverridenPath))
-			udurl = uda.data;
-	}
+
+	udmethod = extractUda!(vibe.http.rest.OverridenMethod, Func);
+	udurl = extractUda!(vibe.http.rest.OverridenPath, Func);
 	
 	// Everything is overriden, no further analysis needed
 	if (!udmethod.isNull() && !udurl.isNull())
@@ -969,4 +967,27 @@ unittest
 	static assert (ret5[0] == true);
 	static assert (ret5[1] == HTTPMethod.POST);
 	static assert (ret5[2] == "compound/path");
+}
+
+struct RootPath
+{
+	string data;
+	alias data this;
+}
+
+/**
+	UDA to define root URL prefix for annotated REST interface.
+	Empty path means deducing prefix from interface type name (see prefixFromName)
+ */
+RootPath rootPath(string path)
+{
+	return RootPath(path);
+}
+
+/**
+	Convenience alias
+ */
+RootPath prefixFromName()
+{
+	return RootPath("");
 }

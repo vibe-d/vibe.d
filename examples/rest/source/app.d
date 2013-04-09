@@ -214,12 +214,12 @@ shared static this()
 {
 	// Registering our REST services in router
 	auto routes = new URLRouter;
-	registerRestInterface!IExample1API(routes, new Example1(), "/example1/");
+	registerRestInterface(routes, new Example1(), "/example1/");
 	// note additional last parameter that defines used naming convention for compile-time introspection
-	registerRestInterface!IExample2API(routes, new Example2(), "/example2/", MethodStyle.upperUnderscored);
+	registerRestInterface(routes, new Example2(), "/example2/", MethodStyle.upperUnderscored);
 	// naming style is default again, those can be router path specific.
-	registerRestInterface!IExample3API(routes, new Example3(), "/example3/");
-	registerRestInterface!IExample4API(routes, new Example4(), "/example4/");
+	registerRestInterface(routes, new Example3(), "/example3/");
+	registerRestInterface(routes, new Example4(), "/example4/");
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
