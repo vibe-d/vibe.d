@@ -233,6 +233,8 @@ interface FullDuplexStream : Stream, EventedObject {
 			assert(amWriteOwner(), "Writing to stream without owning its reader.");
 		}
 
+	alias write = Stream.write;
+
 	/** Acquires just the read part of the stream - must not be used while the acquire/release are in effect.
 
 		This function, together with acquireWriter is useful to read and write data on a stream
