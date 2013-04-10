@@ -17,12 +17,12 @@ import vibe.core.log;
 import vibe.data.json;
 
 import std.algorithm : any, array, map, sort;
-import std.array : replicate;
+import std.array : join, replicate, split;
 import std.exception;
 import std.file;
 import std.getopt;
-import std.path;
-import std.string;
+import std.path : buildPath;
+import std.string : format, stripRight, wrap;
 
 import core.runtime;
 
