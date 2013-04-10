@@ -147,7 +147,7 @@ class HTTPClient : EventedObject {
 	
 	void acquire() { if( m_conn && m_conn.connected) m_conn.acquire(); }
 	void release() { if( m_conn && m_conn.connected ) m_conn.release(); }
-	bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
+	bool amOwner() { return m_conn ? m_conn.amOwner() : true; }
 
 	void connect(string server, ushort port = 80, bool ssl = false)
 	{

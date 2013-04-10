@@ -151,9 +151,10 @@ interface EventedObject {
 	void acquire();
 
 	/// Returns true if the calling fiber owns this object
-	bool isOwner();
+	bool amOwner();
 
-	alias amOwner = isOwner;
+	/// Compatibility alias, will be deprecated soon.
+	alias isOwner = amOwner;
 }
 
 
@@ -185,7 +186,7 @@ mixin template SingleOwnerEventedObject() {
 
 	void release()
 	{
-		assert(isOwner(), "Releasing evented object that is not owned by the calling task.");
+		assert(amOwner(), "Releasing evented object that is not owned by the calling task.");
 		m_owner = Task();
 	}
 
@@ -195,7 +196,7 @@ mixin template SingleOwnerEventedObject() {
 		m_owner = Task.getThis();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -217,11 +218,11 @@ mixin template MultiOwnerEventedObject() {
 	void acquire()
 	{
 		auto self = Task.getThis();
-		assert(!isOwner(), "Acquiring evented object that is already owned by the calling task.");
+		assert(!amOwner(), "Acquiring evented object that is already owned by the calling task.");
 		m_owners ~= self;
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owners.countUntil(Task.getThis()) >= 0;
 	}

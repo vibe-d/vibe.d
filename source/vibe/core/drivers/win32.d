@@ -354,7 +354,7 @@ class Win32ManualEvent : ManualEvent {
 	int wait(int reference_emit_count)
 	{
 		logDebug("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
-		assert(!isOwner());
+		assert(!amOwner());
 		acquire();
 		scope(exit) release();
 		auto ec = atomicLoad(m_emitCount);
@@ -384,7 +384,7 @@ class Win32ManualEvent : ManualEvent {
 		}
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		synchronized(m_mutex)
 		{
@@ -434,7 +434,7 @@ class Win32Timer : Timer {
 		m_owner = Task();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -567,7 +567,7 @@ class Win32FileStream : FileStream {
 		m_task = Task.getThis();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_task == Task.getThis();
 	}
@@ -758,7 +758,7 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 		m_task = Task.getThis();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_task == Task.getThis();
 	}
@@ -872,7 +872,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	}
 
 
-	bool isOwner() {
+	bool amOwner() {
 		return m_task != Task() && m_task == Task.getThis();
 	}
 
@@ -1038,7 +1038,7 @@ m_status = ConnectionStatus.Connected;
 		m_readOwner = m_writeOwner = Task.getThis();
 	}
 
-	bool isOwner() { return Task.getThis() == m_readOwner && m_readOwner == m_writeOwner; }
+	bool amOwner() { return Task.getThis() == m_readOwner && m_readOwner == m_writeOwner; }
 
 	@property void tcpNoDelay(bool enabled)
 	{

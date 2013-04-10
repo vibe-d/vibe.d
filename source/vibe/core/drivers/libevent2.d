@@ -350,7 +350,7 @@ class Libevent2ManualEvent : ManualEvent {
 
 	int wait(int reference_emit_count)
 	{
-		assert(!isOwner());
+		assert(!amOwner());
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
@@ -389,7 +389,7 @@ class Libevent2ManualEvent : ManualEvent {
 		}
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		auto self = Task.getThis();
 		synchronized (m_mutex) {
@@ -463,7 +463,7 @@ class Libevent2Timer : Timer {
 		m_owner = Task();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -580,7 +580,7 @@ class Libevent2UDPConnection : UDPConnection {
 	}
 
 
-	bool isOwner() {
+	bool amOwner() {
 		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}
 

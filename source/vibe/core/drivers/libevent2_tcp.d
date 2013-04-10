@@ -70,7 +70,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_ctx = ctx;
 		m_inputBuffer = bufferevent_get_input(m_event);
 
-		assert(isOwner());
+		assert(amOwner());
 
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
@@ -122,7 +122,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_ctx.readOwner = m_ctx.writeOwner = Task();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}

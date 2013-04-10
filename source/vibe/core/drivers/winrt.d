@@ -90,7 +90,7 @@ class WinRTManualEvent : ManualEvent {
 	{
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		assert(false);
 	}
@@ -131,7 +131,7 @@ class WinRTTimer : Timer {
 	{
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		assert(false);
 	}
@@ -172,7 +172,7 @@ class WinRTFileStream : FileStream {
 	{
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		assert(false);
 	}
@@ -251,7 +251,7 @@ class WinRTTCPConnection : TCPConnection {
 	{
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		assert(false);
 	}

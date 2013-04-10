@@ -142,7 +142,7 @@ class ThreadedFileStream : FileStream {
 		// TODO: store the owner and throw an exception if illegal calls happen
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		// TODO: really check ownership
 		return true;
