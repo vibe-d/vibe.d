@@ -122,7 +122,7 @@ class TaskMutex : core.sync.mutex.Mutex {
 	override @trusted void lock()
 	{
 		if (tryLock()) return;
-		debug assert(m_owner == Task() || m_owner != Task.getThis());
+		debug assert(m_owner == Task() || m_owner != Task.getThis(), "Recursive mutex lock.");
 		atomicOp!"+="(m_waiters, 1);
 		version(MutexPrint) writefln("mutex %s wait %s", cast(void*)this, atomicLoad(m_waiters));
 		scope(exit) atomicOp!"-="(m_waiters, 1);

@@ -917,7 +917,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		NetworkAddress from;
 		from.family = m_bindAddress.family;
 		while(true){
-			uint addr_len = from.sockAddrLen;
+			int addr_len = from.sockAddrLen;
 			auto ret = .recvfrom(m_socket, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;
