@@ -113,7 +113,11 @@ nothrow {
 					ll.log(msg);
 			}
 		}
-	} catch(Exception) assert(false);
+	} catch (Exception e) {
+		try writefln("Error during logging: %s", e.toString());
+		catch(Exception) {}
+		assert(false, "Exception during logging: "~e.msg);
+	}
 }
 
 /// Specifies the log level for a particular log message.
@@ -396,10 +400,10 @@ package void initializeLogModule()
 	ss_loggers ~= ss_stdoutLogger;
 
 	bool[4] verbose;
-	getOption("verbose|v"  , &verbose[0]);
-	getOption("vverbose|vv", &verbose[1]);
-	getOption("vvv"        , &verbose[2]);
-	getOption("vvvv"       , &verbose[3]);
+	getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
+	getOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
+	getOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
+	getOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
 
 	foreach_reverse (i, v; verbose)
 		if (v) {

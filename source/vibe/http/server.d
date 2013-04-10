@@ -1374,8 +1374,9 @@ private string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
 
 shared static this()
 {
-	string disthost=s_distHost; ushort distport = s_distPort;
-	getOption("disthost|d", &disthost);
-	getOption("distport"  , &distport);
+	string disthost = s_distHost;
+	ushort distport = s_distPort;
+	getOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
+	getOption("distport", &distport, "Sets the port used for load balancing.");
 	setVibeDistHost(disthost, distport);
 }

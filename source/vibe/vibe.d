@@ -17,7 +17,6 @@ public import vibe.core.core;
 public import vibe.core.file;
 public import vibe.core.log;
 public import vibe.core.net;
-public import vibe.core.setuid;
 public import vibe.core.sync;
 public import vibe.crypto.passwordhash;
 public import vibe.data.bson;

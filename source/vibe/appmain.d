@@ -19,8 +19,8 @@
 */
 module vibe.appmain;
 
-import vibe.core.args : finalizeCommandLineArgs;
-import vibe.core.core : runEventLoop;
+import vibe.core.args : finalizeCommandLineOptions;
+import vibe.core.core : runEventLoop, lowerPrivileges;
 import vibe.core.log;
 
 // only include main if VibeCustomMain is not set
@@ -38,7 +38,14 @@ int main()
 		logInfo("All unit tests were successful.");
 		return 0;
 	} else {
-		finalizeCommandLineArgs();
+		try if (!finalizeCommandLineOptions()) return 0;
+		catch (Exception e) {
+			logDiagnostic("Error processing command line: %s", e.msg);
+			return 1;
+		}
+
+		lowerPrivileges();
+		
 		logInfo("Running event loop...");
 		debug {
 			return runEventLoop();
