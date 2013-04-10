@@ -152,6 +152,8 @@ interface EventedObject {
 
 	/// Returns true if the calling fiber owns this object
 	bool isOwner();
+
+	alias amOwner = isOwner;
 }
 
 

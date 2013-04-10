@@ -9,10 +9,13 @@ module vibe.core.net;
 
 public import vibe.core.driver;
 
+import vibe.core.log;
+
 import core.sys.posix.netinet.in_;
 import core.time;
 import std.exception;
 import std.functional;
+import std.string;
 version(Windows) import std.c.windows.winsock;
 
 
@@ -156,28 +159,79 @@ struct NetworkAddress {
 	Represents a single TCP connection.
 */
 interface TCPConnection : Stream, EventedObject {
-	/// Used to disable Nagle's algorithm
-	@property void tcpNoDelay(bool enabled);
+	/// Used to disable Nagle's algorithm.
+	@property void tcpNoDelay(bool enabled)
+		in {
+			assert(amOwner(), "Setting TCP settings on a connection that is not owned by the calling task.");
+		}
 	/// ditto
 	@property bool tcpNoDelay() const;
 
-	/// Controls the read time out after which the connection is closed automatically
+	/// Controls the read time out after which the connection is closed automatically.
 	@property void readTimeout(Duration duration)
-		in { assert(duration >= dur!"seconds"(0)); }
+		in {
+			assert(amOwner(), "Setting TCP settings on a connection that is not owned by the calling task.");
+		}
 	/// ditto
 	@property Duration readTimeout() const;
 
-	/// The current connection status
+	/// Determines The current connection status.
 	@property bool connected() const;
 
 	/// Returns the IP address of the connected peer.
 	@property string peerAddress() const;
 
 	/// Actively closes the connection.
-	void close();
+	void close()
+		in {
+			assert(amOwner(), "Closing connection that is not owned by the calling task.");
+		}
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(Duration timeout);
+	bool waitForData(Duration timeout)
+		in {
+			assert(amReadOwner(), "Reading from connection that is now owned by the calling task.");
+		}
+
+	/** Acquires just the read part of the connection - must not be used while the acquire/release are in effect.
+
+		This function, together with acquireWriter is useful to read and write data on a connection
+		from different fibers. Certain things, such as request pipelining, can be implemented
+		effectively using such an approach.
+
+		See_Also: acquireWriter, releaseReader, isReadOwner
+	*/
+	InputStream acquireReader();
+
+	/** Releases just the read part of the connection. Use in conjunction with acquireReader.
+
+		See_Also: acquireReader, isReadOwner
+	*/
+	void releaseReader();
+
+	/** Determines if the calling fiber owns the read part of the connection.
+
+		See_Also: acquireReader, releaseReader
+	*/
+	bool amReadOwner() const;
+
+	/** Acquires just the write part of the connection - must not be used while the acquire/release are in effect.
+
+		See_Also: acquireReader, releaseWriter
+	*/
+	OutputStream acquireWriter();
+
+	/** Releases just the write part of the connection. Use in conjunction with acquireReader.
+
+		See_Also: acquireWriter
+	*/
+	void releaseWriter();
+
+	/** Determines if the calling fiber owns the write part of the connection.
+
+		See_Also: acquireWriter, releaseWriter
+	*/
+	bool amWriteOwner() const;
 }
 
 /// Compatibility alias, will be deprecated soon.

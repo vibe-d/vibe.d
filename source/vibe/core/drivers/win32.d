@@ -963,7 +963,8 @@ enum ConnectionStatus { Initialized, Connected, Disconnected }
 class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	private {
 		Win32EventDriver m_driver;
-		Task m_task;
+		Task m_readOwner;
+		Task m_writeOwner;
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
 		SOCKET m_socket;
@@ -981,7 +982,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	{
 		m_driver = driver;
 		m_socket = sock;
-		m_task = Task.getThis();
+		m_readOwner = m_writeOwner = Task.getThis();
 		m_driver.m_socketHandlers[sock] = this;
 
 		// setup overlapped structure for copy-less file sending
@@ -1027,17 +1028,17 @@ m_status = ConnectionStatus.Connected;
 
 	void release()
 	{
-		assert(m_task == Task.getThis(), "Releasing TCP connection that is not owned by the calling task.");
-		m_task = Task();
+		assert(m_readOwner == Task.getThis() && m_readOwner == m_writeOwner, "Releasing TCP connection that is not owned by the calling task.");
+		m_readOwner = m_writeOwner = Task();
 	}
 
 	void acquire()
 	{
-		assert(m_task == Task(), "Acquiring TCP connection that is currently owned.");
-		m_task = Task.getThis();
+		assert(m_readOwner == Task() && m_writeOwner == Task(), "Acquiring TCP connection that is currently owned.");
+		m_readOwner = m_writeOwner = Task.getThis();
 	}
 
-	bool isOwner() { return Task.getThis() == m_task; }
+	bool isOwner() { return Task.getThis() == m_readOwner && m_readOwner == m_writeOwner; }
 
 	@property void tcpNoDelay(bool enabled)
 	{
@@ -1048,7 +1049,8 @@ m_status = ConnectionStatus.Connected;
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
-	@property void readTimeout(Duration v){
+	@property void readTimeout(Duration v)
+	{
 		m_readTimeout = v;
 		auto msecs = v.total!"msecs"();
 		assert(msecs < DWORD.max);
@@ -1069,6 +1071,8 @@ m_status = ConnectionStatus.Connected;
 
 	@property ulong leastSize()
 	{
+		assert(amReadOwner());
+
 		while( m_readBuffer.empty ){
 			if( !connected ) return 0;
 			m_driver.m_core.yieldForEvent();
@@ -1076,7 +1080,11 @@ m_status = ConnectionStatus.Connected;
 		return m_readBuffer.length;
 	}
 
-	@property bool dataAvailableForRead() { return !m_readBuffer.empty; }
+	@property bool dataAvailableForRead()
+	{
+		assert(amReadOwner());
+		return !m_readBuffer.empty;
+	}
 
 	void close()
 	{
@@ -1099,10 +1107,16 @@ m_status = ConnectionStatus.Connected;
 		return true;
 	}
 
-	const(ubyte)[] peek() { return m_readBuffer.peek(); }
+	const(ubyte)[] peek()
+	{
+		assert(amReadOwner());
+		return m_readBuffer.peek();
+	}
 
 	void read(ubyte[] dst)
 	{
+		assert(amReadOwner());
+
 		while( dst.length > 0 ){
 			while( m_readBuffer.empty ){
 				checkConnected();
@@ -1117,6 +1131,8 @@ m_status = ConnectionStatus.Connected;
 
 	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
+		assert(amWriteOwner());
+
 		checkConnected();
 		const(ubyte)[] bytes = bytes_;
 		logTrace("TCP write with %s bytes called", bytes.length);
@@ -1135,7 +1151,7 @@ m_status = ConnectionStatus.Connected;
 
 			m_bytesTransferred = 0;
 			logTrace("Sending %s bytes TCP", buf.len);
-			auto ret = WSASend(m_socket, &buf, 1, null, 0, &overlapped, &onIOCompleted);
+			auto ret = WSASend(m_socket, &buf, 1, null, 0, &overlapped, &onIOWriteCompleted);
 			if( ret == SOCKET_ERROR ){
 				auto err = WSAGetLastError();
 				enforce(err == WSA_IO_PENDING, "WSASend failed with error "~to!string(err));
@@ -1149,16 +1165,22 @@ m_status = ConnectionStatus.Connected;
 
 	void flush()
 	{
+		assert(amWriteOwner());
+
 		checkConnected();
 	}
 
 	void finalize()
 	{
+		assert(amWriteOwner());
+
 		flush();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
+		assert(amWriteOwner());
+
 		import vibe.core.drivers.threadedfile;
 		// special case sending of files
 		if( auto fstream = cast(Win32FileStream)stream ){
@@ -1180,21 +1202,29 @@ m_status = ConnectionStatus.Connected;
 		writeDefault(stream, nbytes, do_flush);
 	}
 
-	void checkConnected()
+	InputStream acquireReader() { assert(m_readOwner == Task()); m_readOwner = Task.getThis(); return this; }
+	void releaseReader() { assert(m_readOwner == Task.getThis()); m_readOwner = Task(); }
+	bool amReadOwner() const { return m_readOwner == Task.getThis(); }
+
+	OutputStream acquireWriter() { assert(m_writeOwner == Task()); m_writeOwner = Task.getThis(); return this; }
+	void releaseWriter() { assert(m_writeOwner == Task.getThis()); m_writeOwner = Task(); }
+	bool amWriteOwner() const { return m_writeOwner == Task.getThis(); }
+
+	private void checkConnected()
 	{
 		// TODO!
 	}
 
-	bool testFileWritten()
+	private bool testFileWritten()
 	{
 		if( !GetOverlappedResult(m_transferredFile, &m_fileOverlapped, &m_bytesTransferred, false) ){
 			if( GetLastError() != ERROR_IO_PENDING ){
-				m_driver.m_core.resumeTask(m_task, new Exception("File transfer over TCP failed."));
+				m_driver.m_core.resumeTask(m_writeOwner, new Exception("File transfer over TCP failed."));
 				return true;
 			}
 			return false;
 		} else {
-			m_driver.m_core.resumeTask(m_task);
+			m_driver.m_core.resumeTask(m_writeOwner);
 			return true;
 		}
 	}
@@ -1228,7 +1258,7 @@ m_status = ConnectionStatus.Connected;
 						}
 					}
 
-					//m_driver.m_core.resumeTask(m_task, ex);
+					//m_driver.m_core.resumeTask(m_readOwner, ex);
 					/*WSABUF buf;
 					buf.len = dst.length;
 					buf.buf = dst.ptr;
@@ -1251,6 +1281,7 @@ m_status = ConnectionStatus.Connected;
 
 					assert(m_bytesTransferred <= dst.length, "More data received than requested!?");
 					m_readBuffer.pushN(m_bytesTransferred);*/
+					if (m_readOwner) m_driver.m_core.resumeTask(m_readOwner, ex);
 					break;
 				case FD_WRITE:
 					if( m_status == ConnectionStatus.Initialized ){
@@ -1258,6 +1289,7 @@ m_status = ConnectionStatus.Connected;
 							ex = new Exception("Failed to connect to host: "~to!string(error));
 						} else m_status = ConnectionStatus.Connected;
 					}
+					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 				case FD_CLOSE:
 					if( error ){
@@ -1271,15 +1303,15 @@ m_status = ConnectionStatus.Connected;
 						closesocket(m_socket);
 						m_socket = -1;
 					}
+					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 			}
-			if( m_task ) m_driver.m_core.resumeTask(m_task, ex);
 		} catch( Throwable th ){
 			logWarn("Exception while handling socket event: %s", th.msg);
 		}
 	}
 
-	void runConnectionCallback()
+	private void runConnectionCallback()
 	{
 		try {
 			acquire();
@@ -1293,16 +1325,16 @@ m_status = ConnectionStatus.Connected;
 	}
 
 	private static extern(System) nothrow
-	void onIOCompleted(DWORD dwError, DWORD cbTransferred, WSAOVERLAPPEDX* lpOverlapped, DWORD dwFlags)
+	void onIOWriteCompleted(DWORD dwError, DWORD cbTransferred, WSAOVERLAPPEDX* lpOverlapped, DWORD dwFlags)
 	{
 		logTrace("IO completed for TCP send: %s (error=%s)", cbTransferred, dwError);
 		try {
 			auto conn = cast(Win32TCPConnection)(lpOverlapped.hEvent);
 			conn.m_bytesTransferred = cbTransferred;
-			if( conn.m_task ){
+			if( conn.m_writeOwner ){
 				Exception ex;
 				if( dwError != 0 ) ex = new Exception("Socket I/O error: "~to!string(dwError));
-				if( conn.m_task ) conn.m_driver.m_core.resumeTask(conn.m_task, ex);
+				conn.m_driver.m_core.resumeTask(conn.m_writeOwner, ex);
 			}
 		} catch( Throwable th ){
 			logWarn("Exception while handline TCP I/O: %s", th.msg);
