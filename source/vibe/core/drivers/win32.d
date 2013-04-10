@@ -1,5 +1,5 @@
 /**
-	Win32 driver implementation using I/O completion ports
+	Win32 driver implementation using WSAAsyncSelect
 
 	Copyright: © 2012 Sönke Ludwig
 	Authors: Sönke Ludwig, Leonid Kramer
@@ -33,7 +33,8 @@ import std.utf;
 enum WM_USER_SIGNAL = WM_USER+101;
 enum WM_USER_SOCKET = WM_USER+102;
 
-pragma(lib, "wsock32.lib");
+pragma(lib, "wsock32");
+pragma(lib, "ws2_32");
 
 /******************************************************************************/
 /* class Win32EventDriver                                                     */
@@ -917,7 +918,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		NetworkAddress from;
 		from.family = m_bindAddress.family;
 		while(true){
-			int addr_len = from.sockAddrLen;
+			socklen_t addr_len = from.sockAddrLen;
 			auto ret = .recvfrom(m_socket, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;

@@ -40,6 +40,14 @@ import std.exception;
 import std.range;
 import std.string;
 
+version (Windows)
+{
+	pragma(lib, "event2");
+	pragma(lib, "ws2_32.lib");
+}
+else
+	pragma(lib, "event");
+
 version(Windows)
 {
 	alias WSAEWOULDBLOCK EWOULDBLOCK;

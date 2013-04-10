@@ -1,11 +1,11 @@
-module tests.mongodb;
+/// Requires mongo service running on localhost with default port
+/// Uses test database
+
+module app;
 
 import vibe.vibe;
 
-// Requires mongo service running on localhost with default port
-// Uses test database
-
-void test_mongodb_general()
+void runTest()
 {
 	auto client = connectMongoDB("localhost");
 	auto coll = client.getCollection("test.collection");
@@ -35,4 +35,11 @@ void test_mongodb_general()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
+}
+
+int main()
+{
+	setLogLevel(LogLevel.Debug);
+	runTask(toDelegate(&runTest));
+	return runEventLoop();
 }
