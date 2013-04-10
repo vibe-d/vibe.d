@@ -45,8 +45,11 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
 	TCPListener[] ret;
-	if (auto l = listenTCP(port, connection_callback, "::", options)) ret ~= l;
-	if (auto l = listenTCP(port, connection_callback, "0.0.0.0", options)) ret ~= l;
+	try ret ~= listenTCP(port, connection_callback, "::", options);
+	catch (Exception e) logDiagnostic("Failed to listen on \"::\": %s", e.msg);
+	try ret ~= listenTCP(port, connection_callback, "0.0.0.0", options);
+	catch (Exception e) logDiagnostic("Failed to listen on \"0.0.0.0\": %s", e.msg);
+	enforce(ret.length > 0, format("Failed to listen on all interfaces on port %s", port));
 	return ret;
 }
 /// ditto
