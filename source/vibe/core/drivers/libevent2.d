@@ -42,11 +42,11 @@ import std.string;
 
 version (Windows)
 {
-	pragma(lib, "event2");
+	version(VibePragmaLib) pragma(lib, "event2");
 	pragma(lib, "ws2_32.lib");
 }
 else
-	pragma(lib, "event");
+	version(VibePragmaLib) pragma(lib, "event");
 
 version(Windows)
 {
