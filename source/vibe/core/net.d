@@ -161,7 +161,7 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TCPConnection : Stream, EventedObject {
+interface TCPConnection : FullDuplexStream {
 	/// Used to disable Nagle's algorithm.
 	@property void tcpNoDelay(bool enabled)
 		in {
@@ -195,46 +195,6 @@ interface TCPConnection : Stream, EventedObject {
 		in {
 			assert(amReadOwner(), "Reading from connection that is now owned by the calling task.");
 		}
-
-	/** Acquires just the read part of the connection - must not be used while the acquire/release are in effect.
-
-		This function, together with acquireWriter is useful to read and write data on a connection
-		from different fibers. Certain things, such as request pipelining, can be implemented
-		effectively using such an approach.
-
-		See_Also: acquireWriter, releaseReader, isReadOwner
-	*/
-	InputStream acquireReader();
-
-	/** Releases just the read part of the connection. Use in conjunction with acquireReader.
-
-		See_Also: acquireReader, isReadOwner
-	*/
-	void releaseReader();
-
-	/** Determines if the calling fiber owns the read part of the connection.
-
-		See_Also: acquireReader, releaseReader
-	*/
-	bool amReadOwner() const;
-
-	/** Acquires just the write part of the connection - must not be used while the acquire/release are in effect.
-
-		See_Also: acquireReader, releaseWriter
-	*/
-	OutputStream acquireWriter();
-
-	/** Releases just the write part of the connection. Use in conjunction with acquireReader.
-
-		See_Also: acquireWriter
-	*/
-	void releaseWriter();
-
-	/** Determines if the calling fiber owns the write part of the connection.
-
-		See_Also: acquireWriter, releaseWriter
-	*/
-	bool amWriteOwner() const;
 }
 
 /// Compatibility alias, will be deprecated soon.

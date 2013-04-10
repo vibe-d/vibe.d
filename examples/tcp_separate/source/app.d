@@ -39,6 +39,7 @@ shared static this()
 			}
 		});
 
+		// wait for the tasks to finish
 		rtask.join();
 		wtask.join();
 
