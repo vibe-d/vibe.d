@@ -450,7 +450,7 @@ class Win32Timer : Timer {
 		auto msecs = dur.total!"msecs"();
 		assert(msecs < UINT.max, "Timeout is too large for windows timers!");
 		m_id = SetTimer(null, 0, cast(UINT)msecs, &onTimer);
-		s_timers[m_id] = this;
+		s_timers[m_id] = cast(void*)this;
 		m_pending = true;
 	}
 
@@ -474,7 +474,7 @@ class Win32Timer : Timer {
 	void onTimer(HWND hwnd, UINT msg, UINT_PTR id, uint time)
 	{
 		try{
-			auto timer = s_timers.get(id);
+			auto timer = cast(Win32Timer)s_timers.get(id);
 			if (!timer) {
 				logWarn("timer %d not registered", id);
 				return;
@@ -1402,7 +1402,7 @@ class Win32TCPListener : TCPListener, SocketEventHandler {
 
 
 private {
-	HashMap!(UINT_PTR, Win32Timer, { return UINT_PTR.max; }) s_timers;
+	HashMap!(UINT_PTR, void*/*Win32Timer*/, { return UINT_PTR.max; }) s_timers;
 	__gshared s_setupWindowClass = false;
 }
 
