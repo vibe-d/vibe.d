@@ -12,9 +12,15 @@
 	],
 
 	"versions": ["LIBEV4"],
+	
 	"libs-posix" : ["ssl", "crypto"],
+	"libs-windows": ["wsock32", "ws2_32"],
+
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
 	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+	"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
+	
 	"excludedSourceFiles": [
 		"source/vibe/core/mutex.d",
 		"source/vibe/core/signal.d",
@@ -23,7 +29,6 @@
 		"source/vibe/crypto/ssl.d",
 		"source/vibe/stream/stream.d"
 	],
-	"libs-windows": ["wsock32", "ws2_32"],
 
 	"configurations": [
 		{
@@ -32,6 +37,8 @@
 			"libs-posix" : ["event", "event_pthreads"],
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
+			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"]
 		},
 		{
 			"name": "libev",
@@ -42,7 +49,7 @@
 		{
 			"name": "win32",
 			"platforms": ["windows"],
-			"versions": ["VibeWin32Driver"],
+			"versions": ["VibeWin32Driver"]
 		},
 		{
 			"name": "winrt",
