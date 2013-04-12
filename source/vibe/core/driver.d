@@ -151,7 +151,10 @@ interface EventedObject {
 	void acquire();
 
 	/// Returns true if the calling fiber owns this object
-	bool isOwner();
+	bool amOwner();
+
+	/// Compatibility alias, will be deprecated soon.
+	alias isOwner = amOwner;
 }
 
 
@@ -176,6 +179,103 @@ interface Timer : EventedObject {
 }
 
 
+/**
+	Represents a stream which can be read from and written to at the same time.
+
+	Two separate tasks can own the read and write parts of the stream to be able
+	to read and write in parallel. The two methods acquireReader and acquireWriter
+	are responsible for managing the separate ownership. Note that you usually
+	have to release the stream before being able to use those functions.
+*/
+interface FullDuplexStream : Stream, EventedObject {
+	override @property bool empty()
+		in {
+			assert(amReadOwner(), "Reading from stream without owning its reader.");
+		}
+
+	override @property ulong leastSize()
+		in {
+			assert(amReadOwner(), "Reading from stream without owning its reader.");
+		}
+
+	override @property bool dataAvailableForRead()
+		in {
+			assert(amReadOwner(), "Reading from stream without owning its reader.");
+		}
+
+	override const(ubyte)[] peek()
+		in {
+			assert(amReadOwner(), "Reading from stream without owning its reader.");
+		}
+
+	override void read(ubyte[] dst)
+		in {
+			assert(amReadOwner(), "Reading from stream without owning its reader.");
+		}
+	
+	override void write(in ubyte[] bytes, bool do_flush = true)
+		in {
+			assert(amWriteOwner(), "Writing to stream without owning its reader.");
+		}
+
+	override void flush()
+		in {
+			assert(amWriteOwner(), "Writing to stream without owning its reader.");
+		}
+
+	override void finalize()
+		in {
+			assert(amWriteOwner(), "Writing to stream without owning its reader.");
+		}
+
+	override void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+		in {
+			assert(amWriteOwner(), "Writing to stream without owning its reader.");
+		}
+
+	alias write = Stream.write;
+
+	/** Acquires just the read part of the stream - must not be used while the acquire/release are in effect.
+
+		This function, together with acquireWriter is useful to read and write data on a stream
+		from different fibers. Certain things, such as request pipelining, can be implemented
+		effectively using such an approach.
+
+		See_Also: acquireWriter, releaseReader, isReadOwner
+	*/
+	InputStream acquireReader();
+
+	/** Releases just the read part of the stream. Use in conjunction with acquireReader.
+
+		See_Also: acquireReader, isReadOwner
+	*/
+	void releaseReader();
+
+	/** Determines if the calling fiber owns the read part of the stream.
+
+		See_Also: acquireReader, releaseReader
+	*/
+	bool amReadOwner() const;
+
+	/** Acquires just the write part of the stream - must not be used while the acquire/release are in effect.
+
+		See_Also: acquireReader, releaseWriter
+	*/
+	OutputStream acquireWriter();
+
+	/** Releases just the write part of the stream. Use in conjunction with acquireReader.
+
+		See_Also: acquireWriter
+	*/
+	void releaseWriter();
+
+	/** Determines if the calling fiber owns the write part of the stream.
+
+		See_Also: acquireWriter, releaseWriter
+	*/
+	bool amWriteOwner() const;
+}
+
 mixin template SingleOwnerEventedObject() {
 	protected {
 		Task m_owner;
@@ -183,7 +283,7 @@ mixin template SingleOwnerEventedObject() {
 
 	void release()
 	{
-		assert(isOwner(), "Releasing evented object that is not owned by the calling task.");
+		assert(amOwner(), "Releasing evented object that is not owned by the calling task.");
 		m_owner = Task();
 	}
 
@@ -193,7 +293,7 @@ mixin template SingleOwnerEventedObject() {
 		m_owner = Task.getThis();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -215,11 +315,11 @@ mixin template MultiOwnerEventedObject() {
 	void acquire()
 	{
 		auto self = Task.getThis();
-		assert(!isOwner(), "Acquiring evented object that is already owned by the calling task.");
+		assert(!amOwner(), "Acquiring evented object that is already owned by the calling task.");
 		m_owners ~= self;
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owners.countUntil(Task.getThis()) >= 0;
 	}

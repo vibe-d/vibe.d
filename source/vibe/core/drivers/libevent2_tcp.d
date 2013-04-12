@@ -70,7 +70,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_ctx = ctx;
 		m_inputBuffer = bufferevent_get_input(m_event);
 
-		assert(Fiber.getThis() is m_ctx.task);
+		assert(amOwner());
 
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
@@ -110,21 +110,21 @@ package class Libevent2TCPConnection : TCPConnection {
 	void acquire()
 	{
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
-		assert(m_ctx.task == Task(), "Trying to acquire a TCP connection that is currently owned.");
-		m_ctx.task = Task.getThis();
+		assert(m_ctx.readOwner == Task() && m_ctx.writeOwner == Task(), "Trying to acquire a TCP connection that is currently owned.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 	}
 
 	void release()
 	{
 		if( !m_ctx ) return;
-		assert(m_ctx.task != Task(), "Trying to release a TCP connection that is not owned.");
-		assert(m_ctx.task == Task.getThis(), "Trying to release a foreign TCP connection.");
-		m_ctx.task = Task();
+		assert(m_ctx.readOwner != Task() && m_ctx.writeOwner != Task(), "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner, "Trying to release a foreign TCP connection.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
-		return m_ctx !is null && m_ctx.task != Task() && m_ctx.task == Task.getThis();
+		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}
 	
 	/// Closes the connection.
@@ -132,7 +132,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	{
 		assert(m_ctx, "Closing an already closed TCP connection.");
 
-		checkConnected();
+		checkConnected(true, true);
 		auto fd = m_ctx.socketfd;
 		m_ctx.shutdown = true;
 		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
@@ -190,7 +190,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ){
-			checkConnected();
+			checkConnected(true, false);
 			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, m_ctx.socketfd);
 			auto nbytes = bufferevent_read(m_event, dst.ptr, dst.length);
 			logTrace(" .. got %d bytes", nbytes);
@@ -236,7 +236,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{	
-		checkConnected();
+		checkConnected(false, true);
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
@@ -248,6 +248,7 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
+		checkConnected(false, true);
 		import vibe.core.drivers.threadedfile;
 		version(none){ // causes a crash on Windows
 			// special case sending of files
@@ -269,7 +270,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void flush()
 	{
-		checkConnected();
+		checkConnected(false, true);
 		logTrace("bufferevent_flush");
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 	}
@@ -279,7 +280,15 @@ package class Libevent2TCPConnection : TCPConnection {
 		flush();
 	}
 
-	private void checkConnected()
+	InputStream acquireReader() { assert(m_ctx.readOwner == Task(), "Acquiring reader of already owned connection."); m_ctx.readOwner = Task.getThis(); return this; }
+	void releaseReader() { assert(m_ctx.readOwner == Task.getThis(), "Releasing reader of unowned connection."); m_ctx.readOwner = Task(); }
+	bool amReadOwner() const { return m_ctx.readOwner == Task.getThis(); }
+
+	OutputStream acquireWriter() { assert(m_ctx.writeOwner == Task(), "Acquiring writer of already owned connection."); m_ctx.writeOwner = Task.getThis(); return this; }
+	void releaseWriter() { assert(m_ctx.writeOwner == Task.getThis(), "Releasing reader of already unowned connection."); m_ctx.writeOwner = Task(); }
+	bool amWriteOwner() const { return m_ctx.writeOwner == Task.getThis(); }
+
+	private void checkConnected(bool read, bool write)
 	{
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if( m_ctx.event is null ){
@@ -287,7 +296,7 @@ package class Libevent2TCPConnection : TCPConnection {
 			m_ctx = null;
 			enforce(false, "Remote hung up while operating on TCPConnection.");
 		}
-		enforce(m_ctx.task == Task.getThis(), "Operating on TCPConnection owned by a different fiber!");
+		assert((!read || amReadOwner()) && (!write || amWriteOwner()), "Operating on TCPConnection owned by a different fiber!");
 	}
 }
 
@@ -346,7 +355,8 @@ package struct TCPContext
 	bool shutdown = false;
 	int socketfd = -1;
 	int status = 0;
-	Task task;
+	Task readOwner;
+	Task writeOwner;
 	bool writeFinished;
 }
 alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
@@ -401,7 +411,7 @@ package nothrow extern(C)
 				}
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
-				client_ctx.task = Task.getThis();
+				client_ctx.readOwner = client_ctx.writeOwner = Task.getThis();
 				auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
 				assert(conn.connected, "Connection closed directly after accept?!");
 				logDebug("start task (fd %d).", client_ctx.socketfd);
@@ -465,7 +475,7 @@ package nothrow extern(C)
 		auto ctx = cast(TCPContext*)arg;
 		logTrace("socket %d read event!", ctx.socketfd);
 
-		auto f = ctx.task;
+		auto f = ctx.readOwner;
 		try {
 			if( f && f.state != Fiber.State.TERM )
 				ctx.core.resumeTask(f);
@@ -480,11 +490,11 @@ package nothrow extern(C)
 			auto ctx = cast(TCPContext*)arg;
 			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TCPContext");
 			logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
-			if( ctx.task && ctx.task.state != Fiber.State.TERM ){
+			if (ctx.writeOwner && ctx.writeOwner.running) {
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 			}
 			ctx.writeFinished = true;
-			if( ctx.task ) ctx.core.resumeTask(ctx.task);
+			if (ctx.writeOwner) ctx.core.resumeTask(ctx.writeOwner);
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
 		}
@@ -519,19 +529,21 @@ package nothrow extern(C)
 				else errorMessage = "Socket error: "~to!string(status);
 			}
 
-			if( free_event || (status & BEV_EVENT_ERROR) ){	
+			if (free_event || (status & BEV_EVENT_ERROR)) {	
 				bufferevent_free(buf_event);
 				ctx.event = null;
 			}
 
-			if( ctx.task && ctx.task.running ){
-				if( status & BEV_EVENT_ERROR ){
-					logTrace("resuming corresponding task with exception...");
-					ctx.core.resumeTask(ctx.task, new Exception(errorMessage));
-				} else {
-					logTrace("resuming corresponding task...");
-					ctx.core.resumeTask(ctx.task);
-				}
+			Exception ex;
+			if (status & BEV_EVENT_ERROR) ex = new Exception(errorMessage);
+
+			if (ctx.readOwner && ctx.readOwner.running) {
+				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
+				ctx.core.resumeTask(ctx.readOwner, ex);
+			}
+			if (ctx.writeOwner && ctx.writeOwner != ctx.readOwner && ctx.writeOwner.running) {
+				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
+				ctx.core.resumeTask(ctx.readOwner, ex);
 			}
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
@@ -544,7 +556,7 @@ package nothrow extern(C)
 			logTrace("data wait timeout");
 			auto conn = cast(Libevent2TCPConnection)userptr;
 			conn.m_timeout_triggered = true;
-			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.task);
+			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.readOwner);
 			else logDebug("waitForData timeout after connection was closed!");
 		} catch( Throwable e ){
 			logWarn("Exception onTimeout: %s", e.msg);

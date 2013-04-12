@@ -131,7 +131,7 @@ class MongoConnection : EventedObject {
 			m_conn.release();
 	}
 
-	override bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
+	override bool amOwner() { return m_conn ? m_conn.amOwner() : true; }
 
 	void connect()
 	{

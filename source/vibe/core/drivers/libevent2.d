@@ -40,6 +40,14 @@ import std.exception;
 import std.range;
 import std.string;
 
+version (Windows)
+{
+	version(VibePragmaLib) pragma(lib, "event2");
+	pragma(lib, "ws2_32.lib");
+}
+else
+	version(VibePragmaLib) pragma(lib, "event");
+
 version(Windows)
 {
 	alias WSAEWOULDBLOCK EWOULDBLOCK;
@@ -195,7 +203,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
 		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
-		cctx.task = Task.getThis();
+		cctx.readOwner = cctx.writeOwner = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
@@ -350,7 +358,7 @@ class Libevent2ManualEvent : ManualEvent {
 
 	int wait(int reference_emit_count)
 	{
-		assert(!isOwner());
+		assert(!amOwner());
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
@@ -389,7 +397,7 @@ class Libevent2ManualEvent : ManualEvent {
 		}
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		auto self = Task.getThis();
 		synchronized (m_mutex) {
@@ -463,7 +471,7 @@ class Libevent2Timer : Timer {
 		m_owner = Task();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -560,7 +568,7 @@ class Libevent2UDPConnection : UDPConnection {
 			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
 		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
-		m_ctx.task = Task.getThis();
+		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 
 		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
 		if( !evt ) throw new Exception("Failed to create buffer event for socket.");
@@ -580,23 +588,23 @@ class Libevent2UDPConnection : UDPConnection {
 	}
 
 
-	bool isOwner() {
-		return m_ctx !is null && m_ctx.task != Task() && m_ctx.task == Task.getThis();
+	bool amOwner() {
+		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}
 
 	void acquire()
 	{
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
-		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
-		m_ctx.task = Task.getThis();
+		assert(m_ctx.readOwner == Task() && m_ctx.writeOwner == Task(), "Trying to acquire a TCP connection that is currently owned.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 	}
 
 	void release()
 	{
 		if( !m_ctx ) return;
-		assert(m_ctx.task != Task(), "Trying to release a TCP connection that is not owned.");
-		assert(m_ctx.task == Task.getThis(), "Trying to release a foreign TCP connection.");
-		m_ctx.task = Task();
+		assert(m_ctx.readOwner != Task() && m_ctx.writeOwner != Task(), "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner, "Trying to release a foreign TCP connection.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task();
 	}
 
 	void connect(string host, ushort port)
@@ -648,7 +656,7 @@ class Libevent2UDPConnection : UDPConnection {
 		logTrace("udp socket %d read event!", ctx.socketfd);
 
 		try {
-			auto f = ctx.task;
+			auto f = ctx.readOwner;
 			if( f && f.state != Fiber.State.TERM )
 				ctx.core.resumeTask(f);
 		} catch( Throwable e ){

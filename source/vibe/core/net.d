@@ -9,10 +9,13 @@ module vibe.core.net;
 
 public import vibe.core.driver;
 
+import vibe.core.log;
+
 import core.sys.posix.netinet.in_;
 import core.time;
 import std.exception;
 import std.functional;
+import std.string;
 version(Windows) import std.c.windows.winsock;
 
 
@@ -42,8 +45,11 @@ NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool 
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
 	TCPListener[] ret;
-	if (auto l = listenTCP(port, connection_callback, "::", options)) ret ~= l;
-	if (auto l = listenTCP(port, connection_callback, "0.0.0.0", options)) ret ~= l;
+	try ret ~= listenTCP(port, connection_callback, "::", options);
+	catch (Exception e) logDiagnostic("Failed to listen on \"::\": %s", e.msg);
+	try ret ~= listenTCP(port, connection_callback, "0.0.0.0", options);
+	catch (Exception e) logDiagnostic("Failed to listen on \"0.0.0.0\": %s", e.msg);
+	enforce(ret.length > 0, format("Failed to listen on all interfaces on port %s", port));
 	return ret;
 }
 /// ditto
@@ -155,29 +161,40 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TCPConnection : Stream, EventedObject {
-	/// Used to disable Nagle's algorithm
-	@property void tcpNoDelay(bool enabled);
+interface TCPConnection : FullDuplexStream {
+	/// Used to disable Nagle's algorithm.
+	@property void tcpNoDelay(bool enabled)
+		in {
+			assert(amOwner(), "Setting TCP settings on a connection that is not owned by the calling task.");
+		}
 	/// ditto
 	@property bool tcpNoDelay() const;
 
-	/// Controls the read time out after which the connection is closed automatically
+	/// Controls the read time out after which the connection is closed automatically.
 	@property void readTimeout(Duration duration)
-		in { assert(duration >= dur!"seconds"(0)); }
+		in {
+			assert(amOwner(), "Setting TCP settings on a connection that is not owned by the calling task.");
+		}
 	/// ditto
 	@property Duration readTimeout() const;
 
-	/// The current connection status
+	/// Determines The current connection status.
 	@property bool connected() const;
 
 	/// Returns the IP address of the connected peer.
 	@property string peerAddress() const;
 
 	/// Actively closes the connection.
-	void close();
+	void close()
+		in {
+			assert(amOwner(), "Closing connection that is not owned by the calling task.");
+		}
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(Duration timeout);
+	bool waitForData(Duration timeout)
+		in {
+			assert(amReadOwner(), "Reading from connection that is now owned by the calling task.");
+		}
 }
 
 /// Compatibility alias, will be deprecated soon.

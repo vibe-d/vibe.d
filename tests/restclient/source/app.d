@@ -1,4 +1,4 @@
-module tests.restclient;
+module app;
 
 import vibe.vibe;
 
@@ -21,8 +21,8 @@ class TestAPI : ITestAPI
 	int customParameters2(int _param, bool _param2) { return _param2 ? _param : -_param; }
 }
 
-void test_rest_client()
-{ 
+void runTest()
+{
 	auto router = new UrlRouter;
 	registerRestInterface!ITestAPI(router, new TestAPI, "/root/");
 
@@ -37,4 +37,11 @@ void test_rest_client()
 	assert(api.customParameters("one", "two") == "onetwo");
 	assert(api.customParameters2(10, false) == -10);
 	assert(api.customParameters2(10, true) == 10);
+}
+
+int main()
+{
+	setLogLevel(LogLevel.Debug);
+	runTask(toDelegate(&runTest));
+	return runEventLoop();
 }

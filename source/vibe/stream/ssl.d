@@ -52,6 +52,9 @@ import std.string;
 
 import core.stdc.string : strlen;
 
+version(VibePragmaLib) pragma(lib, "ssl");
+version(VibePragmaLib) version (Windows) pragma(lib, "eay");
+
 version = SSL;
 
 

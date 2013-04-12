@@ -11,6 +11,7 @@ public import vibe.core.net;
 public import vibe.http.common;
 public import vibe.http.session;
 
+import vibe.core.args;
 import vibe.core.core;
 import vibe.core.file;
 import vibe.core.log;
@@ -1369,4 +1370,13 @@ private string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
 	auto app = AllocAppender!string(alloc);
 	formattedWrite(&app, fmt, args);
 	return app.data;
+}
+
+shared static this()
+{
+	string disthost = s_distHost;
+	ushort distport = s_distPort;
+	getOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
+	getOption("distport", &distport, "Sets the port used for load balancing.");
+	setVibeDistHost(disthost, distport);
 }

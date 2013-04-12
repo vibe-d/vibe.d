@@ -1,6 +1,61 @@
 ﻿Changelog
 =========
 
+v0.7.15 - 2013-04-
+--------------------
+
+### Features and improvements ###
+ 
+ - Improved the logging system with pluggable loggers, more specified verbose log levels, an HTML logger, and proper use of stdout/stderr
+ - Added basic compile support for 64-bit Windows (using the "win32" driver)
+ - `TCPConnection` now allows parallel reading and writing from different tasks - [issue #190][issue190]
+ - Add a scoped alternative version of `vibe.core.concurrency.lock` (used for safe access to `shared` objects with unshared methods)
+ - Add support to repeat the idle event until a new message arrives
+ - Task is now weakly isolated and can thus be passed to other threads using `runWorkerTask`
+ - The number of worker threads is now `core.cpuid.threadsPerCPU`
+ - `TaskMutex` is now fully thread safe and has much lower overhead when no contention happens
+ - `TaskCondition` now also works with a plain `Mutex` in addition to a `TaskMutex`
+ - Removed the deprecated `Mutex` alias
+ - Renamed `Signal` to `ManualEvent` to avoid confusion with other kinds of "signals"
+ - `HttpServer` will now drop incoming connections that don't send data within 10 seconds after the connection has been established
+ - Added a new `createTimer` overload that doesn't automatically arm the timer after creation
+ - `exitEventLoop` now by default also shuts down the worker threads (if `enableWorkerThreads` was called)
+ - Added new command line options "--vv", "--vvv" and "--vvvv" to specify more verbose logging
+ - Added connection pooling to the Redis client (by Junho Nurminen aka jupenur) - [pull #199][issue199]
+ - Various documentation improvements and better adherence to the [style guide](http://vibed.org/style-guide)
+ - Compiles with DMD 2.063 (mostly by Vladimir Panteleev aka CyberShadow) - [pull #207][issue207]
+ - All examples now use exact imports rather than using `import vibe.vibe;` or `import vibe.d;`
+ - Moved basic WWW form parsing from `vibe.http.form` to `vibe.inet.webform` to reduce intermodule dependencies and improve compile time
+ - MongoDB URL parsing code uses `vibe.inet.webform` to parse query string arguments now instead of `std.regex` - improves compile time
+ - Much more complete REST interface generator example (by Михаил Страшун aka Dicebot) - [pull #210][issue210]
+ - Updated OpenSSL DLLs to 1.0.1e (important security fixes)
+ - Renamed `EventedObject.isOwner` to `amOwner`
+ - Improved intermodule dependencies, configuration option/file handling and added `pragma(lib)` (using "--version=VibePragmaLib") for more comfortable building without dub/vibe (by Vladimir Panteleev aka CyberShadow) - [pull #211][issue211]
+ - Implemented an automatic command line help screen (inferred from calls to `vibe.core.args.getOption`)
+
+### Bug fixes ###
+
+ - Fixed `vibe.core.concurrency.receiveTimeout` to actually work at all
+ - Fixed `Win32Timer.stop` to reset the `pending` state and allow repeated calls
+ - Fixed `HttpClient` to avoid running into keep-alive timeouts (will close the connection 2 seconds before the timeout now)
+ - Fixed `HttpClient` to properly handle responses without a "Keep-Alive" header
+ - Fixed `isWeaklyIsolated` for structs containing functions
+ - Fixed all invalid uses of `countUntil` where `std.string.indexOf` should have been used instead - [issue #205][issue205]
+ - Fixed spelling of the "--distport" command line switch and some documentation - [pull #203][issue203], [pull #204][issue204]
+ - Fixed spurious error messages when accepting connections in the libevent driver (by Vladimir Panteleev aka CyberShadow) - [pull #207][issue207]
+ - Fixed adjusting of method names in the REST interface generator for sub interfaces (by Михаил Страшун aka Dicebot) - [pull #210][issue210]
+ - Fixed falling back to IPv4 if listening on IPv6 fails when calling `listenTCP` without a bind address
+
+[issue190]: https://github.com/rejectedsoftware/vibe.d/issues/190
+[issue199]: https://github.com/rejectedsoftware/vibe.d/issues/199
+[issue203]: https://github.com/rejectedsoftware/vibe.d/issues/203
+[issue204]: https://github.com/rejectedsoftware/vibe.d/issues/204
+[issue205]: https://github.com/rejectedsoftware/vibe.d/issues/205
+[issue207]: https://github.com/rejectedsoftware/vibe.d/issues/207
+[issue210]: https://github.com/rejectedsoftware/vibe.d/issues/210
+[issue211]: https://github.com/rejectedsoftware/vibe.d/issues/211
+
+
 v0.7.14 - 2013-03-22
 --------------------
 

@@ -259,7 +259,7 @@ class LibevManualEvent : ManualEvent {
 
 	int wait(int reference_emit_count)
 	{
-		assert(!isOwner());
+		assert(!amOwner());
 		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
@@ -298,7 +298,7 @@ class LibevManualEvent : ManualEvent {
 		}
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		auto self = Task.getThis();
 		synchronized (m_mutex) {

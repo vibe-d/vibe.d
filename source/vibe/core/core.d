@@ -9,6 +9,7 @@ module vibe.core.core;
 
 public import vibe.core.driver;
 
+import vibe.core.args;
 import vibe.core.concurrency;
 import vibe.core.log;
 import vibe.utils.array;
@@ -29,10 +30,30 @@ import vibe.core.drivers.libevent2;
 import vibe.core.drivers.win32;
 import vibe.core.drivers.winrt;
 
-version(Posix){
+version(Posix)
+{
 	import core.sys.posix.signal;
+	import core.sys.posix.unistd;
+	import core.sys.posix.pwd;
+
+	static if (__traits(compiles, {import core.sys.posix.grp; getgrgid(0);})) {
+		import core.sys.posix.grp;
+	} else {
+		extern (C) {
+			struct group {
+				char*   gr_name;
+				char*   gr_passwd;
+				gid_t   gr_gid;
+				char**  gr_mem;
+			}
+			group* getgrgid(gid_t);
+			group* getgrnam(in char*);
+		}
+	}
 }
-version(Windows){
+
+version (Windows)
+{
 	import core.stdc.signal;
 }
 
@@ -344,7 +365,7 @@ void enableWorkerThreads()
 	st_workerTaskMutex = new core.sync.mutex.Mutex;	
 
 	st_workerTaskSignal = getEventDriver().createManualEvent();
-	assert(!st_workerTaskSignal.isOwner());
+	assert(!st_workerTaskSignal.amOwner());
 
 	foreach (i; 0 .. threadsPerCPU) {
 		auto thr = new Thread(&workerThreadFunc);
@@ -353,6 +374,30 @@ void enableWorkerThreads()
 		thr.start();
 	}
 }
+
+
+/**
+	Sets the effective user and group ID to the ones configured for privilege lowering.
+
+	This function is useful for services run as root to give up on the privileges that
+	they only need for initialization (such as listening on ports <= 1024 or opening
+	system log files).
+*/
+void lowerPrivileges()
+{
+	auto uname = s_privilegeLoweringUserName;
+	auto gname = s_privilegeLoweringGroupName;
+	if (uname || gname) {
+		static bool tryParse(T)(string s, out T n) { import std.conv; n = parse!T(s); return s.length==0; }
+		int uid = -1, gid = -1;
+		if (uname && !tryParse(uname, uid)) uid = getUID(uname);
+		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
+		setUID(uid, gid);
+	} else if (isRoot()) {
+		logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering.");
+	}
+}
+
 
 /**
 	A version string representing the current vibe version
@@ -565,6 +610,9 @@ private {
 	CoreTask[] s_availableFibers;
 	size_t s_availableFibersCount;
 	size_t s_fiberCount;
+
+	string s_privilegeLoweringUserName;
+	string s_privilegeLoweringGroupName;
 }
 
 // per process setup
@@ -613,6 +661,9 @@ shared static this()
 		logTrace("setup gc");
 		s_core.setupGcTimer();
 	}
+
+	getOption("uid|user", &s_privilegeLoweringUserName, "Sets the user name or id used for privilege lowering.");
+	getOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
 }
 
 shared static ~this()
@@ -675,7 +726,7 @@ private void handleWorkerTasks()
 	auto thisthr = Thread.getThis();
 
 	logDebug("worker task loop enter");
-	assert(!st_workerTaskSignal.isOwner());
+	assert(!st_workerTaskSignal.amOwner());
 	while(true){
 		void delegate() t;
 		auto emit_count = st_workerTaskSignal.emitCount;
@@ -700,30 +751,82 @@ private void handleWorkerTasks()
 				st_workerThreads[thisthr].taskQueue.popFront();
 			}
 		}
-		assert(!st_workerTaskSignal.isOwner());
+		assert(!st_workerTaskSignal.amOwner());
 		if (t) runTask(t);
 		else st_workerTaskSignal.wait(emit_count);
-		assert(!st_workerTaskSignal.isOwner());
+		assert(!st_workerTaskSignal.amOwner());
 	}
 	logDebug("worker task exit");
 }
 
-private extern(C) nothrow
+
+private extern(C) void extrap()
+nothrow {
+	logTrace("exception trap");
+}
+
+private extern(C) void onSignal(int signal)
+nothrow {
+	logInfo("Received signal %d. Shutting down.", signal);
+
+	if( s_eventLoopRunning ) try exitEventLoop(); catch(Exception e) {}
+	else exit(1);
+}
+
+private extern(C) void onBrokenPipe(int signal)
+nothrow {
+	logTrace("Broken pipe.");
+}
+
+version(Posix)
 {
-	void extrap()
+	private bool isRoot() { return geteuid() == 0; }
+
+	private void setUID(int uid, int gid)
 	{
-		logTrace("exception trap");
+		logInfo("Lowering privileges to uid=%d, gid=%d...", uid, gid);
+		if (gid >= 0) {
+			enforce(getgrgid(gid) !is null, "Invalid group id!");
+			enforce(setegid(gid) == 0, "Error setting group id!");
+		}
+		//if( initgroups(const char *user, gid_t group);
+		if (uid >= 0) {
+			enforce(getpwuid(uid) !is null, "Invalid user id!");
+			enforce(seteuid(uid) == 0, "Error setting user id!");
+		}
 	}
 
-	nothrow void onSignal(int signal)
+	private int getUID(string name)
 	{
-		logInfo("Received signal %d. Shutting down.", signal);
-
-		if( s_eventLoopRunning ) try exitEventLoop(); catch(Exception e) {}
-		else exit(1);
+		auto pw = getpwnam(name.toStringz());
+		enforce(pw !is null, "Unknown user name: "~name);
+		return pw.pw_uid;
 	}
 
-	void onBrokenPipe(int signal)
+	private int getGID(string name)
 	{
+		auto gr = getgrnam(name.toStringz());
+		enforce(gr !is null, "Unknown group name: "~name);
+		return gr.gr_gid;
+	}
+} else version(Windows){
+	private bool isRoot() { return false; }
+
+	private void setUID(int uid, int gid)
+	{
+		enforce(false, "UID/GID not supported on Windows.");
+	}
+
+	private int getUID(string name)
+	{
+		enforce(false, "Privilege lowering not supported on Windows.");
+		assert(false);
+	}
+
+	private int getGID(string name)
+	{
+		enforce(false, "Privilege lowering not supported on Windows.");
+		assert(false);
 	}
 }
+
