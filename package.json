@@ -12,7 +12,9 @@
 	],
 
 	"versions": ["LIBEV4"],
-	
+
+	"importPaths": ["import", "source"],
+
 	"libs-posix" : ["ssl", "crypto"],
 	"libs-windows": ["wsock32", "ws2_32"],
 

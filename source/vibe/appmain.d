@@ -22,6 +22,7 @@ module vibe.appmain;
 import vibe.core.args : finalizeCommandLineOptions;
 import vibe.core.core : runEventLoop, lowerPrivileges;
 import vibe.core.log;
+import vibe.http.server : startListening;
 
 // only include main if VibeCustomMain is not set
 version(VibeCustomMain) {} else:
@@ -44,6 +45,7 @@ int main()
 			return 1;
 		}
 
+		startListening();
 		lowerPrivileges();
 		
 		logInfo("Running event loop...");
