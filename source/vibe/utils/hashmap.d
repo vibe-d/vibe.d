@@ -9,12 +9,13 @@ module vibe.utils.hashmap;
 
 import vibe.utils.memory;
 
-import std.typecons;
-
 
 struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 {
-	alias TableEntry = Tuple!(Key, Value);
+	struct TableEntry {
+		Key key;
+		Value value;
+	}
 	private {
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
@@ -36,17 +37,17 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		auto idx = findIndex(key);
 		auto i = idx;
 		while (true) {
-			m_table[i][0] = ClearValue();
-			m_table[i][1] = Value.init;
+			m_table[i].key = ClearValue();
+			m_table[i].value = Value.init;
 
 			size_t j = i, r;
 			do {
 				if (++i >= m_table.length) i -= m_table.length;
-				if (m_table[i][0] == ClearValue()) {
+				if (m_table[i].key == ClearValue()) {
 					m_length--;
 					return;
 				}
-				r = m_hasher(m_table[i][0]) & (m_table.length-1);
+				r = m_hasher(m_table[i].key) & (m_table.length-1);
 			} while ((j<r && r<=i) || (i<j && j<r) || (r<=i && i<j));
 			m_table[j] = m_table[i];
 		}
@@ -56,7 +57,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	inout {
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return cast(inout)default_value;
-		return m_table[idx][1];
+		return m_table[idx].value;
 	}
 
 	void opIndexAssign(Value value, Key key)
@@ -67,11 +68,11 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		auto hash = m_hasher(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
-		while (m_table[i][0] != ClearValue() && m_table[i][0] != key) {
+		while (m_table[i].key != ClearValue() && m_table[i].key != key) {
 			if (++i >= m_table.length) i -= m_table.length;
 			assert (i != target, "No free bucket found, HashMap full!?");
 		}
-		if (m_table[i][0] != key) m_length++;
+		if (m_table[i].key != key) m_length++;
 		m_table[i] = TableEntry(key, value);
 	}
 
@@ -79,14 +80,14 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	inout {
 		auto idx = findIndex(key);
 		assert (idx != size_t.max, "Accessing non-existent key.");
-		return m_table[idx][1];
+		return m_table[idx].value;
 	}
 
 	inout(Value)* opBinaryRight(string op)(Key key)
 	inout if (op == "in") {
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return null;
-		return &m_table[idx][1];
+		return &m_table[idx].value;
 	}
 
 	private size_t findIndex(Key key)
@@ -94,8 +95,8 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		if (m_length == 0) return size_t.max;
 		size_t start = m_hasher(key) & (m_table.length-1);
 		auto i = start;
-		while (m_table[i][0] != key) {
-			if (m_table[i][0] == ClearValue()) return size_t.max;
+		while (m_table[i].key != key) {
+			if (m_table[i].key == ClearValue()) return size_t.max;
 			if (++i >= m_table.length) i -= m_table.length;
 			if (i == start) return size_t.max;
 		}
@@ -131,11 +132,11 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		m_table = new TableEntry[new_size];
 		static if (ClearValue() != Key.init)
 			foreach (ref el; m_table)
-				el[0] = ClearValue();
+				el.key = ClearValue();
 		m_length = 0;
 		foreach (ref el; oldtable)
-			if (el[0] != ClearValue())
-				this[el[0]] = el[1];
+			if (el.key != ClearValue())
+				this[el.key] = el.value;
 		destroy(oldtable);
 	}
 }
