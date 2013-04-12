@@ -70,7 +70,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_ctx = ctx;
 		m_inputBuffer = bufferevent_get_input(m_event);
 
-		assert(amOwner());
+		assert(Task.getThis() == Task() || amOwner());
 
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
