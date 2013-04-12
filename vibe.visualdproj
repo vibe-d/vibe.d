@@ -325,7 +325,7 @@
   <compiler>0</compiler>
   <otherDMD>0</otherDMD>
   <program>$(DMDInstallDir)windows\bin\dmd.exe</program>
-  <imppath>source</imppath>
+  <imppath>source import</imppath>
   <fileImppath />
   <outdir>$(ConfigurationName)</outdir>
   <objdir>$(OutDir)</objdir>
@@ -601,6 +601,11 @@
     <File path="source\vibe\db\redis\redis.d" />
    </Folder>
   </Folder>
+  <Folder name="internal">
+   <Folder name="std">
+    <File path="source\vibe\internal\std\process.d" />
+   </Folder>
+  </Folder>
   <Folder name="http">
    <Folder name="auth">
     <File path="source\vibe\http\auth\basic_auth.d" />
@@ -656,6 +661,5 @@
    <File path="source\vibe\utils\string.d" />
    <File path="source\vibe\utils\validation.d" />
   </Folder>
-  <File path="source\stdx\process.d" />
  </Folder>
 </DProject>
