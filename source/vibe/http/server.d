@@ -84,8 +84,6 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_h
 
 	g_contexts ~= ctx;
 
-	if( !s_listenersStarted && !settings.disableDistHost ) return;
-
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
 	if( s_distHost.length && !settings.disableDistHost ){
@@ -207,20 +205,8 @@ void setVibeDistHost(string host, ushort port)
 	s_distPort = port;
 }
 
-void startListening()
-{
-	assert(!s_listenersStarted);
-	s_listenersStarted = true;
-	foreach( ctx; g_contexts ){
-		// if a VibeDist host was specified on the command line, register there instead of listening
-		// directly.
-		if( s_distHost.length ){
-			listenHTTPDist(ctx.settings, ctx.requestHandler, s_distHost, s_distPort);
-		} else {
-			listenHTTPPlain(ctx.settings, ctx.requestHandler);
-		}
-	}
-}
+deprecated("This function does nothing, no need to call it anymore.") void startListening() {}
+
 
 /**
 	Renders the given template and makes all ALIASES available to the template.
@@ -1038,7 +1024,6 @@ private class TimeoutHTTPInputStream : InputStream {
 private {
 	shared string s_distHost;
 	shared ushort s_distPort = 11000;
-	shared bool s_listenersStarted = false;
 	__gshared HTTPServerContext[] g_contexts;
 	__gshared HTTPServerListener[] g_listeners;
 }
