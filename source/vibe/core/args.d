@@ -173,12 +173,12 @@ private string[] getConfigPaths()
 	return result;
 }
 
-// this is invoked by the first getOption call (at least vibe.core will porform one)
+// this is invoked by the first getOption call (at least vibe.core will perform one)
 private void init()
 {
 	g_args = Runtime.args.dup;
 
-	// TODO: let different config files override induvidual fields
+	// TODO: let different config files override individual fields
 	auto searchpaths = getConfigPaths();
 	foreach (spath; searchpaths) {
 		auto cpath = buildPath(spath, configName);
