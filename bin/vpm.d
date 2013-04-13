@@ -131,6 +131,7 @@ int main(string[] args)
 				}
 				flags ~= "-g";
 				flags ~= "-I" ~ (vibedDir ~ ".." ~ "source").toNativeString();
+				flags ~= "-I" ~ (vibedDir ~ ".." ~ "import").toNativeString();
 				flags ~= "-Isource";
 				flags ~= "-Jviews";
 				flags ~= vpm.dflags;
