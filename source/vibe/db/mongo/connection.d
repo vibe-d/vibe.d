@@ -139,7 +139,10 @@ class MongoConnection : EventedObject {
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
 		 */
-		m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+		try m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+		catch (Exception e) {
+			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
+		}
 		m_bytesRead = 0;
 	}
 
