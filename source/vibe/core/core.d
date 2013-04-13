@@ -708,6 +708,7 @@ private void setupDriver()
 	else version(VibeLibevDriver) setEventDriver(new LibevDriver(s_core));
 	else version(VibeLibeventDriver) setEventDriver(new Libevent2Driver(s_core));
 	else static assert(false, "No event driver is available. Please specify a -version=Vibe*Driver for the desired driver.");
+	logTrace("driver %s created", (cast(Object)getEventDriver()).classinfo.name);
 }
 
 private void workerThreadFunc()
