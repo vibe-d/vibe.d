@@ -46,16 +46,19 @@ int main()
 
 		lowerPrivileges();
 		
-		logInfo("Running event loop...");
+		logDiagnostic("Running event loop...");
+		int status;
 		debug {
-			return runEventLoop();
+			status = runEventLoop();
 		} else {
 			try {
-				return runEventLoop();
+				status = runEventLoop();
 			} catch( Throwable th ){
 				logError("Unhandled exception in event loop: %s", th.toString());
 				return 1;
 			}
 		}
+		logDiagnostic("Event loop exited with status %d.", status);
+		return status;
 	}
 }
