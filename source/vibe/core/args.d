@@ -176,7 +176,8 @@ private string[] getConfigPaths()
 // this is invoked by the first getOption call (at least vibe.core will perform one)
 private void init()
 {
-	g_args = Runtime.args.dup;
+	g_args = Runtime.args;
+	if (!g_args.length) g_args = ["dummy"];
 
 	// TODO: let different config files override individual fields
 	auto searchpaths = getConfigPaths();
