@@ -427,10 +427,10 @@ private Pid spawnProcessImpl(in char[][] args,
         setCLOEXEC(STDERR_FILENO, false);
         if (!(config & Config.inheritFDs))
         {
-            import core.sys.posix.sys.resource;
+            /*import core.sys.posix.sys.resource;
             rlimit r;
             getrlimit(RLIMIT_NOFILE, &r);
-            foreach (i; 3 .. cast(int) r.rlim_cur) close(i);
+            foreach (i; 3 .. cast(int) r.rlim_cur) close(i);*/
         }
 
         // Close the old file descriptors, unless they are
