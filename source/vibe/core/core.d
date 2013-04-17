@@ -385,6 +385,7 @@ void enableWorkerThreads()
 */
 void lowerPrivileges()
 {
+	if (!isRoot()) return;
 	auto uname = s_privilegeLoweringUserName;
 	auto gname = s_privilegeLoweringGroupName;
 	if (uname || gname) {
@@ -393,9 +394,7 @@ void lowerPrivileges()
 		if (uname && !tryParse(uname, uid)) uid = getUID(uname);
 		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
 		setUID(uid, gid);
-	} else if (isRoot()) {
-		logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering.");
-	}
+	} else logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering. Running with full permissions.");
 }
 
 
