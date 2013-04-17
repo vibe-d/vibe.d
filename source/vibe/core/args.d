@@ -72,7 +72,7 @@ bool getOption(T)(string names, T* pvalue, string help_text)
 	if (g_haveConfig) {
 		foreach (name; info.names)
 			if (auto pv = name in g_config) {
-				*pvalue = pv.get!T;
+				*pvalue = pv.to!T;
 				return true;
 			}
 	}
