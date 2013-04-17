@@ -11,8 +11,8 @@
 		"see github for more"
 	],
 
+	"targetType": "library",
 	"versions": ["LIBEV4"],
-
 	"importPaths": ["import", "source"],
 
 	"libs-posix" : ["ssl", "crypto"],
