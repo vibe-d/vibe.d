@@ -9,6 +9,8 @@ module vibe.utils.hashmap;
 
 import vibe.utils.memory;
 
+import std.conv : emplace;
+
 
 struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 {
@@ -26,9 +28,15 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 
 	this(Allocator allocator)
 	{
-		assert (allocator is defaultAllocator(), "Allocators not yet supported.");
 		m_allocator = allocator;
 	}
+
+	~this()
+	{
+		if (m_table) m_allocator.free(cast(void[])m_table);
+	}
+
+	@disable this(this);
 
 	@property size_t length() const { return m_length; }
 
@@ -90,6 +98,42 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		return &m_table[idx].value;
 	}
 
+	int opApply(int delegate(ref Value) del)
+	{
+		foreach (i; 0 .. m_table.length)
+			if (m_table[i].key != ClearValue())
+				if (auto ret = del(m_table[i].value))
+					return ret;
+		return 0;
+	}
+
+	int opApply(int delegate(in ref Value) del)
+	const {
+		foreach (i; 0 .. m_table.length)
+			if (m_table[i].key != ClearValue())
+				if (auto ret = del(m_table[i].value))
+					return ret;
+		return 0;
+	}
+
+	int opApply(int delegate(in ref Key, ref Value) del)
+	{
+		foreach (i; 0 .. m_table.length)
+			if (m_table[i].key != ClearValue())
+				if (auto ret = del(m_table[i].key, m_table[i].value))
+					return ret;
+		return 0;
+	}
+
+	int opApply(int delegate(in ref Key, in ref Value) del)
+	const {
+		foreach (i; 0 .. m_table.length)
+			if (m_table[i].key != ClearValue())
+				if (auto ret = del(m_table[i].key, m_table[i].value))
+					return ret;
+		return 0;
+	}
+
 	private size_t findIndex(Key key)
 	const {
 		if (m_length == 0) return size_t.max;
@@ -105,12 +149,6 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 
 	private void grow(size_t amount)
 	{
-		if( !m_allocator ){
-			m_allocator = defaultAllocator();
-			auto typeinfo = typeid(Key.init);
-			m_hasher = k => typeinfo.getHash(&k);
-		}
-
 		auto newsize = m_length + amount;
 		if (newsize < (m_table.length*2)/3) return;
 		auto newcap = m_table.length ? m_table.length : 16;
@@ -124,20 +162,29 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		m_resizing = true;
 		scope(exit) m_resizing = false;
 
+		if (!m_allocator) m_allocator = defaultAllocator();
+		if (!m_hasher) {
+			auto typeinfo = typeid(Key);
+			m_hasher = k => typeinfo.getHash(&k);
+		}
+
 		uint pot = 0;
 		while (new_size > 1) pot++, new_size /= 2;
 		new_size = 1 << pot;
 
 		auto oldtable = m_table;
-		m_table = new TableEntry[new_size];
-		static if (ClearValue() != Key.init)
-			foreach (ref el; m_table)
-				el.key = ClearValue();
+		m_table = cast(TableEntry[])m_allocator.alloc(TableEntry.sizeof * new_size);
+		foreach (ref el; m_table) {
+			emplace!Key(&el.key, ClearValue());
+			emplace!Value(&el.value);
+		}
 		m_length = 0;
-		foreach (ref el; oldtable)
+		foreach (ref el; oldtable) {
 			if (el.key != ClearValue())
 				this[el.key] = el.value;
-		destroy(oldtable);
+			destroy(el);
+		}
+		if (oldtable) m_allocator.free(cast(void[])oldtable);
 	}
 }
 
