@@ -389,7 +389,13 @@ void lowerPrivileges()
 	auto uname = s_privilegeLoweringUserName;
 	auto gname = s_privilegeLoweringGroupName;
 	if (uname || gname) {
-		static bool tryParse(T)(string s, out T n) { import std.conv; n = parse!T(s); return s.length==0; }
+		static bool tryParse(T)(string s, out T n)
+		{
+			import std.conv, std.ascii;
+			if (!isDigit(s[0])) return false;
+			n = parse!T(s);
+			return s.length==0;
+		}
 		int uid = -1, gid = -1;
 		if (uname && !tryParse(uname, uid)) uid = getUID(uname);
 		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
