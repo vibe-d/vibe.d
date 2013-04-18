@@ -132,7 +132,8 @@ private class Application {
 		if( m_main ) ret.put(m_main.dflags());
 		ret.put("-Isource");
 		ret.put("-Jviews");
-		foreach( string s, pkg; m_packages ){
+		foreach (p; m_main.importPaths) ret.put("-I"~p.toNativeString());
+		foreach (string s, pkg; m_packages) {
 			void addPath(string prefix, string name){
 				auto path = "modules/"~pkg.name~"/"~name;
 				if( exists(path) )
@@ -141,6 +142,7 @@ private class Application {
 			ret.put(pkg.dflags());
 			addPath("-I", "source");
 			addPath("-J", "views");
+			foreach (p; pkg.importPaths) addPath("-I", p.toNativeString());
 		}
 		return ret.data();
 	}

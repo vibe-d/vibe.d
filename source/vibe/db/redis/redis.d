@@ -113,7 +113,10 @@ private final class RedisConnection : EventedObject {
 
 	T request(T=RedisReply)(string command, in ubyte[][] args...) {
 		if( !m_conn || !m_conn.connected ){
-			m_conn = connectTcp(m_host, m_port);
+			try m_conn = connectTcp(m_host, m_port);
+			catch (Exception e) {
+				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
+			}
 		}
 		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
 		foreach( arg; args ) {

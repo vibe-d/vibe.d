@@ -27,6 +27,7 @@ import std.conv;
 import std.c.windows.windows;
 import std.c.windows.winsock;
 import std.exception;
+import std.string : lastIndexOf;
 import std.typecons;
 import std.utf;
 
@@ -213,7 +214,7 @@ class Win32EventDriver : EventDriver {
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
 		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
 
-		auto conn = new Win32TCPConnection(this, sock);
+		auto conn = new Win32TCPConnection(this, sock, addr);
 		conn.connect(addr);
 		return conn;	
 	}
@@ -857,10 +858,13 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	@property SOCKET socket() { return m_socket; }
 
 	@property string bindAddress() const {
+		// NOTE: using WSAAddressToStringW instead of inet_ntop because that is only available from Vista up
 		wchar[64] buf;
-		WORD buf_len = 64;
+		DWORD buf_len = 64;
 		WSAAddressToStringW(m_bindAddress.sockAddr, m_bindAddress.sockAddrLen, null, buf.ptr, &buf_len);
-		return to!string(buf[0 .. buf_len]);
+		auto ret = to!string(buf[0 .. buf_len]);
+		ret = ret[0 .. ret.lastIndexOf(':')]; // strip the port number
+		return ret;
 	}
 
 	@property bool canBroadcast() const { return m_canBroadcast; }
@@ -970,6 +974,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		Duration m_readTimeout;
 		SOCKET m_socket;
 		NetworkAddress m_peerAddress;
+		string m_peerAddressString;
 		DWORD m_bytesTransferred;
 		ConnectionStatus m_status = ConnectionStatus.Initialized;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
@@ -979,12 +984,22 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		OVERLAPPED m_fileOverlapped;
 	}
 
-	this(Win32EventDriver driver, SOCKET sock)
+	this(Win32EventDriver driver, SOCKET sock, NetworkAddress peer_address)
 	{
 		m_driver = driver;
 		m_socket = sock;
 		m_readOwner = m_writeOwner = Task.getThis();
 		m_driver.m_socketHandlers[sock] = this;
+		m_peerAddress = peer_address;
+
+		// NOTE: using WSAAddressToStringW instead of inet_ntop because that is only available from Vista up
+		wchar[64] buf;
+		DWORD buflen = buf.length;
+		enforce(WSAAddressToStringW(m_peerAddress.sockAddr, m_peerAddress.sockAddrLen, null, buf.ptr, &buflen) == 0, "Failed to get string representation of peer address.");
+		m_peerAddressString = to!string(buf[0 .. buflen]);
+		m_peerAddressString = m_peerAddressString[0 .. m_peerAddressString.lastIndexOf(':')]; // strip the port number
+
+		m_status = ConnectionStatus.Connected;
 
 		// setup overlapped structure for copy-less file sending
 		m_fileOverlapped.Internal = 0;
@@ -994,13 +1009,6 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_fileOverlapped.hEvent = m_driver.m_fileCompletionEvent;
 
 		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
-	}
-
-	this(Win32EventDriver driver, SOCKET sock, NetworkAddress peer_address)
-	{
-		this(driver, sock);
-		m_peerAddress = peer_address;
-		m_status = ConnectionStatus.Connected;
 	}
 
 	~this()
@@ -1062,11 +1070,7 @@ m_status = ConnectionStatus.Connected;
 
 	@property bool connected() const { return m_status == ConnectionStatus.Connected; }
 
-	@property string peerAddress()
-	const {
-		//m_peerAddress
-		return "xxx";
-	}
+	@property string peerAddress() const { return m_peerAddressString; }
 
 	@property bool empty() { return leastSize == 0; }
 
@@ -1604,7 +1608,7 @@ private extern(System) nothrow
 	int WSASend(SOCKET s, in WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesSent, DWORD dwFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
 	INT WSAStringToAddressW(in LPWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
-	INT WSAAddressToStringW(in SOCKADDR* lpsaAddress, DWORD dwAddressLength, in WSAPROTOCOL_INFO* lpProtocolInfo, LPWSTR lpszAddressString, WORD* lpdwAddressStringLength);
+	INT WSAAddressToStringW(in SOCKADDR* lpsaAddress, DWORD dwAddressLength, in WSAPROTOCOL_INFO* lpProtocolInfo, LPWSTR lpszAddressString, DWORD* lpdwAddressStringLength);
 	int GetAddrInfoExW(LPCWSTR pName, LPCWSTR pServiceName, DWORD dwNameSpace, GUID* lpNspId, const ADDRINFOEXW *pHints, ADDRINFOEXW **ppResult, timeval *timeout, WSAOVERLAPPEDX* lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, HANDLE* lpNameHandle);
 	int GetAddrInfoW(LPCWSTR pName, LPCWSTR pServiceName, const ADDRINFOW *pHints, ADDRINFOW **ppResult);
 	int getaddrinfo(LPCSTR pName, LPCSTR pServiceName, const ADDRINFOA *pHints, ADDRINFOA **ppResult);

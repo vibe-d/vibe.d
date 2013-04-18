@@ -241,12 +241,12 @@ class TaskCondition : core.sync.condition.Condition {
 
 /** Creates a new signal that can be shared between fibers.
 */
-Signal createManualEvent()
+ManualEvent createManualEvent()
 {
 	return getEventDriver().createManualEvent();
 }
 
-/** A manually triggered cross-fiber event
+/** A manually triggered cross-task event.
 
 	Note: the ownership can be shared between multiple fibers and threads.
 */

@@ -396,7 +396,9 @@ private {
 package void initializeLogModule()
 {
 	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
-	ss_stdoutLogger.lock().minLevel = LogLevel.info;
+	auto l = ss_stdoutLogger.lock();
+	l.minLevel = LogLevel.info;
+	l.format = FileLogger.Format.plain;
 	ss_loggers ~= ss_stdoutLogger;
 
 	bool[4] verbose;

@@ -14,6 +14,7 @@ import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
+import vibe.utils.hashmap;
 import vibe.utils.memory;
 
 import deimos.event2.bufferevent;
@@ -325,18 +326,18 @@ class Libevent2ManualEvent : ManualEvent {
 		}
 		shared int m_emitCount = 0;
 		__gshared core.sync.mutex.Mutex m_mutex;
-		__gshared ThreadSlot[Thread] m_waiters;
+		__gshared HashMap!(Thread, ThreadSlot) m_waiters;
 	}
 
 	this()
 	{
 		m_mutex = new core.sync.mutex.Mutex;
+		m_waiters = HashMap!(Thread, ThreadSlot)(manualAllocator());
 	}
 
 	~this()
 	{
 		if( !s_alreadyDeinitialized ){
-			// FIXME: this is illegal (accessing GC memory)
 			foreach (ts; m_waiters)
 				event_free(ts.event);
 		}

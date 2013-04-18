@@ -25,18 +25,6 @@ import vibe.vpm.utils;
 static import std.compiler;
 
 
-Dependency[string] dependencies(const Json json)
-{
-	if( "dependencies" !in json ) return null;
-	Dependency[string] dep;
-	foreach( string pkg, ref const Json vers; json["dependencies"] ) {
-		enforce( pkg !in dep, "The dependency '"~pkg~"' is specified more than once." );
-		if( pkg == "vibe-d" ) continue; // forward compatibility with DUB
-		dep[pkg] = new Dependency(cast(string)vers);
-	}
-	return dep;
-}
-
 /**
 	A version in the format "major.update.bugfix".
 */
@@ -316,12 +304,16 @@ class Package {
 	}
 	
 	this(Path root) {
-		m_meta = jsonFromFile(root ~ "package.json");
-		m_dependencies = .dependencies(m_meta);
+		this(jsonFromFile(root ~ "package.json"));
 	}
 	this(Json json) {
 		m_meta = json;
-		m_dependencies = .dependencies(m_meta);
+
+		foreach (pkg, vers; json["dependencies"].opt!(Json[string])) {
+			enforce(pkg !in m_dependencies, "The dependency '"~pkg~"' is specified more than once.");
+			if (pkg == "vibe-d") continue; // forward compatibility with DUB
+			m_dependencies[pkg] = new Dependency(cast(string)vers);
+		}
 	}
 	
 	@property string name() const { return cast(string)m_meta["name"]; }
@@ -333,6 +325,13 @@ class Package {
 		auto flags = m_meta["dflags"].get!(Json[]);
 		auto ret = appender!(string[])();
 		foreach( f; flags ) ret.put(f.get!string);
+		return ret.data;
+	}
+	@property Path[] importPaths()
+	const {
+		auto ret = appender!(Path[])();
+		foreach (p; m_meta["importPaths"].opt!(Json[]))
+			ret.put(Path(p.get!string()));
 		return ret.data;
 	}
 	
