@@ -121,7 +121,7 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 			"if( _arguments["~INDEX~"] == typeid(Variant) )\n"~
 			"\t"~NAME~" = *va_arg!Variant(_argptr).peek!("~TYPE~")();\n"~
 			"else {\n"~
-			"\tassert(_arguments["~INDEX~"] == typeid("~TYPE~"));\n"~
+			"\tassert(_arguments["~INDEX~"] == typeid("~TYPE~"), \"Actual type for parameter "~NAME~" does not match template type.\");\n"~
 			"\t"~NAME~" = va_arg!("~TYPE~")(_argptr);\n"~
 			"}\n"~
 			localAliasesCompat!(i+2, TYPES_AND_NAMES);

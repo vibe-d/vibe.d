@@ -351,13 +351,13 @@ private struct DietCompiler {
 	{
 		auto output = new OutputContext;
 		buildWriter(output, 0);
-		assert(output.m_nodeStack.length == 0);
+		assert(output.m_nodeStack.length == 0, "Template writer did not consume all nodes!?");
 		return output.m_result;
 	}
 
 	void buildWriter(OutputContext output, int base_level)
 	{
-		assert(m_blocks !is null);
+		assert(m_blocks !is null, "Trying to compile template with no blocks specified.");
 
 		while(true){
 			if( lineCount == 0 ) return;
@@ -417,7 +417,7 @@ private struct DietCompiler {
 
 	private void buildBodyWriter(OutputContext output, int base_level, int start_indent_level)
 	{
-		assert(m_blocks !is null);
+		assert(m_blocks !is null, "Trying to compile template body with no blocks specified.");
 
 		assertp(output.stackSize >= base_level);
 
