@@ -40,10 +40,10 @@ import std.algorithm;
 
 	Returns:
 		A new MongoClient instance that can be used to access the database.
-  
+
  	Throws:
  		Throws an exception if a mongodb:// URL is given and the URL cannot be parsed.
- 		An exception will not be thrown if called with a hostname and port. 
+ 		An exception will not be thrown if called with a hostname and port.
 */
 MongoClient connectMongoDB(string host, ushort port)
 {

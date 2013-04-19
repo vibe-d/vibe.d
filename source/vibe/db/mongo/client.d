@@ -32,18 +32,18 @@ class MongoClient {
 	package this(string host, ushort port = MongoConnection.defaultPort)
 	{
 		this("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
-		}
+	}
 
 	/**
 		Initializes a MongoDB client using a URL.
 
 		The URL must be in the form documented at
 		$(LINK http://www.mongodb.org/display/DOCS/Connections) which is:
-		
+
 		mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
 
 		Throws:
-			An exception if the URL cannot be parsed as a valid MongoDB URL. 
+			An exception if the URL cannot be parsed as a valid MongoDB URL.
 	*/
 	package this(string url)
 	{
@@ -70,8 +70,8 @@ class MongoClient {
 		conjunction with MongoDatabase.opIndex.
 
 		Returns:
-			MongoCollection for the given combined database and collectiion name(path)
-		
+			MongoCollection for the given combined database and collection name(path)
+
 		Examples:
 			---
 			auto col = client.getCollection("test.collection");
@@ -87,7 +87,7 @@ class MongoClient {
 
 		The returned object allows to access the database entity (which contains
 		a set of collections). There are two main use cases:
-		
+
 		1. Accessing collections using a relative path
 
 		2. Performing service commands on the database itself
