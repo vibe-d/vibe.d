@@ -8,6 +8,7 @@
 module vibe.db.mongo.mongo;
 
 public import vibe.db.mongo.client;
+import vibe.db.mongo.connection;
 
 import std.algorithm;
 
@@ -40,10 +41,10 @@ import std.algorithm;
 
 	Returns:
 		A new MongoClient instance that can be used to access the database.
-  
+
  	Throws:
  		Throws an exception if a mongodb:// URL is given and the URL cannot be parsed.
- 		An exception will not be thrown if called with a hostname and port. 
+ 		An exception will not be thrown if called with a hostname and port.
 */
 MongoClient connectMongoDB(string host, ushort port)
 {
@@ -51,11 +52,11 @@ MongoClient connectMongoDB(string host, ushort port)
 	return new MongoClient(host, port);
 }
 /// ditto
-MongoClient connectMongoDB(string host_or_url)
+MongoClient connectMongoDB(string host_or_url, IMongoAuthenticator authenticator = null)
 {
 	/* If this looks like a URL try to parse it that way. */
 	if(host_or_url.startsWith("mongodb://")){
-		return new MongoClient(host_or_url);
+		return new MongoClient(host_or_url, authenticator);
 	} else {
 		return new MongoClient(host_or_url, MongoConnection.defaultPort);
 	}
