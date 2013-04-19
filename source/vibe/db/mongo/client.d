@@ -45,14 +45,13 @@ class MongoClient {
 		Throws:
 			An exception if the URL cannot be parsed as a valid MongoDB URL.
 	*/
-	package this(string url, IMongoAuthenticator authenticator = null)
+	package this(string url)
 	{
 		MongoClientSettings settings;
 		auto goodUrl = parseMongoDBUrl(settings, url);
 
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
 
-		settings.authenticator = authenticator;
 		m_connections = new ConnectionPool!MongoConnection({
 			auto ret = new MongoConnection(settings);
 			ret.connect();

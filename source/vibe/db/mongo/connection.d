@@ -154,9 +154,9 @@ class MongoConnection : EventedObject {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
 		}
 		m_bytesRead = 0;
-		if(m_settings.authenticator !is null && m_settings.digest != string.init)
+		if(m_settings.digest != string.init)
 		{
-			m_settings.authenticator.authenticate(this, m_settings.username, m_settings.digest, m_settings.database);
+			authenticate();
 		}
 	}
 
@@ -401,6 +401,42 @@ class MongoConnection : EventedObject {
 			err.code < 0,
 			new MongoDBException(err)
 		);
+	}
+
+	private void authenticate()
+	{
+		Reply rep;
+		Bson cmd, doc;
+		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
+
+		cmd = Bson(["getnonce":Bson(1)]);
+		rep = query(cn, QueryFlags.None, 0, -1, cmd);
+		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
+		{
+			throw new MongoDriverException("Calling getNonce failed.");
+		}
+		doc = rep.documents[0];
+		if (doc["ok"].get!double != 1.0)
+		{
+			throw new MongoDriverException("getNonce failed.");
+		}
+		string nonce = doc["nonce"].get!string;
+		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
+		cmd = Bson.EmptyObject;
+		cmd["authenticate"] = Bson(1);
+		cmd["nonce"] = Bson(nonce);
+		cmd["user"] = Bson(m_settings.username);
+		cmd["key"] = Bson(key);
+		rep = query(cn, QueryFlags.None, 0, -1, cmd);
+		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
+		{
+			throw new MongoDriverException("Calling authenticate failed.");
+		}
+		doc = rep.documents[0];
+		if (doc["ok"].get!double != 1.0)
+		{
+			throw new MongoAuthException("Authentication failed.");
+		}
 	}
 }
 
@@ -744,17 +780,10 @@ class MongoClientSettings
 	bool journal;
 	long connectTimeoutMS;
 	long socketTimeoutMS;
-	IMongoAuthenticator authenticator;
 }
 
 private struct MongoHost
 {
 	string name;
 	ushort port;
-}
-
-interface IMongoAuthenticator
-{
-	@property string name();
-	void authenticate(MongoConnection connection, string username, string digest, string database = "admin");
 }
