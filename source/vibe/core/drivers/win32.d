@@ -112,7 +112,12 @@ class Win32EventDriver : EventDriver {
 		return 0;
 	}
 
-	private bool haveEvents() { return !m_fileWriters.byKey.empty || !m_socketHandlers.byKey.empty; }
+	private bool haveEvents()
+	{
+		version(VibePartialAutoExit)
+			return !m_fileWriters.byKey.empty || !m_socketHandlers.byKey.empty;
+		else return true;
+	}
 
 	private void waitForEvents(uint timeout)
 	{
