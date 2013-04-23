@@ -70,6 +70,7 @@ class MemoryOutputStream : OutputStream {
 class MemoryStream : RandomAccessStream {
 	private {
 		ubyte[] m_data;
+		size_t m_size;
 		bool m_writable;
 		size_t m_ptr = 0;
 		size_t m_peekWindow;
@@ -80,10 +81,12 @@ class MemoryStream : RandomAccessStream {
 		Params:
 			data = The data array
 			writable = Flag that controls whether the data array may be changed
+			initial_size = The initial value that size returns - the file can grow up to data.length in size
 	*/
-	this(ubyte[] data, bool writable = true)
+	this(ubyte[] data, bool writable = true, size_t initial_size = size_t.max)
 	{
 		m_data = data;
+		m_size = min(initial_size, data.length);
 		m_writable = writable;
 		m_peekWindow = m_data.length;
 	}
@@ -95,17 +98,32 @@ class MemoryStream : RandomAccessStream {
 	@property void peekWindow(size_t size) { m_peekWindow = size; }
 
 	@property bool empty() { return leastSize() == 0; }
-	@property ulong leastSize() { return m_data.length - m_ptr; }
+	@property ulong leastSize() { return m_size - m_ptr; }
 	@property bool dataAvailableForRead() { return leastSize() > 0; }
-	@property ulong size() const nothrow { return m_data.length; }
+	@property ulong size() const nothrow { return m_size; }
 	@property bool readable() const nothrow { return true; }
 	@property bool writable() const nothrow { return m_writable; }
 
-	void seek(ulong offset) { assert(offset <= m_data.length); m_ptr = cast(size_t)offset; }
+	void seek(ulong offset) { assert(offset <= m_size); m_ptr = cast(size_t)offset; }
 	ulong tell() nothrow { return m_ptr; }
-	const(ubyte)[] peek() { return m_data[m_ptr .. min(m_data.length, m_ptr+m_peekWindow)]; }
-	void read(ubyte[] dst) { assert(dst.length <= leastSize); dst[] = m_data[m_ptr .. m_ptr+dst.length]; m_ptr += dst.length; }
-	void write(in ubyte[] bytes, bool do_flush = true) { assert(writable); assert(bytes.length <= leastSize); m_data[m_ptr .. m_ptr+bytes.length] = bytes[]; m_ptr += bytes.length; }
+	const(ubyte)[] peek() { return m_data[m_ptr .. min(m_size, m_ptr+m_peekWindow)]; }
+
+	void read(ubyte[] dst)
+	{
+		assert(dst.length <= leastSize);
+		dst[] = m_data[m_ptr .. m_ptr+dst.length];
+		m_ptr += dst.length;
+	}
+
+	void write(in ubyte[] bytes, bool do_flush = true)
+	{
+		assert(writable);
+		assert(bytes.length <= m_data.length - m_ptr);
+		m_data[m_ptr .. m_ptr+bytes.length] = bytes[];
+		m_ptr += bytes.length;
+		m_size = max(m_size, m_ptr);
+	}
+
 	void flush() {}
 	void finalize() {}
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true) { writeDefault(stream, nbytes, do_flush); }
