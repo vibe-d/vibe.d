@@ -60,7 +60,7 @@ HTTPServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto rurl = url;
-		rurl.localURI = req.url;
+		rurl.localURI = req.requestURL;
 		auto cres = requestHTTP(rurl, (scope creq){
 				creq.method = req.method;
 				creq.headers = req.headers.dup;

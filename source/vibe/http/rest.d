@@ -132,7 +132,7 @@ void registerRestInterface(T)(URLRouter router, T instance, string urlPrefix = "
 {
 	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
 	{
-		router.addRoute(httpVerb, url, handler);
+		router.match(httpVerb, url, handler);
 		logDebug("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
 	}       
 	

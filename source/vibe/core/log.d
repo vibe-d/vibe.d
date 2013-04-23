@@ -33,7 +33,7 @@ void setPlainLogging(bool enable)
 /// Sets a log file for disk logging
 void setLogFile(string filename, LogLevel min_level = LogLevel.error)
 {
-	auto logger = new shared(FileLogger)(filename);
+	auto logger = cast(shared)new FileLogger(filename);
 	logger.lock().minLevel = min_level;
 	ss_loggers ~= logger;
 }
@@ -395,7 +395,7 @@ private {
 
 package void initializeLogModule()
 {
-	ss_stdoutLogger = new shared(FileLogger)(stdout, stderr);
+	ss_stdoutLogger = cast(shared)new FileLogger(stdout, stderr);
 	auto l = ss_stdoutLogger.lock();
 	l.minLevel = LogLevel.info;
 	l.format = FileLogger.Format.plain;

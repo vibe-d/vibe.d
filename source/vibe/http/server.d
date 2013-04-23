@@ -935,7 +935,7 @@ final class HTTPServerResponse : HTTPResponse {
 					app.put("; MaxAge=");
 					formattedWrite(&app, "%s", cookie.maxAge);
 				}
-				if ( cookie.isSecure ) {
+				if ( cookie.secure ) {
 					app.put("; Secure");
 				}
 				if ( cookie.httpOnly ) {
