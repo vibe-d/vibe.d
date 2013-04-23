@@ -164,8 +164,12 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 
 		if (!m_allocator) m_allocator = defaultAllocator();
 		if (!m_hasher) {
-			auto typeinfo = typeid(Key);
-			m_hasher = k => typeinfo.getHash(&k);
+			static if (__traits(compiles, (){ Key t; size_t hash = t.toHash(); }())) {
+				m_hasher = k => k.toHash();
+			} else {
+				auto typeinfo = typeid(Key);
+				m_hasher = k => typeinfo.getHash(&k);
+			}
 		}
 
 		uint pot = 0;
