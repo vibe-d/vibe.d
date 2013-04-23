@@ -80,7 +80,7 @@ class Win32EventDriver : EventDriver {
 	int runEventLoop()
 	{
 		m_exit = false;
-		while( !m_exit )
+		while( !m_exit && haveEvents() )
 			runEventLoopOnce();
 		return 0;
 	}
@@ -111,6 +111,8 @@ class Win32EventDriver : EventDriver {
 		}
 		return 0;
 	}
+
+	private bool haveEvents() { return !m_fileWriters.byKey.empty || !m_socketHandlers.byKey.empty; }
 
 	private void waitForEvents(uint timeout)
 	{

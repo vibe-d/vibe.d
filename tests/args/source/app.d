@@ -8,11 +8,11 @@ import std.stdio;
 shared static this()
 {
 	string argtest;
-	getOption("argtest", &argtest);
+	getOption("argtest", &argtest, "Test argument");
 	writeln("argtest=", argtest);
 }
 
 void main()
 {
-	finalizeCommandLineArgs();
+	finalizeCommandLineOptions();
 }
