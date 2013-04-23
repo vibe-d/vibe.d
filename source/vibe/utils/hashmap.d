@@ -43,6 +43,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	void remove(Key key)
 	{
 		auto idx = findIndex(key);
+		assert (idx != size_t.max, "Removing non-existent element.");
 		auto i = idx;
 		while (true) {
 			m_table[i].key = ClearValue();
@@ -166,6 +167,8 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		if (!m_hasher) {
 			static if (__traits(compiles, (){ Key t; size_t hash = t.toHash(); }())) {
 				m_hasher = k => k.toHash();
+			} else static if (__traits(compiles, (){ Key t; size_t hash = t.toHashShared(); }())) {
+				m_hasher = k => k.toHashShared();
 			} else {
 				auto typeinfo = typeid(Key);
 				m_hasher = k => typeinfo.getHash(&k);
