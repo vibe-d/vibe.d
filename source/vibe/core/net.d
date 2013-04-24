@@ -163,18 +163,12 @@ struct NetworkAddress {
 */
 interface TCPConnection : FullDuplexStream {
 	/// Used to disable Nagle's algorithm.
-	@property void tcpNoDelay(bool enabled)
-		in {
-			assert(amOwner(), "Setting TCP settings on a connection that is not owned by the calling task.");
-		}
+	@property void tcpNoDelay(bool enabled);
 	/// ditto
 	@property bool tcpNoDelay() const;
 
 	/// Controls the read time out after which the connection is closed automatically.
-	@property void readTimeout(Duration duration)
-		in {
-			assert(amOwner(), "Setting TCP settings on a connection that is not owned by the calling task.");
-		}
+	@property void readTimeout(Duration duration);
 	/// ditto
 	@property Duration readTimeout() const;
 
@@ -185,16 +179,10 @@ interface TCPConnection : FullDuplexStream {
 	@property string peerAddress() const;
 
 	/// Actively closes the connection.
-	void close()
-		in {
-			assert(amOwner(), "Closing connection that is not owned by the calling task.");
-		}
+	void close();
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(Duration timeout)
-		in {
-			assert(amReadOwner(), "Reading from connection that is now owned by the calling task.");
-		}
+	bool waitForData(Duration timeout);
 }
 
 /// Compatibility alias, will be deprecated soon.

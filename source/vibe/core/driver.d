@@ -144,17 +144,6 @@ interface DriverCore {
 	connections and files across fibers.
 */
 interface EventedObject {
-	/// Releases the ownership of the object.
-	void release();
-
-	/// Acquires the ownership of an unowned object.
-	void acquire();
-
-	/// Returns true if the calling fiber owns this object
-	bool amOwner();
-
-	/// Compatibility alias, will be deprecated soon.
-	alias isOwner = amOwner;
 }
 
 
@@ -281,19 +270,19 @@ mixin template SingleOwnerEventedObject() {
 		Task m_owner;
 	}
 
-	void release()
+	protected void release()
 	{
 		assert(amOwner(), "Releasing evented object that is not owned by the calling task.");
 		m_owner = Task();
 	}
 
-	void acquire()
+	protected void acquire()
 	{
 		assert(m_owner == Task(), "Acquiring evented object that is already owned.");
 		m_owner = Task.getThis();
 	}
 
-	bool amOwner()
+	protected bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -304,7 +293,7 @@ mixin template MultiOwnerEventedObject() {
 		Task[] m_owners;
 	}
 
-	void release()
+	protected void release()
 	{
 		auto self = Task.getThis();
 		auto idx = m_owners.countUntil(self);
@@ -312,14 +301,14 @@ mixin template MultiOwnerEventedObject() {
 		m_owners = m_owners[0 .. idx] ~ m_owners[idx+1 .. $];
 	}
 
-	void acquire()
+	protected void acquire()
 	{
 		auto self = Task.getThis();
 		assert(!amOwner(), "Acquiring evented object that is already owned by the calling task.");
 		m_owners ~= self;
 	}
 
-	bool amOwner()
+	protected bool amOwner()
 	{
 		return m_owners.countUntil(Task.getThis()) >= 0;
 	}

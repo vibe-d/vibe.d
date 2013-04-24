@@ -332,6 +332,8 @@ class Win32ManualEvent : ManualEvent {
 		Win32EventDriver m_driver;
 		Win32EventDriver[Task] m_listeners;
 		shared int m_emitCount = 0;
+		Task m_waiter;
+		bool m_timedOut;
 	}
 
 	this(Win32EventDriver driver)
@@ -375,6 +377,22 @@ class Win32ManualEvent : ManualEvent {
 		return ec;
 	}
 
+	int wait(Duration timeout, int reference_emit_count = emitCount)
+	{
+		acquire();
+		scope(exit) release();
+		auto ec = atomicLoad(m_emitCount);
+		m_timedOut = false;
+		m_waiter = Task.getThis();
+		auto timer = SetTimer(null, 0, cast(UINT)timeout.total!"msecs", &onTimer);
+		scope(exit) KillTimer(null, timer);
+		while (ec == reference_emit_count && !m_timedOut) {
+			m_driver.m_core.yieldForEvent();
+			ec = atomicLoad(m_emitCount);
+		}
+		return ec;
+	}
+
 	void acquire()
 	{
 		synchronized(m_mutex)
@@ -402,6 +420,22 @@ class Win32ManualEvent : ManualEvent {
 	}
 
 	@property int emitCount() const { return atomicLoad(m_emitCount); }
+
+	private static extern(Windows) nothrow
+	void onTimer(HWND hwnd, UINT msg, UINT_PTR id, uint time)
+	{
+		try{
+			auto timer = cast(Win32ManualEvent)s_timers.get(id);
+			if (!timer) {
+				logWarn("timer %d not registered", id);
+				return;
+			}
+			timer.m_timedOut = true;
+			timer.m_driver.m_core.resumeTask(timer.m_waiter);
+		} catch(Exception e){
+			logError("Exception in onTimer: %s", e);
+		}
+	}
 }
 
 
@@ -523,7 +557,6 @@ class Win32FileStream : FileStream {
 		m_path = path;
 		m_mode = mode;
 		m_driver = driver;
-		m_task = Task.getThis();
 		auto nstr = m_path.toNativeString();
 
 		auto access = m_mode == FileMode.ReadWrite? (GENERIC_WRITE | GENERIC_READ) :
@@ -630,8 +663,11 @@ class Win32FileStream : FileStream {
 		assert(false);
 	}
 
-	void read(ubyte[] dst){
+	void read(ubyte[] dst)
+	{
 		assert(this.readable);
+		acquire();
+		scope(exit) release();
 
 		while( dst.length > 0 ){
 			enforce(dst.length <= leastSize);
@@ -657,8 +693,11 @@ class Win32FileStream : FileStream {
 		}
 	}
 
-	void write(in ubyte[] bytes_, bool do_flush = true){
+	void write(in ubyte[] bytes_, bool do_flush = true)
+	{
 		assert(this.writable);
+		acquire();
+		scope(exit) release();
 
 		const(ubyte)[] bytes = bytes_;
 
@@ -854,7 +893,6 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	{
 		m_driver = driver;
 		m_socket = sock;
-		m_task = Task.getThis();
 		m_bindAddress = bind_addr;
 
 		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
@@ -924,6 +962,8 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
+		acquire();
+		scope(exit) release();
 		assert(buf.length <= int.max);
 		if( buf.length == 0 ) buf.length = 65507;
 		NetworkAddress from;
@@ -995,7 +1035,6 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	{
 		m_driver = driver;
 		m_socket = sock;
-		m_readOwner = m_writeOwner = Task.getThis();
 		m_driver.m_socketHandlers[sock] = this;
 		m_peerAddress = peer_address;
 
