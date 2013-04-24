@@ -312,7 +312,7 @@ int UI_method_set_flusher(UI_METHOD* method, ExternC!(int function(UI* ui)) flus
 int UI_method_set_reader(UI_METHOD* method, ExternC!(int function(UI* ui, UI_STRING* uis)) reader);
 int UI_method_set_closer(UI_METHOD* method, ExternC!(int function(UI* ui)) closer);
 int UI_method_set_prompt_constructor(UI_METHOD* method, ExternC!(char* function(UI* ui, const(char)* object_desc, const(char)* object_name)) prompt_constructor);
-ExternC!(int function(UI*))  UI_method_get_writer(UI_METHOD* method);
+ExternC!(int function(UI*))  UI_method_get_opener(UI_METHOD* method);
 ExternC!(int function(UI*,UI_STRING*))  UI_method_get_writer(UI_METHOD* method);
 ExternC!(int function(UI*))  UI_method_get_flusher(UI_METHOD* method);
 ExternC!(int function(UI*,UI_STRING*))  UI_method_get_reader(UI_METHOD* method);
