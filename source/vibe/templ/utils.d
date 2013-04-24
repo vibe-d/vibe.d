@@ -10,6 +10,7 @@ module vibe.templ.utils;
 import vibe.http.server;
 
 import std.traits;
+import std.typecons : Rebindable, Unqual;
 
 
 /**
@@ -117,7 +118,7 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 		enum NAME = TYPES_AND_NAMES[i+1];
 		enum INDEX = cttostring(i/2);
 		enum string localAliasesCompat = 
-			TYPE~" "~NAME~";\n"~
+			"Rebindable2!("~TYPE~") "~NAME~";\n"~
 			"if( _arguments["~INDEX~"] == typeid(Variant) )\n"~
 			"\t"~NAME~" = *va_arg!Variant(_argptr).peek!("~TYPE~")();\n"~
 			"else {\n"~
@@ -128,6 +129,12 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 	} else {
 		enum string localAliasesCompat = "";
 	}
+}
+
+template Rebindable2(T)
+{
+	static if (is(T == class) || is(T == struct)) alias Rebindable2 = Rebindable!T;
+	else alias Rebindable2 = Unqual!T;
 }
 
 /// private
