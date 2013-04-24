@@ -99,13 +99,19 @@ int runEventLoop()
 void exitEventLoop(bool shutdown_workers = true)
 {
 	assert(s_eventLoopRunning);
-	getEventDriver().exitEventLoop();
 	if (shutdown_workers) {
 		synchronized (st_workerTaskMutex)
 			foreach (ref ctx; st_workerThreads)
 				ctx.exit = true;
 		st_workerTaskSignal.emit();
+		while (true) {
+			synchronized (st_workerTaskMutex)
+				if (st_workerThreads.length == 0)
+					break;
+			st_workerTaskSignal.wait();
+		}
 	}
+	getEventDriver().exitEventLoop();
 }
 
 /**
@@ -763,6 +769,9 @@ private void handleWorkerTasks()
 		assert(!st_workerTaskSignal.amOwner());
 	}
 	logDebug("worker task exit");
+	synchronized(st_workerTaskMutex)
+		st_workerThreads.remove(thisthr);
+	st_workerTaskSignal.emit();
 }
 
 
