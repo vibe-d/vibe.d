@@ -133,7 +133,7 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 
 template Rebindable2(T)
 {
-	static if (is(T == class) || is(T == struct)) alias Rebindable2 = Rebindable!T;
+	static if (is(T == class) || is(T == interface) || isArray!T) alias Rebindable2 = Rebindable!T;
 	else alias Rebindable2 = Unqual!T;
 }
 
