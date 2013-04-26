@@ -161,7 +161,7 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TCPConnection : Stream {
+interface TCPConnection : Stream, EventedObject {
 	/// Used to disable Nagle's algorithm.
 	@property void tcpNoDelay(bool enabled)
 		in {
@@ -191,10 +191,7 @@ interface TCPConnection : Stream {
 		}
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(Duration timeout)
-		in {
-			assert(amReadOwner(), "Reading from connection that is now owned by the calling task.");
-		}
+	bool waitForData(Duration timeout);
 }
 
 /// Compatibility alias, will be deprecated soon.
