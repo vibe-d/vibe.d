@@ -204,7 +204,6 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
 		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
-		cctx.readOwner = cctx.writeOwner = Task.getThis();
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
@@ -367,6 +366,24 @@ class Libevent2ManualEvent : ManualEvent {
 		while( ec == reference_emit_count ){
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
+		}
+		return ec;
+	}
+
+	int wait(Duration timeout, int reference_emit_count)
+	{
+		assert(!amOwner());
+		auto self = Fiber.getThis();
+		acquire();
+		scope(exit) release();
+		scope tm = new Libevent2Timer(cast(Libevent2Driver)getEventDriver(), null);
+		tm.rearm(timeout);
+
+		auto ec = this.emitCount;
+		while( ec == reference_emit_count ){
+			getThreadLibeventDriverCore().yieldForEvent();
+			ec = this.emitCount;
+			if (!tm.pending) break;
 		}
 		return ec;
 	}
@@ -569,7 +586,6 @@ class Libevent2UDPConnection : UDPConnection {
 			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
 		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
-		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 
 		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
 		if( !evt ) throw new Exception("Failed to create buffer event for socket.");

@@ -70,7 +70,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_ctx = ctx;
 		m_inputBuffer = bufferevent_get_input(m_event);
 
-		assert(Task.getThis() == Task() || amOwner());
+		assert(!amOwner());
 
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
@@ -130,6 +130,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	/// Closes the connection.
 	void close()
 	{
+		acquire();
 		assert(m_ctx, "Closing an already closed TCP connection.");
 
 		checkConnected(true, true);
@@ -140,7 +141,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
 		logTrace("Closing socket %d...", fd);
 		auto buf = bufferevent_get_output(m_ctx.event);
-		while( m_ctx.event && evbuffer_get_length(buf) > 0 )
+		while (m_ctx.event && evbuffer_get_length(buf) > 0)
 			m_ctx.core.yieldForEvent();
 
 		version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
@@ -158,10 +159,12 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	@property ulong leastSize()
 	{
+		acquireReader();
+		scope(exit) releaseReader();
 		size_t len;
 		auto buf = m_inputBuffer;
-		while( (len = evbuffer_get_length(buf)) == 0 ){
-			if( !connected ) return 0;
+		while ((len = evbuffer_get_length(buf)) == 0) {
+			if (!connected) return 0;
 			logTrace("leastSize waiting for new data.");
 			m_ctx.core.yieldForEvent();
 		}
@@ -170,6 +173,8 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	@property bool dataAvailableForRead()
 	{
+		acquireReader();
+		scope(exit) releaseReader();
 		auto buf = m_inputBuffer;
 		return evbuffer_get_length(buf) > 0;
 	}
@@ -178,9 +183,11 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	const(ubyte)[] peek()
 	{
+		acquireReader();
+		scope(exit) releaseReader();
 		auto buf = m_inputBuffer;
 		evbuffer_iovec iovec;
-		if( evbuffer_peek(buf, -1, null, &iovec, 1) == 0 )
+		if (evbuffer_peek(buf, -1, null, &iovec, 1) == 0)
 			return null;
 		return (cast(ubyte*)iovec.iov_base)[0 .. iovec.iov_len];
 	}
@@ -189,6 +196,8 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void read(ubyte[] dst)
 	{
+		acquireReader();
+		scope(exit) releaseReader();
 		while( dst.length > 0 ){
 			checkConnected(true, false);
 			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, m_ctx.socketfd);
@@ -205,7 +214,9 @@ package class Libevent2TCPConnection : TCPConnection {
 	
 	bool waitForData(Duration timeout)
 	{
-		if( dataAvailableForRead ) return true;
+		acquireReader();
+		scope(exit) releaseReader();
+		if (evbuffer_get_length(m_inputBuffer) > 0) return true;
 		m_timeout_triggered = false;
 		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 		timeval t;
@@ -214,20 +225,20 @@ package class Libevent2TCPConnection : TCPConnection {
 		t.tv_usec = timeout.fracSec().usecs();
 		logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
 		event_add(evtmout, &t);
-		scope(exit){
+		scope (exit) {
 			event_del(evtmout);
 			event_free(evtmout);
 		}
 		logTrace("wait for data");
-		while( connected ) {
-			if( dataAvailableForRead || m_timeout_triggered ) break;
+		while (connected) {
+			if (evbuffer_get_length(m_inputBuffer) > 0 || m_timeout_triggered) break;
 			try rawYield();
-			catch( Exception e ){
+			catch (Exception e) {
 				logDiagnostic("Connection error during waitForData: %s", e.toString());
 			}
 		}
 		logTrace(" -> timeout = %s", m_timeout_triggered);
-		return dataAvailableForRead;
+		return evbuffer_get_length(m_inputBuffer) > 0;
 	}
 
 	alias Stream.write write;
@@ -236,6 +247,8 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{	
+		acquireWriter();
+		scope(exit) releaseWriter();
 		checkConnected(false, true);
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
@@ -243,7 +256,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		if( bufferevent_write(m_event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
 			
-		if( do_flush ) flush();
+		if (do_flush) bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 	}
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
@@ -253,12 +266,14 @@ package class Libevent2TCPConnection : TCPConnection {
 		version(none){ // causes a crash on Windows
 			// special case sending of files
 			if( auto fstream = cast(ThreadedFileStream)stream ){
+				acquireWriter();
+				scope(exit) releaseWriter();
 				logInfo("Using sendfile! %s %s %s %s", fstream.fd, fstream.tell(), fstream.size, nbytes);
 				fstream.takeOwnershipOfFD();
 				auto buf = bufferevent_get_output(m_event);
 				enforce(evbuffer_add_file(buf, fstream.fd, fstream.tell(), nbytes ? nbytes : fstream.size-fstream.tell()) == 0,
 					"Failed to send file over TCP connection.");
-				if( do_flush ) flush();
+				if (do_flush) bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 				return;
 			}
 		}
@@ -270,6 +285,8 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void flush()
 	{
+		acquireWriter();
+		scope(exit) releaseWriter();
 		checkConnected(false, true);
 		logTrace("bufferevent_flush");
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
@@ -411,7 +428,6 @@ package nothrow extern(C)
 				}
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
-				client_ctx.readOwner = client_ctx.writeOwner = Task.getThis();
 				auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
 				assert(conn.connected, "Connection closed directly after accept?!");
 				logDebug("start task (fd %d).", client_ctx.socketfd);
