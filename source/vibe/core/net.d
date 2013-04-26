@@ -161,7 +161,7 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TCPConnection : FullDuplexStream {
+interface TCPConnection : Stream {
 	/// Used to disable Nagle's algorithm.
 	@property void tcpNoDelay(bool enabled);
 	/// ditto
