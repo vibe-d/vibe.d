@@ -345,7 +345,7 @@ class Win32ManualEvent : ManualEvent {
 	void emit()
 	{
 		auto newcnt = atomicOp!"+="(m_emitCount, 1);
-		logDebug("Signal %s emit %s", cast(void*)this, newcnt);
+		logDebugV("Signal %s emit %s", cast(void*)this, newcnt);
 		bool[Win32EventDriver] threads;
 		synchronized(m_mutex)
 		{
@@ -364,7 +364,7 @@ class Win32ManualEvent : ManualEvent {
 
 	int wait(int reference_emit_count)
 	{
-		logDebug("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
+		logDebugV("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
 		assert(!amOwner());
 		acquire();
 		scope(exit) release();
@@ -373,7 +373,7 @@ class Win32ManualEvent : ManualEvent {
 			m_driver.m_core.yieldForEvent();
 			ec = atomicLoad(m_emitCount);
 		}
-		logDebug("Signal %s wait leave %s", cast(void*)this, ec);
+		logDebugV("Signal %s wait leave %s", cast(void*)this, ec);
 		return ec;
 	}
 
@@ -1122,7 +1122,8 @@ m_status = ConnectionStatus.Connected;
 
 	@property ulong leastSize()
 	{
-		assert(amReadOwner());
+		acquireReader();
+		scope(exit) releaseReader();
 
 		while( m_readBuffer.empty ){
 			if( !connected ) return 0;
@@ -1133,12 +1134,15 @@ m_status = ConnectionStatus.Connected;
 
 	@property bool dataAvailableForRead()
 	{
-		assert(amReadOwner());
+		acquireReader();
+		scope(exit) releaseReader();
 		return !m_readBuffer.empty;
 	}
 
 	void close()
 	{
+		acquire();
+		scope(exit) release();
 		WSASendDisconnect(m_socket, null);
 		closesocket(m_socket);
 		m_socket = -1;
@@ -1147,6 +1151,8 @@ m_status = ConnectionStatus.Connected;
 
 	bool waitForData(Duration timeout)
 	{
+		acquireReader();
+		scope(exit) releaseReader();
 		auto tm = scoped!Win32Timer(m_driver, cast(void delegate())null);
 		tm.acquire();
 		tm.rearm(timeout);
@@ -1160,13 +1166,15 @@ m_status = ConnectionStatus.Connected;
 
 	const(ubyte)[] peek()
 	{
-		assert(amReadOwner());
+		acquireReader();
+		scope(exit) releaseReader();
 		return m_readBuffer.peek();
 	}
 
 	void read(ubyte[] dst)
 	{
-		assert(amReadOwner());
+		acquireReader();
+		scope(exit) releaseReader();
 
 		while( dst.length > 0 ){
 			while( m_readBuffer.empty ){
@@ -1182,7 +1190,8 @@ m_status = ConnectionStatus.Connected;
 
 	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
-		assert(amWriteOwner());
+		acquireWriter();
+		scope(exit) releaseWriter();
 
 		checkConnected();
 		const(ubyte)[] bytes = bytes_;
@@ -1216,26 +1225,28 @@ m_status = ConnectionStatus.Connected;
 
 	void flush()
 	{
-		assert(amWriteOwner());
+		acquireWriter();
+		scope(exit) releaseWriter();
 
 		checkConnected();
 	}
 
 	void finalize()
 	{
-		assert(amWriteOwner());
+		acquireWriter();
+		scope(exit) releaseWriter();
 
 		flush();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
-		assert(amWriteOwner());
-
 		import vibe.core.drivers.threadedfile;
 		// special case sending of files
 		if( auto fstream = cast(Win32FileStream)stream ){
 			if( fstream.tell() == 0 && fstream.size <= 1<<31 ){
+				acquireWriter();
+				scope(exit) releaseWriter();
 				logDebug("Using sendfile! %s %s %s", fstream.m_handle, fstream.tell(), fstream.size);
 
 				m_bytesTransferred = 0;
@@ -1365,7 +1376,6 @@ m_status = ConnectionStatus.Connected;
 	private void runConnectionCallback()
 	{
 		try {
-			acquire();
 			m_connectionCallback(this);
 			logDebug("task out (fd %d).", m_socket);
 		} catch( Exception e ){
@@ -1438,7 +1448,6 @@ class Win32TCPListener : TCPListener, SocketEventHandler {
 					// TODO avoid GC allocations for delegate and Win32TCPConnection
 					auto conn = new Win32TCPConnection(m_driver, clientsock, addr);
 					conn.m_connectionCallback = m_connectionCallback;
-					conn.release();
 					runTask(&conn.runConnectionCallback);
 				} catch( Exception e ){
 					logWarn("Exception white accepting TCP connection: %s", e.msg);
