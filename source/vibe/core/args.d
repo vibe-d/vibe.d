@@ -31,7 +31,7 @@ import core.runtime;
 	Deprecated. Removes any recognized arguments from args leaving any unrecognized options.
 
 	Note that vibe.d parses all options on start up and calling this function is not necessary.
-	It is recommended to use 
+	It is recommended to use
 	Currently does nothing - Vibe will parse arguments
 	automatically on startup. Call $(D finalizeCommandLineArgs) from your
 	$(D main()) if you use a custom one, to check for unrecognized options.
@@ -44,7 +44,7 @@ deprecated void processCommandLineArgs(ref string[] args)
 
 /**
 	Finds and reads an option from the configuration file or command line.
-	
+
 	Command line options take precedence over configuration file entries.
 
 	Params:
@@ -107,7 +107,8 @@ void printCommandLineHelp()
 			else return "--"~name~(opt.hasValue ? "=<value>" : "");
 		}
 
-		auto optstr = format(" %s %s", shortopt, longopts.map!optionString().join(", "));
+		string[] lopts; foreach(lo; longopts) lopts ~= optionString(lo);
+		auto optstr = format(" %s %s", shortopt, lopts.join(", "));
 		if (optstr.length < dcolumn) optstr ~= replicate(" ", dcolumn - optstr.length);
 
 		auto indent = replicate(" ", dcolumn+1);
