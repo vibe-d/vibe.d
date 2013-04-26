@@ -597,18 +597,14 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					
 					ret ~= format(
 						q{
-							string url__;
 							if (%s)
-								url__ = m_baseURL.toString() ~ PathEntry("%s").toString();
+								m_%s = new %s(m_baseURL.toString() ~ PathEntry("%s").toString(), m_methodStyle);
 							else
-								url__ = m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString(), m_methodStyle);
-							m_%s = new %s(url__, m_methodStyle);
+								m_%s = new %s(m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString(), m_methodStyle), m_methodStyle);
 						},
 						pathOverriden,
-						url,
-						url,
-						implname,
-						implname,
+						implname, implname, url,
+						implname, implname, url
 					);
 					ret ~= "\n";
 				}
