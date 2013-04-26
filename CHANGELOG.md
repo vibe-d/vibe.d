@@ -8,15 +8,16 @@ v0.7.15 - 2013-04-
  
  - Improved the logging system with pluggable loggers, more specified verbose log levels, an HTML logger, and proper use of stdout/stderr
  - Added basic compile support for 64-bit Windows (using the "win32" driver)
- - `TCPConnection` now allows parallel reading and writing from different tasks - [issue #190][issue190]
  - Add a scoped alternative version of `vibe.core.concurrency.lock` (used for safe access to `shared` objects with unshared methods)
  - Add support to repeat the idle event until a new message arrives
  - Task is now weakly isolated and can thus be passed to other threads using `runWorkerTask`
+ - Implemented digest authentication in the MongoDB client (by Christian Schneider aka HowToMeetLadies) - [pull #218][issue218]
  - The number of worker threads is now `core.cpuid.threadsPerCPU`
  - `TaskMutex` is now fully thread safe and has much lower overhead when no contention happens
  - `TaskCondition` now also works with a plain `Mutex` in addition to a `TaskMutex`
  - Removed the deprecated `Mutex` alias
  - Renamed `Signal` to `ManualEvent` to avoid confusion with other kinds of "signals"
+ - `MemoryStream` now supports dynamically growing to the buffer limit
  - `HttpServer` will now drop incoming connections that don't send data within 10 seconds after the connection has been established
  - Added a new `createTimer` overload that doesn't automatically arm the timer after creation
  - `exitEventLoop` now by default also shuts down the worker threads (if `enableWorkerThreads` was called)
@@ -32,6 +33,8 @@ v0.7.15 - 2013-04-
  - Renamed `EventedObject.isOwner` to `amOwner`
  - Improved intermodule dependencies, configuration option/file handling and added `pragma(lib)` (using "--version=VibePragmaLib") for more comfortable building without dub/vibe (by Vladimir Panteleev aka CyberShadow) - [pull #211][issue211]
  - Implemented an automatic command line help screen (inferred from calls to `vibe.core.args.getOption`)
+ - Added meaningful error messages when the connection to a MongoDB or Redis server fails
+ - Deprecated `vibe.http.server.startListening`, which is not necessary anymore
 
 ### Bug fixes ###
 
@@ -45,6 +48,11 @@ v0.7.15 - 2013-04-
  - Fixed spurious error messages when accepting connections in the libevent driver (by Vladimir Panteleev aka CyberShadow) - [pull #207][issue207]
  - Fixed adjusting of method names in the REST interface generator for sub interfaces (by Михаил Страшун aka Dicebot) - [pull #210][issue210]
  - Fixed falling back to IPv4 if listening on IPv6 fails when calling `listenTCP` without a bind address
+ - Fixed `Libevent2MenualEvent.~this` to not access GC memory which may already be finalized
+ - Fixed `Win32TCPConnection.peerAddress` and `Win32UDPConnection.bindAddress`
+ - Partially fixed automatic event loop exit in the Win32 driver (use -version=VibePartialAutoExit for now) - [pull #213][issue213]
+ - Fixed `renderCompat` to work with `const` parameters
+ - Fixed an error in the Deimos bindings (by Henry Robbins Gouk) - [pull #220][issue220]
 
 [issue190]: https://github.com/rejectedsoftware/vibe.d/issues/190
 [issue199]: https://github.com/rejectedsoftware/vibe.d/issues/199
@@ -54,6 +62,9 @@ v0.7.15 - 2013-04-
 [issue207]: https://github.com/rejectedsoftware/vibe.d/issues/207
 [issue210]: https://github.com/rejectedsoftware/vibe.d/issues/210
 [issue211]: https://github.com/rejectedsoftware/vibe.d/issues/211
+[issue213]: https://github.com/rejectedsoftware/vibe.d/issues/213
+[issue218]: https://github.com/rejectedsoftware/vibe.d/issues/218
+[issue220]: https://github.com/rejectedsoftware/vibe.d/issues/220
 
 
 v0.7.14 - 2013-03-22
