@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.15 - 2013-04-
+v0.7.15 - 2013-04-27
 --------------------
 
 ### Features and improvements ###
@@ -53,6 +53,7 @@ v0.7.15 - 2013-04-
  - Partially fixed automatic event loop exit in the Win32 driver (use -version=VibePartialAutoExit for now) - [pull #213][issue213]
  - Fixed `renderCompat` to work with `const` parameters
  - Fixed an error in the Deimos bindings (by Henry Robbins Gouk) - [pull #220][issue220]
+ - Fixed a compilation error in the REST interface client (multiple definitions of "url__")
 
 [issue190]: https://github.com/rejectedsoftware/vibe.d/issues/190
 [issue199]: https://github.com/rejectedsoftware/vibe.d/issues/199
