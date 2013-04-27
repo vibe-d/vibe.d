@@ -13,6 +13,7 @@ import vibe.utils.memory;
 
 import std.algorithm;
 import std.array;
+import std.exception;
 import std.typecons;
 
 
@@ -101,6 +102,7 @@ class MemoryStream : RandomAccessStream {
 	@property ulong leastSize() { return m_size - m_ptr; }
 	@property bool dataAvailableForRead() { return leastSize() > 0; }
 	@property ulong size() const nothrow { return m_size; }
+	@property size_t capacity() const nothrow { return m_data.length; }
 	@property bool readable() const nothrow { return true; }
 	@property bool writable() const nothrow { return m_writable; }
 
@@ -118,7 +120,7 @@ class MemoryStream : RandomAccessStream {
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{
 		assert(writable);
-		assert(bytes.length <= m_data.length - m_ptr);
+		enforce(bytes.length <= m_data.length - m_ptr, "Size limit of memory stream reached.");
 		m_data[m_ptr .. m_ptr+bytes.length] = bytes[];
 		m_ptr += bytes.length;
 		m_size = max(m_size, m_ptr);
