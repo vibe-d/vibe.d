@@ -145,10 +145,6 @@ class HTTPClient : EventedObject {
 
 	static void setUserAgentString(string str) { m_userAgent = str; }
 	
-	void acquire() { if( m_conn && m_conn.connected) m_conn.acquire(); }
-	void release() { if( m_conn && m_conn.connected ) m_conn.release(); }
-	bool amOwner() { return m_conn ? m_conn.amOwner() : true; }
-
 	void connect(string server, ushort port = 80, bool ssl = false)
 	{
 		assert(port != 0);

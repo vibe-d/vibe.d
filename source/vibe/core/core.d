@@ -371,7 +371,6 @@ void enableWorkerThreads()
 	st_workerTaskMutex = new core.sync.mutex.Mutex;	
 
 	st_workerTaskSignal = getEventDriver().createManualEvent();
-	assert(!st_workerTaskSignal.amOwner());
 
 	foreach (i; 0 .. threadsPerCPU) {
 		auto thr = new Thread(&workerThreadFunc);
@@ -738,7 +737,6 @@ private void handleWorkerTasks()
 	auto thisthr = Thread.getThis();
 
 	logDebug("worker task loop enter");
-	assert(!st_workerTaskSignal.amOwner());
 	while(true){
 		void delegate() t;
 		auto emit_count = st_workerTaskSignal.emitCount;
@@ -763,10 +761,8 @@ private void handleWorkerTasks()
 				st_workerThreads[thisthr].taskQueue.popFront();
 			}
 		}
-		assert(!st_workerTaskSignal.amOwner());
 		if (t) runTask(t);
 		else st_workerTaskSignal.wait(emit_count);
-		assert(!st_workerTaskSignal.amOwner());
 	}
 	logDebug("worker task exit");
 	synchronized(st_workerTaskMutex)

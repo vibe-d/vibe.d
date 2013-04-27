@@ -128,21 +128,6 @@ class MongoConnection : EventedObject {
 					m_settings.hosts[0].name, m_settings.hosts[0].port);
 	}
 
-	/// Changes the ownership of this connection
-	override void acquire()
-	{
-		if( m_conn && m_conn.connected ) m_conn.acquire();
-		else connect();
-	}
-
-	override void release()
-	{
-		if( m_conn && m_conn.connected )
-			m_conn.release();
-	}
-
-	override bool amOwner() { return m_conn ? m_conn.amOwner() : true; }
-
 	void connect()
 	{
 		/*

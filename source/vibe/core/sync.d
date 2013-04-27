@@ -172,7 +172,6 @@ class TaskCondition : core.sync.condition.Condition {
 	private {
 		Mutex m_mutex;
 		ManualEvent m_signal;
-		Timer m_timer;
 	}
 
 	this(Mutex mutex)
@@ -180,7 +179,6 @@ class TaskCondition : core.sync.condition.Condition {
 		super(mutex);
 		m_mutex = mutex;
 		m_signal = createManualEvent();
-		m_timer = getEventDriver().createTimer(null);
 	}
 
 	override @trusted @property Mutex mutex() { return m_mutex; }
@@ -211,19 +209,8 @@ class TaskCondition : core.sync.condition.Condition {
 		m_mutex.unlock();
 		scope(failure) m_mutex.lock();
 
-		m_timer.rearm(timeout);
-		m_timer.acquire();
-		m_signal.acquire();
-		scope (failure) {
-			m_signal.release();
-			m_timer.release();
-		}
-		while (refcount == m_signal.emitCount && m_timer.pending)
-			rawYield();
+		auto succ = m_signal.wait(timeout, refcount) != refcount;
 
-		m_signal.release();
-		m_timer.release();
-		auto succ = refcount != m_signal.emitCount;
 		m_mutex.lock();
 		return succ;
 	}
@@ -262,6 +249,9 @@ interface ManualEvent : EventedObject {
 
 	/// Acquires ownership and waits until the signal is emitted if no emit has happened since the given reference emit count.
 	int wait(int reference_emit_count);
+
+	/// 
+	int wait(Duration timeout, int reference_emit_count);
 }
 
 /// Compatibility alias, will soon be deprecated.

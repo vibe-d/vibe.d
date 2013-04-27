@@ -132,22 +132,6 @@ class ThreadedFileStream : FileStream {
 	@property bool readable() const { return m_mode != FileMode.Append; }
 	@property bool writable() const { return m_mode != FileMode.Read; }
 
-	void acquire()
-	{
-		// TODO: store the owner and throw an exception if illegal calls happen
-	}
-
-	void release()
-	{
-		// TODO: store the owner and throw an exception if illegal calls happen
-	}
-
-	bool amOwner()
-	{
-		// TODO: really check ownership
-		return true;
-	}
-
 	void takeOwnershipOfFD()
 	{
 		enforce(m_ownFD);

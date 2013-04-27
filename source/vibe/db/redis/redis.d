@@ -97,20 +97,6 @@ private final class RedisConnection : EventedObject {
 		m_port = port;
 	}
 
-	override void acquire() {
-		if (m_conn && m_conn.connected)
-			m_conn.acquire();
-	}
-
-	override void release() {
-		if (m_conn && m_conn.connected)
-			m_conn.release();
-	}
-
-	override bool amOwner() {
-		return m_conn ? m_conn.amOwner() : true;
-	}
-
 	T request(T=RedisReply)(string command, in ubyte[][] args...) {
 		if( !m_conn || !m_conn.connected ){
 			try m_conn = connectTcp(m_host, m_port);
