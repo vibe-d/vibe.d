@@ -11,11 +11,14 @@
 		"see github for more"
 	],
 
-	"targetType": "library",
-	"versions": ["LIBEV4"],
-	"importPaths": ["import", "source"],
+	"dependencies": {
+		"libevent": "~master",
+		"libev": "~master",
+		"openssl": "~master"
+	},
 
-	"libs-posix" : ["ssl", "crypto"],
+	"targetType": "library",
+
 	"libs-windows": ["wsock32", "ws2_32"],
 
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
@@ -36,7 +39,6 @@
 		{
 			"name": "libevent",
 			"versions": ["VibeLibeventDriver"],
-			"libs-posix" : ["event", "event_pthreads"],
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
 			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
@@ -46,7 +48,6 @@
 			"name": "libev",
 			"platforms": ["posix"],
 			"versions": ["VibeLibevDriver"],
-			"libs-posix" : ["ev"]
 		},
 		{
 			"name": "win32",
