@@ -127,7 +127,7 @@ import std.traits;
 	
 		RestInterfaceClient class for a seamless way to acces such a generated API
 */
-void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPrefix = "/",
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPrefix,
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
@@ -167,6 +167,25 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 					addRoute(httpVerb, urlPrefix ~ url, handler, paramNames);
 			}
 		}
+	}
+}
+
+
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style = MethodStyle.lowerUnderscored)
+{
+	alias T = reduceToInterface!TImpl;
+	enum uda = extractUda!(RootPath, T);
+	static if (is(typeof(uda) == typeof(null)))
+		registerRestInterface!T(router, instance, "/", style);
+	else
+	{
+		static if (uda.data == "")
+		{
+			auto path = adjustMethodStyle(T.stringof, style);
+			registerRestInterface!T(router, instance, path, style);
+		}
+		else
+			registerRestInterface!T(router, instance, uda.data, style);
 	}
 }
 
@@ -259,7 +278,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 263 "source/vibe/http/rest.d"
+#line 282 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;
@@ -983,7 +1002,7 @@ struct RootPath
 
 /**
 	UDA to define root URL prefix for annotated REST interface.
-	Empty path means deducing prefix from interface type name (see prefixFromName)
+	Empty path means deducing prefix from interface type name (see also prefixFromName)
  */
 RootPath rootPath(string path)
 {
@@ -993,7 +1012,7 @@ RootPath rootPath(string path)
 /**
 	Convenience alias
  */
-RootPath prefixFromName()
+@property RootPath prefixFromName()
 {
 	return RootPath("");
 }
