@@ -67,31 +67,38 @@ unittest
 {
 	interface A { }
 	class B : A { }
-	static assert (is(reduceToInterface!A) == A);
-	static assert (is(reduceToInterface!B) == A);
+	static assert (is(reduceToInterface!A == A));
+	static assert (is(reduceToInterface!B == A));
 }
 
 /**
   Small convenience wrapper to find and extract certain UDA from given type
-  Returns: null if UDA is not found, UDA value otherwise
+Returns: null if UDA is not found, UDA value otherwise
  */
 template extractUda(UDA, alias Symbol)
 {
-	private alias TypeTuple!(__traits(getAttributes, Symbol)) type_udas;
+    private alias TypeTuple!(__traits(getAttributes, Symbol)) type_udas;
 
-	private template extract(list)
-	{
-		static if (!list.length)
-			enum extract = null;
-		else static if (is(list[0] == UDA))
-			enum extract = uda;
-		else
-			enum extract = extract!(list[0..$-1]);
-	}
+    private template extract(list...)
+    {
+        static if (!list.length)
+            enum extract = null;
+        else static if (is(typeof(list[0]) == UDA) || is(list[0] == UDA))
+            enum extract = list[0];
+        else
+            enum extract = extract!(list[1..$]);
+    }
 
-	private template extract() { enum extract = null; }
+    enum extractUda = extract!type_udas;
+}
 
-	enum extractUda = extract!type_udas;
+unittest
+{
+    struct Attr { int x; }
+    @("something", Attr(42)) void decl();
+    static assert (extractUda!(string, decl) == "something");
+    static assert (extractUda!(Attr, decl) == Attr(42));
+    static assert (extractUda!(int, decl) == null);
 }
 
 /**
@@ -560,7 +567,6 @@ private template returnsRef(alias f)
 		auto ptr = &f(param);
 	}));
 }
-
 
 template temporary_packageName(alias T)
 {

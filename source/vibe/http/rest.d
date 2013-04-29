@@ -259,7 +259,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 261 "source/vibe/http/rest.d"
+#line 263 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;
@@ -887,15 +887,21 @@ private Tuple!(bool, HTTPMethod, string) extractHTTPMethodAndName(alias Func)()
 	
 	string name = __traits(identifier, Func);
 	alias typeof(&Func) T;
-	
+
 	Nullable!HTTPMethod udmethod;
 	Nullable!string udurl;
-	
+
 	// Cases may conflict and are listed in order of priority
 
-	udmethod = extractUda!(vibe.http.rest.OverridenMethod, Func);
-	udurl = extractUda!(vibe.http.rest.OverridenPath, Func);
-	
+	// Workaround for Nullable incompetence
+	enum uda1 = extractUda!(vibe.http.rest.OverridenMethod, Func);
+	enum uda2 = extractUda!(vibe.http.rest.OverridenPath, Func);
+
+	static if (!is(typeof(uda1) == typeof(null)))
+		udmethod = uda1;
+	static if (!is(typeof(uda2) == typeof(null)))
+		udurl = uda2;
+
 	// Everything is overriden, no further analysis needed
 	if (!udmethod.isNull() && !udurl.isNull())
 		return tuple(true, udmethod.get(), udurl.get());
