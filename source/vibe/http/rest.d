@@ -181,11 +181,18 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 	{
 		static if (uda.data == "")
 		{
-			auto path = adjustMethodStyle(T.stringof, style);
+			auto path = "/" ~ adjustMethodStyle(T.stringof, style) ~ "/";
 			registerRestInterface!T(router, instance, path, style);
 		}
 		else
-			registerRestInterface!T(router, instance, uda.data, style);
+		{
+			auto path = uda.data;
+			if (!path.startsWith("/"))
+				path = "/" ~ path;
+			if (!path.endsWith("/"))
+				path = path ~ "/";
+			registerRestInterface!T(router, instance, path, style);
+		}
 	}
 }
 
@@ -243,12 +250,28 @@ class RestInterfaceClient(I) : I
 	}
 	
 	alias I BaseInterface;
-	
+
 	/** Creates a new REST implementation of I
 	*/
 	this(string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseURL = URL.parse(base_url);
+        enum uda = extractUda!(RootPath, I);
+        static if (is(typeof(uda) == typeof(null)))
+    		m_baseURL = URL.parse(base_url);
+        else
+        {
+            static if (uda.data == "")
+    		    m_baseURL = URL.parse(base_url ~ "/" ~ adjustMethodStyle(I.stringof, style) ~ "/");
+            else
+			{
+				auto path = uda.data;
+				if (!path.startsWith("/"))
+					path = "/" ~ path;
+				if (!path.endsWith("/"))
+					path = path ~ "/";
+    		    m_baseURL = URL.parse(base_url ~ adjustMethodStyle(uda.data, style));
+			}
+        }
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I());
 	}
@@ -1002,7 +1025,7 @@ struct RootPath
 
 /**
 	UDA to define root URL prefix for annotated REST interface.
-	Empty path means deducing prefix from interface type name (see also prefixFromName)
+	Empty path means deducing prefix from interface type name (see also rootPathFromName)
  */
 RootPath rootPath(string path)
 {
@@ -1012,7 +1035,7 @@ RootPath rootPath(string path)
 /**
 	Convenience alias
  */
-@property RootPath prefixFromName()
+@property RootPath rootPathFromName()
 {
 	return RootPath("");
 }
