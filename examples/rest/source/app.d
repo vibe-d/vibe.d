@@ -20,7 +20,8 @@ import core.time;
  *
  * All types are serialized and deserialized automatically by vibe.d framework using JSON.
  */
-interface IExample1API
+@rootPathFromName
+interface Example1API
 {
 	/* Default convention is based on camelCase
 	 */
@@ -52,7 +53,7 @@ interface IExample1API
 	 */
 }
 
-class Example1 : IExample1API
+class Example1 : Example1API
 {
 	override: // use of this handy D feature is highly recommended
 		string getSomeInfo()
@@ -77,7 +78,8 @@ class Example1 : IExample1API
  * Shows example usage of non-default naming convention, please check module constructor for details on this.
  * UpperUnderscore method style will be used.
  */
-interface IExample2API
+@rootPathFromName
+interface Example2API
 {
 	// Any D data type may be here. Serializer is not configurable and will send all declared fields.
 	// This should be an API-specified type and may or may not be the same as data type used by other application code.
@@ -103,7 +105,7 @@ interface IExample2API
 	Aggregate queryAccumulateAll(Aggregate[] input);
 }
 
-class Example2 : IExample2API
+class Example2 : Example2API
 {
 	override:
 		Aggregate queryAccumulateAll(Aggregate[] input)
@@ -121,11 +123,12 @@ class Example2 : IExample2API
  *
  * Some limited form of URL parameters exists via special "id" parameter.
  */
-interface IExample3API
+@rootPathFromName
+interface Example3API
 {
 	/* Available under ./nested_module/
 	 */
-	@property IExample3APINested nestedModule();
+	@property Example3APINested nestedModule();
 
 	/* "id" is special parameter name that is parsed from URL. No special magic happens here,
 	 * it uses usual vibe.d URL pattern matching functionality.
@@ -134,7 +137,7 @@ interface IExample3API
 	int getMyID(int id);
 }
 
-interface IExample3APINested
+interface Example3APINested
 {
 	/* In this example it will be available under "GET /nested_module/number"
 	 * But this interface does't really know it, it does not care about exact path
@@ -142,7 +145,7 @@ interface IExample3APINested
 	int getNumber();
 }
 
-class Example3 : IExample3API
+class Example3 : Example3API
 {
 	private:
 		Example3Nested m_nestedImpl;  
@@ -159,13 +162,13 @@ class Example3 : IExample3API
 				return id;
 			}
 
-			@property IExample3APINested nestedModule()
+			@property Example3APINested nestedModule()
 			{
 				return m_nestedImpl;
 			}
 }
 
-class Example3Nested : IExample3APINested
+class Example3Nested : Example3APINested
 {
 	override:
 		int getNumber()
@@ -177,7 +180,8 @@ class Example3Nested : IExample3APINested
 /* If pre-defined conventions do not suit your needs, you can configure url and method
  * precisely via User Defined Attributes.
  */
-interface IExample4API
+@rootPathFromName
+interface Example4API
 {
 	/* vibe.http.rest module provides two pre-defined UDA - @path and @method
 	 * You can use any one of those or both. In case @path is used, not method style
@@ -195,7 +199,7 @@ interface IExample4API
 	int getParametersInURL(string _param, string _another_param);
 }
 
-class Example4 : IExample4API
+class Example4 : Example4API
 {
 	override:
 		void myNameDoesNotMatter()
@@ -214,12 +218,12 @@ shared static this()
 {
 	// Registering our REST services in router
 	auto routes = new URLRouter;
-	registerRestInterface!IExample1API(routes, new Example1(), "/example1/");
+	registerRestInterface(routes, new Example1());
 	// note additional last parameter that defines used naming convention for compile-time introspection
-	registerRestInterface!IExample2API(routes, new Example2(), "/example2/", MethodStyle.upperUnderscored);
+	registerRestInterface(routes, new Example2(), MethodStyle.upperUnderscored);
 	// naming style is default again, those can be router path specific.
-	registerRestInterface!IExample3API(routes, new Example3(), "/example3/");
-	registerRestInterface!IExample4API(routes, new Example4(), "/example4/");
+	registerRestInterface(routes, new Example3());
+	registerRestInterface(routes, new Example4());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
@@ -237,32 +241,32 @@ shared static this()
 		logInfo("Starting communication with REST interface. Use capture tool (i.e. wireshark) to check how it looks on HTTP protocol level");
 		// Example 1
 		{
-			auto api = new RestInterfaceClient!IExample1API("http://127.0.0.1:8080/example1/");
+			auto api = new RestInterfaceClient!Example1API("http://127.0.0.1:8080");
 			assert(api.getSomeInfo() == "Some Info!");
 			assert(api.getIndex() == "Index!");
 			assert(api.postSum(2, 3) == 5);
 		}
 		// Example 2
 		{
-			auto api = new RestInterfaceClient!IExample2API("http://127.0.0.1:8080/example2/", MethodStyle.upperUnderscored);
-			IExample2API.Aggregate[] data = [
-				{ "one", 1, IExample2API.Aggregate.Type.Type1 }, 
-				{ "two", 2, IExample2API.Aggregate.Type.Type2 }
+			auto api = new RestInterfaceClient!Example2API("http://127.0.0.1:8080", MethodStyle.upperUnderscored);
+			Example2API.Aggregate[] data = [
+				{ "one", 1, Example2API.Aggregate.Type.Type1 }, 
+				{ "two", 2, Example2API.Aggregate.Type.Type2 }
 			];
 			auto accumulated = api.queryAccumulateAll(data);
-			assert(accumulated.type == IExample2API.Aggregate.Type.Type3);
+			assert(accumulated.type == Example2API.Aggregate.Type.Type3);
 			assert(accumulated.count == 3);
 			assert(accumulated.name == "onetwo");
 		}
 		// Example 3
 		{
-			auto api = new RestInterfaceClient!IExample3API("http://127.0.0.1:8080/example3/");
+			auto api = new RestInterfaceClient!Example3API("http://127.0.0.1:8080");
 			assert(api.getMyID(9000) == 9000);
 			assert(api.nestedModule.getNumber() == 42);
 		}
 		// Example 4
 		{
-			auto api = new RestInterfaceClient!IExample4API("http://127.0.0.1:8080/example4/");
+			auto api = new RestInterfaceClient!Example4API("http://127.0.0.1:8080");
 			api.myNameDoesNotMatter();
 			assert(api.getParametersInURL("20", "30") == 50);
 		}
