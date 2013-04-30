@@ -208,6 +208,9 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
 
+		cctx.readOwner = Task.getThis();
+		scope(exit) cctx.readOwner = Task();
+
 		if( bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
 

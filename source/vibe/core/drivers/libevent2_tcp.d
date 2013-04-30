@@ -261,13 +261,13 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
-		checkConnected(false, true);
 		import vibe.core.drivers.threadedfile;
 		version(none){ // causes a crash on Windows
 			// special case sending of files
 			if( auto fstream = cast(ThreadedFileStream)stream ){
 				acquireWriter();
 				scope(exit) releaseWriter();
+				checkConnected(false, true);
 				logInfo("Using sendfile! %s %s %s %s", fstream.fd, fstream.tell(), fstream.size, nbytes);
 				fstream.takeOwnershipOfFD();
 				auto buf = bufferevent_get_output(m_event);
