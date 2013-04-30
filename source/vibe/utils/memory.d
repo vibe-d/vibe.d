@@ -186,7 +186,8 @@ class GCAllocator : Allocator {
 	}
 	void free(void[] mem)
 	{
-		GC.free(extractUnalignedPointer(mem.ptr));
+		// For safety reasons, the GCAllocator should never explicitly free memory.
+		//GC.free(extractUnalignedPointer(mem.ptr));
 	}
 }
 
