@@ -47,6 +47,60 @@ unittest
 	static assert(isPropertySetter!(typeof(&Sample.setter)));
 }
 
+/// Given some class or interface, reduces it to single base interface
+template reduceToInterface(T)
+	if (is(T == interface) || is(T == class))
+{
+	static if (is(T == interface))
+		alias T reduceToInterface;
+	else
+	{
+		alias Ifaces = InterfacesTuple!T;
+		static if (Ifaces.length == 1)
+			alias Ifaces[0] reduceToInterface;
+		else
+			static assert ("Type must be either provided as an interface or implement only one interface");
+	}
+}
+
+unittest
+{
+	interface A { }
+	class B : A { }
+	static assert (is(reduceToInterface!A == A));
+	static assert (is(reduceToInterface!B == A));
+}
+
+/**
+  Small convenience wrapper to find and extract certain UDA from given type
+Returns: null if UDA is not found, UDA value otherwise
+ */
+template extractUda(UDA, alias Symbol)
+{
+    private alias TypeTuple!(__traits(getAttributes, Symbol)) type_udas;
+
+    private template extract(list...)
+    {
+        static if (!list.length)
+            enum extract = null;
+        else static if (is(typeof(list[0]) == UDA) || is(list[0] == UDA))
+            enum extract = list[0];
+        else
+            enum extract = extract!(list[1..$]);
+    }
+
+    enum extractUda = extract!type_udas;
+}
+
+unittest
+{
+    struct Attr { int x; }
+    @("something", Attr(42)) void decl();
+    static assert (extractUda!(string, decl) == "something");
+    static assert (extractUda!(Attr, decl) == Attr(42));
+    static assert (extractUda!(int, decl) == null);
+}
+
 /**
 	Clones function signature including its name so that resulting string
 	can be mixed into descendant class to override it. All symbols in
@@ -513,7 +567,6 @@ private template returnsRef(alias f)
 		auto ptr = &f(param);
 	}));
 }
-
 
 template temporary_packageName(alias T)
 {

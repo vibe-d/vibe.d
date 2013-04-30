@@ -127,15 +127,17 @@ import std.traits;
 	
 		RestInterfaceClient class for a seamless way to acces such a generated API
 */
-void registerRestInterface(T)(URLRouter router, T instance, string urlPrefix = "/",
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPrefix,
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
 	{
 		router.match(httpVerb, url, handler);
 		logDebug("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
-	}       
-	
+	}
+
+	alias T = reduceToInterface!TImpl;
+
 	foreach( method; __traits(allMembers, T) ) {
 		foreach( overload; MemberFunctionsTuple!(T, method) ) {
 			alias ReturnType!overload RetType;
@@ -164,6 +166,32 @@ void registerRestInterface(T)(URLRouter router, T instance, string urlPrefix = "
 				} else
 					addRoute(httpVerb, urlPrefix ~ url, handler, paramNames);
 			}
+		}
+	}
+}
+
+
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style = MethodStyle.lowerUnderscored)
+{
+	alias T = reduceToInterface!TImpl;
+	enum uda = extractUda!(RootPath, T);
+	static if (is(typeof(uda) == typeof(null)))
+		registerRestInterface!T(router, instance, "/", style);
+	else
+	{
+		static if (uda.data == "")
+		{
+			auto path = "/" ~ adjustMethodStyle(T.stringof, style) ~ "/";
+			registerRestInterface!T(router, instance, path, style);
+		}
+		else
+		{
+			auto path = uda.data;
+			if (!path.startsWith("/"))
+				path = "/" ~ path;
+			if (!path.endsWith("/"))
+				path = path ~ "/";
+			registerRestInterface!T(router, instance, path, style);
 		}
 	}
 }
@@ -222,12 +250,28 @@ class RestInterfaceClient(I) : I
 	}
 	
 	alias I BaseInterface;
-	
+
 	/** Creates a new REST implementation of I
 	*/
 	this(string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseURL = URL.parse(base_url);
+        enum uda = extractUda!(RootPath, I);
+        static if (is(typeof(uda) == typeof(null)))
+    		m_baseURL = URL.parse(base_url);
+        else
+        {
+            static if (uda.data == "")
+    		    m_baseURL = URL.parse(base_url ~ "/" ~ adjustMethodStyle(I.stringof, style) ~ "/");
+            else
+			{
+				auto path = uda.data;
+				if (!path.startsWith("/"))
+					path = "/" ~ path;
+				if (!path.endsWith("/"))
+					path = path ~ "/";
+    		    m_baseURL = URL.parse(base_url ~ adjustMethodStyle(uda.data, style));
+			}
+        }
 		m_methodStyle = style;
 		mixin(generateRestInterfaceSubInterfaceInstances!I());
 	}
@@ -257,7 +301,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 261 "source/vibe/http/rest.d"
+#line 282 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;
@@ -885,19 +929,21 @@ private Tuple!(bool, HTTPMethod, string) extractHTTPMethodAndName(alias Func)()
 	
 	string name = __traits(identifier, Func);
 	alias typeof(&Func) T;
-	alias TypeTuple!(__traits(getAttributes, Func)) udas;
-	
+
 	Nullable!HTTPMethod udmethod;
 	Nullable!string udurl;
-	
+
 	// Cases may conflict and are listed in order of priority
-	foreach ( uda; udas ){
-		static if (is(typeof(uda) == vibe.http.rest.OverridenMethod))
-			udmethod = uda.data;
-		else if (is(typeof(uda) == vibe.http.rest.OverridenPath))
-			udurl = uda.data;
-	}
-	
+
+	// Workaround for Nullable incompetence
+	enum uda1 = extractUda!(vibe.http.rest.OverridenMethod, Func);
+	enum uda2 = extractUda!(vibe.http.rest.OverridenPath, Func);
+
+	static if (!is(typeof(uda1) == typeof(null)))
+		udmethod = uda1;
+	static if (!is(typeof(uda2) == typeof(null)))
+		udurl = uda2;
+
 	// Everything is overriden, no further analysis needed
 	if (!udmethod.isNull() && !udurl.isNull())
 		return tuple(true, udmethod.get(), udurl.get());
@@ -969,4 +1015,27 @@ unittest
 	static assert (ret5[0] == true);
 	static assert (ret5[1] == HTTPMethod.POST);
 	static assert (ret5[2] == "compound/path");
+}
+
+struct RootPath
+{
+	string data;
+	alias data this;
+}
+
+/**
+	UDA to define root URL prefix for annotated REST interface.
+	Empty path means deducing prefix from interface type name (see also rootPathFromName)
+ */
+RootPath rootPath(string path)
+{
+	return RootPath(path);
+}
+
+/**
+	Convenience alias
+ */
+@property RootPath rootPathFromName()
+{
+	return RootPath("");
 }
