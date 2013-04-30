@@ -14,7 +14,8 @@ import std.utf;
 final class RedisReply {
 
 	private {
-		private TcpConnection m_conn;
+		TcpConnection m_conn;
+		LockedConnection!RedisConnection m_lockedConnection;
 		ubyte[] m_data;
 		size_t m_length;
 		size_t m_index;
@@ -64,7 +65,10 @@ final class RedisReply {
 		return data;
 	}
 
-	@property bool hasNext() { return  m_index < m_length; }
+	@property bool hasNext() 
+	{ 
+		return  m_index < m_length; 
+	}
 
 	T next(T : E[], E)() {
 		assert( hasNext, "end of reply" );
@@ -76,14 +80,14 @@ final class RedisReply {
 		} else {
 			ret = m_data;
 		}
-		static if( isSomeString!T ) validate(cast(T)ret);
+		if (m_index >= m_length) m_lockedConnection.clear();
+		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
 	}
 }
 
-private final class RedisConnection : EventedObject {
-	
+final class RedisConnection : EventedObject {
 	private {
 		string m_host;
 		ushort m_port;
@@ -97,7 +101,7 @@ private final class RedisConnection : EventedObject {
 		m_port = port;
 	}
 
-	T request(T=RedisReply)(string command, in ubyte[][] args...) {
+	RedisReply request(string command, in ubyte[][] args...) {
 		if( !m_conn || !m_conn.connected ){
 			try m_conn = connectTcp(m_host, m_port);
 			catch (Exception e) {
@@ -110,15 +114,7 @@ private final class RedisConnection : EventedObject {
 			m_conn.write(arg);
 			m_conn.write("\r\n");
 		}
-		auto reply = new RedisReply(m_conn);
-		static if( is(T == bool) ) {
-			return reply.next!(ubyte[])()[0] == '1';
-		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
-			auto str = reply.next!string();
-			return parse!T(str);
-		} else static if ( is(T == string) ) {
-			return cast(string)reply.next!T();
-		} else return reply;
+		return new RedisReply(m_conn);
 	}
 }
 
@@ -127,10 +123,18 @@ final class RedisClient {
 
 	private ConnectionPool!RedisConnection m_connections;
 
-	this() { }
-	
+	deprecated this() { }
+	this(string host = "127.0.0.1", ushort port = 6379)
+	{
+		m_connections = new ConnectionPool!RedisConnection({
+			auto connection = new RedisConnection;
+			connection.connect(host, port);
+			return connection;
+		});
+	}
+
 	/** Initializes the connection pool. */
-	void connect(string host = "127.0.0.1", ushort port = 6379) {
+	deprecated void connect(string host = "127.0.0.1", ushort port = 6379) {
 		m_connections = new ConnectionPool!RedisConnection({
 			auto connection = new RedisConnection;
 			connection.connect(host, port);
@@ -212,7 +216,7 @@ final class RedisClient {
 	}
 
 	int decr(string key, int value = 1) {
-		return value == 1 ? request!int("DECR") : request!int("DECRBY", cast(ubyte[])to!string(value));
+		return value == 1 ? request!int("DECR") : request!int("DECRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
 	}
 
 	T get(T : E[], E)(string key) {
@@ -232,7 +236,7 @@ final class RedisClient {
 	}
 
 	int incr(string key, int value = 1) {
-		return value == 1 ? request!int("INCR") : request!int("INCRBY", cast(ubyte[])to!string(value));
+		return value == 1 ? request!int("INCR") : request!int("INCRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
 	}
 
 	RedisReply mget(string[] keys) {
@@ -618,6 +622,20 @@ final class RedisClient {
 	//TODO sync
 
 	T request(T=RedisReply)(string command, in ubyte[][] args...) {
-		return m_connections.lockConnection().request!T(command, args);
+
+		auto conn = m_connections.lockConnection();
+		auto reply = conn.request(command, args);
+
+		static if( is(T == bool) ) {
+			return reply.next!(ubyte[])()[0] == '1';
+		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
+			auto str = reply.next!string();
+			return parse!T(str);
+		} else static if ( is(T == string) ) {
+			return cast(string)reply.next!T();
+		} else {
+			reply.m_lockedConnection = conn;
+			return reply;
+		}
 	}
 }

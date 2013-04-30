@@ -21,7 +21,7 @@ import core.thread;
 	as any copy of the returned LockedConnection object still exists. Connections that are not
 	associated 
 */
-class ConnectionPool(Connection : EventedObject)
+class ConnectionPool(Connection)
 {
 	private {
 		Connection delegate() m_connectionFactory;
@@ -64,7 +64,7 @@ class ConnectionPool(Connection : EventedObject)
 	}
 }
 
-struct LockedConnection(Connection : EventedObject) {
+struct LockedConnection(Connection) {
 	private {
 		ConnectionPool!Connection m_pool;
 		Task m_task;
