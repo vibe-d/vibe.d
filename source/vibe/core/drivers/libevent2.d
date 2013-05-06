@@ -326,9 +326,9 @@ class Libevent2ManualEvent : ManualEvent {
 			deimos.event2.event.event* event;
 			bool[Task] tasks;
 		}
-		shared int m_emitCount = 0;
-		__gshared core.sync.mutex.Mutex m_mutex;
-		__gshared HashMap!(Thread, ThreadSlot) m_waiters;
+		shared(int) m_emitCount = 0;
+		core.sync.mutex.Mutex m_mutex;
+		HashMap!(Thread, ThreadSlot) m_waiters;
 	}
 
 	this()
@@ -349,7 +349,7 @@ class Libevent2ManualEvent : ManualEvent {
 	{
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
-			foreach (sl; m_waiters)
+			foreach (ref sl; m_waiters)
 				event_active(sl.event, 0, 0);
 		}
 	}
@@ -362,7 +362,6 @@ class Libevent2ManualEvent : ManualEvent {
 	int wait(int reference_emit_count)
 	{
 		assert(!amOwner());
-		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
 		auto ec = this.emitCount;
@@ -376,11 +375,12 @@ class Libevent2ManualEvent : ManualEvent {
 	int wait(Duration timeout, int reference_emit_count)
 	{
 		assert(!amOwner());
-		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
 		scope tm = new Libevent2Timer(cast(Libevent2Driver)getEventDriver(), null);
 		tm.rearm(timeout);
+		tm.acquire();
+		scope(exit) tm.release();
 
 		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
