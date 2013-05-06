@@ -180,7 +180,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		new_size = 1 << pot;
 
 		auto oldtable = m_table;
-		m_table = cast(TableEntry[])m_allocator.alloc(TableEntry.sizeof * new_size);
+		m_table = allocArray!TableEntry(m_allocator, new_size);
 		foreach (ref el; m_table) {
 			emplace!Key(&el.key, ClearValue());
 			emplace!Value(&el.value);

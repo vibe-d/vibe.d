@@ -52,11 +52,6 @@ auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args
 		static if( hasIndirections!T ) 
 			GC.addRange(mem.ptr, mem.length);
 		auto ret = emplace!T(mem, args);
-		Destructor des;
-		des.next = m_destructors;
-		des.destructor = &destroy!T;
-		des.object = mem.ptr;
-		m_destructors = des;
 	}
 	else static if( is(T == class) ) return cast(T)mem.ptr;
 	else return cast(T*)mem.ptr;
@@ -70,13 +65,8 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 		static if( hasIndirections!T ) 
 			GC.addRange(mem.ptr, mem.length);
 		// TODO: use memset for class, pointers and scalars
-		foreach( ref el; ret ){
-			emplace(cast(void*)&el);
-			Destructor des;
-			des.next = m_destructors;
-			des.destructor = &destroy!T;
-			des.object = &el;
-			m_destructors = des;
+		foreach (ref el; ret) {
+			emplace!T(cast(void[])((&el)[0 .. 1]));
 		}
 	}
 	return ret;
