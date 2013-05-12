@@ -110,14 +110,14 @@ alias HttpRouter = HTTPRouter;
 		// similar tasks. The auth method will only write a response if the
 		// user is _not_ authorized. Otherwise, the router will fall through
 		// and continue with the following routes.
-		router.any("*", &auth)
+		router.any("*", &auth);
 
 		// Matches a POST request
-		router.post("/users/:username/delete", &deleteUser)
+		router.post("/users/:username/delete", &deleteUser);
 
 		// Matches all GET requests in /static/ such as /static/img.png or
 		// /static/styles/sty.css
-		router.get("/static/*", &serveStaticFiles)
+		router.get("/static/*", serveStaticFiles("public/"));
 
 		// Setup a HTTP server...
 		auto settings = new HTTPServerSettings;
