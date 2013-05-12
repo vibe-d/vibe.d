@@ -130,10 +130,10 @@ package class Libevent2TCPConnection : TCPConnection {
 	/// Closes the connection.
 	void close()
 	{
+		checkConnected();
 		acquire();
 		assert(m_ctx, "Closing an already closed TCP connection.");
 
-		checkConnected(true, true);
 		auto fd = m_ctx.socketfd;
 		m_ctx.shutdown = true;
 		bufferevent_setwatermark(m_event, EV_WRITE, 1, 0);
@@ -196,10 +196,10 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void read(ubyte[] dst)
 	{
+		checkConnected();
 		acquireReader();
 		scope(exit) releaseReader();
 		while( dst.length > 0 ){
-			checkConnected(true, false);
 			logTrace("evbuffer_read %d bytes (fd %d)", dst.length, m_ctx.socketfd);
 			auto nbytes = bufferevent_read(m_event, dst.ptr, dst.length);
 			logTrace(" .. got %d bytes", nbytes);
@@ -247,9 +247,9 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void write(in ubyte[] bytes, bool do_flush = true)
 	{	
+		checkConnected();
 		acquireWriter();
 		scope(exit) releaseWriter();
-		checkConnected(false, true);
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
@@ -265,9 +265,9 @@ package class Libevent2TCPConnection : TCPConnection {
 		version(none){ // causes a crash on Windows
 			// special case sending of files
 			if( auto fstream = cast(ThreadedFileStream)stream ){
+				checkConnected();
 				acquireWriter();
 				scope(exit) releaseWriter();
-				checkConnected(false, true);
 				logInfo("Using sendfile! %s %s %s %s", fstream.fd, fstream.tell(), fstream.size, nbytes);
 				fstream.takeOwnershipOfFD();
 				auto buf = bufferevent_get_output(m_event);
@@ -285,9 +285,9 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void flush()
 	{
+		checkConnected();
 		acquireWriter();
 		scope(exit) releaseWriter();
-		checkConnected(false, true);
 		logTrace("bufferevent_flush");
 		bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 	}
@@ -297,15 +297,13 @@ package class Libevent2TCPConnection : TCPConnection {
 		flush();
 	}
 
-	InputStream acquireReader() { assert(m_ctx.readOwner == Task(), "Acquiring reader of already owned connection."); m_ctx.readOwner = Task.getThis(); return this; }
-	void releaseReader() { assert(m_ctx.readOwner == Task.getThis(), "Releasing reader of unowned connection."); m_ctx.readOwner = Task(); }
-	bool amReadOwner() const { return m_ctx.readOwner == Task.getThis(); }
+	private void acquireReader() { assert(m_ctx.readOwner == Task(), "Acquiring reader of already owned connection."); m_ctx.readOwner = Task.getThis(); }
+	private void releaseReader() { if (!m_ctx) return; assert(m_ctx.readOwner == Task.getThis(), "Releasing reader of unowned connection."); m_ctx.readOwner = Task(); }
 
-	OutputStream acquireWriter() { assert(m_ctx.writeOwner == Task(), "Acquiring writer of already owned connection."); m_ctx.writeOwner = Task.getThis(); return this; }
-	void releaseWriter() { assert(m_ctx.writeOwner == Task.getThis(), "Releasing reader of already unowned connection."); m_ctx.writeOwner = Task(); }
-	bool amWriteOwner() const { return m_ctx.writeOwner == Task.getThis(); }
+	private void acquireWriter() { assert(m_ctx.writeOwner == Task(), "Acquiring writer of already owned connection."); m_ctx.writeOwner = Task.getThis(); }
+	private void releaseWriter() { if (!m_ctx) return; assert(m_ctx.writeOwner == Task.getThis(), "Releasing reader of already unowned connection."); m_ctx.writeOwner = Task(); }
 
-	private void checkConnected(bool read, bool write)
+	private void checkConnected()
 	{
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if( m_ctx.event is null ){
@@ -313,7 +311,6 @@ package class Libevent2TCPConnection : TCPConnection {
 			m_ctx = null;
 			enforce(false, "Remote hung up while operating on TCPConnection.");
 		}
-		assert((!read || amReadOwner()) && (!write || amWriteOwner()), "Operating on TCPConnection owned by a different fiber!");
 	}
 }
 
