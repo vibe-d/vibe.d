@@ -38,13 +38,14 @@ import std.exception;
 import std.bitmanip;
 import std.digest.sha;
 import std.string;
+import std.functional;
 
 
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
+HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -83,9 +84,14 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 		Stream conn = res.switchProtocol("websocket");
 
 		auto socket = new WebSocket(conn);
-		onHandshake(socket);
+		on_handshake(socket);
 	}
 	return &callback;
+}
+/// ditto
+HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake)
+{
+	return handleWebSockets(toDelegate(on_handshake));
 }
 
 
