@@ -214,9 +214,11 @@ package class Libevent2TCPConnection : TCPConnection {
 	
 	bool waitForData(Duration timeout)
 	{
+		if (evbuffer_get_length(m_inputBuffer) > 0) return true;
+		if (!m_ctx) return false;
+		
 		acquireReader();
 		scope(exit) releaseReader();
-		if (evbuffer_get_length(m_inputBuffer) > 0) return true;
 		m_timeout_triggered = false;
 		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 		timeval t;

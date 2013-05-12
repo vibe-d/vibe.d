@@ -870,7 +870,13 @@ final class HTTPServerResponse : HTTPResponse {
 	{
 		if( m_bodyWriter ) m_bodyWriter.finalize();
 		if( m_chunkedBodyWriter && m_chunkedBodyWriter !is m_bodyWriter ) m_chunkedBodyWriter.finalize();
-		m_conn.flush();
+
+		// ignore exceptions caused by an already closed connection - the client
+		// may have closed the connection already and this doesn't usually indicate
+		// a problem.
+		try m_conn.flush();
+		catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
+
 		m_timeFinalized = Clock.currTime(UTC());
 	}
 
