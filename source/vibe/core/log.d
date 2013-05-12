@@ -18,30 +18,64 @@ import std.format;
 import std.stdio;
 import core.thread;
 
-/// Sets the minimum log level to be printed.
+/**
+	Sets the minimum log level to be printed.
+
+	This level applies to the default stdout/stderr logger only.
+*/
 void setLogLevel(LogLevel level)
 nothrow {
 	ss_stdoutLogger.lock().minLevel = level;
 }
 
-/// Disables output of thread/task ids with each log message
+
+/**
+	Enables/disables output of thread/task ids with each log message-
+
+	By default, only the log message is displayed (enable=true).
+*/
 void setPlainLogging(bool enable)
 {
 	ss_stdoutLogger.lock().format = enable ? FileLogger.Format.plain : FileLogger.Format.thread;
 }
 
-/// Sets a log file for disk logging
+
+/**
+	Sets a log file for disk file logging.
+
+	Multiple calls to this function will register multiple log
+	files for output.
+*/
 void setLogFile(string filename, LogLevel min_level = LogLevel.error)
 {
 	auto logger = cast(shared)new FileLogger(filename);
-	logger.lock().minLevel = min_level;
-	ss_loggers ~= logger;
+	{
+		auto l = logger.lock();
+		l.minLevel = min_level;
+		l.format = FileLogger.Format.threadTime;
+	}
+	registerLogger(logger);
 }
 
+
+/**
+	Registers a new logger instance.
+
+	The specified Logger will receive all log messages in its Logger.log
+	method after it has been registered.
+
+	Examples:
+	---
+	auto logger = cast(shared)new HTMLLogger("log.html");
+	logger.lock().format = FileLogger.Format.threadTime;
+	registerLogger(logger);
+	---
+*/
 void registerLogger(shared(Logger) logger)
 {
 	ss_loggers ~= logger;
 }
+
 
 /**
 	Logs a message.
@@ -88,38 +122,6 @@ void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string fi
 void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
 
 
-private void rawLog(/*string mod, string func,*/ string file, int line, LogLevel level, string text)
-nothrow {
-	static uint makeid(void* ptr) { return (cast(ulong)ptr & 0xFFFFFFFF) ^ (cast(ulong)ptr >> 32); }
-
-	LogLine msg;
-	try {
-		msg.time = Clock.currTime(UTC());
-		//msg.mod = mod;
-		//msg.func = func;
-		msg.file = file;
-		msg.line = line;
-		msg.level = level;
-		msg.thread = Thread.getThis();
-		msg.threadID = makeid(cast(void*)msg.thread);
-		msg.fiber = Fiber.getThis();
-		msg.fiberID = makeid(cast(void*)msg.fiber);
-
-		foreach (ln; text.splitter("\n")) {
-			msg.text = ln;
-			foreach (l; ss_loggers) {
-				auto ll = l.lock();
-				if (ll.acceptsLevel(msg.level))
-					ll.log(msg);
-			}
-		}
-	} catch (Exception e) {
-		try writefln("Error during logging: %s", e.toString());
-		catch(Exception) {}
-		assert(false, "Exception during logging: "~e.msg);
-	}
-}
-
 /// Specifies the log level for a particular log message.
 enum LogLevel {
 	trace,      /// Developer information for locating events when no useful stack traces are available
@@ -147,6 +149,7 @@ enum LogLevel {
 	None = none          /// deprecated
 }
 
+/// Represents a single logged line
 struct LogLine {
 	string mod;
 	string func;
@@ -162,11 +165,16 @@ struct LogLine {
 	string text;
 }
 
+/// Abstract base class for all loggers
 class Logger {
 	abstract bool acceptsLevel(LogLevel level);
 	abstract void log(ref LogLine message);
 }
 
+
+/**
+	Plain-text based logger for logging to regular files or stdout/stderr
+*/
 class FileLogger : Logger {
 	enum Format {
 		plain,
@@ -234,6 +242,9 @@ class FileLogger : Logger {
 
 import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=7016
 
+/**	
+	Logger implementation for logging to an HTML file with dynamic filtering support.
+*/
 class HTMLLogger : Logger {
 	private {
 		File m_logFile;
@@ -393,13 +404,47 @@ private {
 	shared(FileLogger) ss_fileLogger;
 }
 
+private void rawLog(/*string mod, string func,*/ string file, int line, LogLevel level, string text)
+nothrow {
+	static uint makeid(void* ptr) { return (cast(ulong)ptr & 0xFFFFFFFF) ^ (cast(ulong)ptr >> 32); }
+
+	LogLine msg;
+	try {
+		msg.time = Clock.currTime(UTC());
+		//msg.mod = mod;
+		//msg.func = func;
+		msg.file = file;
+		msg.line = line;
+		msg.level = level;
+		msg.thread = Thread.getThis();
+		msg.threadID = makeid(cast(void*)msg.thread);
+		msg.fiber = Fiber.getThis();
+		msg.fiberID = makeid(cast(void*)msg.fiber);
+
+		foreach (ln; text.splitter("\n")) {
+			msg.text = ln;
+			foreach (l; ss_loggers) {
+				auto ll = l.lock();
+				if (ll.acceptsLevel(msg.level))
+					ll.log(msg);
+			}
+		}
+	} catch (Exception e) {
+		try writefln("Error during logging: %s", e.toString());
+		catch(Exception) {}
+		assert(false, "Exception during logging: "~e.msg);
+	}
+}
+
 package void initializeLogModule()
 {
 	ss_stdoutLogger = cast(shared)new FileLogger(stdout, stderr);
-	auto l = ss_stdoutLogger.lock();
-	l.minLevel = LogLevel.info;
-	l.format = FileLogger.Format.plain;
-	ss_loggers ~= ss_stdoutLogger;
+	{
+		auto l = ss_stdoutLogger.lock();
+		l.minLevel = LogLevel.info;
+		l.format = FileLogger.Format.plain;
+	}
+	registerLogger(ss_stdoutLogger);
 
 	bool[4] verbose;
 	getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
