@@ -558,7 +558,7 @@ package nothrow extern(C)
 			}
 			if (ctx.writeOwner && ctx.writeOwner != ctx.readOwner && ctx.writeOwner.running) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
-				ctx.core.resumeTask(ctx.readOwner, ex);
+				ctx.core.resumeTask(ctx.writeOwner, ex);
 			}
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
