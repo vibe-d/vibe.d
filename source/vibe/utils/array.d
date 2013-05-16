@@ -1,5 +1,5 @@
 /**
-	Utiltiy functions for array processing
+	Utility functions for array processing
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -30,6 +30,12 @@ void removeFromArrayIdx(T)(ref T[] array, size_t idx)
 	array.length = array.length-1;
 }
 
+enum AppenderResetMode {
+	keepData,
+	freeData,
+	reuseData
+}
+
 struct AllocAppender(ArrayType : E[], E) {
 	alias Unqual!E ElemType;
 	private {
@@ -47,8 +53,10 @@ struct AllocAppender(ArrayType : E[], E) {
 
 	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_data.length - m_remaining.length]; }
 
-	void reset()
+	void reset(AppenderResetMode reset_mode = AppenderResetMode.keepData)
 	{
+		if (reset_mode == AppenderResetMode.keepData) m_data = null;
+		else if( reset_mode == AppenderResetMode.freeData) { m_alloc.free(m_data); m_data = null; }
 		m_remaining = m_data;
 	}
 
@@ -57,6 +65,7 @@ struct AllocAppender(ArrayType : E[], E) {
 		size_t nelems = m_data.length - m_remaining.length;
 		if( !m_data.length ){
 			m_data = cast(ElemType[])m_alloc.alloc(amt*E.sizeof);
+			m_remaining = m_data;
 		}
 		if( m_remaining.length < amt ){
 			size_t n = m_data.length - m_remaining.length;
@@ -75,7 +84,7 @@ struct AllocAppender(ArrayType : E[], E) {
 	void put(ArrayType arr)
 	{
 		if( m_remaining.length < arr.length ) grow(arr.length);
-		m_remaining[0 .. arr.length] = arr;
+		m_remaining[0 .. arr.length] = arr[];
 		m_remaining = m_remaining[arr.length .. $];
 	}
 
@@ -113,30 +122,29 @@ struct AllocAppender(ArrayType : E[], E) {
 	{
 		if( !m_data.length && min_free < 16 ) min_free = 16;
 
-		auto min_size = m_data.length + min_free;
+		auto min_size = m_data.length + min_free - m_remaining.length;
 		auto new_size = max(m_data.length, 16);
 		while( new_size < min_size )
 			new_size = (new_size * 3) / 2;
-		reserve(new_size - m_data.length);
+		reserve(new_size - m_data.length + m_remaining.length);
 	}
 }
 
-class FixedAppender(ArrayType : E[], size_t NELEM, E) {
+struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 	alias Unqual!E ElemType;
 	private {
 		ElemType[NELEM] m_data;
-		ElemType[] m_remaining;
+		size_t m_fill;
 	}
 
-	this()
+	void clear()
 	{
-		m_remaining = m_data;
+		m_fill = 0;
 	}
 
 	void put(E el)
 	{
-		m_remaining[0] = el;
-		m_remaining = m_remaining[1 .. $];
+		m_data[m_fill++] = el;
 	}
 
 	static if( is(ElemType == char) ){
@@ -165,11 +173,11 @@ class FixedAppender(ArrayType : E[], size_t NELEM, E) {
 
 	void put(ArrayType arr)
 	{
-		m_remaining[0 .. arr.length] = cast(ElemType[])arr;
-		m_remaining = m_remaining[arr.length .. $];
+		m_data[m_fill .. m_fill+arr.length] = (cast(ElemType[])arr)[];
+		m_fill += arr.length;
 	}
 
-	@property ArrayType data() { return cast(ArrayType)m_data[0 .. $-m_remaining.length]; }
+	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_fill]; }
 }
 
 
@@ -229,7 +237,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 			m_buffer[m_start+m_fill .. m_buffer.length] = itms[0 .. chunk1];
 			m_buffer[0 .. chunk2] = itms[chunk1 .. $];
 		} else {
-			m_buffer[m_start+m_fill .. m_start+m_fill+itms.length] = itms;
+			m_buffer[m_start+m_fill .. m_start+m_fill+itms.length] = itms[];
 		}
 		m_fill += itms.length;
 	}

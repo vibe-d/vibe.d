@@ -1,13 +1,20 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.http.router;
+import vibe.http.server;
+
+import core.time;
+
 
 Task g_task;
 
-void status(HttpServerRequest req, HttpServerResponse res)
+void status(HTTPServerRequest req, HTTPServerResponse res)
 {
 	res.renderCompat!("index.dt", Task, "task")(g_task);
 }
 
-void interrupt(HttpServerRequest req, HttpServerResponse res)
+void interrupt(HTTPServerRequest req, HTTPServerResponse res)
 {
 	g_task.interrupt();
 	res.redirect("/");
@@ -27,13 +34,13 @@ shared static this()
 		logInfo("Task has finished.");
 	});
 
-	auto routes = new UrlRouter;
+	auto routes = new URLRouter;
 	routes.get("/", &status);
 	routes.post("/interrupt", &interrupt);
 
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
-	listenHttp(settings, routes);
+	listenHTTP(settings, routes);
 
 	logInfo("Please open http://localhost:8080/ in a browser to monitor or interrupt the task.");
 }

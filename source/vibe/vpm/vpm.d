@@ -132,7 +132,8 @@ private class Application {
 		if( m_main ) ret.put(m_main.dflags());
 		ret.put("-Isource");
 		ret.put("-Jviews");
-		foreach( string s, pkg; m_packages ){
+		foreach (p; m_main.importPaths) ret.put("-I"~p.toNativeString());
+		foreach (string s, pkg; m_packages) {
 			void addPath(string prefix, string name){
 				auto path = "modules/"~pkg.name~"/"~name;
 				if( exists(path) )
@@ -141,6 +142,7 @@ private class Application {
 			ret.put(pkg.dflags());
 			addPath("-I", "source");
 			addPath("-J", "views");
+			foreach (p; pkg.importPaths) addPath("-I", p.toNativeString());
 		}
 		return ret.data();
 	}
@@ -338,7 +340,7 @@ private class Application {
 	private bool needsUpToDateCheck(string packageId) {
 		try {
 			auto time = m_json["vpm"]["lastUpdate"][packageId].to!string;
-			return (Clock.currTime() - SysTime.fromISOExtString(time)) > dur!"days"(1);
+			return (Clock.currTime(UTC()) - SysTime.fromISOExtString(time)) > dur!"days"(1);
 		}
 		catch(Throwable t) {
 			return true;
@@ -353,7 +355,7 @@ private class Application {
 		}
 		create(m_json, "vpm");
 		create(m_json["vpm"], "lastUpdate");
-		m_json["vpm"]["lastUpdate"][packageId] = Json( Clock.currTime().toISOExtString() );
+		m_json["vpm"]["lastUpdate"][packageId] = Json( Clock.currTime(UTC()).toISOExtString() );
 
 		writeVpmJson();
 	}
@@ -376,7 +378,7 @@ private class Application {
 /// The default supplier for packages, which is the registry
 /// hosted by vibed.org.
 PackageSupplier defaultPackageSupplier() {
-	Url url = Url.parse("http://registry.vibed.org/");
+	URL url = URL("http://registry.vibed.org/");
 	logDebug("Using the registry from %s", url);
 	return new RegistryPS(url);
 }

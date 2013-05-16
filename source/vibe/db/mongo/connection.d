@@ -11,13 +11,15 @@ public import vibe.data.bson;
 
 import vibe.core.log;
 import vibe.core.net;
+import vibe.inet.webform;
 
-import std.algorithm;
+import std.algorithm : splitter;
 import std.array;
 import std.conv;
 import std.exception;
-import std.regex;
 import std.string;
+import std.digest.md;
+
 
 private struct _MongoErrorDescription
 {
@@ -81,6 +83,19 @@ class MongoDBException : MongoException
 }
 
 /**
+ * Generic class for all exceptions related to authentication problems.
+ *
+ * I.e.: unsupported mechanisms or wrong credentials.
+ */
+class MongoAuthException : MongoException
+{
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+/**
   [internal] Provides low-level mongodb protocol access.
 
   It is not intended for direct usage. Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
@@ -88,58 +103,46 @@ class MongoDBException : MongoException
  */
 class MongoConnection : EventedObject {
 	private {
-		MongoClientSettings settings;
-		TcpConnection m_conn;
+		MongoClientSettings m_settings;
+		TCPConnection m_conn;
 		ulong m_bytesRead;
 		int m_msgid = 1;
 	}
 
 	enum defaultPort = 27017;
 
-	/// Simplified constructor overload, with no settings
+	/// Simplified constructor overload, with no m_settings
 	this(string server, ushort port = defaultPort)
 	{
-		settings = new MongoClientSettings();
-		settings.hosts ~= MongoHost(server, port);
+		m_settings = new MongoClientSettings();
+		m_settings.hosts ~= MongoHost(server, port);
 	}
 
 	this(MongoClientSettings cfg)
 	{
-		settings = cfg;
+		m_settings = cfg;
 
 		// Now let's check for features that are not yet supported.
-		if(settings.hosts.length > 1)
+		if(m_settings.hosts.length > 1)
 			logWarn("Multiple mongodb hosts are not yet supported. Using first one: %s:%s",
-					settings.hosts[0].name, settings.hosts[0].port);
-		if(settings.username != string.init)
-			logWarn("MongoDB username is not yet supported. Ignoring username: %s", settings.username);
-		if(settings.password != string.init)
-			logWarn("MongoDB password is not yet supported. Ignoring password.");
+					m_settings.hosts[0].name, m_settings.hosts[0].port);
 	}
-
-	/// Changes the ownership of this connection
-	override void acquire()
-	{
-		if( m_conn && m_conn.connected ) m_conn.acquire();
-		else connect();
-	}
-
-	override void release()
-	{
-		if( m_conn && m_conn.connected )
-			m_conn.release();
-	}
-
-	override bool isOwner() { return m_conn ? m_conn.isOwner() : true; }
 
 	void connect()
 	{
-		/* 
+		/*
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
 		 */
-		m_conn = connectTcp(settings.hosts[0].name, settings.hosts[0].port);
+		try m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+		catch (Exception e) {
+			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
+		}
 		m_bytesRead = 0;
+		if(m_settings.digest != string.init)
+		{
+			authenticate();
+		}
 	}
 
 	void disconnect()
@@ -162,7 +165,7 @@ class MongoConnection : EventedObject {
 		msg.addBSON(selector);
 		msg.addBSON(update);
 		send(msg);
-		if(settings.safe)
+		if(m_settings.safe)
 		{
 			checkForError(collection_name);
 		}
@@ -180,7 +183,7 @@ class MongoConnection : EventedObject {
 		}
 		send(msg);
 
-		if(settings.safe)
+		if(m_settings.safe)
 		{
 			checkForError(collection_name);
 		}
@@ -190,7 +193,7 @@ class MongoConnection : EventedObject {
 	{
 		scope(failure) disconnect();
 		scope msg = new Message(OpCode.Query);
-		msg.addInt(flags | settings.defQueryFlags);
+		msg.addInt(flags | m_settings.defQueryFlags);
 		msg.addCString(collection_name);
 		msg.addInt(nskip);
 		msg.addInt(nret);
@@ -220,7 +223,7 @@ class MongoConnection : EventedObject {
 		msg.addInt(flags);
 		msg.addBSON(selector);
 		send(msg);
-		if(settings.safe)
+		if(m_settings.safe)
 		{
 			checkForError(collection_name);
 		}
@@ -245,17 +248,17 @@ class MongoConnection : EventedObject {
 
 		Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
 
-		if(settings.w != settings.w.init)
-			command_and_options["w"] = settings.w; // Already a Bson struct
-		if(settings.wTimeoutMS != settings.wTimeoutMS.init)
-			command_and_options["wtimeout"] = Bson(settings.wTimeoutMS);
-		if(settings.journal)
+		if(m_settings.w != m_settings.w.init)
+			command_and_options["w"] = m_settings.w; // Already a Bson struct
+		if(m_settings.wTimeoutMS != m_settings.wTimeoutMS.init)
+			command_and_options["wtimeout"] = Bson(m_settings.wTimeoutMS);
+		if(m_settings.journal)
 			command_and_options["j"] = Bson(true);
-		if(settings.fsync)
-			command_and_options["fsync"] = Bson(true); 
+		if(m_settings.fsync)
+			command_and_options["fsync"] = Bson(true);
 
-		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | settings.defQueryFlags,
-				0, -1, serializeToBson(command_and_options));	
+		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
+				0, -1, serializeToBson(command_and_options));
 
 		logTrace(
 				"getLastEror(%s)\n\tResult flags: %s\n\tCursor: %s\n\tDocument count: %s",
@@ -384,19 +387,55 @@ class MongoConnection : EventedObject {
 			new MongoDBException(err)
 		);
 	}
+
+	private void authenticate()
+	{
+		Reply rep;
+		Bson cmd, doc;
+		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
+
+		cmd = Bson(["getnonce":Bson(1)]);
+		rep = query(cn, QueryFlags.None, 0, -1, cmd);
+		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
+		{
+			throw new MongoDriverException("Calling getNonce failed.");
+		}
+		doc = rep.documents[0];
+		if (doc["ok"].get!double != 1.0)
+		{
+			throw new MongoDriverException("getNonce failed.");
+		}
+		string nonce = doc["nonce"].get!string;
+		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
+		cmd = Bson.EmptyObject;
+		cmd["authenticate"] = Bson(1);
+		cmd["nonce"] = Bson(nonce);
+		cmd["user"] = Bson(m_settings.username);
+		cmd["key"] = Bson(key);
+		rep = query(cn, QueryFlags.None, 0, -1, cmd);
+		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
+		{
+			throw new MongoDriverException("Calling authenticate failed.");
+		}
+		doc = rep.documents[0];
+		if (doc["ok"].get!double != 1.0)
+		{
+			throw new MongoAuthException("Authentication failed.");
+		}
+	}
 }
 
 /**
- * Parses the given string as a mongodb URL. Url must be in the form documented at
+ * Parses the given string as a mongodb URL. The URL must be in the form documented at
  * $(LINK http://www.mongodb.org/display/DOCS/Connections) which is:
- * 
+ *
  * mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
  *
  * Returns: true if the URL was successfully parsed. False if the URL can not be parsed.
- * 
- * If the URL is successfully parsed the MongoClientSettings instance will contain the parsed config. 
- * If the URL is not successfully parsed the information in the MongoClientSettings instance may be 
- * incomplete and should not be used. 
+ *
+ * If the URL is successfully parsed the MongoClientSettings instance will contain the parsed config.
+ * If the URL is not successfully parsed the information in the MongoClientSettings instance may be
+ * incomplete and should not be used.
  */
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 {
@@ -412,18 +451,18 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	// Reslice to get rid of 'mongodb://'
 	tmpUrl = tmpUrl[10..$];
 
-	auto slashIndex = countUntil(tmpUrl, "/");
-	if( slashIndex == -1 ) slashIndex = tmpUrl.length; 
-	auto authIndex = tmpUrl[0 .. slashIndex].countUntil('@');
+	auto slashIndex = tmpUrl.indexOf("/");
+	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
+	auto authIndex = tmpUrl[0 .. slashIndex].indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
 
-	// Parse out the username and optional password. 
+	// Parse out the username and optional password.
 	if( authIndex != -1 )
 	{
 		// Set the host start to after the '@'
 		hostIndex = authIndex + 1;
 
-		auto colonIndex = tmpUrl[0..authIndex].countUntil(':');
+		auto colonIndex = tmpUrl[0..authIndex].indexOf(':');
 		if(colonIndex != -1)
 		{
 			cfg.username = tmpUrl[0..colonIndex];
@@ -432,29 +471,35 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			cfg.username = tmpUrl[0..authIndex];
 		}
 
-		// Make sure the username is not empty. If it is then the parse failed. 
+		// Make sure the username is not empty. If it is then the parse failed.
 		if(cfg.username.length == 0)
-		{ 
+		{
 			return false;
 		}
+
+		cfg.digest = toLower(toHexString(md5Of(cfg.username ~ ":mongo:" ~ cfg.password)).idup);
+		cfg.password = string.init;
 	}
 
-	// Parse the hosts section. 
-	try 
+	// Parse the hosts section.
+	try
 	{
-		auto hostPortEntries = splitter(tmpUrl[hostIndex..slashIndex], ",");
-		foreach(entry; hostPortEntries)
+		foreach(entry; splitter(tmpUrl[hostIndex..slashIndex], ","))
 		{
 			auto hostPort = splitter(entry, ":");
 			string host = hostPort.front;
 			hostPort.popFront();
-			ushort port = hostPort.empty ? MongoConnection.defaultPort : to!ushort(hostPort.front);
-
+			ushort port = MongoConnection.defaultPort;
+			if (!hostPort.empty) {
+				port = to!ushort(hostPort.front);
+				hostPort.popFront();
+			}
+			enforce(hostPort.empty, "Host specifications are expected to be of the form \"HOST:PORT,HOST:PORT,...\".");
 			cfg.hosts ~= MongoHost(host, port);
 		}
 	} catch (Exception e) {
 		return  false; // Probably failed converting the port to ushort.
-	}		
+	}
 
 	// If we couldn't parse a host we failed.
 	if(cfg.hosts.length == 0)
@@ -464,14 +509,14 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 	if(slashIndex == tmpUrl.length)
 	{
-		// We're done parsing. 
+		// We're done parsing.
 		return true;
 	}
 
-	auto queryIndex = tmpUrl[slashIndex..$].countUntil("?");
+	auto queryIndex = tmpUrl[slashIndex..$].indexOf("?");
 	if(queryIndex == -1){
 		// No query string. Remaining string is the database
-		queryIndex = tmpUrl.length;  
+		queryIndex = tmpUrl.length;
 	} else {
 		queryIndex += slashIndex;
 	}
@@ -479,18 +524,11 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	cfg.database = tmpUrl[slashIndex+1..queryIndex];
 	if(queryIndex != tmpUrl.length)
 	{
-		// Parse options if any. They may be separated by ';' or '&'
-		auto optionRegex = ctRegex!(`(?P<option>[^=&;]+=[^=&;]+)(?:[&;])?`, "g");
-		auto optionMatch = match(tmpUrl[queryIndex+1..$], optionRegex);
-		foreach(c; optionMatch)
-		{
-			auto optionString = c["option"];
-			auto separatorIndex = countUntil(optionString, "="); 
-			// Per the mongo docs the option names are case insensitive. 
-			auto option = optionString[0 .. separatorIndex];
-			auto value = optionString[(separatorIndex+1) .. $];
-
-			bool setBool(ref bool dst){
+		string[string] options;
+		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
+		foreach (option, value; options) {
+			bool setBool(ref bool dst)
+			{
 				try {
 					dst = to!bool(value);
 					return true;
@@ -500,7 +538,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
-			bool setLong(ref long dst){
+			bool setLong(ref long dst)
+			{
 				try {
 					dst = to!long(value);
 					return true;
@@ -510,7 +549,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				}
 			}
 
-			void warnNotImplemented(){
+			void warnNotImplemented()
+			{
 				logWarn("MongoDB option %s not yet implemented.", option);
 			}
 
@@ -538,8 +578,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			}
 		}
 
-		/* Some settings imply safe. If they are set, set safe to true regardless
-		 * of what it was set to in the URL string 
+		/* Some m_settings imply safe. If they are set, set safe to true regardless
+		 * of what it was set to in the URL string
 		 */
 		if( (cfg.w != Bson.init) || (cfg.wTimeoutMS != long.init) ||
 				cfg.journal 	 || cfg.fsync )
@@ -552,7 +592,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 }
 
 /* Test for parseMongoDBUrl */
-unittest 
+unittest
 {
 	MongoClientSettings cfg;
 
@@ -571,7 +611,7 @@ unittest
 	assert(cfg.connectTimeoutMS == long.init);
 	assert(cfg.socketTimeoutMS == long.init);
 
-	cfg = MongoClientSettings.init;	
+	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
 	assert(cfg.username == "fred");
 	assert(cfg.hosts.length == 1);
@@ -579,7 +619,7 @@ unittest
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
 
-	cfg = MongoClientSettings.init;	
+	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/baz"));
 	assert(cfg.username == "fred");
 	assert(cfg.password == "");
@@ -588,7 +628,7 @@ unittest
 	assert(cfg.hosts[0].name == "localhost");
 	assert(cfg.hosts[0].port == 27017);
 
-	cfg = MongoClientSettings.init;		
+	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true"));
 	assert(cfg.username == "");
 	assert(cfg.password == "");
@@ -605,8 +645,8 @@ unittest
 	assert(cfg.wTimeoutMS == 2000);
 	assert(cfg.defQueryFlags == QueryFlags.SlaveOk);
 
-	cfg = MongoClientSettings.init;		
-	assert(parseMongoDBUrl(cfg, 
+	cfg = MongoClientSettings.init;
+	assert(parseMongoDBUrl(cfg,
 				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
 				"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
@@ -627,7 +667,7 @@ unittest
 	assert(cfg.safe == true);
 
 	// Invalid URLs - these should fail to parse
-	cfg = MongoClientSettings.init;		
+	cfg = MongoClientSettings.init;
 	assert(! (parseMongoDBUrl(cfg, "localhost:27018")));
 	assert(! (parseMongoDBUrl(cfg, "http://blah")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
@@ -713,6 +753,7 @@ class MongoClientSettings
 {
 	string username;
 	string password;
+	string digest;
 	MongoHost[] hosts;
 	string database;
 	QueryFlags defQueryFlags = QueryFlags.None;

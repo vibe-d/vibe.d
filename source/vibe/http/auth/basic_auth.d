@@ -18,9 +18,9 @@ import std.string;
 /**
 	Returns a request handler that enforces request to be authenticated using HTTP Basic Auth.
 */
-HttpServerRequestDelegate performBasicAuth(string realm, bool delegate(string user, string name) pwcheck)
+HTTPServerRequestDelegate performBasicAuth(string realm, bool delegate(string user, string name) pwcheck)
 {
-	void handleRequest(HttpServerRequest req, HttpServerResponse res)
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto pauth = "Authorization" in req.headers;
 
@@ -40,7 +40,7 @@ HttpServerRequestDelegate performBasicAuth(string realm, bool delegate(string us
 		}
 
 		// else output an error page
-		res.statusCode = HttpStatus.Unauthorized;
+		res.statusCode = HTTPStatus.unauthorized;
 		res.contentType = "text/plain";
 		res.headers["WWW-Authenticate"] = "Basic realm=\""~realm~"\"";
 		res.bodyWriter.write("Authorization required");
@@ -60,9 +60,9 @@ HttpServerRequestDelegate performBasicAuth(string realm, bool delegate(string us
 
 	Returns: Returns the name of the authenticated user.
 
-	Throws: Throws a HttpStatusExeption in case of an authentication failure.
+	Throws: Throws a HTTPStatusExeption in case of an authentication failure.
 */
-string performBasicAuth(HttpServerRequest req, HttpServerResponse res, string realm, bool delegate(string user, string name) pwcheck)
+string performBasicAuth(HTTPServerRequest req, HTTPServerResponse res, string realm, bool delegate(string user, string name) pwcheck)
 {
 	auto pauth = "Authorization" in req.headers;
 	if( pauth && (*pauth).startsWith("Basic ") ){
@@ -80,14 +80,14 @@ string performBasicAuth(HttpServerRequest req, HttpServerResponse res, string re
 	}
 
 	res.headers["WWW-Authenticate"] = "Basic realm=\""~realm~"\"";
-	throw new HttpStatusException(HttpStatus.Unauthorized);
+	throw new HTTPStatusException(HTTPStatus.unauthorized);
 }
 
 
 /**
 	Augments the given HTTP request with an HTTP Basic Auth header.
 */
-void addBasicAuth(HttpRequest req, string user, string password)
+void addBasicAuth(HTTPRequest req, string user, string password)
 {
 	string pwstr = user ~ ":" ~ password;
 	string authstr = cast(string)Base64.encode(cast(ubyte[])pwstr);

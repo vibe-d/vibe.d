@@ -11,7 +11,7 @@ import vibe.core.log;
 import vibe.textfilter.html;
 import vibe.utils.string;
 
-import std.algorithm;
+import std.algorithm : canFind, countUntil, min;
 import std.array;
 import std.ascii : isAlpha;
 import std.conv;
@@ -146,9 +146,9 @@ private Line[] parseLines(ref string[] lines, MarkdownFlags flags)
 		if( (flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
 		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
 		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
+		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
-		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isLineBlank(ln) ) lninfo.type = LineType.Blank;
 		else if( !(flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln) ) lninfo.type = LineType.HtmlBlock;
 		else lninfo.type = LineType.Plain;
@@ -584,8 +584,14 @@ private bool isSetextHeaderLine(string ln)
 {
 	ln = stripLeft(ln);
 	if( ln.length < 1 ) return false;
-	if( ln[0] == '=' ) return allOf(ln, " \t=");
-	if( ln[0] == '-' ) return allOf(ln, " \t-");
+	if( ln[0] == '=' ){
+		while(!ln.empty && ln.front == '=') ln.popFront();
+		return allOf(ln, " \t");
+	}
+	if( ln[0] == '-' ){
+		while(!ln.empty && ln.front == '-') ln.popFront();
+		return allOf(ln, " \t");
+	}
 	return false;
 }
 
@@ -602,6 +608,7 @@ private bool isHlineLine(string ln)
 {
 	if( allOf(ln, " -") && count(ln, '-') >= 3 ) return true;
 	if( allOf(ln, " *") && count(ln, '*') >= 3 ) return true;
+	if( allOf(ln, " _") && count(ln, '_') >= 3 ) return true;
 	return false;
 }
 
@@ -624,9 +631,9 @@ private size_t getQuoteLevel(string ln)
 private bool isUListLine(string ln)
 {
 	ln = stripLeft(ln);
-	if( ln.length < 2 ) return false;
-	if( "*+-".countUntil(ln[0]) < 0 ) return false;
-	if( ln[1] != ' ' && ln[1] != '\t' ) return false;
+	if (ln.length < 2) return false;
+	if (!canFind("*+-", ln[0])) return false;
+	if (ln[1] != ' ' && ln[1] != '\t') return false;
 	return true;
 }
 
@@ -650,7 +657,7 @@ private string removeListPrefix(string str, LineType tp)
 	switch(tp){
 		default: assert(false);
 		case LineType.OList: // skip bullets and output using normal escaping
-			auto idx = str.countUntil('.');
+			auto idx = str.indexOfCT('.');
 			assert(idx > 0);
 			return str[idx+1 .. $].stripLeft();
 		case LineType.UList:
@@ -686,11 +693,11 @@ private auto parseHtmlBlockLine(string ln)
 	ret.tagName = ln[0 .. idx];
 	ln = ln[idx .. $];
 
-	auto eidx = ln.countUntil('>');
+	auto eidx = ln.indexOf('>');
 	if( eidx < 0 ) return ret;
 	if( eidx != ln.length-1 ) return ret;
 
-	if( s_blockTags.countUntil(ret.tagName) < 0 ) return ret;
+	if (!s_blockTags.canFind(ret.tagName)) return ret;
 
 	ret.isHtmlBlock = true;
 	return ret;
@@ -746,7 +753,7 @@ private int parseEmphasis(ref string str, ref string text)
 
 	pstr = pstr[ctag.length .. $];
 
-	auto cidx = pstr.countUntil(ctag);
+	auto cidx = pstr.indexOf(ctag);
 	if( cidx < 1 ) return false;
 
 	text = pstr[0 .. cidx];
@@ -765,7 +772,7 @@ private bool parseInlineCode(ref string str, ref string code)
 	else return false;
 	pstr = pstr[ctag.length .. $];
 
-	auto cidx = pstr.countUntil(ctag);
+	auto cidx = pstr.indexOf(ctag);
 	if( cidx < 1 ) return false;
 
 	code = pstr[0 .. cidx];
@@ -783,7 +790,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	// parse the text part [text]
 	if( pstr[0] != '[' ) return false;
 	pstr = pstr[1 .. $];
-	auto cidx = pstr.countUntil(']');
+	auto cidx = pstr.indexOfCT(']');
 	if( cidx < 1 ) return false;
 	string refid;
 	dst.text = pstr[0 .. cidx];
@@ -793,8 +800,8 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	if( pstr.length < 3 ) return false;
 	if( pstr[0] == '('){
 		pstr = pstr[1 .. $];
-		cidx = pstr.countUntil(')');
-		auto spidx = pstr.countUntil(' ');
+		cidx = pstr.indexOfCT(')');
+		auto spidx = pstr.indexOfCT(' ');
 		if( spidx > 0 && spidx < cidx ){
 			dst.url = pstr[0 .. spidx];
 			dst.title = pstr[spidx+1 .. cidx];
@@ -810,7 +817,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
 		if( pstr[0] != '[' ) return false;
 		pstr = pstr[1 .. $];
-		cidx = pstr.countUntil("]");
+		cidx = pstr.indexOfCT(']');
 		if( cidx < 0 ) return false;
 		if( cidx == 0 ) refid = dst.text;
 		else refid = pstr[0 .. cidx];
@@ -838,13 +845,13 @@ private bool parseAutoLink(ref string str, ref string url)
 	if( pstr.length < 3 ) return false;
 	if( pstr[0] != '<' ) return false;
 	pstr = pstr[1 .. $];
-	auto cidx = pstr.countUntil('>');
+	auto cidx = pstr.indexOf('>');
 	if( cidx < 0 ) return false;
 	url = pstr[0 .. cidx];
 	if( anyOf(url, " \t") ) return false;
 	if( !anyOf(url, ":@") ) return false;
 	str = pstr[cidx+1 .. $];
-	if( url.countUntil('@') > 0 ) url = "mailto:"~url;
+	if( url.indexOf('@') > 0 ) url = "mailto:"~url;
 	return true;
 }
 
@@ -864,24 +871,24 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 		if( !ln.startsWith("[") ) continue;
 		ln = ln[1 .. $];
 
-		auto idx = ln.countUntil("]:");
+		auto idx = ln.indexOf("]:");
 		if( idx < 0 ) continue;
 		string refid = ln[0 .. idx];
 		ln = stripLeft(ln[idx+2 .. $]);
 
 		string url;
 		if( ln.startsWith("<") ){
-			idx = ln.countUntil(">");
+			idx = ln.indexOf(">");
 			if( idx < 0 ) continue;
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
 		} else {
-			idx = ln.countUntil(' ');
+			idx = ln.indexOf(' ');
 			if( idx > 0 ){
 				url = ln[0 .. idx];
 				ln = ln[idx+1 .. $];
 			} else {
-				idx = ln.countUntil('\t');
+				idx = ln.indexOf('\t');
 				if( idx < 0 ){
 					url = ln;
 					ln = ln[$ .. $];

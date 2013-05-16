@@ -279,6 +279,285 @@
   <postBuildCommand />
   <filesToClean>*.obj;*.cmd;*.build;*.json;*.dep</filesToClean>
  </Config>
+ <Config name="Debug" platform="x64">
+  <obj>0</obj>
+  <link>0</link>
+  <lib>1</lib>
+  <subsystem>0</subsystem>
+  <multiobj>0</multiobj>
+  <singleFileCompilation>0</singleFileCompilation>
+  <oneobj>0</oneobj>
+  <trace>0</trace>
+  <quiet>0</quiet>
+  <verbose>0</verbose>
+  <vtls>0</vtls>
+  <symdebug>1</symdebug>
+  <optimize>0</optimize>
+  <cpu>0</cpu>
+  <isX86_64>1</isX86_64>
+  <isLinux>0</isLinux>
+  <isOSX>0</isOSX>
+  <isWindows>0</isWindows>
+  <isFreeBSD>0</isFreeBSD>
+  <isSolaris>0</isSolaris>
+  <scheduler>0</scheduler>
+  <useDeprecated>0</useDeprecated>
+  <useAssert>0</useAssert>
+  <useInvariants>0</useInvariants>
+  <useIn>0</useIn>
+  <useOut>0</useOut>
+  <useArrayBounds>0</useArrayBounds>
+  <noboundscheck>0</noboundscheck>
+  <useSwitchError>0</useSwitchError>
+  <useUnitTests>0</useUnitTests>
+  <useInline>0</useInline>
+  <release>0</release>
+  <preservePaths>0</preservePaths>
+  <warnings>1</warnings>
+  <infowarnings>0</infowarnings>
+  <checkProperty>1</checkProperty>
+  <genStackFrame>0</genStackFrame>
+  <pic>0</pic>
+  <cov>0</cov>
+  <nofloat>0</nofloat>
+  <Dversion>2</Dversion>
+  <ignoreUnsupportedPragmas>0</ignoreUnsupportedPragmas>
+  <compiler>0</compiler>
+  <otherDMD>0</otherDMD>
+  <program>$(DMDInstallDir)windows\bin\dmd.exe</program>
+  <imppath>source import</imppath>
+  <fileImppath />
+  <outdir>$(ConfigurationName)</outdir>
+  <objdir>$(OutDir)</objdir>
+  <objname />
+  <libname />
+  <doDocComments>0</doDocComments>
+  <docdir />
+  <docname />
+  <modules_ddoc />
+  <ddocfiles />
+  <doHdrGeneration>0</doHdrGeneration>
+  <hdrdir />
+  <hdrname />
+  <doXGeneration>1</doXGeneration>
+  <xfilename>$(IntDir)\$(TargetName).json</xfilename>
+  <debuglevel>0</debuglevel>
+  <debugids />
+  <versionlevel>0</versionlevel>
+  <versionids>VibeWin32Driver</versionids>
+  <dump_source>0</dump_source>
+  <mapverbosity>0</mapverbosity>
+  <createImplib>0</createImplib>
+  <defaultlibname />
+  <debuglibname />
+  <moduleDepsFile />
+  <run>0</run>
+  <runargs />
+  <runCv2pdb>1</runCv2pdb>
+  <pathCv2pdb>$(VisualDInstallDir)cv2pdb\cv2pdb.exe</pathCv2pdb>
+  <cv2pdbPre2043>0</cv2pdbPre2043>
+  <cv2pdbNoDemangle>0</cv2pdbNoDemangle>
+  <cv2pdbEnumType>0</cv2pdbEnumType>
+  <cv2pdbOptions />
+  <objfiles />
+  <linkswitches />
+  <libfiles />
+  <libpaths />
+  <deffile />
+  <resfile />
+  <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
+  <additionalOptions />
+  <preBuildCommand />
+  <postBuildCommand />
+  <filesToClean>*.obj;*.cmd;*.build;*.json;*.dep</filesToClean>
+ </Config>
+ <Config name="Release" platform="x64">
+  <obj>0</obj>
+  <link>0</link>
+  <lib>1</lib>
+  <subsystem>0</subsystem>
+  <multiobj>0</multiobj>
+  <singleFileCompilation>0</singleFileCompilation>
+  <oneobj>0</oneobj>
+  <trace>0</trace>
+  <quiet>0</quiet>
+  <verbose>0</verbose>
+  <vtls>0</vtls>
+  <symdebug>0</symdebug>
+  <optimize>0</optimize>
+  <cpu>0</cpu>
+  <isX86_64>1</isX86_64>
+  <isLinux>0</isLinux>
+  <isOSX>0</isOSX>
+  <isWindows>0</isWindows>
+  <isFreeBSD>0</isFreeBSD>
+  <isSolaris>0</isSolaris>
+  <scheduler>0</scheduler>
+  <useDeprecated>0</useDeprecated>
+  <useAssert>0</useAssert>
+  <useInvariants>0</useInvariants>
+  <useIn>0</useIn>
+  <useOut>0</useOut>
+  <useArrayBounds>0</useArrayBounds>
+  <noboundscheck>0</noboundscheck>
+  <useSwitchError>0</useSwitchError>
+  <useUnitTests>0</useUnitTests>
+  <useInline>0</useInline>
+  <release>1</release>
+  <preservePaths>0</preservePaths>
+  <warnings>1</warnings>
+  <infowarnings>0</infowarnings>
+  <checkProperty>1</checkProperty>
+  <genStackFrame>0</genStackFrame>
+  <pic>0</pic>
+  <cov>0</cov>
+  <nofloat>0</nofloat>
+  <Dversion>2</Dversion>
+  <ignoreUnsupportedPragmas>0</ignoreUnsupportedPragmas>
+  <compiler>0</compiler>
+  <otherDMD>0</otherDMD>
+  <program>$(DMDInstallDir)windows\bin\dmd.exe</program>
+  <imppath>source</imppath>
+  <fileImppath />
+  <outdir>$(ConfigurationName)</outdir>
+  <objdir>$(OutDir)</objdir>
+  <objname />
+  <libname />
+  <doDocComments>0</doDocComments>
+  <docdir />
+  <docname />
+  <modules_ddoc />
+  <ddocfiles />
+  <doHdrGeneration>0</doHdrGeneration>
+  <hdrdir />
+  <hdrname />
+  <doXGeneration>1</doXGeneration>
+  <xfilename>$(IntDir)\$(TargetName).json</xfilename>
+  <debuglevel>0</debuglevel>
+  <debugids />
+  <versionlevel>0</versionlevel>
+  <versionids>VibeWin32Driver</versionids>
+  <dump_source>0</dump_source>
+  <mapverbosity>0</mapverbosity>
+  <createImplib>0</createImplib>
+  <defaultlibname />
+  <debuglibname />
+  <moduleDepsFile />
+  <run>0</run>
+  <runargs />
+  <runCv2pdb>0</runCv2pdb>
+  <pathCv2pdb>$(VisualDInstallDir)cv2pdb\cv2pdb.exe</pathCv2pdb>
+  <cv2pdbPre2043>0</cv2pdbPre2043>
+  <cv2pdbNoDemangle>0</cv2pdbNoDemangle>
+  <cv2pdbEnumType>0</cv2pdbEnumType>
+  <cv2pdbOptions />
+  <objfiles />
+  <linkswitches />
+  <libfiles />
+  <libpaths />
+  <deffile />
+  <resfile />
+  <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
+  <additionalOptions />
+  <preBuildCommand />
+  <postBuildCommand />
+  <filesToClean>*.obj;*.cmd;*.build;*.json;*.dep</filesToClean>
+ </Config>
+ <Config name="Unittest" platform="x64">
+  <obj>0</obj>
+  <link>0</link>
+  <lib>1</lib>
+  <subsystem>0</subsystem>
+  <multiobj>0</multiobj>
+  <singleFileCompilation>0</singleFileCompilation>
+  <oneobj>0</oneobj>
+  <trace>0</trace>
+  <quiet>0</quiet>
+  <verbose>0</verbose>
+  <vtls>0</vtls>
+  <symdebug>0</symdebug>
+  <optimize>0</optimize>
+  <cpu>0</cpu>
+  <isX86_64>1</isX86_64>
+  <isLinux>0</isLinux>
+  <isOSX>0</isOSX>
+  <isWindows>0</isWindows>
+  <isFreeBSD>0</isFreeBSD>
+  <isSolaris>0</isSolaris>
+  <scheduler>0</scheduler>
+  <useDeprecated>0</useDeprecated>
+  <useAssert>0</useAssert>
+  <useInvariants>0</useInvariants>
+  <useIn>0</useIn>
+  <useOut>0</useOut>
+  <useArrayBounds>0</useArrayBounds>
+  <noboundscheck>0</noboundscheck>
+  <useSwitchError>0</useSwitchError>
+  <useUnitTests>1</useUnitTests>
+  <useInline>0</useInline>
+  <release>1</release>
+  <preservePaths>0</preservePaths>
+  <warnings>0</warnings>
+  <infowarnings>0</infowarnings>
+  <checkProperty>0</checkProperty>
+  <genStackFrame>0</genStackFrame>
+  <pic>0</pic>
+  <cov>0</cov>
+  <nofloat>0</nofloat>
+  <Dversion>2</Dversion>
+  <ignoreUnsupportedPragmas>0</ignoreUnsupportedPragmas>
+  <compiler>0</compiler>
+  <otherDMD>0</otherDMD>
+  <program>$(DMDInstallDir)windows\bin\dmd.exe</program>
+  <imppath>source</imppath>
+  <fileImppath />
+  <outdir>$(ConfigurationName)</outdir>
+  <objdir>$(OutDir)</objdir>
+  <objname />
+  <libname />
+  <doDocComments>0</doDocComments>
+  <docdir />
+  <docname />
+  <modules_ddoc />
+  <ddocfiles />
+  <doHdrGeneration>0</doHdrGeneration>
+  <hdrdir />
+  <hdrname />
+  <doXGeneration>1</doXGeneration>
+  <xfilename>$(IntDir)\$(TargetName).json</xfilename>
+  <debuglevel>0</debuglevel>
+  <debugids />
+  <versionlevel>0</versionlevel>
+  <versionids />
+  <dump_source>0</dump_source>
+  <mapverbosity>0</mapverbosity>
+  <createImplib>0</createImplib>
+  <defaultlibname />
+  <debuglibname />
+  <moduleDepsFile />
+  <run>0</run>
+  <runargs />
+  <runCv2pdb>0</runCv2pdb>
+  <pathCv2pdb>$(VisualDInstallDir)cv2pdb\cv2pdb.exe</pathCv2pdb>
+  <cv2pdbPre2043>0</cv2pdbPre2043>
+  <cv2pdbNoDemangle>0</cv2pdbNoDemangle>
+  <cv2pdbEnumType>0</cv2pdbEnumType>
+  <cv2pdbOptions />
+  <objfiles />
+  <linkswitches />
+  <libfiles />
+  <libpaths />
+  <deffile />
+  <resfile />
+  <exefile>$(OutDir)\$(ProjectName).lib</exefile>
+  <useStdLibPath>1</useStdLibPath>
+  <additionalOptions />
+  <preBuildCommand />
+  <postBuildCommand />
+  <filesToClean>*.obj;*.cmd;*.build;*.json;*.dep</filesToClean>
+ </Config>
  <Folder name="vibe">
   <Folder name="core">
    <Folder name="drivers">
@@ -296,17 +575,13 @@
    <File path="source\vibe\core\driver.d" />
    <File path="source\vibe\core\file.d" />
    <File path="source\vibe\core\log.d" />
-   <File path="source\vibe\core\mutex.d" />
    <File path="source\vibe\core\net.d" />
-   <File path="source\vibe\core\signal.d" />
    <File path="source\vibe\core\stream.d" />
+   <File path="source\vibe\core\sync.d" />
    <File path="source\vibe\core\task.d" />
   </Folder>
   <Folder name="crypto">
-   <File path="source\vibe\crypto\md5.d" />
    <File path="source\vibe\crypto\passwordhash.d" />
-   <File path="source\vibe\crypto\sha1.d" />
-   <File path="source\vibe\crypto\ssl.d" />
   </Folder>
   <Folder name="data">
    <File path="source\vibe\data\bson.d" />
@@ -326,6 +601,11 @@
     <File path="source\vibe\db\redis\redis.d" />
    </Folder>
   </Folder>
+  <Folder name="internal">
+   <Folder name="std">
+    <File path="source\vibe\internal\std\process.d" />
+   </Folder>
+  </Folder>
   <Folder name="http">
    <Folder name="auth">
     <File path="source\vibe\http\auth\basic_auth.d" />
@@ -338,6 +618,7 @@
    <File path="source\vibe\http\log.d" />
    <File path="source\vibe\http\proxy.d" />
    <File path="source\vibe\http\rest.d" />
+   <File path="source\vibe\http\restutil.d" />
    <File path="source\vibe\http\router.d" />
    <File path="source\vibe\http\server.d" />
    <File path="source\vibe\http\session.d" />
@@ -350,6 +631,7 @@
    <File path="source\vibe\inet\path.d" />
    <File path="source\vibe\inet\url.d" />
    <File path="source\vibe\inet\urltransfer.d" />
+   <File path="source\vibe\inet\webform.d" />
   </Folder>
   <Folder name="mail">
    <File path="source\vibe\mail\smtp.d" />
@@ -374,10 +656,10 @@
   </Folder>
   <Folder name="utils">
    <File path="source\vibe\utils\array.d" />
+   <File path="source\vibe\utils\hashmap.d" />
    <File path="source\vibe\utils\memory.d" />
    <File path="source\vibe\utils\string.d" />
    <File path="source\vibe\utils\validation.d" />
   </Folder>
-  <File path="source\stdx\process.d" />
  </Folder>
 </DProject>

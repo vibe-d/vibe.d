@@ -1,14 +1,20 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.log;
+import vibe.http.router;
+import vibe.http.server;
 
-void uploadFile(HttpServerRequest req, HttpServerResponse res)
+import std.exception;
+
+
+void uploadFile(HTTPServerRequest req, HTTPServerResponse res)
 {
 	auto pf = "file" in req.files;
 	enforce(pf !is null, "No file uploaded!");
-	try moveFile(pf.tempPath, Path(".")~pf.filename);
-	catch( Exception e ){
+	try moveFile(pf.tempPath, Path(".") ~ pf.filename);
+	catch (Exception e) {
 		logWarn("Failed to move file to destination folder: %s", e.msg);
 		logInfo("Performing copy+delete instead.");
-		copyFile(pf.tempPath, Path(".")~pf.filename);
+		copyFile(pf.tempPath, Path(".") ~ pf.filename);
 	}
 
 	res.writeBody("File uploaded!", "text/plain");
@@ -16,11 +22,11 @@ void uploadFile(HttpServerRequest req, HttpServerResponse res)
 
 shared static this()
 {
-	auto router = new UrlRouter;
+	auto router = new URLRouter;
 	router.get("/", staticTemplate!"upload_form.dt");
 	router.post("/upload", &uploadFile);
 
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
-	listenHttp(settings, router);
+	listenHTTP(settings, router);
 }

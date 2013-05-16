@@ -2,6 +2,7 @@ module vibe.db.redis.redis;
 
 public import vibe.core.net;
 
+import vibe.core.connectionpool;
 import vibe.core.log;
 import vibe.stream.operations;
 import std.string;
@@ -13,7 +14,8 @@ import std.utf;
 final class RedisReply {
 
 	private {
-		private TcpConnection m_conn;
+		TcpConnection m_conn;
+		LockedConnection!RedisConnection m_lockedConnection;
 		ubyte[] m_data;
 		size_t m_length;
 		size_t m_index;
@@ -46,7 +48,7 @@ final class RedisReply {
 					return;
 				}
 				m_multi = true;
-				m_length = parse!size_t(ln[ 1 .. $ ]);
+				m_length = to!size_t(ln[ 1 .. $ ]);
 				break;
 			default:
 				assert(false, "Unknown reply type");
@@ -56,14 +58,17 @@ final class RedisReply {
 	private ubyte[] readBulk( string sizeLn )	
 	{
 		if ( sizeLn.startsWith("$-1") ) return null;
-		auto size = parse!size_t( sizeLn[1 .. $] );
+		auto size = to!size_t( sizeLn[1 .. $] );
 		auto data = new ubyte[size];
 		m_conn.read(data);
 		m_conn.readLine();
 		return data;
 	}
 
-	@property bool hasNext() { return  m_index < m_length; }
+	@property bool hasNext() 
+	{ 
+		return  m_index < m_length; 
+	}
 
 	T next(T : E[], E)() {
 		assert( hasNext, "end of reply" );
@@ -75,14 +80,14 @@ final class RedisReply {
 		} else {
 			ret = m_data;
 		}
-		static if( isSomeString!T ) validate(cast(T)ret);
+		if (m_index >= m_length) m_lockedConnection.clear();
+		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
 	}
 }
 
-final class RedisClient {
-	
+final class RedisConnection : EventedObject {
 	private {
 		string m_host;
 		ushort m_port;
@@ -96,18 +101,58 @@ final class RedisClient {
 		m_port = port;
 	}
 
-	private {
-		ubyte[][] argsToUbyte(ARGS...)(ARGS args) {
-		    static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
-		    foreach( i, T; ARGS ){
-		        static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-		        static assert(i % 2 != 1 || isArray!T, "Values must be arrays.");
-		    }
-		    ubyte[][] ret;
-		    foreach( i, arg; args) ret ~= cast(ubyte[])arg;
-		    return ret;
+	RedisReply request(string command, in ubyte[][] args...) {
+		if( !m_conn || !m_conn.connected ){
+			try m_conn = connectTcp(m_host, m_port);
+			catch (Exception e) {
+				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
+			}
 		}
+		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
+		foreach( arg; args ) {
+			m_conn.write(format("$%d\r\n", arg.length));
+			m_conn.write(arg);
+			m_conn.write("\r\n");
+		}
+		return new RedisReply(m_conn);
 	}
+}
+
+/** A redis client with connection pooling. */
+final class RedisClient {
+
+	private ConnectionPool!RedisConnection m_connections;
+
+	deprecated this() { }
+	this(string host = "127.0.0.1", ushort port = 6379)
+	{
+		m_connections = new ConnectionPool!RedisConnection({
+			auto connection = new RedisConnection;
+			connection.connect(host, port);
+			return connection;
+		});
+	}
+
+	/** Initializes the connection pool. */
+	deprecated void connect(string host = "127.0.0.1", ushort port = 6379) {
+		m_connections = new ConnectionPool!RedisConnection({
+			auto connection = new RedisConnection;
+			connection.connect(host, port);
+			return connection;
+		});
+	}
+
+	private static ubyte[][] argsToUbyte(ARGS...)(ARGS args) {
+		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
+		foreach( i, T; ARGS ){
+			static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
+			static assert(i % 2 != 1 || isArray!T, "Values must be arrays.");
+		}
+		ubyte[][] ret;
+		foreach( i, arg; args) ret ~= cast(ubyte[])arg;
+		return ret;
+	}
+
 	size_t del(string[] keys...) {
 		return request!size_t("DEL", cast(ubyte[][])keys);
 	}
@@ -171,7 +216,7 @@ final class RedisClient {
 	}
 
 	int decr(string key, int value = 1) {
-		return value == 1 ? request!int("DECR") : request!int("DECRBY", cast(ubyte[])to!string(value));
+		return value == 1 ? request!int("DECR") : request!int("DECRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
 	}
 
 	T get(T : E[], E)(string key) {
@@ -191,7 +236,7 @@ final class RedisClient {
 	}
 
 	int incr(string key, int value = 1) {
-		return value == 1 ? request!int("INCR") : request!int("INCRBY", cast(ubyte[])to!string(value));
+		return value == 1 ? request!int("INCR") : request!int("INCRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
 	}
 
 	RedisReply mget(string[] keys) {
@@ -577,16 +622,10 @@ final class RedisClient {
 	//TODO sync
 
 	T request(T=RedisReply)(string command, in ubyte[][] args...) {
-		if( !m_conn /*|| !m_conn.connected*/ ){
-			m_conn = connectTcp(m_host, m_port);
-		}
-		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
-		foreach( arg; args ) {
-			m_conn.write(format("$%d\r\n", arg.length));
-			m_conn.write(arg);
-			m_conn.write("\r\n");
-		}
-		auto reply = new RedisReply(m_conn);
+
+		auto conn = m_connections.lockConnection();
+		auto reply = conn.request(command, args);
+
 		static if( is(T == bool) ) {
 			return reply.next!(ubyte[])()[0] == '1';
 		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
@@ -594,6 +633,9 @@ final class RedisClient {
 			return parse!T(str);
 		} else static if ( is(T == string) ) {
 			return cast(string)reply.next!T();
-		} else return reply;
+		} else {
+			reply.m_lockedConnection = conn;
+			return reply;
+		}
 	}
 }

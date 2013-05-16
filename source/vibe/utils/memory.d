@@ -1,5 +1,5 @@
 /**
-	Utiltiy functions for memory management
+	Utility functions for memory management
 
 	Note that this module currently is a big sand box for testing allocation related stuff.
 	Nothing here, including the interfaces, is final but rather a lot of experimentation.
@@ -27,7 +27,7 @@ Allocator defaultAllocator()
 		static Allocator alloc;
 		if( !alloc ){
 			alloc = new GCAllocator;
-			alloc = new AutoFreeListAllocator(alloc);
+			//alloc = new AutoFreeListAllocator(alloc);
 			//alloc = new DebugAllocator(alloc);
 		}
 		return alloc;
@@ -52,11 +52,6 @@ auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args
 		static if( hasIndirections!T ) 
 			GC.addRange(mem.ptr, mem.length);
 		auto ret = emplace!T(mem, args);
-		Destructor des;
-		des.next = m_destructors;
-		des.destructor = &destroy!T;
-		des.object = mem.ptr;
-		m_destructors = des;
 	}
 	else static if( is(T == class) ) return cast(T)mem.ptr;
 	else return cast(T*)mem.ptr;
@@ -70,13 +65,8 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 		static if( hasIndirections!T ) 
 			GC.addRange(mem.ptr, mem.length);
 		// TODO: use memset for class, pointers and scalars
-		foreach( ref el; ret ){
-			emplace(cast(void*)&el);
-			Destructor des;
-			des.next = m_destructors;
-			des.destructor = &destroy!T;
-			des.object = &el;
-			m_destructors = des;
+		foreach (ref el; ret) {
+			emplace!T(cast(void[])((&el)[0 .. 1]));
 		}
 	}
 	return ret;
@@ -186,7 +176,8 @@ class GCAllocator : Allocator {
 	}
 	void free(void[] mem)
 	{
-		GC.free(extractUnalignedPointer(mem.ptr));
+		// For safety reasons, the GCAllocator should never explicitly free memory.
+		//GC.free(extractUnalignedPointer(mem.ptr));
 	}
 }
 
@@ -256,6 +247,26 @@ class PoolAllocator : Allocator {
 	{
 		m_poolSize = pool_size;
 		m_baseAllocator = base;
+	}
+
+	@property size_t totalSize()
+	{
+		size_t amt = 0;
+		for (auto p = m_fullPools; p; p = p.next)
+			amt += p.data.length;
+		for (auto p = m_freePools; p; p = p.next)
+			amt += p.data.length;
+		return amt;
+	}
+
+	@property size_t allocatedSize()
+	{
+		size_t amt = 0;
+		for (auto p = m_fullPools; p; p = p.next)
+			amt += p.data.length;
+		for (auto p = m_freePools; p; p = p.next)
+			amt += p.data.length - p.remaining.length;
+		return amt;
 	}
 
 	void[] alloc(size_t sz)
@@ -358,8 +369,8 @@ class PoolAllocator : Allocator {
 
 	private static destroy(T)(void* ptr)
 	{
-		static if( is(T == class) ) .clear(cast(T)ptr);
-		else .clear(*cast(T*)ptr);
+		static if( is(T == class) ) .destroy(cast(T)ptr);
+		else .destroy(*cast(T*)ptr);
 	}
 }
 
@@ -444,7 +455,7 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 	{
 		static if( INIT ){
 			auto objc = obj;
-			.clear(objc);//typeid(T).destroy(cast(void*)obj);
+			.destroy(objc);//typeid(T).destroy(cast(void*)obj);
 		}
 		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
 		manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
@@ -522,7 +533,7 @@ struct FreeListRef(T, bool INIT = true)
 						//logInfo("ref %s destroy", T.stringof);
 						//typeid(T).destroy(cast(void*)m_object);
 						auto objc = m_object;
-						.clear(objc);
+						.destroy(objc);
 						//logInfo("ref %s destroyed", T.stringof);
 					}
 					static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);

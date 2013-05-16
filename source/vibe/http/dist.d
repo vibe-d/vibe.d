@@ -22,7 +22,7 @@ import std.exception;
 
 	This function is usable as direct replacement of 
 */
-void listenHttpDist(HttpServerSettings settings, HttpServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
+void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
 	Json regmsg = Json.EmptyObject;
 	regmsg.hostName = settings.hostName;
@@ -30,18 +30,22 @@ void listenHttpDist(HttpServerSettings settings, HttpServerRequestDelegate handl
 	regmsg.sslCertFile = settings.sslCertFile;
 	regmsg.sslKeyFile = settings.sslKeyFile;
 
-	HttpServerSettings local_settings = settings.dup;
+	HTTPServerSettings local_settings = settings.dup;
 	local_settings.port = 0;
-	listenHttpPlain(local_settings, handler);
+	local_settings.disableDistHost = true;
+	listenHTTP(local_settings, handler);
 
 	regmsg.localPort = local_settings.port;
 
 	logInfo("Listening for VibeDist connections on port %d", local_settings.port);
 
-	auto res = requestHttp(Url.parse("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (req){
+	auto res = requestHTTP(URL("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
 			req.writeJsonBody(regmsg);
 		});
 	scope(exit) destroy(res);
-	enforce(res.statusCode == HttpStatus.OK, "Failed to register with load balancer.");
+	enforce(res.statusCode == HTTPStatus.OK, "Failed to register with load balancer.");
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias listenHttpDist = listenHTTPDist;
 

@@ -7,10 +7,14 @@
 */
 module vibe.core.drivers.libevent2;
 
+version(VibeLibeventDriver)
+{
+
 import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
+import vibe.utils.hashmap;
 import vibe.utils.memory;
 
 import deimos.event2.bufferevent;
@@ -29,12 +33,21 @@ import core.sync.rwmutex;
 import core.sys.posix.netinet.in_;
 import core.sys.posix.netinet.tcp;
 version(Windows) import std.c.windows.winsock;
+import core.atomic;
 import core.thread;
 import std.conv;
 import std.encoding : sanitize;
 import std.exception;
 import std.range;
 import std.string;
+
+version (Windows)
+{
+	version(VibePragmaLib) pragma(lib, "event2");
+	pragma(lib, "ws2_32.lib");
+}
+else
+	version(VibePragmaLib) pragma(lib, "event");
 
 version(Windows)
 {
@@ -79,10 +92,10 @@ class Libevent2Driver : EventDriver {
 		evthread_set_id_callback(&lev_get_thread_id);
 
 		// initialize libevent
-		logDebug("libevent version: %s", to!string(event_get_version()));
+		logDiagnostic("libevent version: %s", to!string(event_get_version()));
 		m_eventLoop = event_base_new();
 		s_eventLoop = m_eventLoop;
-		logDebug("libevent is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
+		logDiagnostic("libevent is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
 		evthread_make_base_notifiable(m_eventLoop);
 		
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
@@ -176,7 +189,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		throw new Exception("Failed to lookup host: "~host);
 	}
 
-	TcpConnection connectTcp(string host, ushort port)
+	TCPConnection connectTCP(string host, ushort port)
 	{
 		auto addr = resolveHost(host);
 		addr.port = port;
@@ -190,11 +203,13 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = TcpContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
-		cctx.task = Task.getThis();
+		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
+
+		cctx.readOwner = Task.getThis();
+		scope(exit) cctx.readOwner = Task();
 
 		if( bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
@@ -211,10 +226,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		if( cctx.status != BEV_EVENT_CONNECTED )
 			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port)~": "~to!string(cctx.status));
 
-		return new Libevent2TcpConnection(cctx);
+		return new Libevent2TCPConnection(cctx);
 	}
 
-	TcpListener listenTcp(ushort port, void delegate(TcpConnection conn) connection_callback, string address)
+	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
 	{
 		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
 		bind_addr.port = port;
@@ -232,28 +247,40 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		// Set socket for non-blocking I/O
 		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
 			"Error setting listening socket to non-blocking I/O.");
-		
-		// Add an event to wait for connections
-		auto ctx = TcpContextAlloc.alloc(m_core, m_eventLoop, listenfd, null, bind_addr);
-		ctx.connectionCallback = connection_callback;
-		ctx.listenEvent = event_new(m_eventLoop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
-		enforce(event_add(ctx.listenEvent, null) == 0,
-			"Error scheduling connection event on the event loop.");
-		
-		return new LibeventTcpListener(ctx);
+
+		auto ret = new LibeventTCPListener;
+
+		static void setupConnectionHandler(shared(LibeventTCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback)
+		{
+			auto evloop = getThreadLibeventEventLoop();
+			auto core = getThreadLibeventDriverCore();
+			// Add an event to wait for connections
+			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr);
+			ctx.connectionCallback = cast()connection_callback;
+			ctx.listenEvent = event_new(evloop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+			enforce(event_add(ctx.listenEvent, null) == 0,
+				"Error scheduling connection event on the event loop.");
+			(cast()listener).addContext(ctx);
+		}
+
+		// FIXME: the API needs improvement with proper shared annotations, so the the following casts are not necessary
+		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
+		else setupConnectionHandler(cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
+
+		return ret;
 	}
 
-	UdpConnection listenUdp(ushort port, string bind_address = "0.0.0.0")
+	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, true);
 		bindaddr.port = port;
 
-		return new Libevent2UdpConnection(bindaddr, this);
+		return new Libevent2UDPConnection(bindaddr, this);
 	}
 
-	Libevent2Signal createSignal()
+	Libevent2ManualEvent createManualEvent()
 	{
-		return new Libevent2Signal(this);
+		return new Libevent2ManualEvent;
 	}
 
 	Libevent2Timer createTimer(void delegate() callback)
@@ -281,7 +308,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		info.status = result;
 		try {
 			switch( info.addr.family ){
-				default: assert(false, "Unimplmeneted address family");
+				default: assert(false, "Unimplemented address family");
 				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
 				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
 			}
@@ -292,30 +319,39 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 	}
 }
 
-class Libevent2Signal : Signal {
+class Libevent2ManualEvent : ManualEvent {
 	private {
-		Libevent2Driver m_driver;
-		event* m_event;
-		bool[Task] m_listeners;
-		int m_emitCount = 0;
+		struct ThreadSlot {
+			Libevent2Driver driver;
+			deimos.event2.event.event* event;
+			bool[Task] tasks;
+		}
+		shared(int) m_emitCount = 0;
+		core.sync.mutex.Mutex m_mutex;
+		HashMap!(Thread, ThreadSlot) m_waiters;
 	}
 
-	this(Libevent2Driver driver)
+	this()
 	{
-		m_driver = driver;
-		m_event = event_new(m_driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
-		event_add(m_event, null);
+		m_mutex = new core.sync.mutex.Mutex;
+		m_waiters = HashMap!(Thread, ThreadSlot)(manualAllocator());
 	}
 
 	~this()
 	{
-		if( !s_alreadyDeinitialized )
-			event_free(m_event);
+		if( !s_alreadyDeinitialized ){
+			foreach (ts; m_waiters)
+				event_free(ts.event);
+		}
 	}
 
 	void emit()
 	{
-		event_active(m_event, 0, 0);
+		atomicOp!"+="(m_emitCount, 1);
+		synchronized (m_mutex) {
+			foreach (ref sl; m_waiters)
+				event_active(sl.event, 0, 0);
+		}
 	}
 
 	void wait()
@@ -325,51 +361,94 @@ class Libevent2Signal : Signal {
 
 	int wait(int reference_emit_count)
 	{
-		assert(!isOwner());
-		auto self = Fiber.getThis();
+		assert(!amOwner());
 		acquire();
 		scope(exit) release();
-		auto ec = m_emitCount;
+		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
-			m_driver.m_core.yieldForEvent();
-			ec = m_emitCount;
+			getThreadLibeventDriverCore().yieldForEvent();
+			ec = this.emitCount;
+		}
+		return ec;
+	}
+
+	int wait(Duration timeout, int reference_emit_count)
+	{
+		assert(!amOwner());
+		acquire();
+		scope(exit) release();
+		scope tm = new Libevent2Timer(cast(Libevent2Driver)getEventDriver(), null);
+		tm.rearm(timeout);
+		tm.acquire();
+		scope(exit) tm.release();
+
+		auto ec = this.emitCount;
+		while( ec == reference_emit_count ){
+			getThreadLibeventDriverCore().yieldForEvent();
+			ec = this.emitCount;
+			if (!tm.pending) break;
 		}
 		return ec;
 	}
 
 	void acquire()
 	{
-		m_listeners[Task.getThis()] = true;
+		auto task = Task.getThis();
+		auto thread = task.thread;
+		synchronized (m_mutex) {
+			if (thread !in m_waiters) {
+				ThreadSlot slot;
+				slot.driver = cast(Libevent2Driver)getEventDriver();
+				slot.event = event_new(slot.driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
+				event_add(slot.event, null);
+				m_waiters[thread] = slot;
+			}
+			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
+			m_waiters[thread].tasks[task] = true;
+		}
 	}
 
 	void release()
 	{
 		auto self = Task.getThis();
-		if( isOwner() )
-			m_listeners.remove(self);
+		synchronized (m_mutex) {
+			assert(self.thread in m_waiters && self in m_waiters[self.thread].tasks,
+				"Releasing non-acquired signal.");
+			m_waiters[self.thread].tasks.remove(self);
+		}
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
-		return (Task.getThis() in m_listeners) !is null;
+		auto self = Task.getThis();
+		synchronized (m_mutex) {
+			if (self.thread !in m_waiters) return false;
+			return (self in m_waiters[self.thread].tasks) !is null;
+		}
 	}
 
-	@property int emitCount() const { return m_emitCount; }
+	@property int emitCount() const { return atomicLoad(m_emitCount); }
 
 	private static nothrow extern(C)
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
-		auto sig = cast(Libevent2Signal)userptr;
-
-		sig.m_emitCount++;
-
-		bool[Task] lst;
 		try {
-			lst = sig.m_listeners.dup;
-			foreach( l, _; lst )
-				sig.m_driver.m_core.resumeTask(l);
-		} catch( Throwable e ){
+			auto sig = cast(Libevent2ManualEvent)userptr;
+			auto thread = Thread.getThis();
+			auto core = getThreadLibeventDriverCore();
+
+			bool[Task] lst;
+			synchronized (sig.m_mutex) {
+				assert(thread in sig.m_waiters);
+				lst = sig.m_waiters[thread].tasks.dup;
+			}
+
+			foreach (l; lst.byKey)
+				core.resumeTask(l);
+		} catch (Exception e) {
 			logError("Exception while handling signal event: %s", e.msg);
+			try logDiagnostic("Full error: %s", sanitize(e.msg));
+			catch(Exception) {}
 			debug assert(false);
 		}
 	}
@@ -413,7 +492,7 @@ class Libevent2Timer : Timer {
 		m_owner = Task();
 	}
 
-	bool isOwner()
+	bool amOwner()
 	{
 		return m_owner != Task() && m_owner == Task.getThis();
 	}
@@ -472,16 +551,16 @@ class Libevent2Timer : Timer {
 			if( tm.m_callback ) runTask(tm.m_callback);
 		} catch( Throwable e ){
 			logError("Exception while handling timer event: %s", e.msg);
-			try logDebug("Full exception: %s", sanitize(e.toString())); catch {}
+			try logDiagnostic("Full exception: %s", sanitize(e.toString())); catch {}
 			debug assert(false);
 		}
 	}
 }
 
-class Libevent2UdpConnection : UdpConnection {
+class Libevent2UDPConnection : UDPConnection {
 	private {
 		Libevent2Driver m_driver;
-		TcpContext* m_ctx;
+		TCPContext* m_ctx;
 		string m_bindAddress;
 		bool m_canBroadcast = false;
 	}
@@ -509,10 +588,9 @@ class Libevent2UdpConnection : UdpConnection {
 		if( bind_addr.port )
 			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
-		m_ctx = TcpContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
-		m_ctx.task = Task.getThis();
+		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
 
-		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUdpRead, m_ctx);
+		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
 		if( !evt ) throw new Exception("Failed to create buffer event for socket.");
 
 		enforce(event_add(evt, null) == 0);
@@ -530,23 +608,23 @@ class Libevent2UdpConnection : UdpConnection {
 	}
 
 
-	bool isOwner() {
-		return m_ctx !is null && m_ctx.task != Task() && m_ctx.task == Task.getThis();
+	bool amOwner() {
+		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}
 
 	void acquire()
 	{
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
-		assert(m_ctx.task is null, "Trying to acquire a TCP connection that is currently owned.");
-		m_ctx.task = Task.getThis();
+		assert(m_ctx.readOwner == Task() && m_ctx.writeOwner == Task(), "Trying to acquire a TCP connection that is currently owned.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 	}
 
 	void release()
 	{
 		if( !m_ctx ) return;
-		assert(m_ctx.task != Task(), "Trying to release a TCP connection that is not owned.");
-		assert(m_ctx.task == Task.getThis(), "Trying to release a foreign TCP connection.");
-		m_ctx.task = Task();
+		assert(m_ctx.readOwner != Task() && m_ctx.writeOwner != Task(), "Trying to release a TCP connection that is not owned.");
+		assert(m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner, "Trying to release a foreign TCP connection.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task();
 	}
 
 	void connect(string host, ushort port)
@@ -577,7 +655,7 @@ class Libevent2UdpConnection : UdpConnection {
 		from.family = m_ctx.remote_addr.family;
 		assert(buf.length <= int.max);
 		while(true){
-			uint addr_len = from.sockAddrLen;
+			socklen_t addr_len = from.sockAddrLen;
 			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
 			if( ret > 0 ){
 				if( peer_address ) *peer_address = from;
@@ -585,24 +663,24 @@ class Libevent2UdpConnection : UdpConnection {
 			}
 			if( ret < 0 ){
 				auto err = getLastSocketError();
-				logDebug("UDP recv err: %s", err);
+				logDiagnostic("UDP recv err: %s", err);
 				enforce(err == EWOULDBLOCK, "Error receiving UDP packet.");
 			}
 			m_ctx.core.yieldForEvent();
 		}
 	}
 
-	private static nothrow extern(C) void onUdpRead(evutil_socket_t sockfd, short evts, void* arg)
+	private static nothrow extern(C) void onUDPRead(evutil_socket_t sockfd, short evts, void* arg)
 	{
-		auto ctx = cast(TcpContext*)arg;
+		auto ctx = cast(TCPContext*)arg;
 		logTrace("udp socket %d read event!", ctx.socketfd);
 
 		try {
-			auto f = ctx.task;
+			auto f = ctx.readOwner;
 			if( f && f.state != Fiber.State.TERM )
 				ctx.core.resumeTask(f);
 		} catch( Throwable e ){
-			logError("Exception onUdpRead: %s", e.msg);
+			logError("Exception onUDPRead: %s", e.msg);
 			debug assert(false);
 		}
 	}
@@ -801,4 +879,6 @@ private nothrow extern(C)
 			return 0;
 		}
 	}
+}
+
 }

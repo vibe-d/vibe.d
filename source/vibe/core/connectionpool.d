@@ -21,7 +21,7 @@ import core.thread;
 	as any copy of the returned LockedConnection object still exists. Connections that are not
 	associated 
 */
-class ConnectionPool(Connection : EventedObject)
+class ConnectionPool(Connection)
 {
 	private {
 		Connection delegate() m_connectionFactory;
@@ -49,7 +49,6 @@ class ConnectionPool(Connection : EventedObject)
 		if( cidx != size_t.max ){
 			logTrace("returning %s connection %d of %d", Connection.stringof, cidx, m_connections.length);
 			conn = m_connections[cidx];
-			if( Task.getThis() != Task() ) conn.acquire();
 		} else {
 			logDebug("creating new %s connection, all %d are in use", Connection.stringof, m_connections.length);
 			conn = m_connectionFactory(); // NOTE: may block
@@ -65,7 +64,7 @@ class ConnectionPool(Connection : EventedObject)
 	}
 }
 
-struct LockedConnection(Connection : EventedObject) {
+struct LockedConnection(Connection) {
 	private {
 		ConnectionPool!Connection m_pool;
 		Task m_task;
@@ -100,7 +99,6 @@ struct LockedConnection(Connection : EventedObject) {
 			assert(*plc >= 1);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
 			if( --*plc == 0 ){
-				if( fthis ) m_conn.release();
 				//logTrace("conn %s release", cast(void*)m_conn);
 			}
 			m_conn = null;

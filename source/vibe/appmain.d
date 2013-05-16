@@ -19,10 +19,9 @@
 */
 module vibe.appmain;
 
-import vibe.core.args;
-import vibe.core.core;
+import vibe.core.args : finalizeCommandLineOptions;
+import vibe.core.core : runEventLoop, lowerPrivileges;
 import vibe.core.log;
-import vibe.http.server;
 
 // only include main if VibeCustomMain is not set
 version(VibeCustomMain) {} else:
@@ -33,19 +32,33 @@ version(VibeCustomMain) {} else:
 	This function will automatically be executed if you import the module vibe.d in your code. It
 	will perform default command line parsing and starts the event loop.
 */
-int main(string[] args)
+int main()
 {
 	version(unittest){
 		logInfo("All unit tests were successful.");
 		return 0;
 	} else {
-		processCommandLineArgs(args);
-		logInfo("Running event loop...");
-		try {
-			return runEventLoop();
-		} catch( Throwable th ){
-			logError("Unhandled exception in event loop: %s", th.toString());
+		try if (!finalizeCommandLineOptions()) return 0;
+		catch (Exception e) {
+			logDiagnostic("Error processing command line: %s", e.msg);
 			return 1;
 		}
+
+		lowerPrivileges();
+		
+		logDiagnostic("Running event loop...");
+		int status;
+		debug {
+			status = runEventLoop();
+		} else {
+			try {
+				status = runEventLoop();
+			} catch( Throwable th ){
+				logError("Unhandled exception in event loop: %s", th.toString());
+				return 1;
+			}
+		}
+		logDiagnostic("Event loop exited with status %d.", status);
+		return status;
 	}
 }

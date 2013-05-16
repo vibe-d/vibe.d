@@ -76,7 +76,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string lines
 ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	auto output = scoped!MemoryOutputStream(alloc);
-	output.reserve(max_bytes < 128 ? max_bytes : 128);
+	output.reserve(max_bytes < 64 ? max_bytes : 64);
 	readUntil(stream, output, end_marker, max_bytes);
 	return output.data();
 }
@@ -84,7 +84,14 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
-	auto nmatchoffset = new size_t[end_marker.length];
+	
+	// allocate internal jump table to optimize the number of comparisons
+	size_t[8] nmatchoffsetbuffer;
+	size_t[] nmatchoffset;
+	if (end_marker.length <= nmatchoffsetbuffer.length) nmatchoffset = nmatchoffsetbuffer[0 .. end_marker.length];
+	else nmatchoffset = new size_t[end_marker.length];
+	
+	// precompute the jump table
 	nmatchoffset[0] = 0;
 	foreach( i; 1 .. end_marker.length ){
 		nmatchoffset[i] = i;
@@ -243,9 +250,9 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 	Throws:
 		An exception is thrown if max_bytes != 0 and the stream contains more than max_bytes data.
 		If the sanitize parameter is fals and the stream contains invalid UTF-8 code sequences,
-		a UtfException is thrown.
+		a UTFException is thrown.
 */
-string readAllUtf8(InputStream stream, bool sanitize = false, size_t max_bytes = 0)
+string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes = 0)
 {
 	import std.utf;
 	import vibe.utils.string;
@@ -256,5 +263,8 @@ string readAllUtf8(InputStream stream, bool sanitize = false, size_t max_bytes =
 		return stripUTF8Bom(cast(string)data);
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias readAllUtf8 = readAllUTF8;
 
 private struct Buffer { ubyte[64*1024] bytes; }

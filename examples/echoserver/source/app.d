@@ -1,6 +1,7 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.net;
 
 shared static this()
 {
-	listenTcp(7, conn => conn.write(conn));
+	listenTCP(7, conn => conn.write(conn));
 }

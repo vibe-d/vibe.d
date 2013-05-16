@@ -1,7 +1,0 @@
-{
-    "name": "tests",
-    "description": "High level test suite for vibe.d",
-    "dependencies": {
-        "vibe-d": {"version": "~master", "path": "../"}
-    }
-}

@@ -11,6 +11,7 @@
 */
 module vibe.vibe;
 
+public import vibe.core.args;
 public import vibe.core.concurrency;
 public import vibe.core.core;
 public import vibe.core.file;
@@ -25,6 +26,7 @@ public import vibe.db.redis.redis;
 public import vibe.http.auth.basic_auth;
 public import vibe.http.client;
 public import vibe.http.fileserver;
+public import vibe.http.form;
 public import vibe.http.proxy;
 public import vibe.http.rest;
 public import vibe.http.router;

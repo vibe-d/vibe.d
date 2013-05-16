@@ -11,6 +11,7 @@ import std.exception;
 import vibe.core.core;
 public import vibe.core.driver;
 
+import core.atomic;
 import core.sync.mutex;
 import core.sync.condition;
 
@@ -95,47 +96,53 @@ struct ScopedMutexLock {
 		core.sync.mutex instead.
 */
 class TaskMutex : core.sync.mutex.Mutex {
+	import std.stdio;
 	private {
-		bool m_locked = false;
-		Signal m_signal;
+		shared(bool) m_locked = false;
+		shared(uint) m_waiters = 0;
+		ManualEvent m_signal;
 		debug Task m_owner;
 	}
 
 	this()
 	{
-		m_signal = createSignal();
+		m_signal = createManualEvent();
 	}
-
-	private	@property bool locked() const { return m_locked; }
 
 	override @trusted bool tryLock()
 	{
-		if(m_locked) return false;
-		m_locked = true;
-		debug m_owner = Task.getThis();
-		return true;
+		if (cas(&m_locked, false, true)) {
+			debug m_owner = Task.getThis();
+			version(MutexPrint) writefln("mutex %s lock %s", cast(void*)this, atomicLoad(m_waiters));
+			return true;
+		}
+		return false;
 	}
 
 	override @trusted void lock()
 	{
-		if(m_locked){
-			m_signal.acquire();
-			do{ m_signal.wait(); } while(m_locked);
-		}
-		m_locked = true;
-		debug m_owner = Task.getThis();
+		if (tryLock()) return;
+		debug assert(m_owner == Task() || m_owner != Task.getThis(), "Recursive mutex lock.");
+		atomicOp!"+="(m_waiters, 1);
+		version(MutexPrint) writefln("mutex %s wait %s", cast(void*)this, atomicLoad(m_waiters));
+		scope(exit) atomicOp!"-="(m_waiters, 1);
+		auto ecnt = m_signal.emitCount();
+		while (!tryLock()) ecnt = m_signal.wait(ecnt);
 	}
 
 	override @trusted void unlock()
 	{
-		enforce(m_locked);
-		m_locked = false;
-		debug m_owner = Task();
+		assert(m_locked);
+		debug {
+			assert(m_owner == Task.getThis());
+			m_owner = Task();
+		}
+		atomicStore!(MemoryOrder.rel)(m_locked, false);
+		version(MutexPrint) writefln("mutex %s unlock %s", cast(void*)this, atomicLoad(m_waiters));
+		if (atomicLoad(m_waiters) > 0)
+			m_signal.emit();
 	}
 }
-
-deprecated("please use TaskMutex instead.")
-alias Mutex = TaskMutex;
 
 unittest {
 	auto mutex = new TaskMutex;
@@ -143,12 +150,12 @@ unittest {
 	{
 		auto lock = ScopedMutexLock(mutex);
 		assert(lock.locked);
-		assert(mutex.locked);
+		assert(mutex.m_locked);
 
 		auto lock2 = ScopedMutexLock(mutex, LockMode.tryLock);
 		assert(!lock2.locked);
 	}
-	assert(!mutex.locked);
+	assert(!mutex.m_locked);
 
 	auto lock = ScopedMutexLock(mutex, LockMode.tryLock);
 	assert(lock.locked);
@@ -163,25 +170,25 @@ unittest {
 
 class TaskCondition : core.sync.condition.Condition {
 	private {
-		TaskMutex m_mutex;
-		Signal m_signal;
-		Timer m_timer;
+		Mutex m_mutex;
+		ManualEvent m_signal;
 	}
 
-	this(TaskMutex mutex)
+	this(Mutex mutex)
 	{
 		super(mutex);
 		m_mutex = mutex;
-		m_signal = createSignal();
-		m_timer = getEventDriver().createTimer(null);
+		m_signal = createManualEvent();
 	}
 
-	override @trusted @property TaskMutex mutex() { return m_mutex; }
+	override @trusted @property Mutex mutex() { return m_mutex; }
 
 	override @trusted void wait()
 	{
-		assert(m_mutex.m_locked);
-		debug assert(m_mutex.m_owner == Task.getThis());
+		if (auto tm = cast(TaskMutex)m_mutex) {
+			assert(tm.m_locked);
+			debug assert(tm.m_owner == Task.getThis());
+		}
 
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
@@ -192,20 +199,18 @@ class TaskCondition : core.sync.condition.Condition {
 
 	override @trusted bool wait(Duration timeout)
 	{
-		assert(m_mutex.m_locked);
-		debug assert(m_mutex.m_owner == Task.getThis());
+		assert(!timeout.isNegative());
+		if (auto tm = cast(TaskMutex)m_mutex) {
+			assert(tm.m_locked);
+			debug assert(tm.m_owner == Task.getThis());
+		}
 
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
 		scope(failure) m_mutex.lock();
 
-		m_timer.rearm(timeout);
-		m_signal.acquire();
-		scope(failure) m_signal.release();
-		while(refcount == m_signal.emitCount && m_timer.pending)
-			rawYield();
-		m_signal.release();
-		auto succ = refcount != m_signal.emitCount;
+		auto succ = m_signal.wait(timeout, refcount) != refcount;
+
 		m_mutex.lock();
 		return succ;
 	}
@@ -223,16 +228,16 @@ class TaskCondition : core.sync.condition.Condition {
 
 /** Creates a new signal that can be shared between fibers.
 */
-Signal createSignal()
+ManualEvent createManualEvent()
 {
-	return getEventDriver().createSignal();
+	return getEventDriver().createManualEvent();
 }
 
-/** A cross-fiber signal
+/** A manually triggered cross-task event.
 
-	Note: the ownership can be shared between multiple fibers.
+	Note: the ownership can be shared between multiple fibers and threads.
 */
-interface Signal : EventedObject {
+interface ManualEvent : EventedObject {
 	/// A counter that is increased with every emit() call
 	@property int emitCount() const;
 
@@ -244,9 +249,17 @@ interface Signal : EventedObject {
 
 	/// Acquires ownership and waits until the signal is emitted if no emit has happened since the given reference emit count.
 	int wait(int reference_emit_count);
+
+	/// 
+	int wait(Duration timeout, int reference_emit_count);
 }
 
-class SignalException : Exception {
+/// Compatibility alias, will soon be deprecated.
+alias Signal = ManualEvent;
+/// ditto
+alias createSignal = createManualEvent;
+
+deprecated class SignalException : Exception {
 	this() { super("Signal emitted."); }
 }
 

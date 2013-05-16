@@ -1,5 +1,5 @@
 /**
-	Contains HTTP form parsing and construction routines.
+	Routines for automated implementation of HTML form based interfaces.
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -7,147 +7,21 @@
 */
 module vibe.http.form;
 
-import vibe.core.driver;
-import vibe.core.file;
-import vibe.core.log;
-import vibe.inet.message;
-import vibe.inet.url;
-import vibe.stream.operations;
-import vibe.textfilter.urlencode;
-
-// needed for registerFormInterface stuff:
-import vibe.http.rest;
-import vibe.http.server;
-import vibe.http.router;
-
-
-import std.array;
-import std.exception;
-import std.string;
-
-// needed for registerFormInterface stuff:
-import std.traits;
-import std.conv;
-import std.typecons;
+public import vibe.inet.webform;
 public import std.typecons : Yes, No;
 
-struct FilePart  {
-	InetHeaderMap headers;
-	PathEntry filename;
-	Path tempPath;
-}
+import vibe.core.log;
+import vibe.http.rest;
+import vibe.http.router;
+import vibe.http.server;
+import vibe.inet.url;
 
-/**
-	Parses the form given by content_type and body_reader.
-*/
-bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader, size_t max_line_length)
-{
-	auto ct_entries = content_type.split(";");
-	if( !ct_entries.length ) return false;
-
-	if( ct_entries[0].strip() == "application/x-www-form-urlencoded" ){
-		auto bodyStr = cast(string)body_reader.readAll();
-		parseUrlEncodedForm(bodyStr, fields);
-		return true;
-	}
-	if( ct_entries[0].strip() == "multipart/form-data" ){
-		parseMultiPartForm(fields, files, content_type, body_reader, max_line_length);
-		return true;
-	}
-	return false;
-}
-
-/**
-	Parses a url encoded form (query string format) and puts the key/value pairs into params.
-*/
-void parseUrlEncodedForm(string str, ref string[string] params)
-{
-	while(str.length > 0){
-		// name part
-		auto idx = str.indexOf("=");
-		if( idx == -1 ) {
-			idx = str.indexOf("&");
-			if( idx == -1 ) {
-				params[urlDecode(str[0 .. $])] = "";
-				return;
-			} else {
-				params[urlDecode(str[0 .. idx])] = "";
-				str = str[idx+1 .. $];
-				continue;
-			}
-		} else {
-			auto idx_amp = str.indexOf("&");
-			if( idx_amp > -1 && idx_amp < idx ) {
-				params[urlDecode(str[0 .. idx_amp])] = "";
-				str = str[idx_amp+1 .. $];
-				continue;				
-			} else {
-				string name = urlDecode(str[0 .. idx]);
-				str = str[idx+1 .. $];
-				// value part
-				for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
-				string value = urlDecode(str[0 .. idx]);
-				params[name] = value;
-				str = idx < str.length ? str[idx+1 .. $] : null;
-			}
-		}
-	}
-}
-
-private void parseMultiPartForm(ref string[string] fields, ref FilePart[string] files,
-	string content_type, InputStream body_reader, size_t max_line_length)
-{
-	auto pos = content_type.indexOf("boundary=");			
-	enforce(pos >= 0 , "no boundary for multipart form found");
-	auto boundary = content_type[pos+9 .. $];
-	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
-	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
-
-	while( parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary, max_line_length) ) {}
-}
-
-private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary, size_t max_line_length)
-{
-	InetHeaderMap headers;
-	stream.parseRfc5322Header(headers);
-	auto pv = "Content-Disposition" in headers;
-	enforce(pv, "invalid multipart");
-	auto cd = *pv;
-	string name;
-	auto pos = cd.indexOf("name=\"");
-	if( pos >= 0 ) {
-		cd = cd[pos+6 .. $];
-		pos = cd.indexOf("\"");
-		name = cd[0 .. pos];
-	}
-	string filename;
-	pos = cd.indexOf("filename=\"");
-	if( pos >= 0 ) {
-		cd = cd[pos+10 .. $];
-		pos = cd.indexOf("\"");
-		filename = cd[0 .. pos];
-	}
-
-	if( filename.length > 0 ) {
-		FilePart fp;
-		fp.headers = headers;
-		fp.filename = PathEntry(filename);
-
-		auto file = createTempFile();
-		fp.tempPath = file.path;
-		stream.readUntil(file, cast(ubyte[])boundary);
-		logDebug("file: %s", fp.tempPath.toString());
-		file.close();
-
-		files[name] = fp;
-
-		// TODO: temp files must be deleted after the request has been processed!
-	} else {
-		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
-		form[name] = data;
-	}
-	return stream.readLine(max_line_length) != "--";
-}
+import std.array;
+import std.conv;
+import std.exception;
+import std.string;
+import std.traits;
+import std.typecons;
 
 
 /**
@@ -159,7 +33,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	"index" will be made available via url_prefix. method_name is generated from
 	the original method name by the same rules as for
 	vibe.http.rest.registerRestInterface. All these methods might take a
-	HttpServerRequest parameter and a HttpServerResponse parameter, but don't have
+	HTTPServerRequest parameter and a HTTPServerResponse parameter, but don't have
 	to.
 
 	All additional parameters will be filled with available form-data fields.
@@ -212,23 +86,23 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 	---
 	class FrontEnd {
 		// GET /
-		void index(HttpServerResponse res)
+		void index(HTTPServerResponse res)
 		{
 			res.render!("index.dt");
 		}
 
 		/// GET /files?folder=...
-		void getFiles(HttpServerRequest req, HttpServerResponse res, string folder)
+		void getFiles(HTTPServerRequest req, HTTPServerResponse res, string folder)
 		{
 			res.render!("files.dt", req, folder);
 		}
 
 		/// POST /login
-		void postLogin(HttpServerRequest req, HttpServerResponse res, string username,
+		void postLogin(HTTPServerRequest req, HTTPServerResponse res, string username,
 			string password)
 		{
 			if( username != "tester" || password != "secret" )
-				throw new HttpStatusException(HttpStatus.Unauthorized);
+				throw new HTTPStatusException(HTTPStatus.Unauthorized);
 			auto session = req.session;
 			if( !session ) session = res.startSession();
 			session["username"] = username;
@@ -238,16 +112,16 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 
 	static this()
 	{
-		auto settings = new HttpServerSettings;
+		auto settings = new HTTPServerSettings;
 		settings.port = 8080;
-		auto router = new UrlRouter;
+		auto router = new URLRouter;
 		registerFormInterface(router, new FrontEnd);
-		listenHttp(settings, router);
+		listenHTTP(settings, router);
 	}
 	---
 
 */
-void registerFormInterface(I)(UrlRouter router, I instance, string url_prefix,
+void registerFormInterface(I)(URLRouter router, I instance, string url_prefix,
 		MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict)
 {
 	foreach( method; __traits(allMembers, I) ){
@@ -295,7 +169,7 @@ unittest {
 		method = The name of the method to register. It might be
 		overloaded, one overload has to match any given form data, otherwise an error is triggered.
 */
-void registerFormMethod(string method, I)(UrlRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
+void registerFormMethod(string method, I)(URLRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
 {
 	string url(string name) {
 		return url_prefix ~ adjustMethodStyle(name, style);
@@ -309,19 +183,19 @@ void registerFormMethod(string method, I)(UrlRouter router, I instance, string u
 
 
 /*
-	Generate a HttpServerRequestDelegate from a generic function with arbitrary arguments.
+	Generate a HTTPServerRequestDelegate from a generic function with arbitrary arguments.
 	The arbitrary arguments will be filled in with data from the form in req. For details see applyParametersFromAssociativeArrays.
 	See_Also: applyParametersFromAssociativeArrays
 	Params:
 		delegate = Some function, which some arguments which must be constructible from strings with to!ArgType(some_string), except one optional parameter
-		of type HttpServerRequest and one of type HttpServerResponse which are passed over.
+		of type HTTPServerRequest and one of type HTTPServerResponse which are passed over.
 
-	Returns: A HttpServerRequestDelegate which passes over any form data to the given function.
+	Returns: A HTTPServerRequestDelegate which passes over any form data to the given function.
 */
 /// private
-HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
+HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
 {
-	void handler(HttpServerRequest req, HttpServerResponse res)
+	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		string error;
 		enforce(applyParametersFromAssociativeArray(req, res, func, error, strict), error);
@@ -336,13 +210,13 @@ HttpServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Fla
 	of the passed method and will only raise an error if no conforming overload is found.
 */
 /// private
-HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
+HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
 {
 	import std.stdio;
-	void handler(HttpServerRequest req, HttpServerResponse res)
+	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		import std.traits;
-		string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+		string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
 //		alias MemberFunctionsTuple!(T, method) overloads;
 		string errors;
 		foreach(func; __traits(getOverloads, T, method)) {
@@ -362,7 +236,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	Tries to apply all named arguments in args to func.
 
 	If it succeeds it calls the function with req, res (if it has one
-	parameter of type HttpServerRequest and one of type HttpServerResponse), and
+	parameter of type HTTPServerRequest and one of type HTTPServerResponse), and
 	all the values found in args. 
 
 	If any supplied argument could not be applied or the method 
@@ -374,7 +248,7 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	Applying data happens as follows: 
 	
 	1. All parameters are traversed
-	2. If parameter is of type HttpServerRequest or HttpServerResponse req/res will be applied.
+	2. If parameter is of type HTTPServerRequest or HTTPServerResponse req/res will be applied.
 	3. If the parameters name is found in the form, the form data has to be convertible with conv.to to the parameters type, otherwise this method returns false.
 	4. If the parameters name is not found in the form, but is a struct, its fields are traversed and searched in the form. The form needs to contain keys in the form: parameterName_structField.
 		So if you have a struct paramter foo with a field bar and a field fooBar, the form would need to contain keys: foo_bar and foo_fooBar. The struct fields maybe datafields or properties.
@@ -387,11 +261,11 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	See_Also: formMethodHandler
 
 	Params:
-		req = The HttpServerRequest object that gets queried for form
+		req = The HTTPServerRequest object that gets queried for form
 		data (req.query for GET requests, req.form for POST requests) and that is
 		passed on to func, if func has a parameter of matching type. Each key in the
 		form data must match a parameter name, the corresponding value is then applied.
-		HttpServerRequest and HttpServerResponse arguments are excluded as they are
+		HTTPServerRequest and HTTPServerResponse arguments are excluded as they are
 		qrovided by the passed req and res objects.
 
 
@@ -404,23 +278,23 @@ HttpServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"stri
 	Returns: true if successful, false otherwise.
 */
 /// private
-private bool applyParametersFromAssociativeArray(Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error, Flag!"strict" strict) {
+private bool applyParametersFromAssociativeArray(Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
 }
 
 // Overload which takes additional parameter for handling overloads of func.
 /// private
-private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServerRequest req, HttpServerResponse res, Func func, out string error, Flag!"strict" strict) {
+private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	alias ParameterTypeTuple!Overload ParameterTypes;
 	ParameterTypes args;
-	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+	string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
 	int count=0;
 	Error e;
 	foreach(i, item; ParameterIdentifierTuple!Overload) {
-		static if(is(ParameterTypes[i] : HttpServerRequest)) {
+		static if(is(ParameterTypes[i] : HTTPServerRequest)) {
 			args[i] = req;
 		}
-		else static if(is(ParameterTypes[i] : HttpServerResponse)) {
+		else static if(is(ParameterTypes[i] : HTTPServerResponse)) {
 			args[i] = res;
 		}
 		else {
@@ -484,7 +358,7 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
 		Address address;
    }
    // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"] 
-   void postPerson(HttpServerRequest req, HttpServerResponse res) {
+   void postPerson(HTTPServerRequest req, HTTPServerResponse res) {
 		Person p;
 		// We have a default value for country if not provided, so we don't care that it is not:
 		p.address.country="Important Country";
@@ -498,12 +372,12 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HttpServe
    --- 
   * The mechanism is more useful in get requests, when you have good default values for unspecified parameters.
   * Params:
-  *		req  = The HttpServerRequest that contains the form data. (req.query or req.form will be used depending on HttpMethod)
+  *		req  = The HTTPServerRequest that contains the form data. (req.query or req.form will be used depending on HTTPMethod)
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(T)(HttpServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T) {
-	string[string] form = req.method == HttpMethod.GET ? req.query : req.form;
+FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T) {
+	string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
 	if(form.length==0)
 		return FormDataLoadResult(0, 0);
 	Error error;

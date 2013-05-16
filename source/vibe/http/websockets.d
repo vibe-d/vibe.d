@@ -7,13 +7,13 @@
 	{
 		// simple echo server
 		while( sock.connected ){
-			auto msg = sock.receive();
+			auto msg = sock.receiveText();
 			sock.send(msg);
 		}
 	}
 
 	static this {
-		auto router = new UrlRouter;
+		auto router = new URLRouter;
 		router.get("/websocket", handleWebSockets(&handleConn))
 		
 		// Start HTTP server...
@@ -38,15 +38,16 @@ import std.exception;
 import std.bitmanip;
 import std.digest.sha;
 import std.string;
+import std.functional;
 
 
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
+HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
 {
-	void callback(HttpServerRequest req, HttpServerResponse res)
+	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
@@ -72,7 +73,7 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
-			res.statusCode = HttpStatus.BadRequest;
+			res.statusCode = HTTPStatus.BadRequest;
 			res.writeVoidBody();
 			return;
 		}
@@ -83,9 +84,14 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 		Stream conn = res.switchProtocol("websocket");
 
 		auto socket = new WebSocket(conn);
-		onHandshake(socket);
+		on_handshake(socket);
 	}
 	return &callback;
+}
+/// ditto
+HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake)
+{
+	return handleWebSockets(toDelegate(on_handshake));
 }
 
 
@@ -94,14 +100,14 @@ HttpServerRequestDelegate handleWebSockets(void delegate(WebSocket) onHandshake)
 */
 class WebSocket {
 	private {
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 	}
 
 	this(Stream conn)
 	{
-		m_conn = cast(TcpConnection)conn;
+		m_conn = cast(TCPConnection)conn;
 		assert(m_conn);
 	}
 
@@ -171,13 +177,34 @@ class WebSocket {
 
 	/**
 		Receives a new message and returns its contents as a newly allocated data array.
+
+		Params:
+			strict = If set, ensures the exact frame type (text/binary) is received and throws an execption otherwise.
 	*/
-	ubyte[] receive()
+	ubyte[] receiveBinary(bool strict = false)
 	{
 		ubyte[] ret;
-		receive((scope message){ ret = message.readAll(); });
+		receive((scope message){
+			enforce(!strict || message.frameOpcode == FrameOpcode.binary,
+				"Expected a binary message, got "~message.frameOpcode.to!string());
+			ret = message.readAll();
+		});
 		return ret;
 	}
+	/// ditto
+	string receiveText(bool strict = false)
+	{
+		string ret;
+		receive((scope message){
+			enforce(!strict || message.frameOpcode == FrameOpcode.text,
+				"Expected a text message, got "~message.frameOpcode.to!string());
+			ret = message.readAllUtf8();
+		});
+		return ret;
+	}
+
+	/// Compatibility alias for readBinary. Will be deprecated at some point.
+	alias receive = receiveBinary;
 
 	/**
 		Receives a new message using an InputStream.

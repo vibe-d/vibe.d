@@ -1,6 +1,36 @@
 ﻿/**
 	SSL/TLS stream implementation
 
+	SSLStream can be used to implement SSL/TLS communication on top of a TCP connection. The
+	initial SSLStreamState determines if the SSL tunnel is on the client or server side.
+
+	Examples:
+		A simple SSL client:
+		---
+		void sendSSLMessage()
+		{
+			auto conn = connectTCP("127.0.0.1", 1234);
+			auto sslctx = mew SSLContext;
+			auto stream = new SSLStream(conn, sslctx, SSLStreamState.connecting);
+			stream.write("Hello, World!");
+			stream.finalize();
+			conn.close();
+		}
+		---
+
+		Corresponding server:
+		---
+		void listenForSSL()
+		{
+			auto sslctx = new SSLContext("server.crt", "server.key");
+			listenTCP(1234, (conn){
+				auto stream = new SSLStream(conn, sslctx, SSLStreamState.accepting);
+				logInfo("Got message: %s", strea.readAllUtf8());
+				stream.finalize();
+			});
+		}
+		---
+
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
@@ -22,6 +52,9 @@ import std.string;
 
 import core.stdc.string : strlen;
 
+version(VibePragmaLib) pragma(lib, "ssl");
+version(VibePragmaLib) version (Windows) pragma(lib, "eay");
+
 version = SSL;
 
 
@@ -29,18 +62,26 @@ version = SSL;
 /* Public types                                                                                   */
 /**************************************************************************************************/
 
-class SslStream : Stream {
+/**
+	Creates an SSL/TLS tunnel within an existing stream.
+
+	Note: Be sure to call finalize before finalizing/closing the outer stream so that the SSL
+	tunnel is properly closed first.
+*/
+class SSLStream : Stream {
 	private {
 		Stream m_stream;
-		SslContext m_sslCtx;
-		SslStreamState m_state;
+		SSLContext m_sslCtx;
+		SSLStreamState m_state;
 		BIO* m_bio;
 		ssl_st* m_ssl;
 		ubyte m_peekBuffer[64];
 		Exception[] m_exceptions;
 	}
 
-	this(Stream underlying, SslContext ctx, SslStreamState state)
+	/** Constructs a new SSL tunnel.
+	*/
+	this(Stream underlying, SSLContext ctx, SSLStreamState state)
 	{
 		m_stream = underlying;
 		m_state = state;
@@ -56,15 +97,15 @@ class SslStream : Stream {
 		SSL_set_bio(m_ssl, m_bio, m_bio);
 
 		final switch (state) {
-			case SslStreamState.accepting:
+			case SSLStreamState.accepting:
 				//SSL_set_accept_state(m_ssl);
-				enforceSsl(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
+				enforceSSL(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
 				break;
-			case SslStreamState.connecting:
+			case SSLStreamState.connecting:
 				//SSL_set_connect_state(m_ssl);
-				enforceSsl(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
+				enforceSSL(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
 				break;
-			case SslStreamState.connected:
+			case SSLStreamState.connected:
 				break;
 		}
 		checkExceptions();
@@ -145,7 +186,7 @@ class SslStream : Stream {
 	void finalize()
 	{
 		if( !m_ssl ) return;
-		logTrace("SslStream finalize");
+		logTrace("SSLStream finalize");
 
 		SSL_shutdown(m_ssl);
 		SSL_free(m_ssl);
@@ -168,7 +209,7 @@ class SslStream : Stream {
 		}
 	}
 
-	private int enforceSsl(int ret, string message)
+	private int enforceSSL(int ret, string message)
 	{
 		if( ret <= 0 ){
 			auto errmsg = to!string(SSL_get_error(m_ssl, ret));
@@ -178,7 +219,11 @@ class SslStream : Stream {
 	}
 }
 
-enum SslStreamState {
+/// Compatibility alias, will be deprecated soon.
+alias SslStream = SSLStream;
+
+
+enum SSLStreamState {
 	connecting,
 	accepting,
 	connected,
@@ -191,7 +236,11 @@ enum SslStreamState {
 	Connected = connected
 }
 
-class SslContext {
+/// Compatibility alias, will be deprecated soon.
+alias SslStreamState = SSLStreamState;
+
+
+class SSLContext {
 	private {
 		ssl_ctx_st* m_ctx;
 	}
@@ -241,6 +290,10 @@ class SslContext {
 		else assert(false);
 	}
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias SslContext = SSLContext;
+
 
 enum SSLVersion {
 	ssl23,
@@ -302,7 +355,7 @@ private nothrow extern(C)
 
 	int onBioRead(BIO *b, char *outb, int outlen)
 	{
-		SslStream stream = cast(SslStream)b.ptr;
+		auto stream = cast(SSLStream)b.ptr;
 		
 		try {
 			outlen = min(outlen, stream.m_stream.leastSize);
@@ -316,7 +369,7 @@ private nothrow extern(C)
 
 	int onBioWrite(BIO *b, const(char) *inb, int inlen)
 	{
-		SslStream stream = cast(SslStream)b.ptr;
+		auto stream = cast(SSLStream)b.ptr;
 		try {
 			stream.m_stream.write(inb[0 .. inlen]);
 		} catch(Exception e){
@@ -328,7 +381,7 @@ private nothrow extern(C)
 
 	c_long onBioCtrl(BIO *b, int cmd, c_long num, void *ptr)
 	{
-		SslStream stream = cast(SslStream)b.ptr;
+		auto stream = cast(SSLStream)b.ptr;
 		c_long ret = 1;
 
 		switch(cmd){

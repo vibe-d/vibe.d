@@ -10,6 +10,7 @@ module vibe.templ.utils;
 import vibe.http.server;
 
 import std.traits;
+import std.typecons : Rebindable, Unqual;
 
 
 /**
@@ -32,20 +33,20 @@ import std.traits;
 		'authInjector' and 'somethingInjector' can process the request and decide what to do.
 
 		---
-		void authInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void authInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
 			Next!(Aliases, userinfo)(req, res);
 		}
 
-		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void somethingInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string something_else;
 			Next!(Aliases, something_else)(req, res);
 		}
 
-		void page(Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void page(Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string message = "Welcome to the example page!"
 			res.render!("home.dt", Aliases, message);
@@ -53,7 +54,7 @@ import std.traits;
 
 		static this()
 		{
-			auto router = new UrlRouter;
+			auto router = new URLRouter;
 			router.get("/", inject!(page, authInjector, somethingInjector));
 		} 
 		---
@@ -69,14 +70,14 @@ import std.traits;
 
 	Examples:
 		---
-		void authInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void authInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			string userinfo;
 			// TODO: fill userinfo with content, throw an Unauthorized HTTP error etc.
 			Next!(Aliases, userinfo)(req, res);
 		}
 
-		void somethingInjector(alias Next, Aliases...)(HttpServerRequest req, HttpServerResponse res)
+		void somethingInjector(alias Next, Aliases...)(HTTPServerRequest req, HTTPServerResponse res)
 		{
 			// access the userinfo variable:
 			if( InjectedParams!Aliases.userinfo.length == 0 ) return;
@@ -117,17 +118,23 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 		enum NAME = TYPES_AND_NAMES[i+1];
 		enum INDEX = cttostring(i/2);
 		enum string localAliasesCompat = 
-			TYPE~" "~NAME~";\n"~
+			"Rebindable2!("~TYPE~") "~NAME~";\n"~
 			"if( _arguments["~INDEX~"] == typeid(Variant) )\n"~
 			"\t"~NAME~" = *va_arg!Variant(_argptr).peek!("~TYPE~")();\n"~
 			"else {\n"~
-			"\tassert(_arguments["~INDEX~"] == typeid("~TYPE~"));\n"~
+			"\tassert(_arguments["~INDEX~"] == typeid("~TYPE~"), \"Actual type for parameter "~NAME~" does not match template type.\");\n"~
 			"\t"~NAME~" = va_arg!("~TYPE~")(_argptr);\n"~
 			"}\n"~
 			localAliasesCompat!(i+2, TYPES_AND_NAMES);
 	} else {
 		enum string localAliasesCompat = "";
 	}
+}
+
+template Rebindable2(T)
+{
+	static if (is(T == class) || is(T == interface) || isArray!T) alias Rebindable2 = Rebindable!T;
+	else alias Rebindable2 = Unqual!T;
 }
 
 /// private
@@ -156,7 +163,7 @@ private template injectReverse(Injectors...)
 }
 
 /// private
-void reqInjector(alias Next, Vars...)(HttpServerRequest req, HttpServerResponse res)
+void reqInjector(alias Next, Vars...)(HTTPServerRequest req, HTTPServerResponse res)
 {
 	Next!(Vars, req)(req, res);
 }

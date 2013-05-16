@@ -1,6 +1,8 @@
 ﻿{
 	"name": "vibe-d",
 	"description": "Asynchronous I/O framework",
+	"license": "MIT",
+	"copyright": "Copyright © 2012-2013 rejectedsoftware e.K.",
 	"homepage": "http://vibed.org/",
 	"authors": [
 		"Sönke Ludwig",
@@ -8,14 +10,54 @@
 		"Matthias Dondorff",
 		"see github for more"
 	],
-	"dependencies": {},
-	"versions": ["LIBEV4"],
-	"libs-posix" : ["event", "event_pthreads", "ssl", "crypto"],
+
+	"dependencies": {
+		"libevent": "~master",
+		"libev": "~master",
+		"openssl": "~master"
+	},
+
+	"targetType": "library",
+
 	"libs-windows": ["wsock32", "ws2_32"],
-	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/libevent.dll", "lib/win-i386/ssleay32.dll"],
-	"files-windows-x86" : [
-		"lib/win-i386/eay.lib",
-		"lib/win-i386/ssl.lib",
-		"lib/win-i386/event2.lib"
+
+	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+	"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
+	
+	"excludedSourceFiles": [
+		"source/vibe/core/mutex.d",
+		"source/vibe/core/signal.d",
+		"source/vibe/crypto/md5.d",
+		"source/vibe/crypto/sha1.d",
+		"source/vibe/crypto/ssl.d",
+		"source/vibe/stream/stream.d"
+	],
+
+	"configurations": [
+		{
+			"name": "libevent",
+			"versions": ["VibeLibeventDriver"],
+			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
+			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
+			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"]
+		},
+		{
+			"name": "libev",
+			"platforms": ["posix"],
+			"versions": ["VibeLibevDriver"],
+		},
+		{
+			"name": "win32",
+			"platforms": ["windows"],
+			"versions": ["VibeWin32Driver"]
+		},
+		{
+			"name": "winrt",
+			"platforms": ["windows"],
+			"versions": ["VibeWinrtDriver"]
+		}
 	]
 }

@@ -69,12 +69,29 @@ struct Json {
 	private {
 		union {
 			bool m_bool;
-			long m_int;
-			double m_float;
-			string m_string;
-			Json[] m_array;
 			Json[string] m_object;
-		};
+		}
+		// put each size into its own union to work around garbage that
+		// otherwise is in the unused area of the union. This garbage
+		// produces false GC references and causes std.algorithm.swap
+		// to choke because of pretended self-aliasing
+		static if ((void*).sizeof == 4) {
+			union {
+				long m_int;
+				double m_float;
+				Json[] m_array;
+				string m_string;
+			}
+		} else {
+			union {
+				long m_int;
+				double m_float;
+			}
+			union {
+				Json[] m_array;
+				string m_string;
+			}
+		}
 		Type m_type = Type.Undefined;
 	}
 

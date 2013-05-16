@@ -1,6 +1,117 @@
 ﻿Changelog
 =========
 
+v0.7.15 - 2013-04-27
+--------------------
+
+### Features and improvements ###
+ 
+ - Improved the logging system with pluggable loggers, more specified verbose log levels, an HTML logger, and proper use of stdout/stderr
+ - Added basic compile support for 64-bit Windows (using the "win32" driver)
+ - Add a scoped alternative version of `vibe.core.concurrency.lock` (used for safe access to `shared` objects with unshared methods)
+ - Add support to repeat the idle event until a new message arrives
+ - Task is now weakly isolated and can thus be passed to other threads using `runWorkerTask`
+ - Implemented digest authentication in the MongoDB client (by Christian Schneider aka HowToMeetLadies) - [pull #218][issue218]
+ - The number of worker threads is now `core.cpuid.threadsPerCPU`
+ - `TaskMutex` is now fully thread safe and has much lower overhead when no contention happens
+ - `TaskCondition` now also works with a plain `Mutex` in addition to a `TaskMutex`
+ - Removed the deprecated `Mutex` alias
+ - Renamed `Signal` to `ManualEvent` to avoid confusion with other kinds of "signals"
+ - `MemoryStream` now supports dynamically growing to the buffer limit
+ - `HttpServer` will now drop incoming connections that don't send data within 10 seconds after the connection has been established
+ - Added a new `createTimer` overload that doesn't automatically arm the timer after creation
+ - `exitEventLoop` now by default also shuts down the worker threads (if `enableWorkerThreads` was called)
+ - Added new command line options "--vv", "--vvv" and "--vvvv" to specify more verbose logging
+ - Added connection pooling to the Redis client (by Junho Nurminen aka jupenur) - [pull #199][issue199]
+ - Various documentation improvements and better adherence to the [style guide](http://vibed.org/style-guide)
+ - Compiles with DMD 2.063 (mostly by Vladimir Panteleev aka CyberShadow) - [pull #207][issue207]
+ - All examples now use exact imports rather than using `import vibe.vibe;` or `import vibe.d;`
+ - Moved basic WWW form parsing from `vibe.http.form` to `vibe.inet.webform` to reduce intermodule dependencies and improve compile time
+ - MongoDB URL parsing code uses `vibe.inet.webform` to parse query string arguments now instead of `std.regex` - improves compile time
+ - Much more complete REST interface generator example (by Михаил Страшун aka Dicebot) - [pull #210][issue210]
+ - Updated OpenSSL DLLs to 1.0.1e (important security fixes)
+ - Renamed `EventedObject.isOwner` to `amOwner`
+ - Improved intermodule dependencies, configuration option/file handling and added `pragma(lib)` (using "--version=VibePragmaLib") for more comfortable building without dub/vibe (by Vladimir Panteleev aka CyberShadow) - [pull #211][issue211]
+ - Implemented an automatic command line help screen (inferred from calls to `vibe.core.args.getOption`)
+ - Added meaningful error messages when the connection to a MongoDB or Redis server fails
+ - Deprecated `vibe.http.server.startListening`, which is not necessary anymore
+
+### Bug fixes ###
+
+ - Fixed `vibe.core.concurrency.receiveTimeout` to actually work at all
+ - Fixed `Win32Timer.stop` to reset the `pending` state and allow repeated calls
+ - Fixed `HttpClient` to avoid running into keep-alive timeouts (will close the connection 2 seconds before the timeout now)
+ - Fixed `HttpClient` to properly handle responses without a "Keep-Alive" header
+ - Fixed `isWeaklyIsolated` for structs containing functions
+ - Fixed all invalid uses of `countUntil` where `std.string.indexOf` should have been used instead - [issue #205][issue205]
+ - Fixed spelling of the "--distport" command line switch and some documentation - [pull #203][issue203], [pull #204][issue204]
+ - Fixed spurious error messages when accepting connections in the libevent driver (by Vladimir Panteleev aka CyberShadow) - [pull #207][issue207]
+ - Fixed adjusting of method names in the REST interface generator for sub interfaces (by Михаил Страшун aka Dicebot) - [pull #210][issue210]
+ - Fixed falling back to IPv4 if listening on IPv6 fails when calling `listenTCP` without a bind address
+ - Fixed `Libevent2MenualEvent.~this` to not access GC memory which may already be finalized
+ - Fixed `Win32TCPConnection.peerAddress` and `Win32UDPConnection.bindAddress`
+ - Partially fixed automatic event loop exit in the Win32 driver (use -version=VibePartialAutoExit for now) - [pull #213][issue213]
+ - Fixed `renderCompat` to work with `const` parameters
+ - Fixed an error in the Deimos bindings (by Henry Robbins Gouk) - [pull #220][issue220]
+ - Fixed a compilation error in the REST interface client (multiple definitions of "url__")
+
+[issue190]: https://github.com/rejectedsoftware/vibe.d/issues/190
+[issue199]: https://github.com/rejectedsoftware/vibe.d/issues/199
+[issue203]: https://github.com/rejectedsoftware/vibe.d/issues/203
+[issue204]: https://github.com/rejectedsoftware/vibe.d/issues/204
+[issue205]: https://github.com/rejectedsoftware/vibe.d/issues/205
+[issue207]: https://github.com/rejectedsoftware/vibe.d/issues/207
+[issue210]: https://github.com/rejectedsoftware/vibe.d/issues/210
+[issue211]: https://github.com/rejectedsoftware/vibe.d/issues/211
+[issue213]: https://github.com/rejectedsoftware/vibe.d/issues/213
+[issue218]: https://github.com/rejectedsoftware/vibe.d/issues/218
+[issue220]: https://github.com/rejectedsoftware/vibe.d/issues/220
+
+
+v0.7.14 - 2013-03-22
+--------------------
+
+### Features and improvements ###
+
+ - Performance tuning for the HTTP server and client
+ - Implemented distributed listening and HTTP server request processing (using worker threads to accept connections)
+ - Stable memory usage for HTTP client and server (tested for 50 million requests)
+ - Implemented new `TaskMutex` and `TaskCondition` classes deriving from Druntime's `Mutex` and `Condition` for drop-in replacement
+ - Added a simplified version of the `std.concurrency` API that works with vibe.d's tasks (temporary drop-in replacement)
+ - Added support for customizing the HTTP method and path using UDAs in the REST interface generator (by Михаил Страшун aka Dicebot) - [pull #189][issue189]
+ - `vibe.core.mutex` and `vibe.core.signal` have been deprecated
+ - Added support for WebDAV specific HTTP methods - see also [issue #109][issue109]
+ - Compiles on DMD 2.061/2.062 in unit test mode
+ - Added `Json.remove()` for JSON objects
+ - Added `Isolated!T` in preparation of a fully thread-safe API
+ - The package description now exposes a proper set of configurations
+ - VPM uses the new download URL schema instead of relying on a `"downloadUrl"` field in the package description to stay forward compatible with DUB
+ - The default order to listen is now IPv6 and then IPv4 to avoid the IPv4 listener blocking the IPv6 one on certain systems
+ - Added `HttpServerSettings.disableDistHost` to force `listenHttp` to listen immediately, even during initialization
+ - Added `WebSocket.receiveBinary` and `WebSocket.receiveText` - [issue #182][issue182]
+ - Added `HttpServerResponse.writeRawBody` and `HttpClientResponse.readRwaBody` to allow for verbatim forwarding
+ - ".gz" and ".tgz" are now recognized as compressed formats and are not transferred with a compressed "Content-Encoding"
+ - Added a pure scoped callback based version of `requestHttp` to allow GC-less operation and also automatic pipelining of requests in the future
+
+### Bug fixes ###
+
+ - Fixed some possible crashes and memory leaks in the `HttpClient`
+ - Fixed the `HttpRouter` interface to derive from `HttpServerRequestHandler`
+ - Fixed parsing of version ranges in the deprecated VPM
+ - Fixed some examples by added a `VibeCustomMain` version to their package.json
+ - Fixed a possible range violation in the Diet compiler for raw/filter nodes
+ - Fixed detection of horizontal lines in the Markdown parser
+ - Fixed handling of one character methods in the REST interface generator - [pull #195][issue195]
+ - Fixed the reverse proxy to not drop the "Content-Length" header
+ - Fixed `HttpClient` to obey "Connection: close" responses
+ - Fixed `Libevent2Signal` to not move tasks between threads
+
+[issue109]: https://github.com/rejectedsoftware/vibe.d/issues/109
+[issue182]: https://github.com/rejectedsoftware/vibe.d/issues/182
+[issue189]: https://github.com/rejectedsoftware/vibe.d/issues/189
+[issue195]: https://github.com/rejectedsoftware/vibe.d/issues/195
+
+
 v0.7.13 - 2013-02-24
 --------------------
 

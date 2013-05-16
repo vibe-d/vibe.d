@@ -1,23 +1,28 @@
-import vibe.d;
+import vibe.appmain;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.core.concurrency;
+import core.time;
 
-static this()
+
+shared static this()
 {
 	auto t1 = runTask({
-		while(true){
+		while (true) {
 			logDebug("receive1");
 			receive(
-				(string msg){
+				(string msg) {
 					logInfo("Received string message: %s", msg);
 				},
-				(int msg){
+				(int msg) {
 					logInfo("Received int message: %s", msg);
 				});
 			logDebug("receive2");
 			receive(
-				(double msg){
+				(double msg) {
 					logInfo("Received double: %s", msg);
 				},
-				(int a, int b, int c){
+				(int a, int b, int c) {
 					logInfo("Received iii: %s %s %s", a, b, c);
 				});
 		}

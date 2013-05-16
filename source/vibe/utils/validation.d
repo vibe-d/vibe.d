@@ -9,11 +9,12 @@ module vibe.utils.validation;
 
 import vibe.utils.string;
 
-import std.algorithm;
+import std.algorithm : canFind;
 import std.exception;
-import std.conv;
-import std.utf;
 import std.compiler;
+import std.conv;
+import std.string;
+import std.utf;
 
 static if( D_major > 2 || D_major == 2 && D_minor >= 60 )
 	import std.net.isemail; // does not link pre 2.060
@@ -30,12 +31,12 @@ static if( D_major > 2 || D_major == 2 && D_minor >= 60 )
 string validateEmail(string str, size_t max_length = 64)
 {
 	enforce(str.length <= 64, "The email address may not be longer than "~to!string(max_length)~"characters.");
-	auto at_idx = str.countUntil('@');
+	auto at_idx = str.indexOf('@');
 	enforce(at_idx > 0, "Email is missing the '@'.");
 	validateIdent(str[0 .. at_idx], "!#$%&'*+-/=?^_`{|}~.(),:;<>@[\\]", "An email user name", false);
 	
 	auto domain = str[at_idx+1 .. $];
-	auto dot_idx = domain.countUntil('.');
+	auto dot_idx = domain.indexOf('.');
 	enforce(dot_idx > 0 && dot_idx < str.length-2, "The email domain is not valid.");
 	enforce(!domain.anyOf(" @,[](){}<>!\"'%&/\\?*#;:|"), "The email domain contains invalid characters.");
 	
@@ -73,12 +74,12 @@ string validateUserName(string str, int min_length = 3, int max_length = 32, str
 string validateIdent(string str, string additional_chars = "_", string entity_name = "An identifier", bool no_number_start = true)
 {
 	// NOTE: this is meant for ASCII identifiers only!
-	foreach( i, char ch; str ){
-		if( ch >= 'a' && ch <= 'z' ) continue;
-		if( ch >= 'A' && ch <= 'Z' ) continue;
-		if( i > 0 && ch >= '0' && ch <= '9' ) continue;
-		if( additional_chars.countUntil(ch) >= 0 ) continue; 
-		if( no_number_start && ch >= '0' && ch <= '9' ) 
+	foreach (i, char ch; str) {
+		if (ch >= 'a' && ch <= 'z') continue;
+		if (ch >= 'A' && ch <= 'Z') continue;
+		if (i > 0 && ch >= '0' && ch <= '9') continue;
+		if (additional_chars.canFind(ch)) continue; 
+		if (no_number_start && ch >= '0' && ch <= '9') 
 	    	throw new Exception(entity_name~" must not begin with a number."); 
 		//throw new Exception(entity_name~" may only contain numbers, letters and one of ("~additional_chars~")");
 	}

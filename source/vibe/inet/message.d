@@ -8,7 +8,6 @@
 module vibe.inet.message;
 
 import vibe.core.log;
-import vibe.http.common : StrMapCI;
 import vibe.core.stream;
 import vibe.stream.operations;
 import vibe.utils.array;
@@ -25,7 +24,7 @@ import std.string;
 /**
 	Parses an internet header according to RFC5322 (with RFC822 compatibility).
 */
-void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator())
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator())
 {
 	string hdr, hdrvalue;
 
@@ -40,7 +39,6 @@ void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 
 	string ln;
 	while( (ln = cast(string)input.readLine(max_line_length, "\r\n", alloc)).length > 0 ){
-		logTrace("hdr: %s", ln);
 		if( ln[0] != ' ' && ln[0] != '\t' ){
 			addPreviousHeader();
 
@@ -54,6 +52,10 @@ void parseRfc5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 	}
 	addPreviousHeader();
 }
+
+/// Compatibility alias, will be deprecated soon.
+alias parseRfc5322Header = parseRFC5322Header;
+
 
 private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -84,7 +86,7 @@ void writeRFC822TimeString(R)(ref R dst, SysTime time)
 	writeDecimal2(dst, time.second);
 	if( time.timezone == UTC() ) dst.put(" GMT");
 	else {
-		auto now = Clock.currTime().stdTime();
+		auto now = Clock.currStdTime();
 		auto offset = cast(int)((time.timezone.utcToTZ(now) - now) / 600_000_000);
 		dst.put(' ');
 		dst.put(offset >= 0 ? '+' : '-');
@@ -173,7 +175,7 @@ SysTime parseRFC822DateTimeString(string str)
 
 	auto dt = DateTime(year, month, day, hour, minute, second);
 	if( tzoffset == 0 ) return SysTime(dt, UTC());
-	else return SysTime(dt, new SimpleTimeZone((tzoffset / 100) * 60 + tzoffset % 100));
+	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100) * 60 + tzoffset % 100));
 }
 
 
@@ -287,7 +289,8 @@ struct InetHeaderMap {
 		auto keysum = computeCheckSumI(key);
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ){
-			removeFromArrayIdx(m_fields[0 .. m_fieldCount], idx);
+			auto slice = m_fields[0 .. m_fieldCount];
+			removeFromArrayIdx(slice, idx);
 			m_fieldCount--;
 		} else {
 			idx = getIndex(m_extendedFields, key, keysum);
@@ -359,9 +362,9 @@ struct InetHeaderMap {
 		return 0;
 	}
 
-	@property StrMapCI dup()
+	@property InetHeaderMap dup()
 	const {
-		StrMapCI ret;
+		InetHeaderMap ret;
 		ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
 		ret.m_fieldCount = m_fieldCount;
 		ret.m_extendedFields = m_extendedFields.dup;

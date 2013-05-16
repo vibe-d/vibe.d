@@ -1,6 +1,0 @@
-{
-	"name": "vibe-d-benchmark",
-	"dependencies": {
-		"vibe-d": "~master"
-	}
-}

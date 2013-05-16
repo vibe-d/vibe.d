@@ -129,24 +129,8 @@ class ThreadedFileStream : FileStream {
 	@property int fd() { return m_fileDescriptor; }
 	@property Path path() const { return m_path; }
 	@property ulong size() const { return m_size; }
-	@property bool readable() const { return m_mode == FileMode.Read; }
+	@property bool readable() const { return m_mode != FileMode.Append; }
 	@property bool writable() const { return m_mode != FileMode.Read; }
-
-	void acquire()
-	{
-		// TODO: store the owner and throw an exception if illegal calls happen
-	}
-
-	void release()
-	{
-		// TODO: store the owner and throw an exception if illegal calls happen
-	}
-
-	bool isOwner()
-	{
-		// TODO: really check ownership
-		return true;
-	}
 
 	void takeOwnershipOfFD()
 	{
@@ -193,7 +177,8 @@ class ThreadedFileStream : FileStream {
 	{
 		assert(this.writable);
 		assert(bytes.length <= int.max);
-		enforce(.write(m_fileDescriptor, bytes.ptr, cast(int)bytes.length) == bytes.length, "Failed to write data to disk.");
+		auto ret = .write(m_fileDescriptor, bytes.ptr, cast(int)bytes.length);
+		enforce(ret == bytes.length, "Failed to write data to disk."~to!string(bytes.length)~" "~to!string(errno)~" "~to!string(ret)~" "~to!string(m_fileDescriptor));
 		m_ptr += bytes.length;
 	}
 

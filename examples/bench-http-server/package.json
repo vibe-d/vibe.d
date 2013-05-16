@@ -1,0 +1,6 @@
+{
+	"name": "bench-http-server",
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	}
+}

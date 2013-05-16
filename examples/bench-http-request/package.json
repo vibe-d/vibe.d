@@ -1,0 +1,7 @@
+{
+	"name": "bench-http-request",
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": ["VibeCustomMain"]
+}

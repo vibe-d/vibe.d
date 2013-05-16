@@ -4,24 +4,24 @@ import vibe.d;
 import index;
 
 
-void showError(HttpServerRequest req, HttpServerResponse res, HttpServerErrorInfo error)
+void showError(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error)
 {
 	//res.render!("error.dt", req, error);
 	res.renderCompat!("error.dt",
-		HttpServerRequest, "req",
-		HttpServerErrorInfo, "error")(req, error);
+		HTTPServerRequest, "req",
+		HTTPServerErrorInfo, "error")(req, error);
 }
 
 shared static this()
 {
-	auto router = new UrlRouter;
+	auto router = new URLRouter;
 	router.get("/", &showHome);
 	router.get("/about", staticTemplate!"about.dt");
 	router.get("*", serveStaticFiles("public"));
 	
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.errorPageHandler = toDelegate(&showError);
 
-	listenHttp(settings, router);
+	listenHTTP(settings, router);
 }

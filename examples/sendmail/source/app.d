@@ -1,12 +1,12 @@
-import vibe.vibe;
-
+import vibe.core.log;
 import vibe.mail.smtp;
+
 
 void main()
 {
-	auto settings = new SmtpClientSettings("smtp.example.com", 25);
-	settings.connectionType = SmtpConnectionType.StartTLS;
-	settings.authType = SmtpAuthType.Plain;
+	auto settings = new SMTPClientSettings("smtp.example.com", 25);
+	settings.connectionType = SMTPConnectionType.startTLS;
+	settings.authType = SMTPAuthType.plain;
 	settings.username = "username";
 	settings.password = "secret";
 

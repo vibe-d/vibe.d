@@ -10,7 +10,7 @@ module vibe.http.status;
 /**
 	Definitions of all standard HTTP status codes.
 */
-enum HttpStatus {
+enum HTTPStatus {
 	continue_                    = 100,
 	switchingProtocols           = 101,
 	ok                           = 200,
@@ -134,6 +134,10 @@ enum HttpStatus {
 	HTTPVersionNotSupported = httpVersionNotSupported,
 }
 
+/// Compatibility alias, will be deprecated soon.
+alias HttpStatus = HTTPStatus;
+
+
 /**
 	Returns a standard text description of the specified HTTP status code.
 */
@@ -142,46 +146,46 @@ string httpStatusText(int code)
 	switch(code)
 	{
 		default: break;
-		case HttpStatus.continue_                    : return "Continue";
-		case HttpStatus.switchingProtocols           : return "Switching Protocols";
-		case HttpStatus.ok                           : return "OK";
-		case HttpStatus.created                      : return "Created";
-		case HttpStatus.accepted                     : return "Accepted";
-		case HttpStatus.nonAuthoritativeInformation  : return "Non-Authoritative Information";
-		case HttpStatus.noContent                    : return "No Content";
-		case HttpStatus.resetContent                 : return "Reset Content";
-		case HttpStatus.partialContent               : return "Partial Content";
-		case HttpStatus.multipleChoices              : return "Multiple Choices";
-		case HttpStatus.movedPermanently             : return "Moved Permanently";
-		case HttpStatus.found                        : return "Found";
-		case HttpStatus.seeOther                     : return "See Other";
-		case HttpStatus.notModified                  : return "Not Modified";
-		case HttpStatus.useProxy                     : return "Use Proxy";
-		case HttpStatus.temporaryRedirect            : return "Temporary Redirect";
-		case HttpStatus.badRequest                   : return "Bad Request";
-		case HttpStatus.unauthorized                 : return "Unauthorized";
-		case HttpStatus.paymentRequired              : return "Payment Required";
-		case HttpStatus.forbidden                    : return "Forbidden";
-		case HttpStatus.notFound                     : return "Not Found";
-		case HttpStatus.methodNotAllowed             : return "Method Not Allowed";
-		case HttpStatus.notAcceptable                : return "Not Acceptable";
-		case HttpStatus.proxyAuthenticationRequired  : return "Proxy Authentication Required";
-		case HttpStatus.requestTimeout               : return "Request Time-out";
-		case HttpStatus.conflict                     : return "Conflict";
-		case HttpStatus.gone                         : return "Gone";
-		case HttpStatus.lengthRequired               : return "Length Required";
-		case HttpStatus.preconditionFailed           : return "Precondition Failed";
-		case HttpStatus.requestEntityTooLarge        : return "Request Entity Too Large";
-		case HttpStatus.requestURITooLarge           : return "Request-URI Too Large";
-		case HttpStatus.unsupportedMediaType         : return "Unsupported Media Type";
-		case HttpStatus.requestedrangenotsatisfiable : return "Requested range not satisfiable";
-		case HttpStatus.expectationFailed            : return "Expectation Failed";
-		case HttpStatus.internalServerError          : return "Internal Server Error";
-		case HttpStatus.notImplemented               : return "Not Implemented";
-		case HttpStatus.badGateway                   : return "Bad Gateway";
-		case HttpStatus.serviceUnavailable           : return "Service Unavailable";
-		case HttpStatus.gatewayTimeout               : return "Gateway Time-out";
-		case HttpStatus.httpVersionNotSupported      : return "HTTP Version not supported";
+		case HTTPStatus.continue_                    : return "Continue";
+		case HTTPStatus.switchingProtocols           : return "Switching Protocols";
+		case HTTPStatus.ok                           : return "OK";
+		case HTTPStatus.created                      : return "Created";
+		case HTTPStatus.accepted                     : return "Accepted";
+		case HTTPStatus.nonAuthoritativeInformation  : return "Non-Authoritative Information";
+		case HTTPStatus.noContent                    : return "No Content";
+		case HTTPStatus.resetContent                 : return "Reset Content";
+		case HTTPStatus.partialContent               : return "Partial Content";
+		case HTTPStatus.multipleChoices              : return "Multiple Choices";
+		case HTTPStatus.movedPermanently             : return "Moved Permanently";
+		case HTTPStatus.found                        : return "Found";
+		case HTTPStatus.seeOther                     : return "See Other";
+		case HTTPStatus.notModified                  : return "Not Modified";
+		case HTTPStatus.useProxy                     : return "Use Proxy";
+		case HTTPStatus.temporaryRedirect            : return "Temporary Redirect";
+		case HTTPStatus.badRequest                   : return "Bad Request";
+		case HTTPStatus.unauthorized                 : return "Unauthorized";
+		case HTTPStatus.paymentRequired              : return "Payment Required";
+		case HTTPStatus.forbidden                    : return "Forbidden";
+		case HTTPStatus.notFound                     : return "Not Found";
+		case HTTPStatus.methodNotAllowed             : return "Method Not Allowed";
+		case HTTPStatus.notAcceptable                : return "Not Acceptable";
+		case HTTPStatus.proxyAuthenticationRequired  : return "Proxy Authentication Required";
+		case HTTPStatus.requestTimeout               : return "Request Time-out";
+		case HTTPStatus.conflict                     : return "Conflict";
+		case HTTPStatus.gone                         : return "Gone";
+		case HTTPStatus.lengthRequired               : return "Length Required";
+		case HTTPStatus.preconditionFailed           : return "Precondition Failed";
+		case HTTPStatus.requestEntityTooLarge        : return "Request Entity Too Large";
+		case HTTPStatus.requestURITooLarge           : return "Request-URI Too Large";
+		case HTTPStatus.unsupportedMediaType         : return "Unsupported Media Type";
+		case HTTPStatus.requestedrangenotsatisfiable : return "Requested range not satisfiable";
+		case HTTPStatus.expectationFailed            : return "Expectation Failed";
+		case HTTPStatus.internalServerError          : return "Internal Server Error";
+		case HTTPStatus.notImplemented               : return "Not Implemented";
+		case HTTPStatus.badGateway                   : return "Bad Gateway";
+		case HTTPStatus.serviceUnavailable           : return "Service Unavailable";
+		case HTTPStatus.gatewayTimeout               : return "Gateway Time-out";
+		case HTTPStatus.httpVersionNotSupported      : return "HTTP Version not supported";
 	}
 	if( code >= 600 ) return "Unknown";
 	if( code >= 500 ) return "Unknown server error";
@@ -198,9 +202,9 @@ string httpStatusText(int code)
 bool justifiesConnectionClose(int status) {
 	switch(status) {
 		default: return false;
-		case HttpStatus.requestEntityTooLarge:
-		case HttpStatus.requestURITooLarge:
-		case HttpStatus.requestTimeout:
+		case HTTPStatus.requestEntityTooLarge:
+		case HTTPStatus.requestURITooLarge:
+		case HTTPStatus.requestTimeout:
 			return true; 
 	}
 }

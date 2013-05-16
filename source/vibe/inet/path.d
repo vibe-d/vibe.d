@@ -7,7 +7,7 @@
 */
 module vibe.inet.path;
 
-import std.algorithm;
+import std.algorithm : canFind, min;
 import std.array;
 import std.conv;
 import std.exception;
@@ -32,9 +32,9 @@ struct Path {
 	this(string pathstr)
 	{
 		m_nodes = cast(immutable)splitPath(pathstr);
-		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && m_nodes[0].toString().countUntil(':')>0);
+		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && m_nodes[0].toString().indexOf(':')>0);
 		m_endsWithSlash = pathstr.endsWith("/");
-		foreach( e; m_nodes ) assert(e.toString().length > 0);
+		foreach( e; m_nodes ) assert(e.toString().length > 0, "Empty path nodes not allowed: "~pathstr);
 	}
 	
 	/// Constructs a path object from a list of PathEntry objects.
@@ -195,10 +195,10 @@ struct Path {
 		return ret;
 	}
 	
-	Path opBinary(string OP)(string rhs) const if( OP == "~" ) { assert(rhs.length > 0); return opBinary!"~"(Path(rhs)); }
-	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { assert(rhs.toString().length > 0); return opBinary!"~"(Path(rhs)); }
-	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { assert(rhs.length > 0); opOpAssign!"~"(Path(rhs)); }
-	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { assert(rhs.toString().length > 0); opOpAssign!"~"(Path(rhs)); }
+	Path opBinary(string OP)(string rhs) const if( OP == "~" ) { return opBinary!"~"(Path(rhs)); }
+	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return opBinary!"~"(Path(rhs)); }
+	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
+	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { auto p = this ~ rhs; m_nodes = p.m_nodes; m_endsWithSlash = rhs.m_endsWithSlash; }
 	
 	/// Tests two paths for equality using '=='.
@@ -232,7 +232,7 @@ struct PathEntry {
 	
 	this(string str)
 	{
-		assert(str.countUntil('/') < 0 && str.countUntil('\\') < 0);
+		assert(!str.canFind('/') && !str.canFind('\\'));
 		m_name = str;
 	}
 	
@@ -277,7 +277,12 @@ PathEntry[] splitPath(string path)
 	nelements++;
 	
 	// reserve space for the elements
-	auto elements = new PathEntry[nelements];
+	PathEntry[] storage;
+	/*if (alloc) {
+		auto mem = alloc.alloc(nelements * PathEntry.sizeof);
+		mem[] = 0;
+		storage = cast(PathEntry[])mem;
+	} else*/ storage = new PathEntry[nelements];
 
 	// read and return the elements
 	size_t startidx = 0;
@@ -285,11 +290,11 @@ PathEntry[] splitPath(string path)
 	foreach( i, char ch; path )
 		if( ch == '\\' || ch == '/' ){
 			enforce(i - startidx > 0, "Empty path entries not allowed.");
-			elements[eidx++] = PathEntry(path[startidx .. i]);
+			storage[eidx++] = PathEntry(path[startidx .. i]);
 			startidx = i+1;
 		}
-	elements[eidx++] = PathEntry(path[startidx .. $]);
+	storage[eidx++] = PathEntry(path[startidx .. $]);
 	enforce(path.length - startidx > 0, "Empty path entries not allowed.");
 	assert(eidx == nelements);
-	return elements;
+	return storage;
 }
