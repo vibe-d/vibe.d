@@ -196,7 +196,6 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void read(ubyte[] dst)
 	{
-		checkConnected();
 		acquireReader();
 		scope(exit) releaseReader();
 		while( dst.length > 0 ){
@@ -207,6 +206,7 @@ package class Libevent2TCPConnection : TCPConnection {
 			
 			if( dst.length == 0 ) break;
 
+			checkConnected();
 			m_ctx.core.yieldForEvent();
 		}
 		logTrace("read data");
