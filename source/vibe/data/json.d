@@ -117,13 +117,20 @@ struct Json {
 	}
 
 	/// New JSON value of Type.Undefined
-	static @property Json Undefined() { return Json(); }
+	static @property Json undefined() { return Json(); }
 
 	/// New JSON value of Type.Object
-	static @property Json EmptyObject() { return Json(cast(Json[string])null); }
+	static @property Json emptyObject() { return Json(cast(Json[string])null); }
 
 	/// New JSON value of Type.Array
-	static @property Json EmptyArray() { return Json(cast(Json[])null); }
+	static @property Json emptyArray() { return Json(cast(Json[])null); }
+
+	/// Compatibility alias - will be deprecated soon.
+	alias Undefined = undefined;
+	/// ditto
+	alias EmptyObject = emptyObject;
+	/// ditto
+	alias EmptyArray = emptyArray;
 
 	version(JsonLineNumbers) int line;
 
