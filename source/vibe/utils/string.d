@@ -9,6 +9,9 @@ module vibe.utils.string;
 
 public import std.string;
 
+import vibe.utils.array;
+import vibe.utils.memory;
+
 import std.algorithm;
 import std.array;
 import std.ascii;
@@ -155,6 +158,14 @@ string formatString(ARGS...)(string format, ARGS args)
 	auto dst = appender!string();
 	formattedWrite(dst, format, args);
 	return dst.data;
+}
+
+/// Same as std.string.format, just using an allocator.
+string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
+{
+	auto app = AllocAppender!string(alloc);
+	formattedWrite(&app, fmt, args);
+	return app.data;
 }
 
 /// Special version of icmp() with optimization for ASCII characters

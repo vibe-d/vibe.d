@@ -1356,13 +1356,6 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 	}
 }
 
-private string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
-{
-	auto app = AllocAppender!string(alloc);
-	formattedWrite(&app, fmt, args);
-	return app.data;
-}
-
 shared static this()
 {
 	string disthost = s_distHost;
