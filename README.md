@@ -12,20 +12,24 @@ Visit the website at <http://vibed.org/> for more information.
 Recommended use is via DUB
 --------------------------
 
-Instead of installing vibe.d, it is now recommended to use 
+Instead of explicitly installing vibe.d, it is now recommended to use 
 [DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
-applications. Once DUB is installed, you can use vibe.d by adding the following
-dependency to a `package.json` file in your project's directory:
+applications. Once DUB is installed, you can create a new project by running
+`dub init &lt;name&gt;` and enable the use of vibe.d by adding the following
+dependency to the `package.json` file in your project's directory:
 
     {
         "name": "your-project-identifier",
         "dependencies": {
-            "vibe-d": ">=0.7.12"
+            "vibe-d": ">=0.7.15"
         }
     }
 
 Invoking `dub` will then automatically download the latest vibe.d and compile
 and run the project.
+
+Similarly, you can run an example by invoking `dub` from any of the
+example project directories.
 
 
 Installation on Windows
