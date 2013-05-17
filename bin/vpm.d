@@ -233,8 +233,11 @@ private string[] getPackagesAsVersion(const Vpm vpm)
 {
 	string[] ret;
 	string[string] pkgs = vpm.installedPackages();
-	foreach(id, vers; pkgs)
+	ret ~= "Have_vibe_d";
+	foreach(id, vers; pkgs) {
 		ret ~= "-version=VPM_package_" ~ stripDlangSpecialChars(id);
+		ret ~= "-version=Have_" ~ stripDlangSpecialChars(id);
+	}
 	return ret;
 }
 
