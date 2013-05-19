@@ -286,7 +286,8 @@ class HTMLLogger : Logger {
 			case LogLevel.fatal: m_logFile.write(`<div class="fatal">`); break;
 		}
 		m_logFile.writef(`<div class="timeStamp">%s</div>`, msg.time.toISOExtString());
-		m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
+		if (msg.thread)
+			m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
 		m_logFile.write(`<div class="message">`);
 		{
 			auto dst = m_logFile.lockingTextWriter();
