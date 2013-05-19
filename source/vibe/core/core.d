@@ -565,20 +565,19 @@ private class VibeDriverCore : DriverCore {
 
 	void notifyIdle()
 	{
-		again:
-		while(true){
+		bool again = true;
+		while (again) {
+			if (s_idleHandler)
+				again = s_idleHandler();
+			else again = false;
+
 			Task[] tmp;
 			swap(s_yieldedTasks, tmp);
 			foreach(t; tmp) resumeTask(t);
-			if( s_yieldedTasks.length == 0 ) break;
-			processEvents();
+			if (s_yieldedTasks.length > 0)
+				again = true;
+			if (again) processEvents();
 		}
-
-		if (s_idleHandler)
-			if (s_idleHandler()){
-				processEvents();
-				goto again;
-			}
 
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
