@@ -525,7 +525,7 @@ class Win32Timer : Timer {
 			if (timer.m_periodic) {
 				timer.rearm(timer.m_timeout, true);
 			} else {
-				timer.m_pending = false;
+				timer.stop();
 			}
 			if (timer.m_owner) timer.m_driver.m_core.resumeTask(timer.m_owner);
 			if (timer.m_callback) timer.m_callback();
