@@ -99,7 +99,7 @@ int runEventLoop()
 void exitEventLoop(bool shutdown_workers = true)
 {
 	assert(s_eventLoopRunning);
-	if (shutdown_workers) {
+	if (shutdown_workers && st_workerTaskMutex) {
 		synchronized (st_workerTaskMutex)
 			foreach (ref ctx; st_workerThreads)
 				ctx.exit = true;
@@ -151,20 +151,28 @@ void setIdleHandler(bool delegate() del)
 */
 Task runTask(void delegate() task)
 {
-	// if there is no fiber available, create one.
-	if( s_availableFibersCount == 0 ){
+	CoreTask f;
+	while (s_availableFibersCount > 0) {
+		// pick the first available fiber
+		f = s_availableFibers[--s_availableFibersCount];
+		if (f.state == Fiber.State.TERM) {
+			f = null;
+			continue;
+		}
+	}
+
+	if (f is null) {
+		// if there is no fiber available, create one.
 		if( s_availableFibers.length == 0 ) s_availableFibers.length = 1024;
 		logDebug("Creating new fiber...");
 		s_fiberCount++;
-		s_availableFibers[s_availableFibersCount++] = new CoreTask;
+		f = new CoreTask;
 	}
 	
-	// pick the first available fiber
-	auto f = s_availableFibers[--s_availableFibersCount];
 	f.m_taskFunc = task;
 	f.m_taskCounter++;
 	auto handle = f.task();
-	logTrace("initial task call");
+	logTrace("initial task call (%s)", f.state);
 	s_core.resumeTask(handle, null, true);
 	logTrace("run task out");
 	return handle;
@@ -459,12 +467,15 @@ private class CoreTask : TaskFiber {
 				}
 				resetLocalStorage();
 
-				foreach( t; m_yielders ) s_core.resumeTask(t);
+				s_yieldedTasks ~= m_yielders;
+				m_yielders.length = 0;
 				
 				// make the fiber available for the next task
 				if( s_availableFibers.length <= s_availableFibersCount )
 					s_availableFibers.length = 2*s_availableFibers.length;
 				s_availableFibers[s_availableFibersCount++] = this;
+
+				rawYield();
 			}
 		} catch(Throwable th){
 			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
@@ -475,7 +486,7 @@ private class CoreTask : TaskFiber {
 	override void join()
 	{
 		auto caller = Task.getThis();
-		assert(caller !is this, "A task cannot join itself.");
+		assert(caller.fiber !is this, "A task cannot join itself.");
 		assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
 		m_yielders ~= caller;
 		auto run_count = m_taskCounter;
@@ -545,11 +556,10 @@ private class VibeDriverCore : DriverCore {
 
 	void resumeTask(Task task, Exception event_exception, bool initial_resume)
 	{
-		CoreTask ctask = cast(CoreTask)task.fiber;
-		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ to!string(ctask.state));
-		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
-
 		assert(initial_resume || task.running, "Resuming terminated task.");
+		CoreTask ctask = cast(CoreTask)task.fiber;
+		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
+		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ to!string(ctask.state));
 
 		if( event_exception ){
 			extrap();
@@ -574,7 +584,9 @@ private class VibeDriverCore : DriverCore {
 
 			Task[] tmp;
 			swap(s_yieldedTasks, tmp);
-			foreach(t; tmp) resumeTask(t);
+			foreach(t; tmp)
+				if (t.running)
+					resumeTask(t);
 			if (s_yieldedTasks.length > 0)
 				again = true;
 			if (again) processEvents();
