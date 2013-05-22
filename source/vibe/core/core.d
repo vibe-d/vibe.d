@@ -476,11 +476,12 @@ private class CoreTask : TaskFiber {
 	{
 		auto caller = Task.getThis();
 		assert(caller !is this, "A task cannot join itself.");
+		assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
 		m_yielders ~= caller;
 		auto run_count = m_taskCounter;
-		if( m_running && run_count == m_taskCounter ){
+		if (m_running && run_count == m_taskCounter) {
 			s_core.resumeTask(this.task);
-			while( m_running && run_count == m_taskCounter ) rawYield();
+			while (m_running && run_count == m_taskCounter) rawYield();
 		}
 	}
 
@@ -545,7 +546,7 @@ private class VibeDriverCore : DriverCore {
 	void resumeTask(Task task, Exception event_exception, bool initial_resume)
 	{
 		CoreTask ctask = cast(CoreTask)task.fiber;
-		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ (ctask.state == Fiber.State.TERM ? "terminated" : "running"));
+		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ to!string(ctask.state));
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
 
 		assert(initial_resume || task.running, "Resuming terminated task.");
