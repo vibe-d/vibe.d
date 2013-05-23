@@ -62,7 +62,7 @@ interface EventDriver {
 
 	/** Processes all outstanding events if any, does not block.
 	*/
-	int processEvents();
+	bool processEvents();
 
 	/** Exits any running event loop.
 	*/

@@ -115,6 +115,7 @@ class Libevent2Driver : EventDriver {
 	int runEventLoop()
 	{
 		int ret;
+		m_exit = false;
 		while( !m_exit && (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0 )
 			s_driverCore.notifyIdle();
 		return ret;
@@ -127,10 +128,14 @@ class Libevent2Driver : EventDriver {
 		return ret;
 	}
 
-	int processEvents()
+	bool processEvents()
 	{
-		auto ret = event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
-		return ret;
+		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
+		if (m_exit) {
+			m_exit = false;
+			return false;
+		}
+		return true;
 	}
 
 	void exitEventLoop()

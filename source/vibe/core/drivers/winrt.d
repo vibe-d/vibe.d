@@ -37,7 +37,7 @@ class WinRTEventDriver : EventDriver {
 		return 0;
 	}
 
-	int processEvents()
+	bool processEvents()
 	{
 		return 0;
 	}

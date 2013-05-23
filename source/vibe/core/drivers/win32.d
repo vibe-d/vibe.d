@@ -87,29 +87,29 @@ class Win32EventDriver : EventDriver {
 
 	int runEventLoopOnce()
 	{
-		auto ret = doProcessEvents(INFINITE);
+		doProcessEvents(INFINITE);
 		m_core.notifyIdle();
-		return ret;
+		return 0;
 	}
 
-	int processEvents()
+	bool processEvents()
 	{
 		return doProcessEvents(0);
 	}
 
-	int doProcessEvents(uint timeout)
+	bool doProcessEvents(uint timeout)
 	{
 		waitForEvents(timeout);
 		assert(m_tid == GetCurrentThreadId());
 		MSG msg;
 		while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
-			if( msg.message == WM_QUIT ) break;
+			if( msg.message == WM_QUIT ) return false;
 			if( msg.message == WM_USER_SIGNAL )
 				msg.hwnd = m_hwnd;
 			TranslateMessage(&msg);
 			DispatchMessageW(&msg);
 		}
-		return 0;
+		return true;
 	}
 
 	private bool haveEvents()

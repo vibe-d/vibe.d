@@ -77,7 +77,9 @@ int runEventLoop()
 	scope(exit) s_eventLoopRunning = false;
 
 	// runs any yield()ed tasks first
+	s_core.m_exit = false;
 	s_core.notifyIdle();
+	if (s_core.m_exit) return 0;
 
 	if( auto err = getEventDriver().runEventLoop() != 0){
 		if( err == 1 ){
@@ -118,8 +120,10 @@ void exitEventLoop(bool shutdown_workers = true)
 	Process all pending events without blocking.
 
 	Checks if events are ready to trigger immediately, and run their callbacks if so.
+
+	Returns: Returns false iff exitEventLoop was called in the process.
 */
-int processEvents()
+bool processEvents()
 {
 	return getEventDriver().processEvents();
 }
@@ -516,6 +520,7 @@ private class VibeDriverCore : DriverCore {
 		Duration m_gcCollectTimeout;
 		Timer m_gcTimer;
 		bool m_ignoreIdleForGC = false;
+		bool m_exit = false;
 	}
 
 	private void setupGcTimer()
@@ -589,7 +594,11 @@ private class VibeDriverCore : DriverCore {
 					resumeTask(t);
 			if (s_yieldedTasks.length > 0)
 				again = true;
-			if (again) processEvents();
+			if (again)
+				if (!processEvents()) {
+					m_exit = true;
+					return;
+				}
 		}
 
 		if( !m_ignoreIdleForGC && m_gcTimer ){
