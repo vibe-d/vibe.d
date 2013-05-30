@@ -1201,7 +1201,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		// URL parsing if desired
 		if( settings.options & HTTPServerOption.parseURL ){
 			auto url = URL.parse(req.requestURL);
-			req.path = url.pathString;
+			req.path = urlDecode(url.pathString);
 			req.queryString = url.queryString;
 			req.username = url.username;
 			req.password = url.password;
