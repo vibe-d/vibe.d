@@ -137,6 +137,8 @@ class URLRouter : HTTPRouter {
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
+		import std.algorithm;
+		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		m_routes[method] ~= Route(path, cb);
 		return this;
 	}
@@ -175,6 +177,8 @@ class URLRouter : HTTPRouter {
 alias UrlRouter = URLRouter;
 
 
+private enum maxRouteParameters = 64;
+
 private struct Route {
 	string pattern;
 	HTTPServerRequestDelegate cb;
@@ -182,23 +186,33 @@ private struct Route {
 	bool matches(string url, ref string[string] params)
 	const {
 		size_t i, j;
-		for( i = 0, j = 0; i < url.length && j < pattern.length; ){
-			if( pattern[j] == '*' ) return true;
-			if( url[i] == pattern[j] ){
+
+		// store parameters until a full match is confirmed
+		import std.typecons;
+		Tuple!(string, string)[maxRouteParameters] tmpparams;
+		size_t tmppparams_length = 0;
+
+		for (i = 0, j = 0; i < url.length && j < pattern.length;) {
+			if (pattern[j] == '*') return true;
+			if (url[i] == pattern[j]) {
 				i++;
 				j++;
-			} else if( pattern[j] == ':' ){
+			} else if(pattern[j] == ':') {
 				j++;
 				string name = skipPathNode(pattern, j);
 				string match = skipPathNode(url, i);
-				params[name] = urlDecode(match);
+				assert(tmppparams_length < maxRouteParameters, "Maximum number of route parameters exceeded.");
+				tmpparams[tmppparams_length++] = tuple(name, urlDecode(match));
 			} else return false;
 		}
 
-		if( j < pattern.length && pattern[j] == '*' )
+		if ((j < pattern.length && pattern[j] == '*') || (i == url.length && j == pattern.length)) {
+			foreach (t; tmpparams[0 .. tmppparams_length])
+				params[t[0]] = t[1];
 			return true;
+		}
 
-		return i == url.length && j == pattern.length;
+		return false;
 	}
 }
 
