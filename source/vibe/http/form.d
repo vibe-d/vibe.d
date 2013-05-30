@@ -110,7 +110,7 @@ import std.typecons;
 		}
 	}
 
-	static this()
+	shared static this()
 	{
 		auto settings = new HTTPServerSettings;
 		settings.port = 8080;
