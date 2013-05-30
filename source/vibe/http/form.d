@@ -115,7 +115,7 @@ import std.typecons;
 		auto settings = new HTTPServerSettings;
 		settings.port = 8080;
 		auto router = new URLRouter;
-		registerFormInterface(router, new FrontEnd);
+		registerFormInterface(router, new FrontEnd, "/");
 		listenHTTP(settings, router);
 	}
 	---
