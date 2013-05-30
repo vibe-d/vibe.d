@@ -983,6 +983,8 @@ private struct DietCompiler {
 	private int indentLevel(in ref string s, in ref string indent, bool strict = true)
 	{
 		if( indent.length == 0 ) return 0;
+		assertp(!strict || (s[0] != ' ' && s[0] != '\t') || s[0] == indent[0],
+			"Indentation style is inconsistent with previous lines.");
 		int l = 0;
 		while( l+indent.length <= s.length && s[l .. l+indent.length] == indent )
 			l += cast(int)indent.length;
