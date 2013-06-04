@@ -461,12 +461,13 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	{
 		// Set the host start to after the '@'
 		hostIndex = authIndex + 1;
+		string password;
 
 		auto colonIndex = tmpUrl[0..authIndex].indexOf(':');
 		if(colonIndex != -1)
 		{
 			cfg.username = tmpUrl[0..colonIndex];
-			cfg.password = tmpUrl[colonIndex + 1 .. authIndex];
+			password = tmpUrl[colonIndex + 1 .. authIndex];
 		} else {
 			cfg.username = tmpUrl[0..authIndex];
 		}
@@ -477,8 +478,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			return false;
 		}
 
-		cfg.digest = toLower(toHexString(md5Of(cfg.username ~ ":mongo:" ~ cfg.password)).idup);
-		cfg.password = string.init;
+		cfg.digest = MongoClientSettings.makeDigest(cfg.username, password);
 	}
 
 	// Parse the hosts section.
@@ -614,6 +614,8 @@ unittest
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
 	assert(cfg.username == "fred");
+	//assert(cfg.password == "foobar");
+	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "foobar"));
 	assert(cfg.hosts.length == 1);
 	assert(cfg.database == "");
 	assert(cfg.hosts[0].name == "localhost");
@@ -622,7 +624,8 @@ unittest
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:@localhost/baz"));
 	assert(cfg.username == "fred");
-	assert(cfg.password == "");
+	//assert(cfg.password == "");
+	assert(cfg.digest == MongoClientSettings.makeDigest("fred", ""));
 	assert(cfg.database == "baz");
 	assert(cfg.hosts.length == 1);
 	assert(cfg.hosts[0].name == "localhost");
@@ -631,7 +634,8 @@ unittest
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true"));
 	assert(cfg.username == "");
-	assert(cfg.password == "");
+	//assert(cfg.password == "");
+	assert(cfg.digest == "");
 	assert(cfg.database == "");
 	assert(cfg.hosts.length == 3);
 	assert(cfg.hosts[0].name == "host1");
@@ -650,7 +654,8 @@ unittest
 				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
 				"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
-	assert(cfg.password == "flinstone");
+	//assert(cfg.password == "flinstone");
+	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "flinstone"));
 	assert(cfg.database == "mydb");
 	assert(cfg.hosts.length == 3);
 	assert(cfg.hosts[0].name == "host1.example.com");
@@ -752,7 +757,6 @@ private class Message {
 class MongoClientSettings
 {
 	string username;
-	string password;
 	string digest;
 	MongoHost[] hosts;
 	string database;
@@ -765,6 +769,11 @@ class MongoClientSettings
 	bool journal;
 	long connectTimeoutMS;
 	long socketTimeoutMS;
+
+	static string makeDigest(string username, string password)
+	{
+		return md5Of(username ~ ":mongo:" ~ password).toHexString().idup.toLower();
+	}
 }
 
 private struct MongoHost
