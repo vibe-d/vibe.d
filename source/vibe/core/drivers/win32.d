@@ -1241,7 +1241,6 @@ m_status = ConnectionStatus.Connected;
 
 	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
 	{
-		import vibe.core.drivers.threadedfile;
 		// special case sending of files
 		if( auto fstream = cast(Win32FileStream)stream ){
 			if( fstream.tell() == 0 && fstream.size <= 1<<31 ){
