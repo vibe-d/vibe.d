@@ -10,9 +10,6 @@ module vibe.core.file;
 public import vibe.core.driver;
 public import vibe.inet.url;
 
-import vibe.core.drivers.threadedfile;
-import vibe.core.log;
-
 import std.conv;
 import std.c.stdio;
 import std.datetime;
@@ -51,7 +48,6 @@ FileStream createTempFile(string suffix = null)
 		auto tmpname = to!string(tmp.ptr);
 		if( tmpname.startsWith("\\") ) tmpname = tmpname[1 .. $];
 		tmpname ~= suffix;
-		logDebug("tmp %s", tmpname);
 		return openFile(tmpname, FileMode.createTrunc);
 	} else {
 		enum pattern ="/tmp/vtmp.XXXXXX";

@@ -8,7 +8,6 @@
 module vibe.core.sync;
 
 import std.exception;
-import vibe.core.core;
 public import vibe.core.driver;
 
 import core.atomic;
