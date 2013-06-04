@@ -12,7 +12,7 @@ import vibe.utils.memory;
 import std.conv : emplace;
 
 
-struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
+struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a, b) => a == b)
 {
 	struct TableEntry {
 		Key key;
@@ -102,7 +102,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	int opApply(int delegate(ref Value) del)
 	{
 		foreach (i; 0 .. m_table.length)
-			if (m_table[i].key != ClearValue())
+			if (!Equals(m_table[i].key, ClearValue()))
 				if (auto ret = del(m_table[i].value))
 					return ret;
 		return 0;
@@ -111,7 +111,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	int opApply(int delegate(in ref Value) del)
 	const {
 		foreach (i; 0 .. m_table.length)
-			if (m_table[i].key != ClearValue())
+			if (!Equals(m_table[i].key, ClearValue()))
 				if (auto ret = del(m_table[i].value))
 					return ret;
 		return 0;
@@ -120,7 +120,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	int opApply(int delegate(in ref Key, ref Value) del)
 	{
 		foreach (i; 0 .. m_table.length)
-			if (m_table[i].key != ClearValue())
+			if (!Equals(m_table[i].key, ClearValue()))
 				if (auto ret = del(m_table[i].key, m_table[i].value))
 					return ret;
 		return 0;
@@ -129,7 +129,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 	int opApply(int delegate(in ref Key, in ref Value) del)
 	const {
 		foreach (i; 0 .. m_table.length)
-			if (m_table[i].key != ClearValue())
+			if (!Equals(m_table[i].key, ClearValue()))
 				if (auto ret = del(m_table[i].key, m_table[i].value))
 					return ret;
 		return 0;
@@ -141,7 +141,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		size_t start = m_hasher(key) & (m_table.length-1);
 		auto i = start;
 		while (m_table[i].key != key) {
-			if (m_table[i].key == ClearValue()) return size_t.max;
+			if (Equals(m_table[i].key, ClearValue())) return size_t.max;
 			if (++i >= m_table.length) i -= m_table.length;
 			if (i == start) return size_t.max;
 		}
@@ -187,7 +187,7 @@ struct HashMap(Key, Value, alias ClearValue = { return Key.init; })
 		}
 		m_length = 0;
 		foreach (ref el; oldtable) {
-			if (el.key != ClearValue())
+			if (!Equals(el.key, ClearValue()))
 				this[el.key] = el.value;
 			destroy(el);
 		}

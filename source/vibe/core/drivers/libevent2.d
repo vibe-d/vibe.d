@@ -333,13 +333,19 @@ class Libevent2ManualEvent : ManualEvent {
 		}
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
-		HashMap!(Thread, ThreadSlot) m_waiters;
+		alias ThreadSlotMap = HashMap!(Thread, ThreadSlot, nullSlotDummy, slotCompare);
+		ThreadSlotMap m_waiters;
 	}
+
+	/// private
+	static Thread nullSlotDummy() { return null; }
+	/// private
+	static bool slotCompare(in Thread a, in Thread b) { return a is b; }
 
 	this()
 	{
 		m_mutex = new core.sync.mutex.Mutex;
-		m_waiters = HashMap!(Thread, ThreadSlot)(manualAllocator());
+		m_waiters = ThreadSlotMap(manualAllocator());
 	}
 
 	~this()
