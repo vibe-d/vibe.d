@@ -109,11 +109,16 @@ struct Bson {
 			case Type.Bool: m_data = m_data[0 .. 1]; break;
 			case Type.Date: m_data = m_data[0 .. 8]; break;
 			case Type.Null: m_data = null; break;
-			case Type.Regex: m_data = m_data[0 .. 0]; assert(false);
-			case Type.DBRef: m_data = m_data[0 .. 0]; assert(false);
+			case Type.Regex:
+				auto tmp = m_data;
+    			tmp.skipCString();
+    			tmp.skipCString();
+    			m_data = m_data[0 .. $ - tmp.length];
+    			break;
+			case Type.DBRef: m_data = m_data[0 .. 0]; assert(false, "Not implemented.");
 			case Type.Code: m_data = m_data[0 .. 4 + fromBsonData!int(m_data)]; break;
 			case Type.Symbol: m_data = m_data[0 .. 4 + fromBsonData!int(m_data)]; break;
-			case Type.CodeWScope: m_data = m_data[0 .. 0]; assert(false);
+			case Type.CodeWScope: m_data = m_data[0 .. 0]; assert(false, "Not implemented.");
 			case Type.Int: m_data = m_data[0 .. 4]; break;
 			case Type.Timestamp: m_data = m_data[0 .. 8]; break;
 			case Type.Long: m_data = m_data[0 .. 8]; break;
