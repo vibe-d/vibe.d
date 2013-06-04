@@ -216,7 +216,7 @@ final class RedisClient {
 	}
 
 	int decr(string key, int value = 1) {
-		return value == 1 ? request!int("DECR") : request!int("DECRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
+		return value == 1 ? request!int("DECR", cast(ubyte[])key) : request!int("DECRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
 	}
 
 	T get(T : E[], E)(string key) {
@@ -236,7 +236,7 @@ final class RedisClient {
 	}
 
 	int incr(string key, int value = 1) {
-		return value == 1 ? request!int("INCR") : request!int("INCRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
+		return value == 1 ? request!int("INCR", cast(ubyte[])key) : request!int("INCRBY", cast(ubyte[])key, cast(ubyte[])to!string(value));
 	}
 
 	RedisReply mget(string[] keys) {
