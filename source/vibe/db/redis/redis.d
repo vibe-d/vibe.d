@@ -123,7 +123,6 @@ final class RedisClient {
 
 	private ConnectionPool!RedisConnection m_connections;
 
-	deprecated this() { }
 	this(string host = "127.0.0.1", ushort port = 6379)
 	{
 		m_connections = new ConnectionPool!RedisConnection({
@@ -143,13 +142,12 @@ final class RedisClient {
 	}
 
 	private static ubyte[][] argsToUbyte(ARGS...)(ARGS args) {
-		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
-		foreach( i, T; ARGS ){
-			static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-			static assert(i % 2 != 1 || isArray!T, "Values must be arrays.");
-		}
 		ubyte[][] ret;
-		foreach( i, arg; args) ret ~= cast(ubyte[])arg;
+		foreach (i, arg; args) {
+			static if (is(ARGS[i] : const(ubyte)[]) || is (ARGS[i] == string)) ret ~= cast(ubyte[])arg;
+			else static if (is(ARGS[i] : long)) ret ~= cast(ubyte[])to!string(args);
+			else static assert(false, "Only strings, byte array and integers allowed as parameters.");
+		}
 		return ret;
 	}
 
@@ -244,10 +242,14 @@ final class RedisClient {
 	}
 
 	void mset(ARGS...)(ARGS args) {
+		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
+		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
 	    request("MSET", argsToUbyte!ARGS(args));
 	}
 	
 	bool msetNX(ARGS...)(ARGS args) {
+		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
+		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
 	    return request!bool("MSETEX", argsToUbyte!ARGS(args));
 	}
 
