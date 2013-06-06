@@ -455,6 +455,7 @@ package void initializeLogModule()
 
 	foreach_reverse (i, v; verbose)
 		if (v) {
+			setPlainLogging(false);
 			setLogLevel(cast(LogLevel)(LogLevel.diagnostic - i));
 			break;
 		}
