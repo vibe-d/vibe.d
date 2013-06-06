@@ -87,6 +87,7 @@ class SSLStream : Stream {
 		m_state = state;
 		m_sslCtx = ctx;
 		m_ssl = ctx.createClientCtx();
+		scope(failure) SSL_free(m_ssl);
 
 		m_bio = BIO_new(&s_bio_methods);
 		enforce(m_bio !is null, "SSL failed: failed to create BIO structure.");
@@ -143,10 +144,7 @@ class SSLStream : Stream {
 	{
 		while( dst.length > 0 ){
 			int readlen = min(dst.length, int.max);
-			auto ret = SSL_read(m_ssl, dst.ptr, readlen);
-			checkExceptions();
-			enforce(ret != 0, "SSL_read was unsuccessful with ret 0");
-			enforce(ret >= 0, "SSL_read returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
+			auto ret = checkSSLRet("SSL_read", SSL_read(m_ssl, dst.ptr, readlen));
 			//logTrace("SSL read %d/%d", ret, dst.length);
 			dst = dst[ret .. $];
 		}
@@ -157,22 +155,8 @@ class SSLStream : Stream {
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
 			int writelen = min(bytes.length, int.max);
-			auto ret = SSL_write(m_ssl, bytes.ptr, writelen);
-			checkExceptions();
-			
-			const(char)* file = null, data = null;
-			int line;
-			int flags;
-			c_ulong eret;
-			char[120] ebuf;
-			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
-				ERR_error_string(eret, ebuf.ptr);
-				logWarn("SSL error %s at %s:%d: %s", to!string(ebuf.ptr), to!string(file), line, flags & ERR_TXT_STRING ? to!string(data) : "-");
-				if( flags & ERR_TXT_MALLOCED ) OPENSSL_free(cast(void*)data);
-			}
-			enforce(ret != 0, "SSL_write was unsuccessful with ret 0");
-			enforce(ret >= 0, "SSL_write returned an error: "~to!string(SSL_get_error(m_ssl, ret)));
-			logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
+			auto ret = checkSSLRet("SSL_write", SSL_write(m_ssl, bytes.ptr, writelen));
+			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
 		}
 		if( do_flush ) flush();
@@ -200,11 +184,31 @@ class SSLStream : Stream {
 		writeDefault(stream, nbytes, do_flush);
 	}
 
+	private int checkSSLRet(string what, int ret)
+	{
+		checkExceptions();
+		if (ret <= 0) {
+			const(char)* file = null, data = null;
+			int line;
+			int flags;
+			c_ulong eret;
+			char[120] ebuf;
+			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
+				ERR_error_string(eret, ebuf.ptr);
+				logDiagnostic("%s error at at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
+				if (flags & ERR_TXT_MALLOCED) OPENSSL_free(cast(void*)data);
+			}
+		}
+		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
+		enforce(ret >= 0, format("%s returned an error: %s", what, SSL_get_error(m_ssl, ret)));
+		return ret;
+	}
+
 	private void checkExceptions()
 	{
 		if( m_exceptions.length > 0 ){
 			foreach( e; m_exceptions )
-				logWarn("Exception occured on SSL source stream: %s", e.toString());
+				logDiagnostic("Exception occured on SSL source stream: %s", e.toString());
 			throw m_exceptions[0];
 		}
 	}
@@ -256,6 +260,7 @@ class SSLContext {
 				case SSLVersion.dtls1: method = DTLSv1_server_method(); break;
 			}
 			m_ctx = SSL_CTX_new(method);
+			scope(failure) SSL_CTX_free(m_ctx);
 			auto succ = SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(cert_file)) &&
 					SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(key_file), SSL_FILETYPE_PEM);
 			enforce(succ, "Failed to load server cert/key.");
