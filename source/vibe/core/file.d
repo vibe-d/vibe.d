@@ -10,6 +10,8 @@ module vibe.core.file;
 public import vibe.core.driver;
 public import vibe.inet.url;
 
+import vibe.core.drivers.threadedfile; // temporarily needed tp get mkstemps to work
+
 import std.conv;
 import std.c.stdio;
 import std.datetime;
