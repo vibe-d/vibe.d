@@ -325,6 +325,12 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 }
 
 class Libevent2ManualEvent : ManualEvent {
+	
+	/// private
+	static Thread nullSlotDummy() { return null; }
+	/// private
+	static bool slotCompare(in Thread a, in Thread b) { return a is b; }
+	
 	private {
 		struct ThreadSlot {
 			Libevent2Driver driver;
@@ -336,11 +342,6 @@ class Libevent2ManualEvent : ManualEvent {
 		alias ThreadSlotMap = HashMap!(Thread, ThreadSlot, nullSlotDummy, slotCompare);
 		ThreadSlotMap m_waiters;
 	}
-
-	/// private
-	static Thread nullSlotDummy() { return null; }
-	/// private
-	static bool slotCompare(in Thread a, in Thread b) { return a is b; }
 
 	this()
 	{
