@@ -6,18 +6,18 @@ v0.7.16 - 2013-06-
 
 ### Features and improvements ###
 
- - Fiber ownership of network connections and file streams is now handled implicitly to be more in line with classic blocking I/O
+ - Fiber ownership of network connections and file streams is now handled implicitly to be more in line with classic blocking I/O and to lower the code overhead to share/pass connections between threads
  - Removed support for the "vibe" script (aka "VPM") in favor of DUB
- - Uses external deimos packages instead of the included copies for binding to external C libraries
+ - Uses external Deimos packages instead of the included copies for binding to external C libraries
  - Improvements on the REST interface front (by Михаил Страшун aka Dicebot):
      - `registerRestInterface` deduces the base interface from a passed class instance
      - New overload of `registerRestInterface` for use with `@rootPath`
- - Added and overload of `handleWebSockets` that takes a function pointer
- - Improved documentation of `vibe.core.log` and reenabled logging of date/time to plain text log files
- - Compiles with the release version of DMD 2.063 (various authors)
+ - Added an overload of `handleWebSockets` that takes a function pointer
+ - Improved documentation of `vibe.core.log` and re-enabled logging of date/time to plain text log files
+ - Compiles with the release version of DMD 2.063 (various authors involved)
  - The idle handler is now called after processing all events in a spinning round after `yield()` call
  - Added `serveStaticFile` in addition to `serveStaticFiles` - [issue #227][issue227]
- - The thread/fiber ID is looged again by default if verbose logging is enabled
+ - The thread/fiber ID is logged again by default if verbose logging is enabled
 
 ### Bug fixes ###
 
