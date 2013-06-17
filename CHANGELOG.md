@@ -1,6 +1,54 @@
 ﻿Changelog
 =========
 
+v0.7.16 - 2013-06-
+--------------------
+
+### Features and improvements ###
+
+ - Fiber ownership of network connections and file streams is now handled implicitly to be more in line with classic blocking I/O
+ - Removed support for the "vibe" script (aka "VPM") in favor of DUB
+ - Uses external deimos packages instead of the included copies for binding to external C libraries
+ - Improvements on the REST interface front (by Михаил Страшун aka Dicebot):
+     - `registerRestInterface` deduces the base interface from a passed class instance
+     - New overload of `registerRestInterface` for use with `@rootPath`
+ - Added and overload of `handleWebSockets` that takes a function pointer
+ - Improved documentation of `vibe.core.log` and reenabled logging of date/time to plain text log files
+ - Compiles with the release version of DMD 2.063 (various authors)
+ - The idle handler is now called after processing all events in a spinning round after `yield()` call
+ - Added `serveStaticFile` in addition to `serveStaticFiles` - [issue #227][issue227]
+ - The thread/fiber ID is looged again by default if verbose logging is enabled
+
+### Bug fixes ###
+
+ - Fixed "INCR" and "DECR" methods in the Redis client - [issue #200][issue200], [issue #206][issue206]
+ - Fixed the utility `HashMap` to properly call `GC.addRange` on manually allocated memory
+ - Fixed erroneous crosstalk between multiple `ManualEvent` instances in the libevent driver
+ - Fixed self-sending of messages to the caller in `vibe.core.concurrency`
+ - Fixed syntax errors in the documentation of `URLRouter` - [issue #223][issue223]
+ - Fixed calling the HTML logger from a thread that is not registered with the D runtime
+ - Fixed `exitEventLoop` with no call to `enableWorkerThreads`, as well as when called from the idle handler
+ - Fixed `HTTPServerRequest.path` to contain the URL-decoded version of the path - [issue #229][issue229]
+ - Fixed `URLRouter` to not extract parameters of partial matches - [issue #230][issue230]
+ - Fixed documentation example of `registerFormInterface`
+ - Fixed lax indentation style checking in the Diet template compiler
+ - Fixed unit tests for `parseMongoDBUrl` after the recently added support for digest authentication
+ - Fixed construction of `Bson.Type.Regex` `Bson` objects (by Rene Zwanenburg) - [issue #238][issue238]
+ - Fixed handling of Windows UNC paths - [See DUB issue #75][issue75dub]
+ - Fixed the Redis methods taking varargs - [issue #234][issue234]
+ - Fixed failure to free memory after an `SSLStream` has failed to initiate the tunnel
+
+[issue200]: https://github.com/rejectedsoftware/vibe.d/issues/200
+[issue206]: https://github.com/rejectedsoftware/vibe.d/issues/206
+[issue223]: https://github.com/rejectedsoftware/vibe.d/issues/223
+[issue227]: https://github.com/rejectedsoftware/vibe.d/issues/227
+[issue229]: https://github.com/rejectedsoftware/vibe.d/issues/229
+[issue230]: https://github.com/rejectedsoftware/vibe.d/issues/230
+[issue234]: https://github.com/rejectedsoftware/vibe.d/issues/234
+[issue238]: https://github.com/rejectedsoftware/vibe.d/issues/238
+[issue75dub]: https://github.com/rejectedsoftware/dub/issues/75
+
+
 v0.7.15 - 2013-04-27
 --------------------
 
