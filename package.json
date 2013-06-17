@@ -12,8 +12,6 @@
 	],
 
 	"dependencies": {
-		"libevent": "~master",
-		"libev": "~master",
 		"openssl": "~master"
 	},
 
@@ -38,6 +36,7 @@
 	"configurations": [
 		{
 			"name": "libevent",
+			"dependencies": {"libevent": "~master"},
 			"versions": ["VibeLibeventDriver"],
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
@@ -46,6 +45,7 @@
 		},
 		{
 			"name": "libev",
+			"dependencies": {"libev": "~master"},
 			"platforms": ["posix"],
 			"versions": ["VibeLibevDriver"],
 		},
