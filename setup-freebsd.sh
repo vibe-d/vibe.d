@@ -10,7 +10,6 @@ USER_NAME="www-vibe"
 GROUP_NAME="www-vibe"
 USER_COMMENT="Vibe user"
 CONFIG_FILE="/usr/local/etc/vibe/vibe.conf"
-SYMLINK_FILE="/usr/local/bin/vibe"
 LOG_FILE="/var/spool/vibe/install.log"
 
 # remove user, group, log file and configuration file
@@ -47,16 +46,8 @@ then
 	rm -f $CONFIG_FILE
 	rmdir $(dirname $CONFIG_FILE) >/dev/null 2>&1 || true
 
-	# remove symlink
-	echo "Removing symlink $SYMLINK_FILE..."
-	rm -f $SYMLINK_FILE
-
 	exit
 fi
-
-# create a symlink to the vibe script
-echo "Creating symlink in $SYMLINK_FILE..."
-ln -sf $(pwd)/bin/vibe $SYMLINK_FILE
 
 # creating group if he isn't already there
 if ! getent group $GROUP_NAME >/dev/null; then

@@ -10,8 +10,6 @@ BASE_DIR="$PREFIX/share/vibe"
 SRC_DIR=$(dirname $0)
 CONFIG_DIR="/etc/vibe"
 CONFIG_FILE="$CONFIG_DIR/vibe.conf"
-SYMLINK_DIR="$PREFIX/bin"
-SYMLINK_FILE="$SYMLINK_DIR/vibe"
 LOG_DIR="/var/spool/vibe"
 LOG_FILE="$LOG_DIR/install.log"
 MENU_DIR="$PREFIX/share/applications"
@@ -130,11 +128,6 @@ finstall()
 	else
 		unset MENU_DIR MENU_FILE
 	fi
-
-	# create a symlink to the vibe script
-	echo "Creating symlink $SYMLINK_FILE..."
-	mkdir -p $SYMLINK_DIR
-	ln -sf $BASE_DIR/bin/vibe $SYMLINK_FILE
 
 	# user/group administration
 	if getent group $DEBIAN_GROUP >/dev/null && getent passwd $DEBIAN_USER >/dev/null
