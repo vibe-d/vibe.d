@@ -580,28 +580,6 @@ private const(char*)* createEnv(const string[string] childEnv,
     return envz.ptr;
 }
 
-version (Posix) unittest
-{
-    auto e1 = createEnv(null, false);
-    assert (e1 != null && *e1 == null);
-
-    auto e2 = createEnv(null, true);
-    assert (e2 != null);
-    int i = 0;
-    for (; environ[i] != null; ++i)
-    {
-        assert (e2[i] != null);
-        import core.stdc.string;
-        assert (strcmp(e2[i], environ[i]) == 0);
-    }
-    assert (e2[i] == null);
-
-    auto e3 = createEnv(["foo" : "bar", "hello" : "world"], false);
-    assert (e3 != null && e3[0] != null && e3[1] != null && e3[2] == null);
-    assert ((e3[0][0 .. 8] == "foo=bar\0" && e3[1][0 .. 12] == "hello=world\0")
-			|| (e3[0][0 .. 12] == "hello=world\0" && e3[1][0 .. 8] == "foo=bar\0"));
-}
-
 
 // Converts childEnv to a Windows environment block, which is on the form
 // "name1=value1\0name2=value2\0...nameN=valueN\0\0", optionally adding
@@ -643,14 +621,6 @@ private LPVOID createEnv(const string[string] childEnv,
     return envz.data.ptr;
 }
 
-version (Windows) unittest
-{
-    assert (createEnv(null, true) == null);
-    assert ((cast(wchar*) createEnv(null, false))[0 .. 2] == "\0\0"w);
-    auto e1 = (cast(wchar*) createEnv(["foo":"bar", "ab":"c"], false))[0 .. 14];
-    assert (e1 == "FOO=bar\0AB=c\0\0"w || e1 == "AB=c\0FOO=bar\0\0"w);
-}
-
 // Searches the PATH variable for the given executable file,
 // (checking that it is in fact executable).
 version (Posix)
@@ -677,16 +647,6 @@ private bool isExecutable(in char[] path) @trusted //TODO: @safe nothrow
     return (access(toStringz(path), X_OK) == 0);
 }
 
-version (Posix) unittest
-{
-    auto unamePath = searchPathFor("uname");
-    assert (!unamePath.empty);
-    assert (unamePath[0] == '/');
-    assert (unamePath.endsWith("uname"));
-    auto unlikely = searchPathFor("lkmqwpoialhggyaofijadsohufoiqezm");
-    assert (unlikely is null, "Are you kidding me?");
-}
-
 // Sets or unsets the FD_CLOEXEC flag on the given file descriptor.
 version (Posix)
 private void setCLOEXEC(int fd, bool on)
@@ -704,115 +664,6 @@ private void setCLOEXEC(int fd, bool on)
         throw new StdioException("Failed to "~(on ? "" : "un")
                                  ~"set close-on-exec flag on file descriptor");
     }
-}
-
-unittest // Command line arguments in spawnProcess().
-{
-    version (Windows) TestScript prog =
-		"if not [%~1]==[foo] ( exit 1 )
-        if not [%~2]==[bar] ( exit 2 )
-        exit 0";
-    else version (Posix) TestScript prog =
-		`if test "$1" != "foo"; then exit 1; fi
-        if test "$2" != "bar"; then exit 2; fi
-        exit 0`;
-    assert (wait(spawnProcess(prog.path)) == 1);
-    assert (wait(spawnProcess([prog.path])) == 1);
-    assert (wait(spawnProcess([prog.path, "foo"])) == 2);
-    assert (wait(spawnProcess([prog.path, "foo", "baz"])) == 2);
-    assert (wait(spawnProcess([prog.path, "foo", "bar"])) == 0);
-}
-
-unittest // Environment variables in spawnProcess().
-{
-    // We really should use set /a on Windows, but Wine doesn't support it.
-    version (Windows) TestScript envProg =
-		`if [%STD_PROCESS_UNITTEST1%] == [1] (
-		if [%STD_PROCESS_UNITTEST2%] == [2] (exit 3)
-		exit 1
-        )
-        if [%STD_PROCESS_UNITTEST1%] == [4] (
-		if [%STD_PROCESS_UNITTEST2%] == [2] (exit 6)
-		exit 4
-        )
-        if [%STD_PROCESS_UNITTEST2%] == [2] (exit 2)
-        exit 0`;
-    version (Posix) TestScript envProg =
-		`if test "$std_process_unittest1" = ""; then
-		std_process_unittest1=0
-        fi
-        if test "$std_process_unittest2" = ""; then
-		std_process_unittest2=0
-        fi
-        exit $(($std_process_unittest1+$std_process_unittest2))`;
-
-    environment.remove("std_process_unittest1"); // Just in case.
-    environment.remove("std_process_unittest2");
-    assert (wait(spawnProcess(envProg.path)) == 0);
-    assert (wait(spawnProcess(envProg.path, null, Config.newEnv)) == 0);
-
-    environment["std_process_unittest1"] = "1";
-    assert (wait(spawnProcess(envProg.path)) == 1);
-    assert (wait(spawnProcess(envProg.path, null, Config.newEnv)) == 0);
-
-    auto env = ["std_process_unittest2" : "2"];
-    assert (wait(spawnProcess(envProg.path, env)) == 3);
-    assert (wait(spawnProcess(envProg.path, env, Config.newEnv)) == 2);
-
-    env["std_process_unittest1"] = "4";
-    assert (wait(spawnProcess(envProg.path, env)) == 6);
-    assert (wait(spawnProcess(envProg.path, env, Config.newEnv)) == 6);
-
-    environment.remove("std_process_unittest1");
-    assert (wait(spawnProcess(envProg.path, env)) == 6);
-    assert (wait(spawnProcess(envProg.path, env, Config.newEnv)) == 6);
-}
-
-unittest // Stream redirection in spawnProcess().
-{
-    version (Windows) TestScript prog =
-		"set /p INPUT=
-        echo %INPUT% output %~1
-        echo %INPUT% error %~2 1>&2";
-    else version (Posix) TestScript prog =
-		"read INPUT
-        echo $INPUT output $1
-        echo $INPUT error $2 >&2";
-
-    // Pipes
-    auto pipei = pipe();
-    auto pipeo = pipe();
-    auto pipee = pipe();
-    auto pid = spawnProcess([prog.path, "foo", "bar"],
-							pipei.readEnd, pipeo.writeEnd, pipee.writeEnd);
-    pipei.writeEnd.writeln("input");
-    pipei.writeEnd.flush();
-    assert (pipeo.readEnd.readln().chomp() == "input output foo");
-    assert (pipee.readEnd.readln().chomp().stripRight() == "input error bar");
-    wait(pid);
-
-    // Files
-    import std.ascii, std.file, std.uuid;
-    auto pathi = buildPath(tempDir(), randomUUID().toString());
-    auto patho = buildPath(tempDir(), randomUUID().toString());
-    auto pathe = buildPath(tempDir(), randomUUID().toString());
-    std.file.write(pathi, "INPUT"~std.ascii.newline);
-    auto filei = File(pathi, "r");
-    auto fileo = File(patho, "w");
-    auto filee = File(pathe, "w");
-    pid = spawnProcess([prog.path, "bar", "baz" ], filei, fileo, filee);
-    wait(pid);
-    assert (readText(patho).chomp() == "INPUT output bar");
-    assert (readText(pathe).chomp().stripRight() == "INPUT error baz");
-    remove(pathi);
-    remove(patho);
-    remove(pathe);
-}
-
-unittest // Error handling in spawnProcess()
-{
-    assertThrown!ProcessException(spawnProcess("ewrgiuhrifuheiohnmnvqweoijwf"));
-    assertThrown!ProcessException(spawnProcess("./rgiuhrifuheiohnmnvqweoijwf"));
 }
 
 
@@ -876,25 +727,6 @@ Pid spawnShell(in char[] command,
                       std.stdio.stderr,
                       env,
                       config);
-}
-
-unittest
-{
-    version (Windows)
-        auto cmd = "echo %FOO%";
-    else version (Posix)
-        auto cmd = "echo $foo";
-    import std.file;
-    auto tmpFile = uniqueTempPath();
-    scope(exit) if (exists(tmpFile)) remove(tmpFile);
-    auto redir = "> \""~tmpFile~'"';
-    auto env = ["foo" : "bar"];
-    assert (wait(spawnShell(cmd~redir, env)) == 0);
-    auto f = File(tmpFile, "a");
-    assert (wait(spawnShell(cmd, std.stdio.stdin, f, std.stdio.stderr, env)) == 0);
-    f.close();
-    auto output = std.file.readText(tmpFile);
-    assert (output == "bar\nbar\n" || output == "bar\r\nbar\r\n");
 }
 
 
@@ -1163,24 +995,6 @@ int wait(Pid pid) @safe
 }
 
 
-unittest // Pid and wait()
-{
-    version (Windows)    TestScript prog = "exit %~1";
-    else version (Posix) TestScript prog = "exit $1";
-    assert (wait(spawnProcess([prog.path, "0"])) == 0);
-    assert (wait(spawnProcess([prog.path, "123"])) == 123);
-    auto pid = spawnProcess([prog.path, "10"]);
-    assert (pid.processID > 0);
-    version (Windows)    assert (pid.osHandle != INVALID_HANDLE_VALUE);
-    else version (Posix) assert (pid.osHandle == pid.processID);
-    assert (wait(pid) == 10);
-    assert (wait(pid) == 10); // cached exit code
-    assert (pid.processID < 0);
-    version (Windows)    assert (pid.osHandle == INVALID_HANDLE_VALUE);
-    else version (Posix) assert (pid.osHandle < 0);
-}
-
-
 /**
 A non-blocking version of $(LREF wait).
 
@@ -1332,38 +1146,6 @@ void kill(Pid pid, int codeOrSignal)
         if (kill(pid.osHandle, codeOrSignal) == -1)
             throw ProcessException.newFromErrno();
     }
-}
-
-unittest // tryWait() and kill()
-{
-    import core.thread;
-    // The test script goes into an infinite loop.
-    version (Windows)
-    {
-        TestScript prog = ":loop
-			goto loop";
-    }
-    else version (Posix)
-    {
-        import core.sys.posix.signal: SIGTERM, SIGKILL;
-        TestScript prog = "while true; do sleep 1; done";
-    }
-    auto pid = spawnProcess(prog.path);
-    Thread.sleep(dur!"seconds"(1));
-    kill(pid);
-    version (Windows)    assert (wait(pid) == 1);
-    else version (Posix) assert (wait(pid) == -SIGTERM);
-
-    pid = spawnProcess(prog.path);
-    Thread.sleep(dur!"seconds"(1));
-    auto s = tryWait(pid);
-    assert (!s.terminated && s.status == 0);
-    version (Windows)    kill(pid, 123);
-    else version (Posix) kill(pid, SIGKILL);
-    do { s = tryWait(pid); } while (!s.terminated);
-    version (Windows)    assert (s.status == 123);
-    else version (Posix) assert (s.status == -SIGKILL);
-    assertThrown!ProcessException(kill(pid));
 }
 
 
@@ -1527,17 +1309,6 @@ struct Pipe
 
 private:
     File _read, _write;
-}
-
-unittest
-{
-    auto p = pipe();
-    p.writeEnd.writeln("Hello World");
-    p.writeEnd.flush();
-    assert (p.readEnd.readln().chomp() == "Hello World");
-    p.close();
-    assert (!p.readEnd.isOpen);
-    assert (!p.writeEnd.isOpen);
 }
 
 
@@ -1737,80 +1508,6 @@ enum Redirect
     stdoutToStderr = 16,
 }
 
-unittest
-{
-    version (Windows) TestScript prog =
-		"call :sub %~1 %~2 0
-        call :sub %~1 %~2 1
-        call :sub %~1 %~2 2
-        call :sub %~1 %~2 3
-        exit 3
-
-        :sub
-        set /p INPUT=
-        if -%INPUT%-==-stop- ( exit %~3 )
-        echo %INPUT% %~1
-        echo %INPUT% %~2 1>&2";
-    else version (Posix) TestScript prog =
-		`for EXITCODE in 0 1 2 3; do
-		read INPUT
-		if test "$INPUT" = stop; then break; fi
-		echo "$INPUT $1"
-		echo "$INPUT $2" >&2
-        done
-        exit $EXITCODE`;
-    auto pp = pipeProcess([prog.path, "bar", "baz"]);
-    pp.stdin.writeln("foo");
-    pp.stdin.flush();
-    assert (pp.stdout.readln().chomp() == "foo bar");
-    assert (pp.stderr.readln().chomp().stripRight() == "foo baz");
-    pp.stdin.writeln("1234567890");
-    pp.stdin.flush();
-    assert (pp.stdout.readln().chomp() == "1234567890 bar");
-    assert (pp.stderr.readln().chomp().stripRight() == "1234567890 baz");
-    pp.stdin.writeln("stop");
-    pp.stdin.flush();
-    assert (wait(pp.pid) == 2);
-
-    pp = pipeProcess([prog.path, "12345", "67890"],
-                     Redirect.stdin | Redirect.stdout | Redirect.stderrToStdout);
-    pp.stdin.writeln("xyz");
-    pp.stdin.flush();
-    assert (pp.stdout.readln().chomp() == "xyz 12345");
-    assert (pp.stdout.readln().chomp().stripRight() == "xyz 67890");
-    pp.stdin.writeln("stop");
-    pp.stdin.flush();
-    assert (wait(pp.pid) == 1);
-
-    pp = pipeShell(prog.path~" AAAAA BBB",
-                   Redirect.stdin | Redirect.stdoutToStderr | Redirect.stderr);
-    pp.stdin.writeln("ab");
-    pp.stdin.flush();
-    assert (pp.stderr.readln().chomp() == "ab AAAAA");
-    assert (pp.stderr.readln().chomp().stripRight() == "ab BBB");
-    pp.stdin.writeln("stop");
-    pp.stdin.flush();
-    assert (wait(pp.pid) == 1);
-}
-
-unittest
-{
-    TestScript prog = "exit 0";
-    assertThrown!Error(pipeProcess(
-								   prog.path,
-								   Redirect.stdout | Redirect.stdoutToStderr));
-    assertThrown!Error(pipeProcess(
-								   prog.path,
-								   Redirect.stderr | Redirect.stderrToStdout));
-    auto p = pipeProcess(prog.path, Redirect.stdin);
-    assertThrown!Error(p.stdout);
-    assertThrown!Error(p.stderr);
-    wait(p.pid);
-    p = pipeProcess(prog.path, Redirect.stderr);
-    assertThrown!Error(p.stdin);
-    assertThrown!Error(p.stdout);
-    wait(p.pid);
-}
 
 /**
 Object which contains $(XREF stdio,File) handles that allow communication
@@ -1996,39 +1693,6 @@ private auto executeImpl(alias pipeFunc, Cmd)(
     return ProcessOutput(wait(p.pid), cast(string) a.data);
 }
 
-unittest
-{
-    // To avoid printing the newline characters, we use the echo|set trick on
-    // Windows, and printf on POSIX (neither echo -n nor echo \c are portable).
-    version (Windows) TestScript prog =
-		"echo|set /p=%~1
-        echo|set /p=%~2 1>&2
-        exit 123";
-    else version (Posix) TestScript prog =
-		`printf '%s' $1
-        printf '%s' $2 >&2
-        exit 123`;
-    auto r = execute([prog.path, "foo", "bar"]);
-    assert (r.status == 123);
-    assert (r.output.stripRight() == "foobar");
-    auto s = execute([prog.path, "Hello", "World"]);
-    assert (s.status == 123);
-    assert (s.output.stripRight() == "HelloWorld");
-}
-
-unittest
-{
-    auto r1 = executeShell("echo foo");
-    assert (r1.status == 0);
-    assert (r1.output.chomp() == "foo");
-    auto r2 = executeShell("echo bar 1>&2");
-    assert (r2.status == 0);
-    assert (r2.output.chomp().stripRight() == "bar");
-    auto r3 = executeShell("exit 123");
-    assert (r3.status == 123);
-    assert (r3.output.empty);
-}
-
 
 /// An exception that signals a problem with starting or waiting for a process.
 class ProcessException : Exception
@@ -2103,60 +1767,6 @@ version (Windows) private immutable string shellSwitch = "/C";
 {
     version (Windows)    return GetCurrentProcessId();
     else version (Posix) return getpid();
-}
-
-
-// Unittest support code:  TestScript takes a string that contains a
-// shell script for the current platform, and writes it to a temporary
-// file. On Windows the file name gets a .cmd extension, while on
-// POSIX its executable permission bit is set.  The file is
-// automatically deleted when the object goes out of scope.
-version (unittest)
-private struct TestScript
-{
-    this(string code)
-    {
-        import std.ascii, std.file;
-        version (Windows)
-        {
-            auto ext = ".cmd";
-            auto firstLine = "@echo off";
-        }
-        else version (Posix)
-        {
-            auto ext = "";
-            auto firstLine = "#!/bin/sh";
-        }
-        path = uniqueTempPath()~ext;
-        std.file.write(path, firstLine~std.ascii.newline~code~std.ascii.newline);
-        version (Posix)
-        {
-            import core.sys.posix.sys.stat;
-            chmod(toStringz(path), octal!777);
-        }
-    }
-
-    ~this()
-    {
-        import std.file;
-        if (!path.empty && exists(path))
-        {
-            try { remove(path); }
-            catch (Exception e)
-            {
-                debug std.stdio.stderr.writeln(e.msg);
-            }
-        }
-    }
-
-    string path;
-}
-
-version (unittest)
-private string uniqueTempPath()
-{
-    import std.file, std.uuid;
-    return buildPath(tempDir(), randomUUID().toString());
 }
 
 
@@ -2368,45 +1978,6 @@ if (is(typeof(allocator(size_t.init)[0] = char.init)))
     return buf;
 }
 
-version(Windows) version(unittest)
-{
-    import core.sys.windows.windows;
-    import core.stdc.stddef;
-
-    extern (Windows) wchar_t**  CommandLineToArgvW(wchar_t*, int*);
-    extern (C) size_t wcslen(in wchar *);
-
-    unittest
-    {
-        string[] testStrings = [
-            `Hello`,
-            `Hello, world`,
-            `Hello, "world"`,
-            `C:\`,
-            `C:\dmd`,
-            `C:\Program Files\`,
-        ];
-
-        enum CHARS = `_x\" *&^`; // _ is placeholder for nothing
-        foreach (c1; CHARS)
-			foreach (c2; CHARS)
-				foreach (c3; CHARS)
-					foreach (c4; CHARS)
-						testStrings ~= [c1, c2, c3, c4].replace("_", "");
-
-        foreach (s; testStrings)
-        {
-            auto q = escapeWindowsArgument(s);
-            LPWSTR lpCommandLine = (to!(wchar[])("Dummy.exe " ~ q) ~ "\0"w).ptr;
-            int numArgs;
-            LPWSTR* args = CommandLineToArgvW(lpCommandLine, &numArgs);
-            scope(exit) LocalFree(args);
-            assert(numArgs==2, s ~ " => " ~ q ~ " #" ~ text(numArgs-1));
-            auto arg = to!string(args[1][0..wcslen(args[1])]);
-            assert(arg == s, s ~ " => " ~ q ~ " => " ~ arg);
-        }
-    }
-}
 
 private string escapePosixArgument(in char[] arg) @trusted pure nothrow
 {
@@ -2459,110 +2030,6 @@ string escapeShellFileName(in char[] fileName) @trusted pure nothrow
         return cast(string)('"' ~ fileName ~ '"');
     else
         return escapePosixArgument(fileName);
-}
-
-// Loop generating strings with random characters
-//version = unittest_burnin;
-
-version(unittest_burnin)
-unittest
-{
-    // There are no readily-available commands on all platforms suitable
-    // for properly testing command escaping. The behavior of CMD's "echo"
-    // built-in differs from the POSIX program, and Windows ports of POSIX
-    // environments (Cygwin, msys, gnuwin32) may interfere with their own
-    // "echo" ports.
-
-    // To run this unit test, create std_process_unittest_helper.d with the
-    // following content and compile it:
-    // import std.stdio, std.array; void main(string[] args) { write(args.join("\0")); }
-    // Then, test this module with:
-    // rdmd --main -unittest -version=unittest_burnin process.d
-
-    auto helper = absolutePath("std_process_unittest_helper");
-    assert(shell(helper ~ " hello").split("\0")[1..$] == ["hello"], "Helper malfunction");
-
-    void test(string[] s, string fn)
-    {
-        string e;
-        string[] g;
-
-        e = escapeShellCommand(helper ~ s);
-        {
-            scope(failure) writefln("shell() failed.\nExpected:\t%s\nEncoded:\t%s", s, [e]);
-            g = shell(e).split("\0")[1..$];
-        }
-        assert(s == g, format("shell() test failed.\nExpected:\t%s\nGot:\t\t%s\nEncoded:\t%s", s, g, [e]));
-
-        e = escapeShellCommand(helper ~ s) ~ ">" ~ escapeShellFileName(fn);
-        {
-            scope(failure) writefln("system() failed.\nExpected:\t%s\nFilename:\t%s\nEncoded:\t%s", s, [fn], [e]);
-            system(e);
-            g = readText(fn).split("\0")[1..$];
-        }
-        remove(fn);
-        assert(s == g, format("system() test failed.\nExpected:\t%s\nGot:\t\t%s\nEncoded:\t%s", s, g, [e]));
-    }
-
-    while (true)
-    {
-        string[] args;
-        foreach (n; 0..uniform(1, 4))
-        {
-            string arg;
-            foreach (l; 0..uniform(0, 10))
-            {
-                dchar c;
-                while (true)
-                {
-                    version (Windows)
-                    {
-                        // As long as DMD's system() uses CreateProcessA,
-                        // we can't reliably pass Unicode
-                        c = uniform(0, 128);
-                    }
-                    else
-                        c = uniform!ubyte();
-
-                    if (c == 0)
-                        continue; // argv-strings are zero-terminated
-                    version (Windows)
-                        if (c == '\r' || c == '\n')
-                            continue; // newlines are unescapable on Windows
-                    break;
-                }
-                arg ~= c;
-            }
-            args ~= arg;
-        }
-
-        // generate filename
-        string fn = "test_";
-        foreach (l; 0..uniform(1, 10))
-        {
-            dchar c;
-            while (true)
-            {
-                version (Windows)
-                    c = uniform(0, 128); // as above
-                else
-                    c = uniform!ubyte();
-
-                if (c == 0 || c == '/')
-                    continue; // NUL and / are the only characters
-				// forbidden in POSIX filenames
-                version (Windows)
-                    if (c < '\x20' || c == '<' || c == '>' || c == ':' ||
-                        c == '"' || c == '\\' || c == '|' || c == '?' || c == '*')
-                        continue; // http://msdn.microsoft.com/en-us/library/aa365247(VS.85).aspx
-                break;
-            }
-
-            fn ~= c;
-        }
-
-        test(args, fn);
-    }
 }
 
 
@@ -2775,49 +2242,6 @@ private:
     }
 }
 
-unittest
-{
-    // New variable
-    environment["std_process"] = "foo";
-    assert (environment["std_process"] == "foo");
-
-    // Set variable again
-    environment["std_process"] = "bar";
-    assert (environment["std_process"] == "bar");
-
-    // Remove variable
-    environment.remove("std_process");
-
-    // Remove again, should succeed
-    environment.remove("std_process");
-
-    // Throw on not found.
-    assertThrown(environment["std_process"]);
-
-    // get() without default value
-    assert (environment.get("std_process") == null);
-
-    // get() with default value
-    assert (environment.get("std_process", "baz") == "baz");
-
-    // Convert to associative array
-    auto aa = environment.toAA();
-    assert (aa.length > 0);
-    foreach (n, v; aa)
-    {
-        // Wine has some bugs related to environment variables:
-        //  - Wine allows the existence of an env. variable with the name
-        //    "\0", but GetEnvironmentVariable refuses to retrieve it.
-        //  - If an env. variable has zero length, i.e. is "\0",
-        //    GetEnvironmentVariable should return 1.  Instead it returns
-        //    0, indicating the variable doesn't exist.
-        version (Windows) if (n.length == 0 || v.length == 0) continue;
-
-        assert (v == environment[n]);
-    }
-}
-
-
 
 
 // =============================================================================
@@ -2861,11 +2285,6 @@ version (Posix)
 {
     import core.sys.posix.stdlib;
 }
-version (unittest)
-{
-    import std.file, std.conv, std.random;
-}
-
 
 
 /**
@@ -3195,16 +2614,6 @@ string shell(string cmd)
         static assert(0, "shell not implemented for this OS.");
 }
 
-unittest
-{
-    auto x = shell("echo wyda");
-    // @@@ This fails on wine
-    //assert(x == "wyda" ~ newline, text(x.length));
-
-    import std.exception;  // Issue 9444
-    assertThrown!ErrnoException(shell("qwertyuiop09813478"));
-}
-
 /**
 Gets the value of environment variable $(D name) as a string. Calls
 $(LINK2 std_c_stdlib.html#_getenv, std.c.stdlib._getenv)
@@ -3255,54 +2664,6 @@ else version(Posix) void unsetenv(in char[] name)
     errnoEnforce(std.c.stdlib.unsetenv(toStringz(name)) == 0);
 }
 
-version (Posix) unittest
-{
-    setenv("wyda", "geeba", true);
-    assert(getenv("wyda") == "geeba");
-    // Get again to make sure caching works
-    assert(getenv("wyda") == "geeba");
-    unsetenv("wyda");
-    assert(getenv("wyda") is null);
-}
-
-/* ////////////////////////////////////////////////////////////////////////// */
-
-version(MainTest)
-{
-    int main(string[] args)
-    {
-        if(args.length < 2)
-        {
-            printf("Must supply executable (and optional arguments)\n");
-
-            return 1;
-        }
-        else
-        {
-            string[]    dummy_env;
-
-            dummy_env ~= "VAL0=value";
-            dummy_env ~= "VAL1=value";
-
-			/+
-            foreach(string arg; args)
-            {
-			printf("%.*s\n", arg);
-            }
-			+/
-
-			//          int i = execv(args[1], args[1 .. args.length]);
-			//          int i = execvp(args[1], args[1 .. args.length]);
-            int i = execvpe(args[1], args[1 .. args.length], dummy_env);
-
-            printf("exec??() has returned! Error code: %d; errno: %d\n", i, /* errno */-1);
-
-            return 0;
-        }
-    }
-}
-
-/* ////////////////////////////////////////////////////////////////////////// */
 
 
 version(StdDdoc)
