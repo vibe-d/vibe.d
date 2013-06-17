@@ -324,23 +324,25 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 	}
 }
 
+/// private
+struct ThreadSlot {
+	Libevent2Driver driver;
+	deimos.event2.event.event* event;
+	bool[Task] tasks;
+}
+/// private
+Thread nullSlotDummy() { return null; }
+/// private
+bool slotCompare(in Thread a, in Thread b) { return a is b; }
+/// private
+alias ThreadSlotMap = HashMap!(Thread, ThreadSlot, nullSlotDummy, slotCompare);
+
 class Libevent2ManualEvent : ManualEvent {
 	private {
-		struct ThreadSlot {
-			Libevent2Driver driver;
-			deimos.event2.event.event* event;
-			bool[Task] tasks;
-		}
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
-		alias ThreadSlotMap = HashMap!(Thread, ThreadSlot, nullSlotDummy, slotCompare);
 		ThreadSlotMap m_waiters;
 	}
-
-	/// private
-	static Thread nullSlotDummy() { return null; }
-	/// private
-	static bool slotCompare(in Thread a, in Thread b) { return a is b; }
 
 	this()
 	{
