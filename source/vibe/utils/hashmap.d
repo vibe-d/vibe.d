@@ -11,8 +11,16 @@ import vibe.utils.memory;
 
 import std.conv : emplace;
 
+struct DefaultHashMapTraits(Key) {
+	enum clearValue = Key.init;
+	static bool equals(in Key a, in Key b)
+	{
+		static if (is(Key == class)) return a is b;
+		else return a == b;
+	}
+}
 
-struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a, b) => a == b)
+struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 {
 	struct TableEntry {
 		Key key;
@@ -46,13 +54,13 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 		assert (idx != size_t.max, "Removing non-existent element.");
 		auto i = idx;
 		while (true) {
-			m_table[i].key = ClearValue();
+			m_table[i].key = Traits.clearValue;
 			m_table[i].value = Value.init;
 
 			size_t j = i, r;
 			do {
 				if (++i >= m_table.length) i -= m_table.length;
-				if (m_table[i].key == ClearValue()) {
+				if (m_table[i].key == Traits.clearValue) {
 					m_length--;
 					return;
 				}
@@ -71,13 +79,13 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 
 	void opIndexAssign(Value value, Key key)
 	{
-		assert(key != ClearValue(), "Inserting clear value into hash map.");
+		assert(key != Traits.clearValue, "Inserting clear value into hash map.");
 		grow(1);
 
 		auto hash = m_hasher(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
-		while (m_table[i].key != ClearValue() && m_table[i].key != key) {
+		while (m_table[i].key != Traits.clearValue && m_table[i].key != key) {
 			if (++i >= m_table.length) i -= m_table.length;
 			assert (i != target, "No free bucket found, HashMap full!?");
 		}
@@ -102,7 +110,7 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 	int opApply(int delegate(ref Value) del)
 	{
 		foreach (i; 0 .. m_table.length)
-			if (!Equals(m_table[i].key, ClearValue()))
+			if (!Traits.equals(m_table[i].key, Traits.clearValue))
 				if (auto ret = del(m_table[i].value))
 					return ret;
 		return 0;
@@ -111,7 +119,7 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 	int opApply(int delegate(in ref Value) del)
 	const {
 		foreach (i; 0 .. m_table.length)
-			if (!Equals(m_table[i].key, ClearValue()))
+			if (!Traits.equals(m_table[i].key, Traits.clearValue))
 				if (auto ret = del(m_table[i].value))
 					return ret;
 		return 0;
@@ -120,7 +128,7 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 	int opApply(int delegate(in ref Key, ref Value) del)
 	{
 		foreach (i; 0 .. m_table.length)
-			if (!Equals(m_table[i].key, ClearValue()))
+			if (!Traits.equals(m_table[i].key, Traits.clearValue))
 				if (auto ret = del(m_table[i].key, m_table[i].value))
 					return ret;
 		return 0;
@@ -129,7 +137,7 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 	int opApply(int delegate(in ref Key, in ref Value) del)
 	const {
 		foreach (i; 0 .. m_table.length)
-			if (!Equals(m_table[i].key, ClearValue()))
+			if (!Traits.equals(m_table[i].key, Traits.clearValue))
 				if (auto ret = del(m_table[i].key, m_table[i].value))
 					return ret;
 		return 0;
@@ -141,7 +149,7 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 		size_t start = m_hasher(key) & (m_table.length-1);
 		auto i = start;
 		while (m_table[i].key != key) {
-			if (Equals(m_table[i].key, ClearValue())) return size_t.max;
+			if (Traits.equals(m_table[i].key, Traits.clearValue)) return size_t.max;
 			if (++i >= m_table.length) i -= m_table.length;
 			if (i == start) return size_t.max;
 		}
@@ -182,12 +190,12 @@ struct HashMap(Key, Value, alias ClearValue = () => Key.init, alias Equals = (a,
 		auto oldtable = m_table;
 		m_table = allocArray!TableEntry(m_allocator, new_size);
 		foreach (ref el; m_table) {
-			emplace!Key(&el.key, ClearValue());
+			emplace!Key(&el.key, Traits.clearValue);
 			emplace!Value(&el.value);
 		}
 		m_length = 0;
 		foreach (ref el; oldtable) {
-			if (!Equals(el.key, ClearValue()))
+			if (!Traits.equals(el.key, Traits.clearValue))
 				this[el.key] = el.value;
 			destroy(el);
 		}

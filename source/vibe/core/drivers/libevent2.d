@@ -331,11 +331,7 @@ struct ThreadSlot {
 	bool[Task] tasks;
 }
 /// private
-Thread nullSlotDummy() { return null; }
-/// private
-bool slotCompare(in Thread a, in Thread b) { return a is b; }
-/// private
-alias ThreadSlotMap = HashMap!(Thread, ThreadSlot, nullSlotDummy, slotCompare);
+alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
 
 class Libevent2ManualEvent : ManualEvent {
 	private {
