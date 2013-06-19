@@ -12,6 +12,7 @@ public import vibe.core.net;
 public import vibe.core.sync;
 public import vibe.core.stream;
 public import vibe.core.task;
+public import vibe.core._eventedobject;
 
 import vibe.inet.url;
 
@@ -132,18 +133,6 @@ interface DriverCore {
 	void yieldForEvent();
 	void resumeTask(Task f, Exception event_exception = null);
 	void notifyIdle();
-}
-
-
-/**
-	Base interface for all evented objects.
-
-	Evented objects are owned by the fiber/task that created them and may only be used inside this
-	specific fiber. By using release(), a fiber can drop the ownership of an object so that 
-	another fiber can gain ownership using acquire(). This way it becomes possible to share
-	connections and files across fibers.
-*/
-interface EventedObject {
 }
 
 

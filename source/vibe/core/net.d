@@ -7,7 +7,8 @@
 */
 module vibe.core.net;
 
-public import vibe.core.driver;
+public import vibe.core._eventedobject;
+public import vibe.core.stream;
 
 import vibe.core.log;
 

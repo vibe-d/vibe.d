@@ -8,7 +8,7 @@
 module vibe.core.sync;
 
 import std.exception;
-public import vibe.core.driver;
+public import vibe.core._eventedobject;
 
 import core.atomic;
 import core.sync.mutex;

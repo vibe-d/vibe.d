@@ -25,10 +25,10 @@ import core.sync.mutex;
 import core.stdc.stdlib;
 import core.thread;
 
-import vibe.core.drivers.libev;
-import vibe.core.drivers.libevent2;
-import vibe.core.drivers.win32;
-import vibe.core.drivers.winrt;
+version(VibeLibevDriver) import vibe.core.drivers.libev;
+version(VibeLibevent2Driver) import vibe.core.drivers.libevent2;
+version(VibeWin32Driver) import vibe.core.drivers.win32;
+version(VibeWinrtDriver) import vibe.core.drivers.winrt;
 
 version(Posix)
 {
