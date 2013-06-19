@@ -1,7 +1,7 @@
 /**
 	INTERNAL
 */
-module vibe.core._eventeobject;
+module vibe.core._eventedobject;
 
 /**
 	DEPRECATED; Base interface for all evented objects.
