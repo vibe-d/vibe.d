@@ -10,6 +10,7 @@ module vibe.core.net;
 public import vibe.core._eventedobject;
 public import vibe.core.stream;
 
+import vibe.core.driver;
 import vibe.core.log;
 
 import core.sys.posix.netinet.in_;

@@ -26,7 +26,7 @@ import core.stdc.stdlib;
 import core.thread;
 
 version(VibeLibevDriver) import vibe.core.drivers.libev;
-version(VibeLibevent2Driver) import vibe.core.drivers.libevent2;
+version(VibeLibeventDriver) import vibe.core.drivers.libevent2;
 version(VibeWin32Driver) import vibe.core.drivers.win32;
 version(VibeWinrtDriver) import vibe.core.drivers.winrt;
 

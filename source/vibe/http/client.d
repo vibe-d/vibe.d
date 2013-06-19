@@ -9,6 +9,7 @@ module vibe.http.client;
 
 public import vibe.core.net;
 public import vibe.http.common;
+public import vibe.inet.url;
 
 import vibe.core.connectionpool;
 import vibe.core.core;

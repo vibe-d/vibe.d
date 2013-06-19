@@ -60,7 +60,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 			size_t j = i, r;
 			do {
 				if (++i >= m_table.length) i -= m_table.length;
-				if (m_table[i].key == Traits.clearValue) {
+				if (Traits.equals(m_table[i].key, Traits.clearValue)) {
 					m_length--;
 					return;
 				}
@@ -79,17 +79,17 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 
 	void opIndexAssign(Value value, Key key)
 	{
-		assert(key != Traits.clearValue, "Inserting clear value into hash map.");
+		assert(!Traits.equals(key, Traits.clearValue), "Inserting clear value into hash map.");
 		grow(1);
 
 		auto hash = m_hasher(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
-		while (m_table[i].key != Traits.clearValue && m_table[i].key != key) {
+		while (!Traits.equals(m_table[i].key, Traits.clearValue) && m_table[i].key != key) {
 			if (++i >= m_table.length) i -= m_table.length;
 			assert (i != target, "No free bucket found, HashMap full!?");
 		}
-		if (m_table[i].key != key) m_length++;
+		if (!Traits.equals(m_table[i].key, key)) m_length++;
 		m_table[i] = TableEntry(key, value);
 	}
 
