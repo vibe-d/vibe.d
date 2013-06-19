@@ -334,6 +334,12 @@ struct ThreadSlot {
 alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
 
 class Libevent2ManualEvent : ManualEvent {
+	
+	/// private
+	static Thread nullSlotDummy() { return null; }
+	/// private
+	static bool slotCompare(in Thread a, in Thread b) { return a is b; }
+	
 	private {
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
