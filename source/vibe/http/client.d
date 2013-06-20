@@ -40,8 +40,15 @@ import std.datetime;
 /**
 	Performs a HTTP request on the specified URL.
 
-	The 'requester' parameter allows to customize the request and to specify the request body for
-	non-GET requests.
+	The requester parameter allows to customize the request and to specify the request body for
+	non-GET requests before it is sent. A response object is then returned or passed to the
+	responder callback synchronously.
+
+	Note that it is highly recommended to use one of the overloads that take a responder callback,
+	as they can avoid some memory allocations and are safe against accidentially leaving stale
+	response objects (objects whose response body wasn't fully read). For the returning overloads
+	of the function it is recommended to put a $(D scope(exit)) right after the call in which
+	HTTPClientResponse.dropBody is called to avoid this.
 */
 HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null)
 {
