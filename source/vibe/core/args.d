@@ -36,7 +36,8 @@ import core.runtime;
 	automatically on startup. Call $(D finalizeCommandLineArgs) from your
 	$(D main()) if you use a custom one, to check for unrecognized options.
 */
-deprecated void processCommandLineArgs(ref string[] args)
+deprecated("Please use getOption, finalizeCommandLineArgs and/or lowerPrivileges instead to achieve the desired functionality.")
+void processCommandLineArgs(ref string[] args)
 {
 	args = g_args.dup;
 }
@@ -128,13 +129,22 @@ void printCommandLineHelp()
 	correct command line usage. It will print a help screen in case of
 	unrecognized options.
 
+	Params:
+		args_out = Optional parameter for storing any arguments not handled
+		           by any getOption call. If this is left to null, an error
+		           will be triggered whenever unhandled arguments exist.
+
 	Returns:
 		If "--help" was passed, the function returns false. In all other
 		cases either true is returned or an exception is thrown.
 */
-bool finalizeCommandLineOptions()
+bool finalizeCommandLineOptions(string[]* args_out = null)
 {
-	if (g_args.length > 1) {
+	scope(exit) g_args = null;
+
+	if (args_out) {
+		*args_out = g_args;
+	} else if (g_args.length > 1) {
 		logError("Unrecognized command line option: %s\n", g_args[1]);
 		printCommandLineHelp();
 		throw new Exception("Unrecognized command line option.");
