@@ -67,31 +67,19 @@ import std.traits;
 */
 struct Json {
 	private {
-		union {
-			bool m_bool;
-			Json[string] m_object;
-		}
-		// put each size into its own union to work around garbage that
-		// otherwise is in the unused area of the union. This garbage
-		// produces false GC references and causes std.algorithm.swap
-		// to choke because of pretended self-aliasing
-		static if ((void*).sizeof == 4) {
-			union {
-				long m_int;
-				double m_float;
-				Json[] m_array;
-				string m_string;
-			}
-		} else {
-			union {
-				long m_int;
-				double m_float;
-			}
-			union {
-				Json[] m_array;
-				string m_string;
-			}
-		}
+		// putting all fields in a union results in many false pointers leading to
+		// memory leaks and, worse, std.algorithm.swap triggering an assertion
+		// because of internal pointers. This crude workaround seems to fix
+		// the issues.
+		void*[2] m_data;
+		ref inout(T) getDataAs(T)() inout { static assert(T.sizeof <= m_data.sizeof); return *cast(inout(T)*)m_data.ptr; }
+		@property ref inout(long) m_int() inout { return getDataAs!long(); }
+		@property ref inout(double) m_float() inout { return getDataAs!double(); }
+		@property ref inout(bool) m_bool() inout { return getDataAs!bool(); }
+		@property ref inout(string) m_string() inout { return getDataAs!string(); }
+		@property ref inout(Json[string]) m_object() inout { return getDataAs!(Json[string])(); }
+		@property ref inout(Json[]) m_array() inout { return getDataAs!(Json[])(); }
+
 		Type m_type = Type.Undefined;
 	}
 
