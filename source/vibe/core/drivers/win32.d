@@ -1460,7 +1460,11 @@ class Win32TCPListener : TCPListener, SocketEventHandler {
 
 
 private {
-	HashMap!(UINT_PTR, void*/*Win32Timer*/, { return UINT_PTR.max; }) s_timers;
+	struct TimerMapTraits {
+		enum clearValue = UINT_PTR.max;
+		static bool equals(UINT_PTR a, UINT_PTR b) { return a == b; }
+	}
+	HashMap!(UINT_PTR, void*/*Win32Timer*/, TimerMapTraits) s_timers;
 	__gshared s_setupWindowClass = false;
 }
 
