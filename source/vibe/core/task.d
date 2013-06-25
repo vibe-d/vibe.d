@@ -261,7 +261,7 @@ class MessageQueue {
 			}
 		}
 
-		callOps(args, ops);
+		return callOps(args, ops);
 	}
 
 	private static bool receiveQueue(OPS...)(ref FixedRingBuffer!Variant queue, ref Variant dst, OPS ops)
