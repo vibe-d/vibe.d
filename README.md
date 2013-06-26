@@ -15,7 +15,7 @@ Recommended use is via DUB
 Instead of explicitly installing vibe.d, it is now recommended to use 
 [DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
 applications. Once DUB is installed, you can create a new project by running
-`dub init &lt;name&gt;` and enable the use of vibe.d by adding the following
+`dub init <name>` and enable the use of vibe.d by adding the following
 dependency to the `package.json` file in your project's directory:
 
     {
