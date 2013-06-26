@@ -50,7 +50,7 @@ class WinRTEventDriver : EventDriver {
 	{
 	}
 
-	WinRTFileStream openFile(string path, FileMode mode)
+	WinRTFileStream openFile(Path path, FileMode mode)
 	{
 		return new WinRTFileStream(path, mode);
 	}
@@ -60,12 +60,22 @@ class WinRTEventDriver : EventDriver {
 		assert(false);
 	}
 
+	NetworkAddress resolveHost(string host, ushort family, bool no_dns)
+	{
+		assert(false);
+	}
+
 	WinRTTCPConnection connectTCP(string host, ushort port)
 	{
 		assert(false);
 	}
 
-	void listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
+	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
+	{
+		assert(false);
+	}
+
+	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(false);
 	}
@@ -82,19 +92,6 @@ class WinRTEventDriver : EventDriver {
 }
 
 class WinRTManualEvent : ManualEvent {
-	void release()
-	{
-	}
-
-	void acquire()
-	{
-	}
-
-	bool amOwner()
-	{
-		assert(false);
-	}
-
 	@property int emitCount()
 	const {
 		assert(false);
@@ -106,6 +103,16 @@ class WinRTManualEvent : ManualEvent {
 
 	void wait()
 	{
+	}
+
+	int wait(int reference_emit_count)
+	{
+		assert(false);
+	}
+
+	int wait(Duration timeout, int reference_emit_count)
+	{
+		assert(false);
 	}
 }
 
@@ -121,19 +128,6 @@ class WinRTTimer : Timer {
 	{
 		m_driver = driver;
 		m_callback = callback;
-	}
-
-	void release()
-	{
-	}
-
-	void acquire()
-	{
-	}
-
-	bool amOwner()
-	{
-		assert(false);
 	}
 
 	@property bool pending() { return m_pending; }
@@ -159,20 +153,7 @@ class WinRTTimer : Timer {
 }
 
 class WinRTFileStream : FileStream {
-	this(string path, FileMode mode)
-	{
-		assert(false);
-	}
-
-	void release()
-	{
-	}
-
-	void acquire()
-	{
-	}
-
-	bool amOwner()
+	this(Path path, FileMode mode)
 	{
 		assert(false);
 	}
@@ -241,19 +222,6 @@ class WinRTTCPConnection : TCPConnection {
 	private {
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
-	}
-
-	void release()
-	{
-	}
-
-	void acquire()
-	{
-	}
-
-	bool amOwner()
-	{
-		assert(false);
 	}
 
 	@property void tcpNoDelay(bool enabled)

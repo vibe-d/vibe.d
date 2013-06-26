@@ -735,7 +735,7 @@ private void setupDriver()
 
 	logTrace("create driver");
 	version(VibeWin32Driver) setEventDriver(new Win32EventDriver(s_core));
-	else version(VibeWinrtDriver) setEventDriver(new WinRtEventDriver(s_core));
+	else version(VibeWinrtDriver) setEventDriver(new WinRTEventDriver(s_core));
 	else version(VibeLibevDriver) setEventDriver(new LibevDriver(s_core));
 	else version(VibeLibeventDriver) setEventDriver(new Libevent2Driver(s_core));
 	else static assert(false, "No event driver is available. Please specify a -version=Vibe*Driver for the desired driver.");
