@@ -2,7 +2,7 @@
 
 set -e
 
-echo "Checking for root priviledges..."
+echo "Checking for root privileges..."
 # root privileges required
 [ "root" != "$USER" ] && exec sudo $0 "$@"
 

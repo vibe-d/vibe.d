@@ -103,15 +103,13 @@ fremove()
 finstall()
 {
 	# check if vibe sources
-	if [ ! -f $SRC_DIR/bin/vibe ] || [ ! -f $SRC_DIR/source/vibe/vibe.d ]
+	if [ ! -f $SRC_DIR/source/vibe/vibe.d ]
 	then
 		ferror "$0: FATAL ERROR! missing 'vibe' sources!" "Try '$0 -h' for more information."
 	fi
 
 	# install files
 	echo "Installing 'vibe' files in $BASE_DIR/..."
-	mkdir -p $BASE_DIR/bin/
-	cp -Rf $SRC_DIR/bin/{vibe,vpm.d} $BASE_DIR/bin/
 	cp -Rf $SRC_DIR/{source/,docs/,examples/} $BASE_DIR/
 
 	# create menu entry
