@@ -38,7 +38,7 @@ interface Example1API
 	 *
 	 * Resulting matching request: "GET /"
 	 */
-	string getIndex();
+	string index();
 
 	/* Parameters are supported in a similar fashion.
 	 * Despite this is only an interface, make sure parameter names are not omitted, those are used for serialization.
@@ -61,7 +61,7 @@ class Example1 : Example1API
 			return "Some Info!";
 		}
 
-		string getIndex()
+		string index()
 		{
 			return "Index!";
 		}
@@ -243,7 +243,7 @@ shared static this()
 		{
 			auto api = new RestInterfaceClient!Example1API("http://127.0.0.1:8080");
 			assert(api.getSomeInfo() == "Some Info!");
-			assert(api.getIndex() == "Index!");
+			assert(api.index() == "Index!");
 			assert(api.postSum(2, 3) == 5);
 		}
 		// Example 2
