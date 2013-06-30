@@ -430,6 +430,7 @@ unittest
 	assert(adjustMethodStyle("getHTMLEntity", MethodStyle.lowerUnderscored) == "get_html_entity");
 	assert(adjustMethodStyle("ID", MethodStyle.lowerUnderscored) == "id");
 	assert(adjustMethodStyle("ID", MethodStyle.pascalCase) == "ID");
+	assert(adjustMethodStyle("ID", MethodStyle.camelCase) == "id");
 }
 
 
@@ -525,7 +526,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 		try {
 			static if( is(RetType == void) ){
 				__traits(getMember, inst, method)(params);
-				res.writeJsonBody(Json.EmptyObject);
+				res.writeJsonBody(Json.emptyObject);
 			} else {
 				auto ret = __traits(getMember, inst, method)(params);
 				res.writeJsonBody(serializeToJson(ret));
@@ -800,7 +801,7 @@ private string generateRestInterfaceMethods(I)()
 				ret ~= format(
 					q{
 						override %s {
-							Json jparams__ = Json.EmptyObject;
+							Json jparams__ = Json.emptyObject;
 							bool[string] jparamsj__;
 							string url__ = "%s";
 							%s
