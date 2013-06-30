@@ -16,9 +16,6 @@
 	},
 
 	"targetType": "library",
-
-	"libs-windows": ["wsock32", "ws2_32"],
-
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
 	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
 	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
@@ -32,23 +29,27 @@
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
 			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
-			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"]
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
+			"libs-windows": ["wsock32", "ws2_32"],
 		},
 		{
 			"name": "libev",
 			"dependencies": {"libev": "~master"},
 			"platforms": ["posix"],
-			"versions": ["VibeLibevDriver"],
+			"versions": ["VibeLibevDriver", "LIBEV4"],
 		},
 		{
 			"name": "win32",
 			"platforms": ["windows"],
-			"versions": ["VibeWin32Driver"]
+			"versions": ["VibeWin32Driver"],
+			"libs-windows": ["wsock32", "ws2_32"],
 		},
 		{
 			"name": "winrt",
 			"platforms": ["windows"],
-			"versions": ["VibeWinrtDriver"]
+			"dependencies": {"winrt": "~master"},
+			"versions": ["VibeWinrtDriver"],
+			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
 		}
 	],
 

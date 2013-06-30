@@ -19,6 +19,7 @@ version(VibeWinrtDriver)
 	import winrtd.comsupport;
 	import winrtd.roapi;
 
+	import core.atomic;
 	import core.time;
 
 	shared static this()
@@ -34,6 +35,7 @@ version(VibeWinrtDriver)
 	class WinRTEventDriver : EventDriver {
 		private {
 			DriverCore m_core;
+			bool m_exit = false;
 		}
 
 		this(DriverCore core)
@@ -42,36 +44,96 @@ version(VibeWinrtDriver)
 
 		}
 
-		int runEventLoop()
-		{
-			processEventsInternal(CoreProcessEventsOption.ProcessUntilQuit);
-			return 0;
-		}
+		version (HostWinRTDesktop) {
+			import core.sys.windows.windows;
+			import vibe.internal.win32;
 
-		int runEventLoopOnce()
-		{
-			processEventsInternal(CoreProcessEventsOption.ProcessOneAndAllPending);
-			return 0;
-		}
+			int runEventLoop()
+			{
+				m_exit = false;
+				while( !m_exit && haveEvents() )
+					runEventLoopOnce();
+				return 0;
+			}
 
-		bool processEvents()
-		{
-			return processEventsInternal(CoreProcessEventsOption.ProcessAllIfPresent);
-		}
+			int runEventLoopOnce()
+			{
+				doProcessEvents(INFINITE);
+				m_core.notifyIdle();
+				return 0;
+			}
 
-		bool processEventsInternal(CoreProcessEventsOption mode)
-		{
-			ComPtr!ICoreWindowStatic windowStatic;
-			auto windowClassName= HStringReference("Windows.UI.Core.CoreWindow");
-			comCheck(GetActivationFactory(windowClassName, windowStatic._target), "ICoreWindowStatic");
-			ComPtr!ICoreWindow window;
-			comCheck(windowStatic.GetForCurrentThread(window._target), "GetWindowForCurrentThread");
-			ComPtr!ICoreDispatcher dispatcher;
-			comCheck(window.Dispatcher(dispatcher._target), "Dispatcher");
-			comCheck(dispatcher.ProcessEvents(mode), "ProcessEvents");
-			bool vis;
-			comCheck(window.Visible(&vis));
-			return vis;
+			bool processEvents()
+			{
+				return doProcessEvents(0);
+			}
+
+			bool doProcessEvents(uint timeout)
+			{
+				waitForEvents(timeout);
+				assert(m_tid == GetCurrentThreadId());
+				MSG msg;
+				while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
+					if( msg.message == WM_QUIT ) return false;
+					if( msg.message == WM_USER_SIGNAL )
+						msg.hwnd = m_hwnd;
+					TranslateMessage(&msg);
+					DispatchMessageW(&msg);
+				}
+				return true;
+			}
+
+			private bool haveEvents()
+			{
+				version(VibePartialAutoExit)
+					return !m_fileWriters.byKey.empty || !m_socketHandlers.byKey.empty;
+				else return true;
+			}
+
+			private void waitForEvents(uint timeout)
+			{
+				auto ret = MsgWaitForMultipleObjectsEx(cast(DWORD)m_registeredEvents.length, m_registeredEvents.ptr, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
+				if( ret == WAIT_OBJECT_0 ){
+					Win32TCPConnection[] to_remove;
+					foreach( fw; m_fileWriters.byKey )
+						if( fw.testFileWritten() )
+							to_remove ~= fw;
+					foreach( fw; to_remove )
+						m_fileWriters.remove(fw);
+				}
+			}
+		} else {
+			int runEventLoop()
+			{
+				processEventsInternal(CoreProcessEventsOption.ProcessUntilQuit);
+				return 0;
+			}
+
+			int runEventLoopOnce()
+			{
+				processEventsInternal(CoreProcessEventsOption.ProcessOneAndAllPending);
+				return 0;
+			}
+
+			bool processEvents()
+			{
+				return processEventsInternal(CoreProcessEventsOption.ProcessAllIfPresent);
+			}
+
+			bool processEventsInternal(CoreProcessEventsOption mode)
+			{
+				ComPtr!ICoreWindowStatic windowStatic;
+				auto windowClassName= HStringReference("Windows.UI.Core.CoreWindow");
+				comCheck(GetActivationFactory(windowClassName, windowStatic._target), "ICoreWindowStatic");
+				ComPtr!ICoreWindow window;
+				comCheck(windowStatic.GetForCurrentThread(window._target), "GetWindowForCurrentThread");
+				ComPtr!ICoreDispatcher dispatcher;
+				comCheck(window.Dispatcher(dispatcher._target), "Dispatcher");
+				comCheck(dispatcher.ProcessEvents(mode), "ProcessEvents");
+				bool vis;
+				comCheck(window.Visible(&vis));
+				return vis;
+			}
 		}
 
 		void exitEventLoop()
@@ -84,9 +146,11 @@ version(VibeWinrtDriver)
 			comCheck(window.Close(), "window.Close");
 		}
 
-		WinRTFileStream openFile(Path path, FileMode mode)
+		FileStream openFile(Path path, FileMode mode)
 		{
-			return new WinRTFileStream(path, mode);
+			//return new WinRTFileStream(path, mode);
+			import vibe.core.drivers.threadedfile;
+			return new ThreadedFileStream(path, mode);
 		}
 
 		DirectoryWatcher watchDirectory(Path path, bool recursive)
@@ -116,7 +180,7 @@ version(VibeWinrtDriver)
 
 		WinRTManualEvent createManualEvent()
 		{
-			assert(false);
+			return new WinRTManualEvent(this);
 		}
 
 		WinRTTimer createTimer(void delegate() callback)
@@ -126,22 +190,39 @@ version(VibeWinrtDriver)
 	}
 
 	class WinRTManualEvent : ManualEvent {
-		@property int emitCount()
-		const {
-			assert(false);
+		private {
+			WinRTEventDriver m_driver;
+			shared(int) m_emitCount;
+			Task[] m_waiters;
 		}
+
+		this(WinRTEventDriver driver)
+		{
+			m_driver = driver;
+		}
+
+		@property int emitCount() const { return m_emitCount; }
 
 		void emit()
 		{
+			atomicOp!"+="(m_emitCount, 1);
+			auto wtrs = m_waiters;
+			m_waiters = null;
+			foreach (t; wtrs)
+				m_driver.m_core.resumeTask(t);
 		}
 
 		void wait()
 		{
+			wait(this.emitCount);
 		}
 
 		int wait(int reference_emit_count)
 		{
-			assert(false);
+			m_waiters ~= Task.getThis();
+			int rc;
+			while ((rc = this.emitCount) == reference_emit_count) m_driver.m_core.yieldForEvent();
+			return rc;
 		}
 
 		int wait(Duration timeout, int reference_emit_count)

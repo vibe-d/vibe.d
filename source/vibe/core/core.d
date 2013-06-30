@@ -650,6 +650,11 @@ private {
 shared static this()
 {
 	version(Windows){
+		version(VibeLibeventDriver) enum need_wsa = true;
+		else version(VibeWin32Driver) enum need_wsa = true;
+		else enum need_wsa = false;
+	}
+	static if (need_wsa) {
 		logTrace("init winsock");
 		// initialize WinSock2
 		import std.c.windows.winsock;
