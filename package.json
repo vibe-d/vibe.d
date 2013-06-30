@@ -24,15 +24,6 @@
 	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
 	"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
 	
-	"excludedSourceFiles": [
-		"source/vibe/core/mutex.d",
-		"source/vibe/core/signal.d",
-		"source/vibe/crypto/md5.d",
-		"source/vibe/crypto/sha1.d",
-		"source/vibe/crypto/ssl.d",
-		"source/vibe/stream/stream.d"
-	],
-
 	"configurations": [
 		{
 			"name": "libevent",
