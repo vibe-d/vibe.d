@@ -47,7 +47,6 @@
 		{
 			"name": "winrt",
 			"platforms": ["windows"],
-			"dependencies": {"winrt": "~master"},
 			"versions": ["VibeWinrtDriver"],
 			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
 		}
