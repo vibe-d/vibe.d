@@ -60,8 +60,8 @@ void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null)
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias filterUrlEncode = filterURLEncode;
+/// Deprecated compatibility alias
+deprecated("Please use filterURLEncode instead.") alias filterUrlEncode = filterURLEncode;
 
 
 /** Writes the decoded version of the given URL encoded string to an output range.
@@ -89,8 +89,8 @@ void filterURLDecode(R)(ref R dst, string str)
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias filterUrlDecode = filterURLDecode;
+/// Deprecated compatibility alias
+deprecated("Please use filterURLDecode instead.") alias filterUrlDecode = filterURLDecode;
 
 
 unittest

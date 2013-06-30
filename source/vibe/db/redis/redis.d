@@ -14,7 +14,7 @@ import std.utf;
 final class RedisReply {
 
 	private {
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 		LockedConnection!RedisConnection m_lockedConnection;
 		ubyte[] m_data;
 		size_t m_length;
@@ -22,7 +22,7 @@ final class RedisReply {
 		bool m_multi;
 	}
 	
-	this(TcpConnection conn) {
+	this(TCPConnection conn) {
 		m_conn = conn;
 		m_index = 0;
 		m_length = 1;
@@ -91,7 +91,7 @@ final class RedisConnection : EventedObject {
 	private {
 		string m_host;
 		ushort m_port;
-		TcpConnection m_conn;
+		TCPConnection m_conn;
 	}
 
 	this() {}
@@ -103,7 +103,7 @@ final class RedisConnection : EventedObject {
 
 	RedisReply request(string command, in ubyte[][] args...) {
 		if( !m_conn || !m_conn.connected ){
-			try m_conn = connectTcp(m_host, m_port);
+			try m_conn = connectTCP(m_host, m_port);
 			catch (Exception e) {
 				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
 			}

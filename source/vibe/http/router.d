@@ -76,8 +76,8 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpRouter = HTTPRouter;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPRouter instead.") alias HttpRouter = HTTPRouter;
 
 
 /++
@@ -170,8 +170,8 @@ class URLRouter : HTTPRouter {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias UrlRouter = URLRouter;
+/// Deprecated compatibility alias
+deprecated("Please use URLRouter instead.") alias UrlRouter = URLRouter;
 
 
 private enum maxRouteParameters = 64;

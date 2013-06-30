@@ -202,8 +202,8 @@ struct URL {
 		return ret;
 	}
 
-	/// Compatibility alias, will be deprecated soon.
-	alias parentUrl = parentURL;
+	/// Deprecated compatibility alias
+	deprecated("Please use parentURL instead.") alias parentUrl = parentURL;
 
 	/// Converts this URL object to its string representation.
 	string toString()
@@ -259,8 +259,8 @@ struct URL {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias Url = URL;
+/// Deprecated compatibility alias
+deprecated("Please use URL instead.") alias Url = URL;
 
 
 unittest {

@@ -223,8 +223,8 @@ class SSLStream : Stream {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SslStream = SSLStream;
+/// Deprecated compatibility alias
+deprecated("Please use SSLStream instead.") alias SslStream = SSLStream;
 
 
 enum SSLStreamState {
@@ -233,8 +233,8 @@ enum SSLStreamState {
 	connected
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SslStreamState = SSLStreamState;
+/// Deprecated compatibility alias
+deprecated("Please use SSLStreamState instead.") alias SslStreamState = SSLStreamState;
 
 
 class SSLContext {
@@ -289,8 +289,8 @@ class SSLContext {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SslContext = SSLContext;
+/// Deprecated compatibility alias
+deprecated("Please use SSLContext instead.") alias SslContext = SSLContext;
 
 
 enum SSLVersion {

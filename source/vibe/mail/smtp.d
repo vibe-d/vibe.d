@@ -28,8 +28,8 @@ enum SMTPConnectionType {
 	startTLS
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SmtpConnectionType = SMTPConnectionType;
+/// Deprecated compatibility alias
+deprecated("Please use SMTPConnectionType instead.") alias SmtpConnectionType = SMTPConnectionType;
 
 
 /** Represents the different status codes for SMTP replies.
@@ -62,8 +62,8 @@ enum SMTPStatus {
 	transactionFailed = 554
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SmtpStatus = SMTPStatus;
+/// Deprecated compatibility alias
+deprecated("Please use SMTPStatus instead.") alias SmtpStatus = SMTPStatus;
 
 
 /**
@@ -76,8 +76,8 @@ enum SMTPAuthType {
 	cramMd5
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SmtpAuthType = SMTPAuthType;
+/// Deprecated compatibility alias
+deprecated("Please use SMTPAuthType instead.") alias SmtpAuthType = SMTPAuthType;
 
 
 /**
@@ -96,8 +96,8 @@ class SMTPClientSettings {
 	this(string host, ushort port) { this.host = host; this.port = port; }
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias SmtpClientSettings = SMTPClientSettings;
+/// Deprecated compatibility alias
+deprecated("Please use SMTPClientSettings instead.") alias SmtpClientSettings = SMTPClientSettings;
 
 
 /**
@@ -113,9 +113,9 @@ class Mail {
 */
 void sendMail(SMTPClientSettings settings, Mail mail)
 {
-	TcpConnection raw_conn;
+	TCPConnection raw_conn;
 	try {
-		raw_conn = connectTcp(settings.host, settings.port);
+		raw_conn = connectTCP(settings.host, settings.port);
 	} catch(Exception e){
 		throw new Exception("Failed to connect to SMTP server at "~settings.host~" port "
 			~to!string(settings.port), e);

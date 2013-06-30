@@ -37,8 +37,8 @@ void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host
 	listenHTTP(settings, reverseProxyRequest(destination_host, destination_port));
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenHttpReverseProxy = listenHTTPReverseProxy;
+/// Deprecated compatibility alias
+deprecated("Please use listenHTTPReverseProxy instead.") alias listenHttpReverseProxy = listenHTTPReverseProxy;
 
 
 /**

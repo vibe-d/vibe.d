@@ -94,8 +94,8 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 		}, responder);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias requestHttp = requestHTTP;
+/// Deprecated compatibility alias
+deprecated("Please use requestHTTP instead.") alias requestHttp = requestHTTP;
 
 
 /**
@@ -125,8 +125,8 @@ auto connectHTTP(string host, ushort port = 0, bool ssl = false)
 	return pool.lockConnection();
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias connectHttp = connectHTTP;
+/// Deprecated compatibility alias
+deprecated("Please use connectHTTP instead.") alias connectHttp = connectHTTP;
 
 
 /**************************************************************************************************/
@@ -136,8 +136,8 @@ alias connectHttp = connectHTTP;
 class HTTPClient : EventedObject {
 	enum maxHeaderLineLength = 4096;
 
-	/// Compatibility alias, will be deprecated soon.
-	enum maxHttpHeaderLineLength = maxHeaderLineLength;
+	/// Deprecated compatibility alias
+	deprecated("Please use maxHeaderLineLength instead.") enum maxHttpHeaderLineLength = maxHeaderLineLength;
 
 	private {
 		string m_server;
@@ -238,8 +238,8 @@ class HTTPClient : EventedObject {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpClient = HTTPClient;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPClient instead.") alias HttpClient = HTTPClient;
 
 
 final class HTTPClientRequest : HTTPRequest {
@@ -370,8 +370,8 @@ final class HTTPClientRequest : HTTPRequest {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpClientRequest = HTTPClientRequest;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPClientRequest instead.") alias HttpClientRequest = HTTPClientRequest;
 
 
 final class HTTPClientResponse : HTTPResponse {
@@ -397,7 +397,7 @@ final class HTTPClientResponse : HTTPResponse {
 		logTrace("HTTP client reading status line");
 		string stln = cast(string)client.m_stream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", alloc);
 		logTrace("stln: %s", stln);
-		this.httpVersion = parseHttpVersion(stln);
+		this.httpVersion = parseHTTPVersion(stln);
 		enforce(stln.startsWith(" "));
 		stln = stln[1 .. $];
 		this.statusCode = parse!int(stln);
@@ -408,12 +408,12 @@ final class HTTPClientResponse : HTTPResponse {
 		}
 		
 		// read headers until an empty line is hit
-		parseRfc5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc);
+		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc);
 
 		logTrace("---------------------");
 		logTrace("HTTP client response:");
 		logTrace("---------------------");
-		logTrace("%s %s", getHttpVersionString(this.httpVersion), this.statusCode);
+		logTrace("%s %s", getHTTPVersionString(this.httpVersion), this.statusCode);
 		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
@@ -537,8 +537,8 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpClientResponse = HTTPClientResponse;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPClientResponse instead.") alias HttpClientResponse = HTTPClientResponse;
 
 
 private NullOutputStream s_sink;

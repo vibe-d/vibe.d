@@ -32,8 +32,8 @@ enum HTTPVersion {
 	HTTP_1_1
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpVersion = HTTPVersion;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPVersion instead.") alias HttpVersion = HTTPVersion;
 
 
 enum HTTPMethod {
@@ -58,8 +58,8 @@ enum HTTPMethod {
 	UNLOCK
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpMethod = HTTPMethod;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPMethod instead.") alias HttpMethod = HTTPMethod;
 
 
 /**
@@ -113,8 +113,8 @@ void enforceHTTP(T)(T condition, HTTPStatus statusCode, string message = null)
 	enforce(condition, new HTTPStatusException(statusCode, message));
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias enforceHttp = enforceHTTP;
+/// Deprecated compatibility alias
+deprecated("Please use enforceHTTP instead.") alias enforceHttp = enforceHTTP;
 
 
 /**
@@ -140,8 +140,8 @@ class HTTPRequest {
 		*/
 		string requestURL = "/";
 
-		/// Compatibility alias, will be deprecated soon.
-		alias requestUrl = requestURL;
+		/// Deprecated compatibility alias
+		deprecated("Please use requestURL instead.") alias requestUrl = requestURL;
 
 		/// Please use requestURL instead.
 		deprecated("Please use requestURL instead.") alias url = requestURL;
@@ -213,8 +213,8 @@ class HTTPRequest {
 	
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpRequest = HTTPRequest;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPRequest instead.") alias HttpRequest = HTTPRequest;
 
 
 /**
@@ -248,8 +248,8 @@ class HTTPResponse {
 	@property void contentType(string ct) { headers["Content-Type"] = ct; }
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpResponse = HTTPResponse;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPResponse instead.") alias HttpResponse = HTTPResponse;
 
 
 /**
@@ -272,8 +272,8 @@ class HTTPStatusException : Exception {
 	@property int status() const { return m_status; }
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpStatusException = HTTPStatusException;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPStatusException instead.") alias HttpStatusException = HTTPStatusException;
 
 
 class MultiPart {
@@ -292,8 +292,8 @@ string getHTTPVersionString(HTTPVersion ver)
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias getHttpVersionString = getHTTPVersionString;
+/// Deprecated compatibility alias
+deprecated("Please use getHTTPVersionString instead.") alias getHttpVersionString = getHTTPVersionString;
 
 
 HTTPVersion parseHTTPVersion(ref string str)
@@ -309,8 +309,8 @@ HTTPVersion parseHTTPVersion(ref string str)
 	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias parseHttpVersion = parseHTTPVersion;
+/// Deprecated compatibility alias
+deprecated("Please use parseHTTPVersion instead.") alias parseHttpVersion = parseHTTPVersion;
 
 
 /**

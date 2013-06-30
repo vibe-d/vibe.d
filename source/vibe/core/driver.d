@@ -87,8 +87,8 @@ interface EventDriver {
 	*/
 	TCPConnection connectTCP(string host, ushort port);
 
-	/// Compatibility alias, will be deprecated soon.
-	alias connectTcp = connectTCP;
+	/// Deprecated compatibility alias
+	deprecated("Please use connectTCP instead.") alias connectTcp = connectTCP;
 
 	/** Listens on the specified port and interface for TCP connections.
 
@@ -98,8 +98,8 @@ interface EventDriver {
 	*/
 	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options);
 
-	/// Compatibility alias, will be deprecated soon.
-	alias listenTcp = listenTCP;
+	/// Deprecated compatibility alias
+	deprecated("Please use listenTCP instead.") alias listenTcp = listenTCP;
 
 	/** Creates a new UDP socket and sets the specified address/port as the destination for packets.
 
@@ -108,15 +108,15 @@ interface EventDriver {
 	*/
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0");
 
-	/// Compatibility alias, will be deprecated soon.
-	alias listenUdp = listenUDP;
+	/// Deprecated compatibility alias
+	deprecated("Please use listenUDP instead.") alias listenUdp = listenUDP;
 
 	/** Creates a new manually triggered event.
 	*/
 	ManualEvent createManualEvent();
 
-	/// Compatibility alias, will be deprecated soon.
-	alias createSignal = createManualEvent;
+	/// Deprecated compatibility alias
+	deprecated("Please use createNanualEvent instead.") alias createSignal = createManualEvent;
 
 	/** Creates a new timer.
 

@@ -103,8 +103,8 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_ha
 	listenHTTP(settings, &request_handler.handleRequest);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenHttp = listenHTTP;
+/// Deprecated compatibility alias
+deprecated("Please use listenHTTP instead.") alias listenHttp = listenHTTP;
 
 
 /**
@@ -145,10 +145,10 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 			}
 		}
 		if( !found_listener ){
-			if( (settings.sslKeyFile || settings.sslCertFile) && !settings.sslContext ){
+			if( (settings._sslKeyFile || settings._sslCertFile) && !settings.sslContext ){
 				logDebug("Creating SSL context...");
-				assert(settings.sslCertFile.length && settings.sslKeyFile.length);
-				settings.sslContext = new SSLContext(settings.sslCertFile, settings.sslKeyFile);
+				assert(settings._sslCertFile.length && settings._sslKeyFile.length);
+				settings.sslContext = new SSLContext(settings._sslCertFile, settings._sslKeyFile);
 				logDebug("... done");
 			}
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
@@ -168,8 +168,8 @@ void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandler reque
 	listenHTTPPlain(settings, &request_handler.handleRequest);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenHttpPlain = listenHTTPPlain;
+/// Deprecated compatibility alias
+deprecated("Please use listenHTTPPlain instead.") alias listenHttpPlain = listenHTTPPlain;
 
 
 /**
@@ -246,12 +246,12 @@ interface HTTPServerRequestHandler {
 }
 
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerRequestDelegate = HTTPServerRequestDelegate;
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerRequestFunction = HTTPServerRequestFunction;
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerRequestHandler = HTTPServerRequestHandler;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerRequestDelegate instead.") alias HttpServerRequestDelegate = HTTPServerRequestDelegate;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerRequestFunction instead.") alias HttpServerRequestFunction = HTTPServerRequestFunction;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerRequestHandler instead.") alias HttpServerRequestHandler = HTTPServerRequestHandler;
 
 /// Compatibility alias.
 deprecated("Please use HTTPServerRequestHandler instead.")
@@ -270,15 +270,15 @@ class HTTPServerErrorInfo {
 	Throwable exception;
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerErrorInfo = HTTPServerErrorInfo;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerErrorInfo instead.") alias HttpServerErrorInfo = HTTPServerErrorInfo;
 
 
 /// Delegate type used for user defined error page generator callbacks.
 alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error);
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerErrorPageHandler = HTTPServerErrorPageHandler;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerErrorPageHandler instead.") alias HttpServerErrorPageHandler = HTTPServerErrorPageHandler;
 
 
 /**
@@ -319,8 +319,8 @@ enum HTTPServerOption {
 	ParseCookies = parseCookies
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerOption = HTTPServerOption;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerOption instead.") alias HttpServerOption = HTTPServerOption;
 
 
 /**
@@ -385,9 +385,9 @@ class HTTPServerSettings {
 		Please use sslContext in new code instead of setting the key/cert file. Those fileds
 		will be deprecated at some point.
 	*/
-	string sslCertFile;
+	deprecated("Please use sslContext instead.") @property ref inout(string) sslCertFile() inout { return _sslCertFile; }
 	/// ditto
-	string sslKeyFile;
+	deprecated("Please use sslContext instead.") @property ref inout(string) sslKeyFile() inout { return _sslKeyFile; }
 	/// ditto
 	SSLContext sslContext;
 
@@ -418,8 +418,9 @@ class HTTPServerSettings {
 	@property HTTPServerSettings dup()
 	{
 		auto ret = new HTTPServerSettings;
-		foreach( mem; __traits(allMembers, HTTPServerSettings) ){
-			static if( mem == "bindAddresses" ) ret.bindAddresses = bindAddresses.dup;
+		foreach (mem; __traits(allMembers, HTTPServerSettings)) {
+			static if (mem == "bindAddresses") ret.bindAddresses = bindAddresses.dup;
+			else static if (mem == "sslCertFile" || mem == "sslKeyFile") {}
 			else static if( __traits(compiles, __traits(getMember, ret, mem) = __traits(getMember, this, mem)) )
 				__traits(getMember, ret, mem) = __traits(getMember, this, mem);
 		}
@@ -428,10 +429,12 @@ class HTTPServerSettings {
 
 	/// Disable support for VibeDist and instead start listening immediately.
 	bool disableDistHost = false;
+
+	private string _sslCertFile, _sslKeyFile;
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerSettings = HTTPServerSettings;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerSettings instead.") alias HttpServerSettings = HTTPServerSettings;
 
 
 /**
@@ -581,8 +584,8 @@ final class HTTPServerRequest : HTTPRequest {
 		return url;
 	}
 
-	/// Compatibility alias, will be deprecated soon.
-	alias fullUrl = fullURL;
+	/// Deprecated compatibility alias
+	deprecated("Please use fullURL instead.") alias fullUrl = fullURL;
 
 	/** The relative path the the root folder.
 
@@ -599,8 +602,8 @@ final class HTTPServerRequest : HTTPRequest {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerRequest = HTTPServerRequest;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerRequest instead.") alias HttpServerRequest = HTTPServerRequest;
 
 
 /**
@@ -957,8 +960,8 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HttpServerResponse = HTTPServerResponse;
+/// Deprecated compatibility alias
+deprecated("Please use HTTPServerResponse instead.") alias HttpServerResponse = HTTPServerResponse;
 
 
 /**************************************************************************************************/
@@ -1334,7 +1337,7 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 	req.httpVersion = parseHTTPVersion(reqln);
 	
 	//headers
-	parseRfc5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc);
+	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc);
 
 	foreach (k, v; req.headers)
 		logTrace("%s: %s", k, v);

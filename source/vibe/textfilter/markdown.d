@@ -410,7 +410,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			assert(block.blocks.length == 0);
 			dst.put("<pre class=\"prettyprint\"><code>");
 			foreach(ln; block.text){
-				filterHtmlEscape(dst, ln);
+				filterHTMLEscape(dst, ln);
 				dst.put("\n");
 			}
 			dst.put("</code></pre>");
@@ -462,7 +462,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				string text;
 				if( auto em = parseEmphasis(ln, text) ){
 					dst.put(em == 1 ? "<em>" : em == 2 ? "<strong>" : "<strong><em>");
-					filterHtmlEscape(dst, text);
+					filterHTMLEscape(dst, text);
 					dst.put(em == 1 ? "</em>" : em == 2 ? "</strong>": "</em></strong>");
 				} else {
 					dst.put(ln[0]);
@@ -473,7 +473,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				string code;
 				if( parseInlineCode(ln, code) ){
 					dst.put("<code class=\"prettyprint\">");
-					filterHtmlEscape(dst, code);
+					filterHTMLEscape(dst, code);
 					dst.put("</code>");
 				} else {
 					dst.put(ln[0]);
@@ -484,15 +484,15 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<a href=\"");
-					filterHtmlEscape(dst, link.url);
+					filterHTMLEscape(dst, link.url);
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
-						filterHtmlEscape(dst, link.title);
+						filterHTMLEscape(dst, link.title);
 						dst.put("\"");
 					}
 					dst.put(">");
-					filterHtmlEscape(dst, link.text);
+					filterHTMLEscape(dst, link.text);
 					dst.put("</a>");
 				} else {
 					dst.put(ln[0]);
@@ -503,14 +503,14 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<img src=\"");
-					filterHtmlEscape(dst, link.title);
+					filterHTMLEscape(dst, link.title);
 					dst.put(link.url);
 					dst.put("\" alt=\"");
-					filterHtmlEscape(dst, link.text);
+					filterHTMLEscape(dst, link.text);
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
-						filterHtmlEscape(dst, link.title);
+						filterHTMLEscape(dst, link.title);
 						dst.put("\"");
 					}
 					dst.put(">");
@@ -532,11 +532,11 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				if( parseAutoLink(ln, url) ){
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
-					if( is_email ) filterHtmlAllEscape(dst, url);
-					else filterHtmlEscape(dst, url);
+					if( is_email ) filterHTMLAllEscape(dst, url);
+					else filterHTMLEscape(dst, url);
 					dst.put("\">");
-					if( is_email ) filterHtmlAllEscape(dst, url[7 .. $]);
-					else filterHtmlEscape(dst, url);
+					if( is_email ) filterHTMLAllEscape(dst, url[7 .. $]);
+					else filterHTMLEscape(dst, url);
 					dst.put("</a>");
 				} else {
 					if( flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");

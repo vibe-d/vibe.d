@@ -264,7 +264,7 @@ string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes =
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias readAllUtf8 = readAllUTF8;
+/// Deprecated compatibility alias
+deprecated("Please use readAllUTF8 instead.") alias readAllUtf8 = readAllUTF8;
 
 private struct Buffer { ubyte[64*1024] bytes; }

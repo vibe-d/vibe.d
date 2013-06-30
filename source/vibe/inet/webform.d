@@ -77,8 +77,8 @@ void parseURLEncodedForm(string str, ref string[string] params)
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias parseUrlEncodedForm = parseURLEncodedForm;
+/// Deprecated compatibility alias
+deprecated("Please use parseURLEncodedForm instead.") alias parseUrlEncodedForm = parseURLEncodedForm;
 
 unittest
 {
@@ -121,7 +121,7 @@ struct FilePart {
 private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary, size_t max_line_length)
 {
 	InetHeaderMap headers;
-	stream.parseRfc5322Header(headers);
+	stream.parseRFC5322Header(headers);
 	auto pv = "Content-Disposition" in headers;
 	enforce(pv, "invalid multipart");
 	auto cd = *pv;

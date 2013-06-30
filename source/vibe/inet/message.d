@@ -53,8 +53,8 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 	addPreviousHeader();
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias parseRfc5322Header = parseRFC5322Header;
+/// Deprecated compatibility alias
+deprecated("Please use parseRFC5322Header instead.") alias parseRfc5322Header = parseRFC5322Header;
 
 
 private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

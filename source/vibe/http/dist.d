@@ -24,11 +24,10 @@ import std.exception;
 */
 void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
-	Json regmsg = Json.EmptyObject;
+	Json regmsg = Json.emptyObject;
 	regmsg.hostName = settings.hostName;
 	regmsg.port = settings.port;
-	regmsg.sslCertFile = settings.sslCertFile;
-	regmsg.sslKeyFile = settings.sslKeyFile;
+	//regmsg.sslContext = settings.sslContext; // TODO: send key/cert contents
 
 	HTTPServerSettings local_settings = settings.dup;
 	local_settings.port = 0;
@@ -46,6 +45,6 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 	enforce(res.statusCode == HTTPStatus.OK, "Failed to register with load balancer.");
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenHttpDist = listenHTTPDist;
+/// Deprecated compatibility alias
+deprecated("Please use listenHTTPDist instead.") alias listenHttpDist = listenHTTPDist;
 

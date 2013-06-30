@@ -60,8 +60,8 @@ TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) connectio
 	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenTcp = listenTCP;
+/// Deprecated compatibility alias
+deprecated("Please use listenTCP instead.") alias listenTcp = listenTCP;
 
 /**
 	Starts listening on the specified port.
@@ -78,8 +78,8 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 	return listenTCP(port, toDelegate(connection_callback), address, options);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenTcpS = listenTCP_s;
+/// Deprecated compatibility alias
+deprecated("Please use listenTCP_s instead.") alias listenTcpS = listenTCP_s;
 
 /**
 	Establishes a connection to the given host/port.
@@ -89,8 +89,8 @@ TCPConnection connectTCP(string host, ushort port)
 	return getEventDriver().connectTCP(host, port);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias connectTcp = connectTCP;
+/// Deprecated compatibility alias
+deprecated("Please use connectTCP instead.")alias connectTcp = connectTCP;
 
 
 /**
@@ -101,8 +101,8 @@ UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	return getEventDriver().listenUDP(port, bind_address);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias listenUdp = listenUDP;
+/// Deprecated compatibility alias
+deprecated("Please use listenUDP instead.")alias listenUdp = listenUDP;
 
 
 /**
@@ -187,8 +187,8 @@ interface TCPConnection : Stream, EventedObject {
 	bool waitForData(Duration timeout);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias TcpConnection = TCPConnection;
+/// Deprecated compatibility alias
+deprecated("Please use TCPConnection instead.")alias TcpConnection = TCPConnection;
 
 
 /**
@@ -199,8 +199,8 @@ interface TCPListener /*: EventedObject*/ {
 	void stopListening();
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias TcpListener = TCPListener;
+/// Deprecated compatibility alias
+deprecated("Please use TCPListener instead.")alias TcpListener = TCPListener;
 
 
 /**
@@ -238,8 +238,8 @@ interface UDPConnection : EventedObject {
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias UdpConnection = UDPConnection;
+/// Deprecated compatibility alias
+deprecated("Please use UDPConnection instead.")alias UdpConnection = UDPConnection;
 
 
 enum TCPListenOptions {
@@ -247,5 +247,5 @@ enum TCPListenOptions {
 	distribute = 1<<0
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias TcpListenOptions = TCPListenOptions;
+/// Deprecated compatibility alias
+deprecated("Please use TCPListenOptions instead.")alias TcpListenOptions = TCPListenOptions;

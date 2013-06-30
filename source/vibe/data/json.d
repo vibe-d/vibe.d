@@ -113,12 +113,12 @@ struct Json {
 	/// New JSON value of Type.Array
 	static @property Json emptyArray() { return Json(cast(Json[])null); }
 
-	/// Compatibility alias - will be deprecated soon.
-	alias Undefined = undefined;
+	/// Deprecated compatibility alias
+	deprecated("Please use undefined instead.") alias Undefined = undefined;
 	/// ditto
-	alias EmptyObject = emptyObject;
+	deprecated("Please use emptyObject instead.") alias EmptyObject = emptyObject;
 	/// ditto
-	alias EmptyArray = emptyArray;
+	deprecated("Please use emptyArray instead.") alias EmptyArray = emptyArray;
 
 	version(JsonLineNumbers) int line;
 
@@ -197,7 +197,7 @@ struct Json {
 	const(Json) opIndex(string key) const {
 		checkType!(Json[string])();
 		if( auto pv = key in m_object ) return *pv;
-		Json ret = Json.Undefined;
+		Json ret = Json.undefined;
 		ret.m_string = key;
 		return ret;
 	}

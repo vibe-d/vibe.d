@@ -198,13 +198,10 @@ class WebSocket {
 		receive((scope message){
 			enforce(!strict || message.frameOpcode == FrameOpcode.text,
 				"Expected a text message, got "~message.frameOpcode.to!string());
-			ret = message.readAllUtf8();
+			ret = message.readAllUTF8();
 		});
 		return ret;
 	}
-
-	/// Compatibility alias for readBinary. Will be deprecated at some point.
-	alias receive = receiveBinary;
 
 	/**
 		Receives a new message using an InputStream.

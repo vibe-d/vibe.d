@@ -36,8 +36,8 @@ void filterHTMLEscape(R)(ref R dst, string str)
 		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeNewline);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias filterHtmlEscape = filterHTMLEscape;
+/// Deprecated compatibility alias
+deprecated("Please use filterHTMLEscape instead.") alias filterHtmlEscape = filterHTMLEscape;
 
 
 /** Returns the HTML escaped version of a given string (also escapes double quotes).
@@ -63,8 +63,8 @@ void filterHTMLAttribEscape(R)(ref R dst, string str)
 		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias filterHtmlAttribEscape = filterHTMLAttribEscape;
+/// Deprecated compatibility alias
+deprecated("Please use filterHTMLAttribEscape instead.") alias filterHtmlAttribEscape = filterHTMLAttribEscape;
 
 
 /** Returns the HTML escaped version of a given string (escapes every character).
@@ -93,8 +93,8 @@ void filterHTMLAllEscape(R)(ref R dst, string str)
 	}
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias filterHtmlAllEscape = filterHTMLAllEscape;
+/// Deprecated compatibility alias
+deprecated("Please use filterHTMLAllEscape instead.") alias filterHtmlAllEscape = filterHTMLAllEscape;
 
 
 /**
@@ -155,8 +155,8 @@ enum HTMLEscapeFlags {
 	escapeUnknown = 1<<2
 }
 
-/// Compatibility alias, will be deprecated soon.
-alias HtmlEscapeFlags = HTMLEscapeFlags;
+/// Deprecated compatibility alias
+deprecated("Please use HTMLEscapeFlags instead.") alias HtmlEscapeFlags = HTMLEscapeFlags;
 
 private struct StringAppender {
 	string data;
