@@ -1,7 +1,11 @@
 /// [internal]
 module vibe.internal.win32;
 
-private extern(System) nothrow
+public import core.sys.windows.windows;
+public import std.c.windows.windows;
+public import std.c.windows.winsock;
+
+extern(System) nothrow
 {
 	enum HWND HWND_MESSAGE = cast(HWND)-3;
 	enum {
@@ -25,8 +29,6 @@ private extern(System) nothrow
 	LONG_PTR GetWindowLongA(HWND hWnd, int nIndex);
 
 	alias void function(DWORD, DWORD, OVERLAPPED*) LPOVERLAPPED_COMPLETION_ROUTINE;
-
-	DWORD GetCurrentThreadId();
 
 	HANDLE CreateEventW(SECURITY_ATTRIBUTES* lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 	BOOL PostThreadMessageW(DWORD idThread, UINT Msg, WPARAM wParam, LPARAM lParam);

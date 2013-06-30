@@ -45,8 +45,9 @@ version(VibeWinrtDriver)
 		}
 
 		version (HostWinRTDesktop) {
-			import core.sys.windows.windows;
 			import vibe.internal.win32;
+
+			private DWORD m_tid;
 
 			int runEventLoop()
 			{
@@ -75,8 +76,6 @@ version(VibeWinrtDriver)
 				MSG msg;
 				while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
 					if( msg.message == WM_QUIT ) return false;
-					if( msg.message == WM_USER_SIGNAL )
-						msg.hwnd = m_hwnd;
 					TranslateMessage(&msg);
 					DispatchMessageW(&msg);
 				}
@@ -92,15 +91,7 @@ version(VibeWinrtDriver)
 
 			private void waitForEvents(uint timeout)
 			{
-				auto ret = MsgWaitForMultipleObjectsEx(cast(DWORD)m_registeredEvents.length, m_registeredEvents.ptr, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
-				if( ret == WAIT_OBJECT_0 ){
-					Win32TCPConnection[] to_remove;
-					foreach( fw; m_fileWriters.byKey )
-						if( fw.testFileWritten() )
-							to_remove ~= fw;
-					foreach( fw; to_remove )
-						m_fileWriters.remove(fw);
-				}
+				auto ret = MsgWaitForMultipleObjectsEx(/*cast(DWORD)m_registeredEvents.length, m_registeredEvents.ptr*/0, null, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
 			}
 		} else {
 			int runEventLoop()
