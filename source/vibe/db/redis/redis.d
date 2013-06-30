@@ -132,15 +132,6 @@ final class RedisClient {
 		});
 	}
 
-	/** Initializes the connection pool. */
-	deprecated void connect(string host = "127.0.0.1", ushort port = 6379) {
-		m_connections = new ConnectionPool!RedisConnection({
-			auto connection = new RedisConnection;
-			connection.connect(host, port);
-			return connection;
-		});
-	}
-
 	private static ubyte[][] argsToUbyte(ARGS...)(ARGS args) {
 		ubyte[][] ret;
 		foreach (i, arg; args) {

@@ -230,14 +230,7 @@ alias SslStream = SSLStream;
 enum SSLStreamState {
 	connecting,
 	accepting,
-	connected,
-
-	/// deprecated
-	Connecting = connecting,
-	/// deprecated
-	Accepting = accepting,
-	/// deprecated
-	Connected = connected
+	connected
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -304,16 +297,7 @@ enum SSLVersion {
 	ssl23,
 	ssl3,
 	tls1,
-	dtls1,
-
-	/// deprecated
-	SSLv23 = ssl23,
-	/// deprecated
-	SSLv3 = ssl3,
-	/// deprecated
-	TLSv1 = tls1,
-	/// deprecated
-	DTLSv1 = dtls1
+	dtls1
 }
 
 

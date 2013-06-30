@@ -139,14 +139,6 @@ enum LogLevel {
 	verbose2 = debug_,     /// Alias for debug messages
 	verbose3 = debugV,     /// Alias for verbose debug messages
 	verbose4 = trace,      /// Alias for trace messages
-
-	Trace = trace,       /// deprecated
-	Debug = debug_,      /// deprecated
-	Info = info,         /// deprecated
-	Warn = warn,         /// deprecated
-	Error = error,       /// deprecated
-	Critical = critical, /// deprecated
-	None = none          /// deprecated
 }
 
 /// Represents a single logged line

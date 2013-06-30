@@ -56,25 +56,6 @@ string stripUTF8Bom(string str)
 	return str;
 }
 
-/**
-	Joins an array of strings using 'linesep' as the line separator (\n by default).
-*/
-deprecated("Please use std.array.join instead.")
-string joinLines(string[] strs, string linesep = "\n")
-{
-	auto len = 0;
-	foreach( i, s; strs ){
-		if( i > 0 ) len += linesep.length;
-		len += s.length;
-	}
-	auto ret = appender!string();
-	ret.reserve(len);
-	foreach( i, s; strs ){
-		if( i > 0 ) ret.put(linesep);
-		ret.put(s);
-	}
-	return ret.data;
-}
 
 /**
 	Checks if all characters in 'str' are contained in 'chars'.
@@ -115,9 +96,6 @@ bool anyOf(string str, string chars)
 	return false;
 }
 
-/// ASCII alpha character check
-deprecated("Please use std.ascii.isAlpha instead.")
-alias isAlpha = std.ascii.isAlpha;
 
 /// ASCII whitespace trimming (space and tab)
 string stripLeftA(string s)
@@ -150,15 +128,6 @@ sizediff_t indexOfAny(string str, string chars)
 	return -1;
 }
 alias indexOfAny countUntilAny;
-
-/// Formats a string using formattedWrite() and returns it.
-deprecated("Please use std.string.format instead.")
-string formatString(ARGS...)(string format, ARGS args)
-{
-	auto dst = appender!string();
-	formattedWrite(dst, format, args);
-	return dst.data;
-}
 
 /// Same as std.string.format, just using an allocator.
 string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)

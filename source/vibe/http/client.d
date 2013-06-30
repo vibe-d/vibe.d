@@ -135,7 +135,7 @@ alias connectHttp = connectHTTP;
 
 class HTTPClient : EventedObject {
 	enum maxHeaderLineLength = 4096;
-	deprecated enum MaxHttpHeaderLineLength = maxHeaderLineLength;
+
 	/// Compatibility alias, will be deprecated soon.
 	enum maxHttpHeaderLineLength = maxHeaderLineLength;
 

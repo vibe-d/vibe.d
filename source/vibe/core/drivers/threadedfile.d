@@ -75,16 +75,16 @@ class ThreadedFileStream : FileStream {
 	{
 		auto pathstr = path.toNativeString();
 		final switch(mode){
-			case FileMode.Read:
+			case FileMode.read:
 				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
 				break;
-			case FileMode.ReadWrite:
+			case FileMode.readWrite:
 				m_fileDescriptor = open(pathstr.toStringz(), O_BINARY);
 				break;
-			case FileMode.CreateTrunc:
+			case FileMode.createTrunc:
 				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY, octal!644);
 				break;
-			case FileMode.Append:
+			case FileMode.append:
 				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
 				break;
 		}
@@ -112,7 +112,7 @@ class ThreadedFileStream : FileStream {
 			
 			// (at least) on windows, the created file is write protected
 			version(Windows){
-				if( mode == FileMode.CreateTrunc )
+				if( mode == FileMode.createTrunc )
 					chmod(path.toNativeString().toStringz(), S_IREAD|S_IWRITE);
 			}
 		}
@@ -129,8 +129,8 @@ class ThreadedFileStream : FileStream {
 	@property int fd() { return m_fileDescriptor; }
 	@property Path path() const { return m_path; }
 	@property ulong size() const { return m_size; }
-	@property bool readable() const { return m_mode != FileMode.Append; }
-	@property bool writable() const { return m_mode != FileMode.Read; }
+	@property bool readable() const { return m_mode != FileMode.append; }
+	@property bool writable() const { return m_mode != FileMode.read; }
 
 	void takeOwnershipOfFD()
 	{

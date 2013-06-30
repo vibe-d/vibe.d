@@ -343,20 +343,7 @@ enum FrameOpcode {
 	binary = 0x2,
 	close = 0x8,
 	ping = 0x9,
-	pong = 0xA,
-
-	/// deprecated
-	Continuation = continuation,
-	/// deprecated
-	Text = text,
-	/// deprecated
-	Binary = binary,
-	/// deprecated
-	Close = close,
-	/// deprecated
-	Ping = ping,
-	/// deprecated
-	Pong = pong,
+	pong = 0xA
 }
 
 

@@ -19,14 +19,7 @@ import core.sync.condition;
 enum LockMode{
 	lock,
 	tryLock,
-	defer,
-
-	/// deprecated
-	Lock = lock,
-	/// deprecated
-	Try = tryLock,
-	/// deprecated
-	Defer = defer
+	defer
 }
 
 
@@ -259,8 +252,3 @@ interface ManualEvent : EventedObject {
 alias Signal = ManualEvent;
 /// ditto
 alias createSignal = createManualEvent;
-
-deprecated class SignalException : Exception {
-	this() { super("Signal emitted."); }
-}
-

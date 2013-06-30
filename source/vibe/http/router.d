@@ -139,13 +139,10 @@ class URLRouter : HTTPRouter {
 	{
 		import std.algorithm;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
+		logDebug("add route %s %s", method, path);
 		m_routes[method] ~= Route(path, cb);
 		return this;
 	}
-
-	/// Alias for backwards compatibility
-	deprecated("Please use match instead.")
-	alias match addRoute;
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)

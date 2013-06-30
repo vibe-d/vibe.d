@@ -25,14 +25,7 @@ import std.string;
 enum SMTPConnectionType {
 	plain,
 	ssl,
-	startTLS,
-
-	/// deprecated
-	Plain = plain,
-	/// deprecated
-	SSL = ssl,
-	/// deprecated
-	StartTLS = startTLS
+	startTLS
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -66,58 +59,7 @@ enum SMTPStatus {
 	userNotLocal = 551,
 	exceededStorageAllocation = 552,
 	mailboxNameNotAllowed = 553,
-	transactionFailed = 554,
-
-	/// deprecated
-	_Success = _success,
-	/// deprecated
-	SystemStatus = systemStatus,
-	/// deprecated
-	HelpMessage = helpMessage,
-	/// deprecated
-	ServiceReady = serviceReady,
-	/// deprecated
-	ServiceClosing = serviceClosing,
-	/// deprecated
-	Success = success,
-	/// deprecated
-	Forwarding = forwarding,
-	/// deprecated
-	ServerAuthReady = serverAuthReady,
-	/// deprecated
-	StartMailInput = startMailInput,
-	/// deprecated
-	ServiceUnavailable = serviceUnavailable,
-	/// deprecated
-	MailboxTemporarilyUnavailable = mailboxTemporarilyUnavailable,
-	/// deprecated
-	ProcessingError = processingError,
-	/// deprecated
-	OutOfDiskSpace = outOfDiskSpace,
-	/// deprecated
-	CommandUnrecognized = commandUnrecognized,
-	/// deprecated
-	InvalidParameters = invalidParameters,
-	/// deprecated
-	CommandNotImplemented = commandNotImplemented,
-	/// deprecated
-	BadCommandSequence = badCommandSequence,
-	/// deprecated
-	CommandParameterNotImplemented = commandParameterNotImplemented,
-	/// deprecated
-	DomainAcceptsNoMail = domainAcceptsNoMail,
-	/// deprecated
-	AccessDenied = accessDenied,
-	/// deprecated
-	MailboxUnavailable = mailboxUnavailable,
-	/// deprecated
-	UserNotLocal = userNotLocal,
-	/// deprecated
-	ExceededStorageAllocation = exceededStorageAllocation,
-	/// deprecated
-	MailboxNameNotAllowed = mailboxNameNotAllowed,
-	/// deprecated
-	TransactionFailed = transactionFailed,
+	transactionFailed = 554
 }
 
 /// Compatibility alias, will be deprecated soon.
@@ -131,16 +73,7 @@ enum SMTPAuthType {
 	none,
 	plain,
 	login,
-	cramMd5,
-
-	/// deprecated
-	None = none,
-	/// deprecated
-	Plain = plain,
-	/// deprecated
-	Login = login,
-	/// deprecated
-	CramMd5 = cramMd5
+	cramMd5
 }
 
 /// Compatibility alias, will be deprecated soon.

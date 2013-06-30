@@ -471,31 +471,7 @@ final class Cookie {
 
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
-
-
-	/// Deprecated compatibility aliases
-	deprecated("Please use secure instead.") alias secure isSecure;
-	// ditto
-	deprecated("Please use httpOnly instead.") alias httpOnly isHttpOnly;
-	// ditto
-	deprecated("Please use the 'value' property instead.") Cookie setValue(string value) { m_value = value; return this; }
-	/// ditto
-	deprecated("Please use the 'domain' property instead.") Cookie setDomain(string domain) { m_domain = domain; return this; }
-	/// ditto
-	deprecated("Please use the 'path' property instead.") Cookie setPath(string path) { m_path = path; return this; }
-	/// ditto
-	deprecated("Please use the 'expire' property instead.") Cookie setExpire(string expires) { m_expires = expires; return this; }
-	/// ditto
-	deprecated("Please use the 'maxAge' property instead.") Cookie setMaxAge(long maxAge) { m_maxAge = maxAge; return this;}
-	/// ditto
-	deprecated("Please use the 'secure' property instead.") Cookie setSecure(bool enabled) { m_secure = enabled; return this; }
-	/// ditto
-	deprecated("Please use the 'httpOnly' property instead.") Cookie setHttpOnly(bool enabled) { m_httpOnly = enabled; return this; }
 }
-
-/// Compatibility alias for vibe.inet.message.InetHeaderMap
-deprecated("please use vibe.inet.message.InetHeaderMap instead.")
-alias InetHeaderMap StrMapCI;
 
 
 /** 

@@ -36,7 +36,7 @@ class HTTPFileLogger : HTTPLogger {
 
 	this(HTTPServerSettings settings, string format, string filename)
 	{
-		m_stream = openFile(filename, FileMode.Append);
+		m_stream = openFile(filename, FileMode.append);
 		super(settings, format);
 	}
 

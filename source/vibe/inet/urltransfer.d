@@ -79,7 +79,7 @@ void download(string url, scope void delegate(scope InputStream) callback, HTTPC
 void download(string url, string filename)
 {
 	download(url, (scope input){
-		auto fil = openFile(filename, FileMode.CreateTrunc);
+		auto fil = openFile(filename, FileMode.createTrunc);
 		scope(exit) fil.close();
 		fil.write(input);
 	});

@@ -253,16 +253,7 @@ enum FileMode {
 	/// The file is truncated if it exists and created otherwise and the opened for read-write access.
 	createTrunc,
 	/// The file is opened for appending data to it and created if it does not exist.
-	append,
-
-	/// deprecated
-	Read = read,
-	/// deprecated
-	ReadWrite = readWrite,
-	/// deprecated
-	CreateTrunc = createTrunc,
-	/// deprecated
-	Append = append
+	append
 }
 
 /**
@@ -315,14 +306,7 @@ enum DirectoryChangeType {
 	/// A file or directory was deleted
 	removed,
 	/// A file or directory was modified
-	modified,
-
-	/// deprecated
-	Added = added,
-	/// deprecated
-	Removed = removed,
-	/// deprecated
-	Modified = modified
+	modified
 }
 
 
