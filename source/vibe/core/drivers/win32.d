@@ -560,12 +560,12 @@ class Win32FileStream : FileStream {
 		m_driver = driver;
 		auto nstr = m_path.toNativeString();
 
-		auto access = m_mode == FileMode.ReadWrite? (GENERIC_WRITE | GENERIC_READ) :
-						(m_mode == FileMode.CreateTrunc || m_mode == FileMode.Append)? GENERIC_WRITE : GENERIC_READ;
+		auto access = m_mode == FileMode.readWrite ? (GENERIC_WRITE | GENERIC_READ) :
+						(m_mode == FileMode.createTrunc || m_mode == FileMode.append)? GENERIC_WRITE : GENERIC_READ;
 
-		auto shareMode = m_mode == FileMode.Read? FILE_SHARE_READ : 0;
+		auto shareMode = m_mode == FileMode.read? FILE_SHARE_READ : 0;
 
-		auto creation = m_mode == FileMode.CreateTrunc? CREATE_ALWAYS : m_mode == FileMode.Append? OPEN_ALWAYS : OPEN_EXISTING;
+		auto creation = m_mode == FileMode.createTrunc? CREATE_ALWAYS : m_mode == FileMode.append? OPEN_ALWAYS : OPEN_EXISTING;
 
 		m_handle = CreateFileW(
 					toUTF16z(m_path.toNativeString()),
@@ -578,7 +578,7 @@ class Win32FileStream : FileStream {
 
 		auto errorcode = GetLastError();
 		enforce(m_handle != INVALID_HANDLE_VALUE, "Failed to open "~path.toNativeString()~": "~to!string(errorcode));
-		if(mode == FileMode.CreateTrunc && errorcode == ERROR_ALREADY_EXISTS)
+		if(mode == FileMode.createTrunc && errorcode == ERROR_ALREADY_EXISTS)
 		{
 			// truncate file
 			// TODO: seek to start pos?
@@ -640,12 +640,12 @@ class Win32FileStream : FileStream {
 
 	@property bool readable()
 	const {
-		return m_mode == FileMode.Read || m_mode == FileMode.ReadWrite;
+		return m_mode == FileMode.read || m_mode == FileMode.readWrite;
 	}
 
 	@property bool writable()
 	const {
-		return m_mode == FileMode.Append || m_mode == FileMode.CreateTrunc || m_mode == FileMode.ReadWrite;
+		return m_mode == FileMode.append || m_mode == FileMode.createTrunc || m_mode == FileMode.readWrite;
 	}
 
 	void seek(ulong offset)
@@ -840,12 +840,12 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 			auto fni = cast(FILE_NOTIFY_INFORMATION*)result.ptr;
 			DirectoryChangeType kind;
 			switch( fni.Action ){
-				default: kind = DirectoryChangeType.Modified; break;
-				case 0x1: kind = DirectoryChangeType.Added; break;
-				case 0x2: kind = DirectoryChangeType.Removed; break;
-				case 0x3: kind = DirectoryChangeType.Modified; break;
-				case 0x4: kind = DirectoryChangeType.Removed; break;
-				case 0x5: kind = DirectoryChangeType.Added; break;
+				default: kind = DirectoryChangeType.modified; break;
+				case 0x1: kind = DirectoryChangeType.added; break;
+				case 0x2: kind = DirectoryChangeType.removed; break;
+				case 0x3: kind = DirectoryChangeType.modified; break;
+				case 0x4: kind = DirectoryChangeType.removed; break;
+				case 0x5: kind = DirectoryChangeType.added; break;
 			}
 			string filename = to!string(fni.FileName.ptr[0 .. fni.FileNameLength/2]);
 			dst ~= DirectoryChange(kind, Path(filename));
