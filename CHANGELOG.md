@@ -1,7 +1,20 @@
 ﻿Changelog
 =========
 
-v0.7.16 - 2013-06-
+v0.7.17 - 2013-
+--------------------
+
+### Features and improvements ###
+
+ - Implemented a basic version of a WinRT based driver 
+ - Removed a big chunk of deprecated functionality and deprecated schediuled declarations
+
+### Bug fixes ###
+
+ - 
+
+
+v0.7.16 - 2013-06-26
 --------------------
 
 ### Features and improvements ###
