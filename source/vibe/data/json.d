@@ -179,7 +179,7 @@ struct Json {
 		Allows removement of values from Type.Object Json objects.
 	*/
 	void remove(string item) { checkType!(Json[string])(); m_object.remove(item); }
-	
+
 	/**
 		The current type id of this JSON object.
 	*/
@@ -884,7 +884,7 @@ Json serializeToJson(T)(T value)
 	else static if( is(TU == DateTime) ) return Json(value.toISOExtString());
 	else static if( is(TU == SysTime) ) return Json(value.toISOExtString());
 	else static if( is(TU : long) ) return Json(cast(long)value);
-	else static if( is(TU == string) ) return Json(value);
+	else static if( is(TU : string) ) return Json(value);
 	else static if( isArray!T ){
 		auto ret = new Json[value.length];
 		foreach( i; 0 .. value.length )
@@ -947,7 +947,7 @@ T deserializeJson(T)(Json src)
 	else static if( is(T == DateTime) ) return DateTime.fromISOExtString(src.get!string);
 	else static if( is(T == SysTime) ) return SysTime.fromISOExtString(src.get!string);
 	else static if( is(T : long) ) return cast(T)src.get!long;
-	else static if( is(T == string) ) return src.get!string;
+	else static if( is(T : string) ) return cast(T)src.get!string;
 	else static if( isArray!T ){
 		alias typeof(T.init[0]) TV;
 		auto dst = new Unqual!TV[src.length];
@@ -996,8 +996,10 @@ T deserializeJson(T)(Json src)
 
 unittest {
 	import std.stdio;
-	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	enum Foo : string { k = "test" }
+	enum Boo : int { l = 5 }
+	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; Foo k; Boo l; }
+	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3], Foo.k, Boo.l};
 	S u;
 	deserializeJson(u, serializeToJson(t));
 	assert(t.a == u.a);
@@ -1010,6 +1012,8 @@ unittest {
 	assert(t.h == u.h);
 	assert(t.i == u.i);
 	assert(t.j == u.j);
+	assert(t.k == u.k);
+	assert(t.l == u.l);
 }
 
 unittest {
