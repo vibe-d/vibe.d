@@ -135,6 +135,12 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
 	}
 
+	if (dirent.isDir) {
+		logDebugV("Hit directory when serving files, ignoring: %s", pathstr);
+		if( settings.failIfNotFound ) throw new HTTPStatusException(HTTPStatus.NotFound);
+		else return;
+	}
+
 	auto lastModified = toRFC822DateTimeString(dirent.timeLastModified.toUTC());
 	
 	if( auto pv = "If-Modified-Since" in req.headers ) {
