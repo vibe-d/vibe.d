@@ -81,7 +81,6 @@ import std.traits;
 
 			void addNewUser(string name);
 			@property string[] users();
-			string[] index();
 			string getName(int id);
 			
 			@property IMyItemsApi items();
@@ -106,7 +105,6 @@ import std.traits;
 
 			void addNewUser(string name) { m_users ~= name; }
 			@property string[] users() { return m_users; }
-			string[] index() { return m_users; }
 			string getName(int id) { return m_users[id]; }
 			
 			@property MyItemsApiImpl items() { return m_items; }
@@ -224,7 +222,6 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 			
 			void addNewUser(string name);
 			@property string[] users();
-			string[] index();
 			string getName(int id);
 		}
 
