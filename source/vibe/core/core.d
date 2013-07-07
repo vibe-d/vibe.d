@@ -653,14 +653,14 @@ shared static this()
 		version(VibeLibeventDriver) enum need_wsa = true;
 		else version(VibeWin32Driver) enum need_wsa = true;
 		else enum need_wsa = false;
-	}
-	static if (need_wsa) {
-		logTrace("init winsock");
-		// initialize WinSock2
-		import std.c.windows.winsock;
-		WSADATA data;
-		WSAStartup(0x0202, &data);
+		static if (need_wsa) {
+			logTrace("init winsock");
+			// initialize WinSock2
+			import std.c.windows.winsock;
+			WSADATA data;
+			WSAStartup(0x0202, &data);
 
+		}
 	}
 
 	initializeLogModule();
