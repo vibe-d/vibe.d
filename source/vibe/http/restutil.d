@@ -117,10 +117,7 @@ template cloneFunction(alias Symbol)
 
 	    // Phobos has fullyQualifiedName implementation for types only since 2.062
 		import std.compiler;
-		static if ((D_major == 2) && (D_minor >= 62U))
-			alias std.traits.fulllyQualifiedName fqn;
-		else
-			alias vibe.http.restutil.legacyfullyQualifiedName fqn;
+    	alias std.traits.fullyQualifiedName fqn;
 
 		static string addTypeQualifiers(string type)
 		{
@@ -259,220 +256,6 @@ unittest
 	}
 }
 
-// Will be removed upon Phobos 2.063 release
-private template legacyfullyQualifiedName(T)
-{
-	enum legacyfullyQualifiedName = legacyfullyQualifiedNameImpl!(
-		T,
-		false,
-		false,
-		false,
-		false
-	);
-}
-
-// Same as legacyfullyQualifiedName, it simply copies latest phobos implementation for now
-// Thus not tested separately only as part of cloneFunction
-private template legacyfullyQualifiedNameImpl(T,
-	bool alreadyConst, bool alreadyImmutable, bool alreadyShared, bool alreadyInout)
-{   
-	import std.string;
-	
-	// Convenience tags
-	enum {
-		_const = 0,
-		_immutable = 1,
-		_shared = 2,
-		_inout = 3
-	}
-	
-	alias TypeTuple!(is(T == const), is(T == immutable), is(T == shared), is(T == inout)) qualifiers;
-	alias TypeTuple!(false, false, false, false) noQualifiers;
-	
-	string storageClassesString(uint psc)() @property
-	{
-		alias ParameterStorageClass PSC;
-		
-		return format("%s%s%s%s",
-			psc & PSC.scope_ ? "scope " : "",
-			psc & PSC.out_ ? "out " : "",
-			psc & PSC.ref_ ? "ref " : "",
-			psc & PSC.lazy_ ? "lazy " : ""
-		);
-	}
-	
-	string parametersTypeString(T)() @property
-	{
-		import std.array, std.algorithm, std.range;
-		
-		alias ParameterTypeTuple!(T) parameters;
-		alias ParameterStorageClassTuple!(T) parameterStC;
-		
-		enum variadic = variadicFunctionStyle!T;
-		static if (variadic == Variadic.no)
-			enum variadicStr = "";
-		else static if (variadic == Variadic.c)
-			enum variadicStr = ", ...";
-		else static if (variadic == Variadic.d)
-			enum variadicStr = parameters.length ? ", ..." : "...";
-		else static if (variadic == Variadic.typesafe)
-			enum variadicStr = " ...";
-		else
-			static assert(0, "New variadic style has been added, please update fullyQualifiedName implementation");
-		
-		static if (parameters.length)
-		{
-			string result = join(
-				map!(a => format("%s%s", a[0], a[1]))(
-				zip([staticMap!(storageClassesString, parameterStC)],
-			    [staticMap!(fullyQualifiedName, parameters)])
-				),
-				", "
-				);
-			
-			return result ~= variadicStr;
-		}
-		else
-			return variadicStr;
-	}
-	
-	string linkageString(T)() @property
-	{
-		enum linkage = functionLinkage!T;
-		
-		if (linkage != "D")
-			return format("extern(%s) ", linkage);
-		else
-			return "";
-	}
-	
-	string functionAttributeString(T)() @property
-	{
-		alias FunctionAttribute FA;
-		enum attrs = functionAttributes!T;
-		
-		static if (attrs == FA.none)
-			return "";
-		else
-			return format("%s%s%s%s%s%s",
-				attrs & FA.pure_ ? " pure" : "",
-				attrs & FA.nothrow_ ? " nothrow" : "",
-				attrs & FA.ref_ ? " ref" : "",
-				attrs & FA.property ? " @property" : "",
-				attrs & FA.trusted ? " @trusted" : "",
-				attrs & FA.safe ? " @safe" : ""
-			);
-	}
-	
-	string addQualifiers(string typeString,
-		bool addConst, bool addImmutable, bool addShared, bool addInout)
-	{
-		auto result = typeString;
-		if (addShared)
-		{
-			result = format("shared(%s)", result);
-		}
-		if (addConst || addImmutable || addInout)
-		{
-			result = format("%s(%s)",
-			                addConst ? "const" :
-			                addImmutable ? "immutable" : "inout",
-			                result
-			                );
-		}
-		return result;
-	}
-	
-	// Convenience template to avoid copy-paste
-	template chain(string current)
-	{
-		enum chain = addQualifiers(current,
-		                           qualifiers[_const]     && !alreadyConst,
-		                           qualifiers[_immutable] && !alreadyImmutable,
-		                           qualifiers[_shared]    && !alreadyShared,
-		                           qualifiers[_inout]     && !alreadyInout);
-	}
-	
-	static if (is(T == string))
-	{
-		enum legacyfullyQualifiedNameImpl = "string";
-	}
-	else static if (is(T == wstring))
-	{
-		enum legacyfullyQualifiedNameImpl = "wstring";
-	}
-	else static if (is(T == dstring))
-	{
-		enum legacyfullyQualifiedNameImpl = "dstring";
-	}
-	else static if (isBasicType!T || is(T == enum))
-	{
-		enum legacyfullyQualifiedNameImpl = chain!((Unqual!T).stringof);
-	}
-	else static if (isAggregateType!T)
-	{
-		enum legacyfullyQualifiedNameImpl = chain!(fullyQualifiedName!T);
-	}
-	else static if (isStaticArray!T)
-	{
-		import std.conv;
-		
-		enum legacyfullyQualifiedNameImpl = chain!(
-			format("%s[%s]", legacyfullyQualifiedNameImpl!(typeof(T.init[0]), qualifiers), T.length)
-			);
-	}
-	else static if (isArray!T)
-	{
-		enum legacyfullyQualifiedNameImpl = chain!(
-			format("%s[]", legacyfullyQualifiedNameImpl!(typeof(T.init[0]), qualifiers))
-			);
-	}
-	else static if (isAssociativeArray!T)
-	{
-		enum legacyfullyQualifiedNameImpl = chain!(
-			format("%s[%s]", legacyfullyQualifiedNameImpl!(ValueType!T, qualifiers), legacyfullyQualifiedNameImpl!(KeyType!T, noQualifiers))
-			);
-	}
-	else static if (isSomeFunction!T)
-	{
-		static if (is(T F == delegate))
-		{
-			enum qualifierString = format("%s%s",
-				is(F == shared) ? " shared" : "",
-				is(F == inout) ? " inout" :
-				is(F == immutable) ? " immutable" :
-				is(F == const) ? " const" : ""
-			);
-			enum formatStr = "%s%s delegate(%s)%s%s";
-			enum legacyfullyQualifiedNameImpl = chain!(
-				format(formatStr, linkageString!T, legacyfullyQualifiedNameImpl!(ReturnType!T, noQualifiers),
-				parametersTypeString!(T), functionAttributeString!T, qualifierString)
-				);
-		}
-		else
-		{
-			static if (isFunctionPointer!T)
-				enum formatStr = "%s%s function(%s)%s";
-			else
-				enum formatStr = "%s%s(%s)%s";
-			
-			enum legacyfullyQualifiedNameImpl = chain!(
-				format(formatStr, linkageString!T, legacyfullyQualifiedNameImpl!(ReturnType!T, noQualifiers),
-				parametersTypeString!(T), functionAttributeString!T)
-			);
-		}
-	}
-	else static if (isPointer!T)
-	{
-		enum legacyfullyQualifiedNameImpl = chain!(
-			format("%s*", legacyfullyQualifiedNameImpl!(PointerTarget!T, qualifiers))
-			);
-	}
-	else
-		// In case something is forgotten
-		static assert(0, "Unrecognized type " ~ T.stringof ~ ", can't convert to fully qualified string");
-}
-
 /**
 	Returns a tuple consisting of all symbols type T consists of
 	that may need explicit qualification. Implementation is incomplete
@@ -550,52 +333,49 @@ version(unittest)
 		}
 }
 
-template ReturnTypeString(alias F)
-{   
-	alias ReturnType!F T;
-	static if (returnsRef!F)  
-		enum ReturnTypeString = "ref " ~ fullyQualifiedTypeName!T;
-	else
-		enum ReturnTypeString = legacyfullyQualifiedName!T;
-}
-
-private template returnsRef(alias f)
+/**
+	For a given interface, finds all user-defined types
+	used in its method signatures and generates list of
+	module they originate from.
+ */
+string[] getRequiredImports(I)()
+	if( is(I == interface) )
 {
-	enum bool returnsRef = is(typeof(
+	if( !__ctfe )
+		assert(false);
+
+	bool[string] visited;
+	string[] ret;
+
+	void addModule(string name)
 	{
-		ParameterTypeTuple!f param;
-		auto ptr = &f(param);
-	}));
+		if (name !in visited) {
+			ret ~= name;
+			visited[name] = true;
+		}
+	}
+
+	foreach( method; __traits(allMembers, I) ){
+		foreach( overload; MemberFunctionsTuple!(I, method) ) {
+			foreach( symbol; getSymbols!(ReturnType!overload) ) {
+				static if( __traits(compiles, moduleName!symbol) )
+					addModule(moduleName!symbol);
+			}
+			foreach( P; ParameterTypeTuple!overload ){
+				foreach( symbol; getSymbols!P ){
+					static if( __traits(compiles, moduleName!symbol) )
+						addModule(moduleName!symbol);
+				}
+			}
+		}
+	}
+	
+	return ret;
 }
 
-template temporary_packageName(alias T)
+unittest
 {
-    static if (is(typeof(__traits(parent, T))))
-        enum parent = packageName!(__traits(parent, T));
-    else
-        enum string parent = null;
-
-    static if (T.stringof.startsWith("package "))
-        enum packageName = (parent ? parent ~ "." : "") ~ T.stringof[8 .. $];
-    else static if (parent)
-        enum packageName = parent;
-    else
-        static assert(false, T.stringof ~ " has no parent");
-}
-
-template temporary_moduleName(alias T)
-{
-    static assert(!T.stringof.startsWith("package "), "cannot get the module name for a package");
-
-    static if (T.stringof.startsWith("module "))
-    {
-        static if (__traits(compiles, packageName!T))
-            enum packagePrefix = packageName!T ~ '.';
-        else
-            enum packagePrefix = "";
-
-        enum temporary_moduleName = packagePrefix ~ T.stringof[7..$];
-    }
-    else
-        alias temporary_moduleName!(__traits(parent, T)) temporary_moduleName;
+	enum imports = getRequiredImports!QualifiedNameTests;
+	static assert(imports.length == 1);
+	static assert(imports[0] == "vibe.http.restutil");
 }

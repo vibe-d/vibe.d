@@ -542,43 +542,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	return &handler;
 }
 
-/// For a given interface, finds all user-defined types
-/// used in its method signatures and generates list of
-/// static imports with modules they originate from.
-private string generateModuleImports(I)()
-	if( is(I == interface) )
-{
-	if( !__ctfe )
-		assert(false);
-	
-	bool[string] visited;
-	string ret;
-	
-	void addModule( string mod ){
-		if( mod !in visited ){
-			ret ~= "static import "~mod~";\n";
-			visited[mod] = true;
-		}
-	}
-	
-	foreach( method; __traits(allMembers, I) ){
-		foreach( overload; MemberFunctionsTuple!(I, method) ){
-			foreach( symbol; getSymbols!(ReturnType!overload) ){
-				static if( __traits(compiles, temporary_moduleName!(symbol)) )
-					addModule(temporary_moduleName!symbol);
-			}
-			foreach( P; ParameterTypeTuple!overload ){
-				foreach( symbol; getSymbols!P ){
-					static if( __traits(compiles, temporary_moduleName!(symbol)) )
-						addModule(temporary_moduleName!(symbol));
-				}
-			}
-		}
-	}
-	
-	return ret;
-}
-
 /// private
 private string generateRestInterfaceSubInterfaces(I)()
 {
@@ -599,7 +562,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 					string implname = RT.stringof~"Impl";
 					ret ~= format(
 						q{alias RestInterfaceClient!(%s) %s;},
-						ReturnTypeString!(overload),
+						fullyQualifiedName!RT,
 						implname
 					);
 					ret ~= "\n";
@@ -839,6 +802,30 @@ private T fromRestString(T)(string value)
 	else static if( is(T : string) ) return value;
 	else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
 	else return deserializeJson!T(parseJson(value));
+}
+
+private string generateModuleImports(I)()
+{
+	if( !__ctfe )
+		assert(false);
+    auto modules = getRequiredImports!I();	
+	import std.algorithm;
+	return join(map!(a => "static import " ~ a ~ ";")(modules), "\n");
+}
+
+version(unittest)
+{
+    private struct Aggregate { }
+    private interface Interface
+    {
+        Aggregate[] foo();
+    }
+}
+
+unittest
+{
+    enum imports = generateModuleImports!Interface;
+    static assert(imports == "static import vibe.http.rest;");
 }
 
 /**
