@@ -325,7 +325,7 @@ struct Bson {
 				auto tp = cast(Type)d[0];
 				if( tp == Type.End ) break;
 				d = d[1 .. $];
-				auto key = skipCString(d);	
+				auto key = skipCString(d);
 				auto value = Bson(tp, d);
 				d = d[value.data.length .. $];
 
@@ -893,7 +893,7 @@ Bson serializeToBson(T)(T value)
 	else static if( is(Unqualified == double) ) return Bson(value);
 	else static if( is(Unqualified : int) ) return Bson(cast(int)value);
 	else static if( is(Unqualified : long) ) return Bson(cast(long)value);
-	else static if( is(Unqualified == string) ) return Bson(value);
+	else static if( is(Unqualified : string) ) return Bson(value);
 	else static if( is(Unqualified : const(ubyte)[]) ) return Bson(BsonBinData(BsonBinData.Type.Generic, value.idup));
 	else static if( isArray!T ){
 		auto ret = new Bson[value.length];
@@ -963,7 +963,7 @@ T deserializeBson(T)(Bson src)
 	else static if( is(T == double) ) return cast(double)src;
 	else static if( is(T : int) ) return cast(T)cast(int)src;
 	else static if( is(T : long) ) return cast(T)cast(long)src;
-	else static if( is(T == string) ) return cast(string)src;
+	else static if( is(T : string) ) return cast(T)(cast(string)src);
 	else static if( is(T : const(ubyte)[]) ) return cast(T)src.get!BsonBinData.rawData.dup;
 	else static if( isArray!T ){
 		alias typeof(T.init[0]) TV;
@@ -1017,8 +1017,10 @@ T deserializeBson(T)(Bson src)
 
 unittest {
 	import std.stdio;
-	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; }
-	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3]};
+	enum Foo : string { k = "test" }
+	enum Boo : int { l = 5 }
+	static struct S { float a; double b; bool c; int d; string e; byte f; ubyte g; long h; ulong i; float[] j; Foo k; Boo l;}
+	immutable S t = {1.5, -3.0, true, int.min, "Test", -128, 255, long.min, ulong.max, [1.1, 1.2, 1.3], Foo.k, Boo.l,};
 	S u;
 	deserializeBson(u, serializeToBson(t));
 	assert(t.a == u.a);
@@ -1031,6 +1033,8 @@ unittest {
 	assert(t.h == u.h);
 	assert(t.i == u.i);
 	assert(t.j == u.j);
+	assert(t.k == u.k);
+	assert(t.l == u.l);
 }
 
 unittest {
