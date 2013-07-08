@@ -33,13 +33,6 @@ interface Example1API
 	 */
 	string getSomeInfo();
 
-	/* "Index" is special method name. Its matching url path is "/", not "/index"
-	 * HTTP method selection remains the same.
-	 *
-	 * Resulting matching request: "GET /"
-	 */
-	string index();
-
 	/* Parameters are supported in a similar fashion.
 	 * Despite this is only an interface, make sure parameter names are not omitted, those are used for serialization.
 	 * If it is a GET reuqest, parameters are embedded into query URL.
@@ -51,6 +44,7 @@ interface Example1API
 	 * All supported convention prefixes are documentated : http://vibed.org/api/vibe.http.rest/registerRestInterface
 	 * Rather obvious and thus omitted in this example interface.
 	 */
+	@property string getter();
 }
 
 class Example1 : Example1API
@@ -61,14 +55,15 @@ class Example1 : Example1API
 			return "Some Info!";
 		}
 
-		string index()
-		{
-			return "Index!";
-		}
-
 		int postSum(int a, int b)
 		{
 			return a + b;
+		}
+
+		@property
+		string getter()
+		{
+			return "Getter";
 		}
 }
 
@@ -187,7 +182,7 @@ interface Example4API
 	 * You can use any one of those or both. In case @path is used, not method style
 	 * adjustment is made.
 	 */
-	@path("simple") @method(HttpMethod.POST)
+	@path("simple") @method(HTTPMethod.POST)
 	void myNameDoesNotMatter();
 
 	/* Only @path is used here, so HTTP method is deduced in usual way (GET)
@@ -243,7 +238,7 @@ shared static this()
 		{
 			auto api = new RestInterfaceClient!Example1API("http://127.0.0.1:8080");
 			assert(api.getSomeInfo() == "Some Info!");
-			assert(api.index() == "Index!");
+			assert(api.getter == "Getter");
 			assert(api.postSum(2, 3) == 5);
 		}
 		// Example 2

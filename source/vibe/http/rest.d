@@ -44,10 +44,9 @@ import std.traits;
 		<tr><td>post</td><td>POST</td></tr>
 	</table>
 
-	A method named 'index' is mapped to the root URL (e.g. GET /api/). If a method has its first
-	parameter named 'id', it will be mapped to ':id/method' and 'id' is expected to be part of the
-	URL instead of a JSON request. Parameters with default values will be optional in the
-	corresponding JSON request.
+	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
+    'id' is expected to be part of the URL instead of a JSON request. Parameters with default
+    values will be optional in the corresponding JSON request.
 	
 	Any interface that you return from a getter will be made available with the base url and its name appended.
 
@@ -82,7 +81,6 @@ import std.traits;
 
 			void addNewUser(string name);
 			@property string[] users();
-			string[] index();
 			string getName(int id);
 			
 			@property IMyItemsApi items();
@@ -107,7 +105,6 @@ import std.traits;
 
 			void addNewUser(string name) { m_users ~= name; }
 			@property string[] users() { return m_users; }
-			string[] index() { return m_users; }
 			string getName(int id) { return m_users[id]; }
 			
 			@property MyItemsApiImpl items() { return m_items; }
@@ -149,7 +146,13 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 			static if (pathOverriden)
 				string url = meta[2];
 			else
+            {
+                static if (__traits(identifier, overload) == "index")
+                    pragma(msg, "Processing interface " ~ T.stringof ~ ": please use @path(\"/\") to define '/' path instead of 'index' method."
+                        " Special behavior will be removed in the next release.");
+
 				string url = adjustMethodStyle(meta[2], style);
+            }
 			
 			static if( is(RetType == interface) ) {
 				static assert(ParameterTypeTuple!overload.length == 0, "Interfaces may only be returned from parameter-less functions!");
@@ -219,7 +222,6 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 			
 			void addNewUser(string name);
 			@property string[] users();
-			string[] index();
 			string getName(int id);
 		}
 
