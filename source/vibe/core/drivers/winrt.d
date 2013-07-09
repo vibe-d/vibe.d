@@ -14,6 +14,9 @@ version(VibeWinrtDriver)
 	import vibe.inet.url;
 	import deimos.winrt.windows.applicationmodel.core;
 	import deimos.winrt.windows.ui.core;
+	import deimos.winrt.windows.ui.xaml._ : DispatcherTimer;
+	import winrtd.generics;
+	import deimos.winrt.windows.foundation._;
 	import deimos.winrt._;
 	import deimos.winrt.roapi;
 	import winrtd.comsupport;
@@ -44,97 +47,34 @@ version(VibeWinrtDriver)
 
 		}
 
-		version (HostWinRTDesktop) {
-			import vibe.internal.win32;
+		int runEventLoop()
+		{
+			processEventsInternal(CoreProcessEventsOption.ProcessUntilQuit);
+			return 0;
+		}
 
-			private DWORD m_tid;
+		int runEventLoopOnce()
+		{
+			processEventsInternal(CoreProcessEventsOption.ProcessOneAndAllPending);
+			return 0;
+		}
 
-			int runEventLoop()
-			{
-				m_exit = false;
-				while( !m_exit && haveEvents() )
-					runEventLoopOnce();
-				return 0;
-			}
+		bool processEvents()
+		{
+			return processEventsInternal(CoreProcessEventsOption.ProcessAllIfPresent);
+		}
 
-			int runEventLoopOnce()
-			{
-				doProcessEvents(INFINITE);
-				m_core.notifyIdle();
-				return 0;
-			}
-
-			bool processEvents()
-			{
-				return doProcessEvents(0);
-			}
-
-			bool doProcessEvents(uint timeout)
-			{
-				waitForEvents(timeout);
-				assert(m_tid == GetCurrentThreadId());
-				MSG msg;
-				while( PeekMessageW(&msg, null, 0, 0, PM_REMOVE) ){
-					if( msg.message == WM_QUIT ) return false;
-					TranslateMessage(&msg);
-					DispatchMessageW(&msg);
-				}
-				return true;
-			}
-
-			private bool haveEvents()
-			{
-				version(VibePartialAutoExit)
-					return !m_fileWriters.byKey.empty || !m_socketHandlers.byKey.empty;
-				else return true;
-			}
-
-			private void waitForEvents(uint timeout)
-			{
-				auto ret = MsgWaitForMultipleObjectsEx(/*cast(DWORD)m_registeredEvents.length, m_registeredEvents.ptr*/0, null, timeout, QS_ALLEVENTS, MWMO_ALERTABLE|MWMO_INPUTAVAILABLE);
-			}
-		} else {
-			int runEventLoop()
-			{
-				processEventsInternal(CoreProcessEventsOption.ProcessUntilQuit);
-				return 0;
-			}
-
-			int runEventLoopOnce()
-			{
-				processEventsInternal(CoreProcessEventsOption.ProcessOneAndAllPending);
-				return 0;
-			}
-
-			bool processEvents()
-			{
-				return processEventsInternal(CoreProcessEventsOption.ProcessAllIfPresent);
-			}
-
-			bool processEventsInternal(CoreProcessEventsOption mode)
-			{
-				ComPtr!ICoreWindowStatic windowStatic;
-				auto windowClassName= HStringReference("Windows.UI.Core.CoreWindow");
-				comCheck(GetActivationFactory(windowClassName, windowStatic._target), "ICoreWindowStatic");
-				ComPtr!ICoreWindow window;
-				comCheck(windowStatic.GetForCurrentThread(window._target), "GetWindowForCurrentThread");
-				ComPtr!ICoreDispatcher dispatcher;
-				comCheck(window.Dispatcher(dispatcher._target), "Dispatcher");
-				comCheck(dispatcher.ProcessEvents(mode), "ProcessEvents");
-				bool vis;
-				comCheck(window.Visible(&vis));
-				return vis;
-			}
+		bool processEventsInternal(CoreProcessEventsOption mode)
+		{
+			auto window = CoreWindow.getForCurrentThread();
+			window.dispatcher.processEvents(mode);
+			return window.visible;
 		}
 
 		void exitEventLoop()
 		{
-			ComPtr!ICoreWindowStatic windowStatic;
-			auto windowClassName = HStringReference("Windows.UI.Core.CoreWindow");
-			comCheck(GetActivationFactory(windowClassName, windowStatic._target), "ICoreWindowStatic");
-			ComPtr!ICoreWindow window;
-			comCheck(windowStatic.GetForCurrentThread(window._target), "GetWindowForCurrentThread");
-			comCheck(window.Close(), "window.Close");
+			CoreWindow.getForCurrentThread().close();
+			//CoreApplication.exit();
 		}
 
 		FileStream openFile(Path path, FileMode mode)
@@ -226,39 +166,56 @@ version(VibeWinrtDriver)
 		private {
 			WinRTEventDriver m_driver;
 			void delegate() m_callback;
-			bool m_pending;
+			DispatcherTimer m_timer;
+			EventConnection m_eventConn;
 			bool m_periodic;
+			Task[] m_waiters;
 		}
 
 		this(WinRTEventDriver driver, void delegate() callback)
 		{
 			m_driver = driver;
 			m_callback = callback;
+			m_eventConn = m_timer.invokeOnTick((sender, timer) {
+				if (m_callback) m_callback();
+				foreach (t; m_waiters)
+					m_driver.m_core.resumeTask(t);
+			});
 		}
 
-		@property bool pending() { return m_pending; }
+		~this()
+		{
+			m_eventConn.disconnect();
+		}
+
+		@property bool pending() { return m_timer.isEnabled; }
 
 		void rearm(Duration dur, bool periodic = false)
 		{
-			if( m_pending ) stop();
+			if (m_timer) m_timer.stop();
+			else m_timer = new DispatcherTimer;
+			m_timer.interval = TimeSpan(dur.total!"hnsecs"());
+			m_timer.start();
 			m_periodic = periodic;
-			//SetTimer(m_hwnd, id, seconds.total!"msecs"(), &timerProc);
 		}
 
 		void stop()
 		{
-			assert(m_pending);
-			//KillTimer(m_driver.m_hwnd, cast(size_t)cast(void*)this);
+			if (m_timer.isEnabled)
+				m_timer.stop();
 		}
 
 		void wait()
 		{
-			while( m_pending )
+			while (m_timer.isEnabled)
 				m_driver.m_core.yieldForEvent();
 		}
 	}
 
 	class WinRTFileStream : FileStream {
+		private {
+		}
+
 		this(Path path, FileMode mode)
 		{
 			assert(false);
