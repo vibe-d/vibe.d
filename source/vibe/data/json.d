@@ -817,9 +817,14 @@ Json parseJson(R)(ref R range, int* line = null)
 */
 Json parseJsonString(string str)
 {
-	auto ret = parseJson(str);
-	enforce(str.strip().length == 0, "Expected end of string after JSON value.");
-	return ret;
+	auto strcopy = str;
+	try {
+		auto ret = parseJson(strcopy);
+		enforce(str.strip().length == 0, "Expected end of string after JSON value.");
+		return ret;
+	} catch (Exception e) {
+		throw new Exception(format("JSON format error at byte %s: %s", str.length - strcopy.length, e.msg));
+	}
 }
 
 unittest {
