@@ -1079,7 +1079,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 		case Json.Type.Null:
 			return Bson.Type.Null;
 		case Json.Type.Bool:
-			dst.put(cast(ubyte)(cast(bool)value ? 0x00 : 0x01));
+			dst.put(cast(ubyte)(cast(bool)value ? 0x01 : 0x00));
 			return Bson.Type.Bool;
 		case Json.Type.Int:
 			auto v = cast(long)value;
