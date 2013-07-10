@@ -387,7 +387,7 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 
 	/// private
-	this(HTTPClient client, bool has_body, Allocator alloc = defaultAllocator())
+	this(HTTPClient client, bool has_body, shared(Allocator) alloc = defaultAllocator())
 	{
 		m_client = client;
 

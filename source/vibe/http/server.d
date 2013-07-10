@@ -613,7 +613,7 @@ final class HTTPServerResponse : HTTPResponse {
 	private {
 		Stream m_conn;
 		OutputStream m_bodyWriter;
-		Allocator m_requestAlloc;
+		shared(Allocator) m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
 		FreeListRef!CountingOutputStream m_countingWriter;
 		FreeListRef!GzipOutputStream m_gzipOutputStream;
@@ -625,7 +625,7 @@ final class HTTPServerResponse : HTTPResponse {
 		SysTime m_timeFinalized;
 	}
 
-	this(Stream conn, HTTPServerSettings settings, Allocator req_alloc)
+	this(Stream conn, HTTPServerSettings settings, shared(Allocator) req_alloc)
 	{
 		m_conn = conn;
 		m_countingWriter = FreeListRef!CountingOutputStream(conn);
@@ -1078,7 +1078,8 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 {
 	SysTime reqtime = Clock.currTime(UTC());
 
-	auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
+	//auto request_allocator = scoped!(shared(PoolAllocator))(1024, defaultAllocator());
+	scope request_allocator = new shared PoolAllocator(1024, defaultAllocator());
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
@@ -1105,7 +1106,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 	req.ssl = listen_info.sslContext !is null;
 
 	// Create the response object
-	auto res = FreeListRef!HTTPServerResponse(http_stream, settings, request_allocator.Scoped_payload);
+	auto res = FreeListRef!HTTPServerResponse(http_stream, settings, request_allocator/*.Scoped_payload*/);
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -1309,7 +1310,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 }
 
 
-private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
+private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, shared(Allocator) alloc, ulong max_header_size)
 {
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 

@@ -24,7 +24,7 @@ import std.string;
 /**
 	Parses an internet header according to RFC5322 (with RFC822 compatibility).
 */
-void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator())
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, shared(Allocator) alloc = defaultAllocator())
 {
 	string hdr, hdrvalue;
 
