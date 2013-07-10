@@ -820,7 +820,7 @@ Json parseJsonString(string str)
 	auto strcopy = str;
 	try {
 		auto ret = parseJson(strcopy);
-		enforce(str.strip().length == 0, "Expected end of string after JSON value.");
+		enforce(strcopy.strip().length == 0, "Expected end of string after JSON value.");
 		return ret;
 	} catch (Exception e) {
 		throw new Exception(format("JSON format error at byte %s: %s", str.length - strcopy.length, e.msg));
