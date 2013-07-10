@@ -18,11 +18,11 @@ import std.format;
 
 /** Returns the URL encoded version of a given string.
 */
-string urlEncode(string str)
+string urlEncode(string str, string allowed_chars = null)
 {
 	auto dst = appender!string();
 	dst.reserve(str.length);
-	filterURLEncode(dst, str);
+	filterURLEncode(dst, str, allowed_chars);
 	return dst.data;
 }
 
