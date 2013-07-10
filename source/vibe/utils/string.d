@@ -130,7 +130,7 @@ sizediff_t indexOfAny(string str, string chars)
 alias indexOfAny countUntilAny;
 
 /// Same as std.string.format, just using an allocator.
-string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
+string formatAlloc(ARGS...)(shared(Allocator) alloc, string fmt, ARGS args)
 {
 	auto app = AllocAppender!string(alloc);
 	formattedWrite(&app, fmt, args);

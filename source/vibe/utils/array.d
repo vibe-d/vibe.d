@@ -41,10 +41,10 @@ struct AllocAppender(ArrayType : E[], E) {
 	private {
 		ElemType[] m_data;
 		ElemType[] m_remaining;
-		Allocator m_alloc;
+		shared(Allocator) m_alloc;
 	}
 
-	this(Allocator alloc)
+	this(shared(Allocator) alloc)
 	{
 		m_alloc = alloc;
 	}

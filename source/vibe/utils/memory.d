@@ -19,14 +19,14 @@ import std.traits;
 import std.algorithm;
 
 
-Allocator defaultAllocator()
+shared(Allocator) defaultAllocator()
 {
 	version(VibeManualMemoryManagement){
 		return manualAllocator();
 	} else {
-		static Allocator alloc;
+		static shared Allocator alloc;
 		if( !alloc ){
-			alloc = new GCAllocator;
+			alloc = new shared GCAllocator;
 			//alloc = new AutoFreeListAllocator(alloc);
 			//alloc = new DebugAllocator(alloc);
 		}
@@ -34,13 +34,13 @@ Allocator defaultAllocator()
 	}
 }
 
-Allocator manualAllocator()
+shared(Allocator) manualAllocator()
 {
-	static Allocator alloc;
+	static shared Allocator alloc;
 	if( !alloc ){
-		alloc = new MallocAllocator;
-		alloc = new AutoFreeListAllocator(alloc);
-		//alloc = new DebugAllocator(alloc);
+		alloc = new shared MallocAllocator;
+		alloc = new shared AutoFreeListAllocator(alloc);
+		//alloc = new shared DebugAllocator(alloc);
 	}
 	return alloc;
 }
@@ -57,7 +57,7 @@ auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args
 	else return cast(T*)mem.ptr;
 }
 
-T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
+T[] allocArray(T, bool MANAGED = true)(shared(Allocator) allocator, size_t n)
 {
 	auto mem = allocator.alloc(T.sizeof * n);
 	auto ret = cast(T[])mem;
@@ -73,7 +73,7 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 }
 
 
-interface Allocator {
+shared interface Allocator {
 	enum size_t alignment = 0x10;
 	enum size_t alignmentMask = alignment-1;
 
@@ -88,15 +88,15 @@ interface Allocator {
 		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free()."); }
 }
 
-class DebugAllocator : Allocator {
+synchronized class DebugAllocator : Allocator {
 	private {
-		Allocator m_baseAlloc;
+		shared(Allocator) m_baseAlloc;
 		size_t[void*] m_blocks;
 		size_t m_bytes;
 		size_t m_maxBytes;
 	}
 
-	this(Allocator base_allocator)
+	shared this(shared(Allocator) base_allocator)
 	{
 		m_baseAlloc = base_allocator;
 	}
@@ -144,7 +144,7 @@ class DebugAllocator : Allocator {
 	}
 }
 
-class MallocAllocator : Allocator {
+shared class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
 		return adjustPointerAlignment(.malloc(sz + Allocator.alignment))[0 .. sz];
@@ -163,7 +163,7 @@ class MallocAllocator : Allocator {
 	}
 }
 
-class GCAllocator : Allocator {
+shared class GCAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
 		return adjustPointerAlignment(GC.malloc(sz+Allocator.alignment))[0 .. sz];
@@ -181,18 +181,18 @@ class GCAllocator : Allocator {
 	}
 }
 
-class AutoFreeListAllocator : Allocator {
+synchronized class AutoFreeListAllocator : Allocator {
 	private {
 		FreeListAlloc[] m_freeLists;
-		Allocator m_baseAlloc;
+		shared(Allocator) m_baseAlloc;
 	}
 
-	this(Allocator base_allocator)
+	shared this(shared(Allocator) base_allocator)
 	{
 		m_baseAlloc = base_allocator;
 		foreach( i; 3 .. 12 )
-			m_freeLists ~= new FreeListAlloc(1<<i, m_baseAlloc);
-		m_freeLists ~= new FreeListAlloc(65540, m_baseAlloc);
+			m_freeLists ~= new shared FreeListAlloc(1<<i, m_baseAlloc);
+		m_freeLists ~= new shared FreeListAlloc(65540, m_baseAlloc);
 	}
 
 	void[] alloc(size_t sz)
@@ -232,18 +232,18 @@ class AutoFreeListAllocator : Allocator {
 	}
 }
 
-class PoolAllocator : Allocator {
+synchronized class PoolAllocator : Allocator {
 	static struct Pool { Pool* next; void[] data; void[] remaining; }
 	static struct Destructor { Destructor* next; void function(void*) destructor; void* object; }
 	private {
-		Allocator m_baseAllocator;
+		shared(Allocator) m_baseAllocator;
 		Pool* m_freePools;
 		Pool* m_fullPools;
 		Destructor* m_destructors;
 		size_t m_poolSize;
 	}
 
-	this(size_t pool_size, Allocator base)
+	shared this(size_t pool_size, shared(Allocator) base)
 	{
 		m_poolSize = pool_size;
 		m_baseAllocator = base;
@@ -274,7 +274,7 @@ class PoolAllocator : Allocator {
 		auto aligned_sz = alignedSize(sz);
 
 		Pool* pprev = null;
-		Pool* p = m_freePools;
+		Pool* p = cast(Pool*)m_freePools;
 		while( p && p.remaining.length < aligned_sz ){
 			pprev = p;
 			p = p.next;
@@ -286,8 +286,8 @@ class PoolAllocator : Allocator {
 			p = emplace!Pool(pmem);
 			p.data = m_baseAllocator.alloc(max(aligned_sz, m_poolSize));
 			p.remaining = p.data;
-			p.next = m_freePools;
-			m_freePools = p;
+			p.next = cast(Pool*)m_freePools;
+			m_freePools = cast(shared)p;
 			pprev = null;
 		}
 
@@ -297,10 +297,10 @@ class PoolAllocator : Allocator {
 			if( pprev ){
 				pprev.next = p.next;
 			} else {
-				m_freePools = p.next;
+				m_freePools = cast(shared)p.next;
 			}
-			p.next = m_fullPools;
-			m_fullPools = p;
+			p.next = cast(Pool*)m_fullPools;
+			m_fullPools = cast(shared)p;
 		}
 
 		return ret[0 .. sz];
@@ -374,18 +374,18 @@ class PoolAllocator : Allocator {
 	}
 }
 
-class FreeListAlloc : Allocator
+synchronized class FreeListAlloc : Allocator
 {
 	private static struct FreeListSlot { FreeListSlot* next; }
 	private {
 		immutable size_t m_elemSize;
-		Allocator m_baseAlloc;
+		shared(Allocator) m_baseAlloc;
 		FreeListSlot* m_firstFree = null;
 		size_t m_nalloc = 0;
 		size_t m_nfree = 0;
 	}
 
-	this(size_t elem_size, Allocator base_allocator)
+	shared this(size_t elem_size, shared(Allocator) base_allocator)
 	{
 		assert(elem_size >= size_t.sizeof);
 		m_elemSize = elem_size;
@@ -424,7 +424,7 @@ class FreeListAlloc : Allocator
 	void free(void[] mem)
 	{
 		assert(mem.length == m_elemSize, "Memory block passed to free has wrong size.");
-		auto s = cast(FreeListSlot*)mem.ptr;
+		auto s = cast(shared(FreeListSlot)*)mem.ptr;
 		s.next = m_firstFree;
 		m_firstFree = s;
 		m_nalloc--;
