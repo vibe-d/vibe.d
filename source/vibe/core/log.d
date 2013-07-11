@@ -70,10 +70,26 @@ void setLogFile(string filename, LogLevel min_level = LogLevel.error)
 	logger.lock().format = FileLogger.Format.threadTime;
 	registerLogger(logger);
 	---
+
+	See_Also: deregisterLogger
 */
 void registerLogger(shared(Logger) logger)
 {
 	ss_loggers ~= logger;
+}
+
+
+/**
+	Deregisters an active logger instance.
+
+	See_Also: registerLogger
+*/
+void deregisterLogger(shared(Logger) logger)
+{
+	for (size_t i = 0; i < ss_loggers.length; ) {
+		if (ss_loggers[i] !is logger) i++;
+		else ss_loggers = ss_loggers[0 .. i] ~ ss_loggers[i+1 .. $];
+	}
 }
 
 
@@ -392,7 +408,7 @@ class HTMLLogger : Logger {
 }
 
 private {
-	shared Logger[] ss_loggers;
+	__gshared shared(Logger)[] ss_loggers;
 	shared(FileLogger) ss_stdoutLogger;
 	shared(FileLogger) ss_fileLogger;
 }
