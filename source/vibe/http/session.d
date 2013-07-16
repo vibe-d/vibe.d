@@ -25,7 +25,7 @@ final class Session {
 		string m_id;
 	}
 
-	private this(SessionStore store, string id = null)
+	this(SessionStore store, string id = null)
 	{
 		m_store = store;
 		if (id) {
