@@ -58,13 +58,13 @@ Optionally, run `./setup-mac.sh` to create a user/group pair for privilege lower
 Additional setup on Linux (Debian/Ubuntu/Mint, using apt)
 ---------------------------------------------------------
 
-Go to <https://code.google.com/p/d-apt/wiki/APT_Repository> and follow the
+Go to <http://d-apt.sourceforge.net/> and follow the
 instructions. This will setup the APT repository of Jordi Sayol, who maintains
 a number of D packages for Debian based systems (*).
 
 Installing is then done using
 
-    sudo apt-get install vibe
+    sudo apt-get install dub
 
 (*) Note that Debian 6 (Squeeze) and older requires manual installation (see below).
 
@@ -80,15 +80,15 @@ Install vibe dependencies
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-util
-    wget "http://ftp.digitalmars.com/dmd_2.058-0_i386.deb"
-    sudo dpkg -i dmd_2.058-0_i386.deb
+    wget "http://ftp.digitalmars.com/dmd_2.062-0_i386.deb"
+    sudo dpkg -i dmd_2.062-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-util
-    wget "http://ftp.digitalmars.com/dmd_2.058-0_amd64.deb"
-    sudo dpkg -i dmd_2.058-0_amd64.deb
+    wget "http://ftp.digitalmars.com/dmd_2.062-0_amd64.deb"
+    sudo dpkg -i dmd_2.062-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
