@@ -172,8 +172,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 		}
 	}
 }
-
-
+/// ditto
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	alias T = reduceToInterface!TImpl;
@@ -198,6 +197,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 		}
 	}
 }
+
 
 /**
 	Implements the given interface by forwarding all public methods to a REST server.
