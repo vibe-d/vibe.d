@@ -142,7 +142,7 @@ string toRFC822DateTimeString(SysTime time)
 SysTime parseRFC822DateTimeString(string str)
 {
 	auto idx = str.indexOf(',');
-	if( idx > 0 ) str = str[idx .. $].stripLeft();
+	if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
 
 	str = str.stripLeft();
 	auto day = parse!int(str);
@@ -151,6 +151,7 @@ SysTime parseRFC822DateTimeString(string str)
 	foreach( i, ms; monthStrings )
 		if( str.startsWith(ms) ){
 			month = cast(int)i+1;
+			str = str[ms.length .. $];
 			break;
 		}
 	enforce(month > 0);
