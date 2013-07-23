@@ -1,10 +1,10 @@
 /**
-  Low level mongodb protocol.
+	Low level mongodb protocol.
 
-Copyright: © 2012 RejectedSoftware e.K.
-License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-Authors: Sönke Ludwig
- */
+	Copyright: © 2012 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Sönke Ludwig
+*/
 module vibe.db.mongo.connection;
 
 public import vibe.data.bson;
