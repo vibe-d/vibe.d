@@ -1,25 +1,27 @@
 /**
- * MongoDatabase class representing common database for group of collections.
- * Technically it is very special collection with common query functions
- * disabled and some service commands provided.
- */
+	MongoDatabase class representing common database for group of collections.
+
+	Technically it is very special collection with common query functions
+	disabled and some service commands provided.
+
+	Copyright: © 2012-2013 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Sönke Ludwig
+*/
 module vibe.db.mongo.database;
 
 import vibe.db.mongo.client;
 import vibe.db.mongo.collection;
 import vibe.data.bson;
 
+
+/** Represents a single database accessible through a given MongoClient.
+*/
 struct MongoDatabase
 { 
 	private {
 		string m_name;
 		MongoClient m_client;
-	}
-
-	// http://www.mongodb.org/display/DOCS/Commands
-	package Bson runCommand(Bson commandAndOptions)
-	{
-		return m_client.getCollection(m_name ~ ".$cmd").findOne(commandAndOptions);
 	}
 
 	//@disable this();
@@ -38,53 +40,79 @@ struct MongoDatabase
 		m_name = name;
 	}
 
+	/// The name of this database
 	@property string name()
 	{
 		return m_name;
 	}
 
+	/// The client which represents the connection to the database server
 	@property MongoClient client()
 	{
 		return m_client;
 	}
 
-	/**
-	 * Returns: child collection of this database named "name"
-	 */
+	/** Accesses the collections of this database.
+
+		Returns: The collection with the given name
+	*/
 	MongoCollection opIndex(string name)
 	{
 		return MongoCollection(this, name);
 	}
 
-	/**
-	 * Returns: struct storing data from MongoDB db.getLastErrorObj() object
-	 *
-	 * Exact object format is not documented. MongoErrorDescription signature will be
-	 * updated upon any issues. Note that this method will execute a query to service
-	 * collection and thus is far from being "free".
+	/** Retrieves the last error code (if any) from the database server.
+
+		Exact object format is not documented. MongoErrorDescription signature will be
+		updated upon any issues. Note that this method will execute a query to service
+		collection and thus is far from being "free".
+
+		Returns: struct storing data from MongoDB db.getLastErrorObj() object
  	*/
 	MongoErrorDescription getLastError()
 	{
 		return m_client.lockConnection().getLastError(m_name);
 	}
 
-	/* See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command)
-     *
-	 * Returns: Bson document with recent log messages from MongoDB service.
-	 * Params:
-	 *  mask = "global" or "rs" or "startupWarnings". Refer to official MongoDB docs.
+	/** Returns recent log messages for this database from the database server.
+
+		See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command).
+     	
+	 	Params:
+	 		mask = "global" or "rs" or "startupWarnings". Refer to official MongoDB docs.
+
+     	Returns: Bson document with recent log messages from MongoDB service.
  	 */
 	Bson getLog(string mask)
 	{
 		return runCommand(Bson(["getLog" : Bson(mask)]));
 	}
 
-	/* See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
-     *
-	 * Returns: check documentation
+	/** Performs a filesystem/disk sync of the database on the server.
+
+		See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
+		
+		Returns: check documentation
  	 */
 	Bson fsync(bool async = false)
 	{
 		return runCommand(Bson(["fsync" : Bson(1), "async" : Bson(async)]));
-	}	
+	}
+
+
+	/** Generic means to run commands on the database.
+
+		See $(LINK http://www.mongodb.org/display/DOCS/Commands) for a list
+		of possible values for command_and_options.
+
+		Params:
+			command_and_options = Bson object containing the command to be executed
+				as well as the command parameters as fields
+
+		Returns: The raw response of the MongoDB server
+	*/
+	Bson runCommand(Bson command_and_options)
+	{
+		return m_client.getCollection(m_name ~ ".$cmd").findOne(command_and_options);
+	}
 }
