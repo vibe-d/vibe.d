@@ -142,7 +142,8 @@ struct ScopedLock(T)
 	//pragma(msg, isolatedRefMethods!T());
 	#line 1 "isolatedAggreateMethodsString"
 //	mixin(isolatedAggregateMethodsString!T());
-	#line 140 "source/vibe/core/concurrency.d"
+	#line 146 "source/vibe/core/concurrency.d"
+	static assert(__LINE__ == 146);
 
 	private Object getObject()
 		pure nothrow {
@@ -331,7 +332,8 @@ private struct IsolatedRef(T)
 	//mixin isolatedAggregateMethods!T;
 	#line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-	#line 322 "source/vibe/concurrency.d"
+	#line 336 "source/vibe/concurrency.d"
+	static assert(__LINE__ == 1336);
 
 	@disable this(this);
 
@@ -576,7 +578,8 @@ private struct ScopedRefAggregate(T)
 	} else {
 		#line 1 "isolatedAggregateMethodsString"
 		mixin(isolatedAggregateMethodsString!T());
-		#line 567 "source/vibe/concurrency.d"
+		#line 585 "source/vibe/concurrency.d"
+		static assert(__LINE__ == 582);
 		//mixin isolatedAggregateMethods!T;
 	}
 }
@@ -632,7 +635,8 @@ private struct ScopedRefAssociativeArray(K, V)
 {
 #line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-#line 623 "source/vibe/concurrency.d"
+#line 639 "source/vibe/concurrency.d"
+static assert(__LINE__ == 639);
 }*/
 
 /// private
