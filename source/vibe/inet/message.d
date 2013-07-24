@@ -179,6 +179,22 @@ SysTime parseRFC822DateTimeString(string str)
 	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100) * 60 + tzoffset % 100));
 }
 
+unittest {
+	import std.typecons;
+
+	auto times = [
+		tuple("Wed, 02 Oct 2002 08:00:00 GMT", SysTime(DateTime(2002, 10, 02, 8, 0, 0), UTC())),
+		tuple("Wed, 02 Oct 2002 08:00:00 +0200", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(120))),
+		tuple("Wed, 02 Oct 2002 08:00:00 -0130", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(-90)))
+	];
+	foreach (t; times) {
+		auto st = parseRFC822DateTimeString(t[0]);
+		auto ts = toRFC822DateTimeString(t[1]);
+		assert(st == t[1], "Parse error: "~t[0]);
+		assert(parseRFC822DateTimeString(ts) == t[1], "Stringify error: "~ts);
+	}
+}
+
 
 /**
 	Decodes a string in encoded-word form.
