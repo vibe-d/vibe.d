@@ -303,7 +303,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 282 "source/vibe/http/rest.d"
+#line 307 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;
@@ -377,37 +377,54 @@ unittest
 */
 string adjustMethodStyle(string name, MethodStyle style)
 {
+	assert(name.length > 0);
+	import std.uni;
+
 	final switch(style){
 		case MethodStyle.unaltered:
 			return name;
 		case MethodStyle.camelCase:
-			return toLower(name[0 .. 1]) ~ name[1 .. $];
+			size_t i = 0;
+			foreach (idx, dchar ch; name)
+				if (ch.isUpper) i = idx;
+				else break;
+			if (i == 0) {
+				std.utf.decode(name, i);
+				return std.string.toLower(name[0 .. i]) ~ name[i .. $];
+			} else {
+				std.utf.decode(name, i);
+				if (i < name.length) return std.string.toLower(name[0 .. i-1]) ~ name[i-1 .. $];
+				else return std.string.toLower(name);
+			}
 		case MethodStyle.pascalCase:
-			return toUpper(name[0 .. 1]) ~ name[1 .. $];
+			size_t idx = 0;
+			std.utf.decode(name, idx);
+			return std.string.toUpper(name[0 .. idx]) ~ name[idx .. $];
 		case MethodStyle.lowerCase:
-			return toLower(name);
+			return std.string.toLower(name);
 		case MethodStyle.upperCase:
-			return toUpper(name);
+			return std.string.toUpper(name);
 		case MethodStyle.lowerUnderscored:
 		case MethodStyle.upperUnderscored:
 			string ret;
 			size_t start = 0, i = 0;
-			while( i <= name.length ){
+			while (i < name.length) {
 				// skip acronyms
-				while (i < name.length && (i+1 >= name.length || (name[i+1] >= 'A' && name[i+1] <= 'Z'))) i++;
+				while (i < name.length && (i+1 >= name.length || (name[i+1] >= 'A' && name[i+1] <= 'Z'))) std.utf.decode(name, i);
 
 				// skip the main (lowercase) part of a word
-				while (i < name.length && !(name[i] >= 'A' && name[i] <= 'Z')) i++;
+				while (i < name.length && !(name[i] >= 'A' && name[i] <= 'Z')) std.utf.decode(name, i);
 
 				// add a single word
 				if( ret.length > 0 ) ret ~= "_";
 				ret ~= name[start .. i];
 
 				// quick skip the capital and remember the start of the next word
-				start = i++;
+				start = i;
+				if (i < name.length) std.utf.decode(name, i);
 			}
-			if( i < name.length ) ret ~= "_" ~ name[start .. $];
-			return style == MethodStyle.lowerUnderscored ? toLower(ret) : toUpper(ret);
+			if (i < name.length) ret ~= "_" ~ name[start .. $];
+			return style == MethodStyle.lowerUnderscored ? std.string.toLower(ret) : std.string.toUpper(ret);
 	}
 }
 
@@ -433,6 +450,9 @@ unittest
 	assert(adjustMethodStyle("ID", MethodStyle.lowerUnderscored) == "id");
 	assert(adjustMethodStyle("ID", MethodStyle.pascalCase) == "ID");
 	assert(adjustMethodStyle("ID", MethodStyle.camelCase) == "id");
+	assert(adjustMethodStyle("IDTest", MethodStyle.lowerUnderscored) == "id_test");
+	assert(adjustMethodStyle("IDTest", MethodStyle.pascalCase) == "IDTest");
+	assert(adjustMethodStyle("IDTest", MethodStyle.camelCase) == "idTest");
 }
 
 
