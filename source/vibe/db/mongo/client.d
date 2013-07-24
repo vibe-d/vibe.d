@@ -32,7 +32,7 @@ class MongoClient {
 	package this(string host, ushort port = MongoConnection.defaultPort)
 	{
 		this("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
-		}
+	}
 
 	/**
 		Initializes a MongoDB client using a URL.

@@ -304,6 +304,7 @@ class RestInterfaceClient(I) : I
 	mixin(generateRestInterfaceMethods!I());
 	
 #line 307 "source/vibe/http/rest.d"
+static assert(__LINE__ == 307);
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;

@@ -63,6 +63,7 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
 	#line 66 "diet.d"
+	static assert(__LINE__ == 66);
 }
 
 /// compatibility alias
@@ -93,7 +94,8 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
-	#line 97 "diet.d"
+	#line 98 "diet.d"
+	static assert(__LINE__ == 98);
 }
 
 /// compatibility alias
