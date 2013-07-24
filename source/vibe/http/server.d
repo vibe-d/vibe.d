@@ -744,7 +744,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if( "Content-Encoding" in headers && "Content-Length" in headers ){
 			// we do not known how large the compressed body will be in advance
 			// so remove the content-length and use chunked transfer
-			headers.remove("Content-Encoding");
+			headers.remove("Content-Length");
 		}
 		
 		if ( "Content-Length" in headers ) {
