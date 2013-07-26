@@ -15,7 +15,10 @@ shared static this()
 	
 	auto router = new URLRouter;
 	router.get("/", &handleRequest);
-	router.get("*", serveStaticFiles("./public/"));
+	auto fileServerSettings = new HTTPFileServerSettings;
+	fileServerSettings.encodingFileExtension = ["gzip" : ".gz"];
+	router.get("/gzip/*", serveStaticFiles("./public/", fileServerSettings));
+	router.get("*", serveStaticFiles("./public/",));
 	
 	listenHTTP(settings, router);
 }
