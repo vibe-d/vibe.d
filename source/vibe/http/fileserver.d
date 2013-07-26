@@ -96,6 +96,7 @@ class HTTPFileServerSettings {
 	string serverPathPrefix = "/";
 	Duration maxAge = hours(24);
 	bool failIfNotFound = false;
+	string[string] encodingFileExtension;
 	
 	/**
 		Called just before headers and data are sent.
@@ -165,7 +166,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 
 	auto mimetype = getMimeTypeForFile(pathstr);
 	// avoid double-compression
-	if( isCompressedFormat(mimetype) && "Content-Encoding" in res.headers )
+	if( isCompressedFormat(mimetype) )
 		res.headers.remove("Content-Encoding");
 	res.headers["Content-Type"] = mimetype;
 	res.headers["Content-Length"] = to!string(dirent.size);
@@ -175,6 +176,30 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		auto expireTime = Clock.currTime(UTC()) + settings.maxAge;
 		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
 		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
+	}
+
+	auto pce = "Content-Encoding" in res.headers;
+	// check for already encoded file if configured
+	auto encodingFileExtension = pce && settings.encodingFileExtension ? settings.encodingFileExtension[*pce] : "";
+	auto encodedFilepath = pathstr ~ encodingFileExtension;
+	auto useEncodedFile = encodingFileExtension.length && exists(encodedFilepath);
+	if( pce && useEncodedFile ){
+		auto origLastModified = dirent.timeLastModified.toUTC();
+
+		try dirent = dirEntry(encodedFilepath);
+		catch(FileException){
+			throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
+		}
+
+		// encoded file must be younger than original else warn
+		if (dirent.timeLastModified.toUTC() >= origLastModified){
+			logTrace("Using already encoded file '%s' -> '%s'", path, encodedFilepath);
+			path = Path(encodedFilepath);
+			res.headers["Content-Length"] = to!string(dirent.size);
+		} else {
+			logWarn("Encoded file '%s' is older than the original '%s'. Ignoring it.", encodedFilepath, path);
+			useEncodedFile = false;
+		}
 	}
 	
 	if(settings.preWriteCallback)
@@ -200,7 +225,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	}
 	scope(exit) fil.close();
 
-	if( "Content-Encoding" in res.headers )
+	if( pce && !useEncodedFile )
 		res.bodyWriter.write(fil);
 	else res.writeRawBody(fil);
 	logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
