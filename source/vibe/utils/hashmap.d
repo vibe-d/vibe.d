@@ -70,11 +70,28 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		}
 	}
 
-	inout(Value) get(Key key, lazy Value default_value = Value.init)
-	inout {
+	Value get(Key key, lazy Value default_value = Value.init)
+	{
 		auto idx = findIndex(key);
-		if (idx == size_t.max) return cast(inout)default_value;
+		if (idx == size_t.max) return default_value;
 		return m_table[idx].value;
+	}
+
+	const(Value) get(Key key, lazy const(Value) default_value = Value.init)
+	{
+		auto idx = findIndex(key);
+		if (idx == size_t.max) return default_value;
+		return m_table[idx].value;
+	}
+
+	void clear()
+	{
+		foreach (i; 0 .. m_table.length)
+			if (!Traits.equals(m_table[i].key, Traits.clearValue)) {
+				m_table[i].key = Traits.clearValue;
+				m_table[i].value = Value.init;
+			}
+		m_length = 0;
 	}
 
 	void opIndexAssign(Value value, Key key)
