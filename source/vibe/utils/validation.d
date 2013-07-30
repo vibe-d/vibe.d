@@ -46,6 +46,12 @@ string validateEmail(string str, size_t max_length = 64)
 	return str;
 }
 
+unittest {
+	assertNotThrown(validateEmail("0a0@b.com"));
+	assertNotThrown(validateEmail("123@123.com"));
+	assertThrown(validateEmail("§@b.com"));
+}
+
 /** Validates a user name string.
 
 	User names may only contain ASCII letters and digits or any of the specified additional
@@ -77,11 +83,12 @@ string validateIdent(string str, string additional_chars = "_", string entity_na
 	foreach (i, char ch; str) {
 		if (ch >= 'a' && ch <= 'z') continue;
 		if (ch >= 'A' && ch <= 'Z') continue;
-		if (i > 0 && ch >= '0' && ch <= '9') continue;
+		if (ch >= '0' && ch <= '9') {
+			if (!no_number_start || i > 0) continue;
+			else throw new Exception(entity_name~" must not begin with a number."); 
+		}	
 		if (additional_chars.canFind(ch)) continue; 
-		if (no_number_start && ch >= '0' && ch <= '9') 
-	    	throw new Exception(entity_name~" must not begin with a number."); 
-		//throw new Exception(entity_name~" may only contain numbers, letters and one of ("~additional_chars~")");
+		throw new Exception(entity_name~" may only contain numbers, letters and one of ("~additional_chars~")");
 	}
 	
 	return str;
