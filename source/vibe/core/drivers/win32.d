@@ -913,6 +913,8 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		return ret;
 	}
 
+	@property NetworkAddress localAddress() const { return m_bindAddress; }
+
 	@property bool canBroadcast() const { return m_canBroadcast; }
 	@property void canBroadcast(bool val)
 	{
@@ -944,6 +946,10 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	{
 		NetworkAddress addr = m_driver.resolveHost(host, m_bindAddress.family);
 		addr.port = port;
+		connect(addr);
+	}
+	void connect(NetworkAddress addr)
+	{
 		enforce(.connect(m_socket, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
 	}
 
@@ -1021,6 +1027,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
 		SOCKET m_socket;
+		NetworkAddress m_localAddress;
 		NetworkAddress m_peerAddress;
 		string m_peerAddressString;
 		DWORD m_bytesTransferred;
@@ -1037,6 +1044,13 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_driver = driver;
 		m_socket = sock;
 		m_driver.m_socketHandlers[sock] = this;
+		
+		m_localAddress.family = peer_address.family;
+		if (peer_address.family == AF_INET) m_localAddress.sockAddrInet4.sin_addr.s_addr = 0;
+		else m_localAddress.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+		socklen_t balen = m_localAddress.sockAddrLen;
+		enforce(getsockname(sock, m_localAddress.sockAddr, &balen) == 0, "getsockname failed.");
+
 		m_peerAddress = peer_address;
 
 		// NOTE: using WSAAddressToStringW instead of inet_ntop because that is only available from Vista up
@@ -1118,6 +1132,9 @@ m_status = ConnectionStatus.Connected;
 	@property bool connected() const { return m_status == ConnectionStatus.Connected; }
 
 	@property string peerAddress() const { return m_peerAddressString; }
+
+	@property NetworkAddress localAddress() const { return m_localAddress; }
+	@property NetworkAddress remoteAddress() const { return m_peerAddress; }
 
 	@property bool empty() { return leastSize == 0; }
 
