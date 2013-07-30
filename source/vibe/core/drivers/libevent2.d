@@ -201,6 +201,14 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 		auto sockfd = socket(addr.family, SOCK_STREAM, 0);
 		enforce(sockfd != -1, "Failed to create socket.");
+
+		NetworkAddress bind_addr;
+		bind_addr.family = addr.family;
+		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
+		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+		enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
+		socklen_t balen = bind_addr.sockAddrLen;
+		enforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
 		
 		if( evutil_make_socket_nonblocking(sockfd) )
 			throw new Exception("Failed to make socket non-blocking.");
@@ -208,7 +216,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, addr);
+		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, bind_addr, addr);
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
@@ -260,7 +268,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
-			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr);
+			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr, NetworkAddress());
 			ctx.connectionCallback = cast()connection_callback;
 			ctx.listenEvent = event_new(evloop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 			enforce(event_add(ctx.listenEvent, null) == 0,
@@ -570,7 +578,8 @@ class Libevent2UDPConnection : UDPConnection {
 	private {
 		Libevent2Driver m_driver;
 		TCPContext* m_ctx;
-		string m_bindAddress;
+		NetworkAddress m_bindAddress;
+		string m_bindAddressString;
 		bool m_canBroadcast = false;
 	}
 
@@ -578,12 +587,13 @@ class Libevent2UDPConnection : UDPConnection {
 	{
 		m_driver = driver;
 
+		m_bindAddress = bind_addr;
 		char buf[64];
 		void* ptr;
 		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
 		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
 		evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length);
-		m_bindAddress = to!string(buf.ptr);
+		m_bindAddressString = to!string(buf.ptr);
 
 		auto sockfd = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
 		enforce(sockfd != -1, "Failed to create socket.");
@@ -597,7 +607,7 @@ class Libevent2UDPConnection : UDPConnection {
 		if( bind_addr.port )
 			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
-		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr);
+		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress());
 
 		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
 		if( !evt ) throw new Exception("Failed to create buffer event for socket.");
@@ -605,7 +615,8 @@ class Libevent2UDPConnection : UDPConnection {
 		enforce(event_add(evt, null) == 0);
 	}
 
-	@property string bindAddress() const { return m_bindAddress; }
+	@property string bindAddress() const { return m_bindAddressString; }
+	@property NetworkAddress localAddress() const { return m_bindAddress; }
 
 	@property bool canBroadcast() const { return m_canBroadcast; }
 	@property void canBroadcast(bool val)
@@ -638,8 +649,13 @@ class Libevent2UDPConnection : UDPConnection {
 
 	void connect(string host, ushort port)
 	{
-		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.remote_addr.family);
+		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.local_addr.family);
 		addr.port = port;
+		connect(addr);
+	}
+	
+	void connect(NetworkAddress addr)
+	{
 		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(getLastSocketError()));
 	}
 
@@ -661,7 +677,7 @@ class Libevent2UDPConnection : UDPConnection {
 	{
 		if( buf.length == 0 ) buf.length = 65507;
 		NetworkAddress from;
-		from.family = m_ctx.remote_addr.family;
+		from.family = m_ctx.local_addr.family;
 		assert(buf.length <= int.max);
 		while(true){
 			socklen_t addr_len = from.sockAddrLen;

@@ -180,6 +180,12 @@ interface TCPConnection : Stream, EventedObject {
 	/// Returns the IP address of the connected peer.
 	@property string peerAddress() const;
 
+	/// The local/bind address of the underlying socket.
+	@property NetworkAddress localAddress() const;
+
+	/// The address of the connected peer.
+	@property NetworkAddress remoteAddress() const;
+
 	/// Actively closes the connection.
 	void close();
 
@@ -217,12 +223,17 @@ interface UDPConnection : EventedObject {
 	/// ditto
 	@property void canBroadcast(bool val);
 
+	/// The local/bind address of the underlying socket.
+	@property NetworkAddress localAddress() const;
+
 	/** Locks the UDP connection to a certain peer.
 
 		Once connected, the UDPConnection can only communicate with the specified peer.
 		Otherwise communication with any reachable peer is possible.
 	*/
 	void connect(string host, ushort port);
+	/// ditto
+	void connect(NetworkAddress address);
 
 	/** Sends a single packet.
 

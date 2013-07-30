@@ -62,6 +62,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		bool m_tcpNoDelay = false;
 		Duration m_readTimeout;
 		char[64] m_peerAddressBuf;
+		NetworkAddress m_localAddress, m_remoteAddress;
 	}
 	
 	this(TCPContext* ctx)
@@ -71,6 +72,9 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_inputBuffer = bufferevent_get_input(m_event);
 
 		assert(!amOwner());
+
+		m_localAddress = ctx.local_addr;
+		m_remoteAddress = ctx.remote_addr;
 
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
@@ -106,6 +110,9 @@ package class Libevent2TCPConnection : TCPConnection {
 		}
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
+
+	@property NetworkAddress localAddress() const { return m_localAddress; }
+	@property NetworkAddress remoteAddress() const { return m_remoteAddress; }
 
 	void acquire()
 	{
@@ -347,11 +354,12 @@ class LibeventTCPListener : TCPListener {
 
 package struct TCPContext
 {
-	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, NetworkAddress peeraddr){
+	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, NetworkAddress bindaddr, NetworkAddress peeraddr){
 		core = c;
 		eventLoop = evbase;
 		socketfd = sock;
 		event = evt;
+		local_addr = bindaddr;
 		remote_addr = peeraddr;
 	}
 
@@ -367,6 +375,7 @@ package struct TCPContext
 	void delegate(TCPConnection conn) connectionCallback;
 	bufferevent* event;
 	deimos.event2.event_struct.event* listenEvent;
+	NetworkAddress local_addr;
 	NetworkAddress remote_addr;
 	bool shutdown = false;
 	int socketfd = -1;
@@ -396,6 +405,7 @@ package nothrow extern(C)
 
 		static struct ClientTask {
 			TCPContext* listen_ctx;
+			NetworkAddress bind_addr;
 			NetworkAddress remote_addr;
 			int sockfd;
 
@@ -416,7 +426,7 @@ package nothrow extern(C)
 					return;
 				}
 
-				auto client_ctx = TCPContextAlloc.alloc(drivercore, eventloop, sockfd, buf_event, remote_addr);
+				auto client_ctx = TCPContextAlloc.alloc(drivercore, eventloop, sockfd, buf_event, bind_addr, remote_addr);
 				assert(client_ctx.event !is null, "event is null although it was just != null?");
 				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
 				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
@@ -469,6 +479,7 @@ package nothrow extern(C)
 
 				auto task = FreeListObjectAlloc!ClientTask.alloc();
 				task.listen_ctx = ctx;
+				task.bind_addr = ctx.local_addr;
 				*cast(sockaddr_in6*)task.remote_addr.sockAddr = remote_addr;
 				task.sockfd = sockfd;
 
