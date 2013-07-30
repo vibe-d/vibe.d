@@ -35,6 +35,7 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 	//regmsg.sslContext = settings.sslContext; // TODO: send key/cert contents
 
 	HTTPServerSettings local_settings = settings.dup;
+	local_settings.bindAddresses = ["127.0.0.1"];
 	local_settings.port = 0;
 	local_settings.disableDistHost = true;
 	listenHTTP(local_settings, handler);
