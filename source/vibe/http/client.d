@@ -227,7 +227,7 @@ class HTTPClient : EventedObject {
 
 		m_keepAliveLimit = now;
 
-		auto req = scoped!HTTPClientRequest(m_stream);
+		auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
 		req.headers["User-Agent"] = m_userAgent;
 		req.headers["Connection"] = "keep-alive";
 		req.headers["Accept-Encoding"] = "gzip, deflate";
@@ -248,13 +248,19 @@ final class HTTPClientRequest : HTTPRequest {
 		OutputStream m_bodyWriter;
 		bool m_headerWritten = false;
 		FixedAppender!(string, 22) m_contentLengthBuffer;
+		NetworkAddress m_localAddress;
 	}
 
+	
+
 	/// private
-	this(Stream conn)
+	this(Stream conn, NetworkAddress local_addr)
 	{
 		super(conn);
+		m_localAddress = local_addr;
 	}
+
+	@property NetworkAddress localAddress() const { return m_localAddress; }
 
 	/**
 		Writes the whole response body at once using raw bytes.
