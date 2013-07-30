@@ -24,6 +24,7 @@ import vibe.stream.zlib;
 import vibe.utils.array;
 import vibe.utils.memory;
 
+import core.exception : AssertError;
 import std.array;
 import std.conv;
 import std.exception;
@@ -376,6 +377,7 @@ deprecated("Please use HTTPClientRequest instead.") alias HttpClientRequest = HT
 
 final class HTTPClientResponse : HTTPResponse {
 	private {
+		__gshared ms_staleResponseError = cast(immutable)new AssertError("Stale HTTP response detected. Use .dropBody() or the scoped version of requestHTTP.");
 		HTTPClient m_client;
 		LockedConnection!HTTPClient lockedConnection;
 		FreeListRef!LimitedInputStream m_limitedInputStream;
@@ -435,11 +437,7 @@ final class HTTPClientResponse : HTTPResponse {
 
 	~this()
 	{
-		assert (!m_client, "Stale HTTP response is finalized!");
-		if( m_client ){
-			logDebug("Warning: dropping unread body.");
-			dropBody();
-		}
+		if (m_client) throw ms_staleResponseError;
 	}
 
 	/**
