@@ -433,15 +433,6 @@ final class HTTPClientResponse : HTTPResponse {
 		if (!has_body) finalize();
 	}
 
-	~this()
-	{
-		assert (!m_client, "Stale HTTP response is finalized!");
-		if( m_client ){
-			logDebug("Warning: dropping unread body.");
-			dropBody();
-		}
-	}
-
 	/**
 		An input stream suitable for reading the response body.
 	*/
