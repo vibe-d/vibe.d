@@ -15,6 +15,7 @@ import vibe.http.server;
 
 import std.conv;
 import std.exception;
+import std.process;
 
 
 /**
@@ -24,9 +25,13 @@ import std.exception;
 */
 void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
+	auto baddr = resolveHost(balancer_address);
+
 	Json regmsg = Json.emptyObject;
-	regmsg.hostName = settings.hostName;
+	regmsg.host_name = settings.hostName;
 	regmsg.port = settings.port;
+	regmsg.ssl_settings = "";
+	regmsg.pid = thisProcessID;
 	//regmsg.sslContext = settings.sslContext; // TODO: send key/cert contents
 
 	HTTPServerSettings local_settings = settings.dup;
@@ -34,15 +39,15 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 	local_settings.disableDistHost = true;
 	listenHTTP(local_settings, handler);
 
-	regmsg.localPort = local_settings.port;
-
-	logInfo("Listening for VibeDist connections on port %d", local_settings.port);
-
-	auto res = requestHTTP(URL("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
+	requestHTTP(URL("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
+			logInfo("Listening for VibeDist connections on port %d", req.localAddress.port);
+			regmsg.local_address = "127.0.0.1";
+			regmsg.local_port = req.localAddress.port;
+			req.method = HTTPMethod.POST;
 			req.writeJsonBody(regmsg);
+		}, (scope res){
+			enforce(res.statusCode == HTTPStatus.ok, "Failed to register with load balancer.");
 		});
-	scope(exit) destroy(res);
-	enforce(res.statusCode == HTTPStatus.OK, "Failed to register with load balancer.");
 }
 
 /// Deprecated compatibility alias
