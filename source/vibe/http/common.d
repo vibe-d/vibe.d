@@ -365,8 +365,8 @@ final class ChunkedInputStream : InputStream {
 	{
 		// read chunk header
 		logTrace("read next chunk header");
-		auto ln = m_in.readLine();
-		ulong sz = toImpl!ulong(cast(string)ln, 16u);
+		auto ln = cast(string)m_in.readLine();
+		ulong sz = parse!ulong(ln, 16u);
 		m_bytesInCurrentChunk = sz;
 
 		if( m_bytesInCurrentChunk == 0 ){
