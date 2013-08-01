@@ -177,6 +177,7 @@ Task runTask(void delegate() task)
 	f.m_taskCounter++;
 	auto handle = f.task();
 	logTrace("initial task call (%s)", f.state);
+	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart);
 	s_core.resumeTask(handle, null, true);
 	logTrace("run task out");
 	return handle;
@@ -422,9 +423,34 @@ void lowerPrivileges()
 
 
 /**
+	Sets a callback that is invoked whenever a task changes its status.
+
+	This function is useful mostly for implementing debuggers that
+	analyze the life time of tasks, including task switches.
+*/
+void setTaskEventCallback(void function(TaskEvent) func)
+{
+	s_taskEventCallback = func;
+}
+
+
+/**
 	A version string representing the current vibe version
 */
 enum VibeVersionString = "0.7.16";
+
+
+/**
+
+*/
+enum TaskEvent {
+	preStart, /// Just about to invoke the fiber which starts execution
+	start,    /// Just about to start execution
+	yield,    /// Temporarily paused
+	resume,   /// Resumed from a prior yield
+	end,      /// Ended normally
+	fail      /// Ended with an exception
+}
 
 
 /**************************************************************************************************/
@@ -462,9 +488,12 @@ private class CoreTask : TaskFiber {
 					m_running = true;
 					scope(exit) m_running = false;
 					logTrace("entering task.");
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start);
 					task();
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end);
 					logTrace("exiting task.");
 				} catch( Exception e ){
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail);
 					import std.encoding;
 					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
@@ -534,7 +563,9 @@ private class VibeDriverCore : DriverCore {
 		auto fiber = cast(CoreTask)Fiber.getThis();
 		if( fiber ){
 			logTrace("yield");
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield);
 			Fiber.yield();
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume);
 			logTrace("resume");
 			auto e = fiber.m_exception;
 			if( e ){
@@ -635,6 +666,7 @@ private {
 	__gshared ManualEvent st_workerTaskSignal;
 
 	bool delegate() s_idleHandler;
+	debug void function(TaskEvent) s_taskEventCallback;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
