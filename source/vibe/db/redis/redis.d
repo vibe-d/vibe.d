@@ -21,7 +21,7 @@ final class RedisReply {
 		size_t m_index;
 		bool m_multi;
 	}
-	
+
 	this(TCPConnection conn) {
 		m_conn = conn;
 		m_index = 0;
@@ -55,7 +55,7 @@ final class RedisReply {
 		}
 	}
 
-	private ubyte[] readBulk( string sizeLn )	
+	private ubyte[] readBulk( string sizeLn )
 	{
 		if ( sizeLn.startsWith("$-1") ) return null;
 		auto size = to!size_t( sizeLn[1 .. $] );
@@ -65,9 +65,9 @@ final class RedisReply {
 		return data;
 	}
 
-	@property bool hasNext() 
-	{ 
-		return  m_index < m_length; 
+	@property bool hasNext()
+	{
+		return  m_index < m_length;
 	}
 
 	T next(T : E[], E)() {
@@ -237,7 +237,7 @@ final class RedisClient {
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
 	    request("MSET", argsToUbyte!ARGS(args));
 	}
-	
+
 	bool msetNX(ARGS...)(ARGS args) {
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
@@ -266,7 +266,7 @@ final class RedisClient {
 	}
 
 	size_t strlen(string key) {
-		return request!size_t("STRLEN", cast(ubyte[])key);	
+		return request!size_t("STRLEN", cast(ubyte[])key);
 	}
 
 	/*
@@ -337,10 +337,6 @@ final class RedisClient {
 		return request!size_t("LLEN", cast(ubyte[])key);
 	}
 
-	T lpop(T : E[], E)(string key) {
-		return request("LPOP", cast(ubyte[])key).next!T();
-	}
-
 	size_t lpush(ARGS...)(string key, ARGS args) {
 		ubyte[][] list = cast(ubyte[])key ~ argsToUbyte!ARGS(args);
 		return request!size_t("LPUSH", list);
@@ -361,7 +357,7 @@ final class RedisClient {
 	void lset(T : E[], E)(string key, size_t index, T value) {
 		request("LSET", cast(ubyte[])key, cast(ubyte[])to!string(index), cast(ubyte[])value);
 	}
-	
+
 	void ltrim(string key, size_t start, size_t stop) {
 		request("LTRIM",  cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(stop));
 	}
@@ -373,7 +369,7 @@ final class RedisClient {
 	T lpop(T : E[], E)(string key) {
 		return request("LPOP", cast(ubyte[])key).next!T();
 	}
-	
+
 	T rpoplpush(T : E[], E)(string key, string destination) {
 		return request("RPOPLPUSH", cast(ubyte[])key, cast(ubyte[])destination).next!T();
 	}
@@ -499,7 +495,7 @@ final class RedisClient {
 
 	size_t zremRangeByScore(string key, double min, double max) {
 		return request!size_t("ZREMRANGEBYSCORE", cast(ubyte[])key, cast(ubyte[])to!string(min), cast(ubyte[])to!string(max));
-	}	
+	}
 
 	RedisReply zrevRange(string key, size_t start, size_t end, bool withScores=false) {
 		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
@@ -540,7 +536,7 @@ final class RedisClient {
 	}
 
 	T echo(T : E[], E)(T data) {
-		return request("AUTH", cast(ubyte[])data).next!T();
+		return request("ECHO", cast(ubyte[])data).next!T();
 	}
 
 	void ping() {
