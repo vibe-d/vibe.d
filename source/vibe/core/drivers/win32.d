@@ -222,6 +222,12 @@ class Win32EventDriver : EventDriver {
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
 		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
 
+		NetworkAddress bind_addr;
+		bind_addr.family = addr.family;
+		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
+		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+		enforce(bind(sock, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
+
 		auto conn = new Win32TCPConnection(this, sock, addr);
 		conn.connect(addr);
 		return conn;	
@@ -346,7 +352,6 @@ class Win32ManualEvent : ManualEvent {
 	void emit()
 	{
 		auto newcnt = atomicOp!"+="(m_emitCount, 1);
-		logDebugV("Signal %s emit %s", cast(void*)this, newcnt);
 		bool[Win32EventDriver] threads;
 		synchronized(m_mutex)
 		{
