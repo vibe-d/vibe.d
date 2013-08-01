@@ -337,10 +337,6 @@ final class RedisClient {
 		return request!size_t("LLEN", cast(ubyte[])key);
 	}
 
-	T lpop(T : E[], E)(string key) {
-		return request("LPOP", cast(ubyte[])key).next!T();
-	}
-
 	size_t lpush(ARGS...)(string key, ARGS args) {
 		ubyte[][] list = cast(ubyte[])key ~ argsToUbyte!ARGS(args);
 		return request!size_t("LPUSH", list);
