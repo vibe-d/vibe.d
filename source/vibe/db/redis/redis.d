@@ -413,8 +413,8 @@ final class RedisClient {
 		return request!bool("SISMEMBER", cast(ubyte[])key, cast(ubyte[])member);
 	}
 
-	bool smembers(string key) {
-		return request!bool("SMEMBERS", cast(ubyte[])key);
+	RedisReply smembers(string key) {
+		return request("SMEMBERS", cast(ubyte[])key);
 	}
 
 	bool smove(T : E[], E)(string source, string destination, T member) {
