@@ -342,8 +342,17 @@ final class RedisClient {
 		return request!size_t("LPUSH", list);
 	}
 
-	size_t lpushX(ARGS...)(string key, T value) {
-		return request!size_t("LPUSH", cast(ubyte[])key, cast(ubyte[])value);
+	size_t lpushX(T)(string key, T value) {
+		return request!size_t("LPUSHX", cast(ubyte[])key, cast(ubyte[])value);
+	}
+
+	size_t rpush(ARGS...)(string key, ARGS args) {
+		ubyte[][] list = cast(ubyte[])key ~ argsToUbyte!ARGS(args);
+		return request!size_t("RPUSH", list);
+	}
+
+	size_t rpushX(T)(string key, T value) {
+		return request!size_t("RPUSHX", cast(ubyte[])key, cast(ubyte[])value);
 	}
 
 	RedisReply lrange(string key, size_t start, size_t stop) {
