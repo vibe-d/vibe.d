@@ -16,7 +16,11 @@ import vibe.core.sync;
 import vibe.utils.array;
 
 
+/**
+	Implements a unidirectional data pipe between two tasks.
+*/
 class TaskPipe {
+	/// Proxy around TaskPipeImpl implementing an InputStream 
 	static class Reader : InputStream {
 		private TaskPipeImpl m_pipe;
 		this(TaskPipeImpl pipe) { m_pipe = pipe; }
@@ -27,6 +31,7 @@ class TaskPipe {
 		void read(ubyte[] dst) { return m_pipe.read(dst); }
 	}
 
+	/// Proxy around TaskPipeImpl implementing an OutputStream 
 	static class Writer : OutputStream {
 		private TaskPipeImpl m_pipe;
 		this(TaskPipeImpl pipe) { m_pipe = pipe; }
@@ -42,6 +47,8 @@ class TaskPipe {
 		TaskPipeImpl m_pipe;
 	}
 
+	/** Constructs a new pipe ready for use.
+	*/
 	this()
 	{
 		m_pipe = new TaskPipeImpl;
@@ -49,10 +56,22 @@ class TaskPipe {
 		m_writer = new Writer(m_pipe);
 	}
 
+	/// Read end of the pipe
 	@property Reader reader() { return m_reader; }
+
+	/// Write end of the pipe
 	@property Writer writer() { return m_writer; }
+
+	/// Size of the (fixed) FIFO buffer used to transfer data between tasks
+	@property size_t bufferSize() const { return m_pipe.bufferSize; }
+	/// ditto
+	@property void bufferSize(size_t nbytes) { m_pipe.bufferSize = nbytes; }
 }
 
+
+/**
+	Underyling pipe implementation for TaskPipe with no Stream interface.
+*/
 class TaskPipeImpl {
 	private {
 		Mutex m_mutex;
@@ -61,18 +80,21 @@ class TaskPipeImpl {
 		bool m_closed = false;
 	}
 
-	this(Mutex mutex = null)
+	/** Constructs a new pipe ready for use.
+	*/
+	this()
 	{
-		m_mutex = mutex ? mutex : new Mutex;
+		m_mutex = new Mutex;
 		m_condition = new TaskCondition(m_mutex);
 		m_buffer.capacity = 2048;
 	}
 
-	@property void bufferSize(size_t len)
-	{
-		m_buffer.capacity = len;
-	}
+	/// Size of the (fixed) buffer used to transfer data between tasks
+	@property size_t bufferSize() const { return m_buffer.capacity; }
+	/// ditto
+	@property void bufferSize(size_t nbytes) { m_buffer.capacity = nbytes; }
 
+	/// Number of bytes currently in the transfer buffer
 	@property size_t fill()
 	const {
 		synchronized (m_mutex) {
@@ -80,11 +102,16 @@ class TaskPipeImpl {
 		}
 	}
 
+	/** Closes the pipe.
+	*/
 	void close()
 	{
 		synchronized (m_mutex) m_closed = true;
+		m_condition.notifyAll();
 	}
 
+	/** Blocks until at least one byte of data has been written to the pipe.
+	*/
 	void waitForData()
 	{
 		synchronized (m_mutex) {
@@ -92,6 +119,8 @@ class TaskPipeImpl {
 		}
 	}
 
+	/** Writes the given byte array to the pipe.
+	*/
 	void write(const(ubyte)[] data)
 	{
 		while (data.length > 0){
@@ -107,6 +136,11 @@ class TaskPipeImpl {
 		}
 	}
 
+	/** Returns a temporary view of the beginning of the transfer buffer.
+
+		Note that a call to read invalidates this array slice. Blocks in case
+		of a filled up transfer buffer.
+	*/
 	const(ubyte[]) peek()
 	{
 		synchronized (m_mutex) {
@@ -114,6 +148,10 @@ class TaskPipeImpl {
 		}
 	}
 
+	/** Reads data into the supplied buffer.
+
+		Blocks until a sufficient amount of data has been written to the pipe.
+	*/
 	void read(ubyte[] dst)
 	{
 		while (dst.length > 0) {
