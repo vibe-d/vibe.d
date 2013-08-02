@@ -186,6 +186,9 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 struct FixedRingBuffer(T, size_t N = 0) {
 	static assert(isInputRange!FixedRingBuffer && isOutputRange!(FixedRingBuffer, T));
 
+	static if (is(typeof({ T t; const(T) u; t = u; }))) alias TC = const(T);
+	else alias TC = T;
+
 	private {
 		static if( N > 0 ) T[N] m_buffer;
 		else T[] m_buffer;
@@ -227,7 +230,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	@property ref inout(T) back() inout { assert(!empty); return m_buffer[mod(m_start+m_fill-1)]; }
 
 	void put(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
-	void put(T[] itms)
+	void put(TC[] itms)
 	{
 		if( !itms.length ) return;
 		assert(m_fill+itms.length <= m_buffer.length);
@@ -237,7 +240,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 			m_buffer[m_start+m_fill .. m_buffer.length] = itms[0 .. chunk1];
 			m_buffer[0 .. chunk2] = itms[chunk1 .. $];
 		} else {
-			m_buffer[m_start+m_fill .. m_start+m_fill+itms.length] = itms[];
+			m_buffer[mod(m_start+m_fill) .. mod(m_start+m_fill)+itms.length] = itms[];
 		}
 		m_fill += itms.length;
 	}
@@ -364,4 +367,30 @@ struct FixedRingBuffer(T, size_t N = 0) {
 				m_start = 0;
 		}
 	}
+}
+
+unittest {
+	FixedRingBuffer!(int, 5) buf;
+	assert(buf.length == 0 && buf.freeSpace == 5); buf.put(1); // |1 . . . .
+	assert(buf.length == 1 && buf.freeSpace == 4); buf.put(2); // |1 2 . . .
+	assert(buf.length == 2 && buf.freeSpace == 3); buf.put(3); // |1 2 3 . .
+	assert(buf.length == 3 && buf.freeSpace == 2); buf.put(4); // |1 2 3 4 .
+	assert(buf.length == 4 && buf.freeSpace == 1); buf.put(5); // |1 2 3 4 5
+	assert(buf.length == 5 && buf.freeSpace == 0);
+	assert(buf.front == 1);
+	buf.popFront(); // .|2 3 4 5
+	assert(buf.front == 2);
+	buf.popFrontN(2); // . . .|4 5
+	assert(buf.front == 4);
+	assert(buf.length == 2 && buf.freeSpace == 3);
+	buf.put([6, 7, 8]); // 6 7 8|4 5
+	assert(buf.length == 5 && buf.freeSpace == 0);
+	int[5] dst;
+	buf.read(dst); // . . .|. .
+	assert(dst == [4, 5, 6, 7, 8]);
+	assert(buf.length == 0 && buf.freeSpace == 5);
+	buf.put([1, 2]); // . . .|1 2
+	assert(buf.length == 2 && buf.freeSpace == 3);
+	buf.read(dst[0 .. 2]); //|. . . . .
+	assert(dst[0 .. 2] == [1, 2]);
 }
