@@ -4,7 +4,7 @@
 	Note that this module currently is a big sand box for testing allocation related stuff.
 	Nothing here, including the interfaces, is final but rather a lot of experimentation.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -12,9 +12,11 @@ module vibe.utils.memory;
 
 import vibe.core.log;
 
+import core.exception : OutOfMemoryError;
 import core.stdc.stdlib;
 import core.memory;
 import std.conv;
+import std.exception : enforceEx;
 import std.traits;
 import std.algorithm;
 
@@ -147,7 +149,9 @@ synchronized class DebugAllocator : Allocator {
 shared class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
-		return adjustPointerAlignment(.malloc(sz + Allocator.alignment))[0 .. sz];
+		auto ptr = .malloc(sz + Allocator.alignment);
+		enforceEx!OutOfMemoryError(ptr !is null);
+		return adjustPointerAlignment(ptr)[0 .. sz];
 	}
 
 	void[] realloc(void[] mem, size_t new_size)
