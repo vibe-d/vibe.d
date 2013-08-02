@@ -411,6 +411,7 @@ class Libevent2ManualEvent : ManualEvent {
 	void acquire()
 	{
 		auto task = Task.getThis();
+		assert(task != Task(), "ManualEvent.wait works only when called from a task.");
 		auto thread = task.thread;
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
