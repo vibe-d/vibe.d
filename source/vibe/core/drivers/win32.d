@@ -370,8 +370,7 @@ class Win32ManualEvent : ManualEvent {
 
 	int wait(int reference_emit_count)
 	{
-		logDebugV("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
-		assert(!amOwner());
+		//logDebugV("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
 		acquire();
 		scope(exit) release();
 		auto ec = atomicLoad(m_emitCount);
@@ -379,7 +378,7 @@ class Win32ManualEvent : ManualEvent {
 			m_driver.m_core.yieldForEvent();
 			ec = atomicLoad(m_emitCount);
 		}
-		logDebugV("Signal %s wait leave %s", cast(void*)this, ec);
+		//logDebugV("Signal %s wait leave %s", cast(void*)this, ec);
 		return ec;
 	}
 
