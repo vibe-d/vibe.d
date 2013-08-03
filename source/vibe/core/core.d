@@ -441,7 +441,88 @@ enum VibeVersionString = "0.7.16";
 
 
 /**
+	Implements a task local storage variable.
 
+	Task local variables, similar to thread local variables, exist separately
+	in each task. Consequently, they do not need any form of synchronization
+	when accessing them.
+
+	Note, however, that each TaskLocal variable will increase the memory footprint
+	of any task that uses task local storage. There is also an overhead to access
+	TaskLocal variables, higher than for thread local variables, but generelly
+	still O(n).
+
+	Notice:
+		FiberLocal instances MUST be declared as static/global thread-local
+		variables. Defining them as a temporary/stack variable will cause
+		crashes or data corruption!
+
+	Examples:
+		---
+		TaskLocal!string s_myString = "world";
+
+		void taskFunc()
+		{
+			assert(s_myString == "world");
+			s_myString = "hello";
+			assert(s_myString == "hello");
+		}
+
+		shared static this()
+		{
+			// both tasks will get independent storage for s_myString
+			runTask(&taskFunc);
+			runTask(&taskFunc);
+		}
+		---
+*/
+struct TaskLocal(T)
+{
+	private {
+		size_t m_offset = size_t.max;
+		size_t m_id;
+		T m_initValue;
+	}
+
+	this(T init_val) { m_initValue = init_val; }
+
+	@disable this(this);
+
+	void opAssign(bool value) { this.storage = value; }
+
+	@property ref T storage()
+	{
+		auto fiber = cast(CoreTask)Fiber.getThis();
+
+		// lazily register in FLS storage
+		if (m_offset == size_t.max) {
+			// TODO: handle alignment properly
+			m_offset = CoreTask.ms_flsFill;
+			m_id = CoreTask.ms_flsCounter++;
+			CoreTask.ms_flsFill += T.sizeof;
+		}
+
+		// make sure the current fiber has enough FLS storage
+		if (fiber.m_fls.length < CoreTask.ms_flsFill) {
+			fiber.m_fls.length = CoreTask.ms_flsFill + 128;
+			fiber.m_flsInit.length = CoreTask.ms_flsCounter + 64;
+		}
+		
+		// return (possibly default initialized) value
+		auto data = fiber.m_fls.ptr[m_offset .. m_offset+T.sizeof];
+		if (!fiber.m_flsInit[m_id]) {
+			fiber.m_flsInit[m_id] = true;
+			emplace!T(data, m_initValue);
+		}
+		return (cast(T[])data)[0];
+	}
+
+	alias storage this;
+}
+
+
+/**
+	High level state change events for a Task
 */
 enum TaskEvent {
 	preStart, /// Just about to invoke the fiber which starts execution
@@ -458,10 +539,17 @@ enum TaskEvent {
 /**************************************************************************************************/
 
 private class CoreTask : TaskFiber {
+	import std.bitmanip;
 	private {
 		void delegate() m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
+
+		// task local storage
+		static size_t ms_flsFill = 0; // thread-local
+		static size_t ms_flsCounter = 0;
+		BitArray m_flsInit;
+		void[] m_fls;
 	}
 
 	this()
@@ -666,7 +754,7 @@ private {
 	__gshared ManualEvent st_workerTaskSignal;
 
 	bool delegate() s_idleHandler;
-	debug void function(TaskEvent) s_taskEventCallback;
+	__gshared debug void function(TaskEvent) s_taskEventCallback;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
