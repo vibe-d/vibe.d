@@ -557,6 +557,7 @@ private class CoreTask : TaskFiber {
 	{
 		auto f = Fiber.getThis();
 		if (f) return cast(CoreTask)f;
+		if (!ms_coreTask) ms_coreTask = new CoreTask;
 		return ms_coreTask;
 	}
 
@@ -850,7 +851,7 @@ static this()
 {
 	assert(s_core !is null);
 
-	CoreTask.ms_coreTask = new CoreTask;
+	//CoreTask.ms_coreTask = new CoreTask;
 
 	setupDriver();
 }
