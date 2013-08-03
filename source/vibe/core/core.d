@@ -430,7 +430,7 @@ void lowerPrivileges()
 */
 void setTaskEventCallback(void function(TaskEvent) func)
 {
-	s_taskEventCallback = func;
+	debug s_taskEventCallback = func;
 }
 
 
