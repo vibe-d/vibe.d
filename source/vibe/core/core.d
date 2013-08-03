@@ -575,11 +575,9 @@ private class CoreTask : TaskFiber {
 				try {
 					m_running = true;
 					scope(exit) m_running = false;
-					logTrace("entering task.");
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start);
 					task();
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end);
-					logTrace("exiting task.");
 				} catch( Exception e ){
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail);
 					import std.encoding;
@@ -650,11 +648,9 @@ private class VibeDriverCore : DriverCore {
 	{
 		auto fiber = cast(CoreTask)Fiber.getThis();
 		if( fiber ){
-			logTrace("yield");
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield);
 			Fiber.yield();
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume);
-			logTrace("resume");
 			auto e = fiber.m_exception;
 			if( e ){
 				fiber.m_exception = null;
