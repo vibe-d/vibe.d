@@ -176,10 +176,9 @@ Task runTask(void delegate() task)
 	f.m_taskFunc = task;
 	f.m_taskCounter++;
 	auto handle = f.task();
-	logTrace("initial task call (%s)", f.state);
-	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart);
+	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart, f);
 	s_core.resumeTask(handle, null, true);
-	logTrace("run task out");
+	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.postStart, f);
 	return handle;
 }
 
@@ -428,7 +427,7 @@ void lowerPrivileges()
 	This function is useful mostly for implementing debuggers that
 	analyze the life time of tasks, including task switches.
 */
-void setTaskEventCallback(void function(TaskEvent) func)
+void setTaskEventCallback(void function(TaskEvent, Fiber) func)
 {
 	debug s_taskEventCallback = func;
 }
@@ -492,7 +491,7 @@ struct TaskLocal(T)
 
 	@property ref T storage()
 	{
-		auto fiber = cast(CoreTask)Fiber.getThis();
+		auto fiber = CoreTask.getThis();
 
 		// lazily register in FLS storage
 		if (m_offset == size_t.max) {
@@ -525,12 +524,13 @@ struct TaskLocal(T)
 	High level state change events for a Task
 */
 enum TaskEvent {
-	preStart, /// Just about to invoke the fiber which starts execution
-	start,    /// Just about to start execution
-	yield,    /// Temporarily paused
-	resume,   /// Resumed from a prior yield
-	end,      /// Ended normally
-	fail      /// Ended with an exception
+	preStart,  /// Just about to invoke the fiber which starts execution
+	postStart, /// After the fiber has returned for the first time (by yield or exit)
+	start,     /// Just about to start execution
+	yield,     /// Temporarily paused
+	resume,    /// Resumed from a prior yield
+	end,       /// Ended normally
+	fail       /// Ended with an exception
 }
 
 
@@ -541,6 +541,7 @@ enum TaskEvent {
 private class CoreTask : TaskFiber {
 	import std.bitmanip;
 	private {
+		static CoreTask ms_coreTask;
 		void delegate() m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
@@ -550,6 +551,13 @@ private class CoreTask : TaskFiber {
 		static size_t ms_flsCounter = 0;
 		BitArray m_flsInit;
 		void[] m_fls;
+	}
+
+	static CoreTask getThis()
+	{
+		auto f = Fiber.getThis();
+		if (f) return cast(CoreTask)f;
+		return ms_coreTask;
 	}
 
 	this()
@@ -575,11 +583,11 @@ private class CoreTask : TaskFiber {
 				try {
 					m_running = true;
 					scope(exit) m_running = false;
-					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start);
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, this);
 					task();
-					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end);
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end, this);
 				} catch( Exception e ){
-					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail);
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail, this);
 					import std.encoding;
 					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
@@ -648,9 +656,9 @@ private class VibeDriverCore : DriverCore {
 	{
 		auto fiber = cast(CoreTask)Fiber.getThis();
 		if( fiber ){
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield);
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, fiber);
 			Fiber.yield();
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume);
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, fiber);
 			auto e = fiber.m_exception;
 			if( e ){
 				fiber.m_exception = null;
@@ -750,7 +758,7 @@ private {
 	__gshared ManualEvent st_workerTaskSignal;
 
 	bool delegate() s_idleHandler;
-	__gshared debug void function(TaskEvent) s_taskEventCallback;
+	__gshared debug void function(TaskEvent, Fiber) s_taskEventCallback;
 	Task[] s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
@@ -841,6 +849,8 @@ shared static ~this()
 static this()
 {
 	assert(s_core !is null);
+
+	CoreTask.ms_coreTask = new CoreTask;
 
 	setupDriver();
 }
