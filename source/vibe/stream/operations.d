@@ -226,10 +226,9 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
 	auto bufferobj = FreeListRef!(Buffer, false)();
 	auto buffer = bufferobj.bytes[];
 	size_t n = 0;
-	while( !stream.empty ){
+	while (!stream.empty) {
 		enforce(!max_bytes || n++ < max_bytes, "Data too long!");
 		size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
-		logTrace("read pipe chunk %d", chunk);
 		stream.read(buffer[0 .. chunk]);
 		dst.put(buffer[0 .. chunk]);
 	}
