@@ -77,11 +77,13 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return m_table[idx].value;
 	}
 
-	const(Value) get(Key key, lazy const(Value) default_value = Value.init)
-	{
-		auto idx = findIndex(key);
-		if (idx == size_t.max) return default_value;
-		return m_table[idx].value;
+	static if (!is(typeof({ Value v; const(Value) vc; v = vc; }))) {
+		const(Value) get(Key key, lazy const(Value) default_value = Value.init)
+		{
+			auto idx = findIndex(key);
+			if (idx == size_t.max) return default_value;
+			return m_table[idx].value;
+		}
 	}
 
 	void clear()
