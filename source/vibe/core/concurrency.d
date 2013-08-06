@@ -87,12 +87,12 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 
 	See_Also: core.concurrency.isWeaklyIsolated
 */
-ScopedLock!T lock(T)(shared(T) object)
+ScopedLock!T lock(T : Object)(shared(T) object)
 pure nothrow {
 	return ScopedLock!T(object);
 }
 /// ditto
-void lock(T)(shared(T) object, scope void delegate(scope T) accessor)
+void lock(T : Object)(shared(T) object, scope void delegate(scope T) accessor)
 nothrow {
 	auto l = lock(object);
 	accessor(l.unsafeGet());
