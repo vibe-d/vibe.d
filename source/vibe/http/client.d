@@ -32,6 +32,7 @@ import std.format;
 import std.string;
 import std.typecons;
 import std.datetime;
+import std.uri;
 
 
 /**************************************************************************************************/
@@ -148,12 +149,12 @@ class HTTPClient : EventedObject {
 		SSLContext m_ssl;
 		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		bool m_requesting = false, m_responding = false;
-		SysTime m_keepAliveLimit; 
+		SysTime m_keepAliveLimit;
 		int m_timeout;
 	}
 
 	static void setUserAgentString(string str) { m_userAgent = str; }
-	
+
 	void connect(string server, ushort port = 80, bool ssl = false)
 	{
 		assert(port != 0);
@@ -251,7 +252,7 @@ final class HTTPClientRequest : HTTPRequest {
 		NetworkAddress m_localAddress;
 	}
 
-	
+
 
 	/// private
 	this(Stream conn, NetworkAddress local_addr)
@@ -297,7 +298,26 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	void writeFormBody(in string[string] form)
 	{
-		assert(false, "TODO");
+        char[] data;
+        size_t length = 1024;
+        data.length = length;
+
+        size_t offset = 0;
+        foreach(key,val; form)
+        {
+            auto d = "&" ~ encode(key) ~ "=" ~ encode(val);
+            if (length < offset + d.length)
+            {
+                length += 1024;
+                data.length = length; // XXX: Is bytes should be copied?
+            }
+            data[offset..offset+d.length] = d[];
+            offset += d.length;
+        }
+        headers["Content-Type"] = "application/x-www-form-urlencoded";
+		headers["Content-Length"] = clengthString(offset-1);
+        bodyWriter.write(data[1..offset]);
+        finalize();
 	}
 
 	/**
@@ -414,7 +434,7 @@ final class HTTPClientResponse : HTTPResponse {
 			stln = stln[1 .. $];
 			this.statusPhrase = stln;
 		}
-		
+
 		// read headers until an empty line is hit
 		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc);
 
