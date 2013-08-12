@@ -10,6 +10,8 @@ module vibe.utils.hashmap;
 import vibe.utils.memory;
 
 import std.conv : emplace;
+import std.traits;
+
 
 struct DefaultHashMapTraits(Key) {
 	enum clearValue = Key.init;
@@ -23,8 +25,10 @@ struct DefaultHashMapTraits(Key) {
 struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 {
 	struct TableEntry {
-		Key key;
+		UnConst!Key key;
 		Value value;
+
+		this(Key key, Value value) { this.key = cast(UnConst!Key)key; this.value = value; }
 	}
 	private {
 		TableEntry[] m_table; // NOTE: capacity is always POT
@@ -209,7 +213,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		auto oldtable = m_table;
 		m_table = allocArray!TableEntry(m_allocator, new_size);
 		foreach (ref el; m_table) {
-			emplace!Key(&el.key, Traits.clearValue);
+			emplace!(UnConst!Key)(cast(UnConst!Key*)&el.key, cast(UnConst!Key)Traits.clearValue);
 			emplace!Value(&el.value);
 		}
 		m_length = 0;
@@ -250,4 +254,12 @@ unittest {
 		assert(pe !is null && *pe == str ~ "+");
 		assert(map[str] == str ~ "+");
 	}
+}
+
+template UnConst(T) {
+	static if (is(T == const(U), U)) {
+		alias UnConst = U;
+	} else static if (is(T == immutable(V), V)) {
+		alias UnConst = V;
+	} else alias UnConst = T;
 }
