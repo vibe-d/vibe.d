@@ -16,6 +16,7 @@ import core.time;
 import std.traits;
 import std.typecons;
 import std.variant;
+import std.string;
 import vibe.core.task;
 
 private extern (C) pure nothrow void _d_monitorenter(Object h);
@@ -1087,16 +1088,19 @@ void receive(OPS...)(OPS ops)
 
 auto receiveOnly(ARGS...)()
 {
-	Tuple!T ret;
+	ARGS ret;
 
 	receive(
-		(T val) { ret = val; },
+		(ARGS val) { ret = val; },
 		(LinkTerminated e) { throw e; },
 		(OwnerTerminated e) { throw e; },
-		(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, T.stringof)); }
+		(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, ARGS.stringof)); }
 	);
 
-	return ret;
+	static if(ARGS.length == 1)
+		return ret[0];
+	else
+		return tuple(ret);
 }
 
 bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
