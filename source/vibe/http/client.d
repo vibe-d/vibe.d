@@ -32,6 +32,7 @@ import std.format;
 import std.string;
 import std.typecons;
 import std.datetime;
+import std.uri;
 
 
 /**************************************************************************************************/
@@ -297,7 +298,12 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	void writeFormBody(in string[string] form)
 	{
-		assert(false, "TODO");
+		auto formBody = appender!string();
+		foreach(k, v; form) formBody.put("&" ~ encode(k) ~ "=" ~ encode(v));
+		headers["Content-Type"] = "application/x-www-form-urlencoded";
+		headers["Content-Length"] = clengthString(formBody.data.length - 1);
+		bodyWriter.write(formBody.data[1..$]);
+		finalize();
 	}
 
 	/**
