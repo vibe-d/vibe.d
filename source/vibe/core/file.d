@@ -143,7 +143,9 @@ bool existsFile(string path)
 */
 FileInfo getFileInfo(Path path)
 {
-	auto ent = std.file.dirEntry(path.toNativeString());
+	DirEntry ent;
+	static if (is(typeof(DirEntry("")))) ent = DirEntry(path.toNativeString()); // DMD 2.064 and up
+	else ent = std.file.dirEntry(path.toNativeString());
 	return makeFileInfo(ent);
 }
 /// ditto

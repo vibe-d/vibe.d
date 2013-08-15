@@ -17,7 +17,6 @@ import vibe.inet.url;
 import std.conv;
 import std.datetime;
 import std.digest.md;
-import std.file;
 import std.string;
 
 
@@ -125,24 +124,24 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	auto pathstr = path.toNativeString();
 
 	// return if the file does not exist
-	if( !exists(pathstr) ){
+	if( !existsFile(pathstr) ){
 		if( settings.failIfNotFound ) throw new HTTPStatusException(HTTPStatus.NotFound);
 		else return;
 	}
 
-	DirEntry dirent;
-	try dirent = dirEntry(pathstr);
-	catch(FileException){
+	FileInfo dirent;
+	try dirent = getFileInfo(pathstr);
+	catch(Exception){
 		throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
 	}
 
-	if (dirent.isDir) {
+	if (dirent.isDirectory) {
 		logDebugV("Hit directory when serving files, ignoring: %s", pathstr);
 		if( settings.failIfNotFound ) throw new HTTPStatusException(HTTPStatus.NotFound);
 		else return;
 	}
 
-	auto lastModified = toRFC822DateTimeString(dirent.timeLastModified.toUTC());
+	auto lastModified = toRFC822DateTimeString(dirent.timeModified.toUTC());
 	
 	if( auto pv = "If-Modified-Since" in req.headers ) {
 		if( *pv == lastModified ) {
@@ -182,17 +181,17 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	// check for already encoded file if configured
 	auto encodingFileExtension = pce && settings.encodingFileExtension ? settings.encodingFileExtension[*pce] : "";
 	auto encodedFilepath = pathstr ~ encodingFileExtension;
-	auto useEncodedFile = encodingFileExtension.length && exists(encodedFilepath);
+	auto useEncodedFile = encodingFileExtension.length && existsFile(encodedFilepath);
 	if( pce && useEncodedFile ){
-		auto origLastModified = dirent.timeLastModified.toUTC();
+		auto origLastModified = dirent.timeModified.toUTC();
 
-		try dirent = dirEntry(encodedFilepath);
-		catch(FileException){
+		try dirent = getFileInfo(encodedFilepath);
+		catch(Exception){
 			throw new HTTPStatusException(HTTPStatus.InternalServerError, "Failed to get information for the file due to a file system error.");
 		}
 
 		// encoded file must be younger than original else warn
-		if (dirent.timeLastModified.toUTC() >= origLastModified){
+		if (dirent.timeModified.toUTC() >= origLastModified){
 			logTrace("Using already encoded file '%s' -> '%s'", path, encodedFilepath);
 			path = Path(encodedFilepath);
 			res.headers["Content-Length"] = to!string(dirent.size);
