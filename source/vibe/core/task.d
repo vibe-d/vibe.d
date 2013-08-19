@@ -221,7 +221,7 @@ class MessageQueue {
 		m_condition.notify();
 	}
 
-	void receive(OPS...)(OPS ops)
+	void receive(scope bool delegate(Variant) filter, scope void delegate(Variant) handler)
 	{
 		bool notify;
 		scope (exit) if (notify) m_condition.notify();
@@ -232,17 +232,17 @@ class MessageQueue {
 			while (true) {
 				import vibe.core.log;
 				logTrace("looking for messages");
-				if (receiveQueue(m_priorityQueue, args, ops)) break;
-				if (receiveQueue(m_queue, args, ops)) break;
+				if (receiveQueue(m_priorityQueue, args, filter)) break;
+				if (receiveQueue(m_queue, args, filter)) break;
 				logTrace("received no message, waiting..");
 				m_condition.wait();
 			}
 		}
 
-		callOps(args, ops);
+		handler(args);
 	}
 
-	bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
+	bool receiveTimeout(OPS...)(Duration timeout, scope bool delegate(Variant) filter, scope void delegate(Variant) handler)
 	{
 		import std.datetime;
 
@@ -253,73 +253,30 @@ class MessageQueue {
 		synchronized (m_mutex) {
 			notify = this.full;
 			while (true) {
-				if (receiveQueue(m_priorityQueue, args, ops)) break;
-				if (receiveQueue(m_queue, args, ops)) break;
+				if (receiveQueue(m_priorityQueue, args, filter)) break;
+				if (receiveQueue(m_queue, args, filter)) break;
 				auto now = Clock.currTime(UTC());
 				if (now > limit_time) return false;
 				m_condition.wait(limit_time - now);
 			}
 		}
 
-		return callOps(args, ops);
+		handler(args);
 	}
 
-	private static bool receiveQueue(OPS...)(ref FixedRingBuffer!Variant queue, ref Variant dst, OPS ops)
+	private static bool receiveQueue(OPS...)(ref FixedRingBuffer!Variant queue, ref Variant dst, scope bool delegate(Variant) filter)
 	{
 		auto r = queue[];
 		while (!r.empty) {
 			scope (failure) queue.removeAt(r);
 			auto msg = r.front;
-			bool matched;
-			foreach (i, TO; OPS) {
-				alias ParameterTypeTuple!TO ArgTypes;
-
-				static if (ArgTypes.length == 1) {
-					static if (is(ArgTypes[0] == Variant)) {
-						dst = msg;
-						queue.removeAt(r);
-						return true;
-					} else if (msg.convertsTo!(ArgTypes[0])) {
-						dst = msg;
-						queue.removeAt(r);
-						return true;
-					}
-				} else if (msg.convertsTo!(Tuple!ArgTypes)) {
-					dst = msg;
-					queue.removeAt(r);
-					return true;
-				}
+			if (filter(msg)) {
+				dst = msg;
+				queue.removeAt(r);
+				return true;
 			}
 			r.popFront();
 		}
 		return false;
-	}
-
-	private static bool callOps(OPS...)(Variant msg, OPS ops)
-	{
-		foreach(i, TO; OPS){
-			alias ParameterTypeTuple!TO ArgTypes;
-
-			static if (ArgTypes.length == 1) {
-				static if (is(ArgTypes[0] == Variant)) {
-					if (callOp(ops[i], msg)) return true;
-				} else if (msg.convertsTo!(ArgTypes[0])) {
-					if (callOp(ops[i], msg.get!(ArgTypes[0]))) return true;
-				}
-			} else if (msg.convertsTo!(Tuple!ArgTypes)) {
-				if (callOp(ops[i], msg.get!(Tuple!ArgTypes).expand)) return true;
-			}
-		}
-		return false;
-	}
-
-	private static bool callOp(OP, ARGS...)(OP op, ARGS args)
-	{
-		static if (is(ReturnType!op == bool)) {
-			return op(args);
-		} else {
-			op(args);
-			return true;
-		}
 	}
 }

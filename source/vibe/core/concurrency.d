@@ -15,6 +15,7 @@ public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated
 import core.time;
 import std.traits;
 import std.typecons;
+import std.typetuple;
 import std.variant;
 import std.string;
 import vibe.core.task;
@@ -287,7 +288,7 @@ template Isolated(T)
 		alias IsolatedArray!(typeof(T.init[0])) Isolated;
 	} else static if( isAssociativeArray!T ){
 		alias IsolatedAssociativeArray!(KeyType!T, ValueType!T) Isolated;
-	} else static assert(false, T.stringof~": Unsupported type for unique - must be class, pointer, array or associative array.");
+	} else static assert(false, T.stringof~": Unsupported type for Isolated!T - must be class, pointer, array or associative array.");
 }
 
 
@@ -1063,8 +1064,7 @@ void send(ARGS...)(Tid tid, ARGS args)
 	foreach(A; ARGS){
 		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
 	}
-	static if( args.length == 1 ) tid.messageQueue.send(Variant(args[0]));
-	else tid.messageQueue.send(Variant(tuple(args)));
+	tid.messageQueue.send(variantWithIsolatedSupport(args));
 }
 
 void prioritySend(ARGS...)(Tid tid, ARGS args)
@@ -1074,8 +1074,7 @@ void prioritySend(ARGS...)(Tid tid, ARGS args)
 	foreach(A; ARGS){
 		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
 	}
-	static if( args.length == 1 ) tid.messageQueue.prioritySend(Variant(args[0]));
-	else tid.messageQueue.prioritySend(Variant(tuple(args)));
+	tid.messageQueue.prioritySend(variantWithIsolatedSupport(args));
 }
 
 // TODO: handle special exception types
@@ -1083,7 +1082,7 @@ void prioritySend(ARGS...)(Tid tid, ARGS args)
 void receive(OPS...)(OPS ops)
 {
 	auto tid = Task.getThis();
-	tid.messageQueue.receive(ops, (Throwable th) { throw th; });
+	tid.messageQueue.receive(opsFilter(ops), opsHandler(ops));
 }
 
 auto receiveOnly(ARGS...)()
@@ -1097,16 +1096,14 @@ auto receiveOnly(ARGS...)()
 		(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, ARGS.stringof)); }
 	);
 
-	static if(ARGS.length == 1)
-		return ret[0];
-	else
-		return tuple(ret);
+	static if(ARGS.length == 1) return ret[0];
+	else return tuple(ret);
 }
 
 bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
 {
 	auto tid = Task.getThis();
-	return tid.messageQueue.receiveTimeout!OPS(timeout, ops);
+	return tid.messageQueue.receiveTimeout!OPS(timeout, opsFilter(ops), opsHandler(ops));
 }
 
 void setMaxMailboxSize(Tid tid, size_t messages, OnCrowding on_crowding)
@@ -1131,3 +1128,99 @@ private bool onCrowdingDrop(Task tid){
 	return false;
 }
 
+private Variant variantWithIsolatedSupport(T...)(ref T t)
+{
+	IsolatedValueProxyTuple!T dst;
+	foreach (i, Ti; T) {
+		static if (isInstanceOf!(IsolatedSendProxy, typeof(dst[i])))
+			dst[i] = IsolatedSendProxy!(Ti.BaseType)(t[i].move().unsafeGet());
+		else dst[i] = t[i];
+	}
+	return Variant(dst);
+}
+
+private auto unproxyIsolatedValues(T...)(IsolatedValueProxyTuple!T t)
+{
+	Tuple!T ret;
+	foreach (i, Ti; T) {
+		static if (isInstanceOf!(IsolatedSendProxy, IsolatedValueProxy!T)) {
+			auto isolated = assumeIsolated(t[i].value);
+			ret[i] = isolated;
+		} else ret[i] = t[i];
+	}
+	return ret;
+}
+
+private template IsolatedValueProxyTuple(T...)
+{
+	alias IsolatedValueProxyTuple = Tuple!(staticMap!(IsolatedValueProxy, T));
+}
+
+private template IsolatedValueProxy(T)
+{
+	static if (isInstanceOf!(IsolatedRef, T) || isInstanceOf!(IsolatedArray, T) || isInstanceOf!(IsolatedAssociativeArray, T)) {
+		alias IsolatedValueProxy = IsolatedSendProxy!(T.BaseType);
+	} else {
+		alias IsolatedValueProxy = T;
+	}
+}
+
+private struct IsolatedSendProxy(T) { alias BaseType = T; T value; }
+
+private bool matchesHandler(F)(Variant msg)
+{
+	return msg.convertsTo!(IsolatedValueProxyTuple!(ParameterTypeTuple!F));
+}
+
+private bool callBool(F, T...)(F fnc, T args)
+{
+	static string caller(string prefix)
+	{
+		import std.conv;
+		string ret = prefix ~ "fnc(";
+		foreach (i, Ti; T) {
+			static if (i > 0) ret ~= ", ";
+			static if (isInstanceOf!(IsolatedSendProxy, Ti)) ret ~= "assumeIsolated(args["~to!string(i)~"].value)";
+			else ret ~= "args["~to!string(i)~"]";
+		}
+		ret ~= ");";
+		return ret;
+	}
+	static assert(is(ReturnType!F == bool) || is(ReturnType!F == void),
+		"Message handlers must return either bool or void.");
+	static if (is(ReturnType!F == bool)) mixin(caller("return "));
+	else {
+		mixin(caller(""));
+		return true;
+	}
+}
+
+private bool delegate(Variant) opsFilter(OPS...)(OPS ops)
+{
+	return (Variant msg) {
+		if (msg.convertsTo!Throwable) return true;
+		foreach (i, OP; OPS)
+			if (matchesHandler!OP(msg))
+				return true;
+		return false;
+	};
+}
+
+private void delegate(Variant) opsHandler(OPS...)(OPS ops)
+{
+	return (Variant msg) {
+		foreach (i, OP; OPS) {
+			alias PTypes = ParameterTypeTuple!OP;
+			if (matchesHandler!OP(msg)) {
+				static if (PTypes.length == 1 && is(PTypes[0] == Variant)) {
+					if (callBool(ops[i], msg)) return; // WARNING: proxied isolated values will go through verbatim!
+				} else {
+					auto msgt = msg.get!(IsolatedValueProxyTuple!PTypes);
+					if (callBool(ops[i], msgt.expand)) return;
+				}
+			}
+		}
+		if (msg.convertsTo!Throwable)
+			throw msg.get!Throwable();
+	};
+}
