@@ -1120,6 +1120,19 @@ void setMaxMailboxSize(Tid tid, size_t messages, bool function(Tid) on_crowding)
 	tid.messageQueue.setMaxSize(messages, on_crowding);
 }
 
+version(unittest)
+{
+	class CLS {}
+	static assert(is(typeof(send(Tid.init, makeIsolated!CLS()))));
+	static assert(is(typeof(send(Tid.init, 1))));
+	static assert(is(typeof(send(Tid.init, 1, "str", makeIsolated!CLS()))));
+	static assert(!is(typeof(send(Tid.init, new CLS))));
+	static assert(is(typeof(receive((Isolated!CLS){}))));
+	static assert(is(typeof(receive((int){}))));
+	static assert(is(typeof(receive!(void delegate(int, string, Isolated!CLS))((int, string, Isolated!CLS){}))));
+	static assert(!is(typeof(receive((CLS){}))));
+}
+
 private bool onCrowdingThrow(Task tid){
 	throw new MailboxFull(std.concurrency.Tid());
 }
@@ -1166,11 +1179,6 @@ private template IsolatedValueProxy(T)
 }
 
 private struct IsolatedSendProxy(T) { alias BaseType = T; T value; }
-
-private bool matchesHandler(F)(Variant msg)
-{
-	return msg.convertsTo!(IsolatedValueProxyTuple!(ParameterTypeTuple!F));
-}
 
 private bool callBool(F, T...)(F fnc, T args)
 {
@@ -1223,4 +1231,9 @@ private void delegate(Variant) opsHandler(OPS...)(OPS ops)
 		if (msg.convertsTo!Throwable)
 			throw msg.get!Throwable();
 	};
+}
+
+private bool matchesHandler(F)(Variant msg)
+{
+	return msg.convertsTo!(IsolatedValueProxyTuple!(ParameterTypeTuple!F));
 }
