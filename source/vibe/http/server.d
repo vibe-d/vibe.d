@@ -1,7 +1,7 @@
 /**
 	A HTTP 1.1/1.0 server implementation.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -790,14 +790,19 @@ final class HTTPServerResponse : HTTPResponse {
 		return m_conn;
 	}
 
-	/// Sets the specified cookie value.
+	/** Sets the specified cookie value.
+
+		Params:
+			name = Name of the cookie
+			value = New cookie value - pass null to clear the cookie
+			path = Path (as seen by the client) of the directory tree in which the cookie is visible
+	*/
 	Cookie setCookie(string name, string value, string path = "/")
 	{
 		auto cookie = new Cookie();
 		cookie.path = path;
 		cookie.value = value;
-		if( value is null )
-			cookie.expires = Clock.currTime().add!("months")(-1).toSimpleString();
+		if (value is null) cookie.maxAge = 0;
 		cookies[name] = cookie;
 		return cookie;
 	}
