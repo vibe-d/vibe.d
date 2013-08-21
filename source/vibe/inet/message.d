@@ -283,6 +283,44 @@ void decodeEmailAddressHeader(string header, out string name, out string address
 
 
 /**
+	Decodes a message body according to the specified content transfer
+	encoding ("Content-Transfer-Encoding" header).
+
+	The result is returned as a UTF-8 string.
+*/
+string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
+{
+	import std.algorithm;
+	import std.base64;
+
+	const(ubyte)[] msg = message_body;
+	switch (content_transfer_encoding) {
+		default: break;
+		case "quoted-printable": msg = QuotedPrintable.decode(cast(string)msg); break;
+		case "base64":
+			try msg = Base64.decode(msg);
+			catch(Exception e){
+				auto dst = appender!(ubyte[])();
+				try {
+					auto dec = Base64.decoder(filter!(ch => ch != '\r' && ch != '\n')(msg));
+					while( !dec.empty ){
+						dst.put(dec.front);
+						dec.popFront();
+					}
+				} catch(Exception e){
+					dst.put(cast(ubyte[])"\r\n-------\r\nDECODING ERROR: ");
+					dst.put(cast(ubyte[])e.toString());
+				}
+				msg = dst.data();
+			}
+			break;
+	}
+	// TODO: do character encoding etc.
+	return sanitizeUTF8(msg);
+}
+
+
+/**
 	Behaves like string[string] but case does not matter for the key and the insertion order is not changed.
 
 	This kind of map is used for MIME headers (e.g. for HTTP), where the case of the key strings
