@@ -796,6 +796,8 @@ final class HTTPServerResponse : HTTPResponse {
 		auto cookie = new Cookie();
 		cookie.path = path;
 		cookie.value = value;
+		if( value is null )
+			cookie.expires = Clock.currTime().add!("months")(-1).toSimpleString();
 		cookies[name] = cookie;
 		return cookie;
 	}
