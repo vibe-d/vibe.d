@@ -387,7 +387,7 @@ string adjustMethodStyle(string name, MethodStyle style)
 		case MethodStyle.camelCase:
 			size_t i = 0;
 			foreach (idx, dchar ch; name)
-				if (ch.isUpper) i = idx;
+				if (isUpper(ch)) i = idx;
 				else break;
 			if (i == 0) {
 				std.utf.decode(name, i);

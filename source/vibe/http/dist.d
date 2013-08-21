@@ -1,7 +1,7 @@
 /**
 	Interface for the VibeDist load balancer
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -15,7 +15,7 @@ import vibe.http.server;
 
 import std.conv;
 import std.exception;
-import std.process;
+import vibe.internal.std.process;
 
 
 /**

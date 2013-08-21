@@ -256,10 +256,10 @@ unittest {
 	}
 }
 
-template UnConst(T) {
-	static if (is(T == const(U), U)) {
+private template UnConst(T) {
+	static if (is(T U == const(U))) {
 		alias UnConst = U;
-	} else static if (is(T == immutable(V), V)) {
+	} else static if (is(T V == immutable(V))) {
 		alias UnConst = V;
 	} else alias UnConst = T;
 }

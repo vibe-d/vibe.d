@@ -1,7 +1,7 @@
 /**
 	A simple HTTP/1.1 client implementation.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -387,9 +387,14 @@ final class HTTPClientRequest : HTTPRequest {
 deprecated("Please use HTTPClientRequest instead.") alias HttpClientRequest = HTTPClientRequest;
 
 
+shared static this()
+{
+	HTTPClientResponse.ms_staleResponseError = cast(immutable)new AssertError("Stale HTTP response detected. Use .dropBody() or the scoped version of requestHTTP.");
+}
+
 final class HTTPClientResponse : HTTPResponse {
 	private {
-		__gshared ms_staleResponseError = cast(immutable)new AssertError("Stale HTTP response detected. Use .dropBody() or the scoped version of requestHTTP.");
+		__gshared Rebindable!(immutable(AssertError)) ms_staleResponseError;
 		HTTPClient m_client;
 		LockedConnection!HTTPClient lockedConnection;
 		FreeListRef!LimitedInputStream m_limitedInputStream;
@@ -449,7 +454,7 @@ final class HTTPClientResponse : HTTPResponse {
 
 	~this()
 	{
-		if (m_client) throw ms_staleResponseError;
+		if (m_client) throw ms_staleResponseError.get;
 	}
 
 	/**
