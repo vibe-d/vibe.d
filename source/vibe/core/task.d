@@ -262,6 +262,7 @@ class MessageQueue {
 		}
 
 		handler(args);
+		return true;
 	}
 
 	private static bool receiveQueue(OPS...)(ref FixedRingBuffer!Variant queue, ref Variant dst, scope bool delegate(Variant) filter)
