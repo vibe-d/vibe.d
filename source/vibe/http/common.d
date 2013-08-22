@@ -387,6 +387,7 @@ final class ChunkedOutputStream : OutputStream {
 	private {
 		OutputStream m_out;
 		AllocAppender!(ubyte[]) m_buffer;
+		size_t m_maxBufferSize = 512*1024;
 	}
 	
 	this(OutputStream stream, shared(Allocator) alloc = defaultAllocator())
@@ -395,10 +396,29 @@ final class ChunkedOutputStream : OutputStream {
 		m_buffer = AllocAppender!(ubyte[])(alloc);
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true)
+	/** Maximum buffer size used to buffer individual chunks.
+
+		A size of zero means unlimited buffer size. Explicit flush is required
+		in this case to empty the buffer.
+	*/
+	@property size_t maxBufferSize() const { return m_maxBufferSize; }
+	/// ditto
+	@property void maxBufferSize(size_t bytes) { m_maxBufferSize = bytes; if (m_buffer.data.length >= m_maxBufferSize) flush(); }
+
+	void write(in ubyte[] bytes_, bool do_flush = true)
 	{
-		m_buffer.put(bytes);
-		if( do_flush ) flush();
+		const(ubyte)[] bytes = bytes_;
+		while (bytes.length > 0) {
+			auto sz = bytes.length;
+			if (m_maxBufferSize > 0 && m_maxBufferSize < m_buffer.data.length + sz)
+				sz = m_maxBufferSize - min(m_buffer.data.length, m_maxBufferSize);
+			if (sz > 0) {
+				m_buffer.put(bytes[0 .. sz]);
+				bytes = bytes[sz .. $];
+			}
+			if (bytes.length > 0 || do_flush)
+				flush();
+		}
 	}
 	
 	void write(InputStream data, ulong nbytes = 0, bool do_flush = true)
@@ -406,8 +426,9 @@ final class ChunkedOutputStream : OutputStream {
 		if( m_buffer.data.length > 0 ) flush();
 		if( nbytes == 0 ){
 			while( !data.empty ){
-				writeChunkSize(data.leastSize);
-				m_out.write(data, data.leastSize, false);
+				auto sz = data.leastSize;
+				writeChunkSize(sz);
+				m_out.write(data, sz, false);
 				m_out.write("\r\n", do_flush);
 			}
 		} else {
