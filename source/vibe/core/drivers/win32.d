@@ -533,7 +533,7 @@ class Win32Timer : Timer {
 				timer.stop();
 			}
 			if (timer.m_owner) timer.m_driver.m_core.resumeTask(timer.m_owner);
-			if (timer.m_callback) timer.m_callback();
+			if (timer.m_callback) runTask(timer.m_callback);
 		} catch(Exception e){
 			logError("Exception in onTimer: %s", e);
 		}
@@ -1255,9 +1255,6 @@ m_status = ConnectionStatus.Connected;
 
 	void finalize()
 	{
-		acquireWriter();
-		scope(exit) releaseWriter();
-
 		flush();
 	}
 
