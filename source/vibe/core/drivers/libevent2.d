@@ -104,9 +104,12 @@ class Libevent2Driver : EventDriver {
 
 	~this()
 	{
-		s_alreadyDeinitialized = true;
+		foreach (d; s_destructorMap) d();
+		s_destructorMap.clear();
 		evdns_base_free(m_dnsBase, 1);
 		event_base_free(m_eventLoop);
+		s_eventLoop = null;
+		s_alreadyDeinitialized = true;
 	}
 
 	@property event_base* eventLoop() { return m_eventLoop; }
@@ -356,10 +359,8 @@ class Libevent2ManualEvent : ManualEvent {
 
 	~this()
 	{
-		if( !s_alreadyDeinitialized ){
-			foreach (ts; m_waiters)
-				event_free(ts.event);
-		}
+		foreach (ts; m_waiters)
+			event_free(ts.event);
 	}
 
 	void emit()
@@ -420,6 +421,11 @@ class Libevent2ManualEvent : ManualEvent {
 				slot.event = event_new(slot.driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
 				event_add(slot.event, null);
 				m_waiters[thread] = slot;
+				assert(cast(void*)this !in s_destructorMap);
+				s_destructorMap[cast(void*)this] = {
+					event_free(m_waiters[thread].event);
+					m_waiters.remove(thread);
+				};
 			}
 			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
 			m_waiters[thread].tasks[task] = true;
@@ -488,11 +494,16 @@ class Libevent2Timer : Timer {
 		m_driver = driver;
 		m_callback = callback;
 		m_event = event_new(m_driver.eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
+		s_destructorMap[cast(void*)this] = {
+			stop();
+			event_free(m_event);
+			m_event = null;
+		};
 	}
 
 	~this()
 	{
-		if( !s_alreadyDeinitialized ){
+		if (m_event) {
 			stop();
 			event_free(m_event);
 		}
@@ -715,7 +726,8 @@ class Libevent2UDPConnection : UDPConnection {
 private {
 	event_base* s_eventLoop; // TLS
 	__gshared DriverCore s_driverCore;
-	shared s_alreadyDeinitialized = false;
+	bool s_alreadyDeinitialized = false;
+	HashMap!(void*, void delegate()) s_destructorMap;
 }
 
 package event_base* getThreadLibeventEventLoop()
@@ -737,17 +749,21 @@ private int getLastSocketError()
 	}
 }
 
-struct LevMutex {
-	vibe.utils.memory.FreeListRef!(core.sync.mutex.Mutex) mutex;
-	vibe.utils.memory.FreeListRef!ReadWriteMutex rwmutex;
-}
-alias FreeListObjectAlloc!(LevMutex, false, true) LevMutexAlloc;
-
 struct LevCondition {
-	vibe.utils.memory.FreeListRef!Condition cond;
+	Condition cond;
 	LevMutex* mutex;
 }
-alias FreeListObjectAlloc!(LevCondition, false, true) LevConditionAlloc;
+
+struct LevMutex {
+	core.sync.mutex.Mutex mutex;
+	ReadWriteMutex rwmutex;
+}
+
+alias FreeListObjectAlloc!(LevCondition, false) LevConditionAlloc;
+alias FreeListObjectAlloc!(LevMutex, false) LevMutexAlloc;
+alias FreeListObjectAlloc!(core.sync.mutex.Mutex, false) MutexAlloc;
+alias FreeListObjectAlloc!(ReadWriteMutex, false) ReadWriteMutexAlloc;
+alias FreeListObjectAlloc!(Condition, false) ConditionAlloc;
 
 private nothrow extern(C)
 {
@@ -787,12 +803,16 @@ private nothrow extern(C)
 		}
 	}
 
+	__gshared bool[void*] s_mutexes;
+
 	void* lev_alloc_mutex(uint locktype)
 	{
 		try {
 			auto ret = LevMutexAlloc.alloc();
-			if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = FreeListRef!ReadWriteMutex();
-			else ret.mutex = FreeListRef!(core.sync.mutex.Mutex)();
+			if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = ReadWriteMutexAlloc.alloc();
+			else ret.mutex = MutexAlloc.alloc();
+			//logInfo("alloc mutex %s", cast(void*)ret);
+			s_mutexes[cast(void*)ret] = true;
 			return ret;
 		} catch( Throwable th ){
 			logWarn("Exception in lev_alloc_mutex: %s", th.msg);
@@ -802,8 +822,17 @@ private nothrow extern(C)
 
 	void lev_free_mutex(void* lock, uint locktype)
 	{
-		try LevMutexAlloc.free(cast(LevMutex*)lock);
-		catch( Throwable th ){
+		try {
+			import core.runtime;
+			//logInfo("free mutex %s: %s", cast(void*)lock, defaultTraceHandler());
+			assert(lock in s_mutexes);
+
+			s_mutexes.remove(lock);
+			auto lm = cast(LevMutex*)lock;
+			if (lm.mutex) MutexAlloc.free(lm.mutex);
+			if (lm.rwmutex) ReadWriteMutexAlloc.free(lm.rwmutex);
+			LevMutexAlloc.free(lm);
+		} catch( Throwable th ){
 			logWarn("Exception in lev_free_mutex: %s", th.msg);
 		}
 	}
@@ -811,8 +840,12 @@ private nothrow extern(C)
 	int lev_lock_mutex(uint mode, void* lock)
 	{
 		try {
+			//logInfo("lock mutex %s", cast(void*)lock);
+			assert(lock in s_mutexes);
 			auto mtx = cast(LevMutex*)lock;
 			
+			assert(mtx !is null);
+			assert(mtx.mutex !is null || mtx.rwmutex !is null);
 			if( mode & EVTHREAD_WRITE ){
 				if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
 				else mtx.rwmutex.writer().lock();
@@ -820,6 +853,8 @@ private nothrow extern(C)
 				if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
 				else mtx.rwmutex.reader().lock();
 			} else {
+				assert(mtx !is null);
+				assert(mtx.mutex !is null);
 				if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
 				else mtx.mutex.lock();
 			}
@@ -832,6 +867,7 @@ private nothrow extern(C)
 
 	int lev_unlock_mutex(uint mode, void* lock)
 	{
+		//logInfo("unlock mutex %s", cast(void*)lock);
 		try {
 			auto mtx = cast(LevMutex*)lock;
 
@@ -851,8 +887,9 @@ private nothrow extern(C)
 
 	void* lev_alloc_condition(uint condtype)
 	{
-		try return LevConditionAlloc.alloc();
-		catch( Throwable th ){
+		try {
+			return LevConditionAlloc.alloc();
+		} catch( Throwable th ){
 			logWarn("Exception in lev_alloc_condition: %s", th.msg);
 			return null;
 		}
@@ -860,8 +897,11 @@ private nothrow extern(C)
 
 	void lev_free_condition(void* cond)
 	{
-		try LevConditionAlloc.free(cast(LevCondition*)cond);
-		catch( Throwable th ){
+		try {
+			auto lc = cast(LevCondition*)cond;
+			if (lc.cond) ConditionAlloc.free(lc.cond);
+			LevConditionAlloc.free(lc);
+		} catch( Throwable th ){
 			logWarn("Exception in lev_free_condition: %s", th.msg);
 		}
 	}
@@ -885,7 +925,7 @@ private nothrow extern(C)
 			if( c.mutex is null ) c.mutex = cast(LevMutex*)lock;
 			assert(c.mutex.mutex !is null); // RW mutexes are not supported for conditions!
 			assert(c.mutex is lock);
-			if( c.cond is null ) c.cond = FreeListRef!Condition(c.mutex.mutex);
+			if( c.cond is null ) c.cond = ConditionAlloc.alloc(c.mutex.mutex);
 			if( timeout ){
 				if( !c.cond.wait(dur!"seconds"(timeout.tv_sec) + dur!"usecs"(timeout.tv_usec)) )
 					return 1;
