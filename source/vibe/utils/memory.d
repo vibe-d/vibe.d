@@ -509,11 +509,10 @@ struct FreeListRef(T, bool INIT = true)
 
 	this(this)
 	{
-		if( m_magic == 0x1EE75817 ){
-			if( m_object ){
-				//if( m_object ) logInfo("this!%s(this): %d", T.stringof, this.refCount);
-				this.refCount++;
-			}
+		checkInvariants();
+		if( m_object ){
+			//if( m_object ) logInfo("this!%s(this): %d", T.stringof, this.refCount);
+			this.refCount++;
 		}
 	}
 
@@ -529,20 +528,18 @@ struct FreeListRef(T, bool INIT = true)
 
 	void clear()
 	{
-		if( m_magic == 0x1EE75817 ){
-			if( m_object ){
-				assert(this.refCount > 0);
-				if( --this.refCount == 0 ){
-					static if( INIT ){
-						//logInfo("ref %s destroy", T.stringof);
-						//typeid(T).destroy(cast(void*)m_object);
-						auto objc = m_object;
-						.destroy(objc);
-						//logInfo("ref %s destroyed", T.stringof);
-					}
-					static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
-					manualAllocator().free((cast(void*)m_object)[0 .. ElemSize+int.sizeof]);
+		checkInvariants(); 
+		if( m_object ){
+			if( --this.refCount == 0 ){
+				static if( INIT ){
+					//logInfo("ref %s destroy", T.stringof);
+					//typeid(T).destroy(cast(void*)m_object);
+					auto objc = m_object;
+					.destroy(objc);
+					//logInfo("ref %s destroyed", T.stringof);
 				}
+				static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
+				manualAllocator().free((cast(void*)m_object)[0 .. ElemSize+int.sizeof]);
 			}
 		}
 
@@ -550,15 +547,21 @@ struct FreeListRef(T, bool INIT = true)
 		m_magic = 0x1EE75817;
 	}
 
-	@property const(TR) get() const { return m_object; }
-	@property TR get() { return m_object; }
+	@property const(TR) get() const { checkInvariants(); return m_object; }
+	@property TR get() { checkInvariants(); return m_object; }
 	alias get this;
 
 	private @property ref int refCount()
-	{
+	const {
 		auto ptr = cast(ubyte*)cast(void*)m_object;
 		ptr += ElemSize;
 		return *cast(int*)ptr;
+	}
+
+	private void checkInvariants()
+	const {
+		assert(m_magic == 0x1EE75817);
+		assert(!m_object || refCount > 0);
 	}
 }
 
