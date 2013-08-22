@@ -407,6 +407,223 @@ class HTMLLogger : Logger {
 	}
 }
 
+import std.conv;
+/**
+	A logger that logs in syslog format according to RFC 5424.
+
+	Messages can be logged to files (via file streams) or over the network (via
+	TCP or SSL streams).
+
+	Standards: Conforms to RFC 5424.
+*/
+class SyslogLogger : Logger {
+	import vibe.core.stream;
+	private {
+		string m_hostName;
+		string m_appName;
+		OutputStream m_ostream;
+		Facility m_facility;
+	}
+
+	/// Facilities
+	enum Facility {
+		kern,        /// kernel messages
+		user,        /// user-level messages
+		mail,        /// mail system
+		daemon,      /// system daemons
+		auth,        /// security/authorization messages
+		syslog,      /// messages generated internally by syslogd
+		lpr,         /// line printer subsystem
+		news,        /// network news subsystem
+		uucp,        /// UUCP subsystem
+		clockDaemon, /// clock daemon
+		authpriv,    /// security/authorization messages
+		ftp,         /// FTP daemon
+		ntp,         /// NTP subsystem
+		logAudit,    /// log audit
+		logAlert,    /// log alert
+		cron,        /// clock daemon
+		local0,      /// local use 0
+		local1,      /// local use 1
+		local2,      /// local use 2
+		local3,      /// local use 3
+		local4,      /// local use 4
+		local5,      /// local use 5
+		local6,      /// local use 6
+		local7,      /// local use 7
+	}
+
+	private {
+		/// Severities
+		enum Severity {
+			emergency,   /// system is unusable
+			alert,       /// action must be taken immediately
+			critical,    /// critical conditions
+			error,       /// error conditions
+			warning,     /// warning conditions
+			notice,      /// normal but significant condition
+			info,        /// informational messages
+			debug_,      /// debug-level messages
+		}
+
+		/// syslog message format (version 1)
+		/// see section 6 in RFC 5424
+		enum SYSLOG_MESSAGE_FORMAT_VERSION1 = "<%.3s>1 %s %.255s %.48s %.128s %.32s %s %s";
+		///
+		enum NILVALUE = "-";
+		///
+		enum BOM = x"EFBBBF";
+	}
+
+	/**
+		Construct a SyslogLogger.
+
+		The log messages are sent to the given OutputStream stream using the given
+		Facility facility.Optionally the appName and hostName can be set. The
+		appName defaults to null. The hostName defaults to hostName().
+
+		Note that the passed stream's write function must not use logging with
+		a level for that this Logger's acceptsLevel returns true. Because this
+		Logger uses the stream's write function when it logs and would hence
+		log forevermore.
+	*/
+	this(OutputStream stream, Facility facility, string appName = null, string hostName = hostName())
+	{
+		m_hostName = hostName ? hostName : NILVALUE;
+		m_appName = appName ? appName : NILVALUE;
+		m_ostream = stream;
+		m_facility = facility;
+	}
+
+	/**
+		Returns: true iff level >= debug_.
+	*/
+	override bool acceptsLevel(LogLevel level)
+	{
+		return level >= LogLevel.debug_;
+	}
+
+	/**
+		Logs the given LogLine msg.
+
+		It uses the msg's time, level, and text field.
+	*/
+	override void log(ref LogLine msg)
+	{
+		auto tm = msg.time;
+		import core.time;
+		// at most 6 digits for fractional seconds according to RFC
+		tm.fracSec = FracSec.from!"usecs"(tm.fracSec.usecs);
+		auto timestamp = tm.toISOExtString();
+
+		Severity syslogSeverity;
+		// map LogLevel to syslog's severity
+		final switch(msg.level) {
+			case LogLevel.trace:
+				assert(false);
+				break;
+			case LogLevel.debugV:
+				assert(false);
+				break;
+			case LogLevel.debug_:
+				syslogSeverity = Severity.debug_;
+				break;
+			case LogLevel.diagnostic:
+				syslogSeverity = Severity.info;
+				break;
+			case LogLevel.info:
+				syslogSeverity = Severity.notice;
+				break;
+			case LogLevel.warn:
+				syslogSeverity = Severity.warning;
+				break;
+			case LogLevel.error:
+				syslogSeverity = Severity.error;
+				break;
+			case LogLevel.critical:
+				syslogSeverity = Severity.critical;
+				break;
+			case LogLevel.fatal:
+				syslogSeverity = Severity.alert;
+				break;
+			case LogLevel.none:
+				assert(false);
+				break;
+		}
+
+		assert(msg.level >= LogLevel.debug_);
+		auto priVal = (m_facility * 8 + syslogSeverity).to!string();
+
+		alias procId = NILVALUE;
+		alias msgId = NILVALUE;
+		alias structuredData = NILVALUE;
+
+		auto text = msg.text;
+		m_ostream.write(SYSLOG_MESSAGE_FORMAT_VERSION1.format(
+		              priVal, timestamp, m_hostName, BOM ~ m_appName, procId, msgId, structuredData, BOM ~ text) ~ "\n");
+		m_ostream.flush();
+	}
+
+	unittest
+	{
+		import vibe.core.file;
+		auto fstream = createTempFile();
+		auto logger = new SyslogLogger(fstream, Facility.local1, "appname", null);
+		LogLine msg;
+		import std.datetime;
+		import core.thread;
+		msg.time = SysTime(DateTime(0, 1, 1, 0, 0, 0), FracSec.from!"usecs"(1));
+		msg.text = "αβγ";
+
+		msg.level = LogLevel.debug_;
+		logger.log(msg);
+		msg.level = LogLevel.diagnostic;
+		logger.log(msg);
+		msg.level = LogLevel.info;
+		logger.log(msg);
+		msg.level = LogLevel.warn;
+		logger.log(msg);
+		msg.level = LogLevel.error;
+		logger.log(msg);
+		msg.level = LogLevel.critical;
+		logger.log(msg);
+		msg.level = LogLevel.fatal;
+		logger.log(msg);
+
+		import std.file;
+		import std.string;
+		auto lines = splitLines(readText(fstream.path().toNativeString()), KeepTerminator.yes);
+		assert(lines.length == 7);
+		assert(lines[0] == "<143>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+		assert(lines[1] == "<142>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+		assert(lines[2] == "<141>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+		assert(lines[3] == "<140>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+		assert(lines[4] == "<139>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+		assert(lines[5] == "<138>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+		assert(lines[6] == "<137>1 0000-01-01T00:00:00.000001 - " ~ BOM ~ "appname - - - " ~ BOM ~ "αβγ\n");
+	}
+}
+
+/// Returns: this host's host name.
+///
+/// If the host name cannot be determined the /// function returns null.
+private string hostName()
+{
+	string hostName = null;
+
+	import core.sys.posix.sys.utsname;
+	utsname name;
+	if (uname(&name)) return hostName;
+	hostName = name.nodename.to!string();
+
+	import std.socket;
+	auto ih = new InternetHost;
+	if (!ih.getHostByName(hostName)) return hostName;
+	hostName = ih.name;
+
+	return hostName;
+}
+
 private {
 	__gshared shared(Logger)[] ss_loggers;
 	shared(FileLogger) ss_stdoutLogger;
