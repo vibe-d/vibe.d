@@ -521,10 +521,8 @@ class SyslogLogger : Logger {
 		final switch(msg.level) {
 			case LogLevel.trace:
 				assert(false);
-				break;
 			case LogLevel.debugV:
 				assert(false);
-				break;
 			case LogLevel.debug_:
 				syslogSeverity = Severity.debug_;
 				break;
@@ -548,7 +546,6 @@ class SyslogLogger : Logger {
 				break;
 			case LogLevel.none:
 				assert(false);
-				break;
 		}
 
 		assert(msg.level >= LogLevel.debug_);
