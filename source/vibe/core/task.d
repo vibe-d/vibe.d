@@ -33,6 +33,8 @@ struct Task {
 		m_taskCounter = task_counter;
 	}
 
+	this(in Task other) { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = m_taskCounter; }
+
 	/// Makes all methods of TaskFiber available for Task.
 	alias fiber this;
 
