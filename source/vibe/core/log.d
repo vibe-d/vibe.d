@@ -453,27 +453,25 @@ class SyslogLogger : Logger {
 		local7,      /// local use 7
 	}
 
-	private {
-		/// Severities
-		enum Severity {
-			emergency,   /// system is unusable
-			alert,       /// action must be taken immediately
-			critical,    /// critical conditions
-			error,       /// error conditions
-			warning,     /// warning conditions
-			notice,      /// normal but significant condition
-			info,        /// informational messages
-			debug_,      /// debug-level messages
-		}
-
-		/// syslog message format (version 1)
-		/// see section 6 in RFC 5424
-		enum SYSLOG_MESSAGE_FORMAT_VERSION1 = "<%.3s>1 %s %.255s %.48s %.128s %.32s %s %s";
-		///
-		enum NILVALUE = "-";
-		///
-		enum BOM = x"EFBBBF";
+	/// Severities
+	private enum Severity {
+		emergency,   /// system is unusable
+		alert,       /// action must be taken immediately
+		critical,    /// critical conditions
+		error,       /// error conditions
+		warning,     /// warning conditions
+		notice,      /// normal but significant condition
+		info,        /// informational messages
+		debug_,      /// debug-level messages
 	}
+
+	/// syslog message format (version 1)
+	/// see section 6 in RFC 5424
+	private enum SYSLOG_MESSAGE_FORMAT_VERSION1 = "<%.3s>1 %s %.255s %.48s %.128s %.32s %s %s";
+	///
+	private enum NILVALUE = "-";
+	///
+	private enum BOM = x"EFBBBF";
 
 	/**
 		Construct a SyslogLogger.
@@ -519,36 +517,16 @@ class SyslogLogger : Logger {
 		Severity syslogSeverity;
 		// map LogLevel to syslog's severity
 		final switch(msg.level) {
-			case LogLevel.trace:
-				assert(false);
-				break;
-			case LogLevel.debugV:
-				assert(false);
-				break;
-			case LogLevel.debug_:
-				syslogSeverity = Severity.debug_;
-				break;
-			case LogLevel.diagnostic:
-				syslogSeverity = Severity.info;
-				break;
-			case LogLevel.info:
-				syslogSeverity = Severity.notice;
-				break;
-			case LogLevel.warn:
-				syslogSeverity = Severity.warning;
-				break;
-			case LogLevel.error:
-				syslogSeverity = Severity.error;
-				break;
-			case LogLevel.critical:
-				syslogSeverity = Severity.critical;
-				break;
-			case LogLevel.fatal:
-				syslogSeverity = Severity.alert;
-				break;
-			case LogLevel.none:
-				assert(false);
-				break;
+			case LogLevel.none: assert(false); break;
+			case LogLevel.trace: return;
+			case LogLevel.debugV: return;
+			case LogLevel.debug_: syslogSeverity = Severity.debug_; break;
+			case LogLevel.diagnostic: syslogSeverity = Severity.info; break;
+			case LogLevel.info: syslogSeverity = Severity.notice; break;
+			case LogLevel.warn: syslogSeverity = Severity.warning; break;
+			case LogLevel.error: syslogSeverity = Severity.error; break;
+			case LogLevel.critical: syslogSeverity = Severity.critical; break;
+			case LogLevel.fatal: syslogSeverity = Severity.alert; break;
 		}
 
 		assert(msg.level >= LogLevel.debug_);
@@ -609,17 +587,20 @@ class SyslogLogger : Logger {
 /// If the host name cannot be determined the /// function returns null.
 private string hostName()
 {
-	string hostName = null;
+	string hostName;
 
-	import core.sys.posix.sys.utsname;
-	utsname name;
-	if (uname(&name)) return hostName;
-	hostName = name.nodename.to!string();
+	version (Posix) {
+		import core.sys.posix.sys.utsname;
+		utsname name;
+		if (uname(&name)) return hostName;
+		hostName = name.nodename.to!string();
 
-	import std.socket;
-	auto ih = new InternetHost;
-	if (!ih.getHostByName(hostName)) return hostName;
-	hostName = ih.name;
+		import std.socket;
+		auto ih = new InternetHost;
+		if (!ih.getHostByName(hostName)) return hostName;
+		hostName = ih.name;
+	}
+	// TODO: determine proper host name on windows
 
 	return hostName;
 }
