@@ -180,6 +180,8 @@ struct Bson {
 	/// ditto
 	void opAssign(string value)
 	{
+		import std.utf;
+		debug std.utf.validate(value);
 		auto app = appender!bdata_t();
 		app.put(toBsonData(cast(int)value.length+1));
 		app.put(cast(bdata_t)value);
