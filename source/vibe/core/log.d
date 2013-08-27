@@ -517,7 +517,7 @@ class SyslogLogger : Logger {
 		Severity syslogSeverity;
 		// map LogLevel to syslog's severity
 		final switch(msg.level) {
-			case LogLevel.none: assert(false); break;
+			case LogLevel.none: assert(false);
 			case LogLevel.trace: return;
 			case LogLevel.debugV: return;
 			case LogLevel.debug_: syslogSeverity = Severity.debug_; break;
