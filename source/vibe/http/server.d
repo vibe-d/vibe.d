@@ -963,7 +963,8 @@ final class HTTPServerResponse : HTTPResponse {
 
 		// finalize reposonse header
 		app.put("\r\n");
-		m_conn.write(app.data, true);
+		m_conn.write(app.data);
+		m_conn.flush();
 	}
 }
 
