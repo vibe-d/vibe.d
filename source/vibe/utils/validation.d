@@ -30,7 +30,7 @@ static if( D_major > 2 || D_major == 2 && D_minor >= 60 )
 */
 string validateEmail(string str, size_t max_length = 64)
 {
-	enforce(str.length <= 64, "The email address may not be longer than "~to!string(max_length)~"characters.");
+	enforce(str.length <= max_length, "The email address may not be longer than "~to!string(max_length)~"characters.");
 	auto at_idx = str.indexOf('@');
 	enforce(at_idx > 0, "Email is missing the '@'.");
 	validateIdent(str[0 .. at_idx], "!#$%&'*+-/=?^_`{|}~.(),:;<>@[\\]", "An email user name", false);
