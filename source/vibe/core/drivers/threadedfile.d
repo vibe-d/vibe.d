@@ -173,7 +173,7 @@ class ThreadedFileStream : FileStream {
 	}
 
 	alias Stream.write write;
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes)
 	{
 		assert(this.writable);
 		assert(bytes.length <= int.max);
@@ -182,9 +182,9 @@ class ThreadedFileStream : FileStream {
 		m_ptr += bytes.length;
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 	void flush()

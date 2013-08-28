@@ -356,7 +356,7 @@ final class HTTPClientRequest : HTTPRequest {
 			logTrace("%s: %s", k, v);
 		}
 		app.put("\r\n");
-		m_conn.write(app.data, false);
+		m_conn.write(app.data);
 		logTrace("--------------------");
 	}
 

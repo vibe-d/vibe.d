@@ -311,8 +311,8 @@ private class OutputContext {
 
 		final switch(state){
 			case State.Code:
-				if( m_state == State.String ) m_result ~= "\", false);\n";
-				else m_result ~= ", false);\n";
+				if( m_state == State.String ) m_result ~= "\");\n";
+				else m_result ~= ");\n";
 				m_result ~= lineMarker(m_line);
 				break;
 			case State.String:

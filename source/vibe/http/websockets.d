@@ -233,10 +233,9 @@ class OutgoingWebSocketMessage : OutputStream {
 		m_frameOpcode = frameOpcode;
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes)
 	{
 		m_buffer.put(bytes);
-		if( do_flush ) flush();
 	}
 
 	void flush()
@@ -259,9 +258,9 @@ class OutgoingWebSocketMessage : OutputStream {
 		m_buffer.clear();
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 }
@@ -354,18 +353,19 @@ struct Frame {
 	{
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
-		stream.write([firstByte], false);
+		stream.put(firstByte);
 
 		if( payload.length < 126 ) {
-			stream.write(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length), false);
+			stream.write(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length));
 		} else if( payload.length <= 65536 ) {
-			stream.write(cast(ubyte[])[126], false);
-			stream.write(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length), false);
+			stream.write(cast(ubyte[])[126]);
+			stream.write(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
 		} else {
-			stream.write(cast(ubyte[])[127], false);
-			stream.write(std.bitmanip.nativeToBigEndian(payload.length), false);
+			stream.write(cast(ubyte[])[127]);
+			stream.write(std.bitmanip.nativeToBigEndian(payload.length));
 		}
 		stream.write(payload);
+		stream.flush();
 	}
 
 	static Frame readFrame(InputStream stream)

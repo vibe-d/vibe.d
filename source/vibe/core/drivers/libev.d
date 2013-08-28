@@ -571,7 +571,7 @@ class LibevTCPConnection : TCPConnection {
 		}
 	}
 		
-	void write(in ubyte[] bytes_, bool do_flush = true)
+	void write(in ubyte[] bytes_)
 	{
 		m_writeBuffer.put(bytes_);
 		
@@ -603,9 +603,9 @@ class LibevTCPConnection : TCPConnection {
 		flush();
 	}
 	
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 	
 	private bool readChunk(bool try_only = false)

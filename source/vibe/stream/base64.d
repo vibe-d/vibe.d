@@ -13,12 +13,12 @@ import vibe.core.stream;
 /**
 */
 class Base64OutputStream : OutputStream {
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes)
 	{
 		assert(false, "Unimplemented");
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
 		assert(false, "Unimplemented");
 	}

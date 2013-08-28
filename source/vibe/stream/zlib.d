@@ -51,16 +51,16 @@ class ZlibOutputStream : OutputStream {
 		m_comp = FreeListRef!Compress(type);
 	}
 
-	void write(in ubyte[] data, bool do_flush = true)
+	void write(in ubyte[] data)
 	{
 		auto ret = m_comp.compress(data);
 		if( ret.length )
-			m_out.write(cast(ubyte[])ret, do_flush);
+			m_out.write(cast(ubyte[])ret);
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 	void flush()

@@ -56,7 +56,7 @@ interface InputStream {
 interface OutputStream {
 	/** Writes an array of bytes to the stream.
 	*/
-	void write(in ubyte[] bytes, bool do_flush = true);
+	void write(in ubyte[] bytes);
 
 	/** Flushes the stream and makes sure that all data is being written to the output device.
 	*/
@@ -71,9 +71,9 @@ interface OutputStream {
 
 	/** Writes an array of chars to the stream.
 	*/
-	final void write(in char[] bytes, bool do_flush = true)
+	final void write(in char[] bytes)
 	{
-		write(cast(const(ubyte)[])bytes, do_flush);
+		write(cast(const(ubyte)[])bytes);
 	}
 
 	/** Pipes an InputStream directly into this OutputStream.
@@ -82,7 +82,7 @@ interface OutputStream {
 		nbytes for nbytes > 0. If the input stream contains less than nbytes of data, an exception
 		is thrown.
 	*/
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true);
+	void write(InputStream stream, ulong nbytes = 0);
 
 	/** These methods provide an output range interface.
 
@@ -91,19 +91,19 @@ interface OutputStream {
 
 		See_Also: $(LINK http://dlang.org/phobos/std_range.html#isOutputRange)
 	*/
-	final void put(ubyte elem) { write((&elem)[0 .. 1], false); }
+	final void put(ubyte elem) { write((&elem)[0 .. 1]); }
 	/// ditto
-	final void put(in ubyte[] elems) { write(elems, false); }
+	final void put(in ubyte[] elems) { write(elems); }
 	/// ditto
-	final void put(char elem) { write((&elem)[0 .. 1], false); }
+	final void put(char elem) { write((&elem)[0 .. 1]); }
 	/// ditto
-	final void put(in char[] elems) { write(elems, false); }
+	final void put(in char[] elems) { write(elems); }
 	/// ditto
 	final void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
 	/// ditto
 	final void put(in dchar[] elems) { foreach( ch; elems ) put(ch); }
 
-	protected final void writeDefault(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	protected final void writeDefault(InputStream stream, ulong nbytes = 0)
 	{
 		static struct Buffer { ubyte[64*1024] bytes; }
 		auto bufferobj = FreeListRef!(Buffer, false)();
@@ -116,7 +116,7 @@ interface OutputStream {
 				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
-				write(buffer[0 .. chunk], false);
+				write(buffer[0 .. chunk]);
 			}
 		} else {
 			while( nbytes > 0 ){
@@ -124,11 +124,10 @@ interface OutputStream {
 				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
-				write(buffer[0 .. chunk], false);
+				write(buffer[0 .. chunk]);
 				nbytes -= chunk;
 			}
 		}
-		if( do_flush ) flush();
 	}
 }
 
@@ -167,10 +166,10 @@ interface RandomAccessStream : Stream {
 	the output of a particular stream is not needed but the stream needs to be drained.
 */
 class NullOutputStream : OutputStream {
-	void write(in ubyte[] bytes, bool do_flush = true) {}
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(in ubyte[] bytes) {}
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 	void flush() {}
 	void finalize() {}

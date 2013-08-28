@@ -35,10 +35,10 @@ class TaskPipe {
 	static class Writer : OutputStream {
 		private TaskPipeImpl m_pipe;
 		this(TaskPipeImpl pipe) { m_pipe = pipe; }
-		void write(in ubyte[] bytes, bool do_flush = true) { m_pipe.write(bytes); }
+		void write(in ubyte[] bytes) { m_pipe.write(bytes); }
 		void flush() {}
 		void finalize() { m_pipe.close(); }
-		void write(InputStream stream, ulong nbytes = 0, bool do_flush = true) { writeDefault(stream, nbytes, do_flush); }
+		void write(InputStream stream, ulong nbytes = 0) { writeDefault(stream, nbytes); }
 	}
 
 	private {

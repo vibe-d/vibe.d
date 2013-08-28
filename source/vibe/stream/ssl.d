@@ -150,7 +150,7 @@ class SSLStream : Stream {
 		}
 	}
 
-	void write(in ubyte[] bytes_, bool do_flush = true)
+	void write(in ubyte[] bytes_)
 	{
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
@@ -159,7 +159,6 @@ class SSLStream : Stream {
 			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
 		}
-		if( do_flush ) flush();
 	}
 
 	void flush()
@@ -179,9 +178,9 @@ class SSLStream : Stream {
 		checkExceptions();
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 	private int checkSSLRet(string what, int ret)

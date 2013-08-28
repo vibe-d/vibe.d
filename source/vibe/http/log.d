@@ -49,8 +49,9 @@ class HTTPFileLogger : HTTPLogger {
 	protected override void writeLine(string ln)
 	{
 		assert(m_stream);
-		m_stream.write(ln, false);
+		m_stream.write(ln);
 		m_stream.write("\n");
+		m_stream.flush();
 	}
 }
 

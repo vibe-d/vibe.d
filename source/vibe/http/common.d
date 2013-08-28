@@ -405,7 +405,7 @@ final class ChunkedOutputStream : OutputStream {
 	/// ditto
 	@property void maxBufferSize(size_t bytes) { m_maxBufferSize = bytes; if (m_buffer.data.length >= m_maxBufferSize) flush(); }
 
-	void write(in ubyte[] bytes_, bool do_flush = true)
+	void write(in ubyte[] bytes_)
 	{
 		const(ubyte)[] bytes = bytes_;
 		while (bytes.length > 0) {
@@ -416,25 +416,27 @@ final class ChunkedOutputStream : OutputStream {
 				m_buffer.put(bytes[0 .. sz]);
 				bytes = bytes[sz .. $];
 			}
-			if (bytes.length > 0 || do_flush)
+			if (bytes.length > 0)
 				flush();
 		}
 	}
 	
-	void write(InputStream data, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream data, ulong nbytes = 0)
 	{
 		if( m_buffer.data.length > 0 ) flush();
 		if( nbytes == 0 ){
 			while( !data.empty ){
 				auto sz = data.leastSize;
 				writeChunkSize(sz);
-				m_out.write(data, sz, false);
-				m_out.write("\r\n", do_flush);
+				m_out.write(data, sz);
+				m_out.write("\r\n");
+				m_out.flush();
 			}
 		} else {
 			writeChunkSize(nbytes);
-			m_out.write(data, nbytes, false);
-			m_out.write("\r\n", do_flush);
+			m_out.write(data, nbytes);
+			m_out.write("\r\n");
+			m_out.flush();
 		}
 	}
 
@@ -443,7 +445,7 @@ final class ChunkedOutputStream : OutputStream {
 		auto data = m_buffer.data();
 		if( data.length ){
 			writeChunkSize(data.length);
-			m_out.write(data, false);
+			m_out.write(data);
 			m_out.write("\r\n");
 		}
 		m_out.flush();
@@ -457,7 +459,9 @@ final class ChunkedOutputStream : OutputStream {
 		m_buffer.reset(AppenderResetMode.freeData);
 	}
 	private void writeChunkSize(long length) {
-		m_out.write(format("%x\r\n", length), false);
+		char[64] buf;
+		auto chars = sformat(buf, "%x\r\n", length);
+		m_out.write(chars);
 	}
 }
 

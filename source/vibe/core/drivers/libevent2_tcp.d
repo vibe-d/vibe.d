@@ -254,7 +254,7 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	/** Writes the given byte array.
 	*/
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes)
 	{	
 		checkConnected();
 		acquireWriter();
@@ -264,11 +264,9 @@ package class Libevent2TCPConnection : TCPConnection {
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
 		if( bufferevent_write(m_event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
-			
-		if (do_flush) bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
 		import vibe.core.drivers.threadedfile;
 		version(none){ // causes a crash on Windows
@@ -282,12 +280,11 @@ package class Libevent2TCPConnection : TCPConnection {
 				auto buf = bufferevent_get_output(m_event);
 				enforce(evbuffer_add_file(buf, fstream.fd, fstream.tell(), nbytes ? nbytes : fstream.size-fstream.tell()) == 0,
 					"Failed to send file over TCP connection.");
-				if (do_flush) bufferevent_flush(m_event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
 				return;
 			}
 		}
 
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 		
 	/** Causes any buffered data to be written.

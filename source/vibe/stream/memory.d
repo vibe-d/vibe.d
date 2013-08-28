@@ -45,7 +45,7 @@ class MemoryOutputStream : OutputStream {
 		m_destination.reserve(nbytes);
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes)
 	{
 		m_destination.put(bytes);
 	}
@@ -58,9 +58,9 @@ class MemoryOutputStream : OutputStream {
 	{
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 }
 
@@ -117,7 +117,7 @@ class MemoryStream : RandomAccessStream {
 		m_ptr += dst.length;
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true)
+	void write(in ubyte[] bytes)
 	{
 		assert(writable);
 		enforce(bytes.length <= m_data.length - m_ptr, "Size limit of memory stream reached.");
@@ -128,5 +128,5 @@ class MemoryStream : RandomAccessStream {
 
 	void flush() {}
 	void finalize() {}
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true) { writeDefault(stream, nbytes, do_flush); }
+	void write(InputStream stream, ulong nbytes = 0) { writeDefault(stream, nbytes); }
 }

@@ -363,7 +363,7 @@ class MongoConnection : EventedObject {
 
 	private void sendInt(int v) { send(toBsonData(v)); }
 	private void sendLong(long v) { send(toBsonData(v)); }
-	private void send(in ubyte[] data){ m_conn.write(data, false); }
+	private void send(in ubyte[] data){ m_conn.write(data); }
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }

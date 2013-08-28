@@ -90,15 +90,15 @@ class CountingOutputStream : OutputStream {
 		m_bytesWritten += bytes;
 	}
 
-	void write(in ubyte[] bytes, bool do_flush = true) 
+	void write(in ubyte[] bytes) 
 	{
-		m_out.write(bytes, do_flush);
+		m_out.write(bytes);
 		m_bytesWritten += bytes.length;
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 	void flush() { m_out.flush(); }

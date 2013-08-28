@@ -263,7 +263,7 @@ version(VibeWinrtDriver)
 		{
 		}
 
-		void write(in ubyte[] bytes, bool do_flush = true)
+		void write(in ubyte[] bytes)
 		{
 		}
 
@@ -275,9 +275,9 @@ version(VibeWinrtDriver)
 		{
 		}
 
-		void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+		void write(InputStream stream, ulong nbytes = 0)
 		{
-			writeDefault(stream, nbytes, do_flush);
+			writeDefault(stream, nbytes);
 		}
 	}
 
@@ -331,7 +331,7 @@ version(VibeWinrtDriver)
 		{
 		}
 
-		void write(in ubyte[] bytes, bool do_flush = true)
+		void write(in ubyte[] bytes)
 		{
 		}
 
@@ -343,9 +343,9 @@ version(VibeWinrtDriver)
 		{
 		}
 
-		void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+		void write(InputStream stream, ulong nbytes = 0)
 		{
-			writeDefault(stream, nbytes, do_flush);
+			writeDefault(stream, nbytes);
 		}
 	}
 

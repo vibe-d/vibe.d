@@ -698,7 +698,7 @@ class Win32FileStream : FileStream {
 		}
 	}
 
-	void write(in ubyte[] bytes_, bool do_flush = true)
+	void write(in ubyte[] bytes_)
 	{
 		assert(this.writable);
 		acquire();
@@ -734,9 +734,9 @@ class Win32FileStream : FileStream {
 
 	void finalize(){}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 	private static extern(System) nothrow
@@ -1210,7 +1210,7 @@ m_status = ConnectionStatus.Connected;
 		}
 	}
 
-	void write(in ubyte[] bytes_, bool do_flush = true)
+	void write(in ubyte[] bytes_)
 	{
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -1258,7 +1258,7 @@ m_status = ConnectionStatus.Connected;
 		flush();
 	}
 
-	void write(InputStream stream, ulong nbytes = 0, bool do_flush = true)
+	void write(InputStream stream, ulong nbytes = 0)
 	{
 		// special case sending of files
 		if( auto fstream = cast(Win32FileStream)stream ){
@@ -1279,7 +1279,7 @@ m_status = ConnectionStatus.Connected;
 			}
 		}
 
-		writeDefault(stream, nbytes, do_flush);
+		writeDefault(stream, nbytes);
 	}
 
 	InputStream acquireReader() { assert(m_readOwner == Task()); m_readOwner = Task.getThis(); return this; }
