@@ -24,7 +24,7 @@ import std.typecons : Rebindable, Unqual;
 	If you should need explicit access to one of the parameters of an upstream injector, you can use
 	the InjectedParams!() template.
 
-	NOTE: this function requires at least DMD 2.060, as it suffers from DMD BUG 2962.
+	NOTE: this function requires at least DMD 2.064, as it suffers from DMD BUG 2962/10086/10857.
 
 	Examples:
 

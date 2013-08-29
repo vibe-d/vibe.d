@@ -41,8 +41,9 @@ import std.variant;
 	Parses the given diet template at compile time and writes the resulting
 	HTML code into 'stream'.
 
-	Note that this function currently suffers from multiple DMD bugs in conjunction with local
-	variables passed as alias template parameters.
+	Note that this function suffers from multiple compiler bugsin conjunction with local
+	variables passed as alias template parameters up to DMD 2.063.2. DMD 2.064 supposedly
+	has these fixed.
 */
 void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 {
