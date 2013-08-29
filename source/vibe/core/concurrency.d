@@ -124,10 +124,13 @@ struct ScopedLock(T)
 			assert(obj !is null, "Attempting to lock null object.");
 			m_ref = cast(T)obj;
 			_d_monitorenter(getObject());
+			assert(getObject().__monitor !is null);
 		}
 
 	pure nothrow ~this()
 	{
+		assert(m_ref !is null);
+		assert(getObject().__monitor !is null);
 		_d_monitorexit(getObject());
 	}
 
@@ -139,12 +142,12 @@ struct ScopedLock(T)
 	*/
 	@property inout(T) unsafeGet() inout nothrow { return m_ref; }
 
-	alias unsafeGet this;
+	inout(T) opDot() inout nothrow { return m_ref; }
 	//pragma(msg, "In ScopedLock!("~T.stringof~")");
 	//pragma(msg, isolatedRefMethods!T());
 	#line 1 "isolatedAggreateMethodsString"
 //	mixin(isolatedAggregateMethodsString!T());
-	#line 146 "source/vibe/core/concurrency.d"
+	#line 151 "source/vibe/core/concurrency.d"
 	static assert(__LINE__ == 146);
 
 	private Object getObject()
@@ -387,7 +390,7 @@ private struct IsolatedRef(T)
 	/**
 		Converts the isolated reference to immutable.
 
-		The reference in this instance will be set to null after the call returns.
+		The reference in this instance will be set to null after the call has returned.
 		Note that this method is only available for strongly isolated references,
 		which means references that do not contain shared aliasing.
 	*/
@@ -398,6 +401,27 @@ private struct IsolatedRef(T)
 		m_ref = null;
 		return cast(immutable)ret;
 	}
+
+	/**
+		Performs an up- or down-cast of the reference and moves it to a new IsolatedRef instance.
+
+		The reference in this instance will be set to null after the call has returned.
+	*/
+	U opCast(U)()
+		if (isInstanceOf!(IsolatedRef, U) && (is(U.BaseType : BaseType) || is(BaseType : U.BaseType)))
+	{
+		auto r = U(cast(U.BaseType)m_ref);
+		m_ref = null;
+		return r;
+	}
+
+	/**
+		Determines if the contained reference is non-null.
+
+		This method allows Isolated references to be used in boolean expressions without having to
+		extract the reference.
+	*/
+	U opCast(U)() const if(is(U == bool)) { return m_ref !is null; }
 }
 
 
