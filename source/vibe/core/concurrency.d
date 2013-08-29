@@ -148,7 +148,6 @@ struct ScopedLock(T)
 	#line 1 "isolatedAggreateMethodsString"
 //	mixin(isolatedAggregateMethodsString!T());
 	#line 151 "source/vibe/core/concurrency.d"
-	static assert(__LINE__ == 146);
 
 	private Object getObject()
 		pure nothrow {
