@@ -537,17 +537,38 @@ final class HTTPClientResponse : HTTPResponse {
 		}
 	}
 
+	/**
+		Forcefully terminates the connection regardless of the current state.
+
+		Note that this will only actually disconnect if the request has not yet
+		been fully processed. If the whole body was already read, the connection
+		is not owned by the current request operation and cannot be accessed
+		anymore.
+	*/
+	void disconnect()
+	{
+		finalize(true);
+	}
+
 	private void finalize()
+	{
+		finalize(false);
+	}
+
+	private void finalize(bool disconnect)
 	{
 		// ignore duplicate and too early calls to finalize
 		// (too early happesn for empty response bodies)
-		if( !m_client ) return;
-		m_client.m_responding = false;
+		if (!m_client) return;
+
+		auto cli = m_client;
 		m_client = null;
+		cli.m_responding = false;
 		destroy(m_deflateInputStream);
 		destroy(m_gzipInputStream);
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
+		if (disconnect) cli.disconnect();
 		destroy(lockedConnection);
 	}
 }
