@@ -101,9 +101,11 @@ deprecated("Please use requestHTTP instead.") alias requestHttp = requestHTTP;
 
 
 /**
-	Returns a HttpClient proxy that is connected to the specified host.
+	Returns a HttpClient proxy object that is connected to the specified host.
 
-	Internally, a connection pool is used to reuse already existing connections.
+	Internally, a connection pool is used to reuse already existing connections. Note that
+	usually requestHTTP should be used for making requests instead of manually using a
+	HTTPClient to do so.
 */
 auto connectHTTP(string host, ushort port = 0, bool ssl = false)
 {
@@ -135,6 +137,13 @@ deprecated("Please use connectHTTP instead.") alias connectHttp = connectHTTP;
 /* Public types                                                                                   */
 /**************************************************************************************************/
 
+/**
+	Implementation of a HTTP 1.0/1.1 client with keep-alive support.
+
+	Note that it is usually recommended to use requestHTTP for making requests as that will use a
+	pool of HTTPClient instances to keep the number of connection establishments low while not
+	blocking requests from different tasks.
+*/
 class HTTPClient : EventedObject {
 	enum maxHeaderLineLength = 4096;
 
@@ -153,25 +162,40 @@ class HTTPClient : EventedObject {
 		int m_timeout;
 	}
 
+	/**
+		Sets the default user agent string for new HTTP requests.
+	*/
 	static void setUserAgentString(string str) { m_userAgent = str; }
 	
+	/**
+		Connects to a specific server.
+
+		This method may only be called if any previous connection has been closed.
+	*/
 	void connect(string server, ushort port = 80, bool ssl = false)
 	{
+		assert(m_conn is null);
 		assert(port != 0);
+		disconnect();
 		m_conn = null;
 		m_server = server;
 		m_port = port;
 		m_ssl = ssl ? new SSLContext() : null;
 	}
 
+	/**
+		Forcefully closes the TCP connection.
+
+		Before calling this method, be sure that no request is currently being processed.
+	*/
 	void disconnect()
 	{
-		if( m_conn){
-			if (m_conn.connected){
+		if (m_conn) {
+			if (m_conn.connected) {
 				m_stream.finalize();
 				m_conn.close();
 			}
-			if (m_stream !is m_conn){
+			if (m_stream !is m_conn) {
 				destroy(m_stream);
 				m_stream = null;
 			}
@@ -180,6 +204,21 @@ class HTTPClient : EventedObject {
 		}
 	}
 
+	/**
+		Performs a HTTP request.
+
+		requester is called first to populate the request with headers and the desired
+		HTTP method and version. After a response has been received it is then passed
+		to the caller which can in turn read the reponse body. Any part of the body
+		that has not been processed will automatically be consumed and dropped.
+
+		Note that the second form of this method (returning a HTTPClientResponse) is
+		not recommended to use as it may accidentially block a HTTP connection when
+		only part of the response body was read and also requires a heap allocation
+		for the response object. The callback based version on the other hand uses
+		a stack allocation and guarantees that the request has been fully processed
+		once it has returned.
+	*/
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	{
 		//auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
@@ -197,7 +236,7 @@ class HTTPClient : EventedObject {
 		}
 		responder(res);
 	}
-
+	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
 	{
 		bool has_body = doRequest(requester);
@@ -244,6 +283,9 @@ class HTTPClient : EventedObject {
 deprecated("Please use HTTPClient instead.") alias HttpClient = HTTPClient;
 
 
+/**
+	Represents a HTTP client request (as sent to the server).
+*/
 final class HTTPClientRequest : HTTPRequest {
 	private {
 		OutputStream m_bodyWriter;
@@ -387,11 +429,9 @@ final class HTTPClientRequest : HTTPRequest {
 deprecated("Please use HTTPClientRequest instead.") alias HttpClientRequest = HTTPClientRequest;
 
 
-shared static this()
-{
-	HTTPClientResponse.ms_staleResponseError = cast(immutable)new AssertError("Stale HTTP response detected. Use .dropBody() or the scoped version of requestHTTP.");
-}
-
+/**
+	Represents a HTTP client response (as received from the server).
+*/
 final class HTTPClientResponse : HTTPResponse {
 	private {
 		__gshared Rebindable!(immutable(AssertError)) ms_staleResponseError;
@@ -498,13 +538,14 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 
 	/**
-		Provides an unsafe maeans to read raw data from the connection.
+		Provides unsafe means to read raw data from the connection.
 
 		No transfer decoding and no content decoding is done on the data.
 
-		Not that the provided delegate is required to consume the whole stream,
+		Not that the provided delegate must read the whole stream,
 		as the state of the response is unknown after raw bytes have been
-		taken.
+		taken. Failure to read the right amount of data will lead to
+		protocol corruption in later requests.
 	*/
 	void readRawBody(scope void delegate(scope InputStream stream) del)
 	{
@@ -541,9 +582,10 @@ final class HTTPClientResponse : HTTPResponse {
 		Forcefully terminates the connection regardless of the current state.
 
 		Note that this will only actually disconnect if the request has not yet
-		been fully processed. If the whole body was already read, the connection
-		is not owned by the current request operation and cannot be accessed
-		anymore.
+		been fully processed. If the whole body was already read, the
+		connection is not owned by the current request operation anymore and
+		cannot be accessed. Use a "Connection: close" header instead in this
+		case to let the server close the connection.
 	*/
 	void disconnect()
 	{
@@ -579,4 +621,12 @@ deprecated("Please use HTTPClientResponse instead.") alias HttpClientResponse = 
 
 private NullOutputStream s_sink;
 
-static this() { s_sink = new NullOutputStream; }
+shared static this()
+{
+	HTTPClientResponse.ms_staleResponseError = cast(immutable)new AssertError("Stale HTTP response detected. Use .dropBody() or the scoped version of requestHTTP.");
+}
+
+static this()
+{
+	s_sink = new NullOutputStream;
+}
