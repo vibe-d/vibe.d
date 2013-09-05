@@ -458,7 +458,9 @@ package nothrow extern(C)
 				assert(listenfd < int.max, "Listen socket descriptor >= int.max?!");
 				sockaddr_in6 remote_addr;
 				socklen_t addrlen = remote_addr.sizeof;
-				auto sockfd = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
+				auto sockfd_raw = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
+				static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max);
+				auto sockfd = cast(int)sockfd_raw;
 				logTrace("accepted %d", sockfd);
 				version(Windows) auto isValid = sockfd != INVALID_SOCKET;
 				else auto isValid = sockfd >= 0;

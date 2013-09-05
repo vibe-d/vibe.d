@@ -202,7 +202,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		auto addr = resolveHost(host);
 		addr.port = port;
 
-		auto sockfd = socket(addr.family, SOCK_STREAM, 0);
+		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
+		// on Win64 socket() returns a 64-bit value but libevent expects an int
+		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max);
+		auto sockfd = cast(int)sockfd_raw;
 		enforce(sockfd != -1, "Failed to create socket.");
 
 		NetworkAddress bind_addr;
@@ -250,7 +253,10 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
 		bind_addr.port = port;
 
-		auto listenfd = socket(bind_addr.family, SOCK_STREAM, 0);
+		auto listenfd_raw = socket(bind_addr.family, SOCK_STREAM, 0);
+		// on Win64 socket() returns a 64-bit value but libevent expects an int
+		static if (typeof(listenfd_raw).max > int.max) assert(listenfd_raw <= int.max);
+		auto listenfd = cast(int)listenfd_raw;
 		enforce(listenfd != -1, "Error creating listening socket");
 		int tmp_reuse = 1; 
 		enforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
@@ -607,7 +613,10 @@ class Libevent2UDPConnection : UDPConnection {
 		evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length);
 		m_bindAddressString = to!string(buf.ptr);
 
-		auto sockfd = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
+		auto sockfd_raw = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
+		// on Win64 socket() returns a 64-bit value but libevent expects an int
+		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max);
+		auto sockfd = cast(int)sockfd_raw;
 		enforce(sockfd != -1, "Failed to create socket.");
 		
 		enforce(evutil_make_socket_nonblocking(sockfd) == 0, "Failed to make socket non-blocking.");
