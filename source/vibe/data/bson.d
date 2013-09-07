@@ -907,11 +907,11 @@ Bson serializeToBson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToBson(value);
 		return Bson(ret);
-	} else static if( __traits(compiles, value = T.fromBson(value.toBson())) ){
+	} else static if( is(typeof(value.toBson()) == Bson) ){
 		return value.toBson();
-	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+	} else static if( is(typeof(value.toJson()) == Json) ){
 		return Bson.fromJson(value.toJson());
-	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
+	} else static if( is(typeof(value.toString()) == string) ){
 		return Bson(value.toString());
 	} else static if( is(Unqualified == struct) ){
 		Bson[string] ret;
