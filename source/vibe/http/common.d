@@ -180,6 +180,8 @@ class HTTPRequest {
 		auto idx = std.string.indexOf(*pv, ';');
 		return idx >= 0 ? (*pv)[0 .. idx] : *pv;
 	}
+	/// ditto
+	@property void contentType(string ct) { headers["Content-Type"] = ct; }
 
 	/** Returns any supplementary parameters of the 'Content-Type' header.
 

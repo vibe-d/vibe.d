@@ -11,6 +11,7 @@ public import vibe.inet.webform;
 public import std.typecons : Yes, No;
 
 import vibe.core.log;
+import vibe.http.client : HTTPClientRequest; // for writeFormBody
 import vibe.http.rest;
 import vibe.http.router;
 import vibe.http.server;
@@ -19,6 +20,7 @@ import vibe.inet.url;
 import std.array;
 import std.conv;
 import std.exception;
+import std.range;
 import std.string;
 import std.traits;
 import std.typecons;
@@ -193,7 +195,7 @@ void registerFormMethod(string method, I)(URLRouter router, I instance, string u
 	Returns: A HTTPServerRequestDelegate which passes over any form data to the given function.
 */
 /// private
-HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
+private HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
 {
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -210,7 +212,7 @@ HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Fla
 	of the passed method and will only raise an error if no conforming overload is found.
 */
 /// private
-HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
+private HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
 {
 	import std.stdio;
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
@@ -317,6 +319,81 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServe
 	return true;
 }
 
+
+/**
+	Encodes the given dictionary as URL encoded form data.
+
+	Examples:
+		---
+		import std.array;
+		import vibe.core.log;
+		import vibe.http.form;
+
+		void test()
+		{
+			auto dst = appender!string();
+			dst.writeFormData(["field1": "value1", "field2": "value2"]);
+			logInfo("Form data: %s", dst.data);
+		}
+		---
+*/
+void writeFormData(R)(R dst, in string[string] data)
+	if (isOutputRange!(R, char))
+{
+	import vibe.textfilter.urlencode;
+
+	bool first = true;
+	foreach (k, v; data) {
+		if (first) first = false;
+		else dst.put("&");
+		filterURLEncode(dst, k);
+		dst.put("=");
+		filterURLEncode(dst, v);
+	}
+}
+
+
+/**
+	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
+
+	Examples:
+		---
+		import vibe.core.log;
+		import vibe.http.client;
+		import vibe.http.form;
+
+		void sendForm()
+		{
+			requestHTTP("http://example.com/form",
+				(scope req) {
+					req.method = HTTPMethod.POST;
+					req.writeFormData(["field1": "value1", "field2"; "value2"]);
+				},
+				(scope res) {
+					logInfo("Response: %s", res.bodyReader.readAllUTF8());
+				});
+		}
+		---
+*/
+void writeFormBody(HTTPClientRequest req, in string[string] form)
+{
+	import vibe.http.form;
+	import std.utf;
+
+	struct Counter {
+		size_t count = 0;
+		void put(string str) { count += str.length; }
+		void put(dchar ch) { count += codeLength!char(ch); }
+	}
+
+	Counter len;
+	writeFormData(&len, form);
+	req.contentType = "application/x-www-form-urlencoded";
+	req.contentLength = len.count;
+	writeFormData(req.bodyWriter, form);
+}
+
+
 /**
   * Load form data into fields of a given struct or array.
   *
@@ -376,16 +453,40 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServe
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T) {
+FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T)
+{
 	string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
-	if(form.length==0)
+	if (form.length == 0)
 		return FormDataLoadResult(0, 0);
 	Error error;
-	int count=loadFormDataRecursive(form, load_to, name, error, No.strict);
-	if(error.message) { // Only serious errors are reported, so let's throw.
+	int count = loadFormDataRecursive(form, load_to, name, error, No.strict);
+	if (error.message) { // Only serious errors are reported, so let's throw.
 		throw new Exception(error.message);
 	}
 	return FormDataLoadResult(cast(int)form.length, count);
+}
+
+
+/**
+  * struct that contains result from loadFormData.
+  *
+  * It is convertible to bool and will result to true if all form data has been applied.
+  */
+struct FormDataLoadResult {
+	/// The number of fields in the form
+	int formLength;
+	/// The number of actually applied fields.
+	int appliedCount;
+	alias fullApplied this;
+	/// Were all fields applied?
+	bool fullApplied() const {
+		return formLength==appliedCount;
+	}
+}
+
+struct Error {
+	string message;
+	string[] missing_parameters;
 }
 
 /// private
@@ -499,25 +600,4 @@ unittest {
 	assert(t.d[0].a==6);
 	assert(t.d[0].b==7);
 	assert(t.d[1].a==9);
-}
-/**
-  * struct that contains result from loadFormData.
-  *
-  * It is convertible to bool and will result to true if all form data has been applied.
-  */
-struct FormDataLoadResult {
-	/// The number of fields in the form
-	int formLength;
-	/// The number of actually applied fields.
-	int appliedCount;
-	alias fullApplied this;
-	/// Were all fields applied?
-	bool fullApplied() const {
-		return formLength==appliedCount;
-	}
-}
-
-struct Error {
-	string message;
-	string[] missing_parameters;
 }

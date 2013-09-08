@@ -32,7 +32,6 @@ import std.format;
 import std.string;
 import std.typecons;
 import std.datetime;
-import std.uri;
 
 
 /**************************************************************************************************/
@@ -306,6 +305,19 @@ final class HTTPClientRequest : HTTPRequest {
 	@property NetworkAddress localAddress() const { return m_localAddress; }
 
 	/**
+		Accesses the Content-Length header of the request.
+
+		Negative values correspond to an unset Content-Length header.
+	*/
+	@property long contentLength() const { return headers.get("Content-Length", "-1").to!long(); }
+	/// ditto
+	@property void contentLength(long value)
+	{
+		if (value >= 0) headers["Content-Length"] = clengthString(value);
+		else if ("Content-Length" in headers) headers.remove("Content-Length");
+	}
+
+	/**
 		Writes the whole response body at once using raw bytes.
 	*/
 	void writeBody(RandomAccessStream data)
@@ -332,19 +344,6 @@ final class HTTPClientRequest : HTTPRequest {
 		if( content_type ) headers["Content-Type"] = content_type;
 		headers["Content-Length"] = clengthString(data.length);
 		bodyWriter.write(data);
-		finalize();
-	}
-
-	/**
-		Writes the response body as form data.
-	*/
-	void writeFormBody(in string[string] form)
-	{
-		auto formBody = appender!string();
-		foreach(k, v; form) formBody.put("&" ~ encode(k) ~ "=" ~ encode(v));
-		headers["Content-Type"] = "application/x-www-form-urlencoded";
-		headers["Content-Length"] = clengthString(formBody.data.length - 1);
-		bodyWriter.write(formBody.data[1..$]);
 		finalize();
 	}
 
