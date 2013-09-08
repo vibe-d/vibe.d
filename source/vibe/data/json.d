@@ -900,9 +900,9 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
-	} else static if( __traits(compiles, value = T.fromJson(value.toJson())) ){
+	} else static if( is(typeof(value.toJson()) == Json) ){
 		return value.toJson();
-	} else static if( __traits(compiles, value = T.fromString(value.toString())) ){
+	} else static if( is(typeof(value.toString()) == string) ){
 		return Json(value.toString());
 	} else static if( is(TU == struct) ){
 		Json[string] ret;
