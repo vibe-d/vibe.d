@@ -567,6 +567,7 @@ class SyslogLogger : Logger {
 		logger.log(msg);
 		msg.level = LogLevel.fatal;
 		logger.log(msg);
+		fstream.close();
 
 		import std.file;
 		import std.string;
