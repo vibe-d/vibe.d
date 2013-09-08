@@ -461,7 +461,7 @@ struct Json {
 			$(DT Float)  $(DD +, -, *, /, %)
 			$(DT String) $(DD ~)
 			$(DT Array)  $(DD ~)
-			$(DT Object) $(DD none)
+			$(DT Object) $(DD in)
 		)
 	*/
 	Json opBinary(string op)(ref const(Json) other)
@@ -900,11 +900,11 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
-	} else static if( is(typeof(value.toJson()) == Json) ){
+	} else static if(is(typeof(value.toJson()) == Json) && is(typeof(TU.fromJson(Json())) == TU)) {
 		return value.toJson();
-	} else static if( is(typeof(value.toString()) == string) ){
+	} else static if(is(typeof(value.toString()) == string) && is(typeof(TU.fromString("")) == TU)) {
 		return Json(value.toString());
-	} else static if( is(TU == struct) ){
+	} else static if(is(TU == struct)) {
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWField!(TU, m) ){
@@ -913,7 +913,7 @@ Json serializeToJson(T)(T value)
 			}
 		}
 		return Json(ret);
-	} else static if( is(TU == class) ){
+	} else static if(is(TU == class)) {
 		if( value is null ) return Json(null);
 		Json[string] ret;
 		foreach( m; __traits(allMembers, T) ){
@@ -965,9 +965,9 @@ T deserializeJson(T)(Json src)
 		foreach( string key, value; src )
 			dst[key] = deserializeJson!(Unqual!TV)(value);
 		return dst;
-	} else static if( __traits(compiles, { T dst; dst = T.fromJson(dst.toJson()); }()) ){
+	} else static if (is(typeof(value.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
 		return T.fromJson(src);
-	} else static if( __traits(compiles, { T dst; dst = T.fromString(dst.toString()); }()) ){
+	} else static if (is(typeof(value.toString()) == string) && is(typeof(T.fromString("")) == T)) {
 		return T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
 		T dst;
@@ -1019,6 +1019,19 @@ unittest {
 	assert(t.j == u.j);
 	assert(t.k == u.k);
 	assert(t.l == u.l);
+}
+
+unittest {
+	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } }
+	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	static struct D { int value; }
+
+	assert(serializeToJson(const A(123)) == Json(123));
+	assert(serializeToJson(A(123))       == Json(123));
+	assert(serializeToJson(const C(123)) == Json("123"));
+	assert(serializeToJson(C(123))       == Json("123"));
+	assert(serializeToJson(const D(123)) == serializeToJson(["value": 123]));
+	assert(serializeToJson(D(123))       == serializeToJson(["value": 123]));
 }
 
 unittest {

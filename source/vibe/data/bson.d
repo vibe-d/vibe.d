@@ -907,11 +907,11 @@ Bson serializeToBson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToBson(value);
 		return Bson(ret);
-	} else static if( is(typeof(value.toBson()) == Bson) ){
+	} else static if (is(typeof(value.toBson()) == Bson) && is(typeof(Unqualified.fromBson(Bson())) == Unqualified)) {
 		return value.toBson();
-	} else static if( is(typeof(value.toJson()) == Json) ){
+	} else static if (is(typeof(value.toJson()) == Json) && is(typeof(Unqualified.fromJson(Json())) == Unqualified)) {
 		return Bson.fromJson(value.toJson());
-	} else static if( is(typeof(value.toString()) == string) ){
+	} else static if (is(typeof(value.toString()) == string) && is(typeof(Unqualified.fromString("")) == Unqualified)) {
 		return Bson(value.toString());
 	} else static if( is(Unqualified == struct) ){
 		Bson[string] ret;
@@ -979,13 +979,13 @@ T deserializeBson(T)(Bson src)
 		foreach( string key, value; cast(Bson[string])src )
 			dst[key] = deserializeBson!(Unqual!TV)(value);
 		return dst;
-	} else static if( __traits(compiles, { T dst; dst = T.fromBson(dst.toBson()); }) ){
+	} else static if (is(typeof(value.toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T)) {
 		return T.fromBson(src);
-	} else static if( __traits(compiles, { T dst; dst = T.fromJson(dst.toJson()); }) ){
+	} else static if (is(typeof(value.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
 		return T.fromJson(src.toJson());
-	} else static if( __traits(compiles, { T dst; dst = T.fromString(dst.toString()); }) ){
+	} else static if (is(typeof(value.toString()) == string) && is(typeof(T.fromString("")) == T)) {
 		return T.fromString(cast(string)src);
-	} else static if( is(T == struct) ){
+	} else static if (is(T == struct)) {
 		T dst;
 		foreach( m; __traits(allMembers, T) ){
 			static if( isRWPlainField!(T, m) || isRWField!(T, m) ){
@@ -1037,6 +1037,22 @@ unittest {
 	assert(t.j == u.j);
 	assert(t.k == u.k);
 	assert(t.l == u.l);
+}
+
+unittest {
+	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } }
+	static struct B { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } }
+	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	static struct D { int value; }
+
+	assert(serializeToBson(const A(123)) == Bson(123));
+	assert(serializeToBson(A(123))       == Bson(123));
+	assert(serializeToBson(const B(123)) == Bson(123));
+	assert(serializeToBson(B(123))       == Bson(123));
+	assert(serializeToBson(const C(123)) == Bson("123"));
+	assert(serializeToBson(C(123))       == Bson("123"));
+	assert(serializeToBson(const D(123)) == serializeToBson(["value": 123]));
+	assert(serializeToBson(D(123))       == serializeToBson(["value": 123]));
 }
 
 unittest {
