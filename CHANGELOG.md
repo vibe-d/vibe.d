@@ -1,17 +1,74 @@
 ﻿Changelog
 =========
 
-v0.7.17 - 2013-
+v0.7.17 - 2013-09-
 --------------------
 
 ### Features and improvements ###
 
+ - Compiles using DMD 2.063.2 and DMD HEAD
+ - Removed a big chunk of deprecated functionality and deprecated declarations marked as scheduled for deprecation
+ - Implemented `TaskPipe` to support piping of data between tasks/threads (usable for converting synchronous I/O to asynchronous I/O)
+ - Implemented `TaskLocal!T` for faster and safer task local storage
+ - Implemented a `SyslogLogger` class (by Jens K. Mueller) - [pull #294][issue294]
+ - Implement support for transferring pre-compressed files in the HTTP file server (by Jens K. Mueller) - [pull #270][issue270]
+ - Implemented a first version of `writeFormBody` (by Ben Gradham aka SerialVelocity) - [pull #288][issue288]
+ - Implemented `vibe.inet.message.decodeMessage` for decoding an internet message body
+ - Implemented a moving `opCast` for `IsolatedRef!T` to allow safe casting to base or derived classes and a boolean `opCast` to allow checking for `null`
  - Implemented a basic version of a WinRT based driver 
- - Removed a big chunk of deprecated functionality and deprecated schediuled declarations
+ - Added `localAddress` and `remoteAddress` properties to `TCPConnection`
+ - Added `localAddress` property and a `connect(NetworkAddress)` overload to `UDPConnection`
+ - Added `localAddress` property to `HTTPClientRequest`
+ - Added `setTaskEventCallback` to support task level debugging
+ - Added `RedisClient.rpush` and `RedisClient.rpushx` (by Martin Mauchauffée aka moechofe) - [pull #280][issue280]
+ - Added a write buffer size limit to `ChunkedOutputStream`
+ - Added `HTTPClientResponse.disconnect` to force disconnecting the client during request handling
+ - Deprecated the `index()` special method for the REST interface generator in favor of `@path` (by Михаил Страшун aka Dicebot)
+ - `MongoDatabase.runCommand` is now publicly accessible - [issue #261][issue261]
+ - Cookies are now cleared on the client if set to `null` (by Sergey Shamov) - [pull #293][issue293]
+ - The optional `do_flush` argument of `OutputStream.write` has been removed - flushing needs to be done explicitly now
 
 ### Bug fixes ###
 
- - 
+ - Fixed the HTTP file server to ignore directories (so that other handlers can e.g. generate an index page) - [issue #256][issue256]
+ - Fixed BSON/JSON (de)serialization of string type enum values
+ - Fixed inversion of boolean values when converting from `Json` to `Bson` (by Nicolas Sicard aka biozic) - [pull #260][issue260]
+ - Fixed a possible source for memory corruption by making allocators shared between threads
+ - Fixed `parseRFC822DateTimeString` (by Nathan M. Swan) - [pull #264][issue264]
+ - Fixed `adjustMethodStyle` to cope with non-ASCII characters and fixed conversion of identifiers starting with acronyms
+ - Fixed preferring compression over non-chunked transfer when both are requested for `HTTPServerResponse.bodyWriter` (by Jens K. Mueller) - [pull #268][issue268]
+ - Fixed assertion in `HTTPClientReponse.~this` (was causing an `InvalidMemoryOperationError` instead of the expected `AssertError`) - [issue #273][issue273]
+ - Fixed the VibeDist support code to match the latest VibeDist version (still WIP)
+ - Fixed `validateIdent` to properly check validity of the first character
+ - Fixed handling of RFC2616 HTTP chunk extensions (ignoring them for now, by Nathan M. Swan) - [pull #274][issue274]
+ - Fixed `RedisClient.smembers` (by Nicolas Sigard aka biozic) - [pull #277][issue277]
+ - Fixed `RedisClient.echo` and `RedisClient.lpop` (by Martin Mauchauffée aka moechofe) - [pull #279][issue279]
+ - Fixed `FixedRingBuffer.put` (used for message passing)
+ - Fixed handling of out-of-memory situations in `MallocAllocator`
+ - Fixed sending of `Isolated!T` values using `vibe.core.concurrency`
+ - Fixed several concurrency related bugs in `ChunkedOutputStream` and `Libevent2ManualEvent`
+ - Fixed handling of the `max_lenger` parameter in `validateEmail` (by Mike Wey) - [pull #296][issue296]
+ - Fixed possible failed listen attempts in the example projects - [issue #8][issue8], [issue #249][issue249], [issue #298][issue298]
+ - Fixed compilation of the libevent2 driver on Win64
+
+[issue8]: https://github.com/rejectedsoftware/vibe.d/issues/8
+[issue249]: https://github.com/rejectedsoftware/vibe.d/issues/249
+[issue256]: https://github.com/rejectedsoftware/vibe.d/issues/256
+[issue260]: https://github.com/rejectedsoftware/vibe.d/issues/260
+[issue261]: https://github.com/rejectedsoftware/vibe.d/issues/261
+[issue264]: https://github.com/rejectedsoftware/vibe.d/issues/264
+[issue268]: https://github.com/rejectedsoftware/vibe.d/issues/268
+[issue270]: https://github.com/rejectedsoftware/vibe.d/issues/270
+[issue273]: https://github.com/rejectedsoftware/vibe.d/issues/273
+[issue274]: https://github.com/rejectedsoftware/vibe.d/issues/274
+[issue277]: https://github.com/rejectedsoftware/vibe.d/issues/277
+[issue279]: https://github.com/rejectedsoftware/vibe.d/issues/279
+[issue280]: https://github.com/rejectedsoftware/vibe.d/issues/280
+[issue288]: https://github.com/rejectedsoftware/vibe.d/issues/288
+[issue293]: https://github.com/rejectedsoftware/vibe.d/issues/293
+[issue294]: https://github.com/rejectedsoftware/vibe.d/issues/294
+[issue296]: https://github.com/rejectedsoftware/vibe.d/issues/296
+[issue298]: https://github.com/rejectedsoftware/vibe.d/issues/298
 
 
 v0.7.16 - 2013-06-26
@@ -232,7 +289,7 @@ v0.7.12 - 2013-02-11
  - Fixed matching of the host name in `HttpServer` - is case insensitive now
  - Fixed issues in `ConnectionPool` and `HttpClient` that caused `InvalidMemoryOperationError` and invalid multiplexed requests
  - Fixed `GCAllocator` and `PoolAllocator` to enforce proper alignment
- - Fixed passing of misaligned base pointers to `free()` in `MallocAllocator` - at least 32-bit Linux seems to choke on it - [issue #157](issue157)
+ - Fixed passing of misaligned base pointers to `free()` in `MallocAllocator` - at least 32-bit Linux seems to choke on it - [issue #157][issue157]
  - Fixed `listenTcp` without an explicit bind address - now returns an array of listeners with one entry per IP protocol version
  - Fixed "Connection: close" hangs also for HTTP/1.0 clients - those that depended on this behavior are broken anyway - [issue #147][issue147]
  - Fixed possible invalid line markers in the mixin generated by the Diet compiler - [issue #155][issue155]
