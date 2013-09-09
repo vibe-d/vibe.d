@@ -7,7 +7,7 @@ v0.7.17 - 2013-09-09
 ### Features and improvements ###
 
  - Compiles using DMD 2.063.2 and DMD HEAD
- - Removed a big chunk of deprecated functionality and deprecated declarations marked as scheduled for deprecation
+ - Removed a big chunk of deprecated functionality and marked declarations "scheduled for deprecation" as actually deprecated
  - Implemented `TaskPipe` to support piping of data between tasks/threads (usable for converting synchronous I/O to asynchronous I/O)
  - Implemented `TaskLocal!T` for faster and safer task local storage
  - Implemented a `SyslogLogger` class (by Jens K. Mueller) - [pull #294][issue294]
