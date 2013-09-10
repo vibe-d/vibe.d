@@ -746,7 +746,7 @@ final class HTTPServerResponse : HTTPResponse {
 			// so remove the content-length and use chunked transfer
 			headers.remove("Content-Length");
 		}
-		
+
 		if ( "Content-Length" in headers ) {
 			writeHeader();
 			m_bodyWriter = m_countingWriter; // TODO: LimitedOutputStream(m_conn, content_length)
@@ -878,8 +878,9 @@ final class HTTPServerResponse : HTTPResponse {
 	// Finalizes the response. This is called automatically by the server.
 	private void finalize() 
 	{
-		if( m_bodyWriter ) m_bodyWriter.finalize();
-		if( m_chunkedBodyWriter && m_chunkedBodyWriter !is m_bodyWriter ) m_chunkedBodyWriter.finalize();
+		if (m_gzipOutputStream) m_gzipOutputStream.finalize();
+		if (m_deflateOutputStream) m_deflateOutputStream.finalize();
+		if (m_chunkedBodyWriter) m_chunkedBodyWriter.finalize();
 
 		// ignore exceptions caused by an already closed connection - the client
 		// may have closed the connection already and this doesn't usually indicate
