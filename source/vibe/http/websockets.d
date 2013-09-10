@@ -159,8 +159,9 @@ class WebSocket {
 	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
 		if(m_sentCloseFrame) { throw new Exception("closed connection"); }
-		auto message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
+		scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
 		sender(message);
+		message.finalize();
 	}
 
 	/**
@@ -224,6 +225,7 @@ class OutgoingWebSocketMessage : OutputStream {
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
+		bool m_finalized = false;
 	}
 
 	this( Stream conn, FrameOpcode frameOpcode )
@@ -235,27 +237,34 @@ class OutgoingWebSocketMessage : OutputStream {
 
 	void write(in ubyte[] bytes)
 	{
+		assert(!m_finalized);
 		m_buffer.put(bytes);
 	}
 
 	void flush()
 	{
+		assert(!m_finalized);
 		Frame frame;
 		frame.opcode = m_frameOpcode;
-		frame.fin = true;
+		frame.fin = false;
 		frame.payload = m_buffer.data;
 		frame.writeFrame(m_conn);
 		m_buffer.clear();
+		m_conn.flush();
 	}
 
 	void finalize()
 	{
+		if (m_finalized) return;
+		m_finalized = true;
+		
 		Frame frame;
 		frame.fin = true;
 		frame.opcode = m_frameOpcode;
 		frame.payload = m_buffer.data;
 		frame.writeFrame(m_conn);
 		m_buffer.clear();
+		m_conn.flush();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
