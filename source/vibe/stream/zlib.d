@@ -53,8 +53,8 @@ class ZlibOutputStream : OutputStream {
 
 	void write(in ubyte[] data)
 	{
-		auto ret = m_comp.compress(data);
-		if( ret.length )
+		auto ret = m_comp.compress(data.dup);
+		if (ret.length)
 			m_out.write(cast(ubyte[])ret);
 	}
 
@@ -72,7 +72,7 @@ class ZlibOutputStream : OutputStream {
 	void finalize()
 	{
 		auto ret = m_comp.flush(Z_FINISH);
-		if( ret.length > 0 )
+		if (ret.length > 0)
 			m_out.write(cast(ubyte[])ret);
 		m_out.flush();
 	}
@@ -120,24 +120,15 @@ class ZlibInputStream : InputStream {
 		m_uncomp = FreeListRef!UnCompress(type);
 	}
 
-	@property bool empty()
-	{
-		assert(!m_finished || m_in.empty);
-		if( m_buffer.length > 0 ) return false;
-		if( m_finished ) return true;
-		readChunk();
-		return m_buffer.length == 0;
-	}
+	@property bool empty() { return this.leastSize == 0; }
 
 	@property ulong leastSize()
 	{
-		if( m_buffer.length ) return m_buffer.length;
-		if( m_finished ){
-			assert(m_in.empty);
-			return 0;
-		}
+		assert(!m_finished || m_in.empty);
+		if (m_buffer.length > 0) return m_buffer.length;
+		if (m_finished) return 0;
 		readChunk();
-		assert(m_buffer.length || empty);
+		assert(m_buffer.length || m_finished);
 		return m_buffer.length;
 	}
 
@@ -146,23 +137,20 @@ class ZlibInputStream : InputStream {
 		return m_buffer.length > 0 || m_in.dataAvailableForRead;
 	}
 
-	const(ubyte)[] peek()
-	{
-		return m_buffer;
-	}
+	const(ubyte)[] peek() { return m_buffer; }
 
 	void read(ubyte[] dst)
 	{
 		enforce(dst.length == 0 || !empty, "Reading empty stream");
-		while( dst.length > 0 ){
+		while (dst.length > 0) {
 			enforce(!empty, "Reading zlib stream past EOS");
 			size_t sz = min(m_buffer.length, dst.length);
 			dst[0 .. sz] = m_buffer[0 .. sz];
 			dst = dst[sz .. $];
 			m_buffer = m_buffer[sz .. $];
-			if( !m_buffer.length ){
+			if (!m_buffer.length) {
 				assert(!dst.length || !m_finished, "Bug: UnCompress returned an empty buffer but more is still to be read.");
-				if( !m_finished ) readChunk();
+				if (!m_finished) readChunk();
 			}
 		}
 	}
@@ -171,14 +159,13 @@ class ZlibInputStream : InputStream {
 	{
 		assert(m_buffer.length == 0, "readChunk called before buffer was emptied");
 		assert(!m_finished, "readChunk called after zlib stream was finished.");
-		auto chunk = new ubyte[4096];
-		while(!m_in.empty && m_buffer.length == 0){
-			auto sz = min(m_in.leastSize, 4096);
-			m_in.read(chunk[0 .. sz]);
-			m_buffer = cast(ubyte[])m_uncomp.uncompress(chunk[0 .. sz]);
+		while (!m_in.empty && m_buffer.length == 0) {
+			auto chunk = new ubyte[min(m_in.leastSize, 4096)];
+			m_in.read(chunk);
+			m_buffer = cast(ubyte[])m_uncomp.uncompress(chunk/*[0 .. sz]*/);
 		}
 
-		if( m_buffer.length == 0 ){
+		if (m_buffer.length == 0) {
 			m_buffer = cast(ubyte[])m_uncomp.flush();
 			m_finished = true;
 		}
