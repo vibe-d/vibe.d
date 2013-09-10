@@ -204,7 +204,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
-		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max);
+		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
 		enforce(sockfd != -1, "Failed to create socket.");
 
@@ -255,7 +255,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 		auto listenfd_raw = socket(bind_addr.family, SOCK_STREAM, 0);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
-		static if (typeof(listenfd_raw).max > int.max) assert(listenfd_raw <= int.max);
+		static if (typeof(listenfd_raw).max > int.max) assert(listenfd_raw <= int.max || listenfd_raw == ~0);
 		auto listenfd = cast(int)listenfd_raw;
 		enforce(listenfd != -1, "Error creating listening socket");
 		int tmp_reuse = 1; 
@@ -615,7 +615,7 @@ class Libevent2UDPConnection : UDPConnection {
 
 		auto sockfd_raw = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
-		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max);
+		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
 		enforce(sockfd != -1, "Failed to create socket.");
 		

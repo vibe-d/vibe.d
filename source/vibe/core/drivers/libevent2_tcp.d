@@ -459,12 +459,11 @@ package nothrow extern(C)
 				sockaddr_in6 remote_addr;
 				socklen_t addrlen = remote_addr.sizeof;
 				auto sockfd_raw = accept(cast(int)listenfd, cast(sockaddr*)&remote_addr, &addrlen);
-				static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max);
+				logDebug("FD: %s", sockfd_raw);
+				static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 				auto sockfd = cast(int)sockfd_raw;
 				logTrace("accepted %d", sockfd);
-				version(Windows) auto isValid = sockfd != INVALID_SOCKET;
-				else auto isValid = sockfd >= 0;
-				if(!isValid) {
+				if (sockfd == -1) {
 					version(Windows) auto err = evutil_socket_geterror(sockfd);
 					else auto err = errno;
 					if( err != EWOULDBLOCK && err != EAGAIN && err != 0 ){
@@ -485,11 +484,14 @@ package nothrow extern(C)
 				version(MultiThreadTest){
 					runWorkerTask(&task.execute);
 				} else {
+logDebug("running task");
 					runTask(&task.execute);
 				}
 			}
-		} catch( Throwable e ){
+		} catch (Throwable e) {
 			logWarn("Got exception while accepting new connections: %s", e.msg);
+			try logDebug("Full error: %s", e.toString().sanitize());
+			catch {}
 		}
 
 		logTrace("handled incoming connections...");
