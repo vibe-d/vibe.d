@@ -174,7 +174,8 @@ unittest {
 void registerFormMethod(string method, I)(URLRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
 {
 	string url(string name) {
-		return url_prefix ~ adjustMethodStyle(name, style);
+		if (name.length) return url_prefix ~ adjustMethodStyle(name, style);
+		else return url_prefix;
 	}
 	
 	auto handler=formMethodHandler!(I, method)(instance, strict);
