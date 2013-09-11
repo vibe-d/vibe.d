@@ -161,6 +161,12 @@ class Libevent2Driver : EventDriver {
 	{
 		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
 
+		// HACK to work around missing /etc/hosts processing
+		if (host == "localhost") {
+			if (family == AF_INET6) host = "::1";
+			else host = "127.0.0.1";
+		}
+
 		NetworkAddress addr;
 		// first try to decode as IP address
 		foreach( af; addrfamilies ){
