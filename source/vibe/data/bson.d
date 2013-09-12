@@ -411,7 +411,7 @@ struct Bson {
 	}
 
 	/** Converts a BSON value to a JSON value.
-		
+
 		All BSON types that cannot be exactly represented as JSON, will
 		be converted to a string.
 	*/
@@ -979,11 +979,11 @@ T deserializeBson(T)(Bson src)
 		foreach( string key, value; cast(Bson[string])src )
 			dst[key] = deserializeBson!(Unqual!TV)(value);
 		return dst;
-	} else static if (is(typeof(value.toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T)) {
+	} else static if (is(typeof(T.fromBson(Bson()).toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T)) {
 		return T.fromBson(src);
-	} else static if (is(typeof(value.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
+	} else static if (is(typeof(T.fromJson(Json()).toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
 		return T.fromJson(src.toJson());
-	} else static if (is(typeof(value.toString()) == string) && is(typeof(T.fromString("")) == T)) {
+	} else static if (is(typeof(T.fromString("").toString()) == string) && is(typeof(T.fromString("")) == T)) {
 		return T.fromString(cast(string)src);
 	} else static if (is(T == struct)) {
 		T dst;
@@ -1090,7 +1090,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
         Bson.Type.Array,
         Bson.Type.Object
     ];
-    
+
 	final switch(value.type){
 		case Json.Type.Undefined:
 			return Bson.Type.Undefined;
@@ -1146,10 +1146,10 @@ unittest
 {
     Json jsvalue = parseJsonString("{\"key\" : \"Value\"}");
     assert(serializeToBson(jsvalue).toJson() == jsvalue);
-    
+
     jsvalue = parseJsonString("{\"key\" : [{\"key\" : \"Value\"}, {\"key2\" : \"Value2\"}] }");
     assert(serializeToBson(jsvalue).toJson() == jsvalue);
-    
+
     jsvalue = parseJsonString("[ 1 , 2 , 3]");
     assert(serializeToBson(jsvalue).toJson() == jsvalue);
 }

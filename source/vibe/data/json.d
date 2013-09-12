@@ -965,9 +965,9 @@ T deserializeJson(T)(Json src)
 		foreach( string key, value; src )
 			dst[key] = deserializeJson!(Unqual!TV)(value);
 		return dst;
-	} else static if (is(typeof(value.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
+	} else static if (is(typeof(T.fromJson(Json()).toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
 		return T.fromJson(src);
-	} else static if (is(typeof(value.toString()) == string) && is(typeof(T.fromString("")) == T)) {
+	} else static if (is(typeof(T.fromString("").toString()) == string) && is(typeof(T.fromString("")) == T)) {
 		return T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
 		T dst;
