@@ -165,7 +165,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 
 	auto mimetype = getMimeTypeForFile(pathstr);
 	// avoid double-compression
-	if( isCompressedFormat(mimetype) )
+	if ("Content-Encoding" in res.headers && isCompressedFormat(mimetype))
 		res.headers.remove("Content-Encoding");
 	res.headers["Content-Type"] = mimetype;
 	res.headers["Content-Length"] = to!string(dirent.size);
