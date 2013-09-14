@@ -227,6 +227,8 @@ version(VibeWinrtDriver)
 
 		@property Path path() const { assert(false); }
 
+		@property bool isOpen() const { assert(false); }
+
 		@property ulong size()
 		const {
 			assert(false);

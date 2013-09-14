@@ -128,6 +128,7 @@ class ThreadedFileStream : FileStream {
 	
 	@property int fd() { return m_fileDescriptor; }
 	@property Path path() const { return m_path; }
+	@property bool isOpen() const { return m_fileDescriptor.isOpen; }
 	@property ulong size() const { return m_size; }
 	@property bool readable() const { return m_mode != FileMode.append; }
 	@property bool writable() const { return m_mode != FileMode.read; }

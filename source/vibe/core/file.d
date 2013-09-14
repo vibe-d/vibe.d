@@ -265,6 +265,9 @@ interface FileStream : RandomAccessStream, EventedObject {
 	/// The path of the file.
 	@property Path path() const nothrow;
 
+	/// Determines if the file stream is still open
+	@property bool isOpen() const;
+
 	/// Closes the file handle.
 	void close();
 }

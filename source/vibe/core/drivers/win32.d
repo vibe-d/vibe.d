@@ -627,20 +627,13 @@ class Win32FileStream : FileStream {
 		m_handle = INVALID_HANDLE_VALUE;
 	}
 
-	ulong tell()
-	{
-		return m_ptr;
-	}
+	ulong tell() { return m_ptr; }
 
-	@property Path path()
-	const{
-		return m_path;
-	}
+	@property Path path() const { return m_path; }
 
-	@property ulong size()
-	const {
-		return m_size;
-	}
+	@property bool isOpen() const { return m_handle != INVALID_HANDLE_VALUE; }
+
+	@property ulong size() const { return m_size; }
 
 	@property bool readable()
 	const {
