@@ -1,4 +1,4 @@
-﻿/**
+/**
 	This module contains the core functionality of the vibe framework.
 
 	Copyright: © 2012-2013 RejectedSoftware e.K.
@@ -449,7 +449,8 @@ enum VibeVersionString = "0.7.17";
 	Note, however, that each TaskLocal variable will increase the memory footprint
 	of any task that uses task local storage. There is also an overhead to access
 	TaskLocal variables, higher than for thread local variables, but generelly
-	still O(n).
+	still O(1) (since actual storage acquisition is done lazily the first access
+	can require a memory allocation with unknown computational costs).
 
 	Notice:
 		FiberLocal instances MUST be declared as static/global thread-local
