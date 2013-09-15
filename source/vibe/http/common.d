@@ -462,9 +462,7 @@ final class ChunkedOutputStream : OutputStream {
 	}
 	private void writeChunkSize(long length)
 	{
-		FixedAppender!(string, 64) buf;
-		formattedWrite(buf, "%x\r\n", length);
-		m_out.write(buf.data);
+		formattedWrite(m_out, "%x\r\n", length);
 	}
 }
 
