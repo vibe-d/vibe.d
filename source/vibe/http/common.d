@@ -460,10 +460,11 @@ final class ChunkedOutputStream : OutputStream {
 		m_out.flush();
 		m_buffer.reset(AppenderResetMode.freeData);
 	}
-	private void writeChunkSize(long length) {
-		char[64] buf;
-		auto chars = sformat(buf, "%x\r\n", length);
-		m_out.write(chars);
+	private void writeChunkSize(long length)
+	{
+		FixedAppender!(string, 64) buf;
+		formattedWrite(buf, "%x\r\n", length);
+		m_out.write(buf.data);
 	}
 }
 
