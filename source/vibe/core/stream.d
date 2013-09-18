@@ -1,7 +1,7 @@
 /**
 	Generic stream interface used by several stream-like classes.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -112,7 +112,7 @@ interface OutputStream {
 		//logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);
 		if( nbytes == 0 ){
 			while( !stream.empty ){
-				size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
+				size_t chunk = min(stream.leastSize, buffer.length);
 				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
@@ -120,7 +120,7 @@ interface OutputStream {
 			}
 		} else {
 			while( nbytes > 0 ){
-				size_t chunk = cast(size_t)min(nbytes, buffer.length);
+				size_t chunk = min(nbytes, buffer.length);
 				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
