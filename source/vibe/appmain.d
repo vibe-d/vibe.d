@@ -23,6 +23,7 @@ module vibe.appmain;
 import vibe.core.args : finalizeCommandLineOptions;
 import vibe.core.core : runEventLoop, lowerPrivileges;
 import vibe.core.log;
+import std.encoding : sanitize;
 
 // only include main if VibeCustomMain is not set
 version(VibeCustomMain) {} else:
@@ -55,7 +56,8 @@ int main()
 			try {
 				status = runEventLoop();
 			} catch( Throwable th ){
-				logError("Unhandled exception in event loop: %s", th.toString());
+				logError("Unhandled exception in event loop: %s", th.msg);
+				logDiagnostic("Full exception: %s", th.toString().sanitize());
 				return 1;
 			}
 		}
