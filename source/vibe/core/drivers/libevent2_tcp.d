@@ -1,7 +1,7 @@
 /**
 	libevent based driver
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -81,6 +81,8 @@ package class Libevent2TCPConnection : TCPConnection {
 		else ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr;
 		evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length);
 		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
+
+		bufferevent_setwatermark(m_event, EV_WRITE, 4096, 65536);
 	}
 	
 	~this()
@@ -259,11 +261,16 @@ package class Libevent2TCPConnection : TCPConnection {
 		checkConnected();
 		acquireWriter();
 		scope(exit) releaseWriter();
+
+		if (!bytes.length) return;
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
+		m_ctx.writeFinished = false;
+		scope (exit) m_ctx.writeFinished = false;
 		if( bufferevent_write(m_event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
+		while (!m_ctx.writeFinished) rawYield();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
@@ -284,7 +291,9 @@ package class Libevent2TCPConnection : TCPConnection {
 			}
 		}
 
+		logTrace("writing stream %s %s", nbytes, stream.leastSize);
 		writeDefault(stream, nbytes);
+		logTrace("wrote stream %s", nbytes);
 	}
 		
 	/** Causes any buffered data to be written.
