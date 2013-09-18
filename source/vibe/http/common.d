@@ -335,7 +335,7 @@ final class ChunkedInputStream : InputStream {
 
 	@property ulong leastSize() const { return m_bytesInCurrentChunk; }
 
-	@property bool dataAvailableForRead() { return m_in.dataAvailableForRead; }
+	@property bool dataAvailableForRead() { return m_bytesInCurrentChunk > 0 && m_in.dataAvailableForRead; }
 
 	const(ubyte)[] peek()
 	{
@@ -345,6 +345,7 @@ final class ChunkedInputStream : InputStream {
 
 	void read(ubyte[] dst)
 	{
+		enforce(!empty, "Read past end of chunked stream.");
 		while( dst.length > 0 ){
 			enforce(m_bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
 
@@ -365,11 +366,12 @@ final class ChunkedInputStream : InputStream {
 
 	private void readChunk()
 	{
+		assert(m_bytesInCurrentChunk == 0);
 		// read chunk header
 		logTrace("read next chunk header");
 		auto ln = cast(string)m_in.readLine();
-		ulong sz = parse!ulong(ln, 16u);
-		m_bytesInCurrentChunk = sz;
+		logTrace("got chunk header: %s", ln);
+		m_bytesInCurrentChunk = parse!ulong(ln, 16u);
 
 		if( m_bytesInCurrentChunk == 0 ){
 			// empty chunk denotes the end
@@ -390,6 +392,7 @@ final class ChunkedOutputStream : OutputStream {
 		OutputStream m_out;
 		AllocAppender!(ubyte[]) m_buffer;
 		size_t m_maxBufferSize = 512*1024;
+		bool m_finalized = false;
 	}
 	
 	this(OutputStream stream, shared(Allocator) alloc = defaultAllocator())
@@ -409,6 +412,7 @@ final class ChunkedOutputStream : OutputStream {
 
 	void write(in ubyte[] bytes_)
 	{
+		assert(!m_finalized);
 		const(ubyte)[] bytes = bytes_;
 		while (bytes.length > 0) {
 			auto sz = bytes.length;
@@ -425,10 +429,12 @@ final class ChunkedOutputStream : OutputStream {
 	
 	void write(InputStream data, ulong nbytes = 0)
 	{
+		assert(!m_finalized);
 		if( m_buffer.data.length > 0 ) flush();
 		if( nbytes == 0 ){
 			while( !data.empty ){
 				auto sz = data.leastSize;
+				assert(sz > 0);
 				writeChunkSize(sz);
 				m_out.write(data, sz);
 				m_out.write("\r\n");
@@ -444,6 +450,7 @@ final class ChunkedOutputStream : OutputStream {
 
 	void flush() 
 	{
+		assert(!m_finalized);
 		auto data = m_buffer.data();
 		if( data.length ){
 			writeChunkSize(data.length);
@@ -454,11 +461,14 @@ final class ChunkedOutputStream : OutputStream {
 		m_buffer.reset(AppenderResetMode.reuseData);
 	}
 
-	void finalize() {
+	void finalize()
+	{
+		if (m_finalized) return;
 		flush();
+		m_buffer.reset(AppenderResetMode.freeData);		
+		m_finalized = true;
 		m_out.write("0\r\n\r\n");
 		m_out.flush();
-		m_buffer.reset(AppenderResetMode.freeData);
 	}
 	private void writeChunkSize(long length)
 	{
