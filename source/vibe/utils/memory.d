@@ -186,7 +186,7 @@ shared class GCAllocator : Allocator {
 		// account for both, possibly changed alignment and a possible
 		// GC bug where only part of the old memory chunk is copied to
 		// the new one
-		pna[0 .. csz] = cast(ubyte[])mem[0 .. csz];
+		pna[0 .. csz] = (cast(ubyte[])mem)[0 .. csz];
 
 		return pna[0 .. new_size];
 	}
