@@ -69,7 +69,9 @@ struct AllocAppender(ArrayType : E[], E) {
 		}
 		if( m_remaining.length < amt ){
 			size_t n = m_data.length - m_remaining.length;
+			auto olddata = m_data;
 			m_data = cast(ElemType[])m_alloc.realloc(m_data, (n+amt)*E.sizeof);
+			debug assert(m_data[0 .. olddata.length] == olddata);
 		}
 		m_remaining = m_data[nelems .. m_data.length];
 	}
