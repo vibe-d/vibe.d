@@ -1,7 +1,7 @@
 /**
 	High level stream manipulation functions.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -218,17 +218,24 @@ unittest {
 	Reads the complete contents of a stream, optionally limited by max_bytes.
 
 	Throws:
-		An exception is thrown if max_bytes != 0 and the stream contains more than max_bytes data.
+		An exception is thrown if the stream contains more than max_bytes data.
 */
-ubyte[] readAll(InputStream stream, size_t max_bytes = 0) /*@ufcs*/
+ubyte[] readAll(InputStream stream, size_t max_bytes = size_t.max, size_t reserve_bytes = 0) /*@ufcs*/
 {
+	if (max_bytes == 0) logDebug("Deprecated behavior: readAll() called with max_bytes==0, use max_bytes==size_t.max instead.");
+
+	// prepare output buffer
 	auto dst = appender!(ubyte[])();
+	reserve_bytes = max(reserve_bytes, min(max_bytes, stream.leastSize));
+	if (reserve_bytes) dst.reserve(reserve_bytes);
+
 	auto bufferobj = FreeListRef!(Buffer, false)();
 	auto buffer = bufferobj.bytes[];
 	size_t n = 0;
 	while (!stream.empty) {
-		enforce(!max_bytes || n++ < max_bytes, "Data too long!");
 		size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
+		n += chunk;
+		enforce(!max_bytes || n <= max_bytes, "Input data too long!");
 		stream.read(buffer[0 .. chunk]);
 		dst.put(buffer[0 .. chunk]);
 	}
