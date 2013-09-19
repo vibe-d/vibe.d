@@ -18,7 +18,7 @@
 		assert(j["name"].get!string == "Example");
 		assert(j["id"].get!int == 1);
 
-		// semantic convertions can be done using to()
+		// semantic conversions can be done using to()
 		assert(j.id.to!string == "1");
 
 		// prints:
