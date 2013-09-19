@@ -176,7 +176,7 @@ struct Json {
 	Json[string] opAssign(Json[string] v) { m_type = Type.Object; m_object = v; return v; }
 
 	/**
-		Allows removement of values from Type.Object Json objects.
+		Allows removal of values from Type.Object Json objects.
 	*/
 	void remove(string item) { checkType!(Json[string])(); m_object.remove(item); }
 
