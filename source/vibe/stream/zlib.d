@@ -220,14 +220,14 @@ class ZlibInputStream : InputStream {
 		enforce (!m_finished, "Reading past end of zlib stream.");
 
 		m_zstream.next_out = m_outbuffer.peekDst().ptr;
-		m_zstream.avail_out = m_outbuffer.peekDst().length;
+		m_zstream.avail_out = cast(uint)m_outbuffer.peekDst().length;
 
 		while (!m_outbuffer.length) {
 			if (m_zstream.avail_in == 0) {
 				auto clen = min(m_inbuffer.length, m_in.leastSize);
 				m_in.read(m_inbuffer[0 .. clen]);
 				m_zstream.next_in = m_inbuffer.ptr;
-				m_zstream.avail_in = clen;
+				m_zstream.avail_in = cast(uint)clen;
 			}
 			auto avins = m_zstream.avail_in;
 			//logInfo("inflate %s -> %s (@%s in @%s)", m_zstream.avail_in, m_zstream.avail_out, m_ninflated, n_read);
