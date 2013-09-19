@@ -907,11 +907,11 @@ Bson serializeToBson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToBson(value);
 		return Bson(ret);
-	} else static if (is(typeof(value.toBson()) == Bson) && is(typeof(Unqualified.fromBson(Bson())) == Unqualified)) {
+	} else static if (isBsonSerializable!Unqualified) {
 		return value.toBson();
-	} else static if (is(typeof(value.toJson()) == Json) && is(typeof(Unqualified.fromJson(Json())) == Unqualified)) {
+	} else static if (isJsonSerializable!Unqualified) {
 		return Bson.fromJson(value.toJson());
-	} else static if (is(typeof(value.toString()) == string) && is(typeof(Unqualified.fromString("")) == Unqualified)) {
+	} else static if (isStringSerializable!Unqualified) {
 		return Bson(value.toString());
 	} else static if( is(Unqualified == struct) ){
 		Bson[string] ret;
@@ -979,11 +979,11 @@ T deserializeBson(T)(Bson src)
 		foreach( string key, value; cast(Bson[string])src )
 			dst[key] = deserializeBson!(Unqual!TV)(value);
 		return dst;
-	} else static if (is(typeof(T.fromBson(Bson()).toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T)) {
+	} else static if (isBsonSerializable!T) {
 		return T.fromBson(src);
-	} else static if (is(typeof(T.fromJson(Json()).toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
+	} else static if (isJsonSerializable!T) {
 		return T.fromJson(src.toJson());
-	} else static if (is(typeof(T.fromString("").toString()) == string) && is(typeof(T.fromString("")) == T)) {
+	} else static if (isStringSerializable!T) {
 		return T.fromString(cast(string)src);
 	} else static if (is(T == struct)) {
 		T dst;
@@ -1040,17 +1040,28 @@ unittest {
 }
 
 unittest {
-	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } }
-	static struct B { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } }
-	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
-	static struct D { int value; }
+	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } Bson toBson() { return Bson(); } }
+	static struct B { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
+	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } Json toJson() { return Json(); } }
+	static struct D { int value; string toString() { return ""; } }
 
+	static assert(!isStringSerializable!A && isJsonSerializable!A && !isBsonSerializable!A);
+	static assert(!isStringSerializable!(const(A)) && !isJsonSerializable!(const(A)) && !isBsonSerializable!(const(A)));
 	assert(serializeToBson(const A(123)) == Bson(123));
 	assert(serializeToBson(A(123))       == Bson(123));
+
+	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
+	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
 	assert(serializeToBson(const B(123)) == Bson(123));
 	assert(serializeToBson(B(123))       == Bson(123));
+
+	static assert(isStringSerializable!C && !isJsonSerializable!C && !isBsonSerializable!C);
+	static assert(!isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
 	assert(serializeToBson(const C(123)) == Bson("123"));
 	assert(serializeToBson(C(123))       == Bson("123"));
+
+	static assert(!isStringSerializable!D && !isJsonSerializable!D && !isBsonSerializable!D);
+	static assert(!isStringSerializable!(const(D)) && !isJsonSerializable!(const(D)) && !isBsonSerializable!(const(D)));
 	assert(serializeToBson(const D(123)) == serializeToBson(["value": 123]));
 	assert(serializeToBson(D(123))       == serializeToBson(["value": 123]));
 }
@@ -1203,3 +1214,5 @@ pure {
 	else return field_name[0 .. $-1];
 }
 
+/// private
+package template isBsonSerializable(T) { enum isBsonSerializable = is(typeof(T.init.toBson()) == Bson) && is(typeof(T.fromBson(Bson())) == T); }

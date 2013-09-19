@@ -900,9 +900,9 @@ Json serializeToJson(T)(T value)
 		foreach( string key, value; value )
 			ret[key] = serializeToJson(value);
 		return Json(ret);
-	} else static if(is(typeof(value.toJson()) == Json) && is(typeof(TU.fromJson(Json())) == TU)) {
+	} else static if(isJsonSerializable!TU) {
 		return value.toJson();
-	} else static if(is(typeof(value.toString()) == string) && is(typeof(TU.fromString("")) == TU)) {
+	} else static if(isStringSerializable!TU) {
 		return Json(value.toString());
 	} else static if(is(TU == struct)) {
 		Json[string] ret;
@@ -965,9 +965,9 @@ T deserializeJson(T)(Json src)
 		foreach( string key, value; src )
 			dst[key] = deserializeJson!(Unqual!TV)(value);
 		return dst;
-	} else static if (is(typeof(T.fromJson(Json()).toJson()) == Json) && is(typeof(T.fromJson(Json())) == T)) {
+	} else static if (isJsonSerializable!T) {
 		return T.fromJson(src);
-	} else static if (is(typeof(T.fromString("").toString()) == string) && is(typeof(T.fromString("")) == T)) {
+	} else static if (isStringSerializable!T) {
 		return T.fromString(src.get!string);
 	} else static if( is(T == struct) ){
 		T dst;
@@ -1310,3 +1310,9 @@ private string underscoreStrip(string field_name)
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
 	else return field_name[0 .. $-1];
 }
+
+/// private
+package template isStringSerializable(T) { enum isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T); }
+
+/// private
+package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.init.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T); }
