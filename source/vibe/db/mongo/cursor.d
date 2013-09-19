@@ -43,7 +43,7 @@ struct MongoCursor {
 	}
 
 	/**
-		Returns true if there are more documents for this cursor.
+		Returns true if there are no more documents for this cursor.
 
 		Throws: An exception if there is a query or communication error.
 	*/
