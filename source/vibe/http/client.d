@@ -227,13 +227,15 @@ class HTTPClient : EventedObject {
 		bool has_body = doRequest(requester);
 		m_responding = true;
 		auto res = scoped!HTTPClientResponse(this, has_body, request_allocator);
-		scope(exit){
-			res.dropBody();
-			assert(!m_responding, "Still in responding state after dropping the response body!?");
-			if (res.headers.get("Connection") == "close")
-				disconnect();
+		{
+			scope (exit) {
+				res.dropBody();
+				assert(!m_responding, "Still in responding state after dropping the response body!?");
+				if (res.headers.get("Connection") == "close")
+					disconnect();
+			}
+			responder(res);
 		}
-		responder(res);
 	}
 	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
@@ -433,7 +435,6 @@ deprecated("Please use HTTPClientRequest instead.") alias HttpClientRequest = HT
 */
 final class HTTPClientResponse : HTTPResponse {
 	private {
-		__gshared Rebindable!(immutable(AssertError)) ms_staleResponseError;
 		HTTPClient m_client;
 		LockedConnection!HTTPClient lockedConnection;
 		FreeListRef!LimitedInputStream m_limitedInputStream;
@@ -493,7 +494,7 @@ final class HTTPClientResponse : HTTPResponse {
 
 	~this()
 	{
-		if (m_client) throw ms_staleResponseError.get;
+		debug if (m_client) assert(false);
 	}
 
 	/**
@@ -619,11 +620,6 @@ deprecated("Please use HTTPClientResponse instead.") alias HttpClientResponse = 
 
 
 private NullOutputStream s_sink;
-
-shared static this()
-{
-	HTTPClientResponse.ms_staleResponseError = cast(immutable)new AssertError("Stale HTTP response detected. Use .dropBody() or the scoped version of requestHTTP.");
-}
 
 static this()
 {
