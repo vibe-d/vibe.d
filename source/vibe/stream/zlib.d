@@ -173,11 +173,15 @@ class ZlibInputStream : InputStream {
 	this(InputStream src, HeaderFormat type)
 	{
 		m_in = src;
-		int wndbits = 15;
-        if(type == HeaderFormat.gzip) wndbits += 16;
-        else if(type == HeaderFormat.automatic) wndbits += 32;
-		zlibEnforce(inflateInit2(&m_zstream, wndbits));
-		readChunk();
+		if (m_in.empty) {
+			m_finished = true;
+		} else {
+			int wndbits = 15;
+			if(type == HeaderFormat.gzip) wndbits += 16;
+			else if(type == HeaderFormat.automatic) wndbits += 32;
+			zlibEnforce(inflateInit2(&m_zstream, wndbits));
+			readChunk();
+		}
 	}
 
 	@property bool empty() { return this.leastSize == 0; }
