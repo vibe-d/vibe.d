@@ -755,45 +755,71 @@ struct BsonObjectID {
 
 /**
 	Represents a BSON date value (Bson.Type.Date).
+
+	BSON date values are stored in UNIX time format, counting the number of
+	milliseconds from 1970/01/01.
 */
 struct BsonDate {
 	private long m_time; // milliseconds since UTC unix epoch
 
-	this(in Date date) {
-		this(SysTime(date));
+	/** Constructs a BsonDate from the given date value
+	*/
+	this(in Date date) { this(SysTime(date)); }
+	/// ditto
+	this(in DateTime date) { this(SysTime(date)); }
+	/// ditto
+	this(in SysTime date) { this(fromStdTime(date.stdTime()).m_time); }
+
+	/** Constructs a BsonDate from the given UNIX time.
+
+		unix_time needs to be given in milliseconds from 1970/01/01. This is
+		the native storage format for BsonDate.
+	*/
+	this(long unix_time)
+	{
+		m_time = unix_time;
 	}
 
-	this(in DateTime date) {
-		this(SysTime(date));
-	}
-
-	this(long time){
-		m_time = time;
-	}
-
-	this(in SysTime time){
-		auto zero = unixTimeToStdTime(0);
-		m_time = (time.stdTime() - zero) / 10_000L;
-	}
-
+	/** Constructs a BsonDate from the given date/time string in ISO extended format.
+	*/
 	static BsonDate fromString(string iso_ext_string) { return BsonDate(SysTime.fromISOExtString(iso_ext_string)); }
 
+	/** Constructs a BsonDate from the given date/time in standard time as defined in std.datetime.
+	*/
+	static BsonDate fromStdTime(long std_time)
+	{
+		enum zero = unixTimeToStdTime(0);
+		return BsonDate((std_time - zero) / 10_000L);
+	}
+
+	/** The raw unix time value.
+
+		This is the native storage/transfer format of a BsonDate.
+	*/
+	@property long value() const { return m_time; }
+	/// ditto
+	@property void value(long v) { m_time = v; }
+
+	/** Returns the date formatted as ISO extended format.
+	*/
 	string toString() const { return toSysTime().toISOExtString(); }
 
+	/* Converts to a SysTime.
+	*/
 	SysTime toSysTime() const {
 		auto zero = unixTimeToStdTime(0);
 		return SysTime(zero + m_time * 10_000L, UTC());
 	}
 
+	/** Allows relational and equality comparisons.
+	*/
 	bool opEquals(ref const BsonDate other) const { return m_time == other.m_time; }
+	/// ditto
 	int opCmp(ref const BsonDate other) const {
 		if( m_time == other.m_time ) return 0;
 		if( m_time < other.m_time ) return -1;
 		else return 1;
 	}
-
-	@property long value() const { return m_time; }
-	@property void value(long v) { m_time = v; }
 }
 
 
