@@ -856,11 +856,11 @@ private nothrow extern(C)
 	{
 		try {
 			//logInfo("lock mutex %s", cast(void*)lock);
-			assert(lock in s_mutexes);
+			assert(lock in s_mutexes, "Unknown lock handle");
 			auto mtx = cast(LevMutex*)lock;
 			
-			assert(mtx !is null);
-			assert(mtx.mutex !is null || mtx.rwmutex !is null);
+			assert(mtx !is null, "null lock");
+			assert(mtx.mutex !is null || mtx.rwmutex !is null, "lock contains no mutex");
 			if( mode & EVTHREAD_WRITE ){
 				if( mode & EVTHREAD_TRY ) return mtx.rwmutex.writer().tryLock() ? 0 : 1;
 				else mtx.rwmutex.writer().lock();
@@ -868,8 +868,7 @@ private nothrow extern(C)
 				if( mode & EVTHREAD_TRY ) return mtx.rwmutex.reader().tryLock() ? 0 : 1;
 				else mtx.rwmutex.reader().lock();
 			} else {
-				assert(mtx !is null);
-				assert(mtx.mutex !is null);
+				assert(mtx.mutex !is null, "lock mutex is null");
 				if( mode & EVTHREAD_TRY ) return mtx.mutex.tryLock() ? 0 : 1;
 				else mtx.mutex.lock();
 			}
