@@ -379,19 +379,20 @@ void writeFormData(R)(R dst, in string[string] data)
 void writeFormBody(HTTPClientRequest req, in string[string] form)
 {
 	import vibe.http.form;
-	import std.utf;
 
-	struct Counter {
-		size_t count = 0;
-		void put(string str) { count += str.length; }
-		void put(dchar ch) { count += codeLength!char(ch); }
-	}
-
-	Counter len;
+	StringLengthCountingRange len;
 	writeFormData(&len, form);
 	req.contentType = "application/x-www-form-urlencoded";
 	req.contentLength = len.count;
 	writeFormData(req.bodyWriter, form);
+}
+
+/// private
+struct StringLengthCountingRange {
+	import std.utf;
+	size_t count = 0;
+	void put(string str) { count += str.length; }
+	void put(dchar ch) { count += codeLength!char(ch); }
 }
 
 
