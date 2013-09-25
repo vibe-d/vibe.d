@@ -1281,15 +1281,15 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 	} catch(HTTPStatusException err) {
 		logDebug("http error thrown: %s", err.toString());
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
-		else logError("HTTPStatusException after page has been written: %s", err.toString());
+		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
-		else logError("Error after page has been written: %s", e.toString());
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString());
+		else logDiagnostic("Error while writing the response: %s", e.msg);
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
 		if ( !parsed )
 			keep_alive = false;
 	}
