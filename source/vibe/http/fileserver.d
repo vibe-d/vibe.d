@@ -177,12 +177,15 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
 	}
 
-	auto pce = "Content-Encoding" in res.headers;
 	// check for already encoded file if configured
-	auto encodingFileExtension = pce && settings.encodingFileExtension ? settings.encodingFileExtension[*pce] : "";
-	auto encodedFilepath = pathstr ~ encodingFileExtension;
-	auto useEncodedFile = encodingFileExtension.length && existsFile(encodedFilepath);
-	if( pce && useEncodedFile ){
+	string encodedFilepath;
+	if (auto pce = "Content-Encoding" in res.headers) {
+		if (auto pfe = *pce in settings.encodingFileExtension) {
+			assert((*pfe).length > 0);
+			encodedFilepath = pathstr ~ *pfe;
+		}
+	}
+	if (encodedFilepath.length && existsFile(encodedFilepath)) {
 		auto origLastModified = dirent.timeModified.toUTC();
 
 		try dirent = getFileInfo(encodedFilepath);
@@ -197,7 +200,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 			res.headers["Content-Length"] = to!string(dirent.size);
 		} else {
 			logWarn("Encoded file '%s' is older than the original '%s'. Ignoring it.", encodedFilepath, path);
-			useEncodedFile = false;
+			encodedFilepath = null;
 		}
 	}
 	
@@ -224,7 +227,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	}
 	scope(exit) fil.close();
 
-	if( pce && !useEncodedFile )
+	if (encodedFilepath.length > 0)
 		res.bodyWriter.write(fil);
 	else res.writeRawBody(fil);
 	logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
