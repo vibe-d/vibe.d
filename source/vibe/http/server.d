@@ -35,6 +35,7 @@ import std.algorithm : canFind, map, min;
 import std.array;
 import std.conv;
 import std.datetime;
+import std.encoding : sanitize;
 import std.exception;
 import std.format;
 import std.functional;
