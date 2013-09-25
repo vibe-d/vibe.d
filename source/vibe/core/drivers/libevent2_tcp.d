@@ -225,16 +225,13 @@ package class Libevent2TCPConnection : TCPConnection {
 	
 	bool waitForData(Duration timeout)
 	{
-logTrace("wait for data in");
 		if (!connected) return false;
 		assert(m_ctx !is null);
-logTrace("wait for data check input");
 		auto inbuf = bufferevent_get_input(m_ctx.event);
 		if (evbuffer_get_length(inbuf) > 0) return true;
 		
 		acquireReader();
 		scope(exit) releaseReader();
-logTrace("wait for data prepare timeout");
 		m_timeout_triggered = false;
 		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 		timeval t;
@@ -249,7 +246,6 @@ logTrace("wait for data prepare timeout");
 		}
 		logTrace("wait for data");
 		while (connected) {
-logTrace("wait for data check input loop");
 			if (evbuffer_get_length(inbuf) > 0 || m_timeout_triggered) break;
 			try rawYield();
 			catch (Exception e) {
@@ -266,7 +262,6 @@ logTrace("wait for data check input loop");
 	*/
 	void write(in ubyte[] bytes)
 	{
-logTrace("write check connected");
 		checkConnected();
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -277,12 +272,9 @@ logTrace("write check connected");
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
 		m_ctx.writeFinished = false;
 		scope (exit) m_ctx.writeFinished = false;
-logTrace("write writing");
 		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
-logTrace("write yielding");
 		while (!m_ctx.writeFinished) rawYield();
-logTrace("write done");
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
@@ -332,13 +324,10 @@ logTrace("write done");
 
 	private void checkConnected()
 	{
-logTrace("cghecking connection");
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if( m_ctx.event is null ){
-logTrace("detected close");
 			TCPContextAlloc.free(m_ctx);
 			m_ctx = null;
-logTrace("throwing");
 			throw new Exception("Remote hung up while operating on TCPConnection.");
 		}
 	}
