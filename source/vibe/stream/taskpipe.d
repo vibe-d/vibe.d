@@ -49,9 +49,9 @@ class TaskPipe {
 
 	/** Constructs a new pipe ready for use.
 	*/
-	this()
+	this(bool grow_when_full = false)
 	{
-		m_pipe = new TaskPipeImpl;
+		m_pipe = new TaskPipeImpl(grow_when_full);
 		m_reader = new Reader(m_pipe);
 		m_writer = new Writer(m_pipe);
 	}
@@ -78,15 +78,17 @@ class TaskPipeImpl {
 		TaskCondition m_condition;
 		FixedRingBuffer!ubyte m_buffer;
 		bool m_closed = false;
+		bool m_growWhenFull;
 	}
 
 	/** Constructs a new pipe ready for use.
 	*/
-	this()
+	this(bool grow_when_full = false)
 	{
 		m_mutex = new Mutex;
 		m_condition = new TaskCondition(m_mutex);
 		m_buffer.capacity = 2048;
+		m_growWhenFull = grow_when_full;
 	}
 
 	/// Size of the (fixed) buffer used to transfer data between tasks
@@ -127,7 +129,11 @@ class TaskPipeImpl {
 			bool need_signal;
 			synchronized (m_mutex) {
 				if (m_buffer.empty) need_signal = true;
-				else while (m_buffer.full) m_condition.wait();
+				else if (m_growWhenFull && m_buffer.full) {
+					size_t new_sz = m_buffer.capacity;
+					while (new_sz - m_buffer.capacity < data.length) new_sz += 2;
+					m_buffer.capacity = new_sz;
+				} else while (m_buffer.full) m_condition.wait();
 				auto len = min(m_buffer.freeSpace, data.length);
 				m_buffer.put(data[0 .. len]);
 				data = data[len .. $];
