@@ -14,7 +14,8 @@ import std.range;
 
 /** Returns the HTML escaped version of a given string.
 */
-string htmlEscape(string str)
+string htmlEscape(R)(R str)
+	if (isInputRange!R)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
@@ -30,7 +31,8 @@ string htmlEscape(string str)
 
 /** Writes the HTML escaped version of a given string to an output range.
 */
-void filterHTMLEscape(R)(ref R dst, string str)
+void filterHTMLEscape(R, S)(ref R dst, S str)
+	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
 	for( ; !str.empty; str.popFront() )
 		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline);
@@ -42,7 +44,8 @@ deprecated("Please use filterHTMLEscape instead.") alias filterHtmlEscape = filt
 
 /** Returns the HTML escaped version of a given string (also escapes double quotes).
 */
-string htmlAttribEscape(string str)
+string htmlAttribEscape(R)(R str)
+	if (isInputRange!R)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
@@ -57,7 +60,8 @@ string htmlAttribEscape(string str)
 
 /** Writes the HTML escaped version of a given string to an output range (also escapes double quotes).
 */
-void filterHTMLAttribEscape(R)(ref R dst, string str)
+void filterHTMLAttribEscape(R, S)(ref R dst, S str)
+	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
 	for( ; !str.empty; str.popFront() )
 		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
@@ -69,7 +73,8 @@ deprecated("Please use filterHTMLAttribEscape instead.") alias filterHtmlAttribE
 
 /** Returns the HTML escaped version of a given string (escapes every character).
 */
-string htmlAllEscape()(string str)
+string htmlAllEscape(R)(R str)
+	if (isInputRange!R)
 {
 	if( __ctfe ){ // appender is a performance/memory hog in ctfe
 		StringAppender dst;
@@ -84,7 +89,8 @@ string htmlAllEscape()(string str)
 
 /** Writes the HTML escaped version of a given string to an output range (escapes every character).
 */
-void filterHTMLAllEscape(R)(ref R dst, string str)
+void filterHTMLAllEscape(R, S)(ref R dst, S str)
+	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
 	for( ; !str.empty; str.popFront() ){
 		dst.put("&#");
@@ -100,7 +106,8 @@ deprecated("Please use filterHTMLAllEscape instead.") alias filterHtmlAllEscape 
 /**
 	Minimally escapes a text so that no HTML tags appear in it.
 */
-string htmlEscapeMin(string str)
+string htmlEscapeMin(R)(R str)
+	if (isInputRange!R)
 {
 	auto dst = appender!string();
 	for( ; !str.empty; str.popFront() )
