@@ -103,6 +103,12 @@ class TaskMutex : core.sync.mutex.Mutex {
 		m_signal = createManualEvent();
 	}
 
+	this(Object o)
+	{
+		super(o);
+		m_signal = createManualEvent();
+	}
+
 	override @trusted bool tryLock()
 	{
 		if (cas(&m_locked, false, true)) {
