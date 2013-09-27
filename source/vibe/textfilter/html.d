@@ -88,7 +88,7 @@ void filterHTMLAllEscape(R)(ref R dst, string str)
 {
 	for( ; !str.empty; str.popFront() ){
 		dst.put("&#");
-		dst.put(to!string(cast(int)str.front));
+		dst.put(to!string(cast(uint)str.front));
 		dst.put(';');
 	}
 }
@@ -118,7 +118,7 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		default:
 			if( flags & HTMLEscapeFlags.escapeUnknown ){
 				dst.put("&#");
-				dst.put(to!string(cast(int)ch)); 
+				dst.put(to!string(cast(uint)ch));
 				dst.put(';');
 			} else dst.put(ch);
 			break;
@@ -129,10 +129,10 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		case '\r', '\n':
 			if( flags & HTMLEscapeFlags.escapeNewline ){
 				dst.put("&#");
-				dst.put(to!string(cast(int)ch)); 
+				dst.put(to!string(cast(uint)ch));
 				dst.put(';');
 			} else dst.put(ch);
-			break; 
+			break;
 		case 'a': .. case 'z': goto case;
 		case 'A': .. case 'Z': goto case;
 		case '0': .. case '9': goto case;
