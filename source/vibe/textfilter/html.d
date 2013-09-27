@@ -32,8 +32,8 @@ string htmlEscape(string str)
 */
 void filterHTMLEscape(R)(ref R dst, string str)
 {
-	foreach( dchar ch; str )
-		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeNewline);
+	for( ; !str.empty; str.popFront() )
+		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline);
 }
 
 /// Deprecated compatibility alias
@@ -59,8 +59,8 @@ string htmlAttribEscape(string str)
 */
 void filterHTMLAttribEscape(R)(ref R dst, string str)
 {
-	foreach( dchar ch; str )
-		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
+	for( ; !str.empty; str.popFront() )
+		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
 }
 
 /// Deprecated compatibility alias
@@ -86,9 +86,9 @@ string htmlAllEscape()(string str)
 */
 void filterHTMLAllEscape(R)(ref R dst, string str)
 {
-	foreach( dchar ch; str ){
+	for( ; !str.empty; str.popFront() ){
 		dst.put("&#");
-		dst.put(to!string(cast(int)ch)); 
+		dst.put(to!string(cast(uint)str.front));
 		dst.put(';');
 	}
 }
@@ -103,8 +103,8 @@ deprecated("Please use filterHTMLAllEscape instead.") alias filterHtmlAllEscape 
 string htmlEscapeMin(string str)
 {
 	auto dst = appender!string();
-	foreach( dchar ch; str )
-		filterHTMLEscape(dst, ch, HTMLEscapeFlags.escapeMinimal);
+	for( ; !str.empty; str.popFront() )
+		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeMinimal);
 	return dst.data();
 }
 
@@ -118,7 +118,7 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		default:
 			if( flags & HTMLEscapeFlags.escapeUnknown ){
 				dst.put("&#");
-				dst.put(to!string(cast(int)ch)); 
+				dst.put(to!string(cast(uint)ch));
 				dst.put(';');
 			} else dst.put(ch);
 			break;
@@ -129,10 +129,10 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		case '\r', '\n':
 			if( flags & HTMLEscapeFlags.escapeNewline ){
 				dst.put("&#");
-				dst.put(to!string(cast(int)ch)); 
+				dst.put(to!string(cast(uint)ch));
 				dst.put(';');
 			} else dst.put(ch);
-			break; 
+			break;
 		case 'a': .. case 'z': goto case;
 		case 'A': .. case 'Z': goto case;
 		case '0': .. case '9': goto case;
