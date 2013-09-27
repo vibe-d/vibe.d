@@ -1036,7 +1036,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		OVERLAPPED m_fileOverlapped;
 	}
 
-	this(Win32EventDriver driver, SOCKET sock, NetworkAddress peer_address)
+	this(Win32EventDriver driver, SOCKET sock, NetworkAddress peer_address, ConnectionStatus status = ConnectionStatus.Initialized)
 	{
 		m_driver = driver;
 		m_socket = sock;
@@ -1056,8 +1056,6 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		enforce(WSAAddressToStringW(m_peerAddress.sockAddr, m_peerAddress.sockAddrLen, null, buf.ptr, &buflen) == 0, "Failed to get string representation of peer address.");
 		m_peerAddressString = to!string(buf[0 .. buflen]);
 		m_peerAddressString = m_peerAddressString[0 .. m_peerAddressString.lastIndexOf(':')]; // strip the port number
-
-		m_status = ConnectionStatus.Connected;
 
 		// setup overlapped structure for copy-less file sending
 		m_fileOverlapped.Internal = 0;
@@ -1080,17 +1078,22 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 
 	private void connect(NetworkAddress addr)
 	{
+		enforce(m_status != ConnectionStatus.Connected, "Connection is already established.");
+		acquire();
+		scope(exit) release();
+
 		auto ret = .connect(m_socket, addr.sockAddr, addr.sockAddrLen);
 		//enforce(WSAConnect(m_socket, addr.sockAddr, addr.sockAddrLen, null, null, null, null), "Failed to connect to host");
 
-		if( ret == 0 ){
-m_status = ConnectionStatus.Connected;
-			assert(m_status == ConnectionStatus.Connected);
-			return;
+		if (ret != 0) {
+			auto err = WSAGetLastError();
+			logDebugV("connect err: %s", err);
+			import std.string;
+			enforce(err == WSAEWOULDBLOCK), format("Connect call failed with %s", WSAGetLastError());
+			while (m_status != ConnectionStatus.Connected)
+				m_driver.m_core.yieldForEvent();
 		}
-
-		while( m_status == ConnectionStatus.Initialized )
-			m_driver.m_core.yieldForEvent();
+		assert(m_status == ConnectionStatus.Connected);
 	}
 
 	void release()
@@ -1310,6 +1313,13 @@ m_status = ConnectionStatus.Connected;
 			Exception ex;
 			switch(event){
 				default: break;
+				case FD_CONNECT: // doesn't seem to occur, but we handle it just in case
+					if (error) {
+						ex = new Exception("Failed to connect to host: "~to!string(error));
+						m_status = ConnectionStatus.Disconnected;
+					} else m_status = ConnectionStatus.Connected;
+					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
+					break;
 				case FD_READ:
 					logTrace("TCP read event");
 					while( m_readBuffer.freeSpace > 0 ){
@@ -1457,7 +1467,7 @@ class Win32TCPListener : TCPListener, SocketEventHandler {
 					auto clientsock = WSAAccept(sock, addr.sockAddr, &addrlen, null, 0);
 					assert(addrlen == addr.sockAddrLen);
 					// TODO avoid GC allocations for delegate and Win32TCPConnection
-					auto conn = new Win32TCPConnection(m_driver, clientsock, addr);
+					auto conn = new Win32TCPConnection(m_driver, clientsock, addr, ConnectionStatus.Connected);
 					conn.m_connectionCallback = m_connectionCallback;
 					runTask(&conn.runConnectionCallback);
 				} catch( Exception e ){
