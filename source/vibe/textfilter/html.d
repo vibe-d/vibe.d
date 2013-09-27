@@ -17,7 +17,7 @@ import std.range;
 string htmlEscape(R)(R str)
 	if (isInputRange!R)
 {
-	if( __ctfe ){ // appender is a performance/memory hog in ctfe
+	if (__ctfe) { // appender is a performance/memory hog in ctfe
 		StringAppender dst;
 		filterHTMLEscape(dst, str);
 		return dst.data;
@@ -34,7 +34,7 @@ string htmlEscape(R)(R str)
 void filterHTMLEscape(R, S)(ref R dst, S str)
 	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
-	for( ; !str.empty; str.popFront() )
+	for (;!str.empty;str.popFront())
 		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline);
 }
 
@@ -47,7 +47,7 @@ deprecated("Please use filterHTMLEscape instead.") alias filterHtmlEscape = filt
 string htmlAttribEscape(R)(R str)
 	if (isInputRange!R)
 {
-	if( __ctfe ){ // appender is a performance/memory hog in ctfe
+	if (__ctfe) { // appender is a performance/memory hog in ctfe
 		StringAppender dst;
 		filterHTMLAttribEscape(dst, str);
 		return dst.data;
@@ -63,7 +63,7 @@ string htmlAttribEscape(R)(R str)
 void filterHTMLAttribEscape(R, S)(ref R dst, S str)
 	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
-	for( ; !str.empty; str.popFront() )
+	for (; !str.empty; str.popFront())
 		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
 }
 
@@ -76,7 +76,7 @@ deprecated("Please use filterHTMLAttribEscape instead.") alias filterHtmlAttribE
 string htmlAllEscape(R)(R str)
 	if (isInputRange!R)
 {
-	if( __ctfe ){ // appender is a performance/memory hog in ctfe
+	if (__ctfe) { // appender is a performance/memory hog in ctfe
 		StringAppender dst;
 		filterHTMLAllEscape(dst, str);
 		return dst.data;
@@ -92,7 +92,7 @@ string htmlAllEscape(R)(R str)
 void filterHTMLAllEscape(R, S)(ref R dst, S str)
 	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
-	for( ; !str.empty; str.popFront() ){
+	for (; !str.empty; str.popFront()) {
 		dst.put("&#");
 		dst.put(to!string(cast(uint)str.front));
 		dst.put(';');
@@ -110,7 +110,7 @@ string htmlEscapeMin(R)(R str)
 	if (isInputRange!R)
 {
 	auto dst = appender!string();
-	for( ; !str.empty; str.popFront() )
+	for (; !str.empty; str.popFront())
 		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeMinimal);
 	return dst.data();
 }
@@ -121,20 +121,20 @@ string htmlEscapeMin(R)(R str)
 */
 void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscapeFlags.escapeNewline )
 {
-	switch(ch){
+	switch (ch) {
 		default:
-			if( flags & HTMLEscapeFlags.escapeUnknown ){
+			if (flags & HTMLEscapeFlags.escapeUnknown) {
 				dst.put("&#");
 				dst.put(to!string(cast(uint)ch));
 				dst.put(';');
 			} else dst.put(ch);
 			break;
 		case '"':
-			if( flags & HTMLEscapeFlags.escapeQuotes ) dst.put("&quot;");
+			if (flags & HTMLEscapeFlags.escapeQuotes) dst.put("&quot;");
 			else dst.put('"');
 			break;
 		case '\r', '\n':
-			if( flags & HTMLEscapeFlags.escapeNewline ){
+			if (flags & HTMLEscapeFlags.escapeNewline) {
 				dst.put("&#");
 				dst.put(to!string(cast(uint)ch));
 				dst.put(';');
