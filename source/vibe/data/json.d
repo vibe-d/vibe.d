@@ -10,7 +10,7 @@
 	void manipulateJson(Json j)
 	{
 		// object members can be accessed using member syntax, just like in JavaScript
-		j = Json.EmptyObject;
+		j = Json.emptyObject;
 		j.name = "Example";
 		j.id = 1;
 
