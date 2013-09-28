@@ -52,86 +52,46 @@ enum HTTPStatus {
 	gatewayTimeout               = 504,
 	httpVersionNotSupported      = 505,
 
-	/// deprecated
-	Continue = continue_,
-	/// deprecated
-	SwitchingProtocols = switchingProtocols,
-	/// deprecated
-	OK = ok,
-	/// deprecated
-	Created = created,
-	/// deprecated
-	Accepted = accepted,
-	/// deprecated
-	NonAuthoritativeInformation = nonAuthoritativeInformation,
-	/// deprecated
-	NoContent = noContent,
-	/// deprecated
-	ResetContent = resetContent,
-	/// deprecated
-	PartialContent = partialContent,
-	/// deprecated
-	MultipleChoices = multipleChoices,
-	/// deprecated
-	MovedPermanently = movedPermanently,
-	/// deprecated
-	Found = found,
-	/// deprecated
-	SeeOther = seeOther,
-	/// deprecated
-	NotModified = notModified,
-	/// deprecated
-	UseProxy = useProxy,
-	/// deprecated
-	TemporaryRedirect = temporaryRedirect,
-	/// deprecated
-	BadRequest = badRequest,
-	/// deprecated
-	Unauthorized = unauthorized,
-	/// deprecated
-	PaymentRequired = paymentRequired,
-	/// deprecated
-	Forbidden = forbidden,
-	/// deprecated
-	NotFound = notFound,
-	/// deprecated
-	MethodNotAllowed = methodNotAllowed,
-	/// deprecated
-	NotAcceptable = notAcceptable,
-	/// deprecated
-	ProxyAuthenticationRequired = proxyAuthenticationRequired,
-	/// deprecated
-	RequestTimeout = requestTimeout,
-	/// deprecated
-	Conflict = conflict,
-	/// deprecated
-	Gone = gone,
-	/// deprecated
-	LengthRequired = lengthRequired,
-	/// deprecated
-	PreconditionFailed = preconditionFailed,
-	/// deprecated
-	RequestEntityTooLarge = requestEntityTooLarge,
-	/// deprecated
-	RequestURITooLarge = requestURITooLarge,
-	/// deprecated
-	UnsupportedMediaType = unsupportedMediaType,
-	/// deprecated
-	Requestedrangenotsatisfiable = requestedrangenotsatisfiable,
-	/// deprecated
-	ExpectationFailed = expectationFailed,
-	/// deprecated
-	InternalServerError = internalServerError,
-	/// deprecated
-	NotImplemented = notImplemented,
-	/// deprecated
-	BadGateway = badGateway,
-	/// deprecated
-	ServiceUnavailable = serviceUnavailable,
-	/// deprecated
-	GatewayTimeout = gatewayTimeout,
-	/// deprecated
-	HTTPVersionNotSupported = httpVersionNotSupported,
+	Continue = continue_, /// deprecated
+	SwitchingProtocols = switchingProtocols, /// deprecated
+	OK = ok, /// deprecated
+	Created = created, /// deprecated
+	Accepted = accepted, /// deprecated
+	NonAuthoritativeInformation = nonAuthoritativeInformation, /// deprecated
+	NoContent = noContent, /// deprecated
+	ResetContent = resetContent, /// deprecated
+	PartialContent = partialContent, /// deprecated
+	MultipleChoices = multipleChoices, /// deprecated
+	MovedPermanently = movedPermanently, /// deprecated
+	Found = found, /// deprecated
+	SeeOther = seeOther, /// deprecated
+	NotModified = notModified, /// deprecated
+	UseProxy = useProxy, /// deprecated
+	TemporaryRedirect = temporaryRedirect, /// deprecated
+	BadRequest = badRequest, /// deprecated
+	Unauthorized = unauthorized, /// deprecated
+	PaymentRequired = paymentRequired, /// deprecated
+	Forbidden = forbidden, /// deprecated
+	NotFound = notFound, /// deprecated
+	MethodNotAllowed = methodNotAllowed, /// deprecated
+	NotAcceptable = notAcceptable, /// deprecated
+	ProxyAuthenticationRequired = proxyAuthenticationRequired, /// deprecated
+	RequestTimeout = requestTimeout, /// deprecated
+	Conflict = conflict, /// deprecated
+	Gone = gone, /// deprecated
+	LengthRequired = lengthRequired, /// deprecated
+	PreconditionFailed = preconditionFailed, /// deprecated
+	RequestEntityTooLarge = requestEntityTooLarge, /// deprecated
+	RequestURITooLarge = requestURITooLarge, /// deprecated
+	UnsupportedMediaType = unsupportedMediaType, /// deprecated
+	Requestedrangenotsatisfiable = requestedrangenotsatisfiable, /// deprecated
+	ExpectationFailed = expectationFailed, /// deprecated
+	InternalServerError = internalServerError, /// deprecated
+	NotImplemented = notImplemented, /// deprecated
+	BadGateway = badGateway, /// deprecated
+	ServiceUnavailable = serviceUnavailable, /// deprecated
+	GatewayTimeout = gatewayTimeout, /// deprecated
+	HTTPVersionNotSupported = httpVersionNotSupported, /// deprecated
 }
 
 /// Deprecated compatibility alias
