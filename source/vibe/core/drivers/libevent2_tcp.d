@@ -135,9 +135,8 @@ package class Libevent2TCPConnection : TCPConnection {
 	/// Closes the connection.
 	void close()
 	{
-		checkConnected();
 		acquire();
-		assert(m_ctx, "Closing an already closed TCP connection.");
+		assert(connected, "Closing an already closed TCP connection.");
 
 		auto fd = m_ctx.socketfd;
 		m_ctx.shutdown = true;
@@ -274,7 +273,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		scope (exit) m_ctx.writeFinished = false;
 		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
-		while (!m_ctx.writeFinished) rawYield();
+		while (connected && !m_ctx.writeFinished) rawYield();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
