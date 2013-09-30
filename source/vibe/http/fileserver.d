@@ -179,13 +179,16 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 
 	// check for already encoded file if configured
 	string encodedFilepath;
-	if (auto pce = "Content-Encoding" in res.headers) {
+	auto pce = "Content-Encoding" in res.headers;
+	if (pce) {
 		if (auto pfe = *pce in settings.encodingFileExtension) {
 			assert((*pfe).length > 0);
-			encodedFilepath = pathstr ~ *pfe;
+			auto p = pathstr ~ *pfe;
+			if (existsFile(p))
+				encodedFilepath = p;
 		}
 	}
-	if (encodedFilepath.length && existsFile(encodedFilepath)) {
+	if (encodedFilepath.length) {
 		auto origLastModified = dirent.timeModified.toUTC();
 
 		try dirent = getFileInfo(encodedFilepath);
@@ -227,7 +230,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	}
 	scope(exit) fil.close();
 
-	if (encodedFilepath.length > 0)
+	if (pce && !encodedFilepath.length)
 		res.bodyWriter.write(fil);
 	else res.writeRawBody(fil);
 	logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
