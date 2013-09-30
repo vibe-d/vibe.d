@@ -1028,7 +1028,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		NetworkAddress m_peerAddress;
 		string m_peerAddressString;
 		DWORD m_bytesTransferred;
-		ConnectionStatus m_status = ConnectionStatus.Initialized;
+		ConnectionStatus m_status;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
 		void delegate(TCPConnection) m_connectionCallback;
 
@@ -1041,6 +1041,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_driver = driver;
 		m_socket = sock;
 		m_driver.m_socketHandlers[sock] = this;
+		m_status = status;
 		
 		m_localAddress.family = peer_address.family;
 		if (peer_address.family == AF_INET) m_localAddress.sockAddrInet4.sin_addr.s_addr = 0;
