@@ -41,6 +41,7 @@ module vibe.data.json;
 
 import vibe.data.utils;
 
+import std.algorithm : min;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -740,17 +741,17 @@ Json parseJson(R)(ref R range, int* line = null)
 
 	switch( range.front ){
 		case 'f':
-			enforce(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. 5]~"'.");
+			enforce(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.");
 			range.popFrontN(5);
 			ret = false;
 			break;
 		case 'n':
-			enforce(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. 4]~"'.");
+			enforce(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.");
 			range.popFrontN(4);
 			ret = null;
 			break;
 		case 't':
-			enforce(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. 4]~"'.");
+			enforce(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.");
 			range.popFrontN(4);
 			ret = true;
 			break;
@@ -803,7 +804,7 @@ Json parseJson(R)(ref R range, int* line = null)
 			ret = obj;
 			break;
 		default:
-			enforce(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. range.length>12?12:range.length]~"'.");
+			enforce(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. min(12, $)]~"'.");
 	}
 
 	assert(ret.type != Json.Type.undefined);
