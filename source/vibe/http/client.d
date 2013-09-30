@@ -64,7 +64,8 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 	bool ssl = url.schema == "https";
 	auto cli = connectHTTP(url.host, url.port, ssl);
 	auto res = cli.request((req){
-			req.requestURL = url.localURI;
+			if (url.localURI.length)
+				req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		});
@@ -89,7 +90,8 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 	bool ssl = url.schema == "https";
 	auto cli = connectHTTP(url.host, url.port, ssl);
 	cli.request((scope req){
-			req.requestURL = url.localURI;
+			if (url.localURI.length)
+				req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		}, responder);
@@ -387,19 +389,16 @@ final class HTTPClientRequest : HTTPRequest {
 		assert(!m_headerWritten, "HTTPClient tried to write headers twice.");
 		m_headerWritten = true;
 
-		auto app = appender!string();
-		app.reserve(512);
-		formattedWrite(app, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
+		formattedWrite(m_conn, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		logTrace("--------------------");
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
 		logTrace("%s %s %s", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		foreach( k, v; headers ){
-			formattedWrite(app, "%s: %s\r\n", k, v);
+			formattedWrite(m_conn, "%s: %s\r\n", k, v);
 			logTrace("%s: %s", k, v);
 		}
-		app.put("\r\n");
-		m_conn.write(app.data);
+		m_conn.write("\r\n");
 		logTrace("--------------------");
 	}
 
