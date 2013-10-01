@@ -213,8 +213,12 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		auto oldtable = m_table;
 		m_table = allocArray!TableEntry(m_allocator, new_size);
 		foreach (ref el; m_table) {
-			emplace!(UnConst!Key)(cast(UnConst!Key*)&el.key, cast(UnConst!Key)Traits.clearValue);
-			emplace!Value(&el.value);
+			static if (is(Key == struct)) {
+				emplace(cast(UnConst!Key*)&el.key);
+				static if (Traits.clearValue !is Key.init)
+					el.key = cast(UnConst!Key)Traits.clearValue;
+			} else el.key = cast(UnConst!Key)Traits.clearValue;
+			emplace(&el.value);
 		}
 		m_length = 0;
 		foreach (ref el; oldtable) {
