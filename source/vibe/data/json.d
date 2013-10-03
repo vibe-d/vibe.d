@@ -899,16 +899,16 @@ Json serializeToJson(T)(T value)
 		return Json(ret);
 	} else static if( isAssociativeArray!TU ){
 		Json[string] ret;
-           	alias KeyType!T TK;
+		alias KeyType!T TK;
 		foreach( key, value; value ) {
-                         static if(is(TK == string)) {
-                                ret[key] = serializeToJson(value);
-                         } else static if(is(TK == enum)) {
-                                ret[to!string(key)] = serializeToJson(value);
-                         } else static if(isStringSerializable!(TK)) {
-                                ret[key.toString()] = serializeToJson(value);
-                         }
-                }
+			 static if(is(TK == string)) {
+				ret[key] = serializeToJson(value);
+			 } else static if(is(TK == enum)) {
+				ret[to!string(key)] = serializeToJson(value);
+			 } else static if(isStringSerializable!(TK)) {
+				ret[key.toString()] = serializeToJson(value);
+			 }
+		}
 		return Json(ret);
 	} else static if(isJsonSerializable!TU) {
 		return value.toJson();
