@@ -70,17 +70,17 @@ bool getOption(T)(string names, T* pvalue, string help_text)
 
 	immutable olen = g_args.length;
 	getopt(g_args, getoptConfig, names, pvalue);
-	immutable found = olen > g_args.length;
+	if (g_args.length < olen) return true;
 
 	if (g_haveConfig) {
 		foreach (name; info.names)
 			if (auto pv = name in g_config) {
 				*pvalue = pv.to!T;
-				break;
+				return true;
 			}
 	}
 
-	return found;
+	return false;
 }
 
 
