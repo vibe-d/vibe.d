@@ -899,8 +899,16 @@ Json serializeToJson(T)(T value)
 		return Json(ret);
 	} else static if( isAssociativeArray!TU ){
 		Json[string] ret;
-		foreach( string key, value; value )
-			ret[key] = serializeToJson(value);
+		alias KeyType!T TK;
+		foreach( key, value; value ) {
+			 static if(is(TK == string)) {
+				ret[key] = serializeToJson(value);
+			 } else static if(is(TK == enum)) {
+				ret[to!string(key)] = serializeToJson(value);
+			 } else static if(isStringSerializable!(TK)) {
+				ret[key.toString()] = serializeToJson(value);
+			 }
+		}
 		return Json(ret);
 	} else static if(isJsonSerializable!TU) {
 		return value.toJson();
@@ -963,9 +971,18 @@ T deserializeJson(T)(Json src)
 		return dst;
 	} else static if( isAssociativeArray!T ){
 		alias typeof(T.init.values[0]) TV;
-		Unqual!TV[string] dst;
-		foreach( string key, value; src )
-			dst[key] = deserializeJson!(Unqual!TV)(value);
+		alias KeyType!T TK;
+		Unqual!TV[TK] dst;
+		foreach( string key, value; src ) {
+			static if(is(TK == string)) {
+				dst[key] = deserializeJson!(Unqual!TV)(value);
+			} else static if(is(TK == enum)) { 
+				dst[to!(TK)(key)] = deserializeJson!(Unqual!TV)(value);
+			} else static if(isStringSerializable!TK) {
+				auto dsk = TK.fromString(key);
+				dst[dsk] = deserializeJson!(Unqual!TV)(value);
+			}
+		}
 		return dst;
 	} else static if (isJsonSerializable!T) {
 		return T.fromJson(src);
@@ -1057,6 +1074,40 @@ unittest {
 	assert(c.b == d.b);
 }
 
+unittest {
+	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	enum Color { Red, Green, Blue }
+	{
+		static class T {
+			string[Color] enumIndexedMap;
+			string[C] stringableIndexedMap;
+			this() {
+				enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
+                                stringableIndexedMap = [ C(42) : "forty-two" ];
+			}
+		}
+
+		T original = new T;
+		original.enumIndexedMap[Color.Green] = "olive";
+		T other;
+		deserializeJson(other, serializeToJson(original));
+		assert(serializeToJson(other) == serializeToJson(original));
+	}
+	{
+		static struct S {
+			string[Color] enumIndexedMap;
+			string[C] stringableIndexedMap;
+		}
+
+		S *original = new S;
+		original.enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
+		original.enumIndexedMap[Color.Green] = "olive";
+                original.stringableIndexedMap = [ C(42) : "forty-two" ];
+		S other;
+		deserializeJson(other, serializeToJson(original));
+		assert(serializeToJson(other) == serializeToJson(original));
+	}
+}
 
 /**
 	Writes the given JSON object as a JSON string into the destination range.
