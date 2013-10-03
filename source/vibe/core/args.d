@@ -68,17 +68,19 @@ bool getOption(T)(string names, T* pvalue, string help_text)
 	assert(!g_options.any!(o => o.names == info.names)(), "getOption() may only be called once per option name.");
 	g_options ~= info;
 
+	immutable olen = g_args.length;
 	getopt(g_args, getoptConfig, names, pvalue);
+	immutable found = olen > g_args.length;
 
 	if (g_haveConfig) {
 		foreach (name; info.names)
 			if (auto pv = name in g_config) {
 				*pvalue = pv.to!T;
-				return true;
+				break;
 			}
 	}
 
-	return false;
+	return found;
 }
 
 
