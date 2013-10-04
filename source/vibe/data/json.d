@@ -1059,6 +1059,8 @@ unittest {
 	auto d = Date(2001,1,1);
 	deserializeJson(d, serializeToJson(Date.init));
 	assert(d == Date.init);
+	deserializeJson(d, serializeToJson(Date(2001,1,1)));
+	assert(d == Date(2001,1,1));
 }
 
 unittest {
