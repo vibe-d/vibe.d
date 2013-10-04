@@ -950,7 +950,7 @@ final class HTTPServerResponse : HTTPResponse {
 					app.put(cookie.expires);
 				}
 				if ( cookie.maxAge ) {
-					app.put("; MaxAge=");
+					app.put("; Max-Age=");
 					formattedWrite(&app, "%s", cookie.maxAge);
 				}
 				if ( cookie.secure ) {
