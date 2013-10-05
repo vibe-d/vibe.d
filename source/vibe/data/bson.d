@@ -775,11 +775,14 @@ struct BsonObjectID {
 struct BsonDate {
 	private long m_time; // milliseconds since UTC unix epoch
 
-	/** Constructs a BsonDate from the given date value
+	/** Constructs a BsonDate from the given date value.
+
+		The time-zone independent Date and DateTime types are assumed to be in
+		the local time zone and converted to UTC if tz is left to null.
 	*/
-	this(in Date date) { this(SysTime(date)); }
+	this(in Date date, immutable TimeZone tz = null) { this(SysTime(date, tz)); }
 	/// ditto
-	this(in DateTime date) { this(SysTime(date)); }
+	this(in DateTime date, immutable TimeZone tz = null) { this(SysTime(date, tz)); }
 	/// ditto
 	this(in SysTime date) { this(fromStdTime(date.stdTime()).m_time); }
 
@@ -926,8 +929,9 @@ Bson serializeToBson(T)(T value)
 	else static if (is(Unqualified == BsonDate)) return Bson(value);
 	else static if (is(Unqualified == BsonTimestamp)) return Bson(value);
 	else static if (is(Unqualified == BsonRegex)) return Bson(value);
-	else static if (is(Unqualified == DateTime)) return Bson(BsonDate(value));
+	else static if (is(Unqualified == DateTime)) return Bson(BsonDate(value, UTC()));
 	else static if (is(Unqualified == SysTime)) return Bson(BsonDate(value));
+	else static if (is(Unqualified == Date)) return Bson(BsonDate(value, UTC()));
 	else static if (is(Unqualified == typeof(null))) return Bson(null);
 	else static if (is(Unqualified == bool)) return Bson(value);
 	else static if (is(Unqualified == float)) return Bson(cast(double)value);
@@ -998,6 +1002,7 @@ T deserializeBson(T)(Bson src)
 	else static if (is(T == BsonRegex)) return cast(T)src;
 	else static if (is(T == SysTime)) return src.get!BsonDate().toSysTime();
 	else static if (is(T == DateTime)) return cast(DateTime)src.get!BsonDate().toSysTime();
+	else static if (is(T == Date)) return cast(Date)src.get!BsonDate().toSysTime();
 	else static if (is(T == typeof(null))) return null;
 	else static if (is(T == bool)) return cast(bool)src;
 	else static if (is(T == float)) return cast(double)src;
@@ -1076,6 +1081,16 @@ unittest {
 	assert(t.j == u.j);
 	assert(t.k == u.k);
 	assert(t.l == u.l);
+}
+
+unittest {
+	assert(deserializeBson!SysTime(serializeToBson(SysTime(0))) == SysTime(0));
+	assert(deserializeBson!SysTime(serializeToBson(SysTime(0, UTC()))) == SysTime(0, UTC()));
+	import std.stdio;
+	writefln("%s", Date.init.toISOExtString());
+	writefln("%s", deserializeBson!Date(serializeToBson(Date.init)).toISOExtString());
+	assert(deserializeBson!Date(serializeToBson(Date.init)) == Date.init);
+	assert(deserializeBson!Date(serializeToBson(Date(2001, 1, 1))) == Date(2001, 1, 1));
 }
 
 unittest {
