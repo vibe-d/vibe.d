@@ -947,8 +947,16 @@ Bson serializeToBson(T)(T value)
 		return Bson(ret);
 	} else static if (isAssociativeArray!T) {
 		Bson[string] ret;
-		foreach( string key, value; value )
-			ret[key] = serializeToBson(value);
+		alias KeyType!T TK;
+		foreach (key, value; value) {
+			static if(is(TK == string)) {
+				ret[key] = serializeToBson(value);
+			} else static if (is(TK == enum)) {
+				ret[to!string(key)] = serializeToBson(value);
+			} else static if (isStringSerializable!(TK)) {
+				ret[key.toString()] = serializeToBson(value);
+			} else static assert("AA key type %s not supported for BSON serialization.");
+		}
 		return Bson(ret);
 	} else static if (isBsonSerializable!Unqualified) {
 		return value.toBson();
@@ -1019,9 +1027,18 @@ T deserializeBson(T)(Bson src)
 		return ret;
 	} else static if (isAssociativeArray!T) {
 		alias typeof(T.init.values[0]) TV;
-		Unqual!TV[string] dst;
-		foreach (string key, value; cast(Bson[string])src)
-			dst[key] = deserializeBson!(Unqual!TV)(value);
+		alias KeyType!T TK;
+		Unqual!TV[TK] dst;
+		foreach (string key, value; src) {
+			static if (is(TK == string)) {
+				dst[key] = deserializeBson!(Unqual!TV)(value);
+			} else static if (is(TK == enum)) { 
+				dst[to!(TK)(key)] = deserializeBson!(Unqual!TV)(value);
+			} else static if (isStringSerializable!TK) {
+				auto dsk = TK.fromString(key);
+				dst[dsk] = deserializeBson!(Unqual!TV)(value);
+			} else static assert("AA key type %s not supported for BSON serialization.");
+		}
 		return dst;
 	} else static if (isBsonSerializable!T) {
 		return T.fromBson(src);
@@ -1086,9 +1103,6 @@ unittest {
 unittest {
 	assert(deserializeBson!SysTime(serializeToBson(SysTime(0))) == SysTime(0));
 	assert(deserializeBson!SysTime(serializeToBson(SysTime(0, UTC()))) == SysTime(0, UTC()));
-	import std.stdio;
-	writefln("%s", Date.init.toISOExtString());
-	writefln("%s", deserializeBson!Date(serializeToBson(Date.init)).toISOExtString());
 	assert(deserializeBson!Date(serializeToBson(Date.init)) == Date.init);
 	assert(deserializeBson!Date(serializeToBson(Date(2001, 1, 1))) == Date(2001, 1, 1));
 }
@@ -1139,6 +1153,41 @@ unittest {
 	deserializeBson(d, serializeToBson(c));
 	assert(c.a == d.a);
 	assert(c.b == d.b);
+}
+
+unittest {
+	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	enum Color { Red, Green, Blue }
+	{
+		static class T {
+			string[Color] enumIndexedMap;
+			string[C] stringableIndexedMap;
+			this() {
+				enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
+                                stringableIndexedMap = [ C(42) : "forty-two" ];
+			}
+		}
+
+		T original = new T;
+		original.enumIndexedMap[Color.Green] = "olive";
+		T other;
+		deserializeBson(other, serializeToBson(original));
+		assert(serializeToBson(other) == serializeToBson(original));
+	}
+	{
+		static struct S {
+			string[Color] enumIndexedMap;
+			string[C] stringableIndexedMap;
+		}
+
+		S original;
+		original.enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
+		original.enumIndexedMap[Color.Green] = "olive";
+                original.stringableIndexedMap = [ C(42) : "forty-two" ];
+		S other;
+		deserializeBson(other, serializeToBson(original));
+		assert(serializeToBson(other) == serializeToBson(original));
+	}
 }
 
 
