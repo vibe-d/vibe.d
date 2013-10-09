@@ -955,7 +955,8 @@ void deserializeJson(T)(ref T dst, Json src)
 /// ditto
 T deserializeJson(T)(Json src)
 {
-	static if( is(T == struct) ) if( src.type == Json.Type.null_ ) return T.init;
+	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T ) 
+		if( src.type == Json.Type.null_ ) return T.init;
 	static if( is(T == Json) ) return src;
 	else static if( is(T == typeof(null)) ){ return null; }
 	else static if( is(T == bool) ) return src.get!bool;
@@ -1068,10 +1069,14 @@ unittest {
 	assert(s == S([1,2,3]));
 	struct T {
 		S s;
+		int i;
+		float f;
+		double d;
+		string str;
 	}
 	auto t = T(S([1,2,3]));
-	deserializeJson(t, parseJsonString(`{ "s" : null }`));
-	assert(t == T());
+	deserializeJson(t, parseJsonString(`{ "s" : null, "i" : null, "f" : null, "d" : null, "str" : null }`));
+	assert(text(t) == text(T()));
 }
 
 unittest {
