@@ -955,6 +955,8 @@ void deserializeJson(T)(ref T dst, Json src)
 /// ditto
 T deserializeJson(T)(Json src)
 {
+	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T ) 
+		if( src.type == Json.Type.null_ ) return T.init;
 	static if (is(T == Json)) return src;
 	else static if (is(T == typeof(null))) { return null; }
 	else static if (is(T == bool)) return src.get!bool;
@@ -970,8 +972,8 @@ T deserializeJson(T)(Json src)
 		auto dst = new Unqual!TV[src.length];
 		foreach (size_t i, v; src)
 			dst[i] = deserializeJson!(Unqual!TV)(v);
-		return dst;
-	} else static if (isAssociativeArray!T) {
+		return cast(T)dst;
+	} else static if( isAssociativeArray!T ) {
 		alias typeof(T.init.values[0]) TV;
 		alias KeyType!T TK;
 		Unqual!TV[TK] dst;
@@ -1061,6 +1063,20 @@ unittest {
 	assert(d == Date.init);
 	deserializeJson(d, serializeToJson(Date(2001,1,1)));
 	assert(d == Date(2001,1,1));
+	struct S { immutable(int)[] x; }
+	S s;
+	deserializeJson(s, serializeToJson(S([1,2,3])));
+	assert(s == S([1,2,3]));
+	struct T {
+		S s;
+		int i;
+		float f;
+		double d;
+		string str;
+	}
+	auto t = T(S([1,2,3]));
+	deserializeJson(t, parseJsonString(`{ "s" : null, "i" : null, "f" : null, "d" : null, "str" : null }`));
+	assert(text(t) == text(T()));
 }
 
 unittest {
