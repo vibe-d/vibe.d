@@ -52,10 +52,10 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 	import vibe.utils.string;
 
 	pragma(msg, "Compiling diet template '"~template_file~"'...");
-	static if( ALIASES.length > 0 ){
+	static if (ALIASES.length > 0 && __VERSION__ < 2064) {
 		pragma(msg, "Warning: using render!() or parseDietFile!() with aliases is unsafe,");
 		pragma(msg, "         please consider using renderCompat!()/parseDietFileCompat!()");
-		pragma(msg, "         until DMD is fully stable regarding local alias template arguments.");
+		pragma(msg, "         on DMD versions prior to 2.064.");
 	}
 	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
