@@ -78,7 +78,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length);
 		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
 
-		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
+		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 0, 65536);
 	}
 	
 	~this()
@@ -269,11 +269,10 @@ package class Libevent2TCPConnection : TCPConnection {
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
-		m_ctx.writeFinished = false;
-		scope (exit) m_ctx.writeFinished = false;
+		auto outbuf = bufferevent_get_output(m_ctx.event);
 		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
-		while (connected && !m_ctx.writeFinished) rawYield();
+		while (connected && evbuffer_get_length(outbuf) > 0) rawYield();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
@@ -391,7 +390,6 @@ package struct TCPContext
 	int status = 0;
 	Task readOwner;
 	Task writeOwner;
-	bool writeFinished;
 }
 alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
 
@@ -532,7 +530,6 @@ logDebug("running task");
 			if (ctx.writeOwner && ctx.writeOwner.running) {
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 			}
-			ctx.writeFinished = true;
 			if (ctx.writeOwner) ctx.core.resumeTask(ctx.writeOwner);
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
