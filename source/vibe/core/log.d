@@ -19,7 +19,7 @@ import std.stdio;
 import core.thread;
 
 /**
-	Sets the minimum log level to be printed.
+	Sets the minimum log level to be printed using the default console logger.
 
 	This level applies to the default stdout/stderr logger only.
 */
@@ -33,10 +33,22 @@ nothrow {
 	Enables/disables output of thread/task ids with each log message-
 
 	By default, only the log message is displayed (enable=true).
+
+	This method is scheduled for deprecation. Please use setLogFormat instead.
 */
 void setPlainLogging(bool enable)
 {
 	ss_stdoutLogger.lock().format = enable ? FileLogger.Format.plain : FileLogger.Format.thread;
+}
+
+/**
+	Sets the log format used for the default console logger.
+
+	This level applies to the default stdout/stderr logger only.
+*/
+void setLogFormat(FileLogger.Format fmt)
+{
+	ss_stdoutLogger.lock().format = fmt;
 }
 
 
