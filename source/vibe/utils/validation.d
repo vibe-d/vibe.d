@@ -16,8 +16,8 @@ import std.conv;
 import std.string;
 import std.utf;
 
-static if( D_major > 2 || D_major == 2 && D_minor >= 60 )
-	import std.net.isemail; // does not link pre 2.060
+static if (__VERSION__ >= 2060) // does not link pre 2.060
+	import std.net.isemail;
 
 
 /** Provides a simple email address validation.
@@ -40,7 +40,7 @@ string validateEmail(string str, size_t max_length = 64)
 	enforce(dot_idx > 0 && dot_idx < str.length-2, "The email domain is not valid.");
 	enforce(!domain.anyOf(" @,[](){}<>!\"'%&/\\?*#;:|"), "The email domain contains invalid characters.");
 	
-	static if(D_major > 2 || D_major == 2 && D_minor >= 60)
+	static if (__VERSION__ >= 2060)
 		enforce(isEmail(str) == EmailStatusCode.valid, "The email address is invalid.");
 	
 	return str;
