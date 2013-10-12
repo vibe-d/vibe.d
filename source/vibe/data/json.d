@@ -196,7 +196,8 @@ struct Json {
 		Allows direct indexing of object typed JSON values using a string as
 		the key.
 	*/
-	const(Json) opIndex(string key) const {
+	const(Json) opIndex(string key)
+	const {
 		checkType!(Json[string])();
 		if( auto pv = key in m_object ) return *pv;
 		Json ret = Json.undefined;
@@ -204,11 +205,18 @@ struct Json {
 		return ret;
 	}
 	/// ditto
-	ref Json opIndex(string key){
+	ref Json opIndex(string key)
+	{
 		checkType!(Json[string])();
 		if( auto pv = key in m_object )
 			return *pv;
-		m_object[key] = Json();
+		if (m_object is null) {
+			m_object = ["": Json.init];
+			m_object.remove("");
+		}
+		m_object[key] = Json.init;
+		assert(m_object !is null);
+		assert(key in m_object, "Failed to insert key '"~key~"' into AA!?");
 		m_object[key].m_type = Type.undefined; // DMDBUG: AAs are teh $H1T!!!11
 		assert(m_object[key].type == Type.undefined);
 		m_object[key].m_string = key;
@@ -497,6 +505,7 @@ struct Json {
 			else enforce(false, "'%' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "~" ){
 			if( m_type == Type.string ) return Json(m_string ~ other.m_string);
+			else if (m_type == Type.array) return Json(m_array ~ other.m_array);
 			else enforce(false, "'~' only allowed for strings, not "~.to!string(m_type)~".");
 		} else static assert("Unsupported operator '"~op~"' for type JSON.");
 		assert(false);
@@ -514,9 +523,10 @@ struct Json {
 	}
 	/// ditto
 	void opOpAssign(string op)(Json other)
-		if( op == "+" || op == "-" || op == "*" ||op == "/" || op == "%" )
+		if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op =="~")
 	{
-		enforce(m_type == other.m_type, "Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
+		enforce(m_type == other.m_type || op == "~" && m_type == Type.array,
+				"Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
 		static if( op == "+" ){
 			if( m_type == Type.int_ ) m_int += other.m_int;
 			else if( m_type == Type.float_ ) m_float += other.m_float;
@@ -537,12 +547,19 @@ struct Json {
 			if( m_type == Type.int_ ) m_int %= other.m_int;
 			else if( m_type == Type.float_ ) m_float %= other.m_float;
 			else enforce(false, "'%' only allowed for scalar types, not "~.to!string(m_type)~".");
-		} /*else static if( op == "~" ){
-			if( m_type == Type.String ) m_string ~= other.m_string;
-			else if( m_type == Type.Array ) m_array ~= other.m_array;
-			else enforce(false, "'%' only allowed for scalar types, not "~.to!string(m_type)~".");
-		}*/ else static assert("Unsupported operator '"~op~"' for type JSON.");
-		assert(false);
+		} else static if( op == "~" ){
+			if (m_type == Type.string) m_string ~= other.m_string;
+			else if (m_type == Type.array) {
+				if (other.m_type == Type.array) m_array ~= other.m_array;
+				else m_array ~= other;
+			} else enforce(false, "'~' only allowed for string and array types, not "~.to!string(m_type)~".");
+		} else static assert("Unsupported operator '"~op~"' for type JSON.");
+	}
+	/// ditto
+	void opOpAssign(string op, T)(T other)
+		if (!is(T == Json) && is(typeof(Json(other))))
+	{
+		opOpAssign!op(Json(other));
 	}
 	/// ditto
 	Json opBinary(string op)(bool other) const { checkType!bool(); mixin("return Json(m_bool "~op~" other);"); }
@@ -1148,7 +1165,7 @@ unittest {
 
 	See_Also: Json.toString, writePrettyJsonString
 */
-void writeJsonString(R)(ref R dst, in Json json)
+void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, int level = 0)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
@@ -1158,36 +1175,74 @@ void writeJsonString(R)(ref R dst, in Json json)
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
 		case Json.Type.float_: formattedWrite(dst, "%.16g", json.get!double); break;
 		case Json.Type.string:
-			dst.put("\"");
+			dst.put('\"');
 			jsonEscape(dst, cast(string)json);
-			dst.put("\"");
+			dst.put('\"');
 			break;
 		case Json.Type.array:
-			dst.put("[");
+			dst.put('[');
 			bool first = true;
-			foreach( ref const Json e; json ){
+			foreach (ref const Json e; json) {
 				if( e.type == Json.Type.undefined ) continue;
 				if( !first ) dst.put(",");
 				first = false;
-				writeJsonString(dst, e);
+				static if (pretty) {
+					dst.put('\n');
+					foreach (tab; 0 .. level+1) dst.put('\t');
+				}
+				writeJsonString!(R, pretty)(dst, e, level+1);
 			}
-			dst.put("]");
+			static if (pretty) {
+				if (json.length > 0) {
+					dst.put('\n');
+					foreach (tab; 0 .. level) dst.put('\t');
+				}
+			}
+			dst.put(']');
 			break;
 		case Json.Type.object:
-			dst.put("{");
+			dst.put('{');
 			bool first = true;
 			foreach( string k, ref const Json e; json ){
 				if( e.type == Json.Type.undefined ) continue;
-				if( !first ) dst.put(",");
+				if( !first ) dst.put(',');
 				first = false;
-				dst.put("\"");
+				static if (pretty) {
+					dst.put('\n');
+					foreach (tab; 0 .. level+1) dst.put('\t');
+				}
+				dst.put('\"');
 				jsonEscape(dst, k);
-				dst.put("\":");
-				writeJsonString(dst, e);
+				dst.put(pretty ? `": ` : `":`);
+				writeJsonString!(R, pretty)(dst, e, level+1);
 			}
-			dst.put("}");
+			static if (pretty) {
+				if (json.length > 0) {
+					dst.put('\n');
+					foreach (tab; 0 .. level) dst.put('\t');
+				}
+			}
+			dst.put('}');
 			break;
 	}
+}
+
+unittest {
+	auto a = Json.emptyObject;
+	a.a = Json.emptyArray;
+	a.b = Json.emptyArray;
+	a.b ~= Json(1);
+	a.b ~= Json.emptyObject;
+
+	assert(a.toString() == `{"a":[],"b":[1,{}]}`);
+	assert(a.toPrettyString() ==
+`{
+	"a": [],
+	"b": [
+		1,
+		{}
+	]
+}`);
 }
 
 /**
@@ -1206,55 +1261,7 @@ void writeJsonString(R)(ref R dst, in Json json)
 void writePrettyJsonString(R)(ref R dst, in Json json, int level = 0)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
-	final switch( json.type ){
-		case Json.Type.undefined: dst.put("undefined"); break;
-		case Json.Type.null_: dst.put("null"); break;
-		case Json.Type.bool_: dst.put(cast(bool)json ? "true" : "false"); break;
-		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
-		case Json.Type.float_: formattedWrite(dst, "%.16g", json.get!double); break;
-		case Json.Type.string:
-			dst.put("\"");
-			jsonEscape(dst, cast(string)json);
-			dst.put("\"");
-			break;
-		case Json.Type.array:
-			dst.put("[");
-			bool first = true;
-			foreach( e; json ){
-				if( e.type == Json.Type.undefined ) continue;
-				if( !first ) dst.put(",");
-				first = false;
-				dst.put("\n");
-				foreach( tab; 0 .. level ) dst.put('\t');
-				writePrettyJsonString(dst, e, level+1);
-			}
-			if( json.length > 0 ) {
-				dst.put('\n');
-				foreach( tab; 0 .. (level-1) ) dst.put('\t');
-			}
-			dst.put("]");
-			break;
-		case Json.Type.object:
-			dst.put("{");
-			bool first = true;
-			foreach( string k, e; json ){
-				if( e.type == Json.Type.undefined ) continue;
-				if( !first ) dst.put(",");
-				dst.put("\n");
-				first = false;
-				foreach( tab; 0 .. level ) dst.put('\t');
-				dst.put("\"");
-				jsonEscape(dst, k);
-				dst.put("\": ");
-				writePrettyJsonString(dst, e, level+1);
-			}
-			if( json.length > 0 ) {
-				dst.put('\n');
-				foreach( tab; 0 .. (level-1) ) dst.put('\t');
-			}
-			dst.put("}");
-			break;
-	}
+	writeJsonString!(R, true)(dst, json, level);
 }
 
 
