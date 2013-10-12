@@ -78,7 +78,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length);
 		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
 
-		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 0, 65536);
+		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
 	}
 	
 	~this()
@@ -272,7 +272,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		auto outbuf = bufferevent_get_output(m_ctx.event);
 		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
-		while (connected && evbuffer_get_length(outbuf) > 0) rawYield();
+		while (connected && evbuffer_get_length(outbuf) > 4096) rawYield();
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
