@@ -105,7 +105,7 @@ interface OutputStream {
 
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0)
 	{
-		static struct Buffer { ubyte[64*1024] bytes; }
+		static struct Buffer { ubyte[64*1024] bytes = void; }
 		auto bufferobj = FreeListRef!(Buffer, false)();
 		auto buffer = bufferobj.bytes[];
 
