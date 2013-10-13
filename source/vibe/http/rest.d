@@ -7,8 +7,6 @@
 */
 module vibe.http.rest;
 
-import vibe.http.restutil;
-
 import vibe.core.log;
 import vibe.data.json;
 import vibe.http.client;
@@ -16,6 +14,7 @@ import vibe.http.router;
 import vibe.inet.url;
 import vibe.textfilter.urlencode;
 import vibe.utils.string;
+import vibe.utils.meta.all;
 
 import std.algorithm : filter;
 import std.array;
@@ -23,6 +22,8 @@ import std.conv;
 import std.exception;
 import std.string;
 import std.traits;
+import std.typecons;
+import std.typetuple;
 
 /**
 	Generates registers a REST interface and connects it the the given instance.
@@ -133,7 +134,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 		logDebug("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
 	}
 
-	alias T = reduceToInterface!TImpl;
+	alias T = baseInterface!TImpl;
 
 	foreach( method; __traits(allMembers, T) ) {
 		foreach( overload; MemberFunctionsTuple!(T, method) ) {
@@ -175,7 +176,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 /// ditto
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style = MethodStyle.lowerUnderscored)
 {
-	alias T = reduceToInterface!TImpl;
+	alias T = baseInterface!TImpl;
 	enum uda = extractUda!(RootPath, T);
 	static if (is(typeof(uda) == typeof(null)))
 		registerRestInterface!T(router, instance, "/", style);
