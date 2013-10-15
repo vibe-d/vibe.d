@@ -258,7 +258,7 @@ class MessageQueue {
 				if (receiveQueue(m_priorityQueue, args, filter)) break;
 				if (receiveQueue(m_queue, args, filter)) break;
 				auto now = Clock.currTime(UTC());
-				if (now > limit_time) return false;
+				if (now >= limit_time) return false;
 				m_condition.wait(limit_time - now);
 			}
 		}

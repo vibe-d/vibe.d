@@ -550,7 +550,6 @@ class Libevent2Timer : Timer {
 		assert(timeout.total!"seconds"() <= int.max);
 		m_timeout.tv_sec = cast(int)timeout.total!"seconds"();
 		m_timeout.tv_usec = timeout.fracSec().usecs();
-		assert(m_timeout.tv_sec > 0 || m_timeout.tv_usec > 0);
 		event_add(m_event, &m_timeout);
 		assert(event_pending(m_event, EV_TIMEOUT, null));
 		m_pending = true;
