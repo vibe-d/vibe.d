@@ -163,7 +163,7 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TCPConnection : Stream, EventedObject {
+interface TCPConnection : ConnectionStream, EventedObject {
 	/// Used to disable Nagle's algorithm.
 	@property void tcpNoDelay(bool enabled);
 	/// ditto
@@ -174,9 +174,6 @@ interface TCPConnection : Stream, EventedObject {
 	/// ditto
 	@property Duration readTimeout() const;
 
-	/// Determines The current connection status.
-	@property bool connected() const;
-
 	/// Returns the IP address of the connected peer.
 	@property string peerAddress() const;
 
@@ -185,12 +182,6 @@ interface TCPConnection : Stream, EventedObject {
 
 	/// The address of the connected peer.
 	@property NetworkAddress remoteAddress() const;
-
-	/// Actively closes the connection.
-	void close();
-
-	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(Duration timeout);
 }
 
 /// Deprecated compatibility alias

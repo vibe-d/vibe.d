@@ -9,6 +9,7 @@ module vibe.core.stream;
 
 import vibe.utils.memory : FreeListRef;
 
+import core.time;
 import std.algorithm;
 import std.conv;
 
@@ -121,7 +122,6 @@ interface OutputStream {
 		} else {
 			while( nbytes > 0 ){
 				size_t chunk = min(nbytes, buffer.length);
-				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
 				write(buffer[0 .. chunk]);
@@ -135,6 +135,26 @@ interface OutputStream {
 	Interface for all classes implementing readable and writable streams.
 */
 interface Stream : InputStream, OutputStream {
+}
+
+
+/**
+	Interface for streams based on a connection.
+
+	Connection streams are based on streaming socket connections, pipes and
+	similar end-to-end streams.
+
+	See_also: vibe.core.new.TCPConnection
+*/
+interface ConnectionStream : Stream {
+	/// Determines The current connection status.
+	@property bool connected() const;
+
+	/// Actively closes the connection.
+	void close();
+
+	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
+	bool waitForData(Duration timeout = 0.seconds);
 }
 
 
