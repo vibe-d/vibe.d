@@ -805,7 +805,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 		auto spidx = pstr.indexOfCT(' ');
 		if( spidx > 0 && spidx < cidx ){
 			dst.url = pstr[0 .. spidx];
-			dst.title = pstr[spidx+1 .. cidx];
+			dst.title = pstr[spidx+1 .. cidx].strip();
 			if( dst.title.length < 2 ) return false;
 			if( !dst.title.startsWith("\"") || !dst.title.endsWith("\"") ) return false;
 			dst.title = dst.title[1 .. $-1];
@@ -853,6 +853,8 @@ unittest
 
     testLink(`[link](target)`, Link("link", "target"), null);
     testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+    testLink(`[link](target  "title")`, Link("link", "target", "title"), null);
+    testLink(`[link](target "title"  )`, Link("link", "target", "title"), null);
 
     testLink(`[link](target)`, Link("link", "target"), null);
     testLink(`[link](target "title")`, Link("link", "target", "title"), null);
