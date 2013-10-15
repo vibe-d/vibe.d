@@ -839,6 +839,21 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	return true;
 }
 
+unittest
+{
+    static void testLink(string s, Link exp)
+    {
+        Link link;
+        assert(parseLink(s, link, null), s);
+        assert(link == exp);
+    }
+    testLink(`[link](target)`, Link("link", "target"));
+    testLink(`[link](target "title")`, Link("link", "target", "title"));
+
+    testLink(`[link](target)`, Link("link", "target"));
+    testLink(`[link](target "title")`, Link("link", "target", "title"));
+}
+
 private bool parseAutoLink(ref string str, ref string url)
 {
 	string pstr = str;
