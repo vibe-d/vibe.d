@@ -719,11 +719,10 @@ private class VibeDriverCore : DriverCore {
 					resumeTask(t);
 			if (s_yieldedTasks.length > 0)
 				again = true;
-			if (again)
-				if (!processEvents()) {
-					m_exit = true;
-					return;
-				}
+			if (again && !processEvents()) {
+				m_exit = true;
+				return;
+			}
 		}
 
 		if( !m_ignoreIdleForGC && m_gcTimer ){

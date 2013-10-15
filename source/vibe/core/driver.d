@@ -145,7 +145,8 @@ interface Timer : EventedObject {
 
 	/** Resets the timer to the specified timeout
 	*/
-	void rearm(Duration dur, bool periodic = false);
+	void rearm(Duration dur, bool periodic = false)
+		in { assert(dur > 0.seconds); }
 
 	/** Resets the timer and avoids any firing.
 	*/
