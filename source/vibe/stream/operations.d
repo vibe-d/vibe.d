@@ -270,6 +270,54 @@ string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes =
 	}
 }
 
+/**
+	Pipes a stream to another while keeping the latency within the specified threshold.
+
+	Params:
+		destination = The destination stram to pipe into
+		source =      The source stream to read data from
+		nbytes =      Number of bytes to pipe through. The default of zero means to pipe
+		              the whole input stream.
+		max_latency = The maximum time before data is flushed to destination. The default value
+		              of 0 s will flush after each chunk of data read from source.
+
+	See_also: OutputStream.write
+*/
+void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbytes = 0, Duration max_latency = 0.seconds)
+{
+	static struct Buffer { ubyte[64*1024] bytes = void; }
+	auto bufferobj = FreeListRef!(Buffer, false)();
+	auto buffer = bufferobj.bytes[];
+
+	//logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);
+	auto least_size = source.leastSize;
+	StopWatch sw;
+	sw.start();
+	while (nbytes > 0 || least_size > 0) {
+		size_t chunk = min(nbytes > 0 ? nbytes : ulong.max, least_size, buffer.length);
+		assert(chunk > 0, "leastSize returned zero for non-empty stream.");
+		//logTrace("read pipe chunk %d", chunk);
+		source.read(buffer[0 .. chunk]);
+		destination.write(buffer[0 .. chunk]);
+		if (nbytes > 0) nbytes -= chunk;
+
+		if (max_latency <= 0.seconds || cast(Duration)sw.peek() >= max_latency || !source.waitForData(max_latency)) {
+			logInfo("FLUSH");
+			destination.flush();
+			sw.reset();
+		} else {
+			logInfo("NOFLUSH");
+		}
+
+		least_size = source.leastSize;
+		if (!least_size) {
+			enforce(nbytes == 0, "Reading past end of input.");
+			break;
+		}
+	}
+	destination.flush();
+}
+
 /// Deprecated compatibility alias
 deprecated("Please use readAllUTF8 instead.") alias readAllUtf8 = readAllUTF8;
 
