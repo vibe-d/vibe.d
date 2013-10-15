@@ -10,6 +10,7 @@ module vibe.stream.taskpipe;
 public import vibe.core.stream;
 
 import core.sync.mutex;
+import core.time;
 import std.algorithm : min;
 import std.exception;
 import vibe.core.sync;
@@ -19,31 +20,8 @@ import vibe.utils.array;
 /**
 	Implements a unidirectional data pipe between two tasks.
 */
-class TaskPipe {
-	/// Proxy around TaskPipeImpl implementing an InputStream 
-	static class Reader : InputStream {
-		private TaskPipeImpl m_pipe;
-		this(TaskPipeImpl pipe) { m_pipe = pipe; }
-		@property bool empty() { return leastSize() == 0; }
-		@property ulong leastSize() { m_pipe.waitForData(); return m_pipe.fill; }
-		@property bool dataAvailableForRead() { return m_pipe.fill > 0; }
-		const(ubyte)[] peek() { return m_pipe.peek; }
-		void read(ubyte[] dst) { return m_pipe.read(dst); }
-	}
-
-	/// Proxy around TaskPipeImpl implementing an OutputStream 
-	static class Writer : OutputStream {
-		private TaskPipeImpl m_pipe;
-		this(TaskPipeImpl pipe) { m_pipe = pipe; }
-		void write(in ubyte[] bytes) { m_pipe.write(bytes); }
-		void flush() {}
-		void finalize() { m_pipe.close(); }
-		void write(InputStream stream, ulong nbytes = 0) { writeDefault(stream, nbytes); }
-	}
-
+class TaskPipe : ConnectionStream {
 	private {
-		Reader m_reader;
-		Writer m_writer;
 		TaskPipeImpl m_pipe;
 	}
 
@@ -52,27 +30,44 @@ class TaskPipe {
 	this(bool grow_when_full = false)
 	{
 		m_pipe = new TaskPipeImpl(grow_when_full);
-		m_reader = new Reader(m_pipe);
-		m_writer = new Writer(m_pipe);
 	}
 
-	/// Read end of the pipe
-	@property Reader reader() { return m_reader; }
+	/// Read end of the pipe (scheduled for deprecation)
+	@property InputStream reader() { return this; }
 
-	/// Write end of the pipe
-	@property Writer writer() { return m_writer; }
+	/// Write end of the pipe (scheduled for deprecation)
+	@property OutputStream writer() { return this; }
 
 	/// Size of the (fixed) FIFO buffer used to transfer data between tasks
 	@property size_t bufferSize() const { return m_pipe.bufferSize; }
 	/// ditto
 	@property void bufferSize(size_t nbytes) { m_pipe.bufferSize = nbytes; }
+
+	@property bool empty() { return leastSize() == 0; }
+	@property ulong leastSize() { m_pipe.waitForData(); return m_pipe.fill; }
+	@property bool dataAvailableForRead() { return m_pipe.fill > 0; }
+	@property bool connected() const { return m_pipe.open; }
+
+	void close() { m_pipe.close(); }
+	bool waitForData(Duration timeout)
+	{
+		if (dataAvailableForRead) return true;
+		m_pipe.waitForData(timeout);
+		return dataAvailableForRead;
+	}
+	const(ubyte)[] peek() { return m_pipe.peek; }
+	void read(ubyte[] dst) { return m_pipe.read(dst); }
+	void write(in ubyte[] bytes) { m_pipe.write(bytes); }
+	void flush() {}
+	void finalize() { m_pipe.close(); }
+	void write(InputStream stream, ulong nbytes = 0) { writeDefault(stream, nbytes); }
 }
 
 
 /**
 	Underyling pipe implementation for TaskPipe with no Stream interface.
 */
-class TaskPipeImpl {
+private class TaskPipeImpl {
 	private {
 		Mutex m_mutex;
 		TaskCondition m_condition;
@@ -104,6 +99,8 @@ class TaskPipeImpl {
 		}
 	}
 
+	@property bool open() const { return !m_closed; }
+
 	/** Closes the pipe.
 	*/
 	void close()
@@ -114,10 +111,14 @@ class TaskPipeImpl {
 
 	/** Blocks until at least one byte of data has been written to the pipe.
 	*/
-	void waitForData()
+	void waitForData(Duration timeout = 0.seconds)
 	{
 		synchronized (m_mutex) {
-			while (m_buffer.empty && !m_closed) m_condition.wait();
+			while (m_buffer.empty && !m_closed) {
+				if (timeout > 0.seconds)
+					m_condition.wait(timeout);
+				else m_condition.wait();
+			}
 		}
 	}
 
@@ -140,6 +141,7 @@ class TaskPipeImpl {
 			}
 			if (need_signal) m_condition.notifyAll();
 		}
+		vibe.core.core.yield();
 	}
 
 	/** Returns a temporary view of the beginning of the transfer buffer.
@@ -173,5 +175,6 @@ class TaskPipeImpl {
 			if (need_signal) m_condition.notifyAll();
 			dst = dst[len .. $];
 		}
+		vibe.core.core.yield();
 	}
 }
