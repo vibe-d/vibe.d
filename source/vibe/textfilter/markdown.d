@@ -801,6 +801,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	if( pstr[0] == '('){
 		pstr = pstr[1 .. $];
 		cidx = pstr.indexOfCT(')');
+                if( cidx < 1 ) return false;
 		auto spidx = pstr.indexOfCT(' ');
 		if( spidx > 0 && spidx < cidx ){
 			dst.url = pstr[0 .. spidx];
@@ -847,11 +848,20 @@ unittest
         assert(parseLink(s, link, null), s);
         assert(link == exp);
     }
+
     testLink(`[link](target)`, Link("link", "target"));
     testLink(`[link](target "title")`, Link("link", "target", "title"));
 
     testLink(`[link](target)`, Link("link", "target"));
     testLink(`[link](target "title")`, Link("link", "target", "title"));
+
+    auto failing = [
+        `text`, `[link](target`, `[link]target)`, `[link]`,
+        `[link(target)`, `link](target)`, `[link] (target)`
+    ];
+    Link link;
+    foreach (s; failing)
+        assert(!parseLink(s, link, null), s);
 }
 
 private bool parseAutoLink(ref string str, ref string url)
