@@ -21,7 +21,7 @@ unittest
 		bool updated = false;
 	}
 
-	static double genID(Context* context)
+	static int genID(Context* context)
 	{
 		static int id = 0;
 		return (id += context.increment);
