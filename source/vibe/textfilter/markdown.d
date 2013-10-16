@@ -797,14 +797,15 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	pstr = pstr[cidx+1 .. $];
 
 	// parse either (link '['"title"']') or '[' ']'[refid]
-	if( pstr.length < 3 ) return false;
+	if( pstr.length < 2 ) return false;
 	if( pstr[0] == '('){
 		pstr = pstr[1 .. $];
 		cidx = pstr.indexOfCT(')');
+                if( cidx < 1 ) return false;
 		auto spidx = pstr.indexOfCT(' ');
 		if( spidx > 0 && spidx < cidx ){
 			dst.url = pstr[0 .. spidx];
-			dst.title = pstr[spidx+1 .. cidx];
+			dst.title = pstr[spidx+1 .. cidx].strip();
 			if( dst.title.length < 2 ) return false;
 			if( !dst.title.startsWith("\"") || !dst.title.endsWith("\"") ) return false;
 			dst.title = dst.title[1 .. $-1];
@@ -837,6 +838,38 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 
 	str = pstr;
 	return true;
+}
+
+unittest
+{
+    static void testLink(string s, Link exp, in LinkRef[string] refs)
+    {
+        Link link;
+        assert(parseLink(s, link, refs), s);
+        assert(link == exp);
+    }
+    LinkRef[string] refs;
+    refs["ref"] = LinkRef("ref", "target", "title");
+
+    testLink(`[link](target)`, Link("link", "target"), null);
+    testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+    testLink(`[link](target  "title")`, Link("link", "target", "title"), null);
+    testLink(`[link](target "title"  )`, Link("link", "target", "title"), null);
+
+    testLink(`[link](target)`, Link("link", "target"), null);
+    testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+
+    testLink(`[link][ref]`, Link("link", "target", "title"), refs);
+    testLink(`[ref][]`, Link("ref", "target", "title"), refs);
+
+    auto failing = [
+        `text`, `[link](target`, `[link]target)`, `[link]`,
+        `[link(target)`, `link](target)`, `[link] (target)`,
+        `[link][noref]`, `[noref][]`
+    ];
+    Link link;
+    foreach (s; failing)
+        assert(!parseLink(s, link, refs), s);
 }
 
 private bool parseAutoLink(ref string str, ref string url)
