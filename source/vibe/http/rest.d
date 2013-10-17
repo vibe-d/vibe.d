@@ -26,7 +26,7 @@ import std.typecons;
 import std.typetuple;
 
 /**
-	Generates registers a REST interface and connects it the the given instance.
+	Registers a REST interface and connects it the the given instance.
 
 	Each method is mapped to the corresponing HTTP verb. Property methods are mapped to GET/PUT and
 	all other methods are mapped according to their prefix verb. If the method has no known prefix,
@@ -51,80 +51,105 @@ import std.typetuple;
 	
 	Any interface that you return from a getter will be made available with the base url and its name appended.
 
-	Examples:
-
-		The following example makes MyApi available using HTTP requests. Valid requests are:
-
-		<ul>
-		  $(LI GET /api/status &rarr; "OK")
-		  $(LI GET /api/greeting &rarr; "&lt;current greeting&gt;")
-		  $(LI PUT /api/greeting &larr; {"text": "&lt;new text&gt;"})
-		  $(LI POST /api/new_user &larr; {"name": "&lt;new user name&gt;"})
-		  $(LI GET /api/users &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
-		  $(LI GET /api/ &rarr; ["&lt;user 1&gt;", "&lt;user 2&gt;"])
-		  $(LI GET /api/:id/name &rarr; ["&lt;user name for id&gt;"])
-		  $(LI GET /api/items/text &rarr; "Hello, World")
-		  $(LI GET /api/items/:id/index &rarr; &lt;item index&gt;)
-		</ul>
-		---
-		import vibe.d;
-		
-		interface IMyItemsApi {
-			string getText();
-			int getIndex(int id);
-		}
-
-		interface IMyApi {
-			string getStatus();
-
-			@property string greeting();
-			@property void greeting(string text);
-
-			void addNewUser(string name);
-			@property string[] users();
-			string getName(int id);
-			
-			@property IMyItemsApi items();
-		}
-		
-		class MyItemsApiImpl : IMyItemsApi {
-			string getText() { return "Hello, World"; }
-			int getIndex(int id) { return id; }
-		}
-
-		class MyApiImpl : IMyApi {
-			private string m_greeting;
-			private string[] m_users;
-			private MyItemsApiImpl m_items;
-			
-			this() { m_items = new MyItemsApiImpl; }
-
-			string getStatus() { return "OK"; }
-
-			@property string greeting() { return m_greeting; }
-			@property void greeting(string text) { m_greeting = text; }
-
-			void addNewUser(string name) { m_users ~= name; }
-			@property string[] users() { return m_users; }
-			string getName(int id) { return m_users[id]; }
-			
-			@property MyItemsApiImpl items() { return m_items; }
-		}
-
-		static this()
-		{
-			auto routes = new URLRouter;
-
-			registerRestInterface(routes, new MyApiImpl, "/api/");
-
-			listenHTTP(new HTTPServerSettings, routes);
-		}
-		---
-
 	See_Also:
 	
 		RestInterfaceClient class for a seamless way to acces such a generated API
+
 */
+
+/// example
+unittest
+{
+	// This is a veru limited example of REST interface
+	// features. Please refer to `rest` project in vibe.d `examples`
+	// folder for full overview - it is a very long list.
+
+    // all details related to HTTP are inferred from
+    // interface declaration 
+
+	interface IMyAPI
+	{
+		// GET /api/greeting
+		@property string greeting();
+
+		// PUT /api/greeting
+		@property void greeting(string text);
+
+		// POST /api/users
+		@path("/users")
+		void addNewUser(string name);
+
+		// GET /api/users
+		@property string[] users();
+
+		// GET /api/:id/name
+		string getName(int id);
+	}
+
+	// vibe.d takes care of all JSON encoding/decoding
+	// and actual API implementation can work directly
+	// with native types
+	
+	class API : IMyAPI
+	{
+		private {
+			string m_greeting;
+			string[] m_users;
+		}
+		
+		@property string greeting()
+		{
+			return m_greeting;
+		}
+
+		@property void greeting(string text)
+		{
+			m_greeting = text;
+		}
+
+		void addNewUser(string name)
+		{
+			m_users ~= name;
+		}
+
+		@property string[] users()
+		{
+			return m_users;
+		}
+
+		string getName(int id)
+		{
+			return m_users[id];
+		}
+	}
+
+	// actual usage, this is usually done in app.d module
+	// constructor
+
+	void static_this()
+	{
+		auto router = new URLRouter();
+		registerRestInterface(router, new API());
+		listenHTTP(new HTTPServerSettings(), router);
+	}
+}
+
+// concatenates two URL parts avoiding any duplicate slashes
+// in resulting URL. `trailing` defines of result URL must
+// end with slash
+private string concatUrl(string prefix, string url, bool trailing = false)
+{
+	// "/" is ASCII, so can just slice
+	auto pre = prefix.endsWith("/") ? prefix[0..$-1] : prefix;
+	auto post = url.startsWith("/") ? url : ( "/" ~ url );
+	if (trailing) {
+		return post.endsWith("/") ? (pre ~ post) : (pre ~ post ~ "/");
+	}
+	else {
+		return post.endsWith("/") ? (pre ~ post[0..$-1]) : (pre ~ post);
+	}
+}
+
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPrefix,
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
@@ -144,31 +169,38 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 			enum meta = extractHTTPMethodAndName!(overload)();
 			enum pathOverriden = meta[0];
 			HTTPMethod httpVerb = meta[1];
-			static if (pathOverriden)
+
+			static if (pathOverriden) {
 				string url = meta[2];
-			else
-            {
-                static if (__traits(identifier, overload) == "index")
-                    pragma(msg, "Processing interface " ~ T.stringof ~ ": please use @path(\"/\") to define '/' path instead of 'index' method."
-                        " Special behavior will be removed in the next release.");
+			}
+			else {
+				static if (__traits(identifier, overload) == "index") {
+					pragma(msg, "Processing interface " ~ T.stringof ~ 
+						": please use @path(\"/\") to define '/' path" ~
+						" instead of 'index' method. Special behavior will be removed" ~
+						" in the next release.");
+				}
 
 				string url = adjustMethodStyle(meta[2], style);
-            }
-			
+			}
+
 			static if( is(RetType == interface) ) {
 				static assert(ParameterTypeTuple!overload.length == 0, "Interfaces may only be returned from parameter-less functions!");
-				registerRestInterface!RetType(router, __traits(getMember, instance, method)(), urlPrefix ~ url ~ "/");
+				registerRestInterface!RetType(router, __traits(getMember, instance, method)(), concatUrl(urlPrefix, url, true));
 			} else {
 				auto handler = jsonMethodHandler!(T, method, overload)(instance);
 				string id_supplement;
 				size_t skip = 0;
 				// legacy special case for :id, left for backwards-compatibility reasons
-				if( paramNames.length && paramNames[0] == "id" ) {
-					addRoute(httpVerb, urlPrefix ~ ":id/" ~ url, handler, paramNames);
-					if( url.length == 0 )
-						addRoute(httpVerb, urlPrefix ~ ":id", handler, paramNames);
-				} else
-					addRoute(httpVerb, urlPrefix ~ url, handler, paramNames);
+				if (paramNames.length && paramNames[0] == "id") {
+					auto combinedUrl = concatUrl(
+						concatUrl(urlPrefix, ":id"),
+						url
+					);
+					addRoute(httpVerb, combinedUrl, handler, paramNames);
+				} else {
+					addRoute(httpVerb, concatUrl(urlPrefix, url), handler, paramNames);
+				}
 			}
 		}
 	}
@@ -304,8 +336,7 @@ class RestInterfaceClient(I) : I
 #line 1 "restinterface"
 	mixin(generateRestInterfaceMethods!I());
 	
-#line 307 "source/vibe/http/rest.d"
-static assert(__LINE__ == 307);
+#line 354 "source/vibe/http/rest.d"
 	protected Json request(string verb, string name, Json params, bool[string] paramIsJson)
 	const {
 		URL url = m_baseURL;
@@ -379,7 +410,10 @@ unittest
 */
 string adjustMethodStyle(string name, MethodStyle style)
 {
-	if (name.length == 0) return null;
+	if (!name.length) {
+		return "";
+	}
+
 	import std.uni;
 
 	final switch(style){
