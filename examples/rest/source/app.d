@@ -267,5 +267,6 @@ shared static this()
 			assert(api.getParametersInURL("20", "30") == 50);
 		}
 		logInfo("Success.");
+        exitEventLoop(true);
 	});
 }
