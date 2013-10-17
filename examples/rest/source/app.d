@@ -158,8 +158,11 @@ interface Example3APINested
 {
 	/* In this example it will be available under "GET /nested_module/number"
 	 * But this interface does't really know it, it does not care about exact path
+	 *
+	 * Default parameter values work as expected - they get used if there are no data
+	 & for that parameter in request.
 	 */
-	int getNumber();
+	int getNumber(int def_arg = 42);
 }
 
 class Example3 : Example3API
@@ -188,9 +191,9 @@ class Example3 : Example3API
 class Example3Nested : Example3APINested
 {
 	override:
-		int getNumber()
+		int getNumber(int def_arg)
 		{
-			return 42;
+			return def_arg;
 		}
 }
 
@@ -301,6 +304,7 @@ shared static this()
 			auto api = new RestInterfaceClient!Example3API("http://127.0.0.1:8080");
 			assert(api.getMyID(9000) == 9000);
 			assert(api.nestedModule.getNumber() == 42);
+			assert(api.nestedModule.getNumber(1) == 1);
 		}
 		// Example 4
 		{
