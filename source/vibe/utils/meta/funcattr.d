@@ -110,6 +110,62 @@ unittest
 	@after!filter()
 	int foo() { return 42; }
 }
+/**
+	Checks if parameter is calculated by one of attached
+	functions.
+
+	Params:
+		Function = function symbol to query for attributes
+		name = parameter name to check
+	
+	Returns:
+		`true` if it is calculated
+*/
+template IsAttributedParameter(alias Function, string name)
+{
+	import std.traits : FunctionTypeOf;
+
+	static assert (is(FunctionTypeOf!Function));
+
+	private {
+		alias Data = AttributedParameterMetadata!Function;
+
+		template Impl(T...)
+		{
+			static if (T.length == 0) {
+				enum Impl = false;
+			}
+			else {
+				static if (T[0].name == name) {
+					enum Impl = true;
+				}
+				else {
+					enum Impl = Impl!(T[1..$]);
+				}
+			}
+		}
+	}
+
+	enum IsAttributedParameter = Impl!Data;
+}
+
+///
+unittest
+{
+	int foo()
+	{
+		return 42;
+	}
+
+	@before!foo("name1")
+	void bar(int name1, double name2)
+	{
+	}
+
+	static assert (IsAttributedParameter!(bar, "name1"));
+	static assert (!IsAttributedParameter!(bar, "name2"));
+	static assert (!IsAttributedParameter!(bar, "oops"));
+}
 
 // internal attribute definitions
 private {
@@ -390,11 +446,11 @@ private {
 */
 struct AttributedFunction(alias Function, alias StoredArgTypes)	
 {
-	import std.traits : isSomeFunction, ReturnType;
+	import std.traits : isSomeFunction, ReturnType, FunctionTypeOf;
 	import vibe.utils.meta.typetuple : Group, isGroup;
 
 	static assert (isGroup!StoredArgTypes);
-	static assert (isSomeFunction!(typeof(Function)));
+	static assert (is(FunctionTypeOf!Function));
 
 	/**
 		Stores argument tuple for attached function calls
