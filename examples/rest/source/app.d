@@ -49,7 +49,7 @@ interface Example1API
 
 class Example1 : Example1API
 {
-	override: // use of this handy D feature is highly recommended
+	override: // usage of this handy D feature is highly recommended
 		string getSomeInfo()
 		{
 			return "Some Info!";
@@ -65,6 +65,17 @@ class Example1 : Example1API
 		{
 			return "Getter";
 		}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example1());
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/example1_api/some_info");
+	assert (routes[HTTPMethod.GET][1].pattern == "/example1_api/getter");
+	assert (routes[HTTPMethod.POST][0].pattern == "/example1_api/sum");
 }
 
 /* --------- EXAMPLE 2 ---------- */
@@ -107,8 +118,19 @@ class Example2 : Example2API
 		{
 			import std.algorithm;
 			// Some sweet functional D
-			return reduce!( (a, b) => Aggregate(a.name ~ b.name, a.count + b.count, Aggregate.Type.Type3) )(Aggregate.init, input);
+			return reduce!(
+                (a, b) => Aggregate(a.name ~ b.name, a.count + b.count, Aggregate.Type.Type3)
+            )(Aggregate.init, input);
 		}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example2(), MethodStyle.upperUnderscored);
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/EXAMPLE2_API/ACCUMULATE_ALL");
 }
 
 /* --------- EXAMPLE 3 ---------- */
@@ -172,6 +194,17 @@ class Example3Nested : Example3APINested
 		}
 }
 
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example3());
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/example3_api/nested_module/number");
+	assert (routes[HTTPMethod.GET][1].pattern == "/example3_api/:id/myid");
+}
+
+
 /* If pre-defined conventions do not suit your needs, you can configure url and method
  * precisely via User Defined Attributes.
  */
@@ -208,6 +241,15 @@ class Example4 : Example4API
 		}
 }
 
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example4());
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.POST][0].pattern == "/example4_api/simple");
+	assert (routes[HTTPMethod.GET][0].pattern == "/example4_api/:param/:another_param/data");
+}
 
 shared static this()
 {
