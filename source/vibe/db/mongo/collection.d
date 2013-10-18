@@ -221,6 +221,30 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 		return cast(ulong)reply.n.get!double;
 	}
 
+	/**
+	  Calculates aggregate values for the data in a collection.
+
+	  Params:
+		pipeline = a sequence of data aggregation processes
+
+	  Returns: an array of documents returned by the pipeline
+
+	  Throws: Exception if a DB communication error occured
+
+	  See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
+	*/
+	Bson aggregate(ARGS...)(ARGS pipeline) {
+		Bson[ARGS.length] nodes;
+		foreach(i, node; pipeline)
+			nodes[i] = serializeToBson(node);
+		Bson cmd = Bson.emptyObject;
+		cmd["aggregate"] = Bson(m_name);
+		cmd["pipeline"] = serializeToBson(nodes);
+		auto ret = database.runCommand(cmd);
+		enforce(ret.ok.get!double == 1, "Aggregate command failed.");
+		return ret.result;
+	}
+
 	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None)
 	{
 		// TODO: support 2d indexes
