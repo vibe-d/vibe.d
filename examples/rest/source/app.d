@@ -254,6 +254,69 @@ unittest
 	assert (routes[HTTPMethod.GET][0].pattern == "/example4_api/:param/:another_param/data");
 }
 
+/* It is possible to attach function hooks to methods via User-Define Attributes.
+ *
+ * Such hook must be a free function that
+ *     1) accepts HTTPServerRequest and HTTPServerResponse
+ *     2) is attached to specific parameter of a method
+ *     3) has same return type as that parameter type
+ * 
+ * REST API framework will call attached functions before actual
+ * method call and use their result as an input to method call. 
+ *
+ * There is also another attribute function type that can be called
+ * to post-process method return value.
+ *
+ * Refer to `vibe.utils.meta.funcattr` for more details.
+ */
+@rootPathFromName
+interface Example5API
+{
+	import vibe.utils.meta.funcattr;
+
+	@before!authenticate("user") @after!addBrackets()
+	string getSecret(int num, User user);	
+}
+
+User authenticate(HTTPServerRequest req, HTTPServerResponse res)
+{
+	return User("admin", true);
+}
+
+struct User
+{
+	string name;
+	bool authorized;
+}
+
+string addBrackets(string result, HTTPServerRequest, HTTPServerResponse)
+{
+	return "{" ~ result ~ "}";
+}
+
+class Example5 : Example5API
+{
+	string getSecret(int num, User user)
+	{
+		import std.conv : to;
+		import std.string : format;
+
+		if (!user.authorized)
+			return "";
+			
+		return format("secret #%s for %s", num, user.name);
+	}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example5());
+	auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/example5_api/secret");
+}
+
 shared static this()
 {
 	// Registering our REST services in router
@@ -264,6 +327,7 @@ shared static this()
 	// naming style is default again, those can be router path specific.
 	registerRestInterface(routes, new Example3());
 	registerRestInterface(routes, new Example4());
+	registerRestInterface(routes, new Example5());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
@@ -279,6 +343,9 @@ shared static this()
 	 * will always stay in sync. Care about method style naming convention mismatch though.
 	 */
 	setTimer(dur!"seconds"(1), {
+		scope(exit)
+			exitEventLoop(true);
+
 		logInfo("Starting communication with REST interface. Use capture tool (i.e. wireshark) to check how it looks on HTTP protocol level");
 		// Example 1
 		{
@@ -312,7 +379,13 @@ shared static this()
 			api.myNameDoesNotMatter();
 			assert(api.getParametersInURL("20", "30") == 50);
 		}
+		// Example 5
+		{
+			auto api = new RestInterfaceClient!Example5API("http://127.0.0.1:8080");
+			auto secret = api.getSecret(42, User.init);
+			assert(secret == "{secret #42 for admin}");
+		}
+
 		logInfo("Success.");
-        exitEventLoop(true);
 	});
 }
