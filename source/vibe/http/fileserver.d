@@ -171,10 +171,10 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	res.headers["Content-Length"] = to!string(dirent.size);
 	
 	res.headers["Last-Modified"] = lastModified;
-	if( settings.maxAge > seconds(0) ){
+	if (settings.maxAge > seconds(0)) {
 		auto expireTime = Clock.currTime(UTC()) + settings.maxAge;
 		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
-		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge);
+		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge.total!"seconds");
 	}
 
 	// check for already encoded file if configured
