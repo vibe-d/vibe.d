@@ -142,7 +142,17 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	}
 
 	auto lastModified = toRFC822DateTimeString(dirent.timeModified.toUTC());
+	// simple etag generation
+	auto etag = "\"" ~ hexDigest!MD5(pathstr ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)).idup ~ "\"";
 	
+	res.headers["Last-Modified"] = lastModified;
+	res.headers["Etag"] = etag;
+	if (settings.maxAge > seconds(0)) {
+		auto expireTime = Clock.currTime(UTC()) + settings.maxAge;
+		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
+		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge.total!"seconds");
+	}
+
 	if( auto pv = "If-Modified-Since" in req.headers ) {
 		if( *pv == lastModified ) {
 			res.statusCode = HTTPStatus.NotModified;
@@ -151,8 +161,6 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		}
 	}
 
-	// simple etag generation
-	auto etag = "\"" ~ hexDigest!MD5(pathstr ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)).idup ~ "\"";
 	if( auto pv = "If-None-Match" in req.headers ) {
 		if ( *pv == etag ) {
 			res.statusCode = HTTPStatus.NotModified;
@@ -161,8 +169,6 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		}
 	}
 
-	res.headers["Etag"] = etag;
-
 	auto mimetype = getMimeTypeForFile(pathstr);
 	// avoid double-compression
 	if ("Content-Encoding" in res.headers && isCompressedFormat(mimetype))
@@ -170,13 +176,6 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	res.headers["Content-Type"] = mimetype;
 	res.headers["Content-Length"] = to!string(dirent.size);
 	
-	res.headers["Last-Modified"] = lastModified;
-	if (settings.maxAge > seconds(0)) {
-		auto expireTime = Clock.currTime(UTC()) + settings.maxAge;
-		res.headers["Expires"] = toRFC822DateTimeString(expireTime);
-		res.headers["Cache-Control"] = "max-age="~to!string(settings.maxAge.total!"seconds");
-	}
-
 	// check for already encoded file if configured
 	string encodedFilepath;
 	auto pce = "Content-Encoding" in res.headers;
