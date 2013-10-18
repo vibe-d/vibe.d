@@ -1264,6 +1264,7 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		if( req.method == HTTPMethod.HEAD ) res.m_isHeadResponse = true;
 		if( settings.serverString.length )
 			res.headers["Server"] = settings.serverString;
+		res.headers["Date"] = formatRFC822DateAlloc(request_allocator, reqtime);
 		if( req.persistent ) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
 
 		// finished parsing the request
@@ -1377,4 +1378,11 @@ shared static this()
 	getOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
 	getOption("distport", &distport, "Sets the port used for load balancing.");
 	setVibeDistHost(disthost, distport);
+}
+
+private string formatRFC822DateAlloc(shared(Allocator) alloc, SysTime time)
+{
+	auto app = AllocAppender!string(alloc);
+	writeRFC822DateTimeString(app, time);
+	return app.data;
 }
