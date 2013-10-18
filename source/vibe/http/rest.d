@@ -265,7 +265,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateModuleImports!(I)());
 #line 1 "module imports"
 	mixin(generateModuleImports!I());
-#line 243
+#line 244
 
 	import vibe.inet.url : URL, PathEntry;
 	import vibe.http.client : HTTPClientRequest;
@@ -315,7 +315,7 @@ class RestInterfaceClient(I) : I
 
 #line 1 "subinterface instances"
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
-#line 293
+#line 294
 	}
 	
 	/**
@@ -331,7 +331,7 @@ class RestInterfaceClient(I) : I
 		m_requestFilter = v;
 #line 1 "request filter"		
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
-#line 309		
+#line 310
 	}
 	
 	//pragma(msg, "subinterfaces:");
@@ -343,7 +343,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateRestInterfaceMethods!(I)());
 #line 1 "restinterface"
 	mixin (generateRestInterfaceMethods!I());
-#line 337 "source/vibe/http/rest.d"
+#line 322 "source/vibe/http/rest.d"
 
 	protected {
 		import vibe.data.json : Json;
@@ -619,6 +619,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 	import vibe.http.common : HTTPStatusException, HTTPStatus;
 	import vibe.utils.string : sanitizeUTF8;
+	import vibe.utils.meta.funcattr : IsAttributedParameter;
 
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
@@ -639,6 +640,11 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				)
 			);
 
+			// will be re-written by UDA function anyway
+			static if (IsAttributedParameter!(Func, ParamNames[i])) {
+				continue;
+			}
+
 			static if (i == 0 && ParamNames[i] == "id") {
 				// legacy special case for :id, backwards-compatibility
 				logDebug("id %s", req.params["id"]);
@@ -658,7 +664,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				alias DefVal = ParamDefaults[i];
 				if (req.method == HTTPMethod.GET ) {
 					logDebug("query %s of %s" ,ParamNames[i], req.query);
-
+					
 					static if (is (DefVal == void)) {
 						enforce(
 							ParamNames[i] in req.query,
@@ -670,6 +676,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 							continue;
 						}
 					}
+
 					params[i] = fromRestString!P(req.query[ParamNames[i]]);
 				} else {
 					logDebug("%s %s", method, ParamNames[i]);
@@ -705,11 +712,15 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 		}
 		
 		try {
+			import vibe.utils.meta.funcattr;
+
+			auto handler = createAttributedFunction!Func(req, res);
+
 			static if (is(RT == void)) {
-				__traits(getMember, inst, method)(params);
+				handler(&__traits(getMember, inst, method), params);
 				res.writeJsonBody(Json.emptyObject);
 			} else {
-				auto ret = __traits(getMember, inst, method)(params);
+				auto ret = handler(&__traits(getMember, inst, method), params);
 				res.writeJsonBody(serializeToJson(ret));
 			}
 		} catch (HTTPStatusException e) {
@@ -889,6 +900,7 @@ private string generateRestInterfaceMethods(I)()
 	import std.array : split;
 
 	import vibe.utils.meta.codegen : cloneFunction;
+	import vibe.utils.meta.funcattr : IsAttributedParameter;
 	import vibe.http.server : httpMethodString;
 	
 	string ret;
@@ -937,7 +949,10 @@ private string generateRestInterfaceMethods(I)()
 						else
 							url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 					}
-					else static if (!ParamNames[i].startsWith("_")) {
+					else static if (
+						!ParamNames[i].startsWith("_") &&
+						!IsAttributedParameter!(overload, ParamNames[i])
+					) {
 						// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
 						param_handling_str ~= format(
 							q{
