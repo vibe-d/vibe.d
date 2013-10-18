@@ -691,7 +691,7 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	/// Writes a JSON message with the specified status
-	void writeJsonBody(T)(T data, int status = HTTPStatus.OK)
+	void writeJsonBody(T)(T data, int status = HTTPStatus.OK, string content_type = "application/json; charset=UTF-8")
 	{
 		import std.traits;
 		static if( is(typeof(data.data())) && isArray!(typeof(data.data())) ){
@@ -699,7 +699,7 @@ final class HTTPServerResponse : HTTPResponse {
 		}
 
 		statusCode = status;
-		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json; charset=UTF-8");
+		writeBody(cast(ubyte[])serializeToJson(data).toString(), content_type);
 	}
 
 	/**
