@@ -27,6 +27,7 @@ import vibe.utils.memory;
 import core.exception : AssertError;
 import std.array;
 import std.conv;
+import std.encoding : sanitize;
 import std.exception;
 import std.format;
 import std.string;
@@ -95,6 +96,8 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 			req.headers["Host"] = url.host;
 			if( requester ) requester(req);
 		}, responder);
+	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
+	assert(!cli.m_responding, "HTTP client still responding after return!?");
 }
 
 /// Deprecated compatibility alias
@@ -229,15 +232,30 @@ class HTTPClient : EventedObject {
 		bool has_body = doRequest(requester);
 		m_responding = true;
 		auto res = scoped!HTTPClientResponse(this, has_body, request_allocator);
+		Exception user_exception;
 		{
-			scope (exit) {
-				res.dropBody();
-				assert(!m_responding, "Still in responding state after dropping the response body!?");
-				if (res.headers.get("Connection") == "close")
-					disconnect();
+			scope (failure) {
+				m_responding = false;
+				disconnect();
 			}
-			responder(res);
+			try responder(res);
+			catch (Exception e) {
+				logDebug("Error while handling response: %s", e.toString().sanitize());
+				user_exception = e;
+			}
+			try res.dropBody();
+			catch (Exception e) {
+				if (user_exception) e.next = user_exception;
+				user_exception = e;
+				logDebug("Error while dropping response body: %s", e.toString().sanitize());
+				m_responding = false;
+				disconnect();
+			}
+			assert(!m_responding, "Still in responding state after dropping the response body!?");
+			if (res.headers.get("Connection") == "close")
+				disconnect();
 		}
+		if (user_exception) throw user_exception;
 	}
 	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
@@ -249,7 +267,9 @@ class HTTPClient : EventedObject {
 
 	private bool doRequest(scope void delegate(HTTPClientRequest req) requester)
 	{
-		assert(!m_requesting && !m_responding, "Interleaved request detected!");
+		assert(!m_requesting, "Interleaved HTTP client requests detected!");
+		assert(!m_responding, "Interleaved HTTP client request/response detected!");
+
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
