@@ -131,7 +131,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
 	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
 	{
 		router.match(httpVerb, url, handler);
-		logDebug("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
+		logDiagnostic("REST route: %s %s %s", httpVerb, url, params.filter!(p => !p.startsWith("_") && p != "id")().array());
 	}
 
 	alias T = baseInterface!TImpl;
@@ -152,7 +152,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
                     pragma(msg, "Processing interface " ~ T.stringof ~ ": please use @path(\"/\") to define '/' path instead of 'index' method."
                         " Special behavior will be removed in the next release.");
 
-				string url = adjustMethodStyle(meta[2], style);
+				string url = meta[2].length ? adjustMethodStyle(meta[2], style) : "";
             }
 			
 			static if( is(RetType == interface) ) {
@@ -379,7 +379,7 @@ unittest
 */
 string adjustMethodStyle(string name, MethodStyle style)
 {
-	assert(name.length > 0);
+	assert(name.length > 0, "Missing method name");
 	import std.uni;
 
 	final switch(style){
