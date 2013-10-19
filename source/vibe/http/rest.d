@@ -152,7 +152,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string urlPr
                     pragma(msg, "Processing interface " ~ T.stringof ~ ": please use @path(\"/\") to define '/' path instead of 'index' method."
                         " Special behavior will be removed in the next release.");
 
-				string url = meta[2].length ? adjustMethodStyle(meta[2], style) : "";
+				string url = adjustMethodStyle(meta[2], style);
             }
 			
 			static if( is(RetType == interface) ) {
@@ -379,7 +379,7 @@ unittest
 */
 string adjustMethodStyle(string name, MethodStyle style)
 {
-	assert(name.length > 0, "Missing method name");
+	if (name.length == 0) return null;
 	import std.uni;
 
 	final switch(style){
