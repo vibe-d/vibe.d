@@ -37,7 +37,7 @@ version(Windows)
 //Use "/dev/random" only for long-term secure-critical purposes because it works too slow
 struct SystemRand
 {
-	//бесконечный диапазон - всегда ложно
+	//infinite range - always false
 	enum bool empty = false;
 	
 	@disable this();
@@ -54,7 +54,7 @@ struct SystemRand
 	{
 		private import std.stdio;
 		
-		//ссылка на файловый поток
+		//reference to the file stream chunks
 		private File.ByChunk chunks;
 	}
 	else
