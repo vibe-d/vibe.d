@@ -336,7 +336,7 @@ private struct IsolatedRef(T)
 	//mixin isolatedAggregateMethods!T;
 	#line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-	#line 336 "source/vibe/concurrency.d"
+	#line 340 "source/vibe/concurrency.d"
 	static assert(__LINE__ == 336);
 
 	@disable this(this);
@@ -603,7 +603,7 @@ private struct ScopedRefAggregate(T)
 	} else {
 		#line 1 "isolatedAggregateMethodsString"
 		mixin(isolatedAggregateMethodsString!T());
-		#line 582 "source/vibe/concurrency.d"
+		#line 607 "source/vibe/concurrency.d"
 		static assert(__LINE__ == 582);
 		//mixin isolatedAggregateMethods!T;
 	}
@@ -660,7 +660,7 @@ private struct ScopedRefAssociativeArray(K, V)
 {
 #line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-#line 639 "source/vibe/concurrency.d"
+#line 664 "source/vibe/concurrency.d"
 static assert(__LINE__ == 639);
 }*/
 
@@ -949,37 +949,19 @@ private void tryAccess(T, string member)()
 */
 template isStronglyIsolated(T...)
 {
-	static if( T.length == 0 ) enum isStronglyIsolated = true;
+	static if (T.length == 0) enum bool isStronglyIsolated = true;
+	else static if (T.length > 1) enum bool isStronglyIsolated = isStronglyIsolated!(T[0 .. $/2]) && isStronglyIsolated!(T[$/2 .. $]);
 	else {
-		alias T[0] HEAD;
-		alias T[1 .. $] TAIL;
-		/*static if( is(typeof(HEAD.__isIsolatedType)) ){
-			pragma(msg, "I " ~ HEAD.stringof);
-		} else static if( is(HEAD.BaseType) ){
-			pragma(msg, HEAD.stringof ~ " <" ~ HEAD.BaseType.stringof ~ "> ");// ~ Isolated!(HEAD.BaseType).stringof);
-		} else static if( is(HEAD == struct) ){
-			pragma(msg, "S " ~ HEAD.stringof ~ " <-> " ~ TAIL.stringof);
-		} else static if( is(HEAD == class) ){
-			pragma(msg, "C " ~ HEAD.stringof ~ " <-> " ~ TAIL.stringof);
-		} else static if( is(HEAD == function) ){
-			pragma(msg, "F " ~ HEAD.stringof ~ " <-> " ~ TAIL.stringof);
-		} else static if( is(HEAD == delegate) ){
-			pragma(msg, "D " ~ HEAD.stringof ~ " <-> " ~ TAIL.stringof);
-		} else static if( isSomeFunction!HEAD ){
-			pragma(msg, "SF " ~ HEAD.stringof ~ " <-> " ~ TAIL.stringof);
-		} else {
-			pragma(msg, HEAD.stringof ~ " <-> " ~ TAIL.stringof);
-		}*/
-		static if( is(HEAD == immutable) ) enum isStronglyIsolated = isStronglyIsolated!TAIL;
-		else static if( is(typeof(HEAD.__isIsolatedType)) ) enum isStronglyIsolated = isStronglyIsolated!TAIL;
-		else static if( is(HEAD == class) ) enum isStronglyIsolated = false;
-		else static if( is(HEAD == delegate) ) enum isStronglyIsolated = false; // can't know to what a delegate points
-		else static if( isDynamicArray!HEAD ) enum isStronglyIsolated = is(typeof(HEAD.init[0]) == immutable) && isStronglyIsolated!TAIL;
-		else static if( isAssociativeArray!HEAD ) enum isStronglyIsolated = false; // TODO: be less strict here
-		else static if( isSomeFunction!HEAD ) enum isStronglyIsolated = isStronglyIsolated!TAIL; // functions are immutable
-		else static if( isPointer!HEAD ) enum isStronglyIsolated = is(typeof(*HEAD.init) == immutable) && isStronglyIsolated!TAIL;
-		else static if( isAggregateType!HEAD ) enum isStronglyIsolated = isStronglyIsolated!(FieldTypeTuple!HEAD) && isStronglyIsolated!TAIL;
-		else enum isStronglyIsolated = isStronglyIsolated!TAIL;
+		static if (is(T[0] == immutable)) enum bool isStronglyIsolated = true;
+		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isStronglyIsolated = true;
+		else static if (is(T[0] == class)) enum bool isStronglyIsolated = false;
+		else static if (is(T[0] == delegate)) enum bool isStronglyIsolated = false; // can't know to what a delegate points
+		else static if (isDynamicArray!(T[0])) enum bool isStronglyIsolated = is(typeof(T[0].init[0]) == immutable);
+		else static if (isAssociativeArray!(T[0])) enum bool isStronglyIsolated = false; // TODO: be less strict here
+		else static if (isSomeFunction!(T[0])) enum bool isStronglyIsolated = true; // functions are immutable
+		else static if (isPointer!(T[0])) enum bool isStronglyIsolated = is(typeof(*T[0].init) == immutable);
+		else static if (isAggregateType!(T[0])) enum bool isStronglyIsolated = isStronglyIsolated!(FieldTypeTuple!(T[0]));
+		else enum bool isStronglyIsolated = true;
 	}
 }
 
@@ -993,23 +975,21 @@ template isStronglyIsolated(T...)
 */
 template isWeaklyIsolated(T...)
 {
-	static if( T.length == 0 ) enum isWeaklyIsolated = true;
+	static if (T.length == 0) enum bool isWeaklyIsolated = true;
+	else static if (T.length > 1) enum bool isWeaklyIsolated = isWeaklyIsolated!(T[0 .. $/2]) && isWeaklyIsolated!(T[$/2 .. $]);
 	else {
-		alias T[0] HEAD;
-		alias T[1 .. $] TAIL;
-
-		static if( is(HEAD == immutable) ) enum isWeaklyIsolated = isWeaklyIsolated!TAIL;
-		else static if( is(HEAD == shared) ) enum isWeaklyIsolated = isWeaklyIsolated!TAIL;
-		else static if( is(typeof(HEAD.__isIsolatedType)) ) enum isWeaklyIsolated = isWeaklyIsolated!TAIL;
-		else static if( is(typeof(HEAD.__isWeakIsolatedType)) ) enum isWeaklyIsolated = isWeaklyIsolated!TAIL;
-		else static if( is(HEAD == class) ) enum isWeaklyIsolated = false;
-		else static if( is(HEAD == delegate) ) enum isWeaklyIsolated = false; // can't know to what a delegate points
-		else static if( isDynamicArray!HEAD ) enum isWeaklyIsolated = is(typeof(HEAD.init[0]) == immutable) && isWeaklyIsolated!TAIL;
-		else static if( isAssociativeArray!HEAD ) enum isWeaklyIsolated = false; // TODO: be less strict here
-		else static if( isSomeFunction!HEAD ) enum isWeaklyIsolated = isWeaklyIsolated!TAIL; // functions are immutable
-		else static if( isPointer!HEAD ) enum isWeaklyIsolated = is(typeof(*HEAD.init) == immutable) && isWeaklyIsolated!TAIL;
-		else static if( isAggregateType!HEAD ) enum isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!HEAD) && isWeaklyIsolated!TAIL;
-		else enum isWeaklyIsolated = isWeaklyIsolated!TAIL; //
+		static if(is(T[0] == immutable)) enum bool isWeaklyIsolated = true;
+		else static if(is(T[0] == shared)) enum bool isWeaklyIsolated = true;
+		else static if(is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
+		else static if(is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
+		else static if(is(T[0] == class)) enum bool isWeaklyIsolated = false;
+		else static if(is(T[0] == delegate)) enum bool isWeaklyIsolated = false; // can't know to what a delegate points
+		else static if(isDynamicArray!(T[0])) enum bool isWeaklyIsolated = is(typeof(T[0].init[0]) == immutable);
+		else static if(isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
+		else static if(isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
+		else static if(isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable);
+		else static if(isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
+		else enum bool isWeaklyIsolated = true; //
 	}
 }
 
