@@ -72,7 +72,7 @@ struct MongoCollection {
 	}
 
 	this(ref MongoDatabase db, string name)
-	{ 
+	{
 		assert(db.client !is null);
 		m_client = db.client;
 		m_fullPath = db.name ~ "." ~ name;
@@ -123,18 +123,14 @@ struct MongoCollection {
 
 	  If no arguments are passed to find(), all documents of the collection will be returned.
 
-	  Throws: Exception if a DB communication error or a query error occured.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
 	MongoCursor find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
-		auto conn = m_client.lockConnection();
-		Reply reply;
 		static if( is(typeof(returnFieldSelector is null)) )
-			reply = conn.query(m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
-		else 
-			reply = conn.query(m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), serializeToBson(returnFieldSelector));
-		return MongoCursor(m_client, m_fullPath, num_docs_per_chunk, reply);
+			return MongoCursor(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
+		else
+			return MongoCursor(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), serializeToBson(returnFieldSelector));
 	}
 
 	/// ditto
