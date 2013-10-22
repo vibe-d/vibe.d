@@ -82,7 +82,7 @@ class ThreadedFileStream : FileStream {
 				m_fileDescriptor = open(pathstr.toStringz(), O_BINARY);
 				break;
 			case FileMode.createTrunc:
-				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_TRUNC|O_BINARY, octal!644);
+				m_fileDescriptor = open(pathstr.toStringz(), O_CREAT|O_TRUNC|O_BINARY, octal!644);
 				break;
 			case FileMode.append:
 				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);

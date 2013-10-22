@@ -252,7 +252,7 @@ enum FileMode {
 	read,
 	/// The file is opened for read-write random access.
 	readWrite,
-	/// The file is truncated if it exists and created otherwise and the opened for read-write access.
+	/// The file is truncated if it exists or created otherwise and then opened for read-write access.
 	createTrunc,
 	/// The file is opened for appending data to it and created if it does not exist.
 	append
