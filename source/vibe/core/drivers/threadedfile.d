@@ -40,6 +40,7 @@ version(Windows){
 		
 		enum O_RDONLY = 0;
 		enum O_WRONLY = 1;
+		enum O_RDWR = 2;
 		enum O_APPEND = 8;
 		enum O_CREAT = 0x0100;
 		enum O_TRUNC = 0x0200;
@@ -79,10 +80,10 @@ class ThreadedFileStream : FileStream {
 				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
 				break;
 			case FileMode.readWrite:
-				m_fileDescriptor = open(pathstr.toStringz(), O_BINARY);
+				m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_BINARY);
 				break;
 			case FileMode.createTrunc:
-				m_fileDescriptor = open(pathstr.toStringz(), O_CREAT|O_TRUNC|O_BINARY, octal!644);
+				m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_CREAT|O_TRUNC|O_BINARY, octal!644);
 				break;
 			case FileMode.append:
 				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
