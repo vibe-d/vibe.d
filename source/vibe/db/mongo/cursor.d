@@ -25,9 +25,8 @@ import std.exception;
 struct MongoCursor {
 	private MongoCursorData m_data;
 
-	package this(MongoClient client, string collection, int nret, Reply first_chunk)
-	{
-		m_data = new MongoCursorData(client, collection, nret, first_chunk);
+	package this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Bson query, Bson return_field_selector) {
+		m_data = new MongoCursorData(client, collection, flags, nskip, nret, query, return_field_selector);
 	}
 
 	this(this)
@@ -57,6 +56,28 @@ struct MongoCursor {
 		if empty returns false.
 	*/
 	@property Bson front() { return m_data.front; }
+
+	/**
+		Controls the order that the query returns matching documents.
+
+		This method must be called before beginning iteration, otherwise exeption will be thrown.
+		Only the last sort() applied to cursor has any effect.
+
+		Params:
+			order = a document that defines the sort order of the result set
+
+		Returns: the same cursor
+
+		Throws:
+			An exception if there is a query or communication error.
+			Also throws if the method was called after beginning of iteration.
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.sort)
+	*/
+	MongoCursor sort(T)(T order) {
+		m_data.sort(serializeToBson(order));
+		return this;
+	}
 
 	/**
 		Advances the cursor to the next document of the response.
@@ -119,23 +140,30 @@ private class MongoCursorData {
 		MongoClient m_client;
 		string m_collection;
 		long m_cursor;
+		QueryFlags m_flags;
+		int m_nskip;
 		int m_nret;
+		Bson[string] m_query;
+		Bson m_returnFieldSelector;
 		int m_offset;
 		size_t m_currentDoc = 0;
 		Bson[] m_documents;
+		bool m_started_iterating = false;
 	}
 
-	this(MongoClient client, string collection, int nret, Reply first_chunk)
-	{
+	this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Bson query, Bson return_field_selector) {
 		m_client = client;
 		m_collection = collection;
-		m_cursor = first_chunk.cursor;
+		m_flags = flags;
+		m_nskip = nskip;
 		m_nret = nret;
-		handleReply(first_chunk);
+		m_query["$query"] = query;
+		m_returnFieldSelector = return_field_selector;
 	}
 
 	@property bool empty()
 	{
+		if(!m_started_iterating) startIterating();
 		if( m_currentDoc < m_documents.length )
 			return false;
 		if( m_cursor == 0 )
@@ -159,9 +187,26 @@ private class MongoCursorData {
 		return m_documents[m_currentDoc];
 	}
 
+	void sort(Bson order) {
+		addSpecial("$orderby", order);
+	}
+
 	void popFront()
 	{
 		m_currentDoc++;
+	}
+
+	private void addSpecial(string key, Bson value) {
+		enforce(!m_started_iterating, "Cursor cannot be modified after beginning iteration");
+		m_query[key] = value;
+	}
+
+	private void startIterating() {
+		auto conn = m_client.lockConnection();
+		auto reply = conn.query(m_collection, m_flags, m_nskip, m_nret, serializeToBson(m_query), m_returnFieldSelector);
+		m_cursor = reply.cursor;
+		handleReply(reply);
+		m_started_iterating = true;
 	}
 
 	private void destroy()
