@@ -111,6 +111,7 @@ void deregisterLogger(shared(Logger) logger)
 	Params:
 		level = The log level for the logged message
 		fmt = See http://dlang.org/phobos/std_format.html#format-string
+		args = Any input values needed for formatting
 
 	Examples:
 	---

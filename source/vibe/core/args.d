@@ -50,8 +50,10 @@ void processCommandLineArgs(ref string[] args)
 
 	Params:
 		names = Option names. Separate multiple name variants with "|",
-				as for $(D std.getopt).
+			as for $(D std.getopt).
 		pvalue = Pointer to store the value. Unchanged if value was not found.
+		help_text = Text to be displayed when the application is run with
+			--help.
 
 	Returns:
 		$(D true) if the value was found, $(D false) otherwise.
