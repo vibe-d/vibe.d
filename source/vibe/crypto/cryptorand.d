@@ -1,6 +1,7 @@
 //Implements a cryptographically secure random number generator
 module vibe.crypto.cryptorand;
 
+
 private import std.conv : text;
 
 class CryptoException : Exception
@@ -88,7 +89,7 @@ final class SystemRand
 	}
 	
 	//Fills the buffer new random numbers
-	void fillBuffer(ubyte[] buffer)
+	void read(ubyte[] buffer)
 	in
 	{
 		assert(buffer.length, "buffer length must be larger than 0");
@@ -129,6 +130,7 @@ final class SystemRand
 	}
 }
 
+//test heap-based arrays
 unittest
 {
 	import std.algorithm;
@@ -149,7 +151,7 @@ unittest
 	ubyte[] prevRadn = new ubyte[bufferSize];
 	
 	//create the next random number
-	systemRand.fillBuffer(prevRadn);
+	systemRand.read(prevRadn);
 	
 	assert(!equal(prevRadn, take(repeat(0), bufferSize)), "it's almost unbelievable - all random bytes is zero");
 	
@@ -157,7 +159,7 @@ unittest
 	foreach(i; 0..iterationCount)
 	{
 		//create the next random number
-		systemRand.fillBuffer(rand);
+		systemRand.read(rand);
 		
 		assert(!equal(rand, take(repeat(0), bufferSize)), "it's almost unbelievable - all random bytes is zero");
 		
@@ -168,6 +170,7 @@ unittest
 	}
 }
 
+//test stack-based arrays
 unittest
 {
 	import std.algorithm;
@@ -193,7 +196,7 @@ unittest
 	ubyte[bufferSize] prevRadn;
 	
 	//create the next random number
-	systemRand.fillBuffer(prevRadn);
+	systemRand.read(prevRadn);
 	
 	assert(prevRadn != zeroArray, "it's almost unbelievable - all random bytes is zero");
 	
@@ -201,7 +204,7 @@ unittest
 	foreach(i; 0..iterationCount)
 	{
 		//create the next random number
-		systemRand.fillBuffer(rand);
+		systemRand.read(rand);
 		
 		assert(prevRadn != zeroArray, "it's almost unbelievable - all random bytes is zero");
 		
