@@ -35,9 +35,9 @@ version(Windows)
 	}
 }
 
-//System cryptography secure random generator
+//System cryptography secure random number generator
 //Used "CryptGenRandom" function for Windows and "/dev/urandom" for Posix
-final class SystemRand
+final class SystemRNG
 {
 	version(Windows)
 	{
@@ -65,7 +65,7 @@ final class SystemRand
 			//init cryptographic service provider
 			if(0 == CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
 			{
-				throw new CryptoException(text("Cannot init SystemRand: Error id is ", GetLastError()));
+				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", GetLastError()));
 			}
 		}
 		else version(Posix)
@@ -79,11 +79,11 @@ final class SystemRand
 			}
 			catch(ErrnoException e)
 			{
-				throw new CryptoException(text("Cannot init SystemRand: Error id is ", e.errno, `, Error message is: "`, e.msg, `"`));
+				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", e.errno, `, Error message is: "`, e.msg, `"`));
 			}
 			catch(Exception e)
 			{
-				throw new CryptoException(text("Cannot init SystemRand: ", e.msg));
+				throw new CryptoException(text("Cannot init SystemRNG: ", e.msg));
 			}
 		}
 	}
@@ -142,7 +142,7 @@ unittest
 	//number of iteration counts
 	enum iterationCount = 10;
 	
-	auto systemRand = new SystemRand();
+	auto rng = new SystemRNG();
 	
 	//holds the random number
 	ubyte[] rand = new ubyte[bufferSize];
@@ -151,7 +151,7 @@ unittest
 	ubyte[] prevRadn = new ubyte[bufferSize];
 	
 	//create the next random number
-	systemRand.read(prevRadn);
+	rng.read(prevRadn);
 	
 	assert(!equal(prevRadn, take(repeat(0), bufferSize)), "it's almost unbelievable - all random bytes is zero");
 	
@@ -159,7 +159,7 @@ unittest
 	foreach(i; 0..iterationCount)
 	{
 		//create the next random number
-		systemRand.read(rand);
+		rng.read(rand);
 		
 		assert(!equal(rand, take(repeat(0), bufferSize)), "it's almost unbelievable - all random bytes is zero");
 		
@@ -187,7 +187,7 @@ unittest
 	ubyte[bufferSize] zeroArray;
 	zeroArray[] = take(repeat(cast(ubyte)0), bufferSize).array()[];
 	
-	auto systemRand = new SystemRand();
+	auto rng = new SystemRNG();
 	
 	//holds the random number
 	ubyte[bufferSize] rand;
@@ -196,7 +196,7 @@ unittest
 	ubyte[bufferSize] prevRadn;
 	
 	//create the next random number
-	systemRand.read(prevRadn);
+	rng.read(prevRadn);
 	
 	assert(prevRadn != zeroArray, "it's almost unbelievable - all random bytes is zero");
 	
@@ -204,7 +204,7 @@ unittest
 	foreach(i; 0..iterationCount)
 	{
 		//create the next random number
-		systemRand.read(rand);
+		rng.read(rand);
 		
 		assert(prevRadn != zeroArray, "it's almost unbelievable - all random bytes is zero");
 		
