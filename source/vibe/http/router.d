@@ -168,6 +168,12 @@ class URLRouter : HTTPRouter {
 
 		logTrace("no route match: %s %s", req.method, req.requestURL);
 	}
+
+    /// Returns all registered routes as const AA
+	const(typeof(m_routes)) getAllRoutes()
+	{
+		return m_routes;
+	}
 }
 
 /// Deprecated compatibility alias

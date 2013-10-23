@@ -110,6 +110,62 @@ unittest
 	@after!filter()
 	int foo() { return 42; }
 }
+/**
+	Checks if parameter is calculated by one of attached
+	functions.
+
+	Params:
+		Function = function symbol to query for attributes
+		name = parameter name to check
+	
+	Returns:
+		`true` if it is calculated
+*/
+template IsAttributedParameter(alias Function, string name)
+{
+	import std.traits : FunctionTypeOf;
+
+	static assert (is(FunctionTypeOf!Function));
+
+	private {
+		alias Data = AttributedParameterMetadata!Function;
+
+		template Impl(T...)
+		{
+			static if (T.length == 0) {
+				enum Impl = false;
+			}
+			else {
+				static if (T[0].name == name) {
+					enum Impl = true;
+				}
+				else {
+					enum Impl = Impl!(T[1..$]);
+				}
+			}
+		}
+	}
+
+	enum IsAttributedParameter = Impl!Data;
+}
+
+///
+unittest
+{
+	int foo()
+	{
+		return 42;
+	}
+
+	@before!foo("name1")
+	void bar(int name1, double name2)
+	{
+	}
+
+	static assert (IsAttributedParameter!(bar, "name1"));
+	static assert (!IsAttributedParameter!(bar, "name2"));
+	static assert (!IsAttributedParameter!(bar, "oops"));
+}
 
 // internal attribute definitions
 private {
@@ -170,6 +226,8 @@ private {
 		int index;
 		// fully qualified return type of attached function
 		string type; 
+		// for non-basic types - module to import
+		string origin;
 	}
 
 	/**
@@ -187,7 +245,7 @@ private {
 	{
 		import std.typetuple : Filter, staticMap, staticIndexOf;
 		import std.traits : ParameterIdentifierTuple, ReturnType,
-			fullyQualifiedName;
+			fullyQualifiedName, moduleName;
 	
 		private alias attributes = Filter!(
 			isInputAttribute,
@@ -209,11 +267,19 @@ private {
 				"hook functions attached for usage with `AttributedFunction` " ~
 				"must have a return type"
 			);
+		
+			static if (is(typeof(moduleName!(ReturnType!(attribute.evaluator))))) {
+				enum origin = moduleName!(ReturnType!(attribute.evaluator));
+			}
+			else {
+				enum origin = "";
+			}
 
 			enum BuildParameter = Parameter(
 				name,
 				staticIndexOf!(name, parameter_names),
-				fullyQualifiedName!(ReturnType!(attribute.evaluator))
+				fullyQualifiedName!(ReturnType!(attribute.evaluator)),
+				origin
 			);
 
 			import std.string : format;
@@ -298,6 +364,9 @@ private {
 			enum Parameter meta = ParameterMeta.expand[0];
 
 			static assert (meta.index <= ParameterList.expand.length);
+			static if (meta.origin.length) {
+				mixin("static import " ~ meta.origin ~ ";");
+			}
 			mixin("alias type = " ~ meta.type ~ ";");
 
 			alias PartialResult = Group!(
@@ -390,11 +459,14 @@ private {
 */
 struct AttributedFunction(alias Function, alias StoredArgTypes)	
 {
-	import std.traits : isSomeFunction, ReturnType;
-	import vibe.utils.meta.typetuple : Group, isGroup;
+	import std.traits : isSomeFunction, ReturnType, FunctionTypeOf,
+		ParameterTypeTuple, ParameterIdentifierTuple;
+	import vibe.utils.meta.typetuple : Group, isGroup, Compare;
+	import std.functional : toDelegate;
+	import std.typetuple : Filter;
 
 	static assert (isGroup!StoredArgTypes);
-	static assert (isSomeFunction!(typeof(Function)));
+	static assert (is(FunctionTypeOf!Function));
 
 	/**
 		Stores argument tuple for attached function calls
@@ -430,6 +502,23 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 			ReturnType!Function result;
 		}
 
+		// check that all attached functions have conforming argument lists
+		foreach (uda; input_attributes) {
+			static assert (
+				Compare!(
+					Group!(ParameterTypeTuple!(uda.evaluator)),
+					StoredArgTypes
+				),
+				format(
+					"Input attribute function '%s%s' argument list " ~
+					"does not match provided argument list %s",
+					fullyQualifiedName!(uda.evaluator),
+					ParameterTypeTuple!(uda.evaluator).stringof,
+					StoredArgTypes.expand.stringof
+				)
+			);
+		}
+
 		static if (hasReturnType) {
 			result = prepareInputAndCall(dg, args);
 		}
@@ -443,8 +532,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 		);
 
 		static if (output_attributes.length) {
-			import vibe.utils.meta.typetuple : Compare;
-			import std.traits : fullyQualifiedName, ParameterTypeTuple;
+			import std.traits : fullyQualifiedName;
 			import std.string : format;
 			import std.typetuple : TypeTuple;
 
@@ -488,10 +576,6 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 	}
 
 	private {
-		import std.functional : toDelegate;
-		import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
-		import std.typetuple : Filter;
-
 		// used as an argument tuple when function attached
 		// to InputAttribute is called
 		StoredArgTypes.expand m_storedArgs;
@@ -526,6 +610,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 				proxies return value of dg
 		*/
 		ReturnType!Function prepareInputAndCall(T...)(FunctionDg dg, T args)
+			if (!Compare!(Group!T, Group!(ParameterTypeTuple!Function)))
 		{
 			alias attributed_parameters = AttributedParameterMetadata!Function;
 			// calculated combined input type list
@@ -534,7 +619,6 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 				Group!T
 			);
 
-			import vibe.utils.meta.typetuple : Compare;
 			import std.traits : fullyQualifiedName;
 			import std.string : format;
 
@@ -552,8 +636,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 			// this value tuple will be used to assemble argument list
 			Input input;
 
-			foreach (i, uda; input_attributes)
-			{
+			foreach (i, uda; input_attributes) {
 				// each iteration cycle is responsible for initialising `input`
 				// tuple from previous spot to current attributed parameter index
 				// (including)
@@ -594,6 +677,24 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 
 			return dg(input);
 		}
+
+		/**
+			`prepareInputAndCall` overload that operates on argument tuple that exactly
+			matches attributed function argument list and thus gets updated by
+			attached function instead of being merged with it
+		*/
+		ReturnType!Function prepareInputAndCall(T...)(FunctionDg dg, T args)
+			if (Compare!(Group!T, Group!(ParameterTypeTuple!Function)))
+		{
+			alias attributed_parameters = AttributedParameterMetadata!Function;
+
+			foreach (i, uda; input_attributes) {
+				enum index = attributed_parameters[i].index;
+				args[index] = uda.evaluator(m_storedArgs);
+			}
+
+			return dg(args);
+		} 
 	}
 }
 
@@ -625,6 +726,36 @@ unittest
 	// `b` and `d` are unattributed, thus `42` and `13.5` will be
 	// used as their values
 	int result = funcattr(42, 13.5);
+
+	assert(result == (1020 + 42 + 1020 + to!int(13.5)) * 2);
+}
+
+// testing other prepareInputAndCall overload
+unittest
+{
+	import std.conv;
+
+	static string evaluator(string left, string right)
+	{
+		return left ~ right;
+	}
+
+	// all attribute function must accept same stored parameters
+	static int modificator(int result, string unused1, string unused2)
+	{
+		return result * 2;
+	}
+
+	@before!evaluator("a") @before!evaluator("c") @after!modificator()
+	static int sum(string a, int b, string c, double d)
+	{
+		return to!int(a) + to!int(b) + to!int(c) + to!int(d);
+	}
+
+	auto funcattr = createAttributedFunction!sum("10", "20");
+
+	// `a` and `c` are expected to be simply overwritten
+	int result = funcattr("1000", 42, "1000", 13.5);
 
 	assert(result == (1020 + 42 + 1020 + to!int(13.5)) * 2);
 }

@@ -49,7 +49,7 @@ interface Example1API
 
 class Example1 : Example1API
 {
-	override: // use of this handy D feature is highly recommended
+	override: // usage of this handy D feature is highly recommended
 		string getSomeInfo()
 		{
 			return "Some Info!";
@@ -65,6 +65,17 @@ class Example1 : Example1API
 		{
 			return "Getter";
 		}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example1());
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/example1_api/some_info");
+	assert (routes[HTTPMethod.GET][1].pattern == "/example1_api/getter");
+	assert (routes[HTTPMethod.POST][0].pattern == "/example1_api/sum");
 }
 
 /* --------- EXAMPLE 2 ---------- */
@@ -107,8 +118,19 @@ class Example2 : Example2API
 		{
 			import std.algorithm;
 			// Some sweet functional D
-			return reduce!( (a, b) => Aggregate(a.name ~ b.name, a.count + b.count, Aggregate.Type.Type3) )(Aggregate.init, input);
+			return reduce!(
+                (a, b) => Aggregate(a.name ~ b.name, a.count + b.count, Aggregate.Type.Type3)
+            )(Aggregate.init, input);
 		}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example2(), MethodStyle.upperUnderscored);
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/EXAMPLE2_API/ACCUMULATE_ALL");
 }
 
 /* --------- EXAMPLE 3 ---------- */
@@ -136,8 +158,11 @@ interface Example3APINested
 {
 	/* In this example it will be available under "GET /nested_module/number"
 	 * But this interface does't really know it, it does not care about exact path
+	 *
+	 * Default parameter values work as expected - they get used if there are no data
+	 & for that parameter in request.
 	 */
-	int getNumber();
+	int getNumber(int def_arg = 42);
 }
 
 class Example3 : Example3API
@@ -166,11 +191,22 @@ class Example3 : Example3API
 class Example3Nested : Example3APINested
 {
 	override:
-		int getNumber()
+		int getNumber(int def_arg)
 		{
-			return 42;
+			return def_arg;
 		}
 }
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example3());
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/example3_api/nested_module/number");
+	assert (routes[HTTPMethod.GET][1].pattern == "/example3_api/:id/myid");
+}
+
 
 /* If pre-defined conventions do not suit your needs, you can configure url and method
  * precisely via User Defined Attributes.
@@ -208,6 +244,78 @@ class Example4 : Example4API
 		}
 }
 
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example4());
+    auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.POST][0].pattern == "/example4_api/simple");
+	assert (routes[HTTPMethod.GET][0].pattern == "/example4_api/:param/:another_param/data");
+}
+
+/* It is possible to attach function hooks to methods via User-Define Attributes.
+ *
+ * Such hook must be a free function that
+ *     1) accepts HTTPServerRequest and HTTPServerResponse
+ *     2) is attached to specific parameter of a method
+ *     3) has same return type as that parameter type
+ * 
+ * REST API framework will call attached functions before actual
+ * method call and use their result as an input to method call. 
+ *
+ * There is also another attribute function type that can be called
+ * to post-process method return value.
+ *
+ * Refer to `vibe.utils.meta.funcattr` for more details.
+ */
+@rootPathFromName
+interface Example5API
+{
+	import vibe.utils.meta.funcattr;
+
+	@before!authenticate("user") @after!addBrackets()
+	string getSecret(int num, User user);	
+}
+
+User authenticate(HTTPServerRequest req, HTTPServerResponse res)
+{
+	return User("admin", true);
+}
+
+struct User
+{
+	string name;
+	bool authorized;
+}
+
+string addBrackets(string result, HTTPServerRequest, HTTPServerResponse)
+{
+	return "{" ~ result ~ "}";
+}
+
+class Example5 : Example5API
+{
+	string getSecret(int num, User user)
+	{
+		import std.conv : to;
+		import std.string : format;
+
+		if (!user.authorized)
+			return "";
+			
+		return format("secret #%s for %s", num, user.name);
+	}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example5());
+	auto routes = router.getAllRoutes();
+
+	assert (routes[HTTPMethod.GET][0].pattern == "/example5_api/secret");
+}
 
 shared static this()
 {
@@ -219,6 +327,7 @@ shared static this()
 	// naming style is default again, those can be router path specific.
 	registerRestInterface(routes, new Example3());
 	registerRestInterface(routes, new Example4());
+	registerRestInterface(routes, new Example5());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
@@ -234,6 +343,9 @@ shared static this()
 	 * will always stay in sync. Care about method style naming convention mismatch though.
 	 */
 	setTimer(dur!"seconds"(1), {
+		scope(exit)
+			exitEventLoop(true);
+
 		logInfo("Starting communication with REST interface. Use capture tool (i.e. wireshark) to check how it looks on HTTP protocol level");
 		// Example 1
 		{
@@ -259,6 +371,7 @@ shared static this()
 			auto api = new RestInterfaceClient!Example3API("http://127.0.0.1:8080");
 			assert(api.getMyID(9000) == 9000);
 			assert(api.nestedModule.getNumber() == 42);
+			assert(api.nestedModule.getNumber(1) == 1);
 		}
 		// Example 4
 		{
@@ -266,6 +379,13 @@ shared static this()
 			api.myNameDoesNotMatter();
 			assert(api.getParametersInURL("20", "30") == 50);
 		}
+		// Example 5
+		{
+			auto api = new RestInterfaceClient!Example5API("http://127.0.0.1:8080");
+			auto secret = api.getSecret(42, User.init);
+			assert(secret == "{secret #42 for admin}");
+		}
+
 		logInfo("Success.");
 	});
 }

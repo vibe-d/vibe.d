@@ -336,8 +336,7 @@ private struct IsolatedRef(T)
 	//mixin isolatedAggregateMethods!T;
 	#line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-	#line 340 "source/vibe/concurrency.d"
-	static assert(__LINE__ == 336);
+	#line 340 "source/vibe/core/concurrency.d"
 
 	@disable this(this);
 
