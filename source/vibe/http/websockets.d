@@ -44,7 +44,21 @@ import std.functional;
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
+
+	Note:
+		The overloads taking non-scoped callback parameters are scheduled to
+		be deprecated soon.
 */
+HTTPServerRequestDelegate handleWebSockets(void delegate(scope WebSocket) on_handshake)
+{
+	return handleWebSockets(ws => on_handshake(ws));
+}
+/// ditto
+HTTPServerRequestDelegate handleWebSockets(void function(scope WebSocket) on_handshake)
+{
+	return handleWebSockets(ws => on_handshake(ws));
+}
+/// ditto
 HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
@@ -83,7 +97,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		res.headers["Connection"] = "Upgrade";
 		Stream conn = res.switchProtocol("websocket");
 
-		auto socket = new WebSocket(conn);
+		/*scope*/ auto socket = new WebSocket(conn, req);
 		on_handshake(socket);
 	}
 	return &callback;
@@ -103,11 +117,13 @@ class WebSocket {
 		TCPConnection m_conn;
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
+		const HTTPServerRequest m_request;
 	}
 
-	this(Stream conn)
+	this(Stream conn, HTTPServerRequest request)
 	{
 		m_conn = cast(TCPConnection)conn;
+		m_request = request;
 		assert(m_conn);
 	}
 
@@ -127,6 +143,11 @@ class WebSocket {
 		}
 		return m_conn.connected && !m_sentCloseFrame;
 	}
+
+	/**
+		The HTTP request the established the web socket connection.
+	*/
+	@property const(HTTPServerRequest) request() const { return m_request; }
 
 	/**
 		Checks if data is readily available for read.
