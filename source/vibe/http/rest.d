@@ -171,8 +171,10 @@ unittest
 		// GET /api/greeting
 		@property string greeting();
 
-		// PUT /api/greeting
-		@property void greeting(string text);
+		version (none) {
+			// PUT /api/greeting
+			@property void greeting(string text);
+		}
 
 		// POST /api/users
 		@path("/users")
@@ -201,9 +203,11 @@ unittest
 			return m_greeting;
 		}
 
-		@property void greeting(string text)
-		{
-			m_greeting = text;
+		version(none) {		
+			@property void greeting(string text)
+			{
+				m_greeting = text;
+			}
 		}
 
 		void addNewUser(string name)
@@ -442,8 +446,10 @@ unittest
 
 		// GET /greeting
 		@property string greeting();
-		// PUT /greeting
-		@property void greeting(string text);
+		version(none) {
+			// PUT /greeting
+			@property void greeting(string text);
+		}
 		
 		// POST /new_user
 		void addNewUser(string name);
@@ -458,7 +464,8 @@ unittest
 		auto api = new RestInterfaceClient!IMyApi("http://127.0.0.1/api/");
 
 		logInfo("Status: %s", api.getStatus());
-		api.greeting = "Hello, World!";
+		version(none)
+			api.greeting = "Hello, World!";
 		logInfo("Greeting message: %s", api.greeting);
 		api.addNewUser("Peter");
 		api.addNewUser("Igor");
