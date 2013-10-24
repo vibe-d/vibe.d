@@ -366,7 +366,7 @@ private {
 			enum Parameter meta = ParameterMeta.expand[0];
 
 			static assert (meta.index <= ParameterList.expand.length);
-			static if (meta.origin.length) {
+			static if (meta.origin != "") {
 				mixin("static import " ~ meta.origin ~ ";");
 			}
 			mixin("alias type = " ~ meta.type ~ ";");
@@ -660,7 +660,9 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 					enum rEnd = index - i;
 				}				
 
-				input[lStart..lEnd] = args[rStart..rEnd];
+				static if (lStart != lEnd) {
+					input[lStart..lEnd] = args[rStart..rEnd];
+				}
 
 				// during last iteration cycle remaining tail is initialised
 				// too (if any)
