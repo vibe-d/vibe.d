@@ -3,6 +3,7 @@ module vibe.crypto.cryptorand;
 
 
 private import std.conv : text;
+private import std.digest.sha;
 
 class CryptoException : Exception
 {
@@ -49,7 +50,7 @@ final class SystemRNG
 		private import std.stdio;
 		private import std.exception;
 		
-		//reference to the file stream
+		//cryptographic file stream
 		private File file;
 	}
 	else
@@ -212,5 +213,207 @@ unittest
 		
 		//copy current random bytes for next iteration
 		prevRadn[] = rand[];
+	}
+}
+
+
+//Hash-based cryptographically secure mixer
+//It uses hash function to mix random bytes from input RNG
+//Use only cryptographically secure hash functions like SHA-512, Whirlpool or SHA-256, but not MD5
+//"factor" param shows in how many times a input RNG buffer bigger than output buffer
+//Increase "factor" value if you need more security because it increases entropy level
+//Decrease "factor" value if you need more speed
+final class MixerRNG(Hash, uint factor)
+if(isDigest!Hash)
+{
+	static assert(factor, "factor must be larger than 0");
+	
+	//random number generator
+	SystemRNG rng;
+	
+	//Creates new random generator
+	this()
+	{
+		//create random number generator
+		this.rng = new SystemRNG();
+	}
+	
+	//Fills the buffer new random numbers
+	void read(ubyte[] buffer)
+	in
+	{
+		assert(buffer.length, "buffer length must be larger than 0");
+		assert(buffer.length <= uint.max, "buffer length must be smaller or equal uint.max");
+	}
+	body
+	{
+		//use stack to allocate internal buffer
+		ubyte[factor * digestLength!Hash] internalBuffer;
+		
+		//init internal buffer
+		this.rng.read(internalBuffer);
+		
+		//create new random number on stack
+		ubyte[digestLength!Hash] randomNumber = digest!Hash(internalBuffer);
+		
+		//allows to fill buffers longer than hash digest length
+		while(buffer.length > digestLength!Hash)
+		{
+			//fill the buffer's beginning
+			buffer[0..digestLength!Hash] = randomNumber[0..$];
+			
+			//receive the buffer's end
+			buffer = buffer[digestLength!Hash..$];
+			
+			//re-init internal buffer
+			this.rng.read(internalBuffer);
+			
+			//create next random number
+			randomNumber = digest!Hash(internalBuffer);
+		}
+		
+		//fill the buffer's end
+		buffer[0..$] = randomNumber[0..buffer.length];
+	}
+}
+
+alias MixerRNG!(SHA1, 5) SHA1MixerRNG;
+
+//test heap-based arrays
+unittest
+{
+	import std.algorithm;
+	import std.range;
+	import std.typetuple;
+	import std.digest.md;
+	
+	//number of iteration counts
+	enum iterationCount = 10;
+	
+	enum uint factor = 5;
+	
+	//tested hash functions
+	foreach(Hash; TypeTuple!(SHA1, MD5))
+	{
+		//test for different number random bytes in the buffer from 10 to 80 inclusive
+		foreach(bufferSize; iota(10, 81))
+		{
+			auto rng = new MixerRNG!(Hash, factor)();
+			
+			//holds the random number
+			ubyte[] rand = new ubyte[bufferSize];
+			
+			//holds the previous random number after the creation of the next one
+			ubyte[] prevRadn = new ubyte[bufferSize];
+			
+			//create the next random number
+			rng.read(prevRadn);
+			
+			assert(!equal(prevRadn, take(repeat(0), bufferSize)), "it's almost unbelievable - all random bytes is zero");
+			
+			//take "iterationCount" arrays with random bytes
+			foreach(i; 0..iterationCount)
+			{
+				//create the next random number
+				rng.read(rand);
+				
+				assert(!equal(rand, take(repeat(0), bufferSize)), "it's almost unbelievable - all random bytes is zero");
+				
+				assert(!equal(rand, prevRadn), "it's almost unbelievable - current and previous random bytes are equal");
+				
+				//make sure that we have different random bytes in different hash digests
+				if(bufferSize > digestLength!Hash)
+				{
+					//begin and end of random number array
+					ubyte[] begin = rand[0..digestLength!Hash];
+					ubyte[] end = rand[digestLength!Hash..$];
+					
+					//compare all nearby hash digests
+					while(end.length >= digestLength!Hash)
+					{
+						assert(!equal(begin, end[0..digestLength!Hash]), "it's almost unbelievable - random bytes in different hash digests are equal");
+						
+						//go to the next hash digests
+						begin = end[0..digestLength!Hash];
+						end = end[digestLength!Hash..$];
+					}
+				}
+				
+				//copy current random bytes for next iteration
+				prevRadn[] = rand[];
+			}
+		}
+	}
+}
+
+//test stack-based arrays
+unittest
+{
+	import std.algorithm;
+	import std.range;
+	import std.array;
+	import std.typetuple;
+	import std.digest.md;
+	
+	//number of iteration counts
+	enum iterationCount = 10;
+	
+	enum uint factor = 5;
+	
+	//tested hash functions
+	foreach(Hash; TypeTuple!(SHA1, MD5))
+	{
+		//test for different number random bytes in the buffer
+		foreach(bufferSize; TypeTuple!(10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80))
+		{
+			//array that contains only zeros
+			ubyte[bufferSize] zeroArray;
+			zeroArray[] = take(repeat(cast(ubyte)0), bufferSize).array()[];
+			
+			auto rng = new MixerRNG!(Hash, factor)();
+			
+			//holds the random number
+			ubyte[bufferSize] rand;
+			
+			//holds the previous random number after the creation of the next one
+			ubyte[bufferSize] prevRadn;
+			
+			//create the next random number
+			rng.read(prevRadn);
+			
+			assert(prevRadn != zeroArray, "it's almost unbelievable - all random bytes is zero");
+			
+			//take "iterationCount" arrays with random bytes
+			foreach(i; 0..iterationCount)
+			{
+				//create the next random number
+				rng.read(rand);
+				
+				assert(prevRadn != zeroArray, "it's almost unbelievable - all random bytes is zero");
+				
+				assert(rand != prevRadn, "it's almost unbelievable - current and previous random bytes are equal");
+				
+				//make sure that we have different random bytes in different hash digests
+				if(bufferSize > digestLength!Hash)
+				{
+					//begin and end of random number array
+					ubyte[] begin = rand[0..digestLength!Hash];
+					ubyte[] end = rand[digestLength!Hash..$];
+					
+					//compare all nearby hash digests
+					while(end.length >= digestLength!Hash)
+					{
+						assert(!equal(begin, end[0..digestLength!Hash]), "it's almost unbelievable - random bytes in different hash digests are equal");
+						
+						//go to the next hash digests
+						begin = end[0..digestLength!Hash];
+						end = end[digestLength!Hash..$];
+					}
+				}
+				
+				//copy current random bytes for next iteration
+				prevRadn[] = rand[];
+			}
+		}
 	}
 }
