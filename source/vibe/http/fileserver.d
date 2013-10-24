@@ -93,7 +93,7 @@ HTTPServerRequestDelegate serveStaticFile(string local_path, HTTPFileServerSetti
 */
 class HTTPFileServerSettings {
 	string serverPathPrefix = "/";
-	Duration maxAge = hours(24);
+	Duration maxAge;// = hours(24);
 	bool failIfNotFound = false;
 	string[string] encodingFileExtension;
 	
@@ -107,10 +107,15 @@ class HTTPFileServerSettings {
 	*/
 	void delegate(HTTPServerRequest req, HTTPServerResponse res, ref string physicalPath) preWriteCallback = null;
 
-	this() {}
+	this()
+	{
+		// need to use the contructor because the Ubuntu 13.10 GDC cannot CTFE dur()
+		maxAge = 24.hours;
+	}
 
 	this(string path_prefix)
 	{
+		this();
 		serverPathPrefix = path_prefix;
 	}
 } 

@@ -363,11 +363,17 @@ class HTTPServerSettings {
 		HTTPServerOption.parseMultiPartBody |
 		HTTPServerOption.parseCookies;
 	
-	/// Time of a request after which the connection is closed with an error; not supported yet
-	Duration maxRequestTime = dur!"seconds"(0);
+	/** Time of a request after which the connection is closed with an error; not supported yet
 
-	/// Maximum time between two request on a keep-alive connection
-	Duration keepAliveTimeout = dur!"seconds"(10);
+		The default limit of 0 means that the request time is not limited.
+	*/
+	Duration maxRequestTime;// = dur!"seconds"(0);
+
+	/** Maximum time between two request on a keep-alive connection
+
+		The default value is 10 seconds.
+	*/
+	Duration keepAliveTimeout;// = dur!"seconds"(10);
 	
 	/// Maximum number of transferred bytes per request after which the connection is closed with
 	/// an error; not supported yet
@@ -430,6 +436,13 @@ class HTTPServerSettings {
 
 	/// Disable support for VibeDist and instead start listening immediately.
 	bool disableDistHost = false;
+
+	this()
+	{
+		// need to use the contructor because the Ubuntu 13.10 GDC cannot CTFE dur()
+		maxRequestTime = 0.seconds;
+		keepAliveTimeout = 10.seconds;
+	}
 
 	private string _sslCertFile, _sslKeyFile;
 }

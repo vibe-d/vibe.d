@@ -7,11 +7,13 @@
 */
 module vibe.http.rest;
 
+import vibe.core.log;
 import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 
-import vibe.core.log;
+import std.array : startsWith, endsWith;
+
 
 /**
 	Registers a REST interface and connects it the the given instance.

@@ -183,7 +183,7 @@ private {
 
 	template isInputAttribute(T...)	
 	{
-		enum isInputAttribute = (T.length == 1) && is(typeof(T[0]) : InputAttribute!F, alias F);
+		enum isInputAttribute = (T.length == 1) && isInstanceOf!(InputAttribute, T[0]);
 	}
 
 	unittest
@@ -199,7 +199,7 @@ private {
 
 	template isOutputAttribute(T...)	
 	{
-		enum isOutputAttribute = (T.length == 1) && is(typeof(T[0]) : OutputAttribute!F, alias F);
+		enum isOutputAttribute = (T.length == 1) && isInstanceOf!(OutputAttribute, T[0]);
 	}
 
 	unittest

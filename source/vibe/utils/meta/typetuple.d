@@ -43,8 +43,7 @@ template isGroup(T...)
 		&& !is(typeof(&(T[0].expand)));            // expands to not addressable
 }
 
-///
-unittest
+version (unittest) // NOTE: GDC complains about template definitions in unittest blocks
 {
 	alias group = Group!(int, double, string);
 	alias group2 = Group!();
