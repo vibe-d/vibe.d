@@ -11,6 +11,8 @@
 
 module vibe.utils.meta.funcattr;
 
+import std.traits : isInstanceOf;
+
 /// example
 unittest
 {
