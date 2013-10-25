@@ -1,10 +1,18 @@
-//Implements a cryptographically secure random number generator
+/**
+	Implements a cryptographically secure random number generator
+	
+	Copyright: © 2013 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Ilya Shipunov
+*/
 module vibe.crypto.cryptorand;
-
 
 private import std.conv : text;
 private import std.digest.sha;
 
+/**
+	Thrown if we have errors with random number generation.
+*/
 class CryptoException : Exception
 {
 	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) @safe pure nothrow
@@ -36,8 +44,18 @@ version(Windows)
 	}
 }
 
-//System cryptography secure random number generator
-//Used "CryptGenRandom" function for Windows and "/dev/urandom" for Posix
+/**
+	System cryptography secure random number generator
+	It use "CryptGenRandom" function for Windows and "/dev/urandom" for Posix
+	It's recommended to use additional processing generated random numbers
+	via provided functions for systems where security matters.
+	
+	Remarks:
+		Windows "CryptGenRandom" RNG has problems with Windows 2000 and Windows XP
+		(assuming the attacker has control of the machine).
+		Fixed for Windows XP Service Pack 3 and Windows Vista.
+		http://en.wikipedia.org/wiki/CryptGenRandom
+*/
 final class SystemRNG
 {
 	version(Windows)
@@ -58,7 +76,9 @@ final class SystemRNG
 		static assert(0, "OS is not supported");
 	}
 	
-	//Creates new random generator
+	/**
+		Creates new system random generator
+	*/
 	this()
 	{
 		version(Windows)
@@ -89,7 +109,16 @@ final class SystemRNG
 		}
 	}
 	
-	//Fills the buffer new random numbers
+	/**
+		Fills the buffer new random number
+		
+		Params:
+			buffer: The buffer that will be filled new random number.
+				It will contain buffer.length random ubytes.
+				Supported both heap-based and stack-based arrays.
+		Throws:
+			CryptoException on error.
+	*/
 	void read(ubyte[] buffer)
 	in
 	{
@@ -217,12 +246,18 @@ unittest
 }
 
 
-//Hash-based cryptographically secure mixer
-//It uses hash function to mix random bytes from input RNG
-//Use only cryptographically secure hash functions like SHA-512, Whirlpool or SHA-256, but not MD5
-//"factor" param shows in how many times a input RNG buffer bigger than output buffer
-//Increase "factor" value if you need more security because it increases entropy level
-//Decrease "factor" value if you need more speed
+/**
+	Hash-based cryptographically secure mixer
+	It uses hash function to mix random bytes from input RNG
+	Use only cryptographically secure hash functions like SHA-512, Whirlpool or SHA-256, but not MD5
+	
+	Params:
+		Hash: hash function like SHA1
+		factor: Shows in how many times a input RNG buffer bigger than output buffer
+			Increase factor value if you need more security because it increases entropy level
+			Decrease factor value if you need more speed
+			
+*/
 final class HashMixerRNG(Hash, uint factor)
 if(isDigest!Hash)
 {
@@ -231,14 +266,25 @@ if(isDigest!Hash)
 	//random number generator
 	SystemRNG rng;
 	
-	//Creates new random generator
+	/**
+		Creates new hash-based mixer random generator
+	*/
 	this()
 	{
 		//create random number generator
 		this.rng = new SystemRNG();
 	}
 	
-	//Fills the buffer new random numbers
+	/**
+		Fills the buffer new random number
+		
+		Params:
+			buffer: The buffer that will be filled new random number.
+				It will contain buffer.length random ubytes.
+				Supported both heap-based and stack-based arrays.
+		Throws:
+			CryptoException on error.
+	*/
 	void read(ubyte[] buffer)
 	in
 	{
@@ -277,6 +323,7 @@ if(isDigest!Hash)
 	}
 }
 
+///alias for HashMixerRNG!(SHA1, 5)
 alias HashMixerRNG!(SHA1, 5) SHA1HashMixerRNG;
 
 //test heap-based arrays
