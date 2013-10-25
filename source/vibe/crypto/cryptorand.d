@@ -223,7 +223,7 @@ unittest
 //"factor" param shows in how many times a input RNG buffer bigger than output buffer
 //Increase "factor" value if you need more security because it increases entropy level
 //Decrease "factor" value if you need more speed
-final class MixerRNG(Hash, uint factor)
+final class HashMixerRNG(Hash, uint factor)
 if(isDigest!Hash)
 {
 	static assert(factor, "factor must be larger than 0");
@@ -277,7 +277,7 @@ if(isDigest!Hash)
 	}
 }
 
-alias MixerRNG!(SHA1, 5) SHA1MixerRNG;
+alias HashMixerRNG!(SHA1, 5) SHA1HashMixerRNG;
 
 //test heap-based arrays
 unittest
@@ -298,7 +298,7 @@ unittest
 		//test for different number random bytes in the buffer from 10 to 80 inclusive
 		foreach(bufferSize; iota(10, 81))
 		{
-			auto rng = new MixerRNG!(Hash, factor)();
+			auto rng = new HashMixerRNG!(Hash, factor)();
 			
 			//holds the random number
 			ubyte[] rand = new ubyte[bufferSize];
@@ -370,7 +370,7 @@ unittest
 			ubyte[bufferSize] zeroArray;
 			zeroArray[] = take(repeat(cast(ubyte)0), bufferSize).array()[];
 			
-			auto rng = new MixerRNG!(Hash, factor)();
+			auto rng = new HashMixerRNG!(Hash, factor)();
 			
 			//holds the random number
 			ubyte[bufferSize] rand;
