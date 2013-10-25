@@ -23,8 +23,6 @@ class CryptoException : Exception
 
 version(Windows)
 {
-	pragma(lib,"advapi32");
-	
 	private import std.c.windows.windows;
 	
 	private extern(Windows) nothrow
