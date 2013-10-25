@@ -1,6 +1,63 @@
 ﻿Changelog
 =========
 
+v0.7.18 - 2013-
+--------------------
+
+### Features and improvements ###
+
+ - Compiles using DMD 2.064 (and DMD 2.063.2)
+ - `OutgoingWebSocketMessage` is now automatically finalized
+ - Added `File.isOpen`
+ - `vibe.stream.operations.readAll()` now preallocates if possible
+ - Added `BsonDate.fromStdTime` and improve documentation to avoid time zone related bugs
+ - Optimized HTML escaping performance (by Martin Nowak) - [pull #327][issue327]
+ - Added a `TaskMutex.this(Object)` constructor to be able to use them as object monitors
+ - Added a non-blocking (infinitely buffering) mode for `TaskPipe`
+ - Adjusted naming of `Bson.Type` and `Json.Type` members for naming conventions
+ - Added (de)serialization support for AAs with string serializable key types (by Daniel Davidson) - [pull #333][issue333]
+ - Implemented different deserialization modes (partially [pull #336][issue336])
+ - Added `setLogFormat` as a more flexible replacement for `setPlainLogging
+ - `render!()` for rendering Diet templates is assumed to be safe starting with DMD 2.064
+ - Improved `Json` usability by enabling `~=` and some more use cases for `~`
+ - Added a workaround for excessive compile times for large static arrays (by Martin Nowak) - [pull #341][issue341]
+ - Added a `ConnectionStream` interface from which `TCPConnection` and `TaskPipe` now derive
+ - Implemented `vibe.stream.operations.pipeRealtime` for piping stream data with a defined maximum latency
+ - Implemented parameter and return value modifier user attributes for the REST interface generator and refactor meta programming facilities (by Михаил Страшун aka Dicebot) - [pull #340][issue340], [pull #344][issue344], [pull #349][issue349]
+ - Improved the HTTP reverse proxy by handling HEAD requests correctly, avoiding GC allocations and optionally disabling transfer compression
+ - Added `MongoCollection.aggregate()` (by Jack Applegame) - [pull #348][issue348]
+ - Added `WebSocket.request` to enable access to the original HTTP request and add scoped web socket callbacks for avoiding GC allocations
+ - Implemented `MongoCursor.sort` to allow sorted queries using the same syntax as other MongoDB drivers (by Jack Applegame) - [pull #353][issue353]
+ - Implemented random number generators suited for cryptographic applications (by Ilya Stromberg) - [pull #352][issue352]
+
+### Bug fixes ###
+
+ - Fixed wrongly triggering assertions on Windows when `INVALID_SOCKET` is returned
+ - Fixed issues with `vibe.stream.zlib` by reimplementing everything using zlib directly instead of `std.zlib`
+ - Fixed an exception in the HTTP file server when downloading a compressed file with no content transfer encoding requested
+ - Fixed compilation in release and unit test modes
+ - Fixed a data corruption bug caused by changed alignment in memory returned by `GC.realloc`
+ - Fixed the libevent driver to avoid infinite buffering of output data - [issue #191][issue191]
+ - Fixed (de)serialization of BSON/JSON with (to/from)(String/Json) methods (by Jack Applegame) - [pull #309][issue309]
+ - Fixed possible finalization errors and possible interleaved requests in `HTTPClient.request`
+ - Fixed a possible access violation in `Libevent2TCPConnection` when the connection was closed by the remote peer - [issue #321][issue321]
+ - Fixed `Win32TCPConnection.connect` to wait for the connection to be established (and throw proper exceptions on failure)
+ - Fixed HTTP client requests for URLs with an empty path component (ending directly with the host name)
+ - Fixed out-of-range errors when parsing JSON with malformed keywords
+ - Fixed an exception when disconnecting HTTP client connections where the remote has already disconnected
+ - Fixed `vibe.core.args.getOption` to return true when an option was found (by Martin Nowak) - [pull #331][issue331]
+ - Fixed command line options to have precedence over configuration settings for `getOption`
+ - Fixed `Cookie.maxAge` having no effect (by Jack Applegame) - [pull #334][issue334], [issue #330][issue330]
+ - Fixed request/response delays in `Libevent2TCPConnection` (by Martin Nowak) - [issue #338][issue338]
+ - Fixed conditional use of `std.net.isemail` to validate emails
+ - Fixed an assertion triggering for very small wait timeouts
+ - Fixed markdown `[ref][]` style links (by Martin Nowak) - [pull #343][issue343]
+ - Fixed cache headers in the HTTP file server and sending a "Date" header for all HTTP server responses
+ - Fixed interleaved HTTP client requests when dropping a previous response has failed for some reason
+ - Fixed opening files with `FileMode.readWrite` and `FileMode.createTrunc` to allow both, reading and writing - [issue #337][issue337], [issue #354][issue354]
+ - Fixed documentation of some parameters - [issue #322][issue322]
+
+
 v0.7.17 - 2013-09-09
 --------------------
 
