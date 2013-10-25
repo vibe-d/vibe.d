@@ -57,6 +57,28 @@ v0.7.18 - 2013-
  - Fixed opening files with `FileMode.readWrite` and `FileMode.createTrunc` to allow both, reading and writing - [issue #337][issue337], [issue #354][issue354]
  - Fixed documentation of some parameters - [issue #322][issue322]
 
+[issue191]: https://github.com/rejectedsoftware/vibe.d/issues/191
+[issue309]: https://github.com/rejectedsoftware/vibe.d/issues/309
+[issue321]: https://github.com/rejectedsoftware/vibe.d/issues/321
+[issue322]: https://github.com/rejectedsoftware/vibe.d/issues/322
+[issue327]: https://github.com/rejectedsoftware/vibe.d/issues/327
+[issue330]: https://github.com/rejectedsoftware/vibe.d/issues/330
+[issue331]: https://github.com/rejectedsoftware/vibe.d/issues/331
+[issue333]: https://github.com/rejectedsoftware/vibe.d/issues/333
+[issue334]: https://github.com/rejectedsoftware/vibe.d/issues/334
+[issue336]: https://github.com/rejectedsoftware/vibe.d/issues/336
+[issue337]: https://github.com/rejectedsoftware/vibe.d/issues/337
+[issue338]: https://github.com/rejectedsoftware/vibe.d/issues/338
+[issue340]: https://github.com/rejectedsoftware/vibe.d/issues/340
+[issue341]: https://github.com/rejectedsoftware/vibe.d/issues/341
+[issue343]: https://github.com/rejectedsoftware/vibe.d/issues/343
+[issue344]: https://github.com/rejectedsoftware/vibe.d/issues/344
+[issue348]: https://github.com/rejectedsoftware/vibe.d/issues/348
+[issue349]: https://github.com/rejectedsoftware/vibe.d/issues/349
+[issue352]: https://github.com/rejectedsoftware/vibe.d/issues/352
+[issue353]: https://github.com/rejectedsoftware/vibe.d/issues/353
+[issue354]: https://github.com/rejectedsoftware/vibe.d/issues/354
+
 
 v0.7.17 - 2013-09-09
 --------------------
