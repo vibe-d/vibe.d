@@ -242,9 +242,15 @@ private class OutputContext {
 		Code,
 		String
 	}
+	struct Node {
+		string tag;
+		bool inner;
+		bool outer;
+		alias tag this;
+	}
 
 	State m_state = State.Code;
-	string[] m_nodeStack;
+	Node[] m_nodeStack;
 	string m_result;
 	Line m_line = Line(null, -1, null);
 
@@ -259,25 +265,27 @@ private class OutputContext {
 
 	@property size_t stackSize() const { return m_nodeStack.length; }
 
-	void pushNode(string str) { m_nodeStack ~= str; }
+	void pushNode(string str, bool inner = true, bool outer = true) { m_nodeStack ~= Node(str, inner, outer); }
 	void pushDummyNode() { pushNode("-"); }
 
-	void popNodes(int next_indent_level)
+	void popNodes(int next_indent_level, ref bool prepend_whitespaces)
 	{
 		// close all tags/blocks until we reach the level of the next line
 		while( m_nodeStack.length > next_indent_level ){
-			if( m_nodeStack[$-1][0] == '-' ){
-				if( m_nodeStack[$-1].length > 1 ){
-					writeCodeLine(m_nodeStack[$-1][1 .. $]);
+			auto top = m_nodeStack[$-1];
+			if( top[0] == '-' ){
+				if( top.length > 1 ){
+					writeCodeLine(top[1 .. $]);
 				}
-			} else if( m_nodeStack[$-1].length ){
+			} else if( top.length ){
 				string str;
-				if( m_nodeStack[$-1] != "</pre>" ){
+				if( top.inner && prepend_whitespaces && top != "</pre>" ){
 					str = "\n";
 					foreach( j; 0 .. m_nodeStack.length-1 ) if( m_nodeStack[j][0] != '-' ) str ~= "\t";
 				}
-				str ~= m_nodeStack[$-1];
+				str ~= top;
 				writeString(str);
+				prepend_whitespaces = top.outer;
 			}
 			m_nodeStack.length--;
 		}
@@ -428,6 +436,8 @@ private struct DietCompiler {
 			return (m_lineIndex+1 < lineCount ? indentLevel(line(m_lineIndex+1).text, indentStyle, false) - start_indent_level : 0) + base_level;
 		}
 
+		bool prepend_whitespaces = true;
+
 		for( ; m_lineIndex < lineCount; m_lineIndex++ ){
 			auto curline = line(m_lineIndex);
 			output.markInputLine(curline);
@@ -445,7 +455,7 @@ private struct DietCompiler {
 				output.writeCodeLine(ln[1 .. $] ~ "{");
 				output.pushNode("-}");
 			} else if( ln[0] == '|' ){ // plain text node
-				buildTextNodeWriter(output, ln[1 .. ln.length], level);
+				buildTextNodeWriter(output, ln[1 .. ln.length], level, prepend_whitespaces);
 			} else if( ln[0] == ':' ){ // filter node (filtered raw text)
 				// find all child lines
 				size_t next_tag = m_lineIndex+1;
@@ -468,7 +478,7 @@ private struct DietCompiler {
 				if( ln.startsWith("!!! ") ) tag = "!!!";
 				switch(tag){
 					default:
-						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level);
+						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces);
 						break;
 					case "!!!": // HTML Doctype header
 						buildSpecialTag(output, "!DOCTYPE html", level);
@@ -529,7 +539,7 @@ private struct DietCompiler {
 					case "script":
 					case "style":
 						if( tag == "script" && next_indent_level <= level){
-							buildHtmlNodeWriter(output, tag, ln[j .. $], level, false);
+							buildHtmlNodeWriter(output, tag, ln[j .. $], level, false, prepend_whitespaces);
 						} else {
 							// pass all child lines to buildRawTag and continue with the next sibling
 							size_t next_tag = m_lineIndex+1;
@@ -553,14 +563,13 @@ private struct DietCompiler {
 						break;
 				}
 			}
-			
-			output.popNodes(next_indent_level);
+			output.popNodes(next_indent_level, prepend_whitespaces);
 		}
 	}
 
-	private void buildTextNodeWriter(OutputContext output, in string textline, int level)
+	private void buildTextNodeWriter(OutputContext output, in string textline, int level, ref bool prepend_whitespaces)
 	{
-		output.writeString("\n");
+		if(prepend_whitespaces) output.writeString("\n");
 		if( textline.length >= 1 && textline[0] == '=' ){
 			output.writeExprHtmlEscaped(textline[1 .. $]);
 		} else if( textline.length >= 2 && textline[0 .. 2] == "!=" ){
@@ -569,14 +578,15 @@ private struct DietCompiler {
 			buildInterpolatedString(output, textline);
 		}
 		output.pushDummyNode();
+		prepend_whitespaces = true;
 	}
 
-	private void buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes)
+	private void buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes, ref bool prepend_whitespaces)
 	{
 		// parse the HTML tag, leaving any trailing text as line[i .. $]
 		size_t i;
 		Tuple!(string, string)[] attribs;
-		parseHtmlTag(line, i, attribs);
+		auto ws_type = parseHtmlTag(line, i, attribs);
 
 		// determine if we need a closing tag
 		bool is_singular_tag = false;
@@ -588,9 +598,9 @@ private struct DietCompiler {
 			default:
 		}
 		assertp(!(is_singular_tag && has_child_nodes), "Singular HTML element '"~tag~"' may not have children.");
-		
+
 		// opening tag
-		buildHtmlTag(output, tag, level, attribs, is_singular_tag);
+		buildHtmlTag(output, tag, level, attribs, is_singular_tag, ws_type.outer && prepend_whitespaces);
 
 		// parse any text contents (either using "= code" or as plain text)
 		string textstring;
@@ -608,8 +618,9 @@ private struct DietCompiler {
 		}
 
 		// closing tag
-		if( has_child_nodes ) output.pushNode("</"~tag~">");
+		if( has_child_nodes ) output.pushNode("</" ~ tag ~ ">", ws_type.inner, ws_type.outer);
 		else if( !is_singular_tag ) output.writeString("</" ~ tag ~ ">");
+		prepend_whitespaces = has_child_nodes ? ws_type.inner : ws_type.outer;
 	}
 
 	private void buildRawNodeWriter(OutputContext output, in ref string tag, in string tagline, int level,
@@ -694,13 +705,20 @@ private struct DietCompiler {
 		output.writeStringExpr(filter_expr);
 	}
 
-	private void parseHtmlTag(in ref string line, out size_t i, out Tuple!(string, string)[] attribs)
+	private auto parseHtmlTag(in ref string line, out size_t i, out Tuple!(string, string)[] attribs)
 	{
+		struct WSType {
+			bool inner = true;
+			bool outer = true;
+		}
+
 		i = 0;
 
 		string id;
 		string classes;
-		
+
+		WSType ws_type;
+
 		// parse #id and .classes
 		while( i < line.length ){
 			if( line[i] == '#' ){
@@ -714,16 +732,23 @@ private struct DietCompiler {
 				else classes ~= " " ~ cls;
 			} else break;
 		}
-		
+
 		// put #id and .classes into the attribs list
 		if( id.length ) attribs ~= tuple("id", '"'~id~'"');
-		
+
 		// parse other attributes
 		if( i < line.length && line[i] == '(' ){
 			i++;
 			string attribstring = skipUntilClosingClamp(line, i);
 			parseAttributes(attribstring, attribs);
 			i++;
+		}
+
+		// parse whitespaces removal tokens
+		for(; i < line.length; i++) {
+			if(line[i] == '<') ws_type.inner = false;
+			else if(line[i] == '>') ws_type.outer = false;
+			else break;
 		}
 
 		// add special attribute for extra classes that is handled by buildHtmlTag
@@ -741,13 +766,17 @@ private struct DietCompiler {
 
 		// skip until the optional tag text contents begin
 		skipWhitespace(line, i);
+
+		return ws_type;
 	}
 
-	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref Tuple!(string, string)[] attribs, bool is_singular_tag)
+	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref Tuple!(string, string)[] attribs, bool is_singular_tag, bool outer_whitespaces = true)
 	{
-		output.writeString("\n");
-		assertp(output.stackSize >= level);
-		foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) output.writeString("\t");
+		if(outer_whitespaces) {
+			output.writeString("\n");
+			assertp(output.stackSize >= level);
+			foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) output.writeString("\t");
+		}
 		output.writeString("<" ~ tag);
 		foreach( att; attribs ){
 			if( att[0][0] == '$' ) continue; // ignore special attributes
@@ -801,7 +830,7 @@ private struct DietCompiler {
 					value = '"' ~ value[1 .. $-1] ~ '"';
 				}
 			} else value = "true";
-			
+
 			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
 			if( i < str.length ){
 				i++;
@@ -1015,7 +1044,7 @@ private struct DietCompiler {
 		assertp(false, "Bug: include input file "~filename~" not found in internal list!?");
 		assert(false);
 	}
-	
+
 	private TemplateBlock* getBlock(string name)
 	{
 		foreach( i; 0 .. m_blocks.blocks.length )
