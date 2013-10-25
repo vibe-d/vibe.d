@@ -30,7 +30,7 @@
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
 			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
 			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
-			"libs-windows": ["wsock32", "ws2_32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
 		},
 		{
 			"name": "libev",
@@ -42,7 +42,7 @@
 			"name": "win32",
 			"platforms": ["windows"],
 			"versions": ["VibeWin32Driver"],
-			"libs-windows": ["wsock32", "ws2_32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
 		},
 		{
 			"name": "winrt",
