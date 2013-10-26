@@ -463,6 +463,8 @@ final class HTTPServerRequest : HTTPRequest {
 	public {
 		/// The IP address of the client
 		string peer;
+		/// ditto
+		NetworkAddress clientAddress;
 
 		/// Determines if the request was issued over an SSL encrypted channel.
 		bool ssl;
@@ -1080,7 +1082,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	do {
 		HTTPServerSettings settings;
 		bool keep_alive;
-		handleRequest(http_stream, connection.peerAddress, listen_info, settings, keep_alive);
+		handleRequest(http_stream, connection.peerAddress, connection.remoteAddress, listen_info, settings, keep_alive);
 		if( !keep_alive ){
 			logTrace("No keep-alive");
 			break;
@@ -1097,7 +1099,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream http_stream, string peer_address, HTTPServerListener listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
+private bool handleRequest(Stream http_stream, string peer_address_string, NetworkAddress peer_address, HTTPServerListener listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
 	SysTime reqtime = Clock.currTime(UTC());
 
@@ -1168,9 +1170,10 @@ private bool handleRequest(Stream http_stream, string peer_address, HTTPServerLi
 		}
 
 		// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-		if( peer_address.startsWith("::ffff:") && peer_address[7 .. $].indexOf(":") < 0 )
-			req.peer = peer_address[7 .. $];
-		else req.peer = peer_address;
+		if( peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(":") < 0 )
+			req.peer = peer_address_string[7 .. $];
+		else req.peer = peer_address_string;
+		req.clientAddress = peer_address;
 
 		// basic request parsing
 		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
