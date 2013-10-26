@@ -1,9 +1,9 @@
 /**
 	Cookie based session support.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Jan Krüger, Sönke Ludwig
+	Authors: Jan Krüger, Sönke Ludwig, Ilya Shipunov
 */
 module vibe.http.session;
 
@@ -11,9 +11,21 @@ import vibe.core.log;
 
 import std.base64;
 import std.array;
-import std.random;
+import vibe.crypto.cryptorand;
 
-	
+//random number generator
+//TODO: Use Whirlpool or SHA-512 here
+private SHA1HashMixerRNG g_rng;
+
+static this()
+{
+	g_rng = new SHA1HashMixerRNG();
+}
+
+//The "URL and Filename safe" Base64 without padding
+alias Base64Impl!('-', '_', Base64.NoPadding) Base64URLNoPadding;
+
+
 /**
 	Represents a single HTTP session.
 
@@ -31,9 +43,9 @@ final class Session {
 		if (id) {
 			m_id = id;
 		} else {
-			auto rnd = appender!(ubyte[])();
-			foreach(i;0..16) rnd.put(cast(ubyte)uniform(0, 255));			
-			m_id = cast(immutable)Base64.encode(rnd.data);			
+			ubyte[64] rand;
+			g_rng.read(rand);
+			m_id = cast(immutable)Base64URLNoPadding.encode(rand);
 		}
 	}
 
