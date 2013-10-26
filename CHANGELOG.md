@@ -28,7 +28,9 @@ v0.7.18 - 2013-
  - Added `MongoCollection.aggregate()` (by Jack Applegame) - [pull #348][issue348]
  - Added `WebSocket.request` to enable access to the original HTTP request and add scoped web socket callbacks for avoiding GC allocations
  - Implemented `MongoCursor.sort` to allow sorted queries using the same syntax as other MongoDB drivers (by Jack Applegame) - [pull #353][issue353]
- - Implemented random number generators suited for cryptographic applications (by Ilya Stromberg) - [pull #352][issue352]
+ - Implemented random number generators suited for cryptographic applications, which is now used for session ID generation (by Ilya Shipunov) - [pull #352][issue352], [pull #364][issue364], [issue #350][issue350]
+ - Implemented Scalate whitespace stripping syntax for Diet templates (by Jack Applegame) - [pull #362][issue362]
+ - Added `HTTPServerRequest.clientAddress` to get the full remote address including the port - [issue #357][issue357]
 
 ### Bug fixes ###
 
@@ -75,9 +77,13 @@ v0.7.18 - 2013-
 [issue344]: https://github.com/rejectedsoftware/vibe.d/issues/344
 [issue348]: https://github.com/rejectedsoftware/vibe.d/issues/348
 [issue349]: https://github.com/rejectedsoftware/vibe.d/issues/349
+[issue350]: https://github.com/rejectedsoftware/vibe.d/issues/350
 [issue352]: https://github.com/rejectedsoftware/vibe.d/issues/352
 [issue353]: https://github.com/rejectedsoftware/vibe.d/issues/353
 [issue354]: https://github.com/rejectedsoftware/vibe.d/issues/354
+[issue357]: https://github.com/rejectedsoftware/vibe.d/issues/357
+[issue362]: https://github.com/rejectedsoftware/vibe.d/issues/362
+[issue364]: https://github.com/rejectedsoftware/vibe.d/issues/364
 
 
 v0.7.17 - 2013-09-09
