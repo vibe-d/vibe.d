@@ -592,7 +592,7 @@ final class HTTPServerRequest : HTTPRequest {
 		url.schema = this.ssl ? "https" : "http";
 		auto pfh = "X-Forwarded-Host" in this.headers;
 		url.host = pfh ? *pfh : this.host;
-		// TODO: also include the port
+		url.port = this.clientAddress.port;
 		url.username = this.username;
 		url.password = this.password;
 		url.path = Path(path);
