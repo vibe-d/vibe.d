@@ -458,6 +458,7 @@ final class HTTPServerRequest : HTTPRequest {
 	private {
 		SysTime m_timeCreated;
 		FixedAppender!(string, 31) m_dateAppender;
+		ushort m_port;
 	}
 
 	public {
@@ -565,9 +566,10 @@ final class HTTPServerRequest : HTTPRequest {
 	}
 
 
-	this(SysTime time)
+	this(SysTime time, ushort port)
 	{
 		m_timeCreated = time.toUTC();
+		m_port = port;
 		writeRFC822DateTimeString(m_dateAppender, time);
 		this.headers["Date"] = m_dateAppender.data();
 	}
@@ -589,10 +591,19 @@ final class HTTPServerRequest : HTTPRequest {
 	@property URL fullURL()
 	const {
 		URL url;
-		url.schema = this.ssl ? "https" : "http";
-		auto pfh = "X-Forwarded-Host" in this.headers;
-		url.host = pfh ? *pfh : this.host;
-		// TODO: also include the port
+		if (auto pfh = "X-Forwarded-Host" in this.headers) {
+			url.schema = this.headers.get("X-Forwarded-Proto", "http");
+			url.host = *pfh;
+		} else {
+			url.host = this.host;
+			if (this.ssl) {
+				url.schema = "https";
+				if (m_port != 443) url.port = 443;
+			} else {
+				url.schema = "http";
+				if (m_port != 80) url.port = m_port;
+			}
+		}
 		url.username = this.username;
 		url.password = this.password;
 		url.path = Path(path);
@@ -1108,7 +1119,7 @@ private bool handleRequest(Stream http_stream, string peer_address_string, Netwo
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
-	FreeListRef!HTTPServerRequest req = FreeListRef!HTTPServerRequest(reqtime);
+	FreeListRef!HTTPServerRequest req = FreeListRef!HTTPServerRequest(reqtime, settings.port);
 	FreeListRef!TimeoutHTTPInputStream timeout_http_input_stream;
 	FreeListRef!LimitedHTTPInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
