@@ -1,5 +1,5 @@
 /**
-	Implements a cryptographically secure random number generator
+	Implements cryptographically secure random number generators.
 	
 	Copyright: © 2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -7,55 +7,45 @@
 */
 module vibe.crypto.cryptorand;
 
-private import std.conv : text;
-private import std.digest.sha;
+import std.conv : text;
+import std.digest.sha;
+import vibe.core.stream;
+
 
 /**
-	Thrown if we have errors with random number generation.
+	Base interface for all cryptographically secure RNGs.
 */
-class CryptoException : Exception
-{
-	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) @safe pure nothrow
-	{
-		super(msg, file, line, next);
-	}
+interface RandomNumberStream : InputStream {
+	/**
+		Fills the buffer new random numbers.
+		
+		Params:
+			buffer: The buffer that will be filled with random numbers.
+				It will contain buffer.length random ubytes.
+				Supportes both heap-based and stack-based arrays.
+		
+		Throws:
+			CryptoException on error.
+	*/
+	void read(ubyte[] dst);
 }
 
-version(Windows)
-{
-	private import std.c.windows.windows;
-	
-	private extern(Windows) nothrow
-	{
-		alias ULONG_PTR HCRYPTPROV;
-		
-		enum LPCTSTR NULL = cast(LPCTSTR)0;
-		enum DWORD PROV_RSA_FULL = 1;
-		enum DWORD CRYPT_VERIFYCONTEXT = 0xF0000000;
-		
-		BOOL CryptAcquireContextA(HCRYPTPROV *phProv, LPCTSTR pszContainer, LPCTSTR pszProvider, DWORD dwProvType, DWORD dwFlags);
-		alias CryptAcquireContextA CryptAcquireContext;
-		
-		BOOL CryptReleaseContext(HCRYPTPROV hProv, DWORD dwFlags);
-		
-		BOOL CryptGenRandom(HCRYPTPROV hProv, DWORD dwLen, BYTE *pbBuffer);
-	}
-}
 
 /**
-	System cryptography secure random number generator
-	It use "CryptGenRandom" function for Windows and "/dev/urandom" for Posix
-	It's recommended to use additional processing generated random numbers
+	Operating system specific cryptography secure random number generator.
+
+	It uses the "CryptGenRandom" function for Windows and "/dev/urandom" for Posix.
+	It's recommended to combine the output use additional processing generated random numbers
 	via provided functions for systems where security matters.
 	
 	Remarks:
-		Windows "CryptGenRandom" RNG has problems with Windows 2000 and Windows XP
-		(assuming the attacker has control of the machine).
-		Fixed for Windows XP Service Pack 3 and Windows Vista.
-		http://en.wikipedia.org/wiki/CryptGenRandom
+		Windows "CryptGenRandom" RNG has known security vulnerabilities on
+		Windows 2000 and Windows XP (assuming the attacker has control of the
+		machine). Fixed for Windows XP Service Pack 3 and Windows Vista.
+	
+	See_Also: $(LINK http://en.wikipedia.org/wiki/CryptGenRandom)
 */
-final class SystemRNG
-{
+final class SystemRNG : RandomNumberStream {
 	version(Windows)
 	{
 		//cryptographic service provider
@@ -107,16 +97,19 @@ final class SystemRNG
 		}
 	}
 	
-	/**
-		Fills the buffer new random number
-		
-		Params:
-			buffer: The buffer that will be filled new random number.
-				It will contain buffer.length random ubytes.
-				Supported both heap-based and stack-based arrays.
-		Throws:
-			CryptoException on error.
-	*/
+	~this()
+	{
+		version(Windows)
+		{
+			CryptReleaseContext(this.hCryptProv, 0);
+		}
+	}
+
+	@property bool empty() { return false; }
+	@property ulong leastSize() { return ulong.max; }
+	@property bool dataAvailableForRead() { return true; }
+	const(ubyte)[] peek() { return null; }
+
 	void read(ubyte[] buffer)
 	in
 	{
@@ -146,14 +139,6 @@ final class SystemRNG
 			{
 				throw new CryptoException(text("Cannot get next random number: ", e.msg));
 			}
-		}
-	}
-	
-	~this()
-	{
-		version(Windows)
-		{
-			CryptReleaseContext(this.hCryptProv, 0);
 		}
 	}
 }
@@ -245,19 +230,21 @@ unittest
 
 
 /**
-	Hash-based cryptographically secure mixer
-	It uses hash function to mix random bytes from input RNG
-	Use only cryptographically secure hash functions like SHA-512, Whirlpool or SHA-256, but not MD5
+	Hash-based cryptographically secure random number mixer.
+
+	This RNG uses a hash function to mix a specific amount of random bytes from the input RNG.
+	Use only cryptographically secure hash functions like SHA-512, Whirlpool or SHA-256, but not MD5.
 	
 	Params:
-		Hash: hash function like SHA1
-		factor: Shows in how many times a input RNG buffer bigger than output buffer
-			Increase factor value if you need more security because it increases entropy level
-			Decrease factor value if you need more speed
+		Hash: The hash function used, for example SHA1
+		factor: Determines how many times the hash digest length of input data
+			is used as input to the hash function. Increase factor value if you
+			need more security because it increases entropy level or decrease
+			the factor value if you need more speed.
 			
 */
-final class HashMixerRNG(Hash, uint factor)
-if(isDigest!Hash)
+final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
+	if(isDigest!Hash)
 {
 	static assert(factor, "factor must be larger than 0");
 	
@@ -265,7 +252,7 @@ if(isDigest!Hash)
 	SystemRNG rng;
 	
 	/**
-		Creates new hash-based mixer random generator
+		Creates new hash-based mixer random generator.
 	*/
 	this()
 	{
@@ -273,16 +260,11 @@ if(isDigest!Hash)
 		this.rng = new SystemRNG();
 	}
 	
-	/**
-		Fills the buffer new random number
-		
-		Params:
-			buffer: The buffer that will be filled new random number.
-				It will contain buffer.length random ubytes.
-				Supported both heap-based and stack-based arrays.
-		Throws:
-			CryptoException on error.
-	*/
+	@property bool empty() { return false; }
+	@property ulong leastSize() { return ulong.max; }
+	@property bool dataAvailableForRead() { return true; }
+	const(ubyte)[] peek() { return null; }
+
 	void read(ubyte[] buffer)
 	in
 	{
@@ -321,7 +303,7 @@ if(isDigest!Hash)
 	}
 }
 
-///alias for HashMixerRNG!(SHA1, 5)
+/// A SHA-1 based mixing RNG. Alias for HashMixerRNG!(SHA1, 5).
 alias HashMixerRNG!(SHA1, 5) SHA1HashMixerRNG;
 
 //test heap-based arrays
@@ -462,3 +444,38 @@ unittest
 		}
 	}
 }
+
+
+/**
+	Thrown when an error occurs during random number generation.
+*/
+class CryptoException : Exception
+{
+	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) @safe pure nothrow
+	{
+		super(msg, file, line, next);
+	}
+}
+
+
+version(Windows)
+{
+	private import std.c.windows.windows;
+	
+	private extern(Windows) nothrow
+	{
+		alias ULONG_PTR HCRYPTPROV;
+		
+		enum LPCTSTR NULL = cast(LPCTSTR)0;
+		enum DWORD PROV_RSA_FULL = 1;
+		enum DWORD CRYPT_VERIFYCONTEXT = 0xF0000000;
+		
+		BOOL CryptAcquireContextA(HCRYPTPROV *phProv, LPCTSTR pszContainer, LPCTSTR pszProvider, DWORD dwProvType, DWORD dwFlags);
+		alias CryptAcquireContextA CryptAcquireContext;
+		
+		BOOL CryptReleaseContext(HCRYPTPROV hProv, DWORD dwFlags);
+		
+		BOOL CryptGenRandom(HCRYPTPROV hProv, DWORD dwLen, BYTE *pbBuffer);
+	}
+}
+
