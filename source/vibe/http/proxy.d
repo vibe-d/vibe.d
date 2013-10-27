@@ -78,8 +78,8 @@ HTTPServerRequestDelegate reverseProxyRequest(HTTPReverseProxySettings settings)
 			creq.headers["Host"] = settings.destinationHost;
 			if (settings.avoidCompressedRequests && "Accept-Encoding" in creq.headers)
 				creq.headers.remove("Accept-Encoding");
-			if (auto pfh = "X-Forwarded-Host" in req.headers) creq.headers["X-Forwarded-Host"] = *pfh;
-			else creq.headers["X-Forwarded-Host"] = req.headers["Host"];
+			if (auto pfh = "X-Forwarded-Host" !in creq.headers) creq.headers["X-Forwarded-Host"] = req.headers["Host"];
+			if (auto pfp = "X-Forwarded-Proto" !in creq.headers) creq.headers["X-Forwarded-Proto"] = req.ssl ? "https" : "http";
 			if (auto pff = "X-Forwarded-For" in req.headers) creq.headers["X-Forwarded-For"] = *pff ~ ", " ~ req.peer;
 			else creq.headers["X-Forwarded-For"] = req.peer;
 			creq.bodyWriter.write(req.bodyReader);
