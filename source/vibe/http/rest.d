@@ -49,7 +49,7 @@ import std.array : startsWith, endsWith;
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
-	import vibe.utils.meta.traits : baseInterface;	
+	import vibe.internal.meta.traits : baseInterface;	
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;	
 
@@ -127,8 +127,8 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 {
 	// this shorter overload tries to deduce root path automatically
 
-	import vibe.utils.meta.uda : findFirstUDA;
-	import vibe.utils.meta.traits : baseInterface;
+	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.traits : baseInterface;
 
 	alias I = baseInterface!TImpl;
 	enum uda = findFirstUDA!(RootPath, I);
@@ -288,7 +288,7 @@ class RestInterfaceClient(I) : I
 	*/
 	this (string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		import vibe.utils.meta.uda : findFirstUDA;
+		import vibe.internal.meta.uda : findFirstUDA;
 		
 		URL url;
 		enum uda = findFirstUDA!(RootPath, I);
@@ -627,7 +627,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 	import vibe.http.common : HTTPStatusException, HTTPStatus;
 	import vibe.utils.string : sanitizeUTF8;
-	import vibe.utils.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
@@ -720,7 +720,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 		}
 		
 		try {
-			import vibe.utils.meta.funcattr;
+			import vibe.internal.meta.funcattr;
 
 			auto handler = createAttributedFunction!Func(req, res);
 
@@ -907,8 +907,8 @@ private string generateRestInterfaceMethods(I)()
 	import std.algorithm : canFind, startsWith;
 	import std.array : split;
 
-	import vibe.utils.meta.codegen : cloneFunction;
-	import vibe.utils.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.codegen : cloneFunction;
+	import vibe.internal.meta.funcattr : IsAttributedParameter;
 	import vibe.http.server : httpMethodString;
 	
 	string ret;
@@ -1101,7 +1101,7 @@ private string generateModuleImports(I)()
 	if( !__ctfe )
 		assert(false);
 
-	import vibe.utils.meta.codegen : getRequiredImports;
+	import vibe.internal.meta.codegen : getRequiredImports;
 	import std.algorithm : map;
 	import std.array : join;
 
@@ -1210,8 +1210,8 @@ private auto extractHTTPMethodAndName(alias Func)()
 		string url;
 	}
 
-	import vibe.utils.meta.uda : findFirstUDA;
-	import vibe.utils.meta.traits : isPropertySetter,
+	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.traits : isPropertySetter,
 		isPropertyGetter;
 	import std.algorithm : startsWith;
 	import std.typecons : Nullable;

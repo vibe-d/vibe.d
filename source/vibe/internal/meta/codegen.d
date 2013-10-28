@@ -9,7 +9,7 @@
 	Authors: Sönke Ludwig, Михаил Страшун
 */
 
-module vibe.utils.meta.codegen;
+module vibe.internal.meta.codegen;
 
 import std.traits : isSomeFunction;
 
@@ -153,7 +153,7 @@ unittest
 	// `Test` is an interface using single user type
 	enum imports = getRequiredImports!TestInterface;
 	static assert (imports.length == 1);
-	static assert (imports[0] == "vibe.utils.meta.codegen");
+	static assert (imports[0] == "vibe.internal.meta.codegen");
 }
 
 /**

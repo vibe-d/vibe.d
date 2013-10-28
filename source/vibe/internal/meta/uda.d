@@ -6,7 +6,7 @@
 	Authors: Sönke Ludwig, Михаил Страшун
 */
 
-module vibe.utils.meta.uda;
+module vibe.internal.meta.uda;
 
 /**
 	Small convenience wrapper to find and extract certain UDA from given type.

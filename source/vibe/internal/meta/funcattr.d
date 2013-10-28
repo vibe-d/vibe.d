@@ -9,7 +9,7 @@
 	Authors: Михаил Страшун
  */
 
-module vibe.utils.meta.funcattr;
+module vibe.internal.meta.funcattr;
 
 import std.traits : isInstanceOf;
 
@@ -357,7 +357,7 @@ private {
 	*/
 	template MergeParameterTypes(alias ParameterMeta, alias ParameterList)
 	{	
-		import vibe.utils.meta.typetuple : isGroup, Group;
+		import vibe.internal.meta.typetuple : isGroup, Group;
 
 		static assert (isGroup!ParameterMeta);
 		static assert (isGroup!ParameterList);
@@ -390,7 +390,7 @@ private {
 	// normal
 	unittest
 	{
-		import vibe.utils.meta.typetuple : Group, Compare;
+		import vibe.internal.meta.typetuple : Group, Compare;
 
 		alias meta = Group!(
 			Parameter("one", 2, "int"),
@@ -409,7 +409,7 @@ private {
 	// edge
 	unittest
 	{
-		import vibe.utils.meta.typetuple : Group, Compare;
+		import vibe.internal.meta.typetuple : Group, Compare;
 
 		alias meta = Group!(
 			Parameter("one", 3, "int"),
@@ -428,7 +428,7 @@ private {
 	// out-of-index
 	unittest
 	{
-		import vibe.utils.meta.typetuple : Group;
+		import vibe.internal.meta.typetuple : Group;
 
 		alias meta = Group!(
 			Parameter("one", 20, "int"),
@@ -463,7 +463,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 {
 	import std.traits : isSomeFunction, ReturnType, FunctionTypeOf,
 		ParameterTypeTuple, ParameterIdentifierTuple;
-	import vibe.utils.meta.typetuple : Group, isGroup, Compare;
+	import vibe.internal.meta.typetuple : Group, isGroup, Compare;
 	import std.functional : toDelegate;
 	import std.typetuple : Filter;
 
@@ -772,7 +772,7 @@ unittest
 */
 auto createAttributedFunction(alias Function, T...)(T args)
 {
-	import vibe.utils.meta.typetuple : Group;
+	import vibe.internal.meta.typetuple : Group;
 
 	AttributedFunction!(Function, Group!T) result;
 	result.storeArgs(args);

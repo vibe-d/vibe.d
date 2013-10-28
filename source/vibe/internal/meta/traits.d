@@ -7,7 +7,7 @@
 	Authors: Sönke Ludwig, Михаил Страшун
 */
 
-module vibe.utils.meta.traits;
+module vibe.internal.meta.traits;
 
 /**
 	Checks if given type is a getter function type
