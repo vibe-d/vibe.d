@@ -6,8 +6,8 @@
 	Authors: Sönke Ludwig, Михаил Страшун
 */
 
-module vibe.utils.meta.all;
+module vibe.internal.meta.all;
 
-public import vibe.utils.meta.traits;
-public import vibe.utils.meta.codegen;
-public import vibe.utils.meta.uda;
+public import vibe.internal.meta.traits;
+public import vibe.internal.meta.codegen;
+public import vibe.internal.meta.uda;

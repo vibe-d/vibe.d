@@ -6,7 +6,7 @@
 	Authors: Михаил Страшун
 */
 
-module vibe.utils.meta.typetuple;
+module vibe.internal.meta.typetuple;
 
 import std.typetuple;
 import std.traits;

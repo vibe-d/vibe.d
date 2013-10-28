@@ -49,8 +49,7 @@ import std.array : startsWith, endsWith;
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
-	import vibe.utils.meta.uda : extractUda;
-	import vibe.utils.meta.traits : baseInterface;	
+	import vibe.internal.meta.traits : baseInterface;	
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;	
 
@@ -128,28 +127,28 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 {
 	// this shorter overload tries to deduce root path automatically
 
-	import vibe.utils.meta.uda : extractUda;
-	import vibe.utils.meta.traits : baseInterface;
+	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.traits : baseInterface;
 
 	alias I = baseInterface!TImpl;
-	enum uda = extractUda!(RootPath, I);
+	enum uda = findFirstUDA!(RootPath, I);
 
-	static if (is(typeof(uda) == typeof(null)))
+	static if (!uda.found)
 		registerRestInterface!I(router, instance, "/", style);
 	else
 	{
-		static if (uda.data == "")
+		static if (uda.value.data == "")
 		{
 			auto path = "/" ~ adjustMethodStyle(I.stringof, style);
 			registerRestInterface!I(router, instance, path, style);
 		}
 		else
 		{
-			auto path = uda.data;
+			auto path = uda.value.data;
 			registerRestInterface!I(
 				router,
 				instance,
-				concatURL("/", uda.data),
+				concatURL("/", uda.value.data),
 				style
 			);
 		}
@@ -289,23 +288,23 @@ class RestInterfaceClient(I) : I
 	*/
 	this (string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		import vibe.utils.meta.uda : extractUda;
+		import vibe.internal.meta.uda : findFirstUDA;
 		
 		URL url;
-		enum uda = extractUda!(RootPath, I);
-		static if (is(typeof(uda) == typeof(null))) {
+		enum uda = findFirstUDA!(RootPath, I);
+		static if (!uda.found) {
 			url = URL.parse(base_url);
 		}
 		else
 		{
-			static if (uda.data == "") {
+			static if (uda.value.data == "") {
 				url = URL.parse(
 					concatURL(base_url, adjustMethodStyle(I.stringof, style), true)
 				);
 			}
 			else {
 			    m_baseURL = URL.parse(
-					concatURL(base_url, uda.data, true)
+					concatURL(base_url, uda.value.data, true)
 				);
 			}
 		}
@@ -628,7 +627,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 	import vibe.http.common : HTTPStatusException, HTTPStatus;
 	import vibe.utils.string : sanitizeUTF8;
-	import vibe.utils.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
@@ -721,7 +720,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 		}
 		
 		try {
-			import vibe.utils.meta.funcattr;
+			import vibe.internal.meta.funcattr;
 
 			auto handler = createAttributedFunction!Func(req, res);
 
@@ -908,8 +907,8 @@ private string generateRestInterfaceMethods(I)()
 	import std.algorithm : canFind, startsWith;
 	import std.array : split;
 
-	import vibe.utils.meta.codegen : cloneFunction;
-	import vibe.utils.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.codegen : cloneFunction;
+	import vibe.internal.meta.funcattr : IsAttributedParameter;
 	import vibe.http.server : httpMethodString;
 	
 	string ret;
@@ -1102,7 +1101,7 @@ private string generateModuleImports(I)()
 	if( !__ctfe )
 		assert(false);
 
-	import vibe.utils.meta.codegen : getRequiredImports;
+	import vibe.internal.meta.codegen : getRequiredImports;
 	import std.algorithm : map;
 	import std.array : join;
 
@@ -1211,8 +1210,8 @@ private auto extractHTTPMethodAndName(alias Func)()
 		string url;
 	}
 
-	import vibe.utils.meta.uda : extractUda;
-	import vibe.utils.meta.traits : isPropertySetter,
+	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.traits : isPropertySetter,
 		isPropertyGetter;
 	import std.algorithm : startsWith;
 	import std.typecons : Nullable;
@@ -1234,14 +1233,14 @@ private auto extractHTTPMethodAndName(alias Func)()
 	// Cases may conflict and are listed in order of priority
 
 	// Workaround for Nullable incompetence
-	enum uda1 = extractUda!(vibe.http.rest.OverridenMethod, Func);
-	enum uda2 = extractUda!(vibe.http.rest.OverridenPath, Func);
+	enum uda1 = findFirstUDA!(vibe.http.rest.OverridenMethod, Func);
+	enum uda2 = findFirstUDA!(vibe.http.rest.OverridenPath, Func);
 
-	static if (!is(typeof(uda1) == typeof(null))) {
-		udmethod = uda1;
+	static if (uda1.found) {
+		udmethod = uda1.value;
 	}
-	static if (!is(typeof(uda2) == typeof(null))) {
-		udurl = uda2;
+	static if (uda2.found) {
+		udurl = uda2.value;
 	}
 
 	// Everything is overriden, no further analysis needed
