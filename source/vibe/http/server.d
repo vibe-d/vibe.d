@@ -1119,7 +1119,7 @@ private bool handleRequest(Stream http_stream, string peer_address_string, Netwo
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
-	FreeListRef!HTTPServerRequest req = FreeListRef!HTTPServerRequest(reqtime, settings.port);
+	FreeListRef!HTTPServerRequest req = FreeListRef!HTTPServerRequest(reqtime, listen_info.bindPort);
 	FreeListRef!TimeoutHTTPInputStream timeout_http_input_stream;
 	FreeListRef!LimitedHTTPInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
