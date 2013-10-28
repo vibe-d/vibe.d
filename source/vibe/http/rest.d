@@ -49,7 +49,6 @@ import std.array : startsWith, endsWith;
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
                               MethodStyle style = MethodStyle.lowerUnderscored)
 {
-	import vibe.utils.meta.uda : extractUda;
 	import vibe.utils.meta.traits : baseInterface;	
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;	
@@ -128,28 +127,28 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 {
 	// this shorter overload tries to deduce root path automatically
 
-	import vibe.utils.meta.uda : extractUda;
+	import vibe.utils.meta.uda : findFirstUDA;
 	import vibe.utils.meta.traits : baseInterface;
 
 	alias I = baseInterface!TImpl;
-	enum uda = extractUda!(RootPath, I);
+	enum uda = findFirstUDA!(RootPath, I);
 
-	static if (is(typeof(uda) == typeof(null)))
+	static if (!uda.found)
 		registerRestInterface!I(router, instance, "/", style);
 	else
 	{
-		static if (uda.data == "")
+		static if (uda.value.data == "")
 		{
 			auto path = "/" ~ adjustMethodStyle(I.stringof, style);
 			registerRestInterface!I(router, instance, path, style);
 		}
 		else
 		{
-			auto path = uda.data;
+			auto path = uda.value.data;
 			registerRestInterface!I(
 				router,
 				instance,
-				concatURL("/", uda.data),
+				concatURL("/", uda.value.data),
 				style
 			);
 		}
@@ -289,23 +288,23 @@ class RestInterfaceClient(I) : I
 	*/
 	this (string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		import vibe.utils.meta.uda : extractUda;
+		import vibe.utils.meta.uda : findFirstUDA;
 		
 		URL url;
-		enum uda = extractUda!(RootPath, I);
-		static if (is(typeof(uda) == typeof(null))) {
+		enum uda = findFirstUDA!(RootPath, I);
+		static if (!uda.found) {
 			url = URL.parse(base_url);
 		}
 		else
 		{
-			static if (uda.data == "") {
+			static if (uda.value.data == "") {
 				url = URL.parse(
 					concatURL(base_url, adjustMethodStyle(I.stringof, style), true)
 				);
 			}
 			else {
 			    m_baseURL = URL.parse(
-					concatURL(base_url, uda.data, true)
+					concatURL(base_url, uda.value.data, true)
 				);
 			}
 		}
@@ -1211,7 +1210,7 @@ private auto extractHTTPMethodAndName(alias Func)()
 		string url;
 	}
 
-	import vibe.utils.meta.uda : extractUda;
+	import vibe.utils.meta.uda : findFirstUDA;
 	import vibe.utils.meta.traits : isPropertySetter,
 		isPropertyGetter;
 	import std.algorithm : startsWith;
@@ -1234,14 +1233,14 @@ private auto extractHTTPMethodAndName(alias Func)()
 	// Cases may conflict and are listed in order of priority
 
 	// Workaround for Nullable incompetence
-	enum uda1 = extractUda!(vibe.http.rest.OverridenMethod, Func);
-	enum uda2 = extractUda!(vibe.http.rest.OverridenPath, Func);
+	enum uda1 = findFirstUDA!(vibe.http.rest.OverridenMethod, Func);
+	enum uda2 = findFirstUDA!(vibe.http.rest.OverridenPath, Func);
 
-	static if (!is(typeof(uda1) == typeof(null))) {
-		udmethod = uda1;
+	static if (uda1.found) {
+		udmethod = uda1.value;
 	}
-	static if (!is(typeof(uda2) == typeof(null))) {
-		udurl = uda2;
+	static if (uda2.found) {
+		udurl = uda2.value;
 	}
 
 	// Everything is overriden, no further analysis needed
