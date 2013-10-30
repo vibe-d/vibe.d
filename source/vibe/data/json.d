@@ -33,15 +33,15 @@
 	}
 	---
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
 module vibe.data.json;
 
-import vibe.data.utils;
+import vibe.data.serialization;
 
-import std.algorithm : min;
+import std.algorithm : equal, min;
 import std.array;
 import std.conv;
 import std.datetime;
@@ -899,6 +899,16 @@ unittest {
 */
 Json serializeToJson(T)(T value)
 {
+	version (VibeNewSerialization) {
+		return serialize!JsonSerializer(value);
+	} else {
+		return serializeToJsonOld(value);
+	}
+}
+
+/// private
+Json serializeToJsonOld(T)(T value)
+{
 	alias Unqual!T TU;
 	static if (is(TU == Json)) return value;
 	else static if (is(TU == typeof(null))) return Json(null);
@@ -971,6 +981,16 @@ void deserializeJson(T)(ref T dst, Json src)
 }
 /// ditto
 T deserializeJson(T)(Json src)
+{
+	version (VibeNewSerialization) {
+		return deserialize!(JsonSerializer, T)(src);
+	} else {
+		return deserializeJsonOld!T(src);
+	}
+}
+
+/// private
+T deserializeJsonOld(T)(Json src)
 {
 	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T ) 
 		if( src.type == Json.Type.null_ ) return T.init;
@@ -1085,11 +1105,11 @@ unittest {
 	deserializeJson(s, serializeToJson(S([1,2,3])));
 	assert(s == S([1,2,3]));
 	struct T {
-		S s;
-		int i;
-		float f;
-		double d;
-		string str;
+		@optional S s;
+		@optional int i;
+		@optional float f;
+		@optional double d;
+		@optional string str;
 	}
 	auto t = T(S([1,2,3]));
 	deserializeJson(t, parseJsonString(`{ "s" : null, "i" : null, "f" : null, "d" : null, "str" : null }`));
@@ -1151,6 +1171,255 @@ unittest {
 		assert(serializeToJson(other) == serializeToJson(original));
 	}
 }
+
+
+/**
+	Serializer for a plain Json representation.
+*/
+struct JsonSerializer {
+	enum isJsonBasicType(T) = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T;
+	
+	enum isSupportedValueType(T) = isJsonBasicType!T || is(T == Json);
+
+	private {
+		Json m_current;
+		Json[] m_compositeStack;
+	}
+
+	this(Json data) { m_current = data; }
+
+	@disable this(this);
+
+	//
+	// serialization
+	//
+	Json getSerializedResult() { return m_current; }
+	void beginWriteDictionary(T)() { m_compositeStack ~= Json.emptyObject; }
+	void endWriteDictionary(T)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
+	void beginWriteDictionaryEntry(T)(string name) {}
+	void endWriteDictionaryEntry(T)(string name) { m_compositeStack[$-1][name] = m_current; }
+
+	void beginWriteArray(T)(size_t) { m_compositeStack ~= Json.emptyArray; }
+	void endWriteArray(T)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
+	void beginWriteArrayEntry(T)(size_t) {}
+	void endWriteArrayEntry(T)(size_t) { m_compositeStack[$-1] ~= m_current; }
+
+	void writeValue(T)(T value)
+	{
+		static if (is(T == Json)) m_current = value;
+		else static if (isJsonSerializable!T) m_current = value.toJson();
+		else m_current = Json(value);
+	}
+
+	//
+	// deserialization
+	//
+	void readDictionary(T)(scope void delegate(string) field_handler)
+	{
+		enforce(m_current.type == Json.Type.object);
+		auto old = m_current;
+		foreach (string key, value; m_current) {
+			m_current = value;
+			field_handler(key);
+		}
+		m_current = old;
+	}
+
+	void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+	{
+		enforce(m_current.type == Json.Type.array);
+		auto old = m_current;
+		size_callback(m_current.length);
+		foreach (ent; old) {
+			m_current = ent;
+			entry_callback();
+		}
+		m_current = old;
+	}
+
+	T readValue(T)()
+	{
+		static if (is(T == Json)) return m_current;
+		else static if (isJsonSerializable!T) return T.fromJson(m_current);
+		else return m_current.get!T();
+	}
+
+	bool tryReadNull() { return m_current.type == Json.Type.null_; }
+}
+
+
+/**
+	Serializer for a range based plain JSON string representation.
+*/
+struct JsonStringSerializer(R, bool pretty = false)
+	if (isInputRange!R || isOutputRange!(R, char))
+{
+	private {
+		R m_range;
+	}
+
+	enum isJsonBasicType(T) = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T;
+	
+	enum isSupportedValueType(T) = isJsonBasicType!T || is(T == Json);
+
+	this(R range)
+	{
+		m_range = range;
+	}
+
+	@disable this(this);
+
+	//
+	// serialization
+	//
+	static if (isOutputRange!(R, char)) {
+		private {
+			bool m_firstInComposite;
+		}
+
+		void getSerializedResult() {}
+
+		void beginWriteDictionary(T)() { m_range.put("{"); m_firstInComposite = true; }
+		void endWriteDictionary(T)() { m_range.put("}"); }
+		void beginWriteDictionaryEntry(T)(string name)
+		{
+			if (!m_firstInComposite) {
+				static if (pretty) m_range.put(", ");
+				else m_range.put(',');
+			} else m_firstInComposite = false;
+			m_range.put('"');
+			m_range.put(name);
+			static if (pretty) m_range.put(`": `);
+			else m_range.put(`":`);
+		}
+		void endWriteDictionaryEntry(T)(string name) {}
+
+		void beginWriteArray(T)(size_t) { m_range.put('['); m_firstInComposite = true; }
+		void endWriteArray(T)() { m_range.put(']'); }
+		void beginWriteArrayEntry(T)(size_t) {
+			if (!m_firstInComposite) m_range.put(", ");
+			else m_firstInComposite = false;
+		}
+		void endWriteArrayEntry(T)(size_t) {}
+
+		void writeValue(T)(T value)
+		{
+			static if (is(T == typeof(null))) m_range.put("null");
+			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
+			else static if (is(T : long)) m_range.formattedWrite("%s", value);
+			else static if (is(T : real)) m_range.formattedWrite("%s", value);
+			else static if (is(T == string)) {
+				m_range.put('"');
+				m_range.jsonEscape(value);
+				m_range.put('"');
+			}
+			else static if (is(T == Json)) m_range.writeJsonString(value);
+			else static if (isJsonSerializable!T) m_range.writeJsonString(value.toJson());
+			else static assert(false, "Unsupported type: " ~ T.stringof);
+		}
+	}
+
+	//
+	// deserialization
+	//
+	static if (isInputRange!(R)) {
+		private {
+			int m_line = 0;
+		}
+
+		void readDictionary(T)(scope void delegate(string) entry_callback)
+		{
+			m_range.skipWhitespace(&m_line);
+			enforce(!m_range.empty && m_range.front == '{', "Expecting object.");
+			m_range.popFront();
+			bool first = true;
+			while(true) {
+				m_range.skipWhitespace(&m_line);
+				enforce(!m_range.empty, "Missing '}'.");
+				if (m_range.front == '}') {
+					m_range.popFront();
+					break;
+				} else if (!first) {
+					enforce(m_range.front == ',', "Expecting ',' or '}'.");
+					m_range.popFront();
+					m_range.skipWhitespace(&m_line);
+				} else first = false;
+
+				auto name = m_range.skipJsonString(&m_line);
+
+				m_range.skipWhitespace(&m_line);
+				enforce(!m_range.empty && m_range.front == ':');
+				m_range.popFront();
+
+				entry_callback(name);
+			}
+		}
+
+		void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+		{
+			m_range.skipWhitespace(&m_line);
+			enforce(!m_range.empty && m_range.front == '[', "Expecting array.");
+			m_range.popFront();
+			bool first = true;
+			while(true) {
+				m_range.skipWhitespace(&m_line);
+				enforce(!m_range.empty, "Missing ']'.");
+				if (m_range.front == ']') {
+					m_range.popFront();
+					break;
+				} else if (!first) {
+					enforce(m_range.front == ',', "Expecting ',' or ']'.");
+					m_range.popFront();
+				} else first = false;
+
+				entry_callback();
+			}
+		}
+
+		T readValue(T)()
+		{
+			m_range.skipWhitespace(&m_line);
+			static if (is(T == typeof(null))) { enforce(m_range.take(4).equal("null"), "Expecting 'null'."); return null; }
+			else static if (is(T == bool)) {
+				if (m_range.front == 't') {
+					enforce(m_range.take(4).equal("true"), "Expecting 'true' or 'false'.");
+					return true;
+				} else {
+					enforce(m_range.take(5).equal("false"), "Expecting 'true' or 'false'.");
+					return false;
+				}
+			} else static if (is(T : long)) {
+				bool is_float;
+				auto num = m_range.skipNumber(is_float);
+				enforce(!is_float, "Expecing integer number.");
+				return to!T(num);
+			} else static if (is(T : real)) {
+				bool is_float;
+				auto num = m_range.skipNumber(is_float);
+				return to!T(num);
+			}
+			else static if (is(T == string)) return m_range.skipJsonString(&m_line);
+			else static if (is(T == Json)) return m_range.parseJson(&m_line);
+			else static if (isJsonSerializable!T) return T.fromJson(m_range.parseJson(&m_line));
+			else static assert(false, "Unsupported type: " ~ T.stringof);
+		}
+
+		bool tryReadNull()
+		{
+			m_range.skipWhitespace(&m_line);
+			if (m_range.front != 'n') return false;
+			static if (is(R == string)) {
+				import vibe.core.log;
+				logInfo("%s", m_range[0 .. min(4, $)]);
+			}
+			enforce(m_range.take(4).equal("null"), "Expecting 'null'.");
+			assert(m_range.front != 'l');
+			return true;
+		}
+	}
+}
+
+
 
 /**
 	Writes the given JSON object as a JSON string into the destination range.

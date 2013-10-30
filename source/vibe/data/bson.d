@@ -9,7 +9,7 @@ module vibe.data.bson;
 
 public import vibe.data.json;
 import vibe.core.log;
-import vibe.data.utils;
+import vibe.data.serialization;
 
 import std.algorithm;
 import std.array;
@@ -921,6 +921,16 @@ struct BsonRegex {
 */
 Bson serializeToBson(T)(T value)
 {
+	version (VibeNewSerialization) {
+		return serialize!BsonSerializer(value);
+	} else {
+		return serializeToBsonOld(value);
+	}
+}
+
+/// private
+Bson serializeToBsonOld(T)(T value)
+{
     alias Unqual!T Unqualified;
 	static if (is(Unqualified == Bson)) return value;
 	else static if (is(Unqualified == Json)) return Bson.fromJson(value);
@@ -1000,6 +1010,16 @@ void deserializeBson(T)(ref T dst, Bson src)
 }
 /// ditto
 T deserializeBson(T)(Bson src)
+{
+	version (VibeNewSerialization) {
+		return deserialize!(BsonSerializer, T)(src);
+	} else {
+		return deserializeBsonOld!T(src);
+	}
+}
+
+/// private
+T deserializeBsonOld(T)(Bson src)
 {
 	static if (is(T == Bson)) return src;
 	else static if (is(T == Json)) return src.toJson();
@@ -1191,20 +1211,198 @@ unittest {
 }
 
 
+
+/**
+	Serializes to an in-memory BSON representation.
+*/
+struct BsonSerializer {
+	private {
+		Appender!(ubyte[]) m_dst;
+		size_t[] m_compositeStack;
+		Bson.Type m_type = Bson.Type.null_;
+		Bson m_inputData;
+		string m_entryName;
+		size_t m_entryIndex = size_t.max;
+	}
+
+	this(Bson input)
+	{
+		m_inputData = input;
+	}
+
+	@disable this(this);
+
+	enum isSupportedValueType(T) = is(typeof(getBsonTypeID(T.init)));
+
+	//
+	// serialization
+	//
+	Bson getSerializedResult()
+	{
+		auto ret = Bson(m_type, cast(immutable)m_dst.data);
+		m_dst = appender!(ubyte[]);
+		m_type = Bson.Type.null_;
+		return ret;
+	}
+
+	void beginWriteDictionary(T)()
+	{
+		writeCompositeEntryHeader(Bson.Type.object);
+		m_compositeStack ~= m_dst.data.length;
+		m_dst.put(toBsonData(cast(int)0));
+	}
+	void endWriteDictionary(T)()
+	{
+		auto sh = m_compositeStack[$-1];
+		m_compositeStack.length--;
+		m_dst.data[sh .. sh + 4] = toBsonData(cast(uint)(m_dst.data.length - sh))[];
+	}
+	void beginWriteDictionaryEntry(T)(string name) { m_entryName = name; }
+	void endWriteDictionaryEntry(T)(string name) {}
+
+	void beginWriteArray(T)(size_t)
+	{
+		writeCompositeEntryHeader(Bson.Type.array);
+		m_compositeStack ~= m_dst.data.length;
+		m_dst.put(toBsonData(cast(int)0));
+	}
+	void endWriteArray(T)() { endWriteDictionary!T(); }
+	void beginWriteArrayEntry(T)(size_t idx) { m_entryIndex = idx; }
+	void endWriteArrayEntry(T)(size_t idx) {}
+
+	void writeValue(T)(T value)
+	{
+		writeCompositeEntryHeader(getBsonTypeID(value));
+		static if (is(T == Bson)) { m_dst.put(value.data); }
+		else static if (is(T == Json)) { m_dst.put(Bson(value).data); }
+		else static if (is(T == typeof(null))) {}
+		else static if (is(T == string)) { m_dst.put(toBsonData(cast(uint)value.length+1)); m_dst.putCString(value); }
+		else static if (is(T == BsonBinData)) { m_dst.put(toBsonData(cast(int)value.rawData.length)); m_dst.put(value.type); m_dst.put(value.rawData); }
+		else static if (is(T == BsonObjectID)) { m_dst.put(value.m_bytes); }
+		else static if (is(T == BsonDate)) { m_dst.put(toBsonData(value.m_time)); }
+		else static if (is(T == BsonRegex)) { m_dst.putCString(value.expression); m_dst.putCString(value.options); }
+		else static if (is(T == BsonTimestamp)) { m_dst.put(toBsonData(value.m_time)); }
+		else static if (is(T == bool)) { m_dst.put(cast(ubyte)(value ? 0x01 : 0x00)); }
+		else static if (is(T : int)) { m_dst.put(toBsonData(cast(int)value)); }
+		else static if (is(T : long)) { m_dst.put(toBsonData(value)); }
+		else static if (is(T : double)) { m_dst.put(toBsonData(cast(double)value)); }
+		else static if (isBsonSerializable!T) m_dst.put(value.toBson().data);
+		else static if (isJsonSerializable!T) m_dst.put(Bson(value.toJson()).data);
+		else static assert(false, "Unsupported type: " ~ T.stringof);
+	}
+
+	private void writeCompositeEntryHeader(Bson.Type tp)
+	{
+		if (!m_compositeStack.length) {
+			assert(m_type == Bson.Type.null_, "Overwriting root item.");
+			m_type = tp;
+		}
+
+		if (m_entryName) {
+			m_dst.put(tp);
+			m_dst.putCString(m_entryName);
+			m_entryName = null;
+		} else if (m_entryIndex != size_t.max) {
+			import std.format;
+			m_dst.put(tp);
+			static struct Wrapper {
+				Appender!(ubyte[])* app;
+				void put(char ch) { (*app).put(ch); }
+				void put(in char[] str) { (*app).put(cast(ubyte[])str); }
+			}
+			auto wr = Wrapper(&m_dst);
+			wr.formattedWrite("%d\0", m_entryIndex);
+			m_entryIndex = size_t.max;
+		}
+	}
+
+	//
+	// deserialization
+	//
+	void readDictionary(T)(scope void delegate(string) entry_callback)
+	{
+		enforce(m_inputData.type == Bson.Type.object);
+		auto old = m_inputData;
+		foreach (string name, value; old) {
+			m_inputData = value;
+			entry_callback(name);
+		}
+		m_inputData = old;
+	}
+
+	void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+	{
+		enforce(m_inputData.type == Bson.Type.array);
+		auto old = m_inputData;
+		foreach (value; old) {
+			m_inputData = value;
+			entry_callback();
+		}
+		m_inputData = old;
+	}
+
+	T readValue(T)()
+	{
+		static if (is(T == Bson)) return m_inputData;
+		else static if (is(T == bool)) return m_inputData.get!bool();
+		else static if (is(T : int)) return m_inputData.get!int().to!T;
+		else static if (is(T : long)) return cast(T)m_inputData.get!long();
+		else static if (is(T : double)) return cast(T)m_inputData.get!double();
+		else static if (isBsonSerializable!T) return T.fromBson(readValue!Bson);
+		else static if (isJsonSerializable!T) return T.fromJson(readValue!Bson.toJson());
+		else return m_inputData.get!T();
+	}
+
+	bool tryReadNull()
+	{
+		if (m_inputData.type == Bson.Type.null_) return true;
+		return false;
+	}
+
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(T value)
+	{
+		Bson.Type tp;
+		static if (is(T == Bson)) tp = value.type;
+		else static if (is(T == Json)) tp = jsonTypeToBsonType(value.type);
+		else static if (is(T == typeof(null))) tp = Bson.Type.null_;
+		else static if (is(T == string)) tp = Bson.Type.string;
+		else static if (is(T == BsonBinData)) tp = Bson.Type.binData;
+		else static if (is(T == BsonObjectID)) tp = Bson.Type.objectID;
+		else static if (is(T == BsonDate)) tp = Bson.Type.date;
+		else static if (is(T == BsonRegex)) tp = Bson.Type.regex;
+		else static if (is(T == BsonTimestamp)) tp = Bson.Type.timestamp;
+		else static if (is(T == bool)) tp = Bson.Type.bool_;
+		else static if (is(T : int)) tp = Bson.Type.int_;
+		else static if (is(T : long)) tp = Bson.Type.long_;
+		else static if (is(T : double)) tp = Bson.Type.double_;
+		else static if (isBsonSerializable!T) tp = value.toBson().type; // FIXME: this is highly inefficient
+		else static if (isJsonSerializable!T) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
+		else static if (accept_ao && isArray!T) tp = Bson.Type.array;
+		else static if (accept_ao && isAssociativeArray!T) tp = Bson.Type.object;
+		else static if (accept_ao && (is(T == class) || is(T == struct))) tp = Bson.Type.object;
+		else static assert(false, "Unsupported type: " ~ T.stringof);
+		return tp;
+	}
+}
+
+private Bson.Type jsonTypeToBsonType(Json.Type tp)
+{
+	static immutable Bson.Type[Json.Type.max+1] JsonIDToBsonID = [
+		Bson.Type.undefined,
+		Bson.Type.null_,
+		Bson.Type.bool_,
+		Bson.Type.int_,
+		Bson.Type.double_,
+		Bson.Type.string,
+		Bson.Type.array,
+		Bson.Type.object
+	];
+	return JsonIDToBsonID[tp];
+}
+
 private Bson.Type writeBson(R)(ref R dst, in Json value)
 	if( isOutputRange!(R, ubyte) )
 {
-    static immutable uint[] JsonIDToBsonID = [
-        Bson.Type.undefined,
-        Bson.Type.null_,
-        Bson.Type.bool_,
-        Bson.Type.int_,
-        Bson.Type.double_,
-        Bson.Type.string,
-        Bson.Type.array,
-        Bson.Type.object
-    ];
-
 	final switch(value.type){
 		case Json.Type.undefined:
 			return Bson.Type.undefined;
@@ -1232,7 +1430,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 		case Json.Type.array:
 			auto app = appender!bdata_t();
 			foreach( size_t i, ref const Json v; value ){
-				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
+				app.put(cast(ubyte)(jsonTypeToBsonType(v.type)));
 				putCString(app, to!string(i));
 				writeBson(app, v);
 			}
@@ -1244,7 +1442,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 		case Json.Type.object:
 			auto app = appender!bdata_t();
 			foreach( string k, ref const Json v; value ){
-				app.put(cast(ubyte)(JsonIDToBsonID[v.type]));
+				app.put(cast(ubyte)(jsonTypeToBsonType(v.type)));
 				putCString(app, k);
 				writeBson(app, v);
 			}
