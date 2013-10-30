@@ -7,13 +7,14 @@
 */
 module vibe.http.rest;
 
+public import vibe.internal.meta.funcattr : before, after;
+
 import vibe.core.log;
 import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 
 import std.array : startsWith, endsWith;
-
 
 /**
 	Registers a REST interface and connects it the the given instance.
@@ -270,7 +271,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateModuleImports!(I)());
 #line 1 "module imports"
 	mixin(generateModuleImports!I());
-#line 244
+#line 275
 
 	import vibe.inet.url : URL, PathEntry;
 	import vibe.http.client : HTTPClientRequest;
@@ -320,7 +321,7 @@ class RestInterfaceClient(I) : I
 
 #line 1 "subinterface instances"
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
-#line 294
+#line 325
 	}
 	
 	/**
@@ -336,7 +337,7 @@ class RestInterfaceClient(I) : I
 		m_requestFilter = v;
 #line 1 "request filter"		
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
-#line 310
+#line 341
 	}
 	
 	//pragma(msg, "subinterfaces:");
@@ -348,7 +349,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateRestInterfaceMethods!(I)());
 #line 1 "restinterface"
 	mixin (generateRestInterfaceMethods!I());
-#line 322 "source/vibe/http/rest.d"
+#line 353 "source/vibe/http/rest.d"
 
 	protected {
 		import vibe.data.json : Json;
@@ -649,72 +650,70 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			);
 
 			// will be re-written by UDA function anyway
-			static if (IsAttributedParameter!(Func, ParamNames[i])) {
-				continue;
-			}
-
-			static if (i == 0 && ParamNames[i] == "id") {
-				// legacy special case for :id, backwards-compatibility
-				logDebug("id %s", req.params["id"]);
-				params[i] = fromRestString!P(req.params["id"]);
-			} else static if (ParamNames[i].startsWith("_")) {
-				// URL parameter
-				static if (ParamNames[i] != "_dummy") {
-					enforce(
-						ParamNames[i][1 .. $] in req.params,
-						format("req.param[%s] was not set!", ParamNames[i][1 .. $])
-					);
-					logDebug("param %s %s", ParamNames[i], req.params[ParamNames[i][1 .. $]]);
-					params[i] = fromRestString!P(req.params[ParamNames[i][1 .. $]]);
-				}
-			} else {
-				// normal parameter
-				alias DefVal = ParamDefaults[i];
-				if (req.method == HTTPMethod.GET ) {
-					logDebug("query %s of %s" ,ParamNames[i], req.query);
-					
-					static if (is (DefVal == void)) {
+			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
+				static if (i == 0 && ParamNames[i] == "id") {
+					// legacy special case for :id, backwards-compatibility
+					logDebug("id %s", req.params["id"]);
+					params[i] = fromRestString!P(req.params["id"]);
+				} else static if (ParamNames[i].startsWith("_")) {
+					// URL parameter
+					static if (ParamNames[i] != "_dummy") {
 						enforce(
-							ParamNames[i] in req.query,
-							format("Missing query parameter '%s'", ParamNames[i])
+							ParamNames[i][1 .. $] in req.params,
+							format("req.param[%s] was not set!", ParamNames[i][1 .. $])
 						);
-					} else {
-						if (ParamNames[i] !in req.query) {
-							params[i] = DefVal;
-							continue;
-						}
+						logDebug("param %s %s", ParamNames[i], req.params[ParamNames[i][1 .. $]]);
+						params[i] = fromRestString!P(req.params[ParamNames[i][1 .. $]]);
 					}
-
-					params[i] = fromRestString!P(req.query[ParamNames[i]]);
 				} else {
-					logDebug("%s %s", method, ParamNames[i]);
-
-					enforce(
-						req.contentType == "application/json",
-						"The Content-Type header needs to be set to application/json."
-					);
-					enforce(
-						req.json.type != Json.Type.Undefined,
-						"The request body does not contain a valid JSON value."
-					);
-					enforce(
-						req.json.type == Json.Type.Object,
-						"The request body must contain a JSON object with an entry for each parameter."
-					);
-
-					static if (is(DefVal == void)) {
-						enforce(
-							req.json[ParamNames[i]].type != Json.Type.Undefined,
-							format("Missing parameter %s", ParamNames[i])
-						);
-					} else {
-						if (req.json[ParamNames[i]].type == Json.Type.Undefined) {
-							params[i] = DefVal;
-							continue;
+					// normal parameter
+					alias DefVal = ParamDefaults[i];
+					if (req.method == HTTPMethod.GET) {
+						logDebug("query %s of %s" ,ParamNames[i], req.query);
+						
+						static if (is (DefVal == void)) {
+							enforce(
+								ParamNames[i] in req.query,
+								format("Missing query parameter '%s'", ParamNames[i])
+							);
+						} else {
+							if (ParamNames[i] !in req.query) {
+								params[i] = DefVal;
+								continue;
+							}
 						}
-					}
 
-					params[i] = deserializeJson!P(req.json[ParamNames[i]]);
+						params[i] = fromRestString!P(req.query[ParamNames[i]]);
+					} else {
+						logDebug("%s %s", method, ParamNames[i]);
+
+						enforce(
+							req.contentType == "application/json",
+							"The Content-Type header needs to be set to application/json."
+						);
+						enforce(
+							req.json.type != Json.Type.Undefined,
+							"The request body does not contain a valid JSON value."
+						);
+						enforce(
+							req.json.type == Json.Type.Object,
+							"The request body must contain a JSON object with an entry for each parameter."
+						);
+
+						static if (is(DefVal == void)) {
+							enforce(
+								req.json[ParamNames[i]].type != Json.Type.Undefined,
+								format("Missing parameter %s", ParamNames[i])
+							);
+						} else {
+							if (req.json[ParamNames[i]].type == Json.Type.Undefined) {
+								params[i] = DefVal;
+								continue;
+							}
+						}
+
+						params[i] = deserializeJson!P(req.json[ParamNames[i]]);
+					}
 				}
 			}
 		}
@@ -1334,10 +1333,58 @@ RootPath rootPath(string path)
 	return RootPath(path);
 }
 
+///
+unittest
+{
+	@rootPath("/oops")
+	interface IAPI
+	{
+		int getFoo();
+	}
+
+	class API : IAPI
+	{
+		int getFoo()
+		{
+			return 42;
+		}
+	}
+
+	auto router = new URLRouter();
+	registerRestInterface(router, new API());
+	auto routes= router.getAllRoutes();
+
+	assert(routes[HTTPMethod.GET][0].pattern == "/oops/foo");
+}
+
 /**
 	Convenience alias
  */
 @property RootPath rootPathFromName()
 {
 	return RootPath("");
+}
+
+///
+unittest
+{
+	@rootPathFromName
+	interface IAPI
+	{
+		int getFoo();
+	}
+
+	class API : IAPI
+	{
+		int getFoo()
+		{
+			return 42;
+		}
+	}
+
+	auto router = new URLRouter();
+	registerRestInterface(router, new API());
+	auto routes= router.getAllRoutes();
+
+	assert(routes[HTTPMethod.GET][0].pattern == "/iapi/foo");
 }

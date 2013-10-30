@@ -46,8 +46,15 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
 				enum extract = UdaSearchResult!(list[0])(true, index);
 			}
 			else {
-				static if (is(typeof(list[0]) == UDA))
-					enum extract = UdaSearchResult!(list[0])(true, index);
+				static if (is(typeof(list[0]) == UDA)) {
+					import vibe.internal.meta.traits : isPropertyGetter;
+					static if (isPropertyGetter!(list[0])) {
+						enum value = list[0];
+						enum extract = UdaSearchResult!(value)(true, index);
+					}
+					else
+						enum extract = UdaSearchResult!(list[0])(true, index);
+				}
 				else
 					enum extract = extract!(index + 1, list[1..$]);
 			}
@@ -61,26 +68,51 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
 unittest
 {
     struct Attribute { int x; }
-    @("something", Attribute(42), Attribute(41)) void symbol();
-	@(Attribute) void oops();
 
-    enum result1 = findFirstUDA!(string, symbol);
+    @("something", Attribute(42), Attribute(41))
+	void symbol();
+
+    enum result0 = findFirstUDA!(string, symbol);
+	static assert (result0.found);
+	static assert (result0.index == 0);
+	static assert (result0.value == "something");
+
+	enum result1 = findFirstUDA!(Attribute, symbol);
 	static assert (result1.found);
-	static assert (result1.index == 0);
-	static assert (result1.value == "something");
+	static assert (result1.index == 1);
+	static assert (result1.value == Attribute(42));
 
-	enum result2 = findFirstUDA!(Attribute, symbol);
-	static assert (result2.found);
-	static assert (result2.index == 1);
-	static assert (result2.value == Attribute(42));
+	enum result2 = findFirstUDA!(int, symbol);
+    static assert (!result2.found);
+}
 
-	enum result3 = findFirstUDA!(int, symbol);
-    static assert (!result3.found);
+unittest
+{
+    struct Attribute { int x; }
 
-	static assert (!__traits(compiles, findFirstUDA!(Attribute, oops)));
+	@(Attribute) void symbol();
 
-	enum result4 = findFirstUDA!(Attribute, oops, true);
-	static assert (result4.found);
-	static assert (result4.index == 0);
-	static assert (is(result4.value == Attribute));
+	static assert (!__traits(compiles, findFirstUDA!(Attribute, symbol)));
+
+	enum result0 = findFirstUDA!(Attribute, symbol, true);
+	static assert (result0.found);
+	static assert (result0.index == 0);
+	static assert (is(result0.value == Attribute));
+}
+
+unittest
+{
+    struct Attribute { int x; }
+
+	@property static Attribute getter()
+	{
+		return Attribute(42);
+	}
+
+	@getter void symbol();
+
+	enum result0 = findFirstUDA!(Attribute, symbol);
+	static assert (result0.found);
+	static assert (result0.index == 0);
+	static assert (result0.value == Attribute(42));
 }

@@ -267,15 +267,15 @@ unittest
  * There is also another attribute function type that can be called
  * to post-process method return value.
  *
- * Refer to `vibe.utils.meta.funcattr` for more details.
+ * Refer to `vibe.internal.meta.funcattr` for more details.
  */
 @rootPathFromName
 interface Example5API
 {
-	import vibe.utils.meta.funcattr;
+	import vibe.http.rest : before, after;
 
 	@before!authenticate("user") @after!addBrackets()
-	string getSecret(int num, User user);	
+	string getSecret(int num, User user);
 }
 
 User authenticate(HTTPServerRequest req, HTTPServerResponse res)
