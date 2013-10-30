@@ -14,12 +14,18 @@ module vibe.internal.meta.traits;
 
 	Returns: `true` if argument is a getter
  */
-template isPropertyGetter(T)
+template isPropertyGetter(T...)
+	if (T.length == 1)
 {
-	import std.traits : functionAttributes, FunctionAttribute, ReturnType;
-	
-	enum isPropertyGetter = (functionAttributes!(T) & FunctionAttribute.property) != 0
-		&& !is(ReturnType!T == void);
+	import std.traits : functionAttributes, FunctionAttribute, ReturnType,
+		isSomeFunction;
+	static if (isSomeFunction!(T[0])) {
+		enum isPropertyGetter = 
+			(functionAttributes!(T[0]) & FunctionAttribute.property) != 0
+			&& !is(ReturnType!T == void);
+	}
+	else
+		enum isPropertyGetter = false;
 }
 
 ///
@@ -35,6 +41,7 @@ unittest
 	static assert(isPropertyGetter!(typeof(&Test.getter)));
 	static assert(!isPropertyGetter!(typeof(&Test.setter)));
 	static assert(!isPropertyGetter!(typeof(&Test.simple)));
+	static assert(!isPropertyGetter!int);
 }
 
 /**
@@ -42,12 +49,19 @@ unittest
 
 	Returns: `true` if argument is a setter
  */
-template isPropertySetter(T)
+template isPropertySetter(T...)
+	if (T.length == 1)
 {
-	import std.traits : functionAttributes, FunctionAttribute, ReturnType;
+	import std.traits : functionAttributes, FunctionAttribute, ReturnType,
+		isSomeFunction;
 
-	enum isPropertySetter = (functionAttributes!(T) & FunctionAttribute.property) != 0
-		&& is(ReturnType!T == void);
+	static if (isSomeFunction!(T[0])) {
+		enum isPropertySetter = 
+			(functionAttributes!(T) & FunctionAttribute.property) != 0
+			&& is(ReturnType!(T[0]) == void);
+	}
+	else
+		enum isPropertySetter = false;
 }
 
 ///
@@ -63,6 +77,7 @@ unittest
 	static assert(isPropertySetter!(typeof(&Test.setter)));
 	static assert(!isPropertySetter!(typeof(&Test.getter)));
 	static assert(!isPropertySetter!(typeof(&Test.simple)));
+	static assert(!isPropertySetter!int);
 }
 
 /**
