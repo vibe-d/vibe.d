@@ -376,8 +376,8 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	void writeJsonBody(T)(T data)
 	{
-		// TODO: avoid building up a string!
-		writeBody(cast(ubyte[])serializeToJson(data).toString(), "application/json");
+		headers["Content-Type"] = "application/json";
+		serializeToJson(bodyWriter, data);
 	}
 
 	void writePart(MultiPart part)
