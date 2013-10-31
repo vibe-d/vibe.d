@@ -905,6 +905,12 @@ Json serializeToJson(T)(T value)
 		return serializeToJsonOld(value);
 	}
 }
+/// ditto
+void serializeToJson(R, T)(R destination, T value)
+	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
+{
+	serialize!(JsonStringSerializer!R)(value, destination);
+}
 
 /// private
 Json serializeToJsonOld(T)(T value)
@@ -987,6 +993,12 @@ T deserializeJson(T)(Json src)
 	} else {
 		return deserializeJsonOld!T(src);
 	}
+}
+/// ditto
+T deserializeJson(T, R)(R input)
+	if (isInputRange!R && !is(R == Json))
+{
+	return deserialize!(JsonStringSerializer!R, T)(input);
 }
 
 /// private
@@ -1596,12 +1608,14 @@ private string jsonUnescape(R)(ref R range)
 	return ret.data;
 }
 
-private string skipNumber(ref string s, out bool is_float)
+/// private
+private string skipNumber(R)(ref R s, out bool is_float)
 {
+	// TODO: make this work with input ranges
 	size_t idx = 0;
 	is_float = false;
-	if( s[idx] == '-' ) idx++;
-	if( s[idx] == '0' ) idx++;
+	if (s[idx] == '-') idx++;
+	if (s[idx] == '0') idx++;
 	else {
 		enforce(isDigit(s[idx++]), "Digit expected at beginning of number.");
 		while( idx < s.length && isDigit(s[idx]) ) idx++;
@@ -1627,38 +1641,39 @@ private string skipNumber(ref string s, out bool is_float)
 	return ret;
 }
 
-private string skipJsonString(ref string s, int* line = null)
+/// private
+private string skipJsonString(R)(ref R s, int* line = null)
 {
-	enforce(s.length >= 2 && s[0] == '\"', "too small: '" ~ s ~ "'");
-	s = s[1 .. $];
+	enforce(!s.empty && s.front == '"', "Expected '\"' to start string.");
+	s.popFront();
 	string ret = jsonUnescape(s);
-	enforce(s.length > 0 && s[0] == '\"', "Unterminated string literal.");
-	s = s[1 .. $];
+	enforce(!s.empty && s.front == '"', "Expected '\"' to terminate string.");
+	s.popFront();
 	return ret;
 }
 
-private void skipWhitespace(ref string s, int* line = null)
+/// private
+private void skipWhitespace(R)(ref R s, int* line = null)
 {
-	while( s.length > 0 ){
-		switch( s[0] ){
+	while (!s.empty) {
+		switch (s.front) {
 			default: return;
-			case ' ', '\t': s = s[1 .. $]; break;
+			case ' ', '\t': s.popFront(); break;
 			case '\n':
-				s = s[1 .. $];
-				if( s.length > 0 && s[0] == '\r' ) s = s[1 .. $];
-				if( line ) (*line)++;
+				s.popFront();
+				if (!s.empty && s.front == '\r') s.popFront();
+				if (line) (*line)++;
 				break;
 			case '\r':
-				s = s[1 .. $];
-				if( s.length > 0 && s[0] == '\n' ) s = s[1 .. $];
-				if( line ) (*line)++;
+				s.popFront();
+				if (!s.empty && s.front == '\n') s.popFront();
+				if (line) (*line)++;
 				break;
 		}
 	}
 }
 
-/// private
-private bool isDigit(T)(T ch){ return ch >= '0' && ch <= '9'; }
+private bool isDigit(dchar ch) { return ch >= '0' && ch <= '9'; }
 
 private string underscoreStrip(string field_name)
 {
