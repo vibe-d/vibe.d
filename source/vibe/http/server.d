@@ -725,7 +725,8 @@ final class HTTPServerResponse : HTTPResponse {
 		}
 
 		statusCode = status;
-		writeBody(cast(ubyte[])serializeToJson(data).toString(), content_type);
+		headers["Content-Type"] = content_type;
+		serializeToJson(bodyWriter, data);
 	}
 
 	/**
