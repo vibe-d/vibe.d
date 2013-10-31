@@ -111,9 +111,8 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_p
 				// legacy special case for :id, left for backwards-compatibility reasons
 				if (params.length && params[0] == "id") {
 					auto combined_url = concatURL(
-						concatURL(url_prefix, ":id"),
-						url
-					);
+						concatURL(url_prefix, ":id", true),
+						url);
 					addRoute(meta.method, combined_url, handler, params);
 				} else {
 					addRoute(meta.method, concatURL(url_prefix, url), handler, params);
@@ -254,7 +253,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateModuleImports!(I)());
 #line 1 "module imports"
 	mixin(generateModuleImports!I());
-#line 275
+#line 257
 
 	import vibe.inet.url : URL, PathEntry;
 	import vibe.http.client : HTTPClientRequest;
@@ -304,7 +303,7 @@ class RestInterfaceClient(I) : I
 
 #line 1 "subinterface instances"
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
-#line 325
+#line 307
 	}
 	
 	/**
@@ -320,7 +319,7 @@ class RestInterfaceClient(I) : I
 		m_requestFilter = v;
 #line 1 "request filter"		
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
-#line 341
+#line 322
 	}
 	
 	//pragma(msg, "subinterfaces:");
@@ -332,7 +331,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateRestInterfaceMethods!(I)());
 #line 1 "restinterface"
 	mixin (generateRestInterfaceMethods!I());
-#line 353 "source/vibe/http/rest.d"
+#line 335 "source/vibe/http/rest.d"
 
 	protected {
 		import vibe.data.json : Json;
@@ -1067,15 +1066,34 @@ private string concatURL(string prefix, string url, bool trailing = false)
 {
 	import std.algorithm : startsWith, endsWith;
 
-	// "/" is ASCII, so can just slice
-	auto pre = prefix.endsWith("/") ? prefix[0..$-1] : prefix;
-	auto post = url.startsWith("/") ? url : ( "/" ~ url );
-	if (trailing) {
-		return post.endsWith("/") ? (pre ~ post) : (pre ~ post ~ "/");
+	auto pre = prefix.endsWith("/");
+	auto post = url.startsWith("/");
+
+	if (!url.length) return trailing && !pre ? prefix ~ "/" : prefix;
+
+	auto suffix = trailing && !url.endsWith("/") ? "/" : null;
+
+	if (pre) {
+		// "/" is ASCII, so can just slice
+		if (post) return prefix ~ url[1 .. $] ~ suffix;
+		else return prefix ~ url ~ suffix;
+	} else {
+		if (post) return prefix ~ url ~ suffix;
+		else return prefix ~ "/" ~ url ~ suffix;
 	}
-	else {
-		return post.endsWith("/") ? (pre ~ post[0..$-1]) : (pre ~ post);
-	}
+}
+
+unittest {
+	assert(concatURL("/test/", "/it/", false) == "/test/it/");
+	assert(concatURL("/test", "it/", false) == "/test/it/");
+	assert(concatURL("/test", "it", false) == "/test/it");
+	assert(concatURL("/test", "", false) == "/test");
+	assert(concatURL("/test/", "", false) == "/test/");
+	assert(concatURL("/test/", "/it/", true) == "/test/it/");
+	assert(concatURL("/test", "it/", true) == "/test/it/");
+	assert(concatURL("/test", "it", true) == "/test/it/");
+	assert(concatURL("/test", "", true) == "/test/");
+	assert(concatURL("/test/", "", true) == "/test/");
 }
 
 private string generateModuleImports(I)()
