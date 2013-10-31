@@ -239,23 +239,6 @@ unittest
 	}
 }
 
-// concatenates two URL parts avoiding any duplicate slashes
-// in resulting URL. `trailing` defines of result URL must
-// end with slash
-private string concatUrl(string prefix, string url, bool trailing = false)
-{
-	import std.string : startsWith, endsWith;
-
-	// "/" is ASCII, so can just slice
-	auto pre = prefix.endsWith("/") ? prefix[0..$-1] : prefix;
-	auto post = url.startsWith("/") ? url : ( "/" ~ url );
-	if (trailing) {
-		return post.endsWith("/") ? (pre ~ post) : (pre ~ post ~ "/");
-	}
-	else {
-		return post.endsWith("/") ? (pre ~ post[0..$-1]) : (pre ~ post);
-	}
-}
 
 /**
 	Implements the given interface by forwarding all public methods to a REST server.
