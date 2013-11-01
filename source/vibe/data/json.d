@@ -1268,6 +1268,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 {
 	private {
 		R m_range;
+		size_t m_level = 0;
 	}
 
 	enum isJsonBasicType(T) = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T;
@@ -1291,27 +1292,21 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 		void getSerializedResult() {}
 
-		void beginWriteDictionary(T)() { m_range.put("{"); m_firstInComposite = true; }
-		void endWriteDictionary(T)() { m_range.put("}"); }
+		void beginWriteDictionary(T)() { startComposite(); m_range.put('{'); }
+		void endWriteDictionary(T)() { endComposite(); m_range.put("}"); }
 		void beginWriteDictionaryEntry(T)(string name)
 		{
-			if (!m_firstInComposite) {
-				static if (pretty) m_range.put(", ");
-				else m_range.put(',');
-			} else m_firstInComposite = false;
+			startCompositeEntry();
 			m_range.put('"');
-			m_range.put(name);
+			m_range.jsonEscape(name);
 			static if (pretty) m_range.put(`": `);
 			else m_range.put(`":`);
 		}
 		void endWriteDictionaryEntry(T)(string name) {}
 
-		void beginWriteArray(T)(size_t) { m_range.put('['); m_firstInComposite = true; }
-		void endWriteArray(T)() { m_range.put(']'); }
-		void beginWriteArrayEntry(T)(size_t) {
-			if (!m_firstInComposite) m_range.put(", ");
-			else m_firstInComposite = false;
-		}
+		void beginWriteArray(T)(size_t) { startComposite(); m_range.put('['); }
+		void endWriteArray(T)() { endComposite(); m_range.put(']'); }
+		void beginWriteArrayEntry(T)(size_t) { startCompositeEntry(); }
 		void endWriteArrayEntry(T)(size_t) {}
 
 		void writeValue(T)(T value)
@@ -1326,8 +1321,38 @@ struct JsonStringSerializer(R, bool pretty = false)
 				m_range.put('"');
 			}
 			else static if (is(T == Json)) m_range.writeJsonString(value);
-			else static if (isJsonSerializable!T) m_range.writeJsonString(value.toJson());
+			else static if (isJsonSerializable!T) m_range.writeJsonString!(R, pretty)(value.toJson(), m_level);
 			else static assert(false, "Unsupported type: " ~ T.stringof);
+		}
+
+		private void startComposite()
+		{
+			static if (pretty) m_level++;
+			m_firstInComposite = true;
+		}
+
+		private void startCompositeEntry()
+		{
+			if (!m_firstInComposite) {
+				m_range.put(',');
+			} else {
+				m_firstInComposite = false;
+			}
+			static if (pretty) indent();
+		}
+
+		private void endComposite()
+		{
+			static if (pretty) {
+				m_level--;
+				if (!m_firstInComposite) indent();
+			}
+		}
+
+		private void indent()
+		{
+			m_range.put('\n');
+			foreach (i; 0 .. m_level) m_range.put('\t');
 		}
 	}
 
