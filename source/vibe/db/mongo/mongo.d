@@ -1,7 +1,16 @@
 /**
 	MongoDB and MongoCollection classes and connections.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Implementation_Note:
+
+	The MongoDB driver implementation here is missing a number of API functions
+	known from the JavaScript driver, but these can usually be implemented in
+	terms of MongoDatabase.runCommand or MongoCollection.find. Since the
+	official documentation is lacking in some places, it may be necessary to use
+	a network sniffer to monitor what exectly needs to be sent. MongoDB has a
+	dedicated utility for this called $(LINK2 http://docs.mongodb.org/manual/reference/program/mongosniff/ mongosniff).
+
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
