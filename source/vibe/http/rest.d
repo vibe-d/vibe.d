@@ -155,16 +155,14 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 	}
 }
 
-/// example
+/**
+	This is a very limited example of REST interface features. Please refer to
+	the "rest" project in the "examples" folder for a full overview.
+
+	All details related to HTTP are inferred from the interface declaration.
+*/
 unittest
 {
-	// This is a veru limited example of REST interface
-	// features. Please refer to `rest` project in vibe.d `examples`
-	// folder for full overview - it is a very long list.
-
-    // all details related to HTTP are inferred from
-    // interface declaration 
-
 	interface IMyAPI
 	{
 		// GET /api/greeting
@@ -253,7 +251,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateModuleImports!(I)());
 #line 1 "module imports"
 	mixin(generateModuleImports!I());
-#line 257
+#line 255
 
 	import vibe.inet.url : URL, PathEntry;
 	import vibe.http.client : HTTPClientRequest;
@@ -303,7 +301,7 @@ class RestInterfaceClient(I) : I
 
 #line 1 "subinterface instances"
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
-#line 307
+#line 305
 	}
 	
 	/**
@@ -319,7 +317,7 @@ class RestInterfaceClient(I) : I
 		m_requestFilter = v;
 #line 1 "request filter"		
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
-#line 322
+#line 321
 	}
 	
 	//pragma(msg, "subinterfaces:");
@@ -331,7 +329,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateRestInterfaceMethods!(I)());
 #line 1 "restinterface"
 	mixin (generateRestInterfaceMethods!I());
-#line 335 "source/vibe/http/rest.d"
+#line 333 "source/vibe/http/rest.d"
 
 	protected {
 		import vibe.data.json : Json;
