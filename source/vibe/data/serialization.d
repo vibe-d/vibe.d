@@ -340,7 +340,7 @@ package template isRWField(T, string M)
 package T Tgen(T)(){ return T.init; }
 
 /// private
-private enum hasAttribute(alias decl, T) = findFirstUDA!(T, decl).found;
+private template hasAttribute(alias decl, T) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
 /// private
 private static T getAttribute(alias decl, T)(T default_value)

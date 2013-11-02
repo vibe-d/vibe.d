@@ -1232,7 +1232,7 @@ struct BsonSerializer {
 
 	@disable this(this);
 
-	enum isSupportedValueType(T) = is(typeof(getBsonTypeID(T.init)));
+	template isSupportedValueType(T) { enum isSupportedValueType = is(typeof(getBsonTypeID(T.init))); }
 
 	//
 	// serialization

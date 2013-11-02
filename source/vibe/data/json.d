@@ -1189,9 +1189,9 @@ unittest {
 	Serializer for a plain Json representation.
 */
 struct JsonSerializer {
-	enum isJsonBasicType(T) = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T;
+	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 	
-	enum isSupportedValueType(T) = isJsonBasicType!T || is(T == Json);
+	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	private {
 		Json m_current;
@@ -1271,9 +1271,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 		size_t m_level = 0;
 	}
 
-	enum isJsonBasicType(T) = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T;
+	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 	
-	enum isSupportedValueType(T) = isJsonBasicType!T || is(T == Json);
+	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	this(R range)
 	{
