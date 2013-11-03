@@ -1067,7 +1067,7 @@ void send(ARGS...)(Tid tid, ARGS args)
 	foreach(A; ARGS){
 		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
 	}
-	tid.messageQueue.send(variantWithIsolatedSupport(args));
+	tid.messageQueue.send(Variant(IsolatedValueProxyTuple!ARGS(args)));
 }
 
 void prioritySend(ARGS...)(Tid tid, ARGS args)
@@ -1077,7 +1077,7 @@ void prioritySend(ARGS...)(Tid tid, ARGS args)
 	foreach(A; ARGS){
 		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
 	}
-	tid.messageQueue.prioritySend(variantWithIsolatedSupport(args));
+	tid.messageQueue.prioritySend(Variant(IsolatedValueProxyTuple!ARGS(args)));
 }
 
 // TODO: handle special exception types
@@ -1144,32 +1144,18 @@ private bool onCrowdingDrop(Task tid){
 	return false;
 }
 
-private Variant variantWithIsolatedSupport(T...)(ref T t)
+private struct IsolatedValueProxyTuple(T...)
 {
-	IsolatedValueProxyTuple!T dst;
-	foreach (i, Ti; T) {
-		static if (isInstanceOf!(IsolatedSendProxy, typeof(dst[i])))
-			dst[i] = IsolatedSendProxy!(Ti.BaseType)(t[i].move().unsafeGet());
-		else dst[i] = t[i];
-	}
-	return Variant(dst);
-}
+	staticMap!(IsolatedValueProxy, T) fields;
 
-private auto unproxyIsolatedValues(T...)(IsolatedValueProxyTuple!T t)
-{
-	Tuple!T ret;
-	foreach (i, Ti; T) {
-		static if (isInstanceOf!(IsolatedSendProxy, IsolatedValueProxy!T)) {
-			auto isolated = assumeIsolated(t[i].value);
-			ret[i] = isolated;
-		} else ret[i] = t[i];
+	this(ref T values)
+	{
+		foreach (i, Ti; T) {
+			static if (isInstanceOf!(IsolatedSendProxy, IsolatedValueProxy!Ti)) {
+				fields[i] = IsolatedValueProxy!Ti(values[i].unsafeGet());
+			} else fields[i] = values[i];
+		}
 	}
-	return ret;
-}
-
-private template IsolatedValueProxyTuple(T...)
-{
-	alias IsolatedValueProxyTuple = Tuple!(staticMap!(IsolatedValueProxy, T));
 }
 
 private template IsolatedValueProxy(T)
@@ -1178,6 +1164,13 @@ private template IsolatedValueProxy(T)
 		alias IsolatedValueProxy = IsolatedSendProxy!(T.BaseType);
 	} else {
 		alias IsolatedValueProxy = T;
+	}
+}
+
+unittest {
+	static class Test {}
+	void test() {
+		Task.getThis().send(new immutable Test, makeIsolated!Test());
 	}
 }
 
@@ -1227,7 +1220,7 @@ private void delegate(Variant) opsHandler(OPS...)(OPS ops)
 					if (callBool(ops[i], msg)) return; // WARNING: proxied isolated values will go through verbatim!
 				} else {
 					auto msgt = msg.get!(IsolatedValueProxyTuple!PTypes);
-					if (callBool(ops[i], msgt.expand)) return;
+					if (callBool(ops[i], msgt.fields)) return;
 				}
 			}
 		}
