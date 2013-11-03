@@ -1,3 +1,4 @@
+import vibe.core.core;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.stream.operations;

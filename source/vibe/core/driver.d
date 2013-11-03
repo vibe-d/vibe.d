@@ -25,6 +25,7 @@ import std.exception;
 */
 EventDriver getEventDriver()
 {
+	assert(s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
 }
 
