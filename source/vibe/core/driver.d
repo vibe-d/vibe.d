@@ -23,9 +23,9 @@ import std.exception;
 /**
 	Returns the active event driver
 */
-EventDriver getEventDriver()
+EventDriver getEventDriver(bool ignore_unloaded = false)
 {
-	assert(s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
+	assert(ignore_unloaded || s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
 }
 

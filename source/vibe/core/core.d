@@ -863,7 +863,7 @@ static ~this()
 
 private void setupDriver()
 {
-	if( getEventDriver() !is null ) return;
+	if (getEventDriver(true) !is null) return;
 
 	logTrace("create driver");
 	version(VibeWin32Driver) setEventDriver(new Win32EventDriver(s_core));
