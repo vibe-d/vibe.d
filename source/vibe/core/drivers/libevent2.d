@@ -588,8 +588,9 @@ class Libevent2Timer : Timer {
 				tm.stop();
 			}
 
-			if( tm.m_owner && tm.m_owner.running ) tm.m_driver.m_core.resumeTask(tm.m_owner);
-			if( tm.m_callback ) runTask(tm.m_callback);
+			auto callback = tm.m_callback; // save callback because the waiting task might destroy the timer object
+			if (tm.m_owner && tm.m_owner.running) tm.m_driver.m_core.resumeTask(tm.m_owner);
+			if (callback) runTask(callback);
 		} catch( Throwable e ){
 			logError("Exception while handling timer event: %s", e.msg);
 			try logDiagnostic("Full exception: %s", sanitize(e.toString())); catch {}
