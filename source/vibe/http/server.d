@@ -3,7 +3,7 @@
 
 	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Sönke Ludwig, Jan Krüger
+	Authors: Sönke Ludwig, Jan Krüger, Ilya Shipunov
 */
 module vibe.http.server;
 
@@ -842,7 +842,7 @@ final class HTTPServerResponse : HTTPResponse {
 		creating the server. Depending on this, the session can be persistent
 		or temporary and specific to this server instance.
 	*/
-	Session startSession(string path = "/", bool secure = false)
+	Session startSession(string path = "/", bool secure = false, bool httpOnly = true)
 	{
 		assert(m_settings.sessionStore, "no session store set");
 		assert(!m_session, "Try to start a session, but already started one.");
@@ -852,6 +852,7 @@ final class HTTPServerResponse : HTTPResponse {
 		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id);
 		cookie.path = path;
 		cookie.secure = secure;
+		cookie.httpOnly = httpOnly;
 		return m_session;
 	}
 
