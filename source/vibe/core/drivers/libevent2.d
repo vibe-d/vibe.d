@@ -1,7 +1,7 @@
 /**
 	libevent based driver
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -14,6 +14,7 @@ import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
+import vibe.utils.array : ArraySet;
 import vibe.utils.hashmap;
 import vibe.utils.memory;
 
@@ -351,7 +352,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 struct ThreadSlot {
 	Libevent2Driver driver;
 	deimos.event2.event.event* event;
-	bool[Task] tasks;
+	ArraySet!Task tasks;
 }
 /// private
 alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
@@ -440,7 +441,7 @@ class Libevent2ManualEvent : ManualEvent {
 				};
 			}
 			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
-			m_waiters[thread].tasks[task] = true;
+			m_waiters[thread].tasks.insert(task);
 		}
 	}
 
@@ -459,7 +460,7 @@ class Libevent2ManualEvent : ManualEvent {
 		auto self = Task.getThis();
 		synchronized (m_mutex) {
 			if (self.thread !in m_waiters) return false;
-			return (self in m_waiters[self.thread].tasks) !is null;
+			return self in m_waiters[self.thread].tasks;
 		}
 	}
 
@@ -473,13 +474,13 @@ class Libevent2ManualEvent : ManualEvent {
 			auto thread = Thread.getThis();
 			auto core = getThreadLibeventDriverCore();
 
-			bool[Task] lst;
+			ArraySet!Task lst;
 			synchronized (sig.m_mutex) {
 				assert(thread in sig.m_waiters);
 				lst = sig.m_waiters[thread].tasks.dup;
 			}
 
-			foreach (l; lst.byKey)
+			foreach (l; lst)
 				core.resumeTask(l);
 		} catch (Exception e) {
 			logError("Exception while handling signal event: %s", e.msg);

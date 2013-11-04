@@ -396,3 +396,61 @@ unittest {
 	buf.read(dst[0 .. 2]); //|. . . . .
 	assert(dst[0 .. 2] == [1, 2]);
 }
+
+
+struct ArraySet(Key)
+{
+	private {
+		Key[4] m_staticEntries;
+		Key[] m_entries;
+	}
+
+	@property ArraySet dup()
+	{
+		return ArraySet(m_staticEntries, m_entries.dup);
+	}
+
+	bool opBinaryRight(string op)(Key key) if (op == "in") { return contains(key); }
+
+	int opApply(int delegate(ref Key) del)
+	{
+		foreach (ref k; m_staticEntries)
+			if (k != Key.init)
+				if (auto ret = del(k))
+					return ret;
+		foreach (ref k; m_entries)
+			if (k != Key.init)
+				if (auto ret = del(k))
+					return ret;
+		return 0;
+	}
+
+	bool contains(Key key)
+	const {
+		foreach (ref k; m_staticEntries) if (k == key) return true;
+		foreach (ref k; m_entries) if (k == key) return true;
+		return false;
+	}
+
+	void insert(Key key)
+	{
+		if (contains(key)) return;
+		foreach (ref k; m_staticEntries)
+			if (k == Key.init) {
+				k = key;
+				return;
+			}
+		foreach (ref k; m_entries)
+			if (k == Key.init) {
+				k = key;
+				return;
+			}
+		m_entries ~= key;
+	}
+
+	void remove(Key key)
+	{
+		foreach (ref k; m_staticEntries) if (k == key) { k = Key.init; return; }
+		foreach (ref k; m_entries) if (k == key) { k = Key.init; return; }
+	}
+}
