@@ -18,13 +18,8 @@ import vibe.utils.array : ArraySet;
 import vibe.utils.hashmap;
 import vibe.utils.memory;
 
-import deimos.event2.bufferevent;
-import deimos.event2.dns;
-import deimos.event2.event;
-import deimos.event2.thread;
-import deimos.event2.util;
-
 import core.memory;
+import core.atomic;
 import core.stdc.config;
 import core.stdc.errno;
 import core.stdc.stdlib;
@@ -33,9 +28,13 @@ import core.sync.mutex;
 import core.sync.rwmutex;
 import core.sys.posix.netinet.in_;
 import core.sys.posix.netinet.tcp;
-version(Windows) import std.c.windows.winsock;
-import core.atomic;
 import core.thread;
+import deimos.event2.bufferevent;
+import deimos.event2.dns;
+import deimos.event2.event;
+import deimos.event2.thread;
+import deimos.event2.util;
+version(Windows) import std.c.windows.winsock;
 import std.conv;
 import std.encoding : sanitize;
 import std.exception;
@@ -62,12 +61,15 @@ class Libevent2Driver : EventDriver {
 		event_base* m_eventLoop;
 		evdns_base* m_dnsBase;
 		bool m_exit = false;
+		ArraySet!size_t m_ownedObjects;
 	}
 
 	this(DriverCore core)
 	{
 		m_core = core;
 		s_driverCore = core;
+
+		if (!s_threadObjectsMutex) s_threadObjectsMutex = new Mutex;
 
 		// set the malloc/free versions of our runtime so we don't run into trouble
 		// because the libevent DLL uses a different one.
@@ -105,8 +107,24 @@ class Libevent2Driver : EventDriver {
 
 	~this()
 	{
-		foreach (d; s_destructorMap) d();
-		s_destructorMap.clear();
+		// notify all other living objects about the shutdown
+		synchronized (s_threadObjectsMutex) {
+			// destroy all living objects owned by this driver
+			foreach (ref key; m_ownedObjects) {
+				assert(key);
+				auto obj = cast(Libevent2Object)cast(void*)key;
+				key = 0;
+				destroy(obj);
+			}
+
+			foreach (ref key; s_threadObjects) {
+				assert(key);
+				auto obj = cast(Libevent2Object)cast(void*)key;
+				obj.onThreadShutdown();
+			}
+		}
+
+		// shutdown libevent for this thread
 		evdns_base_free(m_dnsBase, 1);
 		event_base_free(m_eventLoop);
 		s_eventLoop = null;
@@ -309,7 +327,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 	Libevent2ManualEvent createManualEvent()
 	{
-		return new Libevent2ManualEvent;
+		return new Libevent2ManualEvent(this);
 	}
 
 	Libevent2Timer createTimer(void delegate() callback)
@@ -346,6 +364,41 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			logWarn("Got exception while getting DNS results: %s", e.msg);
 		}
 	}
+
+	private void registerObject(Libevent2Object obj)
+	{
+		auto key = cast(size_t)cast(void*)obj;
+		m_ownedObjects.insert(key);
+		synchronized (s_threadObjectsMutex)
+			s_threadObjects.insert(key);
+	}
+
+	private void unregisterObject(Libevent2Object obj)
+	{
+		auto key = cast(size_t)cast(void*)obj;
+		m_ownedObjects.remove(key);
+		synchronized (s_threadObjectsMutex)
+			s_threadObjects.remove(key);
+	}
+}
+
+private class Libevent2Object {
+	protected Libevent2Driver m_driver;
+
+	this(Libevent2Driver driver)
+	{
+		m_driver = driver;
+		m_driver.registerObject(this);
+	}
+
+	~this()
+	{
+		// NOTE: m_driver will always be destroyed deterministically
+		//       in static ~this(), so it can be used here safely
+		m_driver.unregisterObject(this);
+	}
+
+	protected void onThreadShutdown() {}
 }
 
 /// private
@@ -357,15 +410,16 @@ struct ThreadSlot {
 /// private
 alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
 
-class Libevent2ManualEvent : ManualEvent {
+class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	private {
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
 		ThreadSlotMap m_waiters;
 	}
 
-	this()
+	this(Libevent2Driver driver)
 	{
+		super(driver);
 		m_mutex = new core.sync.mutex.Mutex;
 		m_waiters = ThreadSlotMap(manualAllocator());
 	}
@@ -434,11 +488,6 @@ class Libevent2ManualEvent : ManualEvent {
 				slot.event = event_new(slot.driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
 				event_add(slot.event, null);
 				m_waiters[thread] = slot;
-				assert(cast(void*)this !in s_destructorMap);
-				s_destructorMap[cast(void*)this] = {
-					event_free(m_waiters[thread].event);
-					m_waiters.remove(thread);
-				};
 			}
 			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
 			m_waiters[thread].tasks.insert(task);
@@ -466,6 +515,15 @@ class Libevent2ManualEvent : ManualEvent {
 
 	@property int emitCount() const { return atomicLoad(m_emitCount); }
 
+	protected override void onThreadShutdown()
+	{
+		auto thr = Thread.getThis();
+		if (thr in m_waiters) {
+			event_free(m_waiters[thr].event);
+			m_waiters.remove(thr);
+		}
+	}
+
 	private static nothrow extern(C)
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
@@ -491,9 +549,8 @@ class Libevent2ManualEvent : ManualEvent {
 	}
 }
 
-class Libevent2Timer : Timer {
+class Libevent2Timer : Libevent2Object, Timer {
 	private {
-		Libevent2Driver m_driver;
 		Task m_owner;
 		void delegate() m_callback;
 		event* m_event;
@@ -504,14 +561,9 @@ class Libevent2Timer : Timer {
 
 	this(Libevent2Driver driver, void delegate() callback)
 	{
-		m_driver = driver;
+		super(driver);
 		m_callback = callback;
 		m_event = event_new(m_driver.eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
-		s_destructorMap[cast(void*)this] = {
-			stop();
-			event_free(m_event);
-			m_event = null;
-		};
 	}
 
 	~this()
@@ -742,8 +794,9 @@ class Libevent2UDPConnection : UDPConnection {
 private {
 	event_base* s_eventLoop; // TLS
 	__gshared DriverCore s_driverCore;
+	__gshared Mutex s_threadObjectsMutex;
+	__gshared ArraySet!size_t s_threadObjects;
 	bool s_alreadyDeinitialized = false;
-	HashMap!(void*, void delegate()) s_destructorMap;
 }
 
 package event_base* getThreadLibeventEventLoop()
