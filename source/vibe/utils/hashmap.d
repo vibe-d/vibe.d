@@ -104,14 +104,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 	{
 		assert(!Traits.equals(key, Traits.clearValue), "Inserting clear value into hash map.");
 		grow(1);
-
-		auto hash = m_hasher(key);
-		size_t target = hash & (m_table.length-1);
-		auto i = target;
-		while (!Traits.equals(m_table[i].key, Traits.clearValue) && m_table[i].key != key) {
-			if (++i >= m_table.length) i -= m_table.length;
-			assert (i != target, "No free bucket found, HashMap full!?");
-		}
+		auto i = findInsertIndex(key);
 		if (!Traits.equals(m_table[i].key, key)) m_length++;
 		m_table[i] = TableEntry(key, value);
 	}
@@ -179,6 +172,18 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return i;
 	}
 
+	private size_t findInsertIndex(Key key)
+	const {
+		auto hash = m_hasher(key);
+		size_t target = hash & (m_table.length-1);
+		auto i = target;
+		while (!Traits.equals(m_table[i].key, Traits.clearValue) && m_table[i].key != key) {
+			if (++i >= m_table.length) i -= m_table.length;
+			assert (i != target, "No free bucket found, HashMap full!?");
+		}
+		return i;
+	}
+
 	private void grow(size_t amount)
 	{
 		auto newsize = m_length + amount;
@@ -221,11 +226,12 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 			emplace(&el.value);
 		}
 		m_length = 0;
-		foreach (ref el; oldtable) {
-			if (!Traits.equals(el.key, Traits.clearValue))
-				this[el.key] = el.value;
-			destroy(el);
-		}
+		foreach (ref el; oldtable)
+			if (!Traits.equals(el.key, Traits.clearValue)) {
+				auto idx = findInsertIndex(el.key);
+				(cast(ubyte[])m_table[idx .. idx+1])[] = cast(ubyte[])(&el.value)[0 .. 1];
+				//memcpy(&m_table[idx], &el.value, Value.sizeof);
+			}
 		if (oldtable) m_allocator.free(cast(void[])oldtable);
 	}
 }
