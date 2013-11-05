@@ -45,7 +45,7 @@ import std.variant;
 	variables passed as alias template parameters up to DMD 2.063.2. DMD 2.064 supposedly
 	has these fixed.
 */
-void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
+void compileDietFile(string template_file, ALIASES...)(OutputStream output_stream__)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
@@ -57,6 +57,9 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 		pragma(msg, "         please consider using renderCompat!()/parseDietFileCompat!()");
 		pragma(msg, "         on DMD versions prior to 2.064.");
 	}
+
+	auto stream__ = OutputStreamFilter(output_stream__);
+
 	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
 
@@ -81,7 +84,7 @@ void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStrea
 	compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
 }
 /// ditto
-void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, void* _argptr, TypeInfo[] _arguments)
+void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream output_stream__, void* _argptr, TypeInfo[] _arguments)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
@@ -89,6 +92,9 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	import core.vararg;
 
 	pragma(msg, "Compiling diet template '"~template_file~"' (compat)...");
+
+	auto stream__ = OutputStreamFilter(output_stream__);
+
 	//pragma(msg, localAliasesCompat!(0, TYPES_AND_NAMES));
 	mixin(localAliasesCompat!(0, TYPES_AND_NAMES));
 
@@ -128,7 +134,7 @@ alias compileDietFileCompat parseDietFileCompat;
 */
 template compileDietFileMixin(string template_file, string stream_variable)
 {
-	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file;
+	enum compileDietFileMixin = "auto stream__ = OutputStreamFilter("~stream_variable~");\n" ~ dietParser!template_file;
 }
 
 /**
@@ -142,6 +148,33 @@ void registerDietTextFilter(string name, string function(string, int indent) fil
 	s_filters[name] = filter;
 }
 
+/**************************************************************************************************/
+/* output stream wrapper for filtering output
+/**************************************************************************************************/
+private struct OutputStreamFilter {
+	private {
+		OutputStream m_stream;
+		string m_attrName;
+		string m_attrValue;
+	}
+	this(OutputStream stream) { m_stream = stream; }
+	void write(string data) {
+		if(m_attrName is null) m_stream.write(data);
+		else m_attrValue ~= data;
+	}
+	void beginAttribute(string name) { m_attrName = name; }
+	void endAttribute() {
+		if(m_attrValue.length) {
+			m_stream.write(` `);
+			m_stream.write(m_attrName);
+			m_stream.write(`="`);
+			m_stream.write(m_attrValue);
+			m_stream.write(`"`);
+		}
+		m_attrName = null;
+		m_attrValue.length = 0;
+	}
+}
 
 /**************************************************************************************************/
 /* private functions                                                                              */
@@ -304,6 +337,9 @@ private class OutputContext {
 	void writeExpr(string str) { writeStringExpr("_toString("~str~")"); }
 	void writeExprHtmlEscaped(string str) { writeStringExprHtmlEscaped("_toString("~str~")"); }
 	void writeExprHtmlAttribEscaped(string str) { writeStringExprHtmlAttribEscaped("_toString("~str~")"); }
+
+	void beginAttribute(string name) { writeCodeLine(StreamVariableName ~ `.beginAttribute("` ~ name ~ `");`); }
+	void endAttribute() { writeCodeLine(StreamVariableName ~ `.endAttribute();`); }
 
 	void writeCodeLine(string stmt)
 	{
@@ -781,7 +817,7 @@ private struct DietCompiler {
 		foreach( att; attribs ){
 			if( att[0][0] == '$' ) continue; // ignore special attributes
 			if( isStringLiteral(att[1]) ){
-				output.writeString(" "~att[0]~"=\"");
+				output.beginAttribute(att[0]);
 				if( !hasInterpolations(att[1]) ) output.writeString(htmlAttribEscape(dstringUnescape(att[1][1 .. $-1])));
 				else buildInterpolatedString(output, att[1][1 .. $-1], true);
 
@@ -794,18 +830,18 @@ private struct DietCompiler {
 						}
 				}
 
-				output.writeString("\"");
+				output.endAttribute();
 			} else {
 				output.writeCodeLine("static if(is(typeof("~att[1]~") == bool)){ if("~att[1]~"){");
 				output.writeString(` `~att[0]~`="`~att[0]~`"`);
 				output.writeCodeLine("}} else static if(is(typeof("~att[1]~") == string[])){\n");
-				output.writeString(` `~att[0]~`="`);
+				output.beginAttribute(att[0]);
 				output.writeExprHtmlAttribEscaped(`join(`~att[1]~`, " ")`);
-				output.writeString(`"`);
+				output.endAttribute();
 				output.writeCodeLine("} else {");
-				output.writeString(` `~att[0]~`="`);
+				output.beginAttribute(att[0]);
 				output.writeExprHtmlAttribEscaped(att[1]);
-				output.writeString(`"`);
+				output.endAttribute();
 				output.writeCodeLine("}");
 			}
 		}
