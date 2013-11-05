@@ -111,7 +111,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 		serializer.beginWriteDictionary!TU();
 		foreach (mname; __traits(allMembers, TU)) {
 			static if (isRWPlainField!(TU, mname) || isRWField!(TU, mname)) {
-				alias member = TypeTuple!(__traits(getMember, value, mname))[0];
+				alias member = TypeTuple!(__traits(getMember, TU, mname))[0];
 				static if (!hasAttribute!(member, IgnoreAttribute)) {
 					alias typeof(member) TM;
 					enum name = getAttribute!(member, NameAttribute)(NameAttribute(mname)).name;
@@ -206,7 +206,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 				default: break;
 				foreach (i, mname; __traits(allMembers, T)) {
 					static if (isRWPlainField!(T, mname) || isRWField!(T, mname)) {
-						alias member = TypeTuple!(__traits(getMember, ret, mname))[0];
+						alias member = TypeTuple!(__traits(getMember, T, mname))[0];
 						static if (!hasAttribute!(member, IgnoreAttribute)) {
 							alias TM = typeof(__traits(getMember, ret, mname));
 							enum fname = getAttribute!(member)(NameAttribute(mname)).name;
@@ -225,7 +225,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		});
 		foreach (i, mname; __traits(allMembers, T))
 			static if (isRWPlainField!(T, mname) || isRWField!(T, mname)) {
-				alias member = TypeTuple!(__traits(getMember, ret, mname))[0];
+				alias member = TypeTuple!(__traits(getMember, T, mname))[0];
 				static if (!hasAttribute!(member, IgnoreAttribute) && !hasAttribute!(member, OptionalAttribute))
 					enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"'.");
 			}

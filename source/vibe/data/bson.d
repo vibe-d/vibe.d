@@ -1278,7 +1278,7 @@ struct BsonSerializer {
 		else static if (is(T == typeof(null))) {}
 		else static if (is(T == string)) { m_dst.put(toBsonData(cast(uint)value.length+1)); m_dst.putCString(value); }
 		else static if (is(T == BsonBinData)) { m_dst.put(toBsonData(cast(int)value.rawData.length)); m_dst.put(value.type); m_dst.put(value.rawData); }
-		else static if (is(T == BsonObjectID)) { m_dst.put(value.m_bytes); }
+		else static if (is(T == BsonObjectID)) { m_dst.put(value.m_bytes[]); }
 		else static if (is(T == BsonDate)) { m_dst.put(toBsonData(value.m_time)); }
 		else static if (is(T == BsonRegex)) { m_dst.putCString(value.expression); m_dst.putCString(value.options); }
 		else static if (is(T == BsonTimestamp)) { m_dst.put(toBsonData(value.m_time)); }
