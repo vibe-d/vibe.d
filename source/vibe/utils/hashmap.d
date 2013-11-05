@@ -225,11 +225,10 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 			} else el.key = cast(UnConst!Key)Traits.clearValue;
 			emplace(&el.value);
 		}
-		m_length = 0;
 		foreach (ref el; oldtable)
 			if (!Traits.equals(el.key, Traits.clearValue)) {
 				auto idx = findInsertIndex(el.key);
-				(cast(ubyte[])m_table[idx .. idx+1])[] = (cast(ubyte[])(&el.value)[0 .. 1])[];
+				(cast(ubyte[])(&m_table[idx])[0 .. 1])[] = (cast(ubyte[])(&el)[0 .. 1])[];
 			}
 		if (oldtable) m_allocator.free(cast(void[])oldtable);
 	}
