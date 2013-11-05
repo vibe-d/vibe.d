@@ -1253,6 +1253,7 @@ struct BsonSerializer {
 	}
 	void endWriteDictionary(T)()
 	{
+		m_dst.put(Bson.Type.end);
 		auto sh = m_compositeStack[$-1];
 		m_compositeStack.length--;
 		m_dst.data[sh .. sh + 4] = toBsonData(cast(uint)(m_dst.data.length - sh))[];
