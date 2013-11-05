@@ -323,20 +323,6 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServe
 
 /**
 	Encodes the given dictionary as URL encoded form data.
-
-	Examples:
-		---
-		import std.array;
-		import vibe.core.log;
-		import vibe.http.form;
-
-		void test()
-		{
-			auto dst = appender!string();
-			dst.writeFormData(["field1": "value1", "field2": "value2"]);
-			logInfo("Form data: %s", dst.data);
-		}
-		---
 */
 void writeFormData(R)(R dst, in string[string] data)
 	if (isOutputRange!(R, char))
@@ -353,28 +339,23 @@ void writeFormData(R)(R dst, in string[string] data)
 	}
 }
 
+///
+unittest {
+	import std.array;
+	import vibe.core.log;
+	import vibe.http.form;
+
+	void test()
+	{
+		auto dst = appender!string();
+		dst.writeFormData(["field1": "value1", "field2": "value2"]);
+		logInfo("Form data: %s", dst.data);
+	}
+}
+
 
 /**
 	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
-
-	Examples:
-		---
-		import vibe.core.log;
-		import vibe.http.client;
-		import vibe.http.form;
-
-		void sendForm()
-		{
-			requestHTTP("http://example.com/form",
-				(scope req) {
-					req.method = HTTPMethod.POST;
-					req.writeFormData(["field1": "value1", "field2"; "value2"]);
-				},
-				(scope res) {
-					logInfo("Response: %s", res.bodyReader.readAllUTF8());
-				});
-		}
-		---
 */
 void writeFormBody(HTTPClientRequest req, in string[string] form)
 {
@@ -385,6 +366,26 @@ void writeFormBody(HTTPClientRequest req, in string[string] form)
 	req.contentType = "application/x-www-form-urlencoded";
 	req.contentLength = len.count;
 	writeFormData(req.bodyWriter, form);
+}
+
+///
+unittest {
+	import vibe.core.log;
+	import vibe.http.client;
+	import vibe.http.form;
+	import vibe.stream.operations;
+
+	void sendForm()
+	{
+		requestHTTP("http://example.com/form",
+			(scope req) {
+				req.method = HTTPMethod.POST;
+				req.writeFormBody(["field1": "value1", "field2": "value2"]);
+			},
+			(scope res) {
+				logInfo("Response: %s", res.bodyReader.readAllUTF8());
+			});
+	}
 }
 
 /// private
