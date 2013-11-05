@@ -229,8 +229,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		foreach (ref el; oldtable)
 			if (!Traits.equals(el.key, Traits.clearValue)) {
 				auto idx = findInsertIndex(el.key);
-				(cast(ubyte[])m_table[idx .. idx+1])[] = cast(ubyte[])(&el.value)[0 .. 1];
-				//memcpy(&m_table[idx], &el.value, Value.sizeof);
+				(cast(ubyte[])m_table[idx .. idx+1])[] = (cast(ubyte[])(&el.value)[0 .. 1])[];
 			}
 		if (oldtable) m_allocator.free(cast(void[])oldtable);
 	}
