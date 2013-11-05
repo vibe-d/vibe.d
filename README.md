@@ -25,8 +25,9 @@ dependency to the `package.json` file in your project's directory:
         }
     }
 
-Invoking `dub` will then automatically download the latest vibe.d and compile
-and run the project.
+The latest versions of DUB also support `dub init <name> vibe.d`, which
+automatically adds the required dependency. Invoking `dub` will then
+fetch the latest vibe.d and compile and run the project.
 
 Similarly, you can run an example by invoking `dub` from any of the
 example project directories.
