@@ -100,6 +100,28 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 	assert(!cli.m_responding, "HTTP client still responding after return!?");
 }
 
+/** Posts a simple JSON request. Note that the server www.example.org does not
+	exists, so there will be no meaningful result.
+*/
+unittest {
+	import vibe.core.log;
+	import vibe.http.client;
+	import vibe.stream.operations;
+
+	void test()
+	{
+		requestHTTP("http://www.example.org/",
+			(scope req) {
+				req.method = HTTPMethod.POST;
+				req.writeJsonBody(["name": "My Name"]);
+			},
+			(scope res) {
+				logInfo("Response: %s", res.bodyReader.readAllUTF8());
+			}
+		);
+	}
+}
+
 /// Deprecated compatibility alias
 deprecated("Please use requestHTTP instead.") alias requestHttp = requestHTTP;
 
