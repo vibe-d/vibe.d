@@ -1167,12 +1167,12 @@ private template IsolatedValueProxy(T)
 	}
 }
 
-unittest {
+/+unittest {
 	static class Test {}
 	void test() {
 		Task.getThis().send(new immutable Test, makeIsolated!Test());
 	}
-}
+}+/
 
 private struct IsolatedSendProxy(T) { alias BaseType = T; T value; }
 
