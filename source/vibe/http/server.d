@@ -452,6 +452,45 @@ deprecated("Please use HTTPServerSettings instead.") alias HttpServerSettings = 
 
 
 /**
+	Options altering how sessions are created.
+
+	Multiple values can be or'ed together.
+
+	See_Also: HTTPServerResponse.startSession
+*/
+enum SessionOption {
+	/// No options.
+	none = 0,
+
+	/** Instructs the browser to disallow accessing the session ID from JavaScript.
+
+		See_Also: Cookie.httpOnly
+	*/
+	httpOnly = 1<<0,
+
+	/** Instructs the browser to disallow sending the session ID over
+		unencrypted connections.
+
+		By default, the type of the connection on which the session is started
+		will be used to determine if secure or noSecure is used.
+
+		See_Also: noSecure, Cookie.secure
+	*/
+	secure = 1<<1,
+
+	/** Instructs the browser to allow sending the session ID over unencrypted
+		connections.
+
+		By default, the type of the connection on which the session is started
+		will be used to determine if secure or noSecure is used.
+
+		See_Also: noSecure, Cookie.secure
+	*/
+	noSecure = 1<<2
+}
+
+
+/**
 	Represents a HTTP request as received by the server side.
 */
 final class HTTPServerRequest : HTTPRequest {
@@ -649,6 +688,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Session m_session;
 		bool m_headerWritten = false;
 		bool m_isHeadResponse = false;
+		bool m_ssl;
 		SysTime m_timeFinalized;
 	}
 
@@ -669,6 +709,10 @@ final class HTTPServerResponse : HTTPResponse {
 	/** Determines if the response does not need a body.
 	*/
 	bool isHeadResponse() const { return m_isHeadResponse; }
+
+	/** Determines if the response is sent over an encrypted connection.
+	*/
+	bool ssl() const { return m_ssl; }
 
 	/// Writes the entire response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)
@@ -842,18 +886,35 @@ final class HTTPServerResponse : HTTPResponse {
 		creating the server. Depending on this, the session can be persistent
 		or temporary and specific to this server instance.
 	*/
-	Session startSession(string path = "/", bool secure = false, bool httpOnly = true)
+	Session startSession(string path = "/", SessionOption options = SessionOption.httpOnly)
 	{
 		assert(m_settings.sessionStore, "no session store set");
 		assert(!m_session, "Try to start a session, but already started one.");
+
+		bool secure;
+		if (options & SessionOption.secure) secure = true;
+		else if (options & SessionOption.noSecure) secure = false;
+		else secure = this.ssl;
+
 		m_session = m_settings.sessionStore.create();
 		m_session["$sessionCookiePath"] = path;
 		m_session["$sessionCookieSecure"] = secure.to!string();
 		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id);
 		cookie.path = path;
 		cookie.secure = secure;
-		cookie.httpOnly = httpOnly;
+		cookie.httpOnly = (options & SessionOption.httpOnly) != 0;
 		return m_session;
+	}
+
+	/**
+		Compatibility overload - will be deprecated soon.
+
+		Uses boolean parameters instead of SessionOption to specify the
+		session options SessionOption.secure and SessionOption.httpOnly.
+	*/
+	Session startSession(string path, bool secure, bool httpOnly = true)
+	{
+		return startSession(path, (secure ? SessionOption.secure : SessionOption.none) | (httpOnly ? SessionOption.httpOnly : SessionOption.none));
 	}
 
 	/**
@@ -1141,10 +1202,10 @@ private bool handleRequest(Stream http_stream, string peer_address_string, Netwo
 			request_task = ctx.requestHandler;
 			break;
 		}
-	req.ssl = listen_info.sslContext !is null;
 
 	// Create the response object
 	auto res = FreeListRef!HTTPServerResponse(http_stream, settings, request_allocator/*.Scoped_payload*/);
+	req.ssl = res.m_ssl = listen_info.sslContext !is null;
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -1310,7 +1371,7 @@ private bool handleRequest(Stream http_stream, string peer_address_string, Netwo
 		if( !res.headerWritten )
 			throw new HTTPStatusException(HTTPStatus.notFound);
 	} catch(HTTPStatusException err) {
-		logDebug("http error thrown: %s", err.toString());
+		logDebug("http error thrown: %s", err.toString().sanitize);
 		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
 		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
