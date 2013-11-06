@@ -398,6 +398,7 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	void writeJsonBody(T)(T data)
 	{
+		headers["Transfer-Encoding"] = "chunked";
 		headers["Content-Type"] = "application/json";
 		serializeToJson(bodyWriter, data);
 	}
@@ -453,9 +454,11 @@ final class HTTPClientRequest : HTTPRequest {
 		// force the request to be sent
 		if( !m_headerWritten ) bodyWriter();
 
-		if( m_bodyWriter !is m_conn ) m_bodyWriter.finalize();
-		else m_bodyWriter.flush();
-		m_conn.flush();
+		m_bodyWriter.flush();
+		if (m_bodyWriter !is m_conn) {
+			m_bodyWriter.finalize();
+			m_conn.flush();
+		}
 		m_bodyWriter = null;
 	}
 
