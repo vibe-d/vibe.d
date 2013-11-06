@@ -133,6 +133,10 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 			if (flags & HTMLEscapeFlags.escapeQuotes) dst.put("&quot;");
 			else dst.put('"');
 			break;
+		case '\'':
+			if (flags & HTMLEscapeFlags.escapeQuotes) dst.put("&apos;");
+			else dst.put('\'');
+			break;
 		case '\r', '\n':
 			if (flags & HTMLEscapeFlags.escapeNewline) {
 				dst.put("&#");
