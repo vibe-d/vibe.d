@@ -1189,7 +1189,7 @@ unittest {
 	Serializer for a plain Json representation.
 */
 struct JsonSerializer {
-	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : double) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 	
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
@@ -1253,6 +1253,7 @@ struct JsonSerializer {
 	{
 		static if (is(T == Json)) return m_current;
 		else static if (isJsonSerializable!T) return T.fromJson(m_current);
+		else static if (is(T == float) || is(T == double)) return m_current.type == Json.Type.float_ ? cast(T)m_current.get!double : cast(T)m_current.get!long;
 		else return m_current.get!T();
 	}
 
