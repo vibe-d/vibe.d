@@ -1,7 +1,7 @@
 /**
 	Automatic REST interface and client code generation facilities.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун
 */
@@ -284,7 +284,7 @@ class RestInterfaceClient(I) : I
 				);
 			}
 			else {
-			    m_baseURL = URL.parse(
+				url = URL.parse(
 					concatURL(base_url, uda.value.data, true)
 				);
 			}
@@ -346,14 +346,7 @@ class RestInterfaceClient(I) : I
 
 			URL url = m_baseURL;
 
-			if (name.length) {
-				url ~= Path(name);
-			}
-			else if (url.path.endsWithSlash) {
-				auto p = url.path;
-				p.endsWithSlash = false;
-				url.path = p;
-			}
+			if (name.length) url ~= Path(name);
 			
 			if ((verb == "GET" || verb == "HEAD") && params.length > 0) {
 				auto query = appender!string();
@@ -812,9 +805,9 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					ret ~= format(
 						q{
 							if (%s)
-								m_%s = new %s(m_baseURL.toString() ~ PathEntry("%s").toString(), m_methodStyle);
+								m_%s = new %s(m_baseURL.toString() ~ PathEntry("%s").toString() ~ "/", m_methodStyle);
 							else
-								m_%s = new %s(m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString(), m_methodStyle), m_methodStyle);
+								m_%s = new %s(m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString() ~ "/", m_methodStyle), m_methodStyle);
 						},
 						meta.hadPathUDA,
 						implname, implname, meta.url,
