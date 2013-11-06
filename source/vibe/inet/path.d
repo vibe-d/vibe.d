@@ -171,14 +171,17 @@ struct Path {
 	size_t opDollar(int dim)() const if(dim == 0) { return m_nodes.length; }
 	
 	
-	Path opBinary(string OP)(const Path rhs) const if( OP == "~" ) {
+	Path opBinary(string OP)(const Path rhs) const if( OP == "~" )
+	{
+		assert(!rhs.absolute, "Trying to append absolute path.");
+		if (!rhs.length) return this;
+
 		Path ret;
 		ret.m_nodes = m_nodes;
 		ret.m_absolute = m_absolute;
 		ret.m_endsWithSlash = rhs.m_endsWithSlash;
 		ret.normalize(); // needed to avoid "."~".." become "" instead of ".."
 		
-		assert(!rhs.absolute, "Trying to append absolute path.");
 		size_t idx = m_nodes.length;
 		foreach(folder; rhs.m_nodes){
 			switch(folder.toString()){
@@ -199,7 +202,14 @@ struct Path {
 	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return opBinary!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
-	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { auto p = this ~ rhs; m_nodes = p.m_nodes; m_endsWithSlash = rhs.m_endsWithSlash; }
+	void opOpAssign(string OP)(Path rhs) if( OP == "~" )
+	{
+		assert(!rhs.absolute, "Trying to append absolute path.");
+		if (!rhs.length) return;
+		auto p = this ~ rhs;
+		m_nodes = p.m_nodes;
+		m_endsWithSlash = rhs.m_endsWithSlash;
+	}
 	
 	/// Tests two paths for equality using '=='.
 	bool opEquals(ref const Path rhs) const {
