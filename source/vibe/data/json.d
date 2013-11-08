@@ -1119,7 +1119,7 @@ unittest {
 	struct T {
 		@optional S s;
 		@optional int i;
-		@optional float f;
+		@optional float f_; // underscore strip feature
 		@optional double d;
 		@optional string str;
 	}

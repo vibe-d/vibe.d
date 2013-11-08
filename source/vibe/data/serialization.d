@@ -114,7 +114,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 				alias member = TypeTuple!(__traits(getMember, TU, mname))[0];
 				static if (!hasAttribute!(member, IgnoreAttribute)) {
 					alias typeof(member) TM;
-					enum name = getAttribute!(member, NameAttribute)(NameAttribute(mname)).name;
+					enum name = getAttribute!(member, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
 					serializer.beginWriteDictionaryEntry!TM(name);
 					static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
 						serialize(serializer, __traits(getMember, value, mname).to!string());
@@ -209,7 +209,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 						alias member = TypeTuple!(__traits(getMember, T, mname))[0];
 						static if (!hasAttribute!(member, IgnoreAttribute)) {
 							alias TM = typeof(__traits(getMember, ret, mname));
-							enum fname = getAttribute!(member)(NameAttribute(mname)).name;
+							enum fname = getAttribute!(member)(NameAttribute(underscoreStrip(mname))).name;
 							case fname:
 								set[i] = true;
 								static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
@@ -348,4 +348,10 @@ private static T getAttribute(alias decl, T)(T default_value)
 	enum val = findFirstUDA!(T, decl);
 	static if (val.found) return val.value;
 	else return default_value;
+}
+
+private string underscoreStrip(string field_name)
+{
+	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
+	else return field_name[0 .. $-1];
 }
