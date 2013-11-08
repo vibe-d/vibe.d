@@ -484,7 +484,7 @@ enum SessionOption {
 		By default, the type of the connection on which the session is started
 		will be used to determine if secure or noSecure is used.
 
-		See_Also: noSecure, Cookie.secure
+		See_Also: secure, Cookie.secure
 	*/
 	noSecure = 1<<2
 }
