@@ -511,7 +511,7 @@ final class HTTPClientResponse : HTTPResponse {
 		}
 		
 		// read headers until an empty line is hit
-		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc);
+		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc, false);
 
 		logTrace("---------------------");
 		logTrace("HTTP client response:");

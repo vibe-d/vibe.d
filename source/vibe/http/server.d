@@ -1439,7 +1439,7 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 	req.httpVersion = parseHTTPVersion(reqln);
 	
 	//headers
-	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc);
+	parseRFC5322Header(stream, req.headers, MaxHTTPHeaderLineLength, alloc, false);
 
 	foreach (k, v; req.headers)
 		logTrace("%s: %s", k, v);
