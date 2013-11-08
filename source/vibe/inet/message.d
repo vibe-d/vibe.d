@@ -23,23 +23,32 @@ import std.string;
 
 /**
 	Parses an internet header according to RFC5322 (with RFC822 compatibility).
+
+	Params:
+		input = Input stream from which the header is parsed
+		dst = Destination map to write into
+		max_line_length = The maximum allowed length of a single line
+		alloc = Custom allocator to use for allocating strings
+		rfc822_compatible = Flag indicating that duplicate fields should be merged using a comma
 */
-void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, shared(Allocator) alloc = defaultAllocator())
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, shared(Allocator) alloc = defaultAllocator(), bool rfc822_compatible = true)
 {
 	string hdr, hdrvalue;
 
-	void addPreviousHeader(){
-		if( !hdr.length ) return;
-		if( auto pv = hdr in dst ) {
-			*pv ~= "," ~ hdrvalue; // RFC822 legacy support
-		} else {
-			dst[hdr] = hdrvalue;
-		}
+	void addPreviousHeader() {
+		if (!hdr.length) return;
+		if (rfc822_compatible) {
+			if (auto pv = hdr in dst) {
+				*pv ~= "," ~ hdrvalue; // RFC822 legacy support
+			} else {
+				dst[hdr] = hdrvalue;
+			}
+		} else dst.addField(hdr, hdrvalue);
 	}
 
 	string ln;
-	while( (ln = cast(string)input.readLine(max_line_length, "\r\n", alloc)).length > 0 ){
-		if( ln[0] != ' ' && ln[0] != '\t' ){
+	while ((ln = cast(string)input.readLine(max_line_length, "\r\n", alloc)).length > 0) {
+		if (ln[0] != ' ' && ln[0] != '\t') {
 			addPreviousHeader();
 
 			auto colonpos = ln.indexOf(':');
@@ -324,7 +333,8 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 	Behaves like string[string] but case does not matter for the key and the insertion order is not changed.
 
 	This kind of map is used for MIME headers (e.g. for HTTP), where the case of the key strings
-	does not matter.
+	does not matter. Note that the map can contain fields with the same key multiple times if
+	addField is used for insertion. Insertion order is preserved.
 
 	Note that despite case not being relevant for matching keyse, iterating over the map will yield
 	the original case of the key that was put in.
@@ -338,9 +348,14 @@ struct InetHeaderMap {
 		static char[256] s_keyBuffer;
 	}
 	
+	/** The number of fields present in the map.
+	*/
 	@property size_t length() const { return m_fieldCount + m_extendedFields.length; }
 
-	void remove(string key){
+	/** Removes the first field that matches the given key.
+	*/
+	void remove(string key)
+	{
 		auto keysum = computeCheckSumI(key);
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ){
@@ -354,12 +369,32 @@ struct InetHeaderMap {
 		}
 	}
 
+	/** Adds a new field to the map.
+
+		The new field will be added regardless of any existing fields that
+		have the same key, possibly resulting in duplicates. Use opIndexAssign
+		if you want to avoid duplicates.
+	*/
+	void addField(string key, string value)
+	{
+		auto keysum = computeCheckSumI(key);
+		if (m_fieldCount < m_fields.length)
+			m_fields[m_fieldCount++] = Field(keysum, key, value);
+		else m_extendedFields ~= Field(keysum, key, value);
+	}
+
+	/** Returns the first field that matches the given key.
+
+		If no field is found, def_val is returned.
+	*/
 	string get(string key, string def_val = null)
 	const {
 		if( auto pv = key in this ) return *pv;
 		return def_val;
 	}
 
+	/** Returns the first value matching the given key.
+	*/
 	string opIndex(string key)
 	const {
 		auto pitm = key in this;
@@ -367,6 +402,8 @@ struct InetHeaderMap {
 		return *pitm;
 	}
 	
+	/** Adds or replaces the given field with a new value.
+	*/
 	string opIndexAssign(string val, string key)
 	{
 		auto pitm = key in this;
@@ -376,6 +413,8 @@ struct InetHeaderMap {
 		return val;
 	}
 
+	/** Returns a pointer to the first field that matches the given key.
+	*/
 	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
 		uint keysum = computeCheckSumI(key);
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
@@ -384,11 +423,13 @@ struct InetHeaderMap {
 		if( idx >= 0 ) return &m_extendedFields[idx].value;
 		return null;
 	}
-
+	/// ditto
 	bool opBinaryRight(string op)(string key) inout if(op == "!in") {
 		return !(key in this);
 	}
 
+	/** Iterates over all fields, including duplicates.
+	*/
 	int opApply(int delegate(ref string key, ref string val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
@@ -404,6 +445,7 @@ struct InetHeaderMap {
 		return 0;
 	}
 
+	/// ditto
 	int opApply(int delegate(ref string val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
@@ -417,6 +459,8 @@ struct InetHeaderMap {
 		return 0;
 	}
 
+	/** Duplicates the header map.
+	*/
 	@property InetHeaderMap dup()
 	const {
 		InetHeaderMap ret;
