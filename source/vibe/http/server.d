@@ -643,6 +643,7 @@ final class HTTPServerRequest : HTTPRequest {
 				if (m_port != 80) url.port = m_port;
 			}
 		}
+		url.host = url.host.split(":")[0];
 		url.username = this.username;
 		url.password = this.password;
 		url.path = Path(path);
