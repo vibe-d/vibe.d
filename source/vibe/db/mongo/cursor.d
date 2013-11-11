@@ -143,7 +143,7 @@ private class MongoCursorData {
 		QueryFlags m_flags;
 		int m_nskip;
 		int m_nret;
-		Bson[string] m_query;
+		Bson m_query;
 		Bson m_returnFieldSelector;
 		int m_offset;
 		size_t m_currentDoc = 0;
@@ -157,7 +157,12 @@ private class MongoCursorData {
 		m_flags = flags;
 		m_nskip = nskip;
 		m_nret = nret;
-		m_query["$query"] = query;
+		if (query.type == Bson.Type.Object && (!query["query"].isNull() || !query["$query"].isNull())) {
+			m_query = query;
+		} else {
+			m_query = Bson.emptyObject;
+			m_query["$query"] = query;
+		}
 		m_returnFieldSelector = return_field_selector;
 	}
 
@@ -203,7 +208,7 @@ private class MongoCursorData {
 
 	private void startIterating() {
 		auto conn = m_client.lockConnection();
-		auto reply = conn.query(m_collection, m_flags, m_nskip, m_nret, serializeToBson(m_query), m_returnFieldSelector);
+		auto reply = conn.query(m_collection, m_flags, m_nskip, m_nret, m_query, m_returnFieldSelector);
 		m_cursor = reply.cursor;
 		handleReply(reply);
 		m_started_iterating = true;
