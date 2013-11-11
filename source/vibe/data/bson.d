@@ -9,7 +9,6 @@ module vibe.data.bson;
 
 public import vibe.data.json;
 import vibe.core.log;
-import vibe.data.serialization;
 
 import std.algorithm;
 import std.array;

@@ -39,7 +39,7 @@
 */
 module vibe.data.json;
 
-import vibe.data.serialization;
+public import vibe.data.serialization;
 
 import std.algorithm : equal, min;
 import std.array;

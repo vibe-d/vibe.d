@@ -97,7 +97,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 			serializer.endWriteDictionaryEntry!TV(keyname);
 		}
 		serializer.endWriteDictionary!TU();
-	} else static if (is(TU == SysTime) || is(TU == DateTime) || is(TU == Date)) {
+	} else static if (isISOExtStringSerializable!TU) {
 		serializer.writeValue(value.toISOExtString());
 	} else static if (isStringSerializable!TU) {
 		serializer.writeValue(value.toString());
@@ -187,7 +187,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 			ret[key] = deserialize!TV(deserializer);
 		});
 		return ret;
-	} else static if (is(T == SysTime) || is(T == DateTime) || is(T == Date)) {
+	} else static if (isISOExtStringSerializable!T) {
 		return T.fromISOExtString(deserializer.readValue!string());
 	} else static if (isStringSerializable!T) {
 		return T.fromString(deserializer.readValue!string());
@@ -355,3 +355,6 @@ private string underscoreStrip(string field_name)
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
 	else return field_name[0 .. $-1];
 }
+
+
+private template isISOExtStringSerializable(T) { enum isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T); }
