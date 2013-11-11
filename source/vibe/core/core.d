@@ -254,8 +254,11 @@ private void runWorkerTaskDist_unsafe(void delegate() del)
 */
 void yield()
 {
-	s_yieldedTasks ~= Task.getThis();
-	rawYield();
+	auto t = Task.getThis();
+	if (t != Task.init) {
+		s_yieldedTasks ~= Task.getThis();
+		rawYield();
+	}
 }
 
 
@@ -668,8 +671,8 @@ private class VibeDriverCore : DriverCore {
 			}
 		} else {
 			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			if( auto err = getEventDriver().runEventLoopOnce() ){
-				if( err == 1 ){
+			if (auto err = getEventDriver().runEventLoopOnce()) {
+				if (err == 1) {
 					logDebug("No events registered, exiting event loop.");
 					throw new Exception("No events registered in vibeYieldForEvent.");
 				}
