@@ -7,7 +7,7 @@
 */
 module vibe.core.drivers.threadedfile;
 
-
+import vibe.core.core : yield;
 import vibe.core.log;
 import vibe.core.driver;
 import vibe.inet.url;
@@ -168,20 +168,29 @@ class ThreadedFileStream : FileStream {
 	void read(ubyte[] dst)
 	{
 		assert(this.readable);
-		assert(dst.length <= int.max);
-		enforce(dst.length <= leastSize);
-		enforce(.read(m_fileDescriptor, dst.ptr, cast(int)dst.length) == dst.length, "Failed to read data from disk.");
-		m_ptr += dst.length;
+		while (dst.length > 0) {
+			enforce(dst.length <= leastSize);
+			auto sz = min(dst.length, 4096);
+			enforce(.read(m_fileDescriptor, dst.ptr, cast(int)sz) == sz, "Failed to read data from disk.");
+			dst = dst[sz .. $];
+			m_ptr += sz;
+			yield();
+		}
 	}
 
 	alias Stream.write write;
-	void write(in ubyte[] bytes)
+	void write(in ubyte[] bytes_)
 	{
+		const(ubyte)[] bytes = bytes_;
 		assert(this.writable);
-		assert(bytes.length <= int.max);
-		auto ret = .write(m_fileDescriptor, bytes.ptr, cast(int)bytes.length);
-		enforce(ret == bytes.length, "Failed to write data to disk."~to!string(bytes.length)~" "~to!string(errno)~" "~to!string(ret)~" "~to!string(m_fileDescriptor));
-		m_ptr += bytes.length;
+		while (bytes.length > 0) {
+			auto sz = min(bytes.length, 4096);
+			auto ret = .write(m_fileDescriptor, bytes.ptr, cast(int)sz);
+			enforce(ret == sz, "Failed to write data to disk."~to!string(sz)~" "~to!string(errno)~" "~to!string(ret)~" "~to!string(m_fileDescriptor));
+			bytes = bytes[sz .. $];
+			m_ptr += sz;
+			yield();
+		}
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
