@@ -59,28 +59,28 @@ class ProxyStream : Stream {
 */
 class ConnectionProxyStream : ProxyStream, ConnectionStream {
 	private {
-		Stream m_stream;
-		ConnectionStream m_connectionStream;
+		ConnectionStream m_connection;
 	}
 
 	this(Stream stream, ConnectionStream connection_stream)
 	{
 		super(stream);
-		m_connectionStream = connection_stream;
+		m_connection = connection_stream;
 	}
 
-	@property bool connected() const { return m_connectionStream.connected; }
+	@property bool connected() const { return m_connection.connected; }
 
 	void close()
 	{
-		m_stream.finalize();
-		m_connectionStream.close();
+		if (!m_connection.connected) return;
+		finalize();
+		m_connection.close();
 	}
 
 	bool waitForData(Duration timeout = 0.seconds)
 	{
-		if (m_stream.dataAvailableForRead) return true;
-		return m_connectionStream.waitForData(timeout);
+		if (this.dataAvailableForRead) return true;
+		return m_connection.waitForData(timeout);
 	}
 
 	// for some reason DMD will complain if we don't wrap these here
