@@ -11,6 +11,7 @@ public import vibe.core.stream;
 
 import std.algorithm : min;
 import std.exception;
+import core.time;
 
 
 /**
@@ -20,6 +21,8 @@ class ProxyStream : Stream {
 	private {
 		Stream m_underlying;
 	}
+
+	this(Stream stream = null) { m_underlying = stream; }
 
 	/// The stream that is wrapped by this one
 	@property inout(Stream) underlying() inout { return m_underlying; }
@@ -36,14 +39,55 @@ class ProxyStream : Stream {
 
 	void read(ubyte[] dst) { m_underlying.read(dst); }
 
-	alias Stream.write write;
-	void write(in ubyte[] bytes) { import vibe.core.log; logDebug("WRITE: %s", cast(string)bytes); m_underlying.write(bytes); }
+	void write(in ubyte[] bytes) { m_underlying.write(bytes); }
 
 	void flush() { m_underlying.flush(); }
 
 	void finalize() { m_underlying.finalize(); }
 
 	void write(InputStream stream, ulong nbytes = 0) { m_underlying.write(stream, nbytes); }
+}
+
+
+/**
+	Special kind of proxy stream for streams nested in a ConnectionStream.
+
+	This stream will forward all stream operations to the selected stream,
+	but will forward all connection related operations to the given
+	ConnectionStream. This allows wrapping embedded streams, such as
+	SSL streams in a ConnectionStream.
+*/
+class ConnectionProxyStream : ProxyStream, ConnectionStream {
+	private {
+		Stream m_stream;
+		ConnectionStream m_connectionStream;
+	}
+
+	this(Stream stream, ConnectionStream connection_stream)
+	{
+		super(stream);
+		m_connectionStream = connection_stream;
+	}
+
+	@property bool connected() const { return m_connectionStream.connected; }
+
+	void close()
+	{
+		m_stream.finalize();
+		m_connectionStream.close();
+	}
+
+	bool waitForData(Duration timeout = 0.seconds)
+	{
+		if (m_stream.dataAvailableForRead) return true;
+		return m_connectionStream.waitForData(timeout);
+	}
+
+	// for some reason DMD will complain if we don't wrap these here
+	override void write(in ubyte[] bytes) { super.write(bytes); }
+	override void flush() { super.flush(); }
+	override void finalize() { super.finalize(); }
+	override void write(InputStream stream, ulong nbytes = 0) { super.write(stream, nbytes); }
 }
 
 
