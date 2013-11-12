@@ -1395,14 +1395,16 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 	}
 
-	if( req.bodyReader && !req.bodyReader.empty ){
-		auto nullWriter = scoped!NullOutputStream();
-		nullWriter.write(req.bodyReader);
-		logTrace("dropped body");
-	}
+	if (tcp_connection.connected) {
+		if( req.bodyReader && !req.bodyReader.empty ){
+			auto nullWriter = scoped!NullOutputStream();
+			nullWriter.write(req.bodyReader);
+			logTrace("dropped body");
+		}
 
-	// finalize (e.g. for chunked encoding)
-	res.finalize();
+		// finalize (e.g. for chunked encoding)
+		res.finalize();
+	}
 
 	foreach( k, v ; req.files ){
 		if( existsFile(v.tempPath) ) {
