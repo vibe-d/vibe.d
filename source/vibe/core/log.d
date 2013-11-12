@@ -25,6 +25,7 @@ import core.thread;
 */
 void setLogLevel(LogLevel level)
 nothrow {
+	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
 	ss_stdoutLogger.lock().minLevel = level;
 }
 
@@ -38,6 +39,7 @@ nothrow {
 */
 void setPlainLogging(bool enable)
 {
+	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
 	ss_stdoutLogger.lock().format = enable ? FileLogger.Format.plain : FileLogger.Format.thread;
 }
 
@@ -48,6 +50,7 @@ void setPlainLogging(bool enable)
 */
 void setLogFormat(FileLogger.Format fmt)
 {
+	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
 	ss_stdoutLogger.lock().format = fmt;
 }
 
@@ -659,24 +662,39 @@ nothrow {
 
 package void initializeLogModule()
 {
-	ss_stdoutLogger = cast(shared)new FileLogger(stdout, stderr);
-	{
-		auto l = ss_stdoutLogger.lock();
-		l.minLevel = LogLevel.info;
-		l.format = FileLogger.Format.plain;
-	}
-	registerLogger(ss_stdoutLogger);
 
-	bool[4] verbose;
-	getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
-	getOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
-	getOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
-	getOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
-
-	foreach_reverse (i, v; verbose)
-		if (v) {
-			setPlainLogging(false);
-			setLogLevel(cast(LogLevel)(LogLevel.diagnostic - i));
-			break;
+	version (Windows) {
+		version (VibeWinrtDriver) enum disable_stdout = true;
+		else {
+			enum disable_stdout = false;
+			if (!GetConsoleWindow()) return;
 		}
+	} else enum disable_stdout = false;
+
+	static if (!disable_stdout) {
+		ss_stdoutLogger = cast(shared)new FileLogger(stdout, stderr);
+		{
+			auto l = ss_stdoutLogger.lock();
+			l.minLevel = LogLevel.info;
+			l.format = FileLogger.Format.plain;
+		}
+		registerLogger(ss_stdoutLogger);
+
+		bool[4] verbose;
+		getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
+		getOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
+		getOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
+		getOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+
+		foreach_reverse (i, v; verbose)
+			if (v) {
+				setPlainLogging(false);
+				setLogLevel(cast(LogLevel)(LogLevel.diagnostic - i));
+				break;
+			}
+	}
+}
+
+version (Windows) {
+	extern(System) void* GetConsoleWindow();
 }
