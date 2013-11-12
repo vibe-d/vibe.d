@@ -26,11 +26,13 @@
 */
 module vibe.http.websockets;
 
+import vibe.core.core;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.stream.operations;
 import vibe.http.server;
 
+import core.time;
 import std.array;
 import std.base64;
 import std.conv;
@@ -98,7 +100,11 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		ConnectionStream conn = res.switchProtocol("websocket");
 
 		/*scope*/ auto socket = new WebSocket(conn, req);
-		on_handshake(socket);
+		scope(exit) socket.close();
+		try on_handshake(socket);
+		catch (Exception e) {
+			logDiagnostic("WebSocket handler failed: %s", e.msg);
+		}
 	}
 	return &callback;
 }
@@ -118,6 +124,9 @@ class WebSocket {
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
+		Task m_reader;
+		TaskMutex m_readMutex, m_writeMutex;
+		TaskCondition m_readCondition;
 	}
 
 	this(ConnectionStream conn, in HTTPServerRequest request)
@@ -125,24 +134,16 @@ class WebSocket {
 		m_conn = conn;
 		m_request = request;
 		assert(m_conn);
+		m_reader = runTask(&startReader);
+		m_writeMutex = new TaskMutex;
+		m_readMutex = new TaskMutex;
+		m_readCondition = new TaskCondition(m_readMutex);
 	}
 
 	/**
-		Determines if the WebSocket connection is still alive.
+		Determines if the WebSocket connection is still alive and ready for sending.
 	*/
-	@property bool connected()
-	out { assert(!__result || m_nextMessage); }
-	body {
-		if(m_nextMessage is null && !m_conn.empty){
-			m_nextMessage = new IncomingWebSocketMessage(m_conn);
-			if(m_nextMessage.frameOpcode == FrameOpcode.close) {
-				if(!m_sentCloseFrame) close();
-				m_conn.close();
-				return false;
-			}
-		}
-		return m_conn.connected && !m_sentCloseFrame;
-	}
+	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
 
 	/**
 		The HTTP request the established the web socket connection.
@@ -153,6 +154,23 @@ class WebSocket {
 		Checks if data is readily available for read.
 	*/
 	@property bool dataAvailableForRead() { return m_conn.dataAvailableForRead || m_nextMessage !is null; }
+
+	/** Waits until either a message arrives or until the connection is closed.
+
+		This function can be used in a read loop to cleanly determine when to stop reading.
+	*/
+	bool waitForData(Duration timeout = 0.seconds)
+	{
+		if (m_nextMessage) return true;
+		synchronized (m_readMutex) {
+			while (connected) {
+				if (timeout > 0.seconds) m_readCondition.wait(timeout);
+				else m_readCondition.wait();
+				if (m_nextMessage) return true;
+			}
+		}
+		return false;
+	}
 
 	/**
 		Sends a text message.
@@ -179,10 +197,12 @@ class WebSocket {
 	*/
 	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
-		if(m_sentCloseFrame) { throw new Exception("closed connection"); }
-		scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
-		sender(message);
-		message.finalize();
+		synchronized (m_writeMutex) {
+			enforce(!m_sentCloseFrame, "WebSocket connection already actively closed.");
+			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
+			scope(exit) message.finalize();
+			sender(message);
+		}
 	}
 
 	/**
@@ -190,11 +210,17 @@ class WebSocket {
 	*/
 	void close()
 	{
-		Frame frame;
-		frame.opcode = FrameOpcode.close;
-		frame.fin = true;
-		frame.writeFrame(m_conn);
-		m_sentCloseFrame = true;
+		if (connected) {
+			synchronized (m_writeMutex) {
+				m_sentCloseFrame = true;
+				Frame frame;
+				frame.opcode = FrameOpcode.close;
+				frame.fin = true;
+				frame.writeFrame(m_conn);
+			}
+		}
+
+		if (Task.getThis() != m_reader) m_reader.join();
 	}
 
 	/**
@@ -230,10 +256,35 @@ class WebSocket {
 	*/
 	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
 	{
-		enforce(m_nextMessage || connected, "Trying to read from closed connection.");
-		assert(m_nextMessage !is null);
-		receiver(m_nextMessage);
-		m_nextMessage = null;
+		synchronized (m_readMutex) {
+			while (!m_nextMessage) {
+				enforce(connected, "Connection closed while reading message.");
+				m_readCondition.wait();
+			}
+			receiver(m_nextMessage);
+			m_nextMessage = null;
+			m_readCondition.notifyAll();
+		}
+	}
+
+	private void startReader()
+	{
+		while (m_conn.connected) {
+			assert(!m_nextMessage);
+			scope msg = new IncomingWebSocketMessage(m_conn);
+			if(msg.frameOpcode == FrameOpcode.close) {
+				logDebug("Got closing frame (%s)", m_sentCloseFrame);
+				if(!m_sentCloseFrame) close();
+				logDebug("Terminating connection (%s)", m_sentCloseFrame);
+				m_conn.close();
+				return;
+			} 
+			synchronized (m_readMutex) {
+				m_nextMessage = msg;
+				m_readCondition.notifyAll();
+				while (m_nextMessage) m_readCondition.wait();
+			}
+		}
 	}
 }
 
