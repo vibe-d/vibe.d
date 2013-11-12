@@ -1,7 +1,7 @@
 /**
 	A HTTP 1.1/1.0 server implementation.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2013 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -9,12 +9,44 @@ module vibe.http.log;
 
 import vibe.core.file;
 import vibe.core.log;
+import vibe.core.sync : TaskMutex;
 import vibe.http.server;
+import vibe.utils.array : FixedAppender;
 
 import std.array;
 import std.conv;
 import std.exception;
 import std.string;
+
+
+class HTTPLogger {
+	private {
+		string m_format;
+		HTTPServerSettings m_settings;
+		TaskMutex m_mutex;
+		FixedAppender!(const(char)[], 2048) m_lineAppender;
+	}
+
+	this(HTTPServerSettings settings, string format)
+	{
+		m_format = format;
+		m_settings = settings;
+		m_mutex = new TaskMutex;
+	}
+
+	void close() {}
+
+	void log(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		synchronized (m_mutex) {
+			m_lineAppender.reset();
+			formatApacheLog(m_lineAppender, m_format, req, res, m_settings);
+			writeLine(m_lineAppender.data);
+		}
+	}
+
+	protected abstract void writeLine(string ln);
+}
 
 
 class HTTPConsoleLogger : HTTPLogger {
@@ -28,6 +60,7 @@ class HTTPConsoleLogger : HTTPLogger {
 		logInfo("%s", ln);
 	}
 }
+
 
 class HTTPFileLogger : HTTPLogger {
 	private {
@@ -55,30 +88,7 @@ class HTTPFileLogger : HTTPLogger {
 	}
 }
 
-class HTTPLogger {
-	private {
-		string m_format;
-		HTTPServerSettings m_settings;
-	}
-
-	this(HTTPServerSettings settings, string format)
-	{
-		m_format = format;
-		m_settings = settings;
-	}
-
-	void close() {}
-
-	void log(HTTPServerRequest req, HTTPServerResponse res)
-	{
-		auto ln = formatApacheLog(m_format, req, res, m_settings);
-		writeLine(ln);
-	}
-
-	protected abstract void writeLine(string ln);
-}
-
-string formatApacheLog(string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
+void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
 {
 	enum State {Init, Directive, Status, Key, Command}
 
@@ -88,8 +98,6 @@ string formatApacheLog(string format, HTTPServerRequest req, HTTPServerResponse 
 	bool match = false;
 	string statusStr;
 	string key = "";
-	auto ln = appender!string();
-	ln.reserve(500);
 	while( format.length > 0 ) {
 		final switch(state) {
 			case State.Init:
@@ -232,5 +240,4 @@ string formatApacheLog(string format, HTTPServerRequest req, HTTPServerResponse 
 				break;
 		}
 	}
-	return ln.data;
 }

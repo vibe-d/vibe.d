@@ -180,6 +180,10 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 	}
 
 	@property ArrayType data() { return cast(ArrayType)m_data[0 .. m_fill]; }
+
+	static if (!is(E == immutable)) {
+		void reset() { m_fill = 0; }
+	}
 }
 
 
