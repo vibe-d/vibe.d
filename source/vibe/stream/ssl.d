@@ -195,7 +195,6 @@ class SSLStream : Stream {
 			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
 				ERR_error_string(eret, ebuf.ptr);
 				logDiagnostic("%s error at at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
-				if (flags & ERR_TXT_MALLOCED) OPENSSL_free(cast(void*)data);
 			}
 		}
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
