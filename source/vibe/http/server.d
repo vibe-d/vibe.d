@@ -1385,12 +1385,14 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		if ( !parsed || justifiesConnectionClose(err.status) )
 			keep_alive = false;
 	} catch (Throwable e) {
-		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
-		if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
-		else logDiagnostic("Error while writing the response: %s", e.msg);
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
-		if ( !parsed )
-			keep_alive = false;
+		if (tcp_connection.connected) {
+			auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
+			if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
+			else logDiagnostic("Error while writing the response: %s", e.msg);
+			logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
+			if ( !parsed )
+				keep_alive = false;
+		}
 	}
 
 	if( req.bodyReader && !req.bodyReader.empty ){
