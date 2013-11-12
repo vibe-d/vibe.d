@@ -24,6 +24,7 @@ import vibe.inet.webform;
 import vibe.stream.counting;
 import vibe.stream.operations;
 import vibe.stream.ssl;
+import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;
 import vibe.utils.array;
@@ -679,6 +680,7 @@ deprecated("Please use HTTPServerRequest instead.") alias HttpServerRequest = HT
 final class HTTPServerResponse : HTTPResponse {
 	private {
 		Stream m_conn;
+		ConnectionStream m_rawConnection;
 		OutputStream m_bodyWriter;
 		shared(Allocator) m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
@@ -693,9 +695,10 @@ final class HTTPServerResponse : HTTPResponse {
 		SysTime m_timeFinalized;
 	}
 
-	this(Stream conn, HTTPServerSettings settings, shared(Allocator) req_alloc)
+	this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, shared(Allocator) req_alloc)
 	{
 		m_conn = conn;
+		m_rawConnection = raw_connection;
 		m_countingWriter = FreeListRef!CountingOutputStream(conn);
 		m_settings = settings;
 		m_requestAlloc = req_alloc;
@@ -856,11 +859,12 @@ final class HTTPServerResponse : HTTPResponse {
 
 	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
 	*/
-	Stream switchProtocol(string protocol) {
+	ConnectionStream switchProtocol(string protocol)
+	{
 		statusCode = HTTPStatus.SwitchingProtocols;
 		headers["Upgrade"] = protocol;
 		writeVoidBody();
-		return m_conn;
+		return new ConnectionProxyStream(m_conn, m_rawConnection);
 	}
 
 	/** Sets the specified cookie value.
@@ -1157,7 +1161,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	do {
 		HTTPServerSettings settings;
 		bool keep_alive;
-		handleRequest(http_stream, connection.peerAddress, connection.remoteAddress, listen_info, settings, keep_alive);
+		handleRequest(http_stream, connection, listen_info, settings, keep_alive);
 		if( !keep_alive ){
 			logTrace("No keep-alive");
 			break;
@@ -1174,8 +1178,10 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream http_stream, string peer_address_string, NetworkAddress peer_address, HTTPServerListener listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
+private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPServerListener listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
+	auto peer_address_string = tcp_connection.peerAddress;
+	auto peer_address = tcp_connection.remoteAddress;
 	SysTime reqtime = Clock.currTime(UTC());
 
 	//auto request_allocator = scoped!(shared(PoolAllocator))(1024, defaultAllocator());
@@ -1205,7 +1211,7 @@ private bool handleRequest(Stream http_stream, string peer_address_string, Netwo
 		}
 
 	// Create the response object
-	auto res = FreeListRef!HTTPServerResponse(http_stream, settings, request_allocator/*.Scoped_payload*/);
+	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
 	req.ssl = res.m_ssl = listen_info.sslContext !is null;
 
 	// Error page handler
