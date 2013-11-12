@@ -95,7 +95,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
 		res.headers["Sec-WebSocket-Accept"] = accept;
 		res.headers["Connection"] = "Upgrade";
-		Stream conn = res.switchProtocol("websocket");
+		ConnectionStream conn = res.switchProtocol("websocket");
 
 		/*scope*/ auto socket = new WebSocket(conn, req);
 		on_handshake(socket);
@@ -114,15 +114,15 @@ HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake
 */
 class WebSocket {
 	private {
-		TCPConnection m_conn;
+		ConnectionStream m_conn;
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
 	}
 
-	this(Stream conn, HTTPServerRequest request)
+	this(ConnectionStream conn, in HTTPServerRequest request)
 	{
-		m_conn = cast(TCPConnection)conn;
+		m_conn = conn;
 		m_request = request;
 		assert(m_conn);
 	}
