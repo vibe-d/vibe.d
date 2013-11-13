@@ -197,6 +197,14 @@ HTTPServerRequestDelegate staticRedirect(string url)
 		res.redirect(url);
 	};
 }
+/// ditto
+HTTPServerRequestDelegate staticRedirect(URL url)
+{
+	return (HTTPServerRequest req, HTTPServerResponse res){
+		res.redirect(url);
+	};
+}
+
 
 /**
 	Sets a VibeDist host to register with.
@@ -855,6 +863,11 @@ final class HTTPServerResponse : HTTPResponse {
 		headers["Location"] = url;
 		headers["Content-Length"] = "14";
 		bodyWriter.write("redirecting...");
+	}
+	/// ditto
+	void redirect(URL url, int status = HTTPStatus.Found)
+	{
+		redirect(url.toString(), status);
 	}
 
 	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
