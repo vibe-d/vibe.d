@@ -282,6 +282,10 @@ final class RedisClient {
 		return request!bool("HEXISTS", cast(ubyte[])key, cast(ubyte[])field);
 	}
 
+	void hset(T : E[], E)(string key, string field, T value) {
+		request("HSET", cast(ubyte[])key, cast(ubyte[])field, cast(ubyte[])value);
+	}
+
 	T hget(T : E[], E)(string key, string field) {
 		return request("HGET", cast(ubyte[])key, cast(ubyte[])field).next!T();
 	}
