@@ -136,20 +136,24 @@ deprecated("Please use requestHTTP instead.") alias requestHttp = requestHTTP;
 auto connectHTTP(string host, ushort port = 0, bool ssl = false)
 {
 	static struct ConnInfo { string host; ushort port; bool ssl; }
-	static ConnectionPool!HTTPClient[ConnInfo] s_connections;
+	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 	if( port == 0 ) port = ssl ? 443 : 80;
 	auto ckey = ConnInfo(host, port, ssl);
 
 	ConnectionPool!HTTPClient pool;
-	if( auto pcp = ckey in s_connections )
-		pool = *pcp;
-	else {
+	foreach (c; s_connections)
+		if (c[0].host == host && c[0].port == port && c[0].ssl == ssl)
+			pool = c[1];
+	
+	if (!pool) {
+		logDebug("Create HTTP client pool %s:%s %s", host, port, ssl);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
 				ret.connect(host, port, ssl);
 				return ret;
 			});
-		s_connections[ckey] = pool;
+		if (s_connections.full) s_connections.popFront();
+		s_connections.put(tuple(ckey, pool));
 	}
 
 	return pool.lockConnection();
@@ -521,17 +525,20 @@ final class HTTPClientResponse : HTTPResponse {
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
 
+		int max = 2;
 		if (auto pka = "Keep-Alive" in headers) {
 			foreach(s; split(*pka, ",")){
 				auto pair = s.split("=");
-				if (icmp(pair[0].strip(), "timeout")) {
+				auto name = pair[0].strip();
+				if (icmp(name, "timeout") == 0) {
 					m_client.m_timeout = pair[1].to!int();
-					break;
+				} else if (icmp(name, "max") == 0) {
+					max = pair[1].to!int();
 				}
 			}
 		}
 
-		m_client.m_keepAliveLimit += dur!"seconds"(m_client.m_timeout - 2);
+		if (m_client.m_timeout > 0 && max > 1) m_client.m_keepAliveLimit += (m_client.m_timeout - 2).seconds;
 
 		if (!has_body) finalize();
 	}
@@ -663,9 +670,9 @@ final class HTTPClientResponse : HTTPResponse {
 deprecated("Please use HTTPClientResponse instead.") alias HttpClientResponse = HTTPClientResponse;
 
 
-private NullOutputStream s_sink;
+private __gshared NullOutputStream s_sink;
 
-static this()
+shared static this()
 {
 	s_sink = new NullOutputStream;
 }
