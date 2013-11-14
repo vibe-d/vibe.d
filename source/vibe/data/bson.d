@@ -920,10 +920,10 @@ struct BsonRegex {
 */
 Bson serializeToBson(T)(T value)
 {
-	version (VibeNewSerialization) {
-		return serialize!BsonSerializer(value);
-	} else {
+	version (VibeOldSerialization) {
 		return serializeToBsonOld(value);
+	} else {
+		return serialize!BsonSerializer(value);
 	}
 }
 
@@ -1010,10 +1010,10 @@ void deserializeBson(T)(ref T dst, Bson src)
 /// ditto
 T deserializeBson(T)(Bson src)
 {
-	version (VibeNewSerialization) {
-		return deserialize!(BsonSerializer, T)(src);
-	} else {
+	version (VibeOldSerialization) {
 		return deserializeBsonOld!T(src);
+	} else {
+		return deserialize!(BsonSerializer, T)(src);
 	}
 }
 

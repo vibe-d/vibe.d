@@ -899,10 +899,10 @@ unittest {
 */
 Json serializeToJson(T)(T value)
 {
-	version (VibeNewSerialization) {
-		return serialize!JsonSerializer(value);
-	} else {
+	version (VibeOldSerialization) {
 		return serializeToJsonOld(value);
+	} else {
+		return serialize!JsonSerializer(value);
 	}
 }
 /// ditto
@@ -988,10 +988,10 @@ void deserializeJson(T)(ref T dst, Json src)
 /// ditto
 T deserializeJson(T)(Json src)
 {
-	version (VibeNewSerialization) {
-		return deserialize!(JsonSerializer, T)(src);
-	} else {
+	version (VibeOldSerialization) {
 		return deserializeJsonOld!T(src);
+	} else {
+		return deserialize!(JsonSerializer, T)(src);
 	}
 }
 /// ditto
