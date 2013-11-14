@@ -667,7 +667,7 @@ package void initializeLogModule()
 		version (VibeWinrtDriver) enum disable_stdout = true;
 		else {
 			enum disable_stdout = false;
-			if (!GetConsoleWindow()) return;
+			if (!GetStdHandle(STD_OUTPUT_HANDLE) || !GetStdHandle(STD_ERROR_HANDLE)) return;
 		}
 	} else enum disable_stdout = false;
 
@@ -696,5 +696,8 @@ package void initializeLogModule()
 }
 
 version (Windows) {
-	extern(System) void* GetConsoleWindow();
+	import core.sys.windows.windows;
+	enum STD_OUTPUT_HANDLE = cast(DWORD)-11;
+	enum STD_ERROR_HANDLE = cast(DWORD)-12;
+	extern(System) HANDLE GetStdHandle(DWORD nStdHandle);
 }
