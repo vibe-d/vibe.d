@@ -213,7 +213,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 							case fname:
 								set[i] = true;
 								static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
-									__traits(getMember, ret, mname) = deserialize!string(seserializer).to!TM();
+									__traits(getMember, ret, mname) = deserialize!string(deserializer).to!TM();
 								} else {
 									__traits(getMember, ret, mname) = deserialize!TM(deserializer);
 								}
