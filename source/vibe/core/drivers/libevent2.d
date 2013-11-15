@@ -873,6 +873,7 @@ private nothrow extern(C)
 	}
 
 	__gshared bool[void*] s_mutexes;
+	__gshared Mutex s_mutexesLock;
 
 	void* lev_alloc_mutex(uint locktype)
 	{
@@ -881,7 +882,8 @@ private nothrow extern(C)
 			if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = ReadWriteMutexAlloc.alloc();
 			else ret.mutex = MutexAlloc.alloc();
 			//logInfo("alloc mutex %s", cast(void*)ret);
-			s_mutexes[cast(void*)ret] = true;
+			if (!s_mutexesLock) s_mutexesLock = new Mutex;
+			synchronized (s_mutexesLock) s_mutexes[cast(void*)ret] = true;
 			return ret;
 		} catch( Throwable th ){
 			logWarn("Exception in lev_alloc_mutex: %s", th.msg);
@@ -894,9 +896,10 @@ private nothrow extern(C)
 		try {
 			import core.runtime;
 			//logInfo("free mutex %s: %s", cast(void*)lock, defaultTraceHandler());
-			assert(lock in s_mutexes);
-
-			s_mutexes.remove(lock);
+			synchronized (s_mutexesLock) {
+				assert(lock in s_mutexes);
+				s_mutexes.remove(lock);
+			}
 			auto lm = cast(LevMutex*)lock;
 			if (lm.mutex) MutexAlloc.free(lm.mutex);
 			if (lm.rwmutex) ReadWriteMutexAlloc.free(lm.rwmutex);
@@ -910,7 +913,7 @@ private nothrow extern(C)
 	{
 		try {
 			//logInfo("lock mutex %s", cast(void*)lock);
-			assert(lock in s_mutexes, "Unknown lock handle");
+			synchronized (s_mutexesLock) assert(lock in s_mutexes, "Unknown lock handle");
 			auto mtx = cast(LevMutex*)lock;
 			
 			assert(mtx !is null, "null lock");
