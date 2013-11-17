@@ -11,7 +11,7 @@
 
 module vibe.internal.meta.codegen;
 
-import std.traits : isSomeFunction;
+import std.traits : FunctionTypeOf, isSomeFunction;
 
 /*
 	As user types defined inside unittest blocks don't have proper parent
@@ -127,14 +127,15 @@ string[] getRequiredImports(I)()
 
 	foreach (method; __traits(allMembers, I)) {
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
+			alias FuncType = FunctionTypeOf!overload;
 
-			foreach (symbol; getSymbols!(ReturnType!overload)) {
+			foreach (symbol; getSymbols!(ReturnType!FuncType)) {
 				static if (__traits(compiles, moduleName!symbol)) {
 					addModule(moduleName!symbol);
 				}
 			}
 
-			foreach (P; ParameterTypeTuple!overload) {
+			foreach (P; ParameterTypeTuple!FuncType) {
 				foreach (symbol; getSymbols!P) {
 					static if (__traits(compiles, moduleName!symbol)) {
 						addModule(moduleName!symbol);
