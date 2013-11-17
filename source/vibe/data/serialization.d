@@ -102,6 +102,8 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 	} else static if (isStringSerializable!TU) {
 		serializer.writeValue(value.toString());
 	} else static if (is(TU == struct) || is(TU == class)) {
+		static if (!hasSerializableFields!T)
+			pragma(msg, "Serializing composite type "~T.stringof~" which has no seriailzable fields");
 		static if (is(TU == class)) {
 			if (value is null) {
 				serialize(serializer, null);
@@ -202,25 +204,29 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		static if (is(T == class)) ret = new T;
 		deserializer.readDictionary!T((name) {
 			if (deserializer.tryReadNull()) return;
-			switch (name) {
-				default: break;
-				foreach (i, mname; __traits(allMembers, T)) {
-					static if (isRWPlainField!(T, mname) || isRWField!(T, mname)) {
-						alias member = TypeTuple!(__traits(getMember, T, mname))[0];
-						static if (!hasAttribute!(member, IgnoreAttribute)) {
-							alias TM = typeof(__traits(getMember, ret, mname));
-							enum fname = getAttribute!(member)(NameAttribute(underscoreStrip(mname))).name;
-							case fname:
-								set[i] = true;
-								static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
-									__traits(getMember, ret, mname) = deserialize!string(deserializer).to!TM();
-								} else {
-									__traits(getMember, ret, mname) = deserialize!TM(deserializer);
-								}
-								break;
+			static if (hasSerializableFields!T) {
+				switch (name) {
+					default: break;
+					foreach (i, mname; __traits(allMembers, T)) {
+						static if (isRWPlainField!(T, mname) || isRWField!(T, mname)) {
+							alias member = TypeTuple!(__traits(getMember, T, mname))[0];
+							static if (!hasAttribute!(member, IgnoreAttribute)) {
+								alias TM = typeof(__traits(getMember, ret, mname));
+								enum fname = getAttribute!(member)(NameAttribute(underscoreStrip(mname))).name;
+								case fname:
+									set[i] = true;
+									static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
+										__traits(getMember, ret, mname) = deserialize!string(deserializer).to!TM();
+									} else {
+										__traits(getMember, ret, mname) = deserialize!TM(deserializer);
+									}
+									break;
+							}
 						}
 					}
 				}
+			} else {
+				pragma(msg, "Deserializing composite type "~T.stringof~" which has no serializable fields.");
 			}
 		});
 		foreach (i, mname; __traits(allMembers, T))
@@ -358,3 +364,13 @@ private string underscoreStrip(string field_name)
 
 
 private template isISOExtStringSerializable(T) { enum isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T); }
+
+private template hasSerializableFields(T, size_t idx = 0)
+{
+	static if (idx < __traits(allMembers, T).length) {
+		enum mname = __traits(allMembers, T)[idx];
+		static if (!isRWPlainField!(T, mname) && !isRWField!(T, mname)) enum hasSerializableFields = hasSerializableFields!(T, idx+1);
+		else static if (hasAttribute!(__traits(getMember, T, mname), IgnoreAttribute)) enum hasSerializableFields = hasSerializableFields!(T, idx+1);
+		else enum hasSerializableFields = true;
+	} else enum hasSerializableFields = false;
+}
