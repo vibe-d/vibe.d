@@ -406,25 +406,27 @@ class HTTPServerSettings {
 	string serverString = "vibe.d/" ~ VibeVersionString;
 
 	/**
-		Add `X-Frame-Options` header. You can use `DENY` (dafault), `SAMEORIGIN` or `ALLOW-FROM uri` values.
+		Add `X-Frame-Options` header. You can use `DENY`, `SAMEORIGIN`, `ALLOW-FROM uri` or empty (dafault) values.
 		
 		`X-Frame-Options: DENY` header can protect from clickjacking attacks
 		because Browser disallows to render your website in frames.	
 		If you REALLY need to use frames, you have to use `X-Frame-Options: SAMEORIGIN`
 		or `X-Frame-Options: ALLOW-FROM uri` header.
 		
-		Params:
-			DENY - The page cannot be displayed in a frame, regardless of the site attempting to do so.
+		Parameter's values:
+			DENY - The page cannot be displayed in a frame, regardless of the site attempting to do so (recommended).
 			SAMEORIGIN - The page can only be displayed in a frame on the same origin as the page itself.
 			ALLOW-FROM uri - The page can only be displayed in a frame on the specified origin.
-			Put empty value if you want to disable this header (not recommended).
+			Put empty value if you want to disable this header (dafault, not recommended).
 		
 		See_Also:
 			$(LINK http://en.wikipedia.org/wiki/Clickjacking)
+			$(LINK http://javascript.info/tutorial/clickjacking)
 			$(LINK http://blogs.msdn.com/b/ieinternals/archive/2010/03/30/combating-clickjacking-with-x-frame-options.aspx)
 			$(LINK https://developer.mozilla.org/en-US/docs/HTTP/X-Frame-Options)
+			$(LINK http://tools.ietf.org/html/rfc7034)
 	*/
-	string xFrameOptionsString = "DENY";
+	string xFrameOptionsString = "";
 
 	/** Specifies the format used for the access log.
 
