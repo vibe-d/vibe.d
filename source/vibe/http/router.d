@@ -196,7 +196,11 @@ private struct Route {
 		size_t tmppparams_length = 0;
 
 		for (i = 0, j = 0; i < url.length && j < pattern.length;) {
-			if (pattern[j] == '*') return true;
+			if (pattern[j] == '*') {
+				foreach (t; tmpparams[0 .. tmppparams_length])
+					params[t[0]] = t[1];
+				return true;
+			}
 			if (url[i] == pattern[j]) {
 				i++;
 				j++;
