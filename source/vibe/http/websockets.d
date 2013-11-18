@@ -269,21 +269,28 @@ class WebSocket {
 
 	private void startReader()
 	{
-		while (m_conn.connected) {
-			assert(!m_nextMessage);
-			scope msg = new IncomingWebSocketMessage(m_conn);
-			if(msg.frameOpcode == FrameOpcode.close) {
-				logDebug("Got closing frame (%s)", m_sentCloseFrame);
-				if(!m_sentCloseFrame) close();
-				logDebug("Terminating connection (%s)", m_sentCloseFrame);
-				m_conn.close();
-				return;
-			} 
-			synchronized (m_readMutex) {
-				m_nextMessage = msg;
-				m_readCondition.notifyAll();
-				while (m_nextMessage) m_readCondition.wait();
+		scope (exit) m_readCondition.notifyAll();
+		try {
+			while (m_conn.connected) {
+				assert(!m_nextMessage);
+				scope msg = new IncomingWebSocketMessage(m_conn);
+				if(msg.frameOpcode == FrameOpcode.close) {
+					logDebug("Got closing frame (%s)", m_sentCloseFrame);
+					if(!m_sentCloseFrame) close();
+					logDebug("Terminating connection (%s)", m_sentCloseFrame);
+					m_conn.close();
+					return;
+				} 
+				synchronized (m_readMutex) {
+					m_nextMessage = msg;
+					m_readCondition.notifyAll();
+					while (m_nextMessage) m_readCondition.wait();
+				}
 			}
+		} catch (Exception e) {
+			logDiagnostic("Error while reading websocket message: %s", e.msg);
+			logDiagnostic("Closing connection.");
+			if (m_conn.connected) m_conn.close();
 		}
 	}
 }
