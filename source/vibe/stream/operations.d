@@ -302,11 +302,11 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 		if (nbytes > 0) nbytes -= chunk;
 
 		if (max_latency <= 0.seconds || cast(Duration)sw.peek() >= max_latency || !source.waitForData(max_latency)) {
-			logInfo("FLUSH");
+			logTrace("pipeRealtime flushing.");
 			destination.flush();
 			sw.reset();
 		} else {
-			logInfo("NOFLUSH");
+			logTrace("pipeRealtime not flushing.");
 		}
 
 		least_size = source.leastSize;
