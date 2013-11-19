@@ -2,6 +2,7 @@ import vibe.core.args;
 import vibe.core.core;
 import vibe.http.client;
 
+import core.atomic;
 import std.datetime;
 import std.functional;
 import std.stdio;
@@ -15,11 +16,9 @@ shared long nconn = 0;
 shared long g_concurrency = 1;
 shared long g_requestDelay = 0;
 
-__gshared StopWatch sw;
-
 void request()
 {
-	nconn++;
+	atomicOp!"+="(nconn, 1);
 	try {
 		requestHTTP("http://127.0.0.1:8080/empty",
 			(scope req){
@@ -31,40 +30,54 @@ void request()
 				res.dropBody();
 			}
 		);
-	} catch (Exception) { nerr++; }
-	nconn--;
-	nreq++;
-	if (nreq >= nreqc && sw.peek().msecs() > 0) {
-		writefln("%s iterations: %s req/s, %s err/s (%s active conn)", nreq, (nreq*1_000)/sw.peek().msecs(), (nerr*1_000)/sw.peek().msecs(), nconn);
-		nreqc += 1000;
-	}
+	} catch (Exception) { atomicOp!"+="(nerr, 1); }
+	atomicOp!"-="(nconn, 1);
+	atomicOp!"+="(nreq, 1);
 }
 
-void reqTask()
+void distTask()
 {
-	while (true) request();
+	static shared int s_threadCount = 0;
+	static shared int s_token = 0;
+	auto id = atomicOp!"+="(s_threadCount, 1) - 1;
+	
+	while (true) {
+		while (atomicLoad(s_token) != id && g_concurrency > 0) {}
+		if (g_concurrency == 0) break;
+		runTask({ while (true) request(); });
+		g_concurrency--;
+		atomicStore(s_token, (id + 1) % workerThreadCount);
+	}
 }
 
 void benchmark()
 {
+	g_concurrency--;
+	runWorkerTaskDist(&distTask);
+
+	while (atomicLoad(nreq) == 0) { sleep(1.msecs); }
+
+	StopWatch sw;
 	sw.start();
-	foreach (i; 0 .. g_concurrency)
-		runWorkerTask(&reqTask);
-	
-	while (true) request();
+	ulong next_ts = 100;
+
+	while (true) {
+		if (nreq >= nreqc && sw.peek().msecs() >= next_ts) {
+			writefln("%s iterations: %s req/s, %s err/s (%s active conn)", nreq, (nreq*1_000)/sw.peek().msecs(), (nerr*1_000)/sw.peek().msecs(), nconn);
+			nreqc += 1000;
+			next_ts += 100;
+		}
+		request();
+	}
 }
 
-void main(string[] args)
+void main()
 {
-	import std.getopt;
-	getopt(args,
-		config.passThrough,
-		"c", &g_concurrency,
-		"d", &g_requestDelay
-		);
-
+	import vibe.core.args;
+	getOption("c", &g_concurrency, "The maximum number of concurrent requests");
+	getOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
+	if (!finalizeCommandLineOptions()) return;
 	enableWorkerThreads();
-	processCommandLineArgs(args);
 	runTask(toDelegate(&benchmark));
 	runEventLoop();
 }
