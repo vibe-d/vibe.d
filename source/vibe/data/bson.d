@@ -1344,7 +1344,7 @@ struct BsonSerializer {
 	T readValue(T)()
 	{
 		static if (is(T == Bson)) return m_inputData;
-		static if (is(T == Json)) return m_inputData.toJson();
+		else static if (is(T == Json)) return m_inputData.toJson();
 		else static if (is(T == bool)) return m_inputData.get!bool();
 		else static if (is(T : int)) return m_inputData.get!int().to!T;
 		else static if (is(T : long)) return cast(T)m_inputData.get!long();
