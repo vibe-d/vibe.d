@@ -183,7 +183,7 @@ struct Json {
 	{
 		m_type = Type.array;
 		m_array = v;
-		version (VibeJsonFieldNames) if (m_magic == 0x1337f00d) foreach (idx, ref av; m_array) av.m_name = format("%s[%s]", m_name, idx);
+		version (VibeJsonFieldNames) if (m_magic == 0x1337f00d) foreach (idx, ref av; m_array) av.m_name = format("%s[%s]", m_name, idx); else m_name = null;
 		return v;
 	}
 	/// ditto
@@ -191,7 +191,7 @@ struct Json {
 	{
 		m_type = Type.object;
 		m_object = v;
-		version (VibeJsonFieldNames) if (m_magic == 0x1337f00d) foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key);
+		version (VibeJsonFieldNames) if (m_magic == 0x1337f00d) foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key); else m_name = null;
 		return v;
 	}
 
