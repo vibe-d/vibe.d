@@ -83,7 +83,10 @@ struct Json {
 
 		Type m_type = Type.undefined;
 
-		version (VibeJsonFieldNames) string m_name;
+		version (VibeJsonFieldNames) {
+			uint m_magic = 0x1337f00d; // works aroung Appender bug (DMD BUG 10690/10859/11357)
+			string m_name;
+		}
 	}
 
 	/** Represents the run time type of a JSON value.
@@ -148,7 +151,8 @@ struct Json {
 	/**
 		Allows assignment of D values to a JSON value.
 	*/
-	ref Json opAssign(Json v){
+	ref Json opAssign(Json v)
+	{
 		m_type = v.m_type;
 		final switch(m_type){
 			case Type.undefined: m_string = null; break;
@@ -179,7 +183,7 @@ struct Json {
 	{
 		m_type = Type.array;
 		m_array = v;
-		version (VibeJsonFieldNames) foreach (idx, ref av; m_array) av.m_name = format("%s[%s]", m_name, idx);
+		version (VibeJsonFieldNames) if (m_magic == 0x1337f00d) foreach (idx, ref av; m_array) av.m_name = format("%s[%s]", m_name, idx);
 		return v;
 	}
 	/// ditto
@@ -187,7 +191,7 @@ struct Json {
 	{
 		m_type = Type.object;
 		m_object = v;
-		version (VibeJsonFieldNames) foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key);
+		version (VibeJsonFieldNames) if (m_magic == 0x1337f00d) foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key);
 		return v;
 	}
 
