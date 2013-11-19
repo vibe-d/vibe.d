@@ -872,8 +872,8 @@ private nothrow extern(C)
 		}
 	}
 
-	__gshared bool[void*] s_mutexes;
-	__gshared Mutex s_mutexesLock;
+	debug __gshared size_t[void*] s_mutexes;
+	debug __gshared Mutex s_mutexesLock;
 
 	void* lev_alloc_mutex(uint locktype)
 	{
@@ -882,8 +882,8 @@ private nothrow extern(C)
 			if( locktype == EVTHREAD_LOCKTYPE_READWRITE ) ret.rwmutex = ReadWriteMutexAlloc.alloc();
 			else ret.mutex = MutexAlloc.alloc();
 			//logInfo("alloc mutex %s", cast(void*)ret);
-			if (!s_mutexesLock) s_mutexesLock = new Mutex;
-			synchronized (s_mutexesLock) s_mutexes[cast(void*)ret] = true;
+			debug if (!s_mutexesLock) s_mutexesLock = new Mutex;
+			debug synchronized (s_mutexesLock) s_mutexes[cast(void*)ret] = 0;
 			return ret;
 		} catch( Throwable th ){
 			logWarn("Exception in lev_alloc_mutex: %s", th.msg);
@@ -896,8 +896,10 @@ private nothrow extern(C)
 		try {
 			import core.runtime;
 			//logInfo("free mutex %s: %s", cast(void*)lock, defaultTraceHandler());
-			synchronized (s_mutexesLock) {
-				assert(lock in s_mutexes);
+			debug synchronized (s_mutexesLock) {
+				auto pl = lock in s_mutexes;
+				assert(pl !is null);
+				assert(*pl == 0);
 				s_mutexes.remove(lock);
 			}
 			auto lm = cast(LevMutex*)lock;
@@ -913,7 +915,11 @@ private nothrow extern(C)
 	{
 		try {
 			//logInfo("lock mutex %s", cast(void*)lock);
-			synchronized (s_mutexesLock) assert(lock in s_mutexes, "Unknown lock handle");
+			debug synchronized (s_mutexesLock) {
+				auto pl = lock in s_mutexes;
+				assert(pl !is null, "Unknown lock handle");
+				(*pl)++;
+			}
 			auto mtx = cast(LevMutex*)lock;
 			
 			assert(mtx !is null, "null lock");
@@ -938,8 +944,15 @@ private nothrow extern(C)
 
 	int lev_unlock_mutex(uint mode, void* lock)
 	{
-		//logInfo("unlock mutex %s", cast(void*)lock);
 		try {
+			//logInfo("unlock mutex %s", cast(void*)lock);
+			debug synchronized (s_mutexesLock) {
+				auto pl = lock in s_mutexes;
+				assert(pl !is null, "Unknown lock handle");
+				assert(*pl > 0, "Unlocking unlocked mutex");
+				(*pl)--;
+			}
+
 			auto mtx = cast(LevMutex*)lock;
 
 			if( mode & EVTHREAD_WRITE ){
