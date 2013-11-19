@@ -66,9 +66,10 @@ void distTask()
 void benchmark()
 {
 	g_concurrency--;
-	runWorkerTaskDist(&distTask);
-
-	while (atomicLoad(nreq) == 0) { sleep(1.msecs); }
+	if (g_concurrency > 0) {
+		runWorkerTaskDist(&distTask);
+		while (atomicLoad(nreq) == 0) { sleep(1.msecs); }
+	}
 
 	StopWatch sw;
 	sw.start();
