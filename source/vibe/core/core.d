@@ -252,7 +252,7 @@ private void runWorkerTaskDist_unsafe(void delegate() del)
 void yield()
 {
 	auto t = CoreTask.getThis();
-	if (t != Task.init) {
+	if (t && t !is CoreTask.ms_coreTask) {
 		// it can happen that a task with the same fiber was
 		// terminated while it was yielded.
 		assert(!t.m_queue || t.m_queue is &s_yieldedTasks);
