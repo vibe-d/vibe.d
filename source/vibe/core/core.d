@@ -254,9 +254,13 @@ private void runWorkerTaskDist_unsafe(void delegate() del)
 */
 void yield()
 {
-	auto t = Task.getThis();
+	auto t = CoreTask.getThis();
 	if (t != Task.init) {
-		s_yieldedTasks ~= Task.getThis();
+		// it can happen that a task with the same fiber was
+		// terminated while it was yielded.
+		assert(!t.m_queue || t.m_queue is &s_yieldedTasks);
+		if (!t.m_queue)
+			s_yieldedTasks.insertBack(CoreTask.getThis());
 		rawYield();
 	}
 }
@@ -394,6 +398,12 @@ void enableWorkerThreads()
 		thr.start();
 	}
 }
+
+
+/**
+	The number of worker threads.
+*/
+@property size_t workerThreadCount() { return st_workerThreads.length; }
 
 
 /**
@@ -546,6 +556,8 @@ private class CoreTask : TaskFiber {
 	import std.bitmanip;
 	private {
 		static CoreTask ms_coreTask;
+		CoreTask m_nextInQueue;
+		CoreTaskQueue* m_queue;
 		void delegate() m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
@@ -569,6 +581,8 @@ private class CoreTask : TaskFiber {
 	{
 		super(&run, s_taskStackSize);
 	}
+
+	@property size_t taskCounter() const { return m_taskCounter; }
 
 	private void run()
 	{
@@ -599,7 +613,7 @@ private class CoreTask : TaskFiber {
 				}
 				resetLocalStorage();
 
-				s_yieldedTasks ~= m_yielders;
+				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
 				
 				// make the fiber available for the next task
@@ -690,7 +704,11 @@ private class VibeDriverCore : DriverCore {
 	void resumeTask(Task task, Exception event_exception, bool initial_resume)
 	{
 		assert(initial_resume || task.running, "Resuming terminated task.");
-		CoreTask ctask = cast(CoreTask)task.fiber;
+		resumeCoreTask(cast(CoreTask)task.fiber, event_exception);
+	}
+
+	void resumeCoreTask(CoreTask ctask, Exception event_exception = null)
+	{
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
 		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ to!string(ctask.state));
 
@@ -699,10 +717,10 @@ private class VibeDriverCore : DriverCore {
 			ctask.m_exception = event_exception;
 		}
 		
-		auto uncaught_exception = task.call(false);
+		auto uncaught_exception = ctask.call(false);
 		if( uncaught_exception ){
 			extrap();
-			assert(task.state == Fiber.State.TERM);
+			assert(ctask.state == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", uncaught_exception.toString());
 		}
 	}
@@ -715,12 +733,12 @@ private class VibeDriverCore : DriverCore {
 				again = s_idleHandler();
 			else again = false;
 
-			Task[] tmp;
-			swap(s_yieldedTasks, tmp);
-			foreach(t; tmp)
-				if (t.running)
-					resumeTask(t);
-			if (s_yieldedTasks.length > 0)
+			while (!s_yieldedTasks.empty) {
+				auto tf = s_yieldedTasks.front;
+				s_yieldedTasks.popFront();
+				resumeCoreTask(tf);
+			}
+			if (!s_yieldedTasks.empty)
 				again = true;
 			if (again && !processEvents()) {
 				m_exit = true;
@@ -763,7 +781,7 @@ private {
 
 	bool delegate() s_idleHandler;
 	__gshared debug void function(TaskEvent, Fiber) s_taskEventCallback;
-	Task[] s_yieldedTasks;
+	CoreTaskQueue s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
 	CoreTask[] s_availableFibers;
@@ -994,6 +1012,35 @@ version(Posix)
 	{
 		enforce(false, "Privilege lowering not supported on Windows.");
 		assert(false);
+	}
+}
+
+private struct CoreTaskQueue {
+	CoreTask first, last;
+
+	@disable this(this);
+
+	@property bool empty() const { return first is null; }
+
+	@property CoreTask front() { return first; }
+	
+	void insertBack(CoreTask task)
+	{
+		assert(task.m_queue == null);
+		assert(task.m_nextInQueue is null);
+		task.m_queue = &this;
+		if (last) last.m_nextInQueue = task;
+		else first = last = task;
+	}
+
+	void popFront()
+	{
+		if (first == last) last = null;
+		assert(first && first.m_queue == &this);
+		auto next = first.m_nextInQueue;
+		first.m_nextInQueue = null;
+		first.m_queue = null;
+		first = next;
 	}
 }
 
