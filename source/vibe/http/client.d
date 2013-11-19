@@ -255,9 +255,10 @@ class HTTPClient : EventedObject {
 		//scope(exit) request_allocator.reset();
 		auto request_allocator = defaultAllocator();
 
-		bool has_body = doRequest(requester);
+		bool close_conn = false;
+		bool has_body = doRequest(requester, &close_conn);
 		m_responding = true;
-		auto res = scoped!HTTPClientResponse(this, has_body, request_allocator);
+		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator);
 		Exception user_exception;
 		{
 			scope (failure) {
@@ -286,12 +287,13 @@ class HTTPClient : EventedObject {
 	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
 	{
-		bool has_body = doRequest(requester);
+		bool close_conn = false;
+		bool has_body = doRequest(requester, &close_conn);
 		m_responding = true;
-		return new HTTPClientResponse(this, has_body);
+		return new HTTPClientResponse(this, has_body, close_conn);
 	}
 
-	private bool doRequest(scope void delegate(HTTPClientRequest req) requester)
+	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn)
 	{
 		assert(!m_requesting, "Interleaved HTTP client requests detected!");
 		assert(!m_responding, "Interleaved HTTP client request/response detected!");
@@ -322,6 +324,7 @@ class HTTPClient : EventedObject {
 		req.headers["Accept-Encoding"] = "gzip, deflate";
 		req.headers["Host"] = m_server;
 		requester(req);
+		*close_conn = req.headers.get("Connection", "keep-alive") != "keep-alive";
 		req.finalize();
 
 		return req.method != HTTPMethod.HEAD;
@@ -491,14 +494,16 @@ final class HTTPClientResponse : HTTPResponse {
 		FreeListRef!DeflateInputStream m_deflateInputStream;
 		FreeListRef!EndCallbackInputStream m_endCallback;
 		InputStream m_bodyReader;
+		bool m_closeConn;
 	}
 
 	/// private
-	this(HTTPClient client, bool has_body, shared(Allocator) alloc = defaultAllocator())
+	this(HTTPClient client, bool has_body, bool close_conn, shared(Allocator) alloc = defaultAllocator())
 	{
 		m_client = client;
+		m_closeConn = close_conn;
 
-		scope(failure) finalize();
+		scope(failure) finalize(true);
 
 		// read and parse status line ("HTTP/#.# #[ $]\r\n")
 		logTrace("HTTP client reading status line");
@@ -645,7 +650,7 @@ final class HTTPClientResponse : HTTPResponse {
 
 	private void finalize()
 	{
-		finalize(false);
+		finalize(m_closeConn);
 	}
 
 	private void finalize(bool disconnect)
