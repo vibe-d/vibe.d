@@ -11,18 +11,24 @@ import std.stdio;
 shared long nreq = 0;
 shared long nerr = 0;
 shared long nreqc = 1000;
+shared long ndisconns = 0;
 shared long nconn = 0;
 
 shared long g_concurrency = 1;
 shared long g_requestDelay = 0;
+shared long g_maxKeepAliveRequests = 1000;
 
-void request()
+void request(bool disconnect)
 {
 	atomicOp!"+="(nconn, 1);
 	try {
 		requestHTTP("http://127.0.0.1:8080/empty",
 			(scope req){
 				req.headers.remove("Accept-Encoding");
+				if (disconnect) {
+					atomicOp!"+="(ndisconns, 1);
+					req.headers["Connection"] = "close";
+				}
 			},
 			(scope res){
 				if (g_requestDelay)
@@ -44,7 +50,14 @@ void distTask()
 	while (true) {
 		while (atomicLoad(s_token) != id && g_concurrency > 0) {}
 		if (g_concurrency == 0) break;
-		runTask({ while (true) request(); });
+		runTask({
+			long keep_alives = 0;
+			while (true) {
+				bool disconnect = ++keep_alives >= g_maxKeepAliveRequests;
+				request(disconnect);
+				if (disconnect) keep_alives = 0;
+			}
+		});
 		g_concurrency--;
 		atomicStore(s_token, (id + 1) % workerThreadCount);
 	}
@@ -61,13 +74,17 @@ void benchmark()
 	sw.start();
 	ulong next_ts = 100;
 
+	long keep_alives = 0;
 	while (true) {
-		if (nreq >= nreqc && sw.peek().msecs() >= next_ts) {
-			writefln("%s iterations: %s req/s, %s err/s (%s active conn)", nreq, (nreq*1_000)/sw.peek().msecs(), (nerr*1_000)/sw.peek().msecs(), nconn);
+		auto tm = sw.peek().msecs;
+		if (nreq >= nreqc && tm >= next_ts) {
+			writefln("%s iterations: %s req/s, %s err/s (%s active conn, %s disconnects/s)", nreq, (nreq*1_000)/tm, (nerr*1_000)/tm, nconn, (ndisconns*1_000)/tm);
 			nreqc += 1000;
 			next_ts += 100;
 		}
-		request();
+		bool disconnect = ++keep_alives >= g_maxKeepAliveRequests;
+		request(disconnect);
+		if (disconnect) keep_alives = 0;
 	}
 }
 
@@ -76,6 +93,7 @@ void main()
 	import vibe.core.args;
 	getOption("c", &g_concurrency, "The maximum number of concurrent requests");
 	getOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
+	getOption("k", &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
 	if (!finalizeCommandLineOptions()) return;
 	enableWorkerThreads();
 	runTask(toDelegate(&benchmark));
