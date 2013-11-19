@@ -251,9 +251,10 @@ class HTTPClient : EventedObject {
 	*/
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	{
-		//auto request_allocator = scoped!PoolAllocator(1024, defaultAllocator());
-		//scope(exit) request_allocator.reset();
-		auto request_allocator = defaultAllocator();
+		version (VibeManualMemoryManagement) {
+			scope request_allocator = new shared PoolAllocator(1024, defaultAllocator());
+			scope(exit) request_allocator.reset();
+		} else auto request_allocator = defaultAllocator();
 
 		bool close_conn = false;
 		bool has_body = doRequest(requester, &close_conn);
