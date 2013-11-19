@@ -82,6 +82,8 @@ struct Json {
 		@property ref inout(Json[]) m_array() inout { return getDataAs!(Json[])(); }
 
 		Type m_type = Type.undefined;
+
+		version (VibeJsonFieldNames) string m_name;
 	}
 
 	/** Represents the run time type of a JSON value.
@@ -155,8 +157,8 @@ struct Json {
 			case Type.int_: m_int = v.m_int; break;
 			case Type.float_: m_float = v.m_float; break;
 			case Type.string: m_string = v.m_string; break;
-			case Type.array: m_array = v.m_array; break;
-			case Type.object: m_object = v.m_object; break;
+			case Type.array: opAssign(v.m_array); break;
+			case Type.object: opAssign(v.m_object); break;
 		}
 		return this;
 	}
@@ -173,9 +175,21 @@ struct Json {
 	/// ditto
 	string opAssign(string v) { m_type = Type.string; m_string = v; return v; }
 	/// ditto
-	Json[] opAssign(Json[] v) { m_type = Type.array; m_array = v; return v; }
+	Json[] opAssign(Json[] v)
+	{
+		m_type = Type.array;
+		m_array = v;
+		version (VibeJsonFieldNames) foreach (idx, ref av; m_array) av.m_name = format("%s[%s]", m_name, idx);
+		return v;
+	}
 	/// ditto
-	Json[string] opAssign(Json[string] v) { m_type = Type.object; m_object = v; return v; }
+	Json[string] opAssign(Json[string] v)
+	{
+		m_type = Type.object;
+		m_object = v;
+		version (VibeJsonFieldNames) foreach (key, ref av; m_object) av.m_name = format("%s.%s", m_name, key);
+		return v;
+	}
 
 	/**
 		Allows removal of values from Type.Object Json objects.
@@ -202,6 +216,7 @@ struct Json {
 		if( auto pv = key in m_object ) return *pv;
 		Json ret = Json.undefined;
 		ret.m_string = key;
+		version (VibeJsonFieldNames) ret.m_name = format("%s.%s", m_name, key);
 		return ret;
 	}
 	/// ditto
@@ -220,6 +235,7 @@ struct Json {
 		m_object[key].m_type = Type.undefined; // DMDBUG: AAs are teh $H1T!!!11
 		assert(m_object[key].type == Type.undefined);
 		m_object[key].m_string = key;
+		version (VibeJsonFieldNames) m_object[key].m_name = format("%s.%s", m_name, key);
 		return m_object[key];
 	}
 
@@ -235,13 +251,12 @@ struct Json {
 	*/
 	@property size_t length()
 	const {
+		checkType!(string, Json[], Json[string])("property length");
 		switch(m_type){
 			case Type.string: return m_string.length;
 			case Type.array: return m_array.length;
 			case Type.object: return m_object.length;
-			default:
-				enforce(false, "Json.length() can only be called on strings, arrays and objects, not "~.to!string(m_type)~".");
-				return 0;
+			default: assert(false);
 		}
 	}
 
@@ -250,7 +265,7 @@ struct Json {
 	*/
 	int opApply(int delegate(ref Json obj) del)
 	{
-		enforce(m_type == Type.array || m_type == Type.object, "opApply may only be called on objects and arrays, not "~.to!string(m_type)~".");
+		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
 			foreach( ref v; m_array )
 				if( auto ret = del(v) )
@@ -267,7 +282,7 @@ struct Json {
 	/// ditto
 	int opApply(int delegate(ref const Json obj) del)
 	const {
-		enforce(m_type == Type.array || m_type == Type.object, "opApply may only be called on objects and arrays, not "~.to!string(m_type)~".");
+		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
 			foreach( ref v; m_array )
 				if( auto ret = del(v) )
@@ -284,7 +299,7 @@ struct Json {
 	/// ditto
 	int opApply(int delegate(ref size_t idx, ref Json obj) del)
 	{
-		enforce(m_type == Type.array, "opApply may only be called on arrays, not "~.to!string(m_type)~"");
+		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
 			if( auto ret = del(idx, v) )
 				return ret;
@@ -293,7 +308,7 @@ struct Json {
 	/// ditto
 	int opApply(int delegate(ref size_t idx, ref const Json obj) del)
 	const {
-		enforce(m_type == Type.array, "opApply may only be called on arrays, not "~.to!string(m_type)~".");
+		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
 			if( auto ret = del(idx, v) )
 				return ret;
@@ -302,7 +317,7 @@ struct Json {
 	/// ditto
 	int opApply(int delegate(ref string idx, ref Json obj) del)
 	{
-		enforce(m_type == Type.object, "opApply may only be called on objects, not "~.to!string(m_type)~".");
+		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
 			if( v.type != Type.undefined )
 				if( auto ret = del(idx, v) )
@@ -312,7 +327,7 @@ struct Json {
 	/// ditto
 	int opApply(int delegate(ref string idx, ref const Json obj) del)
 	const {
-		enforce(m_type == Type.object, "opApply may only be called on objects, not "~.to!string(m_type)~".");
+		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
 			if( v.type != Type.undefined )
 				if( auto ret = del(idx, v) )
@@ -451,9 +466,10 @@ struct Json {
 			checkType!bool();
 			return Json(~m_bool);
 		} else static if( op == "+" || op == "-" || op == "++" || op == "--" ){
+			checkType!(long, double)("unary "~op);
 			if( m_type == Type.int_ ) mixin("return Json("~op~"m_int);");
 			else if( m_type == Type.float_ ) mixin("return Json("~op~"m_float);");
-			else enforce(false, "'"~op~"' only allowed on scalar types, not on "~.to!string(m_type)~".");
+			else assert(false);
 		} else static assert("Unsupported operator '"~op~"' for type JSON.");
 	}
 
@@ -478,82 +494,87 @@ struct Json {
 	const {
 		enforce(m_type == other.m_type, "Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
 		static if( op == "&&" ){
-			enforce(m_type == Type.bool_, "'&&' only allowed for Type.Bool, not "~.to!string(m_type)~".");
+			checkType!(bool)(op);
 			return Json(m_bool && other.m_bool);
 		} else static if( op == "||" ){
-			enforce(m_type == Type.bool_, "'||' only allowed for Type.Bool, not "~.to!string(m_type)~".");
+			checkType!(bool)(op);
 			return Json(m_bool || other.m_bool);
 		} else static if( op == "+" ){
+			checkType!(long, double)(op);
 			if( m_type == Type.Int ) return Json(m_int + other.m_int);
 			else if( m_type == Type.float_ ) return Json(m_float + other.m_float);
-			else enforce(false, "'+' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static if( op == "-" ){
+			checkType!(long, double)(op);
 			if( m_type == Type.Int ) return Json(m_int - other.m_int);
 			else if( m_type == Type.float_ ) return Json(m_float - other.m_float);
-			else enforce(false, "'-' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static if( op == "*" ){
+			checkType!(long, double)(op);
 			if( m_type == Type.Int ) return Json(m_int * other.m_int);
 			else if( m_type == Type.float_ ) return Json(m_float * other.m_float);
-			else enforce(false, "'*' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static if( op == "/" ){
+			checkType!(long, double)(op);
 			if( m_type == Type.Int ) return Json(m_int / other.m_int);
 			else if( m_type == Type.float_ ) return Json(m_float / other.m_float);
-			else enforce(false, "'/' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static if( op == "%" ){
+			checkType!(long, double)(op);
 			if( m_type == Type.Int ) return Json(m_int % other.m_int);
 			else if( m_type == Type.float_ ) return Json(m_float % other.m_float);
-			else enforce(false, "'%' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static if( op == "~" ){
+			checkType!(string, Json[])(op);
 			if( m_type == Type.string ) return Json(m_string ~ other.m_string);
 			else if (m_type == Type.array) return Json(m_array ~ other.m_array);
-			else enforce(false, "'~' only allowed for strings, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static assert("Unsupported operator '"~op~"' for type JSON.");
-		assert(false);
 	}
 	/// ditto
 	Json opBinary(string op)(Json other)
 		if( op == "~" )
 	{
 		static if( op == "~" ){
+			checkType!(string, Json[])(op);
 			if( m_type == Type.string ) return Json(m_string ~ other.m_string);
 			else if( m_type == Type.array ) return Json(m_array ~ other.m_array);
-			else enforce(false, "'~' only allowed for strings and arrays, not "~.to!string(m_type)~".");
+			else assert(false);
 		} else static assert("Unsupported operator '"~op~"' for type JSON.");
-		assert(false);
 	}
 	/// ditto
 	void opOpAssign(string op)(Json other)
 		if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op =="~")
 	{
 		enforce(m_type == other.m_type || op == "~" && m_type == Type.array,
-				"Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
+				"Binary operation '"~op~"=' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
 		static if( op == "+" ){
 			if( m_type == Type.int_ ) m_int += other.m_int;
 			else if( m_type == Type.float_ ) m_float += other.m_float;
-			else enforce(false, "'+' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforce(false, "'+=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "-" ){
 			if( m_type == Type.int_ ) m_int -= other.m_int;
 			else if( m_type == Type.float_ ) m_float -= other.m_float;
-			else enforce(false, "'-' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforce(false, "'-=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "*" ){
 			if( m_type == Type.int_ ) m_int *= other.m_int;
 			else if( m_type == Type.float_ ) m_float *= other.m_float;
-			else enforce(false, "'*' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforce(false, "'*=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "/" ){
 			if( m_type == Type.int_ ) m_int /= other.m_int;
 			else if( m_type == Type.float_ ) m_float /= other.m_float;
-			else enforce(false, "'/' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforce(false, "'/=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "%" ){
 			if( m_type == Type.int_ ) m_int %= other.m_int;
 			else if( m_type == Type.float_ ) m_float %= other.m_float;
-			else enforce(false, "'%' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforce(false, "'%=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "~" ){
 			if (m_type == Type.string) m_string ~= other.m_string;
 			else if (m_type == Type.array) {
 				if (other.m_type == Type.array) m_array ~= other.m_array;
 				else m_array ~= other;
-			} else enforce(false, "'~' only allowed for string and array types, not "~.to!string(m_type)~".");
-		} else static assert("Unsupported operator '"~op~"' for type JSON.");
+			} else enforce(false, "'~=' only allowed for string and array types, not "~.to!string(m_type)~".");
+		} else static assert("Unsupported operator '"~op~"=' for type JSON.");
 	}
 	/// ditto
 	void opOpAssign(string op, T)(T other)
@@ -716,11 +737,29 @@ struct Json {
 		return ret.data;
 	}
 
-	private void checkType(T)()
+	private void checkType(TYPES...)(string op = null)
 	const {
-		string dbg;
-		if( m_type == Type.undefined ) dbg = " field "~m_string;
-		enforce(typeId!T == m_type, "Trying to access JSON"~dbg~" of type "~.to!string(m_type)~" as "~T.stringof~".");
+		bool matched = false;
+		foreach (T; TYPES) if (m_type == typeId!T) matched = true;
+		if (matched) return;
+
+		string name;
+		version (VibeJsonFieldNames) {
+			if (m_name.length) name = m_name ~ " of type " ~ m_type.to!string;
+			else name = "JSON of type " ~ m_type.to!string;
+		} else name = "JSON of type " ~ m_type.to!string;
+
+		string expected;
+		static if (TYPES.length == 1) expected = typeId!(TYPES[0]).to!string;
+		else {
+			foreach (T; TYPES) {
+				if (expected.length > 0) expected ~= ", ";
+				expected ~= typeId!T.to!string;
+			}
+		}
+
+		if (!op.length) throw new Exception(format("Got %s, expected %s.", name, expected));
+		else throw new Exception(format("Got %s, expected %s for %s.", name, expected, op));
 	}
 
 	/*invariant()
