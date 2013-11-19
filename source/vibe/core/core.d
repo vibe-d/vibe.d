@@ -166,7 +166,6 @@ Task runTask(void delegate() task)
 		// if there is no fiber available, create one.
 		if (s_availableFibers.capacity == 0) s_availableFibers.capacity = 1024;
 		logDebug("Creating new fiber...");
-		logInfo("new fiber: %s", s_fiberCount++);
 		s_fiberCount++;
 		f = new CoreTask;
 	}
