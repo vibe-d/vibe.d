@@ -1414,13 +1414,13 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		try {
 			auto conn = cast(Win32TCPConnection)(lpOverlapped.hEvent);
 			conn.m_bytesTransferred = cbTransferred;
-			if( conn.m_writeOwner ){
+			if (conn.m_writeOwner != Task.init) {
 				Exception ex;
 				if( dwError != 0 ) ex = new Exception("Socket I/O error: "~to!string(dwError));
 				conn.m_driver.m_core.resumeTask(conn.m_writeOwner, ex);
 			}
 		} catch( Throwable th ){
-			logWarn("Exception while handline TCP I/O: %s", th.msg);
+			logWarn("Exception while handling TCP I/O: %s", th.msg);
 		}
 	}
 }
