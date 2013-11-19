@@ -156,19 +156,17 @@ void setIdleHandler(bool delegate() del)
 Task runTask(void delegate() task)
 {
 	CoreTask f;
-	while (s_availableFibersCount > 0) {
-		// pick the first available fiber
-		f = s_availableFibers[--s_availableFibersCount];
-		if (f.state == Fiber.State.TERM) {
-			f = null;
-			continue;
-		}
+	while (!f && !s_availableFibers.empty) {
+		f = s_availableFibers.back;
+		s_availableFibers.popBack();
+		if (f.state != Fiber.State.HOLD) f = null;
 	}
 
 	if (f is null) {
 		// if there is no fiber available, create one.
-		if( s_availableFibers.length == 0 ) s_availableFibers.length = 1024;
+		if (s_availableFibers.capacity == 0) s_availableFibers.capacity = 1024;
 		logDebug("Creating new fiber...");
+		logInfo("new fiber: %s", s_fiberCount++);
 		s_fiberCount++;
 		f = new CoreTask;
 	}
@@ -589,9 +587,9 @@ private class CoreTask : TaskFiber {
 	{
 		try {
 			while(true){
-				while( !m_taskFunc ){
+				while (!m_taskFunc) {
 					try {
-						s_core.yieldForEvent();
+						rawYield();
 					} catch( Exception e ){
 						logWarn("CoreTaskFiber was resumed with exception but without active task!");
 						logDiagnostic("Full error: %s", e.toString().sanitize());
@@ -618,11 +616,9 @@ private class CoreTask : TaskFiber {
 				m_yielders.length = 0;
 				
 				// make the fiber available for the next task
-				if( s_availableFibers.length <= s_availableFibersCount )
-					s_availableFibers.length = 2*s_availableFibers.length;
-				s_availableFibers[s_availableFibersCount++] = this;
-
-				rawYield();
+				if (s_availableFibers.full)
+					s_availableFibers.capacity = 2 * s_availableFibers.capacity;
+				s_availableFibers.put(this);
 			}
 		} catch(Throwable th){
 			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
@@ -785,8 +781,7 @@ private {
 	CoreTaskQueue s_yieldedTasks;
 	bool s_eventLoopRunning = false;
 	Variant[string] s_taskLocalStorageGlobal; // for use outside of a task
-	CoreTask[] s_availableFibers;
-	size_t s_availableFibersCount;
+	FixedRingBuffer!CoreTask s_availableFibers;
 	size_t s_fiberCount;
 
 	string s_privilegeLoweringUserName;
