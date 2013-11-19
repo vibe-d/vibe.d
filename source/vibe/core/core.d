@@ -284,6 +284,7 @@ void sleep(Duration timeout)
 	auto tm = getEventDriver().createTimer(null);
 	tm.rearm(timeout);
 	tm.wait();
+	destroy(tm);
 }
 
 
