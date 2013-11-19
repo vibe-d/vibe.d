@@ -171,11 +171,12 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		return ret;
 	} else static if (isDynamicArray!T) {
 		alias TV = typeof(T.init[0]);
-		auto app = appender!T();
-		deserializer.readArray!T((sz) { app.reserve(sz); }, () {
-			app.put(deserialize!TV(deserializer));
+		//auto ret = appender!T();
+		T ret; // Cannot use appender because of DMD BUG 10690/10859/11357
+		deserializer.readArray!T((sz) { ret.reserve(sz); }, () {
+			ret ~= deserialize!TV(deserializer);
 		});
-		return cast(T)app.data;
+		return ret;//cast(T)ret.data;
 	} else static if (isAssociativeArray!T) {
 		alias TK = KeyType!T;
 		alias TV = ValueType!T;
