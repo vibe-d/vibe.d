@@ -352,19 +352,19 @@ synchronized class PoolAllocator : Allocator {
 	{
 		version(VibeManualMemoryManagement){
 			// destroy all initialized objects
-			for( auto d = m_destructors; d; d = d.next )
-				d.destructor(d.object);
+			for (auto d = m_destructors; d; d = d.next)
+				d.destructor(cast(void*)d.object);
 			m_destructors = null;
 
 			// put all full Pools into the free pools list
-			for( Pool* p = m_fullPools, pnext; p; p = pnext ){
+			for (Pool* p = cast(Pool*)m_fullPools, pnext; p; p = pnext) {
 				pnext = p.next;
-				p.next = m_freePools;
-				m_freePools = p;
+				p.next = cast(Pool*)m_freePools;
+				m_freePools = cast(shared(Pool)*)p;
 			}
 
 			// free up all pools
-			for( Pool* p = m_freePools; p; p = p.next )
+			for (Pool* p = cast(Pool*)m_freePools; p; p = p.next)
 				p.remaining = p.data;
 		}
 	}
@@ -374,7 +374,7 @@ synchronized class PoolAllocator : Allocator {
 		version(VibeManualMemoryManagement){
 			freeAll();
 			Pool* pnext;
-			for( auto p = m_freePools; p; p = pnext ){
+			for (auto p = cast(Pool*)m_freePools; p; p = pnext) {
 				pnext = p.next;
 				m_baseAllocator.free(p.data);
 				m_baseAllocator.free((cast(void*)p)[0 .. AllocSize!Pool]);
