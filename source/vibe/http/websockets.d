@@ -68,7 +68,6 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
 		auto pKey = "Sec-WebSocket-Key" in req.headers;
-		auto pOrigin = "Origin" in req.headers;
 		auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
 		auto pVersion = "Sec-WebSocket-Version" in req.headers;
 
@@ -84,7 +83,6 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 			}	
 		}
 		if( !(isUpgrade &&
-			  pOrigin &&
 			  pUpgrade && *pUpgrade == "websocket" && 
 			  pKey &&
 			  pVersion && *pVersion == "13") )
