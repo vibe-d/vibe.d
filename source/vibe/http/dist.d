@@ -15,7 +15,7 @@ import vibe.http.server;
 
 import std.conv;
 import std.exception;
-import vibe.internal.std.process;
+import std.process;
 
 
 /**
