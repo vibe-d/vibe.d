@@ -164,7 +164,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		alias TV = typeof(T.init[0]);
 		T ret;
 		size_t i = 0;
-		deserializer.readArray((sz) { assert(sz == 0 || sz == T.length); }, {
+		deserializer.readArray!T((sz) { assert(sz == 0 || sz == T.length); }, {
 			assert(i < T.length);
 			ret[i++] = deserialize!TV(deserializer);
 		});
