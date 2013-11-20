@@ -89,7 +89,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 		foreach (key, ref el; value) {
 			string keyname;
 			static if (is(TK == string)) keyname = key;
-			else static if (is(TK == enum)) keyname = key.to!string;
+			else static if (is(TK : real) || is(TK : long) || is(TK == enum)) keyname = key.to!string;
 			else static if (isStringSerializable!TK) keyname = key.toString();
 			else static assert(false, "Associative array keys must be convertible to string.");
 			serializer.beginWriteDictionaryEntry!TV(keyname);
@@ -184,7 +184,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		deserializer.readDictionary!T((name) {
 			TK key;
 			static if (is(TK == string)) key = name;
-			else static if (is(TK == enum)) key = name.to!TK;
+			else static if (is(TK : real) || is(TK : long) || is(TK == enum)) key = name.to!TK;
 			else static if (isStringSerializable!TK) key = TK.fromString(name);
 			else static assert(false, "Associative array keys must be convertible to string.");
 			ret[key] = deserialize!TV(deserializer);
