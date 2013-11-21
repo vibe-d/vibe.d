@@ -52,5 +52,5 @@
 		}
 	],
 
-	"-ddoxFilterArgs": ["--min-protection=Public", "--ex", "deimos.", "--ex", "vibe.core.drivers.", "--ex", "etc.", "--ex", "std.", "--ex", "core."]
+	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Public", "--ex", "deimos.", "--ex", "vibe.core.drivers.", "--ex", "etc.", "--ex", "std.", "--ex", "core."]
 }
