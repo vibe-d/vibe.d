@@ -112,6 +112,53 @@ sizediff_t indexOfAny(string str, string chars)
 }
 alias indexOfAny countUntilAny;
 
+/*
+ * Find the closing bracket (works with any of '[', '(', '<', '{').
+ * Params:
+ *    str = input string
+ *    nested = whether to skip nested brackets
+ * Returns:
+ *    The index of the closing bracket or -1 for unbalanced strings
+ *    and strings that don't start with a bracket.
+ */
+sizediff_t matchBracket(string str, bool nested = true)
+{
+    if (str.length < 2) return -1;
+
+    char open = str[0], close = void;
+    switch (str[0])
+    {
+    case '[': close = ']'; break;
+    case '(': close = ')'; break;
+    case '<': close = '>'; break;
+    case '{': close = '}'; break;
+    default: return -1;
+    }
+
+    size_t level = 1;
+    foreach (i, char c; str[1 .. $])
+    {
+        if (nested && c == open) ++level;
+        else if (c == close) --level;
+        if (level == 0) return i + 1;
+    }
+    return -1;
+}
+
+unittest
+{
+    static struct Test { string str; sizediff_t res; }
+    enum tests = [
+        Test("[foo]", 4), Test("<bar>", 4), Test("{baz}", 4),
+        Test("[", -1), Test("[foo", -1), Test("ab[f]", -1),
+        Test("[foo[bar]]", 9), Test("[foo{bar]]", 8),
+    ];
+    foreach (test; tests)
+        assert(matchBracket(test.str) == test.res);
+    assert(matchBracket("[foo[bar]]", false) == 8);
+    static assert(matchBracket("[foo]") == 4);
+}
+
 /// Same as std.string.format, just using an allocator.
 string formatAlloc(ARGS...)(shared(Allocator) alloc, string fmt, ARGS args)
 {
