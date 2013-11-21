@@ -1230,6 +1230,8 @@ unittest {
 
 /**
 	Serializer for a plain Json representation.
+
+	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonSerializer {
 	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : double) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
@@ -1306,6 +1308,8 @@ struct JsonSerializer {
 
 /**
 	Serializer for a range based plain JSON string representation.
+
+	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonStringSerializer(R, bool pretty = false)
 	if (isInputRange!R || isOutputRange!(R, char))

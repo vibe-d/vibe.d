@@ -1213,6 +1213,8 @@ unittest {
 
 /**
 	Serializes to an in-memory BSON representation.
+
+	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToBson, deserializeBson
 */
 struct BsonSerializer {
 	private {
