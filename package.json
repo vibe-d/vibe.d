@@ -49,6 +49,12 @@
 			"platforms": ["windows"],
 			"versions": ["VibeWinrtDriver"],
 			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
+		},
+		{
+			"name": "unittest",
+			"targetType": "executable",
+			"dependencies": {"libevent": "~master"},
+			"versions": ["VibeLibeventDriver"],
 		}
 	],
 
