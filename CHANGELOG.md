@@ -7,6 +7,8 @@ v0.7.18 - 2013-
 ### Features and improvements ###
 
  - Compiles using DMD 2.064 (and DMD 2.063.2)
+ - Added `vibe.data.serialization` with support for annotations to control serialization (replaces/extends the serialization code in `vibe.data.json` and `vibe.data.bson`)
+ - Added range based allocation free (de-)serialization for JSON strings and more efficient BSON serialization
  - `OutgoingWebSocketMessage` is now automatically finalized
  - Added `File.isOpen`
  - `vibe.stream.operations.readAll()` now preallocates if possible
@@ -15,7 +17,8 @@ v0.7.18 - 2013-
  - Added a `TaskMutex.this(Object)` constructor to be able to use them as object monitors
  - Added a non-blocking (infinitely buffering) mode for `TaskPipe`
  - Adjusted naming of `Bson.Type` and `Json.Type` members for naming conventions
- - Added (de)serialization support for AAs with string serializable key types (by Daniel Davidson) - [pull #333][issue333]
+ - Added (de)serialization support for AAs with string serializable key types (with `toString`/`fromString` methods) (by Daniel Davidson) - [pull #333][issue333]
+ - Added (de)serialization support for scalar types as associative array keys
  - Implemented different deserialization modes (partially [pull #336][issue336])
  - Added `setLogFormat` as a more flexible replacement for `setPlainLogging
  - `render!()` for rendering Diet templates is assumed to be safe starting with DMD 2.064
@@ -31,6 +34,20 @@ v0.7.18 - 2013-
  - Implemented random number generators suited for cryptographic applications, which is now used for session ID generation (by Ilya Shipunov) - [pull #352][issue352], [pull #364][issue364], [issue #350][issue350]
  - Implemented Scalate whitespace stripping syntax for Diet templates (by Jack Applegame) - [pull #362][issue362]
  - Added `HTTPServerRequest.clientAddress` to get the full remote address including the port - [issue #357][issue357]
+ - Added `vibe.stream.wrapper.ProxyStream` to enable dynamically switching the underlying stream
+ - Added `vibe.stream.wrapper.StreamInputRange` to provide a buffered input range interface for an `InputStream`
+ - `HashMap` now moves elements when resizing instead of copying
+ - `HTTPServerResponse.startSession` now sets the "HttpOnly" attribute by default to better prevent session theft (by Ilya Shipunov) - [issue #368][issue368], [pull #373][issue373]
+ - `HTTPServerResponse.startSession` now automatically sets the "Secure" attribute by default when a HTTPS connection was used to initiate the session - [issue #368][issue368]
+ - `htmlAttribEscape` and friends now also escape single quotes (') - [issue #377][issue377]
+ - Added a new mode for `parseRFC5322Header` that outputs multiple fields with the same value as separate fields instead of concatenating them as per RFC 822 and use the new behavior for the HTTP server - [issue #380][issue380]
+ - `ThreadedFileStream` now uses `yield()` to avoid stalling the event loop
+ - Added `vibe.stream.wrapper.ConnectionProxyStream` that allows wrapping a `ConnectionStream` along with a `Stream` to allow forwarding connection specific functionality together with a wrapped stream
+ - `HTTPServerResponse.switchProtocol` now returns a `ConnectionStream` to allow controlling the underlying TCP connection
+ - Added a WebSockets example project
+ - Added `URL` based overloads for `HTTPServerResponse.redirect` and `staticRedirect`
+ - Added `RedisClient.hset` (by Martin Mauchauffée aka moechofe) - [pull #386][issue386]
+ - Improved the performance of `yield()` by using a singly linked list instead of a dynamic array to store yielded tasks
 
 ### Bug fixes ###
 
@@ -58,6 +75,26 @@ v0.7.18 - 2013-
  - Fixed interleaved HTTP client requests when dropping a previous response has failed for some reason
  - Fixed opening files with `FileMode.readWrite` and `FileMode.createTrunc` to allow both, reading and writing - [issue #337][issue337], [issue #354][issue354]
  - Fixed documentation of some parameters - [issue #322][issue322]
+ - Fixed `HTTPServerRequest.fullURL` to properly set the port - [issue #365][issue365]
+ - Fixed `vibe.core.concurrency.send`/`receive` in conjunction with `immutable` values
+ - Fixed an assertion in `Libevent2ManualEvent` caused by an AA bug
+ - Fixed a possible crash in `Libevent2ManualEvent` when using deterministic destruction
+ - Fixed a resource/memory leak in the libevent2 driver
+ - Fixed the "http-request" example to use the recommended `requestHTTP` function - [issue #374][issue374]
+ - Fixed appending of `Path` values to preserve the trailing slash, if any
+ - Fixed deserialization of JSON integer values as floating point values as FP values often end up without a decimal point
+ - Fixed `yield()` to be a no-op when called outside of a fiber
+ - Fixed a crash when WebSockets were used over a HTTPS connection - [issue #385][issue385]
+ - Fixed a crash in `SSLStream` that occured when the server certificate was rejected by the client - [issue #384][issue384]
+ - Fixed a number of bogus error messages when a connection was terminated before a HTTP request was fully handled
+ - Fixed the console logger to be disabled on Windows application without a console (avoids crashing)
+ - Fixed `HTTPLogger` avoid mixing line contents by using a mutex
+ - Fixed the semantics of `WebSocket.connected` and added `WebSocket.waitForData` - [issue #370][issue370]
+ - Fixed a memory leak and keep-alive connection handling in the HTTP client
+ - Fixed settings of path placeholder values when "*" is used in `URLRouter` routes
+ - Fixed a memory leak where unused fibers where never recycled
+ - Fixed handling "Connection: close" HTTP client requests
+ - Fixed the WebSockets code to accept requests without "Origin" headers as this is only required for web browser clients - [issue #389][issue389]
 
 [issue191]: https://github.com/rejectedsoftware/vibe.d/issues/191
 [issue309]: https://github.com/rejectedsoftware/vibe.d/issues/309
@@ -84,6 +121,17 @@ v0.7.18 - 2013-
 [issue357]: https://github.com/rejectedsoftware/vibe.d/issues/357
 [issue362]: https://github.com/rejectedsoftware/vibe.d/issues/362
 [issue364]: https://github.com/rejectedsoftware/vibe.d/issues/364
+[issue365]: https://github.com/rejectedsoftware/vibe.d/issues/365
+[issue368]: https://github.com/rejectedsoftware/vibe.d/issues/368
+[issue370]: https://github.com/rejectedsoftware/vibe.d/issues/370
+[issue373]: https://github.com/rejectedsoftware/vibe.d/issues/373
+[issue374]: https://github.com/rejectedsoftware/vibe.d/issues/374
+[issue377]: https://github.com/rejectedsoftware/vibe.d/issues/377
+[issue380]: https://github.com/rejectedsoftware/vibe.d/issues/380
+[issue384]: https://github.com/rejectedsoftware/vibe.d/issues/384
+[issue385]: https://github.com/rejectedsoftware/vibe.d/issues/385
+[issue386]: https://github.com/rejectedsoftware/vibe.d/issues/386
+[issue389]: https://github.com/rejectedsoftware/vibe.d/issues/389
 
 
 v0.7.17 - 2013-09-09
