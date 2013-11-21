@@ -287,67 +287,82 @@ unittest {
 
 /**
 	Attribute for overriding the field name during (de-)serialization.
-
-	Examples:
-		---
-		struct Test {
-			@name("screen-size") int screenSize;
-		}
-		---
 */
-NameAttribute name(string name) { return NameAttribute(name); }
+NameAttribute name(string name)
+{
+	return NameAttribute(name);
+}
+///
+unittest {
+	struct Test {
+		@name("screen-size") int screenSize;
+	}
+}
+
 
 /**
 	Attribute marking a field as optional during deserialization.
-
-	Examples:
-		---
-		struct Test {
-			// does not need to be present during deserialization
-			@optional int screenSize = 100;
-		}
-		---
 */
-@property OptionalAttribute optional() { return OptionalAttribute(); }
+@property OptionalAttribute optional()
+{
+	return OptionalAttribute();
+}
+///
+unittest {
+	struct Test {
+		// does not need to be present during deserialization
+		@optional int screenSize = 100;
+	}
+}
+
 
 /**
 	Attribute for marking non-serialized fields.
-
-	Examples:
-		---
-		struct Test {
-			// is neither serialized not deserialized
-			@ignore int screenSize;
-		}
-		---
 */
-@property IgnoreAttribute ignore() { return IgnoreAttribute(); }
+@property IgnoreAttribute ignore()
+{
+	return IgnoreAttribute();
+}
+///
+unittest {
+	struct Test {
+		// is neither serialized not deserialized
+		@ignore int screenSize;
+	}
+}
+
 
 /**
 	Attribute for forcing serialization of enum fields by name instead of by value.
-
-	Examples:
-		---
-		enum Color {
-			red,
-			green,
-			blue
-		}
-
-		struct Test {
-			// serialized as an int (e.g. 1 for Color.green)
-			Color color;
-			// serialized as a string (e.g. "green" for Color.green)
-			@byName Color namedColor;
-		}
-		---
 */
-@property ByNameAttribute byName() { return ByNameAttribute(); }
+@property ByNameAttribute byName()
+{
+	return ByNameAttribute();
+}
+///
+unittest {
+	enum Color {
+		red,
+		green,
+		blue
+	}
 
+	struct Test {
+		// serialized as an int (e.g. 1 for Color.green)
+		Color color;
+		// serialized as a string (e.g. "green" for Color.green)
+		@byName Color namedColor;
+	}
+}
 
 
 /// 
-enum FieldExistence { missing, exists, defer }
+enum FieldExistence
+{
+	missing,
+	exists,
+	defer
+}
 
 /// User defined attribute (not intended for direct use)
 struct NameAttribute { string name; }
