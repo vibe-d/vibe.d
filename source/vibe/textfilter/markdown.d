@@ -828,7 +828,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	if( refid.length > 0 ){
 		auto pr = toLower(refid) in linkrefs;
 		if( !pr ){
-			logDebug("[LINK REF NOT FOUND: '%s'", refid);
+			if (!__ctfe) logDebug("[LINK REF NOT FOUND: '%s'", refid);
 			return false;
 		}
 		dst.url = pr.url;
@@ -941,7 +941,7 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 		ret[toLower(refid)] = LinkRef(refid, url, title);
 		reflines[lnidx] = true;
 
-		logTrace("[detected ref on line %d]", lnidx+1);
+		if (!__ctfe) logTrace("[detected ref on line %d]", lnidx+1);
 	}
 
 	// remove all lines containing references
@@ -965,4 +965,11 @@ private struct Link {
 	string text;
 	string url;
 	string title;
+}
+
+unittest
+{
+    // check CTFE-ability
+    enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
+    assert(res == "<h3> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
 }
