@@ -47,15 +47,13 @@ import std.traits;
 import std.typetuple;
 
 
-	import vibe.data.bson;
-	import vibe.data.json;
-
-
 /**
 	Serializes a value with the given serializer.
 
 	The serializer must have a value result for the first form
 	to work. Otherwise, use the range based form.
+
+	See_Also: vibe.data.json.JsonSerializer, vibe.data.json.JsonStringSerializer, vibe.data.bson.BsonSerializer
 */
 auto serialize(Serializer, T, ARGS...)(T value, ARGS args)
 {
@@ -121,7 +119,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 					static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
 						serialize(serializer, __traits(getMember, value, mname).to!string());
 					} else {
-						serialize(serializer, __traits(getMember, value, mname));
+						serialize(serializer, cast(OriginalType!TM)__traits(getMember, value, mname));
 					}
 					serializer.endWriteDictionaryEntry!TM(name);
 				}
@@ -139,6 +137,23 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 	} else static assert(false, "Unsupported serialization type: " ~ T.stringof);
 }
 
+///
+unittest {
+	import vibe.data.json;
+
+	struct Test {
+		int value;
+		string text;
+	}
+
+	Test test;
+	test.value = 12;
+	test.text = "Hello";
+
+	Json serialized = serialize!JsonSerializer(test);
+	assert(serialized.value.get!int == 12);
+	assert(serialized.text.get!string == "Hello");
+}
 
 
 /**
@@ -146,6 +161,8 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 
 	serialized_data can be either an input range or a value containing
 	the serialized data, depending on the type of serializer used.
+
+	See_Also: vibe.data.json.JsonSerializer, vibe.data.json.JsonStringSerializer, vibe.data.bson.BsonSerializer
 */
 T deserialize(Serializer, T, ARGS...)(ARGS args)
 {
@@ -219,7 +236,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 									static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
 										__traits(getMember, ret, mname) = deserialize!string(deserializer).to!TM();
 									} else {
-										__traits(getMember, ret, mname) = deserialize!TM(deserializer);
+										__traits(getMember, ret, mname) = cast(TM)deserialize!(OriginalType!TM)(deserializer);
 									}
 									break;
 							}
@@ -248,6 +265,23 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 	} else static assert(false, "Unsupported serialization type: " ~ T.stringof);
 }
 
+///
+unittest {
+	import vibe.data.json;
+
+	struct Test {
+		int value;
+		string text;
+	}
+
+	Json serialized = Json.emptyObject;
+	serialized.value = 12;
+	serialized.text = "Hello";
+
+	Test test = deserialize!(JsonSerializer, Test)(serialized);
+	assert(test.value == 12);
+	assert(test.text == "Hello");
+}
 
 
 
@@ -325,7 +359,6 @@ struct IgnoreAttribute {}
 struct ByNameAttribute {}
 
 
-/// private
 package template isRWPlainField(T, string M)
 {
 	static if( !__traits(compiles, typeof(__traits(getMember, T, M))) ){
@@ -336,20 +369,16 @@ package template isRWPlainField(T, string M)
 	}
 }
 
-/// private
 package template isRWField(T, string M)
 {
 	enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
 	//pragma(msg, T.stringof~"."~M~": "~(isRWField?"1":"0"));
 }
 
-/// private
 package T Tgen(T)(){ return T.init; }
 
-/// private
 private template hasAttribute(alias decl, T) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
-/// private
 private static T getAttribute(alias decl, T)(T default_value)
 {
 	enum val = findFirstUDA!(T, decl);
@@ -375,3 +404,5 @@ private template hasSerializableFields(T, size_t idx = 0)
 		else enum hasSerializableFields = true;
 	} else enum hasSerializableFields = false;
 }
+
+package template isStringSerializable(T) { enum isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T); }

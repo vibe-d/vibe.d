@@ -1751,7 +1751,4 @@ private string underscoreStrip(string field_name)
 }
 
 /// private
-package template isStringSerializable(T) { enum isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T); }
-
-/// private
 package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.init.toJson()) == Json) && is(typeof(T.fromJson(Json())) == T); }
