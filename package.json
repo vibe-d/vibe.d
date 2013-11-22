@@ -55,6 +55,11 @@
 			"targetType": "executable",
 			"dependencies": {"libevent": "~master"},
 			"versions": ["VibeLibeventDriver"],
+			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
+			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
+			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
 		}
 	],
 
