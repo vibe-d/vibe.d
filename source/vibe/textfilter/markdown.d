@@ -13,7 +13,7 @@ import vibe.utils.string;
 
 import std.algorithm : canFind, countUntil, min;
 import std.array;
-import std.ascii : isAlpha;
+import std.ascii : isAlpha, isWhite;
 import std.conv;
 import std.range;
 import std.string;
@@ -789,28 +789,27 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 
 	// parse the text part [text]
 	if( pstr[0] != '[' ) return false;
-	pstr = pstr[1 .. $];
-	auto cidx = pstr.indexOfCT(']');
+	auto cidx = pstr.matchBracket();
 	if( cidx < 1 ) return false;
 	string refid;
-	dst.text = pstr[0 .. cidx];
+	dst.text = pstr[1 .. cidx];
 	pstr = pstr[cidx+1 .. $];
 
 	// parse either (link '['"title"']') or '[' ']'[refid]
 	if( pstr.length < 2 ) return false;
 	if( pstr[0] == '('){
-		pstr = pstr[1 .. $];
-		cidx = pstr.indexOfCT(')');
-                if( cidx < 1 ) return false;
-		auto spidx = pstr.indexOfCT(' ');
-		if( spidx > 0 && spidx < cidx ){
-			dst.url = pstr[0 .. spidx];
-			dst.title = pstr[spidx+1 .. cidx].strip();
-			if( dst.title.length < 2 ) return false;
-			if( !dst.title.startsWith("\"") || !dst.title.endsWith("\"") ) return false;
-			dst.title = dst.title[1 .. $-1];
+		cidx = pstr.matchBracket();
+		if( cidx < 1 ) return false;
+		auto inner = pstr[1 .. cidx];
+		immutable qidx = inner.indexOf('"');
+		if( qidx > 1 && inner[qidx - 1].isWhite()){
+			dst.url = inner[0 .. qidx].stripRight();
+			immutable len = inner[qidx .. $].lastIndexOf('"');
+			if( len == 0 ) return false;
+			assert(len > 0);
+			dst.title = inner[qidx + 1 .. qidx + len];
 		} else {
-			dst.url = pstr[0 .. cidx];
+			dst.url = inner.stripRight();
 			dst.title = null;
 		}
 		pstr = pstr[cidx+1 .. $];
@@ -861,6 +860,18 @@ unittest
 
     testLink(`[link][ref]`, Link("link", "target", "title"), refs);
     testLink(`[ref][]`, Link("ref", "target", "title"), refs);
+
+    testLink(`[link[with brackets]](target)`, Link("link[with brackets]", "target"), null);
+    testLink(`[link[with brackets]][ref]`, Link("link[with brackets]", "target", "title"), refs);
+
+    testLink(`[link](/target with spaces )`, Link("link", "/target with spaces"), null);
+    testLink(`[link](/target with spaces "title")`, Link("link", "/target with spaces", "title"), null);
+
+    testLink(`[link](white-space  "around title" )`, Link("link", "white-space", "around title"), null);
+    testLink(`[link](tabs	"around title"	)`, Link("link", "tabs", "around title"), null);
+
+    testLink(`[link](target "")`, Link("link", "target", ""), null);
+    testLink(`[link](target-no-title"foo" )`, Link("link", "target-no-title\"foo\"", ""), null);
 
     auto failing = [
         `text`, `[link](target`, `[link]target)`, `[link]`,
