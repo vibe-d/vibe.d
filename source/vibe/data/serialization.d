@@ -101,7 +101,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 		serializer.writeValue(value.toString());
 	} else static if (is(TU == struct) || is(TU == class)) {
 		static if (!hasSerializableFields!T)
-			pragma(msg, "Serializing composite type "~T.stringof~" which has no seriailzable fields");
+			pragma(msg, "Serializing composite type "~T.stringof~" which has no serializable fields");
 		static if (is(TU == class)) {
 			if (value is null) {
 				serialize(serializer, null);
@@ -157,7 +157,7 @@ unittest {
 
 
 /**
-	Deserializes and returns a seriailized value.
+	Deserializes and returns a serialized value.
 
 	serialized_data can be either an input range or a value containing
 	the serialized data, depending on the type of serializer used.
