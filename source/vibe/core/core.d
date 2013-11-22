@@ -1019,14 +1019,17 @@ private struct CoreTaskQueue {
 	@property bool empty() const { return first is null; }
 
 	@property CoreTask front() { return first; }
-	
+
 	void insertBack(CoreTask task)
 	{
 		assert(task.m_queue == null);
 		assert(task.m_nextInQueue is null);
 		task.m_queue = &this;
-		if (last) last.m_nextInQueue = task;
-		else first = last = task;
+		if (empty)
+			first = task;
+		else
+			last.m_nextInQueue = task;
+		last = task;
 	}
 
 	void popFront()
