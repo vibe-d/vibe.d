@@ -151,7 +151,7 @@ final class MemorySessionStore : SessionStore {
 
 	Session create()
 	{
-		auto s = new Session(this);
+		auto s = createSessionInstance();
 		m_sessions[s.id] = null;
 		return s;
 	}
@@ -159,7 +159,7 @@ final class MemorySessionStore : SessionStore {
 	Session open(string id)
 	{
 		auto pv = id in m_sessions;
-		return pv ? new Session(this, id) : null;	
+		return pv ? createSessionInstance(id) : null;	
 	}
 
 	void set(string id, string name, string value)
