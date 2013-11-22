@@ -916,12 +916,12 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
 		} else {
-			idx = ln.indexOf(' ');
+			idx = ln.indexOfCT(' ');
 			if( idx > 0 ){
 				url = ln[0 .. idx];
 				ln = ln[idx+1 .. $];
 			} else {
-				idx = ln.indexOf('\t');
+				idx = ln.indexOfCT('\t');
 				if( idx < 0 ){
 					url = ln;
 					ln = ln[$ .. $];
