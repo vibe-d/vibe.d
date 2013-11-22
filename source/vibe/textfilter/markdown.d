@@ -801,7 +801,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 		cidx = pstr.matchBracket();
 		if( cidx < 1 ) return false;
 		auto inner = pstr[1 .. cidx];
-		immutable qidx = inner.indexOf('"');
+		immutable qidx = inner.indexOfCT('"');
 		if( qidx > 1 && inner[qidx - 1].isWhite()){
 			dst.url = inner[0 .. qidx].stripRight();
 			immutable len = inner[qidx .. $].lastIndexOf('"');
