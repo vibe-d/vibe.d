@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.18 - 2013-
+v0.7.18 - 2013-11-
 --------------------
 
 ### Features and improvements ###
@@ -47,7 +47,7 @@ v0.7.18 - 2013-
  - Added a WebSockets example project
  - Added `URL` based overloads for `HTTPServerResponse.redirect` and `staticRedirect`
  - Added `RedisClient.hset` (by Martin Mauchauffée aka moechofe) - [pull #386][issue386]
- - Improved the performance of `yield()` by using a singly linked list instead of a dynamic array to store yielded tasks
+ - Improved the performance of `yield()` by using a singly linked list instead of a dynamic array to store yielded tasks (incl. bugfix by Martin Nowak, see [pull #402][issue402] and [issue #401][issue401])
 
 ### Bug fixes ###
 
@@ -95,6 +95,8 @@ v0.7.18 - 2013-
  - Fixed a memory leak where unused fibers where never recycled
  - Fixed handling "Connection: close" HTTP client requests
  - Fixed the WebSockets code to accept requests without "Origin" headers as this is only required for web browser clients - [issue #389][issue389]
+ - Fixed the markdown compiler to be CTFEable again (by Martin Nowak) - see [pull #398][issue398]
+ - Fixed fixed markdown named links containing square brackets in their name - see [pull #399][issue399]
 
 [issue191]: https://github.com/rejectedsoftware/vibe.d/issues/191
 [issue309]: https://github.com/rejectedsoftware/vibe.d/issues/309
@@ -132,6 +134,10 @@ v0.7.18 - 2013-
 [issue385]: https://github.com/rejectedsoftware/vibe.d/issues/385
 [issue386]: https://github.com/rejectedsoftware/vibe.d/issues/386
 [issue389]: https://github.com/rejectedsoftware/vibe.d/issues/389
+[issue398]: https://github.com/rejectedsoftware/vibe.d/issues/398
+[issue399]: https://github.com/rejectedsoftware/vibe.d/issues/399
+[issue401]: https://github.com/rejectedsoftware/vibe.d/issues/401
+[issue402]: https://github.com/rejectedsoftware/vibe.d/issues/402
 
 
 v0.7.17 - 2013-09-09
