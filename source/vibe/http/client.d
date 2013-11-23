@@ -276,8 +276,7 @@ class HTTPClient : EventedObject {
 				if (user_exception) e.next = user_exception;
 				user_exception = e;
 				logDebug("Error while dropping response body: %s", e.toString().sanitize());
-				m_responding = false;
-				disconnect();
+				res.disconnect();
 			}
 			assert(!m_responding, "Still in responding state after dropping the response body!?");
 			if (res.headers.get("Connection") == "close")
