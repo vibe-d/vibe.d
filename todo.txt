@@ -8,7 +8,7 @@ HTTP
 TCP
 ===
 
- - Find out what makes the libevent event loop continue to run after all connections have been disconnected
+ - Keep a live count of all event objects in the libevent2 driver and exit as soon as the count drops to zero
  - Add a DoS barrier that closes old connections in case of high connection counts (e.g. Slowloris attack)
 
 GENERAL
@@ -21,10 +21,8 @@ GENERAL
  - HTTP server comparison to nginx
  - Mention the API used for Diet templates on the /templates page
  - Implement a soft-shutdown in case of catching an Error (in conjunction with vibedist)
- - Add support for an entry "lowerPriviledges" to package.json which will use the system's 'vibe' user for priviledge lowering
+ - Add support for an entry "lowerPrivileges" to package.json which will use the system's 'vibe' user for priviledge lowering
  - Document the different -version specifiers that are possible
- - See why find([""]) and find(Bson()) resets the connection and maybe detect their use before sending the command to the server
- - Add proper documentation for types supported by the REST interface generator
 
 DIET TEMPLATES
 ==============
