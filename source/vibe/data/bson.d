@@ -1128,29 +1128,37 @@ unittest {
 
 unittest {
 	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } Bson toBson() { return Bson(); } }
-	static struct B { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
-	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } Json toJson() { return Json(); } }
-	static struct D { int value; string toString() { return ""; } }
-
 	static assert(!isStringSerializable!A && isJsonSerializable!A && !isBsonSerializable!A);
 	static assert(!isStringSerializable!(const(A)) && !isJsonSerializable!(const(A)) && !isBsonSerializable!(const(A)));
 	assert(serializeToBson(const A(123)) == Bson(123));
 	assert(serializeToBson(A(123))       == Bson(123));
 
+	static struct B { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
 	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
 	assert(serializeToBson(const B(123)) == Bson(123));
 	assert(serializeToBson(B(123))       == Bson(123));
 
+	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } Json toJson() { return Json(); } }
 	static assert(isStringSerializable!C && !isJsonSerializable!C && !isBsonSerializable!C);
 	static assert(!isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
 	assert(serializeToBson(const C(123)) == Bson("123"));
 	assert(serializeToBson(C(123))       == Bson("123"));
 
+	static struct D { int value; string toString() { return ""; } }
 	static assert(!isStringSerializable!D && !isJsonSerializable!D && !isBsonSerializable!D);
 	static assert(!isStringSerializable!(const(D)) && !isJsonSerializable!(const(D)) && !isBsonSerializable!(const(D)));
 	assert(serializeToBson(const D(123)) == serializeToBson(["value": 123]));
 	assert(serializeToBson(D(123))       == serializeToBson(["value": 123]));
+}
+
+unittest {
+	static struct E { ubyte[4] bytes; ubyte[] more; }
+	auto e = E([1, 2, 3, 4], [5, 6]);
+	auto eb = serializeToBson(e);
+	assert(eb.bytes.type == Bson.Type.binData);
+	assert(eb.more.type == Bson.Type.binData);
+	assert(e == deserializeBson!E(eb));
 }
 
 unittest {
@@ -1276,7 +1284,7 @@ struct BsonSerializer {
 	{
 		writeCompositeEntryHeader(getBsonTypeID(value));
 		static if (is(T == Bson)) { m_dst.put(value.data); }
-		else static if (is(T == Json)) { m_dst.put(Bson(value).data); }
+		else static if (is(T == Json)) { m_dst.put(Bson(value).data); } // FIXME: use .writeBsonValue
 		else static if (is(T == typeof(null))) {}
 		else static if (is(T == string)) { m_dst.put(toBsonData(cast(uint)value.length+1)); m_dst.putCString(value); }
 		else static if (is(T == BsonBinData)) { m_dst.put(toBsonData(cast(int)value.rawData.length)); m_dst.put(value.type); m_dst.put(value.rawData); }
@@ -1290,6 +1298,7 @@ struct BsonSerializer {
 		else static if (is(T : double)) { m_dst.put(toBsonData(cast(double)value)); }
 		else static if (isBsonSerializable!T) m_dst.put(value.toBson().data);
 		else static if (isJsonSerializable!T) m_dst.put(Bson(value.toJson()).data);
+		else static if (is(T : const(ubyte)[])) { writeValue(BsonBinData(BsonBinData.Type.generic, value.idup)); }
 		else static assert(false, "Unsupported type: " ~ T.stringof);
 	}
 
@@ -1323,7 +1332,7 @@ struct BsonSerializer {
 	//
 	void readDictionary(T)(scope void delegate(string) entry_callback)
 	{
-		enforce(m_inputData.type == Bson.Type.object);
+		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;
 		foreach (string name, value; old) {
 			m_inputData = value;
@@ -1334,7 +1343,7 @@ struct BsonSerializer {
 
 	void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
-		enforce(m_inputData.type == Bson.Type.array);
+		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;
 		foreach (value; old) {
 			m_inputData = value;
@@ -1353,7 +1362,12 @@ struct BsonSerializer {
 		else static if (is(T : double)) return cast(T)m_inputData.get!double();
 		else static if (isBsonSerializable!T) return T.fromBson(readValue!Bson);
 		else static if (isJsonSerializable!T) return T.fromJson(readValue!Bson.toJson());
-		else return m_inputData.get!T();
+		else static if (is(T : const(ubyte)[])) {
+			auto ret = m_inputData.get!BsonBinData.rawData;
+			static if (isStaticArray!T) return cast(T)ret[0 .. T.length];
+			else static if (is(T : immutable(char)[])) return ret;
+			else return cast(T)ret.dup;
+		} else return m_inputData.get!T();
 	}
 
 	bool tryReadNull()
@@ -1380,6 +1394,7 @@ struct BsonSerializer {
 		else static if (is(T : double)) tp = Bson.Type.double_;
 		else static if (isBsonSerializable!T) tp = value.toBson().type; // FIXME: this is highly inefficient
 		else static if (isJsonSerializable!T) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
+		else static if (is(T : const(ubyte)[])) tp = Bson.Type.binData;
 		else static if (accept_ao && isArray!T) tp = Bson.Type.array;
 		else static if (accept_ao && isAssociativeArray!T) tp = Bson.Type.object;
 		else static if (accept_ao && (is(T == class) || is(T == struct))) tp = Bson.Type.object;
