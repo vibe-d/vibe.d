@@ -518,9 +518,11 @@ class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	protected override void onThreadShutdown()
 	{
 		auto thr = Thread.getThis();
-		if (thr in m_waiters) {
-			event_free(m_waiters[thr].event);
-			m_waiters.remove(thr);
+		synchronized (m_mutex) {
+			if (thr in m_waiters) {
+				event_free(m_waiters[thr].event);
+				m_waiters.remove(thr);
+			}
 		}
 	}
 
