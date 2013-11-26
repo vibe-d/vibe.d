@@ -447,7 +447,7 @@ void setTaskEventCallback(void function(TaskEvent, Fiber) func)
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.17";
+enum VibeVersionString = "0.7.18";
 
 
 /**

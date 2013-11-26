@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.18 - 2013-11-
+v0.7.18 - 2013-11-26
 --------------------
 
 ### Features and improvements ###
@@ -9,44 +9,43 @@ v0.7.18 - 2013-11-
  - Compiles using DMD 2.064 (and DMD 2.063.2)
  - Added `vibe.data.serialization` with support for annotations to control serialization (replaces/extends the serialization code in `vibe.data.json` and `vibe.data.bson`)
  - Added range based allocation free (de-)serialization for JSON strings and more efficient BSON serialization
- - `OutgoingWebSocketMessage` is now automatically finalized
  - Added `File.isOpen`
- - `vibe.stream.operations.readAll()` now preallocates if possible
+ - Added a `ConnectionStream` interface from which `TCPConnection` and `TaskPipe` now derive
  - Added `BsonDate.fromStdTime` and improve documentation to avoid time zone related bugs
- - Optimized HTML escaping performance (by Martin Nowak) - [pull #327][issue327]
  - Added a `TaskMutex.this(Object)` constructor to be able to use them as object monitors
  - Added a non-blocking (infinitely buffering) mode for `TaskPipe`
- - Adjusted naming of `Bson.Type` and `Json.Type` members for naming conventions
  - Added (de)serialization support for AAs with string serializable key types (with `toString`/`fromString` methods) (by Daniel Davidson) - [pull #333][issue333]
  - Added (de)serialization support for scalar types as associative array keys
- - Implemented different deserialization modes (partially [pull #336][issue336])
- - Added `setLogFormat` as a more flexible replacement for `setPlainLogging
- - `render!()` for rendering Diet templates is assumed to be safe starting with DMD 2.064
- - Improved `Json` usability by enabling `~=` and some more use cases for `~`
- - Added a workaround for excessive compile times for large static arrays (by Martin Nowak) - [pull #341][issue341]
- - Added a `ConnectionStream` interface from which `TCPConnection` and `TaskPipe` now derive
- - Implemented `vibe.stream.operations.pipeRealtime` for piping stream data with a defined maximum latency
- - Implemented parameter and return value modifier user attributes for the REST interface generator and refactor meta programming facilities (by Михаил Страшун aka Dicebot) - [pull #340][issue340], [pull #344][issue344], [pull #349][issue349]
- - Improved the HTTP reverse proxy by handling HEAD requests correctly, avoiding GC allocations and optionally disabling transfer compression
+ - Added `setLogFormat` as a more flexible replacement for `setPlainLogging`
  - Added `MongoCollection.aggregate()` (by Jack Applegame) - [pull #348][issue348]
  - Added `WebSocket.request` to enable access to the original HTTP request and add scoped web socket callbacks for avoiding GC allocations
- - Implemented `MongoCursor.sort` to allow sorted queries using the same syntax as other MongoDB drivers (by Jack Applegame) - [pull #353][issue353]
- - Implemented random number generators suited for cryptographic applications, which is now used for session ID generation (by Ilya Shipunov) - [pull #352][issue352], [pull #364][issue364], [issue #350][issue350]
- - Implemented Scalate whitespace stripping syntax for Diet templates (by Jack Applegame) - [pull #362][issue362]
  - Added `HTTPServerRequest.clientAddress` to get the full remote address including the port - [issue #357][issue357]
  - Added `vibe.stream.wrapper.ProxyStream` to enable dynamically switching the underlying stream
  - Added `vibe.stream.wrapper.StreamInputRange` to provide a buffered input range interface for an `InputStream`
- - `HashMap` now moves elements when resizing instead of copying
- - `HTTPServerResponse.startSession` now sets the "HttpOnly" attribute by default to better prevent session theft (by Ilya Shipunov) - [issue #368][issue368], [pull #373][issue373]
- - `HTTPServerResponse.startSession` now automatically sets the "Secure" attribute by default when a HTTPS connection was used to initiate the session - [issue #368][issue368]
- - `htmlAttribEscape` and friends now also escape single quotes (') - [issue #377][issue377]
- - Added a new mode for `parseRFC5322Header` that outputs multiple fields with the same value as separate fields instead of concatenating them as per RFC 822 and use the new behavior for the HTTP server - [issue #380][issue380]
- - `ThreadedFileStream` now uses `yield()` to avoid stalling the event loop
  - Added `vibe.stream.wrapper.ConnectionProxyStream` that allows wrapping a `ConnectionStream` along with a `Stream` to allow forwarding connection specific functionality together with a wrapped stream
- - `HTTPServerResponse.switchProtocol` now returns a `ConnectionStream` to allow controlling the underlying TCP connection
- - Added a WebSockets example project
  - Added `URL` based overloads for `HTTPServerResponse.redirect` and `staticRedirect`
  - Added `RedisClient.hset` (by Martin Mauchauffée aka moechofe) - [pull #386][issue386]
+ - Added a WebSockets example project
+ - Added `MongoCursor.sort` to allow sorted queries using the same syntax as other MongoDB drivers (by Jack Applegame) - [pull #353][issue353]
+ - Added random number generators suited for cryptographic applications, which is now used for session ID generation (by Ilya Shipunov) - [pull #352][issue352], [pull #364][issue364], [issue #350][issue350]
+ - Added parameter and return value modifier user attributes for the REST interface generator and refactor meta programming facilities (by Михаил Страшун aka Dicebot) - [pull #340][issue340], [pull #344][issue344], [pull #349][issue349]
+ - Added `vibe.stream.operations.pipeRealtime` for piping stream data with a defined maximum latency
+ - `OutgoingWebSocketMessage` is now automatically finalized
+ - `HTTPServerResponse.switchProtocol` now returns a `ConnectionStream` to allow controlling the underlying TCP connection
+ - `HTTPServerResponse.startSession` now sets the "HttpOnly" attribute by default to better prevent session theft (by Ilya Shipunov) - [issue #368][issue368], [pull #373][issue373]
+ - `HTTPServerResponse.startSession` now automatically sets the "Secure" attribute by default when a HTTPS connection was used to initiate the session - [issue #368][issue368]
+ - Implemented Scalate whitespace stripping syntax for Diet templates (by Jack Applegame) - [pull #362][issue362]
+ - `htmlAttribEscape` and friends now also escape single quotes (') - [issue #377][issue377]
+ - `vibe.stream.operations.readAll()` now preallocates if possible
+ - Optimized HTML escaping performance (by Martin Nowak) - [pull #327][issue327]
+ - Adjusted naming of `Bson.Type` and `Json.Type` members for naming conventions
+ - `render!()` for rendering Diet templates is assumed to be safe starting with DMD 2.064
+ - Improved `Json` usability by enabling `~=` and some more use cases for `~`
+ - Added a workaround for excessive compile times for large static arrays (by Martin Nowak) - [pull #341][issue341]
+ - Improved the HTTP reverse proxy by handling HEAD requests correctly, avoiding GC allocations and optionally disabling transfer compression
+ - `HashMap` now moves elements when resizing instead of copying
+ - Added a new mode for `parseRFC5322Header` that outputs multiple fields with the same value as separate fields instead of concatenating them as per RFC 822 and use the new behavior for the HTTP server - [issue #380][issue380]
+ - `ThreadedFileStream` now uses `yield()` to avoid stalling the event loop
  - Improved the performance of `yield()` by using a singly linked list instead of a dynamic array to store yielded tasks (incl. bugfix by Martin Nowak, see [pull #402][issue402] and [issue #401][issue401])
 
 ### Bug fixes ###
@@ -97,6 +96,9 @@ v0.7.18 - 2013-11-
  - Fixed the WebSockets code to accept requests without "Origin" headers as this is only required for web browser clients - [issue #389][issue389]
  - Fixed the markdown compiler to be CTFEable again (by Martin Nowak) - see [pull #398][issue398]
  - Fixed fixed markdown named links containing square brackets in their name - see [pull #399][issue399]
+ - Fixed a crash (finalization error) in the HTTP client when an SSL read error occurs
+ - Fixed a race condition during shutdown in `Libevent2ManualEvent`
+ - Fixed the `Task.this(in Task)` constructor to preserve the task ID
 
 [issue191]: https://github.com/rejectedsoftware/vibe.d/issues/191
 [issue309]: https://github.com/rejectedsoftware/vibe.d/issues/309
