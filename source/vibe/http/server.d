@@ -1388,22 +1388,19 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		// if no one has written anything, return 404
 		if( !res.headerWritten )
 			throw new HTTPStatusException(HTTPStatus.notFound);
-	} catch(HTTPStatusException err) {
+	} catch (HTTPStatusException err) {
 		logDebug("http error thrown: %s", err.toString().sanitize);
-		if ( !res.headerWritten ) errorOut(err.status, err.msg, err.toString(), err);
+		if (!res.headerWritten) errorOut(err.status, err.msg, err.toString(), err);
 		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
-		if ( !parsed || justifiesConnectionClose(err.status) )
+		if (!parsed || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (Throwable e) {
-		if (tcp_connection.connected) {
-			auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
-			if( !res.headerWritten ) errorOut(status, httpStatusText(status), e.toString(), e);
-			else logDiagnostic("Error while writing the response: %s", e.msg);
-			logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
-			if ( !parsed )
-				keep_alive = false;
-		}
+		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
+		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), e.toString(), e);
+		else logDiagnostic("Error while writing the response: %s", e.msg);
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
+		if (!parsed || !cast(Exception)e) keep_alive = false;
 	}
 
 	if (tcp_connection.connected) {
