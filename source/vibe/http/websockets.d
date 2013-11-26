@@ -98,11 +98,15 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		ConnectionStream conn = res.switchProtocol("websocket");
 
 		/*scope*/ auto socket = new WebSocket(conn, req);
-		scope(exit) socket.close();
 		try on_handshake(socket);
 		catch (Exception e) {
 			logDiagnostic("WebSocket handler failed: %s", e.msg);
+		} catch (Throwable th) {
+			// pretend to have sent a closing frame so that any further sends will fail
+			socket.m_sentCloseFrame = true;
+			throw th;
 		}
+		socket.close();
 	}
 	return &callback;
 }
