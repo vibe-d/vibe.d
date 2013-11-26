@@ -101,7 +101,7 @@ class MongoAuthException : MongoException
   It is not intended for direct usage. Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
   Note that a MongoConnection may only be used from one fiber/thread at a time.
  */
-class MongoConnection : EventedObject {
+class MongoConnection {
 	private {
 		MongoClientSettings m_settings;
 		TCPConnection m_conn;

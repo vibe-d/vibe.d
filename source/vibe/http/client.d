@@ -174,7 +174,7 @@ deprecated("Please use connectHTTP instead.") alias connectHttp = connectHTTP;
 	pool of HTTPClient instances to keep the number of connection establishments low while not
 	blocking requests from different tasks.
 */
-class HTTPClient : EventedObject {
+class HTTPClient {
 	enum maxHeaderLineLength = 4096;
 
 	/// Deprecated compatibility alias

@@ -87,7 +87,7 @@ final class RedisReply {
 	}
 }
 
-final class RedisConnection : EventedObject {
+final class RedisConnection {
 	private {
 		string m_host;
 		ushort m_port;

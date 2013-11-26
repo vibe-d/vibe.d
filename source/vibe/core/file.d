@@ -7,7 +7,6 @@
 */
 module vibe.core.file;
 
-public import vibe.core._eventedobject;
 public import vibe.core.stream;
 public import vibe.inet.url;
 
@@ -261,7 +260,7 @@ enum FileMode {
 /**
 	Accesses the contents of a file as a stream.
 */
-interface FileStream : RandomAccessStream, EventedObject {
+interface FileStream : RandomAccessStream {
 	/// The path of the file.
 	@property Path path() const nothrow;
 

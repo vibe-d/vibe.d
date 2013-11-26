@@ -7,7 +7,6 @@
 */
 module vibe.core.net;
 
-public import vibe.core._eventedobject;
 public import vibe.core.stream;
 
 import vibe.core.driver;
@@ -163,7 +162,7 @@ struct NetworkAddress {
 /**
 	Represents a single TCP connection.
 */
-interface TCPConnection : ConnectionStream, EventedObject {
+interface TCPConnection : ConnectionStream {
 	/// Used to disable Nagle's algorithm.
 	@property void tcpNoDelay(bool enabled);
 	/// ditto
@@ -191,7 +190,7 @@ deprecated("Please use TCPConnection instead.")alias TcpConnection = TCPConnecti
 /**
 	Represents a listening TCP socket.
 */
-interface TCPListener /*: EventedObject*/ {
+interface TCPListener {
 	/// Stops listening and closes the socket.
 	void stopListening();
 }
@@ -203,7 +202,7 @@ deprecated("Please use TCPListener instead.")alias TcpListener = TCPListener;
 /**
 	Represents a bound and possibly 'connected' UDP socket.
 */
-interface UDPConnection : EventedObject {
+interface UDPConnection {
 	/** Returns the address to which the UDP socket is bound.
 	*/
 	@property string bindAddress() const;

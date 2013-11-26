@@ -199,7 +199,7 @@ class HTTPRequest {
 	/** Determines if the connection persists across requests.
 	*/
 	@property bool persistent() const 
-	{ 
+	{
 		auto ph = "connection" in headers;
 		switch(httpVersion) {
 			case HTTPVersion.HTTP_1_0:
@@ -210,7 +210,7 @@ class HTTPRequest {
 				return true;
 			default: 
 				return false;
-		}	
+		}
 	}
 	
 }

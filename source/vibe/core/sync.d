@@ -8,7 +8,6 @@
 module vibe.core.sync;
 
 import std.exception;
-public import vibe.core._eventedobject;
 
 import vibe.core.driver;
 
@@ -237,7 +236,7 @@ ManualEvent createManualEvent()
 
 	Note: the ownership can be shared between multiple fibers and threads.
 */
-interface ManualEvent : EventedObject {
+interface ManualEvent {
 	/// A counter that is increased with every emit() call
 	@property int emitCount() const;
 

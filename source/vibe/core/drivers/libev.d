@@ -735,4 +735,53 @@ private void setNonBlocking(int fd)
 	}
 }
 
+private mixin template SingleOwnerEventedObject() {
+	protected {
+		Task m_owner;
+	}
+
+	protected void release()
+	{
+		assert(amOwner(), "Releasing evented object that is not owned by the calling task.");
+		m_owner = Task();
+	}
+
+	protected void acquire()
+	{
+		assert(m_owner == Task(), "Acquiring evented object that is already owned.");
+		m_owner = Task.getThis();
+	}
+
+	protected bool amOwner()
+	{
+		return m_owner != Task() && m_owner == Task.getThis();
+	}
+}
+
+private mixin template MultiOwnerEventedObject() {
+	protected {
+		Task[] m_owners;
+	}
+
+	protected void release()
+	{
+		auto self = Task.getThis();
+		auto idx = m_owners.countUntil(self);
+		assert(idx >= 0, "Releasing evented object that is not owned by the calling task.");
+		m_owners = m_owners[0 .. idx] ~ m_owners[idx+1 .. $];
+	}
+
+	protected void acquire()
+	{
+		auto self = Task.getThis();
+		assert(!amOwner(), "Acquiring evented object that is already owned by the calling task.");
+		m_owners ~= self;
+	}
+
+	protected bool amOwner()
+	{
+		return m_owners.countUntil(Task.getThis()) >= 0;
+	}
+}
+
 } // version(VibeLibevDriver)
