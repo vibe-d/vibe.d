@@ -79,6 +79,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
 
 		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
+		bufferevent_setwatermark(m_ctx.event, EV_READ, 0, 65536);
 	}
 	
 	~this()
