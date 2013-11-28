@@ -1393,14 +1393,14 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.toString(), err);
 		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
-		if (!parsed || justifiesConnectionClose(err.status))
+		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (Throwable e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), e.toString(), e);
 		else logDiagnostic("Error while writing the response: %s", e.msg);
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
-		if (!parsed || !cast(Exception)e) keep_alive = false;
+		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;
 	}
 
 	if (tcp_connection.connected) {
