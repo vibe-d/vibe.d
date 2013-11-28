@@ -135,8 +135,8 @@ package class Libevent2TCPConnection : TCPConnection {
 	/// Closes the connection.
 	void close()
 	{
-		acquire();
 		assert(connected, "Closing an already closed TCP connection.");
+		acquire();
 
 		auto fd = m_ctx.socketfd;
 		m_ctx.shutdown = true;
@@ -163,9 +163,9 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	@property ulong leastSize()
 	{
+		if (!connected) return 0;
 		acquireReader();
 		scope(exit) releaseReader();
-		if (!connected) return 0;
 		auto inbuf = bufferevent_get_input(m_ctx.event);
 		size_t len;
 		while ((len = evbuffer_get_length(inbuf)) == 0) {
@@ -178,9 +178,9 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	@property bool dataAvailableForRead()
 	{
+		if (!connected) return false;
 		acquireReader();
 		scope(exit) releaseReader();
-		if (!connected) return false;
 		auto inbuf = bufferevent_get_input(m_ctx.event);
 
 		return evbuffer_get_length(inbuf) > 0;
@@ -190,9 +190,9 @@ package class Libevent2TCPConnection : TCPConnection {
 
 	const(ubyte)[] peek()
 	{
+		if (!connected) return null;
 		acquireReader();
 		scope(exit) releaseReader();
-		if (!connected) return null;
 
 		auto inbuf = bufferevent_get_input(m_ctx.event);
 		evbuffer_iovec iovec;
@@ -205,6 +205,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	*/
 	void read(ubyte[] dst)
 	{
+		checkConnected();
 		acquireReader();
 		scope(exit) releaseReader();
 		while (dst.length > 0) {
