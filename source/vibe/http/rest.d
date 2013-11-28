@@ -701,7 +701,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				res.writeJsonBody(Json.emptyObject);
 			} else {
 				auto ret = handler(&__traits(getMember, inst, method), params);
-				res.writeJsonBody(serializeToJson(ret));
+				res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
 			res.writeJsonBody([ "statusMessage": e.msg ], e.status);
