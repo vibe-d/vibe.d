@@ -1176,7 +1176,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 		bool keep_alive;
 		handleRequest(http_stream, connection, listen_info, settings, keep_alive);
 		if (!keep_alive) { logTrace("No keep-alive"); break; }
-		if (!connection.connected) { logTrace("Client disconnected."); break; }
+		if (connection.empty) { logTrace("Client disconnected."); break; }
 
 		logTrace("Waiting for next request...");
 		// wait for another possible request on a keep-alive connection
@@ -1184,7 +1184,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 			logDebug("persistent connection timeout!");
 			break;
 		}
-	} while(connection.connected);
+	} while(!connection.empty);
 	
 	logTrace("Done handling connection.");
 }

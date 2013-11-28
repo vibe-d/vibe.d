@@ -72,8 +72,7 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 
 	void close()
 	{
-		if (!m_connection.connected) return;
-		finalize();
+		if (m_connection.connected) finalize();
 		m_connection.close();
 	}
 

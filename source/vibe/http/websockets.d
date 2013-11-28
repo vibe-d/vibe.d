@@ -273,7 +273,7 @@ class WebSocket {
 	{
 		scope (exit) m_readCondition.notifyAll();
 		try {
-			while (m_conn.connected) {
+			while (!m_conn.empty) {
 				assert(!m_nextMessage);
 				scope msg = new IncomingWebSocketMessage(m_conn);
 				if(msg.frameOpcode == FrameOpcode.close) {
@@ -292,8 +292,8 @@ class WebSocket {
 		} catch (Exception e) {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
 			logDiagnostic("Closing connection.");
-			if (m_conn.connected) m_conn.close();
 		}
+		m_conn.close();
 	}
 }
 

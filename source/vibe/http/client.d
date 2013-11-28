@@ -221,10 +221,8 @@ class HTTPClient {
 	void disconnect()
 	{
 		if (m_conn) {
-			if (m_conn.connected) {
-				m_stream.finalize();
-				if (m_conn.connected) m_conn.close();
-			}
+			if (m_conn.connected) m_stream.finalize();
+			m_conn.close();
 			if (m_stream !is m_conn) {
 				destroy(m_stream);
 				m_stream = null;
@@ -271,17 +269,13 @@ class HTTPClient {
 				logDebug("Error while handling response: %s", e.toString().sanitize());
 				user_exception = e;
 			}
-			if (m_conn.connected) {
-				try res.dropBody();
-				catch (Exception e) {
-					if (user_exception) e.next = user_exception;
-					user_exception = e;
-					logDebug("Error while dropping response body: %s", e.toString().sanitize());
-					res.disconnect();
-				}
-			} else res.disconnect();
-			assert(!m_responding, "Still in responding state after dropping the response body!?");
-			if (res.headers.get("Connection") == "close")
+			if (user_exception || m_responding) {
+				logDebug("Failed to send a complete response to server - disconnecting.");
+				res.disconnect();
+			}
+			assert(!m_responding, "Still in responding state after finalizing the response!?");
+
+			if (user_exception || res.headers.get("Connection") == "close")
 				disconnect();
 		}
 		if (user_exception) throw user_exception;
@@ -310,7 +304,8 @@ class HTTPClient {
 			disconnect();
 		}
 
-		if( !m_conn || !m_conn.connected ){
+		if (!m_conn || !m_conn.connected) {
+			if (m_conn) m_conn.close(); // make sure all resources are freed
 			m_conn = connectTCP(m_server, m_port);
 			m_stream = m_conn;
 			if( m_ssl ) m_stream = new SSLStream(m_conn, m_ssl, SSLStreamState.connecting);

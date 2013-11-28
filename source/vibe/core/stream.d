@@ -22,7 +22,7 @@ import std.conv;
 Interface for all classes implementing readable streams.
 */
 interface InputStream {
-	/** Returns true iff the end of the stream has been reached
+	/** Returns true iff the end of the input stream has been reached.
 	*/
 	@property bool empty();
 
@@ -147,10 +147,21 @@ interface Stream : InputStream, OutputStream {
 	See_also: vibe.core.new.TCPConnection
 */
 interface ConnectionStream : Stream {
-	/// Determines The current connection status.
+	/** Determines The current connection status.
+
+		If connected is false, writing to the connection will trigger an
+		exception. Reading may still succeed as long as there is data left in
+		the input buffer. Use InputStream.empty to determine when to stop
+		reading.
+	*/
 	@property bool connected() const;
 
-	/// Actively closes the connection.
+	/** Actively closes the connection and frees associated resources.
+
+		Note that close must always be called, even if the remote has already
+		closed the connection. Failure to do so will result in resource and
+		memory leakage.
+	*/
 	void close();
 
 	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.

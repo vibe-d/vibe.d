@@ -147,8 +147,8 @@ class MongoConnection {
 
 	void disconnect()
 	{
-		if( m_conn ){
-			if( m_conn.connected ) m_conn.close();
+		if (m_conn) {
+			m_conn.close();
 			m_conn = null;
 		}
 	}
