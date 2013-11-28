@@ -271,13 +271,15 @@ class HTTPClient {
 				logDebug("Error while handling response: %s", e.toString().sanitize());
 				user_exception = e;
 			}
-			try res.dropBody();
-			catch (Exception e) {
-				if (user_exception) e.next = user_exception;
-				user_exception = e;
-				logDebug("Error while dropping response body: %s", e.toString().sanitize());
-				res.disconnect();
-			}
+			if (m_conn.connected) {
+				try res.dropBody();
+				catch (Exception e) {
+					if (user_exception) e.next = user_exception;
+					user_exception = e;
+					logDebug("Error while dropping response body: %s", e.toString().sanitize());
+					res.disconnect();
+				}
+			} else res.disconnect();
 			assert(!m_responding, "Still in responding state after dropping the response body!?");
 			if (res.headers.get("Connection") == "close")
 				disconnect();
