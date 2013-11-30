@@ -146,13 +146,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 				break;
 			}
 		}
-		if( !found_listener ){
-			if( (settings._sslKeyFile || settings._sslCertFile) && !settings.sslContext ){
-				logDebug("Creating SSL context...");
-				assert(settings._sslCertFile.length && settings._sslKeyFile.length);
-				settings.sslContext = new SSLContext(settings._sslCertFile, settings._sslKeyFile);
-				logDebug("... done");
-			}
+		if (!found_listener) {
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
 			g_listeners ~= listener;
 			doListen(settings, listener, addr); // DMD BUG 2043
@@ -401,10 +395,6 @@ class HTTPServerSettings {
 		Please use sslContext in new code instead of setting the key/cert file. Those fileds
 		will be deprecated at some point.
 	*/
-	deprecated("Please use sslContext instead.") @property ref inout(string) sslCertFile() inout { return _sslCertFile; }
-	/// ditto
-	deprecated("Please use sslContext instead.") @property ref inout(string) sslKeyFile() inout { return _sslKeyFile; }
-	/// ditto
 	SSLContext sslContext;
 
 	/// Session management is enabled if a session store instance is provided
@@ -463,8 +453,6 @@ class HTTPServerSettings {
 		maxRequestTime = 0.seconds;
 		keepAliveTimeout = 10.seconds;
 	}
-
-	private string _sslCertFile, _sslKeyFile;
 }
 
 /// Deprecated compatibility alias
