@@ -252,8 +252,3 @@ interface ManualEvent {
 	/// 
 	int wait(Duration timeout, int reference_emit_count);
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use ManualEvent instead.")alias Signal = ManualEvent;
-/// ditto
-deprecated("Please use createManualEvent instead.") alias createSignal = createManualEvent;
