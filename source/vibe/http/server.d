@@ -446,6 +446,17 @@ class HTTPServerSettings {
 	/// Disable support for VibeDist and instead start listening immediately.
 	bool disableDistHost = false;
 
+	/** Responds to "Accept-Encoding" by using compression if possible.
+
+		Compression can also be manually enabled by setting the
+		"Content-Encoding" header of the HTTP response appropriately before
+		sending the response body.
+
+		This setting is disabled by default. Also note that there are still some
+		known issues with the GZIP compression code.
+	*/
+	bool useCompressionIfPossible = false;
+
 	this()
 	{
 		// need to use the contructor because the Ubuntu 13.10 GDC cannot CTFE dur()
@@ -1288,11 +1299,13 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		res.m_settings = settings;
 
 		// setup compressed output
-		if( auto pae = "Accept-Encoding" in req.headers ){
-			if (canFind(*pae, "gzip")) {
-				res.headers["Content-Encoding"] = "gzip";
-			} else if (canFind(*pae, "deflate")) {
-				res.headers["Content-Encoding"] = "deflate";
+		if (settings.useCompressionIfPossible) {
+			if (auto pae = "Accept-Encoding" in req.headers) {
+				if (canFind(*pae, "gzip")) {
+					res.headers["Content-Encoding"] = "gzip";
+				} else if (canFind(*pae, "deflate")) {
+					res.headers["Content-Encoding"] = "deflate";
+				}
 			}
 		}
 
