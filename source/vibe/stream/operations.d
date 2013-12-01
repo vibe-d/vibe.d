@@ -29,7 +29,7 @@ import std.typecons;
 
 	Throws:
 		An exception if either the stream end was hit without hitting a newline first, or
-		if more than max_bytes have been read from the stream in case of max_bytes != 0.
+		if more than max_bytes have been read from the stream.
 */
 ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", shared(Allocator) alloc = defaultAllocator()) /*@ufcs*/
 {
