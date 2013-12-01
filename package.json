@@ -11,11 +11,13 @@
 		"see github for more"
 	],
 
+	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
 	"dependencies": {
 		"openssl": "~master"
 	},
 
 	"targetType": "library",
+	"mainSourceFile": "source/vibe/vibe.d",
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
 	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
 	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
