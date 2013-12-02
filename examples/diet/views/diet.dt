@@ -12,7 +12,7 @@ html(lang="en")
 			br
 			b a test
 			em= 13*12
-			| One line of text <Phew!>
+			| One line of text &lt;Phew!&gt;
 			| Another line of text
 		#sanity(style='background-color: lightgreen')
 			- if( 12 == 13 )
