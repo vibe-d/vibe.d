@@ -29,6 +29,11 @@ import std.algorithm;
 	$(LINK http://www.mongodb.org/display/DOCS/Connections) for the complete set
 	of options.
 
+	Note that the returned MongoClient uses a vibe.core.connectionpool.ConnectionPool
+	internally to create and reuse connections as necessary. Thus, the
+	MongoClient instance can - and should - be shared among all fibers in a
+	thread by storing in in a thread local variable.
+
 	Examples:
 		---
 		// connecting with default settings:

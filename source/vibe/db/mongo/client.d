@@ -21,8 +21,11 @@ import std.conv;
 import std.string;
 
 /**
-	Represents a single remote MongoClient. Abstracts away management of connections
-	to mongo service.
+	Represents a connection to a MongoDB server.
+
+	Note that this class uses a ConnectionPool internally to create and reuse
+	network conections to the server as necessary. It should be reused for all
+	fibers in a thread for optimum performance in high concurrency scenarios.
  */
 class MongoClient {
 	private {
