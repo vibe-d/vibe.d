@@ -404,6 +404,29 @@ class HTTPServerSettings {
 	///
 	string serverString = "vibe.d/" ~ VibeVersionString;
 
+	/**
+		Add `X-Frame-Options` header. You can use `DENY`, `SAMEORIGIN`, `ALLOW-FROM uri` or empty (dafault) values.
+		
+		`X-Frame-Options: DENY` header can protect from clickjacking attacks
+		because Browser disallows to render your website in frames.	
+		If you REALLY need to use frames, you have to use `X-Frame-Options: SAMEORIGIN`
+		or `X-Frame-Options: ALLOW-FROM uri` header.
+		
+		Parameter's values:
+			DENY - The page cannot be displayed in a frame, regardless of the site attempting to do so (recommended).
+			SAMEORIGIN - The page can only be displayed in a frame on the same origin as the page itself.
+			ALLOW-FROM uri - The page can only be displayed in a frame on the specified origin.
+			Put empty value if you want to disable this header (dafault, not recommended).
+		
+		See_Also:
+			$(LINK http://en.wikipedia.org/wiki/Clickjacking)
+			$(LINK http://javascript.info/tutorial/clickjacking)
+			$(LINK http://blogs.msdn.com/b/ieinternals/archive/2010/03/30/combating-clickjacking-with-x-frame-options.aspx)
+			$(LINK https://developer.mozilla.org/en-US/docs/HTTP/X-Frame-Options)
+			$(LINK http://tools.ietf.org/html/rfc7034)
+	*/
+	string xFrameOptionsString = "";
+
 	/** Specifies the format used for the access log.
 
 		The log format is given using the Apache server syntax. By default NCSA combined is used.
@@ -492,7 +515,7 @@ enum SessionOption {
 		By default, the type of the connection on which the session is started
 		will be used to determine if secure or noSecure is used.
 
-		See_Also: noSecure, Cookie.secure
+		See_Also: secure, Cookie.secure
 	*/
 	noSecure = 1<<2
 }
@@ -1375,6 +1398,8 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			res.headers["Server"] = settings.serverString;
 		res.headers["Date"] = formatRFC822DateAlloc(request_allocator, reqtime);
 		if( req.persistent ) res.headers["Keep-Alive"] = formatAlloc(request_allocator, "timeout=%d", settings.keepAliveTimeout.total!"seconds"());
+		if( settings.serverString.length )
+			res.headers["X-Frame-Options"] = settings.xFrameOptionsString;
 
 		// finished parsing the request
 		parsed = true;
