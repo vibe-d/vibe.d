@@ -39,6 +39,7 @@ module vibe.stream.ssl;
 
 import vibe.core.log;
 import vibe.core.stream;
+import vibe.core.sync;
 
 import deimos.openssl.bio;
 import deimos.openssl.err;
@@ -51,6 +52,8 @@ import std.exception;
 import std.string;
 
 import core.stdc.string : strlen;
+import core.sync.mutex;
+import core.thread;
 
 version(VibePragmaLib) pragma(lib, "ssl");
 version(VibePragmaLib) version (Windows) pragma(lib, "eay");
@@ -303,21 +306,54 @@ enum SSLVersion {
 /* Private functions                                                                              */
 /**************************************************************************************************/
 
+__gshared Mutex[] g_cryptoMutexes;
+
 shared static this()
 {
 	logDebug("Initializing OpenSSL...");
 	SSL_load_error_strings();
 	SSL_library_init();
-	// TODO: call thread safety functions!
-	/* We MUST have entropy, or else there's no point to crypto. */
-	auto ret = RAND_poll();
-	assert(ret);
+
+	g_cryptoMutexes.length = CRYPTO_num_locks();
+	// TODO: investigate if a normal Mutex is enough - not sure if BIO is called in a locked state
+	foreach (i; 0 .. g_cryptoMutexes.length)
+		g_cryptoMutexes[i] = new TaskMutex;
+	foreach (ref m; g_cryptoMutexes) {
+		assert(m !is null);
+	}
+
+	CRYPTO_set_id_callback(&onCryptoGetThreadID);
+	CRYPTO_set_locking_callback(&onCryptoLock);
+
+	enforce(RAND_poll(), "Fatal: failed to initialize random number generator entropy (RAND_poll).");
 	logDebug("... done.");
 }
 
 private nothrow extern(C)
 {
 	import core.stdc.config;
+
+	size_t onCryptoGetThreadID()
+	{
+		try return cast(size_t)cast(void*)Thread.getThis();
+		catch (Exception e) {
+			logWarn("OpenSSL: failed to get current thread ID: %s", e.msg);
+			return 0;
+		}
+	}
+
+	void onCryptoLock(int mode, int n, const(char)* file, int line)
+	{
+		try {
+			enforce(n >= 0 && n < g_cryptoMutexes.length, "Mutex index out of range.");
+			auto mutex = g_cryptoMutexes[n];
+			assert(mutex !is null);
+			if (mode & CRYPTO_LOCK) mutex.lock();
+			else mutex.unlock();
+		} catch (Exception e) {
+			logWarn("OpenSSL: failed to lock/unlock mutex: %s", e.msg);
+		}
+	}
 
 	int onBioNew(BIO *b) nothrow
 	{
