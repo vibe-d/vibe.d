@@ -499,7 +499,7 @@ struct TaskLocal(T)
 
 	@disable this(this);
 
-	void opAssign(bool value) { this.storage = value; }
+	void opAssign(T value) { this.storage = value; }
 
 	@property ref T storage()
 	{
