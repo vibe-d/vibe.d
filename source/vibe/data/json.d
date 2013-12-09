@@ -1519,7 +1519,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 	See_Also: Json.toString, writePrettyJsonString
 */
-void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, int level = 0)
+void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t level = 0)
 //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
