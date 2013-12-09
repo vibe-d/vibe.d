@@ -275,6 +275,11 @@ class LibevManualEvent : ManualEvent {
 		return ec;
 	}
 
+	int wait(Duration timeout, int reference_emit_count)
+	{
+		assert(false, "Not implemented!");
+	}
+
 	void acquire()
 	{
 		auto task = Task.getThis();
@@ -476,6 +481,25 @@ class LibevTCPConnection : TCPConnection {
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
 	
+	@property bool connected() const { return m_socket >= 0; }
+	
+	@property bool dataAvailableForRead(){ return m_readBufferContent.length > 0; }
+	
+	@property string peerAddress() const { return "xxx"; } // TODO!
+	@property NetworkAddress localAddress() const { return NetworkAddress.init; } // TODO!
+	@property NetworkAddress remoteAddress() const { return NetworkAddress.init; } // TODO!
+	
+	@property bool empty() { return leastSize == 0; }
+	
+	@property ulong leastSize()
+	{
+		if( m_readBufferContent.length == 0 ){
+			readChunk();
+			//assert(m_readBufferContent.length > 0);
+		}
+		return m_readBufferContent.length;
+	}
+	
 	void close()
 	{
 		//logTrace("closing");
@@ -503,15 +527,6 @@ class LibevTCPConnection : TCPConnection {
 
 	}
 	
-	@property bool connected() const { return m_socket >= 0; }
-	
-	@property bool dataAvailableForRead(){ return m_readBufferContent.length > 0; }
-	
-	@property string peerAddress() const
-	{
-		return "xxx";
-	}
-	
 	bool waitForData(Duration timeout)
 	{
 		if (!m_readBufferContent.empty) return true;
@@ -525,17 +540,6 @@ class LibevTCPConnection : TCPConnection {
 			timer.rearm(timeout);
 		yieldFor(EV_READ);
 		return readChunk(true);
-	}
-	
-	@property bool empty() { return leastSize == 0; }
-	
-	@property ulong leastSize()
-	{
-		if( m_readBufferContent.length == 0 ){
-			readChunk();
-			//assert(m_readBufferContent.length > 0);
-		}
-		return m_readBufferContent.length;
 	}
 	
 	const(ubyte)[] peek()
