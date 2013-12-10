@@ -982,6 +982,7 @@ template isWeaklyIsolated(T...)
 		static if(is(T[0] == immutable)) enum bool isWeaklyIsolated = true;
 		else static if(is(T[0] == shared)) enum bool isWeaklyIsolated = true;
 		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
+		else static if(is(T[0] : Throwable)) enum bool isWeaklyIsolated = true; // WARNING: this is unsafe, but needed for send/receive!
 		else static if(is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
 		else static if(is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
 		else static if(is(T[0] == class)) enum bool isWeaklyIsolated = false;
@@ -1233,5 +1234,7 @@ private void delegate(Variant) opsHandler(OPS...)(OPS ops)
 
 private bool matchesHandler(F)(Variant msg)
 {
-	return msg.convertsTo!(IsolatedValueProxyTuple!(ParameterTypeTuple!F));
+	alias PARAMS = ParameterTypeTuple!F;
+	if (PARAMS.length == 1 && is(PARAMS[0] == Variant)) return true;
+	else return msg.convertsTo!(IsolatedValueProxyTuple!PARAMS);
 }
