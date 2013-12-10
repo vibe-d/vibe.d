@@ -368,17 +368,19 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 	private void registerObject(Libevent2Object obj)
 	{
 		auto key = cast(size_t)cast(void*)obj;
-		m_ownedObjects.insert(key);
-		synchronized (s_threadObjectsMutex)
+		synchronized (s_threadObjectsMutex) {
+			m_ownedObjects.insert(key);
 			s_threadObjects.insert(key);
+		}
 	}
 
 	private void unregisterObject(Libevent2Object obj)
 	{
 		auto key = cast(size_t)cast(void*)obj;
-		m_ownedObjects.remove(key);
-		synchronized (s_threadObjectsMutex)
+		synchronized (s_threadObjectsMutex) {
+			m_ownedObjects.remove(key);
 			s_threadObjects.remove(key);
+		}
 	}
 }
 
