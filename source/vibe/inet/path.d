@@ -202,6 +202,7 @@ struct Path {
 	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return opBinary!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(string rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
 	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs)); }
+	void opOpAssign(string OP)(immutable(PathEntry)[] rhs) if( OP == "~" ) { opOpAssign!"~"(Path(rhs, false)); }
 	void opOpAssign(string OP)(Path rhs) if( OP == "~" )
 	{
 		assert(!rhs.absolute, "Trying to append absolute path.");
