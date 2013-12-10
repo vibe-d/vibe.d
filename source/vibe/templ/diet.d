@@ -693,6 +693,7 @@ private struct DietCompiler {
 				case "css": content = filterCSS(content, indent); break;
 				case "javascript": content = filterJavaScript(content, indent); break;
 				case "markdown": content = filterMarkdown(content, indent); break;
+				case "htmlescape": content = filterHtmlEscape(content, indent); break;
 			}
 			if (found) filters.length = filters.length-1;
 			else break;
