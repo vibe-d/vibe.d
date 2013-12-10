@@ -62,10 +62,12 @@ class Libevent2Driver : EventDriver {
 		evdns_base* m_dnsBase;
 		bool m_exit = false;
 		ArraySet!size_t m_ownedObjects;
+		debug Thread m_ownerThread;
 	}
 
 	this(DriverCore core)
 	{
+		debug m_ownerThread = Thread.getThis();
 		m_core = core;
 		s_driverCore = core;
 
@@ -107,12 +109,16 @@ class Libevent2Driver : EventDriver {
 
 	~this()
 	{
+		debug assert(Thread.getThis() is m_ownerThread, "Event loop destroyed in foreign thread.");
+
 		// notify all other living objects about the shutdown
 		synchronized (s_threadObjectsMutex) {
 			// destroy all living objects owned by this driver
 			foreach (ref key; m_ownedObjects) {
 				assert(key);
 				auto obj = cast(Libevent2Object)cast(void*)key;
+				debug assert(obj.m_ownerThread is m_ownerThread, "Owned object with foreign thread ID detected.");
+				debug assert(obj.m_driver is this, "Owned object with foreign driver reference detected.");
 				key = 0;
 				destroy(obj);
 			}
@@ -120,6 +126,8 @@ class Libevent2Driver : EventDriver {
 			foreach (ref key; s_threadObjects) {
 				assert(key);
 				auto obj = cast(Libevent2Object)cast(void*)key;
+				debug assert(obj.m_ownerThread !is m_ownerThread, "Live object of this thread detected after all owned mutexes have been destroyed.");
+				debug assert(obj.m_driver !is this, "Live object of this driver detected with different thread ID after all owned mutexes have been destroyed.");
 				obj.onThreadShutdown();
 			}
 		}
@@ -367,6 +375,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 	private void registerObject(Libevent2Object obj)
 	{
+		debug assert(Thread.getThis() is m_ownerThread, "Event object created in foreign thread.");
 		auto key = cast(size_t)cast(void*)obj;
 		synchronized (s_threadObjectsMutex) {
 			m_ownedObjects.insert(key);
@@ -386,11 +395,13 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 private class Libevent2Object {
 	protected Libevent2Driver m_driver;
+	debug private Thread m_ownerThread;
 
 	this(Libevent2Driver driver)
 	{
 		m_driver = driver;
 		m_driver.registerObject(this);
+		debug m_ownerThread = driver.m_ownerThread;
 	}
 
 	~this()
