@@ -81,12 +81,14 @@ struct ScopedMutexLock {
 	}
 }
 
-/** Mutex implementation for fibers.
+/**
+	Mutex implementation for fibers.
 
-	Note: 
-		This mutex is currently suitable only for synchronizing different
-		fibers. If you need inter-thread synchronization, go for
-		core.sync.mutex instead.
+	This mutex type can be used in exchange for a core.sync.mutex.Mutex, but
+	does not block the event loop when contention happens. Note that this
+	mutex does not allow recursive locking.
+
+	See_Also: RecursiveTaskMutex, core.sync.mutex.Mutex
 */
 class TaskMutex : core.sync.mutex.Mutex {
 	import std.stdio;
@@ -163,6 +165,83 @@ unittest {
 
 	synchronized(mutex){
 		assert(mutex.m_locked);
+	}
+}
+
+
+/**
+	Recursive mutex implementation for tasks.
+
+	This mutex type can be used in exchange for a core.sync.mutex.Mutex, but
+	does not block the event loop when contention happens.
+
+	See_Also: TaskMutex, core.sync.mutex.Mutex
+*/
+class RecursiveTaskMutex : core.sync.mutex.Mutex {
+	import std.stdio;
+	private {
+		Mutex m_mutex;
+		Task m_owner;
+		size_t m_recCount = 0;
+		shared(uint) m_waiters = 0;
+		ManualEvent m_signal;
+	}
+
+	this()
+	{
+		m_signal = createManualEvent();
+		m_mutex = new Mutex;
+	}
+
+	this(Object o)
+	{
+		super(o);
+		m_signal = createManualEvent();
+		m_mutex = new Mutex;
+	}
+
+	override @trusted bool tryLock()
+	{
+		auto self = Task.getThis();
+		synchronized (m_mutex) {
+			if (!m_owner) {
+				assert(m_recCount == 0);
+				m_recCount = 1;
+				m_owner = self;
+				return true;
+			} else if (m_owner == self) {
+				m_recCount++;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	override @trusted void lock()
+	{
+		if (tryLock()) return;
+		atomicOp!"+="(m_waiters, 1);
+		version(MutexPrint) writefln("mutex %s wait %s", cast(void*)this, atomicLoad(m_waiters));
+		scope(exit) atomicOp!"-="(m_waiters, 1);
+		auto ecnt = m_signal.emitCount();
+		while (!tryLock()) ecnt = m_signal.wait(ecnt);
+	}
+
+	override @trusted void unlock()
+	{
+		auto self = Task.getThis();
+		synchronized (m_mutex) {
+			assert(m_owner == self);
+			assert(m_recCount > 0);
+			m_recCount--;
+			if (m_recCount == 0) {
+				m_owner = Task.init;
+			}
+
+		}
+		version(MutexPrint) writefln("mutex %s unlock %s", cast(void*)this, atomicLoad(m_waiters));
+		if (atomicLoad(m_waiters) > 0)
+			m_signal.emit();
 	}
 }
 
