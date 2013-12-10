@@ -953,6 +953,7 @@ template isStronglyIsolated(T...)
 	else static if (T.length > 1) enum bool isStronglyIsolated = isStronglyIsolated!(T[0 .. $/2]) && isStronglyIsolated!(T[$/2 .. $]);
 	else {
 		static if (is(T[0] == immutable)) enum bool isStronglyIsolated = true;
+		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isStronglyIsolated = isStronglyIsolated!(typeof(T[0].get()));
 		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isStronglyIsolated = true;
 		else static if (is(T[0] == class)) enum bool isStronglyIsolated = false;
 		else static if (is(T[0] == delegate)) enum bool isStronglyIsolated = false; // can't know to what a delegate points
@@ -980,6 +981,7 @@ template isWeaklyIsolated(T...)
 	else {
 		static if(is(T[0] == immutable)) enum bool isWeaklyIsolated = true;
 		else static if(is(T[0] == shared)) enum bool isWeaklyIsolated = true;
+		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
 		else static if(is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
 		else static if(is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
 		else static if(is(T[0] == class)) enum bool isWeaklyIsolated = false;
