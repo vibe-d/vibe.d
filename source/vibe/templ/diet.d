@@ -687,13 +687,15 @@ private struct DietCompiler {
 		// compile-time filter whats possible
 		filter_loop:
 		foreach_reverse( f; filters ){
+			bool found = true;
 			switch(f){
-				default: break filter_loop;
+				default: found = false; break;//break filter_loop;
 				case "css": content = filterCSS(content, indent); break;
 				case "javascript": content = filterJavaScript(content, indent); break;
 				case "markdown": content = filterMarkdown(content, indent); break;
 			}
-			filters.length = filters.length-1;
+			if (found) filters.length = filters.length-1;
+			else break;
 		}
 
 		// the rest of the filtering will happen at run time
