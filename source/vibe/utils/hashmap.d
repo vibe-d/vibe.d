@@ -202,9 +202,11 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		if (!m_allocator) m_allocator = defaultAllocator();
 		if (!m_hasher) {
 			static if (__traits(compiles, (){ Key t; size_t hash = t.toHash(); }())) {
-				m_hasher = k => k.toHash();
+				static if (isPointer!Key || is(Unqual!Key == class)) m_hasher = k => k ? k.toHash() : 0;
+				else m_hasher = k => k.toHash();
 			} else static if (__traits(compiles, (){ Key t; size_t hash = t.toHashShared(); }())) {
-				m_hasher = k => k.toHashShared();
+				static if (isPointer!Key || is(Unqual!Key == class)) m_hasher = k => k ? k.toHashShared() : 0;
+				else m_hasher = k => k.toHashShared();
 			} else {
 				auto typeinfo = typeid(Key);
 				m_hasher = k => typeinfo.getHash(&k);
