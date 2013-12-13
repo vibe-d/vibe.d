@@ -107,23 +107,20 @@ int runEventLoop()
 
 	Calling this function will cause the event loop to stop event processing and
 	the corresponding call to runEventLoop() will return to its caller.
+
+	Params:
+		shutdown_all_threads = If true, exits event loops of all threads -
+			false by default. Note that the event loops of all threads are
+			automatically stopped when the main thread exits, so usually
+			there is no need to set shutdown_all_threads to true.
 */
-void exitEventLoop(bool shutdown_all_threads = true)
+void exitEventLoop(bool shutdown_all_threads = false)
 {
 	assert(s_eventLoopRunning || shutdown_all_threads);
 	if (shutdown_all_threads) {
 		auto thisthr = Thread.getThis();
 		atomicStore(st_term, true);
 		st_workerTaskSignal.emit();
-
-		synchronized (st_workerTaskMutex) {
-			while (true) {
-				if (!st_threads.canFind!(c => c.thread !is thisthr))
-					break;
-
-				st_threadShutdownCondition.wait();
-			}
-		}
 	}
 
 	// shutdown the calling thread
