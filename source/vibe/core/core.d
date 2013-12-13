@@ -294,6 +294,8 @@ void sleep(Duration timeout)
 /**
 	Returns a new armed timer.
 
+	Note that timers can only work if an event loop is running.
+
 	Params:
 		timeout = Determines the minimum amount of time that elapses before the timer fires.
 		callback = This delegate will be called when the timer fires
@@ -308,6 +310,22 @@ Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false
 	tm.rearm(timeout, periodic);
 	return tm;
 }
+///
+unittest {
+	void printTime()
+	{
+		import std.datetime;
+		logInfo("The time is: %s", Clock.currTime());
+	}
+
+	void test()
+	{
+		import vibe.core.core;
+		// start a periodic timer that prints the time every second
+		setTimer(1.seconds, toDelegate(&printTime), true);
+	}
+}
+
 
 /**
 	Creates a new timer without arming it.
