@@ -1,0 +1,14 @@
+extends layout
+
+block head
+	- auto title = "Home";
+
+block contents
+
+	- if (settings)
+		p Hello, #{settings.userName}! Welcome to your personal web service.
+
+		p You can <a href="settings">edit settings</a>. Currently your setting is #{settings.someSetting ? "on" : "off"}.
+	- else
+		p This is an example web service.
+		p Please <a href="login">log in</a>.
