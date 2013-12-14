@@ -8,10 +8,11 @@
 module vibe.http.session;
 
 import vibe.core.log;
-
-import std.base64;
-import std.array;
 import vibe.crypto.cryptorand;
+
+import std.array;
+import std.base64;
+import std.variant;
 
 //random number generator
 //TODO: Use Whirlpool or SHA-512 here
@@ -31,7 +32,7 @@ alias Base64Impl!('-', '_', Base64.NoPadding) Base64URLNoPadding;
 
 	Indexing the session object with string keys allows to store arbitrary key/value pairs.
 */
-final class Session {
+final struct Session {
 	private {
 		SessionStore m_store;
 		string m_id;
@@ -39,21 +40,21 @@ final class Session {
 
 	private this(SessionStore store, string id = null)
 	{
+		assert(id.length > 0);
 		m_store = store;
-		if (id) {
-			m_id = id;
-		} else {
-			ubyte[64] rand;
-			g_rng.read(rand);
-			m_id = cast(immutable)Base64URLNoPadding.encode(rand);
-		}
+		m_id = id;
 	}
+
+	bool opCast() const { return m_store !is null; }
 
 	/// Returns the unique session id of this session.
 	@property string id() const { return m_id; }
 
 	/// Queries the session for the existence of a particular key.
 	bool isKeySet(string key) const { return m_store.isKeySet(m_id, key); }
+
+	T get(T)(string key) { return m_store.get(m_id, key).get!T; }
+	void set(T)(string key, T value) { m_store.set(m_id, key, Variant(value)); }
 
 	/**
 		Enables foreach-iteration over all key/value pairs of the session.
@@ -69,7 +70,7 @@ final class Session {
 		}
 		---
 	*/
-	int opApply(int delegate(ref string key, ref string value) del)
+	int opApply(int delegate(ref string key, ref Variant value) del)
 	{
 		foreach( key, ref value; m_store.iterateSession(m_id) )
 			if( auto ret = del(key, value) != 0 )
@@ -93,9 +94,9 @@ final class Session {
 		}
 		---
 	*/
-	string opIndex(string name) const { return m_store.get(m_id, name); }
+	string opIndex(string name) const { return m_store.get(m_id, name).get!string; }
 	/// ditto
-	void opIndexAssign(string value, string name) { m_store.set(m_id, name, value); }
+	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
 
 	package void destroy() { m_store.destroy(m_id); }
 }
@@ -115,10 +116,10 @@ interface SessionStore {
 	Session open(string id);
 
 	/// Sets a name/value pair for a given session.
-	void set(string id, string name, string value);
+	void set(string id, string name, Variant value);
 
 	/// Returns the value for a given session key.
-	string get(string id, string name, string defaultVal = null) const;
+	Variant get(string id, string name, Variant defaultVal = null) const;
 
 	/// Determines if a certain session key is set.
 	bool isKeySet(string id, string key) const;
@@ -127,12 +128,17 @@ interface SessionStore {
 	void destroy(string id);
 
 	/// Iterates all key/value pairs stored in the given session. 
-	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id);
+	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id);
 
 	/// Creates a new Session object which sources its contents from this store.
 	protected final Session createSessionInstance(string id = null)
 	{
-		return new Session(this, id);
+		if (!id.length) {
+			ubyte[64] rand;
+			g_rng.read(rand);
+			id = cast(immutable)Base64URLNoPadding.encode(rand);
+		}
+		return Session(this, id);
 	}
 }
 
@@ -146,7 +152,7 @@ interface SessionStore {
 */
 final class MemorySessionStore : SessionStore {
 	private {
-		string[string][string] m_sessions;
+		Variant[string][string] m_sessions;
 	}
 
 	Session create()
@@ -159,16 +165,16 @@ final class MemorySessionStore : SessionStore {
 	Session open(string id)
 	{
 		auto pv = id in m_sessions;
-		return pv ? createSessionInstance(id) : null;	
+		return pv ? createSessionInstance(id) : Session.init;	
 	}
 
-	void set(string id, string name, string value)
+	void set(string id, string name, Variant value)
 	{
 		m_sessions[id][name] = value;
 		foreach(k, v; m_sessions[id]) logTrace("Csession[%s][%s] = %s", id, k, v);
 	}
 
-	string get(string id, string name, string defaultVal=null)
+	Variant get(string id, string name, Variant defaultVal = null)
 	const {
 		assert(id in m_sessions, "session not in store");
 		foreach(k, v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
@@ -189,10 +195,10 @@ final class MemorySessionStore : SessionStore {
 		m_sessions.remove(id);
 	}
 
-	int delegate(int delegate(ref string key, ref string value)) iterateSession(string id)
+	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id)
 	{
 		assert(id in m_sessions, "session not in store");
-		int iterator(int delegate(ref string key, ref string value) del)
+		int iterator(int delegate(ref string key, ref Variant value) del)
 		{
 			foreach( key, ref value; m_sessions[id] )
 				if( auto ret = del(key, value) != 0 )

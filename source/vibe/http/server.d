@@ -943,7 +943,7 @@ final class HTTPServerResponse : HTTPResponse {
 		cookie.path = m_session["$sessionCookiePath"];
 		cookie.secure = m_session["$sessionCookieSecure"].to!bool();
 		m_session.destroy();
-		m_session = null;
+		m_session = Session.init;
 	}
 
 	@property ulong bytesWritten() {
