@@ -1,6 +1,46 @@
 ﻿Changelog
 =========
 
+v0.7.19 - 2013-12-
+--------------------
+
+### Features and improvements ###
+
+ - Removed the old `EventedObject` interface
+ - JSON answers in the REST interface generator are now directly serialized, improving performance and memory requirements
+ - `Libevent2TCPConnection` now has a limited read buffer size to avoid unbounded memory consumption
+ - Fixed the semantics of `ConnectionStream.empty` and `connected` - `empty` is generally useful for read loops and `connected` for write loops
+ - HTTP response compression is now disabled by default (controllable by the new `HTTPServerSettings.useCompressionIfPossible)
+ - Removed the deprecated `sslKeyFile` and `sslCertFile` fields from `HTTPServerSettings`
+ - Removed the compatibility alias `Signal` (alias for `ManualEvent`)
+ - `:htmlescape` in Diet templates is now processed at compile time if possible
+ - Added support for `Rebindable!T` in `isStronglyIsolated` and `isWeaklyIsolated` - [issue #421][issue421]
+ - Added `RecursiveTaskMutex`
+ - `Throwable` is now treated as weakly isolated to allow passing exceptions using `vibe.core.concurrency.send`
+ - `exitEventLoop` by default now only terminates the current thread's event loop and always works asynchronously
+ - `Session` is now a struct instead of a class
+ - Added support for storing arbitrary types in `Session`
+ - Moved the REST interface generator from `vibe.http.rest` to `vibe.web.rest`
+ - Added a new web interface generator (`vibe.web.web`), similar to `vibe.http.form`, but with full support for attribute based customization
+ - Added a compile time warning when neither `VibeCustomMain`, nor `VibeDefaultMain` versions are specified - starts the transition from `VibeCustomMain` to `VibeDefaultMain`
+
+### Bug fixes ###
+
+ - Fixed a condition under which a `WebSocket` could still be used after its handler function has thrown an exception - [issue #407][issue407]
+ - Fixed a `null` pointer dereference in `Libevent2TCPConnection` when trying to read from a closed connection
+ - Fixed the HTTP client to still properly shutdown the connection when an exception occurs during the shutdown
+ - Fixed `SSLStream` to perform proper locking for multithreaded servers
+ - Fixed the signature of `TaskLocal.opAssign` - [issue #432][issue432]
+ - Fixed thread shutdown in cases where multiple threads are used - [issue #419][issue419]
+ - Fixed SIGINT/SIGTERM application shutdown - [issue #419][issue419]
+ - Fixed `HashMap` to properly handle `null` keys
+
+[issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
+[issue419]: https://github.com/rejectedsoftware/vibe.d/issues/419
+[issue421]: https://github.com/rejectedsoftware/vibe.d/issues/421
+[issue432]: https://github.com/rejectedsoftware/vibe.d/issues/432
+
+
 v0.7.18 - 2013-11-26
 --------------------
 
