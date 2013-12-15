@@ -27,7 +27,8 @@ import std.typecons;
 
 
 /**
-	Generates a form based interface to the given instance.
+	Generates a form based interface to the given instance - scheduled to be
+	deprecated in favor of vibe.web.web.registerWebInterface.
 
 	Each function is callable with either GET or POST using form encoded
 	parameters.  All methods of I that start with "get", "query", "add", "create",
