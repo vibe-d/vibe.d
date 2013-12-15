@@ -57,19 +57,18 @@ void redirect(string path_or_url)
 	import std.array : startsWith;
 
 	assert(s_requestContext.req !is null, "redirect() used outside of a wen interface request!");
-	with (s_requestContext) {
-		URL url;
-		if (path_or_url.startsWith("/")) {
-			url = req.fullURL;
-			url.path = Path(path_or_url);
-		} else if (path_or_url.canFind(":")) { // TODO: better URL recognition
-			url = URL(path_or_url);
-		} else {
-			if (req.fullURL.path.endsWithSlash) url = req.fullURL ~ Path(path_or_url);
-			else url = req.fullURL.parentURL ~ Path(path_or_url);
-		}
-		res.redirect(url);
+	alias ctx = s_requestContext;
+	URL url;
+	if (path_or_url.startsWith("/")) {
+		url = ctx.req.fullURL;
+		url.path = Path(path_or_url);
+	} else if (path_or_url.canFind(":")) { // TODO: better URL recognition
+		url = URL(path_or_url);
+	} else {
+		if (ctx.req.fullURL.path.endsWithSlash) url = ctx.req.fullURL ~ Path(path_or_url);
+		else url = ctx.req.fullURL.parentURL ~ Path(path_or_url);
 	}
+	ctx.res.redirect(url);
 }
 
 class WebInterfaceSettings {
@@ -92,10 +91,9 @@ struct SessionVar(T, string name) {
 	@property T value()
 	{
 		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
-		with(s_requestContext) {
-			if (req.session && req.session.isKeySet(name))
-				return req.session.get!T(name);
-		}
+		alias ctx = s_requestContext;
+		if (ctx.req.session && ctx.req.session.isKeySet(name))
+			return ctx.req.session.get!T(name);
 
 		return m_initValue;
 	}
@@ -103,10 +101,9 @@ struct SessionVar(T, string name) {
 	@property void value(T new_value)
 	{
 		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
-		with(s_requestContext) {
-			if (!req.session) req.session = res.startSession();
-			req.session.set(name, new_value);
-		}
+		alias ctx = s_requestContext;
+		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
+		ctx.req.session.set(name, new_value);
 	}
 
 	alias value this;
