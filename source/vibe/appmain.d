@@ -26,7 +26,11 @@ import vibe.core.log;
 import std.encoding : sanitize;
 
 // only include main if VibeCustomMain is not set
-version(VibeCustomMain) {} else:
+version (VibeCustomMain) {}
+else:
+
+version (VibeDefaultMain) {}
+else { pragma(msg, "Warning: -version=VibeDefaultMain will be required in the future to use vibe.d's default main(). Please update your build scripts."); }
 
 /**
 	The predefined vibe.d application entry point.
@@ -36,7 +40,7 @@ version(VibeCustomMain) {} else:
 */
 int main()
 {
-	version(unittest){
+	version (unittest) {
 		logInfo("All unit tests were successful.");
 		return 0;
 	} else {

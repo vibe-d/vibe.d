@@ -3,5 +3,5 @@
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
 	},
-	"versions": ["VibeManualMemoryManagement"]
+	"versions": ["VibeDefaultMain", "VibeManualMemoryManagement"]
 }

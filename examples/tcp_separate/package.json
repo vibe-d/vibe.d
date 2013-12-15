@@ -1,8 +1,9 @@
 ﻿{
-	"name": "echoserver-example",
-	"description": "Implementation of a minimal echo server.",
+	"name": "tcp-separate-example",
+	"description": "Example using a single TCP connection from different tasks.",
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
-	}
+	},
+	"versions": ["VibeDefaultMain"]
 }

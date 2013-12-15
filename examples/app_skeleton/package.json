@@ -8,5 +8,6 @@
 	],
 	"dependencies": {
 		"vibe-d": ">=0.7.12"
-	}
+	},
+	"versions": ["VibeDefaultMain"]
 }

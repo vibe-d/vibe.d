@@ -4,5 +4,6 @@
 	"authors": [ "Robert Klotzner" ],
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
-	}
+	},
+	"versions": ["VibeDefaultMain"]
 }
