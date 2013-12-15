@@ -51,7 +51,7 @@ final struct Session {
 	@property string id() const { return m_id; }
 
 	/// Queries the session for the existence of a particular key.
-	bool isKeySet(string key) const { return m_store.isKeySet(m_id, key); }
+	bool isKeySet(string key) { return m_store.isKeySet(m_id, key); }
 
 	T get(T)(string key) { return m_store.get(m_id, key).get!T; }
 	void set(T)(string key, T value) { m_store.set(m_id, key, Variant(value)); }
@@ -94,7 +94,7 @@ final struct Session {
 		}
 		---
 	*/
-	string opIndex(string name) const { return m_store.get(m_id, name).get!string; }
+	string opIndex(string name) { return m_store.get(m_id, name).get!string; }
 	/// ditto
 	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
 
@@ -119,10 +119,10 @@ interface SessionStore {
 	void set(string id, string name, Variant value);
 
 	/// Returns the value for a given session key.
-	Variant get(string id, string name, Variant defaultVal = null) const;
+	Variant get(string id, string name, Variant defaultVal = null);
 
 	/// Determines if a certain session key is set.
-	bool isKeySet(string id, string key) const;
+	bool isKeySet(string id, string key);
 
 	/// Terminates the given sessiom.
 	void destroy(string id);
@@ -175,7 +175,7 @@ final class MemorySessionStore : SessionStore {
 	}
 
 	Variant get(string id, string name, Variant defaultVal = null)
-	const {
+	{
 		assert(id in m_sessions, "session not in store");
 		foreach(k, v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
 		if (auto pv = name in m_sessions[id]) {
@@ -186,7 +186,7 @@ final class MemorySessionStore : SessionStore {
 	}
 
 	bool isKeySet(string id, string key)
-	const {
+	{
 		return (key in m_sessions[id]) !is null;
 	}
 
