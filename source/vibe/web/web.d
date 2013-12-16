@@ -15,6 +15,16 @@ import vibe.http.common;
 import vibe.http.router;
 import vibe.http.server;
 
+/*
+	TODO:
+		- conversion errors of path place holder parameters should result in 404
+		- support arrays and composite types as parameters by splitting them up into multiple form/query parameters
+		- support format patterns for redirect()
+		- add a way to specify response headers without explicit access to "res"
+		- support class/interface getter properties and register their methods as well
+		- support authentication somehow nicely
+*/
+
 
 /** Registers a HTTP/web interface based on a class instance.
 
@@ -121,7 +131,6 @@ private struct RequestContext {
 private void handleRequest(string M, alias overload, C)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings)
 {
 	import std.array : startsWith;
-	import std.conv;
 	import std.traits;
 
 	alias RET = ReturnType!overload;
@@ -135,12 +144,18 @@ private void handleRequest(string M, alias overload, C)(HTTPServerRequest req, H
 		static if (is(PT == InputStream)) params[i] = req.bodyReader;
 		else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 		else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
-		else static if (param_names[i].startsWith("_")) params[i] = req.params[param_names[i][1 .. $]].to!PT;
-		else static if (is(PT == bool)) params[i] = param_names[i] in req.form || param_names[i] in req.query;
-		else if (auto pv = param_names[i] in req.form) params[i] = (*pv).to!PT;
-		else if (auto pv = param_names[i] in req.query) params[i] = (*pv).to!PT;
-		else static if (!is(default_values[i] == void)) params[i] = default_values[i];
-		else enforceHTTP(false, HTTPStatus.badRequest, "Missing form/query field "~param_names[i]);
+		else static if (param_names[i].startsWith("_")) {
+			if (auto pv = param_names[i][1 .. $] in req.params) params[i] = (*pv).convTo!PT;
+			else static if (!is(default_values[i] == void)) params[i] = default_values[i];
+			else enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
+		} else static if (is(PT == bool)) {
+			params[i] = param_names[i] in req.form || param_names[i] in req.query;
+		} else {
+			if (auto pv = param_names[i] in req.form) params[i] = (*pv).convTo!PT;
+			else if (auto pv = param_names[i] in req.query) params[i] = (*pv).convTo!PT;
+			else static if (!is(default_values[i] == void)) params[i] = default_values[i];
+			else enforceHTTP(false, HTTPStatus.badRequest, "Missing form/query field "~param_names[i]);
+		}
 	}
 
 	static if (is(RET : InputStream)) {
@@ -149,4 +164,11 @@ private void handleRequest(string M, alias overload, C)(HTTPServerRequest req, H
 		static assert(is(RET == void), "Only InputStream and void are supported as return types.");
 		__traits(getMember, instance, M)(params);
 	}
+}
+
+private T convTo(T)(string str)
+{
+	import std.conv;
+	static if (is(typeof(T.fromString(str)) == T)) return T.fromString(str);
+	else return str.to!T();
 }
