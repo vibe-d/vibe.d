@@ -18,6 +18,8 @@
 
 	"targetType": "library",
 	"mainSourceFile": "source/vibe/vibe.d",
+	"buildRequirements": ["requireBoundsCheck"],
+
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
 	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
 	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
