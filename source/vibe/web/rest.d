@@ -934,6 +934,6 @@ version(unittest)
 unittest
 {
 	enum imports = generateModuleImports!Interface;
-	static assert(imports == "static import vibe.http.rest;");
+	static assert(imports == "static import vibe.web.rest;");
 }
 

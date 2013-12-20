@@ -178,6 +178,9 @@ RootPath rootPath(string path)
 ///
 unittest
 {
+	import vibe.http.router;
+	import vibe.web.rest;
+
 	@rootPath("/oops")
 	interface IAPI
 	{
@@ -210,6 +213,9 @@ unittest
 ///
 unittest
 {
+	import vibe.http.router;
+	import vibe.web.rest;
+
 	@rootPathFromName
 	interface IAPI
 	{
