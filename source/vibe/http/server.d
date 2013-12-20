@@ -1365,7 +1365,9 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		if( settings.options & HTTPServerOption.parseJsonBody ){
 			if( req.contentType == "application/json" ){
 				auto bodyStr = cast(string)req.bodyReader.readAll();
-				req.json = parseJson(bodyStr);
+				if ( !bodyStr.empty ){
+					req.json = parseJson(bodyStr);	
+				}
 			}
 		}
 
