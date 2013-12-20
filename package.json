@@ -17,7 +17,7 @@
 	},
 
 	"targetType": "library",
-	"mainSourceFile": "source/vibe/vibe.d",
+	"mainSourceFile": "source/vibe/appmain.d",
 	"buildRequirements": ["requireBoundsCheck"],
 
 	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
@@ -58,12 +58,12 @@
 			"name": "unittest",
 			"targetType": "executable",
 			"dependencies": {"libevent": "~master"},
-			"versions": ["VibeLibeventDriver"],
+			"versions": ["VibeLibeventDriver", "VibeDefaultMain"],
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
 			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
 			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"]
 		}
 	],
 
