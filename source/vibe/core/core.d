@@ -278,6 +278,10 @@ void rawYield()
 
 /**
 	Suspends the execution of the calling task for the specified amount of time.
+
+	Note that other tasks of the same thread will continue to run during the
+	wait time, in contrast to $(D core.thread.Thread.sleep), which shouldn't be
+	used in vibe.d applications.
 */
 void sleep(Duration timeout)
 {
@@ -285,6 +289,19 @@ void sleep(Duration timeout)
 	tm.rearm(timeout);
 	tm.wait();
 	destroy(tm);
+}
+///
+unittest {
+	import vibe.core.core : sleep;
+	import vibe.core.log : logInfo;
+	import core.time : msecs;
+
+	void test()
+	{
+		logInfo("Sleeping for half a second...");
+		sleep(500.msecs);
+		logInfo("Done sleeping.");
+	}
 }
 
 
