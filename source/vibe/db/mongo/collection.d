@@ -98,6 +98,7 @@ struct MongoCollection {
 	 */
 	void update(T, U)(T selector, U update, UpdateFlags flags = UpdateFlags.None)
 	{
+		assert(m_client !is null, "Updating uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
 		conn.update(m_fullPath, flags, serializeToBson(selector), serializeToBson(update));
 	}
@@ -110,6 +111,7 @@ struct MongoCollection {
 	 */
 	void insert(T)(T document_or_documents, InsertFlags flags = InsertFlags.None)
 	{
+		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
 		Bson[] docs;
 		Bson bdocs = serializeToBson(document_or_documents);
@@ -127,6 +129,7 @@ struct MongoCollection {
 	 */
 	MongoCursor find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
+		assert(m_client !is null, "Querying uninitialized MongoCollection.");
 		static if( is(typeof(returnFieldSelector is null)) )
 			return MongoCursor(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
 		else
@@ -168,6 +171,7 @@ struct MongoCollection {
 	 */
 	void remove(T)(T selector, DeleteFlags flags = DeleteFlags.None)
 	{
+		assert(m_client !is null, "Removnig from uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
 		conn.delete_(m_fullPath, flags, serializeToBson(selector));
 	}
