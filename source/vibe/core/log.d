@@ -152,6 +152,8 @@ void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string fil
 void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
 void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
+/// ditto 
+void logFatal(string file = __FILE__, int line = __LINE__, T...)(string fmt, auto ref T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
 
 
 /// Specifies the log level for a particular log message.
