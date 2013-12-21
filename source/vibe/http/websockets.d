@@ -83,11 +83,12 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 			}	
 		}
 		if( !(isUpgrade &&
-			  pUpgrade && *pUpgrade == "websocket" && 
+			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 && 
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
-			res.statusCode = HTTPStatus.BadRequest;
+			logDebug("Browser sent invalid WebSocket request.");
+			res.statusCode = HTTPStatus.badRequest;
 			res.writeVoidBody();
 			return;
 		}
