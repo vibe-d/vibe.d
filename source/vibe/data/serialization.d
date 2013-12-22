@@ -167,10 +167,10 @@ unittest {
 T deserialize(Serializer, T, ARGS...)(ARGS args)
 {
 	auto deserializer = Serializer(args);
-	return deserialize!T(deserializer);
+	return deserializeImpl!T(deserializer);
 }
-/// ditto
-private T deserialize(T, Serializer)(ref Serializer deserializer)
+
+private T deserializeImpl(T, Serializer)(ref Serializer deserializer)
 {
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
@@ -183,7 +183,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		size_t i = 0;
 		deserializer.readArray!T((sz) { assert(sz == 0 || sz == T.length); }, {
 			assert(i < T.length);
-			ret[i++] = deserialize!TV(deserializer);
+			ret[i++] = deserializeImpl!TV(deserializer);
 		});
 		return ret;
 	} else static if (isDynamicArray!T) {
@@ -191,7 +191,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		//auto ret = appender!T();
 		T ret; // Cannot use appender because of DMD BUG 10690/10859/11357
 		deserializer.readArray!T((sz) { ret.reserve(sz); }, () {
-			ret ~= deserialize!TV(deserializer);
+			ret ~= deserializeImpl!TV(deserializer);
 		});
 		return ret;//cast(T)ret.data;
 	} else static if (isAssociativeArray!T) {
@@ -204,7 +204,7 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 			else static if (is(TK : real) || is(TK : long) || is(TK == enum)) key = name.to!TK;
 			else static if (isStringSerializable!TK) key = TK.fromString(name);
 			else static assert(false, "Associative array keys must be strings, numbers, enums, or have toString/fromString methods.");
-			ret[key] = deserialize!TV(deserializer);
+			ret[key] = deserializeImpl!TV(deserializer);
 		});
 		return ret;
 	} else static if (isISOExtStringSerializable!T) {
@@ -234,9 +234,9 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 								case fname:
 									set[i] = true;
 									static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
-										__traits(getMember, ret, mname) = deserialize!string(deserializer).to!TM();
+										__traits(getMember, ret, mname) = deserializeImpl!string(deserializer).to!TM();
 									} else {
-										__traits(getMember, ret, mname) = cast(TM)deserialize!(OriginalType!TM)(deserializer);
+										__traits(getMember, ret, mname) = cast(TM)deserializeImpl!(OriginalType!TM)(deserializer);
 									}
 									break;
 							}
@@ -258,10 +258,10 @@ private T deserialize(T, Serializer)(ref Serializer deserializer)
 		if (deserializer.isNull()) return null;
 		alias PT = PointerTarget!T;
 		auto ret = new PT;
-		*ret = deserialize!PT(deserializer);
+		*ret = deserializeImpl!PT(deserializer);
 		return ret;
 	} else static if (is(T == bool) || is(T : real) || is(T : long)) {
-		return to!T(deserialize!string(deserializer));
+		return to!T(deserializeImpl!string(deserializer));
 	} else static assert(false, "Unsupported serialization type: " ~ T.stringof);
 }
 
