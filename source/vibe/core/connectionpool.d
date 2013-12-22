@@ -69,6 +69,7 @@ struct LockedConnection(Connection) {
 		ConnectionPool!Connection m_pool;
 		Task m_task;
 		Connection m_conn;
+		debug uint m_magic = 0xB1345AC2;
 	}
 	
 	private this(ConnectionPool!Connection pool, Connection conn)
@@ -81,6 +82,7 @@ struct LockedConnection(Connection) {
 
 	this(this)
 	{
+		debug assert(m_magic == 0xB1345AC2, "LockedConnection value corrupted.");
 		if( m_conn ){
 			auto fthis = Fiber.getThis();
 			assert(fthis is m_task);
@@ -91,6 +93,7 @@ struct LockedConnection(Connection) {
 
 	~this()
 	{
+		debug assert(m_magic == 0xB1345AC2, "LockedConnection value corrupted.");
 		if( m_conn ){
 			auto fthis = Fiber.getThis();
 			assert(fthis is m_task, "Locked connection destroyed in foreign fiber.");
