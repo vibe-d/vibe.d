@@ -294,15 +294,12 @@ template Isolated(T)
 }
 
 
-version(unittest)
-{
-	private class CE {}
-	private struct SE {}
-}
-
 // unit tests fails with DMD 2.064 due to some cyclic import regression
 version (none) unittest
 {
+	static class CE {}
+	static struct SE {}
+
 	static assert(is(Isolated!CE == IsolatedRef!CE));
 	static assert(is(Isolated!(SE*) == IsolatedRef!SE));
 	static assert(is(Isolated!(SE[]) == IsolatedArray!SE));
@@ -996,11 +993,10 @@ template isWeaklyIsolated(T...)
 	}
 }
 
-version(unittest)
-{
-	private class A { int x; string y; }
+unittest {
+	static class A { int x; string y; }
 
-	private struct B {
+	static struct B {
 		string a; // strongly isolated
 		Isolated!A b; // strongly isolated
 		version(EnablePhobosFails)
@@ -1011,7 +1007,7 @@ version(unittest)
 		Isolated!(int[string]) d; // strongly isolated
 	}
 
-	private struct C {
+	static struct C {
 		string a; // strongly isolated
 		shared(A) b; // weakly isolated
 		Isolated!A c; // strongly isolated
@@ -1020,11 +1016,11 @@ version(unittest)
 		shared(A[string]) f; // weakly isolated
 	}
 
-	private struct D { A a; } // not isolated
-	private struct E { void delegate() a; } // not isolated
-	private struct F { void function() a; } // strongly isolated (functions are immutable)
-	private struct G { void test(); } // strongly isolated
-	private struct H { A[] a; } // not isolated
+	static struct D { A a; } // not isolated
+	static struct E { void delegate() a; } // not isolated
+	static struct F { void function() a; } // strongly isolated (functions are immutable)
+	static struct G { void test(); } // strongly isolated
+	static struct H { A[] a; } // not isolated
 
 	static assert(!isStronglyIsolated!A);
 	static assert(isStronglyIsolated!(FieldTypeTuple!A));
@@ -1126,9 +1122,8 @@ void setMaxMailboxSize(Tid tid, size_t messages, bool function(Tid) on_crowding)
 	tid.messageQueue.setMaxSize(messages, on_crowding);
 }
 
-version(unittest)
-{
-	class CLS {}
+unittest {
+	static class CLS {}
 	static assert(is(typeof(send(Tid.init, makeIsolated!CLS()))));
 	static assert(is(typeof(send(Tid.init, 1))));
 	static assert(is(typeof(send(Tid.init, 1, "str", makeIsolated!CLS()))));
