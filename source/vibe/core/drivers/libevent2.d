@@ -245,7 +245,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		bind_addr.family = addr.family;
 		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
 		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
-		enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
+		errnoEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
 		socklen_t balen = bind_addr.sockAddrLen;
 		enforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
 		
