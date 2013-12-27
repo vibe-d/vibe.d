@@ -41,7 +41,7 @@ unittest {
 	void sendSSLMessage()
 	{
 		auto conn = connectTCP("127.0.0.1", 1234);
-		auto sslctx = new SSLContext;
+		auto sslctx = new SSLContext(SSLContextKind.client);
 		auto stream = new SSLStream(conn, sslctx, SSLStreamState.connecting);
 		stream.write("Hello, World!");
 		stream.finalize();
@@ -58,7 +58,9 @@ unittest {
 
 	void listenForSSL()
 	{
-		auto sslctx = new SSLContext("server.crt", "server.key");
+		auto sslctx = new SSLContext(SSLContextKind.server);
+		sslctx.useCertificateChainFile("server.crt");
+		sslctx.usePrivateKeyFile("server.key");
 		listenTCP(1234, (conn){
 			auto stream = new SSLStream(conn, sslctx, SSLStreamState.accepting);
 			logInfo("Got message: %s", stream.readAllUTF8());

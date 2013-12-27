@@ -210,7 +210,7 @@ class HTTPClient {
 		m_conn = null;
 		m_server = server;
 		m_port = port;
-		m_ssl = ssl ? new SSLContext() : null;
+		m_ssl = ssl ? new SSLContext(SSLContextKind.client) : null;
 	}
 
 	/**
