@@ -2,7 +2,8 @@
 	SSL/TLS stream implementation
 
 	SSLStream can be used to implement SSL/TLS communication on top of a TCP connection. The
-	initial SSLStreamState determines if the SSL tunnel is on the client or server side.
+	SSLContextKind of an SSLStream determines if the SSL tunnel is established actively (client) or
+	passively (server).
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -42,7 +43,7 @@ unittest {
 	{
 		auto conn = connectTCP("127.0.0.1", 1234);
 		auto sslctx = new SSLContext(SSLContextKind.client);
-		auto stream = new SSLStream(conn, sslctx, SSLStreamState.connecting);
+		auto stream = new SSLStream(conn, sslctx);
 		stream.write("Hello, World!");
 		stream.finalize();
 		conn.close();
@@ -62,7 +63,7 @@ unittest {
 		sslctx.useCertificateChainFile("server.crt");
 		sslctx.usePrivateKeyFile("server.key");
 		listenTCP(1234, (conn){
-			auto stream = new SSLStream(conn, sslctx, SSLStreamState.accepting);
+			auto stream = new SSLStream(conn, sslctx);
 			logInfo("Got message: %s", stream.readAllUTF8());
 			stream.finalize();
 		});
@@ -78,7 +79,7 @@ unittest {
 	Creates an SSL/TLS tunnel within an existing stream.
 
 	Note: Be sure to call finalize before finalizing/closing the outer stream so that the SSL
-	tunnel is properly closed first.
+		tunnel is properly closed first.
 */
 class SSLStream : Stream {
 	private {
@@ -91,7 +92,29 @@ class SSLStream : Stream {
 		Exception[] m_exceptions;
 	}
 
-	/** Constructs a new SSL tunnel.
+	/** Constructs a new SSL tunnel and infers the stream state from the SSLContextKind.
+
+		Depending on the SSLContextKind of ctx, the tunnel will try to establish an SSL
+		tunnel by either passively accepting or by actively connecting.
+
+		Params:
+			underlying = The base stream which is used for the SSL tunnel
+			ctx = SSL context used for initiating the tunnel
+	*/
+	this(Stream underlying, SSLContext ctx)
+	{
+		this(underlying, ctx, ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting);
+	}
+
+	/** Constructs a new SSL tunnel, allowing to override the stream state.
+
+		This constructor allows to specify a custom tunnel state, which can
+		be useful when a tunnel has already been established by other means.
+
+		Params:
+			underlying = The base stream which is used for the SSL tunnel
+			ctx = SSL context used for initiating the tunnel
+			state = The manually specified tunnel state
 	*/
 	this(Stream underlying, SSLContext ctx, SSLStreamState state)
 	{
@@ -256,6 +279,7 @@ deprecated("Please use SSLStreamState instead.") alias SslStreamState = SSLStrea
 */
 class SSLContext {
 	private {
+		SSLContextKind m_kind;
 		ssl_ctx_st* m_ctx;
 	}
 
@@ -268,6 +292,8 @@ class SSLContext {
 	*/
 	this(SSLContextKind kind, SSLVersion ver = SSLVersion.tls1)
 	{
+		m_kind = kind;
+
 		version (SSL) {
 			const(SSL_METHOD)* method;
 			final switch (kind) {
@@ -318,6 +344,9 @@ class SSLContext {
 		SSL_CTX_free(m_ctx);
 		m_ctx = null;
 	}
+
+	/// The kind of SSL context (client/server)
+	@property SSLContextKind kind() const { return m_kind; }
 
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path)
