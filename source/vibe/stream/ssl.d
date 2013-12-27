@@ -4,33 +4,6 @@
 	SSLStream can be used to implement SSL/TLS communication on top of a TCP connection. The
 	initial SSLStreamState determines if the SSL tunnel is on the client or server side.
 
-	Examples:
-		A simple SSL client:
-		---
-		void sendSSLMessage()
-		{
-			auto conn = connectTCP("127.0.0.1", 1234);
-			auto sslctx = new SSLContext;
-			auto stream = new SSLStream(conn, sslctx, SSLStreamState.connecting);
-			stream.write("Hello, World!");
-			stream.finalize();
-			conn.close();
-		}
-		---
-
-		Corresponding server:
-		---
-		void listenForSSL()
-		{
-			auto sslctx = new SSLContext("server.crt", "server.key");
-			listenTCP(1234, (conn){
-				auto stream = new SSLStream(conn, sslctx, SSLStreamState.accepting);
-				logInfo("Got message: %s", strea.readAllUtf8());
-				stream.finalize();
-			});
-		}
-		---
-
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
@@ -59,6 +32,40 @@ version(VibePragmaLib) pragma(lib, "ssl");
 version(VibePragmaLib) version (Windows) pragma(lib, "eay");
 
 version = SSL;
+
+/// A simple SSL client
+unittest {
+	import vibe.core.net;
+	import vibe.stream.ssl;
+
+	void sendSSLMessage()
+	{
+		auto conn = connectTCP("127.0.0.1", 1234);
+		auto sslctx = new SSLContext;
+		auto stream = new SSLStream(conn, sslctx, SSLStreamState.connecting);
+		stream.write("Hello, World!");
+		stream.finalize();
+		conn.close();
+	}
+}
+
+/// Corresponding server
+unittest {
+	import vibe.core.log;
+	import vibe.core.net;
+	import vibe.stream.operations;
+	import vibe.stream.ssl;
+
+	void listenForSSL()
+	{
+		auto sslctx = new SSLContext("server.crt", "server.key");
+		listenTCP(1234, (conn){
+			auto stream = new SSLStream(conn, sslctx, SSLStreamState.accepting);
+			logInfo("Got message: %s", stream.readAllUTF8());
+			stream.finalize();
+		});
+	}
+}
 
 
 /**************************************************************************************************/
@@ -163,6 +170,8 @@ class SSLStream : Stream {
 			bytes = bytes[ret .. $];
 		}
 	}
+
+	alias Stream.write write;
 
 	void flush()
 	{
