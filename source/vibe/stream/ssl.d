@@ -10,7 +10,7 @@
 		void sendSSLMessage()
 		{
 			auto conn = connectTCP("127.0.0.1", 1234);
-			auto sslctx = mew SSLContext;
+			auto sslctx = new SSLContext;
 			auto stream = new SSLStream(conn, sslctx, SSLStreamState.connecting);
 			stream.write("Hello, World!");
 			stream.finalize();
