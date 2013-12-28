@@ -543,7 +543,7 @@ final class HTTPClientResponse : HTTPResponse {
 		if (this.headers.get("Connection") == "close") {
 			// do nothing, forcing disconnect() before next request
 		} else if (m_client.m_timeout > 0 && max > 1) {
-			m_client.m_keepAliveLimit += m_client.m_timeout.seconds;
+			m_client.m_keepAliveLimit += (m_client.m_timeout - 2).seconds;
 		} else if (this.httpVersion == HTTPVersion.HTTP_1_1) {
 			m_client.m_keepAliveLimit += 60.seconds;
 		}
