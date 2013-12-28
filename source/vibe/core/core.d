@@ -684,6 +684,7 @@ private class VibeDriverCore : DriverCore {
 		Duration m_gcCollectTimeout;
 		Timer m_gcTimer;
 		bool m_ignoreIdleForGC = false;
+		Exception m_eventException;
 	}
 
 	private void setupGcTimer()
@@ -692,10 +693,12 @@ private class VibeDriverCore : DriverCore {
 		m_gcCollectTimeout = dur!"seconds"(2);
 	}
 
+	@property void eventException(Exception e) { m_eventException = e; }
+
 	void yieldForEvent()
 	{
 		auto fiber = cast(CoreTask)Fiber.getThis();
-		if( fiber ){
+		if (fiber) {
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, fiber);
 			Fiber.yield();
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, fiber);
@@ -706,6 +709,7 @@ private class VibeDriverCore : DriverCore {
 			}
 		} else {
 			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
+			m_eventException = null;
 			if (auto err = getEventDriver().runEventLoopOnce()) {
 				if (err == 1) {
 					logDebug("No events registered, exiting event loop.");
@@ -713,6 +717,10 @@ private class VibeDriverCore : DriverCore {
 				}
 				logError("Error running event loop: %d", err);
 				throw new Exception("Error waiting for events.");
+			}
+			if (auto e = m_eventException) {
+				m_eventException = null;
+				throw e;
 			}
 		}
 	}

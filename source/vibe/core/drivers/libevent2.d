@@ -34,7 +34,6 @@ import deimos.event2.dns;
 import deimos.event2.event;
 import deimos.event2.thread;
 import deimos.event2.util;
-version(Windows) import std.c.windows.winsock;
 import std.conv;
 import std.encoding : sanitize;
 import std.exception;
@@ -51,7 +50,12 @@ else
 
 version(Windows)
 {
+	import std.c.windows.windows;
+	import std.c.windows.winsock;
+
 	alias WSAEWOULDBLOCK EWOULDBLOCK;
+
+	extern(System) DWORD FormatMessageW(DWORD dwFlags, const(void)* lpSource, DWORD dwMessageId, DWORD dwLanguageId, LPWSTR lpBuffer, DWORD nSize, void* Arguments);
 }
 
 
@@ -239,15 +243,15 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
-		enforce(sockfd != -1, "Failed to create socket.");
+		socketEnforce(sockfd != -1, "Failed to create socket.");
 
 		NetworkAddress bind_addr;
 		bind_addr.family = addr.family;
 		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
 		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
-		enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
+		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
 		socklen_t balen = bind_addr.sockAddrLen;
-		enforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
+		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
 		
 		if( evutil_make_socket_nonblocking(sockfd) )
 			throw new Exception("Failed to make socket non-blocking.");
@@ -263,21 +267,21 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		cctx.readOwner = Task.getThis();
 		scope(exit) cctx.readOwner = Task();
 
-		if( bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) )
-			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port));
+		socketEnforce(bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) == 0,
+			"Failed to connect to host "~host~" on port "~to!string(port));
 
 	// TODO: cctx.remove_addr6 = ...;
 		
 		try {
-			while( cctx.status == 0 )
+			while (cctx.status == 0)
 				m_core.yieldForEvent();
-		} catch( Exception ){}
-			
-		logTrace("Connect result status: %d", cctx.status);
+		} catch (Exception e) {
+			throw new Exception(format("Failed to connect to %s:%s: %s", host, port, e.msg));
+		}
 		
-		if( cctx.status != BEV_EVENT_CONNECTED )
-			throw new Exception("Failed to connect to host "~host~" on port "~to!string(port)~": "~to!string(cctx.status));
-
+		logTrace("Connect result status: %d", cctx.status);
+		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s:%s: %s", host, port, cctx.status));
+		
 		return new Libevent2TCPConnection(cctx);
 	}
 
@@ -290,13 +294,13 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(listenfd_raw).max > int.max) assert(listenfd_raw <= int.max || listenfd_raw == ~0);
 		auto listenfd = cast(int)listenfd_raw;
-		enforce(listenfd != -1, "Error creating listening socket");
+		socketEnforce(listenfd != -1, "Error creating listening socket");
 		int tmp_reuse = 1; 
-		enforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
+		socketEnforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
 			"Error enabling socket address reuse on listening socket");
-		enforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
+		socketEnforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
 			"Error binding listening socket");
-		enforce(listen(listenfd, 128) == 0,
+		socketEnforce(listen(listenfd, 128) == 0,
 			"Error listening to listening socket");
 
 		// Set socket for non-blocking I/O
@@ -691,16 +695,16 @@ class Libevent2UDPConnection : UDPConnection {
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
-		enforce(sockfd != -1, "Failed to create socket.");
+		socketEnforce(sockfd != -1, "Failed to create socket.");
 		
 		enforce(evutil_make_socket_nonblocking(sockfd) == 0, "Failed to make socket non-blocking.");
 
 		int tmp_reuse = 1;
-		enforce(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
+		socketEnforce(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
 			"Error enabling socket address reuse on listening socket");
 
 		if( bind_addr.port )
-			enforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
+			socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
 		
 		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress());
 
@@ -848,6 +852,30 @@ alias FreeListObjectAlloc!(LevMutex, false) LevMutexAlloc;
 alias FreeListObjectAlloc!(core.sync.mutex.Mutex, false) MutexAlloc;
 alias FreeListObjectAlloc!(ReadWriteMutex, false) ReadWriteMutexAlloc;
 alias FreeListObjectAlloc!(Condition, false) ConditionAlloc;
+
+version (Windows) {
+	class WSAErrorException : Exception {
+		int error;
+
+		this(string message, string file = __FILE__, size_t line = __LINE__)
+		{
+			error = WSAGetLastError();
+			ushort* errmsg;
+			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, 
+				null, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), cast(LPWSTR)&errmsg, 0, null);
+			size_t len = 0;
+			while (errmsg[len]) len++;
+			auto errmsgd = (cast(wchar[])errmsg[0 .. len]).idup;
+			LocalFree(errmsg);
+			super(format("%s: %s (%s)", message, errmsgd, error), file, line);
+		}
+	}
+
+	T socketEnforce(T)(T value, lazy string msg = null, string file = __FILE__, size_t line = __LINE__)
+	{
+		return enforceEx!WSAErrorException(value, msg, file, line);
+	}
+} else alias socketEnforce = errnoEnforce;
 
 private nothrow extern(C)
 {

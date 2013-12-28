@@ -130,6 +130,7 @@ interface EventDriver {
 	Provides an event driver with core functions for task/fiber control.
 */
 interface DriverCore {
+	@property void eventException(Exception e);
 	void yieldForEvent();
 	void resumeTask(Task f, Exception event_exception = null);
 	void notifyIdle();

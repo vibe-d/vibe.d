@@ -570,36 +570,30 @@ logDebug("running task");
 			logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
 			assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TCPContext");
 	
+			Exception ex;
 			bool free_event = false;
 			
 			string errorMessage;
-			if( status & BEV_EVENT_EOF ){
+			if (status & BEV_EVENT_EOF) {
 				logDebug("Connection was closed (fd %d).", ctx.socketfd);
 				ctx.eof = true;
 				evbuffer* buf = bufferevent_get_input(buf_event);
 				if (evbuffer_get_length(buf) == 0) free_event = true;
-			} else if( status & BEV_EVENT_TIMEOUT ){
+			} else if (status & BEV_EVENT_TIMEOUT) {
 				logDebug("Remote host on fd %d timed out.", ctx.socketfd);
 				free_event = true;
-			} else if( status & BEV_EVENT_ERROR ){
-				version(Windows){
-					logDebug("A socket error occurred on fd %d: %d (%s)", ctx.socketfd, status, to!string(evutil_socket_error_to_string(status)));
-				} else {
-					logDebug("A socket error occurred on fd %d: %d", ctx.socketfd, status);
-				}
+			} else if (status & BEV_EVENT_ERROR) {
+				auto msg = format("Error on socket %s%s", ctx.socketfd,
+					(status & BEV_EVENT_READING) ? "while reading" : (status & BEV_EVENT_WRITING) ? "while writing" : "");
+				version(Windows) ex = new WSAErrorException(msg);
+				else ex = new ErrnoException(msg);
 				free_event = true;
-				if( status & BEV_EVENT_READING ) errorMessage = "Error reading data from socket. Remote hung up?";
-				else if( status & BEV_EVENT_WRITING ) errorMessage = "Error writing data to socket. Remote hung up?";
-				else errorMessage = "Socket error: "~to!string(status);
 			}
 
 			if (free_event) {	
 				bufferevent_free(buf_event);
 				ctx.event = null;
 			}
-
-			Exception ex;
-			if (status & BEV_EVENT_ERROR) ex = new Exception(errorMessage);
 
 			if (ctx.readOwner && ctx.readOwner.running) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
@@ -609,6 +603,8 @@ logDebug("running task");
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
 				ctx.core.resumeTask(ctx.writeOwner, ex);
 			}
+
+			ctx.core.eventException = ex;
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
 		}
