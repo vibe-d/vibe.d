@@ -12,6 +12,7 @@ version(VibeWin32Driver)
 
 import vibe.core.core;
 import vibe.core.driver;
+import vibe.core.drivers.utils;
 import vibe.core.log;
 import vibe.inet.url;
 import vibe.internal.win32;
@@ -201,7 +202,7 @@ class Win32EventDriver : EventDriver {
 			FreeAddrInfoW(addr_ret);
 		} else {
 			auto he = gethostbyname(toUTFz!(immutable(char)*)(host));
-			enforce(he !is null, "Failed to look up host "~host~".");
+			socketEnforce(he !is null, "Failed to look up host "~host);
 			addr.family = he.h_addrtype;
 			switch(addr.family){
 				default: assert(false, "Invalid address family returned from host lookup.");
@@ -220,13 +221,13 @@ class Win32EventDriver : EventDriver {
 		addr.port = port;
 
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
-		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
+		socketEnforce(sock != INVALID_SOCKET, "Failed to create socket");
 
 		NetworkAddress bind_addr;
 		bind_addr.family = addr.family;
 		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
 		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
-		enforce(bind(sock, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
+		socketEnforce(bind(sock, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket");
 
 		auto conn = new Win32TCPConnection(this, sock, addr);
 		conn.connect(addr);
@@ -240,13 +241,13 @@ class Win32EventDriver : EventDriver {
 		addr.port = port;
 
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
-		enforce(sock != INVALID_SOCKET, "Failed to create socket.");
+		socketEnforce(sock != INVALID_SOCKET, "Failed to create socket");
 
-		enforce(bind(sock, addr.sockAddr, addr.sockAddrLen) == 0,
-			"Failed to bind listening socket.");
+		socketEnforce(bind(sock, addr.sockAddr, addr.sockAddrLen) == 0,
+			"Failed to bind listening socket");
 
-		enforce(listen(sock, 128) == 0,
-			"Failed to listen.");
+		socketEnforce(listen(sock, 128) == 0,
+			"Failed to listen");
 
 		return new Win32TCPListener(this, sock, conn_callback);
 	}
@@ -916,8 +917,8 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	@property void canBroadcast(bool val)
 	{
 		int tmp_broad = val;
-		enforce(setsockopt(m_socket, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
-				"Failed to change the socket broadcast flag.");
+		socketEnforce(setsockopt(m_socket, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
+				"Failed to change the socket broadcast flag");
 		m_canBroadcast = val;
 	}
 
@@ -947,7 +948,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	}
 	void connect(NetworkAddress addr)
 	{
-		enforce(.connect(m_socket, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(WSAGetLastError()));
+		socketEnforce(.connect(m_socket, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket");
 	}
 
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
@@ -960,7 +961,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 			ret = .send(m_socket, data.ptr, cast(int)data.length, 0);
 		}
 		logTrace("send ret: %s, %s", ret, WSAGetLastError());
-		enforce(ret >= 0, "Error sending UDP packet.");
+		socketEnforce(ret >= 0, "Error sending UDP packet");
 		enforce(ret == data.length, "Unable to send full packet.");
 	}
 
@@ -982,7 +983,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 			if( ret < 0 ){
 				auto err = WSAGetLastError();
 				logDebug("UDP recv err: %s", err);
-				enforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet.");
+				socketEnforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet");
 			}
 			m_driver.m_core.yieldForEvent();
 		}
@@ -1047,14 +1048,14 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		if (peer_address.family == AF_INET) m_localAddress.sockAddrInet4.sin_addr.s_addr = 0;
 		else m_localAddress.sockAddrInet6.sin6_addr.s6_addr[] = 0;
 		socklen_t balen = m_localAddress.sockAddrLen;
-		enforce(getsockname(sock, m_localAddress.sockAddr, &balen) == 0, "getsockname failed.");
+		socketEnforce(getsockname(sock, m_localAddress.sockAddr, &balen) == 0, "getsockname failed");
 
 		m_peerAddress = peer_address;
 
 		// NOTE: using WSAAddressToStringW instead of inet_ntop because that is only available from Vista up
 		wchar[64] buf;
 		DWORD buflen = buf.length;
-		enforce(WSAAddressToStringW(m_peerAddress.sockAddr, m_peerAddress.sockAddrLen, null, buf.ptr, &buflen) == 0, "Failed to get string representation of peer address.");
+		socketEnforce(WSAAddressToStringW(m_peerAddress.sockAddr, m_peerAddress.sockAddrLen, null, buf.ptr, &buflen) == 0, "Failed to get string representation of peer address");
 		m_peerAddressString = to!string(buf[0 .. buflen]);
 		m_peerAddressString = m_peerAddressString[0 .. m_peerAddressString.lastIndexOf(':')]; // strip the port number
 
@@ -1090,7 +1091,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 			auto err = WSAGetLastError();
 			logDebugV("connect err: %s", err);
 			import std.string;
-			enforce(err == WSAEWOULDBLOCK), format("Connect call failed with %s", WSAGetLastError());
+			socketEnforce(err == WSAEWOULDBLOCK, "Connect call failed");
 			while (m_status != ConnectionStatus.Connected)
 				m_driver.m_core.yieldForEvent();
 		}
@@ -1233,7 +1234,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 			auto ret = WSASend(m_socket, &buf, 1, null, 0, &overlapped, &onIOWriteCompleted);
 			if( ret == SOCKET_ERROR ){
 				auto err = WSAGetLastError();
-				enforce(err == WSA_IO_PENDING, "WSASend failed with error "~to!string(err));
+				socketEnforce(err == WSA_IO_PENDING, "Failed to send data");
 			}
 			while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
 
@@ -1269,7 +1270,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 				if( TransmitFile(m_socket, fstream.m_handle, 0, 0, &m_fileOverlapped, null, 0) )
 					m_bytesTransferred = 1;
 
-				enforce(WSAGetLastError() == WSA_IO_PENDING, "Failed to send file over TCP.");
+				socketEnforce(WSAGetLastError() == WSA_IO_PENDING, "Failed to send file over TCP.");
 
 				while( m_bytesTransferred < fstream.size ) m_driver.m_core.yieldForEvent();
 				return;
@@ -1359,7 +1360,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					auto ret = WSARecv(m_socket, &buf, 1, null, &flags, &overlapped, &onIOCompleted);
 					if( ret == SOCKET_ERROR ){
 						auto err = WSAGetLastError();
-						enforce(err == WSA_IO_PENDING, "WSARecv failed with error "~to!string(err));
+						socketEnforce(err == WSA_IO_PENDING, "Failed to receive data");
 					}
 					while( !m_bytesTransferred ) m_driver.m_core.yieldForEvent();
 

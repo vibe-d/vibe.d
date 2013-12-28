@@ -14,6 +14,7 @@ public import vibe.core.core;
 
 import vibe.core.log;
 import vibe.core.drivers.libevent2;
+import vibe.core.drivers.utils;
 import vibe.utils.memory;
 
 import deimos.event2.buffer;
@@ -585,8 +586,7 @@ logDebug("running task");
 			} else if (status & BEV_EVENT_ERROR) {
 				auto msg = format("Error on socket %s%s", ctx.socketfd,
 					(status & BEV_EVENT_READING) ? " while reading" : (status & BEV_EVENT_WRITING) ? " while writing" : "");
-				version(Windows) ex = new WSAErrorException(msg);
-				else ex = new ErrnoException(msg);
+				ex = new SystemSocketException(msg);
 				free_event = true;
 			}
 

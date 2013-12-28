@@ -13,6 +13,7 @@ version(VibeLibeventDriver)
 import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
+import vibe.core.drivers.utils;
 import vibe.core.log;
 import vibe.utils.array : ArraySet;
 import vibe.utils.hashmap;
@@ -50,12 +51,9 @@ else
 
 version(Windows)
 {
-	import std.c.windows.windows;
 	import std.c.windows.winsock;
 
 	alias WSAEWOULDBLOCK EWOULDBLOCK;
-
-	extern(System) DWORD FormatMessageW(DWORD dwFlags, const(void)* lpSource, DWORD dwMessageId, DWORD dwLanguageId, LPWSTR lpBuffer, DWORD nSize, void* Arguments);
 }
 
 
@@ -852,30 +850,6 @@ alias FreeListObjectAlloc!(LevMutex, false) LevMutexAlloc;
 alias FreeListObjectAlloc!(core.sync.mutex.Mutex, false) MutexAlloc;
 alias FreeListObjectAlloc!(ReadWriteMutex, false) ReadWriteMutexAlloc;
 alias FreeListObjectAlloc!(Condition, false) ConditionAlloc;
-
-version (Windows) {
-	class WSAErrorException : Exception {
-		int error;
-
-		this(string message, string file = __FILE__, size_t line = __LINE__)
-		{
-			error = WSAGetLastError();
-			ushort* errmsg;
-			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, 
-				null, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), cast(LPWSTR)&errmsg, 0, null);
-			size_t len = 0;
-			while (errmsg[len]) len++;
-			auto errmsgd = (cast(wchar[])errmsg[0 .. len]).idup;
-			LocalFree(errmsg);
-			super(format("%s: %s (%s)", message, errmsgd, error), file, line);
-		}
-	}
-
-	T socketEnforce(T)(T value, lazy string msg = null, string file = __FILE__, size_t line = __LINE__)
-	{
-		return enforceEx!WSAErrorException(value, msg, file, line);
-	}
-} else alias socketEnforce = errnoEnforce;
 
 private nothrow extern(C)
 {
