@@ -584,7 +584,7 @@ logDebug("running task");
 				free_event = true;
 			} else if (status & BEV_EVENT_ERROR) {
 				auto msg = format("Error on socket %s%s", ctx.socketfd,
-					(status & BEV_EVENT_READING) ? "while reading" : (status & BEV_EVENT_WRITING) ? "while writing" : "");
+					(status & BEV_EVENT_READING) ? " while reading" : (status & BEV_EVENT_WRITING) ? " while writing" : "");
 				version(Windows) ex = new WSAErrorException(msg);
 				else ex = new ErrnoException(msg);
 				free_event = true;
