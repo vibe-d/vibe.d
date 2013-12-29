@@ -479,7 +479,7 @@ package nothrow extern(C)
 					logDebug("task out (fd %d).", client_ctx.socketfd);
 				} catch( Exception e ){
 					logWarn("Handling of connection failed: %s", e.msg);
-					logDiagnostic("%s", e.toString());
+					logDiagnostic("%s", e.toString().sanitize);
 				}
 				conn.close();
 
@@ -596,6 +596,8 @@ logDebug("running task");
 				ctx.event = null;
 			}
 
+			ctx.core.eventException = ex;
+
 			if (ctx.readOwner && ctx.readOwner.running) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
 				ctx.core.resumeTask(ctx.readOwner, ex);
@@ -604,10 +606,9 @@ logDebug("running task");
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
 				ctx.core.resumeTask(ctx.writeOwner, ex);
 			}
-
-			ctx.core.eventException = ex;
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
 		}
 	}
 
