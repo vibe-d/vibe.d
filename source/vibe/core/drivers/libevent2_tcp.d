@@ -584,8 +584,9 @@ logDebug("running task");
 				logDebug("Remote host on fd %d timed out.", ctx.socketfd);
 				free_event = true;
 			} else if (status & BEV_EVENT_ERROR) {
-				auto msg = format("Error on socket %s%s", ctx.socketfd,
-					(status & BEV_EVENT_READING) ? " while reading" : (status & BEV_EVENT_WRITING) ? " while writing" : "");
+				auto msg = format("Error %s socket %s",
+					(status & BEV_EVENT_READING) ? "reading from" : (status & BEV_EVENT_WRITING) ? "writing to" : "on",
+					ctx.socketfd);
 				ex = new SystemSocketException(msg);
 				free_event = true;
 			}
