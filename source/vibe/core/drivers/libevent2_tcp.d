@@ -348,11 +348,11 @@ package class Libevent2TCPConnection : TCPConnection {
 			m_ctx = null;
 			throw new Exception(format("Connection error while %s TCPConnection.", write ? "writing to" : "reading from"));
 		}
-		enforce (!write || !m_ctx.eof, "Remove hung up while writing to TCPConnection.");
+		enforce (!write || !m_ctx.eof, "Remote hung up while writing to TCPConnection.");
 		if (!write && m_ctx.eof) {
 			auto buf = bufferevent_get_input(m_ctx.event);
 			auto data_left = evbuffer_get_length(buf) > 0;
-			enforce(data_left, "Remove hung up while reading from TCPConnection.");
+			enforce(data_left, "Remote hung up while reading from TCPConnection.");
 		}
 	}
 }
