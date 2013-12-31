@@ -638,7 +638,7 @@ class Win32FileStream : FileStream {
 
 	@property bool readable()
 	const {
-		return m_mode == FileMode.read || m_mode == FileMode.readWrite;
+		return m_mode != FileMode.append;
 	}
 
 	@property bool writable()
