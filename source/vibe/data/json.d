@@ -1425,7 +1425,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 					m_range.popFront();
 					break;
 				} else if (!first) {
-					enforce(m_range.front == ',', "Expecting ',' or '}'.");
+					enforce(m_range.front == ',', "Expecting ',' or '}', not '"~m_range.front.to!string~"'.");
 					m_range.popFront();
 					m_range.skipWhitespace(&m_line);
 				} else first = false;
@@ -1466,13 +1466,13 @@ struct JsonStringSerializer(R, bool pretty = false)
 			m_range.skipWhitespace(&m_line);
 			static if (is(T == typeof(null))) { enforce(m_range.take(4).equal("null"), "Expecting 'null'."); return null; }
 			else static if (is(T == bool)) {
-				if (m_range.front == 't') {
-					enforce(m_range.take(4).equal("true"), "Expecting 'true' or 'false'.");
-					return true;
-				} else {
-					enforce(m_range.take(5).equal("false"), "Expecting 'true' or 'false'.");
-					return false;
+				bool ret = m_range.front == 't';
+				string expected = ret ? "true" : "false";
+				foreach (ch; expected) {
+					enforce(m_range.front == ch, "Expecting 'true' or 'false'.");
+					m_range.popFront();
 				}
+				return ret;
 			} else static if (is(T : long)) {
 				bool is_float;
 				auto num = m_range.skipNumber(is_float);
@@ -1497,8 +1497,11 @@ struct JsonStringSerializer(R, bool pretty = false)
 				import vibe.core.log;
 				logInfo("%s", m_range[0 .. min(4, $)]);
 			}
-			enforce(m_range.take(4).equal("null"), "Expecting 'null'.");
-			assert(m_range.front != 'l');
+			foreach (ch; "null") {
+				enforce(m_range.front == ch, "Expecting 'null'.");
+				m_range.popFront();
+			}
+			assert(m_range.empty || m_range.front != 'l');
 			return true;
 		}
 	}
