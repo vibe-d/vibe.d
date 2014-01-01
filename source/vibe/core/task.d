@@ -51,6 +51,7 @@ struct Task {
 
 	nothrow:
 	@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
+	@property size_t taskCounter() const { return m_taskCounter; }
 	@property inout(Thread) thread() inout { if( m_fiber ) return (cast(inout(TaskFiber))m_fiber).thread; return null; }
 
 	/** Determines if the task is still running.
