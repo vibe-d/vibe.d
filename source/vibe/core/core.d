@@ -184,9 +184,9 @@ Task runTask(void delegate() task)
 	f.m_taskFunc = task;
 	f.m_taskCounter++;
 	auto handle = f.task();
-	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart, f);
+	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart, handle);
 	s_core.resumeTask(handle, null, true);
-	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.postStart, f);
+	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.postStart, handle);
 	return handle;
 }
 
@@ -463,7 +463,7 @@ void lowerPrivileges()
 	This function is useful mostly for implementing debuggers that
 	analyze the life time of tasks, including task switches.
 */
-void setTaskEventCallback(void function(TaskEvent, Fiber) func)
+void setTaskEventCallback(void function(TaskEvent, Task) func)
 {
 	debug s_taskEventCallback = func;
 }
@@ -622,14 +622,15 @@ private class CoreTask : TaskFiber {
 
 				auto task = m_taskFunc;
 				m_taskFunc = null;
+				Task handle = this.task;
 				try {
 					m_running = true;
 					scope(exit) m_running = false;
-					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, this);
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					task();
-					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end, this);
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end, handle);
 				} catch( Exception e ){
-					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail, this);
+					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail, handle);
 					import std.encoding;
 					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
@@ -697,11 +698,12 @@ private class VibeDriverCore : DriverCore {
 
 	void yieldForEvent()
 	{
-		auto fiber = cast(CoreTask)Fiber.getThis();
-		if (fiber) {
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, fiber);
-			Fiber.yield();
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, fiber);
+		auto task = Task.getThis();
+		auto fiber = cast(CoreTask)task.fiber;
+		if (task != Task.init) {
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
+			fiber.yield();
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
 			auto e = fiber.m_exception;
 			if( e ){
 				fiber.m_exception = null;
@@ -812,7 +814,7 @@ private {
 	__gshared ManualEvent st_workerTaskSignal;
 	__gshared Mutex st_threadShutdownMutex;
 	__gshared Condition st_threadShutdownCondition;
-	__gshared debug void function(TaskEvent, Fiber) s_taskEventCallback;
+	__gshared debug void function(TaskEvent, Task) s_taskEventCallback;
 	shared bool st_term = false;
 
 	bool s_exitEventLoop = false;
