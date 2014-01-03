@@ -244,14 +244,23 @@ synchronized class AutoFreeListAllocator : Allocator {
 
 	void[] realloc(void[] data, size_t sz)
 	{
-		// TODO: optimize!
-		//logTrace("AFL realloc");
-		auto newd = alloc(sz);
-		assert(newd.ptr+sz <= data.ptr || newd.ptr >= data.ptr+data.length, "New block overlaps old one!?");
-		auto len = min(data.length, sz);
-		newd[0 .. len] = data[0 .. len];
-		free(data);
-		return newd;
+		foreach (fl; m_freeLists)
+			if (data.length <= fl.elementSize) {
+				// just grow the slice if it still fits into the free list slot
+				if (sz <= fl.elementSize)
+					return data.ptr[0 .. sz];
+
+				// otherwise re-allocate
+				auto newd = alloc(sz);
+				assert(newd.ptr+sz <= data.ptr || newd.ptr >= data.ptr+data.length, "New block overlaps old one!?");
+				auto len = min(data.length, sz);
+				newd[0 .. len] = data[0 .. len];
+				free(data);
+				return newd;
+			}
+
+		// forward large blocks to the base allocator
+		return m_baseAlloc.realloc(data, sz);
 	}
 
 	void free(void[] data)
