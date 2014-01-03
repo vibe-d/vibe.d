@@ -72,9 +72,10 @@ struct AllocAppender(ArrayType : E[], E) {
 			debug {
 				import std.digest.crc;
 				auto checksum = crc32Of(m_data);
+				auto oldlen = m_data.length;
 			}
 			m_data = cast(ElemType[])m_alloc.realloc(m_data, (n+amt)*E.sizeof);
-			debug assert(crc32Of(m_data[0 .. olddata.length]) == checksum);
+			debug assert(crc32Of(m_data[0 .. oldlen]) == checksum);
 		}
 		m_remaining = m_data[nelems .. m_data.length];
 	}
