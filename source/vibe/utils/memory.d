@@ -158,18 +158,25 @@ shared class MallocAllocator : Allocator {
 	{
 		size_t csz = min(mem.length, new_size);
 		auto p = extractUnalignedPointer(mem.ptr);
-		size_t misalign = mem.ptr - p;
-		auto pn = adjustPointerAlignment(.realloc(p, new_size+Allocator.alignment));
-		if (p == pn) return pn[misalign .. new_size+misalign];
+		size_t oldmisalign = mem.ptr - p;
+		auto pn = cast(ubyte*).realloc(p, new_size+Allocator.alignment);
+		if (p == pn) return pn[oldmisalign .. new_size+oldmisalign];
 
 		auto pna = cast(ubyte*)adjustPointerAlignment(pn);
+		auto newmisalign = pna - pn;
 
-		// account for both, possibly changed alignment and a possible
-		// GC bug where only part of the old memory chunk is copied to
-		// the new one
-		pna[0 .. csz] = (cast(ubyte[])mem)[0 .. csz];
+		// account for changed alignment after realloc (move memory back to aligned position)
+		if (oldmisalign != newmisalign) {
+			if (newmisalign > oldmisalign) {
+				foreach_reverse (i; 0 .. mem.length)
+					pn[i + newmisalign] = pn[i + oldmisalign];
+			} else {
+				foreach (i; 0 .. mem.length)
+					pn[i + newmisalign] = pn[i + oldmisalign];
+			}
+		}
 
-		return pn[0 .. new_size];
+		return pna[0 .. new_size];
 	}
 
 	void free(void[] mem)
