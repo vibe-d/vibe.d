@@ -58,6 +58,9 @@ version(Windows)
 
 
 class Libevent2Driver : EventDriver {
+	import std.container : Array, BinaryHeap, heapify;
+	import std.datetime : Clock;
+
 	private {
 		DriverCore m_core;
 		event_base* m_eventLoop;
@@ -65,6 +68,13 @@ class Libevent2Driver : EventDriver {
 		bool m_exit = false;
 		ArraySet!size_t m_ownedObjects;
 		debug Thread m_ownerThread;
+
+		event* m_timerEvent;
+		int m_timerIDCounter = 1;
+		int m_timerProcessCounter;
+		HashMap!(size_t, TimerInfo) m_timers;
+		Array!TimeoutEntry m_timeoutHeapStore;
+		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
 	}
 
 	this(DriverCore core)
@@ -107,11 +117,15 @@ class Libevent2Driver : EventDriver {
 		
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
+
+		m_timerEvent = event_new(m_eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
 	}
 
 	~this()
 	{
 		debug assert(Thread.getThis() is m_ownerThread, "Event loop destroyed in foreign thread.");
+
+		event_free(m_timerEvent);
 
 		// notify all other living objects about the shutdown
 		synchronized (s_threadObjectsMutex) {
@@ -148,14 +162,17 @@ class Libevent2Driver : EventDriver {
 	{
 		int ret;
 		m_exit = false;
-		while( !m_exit && (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0 )
+		while (!m_exit && (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0) {
+			processTimers();
 			s_driverCore.notifyIdle();
+		}
 		return ret;
 	}
 
 	int runEventLoopOnce()
 	{
 		auto ret = event_base_loop(m_eventLoop, EVLOOP_ONCE);
+		processTimers();
 		m_core.notifyIdle();
 		return ret;
 	}
@@ -163,6 +180,7 @@ class Libevent2Driver : EventDriver {
 	bool processEvents()
 	{
 		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
+		processTimers();
 		if (m_exit) {
 			m_exit = false;
 			return false;
@@ -340,9 +358,99 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2ManualEvent(this);
 	}
 
-	Libevent2Timer createTimer(void delegate() callback)
+	size_t createTimer(void delegate() callback)
 	{
-		return new Libevent2Timer(this, callback);
+		debug assert(m_ownerThread is Thread.getThis());
+		auto id = m_timerIDCounter++;
+		if (!id) id = m_timerIDCounter++;
+		m_timers[id] = TimerInfo(callback);
+		return id;
+	}
+
+	void acquireTimer(size_t timer_id) { m_timers[timer_id].refCount++; }
+	void releaseTimer(size_t timer_id)
+	{
+		if (!--m_timers[timer_id].refCount)
+			m_timers.remove(timer_id);
+	}
+
+	bool isTimerPending(size_t timer_id) { return m_timers[timer_id].pending; }
+
+	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
+	{
+		debug assert(m_ownerThread is Thread.getThis());
+		auto timeout = Clock.currStdTime() + dur.total!"hnsecs";
+		auto pt = timer_id in m_timers;
+		assert(pt !is null, "Accessing non-existent timer ID.");
+		pt.timeout = timeout;
+		pt.repeatDuration = periodic ? dur.total!"hnsecs" : 0;
+		pt.pending = true;
+		pt.processCounter = m_timerProcessCounter;
+		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
+			event_del(m_timerEvent);
+			assert(dur.total!"seconds"() <= int.max);
+			timeval tvdur;
+			tvdur.tv_sec = cast(int)dur.total!"seconds"();
+			tvdur.tv_usec = dur.fracSec().usecs();
+			event_add(m_timerEvent, &tvdur);
+			assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
+		}
+		m_timeoutHeap.insert(TimeoutEntry(timeout, timer_id));
+	}
+
+	void stopTimer(size_t timer_id) { m_timers[timer_id].pending = false; }
+
+	void waitTimer(size_t timer_id)
+	{
+		debug assert(m_ownerThread is Thread.getThis());
+		while (true) {
+			{
+				auto pt = timer_id in m_timers;
+				if (!pt || !pt.pending) return;
+				assert(pt.repeatDuration == 0, "Cannot wait for a periodic timer.");
+				assert(pt.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
+				pt.owner = Task.getThis();
+			}
+			scope (exit) {
+				auto pt = timer_id in m_timers;
+				if (pt) pt.owner = Task.init;
+			}
+			m_core.yieldForEvent();
+		}
+	}
+
+	private void processTimers()
+	{
+		m_timerProcessCounter++;
+
+		// process all timers that have expired up to now
+		auto now = Clock.currStdTime();
+		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
+			auto tm = m_timeoutHeap.front.id;
+			m_timeoutHeap.removeFront();
+
+			if (auto pt = tm in m_timers) {
+				if (pt.pending && pt.processCounter - m_timerProcessCounter < 0) {
+					if (pt.repeatDuration > 0) {
+						pt.timeout += pt.repeatDuration;
+						pt.processCounter = m_timerProcessCounter;
+					} else pt.pending = false;
+				}
+				if (pt.owner) m_core.resumeTask(pt.owner);
+				if (pt.callback) runTask(pt.callback);
+			}
+		}
+	}
+
+	private static nothrow extern(C)
+	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
+	{
+		auto drv = cast(Libevent2Driver)userptr;
+		try drv.processTimers();
+		catch (Exception e) {
+			logError("Failed to process timers: %s", e.msg);
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
+		}
 	}
 
 	static struct DnsLookupInfo {
@@ -393,6 +501,23 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 			s_threadObjects.remove(key);
 		}
 	}
+}
+
+private struct TimerInfo {
+	long timeout;
+	long repeatDuration;
+	size_t refCount = 1;
+	void delegate() callback;
+	Task owner;
+	int processCounter;
+	bool pending;
+
+	this(void delegate() callback) { this.callback = callback; }
+}
+
+private struct TimeoutEntry {
+	long timeout;
+	size_t id;
 }
 
 private class Libevent2Object {
@@ -477,16 +602,16 @@ class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		assert(!amOwner());
 		acquire();
 		scope(exit) release();
-		scope tm = new Libevent2Timer(cast(Libevent2Driver)getEventDriver(), null);
-		tm.rearm(timeout);
-		tm.acquire();
-		scope(exit) tm.release();
+		auto tm = m_driver.createTimer(null);
+		scope (exit) m_driver.releaseTimer(tm);
+		m_driver.m_timers[tm].owner = Task.getThis();
+		m_driver.rearmTimer(tm, timeout, false);
 
 		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
-			if (!tm.pending) break;
+			if (!m_driver.isTimerPending(tm)) break;
 		}
 		return ec;
 	}
@@ -566,107 +691,6 @@ class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	}
 }
 
-class Libevent2Timer : Libevent2Object, Timer {
-	private {
-		Task m_owner;
-		void delegate() m_callback;
-		event* m_event;
-		bool m_pending;
-		bool m_periodic;
-		timeval m_timeout;
-	}
-
-	this(Libevent2Driver driver, void delegate() callback)
-	{
-		super(driver);
-		m_callback = callback;
-		m_event = event_new(m_driver.eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
-	}
-
-	~this()
-	{
-		if (m_event) {
-			stop();
-			event_free(m_event);
-		}
-	}
-
-	void acquire()
-	{
-		assert(m_owner == Task());
-		m_owner = Task.getThis();
-	}
-
-	void release()
-	{
-		assert(m_owner == Task.getThis());
-		m_owner = Task();
-	}
-
-	bool amOwner()
-	{
-		return m_owner != Task() && m_owner == Task.getThis();
-	}
-
-	@property bool pending()
-	{
-		return m_pending;
-	}
-
-	void rearm(Duration timeout, bool periodic = false)
-	{
-		stop();
-
-		assert(timeout.total!"seconds"() <= int.max);
-		m_timeout.tv_sec = cast(int)timeout.total!"seconds"();
-		m_timeout.tv_usec = timeout.fracSec().usecs();
-		event_add(m_event, &m_timeout);
-		assert(event_pending(m_event, EV_TIMEOUT, null));
-		m_pending = true;
-		m_periodic = periodic;
-	}
-
-	void stop() nothrow
-	{
-		if( m_event ){
-			event_del(m_event);
-		}
-		m_pending = false;
-	}
-
-	void wait()
-	{
-		acquire();
-		scope(exit) release();
-
-		while( pending )
-			m_driver.m_core.yieldForEvent();
-	}
-
-	private static nothrow extern(C)
-	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
-	{
-		auto tm = cast(Libevent2Timer)userptr;
-		logTrace("Timer event %s/%s", tm.m_pending, tm.m_periodic);
-		if( !tm.m_pending ) return;
-		try {
-			if( tm.m_periodic ){
-				event_del(tm.m_event);
-				event_add(tm.m_event, &tm.m_timeout);
-			} else {
-				tm.stop();
-			}
-
-			auto callback = tm.m_callback; // save callback because the waiting task might destroy the timer object
-			if (tm.m_owner && tm.m_owner.running) tm.m_driver.m_core.resumeTask(tm.m_owner);
-			if (callback) runTask(callback);
-		} catch( Throwable e ){
-			logError("Exception while handling timer event: %s", e.msg);
-			try logDiagnostic("Full exception: %s", sanitize(e.toString())); catch {}
-			debug assert(false);
-		}
-	}
-}
 
 class Libevent2UDPConnection : UDPConnection {
 	private {

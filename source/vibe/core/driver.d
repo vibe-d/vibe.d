@@ -47,7 +47,10 @@ private {
 
 
 /**
-	Interface for all evented I/O implementations
+	Interface for all evented I/O implementations.
+
+	This is the low level interface for all event based functionality. It is
+	not intended to be used directly by users of the library.
 */
 interface EventDriver {
 	/** Starts the event loop.
@@ -120,9 +123,29 @@ interface EventDriver {
 
 	/** Creates a new timer.
 
-		The timer can be started by calling rearm() with a timeout.
+		The timer can be started by calling rearmTimer() with a timeout.
+		The initial reference count is 1, use releaseTimer to free all resources
+		associated with the timer.
 	*/
-	Timer createTimer(void delegate() callback);
+	size_t createTimer(void delegate() callback);
+
+	/// Increases the reference count by one.
+	void acquireTimer(size_t timer_id);
+
+	/// Decreases the reference count by one.
+	void releaseTimer(size_t timer_id);
+
+	/// Queries if the timer is currently active.
+	bool isTimerPending(size_t timer_id);
+
+	/// Resets the timeout of the timer.
+	void rearmTimer(size_t timer_id, Duration dur, bool periodic);
+
+	/// Stops the timer.
+	void stopTimer(size_t timer_id);
+
+	/// Waits for the pending timer to expire.
+	void waitTimer(size_t timer_id);
 }
 
 
@@ -136,24 +159,3 @@ interface DriverCore {
 	void notifyIdle();
 }
 
-
-/**
-	Represents a timer.
-*/
-interface Timer {
-	/// True if the timer is yet to fire.
-	@property bool pending();
-
-	/** Resets the timer to the specified timeout
-	*/
-	void rearm(Duration dur, bool periodic = false)
-		in { assert(dur > 0.seconds); }
-
-	/** Resets the timer and avoids any firing.
-	*/
-	void stop();
-
-	/** Waits until the timer fires.
-	*/
-	void wait();
-}

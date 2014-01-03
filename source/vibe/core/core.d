@@ -285,10 +285,8 @@ void rawYield()
 */
 void sleep(Duration timeout)
 {
-	auto tm = getEventDriver().createTimer(null);
-	tm.rearm(timeout);
+	auto tm = setTimer(timeout, null);
 	tm.wait();
-	destroy(tm);
 }
 ///
 unittest {
@@ -320,7 +318,7 @@ unittest {
 */
 Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false)
 {
-	auto tm = getEventDriver().createTimer(callback);
+	auto tm = createTimer(callback);
 	tm.rearm(timeout, periodic);
 	return tm;
 }
@@ -346,7 +344,8 @@ unittest {
 */
 Timer createTimer(void delegate() callback)
 {
-	return getEventDriver().createTimer(callback);
+	auto drv = getEventDriver();
+	return Timer(drv, drv.createTimer(callback));
 }
 
 /**
@@ -473,6 +472,58 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 	A version string representing the current vibe version
 */
 enum VibeVersionString = "0.7.18";
+
+
+/**
+	Represents a timer.
+*/
+struct Timer {
+	private {
+		EventDriver m_driver;
+		size_t m_id;
+		debug uint m_magicNumber = 0x4d34f916;
+	}
+
+	private this(EventDriver driver, size_t id)
+	{
+		m_driver = driver;
+		m_id = id;
+	}
+
+	this(this)
+	{
+		debug assert(m_magicNumber == 0x4d34f916);
+		if (m_driver) m_driver.acquireTimer(m_id);
+	}
+
+	~this()
+	{
+		debug assert(m_magicNumber == 0x4d34f916);
+		if (m_driver) m_driver.releaseTimer(m_id);
+	}
+
+	/// True if the timer is yet to fire.
+	@property bool pending() { return m_driver.isTimerPending(m_id); }
+
+	/// The internal ID of the timer.
+	@property size_t id() const { return m_id; }
+
+	bool opCast() const { return m_driver !is null; }
+
+	/** Resets the timer to the specified timeout
+	*/
+	void rearm(Duration dur, bool periodic = false)
+		in { assert(dur > 0.seconds); }
+		body { m_driver.rearmTimer(m_id, dur, periodic); }
+
+	/** Resets the timer and avoids any firing.
+	*/
+	void stop() { m_driver.stopTimer(m_id); }
+
+	/** Waits until the timer fires.
+	*/
+	void wait() { m_driver.waitTimer(m_id); }
+}
 
 
 /**
@@ -690,7 +741,7 @@ private class VibeDriverCore : DriverCore {
 
 	private void setupGcTimer()
 	{
-		m_gcTimer = getEventDriver().createTimer(&collectGarbage);
+		m_gcTimer = createTimer(&collectGarbage);
 		m_gcCollectTimeout = dur!"seconds"(2);
 	}
 
