@@ -164,8 +164,10 @@ void setIdleHandler(bool delegate() del)
 	continue to run until vibeYield() or any of the I/O or wait functions is
 	called.
 */
-Task runTask(void delegate() task)
+Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 {
+	import std.typecons : Tuple, tuple;
+
 	CoreTask f;
 	while (!f && !s_availableFibers.empty) {
 		f = s_availableFibers.back;
@@ -180,8 +182,16 @@ Task runTask(void delegate() task)
 		s_fiberCount++;
 		f = new CoreTask;
 	}
+
+	static void callDelegate(CoreTask fiber) {
+		auto del = fiber.m_taskDelegate.get!(void delegate(ARGS))();
+		static if (ARGS.length) del(fiber.m_taskArgs.get!(Tuple!ARGS).expand);
+		else del();
+	}
 	
-	f.m_taskFunc = task;
+	f.m_taskDelegate = Variant(task);
+	static if (ARGS.length) f.m_taskArgs = VariantN!256(tuple(args));
+	f.m_taskFunc = &callDelegate;
 	f.m_taskCounter++;
 	auto handle = f.task();
 	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart, handle);
@@ -632,7 +642,9 @@ private class CoreTask : TaskFiber {
 		static CoreTask ms_coreTask;
 		CoreTask m_nextInQueue;
 		CoreTaskQueue* m_queue;
-		void delegate() m_taskFunc;
+		Variant m_taskDelegate;
+		VariantN!256 m_taskArgs;
+		void function(CoreTask) m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
 
@@ -678,7 +690,7 @@ private class CoreTask : TaskFiber {
 					m_running = true;
 					scope(exit) m_running = false;
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
-					task();
+					task(this);
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end, handle);
 				} catch( Exception e ){
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail, handle);
