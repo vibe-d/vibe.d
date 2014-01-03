@@ -975,10 +975,11 @@ private void workerThreadFunc()
 {
 	auto thisthr = Thread.getThis();
 	assert(s_core !is null);
+	if (getExitFlag()) return;
 	logDebug("entering worker thread");
 	runTask(toDelegate(&handleWorkerTasks));
 	logDebug("running event loop");
-	runEventLoop();
+	if (!getExitFlag()) runEventLoop();
 	logDebug("Worker thread exit.");
 }
 
