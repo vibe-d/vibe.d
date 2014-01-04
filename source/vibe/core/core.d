@@ -163,10 +163,16 @@ void setIdleHandler(bool delegate() del)
 	task will be called synchronously from within the vibeRunTask call. It will
 	continue to run until vibeYield() or any of the I/O or wait functions is
 	called.
+
+	Note that the maximum size of all args must not exceed MaxTaskParameterSize.
 */
 Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 {
 	import std.typecons : Tuple, tuple;
+
+	static assert(Tuple!ARGS.sizeof <= MaxTaskParameterSize,
+		"The arguments passed to runTask must not exceed "~
+		MaxTaskParameterSize.to!string~" bytes in total size.");
 
 	CoreTask f;
 	while (!f && !s_availableFibers.empty) {
@@ -190,7 +196,7 @@ Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 	}
 	
 	f.m_taskDelegate = Variant(task);
-	static if (ARGS.length) f.m_taskArgs = VariantN!256(tuple(args));
+	static if (ARGS.length) f.m_taskArgs = VariantN!MaxTaskParameterSize(tuple(args));
 	f.m_taskFunc = &callDelegate;
 	f.m_taskCounter++;
 	auto handle = f.task();
@@ -483,6 +489,12 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 */
 enum VibeVersionString = "0.7.18";
 
+/**
+	The maximum combined size of all parameters passed to a task delegate
+
+	See_Also: runTask
+*/
+enum MaxTaskParameterSize = 128;
 
 /**
 	Represents a timer.
@@ -643,7 +655,7 @@ private class CoreTask : TaskFiber {
 		CoreTask m_nextInQueue;
 		CoreTaskQueue* m_queue;
 		Variant m_taskDelegate;
-		VariantN!256 m_taskArgs;
+		VariantN!MaxTaskParameterSize m_taskArgs;
 		void function(CoreTask) m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
