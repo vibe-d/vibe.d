@@ -141,7 +141,7 @@ private class TaskPipeImpl {
 			}
 			if (need_signal) m_condition.notifyAll();
 		}
-		vibe.core.core.yield();
+		if (!m_growWhenFull) vibe.core.core.yield();
 	}
 
 	/** Returns a temporary view of the beginning of the transfer buffer.
