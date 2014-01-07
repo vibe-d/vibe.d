@@ -71,7 +71,6 @@ class Libevent2Driver : EventDriver {
 
 		event* m_timerEvent;
 		int m_timerIDCounter = 1;
-		int m_timerProcessCounter;
 		HashMap!(size_t, TimerInfo) m_timers;
 		Array!TimeoutEntry m_timeoutHeapStore;
 		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
@@ -384,21 +383,21 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		assert(pt !is null, "Accessing non-existent timer ID.");
 		pt.timeout = timeout;
 		pt.repeatDuration = periodic ? dur.total!"hnsecs" : 0;
-		pt.pending = true;
-		pt.processCounter = m_timerProcessCounter;
-		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
-			event_del(m_timerEvent);
-			assert(dur.total!"seconds"() <= int.max);
-			timeval tvdur;
-			tvdur.tv_sec = cast(int)dur.total!"seconds"();
-			tvdur.tv_usec = dur.fracSec().usecs();
-			event_add(m_timerEvent, &tvdur);
-			assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
+		if (!pt.pending) {
+			pt.pending = true;
+			acquireTimer(timer_id);
 		}
-		m_timeoutHeap.insert(TimeoutEntry(timeout, timer_id));
+		scheduleTimer(timeout, timer_id);
 	}
 
-	void stopTimer(size_t timer_id) { m_timers[timer_id].pending = false; }
+	void stopTimer(size_t timer_id)
+	{
+		auto pt = timer_id in m_timers;
+		if (pt.pending) {
+			pt.pending = false;
+			releaseTimer(timer_id);
+		}
+	}
 
 	void waitTimer(size_t timer_id)
 	{
@@ -421,25 +420,44 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 	private void processTimers()
 	{
-		m_timerProcessCounter++;
-
 		// process all timers that have expired up to now
 		auto now = Clock.currStdTime();
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
 			auto tm = m_timeoutHeap.front.id;
 			m_timeoutHeap.removeFront();
 
-			if (auto pt = tm in m_timers) {
-				if (pt.pending && pt.processCounter - m_timerProcessCounter < 0) {
-					if (pt.repeatDuration > 0) {
-						pt.timeout += pt.repeatDuration;
-						pt.processCounter = m_timerProcessCounter;
-					} else pt.pending = false;
-				}
-				if (pt.owner) m_core.resumeTask(pt.owner);
-				if (pt.callback) runTask(pt.callback);
+			auto pt = tm in m_timers;
+			if (!pt || !pt.pending) continue;
+	
+			Task owner = pt.owner;
+			auto callback = pt.callback;
+
+			if (pt.repeatDuration > 0) {
+				pt.timeout += pt.repeatDuration;
+				scheduleTimer(pt.timeout, tm);
+			} else {
+				pt.pending = false;
+				releaseTimer(tm);
 			}
+
+			if (owner) m_core.resumeTask(owner);
+			if (callback) runTask(callback);
 		}
+	}
+
+	private void scheduleTimer(long timeout, size_t id)
+	{
+		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
+			event_del(m_timerEvent);
+			auto dur = (timeout - Clock.currStdTime()).hnsecs;
+			assert(dur.total!"seconds"() <= int.max);
+			timeval tvdur;
+			tvdur.tv_sec = cast(int)dur.total!"seconds"();
+			tvdur.tv_usec = dur.fracSec().usecs();
+			event_add(m_timerEvent, &tvdur);
+			assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
+		}
+		m_timeoutHeap.insert(TimeoutEntry(timeout, id));
 	}
 
 	private static nothrow extern(C)
@@ -509,7 +527,6 @@ private struct TimerInfo {
 	size_t refCount = 1;
 	void delegate() callback;
 	Task owner;
-	int processCounter;
 	bool pending;
 
 	this(void delegate() callback) { this.callback = callback; }

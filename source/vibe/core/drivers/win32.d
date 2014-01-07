@@ -58,7 +58,6 @@ class Win32EventDriver : EventDriver {
 		bool[Win32TCPConnection] m_fileWriters;
 
 		int m_timerIDCounter = 1;
-		int m_timerProcessCounter;
 		HashMap!(size_t, TimerInfo) m_timers;
 		Array!TimeoutEntry m_timeoutHeapStore;
 		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
@@ -81,7 +80,7 @@ class Win32EventDriver : EventDriver {
 		m_fileCompletionEvent = CreateEventW(null, false, false, null);
 		m_registeredEvents ~= m_fileCompletionEvent;
 
-		m_timeoutHeap = heapify!"a.timeout > b.timeout"(m_timeoutHeapStore, 0);
+		m_timeoutHeap = heapify!(TimeoutEntry.compare)(m_timeoutHeapStore, 0);
 	}
 
 	~this()
@@ -163,24 +162,29 @@ class Win32EventDriver : EventDriver {
 
 	private void processTimers()
 	{
-		m_timerProcessCounter++;
-
 		// process all timers that have expired up to now
 		auto now = Clock.currStdTime();
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
 			auto tm = m_timeoutHeap.front.id;
 			m_timeoutHeap.removeFront();
 
-			if (auto pt = tm in m_timers) {
-				if (pt.pending && pt.processCounter - m_timerProcessCounter < 0) {
-					if (pt.repeatDuration > 0) {
-						pt.timeout += pt.repeatDuration;
-						pt.processCounter = m_timerProcessCounter;
-					} else pt.pending = false;
-				}
-				if (pt.owner) m_core.resumeTask(pt.owner);
-				if (pt.callback) runTask(pt.callback);
+			auto pt = tm in m_timers;
+			if (!pt || !pt.pending) continue;
+
+			Task owner = pt.owner;
+			auto callback = pt.callback;
+
+			if (pt.repeatDuration > 0) {
+				pt.timeout += pt.repeatDuration;
+				if (pt.timeout <= now) pt.timeout = now; // never try to process periodic timers faster than possible
+				m_timeoutHeap.insert(TimeoutEntry(pt.timeout, tm));
+			} else {
+				pt.pending = false;
+				releaseTimer(tm);
 			}
+
+			if (owner) m_core.resumeTask(owner);
+			if (callback) runTask(callback);
 		}
 	}
 
@@ -342,12 +346,21 @@ class Win32EventDriver : EventDriver {
 		assert(pt !is null, "Accessing non-existent timer ID.");
 		pt.timeout = timeout;
 		pt.repeatDuration = periodic ? dur.total!"hnsecs" : 0;
-		pt.pending = true;
-		pt.processCounter = m_timerProcessCounter;
+		if (!pt.pending) {
+			pt.pending = true;
+			acquireTimer(timer_id);
+		}
 		m_timeoutHeap.insert(TimeoutEntry(timeout, timer_id));
 	}
 
-	void stopTimer(size_t timer_id) { m_timers[timer_id].pending = false; }
+	void stopTimer(size_t timer_id)
+	{
+		auto pt = timer_id in m_timers;
+		if (pt.pending) {
+			pt.pending = false;
+			releaseTimer(timer_id);
+		}
+	}
 
 	void waitTimer(size_t timer_id)
 	{
@@ -365,8 +378,6 @@ class Win32EventDriver : EventDriver {
 			m_core.yieldForEvent();
 		}
 	}
-
-	private static bool compareTimerTimeout(TimeoutEntry a, TimeoutEntry b) { return a.timeout > b.timeout; }
 
 
 	static struct LookupStatus {
@@ -431,7 +442,6 @@ private struct TimerInfo {
 	size_t refCount = 1;
 	void delegate() callback;
 	Task owner;
-	int processCounter;
 	bool pending;
 
 	this(void delegate() callback) { this.callback = callback; }
