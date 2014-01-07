@@ -80,7 +80,7 @@ class Win32EventDriver : EventDriver {
 		m_fileCompletionEvent = CreateEventW(null, false, false, null);
 		m_registeredEvents ~= m_fileCompletionEvent;
 
-		m_timeoutHeap = heapify!(TimeoutEntry.compare)(m_timeoutHeapStore, 0);
+		m_timeoutHeap = heapify!"a.timeout > b.timeout"(m_timeoutHeapStore, 0);
 	}
 
 	~this()
