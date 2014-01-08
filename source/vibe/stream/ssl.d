@@ -415,10 +415,10 @@ private nothrow extern(C)
 {
 	import core.stdc.config;
 
-	uint onCryptoGetThreadID()
+	c_ulong onCryptoGetThreadID()
 	{
 		try {
-			return cast(uint)(cast(size_t)cast(void*)Thread.getThis() * 0x35d2c57);
+			return cast(c_ulong)(cast(size_t)cast(void*)Thread.getThis() * 0x35d2c57);
 		} catch (Exception e) {
 			logWarn("OpenSSL: failed to get current thread ID: %s", e.msg);
 			return 0;
