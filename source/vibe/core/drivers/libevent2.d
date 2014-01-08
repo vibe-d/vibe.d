@@ -38,7 +38,6 @@ import deimos.event2.util;
 import std.conv;
 import std.encoding : sanitize;
 import std.exception;
-import std.range;
 import std.string;
 
 version (Windows)

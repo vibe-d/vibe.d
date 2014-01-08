@@ -10,7 +10,7 @@ module vibe.utils.array;
 import vibe.utils.memory;
 
 import std.algorithm;
-import std.range;
+import std.range : isInputRange, isOutputRange;
 import std.traits;
 
 

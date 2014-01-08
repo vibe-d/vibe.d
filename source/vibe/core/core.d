@@ -18,7 +18,7 @@ import std.conv;
 import std.encoding;
 import std.exception;
 import std.functional;
-import std.range;
+import std.range : empty, front, popFront;
 import std.string;
 import std.variant;
 import core.atomic;
