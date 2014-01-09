@@ -556,7 +556,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 			Remarks: This field is only set if HTTPServerOption.parseQueryString is set.
 		*/
-		string[string] query;
+		FormFields query;
 
 		/** A map of general parameters for the request.
 
@@ -591,7 +591,7 @@ final class HTTPServerRequest : HTTPRequest {
 				A form request must either have the Content-Type
 				"application/x-www-form-urlencoded" or "multipart/form-data".
 		*/
-		string[string] form;
+		FormFields form;
 
 		/** Contains information about any uploaded file for a HTML _form request.
 

@@ -13,6 +13,7 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode;
 import vibe.utils.string;
+import vibe.utils.dictionarylist;
 
 import std.array;
 import std.exception;
@@ -22,7 +23,7 @@ import std.string;
 /**
 	Parses the form given by content_type and body_reader.
 */
-bool parseFormData(ref string[string] fields, ref FilePart[string] files, string content_type, InputStream body_reader, size_t max_line_length)
+bool parseFormData(ref FormFields fields, ref FilePart[string] files, string content_type, InputStream body_reader, size_t max_line_length)
 {
 	auto ct_entries = content_type.split(";");
 	if (!ct_entries.length) return false;
@@ -43,7 +44,7 @@ bool parseFormData(ref string[string] fields, ref FilePart[string] files, string
 /**
 	Parses a url encoded form (query string format) and puts the key/value pairs into params.
 */
-void parseURLEncodedForm(string str, ref string[string] params)
+void parseURLEncodedForm(string str, ref FormFields params)
 {
 	while (str.length > 0) {
 		// name part
@@ -51,17 +52,17 @@ void parseURLEncodedForm(string str, ref string[string] params)
 		if (idx == -1) {
 			idx = str.indexOfAny("&;");
 			if (idx == -1) {
-				params[urlDecode(str[0 .. $])] = "";
+				params.addField(urlDecode(str[0 .. $]), "");
 				return;
 			} else {
-				params[urlDecode(str[0 .. idx])] = "";
+				params.addField(urlDecode(str[0 .. idx]), "");
 				str = str[idx+1 .. $];
 				continue;
 			}
 		} else {
 			auto idx_amp = str.indexOfAny("&;");
 			if (idx_amp > -1 && idx_amp < idx) {
-				params[urlDecode(str[0 .. idx_amp])] = "";
+				params.addField(urlDecode(str[0 .. idx_amp]), "");
 				str = str[idx_amp+1 .. $];
 				continue;				
 			} else {
@@ -70,7 +71,7 @@ void parseURLEncodedForm(string str, ref string[string] params)
 				// value part
 				for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
 				string value = urlDecode(str[0 .. idx]);
-				params[name] = value;
+				params.addField(name, value);
 				str = idx < str.length ? str[idx+1 .. $] : null;
 			}
 		}
@@ -98,7 +99,7 @@ unittest
 	If any _files are contained in the form, they are written to temporary _files using
 	vibe.core.file.createTempFile and returned in the files field.
 */
-void parseMultiPartForm(ref string[string] fields, ref FilePart[string] files,
+void parseMultiPartForm(ref FormFields fields, ref FilePart[string] files,
 	string content_type, InputStream body_reader, size_t max_line_length)
 {
 	auto pos = content_type.indexOf("boundary=");			
@@ -110,6 +111,7 @@ void parseMultiPartForm(ref string[string] fields, ref FilePart[string] files,
 	while (parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary, max_line_length)) {}
 }
 
+alias FormFields = DictionaryList!(string, true);
 
 struct FilePart {
 	InetHeaderMap headers;
@@ -118,7 +120,7 @@ struct FilePart {
 }
 
 
-private bool parseMultipartFormPart(InputStream stream, ref string[string] form, ref FilePart[string] files, string boundary, size_t max_line_length)
+private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref FilePart[string] files, string boundary, size_t max_line_length)
 {
 	InetHeaderMap headers;
 	stream.parseRFC5322Header(headers);
@@ -156,7 +158,7 @@ private bool parseMultipartFormPart(InputStream stream, ref string[string] form,
 		// TODO: temp files must be deleted after the request has been processed!
 	} else {
 		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
-		form[name] = data;
+		form.addField(name, data);
 	}
 	return stream.readLine(max_line_length) != "--";
 }

@@ -524,7 +524,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	cfg.database = tmpUrl[slashIndex+1..queryIndex];
 	if(queryIndex != tmpUrl.length)
 	{
-		string[string] options;
+		FormFields options;
 		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
 		foreach (option, value; options) {
 			bool setBool(ref bool dst)
