@@ -1,7 +1,7 @@
 /**
 	This module contains the core functionality of the vibe framework.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -956,7 +956,9 @@ shared static this()
 		signal(SIGINT, &onSignal);
 	}
 
-	st_threads ~= ThreadContext(Thread.getThis(), false);
+	auto thisthr = Thread.getThis();
+	thisthr.name = "Main";
+	st_threads ~= ThreadContext(thisthr, false);
 
 	setupDriver();
 
