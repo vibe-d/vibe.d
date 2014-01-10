@@ -194,11 +194,6 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 /**
 */
 struct FixedRingBuffer(T, size_t N = 0) {
-	static assert(isInputRange!FixedRingBuffer && isOutputRange!(FixedRingBuffer, T));
-
-	static if (is(typeof({ T t; const(T) u; t = u; }))) alias TC = const(T);
-	else alias TC = T;
-
 	private {
 		static if( N > 0 ) T[N] m_buffer;
 		else T[] m_buffer;
@@ -240,7 +235,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	@property ref inout(T) back() inout { assert(!empty); return m_buffer[mod(m_start+m_fill-1)]; }
 
 	void put(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
-	void put(TC[] itms)
+	void put(TC : T)(TC[] itms)
 	{
 		if( !itms.length ) return;
 		assert(m_fill+itms.length <= m_buffer.length);
@@ -380,6 +375,8 @@ struct FixedRingBuffer(T, size_t N = 0) {
 }
 
 unittest {
+	static assert(isInputRange!(FixedRingBuffer!int) && isOutputRange!(FixedRingBuffer!int, int));
+
 	FixedRingBuffer!(int, 5) buf;
 	assert(buf.length == 0 && buf.freeSpace == 5); buf.put(1); // |1 . . . .
 	assert(buf.length == 1 && buf.freeSpace == 4); buf.put(2); // |1 2 . . .
