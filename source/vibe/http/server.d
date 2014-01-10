@@ -891,7 +891,10 @@ final class HTTPServerResponse : HTTPResponse {
 		auto cookie = new Cookie();
 		cookie.path = path;
 		cookie.value = value;
-		if (value is null) cookie.maxAge = 0;
+		if (value is null) {
+			cookie.maxAge = 0;
+			cookie.expires = "Thu, 01 Jan 1970 00:00:00 GMT";
+		}
 		cookies[name] = cookie;
 		return cookie;
 	}
