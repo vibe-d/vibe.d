@@ -83,7 +83,7 @@ deprecated("Please use parseURLEncodedForm instead.") alias parseUrlEncodedForm 
 
 unittest
 {
-	string[string] dst;
+	FormFields dst;
 	parseURLEncodedForm("a=b;c;dee=asd&e=fgh&f=j%20l", dst);
 	assert("a" in dst && dst["a"] == "b");
 	assert("c" in dst && dst["c"] == "");

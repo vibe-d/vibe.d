@@ -29,7 +29,7 @@ import std.exception : enforce;
 */
 struct DictionaryList(Value, bool case_sensitive = true) {
 	private {
-		static struct Field { uint keyCheckSum; string key; string value; }
+		static struct Field { uint keyCheckSum; string key; Value value; }
 		Field[64] m_fields;
 		size_t m_fieldCount = 0;
 		Field[] m_extendedFields;
@@ -57,13 +57,33 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 		}
 	}
 
+	/** Removes all fields that matches the given key.
+	*/
+	void removeAll(string key)
+	{
+		auto keysum = computeCheckSumI(key);
+		for (size_t i = 0; i < m_fieldCount;) {
+			if (m_fields[i].keyCheckSum == keysum && matches(m_fields[i].key, key)) {
+				auto slice = m_fields[0 .. m_fieldCount];
+				removeFromArrayIdx(slice, i);
+				m_fieldCount--;
+			} else i++;
+		}
+
+		for (size_t i = 0; i < m_extendedFields.length;) {
+			if (m_fields[i].keyCheckSum == keysum && matches(m_fields[i].key, key))
+				removeFromArrayIdx(m_extendedFields, i);
+			else i++;
+		}
+	}
+
 	/** Adds a new field to the map.
 
 		The new field will be added regardless of any existing fields that
 		have the same key, possibly resulting in duplicates. Use opIndexAssign
 		if you want to avoid duplicates.
 	*/
-	void addField(string key, string value)
+	void addField(string key, Value value)
 	{
 		auto keysum = computeCheckSumI(key);
 		if (m_fieldCount < m_fields.length)
@@ -75,15 +95,40 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 
 		If no field is found, def_val is returned.
 	*/
-	string get(string key, string def_val = null)
+	Value get(string key, lazy Value def_val = Value.init)
 	const {
-		if( auto pv = key in this ) return *pv;
+		if (auto pv = key in this) return *pv;
 		return def_val;
+	}
+
+	/** Returns all values matching the given key.
+
+		Note that the version returning an array will allocate for each call.
+	*/
+	const(Value)[] getAll(string key)
+	const {
+		import std.array;
+		auto ret = appender!(const(Value)[])();
+		getAll(key, (v) { ret.put(v); });
+		return ret.data;
+	}
+	/// ditto
+	void getAll(string key, scope void delegate(const(Value)) del)
+	const {
+		uint keysum = computeCheckSumI(key);
+		foreach (ref f; m_fields[0 .. m_fieldCount]) {
+			if (f.keyCheckSum != keysum) continue;
+			if (matches(f.key, key)) del(f.value);
+		}
+		foreach (ref f; m_extendedFields) {
+			if (f.keyCheckSum != keysum) continue;
+			if (matches(f.key, key)) del(f.value);
+		}
 	}
 
 	/** Returns the first value matching the given key.
 	*/
-	string opIndex(string key)
+	Value opIndex(string key)
 	const {
 		auto pitm = key in this;
 		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
@@ -92,7 +137,7 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 	
 	/** Adds or replaces the given field with a new value.
 	*/
-	string opIndexAssign(string val, string key)
+	Value opIndexAssign(Value val, string key)
 	{
 		auto pitm = key in this;
 		if( pitm ) *pitm = val;
@@ -103,7 +148,7 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 
 	/** Returns a pointer to the first field that matches the given key.
 	*/
-	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
+	inout(Value)* opBinaryRight(string op)(string key) inout if(op == "in") {
 		uint keysum = computeCheckSumI(key);
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ) return &m_fields[idx].value;
@@ -118,7 +163,7 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 
 	/** Iterates over all fields, including duplicates.
 	*/
-	int opApply(int delegate(ref string key, ref string val) del)
+	int opApply(int delegate(ref string key, ref Value val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
 			string kcopy = kv.key;
@@ -134,7 +179,7 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 	}
 
 	/// ditto
-	int opApply(int delegate(ref string val) del)
+	int opApply(int delegate(ref Value val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
 			if( auto ret = del(kv.value) )
@@ -162,15 +207,15 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 	const {
 		foreach (i, ref const(Field) entry; map) {
 			if (entry.keyCheckSum != keysum) continue;
-			static if (case_sensitive) {
-				if (entry.key == key)
-					return i;
-			} else {
-				if( icmp2(entry.key, key) == 0 )
-					return i;
-			}
+			if (matches(entry.key, key)) return i;
 		}
 		return -1;
+	}
+
+	private static bool matches(string a, string b)
+	{
+		static if (case_sensitive) return a == b;
+		else return icmp2(a, b) == 0;
 	}
 	
 	// very simple check sum function with a good chance to match
@@ -182,4 +227,28 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 		foreach (char ch; s) csum += 347 * (csum + (ch & 0x1101_1111));
 		return csum;
 	}
+}
+
+unittest {
+	DictionaryList!(int, true) a;
+	a.addField("a", 1);
+	a.addField("a", 2);
+	assert(a["a"] == 1);
+	assert(a.getAll("a") == [1, 2]);
+	a["a"] = 3;
+	assert(a["a"] == 3);
+	assert(a.getAll("a") == [3, 2]);
+	a.removeAll("a");
+	assert(a.getAll("a").length == 0);
+	assert(a.get("a", 4) == 4);
+	a.addField("b", 2);
+	a.addField("b", 1);
+	a.remove("b");
+	assert(a.getAll("b") == [1]);
+
+	DictionaryList!(int, false) b;
+	b.addField("a", 1);
+	b.addField("A", 2);
+	assert(b["A"] == 1);
+	assert(b.getAll("a") == [1, 2]);
 }
