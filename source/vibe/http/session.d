@@ -53,7 +53,7 @@ final struct Session {
 	/// Queries the session for the existence of a particular key.
 	bool isKeySet(string key) { return m_store.isKeySet(m_id, key); }
 
-	T get(T)(string key) { return m_store.get(m_id, key).get!T; }
+	T get(T)(string key, lazy T def_value = T.init) { return m_store.get(m_id, key, Variant(def_value)).get!T; }
 	void set(T)(string key, T value) { m_store.set(m_id, key, Variant(value)); }
 
 	/**
@@ -94,7 +94,7 @@ final struct Session {
 		}
 		---
 	*/
-	string opIndex(string name) { return m_store.get(m_id, name).get!string; }
+	string opIndex(string name) { return m_store.get(m_id, name, Variant(string.init)).get!string; }
 	/// ditto
 	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
 
@@ -119,7 +119,7 @@ interface SessionStore {
 	void set(string id, string name, Variant value);
 
 	/// Returns the value for a given session key.
-	Variant get(string id, string name, Variant defaultVal = null);
+	Variant get(string id, string name, lazy Variant defaultVal);
 
 	/// Determines if a certain session key is set.
 	bool isKeySet(string id, string key);
@@ -174,7 +174,7 @@ final class MemorySessionStore : SessionStore {
 		foreach(k, v; m_sessions[id]) logTrace("Csession[%s][%s] = %s", id, k, v);
 	}
 
-	Variant get(string id, string name, Variant defaultVal = null)
+	Variant get(string id, string name, lazy Variant defaultVal)
 	{
 		assert(id in m_sessions, "session not in store");
 		foreach(k, v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
