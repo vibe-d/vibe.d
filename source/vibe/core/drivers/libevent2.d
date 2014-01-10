@@ -494,7 +494,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
 				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
 			}
-			if( info.task && info.task.state != Fiber.State.TERM ) info.core.resumeTask(info.task);
+			if (info.task && info.task.running) info.core.resumeTask(info.task);
 		} catch( Throwable e ){
 			logWarn("Got exception while getting DNS results: %s", e.msg);
 		}
@@ -839,7 +839,7 @@ class Libevent2UDPConnection : UDPConnection {
 
 		try {
 			auto f = ctx.readOwner;
-			if( f && f.state != Fiber.State.TERM )
+			if (f && f.running)
 				ctx.core.resumeTask(f);
 		} catch( Throwable e ){
 			logError("Exception onUDPRead: %s", e.msg);

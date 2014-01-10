@@ -541,7 +541,7 @@ logDebug("running task");
 
 		auto f = ctx.readOwner;
 		try {
-			if( f && f.state != Fiber.State.TERM )
+			if (f && f.running)
 				ctx.core.resumeTask(f);
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);

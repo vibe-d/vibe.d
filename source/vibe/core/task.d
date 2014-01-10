@@ -18,8 +18,6 @@ import std.variant;
 
 
 /** Represents a single task as started using vibe.core.runTask.
-
-	All methods of TaskFiber are also available as methods of Task.
 */
 struct Task {
 	private {
@@ -35,9 +33,6 @@ struct Task {
 
 	this(in Task other) { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
 
-	/// Makes all methods of TaskFiber available for Task.
-	alias fiber this;
-
 	/** Returns the Task instance belonging to the calling task.
 	*/
 	static Task getThis()
@@ -49,22 +44,32 @@ struct Task {
 		return Task(tfiber, tfiber.m_taskCounter);
 	}
 
-	nothrow:
-	@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
-	@property size_t taskCounter() const { return m_taskCounter; }
-	@property inout(Thread) thread() inout { if( m_fiber ) return (cast(inout(TaskFiber))m_fiber).thread; return null; }
+	nothrow {
+		@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
+		@property size_t taskCounter() const { return m_taskCounter; }
+		@property inout(Thread) thread() inout { if (m_fiber) return this.fiber.thread; return null; }
 
-	/** Determines if the task is still running.
-	*/
-	@property bool running()
-	const {
-		assert(m_fiber, "Invalid task handle");
-		try if (this.fiber.state == Fiber.State.TERM ) return false; catch {}
-		return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
+		/** Determines if the task is still running.
+		*/
+		@property bool running()
+		const {
+			assert(m_fiber, "Invalid task handle");
+			try if (this.fiber.state == Fiber.State.TERM) return false; catch {}
+			return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
+		}
 	}
 
-	bool opEquals(in ref Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
-	bool opEquals(in Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
+	@property inout(MessageQueue) messageQueue() inout { assert(running); return fiber.messageQueue; }
+
+	T opCast(T)() const nothrow if (is(T == bool)) { return m_fiber !is null; }
+
+	void join() { if (running) fiber.join(); }
+	void interrupt() { if (running) fiber.interrupt(); }
+	void terminate() { if (running) fiber.terminate(); }
+
+
+	bool opEquals(in ref Task other) const nothrow { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
+	bool opEquals(in Task other) const nothrow { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
 }
 
 
@@ -115,14 +120,18 @@ class TaskFiber : Fiber {
 	*/
 	abstract void terminate();
 
-	/** Sets a task local variable.
+	/** Sets a task local variable. Will be deprecated soon.
+
+		Please use vibe.core.core.TaskLocal instead.
 	*/
 	void set(T)(string name, T value)
 	{
 		m_taskLocalStorage[name] = Variant(value);
 	}
 
-	/** Returns a task local variable.
+	/** Returns a task local variable. Will be deprecated soon.
+
+		Please use vibe.core.core.TaskLocal instead.
 	*/
 	T get(T)(string name)
 	{
@@ -132,7 +141,9 @@ class TaskFiber : Fiber {
 		return pvar.get!T();
 	}
 
-	/** Determines if a certain task local variable is set.
+	/** Determines if a certain task local variable is set. Will be deprecated soon.
+
+		Please use vibe.core.core.TaskLocal instead.
 	*/
 	bool isSet(string name)
 	{
@@ -156,6 +167,7 @@ class InterruptException : Exception {
 		super("Task interrupted.");
 	}
 }
+
 
 class MessageQueue {
 	private {

@@ -84,7 +84,7 @@ struct LockedConnection(Connection) {
 	{
 		debug assert(m_magic == 0xB1345AC2, "LockedConnection value corrupted.");
 		if( m_conn ){
-			auto fthis = Fiber.getThis();
+			auto fthis = Task.getThis();
 			assert(fthis is m_task);
 			m_pool.m_lockCount[m_conn]++;
 			logTrace("conn %s copy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]);
@@ -95,8 +95,8 @@ struct LockedConnection(Connection) {
 	{
 		debug assert(m_magic == 0xB1345AC2, "LockedConnection value corrupted.");
 		if( m_conn ){
-			auto fthis = Fiber.getThis();
-			assert(fthis is m_task, "Locked connection destroyed in foreign fiber.");
+			auto fthis = Task.getThis();
+			assert(fthis is m_task, "Locked connection destroyed in foreign task.");
 			auto plc = m_conn in m_pool.m_lockCount;
 			assert(plc !is null);
 			assert(*plc >= 1);
