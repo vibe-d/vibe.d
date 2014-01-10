@@ -322,6 +322,11 @@ class Win32EventDriver : EventDriver {
 		return new Win32ManualEvent(this);
 	}
 
+	FileEvent createFileEvent(int file_descriptor, FileEvent.Event events)
+	{
+		assert(false, "Not implemented.");
+	}
+
 	size_t createTimer(void delegate() callback)
 	{
 		assert(m_tid == GetCurrentThreadId());

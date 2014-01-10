@@ -118,6 +118,10 @@ interface EventDriver {
 	*/
 	ManualEvent createManualEvent();
 
+	/** Creates an event for waiting on a non-bocking file handle.
+	*/
+	FileEvent createFileEvent(int file_descriptor, FileEvent.Event events);
+
 	/// Deprecated compatibility alias
 	deprecated("Please use createNanualEvent instead.") alias createSignal = createManualEvent;
 
@@ -159,3 +163,15 @@ interface DriverCore {
 	void notifyIdle();
 }
 
+interface FileEvent {
+	enum Event {
+		none = 0,
+		read = 1<<0,
+		write = 1<<1,
+		signal = 1<<2,
+		any = read|write|signal
+	}
+	
+	void wait(Event which = Event.any);
+	bool wait(Duration timeout, Event which = Event.any);
+}
