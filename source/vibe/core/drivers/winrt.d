@@ -89,7 +89,7 @@ version(VibeWinrtDriver)
 			assert(false);
 		}
 
-		NetworkAddress resolveHost(string host, ushort family, bool no_dns)
+		NetworkAddress resolveHost(string host, ushort family, bool use_dns)
 		{
 			assert(false);
 		}

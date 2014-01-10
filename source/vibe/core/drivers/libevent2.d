@@ -202,7 +202,7 @@ class Libevent2Driver : EventDriver {
 		assert(false);
 	}
 
-	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
+	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
 	{
 		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
 
@@ -224,7 +224,7 @@ class Libevent2Driver : EventDriver {
 			if( ret == 1 ) return addr;
 		}
 
-		enforce(!no_dns, "Invalid IP address string: "~host);
+		enforce(use_dns, "Invalid IP address string: "~host);
 
 		// then try a DNS lookup
 		foreach( af; addrfamilies ){
@@ -301,7 +301,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
 	{
-		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
+		auto bind_addr = resolveHost(address, AF_UNSPEC, false);
 		bind_addr.port = port;
 
 		auto listenfd_raw = socket(bind_addr.family, SOCK_STREAM, 0);
@@ -345,7 +345,7 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
-		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, true);
+		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, false);
 		bindaddr.port = port;
 
 		return new Libevent2UDPConnection(bindaddr, this);

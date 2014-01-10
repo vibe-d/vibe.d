@@ -206,7 +206,7 @@ class Win32EventDriver : EventDriver {
 		return new Win32DirectoryWatcher(m_core, path, recursive);
 	}
 
-	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
+	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
 	{
 		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
 
@@ -222,6 +222,7 @@ class Win32EventDriver : EventDriver {
 			return addr;
 		}
 
+		enforce(use_dns, "Invalid IP address string: "~host);
 
 		LookupStatus status;
 		status.task = Task.getThis();
