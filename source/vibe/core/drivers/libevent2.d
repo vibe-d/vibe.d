@@ -723,6 +723,7 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 
 	this(Libevent2Driver driver, int file_descriptor, Event events)
 	{
+		assert(events != Event.none);
 		super(driver);
 		m_fd = file_descriptor;
 		short evts = 0;
@@ -730,6 +731,7 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 		if (events & Event.write) evts |= EV_WRITE;
 		if (events & Event.signal) evts |= EV_SIGNAL;
 		m_event = event_new(driver.eventLoop, file_descriptor, evts|EV_PERSIST, &onFileTriggered, cast(void*)this);
+		event_add(m_event, null);
 	}
 
 	~this()
@@ -741,9 +743,12 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
-		scope (exit) m_waiter = Task.init;
+		scope (exit) {
+			m_waiter = Task.init;
+			m_activeEvents &= ~which;
+		}
 
-		while ((m_activeEvents & which) == 0)
+		while ((m_activeEvents & which) == Event.none)
 			getThreadLibeventDriverCore().yieldForEvent();
 	}
 
@@ -751,18 +756,21 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
-		scope (exit) m_waiter = Task.init;
+		scope (exit) {
+			m_waiter = Task.init;
+			m_activeEvents &= ~which;
+		}
 
 		auto tm = m_driver.createTimer(null);
 		scope (exit) m_driver.releaseTimer(tm);
 		m_driver.m_timers[tm].owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 
-		while ((m_activeEvents & which) == 0) {
+		while ((m_activeEvents & which) == Event.none) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			if (!m_driver.isTimerPending(tm)) break;
 		}
-		return (m_activeEvents & which) != 0;
+		return (m_activeEvents & which) != Event.none;
 	}
 
 	private static nothrow extern(C)
