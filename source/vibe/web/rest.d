@@ -183,6 +183,9 @@ unittest
 
 		// GET /api/:id/name
 		string getName(int id);
+
+		// GET /some_custom_json
+		Json getSomeCustomJson();
 	}
 
 	// vibe.d takes care of all JSON encoding/decoding
@@ -221,6 +224,13 @@ unittest
 		string getName(int id)
 		{
 			return m_users[id];
+		}
+
+		Json getSomeCustomJson()
+		{
+			Json ret = Json.emptyObject;
+			ret["somefield"] = "Hello, World!";
+			return ret;
 		}
 	}
 
@@ -431,6 +441,8 @@ unittest
 		@property string[] users();
 		// GET /:id/name
 		string getName(int id);
+
+		Json getSomeCustomJson();
 	}
 
 	void application()
