@@ -356,9 +356,9 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2ManualEvent(this);
 	}
 
-	Libevent2FileEvent createFileEvent(int fd, FileEvent.Event events)
+	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events)
 	{
-		return new Libevent2FileEvent(this, fd, events);
+		return new Libevent2FileDescriptorEvent(this, fd, events);
 	}
 
 	size_t createTimer(void delegate() callback)
@@ -713,23 +713,22 @@ class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 }
 
 
-class Libevent2FileEvent : Libevent2Object, FileEvent {
+class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent {
 	private {
 		int m_fd;
 		deimos.event2.event.event* m_event;
-		Event m_activeEvents;
+		Trigger m_activeEvents;
 		Task m_waiter;
 	}
 
-	this(Libevent2Driver driver, int file_descriptor, Event events)
+	this(Libevent2Driver driver, int file_descriptor, Trigger events)
 	{
-		assert(events != Event.none);
+		assert(events != Trigger.none);
 		super(driver);
 		m_fd = file_descriptor;
 		short evts = 0;
-		if (events & Event.read) evts |= EV_READ;
-		if (events & Event.write) evts |= EV_WRITE;
-		if (events & Event.signal) evts |= EV_SIGNAL;
+		if (events & Trigger.read) evts |= EV_READ;
+		if (events & Trigger.write) evts |= EV_WRITE;
 		m_event = event_new(driver.eventLoop, file_descriptor, evts|EV_PERSIST, &onFileTriggered, cast(void*)this);
 		event_add(m_event, null);
 	}
@@ -739,7 +738,7 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 		event_free(m_event);
 	}
 
-	void wait(Event which)
+	void wait(Trigger which)
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
@@ -748,11 +747,11 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 			m_activeEvents &= ~which;
 		}
 
-		while ((m_activeEvents & which) == Event.none)
+		while ((m_activeEvents & which) == Trigger.none)
 			getThreadLibeventDriverCore().yieldForEvent();
 	}
 
-	bool wait(Duration timeout, Event which)
+	bool wait(Duration timeout, Trigger which)
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
@@ -766,25 +765,23 @@ class Libevent2FileEvent : Libevent2Object, FileEvent {
 		m_driver.m_timers[tm].owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 
-		while ((m_activeEvents & which) == Event.none) {
+		while ((m_activeEvents & which) == Trigger.none) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			if (!m_driver.isTimerPending(tm)) break;
 		}
-		return (m_activeEvents & which) != Event.none;
+		return (m_activeEvents & which) != Trigger.none;
 	}
 
 	private static nothrow extern(C)
-	void onFileTriggered(evutil_socket_t, short events, void* userptr)
+	void onFileTriggered(evutil_socket_t fd, short events, void* userptr)
 	{
 		try {
 			auto core = getThreadLibeventDriverCore();
-			auto evt = cast(Libevent2FileEvent)userptr;
+			auto evt = cast(Libevent2FileDescriptorEvent)userptr;
 
-			evt.m_activeEvents = Event.none;
-			if (events & EV_READ) evt.m_activeEvents |= Event.read;
-			if (events & EV_WRITE) evt.m_activeEvents |= Event.write;
-			if (events & EV_SIGNAL) evt.m_activeEvents |= Event.signal;
-
+			evt.m_activeEvents = Trigger.none;
+			if (events & EV_READ) evt.m_activeEvents |= Trigger.read;
+			if (events & EV_WRITE) evt.m_activeEvents |= Trigger.write;
 			if (evt.m_waiter) core.resumeTask(evt.m_waiter);
 		} catch (Exception e) {
 			logError("Exception while handling file event: %s", e.msg);

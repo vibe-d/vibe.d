@@ -120,7 +120,7 @@ interface EventDriver {
 
 	/** Creates an event for waiting on a non-bocking file handle.
 	*/
-	FileEvent createFileEvent(int file_descriptor, FileEvent.Event events);
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers);
 
 	/// Deprecated compatibility alias
 	deprecated("Please use createNanualEvent instead.") alias createSignal = createManualEvent;
@@ -163,15 +163,35 @@ interface DriverCore {
 	void notifyIdle();
 }
 
-interface FileEvent {
-	enum Event {
-		none = 0,
-		read = 1<<0,
-		write = 1<<1,
-		signal = 1<<2,
-		any = read|write|signal
+
+/**
+	Generic file descriptor event.
+
+	This kind of event can be used to wait for events on a non-blocking
+	file descriptor. Note that this can usually only be used on socket
+	based file descriptors.
+*/
+interface FileDescriptorEvent {
+	/** Event mask selecting the kind of events to listen for.
+	*/
+	enum Trigger {
+		none = 0,         /// Match no event (invalid value)
+		read = 1<<0,      /// React on read-ready events
+		write = 1<<1,     /// React on write-ready events
+		any = read|write  /// Match any kind of event
 	}
-	
-	void wait(Event which = Event.any);
-	bool wait(Duration timeout, Event which = Event.any);
+
+	/** Waits for the selected event to occur.
+
+		Params:
+			which = Optional event mask to react only on certain events
+			timeout = Maximum time to wait for an event
+
+		Returns:
+			The overload taking the timeout parameter returns true if
+			an event was received on time and false otherwise.
+	*/
+	void wait(Trigger which = Trigger.any);
+	/// ditto
+	bool wait(Duration timeout, Trigger which = Trigger.any);
 }

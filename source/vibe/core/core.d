@@ -364,12 +364,36 @@ Timer createTimer(void delegate() callback)
 	return Timer(drv, drv.createTimer(callback));
 }
 
+
 /**
-	Sets a variable specific to the calling task/fiber.
+	Creates an event to wait on an existing file descriptor.
+
+	The file descriptor usually needs to be a non-blocking socket for this to
+	work.
+
+	Params:
+		file_descriptor = The Posix file descriptor to watch
+		event_mask = Specifies which events will be listened for
+
+	Returns:
+		Returns a newly created FileDescriptorEvent associated with the given
+		file descriptor.
+*/
+FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger event_mask)
+{
+	auto drv = getEventDriver();
+	return drv.createFileDescriptorEvent(file_descriptor, event_mask);
+}
+
+
+/**
+	Sets a variable specific to the calling task/fiber. Scheduled for deprecation.
+
+	Please use TaskLocal instead.
 
 	Remarks:
-		This function also works if called from outside if a fiber. In this case, it will work
-		on a thread local storage.
+		This function also works if called from outside if a fiber. In this
+		case, it will work on a thread local storage.
 */
 void setTaskLocal(T)(string name, T value)
 {
@@ -379,11 +403,13 @@ void setTaskLocal(T)(string name, T value)
 }
 
 /**
-	Returns a task/fiber specific variable.
+	Returns a task/fiber specific variable. Scheduled for deprecation.
+
+	Please use TaskLocal instead.
 
 	Remarks:
-		This function also works if called from outside if a fiber. In this case, it will work
-		on a thread local storage.
+		This function also works if called from outside if a fiber. In this
+		case, it will work on a thread local storage.
 */
 T getTaskLocal(T)(string name)
 {
@@ -395,11 +421,13 @@ T getTaskLocal(T)(string name)
 }
 
 /**
-	Returns a task/fiber specific variable.
+	Returns a task/fiber specific variable. Scheduled for deprecation.
+
+	Please use TaskLocal instead.
 
 	Remarks:
-		This function also works if called from outside if a fiber. In this case, it will work
-		on a thread local storage.
+		This function also works if called from outside if a fiber. In this
+		case, it will work on a thread local storage.
 */
 bool isTaskLocalSet(string name)
 {
@@ -408,14 +436,16 @@ bool isTaskLocalSet(string name)
 	return (name in s_taskLocalStorageGlobal) !is null;
 }
 
+
 /**
 	Sets the stack size for tasks.
 
-	The default stack size is set to 16 KiB, which is sufficient for most tasks. Tuning this value
-	can be used to reduce memory usage for great numbers of concurrent tasks or to allow applications
-	with heavy stack use.
+	The default stack size is set to 16 KiB, which is sufficient for most tasks.
+	Tuning this value can be used to reduce memory usage for great numbers of
+	concurrent tasks or to enable applications with heavy stack use.
 
-	Note that this function must be called before any task is started to have an effect.
+	Note that this function must be called before any task is started to have an
+	effect.
 */
 void setTaskStackSize(size_t sz)
 {

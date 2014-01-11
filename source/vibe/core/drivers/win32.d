@@ -322,7 +322,7 @@ class Win32EventDriver : EventDriver {
 		return new Win32ManualEvent(this);
 	}
 
-	FileEvent createFileEvent(int file_descriptor, FileEvent.Event events)
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger events)
 	{
 		assert(false, "Not implemented.");
 	}
