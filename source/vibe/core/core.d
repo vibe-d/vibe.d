@@ -869,13 +869,14 @@ private class VibeDriverCore : DriverCore {
 				again = s_idleHandler();
 			else again = false;
 
-			while (!s_yieldedTasks.empty) {
+			for (auto limit = s_yieldedTasks.length; limit > 0 && !s_yieldedTasks.empty; limit--) {
 				auto tf = s_yieldedTasks.front;
 				s_yieldedTasks.popFront();
 				resumeCoreTask(tf);
 			}
-			if (!s_yieldedTasks.empty)
-				again = true;
+
+			if (!s_yieldedTasks.empty) again = true;
+
 			if (again && !processEvents()) {
 				s_exitEventLoop = true;
 				return;
@@ -1201,6 +1202,7 @@ version(Posix)
 
 private struct CoreTaskQueue {
 	CoreTask first, last;
+	size_t length;
 
 	@disable this(this);
 
@@ -1218,6 +1220,7 @@ private struct CoreTaskQueue {
 		else
 			last.m_nextInQueue = task;
 		last = task;
+		length++;
 	}
 
 	void popFront()
@@ -1228,6 +1231,7 @@ private struct CoreTaskQueue {
 		first.m_nextInQueue = null;
 		first.m_queue = null;
 		first = next;
+		length--;
 	}
 }
 
