@@ -57,8 +57,10 @@ void processCommandLineArgs(ref string[] args)
 
 	Returns:
 		$(D true) if the value was found, $(D false) otherwise.
+
+	See_Also: readRequiredOption
 */
-bool getOption(T)(string names, T* pvalue, string help_text)
+bool readOption(T)(string names, T* pvalue, string help_text)
 {
 	// May happen due to http://d.puremagic.com/issues/show_bug.cgi?id=9881
 	if (!g_args) init();
@@ -83,6 +85,26 @@ bool getOption(T)(string names, T* pvalue, string help_text)
 	}
 
 	return false;
+}
+
+/// Compatibility alias
+alias getOption = readOption;
+
+
+/**
+	The same as getOption, but throws an exception if the given option is missing.
+
+	See_Also: readOption
+*/
+T readRequiredOption(T)(string names, string help_text)
+{
+	string formattedNames() {
+		return names.split("|").map!(s => s.length == 1 ? "-" ~ s : "--" ~ s).join("/");
+	}
+	T ret;
+	enforce(readOption(names, &ret, help_text),
+		format("Missing mandatory option %s.", formattedNames()));
+	return ret;
 }
 
 
