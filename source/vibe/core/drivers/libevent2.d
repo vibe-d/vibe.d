@@ -40,6 +40,7 @@ import std.encoding : sanitize;
 import std.exception;
 import std.range;
 import std.string;
+import std.file;
 
 version (Windows)
 {
@@ -107,6 +108,13 @@ class Libevent2Driver : EventDriver {
 		
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
+		version(linux) {
+			if (exists("/etc/hosts")) {
+				if (evdns_base_load_hosts(m_dnsBase, "/etc/hosts") != 0) {
+					logError("Failed to load /etc/hosts");
+				}
+			}
+		}
 	}
 
 	~this()
@@ -186,50 +194,39 @@ class Libevent2Driver : EventDriver {
 		assert(false);
 	}
 
+	struct GetAddrInfoMsg {
+		NetworkAddress* addr;
+		bool done = false;
+		int err = 0;
+	}
+
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
 	{
-		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
-
-		// HACK to work around missing /etc/hosts processing
-		if (host == "localhost") {
-			if (family == AF_INET6) host = "::1";
-			else host = "127.0.0.1";
-		}
-
 		NetworkAddress addr;
-		// first try to decode as IP address
-		foreach( af; addrfamilies ){
-			if( family != af && family != AF_UNSPEC ) continue;
-			addr.family = af;
-			void* ptr;
-			if( af == AF_INET ) ptr = &addr.sockAddrInet4.sin_addr;
-			else ptr = &addr.sockAddrInet6.sin6_addr;
-			auto ret = evutil_inet_pton(af, toStringz(host), ptr);
-			if( ret == 1 ) return addr;
+		GetAddrInfoMsg msg;
+		msg.addr = &addr;
+
+		evutil_addrinfo hints;
+		hints.ai_family = family;
+		if (no_dns) {
+			//When this flag is set, we only resolve numeric IPv4 and IPv6
+			//addresses; if the nodename would require a name lookup, we instead
+			//give an EVUTIL_EAI_NONAME error.
+			hints.ai_flags = EVUTIL_AI_NUMERICHOST;
 		}
 
-		enforce(!no_dns, "Invalid IP address string: "~host);
-
-		// then try a DNS lookup
-		foreach( af; addrfamilies ){
-			DnsLookupInfo dnsinfo;
-			dnsinfo.core = m_core;
-			dnsinfo.task = Task.getThis();
-			dnsinfo.addr = &addr;
-			addr.family = af;
-
-			evdns_request* dnsreq;
-logDebug("dnsresolve");
-			if( af == AF_INET ) dnsreq = evdns_base_resolve_ipv4(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
-			else dnsreq = evdns_base_resolve_ipv6(m_dnsBase, toStringz(host), 0, &onDnsResult, &dnsinfo);
-
-logDebug("dnsresolve yield");
-			while( !dnsinfo.done ) m_core.yieldForEvent();
-logDebug("dnsresolve ret %s", dnsinfo.status);
-			if( dnsinfo.status == DNS_ERR_NONE ) return addr;
+		assert(m_dnsBase);
+		logDebug("dnsresolve %s", host);
+		evdns_getaddrinfo_request* dnsReq = evdns_getaddrinfo(m_dnsBase, toStringz(host), null,
+			&hints, &onAddrInfo, &msg);
+		logDebug("dnsresolve yield");
+		while( !msg.done ) m_core.yieldForEvent();
+		logDebug("dnsresolve ret");
+		if( msg.err == DNS_ERR_NONE ) {
+			return addr;
+		} else {
+			throw new Exception("Failed to lookup host: %s. Reason: %s".format(host, evutil_gai_strerror(msg.err)));
 		}
-
-		throw new Exception("Failed to lookup host: "~host);
 	}
 
 	TCPConnection connectTCP(string host, ushort port)
@@ -345,33 +342,36 @@ logDebug("dnsresolve ret %s", dnsinfo.status);
 		return new Libevent2Timer(this, callback);
 	}
 
-	static struct DnsLookupInfo {
-		NetworkAddress* addr;
-		Task task;
-		DriverCore core;
-		bool done = false;
-		int status = 0;
-	}
-
-	private static nothrow extern(C) void onDnsResult(int result, char type, int count, int ttl, void* addresses, void* arg)
+	private static nothrow extern(C) void onAddrInfo(int err, evutil_addrinfo* res, void* arg)
 	{
-		auto info = cast(DnsLookupInfo*)arg;
-		if( count <= 0 ){
-			info.done = true;
-			info.status = result;
-			return;
+		auto msg = cast(GetAddrInfoMsg*)arg;
+		msg.err = err;
+		msg.done = true;
+		if (err != DNS_ERR_NONE) {
+			return;			
 		}
-		info.done = true;
-		info.status = result;
+
+		assert(res !is null);
+		scope(exit){ evutil_freeaddrinfo(res); }
+
+		// Note that we are only returning the first address and ignoring the
+		// rest. Ideally we should return all of the NetworkAddress
+		msg.addr.family = cast(ushort)res.ai_family;
+		assert(res.ai_addrlen == msg.addr.sockAddrLen());
 		try {
-			switch( info.addr.family ){
-				default: assert(false, "Unimplemented address family");
-				case AF_INET: info.addr.sockAddrInet4.sin_addr.s_addr = *cast(uint*)addresses; break;
-				case AF_INET6: info.addr.sockAddrInet6.sin6_addr.s6_addr = *cast(ubyte[16]*)addresses; break;
+			switch( msg.addr.family ){
+				case AF_INET:
+					auto sock4 = cast(sockaddr_in*)res.ai_addr;
+					msg.addr.sockAddrInet4.sin_addr.s_addr = sock4.sin_addr.s_addr;
+					break;
+				case AF_INET6:
+					auto sock6 = cast(sockaddr_in6*)res.ai_addr;
+					msg.addr.sockAddrInet6.sin6_addr.s6_addr = sock6.sin6_addr.s6_addr;
+					break;
+				default: throw new Exception("Unimplemented address family");
 			}
-			if( info.task && info.task.state != Fiber.State.TERM ) info.core.resumeTask(info.task);
-		} catch( Throwable e ){
-			logWarn("Got exception while getting DNS results: %s", e.msg);
+		} catch( Exception e ){
+			logError("Got exception while fetching DNS results: %s", e.msg);
 		}
 	}
 
