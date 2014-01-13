@@ -108,6 +108,8 @@ deprecated("Please use listenUDP instead.")alias listenUdp = listenUDP;
 	Represents a network/socket address.
 */
 struct NetworkAddress {
+	pure nothrow:
+
 	private union {
 		sockaddr addr;
 		sockaddr_in addr_ip4;
@@ -116,46 +118,52 @@ struct NetworkAddress {
 
 	/** Family (AF_) of the socket address.
 	*/
-	@property ushort family() const nothrow { return addr.sa_family; }
+	@property ushort family() const { return addr.sa_family; }
 	/// ditto
-	@property void family(ushort val) nothrow { addr.sa_family = cast(ubyte)val; }
+	@property void family(ushort val) { addr.sa_family = cast(ubyte)val; }
 
 	/** The port in host byte order.
 	*/
 	@property ushort port()
 	const {
-		switch(this.family){
+		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
-			case AF_INET: return ntohs(addr_ip4.sin_port);
-			case AF_INET6: return ntohs(addr_ip6.sin6_port);
+			case AF_INET: return ntoh(addr_ip4.sin_port);
+			case AF_INET6: return ntoh(addr_ip6.sin6_port);
 		}
 	}
 	/// ditto
 	@property void port(ushort val)
 	{
-		switch(this.family){
+		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
-			case AF_INET: addr_ip4.sin_port = htons(val); break;
-			case AF_INET6: addr_ip6.sin6_port = htons(val); break;
+			case AF_INET: addr_ip4.sin_port = hton(val); break;
+			case AF_INET6: addr_ip6.sin6_port = hton(val); break;
 		}
 	}
 
 	/** A pointer to a sockaddr struct suitable for passing to socket functions.
 	*/
-	@property inout(sockaddr)* sockAddr() inout nothrow { return &addr; }
+	@property inout(sockaddr)* sockAddr() inout { return &addr; }
 
 	/** Size of the sockaddr struct that is returned by sockAddr().
 	*/
-	@property int sockAddrLen() const nothrow {
-		switch(this.family){
+	@property int sockAddrLen()
+	const {
+		switch (this.family) {
 			default: assert(false, "sockAddrLen() called for invalid address family.");
 			case AF_INET: return addr_ip4.sizeof;
 			case AF_INET6: return addr_ip6.sizeof;
 		}
 	}
 
-	@property inout(sockaddr_in)* sockAddrInet4() inout { enforce(family == AF_INET); return &addr_ip4; }
-	@property inout(sockaddr_in6)* sockAddrInet6() inout { enforce(family == AF_INET6); return &addr_ip6; }
+	@property inout(sockaddr_in)* sockAddrInet4() inout
+		in { assert (family == AF_INET); }
+		body { return &addr_ip4; }
+
+	@property inout(sockaddr_in6)* sockAddrInet6() inout
+		in { assert (family == AF_INET); }
+		body { return &addr_ip6; }
 }
 
 
@@ -250,3 +258,21 @@ enum TCPListenOptions {
 
 /// Deprecated compatibility alias
 deprecated("Please use TCPListenOptions instead.")alias TcpListenOptions = TCPListenOptions;
+
+private pure nothrow {
+	import std.bitmanip;
+	
+	ushort ntoh(ushort val)
+	{
+		version (LittleEndian) return swapEndian(val);
+		else version (BigEndian) return val;
+		else static assert(false, "Unknown endianness.");
+	}
+
+	ushort hton(ushort val)
+	{
+		version (LittleEndian) return swapEndian(val);
+		else version (BigEndian) return val;
+		else static assert(false, "Unknown endianness.");
+	}
+}
