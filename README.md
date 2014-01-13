@@ -43,10 +43,10 @@ Additional setup on Mac using brew
 ----------------------------------
 
 If you don't have brew installed, install it according to their [install
-instructions](<https://github.com/mxcl/homebrew/wiki/installation>) and
+instructions](<http://www.brew.sh>) and
 install libevent.
 
-    ruby -e "$(curl -fsSkL raw.github.com/mxcl/homebrew/go)"
+    ruby -e "$(curl -fsSL https://raw.github.com/Homebrew/homebrew/go/install)"
     brew install libevent
 
 (Note: Install brew only if you do not have macports, as they will conflict)
