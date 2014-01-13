@@ -200,7 +200,7 @@ class Libevent2Driver : EventDriver {
 		int err = 0;
 	}
 
-	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool no_dns = false)
+	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
 	{
 		NetworkAddress addr;
 		GetAddrInfoMsg msg;
@@ -208,7 +208,7 @@ class Libevent2Driver : EventDriver {
 
 		evutil_addrinfo hints;
 		hints.ai_family = family;
-		if (no_dns) {
+		if (!use_dns) {
 			//When this flag is set, we only resolve numeric IPv4 and IPv6
 			//addresses; if the nodename would require a name lookup, we instead
 			//give an EVUTIL_EAI_NONAME error.
@@ -282,7 +282,7 @@ class Libevent2Driver : EventDriver {
 
 	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
 	{
-		auto bind_addr = resolveHost(address, AF_UNSPEC, true);
+		auto bind_addr = resolveHost(address, AF_UNSPEC, false);
 		bind_addr.port = port;
 
 		auto listenfd_raw = socket(bind_addr.family, SOCK_STREAM, 0);
@@ -326,7 +326,7 @@ class Libevent2Driver : EventDriver {
 
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
-		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, true);
+		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, false);
 		bindaddr.port = port;
 
 		return new Libevent2UDPConnection(bindaddr, this);
