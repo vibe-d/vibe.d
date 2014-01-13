@@ -39,7 +39,7 @@ import std.conv;
 import std.encoding : sanitize;
 import std.exception;
 import std.string;
-import std.file;
+
 
 version (Windows)
 {
@@ -117,12 +117,12 @@ class Libevent2Driver : EventDriver {
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
 
-		version(linux) {
-			if (exists("/etc/hosts")) {
-				if (evdns_base_load_hosts(m_dnsBase, "/etc/hosts") != 0) {
-					logError("Failed to load /etc/hosts");
-				}
-			}
+		string hosts_file;
+		version (Windows) hosts_file = `C:\Windows\System32\drivers\etc\hosts`;
+		else hosts_file = `/etc/hosts`;
+		if (existsFile(hosts_file)) {
+			if (evdns_base_load_hosts(m_dnsBase, hosts_file.toStringz()) != 0)
+				logError("Failed to load hosts file at %s", hosts_file);
 		}
 
 		m_timerEvent = event_new(m_eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
@@ -213,9 +213,9 @@ class Libevent2Driver : EventDriver {
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
 	{
-		NetworkAddress addr;
 		GetAddrInfoMsg msg;
-		msg.addr = &addr;
+		msg.core = m_core;
+		msg.task = Task.getThis();
 
 		evutil_addrinfo hints;
 		hints.ai_family = family;
@@ -231,13 +231,11 @@ class Libevent2Driver : EventDriver {
 		evdns_getaddrinfo_request* dnsReq = evdns_getaddrinfo(m_dnsBase, toStringz(host), null,
 			&hints, &onAddrInfo, &msg);
 		logDebug("dnsresolve yield");
-		while( !msg.done ) m_core.yieldForEvent();
+		while (!msg.done) m_core.yieldForEvent();
 		logDebug("dnsresolve ret");
-		if( msg.err == DNS_ERR_NONE ) {
-			return addr;
-		} else {
-			throw new Exception("Failed to lookup host: %s. Reason: %s".format(host, evutil_gai_strerror(msg.err)));
-		}
+		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, evutil_gai_strerror(msg.err)));
+
+		return msg.addr;
 	}
 
 	TCPConnection connectTCP(string host, ushort port)
@@ -472,19 +470,15 @@ class Libevent2Driver : EventDriver {
 		auto msg = cast(GetAddrInfoMsg*)arg;
 		msg.err = err;
 		msg.done = true;
-		if (err != DNS_ERR_NONE) {
-			return;			
-		}
+		if (err == DNS_ERR_NONE) {
+			assert(res !is null);
+			scope (exit) evutil_freeaddrinfo(res);
 
-		assert(res !is null);
-		scope(exit){ evutil_freeaddrinfo(res); }
-
-		// Note that we are only returning the first address and ignoring the
-		// rest. Ideally we should return all of the NetworkAddress
-		msg.addr.family = cast(ushort)res.ai_family;
-		assert(res.ai_addrlen == msg.addr.sockAddrLen());
-		try {
-			switch( msg.addr.family ){
+			// Note that we are only returning the first address and ignoring the
+			// rest. Ideally we should return all of the NetworkAddress
+			msg.addr.family = cast(ushort)res.ai_family;
+			assert(res.ai_addrlen == msg.addr.sockAddrLen());
+			switch (msg.addr.family) {
 				case AF_INET:
 					auto sock4 = cast(sockaddr_in*)res.ai_addr;
 					msg.addr.sockAddrInet4.sin_addr.s_addr = sock4.sin_addr.s_addr;
@@ -493,11 +487,15 @@ class Libevent2Driver : EventDriver {
 					auto sock6 = cast(sockaddr_in6*)res.ai_addr;
 					msg.addr.sockAddrInet6.sin6_addr.s6_addr = sock6.sin6_addr.s6_addr;
 					break;
-				default: throw new Exception("Unimplemented address family");
+				default:
+					logDiagnostic("DNS lookup yielded unknown address family: %s", msg.addr.family);
+					err = DNS_ERR_UNKNOWN;
+					break;
 			}
-			//if (info.task && info.task.running) info.core.resumeTask(info.task);
-		} catch( Throwable e ){
-			logWarn("Got exception while fetching DNS results: %s", e.msg);
+		}
+		if (msg.task && msg.task.running) {
+			try msg.core.resumeTask(msg.task);
+			catch (Exception e) logWarn("Error resuming DNS query task: %s", e.msg);
 		}
 	}
 
@@ -538,9 +536,11 @@ private struct TimeoutEntry {
 }
 
 private struct GetAddrInfoMsg {
-	NetworkAddress* addr;
+	NetworkAddress addr;
 	bool done = false;
 	int err = 0;
+	DriverCore core;
+	Task task;
 }
 
 private class Libevent2Object {
