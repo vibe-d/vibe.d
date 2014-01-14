@@ -45,7 +45,7 @@ import std.array : startsWith, endsWith;
 
 	See_Also:
 	
-		RestInterfaceClient class for a seamless way to acces such a generated API
+		RestInterfaceClient class for a seamless way to access such a generated API
 
 */
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
