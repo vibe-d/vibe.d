@@ -162,7 +162,7 @@ struct NetworkAddress {
 		body { return &addr_ip4; }
 
 	@property inout(sockaddr_in6)* sockAddrInet6() inout
-		in { assert (family == AF_INET); }
+		in { assert (family == AF_INET6); }
 		body { return &addr_ip6; }
 }
 
