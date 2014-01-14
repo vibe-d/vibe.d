@@ -298,7 +298,7 @@ enum MethodStyle
 
 
 /**
-	Uses given function symbol to determine what HTTP method and
+	Uses given function symbol to determine which HTTP method and
 	what URL path should be used to access it in REST API.
 
 	Is designed for CTFE usage and will assert at run time.
