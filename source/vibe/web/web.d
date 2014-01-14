@@ -57,7 +57,7 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 
 void render(string diet_file, ALIASES...)()
 {
-	assert(s_requestContext.req !is null, "render() used outside of a wen interface request!");
+	assert(s_requestContext.req !is null, "render() used outside of a web interface request!");
 	auto req = s_requestContext.req;
 	vibe.http.server.render!(diet_file, req, ALIASES)(s_requestContext.res);
 }
@@ -66,7 +66,7 @@ void redirect(string path_or_url)
 {
 	import std.array : startsWith;
 
-	assert(s_requestContext.req !is null, "redirect() used outside of a wen interface request!");
+	assert(s_requestContext.req !is null, "redirect() used outside of a web interface request!");
 	alias ctx = s_requestContext;
 	URL url;
 	if (path_or_url.startsWith("/")) {
