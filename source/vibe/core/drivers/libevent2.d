@@ -386,6 +386,7 @@ class Libevent2Driver : EventDriver {
 
 	void stopTimer(size_t timer_id)
 	{
+		logTrace("Stopping timer %s", timer_id);
 		auto pt = timer_id in m_timers;
 		if (pt.pending) {
 			pt.pending = false;
@@ -414,6 +415,8 @@ class Libevent2Driver : EventDriver {
 
 	private void processTimers()
 	{
+		logTrace("Processing due timers");
+
 		// process all timers that have expired up to now
 		auto now = Clock.currStdTime();
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
@@ -434,6 +437,8 @@ class Libevent2Driver : EventDriver {
 				releaseTimer(tm);
 			}
 
+			logTrace("Timer %s fired (%s/%s)", tm, owner != Task.init, callback !is null);
+
 			if (owner) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
 		}
@@ -441,6 +446,7 @@ class Libevent2Driver : EventDriver {
 
 	private void scheduleTimer(long timeout, size_t id)
 	{
+		logTrace("Schedule timer %s", id);
 		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
 			event_del(m_timerEvent);
 			auto dur = (timeout - Clock.currStdTime()).hnsecs;
@@ -450,6 +456,7 @@ class Libevent2Driver : EventDriver {
 			tvdur.tv_usec = dur.fracSec().usecs();
 			event_add(m_timerEvent, &tvdur);
 			assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
+			logTrace("Rescheduled timer event for %s seconds (%s)", dur.total!"usecs" * 1e-6, id);
 		}
 		m_timeoutHeap.insert(TimeoutEntry(timeout, id));
 	}
@@ -457,6 +464,7 @@ class Libevent2Driver : EventDriver {
 	private static nothrow extern(C)
 	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
 	{
+		logTrace("timer event fired");
 		auto drv = cast(Libevent2Driver)userptr;
 		try drv.processTimers();
 		catch (Exception e) {
