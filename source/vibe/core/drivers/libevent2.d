@@ -419,8 +419,8 @@ class Libevent2Driver : EventDriver {
 
 		// process all timers that have expired up to now
 		auto now = Clock.currStdTime();
-		if (m_timeoutHeap.empty) logInfo("no timers scheduled");
-		else logInfo("first timeout: %s", (m_timeoutHeap.front.timeout - now) * 1e-7);
+		if (m_timeoutHeap.empty) logTrace("no timers scheduled");
+		else logTrace("first timeout: %s", (m_timeoutHeap.front.timeout - now) * 1e-7);
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
 			auto tm = m_timeoutHeap.front.id;
 			m_timeoutHeap.removeFront();
