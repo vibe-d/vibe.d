@@ -419,6 +419,8 @@ class Libevent2Driver : EventDriver {
 
 		// process all timers that have expired up to now
 		auto now = Clock.currStdTime();
+		if (m_timeoutHeap.empty) logInfo("no timers scheduled");
+		else logInfo("first timeout: %s", (m_timeoutHeap.front.timeout - now) * 1e-7);
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
 			auto tm = m_timeoutHeap.front.id;
 			m_timeoutHeap.removeFront();
@@ -442,23 +444,29 @@ class Libevent2Driver : EventDriver {
 			if (owner) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
 		}
+
+		if (!m_timeoutHeap.empty) rescheduleTimerEvent((m_timeoutHeap.front.timeout - now).hnsecs);
 	}
 
 	private void scheduleTimer(long timeout, size_t id)
 	{
 		logTrace("Schedule timer %s", id);
 		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
-			event_del(m_timerEvent);
-			auto dur = (timeout - Clock.currStdTime()).hnsecs;
-			assert(dur.total!"seconds"() <= int.max);
-			timeval tvdur;
-			tvdur.tv_sec = cast(int)dur.total!"seconds"();
-			tvdur.tv_usec = dur.fracSec().usecs();
-			event_add(m_timerEvent, &tvdur);
-			assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
-			logTrace("Rescheduled timer event for %s seconds (%s)", dur.total!"usecs" * 1e-6, id);
+			rescheduleTimerEvent((timeout - Clock.currStdTime()).hnsecs);
 		}
 		m_timeoutHeap.insert(TimeoutEntry(timeout, id));
+	}
+
+	private void rescheduleTimerEvent(Duration dur)
+	{
+		event_del(m_timerEvent);
+		assert(dur.total!"seconds"() <= int.max);
+		timeval tvdur;
+		tvdur.tv_sec = cast(int)dur.total!"seconds"();
+		tvdur.tv_usec = dur.fracSec().usecs();
+		event_add(m_timerEvent, &tvdur);
+		assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
+		logTrace("Rescheduled timer event for %s seconds", dur.total!"usecs" * 1e-6);
 	}
 
 	private static nothrow extern(C)
