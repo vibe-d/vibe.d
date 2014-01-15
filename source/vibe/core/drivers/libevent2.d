@@ -213,9 +213,7 @@ class Libevent2Driver : EventDriver {
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
 	{
-		GetAddrInfoMsg msg;
-		msg.core = m_core;
-		msg.task = Task.getThis();
+		assert(m_dnsBase);
 
 		evutil_addrinfo hints;
 		hints.ai_family = family;
@@ -226,12 +224,19 @@ class Libevent2Driver : EventDriver {
 			hints.ai_flags = EVUTIL_AI_NUMERICHOST;
 		}
 
-		assert(m_dnsBase);
 		logDebug("dnsresolve %s", host);
+		GetAddrInfoMsg msg;
+		msg.core = m_core;
 		evdns_getaddrinfo_request* dnsReq = evdns_getaddrinfo(m_dnsBase, toStringz(host), null,
 			&hints, &onAddrInfo, &msg);
-		logDebug("dnsresolve yield");
-		while (!msg.done) m_core.yieldForEvent();
+
+		// wait if the request couldn't be fulfilled instantly
+		if (!msg.done) {
+			msg.task = Task.getThis();
+			logDebug("dnsresolve yield");
+			while (!msg.done) m_core.yieldForEvent();
+		}
+
 		logDebug("dnsresolve ret");
 		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, evutil_gai_strerror(msg.err)));
 
