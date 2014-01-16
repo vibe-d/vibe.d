@@ -515,10 +515,11 @@ class Libevent2Driver : EventDriver {
 					break;
 			}
 		}
-		if (msg.task && msg.task.running) {
-			try msg.core.resumeTask(msg.task);
-			catch (Exception e) logWarn("Error resuming DNS query task: %s", e.msg);
-		}
+		try{
+			if (msg.task && Task.getThis() != msg.task && msg.task.running) {
+				msg.core.resumeTask(msg.task);
+			}
+		} catch (Exception e) logWarn("Error resuming DNS query task: %s", e.msg);
 	}
 
 	private void registerObject(Libevent2Object obj)
