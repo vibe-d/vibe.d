@@ -465,7 +465,7 @@ final class RedisClient {
 	}
 
 	size_t zcount(string key, double min, double max) {
-		return request!size_t("SCARD", cast(ubyte[])key);
+		return request!size_t("ZCOUNT", cast(ubyte[])key, cast(ubyte[])to!string(min), cast(ubyte[])to!string(max));
 	}
 
 	double zincrby(string key, double value, string member) {
