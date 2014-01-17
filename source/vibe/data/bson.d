@@ -452,6 +452,12 @@ struct Bson {
 		}
 	}
 
+	/** Returns a string representation of this BSON value in JSON format.
+	*/
+	string toString()
+	{
+		return toJson().toString();
+	}
 
 	/** Allows accessing fields of a BSON object using [].
 
