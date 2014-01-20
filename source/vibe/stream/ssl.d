@@ -354,10 +354,50 @@ class SSLContext {
 		enforce(SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(path)), "Failed to load certificate file " ~ path);
 	}
 
-	/// Sets a certificate file to use for negotiating the excryption
+	/// Sets the private key to use for authenticating to the remote peer based
+	/// on the configured certificate chain file.
 	void usePrivateKeyFile(string path)
 	{
-		enforce(SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(path), SSL_FILETYPE_PEM), "Failed to load certificate file " ~ path);
+		enforce(SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(path), SSL_FILETYPE_PEM), "Failed to load private key file " ~ path);
+	}
+
+	/// Sets the list of certificates to considers trusted when verifying the
+	/// certificate presented by the peer.
+	///
+	/// If this is a server context, this also entails that the given
+	/// certificates are advertised to connecting clients during handshake.
+	void useTrustedCertificateFile(string path)
+	{
+		immutable cPath = toStringz(path);
+		enforce(SSL_CTX_load_verify_locations(m_ctx, cPath, null),
+			"Failed to load trusted certificate file " ~ path);
+
+		if (m_kind == SSLContextKind.server) {
+			auto certNames = enforce(SSL_load_client_CA_file(cPath),
+				"Failed to load client CA name list from file " ~ path);
+			SSL_CTX_set_client_CA_list(m_ctx, certNames);
+		}
+	}
+
+	/// Whether to verify that the certificate presented by the peer has been
+	/// signed by a trusted entity.
+	///
+	/// Defaults to no.
+	///
+	/// $(RED Important Note:) Currently, it is not verified whether the peer
+	/// certificate contains a host name/IP address matching the connection
+	/// information. In short, this means that peer verification does not
+	/// protect against man-in-the-middle attacks yet (if the attacker can
+	/// present any valid certificate).
+	void verifyPeer(bool required) @property {
+		int mode;
+		if (required) {
+			mode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT |
+				SSL_VERIFY_CLIENT_ONCE;
+		} else {
+			mode = SSL_VERIFY_NONE;
+		}
+		SSL_CTX_set_verify(m_ctx, mode, null);
 	}
 
 	/// Creates an SSL client context usable for a concrete SSLStream.
