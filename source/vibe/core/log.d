@@ -317,7 +317,13 @@ class HTMLLogger : Logger {
 		m_logFile.write(`<div class="message">`);
 		{
 			auto dst = m_logFile.lockingTextWriter();
-			filterHTMLEscape(dst, msg.text);
+			auto txt = msg.text;
+			while (!txt.empty && (txt.front == ' ' || txt.front == '\t')) {
+				foreach (i; 0 .. txt.front == ' ' ? 1 : 4)
+					dst.put("&nbsp;");
+				txt.popFront();
+			}
+			filterHTMLEscape(dst, txt);
 		}
 		m_logFile.write(`</div>`);
 		m_logFile.writeln(`</div>`);
