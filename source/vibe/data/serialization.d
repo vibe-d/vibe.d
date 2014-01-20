@@ -86,7 +86,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 		serializer.beginWriteDictionary!TU();
 		foreach (key, ref el; value) {
 			string keyname;
-			static if (is(TK == string)) keyname = key;
+			static if (is(TK : string)) keyname = key;
 			else static if (is(TK : real) || is(TK : long) || is(TK == enum)) keyname = key.to!string;
 			else static if (isStringSerializable!TK) keyname = key.toString();
 			else static assert(false, "Associative array keys must be strings, numbers, enums, or have toString/fromString methods.");
@@ -153,6 +153,17 @@ unittest {
 	Json serialized = serialize!JsonSerializer(test);
 	assert(serialized.value.get!int == 12);
 	assert(serialized.text.get!string == "Hello");
+}
+
+unittest {
+	import vibe.data.json;
+
+	// Make sure that immutable(char[]) works just like string
+	// (i.e., immutable(char)[]).
+	immutable key = "answer";
+	auto ints = [key: 42];
+	auto serialized = serialize!JsonSerializer(ints);
+	assert(serialized[key].get!int == 42);
 }
 
 
