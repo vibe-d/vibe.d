@@ -43,15 +43,18 @@ extern(System) nothrow
 	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
 					LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
 	BOOL GetFileSizeEx(HANDLE hFile, long *lpFileSize);
-	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
-	LONG DispatchMessageW(MSG *lpMsg);
-	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
 	BOOL SetEndOfFile(HANDLE hFile);
 	BOOL GetOverlappedResult(HANDLE hFile, OVERLAPPED* lpOverlapped, DWORD* lpNumberOfBytesTransferred, BOOL bWait);
+	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
 
-	enum {
-		ERROR_ALREADY_EXISTS = 183,
-		ERROR_IO_PENDING = 997
+	static if (__VERSION__ < 2065) {
+		BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+		LONG DispatchMessageW(MSG *lpMsg);
+
+		enum {
+			ERROR_ALREADY_EXISTS = 183,
+			ERROR_IO_PENDING = 997
+		}
 	}
 
 	struct FILE_NOTIFY_INFORMATION {

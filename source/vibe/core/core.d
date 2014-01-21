@@ -1033,7 +1033,7 @@ static this()
 
 	auto thisthr = Thread.getThis();
 	synchronized (st_workerTaskMutex)
-		if (!st_threads.canFind!(c => c.thread is thisthr))
+		if (!st_threads.any!(c => c.thread is thisthr))
 			st_threads ~= ThreadContext(thisthr, false);
 
 	//CoreTask.ms_coreTask = new CoreTask;
