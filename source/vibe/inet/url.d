@@ -223,6 +223,12 @@ struct URL {
 				dst.put("//");
 				break;
 		}
+		if (m_username.length || m_password.length) {
+			dst.put(username);
+			dst.put(':');
+			dst.put(password);
+			dst.put('@');
+		}
 		dst.put(host);
 		if( m_port > 0 ) formattedWrite(dst, ":%d", m_port);
 		dst.put(localURI);
@@ -264,12 +270,15 @@ deprecated("Please use URL instead.") alias Url = URL;
 
 
 unittest {
-	auto url = URL.parse("https://www.example.net/index.html");
+	auto urlstr = "https://www.example.net/index.html";
+	auto url = URL.parse(urlstr);
 	assert(url.schema == "https", url.schema);
 	assert(url.host == "www.example.net", url.host);
 	assert(url.path == Path("/index.html"), url.path.toString());
+	assert(url.toString == urlstr);
 	
-	url = URL.parse("http://jo.doe:password@sub.www.example.net:4711/sub2/index.html?query#anchor");
+	urlstr = "http://jo.doe:password@sub.www.example.net:4711/sub2/index.html?query#anchor";
+	url = URL.parse(urlstr);
 	assert(url.schema == "http", url.schema);
 	assert(url.username == "jo.doe", url.username);
 	assert(url.password == "password", url.password);
@@ -278,4 +287,5 @@ unittest {
 	assert(url.path.toString() == "/sub2/index.html", url.path.toString());
 	assert(url.queryString == "query", url.queryString);
 	assert(url.anchor == "anchor", url.anchor);
+	assert(url.toString == urlstr);
 }
