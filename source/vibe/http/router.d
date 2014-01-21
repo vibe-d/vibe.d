@@ -10,7 +10,6 @@ module vibe.http.router;
 public import vibe.http.server;
 
 import vibe.core.log;
-import vibe.textfilter.urlencode;
 
 import std.functional;
 
@@ -209,7 +208,7 @@ private struct Route {
 				string name = skipPathNode(pattern, j);
 				string match = skipPathNode(url, i);
 				assert(tmppparams_length < maxRouteParameters, "Maximum number of route parameters exceeded.");
-				tmpparams[tmppparams_length++] = tuple(name, urlDecode(match));
+				tmpparams[tmppparams_length++] = tuple(name, match);
 			} else return false;
 		}
 
