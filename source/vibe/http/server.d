@@ -390,11 +390,7 @@ class HTTPServerSettings {
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	HTTPServerErrorPageHandler errorPageHandler = null;
 
-	/** If set, a HTTPS server will be started instead of plain HTTP
-
-		Please use sslContext in new code instead of setting the key/cert file. Those fileds
-		will be deprecated at some point.
-	*/
+	/// If set, a HTTPS server will be started instead of plain HTTP.
 	SSLContext sslContext;
 
 	/// Session management is enabled if a session store instance is provided
@@ -426,7 +422,6 @@ class HTTPServerSettings {
 		auto ret = new HTTPServerSettings;
 		foreach (mem; __traits(allMembers, HTTPServerSettings)) {
 			static if (mem == "bindAddresses") ret.bindAddresses = bindAddresses.dup;
-			else static if (mem == "sslCertFile" || mem == "sslKeyFile") {}
 			else static if (__traits(compiles, __traits(getMember, ret, mem) = __traits(getMember, this, mem)))
 				__traits(getMember, ret, mem) = __traits(getMember, this, mem);
 		}
