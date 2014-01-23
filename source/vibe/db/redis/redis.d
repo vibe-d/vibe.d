@@ -1,3 +1,10 @@
+/**
+	Redis database client implementation.
+
+	Copyright: © 2012-2014 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Jan Krüger
+*/
 module vibe.db.redis.redis;
 
 public import vibe.core.net;
@@ -11,114 +18,21 @@ import std.exception;
 import std.traits;
 import std.utf;
 
-final class RedisReply {
+// TODO: convert RedisReply to expose an input range interface
 
-	private {
-		TCPConnection m_conn;
-		LockedConnection!RedisConnection m_lockedConnection;
-		ubyte[] m_data;
-		size_t m_length;
-		size_t m_index;
-		bool m_multi;
-	}
 
-	this(TCPConnection conn) {
-		m_conn = conn;
-		m_index = 0;
-		m_length = 1;
-		m_multi = false;
-
-		auto ln = cast(string)m_conn.readLine();
-
-		switch(ln[0]) {
-			case '+':
-				m_data = cast(ubyte[])ln[ 1 .. $ ];
-				break;
-			case '-':
-				throw new Exception(ln[ 1 .. $ ]);
-			case ':':
-				m_data = cast(ubyte[])ln[ 1 .. $ ];
-				break;
-			case '$':
-				m_data = readBulk(ln);
-				break;
-			case '*':
-				if( ln.startsWith("*-1") ) {
-					m_length = 0;
-					return;
-				}
-				m_multi = true;
-				m_length = to!size_t(ln[ 1 .. $ ]);
-				break;
-			default:
-				assert(false, "Unknown reply type");
-		}
-	}
-
-	private ubyte[] readBulk( string sizeLn )
-	{
-		if ( sizeLn.startsWith("$-1") ) return null;
-		auto size = to!size_t( sizeLn[1 .. $] );
-		auto data = new ubyte[size];
-		m_conn.read(data);
-		m_conn.readLine();
-		return data;
-	}
-
-	@property bool hasNext()
-	{
-		return  m_index < m_length;
-	}
-
-	T next(T : E[], E)() {
-		assert( hasNext, "end of reply" );
-		m_index++;
-		ubyte[] ret;
-		if( m_multi ) {
-			auto ln = cast(string)m_conn.readLine();
-			ret = readBulk(ln);
-		} else {
-			ret = m_data;
-		}
-		if (m_index >= m_length) m_lockedConnection.clear();
-		static if (isSomeString!T) validate(cast(T)ret);
-		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
-		return cast(T)ret;
-	}
+/**
+	Returns a RedisClient that can be used to communicate to the specified database server.
+*/
+RedisClient connectRedis(string host, ushort port = 6379)
+{
+	return new RedisClient(host, port);
 }
 
-final class RedisConnection {
-	private {
-		string m_host;
-		ushort m_port;
-		TCPConnection m_conn;
-	}
 
-	this() {}
-
-	void connect(string host = "127.0.0.1", ushort port = 6379) {
-		m_host = host;
-		m_port = port;
-	}
-
-	RedisReply request(string command, in ubyte[][] args...) {
-		if( !m_conn || !m_conn.connected ){
-			try m_conn = connectTCP(m_host, m_port);
-			catch (Exception e) {
-				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
-			}
-		}
-		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
-		foreach( arg; args ) {
-			m_conn.write(format("$%d\r\n", arg.length));
-			m_conn.write(arg);
-			m_conn.write("\r\n");
-		}
-		return new RedisReply(m_conn);
-	}
-}
-
-/** A redis client with connection pooling. */
+/**
+	A redis client with connection pooling.
+*/
 final class RedisClient {
 
 	private ConnectionPool!RedisConnection m_connections;
@@ -132,7 +46,8 @@ final class RedisClient {
 		});
 	}
 
-	private static ubyte[][] argsToUbyte(ARGS...)(ARGS args) {
+	private static ubyte[][] argsToUbyte(ARGS...)(ARGS args)
+	{
 		ubyte[][] ret;
 		foreach (i, arg; args) {
 			static if (is(ARGS[i] : const(ubyte)[]) || is (ARGS[i] == string)) ret ~= cast(ubyte[])arg;
@@ -623,8 +538,8 @@ final class RedisClient {
 
 	//TODO sync
 
-	T request(T=RedisReply)(string command, in ubyte[][] args...) {
-
+	T request(T = RedisReply)(string command, in ubyte[][] args...)
+	{
 		auto conn = m_connections.lockConnection();
 		auto reply = conn.request(command, args);
 
@@ -639,5 +554,111 @@ final class RedisClient {
 			reply.m_lockedConnection = conn;
 			return reply;
 		}
+	}
+}
+
+
+final class RedisReply {
+	private {
+		TCPConnection m_conn;
+		LockedConnection!RedisConnection m_lockedConnection;
+		ubyte[] m_data;
+		size_t m_length;
+		size_t m_index;
+		bool m_multi;
+	}
+
+	this(TCPConnection conn)
+	{
+		m_conn = conn;
+		m_index = 0;
+		m_length = 1;
+		m_multi = false;
+
+		auto ln = cast(string)m_conn.readLine();
+
+		switch(ln[0]) {
+			case '+':
+				m_data = cast(ubyte[])ln[ 1 .. $ ];
+				break;
+			case '-':
+				throw new Exception(ln[ 1 .. $ ]);
+			case ':':
+				m_data = cast(ubyte[])ln[ 1 .. $ ];
+				break;
+			case '$':
+				m_data = readBulk(ln);
+				break;
+			case '*':
+				if( ln.startsWith("*-1") ) {
+					m_length = 0;
+					return;
+				}
+				m_multi = true;
+				m_length = to!size_t(ln[ 1 .. $ ]);
+				break;
+			default:
+				assert(false, "Unknown reply type");
+		}
+	}
+
+	private ubyte[] readBulk( string sizeLn )
+	{
+		if ( sizeLn.startsWith("$-1") ) return null;
+		auto size = to!size_t( sizeLn[1 .. $] );
+		auto data = new ubyte[size];
+		m_conn.read(data);
+		m_conn.readLine();
+		return data;
+	}
+
+	@property bool hasNext() { return  m_index < m_length; }
+
+	T next(T : E[], E)() {
+		assert( hasNext, "end of reply" );
+		m_index++;
+		ubyte[] ret;
+		if( m_multi ) {
+			auto ln = cast(string)m_conn.readLine();
+			ret = readBulk(ln);
+		} else {
+			ret = m_data;
+		}
+		if (m_index >= m_length) m_lockedConnection.clear();
+		static if (isSomeString!T) validate(cast(T)ret);
+		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
+		return cast(T)ret;
+	}
+}
+
+
+private final class RedisConnection {
+	private {
+		string m_host;
+		ushort m_port;
+		TCPConnection m_conn;
+	}
+
+	this() {}
+
+	void connect(string host = "127.0.0.1", ushort port = 6379) {
+		m_host = host;
+		m_port = port;
+	}
+
+	RedisReply request(string command, in ubyte[][] args...) {
+		if( !m_conn || !m_conn.connected ){
+			try m_conn = connectTCP(m_host, m_port);
+			catch (Exception e) {
+				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
+			}
+		}
+		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
+		foreach( arg; args ) {
+			m_conn.write(format("$%d\r\n", arg.length));
+			m_conn.write(arg);
+			m_conn.write("\r\n");
+		}
+		return new RedisReply(m_conn);
 	}
 }
