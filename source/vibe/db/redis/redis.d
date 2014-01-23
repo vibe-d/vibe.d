@@ -39,6 +39,7 @@ final class RedisClient {
 	private {
 		ConnectionPool!RedisConnection m_connections;
 		string m_authPassword;
+		size_t m_selectedDB;
 	}
 
 	this(string host = "127.0.0.1", ushort port = 6379)
@@ -219,7 +220,7 @@ final class RedisClient {
 	T echo(T : E[], E)(T data) { return request!T("ECHO", data); }
 	void ping() { request("PING"); }
 	void quit() { request("QUIT"); }
-	void select(size_t db_index) { request("SELECT", db_index); }
+	void select(size_t db_index) { m_selectedDB = db_index; }
 
 	/*
 		Server
@@ -250,6 +251,7 @@ final class RedisClient {
 	{
 		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
+		conn.setDB(m_selectedDB);
 		auto reply = conn.request(command, args);
 
 		static if( is(T == bool) ) {
@@ -354,6 +356,7 @@ private final class RedisConnection {
 		ushort m_port;
 		TCPConnection m_conn;
 		string m_password;
+		size_t m_selectedDB;
 	}
 
 	this(string host, ushort port)
@@ -367,6 +370,13 @@ private final class RedisConnection {
 		if (m_password == password) return;
 		request("AUTH", password).drop();
 		m_password = password;
+	}
+
+	void setDB(size_t index)
+	{
+		if (index == m_selectedDB) return;
+		request("SELECT", index).drop();
+		m_selectedDB = index;
 	}
 
 	RedisReply request(ARGS...)(string command, ARGS args)
