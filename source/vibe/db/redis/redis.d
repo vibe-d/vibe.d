@@ -12,9 +12,11 @@ public import vibe.core.net;
 import vibe.core.connectionpool;
 import vibe.core.log;
 import vibe.stream.operations;
-import std.string;
 import std.conv;
 import std.exception;
+import std.format;
+import std.range : isOutputRange;
+import std.string;
 import std.traits;
 import std.utf;
 
@@ -40,9 +42,7 @@ final class RedisClient {
 	this(string host = "127.0.0.1", ushort port = 6379)
 	{
 		m_connections = new ConnectionPool!RedisConnection({
-			auto connection = new RedisConnection;
-			connection.connect(host, port);
-			return connection;
+			return new RedisConnection(host, port);
 		});
 	}
 
@@ -250,9 +250,8 @@ final class RedisClient {
 
 	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
-		auto ubyteargs = argsToUbyte(args); // TODO: avoid GC allocations and write directly to the wire
 		auto conn = m_connections.lockConnection();
-		auto reply = conn.request(command, ubyteargs);
+		auto reply = conn.request(command, args);
 
 		static if( is(T == bool) ) {
 			return reply.next!(ubyte[])()[0] == '1';
@@ -350,39 +349,70 @@ private final class RedisConnection {
 		TCPConnection m_conn;
 	}
 
-	this() {}
-
-	void connect(string host = "127.0.0.1", ushort port = 6379) {
+	this(string host, ushort port)
+	{
 		m_host = host;
 		m_port = port;
 	}
 
-	RedisReply request(string command, in ubyte[][] args...) {
-		if( !m_conn || !m_conn.connected ){
+	RedisReply request(ARGS...)(string command, ARGS args)
+	{
+		if (!m_conn || !m_conn.connected) {
 			try m_conn = connectTCP(m_host, m_port);
 			catch (Exception e) {
 				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
 			}
 		}
-		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", args.length + 1, command.length, command));
-		foreach( arg; args ) {
-			m_conn.write(format("$%d\r\n", arg.length));
-			m_conn.write(arg);
-			m_conn.write("\r\n");
-		}
+
+		auto nargs = countArgs!ARGS();
+		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command));
+		writeArgs(m_conn, args);
 		return new RedisReply(m_conn);
+	}
+
+	private static size_t countArgs(ARGS...)()
+	{
+		size_t ret;
+		foreach (i, A; ARGS) {
+			static if (is(A : const(string[])) || is(A : const(ubyte[][])))
+				ret += countArgs!A();
+			else ret++;
+		}
+		return ret;
+	}
+
+	private static void writeArgs(R, ARGS...)(R dst, ARGS args)
+		if (isOutputRange!(R, char))
+	{
+		foreach (i, A; ARGS) {
+			static if (is(A : const(string[])) || is(A : const(ubyte[][])))
+				writeArgs(dst, args[i]);
+			else static if (is(A == bool)) writeArgs(dst, args[i] ? "1" : "0");
+			else static if (is(A : const(ubyte[]))) {
+				dst.formattedWrite("$%s\r\n", args[i].length);
+				dst.put(args[i]);
+				dst.put("\r\n");
+			} else static if (is(A : long) || is(A : real) || is(A == string)) {
+				auto alen = formattedLength(args[i]);
+				dst.formattedWrite("$%d\r\n%s\r\n", alen, args[i]);
+			} else static assert(false, "Unsupported Redis argument type: " ~ T.stringof);
+		}
+	}
+
+	private static size_t formattedLength(ARG)(ARG arg)
+	{
+		static if (is(ARG == string)) return arg.length;
+		else {
+			RangeCounter cnt;
+			cnt.formattedWrite("%s", arg);
+			return cnt.length;
+		}
 	}
 }
 
-private ubyte[][] argsToUbyte(ARGS...)(ARGS args)
-{
-	ubyte[][] ret;
-	foreach (i, arg; args) {
-		static if (is(ARGS[i] : const(ubyte)[]) || is (ARGS[i] == string)) ret ~= cast(ubyte[])arg;
-		else static if (is(ARGS[i] : long) || is (ARGS[i] : real)) ret ~= cast(ubyte[])to!string(arg);
-		else static if (is(ARGS[i] : const(ubyte[][])) || is(ARGS[i] : const(string[]))) {
-			foreach (v; arg) ret ~= argsToUbyte(v);
-		} else static assert(false, "Only strings, byte array and numbers allowed as parameters, not " ~ ARGS[i].stringof);
-	}
-	return ret;
+private struct RangeCounter {
+	import std.utf;
+	size_t length = 0;
+	void put(dchar ch) { length += codeLength!char(ch); }
+	void put(string str) { length += str.length; }
 }
