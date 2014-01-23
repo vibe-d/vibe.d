@@ -114,7 +114,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 				alias member = TypeTuple!(__traits(getMember, TU, mname))[0];
 				static if (!hasAttribute!(member, IgnoreAttribute)) {
 					alias typeof(member) TM;
-					enum name = getAttribute!(member, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
+					enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
 					serializer.beginWriteDictionaryEntry!TM(name);
 					static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
 						serialize(serializer, __traits(getMember, value, mname).to!string());
@@ -241,7 +241,7 @@ private T deserializeImpl(T, Serializer)(ref Serializer deserializer)
 							alias member = TypeTuple!(__traits(getMember, T, mname))[0];
 							static if (!hasAttribute!(member, IgnoreAttribute)) {
 								alias TM = typeof(__traits(getMember, ret, mname));
-								enum fname = getAttribute!(member)(NameAttribute(underscoreStrip(mname))).name;
+								enum fname = getAttribute!(T, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
 								case fname:
 									set[i] = true;
 									static if (is(TM == enum) && hasAttribute!(member, ByNameAttribute)) {
@@ -405,9 +405,9 @@ package T Tgen(T)(){ return T.init; }
 
 private template hasAttribute(alias decl, T) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
-private static T getAttribute(alias decl, T)(T default_value)
+private static T getAttribute(TT, string mname, T)(T default_value)
 {
-	enum val = findFirstUDA!(T, decl);
+	enum val = findFirstUDA!(T, __traits(getMember, TT, mname));
 	static if (val.found) return val.value;
 	else return default_value;
 }
