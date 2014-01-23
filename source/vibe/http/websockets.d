@@ -149,7 +149,7 @@ class WebSocket {
 	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
 
 	/**
-		The HTTP request the established the web socket connection.
+		The HTTP request that established the web socket connection.
 	*/
 	@property const(HTTPServerRequest) request() const { return m_request; }
 
