@@ -36,8 +36,10 @@ RedisClient connectRedis(string host, ushort port = 6379)
 	A redis client with connection pooling.
 */
 final class RedisClient {
-
-	private ConnectionPool!RedisConnection m_connections;
+	private {
+		ConnectionPool!RedisConnection m_connections;
+		string m_authPassword;
+	}
 
 	this(string host = "127.0.0.1", ushort port = 6379)
 	{
@@ -213,11 +215,7 @@ final class RedisClient {
 	/*
 		Connection
 	*/
-	void auth(string password) {
-		// TODO: persist across all conections in the connection pool!
-		request("AUTH", password);
-	}
-
+	void auth(string password) { m_authPassword = password; }
 	T echo(T : E[], E)(T data) { return request!T("ECHO", data); }
 	void ping() { request("PING"); }
 	void quit() { request("QUIT"); }
@@ -251,6 +249,7 @@ final class RedisClient {
 	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
 		auto conn = m_connections.lockConnection();
+		conn.setAuth(m_authPassword);
 		auto reply = conn.request(command, args);
 
 		static if( is(T == bool) ) {
@@ -312,23 +311,14 @@ final class RedisReply {
 		}
 	}
 
-	private ubyte[] readBulk( string sizeLn )
+	@property bool hasNext() const { return  m_index < m_length; }
+
+	T next(T : E[], E)()
 	{
-		if ( sizeLn.startsWith("$-1") ) return null;
-		auto size = to!size_t( sizeLn[1 .. $] );
-		auto data = new ubyte[size];
-		m_conn.read(data);
-		m_conn.readLine();
-		return data;
-	}
-
-	@property bool hasNext() { return  m_index < m_length; }
-
-	T next(T : E[], E)() {
 		assert( hasNext, "end of reply" );
 		m_index++;
 		ubyte[] ret;
-		if( m_multi ) {
+		if (m_multi) {
 			auto ln = cast(string)m_conn.readLine();
 			ret = readBulk(ln);
 		} else {
@@ -339,6 +329,22 @@ final class RedisReply {
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
 	}
+
+	// drop the whole
+	void drop()
+	{
+		while (hasNext) next!(ubyte[])();
+	}
+
+	private ubyte[] readBulk( string sizeLn )
+	{
+		if (sizeLn.startsWith("$-1")) return null;
+		auto size = to!size_t( sizeLn[1 .. $] );
+		auto data = new ubyte[size];
+		m_conn.read(data);
+		m_conn.readLine();
+		return data;
+	}
 }
 
 
@@ -347,12 +353,20 @@ private final class RedisConnection {
 		string m_host;
 		ushort m_port;
 		TCPConnection m_conn;
+		string m_password;
 	}
 
 	this(string host, ushort port)
 	{
 		m_host = host;
 		m_port = port;
+	}
+
+	void setAuth(string password)
+	{
+		if (m_password == password) return;
+		request("AUTH", password).drop();
+		m_password = password;
 	}
 
 	RedisReply request(ARGS...)(string command, ARGS args)
