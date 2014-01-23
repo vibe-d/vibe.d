@@ -254,16 +254,21 @@ final class RedisClient {
 		conn.setDB(m_selectedDB);
 		auto reply = conn.request(command, args);
 
-		static if( is(T == bool) ) {
-			return reply.next!(ubyte[])()[0] == '1';
-		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
-			auto str = reply.next!string();
-			return parse!T(str);
-		} else static if ( is(T == string) ) {
-			return cast(string)reply.next!T();
-		} else {
+		static if (is(T == RedisReply)) {
 			reply.m_lockedConnection = conn;
 			return reply;
+		} else {
+			scope (exit) reply.drop();
+
+			static if (is(T == bool)) {
+				return reply.next!string[0] == '1';
+			} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
+				auto str = reply.next!string();
+				return parse!T(str);
+			} else static if (is(T == string)) {
+				return reply.next!string();
+			} else static if (is(T == void)) {
+			} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
 		}
 	}
 }
