@@ -3,7 +3,7 @@
 
 	Examples:
 	---
-	void handleConn(WebSocket sock)
+	void handleConn(scope WebSocket sock)
 	{
 		// simple echo server
 		while( sock.connected ){
