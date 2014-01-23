@@ -46,177 +46,160 @@ final class RedisClient {
 		});
 	}
 
-	private static ubyte[][] argsToUbyte(ARGS...)(ARGS args)
-	{
-		ubyte[][] ret;
-		foreach (i, arg; args) {
-			static if (is(ARGS[i] : const(ubyte)[]) || is (ARGS[i] == string)) ret ~= cast(ubyte[])arg;
-			else static if (is(ARGS[i] : long)) ret ~= cast(ubyte[])to!string(args);
-			else static assert(false, "Only strings, byte array and integers allowed as parameters.");
-		}
-		return ret;
-	}
-
-	size_t del(string[] keys...) { return request!size_t("DEL", cast(ubyte[][])keys); }
-	bool exists(string key) { return request!bool("EXISTS", cast(ubyte[])key); }
-	bool expire(string key, size_t seconds) { return request!bool("EXPIRE", cast(ubyte[])key, cast(ubyte[])to!string(seconds)); }
-	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", cast(ubyte[])key, cast(ubyte[])to!string(timestamp)); }
-	RedisReply keys(string pattern) { return request("KEYS", cast(ubyte[])pattern); }
-	bool move(string key, string db) { return request!bool("MOVE", cast(ubyte[])key, cast(ubyte[])db); }
-	bool persists(string key) { return request!bool("PERSISTS", cast(ubyte[])key); }
+	size_t del(string[] keys...) { return request!size_t("DEL", keys); }
+	bool exists(string key) { return request!bool("EXISTS", key); }
+	bool expire(string key, size_t seconds) { return request!bool("EXPIRE", key, seconds); }
+	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
+	RedisReply keys(string pattern) { return request("KEYS", pattern); }
+	bool move(string key, string db) { return request!bool("MOVE", key, db); }
+	bool persists(string key) { return request!bool("PERSISTS", key); }
 	//TODO: object
-	string randomKey() { return request("RANDOMKEY").next!string(); }
-	void rename(string key, string newkey) { request("RENAME", cast(ubyte[])key, cast(ubyte[])newkey); }
-	bool renameNX(string key, string newkey) { return request!bool("RENAMENX", cast(ubyte[])key, cast(ubyte[])newkey); }
+	string randomKey() { return request!string("RANDOMKEY"); }
+	void rename(string key, string newkey) { request("RENAME", key, newkey); }
+	bool renameNX(string key, string newkey) { return request!bool("RENAMENX", key, newkey); }
 	//TODO sort
-	long ttl(string key) { return request!long("TTL", cast(ubyte[])key); }
-	string type(string key) { return request!string("TYPE", cast(ubyte[])key); }
+	long ttl(string key) { return request!long("TTL", key); }
+	string type(string key) { return request!string("TYPE", key); }
 	//TODO eval
 
 	/*
 		String Commands
 	*/
 
-	size_t append(T : E[], E)(string key, T suffix) { return request!size_t("APPEND", cast(ubyte[])key, cast(ubyte[])suffix); }
-	int decr(string key, int value = 1) { return value == 1 ? request!int("DECR", cast(ubyte[])key) : request!int("DECRBY", cast(ubyte[])key, cast(ubyte[])to!string(value)); }
-	T get(T : E[], E)(string key) { return request("GET", cast(ubyte[])key).next!T(); }
-	bool getBit(string key, size_t offset) { return request!bool("GETBIT", cast(ubyte[])key, cast(ubyte[])to!string(offset)); }
-	T getRange(T : E[], E)(string key, size_t start, size_t end) { return request("GETRANGE", cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)).next!T(); }
-	T getSet(T : E[], E)(string key, T value) { return request("GET", cast(ubyte[])key, cast(ubyte[])value).next!T(); }
-	int incr(string key, int value = 1) { return value == 1 ? request!int("INCR", cast(ubyte[])key) : request!int("INCRBY", cast(ubyte[])key, cast(ubyte[])to!string(value)); }
-	RedisReply mget(string[] keys) { return request("MGET", cast(ubyte[][])keys); }
+	size_t append(T : E[], E)(string key, T suffix) { return request!size_t("APPEND", key, suffix); }
+	int decr(string key, int value = 1) { return value == 1 ? request!int("DECR", key) : request!int("DECRBY", key, value); }
+	T get(T : E[], E)(string key) { return request!T("GET", key); }
+	bool getBit(string key, size_t offset) { return request!bool("GETBIT", key, offset); }
+	T getRange(T : E[], E)(string key, size_t start, size_t end) { return request!T("GETRANGE", start, end); }
+	T getSet(T : E[], E)(string key, T value) { return request!T("GET", key, value); }
+	int incr(string key, int value = 1) { return value == 1 ? request!int("INCR", key) : request!int("INCRBY", key, value); }
+	RedisReply mget(string[] keys) { return request("MGET", keys); }
 	
 	void mset(ARGS...)(ARGS args)
 	{
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-	    request("MSET", argsToUbyte!ARGS(args));
+	    request("MSET", args);
 	}
 
 	bool msetNX(ARGS...)(ARGS args) {
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-	    return request!bool("MSETEX", argsToUbyte!ARGS(args));
+	    return request!bool("MSETEX", args);
 	}
 
-	void set(T : E[], E)(string key, T value) { request("SET", cast(ubyte[])key, cast(ubyte[])value); }
-	bool setBit(string key, size_t offset, bool value) { return request!bool("SETBIT", cast(ubyte[])key, cast(ubyte[])to!string(offset), value ? ['1'] : ['0']); }
-	
-	void setEX(T : E[], E)(string key, size_t seconds, T value)
-	{
-		ubyte[] val = cast(ubyte[])value;
-		request("SETEX", cast(ubyte[])key, cast(ubyte[])to!string(seconds), cast(ubyte[])value);
-	}
-
-	bool setNX(T : E[], E)(string key, T value) { return request!bool("SETNX", cast(ubyte[])key, cast(ubyte[])value); }
-	size_t setRange(T : E[], E)(string key, size_t offset, T value) { return request!size_t("SETRANGE", cast(ubyte[])key, cast(ubyte[])to!string(offset), cast(ubyte[])value); }
-	size_t strlen(string key) { return request!size_t("STRLEN", cast(ubyte[])key); }
+	void set(T : E[], E)(string key, T value) { request("SET", key, value); }
+	bool setBit(string key, size_t offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
+	void setEX(T : E[], E)(string key, size_t seconds, T value) { request("SETEX", key, seconds, value); }
+	bool setNX(T : E[], E)(string key, T value) { return request!bool("SETNX", key, value); }
+	size_t setRange(T : E[], E)(string key, size_t offset, T value) { return request!size_t("SETRANGE", key, offset, value); }
+	size_t strlen(string key) { return request!size_t("STRLEN", key); }
 
 	/*
 		Hashes
 	*/
 
-	size_t hdel(string key, string[] fields...) { return request!size_t("HDEL", cast(ubyte[])key ~ cast(ubyte[][])fields); }
-	bool hexists(string key, string field) { return request!bool("HEXISTS", cast(ubyte[])key, cast(ubyte[])field); }
-	void hset(T : E[], E)(string key, string field, T value) { request("HSET", cast(ubyte[])key, cast(ubyte[])field, cast(ubyte[])value); }
-	T hget(T : E[], E)(string key, string field) { return request("HGET", cast(ubyte[])key, cast(ubyte[])field).next!T(); }
-	RedisReply hgetAll(string key) { return request("HGETALL", cast(ubyte[])key); }
-	int hincr(string key, string field, int value=1) { return request!int("HINCRBY", cast(ubyte[])key, cast(ubyte[])field, cast(ubyte[])to!string(value)); }
-	RedisReply hkeys(string key) { return request("HKEYS", cast(ubyte[])key); }
-	size_t hlen(string key) { return request!size_t("HLEN", cast(ubyte[])key); }
-	RedisReply hmget(string key, string[] fields...) { return request("HMGET", cast(ubyte[])key ~ cast(ubyte[][])fields); }
-	void hmset(ARGS...)(string key, ARGS args) { request("HMSET", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	RedisReply hvals(string key) { return request("HVALS", cast(ubyte[])key); }
-	T lindex(T : E[], E)(string key, size_t index) { return request("LINDEX", cast(ubyte[])key, cast(ubyte[])to!string(index)).next!T(); }
-	size_t linsertBefore(T1, T2)(string key, T1 pivot, T2 value) { return request!size_t("LINSERT", cast(ubyte[])key, cast(ubyte[])"BEFORE", cast(ubyte[])pivot, cast(ubyte[])value); }
-	size_t linsertAfter(T1, T2)(string key, T1 pivot, T2 value) { return request!size_t("LINSERT", cast(ubyte[])key, cast(ubyte[])"AFTER", cast(ubyte[])pivot, cast(ubyte[])value); }
-	size_t llen(string key) { return request!size_t("LLEN", cast(ubyte[])key); }
-	size_t lpush(ARGS...)(string key, ARGS args) { return request!size_t("LPUSH", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	size_t lpushX(T)(string key, T value) { return request!size_t("LPUSHX", cast(ubyte[])key, cast(ubyte[])value); }
-	size_t rpush(ARGS...)(string key, ARGS args) { return request!size_t("RPUSH", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	size_t rpushX(T)(string key, T value) { return request!size_t("RPUSHX", cast(ubyte[])key, cast(ubyte[])value); }
-	RedisReply lrange(string key, size_t start, size_t stop) { return request("LRANGE",  cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(stop)); }
-	size_t lrem(T : E[], E)(string key, size_t count, T value) { return request!size_t("LREM", cast(ubyte[])to!string(count), cast(ubyte[])value); }
-	void lset(T : E[], E)(string key, size_t index, T value) { request("LSET", cast(ubyte[])key, cast(ubyte[])to!string(index), cast(ubyte[])value); }
-	void ltrim(string key, size_t start, size_t stop) { request("LTRIM",  cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(stop)); }
-	T rpop(T : E[], E)(string key) { return request("RPOP", cast(ubyte[])key).next!T(); }
-	T lpop(T : E[], E)(string key) { return request("LPOP", cast(ubyte[])key).next!T(); }
-	T rpoplpush(T : E[], E)(string key, string destination) { return request("RPOPLPUSH", cast(ubyte[])key, cast(ubyte[])destination).next!T(); }
+	size_t hdel(string key, string[] fields...) { return request!size_t("HDEL", key, fields); }
+	bool hexists(string key, string field) { return request!bool("HEXISTS", key, field); }
+	void hset(T : E[], E)(string key, string field, T value) { request("HSET", key, field, value); }
+	T hget(T : E[], E)(string key, string field) { return request!T("HGET", key, field); }
+	RedisReply hgetAll(string key) { return request("HGETALL", key); }
+	int hincr(string key, string field, int value=1) { return request!int("HINCRBY", key, field, value); }
+	RedisReply hkeys(string key) { return request("HKEYS", key); }
+	size_t hlen(string key) { return request!size_t("HLEN", key); }
+	RedisReply hmget(string key, string[] fields...) { return request("HMGET", key, fields); }
+	void hmset(ARGS...)(string key, ARGS args) { request("HMSET", key, args); }
+	bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
+	RedisReply hvals(string key) { return request("HVALS", key); }
+	T lindex(T : E[], E)(string key, size_t index) { return request!T("LINDEX", key, index); }
+	size_t linsertBefore(T1, T2)(string key, T1 pivot, T2 value) { return request!size_t("LINSERT", key, "BEFORE", pivot, value); }
+	size_t linsertAfter(T1, T2)(string key, T1 pivot, T2 value) { return request!size_t("LINSERT", key, "AFTER", pivot, value); }
+	size_t llen(string key) { return request!size_t("LLEN", key); }
+	size_t lpush(ARGS...)(string key, ARGS args) { return request!size_t("LPUSH", key, args); }
+	size_t lpushX(T)(string key, T value) { return request!size_t("LPUSHX", key, value); }
+	size_t rpush(ARGS...)(string key, ARGS args) { return request!size_t("RPUSH", key, args); }
+	size_t rpushX(T)(string key, T value) { return request!size_t("RPUSHX", key, value); }
+	RedisReply lrange(string key, size_t start, size_t stop) { return request("LRANGE",  key, start, stop); }
+	size_t lrem(T : E[], E)(string key, size_t count, T value) { return request!size_t("LREM", count, value); }
+	void lset(T : E[], E)(string key, size_t index, T value) { request("LSET", key, index, value); }
+	void ltrim(string key, size_t start, size_t stop) { request("LTRIM",  key, start, stop); }
+	T rpop(T : E[], E)(string key) { return request!T("RPOP", key); }
+	T lpop(T : E[], E)(string key) { return request!T("LPOP", key); }
+	T rpoplpush(T : E[], E)(string key, string destination) { return request!T("RPOPLPUSH", key, destination); }
 
 	/*
 		Sets
 	*/
 
-	size_t sadd(ARGS...)(string key, ARGS args) { return request!size_t("SADD", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	size_t scard(string key) { return request!size_t("SCARD", cast(ubyte[])key); }
-	RedisReply sdiff(string[] keys...) { return request("SDIFF", cast(ubyte[][])keys); }
-	size_t sdiffStore(string destination, string[] keys...) { return request!size_t("SDIFFSTORE", cast(ubyte[])destination ~ cast(ubyte[][])keys); }
-	RedisReply sinter(string[] keys) { return request("SINTER", cast(ubyte[][])keys); }
-	size_t sinterStore(string destination, string[] keys...) { return request!size_t("SINTERSTORE", cast(ubyte[])destination ~ cast(ubyte[][])keys); }
-	bool sisMember(T : E[], E)(string key, T member) { return request!bool("SISMEMBER", cast(ubyte[])key, cast(ubyte[])member); }
-	RedisReply smembers(string key) { return request("SMEMBERS", cast(ubyte[])key); }
-	bool smove(T : E[], E)(string source, string destination, T member) { return request!bool("SMOVE", cast(ubyte[])source, cast(ubyte[])destination, cast(ubyte[])member); }
-	T spop(T : E[], E)(string key) { return request("SPOP", cast(ubyte[])key ).next!T(); }
-	T srandMember(T : E[], E)(string key) { return request("SRANDMEMBER", cast(ubyte[])key ).next!T(); }
-	size_t srem(ARGS...)(string key, ARGS args) { return request!size_t("SREM", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	RedisReply sunion(string[] keys...) { return request("SUNION", cast(ubyte[][])keys); }
-	size_t sunionStore(string[] keys...) { return request!size_t("SUNIONSTORE", cast(ubyte[][])keys); }
+	size_t sadd(ARGS...)(string key, ARGS args) { return request!size_t("SADD", key, args); }
+	size_t scard(string key) { return request!size_t("SCARD", key); }
+	RedisReply sdiff(string[] keys...) { return request("SDIFF", keys); }
+	size_t sdiffStore(string destination, string[] keys...) { return request!size_t("SDIFFSTORE", destination, keys); }
+	RedisReply sinter(string[] keys) { return request("SINTER", keys); }
+	size_t sinterStore(string destination, string[] keys...) { return request!size_t("SINTERSTORE", destination, keys); }
+	bool sisMember(T : E[], E)(string key, T member) { return request!bool("SISMEMBER", key, member); }
+	RedisReply smembers(string key) { return request("SMEMBERS", key); }
+	bool smove(T : E[], E)(string source, string destination, T member) { return request!bool("SMOVE", source, destination, member); }
+	T spop(T : E[], E)(string key) { return request!T("SPOP", key ); }
+	T srandMember(T : E[], E)(string key) { return request!T("SRANDMEMBER", key ); }
+	size_t srem(ARGS...)(string key, ARGS args) { return request!size_t("SREM", key, args); }
+	RedisReply sunion(string[] keys...) { return request("SUNION", keys); }
+	size_t sunionStore(string[] keys...) { return request!size_t("SUNIONSTORE", keys); }
 
 	/*
 		Sorted Sets
 	*/
 
-	size_t zadd(ARGS...)(string key, ARGS args) { return request!size_t("SADD", cast(ubyte[])key ~ argsToUbyte!ARGS(args)); }
-	size_t Zcard(string key) { return request!size_t("ZCARD", cast(ubyte[])key); }
-	size_t zcount(string key, double min, double max) { return request!size_t("ZCOUNT", cast(ubyte[])key, cast(ubyte[])to!string(min), cast(ubyte[])to!string(max)); }
-	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", cast(ubyte[])to!string(value), cast(ubyte[])member); }
+	size_t zadd(ARGS...)(string key, ARGS args) { return request!size_t("SADD", key, args); }
+	size_t Zcard(string key) { return request!size_t("ZCARD", key); }
+	size_t zcount(string key, double min, double max) { return request!size_t("ZCOUNT", key, min, max); }
+	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
 	//TODO: zinterstore
 	RedisReply zrange(string key, size_t start, size_t end, bool withScores=false) {
-		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
-		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
+		string[] args = [key, to!string(start), to!string(end)];
+		if (withScores) args ~= "WITHSCORES";
 		return request("ZRANGE", args);
 	}
 
 	RedisReply zrangeByScore(string key, size_t start, size_t end, bool withScores=false) {
-		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
-		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
+		string[] args = [key, to!string(start), to!string(end)];
+		if (withScores) args ~= "WITHSCORES";
 		return request("ZRANGEBYSCORE", args);
 	}
 
 	RedisReply zrangeByScore(string key, size_t start, size_t end, size_t offset, size_t count, bool withScores=false) {
-		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
-		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
-                args ~= cast(ubyte[])"LIMIT" ~ cast(ubyte[])to!string(offset) ~ cast(ubyte[])to!string(count);
+		string[] args = [key, to!string(start), to!string(end)];
+		if (withScores) args ~= "WITHSCORES";
+		args ~= ["LIMIT", to!string(offset), to!string(count)];
 		return request("ZRANGEBYSCORE", args);
 	}
 
 	int zrank(string key, string member) {
-		auto str = request!string("ZRANK", cast(ubyte[]) key, cast(ubyte[]) member);
+		auto str = request!string("ZRANK", key, member);
 		return str ? parse!int(str) : -1;
 	}
-	size_t zrem(string key, string[] members...) { return request!size_t("ZREM", cast(ubyte[])key ~ cast(ubyte[][])members); }
-	size_t zremRangeByRank(string key, int start, int stop) { return request!size_t("ZREMRANGEBYRANK", cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(stop)); }
-	size_t zremRangeByScore(string key, double min, double max) { return request!size_t("ZREMRANGEBYSCORE", cast(ubyte[])key, cast(ubyte[])to!string(min), cast(ubyte[])to!string(max));}
+	size_t zrem(string key, string[] members...) { return request!size_t("ZREM", key, members); }
+	size_t zremRangeByRank(string key, int start, int stop) { return request!size_t("ZREMRANGEBYRANK", key, start, stop); }
+	size_t zremRangeByScore(string key, double min, double max) { return request!size_t("ZREMRANGEBYSCORE", key, min, max);}
 
 	RedisReply zrevRange(string key, size_t start, size_t end, bool withScores=false) {
-		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(start), cast(ubyte[])to!string(end)];
-		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
+		string[] args = [key, to!string(start), to!string(end)];
+		if (withScores) args ~= "WITHSCORES";
 		return request("ZREVRANGE", args);
 	}
 
 	RedisReply zrevRangeByScore(string key, double min, double max, bool withScores=false) {
-		ubyte[][] args = [cast(ubyte[])key, cast(ubyte[])to!string(min), cast(ubyte[])to!string(max)];
-		if (withScores) args ~= cast(ubyte[])"WITHSCORES";
+		string[] args = [key, to!string(min), to!string(max)];
+		if (withScores) args ~= "WITHSCORES";
 		return request("ZREVRANGEBYSCORE", args);
 	}
 
 	int zrevRank(string key, string member) {
-		auto str = request!string("ZREVRANK", cast(ubyte[]) key, cast(ubyte[]) member);
+		auto str = request!string("ZREVRANK", key, member);
 		return str ? parse!int(str) : -1;
 	}
 
-	RedisReply zscore(string key, string member) { return request("ZSCORE", cast(ubyte[]) key, cast(ubyte[]) member); }
+	RedisReply zscore(string key, string member) { return request("ZSCORE", key, member); }
 	//TODO: zunionstore
 
 	/*
@@ -232,13 +215,13 @@ final class RedisClient {
 	*/
 	void auth(string password) {
 		// TODO: persist across all conections in the connection pool!
-		request("AUTH", cast(ubyte[])password);
+		request("AUTH", password);
 	}
 
-	T echo(T : E[], E)(T data) { return request("ECHO", cast(ubyte[])data).next!T(); }
+	T echo(T : E[], E)(T data) { return request!T("ECHO", data); }
 	void ping() { request("PING"); }
 	void quit() { request("QUIT"); }
-	void select(size_t db_index) { request("SELECT", cast(ubyte[])to!string(db_index)); }
+	void select(size_t db_index) { request("SELECT", db_index); }
 
 	/*
 		Server
@@ -247,27 +230,29 @@ final class RedisClient {
 	//TODO: BGREWRITEAOF
 	//TODO: BGSAVE
 
-	T getConfig(T : E[], E)(string parameter) { return request("GET CONFIG", cast(ubyte[])parameter).next!T(); }
-	void setConfig(T : E[], E)(string parameter, T value) { request("SET CONFIG", cast(ubyte[])parameter, cast(ubyte[])value); }
+	T getConfig(T : E[], E)(string parameter) { return request!T("GET CONFIG", parameter); }
+	void setConfig(T : E[], E)(string parameter, T value) { request("SET CONFIG", parameter, value); }
 	void configResetStat() { request("CONFIG RESETSTAT"); }
 	size_t dbSize() { return request!size_t("DBSIZE"); }
 	//TOOD: Debug Object
 	//TODO: Debug Segfault
 	void flushAll() { request("FLUSHALL"); }
 	void flushDB() { request("FLUSHDB"); }
-	string info() { return request("INFO").next!string(); }
+	string info() { return request!string("INFO"); }
 	long lastSave() { return request!long("LASTSAVE"); }
 	//TODO monitor
 	void save() { request("SAVE"); }
 	void shutdown() { request("SHUTDOWN"); }
-	void slaveOf(string host, ushort port) { request("SLAVEOF", cast(ubyte[])host, cast(ubyte[])to!string(port)); }
+	void slaveOf(string host, ushort port) { request("SLAVEOF", host, port); }
 	//TODO slowlog
 	//TODO sync
 
-	T request(T = RedisReply)(string command, in ubyte[][] args...)
+
+	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
+		auto ubyteargs = argsToUbyte(args); // TODO: avoid GC allocations and write directly to the wire
 		auto conn = m_connections.lockConnection();
-		auto reply = conn.request(command, args);
+		auto reply = conn.request(command, ubyteargs);
 
 		static if( is(T == bool) ) {
 			return reply.next!(ubyte[])()[0] == '1';
@@ -387,4 +372,17 @@ private final class RedisConnection {
 		}
 		return new RedisReply(m_conn);
 	}
+}
+
+private ubyte[][] argsToUbyte(ARGS...)(ARGS args)
+{
+	ubyte[][] ret;
+	foreach (i, arg; args) {
+		static if (is(ARGS[i] : const(ubyte)[]) || is (ARGS[i] == string)) ret ~= cast(ubyte[])arg;
+		else static if (is(ARGS[i] : long) || is (ARGS[i] : real)) ret ~= cast(ubyte[])to!string(arg);
+		else static if (is(ARGS[i] : const(ubyte[][])) || is(ARGS[i] : const(string[]))) {
+			foreach (v; arg) ret ~= argsToUbyte(v);
+		} else static assert(false, "Only strings, byte array and numbers allowed as parameters, not " ~ ARGS[i].stringof);
+	}
+	return ret;
 }
