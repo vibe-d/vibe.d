@@ -1,30 +1,32 @@
 /**
 	Implements WebSocket support and fallbacks for older browsers.
 
-	Examples:
-	---
+	Copyright: © 2012-2014 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Jan Krüger
+*/
+module vibe.http.websockets;
+
+///
+unittest {
 	void handleConn(scope WebSocket sock)
 	{
 		// simple echo server
-		while( sock.connected ){
+		while (sock.connected) {
 			auto msg = sock.receiveText();
 			sock.send(msg);
 		}
 	}
 
-	static this {
+	void startServer()
+	{
+		import vibe.http.router;
 		auto router = new URLRouter;
-		router.get("/websocket", handleWebSockets(&handleConn))
+		router.get("/ws", handleWebSockets(&handleConn));
 		
-		// Start HTTP server...
+		// Start HTTP server using listenHTTP()...
 	}
-	---
-
-	Copyright: © 2012 RejectedSoftware e.K.
-	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Jan Krüger
-*/
-module vibe.http.websockets;
+}
 
 import vibe.core.core;
 import vibe.core.log;
