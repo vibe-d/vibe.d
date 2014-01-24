@@ -36,13 +36,21 @@ import std.variant;
 		use filterHtmlEncode().
 */
 
-/// THIS IS A HACK!!! 
+/** 
+	THIS IS A HACK!!! 
+	This does essentialy the same as compileDietFile.
+	You can however specify a string, which replaces the corrospoding stringinclude tag
+	before the rest of the template is compiled.
+	The String is expected to be properly indented as if it were the first block.
+	NOTE: This is highly experimental 
+*/	
+	
 void compileStringIncludeDietFile (string string_include_name, string string_include_code,string template_file, ALIASES...)(OutputStream stream__) 
 {	// some imports to make available by default inside templates
 	import vibe.http.common;
 	import vibe.utils.string;
 	
-	pragma(msg, "Compiling diet template '"~template_file~"'...");
+	pragma(msg, "Compiling diet template '"~template_file~ "With stringinclude"~string_include_name~"'...");
 	static if (ALIASES.length > 0 && __VERSION__ < 2064) {
 		pragma(msg, "Warning: using render!() or parseDietFile!() with aliases is unsafe,");
 		pragma(msg, "         please consider using renderCompat!()/parseDietFileCompat!()");
@@ -79,11 +87,11 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 		pragma(msg, "         please consider using renderCompat!()/parseDietFileCompat!()");
 		pragma(msg, "         on DMD versions prior to 2.064.");
 	}
-	pragma(msg, localAliases!(0, ALIASES));
+	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
-	pragma(msg, dietParser!template_file());
+	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file);
 	#line 66 "diet.d"
 	static assert(__LINE__ == 66);
