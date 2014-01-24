@@ -122,7 +122,10 @@ class SSLStream : Stream {
 		m_state = state;
 		m_sslCtx = ctx;
 		m_ssl = ctx.createClientCtx();
-		scope(failure) SSL_free(m_ssl);
+		scope (failure) {
+			SSL_free(m_ssl);
+			m_ssl = null;
+		}
 
 		m_bio = BIO_new(&s_bio_methods);
 		enforce(m_bio !is null, "SSL failed: failed to create BIO structure.");
@@ -149,7 +152,7 @@ class SSLStream : Stream {
 
 	~this()
 	{
-		if( m_ssl ) SSL_free(m_ssl);
+		if (m_ssl) SSL_free(m_ssl);
 	}
 
 	@property bool empty()
