@@ -287,8 +287,8 @@ interface DirectoryWatcher {
 
 	/** Fills the destination array with all changes that occured since the last call.
 
-		The function will blok until either directory changes have occured or until the
-		tiout has elapsed. Specifying a negative duration will cause the function to
+		The function will block until either directory changes have occured or until the
+		timeout has elapsed. Specifying a negative duration will cause the function to
 		wait without a timeout.
 
 		Params:
