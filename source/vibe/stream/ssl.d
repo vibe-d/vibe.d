@@ -12,6 +12,7 @@
 module vibe.stream.ssl;
 
 import vibe.core.log;
+import vibe.core.net;
 import vibe.core.stream;
 import vibe.core.sync;
 
@@ -100,10 +101,13 @@ class SSLStream : Stream {
 		Params:
 			underlying = The base stream which is used for the SSL tunnel
 			ctx = SSL context used for initiating the tunnel
+			peer_name = DNS name of the remote peer, used for certificate validation
+			peer_address = IP address of the remote peer, used for certificate validation
 	*/
-	this(Stream underlying, SSLContext ctx)
+	this(Stream underlying, SSLContext ctx, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
-		this(underlying, ctx, ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting);
+		auto stream_state = ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting;
+		this(underlying, ctx, stream_state, peer_name, peer_address);
 	}
 
 	/** Constructs a new SSL tunnel, allowing to override the stream state.
@@ -115,8 +119,10 @@ class SSLStream : Stream {
 			underlying = The base stream which is used for the SSL tunnel
 			ctx = SSL context used for initiating the tunnel
 			state = The manually specified tunnel state
+			peer_name = DNS name of the remote peer, used for certificate validation
+			peer_address = IP address of the remote peer, used for certificate validation
 	*/
-	this(Stream underlying, SSLContext ctx, SSLStreamState state)
+	this(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		m_stream = underlying;
 		m_state = state;
@@ -135,18 +141,38 @@ class SSLStream : Stream {
 
 		SSL_set_bio(m_ssl, m_bio, m_bio);
 
-		final switch (state) {
-			case SSLStreamState.accepting:
-				//SSL_set_accept_state(m_ssl);
-				enforceSSL(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
-				break;
-			case SSLStreamState.connecting:
-				//SSL_set_connect_state(m_ssl);
-				enforceSSL(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
-				break;
-			case SSLStreamState.connected:
-				break;
+		if (state != SSLStreamState.connected) {
+			SSLContext.VerifyData vdata;
+			vdata.verifyDepth = ctx.maxCertChainLength;
+			vdata.callback = ctx.peerValidationCallback;
+			vdata.peerName = peer_name;
+			vdata.peerAddress = peer_address;
+			SSL_set_ex_data(m_ssl, gs_verifyDataIndex, &vdata);
+			scope (exit) SSL_set_ex_data(m_ssl, gs_verifyDataIndex, null);
+
+			final switch (state) {
+				case SSLStreamState.accepting:
+					//SSL_set_accept_state(m_ssl);
+					enforceSSL(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
+					break;
+				case SSLStreamState.connecting:
+					//SSL_set_connect_state(m_ssl);
+					enforceSSL(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
+					break;
+				case SSLStreamState.connected:
+					break;
+			}
+
+			if (auto peer = SSL_get_peer_certificate(m_ssl)) {
+				scope(exit) X509_free(peer);
+				auto result = SSL_get_verify_result(m_ssl);
+				if (result != X509_V_OK) {
+					SSL_shutdown(m_ssl);
+					throw new Exception("Peer failed the certificate validation: "~to!string(result));
+				}
+			}
 		}
+
 		checkExceptions();
 	}
 
@@ -284,6 +310,9 @@ class SSLContext {
 	private {
 		SSLContextKind m_kind;
 		ssl_ctx_st* m_ctx;
+		SSLPeerValidationCallback m_peerValidationCallback;
+		SSLPeerValidationMode m_validationMode;
+		int m_verifyDepth;
 	}
 
 	/** Creates a new context of the given kind.
@@ -322,6 +351,12 @@ class SSLContext {
 
 			SSL_CTX_set_options!()(m_ctx, SSL_OP_NO_SSLv2);
 		} else enforce(false, "No SSL support compiled in!");
+
+		maxCertChainLength = 9;
+		peerValidationMode = SSLPeerValidationMode.trustedCert;
+
+
+		SSL_CTX_load_verify_locations(m_ctx, null, "/etc/ssl/certs");
 	}
 
 	/// Convenience constructor to create a server context - will be deprecated soon
@@ -348,8 +383,59 @@ class SSLContext {
 		m_ctx = null;
 	}
 
+
 	/// The kind of SSL context (client/server)
 	@property SSLContextKind kind() const { return m_kind; }
+
+
+	/** Specifies the validation level of remote peers.
+
+		The default mode is SSLPeerValidationMode..
+	*/
+	@property void peerValidationMode(SSLPeerValidationMode mode)
+	{
+		m_validationMode = mode;
+
+		int sslmode;
+		if (mode >= SSLPeerValidationMode.peerName) {
+			sslmode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT |
+				SSL_VERIFY_CLIENT_ONCE;
+		} else {
+			sslmode = SSL_VERIFY_NONE;
+		}
+		SSL_CTX_set_verify(m_ctx, sslmode, &verify_callback);
+	}
+	/// ditto
+	@property SSLPeerValidationMode peerValidationMode() const { return m_validationMode; }
+
+
+	/** The maximum length of an accepted certificate chain.
+
+		Any certificate chain longer than this will result in the SSL/TLS
+		negitiation failing.
+
+		The default value is 9.
+	*/
+	@property int maxCertChainLength() { return m_verifyDepth; }
+	/// ditto
+	@property void maxCertChainLength(int val)
+	{
+		m_verifyDepth = val;
+		// + 1 to let the validation callback handle the error
+		SSL_CTX_set_verify_depth(m_ctx, val + 1);
+	}
+
+
+	/** An optional user callback for peer validation.
+
+		This callback will be called for each peer to allow overriding the
+		validation decision (allow untrusted certificates or reject trusted
+		ones). This is mainly useful for presenting the user with a dialog
+		in case of untrusted or mismatching certificates.
+	*/
+	@property void peerValidationCallback(SSLPeerValidationCallback callback) { m_peerValidationCallback = callback; }
+	/// ditto
+	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
 
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path)
@@ -382,32 +468,66 @@ class SSLContext {
 		}
 	}
 
-	/// Whether to verify that the certificate presented by the peer has been
-	/// signed by a trusted entity.
-	///
-	/// Defaults to no.
-	///
-	/// $(RED Important Note:) Currently, it is not verified whether the peer
-	/// certificate contains a host name/IP address matching the connection
-	/// information. In short, this means that peer verification does not
-	/// protect against man-in-the-middle attacks yet (if the attacker can
-	/// present any valid certificate).
-	void verifyPeer(bool required) @property {
-		int mode;
-		if (required) {
-			mode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT |
-				SSL_VERIFY_CLIENT_ONCE;
-		} else {
-			mode = SSL_VERIFY_NONE;
-		}
-		SSL_CTX_set_verify(m_ctx, mode, null);
-	}
-
 	/// Creates an SSL client context usable for a concrete SSLStream.
 	ssl_st* createClientCtx()
 	{
 		version(SSL) return SSL_new(m_ctx);
 		else assert(false);
+	}
+
+	private static struct VerifyData {
+		int verifyDepth;
+		SSLPeerValidationCallback callback;
+		string peerName;
+		NetworkAddress peerAddress;
+	}
+
+	private static extern(C) nothrow
+	int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
+	{
+		version(Windows) import std.c.windows.winsock;
+		else import core.sys.posix.netinet.in_;
+
+
+		X509* err_cert = X509_STORE_CTX_get_current_cert(ctx);
+		int err = X509_STORE_CTX_get_error(ctx);
+		int depth = X509_STORE_CTX_get_error_depth(ctx);
+
+		SSL* ssl = cast(SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
+		VerifyData* vdata = cast(VerifyData*)SSL_get_ex_data(ssl, gs_verifyDataIndex);
+
+		char[256] buf;
+		X509_NAME_oneline(X509_get_subject_name(err_cert), buf.ptr, 256);
+
+		try {
+			logInfo("validate callback for %s", buf.ptr.to!string);
+
+			if (depth > vdata.verifyDepth) {
+				logWarn("SSL cert chain too long: %s vs. %s", depth, vdata.verifyDepth);
+			    preverify_ok = 0;
+			    err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+			    X509_STORE_CTX_set_error(ctx, err);
+			}
+
+			if (err != X509_V_OK)
+				logWarn("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
+
+			if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
+				X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
+				logWarn("SSL unknown issuer cert: %s", buf.ptr.to!string);
+			}
+
+			if (vdata.callback) {
+				SSLPeerValidationData pvdata;
+				// ...
+				preverify_ok = vdata.callback(pvdata);
+			}
+		} catch (Exception e) {
+			logWarn("SSL verification failed due to exception: %s", e.msg);
+			preverify_ok = false;
+		}
+
+		return preverify_ok;
 	}
 }
 
@@ -426,12 +546,27 @@ enum SSLVersion {
 	dtls1
 }
 
+enum SSLPeerValidationMode {
+	none,        /// Accept any peer and any certificate
+	peerName,    /// Validate that the presented certificate matches the peer name
+    trustedCert, /// Validate the peer name and require that the certificate is trusted
+}
+
+struct SSLPeerValidationData {
+	char[] certName;
+	string errorString;
+}
+
+alias SSLPeerValidationCallback = bool delegate(scope SSLPeerValidationData data);
 
 /**************************************************************************************************/
 /* Private functions                                                                              */
 /**************************************************************************************************/
 
-__gshared Mutex[] g_cryptoMutexes;
+private {
+	__gshared Mutex[] g_cryptoMutexes;
+	__gshared int gs_verifyDataIndex;
+}
 
 shared static this()
 {
@@ -452,6 +587,8 @@ shared static this()
 
 	enforce(RAND_poll(), "Fatal: failed to initialize random number generator entropy (RAND_poll).");
 	logDebug("... done.");
+
+	gs_verifyDataIndex = SSL_get_ex_new_index(0, cast(void*)"VerifyData".ptr, null, null, null);
 }
 
 private nothrow extern(C)
