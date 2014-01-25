@@ -166,12 +166,12 @@ alias compileDietFileCompat parseDietFileCompat;
 	}
 	---
 */
-/*
+
 template compileDietFileMixin(string template_file, string stream_variable)
 {
 	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file;
 }
-*/
+
 /**
 	Registers a new text filter for use in Diet templates.
 
@@ -207,18 +207,18 @@ private @property string stringIncludeDietParser (string template_file,ALIASES..
 
 	TemplateBlock[] files;
 	enum LINES = removeEmptyLines(import(template_file), template_file);
-	enum STRINGDEPS = extractDependencies!true(LINES);
+	enum STRINGDEPS = arrayToTypeTuple!(extractStringDependencies(LINES));
 
-	readString!(STRINGDEPS[0],mixin(STRINGDEPS[0])) (files); //FIXME Iterate the STRINGDEPS.Tuple to get all needed stringTemplates 
-
-
-
+	foreach (STRING;STRINGDEPS) { //TODO Check if there is an corrospnding alias before trying to mixin! 
+		readString!(STRING,mixin(STRING))(files);
+	}
 
 	readFileRec!(template_file)(files);
-	auto compiler = DietCompiler(&files[1], &files, new BlockStore);
+	auto compiler = DietCompiler(&files[STRINGDEPS.length], &files, new BlockStore);
 	return compiler.buildWriter();
 
 }
+
 private @property string dietParser(string template_file)()
 {
 	TemplateBlock[] files;
@@ -244,6 +244,7 @@ private class BlockStore {
 }
 
 /// private hack DO NOT RECURSE stringinclude
+
 private void readString(string string_include_name,string string_include_code,ALREADY_READ...) (ref TemplateBlock[] dst) 
 {	
 	static if( !isPartOf!(string_include_name, ALREADY_READ)() ) {
@@ -279,7 +280,7 @@ private void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 }
 
 /// private
-private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
+private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst) 
 {
 	static if( FILES.length > 0 ){
 		readFileRec!(FILES[0], ALREADY_READ)(dst);
@@ -288,7 +289,7 @@ private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 }
 
 /// private
-private bool isPartOf(string str, STRINGS...)()
+private bool isPartOf(string str, STRINGS...)() pure
 {
 	foreach( s; STRINGS )
 		if( str == s )
@@ -296,20 +297,26 @@ private bool isPartOf(string str, STRINGS...)()
 	return false;
 }
 
+private immutable(string[])  extractStringDependencies (in Line[] lines) pure {
+	string[] deps;
+	foreach( ref ln; lines ){
+		auto lnstr = ln.text.ctstrip();
 
-private string[] extractDependencies(bool with_string_includes = false)(in Line[] lines)
+		if (lnstr.startsWith("include #{")) 
+			deps ~= lnstr["include #".length+1 .. $-1].ctstrip;
+	}
+	return cast(immutable)deps;
+}
+
+		
+
+
+private string[] extractDependencies(in Line[] lines) pure
 {
 	string[] ret;
 	foreach( ref ln; lines ){
 		auto lnstr = ln.text.ctstrip();
-		
 
-			if (lnstr.startsWith("include #{")) {
-			ptrdiff_t till_name_end = matchBracket(lnstr["include #".length .. $])-1;
-				static if (with_string_includes) {
-					ret ~= lnstr["include #".length+1 .. $-1].ctstrip;
-				} else break;
-		}
 		if( !lnstr.startsWith("include #{") &&
 		    (lnstr.startsWith("extends ") ||
 			lnstr.startsWith("include ")) )
