@@ -43,10 +43,10 @@ void compileDietTemplate(bool with_string_includes = false, string template_file
 */
 
 /** 
-	THIS IS A HACK!!! 
+	 
 	This does essentialy the same as compileDietFile.
 	
-	You can however specify a string, which replaces the corrospoding stringinclude tag
+	You can however specify a string, which replaces the corrospoding include #{tag}
 	before the rest of the template is compiled.
 	
 	The String is expected to be properly indented as if it were the first block.
@@ -256,7 +256,7 @@ private void readString(string string_include_name,string string_include_code,AL
 		ret.lines = LINES;
 		ret.indentStyle = detectIndentStyle(ret.lines);
 		//TODO DEPENDCY STUFF
-		//enum DEPS = extractDependencies!true(LINES);
+		enum DEPS = extractDependencies(LINES);
 		/// HACK so it might not work corrently
 
 		dst ~= ret;
@@ -297,7 +297,7 @@ private bool isPartOf(string str, STRINGS...)() pure
 	return false;
 }
 
-private immutable(string[])  extractStringDependencies (in Line[] lines) pure {
+private immutable(string[])  extractStringDependencies (in Line[] lines) /*pure*/ {
 	string[] deps;
 	foreach( ref ln; lines ){
 		auto lnstr = ln.text.ctstrip();
@@ -311,7 +311,7 @@ private immutable(string[])  extractStringDependencies (in Line[] lines) pure {
 		
 
 
-private string[] extractDependencies(in Line[] lines) pure
+private string[] extractDependencies(in Line[] lines)
 {
 	string[] ret;
 	foreach( ref ln; lines ){
