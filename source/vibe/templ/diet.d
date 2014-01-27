@@ -29,12 +29,52 @@ import std.metastrings;
 import std.typecons;
 import std.variant;
 
+void compileDietTemplate(bool with_string_includes = false, string template_file, ALIASES...)(OutputStream stream__) {
+	static if (!with_string_includes)
+		compileDietFile(template_file, ALIASES);
+	else 
+		compileStringIncludeDietFile(template_file,ALIASES);
+}
 /*
 	TODO:
 		support string interpolations in filter blocks
 		to!string and htmlEscape should not be used in conjunction with ~ at run time. instead,
 		use filterHtmlEncode().
 */
+
+/** 
+	 
+	This does essentialy the same as compileDietFile.
+	
+	You can however specify a string, which replaces the corrospoding include #{tag}
+	before the rest of the template is compiled.
+	
+	The String is expected to be properly indented as if it were the first block.
+	NOTE: This is highly experimental 
+	
+	Authors: Stefan Koch
+*/
+	
+void compileStringIncludeDietFile (string template_file, ALIASES...)(OutputStream stream__) 
+{	// some imports to make available by default inside templates
+	import vibe.http.common;
+	import vibe.utils.string;
+	
+	pragma(msg, "Compiling diet template '"~template_file~ "With stringincludes '...");
+	static if (ALIASES.length > 0 && __VERSION__ < 2064) {
+		pragma(msg, "Warning: using render!() or parseDietFile!() with aliases is unsafe,");
+		pragma(msg, "         please consider using renderCompat!()/parseDietFileCompat!()");
+		pragma(msg, "         on DMD versions prior to 2.064.");
+	}
+	//pragma(msg, localAliases!(0, ALIASES));
+	mixin(localAliases!(0, ALIASES));
+	
+	// Generate the D source code for the diet template
+	//pragma(msg, stringIncludeDietParser!(template_file,ALIASES));
+	mixin(stringIncludeDietParser!(template_file,ALIASES));
+
+		
+}
 
 
 /**
@@ -126,6 +166,7 @@ alias compileDietFileCompat parseDietFileCompat;
 	}
 	---
 */
+
 template compileDietFileMixin(string template_file, string stream_variable)
 {
 	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file;
@@ -160,6 +201,23 @@ static this()
 	registerDietTextFilter("htmlescape", &filterHtmlEscape);
 }
 
+private @property string stringIncludeDietParser (string template_file,ALIASES...)() 
+{
+	mixin(localAliases!(0, ALIASES)); // magic wand really :D 
+
+	TemplateBlock[] files;
+	enum LINES = removeEmptyLines(import(template_file), template_file);
+	enum STRINGDEPS = arrayToTypeTuple!(extractStringDependencies(LINES));
+
+	foreach (STRING;STRINGDEPS) { //TODO Check if there is an corrospnding alias before trying to mixin! 
+		readString!(STRING,mixin(STRING))(files);
+	}
+
+	readFileRec!(template_file)(files);
+	auto compiler = DietCompiler(&files[STRINGDEPS.length], &files, new BlockStore);
+	return compiler.buildWriter();
+
+}
 
 private @property string dietParser(string template_file)()
 {
@@ -185,7 +243,25 @@ private class BlockStore {
 	TemplateBlock[] blocks;
 }
 
+/// private hack DO NOT RECURSE stringinclude
 
+private void readString(string string_include_name,string string_include_code,ALREADY_READ...) (ref TemplateBlock[] dst) 
+{	
+	static if( !isPartOf!(string_include_name, ALREADY_READ)() ) {
+
+		enum LINES = removeEmptyLines(string_include_code,string_include_name);
+
+		TemplateBlock ret;
+		ret.name = string_include_name;
+		ret.lines = LINES;
+		ret.indentStyle = detectIndentStyle(ret.lines);
+		//TODO DEPENDCY STUFF
+		enum DEPS = extractDependencies(LINES);
+		/// HACK so it might not work corrently
+
+		dst ~= ret;
+	}
+}
 /// private
 private void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 {
@@ -204,7 +280,7 @@ private void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 }
 
 /// private
-private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
+private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst) 
 {
 	static if( FILES.length > 0 ){
 		readFileRec!(FILES[0], ALREADY_READ)(dst);
@@ -213,7 +289,7 @@ private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 }
 
 /// private
-private bool isPartOf(string str, STRINGS...)()
+private bool isPartOf(string str, STRINGS...)() pure
 {
 	foreach( s; STRINGS )
 		if( str == s )
@@ -221,13 +297,31 @@ private bool isPartOf(string str, STRINGS...)()
 	return false;
 }
 
+private immutable(string[])  extractStringDependencies (in Line[] lines) /*pure*/ {
+	string[] deps;
+	foreach( ref ln; lines ){
+		auto lnstr = ln.text.ctstrip();
+
+		if (lnstr.startsWith("include #{")) 
+			deps ~= lnstr["include #".length+1 .. $-1].ctstrip;
+	}
+	return cast(immutable)deps;
+}
+
+		
+
+
 private string[] extractDependencies(in Line[] lines)
 {
 	string[] ret;
 	foreach( ref ln; lines ){
 		auto lnstr = ln.text.ctstrip();
-		if( lnstr.startsWith("extends ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
-		else if( lnstr.startsWith("include ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
+
+		if( !lnstr.startsWith("include #{") &&
+		    (lnstr.startsWith("extends ") ||
+			lnstr.startsWith("include ")) )
+				ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
+ 
 	}
 	return ret;
 }
@@ -530,11 +624,20 @@ private struct DietCompiler {
 						break;
 					case "include": // Diet file include
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
-						auto filename = ln[8 .. $].ctstrip() ~ ".dt";
-						auto file = getFile(filename);
-						auto includecompiler = new DietCompiler(file, m_files, m_blocks);
-						//includecompiler.m_blocks = m_blocks;
-						includecompiler.buildWriter(output, level);
+
+						if (ln["include ".length .. "include ".length+2]=="#{") { // FUTHER HACK
+							ptrdiff_t till_name_end = matchBracket(ln["include ".length+1 .. $])-1;
+							auto string_include_name = ln["include #".length+1 .. $-1].ctstrip;
+							auto string_include_block = getString(string_include_name);
+							auto stringincludecompiler = new DietCompiler(string_include_block, m_files, m_blocks);
+							stringincludecompiler.buildWriter(output, level);  
+						} else {
+							auto filename = ln[8 .. $].ctstrip() ~ ".dt";
+							auto file = getFile(filename);
+							auto includecompiler = new DietCompiler(file, m_files, m_blocks);
+							//includecompiler.m_blocks = m_blocks;
+							includecompiler.buildWriter(output, level);
+						}
 						break;
 					case "script":
 					case "style":
@@ -1046,6 +1149,17 @@ private struct DietCompiler {
 				return &(*m_files)[i];
 		assertp(false, "Bug: include input file "~filename~" not found in internal list!?");
 		assert(false);
+	}
+	// HACK
+	private TemplateBlock* getString(string name)
+	{
+		foreach( i; 0 .. m_files.length )
+			if( (*m_files)[i].name == name) {
+			return &(*m_files)[i];
+		} else { 
+			//getToken()
+		}
+		assert(0);
 	}
 
 	private TemplateBlock* getBlock(string name)
