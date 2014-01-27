@@ -63,6 +63,46 @@ HTTPServerRequestDelegate serveStaticFiles(string local_path, HTTPFileServerSett
 	return serveStaticFiles(Path(local_path), settings);
 }
 
+///
+unittest {
+	import vibe.http.fileserver;
+	import vibe.http.router;
+	import vibe.http.server;
+
+	void setupServer()
+	{
+		auto router = new URLRouter;
+		// add other routes here
+		router.get("*", serveStaticFiles("public/"));
+
+		auto settings = new HTTPServerSettings;
+		listenHTTP(settings, router);
+	}
+}
+
+/** This example serves all files in the "public" sub directory
+	with an added prefix "static/" so that they don't interfere
+	with other registered routes.
+*/
+unittest {
+	import vibe.http.fileserver;
+	import vibe.http.router;
+	import vibe.http.server;
+
+	void setupRoutes()
+	{
+	 	auto router = new URLRouter;
+		// add other routes here
+
+		auto fsettings = new HTTPFileServerSettings;
+ 		fsettings.serverPathPrefix = "/static";
+ 		router.get("static/*", serveStaticFiles("public/", fsettings));
+
+		auto settings = new HTTPServerSettings;
+		listenHTTP(settings, router);
+ 	}
+}
+
 
 /**
 	Returns a request handler that serves a specific file on disk.
