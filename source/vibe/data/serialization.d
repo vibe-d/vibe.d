@@ -100,7 +100,7 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 	} else static if (isStringSerializable!TU) {
 		serializer.writeValue(value.toString());
 	} else static if (is(TU == struct) || is(TU == class)) {
-		static if (!hasSerializableFields!T)
+		static if (!hasSerializableFields!TU)
 			pragma(msg, "Serializing composite type "~T.stringof~" which has no serializable fields");
 		static if (is(TU == class)) {
 			if (value is null) {
