@@ -5,7 +5,7 @@
 	SSLContextKind of an SSLStream determines if the SSL tunnel is established actively (client) or
 	passively (server).
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -20,6 +20,7 @@ import deimos.openssl.bio;
 import deimos.openssl.err;
 import deimos.openssl.rand;
 import deimos.openssl.ssl;
+import deimos.openssl.x509v3;
 
 import std.algorithm;
 import std.conv;
@@ -166,11 +167,37 @@ class SSLStream : Stream {
 			if (auto peer = SSL_get_peer_certificate(m_ssl)) {
 				scope(exit) X509_free(peer);
 				auto result = SSL_get_verify_result(m_ssl);
+				if (result == X509_V_OK) {
+					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
+						version(Windows) import std.c.windows.winsock;
+						else import core.sys.posix.netinet.in_;
+
+						logWarn("peer name %s couldn't be verified, trying IP address.", vdata.peerName);
+						char* addr;
+						int addrlen;
+						switch (vdata.peerAddress.family) {
+							default: break;
+							case AF_INET:
+								addr = cast(char*)&vdata.peerAddress.sockAddrInet4.sin_addr;
+								addrlen = vdata.peerAddress.sockAddrInet4.sin_addr.sizeof;
+								break;
+							case AF_INET6:
+								addr = cast(char*)&vdata.peerAddress.sockAddrInet6.sin6_addr;
+								addrlen = vdata.peerAddress.sockAddrInet6.sin6_addr.sizeof;
+								break;
+						}
+
+						if (!verifyCertName(peer, GENERAL_NAME.GEN_IPADD, addr[0 .. addrlen])) {
+							logWarn("Error validating peer address");
+							result = X509_V_ERR_APPLICATION_VERIFICATION;
+						}
+					}
+				}
 				if (result != X509_V_OK) {
 					SSL_shutdown(m_ssl);
 					throw new Exception("Peer failed the certificate validation: "~to!string(result));
 				}
-			}
+			} //else enforce(ctx.verifyMode < requireCert);
 		}
 
 		checkExceptions();
@@ -485,10 +512,6 @@ class SSLContext {
 	private static extern(C) nothrow
 	int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
 	{
-		version(Windows) import std.c.windows.winsock;
-		else import core.sys.posix.netinet.in_;
-
-
 		X509* err_cert = X509_STORE_CTX_get_current_cert(ctx);
 		int err = X509_STORE_CTX_get_error(ctx);
 		int depth = X509_STORE_CTX_get_error_depth(ctx);
@@ -524,6 +547,7 @@ class SSLContext {
 			}
 		} catch (Exception e) {
 			logWarn("SSL verification failed due to exception: %s", e.msg);
+			err = X509_V_ERR_APPLICATION_VERIFICATION;
 			preverify_ok = false;
 		}
 
@@ -590,6 +614,105 @@ shared static this()
 
 	gs_verifyDataIndex = SSL_get_ex_new_index(0, cast(void*)"VerifyData".ptr, null, null, null);
 }
+
+private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_wildcards = true)
+{
+	bool delegate(in char[]) str_match;
+
+	bool check_value(ASN1_STRING* str, int type) {
+		if (!str.data || !str.length) return false;
+
+		if (type > 0) {
+			if (type != str.type) return 0;
+			auto strstr = cast(string)str.data[0 .. str.length];
+			return type == V_ASN1_IA5STRING ? str_match(strstr) : strstr == value;
+		}
+
+		char* utfstr;
+		auto utflen = ASN1_STRING_to_UTF8(&utfstr, str);
+		enforce (utflen >= 0, "Error converting ASN1 string to UTF-8.");
+		scope (exit) OPENSSL_free(utfstr);
+		return str_match(utfstr[0 .. utflen]); 
+	}
+
+	int cnid;
+	int alt_type;
+	final switch (field) {
+		case GENERAL_NAME.GEN_DNS:
+			cnid = NID_commonName;
+			alt_type = V_ASN1_IA5STRING;
+			str_match = allow_wildcards ? s => matchWildcard(value, s) : s => s.icmp(value) == 0;
+			break;
+		case GENERAL_NAME.GEN_IPADD:
+			cnid = 0;
+			alt_type = V_ASN1_OCTET_STRING;
+			str_match = s => s == value;
+			break;
+	}
+
+	if (auto gens = cast(STACK_OF!GENERAL_NAME*)X509_get_ext_d2i(cert, NID_subject_alt_name, null, null)) {
+		scope(exit) GENERAL_NAMES_free(gens);
+
+		foreach (i; 0 .. sk_GENERAL_NAME_num(gens)) {
+			auto gen = sk_GENERAL_NAME_value(gens, i);
+			if (gen.type != field) continue;
+			ASN1_STRING *cstr = field == GENERAL_NAME.GEN_DNS ? gen.d.dNSName : gen.d.iPAddress;
+			if (check_value(cstr, alt_type)) return true;
+		}
+		if (!cnid) return false;
+	}
+
+	X509_NAME* name = X509_get_subject_name(cert);
+	int i;
+	while ((i = X509_NAME_get_index_by_NID(name, cnid, i)) >= 0) {
+		X509_NAME_ENTRY* ne = X509_NAME_get_entry(name, i);
+		ASN1_STRING* str = X509_NAME_ENTRY_get_data(ne);
+		if (check_value(str, -1)) return true;
+	}
+
+	return false;
+}
+
+private bool matchWildcard(const(char)[] str, const(char)[] pattern)
+{
+	auto strparts = str.split(".");
+	auto patternparts = pattern.split(".");
+	if (strparts.length != patternparts.length) return false;
+
+	bool isValidChar(dchar ch) {
+		if (ch >= '0' && ch <= '9') return true;
+		if (ch >= 'a' && ch <= 'z') return true;
+		if (ch >= 'A' && ch <= 'Z') return true;
+		if (ch == '-' || ch == '.') return true;
+		return false;
+	}
+
+	if (!pattern.all!(c => isValidChar(c) || c == '*') || !str.all!(c => isValidChar(c)))
+		return false;
+
+	foreach (i; 0 .. strparts.length) {
+		import std.regex;
+		auto p = patternparts[i];
+		auto s = strparts[i];
+		if (!p.length || !s.length) return false;
+		auto rex = "^" ~ std.array.replace(p, "*", "[^.]*") ~ "$";
+		if (!match(s, rex)) return false;
+	}
+	return true;
+}
+
+unittest {
+	assert(matchWildcard("www.example.org", "*.example.org"));
+	assert(matchWildcard("www.example.org", "*w.example.org"));
+	assert(matchWildcard("www.example.org", "w*w.example.org"));
+	assert(matchWildcard("www.example.org", "*w*.example.org"));
+	assert(matchWildcard("test.abc.example.org", "test.*.example.org"));
+	assert(!matchWildcard("test.abc.example.org", "abc.example.org"));
+	assert(!matchWildcard("test.abc.example.org", ".abc.example.org"));
+	assert(!matchWildcard("abc.example.org", "a.example.org"));
+	assert(!matchWildcard("abc.example.org", "bc.example.org"));
+}
+
 
 private nothrow extern(C)
 {
