@@ -289,6 +289,10 @@ deprecated("Please use HTTPServerErrorPageHandler instead.") alias HttpServerErr
 	Specifies optional features of the HTTP server.
 
 	Disabling unneeded features can speed up the server or reduce its memory usage.
+
+	Note that the options parseFormBody, parseJsonBody and parseMultiPartBody
+	will also drain the HTTPServerRequest.bodyReader stream whenever a request
+	body with form or JSON data is encountered.
 */
 enum HTTPServerOption {
 	none                      = 0,
@@ -563,9 +567,12 @@ final class HTTPServerRequest : HTTPRequest {
 
 		/** Supplies the request body as a stream.
 
-			If the body has not already been read because one of the body parsers has
-			processed it (e.g. HTTPServerOption.parseFormBody), it can be read from
-			this stream.
+			Note that when certain server options are set (such as
+			HTTPServerOption.parseJsonBody) and a matching request was sent,
+			the returned stream will be empty. If needed, remove those
+			options and do your own processing of the body when launching
+			the server. HTTPServerOption has a list of all options that affect
+			the request body.
 		*/
 		InputStream bodyReader;
 
@@ -591,8 +598,8 @@ final class HTTPServerRequest : HTTPRequest {
 		/** Contains information about any uploaded file for a HTML _form request.
 
 			Remarks:
-				This field is only set if HTTPServerOption.parseFormBody is set amd
-				if the Content-Type is "multipart/form-data".
+				This field is only set if HTTPServerOption.parseFormBody is set
+				and if the Content-Type is "multipart/form-data".
 		*/
 		FilePart[string] files;
 
