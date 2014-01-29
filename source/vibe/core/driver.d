@@ -90,6 +90,8 @@ interface EventDriver {
 	*/
 	TCPConnection connectTCP(string host, ushort port);
 
+	TCPConnection connectTCP(NetworkAddress target);
+
 	/// Deprecated compatibility alias
 	deprecated("Please use connectTCP instead.") alias connectTcp = connectTCP;
 

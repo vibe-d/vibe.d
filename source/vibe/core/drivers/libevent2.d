@@ -243,11 +243,17 @@ class Libevent2Driver : EventDriver {
 		return msg.addr;
 	}
 
-	TCPConnection connectTCP(string host, ushort port)
-	{
-		auto addr = resolveHost(host);
+	TCPConnection connectTCP(string host,ushort port) 
+	{ 
+		NetworkAddress addr = resolveHost(host);
 		addr.port = port;
+		return connectTCP(addr);
+	}
+		
 
+	TCPConnection connectTCP(NetworkAddress addr)
+	{
+		
 		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
@@ -277,7 +283,7 @@ class Libevent2Driver : EventDriver {
 		scope(exit) cctx.readOwner = Task();
 
 		socketEnforce(bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) == 0,
-			"Failed to connect to host "~host~" on port "~to!string(port));
+			"Failed to connect to host "~to!string(addr)~" on port "~to!string(addr.port));
 
 	// TODO: cctx.remove_addr6 = ...;
 		
@@ -285,11 +291,11 @@ class Libevent2Driver : EventDriver {
 			while (cctx.status == 0)
 				m_core.yieldForEvent();
 		} catch (Exception e) {
-			throw new Exception(format("Failed to connect to %s:%s: %s", host, port, e.msg));
+				throw new Exception(format("Failed to connect to %s:%s: %s", to!string(addr), addr.port, e.msg));
 		}
 		
 		logTrace("Connect result status: %d", cctx.status);
-		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s:%s: %s", host, port, cctx.status));
+			enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s:%s: %s", to!string(addr), addr.port, cctx.status));
 		
 		return new Libevent2TCPConnection(cctx);
 	}
