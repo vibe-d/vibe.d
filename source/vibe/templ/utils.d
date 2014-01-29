@@ -167,3 +167,14 @@ void reqInjector(alias Next, Vars...)(HTTPServerRequest req, HTTPServerResponse 
 {
 	Next!(Vars, req)(req, res);
 }
+/* This template is form bearophile */
+/// private
+template arrayToTypeTuple(alias items) {
+	import std.typetuple,std.traits,std.typecons;
+	static assert (isArray!(typeof(items)));
+	static if (items == null || items.length == 0) // bug 4284
+		alias TypeTuple!() arrayToTypeTuple;
+	else
+		alias TypeTuple!(items[0], arrayToTypeTuple!(items[1..$]))
+			arrayToTypeTuple;
+}

@@ -211,6 +211,12 @@ void setVibeDistHost(string host, ushort port)
 
 deprecated("This function does nothing, no need to call it anymore.") void startListening() {}
 
+@property void stringIncludeRender(string template_file, ALIASES...)(HTTPServerResponse res)
+{
+	import vibe.templ.diet;
+	res.headers["Content-Type"] = "text/html; charset=UTF-8";
+	compileStringIncludeDietFile!(template_file, ALIASES)(res.bodyWriter);
+}
 
 /**
 	Renders the given template and makes all ALIASES available to the template.
