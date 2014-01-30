@@ -152,7 +152,7 @@ struct NetworkAddress {
 		 
 	}
 	unittest {
-		assert (NetworkAddress.init.toString()=="0.0.0.0");
+		assert (std.conv.to!string(resolveHost("localhost"))=="127.0.0.1");
 	}
 	pure nothrow:
 
