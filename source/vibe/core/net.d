@@ -187,7 +187,7 @@ struct NetworkAddress {
 				ret.reserve(40);
 				foreach (i; 0 .. 8) {
 					if (i > 0) ret.put(':');
-					ret.formattedWrite("%02X%02X", ip[i*2], ip[i*2+1]);
+					ret.formattedWrite("%X", bigEndianToNative!ushort(cast(ubyte[2])ip[i*2 .. i*2+2]));
 				}
 				return ret.data;
 		}
@@ -201,7 +201,7 @@ struct NetworkAddress {
 				"IP "~ip~" yielded wrong string representation: "~res);
 		}
 		test("1.2.3.4");
-		test("0102:0304:0506:0708:090A:0B0C:0D0E:0F10");
+		test("102:304:506:708:90A:B0C:D0E:F10");
 	}
 }
 
