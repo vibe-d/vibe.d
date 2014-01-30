@@ -114,48 +114,6 @@ deprecated("Please use listenUDP instead.")alias listenUdp = listenUDP;
 	Represents a network/socket address.
 */
 struct NetworkAddress {
-
-	pure:
-	/** Returns a string Representation of the IPAddress */
-	@property string toString()
-	{
-		import std.conv:to;
-		import std.string:format;
-
-		switch (this.family) {
-			default: assert(false, "toString() called for invalid address family.");
-
-			case AF_INET:  
-						_in_addr ip;
-						ip.s4_addr32 = addr_ip4.sin_addr.s_addr;
-						return format("%d.%d.%d.%d", 	
-				            ip.s4_addr8[0],
-							ip.s4_addr8[1],
-							ip.s4_addr8[2],
-							ip.s4_addr8[3]
-						);
-			
-			case AF_INET6: return format("%x:%x:%x:%x:%x:%x:%x:%x",
-						addr_ip6.sin6_addr.s6_addr16[0],
-						addr_ip6.sin6_addr.s6_addr16[1],
-						
-						addr_ip6.sin6_addr.s6_addr16[2],
-						addr_ip6.sin6_addr.s6_addr16[3],
-
-						addr_ip6.sin6_addr.s6_addr16[4],
-						addr_ip6.sin6_addr.s6_addr16[5],
-
-						addr_ip6.sin6_addr.s6_addr16[6],
-						addr_ip6.sin6_addr.s6_addr16[7]
-						);
-		}
-		 
-	}
-	unittest {
-		assert (std.conv.to!string(resolveHost("localhost"))=="127.0.0.1");
-	}
-	pure nothrow:
-
 	private union {
 		sockaddr addr;
 		sockaddr_in addr_ip4;
@@ -164,14 +122,14 @@ struct NetworkAddress {
 
 	/** Family (AF_) of the socket address.
 	*/
-	@property ushort family() const { return addr.sa_family; }
+	@property ushort family() const pure nothrow { return addr.sa_family; }
 	/// ditto
-	@property void family(ushort val) { addr.sa_family = cast(ubyte)val; }
+	@property void family(ushort val) pure nothrow { addr.sa_family = cast(ubyte)val; }
 
 	/** The port in host byte order.
 	*/
 	@property ushort port()
-	const {
+	const pure nothrow {
 		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
 			case AF_INET: return ntoh(addr_ip4.sin_port);
@@ -180,7 +138,7 @@ struct NetworkAddress {
 	}
 	/// ditto
 	@property void port(ushort val)
-	{
+	pure nothrow {
 		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
 			case AF_INET: addr_ip4.sin_port = hton(val); break;
@@ -190,12 +148,12 @@ struct NetworkAddress {
 
 	/** A pointer to a sockaddr struct suitable for passing to socket functions.
 	*/
-	@property inout(sockaddr)* sockAddr() inout { return &addr; }
+	@property inout(sockaddr)* sockAddr() inout pure nothrow { return &addr; }
 
 	/** Size of the sockaddr struct that is returned by sockAddr().
 	*/
 	@property int sockAddrLen()
-	const {
+	const pure nothrow {
 		switch (this.family) {
 			default: assert(false, "sockAddrLen() called for invalid address family.");
 			case AF_INET: return addr_ip4.sizeof;
@@ -203,13 +161,48 @@ struct NetworkAddress {
 		}
 	}
 
-	@property inout(sockaddr_in)* sockAddrInet4() inout
+	@property inout(sockaddr_in)* sockAddrInet4() inout pure nothrow
 		in { assert (family == AF_INET); }
 		body { return &addr_ip4; }
 
-	@property inout(sockaddr_in6)* sockAddrInet6() inout
+	@property inout(sockaddr_in6)* sockAddrInet6() inout pure nothrow
 		in { assert (family == AF_INET6); }
 		body { return &addr_ip6; }
+
+	/** Returns a string representation of the IP address
+	*/
+	@property string toString()
+	const pure {
+		import std.array : appender;
+		import std.string : format, formattedWrite;
+
+		switch (this.family) {
+			default: assert(false, "toString() called for invalid address family.");
+			case AF_INET:
+				ubyte[4] ip = (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4];
+				return format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+			case AF_INET6:
+				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr8;
+				auto ret = appender!string();
+				ret.reserve(40);
+				foreach (i; 0 .. 8) {
+					if (i > 0) ret.put(':');
+					ret.formattedWrite("%02X%02X", ip[i*2], ip[i*2+1]);
+				}
+				return ret.data;
+		}
+		 
+	}
+
+	unittest {
+		void test(string ip) {
+			auto res = resolveHost(ip, AF_UNSPEC, false).toString();
+			assert(res == ip,
+				"IP "~ip~" yielded wrong string representation: "~res);
+		}
+		test("1.2.3.4");
+		test("0102:0304:0506:0708:090A:0B0C:0D0E:0F10");
+	}
 }
 
 
