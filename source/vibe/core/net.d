@@ -171,13 +171,13 @@ struct NetworkAddress {
 
 	/** Returns a string representation of the IP address
 	*/
-	@property string toString()
+	string toAddressString()
 	const pure {
 		import std.array : appender;
 		import std.string : format, formattedWrite;
 
 		switch (this.family) {
-			default: assert(false, "toString() called for invalid address family.");
+			default: assert(false, "toAddressString() called for invalid address family.");
 			case AF_INET:
 				ubyte[4] ip = (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4];
 				return format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
@@ -187,21 +187,32 @@ struct NetworkAddress {
 				ret.reserve(40);
 				foreach (i; 0 .. 8) {
 					if (i > 0) ret.put(':');
-					ret.formattedWrite("%X", bigEndianToNative!ushort(cast(ubyte[2])ip[i*2 .. i*2+2]));
+					ret.formattedWrite("%x", bigEndianToNative!ushort(cast(ubyte[2])ip[i*2 .. i*2+2]));
 				}
 				return ret.data;
 		}
-		 
+	}
+
+	/** Returns a full string representation of the address, including the port number.
+	*/
+	string toString()
+	const pure {
+		auto ret = toAddressString();
+		switch (this.family) {
+			default: assert(false, "toString() called for invalid address family.");
+			case AF_INET: return ret ~ format(":%s", port);
+			case AF_INET6: return format("[%s]:%s", ret, port);
+		}
 	}
 
 	unittest {
 		void test(string ip) {
-			auto res = resolveHost(ip, AF_UNSPEC, false).toString();
+			auto res = resolveHost(ip, AF_UNSPEC, false).toAddressString();
 			assert(res == ip,
 				"IP "~ip~" yielded wrong string representation: "~res);
 		}
 		test("1.2.3.4");
-		test("102:304:506:708:90A:B0C:D0E:F10");
+		test("102:304:506:708:90a:b0c:d0e:f10");
 	}
 }
 

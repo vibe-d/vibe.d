@@ -283,7 +283,7 @@ class Libevent2Driver : EventDriver {
 		scope(exit) cctx.readOwner = Task();
 
 		socketEnforce(bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) == 0,
-			"Failed to connect to host "~to!string(addr)~" on port "~to!string(addr.port));
+			"Failed to connect to " ~ addr.toString());
 
 	// TODO: cctx.remove_addr6 = ...;
 		
@@ -291,11 +291,11 @@ class Libevent2Driver : EventDriver {
 			while (cctx.status == 0)
 				m_core.yieldForEvent();
 		} catch (Exception e) {
-				throw new Exception(format("Failed to connect to %s:%s: %s", to!string(addr), addr.port, e.msg));
+				throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
 		}
 		
 		logTrace("Connect result status: %d", cctx.status);
-			enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s:%s: %s", to!string(addr), addr.port, cctx.status));
+			enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
 		
 		return new Libevent2TCPConnection(cctx);
 	}
