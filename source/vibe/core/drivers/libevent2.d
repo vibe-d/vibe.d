@@ -243,14 +243,6 @@ class Libevent2Driver : EventDriver {
 		return msg.addr;
 	}
 
-	TCPConnection connectTCP(string host,ushort port) 
-	{ 
-		NetworkAddress addr = resolveHost(host);
-		addr.port = port;
-		return connectTCP(addr);
-	}
-		
-
 	TCPConnection connectTCP(NetworkAddress addr)
 	{
 		

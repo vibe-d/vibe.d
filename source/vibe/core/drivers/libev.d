@@ -124,11 +124,6 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 
-	TCPConnection connectTCP(string host, ushort port)
-	{
-		assert(false);
-	}
-	
 	TCPConnection connectTCP(NetworkAddress addr)
 	{
 		assert(false);

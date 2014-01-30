@@ -81,16 +81,15 @@ interface EventDriver {
 	DirectoryWatcher watchDirectory(Path path, bool recursive);
 
 	/** Resolves the given host name or IP address string.
+
+		'host' can be a DNS name (if use_dns is set) or an IPv4 or IPv6
+		address string.
 	*/
 	NetworkAddress resolveHost(string host, ushort family, bool use_dns);
 
 	/** Establiches a tcp connection on the specified host/port.
-
-		'host' can be a DNS name or an IPv4 or IPv6 address string.
 	*/
-	TCPConnection connectTCP(string host, ushort port);
-
-	TCPConnection connectTCP(NetworkAddress target);
+	TCPConnection connectTCP(NetworkAddress address);
 
 	/// Deprecated compatibility alias
 	deprecated("Please use connectTCP instead.") alias connectTcp = connectTCP;

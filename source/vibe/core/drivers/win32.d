@@ -269,13 +269,6 @@ class Win32EventDriver : EventDriver {
 		return addr;
 	}
 
-	Win32TCPConnection connectTCP(string host, ushort port)
-	{
-		auto addr = resolveHost(host);
-		addr.port = port;
-		return connectTCP(addr);
-	}
-
 	Win32TCPConnection connectTCP(NetworkAddress addr)
 	{
 		assert(m_tid == GetCurrentThreadId());

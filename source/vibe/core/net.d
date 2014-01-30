@@ -87,9 +87,9 @@ TCPConnection connectTCP(string host, ushort port)
 {	
 	NetworkAddress addr = resolveHost(host);
 	addr.port = port; 
-	return getEventDriver().connectTCP(addr);
+	return connectTCP(addr);
 }
-
+/// ditto
 TCPConnection connectTCP(NetworkAddress addr) {
 	return getEventDriver().connectTCP(addr);
 }
