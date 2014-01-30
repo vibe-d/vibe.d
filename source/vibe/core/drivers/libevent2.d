@@ -291,11 +291,11 @@ class Libevent2Driver : EventDriver {
 			while (cctx.status == 0)
 				m_core.yieldForEvent();
 		} catch (Exception e) {
-				throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
+			throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
 		}
 		
 		logTrace("Connect result status: %d", cctx.status);
-			enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
+		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
 		
 		return new Libevent2TCPConnection(cctx);
 	}
