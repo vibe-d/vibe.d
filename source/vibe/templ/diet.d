@@ -47,6 +47,11 @@ import std.variant;
 */
 void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 {
+	compileDietFileIndent!(template_file, 0, ALIASES)(stream__);
+}
+/// ditto
+void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(OutputStream stream__)
+{
 	// some imports to make available by default inside templates
 	import vibe.http.common;
 	import vibe.utils.string;
@@ -62,9 +67,8 @@ void compileDietFile(string template_file, ALIASES...)(OutputStream stream__)
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
-	mixin(dietParser!template_file);
-	#line 66 "diet.d"
-	static assert(__LINE__ == 66);
+	mixin(dietParser!template_file(indent));
+	#line 72 "diet.d"
 }
 
 /// compatibility alias
@@ -94,9 +98,8 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
-	mixin(dietParser!template_file);
-	#line 98 "diet.d"
-	static assert(__LINE__ == 98);
+	mixin(dietParser!template_file(0));
+	#line 103 "diet.d"
 }
 
 /// compatibility alias
@@ -126,9 +129,9 @@ alias compileDietFileCompat parseDietFileCompat;
 	}
 	---
 */
-template compileDietFileMixin(string template_file, string stream_variable)
+template compileDietFileMixin(string template_file, string stream_variable, size_t base_indent = 0)
 {
-	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file;
+	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file(base_indent);
 }
 
 /**
@@ -161,12 +164,12 @@ static this()
 }
 
 
-private @property string dietParser(string template_file)()
+private string dietParser(string template_file)(size_t base_indent)
 {
 	TemplateBlock[] files;
 	readFileRec!(template_file)(files);
 	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
-	return compiler.buildWriter();
+	return compiler.buildWriter(base_indent);
 }
 
 
@@ -253,6 +256,12 @@ private class OutputContext {
 	Node[] m_nodeStack;
 	string m_result;
 	Line m_line = Line(null, -1, null);
+	size_t m_baseIndent;
+
+	this(size_t base_indent = 0)
+	{
+		m_baseIndent = base_indent;
+	}
 
 	void markInputLine(in ref Line line)
 	{
@@ -278,13 +287,12 @@ private class OutputContext {
 					writeCodeLine(top[1 .. $]);
 				}
 			} else if( top.length ){
-				string str;
 				if( top.inner && prepend_whitespaces && top != "</pre>" ){
-					str = "\n";
-					foreach( j; 0 .. m_nodeStack.length-1 ) if( m_nodeStack[j][0] != '-' ) str ~= "\t";
+					writeString("\n");
+					writeIndent(m_nodeStack.length-1);
 				}
-				str ~= top;
-				writeString(str);
+
+				writeString(top);
 				prepend_whitespaces = top.outer;
 			}
 			m_nodeStack.length--;
@@ -296,6 +304,13 @@ private class OutputContext {
 	void writeRawString(string str) { enterState(State.String); m_result ~= str; }
 	void writeString(string str) { writeRawString(dstringEscape(str)); }
 	void writeStringHtmlEscaped(string str) { writeString(htmlEscape(str)); }
+	void writeIndent(size_t stack_depth = size_t.max)
+	{
+		string str;
+		foreach (i; 0 .. m_baseIndent) str ~= '\t';
+		foreach (j; 0 .. min(m_nodeStack.length, stack_depth)) if (m_nodeStack[j][0] != '-') str ~= '\t';
+		writeRawString(str);
+	}
 
 	void writeStringExpr(string str) { writeCodeLine(StreamVariableName~".write("~str~");"); }
 	void writeStringExprHtmlEscaped(string str) { writeStringExpr("htmlEscape("~str~")"); }
@@ -358,9 +373,9 @@ private struct DietCompiler {
 		m_blocks = blocks;
 	}
 
-	string buildWriter()
+	string buildWriter(size_t base_indent)
 	{
-		auto output = new OutputContext;
+		auto output = new OutputContext(base_indent);
 		buildWriter(output, 0);
 		assert(output.m_nodeStack.length == 0, "Template writer did not consume all nodes!?");
 		return output.m_result;
@@ -635,7 +650,8 @@ private struct DietCompiler {
 		buildHtmlTag(output, tag, level, attribs, false);
 
 		string indent_string = "\t";
-		foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) indent_string ~= "\t";
+		foreach (j; 0 .. output.m_baseIndent) indent_string ~= '\t';
+		foreach (j; 0 .. level ) if( output.m_nodeStack[j][0] != '-') indent_string ~= '\t';
 
 		// write the block contents wrapped in a CDATA for old browsers
 		if( tag == "script" ) output.writeString("\n"~indent_string~"//<![CDATA[\n");
@@ -684,16 +700,18 @@ private struct DietCompiler {
 			content ~= lines[i].text[(indent+1)*indentStyle.length .. $];
 		}
 
+		auto out_indent = output.m_baseIndent + indent;
+
 		// compile-time filter whats possible
 		filter_loop:
 		foreach_reverse( f; filters ){
 			bool found = true;
 			switch(f){
 				default: found = false; break;//break filter_loop;
-				case "css": content = filterCSS(content, indent); break;
-				case "javascript": content = filterJavaScript(content, indent); break;
-				case "markdown": content = filterMarkdown(content, indent); break;
-				case "htmlescape": content = filterHtmlEscape(content, indent); break;
+				case "css": content = filterCSS(content, out_indent); break;
+				case "javascript": content = filterJavaScript(content, out_indent); break;
+				case "markdown": content = filterMarkdown(content, out_indent); break;
+				case "htmlescape": content = filterHtmlEscape(content, out_indent); break;
 			}
 			if (found) filters.length = filters.length-1;
 			else break;
@@ -703,7 +721,7 @@ private struct DietCompiler {
 		string filter_expr;
 		foreach_reverse( flt; filters ) filter_expr ~= "s_filters[\""~dstringEscape(flt)~"\"](";
 		filter_expr ~= "\"" ~ dstringEscape(content) ~ "\"";
-		foreach( i; 0 .. filters.length ) filter_expr ~= ", "~cttostring(indent)~")";
+		foreach( i; 0 .. filters.length ) filter_expr ~= ", "~cttostring(out_indent)~")";
 
 		output.writeStringExpr(filter_expr);
 	}
@@ -778,7 +796,7 @@ private struct DietCompiler {
 		if(outer_whitespaces) {
 			output.writeString("\n");
 			assertp(output.stackSize >= level);
-			foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) output.writeString("\t");
+			output.writeIndent(level);
 		}
 		output.writeString("<" ~ tag);
 		foreach( att; attribs ){
@@ -1062,7 +1080,7 @@ private struct DietCompiler {
 private void buildSpecialTag(OutputContext output, string tag, int level)
 {
 	output.writeString("\n");
-	foreach( j; 0 .. level ) if( output.m_nodeStack[j][0] != '-' ) output.writeString("\t");
+	output.writeIndent(level);
 	output.writeString("<" ~ tag ~ ">");
 }
 
