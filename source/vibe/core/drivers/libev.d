@@ -129,6 +129,11 @@ class LibevDriver : EventDriver {
 		assert(false);
 	}
 	
+	TCPConnection connectTCP(NetworkAddress addr)
+	{
+		assert(false);
+	}
+
 	LibevTCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string address, TCPListenOptions options)
 	{
 		sockaddr_in addr_ip4;

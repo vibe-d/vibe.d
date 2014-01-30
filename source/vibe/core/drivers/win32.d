@@ -271,9 +271,14 @@ class Win32EventDriver : EventDriver {
 
 	Win32TCPConnection connectTCP(string host, ushort port)
 	{
-		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(host);
 		addr.port = port;
+		return connectTCP(addr);
+	}
+
+	Win32TCPConnection connectTCP(NetworkAddress addr)
+	{
+		assert(m_tid == GetCurrentThreadId());
 
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
 		socketEnforce(sock != INVALID_SOCKET, "Failed to create socket");
