@@ -116,6 +116,7 @@ deprecated("Please use listenUDP instead.")alias listenUdp = listenUDP;
 struct NetworkAddress {
 
 	pure:
+	/** Returns a string Representation of the IPAddress */
 	@property string toString()
 	{
 		import std.conv:to;
@@ -124,32 +125,35 @@ struct NetworkAddress {
 		switch (this.family) {
 			default: assert(false, "toString() called for invalid address family.");
 
-			case AF_INET: return format("%d.%d.%d.%d", 	
-						cast(ubyte)(addr_ip4.sin_addr.s_addr >> (8*0) & 255),
-						cast(ubyte)(addr_ip4.sin_addr.s_addr >> (8*1) & 255),
-						cast(ubyte)(addr_ip4.sin_addr.s_addr >> (8*2) & 255),
-						cast(ubyte)(addr_ip4.sin_addr.s_addr >> (8*3) & 255)
+			case AF_INET:  
+						_in_addr ip;
+						ip.s4_addr32 = addr_ip4.sin_addr.s_addr;
+						return format("%d.%d.%d.%d", 	
+				            ip.s4_addr8[0],
+							ip.s4_addr8[1],
+							ip.s4_addr8[2],
+							ip.s4_addr8[3]
 						);
 			
 			case AF_INET6: return format("%x:%x:%x:%x:%x:%x:%x:%x",
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[0] >> (16*0) & 255),
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[0] >> (16*1) & 255),
+						addr_ip6.sin6_addr.s6_addr16[0],
+						addr_ip6.sin6_addr.s6_addr16[1],
 						
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[1] >> (16*0) & 255),
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[1] >> (16*1) & 255),
-						
+						addr_ip6.sin6_addr.s6_addr16[2],
+						addr_ip6.sin6_addr.s6_addr16[3],
 
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[2] >> (16*0) & 255),
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[2] >> (16*1) & 255),
-				
+						addr_ip6.sin6_addr.s6_addr16[4],
+						addr_ip6.sin6_addr.s6_addr16[5],
 
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[3] >> (16*0) & 255),
-						cast(ushort)(addr_ip6.sin6_addr.s6_addr32[3] >> (16*2) & 255),
+						addr_ip6.sin6_addr.s6_addr16[6],
+						addr_ip6.sin6_addr.s6_addr16[7]
 						);
 		}
 		 
 	}
-
+	unittest {
+		assert (NetworkAddress.init.toString()=="0.0.0.0");
+	}
 	pure nothrow:
 
 	private union {
@@ -316,5 +320,15 @@ private pure nothrow {
 		version (LittleEndian) return swapEndian(val);
 		else version (BigEndian) return val;
 		else static assert(false, "Unknown endianness.");
+	}
+
+	struct _in_addr
+	{
+		union
+		{
+			uint8_t[4] s4_addr8;
+			uint16_t[2] s4_addr16;
+			uint32_t[1] s4_addr32;
+		}
 	}
 }
