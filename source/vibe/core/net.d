@@ -182,7 +182,7 @@ struct NetworkAddress {
 				ubyte[4] ip = (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4];
 				return format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 			case AF_INET6:
-				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr8;
+				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr;
 				auto ret = appender!string();
 				ret.reserve(40);
 				foreach (i; 0 .. 8) {
@@ -324,15 +324,5 @@ private pure nothrow {
 		version (LittleEndian) return swapEndian(val);
 		else version (BigEndian) return val;
 		else static assert(false, "Unknown endianness.");
-	}
-
-	struct _in_addr
-	{
-		union
-		{
-			uint8_t[4] s4_addr8;
-			uint16_t[2] s4_addr16;
-			uint32_t[1] s4_addr32;
-		}
 	}
 }
