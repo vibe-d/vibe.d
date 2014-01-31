@@ -41,6 +41,20 @@ FileStream openFile(string path, FileMode mode = FileMode.read)
 }
 
 /**
+	Convenience method to append to a file
+*/
+void appendFile(Path path, string data) {
+	auto f = openFile(path, FileMode.append);
+	scope(exit) f.close();
+	f.write(data);
+}
+/// ditto
+void appendFile(string path, string data)
+{
+	appendFile(Path(path), data);
+}
+
+/**
 	Creates and opens a temporary file for writing.
 */
 FileStream createTempFile(string suffix = null)
