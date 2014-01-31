@@ -172,7 +172,7 @@ struct NetworkAddress {
 	/** Returns a string representation of the IP address
 	*/
 	string toAddressString()
-	const pure {
+	const {
 		import std.array : appender;
 		import std.string : format, formattedWrite;
 
@@ -196,7 +196,7 @@ struct NetworkAddress {
 	/** Returns a full string representation of the address, including the port number.
 	*/
 	string toString()
-	const pure {
+	const {
 		auto ret = toAddressString();
 		switch (this.family) {
 			default: assert(false, "toString() called for invalid address family.");
