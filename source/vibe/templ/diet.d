@@ -140,7 +140,7 @@ template compileDietFileMixin(string template_file, string stream_variable, size
 	The filter will be available using :filtername inside of the template. The following filters are
 	predefined: css, javascript, markdown
 */
-void registerDietTextFilter(string name, string function(string, int indent) filter)
+void registerDietTextFilter(string name, string function(string, size_t indent) filter)
 {
 	s_filters[name] = filter;
 }
@@ -152,7 +152,7 @@ void registerDietTextFilter(string name, string function(string, int indent) fil
 
 private {
 	enum string StreamVariableName = "stream__";
-	string function(string, int indent)[string] s_filters;
+	string function(string, size_t indent)[string] s_filters;
 }
 
 static this()
@@ -1112,7 +1112,7 @@ string _toString(T)(T v)
 /* Compile time filters                                                                           */
 /**************************************************************************************************/
 
-private string filterCSS(string text, int indent)
+private string filterCSS(string text, size_t indent)
 {
 	auto lines = splitLines(text);
 
@@ -1129,7 +1129,7 @@ private string filterCSS(string text, int indent)
 }
 
 
-private string filterJavaScript(string text, int indent)
+private string filterJavaScript(string text, size_t indent)
 {
 	auto lines = splitLines(text);
 
@@ -1144,12 +1144,12 @@ private string filterJavaScript(string text, int indent)
 	return ret;
 }
 
-private string filterMarkdown(string text, int indent)
+private string filterMarkdown(string text, size_t indent)
 {
 	return vibe.textfilter.markdown.filterMarkdown(text);
 }
 
-private string filterHtmlEscape(string text, int indent)
+private string filterHtmlEscape(string text, size_t indent)
 {
 	return htmlEscape(text);
 }
