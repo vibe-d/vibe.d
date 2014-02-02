@@ -589,11 +589,21 @@ unittest {
 		Test1[] d;
 		Test1 e;
 	}
+	
 	Test t;
 	t.b=8;
 	t.e.a=9;
-	string[string] form=[ "t_a" : "1", "t_b" : "2", "t_c0" : "3", "t_c1" : "4", "t_c2" : "5",
-	   "t_d0_a" : "6", "t_d0_b" : "7", "t_d1_a" : "9"	];
+
+	FormFields form;
+	form["t_a"] = "1";
+	form["t_b"] = "2";
+	form["t_c0"] = "3";
+	form["t_c1"] = "4";
+	form["t_c2"] = "5";
+	form["t_d0_a"] = "6";
+	form["t_d0_b"] = "7";
+	form["t_d1_a"] = "9";
+
 	Error e;
 	assert(loadFormDataRecursive(form, t, "t", e, No.strict)==form.length);
 	assert(t.b==2);
