@@ -8,6 +8,8 @@ supported in the form of [DUB modules](http://registry.vibed.org/).
 
 Visit the website at <http://vibed.org/> for more information.
 
+[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)
+
 
 Installation
 ------------
