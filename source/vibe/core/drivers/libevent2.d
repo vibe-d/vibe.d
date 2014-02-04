@@ -919,21 +919,26 @@ class Libevent2UDPConnection : UDPConnection {
 
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
-		if( buf.length == 0 ) buf.length = 65507;
+		acquire();
+		scope (exit) release();
+
+		if (buf.length == 0) buf.length = 65507;
 		NetworkAddress from;
 		from.family = m_ctx.local_addr.family;
 		assert(buf.length <= int.max);
-		while(true){
+		while (true) {
 			socklen_t addr_len = from.sockAddrLen;
 			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
-			if( ret > 0 ){
+			if (ret > 0) {
 				if( peer_address ) *peer_address = from;
 				return buf[0 .. ret];
 			}
-			if( ret < 0 ){
+			if (ret < 0) {
 				auto err = getLastSocketError();
-				logDiagnostic("UDP recv err: %s", err);
-				enforce(err == EWOULDBLOCK, "Error receiving UDP packet.");
+				if (err != EWOULDBLOCK) {
+					logDebugV("UDP recv err: %s", err);
+					throw new Exception("Error receiving UDP packet.");
+				}
 			}
 			m_ctx.core.yieldForEvent();
 		}
