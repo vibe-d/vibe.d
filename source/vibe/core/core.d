@@ -226,6 +226,7 @@ void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
 
 private void runWorkerTask_unsafe(void delegate() del)
 {
+	setupWorkerThreads();
 	synchronized (st_workerTaskMutex) st_workerTasks ~= del;
 	st_workerTaskSignal.emit();
 }
@@ -251,7 +252,7 @@ void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
 
 private void runWorkerTaskDist_unsafe(void delegate() del)
 {
-	bool got_worker_threads = false;
+	setupWorkerThreads();
 	synchronized (st_workerTaskMutex) {
 		foreach (ref ctx; st_threads)
 			if (ctx.isWorker)
@@ -1001,14 +1002,6 @@ shared static this()
 
 	st_workerTaskSignal = getEventDriver().createManualEvent();
 
-	import core.cpuid;
-	foreach (i; 0 .. threadsPerCPU) {
-		auto thr = new Thread(&workerThreadFunc);
-		thr.name = format("Vibe Task Worker #%s", i);
-		st_threads ~= ThreadContext(thr, true);
-		thr.start();
-	}
-
 	version(VibeIdleCollect){
 		logTrace("setup gc");
 		s_core.setupGcTimer();
@@ -1083,6 +1076,27 @@ private void setupDriver()
 	else version(VibeLibeventDriver) setEventDriver(new Libevent2Driver(s_core));
 	else static assert(false, "No event driver is available. Please specify a -version=Vibe*Driver for the desired driver.");
 	logTrace("driver %s created", (cast(Object)getEventDriver()).classinfo.name);
+}
+
+private void setupWorkerThreads()
+{
+	import core.cpuid;
+
+	static bool s_workerThreadsStarted = false;
+	if (s_workerThreadsStarted) return;
+	s_workerThreadsStarted = true;
+
+	synchronized (st_workerTaskMutex) {
+		if (st_threads.any!(t => t.isWorker))
+			return;
+
+		foreach (i; 0 .. threadsPerCPU) {
+			auto thr = new Thread(&workerThreadFunc);
+			thr.name = format("Vibe Task Worker #%s", i);
+			st_threads ~= ThreadContext(thr, true);
+			thr.start();
+		}
+	}
 }
 
 private void workerThreadFunc()
