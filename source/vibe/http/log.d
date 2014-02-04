@@ -45,7 +45,7 @@ class HTTPLogger {
 		}
 	}
 
-	protected abstract void writeLine(string ln);
+	protected abstract void writeLine(const(char)[] ln);
 }
 
 
@@ -55,7 +55,7 @@ class HTTPConsoleLogger : HTTPLogger {
 		super(settings, format);
 	}
 
-	protected override void writeLine(string ln)
+	protected override void writeLine(const(char)[] ln)
 	{
 		logInfo("%s", ln);
 	}
@@ -79,7 +79,7 @@ class HTTPFileLogger : HTTPLogger {
 		m_stream = null;
 	}
 
-	protected override void writeLine(string ln)
+	protected override void writeLine(const(char)[] ln)
 	{
 		assert(m_stream);
 		m_stream.write(ln);
