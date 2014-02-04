@@ -120,7 +120,7 @@ void exitEventLoop(bool shutdown_all_threads = false)
 	if (shutdown_all_threads) {
 		auto thisthr = Thread.getThis();
 		atomicStore(st_term, true);
-		st_workerTaskSignal.emit();
+		st_threadsSignal.emit();
 	}
 
 	// shutdown the calling thread
@@ -227,8 +227,8 @@ void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
 private void runWorkerTask_unsafe(void delegate() del)
 {
 	setupWorkerThreads();
-	synchronized (st_workerTaskMutex) st_workerTasks ~= del;
-	st_workerTaskSignal.emit();
+	synchronized (st_threadsMutex) st_workerTasks ~= del;
+	st_threadsSignal.emit();
 }
 
 /**
@@ -253,12 +253,12 @@ void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
 private void runWorkerTaskDist_unsafe(void delegate() del)
 {
 	setupWorkerThreads();
-	synchronized (st_workerTaskMutex) {
+	synchronized (st_threadsMutex) {
 		foreach (ref ctx; st_threads)
 			if (ctx.isWorker)
 				ctx.taskQueue ~= del;
 	}
-	st_workerTaskSignal.emit();
+	st_threadsSignal.emit();
 }
 
 /**
@@ -921,11 +921,10 @@ private {
 	__gshared VibeDriverCore s_core;
 	__gshared size_t s_taskStackSize = 16*4096;
 
-	__gshared core.sync.mutex.Mutex st_workerTaskMutex;
-	__gshared void delegate()[] st_workerTasks;
+	__gshared core.sync.mutex.Mutex st_threadsMutex;
+	__gshared ManualEvent st_threadsSignal;
 	__gshared ThreadContext[] st_threads;
-	__gshared ManualEvent st_workerTaskSignal;
-	__gshared Mutex st_threadShutdownMutex;
+	__gshared void delegate()[] st_workerTasks;
 	__gshared Condition st_threadShutdownCondition;
 	__gshared debug void function(TaskEvent, Task) s_taskEventCallback;
 	shared bool st_term = false;
@@ -969,8 +968,8 @@ shared static this()
 	logTrace("create driver core");
 	
 	s_core = new VibeDriverCore;
-	st_workerTaskMutex = new Mutex;
-	st_threadShutdownCondition = new Condition(st_workerTaskMutex);
+	st_threadsMutex = new Mutex;
+	st_threadShutdownCondition = new Condition(st_threadsMutex);
 
 	version(Posix){
 		logTrace("setup signal handler");
@@ -1000,7 +999,7 @@ shared static this()
 
 	setupDriver();
 
-	st_workerTaskSignal = getEventDriver().createManualEvent();
+	st_threadsSignal = getEventDriver().createManualEvent();
 
 	version(VibeIdleCollect){
 		logTrace("setup gc");
@@ -1015,7 +1014,7 @@ shared static ~this()
 {
 	bool tasks_left = false;
 
-	synchronized (st_workerTaskMutex) {
+	synchronized (st_threadsMutex) {
 		if( !st_workerTasks.empty ) tasks_left = true;
 	}	
 	
@@ -1031,7 +1030,7 @@ static this()
 	assert(s_core !is null);
 
 	auto thisthr = Thread.getThis();
-	synchronized (st_workerTaskMutex)
+	synchronized (st_threadsMutex)
 		if (!st_threads.any!(c => c.thread is thisthr))
 			st_threads ~= ThreadContext(thisthr, false);
 
@@ -1043,7 +1042,7 @@ static this()
 static ~this()
 {
 	auto thisthr = Thread.getThis();
-	synchronized (st_workerTaskMutex) {
+	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
 		assert(idx >= 0);
 		if (idx >= 0) {
@@ -1054,7 +1053,7 @@ static ~this()
 		// if we are the main thread, wait for all others before terminating
 		if (idx == 0) { // we are the main thread, wait for others
 			atomicStore(st_term, true);
-			st_workerTaskSignal.emit();
+			st_threadsSignal.emit();
 			while (st_threads.length)
 				st_threadShutdownCondition.wait();
 		}
@@ -1086,7 +1085,7 @@ private void setupWorkerThreads()
 	if (s_workerThreadsStarted) return;
 	s_workerThreadsStarted = true;
 
-	synchronized (st_workerTaskMutex) {
+	synchronized (st_threadsMutex) {
 		if (st_threads.any!(t => t.isWorker))
 			return;
 
@@ -1120,8 +1119,8 @@ private void handleWorkerTasks()
 	logDebug("worker task loop enter");
 	while(true){
 		void delegate() t;
-		auto emit_count = st_workerTaskSignal.emitCount;
-		synchronized (st_workerTaskMutex) {
+		auto emit_count = st_threadsSignal.emitCount;
+		synchronized (st_threadsMutex) {
 			auto idx = st_threads.countUntil!(c => c.thread is thisthr);
 			assert(idx >= 0);
 			logDebug("worker task check");
@@ -1144,7 +1143,7 @@ private void handleWorkerTasks()
 			}
 		}
 		if (t) runTask(t);
-		else st_workerTaskSignal.wait(emit_count);
+		else st_threadsSignal.wait(emit_count);
 	}
 	logDebug("worker task exit");
 }
@@ -1158,7 +1157,7 @@ nothrow {
 private extern(C) void onSignal(int signal)
 nothrow {
 	atomicStore(st_term, true);
-	try st_workerTaskSignal.emit(); catch {}
+	try st_threadsSignal.emit(); catch {}
 
 	logInfo("Received signal %d. Shutting down.", signal);
 }
