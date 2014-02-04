@@ -76,7 +76,7 @@ version (Windows)
 int runEventLoop()
 {
 	s_eventLoopRunning = true;
-	scope(exit) {
+	scope (exit) {
 		s_eventLoopRunning = false;
 		s_exitEventLoop = false;
 		st_threadShutdownCondition.notifyAll();
@@ -91,8 +91,8 @@ int runEventLoop()
 	// handle worker tasks and st_term
 	runTask(toDelegate(&handleWorkerTasks));
 
-	if( auto err = getEventDriver().runEventLoop() != 0){
-		if( err == 1 ){
+	if (auto err = getEventDriver().runEventLoop() != 0) {
+		if (err == 1) {
 			logDebug("No events active, exiting message loop.");
 			return 0;
 		}
@@ -732,6 +732,12 @@ private class CoreTask : TaskFiber {
 					m_running = true;
 					scope(exit) m_running = false;
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
+					if (!s_eventLoopRunning) {
+						logTrace("Event loop not running at task start - yielding.");
+						assert(!m_queue);
+						.yield();
+						logTrace("Initial resume of task.");
+					}
 					task(this);
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end, handle);
 				} catch( Exception e ){
