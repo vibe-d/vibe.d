@@ -58,7 +58,7 @@ version(Windows)
 
 
 class Libevent2Driver : EventDriver {
-	import std.container : Array, BinaryHeap, heapify;
+	import std.container : Array, BinaryHeap, RedBlackTree, heapify;
 	import std.datetime : Clock;
 
 	private {
@@ -72,8 +72,11 @@ class Libevent2Driver : EventDriver {
 		event* m_timerEvent;
 		int m_timerIDCounter = 1;
 		HashMap!(size_t, TimerInfo) m_timers;
-		Array!TimeoutEntry m_timeoutHeapStore;
-		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
+		static if (__VERSION__ < 2065) {
+			RedBlackTree!(TimeoutEntry, "a.timeout > b.timeout", true) m_timeoutHeap;
+		} else { // suffers from fiel order dependent compile/link errors on DMD pre-2.065
+			BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
+		}
 	}
 
 	this(DriverCore core)
@@ -83,6 +86,8 @@ class Libevent2Driver : EventDriver {
 		s_driverCore = core;
 
 		if (!s_threadObjectsMutex) s_threadObjectsMutex = new Mutex;
+
+		static if (__VERSION__ < 2065) m_timeoutHeap = new typeof(m_timeoutHeap)(null);
 
 		// set the malloc/free versions of our runtime so we don't run into trouble
 		// because the libevent DLL uses a different one.
