@@ -73,7 +73,7 @@ class Libevent2Driver : EventDriver {
 		int m_timerIDCounter = 1;
 		HashMap!(size_t, TimerInfo) m_timers;
 		static if (__VERSION__ < 2065) {
-			RedBlackTree!(TimeoutEntry, "a.timeout > b.timeout", true) m_timeoutHeap;
+			RedBlackTree!(TimeoutEntry, "a.timeout < b.timeout", true) m_timeoutHeap;
 		} else { // suffers from fiel order dependent compile/link errors on DMD pre-2.065
 			BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
 		}
@@ -389,6 +389,7 @@ class Libevent2Driver : EventDriver {
 			pt.pending = true;
 			acquireTimer(timer_id);
 		}
+		logDebugV("rearming timer %s in %s s", timer_id, dur.total!"usecs" * 1e-6);
 		scheduleTimer(timeout, timer_id);
 	}
 
@@ -459,10 +460,12 @@ class Libevent2Driver : EventDriver {
 	private void scheduleTimer(long timeout, size_t id)
 	{
 		logTrace("Schedule timer %s", id);
+		auto now = Clock.currStdTime();
 		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
-			rescheduleTimerEvent((timeout - Clock.currStdTime()).hnsecs);
+			rescheduleTimerEvent((timeout - now).hnsecs);
 		}
 		m_timeoutHeap.insert(TimeoutEntry(timeout, id));
+		logDebugV("first timer %s in %s s", id, (timeout - now) * 1e-7);
 	}
 
 	private void rescheduleTimerEvent(Duration dur)
