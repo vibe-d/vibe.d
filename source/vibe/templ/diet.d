@@ -600,7 +600,7 @@ private struct DietCompiler {
 	{
 		// parse the HTML tag, leaving any trailing text as line[i .. $]
 		size_t i;
-		Tuple!(string, string)[] attribs;
+		HTMLAttribute[] attribs;
 		auto ws_type = parseHtmlTag(line, i, attribs);
 
 		// determine if we need a closing tag
@@ -643,7 +643,7 @@ private struct DietCompiler {
 	{
 		// parse the HTML tag leaving any trailing text as tagline[i .. $]
 		size_t i;
-		Tuple!(string, string)[] attribs;
+		HTMLAttribute[] attribs;
 		parseHtmlTag(tagline, i, attribs);
 
 		// write the tag
@@ -726,7 +726,7 @@ private struct DietCompiler {
 		output.writeStringExpr(filter_expr);
 	}
 
-	private auto parseHtmlTag(in ref string line, out size_t i, out Tuple!(string, string)[] attribs)
+	private auto parseHtmlTag(in ref string line, out size_t i, out HTMLAttribute[] attribs)
 	{
 		struct WSType {
 			bool inner = true;
@@ -755,7 +755,7 @@ private struct DietCompiler {
 		}
 
 		// put #id and .classes into the attribs list
-		if( id.length ) attribs ~= tuple("id", '"'~id~'"');
+		if( id.length ) attribs ~= HTMLAttribute("id", '"'~id~'"');
 
 		// parse other attributes
 		if( i < line.length && line[i] == '(' ){
@@ -776,13 +776,13 @@ private struct DietCompiler {
 		if( classes.length ){
 			bool has_class = false;
 			foreach( a; attribs )
-				if( a[0] == "class" ){
+				if( a.key == "class" ){
 					has_class = true;
 					break;
 				}
 
-			if( has_class ) attribs ~= tuple("$class", classes);
-			else attribs ~= tuple("class", "\"" ~ classes ~ "\"");
+			if( has_class ) attribs ~= HTMLAttribute("$class", classes);
+			else attribs ~= HTMLAttribute("class", "\"" ~ classes ~ "\"");
 		}
 
 		// skip until the optional tag text contents begin
@@ -791,7 +791,7 @@ private struct DietCompiler {
 		return ws_type;
 	}
 
-	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref Tuple!(string, string)[] attribs, bool is_singular_tag, bool outer_whitespaces = true)
+	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref HTMLAttribute[] attribs, bool is_singular_tag, bool outer_whitespaces = true)
 	{
 		if(outer_whitespaces) {
 			output.writeString("\n");
@@ -800,32 +800,32 @@ private struct DietCompiler {
 		}
 		output.writeString("<" ~ tag);
 		foreach( att; attribs ){
-			if( att[0][0] == '$' ) continue; // ignore special attributes
-			if( isStringLiteral(att[1]) ){
-				output.writeString(" "~att[0]~"=\"");
-				if( !hasInterpolations(att[1]) ) output.writeString(htmlAttribEscape(dstringUnescape(att[1][1 .. $-1])));
-				else buildInterpolatedString(output, att[1][1 .. $-1], true);
+			if( att.key[0] == '$' ) continue; // ignore special attributes
+			if( isStringLiteral(att.value) ){
+				output.writeString(" "~att.key~"=\"");
+				if( !hasInterpolations(att.value) ) output.writeString(htmlAttribEscape(dstringUnescape(att.value[1 .. $-1])));
+				else buildInterpolatedString(output, att.value[1 .. $-1], true);
 
 				// output extra classes given as .class
-				if( att[0] == "class" ){
+				if( att.key == "class" ){
 					foreach( a; attribs )
-						if( a[0] == "$class" ){
-							output.writeString(" " ~ a[1]);
+						if( a.key == "$class" ){
+							output.writeString(" " ~ a.value);
 							break;
 						}
 				}
 
 				output.writeString("\"");
 			} else {
-				output.writeCodeLine("static if(is(typeof("~att[1]~") == bool)){ if("~att[1]~"){");
-				output.writeString(` `~att[0]~`="`~att[0]~`"`);
-				output.writeCodeLine("}} else static if(is(typeof("~att[1]~") == string[])){\n");
-				output.writeString(` `~att[0]~`="`);
-				output.writeExprHtmlAttribEscaped(`join(`~att[1]~`, " ")`);
+				output.writeCodeLine("static if(is(typeof("~att.value~") == bool)){ if("~att.value~"){");
+				output.writeString(` `~att.key~`="`~att.key~`"`);
+				output.writeCodeLine("}} else static if(is(typeof("~att.value~") == string[])){\n");
+				output.writeString(` `~att.key~`="`);
+				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
 				output.writeString(`"`);
 				output.writeCodeLine("} else {");
-				output.writeString(` `~att[0]~`="`);
-				output.writeExprHtmlAttribEscaped(att[1]);
+				output.writeString(` `~att.key~`="`);
+				output.writeExprHtmlAttribEscaped(att.value);
 				output.writeString(`"`);
 				output.writeCodeLine("}");
 			}
@@ -834,7 +834,7 @@ private struct DietCompiler {
 		output.writeString(is_singular_tag ? "/>" : ">");
 	}
 
-	private void parseAttributes(in ref string str, ref Tuple!(string, string)[] attribs)
+	private void parseAttributes(in ref string str, ref HTMLAttribute[] attribs)
 	{
 		size_t i = 0;
 		skipWhitespace(str, i);
@@ -858,7 +858,7 @@ private struct DietCompiler {
 				skipWhitespace(str, i);
 			}
 
-			attribs ~= tuple(name, value);
+			attribs ~= HTMLAttribute(name, value);
 		}
 	}
 
@@ -1075,6 +1075,10 @@ private struct DietCompiler {
 	}
 }
 
+private struct HTMLAttribute {
+	string key;
+	string value;
+}
 
 /// private
 private void buildSpecialTag(OutputContext output, string tag, int level)
