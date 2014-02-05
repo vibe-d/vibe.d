@@ -886,17 +886,18 @@ class Libevent2UDPConnection : UDPConnection {
 
 	void acquire()
 	{
-		assert(m_ctx, "Trying to acquire a closed TCP connection.");
-		assert(m_ctx.readOwner == Task() && m_ctx.writeOwner == Task(), "Trying to acquire a TCP connection that is currently owned.");
+		assert(m_ctx, "Trying to acquire a closed UDP connection.");
+		assert(m_ctx.readOwner == Task() && m_ctx.writeOwner == Task(),
+			"Trying to acquire a UDP connection that is currently owned.");
 		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 	}
 
 	void release()
 	{
-		if( !m_ctx ) return;
-		assert(m_ctx.readOwner != Task() && m_ctx.writeOwner != Task(), "Trying to release a TCP connection that is not owned.");
-		assert(m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner, "Trying to release a foreign TCP connection.");
-		m_ctx.readOwner = m_ctx.writeOwner = Task();
+		if (!m_ctx) return;
+		assert(m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner,
+			"Trying to release a UDP connection that is not owned by the current task.");
+		m_ctx.readOwner = m_ctx.writeOwner = Task.init;
 	}
 
 	void connect(string host, ushort port)
