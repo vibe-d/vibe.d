@@ -82,11 +82,13 @@ struct MongoCursor {
 	/**
 		Limits the maximum documents that cursor returns.
 
-		This method must be called before beginnig iteration in order to have effect.
-		Only last limit() applied to cursor has any effect.
+		This method must be called before beginnig iteration in order to have
+		effect. If multiple calls to limit() are made, the one with the lowest
+		limit will be chosen.
 
 		Params:
-			count = a number of documents
+			count = The maximum number number of documents to return. A value
+				of zero means unlimited.
 
 		Returns: the same cursor
 
@@ -224,9 +226,10 @@ private class MongoCursorData {
 		if (count > 0) {
 			if (m_nret == 0 || m_nret > count)
 				m_nret = min(count, 1024);
-		}
 
-		m_limit = count;
+			if (m_limit == 0 || m_limit > count)
+				m_limit = count;
+		}
 	}
 
 	void popFront()
