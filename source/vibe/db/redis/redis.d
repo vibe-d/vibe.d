@@ -253,7 +253,7 @@ final class RedisClient {
 		auto lines = info.splitLines();
 		if (lines.length > 1) {
 			auto lineParams = lines[1].split(":");
-			if (lineParams.length > 1) {
+			if (lineParams.length > 1 && lineParams[0] == "redis_version") {
 				return lineParams[1];
 			}
 		} 
