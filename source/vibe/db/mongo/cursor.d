@@ -80,6 +80,24 @@ struct MongoCursor {
 	}
 
 	/**
+		Limits the maximum documents that cursor returns.
+
+		This method must be called before beginnig iteration in order to have effect.
+		Only last limit() applied to cursor has any effect.
+
+		Params:
+			count = a number of documents
+
+		Returns: the same cursor
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.limit)
+	*/
+	MongoCursor limit(size_t count) {
+		m_data.limit(count);
+		return this;
+	}
+
+	/**
 		Advances the cursor to the next document of the response.
 
 		Note that calling this function is only allowed if empty returns false.
@@ -149,6 +167,7 @@ private class MongoCursorData {
 		size_t m_currentDoc = 0;
 		Bson[] m_documents;
 		bool m_started_iterating = false;
+		size_t m_limit = 0;
 	}
 
 	this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Bson query, Bson return_field_selector) {
@@ -169,6 +188,10 @@ private class MongoCursorData {
 	@property bool empty()
 	{
 		if(!m_started_iterating) startIterating();
+		if (m_limit > 0 && m_currentDoc >= m_limit) {
+			destroy();
+			return true;
+		}
 		if( m_currentDoc < m_documents.length )
 			return false;
 		if( m_cursor == 0 )
@@ -194,6 +217,16 @@ private class MongoCursorData {
 
 	void sort(Bson order) {
 		addSpecial("$orderby", order);
+	}
+
+	void limit(size_t count) {
+		// A limit() value of 0 (e.g. “.limit(0)”) is equivalent to setting no limit.
+		if (count > 0) {
+			if (m_nret == 0 || m_nret > count)
+				m_nret = min(count, 1024);
+		}
+
+		m_limit = count;
 	}
 
 	void popFront()
