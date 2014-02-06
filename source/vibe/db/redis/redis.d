@@ -246,6 +246,19 @@ final class RedisClient {
 	//TODO slowlog
 	//TODO sync
 
+	/// Returns Redis version
+	string getVersion() {
+		import std.string;
+		auto info = info();
+		auto lines = info.splitLines();
+		if (lines.length > 1) {
+			auto lineParams = lines[1].split(":");
+			if (lineParams.length > 1) {
+				return lineParams[1];
+			}
+		} 
+		return "";
+	}
 
 	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
