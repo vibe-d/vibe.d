@@ -1,7 +1,7 @@
 /**
 	URL-encoding implementation
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger, Sönke Ludwig
 */
@@ -30,22 +30,55 @@ string urlEncode(string str, string allowed_chars = null)
 */
 string urlDecode(string str)
 {
-	if( !str.anyOf("%+") ) return str;
+	if (!str.anyOf("%")) return str;
 	auto dst = appender!string();
 	dst.reserve(str.length);
 	filterURLDecode(dst, str);
 	return dst.data;
 }
 
+/** Returns the form encoded version of a given string.
+
+	Form encoding is the same as normal URL encoding, except that
+	spaces are replaced by plus characters.
+
+	Note that newlines should always be represented as \r\n sequences
+	according to the HTTP standard.
+*/
+string formEncode(string str, string allowed_chars = null)
+{
+	auto dst = appender!string();
+	dst.reserve(str.length);
+	filterURLEncode(dst, str, allowed_chars, true);
+	return dst.data;
+}
+
+/** Returns the decoded version of a form encoded string.
+
+	Form encoding is the same as normal URL encoding, except that
+	spaces are replaced by plus characters.
+*/
+string formDecode(string str)
+{
+	if (!str.anyOf("%+")) return str;
+	auto dst = appender!string();
+	dst.reserve(str.length);
+	filterURLDecode(dst, str, true);
+	return dst.data;
+}
+
 /** Writes the URL encoded version of the given string to an output range.
 */
-void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null) 
+void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool form_encoding = false) 
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
 			case ' ':
-				dst.put('+');
-				break;
+				if (form_encoding) {
+					dst.put('+');
+					break;
+				}
+				goto default;
 			case 'A': .. case 'Z'+1:
 			case 'a': .. case 'z'+1:
 			case '0': .. case '9'+1:
@@ -66,7 +99,7 @@ deprecated("Please use filterURLEncode instead.") alias filterUrlEncode = filter
 
 /** Writes the decoded version of the given URL encoded string to an output range.
 */
-void filterURLDecode(R)(ref R dst, string str) 
+void filterURLDecode(R)(ref R dst, string str, bool form_encoding = false) 
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
@@ -79,12 +112,16 @@ void filterURLDecode(R)(ref R dst, string str)
 				str = str[3 .. $];
 				break;
 			case '+':
-				dst.put(' ');
-				str = str[1 .. $];
-				break;
+				if (form_encoding) {
+					dst.put(' ');
+					str = str[1 .. $];
+					break;
+				}
+				goto default;
 			default:
 				dst.put(str[0]);
 				str = str[1 .. $];
+				break;
 		}
 	}
 }
@@ -97,15 +134,19 @@ unittest
 {
 	assert(urlEncode("\r\n") == "%0D%0A"); // github #65
 	assert(urlEncode("This-is~a_test") == "This-is~a_test");
-	assert(urlEncode("This is a test") == "This+is+a+test");
+	assert(urlEncode("This is a test") == "This%20is%20a%20test");
+	assert(formEncode("This is a test") == "This+is+a+test");
+	assert(formEncode("this/test", "/") == "this/test");
+	assert(formEncode("this/test") == "this%2Ftest");
 	assert(urlEncode("%") == "%25");
 	assert(urlEncode("!") == "%21");
 	assert(urlDecode("%0D%0a") == "\r\n");
 	assert(urlDecode("%c2%aE") == "®");
-	assert(urlDecode("This+is%20a+test") == "This is a test");
+	assert(urlDecode("This+is%20a+test") == "This+is a+test");
+	assert(formDecode("This+is%20a+test") == "This is a test");
 
 	string a = "This~is a-test!\r\nHello, Wörld.. ";
 	string aenc = urlEncode(a);
-	assert(aenc == "This~is+a-test%21%0D%0AHello%2C+W%C3%B6rld..+");
+	assert(aenc == "This~is%20a-test%21%0D%0AHello%2C%20W%C3%B6rld..%20");
 	assert(urlDecode(urlEncode(a)) == a);
 }

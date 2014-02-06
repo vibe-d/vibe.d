@@ -1,7 +1,7 @@
 /**
 	Contains HTML/urlencoded form parsing and construction routines.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -52,25 +52,25 @@ void parseURLEncodedForm(string str, ref FormFields params)
 		if (idx == -1) {
 			idx = str.indexOfAny("&;");
 			if (idx == -1) {
-				params.addField(urlDecode(str[0 .. $]), "");
+				params.addField(formDecode(str[0 .. $]), "");
 				return;
 			} else {
-				params.addField(urlDecode(str[0 .. idx]), "");
+				params.addField(formDecode(str[0 .. idx]), "");
 				str = str[idx+1 .. $];
 				continue;
 			}
 		} else {
 			auto idx_amp = str.indexOfAny("&;");
 			if (idx_amp > -1 && idx_amp < idx) {
-				params.addField(urlDecode(str[0 .. idx_amp]), "");
+				params.addField(formDecode(str[0 .. idx_amp]), "");
 				str = str[idx_amp+1 .. $];
 				continue;				
 			} else {
-				string name = urlDecode(str[0 .. idx]);
+				string name = formDecode(str[0 .. idx]);
 				str = str[idx+1 .. $];
 				// value part
 				for( idx = 0; idx < str.length && str[idx] != '&' && str[idx] != ';'; idx++) {}
-				string value = urlDecode(str[0 .. idx]);
+				string value = formDecode(str[0 .. idx]);
 				params.addField(name, value);
 				str = idx < str.length ? str[idx+1 .. $] : null;
 			}
