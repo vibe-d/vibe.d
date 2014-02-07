@@ -40,6 +40,7 @@ final class RedisClient {
 		ConnectionPool!RedisConnection m_connections;
 		string m_authPassword;
 		size_t m_selectedDB;
+		string m_version;
 	}
 
 	this(string host = "127.0.0.1", ushort port = 6379)
@@ -47,6 +48,15 @@ final class RedisClient {
 		m_connections = new ConnectionPool!RedisConnection({
 			return new RedisConnection(host, port);
 		});
+
+		auto info = info();
+		auto lines = info.splitLines();
+		if (lines.length > 1) {
+			auto lineParams = lines[1].split(":");
+			if (lineParams.length > 1 && lineParams[0] == "redis_version") {
+				m_version = lineParams[1];
+			}
+		} 
 	}
 
 	size_t del(string[] keys...) { return request!size_t("DEL", keys); }
@@ -247,17 +257,8 @@ final class RedisClient {
 	//TODO sync
 
 	/// Returns Redis version
-	@property Version() {
-		import std.string;
-		auto info = info();
-		auto lines = info.splitLines();
-		if (lines.length > 1) {
-			auto lineParams = lines[1].split(":");
-			if (lineParams.length > 1 && lineParams[0] == "redis_version") {
-				return lineParams[1];
-			}
-		} 
-		return "";
+	@property string redisVersion() {
+		return m_version;
 	}
 
 	T request(T = RedisReply, ARGS...)(string command, ARGS args)
