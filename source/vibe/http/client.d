@@ -68,6 +68,12 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 			if (url.localURI.length)
 				req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
+			if ("authorization" !in req.headers && url.username != "") {
+				import std.base64;
+				string pwstr = url.username ~ ":" ~ url.password;
+				req.headers["Authorization"] = "Basic " ~ 
+					cast(string)Base64.encode(cast(ubyte[])pwstr);
+			}
 			if( requester ) requester(req);
 		});
 
@@ -94,6 +100,12 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 			if (url.localURI.length)
 				req.requestURL = url.localURI;
 			req.headers["Host"] = url.host;
+			if ("authorization" !in req.headers && url.username != "") {
+				import std.base64;
+				string pwstr = url.username ~ ":" ~ url.password;
+				req.headers["Authorization"] = "Basic " ~ 
+					cast(string)Base64.encode(cast(ubyte[])pwstr);
+			}
 			if( requester ) requester(req);
 		}, responder);
 	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
