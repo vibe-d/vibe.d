@@ -49,6 +49,7 @@ final class RedisClient {
 			return new RedisConnection(host, port);
 		});
 
+		import std.string;
 		auto info = info();
 		auto lines = info.splitLines();
 		if (lines.length > 1) {
