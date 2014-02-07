@@ -247,7 +247,7 @@ final class RedisClient {
 	//TODO sync
 
 	/// Returns Redis version
-	string getVersion() {
+	@property Version() {
 		import std.string;
 		auto info = info();
 		auto lines = info.splitLines();
