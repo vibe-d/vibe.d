@@ -447,16 +447,22 @@ private final class RedisConnection {
 	{
 		static if (is(ARG == string)) return arg.length;
 		else {
-			RangeCounter cnt;
-			cnt.formattedWrite("%s", arg);
-			return cnt.length;
+			size_t length;
+			auto rangeCnt = RangeCounter(&length);
+			rangeCnt.formattedWrite("%s", arg);
+			return length;
 		}
 	}
 }
 
 private struct RangeCounter {
 	import std.utf;
-	size_t length = 0;
-	void put(dchar ch) { length += codeLength!char(ch); }
-	void put(string str) { length += str.length; }
+	size_t* length;
+
+	this(size_t* _captureLength) {
+		length = _captureLength;
+	}
+
+	void put(dchar ch) { *length += codeLength!char(ch); }
+	void put(string str) { *length += str.length; }
 }
