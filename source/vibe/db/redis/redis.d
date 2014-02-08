@@ -19,6 +19,7 @@ import std.range : isOutputRange;
 import std.string;
 import std.traits;
 import std.utf;
+import std.typetuple;
 
 // TODO: convert RedisReply to expose an input range interface
 
@@ -60,7 +61,7 @@ final class RedisClient {
 		} 
 	}
 
-	size_t del(string[] keys...) { return request!size_t("DEL", keys); }
+	size_t del(ARGS...)(ARGS keys) if (allSatisfy!(isSomeString,ARGS)) { return request!size_t("DEL", keys); }
 	bool exists(string key) { return request!bool("EXISTS", key); }
 	bool expire(string key, size_t seconds) { return request!bool("EXPIRE", key, seconds); }
 	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
