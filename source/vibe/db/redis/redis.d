@@ -408,39 +408,56 @@ private final class RedisConnection {
 			}
 		}
 
-		auto nargs = countArgs!ARGS();
+		auto nargs = countArgs(args);
 		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command));
 		writeArgs(m_conn, args);
 		return new RedisReply(m_conn);
 	}
 
-	private static size_t countArgs(ARGS...)()
+	private static size_t countArgs(ARGS...)(ARGS args)
 	{
-		size_t ret;
+		size_t ret = 0;
 		foreach (i, A; ARGS) {
-			static if (is(A : const(string[])) || is(A : const(ubyte[][])))
-				ret += countArgs!A();
-			else ret++;
+			static if (isArray!A && !(is(A : const(ubyte[])) || is(A : const(char[])))) {
+				foreach (arg; args[i])
+					ret += countArgs(arg);
+			} else ret++;
 		}
 		return ret;
+	}
+
+	unittest {
+		assert(countArgs() == 0);
+		assert(countArgs(1, 2, 3) == 3);
+		assert(countArgs("1", ["2", "3", "4"]) == 4);
+		assert(countArgs([["1", "2"], ["3"]]) == 3);
 	}
 
 	private static void writeArgs(R, ARGS...)(R dst, ARGS args)
 		if (isOutputRange!(R, char))
 	{
 		foreach (i, A; ARGS) {
-			static if (is(A : const(string[])) || is(A : const(ubyte[][])))
-				writeArgs(dst, args[i]);
-			else static if (is(A == bool)) writeArgs(dst, args[i] ? "1" : "0");
-			else static if (is(A : const(ubyte[]))) {
-				dst.formattedWrite("$%s\r\n", args[i].length);
-				dst.put(args[i]);
-				dst.put("\r\n");
+			static if (is(A == bool)) {
+				writeArgs(dst, args[i] ? "1" : "0");
 			} else static if (is(A : long) || is(A : real) || is(A == string)) {
 				auto alen = formattedLength(args[i]);
 				dst.formattedWrite("$%d\r\n%s\r\n", alen, args[i]);
+			} else static if (is(A : const(ubyte[])) || is(A : const(char[]))) {
+				dst.formattedWrite("$%s\r\n", args[i].length);
+				dst.put(args[i]);
+				dst.put("\r\n");
+			} else static if (isArray!A) {
+				foreach (arg; args[i])
+					writeArgs(dst, arg);
 			} else static assert(false, "Unsupported Redis argument type: " ~ T.stringof);
 		}
+	}
+
+	unittest {
+		import std.array : appender;
+		auto dst = appender!string;
+		writeArgs(dst, false, true, ["2", "3"], "4", 5.0);
+		assert(dst.data == "$1\r\n0\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n$1\r\n4\r\n$1\r\n5\r\n");
 	}
 
 	private static size_t formattedLength(ARG)(ARG arg)
