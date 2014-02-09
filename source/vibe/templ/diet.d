@@ -553,7 +553,7 @@ private struct DietCompiler {
 						break;
 					case "script":
 					case "style":
-						if( tag == "script" && next_indent_level <= level){
+						if (next_indent_level <= level) {
 							buildHtmlNodeWriter(output, tag, ln[j .. $], level, false, prepend_whitespaces);
 						} else {
 							// pass all child lines to buildRawTag and continue with the next sibling
