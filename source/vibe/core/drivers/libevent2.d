@@ -450,7 +450,7 @@ class Libevent2Driver : EventDriver {
 
 			logTrace("Timer %s fired (%s/%s)", tm, owner != Task.init, callback !is null);
 
-			if (owner) m_core.resumeTask(owner);
+			if (owner && owner.running) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
 		}
 
