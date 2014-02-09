@@ -489,11 +489,35 @@ private struct DietCompiler {
 				next_indent_level = computeNextIndentLevel();
 			} else {
 				size_t j = 0;
-				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
+				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_.") : "div";
+				auto origin_tag = tag;
+
 				if( ln.startsWith("!!! ") ) tag = "!!!";
+
+				if (tag.endsWith(".")) tag = "blocktag";
+
 				switch(tag){
 					default:
 						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces);
+						break;
+					case "blocktag":
+						origin_tag = origin_tag[0 .. $-1];
+						buildHtmlNodeWriter(output, origin_tag, ln[j..$], level, next_indent_level > level, prepend_whitespaces);
+
+						size_t next_tag = m_lineIndex + 1;
+						while( next_tag < lineCount &&
+						      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+						{
+							next_tag++;
+						}
+
+						for (size_t f = 1; f < next_tag - 1 && f + m_lineIndex < lineCount; f++) {
+							buildTextNodeWriter(output, line(m_lineIndex + f).text, level, prepend_whitespaces);
+						}
+
+						m_lineIndex = next_tag - 1;
+						next_indent_level = computeNextIndentLevel();
+
 						break;
 					case "!!!": // HTML Doctype header
 						buildSpecialTag(output, "!DOCTYPE html", level);
