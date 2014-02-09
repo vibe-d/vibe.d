@@ -490,13 +490,19 @@ private struct DietCompiler {
 			} else {
 				size_t j = 0;
 				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
-				if( ln.startsWith("!!! ") ) tag = "!!!";
+
+				if (ln.startsWith("!!! ")) {
+					//output.writeCodeLine(`pragma(msg, "\"!!!\" is deprecated, use \"doctype\" instead.");`);
+					tag = "doctype";
+					j += 4;
+				}
+
 				switch(tag){
 					default:
 						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces);
 						break;
-					case "!!!": // HTML Doctype header
-						buildSpecialTag(output, "!DOCTYPE html", level);
+					case "doctype": // HTML Doctype header
+						buildDoctypeNodeWriter(output, ln, j, level);
 						break;
 					case "//": // HTML comment
 						skipWhitespace(ln, j);
@@ -594,6 +600,49 @@ private struct DietCompiler {
 		}
 		output.pushDummyNode();
 		prepend_whitespaces = true;
+	}
+
+	private void buildDoctypeNodeWriter(OutputContext output, string ln, size_t j, int level)
+	{
+		skipWhitespace(ln, j);
+
+		string doctype_str = "!DOCTYPE html";
+		switch (ln[j .. $]) {
+			case "5":
+			case "":
+				break;
+			case "xml":
+				doctype_str = `?xml version="1.0" encoding="utf-8" ?`;
+				break;
+			case "transitional":
+				doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" `
+					~ `"http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd`;
+				break;
+			case "strict":
+				doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" `
+					~ `"http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd"`;
+				break;
+			case "frameset":
+				doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Frameset//EN" `
+					~ `"http://www.w3.org/TR/xhtml1/DTD/xhtml1-frameset.dtd"`;
+				break;
+			case "1.1":
+				doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1//EN" `
+					~ `"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd"`;
+				break;
+			case "basic":
+				doctype_str = `!DOCTYPE html PUBLIC "-//W3C//DTD XHTML Basic 1.1//EN" `
+					~ `"http://www.w3.org/TR/xhtml-basic/xhtml-basic11.dtd"`;
+				break;
+			case "mobile":
+				doctype_str = `!DOCTYPE html PUBLIC "-//WAPFORUM//DTD XHTML Mobile 1.2//EN" `
+					~ `"http://www.openmobilealliance.org/tech/DTD/xhtml-mobile12.dtd"`;
+				break;
+			default:
+				doctype_str = "!DOCTYPE " ~ ln[j .. $];
+			break;
+		}
+		buildSpecialTag(output, doctype_str, level);
 	}
 
 	private void buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes, ref bool prepend_whitespaces)
