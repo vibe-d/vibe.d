@@ -489,7 +489,8 @@ private struct DietCompiler {
 				next_indent_level = computeNextIndentLevel();
 			} else {
 				size_t j = 0;
-				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
+				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_.") : "div";
+				auto origin_tag = tag;
 
 				if (ln.startsWith("!!! ")) {
 					//output.writeCodeLine(`pragma(msg, "\"!!!\" is deprecated, use \"doctype\" instead.");`);
@@ -497,12 +498,28 @@ private struct DietCompiler {
 					j += 4;
 				}
 
+				if (tag.endsWith(".")) tag = "blocktag";
+
 				switch(tag){
 					default:
 						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces);
 						break;
 					case "doctype": // HTML Doctype header
 						buildDoctypeNodeWriter(output, ln, j, level);
+						break;
+					case "blocktag":
+						origin_tag = origin_tag[0 .. $-1];
+						buildHtmlNodeWriter(output, origin_tag, ln[j..$], level, next_indent_level > level, prepend_whitespaces);
+
+						size_t next_tag = m_lineIndex + 1;
+						while( next_tag < lineCount &&
+						      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+						{
+							buildTextNodeWriter(output, line(next_tag++).text, level, prepend_whitespaces);
+						}
+
+						m_lineIndex = next_tag - 1;
+						next_indent_level = computeNextIndentLevel();
 						break;
 					case "//": // HTML comment
 						skipWhitespace(ln, j);
