@@ -213,7 +213,7 @@ class Libevent2Driver : EventDriver {
 
 	DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
-		assert(false);
+		assert(false, "watchDirectory is not yet implemented in the libevent driver.");
 	}
 
 	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
