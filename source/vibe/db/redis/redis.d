@@ -41,6 +41,8 @@ final class RedisClient {
 		string m_authPassword;
 		size_t m_selectedDB;
 		string m_version;
+		bool m_pubsub = false;
+		LockedConnection!RedisConnection m_pubsubConnection;
 	}
 
 	this(string host = "127.0.0.1", ushort port = 6379)
@@ -220,8 +222,34 @@ final class RedisClient {
 	//TODO: zunionstore
 
 	/*
-		TODO: Pub / Sub
+		Pub / Sub
 	*/
+	RedisReply publish(T : E[], E)(string channel, T message) {
+		return request("PUBLISH", channel, message);
+	}
+
+	RedisReply subscribe(ARGS...)(ARGS args) {
+		bindConnection();
+		return request("SUBSCRIBE", args);
+	}
+
+	RedisReply unsubscribe(ARGS...)(ARGS args) {
+		return request("UNSUBSCRIBE", args);
+	}
+
+	RedisReply psubscribe(ARGS...)(ARGS args) {
+		bindConnection();
+		return request("PSUBSCRIBE", args);
+	}
+
+	RedisReply punsubscribe(ARGS...)(ARGS args) {
+		return request("PUNSUBSCRIBE", args);
+	}
+
+	RedisReply pubsub(ARGS...)(string subcommand, ARGS args) {
+		bindConnection();
+		return request("PUBSUB", subcommand, args);
+	}
 
 	/*
 		TODO: Transactions
@@ -267,7 +295,7 @@ final class RedisClient {
 
 	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
-		auto conn = m_connections.lockConnection();
+		auto conn = m_pubsub ? m_pubsubConnection : m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(m_selectedDB);
 		auto reply = conn.request(command, args);
@@ -288,6 +316,20 @@ final class RedisClient {
 			} else static if (is(T == void)) {
 			} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
 		}
+	}
+
+	void bindConnection() {
+		if (!m_pubsub) {
+			m_pubsub = true;
+			m_pubsubConnection = m_connections.lockConnection();
+		}
+	}
+
+	// Returns a Bulk-Reply when a new message is received
+	RedisReply listen() {
+		auto reply = m_pubsubConnection.listen();
+		reply.m_lockedConnection = m_pubsubConnection;
+		return reply;
 	}
 }
 
@@ -414,6 +456,13 @@ private final class RedisConnection {
 		auto nargs = countArgs(args);
 		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command));
 		writeArgs(m_conn, args);
+		return new RedisReply(m_conn);
+	}
+
+	RedisReply listen() {
+		if( !m_conn || !m_conn.connected ){
+			throw new Exception("Cannot listen on connection without subscribing first.", __FILE__, __LINE__);
+		}
 		return new RedisReply(m_conn);
 	}
 
