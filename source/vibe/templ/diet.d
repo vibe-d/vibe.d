@@ -355,6 +355,7 @@ private struct DietCompiler {
 		TemplateBlock* m_block;
 		TemplateBlock[]* m_files;
 		BlockStore m_blocks;
+		bool m_isHTML5 = false;
 	}
 
 	@property ref string indentStyle() { return m_block.indentStyle; }
@@ -366,11 +367,12 @@ private struct DietCompiler {
 
 	@disable this();
 
-	this(TemplateBlock* block, TemplateBlock[]* files, BlockStore blocks)
+	this(TemplateBlock* block, TemplateBlock[]* files, BlockStore blocks, bool isHTML5 = false)
 	{
 		m_block = block;
 		m_files = files;
 		m_blocks = blocks;
+		m_isHTML5 = isHTML5;
 	}
 
 	string buildWriter(size_t base_indent)
@@ -536,7 +538,7 @@ private struct DietCompiler {
 							if( block.mode == 1 ){
 								// output defaults
 							}
-							auto blockcompiler = new DietCompiler(block, m_files, m_blocks);
+							auto blockcompiler = new DietCompiler(block, m_files, m_blocks, m_isHTML5);
 							/*blockcompiler.m_block = block;
 							blockcompiler.m_blocks = m_blocks;*/
 							blockcompiler.buildWriter(output, cast(int)output.m_nodeStack.length);
@@ -553,7 +555,7 @@ private struct DietCompiler {
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
 						auto filename = ln[8 .. $].ctstrip() ~ ".dt";
 						auto file = getFile(filename);
-						auto includecompiler = new DietCompiler(file, m_files, m_blocks);
+						auto includecompiler = new DietCompiler(file, m_files, m_blocks, m_isHTML5);
 						//includecompiler.m_blocks = m_blocks;
 						includecompiler.buildWriter(output, level);
 						break;
@@ -605,11 +607,13 @@ private struct DietCompiler {
 	private void buildDoctypeNodeWriter(OutputContext output, string ln, size_t j, int level)
 	{
 		skipWhitespace(ln, j);
+		m_isHTML5 = false;
 
 		string doctype_str = "!DOCTYPE html";
 		switch (ln[j .. $]) {
 			case "5":
 			case "":
+				m_isHTML5 = true;
 				break;
 			case "xml":
 				doctype_str = `?xml version="1.0" encoding="utf-8" ?`;
@@ -867,7 +871,10 @@ private struct DietCompiler {
 				output.writeString("\"");
 			} else {
 				output.writeCodeLine("static if(is(typeof("~att.value~") == bool)){ if("~att.value~"){");
-				output.writeString(` `~att.key~`="`~att.key~`"`);
+				if (!m_isHTML5)
+					output.writeString(` `~att.key~`="`~att.key~`"`);
+				else
+					output.writeString(` `~att.key);
 				output.writeCodeLine("}} else static if(is(typeof("~att.value~") == string[])){\n");
 				output.writeString(` `~att.key~`="`);
 				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
