@@ -334,6 +334,11 @@ deprecated("Please use SSLStreamState instead.") alias SslStreamState = SSLStrea
 
 /**
 	Encapsulates the configuration for an SSL tunnel.
+
+	Note that when creating an SSLContext with SSLContextKind.client, the
+	peerValidationMode will be set to SSLPeerValidationMode.trustedCert,
+	but no trusted certificate authorities are added by default. Use
+	useTrustedCertificateFile to add those.
 */
 class SSLContext {
 	private {
@@ -384,7 +389,33 @@ class SSLContext {
 		maxCertChainLength = 9;
 		if (kind == SSLContextKind.client) peerValidationMode = SSLPeerValidationMode.trustedCert;
 		else peerValidationMode = SSLPeerValidationMode.none;
-		SSL_CTX_load_verify_locations(m_ctx, null, "/etc/ssl/certs");
+
+		// while it would be nice to use the system's certificate store, this
+		// seems to be difficult to get right across all systems. The most
+		// popular alternative is to use Mozilla's certificate store and
+		// distribute it along with the library (e.g. in source code form.
+
+		/*version (Posix) {
+			enforce(SSL_CTX_load_verify_locations(m_ctx, null, "/etc/ssl/certs"),
+				"Failed to load system certificate store.");
+		}
+
+		version (Windows) {
+			auto store = CertOpenSystemStore(null, "ROOT");
+			enforce(store !is null, "Failed to load system certificate store.");
+			scope (exit) CertCloseStore(store, 0);
+
+			PCCERT_CONTEXT ctx;
+			while((ctx = CertEnumCertificatesInStore(store, ctx)) !is null) {
+				X509* x509cert; 
+				auto buffer = ctx.pbCertEncoded; 
+				auto len = ctx.cbCertEncoded; 
+				if (ctx.dwCertEncodingType & X509_ASN_ENCODING) { 
+					x509cert = d2i_X509(null, &buffer, len);
+					X509_STORE_add_cert(SSL_CTX_get_cert_store(m_ctx), x509cert); 
+				} 
+			}
+		}*/
 	}
 
 	/// Convenience constructor to create a server context - will be deprecated soon
@@ -520,7 +551,7 @@ class SSLContext {
 	}
 
 	private static extern(C) nothrow
-	int verify_callback(int preverify_ok, X509_STORE_CTX* ctx)
+	int verify_callback(int valid, X509_STORE_CTX* ctx)
 	{
 		X509* err_cert = X509_STORE_CTX_get_current_cert(ctx);
 		int err = X509_STORE_CTX_get_error(ctx);
@@ -537,45 +568,51 @@ class SSLContext {
 
 			if (depth > vdata.verifyDepth) {
 				logDiagnostic("SSL cert chain too long: %s vs. %s", depth, vdata.verifyDepth);
-			    preverify_ok = 0;
+			    valid = false;
 			    err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
 			}
 
 			if (err != X509_V_OK)
 				logDiagnostic("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
 
-			if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
+			if (!valid && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
 				X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
 				logDebug("SSL unknown issuer cert: %s", buf.ptr.to!string);
 				if (vdata.validationMode < SSLPeerValidationMode.trustedCert) {
-					preverify_ok = 1;
+					valid = true;
 					err = X509_V_OK;
 				}
 			}
 
 			if (vdata.validationMode < SSLPeerValidationMode.validCert) {
-				preverify_ok = 1;
+				valid = true;
 				err = X509_V_OK;
 			}
 
 			if (vdata.callback) {
 				SSLPeerValidationData pvdata;
 				// ...
-				if (!preverify_ok) preverify_ok = vdata.callback(pvdata);
-				else if (!vdata.callback(pvdata)) {
-					preverify_ok = 0;
-					err = X509_V_ERR_APPLICATION_VERIFICATION;
+				if (!valid) {
+					if (vdata.callback(pvdata)) {
+						valid = true;
+						err = X509_V_OK;
+					}
+				} else {
+					if (!vdata.callback(pvdata)) {
+						valid = false;
+						err = X509_V_ERR_APPLICATION_VERIFICATION;
+					}
 				}
 			}
 		} catch (Exception e) {
 			logWarn("SSL verification failed due to exception: %s", e.msg);
 			err = X509_V_ERR_APPLICATION_VERIFICATION;
-			preverify_ok = false;
+			valid = false;
 		}
 
 		X509_STORE_CTX_set_error(ctx, err);
 
-		return preverify_ok;
+		return valid;
 	}
 }
 
