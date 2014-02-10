@@ -145,6 +145,7 @@ class SSLStream : Stream {
 		if (state != SSLStreamState.connected) {
 			SSLContext.VerifyData vdata;
 			vdata.verifyDepth = ctx.maxCertChainLength;
+			vdata.validationMode = ctx.peerValidationMode;
 			vdata.callback = ctx.peerValidationCallback;
 			vdata.peerName = peer_name;
 			vdata.peerAddress = peer_address;
@@ -164,10 +165,13 @@ class SSLStream : Stream {
 					break;
 			}
 
+			// ensure that the SSL tunnel gets terminated when an error happens during verification
+			scope (failure) SSL_shutdown(m_ssl);
+
 			if (auto peer = SSL_get_peer_certificate(m_ssl)) {
 				scope(exit) X509_free(peer);
 				auto result = SSL_get_verify_result(m_ssl);
-				if (result == X509_V_OK) {
+				if (result == X509_V_OK && ctx.peerValidationMode >= SSLPeerValidationMode.validCert) {
 					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
 						version(Windows) import std.c.windows.winsock;
 						else import core.sys.posix.netinet.in_;
@@ -193,10 +197,8 @@ class SSLStream : Stream {
 						}
 					}
 				}
-				if (result != X509_V_OK) {
-					SSL_shutdown(m_ssl);
-					throw new Exception("Peer failed the certificate validation: "~to!string(result));
-				}
+
+				enforce(result == X509_V_OK, "Peer failed the certificate validation: "~to!string(result));
 			} //else enforce(ctx.verifyMode < requireCert);
 		}
 
@@ -380,9 +382,8 @@ class SSLContext {
 		} else enforce(false, "No SSL support compiled in!");
 
 		maxCertChainLength = 9;
-		peerValidationMode = SSLPeerValidationMode.trustedCert;
-
-
+		if (kind == SSLContextKind.client) peerValidationMode = SSLPeerValidationMode.trustedCert;
+		else peerValidationMode = SSLPeerValidationMode.none;
 		SSL_CTX_load_verify_locations(m_ctx, null, "/etc/ssl/certs");
 	}
 
@@ -417,18 +418,25 @@ class SSLContext {
 
 	/** Specifies the validation level of remote peers.
 
-		The default mode is SSLPeerValidationMode..
+		The default mode for SSLContextKind.client is
+		SSLPeerValidationMode.trustedCert and the default for
+		SSLContextKind.server is SSLPeerValidationMode.none.
 	*/
 	@property void peerValidationMode(SSLPeerValidationMode mode)
 	{
 		m_validationMode = mode;
 
 		int sslmode;
-		if (mode >= SSLPeerValidationMode.peerName) {
-			sslmode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT |
-				SSL_VERIFY_CLIENT_ONCE;
-		} else {
-			sslmode = SSL_VERIFY_NONE;
+		final switch (mode) with (SSLPeerValidationMode) {
+			case none:
+				sslmode = SSL_VERIFY_NONE;
+				break;
+			case requireCert:
+			case validCert:
+			case trustedCert:
+				sslmode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT |
+					SSL_VERIFY_CLIENT_ONCE;
+				break;
 		}
 		SSL_CTX_set_verify(m_ctx, sslmode, &verify_callback);
 	}
@@ -455,10 +463,12 @@ class SSLContext {
 
 	/** An optional user callback for peer validation.
 
-		This callback will be called for each peer to allow overriding the
-		validation decision (allow untrusted certificates or reject trusted
-		ones). This is mainly useful for presenting the user with a dialog
-		in case of untrusted or mismatching certificates.
+		This callback will be called for each peer and each certificate of
+		its certificate chain to allow overriding the validation decision
+		based on the selected peerValidationMode (e.g. to allow invalid
+		certificates or to reject valid ones). This is mainly useful for
+		presenting the user with a dialog in case of untrusted or mismatching
+		certificates.
 	*/
 	@property void peerValidationCallback(SSLPeerValidationCallback callback) { m_peerValidationCallback = callback; }
 	/// ditto
@@ -477,7 +487,7 @@ class SSLContext {
 		enforce(SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(path), SSL_FILETYPE_PEM), "Failed to load private key file " ~ path);
 	}
 
-	/// Sets the list of certificates to considers trusted when verifying the
+	/// Sets the list of certificates to consider trusted when verifying the
 	/// certificate presented by the peer.
 	///
 	/// If this is a server context, this also entails that the given
@@ -495,8 +505,7 @@ class SSLContext {
 		}
 	}
 
-	/// Creates an SSL client context usable for a concrete SSLStream.
-	ssl_st* createClientCtx()
+	private ssl_st* createClientCtx()
 	{
 		version(SSL) return SSL_new(m_ctx);
 		else assert(false);
@@ -504,6 +513,7 @@ class SSLContext {
 
 	private static struct VerifyData {
 		int verifyDepth;
+		SSLPeerValidationMode validationMode;
 		SSLPeerValidationCallback callback;
 		string peerName;
 		NetworkAddress peerAddress;
@@ -523,33 +533,47 @@ class SSLContext {
 		X509_NAME_oneline(X509_get_subject_name(err_cert), buf.ptr, 256);
 
 		try {
-			logInfo("validate callback for %s", buf.ptr.to!string);
+			logDebug("validate callback for %s", buf.ptr.to!string);
 
 			if (depth > vdata.verifyDepth) {
-				logWarn("SSL cert chain too long: %s vs. %s", depth, vdata.verifyDepth);
+				logDiagnostic("SSL cert chain too long: %s vs. %s", depth, vdata.verifyDepth);
 			    preverify_ok = 0;
 			    err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
-			    X509_STORE_CTX_set_error(ctx, err);
 			}
 
 			if (err != X509_V_OK)
-				logWarn("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
+				logDiagnostic("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
 
 			if (!preverify_ok && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
 				X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
-				logWarn("SSL unknown issuer cert: %s", buf.ptr.to!string);
+				logDebug("SSL unknown issuer cert: %s", buf.ptr.to!string);
+				if (vdata.validationMode < SSLPeerValidationMode.trustedCert) {
+					preverify_ok = 1;
+					err = X509_V_OK;
+				}
+			}
+
+			if (vdata.validationMode < SSLPeerValidationMode.validCert) {
+				preverify_ok = 1;
+				err = X509_V_OK;
 			}
 
 			if (vdata.callback) {
 				SSLPeerValidationData pvdata;
 				// ...
-				preverify_ok = vdata.callback(pvdata);
+				if (!preverify_ok) preverify_ok = vdata.callback(pvdata);
+				else if (!vdata.callback(pvdata)) {
+					preverify_ok = 0;
+					err = X509_V_ERR_APPLICATION_VERIFICATION;
+				}
 			}
 		} catch (Exception e) {
 			logWarn("SSL verification failed due to exception: %s", e.msg);
 			err = X509_V_ERR_APPLICATION_VERIFICATION;
 			preverify_ok = false;
 		}
+
+		X509_STORE_CTX_set_error(ctx, err);
 
 		return preverify_ok;
 	}
@@ -570,15 +594,54 @@ enum SSLVersion {
 	dtls1
 }
 
+
+/** Specifies how rigorously SSL peer certificates are validated.
+
+	Usually trustedCert
+*/
 enum SSLPeerValidationMode {
-	none,        /// Accept any peer and any certificate
-	peerName,    /// Validate that the presented certificate matches the peer name
-    trustedCert, /// Validate the peer name and require that the certificate is trusted
+	/** Accept any peer regardless if and which certificate is presented.
+
+		This mode is generally discouraged and should only be used with
+		a custom validation callback set to do the verification.
+	*/
+	none,
+
+	/** Require the peer to persent a certificate without further validation.
+
+		Note that this mode does not verify the certificate at all. This mode
+		can be useful if a custom validation callback is used to validate
+		certificates.
+	*/
+	requireCert,
+
+	/** Require a valid certificate matching the peer name.
+
+		In this mode, the certificate is validated for general validity and
+		possible expiration and the peer name is checked to see if the
+		certificate actually applies.
+
+		However, the certificate chain is not matched against the system's
+		pool of trusted certificate authorities, so a custom validation
+		callback is still needed to get a secure validation process.
+	*/
+	validCert,
+
+	/** Require a valid an trusted certificate (strongly recommended).
+
+		Checks the certificate and peer name for validity and requires that
+		the certificate chain originates from a trusted CA (based on the
+		systen's pool of certificate authorities).
+	*/
+    trustedCert,
 }
 
 struct SSLPeerValidationData {
 	char[] certName;
 	string errorString;
+	// certificate chain
+	// public key
+	// public key fingerprint
 }
 
 alias SSLPeerValidationCallback = bool delegate(scope SSLPeerValidationData data);
