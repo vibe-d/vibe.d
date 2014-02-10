@@ -613,6 +613,7 @@ private struct DietCompiler {
 		switch (ln[j .. $]) {
 			case "5":
 			case "":
+			case "html":
 				m_isHTML5 = true;
 				break;
 			case "xml":
