@@ -187,6 +187,7 @@ class HTTPClient {
 		Stream m_stream;
 		SSLContext m_ssl;
 		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HTTPClient, +http://vibed.org/)";
+		static __gshared void function(SSLContext) ms_sslSetup;
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit; 
 		int m_timeout;
@@ -196,6 +197,14 @@ class HTTPClient {
 		Sets the default user agent string for new HTTP requests.
 	*/
 	static void setUserAgentString(string str) { m_userAgent = str; }
+
+	/**
+		Sets a callback that will be called for every SSL context that is created.
+
+		Setting such a callback is useful for adjusting the validation parameters
+		of the SSL context.
+	*/
+	static void setSSLSetupCallback(void function(SSLContext) func) { ms_sslSetup = func; }
 	
 	/**
 		Connects to a specific server.
@@ -211,6 +220,9 @@ class HTTPClient {
 		m_server = server;
 		m_port = port;
 		m_ssl = ssl ? new SSLContext(SSLContextKind.client) : null;
+		// this will be changed to trustedCert once a proper root CA store is available by default
+		m_ssl.peerValidationMode = SSLPeerValidationMode.none;
+		if (ms_sslSetup) ms_sslSetup(m_ssl);
 	}
 
 	/**
