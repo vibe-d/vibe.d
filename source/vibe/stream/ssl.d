@@ -518,11 +518,15 @@ class SSLContext {
 		enforce(SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(path), SSL_FILETYPE_PEM), "Failed to load private key file " ~ path);
 	}
 
-	/// Sets the list of certificates to consider trusted when verifying the
-	/// certificate presented by the peer.
-	///
-	/// If this is a server context, this also entails that the given
-	/// certificates are advertised to connecting clients during handshake.
+	/** Sets the list of trusted certificates for verifying peer certificates.
+
+		If this is a server context, this also entails that the given
+		certificates are advertised to connecting clients during handshake.
+
+		On Linux, the system's root certificate authority list is usually
+		found at "/etc/ssl/certs/ca-certificates.crt",
+		"/etc/pki/tls/certs/ca-bundle.crt", or "/etc/ssl/ca-bundle.pem".
+	*/
 	void useTrustedCertificateFile(string path)
 	{
 		immutable cPath = toStringz(path);
