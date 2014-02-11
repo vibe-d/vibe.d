@@ -68,7 +68,7 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file(indent));
-	#line 72 "diet.d"
+	#line 72 "source/vibe/templ/diet.d"
 }
 
 /// compatibility alias
@@ -99,7 +99,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file(0));
-	#line 103 "diet.d"
+	#line 103 "source/vibe/templ/diet.d"
 }
 
 /// compatibility alias
@@ -133,6 +133,24 @@ template compileDietFileMixin(string template_file, string stream_variable, size
 {
 	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file(base_indent);
 }
+
+
+/** As compileDietFile, but taking a Diet source code string instead of a file name.
+*/
+void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
+{
+	// some imports to make available by default inside templates
+	import vibe.http.common;
+	import vibe.utils.string;
+	//pragma(msg, localAliases!(0, ALIASES));
+	mixin(localAliases!(0, ALIASES));
+
+	// Generate the D source code for the diet template
+	//pragma(msg, dietParser!template_file());
+	mixin(dietStringParser!diet_code(0));
+	#line 152 "source/vibe/templ/diet.d"
+}
+
 
 /**
 	Registers a new text filter for use in Diet templates.
@@ -168,6 +186,24 @@ private string dietParser(string template_file)(size_t base_indent)
 {
 	TemplateBlock[] files;
 	readFileRec!(template_file)(files);
+	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
+	return compiler.buildWriter(base_indent);
+}
+
+private string dietStringParser(string template_file)(size_t base_indent)
+{
+	enum dummy_filename = "__string_diet_code__";
+	enum LINES = removeEmptyLines(template_file, dummy_filename);
+
+	TemplateBlock ret;
+	ret.name = dummy_filename;
+	ret.lines = LINES;
+	ret.indentStyle = detectIndentStyle(ret.lines);
+
+	TemplateBlock[] files;
+	files ~= ret;
+	readFilesRec!(extractDependencies(LINES), dummy_filename)(files);
+
 	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
 }
@@ -842,7 +878,7 @@ private struct DietCompiler {
 
 	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref HTMLAttribute[] attribs, bool is_singular_tag, bool outer_whitespaces = true)
 	{
-		if(outer_whitespaces) {
+		if (outer_whitespaces) {
 			output.writeString("\n");
 			assertp(output.stackSize >= level);
 			output.writeIndent(level);
@@ -1158,6 +1194,22 @@ string _toString(T)(T v)
 	else static if( __traits(compiles, v.opCast!string()) ) return cast(string)v;
 	else static if( __traits(compiles, v.toString()) ) return v.toString();
 	else return to!string(v);
+}
+
+unittest {
+	static string compile(string diet, ALIASES...)() {
+		import vibe.stream.memory;
+		auto dst = new MemoryOutputStream;
+		compileDietString!(diet, ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
+
+	assert(compile!("!!! 5") == "<!DOCTYPE html>", "_"~compile!("!!! 5")~"_");
+	assert(compile!("!!! html") == "<!DOCTYPE html>");
+	assert(compile!("doctype html") == "<!DOCTYPE html>");
+	assert(compile!("p= 5") == "<p>5</p>");
+	assert(compile!("script= 5") == "<script>5</script>");
+	assert(compile!("style= 5") == "<style>5</style>");
 }
 
 
