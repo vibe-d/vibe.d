@@ -263,10 +263,9 @@ private bool isPartOf(string str, STRINGS...)()
 private string[] extractDependencies(in Line[] lines)
 {
 	string[] ret;
-	foreach( ref ln; lines ){
+	foreach (ref ln; lines) {
 		auto lnstr = ln.text.ctstrip();
-		if( lnstr.startsWith("extends ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
-		else if( lnstr.startsWith("include ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
+		if (lnstr.startsWith("extends ")) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
 	}
 	return ret;
 }
@@ -587,11 +586,7 @@ private struct DietCompiler {
 						break;
 					case "include": // Diet file include
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
-						auto filename = ln[8 .. $].ctstrip() ~ ".dt";
-						auto file = getFile(filename);
-						auto includecompiler = new DietCompiler(file, m_files, m_blocks);
-						//includecompiler.m_blocks = m_blocks;
-						includecompiler.buildWriter(output, level);
+						output.writeCodeLine("mixin(dietParser!(\""~ln[8 .. $].ctstrip()~".dt\")("~to!string(level)~"));");
 						break;
 					case "script":
 					case "style":
