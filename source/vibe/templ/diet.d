@@ -66,7 +66,7 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
-	//pragma(msg, dietParser!template_file());
+	//pragma(msg, dietParser!template_file(indent));
 	mixin(dietParser!template_file(indent));
 	#line 72 "source/vibe/templ/diet.d"
 }
@@ -589,7 +589,7 @@ private struct DietCompiler {
 						auto content = ln[8 .. $].ctstrip();
 						if (content.startsWith("#{")) {
 							assertp(content.endsWith("}"), "Missing closing '}'.");
-							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~")("~to!string(level)~"));");
+							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\")("~to!string(level)~"));");
 						} else {
 							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\")("~to!string(level)~"));");
 						}
@@ -1205,12 +1205,13 @@ unittest {
 		return strip(cast(string)(dst.data));
 	}
 
-	assert(compile!("!!! 5") == "<!DOCTYPE html>", "_"~compile!("!!! 5")~"_");
-	assert(compile!("!!! html") == "<!DOCTYPE html>");
-	assert(compile!("doctype html") == "<!DOCTYPE html>");
-	assert(compile!("p= 5") == "<p>5</p>");
-	assert(compile!("script= 5") == "<script>5</script>");
-	assert(compile!("style= 5") == "<style>5</style>");
+	assert(compile!(`!!! 5`) == `<!DOCTYPE html>`, `_`~compile!(`!!! 5`)~`_`);
+	assert(compile!(`!!! html`) == `<!DOCTYPE html>`);
+	assert(compile!(`doctype html`) == `<!DOCTYPE html>`);
+	assert(compile!(`p= 5`) == `<p>5</p>`);
+	assert(compile!(`script= 5`) == `<script>5</script>`);
+	assert(compile!(`style= 5`) == `<style>5</style>`);
+	assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
 }
 
 
