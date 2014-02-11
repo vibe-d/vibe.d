@@ -586,7 +586,13 @@ private struct DietCompiler {
 						break;
 					case "include": // Diet file include
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
-						output.writeCodeLine("mixin(dietParser!(\""~ln[8 .. $].ctstrip()~".dt\")("~to!string(level)~"));");
+						auto content = ln[8 .. $].ctstrip();
+						if (content.startsWith("#{")) {
+							assertp(content.endsWith("}"), "Missing closing '}'.");
+							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~")("~to!string(level)~"));");
+						} else {
+							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\")("~to!string(level)~"));");
+						}
 						break;
 					case "script":
 					case "style":
