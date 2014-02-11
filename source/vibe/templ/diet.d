@@ -190,19 +190,19 @@ private string dietParser(string template_file)(size_t base_indent)
 	return compiler.buildWriter(base_indent);
 }
 
-private string dietStringParser(string template_file)(size_t base_indent)
+private string dietStringParser(string diet_code, string name="__string_diet_code__")(size_t base_indent)
 {
-	enum dummy_filename = "__string_diet_code__";
-	enum LINES = removeEmptyLines(template_file, dummy_filename);
+
+	enum LINES = removeEmptyLines(diet_code, dummy_filename);
 
 	TemplateBlock ret;
-	ret.name = dummy_filename;
+	ret.name = name;
 	ret.lines = LINES;
 	ret.indentStyle = detectIndentStyle(ret.lines);
 
 	TemplateBlock[] files;
 	files ~= ret;
-	readFilesRec!(extractDependencies(LINES), dummy_filename)(files);
+	readFilesRec!(extractDependencies(LINES), name)(files);
 
 	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
