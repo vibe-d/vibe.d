@@ -224,7 +224,7 @@ final class RedisClient {
 	/*
 		Pub / Sub
 	*/
-	int publish(T : E[], E)(string channel, T message) {
+	int publish(string channel, string message) {
 		auto str = request!string("PUBLISH", channel, message);
 		return str ? parse!int(str) : -1;
 	}
