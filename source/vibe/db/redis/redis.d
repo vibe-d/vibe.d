@@ -41,8 +41,6 @@ final class RedisClient {
 		string m_authPassword;
 		size_t m_selectedDB;
 		string m_version;
-		bool m_pubsub = false;
-		LockedConnection!RedisConnection m_pubsubConnection;
 	}
 
 	this(string host = "127.0.0.1", ushort port = 6379)
@@ -229,26 +227,7 @@ final class RedisClient {
 		return str ? parse!int(str) : -1;
 	}
 
-	RedisReply subscribe(string[] args...) {
-		bindConnection();
-		return request("SUBSCRIBE", args);
-	}
-
-	RedisReply unsubscribe(string[] args...) {
-		return request("UNSUBSCRIBE", args);
-	}
-
-	RedisReply psubscribe(string[] args...) {
-		bindConnection();
-		return request("PSUBSCRIBE", args);
-	}
-
-	RedisReply punsubscribe(string[] args...) {
-		return request("PUNSUBSCRIBE", args);
-	}
-
 	RedisReply pubsub(string subcommand, string[] args...) {
-		bindConnection();
 		return request("PUBSUB", subcommand, args);
 	}
 
@@ -296,44 +275,56 @@ final class RedisClient {
 
 	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
-		auto conn = m_pubsub ? m_pubsubConnection : m_connections.lockConnection();
+		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(m_selectedDB);
-		auto reply = conn.request(command, args);
-
 		static if (is(T == RedisReply)) {
+			auto reply = conn.request!T(command, args);
 			reply.m_lockedConnection = conn;
 			return reply;
-		} else {
-			scope (exit) reply.drop();
-
-			static if (is(T == bool)) {
-				return reply.next!string[0] == '1';
-			} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
-				auto str = reply.next!string();
-				return parse!T(str);
-			} else static if (is(T == string)) {
-				return reply.next!string();
-			} else static if (is(T == void)) {
-			} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
+		}
+		else {
+			return conn.request!T(command, args);
 		}
 	}
+}
 
-	void bindConnection() {
-		if (!m_pubsub) {
-			m_pubsub = true;
-			m_pubsubConnection = m_connections.lockConnection();
-		}
+/**
+	A redis subscription listener
+*/
+final class RedisSubscriber {
+	private RedisConnection m_conn;
+
+	this(RedisClient client) {
+		m_conn = client.m_connections.lockConnection();
+		m_conn.setAuth(client.m_authPassword);
+		m_conn.setDB(client.m_selectedDB);
+	}
+
+	RedisReply subscribe(string[] args...) {
+		return m_conn.request("SUBSCRIBE", args);
+	}
+
+	RedisReply unsubscribe(string[] args...) {
+		return m_conn.request("UNSUBSCRIBE", args);
+	}
+
+	RedisReply psubscribe(string[] args...) {
+		return m_conn.request("PSUBSCRIBE", args);
+	}
+
+	RedisReply punsubscribe(string[] args...) {
+		return m_conn.request("PUNSUBSCRIBE", args);
 	}
 
 	// Waits for messages and calls the callback with the channel and the message as arguments
 	void listen(void function(string, string) callback) {
 		while(true) {
-			auto reply = this.m_pubsubConnection.listen();
+			auto reply = this.m_conn.listen();
 			while(reply.hasNext) {
 				if(reply.next!string == "message") {
-					auto channel =  this.m_pubsubConnection.listen.next!string;
-					auto message =  this.m_pubsubConnection.listen.next!string;
+					auto channel =  this.m_conn.listen.next!string;
+					auto message =  this.m_conn.listen.next!string;
 					callback(channel, message);
 				}
 			}
@@ -399,7 +390,7 @@ final class RedisReply {
 		} else {
 			ret = m_data;
 		}
-		if (m_index >= m_length) m_lockedConnection.clear();
+		if (m_index >= m_length && m_lockedConnection != null) m_lockedConnection.clear();
 		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
@@ -452,7 +443,7 @@ private final class RedisConnection {
 		m_selectedDB = index;
 	}
 
-	RedisReply request(ARGS...)(string command, ARGS args)
+	T request(T = RedisReply, ARGS...)(string command, ARGS args)
 	{
 		if (!m_conn || !m_conn.connected) {
 			try m_conn = connectTCP(m_host, m_port);
@@ -464,7 +455,23 @@ private final class RedisConnection {
 		auto nargs = countArgs(args);
 		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command));
 		writeArgs(m_conn, args);
-		return new RedisReply(m_conn);
+		auto reply = new RedisReply(m_conn);
+
+		static if (is(T == RedisReply)) {
+			return reply;
+		} else {
+			scope (exit) reply.drop();
+
+			static if (is(T == bool)) {
+				return reply.next!string[0] == '1';
+			} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
+				auto str = reply.next!string();
+				return parse!T(str);
+			} else static if (is(T == string)) {
+				return reply.next!string();
+			} else static if (is(T == void)) {
+			} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
+		}
 	}
 
 	RedisReply listen() {
