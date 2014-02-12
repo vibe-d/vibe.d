@@ -1,6 +1,11 @@
 import vibe.core.log;
 import vibe.db.redis.redis;
 
+void printReply(string channel, string message)
+{
+	logInfo("Received a message from channel %s: %s", channel, message);
+}
+
 void main()
 {
 	auto publisher = new RedisClient();
@@ -10,14 +15,5 @@ void main()
 	publisher.publish("test1", "Hello World!");
 	publisher.publish("test2", "Hello from Channel 2");
 
-	while(1) {
-		auto reply = subscriber.listen;
-		while(reply.hasNext) {
-			if(reply.next!string == "message") {
-				auto channel = subscriber.listen.next!string;
-				auto message = subscriber.listen.next!string;
-				logInfo("%s: %s", channel, message);
-			}
-		}
-	}
+	subscriber.listen(&printReply);
 }

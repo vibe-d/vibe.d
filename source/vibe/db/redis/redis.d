@@ -224,29 +224,30 @@ final class RedisClient {
 	/*
 		Pub / Sub
 	*/
-	RedisReply publish(T : E[], E)(string channel, T message) {
-		return request("PUBLISH", channel, message);
+	int publish(T : E[], E)(string channel, T message) {
+		auto str = request!string("PUBLISH", channel, message);
+		return str ? parse!int(str) : -1;
 	}
 
-	RedisReply subscribe(ARGS...)(ARGS args) {
+	RedisReply subscribe(string[] args...) {
 		bindConnection();
 		return request("SUBSCRIBE", args);
 	}
 
-	RedisReply unsubscribe(ARGS...)(ARGS args) {
+	RedisReply unsubscribe(string[] args...) {
 		return request("UNSUBSCRIBE", args);
 	}
 
-	RedisReply psubscribe(ARGS...)(ARGS args) {
+	RedisReply psubscribe(string[] args...) {
 		bindConnection();
 		return request("PSUBSCRIBE", args);
 	}
 
-	RedisReply punsubscribe(ARGS...)(ARGS args) {
+	RedisReply punsubscribe(string[] args...) {
 		return request("PUNSUBSCRIBE", args);
 	}
 
-	RedisReply pubsub(ARGS...)(string subcommand, ARGS args) {
+	RedisReply pubsub(string subcommand, string[] args...) {
 		bindConnection();
 		return request("PUBSUB", subcommand, args);
 	}
@@ -325,11 +326,18 @@ final class RedisClient {
 		}
 	}
 
-	// Returns a Bulk-Reply when a new message is received
-	RedisReply listen() {
-		auto reply = m_pubsubConnection.listen();
-		reply.m_lockedConnection = m_pubsubConnection;
-		return reply;
+	// Waits for messages and calls the callback with the channel and the message as arguments
+	void listen(void function(string, string) callback) {
+		while(true) {
+			auto reply = this.m_pubsubConnection.listen();
+			while(reply.hasNext) {
+				if(reply.next!string == "message") {
+					auto channel =  this.m_pubsubConnection.listen.next!string;
+					auto message =  this.m_pubsubConnection.listen.next!string;
+					callback(channel, message);
+				}
+			}
+		}
 	}
 }
 
