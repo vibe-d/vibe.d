@@ -66,9 +66,9 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
-	//pragma(msg, dietParser!template_file());
+	//pragma(msg, dietParser!template_file(indent));
 	mixin(dietParser!template_file(indent));
-	#line 72 "diet.d"
+	#line 72 "source/vibe/templ/diet.d"
 }
 
 /// compatibility alias
@@ -99,7 +99,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file(0));
-	#line 103 "diet.d"
+	#line 103 "source/vibe/templ/diet.d"
 }
 
 /// compatibility alias
@@ -133,6 +133,25 @@ template compileDietFileMixin(string template_file, string stream_variable, size
 {
 	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file(base_indent);
 }
+
+
+/**
+	The same as compileDietFile, but taking a Diet source code string instead of a file name.
+*/
+void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
+{
+	// some imports to make available by default inside templates
+	import vibe.http.common;
+	import vibe.utils.string;
+	//pragma(msg, localAliases!(0, ALIASES));
+	mixin(localAliases!(0, ALIASES));
+
+	// Generate the D source code for the diet template
+	//pragma(msg, dietParser!template_file());
+	mixin(dietStringParser!diet_code(0));
+	#line 152 "source/vibe/templ/diet.d"
+}
+
 
 /**
 	Registers a new text filter for use in Diet templates.
@@ -168,6 +187,23 @@ private string dietParser(string template_file)(size_t base_indent)
 {
 	TemplateBlock[] files;
 	readFileRec!(template_file)(files);
+	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
+	return compiler.buildWriter(base_indent);
+}
+
+private string dietStringParser(string diet_code, string name = "__diet_code__")(size_t base_indent)
+{
+	enum LINES = removeEmptyLines(diet_code, name);
+
+	TemplateBlock ret;
+	ret.name = name;
+	ret.lines = LINES;
+	ret.indentStyle = detectIndentStyle(ret.lines);
+
+	TemplateBlock[] files;
+	files ~= ret;
+	readFilesRec!(extractDependencies(LINES), name)(files);
+
 	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
 }
@@ -227,10 +263,9 @@ private bool isPartOf(string str, STRINGS...)()
 private string[] extractDependencies(in Line[] lines)
 {
 	string[] ret;
-	foreach( ref ln; lines ){
+	foreach (ref ln; lines) {
 		auto lnstr = ln.text.ctstrip();
-		if( lnstr.startsWith("extends ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
-		else if( lnstr.startsWith("include ") ) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
+		if (lnstr.startsWith("extends ")) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
 	}
 	return ret;
 }
@@ -551,11 +586,13 @@ private struct DietCompiler {
 						break;
 					case "include": // Diet file include
 						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
-						auto filename = ln[8 .. $].ctstrip() ~ ".dt";
-						auto file = getFile(filename);
-						auto includecompiler = new DietCompiler(file, m_files, m_blocks);
-						//includecompiler.m_blocks = m_blocks;
-						includecompiler.buildWriter(output, level);
+						auto content = ln[8 .. $].ctstrip();
+						if (content.startsWith("#{")) {
+							assertp(content.endsWith("}"), "Missing closing '}'.");
+							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\")("~to!string(level)~"));");
+						} else {
+							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\")("~to!string(level)~"));");
+						}
 						break;
 					case "script":
 					case "style":
@@ -842,7 +879,7 @@ private struct DietCompiler {
 
 	private void buildHtmlTag(OutputContext output, in ref string tag, int level, ref HTMLAttribute[] attribs, bool is_singular_tag, bool outer_whitespaces = true)
 	{
-		if(outer_whitespaces) {
+		if (outer_whitespaces) {
 			output.writeString("\n");
 			assertp(output.stackSize >= level);
 			output.writeIndent(level);
@@ -1158,6 +1195,23 @@ string _toString(T)(T v)
 	else static if( __traits(compiles, v.opCast!string()) ) return cast(string)v;
 	else static if( __traits(compiles, v.toString()) ) return v.toString();
 	else return to!string(v);
+}
+
+unittest {
+	static string compile(string diet, ALIASES...)() {
+		import vibe.stream.memory;
+		auto dst = new MemoryOutputStream;
+		compileDietString!(diet, ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
+
+	assert(compile!(`!!! 5`) == `<!DOCTYPE html>`, `_`~compile!(`!!! 5`)~`_`);
+	assert(compile!(`!!! html`) == `<!DOCTYPE html>`);
+	assert(compile!(`doctype html`) == `<!DOCTYPE html>`);
+	assert(compile!(`p= 5`) == `<p>5</p>`);
+	assert(compile!(`script= 5`) == `<script>5</script>`);
+	assert(compile!(`style= 5`) == `<style>5</style>`);
+	assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
 }
 
 

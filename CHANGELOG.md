@@ -1,15 +1,21 @@
 ﻿Changelog
 =========
 
-v0.7.19 - 2013-12-
+v0.7.19 - 2014-02-
 --------------------
 
 ### Features and improvements ###
 
+ - Compiles with DMD 2.065
+ - API improvements for the SSL support code
+ - Implemented SSL certificate validation (partially by David Nadlinger aka klickverbot, [pull #474][issue474])
  - Removed the old `EventedObject` interface
  - JSON answers in the REST interface generator are now directly serialized, improving performance and memory requirements
+ - Reimplemented the timer code to guarantee light weight timers on all event drivers
  - `Libevent2TCPConnection` now has a limited read buffer size to avoid unbounded memory consumption
  - Fixed the semantics of `ConnectionStream.empty` and `connected` - `empty` is generally useful for read loops and `connected` for write loops
+ - Added an overload of `runTask` that takes a delegate with additional parameters to bind to avoid memory allocations in certain situations
+ - Added `vibe.core.core.createFileDescriptorEvent` to enable existing file descriptors to be integrated into vibe.d's event loop
  - HTTP response compression is now disabled by default (controllable by the new `HTTPServerSettings.useCompressionIfPossible)
  - Removed the deprecated `sslKeyFile` and `sslCertFile` fields from `HTTPServerSettings`
  - Removed the compatibility alias `Signal` (alias for `ManualEvent`)
@@ -23,22 +29,93 @@ v0.7.19 - 2013-12-
  - Moved the REST interface generator from `vibe.http.rest` to `vibe.web.rest`
  - Added a new web interface generator (`vibe.web.web`), similar to `vibe.http.form`, but with full support for attribute based customization
  - Added a compile time warning when neither `VibeCustomMain`, nor `VibeDefaultMain` versions are specified - starts the transition from `VibeCustomMain` to `VibeDefaultMain`
+ - Added `requireBoundsCheck` to the build description
+ - Added assertions to help debug accessing uninitialized `MongoConnection` values
+ - Added `logFatal` as a shortcut to `log` called with `LogLevel.fatal` (by Daniel Killebrew aka gittywithexcitement) - [pull #441][issue441]
+ - Empty JSON request bodies are now handled gracefully in the HTTP server (by Ryan Scott aka Archytaus) - [pull #440][issue440]
+ - Improved documentation of `sleep()` - [issue #434][issue434]
+ - The libevent2 and Win32 event drivers now outputs proper error messages for socket errors
+ - Changed `setTaskEventCallback` to take a delegate with a `Task` parameter instead of `Fiber`
+ - Added a `Task.taskCounter` property
+ - `AutoFreeListAllocator.realloc` can now reuse blocks of memory and uses `realloc` on the base allocator if possible
+ - HTML forms now support multiple values per key
+ - Inverted the `no_dns` parameter of `EventDriver.resolveHost` to `use_dns` to be consistent with `vibe.core.net.resolveHost` - [issue #430][issue430]
+ - `Task` doesn't `alias this` to `TaskFiber` anymore, but forwards just a selected set of emthods
+ - Added `vibe.core.args.readRequiredOption - [issue #442][issue442]
+ - `NetworkAddress` is now fully `pure nothrow`
+ - Refactored the Redis client to use much less allocations and a much shorter source code
+ - Added `Bson.toString()` (by David Nadlinger aka klickverbot) - [pull #468][issue468]
+ - Added `connectTCP(NetworkAddress)` and `NetworkAddress.toString()` (by Stefan Koch aka Uplink_Coder) - [pull #485][issue485]
+ - Added `NetworkAddress.toAddressString` to output only the address portion (without the port number)
+ - Added `compileDietFileIndent` to generate indented HTML output
+ - Added Travis CI integration (by Martin Nowak) - [pull #486][issue486]
+ - Added `appendToFile` to conveniently append to a file without explicitly opening it (by Stephan Dilly aka extrawurst) - [pull #489][issue489]
+ - Tasks started before starting the event loop are now deferred until after the loop has been started
+ - Worker threads are started lazily instead of directly on startup
+ - Added `MongoCursor.limit()` to limit the amount of documents returned (by Damian Ziemba aka nazriel) - [pull #499][issue499]
+ - The HTTP client now sets a basic auth header when the request URL contains a username/password (by Damian Ziemba aka nazriel) - [issue #481][issue481], [pull #501][issue501]
+ - Added `RedisClient.redisVersion` (by Fabian Wallentowitz aka fabsi88) - [pull #502][issue502]
+ - Implemented handling of doctypes other than HTML 5 in the Diet compiler (by Damian Ziemba aka nazriel) - [issue #505][issue505], [pull #509][issue509]
 
 ### Bug fixes ###
 
  - Fixed a condition under which a `WebSocket` could still be used after its handler function has thrown an exception - [issue #407][issue407]
  - Fixed a `null` pointer dereference in `Libevent2TCPConnection` when trying to read from a closed connection
  - Fixed the HTTP client to still properly shutdown the connection when an exception occurs during the shutdown
- - Fixed `SSLStream` to perform proper locking for multithreaded servers
+ - Fixed `SSLStream` to perform proper locking for multi-threaded servers
  - Fixed the signature of `TaskLocal.opAssign` - [issue #432][issue432]
  - Fixed thread shutdown in cases where multiple threads are used - [issue #419][issue419]
  - Fixed SIGINT/SIGTERM application shutdown - [issue #419][issue419]
  - Fixed `HashMap` to properly handle `null` keys
+ - Fixed processing WebSocket requests sent from IE 10 and IE 11
+ - Fixed the HTTP client to assume keep-alive for HTTP/1.1 connections that do not explicitly specify something else (by Daniel Killebrew aka gittywithexcitement) - [issue #448][issue448], [pull #450][issue450]
+ - Fixed `Win32FileStream` to report itself as readable for `FileMode.createTrunc`
+ - Fixed a possible memory corruption bug for an assertion in `AllocAppender`
+ - Fixed clearing of cookies on old browsers - [issue #453][issue453]
+ - Fixed handling of `yield()`ed tasks so that events are guaranteed to be processed
+ - Fixed `Libevent2EventDriver.resolveHost` to take the local hosts file into account (by Daniel Killebrew aka gittywithexcitement) - [issue #289][issue289], [pull #460][issue460]
+ - Fixed `RedisClient.zcount` to issue the right command (by David Nadlinger aka klickverbot) - [pull #467][issue467]
+ - Fixed output of leading white space in the `HTMLLogger` - now replaced by `&nbsp;`
+ - Fixed serialization of AAs with `const(string)` or `immutable(string)` keys (by David Nadlinger aka klickverbot) - [pull #473][issue473]
+ - Fixed double-URL-decoding of path parameters in `URLRouter`
+ - Fixed `URL.toString()` to output username/password, if set
+ - Fixed a crash caused by a double-free when an SSL handshake had failed
+ - Fixed `Libevent2UDPConnection.recv` to work inside of a `Task`
+ - Fixed handling of "+" in the path part of URLs (is *not* replaced by a space) - [issue #498][issue498]
+ - Fixed handling of `<style>` tags with inline content in the Diet compiler - [issue #507][issue507]
 
+[issue289]: https://github.com/rejectedsoftware/vibe.d/issues/289
+[issue289]: https://github.com/rejectedsoftware/vibe.d/issues/289
+[issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
 [issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
 [issue419]: https://github.com/rejectedsoftware/vibe.d/issues/419
+[issue419]: https://github.com/rejectedsoftware/vibe.d/issues/419
 [issue421]: https://github.com/rejectedsoftware/vibe.d/issues/421
+[issue430]: https://github.com/rejectedsoftware/vibe.d/issues/430
 [issue432]: https://github.com/rejectedsoftware/vibe.d/issues/432
+[issue434]: https://github.com/rejectedsoftware/vibe.d/issues/434
+[issue440]: https://github.com/rejectedsoftware/vibe.d/issues/440
+[issue441]: https://github.com/rejectedsoftware/vibe.d/issues/441
+[issue442]: https://github.com/rejectedsoftware/vibe.d/issues/442
+[issue448]: https://github.com/rejectedsoftware/vibe.d/issues/448
+[issue450]: https://github.com/rejectedsoftware/vibe.d/issues/450
+[issue453]: https://github.com/rejectedsoftware/vibe.d/issues/453
+[issue460]: https://github.com/rejectedsoftware/vibe.d/issues/460
+[issue467]: https://github.com/rejectedsoftware/vibe.d/issues/467
+[issue468]: https://github.com/rejectedsoftware/vibe.d/issues/468
+[issue473]: https://github.com/rejectedsoftware/vibe.d/issues/473
+[issue474]: https://github.com/rejectedsoftware/vibe.d/issues/474
+[issue481]: https://github.com/rejectedsoftware/vibe.d/issues/481
+[issue485]: https://github.com/rejectedsoftware/vibe.d/issues/485
+[issue486]: https://github.com/rejectedsoftware/vibe.d/issues/486
+[issue489]: https://github.com/rejectedsoftware/vibe.d/issues/489
+[issue498]: https://github.com/rejectedsoftware/vibe.d/issues/498
+[issue499]: https://github.com/rejectedsoftware/vibe.d/issues/499
+[issue501]: https://github.com/rejectedsoftware/vibe.d/issues/501
+[issue502]: https://github.com/rejectedsoftware/vibe.d/issues/502
+[issue505]: https://github.com/rejectedsoftware/vibe.d/issues/505
+[issue507]: https://github.com/rejectedsoftware/vibe.d/issues/507
+[issue509]: https://github.com/rejectedsoftware/vibe.d/issues/509
 
 
 v0.7.18 - 2013-11-26
