@@ -292,6 +292,7 @@ private class OutputContext {
 	string m_result;
 	Line m_line = Line(null, -1, null);
 	size_t m_baseIndent;
+	bool m_isHTML5;
 
 	this(size_t base_indent = 0)
 	{
@@ -642,11 +643,14 @@ private struct DietCompiler {
 	private void buildDoctypeNodeWriter(OutputContext output, string ln, size_t j, int level)
 	{
 		skipWhitespace(ln, j);
+		output.m_isHTML5 = false;
 
 		string doctype_str = "!DOCTYPE html";
 		switch (ln[j .. $]) {
 			case "5":
 			case "":
+			case "html":
+				output.m_isHTML5 = true;
 				break;
 			case "xml":
 				doctype_str = `?xml version="1.0" encoding="utf-8" ?`;
@@ -904,7 +908,10 @@ private struct DietCompiler {
 				output.writeString("\"");
 			} else {
 				output.writeCodeLine("static if(is(typeof("~att.value~") == bool)){ if("~att.value~"){");
-				output.writeString(` `~att.key~`="`~att.key~`"`);
+				if (!output.m_isHTML5)
+					output.writeString(` `~att.key~`="`~att.key~`"`);
+				else
+					output.writeString(` `~att.key);
 				output.writeCodeLine("}} else static if(is(typeof("~att.value~") == string[])){\n");
 				output.writeString(` `~att.key~`="`);
 				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
