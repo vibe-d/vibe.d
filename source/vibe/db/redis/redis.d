@@ -10,6 +10,7 @@ module vibe.db.redis.redis;
 public import vibe.core.net;
 
 import vibe.core.connectionpool;
+import vibe.core.core;
 import vibe.core.log;
 import vibe.stream.operations;
 import std.conv;
@@ -316,9 +317,9 @@ final class RedisSubscriber {
 	RedisReply punsubscribe(string[] args...) {
 		return m_conn.request("PUNSUBSCRIBE", args);
 	}
-
-	// Waits for messages and calls the callback with the channel and the message as arguments
-	void listen(void function(string, string) callback) {
+	
+	// Same as listen, but blocking
+	void blisten(void delegate(string, string) callback) {
 		while(true) {
 			auto reply = this.m_conn.listen();
 			while(reply.hasNext) {
@@ -329,6 +330,13 @@ final class RedisSubscriber {
 				}
 			}
 		}
+	}
+
+	// Waits for messages and calls the callback with the channel and the message as arguments
+	Task listen(void delegate(string, string) callback) {
+		return runTask({
+			blisten(callback);
+		});
 	}
 }
 

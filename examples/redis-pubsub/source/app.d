@@ -1,3 +1,4 @@
+import std.functional;
 import vibe.core.log;
 import vibe.db.redis.redis;
 
@@ -6,7 +7,7 @@ void printReply(string channel, string message)
 	logInfo("Received a message from channel %s: %s", channel, message);
 }
 
-void main()
+shared static this()
 {
 	auto publisher = new RedisClient();
 	auto subscriber = new RedisSubscriber(new RedisClient());
@@ -15,5 +16,5 @@ void main()
 	publisher.publish("test1", "Hello World!");
 	publisher.publish("test2", "Hello from Channel 2");
 
-	subscriber.listen(&printReply);
+	auto task = subscriber.listen(toDelegate(&printReply));
 }
