@@ -342,7 +342,7 @@ shared static this()
 	 * It greatly simplifies writing client applications and gurantees that server and client API
 	 * will always stay in sync. Care about method style naming convention mismatch though.
 	 */
-	setTimer(dur!"seconds"(1), {
+	setTimer(1.seconds, {
 		scope(exit)
 			exitEventLoop(true);
 
