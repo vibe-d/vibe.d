@@ -231,10 +231,12 @@ class HTTPClient {
 		m_conn = null;
 		m_server = server;
 		m_port = port;
-		m_ssl = ssl ? new SSLContext(SSLContextKind.client) : null;
-		// this will be changed to trustedCert once a proper root CA store is available by default
-		m_ssl.peerValidationMode = SSLPeerValidationMode.none;
-		if (ms_sslSetup) ms_sslSetup(m_ssl);
+		if (ssl) {
+			m_ssl = new SSLContext(SSLContextKind.client);
+			// this will be changed to trustedCert once a proper root CA store is available by default
+			m_ssl.peerValidationMode = SSLPeerValidationMode.none;
+			if (ms_sslSetup) ms_sslSetup(m_ssl);
+		}
 	}
 
 	/**
