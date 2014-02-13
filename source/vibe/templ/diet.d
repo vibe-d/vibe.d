@@ -535,7 +535,17 @@ private struct DietCompiler {
 
 				switch(tag){
 					default:
-						buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces);
+						if (buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces))
+						{
+							size_t next_tag = m_lineIndex + 1;
+							while( next_tag < lineCount &&
+							      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+							{
+								buildTextNodeWriter(output, line(next_tag++).text, level, prepend_whitespaces);
+							}
+							m_lineIndex = next_tag - 1;
+							next_indent_level = computeNextIndentLevel();
+						}
 						break;
 					case "doctype": // HTML Doctype header
 						buildDoctypeNodeWriter(output, ln, j, level);
@@ -686,7 +696,7 @@ private struct DietCompiler {
 		buildSpecialTag(output, doctype_str, level);
 	}
 
-	private void buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes, ref bool prepend_whitespaces)
+	private bool buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes, ref bool prepend_whitespaces)
 	{
 		// parse the HTML tag, leaving any trailing text as line[i .. $]
 		size_t i;
@@ -726,6 +736,8 @@ private struct DietCompiler {
 		if( has_child_nodes ) output.pushNode("</" ~ tag ~ ">", ws_type.inner, ws_type.outer);
 		else if( !is_singular_tag ) output.writeString("</" ~ tag ~ ">");
 		prepend_whitespaces = has_child_nodes ? ws_type.inner : ws_type.outer;
+
+		return ws_type.block_tag;
 	}
 
 	private void buildRawNodeWriter(OutputContext output, in ref string tag, in string tagline, int level,
@@ -821,6 +833,7 @@ private struct DietCompiler {
 		struct WSType {
 			bool inner = true;
 			bool outer = true;
+			bool block_tag = false;
 		}
 
 		i = 0;
@@ -836,23 +849,27 @@ private struct DietCompiler {
 				i++;
 				assertp(id.length == 0, "Id may only be set once.");
 				id = skipIdent(line, i, "-_");
+
+				// put #id and .classes into the attribs list
+				if( id.length ) attribs ~= HTMLAttribute("id", '"'~id~'"');
 			} else if( line[i] == '.' ){
 				i++;
+				// check if tag ends with dot
+				if (i == line.length || line[i] == ' ') {
+					i = line.length;
+					ws_type.block_tag = true;
+					break;
+				}
 				auto cls = skipIdent(line, i, "-_");
 				if( classes.length == 0 ) classes = cls;
 				else classes ~= " " ~ cls;
+			} else if (line[i] == '(') {
+				// parse other attributes
+				i++;
+				string attribstring = skipUntilClosingClamp(line, i);
+				parseAttributes(attribstring, attribs);
+				i++;
 			} else break;
-		}
-
-		// put #id and .classes into the attribs list
-		if( id.length ) attribs ~= HTMLAttribute("id", '"'~id~'"');
-
-		// parse other attributes
-		if( i < line.length && line[i] == '(' ){
-			i++;
-			string attribstring = skipUntilClosingClamp(line, i);
-			parseAttributes(attribstring, attribs);
-			i++;
 		}
 
 		// parse whitespaces removal tokens
@@ -1243,6 +1260,14 @@ unittest {
 		== "<!DOCTYPE html>\n<div someattr></div>");
 	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)") 
 		== "<!DOCTYPE html>\n<div></div>");
+
+	// issue 510
+	assert(compile!("pre.test\n\tfoo") == "<pre class=\"test\">\n\t<foo></foo></pre>");
+	assert(compile!("pre.test.\n\tfoo") == "<pre class=\"test\">\n\tfoo</pre>");
+	assert(compile!("pre.test. foo") == "<pre class=\"test\"></pre>");
+	assert(compile!("pre().\n\tfoo") == "<pre>\n\tfoo</pre>");
+	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
+	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\n\tmeh</pre>");
 }
 
 
