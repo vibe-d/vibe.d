@@ -32,6 +32,49 @@ RedisClient connectRedis(string host, ushort port = 6379)
 	return new RedisClient(host, port);
 }
 
+private RedisReply _request_simple(ARGS...)(RedisConnection conn, bool read, string command, ARGS args)
+{
+	if (!conn.conn || !conn.conn.connected) {
+		try conn.conn = connectTCP(conn.m_host, conn.m_port);
+		catch (Exception e) {
+			throw new Exception(format("Failed to connect to Redis server at %s:%s.", conn.m_host, conn.m_port), __FILE__, __LINE__, e);
+		}
+	}
+
+	auto nargs = conn.countArgs(args);
+	conn.conn.write(format("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command));
+	conn.writeArgs(conn.conn, args);
+	
+	if (!read) {
+		return null;
+	} else {
+		return new RedisReply(conn.conn);
+	}
+}
+
+private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, ARGS args)
+{
+	auto reply = _request_simple(conn, true, command, args);
+
+	static if (is(T == RedisReply)) {
+		reply.m_lockedConnection = conn;
+		return reply;
+	} else {
+		scope (exit) reply.drop();
+
+		static if (is(T == bool)) {
+			return reply.next!string[0] == '1';
+		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
+			auto str = reply.next!string();
+			return parse!T(str);
+		} else static if (is(T == string)) {
+			return reply.next!string();
+		} else static if (is(T == void)) {
+		} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
+	}
+}
+
+
 
 /**
 	A redis client with connection pooling.
@@ -279,14 +322,7 @@ final class RedisClient {
 		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(m_selectedDB);
-		static if (is(T == RedisReply)) {
-			auto reply = conn.request!T(command, args);
-			reply.m_lockedConnection = conn;
-			return reply;
-		}
-		else {
-			return conn.request!T(command, args);
-		}
+		return _request!T(conn, command, args);
 	}
 }
 
@@ -294,7 +330,7 @@ final class RedisClient {
 	A redis subscription listener
 */
 final class RedisSubscriber {
-	private RedisConnection m_conn;
+	private LockedConnection!RedisConnection m_conn;
 
 	this(RedisClient client) {
 		m_conn = client.m_connections.lockConnection();
@@ -302,31 +338,39 @@ final class RedisSubscriber {
 		m_conn.setDB(client.m_selectedDB);
 	}
 
-	RedisReply subscribe(string[] args...) {
-		return m_conn.request("SUBSCRIBE", args);
+	void subscribe(string[] args...) {
+		_request_simple(m_conn, false, "SUBSCRIBE", args);
 	}
 
-	RedisReply unsubscribe(string[] args...) {
-		return m_conn.request("UNSUBSCRIBE", args);
+	void unsubscribe(string[] args...) {
+		_request_simple(m_conn, false, "UNSUBSCRIBE", args);
 	}
 
-	RedisReply psubscribe(string[] args...) {
-		return m_conn.request("PSUBSCRIBE", args);
+	void psubscribe(string[] args...) {
+		_request_simple(m_conn, false, "PSUBSCRIBE", args);
 	}
 
-	RedisReply punsubscribe(string[] args...) {
-		return m_conn.request("PUNSUBSCRIBE", args);
+	void punsubscribe(string[] args...) {
+		_request_simple(m_conn, false, "PUNSUBSCRIBE", args);
 	}
 	
 	// Same as listen, but blocking
 	void blisten(void delegate(string, string) callback) {
 		while(true) {
 			auto reply = this.m_conn.listen();
-			while(reply.hasNext) {
-				if(reply.next!string == "message") {
-					auto channel =  this.m_conn.listen.next!string;
-					auto message =  this.m_conn.listen.next!string;
-					callback(channel, message);
+			auto cmd = reply.next!string;
+			if(cmd == "message") {
+				auto channel = reply.next!string;
+				auto message = reply.next!string;
+				callback(channel, message);
+			} else if(cmd == "unsubscribe") {
+				// keep track to how many channels we are subscribed and exit if none anymore
+				reply.next!(ubyte[])(); // channel from which we get unsubsccribed
+				reply = this.m_conn.listen(); // redis sends a *3 here despite what's in the docs...
+				auto str = reply.next!string;
+				int count = str ? parse!int(str) : -1;
+				if(count == 0) {
+					return;
 				}
 			}
 		}
@@ -437,49 +481,23 @@ private final class RedisConnection {
 		m_port = port;
 	}
 
+	@property{
+		TCPConnection conn() { return m_conn; }
+		void conn(TCPConnection conn) { m_conn = conn; }
+	}
+
 	void setAuth(string password)
 	{
 		if (m_password == password) return;
-		request("AUTH", password).drop();
+		_request_simple(this, true, "AUTH", password).drop();
 		m_password = password;
 	}
 
 	void setDB(size_t index)
 	{
 		if (index == m_selectedDB) return;
-		request("SELECT", index).drop();
+		_request_simple(this, true, "SELECT", index).drop();
 		m_selectedDB = index;
-	}
-
-	T request(T = RedisReply, ARGS...)(string command, ARGS args)
-	{
-		if (!m_conn || !m_conn.connected) {
-			try m_conn = connectTCP(m_host, m_port);
-			catch (Exception e) {
-				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_host, m_port), __FILE__, __LINE__, e);
-			}
-		}
-
-		auto nargs = countArgs(args);
-		m_conn.write(format("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command));
-		writeArgs(m_conn, args);
-		auto reply = new RedisReply(m_conn);
-
-		static if (is(T == RedisReply)) {
-			return reply;
-		} else {
-			scope (exit) reply.drop();
-
-			static if (is(T == bool)) {
-				return reply.next!string[0] == '1';
-			} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
-				auto str = reply.next!string();
-				return parse!T(str);
-			} else static if (is(T == string)) {
-				return reply.next!string();
-			} else static if (is(T == void)) {
-			} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
-		}
 	}
 
 	RedisReply listen() {
