@@ -951,6 +951,7 @@ private struct DietCompiler {
 				skipWhitespace(str, i);
 			}
 
+			if (name == "class" && value == `""`) continue;
 			attribs ~= HTMLAttribute(name, value);
 		}
 	}
@@ -1219,6 +1220,13 @@ unittest {
 	assert(compile!(`script= 5`) == `<script>5</script>`);
 	assert(compile!(`style= 5`) == `<style>5</style>`);
 	assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
+
+	// issue 372
+	assert(compile!(`div(class="")`) == `<div></div>`);
+	assert(compile!(`div.foo(class="")`) == `<div class="foo"></div>`);
+	assert(compile!(`div.foo(class="bar")`) == `<div class="bar foo"></div>`);
+	assert(compile!(`div(class="foo")`) == `<div class="foo"></div>`);
+	assert(compile!(`div#foo(class='')`) == `<div id="foo"></div>`);
 }
 
 
