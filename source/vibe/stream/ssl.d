@@ -668,7 +668,7 @@ enum SSLPeerValidationMode {
 	*/
 	validCert,
 
-	/** Require a valid an trusted certificate (strongly recommended).
+	/** Require a valid and trusted certificate (strongly recommended).
 
 		Checks the certificate and peer name for validity and requires that
 		the certificate chain originates from a trusted CA (based on the
