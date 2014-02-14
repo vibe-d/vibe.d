@@ -89,6 +89,7 @@ class SMTPClientSettings {
 	string localname = "localhost";
 	SMTPConnectionType connectionType = SMTPConnectionType.plain;
 	SMTPAuthType authType = SMTPAuthType.none;
+	SSLPeerValidationMode sslValidationMode = SSLPeerValidationMode.trustedCert;
 	string username;
 	string password;
 
@@ -142,6 +143,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	if( settings.connectionType == SMTPConnectionType.ssl ){
 		auto ctx = new SSLContext(SSLContextKind.client);
+		ctx.peerValidationMode = settings.sslValidationMode;
 		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
@@ -151,6 +153,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 		conn.write("STARTTLS\r\n");
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
 		auto ctx = new SSLContext(SSLContextKind.client);
+		ctx.peerValidationMode = settings.sslValidationMode;
 		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 		greet();
 	}
