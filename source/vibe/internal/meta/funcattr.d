@@ -498,6 +498,9 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 	*/
 	ReturnType!Function opCall(T...)(FunctionDg dg, T args)
 	{
+                import std.traits : fullyQualifiedName;
+                import std.string : format;
+
 		enum hasReturnType = is(ReturnType!Function) && !is(ReturnType!Function == void);
 
 		static if (hasReturnType) {
@@ -534,8 +537,6 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 		);
 
 		static if (output_attributes.length) {
-			import std.traits : fullyQualifiedName;
-			import std.string : format;
 			import std.typetuple : TypeTuple;
 
 			static assert (
