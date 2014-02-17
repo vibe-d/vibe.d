@@ -415,7 +415,7 @@ final class RedisReply {
 	private ubyte[] readBulk( string sizeLn )
 	{
 		if (sizeLn.startsWith("$-1")) return null;
-		auto size = to!long( sizeLn[1 .. $] );
+		auto size = to!size_t( sizeLn[1 .. $] );
 		auto data = new ubyte[size];
 		m_conn.read(data);
 		m_conn.readLine();
