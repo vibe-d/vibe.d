@@ -916,6 +916,12 @@ private struct DietCompiler {
 				output.writeString(` `~att.key~`="`);
 				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
 				output.writeString(`"`);
+				output.writeCodeLine("} else static if(is(typeof("~att.value~") == string)) {");
+				output.writeCodeLine("if ("~att.value~"){");
+				output.writeString(` `~att.key~`="`);
+				output.writeExprHtmlAttribEscaped(att.value);
+				output.writeString(`"`);
+				output.writeCodeLine("}");
 				output.writeCodeLine("} else {");
 				output.writeString(` `~att.key~`="`);
 				output.writeExprHtmlAttribEscaped(att.value);
@@ -1227,6 +1233,16 @@ unittest {
 	assert(compile!(`div.foo(class="bar")`) == `<div class="bar foo"></div>`);
 	assert(compile!(`div(class="foo")`) == `<div class="foo"></div>`);
 	assert(compile!(`div#foo(class='')`) == `<div id="foo"></div>`);
+
+	// issue 520
+	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? \"foo\" : null)") == "<div someattr=\"foo\"></div>");
+	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? \"foo\" : null)") == "<div></div>");
+	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? true : false)") == "<div></div>");
+	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? true : false)") == "<div someattr=\"someattr\"></div>");
+	assert(compile!("doctype html\n- auto cond = true;\ndiv(someattr=cond ? true : false)") 
+		== "<!DOCTYPE html>\n<div someattr></div>");
+	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)") 
+		== "<!DOCTYPE html>\n<div></div>");
 }
 
 
