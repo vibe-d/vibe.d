@@ -143,6 +143,7 @@ final class RedisClient {
 	void ltrim(string key, long start, long stop) { request("LTRIM",  key, start, stop); }
 	T rpop(T : E[], E)(string key) { return request!T("RPOP", key); }
 	T lpop(T : E[], E)(string key) { return request!T("LPOP", key); }
+	T blpop(T : E[], E)(string key, long seconds) { return request!T("BLPOP", key, seconds); }
 	T rpoplpush(T : E[], E)(string key, string destination) { return request!T("RPOPLPUSH", key, destination); }
 
 	/*
