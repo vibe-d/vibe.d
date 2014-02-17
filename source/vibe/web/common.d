@@ -8,6 +8,7 @@
 module vibe.web.common;
 
 import vibe.http.common;
+import vibe.data.json;
 
 
 /**
@@ -466,4 +467,24 @@ unittest {
 	assert(concatURL("/test", "it", true) == "/test/it/");
 	assert(concatURL("/test", "", true) == "/test/");
 	assert(concatURL("/test/", "", true) == "/test/");
+}
+
+/** 
+ 	Respresents a Rest error response returning Json
+*/
+class RestException : HTTPStatusException {
+	private {
+		Json m_jsonResult;
+	}
+	
+	///
+	this(int status, Json _jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(status, _jsonResult.toString(), file, line, next);
+		
+		m_jsonResult = _jsonResult;
+	}
+	
+	/// The HTTP status code
+	@property const(Json) jsonResult() const { return m_jsonResult; }
 }

@@ -407,6 +407,9 @@ class RestInterfaceClient(I) : I
 					if (ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String) {
 						throw new HTTPStatusException(res.statusCode, ret.statusMessage.get!string);
 					}
+					else if (ret.type == Json.Type.Object) {
+						throw new RestException(res.statusCode, ret);
+					}
 					else {
 						throw new HTTPStatusException(res.statusCode, httpStatusText(res.statusCode));
 					}
