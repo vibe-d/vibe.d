@@ -140,8 +140,21 @@ package class Libevent2TCPConnection : TCPConnection {
 		if (!m_ctx) return;
 		acquire();
 
+		scope (exit) {
+			TCPContextAlloc.free(m_ctx);
+			m_ctx = null;
+		}
+
 		if (m_ctx.event) {
 			auto fd = m_ctx.socketfd;
+
+			scope (exit) {
+				version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
+				else shutdown(m_ctx.socketfd, SHUT_WR);
+				if (m_ctx.event) bufferevent_free(m_ctx.event);
+				logTrace("...socket %d closed.", fd);
+			}
+
 			m_ctx.shutdown = true;
 			bufferevent_setwatermark(m_ctx.event, EV_WRITE, 1, 0);
 			bufferevent_flush(m_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
@@ -149,14 +162,7 @@ package class Libevent2TCPConnection : TCPConnection {
 			auto buf = bufferevent_get_output(m_ctx.event);
 			while (m_ctx.event && evbuffer_get_length(buf) > 0)
 				m_ctx.core.yieldForEvent();
-
-			version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
-			else shutdown(m_ctx.socketfd, SHUT_WR);
-			if (m_ctx.event) bufferevent_free(m_ctx.event);
-			logTrace("...socket %d closed.", fd);
 		}
-		TCPContextAlloc.free(m_ctx);
-		m_ctx = null;
 	}
 
 	/// The 'connected' status of this connection
