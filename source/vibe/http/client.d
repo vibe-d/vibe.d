@@ -247,8 +247,10 @@ class HTTPClient {
 	void disconnect()
 	{
 		if (m_conn) {
-			if (m_conn.connected) m_stream.finalize();
-			m_conn.close();
+			if (m_conn.connected) {
+				m_stream.finalize();
+				m_conn.close();
+			}
 			if (m_stream !is m_conn) {
 				destroy(m_stream);
 				m_stream = null;
