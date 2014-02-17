@@ -470,7 +470,7 @@ unittest {
 }
 
 /** 
- 	Respresents a Rest error response returning Json
+ 	Respresents a Rest error response
 */
 class RestException : HTTPStatusException {
 	private {
@@ -478,11 +478,16 @@ class RestException : HTTPStatusException {
 	}
 	
 	///
-	this(int status, Json _jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
-		super(status, _jsonResult.toString(), file, line, next);
+		if (jsonResult.type == Json.Type.Object && jsonResult.statusMessage.type == Json.Type.String) {
+			super(status, jsonResult.statusMessage.get!string, file, line, next);
+		}
+		else {
+			super(status, httpStatusText(status) ~ " (" ~ jsonResult.toString() ~ ")", file, line, next);
+		}
 		
-		m_jsonResult = _jsonResult;
+		m_jsonResult = jsonResult;
 	}
 	
 	/// The HTTP status code

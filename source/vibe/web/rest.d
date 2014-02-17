@@ -403,17 +403,8 @@ class RestInterfaceClient(I) : I
 					ret.toString()
 				);
 
-				if (res.statusCode != HTTPStatus.OK) {
-					if (ret.type == Json.Type.Object && ret.statusMessage.type == Json.Type.String) {
-						throw new HTTPStatusException(res.statusCode, ret.statusMessage.get!string);
-					}
-					else if (ret.type == Json.Type.Object) {
-						throw new RestException(res.statusCode, ret);
-					}
-					else {
-						throw new HTTPStatusException(res.statusCode, httpStatusText(res.statusCode));
-					}
-				}
+				if (res.statusCode != HTTPStatus.OK)
+					throw new RestException(res.statusCode, ret);
 			};
 
 			requestHTTP(url, reqdg, resdg);
