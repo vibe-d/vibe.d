@@ -40,7 +40,7 @@ final class RedisClient {
 	private {
 		ConnectionPool!RedisConnection m_connections;
 		string m_authPassword;
-		size_t m_selectedDB;
+		long m_selectedDB;
 		string m_version;
 	}
 
@@ -64,9 +64,9 @@ final class RedisClient {
 		} 
 	}
 
-	size_t del(string[] keys...) { return request!size_t("DEL", keys); }
+	long del(string[] keys...) { return request!long("DEL", keys); }
 	bool exists(string key) { return request!bool("EXISTS", key); }
-	bool expire(string key, size_t seconds) { return request!bool("EXPIRE", key, seconds); }
+	bool expire(string key, long seconds) { return request!bool("EXPIRE", key, seconds); }
 	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
 	RedisReply keys(string pattern) { return request!RedisReply("KEYS", pattern); }
 	bool move(string key, string db) { return request!bool("MOVE", key, db); }
@@ -84,11 +84,11 @@ final class RedisClient {
 		String Commands
 	*/
 
-	size_t append(T : E[], E)(string key, T suffix) { return request!size_t("APPEND", key, suffix); }
+	long append(T : E[], E)(string key, T suffix) { return request!long("APPEND", key, suffix); }
 	int decr(string key, int value = 1) { return value == 1 ? request!int("DECR", key) : request!int("DECRBY", key, value); }
 	T get(T : E[], E)(string key) { return request!T("GET", key); }
-	bool getBit(string key, size_t offset) { return request!bool("GETBIT", key, offset); }
-	T getRange(T : E[], E)(string key, size_t start, size_t end) { return request!T("GETRANGE", start, end); }
+	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
+	T getRange(T : E[], E)(string key, long start, long end) { return request!T("GETRANGE", start, end); }
 	T getSet(T : E[], E)(string key, T value) { return request!T("GET", key, value); }
 	int incr(string key, int value = 1) { return value == 1 ? request!int("INCR", key) : request!int("INCRBY", key, value); }
 	RedisReply mget(string[] keys) { return request!RedisReply("MGET", keys); }
@@ -107,40 +107,40 @@ final class RedisClient {
 	}
 
 	void set(T : E[], E)(string key, T value) { request("SET", key, value); }
-	bool setBit(string key, size_t offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
-	void setEX(T : E[], E)(string key, size_t seconds, T value) { request("SETEX", key, seconds, value); }
+	bool setBit(string key, long offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
+	void setEX(T : E[], E)(string key, long seconds, T value) { request("SETEX", key, seconds, value); }
 	bool setNX(T : E[], E)(string key, T value) { return request!bool("SETNX", key, value); }
-	size_t setRange(T : E[], E)(string key, size_t offset, T value) { return request!size_t("SETRANGE", key, offset, value); }
-	size_t strlen(string key) { return request!size_t("STRLEN", key); }
+	long setRange(T : E[], E)(string key, long offset, T value) { return request!long("SETRANGE", key, offset, value); }
+	long strlen(string key) { return request!long("STRLEN", key); }
 
 	/*
 		Hashes
 	*/
 
-	size_t hdel(string key, string[] fields...) { return request!size_t("HDEL", key, fields); }
+	long hdel(string key, string[] fields...) { return request!long("HDEL", key, fields); }
 	bool hexists(string key, string field) { return request!bool("HEXISTS", key, field); }
 	void hset(T : E[], E)(string key, string field, T value) { request("HSET", key, field, value); }
 	T hget(T : E[], E)(string key, string field) { return request!T("HGET", key, field); }
 	RedisReply hgetAll(string key) { return request!RedisReply("HGETALL", key); }
 	int hincr(string key, string field, int value=1) { return request!int("HINCRBY", key, field, value); }
 	RedisReply hkeys(string key) { return request!RedisReply("HKEYS", key); }
-	size_t hlen(string key) { return request!size_t("HLEN", key); }
+	long hlen(string key) { return request!long("HLEN", key); }
 	RedisReply hmget(string key, string[] fields...) { return request!RedisReply("HMGET", key, fields); }
 	void hmset(ARGS...)(string key, ARGS args) { request("HMSET", key, args); }
 	bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
 	RedisReply hvals(string key) { return request!RedisReply("HVALS", key); }
-	T lindex(T : E[], E)(string key, size_t index) { return request!T("LINDEX", key, index); }
-	size_t linsertBefore(T1, T2)(string key, T1 pivot, T2 value) { return request!size_t("LINSERT", key, "BEFORE", pivot, value); }
-	size_t linsertAfter(T1, T2)(string key, T1 pivot, T2 value) { return request!size_t("LINSERT", key, "AFTER", pivot, value); }
-	size_t llen(string key) { return request!size_t("LLEN", key); }
-	size_t lpush(ARGS...)(string key, ARGS args) { return request!size_t("LPUSH", key, args); }
-	size_t lpushX(T)(string key, T value) { return request!size_t("LPUSHX", key, value); }
-	size_t rpush(ARGS...)(string key, ARGS args) { return request!size_t("RPUSH", key, args); }
-	size_t rpushX(T)(string key, T value) { return request!size_t("RPUSHX", key, value); }
-	RedisReply lrange(string key, size_t start, size_t stop) { return request!RedisReply("LRANGE",  key, start, stop); }
-	size_t lrem(T : E[], E)(string key, size_t count, T value) { return request!size_t("LREM", count, value); }
-	void lset(T : E[], E)(string key, size_t index, T value) { request("LSET", key, index, value); }
-	void ltrim(string key, size_t start, size_t stop) { request("LTRIM",  key, start, stop); }
+	T lindex(T : E[], E)(string key, long index) { return request!T("LINDEX", key, index); }
+	long linsertBefore(T1, T2)(string key, T1 pivot, T2 value) { return request!long("LINSERT", key, "BEFORE", pivot, value); }
+	long linsertAfter(T1, T2)(string key, T1 pivot, T2 value) { return request!long("LINSERT", key, "AFTER", pivot, value); }
+	long llen(string key) { return request!long("LLEN", key); }
+	long lpush(ARGS...)(string key, ARGS args) { return request!long("LPUSH", key, args); }
+	long lpushX(T)(string key, T value) { return request!long("LPUSHX", key, value); }
+	long rpush(ARGS...)(string key, ARGS args) { return request!long("RPUSH", key, args); }
+	long rpushX(T)(string key, T value) { return request!long("RPUSHX", key, value); }
+	RedisReply lrange(string key, long start, long stop) { return request!RedisReply("LRANGE",  key, start, stop); }
+	long lrem(T : E[], E)(string key, long count, T value) { return request!long("LREM", count, value); }
+	void lset(T : E[], E)(string key, long index, T value) { request("LSET", key, index, value); }
+	void ltrim(string key, long start, long stop) { request("LTRIM",  key, start, stop); }
 	T rpop(T : E[], E)(string key) { return request!T("RPOP", key); }
 	T lpop(T : E[], E)(string key) { return request!T("LPOP", key); }
 	T rpoplpush(T : E[], E)(string key, string destination) { return request!T("RPOPLPUSH", key, destination); }
@@ -149,43 +149,43 @@ final class RedisClient {
 		Sets
 	*/
 
-	size_t sadd(ARGS...)(string key, ARGS args) { return request!size_t("SADD", key, args); }
-	size_t scard(string key) { return request!size_t("SCARD", key); }
+	long sadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
+	long scard(string key) { return request!long("SCARD", key); }
 	RedisReply sdiff(string[] keys...) { return request!RedisReply("SDIFF", keys); }
-	size_t sdiffStore(string destination, string[] keys...) { return request!size_t("SDIFFSTORE", destination, keys); }
+	long sdiffStore(string destination, string[] keys...) { return request!long("SDIFFSTORE", destination, keys); }
 	RedisReply sinter(string[] keys) { return request!RedisReply("SINTER", keys); }
-	size_t sinterStore(string destination, string[] keys...) { return request!size_t("SINTERSTORE", destination, keys); }
+	long sinterStore(string destination, string[] keys...) { return request!long("SINTERSTORE", destination, keys); }
 	bool sisMember(T : E[], E)(string key, T member) { return request!bool("SISMEMBER", key, member); }
 	RedisReply smembers(string key) { return request!RedisReply("SMEMBERS", key); }
 	bool smove(T : E[], E)(string source, string destination, T member) { return request!bool("SMOVE", source, destination, member); }
 	T spop(T : E[], E)(string key) { return request!T("SPOP", key ); }
 	T srandMember(T : E[], E)(string key) { return request!T("SRANDMEMBER", key ); }
-	size_t srem(ARGS...)(string key, ARGS args) { return request!size_t("SREM", key, args); }
+	long srem(ARGS...)(string key, ARGS args) { return request!long("SREM", key, args); }
 	RedisReply sunion(string[] keys...) { return request!RedisReply("SUNION", keys); }
-	size_t sunionStore(string[] keys...) { return request!size_t("SUNIONSTORE", keys); }
+	long sunionStore(string[] keys...) { return request!long("SUNIONSTORE", keys); }
 
 	/*
 		Sorted Sets
 	*/
 
-	size_t zadd(ARGS...)(string key, ARGS args) { return request!size_t("SADD", key, args); }
-	size_t Zcard(string key) { return request!size_t("ZCARD", key); }
-	size_t zcount(string key, double min, double max) { return request!size_t("ZCOUNT", key, min, max); }
+	long zadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
+	long Zcard(string key) { return request!long("ZCARD", key); }
+	long zcount(string key, double min, double max) { return request!long("ZCOUNT", key, min, max); }
 	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
 	//TODO: zinterstore
-	RedisReply zrange(string key, size_t start, size_t end, bool withScores=false) {
+	RedisReply zrange(string key, long start, long end, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		return request!RedisReply("ZRANGE", args);
 	}
 
-	RedisReply zrangeByScore(string key, size_t start, size_t end, bool withScores=false) {
+	RedisReply zrangeByScore(string key, long start, long end, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		return request!RedisReply("ZRANGEBYSCORE", args);
 	}
 
-	RedisReply zrangeByScore(string key, size_t start, size_t end, size_t offset, size_t count, bool withScores=false) {
+	RedisReply zrangeByScore(string key, long start, long end, long offset, long count, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		args ~= ["LIMIT", to!string(offset), to!string(count)];
@@ -196,11 +196,11 @@ final class RedisClient {
 		auto str = request!string("ZRANK", key, member);
 		return str ? parse!int(str) : -1;
 	}
-	size_t zrem(string key, string[] members...) { return request!size_t("ZREM", key, members); }
-	size_t zremRangeByRank(string key, int start, int stop) { return request!size_t("ZREMRANGEBYRANK", key, start, stop); }
-	size_t zremRangeByScore(string key, double min, double max) { return request!size_t("ZREMRANGEBYSCORE", key, min, max);}
+	long zrem(string key, string[] members...) { return request!long("ZREM", key, members); }
+	long zremRangeByRank(string key, int start, int stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
+	long zremRangeByScore(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, min, max);}
 
-	RedisReply zrevRange(string key, size_t start, size_t end, bool withScores=false) {
+	RedisReply zrevRange(string key, long start, long end, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		return request!RedisReply("ZREVRANGE", args);
@@ -243,7 +243,7 @@ final class RedisClient {
 	T echo(T : E[], E)(T data) { return request!T("ECHO", data); }
 	void ping() { request("PING"); }
 	void quit() { request("QUIT"); }
-	void select(size_t db_index) { m_selectedDB = db_index; }
+	void select(long db_index) { m_selectedDB = db_index; }
 
 	/*
 		Server
@@ -255,7 +255,7 @@ final class RedisClient {
 	T getConfig(T : E[], E)(string parameter) { return request!T("GET CONFIG", parameter); }
 	void setConfig(T : E[], E)(string parameter, T value) { request("SET CONFIG", parameter, value); }
 	void configResetStat() { request("CONFIG RESETSTAT"); }
-	size_t dbSize() { return request!size_t("DBSIZE"); }
+	long dbSize() { return request!long("DBSIZE"); }
 	//TOOD: Debug Object
 	//TODO: Debug Segfault
 	void flushAll() { request("FLUSHALL"); }
@@ -347,8 +347,8 @@ final class RedisReply {
 		TCPConnection m_conn;
 		LockedConnection!RedisConnection m_lockedConnection;
 		ubyte[] m_data;
-		size_t m_length;
-		size_t m_index;
+		long m_length;
+		long m_index;
 		bool m_multi;
 	}
 
@@ -379,7 +379,7 @@ final class RedisReply {
 					return;
 				}
 				m_multi = true;
-				m_length = to!size_t(ln[ 1 .. $ ]);
+				m_length = to!long(ln[ 1 .. $ ]);
 				break;
 			default:
 				assert(false, "Unknown reply type");
@@ -414,7 +414,7 @@ final class RedisReply {
 	private ubyte[] readBulk( string sizeLn )
 	{
 		if (sizeLn.startsWith("$-1")) return null;
-		auto size = to!size_t( sizeLn[1 .. $] );
+		auto size = to!long( sizeLn[1 .. $] );
 		auto data = new ubyte[size];
 		m_conn.read(data);
 		m_conn.readLine();
@@ -429,7 +429,7 @@ private final class RedisConnection {
 		ushort m_port;
 		TCPConnection m_conn;
 		string m_password;
-		size_t m_selectedDB;
+		long m_selectedDB;
 	}
 
 	this(string host, ushort port)
@@ -450,7 +450,7 @@ private final class RedisConnection {
 		m_password = password;
 	}
 
-	void setDB(size_t index)
+	void setDB(long index)
 	{
 		if (index == m_selectedDB) return;
 		_request_simple(this, true, "SELECT", index).drop();
@@ -464,9 +464,9 @@ private final class RedisConnection {
 		return new RedisReply(m_conn);
 	}
 
-	private static size_t countArgs(ARGS...)(ARGS args)
+	private static long countArgs(ARGS...)(ARGS args)
 	{
-		size_t ret = 0;
+		long ret = 0;
 		foreach (i, A; ARGS) {
 			static if (isArray!A && !(is(A : const(ubyte[])) || is(A : const(char[])))) {
 				foreach (arg; args[i])
@@ -510,11 +510,11 @@ private final class RedisConnection {
 		assert(dst.data == "$1\r\n0\r\n$1\r\n1\r\n$1\r\n2\r\n$1\r\n3\r\n$1\r\n4\r\n$1\r\n5\r\n");
 	}
 
-	private static size_t formattedLength(ARG)(ARG arg)
+	private static long formattedLength(ARG)(ARG arg)
 	{
 		static if (is(ARG == string)) return arg.length;
 		else {
-			size_t length;
+			long length;
 			auto rangeCnt = RangeCounter(&length);
 			rangeCnt.formattedWrite("%s", arg);
 			return length;
@@ -524,9 +524,9 @@ private final class RedisConnection {
 
 private struct RangeCounter {
 	import std.utf;
-	size_t* length;
+	long* length;
 
-	this(size_t* _captureLength) {
+	this(long* _captureLength) {
 		length = _captureLength;
 	}
 
