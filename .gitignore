@@ -1,4 +1,7 @@
-*.o
+*.[oa]
+*.so
+*.lib
+*.dll
 .*.sw*
 /docs/index.html
 /docs/sitemap.xml
