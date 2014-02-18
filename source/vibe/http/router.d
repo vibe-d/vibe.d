@@ -142,6 +142,12 @@ class URLRouter : HTTPRouter {
 		m_routes[method] ~= Route(path, cb);
 		return this;
 	}
+
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestFunction cb)
+	{
+		return match(method,path,toDelegate(cb));
+	}
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
