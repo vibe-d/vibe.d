@@ -46,7 +46,7 @@
 			"name": "win32",
 			"platforms": ["windows"],
 			"versions": ["VibeWin32Driver"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"],
 		},
 		{
 			"name": "winrt",
