@@ -142,6 +142,8 @@ class URLRouter : HTTPRouter {
 		m_routes[method] ~= Route(path, cb);
 		return this;
 	}
+
+	alias match = HTTPRouter.match;
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
