@@ -4,12 +4,12 @@ import vibe.vibe;
 
 interface ITestAPI
 {
-	@method(HttpMethod.POST) @path("other/path")
+	@method(HTTPMethod.POST) @path("other/path")
 	string info();
 	string getInfo();
-	@path("getCheck/:param/:param2") @method(HttpMethod.GET)
+	@path("getCheck/:param/:param2") @method(HTTPMethod.GET)
 	string customParameters(string _param, string _param2);
-	@path("getCheck2/:param/:param2") @method(HttpMethod.GET)
+	@path("getCheck2/:param/:param2") @method(HTTPMethod.GET)
 	int customParameters2(int _param, bool _param2);
 }
 
@@ -23,13 +23,13 @@ class TestAPI : ITestAPI
 
 void runTest()
 {
-	auto router = new UrlRouter;
+	auto router = new URLRouter;
 	registerRestInterface!ITestAPI(router, new TestAPI, "/root/");
 
-	auto settings = new HttpServerSettings;
+	auto settings = new HTTPServerSettings;
 	settings.disableDistHost = true;
 	settings.port = 8000;
-	listenHttp(settings, router);
+	listenHTTP(settings, router);
 
 	auto api = new RestInterfaceClient!ITestAPI("http://127.0.0.1:8000/root/");
 	assert(api.getInfo() == "description");
@@ -37,11 +37,12 @@ void runTest()
 	assert(api.customParameters("one", "two") == "onetwo");
 	assert(api.customParameters2(10, false) == -10);
 	assert(api.customParameters2(10, true) == 10);
+	exitEventLoop(true);
 }
 
 int main()
 {
-	setLogLevel(LogLevel.Debug);
+	setLogLevel(LogLevel.debug_);
 	runTask(toDelegate(&runTest));
 	return runEventLoop();
 }

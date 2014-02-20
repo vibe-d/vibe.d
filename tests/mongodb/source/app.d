@@ -35,11 +35,12 @@ void runTest()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
+	exitEventLoop(true);
 }
 
 int main()
 {
-	setLogLevel(LogLevel.Debug);
+	setLogLevel(LogLevel.debug_);
 	runTask(toDelegate(&runTest));
 	return runEventLoop();
 }

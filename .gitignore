@@ -12,3 +12,7 @@
 /docs/styles
 
 .dub
+
+# Unittest binaries
+vibe-d
+tests/*/tests
