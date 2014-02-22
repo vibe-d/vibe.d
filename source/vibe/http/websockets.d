@@ -234,7 +234,7 @@ class WebSocket {
 		Params:
 			strict = If set, ensures the exact frame type (text/binary) is received and throws an execption otherwise.
 	*/
-	ubyte[] receiveBinary(bool strict = false)
+	ubyte[] receiveBinary(bool strict = true)
 	{
 		ubyte[] ret;
 		receive((scope message){
@@ -245,7 +245,7 @@ class WebSocket {
 		return ret;
 	}
 	/// ditto
-	string receiveText(bool strict = false)
+	string receiveText(bool strict = true)
 	{
 		string ret;
 		receive((scope message){
