@@ -164,17 +164,33 @@ class WebSocket {
 
 		This function can be used in a read loop to cleanly determine when to stop reading.
 	*/
-	bool waitForData(Duration timeout = 0.seconds)
+	bool waitForData()
 	{
 		if (m_nextMessage) return true;
+
 		synchronized (m_readMutex) {
-			while (connected) {
-				if (timeout > 0.seconds) m_readCondition.wait(timeout);
-				else m_readCondition.wait();
-				if (m_nextMessage) return true;
+			while (connected && m_nextMessage is null)
+				m_readCondition.wait();
+		}
+		return m_nextMessage !is null;
+	}
+
+	/// ditto
+	bool waitForData(Duration timeout)
+	{
+		import std.datetime;
+
+		if (m_nextMessage) return true;
+
+		immutable limit_time = Clock.currTime(UTC()) + timeout;
+
+		synchronized (m_readMutex) {
+			while (connected && m_nextMessage is null && timeout > 0.seconds) {
+				m_readCondition.wait(timeout);
+				timeout = limit_time - Clock.currTime(UTC());
 			}
 		}
-		return false;
+		return m_nextMessage !is null;
 	}
 
 	/**
