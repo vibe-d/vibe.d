@@ -1125,6 +1125,12 @@ unittest {
 	assert(t.l == u.l);
 }
 
+unittest
+{
+    assert(uint.max == serializeToBson(uint.max).deserializeBson!uint);
+    assert(ulong.max == serializeToBson(ulong.max).deserializeBson!ulong);
+}
+
 unittest {
 	assert(deserializeBson!SysTime(serializeToBson(SysTime(0))) == SysTime(0));
 	assert(deserializeBson!SysTime(serializeToBson(SysTime(0, UTC()))) == SysTime(0, UTC()));
@@ -1363,6 +1369,7 @@ struct BsonSerializer {
 		static if (is(T == Bson)) return m_inputData;
 		else static if (is(T == Json)) return m_inputData.toJson();
 		else static if (is(T == bool)) return m_inputData.get!bool();
+		else static if (is(T == uint)) return cast(T)m_inputData.get!int();
 		else static if (is(T : int)) return m_inputData.get!int().to!T;
 		else static if (is(T : long)) return cast(T)m_inputData.get!long();
 		else static if (is(T : double)) return cast(T)m_inputData.get!double();
