@@ -183,7 +183,7 @@ class Win32EventDriver : EventDriver {
 				releaseTimer(tm);
 			}
 
-			if (owner) m_core.resumeTask(owner);
+			if (owner && owner.running) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
 		}
 	}
@@ -1327,7 +1327,11 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	void notifySocketEvent(SOCKET sock, WORD event, WORD error)
 	nothrow {
 		try {
-			logDebug("Socket event for %s: %s, error: %s", sock, event, error);
+			logDebugV("Socket event for %s: %s, error: %s", sock, event, error);
+			if (m_socket == -1) {
+				logDebug("Event for already closed socket - ignoring");
+				return;
+			}
 			assert(sock == m_socket);
 			Exception ex;
 			switch(event){
