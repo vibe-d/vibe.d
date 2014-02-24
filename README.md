@@ -40,6 +40,10 @@ Additional setup on Windows
 
  - Just install DMD using the installer on <http://dlang.org/download.html>
 
+### Note for building on Win64
+
+There are currently no 64-bit Windows binaries of libevent included, so you'll either need to build those yourself, or you can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the package description of your project.
+
 
 Additional setup on Mac using brew
 ----------------------------------
