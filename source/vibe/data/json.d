@@ -1395,6 +1395,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				m_level--;
 				if (!m_firstInComposite) indent();
 			}
+			m_firstInComposite = false;
 		}
 
 		private void indent()
