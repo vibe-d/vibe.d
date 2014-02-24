@@ -164,7 +164,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		if (m_length == 0) return size_t.max;
 		size_t start = m_hasher(key) & (m_table.length-1);
 		auto i = start;
-		while (m_table[i].key != key) {
+		while (!Traits.equals(m_table[i].key, key)) {
 			if (Traits.equals(m_table[i].key, Traits.clearValue)) return size_t.max;
 			if (++i >= m_table.length) i -= m_table.length;
 			if (i == start) return size_t.max;
@@ -177,7 +177,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		auto hash = m_hasher(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
-		while (!Traits.equals(m_table[i].key, Traits.clearValue) && m_table[i].key != key) {
+		while (!Traits.equals(m_table[i].key, Traits.clearValue) && !Traits.equals(m_table[i].key, key)) {
 			if (++i >= m_table.length) i -= m_table.length;
 			assert (i != target, "No free bucket found, HashMap full!?");
 		}
