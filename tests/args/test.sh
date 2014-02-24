@@ -4,9 +4,9 @@ set -e
 die() { echo "$@" 1>&2 ; exit 1; }
 
 if [ "${OS}" == "win32" -o "${OS}" == "Windows_NT" ]; then
-	VIBE='cmd /C vibe'
+	VIBE='cmd /C tests'
 else
-	VIBE=vibe
+	VIBE=./tests
 fi
 
 ( $VIBE | grep -q '^argtest=$' ) || die "Fail (no argument)"
