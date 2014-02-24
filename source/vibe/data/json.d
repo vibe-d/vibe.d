@@ -136,7 +136,17 @@ struct Json {
 	/// ditto
 	this(bool v) { m_type = Type.bool_; m_bool = v; }
 	/// ditto
-	this(int v) { m_type = Type.int_; m_int = v; }
+	this(byte v) { this(cast(long)v); }
+	/// ditto
+	this(ubyte v) { this(cast(long)v); }
+	/// ditto
+	this(short v) { this(cast(long)v); }
+	/// ditto
+	this(ushort v) { this(cast(long)v); }
+	/// ditto
+	this(int v) { this(cast(long)v); }
+	/// ditto
+	this(uint v) { this(cast(long)v); }
 	/// ditto
 	this(long v) { m_type = Type.int_; m_int = v; }
 	/// ditto
@@ -347,14 +357,15 @@ struct Json {
 	@property inout(T) get(T)()
 	inout {
 		checkType!T();
-		static if( is(T == bool) ) return m_bool;
-		else static if( is(T == double) ) return m_float;
-		else static if( is(T == float) ) return cast(T)m_float;
-		else static if( is(T == long) ) return m_int;
-		else static if( is(T : long) ){ enforce(m_int <= T.max && m_int >= T.min); return cast(T)m_int; }
-		else static if( is(T == string) ) return m_string;
-		else static if( is(T == Json[]) ) return m_array;
-		else static if( is(T == Json[string]) ) return m_object;
+		static if (is(T == bool)) return m_bool;
+		else static if (is(T == double)) return m_float;
+		else static if (is(T == float)) return cast(T)m_float;
+		else static if (is(T == long)) return m_int;
+		else static if (is(T == ulong)) return cast(ulong)m_int;
+		else static if (is(T : long)){ enforce(m_int <= T.max && m_int >= T.min); return cast(T)m_int; }
+		else static if (is(T == string)) return m_string;
+		else static if (is(T == Json[])) return m_array;
+		else static if (is(T == Json[string])) return m_object;
 		else static assert("JSON can only be casted to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 	/// ditto
@@ -1134,6 +1145,12 @@ unittest {
 	assert(t.j == u.j);
 	assert(t.k == u.k);
 	assert(t.l == u.l);
+}
+
+unittest
+{
+	assert(uint.max == serializeToJson(uint.max).deserializeJson!uint);
+	assert(ulong.max == serializeToJson(ulong.max).deserializeJson!ulong);
 }
 
 unittest {
