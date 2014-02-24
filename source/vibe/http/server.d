@@ -1393,7 +1393,10 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		request_task(req, res);
 
 		// if no one has written anything, return 404
-		enforceHTTP(res.headerWritten, HTTPStatus.notFound);
+		if (!res.headerWritten) {
+			logDiagnostic("No response written for %s", req.requestURL);
+			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), null, null);
+		}
 	} catch (HTTPStatusException err) {
 		logDebug("http error thrown: %s", err.toString().sanitize);
 		if (!res.headerWritten) errorOut(err.status, err.msg, err.toString(), err);
