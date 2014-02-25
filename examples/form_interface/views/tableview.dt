@@ -4,7 +4,7 @@ prepend block head
 block content
 	.clear
 	h1 Welcome!
-	.datatable(id="datatable")
+	.datatable#datatable
 		h2 Users
 		- static if(__traits(compiles, value)) 
 			- dataProvider.getData(req, res, field, value); 

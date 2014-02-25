@@ -56,9 +56,9 @@ class DataProvider {
 	void getData(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		auto table = users;
-		//res.render!("createTable.dt", table)();
-		res.renderCompat!("createTable.dt",
-			string[][], "table")(table);
+		res.render!("createTable.dt", table)();
+		//res.renderCompat!("createTable.dt",
+		//	string[][], "table")(table);
 	}
 
 	/**
@@ -69,9 +69,9 @@ class DataProvider {
 	void getData(HTTPServerRequest req, HTTPServerResponse res, Fields field, string value)
 	{
 		auto table = users.filter!((a) => value.length==0 || a[field]==value)().array();
-		//res.render!("createTable.dt", table)();
-		res.renderCompat!("createTable.dt",
-			string[][], "table")(table);
+		res.render!("createTable.dt", table)();
+		//res.renderCompat!("createTable.dt",
+		//	string[][], "table")(table);
 	}
 
 	/// Add a new user to the array, using this method from JavaScript is left as an exercise.
@@ -114,23 +114,23 @@ class App {
 	void getTable(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		res.headers["Content-Type"] = "text/html";
-		//res.render!("tableview.dt", req, res, dataProvider)();
-		res.renderCompat!("tableview.dt",
-			HTTPServerRequest, "req",
-			HTTPServerResponse, "res",
-			DataProvider, "dataProvider")(req, res, dataProvider);
+		res.render!("tableview.dt", req, res, dataProvider)();
+		//res.renderCompat!("tableview.dt",
+		//	HTTPServerRequest, "req",
+		//	HTTPServerResponse, "res",
+		//	DataProvider, "dataProvider")(req, res, dataProvider);
 	}
 
 	void getTable(HTTPServerRequest req, HTTPServerResponse res, DataProvider.Fields field, string value)
 	{
 		res.headers["Content-Type"] = "text/html";
-		//res.render!("tableview.dt", req, res, dataProvider, field, value)();
-		res.renderCompat!("tableview.dt",
-			HTTPServerRequest, "req",
-			HTTPServerResponse, "res",
-			DataProvider, "dataProvider",
-			DataProvider.Fields, "field",
-			string, "value")(req, res, dataProvider, field, value);
+		res.render!("tableview.dt", req, res, dataProvider, field, value)();
+		//res.renderCompat!("tableview.dt",
+		//	HTTPServerRequest, "req",
+		//	HTTPServerResponse, "res",
+		//	DataProvider, "dataProvider",
+		//	DataProvider.Fields, "field",
+		//	string, "value")(req, res, dataProvider, field, value);
 	}
 
 	void addUser(HTTPServerRequest req, HTTPServerResponse res, string name, string surname, string address)
