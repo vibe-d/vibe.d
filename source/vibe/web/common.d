@@ -345,8 +345,8 @@ auto extractHTTPMethodAndName(alias Func)()
 	// Cases may conflict and are listed in order of priority
 
 	// Workaround for Nullable incompetence
-	enum uda1 = findFirstUDA!(vibe.http.rest.OverridenMethod, Func);
-	enum uda2 = findFirstUDA!(vibe.http.rest.OverridenPath, Func);
+	enum uda1 = findFirstUDA!(OverridenMethod, Func);
+	enum uda2 = findFirstUDA!(OverridenPath, Func);
 
 	static if (uda1.found) {
 		udmethod = uda1.value;
