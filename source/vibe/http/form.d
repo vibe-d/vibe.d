@@ -220,7 +220,7 @@ private HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Fl
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		import std.traits;
-		string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
+		auto form = (req.method == HTTPMethod.GET ? req.query : req.form);
 //		alias MemberFunctionsTuple!(T, method) overloads;
 		string errors;
 		foreach(func; __traits(getOverloads, T, method)) {
@@ -291,8 +291,8 @@ private bool applyParametersFromAssociativeArray(Func)(HTTPServerRequest req, HT
 private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
 	alias ParameterTypeTuple!Overload ParameterTypes;
 	ParameterTypes args;
-	string[string] form = req.method == HTTPMethod.GET ? req.query : req.form;
-	int count=0;
+	auto form = (req.method == HTTPMethod.GET ? req.query : req.form);
+	int count = 0;
 	Error e;
 	foreach(i, item; ParameterIdentifierTuple!Overload) {
 		static if(is(ParameterTypes[i] : HTTPServerRequest)) {
@@ -308,7 +308,9 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServe
 	error=e.message;
 	if(e.missing_parameters.length) {
 		error~="The following parameters have not been found in the form data: "~to!string(e.missing_parameters)~"\n";
-		error~="Provided form data was: "~to!string(form.keys)~"\n";
+		error~="Provided form data was: ";
+                foreach(k, v; form)
+                    error ~= "[" ~ k ~ ":" ~ v ~ "] ";
 	}
 	if(count!=form.length) {
 		error~="The form had "~to!string(form.length)~" element(s), of which "~to!string(count)~" element(s) were applicable.\n";
