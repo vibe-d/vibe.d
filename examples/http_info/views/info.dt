@@ -3,7 +3,7 @@ html(lang="en")
 	head
 		title Info
 	body
-		h1 #{req.method} #{req.url}
+		h1 #{req.method} #{req.requestURL}
 		
 		h2 Headers
 		dl
