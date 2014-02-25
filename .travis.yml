@@ -20,3 +20,5 @@ install:
 
 script:
   - dub --config=unittest --build=unittest
+  - for ex in `\ls -1 examples/`; do (echo "[INFO] Building example $ex"; cd examples/$ex && dub build) || break; done
+  - for ex in `cat examples/.travis.run`; do (echo "[INFO] Running example $ex"; cd examples/$ex && dub test) || break; done

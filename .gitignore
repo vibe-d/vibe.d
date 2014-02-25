@@ -16,3 +16,34 @@
 # Unittest binaries
 vibe-d
 tests/*/tests
+
+# Examples
+examples/app_skeleton/__test__library__
+examples/bench-http-request/bench-http-request
+examples/bench-http-server/bench-http-server
+examples/daytime/daytime-example
+examples/diet/diet-example
+examples/download/download-example
+examples/echoserver/echoserver-example
+examples/form_interface/form-interface-example
+examples/http_info/http-info-example
+examples/http_request/http-request-example
+examples/http_reverse_proxy/http-reverse-proxy-example
+examples/http_server/http-server-example
+examples/http_static_server/http-static-server-example
+examples/https_server/https-server-example
+examples/json/json-example
+examples/message/message-example
+examples/mongodb/mongodb-example
+examples/app_skeleton/app-skeleton
+examples/redis-pubsub/redis-pubsub-example
+examples/redis/redis-example
+examples/rest/rest-example
+examples/sendmail/sendmail-example
+examples/serialization/serialization-example
+examples/task_control/task-control-example
+examples/tcp_separate/tcp-separate-example
+examples/udp/udp-example
+examples/uploader/uploader-example
+examples/web/web-framework-example
+examples/websocket/websocket-example
