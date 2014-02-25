@@ -42,9 +42,10 @@ struct Task {
 	static Task getThis()
 	{
 		auto fiber = Fiber.getThis();
-		if( !fiber ) return Task(null, 0);
+		if (!fiber) return Task.init;
 		auto tfiber = cast(TaskFiber)fiber;
 		assert(tfiber !is null, "Invalid or null fiber used to construct Task handle.");
+		if (!tfiber.m_running) return Task.init;
 		return Task(tfiber, tfiber.m_taskCounter);
 	}
 
