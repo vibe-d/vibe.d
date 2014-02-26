@@ -414,12 +414,12 @@ private struct MatchTree(T) {
 		//builder.print();
 		builder.disambiguate();
 
-		auto nodemap = new size_t[builder.m_nodes.length];
-		nodemap[] = size_t.max;
+		auto nodemap = new uint[builder.m_nodes.length];
+		nodemap[] = uint.max;
 
 		uint process(size_t n)
 		{
-			if (nodemap[n] != size_t.max) return nodemap[n];
+			if (nodemap[n] != uint.max) return nodemap[n];
 			auto nmidx = cast(uint)m_nodes.length;
 			nodemap[n] = nmidx;
 			m_nodes.length++;
