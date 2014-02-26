@@ -44,7 +44,7 @@ void request(bool disconnect)
 void distTask()
 {
 	static shared int s_threadCount = 0;
-	static shared int s_token = 0;
+	static shared long s_token = 0;
 	auto id = atomicOp!"+="(s_threadCount, 1) - 1;
 	
 	while (true) {
@@ -86,6 +86,7 @@ void benchmark()
 		bool disconnect = ++keep_alives >= g_maxKeepAliveRequests;
 		request(disconnect);
 		if (disconnect) keep_alives = 0;
+                if (nreq >= 5000) exitEventLoop(true);
 	}
 }
 
