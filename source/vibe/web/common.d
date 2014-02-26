@@ -200,7 +200,7 @@ unittest
 	registerRestInterface(router, new API());
 	auto routes= router.getAllRoutes();
 
-	assert(routes[HTTPMethod.GET][0].pattern == "/oops/foo");
+	assert(routes[0].pattern == "/oops/foo" && routes[0].method == HTTPMethod.GET);
 }
 
 
@@ -235,7 +235,7 @@ unittest
 	registerRestInterface(router, new API());
 	auto routes= router.getAllRoutes();
 
-	assert(routes[HTTPMethod.GET][0].pattern == "/iapi/foo");
+	assert(routes[0].pattern == "/iapi/foo" && routes[0].method == HTTPMethod.GET);
 }
 
 
