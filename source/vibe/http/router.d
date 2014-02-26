@@ -271,7 +271,7 @@ private struct MatchTree(T) {
 		struct Node {
 			size_t terminalsStart; // slice into m_terminalTags
 			size_t terminalsEnd;
-			uint[ubyte.max] edges = size_t.max; // character -> index into m_nodes
+			uint[ubyte.max] edges = uint.max; // character -> index into m_nodes
 		}
 		struct TerminalTag { size_t index; size_t var; }
 		struct Terminal {
@@ -417,10 +417,10 @@ private struct MatchTree(T) {
 		auto nodemap = new size_t[builder.m_nodes.length];
 		nodemap[] = size_t.max;
 
-		size_t process(size_t n)
+		uint process(size_t n)
 		{
 			if (nodemap[n] != size_t.max) return nodemap[n];
-			auto nmidx = m_nodes.length;
+			auto nmidx = cast(uint)m_nodes.length;
 			nodemap[n] = nmidx;
 			m_nodes.length++;
 
