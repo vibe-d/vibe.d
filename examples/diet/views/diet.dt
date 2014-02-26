@@ -1,4 +1,4 @@
-!!! 5
+doctype html
 html(lang="en")
 	head
 		title= "pageTitle" ~ "X<Y> "
@@ -14,6 +14,13 @@ html(lang="en")
 			em= 13*12
 			| One line of text &lt;Phew!&gt;
 			| Another line of text
+		p(style="white-space: pre-line").
+			Two lines of
+			<b>Different</b> text
+		p Your user level:
+			input(type='checkbox', checked=is_admin ? "checked" : null) Admin
+			input(type='checkbox', checked=!is_admin ? "checked" : null) User
+			
 		#sanity(style='background-color: lightgreen')
 			- if( 12 == 13 )
 				p
@@ -23,3 +30,7 @@ html(lang="en")
 					- foreach( i; 0 .. 10 )
 						b Everything OK! (#{i})
 							br
+		div#versions.minor Program versions:
+			ul
+				- foreach ( i; 1 .. 4) 
+					li= i
