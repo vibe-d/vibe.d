@@ -628,7 +628,7 @@ final class HTTPServerRequest : HTTPRequest {
 				This field is only set if HTTPServerOption.parseFormBody is set
 				and if the Content-Type is "multipart/form-data".
 		*/
-		FilePart[string] files;
+		FilePartFormFields files;
 
 		/** The current Session object.
 
