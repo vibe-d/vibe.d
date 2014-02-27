@@ -125,8 +125,8 @@ void deregisterLogger(shared(Logger) logger)
 	log!(LogLevel.info)("This is a %s.", "test");
 	---
 */
-void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args)
-nothrow if (isSomeString!S)
+void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args)
+	nothrow if (isSomeString!S)
 {
 	static assert(level != LogLevel.none);
 	try {
@@ -140,23 +140,23 @@ nothrow if (isSomeString!S)
 	} catch(Exception e) debug assert(false, e.msg);
 }
 /// ditto
-void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
+void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
+void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
+void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
+void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
+void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.warn/*, mod, func*/, file, line)(fmt, args); }
+void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.warn/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
+void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
+void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
 /// ditto 
-void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
+void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
 
 
 /// Specifies the log level for a particular log message.
