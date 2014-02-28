@@ -99,7 +99,6 @@ class Win32EventDriver : EventDriver {
 	int runEventLoopOnce()
 	{
 		doProcessEvents(INFINITE);
-		m_core.notifyIdle();
 		return 0;
 	}
 
@@ -128,6 +127,8 @@ class Win32EventDriver : EventDriver {
 			// process timers every now and then so that they don't get stuck
 			//if (++cnt % 10 == 0) processTimers();
 		}
+
+		m_core.notifyIdle();
 
 		return true;
 	}
