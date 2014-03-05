@@ -133,11 +133,11 @@ unittest
 	}
 	---	
  */
-OverridenMethod method(HTTPMethod data)
+OverriddenMethod method(HTTPMethod data)
 {
 	if (!__ctfe)
 		assert(false);
-	return OverridenMethod(data);
+	return OverriddenMethod(data);
 }
 
 /**
@@ -160,11 +160,11 @@ OverridenMethod method(HTTPMethod data)
 	}
 	---	
 */
-OverridenPath path(string data)
+OverriddenPath path(string data)
 {
 	if (!__ctfe)
 		assert(false);
-	return OverridenPath(data);
+	return OverriddenPath(data);
 }
 
 
@@ -240,14 +240,14 @@ unittest
 
 
 /// private
-struct OverridenMethod
+struct OverriddenMethod
 {
 	HTTPMethod data;
 	alias data this;
 }
 
 /// private
-struct OverridenPath
+struct OverriddenPath
 {
 	string data;
 	alias data this;
@@ -345,8 +345,8 @@ auto extractHTTPMethodAndName(alias Func)()
 	// Cases may conflict and are listed in order of priority
 
 	// Workaround for Nullable incompetence
-	enum uda1 = findFirstUDA!(OverridenMethod, Func);
-	enum uda2 = findFirstUDA!(OverridenPath, Func);
+	enum uda1 = findFirstUDA!(OverriddenMethod, Func);
+	enum uda2 = findFirstUDA!(OverriddenPath, Func);
 
 	static if (uda1.found) {
 		udmethod = uda1.value;
