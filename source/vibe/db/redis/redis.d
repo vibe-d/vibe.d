@@ -409,7 +409,8 @@ final class RedisReply {
 	// drop the whole
 	void drop()
 	{
-		while (hasNext) next!(ubyte[])();
+		if (!hasNext) m_lockedConnection.clear();
+		else while (hasNext) next!(ubyte[])();
 	}
 
 	private ubyte[] readBulk( string sizeLn )
