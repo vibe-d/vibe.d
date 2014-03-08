@@ -503,8 +503,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<img src=\"");
-					filterHTMLEscape(dst, link.title);
-					dst.put(link.url);
+					filterHTMLEscape(dst, link.url);
 					dst.put("\" alt=\"");
 					filterHTMLEscape(dst, link.text);
 					dst.put("\"");
