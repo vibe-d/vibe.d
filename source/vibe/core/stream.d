@@ -22,7 +22,7 @@ import std.conv;
 Interface for all classes implementing readable streams.
 */
 interface InputStream {
-	/** Returns true iff the end of the input stream has been reached.
+	/** Returns true if the end of the input stream has been reached.
 	*/
 	@property bool empty();
 
