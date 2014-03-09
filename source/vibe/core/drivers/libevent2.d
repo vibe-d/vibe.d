@@ -429,7 +429,7 @@ class Libevent2Driver : EventDriver {
 			auto tm = m_timeoutHeap.front;
 			m_timeoutHeap.removeFront();
 
-			auto pt = tm in m_timers;
+			auto pt = tm.id in m_timers;
 			if (!pt || !pt.pending || pt.timeout != tm.timeout) continue;
 	
 			Task owner = pt.owner;
