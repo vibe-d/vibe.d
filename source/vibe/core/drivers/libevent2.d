@@ -426,24 +426,24 @@ class Libevent2Driver : EventDriver {
 		if (m_timeoutHeap.empty) logTrace("no timers scheduled");
 		else logTrace("first timeout: %s", (m_timeoutHeap.front.timeout - now) * 1e-7);
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
-			auto tm = m_timeoutHeap.front.id;
+			auto tm = m_timeoutHeap.front;
 			m_timeoutHeap.removeFront();
 
 			auto pt = tm in m_timers;
-			if (!pt || !pt.pending) continue;
+			if (!pt || !pt.pending || pt.timeout != tm.timeout) continue;
 	
 			Task owner = pt.owner;
 			auto callback = pt.callback;
 
 			if (pt.repeatDuration > 0) {
 				pt.timeout += pt.repeatDuration;
-				scheduleTimer(pt.timeout, tm);
+				scheduleTimer(pt.timeout, tm.id);
 			} else {
 				pt.pending = false;
-				releaseTimer(tm);
+				releaseTimer(tm.id);
 			}
 
-			logTrace("Timer %s fired (%s/%s)", tm, owner != Task.init, callback !is null);
+			logTrace("Timer %s fired (%s/%s)", tm.id, owner != Task.init, callback !is null);
 
 			if (owner && owner.running) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
