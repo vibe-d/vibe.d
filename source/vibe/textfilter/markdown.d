@@ -978,6 +978,13 @@ private struct Link {
 	string title;
 }
 
+unittest {
+	assert(filterMarkdown("![alt](http://example.org/image)")
+		== "<p><img src=\"http://example.org/image\" alt=\"alt\">\n</p>\n", filterMarkdown("![alt](http://example.org/image)"));
+	assert(filterMarkdown("![alt](http://example.org/image \"Title\")")
+		== "<p><img src=\"http://example.org/image\" alt=\"alt\" title=\"Title\">\n</p>\n", filterMarkdown("![alt](http://example.org/image Title)"));
+}
+
 unittest
 {
     // check CTFE-ability
