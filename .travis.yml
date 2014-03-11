@@ -19,6 +19,6 @@ install:
   - sudo tar -C /usr/local/bin -zxf ${DUB}.tar.gz
 
 script:
-  - dub --config=unittest --build=unittest
+  - dub test
   - for ex in `\ls -1 examples/`; do (echo "[INFO] Building example $ex"; cd examples/$ex && dub build) || break; done
-  - for ex in `cat examples/.travis.run`; do (echo "[INFO] Running example $ex"; cd examples/$ex && dub test) || break; done
+  - for ex in `\ls -1 tests/`; do (echo "[INFO] Running test $ex"; cd tests/$ex && dub) || break; done
