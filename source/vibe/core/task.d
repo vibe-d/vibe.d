@@ -76,7 +76,7 @@ struct Task {
 
 /** The base class for a task aka Fiber.
 
-	This class represents a single task that is executed concurrencly
+	This class represents a single task that is executed concurrently
 	with other tasks. Each task is owned by a single thread.
 */
 class TaskFiber : Fiber {
