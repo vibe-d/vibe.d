@@ -7,7 +7,14 @@ import vibe.vibe;
 
 void runTest()
 {
-	auto client = connectMongoDB("localhost");
+	MongoClient client;
+	try client = connectMongoDB("localhost");
+	catch (Exception e) {
+		logInfo("Failed to connect to local MongoDB server. Skipping test.");
+		exitEventLoop();
+		return;
+	}
+
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);
 	assert(coll.name == "collection");
