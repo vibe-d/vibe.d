@@ -248,7 +248,8 @@ class HTTPClient {
 	{
 		if (m_conn) {
 			if (m_conn.connected) {
-				m_stream.finalize();
+				try m_stream.finalize();
+				catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
 				m_conn.close();
 			}
 			if (m_stream !is m_conn) {
