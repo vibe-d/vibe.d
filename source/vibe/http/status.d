@@ -51,6 +51,12 @@ enum HTTPStatus {
 	serviceUnavailable           = 503,
 	gatewayTimeout               = 504,
 	httpVersionNotSupported      = 505,
+	// WebDAV status codes
+	multiStatus                  = 207,
+	unprocessableEntity          = 422,
+	locked                       = 423,
+	failedDependency             = 424,
+	insufficientStorage          = 507,
 
 	Continue = continue_, /// deprecated
 	SwitchingProtocols = switchingProtocols, /// deprecated
@@ -146,6 +152,12 @@ string httpStatusText(int code)
 		case HTTPStatus.serviceUnavailable           : return "Service Unavailable";
 		case HTTPStatus.gatewayTimeout               : return "Gateway Time-out";
 		case HTTPStatus.httpVersionNotSupported      : return "HTTP Version not supported";
+		// WebDAV
+		case HTTPStatus.multiStatus                  : return "Multi-Status";
+		case HTTPStatus.unprocessableEntity          : return "Unprocessable Entity";
+		case HTTPStatus.locked                       : return "Locked";
+		case HTTPStatus.failedDependency             : return "Failed Dependency";
+		case HTTPStatus.insufficientStorage          : return "Insufficient Storage";
 	}
 	if( code >= 600 ) return "Unknown";
 	if( code >= 500 ) return "Unknown server error";
