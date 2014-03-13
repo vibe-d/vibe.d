@@ -980,9 +980,9 @@ private struct Link {
 
 unittest {
 	assert(filterMarkdown("![alt](http://example.org/image)")
-		== "<p><img src=\"http://example.org/image\" alt=\"alt\">\n</p>\n", filterMarkdown("![alt](http://example.org/image)"));
+		== "<p><img src=\"http://example.org/image\" alt=\"alt\">\n</p>\n");
 	assert(filterMarkdown("![alt](http://example.org/image \"Title\")")
-		== "<p><img src=\"http://example.org/image\" alt=\"alt\" title=\"Title\">\n</p>\n", filterMarkdown("![alt](http://example.org/image Title)"));
+		== "<p><img src=\"http://example.org/image\" alt=\"alt\" title=\"Title\">\n</p>\n");
 }
 
 unittest
