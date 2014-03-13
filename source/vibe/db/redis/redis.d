@@ -369,7 +369,7 @@ struct RedisReply {
 		return m_impl.readBulk(sizeLn);
 	}
 
-	private @property void lockedConnection(LockedConnection!RedisConnection conn){
+	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
 		m_impl.lockedConnection = conn;
 	}
 
@@ -434,7 +434,7 @@ private final class RedisReplyImpl {
 		}
 	}
 
-	@property void lockedConnection(LockedConnection!RedisConnection conn){
+	@property void lockedConnection(ref LockedConnection!RedisConnection conn){
 		m_lockedConnection = conn;
 	}
 
