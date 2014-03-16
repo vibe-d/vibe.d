@@ -15,7 +15,7 @@ import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 
-import std.array : startsWith, endsWith;
+import std.algorithm : startsWith, endsWith;
 
 /**
 	Registers a REST interface and connects it the the given instance.
@@ -353,7 +353,7 @@ class RestInterfaceClient(I) : I
 			import vibe.http.common : HTTPStatusException, HTTPStatus,
 				httpMethodFromString, httpStatusText;
 			import vibe.inet.url : Path;
-			import std.string : appender;
+			import std.array : appender;
 
 			URL url = m_baseURL;
 

@@ -10,6 +10,9 @@ module vibe.web.common;
 import vibe.http.common;
 import vibe.data.json;
 
+static import std.utf;
+static import std.string;
+
 
 /**
 	Adjusts the naming convention for a given function name to the specified style.

@@ -545,6 +545,7 @@ struct CookieValueMap {
 
 	string opIndex(string name)
 	const {
+		import core.exception : RangeError;
 		auto pv = name in this;
 		if( !pv ) throw new RangeError("Non-existent cookie: "~name);
 		return *pv;

@@ -12,6 +12,7 @@ import vibe.utils.memory;
 import std.algorithm;
 import std.range : isInputRange, isOutputRange;
 import std.traits;
+static import std.utf;
 
 
 void removeFromArray(T)(ref T[] array, T item)

@@ -563,6 +563,7 @@ class SyslogLogger : Logger {
 		alias structuredData = NILVALUE;
 
 		auto text = msg.text;
+		import std.string : format;
 		m_ostream.write(SYSLOG_MESSAGE_FORMAT_VERSION1.format(
 		              priVal, timestamp, m_hostName, BOM ~ m_appName, procId, msgId, structuredData, BOM ~ text) ~ "\n");
 		m_ostream.flush();

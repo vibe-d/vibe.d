@@ -24,6 +24,7 @@ import deimos.event2.event;
 import deimos.event2.util;
 
 import std.algorithm;
+import std.encoding : sanitize;
 import std.exception;
 import std.conv;
 import std.string;
