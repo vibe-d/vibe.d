@@ -188,6 +188,16 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
 		expectStatus(conn, SMTPStatus.success, "RCPT TO");
 	});
+	mail.headers.getAll("Cc", (v){
+		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+		expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	});
+	mail.headers.getAll("Bcc", (v){
+		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+		expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	});
+
+	mail.headers.removeAll("Bcc");
 
 	conn.write("DATA\r\n");
 	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
