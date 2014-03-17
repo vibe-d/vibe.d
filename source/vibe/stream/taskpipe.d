@@ -13,6 +13,7 @@ import core.sync.mutex;
 import core.time;
 import std.algorithm : min;
 import std.exception;
+import vibe.core.core;
 import vibe.core.sync;
 import vibe.utils.array;
 

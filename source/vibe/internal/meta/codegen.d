@@ -253,8 +253,8 @@ template cloneFunction(alias Symbol)
 			}
 			
 			static if (parameters.length) {
-				import std.algorithm : join, map;
-				import std.range : zip;
+				import std.algorithm : map;
+				import std.range : join, zip;
 
 				string result = join(
 					map!(a => format("%s%s %s", a[0], a[1], a[2]))(

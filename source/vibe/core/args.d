@@ -16,8 +16,8 @@ module vibe.core.args;
 import vibe.core.log;
 import vibe.data.json;
 
-import std.algorithm : any, array, map, sort;
-import std.array : join, replicate, split;
+import std.algorithm : any, map, sort;
+import std.array : array, join, replicate, split;
 import std.exception;
 import std.file;
 import std.getopt;

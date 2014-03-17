@@ -12,6 +12,7 @@ public import vibe.data.bson;
 import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 
+import std.algorithm : min;
 import std.exception;
 
 

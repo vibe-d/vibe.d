@@ -64,7 +64,7 @@ void render(string diet_file, ALIASES...)()
 
 void redirect(string path_or_url)
 {
-	import std.array : startsWith;
+	import std.algorithm : canFind, startsWith;
 
 	assert(s_requestContext.req !is null, "redirect() used outside of a web interface request!");
 	alias ctx = s_requestContext;

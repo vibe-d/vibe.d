@@ -23,6 +23,7 @@ import deimos.openssl.ssl;
 import deimos.openssl.x509v3;
 
 import std.algorithm;
+import std.array;
 import std.conv;
 import std.exception;
 import std.string;

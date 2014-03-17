@@ -10,7 +10,7 @@ module vibe.templ.utils;
 import vibe.http.server;
 
 import std.traits;
-import std.typecons : Rebindable, Unqual;
+import std.typecons : Rebindable;
 
 
 /**

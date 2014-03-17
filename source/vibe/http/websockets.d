@@ -408,6 +408,7 @@ class IncomingWebSocketMessage : InputStream {
 			enforce( !empty , "cannot read from empty stream");
 			enforce( leastSize > 0, "no data available" );
 
+			import std.algorithm : min;
 			auto sz = cast(size_t)min(leastSize, dst.length);
 			dst[0 .. sz] = m_currentFrame.payload[0 .. sz];
 			dst = dst[sz .. $];

@@ -621,7 +621,7 @@ private struct ScopedRefAggregate(T)
 	} else {
 		#line 1 "isolatedAggregateMethodsString"
 		mixin(isolatedAggregateMethodsString!T());
-		#line 625 "source/vibe/concurrency.d"
+		#line 625 "source/vibe/core/concurrency.d"
 		//mixin isolatedAggregateMethods!T;
 	}
 }
@@ -677,7 +677,7 @@ private struct ScopedRefAssociativeArray(K, V)
 {
 #line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-#line 681 "source/vibe/concurrency.d"
+#line 681 "source/vibe/core/concurrency.d"
 }*/
 
 /// private
@@ -1154,7 +1154,8 @@ unittest {
 }
 
 private bool onCrowdingThrow(Task tid){
-	throw new MailboxFull(std.concurrency.Tid());
+	import std.concurrency : Tid;
+	throw new MailboxFull(Tid());
 }
 
 private bool onCrowdingDrop(Task tid){

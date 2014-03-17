@@ -174,7 +174,8 @@ struct NetworkAddress {
 	string toAddressString()
 	const {
 		import std.array : appender;
-		import std.string : format, formattedWrite;
+		import std.string : format;
+		import std.format : formattedWrite;
 
 		switch (this.family) {
 			default: assert(false, "toAddressString() called for invalid address family.");

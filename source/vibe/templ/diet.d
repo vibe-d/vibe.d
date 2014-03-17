@@ -342,6 +342,7 @@ private class OutputContext {
 	void writeStringHtmlEscaped(string str) { writeString(htmlEscape(str)); }
 	void writeIndent(size_t stack_depth = size_t.max)
 	{
+		import std.algorithm : min;
 		string str;
 		foreach (i; 0 .. m_baseIndent) str ~= '\t';
 		foreach (j; 0 .. min(m_nodeStack.length, stack_depth)) if (m_nodeStack[j][0] != '-') str ~= '\t';
