@@ -13,6 +13,7 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.stream.ssl;
 
+import std.algorithm : map, splitter;
 import std.base64;
 import std.conv;
 import std.exception;
@@ -184,18 +185,15 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
 	expectStatus(conn, SMTPStatus.success, "MAIL FROM");
 
-	mail.headers.getAll("To", (v){
-		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
-		expectStatus(conn, SMTPStatus.success, "RCPT TO");
-	});
-	mail.headers.getAll("Cc", (v){
-		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
-		expectStatus(conn, SMTPStatus.success, "RCPT TO");
-	});
-	mail.headers.getAll("Bcc", (v){
-		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
-		expectStatus(conn, SMTPStatus.success, "RCPT TO");
-	});
+	static immutable rcpt_headers = ["To", "Cc", "Bcc"];
+	foreach (h; rcpt_headers) {
+		mail.headers.getAll(h, (v) {
+			foreach (a; v.splitter(',').map!(a => a.strip)) {
+				conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+				expectStatus(conn, SMTPStatus.success, "RCPT TO");
+			}
+		});
+	}
 
 	mail.headers.removeAll("Bcc");
 
