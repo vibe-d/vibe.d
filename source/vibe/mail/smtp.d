@@ -189,7 +189,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	foreach (h; rcpt_headers) {
 		mail.headers.getAll(h, (v) {
 			foreach (a; v.splitter(',').map!(a => a.strip)) {
-				conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+				conn.write("RCPT TO:"~addressMailPart(a)~"\r\n");
 				expectStatus(conn, SMTPStatus.success, "RCPT TO");
 			}
 		});
