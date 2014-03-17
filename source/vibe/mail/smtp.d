@@ -184,8 +184,20 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
 	expectStatus(conn, SMTPStatus.success, "MAIL FROM");
 
-	conn.write("RCPT TO:"~addressMailPart(mail.headers["To"])~"\r\n"); // TODO: support multiple recipients
-	expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	mail.headers.getAll("To", (v){
+		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+		expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	});
+	mail.headers.getAll("Cc", (v){
+		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+		expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	});
+	mail.headers.getAll("Bcc", (v){
+		conn.write("RCPT TO:"~addressMailPart(v)~"\r\n");
+		expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	});
+
+	mail.headers.removeAll("Bcc");
 
 	conn.write("DATA\r\n");
 	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
