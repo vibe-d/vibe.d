@@ -27,7 +27,9 @@ import std.algorithm;
 	safe updates, but no fsync. By specifying a URL instead, it is possible to
 	fully customize the settings. See
 	$(LINK http://www.mongodb.org/display/DOCS/Connections) for the complete set
-	of options.
+	of options. Note that 'sslverifycertificate' is only present in some client 
+	bindings, including here.
+	
 
 	Note that the returned MongoClient uses a vibe.core.connectionpool.ConnectionPool
 	internally to create and reuse connections as necessary. Thus, the
@@ -43,8 +45,13 @@ import std.algorithm;
 		---
 
 		---
-		// connectiong using the URL form with custom settings
+		// connecting using the URL form with custom settings
 		auto client = connectMongoDB("mongodb://localhost/?slaveOk=true");
+		---
+
+		---
+		// connecting with SSL encryption enabled and verification off
+		auto client = connectMongoDB("mongodb://localhost/?ssl=true&sslverifycertificate=false");
 		---
 
 	Params:
