@@ -164,18 +164,18 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 	enforce(any_succeeded, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
 /// ditto
-void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
+private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
 {
 	listenHTTPPlain(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
+private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
 {
 	listenHTTPPlain(settings, &request_handler.handleRequest);
 }
 
 /// Deprecated compatibility alias
-deprecated("Please use listenHTTPPlain instead.") alias listenHttpPlain = listenHTTPPlain;
+private deprecated("Please use listenHTTPPlain instead.") alias listenHttpPlain = listenHTTPPlain;
 
 
 /**
