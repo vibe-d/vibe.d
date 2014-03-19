@@ -117,14 +117,20 @@ deprecated("Please use listenHTTP instead.") alias listenHttp = listenHTTP;
 */
 private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 {
-	static void doListen(HTTPServerSettings settings, HTTPServerListener listener, string addr)
+	static bool doListen(HTTPServerSettings settings, HTTPServerListener listener, string addr)
 	{
 		try {
 			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
 			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, listener); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
 			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
-		} catch( Exception e ) logWarn("Failed to listen on %s:%s", addr, settings.port);
+			return true;
+		} catch( Exception e ) {
+			logWarn("Failed to listen on %s:%s", addr, settings.port);
+			return false;
+		}
 	}
+
+	bool any_succeeded = false;
 
 	// Check for every bind address/port, if a new listening socket needs to be created and
 	// check for conflicting servers
@@ -143,15 +149,19 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 						"listening on "~addr~":"~to!string(settings.port)~".");*/
 				}
 				found_listener = true;
+				any_succeeded = true;
 				break;
 			}
 		}
 		if (!found_listener) {
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
 			g_listeners ~= listener;
-			doListen(settings, listener, addr); // DMD BUG 2043
+			if (doListen(settings, listener, addr)) // DMD BUG 2043
+				any_succeeded = true;
 		}
 	}
+
+	enforce(any_succeeded, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
 /// ditto
 void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
