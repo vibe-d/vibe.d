@@ -41,6 +41,7 @@ module vibe.data.json;
 
 public import vibe.data.serialization;
 
+public import std.json : JSONException;
 import std.algorithm : equal, min;
 import std.array;
 import std.conv;
@@ -63,7 +64,7 @@ import std.traits;
 	behave mostly like values in ECMA script in the way that you can
 	transparently perform operations on them. However, strict typechecking is
 	done, so that operations between differently typed JSON values will throw
-	an exception. Additionally, an explicit cast or using get!() or to!() is
+	a JSONException. Additionally, an explicit cast or using get!() or to!() is
 	required to convert a JSON value to the corresponding static D type.
 */
 struct Json {
@@ -362,7 +363,7 @@ struct Json {
 		else static if (is(T == float)) return cast(T)m_float;
 		else static if (is(T == long)) return m_int;
 		else static if (is(T == ulong)) return cast(ulong)m_int;
-		else static if (is(T : long)){ enforce(m_int <= T.max && m_int >= T.min); return cast(T)m_int; }
+		else static if (is(T : long)){ enforceEx!JSONException(m_int <= T.max && m_int >= T.min); return cast(T)m_int; }
 		else static if (is(T == string)) return m_string;
 		else static if (is(T == Json[])) return m_array;
 		else static if (is(T == Json[string])) return m_object;
@@ -491,7 +492,7 @@ struct Json {
 	/**
 		Performs binary operations between JSON values.
 
-		The two JSON values must be of the same run time type or an exception
+		The two JSON values must be of the same run time type or a JSONException
 		will be thrown. Only the operations listed are allowed for each of the
 		types.
 
@@ -507,7 +508,7 @@ struct Json {
 	*/
 	Json opBinary(string op)(ref const(Json) other)
 	const {
-		enforce(m_type == other.m_type, "Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
+		enforceEx!JSONException(m_type == other.m_type, "Binary operation '"~op~"' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
 		static if( op == "&&" ){
 			checkType!(bool)(op);
 			return Json(m_bool && other.m_bool);
@@ -561,34 +562,34 @@ struct Json {
 	void opOpAssign(string op)(Json other)
 		if (op == "+" || op == "-" || op == "*" || op == "/" || op == "%" || op =="~")
 	{
-		enforce(m_type == other.m_type || op == "~" && m_type == Type.array,
+		enforceEx!JSONException(m_type == other.m_type || op == "~" && m_type == Type.array,
 				"Binary operation '"~op~"=' between "~.to!string(m_type)~" and "~.to!string(other.m_type)~" JSON objects.");
 		static if( op == "+" ){
 			if( m_type == Type.int_ ) m_int += other.m_int;
 			else if( m_type == Type.float_ ) m_float += other.m_float;
-			else enforce(false, "'+=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceEx!JSONException(false, "'+=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "-" ){
 			if( m_type == Type.int_ ) m_int -= other.m_int;
 			else if( m_type == Type.float_ ) m_float -= other.m_float;
-			else enforce(false, "'-=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceEx!JSONException(false, "'-=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "*" ){
 			if( m_type == Type.int_ ) m_int *= other.m_int;
 			else if( m_type == Type.float_ ) m_float *= other.m_float;
-			else enforce(false, "'*=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceEx!JSONException(false, "'*=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "/" ){
 			if( m_type == Type.int_ ) m_int /= other.m_int;
 			else if( m_type == Type.float_ ) m_float /= other.m_float;
-			else enforce(false, "'/=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceEx!JSONException(false, "'/=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "%" ){
 			if( m_type == Type.int_ ) m_int %= other.m_int;
 			else if( m_type == Type.float_ ) m_float %= other.m_float;
-			else enforce(false, "'%=' only allowed for scalar types, not "~.to!string(m_type)~".");
+			else enforceEx!JSONException(false, "'%=' only allowed for scalar types, not "~.to!string(m_type)~".");
 		} else static if( op == "~" ){
 			if (m_type == Type.string) m_string ~= other.m_string;
 			else if (m_type == Type.array) {
 				if (other.m_type == Type.array) m_array ~= other.m_array;
 				else m_array ~= other;
-			} else enforce(false, "'~=' only allowed for string and array types, not "~.to!string(m_type)~".");
+			} else enforceEx!JSONException(false, "'~=' only allowed for string and array types, not "~.to!string(m_type)~".");
 		} else static assert("Unsupported operator '"~op~"=' for type JSON.");
 	}
 	/// ditto
@@ -689,7 +690,7 @@ struct Json {
 			case Type.string: return m_string < other.m_string ? -1 : m_string == other.m_string ? 0 : 1;
 			case Type.array: return m_array < other.m_array ? -1 : m_array == other.m_array ? 0 : 1;
 			case Type.object:
-				enforce(false, "JSON objects cannot be compared.");
+				enforceEx!JSONException(false, "JSON objects cannot be compared.");
 				assert(false);
 		}
 	}
@@ -773,8 +774,8 @@ struct Json {
 			}
 		}
 
-		if (!op.length) throw new Exception(format("Got %s, expected %s.", name, expected));
-		else throw new Exception(format("Got %s, expected %s for %s.", name, expected, op));
+		if (!op.length) throw new JSONException(format("Got %s, expected %s.", name, expected));
+		else throw new JSONException(format("Got %s, expected %s for %s.", name, expected, op));
 	}
 
 	/*invariant()
@@ -794,13 +795,13 @@ struct Json {
 	The range is shrunk during parsing, leaving any remaining text that is not part of
 	the JSON contents.
 
-	Throws an Exception if any parsing error occured.
+	Throws a JSONException if any parsing error occured.
 */
 Json parseJson(R)(ref R range, int* line = null)
 	if( is(R == string) )
 {
 	Json ret;
-	enforce(!range.empty, "JSON string is empty.");
+	enforceEx!JSONException(!range.empty, "JSON string is empty.");
 
 	skipWhitespace(range, line);
 
@@ -812,17 +813,17 @@ Json parseJson(R)(ref R range, int* line = null)
 
 	switch( range.front ){
 		case 'f':
-			enforce(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.");
+			enforceEx!JSONException(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.");
 			range.popFrontN(5);
 			ret = false;
 			break;
 		case 'n':
-			enforce(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.");
+			enforceEx!JSONException(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.");
 			range.popFrontN(4);
 			ret = null;
 			break;
 		case 't':
-			enforce(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.");
+			enforceEx!JSONException(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.");
 			range.popFrontN(4);
 			ret = true;
 			break;
@@ -841,11 +842,11 @@ Json parseJson(R)(ref R range, int* line = null)
 			range.popFront();
 			while(true) {
 				skipWhitespace(range, line);
-				enforce(!range.empty);
+				enforceEx!JSONException(!range.empty);
 				if(range.front == ']') break;
 				arr ~= parseJson(range, line);
 				skipWhitespace(range, line);
-				enforce(!range.empty && (range.front == ',' || range.front == ']'), "Expected ']' or ','.");
+				enforceEx!JSONException(!range.empty && (range.front == ',' || range.front == ']'), "Expected ']' or ','.");
 				if( range.front == ']' ) break;
 				else range.popFront();
 			}
@@ -857,17 +858,17 @@ Json parseJson(R)(ref R range, int* line = null)
 			range.popFront();
 			while(true) {
 				skipWhitespace(range, line);
-				enforce(!range.empty);
+				enforceEx!JSONException(!range.empty);
 				if(range.front == '}') break;
 				string key = skipJsonString(range);
 				skipWhitespace(range, line);
-				enforce(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'");
+				enforceEx!JSONException(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'");
 				range.popFront();
 				skipWhitespace(range, line);
 				Json itm = parseJson(range, line);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforce(!range.empty && (range.front == ',' || range.front == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
+				enforceEx!JSONException(!range.empty && (range.front == ',' || range.front == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
 				if( range.front == '}' ) break;
 				else range.popFront();
 			}
@@ -875,7 +876,7 @@ Json parseJson(R)(ref R range, int* line = null)
 			ret = obj;
 			break;
 		default:
-			enforce(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. min(12, $)]~"'.");
+			enforceEx!JSONException(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. min(12, $)]~"'.");
 	}
 
 	assert(ret.type != Json.Type.undefined);
@@ -886,17 +887,17 @@ Json parseJson(R)(ref R range, int* line = null)
 /**
 	Parses the given JSON string and returns the corresponding Json object.
 
-	Throws an Exception if any parsing error occurs.
+	Throws a JSONException if any parsing error occurs.
 */
 Json parseJsonString(string str)
 {
 	auto strcopy = str;
 	try {
 		auto ret = parseJson(strcopy);
-		enforce(strcopy.strip().length == 0, "Expected end of string after JSON value.");
+		enforceEx!JSONException(strcopy.strip().length == 0, "Expected end of string after JSON value.");
 		return ret;
 	} catch (Exception e) {
-		throw new Exception(format("JSON format error at byte %s: %s", str.length - strcopy.length, e.msg));
+		throw new JSONException(format("JSON format error at byte %s: %s", str.length - strcopy.length, e.msg));
 	}
 }
 
@@ -1290,7 +1291,7 @@ struct JsonSerializer {
 	//
 	void readDictionary(T)(scope void delegate(string) field_handler)
 	{
-		enforce(m_current.type == Json.Type.object);
+		enforceEx!JSONException(m_current.type == Json.Type.object);
 		auto old = m_current;
 		foreach (string key, value; m_current) {
 			m_current = value;
@@ -1301,7 +1302,7 @@ struct JsonSerializer {
 
 	void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
-		enforce(m_current.type == Json.Type.array);
+		enforceEx!JSONException(m_current.type == Json.Type.array);
 		auto old = m_current;
 		size_callback(m_current.length);
 		foreach (ent; old) {
@@ -1433,17 +1434,17 @@ struct JsonStringSerializer(R, bool pretty = false)
 		void readDictionary(T)(scope void delegate(string) entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
-			enforce(!m_range.empty && m_range.front == '{', "Expecting object.");
+			enforceEx!JSONException(!m_range.empty && m_range.front == '{', "Expecting object.");
 			m_range.popFront();
 			bool first = true;
 			while(true) {
 				m_range.skipWhitespace(&m_line);
-				enforce(!m_range.empty, "Missing '}'.");
+				enforceEx!JSONException(!m_range.empty, "Missing '}'.");
 				if (m_range.front == '}') {
 					m_range.popFront();
 					break;
 				} else if (!first) {
-					enforce(m_range.front == ',', "Expecting ',' or '}', not '"~m_range.front.to!string~"'.");
+					enforceEx!JSONException(m_range.front == ',', "Expecting ',' or '}', not '"~m_range.front.to!string~"'.");
 					m_range.popFront();
 					m_range.skipWhitespace(&m_line);
 				} else first = false;
@@ -1451,7 +1452,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				auto name = m_range.skipJsonString(&m_line);
 
 				m_range.skipWhitespace(&m_line);
-				enforce(!m_range.empty && m_range.front == ':');
+				enforceEx!JSONException(!m_range.empty && m_range.front == ':');
 				m_range.popFront();
 
 				entry_callback(name);
@@ -1461,17 +1462,17 @@ struct JsonStringSerializer(R, bool pretty = false)
 		void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
-			enforce(!m_range.empty && m_range.front == '[', "Expecting array.");
+			enforceEx!JSONException(!m_range.empty && m_range.front == '[', "Expecting array.");
 			m_range.popFront();
 			bool first = true;
 			while(true) {
 				m_range.skipWhitespace(&m_line);
-				enforce(!m_range.empty, "Missing ']'.");
+				enforceEx!JSONException(!m_range.empty, "Missing ']'.");
 				if (m_range.front == ']') {
 					m_range.popFront();
 					break;
 				} else if (!first) {
-					enforce(m_range.front == ',', "Expecting ',' or ']'.");
+					enforceEx!JSONException(m_range.front == ',', "Expecting ',' or ']'.");
 					m_range.popFront();
 				} else first = false;
 
@@ -1482,19 +1483,19 @@ struct JsonStringSerializer(R, bool pretty = false)
 		T readValue(T)()
 		{
 			m_range.skipWhitespace(&m_line);
-			static if (is(T == typeof(null))) { enforce(m_range.take(4).equal("null"), "Expecting 'null'."); return null; }
+			static if (is(T == typeof(null))) { enforceEx!JSONException(m_range.take(4).equal("null"), "Expecting 'null'."); return null; }
 			else static if (is(T == bool)) {
 				bool ret = m_range.front == 't';
 				string expected = ret ? "true" : "false";
 				foreach (ch; expected) {
-					enforce(m_range.front == ch, "Expecting 'true' or 'false'.");
+					enforceEx!JSONException(m_range.front == ch, "Expecting 'true' or 'false'.");
 					m_range.popFront();
 				}
 				return ret;
 			} else static if (is(T : long)) {
 				bool is_float;
 				auto num = m_range.skipNumber(is_float);
-				enforce(!is_float, "Expecing integer number.");
+				enforceEx!JSONException(!is_float, "Expecing integer number.");
 				return to!T(num);
 			} else static if (is(T : real)) {
 				bool is_float;
@@ -1516,7 +1517,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				logInfo("%s", m_range[0 .. min(4, $)]);
 			}
 			foreach (ch; "null") {
-				enforce(m_range.front == ch, "Expecting 'null'.");
+				enforceEx!JSONException(m_range.front == ch, "Expecting 'null'.");
 				m_range.popFront();
 			}
 			assert(m_range.empty || m_range.front != 'l');
@@ -1665,9 +1666,9 @@ private string jsonUnescape(R)(ref R range)
 			case '"': return ret.data;
 			case '\\':
 				range.popFront();
-				enforce(!range.empty, "Unterminated string escape sequence.");
+				enforceEx!JSONException(!range.empty, "Unterminated string escape sequence.");
 				switch(range.front){
-					default: enforce("Invalid string escape sequence."); break;
+					default: enforceEx!JSONException("Invalid string escape sequence."); break;
 					case '"': ret.put('\"'); range.popFront(); break;
 					case '\\': ret.put('\\'); range.popFront(); break;
 					case '/': ret.put('/'); range.popFront(); break;
@@ -1681,13 +1682,13 @@ private string jsonUnescape(R)(ref R range)
 						dchar uch = 0;
 						foreach( i; 0 .. 4 ){
 							uch *= 16;
-							enforce(!range.empty, "Unicode sequence must be '\\uXXXX'.");
+							enforceEx!JSONException(!range.empty, "Unicode sequence must be '\\uXXXX'.");
 							auto dc = range.front;
 							range.popFront();
 							if( dc >= '0' && dc <= '9' ) uch += dc - '0';
 							else if( dc >= 'a' && dc <= 'f' ) uch += dc - 'a' + 10;
 							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
-							else enforce(false, "Unicode sequence must be '\\uXXXX'.");
+							else enforceEx!JSONException(false, "Unicode sequence must be '\\uXXXX'.");
 						}
 						ret.put(uch);
 						break;
@@ -1711,7 +1712,7 @@ private string skipNumber(R)(ref R s, out bool is_float)
 	if (s[idx] == '-') idx++;
 	if (s[idx] == '0') idx++;
 	else {
-		enforce(isDigit(s[idx++]), "Digit expected at beginning of number.");
+		enforceEx!JSONException(isDigit(s[idx++]), "Digit expected at beginning of number.");
 		while( idx < s.length && isDigit(s[idx]) ) idx++;
 	}
 
@@ -1725,7 +1726,7 @@ private string skipNumber(R)(ref R s, out bool is_float)
 		idx++;
 		is_float = true;
 		if( idx < s.length && (s[idx] == '+' || s[idx] == '-') ) idx++;
-		enforce( idx < s.length && isDigit(s[idx]), "Expected exponent." ~ s[0 .. idx]);
+		enforceEx!JSONException( idx < s.length && isDigit(s[idx]), "Expected exponent." ~ s[0 .. idx]);
 		idx++;
 		while( idx < s.length && isDigit(s[idx]) ) idx++;
 	}
@@ -1738,10 +1739,10 @@ private string skipNumber(R)(ref R s, out bool is_float)
 /// private
 private string skipJsonString(R)(ref R s, int* line = null)
 {
-	enforce(!s.empty && s.front == '"', "Expected '\"' to start string.");
+	enforceEx!JSONException(!s.empty && s.front == '"', "Expected '\"' to start string.");
 	s.popFront();
 	string ret = jsonUnescape(s);
-	enforce(!s.empty && s.front == '"', "Expected '\"' to terminate string.");
+	enforceEx!JSONException(!s.empty && s.front == '"', "Expected '\"' to terminate string.");
 	s.popFront();
 	return ret;
 }
