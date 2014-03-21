@@ -4,7 +4,7 @@
 v0.7.19 - 2014-03-
 --------------------
 
-This release, apart from working on the latest DMD versions, includes an important security enhancement in the form of new experimental code for SSL certificate validation. Other major changes include many improvements to the Diet template compiler, various performance improvements, a new `FileDescriptorEvent` to interface with other I/O libraries, a new web interface generator similar to the REST interface generator, many improvements to the Redis client, and a bunch of other fixes and additions.
+Apart from working on the latest DMD versions, this release includes an important security enhancement in the form of new experimental code for SSL certificate validation. Other major changes include many improvements to the Diet template compiler, various performance improvements, a new `FileDescriptorEvent` to interface with other I/O libraries, a new web interface generator similar to the REST interface generator, many improvements to the Redis client, and a bunch of other fixes and additions.
 
 ### Features and improvements ###
 
@@ -187,6 +187,8 @@ Note that some fixes have been left out because they are related to changes with
 v0.7.18 - 2013-11-26
 --------------------
 
+The new release adds support for DMD 2.064 and contains an impressive number of almost 90 additions and bug fixes. Some notable improvements are a better serialization system, reworked WebSocket support, native MongoDB query sorting support and vastly improved stability of the HTTP client and other parts of the system.
+
 ### Features and improvements ###
 
  - Compiles using DMD 2.064 (and DMD 2.063.2)
@@ -328,6 +330,8 @@ v0.7.18 - 2013-11-26
 v0.7.17 - 2013-09-09
 --------------------
 
+This release fixes compiling on DMD 2.063.2 and DMD HEAD and performs a big API cleanup by removing a lot of deprecated functionality and deprecating some additional symbols. New is also a better task local storage support, a SyslogLogger class and a number of smaller additions and bug fixes.
+
 ### Features and improvements ###
 
  - Compiles using DMD 2.063.2 and DMD HEAD
@@ -398,6 +402,8 @@ v0.7.17 - 2013-09-09
 v0.7.16 - 2013-06-26
 --------------------
 
+This release finally features support for DMD 2.063. It also contains two breaking changes by removing support for the "vibe" script (aka VPM) and switching to an implicit task ownership model for streams (no more explicit acquire/release). It requires DUB 0.9.15 or later to build.
+
 ### Features and improvements ###
 
  - Fiber ownership of network connections and file streams is now handled implicitly to be more in line with classic blocking I/O and to lower the code overhead to share/pass connections between threads
@@ -445,6 +451,8 @@ v0.7.16 - 2013-06-26
 
 v0.7.15 - 2013-04-27
 --------------------
+
+This release cleans up the API in several places (sheduling some symbols for deprecation) and largely improves the multi-threading primitives. It also features initial support for Win64 and a revamped logging system, as well as authentication support for the MongoDB client and a lot of smaller enhancements.
 
 ### Features and improvements ###
  
@@ -513,6 +521,8 @@ v0.7.15 - 2013-04-27
 v0.7.14 - 2013-03-22
 --------------------
 
+A lot has been improved on the performance and multi-threading front. The HTTP server benchmark jumped from around 17k req/s up to 48k req/s on a certain quad-core test system and >10k connections can now be handled at the same time (on 64-bit systems due to virtual memory requirements).
+
 ### Features and improvements ###
 
  - Performance tuning for the HTTP server and client
@@ -557,6 +567,8 @@ v0.7.14 - 2013-03-22
 v0.7.13 - 2013-02-24
 --------------------
 
+This release solves some issues with the `HttpClient` in conjunction with SSL connection and contains a lot of cleaning up. Many modules and symbols have been deprecated or renamed to streamline the API and reduce redundant functionality with Phobos.
+
 ### Features and improvements ###
 
  - Compiles with the latest DUB, which is now the recommended way to build vibe.d projects
@@ -583,6 +595,8 @@ v0.7.13 - 2013-02-24
 
 v0.7.12 - 2013-02-11
 --------------------
+
+Main changes are a refactored MiongoDB client, important fixes to the `HttpClient` and memory alignment fixes in the custom allocators. The library and all examples are now also valid DUB* packages as a first step to remove the 'vibe' script in favor of the more powerful 'dub'.
 
 ### Features and improvements ###
 
@@ -655,6 +669,8 @@ v0.7.12 - 2013-02-11
 v0.7.11 - 2013-01-05
 --------------------
 
+Improves installation on Linux and fixes a configuration file handling error, as well as a hang in conjunction with Nginx used as a reverse proxy.
+
 ### Features and improvements ###
 
  - The `setup-linux.sh` script now installs to `/usr/local/share` and uses any existing `www-data` user for its config if possible (by Jordi Sayol) - [issue #150][issue150], [issue #152][issue152], [issue #153][issue153]
@@ -674,6 +690,8 @@ v0.7.11 - 2013-01-05
 
 v0.7.10 - 2013-01-03
 --------------------
+
+The Win32 back end now has working TCP socket support. Also, the form and REST interface generators have been improved and Diet templates support arbitrary D expressions for attribute values. Finally, everything compiles now on Win64 using DMD 2.061.
 
 ### Features and improvements ###
 
@@ -735,6 +753,8 @@ v0.7.10 - 2013-01-03
 v0.7.9 - 2012-10-30
 -------------------
 
+The new release contains major improvements to the Win32 back end, as well as to the Diet template compiler. The REST interface has gotten more robust in its type handling and a new HTML form interface generator has been added. The zip file release now also includes HTML API docs.
+
 ### Features and improvements ###
 
  - Implemented an automated HTML form interface generator in `vibe.http.form` (by Robert Klotzner aka eskimor) - [issue #106][issue106]
@@ -790,6 +810,8 @@ v0.7.9 - 2012-10-30
 
 v0.7.8 - 2012-10-01
 -------------------
+
+This release adds support for UDP sockets and contains a rather large list of smaller fixes and improvements.
 
 ### Features and improvements ###
 
@@ -851,6 +873,8 @@ v0.7.8 - 2012-10-01
 v0.7.7 - 2012-08-05
 -------------------
 
+Brings some general improvements and DMD 2.060 compatibility.
+
 ### Features and improvements ###
 
  - Compiles with DMD 2.060 - [issue #70][issue70]
@@ -877,6 +901,8 @@ v0.7.7 - 2012-08-05
 v0.7.6 - 2012-07-15
 -------------------
 
+The most important improvements are easier setup on Linux and Mac and an important bug fix for TCP connections. Additionally, a lot of performance tuning - mostly reduction of memory allocations - has been done.
+
 ### Features and improvements ###
  
  - A good amount of performance tuning of the HTTP server
@@ -900,6 +926,8 @@ v0.7.6 - 2012-07-15
  
 v0.7.5 - 2012-06-05
 -------------------
+
+This is a maintainance release primaily to make the examples work again and to improve permission issues when vibe is installed in a read-only location.
 
  - Restructured the examples - each example is now a regular vibe.d application (also fixes compilation using run_example)
  - The REST interface generator now supports sub interfaces which are mapped to sub paths in the URL
