@@ -85,12 +85,12 @@ final class RedisClient {
 	*/
 
 	long append(T : E[], E)(string key, T suffix) { return request!long("APPEND", key, suffix); }
-	int decr(string key, int value = 1) { return value == 1 ? request!int("DECR", key) : request!int("DECRBY", key, value); }
+	long decr(string key, long value = 1) { return value == 1 ? request!long("DECR", key) : request!long("DECRBY", key, value); }
 	T get(T : E[], E)(string key) { return request!T("GET", key); }
 	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
 	T getRange(T : E[], E)(string key, long start, long end) { return request!T("GETRANGE", start, end); }
 	T getSet(T : E[], E)(string key, T value) { return request!T("GET", key, value); }
-	int incr(string key, int value = 1) { return value == 1 ? request!int("INCR", key) : request!int("INCRBY", key, value); }
+	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
 	RedisReply mget(string[] keys) { return request!RedisReply("MGET", keys); }
 	
 	void mset(ARGS...)(ARGS args)
@@ -122,7 +122,7 @@ final class RedisClient {
 	void hset(T : E[], E)(string key, string field, T value) { request("HSET", key, field, value); }
 	T hget(T : E[], E)(string key, string field) { return request!T("HGET", key, field); }
 	RedisReply hgetAll(string key) { return request!RedisReply("HGETALL", key); }
-	int hincr(string key, string field, int value=1) { return request!int("HINCRBY", key, field, value); }
+	long hincr(string key, string field, long value=1) { return request!long("HINCRBY", key, field, value); }
 	RedisReply hkeys(string key) { return request!RedisReply("HKEYS", key); }
 	long hlen(string key) { return request!long("HLEN", key); }
 	RedisReply hmget(string key, string[] fields...) { return request!RedisReply("HMGET", key, fields); }
@@ -193,12 +193,12 @@ final class RedisClient {
 		return request!RedisReply("ZRANGEBYSCORE", args);
 	}
 
-	int zrank(string key, string member) {
+	long zrank(string key, string member) {
 		auto str = request!string("ZRANK", key, member);
-		return str ? parse!int(str) : -1;
+		return str ? parse!long(str) : -1;
 	}
 	long zrem(string key, string[] members...) { return request!long("ZREM", key, members); }
-	long zremRangeByRank(string key, int start, int stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
+	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
 	long zremRangeByScore(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, min, max);}
 
 	RedisReply zrevRange(string key, long start, long end, bool withScores=false) {
@@ -213,9 +213,9 @@ final class RedisClient {
 		return request!RedisReply("ZREVRANGEBYSCORE", args);
 	}
 
-	int zrevRank(string key, string member) {
+	long zrevRank(string key, string member) {
 		auto str = request!string("ZREVRANK", key, member);
-		return str ? parse!int(str) : -1;
+		return str ? parse!long(str) : -1;
 	}
 
 	RedisReply zscore(string key, string member) { return request!RedisReply("ZSCORE", key, member); }
@@ -224,9 +224,9 @@ final class RedisClient {
 	/*
 		Pub / Sub
 	*/
-	int publish(string channel, string message) {
+	long publish(string channel, string message) {
 		auto str = request!string("PUBLISH", channel, message);
-		return str ? parse!int(str) : -1;
+		return str ? parse!long(str) : -1;
 	}
 
 	RedisReply pubsub(string subcommand, string[] args...) {
@@ -326,7 +326,7 @@ final class RedisSubscriber {
 				reply.next!(ubyte[])(); // channel from which we get unsubsccribed
 				reply = this.m_conn.listen(); // redis sends a *3 here despite what's in the docs...
 				auto str = reply.next!string;
-				int count = str ? parse!int(str) : -1;
+				long count = str ? parse!long(str) : -1;
 				if(count == 0) {
 					return;
 				}
@@ -356,6 +356,7 @@ struct RedisReply {
 
 	T next(T : E[], E)()
 	{
+		assert(m_impl.m_lockedConnection !is null);
 		return m_impl.next!T();
 	}
 
@@ -364,6 +365,7 @@ struct RedisReply {
 		return m_impl.drop();
 	}
 
+	// is this necessary?
 	private ubyte[] readBulk( string sizeLn )
 	{
 		return m_impl.readBulk(sizeLn);
@@ -371,17 +373,19 @@ struct RedisReply {
 
 	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
 		m_impl.lockedConnection = conn;
+		assert(m_impl.m_lockedConnection.m_replyRefCount == 0);
+		m_impl.m_lockedConnection.m_replyRefCount++;
 	}
 
 	this(this){
-		m_impl.refCountIncr();
+		m_impl.m_lockedConnection.replyRefCount += 1;
 	}
 
 	~this(){
-		if (m_impl.m_lockedConnection != null)
+		if (m_impl.m_lockedConnection !is null)
 		{
-			m_impl.refCountDecr();
-			if (m_impl.refCount == 0){
+			m_impl.m_lockedConnection.m_replyRefCount -= 1;
+			if (m_impl.m_lockedConnection.replyRefCount == 0){
 				m_impl.drop();
 				FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
 			}
@@ -398,6 +402,7 @@ private final class RedisReplyImpl {
 		long m_length;
 		long m_index;
 		bool m_multi;
+		bool m_initialized = false;
 	}
 
 	this(TCPConnection conn)
@@ -407,8 +412,12 @@ private final class RedisReplyImpl {
 		m_length = 1;
 		m_multi = false;
 
-		auto ln = cast(string)m_conn.readLine();
+	}
 
+	void init(){
+		m_initialized = true;
+		auto ln = cast(string)m_conn.readLine();
+		
 		switch(ln[0]) {
 			case '+':
 				m_data = cast(ubyte[])ln[ 1 .. $ ];
@@ -438,23 +447,12 @@ private final class RedisReplyImpl {
 		m_lockedConnection = conn;
 	}
 
-	void refCountIncr(){
-		m_lockedConnection.refCountIncr();
-	}
-
-	void refCountDecr(){
-		m_lockedConnection.refCountDecr();
-	}
-
-	@property size_t refCount() const {
-		return m_lockedConnection.refCount;
-	}
-
 	@property bool hasNext() const { return  m_index < m_length; }
 
 	T next(T : E[], E)()
 	{
 		assert( hasNext, "end of reply" );
+		if (!m_initialized) init();
 		m_index++;
 		ubyte[] ret;
 		if (m_multi) {
@@ -495,31 +493,19 @@ private final class RedisConnection {
 		TCPConnection m_conn;
 		string m_password;
 		long m_selectedDB;
-		size_t m_refCount;
+		size_t m_replyRefCount;
 	}
 
 	this(string host, ushort port)
 	{
 		m_host = host;
 		m_port = port;
-		m_refCount = 1;
+		m_replyRefCount = 0;
 	}
 
 	@property{
 		TCPConnection conn() { return m_conn; }
 		void conn(TCPConnection conn) { m_conn = conn; }
-	}
-
-	void refCountIncr(){
-		m_refCount += 1;
-	}
-
-	void refCountDecr(){
-		m_refCount -= 1;
-	}
-
-	@property size_t refCount() const {
-		return m_refCount;
 	}
 
 	void setAuth(string password)
