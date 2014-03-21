@@ -232,7 +232,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 				auto idx = findInsertIndex(el.key);
 				(cast(ubyte[])(&m_table[idx])[0 .. 1])[] = (cast(ubyte[])(&el)[0 .. 1])[];
 			}
-		if (oldtable) m_allocator.free(cast(void[])oldtable);
+		if (oldtable) freeArray(m_allocator, oldtable);
 	}
 }
 

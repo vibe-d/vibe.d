@@ -74,6 +74,14 @@ T[] allocArray(T, bool MANAGED = true)(shared(Allocator) allocator, size_t n)
 	return ret;
 }
 
+void freeArray(T, bool MANAGED = true)(shared(Allocator) allocator, ref T[] array)
+{
+	static if (MANAGED && hasIndirections!T)
+		GC.removeRange(array.ptr);
+	allocator.free(cast(void[])array);
+	array = null;
+}
+
 
 shared interface Allocator {
 	enum size_t alignment = 0x10;
