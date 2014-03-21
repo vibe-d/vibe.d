@@ -1,15 +1,18 @@
 ﻿Changelog
 =========
 
-v0.7.19 - 2014-02-
+v0.7.19 - 2014-03-
 --------------------
+
+This release, apart from working on the latest DMD versions, includes an important security enhancement in the form of new experimental code for SSL certificate validation. Other major changes include many improvements to the Diet template compiler, various performance improvements, a new `FileDescriptorEvent` to interface with other I/O libraries, a new web interface generator similar to the REST interface generator, many improvements to the Redis client, and a bunch of other fixes and additions.
 
 ### Features and improvements ###
 
- - Compiles with DMD 2.065
+ - Compiles with DMD 2.065 (and the current DMD HEAD)
  - API improvements for the SSL support code
  - Implemented SSL certificate validation (partially by David Nadlinger aka klickverbot, [pull #474][issue474])
  - Removed the old `EventedObject` interface
+ - Implemented support for string includes in Diet templates (idea by Stefan Koch aka Uplink_Coder) - [issue #482][issue482]
  - JSON answers in the REST interface generator are now directly serialized, improving performance and memory requirements
  - Reimplemented the timer code to guarantee light weight timers on all event drivers
  - `Libevent2TCPConnection` now has a limited read buffer size to avoid unbounded memory consumption
@@ -24,7 +27,7 @@ v0.7.19 - 2014-02-
  - Added `RecursiveTaskMutex`
  - `Throwable` is now treated as weakly isolated to allow passing exceptions using `vibe.core.concurrency.send`
  - `exitEventLoop` by default now only terminates the current thread's event loop and always works asynchronously
- - `Session` is now a struct instead of a class
+ - `Session` is now a `struct` instead of a `class`
  - Added support for storing arbitrary types in `Session`
  - Moved the REST interface generator from `vibe.http.rest` to `vibe.web.rest`
  - Added a new web interface generator (`vibe.web.web`), similar to `vibe.http.form`, but with full support for attribute based customization
@@ -53,9 +56,27 @@ v0.7.19 - 2014-02-
  - Tasks started before starting the event loop are now deferred until after the loop has been started
  - Worker threads are started lazily instead of directly on startup
  - Added `MongoCursor.limit()` to limit the amount of documents returned (by Damian Ziemba aka nazriel) - [pull #499][issue499]
- - The HTTP client now sets a basic auth header when the request URL contains a username/password (by Damian Ziemba aka nazriel) - [issue #481][issue481], [pull #501][issue501]
+ - The HTTP client now sets a basic-auth header when the request URL contains a username/password (by Damian Ziemba aka nazriel) - [issue #481][issue481], [pull #501][issue501]
  - Added `RedisClient.redisVersion` (by Fabian Wallentowitz aka fabsi88) - [pull #502][issue502]
  - Implemented handling of doctypes other than HTML 5 in the Diet compiler (by Damian Ziemba aka nazriel) - [issue #505][issue505], [pull #509][issue509]
+ - Boolean attributes in Diet templates are now written without value for HTML 5 documents (by Damian Ziemba aka nazriel) - [issue #475][issue475], [pull #512][issue512]
+ - Empty "class" attributes in Diet templates are not written to the final HTML output (by Damian Ziemba aka nazriel) - [issue #372][issue372], [pull #519][issue519]
+ - Implemented PUB/SUB support for the Redis client (by Michael Eisendle)
+ - The logging functions take now any kind of string instead of only `string` (by Mathias Lang aka Geod24) - [pull #532][issue532]
+ - Added `SMTPClientSettings.peerValidationMode` (by Stephan Dilly aka Extrawurst) - [pull #528][issue528]
+ - Diet templates that are set to `null` are now omitted in the HTML output (by Damian Ziemba aka nazriel) - [issue #520][issue520], [pull #521][issue521]
+ - Extended the REST interface generator to cope with any type of error response and to always throw a `RestException` on error (by Stephan Dilly aka Extrawurst) - [pull #533][issue533]
+ - Added support for [text blocks](http://jade-lang.com/reference/#blockinatag) in Diet templates (by Damian Ziemba aka nazriel) - [issue #510][issue510], [pull #518][issue518]
+ - Added `RedisClient.blpop` and changed all numbers to `long` to be in line with Redis (by Etienne Cimon aka etcimon) - [pull #527][issue527]
+ - Changed `WebSocket.receiveBinary` and `WebSocket.receiveText` to strictly expect the right type by default (by Martin Nowak) - [pull #543][issue543]
+ - Avoid using an exception to signal HTTP 404 errors for unprocessed requests, resulting in a large performance increas for that case
+ - Modernized the Diet templates used for the example projects (by Damian Ziemba aka nazriel) - [pull #551][issue551]
+ - Added WebDAV HTTP status codes to the `HTTPStatusCode` enum (by Dmitry Mostovenko aka TrueBers) - [pull #574][issue574]
+ - Added support for multiple recipient headers (including "CC" and "BCC") in `sendMail` (by Stephan Dilly aka Extrawurst) - [pull #582][issue582]
+ - Added support for comma separated recipients in `sendMail`
+ - Added SSL support for the MongoDB client (by Daniel Killebrew aka gittywithexcitement) - [issue #575][issue575], [pull #587][issue587]
+ - Made all overloads of `listenHTTPPlain` private (as they were supposed to be since a year)
+ - Added using `-version=VibeDisableCommandLineParsing` to disable default command line argument interpretation
 
 ### Bug fixes ###
 
@@ -83,9 +104,29 @@ v0.7.19 - 2014-02-
  - Fixed `Libevent2UDPConnection.recv` to work inside of a `Task`
  - Fixed handling of "+" in the path part of URLs (is *not* replaced by a space) - [issue #498][issue498]
  - Fixed handling of `<style>` tags with inline content in the Diet compiler - [issue #507][issue507]
+ - Fixed some possible sources for stale TCP sockets when an error occurred in the close sequence
+ - Fixed the Win64 build (using the "win32" driver) that failed due to user32.dll not being linked
+ - Fixed `URLRouter` to expose all overloads of `match()` - see also [pull #535][issue535]
+ - Fixed deserialization of unsigned integers in the BSON serializer (by Anton Gushcha aka NCrashed) - [issue #538][issue538], [pull #539][issue539]
+ - Fixed deserialization of unsigned integers in the JSON serializer
+ - Fixed serialization of nested composite types in the JSON serializer
+ - Fixed two bogus assertions in the win32 event driver (one in the timer code and one for socket events after a socket has been closed)
+ - Fixed `WebSocket.waitForData` to always obey the given timeout value (by Martin Nowak) - [issue #544][issue544], [pull #545][issue545]
+ - Fixed the high level tests in the "tests/" directory (by Mathias Lang aka Geod24) - [pull #541][issue541]
+ - Fixed `HashMap` to always use the supplied `Traits.equals` for comparison
+ - Fixed the example projects and switched from "package.json" to "dub.json" (by Mathias Lang aka Geod24) - [pull #552][issue552]
+ - Fixed emitting an idle event when using `processEvents` to run the event loop
+ - Fixed `Path.relativeTo` to retain a possible trailing slash
+ - Fixed image links with titles in the Markdown compiler (by Mike Wey) - [pull #563][issue563]
+ - Fixed a possible stale TCP connection after finalizing a HTTP client request had failed
+ - Fixed `makeIsolated` to work for structs
+ - Fixed `listenHTTP` to throw an exception if listening on all supplied bind addresses has failed
+
+Note that some fixes have been left out because they are related to changes within the development cycle of this release.
 
 [issue289]: https://github.com/rejectedsoftware/vibe.d/issues/289
 [issue289]: https://github.com/rejectedsoftware/vibe.d/issues/289
+[issue372]: https://github.com/rejectedsoftware/vibe.d/issues/372
 [issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
 [issue407]: https://github.com/rejectedsoftware/vibe.d/issues/407
 [issue419]: https://github.com/rejectedsoftware/vibe.d/issues/419
@@ -105,6 +146,7 @@ v0.7.19 - 2014-02-
 [issue468]: https://github.com/rejectedsoftware/vibe.d/issues/468
 [issue473]: https://github.com/rejectedsoftware/vibe.d/issues/473
 [issue474]: https://github.com/rejectedsoftware/vibe.d/issues/474
+[issue475]: https://github.com/rejectedsoftware/vibe.d/issues/475
 [issue481]: https://github.com/rejectedsoftware/vibe.d/issues/481
 [issue485]: https://github.com/rejectedsoftware/vibe.d/issues/485
 [issue486]: https://github.com/rejectedsoftware/vibe.d/issues/486
@@ -116,6 +158,30 @@ v0.7.19 - 2014-02-
 [issue505]: https://github.com/rejectedsoftware/vibe.d/issues/505
 [issue507]: https://github.com/rejectedsoftware/vibe.d/issues/507
 [issue509]: https://github.com/rejectedsoftware/vibe.d/issues/509
+[issue510]: https://github.com/rejectedsoftware/vibe.d/issues/510
+[issue512]: https://github.com/rejectedsoftware/vibe.d/issues/512
+[issue518]: https://github.com/rejectedsoftware/vibe.d/issues/518
+[issue519]: https://github.com/rejectedsoftware/vibe.d/issues/519
+[issue520]: https://github.com/rejectedsoftware/vibe.d/issues/520
+[issue521]: https://github.com/rejectedsoftware/vibe.d/issues/521
+[issue527]: https://github.com/rejectedsoftware/vibe.d/issues/527
+[issue528]: https://github.com/rejectedsoftware/vibe.d/issues/528
+[issue532]: https://github.com/rejectedsoftware/vibe.d/issues/532
+[issue533]: https://github.com/rejectedsoftware/vibe.d/issues/533
+[issue535]: https://github.com/rejectedsoftware/vibe.d/issues/535
+[issue538]: https://github.com/rejectedsoftware/vibe.d/issues/538
+[issue539]: https://github.com/rejectedsoftware/vibe.d/issues/539
+[issue541]: https://github.com/rejectedsoftware/vibe.d/issues/541
+[issue543]: https://github.com/rejectedsoftware/vibe.d/issues/543
+[issue544]: https://github.com/rejectedsoftware/vibe.d/issues/544
+[issue545]: https://github.com/rejectedsoftware/vibe.d/issues/545
+[issue551]: https://github.com/rejectedsoftware/vibe.d/issues/551
+[issue552]: https://github.com/rejectedsoftware/vibe.d/issues/552
+[issue563]: https://github.com/rejectedsoftware/vibe.d/issues/563
+[issue574]: https://github.com/rejectedsoftware/vibe.d/issues/574
+[issue575]: https://github.com/rejectedsoftware/vibe.d/issues/575
+[issue582]: https://github.com/rejectedsoftware/vibe.d/issues/582
+[issue587]: https://github.com/rejectedsoftware/vibe.d/issues/587
 
 
 v0.7.18 - 2013-11-26
