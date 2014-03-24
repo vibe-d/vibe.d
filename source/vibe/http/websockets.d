@@ -45,7 +45,7 @@ import std.string;
 import std.functional;
 
 
-/// Exception thrown by $(D svibe.http.websockets).
+/// Exception thrown by $(D vibe.http.websockets).
 class WebSocketException: Exception
 {
 	///
