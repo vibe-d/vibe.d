@@ -77,6 +77,9 @@ Apart from working on the latest DMD versions, this release includes an importan
  - Added SSL support for the MongoDB client (by Daniel Killebrew aka gittywithexcitement) - [issue #575][issue575], [pull #587][issue587]
  - Made all overloads of `listenHTTPPlain` private (as they were supposed to be since a year)
  - Added using `-version=VibeDisableCommandLineParsing` to disable default command line argument interpretation
+ - Added using `-version=VibeNoSSL` to disable using OpenSSL and added free functions to create SSL contexts/streams
+ - Functions in `vibe.data.json` now throw a `JSONException` instead of a bare `Exception` (by Luca Niccoli aka lultimouomo) - [pull #590][issue590]
+ - Functions in `vibe.http.websocket` now throw a `WebSocketException` instead of a bare `Exception` (by Luca Niccoli aka lultimouomo) - [pull #590][issue590]
 
 ### Bug fixes ###
 
@@ -121,6 +124,7 @@ Apart from working on the latest DMD versions, this release includes an importan
  - Fixed a possible stale TCP connection after finalizing a HTTP client request had failed
  - Fixed `makeIsolated` to work for structs
  - Fixed `listenHTTP` to throw an exception if listening on all supplied bind addresses has failed
+ - Fixed a possible crash or false pointers in `HashMap` due to a missing call to `GC.removeRange` - [issue #591][issue591]
 
 Note that some fixes have been left out because they are related to changes within the development cycle of this release.
 
@@ -182,6 +186,8 @@ Note that some fixes have been left out because they are related to changes with
 [issue575]: https://github.com/rejectedsoftware/vibe.d/issues/575
 [issue582]: https://github.com/rejectedsoftware/vibe.d/issues/582
 [issue587]: https://github.com/rejectedsoftware/vibe.d/issues/587
+[issue590]: https://github.com/rejectedsoftware/vibe.d/issues/590
+[issue591]: https://github.com/rejectedsoftware/vibe.d/issues/591
 
 
 v0.7.18 - 2013-11-26
