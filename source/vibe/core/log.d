@@ -126,7 +126,8 @@ void deregisterLogger(shared(Logger) logger)
 	---
 */
 void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args)
-    nothrow if (isSomeString!S) {
+nothrow if (isSomeString!S)
+{
 	static assert(level != LogLevel.none);
 	try {
 		foreach (l; ss_loggers)
@@ -136,7 +137,7 @@ void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*
 				rawLog(/*mod, func,*/ file, line, level, app.data);
 				break;
 			}
-	} catch(Exception) assert(false);
+	} catch(Exception e) debug assert(false, e.msg);
 }
 /// ditto
 void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, auto ref T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
