@@ -1517,9 +1517,12 @@ ubyte[] toBsonData(T)(T v)
 	/*static T tmp;
 	tmp = nativeToLittleEndian(v);
 	return cast(ubyte[])((&tmp)[0 .. 1]);*/
-	static ubyte[T.sizeof] ret;
-	ret = nativeToLittleEndian(v);
-	return ret;
+	if (__ctfe) return nativeToLittleEndian(v).dup;
+	else {
+		static ubyte[T.sizeof] ret;
+		ret = nativeToLittleEndian(v);
+		return ret;
+	}
 }
 
 T fromBsonData(T)(in ubyte[] v)
@@ -1532,12 +1535,12 @@ T fromBsonData(T)(in ubyte[] v)
 
 ubyte[] toBigEndianData(T)(T v)
 {
-	/*static T tmp;
-	tmp = nativeToBigEndian(v);
-	return cast(ubyte[])((&tmp)[0 .. 1]);*/
-	static ubyte[T.sizeof] ret;
-	ret = nativeToBigEndian(v);
-	return ret;
+	if (__ctfe) return nativeToBigEndian(v).dup;
+	else {
+		static ubyte[T.sizeof] ret;
+		ret = nativeToBigEndian(v);
+		return ret;
+	}
 }
 
 private string underscoreStrip(string field_name)
