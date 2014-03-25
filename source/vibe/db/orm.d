@@ -42,12 +42,12 @@ unittest {
 	db.insertRow!User("Peter", 42);
 	db.insertRow!User("Foxy", 8);
 	db.insertRow!User("Peter", 69);
-	foreach (usr; db.find!(and!(.equal!(User.name)("Peter"), greater!(User.age)(29))))
+	foreach (usr; db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(29))))
 		logInfo("%s", usr);
-	foreach (usr; db.find!(or!(.equal!(User.name)("Peter"), greater!(User.age)(29))))
+	foreach (usr; db.find(or(.equal!(User.name)("Peter"), greater!(User.age)(29))))
 		logInfo("%s", usr);
-	db.update!(and!(.equal!(User.name)("Tom")), set!(User.age)(20));
-	foreach (usr; db.find!(.equal!(User.name)("Tom")))
+	db.update(.equal!(User.name)("Tom"), set!(User.age)(20));
+	foreach (usr; db.find(.equal!(User.name)("Tom")))
 		logInfo("Changed age: %s", usr);
 	logInfo("Done.");
 }
@@ -90,7 +90,7 @@ unittest {
 	db.insertRow!Box("box 2", ["Tom", "Hartmut", "Lynn"]);
 	db.insertRow!Box("box 3", ["Peter", "Hartmut", "Lynn"]);
 
-	foreach(box; db.find!(containsAll!(Box.users)("Hartmut", "Lynn")))
+	foreach(box; db.find(containsAll!(Box.users)("Hartmut", "Lynn")))
 		logInfo("%s", box.name);
 
 	logInfo("Done.");
@@ -135,28 +135,25 @@ class ORM(Tables, Driver) {
 		upgradeColumns();
 	}
 
-	auto find(QUERY...)()
-		if (QUERY.length == 1)
+	auto find(QUERY)(QUERY query)
 	{
 		alias T = QueryTable!QUERY;
 		enum tidx = tableIndex!(T, Tables);
-		return m_driver.find!(Row!T, QUERY)(m_tables[tidx].handle);
+		return m_driver.find!(Row!T)(m_tables[tidx].handle, query);
 	}
 
-	auto findOne(QUERY...)()
-		if (QUERY.length == 1)
+	auto findOne(QUERY)(QUERY query)
 	{
-		auto res = find!QUERY();
+		auto res = find(query);
 		enforce(!res.empty, "Not found!");
 		return res.front;
 	}
 
-	void update(QUERY_AND_UPDATE...)()
-		if (QUERY_AND_UPDATE.length == 2)
+	void update(QUERY, UPDATE)(QUERY query, UPDATE update)
 	{
-		alias T = QueryTable!(QUERY_AND_UPDATE[0]);
+		alias T = QueryTable!QUERY;
 		auto tidx = tableIndex!(T, Tables);
-		m_driver.update!(Row!T, QUERY_AND_UPDATE)(m_tables[tidx].handle);
+		m_driver.update!(Row!T)(m_tables[tidx].handle, query, update);
 	}
 
 	void insertRow(T, FIELDS...)(FIELDS fields)
@@ -206,8 +203,8 @@ auto less(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comp
 auto lessEqual(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.lessEqual)(value); }
 auto containsAll(alias field)(typeof(field) values...) { return ComparatorExpr!(field, Comparator.containsAll)(values.dup); }
 
-@property auto and(EXPRS...)() { return ConjunctionExpr!EXPRS(); }
-@property auto or(EXPRS...)() { return DisjunctionExpr!EXPRS(); }
+@property auto and(EXPRS...)(EXPRS exprs) { return ConjunctionExpr!EXPRS(exprs); }
+@property auto or(EXPRS...)(EXPRS exprs) { return DisjunctionExpr!EXPRS(exprs); }
 //JoinExpr!()
 
 struct ComparatorExpr(alias FIELD, Comparator COMP)
@@ -227,8 +224,8 @@ enum Comparator {
 	lessEqual,
 	containsAll
 }
-struct ConjunctionExpr(EXPRS...) { alias exprs = TypeTuple!EXPRS; }
-struct DisjunctionExpr(EXPRS...) { alias exprs = TypeTuple!EXPRS; }
+struct ConjunctionExpr(EXPRS...) { EXPRS exprs; }
+struct DisjunctionExpr(EXPRS...) { EXPRS exprs; }
 
 
 /******************************************************************************/
@@ -272,9 +269,9 @@ template isTableDefinition(T) {
 
 private template QueryTable(QUERIES...) if (QUERIES.length > 0) {
 	static if (QUERIES.length == 1) {
-		alias Q = typeof(QUERIES[0]);
+		alias Q = QUERIES[0];
 		static if (isInstanceOf!(ConjunctionExpr, Q) || isInstanceOf!(DisjunctionExpr, Q)) {
-			alias QueryTable = QueryTable!(Q.exprs);
+			alias QueryTable = QueryTable!(typeof(Q.exprs));
 		} else static if (isInstanceOf!(ComparatorExpr, Q) || isInstanceOf!(ContainsExpr, Q)) {
 			alias QueryTable = Q.TABLE;
 		} else static assert(false, "Invalid query type: "~Q.stringof);
@@ -330,33 +327,33 @@ class MongoDBDriver {
 	MongoCollection getTableHandle(string name) { return m_db[name]; }
 	string getColumnHandle(MongoCollection coll, string name) { return name; }
 	
-	auto find(T, QUERY...)(MongoCollection table) if (QUERY.length == 1)
+	auto find(T, QUERY)(MongoCollection table, QUERY query)
 	{
 		struct Query { mixin MongoQuery!(0, QUERY); }
-		Query query;
-		mixin(initializeMongoQuery!(0, QUERY)("query", "QUERY[0]"));
+		Query mquery;
+		mixin(initializeMongoQuery!(0, QUERY)("mquery", "query"));
 		
 		import vibe.core.log; import vibe.data.bson;
-		logInfo("QUERY (%s): %s", table.name, serializeToBson(query).toString());
+		logInfo("QUERY (%s): %s", table.name, serializeToBson(mquery).toString());
 		
-		return table.find(query).map!(b => deserializeBson!T(b));
+		return table.find(mquery).map!(b => deserializeBson!T(b));
 	}
 
-	auto update(T, QUERY_AND_UPDATE...)(MongoCollection table) if (QUERY_AND_UPDATE.length == 2)
+	auto update(T, QUERY, UPDATE)(MongoCollection table, QUERY query, UPDATE update)
 	{
-		struct Query { mixin MongoQuery!(0, QUERY_AND_UPDATE[0]); }
-		Query query;
-		mixin(initializeMongoQuery!(0, QUERY_AND_UPDATE[0])("query", "QUERY_AND_UPDATE[0]"));
+		struct Query { mixin MongoQuery!(0, QUERY); }
+		Query mquery;
+		mixin(initializeMongoQuery!(0, QUERY)("mquery", "query"));
 
-		struct Update { mixin MongoUpdate!(0, QUERY_AND_UPDATE[1]); }
-		Update update;
-		mixin(initializeMongoUpdate!(0, QUERY_AND_UPDATE[1])("update", "QUERY_AND_UPDATE[1]"));
+		struct Update { mixin MongoUpdate!(0, UPDATE); }
+		Update mupdate;
+		mixin(initializeMongoUpdate!(0, UPDATE)("mupdate", "update"));
 
 		import vibe.core.log; import vibe.data.bson;
-		logInfo("QUERY (%s): %s", table.name, serializeToBson(query).toString());
-		logInfo("UPDATE: %s", serializeToBson(update).toString());
+		logInfo("QUERY (%s): %s", table.name, serializeToBson(mquery).toString());
+		logInfo("UPDATE: %s", serializeToBson(mupdate).toString());
 
-		table.update(query, update);
+		table.update(mquery, mupdate);
 	}
 
 	void insert(T)(MongoCollection table, T value)
@@ -375,7 +372,8 @@ mixin template MongoQuery(size_t idx, QUERIES...) {
 		mixin MongoQuery!(idx, QUERIES[0 .. $/2]);
 		mixin MongoQuery!(idx + QUERIES.length/2, QUERIES[$/2 .. $]);
 	} else static if (QUERIES.length == 1) {
-		alias Q = typeof(QUERIES[0]);
+		static assert(!is(typeof(QUERIES[0])) || is(typeof(QUERIES[0])), "Arguments to MongoQuery must be types.");
+		alias Q = QUERIES[0];
 
 		static if (isInstanceOf!(ComparatorExpr, Q)) {
 			static if (Q.comp == Comparator.equal) mixin("Q.T "~Q.name~";");
@@ -388,10 +386,10 @@ mixin template MongoQuery(size_t idx, QUERIES...) {
 			else static assert(false, format("Unsupported comparator: %s", Q.comp));
 		} else static if (isInstanceOf!(ConjunctionExpr, Q)) {
 			//mixin(format(`static struct Q%s { mixin MongoQuery!(0, Q.exprs); } @(vibe.data.serialization.name("$and")) Q%s q%s;`, idx, idx, idx));
-			mixin MongoQuery!(0, Q.exprs);
+			mixin MongoQuery!(0, typeof(Q.exprs));
 		} else static if (isInstanceOf!(DisjunctionExpr, Q)) {
 			mixin(format(
-				`static struct Q%s { mixin MongoQueries!(0, Q.exprs); } @(vibe.data.serialization.name("$or"), asArray) Q%s q%s;`, idx, idx, idx));
+				q{static struct Q%s { mixin MongoQueries!(0, typeof(Q.exprs)); } @(vibe.data.serialization.name("$or"), asArray) Q%s q%s;}, idx, idx, idx));
 		} else static assert(false, "Unsupported query expression type: "~Q.stringof);
 	}
 }
@@ -405,11 +403,10 @@ mixin template MongoQueries(size_t idx, QUERIES...) {
 	}
 }
 
-private static string initializeMongoQuery(size_t idx, QUERY...)(string name, string srcfield)
-	if (QUERY.length == 1)
+private static string initializeMongoQuery(size_t idx, QUERY)(string name, string srcfield)
 {
 	string ret;
-	alias Q = typeof(QUERY[0]);
+	alias Q = QUERY;
 
 	static if (isInstanceOf!(ComparatorExpr, Q)) {
 		final switch (Q.comp) with (Comparator) {
@@ -422,23 +419,23 @@ private static string initializeMongoQuery(size_t idx, QUERY...)(string name, st
 				break;
 		}
 	} else static if (isInstanceOf!(ConjunctionExpr, Q)) {
-		foreach (i, E; Q.exprs)
+		foreach (i, E; typeof(Q.exprs))
 			//ret ~= initializeMongoQuery!(i, E)(format("%s.q%s", name, idx), format("%s.exprs[%s]", srcfield, i));
 			ret ~= initializeMongoQuery!(i, E)(name, format("%s.exprs[%s]", srcfield, i));
 	} else static if (isInstanceOf!(DisjunctionExpr, Q)) {
-		foreach (i, E; Q.exprs)
+		foreach (i, E; typeof(Q.exprs))
 			ret ~= initializeMongoQuery!(i, E)(format("%s.q%s.q%s", name, idx, i), format("%s.exprs[%s]", srcfield, i));
 	} else static assert(false, "Unsupported query expression type: "~Q.stringof);
 
 	return ret;
 }
 
-mixin template MongoUpdate(size_t idx, QUERIES...) {
-	static if (QUERIES.length > 1) {
-		mixin MongoUpdate!(idx, QUERIES[0 .. $/2]);
-		mixin MongoUpdate!(idx + QUERIES.length/2, QUERIES[$/2 .. $]);
-	} else static if (QUERIES.length == 1) {
-		alias Q = typeof(QUERIES[0]);
+mixin template MongoUpdate(size_t idx, UPDATES...) {
+	static if (UPDATES.length > 1) {
+		mixin MongoUpdate!(idx, UPDATES[0 .. $/2]);
+		mixin MongoUpdate!(idx + UPDATES.length/2, UPDATES[$/2 .. $]);
+	} else static if (UPDATES.length == 1) {
+		alias Q = UPDATES[0];
 
 		static if (isInstanceOf!(SetExpr, Q)) {
 			mixin(format(q{static struct Q%s { Q.T %s; } @(vibe.data.serialization.name("$set")) Q%s q%s;}, idx, Q.name, idx, idx));
@@ -446,20 +443,19 @@ mixin template MongoUpdate(size_t idx, QUERIES...) {
 	}
 }
 
-mixin template MongoUpdates(size_t idx, QUERIES...) {
-	static if (QUERIES.length > 1) {
-		mixin MongoUpdates!(idx, QUERIES[0 .. $/2]);
-		mixin MongoUpdates!(idx + QUERIES.length/2, QUERIES[$/2 .. $]);
-	} else static if (QUERIES.length == 1) {
-		mixin(format(`struct Q%s { mixin MongoUpdate!(0, QUERIES[0]); } Q%s q%s;`, idx, idx, idx));
+mixin template MongoUpdates(size_t idx, UPDATES...) {
+	static if (UPDATES.length > 1) {
+		mixin MongoUpdates!(idx, UPDATES[0 .. $/2]);
+		mixin MongoUpdates!(idx + UPDATES.length/2, UPDATES[$/2 .. $]);
+	} else static if (UPDATES.length == 1) {
+		mixin(format(q{struct Q%s { mixin MongoUpdate!(0, UPDATES[0]); } Q%s q%s;}, idx, idx, idx));
 	}
 }
 
-private static string initializeMongoUpdate(size_t idx, QUERY...)(string name, string srcfield)
-	if (QUERY.length == 1)
+private static string initializeMongoUpdate(size_t idx, UPDATE)(string name, string srcfield)
 {
 	string ret;
-	alias Q = typeof(QUERY[0]);
+	alias Q = UPDATE;
 
 	static if (isInstanceOf!(SetExpr, Q)) {
 		ret ~= format("%s.q%s.%s = %s.value;", name, idx, Q.name, srcfield);
