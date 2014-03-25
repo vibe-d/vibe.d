@@ -41,6 +41,22 @@ FileStream openFile(string path, FileMode mode = FileMode.read)
 }
 
 /**
+	Convenience method to read a file completely
+*/
+ubyte[] readFile(Path path)
+{
+	import vibe.stream.operations:readAll;
+	auto fs = openFile(path);
+	scope(exit) fs.close();
+	return fs.readAll();
+}
+/// ditto
+ubyte[] readFile(string path)
+{
+	return readFile(Path(path));
+}
+
+/**
 	Convenience method to append to a file
 */
 void appendToFile(Path path, string data) {
