@@ -31,7 +31,7 @@
 	}
 	---
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013-2014 rejectedsoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
