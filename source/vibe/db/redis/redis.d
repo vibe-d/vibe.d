@@ -295,8 +295,8 @@ final class RedisClient {
 						arr ~= args[i].to!string; 
 					}
 				}
+				logInfo("Redis request: %s ( %s ) => (void)", command, arr);
 			}
-			logInfo("Redis request: %s ( %s ) => (void)", command, arr);
 			return _request!T(conn, command, args);
 		} 
 		else static if (!is (T == RedisReply ) ) {
