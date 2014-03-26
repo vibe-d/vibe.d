@@ -356,12 +356,13 @@ struct RedisReply {
 
 	T next(T : E[], E)()
 	{
-		assert(m_impl.m_lockedConnection !is null);
 		return m_impl.next!T();
 	}
 
 	void drop()
 	{
+		if (m_impl.m_lockedConnection !is null)
+			assert(m_impl.m_lockedConnection.m_replyRefCount == 0);
 		return m_impl.drop();
 	}
 
@@ -372,25 +373,27 @@ struct RedisReply {
 	}
 
 	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
+		assert(conn !is null);
 		m_impl.lockedConnection = conn;
 		m_impl.m_lockedConnection.m_replyRefCount++;
 	}
 
 	this(this){
-		m_impl.m_lockedConnection.m_replyRefCount += 1;
+		if (m_impl !is null && m_impl.m_lockedConnection !is null) m_impl.m_lockedConnection.m_replyRefCount += 1;
 	}
 
 	~this(){
-		if (m_impl.m_lockedConnection !is null)
-		{
-			m_impl.m_lockedConnection.m_replyRefCount -= 1;
-			if (m_impl.m_lockedConnection.m_replyRefCount == 0){
-				m_impl.drop();
+		if (m_impl !is null){
+			if (m_impl.m_lockedConnection !is null)
+			{
+				m_impl.m_lockedConnection.m_replyRefCount -= 1;
+				if (m_impl.m_lockedConnection.m_replyRefCount == 0){
+					m_impl.drop();
+				}
 			}
-		}
-		if (m_impl !is null)
-			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
 
+			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
+		}
 	}
 
 }
