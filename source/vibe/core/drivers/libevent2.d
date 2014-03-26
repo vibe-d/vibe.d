@@ -274,12 +274,15 @@ class Libevent2Driver : EventDriver {
 		cctx.readOwner = Task.getThis();
 		scope(exit) cctx.readOwner = Task();
 
+		assert(cctx.exception is null);
 		socketEnforce(bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) == 0,
 			"Failed to connect to " ~ addr.toString());
-
-	// TODO: cctx.remove_addr6 = ...;
 		
 		try {
+			cctx.checkForException();
+
+			// TODO: cctx.remote_addr6 = ...;
+
 			while (cctx.status == 0)
 				m_core.yieldForEvent();
 		} catch (Exception e) {

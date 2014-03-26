@@ -411,6 +411,13 @@ package struct TCPContext
 		event = evt;
 	}
 
+	void checkForException() {
+		if (auto ex = this.exception) {
+			this.exception = null;
+			throw ex;
+		}
+	}
+
 	DriverCore core;
 	event_base* eventLoop;
 	void delegate(TCPConnection conn) connectionCallback;
@@ -424,6 +431,7 @@ package struct TCPContext
 	bool eof = false; // remomte has hung up
 	Task readOwner;
 	Task writeOwner;
+	Exception exception; // set during onSocketEvent calls that were emitted synchronously
 }
 alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
 
@@ -484,13 +492,13 @@ package nothrow extern(C)
 				try {
 					listen_ctx.connectionCallback(conn);
 					logDebug("task out (fd %d).", client_ctx.socketfd);
-				} catch( Exception e ){
+				} catch (Exception e) {
 					logWarn("Handling of connection failed: %s", e.msg);
 					logDiagnostic("%s", e.toString().sanitize);
+				} finally {
+					FreeListObjectAlloc!ClientTask.free(&this);
+					conn.close();
 				}
-				conn.close();
-
-				FreeListObjectAlloc!ClientTask.free(&this);
 				logDebug("task finished.");
 			}
 		}
@@ -607,11 +615,13 @@ logDebug("running task");
 
 			if (ctx.readOwner && ctx.readOwner.running) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
-				ctx.core.resumeTask(ctx.readOwner, ex);
+				if (ctx.readOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
+				else ctx.core.resumeTask(ctx.readOwner, ex);
 			}
 			if (ctx.writeOwner && ctx.writeOwner != ctx.readOwner && ctx.writeOwner.running) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
-				ctx.core.resumeTask(ctx.writeOwner, ex);
+				if (ctx.writeOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
+				else ctx.core.resumeTask(ctx.writeOwner, ex);
 			}
 		} catch( Throwable e ){
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
