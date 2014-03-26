@@ -280,7 +280,67 @@ final class RedisClient {
 		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(m_selectedDB);
-		return _request!T(conn, command, args);
+		static if (is( T == void )){
+			version (RedisDebug) {
+				import std.stdio;
+				
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string; 
+					}
+				}
+			}
+			logInfo("Redis request: %s ( %s ) => (void)", command, arr);
+			return _request!T(conn, command, args);
+		} 
+		else static if (!is (T == RedisReply ) ) {
+			auto ret = _request!T(conn, command, args);
+			version (RedisDebug) {
+				import std.stdio;
+
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string;
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
+			}
+			return ret;
+		}
+		else
+		{
+			auto ret = _request!T(conn, command, args);
+			version (RedisDebug) {
+				import std.stdio;
+				
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string;
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => (RedisReply)", command, arr);
+			}
+			return ret;
+		}
+
 	}
 }
 
@@ -361,25 +421,26 @@ struct RedisReply {
 
 	void drop()
 	{
-		if (m_impl.m_lockedConnection !is null)
-			assert(m_impl.m_lockedConnection.m_replyRefCount == 0);
+		assert (m_impl.m_lockedConnection !is null);
 		return m_impl.drop();
 	}
 
 	// is this necessary?
 	private ubyte[] readBulk( string sizeLn )
 	{
+		assert(m_impl.m_conn !is null);
 		return m_impl.readBulk(sizeLn);
 	}
 
 	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
-		assert(conn !is null);
+		assert(m_impl.m_conn !is null);
 		m_impl.lockedConnection = conn;
 		m_impl.m_lockedConnection.m_replyRefCount++;
 	}
 
 	this(this){
-		if (m_impl !is null && m_impl.m_lockedConnection !is null) m_impl.m_lockedConnection.m_replyRefCount += 1;
+		if (m_impl !is null && m_impl.m_lockedConnection !is null) 
+			m_impl.m_lockedConnection.m_replyRefCount += 1;
 	}
 
 	~this(){
@@ -634,7 +695,6 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 	} else {
 		scope RedisReply reply = _request_simple(conn, command, args);
 		reply.lockedConnection = conn;
-		scope(exit) reply.drop();
 		static if (is(T == bool)) {
 			return reply.next!string[0] == '1';
 		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {

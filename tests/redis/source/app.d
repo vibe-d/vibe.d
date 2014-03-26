@@ -24,7 +24,7 @@ void runTest()
 	m_RedisDB.setEX("test9", 1000, "test9");
 	m_RedisDB.setEX("test10", 1000, "0");
 	m_RedisDB.del("saddTests");
-	writeln(m_RedisDB.sadd("saddTests", "item1"));
+	m_RedisDB.sadd("saddTests", "item1");
 	m_RedisDB.sadd("saddTests", "item2");
 	
 	
@@ -57,7 +57,7 @@ void runTest()
 
 int main()
 {
-	setLogLevel(LogLevel.debug_);
+	setLogLevel(LogLevel.info);
 	runTask(toDelegate(&runTest));
 	return runEventLoop();
 }
