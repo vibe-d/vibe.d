@@ -373,23 +373,24 @@ struct RedisReply {
 
 	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
 		m_impl.lockedConnection = conn;
-		assert(m_impl.m_lockedConnection.m_replyRefCount == 0);
 		m_impl.m_lockedConnection.m_replyRefCount++;
 	}
 
 	this(this){
-		m_impl.m_lockedConnection.replyRefCount += 1;
+		m_impl.m_lockedConnection.m_replyRefCount += 1;
 	}
 
 	~this(){
 		if (m_impl.m_lockedConnection !is null)
 		{
 			m_impl.m_lockedConnection.m_replyRefCount -= 1;
-			if (m_impl.m_lockedConnection.replyRefCount == 0){
+			if (m_impl.m_lockedConnection.m_replyRefCount == 0){
 				m_impl.drop();
-				FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
 			}
-		}else FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
+		}
+		if (m_impl !is null)
+			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
+
 	}
 
 }
@@ -461,7 +462,10 @@ private final class RedisReplyImpl {
 		} else {
 			ret = m_data;
 		}
-		if (m_index >= m_length && m_lockedConnection != null) m_lockedConnection.clear();
+		if (!hasNext && m_lockedConnection !is null) {
+			m_lockedConnection.m_replyRefCount = 0;
+			m_lockedConnection.clear();
+		}
 		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
@@ -470,8 +474,11 @@ private final class RedisReplyImpl {
 	// drop the whole
 	void drop()
 	{
-		if (!hasNext) m_lockedConnection.clear();
-		else while (hasNext) next!(ubyte[])();
+		if (!m_initialized) init();
+		if (!hasNext && m_lockedConnection !is null) {
+			m_lockedConnection.m_replyRefCount = 0;
+			m_lockedConnection.clear();
+		} else while (hasNext) next!(ubyte[])();
 	}
 
 	private ubyte[] readBulk( string sizeLn )
@@ -617,11 +624,14 @@ private RedisReply _request_simple(ARGS...)(RedisConnection conn, string command
 
 private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, ARGS args)
 { 
-	auto reply = _request_simple(conn, command, args);
-	reply.lockedConnection = conn;
 	static if (is(T == RedisReply)) {
+		RedisReply reply = _request_simple(conn, command, args);
+		reply.lockedConnection = conn;
 		return reply;
 	} else {
+		scope RedisReply reply = _request_simple(conn, command, args);
+		reply.lockedConnection = conn;
+		scope(exit) reply.drop();
 		static if (is(T == bool)) {
 			return reply.next!string[0] == '1';
 		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
@@ -634,3 +644,50 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 	}
 }
 
+unittest {
+	import std.stdio;
+	/* open a redis server locally to run these tests
+	 * Windows download link: https://raw.github.com/MSOpenTech/redis/2.8.4_msopen/bin/release/redis-2.8.4.zip
+	 * Linux: use "yum install redis" on RHEL or "apt-get install redis" on Debian-like
+
+	RedisClient m_RedisDB = new RedisClient();
+	m_RedisDB.setEX("test1", 1000, "test1");
+	m_RedisDB.setEX("test2", 1000, "test2");
+	m_RedisDB.setEX("test3", 1000, "test3");
+	m_RedisDB.setEX("test4", 1000, "test4");
+	m_RedisDB.setEX("test5", 1000, "test5");
+	m_RedisDB.setEX("test6", 1000, "test6");
+	m_RedisDB.setEX("test7", 1000, "test7");
+	m_RedisDB.setEX("test8", 1000, "test8");
+	m_RedisDB.setEX("test9", 1000, "test9");
+	m_RedisDB.setEX("test10", 1000, "0");
+	m_RedisDB.del("saddTests");
+	writeln(m_RedisDB.sadd("saddTests", "item1"));
+	m_RedisDB.sadd("saddTests", "item2");
+	
+	
+	assert(m_RedisDB.get!string("test1") == "test1");
+	m_RedisDB.get!string("test2");
+	m_RedisDB.get!string("test3");
+	m_RedisDB.get!string("test4");
+	m_RedisDB.get!string("test5");
+	m_RedisDB.get!string("test6");
+	m_RedisDB.get!string("test7");
+	m_RedisDB.get!string("test8");
+	m_RedisDB.get!string("test9");
+	m_RedisDB.get!string("test10");
+	m_RedisDB.append("test1", "test1append");
+	m_RedisDB.append("test2", "test2append");
+	m_RedisDB.get!string("test1");
+	m_RedisDB.get!string("test2");
+	m_RedisDB.incr("test10");
+	
+	m_RedisDB.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
+	
+	m_RedisDB.srem("test1", "test1append");
+	m_RedisDB.srem("test2", "test2append");
+	m_RedisDB.smembers("test1");
+	m_RedisDB.smembers("test2");
+	writeln("Redis Test Succeeded.");
+*/
+}
