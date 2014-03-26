@@ -1195,7 +1195,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 		logTrace("Waiting for next request...");
 		// wait for another possible request on a keep-alive connection
 		if (!connection.waitForData(settings.keepAliveTimeout)) {
-			if (!connection.connected) { logTrace("Client disconnected.");
+			if (!connection.connected) logTrace("Client disconnected.");
 			else logDebug("Keep-alive connection timed out!");
 			break;
 		}
