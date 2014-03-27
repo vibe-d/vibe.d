@@ -220,9 +220,39 @@ void runWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
 }
 /// ditto
 void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
+	if (is(typeof(shared(T).init.method)))
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 	runWorkerTask_unsafe({ object.method(args); });
+}
+
+/// Running a worker task using a function
+unittest {
+	static void workerFunc(int param)
+	{
+		logInfo("Param: %s", param);
+	}
+
+	static void test()
+	{
+		runWorkerTask(&workerFunc, 42);
+	}
+}
+
+/// Running a worker task using a class method
+unittest {
+	static class Test {
+		void method(int param)
+		shared {
+			logInfo("Param: %s", param);
+		}
+	}
+
+	static void test()
+	{
+		auto cls = new shared Test;
+		runWorkerTask!(Test.method)(cls, 42);
+	}
 }
 
 private void runWorkerTask_unsafe(void delegate() del)
