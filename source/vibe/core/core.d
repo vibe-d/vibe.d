@@ -220,10 +220,10 @@ void runWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
 }
 /// ditto
 void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
-	if (is(typeof(shared(T).init.method)))
+	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTask_unsafe({ object.method(args); });
+	runWorkerTask_unsafe({ __traits(getMember, object, __traits(identifier, method))(args); });
 }
 
 /// Running a worker task using a function
@@ -242,7 +242,7 @@ unittest {
 /// Running a worker task using a class method
 unittest {
 	static class Test {
-		void method(int param)
+		void workerMethod(int param)
 		shared {
 			logInfo("Param: %s", param);
 		}
@@ -251,7 +251,7 @@ unittest {
 	static void test()
 	{
 		auto cls = new shared Test;
-		runWorkerTask!(Test.method)(cls, 42);
+		runWorkerTask!(Test.workerMethod)(cls, 42);
 	}
 }
 
