@@ -1,7 +1,7 @@
 /**
 	Contains interfaces and enums for evented I/O drivers.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -18,6 +18,10 @@ import std.variant;
 
 
 /** Represents a single task as started using vibe.core.runTask.
+
+	Note that the Task type is considered weakly isolated and thus can be
+	passed between threads using vibe.core.concurrency.send or by passing
+	it as a parameter to vibe.core.core.runWorkerTask.
 */
 struct Task {
 	private {
