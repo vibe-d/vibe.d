@@ -533,12 +533,7 @@ package nothrow extern(C)
 				*cast(sockaddr_in6*)task.remote_addr.sockAddr = remote_addr;
 				task.sockfd = sockfd;
 
-				version(MultiThreadTest){
-					runWorkerTask(&task.execute);
-				} else {
-logDebug("running task");
-					runTask(&task.execute);
-				}
+				runTask(&task.execute);
 			}
 		} catch (Throwable e) {
 			logWarn("Got exception while accepting new connections: %s", e.msg);
