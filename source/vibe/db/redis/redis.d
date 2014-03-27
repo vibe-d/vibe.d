@@ -390,159 +390,127 @@ final class RedisSubscriber {
 
 struct RedisReply {
 	import vibe.utils.memory : FreeListRef;
-	private FreeListRef!RedisReplyImpl m_impl;
+	private {
+		uint m_magic = 0x15f67ab3;
+		RedisConnection m_conn;
+		LockedConnection!RedisConnection m_lockedConnection;
+	}
 
-	this(TCPConnection conn)
+	this(RedisConnection conn)
 	{
-		m_impl = FreeListRef!RedisReplyImpl(conn);
+		m_conn = conn;
+
+		auto ctx = &conn.m_replyContext;
+		assert(ctx.refCount == 0);
+		*ctx = RedisReplyContext.init;
+		ctx.refCount++;
 	}
 
 	this(this)
 	{
-		if (m_impl && m_impl.m_lockedConnection) 
-			m_impl.m_lockedConnection.m_replyRefCount++;
+		assert(m_magic == 0x15f67ab3);
+		if (m_conn) {
+			auto ctx = &m_conn.m_replyContext;
+			assert(ctx.refCount > 0);
+			ctx.refCount++;
+		}
 	}
 
 	~this()
 	{
-		if (m_impl){
-			if (m_impl.m_lockedConnection) {
-				if (!--m_impl.m_lockedConnection.m_replyRefCount)
-					m_impl.drop();
-			} else m_impl.drop();
+		assert(m_magic == 0x15f67ab3);
+		if (m_conn) {
+			if (!--m_conn.m_replyContext.refCount)
+				drop();
 		}
 	}
 
-	@property bool hasNext() const {
-		return m_impl.hasNext;
-	}
+	@property bool hasNext() const { return m_conn && m_conn.m_replyContext.index < m_conn.m_replyContext.length; }
 
 	T next(T : E[], E)()
 	{
-		return m_impl.next!T();
-	}
-
-	void drop()
-	{
-		assert (m_impl.m_lockedConnection !is null);
-		return m_impl.drop();
-	}
-
-	// is this necessary?
-	private ubyte[] readBulk( string sizeLn )
-	{
-		assert(m_impl.m_conn !is null);
-		return m_impl.readBulk(sizeLn);
-	}
-
-	private @property void lockedConnection(ref LockedConnection!RedisConnection conn)
-	{
-		assert(m_impl.m_conn !is null);
-		m_impl.lockedConnection = conn;
-		assert(m_impl.m_lockedConnection.m_replyRefCount == 0);
-		m_impl.m_lockedConnection.m_replyRefCount++;
-	}
-}
-
-private final class RedisReplyImpl {
-	private {
-		TCPConnection m_conn;
-		LockedConnection!RedisConnection m_lockedConnection;
-		ubyte[] m_data;
-		long m_length;
-		long m_index;
-		bool m_multi;
-		bool m_initialized = false;
-	}
-
-	this(TCPConnection conn)
-	{
-		m_conn = conn;
-		m_index = 0;
-		m_length = 1;
-		m_multi = false;
-
-	}
-
-	void init()
-	{
-		m_initialized = true;
-		auto ln = cast(string)m_conn.readLine();
-		
-		switch(ln[0]) {
-			case '+':
-				m_data = cast(ubyte[])ln[ 1 .. $ ];
-				break;
-			case '-':
-				throw new Exception(ln[ 1 .. $ ]);
-			case ':':
-				m_data = cast(ubyte[])ln[ 1 .. $ ];
-				break;
-			case '$':
-				m_data = readBulk(ln);
-				break;
-			case '*':
-				if( ln.startsWith("*-1") ) {
-					m_length = 0;
-					return;
-				}
-				m_multi = true;
-				m_length = to!long(ln[ 1 .. $ ]);
-				break;
-			default:
-				assert(false, "Unknown reply type");
-		}
-	}
-
-	@property void lockedConnection(ref LockedConnection!RedisConnection conn){
-		m_lockedConnection = conn;
-	}
-
-	@property bool hasNext() const { return  m_index < m_length; }
-
-	T next(T : E[], E)()
-	{
-		assert( hasNext, "end of reply" );
-		if (!m_initialized) init();
-		m_index++;
+		assert(hasNext, "end of reply");
+		auto ctx = &m_conn.m_replyContext;
+		if (!ctx.initialized) init();
+		ctx.index++;
 		ubyte[] ret;
-		if (m_multi) {
-			auto ln = cast(string)m_conn.readLine();
+		if (ctx.multi) {
+			auto ln = cast(string)m_conn.conn.readLine();
 			ret = readBulk(ln);
 		} else {
-			ret = m_data;
+			ret = ctx.data;
 		}
-		if (!hasNext && m_lockedConnection !is null) {
-			m_lockedConnection.m_replyRefCount = 0;
+
+		if (!hasNext && ctx.refCount == 1) {
+			ctx.refCount = 0;
+			m_conn = null;
 			m_lockedConnection.destroy();
 		}
+
 		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
 	}
 
-	// drop the whole
 	void drop()
 	{
-		if (!m_initialized) init();
+		if (!m_conn) return;
+		if (!m_conn.m_replyContext.initialized) init();
 		while (hasNext) next!(ubyte[])();
-		if (m_lockedConnection !is null) {
-			m_lockedConnection.m_replyRefCount = 0;
-			m_lockedConnection.clear();
-		}
 	}
 
-	private ubyte[] readBulk( string sizeLn )
+	// is this necessary?
+	private ubyte[] readBulk(string sizeLn)
 	{
+		assert(m_conn !is null);
 		if (sizeLn.startsWith("$-1")) return null;
-		auto size = to!size_t( sizeLn[1 .. $] );
+		auto size = to!size_t(sizeLn[1 .. $]);
 		auto data = new ubyte[size];
-		m_conn.read(data);
-		m_conn.readLine();
+		m_conn.conn.read(data);
+		m_conn.conn.readLine();
 		return data;
+	}
+
+	private @property void lockedConnection(ref LockedConnection!RedisConnection conn)
+	{
+		assert(m_conn !is null);
+		m_lockedConnection = conn;
+	}
+
+	private void init()
+	{
+		assert(m_conn !is null);
+		auto ctx = &m_conn.m_replyContext;
+		ctx.initialized = true;
+
+		auto ln = cast(string)m_conn.conn.readLine();
+		
+		switch (ln[0]) {
+			default: throw new Exception(format("Unknown reply type: %s", ln[0]));
+			case '+': ctx.data = cast(ubyte[])ln[1 .. $]; break;
+			case '-': throw new Exception(ln[1 .. $]);
+			case ':': ctx.data = cast(ubyte[])ln[1 .. $]; break;
+			case '$': ctx.data = readBulk(ln); break;
+			case '*':
+				if (ln.startsWith("*-1")) {
+					ctx.length = 0;
+				} else {
+					ctx.multi = true;
+					ctx.length = to!long(ln[ 1 .. $ ]);
+				}
+				break;
+		}
 	}
 }
 
+struct RedisReplyContext {
+	long refCount = 0;
+	ubyte[] data;
+	long length = 1;
+	long index = 0;
+	bool multi = false;
+	bool initialized = false;
+}
 
 private final class RedisConnection {
 	private {
@@ -551,7 +519,7 @@ private final class RedisConnection {
 		TCPConnection m_conn;
 		string m_password;
 		long m_selectedDB;
-		size_t m_replyRefCount = 0;
+		RedisReplyContext m_replyContext;
 	}
 
 	this(string host, ushort port)
@@ -560,10 +528,8 @@ private final class RedisConnection {
 		m_port = port;
 	}
 
-	@property{
-		TCPConnection conn() { return m_conn; }
-		void conn(TCPConnection conn) { m_conn = conn; }
-	}
+	@property TCPConnection conn() { return m_conn; }
+	@property void conn(TCPConnection conn) { m_conn = conn; }
 
 	void setAuth(string password)
 	{
@@ -580,10 +546,10 @@ private final class RedisConnection {
 	}
 
 	RedisReply listen() {
-		if( !m_conn || !m_conn.connected ){
+		if (!m_conn || !m_conn.connected) {
 			throw new Exception("Cannot listen on connection without subscribing first.", __FILE__, __LINE__);
 		}
-		return RedisReply(m_conn);
+		return RedisReply(this);
 	}
 
 	private static long countArgs(ARGS...)(ARGS args)
@@ -669,7 +635,7 @@ private RedisReply _request_simple(ARGS...)(RedisConnection conn, string command
 	conn.conn.formattedWrite("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
 	conn.writeArgs(conn.conn, args);
 
-	return RedisReply(conn.conn);
+	return RedisReply(conn);
 }
 
 private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, ARGS args)
