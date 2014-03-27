@@ -11,7 +11,6 @@ void runTest()
 	try client = connectMongoDB("localhost");
 	catch (Exception e) {
 		logInfo("Failed to connect to local MongoDB server. Skipping test.");
-		exitEventLoop();
 		return;
 	}
 
@@ -42,12 +41,18 @@ void runTest()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
-	exitEventLoop(true);
 }
 
 int main()
 {
-	setLogLevel(LogLevel.debug_);
-	runTask(toDelegate(&runTest));
-	return runEventLoop();
+	int ret = 0;
+	runTask({
+		try runTest();
+		catch (Throwable th) {
+			logError("Test failed: %s", th.msg);
+			ret = 1;
+		} finally exitEventLoop(true);
+	});
+	runEventLoop();
+	return ret;
 }

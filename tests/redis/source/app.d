@@ -7,57 +7,67 @@ import vibe.vibe;
 
 void runTest()
 {
-	import std.stdio;
 	/* open a redis server locally to run these tests
 	 * Windows download link: https://raw.github.com/MSOpenTech/redis/2.8.4_msopen/bin/release/redis-2.8.4.zip
 	 * Linux: use "yum install redis" on RHEL or "apt-get install redis" on Debian-like
-*/
-	RedisClient m_RedisDB = new RedisClient();
-	m_RedisDB.setEX("test1", 1000, "test1");
-	m_RedisDB.setEX("test2", 1000, "test2");
-	m_RedisDB.setEX("test3", 1000, "test3");
-	m_RedisDB.setEX("test4", 1000, "test4");
-	m_RedisDB.setEX("test5", 1000, "test5");
-	m_RedisDB.setEX("test6", 1000, "test6");
-	m_RedisDB.setEX("test7", 1000, "test7");
-	m_RedisDB.setEX("test8", 1000, "test8");
-	m_RedisDB.setEX("test9", 1000, "test9");
-	m_RedisDB.setEX("test10", 1000, "0");
-	m_RedisDB.del("saddTests");
-	m_RedisDB.sadd("saddTests", "item1");
-	m_RedisDB.sadd("saddTests", "item2");
-	
-	
-	assert(m_RedisDB.get!string("test1") == "test1");
-	m_RedisDB.get!string("test2");
-	m_RedisDB.get!string("test3");
-	m_RedisDB.get!string("test4");
-	m_RedisDB.get!string("test5");
-	m_RedisDB.get!string("test6");
-	m_RedisDB.get!string("test7");
-	m_RedisDB.get!string("test8");
-	m_RedisDB.get!string("test9");
-	m_RedisDB.get!string("test10");
-	m_RedisDB.append("test1", "test1append");
-	m_RedisDB.append("test2", "test2append");
-	m_RedisDB.get!string("test1");
-	m_RedisDB.get!string("test2");
-	m_RedisDB.incr("test10");
-	
-	m_RedisDB.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
-	
-	m_RedisDB.srem("test1", "test1append");
-	m_RedisDB.srem("test2", "test2append");
-	m_RedisDB.smembers("test1");
-	m_RedisDB.smembers("test2");
-	writeln("Redis Test Succeeded.");
+	*/
+	RedisClient redis;
+	try redis = new RedisClient();
+	catch (Exception) {
+		logInfo("Failed to connect to local Redis server. Skipping test.");
+		return;
+	}
 
-	exitEventLoop(true);
+	redis.setEX("test1", 1000, "test1");
+	redis.setEX("test2", 1000, "test2");
+	redis.setEX("test3", 1000, "test3");
+	redis.setEX("test4", 1000, "test4");
+	redis.setEX("test5", 1000, "test5");
+	redis.setEX("test6", 1000, "test6");
+	redis.setEX("test7", 1000, "test7");
+	redis.setEX("test8", 1000, "test8");
+	redis.setEX("test9", 1000, "test9");
+	redis.setEX("test10", 1000, "0");
+	redis.del("saddTests");
+	redis.sadd("saddTests", "item1");
+	redis.sadd("saddTests", "item2");
+	
+	
+	assert(redis.get!string("test1") == "test1");
+	redis.get!string("test2");
+	redis.get!string("test3");
+	redis.get!string("test4");
+	redis.get!string("test5");
+	redis.get!string("test6");
+	redis.get!string("test7");
+	redis.get!string("test8");
+	redis.get!string("test9");
+	redis.get!string("test10");
+	redis.append("test1", "test1append");
+	redis.append("test2", "test2append");
+	redis.get!string("test1");
+	redis.get!string("test2");
+	redis.incr("test10");
+	
+	redis.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
+	
+	redis.srem("test1", "test1append");
+	redis.srem("test2", "test2append");
+	redis.smembers("test1");
+	redis.smembers("test2");
+	logInfo("Redis Test Succeeded.");
 }
 
 int main()
 {
-	setLogLevel(LogLevel.info);
-	runTask(toDelegate(&runTest));
-	return runEventLoop();
+	int ret = 0;
+	runTask({
+		try runTest();
+		catch (Throwable th) {
+			logError("Test failed: %s", th.msg);
+			ret = 1;
+		} finally exitEventLoop(true);
+	});
+	runEventLoop();
+	return ret;
 }
