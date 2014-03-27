@@ -451,7 +451,8 @@ struct RedisReply {
 				if (m_impl.m_lockedConnection.m_replyRefCount == 0){
 					m_impl.drop();
 				}
-			}
+			} else
+				m_impl.drop();
 
 			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
 		}
