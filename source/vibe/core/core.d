@@ -124,6 +124,7 @@ void exitEventLoop(bool shutdown_all_threads = false)
 	}
 
 	// shutdown the calling thread
+	s_exitEventLoop = true;
 	if (s_eventLoopRunning) getEventDriver().exitEventLoop();
 }
 
