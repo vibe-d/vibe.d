@@ -40,8 +40,8 @@ final class RedisClient {
 	private {
 		ConnectionPool!RedisConnection m_connections;
 		string m_authPassword;
-		long m_selectedDB;
 		string m_version;
+		long m_selectedDB;
 	}
 
 	this(string host = "127.0.0.1", ushort port = 6379)
@@ -62,6 +62,137 @@ final class RedisClient {
 				}
 			}
 		} 
+	}
+
+	/// Returns Redis version
+	@property string redisVersion() { return m_version; }
+
+	/// will get deprecated in 0.7.20
+	@property RedisDatabase selectedDB() { return getDatabase(m_selectedDB); }
+	/// will get deprecated in 0.7.20
+	void select(long db_index) { m_selectedDB = db_index; }
+	/// will get deprecated in 0.7.20
+	alias selectedDB this;
+
+	/** Returns a handle to the given database.
+	*/
+	RedisDatabase getDatabase(long index) { return RedisDatabase(this, index); }
+
+	/*
+		Connection
+	*/
+	void auth(string password) { m_authPassword = password; }
+	T echo(T : E[], E)(T data) { return request!T("ECHO", data); }
+	void ping() { request("PING"); }
+	void quit() { request("QUIT"); }
+
+	/*
+		Server
+	*/
+
+	//TODO: BGREWRITEAOF
+	//TODO: BGSAVE
+
+	T getConfig(T : E[], E)(string parameter) { return request!T("GET CONFIG", parameter); }
+	void setConfig(T : E[], E)(string parameter, T value) { request("SET CONFIG", parameter, value); }
+	void configResetStat() { request("CONFIG RESETSTAT"); }
+	//TOOD: Debug Object
+	//TODO: Debug Segfault
+	void flushAll() { request("FLUSHALL"); }
+	void flushDB() { request("FLUSHDB"); }
+	string info() { return request!string("INFO"); }
+	long lastSave() { return request!long("LASTSAVE"); }
+	//TODO monitor
+	void save() { request("SAVE"); }
+	void shutdown() { request("SHUTDOWN"); }
+	void slaveOf(string host, ushort port) { request("SLAVEOF", host, port); }
+	//TODO slowlog
+	//TODO sync
+
+	private T request(T = void, ARGS...)(string command, ARGS args)
+	{
+		return requestDB!(T, ARGS)(m_selectedDB, command, args);
+	}
+
+	private T requestDB(T, ARGS...)(long db, string command, ARGS args)
+	{
+		auto conn = m_connections.lockConnection();
+		conn.setAuth(m_authPassword);
+		conn.setDB(db);
+		static if (is(T == void)) {
+			version (RedisDebug) {
+				import std.stdio;
+				
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string; 
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => (void)", command, arr);
+			}
+			return _request!T(conn, command, args);
+		} else static if (!is (T == RedisReply)) {
+			auto ret = _request!T(conn, command, args);
+			version (RedisDebug) {
+				import std.stdio;
+
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string;
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
+			}
+			return ret;
+		} else {
+			auto ret = _request!T(conn, command, args);
+			version (RedisDebug) {
+				import std.stdio;
+				
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string;
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => (RedisReply)", command, arr);
+			}
+			return ret;
+		}
+	}
+}
+
+
+/**
+	Accesses the contents of a Redis database
+*/
+struct RedisDatabase {
+	private {
+		RedisClient m_client;
+		long m_index;
+	}
+
+	private this(RedisClient client, long index)
+	{
+		m_client = client;
+		m_index = index;
 	}
 
 	long del(string[] keys...) { return request!long("DEL", keys); }
@@ -236,108 +367,14 @@ final class RedisClient {
 	/*
 		TODO: Transactions
 	*/
-
-	/*
-		Connection
-	*/
-	void auth(string password) { m_authPassword = password; }
-	T echo(T : E[], E)(T data) { return request!T("ECHO", data); }
-	void ping() { request("PING"); }
-	void quit() { request("QUIT"); }
-	void select(long db_index) { m_selectedDB = db_index; }
-
-	/*
-		Server
-	*/
-
-	//TODO: BGREWRITEAOF
-	//TODO: BGSAVE
-
-	T getConfig(T : E[], E)(string parameter) { return request!T("GET CONFIG", parameter); }
-	void setConfig(T : E[], E)(string parameter, T value) { request("SET CONFIG", parameter, value); }
-	void configResetStat() { request("CONFIG RESETSTAT"); }
 	long dbSize() { return request!long("DBSIZE"); }
-	//TOOD: Debug Object
-	//TODO: Debug Segfault
-	void flushAll() { request("FLUSHALL"); }
-	void flushDB() { request("FLUSHDB"); }
-	string info() { return request!string("INFO"); }
-	long lastSave() { return request!long("LASTSAVE"); }
-	//TODO monitor
-	void save() { request("SAVE"); }
-	void shutdown() { request("SHUTDOWN"); }
-	void slaveOf(string host, ushort port) { request("SLAVEOF", host, port); }
-	//TODO slowlog
-	//TODO sync
-
-	/// Returns Redis version
-	@property string redisVersion() { return m_version; }
 
 	T request(T = void, ARGS...)(string command, ARGS args)
 	{
-		auto conn = m_connections.lockConnection();
-		conn.setAuth(m_authPassword);
-		conn.setDB(m_selectedDB);
-		static if (is(T == void)) {
-			version (RedisDebug) {
-				import std.stdio;
-				
-				import std.array, std.traits, std.algorithm;
-				string[] arr;
-				foreach(i, A; ARGS){
-					static if (!isSomeString!A && isArray!A){
-						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
-					}
-					else
-					{
-						arr ~= args[i].to!string; 
-					}
-				}
-				logInfo("Redis request: %s ( %s ) => (void)", command, arr);
-			}
-			return _request!T(conn, command, args);
-		} else static if (!is (T == RedisReply)) {
-			auto ret = _request!T(conn, command, args);
-			version (RedisDebug) {
-				import std.stdio;
-
-				import std.array, std.traits, std.algorithm;
-				string[] arr;
-				foreach(i, A; ARGS){
-					static if (!isSomeString!A && isArray!A){
-						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
-					}
-					else
-					{
-						arr ~= args[i].to!string;
-					}
-				}
-				logInfo("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
-			}
-			return ret;
-		} else {
-			auto ret = _request!T(conn, command, args);
-			version (RedisDebug) {
-				import std.stdio;
-				
-				import std.array, std.traits, std.algorithm;
-				string[] arr;
-				foreach(i, A; ARGS){
-					static if (!isSomeString!A && isArray!A){
-						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
-					}
-					else
-					{
-						arr ~= args[i].to!string;
-					}
-				}
-				logInfo("Redis request: %s ( %s ) => (RedisReply)", command, arr);
-			}
-			return ret;
-		}
-
+		return m_client.requestDB!(T, ARGS)(m_index, command, args);
 	}
 }
+
 
 /**
 	A redis subscription listener
