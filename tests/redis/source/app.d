@@ -69,6 +69,8 @@ void runTest()
 	logInfo("PUBLISH Time: %s", Clock.currTime().toString());
 	redis.publish("someChannel", "Some Message");
 	sub.unsubscribe("someChannel");
+
+	sub.stop();
 	sleep(10.seconds);
 	logInfo("Redis Test Succeeded.");
 }

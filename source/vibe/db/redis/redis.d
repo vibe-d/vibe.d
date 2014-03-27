@@ -382,7 +382,9 @@ struct RedisDatabase {
 import std.datetime;
 final class RedisSubscriber {
 	private {
+		RedisClient m_client;
 		LockedConnection!RedisConnection m_lockedConnection;
+		Task m_listener;
 		bool m_listening;
 		bool[string] m_subscriptions;
 		void delegate(string[] args) m_capture;
@@ -401,9 +403,24 @@ final class RedisSubscriber {
 	}
 
 	this(RedisClient client) {
-		m_lockedConnection = client.m_connections.lockConnection();
-		m_lockedConnection.setAuth(client.m_authPassword);
-		m_lockedConnection.setDB(client.m_selectedDB);
+		m_client = client;
+	}
+
+
+	bool bstop(){
+		if (!stop())
+			return false;
+
+		while (m_listening) sleep(1.msecs);
+		return true;
+	}
+
+	bool stop(){
+		if (!m_listening || m_listener == Task.init)
+			return false;
+		import vibe.core.concurrency;
+		m_listener.prioritySend(true);
+		return true;
 	}
 
 	void subscribe(string[] args...) { 
@@ -450,19 +467,53 @@ final class RedisSubscriber {
 		return str;
 	}
 
+	private void init(){
+		if (m_lockedConnection is null){
+			m_lockedConnection = m_client.m_connections.lockConnection();
+			m_lockedConnection.setAuth(m_client.m_authPassword);
+			m_lockedConnection.setDB(m_client.m_selectedDB);
+		}
+	}
+
 	// Same as listen, but blocking
 	void blisten(void delegate(string, string) callback, Duration timeout)
 	{
+		import std.datetime;
+		init();
 		m_listening = true;
+		m_listener = Task.getThis();
+		bool stop;
 		while(true) {
-			if (timeout != 0.seconds){
-				if (!m_lockedConnection.conn.waitForData(timeout))
+			runTask({
+				import std.variant;
+				m_listener.messageQueue.receive((Variant msg){ if (msg.convertsTo!bool) return true; return false; }, (Variant msg){
+					if (msg.get!bool) stop = true;
+					logInfo("stopping");
+				});
+			});
+
+			bool gotData;
+			StopWatch sw;
+			sw.start();
+			while (!gotData && !stop){
+				if (m_lockedConnection.conn.waitForData(5.seconds))
+					gotData = true;
+				if (sw.peek().seconds > timeout.total!"seconds") 
 					break;
-			}else m_lockedConnection.conn.waitForData();
+				if (stop) 
+					break;
+			}
+
+			sw.stop();
+
+			if (!gotData) break;
 
 			if (m_capture !is null){
-				m_capture(handler());
+				string[] resp = handler();
+				logInfo("responded: %s", resp); 
+				m_capture(resp);
 				m_capture = null;
+				continue;
 			}
 
 			auto ln = cast(string)m_lockedConnection.conn.readLine();
@@ -470,24 +521,33 @@ final class RedisSubscriber {
 			if (ln[0] == "$"[0]){
 				cmd = cast(string)m_lockedConnection.conn.readLine();
 			} 
-			else if (ln[0] == "*"[0]) 
+			else if (ln[0] == "*"[0]) {
 				cmd = getString();
-			else 
+			}else {
 				assert(false, "expected $ or *");
-
+			}
 			if(cmd == "message") {
 				auto channel = getString();
 				auto message = getString();
 				callback(channel, message);
-			} else assert(false, "captured something else than a message");
+
+			} 
+			else {
+				handler();
+			}
 		}
+
 		m_listening = false;
+		m_listener = Task.init;
+		m_lockedConnection.destroy();
+
 	}
 
 	private string[] handler(){
 		assert(m_lockedConnection !is null);
 
 		auto ctx = RedisReplyContext.init;
+		logInfo("entering handler");
 		string[] ret;
 
 
@@ -495,10 +555,9 @@ final class RedisSubscriber {
 		{
 			assert(m_lockedConnection !is null);
 			if (sizeLn.startsWith("$-1")) return;
-			auto size = to!size_t(sizeLn[1 .. $]);
-			auto data = new ubyte[size];
-			m_lockedConnection.conn.read(data);
-			m_lockedConnection.conn.readLine();
+			auto data = cast(string)m_lockedConnection.conn.readLine();
+
+			logInfo("skipped:" ~ data);
 			if (cast(string)data != "*" && data != "subscribe" && data != "unsubscribe"){
 				ret ~= cast(string)data;
 				logInfo("Received: %s", cast(string)data);
@@ -527,10 +586,12 @@ final class RedisSubscriber {
 						}
 						break;
 				}
+				logInfo("initialized");
 			}
 			ctx.initialized = true;
 			ctx.index++;
 			if (ctx.multi) {
+				logInfo("multi request received");
 				auto ln = cast(string)m_lockedConnection.conn.readLine();
 				readBulk(ln);
 			}
