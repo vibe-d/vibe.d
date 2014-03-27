@@ -17,56 +17,69 @@ void runTest()
 		logInfo("Failed to connect to local Redis server. Skipping test.");
 		return;
 	}
+	{
+		redis.setEX("test1", 1000, "test1");
+		redis.setEX("test2", 1000, "test2");
+		redis.setEX("test3", 1000, "test3");
+		redis.setEX("test4", 1000, "test4");
+		redis.setEX("test5", 1000, "test5");
+		redis.setEX("test6", 1000, "test6");
+		redis.setEX("test7", 1000, "test7");
+		redis.setEX("test8", 1000, "test8");
+		redis.setEX("test9", 1000, "test9");
+		redis.setEX("test10", 1000, "0");
+		redis.del("saddTests");
+		redis.sadd("saddTests", "item1");
+		redis.sadd("saddTests", "item2");
+		
+		
+		assert(redis.get!string("test1") == "test1");
+		redis.get!string("test2");
+		redis.get!string("test3");
+		redis.get!string("test4");
+		redis.get!string("test5");
+		redis.get!string("test6");
+		redis.get!string("test7");
+		redis.get!string("test8");
+		redis.get!string("test9");
+		redis.get!string("test10");
+		redis.append("test1", "test1append");
+		redis.append("test2", "test2append");
+		redis.get!string("test1");
+		redis.get!string("test2");
+		redis.incr("test10");
+		
+		redis.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
+		
+		redis.srem("test1", "test1append");
+		redis.srem("test2", "test2append");
+		
+		redis.smembers("test1");
+	
+		redis.smembers("test2");
+	}
+	RedisSubscriber sub = new RedisSubscriber(redis);
+	import std.datetime;
 
-	redis.setEX("test1", 1000, "test1");
-	redis.setEX("test2", 1000, "test2");
-	redis.setEX("test3", 1000, "test3");
-	redis.setEX("test4", 1000, "test4");
-	redis.setEX("test5", 1000, "test5");
-	redis.setEX("test6", 1000, "test6");
-	redis.setEX("test7", 1000, "test7");
-	redis.setEX("test8", 1000, "test8");
-	redis.setEX("test9", 1000, "test9");
-	redis.setEX("test10", 1000, "0");
-	redis.del("saddTests");
-	redis.sadd("saddTests", "item1");
-	redis.sadd("saddTests", "item2");
-	
-	
-	assert(redis.get!string("test1") == "test1");
-	redis.get!string("test2");
-	redis.get!string("test3");
-	redis.get!string("test4");
-	redis.get!string("test5");
-	redis.get!string("test6");
-	redis.get!string("test7");
-	redis.get!string("test8");
-	redis.get!string("test9");
-	redis.get!string("test10");
-	redis.append("test1", "test1append");
-	redis.append("test2", "test2append");
-	redis.get!string("test1");
-	redis.get!string("test2");
-	redis.incr("test10");
-	
-	redis.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
-	
-	redis.srem("test1", "test1append");
-	redis.srem("test2", "test2append");
-	redis.smembers("test1");
-	redis.smembers("test2");
+	sub.listen((string channel, string msg){
+		logInfo("received from: %s, msg: %s, time: %s", channel.to!string, msg.to!string, Clock.currTime().toString());
+	});
+	sub.subscribe("someChannel");
+
+	logInfo("PUBLISH Time: %s", Clock.currTime().toString());
+	redis.publish("someChannel", "Some Message");
+	sub.unsubscribe("someChannel");
+	sleep(10.seconds);
 	logInfo("Redis Test Succeeded.");
 }
 
 int main()
 {
 	int ret = 0;
+	setLogLevel(LogLevel.info);
 	runTask({
-		try runTest();
-		catch (Throwable th) {
-			logError("Test failed: %s", th.msg);
-			ret = 1;
-		} finally exitEventLoop(true);
+		runTest();
+		exitEventLoop(true);
 	});
 	runEventLoop();
 	return ret;
