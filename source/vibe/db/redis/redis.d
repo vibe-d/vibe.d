@@ -389,12 +389,12 @@ final class RedisSubscriber {
 }
 
 struct RedisReply {
-	import vibe.utils.memory : FreeListObjectAlloc;
-	private RedisReplyImpl m_impl;
+	import vibe.utils.memory : FreeListRef;
+	private FreeListRef!RedisReplyImpl m_impl;
 
 	this(TCPConnection conn)
 	{
-		m_impl = FreeListObjectAlloc!RedisReplyImpl.alloc(conn);
+		m_impl = FreeListRef!RedisReplyImpl(conn);
 	}
 
 	this(this)
@@ -410,8 +410,6 @@ struct RedisReply {
 				if (!--m_impl.m_lockedConnection.m_replyRefCount)
 					m_impl.drop();
 			} else m_impl.drop();
-
-			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
 		}
 	}
 
@@ -437,9 +435,11 @@ struct RedisReply {
 		return m_impl.readBulk(sizeLn);
 	}
 
-	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
+	private @property void lockedConnection(ref LockedConnection!RedisConnection conn)
+	{
 		assert(m_impl.m_conn !is null);
 		m_impl.lockedConnection = conn;
+		assert(m_impl.m_lockedConnection.m_replyRefCount == 0);
 		m_impl.m_lockedConnection.m_replyRefCount++;
 	}
 }
@@ -514,7 +514,7 @@ private final class RedisReplyImpl {
 		}
 		if (!hasNext && m_lockedConnection !is null) {
 			m_lockedConnection.m_replyRefCount = 0;
-			m_lockedConnection.clear();
+			m_lockedConnection.destroy();
 		}
 		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
