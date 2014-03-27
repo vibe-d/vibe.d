@@ -85,12 +85,12 @@ final class RedisClient {
 	*/
 
 	long append(T : E[], E)(string key, T suffix) { return request!long("APPEND", key, suffix); }
-	int decr(string key, int value = 1) { return value == 1 ? request!int("DECR", key) : request!int("DECRBY", key, value); }
+	long decr(string key, long value = 1) { return value == 1 ? request!long("DECR", key) : request!long("DECRBY", key, value); }
 	T get(T : E[], E)(string key) { return request!T("GET", key); }
 	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
 	T getRange(T : E[], E)(string key, long start, long end) { return request!T("GETRANGE", start, end); }
 	T getSet(T : E[], E)(string key, T value) { return request!T("GET", key, value); }
-	int incr(string key, int value = 1) { return value == 1 ? request!int("INCR", key) : request!int("INCRBY", key, value); }
+	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
 	RedisReply mget(string[] keys) { return request!RedisReply("MGET", keys); }
 	
 	void mset(ARGS...)(ARGS args)
@@ -122,7 +122,7 @@ final class RedisClient {
 	void hset(T : E[], E)(string key, string field, T value) { request("HSET", key, field, value); }
 	T hget(T : E[], E)(string key, string field) { return request!T("HGET", key, field); }
 	RedisReply hgetAll(string key) { return request!RedisReply("HGETALL", key); }
-	int hincr(string key, string field, int value=1) { return request!int("HINCRBY", key, field, value); }
+	long hincr(string key, string field, long value=1) { return request!long("HINCRBY", key, field, value); }
 	RedisReply hkeys(string key) { return request!RedisReply("HKEYS", key); }
 	long hlen(string key) { return request!long("HLEN", key); }
 	RedisReply hmget(string key, string[] fields...) { return request!RedisReply("HMGET", key, fields); }
@@ -193,12 +193,12 @@ final class RedisClient {
 		return request!RedisReply("ZRANGEBYSCORE", args);
 	}
 
-	int zrank(string key, string member) {
+	long zrank(string key, string member) {
 		auto str = request!string("ZRANK", key, member);
-		return str ? parse!int(str) : -1;
+		return str ? parse!long(str) : -1;
 	}
 	long zrem(string key, string[] members...) { return request!long("ZREM", key, members); }
-	long zremRangeByRank(string key, int start, int stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
+	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
 	long zremRangeByScore(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, min, max);}
 
 	RedisReply zrevRange(string key, long start, long end, bool withScores=false) {
@@ -213,9 +213,9 @@ final class RedisClient {
 		return request!RedisReply("ZREVRANGEBYSCORE", args);
 	}
 
-	int zrevRank(string key, string member) {
+	long zrevRank(string key, string member) {
 		auto str = request!string("ZREVRANK", key, member);
-		return str ? parse!int(str) : -1;
+		return str ? parse!long(str) : -1;
 	}
 
 	RedisReply zscore(string key, string member) { return request!RedisReply("ZSCORE", key, member); }
@@ -224,9 +224,9 @@ final class RedisClient {
 	/*
 		Pub / Sub
 	*/
-	int publish(string channel, string message) {
+	long publish(string channel, string message) {
 		auto str = request!string("PUBLISH", channel, message);
-		return str ? parse!int(str) : -1;
+		return str ? parse!long(str) : -1;
 	}
 
 	RedisReply pubsub(string subcommand, string[] args...) {
@@ -280,7 +280,67 @@ final class RedisClient {
 		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(m_selectedDB);
-		return _request!T(conn, command, args);
+		static if (is( T == void )){
+			version (RedisDebug) {
+				import std.stdio;
+				
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string; 
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => (void)", command, arr);
+			}
+			return _request!T(conn, command, args);
+		} 
+		else static if (!is (T == RedisReply ) ) {
+			auto ret = _request!T(conn, command, args);
+			version (RedisDebug) {
+				import std.stdio;
+
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string;
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
+			}
+			return ret;
+		}
+		else
+		{
+			auto ret = _request!T(conn, command, args);
+			version (RedisDebug) {
+				import std.stdio;
+				
+				import std.array, std.traits, std.algorithm;
+				string[] arr;
+				foreach(i, A; ARGS){
+					static if (!isSomeString!A && isArray!A){
+						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
+					}
+					else
+					{
+						arr ~= args[i].to!string;
+					}
+				}
+				logInfo("Redis request: %s ( %s ) => (RedisReply)", command, arr);
+			}
+			return ret;
+		}
+
 	}
 }
 
@@ -297,19 +357,19 @@ final class RedisSubscriber {
 	}
 
 	void subscribe(string[] args...) {
-		_request_simple(m_conn, false, "SUBSCRIBE", args);
+		_request_simple(m_conn, "SUBSCRIBE", args);
 	}
 
 	void unsubscribe(string[] args...) {
-		_request_simple(m_conn, false, "UNSUBSCRIBE", args);
+		_request_simple(m_conn, "UNSUBSCRIBE", args);
 	}
 
 	void psubscribe(string[] args...) {
-		_request_simple(m_conn, false, "PSUBSCRIBE", args);
+		_request_simple(m_conn, "PSUBSCRIBE", args);
 	}
 
 	void punsubscribe(string[] args...) {
-		_request_simple(m_conn, false, "PUNSUBSCRIBE", args);
+		_request_simple(m_conn, "PUNSUBSCRIBE", args);
 	}
 	
 	// Same as listen, but blocking
@@ -326,7 +386,7 @@ final class RedisSubscriber {
 				reply.next!(ubyte[])(); // channel from which we get unsubsccribed
 				reply = this.m_conn.listen(); // redis sends a *3 here despite what's in the docs...
 				auto str = reply.next!string;
-				int count = str ? parse!int(str) : -1;
+				long count = str ? parse!long(str) : -1;
 				if(count == 0) {
 					return;
 				}
@@ -342,8 +402,65 @@ final class RedisSubscriber {
 	}
 }
 
+struct RedisReply {
+	import vibe.utils.memory : FreeListObjectAlloc;
+	private RedisReplyImpl m_impl;
 
-final class RedisReply {
+	this(TCPConnection conn){
+		m_impl = FreeListObjectAlloc!RedisReplyImpl.alloc(conn);
+	}
+
+	@property bool hasNext() const {
+		return m_impl.hasNext;
+	}
+
+	T next(T : E[], E)()
+	{
+		return m_impl.next!T();
+	}
+
+	void drop()
+	{
+		assert (m_impl.m_lockedConnection !is null);
+		return m_impl.drop();
+	}
+
+	// is this necessary?
+	private ubyte[] readBulk( string sizeLn )
+	{
+		assert(m_impl.m_conn !is null);
+		return m_impl.readBulk(sizeLn);
+	}
+
+	private @property void lockedConnection(ref LockedConnection!RedisConnection conn){
+		assert(m_impl.m_conn !is null);
+		m_impl.lockedConnection = conn;
+		m_impl.m_lockedConnection.m_replyRefCount++;
+	}
+
+	this(this){
+		if (m_impl !is null && m_impl.m_lockedConnection !is null) 
+			m_impl.m_lockedConnection.m_replyRefCount += 1;
+	}
+
+	~this(){
+		if (m_impl !is null){
+			if (m_impl.m_lockedConnection !is null)
+			{
+				m_impl.m_lockedConnection.m_replyRefCount -= 1;
+				if (m_impl.m_lockedConnection.m_replyRefCount == 0){
+					m_impl.drop();
+				}
+			} else
+				m_impl.drop();
+
+			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
+		}
+	}
+
+}
+
+private final class RedisReplyImpl {
 	private {
 		TCPConnection m_conn;
 		LockedConnection!RedisConnection m_lockedConnection;
@@ -351,6 +468,7 @@ final class RedisReply {
 		long m_length;
 		long m_index;
 		bool m_multi;
+		bool m_initialized = false;
 	}
 
 	this(TCPConnection conn)
@@ -360,8 +478,12 @@ final class RedisReply {
 		m_length = 1;
 		m_multi = false;
 
-		auto ln = cast(string)m_conn.readLine();
+	}
 
+	void init(){
+		m_initialized = true;
+		auto ln = cast(string)m_conn.readLine();
+		
 		switch(ln[0]) {
 			case '+':
 				m_data = cast(ubyte[])ln[ 1 .. $ ];
@@ -387,11 +509,16 @@ final class RedisReply {
 		}
 	}
 
+	@property void lockedConnection(ref LockedConnection!RedisConnection conn){
+		m_lockedConnection = conn;
+	}
+
 	@property bool hasNext() const { return  m_index < m_length; }
 
 	T next(T : E[], E)()
 	{
 		assert( hasNext, "end of reply" );
+		if (!m_initialized) init();
 		m_index++;
 		ubyte[] ret;
 		if (m_multi) {
@@ -400,7 +527,10 @@ final class RedisReply {
 		} else {
 			ret = m_data;
 		}
-		if (m_index >= m_length && m_lockedConnection != null) m_lockedConnection.clear();
+		if (!hasNext && m_lockedConnection !is null) {
+			m_lockedConnection.m_replyRefCount = 0;
+			m_lockedConnection.clear();
+		}
 		static if (isSomeString!T) validate(cast(T)ret);
 		enforce(ret.length % E.sizeof == 0, "bulk size must be multiple of element type size");
 		return cast(T)ret;
@@ -409,7 +539,11 @@ final class RedisReply {
 	// drop the whole
 	void drop()
 	{
-		while (hasNext) next!(ubyte[])();
+		if (!m_initialized) init();
+		if (!hasNext && m_lockedConnection !is null) {
+			m_lockedConnection.m_replyRefCount = 0;
+			m_lockedConnection.clear();
+		} else while (hasNext) next!(ubyte[])();
 	}
 
 	private ubyte[] readBulk( string sizeLn )
@@ -431,12 +565,14 @@ private final class RedisConnection {
 		TCPConnection m_conn;
 		string m_password;
 		long m_selectedDB;
+		size_t m_replyRefCount;
 	}
 
 	this(string host, ushort port)
 	{
 		m_host = host;
 		m_port = port;
+		m_replyRefCount = 0;
 	}
 
 	@property{
@@ -447,22 +583,22 @@ private final class RedisConnection {
 	void setAuth(string password)
 	{
 		if (m_password == password) return;
-		_request_simple(this, true, "AUTH", password).drop();
+		_request_simple(this, "AUTH", password);
 		m_password = password;
 	}
 
 	void setDB(long index)
 	{
 		if (index == m_selectedDB) return;
-		_request_simple(this, true, "SELECT", index).drop();
-		m_selectedDB = index;
+		_request_simple(this, "SELECT", index);
+		m_selectedDB = index; 
 	}
 
 	RedisReply listen() {
 		if( !m_conn || !m_conn.connected ){
 			throw new Exception("Cannot listen on connection without subscribing first.", __FILE__, __LINE__);
 		}
-		return new RedisReply(m_conn);
+		return RedisReply(m_conn);
 	}
 
 	private static long countArgs(ARGS...)(ARGS args)
@@ -535,7 +671,7 @@ private struct RangeCounter {
 	void put(string str) { *length += str.length; }
 }
 
-private RedisReply _request_simple(ARGS...)(RedisConnection conn, bool read, string command, ARGS args)
+private RedisReply _request_simple(ARGS...)(RedisConnection conn, string command, ARGS args)
 {
 	if (!conn.conn || !conn.conn.connected) {
 		try conn.conn = connectTCP(conn.m_host, conn.m_port);
@@ -548,23 +684,18 @@ private RedisReply _request_simple(ARGS...)(RedisConnection conn, bool read, str
 	conn.conn.formattedWrite("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
 	conn.writeArgs(conn.conn, args);
 
-	if (!read) {
-		return null;
-	} else {
-		return new RedisReply(conn.conn);
-	}
+	return RedisReply(conn.conn);
 }
 
 private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, ARGS args)
-{
-	auto reply = _request_simple(conn, true, command, args);
-
+{ 
 	static if (is(T == RedisReply)) {
-		reply.m_lockedConnection = conn;
+		RedisReply reply = _request_simple(conn, command, args);
+		reply.lockedConnection = conn;
 		return reply;
 	} else {
-		scope (exit) reply.drop();
-
+		scope RedisReply reply = _request_simple(conn, command, args);
+		reply.lockedConnection = conn;
 		static if (is(T == bool)) {
 			return reply.next!string[0] == '1';
 		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
@@ -576,4 +707,3 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 		} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
 	}
 }
-
