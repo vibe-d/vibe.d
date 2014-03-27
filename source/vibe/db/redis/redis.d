@@ -271,16 +271,14 @@ final class RedisClient {
 	//TODO sync
 
 	/// Returns Redis version
-	@property string redisVersion() {
-		return m_version;
-	}
+	@property string redisVersion() { return m_version; }
 
 	T request(T = void, ARGS...)(string command, ARGS args)
 	{
 		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(m_selectedDB);
-		static if (is( T == void )){
+		static if (is(T == void)) {
 			version (RedisDebug) {
 				import std.stdio;
 				
@@ -298,8 +296,7 @@ final class RedisClient {
 				logInfo("Redis request: %s ( %s ) => (void)", command, arr);
 			}
 			return _request!T(conn, command, args);
-		} 
-		else static if (!is (T == RedisReply ) ) {
+		} else static if (!is (T == RedisReply)) {
 			auto ret = _request!T(conn, command, args);
 			version (RedisDebug) {
 				import std.stdio;
@@ -318,9 +315,7 @@ final class RedisClient {
 				logInfo("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
 			}
 			return ret;
-		}
-		else
-		{
+		} else {
 			auto ret = _request!T(conn, command, args);
 			version (RedisDebug) {
 				import std.stdio;
@@ -356,24 +351,14 @@ final class RedisSubscriber {
 		m_conn.setDB(client.m_selectedDB);
 	}
 
-	void subscribe(string[] args...) {
-		_request_simple(m_conn, "SUBSCRIBE", args);
-	}
-
-	void unsubscribe(string[] args...) {
-		_request_simple(m_conn, "UNSUBSCRIBE", args);
-	}
-
-	void psubscribe(string[] args...) {
-		_request_simple(m_conn, "PSUBSCRIBE", args);
-	}
-
-	void punsubscribe(string[] args...) {
-		_request_simple(m_conn, "PUNSUBSCRIBE", args);
-	}
+	void subscribe(string[] args...) { _request_simple(m_conn, "SUBSCRIBE", args); }
+	void unsubscribe(string[] args...) { _request_simple(m_conn, "UNSUBSCRIBE", args); }
+	void psubscribe(string[] args...) { _request_simple(m_conn, "PSUBSCRIBE", args); }
+	void punsubscribe(string[] args...) { _request_simple(m_conn, "PUNSUBSCRIBE", args); }
 	
 	// Same as listen, but blocking
-	void blisten(void delegate(string, string) callback) {
+	void blisten(void delegate(string, string) callback)
+	{
 		while(true) {
 			auto reply = this.m_conn.listen();
 			auto cmd = reply.next!string;
@@ -395,7 +380,8 @@ final class RedisSubscriber {
 	}
 
 	// Waits for messages and calls the callback with the channel and the message as arguments
-	Task listen(void delegate(string, string) callback) {
+	Task listen(void delegate(string, string) callback)
+	{
 		return runTask({
 			blisten(callback);
 		});
@@ -406,8 +392,27 @@ struct RedisReply {
 	import vibe.utils.memory : FreeListObjectAlloc;
 	private RedisReplyImpl m_impl;
 
-	this(TCPConnection conn){
+	this(TCPConnection conn)
+	{
 		m_impl = FreeListObjectAlloc!RedisReplyImpl.alloc(conn);
+	}
+
+	this(this)
+	{
+		if (m_impl && m_impl.m_lockedConnection) 
+			m_impl.m_lockedConnection.m_replyRefCount++;
+	}
+
+	~this()
+	{
+		if (m_impl){
+			if (m_impl.m_lockedConnection) {
+				if (!--m_impl.m_lockedConnection.m_replyRefCount)
+					m_impl.drop();
+			} else m_impl.drop();
+
+			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
+		}
 	}
 
 	@property bool hasNext() const {
@@ -437,27 +442,6 @@ struct RedisReply {
 		m_impl.lockedConnection = conn;
 		m_impl.m_lockedConnection.m_replyRefCount++;
 	}
-
-	this(this){
-		if (m_impl !is null && m_impl.m_lockedConnection !is null) 
-			m_impl.m_lockedConnection.m_replyRefCount += 1;
-	}
-
-	~this(){
-		if (m_impl !is null){
-			if (m_impl.m_lockedConnection !is null)
-			{
-				m_impl.m_lockedConnection.m_replyRefCount -= 1;
-				if (m_impl.m_lockedConnection.m_replyRefCount == 0){
-					m_impl.drop();
-				}
-			} else
-				m_impl.drop();
-
-			FreeListObjectAlloc!RedisReplyImpl.free(m_impl);
-		}
-	}
-
 }
 
 private final class RedisReplyImpl {
@@ -480,7 +464,8 @@ private final class RedisReplyImpl {
 
 	}
 
-	void init(){
+	void init()
+	{
 		m_initialized = true;
 		auto ln = cast(string)m_conn.readLine();
 		
@@ -540,10 +525,11 @@ private final class RedisReplyImpl {
 	void drop()
 	{
 		if (!m_initialized) init();
-		if (!hasNext && m_lockedConnection !is null) {
+		while (hasNext) next!(ubyte[])();
+		if (m_lockedConnection !is null) {
 			m_lockedConnection.m_replyRefCount = 0;
 			m_lockedConnection.clear();
-		} else while (hasNext) next!(ubyte[])();
+		}
 	}
 
 	private ubyte[] readBulk( string sizeLn )
@@ -565,14 +551,13 @@ private final class RedisConnection {
 		TCPConnection m_conn;
 		string m_password;
 		long m_selectedDB;
-		size_t m_replyRefCount;
+		size_t m_replyRefCount = 0;
 	}
 
 	this(string host, ushort port)
 	{
 		m_host = host;
 		m_port = port;
-		m_replyRefCount = 0;
 	}
 
 	@property{
@@ -689,21 +674,14 @@ private RedisReply _request_simple(ARGS...)(RedisConnection conn, string command
 
 private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, ARGS args)
 { 
-	static if (is(T == RedisReply)) {
-		RedisReply reply = _request_simple(conn, command, args);
-		reply.lockedConnection = conn;
-		return reply;
-	} else {
-		scope RedisReply reply = _request_simple(conn, command, args);
-		reply.lockedConnection = conn;
-		static if (is(T == bool)) {
-			return reply.next!string[0] == '1';
-		} else static if ( is(T == int) || is(T == long) || is(T == size_t) || is(T == double) ) {
-			auto str = reply.next!string();
-			return parse!T(str);
-		} else static if (is(T == string)) {
-			return reply.next!string();
-		} else static if (is(T == void)) {
-		} else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
+	RedisReply reply = _request_simple(conn, command, args);
+	reply.lockedConnection = conn;
+	static if (is(T == RedisReply)) return reply;
+	else static if (is(T == bool)) return reply.next!string[0] == '1';
+	else static if (is(T == int) || is(T == long) || is(T == size_t) || is(T == double)) {
+		auto result = reply.next!string();
+		return parse!T(result);
 	}
+	else static if (is(T == string)) return reply.next!string();
+	else static assert(is(T == void), "Unsupported Redis reply type: " ~ T.stringof);
 }
