@@ -490,16 +490,14 @@ final class RedisSubscriber {
 			bool gotData;
 			StopWatch sw;
 			sw.start();
-			while (!gotData && !m_stop){
-				if (m_lockedConnection.conn.waitForData(5.seconds))
-					gotData = true;
-				if (sw.peek().seconds > timeout.total!"seconds") 
-					break;
-				if (m_stop) break;
+			while (!gotData){
+				if (m_lockedConnection.conn.waitForData(5.seconds))	gotData = true;
+				if (sw.peek().seconds > timeout.total!"seconds") { gotData = false;	break; }
+				if (m_stop){ gotData = false; break; }
 			}
 			sw.stop();
 
-			if (!gotData) break;
+			if (!gotData) { m_listening = false; m_lockedConnection.destroy(); return; }
 
 			if (m_capture !is null){
 				auto res = handler();
@@ -529,9 +527,6 @@ final class RedisSubscriber {
 				handler(); // get rid of it
 			}
 		}
-
-		m_listening = false;
-		m_lockedConnection.destroy();
 
 	}
 	private Tuple!(long, string[]) handler(){

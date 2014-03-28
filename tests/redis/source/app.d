@@ -61,20 +61,22 @@ void runTest()
 	RedisSubscriber sub = new RedisSubscriber(redis);
 	import std.datetime;
 
+	assert(!sub.isListening);
 	sub.listen((string channel, string msg){
 		logInfo("LISTEN Recv Channel: %s, Message: %s", channel.to!string, msg.to!string);
 		logInfo("LISTEN Recv Time: %s", Clock.currTime().toString());
 	});
 
+	assert(sub.isListening);
 	sub.subscribe("SomeChannel");
 
 	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
 	redis.publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 	sub.unsubscribe("SomeChannel");
-	auto stopped = sub.stop();
+	auto stopped = sub.bstop();
 	logInfo("LISTEN Stopped: %s", stopped.to!string);
+	assert(!sub.isListening);
 	redis.publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-	sub.subscribe("SomeChannel");
 	sleep(1.seconds);
 	logInfo("Redis Test Succeeded.");
 }
