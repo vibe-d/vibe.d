@@ -379,49 +379,223 @@ struct RedisDatabase {
 /**
 	A redis subscription listener
 */
-final class RedisSubscriber {
-	private LockedConnection!RedisConnection m_conn;
+import std.datetime;
+import vibe.core.concurrency;
+import std.variant;
+import std.typecons : Tuple, tuple;
+import std.datetime;
 
-	this(RedisClient client) {
-		m_conn = client.m_connections.lockConnection();
-		m_conn.setAuth(client.m_authPassword);
-		m_conn.setDB(client.m_selectedDB);
+final class RedisSubscriber {
+	private {
+		RedisClient m_client;
+		LockedConnection!RedisConnection m_lockedConnection;
+		bool[string] m_subscriptions;
+		void delegate(string[] args) m_capture;
+		bool m_listening;
+		bool m_stop;
 	}
 
-	void subscribe(string[] args...) { _request_simple(m_conn, "SUBSCRIBE", args); }
-	void unsubscribe(string[] args...) { _request_simple(m_conn, "UNSUBSCRIBE", args); }
-	void psubscribe(string[] args...) { _request_simple(m_conn, "PSUBSCRIBE", args); }
-	void punsubscribe(string[] args...) { _request_simple(m_conn, "PUNSUBSCRIBE", args); }
-	
-	// Same as listen, but blocking
-	void blisten(void delegate(string, string) callback)
-	{
-		while(true) {
-			auto reply = this.m_conn.listen();
-			auto cmd = reply.next!string;
-			if(cmd == "message") {
-				auto channel = reply.next!string;
-				auto message = reply.next!string;
-				callback(channel, message);
-			} else if(cmd == "unsubscribe") {
-				// keep track to how many channels we are subscribed and exit if none anymore
-				reply.next!(ubyte[])(); // channel from which we get unsubsccribed
-				reply = this.m_conn.listen(); // redis sends a *3 here despite what's in the docs...
-				auto str = reply.next!string;
-				long count = str ? parse!long(str) : -1;
-				if(count == 0) {
-					return;
-				}
-			}
+	@property bool isListening() const {
+		return m_listening;
+	}
+
+	@property string[] subscriptions() const {
+		return m_subscriptions.keys;
+	}
+
+	bool hasSubscription(string channel) const {
+		return (channel in m_subscriptions) !is null && m_subscriptions[channel];
+	}
+
+	this(RedisClient client) {
+		m_client = client;
+	}
+
+	bool bstop(){
+		if (!stop()) return false;
+		while (m_listening) sleep(1.msecs);
+		return true;
+	}
+
+	bool stop(){
+		if (!m_listening)
+			return false;
+		m_stop = true;
+		return true;
+	}
+
+	void subscribe(string[] args...) { 
+		assert(m_listening);
+		m_capture = (channels){
+			logInfo("Callback subscribe(%s)", channels);
+			foreach (channel; channels) m_subscriptions[channel] = true;
+		};
+		_request_void(m_lockedConnection, "SUBSCRIBE", args); 
+		while (m_capture !is null) sleep(1.msecs);
+	}
+
+	void unsubscribe(string[] args...) { 
+		assert(m_listening);
+		m_capture = (channels){
+			logInfo("Callback unsubscribe(%s)", channels);
+			foreach (channel; channels) m_subscriptions.remove(channel);
+		};
+		_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
+		while (m_capture !is null) sleep(1.msecs);
+	}
+
+	void psubscribe(string[] args...) {
+		assert(m_listening); 
+		m_capture = (channels){
+			logInfo("Callback psubscribe(%s)", channels);
+			foreach (channel; channels) m_subscriptions[channel] = true;
+		};
+		_request_void(m_lockedConnection, "PSUBSCRIBE", args);
+		while (m_capture !is null) sleep(1.msecs);
+	}
+
+	void punsubscribe(string[] args...) { 
+		assert(m_listening);
+		m_capture = (channels){
+			logInfo("Callback punsubscribe(%s)", channels);
+			foreach (channel; channels) m_subscriptions.remove(channel);
+		};
+		_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
+		while (m_capture !is null) sleep(1.msecs);
+	}
+
+	private string getString(){
+		auto ln = cast(string)m_lockedConnection.conn.readLine();
+		assert(ln[0] == "$"[0], "Expected a string length, received bad response : " ~ ln);
+		//auto strLen = ln[1..$].to!long;
+		auto str = cast(string)m_lockedConnection.conn.readLine();
+		return str;
+	}
+
+	private void init(){
+		if (m_lockedConnection is null){
+			m_lockedConnection = m_client.m_connections.lockConnection();
+			m_lockedConnection.setAuth(m_client.m_authPassword);
+			m_lockedConnection.setDB(m_client.m_selectedDB);
 		}
 	}
 
-	// Waits for messages and calls the callback with the channel and the message as arguments
-	Task listen(void delegate(string, string) callback)
+	// Same as listen, but blocking
+	void blisten(void delegate(string, string) callback, Duration timeout)
 	{
-		return runTask({
-			blisten(callback);
+		init();
+		m_listening = true;
+		while(true) {
+
+			bool gotData;
+			StopWatch sw;
+			sw.start();
+			while (!gotData){
+				if (m_lockedConnection.conn.waitForData(5.seconds))	gotData = true;
+				if (sw.peek().seconds > timeout.total!"seconds") { gotData = false;	break; }
+				if (m_stop){ gotData = false; break; }
+			}
+			sw.stop();
+
+			if (!gotData) { m_listening = false; m_lockedConnection.destroy(); return; }
+
+			if (m_capture !is null){
+				auto res = handler();
+				m_capture(res[1]);
+				assert(m_subscriptions.length == res[0], "Subscription count is different than reported by the Redis server");
+				m_capture = null;
+				continue;
+			}
+
+			auto ln = cast(string)m_lockedConnection.conn.readLine();
+			string cmd;
+			if (ln[0] == "$"[0]){
+				cmd = cast(string)m_lockedConnection.conn.readLine();
+			} 
+			else if (ln[0] == "*"[0]) {
+				cmd = getString();
+			}else {
+				assert(false, "expected $ or *");
+			}
+			if(cmd == "message") {
+				auto channel = getString();
+				auto message = getString();
+				callback(channel, message);
+
+			} 
+			else {
+				handler(); // get rid of it
+			}
+		}
+
+	}
+	private Tuple!(long, string[]) handler(){
+		assert(m_lockedConnection !is null);
+
+		auto ctx = RedisReplyContext.init;
+		string[] channels;
+		long subscriptions;
+
+		void readBulk(string sizeLn)
+		{
+			assert(m_lockedConnection !is null);
+			if (sizeLn.startsWith("$-1")) return;
+			if (sizeLn.startsWith(':')){
+				subscriptions = sizeLn[1..$].to!long;
+				return;
+			}
+			else {
+				auto data = cast(string)m_lockedConnection.conn.readLine();
+				if (data != "subscribe" && data != "unsubscribe"){
+					channels ~= cast(string)data;
+				}
+			}
+		}
+
+		@property bool hasNext() const { return m_lockedConnection && ctx.index < ctx.length; }
+
+		void next(){
+
+			if (!ctx.initialized){
+				auto ln = cast(string)m_lockedConnection.conn.readLine();
+
+				switch (ln[0]) {
+					default: throw new Exception(format("Unknown reply type: %s", ln[0]));
+					//case '+': ctx.data = cast(ubyte[])ln[1 .. $]; break;
+					//case '-': throw new Exception(ln[1 .. $]);
+					//case ':': ctx.data = cast(ubyte[])ln[1 .. $]; break;
+					case '$': readBulk(ln); break;
+					case '*':
+						if (ln.startsWith("*-1")) {
+							ctx.length = 0;
+						} else {
+							ctx.multi = true;
+							ctx.length = to!long(ln[ 1 .. $ ]);
+						}
+						break;
+				}
+			}
+			ctx.initialized = true;
+			ctx.index++;
+			if (ctx.multi) {
+				auto ln = cast(string)m_lockedConnection.conn.readLine();
+				readBulk(ln);
+			}
+		}
+		while(hasNext) next();
+		return tuple(subscriptions, channels);
+	}
+
+
+	// Waits for messages and calls the callback with the channel and the message as arguments
+	Task listen(void delegate(string, string) callback, Duration timeout = 0.seconds)
+	{
+		auto task = runTask({
+			blisten(callback, timeout);
 		});
+		import std.datetime;
+		while(!m_listening) sleep(1.usecs);
+		return task;
 	}
 }
 
@@ -436,7 +610,6 @@ struct RedisReply {
 	this(RedisConnection conn)
 	{
 		m_conn = conn;
-
 		auto ctx = &conn.m_replyContext;
 		assert(ctx.refCount == 0);
 		*ctx = RedisReplyContext.init;
@@ -477,7 +650,6 @@ struct RedisReply {
 		} else {
 			ret = ctx.data;
 		}
-
 		if (!hasNext && ctx.refCount == 1) {
 			ctx.refCount = 0;
 			m_conn = null;
@@ -571,22 +743,15 @@ private final class RedisConnection {
 	void setAuth(string password)
 	{
 		if (m_password == password) return;
-		_request_simple(this, "AUTH", password);
+		_request_reply(this, "AUTH", password);
 		m_password = password;
 	}
 
 	void setDB(long index)
 	{
 		if (index == m_selectedDB) return;
-		_request_simple(this, "SELECT", index);
+		_request_reply(this, "SELECT", index);
 		m_selectedDB = index; 
-	}
-
-	RedisReply listen() {
-		if (!m_conn || !m_conn.connected) {
-			throw new Exception("Cannot listen on connection without subscribing first.", __FILE__, __LINE__);
-		}
-		return RedisReply(this);
 	}
 
 	private static long countArgs(ARGS...)(ARGS args)
@@ -659,7 +824,21 @@ private struct RangeCounter {
 	void put(string str) { *length += str.length; }
 }
 
-private RedisReply _request_simple(ARGS...)(RedisConnection conn, string command, ARGS args)
+private void _request_void(ARGS...)(RedisConnection conn, string command, ARGS args)
+{
+	if (!conn.conn || !conn.conn.connected) {
+		try conn.conn = connectTCP(conn.m_host, conn.m_port);
+		catch (Exception e) {
+			throw new Exception(format("Failed to connect to Redis server at %s:%s.", conn.m_host, conn.m_port), __FILE__, __LINE__, e);
+		}
+	}
+	
+	auto nargs = conn.countArgs(args);
+	conn.conn.formattedWrite("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
+	conn.writeArgs(conn.conn, args);
+}
+
+private RedisReply _request_reply(ARGS...)(RedisConnection conn, string command, ARGS args)
 {
 	if (!conn.conn || !conn.conn.connected) {
 		try conn.conn = connectTCP(conn.m_host, conn.m_port);
@@ -677,7 +856,7 @@ private RedisReply _request_simple(ARGS...)(RedisConnection conn, string command
 
 private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, ARGS args)
 { 
-	RedisReply reply = _request_simple(conn, command, args);
+	RedisReply reply = _request_reply(conn, command, args);
 	reply.lockedConnection = conn;
 	static if (is(T == RedisReply)) return reply;
 	else static if (is(T == bool)) return reply.next!string[0] == '1';
