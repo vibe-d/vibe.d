@@ -466,7 +466,7 @@ final class RedisSubscriber {
 
 	private string getString(){
 		auto ln = cast(string)m_lockedConnection.conn.readLine();
-		assert(ln[0] == "$"[0], "Expected a string length, received bad response : " ~ ln);
+		enforceEx!RedisProtocolException(ln[0] == "$"[0], "Expected a string length, received bad response : " ~ ln);
 		//auto strLen = ln[1..$].to!long;
 		auto str = cast(string)m_lockedConnection.conn.readLine();
 		return str;
@@ -502,7 +502,7 @@ final class RedisSubscriber {
 			if (m_capture !is null){
 				auto res = handler();
 				m_capture(res[1]);
-				assert(m_subscriptions.length == res[0], "Subscription count is different than reported by the Redis server");
+				enforceEx!RedisProtocolException(m_subscriptions.length == res[0], "Subscription count is different than reported by the Redis server");
 				m_capture = null;
 				continue;
 			}
@@ -515,7 +515,7 @@ final class RedisSubscriber {
 			else if (ln[0] == "*"[0]) {
 				cmd = getString();
 			}else {
-				assert(false, "expected $ or *");
+				enforceEx!RedisProtocolException(false, "expected $ or *");
 			}
 			if(cmd == "message") {
 				auto channel = getString();
@@ -712,7 +712,14 @@ struct RedisReply {
 	}
 }
 
-struct RedisReplyContext {
+class RedisProtocolException : Exception {
+	this(string message, string file = __FILE__, int line = __LINE__, Exception next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
+private struct RedisReplyContext {
 	long refCount = 0;
 	ubyte[] data;
 	long length = 1;
