@@ -713,7 +713,7 @@ struct RedisReply {
 }
 
 class RedisProtocolException : Exception {
-	this(string message, string file = __FILE__, int line = __LINE__, Exception next = null)
+	this(string message, string file = __FILE__, size_t line = __LINE__, Exception next = null)
 	{
 		super(message, file, line, next);
 	}
