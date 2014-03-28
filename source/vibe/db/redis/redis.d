@@ -380,14 +380,19 @@ struct RedisDatabase {
 	A redis subscription listener
 */
 import std.datetime;
+import vibe.core.concurrency;
+import std.variant;
+import std.typecons : Tuple, tuple;
+import std.datetime;
+
 final class RedisSubscriber {
 	private {
 		RedisClient m_client;
 		LockedConnection!RedisConnection m_lockedConnection;
-		Task m_listener;
-		bool m_listening;
 		bool[string] m_subscriptions;
 		void delegate(string[] args) m_capture;
+		bool m_listening;
+		bool m_stop;
 	}
 
 	@property bool isListening() const {
@@ -406,20 +411,16 @@ final class RedisSubscriber {
 		m_client = client;
 	}
 
-
 	bool bstop(){
-		if (!stop())
-			return false;
-
+		if (!stop()) return false;
 		while (m_listening) sleep(1.msecs);
 		return true;
 	}
 
 	bool stop(){
-		if (!m_listening || m_listener == Task.init)
+		if (!m_listening)
 			return false;
-		import vibe.core.concurrency;
-		m_listener.prioritySend(true);
+		m_stop = true;
 		return true;
 	}
 
@@ -430,6 +431,7 @@ final class RedisSubscriber {
 			foreach (channel; channels) m_subscriptions[channel] = true;
 		};
 		_request_void(m_lockedConnection, "SUBSCRIBE", args); 
+		while (m_capture !is null) sleep(1.msecs);
 	}
 
 	void unsubscribe(string[] args...) { 
@@ -438,16 +440,18 @@ final class RedisSubscriber {
 			logInfo("Callback unsubscribe(%s)", channels);
 			foreach (channel; channels) m_subscriptions.remove(channel);
 		};
-		_request_void(m_lockedConnection, "UNSUBSCRIBE", args); 
+		_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
+		while (m_capture !is null) sleep(1.msecs);
 	}
 
 	void psubscribe(string[] args...) {
 		assert(m_listening); 
 		m_capture = (channels){
 			logInfo("Callback psubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions.remove(channel);
+			foreach (channel; channels) m_subscriptions[channel] = true;
 		};
 		_request_void(m_lockedConnection, "PSUBSCRIBE", args);
+		while (m_capture !is null) sleep(1.msecs);
 	}
 
 	void punsubscribe(string[] args...) { 
@@ -457,6 +461,7 @@ final class RedisSubscriber {
 			foreach (channel; channels) m_subscriptions.remove(channel);
 		};
 		_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
+		while (m_capture !is null) sleep(1.msecs);
 	}
 
 	private string getString(){
@@ -478,40 +483,28 @@ final class RedisSubscriber {
 	// Same as listen, but blocking
 	void blisten(void delegate(string, string) callback, Duration timeout)
 	{
-		import std.datetime;
 		init();
 		m_listening = true;
-		m_listener = Task.getThis();
-		bool stop;
 		while(true) {
-			runTask({
-				import std.variant;
-				m_listener.messageQueue.receive((Variant msg){ if (msg.convertsTo!bool) return true; return false; }, (Variant msg){
-					if (msg.get!bool) stop = true;
-					logInfo("stopping");
-				});
-			});
 
 			bool gotData;
 			StopWatch sw;
 			sw.start();
-			while (!gotData && !stop){
+			while (!gotData && !m_stop){
 				if (m_lockedConnection.conn.waitForData(5.seconds))
 					gotData = true;
 				if (sw.peek().seconds > timeout.total!"seconds") 
 					break;
-				if (stop) 
-					break;
+				if (m_stop) break;
 			}
-
 			sw.stop();
 
 			if (!gotData) break;
 
 			if (m_capture !is null){
-				string[] resp = handler();
-				logInfo("responded: %s", resp); 
-				m_capture(resp);
+				auto res = handler();
+				m_capture(res[1]);
+				assert(m_subscriptions.length == res[0], "Subscription count is different than reported by the Redis server");
 				m_capture = null;
 				continue;
 			}
@@ -533,34 +526,34 @@ final class RedisSubscriber {
 
 			} 
 			else {
-				handler();
+				handler(); // get rid of it
 			}
 		}
 
 		m_listening = false;
-		m_listener = Task.init;
 		m_lockedConnection.destroy();
 
 	}
-
-	private string[] handler(){
+	private Tuple!(long, string[]) handler(){
 		assert(m_lockedConnection !is null);
 
 		auto ctx = RedisReplyContext.init;
-		logInfo("entering handler");
-		string[] ret;
-
+		string[] channels;
+		long subscriptions;
 
 		void readBulk(string sizeLn)
 		{
 			assert(m_lockedConnection !is null);
 			if (sizeLn.startsWith("$-1")) return;
-			auto data = cast(string)m_lockedConnection.conn.readLine();
-
-			logInfo("skipped:" ~ data);
-			if (cast(string)data != "*" && data != "subscribe" && data != "unsubscribe"){
-				ret ~= cast(string)data;
-				logInfo("Received: %s", cast(string)data);
+			if (sizeLn.startsWith(':')){
+				subscriptions = sizeLn[1..$].to!long;
+				return;
+			}
+			else {
+				auto data = cast(string)m_lockedConnection.conn.readLine();
+				if (data != "subscribe" && data != "unsubscribe"){
+					channels ~= cast(string)data;
+				}
 			}
 		}
 
@@ -573,9 +566,9 @@ final class RedisSubscriber {
 
 				switch (ln[0]) {
 					default: throw new Exception(format("Unknown reply type: %s", ln[0]));
-					case '+': ctx.data = cast(ubyte[])ln[1 .. $]; break;
-					case '-': throw new Exception(ln[1 .. $]);
-					case ':': ctx.data = cast(ubyte[])ln[1 .. $]; break;
+					//case '+': ctx.data = cast(ubyte[])ln[1 .. $]; break;
+					//case '-': throw new Exception(ln[1 .. $]);
+					//case ':': ctx.data = cast(ubyte[])ln[1 .. $]; break;
 					case '$': readBulk(ln); break;
 					case '*':
 						if (ln.startsWith("*-1")) {
@@ -586,18 +579,16 @@ final class RedisSubscriber {
 						}
 						break;
 				}
-				logInfo("initialized");
 			}
 			ctx.initialized = true;
 			ctx.index++;
 			if (ctx.multi) {
-				logInfo("multi request received");
 				auto ln = cast(string)m_lockedConnection.conn.readLine();
 				readBulk(ln);
 			}
 		}
 		while(hasNext) next();
-		return ret;
+		return tuple(subscriptions, channels);
 	}
 
 

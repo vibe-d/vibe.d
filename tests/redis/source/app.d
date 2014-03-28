@@ -62,16 +62,20 @@ void runTest()
 	import std.datetime;
 
 	sub.listen((string channel, string msg){
-		logInfo("received from: %s, msg: %s, time: %s", channel.to!string, msg.to!string, Clock.currTime().toString());
+		logInfo("LISTEN Recv Channel: %s, Message: %s", channel.to!string, msg.to!string);
+		logInfo("LISTEN Recv Time: %s", Clock.currTime().toString());
 	});
-	sub.subscribe("someChannel");
 
-	logInfo("PUBLISH Time: %s", Clock.currTime().toString());
-	redis.publish("someChannel", "Some Message");
-	sub.unsubscribe("someChannel");
+	sub.subscribe("SomeChannel");
 
-	sub.stop();
-	sleep(10.seconds);
+	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
+	redis.publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	sub.unsubscribe("SomeChannel");
+	auto stopped = sub.stop();
+	logInfo("LISTEN Stopped: %s", stopped.to!string);
+	redis.publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	sub.subscribe("SomeChannel");
+	sleep(1.seconds);
 	logInfo("Redis Test Succeeded.");
 }
 
