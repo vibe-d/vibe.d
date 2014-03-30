@@ -179,9 +179,44 @@ class LibevDriver : EventDriver {
 		return new LibevManualEvent;
 	}
 
-	LibevTimer createTimer(void delegate() callback)
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers)
 	{
-		return new LibevTimer(this, callback);
+		assert(false);
+	}
+
+	size_t createTimer(void delegate() callback)
+	{
+		assert(false);
+	}
+
+	void acquireTimer(size_t timer_id)
+	{
+		assert(false);
+	}
+
+	void releaseTimer(size_t timer_id)
+	{
+		assert(false);
+	}
+
+	bool isTimerPending(size_t timer_id)
+	{
+		assert(false);
+	}
+
+	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
+	{
+		assert(false);
+	}
+
+	void stopTimer(size_t timer_id)
+	{
+		assert(false);
+	}
+
+	void waitTimer(size_t timer_id)
+	{
+		assert(false);
 	}
 
 	private LibevTCPListener listenTCPGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TCPConnection conn) connection_callback)
@@ -344,7 +379,7 @@ class LibevManualEvent : ManualEvent {
 }
 
 
-class LibevTimer : Timer {
+/*class LibevTimer : Timer {
 	mixin SingleOwnerEventedObject;
 	
 	private {
@@ -404,7 +439,7 @@ class LibevTimer : Timer {
 			debug assert(false);
 		}
 	}
-}
+}*/
 
 
 class LibevTCPListener : TCPListener {
@@ -533,11 +568,12 @@ class LibevTCPConnection : TCPConnection {
 		
 		logTrace("wait for data");
 		
-		auto timer = scoped!LibevTimer(m_driver, cast(void delegate())null);
-		timer.acquire();
-		scope(exit) timer.release();
+		auto timer = m_driver.createTimer(null);
+		scope (exit) m_driver.releaseTimer(timer);
+//		m_driver.m_timers[timer].owner = Task.getThis();
 		if (timeout > 0.seconds())
-			timer.rearm(timeout);
+			m_driver.rearmTimer(timer, timeout, false);
+
 		yieldFor(EV_READ);
 		return readChunk(true);
 	}
