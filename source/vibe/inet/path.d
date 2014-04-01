@@ -235,6 +235,17 @@ struct Path {
 		if( m_nodes.length < rhs.m_nodes.length ) return -1;
 		return 0;
 	}
+
+	hash_t toHash()
+	const nothrow @trusted {
+		hash_t ret;
+		auto strhash = &typeid(string).getHash;
+		try foreach (n; nodes) ret ^= strhash(&n.m_name);
+		catch assert(false);
+		if (m_absolute) ret ^= 0xfe3c1738;
+		if (m_endsWithSlash) ret ^= 0x6aa4352d;
+		return ret;
+	}
 }
 
 
