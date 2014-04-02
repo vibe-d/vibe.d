@@ -137,7 +137,9 @@ void exitEventLoop(bool shutdown_all_threads = false)
 */
 bool processEvents()
 {
-	return getEventDriver().processEvents();
+	if (!getEventDriver().processEvents()) return false;
+	s_core.notifyIdle();
+	return true;
 }
 
 /**
@@ -915,7 +917,7 @@ private class VibeDriverCore : DriverCore {
 
 			if (!s_yieldedTasks.empty) again = true;
 
-			if (again && !processEvents()) {
+			if (again && !getEventDriver().processEvents()) {
 				s_exitEventLoop = true;
 				return;
 			}

@@ -187,7 +187,6 @@ class Libevent2Driver : EventDriver {
 	{
 		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
 		processTimers();
-		m_core.notifyIdle();
 		if (m_exit) {
 			m_exit = false;
 			return false;

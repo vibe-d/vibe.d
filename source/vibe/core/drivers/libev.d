@@ -92,7 +92,6 @@ class LibevDriver : EventDriver {
 	bool processEvents()
 	{
 		ev_run(m_loop, EVRUN_NOWAIT);
-		m_core.notifyIdle();
 		if (m_break) {
 			m_break = false;
 			return false;

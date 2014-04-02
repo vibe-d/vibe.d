@@ -128,7 +128,7 @@ class Win32EventDriver : EventDriver {
 			//if (++cnt % 10 == 0) processTimers();
 		}
 
-		m_core.notifyIdle();
+		if (timeout != 0) m_core.notifyIdle();
 
 		return true;
 	}
