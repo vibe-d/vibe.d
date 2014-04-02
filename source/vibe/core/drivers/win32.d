@@ -1,7 +1,7 @@
 /**
 	Win32 driver implementation using WSAAsyncSelect
 
-	Copyright: © 2012 Sönke Ludwig
+	Copyright: © 2012-2014 Sönke Ludwig
 	Authors: Sönke Ludwig, Leonid Kramer
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -128,7 +128,7 @@ class Win32EventDriver : EventDriver {
 			//if (++cnt % 10 == 0) processTimers();
 		}
 
-		if (timeout != 0) m_core.notifyIdle();
+		if (timeout_msecs != 0) m_core.notifyIdle();
 
 		return true;
 	}
