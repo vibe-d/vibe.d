@@ -34,7 +34,8 @@ unittest {
 		User users;
 	}
 
-	auto dbdriver = new MongoDBDriver("127.0.0.1", "test");
+	//auto dbdriver = new MongoDBDriver("127.0.0.1", "test");
+	auto dbdriver = new InMemoryORMDriver;
 	auto db = createORM!Tables(dbdriver);
 	db.removeAll!User();
 	db.insertRow!User("Tom", 45);
@@ -42,6 +43,31 @@ unittest {
 	db.insertRow!User("Peter", 42);
 	db.insertRow!User("Foxy", 8);
 	db.insertRow!User("Peter", 69);
+	
+	auto dummy = q{
+		// the current solution. works, but kind of ugly
+		auto res = m_db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(min_age)));
+		// short, but what to do with explicit joins?
+		auto res = m_db.find!User(equal!"name"("Peter") & greater!"age"(min_age));
+		// short, but what to do with explicit joins? and requires a parser
+		auto res = m_db.find!(User, q{name == "Peter" && age > args[0]})(min_age);
+		// clean syntax, but needs a parser and mixins in user code are kind of ugly
+		auto res = mixin(find("m_db", q{User.name == "Peter" && User.age > min_age}));
+		// using expression templates where possible, simple extension to the current solution, puts the comparison operator in the middle
+		auto res = m_db.find(Cmp!(User.name, "==")("Peter") & Cmp!(User.age, ">")(min_age));
+		auto res = m_db.find(Cmp!(User.name)("Peter") & Cmp!(User.age, ">")(min_age));
+		auto res = m_db.find(Cmp!User.name.equal("Peter") & Cmp!User.age.greater(min_age));
+		auto res = m_db.find(Cmp!User.name("Peter") & Cmp!User.age!">"(min_age));
+		auto res = m_db.find(Cmp!User.name("Peter") & Cmp!User.age(greater(min_age)));
+		// requires different way to define the tables
+		auto res = m_db.find(User.name.equal("Peter") & User.age.greater(min_age));
+		auto res = m_db.find(User.name.cmp!"=="("Peter") & User.age.cmp!">"(min_age));
+		auto res = m_db.find(User.name("Peter") & User.age!">"(min_age));
+		auto res = m_db.find(User.name("Peter") & User.age(greater(min_age)));
+		// short for complex expressions, but long for simple ones
+		auto res = m_db.find!((Var!User u) => u.name.equal("Peter") & u.age.greater(min_age));
+	};
+
 	foreach (usr; db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(29))))
 		logInfo("%s", usr);
 	foreach (usr; db.find(or(.equal!(User.name)("Peter"), greater!(User.age)(29))))
@@ -57,14 +83,14 @@ unittest {
 	import vibe.data.bson;
 
 	@tableDefinition
-	static struct User {
+	struct User {
 		static:
 		@primaryID
 		string name;
 	}
 
 	@tableDefinition
-	static struct Box {
+	struct Box {
 		static:
 		string name;
 		//User[] users;
@@ -76,7 +102,8 @@ unittest {
 		Box boxes;
 	}
 
-	auto dbdriver = new MongoDBDriver("127.0.0.1", "test");
+	//auto dbdriver = new MongoDBDriver("127.0.0.1", "test");
+	auto dbdriver = new InMemoryORMDriver;
 	auto db = createORM!Tables(dbdriver);
 	db.removeAll!User();
 	db.insertRow!User("Tom");
@@ -110,7 +137,7 @@ class ORM(Tables, Driver) {
 		Driver m_driver;
 		struct TableInfo {
 			Driver.TableHandle handle;
-			Driver.ColumnHandle[] columnHandles;
+			//Driver.ColumnHandle[] columnHandles;
 		}
 		TableInfo[] m_tables;
 	}
@@ -127,7 +154,7 @@ class ORM(Tables, Driver) {
 			ti.handle = driver.getTableHandle(tname);
 			foreach (cname; __traits(allMembers, Table)) {
 				pragma(msg, "COL "~cname);
-				ti.columnHandles ~= driver.getColumnHandle(ti.handle, cname);
+				//ti.columnHandles ~= driver.getColumnHandle(ti.handle, cname);
 			}
 			m_tables ~= ti;
 		}
@@ -190,6 +217,12 @@ class ORM(Tables, Driver) {
 	}
 }
 
+
+/*struct Column(T) {
+	alias Type = T;
+
+	auto equal()
+}*/
 
 /******************************************************************************/
 /* QUERY EXPRESSIONS                                                          */
@@ -302,6 +335,81 @@ private template tableIndex(TABLE, TABLES)
 }
 
 
+/******************************************************************************/
+/* IN-MEMORY DRIVER                                                           */
+/******************************************************************************/
+
+class InMemoryORMDriver {
+	alias DefaultID = size_t; // running index
+	alias TableHandle = size_t; // table index
+	alias ColumnHandle = size_t; // byte offset
+
+	private {
+		static struct Table {
+			string name;
+			size_t[size_t] rowIndices;
+			size_t rowCounter;
+			ubyte[] storage;
+			size_t idCounter;
+		}
+		Table[] m_tables;
+	}
+
+	size_t getTableHandle(string name)
+	{
+		foreach (i, ref t; m_tables)
+			if (t.name == name)
+				return i;
+		m_tables ~= Table(name);
+		return m_tables.length - 1;
+	}
+
+	auto find(T, QUERY)(size_t table, QUERY query)
+	{
+		import std.algorithm : filter;
+		auto ptable = &m_tables[table];
+		auto items = cast(T[])ptable.storage;
+		items = items[0 .. ptable.rowCounter];
+		return filter!((itm => matchQuery(itm, query)))(items);
+	}
+
+	void update(T, QUERY, UPDATE)(size_t table, QUERY query, UPDATE update)
+	{
+		auto ptable = &m_tables[table];
+		auto items = cast(T[])ptable.storage;
+		items = items[0 .. ptable.rowCounter];
+		foreach (ref itm; items)
+			if (matchQuery(itm, query))
+				applyUpdate(itm, update);
+	}
+
+	void insert(T)(size_t table, T value)
+	{
+		import std.algorithm : max;
+		auto ptable = &m_tables[table];
+		if (ptable.storage.length <= ptable.rowCounter)
+			ptable.storage.length = max(16 * T.sizeof, ptable.storage.length * 2);
+		auto items = cast(T[])ptable.storage;
+		items[ptable.rowCounter++] = value;
+	}
+
+	void removeAll(size_t table)
+	{
+		m_tables[table].rowCounter = 0;
+	}
+
+	static bool matchQuery(T, QUERY)(ref T item, ref QUERY query)
+	{
+		// TODO!
+		return true;
+	}
+
+	static void applyUpdate(T, UPDATE)(ref T item, ref UPDATE query)
+	{
+		// TODO!
+	}
+}
+
 
 /******************************************************************************/
 /* MONGODB DRIVER                                                             */
@@ -325,7 +433,7 @@ class MongoDBDriver {
 	}
 
 	MongoCollection getTableHandle(string name) { return m_db[name]; }
-	string getColumnHandle(MongoCollection coll, string name) { return name; }
+	//string getColumnHandle(MongoCollection coll, string name) { return name; }
 	
 	auto find(T, QUERY)(MongoCollection table, QUERY query)
 	{
@@ -339,7 +447,7 @@ class MongoDBDriver {
 		return table.find(mquery).map!(b => deserializeBson!T(b));
 	}
 
-	auto update(T, QUERY, UPDATE)(MongoCollection table, QUERY query, UPDATE update)
+	void update(T, QUERY, UPDATE)(MongoCollection table, QUERY query, UPDATE update)
 	{
 		struct Query { mixin MongoQuery!(0, QUERY); }
 		Query mquery;
