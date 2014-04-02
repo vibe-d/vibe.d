@@ -1007,6 +1007,7 @@ template isWeaklyIsolated(T...)
 		else static if(isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
 		else static if(isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
 		else static if(isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable);
+		else static if(is(T[0] == interface)) enum bool isWeaklyIsolated = false; // can't know if the implementation is isolated
 		else static if(isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
 		else enum bool isWeaklyIsolated = true; //
 	}
@@ -1040,6 +1041,7 @@ unittest {
 	static struct F { void function() a; } // strongly isolated (functions are immutable)
 	static struct G { void test(); } // strongly isolated
 	static struct H { A[] a; } // not isolated
+	static interface I {}
 
 	static assert(!isStronglyIsolated!A);
 	static assert(isStronglyIsolated!(FieldTypeTuple!A));
@@ -1060,6 +1062,7 @@ unittest {
 	static assert(isWeaklyIsolated!F);
 	static assert(isWeaklyIsolated!G);
 	static assert(!isWeaklyIsolated!H);
+	static assert(!isWeaklyIsolated!I);
 }
 
 
