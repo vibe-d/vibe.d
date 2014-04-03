@@ -19,6 +19,8 @@ import std.typetuple;
 import vibe.data.serialization;
 import vibe.internal.meta.uda;
 
+
+/// Simple example of defining tables and inserting/querying/updating rows.
 unittest {
 	import vibe.core.log;
 	import vibe.data.bson;
@@ -36,6 +38,7 @@ unittest {
 
 	//auto dbdriver = new MongoDBDriver("127.0.0.1", "test");
 	auto dbdriver = new InMemoryORMDriver;
+
 	auto db = createORM!Tables(dbdriver);
 	db.removeAll!User();
 	db.insertRow!User("Tom", 45);
@@ -44,40 +47,23 @@ unittest {
 	db.insertRow!User("Foxy", 8);
 	db.insertRow!User("Peter", 69);
 	
-	auto dummy = q{
-		// the current solution. works, but kind of ugly
-		auto res = m_db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(min_age)));
-		// short, but what to do with explicit joins?
-		auto res = m_db.find!User(equal!"name"("Peter") & greater!"age"(min_age));
-		// short, but what to do with explicit joins? and requires a parser
-		auto res = m_db.find!(User, q{name == "Peter" && age > args[0]})(min_age);
-		// clean syntax, but needs a parser and mixins in user code are kind of ugly
-		auto res = mixin(find("m_db", q{User.name == "Peter" && User.age > min_age}));
-		// using expression templates where possible, simple extension to the current solution, puts the comparison operator in the middle
-		auto res = m_db.find(Cmp!(User.name, "==")("Peter") & Cmp!(User.age, ">")(min_age));
-		auto res = m_db.find(Cmp!(User.name)("Peter") & Cmp!(User.age, ">")(min_age));
-		auto res = m_db.find(Cmp!User.name.equal("Peter") & Cmp!User.age.greater(min_age));
-		auto res = m_db.find(Cmp!User.name("Peter") & Cmp!User.age!">"(min_age));
-		auto res = m_db.find(Cmp!User.name("Peter") & Cmp!User.age(greater(min_age)));
-		// requires different way to define the tables
-		auto res = m_db.find(User.name.equal("Peter") & User.age.greater(min_age));
-		auto res = m_db.find(User.name.cmp!"=="("Peter") & User.age.cmp!">"(min_age));
-		auto res = m_db.find(User.name("Peter") & User.age!">"(min_age));
-		auto res = m_db.find(User.name("Peter") & User.age(greater(min_age)));
-		// short for complex expressions, but long for simple ones
-		auto res = m_db.find!((Var!User u) => u.name.equal("Peter") & u.age.greater(min_age));
-	};
+	assert(std.algorithm.equal(
+		db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(29))),
+		[Row!User("Peter", 42), Row!User("Peter", 69)]));
 
-	foreach (usr; db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(29))))
-		logInfo("%s", usr);
-	foreach (usr; db.find(or(.equal!(User.name)("Peter"), greater!(User.age)(29))))
-		logInfo("%s", usr);
+	assert(std.algorithm.equal(
+		db.find(or(.equal!(User.name)("Peter"), greater!(User.age)(29))),
+		[Row!User("Tom", 45), Row!User("Peter", 13), Row!User("Peter", 42), Row!User("Peter", 69)]));
+
 	db.update(.equal!(User.name)("Tom"), set!(User.age)(20));
-	foreach (usr; db.find(.equal!(User.name)("Tom")))
-		logInfo("Changed age: %s", usr);
-	logInfo("Done.");
+
+	assert(std.algorithm.equal(
+		db.find(.equal!(User.name)("Tom")),
+		[Row!User("Tom", 20)]));
 }
 
+
+/// Connecting tables using collections
 unittest {
 	import vibe.core.log;
 	import vibe.data.bson;
@@ -115,13 +101,41 @@ unittest {
 	db.removeAll!Box();
 	db.insertRow!Box("box 1", ["Tom", "Foxy"]);
 	db.insertRow!Box("box 2", ["Tom", "Hartmut", "Lynn"]);
-	db.insertRow!Box("box 3", ["Peter", "Hartmut", "Lynn"]);
+	db.insertRow!Box("box 3", ["Lynn", "Hartmut", "Peter"]);
 
 	foreach(box; db.find(containsAll!(Box.users)("Hartmut", "Lynn")))
 		logInfo("%s", box.name);
-
-	logInfo("Done.");
+	assert(std.algorithm.equal(
+		db.find(containsAll!(Box.users)("Hartmut", "Lynn")),
+		[Row!Box("box 2", ["Tom", "Hartmut", "Lynn"]), Row!Box("box 3", ["Lynn", "Hartmut", "Peter"])]));
 }
+
+
+// just playing with ideas for query syntaxes
+auto dummy = q{
+	// the current solution. works, but kind of ugly
+	auto res = m_db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(min_age)));
+	// short, but what to do with explicit joins?
+	auto res = m_db.find!User(equal!"name"("Peter") & greater!"age"(min_age));
+	// short, but what to do with explicit joins? and requires a parser
+	auto res = m_db.find!(User, q{name == "Peter" && age > args[0]})(min_age);
+	// clean syntax, but needs a parser and mixins in user code are kind of ugly
+	auto res = mixin(find("m_db", q{User.name == "Peter" && User.age > min_age}));
+	// using expression templates where possible, simple extension to the current solution, puts the comparison operator in the middle
+	auto res = m_db.find(Cmp!(User.name, "==")("Peter") & Cmp!(User.age, ">")(min_age));
+	auto res = m_db.find(Cmp!(User.name)("Peter") & Cmp!(User.age, ">")(min_age));
+	auto res = m_db.find(Cmp!User.name.equal("Peter") & Cmp!User.age.greater(min_age));
+	auto res = m_db.find(Cmp!User.name("Peter") & Cmp!User.age!">"(min_age));
+	auto res = m_db.find(Cmp!User.name("Peter") & Cmp!User.age(greater(min_age)));
+	// requires different way to define the tables
+	auto res = m_db.find(User.name.equal("Peter") & User.age.greater(min_age));
+	auto res = m_db.find(User.name.cmp!"=="("Peter") & User.age.cmp!">"(min_age));
+	auto res = m_db.find(User.name("Peter") & User.age!">"(min_age));
+	auto res = m_db.find(User.name("Peter") & User.age(greater(min_age)));
+	// short for complex expressions, but long for simple ones
+	auto res = m_db.find!((Var!User u) => u.name.equal("Peter") & u.age.greater(min_age));
+};
+
 
 @property TableDefinitionAttribute tableDefinition() { return TableDefinitionAttribute.init; }
 @property PrimaryIDAttribute primaryID() { return PrimaryIDAttribute.init; }
@@ -398,15 +412,40 @@ class InMemoryORMDriver {
 		m_tables[table].rowCounter = 0;
 	}
 
-	static bool matchQuery(T, QUERY)(ref T item, ref QUERY query)
+	static bool matchQuery(T, Q)(ref T item, ref Q query)
 	{
-		// TODO!
-		return true;
+		static if (isInstanceOf!(ComparatorExpr, Q)) {
+			static if (Q.comp == Comparator.equal) return __traits(getMember, item, Q.name) == query.value;
+			else static if (Q.comp == Comparator.notEqual) return __traits(getMember, item, Q.name) != query.value;
+			else static if (Q.comp == Comparator.greater) return __traits(getMember, item, Q.name) > query.value;
+			else static if (Q.comp == Comparator.greaterEqual) return __traits(getMember, item, Q.name) >= query.value;
+			else static if (Q.comp == Comparator.less) return __traits(getMember, item, Q.name) < query.value;
+			else static if (Q.comp == Comparator.lessEqual) return __traits(getMember, item, Q.name) <= query.value;
+			else static if (Q.comp == Comparator.containsAll) {
+				import std.algorithm : canFind;
+				foreach (v; query.value)
+					if (!canFind(__traits(getMember, item, Q.name), v))
+						return false;
+				return true;
+			} else static assert(false, format("Unsupported comparator: %s", Q.comp));
+		} else static if (isInstanceOf!(ConjunctionExpr, Q)) {
+			foreach (i, E; typeof(Q.exprs))
+				if (!matchQuery(item, query.exprs[i]))
+					return false;
+			return true;
+		} else static if (isInstanceOf!(DisjunctionExpr, Q)) {
+			foreach (i, E; typeof(Q.exprs))
+				if (matchQuery(item, query.exprs[i]))
+					return true;
+			return false;
+		} else static assert(false, "Unsupported query expression type: "~Q.stringof);
 	}
 
-	static void applyUpdate(T, UPDATE)(ref T item, ref UPDATE query)
+	static void applyUpdate(T, U)(ref T item, ref U query)
 	{
-		// TODO!
+		static if (isInstanceOf!(SetExpr, U)) {
+			__traits(getMember, item, U.name) = query.value;
+		} else static assert(false, "Unsupported update expression type: "~U.stringof);
 	}
 }
 
