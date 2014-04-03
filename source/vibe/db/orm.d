@@ -26,7 +26,7 @@ unittest {
 	import vibe.data.bson;
 
 	@tableDefinition
-	static struct User {
+	struct User {
 		static:
 		string name;
 		int age;
@@ -103,8 +103,6 @@ unittest {
 	db.insertRow!Box("box 2", ["Tom", "Hartmut", "Lynn"]);
 	db.insertRow!Box("box 3", ["Lynn", "Hartmut", "Peter"]);
 
-	foreach(box; db.find(containsAll!(Box.users)("Hartmut", "Lynn")))
-		logInfo("%s", box.name);
 	assert(std.algorithm.equal(
 		db.find(containsAll!(Box.users)("Hartmut", "Lynn")),
 		[Row!Box("box 2", ["Tom", "Hartmut", "Lynn"]), Row!Box("box 3", ["Lynn", "Hartmut", "Peter"])]));
@@ -161,13 +159,13 @@ class ORM(Tables, Driver) {
 		m_driver = driver;
 
 		foreach (tname; __traits(allMembers, Tables)) {
-			pragma(msg, "TAB "~tname);
+			//pragma(msg, "TAB "~tname);
 			alias Table = typeof(__traits(getMember, Tables, tname));
 			static assert(isTableDefinition!Table, "Table defintion lacks @TableDefinition UDA: "~Table.stringof);
 			TableInfo ti;
-			ti.handle = driver.getTableHandle(tname);
+			ti.handle = driver.getTableHandle!Table(tname);
 			foreach (cname; __traits(allMembers, Table)) {
-				pragma(msg, "COL "~cname);
+				//pragma(msg, "COL "~cname);
 				//ti.columnHandles ~= driver.getColumnHandle(ti.handle, cname);
 			}
 			m_tables ~= ti;
@@ -305,7 +303,7 @@ mixin template RowFields(TABLE, MEMBERS...) {
 		mixin RowFields!(TABLE, MEMBERS[$/2 .. $]);
 	} else static if (MEMBERS.length == 1) {
 		alias T = typeof(__traits(getMember, TABLE, MEMBERS[0]));
-		pragma(msg, "MEMBER: "~MEMBERS[0]);
+		//pragma(msg, "MEMBER: "~MEMBERS[0]);
 		mixin(format(`T %s;`, MEMBERS[0]));
 	}
 }
@@ -353,6 +351,16 @@ private template tableIndex(TABLE, TABLES)
 /* IN-MEMORY DRIVER                                                           */
 /******************************************************************************/
 
+/** Simple in-memory ORM back end.
+
+	This database back end is mostly useful as a lightweight replacement for
+	a full database engine. It offers no data persistence across program runs.
+
+	The primary uses for this class are to serve as a reference implementation
+	and to enable unit testing without involving an external database process
+	or disk access. However, it can also be useful in cases where persistence
+	isn't needed, but where the ORM interface is already used.
+*/
 class InMemoryORMDriver {
 	alias DefaultID = size_t; // running index
 	alias TableHandle = size_t; // table index
@@ -369,7 +377,7 @@ class InMemoryORMDriver {
 		Table[] m_tables;
 	}
 
-	size_t getTableHandle(string name)
+	size_t getTableHandle(T)(string name)
 	{
 		foreach (i, ref t; m_tables)
 			if (t.name == name)
@@ -412,7 +420,7 @@ class InMemoryORMDriver {
 		m_tables[table].rowCounter = 0;
 	}
 
-	static bool matchQuery(T, Q)(ref T item, ref Q query)
+	private static bool matchQuery(T, Q)(ref T item, ref Q query)
 	{
 		static if (isInstanceOf!(ComparatorExpr, Q)) {
 			static if (Q.comp == Comparator.equal) return __traits(getMember, item, Q.name) == query.value;
@@ -441,7 +449,7 @@ class InMemoryORMDriver {
 		} else static assert(false, "Unsupported query expression type: "~Q.stringof);
 	}
 
-	static void applyUpdate(T, U)(ref T item, ref U query)
+	private static void applyUpdate(T, U)(ref T item, ref U query)
 	{
 		static if (isInstanceOf!(SetExpr, U)) {
 			__traits(getMember, item, U.name) = query.value;
@@ -454,6 +462,12 @@ class InMemoryORMDriver {
 /* MONGODB DRIVER                                                             */
 /******************************************************************************/
 
+
+/** ORM driver using MongoDB for data storage and query execution.
+
+	The driver generates static types used to efficiently and directly
+	serialize query expressions to BSON without unnecessary memory allocations.
+*/
 class MongoDBDriver {
 	import vibe.db.mongo.mongo;
 
@@ -471,7 +485,7 @@ class MongoDBDriver {
 		m_db = cli.getDatabase(name);
 	}
 
-	MongoCollection getTableHandle(string name) { return m_db[name]; }
+	MongoCollection getTableHandle(T)(string name) { return m_db[name]; }
 	//string getColumnHandle(MongoCollection coll, string name) { return name; }
 	
 	auto find(T, QUERY)(MongoCollection table, QUERY query)
@@ -481,7 +495,7 @@ class MongoDBDriver {
 		mixin(initializeMongoQuery!(0, QUERY)("mquery", "query"));
 		
 		import vibe.core.log; import vibe.data.bson;
-		logInfo("QUERY (%s): %s", table.name, serializeToBson(mquery).toString());
+		//logInfo("QUERY (%s): %s", table.name, serializeToBson(mquery).toString());
 		
 		return table.find(mquery).map!(b => deserializeBson!T(b));
 	}
@@ -497,8 +511,8 @@ class MongoDBDriver {
 		mixin(initializeMongoUpdate!(0, UPDATE)("mupdate", "update"));
 
 		import vibe.core.log; import vibe.data.bson;
-		logInfo("QUERY (%s): %s", table.name, serializeToBson(mquery).toString());
-		logInfo("UPDATE: %s", serializeToBson(mupdate).toString());
+		//logInfo("QUERY (%s): %s", table.name, serializeToBson(mquery).toString());
+		//logInfo("UPDATE: %s", serializeToBson(mupdate).toString());
 
 		table.update(mquery, mupdate);
 	}
@@ -514,7 +528,7 @@ class MongoDBDriver {
 	}
 }
 
-mixin template MongoQuery(size_t idx, QUERIES...) {
+private mixin template MongoQuery(size_t idx, QUERIES...) {
 	static if (QUERIES.length > 1) {
 		mixin MongoQuery!(idx, QUERIES[0 .. $/2]);
 		mixin MongoQuery!(idx + QUERIES.length/2, QUERIES[$/2 .. $]);
@@ -541,7 +555,7 @@ mixin template MongoQuery(size_t idx, QUERIES...) {
 	}
 }
 
-mixin template MongoQueries(size_t idx, QUERIES...) {
+private mixin template MongoQueries(size_t idx, QUERIES...) {
 	static if (QUERIES.length > 1) {
 		mixin MongoQueries!(idx, QUERIES[0 .. $/2]);
 		mixin MongoQueries!(idx + QUERIES.length/2, QUERIES[$/2 .. $]);
@@ -577,7 +591,7 @@ private static string initializeMongoQuery(size_t idx, QUERY)(string name, strin
 	return ret;
 }
 
-mixin template MongoUpdate(size_t idx, UPDATES...) {
+private mixin template MongoUpdate(size_t idx, UPDATES...) {
 	static if (UPDATES.length > 1) {
 		mixin MongoUpdate!(idx, UPDATES[0 .. $/2]);
 		mixin MongoUpdate!(idx + UPDATES.length/2, UPDATES[$/2 .. $]);
@@ -590,7 +604,7 @@ mixin template MongoUpdate(size_t idx, UPDATES...) {
 	}
 }
 
-mixin template MongoUpdates(size_t idx, UPDATES...) {
+private mixin template MongoUpdates(size_t idx, UPDATES...) {
 	static if (UPDATES.length > 1) {
 		mixin MongoUpdates!(idx, UPDATES[0 .. $/2]);
 		mixin MongoUpdates!(idx + UPDATES.length/2, UPDATES[$/2 .. $]);
@@ -610,12 +624,3 @@ private static string initializeMongoUpdate(size_t idx, UPDATE)(string name, str
 
 	return ret;
 }
-
-bool anyOf(T)(T value, T[] values...)
-{
-	foreach (v; values)
-		if (v == value)
-			return true;
-	return false;
-}
-
