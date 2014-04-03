@@ -48,17 +48,21 @@ unittest {
 	db.insertRow!User("Peter", 69);
 	
 	assert(std.algorithm.equal(
-		db.find(and(.equal!(User.name)("Peter"), greater!(User.age)(29))),
+		db.find(and(cmp!User.name("Peter"), cmp!User.age.greater(29))),
 		[Row!User("Peter", 42), Row!User("Peter", 69)]));
 
 	assert(std.algorithm.equal(
-		db.find(or(.equal!(User.name)("Peter"), greater!(User.age)(29))),
-		[Row!User("Tom", 45), Row!User("Peter", 13), Row!User("Peter", 42), Row!User("Peter", 69)]));
-
-	db.update(.equal!(User.name)("Tom"), set!(User.age)(20));
+		db.find(cmp!User.name("Peter") & cmp!User.age.greater(29)),
+		[Row!User("Peter", 42), Row!User("Peter", 69)]));
 
 	assert(std.algorithm.equal(
-		db.find(.equal!(User.name)("Tom")),
+		db.find(or(cmp!User.name("Peter"), cmp!User.age.greater(29))),
+		[Row!User("Tom", 45), Row!User("Peter", 13), Row!User("Peter", 42), Row!User("Peter", 69)]));
+
+	db.update(cmp!User.name("Tom"), set!(User.age)(20));
+
+	assert(std.algorithm.equal(
+		db.find(cmp!User.name("Tom")),
 		[Row!User("Tom", 20)]));
 }
 
@@ -91,6 +95,7 @@ unittest {
 	//auto dbdriver = new MongoDBDriver("127.0.0.1", "test");
 	auto dbdriver = new InMemoryORMDriver;
 	auto db = createORM!Tables(dbdriver);
+
 	db.removeAll!User();
 	db.insertRow!User("Tom");
 	db.insertRow!User("Peter");
@@ -104,7 +109,7 @@ unittest {
 	db.insertRow!Box("box 3", ["Lynn", "Hartmut", "Peter"]);
 
 	assert(std.algorithm.equal(
-		db.find(containsAll!(Box.users)("Hartmut", "Lynn")),
+		db.find(cmp!Box.users.containsAll("Hartmut", "Lynn")),
 		[Row!Box("box 2", ["Tom", "Hartmut", "Lynn"]), Row!Box("box 3", ["Lynn", "Hartmut", "Peter"])]));
 }
 
@@ -174,6 +179,14 @@ class ORM(Tables, Driver) {
 		upgradeColumns();
 	}
 
+	/// The underlying database driver
+	@property inout(Driver) driver() inout { return m_driver; }
+
+	/** Queries a table for a set of rows.
+
+		The return value is an input range of type Row!T, where T is the type
+		of the underlying table.
+	*/
 	auto find(QUERY)(QUERY query)
 	{
 		alias T = QueryTable!QUERY;
@@ -181,11 +194,28 @@ class ORM(Tables, Driver) {
 		return m_driver.find!(Row!T)(m_tables[tidx].handle, query);
 	}
 
+	/** Queries a table for the first match.
+
+		When a matching row is found, a Row!T is returned. Otherwise an
+		exception is thrown.
+	*/
 	auto findOne(QUERY)(QUERY query)
 	{
 		auto res = find(query);
 		enforce(!res.empty, "Not found!");
 		return res.front;
+	}
+
+	/** Driver specific version of find.
+
+		This method takes a set of driver defined arguments (e.g. a
+		string plus parameters for an SQL database or a BSON document
+		for the MongoDB driver).
+	*/
+	auto findRaw(TABLE, T...)(T params)
+	{
+		enum tidx = tableIndex!(T, Tables);
+		return m_driver.findRaw!(Row!TABLE)(m_tables[tidx].handle, params);
 	}
 
 	void update(QUERY, UPDATE)(QUERY query, UPDATE update)
@@ -240,13 +270,38 @@ class ORM(Tables, Driver) {
 /* QUERY EXPRESSIONS                                                          */
 /******************************************************************************/
 
-auto equal(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.equal)(value); }
-auto notEqual(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.notEqual)(value); }
-auto greater(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.greater)(value); }
-auto greaterEqual(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.greaterEqual)(value); }
-auto less(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.less)(value); }
-auto lessEqual(alias field)(typeof(field) value) { return ComparatorExpr!(field, Comparator.lessEqual)(value); }
-auto containsAll(alias field)(typeof(field) values...) { return ComparatorExpr!(field, Comparator.containsAll)(values.dup); }
+struct cmp(TABLE)
+{
+	static struct cmpfield(string column)
+	{
+		alias FIELD = typeof(__traits(getMember, TABLE, column));
+		static opCall(FIELD value) { return equal(value); }
+		static auto equal(FIELD value) { return compare!(Comparator.equal)(value); }
+		static auto notEqual(FIELD value) { return compare!(Comparator.notEqual)(value); }
+		static auto greater(FIELD value) { return compare!(Comparator.greater)(value); }
+		static auto greaterEqual(FIELD value) { return compare!(Comparator.greaterEqual)(value); }
+		static auto less(FIELD value) { return compare!(Comparator.less)(value); }
+		static auto lessEqual(FIELD value) { return compare!(Comparator.lessEqual)(value); }
+		static if (isArray!FIELD) {
+			// FIXME: avoid dynamic array here:
+			static auto containsAll(typeof(FIELD.init[0])[] values...) { return compare!(Comparator.containsAll)(values); }
+		}
+		static auto compare(Comparator comp)(FIELD value) { return ComparatorExpr!(__traits(getMember, TABLE, column), comp)(value); }
+	}
+
+	mixin template CmpFields(MEMBERS...) {
+		static if (MEMBERS.length > 1) {
+			mixin CmpFields!(MEMBERS[0 .. $/2]);
+			mixin CmpFields!(MEMBERS[$/2 .. $]);
+		} else static if (MEMBERS.length == 1) {
+			alias T = typeof(__traits(getMember, TABLE, MEMBERS[0]));
+			//pragma(msg, "MEMBER: "~MEMBERS[0]);
+			mixin(format(`alias %s = cmpfield!"%s";`, MEMBERS[0], MEMBERS[0]));
+		}
+	}
+
+	mixin CmpFields!(__traits(allMembers, TABLE));
+}
 
 @property auto and(EXPRS...)(EXPRS exprs) { return ConjunctionExpr!EXPRS(exprs); }
 @property auto or(EXPRS...)(EXPRS exprs) { return DisjunctionExpr!EXPRS(exprs); }
@@ -259,6 +314,9 @@ struct ComparatorExpr(alias FIELD, Comparator COMP)
 	enum name = __traits(identifier, FIELD);
 	enum comp = COMP;
 	T value;
+
+	auto opBinary(string op, T)(T other) if(op == "|") { return DisjunctionExpr!(typeof(this), T)(this, other); }
+	auto opBinary(string op, T)(T other) if(op == "&") { return ConjunctionExpr!(typeof(this), T)(this, other); }
 }
 enum Comparator {
 	equal,
