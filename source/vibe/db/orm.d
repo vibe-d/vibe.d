@@ -15,6 +15,7 @@ import std.algorithm : map;
 import std.string : format;
 import std.traits;
 import std.typetuple;
+import std.typecons : Nullable, tuple;
 
 import vibe.data.serialization;
 import vibe.internal.meta.uda;
@@ -28,6 +29,7 @@ unittest {
 	@tableDefinition
 	struct User {
 		static:
+		@primaryKey int id;
 		string name;
 		int age;
 	}
@@ -41,29 +43,29 @@ unittest {
 
 	auto db = createORM!Tables(dbdriver);
 	db.removeAll!User();
-	db.insertRow!User("Tom", 45);
-	db.insertRow!User("Peter", 13);
-	db.insertRow!User("Peter", 42);
-	db.insertRow!User("Foxy", 8);
-	db.insertRow!User("Peter", 69);
-	
-	assert(std.algorithm.equal(
-		db.find(and(cmp!User.name("Peter"), cmp!User.age.greater(29))),
-		[Row!User("Peter", 42), Row!User("Peter", 69)]));
+	db.insertRow!User(0, "Tom", 45);
+	db.insertRow!User(1, "Peter", 13);
+	db.insertRow!User(2, "Peter", 42);
+	db.insertRow!User(3, "Foxy", 8);
+	db.insertRow!User(4, "Peter", 69);
 
 	assert(std.algorithm.equal(
-		db.find(cmp!User.name("Peter") & cmp!User.age.greater(29)),
-		[Row!User("Peter", 42), Row!User("Peter", 69)]));
+		db.find(and(cmp!User.name("Peter"), cmp!User.age.greater(29))).map!(r => r.toTuple),
+		[tuple(2, "Peter", 42), tuple(4, "Peter", 69)]));
 
 	assert(std.algorithm.equal(
-		db.find(or(cmp!User.name("Peter"), cmp!User.age.greater(29))),
-		[Row!User("Tom", 45), Row!User("Peter", 13), Row!User("Peter", 42), Row!User("Peter", 69)]));
+		db.find(cmp!User.name("Peter") & cmp!User.age.greater(29)).map!(r => r.toTuple),
+		[tuple(2, "Peter", 42), tuple(4, "Peter", 69)]));
+
+	assert(std.algorithm.equal(
+		db.find(or(cmp!User.name("Peter"), cmp!User.age.greater(29))).map!(r => r.toTuple),
+		[tuple(0, "Tom", 45), tuple(1, "Peter", 13), tuple(2, "Peter", 42), tuple(4, "Peter", 69)]));
 
 	db.update(cmp!User.name("Tom"), set!(User.age)(20));
 
 	assert(std.algorithm.equal(
-		db.find(cmp!User.name("Tom")),
-		[Row!User("Tom", 20)]));
+		db.find(cmp!User.name("Tom")).map!(r => r.toTuple),
+		[tuple(0, "Tom", 20)]));
 }
 
 
@@ -75,16 +77,16 @@ unittest {
 	@tableDefinition
 	struct User {
 		static:
-		@primaryID
+		@primaryKey
 		string name;
 	}
 
 	@tableDefinition
 	struct Box {
 		static:
+		@primaryKey
 		string name;
-		//User[] users;
-		string[] users;
+		User[] users;
 	}
 
 	struct Tables {
@@ -109,8 +111,8 @@ unittest {
 	db.insertRow!Box("box 3", ["Lynn", "Hartmut", "Peter"]);
 
 	assert(std.algorithm.equal(
-		db.find(cmp!Box.users.containsAll("Hartmut", "Lynn")),
-		[Row!Box("box 2", ["Tom", "Hartmut", "Lynn"]), Row!Box("box 3", ["Lynn", "Hartmut", "Peter"])]));
+		db.find(cmp!Box.users.containsAll("Hartmut", "Lynn")).map!(r => r.toTuple),
+		[tuple("box 2", ["Tom", "Hartmut", "Lynn"]), tuple("box 3", ["Lynn", "Hartmut", "Peter"])]));
 }
 
 
@@ -141,15 +143,18 @@ auto dummy = q{
 
 
 @property TableDefinitionAttribute tableDefinition() { return TableDefinitionAttribute.init; }
-@property PrimaryIDAttribute primaryID() { return PrimaryIDAttribute.init; }
+@property PrimaryKeyAttribute primaryKey() { return PrimaryKeyAttribute.init; }
 
 struct TableDefinitionAttribute {}
-struct PrimaryIDAttribute {}
+struct PrimaryKeyAttribute {}
 
 
 ORM!(Tables, Driver) createORM(Tables, Driver)(Driver driver) { return new ORM!(Tables, Driver)(driver); }
 
-class ORM(Tables, Driver) {
+class ORM(TABLES, DRIVER) {
+	alias Tables = TABLES;
+	alias Driver = DRIVER;
+
 	private {
 		Driver m_driver;
 		struct TableInfo {
@@ -184,26 +189,26 @@ class ORM(Tables, Driver) {
 
 	/** Queries a table for a set of rows.
 
-		The return value is an input range of type Row!T, where T is the type
+		The return value is an input range of type Row!(T, ORM), where T is the type
 		of the underlying table.
 	*/
 	auto find(QUERY)(QUERY query)
 	{
 		alias T = QueryTable!QUERY;
 		enum tidx = tableIndex!(T, Tables);
-		return m_driver.find!(Row!T)(m_tables[tidx].handle, query);
+		return m_driver.find!(RawRow!(ORM, T))(m_tables[tidx].handle, query).map!(r => Row!(ORM, T)(this, r));
 	}
 
 	/** Queries a table for the first match.
 
-		When a matching row is found, a Row!T is returned. Otherwise an
-		exception is thrown.
+		A Nullable!T is returned and set to null when no match was found.
 	*/
-	auto findOne(QUERY)(QUERY query)
+	Nullable!(Row!(ORM, QueryTable!QUERY)) findOne(QUERY)(QUERY query)
 	{
-		auto res = find(query);
-		enforce(!res.empty, "Not found!");
-		return res.front;
+		auto res = find(query); // TODO: give a hint to the DB driver that only one document is desired
+		Nullable!(Row!(ORM, QueryTable!QUERY)) ret;
+		if (!res.empty) ret = res.front;
+		return ret;
 	}
 
 	/** Driver specific version of find.
@@ -215,21 +220,21 @@ class ORM(Tables, Driver) {
 	auto findRaw(TABLE, T...)(T params)
 	{
 		enum tidx = tableIndex!(T, Tables);
-		return m_driver.findRaw!(Row!TABLE)(m_tables[tidx].handle, params);
+		return m_driver.findRaw!(RawRow!TABLE)(m_tables[tidx].handle, params);
 	}
 
 	void update(QUERY, UPDATE)(QUERY query, UPDATE update)
 	{
 		alias T = QueryTable!QUERY;
 		auto tidx = tableIndex!(T, Tables);
-		m_driver.update!(Row!T)(m_tables[tidx].handle, query, update);
+		m_driver.update!(RawRow!(ORM, T))(m_tables[tidx].handle, query, update);
 	}
 
 	void insertRow(T, FIELDS...)(FIELDS fields)
 		if (isTableDefinition!T)
 	{
 		enum tidx = tableIndex!(T, Tables);
-		Row!T value;
+		RawRow!(ORM, T) value;
 		// TODO: translate references to other tables automatically
 		value.tupleof = fields;
 		m_driver.insert(m_tables[tidx].handle, value);
@@ -274,7 +279,7 @@ struct cmp(TABLE)
 {
 	static struct cmpfield(string column)
 	{
-		alias FIELD = typeof(__traits(getMember, TABLE, column));
+		alias FIELD = ComparatorType!(typeof(__traits(getMember, TABLE, column)));
 		static opCall(FIELD value) { return equal(value); }
 		static auto equal(FIELD value) { return compare!(Comparator.equal)(value); }
 		static auto notEqual(FIELD value) { return compare!(Comparator.notEqual)(value); }
@@ -284,7 +289,7 @@ struct cmp(TABLE)
 		static auto lessEqual(FIELD value) { return compare!(Comparator.lessEqual)(value); }
 		static if (isArray!FIELD) {
 			// FIXME: avoid dynamic array here:
-			static auto containsAll(typeof(FIELD.init[0])[] values...) { return compare!(Comparator.containsAll)(values); }
+			static auto containsAll(FIELD values...) { return compare!(Comparator.containsAll)(values); }
 		}
 		static auto compare(Comparator comp)(FIELD value) { return ComparatorExpr!(__traits(getMember, TABLE, column), comp)(value); }
 	}
@@ -310,10 +315,11 @@ struct cmp(TABLE)
 struct ComparatorExpr(alias FIELD, Comparator COMP)
 {
 	alias T = typeof(FIELD);
+	alias V = ComparatorType!T;
 	alias TABLE = TypeTuple!(__traits(parent, FIELD))[0];
 	enum name = __traits(identifier, FIELD);
 	enum comp = COMP;
-	T value;
+	V value;
 
 	auto opBinary(string op, T)(T other) if(op == "|") { return DisjunctionExpr!(typeof(this), T)(this, other); }
 	auto opBinary(string op, T)(T other) if(op == "&") { return ConjunctionExpr!(typeof(this), T)(this, other); }
@@ -326,6 +332,12 @@ enum Comparator {
 	less,
 	lessEqual,
 	containsAll
+}
+template ComparatorType(T)
+{
+	static if (isTableDefinition!T) alias ComparatorType = PrimaryKeyType!T;
+	else static if (isArray!T && isTableDefinition!(typeof(T.init[0]))) alias ComparatorType = PrimaryKeyType!(typeof(T.init[0]))[];
+	else alias ComparatorType = T;
 }
 struct ConjunctionExpr(EXPRS...) { EXPRS exprs; }
 struct DisjunctionExpr(EXPRS...) { EXPRS exprs; }
@@ -350,25 +362,133 @@ struct SetExpr(alias FIELD)
 /* UTILITY TEMPLATES                                                          */
 /******************************************************************************/
 
-struct Row(TABLE)
-	if (findFirstUDA!(TableDefinitionAttribute, TABLE).found)
+struct Row(ORM, TABLE)
+	if (isTableDefinition!TABLE)
 {
-	mixin RowFields!(TABLE, __traits(allMembers, TABLE));
+	private {
+		ORM m_orm;
+		RawRow!(ORM, TABLE) m_rawData;
+	}
+
+	this(ORM orm, RawRow!(ORM, TABLE) data)
+	{
+		m_orm = orm;
+		m_rawData = data;
+	}
+
+	@property ref const(RawRow!(ORM, TABLE)) rawRowData() const { return m_rawData; }
+
+	auto toTuple() { return tuple(m_rawData.tupleof); }
+
+	mixin RowFields!(ORM, TABLE, __traits(allMembers, TABLE));
 }
-mixin template RowFields(TABLE, MEMBERS...) {
+
+mixin template RowFields(ORM, TABLE, MEMBERS...) {
 	static if (MEMBERS.length > 1) {
-		mixin RowFields!(TABLE, MEMBERS[0 .. $/2]);
-		mixin RowFields!(TABLE, MEMBERS[$/2 .. $]);
+		mixin RowFields!(ORM, TABLE, MEMBERS[0 .. $/2]);
+		mixin RowFields!(ORM, TABLE, MEMBERS[$/2 .. $]);
 	} else static if (MEMBERS.length == 1) {
 		alias T = typeof(__traits(getMember, TABLE, MEMBERS[0]));
-		//pragma(msg, "MEMBER: "~MEMBERS[0]);
-		mixin(format(`T %s;`, MEMBERS[0]));
+		static if (isTableDefinition!T) {
+			mixin(format(`@property auto %s() { return m_orm.findOne(cmp!T.%s(m_rawData.%s)); }`, MEMBERS[0], primaryKeyOf!T, MEMBERS[0]));
+		} else static if (isDynamicArray!T && !isSomeString!T) {
+			alias E = typeof(T.init[0]);
+			static assert(isTableDefinition!E);
+			static if (!isTableDefinition!E) static assert(false);
+			static if (ORM.Driver.supportsArrays) {
+				mixin(format(`@property auto %s() { return RowArray!(ORM, E)(m_orm, m_rawData.%s); }`, MEMBERS[0], MEMBERS[0]));
+			} else {
+				static assert(false);
+			}
+		} else {
+			static assert(!isAssociativeArray!T);
+			mixin(format(`@property auto %s() const { return m_rawData.%s; }`, MEMBERS[0], MEMBERS[0]));
+		}
+	}
+}
+
+struct RowArray(ORM, T) {
+	private {
+		alias E = PrimaryKeyType!T;
+		alias R = Row!(ORM, T);
+		enum primaryKeyName = primaryKeyOf!T;
+		ORM m_orm;
+		E[] m_items;
+	}
+
+	this(ORM orm, E[] items)
+	{
+		m_orm = orm;
+		m_items = items;
+	}
+
+	R opIndex(size_t idx) { return resolve(m_items[idx]); }
+
+	auto opSlice()
+	{
+		return m_items.map!(itm => resolve(itm));
+	}
+
+	private R resolve(E key)
+	{
+		return m_orm.findOne(__traits(getMember, cmp!T, primaryKeyName)(key));
+	}
+}
+
+
+struct RawRow(ORM, TABLE)
+	if (isTableDefinition!TABLE)
+{
+	mixin RawRowFields!(ORM, TABLE, __traits(allMembers, TABLE));
+}
+
+mixin template RawRowFields(ORM, TABLE, MEMBERS...) {
+	static if (MEMBERS.length > 1) {
+		mixin RawRowFields!(ORM, TABLE, MEMBERS[0 .. $/2]);
+		mixin RawRowFields!(ORM, TABLE, MEMBERS[$/2 .. $]);
+	} else static if (MEMBERS.length == 1) {
+		alias T = typeof(__traits(getMember, TABLE, MEMBERS[0]));
+		mixin(format(`RawColumnType!(ORM, T) %s;`, MEMBERS[0]));
+	}
+}
+
+template RawColumnType(ORM, T)
+{
+	static if (isTableDefinition!T) { // TODO: support in-document storage of table types for 1 to n relations
+		alias RawColumnType = PrimaryKeyType!T;
+	} else static if (isDynamicArray!T && !isSomeString!T) {
+		alias E = typeof(T.init[0]);
+		static assert(isTableDefinition!E, format("Array %s.%s may only contain table references, not %s.", TABLE.stringof, MEMBERS[0], E.stringof));
+		static if (!isTableDefinition!E) static assert(false);
+		else static if (ORM.Driver.supportsArrays) {
+			alias RawColumnType = PrimaryKeyType!E[]; // TODO: avoid dyamic allocations!
+		} else {
+			static assert(false, "Arrays for column based databases are not yet supported.");
+		}
+	} else {
+		static assert(!isAssociativeArray!T, "Associative arrays are not supported as column types. Please use a separate table instead.");
+		alias RawColumnType = T;
 	}
 }
 
 template isTableDefinition(T) {
-	enum isTableDefinition = findFirstUDA!(TableDefinitionAttribute, T).found;
+	static if (is(T == struct)) enum isTableDefinition = findFirstUDA!(TableDefinitionAttribute, T).found;
+	else enum isTableDefinition = false;
 }
+template isPrimaryKey(T, string key) { enum isPrimaryKey = findFirstUDA!(PrimaryKeyAttribute, __traits(getMember, T, key)).found; }
+
+@property string primaryKeyOf(T)()
+	if (isTableDefinition!T)
+{
+	// TODO: produce better error messages for duplicate or missing primary keys!
+	foreach (m; __traits(allMembers, T))
+		static if (isPrimaryKey!(T, m))
+			return m;
+	assert(false, "No primary key for "~T.stringof);
+}
+
+template PrimaryKeyType(T) if (isTableDefinition!T) { enum string key = primaryKeyOf!T; alias PrimaryKeyType = typeof(__traits(getMember, T, key)); }
+
 
 private template QueryTable(QUERIES...) if (QUERIES.length > 0) {
 	static if (QUERIES.length == 1) {
@@ -423,6 +543,7 @@ class InMemoryORMDriver {
 	alias DefaultID = size_t; // running index
 	alias TableHandle = size_t; // table index
 	alias ColumnHandle = size_t; // byte offset
+	enum bool supportsArrays = true;
 
 	private {
 		static struct Table {
@@ -536,6 +657,7 @@ class MongoDBDriver {
 	alias DefaultID = BsonObjectID;
 	alias TableHandle = MongoCollection;
 	alias ColumnHandle = string;
+	enum bool supportsArrays = true;
 
 	this(string url_or_host, string name)
 	{
@@ -543,8 +665,11 @@ class MongoDBDriver {
 		m_db = cli.getDatabase(name);
 	}
 
-	MongoCollection getTableHandle(T)(string name) { return m_db[name]; }
-	//string getColumnHandle(MongoCollection coll, string name) { return name; }
+	MongoCollection getTableHandle(T)(string name)
+	{
+		// TODO: setup keys, especially the primary key!
+		return m_db[name];
+	}
 	
 	auto find(T, QUERY)(MongoCollection table, QUERY query)
 	{
@@ -595,13 +720,13 @@ private mixin template MongoQuery(size_t idx, QUERIES...) {
 		alias Q = QUERIES[0];
 
 		static if (isInstanceOf!(ComparatorExpr, Q)) {
-			static if (Q.comp == Comparator.equal) mixin("Q.T "~Q.name~";");
-			else static if (Q.comp == Comparator.notEqual) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$ne")) Q.T value; } Q%s %s;`, idx, idx, Q.name));
-			else static if (Q.comp == Comparator.greater) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$gt")) Q.T value; } Q%s %s;`, idx, idx, Q.name));
-			else static if (Q.comp == Comparator.greaterEqual) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$gte")) Q.T value; } Q%s %s;`, idx, idx, Q.name));
-			else static if (Q.comp == Comparator.less) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$lt")) Q.T value; } Q%s %s;`, idx, idx, Q.name));
-			else static if (Q.comp == Comparator.lessEqual) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$lte")) Q.T value; } Q%s %s;`, idx, idx, Q.name));
-			else static if (Q.comp == Comparator.containsAll) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$all")) Q.T value; } Q%s %s;`, idx, idx, Q.name));
+			static if (Q.comp == Comparator.equal) mixin("Q.V "~Q.name~";");
+			else static if (Q.comp == Comparator.notEqual) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$ne")) Q.V value; } Q%s %s;`, idx, idx, Q.name));
+			else static if (Q.comp == Comparator.greater) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$gt")) Q.V value; } Q%s %s;`, idx, idx, Q.name));
+			else static if (Q.comp == Comparator.greaterEqual) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$gte")) Q.V value; } Q%s %s;`, idx, idx, Q.name));
+			else static if (Q.comp == Comparator.less) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$lt")) Q.V value; } Q%s %s;`, idx, idx, Q.name));
+			else static if (Q.comp == Comparator.lessEqual) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$lte")) Q.V value; } Q%s %s;`, idx, idx, Q.name));
+			else static if (Q.comp == Comparator.containsAll) mixin(format(`static struct Q%s { @(vibe.data.serialization.name("$all")) Q.V value; } Q%s %s;`, idx, idx, Q.name));
 			else static assert(false, format("Unsupported comparator: %s", Q.comp));
 		} else static if (isInstanceOf!(ConjunctionExpr, Q)) {
 			//mixin(format(`static struct Q%s { mixin MongoQuery!(0, Q.exprs); } @(vibe.data.serialization.name("$and")) Q%s q%s;`, idx, idx, idx));
