@@ -426,6 +426,7 @@ struct RowArray(ORM, T) {
 
 	auto opSlice()
 	{
+		static int dummy; dummy++; // force method to be impure to work around DMD 2.065 issue
 		return m_items.map!(itm => resolve(itm));
 	}
 
