@@ -125,7 +125,7 @@ unittest
 /**
 	User Defined Attribute interface to force specific HTTP method in REST interface
 	for function in question. Usual URL generation rules are still applied so if there
-	are ny "get", "query" or similar prefixes, they are filtered out.
+	are any "get", "query" or similar prefixes, they are filtered out.
 
 	Example:
 	---
