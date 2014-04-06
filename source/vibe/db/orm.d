@@ -5,6 +5,9 @@
 	creating, modifying and querying the data. It aims to use no dynamic memory
 	allocations wherever possible.
 
+	Open_issues:
+		How to deal with schema changes?
+
 	Copyright: © 2014 rejectedsoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
@@ -49,23 +52,28 @@ unittest {
 	db.insertRow!User(3, "Foxy", 8);
 	db.insertRow!User(4, "Peter", 69);
 
-	assert(std.algorithm.equal(
-		db.find(and(cmp!User.name("Peter"), cmp!User.age.greater(29))).map!(r => r.toTuple),
-		[tuple(2, "Peter", 42), tuple(4, "Peter", 69)]));
+	assert(db.find(and(cmp!User.name("Peter"), cmp!User.age.greater(29))).map!(r => r.toTuple).equal([
+		tuple(2, "Peter", 42),
+		tuple(4, "Peter", 69)
+	]));
 
-	assert(std.algorithm.equal(
-		db.find(cmp!User.name("Peter") & cmp!User.age.greater(29)).map!(r => r.toTuple),
-		[tuple(2, "Peter", 42), tuple(4, "Peter", 69)]));
+	assert(db.find(cmp!User.name("Peter") & cmp!User.age.greater(29)).map!(r => r.toTuple).equal([
+		tuple(2, "Peter", 42),
+		tuple(4, "Peter", 69)
+	]));
 
-	assert(std.algorithm.equal(
-		db.find(or(cmp!User.name("Peter"), cmp!User.age.greater(29))).map!(r => r.toTuple),
-		[tuple(0, "Tom", 45), tuple(1, "Peter", 13), tuple(2, "Peter", 42), tuple(4, "Peter", 69)]));
+	assert(db.find(or(cmp!User.name("Peter"), cmp!User.age.greater(29))).map!(r => r.toTuple).equal([
+		tuple(0, "Tom", 45),
+		tuple(1, "Peter", 13),
+		tuple(2, "Peter", 42),
+		tuple(4, "Peter", 69)
+	]));
 
 	db.update(cmp!User.name("Tom"), set!(User.age)(20));
 
-	assert(std.algorithm.equal(
-		db.find(cmp!User.name("Tom")).map!(r => r.toTuple),
-		[tuple(0, "Tom", 20)]));
+	assert(db.find(cmp!User.name("Tom")).map!(r => r.toTuple).equal([
+		tuple(0, "Tom", 20)
+	]));
 }
 
 
@@ -110,10 +118,122 @@ unittest {
 	db.insertRow!Box("box 2", ["Tom", "Hartmut", "Lynn"]);
 	db.insertRow!Box("box 3", ["Lynn", "Hartmut", "Peter"]);
 
-	assert(std.algorithm.equal(
-		db.find(cmp!Box.users.containsAll("Hartmut", "Lynn")).map!(r => r.toTuple),
-		[tuple("box 2", ["Tom", "Hartmut", "Lynn"]), tuple("box 3", ["Lynn", "Hartmut", "Peter"])]));
+	assert(db.find(cmp!Box.users.containsAll("Hartmut", "Lynn")).map!(r => r.toTuple).equal([
+		tuple("box 2", ["Tom", "Hartmut", "Lynn"]),
+		tuple("box 3", ["Lynn", "Hartmut", "Peter"])
+	]));
 }
+
+/// Using owned tables for more efficient storage/processing
+/*unittest {
+	@tableDefinition
+	struct User {
+	static:
+		@primaryKey string name;
+	}
+
+	@tableDefinition
+	struct Group {
+	static:
+		@primaryKey string name;
+		@owned @unordered GroupMember[] members;
+	}
+
+	@tableDefinition
+	static struct GroupMember {
+	static:
+		@owner Group group;
+		User user;
+		string type;
+	}
+
+	struct Tables {
+		User users;
+		Group groups;
+		GroupMember groupMembers;
+	}
+
+	auto dbdriver = new InMemoryORMDriver;
+	auto db = new ORM!Tables(db);
+
+	db.users.removeAll();
+	db.users.insertRow("Peter");
+	db.users.insertRow("Tom");
+	db.users.insertRow("Stacy");
+
+	db.groups.removeAll();
+	db.groups.insertRow("drivers");
+	db.groups.insertRow("sellers");
+
+	db.groupMembers.removeAll();
+	db.groupMembers.insertRow("drivers", "Peter", "leader");
+	db.groupMembers.insertRow("drivers", "Tom", "worker");
+	db.groupMembers.insertRow("sellers", "Stacy", "leader");
+	db.groupMembers.insertRow("sellers", "Peter", "staff");
+	
+	assert(db.find!GroupMember(GroupMember.group("sellers")).map!(r => r.toTuple).equal([
+		tuple("sellers", "Stacy", "leader"),
+		tuple("sellers", "Peter", "staff")
+	]));
+}
+
+// Using co-ownership to extend the possibility for efficient queries (may cause some denormalization)
+unittest {
+	@tableDefinition
+	struct User {
+	static:
+		@primaryKey string name;
+		@coOwned @unordered GroupMember[] memberships;
+	}
+
+	@tableDefinition
+	struct Group {
+	static:
+		@primaryKey string name;
+		@coOwned @unordered GroupMember[] members;
+	}
+
+	@tableDefinition @ownedBy!Group
+	struct GroupMember {
+	static:
+		@owner Group group;
+		@owner User user;
+		string type;
+	}
+
+	struct Tables {
+		User users;
+		Group groups;
+		GroupMember groupMembers;
+	}
+
+	auto dbdriver = new InMemoryORMDriver;
+	auto db = new ORM!Tables(db);
+
+	db.users.removeAll();
+	db.users.insertRow("Peter");
+	db.users.insertRow("Tom");
+	db.users.insertRow("Stacy");
+
+	db.groups.removeAll();
+	db.groups.insertRow("drivers");
+	db.groups.insertRow("sellers");
+
+	db.groupMembers.removeAll();
+	db.groupMembers.insertRow("drivers", "Peter", "leader");
+	db.groupMembers.insertRow("drivers", "Tom", "worker");
+	db.groupMembers.insertRow("sellers", "Stacy", "leader");
+	db.groupMembers.insertRow("sellers", "Peter", "staff");
+	
+	assert(db.find(GroupMember.name("Tom")).map!(r => r.toTuple).equal([
+		tuple("drivers", "Tom", "worker")
+	]));
+	
+	assert(db.find!GroupMember(GroupMember.group("sellers")).map!(r => r.toTuple).equal([
+		tuple("sellers", "Stacy", "leader"),
+		tuple("sellers", "Peter", "staff")
+	]));
+}*/
 
 
 // just playing with ideas for query syntaxes
@@ -142,11 +262,49 @@ auto dummy = q{
 };
 
 
+/** Required attribute to mark a struct as a table definition.
+*/
 @property TableDefinitionAttribute tableDefinition() { return TableDefinitionAttribute.init; }
+
+/** Marks the primary key of a table.
+
+	Only one column per table may be the primary key. Whenever columns
+	of the type of the table are compared to other columns/values,
+	the primary key is used for this comparison.
+*/
 @property PrimaryKeyAttribute primaryKey() { return PrimaryKeyAttribute.init; }
+
+/** Notes a secondary key of a table.
+*/
+
+/** Marks a column as containing the referenced table rows.
+
+	This assumption will be enforced in conjunction with the $(D @ownedBy!T)
+	attribute and by disallowing defining an explicit primary key.
+*/
+@property OwnedAttribute owned() { return OwnedAttribute.init; }
+
+/** Sets the owner table for an owned table.
+
+	This attribute must be present on any table referenced using the
+	$(D @owned) attribute. It enforces that only the owner table
+	can have references to the owned table and that there is a strict
+	one to many relationship between owner and ownee.
+*/
+@property OwnerByAttribute owner() { return OwnerByAttribute.init; }
+
+/** Hints the database that the order of array elements does not matter.
+
+	Array fields with this attribute can be freely reordered by the
+	database for more efficient access.
+*/
+@property UnorderedAttribute unordered() { return UnorderedAttribute.init; }
 
 struct TableDefinitionAttribute {}
 struct PrimaryKeyAttribute {}
+struct OwnedAttribute {}
+struct OwnerByAttribute {}
+struct UnorderedAttribute {}
 
 
 ORM!(Tables, Driver) createORM(Tables, Driver)(Driver driver) { return new ORM!(Tables, Driver)(driver); }
@@ -240,6 +398,13 @@ class ORM(TABLES, DRIVER) {
 		m_driver.insert(m_tables[tidx].handle, value);
 	}
 
+	/*void updateOrInsert(QUERY query)(QUERY query, QueryTable)
+
+	void remove(QUERY query)
+	{
+
+	}*/
+
 	void removeAll(T)()
 		if (isTableDefinition!T)
 	{
@@ -276,6 +441,7 @@ class ORM(TABLES, DRIVER) {
 /******************************************************************************/
 
 struct cmp(TABLE)
+	if (isTableDefinition!TABLE)
 {
 	static struct cmpfield(string column)
 	{
@@ -545,6 +711,7 @@ class InMemoryORMDriver {
 	alias TableHandle = size_t; // table index
 	alias ColumnHandle = size_t; // byte offset
 	enum bool supportsArrays = true;
+	enum bool supportsJoins = false;
 
 	private {
 		static struct Table {
@@ -593,6 +760,11 @@ class InMemoryORMDriver {
 			ptable.storage.length = max(16 * T.sizeof, ptable.storage.length * 2);
 		auto items = cast(T[])ptable.storage;
 		items[ptable.rowCounter++] = value;
+	}
+
+	void updateOrInsert(T, QUERY)(size_t table, QUERY query, T value)
+	{
+		assert(false);
 	}
 
 	void removeAll(size_t table)
@@ -659,6 +831,7 @@ class MongoDBDriver {
 	alias TableHandle = MongoCollection;
 	alias ColumnHandle = string;
 	enum bool supportsArrays = true;
+	enum bool supportsJoins = false;
 
 	this(string url_or_host, string name)
 	{
@@ -704,6 +877,11 @@ class MongoDBDriver {
 	void insert(T)(MongoCollection table, T value)
 	{
 		table.insert(value);
+	}
+
+	void updateOrInsert(T, QUERY)(size_t table, QUERY query, T value)
+	{
+		assert(false);
 	}
 
 	void removeAll(MongoCollection table)
@@ -807,4 +985,13 @@ private static string initializeMongoUpdate(size_t idx, UPDATE)(string name, str
 	} else static assert(false, "Unsupported update expression type: "~Q.stringof);
 
 	return ret;
+}
+
+
+/******************************************************************************/
+/* MYSQL DRIVER                                                               */
+/******************************************************************************/
+
+class MySQLORMDriver {
+
 }
