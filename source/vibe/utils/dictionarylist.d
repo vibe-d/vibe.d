@@ -95,8 +95,8 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 
 		If no field is found, def_val is returned.
 	*/
-	Value get(string key, lazy Value def_val = Value.init)
-	const {
+	inout(Value) get(string key, lazy inout(Value) def_val = Value.init)
+	inout {
 		if (auto pv = key in this) return *pv;
 		return def_val;
 	}
@@ -128,8 +128,8 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 
 	/** Returns the first value matching the given key.
 	*/
-	Value opIndex(string key)
-	const {
+	inout(Value) opIndex(string key)
+	inout {
 		auto pitm = key in this;
 		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
 		return *pitm;
@@ -192,15 +192,17 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 		return 0;
 	}
 
-	/** Duplicates the header map.
-	*/
-	@property DictionaryList dup()
-	const {
-		DictionaryList ret;
-		ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
-		ret.m_fieldCount = m_fieldCount;
-		ret.m_extendedFields = m_extendedFields.dup;
-		return ret;
+	static if (is(typeof({ const(Value) v; Value w; w = v; }))) {
+		/** Duplicates the header map.
+		*/
+		@property DictionaryList dup()
+		const {
+			DictionaryList ret;
+			ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
+			ret.m_fieldCount = m_fieldCount;
+			ret.m_extendedFields = m_extendedFields.dup;
+			return ret;
+		}
 	}
 
 	private ptrdiff_t getIndex(in Field[] map, string key, uint keysum)

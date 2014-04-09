@@ -320,6 +320,28 @@ enum HTTPServerOption {
 	parseCookies              = 1<<5,
 	/// Distributes request processing among worker threads
 	distribute                = 1<<6,
+	/** Enables stack traces (HTTPServerErrorInfo.debugMessage).
+
+		Note that generating the stack traces are generally a costly
+		operation that should usually be avoided in production
+		environments. It can also reveal internal information about
+		the application, such as function addresses, which can
+		help an attacker to abuse possible security holes.
+	*/
+	errorStackTraces          = 1<<7,
+
+	/** The default set of options.
+
+		Includes all options, except for distribute.
+	*/
+	defaults =
+		parseURL |
+		parseQueryString |
+		parseFormBody |
+		parseJsonBody |
+		parseMultiPartBody |
+		parseCookies |
+		errorStackTraces,
 
 	/// deprecated
 	None = none,
@@ -370,15 +392,10 @@ class HTTPServerSettings {
 	/** Configures optional features of the HTTP server
 	
 		Disabling unneeded features can improve performance or reduce the server
-		load in case of invalid or unwanted requests (DoS).
+		load in case of invalid or unwanted requests (DoS). By default,
+		HTTPServerOption.defaults is used.
 	*/
-	HTTPServerOption options =
-		HTTPServerOption.parseURL |
-		HTTPServerOption.parseQueryString |
-		HTTPServerOption.parseFormBody |
-		HTTPServerOption.parseJsonBody |
-		HTTPServerOption.parseMultiPartBody |
-		HTTPServerOption.parseCookies;
+	HTTPServerOption options = HTTPServerOption.defaults;
 	
 	/** Time of a request after which the connection is closed with an error; not supported yet
 
@@ -611,7 +628,7 @@ final class HTTPServerRequest : HTTPRequest {
 				This field is only set if HTTPServerOption.parseFormBody is set
 				and if the Content-Type is "multipart/form-data".
 		*/
-		FilePart[string] files;
+		FilePartFormFields files;
 
 		/** The current Session object.
 
@@ -1408,15 +1425,18 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), null, null);
 		}
 	} catch (HTTPStatusException err) {
-		logDebug("http error thrown: %s", err.toString().sanitize);
-		if (!res.headerWritten) errorOut(err.status, err.msg, err.toString(), err);
+		string dbg_msg;
+		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = err.toString().sanitize;
+		if (!res.headerWritten) errorOut(err.status, err.msg, dbg_msg, err);
 		else logDiagnostic("HTTPStatusException while writing the response: %s", err.msg);
-		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString());
+		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString().sanitize);
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
 	} catch (Throwable e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
-		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), e.toString(), e);
+		string dbg_msg;
+		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = e.toString().sanitize;
+		if (!res.headerWritten && tcp_connection.connected) errorOut(status, httpStatusText(status), dbg_msg, e);
 		else logDiagnostic("Error while writing the response: %s", e.msg);
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, e.toString().sanitize());
 		if (!parsed || res.headerWritten || !cast(Exception)e) keep_alive = false;

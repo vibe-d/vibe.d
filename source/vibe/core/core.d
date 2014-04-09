@@ -203,9 +203,17 @@ Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 	f.m_taskFunc = &callDelegate;
 	f.m_taskCounter++;
 	auto handle = f.task();
-	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.preStart, handle);
+	debug Task self = Task.getThis();
+	debug if (s_taskEventCallback) {
+		if (self != Task.init) s_taskEventCallback(TaskEvent.yield, self);
+		s_taskEventCallback(TaskEvent.preStart, handle);
+	}
 	s_core.resumeTask(handle, null, true);
-	debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.postStart, handle);
+	debug if (s_taskEventCallback) {
+		s_taskEventCallback(TaskEvent.postStart, handle);
+		if (self != Task.init) s_taskEventCallback(TaskEvent.resume, self);
+	}
+
 	return handle;
 }
 
@@ -752,7 +760,7 @@ private class CoreTask : TaskFiber {
 			while(true){
 				while (!m_taskFunc) {
 					try {
-						rawYield();
+						Fiber.yield();
 					} catch( Exception e ){
 						logWarn("CoreTaskFiber was resumed with exception but without active task!");
 						logDiagnostic("Full error: %s", e.toString().sanitize());
@@ -844,8 +852,8 @@ private class VibeDriverCore : DriverCore {
 	void yieldForEvent()
 	{
 		auto task = Task.getThis();
-		auto fiber = cast(CoreTask)task.fiber;
 		if (task != Task.init) {
+			auto fiber = cast(CoreTask)task.fiber;
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
 			fiber.yield();
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
