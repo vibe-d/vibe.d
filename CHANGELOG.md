@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.19 - 2014-03-
+v0.7.19 - 2014-04-09
 --------------------
 
 Apart from working on the latest DMD versions, this release includes an important security enhancement in the form of new experimental code for SSL certificate validation. Other major changes include many improvements to the Diet template compiler, various performance improvements, a new `FileDescriptorEvent` to interface with other I/O libraries, a new web interface generator similar to the REST interface generator, many improvements to the Redis client, and a bunch of other fixes and additions.
@@ -61,7 +61,7 @@ Apart from working on the latest DMD versions, this release includes an importan
  - Implemented handling of doctypes other than HTML 5 in the Diet compiler (by Damian Ziemba aka nazriel) - [issue #505][issue505], [pull #509][issue509]
  - Boolean attributes in Diet templates are now written without value for HTML 5 documents (by Damian Ziemba aka nazriel) - [issue #475][issue475], [pull #512][issue512]
  - Empty "class" attributes in Diet templates are not written to the final HTML output (by Damian Ziemba aka nazriel) - [issue #372][issue372], [pull #519][issue519]
- - Implemented PUB/SUB support for the Redis client (by Michael Eisendle)
+ - Implemented PUB/SUB support for the Redis client (by Michael Eisendle with additional fixes by Etienne Cimon aka etcimon)
  - The logging functions take now any kind of string instead of only `string` (by Mathias Lang aka Geod24) - [pull #532][issue532]
  - Added `SMTPClientSettings.peerValidationMode` (by Stephan Dilly aka Extrawurst) - [pull #528][issue528]
  - Diet templates that are set to `null` are now omitted in the HTML output (by Damian Ziemba aka nazriel) - [issue #520][issue520], [pull #521][issue521]
@@ -125,6 +125,11 @@ Apart from working on the latest DMD versions, this release includes an importan
  - Fixed `makeIsolated` to work for structs
  - Fixed `listenHTTP` to throw an exception if listening on all supplied bind addresses has failed
  - Fixed a possible crash or false pointers in `HashMap` due to a missing call to `GC.removeRange` - [issue #591][issue591]
+ - Fixed non-working disconnect of keep-alive connections in the HTTP server (by Stephan Dilly aka Extrawurst) - [pull #597][issue597]
+ - Fixed a possible source for orphaned TCP connections in the libevent driver
+ - Fixed `exitEventLoop` to work when called in a task that has been started just before `runEventLoop` was called
+ - Fixed `isWeaklyIsolated` to work properly for interface types (by Luca Niccoli aka lultimouomo) - [pull #602](issue602)
+ - Fixed the `BsonSerializer` to correctly serialize `SysTime` as a `BsonDate` instead of as a `string`
 
 Note that some fixes have been left out because they are related to changes within the development cycle of this release.
 
@@ -188,6 +193,8 @@ Note that some fixes have been left out because they are related to changes with
 [issue587]: https://github.com/rejectedsoftware/vibe.d/issues/587
 [issue590]: https://github.com/rejectedsoftware/vibe.d/issues/590
 [issue591]: https://github.com/rejectedsoftware/vibe.d/issues/591
+[issue597]: https://github.com/rejectedsoftware/vibe.d/issues/597
+[issue602]: https://github.com/rejectedsoftware/vibe.d/issues/602
 
 
 v0.7.18 - 2013-11-26
