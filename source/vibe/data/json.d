@@ -85,7 +85,7 @@ struct Json {
 		Type m_type = Type.undefined;
 
 		version (VibeJsonFieldNames) {
-			uint m_magic = 0x1337f00d; // works aroung Appender bug (DMD BUG 10690/10859/11357)
+			uint m_magic = 0x1337f00d; // works around Appender bug (DMD BUG 10690/10859/11357)
 			string m_name;
 		}
 	}
@@ -383,7 +383,7 @@ struct Json {
 	}
 
 	/**
-		Converts the JSON value to the corresponding D type - types are converted as neccessary.
+		Converts the JSON value to the corresponding D type - types are converted as necessary.
 	*/
 	@property inout(T) to(T)()
 	inout {
@@ -695,7 +695,7 @@ struct Json {
 		}
 	}
 
-
+	alias opDollar = length;
 
 	/**
 		Returns the type id corresponding to the given D type.
@@ -1619,6 +1619,26 @@ unittest {
 		{}
 	]
 }`);
+}
+
+unittest {
+	auto a = Json.emptyArray;
+	a ~= Json(1);
+	a ~= Json(2);
+	a ~= Json(3);
+	a ~= Json(4);
+	a ~= Json(5);
+
+	auto b = Json(a[0..a.length]);
+	assert(a == b);
+
+	auto c = Json(a[0..$]);
+	assert(a == c);
+	assert(b == c);
+
+	auto d = [Json(1),Json(2),Json(3)];
+	assert(d == a[0..a.length-2]);
+	assert(d == a[0..$-2]);
 }
 
 /**
