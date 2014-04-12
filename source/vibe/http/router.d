@@ -77,9 +77,6 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	}
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use HTTPRouter instead.") alias HttpRouter = HTTPRouter;
-
 
 /++
 	Routes HTTP requests based on the request method and URL.
@@ -198,9 +195,6 @@ class URLRouter : HTTPRouter {
 		} else return m_routes;
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use URLRouter instead.") alias UrlRouter = URLRouter;
 
 
 private enum maxRouteParameters = 64;

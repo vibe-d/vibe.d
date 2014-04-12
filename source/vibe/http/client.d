@@ -134,9 +134,6 @@ unittest {
 	}
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use requestHTTP instead.") alias requestHttp = requestHTTP;
-
 
 /**
 	Returns a HttpClient proxy object that is connected to the specified host.
@@ -171,9 +168,6 @@ auto connectHTTP(string host, ushort port = 0, bool ssl = false)
 	return pool.lockConnection();
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use connectHTTP instead.") alias connectHttp = connectHTTP;
-
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
@@ -188,9 +182,6 @@ deprecated("Please use connectHTTP instead.") alias connectHttp = connectHTTP;
 */
 class HTTPClient {
 	enum maxHeaderLineLength = 4096;
-
-	/// Deprecated compatibility alias
-	deprecated("Please use maxHeaderLineLength instead.") enum maxHttpHeaderLineLength = maxHeaderLineLength;
 
 	private {
 		string m_server;
@@ -232,7 +223,7 @@ class HTTPClient {
 		m_server = server;
 		m_port = port;
 		if (ssl) {
-			m_ssl = new SSLContext(SSLContextKind.client);
+			m_ssl = createSSLContext(SSLContextKind.client);
 			// this will be changed to trustedCert once a proper root CA store is available by default
 			m_ssl.peerValidationMode = SSLPeerValidationMode.none;
 			if (ms_sslSetup) ms_sslSetup(m_ssl);
@@ -337,7 +328,7 @@ class HTTPClient {
 			if (m_conn) m_conn.close(); // make sure all resources are freed
 			m_conn = connectTCP(m_server, m_port);
 			m_stream = m_conn;
-			if (m_ssl) m_stream = new SSLStream(m_conn, m_ssl, SSLStreamState.connecting, m_server, m_conn.remoteAddress);
+			if (m_ssl) m_stream = createSSLStream(m_conn, m_ssl, SSLStreamState.connecting, m_server, m_conn.remoteAddress);
 
 			now = Clock.currTime(UTC());
 		}
@@ -356,9 +347,6 @@ class HTTPClient {
 		return req.method != HTTPMethod.HEAD;
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPClient instead.") alias HttpClient = HTTPClient;
 
 
 /**
@@ -502,9 +490,6 @@ final class HTTPClientRequest : HTTPRequest {
 		return m_contentLengthBuffer.data;
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPClientRequest instead.") alias HttpClientRequest = HTTPClientRequest;
 
 
 /**
@@ -702,9 +687,6 @@ final class HTTPClientResponse : HTTPResponse {
 		destroy(lockedConnection);
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPClientResponse instead.") alias HttpClientResponse = HTTPClientResponse;
 
 
 private __gshared NullOutputStream s_sink;

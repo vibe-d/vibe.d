@@ -38,8 +38,8 @@ unittest {
 	void sendSSLMessage()
 	{
 		auto conn = connectTCP("127.0.0.1", 1234);
-		auto sslctx = new SSLContext(SSLContextKind.client);
-		auto stream = new SSLStream(conn, sslctx);
+		auto sslctx = createSSLContext(SSLContextKind.client);
+		auto stream = createSSLStream(conn, sslctx);
 		stream.write("Hello, World!");
 		stream.finalize();
 		conn.close();
@@ -55,11 +55,11 @@ unittest {
 
 	void listenForSSL()
 	{
-		auto sslctx = new SSLContext(SSLContextKind.server);
+		auto sslctx = createSSLContext(SSLContextKind.server);
 		sslctx.useCertificateChainFile("server.crt");
 		sslctx.usePrivateKeyFile("server.key");
 		listenTCP(1234, (conn){
-			auto stream = new SSLStream(conn, sslctx);
+			auto stream = createSSLStream(conn, sslctx);
 			logInfo("Got message: %s", stream.readAllUTF8());
 			stream.finalize();
 		});
@@ -81,7 +81,7 @@ unittest {
 SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.tls1)
 {
 	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
-	else return new SSLContext(kind, ver);
+	else return new SSLContext(DEPRECATION_HACK.init, kind, ver);
 }
 
 /** Constructs a new SSL tunnel and infers the stream state from the SSLContextKind.
@@ -97,8 +97,8 @@ SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.tls
 */
 SSLStream createSSLStream(Stream underlying, SSLContext ctx, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
-	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
-	else return new SSLStream(underlying, ctx, peer_name, peer_address);
+	auto stream_state = ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting;
+	return createSSLStream(underlying, ctx, stream_state, peer_name, peer_address);
 }
 
 /** Constructs a new SSL tunnel, allowing to override the stream state.
@@ -116,7 +116,7 @@ SSLStream createSSLStream(Stream underlying, SSLContext ctx, string peer_name = 
 SSLStream createSSLStream(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
 	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
-	else return new SSLStream(underlying, ctx, state, peer_name, peer_address);
+	else return new SSLStream(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
 }
 
 
@@ -156,42 +156,24 @@ class SSLStream : Stream {
 		Exception[] m_exceptions;
 	}
 
-	/** Constructs a new SSL tunnel and infers the stream state from the SSLContextKind.
-
-		Depending on the SSLContextKind of ctx, the tunnel will try to establish an SSL
-		tunnel by either passively accepting or by actively connecting.
-
-		Params:
-			underlying = The base stream which is used for the SSL tunnel
-			ctx = SSL context used for initiating the tunnel
-			peer_name = DNS name of the remote peer, used for certificate validation
-			peer_address = IP address of the remote peer, used for certificate validation
-
-		Notice:
-			Please use createSSLStream instead of directly using the constructor - will be deprecated soon.
+	/** Deprecated. Use createSSLStream instead.
 	*/
+	deprecated("Use createSSLStream instead of directly instantiating SSLStream.")
 	this(Stream underlying, SSLContext ctx, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		auto stream_state = ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting;
-		this(underlying, ctx, stream_state, peer_name, peer_address);
+		this(DEPRECATION_HACK.init, underlying, ctx, stream_state, peer_name, peer_address);
 	}
 
-	/** Constructs a new SSL tunnel, allowing to override the stream state.
-
-		This constructor allows to specify a custom tunnel state, which can
-		be useful when a tunnel has already been established by other means.
-
-		Params:
-			underlying = The base stream which is used for the SSL tunnel
-			ctx = SSL context used for initiating the tunnel
-			state = The manually specified tunnel state
-			peer_name = DNS name of the remote peer, used for certificate validation
-			peer_address = IP address of the remote peer, used for certificate validation
-
-		Notice:
-			Please use createSSLStream instead of directly using the constructor - will be deprecated soon.
+	/** Deprecated. Use createSSLStream instead.
 	*/
+	deprecated("Use createSSLStream instead of directly instantiating SSLStream.")
 	this(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	{
+		this(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
+	}
+
+	private this(DEPRECATION_HACK, Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		m_stream = underlying;
 		m_state = state;
@@ -401,18 +383,12 @@ class SSLStream : Stream {
 	}
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use SSLStream instead.") alias SslStream = SSLStream;
-
 
 enum SSLStreamState {
 	connecting,
 	accepting,
 	connected
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use SSLStreamState instead.") alias SslStreamState = SSLStreamState;
 
 
 /**
@@ -432,17 +408,15 @@ class SSLContext {
 		int m_verifyDepth;
 	}
 
-	/** Creates a new context of the given kind.
-
-		Params:
-			kind = Specifies if the context is going to be used on the client
-				or on the server end of the SSL tunnel
-			ver = The SSL/TLS protocol used for negotiating the tunnel
-
-		Notice:
-			Please use createSSLContext instead of directly using the constructor - will be deprecated soon.
+	/** Deprecated. Use createSSLContext instead.
 	*/
+	deprecated("Use createSSLContext instead of directly instantiating SSLContext.")
 	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
+	{
+		this(DEPRECATION_HACK.init, kind, ver);
+	}
+
+	private this(DEPRECATION_HACK, SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 	{
 		m_kind = kind;
 
@@ -507,7 +481,9 @@ class SSLContext {
 		}*/
 	}
 
-	/// Convenience constructor to create a server context - will be deprecated soon
+	/** Deprecated. Use createSSLContext instead.
+	*/
+	deprecated("Use createSSLContext instead of directly instantiating SSLContext.")
 	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.any)
 	{
 		this(SSLContextKind.server, ver);
@@ -519,7 +495,9 @@ class SSLContext {
 		}
 	}
 
-	/// Convenience constructor to create a client context - will be deprecated soon
+	/** Deprecated. Use createSSLContext instead.
+	*/
+	deprecated("Use createSSLContext instead of directly instantiating SSLContext.")
 	this(SSLVersion ver = SSLVersion.any)
 	{
 		this(SSLContextKind.client, ver);
@@ -730,9 +708,6 @@ class SSLContext {
 		}
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use SSLContext instead.") alias SslContext = SSLContext;
 
 version (OpenSSL) alias SSLState = ssl_st*;
 else alias SSLState = void*;
@@ -1062,3 +1037,5 @@ version (OpenSSL) {
 		null, // &onBioCallbackCtrl
 	};
 }
+
+private struct DEPRECATION_HACK {}

@@ -29,9 +29,6 @@ enum SMTPConnectionType {
 	startTLS
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use SMTPConnectionType instead.") alias SmtpConnectionType = SMTPConnectionType;
-
 
 /** Represents the different status codes for SMTP replies.
 */
@@ -63,9 +60,6 @@ enum SMTPStatus {
 	transactionFailed = 554
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use SMTPStatus instead.") alias SmtpStatus = SMTPStatus;
-
 
 /**
 	Represents the authentication mechanism used by the SMTP client.
@@ -76,9 +70,6 @@ enum SMTPAuthType {
 	login,
 	cramMd5
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use SMTPAuthType instead.") alias SmtpAuthType = SMTPAuthType;
 
 
 /**
@@ -97,9 +88,6 @@ class SMTPClientSettings {
 	this() {}
 	this(string host, ushort port) { this.host = host; this.port = port; }
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use SMTPClientSettings instead.") alias SmtpClientSettings = SMTPClientSettings;
 
 
 /**
@@ -127,9 +115,9 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	Stream conn = raw_conn;
 
 	if( settings.connectionType == SMTPConnectionType.ssl ){
-		auto ctx = new SSLContext(SSLContextKind.client);
+		auto ctx = createSSLContext(SSLContextKind.client);
 		ctx.peerValidationMode = settings.sslValidationMode;
-		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
+		conn = createSSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
@@ -153,9 +141,9 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	if( settings.connectionType == SMTPConnectionType.startTLS ){
 		conn.write("STARTTLS\r\n");
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
-		auto ctx = new SSLContext(SSLContextKind.client);
+		auto ctx = createSSLContext(SSLContextKind.client);
 		ctx.peerValidationMode = settings.sslValidationMode;
-		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
+		conn = createSSLStream(raw_conn, ctx, SSLStreamState.connecting);
 		greet();
 	}
 

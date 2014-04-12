@@ -526,6 +526,7 @@ FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescripto
 		This function also works if called from outside if a fiber. In this
 		case, it will work on a thread local storage.
 */
+deprecated("Please use TaskLocal instead.")
 void setTaskLocal(T)(string name, T value)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
@@ -534,7 +535,7 @@ void setTaskLocal(T)(string name, T value)
 }
 
 /**
-	Returns a task/fiber specific variable. Scheduled for deprecation.
+	Deprecated. Returns a task/fiber specific variable.
 
 	Please use TaskLocal instead.
 
@@ -542,6 +543,7 @@ void setTaskLocal(T)(string name, T value)
 		This function also works if called from outside if a fiber. In this
 		case, it will work on a thread local storage.
 */
+deprecated("Please use TaskLocal instead.")
 T getTaskLocal(T)(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
@@ -552,7 +554,7 @@ T getTaskLocal(T)(string name)
 }
 
 /**
-	Returns a task/fiber specific variable. Scheduled for deprecation.
+	Deprecated. Returns a task/fiber specific variable.
 
 	Please use TaskLocal instead.
 
@@ -560,6 +562,7 @@ T getTaskLocal(T)(string name)
 		This function also works if called from outside if a fiber. In this
 		case, it will work on a thread local storage.
 */
+deprecated("Please use TaskLocal instead.")
 bool isTaskLocalSet(string name)
 {
 	auto self = cast(CoreTask)Fiber.getThis();
@@ -584,15 +587,15 @@ void setTaskStackSize(size_t sz)
 }
 
 /**
-	Compatibility stub - will be deprecated soon.
+	Deprecated compatibility stub.
 
 	This function was used to start the worker threads necessary for
 	runWorkerTask and runWorkerTaskDist. These threads are now started
 	automatically, so there is no need to call this function anymore
 */
-void enableWorkerThreads()
+deprecated void enableWorkerThreads()
 {
-	logDiagnostic("enableWorkerThreads() does nothing and will be deprecated soon.");
+	logDiagnostic("enableWorkerThreads() does nothing and will be removed soon.");
 }
 
 

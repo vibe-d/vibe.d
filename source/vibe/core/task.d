@@ -125,19 +125,21 @@ class TaskFiber : Fiber {
 	*/
 	abstract void terminate();
 
-	/** Sets a task local variable. Will be deprecated soon.
+	/** Deprecated. Sets a task local variable.
 
 		Please use vibe.core.core.TaskLocal instead.
 	*/
+	deprecated("Please use vibe.core.core.TaskLocal instead.")
 	void set(T)(string name, T value)
 	{
 		m_taskLocalStorage[name] = Variant(value);
 	}
 
-	/** Returns a task local variable. Will be deprecated soon.
+	/** Deprecated. Returns a task local variable.
 
 		Please use vibe.core.core.TaskLocal instead.
 	*/
+	deprecated("Please use vibe.core.core.TaskLocal instead.")
 	T get(T)(string name)
 	{
 		Variant* pvar;
@@ -146,10 +148,11 @@ class TaskFiber : Fiber {
 		return pvar.get!T();
 	}
 
-	/** Determines if a certain task local variable is set. Will be deprecated soon.
+	/** Deprecated. Determines if a certain task local variable is set.
 
 		Please use vibe.core.core.TaskLocal instead.
 	*/
+	deprecated("Please use vibe.core.core.TaskLocal instead.")
 	bool isSet(string name)
 	{
 		return (name in m_taskLocalStorage) !is null;

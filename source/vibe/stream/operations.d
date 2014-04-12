@@ -318,7 +318,4 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 	destination.flush();
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use readAllUTF8 instead.") alias readAllUtf8 = readAllUTF8;
-
 private struct Buffer { ubyte[64*1024] bytes = void; }

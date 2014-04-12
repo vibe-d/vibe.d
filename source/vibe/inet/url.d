@@ -202,9 +202,6 @@ struct URL {
 		return ret;
 	}
 
-	/// Deprecated compatibility alias
-	deprecated("Please use parentURL instead.") alias parentUrl = parentURL;
-
 	/// Converts this URL object to its string representation.
 	string toString()
 	const {
@@ -264,9 +261,6 @@ struct URL {
 		return true;
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use URL instead.") alias Url = URL;
 
 
 unittest {

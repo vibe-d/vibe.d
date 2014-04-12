@@ -78,9 +78,6 @@ void parseURLEncodedForm(string str, ref FormFields params)
 	}
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use parseURLEncodedForm instead.") alias parseUrlEncodedForm = parseURLEncodedForm;
-
 unittest
 {
 	FormFields dst;

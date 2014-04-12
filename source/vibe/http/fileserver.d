@@ -160,9 +160,6 @@ class HTTPFileServerSettings {
 	}
 } 
 
-/// Deprecated compatibility alias
-deprecated("Please use HTTPFileServerSettings instead.") alias HttpFileServerSettings = HTTPFileServerSettings;
-
 
 private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, HTTPFileServerSettings settings)
 {

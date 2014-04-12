@@ -33,12 +33,13 @@ nothrow {
 
 
 /**
-	Enables/disables output of thread/task ids with each log message-
+	Deprecated. Enables/disables output of thread/task ids with each log message.
 
 	By default, only the log message is displayed (enable=true).
 
-	This method is scheduled for deprecation. Please use setLogFormat instead.
+	Please use setLogFormat with FileLogger.Format.plain or FileLogger.Format.thread instead.
 */
+deprecated("Use setLogFormat instead.")
 void setPlainLogging(bool enable)
 {
 	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
@@ -700,7 +701,7 @@ package void initializeLogModule()
 
 		foreach_reverse (i, v; verbose)
 			if (v) {
-				setPlainLogging(false);
+				setLogFormat(FileLogger.Format.thread);
 				setLogLevel(cast(LogLevel)(LogLevel.diagnostic - i));
 				break;
 			}

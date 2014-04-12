@@ -50,7 +50,3 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 			enforce(res.statusCode == HTTPStatus.ok, "Failed to register with load balancer.");
 		});
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use listenHTTPDist instead.") alias listenHttpDist = listenHTTPDist;
-

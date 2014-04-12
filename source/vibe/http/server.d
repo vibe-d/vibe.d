@@ -105,9 +105,6 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_ha
 	listenHTTP(settings, &request_handler.handleRequest);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use listenHTTP instead.") alias listenHttp = listenHTTP;
-
 
 /**
 	[private] Starts a HTTP server listening on the specified port.
@@ -174,9 +171,6 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandl
 	listenHTTPPlain(settings, &request_handler.handleRequest);
 }
 
-/// Deprecated compatibility alias
-private deprecated("Please use listenHTTPPlain instead.") alias listenHttpPlain = listenHTTPPlain;
-
 
 /**
 	Provides a HTTP request handler that responds with a static Diet template.
@@ -219,8 +213,6 @@ void setVibeDistHost(string host, ushort port)
 	s_distPort = port;
 }
 
-deprecated("This function does nothing, no need to call it anymore.") void startListening() {}
-
 
 /**
 	Renders the given template and makes all ALIASES available to the template.
@@ -260,18 +252,6 @@ interface HTTPServerRequestHandler {
 }
 
 
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerRequestDelegate instead.") alias HttpServerRequestDelegate = HTTPServerRequestDelegate;
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerRequestFunction instead.") alias HttpServerRequestFunction = HTTPServerRequestFunction;
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerRequestHandler instead.") alias HttpServerRequestHandler = HTTPServerRequestHandler;
-
-/// Compatibility alias.
-deprecated("Please use HTTPServerRequestHandler instead.")
-alias IHttpServerRequestHandler = HTTPServerRequestHandler;
-
-
 /// Aggregates all information about an HTTP error status.
 class HTTPServerErrorInfo {
 	/// The HTTP status code
@@ -284,15 +264,8 @@ class HTTPServerErrorInfo {
 	Throwable exception;
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerErrorInfo instead.") alias HttpServerErrorInfo = HTTPServerErrorInfo;
-
-
 /// Delegate type used for user defined error page generator callbacks.
 alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error);
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerErrorPageHandler instead.") alias HttpServerErrorPageHandler = HTTPServerErrorPageHandler;
 
 
 /**
@@ -358,9 +331,6 @@ enum HTTPServerOption {
 	/// deprecated
 	ParseCookies = parseCookies
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerOption instead.") alias HttpServerOption = HTTPServerOption;
 
 
 /**
@@ -480,9 +450,6 @@ class HTTPServerSettings {
 		keepAliveTimeout = 10.seconds;
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerSettings instead.") alias HttpServerSettings = HTTPServerSettings;
 
 
 /**
@@ -688,9 +655,6 @@ final class HTTPServerRequest : HTTPRequest {
 		return url;
 	}
 
-	/// Deprecated compatibility alias
-	deprecated("Please use fullURL instead.") alias fullUrl = fullURL;
-
 	/** The relative path the the root folder.
 
 		Using this function instead of absolute URLs for embedded links can be
@@ -705,9 +669,6 @@ final class HTTPServerRequest : HTTPRequest {
 		return depth == 0 ? "./" : replicate("../", depth);
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerRequest instead.") alias HttpServerRequest = HTTPServerRequest;
 
 
 /**
@@ -956,11 +917,12 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	/**
-		Compatibility overload - will be deprecated soon.
+		Deprecated compatibility overload.
 
 		Uses boolean parameters instead of SessionOption to specify the
 		session options SessionOption.secure and SessionOption.httpOnly.
 	*/
+	deprecated("Use startSession() with a SessionOption parameter instead.")
 	Session startSession(string path, bool secure, bool httpOnly = true)
 	{
 		return startSession(path, (secure ? SessionOption.secure : SessionOption.none) | (httpOnly ? SessionOption.httpOnly : SessionOption.none));
@@ -1106,9 +1068,6 @@ final class HTTPServerResponse : HTTPResponse {
 		m_conn.flush();
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPServerResponse instead.") alias HttpServerResponse = HTTPServerResponse;
 
 
 /**************************************************************************************************/

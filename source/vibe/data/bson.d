@@ -82,9 +82,11 @@ struct Bson {
 	/// Returns a new, empty Bson value of type Object.
 	static @property Bson emptyArray() { return Bson(cast(Bson[])null); }
 
-	/// Compatibility alias - will be deprecated soon.
+	/// Deprecated compatibility alias.
+	deprecated("Please use emptyObject instead.")
 	alias EmptyObject = emptyObject;
-	/// Compatibility alias - will be deprecated soon.
+	/// Deprecated compatibility alias.
+	deprecated("Please use emptyArray instead.")
 	alias EmptyArray = emptyArray;
 
 	private {

@@ -63,21 +63,64 @@ class WebSocketException: Exception
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
-
-	Note:
-		The overloads taking non-scoped callback parameters are scheduled to
-		be deprecated soon.
 */
 HTTPServerRequestDelegate handleWebSockets(void delegate(scope WebSocket) on_handshake)
 {
-	return handleWebSockets(ws => on_handshake(ws));
+	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		auto pUpgrade = "Upgrade" in req.headers;
+		auto pConnection = "Connection" in req.headers;
+		auto pKey = "Sec-WebSocket-Key" in req.headers;
+		auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
+		auto pVersion = "Sec-WebSocket-Version" in req.headers;
+
+		auto isUpgrade = false;
+
+		if( pConnection ) {
+			auto connectionTypes = split(*pConnection, ",");
+			foreach( t ; connectionTypes ) {
+				if( t.strip().toLower() == "upgrade" ) {
+					isUpgrade = true;
+					break;
+				}
+			}	
+		}
+		if( !(isUpgrade &&
+			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 && 
+			  pKey &&
+			  pVersion && *pVersion == "13") )
+		{
+			logDebug("Browser sent invalid WebSocket request.");
+			res.statusCode = HTTPStatus.badRequest;
+			res.writeVoidBody();
+			return;
+		}
+
+		auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
+		res.headers["Sec-WebSocket-Accept"] = accept;
+		res.headers["Connection"] = "Upgrade";
+		ConnectionStream conn = res.switchProtocol("websocket");
+
+		scope socket = new WebSocket(conn, req);
+		try on_handshake(socket);
+		catch (Exception e) {
+			logDiagnostic("WebSocket handler failed: %s", e.msg);
+		} catch (Throwable th) {
+			// pretend to have sent a closing frame so that any further sends will fail
+			socket.m_sentCloseFrame = true;
+			throw th;
+		}
+		socket.close();
+	}
+	return &callback;
 }
 /// ditto
 HTTPServerRequestDelegate handleWebSockets(void function(scope WebSocket) on_handshake)
 {
-	return handleWebSockets(ws => on_handshake(ws));
+	return handleWebSockets(toDelegate(on_handshake));
 }
 /// ditto
+deprecated("Please add 'scope' to the WebSocket parameter of the callback.")
 HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
@@ -129,6 +172,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 	return &callback;
 }
 /// ditto
+deprecated("Please add 'scope' to the WebSocket parameter of the callback.")
 HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake)
 {
 	return handleWebSockets(toDelegate(on_handshake));

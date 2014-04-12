@@ -121,13 +121,6 @@ struct Json {
 	/// New JSON value of Type.Array
 	static @property Json emptyArray() { return Json(cast(Json[])null); }
 
-	/// Deprecated compatibility alias
-	deprecated("Please use undefined instead.") alias Undefined = undefined;
-	/// ditto
-	deprecated("Please use emptyObject instead.") alias EmptyObject = emptyObject;
-	/// ditto
-	deprecated("Please use emptyArray instead.") alias EmptyArray = emptyArray;
-
 	version(JsonLineNumbers) int line;
 
 	/**

@@ -59,9 +59,6 @@ TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) connectio
 	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use listenTCP instead.") alias listenTcp = listenTCP;
-
 /**
 	Starts listening on the specified port.
 
@@ -77,9 +74,6 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 	return listenTCP(port, toDelegate(connection_callback), address, options);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use listenTCP_s instead.") alias listenTcpS = listenTCP_s;
-
 /**
 	Establishes a connection to the given host/port.
 */
@@ -94,9 +88,6 @@ TCPConnection connectTCP(NetworkAddress addr) {
 	return getEventDriver().connectTCP(addr);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use connectTCP instead.")alias connectTcp = connectTCP;
-
 
 /**
 	Creates a bound UDP socket suitable for sending and receiving packets.
@@ -105,9 +96,6 @@ UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 {
 	return getEventDriver().listenUDP(port, bind_address);
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use listenUDP instead.")alias listenUdp = listenUDP;
 
 
 /**
@@ -242,9 +230,6 @@ interface TCPConnection : ConnectionStream {
 	@property NetworkAddress remoteAddress() const;
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use TCPConnection instead.")alias TcpConnection = TCPConnection;
-
 
 /**
 	Represents a listening TCP socket.
@@ -253,9 +238,6 @@ interface TCPListener {
 	/// Stops listening and closes the socket.
 	void stopListening();
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use TCPListener instead.")alias TcpListener = TCPListener;
 
 
 /**
@@ -298,17 +280,11 @@ interface UDPConnection {
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use UDPConnection instead.")alias UdpConnection = UDPConnection;
-
 
 enum TCPListenOptions {
 	defaults = 0,
 	distribute = 1<<0
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use TCPListenOptions instead.")alias TcpListenOptions = TCPListenOptions;
 
 private pure nothrow {
 	import std.bitmanip;

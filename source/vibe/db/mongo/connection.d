@@ -139,12 +139,12 @@ class MongoConnection {
 		try {
 			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
 			if (m_settings.ssl) {
-				auto ctx =  new SSLContext(SSLContextKind.client);
+				auto ctx =  createSSLContext(SSLContextKind.client);
 				if (!m_settings.sslverifycertificate) {
 					ctx.peerValidationMode = SSLPeerValidationMode.none;
 				}
 				
-				m_stream = new SSLStream(m_conn, ctx);
+				m_stream = createSSLStream(m_conn, ctx);
 			}
 			else {
 				m_stream = m_conn;
@@ -428,7 +428,7 @@ class MongoConnection {
 		}
 		string nonce = doc["nonce"].get!string;
 		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
-		cmd = Bson.EmptyObject;
+		cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);

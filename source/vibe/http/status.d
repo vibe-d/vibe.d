@@ -100,9 +100,6 @@ enum HTTPStatus {
 	HTTPVersionNotSupported = httpVersionNotSupported, /// deprecated
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use HTTPStatus instead.") alias HttpStatus = HTTPStatus;
-
 
 /**
 	Returns a standard text description of the specified HTTP status code.
