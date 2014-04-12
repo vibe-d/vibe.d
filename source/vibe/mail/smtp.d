@@ -126,6 +126,12 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	Stream conn = raw_conn;
 
+	if( settings.connectionType == SMTPConnectionType.ssl ){
+		auto ctx = new SSLContext(SSLContextKind.client);
+		ctx.peerValidationMode = settings.sslValidationMode;
+		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
+	}
+
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
 
 	void greet(){
@@ -140,12 +146,6 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 				break;
 			}
 		}
-	}
-
-	if( settings.connectionType == SMTPConnectionType.ssl ){
-		auto ctx = new SSLContext(SSLContextKind.client);
-		ctx.peerValidationMode = settings.sslValidationMode;
-		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
 	greet();
