@@ -191,6 +191,16 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 		}
 		return 0;
 	}
+	
+	Value[string] asAA() @property 
+	{
+		Value[string] aa;
+		foreach (ref kv; m_fields[ 0 .. m_fieldCount] ) 
+		{
+			aa[kv.key] = kv.value;
+		}
+	return aa;
+	}
 
 	static if (is(typeof({ const(Value) v; Value w; w = v; }))) {
 		/** Duplicates the header map.
