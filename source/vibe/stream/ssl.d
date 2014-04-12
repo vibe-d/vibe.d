@@ -442,16 +442,17 @@ class SSLContext {
 		Notice:
 			Please use createSSLContext instead of directly using the constructor - will be deprecated soon.
 	*/
-	this(SSLContextKind kind, SSLVersion ver = SSLVersion.tls1)
+	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 	{
 		m_kind = kind;
 
 		version (OpenSSL) {
 			const(SSL_METHOD)* method;
+			c_long options = SSL_OP_NO_SSLv2|SSL_OP_NO_COMPRESSION;
 			final switch (kind) {
 				case SSLContextKind.client:
 					final switch (ver) {
-						case SSLVersion.ssl23: method = SSLv23_client_method(); break;
+						case SSLVersion.any: method = SSLv23_client_method(); break;
 						case SSLVersion.ssl3: method = SSLv3_client_method(); break;
 						case SSLVersion.tls1: method = TLSv1_client_method(); break;
 						case SSLVersion.dtls1: method = DTLSv1_client_method(); break;
@@ -459,17 +460,19 @@ class SSLContext {
 					break;
 				case SSLContextKind.server:
 					final switch (ver) {
-						case SSLVersion.ssl23: method = SSLv23_server_method(); break;
+						case SSLVersion.any: method = SSLv23_server_method(); break;
 						case SSLVersion.ssl3: method = SSLv3_server_method(); break;
 						case SSLVersion.tls1: method = TLSv1_server_method(); break;
 						case SSLVersion.dtls1: method = DTLSv1_server_method(); break;
 					}
+					options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 					break;
 			}
 
 			m_ctx = SSL_CTX_new(method);
-
-			SSL_CTX_set_options!()(m_ctx, SSL_OP_NO_SSLv2);
+			SSL_CTX_set_options!()(m_ctx, options);
+			// by default, only allow safe cyphers and prefer perfect forward secrecy
+			setCipherList("ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
 		} else enforce(false, "No SSL support compiled in!");
 
 		maxCertChainLength = 9;
@@ -505,7 +508,7 @@ class SSLContext {
 	}
 
 	/// Convenience constructor to create a server context - will be deprecated soon
-	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.ssl23)
+	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.any)
 	{
 		this(SSLContextKind.server, ver);
 		version (OpenSSL) {
@@ -517,7 +520,7 @@ class SSLContext {
 	}
 
 	/// Convenience constructor to create a client context - will be deprecated soon
-	this(SSLVersion ver = SSLVersion.ssl23)
+	this(SSLVersion ver = SSLVersion.any)
 	{
 		this(SSLContextKind.client, ver);
 	}
@@ -594,6 +597,20 @@ class SSLContext {
 	@property void peerValidationCallback(SSLPeerValidationCallback callback) { m_peerValidationCallback = callback; }
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
+
+	/** Set the list of cipher specifications to use for SSL/TSL tunnels.
+
+		The list must be a colon separated list of cipher specifications as
+		accepted by OpenSSL.
+
+		See_also: $(LINK https://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT)
+	*/
+	void setCipherList(string list)
+	{
+		version (OpenSSL) {
+			SSL_CTX_set_cipher_list(m_ctx, list.toStringz());
+		}
+	}
 
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path)
@@ -726,10 +743,12 @@ enum SSLContextKind {
 }
 
 enum SSLVersion {
-	ssl23,
-	ssl3,
-	tls1,
-	dtls1
+	any, /// Accept SSLv3 or TLSv1.0 and greater
+	ssl3, /// Accept only SSLv3
+	tls1, /// Accept only TLSv1.0
+	dtls1, /// Use DTLSv1.0
+
+	ssl23 = any /// Deprecated compatibility alias
 }
 
 
