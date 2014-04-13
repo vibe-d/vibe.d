@@ -19,33 +19,46 @@ import core.time;
 */
 class ProxyStream : Stream {
 	private {
+		InputStream m_input;
+		OutputStream m_output;
 		Stream m_underlying;
 	}
 
-	this(Stream stream = null) { m_underlying = stream; }
+	this(Stream stream = null)
+	{
+		m_underlying = stream;
+		m_input = stream;
+		m_output = stream;
+	}
+
+	this(InputStream input, OutputStream output)
+	{
+		m_input = input;
+		m_output = output;
+	}
 
 	/// The stream that is wrapped by this one
 	@property inout(Stream) underlying() inout { return m_underlying; }
 	/// ditto
-	@property void underlying(Stream value) { m_underlying = value; }
+	@property void underlying(Stream value) { m_underlying = value; m_input = value; m_output = value; }
 
-	@property bool empty() { return m_underlying ? m_underlying.empty : true; }
+	@property bool empty() { return m_input ? m_input.empty : true; }
 
-	@property ulong leastSize() { return m_underlying ? m_underlying.leastSize : 0; }
+	@property ulong leastSize() { return m_input ? m_input.leastSize : 0; }
 
-	@property bool dataAvailableForRead() { return m_underlying ? m_underlying.dataAvailableForRead : false; }
+	@property bool dataAvailableForRead() { return m_input ? m_input.dataAvailableForRead : false; }
 
-	const(ubyte)[] peek() { return m_underlying.peek(); }
+	const(ubyte)[] peek() { return m_input.peek(); }
 
-	void read(ubyte[] dst) { m_underlying.read(dst); }
+	void read(ubyte[] dst) { m_input.read(dst); }
 
-	void write(in ubyte[] bytes) { m_underlying.write(bytes); }
+	void write(in ubyte[] bytes) { m_output.write(bytes); }
 
-	void flush() { m_underlying.flush(); }
+	void flush() { m_output.flush(); }
 
-	void finalize() { m_underlying.finalize(); }
+	void finalize() { m_output.finalize(); }
 
-	void write(InputStream stream, ulong nbytes = 0) { m_underlying.write(stream, nbytes); }
+	void write(InputStream stream, ulong nbytes = 0) { m_output.write(stream, nbytes); }
 }
 
 
