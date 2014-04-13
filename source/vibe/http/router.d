@@ -89,43 +89,6 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	or similar means. If no route matches or if no route handler writes a response,
 	the router will simply not handle the request and the HTTP server may generate
 	a 404 error.
-
-	---
-	void addGroup(HTTPServerRequest req, HTTPServerResponse res)
-	{
-		// Route variables are accessible via the params map
-		logInfo("Getting group %s for user %s.", req.params["groupname"], req.params["username"]);
-	}
-
-	static this()
-	{
-		auto router = new URLRouter;
-		// Matches all GET requests for /users/*/groups/* and places
-		// the place holders in req.params as 'username' and 'groupname'.
-		router.get("/users/:username/groups/:groupname", &addGroup);
-
-		// Natches all requests. This can be useful for authorization and
-		// similar tasks. The auth method will only write a response if the
-		// user is _not_ authorized. Otherwise, the router will fall through
-		// and continue with the following routes.
-		router.any("*", &auth);
-
-		// Matches a POST request
-		router.post("/users/:username/delete", &deleteUser);
-
-		// Matches all GET requests in /static/ such as /static/img.png or
-		// /static/styles/sty.css
-		router.get("/static/*", serveStaticFiles("public/"));
-
-		// Setup a HTTP server...
-		auto settings = new HTTPServerSettings;
-		// ...
-
-		// The router can be directly passed to the listenHTTP function as
-		// the main request handler.
-		listenHTTP(settings, router);
-	}
-	---
 +/
 class URLRouter : HTTPRouter {
 	private {
@@ -202,6 +165,108 @@ class URLRouter : HTTPRouter {
 				r = m_routes.getTerminalData(i);
 			return routes;
 		} else return m_routes;
+	}
+}
+
+///
+unittest {
+	import vibe.http.fileserver; 
+	
+	void addGroup(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// Route variables are accessible via the params map
+		logInfo("Getting group %s for user %s.", req.params["groupname"], req.params["username"]);
+	}
+
+	void deleteUser(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	void auth(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// TODO: check req.session to see if a user is logged in and
+		//       write an error page or throw an exception instead.
+	}
+
+	void setup()
+	{
+		auto router = new URLRouter;
+		// Matches all GET requests for /users/*/groups/* and places
+		// the place holders in req.params as 'username' and 'groupname'.
+		router.get("/users/:username/groups/:groupname", &addGroup);
+
+		// Natches all requests. This can be useful for authorization and
+		// similar tasks. The auth method will only write a response if the
+		// user is _not_ authorized. Otherwise, the router will fall through
+		// and continue with the following routes.
+		router.any("*", &auth);
+
+		// Matches a POST request
+		router.post("/users/:username/delete", &deleteUser);
+
+		// Matches all GET requests in /static/ such as /static/img.png or
+		// /static/styles/sty.css
+		router.get("/static/*", serveStaticFiles("public/"));
+
+		// Setup a HTTP server...
+		auto settings = new HTTPServerSettings;
+		// ...
+
+		// The router can be directly passed to the listenHTTP function as
+		// the main request handler.
+		listenHTTP(settings, router);
+	}
+}
+
+/** Using nested routers to map components to different sub paths. A component
+	could for example be an embedded blog engine.
+*/
+unittest {
+	// some embedded component:
+
+	void showComponentHome(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	void showComponentUser(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	void registerComponent(URLRouter router)
+	{
+		router.get("/", &showComponentHome);
+		router.get("/users/:user", &showComponentUser);
+	}
+
+	// main application:
+
+	void showHome(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	void setup()
+	{
+		auto c1router = new URLRouter("/component1");
+		registerComponent(c1router);
+
+		auto mainrouter = new URLRouter;
+		mainrouter.get("/", &showHome);
+		// forward all unprocessed requests to the component router
+		mainrouter.any("*", c1router);
+
+		// now the following routes will be matched:
+		// / -> showHome
+		// /component1/ -> showComponentHome
+		// /component1/:user -> showComponentUser
+
+		// Start the HTTP server
+		auto settings = new HTTPServerSettings;
+		// ...
+		listenHTTP(settings, mainrouter);
 	}
 }
 
