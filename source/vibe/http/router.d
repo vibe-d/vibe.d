@@ -131,12 +131,21 @@ class URLRouter : HTTPRouter {
 	private {
 		version (VibeRouterTreeMatch) MatchTree!Route m_routes;
 		else Route[] m_routes;
+		string m_prefix;
 	}
+
+	this(string prefix = null)
+	{
+		m_prefix = prefix;
+	}
+
+	@property string prefix() const { return m_prefix; }
 
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
 		import std.algorithm;
+		path = m_prefix ~ path;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		logDebug("add route %s %s", method, path);
 		version (VibeRouterTreeMatch) m_routes.addTerminal(path, Route(method, path, cb));
@@ -184,7 +193,7 @@ class URLRouter : HTTPRouter {
 		logInfo("no route match: %s %s", req.method, req.requestURL);
 	}
 
-    /// Returns all registered routes as const AA
+	/// Returns all registered routes as const AA
 	const(Route)[] getAllRoutes()
 	{
 		version (VibeRouterTreeMatch) {
@@ -196,6 +205,44 @@ class URLRouter : HTTPRouter {
 	}
 }
 
+unittest {
+	import vibe.inet.url;
+
+	auto router = new URLRouter;
+	string result;
+	void a(HTTPServerRequest req, HTTPServerResponse) { result ~= "A"; }
+	void b(HTTPServerRequest req, HTTPServerResponse) { result ~= "B"; }
+	router.get("/test", &a);
+	router.post("/test", &b);
+
+	auto res = createTestHTTPServerResponse();
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/")), res);
+	assert(result == "");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test")), res);
+	assert(result == "A");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test"), HTTPMethod.POST), res);
+	assert(result == "AB");
+}
+
+unittest {
+	import vibe.inet.url;
+
+	auto router = new URLRouter("/test");
+
+	string result;
+	void a(HTTPServerRequest req, HTTPServerResponse) { result ~= "A"; }
+	void b(HTTPServerRequest req, HTTPServerResponse) { result ~= "B"; }
+	router.get("/x", &a);
+	router.get("/y", &b);
+
+	auto res = createTestHTTPServerResponse();
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test")), res);
+	assert(result == "");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test/x")), res);
+	assert(result == "A");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test/y")), res);
+	assert(result == "AB");
+}
 
 private enum maxRouteParameters = 64;
 
