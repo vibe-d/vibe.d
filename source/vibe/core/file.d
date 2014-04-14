@@ -1,7 +1,7 @@
 /**
-	File handling.
+	File handling functions and types.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -40,18 +40,94 @@ FileStream openFile(string path, FileMode mode = FileMode.read)
 	return openFile(Path(path), mode);
 }
 
+
 /**
-	Convenience method to append to a file
+	Read a whole file into a buffer.
+
+	If the supplied buffer is large enough, it will be used to store the
+	contents of the file. Otherwise, a new buffer will be allocated.
+
+	Params:
+		path = The path of the file to read
+		buffer = An optional buffer to use for storing the file contents
+*/
+ubyte[] readFile(Path path, ubyte[] buffer = null, size_t max_size = size_t.max)
+{
+	auto fil = openFile(path);
+	scope (exit) fil.close();
+	enforce(fil.size <= max_size, "File is too big.");
+	auto sz = cast(size_t)fil.size;
+	auto ret = sz <= buffer.length ? buffer[0 .. sz] : new ubyte[sz];
+	fil.read(ret);
+	return ret;
+}
+/// ditto
+ubyte[] readFile(string path, ubyte[] buffer = null, size_t max_size = size_t.max)
+{
+	return readFile(Path(path), buffer, max_size);
+}
+
+
+/**
+	Write a whole file at once.
+*/
+void writeFile(Path path, in ubyte[] contents)
+{
+	auto fil = openFile(path, FileMode.createTrunc);
+	scope (exit) fil.close();
+	fil.write(contents);
+}
+/// ditto
+void writeFile(string path, in ubyte[] contents)
+{
+	writeFile(Path(path), contents);
+}
+
+/**
+	Convenience function to append to a file.
 */
 void appendToFile(Path path, string data) {
-	auto f = openFile(path, FileMode.append);
-	scope(exit) f.close();
-	f.write(data);
+	auto fil = openFile(path, FileMode.append);
+	scope(exit) fil.close();
+	fil.write(data);
 }
 /// ditto
 void appendToFile(string path, string data)
 {
 	appendToFile(Path(path), data);
+}
+
+/**
+	Read a whole UTF-8 encoded file into a string.
+
+	The resulting string will be sanitized and will have the
+	optional byte order mark (BOM) removed.
+*/
+string readFileUTF8(Path path)
+{
+	import vibe.utils.string;
+
+	return stripUTF8Bom(sanitizeUTF8(readFile(path)));
+}
+/// ditto
+string readFileUTF8(string path)
+{
+	return readFileUTF8(Path(path));
+}
+
+
+/**
+	Write a string into a UTF-8 encoded file.
+
+	The file will have a byte order mark (BOM) prepended.
+*/
+void writeFileUTF8(Path path, string contents)
+{
+	static immutable ubyte[] bom = [0xEF, 0xBB, 0xBF];
+	auto fil = openFile(path, FileMode.createTrunc);
+	scope (exit) fil.close();
+	fil.write(bom);
+	fil.write(contents);
 }
 
 /**
@@ -101,7 +177,7 @@ void moveFile(string from, string to)
 		from = Path of the source file
 		to = Path for the destination file
 		overwrite = If true, any file existing at the destination path will be
-			overwritten. If this is false, an excpetion will be thrown should
+			overwritten. If this is false, an exception will be thrown should
 			a file already exist at the destination path.
 
 	Throws:
@@ -299,9 +375,9 @@ interface DirectoryWatcher {
 	/// Indicates if the directory is watched recursively
 	@property bool recursive() const;
 
-	/** Fills the destination array with all changes that occured since the last call.
+	/** Fills the destination array with all changes that occurred since the last call.
 
-		The function will block until either directory changes have occured or until the
+		The function will block until either directory changes have occurred or until the
 		timeout has elapsed. Specifying a negative duration will cause the function to
 		wait without a timeout.
 
