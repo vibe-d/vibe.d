@@ -35,6 +35,7 @@ struct DictionaryList(Value, bool case_sensitive = true) {
 		Field[] m_extendedFields;
 		static char[256] s_keyBuffer;
 	}
+	alias valueType = Value;
 	
 	/** The number of fields present in the map.
 	*/
