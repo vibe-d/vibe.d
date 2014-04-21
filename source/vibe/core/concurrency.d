@@ -972,6 +972,7 @@ template isStronglyIsolated(T...)
 		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isStronglyIsolated = isStronglyIsolated!(typeof(T[0].get()));
 		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isStronglyIsolated = true;
 		else static if (is(T[0] == class)) enum bool isStronglyIsolated = false;
+		else static if (is(T[0] == interface)) enum bool isStronglyIsolated = false; // can't know if the implementation is isolated
 		else static if (is(T[0] == delegate)) enum bool isStronglyIsolated = false; // can't know to what a delegate points
 		else static if (isDynamicArray!(T[0])) enum bool isStronglyIsolated = is(typeof(T[0].init[0]) == immutable);
 		else static if (isAssociativeArray!(T[0])) enum bool isStronglyIsolated = false; // TODO: be less strict here
@@ -996,20 +997,20 @@ template isWeaklyIsolated(T...)
 	else static if (T.length > 1) enum bool isWeaklyIsolated = isWeaklyIsolated!(T[0 .. $/2]) && isWeaklyIsolated!(T[$/2 .. $]);
 	else {
 		static if(is(T[0] == immutable)) enum bool isWeaklyIsolated = true;
-		else static if(is(T[0] == shared)) enum bool isWeaklyIsolated = true;
-		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
-		else static if(is(T[0] : Throwable)) enum bool isWeaklyIsolated = true; // WARNING: this is unsafe, but needed for send/receive!
-		else static if(is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
-		else static if(is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
-		else static if(is(T[0] == class)) enum bool isWeaklyIsolated = false;
-		else static if(is(T[0] == delegate)) enum bool isWeaklyIsolated = false; // can't know to what a delegate points
-		else static if(isDynamicArray!(T[0])) enum bool isWeaklyIsolated = is(typeof(T[0].init[0]) == immutable);
-		else static if(isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
-		else static if(isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
-		else static if(isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable);
-		else static if(is(T[0] == interface)) enum bool isWeaklyIsolated = false; // can't know if the implementation is isolated
-		else static if(isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
-		else enum bool isWeaklyIsolated = true; //
+		else static if (is(T[0] == shared)) enum bool isWeaklyIsolated = true;
+		else static if (isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
+		else static if (is(T[0] : Throwable)) enum bool isWeaklyIsolated = true; // WARNING: this is unsafe, but needed for send/receive!
+		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
+		else static if (is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
+		else static if (is(T[0] == class)) enum bool isWeaklyIsolated = false;
+		else static if (is(T[0] == interface)) enum bool isWeaklyIsolated = false; // can't know if the implementation is isolated
+		else static if (is(T[0] == delegate)) enum bool isWeaklyIsolated = false; // can't know to what a delegate points
+		else static if (isDynamicArray!(T[0])) enum bool isWeaklyIsolated = is(typeof(T[0].init[0]) == immutable);
+		else static if (isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
+		else static if (isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
+		else static if (isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable);
+		else static if (isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
+		else enum bool isWeaklyIsolated = true;
 	}
 }
 
@@ -1052,6 +1053,7 @@ unittest {
 	static assert(isStronglyIsolated!F);
 	static assert(isStronglyIsolated!G);
 	static assert(!isStronglyIsolated!H);
+	static assert(!isStronglyIsolated!I);
 
 	static assert(!isWeaklyIsolated!A);
 	static assert(isWeaklyIsolated!(FieldTypeTuple!A));
