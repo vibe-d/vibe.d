@@ -462,6 +462,8 @@ unittest {
 
 	Returns:
 		Returns a Timer object that can be used to identify and modify the timer.
+
+	See_also: createTimer
 */
 Timer setTimer(Duration timeout, void delegate() callback, bool periodic = false)
 {
@@ -488,6 +490,8 @@ unittest {
 
 /**
 	Creates a new timer without arming it.
+
+	See_also: setTimer
 */
 Timer createTimer(void delegate() callback)
 {

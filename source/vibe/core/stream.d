@@ -161,6 +161,9 @@ interface ConnectionStream : Stream {
 		Note that close must always be called, even if the remote has already
 		closed the connection. Failure to do so will result in resource and
 		memory leakage.
+
+		Closing a connection implies a call to finalize, so that it doesn't
+		need to be called explicitly (it will be a no-op in that case).
 	*/
 	void close();
 
