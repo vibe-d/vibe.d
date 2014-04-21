@@ -910,6 +910,7 @@ unittest {
 	assert(!matchWildcard("test.abc.example.org", ".abc.example.org"));
 	assert(!matchWildcard("abc.example.org", "a.example.org"));
 	assert(!matchWildcard("abc.example.org", "bc.example.org"));
+	assert(!matchWildcard("abcdexample.org", "abc.example.org"));
 }
 
 
