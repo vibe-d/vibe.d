@@ -576,7 +576,7 @@ class SSLContext {
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
 
-	/** Set the list of cipher specifications to use for SSL/TSL tunnels.
+	/** Set the list of cipher specifications to use for SSL/TLS tunnels.
 
 		The list must be a colon separated list of cipher specifications as
 		accepted by OpenSSL.
