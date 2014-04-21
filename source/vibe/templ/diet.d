@@ -5,7 +5,7 @@
 	embedded D source instead of JavaScript. The Diet syntax reference is found at
 	$(LINK http://vibed.org/templates/diet).
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -536,13 +536,14 @@ private struct DietCompiler {
 
 				switch(tag){
 					default:
-						if (buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces))
-						{
+						if (buildHtmlNodeWriter(output, tag, ln[j .. $], level, next_indent_level > level, prepend_whitespaces)) {
+							// tag had a '.' appended. treat child nodes as plain text
 							size_t next_tag = m_lineIndex + 1;
+							size_t unindent_count = level + start_indent_level - base_level + 1;
 							while( next_tag < lineCount &&
 							      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
 							{
-								buildTextNodeWriter(output, line(next_tag++).text, level, prepend_whitespaces);
+								buildTextNodeWriter(output, unindent(line(next_tag++).text, indentStyle, unindent_count), level, prepend_whitespaces);
 							}
 							m_lineIndex = next_tag - 1;
 							next_indent_level = computeNextIndentLevel();
@@ -1149,6 +1150,12 @@ private struct DietCompiler {
 	{
 		size_t lvl = indentLevel(str, indent);
 		return str[lvl*indent.length .. $];
+	}
+
+	private string unindent(in ref string str, in ref string indent, size_t level)
+	{
+		assert(level <= indentLevel(str, indent));
+		return str[level*indent.length .. $];
 	}
 
 	private int indentLevel(in ref string s, in ref string indent, bool strict = true)
