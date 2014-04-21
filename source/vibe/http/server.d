@@ -152,9 +152,11 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 		}
 		if (!found_listener) {
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
-			g_listeners ~= listener;
 			if (doListen(settings, listener, addr)) // DMD BUG 2043
+			{
 				any_succeeded = true;
+				g_listeners ~= listener;
+			}
 		}
 	}
 
