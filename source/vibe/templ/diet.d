@@ -149,7 +149,7 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietStringParser!diet_code(0));
-	#line 152 "source/vibe/templ/diet.d"
+	#line 153 "source/vibe/templ/diet.d"
 }
 
 
@@ -1271,11 +1271,11 @@ unittest {
 
 	// issue 510
 	assert(compile!("pre.test\n\tfoo") == "<pre class=\"test\">\n\t<foo></foo></pre>");
-	assert(compile!("pre.test.\n\tfoo") == "<pre class=\"test\">\n\tfoo</pre>");
+	assert(compile!("pre.test.\n\tfoo") == "<pre class=\"test\">\nfoo</pre>");
 	assert(compile!("pre.test. foo") == "<pre class=\"test\"></pre>");
-	assert(compile!("pre().\n\tfoo") == "<pre>\n\tfoo</pre>");
+	assert(compile!("pre().\n\tfoo") == "<pre>\nfoo</pre>");
 	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
-	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\n\tmeh</pre>");
+	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
 }
 
 
