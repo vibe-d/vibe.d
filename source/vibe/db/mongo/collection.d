@@ -140,7 +140,7 @@ struct MongoCollection {
 	MongoCursor find(T)(T query) { return find(query, null); }
 
 	/// ditto
-	MongoCursor find()() { return find(Bson.EmptyObject, null); }
+	MongoCursor find()() { return find(Bson.emptyObject, null); }
 
 	/**
 	  Queries the collection for existing documents.
@@ -177,7 +177,7 @@ struct MongoCollection {
 	}
 
 	/// ditto
-	void remove()() { remove(Bson.EmptyObject); }
+	void remove()() { remove(Bson.emptyObject); }
 
 	/**
 	  Combines a modify and find operation to a single atomic operation.
@@ -187,7 +187,7 @@ struct MongoCollection {
 	 */
 	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
 	{
-		Bson cmd = Bson.EmptyObject;
+		Bson cmd = Bson.emptyObject;
 		cmd["findAndModify"] = Bson(m_name);
 		cmd["query"] = serializeToBson(query);
 		cmd["update"] = serializeToBson(update);
@@ -212,10 +212,10 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 	 */
 	ulong count(T)(T query)
 	{
-		Bson cmd = Bson.EmptyObject;
+		Bson cmd = Bson.emptyObject;
 		cmd["count"] = Bson(m_name);
 		cmd["query"] = serializeToBson(query);
-		cmd["fields"] = Bson.EmptyObject;
+		cmd["fields"] = Bson.emptyObject;
 		auto reply = database.runCommand(cmd);
 		enforce(reply.ok.get!double == 1, "Count command failed.");
 		return cast(ulong)reply.n.get!double;
