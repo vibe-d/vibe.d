@@ -280,16 +280,29 @@ unittest {
 	string result;
 	void a(HTTPServerRequest req, HTTPServerResponse) { result ~= "A"; }
 	void b(HTTPServerRequest req, HTTPServerResponse) { result ~= "B"; }
+	void c(HTTPServerRequest req, HTTPServerResponse) { assert(req.params["test"] == "x", "Wrong variable contents: "~req.params["test"]); result ~= "C"; }
+	void d(HTTPServerRequest req, HTTPServerResponse) { assert(req.params["test"] == "y", "Wrong variable contents: "~req.params["test"]); result ~= "D"; }
 	router.get("/test", &a);
 	router.post("/test", &b);
+	router.get("/a/:test", &c);
+	router.get("/a/:test/", &d);
 
 	auto res = createTestHTTPServerResponse();
 	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/")), res);
-	assert(result == "");
+	assert(result == "", "Matched for non-existent / path");
 	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test")), res);
-	assert(result == "A");
+	assert(result == "A", "Didn't match a simple GET request");
 	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test"), HTTPMethod.POST), res);
-	assert(result == "AB");
+	assert(result == "AB", "Didn't match a simple POST request");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/a/"), HTTPMethod.GET), res);
+	assert(result == "AB", "Matched empty variable. "~result);
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/a/x"), HTTPMethod.GET), res);
+	assert(result == "ABC", "Didn't match a trailing 1-character var.");
+	// currently fails due to Path not accepting "//"
+	//router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/a//"), HTTPMethod.GET), res);
+	//assert(result == "ABC", "Matched empty string or slash as var. "~result);
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/a/y/"), HTTPMethod.GET), res);
+	assert(result == "ABCD", "Didn't match 1-character infix variable.");
 }
 
 unittest {
@@ -423,6 +436,7 @@ private struct MatchTree(T) {
 			auto term = &m_terminals[t.index];
 			auto vars = varbuffer[0 .. term.varNames.length];
 			matchVars(vars, term, text);
+			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
 			del(t.index, vars);
 		}
 	}
@@ -616,7 +630,7 @@ unittest {
 	m.rebuildGraph();
 	assert(m.getTerminalVarNames(0) == []);
 	assert(m.getTerminalVarNames(1) == ["var"], format("%s", m.getTerminalVarNames(1)));
-	testMatch("a", [1], [""]);
+	testMatch("a", [], []); // vars may not be empty
 	testMatch("ab", [0, 1], ["b"]);
 	testMatch("abc", [1], ["bc"]);
 
