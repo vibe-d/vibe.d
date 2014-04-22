@@ -411,6 +411,7 @@ private struct MatchTree(T) {
 
 		enum TerminalChar = 0;
 		bool m_upToDate = false;
+		string[maxRouteParameters] m_varBuffer = void;
 	}
 
 	@property size_t terminalCount() const { return m_terminals.length; }
@@ -431,10 +432,9 @@ private struct MatchTree(T) {
 		if (!n) return;
 
 		// then, go through the terminals and match their variables
-		string[maxRouteParameters] varbuffer = void;
 		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
 			auto term = &m_terminals[t.index];
-			auto vars = varbuffer[0 .. term.varNames.length];
+			auto vars = m_varBuffer[0 .. term.varNames.length];
 			matchVars(vars, term, text);
 			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
 			del(t.index, vars);
@@ -732,10 +732,13 @@ private struct MatchGraphBuilder {
 		import vibe.utils.hashmap;
 		HashMap!(/*immutable(size_t)[]*/string, size_t) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
-		void process(size_t n)
-		{
+		size_t[] node_stack = [0];
+		while (node_stack.length) {
+			auto n = node_stack[$-1];
+			node_stack.length--;
+
 			while (n >= visited.length) visited.length = visited.length * 2;
-			if (visited[n]) return;
+			if (visited[n]) continue;
 //logInfo("Disambiguate %s", n);
 			visited[n] = true;
 
@@ -768,9 +771,9 @@ private struct MatchGraphBuilder {
 			m_nodes[n].edges = newedges;
 
 			// process nodes recursively
-			foreach (e; newedges) process(e.to);
+			node_stack.assumeSafeAppend();
+			foreach (e; newedges) node_stack ~= e.to;
 		}
-		process(0);
 //logInfo("Disambiguate done");
 	}
 
