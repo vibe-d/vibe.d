@@ -79,9 +79,9 @@ void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool
 					break;
 				}
 				goto default;
-			case 'A': .. case 'Z'+1:
-			case 'a': .. case 'z'+1:
-			case '0': .. case '9'+1:
+			case 'A': .. case 'Z':
+			case 'a': .. case 'z':
+			case '0': .. case '9':
 			case '-': case '_': case '.': case '~':
 				dst.put(str[0]);
 				break;
@@ -129,6 +129,7 @@ unittest
 	assert(urlEncode("\r\n") == "%0D%0A"); // github #65
 	assert(urlEncode("This-is~a_test") == "This-is~a_test");
 	assert(urlEncode("This is a test") == "This%20is%20a%20test");
+	assert(urlEncode("This{is}test") == "This%7Bis%7Dtest", urlEncode("This{is}test"));
 	assert(formEncode("This is a test") == "This+is+a+test");
 	assert(formEncode("this/test", "/") == "this/test");
 	assert(formEncode("this/test") == "this%2Ftest");
