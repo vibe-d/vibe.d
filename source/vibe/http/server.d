@@ -239,43 +239,47 @@ void setVibeDistHost(string host, ushort port)
 }
 
 
-version (unittest) {
-	HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method = HTTPMethod.GET, InputStream data = null)
-	{
-		InetHeaderMap headers;
-		return createTestHTTPServerRequest(url, method, headers, data);
-	}
+/**
+	Creates a HTTPServerRequest suitable for writing unit tests.
+*/
+HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method = HTTPMethod.GET, InputStream data = null)
+{
+	InetHeaderMap headers;
+	return createTestHTTPServerRequest(url, method, headers, data);
+}
+/// ditto
+HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHeaderMap headers, InputStream data = null)
+{
+	auto ssl = url.schema == "https";
+	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : ssl ? 443 : 80);
+	ret.path = url.pathString;
+	ret.queryString = url.queryString;
+	ret.username = url.username;
+	ret.password = url.password;
+	ret.requestURL = url.localURI;
+	ret.method = method;
+	ret.ssl = ssl;
+	ret.headers = headers;
+	ret.bodyReader = data;
+	return ret;
+}
 
-	HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHeaderMap headers, InputStream data = null)
-	{
-		auto ssl = url.schema == "https";
-		auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : ssl ? 443 : 80);
-		ret.path = url.pathString;
-		ret.queryString = url.queryString;
-		ret.username = url.username;
-		ret.password = url.password;
-		ret.requestURL = url.localURI;
-		ret.method = method;
-		ret.ssl = ssl;
-		ret.headers = headers;
-		ret.bodyReader = data;
-		return ret;
-	}
+/**
+	Creates a HTTPServerResponse suitable for writing unit tests.
+*/
+HTTPServerResponse createTestHTTPServerResponse(OutputStream data_sink = null, SessionStore session_store = null)
+{
+	import vibe.stream.wrapper;
 
-	HTTPServerResponse createTestHTTPServerResponse(OutputStream data_sink = null, SessionStore session_store = null)
-	{
-		import vibe.stream.wrapper;
-
-		HTTPServerSettings settings;
-		if (session_store) {
-			settings = new HTTPServerSettings;
-			settings.sessionStore = session_store;
-		}
-		if (!data_sink) data_sink = new NullOutputStream;
-		auto stream = new ProxyStream(null, data_sink);
-		auto ret = new HTTPServerResponse(stream, null, settings, defaultAllocator());
-		return ret;
+	HTTPServerSettings settings;
+	if (session_store) {
+		settings = new HTTPServerSettings;
+		settings.sessionStore = session_store;
 	}
+	if (!data_sink) data_sink = new NullOutputStream;
+	auto stream = new ProxyStream(null, data_sink);
+	auto ret = new HTTPServerResponse(stream, null, settings, defaultAllocator());
+	return ret;
 }
 
 
