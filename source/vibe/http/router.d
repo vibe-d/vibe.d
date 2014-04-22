@@ -128,7 +128,7 @@ class URLRouter : HTTPRouter {
 
 		version (VibeRouterTreeMatch) {
 			bool done = false;
-			m_routes.match(path, (ridx, values) {
+			m_routes.match(path, (ridx, scope values) {
 				if (done) return;
 				auto r = &m_routes.getTerminalData(ridx);
 				logDebugV("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
@@ -390,17 +390,11 @@ private struct MatchTree(T) {
 			string pattern;
 			T data;
 			string[] varNames;
-			string[] varValues; // preallocated storage used during match()
-			
-			// varibles used during match():
-			size_t activeVar = size_t.max;
-			size_t activeVarStart = size_t.max;
-			ulong activeVarCounter = 0; // incremented for every match() operation to see if the values in activeVar and activeStart are set
+			size_t[size_t] varMap; // maps node index to variable index
 		}
 		Node[] m_nodes; // all nodes as a single array
 		TerminalTag[] m_terminalTags;
 		Terminal[] m_terminals;
-		ulong m_activeVarCounter = 0; // compared against Terminal.activeVarCounter to see if the activeVar contents are set
 
 		enum TerminalChar = 0;
 		bool m_upToDate = false;
@@ -414,60 +408,24 @@ private struct MatchTree(T) {
 		m_upToDate = false;
 	}
 
-	void match(string text, scope void delegate(size_t terminal, string[] vars) del)
+	void match(string text, scope void delegate(size_t terminal, scope string[] vars) del)
 	{
+		// lazily update the match graph
 		if (!m_upToDate) rebuildGraph();
 
-		// invalidate all variable matches of the previous run
-		m_activeVarCounter++;
+		// first, determine the end node, if any
+		auto n = matchTerminals(text);
+		if (!n) return;
 
-		auto n = &m_nodes[0];
-
-		// follow the path through the match graph
-		foreach (i, char ch; text) {
-			if (i > 0 || ch != '/') // leave out the leading / as an optimization (will never match a placeholder)
-				updateMatchPlaceholders(n, text, i);
-			auto nidx = n.edges[cast(ubyte)ch];
-			if (nidx == uint.max) return;
-			n = &m_nodes[nidx];
-		}
-		updateMatchPlaceholders(n, text, text.length);
-
-		// finally, find a matching terminal node
-		auto nidx = n.edges[TerminalChar];
-		if (nidx == uint.max) return;
-		n = &m_nodes[nidx];
-
-		// invode the delegate for all matching terminal tags (routes)
+		// then, go through the terminals and match their variables
+		string[maxRouteParameters] varbuffer = void;
 		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
 			auto term = &m_terminals[t.index];
-			// terminate any open named placeholders
-			if (term.activeVarCounter == m_activeVarCounter) term.varValues[term.activeVar] = text[term.activeVarStart .. $];
-			del(t.index, term.varValues);
+			auto vars = varbuffer[0 .. term.varNames.length];
+			matchVars(vars, term, text);
+			del(t.index, vars);
 		}
 	}
-
-	private void updateMatchPlaceholders(Node* n, string text, size_t i)
-	{
-		// handle named placeholders
-		foreach (ref tag; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
-			auto term = &m_terminals[tag.index];
-
-			// check if we are at the end of a placeholder match
-			if (tag.var != term.activeVar && term.activeVarCounter == m_activeVarCounter) {
-				term.varValues[term.activeVar] = text[term.activeVarStart .. i-1];
-				term.activeVarCounter--; // invalidate
-			}
-
-			// check if we are at the beginning of a placeholder match
-			if (tag.var != size_t.max && term.activeVarCounter != m_activeVarCounter) {
-				term.activeVar = tag.var;
-				term.activeVarStart = i;
-				term.activeVarCounter = m_activeVarCounter;
-			}
-		}
-	}
-
 
 	const(string)[] getTerminalVarNames(size_t terminal) const { return m_terminals[terminal].varNames; }
 	ref inout(T) getTerminalData(size_t terminal) inout { return m_terminals[terminal].data; }
@@ -516,6 +474,57 @@ private struct MatchTree(T) {
 		}
 	}
 
+	private Node* matchTerminals(string text)
+	{
+		auto n = &m_nodes[0];
+
+		// follow the path through the match graph
+		foreach (i, char ch; text) {
+			auto nidx = n.edges[cast(ubyte)ch];
+			if (nidx == uint.max) return null;
+			n = &m_nodes[nidx];
+		}
+
+		// finally, find a matching terminal node
+		auto nidx = n.edges[TerminalChar];
+		if (nidx == uint.max) return null;
+		n = &m_nodes[nidx];
+		return n;
+	}
+
+	private void matchVars(string[] dst, Terminal* term, string text)
+	{
+		auto nidx = 0;
+		size_t activevar = size_t.max;
+		size_t activevarstart;
+
+		dst[] = null;
+
+		// folow the path throgh the match graph
+		foreach (i, char ch; text) {
+			auto var = term.varMap[nidx];
+
+			// detect end of variable
+			if (var != activevar && activevar != size_t.max) {
+				dst[activevar] = text[activevarstart .. i-1];
+				activevar = size_t.max;
+			}
+
+			// detect beginning of variable
+			if (var != size_t.max && activevar == size_t.max) {
+				activevar = var;
+				activevarstart = i;
+			}
+
+			nidx = m_nodes[nidx].edges[cast(ubyte)ch];
+			assert(nidx != uint.max);
+		}
+
+		// terminate any active varible with the end of the input string or with the last character
+		auto var = term.varMap[nidx];
+		if (activevar != size_t.max) dst[activevar] = text[activevarstart .. (var == activevar ? $ : $-1)];
+	}
+
 	private void rebuildGraph()
 	{
 		if (m_upToDate) return;
@@ -525,13 +534,8 @@ private struct MatchTree(T) {
 		m_terminalTags = null;
 
 		MatchGraphBuilder builder;
-		foreach (i, ref t; m_terminals) {
+		foreach (i, ref t; m_terminals)
 			t.varNames = builder.insert(t.pattern, i);
-			t.varValues.length = t.varNames.length;
-			t.varValues[] = null;
-			t.activeVar = size_t.max;
-			t.activeVarStart = size_t.max;
-		}
 		//builder.print();
 		builder.disambiguate();
 
@@ -551,6 +555,7 @@ private struct MatchTree(T) {
 				auto var = t.var.length ? m_terminals[t.index].varNames.countUntil(t.var) : size_t.max;
 				assert(!m_terminalTags[nn.terminalsStart .. $].canFind!(u => u.index == t.index && u.var == var));
 				m_terminalTags ~= TerminalTag(t.index, var);
+				m_terminals[t.index].varMap[nmidx] = var;
 			}
 			nn.terminalsEnd = m_terminalTags.length;
 			foreach (e; builder.m_nodes[n].edges)
@@ -575,7 +580,7 @@ unittest {
 	{
 		size_t[] mterms;
 		string[] mvars;
-		m.match(str, (t, vals) {
+		m.match(str, (t, scope vals) {
 			mterms ~= t;
 			mvars ~= vals;
 		});
