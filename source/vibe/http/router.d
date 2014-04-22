@@ -108,7 +108,6 @@ class URLRouter : HTTPRouter {
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
 		import std.algorithm;
-		path = m_prefix ~ path;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		logDebug("add route %s %s", method, path);
 		version (VibeRouterTreeMatch) m_routes.addTerminal(path, Route(method, path, cb));
@@ -123,12 +122,16 @@ class URLRouter : HTTPRouter {
 	{
 		auto method = req.method;
 
+		auto path = req.path;
+		if (path.length < m_prefix.length || path[0 .. m_prefix.length] != m_prefix) return;
+		path = path[m_prefix.length .. $];
+
 		version (VibeRouterTreeMatch) {
 			bool done = false;
-			m_routes.match(req.path, (ridx, values) {
+			m_routes.match(path, (ridx, values) {
 				if (done) return;
 				auto r = &m_routes.getTerminalData(ridx);
-				logInfo("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
+				logDebugV("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
 				if (r.method == method) {
 					foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
 					r.cb(req, res);
@@ -140,7 +143,7 @@ class URLRouter : HTTPRouter {
 			while(true)
 			{
 				foreach (ref r; m_routes) {
-					if (r.method == method && r.matches(req.path, req.params)) {
+					if (r.method == method && r.matches(path, req.params)) {
 						logTrace("route match: %s -> %s %s", req.path, req.method, r.pattern);
 						// .. parse fields ..
 						r.cb(req, res);
@@ -153,7 +156,7 @@ class URLRouter : HTTPRouter {
 			}
 		}
 
-		logInfo("no route match: %s %s", req.method, req.requestURL);
+		logDebug("no route match: %s %s", req.method, req.requestURL);
 	}
 
 	/// Returns all registered routes as const AA
@@ -377,20 +380,27 @@ private struct MatchTree(T) {
 		struct Node {
 			size_t terminalsStart; // slice into m_terminalTags
 			size_t terminalsEnd;
-			uint[ubyte.max] edges = uint.max; // character -> index into m_nodes
+			uint[ubyte.max+1] edges = uint.max; // character -> index into m_nodes
 		}
-		struct TerminalTag { size_t index; size_t var; }
+		struct TerminalTag {
+			size_t index; // index into m_terminals array
+			size_t var; // index into Terminal.varNames/varValues or size_t.max
+		}
 		struct Terminal {
 			string pattern;
 			T data;
 			string[] varNames;
 			string[] varValues; // preallocated storage used during match()
-			size_t activeVar = size_t.max; // used during match()
-			size_t activeVarStart = size_t.max; // used during match()
+			
+			// varibles used during match():
+			size_t activeVar = size_t.max;
+			size_t activeVarStart = size_t.max;
+			ulong activeVarCounter = 0; // incremented for every match() operation to see if the values in activeVar and activeStart are set
 		}
 		Node[] m_nodes; // all nodes as a single array
 		TerminalTag[] m_terminalTags;
 		Terminal[] m_terminals;
+		ulong m_activeVarCounter = 0; // compared against Terminal.activeVarCounter to see if the activeVar contents are set
 
 		enum TerminalChar = 0;
 		bool m_upToDate = false;
@@ -406,53 +416,58 @@ private struct MatchTree(T) {
 
 	void match(string text, scope void delegate(size_t terminal, string[] vars) del)
 	{
-		rebuildGraph();
+		if (!m_upToDate) rebuildGraph();
 
-		foreach (ref t; m_terminals) {
-			t.activeVar = size_t.max;
-			t.activeVarStart = size_t.max;
-		}
+		// invalidate all variable matches of the previous run
+		m_activeVarCounter++;
 
 		auto n = &m_nodes[0];
 
-		void updatePlaceholders(size_t i)
-		{
-			// handle named placeholders
-			foreach (t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
-				auto term = &m_terminals[t.index];
-				if (t.var != term.activeVar && term.activeVar != size_t.max) {
-					term.varValues[term.activeVar] = text[term.activeVarStart .. i-1];
-					term.activeVar = size_t.max;
-				}
-				if (t.var != size_t.max && term.activeVar == size_t.max) {
-					term.activeVar = t.var;
-					term.activeVarStart = i;
-				}
-			}
-		}
-
-		next_char:
+		// follow the path through the match graph
 		foreach (i, char ch; text) {
-			updatePlaceholders(i);
-
-			auto nidx = n.edges[ch];
+			if (i > 0 || ch != '/') // leave out the leading / as an optimization (will never match a placeholder)
+				updateMatchPlaceholders(n, text, i);
+			auto nidx = n.edges[cast(ubyte)ch];
 			if (nidx == uint.max) return;
 			n = &m_nodes[nidx];
 		}
+		updateMatchPlaceholders(n, text, text.length);
 
-		updatePlaceholders(text.length);
-
+		// finally, find a matching terminal node
 		auto nidx = n.edges[TerminalChar];
 		if (nidx == uint.max) return;
 		n = &m_nodes[nidx];
 
-		foreach (t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
+		// invode the delegate for all matching terminal tags (routes)
+		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
 			auto term = &m_terminals[t.index];
 			// terminate any open named placeholders
-			if (term.activeVar != size_t.max) term.varValues[term.activeVar] = text[term.activeVarStart .. $];
+			if (term.activeVarCounter == m_activeVarCounter) term.varValues[term.activeVar] = text[term.activeVarStart .. $];
 			del(t.index, term.varValues);
 		}
 	}
+
+	private void updateMatchPlaceholders(Node* n, string text, size_t i)
+	{
+		// handle named placeholders
+		foreach (ref tag; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
+			auto term = &m_terminals[tag.index];
+
+			// check if we are at the end of a placeholder match
+			if (tag.var != term.activeVar && term.activeVarCounter == m_activeVarCounter) {
+				term.varValues[term.activeVar] = text[term.activeVarStart .. i-1];
+				term.activeVarCounter--; // invalidate
+			}
+
+			// check if we are at the beginning of a placeholder match
+			if (tag.var != size_t.max && term.activeVarCounter != m_activeVarCounter) {
+				term.activeVar = tag.var;
+				term.activeVarStart = i;
+				term.activeVarCounter = m_activeVarCounter;
+			}
+		}
+	}
+
 
 	const(string)[] getTerminalVarNames(size_t terminal) const { return m_terminals[terminal].varNames; }
 	ref inout(T) getTerminalData(size_t terminal) inout { return m_terminals[terminal].data; }
@@ -547,6 +562,8 @@ private struct MatchTree(T) {
 		}
 		assert(builder.m_nodes[0].edges.length == 1, "Graph must be disambiguated before purging.");
 		process(builder.m_nodes[0].edges[0].to);
+
+		logInfo("%s nodes, %s terminals", m_nodes.length, m_terminals.length);
 	}
 }
 
@@ -692,7 +709,7 @@ private struct MatchGraphBuilder {
 
 	void disambiguate()
 	{
-logInfo("Disambiguate");
+//logInfo("Disambiguate");
 		import vibe.utils.hashmap;
 		HashMap!(/*immutable(size_t)[]*/string, size_t) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
@@ -700,7 +717,7 @@ logInfo("Disambiguate");
 		{
 			while (n >= visited.length) visited.length = visited.length * 2;
 			if (visited[n]) return;
-logInfo("Disambiguate %s", n);
+//logInfo("Disambiguate %s", n);
 			visited[n] = true;
 
 			Edge[] newedges;
@@ -735,7 +752,7 @@ logInfo("Disambiguate %s", n);
 			foreach (e; newedges) process(e.to);
 		}
 		process(0);
-logInfo("Disambiguate done");
+//logInfo("Disambiguate done");
 	}
 
 	void print()
