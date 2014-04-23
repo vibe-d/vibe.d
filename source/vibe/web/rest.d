@@ -169,10 +169,8 @@ unittest
 		// GET /api/greeting
 		@property string greeting();
 
-		version (none) {
-			// PUT /api/greeting
-			@property void greeting(string text);
-		}
+		// PUT /api/greeting
+		@property void greeting(string text);
 
 		// POST /api/users
 		@path("/users")
@@ -199,32 +197,14 @@ unittest
 			string[] m_users;
 		}
 		
-		@property string greeting()
-		{
-			return m_greeting;
-		}
+		@property string greeting() { return m_greeting; }
+		@property void greeting(string text) { m_greeting = text; }
 
-		version(none) {		
-			@property void greeting(string text)
-			{
-				m_greeting = text;
-			}
-		}
+		void addNewUser(string name) { m_users ~= name; }
 
-		void addNewUser(string name)
-		{
-			m_users ~= name;
-		}
+		@property string[] users() { return m_users; }
 
-		@property string[] users()
-		{
-			return m_users;
-		}
-
-		string getName(int id)
-		{
-			return m_users[id];
-		}
+		string getName(int id) { return m_users[id]; }
 
 		Json getSomeCustomJson()
 		{
@@ -262,7 +242,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateModuleImports!(I)());
 #line 1 "module imports"
 	mixin(generateModuleImports!I());
-#line 255
+#line 246
 
 	import vibe.inet.url : URL, PathEntry;
 	import vibe.http.client : HTTPClientRequest;
@@ -312,7 +292,7 @@ class RestInterfaceClient(I) : I
 
 #line 1 "subinterface instances"
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
-#line 305
+#line 296
 	}
 	
 	/**
@@ -328,7 +308,7 @@ class RestInterfaceClient(I) : I
 		m_requestFilter = v;
 #line 1 "request filter"		
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
-#line 321
+#line 312
 	}
 	
 	//pragma(msg, "subinterfaces:");
@@ -340,7 +320,7 @@ class RestInterfaceClient(I) : I
 	//pragma(msg, generateRestInterfaceMethods!(I)());
 #line 1 "restinterface"
 	mixin (generateRestInterfaceMethods!I());
-#line 333 "source/vibe/http/rest.d"
+#line 324 "source/vibe/http/rest.d"
 
 	protected {
 		import vibe.data.json : Json;
@@ -424,10 +404,8 @@ unittest
 
 		// GET /greeting
 		@property string greeting();
-		version(none) {
-			// PUT /greeting
-			@property void greeting(string text);
-		}
+		// PUT /greeting
+		@property void greeting(string text);
 		
 		// POST /new_user
 		void addNewUser(string name);
@@ -444,8 +422,7 @@ unittest
 		auto api = new RestInterfaceClient!IMyApi("http://127.0.0.1/api/");
 
 		logInfo("Status: %s", api.getStatus());
-		version(none)
-			api.greeting = "Hello, World!";
+		api.greeting = "Hello, World!";
 		logInfo("Greeting message: %s", api.greeting);
 		api.addNewUser("Peter");
 		api.addNewUser("Igor");
