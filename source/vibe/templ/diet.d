@@ -68,7 +68,6 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file(indent));
 	mixin(dietParser!template_file(indent));
-	#line 72 "source/vibe/templ/diet.d"
 }
 
 /// compatibility alias
@@ -99,7 +98,6 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietParser!template_file(0));
-	#line 103 "source/vibe/templ/diet.d"
 }
 
 /// compatibility alias
@@ -149,7 +147,6 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
 	mixin(dietStringParser!diet_code(0));
-	#line 153 "source/vibe/templ/diet.d"
 }
 
 

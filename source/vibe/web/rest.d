@@ -240,9 +240,7 @@ class RestInterfaceClient(I) : I
 {
 	//pragma(msg, "imports for "~I.stringof~":");
 	//pragma(msg, generateModuleImports!(I)());
-#line 1 "module imports"
 	mixin(generateModuleImports!I());
-#line 246
 
 	import vibe.inet.url : URL, PathEntry;
 	import vibe.http.client : HTTPClientRequest;
@@ -290,9 +288,7 @@ class RestInterfaceClient(I) : I
 		m_baseURL = base_url;
 		m_methodStyle = style;
 
-#line 1 "subinterface instances"
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
-#line 296
 	}
 	
 	/**
@@ -306,21 +302,16 @@ class RestInterfaceClient(I) : I
 	/// ditto
 	@property void requestFilter(RequestFilter v) {
 		m_requestFilter = v;
-#line 1 "request filter"		
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
-#line 312
 	}
 	
 	//pragma(msg, "subinterfaces:");
 	//pragma(msg, generateRestInterfaceSubInterfaces!(I)());
-#line 1 "subinterfaces"
 	mixin (generateRestInterfaceSubInterfaces!I());
 	
 	//pragma(msg, "restinterface:");
 	//pragma(msg, generateRestInterfaceMethods!(I)());
-#line 1 "restinterface"
 	mixin (generateRestInterfaceMethods!I());
-#line 324 "source/vibe/http/rest.d"
 
 	protected {
 		import vibe.data.json : Json;

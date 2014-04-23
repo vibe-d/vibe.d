@@ -145,9 +145,7 @@ struct ScopedLock(T)
 	inout(T) opDot() inout nothrow { return m_ref; }
 	//pragma(msg, "In ScopedLock!("~T.stringof~")");
 	//pragma(msg, isolatedRefMethods!T());
-	#line 1 "isolatedAggreateMethodsString"
 //	mixin(isolatedAggregateMethodsString!T());
-	#line 151 "source/vibe/core/concurrency.d"
 
 	private Object getObject()
 		pure nothrow {
@@ -353,9 +351,7 @@ private struct IsolatedRef(T)
 
 	//mixin isolatedAggregateMethods!T;
 	//pragma(msg, isolatedAggregateMethodsString!T());
-	#line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-	#line 359 "source/vibe/core/concurrency.d"
 
 	@disable this(this);
 
@@ -619,9 +615,7 @@ private struct ScopedRefAggregate(T)
 	static if( is(T == shared) ){
 		auto lock() pure { return .lock(unsafeGet()); }
 	} else {
-		#line 1 "isolatedAggregateMethodsString"
 		mixin(isolatedAggregateMethodsString!T());
-		#line 625 "source/vibe/core/concurrency.d"
 		//mixin isolatedAggregateMethods!T;
 	}
 }
@@ -675,9 +669,7 @@ private struct ScopedRefAssociativeArray(K, V)
 /// private
 /*private mixin template(T) isolatedAggregateMethods
 {
-#line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-#line 681 "source/vibe/core/concurrency.d"
 }*/
 
 /// private
