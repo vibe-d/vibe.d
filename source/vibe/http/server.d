@@ -1204,7 +1204,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	// If this is a HTTPS server, initiate SSL
 	if (listen_info.sslContext) {
 		logTrace("accept ssl");
-		ssl_stream = FreeListRef!SSLStream(http_stream, listen_info.sslContext, SSLStreamState.accepting);
+		ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting);
 		http_stream = ssl_stream;
 	}
 

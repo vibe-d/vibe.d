@@ -119,6 +119,16 @@ SSLStream createSSLStream(Stream underlying, SSLContext ctx, SSLStreamState stat
 	else return new SSLStream(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
 }
 
+/**
+	Constructs a new SSL stream using manual memory allocator.
+*/
+FreeListRef!SSLStream createSSLStreamFL(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+{
+	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
+	else return FreeListRef!SSLStream(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
+
+}
+
 
 /**************************************************************************************************/
 /* Public types                                                                                   */
@@ -173,7 +183,8 @@ class SSLStream : Stream {
 		this(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
 	}
 
-	private this(DEPRECATION_HACK, Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	/// private
+	/*private*/ this(DEPRECATION_HACK, Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		m_stream = underlying;
 		m_state = state;
