@@ -730,7 +730,7 @@ private struct MatchGraphBuilder {
 	{
 //logInfo("Disambiguate");
 		import vibe.utils.hashmap;
-		HashMap!(/*immutable(size_t)[]*/string, size_t) combined_nodes;
+		HashMap!(immutable(size_t)[], size_t) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
 		size_t[] node_stack = [0];
 		while (node_stack.length) {
@@ -748,18 +748,17 @@ private struct MatchGraphBuilder {
 			foreach (ch_; ubyte.min .. ubyte.max+1) {
 				ubyte ch = cast(ubyte)ch_;
 				auto chnodes = edges[ch_];
-				auto chnodeskey = format("%s", chnodes);
 
 				// handle trivial cases
 				if (!chnodes.length) continue;
 				if (chnodes.length == 1) { addToArray(newedges, Edge(ch, chnodes[0])); continue; }
 
 				// generate combined state for ambiguous edges
-				if (auto pn = chnodeskey in combined_nodes) { addToArray(newedges, Edge(ch, *pn)); continue; }
+				if (auto pn = chnodes in combined_nodes) { addToArray(newedges, Edge(ch, *pn)); continue; }
 
 				// for new combinations, create a new node
 				size_t ncomb = addNode();
-				combined_nodes[chnodeskey] = ncomb;
+				combined_nodes[chnodes] = ncomb;
 				foreach (chn; chnodes) {
 					addToArray(m_nodes[ncomb].edges, m_nodes[chn].edges);
 					addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
