@@ -513,10 +513,16 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 	}
 }
 
+
 template AllocSize(T)
 {
-	static if( is(T == class) ) enum AllocSize = __traits(classInstanceSize, T);
-	else enum AllocSize = T.sizeof;
+	static if (is(T == class)) {
+		// workaround for a strange bug where AllocSize!SSLStream == 0: TODO: dustmite!
+		enum dummy = T.stringof ~ __traits(classInstanceSize, T).stringof;
+		enum AllocSize = __traits(classInstanceSize, T);
+	} else {
+		enum AllocSize = T.sizeof;
+	}
 }
 
 struct FreeListRef(T, bool INIT = true)
