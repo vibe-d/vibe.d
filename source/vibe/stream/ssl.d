@@ -78,7 +78,7 @@ unittest {
 			or on the server end of the SSL tunnel
 		ver = The SSL/TLS protocol used for negotiating the tunnel
 */
-SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.tls1)
+SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 {
 	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
 	else return new SSLContext(DEPRECATION_HACK.init, kind, ver);
@@ -125,8 +125,11 @@ SSLStream createSSLStream(Stream underlying, SSLContext ctx, SSLStreamState stat
 FreeListRef!SSLStream createSSLStreamFL(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
 	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
-	else return FreeListRef!SSLStream(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
-
+	else {
+		import vibe.utils.memory;
+		static assert(AllocSize!SSLStream > 0);
+		return FreeListRef!SSLStream(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
+	}
 }
 
 
