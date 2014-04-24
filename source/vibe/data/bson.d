@@ -926,12 +926,12 @@ struct BsonRegex {
 	The methods will have to be defined in pairs. The first pair that is implemented by
 	the type will be used for serialization (i.e. toBson overrides toJson).
 */
-Bson serializeToBson(T)(T value)
+Bson serializeToBson(T)(T value, ubyte[] buffer = null)
 {
 	version (VibeOldSerialization) {
 		return serializeToBsonOld(value);
 	} else {
-		return serialize!BsonSerializer(value);
+		return serialize!BsonSerializer(value, buffer);
 	}
 }
 
@@ -1239,8 +1239,10 @@ unittest {
 	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToBson, deserializeBson
 */
 struct BsonSerializer {
+	import vibe.utils.array : AllocAppender;
+
 	private {
-		Appender!(ubyte[]) m_dst;
+		AllocAppender!(ubyte[]) m_dst;
 		size_t[] m_compositeStack;
 		Bson.Type m_type = Bson.Type.null_;
 		Bson m_inputData;
@@ -1253,6 +1255,12 @@ struct BsonSerializer {
 		m_inputData = input;
 	}
 
+	this(ubyte[] buffer)
+	{
+		import vibe.utils.memory;
+		m_dst = AllocAppender!(ubyte[])(defaultAllocator(), buffer);
+	}
+
 	@disable this(this);
 
 	template isSupportedValueType(T) { enum isSupportedValueType = is(typeof(getBsonTypeID(T.init))); }
@@ -1263,7 +1271,7 @@ struct BsonSerializer {
 	Bson getSerializedResult()
 	{
 		auto ret = Bson(m_type, cast(immutable)m_dst.data);
-		m_dst = appender!(ubyte[]);
+		m_dst.reset();
 		m_type = Bson.Type.null_;
 		return ret;
 	}
@@ -1332,7 +1340,7 @@ struct BsonSerializer {
 			import std.format;
 			m_dst.put(tp);
 			static struct Wrapper {
-				Appender!(ubyte[])* app;
+				AllocAppender!(ubyte[])* app;
 				void put(char ch) { (*app).put(ch); }
 				void put(in char[] str) { (*app).put(cast(ubyte[])str); }
 			}
@@ -1515,7 +1523,7 @@ private string skipCString(ref bdata_t data)
 	return cast(string)ret;
 }
 
-private void putCString(R)(R dst, string str)
+private void putCString(R)(ref R dst, string str)
 {
 	dst.put(cast(bdata_t)str);
 	dst.put(cast(ubyte)0);
