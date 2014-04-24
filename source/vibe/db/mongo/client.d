@@ -32,7 +32,7 @@ final class MongoClient {
 		ConnectionPool!MongoConnection m_connections;
 	}
 
-	package this(string host, ushort port = MongoConnection.defaultPort)
+	package this(string host, ushort port)
 	{
 		this("mongodb://" ~ host ~ ":" ~ to!string(port) ~ "/?safe=true");
 	}
