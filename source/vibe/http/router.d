@@ -19,6 +19,13 @@ else version = VibeRouterTreeMatch;
 
 /**
 	An interface for HTTP request routers.
+
+	Removal_notice:
+
+	Note that this is planned to be removed, due to interface/behavior considerations.
+	In particular, the exact behavior of the router (most importantly, the route match
+	string format) must be considered part of the interface. However, this removes the
+	prime argument for having an interface in the first place.
 */
 interface HTTPRouter : HTTPServerRequestHandler {
 	@property string prefix() const;
@@ -81,7 +88,7 @@ interface HTTPRouter : HTTPServerRequestHandler {
 }
 
 
-/++
+/**
 	Routes HTTP requests based on the request method and URL.
 
 	Routes are matched using a special URL match string that supports two forms of placeholders.
@@ -90,10 +97,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	Registered routes are matched in the same sequence as initially specified.
 	Matching ends as soon as a route handler writes a response using res.writeBody()
 	or similar means. If no route matches or if no route handler writes a response,
-	the router will simply not handle the request and the HTTP server may generate
+	the router will simply not handle the request and the HTTP server will generate
 	a 404 error.
-+/
-class URLRouter : HTTPRouter {
+*/
+final class URLRouter : HTTPRouter {
 	private {
 		version (VibeRouterTreeMatch) MatchTree!Route m_routes;
 		else Route[] m_routes;
