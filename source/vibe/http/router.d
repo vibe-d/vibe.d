@@ -13,13 +13,16 @@ import vibe.core.log;
 
 import std.functional;
 
-//version = VibeRouterTreeMatch;
+version (VibeOldRouterImpl) {}
+else version = VibeRouterTreeMatch;
 
 
 /**
 	An interface for HTTP request routers.
 */
 interface HTTPRouter : HTTPServerRequestHandler {
+	@property string prefix() const;
+
 	/// Adds a new route for request that match the path and method
 	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
 	/// ditto
@@ -116,6 +119,19 @@ class URLRouter : HTTPRouter {
 	}
 
 	alias match = HTTPRouter.match;
+
+	/** Rebuilds the internal matching structures to account for newly added routes.
+
+		This should be used after a lot of routes have been added to the router, to
+		force eager computation of the match structures. The alternative is to
+		let the router lazily compute the structures when the first request happens,
+		which can delay this request.
+	*/
+	void rebuild()
+	{
+		version (VibeRouterTreeMatch)
+			m_routes.rebuildGraph();
+	}
 	
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
