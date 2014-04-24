@@ -433,7 +433,9 @@ class SSLContext {
 
 		version (OpenSSL) {
 			const(SSL_METHOD)* method;
-			c_long options = SSL_OP_NO_SSLv2|SSL_OP_NO_COMPRESSION;
+			c_long options = SSL_OP_NO_SSLv2|SSL_OP_NO_COMPRESSION|
+				SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
+
 			final switch (kind) {
 				case SSLContextKind.client:
 					final switch (ver) {
@@ -456,8 +458,10 @@ class SSLContext {
 
 			m_ctx = SSL_CTX_new(method);
 			SSL_CTX_set_options!()(m_ctx, options);
-			// by default, only allow safe cyphers and prefer perfect forward secrecy
-			setCipherList("ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
+
+			setCipherList();
+			setDHParams();
+			setECDHCurve();
 		} else enforce(false, "No SSL support compiled in!");
 
 		maxCertChainLength = 9;
@@ -589,15 +593,87 @@ class SSLContext {
 
 	/** Set the list of cipher specifications to use for SSL/TLS tunnels.
 
-		The list must be a colon separated list of cipher specifications as
-		accepted by OpenSSL.
+		The list must be a colon separated list of cipher
+		specifications as accepted by OpenSSL. Calling this function
+		without argument will restore the default.
 
 		See_also: $(LINK https://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT)
 	*/
-	void setCipherList(string list)
+	void setCipherList(string list=null)
 	{
 		version (OpenSSL) {
-			SSL_CTX_set_cipher_list(m_ctx, list.toStringz());
+			if (list is null)
+				SSL_CTX_set_cipher_list(m_ctx,
+							"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:"
+							"ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:"
+							"RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
+			else
+				SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
+		}
+	}
+
+	/** Set params to use for DH cipher.
+	 *
+	 * By default the 2048-bit prime from RFC 3526 is used.
+	 *
+	 * Params:
+	 * pem_file = Path to a PEM file containing the DH parameters. Calling
+	 *    this function without argument will restore the default.
+	 */
+	void setDHParams(string pem_file=null)
+	{
+		version (OpenSSL) {
+			DH* dh;
+			scope(exit) DH_free(dh);
+
+			if (pem_file is null) {
+				dh = enforce(DH_new(), "Unable to create DH structure.");
+				dh.p = get_rfc3526_prime_2048(null);
+				ubyte dh_generator = 2;
+				dh.g = BN_bin2bn(&dh_generator, dh_generator.sizeof, null);
+			} else {
+				import core.stdc.stdio : fclose, fopen;
+
+				auto f = enforce(fopen(toStringz(pem_file), "r"), "Failed to load dhparams file "~pem_file);
+				scope(exit) fclose(f);
+				dh = enforce(PEM_read_DHparams(f, null, null, null), "Failed to read dhparams file "~pem_file);
+			}
+
+			SSL_CTX_set_tmp_dh(m_ctx, dh);
+		}
+	}
+
+	/** Set the elliptic curve to use for ECDH cipher.
+	 *
+	 * By default a curve is either chosen automatically or  prime256v1 is used.
+	 *
+	 * Params:
+	 * curve = The short name of the elliptic curve to use. Calling this
+	 *    function without argument will restore the default.
+	 *
+	 */
+	void setECDHCurve(string curve=null)
+	{
+		version (OpenSSL) {
+			static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
+				// use automatic ecdh curve selection by default
+				if (curve is null) {
+					SSL_CTX_set_ecdh_auto(m_ctx, true);
+					return;
+				}
+				// but disable it when an explicit curve is given
+				SSL_CTX_set_ecdh_auto(m_ctx, false);
+			}
+
+			int nid;
+			if (curve is null)
+				nid = NID_X9_62_prime256v1;
+			else
+				nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
+
+			auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
+			SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
+			EC_KEY_free(ecdh);
 		}
 	}
 
