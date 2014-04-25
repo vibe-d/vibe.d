@@ -171,8 +171,9 @@ private class MongoCursorData(Q, R, S) {
 		int m_offset;
 		size_t m_currentDoc = 0;
 		R[] m_documents;
-		bool m_started_iterating = false;
+		bool m_iterationStarted = false;
 		size_t m_limit = 0;
+		bool m_needDestroy = false;
 	}
 
 	this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
@@ -197,7 +198,7 @@ private class MongoCursorData(Q, R, S) {
 
 	@property bool empty()
 	{
-		if (!m_started_iterating) startIterating();
+		if (!m_iterationStarted) startIterating();
 		if (m_limit > 0 && m_currentDoc >= m_limit) {
 			destroy();
 			return true;
@@ -208,8 +209,7 @@ private class MongoCursorData(Q, R, S) {
 			return true;
 
 		auto conn = m_client.lockConnection();
-		auto reply = conn.getMore!R(m_collection, m_nret, m_cursor);
-		handleReply(reply);
+		conn.getMore!R(m_collection, m_nret, m_cursor, &handleReply, &handleDocument);
 		return m_currentDoc >= m_documents.length;
 	}
 
@@ -227,7 +227,7 @@ private class MongoCursorData(Q, R, S) {
 
 	void sort(Bson order)
 	{
-		assert(!m_started_iterating, "Cursor cannot be modified after beginning iteration");
+		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
 		m_sort = order;
 	}
 
@@ -251,7 +251,8 @@ private class MongoCursorData(Q, R, S) {
 		auto conn = m_client.lockConnection();
 		static if (is(Q == Bson)) {
 			ubyte[256] selector_buf;
-			auto reply = conn.query!R(m_collection, m_flags, m_nskip, m_nret, m_query, serializeToBson(m_returnFieldSelector, selector_buf));
+			conn.query!R(m_collection, m_flags, m_nskip, m_nret, m_query,
+				serializeToBson(m_returnFieldSelector, selector_buf), &handleReply, &handleDocument);
 		} else {
 			static struct Query {
 				@name("$query") Q query;
@@ -261,43 +262,47 @@ private class MongoCursorData(Q, R, S) {
 				Bson orderby;
 			}
 
-			Reply!R reply;
 			ubyte[256] query_buf, selector_buf;
 			if (m_sort.isNull) {
 				Query query;
 				query.query = m_query;
-				reply = conn.query!R(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf));
+				conn.query!R(m_collection, m_flags, m_nskip, m_nret,
+					serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf),
+					&handleReply, &handleDocument);
 			} else {
 				QueryOrder query;
 				query.query = m_query;
 				query.orderby = m_sort;
-				reply = conn.query!R(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf));
+				conn.query!R(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf),
+					serializeToBson(m_returnFieldSelector, selector_buf), &handleReply, &handleDocument);
 			}
 		}
 
-		m_cursor = reply.cursor;
-		handleReply(reply);
-		m_started_iterating = true;
+		m_iterationStarted = true;
 	}
 
 	private void destroy()
 	{
-		if( m_cursor == 0 ) return;
+		if (m_cursor == 0) return;
 		auto conn = m_client.lockConnection();
 		conn.killCursors((&m_cursor)[0 .. 1]);
 		m_cursor = 0;
 	}
 
-	private void handleReply(Reply!R reply)
+	private void handleReply(long cursor, ReplyFlags flags, int first_doc, int num_docs)
 	{
-		enforce(!(reply.flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
-		enforce(!(reply.flags & ReplyFlags.QueryFailure), "Query failed.");
+		// FIXME: use MongoDB exceptions
+		enforce(!(flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
+		enforce(!(flags & ReplyFlags.QueryFailure), "Query failed.");
 
-		m_offset = reply.firstDocument;
-		m_documents = reply.documents;
+		m_cursor = cursor;
+		m_offset = first_doc;
+		m_documents.length = num_docs;
 		m_currentDoc = 0;
+	}
 
-		if( reply.cursor == 0 )
-			destroy();
+	private void handleDocument(size_t idx, ref R doc)
+	{
+		m_documents[idx] = doc;
 	}
 }

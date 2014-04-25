@@ -192,20 +192,23 @@ class MongoConnection {
 		if (m_settings.safe) checkForError(collection_name);
 	}
 
-	Reply!T query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
+	void query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
 		flags |= m_settings.defQueryFlags;
+		int id;
 		if (returnFieldSelector.isNull)
-			return call!T(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query);
+			id = send(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query);
 		else
-			return call!T(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query, returnFieldSelector);
+			id = send(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query, returnFieldSelector);
+		recvReply!T(id, on_msg, on_doc);
 	}
 
-	Reply!T getMore(T)(string collection_name, int nret, long cursor_id)
+	void getMore(T)(string collection_name, int nret, long cursor_id, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
-		return call!T(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+		auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+		recvReply!T(id, on_msg, on_doc);
 	}
 
 	void delete_(string collection_name, DeleteFlags flags, Bson selector)
@@ -238,54 +241,42 @@ class MongoConnection {
 		if(m_settings.fsync)
 			command_and_options["fsync"] = Bson(true);
 
-		Reply!Bson reply = query!Bson(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
-				0, -1, serializeToBson(command_and_options));
+		_MongoErrorDescription ret;
 
-		logTrace(
-				"getLastEror(%s)\n\tResult flags: %s\n\tCursor: %s\n\tDocument count: %s",
-				db,
-				reply.flags,
-				reply.cursor,
-				reply.documents.length
+		query!Bson(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
+			0, -1, serializeToBson(command_and_options), Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				logTrace("getLastEror(%s) flags: %s, cursor: %s, documents: %s", db, flags, cursor, num_docs);
+				enforce(!(flags & ReplyFlags.QueryFailure),
+					new MongoDriverException(format("MongoDB error: getLastError(%s) call failed.", db))
 				);
-
-		enforce(
-			!(reply.flags & ReplyFlags.QueryFailure),
-			new MongoDriverException(format(
-				"MongoDB error: getLastError(%s) call failed.",
-				db
-			))
+				enforce(
+					num_docs == 1,
+					new MongoDriverException(format("getLastError(%s) returned %s documents instead of one.", db, num_docs))
+				);
+			},
+			(idx, ref error) {
+				try {
+					ret = MongoErrorDescription(
+						error.err.opt!string(""),
+						error.code.opt!int(-1),
+						error.connectionId.get!int(),
+						error.n.get!int(),
+						error.ok.get!double()
+					);
+				} catch (Exception e) {
+					throw new MongoDriverException(e.msg);
+				}
+			}
 		);
 
-		enforce(
-			reply.documents.length == 1,
-			new MongoDriverException(format(
-				"getLastError(%s) returned %s documents instead of one.",
-				db,
-				to!string(reply.documents.length)
-			))
-		);
-
-		auto error = reply.documents[0];
-
-		try
-		{
-			return MongoErrorDescription(
-				error.err.opt!string(""),
-				error.code.opt!int(-1),
-				error.connectionId.get!int(),
-				error.n.get!int(),
-				error.ok.get!double()
-			);
-		}
-		catch (Exception e)
-		{
-			throw new MongoDriverException(e.msg);
-		}
+		return ret;
 	}
 
-	private Reply!T recvReply(T)(int reqid)
+	private void recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
+		import std.traits;
+
 		auto bytes_read = m_bytesRead;
 		int msglen = recvInt();
 		int resid = recvInt();
@@ -299,32 +290,31 @@ class MongoConnection {
 		long cursor = recvLong();
 		int start = recvInt();
 		int numret = recvInt();
-		auto docs = new Bson[numret];
-		foreach( i; 0 .. numret )
-			docs[i] = recvBson();
 
-		if( m_bytesRead - bytes_read < msglen ){
-			logWarn("MongoDB reply was longer than expected, skipping the rest: %d vs. %d", msglen, m_bytesRead - bytes_read);
-			ubyte[] dst = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
-			recv(dst);
-		} else if( m_bytesRead - bytes_read > msglen ){
-			logWarn("MongoDB reply was shorter than expected. Dropping connection.");
-			disconnect();
-			throw new MongoDriverException("MongoDB reply was too short for data.");
+		scope (exit) {
+			if (m_bytesRead - bytes_read < msglen) {
+				logWarn("MongoDB reply was longer than expected, skipping the rest: %d vs. %d", msglen, m_bytesRead - bytes_read);
+				ubyte[] dst = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
+				recv(dst);
+			} else if (m_bytesRead - bytes_read > msglen) {
+				logWarn("MongoDB reply was shorter than expected. Dropping connection.");
+				disconnect();
+				throw new MongoDriverException("MongoDB reply was too short for data.");
+			}
 		}
 
-		auto msg = new Reply!T;
-		msg.cursor = cursor;
-		msg.flags = flags;
-		msg.firstDocument = start;
-		msg.documents = docs.map!(d => deserializeBson!T(d)).array;
-		return msg;
-	}
-
-	private Reply!T call(T, ARGS...)(OpCode code, int response_to, ARGS args)
-	{
-		auto id = send(code, response_to, args);
-		return recvReply!T(id);
+		on_msg(cursor, flags, start, numret);
+		foreach (i; 0 .. cast(size_t)numret) {
+			// TODO: directly deserialize from the wire
+			static if (!hasIndirections!T) {
+				ubyte[256] buf;
+				auto bson = recvBson(buf);
+			} else {
+				auto bson = recvBson(null);
+			}
+			T doc = deserializeBson!T(bson);
+			on_doc(i, doc);
+		}
 	}
 
 	private int send(ARGS...)(OpCode code, int response_to, ARGS args)
@@ -359,11 +349,13 @@ class MongoConnection {
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
-	private Bson recvBson() {
+	private Bson recvBson(ubyte[] buf) {
 		int len = recvInt();
-		auto bson = new ubyte[len-4];
-		recv(bson);
-		return Bson(Bson.Type.Object, cast(immutable)(toBsonData(len) ~ bson));
+		if (len > buf.length) buf = new ubyte[len];
+		else buf = buf[0 .. len];
+		buf[0 .. 4] = toBsonData(len);
+		recv(buf[4 .. $]);
+		return Bson(Bson.Type.Object, cast(immutable)buf);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
 
@@ -384,34 +376,37 @@ class MongoConnection {
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
+		string nonce, key;
+
 		auto cmd = Bson(["getnonce":Bson(1)]);
-		Reply!Bson rep = query!Bson(cn, QueryFlags.None, 0, -1, cmd);
-		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
-		{
-			throw new MongoDriverException("Calling getNonce failed.");
-		}
-		auto doc = rep.documents[0];
-		if (doc["ok"].get!double != 1.0)
-		{
-			throw new MongoDriverException("getNonce failed.");
-		}
-		string nonce = doc["nonce"].get!string;
-		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
+					throw new MongoDriverException("Calling getNonce failed.");
+			},
+			(idx, ref doc) {
+				if (doc["ok"].get!double != 1.0)
+					throw new MongoDriverException("getNonce failed.");
+				nonce = doc["nonce"].get!string;
+				key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
+			}
+		);
+
 		cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
-		rep = query!Bson(cn, QueryFlags.None, 0, -1, cmd);
-		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
-		{
-			throw new MongoDriverException("Calling authenticate failed.");
-		}
-		doc = rep.documents[0];
-		if (doc["ok"].get!double != 1.0)
-		{
-			throw new MongoAuthException("Authentication failed.");
-		}
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
+					throw new MongoDriverException("Calling authenticate failed.");
+			},
+			(idx, ref doc) {
+				if (doc["ok"].get!double != 1.0)
+					throw new MongoAuthException("Authentication failed.");
+			}
+		);
 	}
 }
 
@@ -688,6 +683,9 @@ private enum OpCode : int {
 	KillCursors  = 2007
 }
 
+alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs);
+template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc); }
+
 enum UpdateFlags {
 	None         = 0,
 	Upsert       = 1<<0,
@@ -721,32 +719,6 @@ enum ReplyFlags {
 	QueryFailure      = 1<<1,
 	ShardConfigStale  = 1<<2,
 	AwaitCapable      = 1<<3
-}
-
-/// [internal]
-class Reply(T) {
-	long cursor;
-	ReplyFlags flags;
-	int firstDocument;
-	T[] documents;
-}
-
-private class Message {
-	private {
-		OpCode m_opCode;
-		Appender!(ubyte[]) m_data;
-	}
-
-	this(OpCode code)
-	{
-		m_opCode = code;
-		m_data = appender!(ubyte[])();
-	}
-
-	void addInt(int v) { m_data.put(toBsonData(v)); }
-	void addLong(long v) { m_data.put(toBsonData(v)); }
-	void addCString(string v) { m_data.put(cast(bdata_t)v); m_data.put(cast(ubyte)0); }
-	void addBSON(Bson v) { m_data.put(v.data); }
 }
 
 /// [internal]
