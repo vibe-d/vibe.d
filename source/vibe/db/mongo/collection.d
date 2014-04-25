@@ -100,7 +100,7 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Updating uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
-		ubyte[256] selector_buf, update_buf;
+		ubyte[256] selector_buf = void, update_buf = void;
 		conn.update(m_fullPath, flags, serializeToBson(selector, selector_buf), serializeToBson(update, update_buf));
 	}
 
@@ -184,7 +184,7 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Removnig from uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
-		ubyte[256] selector_buf;
+		ubyte[256] selector_buf = void;
 		conn.delete_(m_fullPath, flags, serializeToBson(selector, selector_buf));
 	}
 

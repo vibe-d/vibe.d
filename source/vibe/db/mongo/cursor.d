@@ -252,7 +252,7 @@ private class MongoCursorData(Q, R, S) {
 	private void startIterating() {
 		auto conn = m_client.lockConnection();
 		static if (is(Q == Bson)) {
-			ubyte[256] selector_buf;
+			ubyte[256] selector_buf = void;
 			conn.query!R(m_collection, m_flags, m_nskip, m_nret, m_query,
 				serializeToBson(m_returnFieldSelector, selector_buf), &handleReply, &handleDocument);
 		} else {
@@ -264,7 +264,7 @@ private class MongoCursorData(Q, R, S) {
 				Bson orderby;
 			}
 
-			ubyte[256] query_buf, selector_buf;
+			ubyte[256] query_buf = void, selector_buf = void;
 			if (m_sort.isNull) {
 				Query query;
 				query.query = m_query;

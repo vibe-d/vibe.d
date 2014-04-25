@@ -307,7 +307,7 @@ class MongoConnection {
 		foreach (i; 0 .. cast(size_t)numret) {
 			// TODO: directly deserialize from the wire
 			static if (!hasIndirections!T && !is(T == Bson)) {
-				ubyte[256] buf;
+				ubyte[256] buf = void;
 				auto bson = recvBson(buf);
 			} else {
 				auto bson = recvBson(null);
