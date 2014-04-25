@@ -1,7 +1,7 @@
 /**
 	Low level mongodb protocol.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -14,7 +14,7 @@ import vibe.core.net;
 import vibe.inet.webform;
 import vibe.stream.ssl;
 
-import std.algorithm : splitter;
+import std.algorithm : map, splitter;
 import std.array;
 import std.conv;
 import std.exception;
@@ -176,89 +176,49 @@ class MongoConnection {
 
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
+
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Update);
-		msg.addInt(0);
-		msg.addCString(collection_name);
-		msg.addInt(flags);
-		msg.addBSON(selector);
-		msg.addBSON(update);
-		send(msg);
-		if(m_settings.safe)
-		{
-			checkForError(collection_name);
-		}
+		send(OpCode.Update, -1, cast(int)0, collection_name, cast(int)flags, selector, update);
+		if (m_settings.safe) checkForError(collection_name);
 	}
 
 	void insert(string collection_name, InsertFlags flags, Bson[] documents)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Insert);
-		msg.addInt(flags);
-		msg.addCString(collection_name);
-		foreach( d; documents ){
-			if( d["_id"].isNull() ) d["_id"] = Bson(BsonObjectID.generate());
-			msg.addBSON(d);
-		}
-		send(msg);
-
-		if(m_settings.safe)
-		{
-			checkForError(collection_name);
-		}
+		foreach (d; documents) if (d["_id"].isNull()) d["_id"] = Bson(BsonObjectID.generate());
+		send(OpCode.Insert, -1, cast(int)flags, collection_name, documents);
+		if (m_settings.safe) checkForError(collection_name);
 	}
 
-	Reply query(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
+	Reply!T query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Query);
-		msg.addInt(flags | m_settings.defQueryFlags);
-		msg.addCString(collection_name);
-		msg.addInt(nskip);
-		msg.addInt(nret);
-		msg.addBSON(query);
-		if( returnFieldSelector.type != Bson.Type.Null )
-			msg.addBSON(returnFieldSelector);
-		return call(msg);
+		flags |= m_settings.defQueryFlags;
+		if (returnFieldSelector.isNull)
+			return call!T(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query);
+		else
+			return call!T(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query, returnFieldSelector);
 	}
 
-	Reply getMore(string collection_name, int nret, long cursor_id)
+	Reply!T getMore(T)(string collection_name, int nret, long cursor_id)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.GetMore);
-		msg.addInt(0);
-		msg.addCString(collection_name);
-		msg.addInt(nret);
-		msg.addLong(cursor_id);
-		return call(msg);
+		return call!T(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
 	}
 
 	void delete_(string collection_name, DeleteFlags flags, Bson selector)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Delete);
-		msg.addInt(0);
-		msg.addCString(collection_name);
-		msg.addInt(flags);
-		msg.addBSON(selector);
-		send(msg);
-		if(m_settings.safe)
-		{
-			checkForError(collection_name);
-		}
+		send(OpCode.Delete, -1, cast(int)0, collection_name, cast(int)flags, selector);
+		if (m_settings.safe) checkForError(collection_name);
 	}
 
 	void killCursors(long[] cursors)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.KillCursors);
-		msg.addInt(0);
-		msg.addInt(cast(int)cursors.length);
-		foreach( c; cursors )
-			msg.addLong(c);
-		send(msg);
+		send(OpCode.KillCursors, -1, cast(int)0, cast(int)cursors.length, cursors);
 	}
 
 	MongoErrorDescription getLastError(string db)
@@ -278,7 +238,7 @@ class MongoConnection {
 		if(m_settings.fsync)
 			command_and_options["fsync"] = Bson(true);
 
-		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
+		Reply!Bson reply = query!Bson(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
 				0, -1, serializeToBson(command_and_options));
 
 		logTrace(
@@ -324,9 +284,8 @@ class MongoConnection {
 		}
 	}
 
-	private Reply recvReply(int reqid)
+	private Reply!T recvReply(T)(int reqid)
 	{
-
 		auto bytes_read = m_bytesRead;
 		int msglen = recvInt();
 		int resid = recvInt();
@@ -354,36 +313,48 @@ class MongoConnection {
 			throw new MongoDriverException("MongoDB reply was too short for data.");
 		}
 
-		auto msg = new Reply;
+		auto msg = new Reply!T;
 		msg.cursor = cursor;
 		msg.flags = flags;
 		msg.firstDocument = start;
-		msg.documents = docs;
+		msg.documents = docs.map!(d => deserializeBson!T(d)).array;
 		return msg;
 	}
 
-	private Reply call(Message req)
+	private Reply!T call(T, ARGS...)(OpCode code, int response_to, ARGS args)
 	{
-		auto id = send(req);
-		auto res = recvReply(id);
-		return res;
+		auto id = send(code, response_to, args);
+		return recvReply!T(id);
 	}
 
-	private int send(Message req, int response_to = -1)
+	private int send(ARGS...)(OpCode code, int response_to, ARGS args)
 	{
 		if( !connected() ) connect();
 		int id = nextMessageId();
-		sendInt(16 + cast(int)req.m_data.data.length);
-		sendInt(id);
-		sendInt(response_to);
-		sendInt(req.m_opCode);
-		send(req.m_data.data);
+		sendValue(16 + sendLength(args));
+		sendValue(id);
+		sendValue(response_to);
+		sendValue(cast(int)code);
+		foreach (a; args) sendValue(a);
 		m_stream.flush();
 		return id;
 	}
 
-	private void sendInt(int v) { send(toBsonData(v)); }
-	private void sendLong(long v) { send(toBsonData(v)); }
+	private void sendValue(T)(T value)
+	{
+		import std.traits;
+		static if (is(T == int)) send(toBsonData(value));
+		else static if (is(T == long)) send(toBsonData(value));
+		else static if (is(T == Bson)) send(value.data);
+		else static if (is(T == string)) {
+			send(cast(ubyte[])value);
+			send(cast(ubyte[])"\0");
+		} else static if (isArray!T) {
+			foreach (v; value)
+				sendValue(v);
+		} else static assert(false, "Unexpected type: "~T.stringof);
+	}
+
 	private void send(in ubyte[] data){ m_stream.write(data); }
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
@@ -411,17 +382,15 @@ class MongoConnection {
 
 	private void authenticate()
 	{
-		Reply rep;
-		Bson cmd, doc;
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
-		cmd = Bson(["getnonce":Bson(1)]);
-		rep = query(cn, QueryFlags.None, 0, -1, cmd);
+		auto cmd = Bson(["getnonce":Bson(1)]);
+		Reply!Bson rep = query!Bson(cn, QueryFlags.None, 0, -1, cmd);
 		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
 		{
 			throw new MongoDriverException("Calling getNonce failed.");
 		}
-		doc = rep.documents[0];
+		auto doc = rep.documents[0];
 		if (doc["ok"].get!double != 1.0)
 		{
 			throw new MongoDriverException("getNonce failed.");
@@ -433,7 +402,7 @@ class MongoConnection {
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
-		rep = query(cn, QueryFlags.None, 0, -1, cmd);
+		rep = query!Bson(cn, QueryFlags.None, 0, -1, cmd);
 		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
 		{
 			throw new MongoDriverException("Calling authenticate failed.");
@@ -755,11 +724,11 @@ enum ReplyFlags {
 }
 
 /// [internal]
-class Reply {
+class Reply(T) {
 	long cursor;
 	ReplyFlags flags;
 	int firstDocument;
-	Bson[] documents;
+	T[] documents;
 }
 
 private class Message {
@@ -809,4 +778,23 @@ private struct MongoHost
 {
 	string name;
 	ushort port;
+}
+
+private int sendLength(ARGS...)(ARGS args)
+{
+	import std.traits;
+	static if (ARGS.length == 1) {
+		alias T = ARGS[0];
+		static if (is(T == string)) return args[0].length + 1;
+		else static if (is(T == int)) return 4;
+		else static if (is(T == long)) return 8;
+		else static if (is(T == Bson)) return args[0].data.length;
+		else static if (isArray!T) {
+			int ret = 0;
+			foreach (el; args[0]) ret += sendLength(el);
+			return ret;
+		} else static assert(false, "Unexpected type: "~T.stringof);
+	}
+	else if (ARGS.length == 0) return 0;
+	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
 }

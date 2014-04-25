@@ -208,7 +208,7 @@ private class MongoCursorData(Q, R, S) {
 			return true;
 
 		auto conn = m_client.lockConnection();
-		auto reply = conn.getMore(m_collection, m_nret, m_cursor);
+		auto reply = conn.getMore!R(m_collection, m_nret, m_cursor);
 		handleReply(reply);
 		return m_currentDoc >= m_documents.length;
 	}
@@ -251,7 +251,7 @@ private class MongoCursorData(Q, R, S) {
 		auto conn = m_client.lockConnection();
 		static if (is(Q == Bson)) {
 			ubyte[256] selector_buf;
-			auto reply = conn.query(m_collection, m_flags, m_nskip, m_nret, m_query, serializeToBson(m_returnFieldSelector, selector_buf));
+			auto reply = conn.query!R(m_collection, m_flags, m_nskip, m_nret, m_query, serializeToBson(m_returnFieldSelector, selector_buf));
 		} else {
 			static struct Query {
 				@name("$query") Q query;
@@ -261,17 +261,17 @@ private class MongoCursorData(Q, R, S) {
 				Bson orderby;
 			}
 
-			Reply reply;
+			Reply!R reply;
 			ubyte[256] query_buf, selector_buf;
 			if (m_sort.isNull) {
 				Query query;
 				query.query = m_query;
-				reply = conn.query(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf));
+				reply = conn.query!R(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf));
 			} else {
 				QueryOrder query;
 				query.query = m_query;
 				query.orderby = m_sort;
-				reply = conn.query(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf));
+				reply = conn.query!R(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf));
 			}
 		}
 
@@ -288,13 +288,13 @@ private class MongoCursorData(Q, R, S) {
 		m_cursor = 0;
 	}
 
-	private void handleReply(Reply reply)
+	private void handleReply(Reply!R reply)
 	{
 		enforce(!(reply.flags & ReplyFlags.CursorNotFound), "Invalid cursor handle.");
 		enforce(!(reply.flags & ReplyFlags.QueryFailure), "Query failed.");
 
 		m_offset = reply.firstDocument;
-		m_documents = reply.documents.map!(d => deserializeBson!R(d)).array; // TODO: avoid allocations
+		m_documents = reply.documents;
 		m_currentDoc = 0;
 
 		if( reply.cursor == 0 )
