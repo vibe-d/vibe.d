@@ -785,10 +785,10 @@ private int sendLength(ARGS...)(ARGS args)
 	import std.traits;
 	static if (ARGS.length == 1) {
 		alias T = ARGS[0];
-		static if (is(T == string)) return args[0].length + 1;
+		static if (is(T == string)) return cast(int)args[0].length + 1;
 		else static if (is(T == int)) return 4;
 		else static if (is(T == long)) return 8;
-		else static if (is(T == Bson)) return args[0].data.length;
+		else static if (is(T == Bson)) return cast(int)args[0].data.length;
 		else static if (isArray!T) {
 			int ret = 0;
 			foreach (el; args[0]) ret += sendLength(el);
