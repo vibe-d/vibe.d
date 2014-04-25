@@ -4,7 +4,7 @@
 	Technically it is very special collection with common query functions
 	disabled and some service commands provided.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -21,6 +21,7 @@ struct MongoDatabase
 { 
 	private {
 		string m_name;
+		string m_commandCollection;
 		MongoClient m_client;
 	}
 
@@ -38,6 +39,7 @@ struct MongoDatabase
 				"Compound collection path provided to MongoDatabase constructor instead of single database name"
 		  );
 		m_name = name;
+		m_commandCollection = m_name ~ ".$cmd";
 	}
 
 	/// The name of this database
@@ -85,7 +87,12 @@ struct MongoDatabase
  	 */
 	Bson getLog(string mask)
 	{
-		return runCommand(Bson(["getLog" : Bson(mask)]));
+		static struct CMD {
+			string getLog;
+		}
+		CMD cmd;
+		cmd.getLog = mask;
+		return runCommand(cmd);
 	}
 
 	/** Performs a filesystem/disk sync of the database on the server.
@@ -96,7 +103,13 @@ struct MongoDatabase
  	 */
 	Bson fsync(bool async = false)
 	{
-		return runCommand(Bson(["fsync" : Bson(1), "async" : Bson(async)]));
+		static struct CMD {
+			int fsync = 1;
+			bool async;
+		}
+		CMD cmd;
+		cmd.async = async;
+		return runCommand(cmd);
 	}
 
 
@@ -111,8 +124,8 @@ struct MongoDatabase
 
 		Returns: The raw response of the MongoDB server
 	*/
-	Bson runCommand(Bson command_and_options)
+	Bson runCommand(T)(T command_and_options)
 	{
-		return m_client.getCollection(m_name ~ ".$cmd").findOne(command_and_options);
+		return m_client.getCollection(m_commandCollection).findOne(command_and_options);
 	}
 }

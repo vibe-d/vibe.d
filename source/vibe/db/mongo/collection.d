@@ -1,7 +1,7 @@
 /**
 	MongoCollection class
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -100,7 +100,8 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Updating uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
-		conn.update(m_fullPath, flags, serializeToBson(selector), serializeToBson(update));
+		ubyte[256] selector_buf, update_buf;
+		conn.update(m_fullPath, flags, serializeToBson(selector, selector_buf), serializeToBson(update, update_buf));
 	}
 
 	/**
@@ -127,20 +128,17 @@ struct MongoCollection {
 
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
-	MongoCursor find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	MongoCursor!(T, Bson, U) find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
-		static if( is(typeof(returnFieldSelector is null)) )
-			return MongoCursor(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), returnFieldSelector is null ? Bson(null) : serializeToBson(returnFieldSelector));
-		else
-			return MongoCursor(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, serializeToBson(query), serializeToBson(returnFieldSelector));
+		return MongoCursor!(T, Bson, U)(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
 	}
 
 	/// ditto
-	MongoCursor find(T)(T query) { return find(query, null); }
+	MongoCursor!(T, Bson, typeof(null)) find(T)(T query) { return find(query, null); }
 
 	/// ditto
-	MongoCursor find()() { return find(Bson.emptyObject, null); }
+	MongoCursor!(Bson, Bson, typeof(null)) find()() { return find(Bson.emptyObject, null); }
 
 	/**
 	  Queries the collection for existing documents.
@@ -173,7 +171,8 @@ struct MongoCollection {
 	{
 		assert(m_client !is null, "Removnig from uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
-		conn.delete_(m_fullPath, flags, serializeToBson(selector));
+		ubyte[256] selector_buf;
+		conn.delete_(m_fullPath, flags, serializeToBson(selector, selector_buf));
 	}
 
 	/// ditto
@@ -187,12 +186,17 @@ struct MongoCollection {
 	 */
 	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
 	{
-		Bson cmd = Bson.emptyObject;
-		cmd["findAndModify"] = Bson(m_name);
-		cmd["query"] = serializeToBson(query);
-		cmd["update"] = serializeToBson(update);
-		if( returnFieldSelector != null )
-			cmd["fields"] = serializeToBson(returnFieldSelector);
+		static struct CMD {
+			string findAndModify;
+			T query;
+			U update;
+			V fields;
+		}
+		CMD cmd;
+		cmd.findAndModify = m_name;
+		cmd.query = query;
+		cmd.update = update;
+		cmd.fields = returnFieldSelector;
 		auto ret = database.runCommand(cmd);
 		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
 		return ret.value;
@@ -212,10 +216,16 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 	 */
 	ulong count(T)(T query)
 	{
-		Bson cmd = Bson.emptyObject;
-		cmd["count"] = Bson(m_name);
-		cmd["query"] = serializeToBson(query);
-		cmd["fields"] = Bson.emptyObject;
+		static struct Empty {}
+		static struct CMD {
+			string count;
+			T query;
+			Empty fields;
+		}
+
+		CMD cmd;
+		cmd.count = m_name;
+		cmd.query = query;
 		auto reply = database.runCommand(cmd);
 		enforce(reply.ok.get!double == 1, "Count command failed.");
 		return cast(ulong)reply.n.get!double;
@@ -234,12 +244,17 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 	  See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
 	*/
 	Bson aggregate(ARGS...)(ARGS pipeline) {
-		Bson[ARGS.length] nodes;
-		foreach(i, node; pipeline)
-			nodes[i] = serializeToBson(node);
-		Bson cmd = Bson.emptyObject;
-		cmd["aggregate"] = Bson(m_name);
-		cmd["pipeline"] = serializeToBson(nodes);
+		static struct Pipeline {
+			ARGS args;
+		}
+		static struct CMD {
+			string aggregate;
+			@asArray Nodes pipeline;
+		}
+
+		CMD cmd;
+		cmd.aggregate = m_name;
+		cmd.pipeline.args = pipeline;
 		auto ret = database.runCommand(cmd);
 		enforce(ret.ok.get!double == 1, "Aggregate command failed.");
 		return ret.result;
