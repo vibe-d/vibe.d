@@ -306,14 +306,18 @@ class MongoConnection {
 		on_msg(cursor, flags, start, numret);
 		foreach (i; 0 .. cast(size_t)numret) {
 			// TODO: directly deserialize from the wire
-			static if (!hasIndirections!T) {
+			static if (!hasIndirections!T && !is(T == Bson)) {
 				ubyte[256] buf;
 				auto bson = recvBson(buf);
 			} else {
 				auto bson = recvBson(null);
 			}
-			T doc = deserializeBson!T(bson);
-			on_doc(i, doc);
+
+			static if (is(T == Bson)) on_doc(i, bson);
+			else {
+				T doc = deserializeBson!T(bson);
+				on_doc(i, doc);
+			}
 		}
 	}
 

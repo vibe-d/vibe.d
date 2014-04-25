@@ -128,38 +128,51 @@ struct MongoCollection {
 
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
-	MongoCursor!(T, Bson, U) find(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
+	MongoCursor!(T, R, U) find(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None, int num_skip = 0, int num_docs_per_chunk = 0)
 	{
 		assert(m_client !is null, "Querying uninitialized MongoCollection.");
-		return MongoCursor!(T, Bson, U)(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
+		return MongoCursor!(T, R, U)(m_client, m_fullPath, flags, num_skip, num_docs_per_chunk, query, returnFieldSelector);
 	}
 
 	/// ditto
-	MongoCursor!(T, Bson, typeof(null)) find(T)(T query) { return find(query, null); }
+	MongoCursor!(T, R, typeof(null)) find(R = Bson, T)(T query) { return find(query, null); }
 
 	/// ditto
-	MongoCursor!(Bson, Bson, typeof(null)) find()() { return find(Bson.emptyObject, null); }
+	MongoCursor!(Bson, R, typeof(null)) find(R = Bson)() { return find(Bson.emptyObject, null); }
 
-	/**
-	  Queries the collection for existing documents.
+	/** Queries the collection for existing documents.
 
-	  Returns: the first match or null
-	  Throws: Exception if a DB communication error or a query error occured.
-	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
+		Returns:
+			By default, a Bson value of the matching document is returned, or $(D Bson(null))
+			when no document matched. For types R that are not Bson, the returned value is either
+			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
+		
+		Throws: Exception if a DB communication error or a query error occured.
+		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
-	Bson findOne(T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
+	auto findOne(R = Bson, T, U)(T query, U returnFieldSelector, QueryFlags flags = QueryFlags.None)
 	{
-		auto c = find(query, returnFieldSelector, flags, 0, 1);
-		foreach( doc; c ) return doc;
-		return Bson(null);
+		import std.traits;
+		import std.typecons;
+
+		auto c = find!R(query, returnFieldSelector, flags, 0, 1);
+		static if (is(R == Bson)) {
+			foreach (doc; c) return doc;
+			return Bson(null);
+		} else static if (is(R == class) || isPointer!R || isDynamicArray!R || isAssociativeArray!R) {
+			foreach (doc; c) return doc;
+			return null;
+		} else {
+			foreach (doc; c) {
+				Nullable!R ret;
+				ret = doc;
+				return ret;
+			}
+			return Nullable!R.init;
+		}
 	}
 	/// ditto
-	Bson findOne(T)(T query)
-	{
-		auto c = find(query, null, QueryFlags.None, 0, 1);
-		foreach( doc; c ) return doc;
-		return Bson(null);
-	}
+	auto findOne(R = Bson, T)(T query) { return findOne!R(query, Bson(null)); }
 
 	/**
 	  Removes documents from the collection.

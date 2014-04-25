@@ -27,7 +27,9 @@ import std.exception;
 struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	private MongoCursorData!(Q, R, S) m_data;
 
-	package this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector) {
+	package this(MongoClient client, string collection, QueryFlags flags, int nskip, int nret, Q query, S return_field_selector)
+	{
+		// TODO: avoid memory allocation, if possible
 		m_data = new MongoCursorData!(Q, R, S)(client, collection, flags, nskip, nret, query, return_field_selector);
 	}
 
@@ -57,7 +59,7 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 		input range interface. Note that calling this function is only allowed
 		if empty returns false.
 	*/
-	@property Bson front() { return m_data.front; }
+	@property R front() { return m_data.front; }
 
 	/**
 		Controls the order that the query returns matching documents.
@@ -116,14 +118,14 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	int opApply(int delegate(ref Bson doc) del)
+	int opApply(int delegate(ref R doc) del)
 	{
-		if( !m_data ) return 0;
+		if (!m_data) return 0;
 
-		while( !m_data.empty ){
+		while (!m_data.empty) {
 			auto doc = m_data.front;
 			m_data.popFront();
-			if( auto ret = del(doc) )
+			if (auto ret = del(doc))
 				return ret;
 		}
 		return 0;
@@ -137,15 +139,15 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	int opApply(int delegate(ref size_t idx, ref Bson doc) del)
+	int opApply(int delegate(ref size_t idx, ref R doc) del)
 	{
-		if( !m_data ) return 0;
+		if (!m_data) return 0;
 
-		while( !m_data.empty ){
+		while (!m_data.empty) {
 			auto idx = m_data.index;
 			auto doc = m_data.front;
 			m_data.popFront();
-			if( auto ret = del(idx, doc) )
+			if (auto ret = del(idx, doc))
 				return ret;
 		}
 		return 0;
