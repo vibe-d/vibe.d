@@ -217,13 +217,13 @@ private class MongoCursorData(Q, R, S) {
 
 	@property size_t index()
 	{
-		enforce(!empty(), "Cursor has no more data.");
 		return m_offset + m_currentDoc;
 	}
 
 	@property R front()
 	{
-		enforce(!empty(), "Cursor has no more data.");
+		if (!m_iterationStarted) startIterating();
+		assert(!empty(), "Cursor has no more data.");
 		return m_documents[m_currentDoc];
 	}
 
@@ -246,6 +246,8 @@ private class MongoCursorData(Q, R, S) {
 
 	void popFront()
 	{
+		if (!m_iterationStarted) startIterating();
+		assert(!empty(), "Cursor has no more data.");
 		m_currentDoc++;
 	}
 
