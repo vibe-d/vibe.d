@@ -290,7 +290,7 @@ class HTTPClient {
 				user_exception = e;
 			}
 			if (user_exception || m_responding) {
-				logDebug("Failed to send a complete response to server - disconnecting.");
+				logDebug("Failed to handle the complete response of the server - disconnecting.");
 				res.disconnect();
 			}
 			assert(!m_responding, "Still in responding state after finalizing the response!?");
@@ -631,9 +631,8 @@ final class HTTPClientResponse : HTTPResponse {
 		Reads the whole response body and tries to parse it as JSON.
 	*/
 	Json readJson(){
-		auto bdy = bodyReader.readAll();
-		auto str = cast(string)bdy;
-		return parseJson(str);
+		auto bdy = bodyReader.readAllUTF8();
+		return parseJson(bdy);
 	}
 
 	/**
