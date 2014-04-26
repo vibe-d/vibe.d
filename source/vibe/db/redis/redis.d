@@ -302,8 +302,11 @@ struct RedisDatabase {
 		Sorted Sets
 	*/
 
-	long zadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
+	long zadd(ARGS...)(string key, ARGS args) { return request!long("ZADD", key, args); }
 	long Zcard(string key) { return request!long("ZCARD", key); }
+	// TODO:
+	// supports only inclusive intervals
+	// see http://redis.io/commands/zrangebyscore
 	long zcount(string key, double min, double max) { return request!long("ZCOUNT", key, min, max); }
 	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
 	//TODO: zinterstore
@@ -313,13 +316,19 @@ struct RedisDatabase {
 		return request!RedisReply("ZRANGE", args);
 	}
 
-	RedisReply zrangeByScore(string key, long start, long end, bool withScores=false) {
+	// TODO:
+	// supports only inclusive intervals
+	// see http://redis.io/commands/zrangebyscore
+	RedisReply zrangeByScore(string key, double start, double end, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		return request!RedisReply("ZRANGEBYSCORE", args);
 	}
 
-	RedisReply zrangeByScore(string key, long start, long end, long offset, long count, bool withScores=false) {
+	// TODO:
+	// supports only inclusive intervals
+	// see http://redis.io/commands/zrangebyscore
+	RedisReply zrangeByScore(string key, double start, double end, size_t offset, size_t count, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		args ~= ["LIMIT", to!string(offset), to!string(count)];
@@ -332,6 +341,9 @@ struct RedisDatabase {
 	}
 	long zrem(string key, string[] members...) { return request!long("ZREM", key, members); }
 	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
+	// TODO:
+	// supports only inclusive intervals
+	// see http://redis.io/commands/zrangebyscore
 	long zremRangeByScore(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, min, max);}
 
 	RedisReply zrevRange(string key, long start, long end, bool withScores=false) {
@@ -340,9 +352,22 @@ struct RedisDatabase {
 		return request!RedisReply("ZREVRANGE", args);
 	}
 
+	// TODO:
+	// supports only inclusive intervals
+	// see http://redis.io/commands/zrangebyscore
 	RedisReply zrevRangeByScore(string key, double min, double max, bool withScores=false) {
 		string[] args = [key, to!string(min), to!string(max)];
 		if (withScores) args ~= "WITHSCORES";
+		return request!RedisReply("ZREVRANGEBYSCORE", args);
+	}
+
+	// TODO:
+	// supports only inclusive intervals
+	// see http://redis.io/commands/zrangebyscore
+	RedisReply zrevRangeByScore(string key, double min, double max, size_t offset, size_t count, bool withScores=false) {
+		string[] args = [key, to!string(min), to!string(max)];
+		if (withScores) args ~= "WITHSCORES";
+		args ~= ["LIMIT", to!string(offset), to!string(count)];
 		return request!RedisReply("ZREVRANGEBYSCORE", args);
 	}
 
