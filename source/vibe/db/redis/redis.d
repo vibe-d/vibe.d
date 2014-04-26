@@ -346,6 +346,13 @@ struct RedisDatabase {
 		return request!RedisReply("ZREVRANGEBYSCORE", args);
 	}
 
+	RedisReply zrevRangeByScore(string key, double min, double max, size_t offset, size_t count, bool withScores=false) {
+		string[] args = [key, to!string(min), to!string(max)];
+		if (withScores) args ~= "WITHSCORES";
+		args ~= ["LIMIT", to!string(offset), to!string(count)];
+		return request!RedisReply("ZREVRANGEBYSCORE", args);
+	}
+
 	long zrevRank(string key, string member) {
 		auto str = request!string("ZREVRANK", key, member);
 		return str ? parse!long(str) : -1;
