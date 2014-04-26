@@ -302,7 +302,7 @@ struct RedisDatabase {
 		Sorted Sets
 	*/
 
-	long zadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
+	long zadd(ARGS...)(string key, ARGS args) { return request!long("ZADD", key, args); }
 	long Zcard(string key) { return request!long("ZCARD", key); }
 	long zcount(string key, double min, double max) { return request!long("ZCOUNT", key, min, max); }
 	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
