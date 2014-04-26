@@ -313,13 +313,13 @@ struct RedisDatabase {
 		return request!RedisReply("ZRANGE", args);
 	}
 
-	RedisReply zrangeByScore(string key, long start, long end, bool withScores=false) {
+	RedisReply zrangeByScore(string key, double start, double end, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		return request!RedisReply("ZRANGEBYSCORE", args);
 	}
 
-	RedisReply zrangeByScore(string key, long start, long end, long offset, long count, bool withScores=false) {
+	RedisReply zrangeByScore(string key, double start, double end, size_t offset, size_t count, bool withScores=false) {
 		string[] args = [key, to!string(start), to!string(end)];
 		if (withScores) args ~= "WITHSCORES";
 		args ~= ["LIMIT", to!string(offset), to!string(count)];
