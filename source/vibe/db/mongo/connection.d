@@ -337,19 +337,19 @@ class MongoConnection {
 	private void sendValue(T)(T value)
 	{
 		import std.traits;
-		static if (is(T == int)) send(toBsonData(value));
-		else static if (is(T == long)) send(toBsonData(value));
-		else static if (is(T == Bson)) send(value.data);
+		static if (is(T == int)) sendBytes(toBsonData(value));
+		else static if (is(T == long)) sendBytes(toBsonData(value));
+		else static if (is(T == Bson)) sendBytes(value.data);
 		else static if (is(T == string)) {
-			send(cast(ubyte[])value);
-			send(cast(ubyte[])"\0");
+			sendBytes(cast(ubyte[])value);
+			sendBytes(cast(ubyte[])"\0");
 		} else static if (isArray!T) {
 			foreach (v; value)
 				sendValue(v);
 		} else static assert(false, "Unexpected type: "~T.stringof);
 	}
 
-	private void send(in ubyte[] data){ m_stream.write(data); }
+	private void sendBytes(in ubyte[] data){ m_stream.write(data); }
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
@@ -357,7 +357,7 @@ class MongoConnection {
 		int len = recvInt();
 		if (len > buf.length) buf = new ubyte[len];
 		else buf = buf[0 .. len];
-		buf[0 .. 4] = toBsonData(len);
+		buf[0 .. 4] = toBsonData(len)[];
 		recv(buf[4 .. $]);
 		return Bson(Bson.Type.Object, cast(immutable)buf);
 	}
