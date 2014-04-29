@@ -117,7 +117,7 @@ struct MongoCollection {
 		Bson[] docs;
 		Bson bdocs = serializeToBson(document_or_documents);
 		if( bdocs.type == Bson.Type.Array ) docs = cast(Bson[])bdocs;
-		else docs ~= bdocs;
+		else docs = (&bdocs)[0 .. 1];
 		conn.insert(m_fullPath, flags, docs);
 	}
 
