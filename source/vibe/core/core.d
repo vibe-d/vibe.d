@@ -149,7 +149,7 @@ bool processEvents()
 	The callback delegate is called whenever all events in the event queue have been
 	processed. Returning true from the callback will cause another idle event to
 	be triggered immediately after processing any events that have arrived in the
-	meantime. Returning fals will instead wait until another event has arrived first.
+	meantime. Returning false will instead wait until another event has arrived first.
 */
 void setIdleHandler(void delegate() del)
 {
