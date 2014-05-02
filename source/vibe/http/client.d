@@ -136,7 +136,7 @@ unittest {
 
 
 /**
-	Returns a HttpClient proxy object that is connected to the specified host.
+	Returns a HTTPClient proxy object that is connected to the specified host.
 
 	Internally, a connection pool is used to reuse already existing connections. Note that
 	usually requestHTTP should be used for making requests instead of manually using a
