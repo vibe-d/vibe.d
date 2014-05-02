@@ -1149,6 +1149,8 @@ shared static this()
 
 shared static ~this()
 {
+	deleteEventDriver();
+
 	bool tasks_left = false;
 
 	synchronized (st_threadsMutex) {
@@ -1179,6 +1181,9 @@ static this()
 static ~this()
 {
 	auto thisthr = Thread.getThis();
+
+	bool is_main_thread = false;
+
 	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
 		assert(idx >= 0);
@@ -1188,7 +1193,8 @@ static ~this()
 		}
 
 		// if we are the main thread, wait for all others before terminating
-		if (idx == 0) { // we are the main thread, wait for others
+		is_main_thread = idx == 0;
+		if (is_main_thread) { // we are the main thread, wait for others
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
 			while (st_threads.length)
@@ -1196,7 +1202,8 @@ static ~this()
 		}
 	}
 
-	deleteEventDriver();
+	// delay deletion of the main event driver to "~shared static this()"
+	if (!is_main_thread) deleteEventDriver();
 
 	st_threadShutdownCondition.notifyAll();
 }

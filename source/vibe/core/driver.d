@@ -38,6 +38,7 @@ package void deleteEventDriver()
 {
 	// TODO: use destroy() instead
 	delete s_driver;
+	s_driver = null;
 }
 
 
