@@ -31,7 +31,7 @@ void main()
 	logInfo("Setting up routes...");
 	auto duradd = runTimed({
 		foreach (i; 0 .. nroutes)
-			router.get(format("/%s/test/%s/test", i/100, i), &req);
+			router.get(format("/%s/:test1/%s/:test2", i/100, i), &req);
 	});
 
 	import std.random;

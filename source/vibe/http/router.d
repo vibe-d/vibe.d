@@ -782,12 +782,16 @@ private struct MatchGraphBuilder {
 				// for new combinations, create a new node
 				size_t ncomb = addNode();
 				combined_nodes[chnodes] = ncomb;
+				bool[Edge] nc_edges;
+				bool[TerminalTag] nc_terminals;
 				foreach (chn; chnodes) {
-					addToArray(m_nodes[ncomb].edges, m_nodes[chn].edges);
-					addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
-					foreach (i; 1 .. m_nodes[ncomb].terminals.length)
-						assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
+					foreach (e; m_nodes[chn].edges) nc_edges[e] = true;
+					foreach (t; m_nodes[chn].terminals) nc_terminals[t] = true;
 				}
+				m_nodes[ncomb].edges = nc_edges.keys;
+				m_nodes[ncomb].terminals = nc_terminals.keys;
+				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
+					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
 				newedges ~= Edge(ch, ncomb);
 			}
 			m_nodes[n].edges = newedges;
