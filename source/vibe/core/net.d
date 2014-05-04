@@ -281,9 +281,16 @@ interface UDPConnection {
 }
 
 
+/**
+	Flags to control the behavior of listenTCP.
+*/
 enum TCPListenOptions {
+	/// Don't enable any particular option
 	defaults = 0,
-	distribute = 1<<0
+	/// Causes incoming connections to be distributed across the thread pool
+	distribute = 1<<0,
+	/// Disables automatic closing of the connection when the connection callback exits
+	disableAutoClose = 1<<1,
 }
 
 private pure nothrow {

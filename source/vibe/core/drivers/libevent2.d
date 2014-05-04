@@ -318,7 +318,7 @@ class Libevent2Driver : EventDriver {
 
 		auto ret = new LibeventTCPListener;
 
-		static void setupConnectionHandler(shared(LibeventTCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback)
+		static void setupConnectionHandler(shared(LibeventTCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback, TCPListenOptions options)
 		{
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
@@ -326,14 +326,15 @@ class Libevent2Driver : EventDriver {
 			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr, NetworkAddress());
 			ctx.connectionCallback = cast()connection_callback;
 			ctx.listenEvent = event_new(evloop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+			ctx.listenOptions = options;
 			enforce(event_add(ctx.listenEvent, null) == 0,
 				"Error scheduling connection event on the event loop.");
 			(cast()listener).addContext(ctx);
 		}
 
 		// FIXME: the API needs improvement with proper shared annotations, so the the following casts are not necessary
-		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
-		else setupConnectionHandler(cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback);
+		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback, options);
+		else setupConnectionHandler(cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback, options);
 
 		return ret;
 	}

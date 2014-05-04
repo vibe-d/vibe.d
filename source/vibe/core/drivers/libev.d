@@ -146,7 +146,7 @@ class LibevDriver : EventDriver {
 			ret = inet_pton(AF_INET, toStringz(address), &addr_ip4.sin_addr);
 		}
 		if( ret == 1 ){
-			auto rc = listenTCPGeneric(AF_INET, &addr_ip4, port, conn_callback);
+			auto rc = listenTCPGeneric(AF_INET, &addr_ip4, port, conn_callback, options);
 			logInfo("Listening on %s port %d %s", address, port, (rc?"succeeded":"failed"));
 			return rc;
 		}
@@ -158,7 +158,7 @@ class LibevDriver : EventDriver {
 			addr_ip6.sin6_port = htons(port);
 			ret = inet_pton(AF_INET6, toStringz(address), &addr_ip6.sin6_addr);
 			if( ret == 1 ){
-				auto rc = listenTCPGeneric(AF_INET6, &addr_ip6, port, conn_callback);
+				auto rc = listenTCPGeneric(AF_INET6, &addr_ip6, port, conn_callback, options);
 				logInfo("Listening on %s port %d %s", address, port, (rc?"succeeded":"failed"));
 				return rc;
 			}
@@ -250,7 +250,9 @@ sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 		w_accept.data = cast(void*)this;
 		//addEventReceiver(m_core, listenfd, new LibevTCPListener(connection_callback));
 
-		return new LibevTCPListener(this, listenfd, w_accept, connection_callback);
+		// TODO: support TCPListenOptions.distribute
+
+		return new LibevTCPListener(this, listenfd, w_accept, connection_callback, options);
 	}
 }
 
@@ -447,15 +449,17 @@ class LibevTCPListener : TCPListener {
 		int m_socket;
 		ev_io* m_io;
 		void delegate(TCPConnection conn) m_connectionCallback;
+		TCPListenOptions m_options;
 	}
 
-	this(LibevDriver driver, int sock, ev_io* io, void delegate(TCPConnection conn) connection_callback)
+	this(LibevDriver driver, int sock, ev_io* io, void delegate(TCPConnection conn) connection_callback, TCPListenOptions options)
 	{
 		m_driver = driver;
 		m_socket = sock;
 		m_io = io;
 		m_connectionCallback = connection_callback;
 		m_io.data = cast(void*)this;
+		m_options = options;
 	}
 	
 	@property void delegate(TCPConnection conn) connectionCallback() { return m_connectionCallback; }
@@ -736,9 +740,10 @@ private extern(C){
 				obj.m_connectionCallback(conn);
 			} catch( Exception e ){
 				logWarn("Unhandled exception in connection handler: %s", e.toString());
+			} finally {
+				logTrace("client task out");
+				if (conn.connected && !(obj.m_options & TCPListenOptions.disableAutoClose)) conn.close();
 			}
-			logTrace("client task out");
-			if( conn.connected ) conn.close();
 		}
 		
 		runTask(&client_task);

@@ -432,6 +432,7 @@ package struct TCPContext
 	Task readOwner;
 	Task writeOwner;
 	Exception exception; // set during onSocketEvent calls that were emitted synchronously
+	TCPListenOptions listenOptions;
 }
 alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
 
@@ -457,6 +458,7 @@ package nothrow extern(C)
 			NetworkAddress bind_addr;
 			NetworkAddress remote_addr;
 			int sockfd;
+			TCPListenOptions options;
 
 			void execute()
 			{
@@ -496,10 +498,10 @@ package nothrow extern(C)
 					logWarn("Handling of connection failed: %s", e.msg);
 					logDiagnostic("%s", e.toString().sanitize);
 				} finally {
+					logDebug("task finished.");
 					FreeListObjectAlloc!ClientTask.free(&this);
-					conn.close();
+					if (!(options & TCPListenOptions.disableAutoClose)) conn.close();
 				}
-				logDebug("task finished.");
 			}
 		}
 
@@ -532,6 +534,7 @@ package nothrow extern(C)
 				task.bind_addr = ctx.local_addr;
 				*cast(sockaddr_in6*)task.remote_addr.sockAddr = remote_addr;
 				task.sockfd = sockfd;
+				task.options = ctx.listenOptions;
 
 				runTask(&task.execute);
 			}

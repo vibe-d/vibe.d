@@ -303,7 +303,9 @@ class Win32EventDriver : EventDriver {
 		socketEnforce(listen(sock, 128) == 0,
 			"Failed to listen");
 
-		return new Win32TCPListener(this, sock, conn_callback);
+		// TODO: support TCPListenOptions.distribute
+
+		return new Win32TCPListener(this, sock, conn_callback, options);
 	}
 
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
@@ -1418,7 +1420,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		}
 	}
 
-	private void runConnectionCallback()
+	private void runConnectionCallback(TCPListenOptions options)
 	{
 		try {
 			m_connectionCallback(this);
@@ -1426,8 +1428,9 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		} catch( Exception e ){
 			logWarn("Handling of connection failed: %s", e.msg);
 			logDiagnostic("%s", e.toString());
+		} finally {
+			if (!(options & TCPListenOptions.disableAutoClose) && this.connected) close();
 		}
-		if( this.connected ) close();
 	}
 
 	private static extern(System) nothrow
@@ -1457,14 +1460,16 @@ class Win32TCPListener : TCPListener, SocketEventHandler {
 		Win32EventDriver m_driver;
 		SOCKET m_socket;
 		void delegate(TCPConnection conn) m_connectionCallback;
+		TCPListenOptions m_options;
 	}
 
-	this(Win32EventDriver driver, SOCKET sock, void delegate(TCPConnection conn) conn_callback)
+	this(Win32EventDriver driver, SOCKET sock, void delegate(TCPConnection conn) conn_callback, TCPListenOptions options)
 	{
 		m_driver = driver;
 		m_socket = sock;
 		m_connectionCallback = conn_callback;
 		m_driver.m_socketHandlers[sock] = this;
+		m_options = options;
 
 		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_ACCEPT);
 	}
@@ -1493,7 +1498,7 @@ class Win32TCPListener : TCPListener, SocketEventHandler {
 					// TODO avoid GC allocations for delegate and Win32TCPConnection
 					auto conn = new Win32TCPConnection(m_driver, clientsock, addr, ConnectionStatus.Connected);
 					conn.m_connectionCallback = m_connectionCallback;
-					runTask(&conn.runConnectionCallback);
+					runTask(&conn.runConnectionCallback, m_options);
 				} catch( Exception e ){
 					logWarn("Exception white accepting TCP connection: %s", e.msg);
 					try logDiagnostic("Exception white accepting TCP connection: %s", e.toString());
