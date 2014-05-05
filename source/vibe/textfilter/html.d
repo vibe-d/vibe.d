@@ -1,7 +1,9 @@
 /**
 	HTML character entity escaping.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	TODO: Make things @safe once Appender is.
+
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -26,6 +28,11 @@ string htmlEscape(R)(R str)
 		filterHTMLEscape(dst, str);
 		return dst.data;
 	}
+}
+
+///
+unittest {
+	assert(htmlEscape(`"Hello", <World>!`) == `"Hello", &lt;World&gt;!`);
 }
 
 
@@ -55,6 +62,12 @@ string htmlAttribEscape(R)(R str)
 	}
 }
 
+///
+unittest {
+	assert(htmlAttribEscape(`"Hello", <World>!`) == `&quot;Hello&quot;, &lt;World&gt;!`);
+}
+
+
 /** Writes the HTML escaped version of a given string to an output range (also escapes double quotes).
 */
 void filterHTMLAttribEscape(R, S)(ref R dst, S str)
@@ -80,6 +93,12 @@ string htmlAllEscape(R)(R str)
 		return dst.data;
 	}
 }
+
+///
+unittest {
+	assert(htmlAllEscape("Hello!") == "&#72;&#101;&#108;&#108;&#111;&#33;");
+}
+
 
 /** Writes the HTML escaped version of a given string to an output range (escapes every character).
 */

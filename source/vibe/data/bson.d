@@ -1234,7 +1234,7 @@ unittest {
 unittest {
 	ubyte[] data = [1, 2, 3];
 	auto bson = serializeToBson(data);
-	assert(bson.type == Bson.Type.BinData);
+	assert(bson.type == Bson.Type.binData);
 	assert(deserializeBson!(ubyte[])(bson) == data);
 }
 

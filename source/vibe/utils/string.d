@@ -1,7 +1,7 @@
 /**
 	Utility functions for string processing
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -26,17 +26,17 @@ import core.exception;
 	the original as possible.
 */
 string sanitizeUTF8(in ubyte[] str)
-{
+@safe pure {
 	import std.utf;
 	auto ret = appender!string();
 	ret.reserve(str.length);
 
 	size_t i = 0;
-	while( i < str.length ){
+	while (i < str.length) {
 		dchar ch = str[i];
-		try ch = std.utf.decode(cast(string)str, i);
+		try ch = std.utf.decode(cast(const(char[]))str, i);
 		catch( UTFException ){ i++; }
-		catch( AssertError ){ i++; }
+		//catch( AssertError ){ i++; }
 		char[4] dst;
 		auto len = std.utf.encode(dst, ch);
 		ret.put(dst[0 .. len]);
@@ -50,8 +50,8 @@ string sanitizeUTF8(in ubyte[] str)
 	This is useful when the string is coming from a file.
 */
 string stripUTF8Bom(string str)
-{
-	if( str.length >= 3 && str[0 .. 3] == [0xEF, 0xBB, 0xBF] )
+@safe pure nothrow {
+	if (str.length >= 3 && str[0 .. 3] == [0xEF, 0xBB, 0xBF])
 		return str[3 ..$];
 	return str;
 }
@@ -61,15 +61,15 @@ string stripUTF8Bom(string str)
 	Checks if all characters in 'str' are contained in 'chars'.
 */
 bool allOf(string str, string chars)
-{
-	foreach (ch; str)
+@safe pure {
+	foreach (dchar ch; str)
 		if (!chars.canFind(ch))
 			return false;
 	return true;
 }
 
 ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive.yes)
-{
+@safe pure {
 	if (__ctfe) {
 		if (cs == CaseSensitive.yes) {
 			foreach (i, dchar ch; s)
@@ -89,7 +89,7 @@ ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive
 	Checks if any character in 'str' is contained in 'chars'.
 */
 bool anyOf(string str, string chars)
-{
+@safe pure {
 	foreach (ch; str)
 		if (chars.canFind(ch))
 			return true;
@@ -99,29 +99,29 @@ bool anyOf(string str, string chars)
 
 /// ASCII whitespace trimming (space and tab)
 string stripLeftA(string s)
-{
-	while( s.length > 0 && (s[0] == ' ' || s[0] == '\t') )
+@safe pure nothrow {
+	while (s.length > 0 && (s[0] == ' ' || s[0] == '\t'))
 		s = s[1 .. $];
 	return s;
 }
 
 /// ASCII whitespace trimming (space and tab)
 string stripRightA(string s)
-{
-	while( s.length > 0 && (s[$-1] == ' ' || s[$-1] == '\t') )
+@safe pure nothrow {
+	while (s.length > 0 && (s[$-1] == ' ' || s[$-1] == '\t'))
 		s = s[0 .. $-1];
 	return s;
 }
 
 /// ASCII whitespace trimming (space and tab)
 string stripA(string s)
-{
+@safe pure nothrow {
 	return stripLeftA(stripRightA(s));
 }
 
 /// Finds the first occurence of any of the characters in `chars`
 sizediff_t indexOfAny(string str, string chars)
-{
+@safe pure {
 	foreach (i, char ch; str)
 		if (chars.canFind(ch))
 			return i;
@@ -129,40 +129,39 @@ sizediff_t indexOfAny(string str, string chars)
 }
 alias indexOfAny countUntilAny;
 
-/*
- * Find the closing bracket (works with any of '[', '(', '<', '{').
- * Params:
- *    str = input string
- *    nested = whether to skip nested brackets
- * Returns:
- *    The index of the closing bracket or -1 for unbalanced strings
- *    and strings that don't start with a bracket.
- */
+/**
+	Finds the closing bracket (works with any of '[', '(', '<', '{').
+
+	Params:
+		str = input string
+		nested = whether to skip nested brackets
+	Returns:
+		The index of the closing bracket or -1 for unbalanced strings
+		and strings that don't start with a bracket.
+*/
 sizediff_t matchBracket(string str, bool nested = true)
-{
-    if (str.length < 2) return -1;
+@safe pure nothrow {
+	if (str.length < 2) return -1;
 
-    char open = str[0], close = void;
-    switch (str[0])
-    {
-    case '[': close = ']'; break;
-    case '(': close = ')'; break;
-    case '<': close = '>'; break;
-    case '{': close = '}'; break;
-    default: return -1;
-    }
+	char open = str[0], close = void;
+	switch (str[0]) {
+		case '[': close = ']'; break;
+		case '(': close = ')'; break;
+		case '<': close = '>'; break;
+		case '{': close = '}'; break;
+		default: return -1;
+	}
 
-    size_t level = 1;
-    foreach (i, char c; str[1 .. $])
-    {
-        if (nested && c == open) ++level;
-        else if (c == close) --level;
-        if (level == 0) return i + 1;
-    }
-    return -1;
+	size_t level = 1;
+	foreach (i, char c; str[1 .. $]) {
+		if (nested && c == open) ++level;
+		else if (c == close) --level;
+		if (level == 0) return i + 1;
+	}
+	return -1;
 }
 
-unittest
+@safe unittest
 {
     static struct Test { string str; sizediff_t res; }
     enum tests = [
@@ -186,7 +185,7 @@ string formatAlloc(ARGS...)(shared(Allocator) alloc, string fmt, ARGS args)
 
 /// Special version of icmp() with optimization for ASCII characters
 int icmp2(string a, string b)
-{
+@safe pure {
 	size_t i = 0, j = 0;
 	
 	// fast skip equal prefix

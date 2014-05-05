@@ -19,7 +19,7 @@ import std.format;
 /** Returns the URL encoded version of a given string.
 */
 string urlEncode(string str, string allowed_chars = null)
-{
+@safe {
 	auto dst = appender!string();
 	dst.reserve(str.length);
 	filterURLEncode(dst, str, allowed_chars);
@@ -29,7 +29,7 @@ string urlEncode(string str, string allowed_chars = null)
 /** Returns the decoded version of a given URL encoded string.
 */
 string urlDecode(string str)
-{
+@safe {
 	if (!str.anyOf("%")) return str;
 	auto dst = appender!string();
 	dst.reserve(str.length);
@@ -46,7 +46,7 @@ string urlDecode(string str)
 	according to the HTTP standard.
 */
 string formEncode(string str, string allowed_chars = null)
-{
+@safe {
 	auto dst = appender!string();
 	dst.reserve(str.length);
 	filterURLEncode(dst, str, allowed_chars, true);
@@ -59,7 +59,7 @@ string formEncode(string str, string allowed_chars = null)
 	spaces are replaced by plus characters.
 */
 string formDecode(string str)
-{
+@safe {
 	if (!str.anyOf("%+")) return str;
 	auto dst = appender!string();
 	dst.reserve(str.length);
@@ -124,7 +124,7 @@ void filterURLDecode(R)(ref R dst, string str, bool form_encoding = false)
 }
 
 
-unittest
+@safe unittest
 {
 	assert(urlEncode("\r\n") == "%0D%0A"); // github #65
 	assert(urlEncode("This-is~a_test") == "This-is~a_test");

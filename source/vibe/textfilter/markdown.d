@@ -1,7 +1,7 @@
 /**
 	Markdown parser implementation
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -41,8 +41,8 @@ version(MarkdownTest)
 /** Returns a Markdown filtered HTML string.
 */
 string filterMarkdown()(string str, MarkdownFlags flags = MarkdownFlags.vanillaMarkdown)
-{
-	auto dst = appender!string();
+@trusted { // Appender not @safe as of 2.065
+	auto dst = appender!string(); 
 	filterMarkdown(dst, str, flags);
 	return dst.data;
 }
@@ -98,7 +98,7 @@ private struct Line {
 	string unindented;
 
 	string unindent(size_t n)
-	{
+	pure @safe {
 		assert(n <= indent.length);
 		string ln = text;
 		foreach( i; 0 .. n ){
@@ -117,7 +117,7 @@ private struct Line {
 }
 
 private Line[] parseLines(ref string[] lines, MarkdownFlags flags)
-{
+pure @safe {
 	Line[] ret;
 	while( !lines.empty ){
 		auto ln = lines.front;
@@ -178,7 +178,7 @@ private struct Block {
 }
 
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, MarkdownFlags flags)
-{
+pure @safe {
 	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
 
@@ -316,7 +316,7 @@ private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_ind
 }
 
 private string[] skipText(ref Line[] lines, IndentType[] indent)
-{
+pure @safe {
 	static bool matchesIndent(IndentType[] indent, IndentType[] base_indent)
 	{
 		if( indent.length > base_indent.length ) return false;
@@ -575,12 +575,12 @@ private void outputHeaderLine(R)(ref R dst, string ln, string hln)
 }
 
 private bool isLineBlank(string ln)
-{
+pure @safe {
 	return allOf(ln, " \t");
 }
 
 private bool isSetextHeaderLine(string ln)
-{
+pure @safe {
 	ln = stripLeft(ln);
 	if( ln.length < 1 ) return false;
 	if( ln[0] == '=' ){
@@ -595,7 +595,7 @@ private bool isSetextHeaderLine(string ln)
 }
 
 private bool isAtxHeaderLine(string ln)
-{
+pure @safe {
 	ln = stripLeft(ln);
 	size_t i = 0;
 	while( i < ln.length && ln[i] == '#' ) i++;
@@ -604,7 +604,7 @@ private bool isAtxHeaderLine(string ln)
 }
 
 private bool isHlineLine(string ln)
-{
+pure @safe {
 	if( allOf(ln, " -") && count(ln, '-') >= 3 ) return true;
 	if( allOf(ln, " *") && count(ln, '*') >= 3 ) return true;
 	if( allOf(ln, " _") && count(ln, '_') >= 3 ) return true;
@@ -612,12 +612,12 @@ private bool isHlineLine(string ln)
 }
 
 private bool isQuoteLine(string ln)
-{
+pure @safe {
 	return ln.stripLeft().startsWith(">");
 }
 
 private size_t getQuoteLevel(string ln)
-{
+pure @safe {
 	size_t level = 0;
 	ln = stripLeft(ln);
 	while( ln.length > 0 && ln[0] == '>' ){
@@ -628,7 +628,7 @@ private size_t getQuoteLevel(string ln)
 }
 
 private bool isUListLine(string ln)
-{
+pure @safe {
 	ln = stripLeft(ln);
 	if (ln.length < 2) return false;
 	if (!canFind("*+-", ln[0])) return false;
@@ -637,7 +637,7 @@ private bool isUListLine(string ln)
 }
 
 private bool isOListLine(string ln)
-{
+pure @safe {
 	ln = stripLeft(ln);
 	if( ln.length < 1 ) return false;
 	if( ln[0] < '0' || ln[0] > '9' ) return false;
@@ -652,7 +652,7 @@ private bool isOListLine(string ln)
 }
 
 private string removeListPrefix(string str, LineType tp)
-{
+pure @safe {
 	switch(tp){
 		default: assert(false);
 		case LineType.OList: // skip bullets and output using normal escaping
@@ -666,7 +666,7 @@ private string removeListPrefix(string str, LineType tp)
 
 
 private auto parseHtmlBlockLine(string ln)
-{
+pure @safe {
 	struct HtmlBlockInfo {
 		bool isHtmlBlock;
 		string tagName;
@@ -703,41 +703,41 @@ private auto parseHtmlBlockLine(string ln)
 }
 
 private bool isHtmlBlockLine(string ln)
-{
+pure @safe {
 	auto bi = parseHtmlBlockLine(ln);
 	return bi.isHtmlBlock && bi.open;
 }
 
 private bool isHtmlBlockCloseLine(string ln)
-{
+pure @safe {
 	auto bi = parseHtmlBlockLine(ln);
 	return bi.isHtmlBlock && !bi.open;
 }
 
 private bool isCodeBlockDelimiter(string ln)
-{
+pure @safe {
 	return ln.startsWith("```");
 }
 
 private string getHtmlTagName(string ln)
-{
+pure @safe {
 	return parseHtmlBlockLine(ln).tagName;
 }
 
 private bool isLineIndented(string ln)
-{
+pure @safe {
 	return ln.startsWith("\t") || ln.startsWith("    ");
 }
 
 private string unindentLine(string ln)
-{
+pure @safe {
 	if( ln.startsWith("\t") ) return ln[1 .. $];
 	if( ln.startsWith("    ") ) return ln[4 .. $];
 	assert(false);
 }
 
 private int parseEmphasis(ref string str, ref string text)
-{
+pure @safe {
 	string pstr = str;
 	if( pstr.length < 3 ) return false;
 
@@ -752,7 +752,7 @@ private int parseEmphasis(ref string str, ref string text)
 
 	pstr = pstr[ctag.length .. $];
 
-	auto cidx = pstr.indexOf(ctag);
+	auto cidx = () @trusted { return pstr.indexOf(ctag); }();
 	if( cidx < 1 ) return false;
 
 	text = pstr[0 .. cidx];
@@ -762,7 +762,7 @@ private int parseEmphasis(ref string str, ref string text)
 }
 
 private bool parseInlineCode(ref string str, ref string code)
-{
+pure @safe {
 	string pstr = str;
 	if( pstr.length < 3 ) return false;
 	string ctag;
@@ -771,7 +771,7 @@ private bool parseInlineCode(ref string str, ref string code)
 	else return false;
 	pstr = pstr[ctag.length .. $];
 
-	auto cidx = pstr.indexOf(ctag);
+	auto cidx = () @trusted { return pstr.indexOf(ctag); }();
 	if( cidx < 1 ) return false;
 
 	code = pstr[0 .. cidx];
@@ -780,7 +780,7 @@ private bool parseInlineCode(ref string str, ref string code)
 }
 
 private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs)
-{
+pure @safe {
 	string pstr = str;
 	if( pstr.length < 3 ) return false;
 	// ignore img-link prefix
@@ -827,7 +827,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	if( refid.length > 0 ){
 		auto pr = toLower(refid) in linkrefs;
 		if( !pr ){
-			if (!__ctfe) logDebug("[LINK REF NOT FOUND: '%s'", refid);
+			debug if (!__ctfe) logDebug("[LINK REF NOT FOUND: '%s'", refid);
 			return false;
 		}
 		dst.url = pr.url;
@@ -838,7 +838,7 @@ private bool parseLink(ref string str, ref Link dst, in LinkRef[string] linkrefs
 	return true;
 }
 
-unittest
+@safe unittest
 {
     static void testLink(string s, Link exp, in LinkRef[string] refs)
     {
@@ -883,7 +883,7 @@ unittest
 }
 
 private bool parseAutoLink(ref string str, ref string url)
-{
+pure @safe {
 	string pstr = str;
 	if( pstr.length < 3 ) return false;
 	if( pstr[0] != '<' ) return false;
@@ -899,7 +899,7 @@ private bool parseAutoLink(ref string str, ref string url)
 }
 
 private LinkRef[string] scanForReferences(ref string[] lines)
-{
+pure @safe {
 	LinkRef[string] ret;
 	bool[size_t] reflines;
 
@@ -914,14 +914,14 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 		if( !ln.startsWith("[") ) continue;
 		ln = ln[1 .. $];
 
-		auto idx = ln.indexOf("]:");
+		auto idx = () @trusted { return ln.indexOf("]:"); }();
 		if( idx < 0 ) continue;
 		string refid = ln[0 .. idx];
 		ln = stripLeft(ln[idx+2 .. $]);
 
 		string url;
 		if( ln.startsWith("<") ){
-			idx = ln.indexOf(">");
+			idx = ln.indexOfCT('>');
 			if( idx < 0 ) continue;
 			url = ln[1 .. idx];
 			ln = ln[idx+1 .. $];
@@ -952,7 +952,7 @@ private LinkRef[string] scanForReferences(ref string[] lines)
 		ret[toLower(refid)] = LinkRef(refid, url, title);
 		reflines[lnidx] = true;
 
-		if (!__ctfe) logTrace("[detected ref on line %d]", lnidx+1);
+		debug if (!__ctfe) logTrace("[detected ref on line %d]", lnidx+1);
 	}
 
 	// remove all lines containing references
@@ -978,14 +978,14 @@ private struct Link {
 	string title;
 }
 
-unittest {
+@safe unittest {
 	assert(filterMarkdown("![alt](http://example.org/image)")
 		== "<p><img src=\"http://example.org/image\" alt=\"alt\">\n</p>\n");
 	assert(filterMarkdown("![alt](http://example.org/image \"Title\")")
 		== "<p><img src=\"http://example.org/image\" alt=\"alt\" title=\"Title\">\n</p>\n");
 }
 
-unittest
+@safe unittest
 {
     // check CTFE-ability
     enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");

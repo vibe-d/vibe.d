@@ -90,7 +90,7 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 	See_Also: core.concurrency.isWeaklyIsolated
 */
 ScopedLock!T lock(T : Object)(shared(T) object)
-pure nothrow {
+pure nothrow @safe {
 	return ScopedLock!T(object);
 }
 /// ditto
@@ -120,14 +120,16 @@ struct ScopedLock(T)
 	@disable this(this);
 
 	this(shared(T) obj)
-		pure nothrow {
-			assert(obj !is null, "Attempting to lock null object.");
-			m_ref = cast(T)obj;
-			_d_monitorenter(getObject());
-			assert(getObject().__monitor !is null);
-		}
+		pure nothrow @trusted
+	{
+		assert(obj !is null, "Attempting to lock null object.");
+		m_ref = cast(T)obj;
+		_d_monitorenter(getObject());
+		assert(getObject().__monitor !is null);
+	}
 
-	pure nothrow ~this()
+	~this()
+		pure nothrow @trusted
 	{
 		assert(m_ref !is null);
 		assert(getObject().__monitor !is null);

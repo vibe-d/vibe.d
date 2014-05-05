@@ -156,6 +156,7 @@ final class URLRouter : HTTPRouter {
 				auto r = &m_routes.getTerminalData(ridx);
 				logDebugV("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
 				if (r.method == method) {
+					// TODO: use a different map type that avoids allocations for small amounts of keys
 					foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
 					r.cb(req, res);
 					done = res.headerWritten;
@@ -605,7 +606,7 @@ private struct MatchTree(T) {
 		assert(builder.m_nodes[0].edges.length == 1, "Graph must be disambiguated before purging.");
 		process(builder.m_nodes[0].edges[0].to);
 
-		logInfo("%s nodes, %s terminals", m_nodes.length, m_terminals.length);
+		logDebug("Match tree has %s nodes, %s terminals", m_nodes.length, m_terminals.length);
 	}
 }
 
