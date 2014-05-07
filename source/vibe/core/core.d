@@ -904,6 +904,7 @@ private class CoreTask : TaskFiber {
 	override void join()
 	{
 		auto caller = Task.getThis();
+		assert(caller != Task.init, "Join must be called while the event loop is running.");
 		assert(caller.fiber !is this, "A task cannot join itself.");
 		assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
 		m_yielders ~= caller;
