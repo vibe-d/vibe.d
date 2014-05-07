@@ -1077,6 +1077,9 @@ template isCopyable(T)
 
 alias Task Tid;
 
+/// Returns the Tid of the caller (same as Task.getThis())
+@property Tid thisTid() { return Task.getThis(); }
+
 void send(ARGS...)(Tid tid, ARGS args)
 {
 	assert (tid != Task(), "Invalid task handle");
