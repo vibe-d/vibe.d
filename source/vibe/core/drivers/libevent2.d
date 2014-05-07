@@ -926,10 +926,27 @@ class Libevent2UDPConnection : UDPConnection {
 
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
+		return recv(Duration.max, buf, peer_address);
+	}
+
+	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null)
+	{
+		size_t tm = size_t.max;
+		if (timeout >= 0.seconds && timeout != Duration.max) {
+			tm = m_driver.createTimer(null);
+			m_driver.rearmTimer(tm, timeout, false);
+			m_driver.acquireTimer(tm);
+		}
+
 		acquire();
-		scope (exit) release();
+
+		scope (exit) {
+			release();
+			if (tm != size_t.max) m_driver.releaseTimer(tm);
+		}
 
 		if (buf.length == 0) buf.length = 65507;
+
 		NetworkAddress from;
 		from.family = m_ctx.local_addr.family;
 		assert(buf.length <= int.max);
@@ -945,6 +962,9 @@ class Libevent2UDPConnection : UDPConnection {
 				if (err != EWOULDBLOCK) {
 					logDebugV("UDP recv err: %s", err);
 					throw new Exception("Error receiving UDP packet.");
+				}
+				if (timeout != Duration.max) {
+					enforce(timeout > 0.seconds && m_driver.isTimerPending(tm), "UDP receive timeout.");
 				}
 			}
 			m_ctx.core.yieldForEvent();

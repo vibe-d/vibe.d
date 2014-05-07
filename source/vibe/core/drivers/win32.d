@@ -986,8 +986,24 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
+		return recv(Duration.max, buf, peer_address);
+	}
+
+	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null)
+	{
+		size_t tm;
+		if (timeout != Duration.max && timeout > 0.seconds) {
+			tm = m_driver.createTimer(null);
+			m_driver.rearmTimer(tm, timeout, false);
+			m_driver.acquireTimer(tm);
+		}
+
 		acquire();
-		scope(exit) release();
+		scope(exit) {
+			release();
+			if (tm != size_t.max) m_driver.releaseTimer(tm);
+		}
+
 		assert(buf.length <= int.max);
 		if( buf.length == 0 ) buf.length = 65507;
 		NetworkAddress from;
@@ -1003,6 +1019,10 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 				auto err = WSAGetLastError();
 				logDebug("UDP recv err: %s", err);
 				socketEnforce(err == WSAEWOULDBLOCK, "Error receiving UDP packet");
+
+				if (timeout != Duration.max) {
+					enforce(timeout > 0.seconds && m_driver.isTimerPending(tm), "UDP receive timeout.");
+				}
 			}
 			m_driver.m_core.yieldForEvent();
 		}

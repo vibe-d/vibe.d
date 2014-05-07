@@ -1,7 +1,7 @@
 /**
 	TCP/UDP connection and server handling.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -276,8 +276,13 @@ interface UDPConnection {
 	/** Receives a single packet.
 
 		If a buffer is given, it must be large enough to hold the full packet.
+
+		The timeout overload will throw an Exception if no data arrives before the
+		specified duration has elapsed.
 	*/
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
+	/// ditto
+	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null);
 }
 
 
