@@ -185,16 +185,7 @@ private class MongoCursorData(Q, R, S) {
 		m_flags = flags;
 		m_nskip = nskip;
 		m_nret = nret;
-		static if (is(Q == Bson)) {
-			if (query.type == Bson.Type.Object && (!query["query"].isNull() || !query["$query"].isNull())) {
-				m_query = query;
-			} else {
-				m_query = Bson.emptyObject;
-				m_query["$query"] = query;
-			}
-		} else {
-			m_query = query;
-		}
+		m_query = query;
 		m_returnFieldSelector = return_field_selector;
 	}
 
@@ -253,34 +244,32 @@ private class MongoCursorData(Q, R, S) {
 
 	private void startIterating() {
 		auto conn = m_client.lockConnection();
-		static if (is(Q == Bson)) {
-			ubyte[256] selector_buf = void;
-			conn.query!R(m_collection, m_flags, m_nskip, m_nret, m_query,
-				serializeToBson(m_returnFieldSelector, selector_buf), &handleReply, &handleDocument);
-		} else {
-			static struct Query {
-				@name("$query") Q query;
-			}
-			static struct QueryOrder {
-				@name("$query") Q query;
-				Bson orderby;
-			}
 
-			ubyte[256] query_buf = void, selector_buf = void;
-			if (m_sort.isNull) {
-				Query query;
-				query.query = m_query;
-				conn.query!R(m_collection, m_flags, m_nskip, m_nret,
-					serializeToBson(query, query_buf), serializeToBson(m_returnFieldSelector, selector_buf),
-					&handleReply, &handleDocument);
-			} else {
-				QueryOrder query;
-				query.query = m_query;
-				query.orderby = m_sort;
-				conn.query!R(m_collection, m_flags, m_nskip, m_nret, serializeToBson(query, query_buf),
-					serializeToBson(m_returnFieldSelector, selector_buf), &handleReply, &handleDocument);
-			}
+		ubyte[256] selector_buf = void;
+		ubyte[256] query_buf = void;
+
+		Bson selector = serializeToBson(m_returnFieldSelector, selector_buf);
+
+		Bson query;
+		static if (is(Q == Bson)) {
+			query = m_query;
+		} else {
+			query = serializeToBson(m_query, query_buf);
 		}
+
+		Bson full_query;
+
+		if (!query["query"].isNull() || !query["$query"].isNull()) {
+			// TODO: emit deprecation warning
+			full_query = query;
+		} else {
+			full_query = Bson.emptyObject;
+			full_query["$query"] = query;
+		}
+
+		if (!m_sort.isNull()) full_query["orderby"] = m_sort;
+
+		conn.query!R(m_collection, m_flags, m_nskip, m_nret, full_query, selector, &handleReply, &handleDocument);
 
 		m_iterationStarted = true;
 	}
