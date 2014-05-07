@@ -918,6 +918,7 @@ private class CoreTask : TaskFiber {
 	override void interrupt()
 	{
 		auto caller = Task.getThis();
+		assert(caller != Task.getThis(), "Interrupting a task can only be done while the event loop is running.");
 		assert(caller != this.task, "A task cannot interrupt itself.");
 		assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
 		s_core.resumeTask(this.task, new InterruptException);
