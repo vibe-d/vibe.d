@@ -457,7 +457,7 @@ final class HTTPClientRequest : HTTPRequest {
 		logTrace("--------------------");
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
-		logTrace("%s %s %s", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
+		logTrace("%s", this);
 		foreach( k, v; headers ){
 			formattedWrite(m_conn, "%s: %s\r\n", k, v);
 			logTrace("%s: %s", k, v);
@@ -536,7 +536,7 @@ final class HTTPClientResponse : HTTPResponse {
 		logTrace("---------------------");
 		logTrace("HTTP client response:");
 		logTrace("---------------------");
-		logTrace("%s %s", getHTTPVersionString(this.httpVersion), this.statusCode);
+		logTrace("%s", this);
 		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");

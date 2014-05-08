@@ -90,6 +90,7 @@ class HTTPFileLogger : HTTPLogger {
 
 void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
 {
+	import std.format : formattedWrite;
 	enum State {Init, Directive, Status, Key, Command}
 
 	State state = State.Init;
@@ -211,7 +212,7 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						ln.put("?" ~ req.queryString);
 						break;
 					case 'r': //First line of Request
-						ln.put(httpMethodString(req.method) ~ " " ~ req.requestURL ~ " " ~ getHTTPVersionString(req.httpVersion));
+						ln.formattedWrite("%s %s %s", httpMethodString(req.method), req.requestURL, getHTTPVersionString(req.httpVersion));
 						break;
 					case 's': //Status
 						ln.put(to!string(res.statusCode));
