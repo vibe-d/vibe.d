@@ -1059,7 +1059,7 @@ T deserializeBsonOld(T)(Bson src)
 		foreach (string key, value; src) {
 			static if (is(TK == string)) {
 				dst[key] = deserializeBson!(Unqual!TV)(value);
-			} else static if (is(TK == enum)) { 
+			} else static if (is(TK == enum)) {
 				dst[to!(TK)(key)] = deserializeBson!(Unqual!TV)(value);
 			} else static if (isStringSerializable!TK) {
 				auto dsk = TK.fromString(key);
@@ -1308,7 +1308,7 @@ struct BsonSerializer {
 	void beginWriteArrayEntry(T)(size_t idx) { m_entryIndex = idx; }
 	void endWriteArrayEntry(T)(size_t idx) {}
 
-	void writeValue(T, bool write_header = true)(T value)
+	void writeValue(T, bool write_header = true)(auto ref const T value)
 	{
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
 
@@ -1412,7 +1412,7 @@ struct BsonSerializer {
 		return false;
 	}
 
-	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(T value)
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(auto ref const T value)
 	{
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;
