@@ -1164,6 +1164,13 @@ unittest {
 	static assert(!isStringSerializable!(const(D)) && !isJsonSerializable!(const(D)) && !isBsonSerializable!(const(D)));
 	assert(serializeToBson(const D(123)) == serializeToBson(["value": 123]));
 	assert(serializeToBson(D(123))       == serializeToBson(["value": 123]));
+
+	// test if const(class) is serializable
+	static class E { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
+	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
+	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
+	assert(serializeToBson(new const B(123)) == Bson(123));
+	assert(serializeToBson(new B(123))       == Bson(123));
 }
 
 unittest {
