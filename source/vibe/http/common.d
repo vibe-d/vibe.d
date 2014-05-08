@@ -144,6 +144,10 @@ class HTTPRequest {
 	{
 	}
 
+	public override string toString()
+	{
+		return httpMethodString(method) ~ " " ~ requestURL ~ " " ~ getHTTPVersionString(httpVersion);
+	}
 
 	/** Shortcut to the 'Host' header (always present for HTTP 1.1)
 	*/
@@ -197,7 +201,6 @@ class HTTPRequest {
 				return false;
 		}
 	}
-	
 }
 
 
@@ -223,6 +226,13 @@ class HTTPResponse {
 
 		/// All cookies that shall be set on the client for this request
 		Cookie[string] cookies;
+	}
+
+	public override string toString()
+	{
+		auto app = appender!string();
+		formattedWrite(app, "%s %d %s", getHTTPVersionString(this.httpVersion), this.statusCode, this.statusPhrase);
+		return app.data;
 	}
 
 	/** Shortcut to the "Content-Type" header
