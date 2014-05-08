@@ -13,7 +13,7 @@ import std.exception : enforce;
 
 
 /**
-	Behaves similar to string[string] but the insertion order is not changed
+	Behaves similar to $(D Value[string]) but the insertion order is not changed
 	and multiple values per key are supported.
 
 	This kind of map is used for MIME headers (e.g. for HTTP, see
