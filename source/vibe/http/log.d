@@ -172,16 +172,17 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 					//TODO case 'A': //Local IP-address
 					//case 'B': //Size of Response in bytes, excluding headers
 					case 'b': //same as 'B' but a '-' is written if no bytes where sent
-						ln.put( res.bytesWritten == 0 ? "-" : to!string(res.bytesWritten) );
+						if (!res.bytesWritten) ln.put('-');
+						else ln.formattedWrite("%s", res.bytesWritten);
 						break;
 					case 'C': //Cookie content {cookie}
 						enforce(key, "cookie name missing");
-						if( auto pv = key in req.cookies ) ln.put(*pv);
+						if (auto pv = key in req.cookies) ln.put(*pv);
 						else ln.put("-");
 						break;
 					case 'D': //The time taken to serve the request
 						auto d = res.timeFinalized - req.timeCreated;
-						ln.put(to!string(d.total!"msecs"()));
+						ln.formattedWrite("%s", d.total!"msecs"());
 						break;
 					//case 'e': //Environment variable {variable}
 					//case 'f': //Filename 
@@ -193,7 +194,7 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						break;
 					case 'i': //Request header {header}
 						enforce(key, "header name missing");
-						if( auto pv = key in req.headers ) ln.put(*pv);
+						if (auto pv = key in req.headers) ln.put(*pv);
 						else ln.put("-");
 						break;
 					case 'm': //Request method
@@ -205,24 +206,25 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						else ln.put("-");
 						break;
 					case 'p': //port
-						ln.put(to!string(settings.port));
+						ln.formattedWrite("%s", settings.port);
 						break;
 					//case 'P': //Process ID
 					case 'q': //query string (with prepending '?')
-						ln.put("?" ~ req.queryString);
+						ln.put("?");
+						ln.put(req.queryString);
 						break;
 					case 'r': //First line of Request
 						ln.formattedWrite("%s %s %s", httpMethodString(req.method), req.requestURL, getHTTPVersionString(req.httpVersion));
 						break;
 					case 's': //Status
-						ln.put(to!string(res.statusCode));
+						ln.formattedWrite("%s", res.statusCode);
 						break;
 					case 't': //Time the request was received {format}
 						ln.put(req.timeCreated.toSimpleString());
 						break;
 					case 'T': //Time taken to server the request in seconds
 						auto d = res.timeFinalized - req.timeCreated;
-						ln.put(to!string(d.total!"seconds"));
+						ln.formattedWrite("%s", d.total!"seconds");
 						break;
 					case 'u': //Remote user
 						ln.put(req.username.length ? req.username : "-");
