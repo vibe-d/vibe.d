@@ -18,45 +18,46 @@ void runTest()
 		return;
 	}
 	{
-		redis.setEX("test1", 1000, "test1");
-		redis.setEX("test2", 1000, "test2");
-		redis.setEX("test3", 1000, "test3");
-		redis.setEX("test4", 1000, "test4");
-		redis.setEX("test5", 1000, "test5");
-		redis.setEX("test6", 1000, "test6");
-		redis.setEX("test7", 1000, "test7");
-		redis.setEX("test8", 1000, "test8");
-		redis.setEX("test9", 1000, "test9");
-		redis.setEX("test10", 1000, "0");
-		redis.del("saddTests");
-		redis.sadd("saddTests", "item1");
-		redis.sadd("saddTests", "item2");
+		auto db = redis.getDatabase(0);
+		db.setEX("test1", 1000, "test1");
+		db.setEX("test2", 1000, "test2");
+		db.setEX("test3", 1000, "test3");
+		db.setEX("test4", 1000, "test4");
+		db.setEX("test5", 1000, "test5");
+		db.setEX("test6", 1000, "test6");
+		db.setEX("test7", 1000, "test7");
+		db.setEX("test8", 1000, "test8");
+		db.setEX("test9", 1000, "test9");
+		db.setEX("test10", 1000, "0");
+		db.del("saddTests");
+		db.sadd("saddTests", "item1");
+		db.sadd("saddTests", "item2");
 		
 		
-		assert(redis.get!string("test1") == "test1");
-		redis.get!string("test2");
-		redis.get!string("test3");
-		redis.get!string("test4");
-		redis.get!string("test5");
-		redis.get!string("test6");
-		redis.get!string("test7");
-		redis.get!string("test8");
-		redis.get!string("test9");
-		redis.get!string("test10");
-		redis.append("test1", "test1append");
-		redis.append("test2", "test2append");
-		redis.get!string("test1");
-		redis.get!string("test2");
-		redis.incr("test10");
+		assert(db.get!string("test1") == "test1");
+		db.get!string("test2");
+		db.get!string("test3");
+		db.get!string("test4");
+		db.get!string("test5");
+		db.get!string("test6");
+		db.get!string("test7");
+		db.get!string("test8");
+		db.get!string("test9");
+		db.get!string("test10");
+		db.append("test1", "test1append");
+		db.append("test2", "test2append");
+		db.get!string("test1");
+		db.get!string("test2");
+		db.incr("test10");
 		
-		redis.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
+		db.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
 		
-		redis.srem("test1", "test1append");
-		redis.srem("test2", "test2append");
+		db.srem("test1", "test1append");
+		db.srem("test2", "test2append");
 		
-		redis.smembers("test1");
+		db.smembers("test1");
 	
-		redis.smembers("test2");
+		db.smembers("test2");
 	}
 	RedisSubscriber sub = new RedisSubscriber(redis);
 	import std.datetime;
@@ -71,12 +72,12 @@ void runTest()
 	sub.subscribe("SomeChannel");
 
 	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
-	redis.publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 	sub.unsubscribe("SomeChannel");
 	auto stopped = sub.bstop();
 	logInfo("LISTEN Stopped: %s", stopped.to!string);
 	assert(!sub.isListening);
-	redis.publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 	sleep(1.seconds);
 	logInfo("Redis Test Succeeded.");
 }
