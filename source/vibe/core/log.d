@@ -27,7 +27,7 @@ import std.traits : isSomeString;
 */
 void setLogLevel(LogLevel level)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
+	assert(ss_stdoutLogger !is null, "Console logging disabled due to missing console.");
 	ss_stdoutLogger.lock().minLevel = level;
 }
 
@@ -615,7 +615,7 @@ final class SyslogLogger : Logger {
 
 /// Returns: this host's host name.
 ///
-/// If the host name cannot be determined the /// function returns null.
+/// If the host name cannot be determined the function returns null.
 private string hostName()
 {
 	string hostName;

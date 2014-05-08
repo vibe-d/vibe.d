@@ -4,6 +4,6 @@ import vibe.db.redis.redis;
 void main()
 {
 	auto redis = new RedisClient();
-	redis.setBit("test", 15, true);
-	logInfo("Result: %s", redis.getBit("test", 15));
+	redis.getDatabase(0).setBit("test", 15, true);
+	logInfo("Result: %s", redis.getDatabase(0).getBit("test", 15));
 }
