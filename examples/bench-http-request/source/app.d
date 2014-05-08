@@ -97,7 +97,6 @@ void main()
 	getOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
 	getOption("k", &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
 	if (!finalizeCommandLineOptions()) return;
-	enableWorkerThreads();
 	runTask(toDelegate(&benchmark));
 	runEventLoop();
 }

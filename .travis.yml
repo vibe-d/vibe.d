@@ -20,5 +20,5 @@ install:
 
 script:
   - dub test
-  - for ex in `\ls -1 examples/`; do (echo "[INFO] Building example $ex"; cd examples/$ex && dub build) || break; done
-  - for ex in `\ls -1 tests/`; do (echo "[INFO] Running test $ex"; cd tests/$ex && dub) || break; done
+  - for ex in `\ls -1 examples/`; do (echo "[INFO] Building example $ex"; cd examples/$ex && dub build) || exit 1; done
+  - for ex in `\ls -1 tests/`; do (echo "[INFO] Running test $ex"; cd tests/$ex && dub) || exit 1; done

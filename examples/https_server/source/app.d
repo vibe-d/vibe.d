@@ -12,7 +12,7 @@ shared static this()
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
-	settings.sslContext = new SSLContext(SSLContextKind.server);
+	settings.sslContext = createSSLContext(SSLContextKind.server);
 	settings.sslContext.useCertificateChainFile("server.crt");
 	settings.sslContext.usePrivateKeyFile("server.key");
 	
