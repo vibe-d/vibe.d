@@ -238,11 +238,10 @@ void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
 }
 
 /**
-	Runs a new asynchronous task in a worker thread, returning the task.
+	Runs a new asynchronous task in a worker thread, returning the task handle.
 
 	This function will yield and wait for the new task to be created and started 
 	in the worker thread, then resume and return it.
-
 
 	Only function pointers with weakly isolated arguments are allowed to be
 	able to guarantee thread-safety.
@@ -904,10 +903,11 @@ private class CoreTask : TaskFiber {
 	override void join()
 	{
 		auto caller = Task.getThis();
-		assert(caller != Task.init, "Join must be called while the event loop is running.");
-		assert(caller.fiber !is this, "A task cannot join itself.");
-		assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
-		m_yielders ~= caller;
+		if (caller != Task.init) {
+			assert(caller.fiber !is this, "A task cannot join itself.");
+			assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
+			m_yielders ~= caller;
+		} else assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
 		auto run_count = m_taskCounter;
 		if (m_running && run_count == m_taskCounter) {
 			s_core.resumeTask(this.task);
@@ -918,9 +918,10 @@ private class CoreTask : TaskFiber {
 	override void interrupt()
 	{
 		auto caller = Task.getThis();
-		assert(caller != Task.getThis(), "Interrupting a task can only be done while the event loop is running.");
-		assert(caller != this.task, "A task cannot interrupt itself.");
-		assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
+		if (caller != Task.init) {
+			assert(caller != this.task, "A task cannot interrupt itself.");
+			assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
+		} else assert(Thread.getThis() is this.thread, "Interrupting tasks in different threads is not yet supported.");
 		s_core.resumeTask(this.task, new InterruptException);
 	}
 
