@@ -1,7 +1,7 @@
 /**
 	Implements a descriptive framework for building web interfaces.
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -23,6 +23,7 @@ import vibe.http.server;
 		- add a way to specify response headers without explicit access to "res"
 		- support class/interface getter properties and register their methods as well
 		- support authentication somehow nicely
+		- support Nullable!T parameters
 */
 
 
@@ -71,7 +72,7 @@ void redirect(string path_or_url)
 	URL url;
 	if (path_or_url.startsWith("/")) {
 		url = ctx.req.fullURL;
-		url.path = Path(path_or_url);
+		url.localURI = path_or_url;
 	} else if (path_or_url.canFind(":")) { // TODO: better URL recognition
 		url = URL(path_or_url);
 	} else {
@@ -79,6 +80,15 @@ void redirect(string path_or_url)
 		else url = ctx.req.fullURL.parentURL ~ Path(path_or_url);
 	}
 	ctx.res.redirect(url);
+}
+
+void terminateSession()
+{
+	alias ctx = s_requestContext;
+	if (ctx.req.session) {
+		ctx.res.terminateSession();
+		ctx.req.session = Session.init;
+	}
 }
 
 class WebInterfaceSettings {
