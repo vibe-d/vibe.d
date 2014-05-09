@@ -10,7 +10,8 @@ void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	res.render!("diet.dt", req, local_var, is_admin);
 	//res.renderCompat!("diet.dt",
 	//	HTTPServerRequest, "req",
-	//	string, "local_var")(req, local_var);
+	//	string, "local_var",
+	//	bool, "is_admin")(req, local_var, is_admin);
 }
 
 shared static this()

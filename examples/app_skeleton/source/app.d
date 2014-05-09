@@ -6,10 +6,10 @@ import index;
 
 void showError(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error)
 {
-	//res.render!("error.dt", req, error);
-	res.renderCompat!("error.dt",
-		HTTPServerRequest, "req",
-		HTTPServerErrorInfo, "error")(req, error);
+	res.render!("error.dt", req, error);
+	//res.renderCompat!("error.dt",
+	//	HTTPServerRequest, "req",
+	//	HTTPServerErrorInfo, "error")(req, error);
 }
 
 shared static this()
