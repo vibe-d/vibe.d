@@ -11,7 +11,8 @@ Task g_task;
 
 void status(HTTPServerRequest req, HTTPServerResponse res)
 {
-	res.renderCompat!("index.dt", Task, "task")(g_task);
+	auto task = g_task;
+	res.render!("index.dt", task);
 }
 
 void interrupt(HTTPServerRequest req, HTTPServerResponse res)

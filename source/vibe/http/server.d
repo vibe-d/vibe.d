@@ -181,10 +181,7 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandl
 {
 	import vibe.templ.diet;
 	return (HTTPServerRequest req, HTTPServerResponse res){
-		//res.render!(template_file, req);
-		//res.headers["Content-Type"] = "text/html; charset=UTF-8";
-		//parseDietFile!(template_file, req)(res.bodyWriter);
-		res.renderCompat!(template_file, HTTPServerRequest, "req")(req);
+		res.render!(template_file, req);
 	};
 }
 
