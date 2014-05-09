@@ -22,7 +22,7 @@ import vibe.http.server;
 		- add a way to specify response headers without explicit access to "res"
 		- support class/interface getter properties and register their methods as well
 		- support authentication somehow nicely
-		- support Nullable!T parameters
+		- support per-method custom error handling, including for validation/before() errors
 */
 
 
@@ -284,8 +284,9 @@ private void handleRequest(string M, alias overload, C)(HTTPServerRequest req, H
 
 private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname, bool required)
 {
-	import std.traits;
 	import std.string;
+	import std.traits;
+	import std.typecons;
 	import vibe.data.serialization;
 
 	static if (isDynamicArray!T && !isSomeString!T) {
@@ -298,6 +299,10 @@ private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname,
 			dst ~= el;
 			idx++;
 		}
+	} else static if (isInstanceOf!(Nullable, T)) {
+		typeof(dst.get()) el;
+		if (readParamRec(req, el, fieldname, false))
+			dst = el;
 	} else static if (is(T == struct) && !isStringSerializable!T) {
 		foreach (m; __traits(allMembers, T))
 			if (!readParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
