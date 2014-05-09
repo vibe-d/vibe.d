@@ -84,12 +84,11 @@ void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStrea
 	compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
 }
 /// ditto
-void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, void* _argptr, TypeInfo[] _arguments)
+void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, va_list _argptr, TypeInfo[] _arguments)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
 	import vibe.utils.string;
-	import core.vararg;
 
 	pragma(msg, "Compiling diet template '"~template_file~"' (compat)...");
 	//pragma(msg, localAliasesCompat!(0, TYPES_AND_NAMES));
