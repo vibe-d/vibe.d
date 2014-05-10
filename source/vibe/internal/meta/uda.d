@@ -64,6 +64,49 @@ template findFirstUDA(alias UDA, alias Symbol, bool allow_types = false)
 
     enum findFirstUDA = extract!(0, udaTuple);
 }
+/// ditto
+template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
+{
+	import std.typetuple : TypeTuple;
+	import std.traits : isInstanceOf;
+
+    private alias TypeTuple!(__traits(getAttributes, Symbol)) udaTuple;
+
+	private struct UdaSearchResult(alias UDA)
+	{
+		alias value = UDA;
+		bool found = false;
+		long index = -1;
+	}
+
+    private template extract(size_t index, list...)
+    {
+        static if (!list.length)
+            enum extract = UdaSearchResult!(null)(false, -1);
+        else {
+        	static if (is(list[0])) {
+				static if (is(list[0] == UDA)) {
+					static assert (allow_types, "findFirstUDA is designed to look up values, not types");
+					enum extract = UdaSearchResult!(list[0])(true, index);
+				}
+        	} else {
+				static if (is(typeof(list[0]) == UDA)) {
+					import vibe.internal.meta.traits : isPropertyGetter;
+					static if (isPropertyGetter!(list[0])) {
+						enum value = list[0];
+						enum extract = UdaSearchResult!(value)(true, index);
+					}
+					else
+						enum extract = UdaSearchResult!(list[0])(true, index);
+				}
+				else
+					enum extract = extract!(index + 1, list[1..$]);
+			}
+		}
+    }
+
+    enum findFirstUDA = extract!(0, udaTuple);
+}
 
 
 ///
