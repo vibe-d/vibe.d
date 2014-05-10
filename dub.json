@@ -53,19 +53,15 @@
 			"platforms": ["windows"],
 			"versions": ["VibeWinrtDriver"],
 			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
-		},
-		{
-			"name": "unittest",
-			"targetType": "executable",
-			"dependencies": {"libevent": "~master"},
-			"versions": ["VibeLibeventDriver", "VibeDefaultMain"],
-			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
-			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
-			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
-			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32"]
 		}
 	],
+
+	"buildTypes": {
+		"unittest": {
+			"buildOptions": ["unittests", "debugMode"],
+			"buildOptions-posix": ["debugInfo"]
+		}
+	},
 
 	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Protected", "--ex", "vibe.core.drivers.", "--ex", "vibe.internal."]
 }
