@@ -13,7 +13,7 @@ module vibe.internal.meta.uda;
 	Will stop on first element which is of required type.
 
 	Params:
-		UDA = type to search for in UDA list
+		UDA = type or template to search for in UDA list
 		Symbol = symbol to query for UDA's
 		allow_types = if set to `false` considers attached `UDA` types an error
 			(only accepts instances/values)
@@ -22,9 +22,10 @@ module vibe.internal.meta.uda;
 		`found` is boolean flag for having a valid find. `index` is integer index in
 		attribute list this UDA was found at.
 */
-template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
+template findFirstUDA(alias UDA, alias Symbol, bool allow_types = false)
 {
 	import std.typetuple : TypeTuple;
+	import std.traits : isInstanceOf;
 
     private alias TypeTuple!(__traits(getAttributes, Symbol)) udaTuple;
 
@@ -40,13 +41,13 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
         static if (!list.length)
             enum extract = UdaSearchResult!(null)(false, -1);
         else {
-			static if (is(list[0] == UDA)) {
-				static assert (allow_types, "findFirstUDA is designed to look up values, not types");
-
-				enum extract = UdaSearchResult!(list[0])(true, index);
-			}
-			else {
-				static if (is(typeof(list[0]) == UDA)) {
+        	static if (is(list[0])) {
+				static if (is(UDA) && is(list[0] == UDA) || !is(UDA) && isInstanceOf!(UDA, list[0])) {
+					static assert (allow_types, "findFirstUDA is designed to look up values, not types");
+					enum extract = UdaSearchResult!(list[0])(true, index);
+				}
+        	} else {
+				static if (is(UDA) && is(typeof(list[0]) == UDA) || !is(UDA) && isInstanceOf!(UDA, typeof(list[0]))) {
 					import vibe.internal.meta.traits : isPropertyGetter;
 					static if (isPropertyGetter!(list[0])) {
 						enum value = list[0];
@@ -63,6 +64,7 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
 
     enum findFirstUDA = extract!(0, udaTuple);
 }
+
 
 ///
 unittest
