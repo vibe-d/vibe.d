@@ -74,12 +74,13 @@ unittest {
 		}
 
 		@path("/")
-		void getIndex()
+		void getIndex(string _error = null)
 		{
-			//render!("index.dt");
+			//render!("index.dt", _error);
 		}
 
 		// automatically mapped to: POST /login
+		@errorDisplay!getIndex
 		void postLogin(string username, string password)
 		{
 			enforceHTTP(username.length > 0, HTTPStatus.forbidden,
@@ -185,6 +186,60 @@ void terminateSession()
 
 
 /**
+	Attribute to customize error display of an interface method.
+
+
+
+	The first template parameter takes a function that maps an exception and an
+	optional field name to a single error type. The result of this function
+	will then be passed as the $(D _error) parameter to the method referenced
+	by the second template parameter.
+
+	The field parameter, if present, will be set to null if the exception was
+	thrown after the field validation has finished.
+*/
+@property errorDisplay(alias DISPLAY_METHOD)()
+{
+	return ErrorDisplayAttribute!DISPLAY_METHOD.init;
+}
+
+/// Simple error message display
+unittest {
+	void getForm(string _error = null)
+	{
+		//render!("form.dt", _error);
+	}
+
+	@errorDisplay!getForm
+	void postForm(string name)
+	{
+		if (name.length == 0)
+			throw new Exception("Name must not be empty");
+		redirect("/");
+	}
+}
+
+/// Error message display with a matching
+unittest {
+	struct FormError {
+		string error;
+		string field;
+	}
+
+	void getForm(FormError _error = FormError.init)
+	{
+		//render!("form.dt", _error);
+	}
+
+	// throws an error if the submitted form value is not a valid integer
+	@errorDisplay!getForm
+	void postForm(int ingeter)
+	{
+		redirect("/");
+	}
+}
+
+/**
 	Encapsulates settings used to customize the generated web interface.
 */
 class WebInterfaceSettings {
@@ -233,6 +288,35 @@ struct SessionVar(T, string name) {
 }
 
 
+struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
+	import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
+
+	alias displayMethod = DISPLAY_METHOD;
+	enum displayMethodName = __traits(identifier, DISPLAY_METHOD);
+
+	private template GetErrorParamType(size_t idx) {
+		static assert(idx < ParameterIdentifierTuple!DISPLAY_METHOD.length,
+			"Error display method "~displayMethodName~" is missing the _error parameter.");
+		static if (ParameterIdentifierTuple!DISPLAY_METHOD[idx] == "_error")
+			alias GetErrorParamType = ParameterTypeTuple!DISPLAY_METHOD[idx];
+		else alias GetErrorParamType = GetErrorParamType!(idx+1);
+	}
+	
+	alias ErrorParamType = GetErrorParamType!0;
+
+	ErrorParamType getError(Exception ex, string field)
+	{
+		static if (is(ErrorParamType == bool)) return true;
+		else static if (is(ErrorParamType == string)) return ex.msg;
+		else static if (is(ErrorParamType == Exception)) return ex;
+		else static if (is(typeof(ErrorParamType(ex, field)))) return ErrorParamType(ex, field);
+		else static if (is(typeof(ErrorParamType(ex.msg, field)))) return ErrorParamType(ex.msg, field);
+		else static if (is(typeof(ErrorParamType(ex.msg)))) return ErrorParamType(ex.msg);
+		else static assert(false, "Error parameter type %s does not have the required constructor.");
+	}
+}
+
+
 private {
 	TaskLocal!RequestContext s_requestContext;
 }
@@ -242,43 +326,63 @@ private struct RequestContext {
 	HTTPServerResponse res;
 }
 
-private void handleRequest(string M, alias overload, C)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings)
+private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
+	if (ERROR.length <= 1)
 {
 	import std.array : startsWith;
 	import std.traits;
+	import vibe.internal.meta.uda : findFirstUDA;
 
 	alias RET = ReturnType!overload;
 	alias PARAMS = ParameterTypeTuple!overload;
 	alias default_values = ParameterDefaultValueTuple!overload;
 	enum param_names = [ParameterIdentifierTuple!overload];
+	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
 
 	s_requestContext = RequestContext(req, res);
 	PARAMS params;
 	foreach (i, PT; PARAMS) {
-		static if (is(PT == InputStream)) params[i] = req.bodyReader;
-		else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
-		else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
-		else static if (param_names[i].startsWith("_")) {
-			if (auto pv = param_names[i][1 .. $] in req.params) params[i] = (*pv).convTo!PT;
-			else static if (!is(default_values[i] == void)) params[i] = default_values[i];
-			else enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
-		} else static if (is(PT == bool)) {
-			params[i] = param_names[i] in req.form || param_names[i] in req.query;
-		} else {
-			static if (!is(default_values[i] == void)) {
-				if (!readParamRec(req, params[i], param_names[i], false))
-					params[i] = default_values[i];
+		try {
+			static if (param_names[i] == "_error" && ERROR.length == 1) params[i] = error[0];
+			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
+			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
+			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
+			else static if (param_names[i].startsWith("_")) {
+				if (auto pv = param_names[i][1 .. $] in req.params) params[i] = (*pv).convTo!PT;
+				else static if (!is(default_values[i] == void)) params[i] = default_values[i];
+				else enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
+			} else static if (is(PT == bool)) {
+				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
-				readParamRec(req, params[i], param_names[i], true);
+				static if (!is(default_values[i] == void)) {
+					if (!readParamRec(req, params[i], param_names[i], false))
+						params[i] = default_values[i];
+				} else {
+					readParamRec(req, params[i], param_names[i], true);
+				}
+			}
+		} catch (Exception ex) {
+			static if (erruda.found && ERROR.length == 0) {
+				auto err = erruda.value.getError(ex, param_names[i]);
+				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+			} else {
+				throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
 			}
 		}
 	}
 
-	static if (is(RET : InputStream)) {
-		res.writeBody(__traits(getMember, instance, M)(params));
-	} else {
-		static assert(is(RET == void), "Only InputStream and void are supported as return types.");
-		__traits(getMember, instance, M)(params);
+	try {
+		static if (is(RET : InputStream)) {
+			res.writeBody(__traits(getMember, instance, M)(params));
+		} else {
+			static assert(is(RET == void), "Only InputStream and void are supported as return types.");
+			__traits(getMember, instance, M)(params);
+		}
+	} catch (Exception ex) {
+		static if (erruda.found && ERROR.length == 0) {
+			auto err = erruda.value.getError(ex, null);
+			handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+		} else throw ex;
 	}
 }
 
