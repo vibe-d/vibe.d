@@ -48,6 +48,8 @@ public import vibe.textfilter.html;
 public import vibe.textfilter.markdown;
 public import vibe.textfilter.urlencode;
 public import vibe.utils.string;
+public import vibe.web.web;
+public import vibe.web.rest;
 
 // make some useful D standard library functions available
 public import std.functional : toDelegate;
