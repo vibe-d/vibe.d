@@ -54,7 +54,6 @@ html
 mixin template translationModule(string NAME)
 {
 	mixin template decls_mixin(string LANG, size_t i) {
-		pragma(msg, "enum "~LANG~"_"~keyToIdentifier(decl_strings[i].key)~" = "~decl_strings[i].value~";");
 		mixin("enum "~LANG~"_"~keyToIdentifier(decl_strings[i].key)~" = "~decl_strings[i].value~";");
 	}
 
@@ -76,7 +75,6 @@ string tr(CTX, string LANG)(string key)
 
 	foreach (i, mname; __traits(allMembers, CTX))
 		static if (mname.startsWith(LANG~"_")) {
-			pragma(msg, __traits(getMember, CTX, mname));
 			foreach (entry; __traits(getMember, CTX, mname))
 				if (entry.key == key)
 					return entry.value;

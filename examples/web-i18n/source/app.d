@@ -21,7 +21,7 @@ struct TranslationContext {
 	mixin translationModule!"example";
 }
 
-static assert(tr!(TranslationContext, "de_DE")("Welcome to the i18n example app!") == "Willkommen zum i28n-Beispiel!");
+static assert(tr!(TranslationContext, "de_DE")("Welcome to the i18n example app!") == "Willkommen zum i18n-Beispiel!");
 
 @translationContext!TranslationContext
 class SampleService {
