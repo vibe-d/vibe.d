@@ -3,9 +3,42 @@
 */
 module vibe.web.i18n;
 
+import vibe.http.server : HTTPServerRequest;
 import vibe.templ.parsertools;
 
 import std.algorithm : canFind, min, startsWith;
+
+
+/**
+	Annotates an interface method or class with translation information.
+
+	The translation context contains information about supported languages
+	and the translated strings.
+*/
+@property TranslationContextAttribute!CONTEXT translationContext(CONTEXT)() { return TranslationContextAttribute!CONTEXT.init; }
+
+///
+unittest {
+	struct TranslationContext {
+		import std.typetuple;
+		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		//mixin translationModule!"app";
+		//mixin translationModule!"somelib";
+	}
+
+	@translationContext!TranslationContext
+	class MyWebInterface {
+		void getHome()
+		{
+			//render!("home.dt")
+		}
+	}
+}
+
+
+struct TranslationContextAttribute(CONTEXT) {
+	alias Context = CONTEXT;
+}
 
 /*
 doctype 5
@@ -48,8 +81,53 @@ string tr(CTX, string LANG)(string key)
 				if (entry.key == key)
 					return entry.value;
 		}
-	return key;
+
+	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys)
+		assert(false, "Missing translation key for "~LANG~": "~key);
+	else return key;
 }
+
+package string determineLanguage(alias METHOD)(HTTPServerRequest req)
+{
+	import std.string : indexOf;
+	import std.array;
+
+	alias CTX = GetTranslationContext!METHOD;
+
+	static if (!is(CTX == void)) {
+		auto accept_lang = req.headers.get("Accept-Language", null);
+
+		size_t csidx = 0;
+		while (accept_lang.length) {
+			auto cidx = accept_lang[csidx .. $].indexOf(',');
+			if (cidx < 0) cidx = accept_lang.length;
+			auto entry = accept_lang[csidx .. csidx + cidx];
+			auto sidx = entry.indexOf(';');
+			if (sidx < 0) sidx = entry.length;
+			auto entrylang = entry[0 .. sidx];
+
+			foreach (lang; CTX.languages) {
+				if (entrylang == replace(lang, "_", "-")) return lang;
+				if (entrylang == split(lang, "-")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
+			}
+		}
+	}
+
+	return null;
+}
+
+package template GetTranslationContext(alias METHOD)
+{
+	import vibe.internal.meta.uda;
+
+	alias PARENT = typeof(__traits(parent, METHOD).init);
+	enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, METHOD);
+	enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+	static if (FUNCTRANS.found) alias GetTranslationContext = FUNCTRANS.value.Context;
+	else static if (PARENTTRANS.found) alias GetTranslationContext = PARENTTRANS.value.Context;
+	else alias GetTranslationContext = void;
+}
+
 
 private struct DeclString {
 	string key;

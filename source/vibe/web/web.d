@@ -9,6 +9,7 @@ module vibe.web.web;
 
 public import vibe.internal.meta.funcattr : before, after;
 public import vibe.web.common;
+public import vibe.web.i18n;
 
 import vibe.core.core;
 import vibe.http.common;
@@ -269,33 +270,6 @@ unittest {
 
 
 /**
-	Annotates an interface method or class with translation information.
-
-	The translation context contains information about supported languages
-	and the translated strings.
-*/
-@property TranslationContextAttribute!CONTEXT translationContext(CONTEXT)() { return TranslationContextAttribute!CONTEXT.init; }
-
-///
-unittest {
-	struct TranslationContext {
-		import std.typetuple;
-		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
-		//mixin translationModule!"app";
-		//mixin translationModule!"somelib";
-	}
-
-	@translationContext!TranslationContext
-	class MyWebInterface {
-		void getHome()
-		{
-			//render!("home.dt")
-		}
-	}
-}
-
-
-/**
 	Encapsulates settings used to customize the generated web interface.
 */
 class WebInterfaceSettings {
@@ -370,10 +344,6 @@ struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 		else static if (is(typeof(ErrorParamType(ex.msg)))) return ErrorParamType(ex.msg);
 		else static assert(false, "Error parameter type %s does not have the required constructor.");
 	}
-}
-
-struct TranslationContextAttribute(CONTEXT) {
-	alias Context = CONTEXT;
 }
 
 
@@ -484,45 +454,4 @@ private T convTo(T)(string str)
 	import std.conv;
 	static if (is(typeof(T.fromString(str)) == T)) return T.fromString(str);
 	else return str.to!T();
-}
-
-private string determineLanguage(alias METHOD)(HTTPServerRequest req)
-{
-	import std.string : indexOf;
-	import std.array;
-
-	alias CTX = GetTranslationContext!METHOD;
-
-	static if (!is(CTX == void)) {
-		auto accept_lang = req.headers.get("Accept-Language", null);
-
-		size_t csidx = 0;
-		while (accept_lang.length) {
-			auto cidx = accept_lang[csidx .. $].indexOf(',');
-			if (cidx < 0) cidx = accept_lang.length;
-			auto entry = accept_lang[csidx .. csidx + cidx];
-			auto sidx = entry.indexOf(';');
-			if (sidx < 0) sidx = entry.length;
-			auto entrylang = entry[0 .. sidx];
-
-			foreach (lang; CTX.languages) {
-				if (entrylang == replace(lang, "_", "-")) return lang;
-				if (entrylang == split(lang, '-')[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
-			}
-		}
-	}
-
-	return null;
-}
-
-private template GetTranslationContext(alias METHOD)
-{
-	import vibe.internal.meta.uda;
-
-	alias PARENT = typeof(__traits(parent, METHOD).init);
-	enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, METHOD);
-	enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
-	static if (FUNCTRANS.found) alias GetTranslationContext = FUNCTRANS.value.Context;
-	else static if (PARENTTRANS.found) alias GetTranslationContext = PARENTTRANS.value.Context;
-	else alias GetTranslationContext = void;
 }
