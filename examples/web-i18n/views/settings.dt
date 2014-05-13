@@ -1,0 +1,23 @@
+extends layout
+
+block head
+	- auto title = "Settings";
+
+block contents
+	a(href="#{req.rootDir}") Back
+
+	form(method="POST", action="settings")
+		div
+			input#somesetting(name="some_setting", type="checkbox", checked=settings.someSetting)
+			label(for="somesetting") Some setting
+
+		div
+			label(for="username") User name
+			br
+			input#username(name="user_name", type="text", value=settings.userName)
+
+		- if (error.length)
+			p.error= error
+
+		div
+			button(type="sumbit") OK
