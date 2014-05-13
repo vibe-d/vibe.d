@@ -67,7 +67,10 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file(indent));
-	mixin(dietParser!template_file(indent));
+	static if (is(typeof(diet_translate__)))
+		mixin(dietParser!(template_file, diet_translate__)(indent));
+	else
+		mixin(dietParser!template_file(indent));
 }
 
 /// compatibility alias
@@ -145,7 +148,10 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
-	mixin(dietStringParser!diet_code(0));
+	static if (is(typeof(diet_translate__)))
+		mixin(dietStringParser!(diet_code, diet_translate__)(0));
+	else
+		mixin(dietStringParser!diet_code(0));
 }
 
 
@@ -179,15 +185,15 @@ static this()
 }
 
 
-private string dietParser(string template_file)(size_t base_indent)
+private string dietParser(string template_file, TRANSLATE...)(size_t base_indent)
 {
 	TemplateBlock[] files;
 	readFileRec!(template_file)(files);
-	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
+	auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
 }
 
-private string dietStringParser(string diet_code, string name = "__diet_code__")(size_t base_indent)
+private string dietStringParser(string diet_code, string name = "__diet_code__", TRANSLATE...)(size_t base_indent)
 {
 	enum LINES = removeEmptyLines(diet_code, name);
 
@@ -200,7 +206,7 @@ private string dietStringParser(string diet_code, string name = "__diet_code__")
 	files ~= ret;
 	readFilesRec!(extractDependencies(LINES), name)(files);
 
-	auto compiler = DietCompiler(&files[0], &files, new BlockStore);
+	auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
 }
 
@@ -382,7 +388,9 @@ private class OutputContext {
 	}
 }
 
-private struct DietCompiler {
+private struct DietCompiler(TRANSLATE...)
+	if(TRANSLATE.length <= 1)
+{
 	private {
 		size_t m_lineIndex = 0;
 		TemplateBlock* m_block;
@@ -598,9 +606,9 @@ private struct DietCompiler {
 						auto content = ln[8 .. $].ctstrip();
 						if (content.startsWith("#{")) {
 							assertp(content.endsWith("}"), "Missing closing '}'.");
-							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\")("~to!string(level)~"));");
+							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\", TRANSLATE)("~to!string(level)~"));");
 						} else {
-							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\")("~to!string(level)~"));");
+							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\", TRANSLATE)("~to!string(level)~"));");
 						}
 						break;
 					case "script":
@@ -723,10 +731,12 @@ private struct DietCompiler {
 		} else if( i+1 < line.length && line[i .. i+2] == "!=" ){
 			output.writeExpr(ctstrip(line[i+2 .. line.length]));
 		} else {
-			if( hasInterpolations(line[i .. line.length]) ){
-				buildInterpolatedString(output, line[i .. line.length]);
+			string rawtext = line[i .. line.length];
+			static if (TRANSLATE.length > 0) if (ws_type.isTranslated) rawtext = TRANSLATE[0](rawtext);
+			if (hasInterpolations(rawtext)) {
+				buildInterpolatedString(output, rawtext);
 			} else {
-				output.writeRawString(sanitizeEscaping(line[i .. line.length]));
+				output.writeRawString(sanitizeEscaping(rawtext));
 			}
 		}
 
@@ -832,6 +842,7 @@ private struct DietCompiler {
 			bool inner = true;
 			bool outer = true;
 			bool block_tag = false;
+			bool isTranslated;
 		}
 
 		i = 0;
@@ -850,6 +861,10 @@ private struct DietCompiler {
 
 				// put #id and .classes into the attribs list
 				if( id.length ) attribs ~= HTMLAttribute("id", '"'~id~'"');
+			} else if (line[i] == '&') {
+				i++;
+				assertp(i >= line.length || line[i] == ' ' || line[i] == '.');
+				ws_type.isTranslated = true;
 			} else if( line[i] == '.' ){
 				i++;
 				// check if tag ends with dot
