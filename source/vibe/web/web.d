@@ -22,7 +22,7 @@ import vibe.http.server;
 		- add a way to specify response headers without explicit access to "res"
 		- support class/interface getter properties and register their methods as well
 		- support authentication somehow nicely
-		- support per-method custom error handling, including for validation/before() errors
+		- support UDA based parameter validation
 */
 
 
@@ -129,11 +129,39 @@ unittest {
 	Note that this may only be called from a function/method
 	registered using registerWebInterface.
 */
-void render(string diet_file, ALIASES...)()
-{
-	assert(s_requestContext.req !is null, "render() used outside of a web interface request!");
-	auto req = s_requestContext.req;
-	vibe.http.server.render!(diet_file, req, ALIASES)(s_requestContext.res);
+template render(string diet_file, ALIASES...) {
+	void render(string MODULE = __MODULE__, string FUNCTION = __FUNCTION__)()
+	{
+		import vibe.web.i18n;
+		import vibe.internal.meta.uda : findFirstUDA;
+		mixin("static import "~MODULE~";");
+
+		alias PARENT = typeof(__traits(parent, mixin(FUNCTION)).init);
+		enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, mixin(FUNCTION));
+		enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+		static if (FUNCTRANS.found) alias TranslateContext = FUNCTRANS.value.Context;
+		else static if (PARENTTRANS.found) alias TranslateContext = PARENTTRANS.value.Context;
+
+		assert(s_requestContext.req !is null, "render() used outside of a web interface request!");
+		auto req = s_requestContext.req;
+
+		static if (is(TranslateContext)) {
+			switch (s_requestContext.language) {
+				default: {
+					static string diet_translate__(string key) { return tr!(TranslateContext, TranslateContext.languages[0])(key); }
+					vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res);
+					} break;
+				foreach (lang; TranslateContext.languages[1 .. $])
+					case lang: {
+						mixin("struct "~lang~" { static string diet_translate__(string key) { return tr!(TranslateContext, lang)(key); } void render() { vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res); } }");
+						mixin(lang~" renderctx;");
+						renderctx.render();
+						} break;
+			}
+		} else {
+			vibe.http.server.render!(diet_file, req, ALIASES)(s_requestContext.res);
+		}
+	}
 }
 
 
@@ -239,6 +267,34 @@ unittest {
 	}
 }
 
+
+/**
+	Annotates an interface method or class with translation information.
+
+	The translation context contains information about supported languages
+	and the translated strings.
+*/
+@property TranslationContextAttribute!CONTEXT translationContext(CONTEXT)() { return TranslationContextAttribute!CONTEXT.init; }
+
+///
+unittest {
+	struct TranslationContext {
+		import std.typecons;
+		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		//mixin translationModule!"app";
+		//mixin translationModule!"somelib";
+	}
+
+	@translationContext!TranslationContext
+	class MyWebInterface {
+		void getHome()
+		{
+			//render!("home.dt")
+		}
+	}
+}
+
+
 /**
 	Encapsulates settings used to customize the generated web interface.
 */
@@ -316,6 +372,10 @@ struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 	}
 }
 
+struct TranslationContextAttribute(CONTEXT) {
+	alias Context = CONTEXT;
+}
+
 
 private {
 	TaskLocal!RequestContext s_requestContext;
@@ -324,6 +384,7 @@ private {
 private struct RequestContext {
 	HTTPServerRequest req;
 	HTTPServerResponse res;
+	string language;
 }
 
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
@@ -339,7 +400,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	enum param_names = [ParameterIdentifierTuple!overload];
 	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
 
-	s_requestContext = RequestContext(req, res);
+	s_requestContext = RequestContext(req, res, determineLanguage!overload(req));
 	PARAMS params;
 	foreach (i, PT; PARAMS) {
 		try {
@@ -423,4 +484,45 @@ private T convTo(T)(string str)
 	import std.conv;
 	static if (is(typeof(T.fromString(str)) == T)) return T.fromString(str);
 	else return str.to!T();
+}
+
+private string determineLanguage(alias METHOD)(HTTPServerRequest req)
+{
+	import std.string : indexOf;
+	import std.array;
+
+	alias CTX = GetTranslationContext!METHOD;
+
+	static if (!is(CTX == void)) {
+		auto accept_lang = req.headers.get("Accept-Language", null);
+
+		size_t csidx = 0;
+		while (accept_lang.length) {
+			auto cidx = accept_lang[csidx .. $].indexOf(',');
+			if (cidx < 0) cidx = accept_lang.length;
+			auto entry = accept_lang[csidx .. csidx + cidx];
+			auto sidx = entry.indexOf(';');
+			if (sidx < 0) sidx = entry.length;
+			auto entrylang = entry[0 .. sidx];
+
+			foreach (lang; CTX.languages) {
+				if (entrylang == replace(lang, "_", "-")) return lang;
+				if (entrylang == split(lang, '-')[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
+			}
+		}
+	}
+
+	return null;
+}
+
+private template GetTranslationContext(alias METHOD)
+{
+	import vibe.internal.meta.uda;
+
+	alias PARENT = typeof(__traits(parent, METHOD).init);
+	enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, METHOD);
+	enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+	static if (FUNCTRANS.found) alias GetTranslationContext = FUNCTRANS.value.Context;
+	else static if (PARENTTRANS.found) alias GetTranslationContext = PARENTTRANS.value.Context;
+	else alias GetTranslationContext = void;
 }
