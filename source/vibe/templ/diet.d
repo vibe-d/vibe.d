@@ -148,10 +148,10 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
-	static if (is(typeof(diet_translate__)))
-		mixin(dietStringParser!(diet_code, diet_translate__)(0));
-	else
-		mixin(dietStringParser!diet_code(0));
+	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
+	else alias TRANSLATE = TypeTuple!();
+
+	mixin(dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
 }
 
 
@@ -193,7 +193,7 @@ private string dietParser(string template_file, TRANSLATE...)(size_t base_indent
 	return compiler.buildWriter(base_indent);
 }
 
-private string dietStringParser(string diet_code, string name = "__diet_code__", TRANSLATE...)(size_t base_indent)
+private string dietStringParser(string diet_code, string name, TRANSLATE...)(size_t base_indent)
 {
 	enum LINES = removeEmptyLines(diet_code, name);
 
