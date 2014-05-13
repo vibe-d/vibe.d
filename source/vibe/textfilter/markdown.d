@@ -321,7 +321,8 @@ pure @safe {
 	{
 		if( indent.length > base_indent.length ) return false;
 		if( indent != base_indent[0 .. indent.length] ) return false;
-		auto qidx = base_indent.retro().countUntil(IndentType.Quote);
+		sizediff_t qidx = -1;
+		foreach_reverse (i, tp; base_indent) if (tp == IndentType.Quote) { qidx = i; break; }
 		if( qidx >= 0 ){
 			qidx = base_indent.length-1 - qidx;
 			if( indent.length <= qidx ) return false;

@@ -1315,7 +1315,10 @@ struct BsonSerializer {
 	void beginWriteArrayEntry(T)(size_t idx) { m_entryIndex = idx; }
 	void endWriteArrayEntry(T)(size_t idx) {}
 
-	void writeValue(T, bool write_header = true)(auto ref const T value)
+	// auto ref does't work for DMD 2.064
+	void writeValue(T)(/*auto ref const*/T value) { writeValueH!(T, true)(value); }
+	
+	private void writeValueH(/*auto ref const*/T, bool write_header)(T value)
 	{
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
 
@@ -1335,7 +1338,7 @@ struct BsonSerializer {
 		else static if (is(T : double)) { m_dst.put(toBsonData(cast(double)value)); }
 		else static if (isBsonSerializable!T) m_dst.put(value.toBson().data);
 		else static if (isJsonSerializable!T) m_dst.put(Bson(value.toJson()).data);
-		else static if (is(T : const(ubyte)[])) { writeValue!(BsonBinData, false)(BsonBinData(BsonBinData.Type.generic, value.idup)); }
+		else static if (is(T : const(ubyte)[])) { writeValueH!(BsonBinData, false)(BsonBinData(BsonBinData.Type.generic, value.idup)); }
 		else static assert(false, "Unsupported type: " ~ T.stringof);
 	}
 
@@ -1419,7 +1422,7 @@ struct BsonSerializer {
 		return false;
 	}
 
-	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(auto ref const T value)
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ T value)
 	{
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;

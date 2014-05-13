@@ -279,7 +279,7 @@ unittest {
 ///
 unittest {
 	struct TranslationContext {
-		import std.typecons;
+		import std.typetuple;
 		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
