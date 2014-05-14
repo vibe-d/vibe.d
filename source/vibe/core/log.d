@@ -639,7 +639,6 @@ private string hostName()
 private {
 	__gshared shared(Logger)[] ss_loggers;
 	shared(FileLogger) ss_stdoutLogger;
-	shared(FileLogger) ss_fileLogger;
 }
 
 private shared(Logger)[] getLoggers() nothrow @trusted { return ss_loggers; }

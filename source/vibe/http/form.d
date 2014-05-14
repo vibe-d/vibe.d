@@ -220,7 +220,6 @@ private HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Fl
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		import std.traits;
-		auto form = (req.method == HTTPMethod.GET ? req.query : req.form);
 //		alias MemberFunctionsTuple!(T, method) overloads;
 		string errors;
 		foreach(func; __traits(getOverloads, T, method)) {

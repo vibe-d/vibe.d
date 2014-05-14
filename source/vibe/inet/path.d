@@ -183,9 +183,8 @@ struct Path {
 		ret.m_endsWithSlash = rhs.m_endsWithSlash;
 		ret.normalize(); // needed to avoid "."~".." become "" instead of ".."
 		
-		size_t idx = m_nodes.length;
-		foreach(folder; rhs.m_nodes){
-			switch(folder.toString()){
+		foreach (folder; rhs.m_nodes) {
+			switch (folder.toString()) {
 				default: ret.m_nodes = ret.m_nodes ~ folder; break;
 				case ".": break;
 				case "..":

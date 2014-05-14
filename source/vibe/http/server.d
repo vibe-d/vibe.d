@@ -91,7 +91,7 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_h
 	if (s_distHost.length && !settings.disableDistHost) {
 		listenHTTPDist(settings, request_handler, s_distHost, s_distPort);
 	} else {
-		listenHTTPPlain(settings, request_handler);
+		listenHTTPPlain(settings);
 	}
 }
 /// ditto
@@ -112,7 +112,7 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_ha
 	This is the same as listenHTTP() except that it does not use a VibeDist host for
 	remote listening, even if specified on the command line.
 */
-private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
+private void listenHTTPPlain(HTTPServerSettings settings)
 {
 	static bool doListen(HTTPServerSettings settings, HTTPServerListener listener, string addr)
 	{
@@ -161,16 +161,6 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestDeleg
 	}
 
 	enforce(any_succeeded, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
-}
-/// ditto
-private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
-{
-	listenHTTPPlain(settings, toDelegate(request_handler));
-}
-/// ditto
-private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
-{
-	listenHTTPPlain(settings, &request_handler.handleRequest);
 }
 
 

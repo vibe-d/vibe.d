@@ -644,7 +644,6 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 				// tuple from previous spot to current attributed parameter index
 				// (including)
 
-				enum name = uda.parameter;
 				enum index = attributed_parameters[i].index;
 
 				static if (i == 0) {

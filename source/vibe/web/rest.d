@@ -145,7 +145,6 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 		}
 		else
 		{
-			auto path = uda.value.data;
 			registerRestInterface!I(
 				router,
 				instance,

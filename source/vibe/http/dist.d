@@ -25,8 +25,6 @@ import std.process;
 */
 void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
-	auto baddr = resolveHost(balancer_address);
-
 	Json regmsg = Json.emptyObject;
 	regmsg.host_name = settings.hostName;
 	regmsg.port = settings.port;

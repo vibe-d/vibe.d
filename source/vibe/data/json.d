@@ -1752,6 +1752,7 @@ private string skipNumber(R)(ref R s, out bool is_float)
 /// private
 private string skipJsonString(R)(ref R s, int* line = null)
 {
+	// TODO: count or disallow any newlines inside of the string
 	enforceJson(!s.empty && s.front == '"', "Expected '\"' to start string.");
 	s.popFront();
 	string ret = jsonUnescape(s);

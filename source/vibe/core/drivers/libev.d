@@ -300,7 +300,6 @@ class LibevManualEvent : ManualEvent {
 	int wait(int reference_emit_count)
 	{
 		assert(!amOwner());
-		auto self = Fiber.getThis();
 		acquire();
 		scope(exit) release();
 		auto ec = this.emitCount;

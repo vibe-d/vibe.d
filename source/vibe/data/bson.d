@@ -349,7 +349,7 @@ struct Bson {
 			while( d.length > 0 ){
 				auto tp = cast(Type)d[0];
 				if( tp == Type.end ) break;
-				auto key = skipCString(d); // should be '0', '1', ...
+				/*auto key = */skipCString(d); // should be '0', '1', ...
 				auto value = Bson(tp, d);
 				d = d[value.data.length .. $];
 
@@ -457,7 +457,7 @@ struct Bson {
 	/** Returns a string representation of this BSON value in JSON format.
 	*/
 	string toString()
-	{
+	const {
 		return toJson().toString();
 	}
 
@@ -1159,7 +1159,7 @@ unittest {
 	assert(serializeToBson(const C(123)) == Bson("123"));
 	assert(serializeToBson(C(123))       == Bson("123"));
 
-	static struct D { int value; string toString() { return ""; } }
+	static struct D { int value; string toString() const { return ""; } }
 	static assert(!isStringSerializable!D && !isJsonSerializable!D && !isBsonSerializable!D);
 	static assert(!isStringSerializable!(const(D)) && !isJsonSerializable!(const(D)) && !isBsonSerializable!(const(D)));
 	assert(serializeToBson(const D(123)) == serializeToBson(["value": 123]));

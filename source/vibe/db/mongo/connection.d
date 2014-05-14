@@ -273,7 +273,7 @@ class MongoConnection {
 		return ret;
 	}
 
-	private void recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
+	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		import std.traits;
 
@@ -319,6 +319,8 @@ class MongoConnection {
 				on_doc(i, doc);
 			}
 		}
+
+		return resid;
 	}
 
 	private int send(ARGS...)(OpCode code, int response_to, ARGS args)

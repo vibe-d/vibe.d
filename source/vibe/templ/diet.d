@@ -726,8 +726,6 @@ private struct DietCompiler(TRANSLATE...)
 		buildHtmlTag(output, tag, level, attribs, is_singular_tag, ws_type.outer && prepend_whitespaces);
 
 		// parse any text contents (either using "= code" or as plain text)
-		string textstring;
-		bool textstring_isdynamic = true;
 		if( i < line.length && line[i] == '=' ){
 			output.writeExprHtmlEscaped(ctstrip(line[i+1 .. line.length]));
 		} else if( i+1 < line.length && line[i .. i+2] == "!=" ){
@@ -1328,12 +1326,14 @@ private string filterJavaScript(string text, size_t indent)
 	return ret;
 }
 
-private string filterMarkdown(string text, size_t indent)
+private string filterMarkdown(string text, size_t)
 {
+	// TODO: indent
 	return vibe.textfilter.markdown.filterMarkdown(text);
 }
 
-private string filterHtmlEscape(string text, size_t indent)
+private string filterHtmlEscape(string text, size_t)
 {
+	// TODO: indent
 	return htmlEscape(text);
 }

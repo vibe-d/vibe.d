@@ -71,7 +71,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(scope WebSocket) on_han
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
 		auto pKey = "Sec-WebSocket-Key" in req.headers;
-		auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
+		//auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
 		auto pVersion = "Sec-WebSocket-Version" in req.headers;
 
 		auto isUpgrade = false;
@@ -128,7 +128,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
 		auto pKey = "Sec-WebSocket-Key" in req.headers;
-		auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
+		//auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
 		auto pVersion = "Sec-WebSocket-Version" in req.headers;
 
 		auto isUpgrade = false;

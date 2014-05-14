@@ -235,9 +235,8 @@ class Win32EventDriver : EventDriver {
 		overlapped.InternalHigh = 0;
 		overlapped.hEvent = cast(HANDLE)cast(void*)&status;
 
-		void* aif;
-
 		version(none){ // Windows 8+
+			void* aif;
 			ADDRINFOEXW addr_hint;
 			ADDRINFOEXW* addr_ret;
 			addr_hint.ai_family = family;
@@ -311,8 +310,8 @@ class Win32EventDriver : EventDriver {
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(m_tid == GetCurrentThreadId());
-		auto addr = resolveHost(bind_address);
-		addr.port = port;
+		/*auto addr = resolveHost(bind_address);
+		addr.port = port;*/
 
 		assert(false);
 	}
@@ -482,7 +481,7 @@ class Win32ManualEvent : ManualEvent {
 
 	void emit()
 	{
-		auto newcnt = atomicOp!"+="(m_emitCount, 1);
+		/*auto newcnt =*/ atomicOp!"+="(m_emitCount, 1);
 		bool[Win32EventDriver] threads;
 		synchronized(m_mutex)
 		{
@@ -582,7 +581,6 @@ class Win32FileStream : FileStream {
 		m_path = path;
 		m_mode = mode;
 		m_driver = driver;
-		auto nstr = m_path.toNativeString();
 
 		auto access = m_mode == FileMode.readWrite ? (GENERIC_WRITE | GENERIC_READ) :
 						(m_mode == FileMode.createTrunc || m_mode == FileMode.append)? GENERIC_WRITE : GENERIC_READ;
@@ -1535,7 +1533,6 @@ private {
 		enum clearValue = UINT_PTR.max;
 		static bool equals(UINT_PTR a, UINT_PTR b) { return a == b; }
 	}
-	HashMap!(UINT_PTR, void*/*Win32Timer*/, TimerMapTraits) s_timers;
 	__gshared s_setupWindowClass = false;
 }
 

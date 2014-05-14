@@ -53,7 +53,7 @@ auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args
 	static if( MANAGED ){
 		static if( hasIndirections!T ) 
 			GC.addRange(mem.ptr, mem.length);
-		auto ret = emplace!T(mem, args);
+		return emplace!T(mem, args);
 	}
 	else static if( is(T == class) ) return cast(T)mem.ptr;
 	else return cast(T*)mem.ptr;
@@ -176,10 +176,10 @@ shared class MallocAllocator : Allocator {
 		// account for changed alignment after realloc (move memory back to aligned position)
 		if (oldmisalign != newmisalign) {
 			if (newmisalign > oldmisalign) {
-				foreach_reverse (i; 0 .. mem.length)
+				foreach_reverse (i; 0 .. csz)
 					pn[i + newmisalign] = pn[i + oldmisalign];
 			} else {
-				foreach (i; 0 .. mem.length)
+				foreach (i; 0 .. csz)
 					pn[i + newmisalign] = pn[i + oldmisalign];
 			}
 		}

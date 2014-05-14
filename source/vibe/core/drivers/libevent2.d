@@ -231,6 +231,7 @@ class Libevent2Driver : EventDriver {
 
 		// wait if the request couldn't be fulfilled instantly
 		if (!msg.done) {
+			assert(dnsReq !is null);
 			msg.task = Task.getThis();
 			logDebug("dnsresolve yield");
 			while (!msg.done) m_core.yieldForEvent();
