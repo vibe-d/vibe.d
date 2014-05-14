@@ -456,6 +456,8 @@ class SSLContext {
 						case SSLVersion.dtls1: method = DTLSv1_server_method(); break;
 					}
 					options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
+					setDHParams();
+					setECDHCurve();
 					break;
 			}
 
@@ -463,8 +465,6 @@ class SSLContext {
 			SSL_CTX_set_options!()(m_ctx, options);
 
 			setCipherList();
-			setDHParams();
-			setECDHCurve();
 		} else enforce(false, "No SSL support compiled in!");
 
 		maxCertChainLength = 9;
@@ -602,14 +602,13 @@ class SSLContext {
 
 		See_also: $(LINK https://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT)
 	*/
-	void setCipherList(string list=null)
+	void setCipherList(string list = null)
 	{
 		version (OpenSSL) {
 			if (list is null)
 				SSL_CTX_set_cipher_list(m_ctx,
-							"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:"
-							"ECDH+AES128:DH+AES:ECDH+3DES:DH+3DES:"
-							"RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
+					"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:"
+					"RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
 			else
 				SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
 		}
