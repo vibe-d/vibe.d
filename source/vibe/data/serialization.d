@@ -168,6 +168,16 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializer.endWriteDictionaryEntry!TV(keyname);
 		}
 		serializer.endWriteDictionary!TU();
+	} else static if (std.algorithm.startsWith(TU.stringof,"DictionaryList")) {
+		alias TK = string;
+		alias TV = TU.valueType;
+		serializer.beginWriteDictionary!TU();
+		foreach(key,val;value) {
+			serializer.beginWriteDictionaryEntry!TV(key);
+			serialize(serializer,val);
+			serializer.endWriteDictionaryEntry!TV(key);
+		}
+		serializer.endWriteDictionary!TU();
 	} else static if (isISOExtStringSerializable!TU) {
 		serializer.writeValue(value.toISOExtString());
 	} else static if (isStringSerializable!TU) {
