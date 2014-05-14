@@ -34,7 +34,6 @@ struct Path {
 		m_nodes = cast(immutable)splitPath(pathstr);
 		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && (m_nodes[0].toString().canFind(':') || m_nodes[0] == "\\"));
 		m_endsWithSlash = pathstr.endsWith("/");
-		foreach( e; m_nodes ) assert(e.toString().length > 0, "Empty path nodes not allowed: "~pathstr);
 	}
 	
 	/// Constructs a path object from a list of PathEntry objects.
@@ -62,7 +61,7 @@ struct Path {
 				default:
 					newnodes ~= n;
 					break;
-				case ".": break;
+				case "", ".": break;
 				case "..":
 					enforce(!m_absolute || newnodes.length > 0, "Path goes below root node.");
 					if( newnodes.length > 0 && newnodes[$-1] != ".." ) newnodes = newnodes[0 .. $-1];
@@ -186,7 +185,7 @@ struct Path {
 		foreach (folder; rhs.m_nodes) {
 			switch (folder.toString()) {
 				default: ret.m_nodes = ret.m_nodes ~ folder; break;
-				case ".": break;
+				case "", ".": break;
 				case "..":
 					enforce(!ret.absolute || ret.m_nodes.length > 0, "Relative path goes below root node!");
 					if( ret.m_nodes.length > 0 && ret.m_nodes[$-1].toString() != ".." )
@@ -304,6 +303,14 @@ unittest
 		dotpathp.normalize();
 		assert(dotpathp.toString() == "/test2/x/y");
 	}
+
+	{
+		auto dotpath = "/test/..////test2//./x/y";
+		auto dotpathp = Path(dotpath);
+		assert(dotpathp.toString() == "/test/..////test2//./x/y");
+		dotpathp.normalize();
+		assert(dotpathp.toString() == "/test2/x/y");
+	}
 	
 	{
 		auto parentpath = "/path/to/parent";
@@ -392,12 +399,10 @@ PathEntry[] splitPath(string path)
 	// read and return the elements
 	foreach( i, char ch; path )
 		if( ch == '\\' || ch == '/' ){
-			enforce(i - startidx > 0, "Empty path entries not allowed.");
 			storage[eidx++] = PathEntry(path[startidx .. i]);
 			startidx = i+1;
 		}
 	storage[eidx++] = PathEntry(path[startidx .. $]);
-	enforce(path.length - startidx > 0, "Empty path entries not allowed.");
 	assert(eidx == nelements);
 	return storage;
 }
