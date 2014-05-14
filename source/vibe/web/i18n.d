@@ -108,6 +108,9 @@ package string determineLanguage(alias METHOD)(HTTPServerRequest req)
 				if (entrylang == replace(lang, "_", "-")) return lang;
 				if (entrylang == split(lang, "-")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
 			}
+			
+			if (cidx >= accept_lang.length) break;
+			accept_lang = accept_lang[cidx+1 .. $];
 		}
 	}
 
@@ -188,7 +191,7 @@ private size_t skipToDirective(size_t i, ref string text)
 {
 	while (i < text.length) {
 		i = skipWhitespace(i, text);
-		if (text[i] == '#') i = skipLine(i, text);
+		if (i < text.length && text[i] == '#') i = skipLine(i, text);
 		else break;
 	}
 	return i;
