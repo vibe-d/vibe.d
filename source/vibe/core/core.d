@@ -119,7 +119,6 @@ void exitEventLoop(bool shutdown_all_threads = false)
 {
 	assert(s_eventLoopRunning || shutdown_all_threads);
 	if (shutdown_all_threads) {
-		auto thisthr = Thread.getThis();
 		atomicStore(st_term, true);
 		st_threadsSignal.emit();
 	}
@@ -246,7 +245,7 @@ void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
 	Only function pointers with weakly isolated arguments are allowed to be
 	able to guarantee thread-safety.
 */
-Task getWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
+Task runWorkerTaskH(R, ARGS...)(R function(ARGS) func, ARGS args)
 {
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
@@ -261,7 +260,7 @@ Task getWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
 	return result;
 }
 /// ditto
-Task getWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
+Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
@@ -321,7 +320,7 @@ unittest {
 	
 	static void test()
 	{
-		Task callee = getWorkerTask(&workerFunc, Task.getThis);
+		Task callee = runWorkerTaskH(&workerFunc, Task.getThis);
 		do {
 			logInfo("ping");
 			callee.send("ping");
@@ -345,7 +344,7 @@ unittest {
 	static void test()
 	{
 		auto cls = new shared Test;
-		Task callee = getWorkerTask!(Test.workerMethod)(cls, Task.getThis());
+		Task callee = runWorkerTaskH!(Test.workerMethod)(cls, Task.getThis());
 		do {
 			logInfo("ping");
 			callee.send("ping");
@@ -1247,7 +1246,6 @@ private void setupWorkerThreads()
 
 private void workerThreadFunc()
 {
-	auto thisthr = Thread.getThis();
 	assert(s_core !is null);
 	if (getExitFlag()) return;
 	logDebug("entering worker thread");
