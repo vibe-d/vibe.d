@@ -252,6 +252,7 @@ unittest
 	{
 		auto unc = "\\\\server\\share\\path";
 		auto uncp = Path(unc);
+		uncp.normalize();
 		version(Windows) assert(uncp.toNativeString() == unc);
 		assert(uncp.absolute);
 		assert(!uncp.endsWithSlash);

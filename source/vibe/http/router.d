@@ -155,8 +155,8 @@ final class URLRouter : HTTPRouter {
 				m_routes.match(path, (ridx, scope values) {
 					if (done) return;
 					auto r = &m_routes.getTerminalData(ridx);
-					logDebugV("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
 					if (r.method == method) {
+						logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
 						// TODO: use a different map type that avoids allocations for small amounts of keys
 						foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
 						r.cb(req, res);
