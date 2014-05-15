@@ -168,6 +168,9 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializer.endWriteDictionaryEntry!TV(keyname);
 		}
 		serializer.endWriteDictionary!TU();
+	} else static if (isCustomSerializable!T) {
+		alias CustomType = typeof(T.init.toSerializedValue());
+		serializeImpl!(Serializer, CustomType, ATTRIBUTES)(serializer, value.toSerializedValue());
 	} else static if (isISOExtStringSerializable!TU) {
 		serializer.writeValue(value.toISOExtString());
 	} else static if (isStringSerializable!TU) {
@@ -258,6 +261,9 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 			ret[key] = deserializeImpl!(TV, Serializer, ATTRIBUTES)(deserializer);
 		});
 		return ret;
+	} else static if (isCustomSerializable!T) {
+		alias CustomType = typeof(T.init.toSerializedValue());
+		return T.fromSerializedValue(deserializeImpl!(CustomType, Serializer, ATTRIBUTES)(deserializer));
 	} else static if (isISOExtStringSerializable!T) {
 		return T.fromISOExtString(deserializer.readValue!string());
 	} else static if (isStringSerializable!T) {
@@ -453,6 +459,13 @@ struct ByNameAttribute {}
 struct AsArrayAttribute {}
 
 
+template isCustomSerializable(T) { enum isCustomSerializable = is(typeof(T.init.toSerializedValue())) && is(typeof(T.fromSerializedValue(T.init.toSerializedValue())) == T); }
+
+template isISOExtStringSerializable(T) { enum isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T); }
+
+template isStringSerializable(T) { enum isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T); }
+
+
 package template isRWPlainField(T, string M)
 {
 	static if( !__traits(compiles, typeof(__traits(getMember, T, M))) ){
@@ -509,8 +522,6 @@ private string underscoreStrip(string field_name)
 }
 
 
-private template isISOExtStringSerializable(T) { enum isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T); }
-
 private template hasSerializableFields(T, size_t idx = 0)
 {
 	enum hasSerializableFields = SerializableFields!(T).length > 0;
@@ -543,5 +554,3 @@ private template FilterSerializableFields(COMPOSITE, FIELDS...)
 		} else alias FilterSerializableFields = TypeTuple!();
 	} else alias FilterSerializableFields = TypeTuple!();
 }
-
-package template isStringSerializable(T) { enum isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T); }
