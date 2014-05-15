@@ -151,24 +151,28 @@ final class URLRouter : HTTPRouter {
 
 		version (VibeRouterTreeMatch) {
 			bool done = false;
-			m_routes.match(path, (ridx, scope values) {
-				if (done) return;
-				auto r = &m_routes.getTerminalData(ridx);
-				logDebugV("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
-				if (r.method == method) {
-					// TODO: use a different map type that avoids allocations for small amounts of keys
-					foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
-					r.cb(req, res);
-					done = res.headerWritten;
-				}
-			});
-			if (done) return;
+			while (!done) {
+				m_routes.match(path, (ridx, scope values) {
+					if (done) return;
+					auto r = &m_routes.getTerminalData(ridx);
+					logDebugV("route match: %s -> %s %s %s", req.path, req.method, r.pattern, values);
+					if (r.method == method) {
+						// TODO: use a different map type that avoids allocations for small amounts of keys
+						foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
+						r.cb(req, res);
+						done = res.headerWritten;
+					}
+				});
+				
+				if (method == HTTPMethod.HEAD) method = HTTPMethod.GET;
+				else break;
+			}
 		} else {
 			while(true)
 			{
 				foreach (ref r; m_routes) {
 					if (r.method == method && r.matches(path, req.params)) {
-						logTrace("route match: %s -> %s %s", req.path, req.method, r.pattern);
+						logTrace("route match: %s -> %s %s", req.path, r.method, r.pattern);
 						// .. parse fields ..
 						r.cb(req, res);
 						if (res.headerWritten) return;
