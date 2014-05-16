@@ -754,7 +754,7 @@ class SSLContext {
 				}
 
 				if (err != X509_V_OK)
-					logDiagnostic("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
+					logDebug("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
 
 				if (!valid && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
 					X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
