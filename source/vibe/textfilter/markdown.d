@@ -14,7 +14,7 @@ import vibe.utils.string;
 import std.algorithm : canFind, countUntil, min;
 import std.array;
 import std.ascii : isAlpha, isWhite;
-import std.conv;
+import std.format;
 import std.range;
 import std.string;
 
@@ -40,10 +40,16 @@ version(MarkdownTest)
 
 /** Returns a Markdown filtered HTML string.
 */
-string filterMarkdown()(string str, MarkdownFlags flags = MarkdownFlags.vanillaMarkdown)
+string filterMarkdown()(string str, MarkdownFlags flags)
+{
+	scope settings = new MarkdownSettings(flags, 0);
+	return filterMarkdown(settings);
+}
+/// ditto
+string filterMarkdown()(string str, MarkdownSettings settings = null)
 @trusted { // Appender not @safe as of 2.065
 	auto dst = appender!string(); 
-	filterMarkdown(dst, str, flags);
+	filterMarkdown(dst, str, settings);
 	return dst.data;
 }
 
@@ -52,12 +58,23 @@ string filterMarkdown()(string str, MarkdownFlags flags = MarkdownFlags.vanillaM
 */
 void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags = MarkdownFlags.vanillaMarkdown)
 {
+	scope settings = new MarkdownSettings(flags, 0);
+	filterMarkdown(dst, src, settings);
+}
+/// ditto	
+void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = null)
+{
 	auto all_lines = splitLines(src);
 	auto links = scanForReferences(all_lines);
-	auto lines = parseLines(all_lines, flags);
+	auto lines = parseLines(all_lines, settings);
 	Block root_block;
-	parseBlocks(root_block, lines, null, flags);
-	writeBlock(dst, root_block, links, flags);
+	parseBlocks(root_block, lines, null, settings);
+	writeBlock(dst, root_block, links, settings);
+}
+
+final class MarkdownSettings {
+	MarkdownFlags flags = MarkdownFlags.vanillaMarkdown;
+	size_t headingBaseLevel = 1;
 }
 
 enum MarkdownFlags {
@@ -116,8 +133,10 @@ private struct Line {
 	}
 }
 
-private Line[] parseLines(ref string[] lines, MarkdownFlags flags)
+private Line[] parseLines(ref string[] lines, MarkdownSettings settings)
 pure @safe {
+	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
+
 	Line[] ret;
 	while( !lines.empty ){
 		auto ln = lines.front;
@@ -177,7 +196,7 @@ private struct Block {
 	size_t headerLevel;
 }
 
-private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, MarkdownFlags flags)
+private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, MarkdownSettings settings)
 pure @safe {
 	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
@@ -207,7 +226,7 @@ pure @safe {
 				root.blocks ~= cblock;
 			} else {
 				Block subblock;
-				parseBlocks(subblock, lines, ln.indent[0 .. base_indent.length+1], flags);
+				parseBlocks(subblock, lines, ln.indent[0 .. base_indent.length+1], settings);
 				root.blocks ~= subblock;
 			}
 		} else {
@@ -270,7 +289,7 @@ pure @safe {
 							itm.text = null;
 						}
 
-						parseBlocks(itm, lines, itemindent, flags);
+						parseBlocks(itm, lines, itemindent, settings);
 						itm.type = BlockType.ListItem;
 						b.blocks ~= itm;
 					}
@@ -342,8 +361,10 @@ pure @safe {
 }
 
 /// private
-private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, MarkdownFlags flags)
+private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, MarkdownSettings settings)
 {
+	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
+
 	final switch(block.type){
 		case BlockType.Plain:
 			foreach( ln; block.text ){
@@ -351,22 +372,22 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links, flags);
+				writeBlock(dst, b, links, settings);
 			break;
 		case BlockType.Text:
 			foreach( ln; block.text ){
-				writeMarkdownEscaped(dst, ln, links, flags);
+				writeMarkdownEscaped(dst, ln, links, settings);
 				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links, flags);
+				writeBlock(dst, b, links, settings);
 			break;
 		case BlockType.Paragraph:
 			assert(block.blocks.length == 0);
 			dst.put("<p>");
 			foreach( ln; block.text ){
-				writeMarkdownEscaped(dst, ln, links, flags);
+				writeMarkdownEscaped(dst, ln, links, settings);
 				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
 				dst.put("\n");
 			}
@@ -374,37 +395,33 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.Header:
 			assert(block.blocks.length == 0);
-			auto nstr = to!string(block.headerLevel);
-			dst.put("<h");
-			dst.put(nstr);
-			dst.put(">");
+			auto hlvl = block.headerLevel + (settings ? settings.headingBaseLevel-1 : 0);
+			dst.formattedWrite("<h%s>", hlvl);
 			assert(block.text.length == 1);
-			writeMarkdownEscaped(dst, block.text[0], links, flags);
-			dst.put("</h");
-			dst.put(nstr);
-			dst.put(">\n");
+			writeMarkdownEscaped(dst, block.text[0], links, settings);
+			dst.formattedWrite("</h%s>\n", hlvl);
 			break;
 		case BlockType.OList:
 			dst.put("<ol>\n");
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links, flags);
+				writeBlock(dst, b, links, settings);
 			dst.put("</ol>\n");
 			break;
 		case BlockType.UList:
 			dst.put("<ul>\n");
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links, flags);
+				writeBlock(dst, b, links, settings);
 			dst.put("</ul>\n");
 			break;
 		case BlockType.ListItem:
 			dst.put("<li>");
 			foreach(ln; block.text){
-				writeMarkdownEscaped(dst, ln, links, flags);
+				writeMarkdownEscaped(dst, ln, links, settings);
 				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links, flags);
+				writeBlock(dst, b, links, settings);
 			dst.put("</li>\n");
 			break;
 		case BlockType.Code:
@@ -419,20 +436,22 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 		case BlockType.Quote:
 			dst.put("<blockquote>");
 			foreach(ln; block.text){
-				writeMarkdownEscaped(dst, ln, links, flags);
+				writeMarkdownEscaped(dst, ln, links, settings);
 				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
 				dst.put("\n");
 			}
 			foreach(b; block.blocks)
-				writeBlock(dst, b, links, flags);
+				writeBlock(dst, b, links, settings);
 			dst.put("</blockquote>\n");
 			break;
 	}
 }
 
 /// private
-private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, MarkdownFlags flags)
+private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, MarkdownSettings settings)
 {
+	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
+
 	bool br = ln.endsWith("  ");
 	while( ln.length > 0 ){
 		switch( ln[0] ){
@@ -547,32 +566,6 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 		}
 	}
 	if( br ) dst.put("<br/>");
-}
-
-/// private
-private void outputHeaderLine(R)(ref R dst, string ln, string hln)
-{
-	hln = stripLeft(hln);
-	string htype;
-	if( hln.length > 0 ){ // Setext style header
-		htype = hln[0] == '=' ? "1" : "2";
-	} else { // atx style header
-		size_t lvl = 0;
-		while( ln.length > 0 && ln[0] == '#' ){
-			lvl++;
-			ln = ln[1 .. $];
-		}
-		htype = to!string(lvl);
-		while( ln.length > 0 && (ln[$-1] == '#' || ln[$-1] == ' ') )
-			ln = ln[0 .. $-1];
-	}
-	dst.put("<h");
-	dst.put(htype);
-	dst.put('>');
-	outputLine(dst, ln, MarkdownState.Text, null);
-	dst.put("</h");
-	dst.put(htype);
-	dst.put(">\n");
 }
 
 private bool isLineBlank(string ln)
