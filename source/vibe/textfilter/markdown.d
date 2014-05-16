@@ -375,22 +375,14 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				writeBlock(dst, b, links, settings);
 			break;
 		case BlockType.Text:
-			foreach( ln; block.text ){
-				writeMarkdownEscaped(dst, ln, links, settings);
-				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
-				dst.put("\n");
-			}
+			writeMarkdownEscaped(dst, block, links, settings);
 			foreach(b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			break;
 		case BlockType.Paragraph:
 			assert(block.blocks.length == 0);
 			dst.put("<p>");
-			foreach( ln; block.text ){
-				writeMarkdownEscaped(dst, ln, links, settings);
-				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
-				dst.put("\n");
-			}
+			writeMarkdownEscaped(dst, block, links, settings);
 			dst.put("</p>\n");
 			break;
 		case BlockType.Header:
@@ -415,11 +407,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.ListItem:
 			dst.put("<li>");
-			foreach(ln; block.text){
-				writeMarkdownEscaped(dst, ln, links, settings);
-				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
-				dst.put("\n");
-			}
+			writeMarkdownEscaped(dst, block, links, settings);
 			foreach(b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</li>\n");
@@ -435,16 +423,21 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			break;
 		case BlockType.Quote:
 			dst.put("<blockquote>");
-			foreach(ln; block.text){
-				writeMarkdownEscaped(dst, ln, links, settings);
-				if( flags & MarkdownFlags.keepLineBreaks ) dst.put("<br>");
-				dst.put("\n");
-			}
+			writeMarkdownEscaped(dst, block, links, settings);
 			foreach(b; block.blocks)
 				writeBlock(dst, b, links, settings);
 			dst.put("</blockquote>\n");
 			break;
 	}
+}
+
+private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRef[string] links, MarkdownSettings settings)
+{
+	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
+	auto lines = cast(string[])block.text;
+	auto text = flags & MarkdownFlags.keepLineBreaks ? lines.join("<br>") : lines.join("\n");
+	writeMarkdownEscaped(dst, text, links, settings);
+	if (lines.length) dst.put("\n");
 }
 
 /// private
@@ -482,7 +475,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				string text;
 				if( auto em = parseEmphasis(ln, text) ){
 					dst.put(em == 1 ? "<em>" : em == 2 ? "<strong>" : "<strong><em>");
-					filterHTMLEscape(dst, text);
+					filterHTMLEscape(dst, text, HTMLEscapeFlags.escapeMinimal);
 					dst.put(em == 1 ? "</em>" : em == 2 ? "</strong>": "</em></strong>");
 				} else {
 					dst.put(ln[0]);
@@ -493,7 +486,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				string code;
 				if( parseInlineCode(ln, code) ){
 					dst.put("<code class=\"prettyprint\">");
-					filterHTMLEscape(dst, code);
+					filterHTMLEscape(dst, code, HTMLEscapeFlags.escapeMinimal);
 					dst.put("</code>");
 				} else {
 					dst.put(ln[0]);
@@ -504,15 +497,15 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<a href=\"");
-					filterHTMLEscape(dst, link.url);
+					filterHTMLAttribEscape(dst, link.url);
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
-						filterHTMLEscape(dst, link.title);
+						filterHTMLAttribEscape(dst, link.title);
 						dst.put("\"");
 					}
 					dst.put(">");
-					filterHTMLEscape(dst, link.text);
+					writeMarkdownEscaped(dst, link.text, linkrefs, settings);
 					dst.put("</a>");
 				} else {
 					dst.put(ln[0]);
@@ -523,13 +516,13 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<img src=\"");
-					filterHTMLEscape(dst, link.url);
+					filterHTMLAttribEscape(dst, link.url);
 					dst.put("\" alt=\"");
-					filterHTMLEscape(dst, link.text);
+					filterHTMLAttribEscape(dst, link.text);
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
-						filterHTMLEscape(dst, link.title);
+						filterHTMLAttribEscape(dst, link.title);
 						dst.put("\"");
 					}
 					dst.put(">");
@@ -552,10 +545,10 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
 					if( is_email ) filterHTMLAllEscape(dst, url);
-					else filterHTMLEscape(dst, url);
+					else filterHTMLAttribEscape(dst, url);
 					dst.put("\">");
 					if( is_email ) filterHTMLAllEscape(dst, url[7 .. $]);
-					else filterHTMLEscape(dst, url);
+					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
 					dst.put("</a>");
 				} else {
 					if( flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
@@ -805,6 +798,8 @@ pure @safe {
 			dst.url = inner.stripRight();
 			dst.title = null;
 		}
+		if (dst.url.startsWith("<") && dst.url.endsWith(">"))
+			dst.url = dst.url[1 .. $-1];
 		pstr = pstr[cidx+1 .. $];
 	} else {
 		if( pstr[0] == ' ' ) pstr = pstr[1 .. $];
@@ -865,6 +860,8 @@ pure @safe {
 
     testLink(`[link](target "")`, Link("link", "target", ""), null);
     testLink(`[link](target-no-title"foo" )`, Link("link", "target-no-title\"foo\"", ""), null);
+
+    testLink(`[link](<target>)`, Link("link", "target"), null);
 
     auto failing = [
         `text`, `[link](target`, `[link]target)`, `[link]`,
@@ -972,11 +969,18 @@ private struct Link {
 	string title;
 }
 
-@safe unittest {
+@safe unittest { // alt and title attributes
 	assert(filterMarkdown("![alt](http://example.org/image)")
 		== "<p><img src=\"http://example.org/image\" alt=\"alt\">\n</p>\n");
 	assert(filterMarkdown("![alt](http://example.org/image \"Title\")")
 		== "<p><img src=\"http://example.org/image\" alt=\"alt\" title=\"Title\">\n</p>\n");
+}
+
+@safe unittest { // complex links
+	assert(filterMarkdown("their [install\ninstructions](<http://www.brew.sh>) and")
+		== "<p>their <a href=\"http://www.brew.sh\">install\ninstructions</a> and\n</p>\n");
+	assert(filterMarkdown("[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)")
+		== "<p><a href=\"https://travis-ci.org/rejectedsoftware/vibe.d\"><img src=\"https://travis-ci.org/rejectedsoftware/vibe.d.png\" alt=\"Build Status\"></a>\n</p>\n");
 }
 
 @safe unittest

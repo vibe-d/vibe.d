@@ -38,11 +38,11 @@ unittest {
 
 /** Writes the HTML escaped version of a given string to an output range.
 */
-void filterHTMLEscape(R, S)(ref R dst, S str)
+void filterHTMLEscape(R, S)(ref R dst, S str, HTMLEscapeFlags flags = HTMLEscapeFlags.escapeNewline)
 	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
 	for (;!str.empty;str.popFront())
-		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline);
+		filterHTMLEscape(dst, str.front, flags);
 }
 
 
