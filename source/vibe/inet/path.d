@@ -337,18 +337,20 @@ unittest
 	}
 
 	{ // relative paths across Windows devices are not allowed
-		auto p1 = Path("\\\\server\\share"); assert(p1.absolute);
-		auto p2 = Path("\\\\server\\othershare"); assert(p2.absolute);
-		auto p3 = Path("\\\\otherserver\\share"); assert(p3.absolute);
-		auto p4 = Path("C:\\somepath"); assert(p4.absolute);
-		auto p5 = Path("C:\\someotherpath"); assert(p5.absolute);
-		auto p6 = Path("D:\\somepath"); assert(p6.absolute);
-		assert(p4.relativeTo(p5) == Path("../somepath"));
-		assert(p4.relativeTo(p6) == Path("C:\\somepath"));
-		assert(p4.relativeTo(p1) == Path("C:\\somepath"));
-		assert(p1.relativeTo(p2) == Path("../share"));
-		assert(p1.relativeTo(p3) == Path("\\\\server\\share"));
-		assert(p1.relativeTo(p4) == Path("\\\\server\\share"));
+		version (Windows) {
+			auto p1 = Path("\\\\server\\share"); assert(p1.absolute);
+			auto p2 = Path("\\\\server\\othershare"); assert(p2.absolute);
+			auto p3 = Path("\\\\otherserver\\share"); assert(p3.absolute);
+			auto p4 = Path("C:\\somepath"); assert(p4.absolute);
+			auto p5 = Path("C:\\someotherpath"); assert(p5.absolute);
+			auto p6 = Path("D:\\somepath"); assert(p6.absolute);
+			assert(p4.relativeTo(p5) == Path("../somepath"));
+			assert(p4.relativeTo(p6) == Path("C:\\somepath"));
+			assert(p4.relativeTo(p1) == Path("C:\\somepath"));
+			assert(p1.relativeTo(p2) == Path("../share"));
+			assert(p1.relativeTo(p3) == Path("\\\\server\\share"));
+			assert(p1.relativeTo(p4) == Path("\\\\server\\share"));
+		}
 	}
 }
 
