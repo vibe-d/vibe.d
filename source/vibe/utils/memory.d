@@ -167,6 +167,7 @@ shared class MallocAllocator : Allocator {
 		size_t csz = min(mem.length, new_size);
 		auto p = extractUnalignedPointer(mem.ptr);
 		size_t oldmisalign = mem.ptr - p;
+
 		auto pn = cast(ubyte*).realloc(p, new_size+Allocator.alignment);
 		if (p == pn) return pn[oldmisalign .. new_size+oldmisalign];
 
@@ -196,7 +197,12 @@ shared class MallocAllocator : Allocator {
 shared class GCAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
-		return adjustPointerAlignment(GC.malloc(sz+Allocator.alignment))[0 .. sz];
+		auto mem = GC.malloc(sz+Allocator.alignment);
+		auto alignedmem = adjustPointerAlignment(mem);
+		assert(alignedmem - mem <= Allocator.alignment);
+		auto ret = alignedmem[0 .. sz];
+		ensureValidMemory(ret);
+		return ret;
 	}
 	void[] realloc(void[] mem, size_t new_size)
 	{
@@ -204,17 +210,19 @@ shared class GCAllocator : Allocator {
 
 		auto p = extractUnalignedPointer(mem.ptr);
 		size_t misalign = mem.ptr - p;
-		auto pn = cast(ubyte*)GC.realloc(p, new_size+Allocator.alignment);
-		if (p == pn) return pn[misalign .. new_size+misalign];
+		assert(misalign <= Allocator.alignment);
 
-		auto pna = cast(ubyte*)adjustPointerAlignment(pn);
-
-		// account for both, possibly changed alignment and a possible
-		// GC bug where only part of the old memory chunk is copied to
-		// the new one
-		pna[0 .. csz] = (cast(ubyte[])mem)[0 .. csz];
-
-		return pna[0 .. new_size];
+		void[] ret;
+		auto extended = GC.extend(p, new_size - mem.length, new_size - mem.length);
+		if (extended) {
+			assert(extended >= new_size+Allocator.alignment);
+			ret = p[misalign .. new_size+misalign];
+		} else {
+			ret = alloc(new_size);
+			ret[0 .. csz] = mem[0 .. csz];
+		}
+		ensureValidMemory(ret);
+		return ret;
 	}
 	void free(void[] mem)
 	{
@@ -674,4 +682,11 @@ unittest {
 		assert((ia & Allocator.alignmentMask) == 0);
 		assert(ia < i+Allocator.alignment);
 	}
+}
+
+private void ensureValidMemory(void[] mem)
+{
+	auto bytes = cast(ubyte[])mem;
+	swap(bytes[0], bytes[$-1]);
+	swap(bytes[0], bytes[$-1]);
 }
