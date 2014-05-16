@@ -57,7 +57,7 @@ string filterMarkdown()(string str, scope MarkdownSettings settings = null)
 
 /** Markdown filters the given string and writes the corresponding HTML to an output range.
 */
-void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags = MarkdownFlags.vanillaMarkdown)
+void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags)
 {
 	scope settings = new MarkdownSettings;
 	settings.flags = flags;
