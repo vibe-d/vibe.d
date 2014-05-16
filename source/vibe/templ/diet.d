@@ -65,6 +65,9 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
 
+	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
+	else alias TRANSLATE = TypeTuple!();
+
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file(indent));
 	static if (is(typeof(diet_translate__)))
@@ -96,6 +99,9 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 	pragma(msg, "Compiling diet template '"~template_file~"' (compat)...");
 	//pragma(msg, localAliasesCompat!(0, TYPES_AND_NAMES));
 	mixin(localAliasesCompat!(0, TYPES_AND_NAMES));
+
+	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
+	else alias TRANSLATE = TypeTuple!();
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
