@@ -42,11 +42,12 @@ version(MarkdownTest)
 */
 string filterMarkdown()(string str, MarkdownFlags flags)
 {
-	scope settings = new MarkdownSettings(flags, 0);
+	scope settings = new MarkdownSettings;
+	settings.flags = flags;
 	return filterMarkdown(settings);
 }
 /// ditto
-string filterMarkdown()(string str, MarkdownSettings settings = null)
+string filterMarkdown()(string str, scope MarkdownSettings settings = null)
 @trusted { // Appender not @safe as of 2.065
 	auto dst = appender!string(); 
 	filterMarkdown(dst, str, settings);
@@ -58,12 +59,16 @@ string filterMarkdown()(string str, MarkdownSettings settings = null)
 */
 void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags = MarkdownFlags.vanillaMarkdown)
 {
-	scope settings = new MarkdownSettings(flags, 0);
+	scope settings = new MarkdownSettings;
+	settings.flags = flags;
 	filterMarkdown(dst, src, settings);
 }
 /// ditto	
 void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = null)
 {
+	auto defsettings = new MarkdownSettings;
+	if (!settings) settings = defsettings;
+
 	auto all_lines = splitLines(src);
 	auto links = scanForReferences(all_lines);
 	auto lines = parseLines(all_lines, settings);
@@ -133,10 +138,8 @@ private struct Line {
 	}
 }
 
-private Line[] parseLines(ref string[] lines, MarkdownSettings settings)
+private Line[] parseLines(ref string[] lines, scope MarkdownSettings settings)
 pure @safe {
-	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
-
 	Line[] ret;
 	while( !lines.empty ){
 		auto ln = lines.front;
@@ -162,14 +165,14 @@ pure @safe {
 		}
 		lninfo.unindented = ln;
 
-		if( (flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
+		if( (settings.flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
 		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
 		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
 		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
 		else if( isLineBlank(ln) ) lninfo.type = LineType.Blank;
-		else if( !(flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln) ) lninfo.type = LineType.HtmlBlock;
+		else if( !(settings.flags & MarkdownFlags.noInlineHtml) && isHtmlBlockLine(ln) ) lninfo.type = LineType.HtmlBlock;
 		else lninfo.type = LineType.Plain;
 
 		ret ~= lninfo;
@@ -196,7 +199,7 @@ private struct Block {
 	size_t headerLevel;
 }
 
-private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, MarkdownSettings settings)
+private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, scope MarkdownSettings settings)
 pure @safe {
 	if( base_indent.length == 0 ) root.type = BlockType.Text;
 	else if( base_indent[$-1] == IndentType.Quote ) root.type = BlockType.Quote;
@@ -361,10 +364,8 @@ pure @safe {
 }
 
 /// private
-private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, MarkdownSettings settings)
+private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] links, scope MarkdownSettings settings)
 {
-	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
-
 	final switch(block.type){
 		case BlockType.Plain:
 			foreach( ln; block.text ){
@@ -431,20 +432,17 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 	}
 }
 
-private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRef[string] links, MarkdownSettings settings)
+private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRef[string] links, scope MarkdownSettings settings)
 {
-	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
 	auto lines = cast(string[])block.text;
-	auto text = flags & MarkdownFlags.keepLineBreaks ? lines.join("<br>") : lines.join("\n");
+	auto text = settings.flags & MarkdownFlags.keepLineBreaks ? lines.join("<br>") : lines.join("\n");
 	writeMarkdownEscaped(dst, text, links, settings);
 	if (lines.length) dst.put("\n");
 }
 
 /// private
-private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, MarkdownSettings settings)
+private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, scope MarkdownSettings settings)
 {
-	auto flags = settings ? settings.flags : MarkdownFlags.vanillaMarkdown;
-
 	bool br = ln.endsWith("  ");
 	while( ln.length > 0 ){
 		switch( ln[0] ){
@@ -535,7 +533,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				}
 				break;
 			case '>':
-				if( flags & MarkdownFlags.noInlineHtml ) dst.put("&gt;");
+				if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&gt;");
 				else dst.put(ln[0]);
 				ln = ln[1 .. $];
 				break;
@@ -551,7 +549,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
 					dst.put("</a>");
 				} else {
-					if( flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
+					if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
 					else dst.put(ln[0]);
 					ln = ln[1 .. $];
 				}
