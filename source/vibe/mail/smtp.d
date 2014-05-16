@@ -82,6 +82,7 @@ class SMTPClientSettings {
 	SMTPConnectionType connectionType = SMTPConnectionType.plain;
 	SMTPAuthType authType = SMTPAuthType.none;
 	SSLPeerValidationMode sslValidationMode = SSLPeerValidationMode.trustedCert;
+	void delegate(scope SSLContext) sseContextSetup;
 	string username;
 	string password;
 
@@ -117,6 +118,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	if( settings.connectionType == SMTPConnectionType.ssl ){
 		auto ctx = createSSLContext(SSLContextKind.client);
 		ctx.peerValidationMode = settings.sslValidationMode;
+		if (settings.sseContextSetup) settings.sseContextSetup(ctx);
 		conn = createSSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
