@@ -127,6 +127,16 @@ struct Path {
 	
 	/// Computes the relative path from `parentPath` to this path.
 	Path relativeTo(const Path parentPath) const {
+		assert(this.absolute && parentPath.absolute);
+		version(Windows){
+			// a path such as ..\C:\windows is not valid, so force the path to stay absolute in this case
+			if( this.absolute && !this.empty &&
+				(m_nodes[0].toString().endsWith(":") && !parentPath.startsWith(this[0 .. 1]) ||
+				m_nodes[0] == "\\" && !parentPath.startsWith(this[0 .. min(2, $)])))
+			{
+				return this;
+			}
+		}
 		int nup = 0;
 		while( parentPath.length > nup && !startsWith(parentPath[0 .. parentPath.length-nup]) ){
 			nup++;
@@ -324,6 +334,21 @@ unittest
 		auto subfilep = Path(subfile);
 		auto subfile_rel = "child";
 		assert(subfilep.relativeTo(parentpathp).toString() == subfile_rel);
+	}
+
+	{ // relative paths across Windows devices are not allowed
+		auto p1 = Path("\\\\server\\share"); assert(p1.absolute);
+		auto p2 = Path("\\\\server\\othershare"); assert(p2.absolute);
+		auto p3 = Path("\\\\otherserver\\share"); assert(p3.absolute);
+		auto p4 = Path("C:\\somepath"); assert(p4.absolute);
+		auto p5 = Path("C:\\someotherpath"); assert(p5.absolute);
+		auto p6 = Path("D:\\somepath"); assert(p6.absolute);
+		assert(p4.relativeTo(p5) == Path("../somepath"));
+		assert(p4.relativeTo(p6) == Path("C:\\somepath"));
+		assert(p4.relativeTo(p1) == Path("C:\\somepath"));
+		assert(p1.relativeTo(p2) == Path("../share"));
+		assert(p1.relativeTo(p3) == Path("\\\\server\\share"));
+		assert(p1.relativeTo(p4) == Path("\\\\server\\share"));
 	}
 }
 
