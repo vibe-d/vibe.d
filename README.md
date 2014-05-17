@@ -1,10 +1,11 @@
 vibe.d
 ======
 
-vibe.d is an asynchronous I/O and web application framework written in D.
-It already contains many supplemental features such as database support
-to be able to offer a complete development toolbox. Extensions are
-supported in the form of [DUB modules](http://code.dlang.org/?sort=updated&category=library.vibed).
+vibe.d is a high-performance asynchronous I/O, concurrency and web application
+framework written in D. It already contains many supplemental features such as
+database support to be able to offer a complete development toolbox. Extensions
+are supported in the form of
+[DUB packages](http://code.dlang.org/?sort=updated&category=library.vibed).
 
 Visit the website at <http://vibed.org/> for more information.
 
