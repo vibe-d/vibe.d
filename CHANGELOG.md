@@ -1,6 +1,86 @@
 ﻿Changelog
 =========
 
+v0.7.20 - 2014-05-
+--------------------
+
+The `vibe.web.web` web interface generator module has been extended with some important features, making it a full replacement (and more) of the old `registerFormInterface` functionality. Other important changes include the use of strong TLS cyphers out of the box, as well as a heavily optimized `URLRouter` implementation and support for compile-time localization of Diet templates.
+
+
+### Features and improvements ###
+
+ - Implemented a new match tree based routing algorithm for `URLRouter`, resulting in great speedups for complex routing setups
+ - Added `HTTPServerOption.errorStackTraces` to make costly stack trace generation optional
+ - Arguments to the logging functions are now evaluated lazily to avoid computations when messages are not actually logged
+ - Added `@asArray` to force serialization of composite types as arrays instead of dictionaries
+ - Added `runWorkerTaskH` to run a worker task and return its handle in one step (by Luca Niccoli aka lultimouomo) - [pull #601][issue601]
+ - Added `createTestHTTPServerRequest` and `createTestHTTPServerResponse` to support writing unit tests
+ - Added `URLRouter.prefix` to configure a prefix to append to every route
+ - Added `vibe.core.file.readFile`, `readFileUTF8`, `writeFile` and `writeFileUTF8`
+ - Added support for using a pre-allocated buffer for `serializeToBson`
+ - Added support for direct de-serialization of MongoDB query results
+ - Added a limited overload of `RedisDatabase.zrevRangeByScore` and fix the type of the `start`/`end` parameters (by Jens K. Mueller) - [pull #637][issue637]
+ - Added `TCPListenOptions.disableAutoClose` to make incoming TCP connections independent of the initial handler task
+ - Added `vibe.core.concurrency.thisTid` as an alias to `Task.getThis()` for improved API compatibility to `std.concurrency`
+ - Added an overload of `UDPConnection.recv` taking a timeout parameter - [issue #540][issue540]
+ - Added `toString` to `HTTPRequest` and `HTTPResponse` for convenient logging
+ - Added `vibe.web.web.terminateSession()` and `redirect()`
+ - Added support for struct and array parameters, as well as `Nullable!T` in `vibe.web.web`
+ - Added the `@errorDisplay` annotation to `vibe.web.web` to enable automatic exception display using an existing request handler
+ - Added built-in translation (i18n) support for Diet templates using the `tag& text` syntax
+ - Added support for custom serialization representations of user defined types using `toSerializedValue`/`fromSerializedValue` methods
+ - Added `MarkdownSettings` with additional support of setting the base heading level of the generated HTML
+ - Added `SMTPClientSettings.sslContextSetup` to enable customization of the SSL context (e.g. adding trusted certificates)
+ - Added `TCPConnection.keepAlive` to set the `SO_KEEPALIVE` option - [issue #622][issue622]
+ - Annotated some basic modules with `@safe`/`@trusted`/`pure`
+ - Reduced memory allocations in the HTTP logger module
+ - Heavily reduced the number of memory allocations happening in the MongoDB driver - see [issue #633][issue633]
+ - The `HTTPRouter` router interface is scheduled for removal
+ - Upgraded the Windows OpenSSL binaries to 1.0.1g
+ - Using only strong cyphers by default for SSL server contexts
+ - Added out-of-the box support for perfect forward secrecy (PFS) (by Martin Nowak) - [pull #630][issue630]
+ - Changed the default from `SSLVersion.tls1` (fixed TLS 1.0) to `SSLVersion.any` (SSL 3 and up, including TLS 1.1 and TLS 1.2)
+ - Removed deprecated symbols and deprecated symbols that were scheduled for deprecation
+ - Extended `ProxyStream` to optionally take distinct streams for input and output
+ - Replaced all remaining uses of `renderCompat` with `render`
+ - Removed unused variables and made `Bson.toString` `const` (thanks to Brian Schott aka Hackerpilot) - [issue #659][issue659]
+ - Made `DictionaryList` serializable as an array by adding `toSerializedValue`/`fromSerializedValue` - [issue #621][issue621]
+
+### Bug fixes ###
+
+ - Fixed the order of events reported by `setTaskEventCallback` when new tasks are started within an existing task
+ - Fixed HTTP multi-file uploads by changing `HTTPServerRequest.files` to a `DictionaryList`
+ - Fixed `@byName` to work for serializing (associative) arrays of enums
+ - Fixed SSL based SMTP connections (by Martin Nowak) - [pull #609][issue609]
+ - Fixed Diet text blocks (`tag.` style) to properly remove the input file indentation - [issue #614][issue614]
+ - Fixed `isStronglyIsolated!T` to work for interface types
+ - Fixed `filterURLEncode` to encode certain special characters (such as "{") - [issue #632][issue632]
+ - Fixed a crash when accessing vibe.d event functionality from within `shared static ~this`
+ - Fixed `Task.join` and `Task.interrupt` to work when called from outside of the event loop (e.g. when `processEvents` is used instead of `runEventLoop`) - [issue #443][issue443]
+ - Fixed serialization of `const` class instances (by Jack Applegame) - [issue #653][issue653]
+ - Fixed compilation of `renderCompat!()` on GDC (invalid use of `va_list`/`void*`)
+ - Fixed handling of paths with empty path entries (e.g. "/some///path") - [issue #410][issue410]
+ - Fixed a crash caused by `GCAllocator` - `GC.extend` is now used instead of `GC.realloc` to sidestep the issue - [issue #470][issue470]
+ - Fixed rendering of Markdown links with styled captions
+ - Fixed `Path.relativeTo` step over devices for UNC paths on Windows
+
+[issue410]: https://github.com/rejectedsoftware/vibe.d/issues/410
+[issue443]: https://github.com/rejectedsoftware/vibe.d/issues/443
+[issue470]: https://github.com/rejectedsoftware/vibe.d/issues/470
+[issue540]: https://github.com/rejectedsoftware/vibe.d/issues/540
+[issue601]: https://github.com/rejectedsoftware/vibe.d/issues/601
+[issue609]: https://github.com/rejectedsoftware/vibe.d/issues/609
+[issue614]: https://github.com/rejectedsoftware/vibe.d/issues/614
+[issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
+[issue622]: https://github.com/rejectedsoftware/vibe.d/issues/622
+[issue630]: https://github.com/rejectedsoftware/vibe.d/issues/630
+[issue632]: https://github.com/rejectedsoftware/vibe.d/issues/632
+[issue633]: https://github.com/rejectedsoftware/vibe.d/issues/633
+[issue637]: https://github.com/rejectedsoftware/vibe.d/issues/637
+[issue653]: https://github.com/rejectedsoftware/vibe.d/issues/653
+[issue659]: https://github.com/rejectedsoftware/vibe.d/issues/659
+
+
 v0.7.19 - 2014-04-09
 --------------------
 
