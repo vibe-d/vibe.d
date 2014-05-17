@@ -1201,6 +1201,11 @@ unittest {
 	deserializeBson(d, serializeToBson(c));
 	assert(c.a == d.a);
 	assert(c.b == d.b);
+
+	const(C) e = c; // serialize const class instances (issue #653)
+	deserializeBson(d, serializeToBson(e));
+	assert(e.a == d.a);
+	assert(e.b == d.b);
 }
 
 unittest {
