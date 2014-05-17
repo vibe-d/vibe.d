@@ -38,6 +38,7 @@ import deimos.event2.util;
 import std.conv;
 import std.encoding : sanitize;
 import std.exception;
+import std.range : assumeSorted;
 import std.string;
 
 
@@ -58,7 +59,6 @@ version(Windows)
 
 
 class Libevent2Driver : EventDriver {
-	import std.container : Array, BinaryHeap, heapify;
 	import std.datetime : Clock;
 
 	private {
@@ -72,7 +72,13 @@ class Libevent2Driver : EventDriver {
 		event* m_timerEvent;
 		int m_timerIDCounter = 1;
 		HashMap!(size_t, TimerInfo) m_timers;
-		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
+		static if (__VERSION__ < 2065) {
+			import std.container : Array, BinaryHeap, heapify;
+			BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
+		} else {
+			import std.container : DList;
+			DList!TimeoutEntry m_timeoutHeap;
+		}
 	}
 
 	this(DriverCore core)
@@ -463,7 +469,15 @@ class Libevent2Driver : EventDriver {
 		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
 			rescheduleTimerEvent((timeout - now).hnsecs);
 		}
-		m_timeoutHeap.insert(TimeoutEntry(timeout, id));
+		auto entry = TimeoutEntry(timeout, id);
+		static if (__VERSION__ < 2065) {
+			m_timeoutHeap.insert(entry);
+		} else {
+			auto existing = m_timeoutHeap[];
+			while (!existing.empty && existing.front.timeout < entry.timeout)
+				existing.popFront();
+			m_timeoutHeap.insertBefore(existing, entry);
+		}
 		logDebugV("first timer %s in %s s", id, (timeout - now) * 1e-7);
 	}
 
