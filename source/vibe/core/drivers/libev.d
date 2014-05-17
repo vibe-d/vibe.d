@@ -518,6 +518,14 @@ class LibevTCPConnection : TCPConnection {
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
 	
+	@property void keepAlive(bool enabled)
+	{
+		m_keepAlive = enabled;
+		ubyte opt = enabled;
+		setsockopt(m_socket, SOL_SOCKET, SO_KEEPALIVE, &opt, opt.sizeof);
+	}
+	@property bool keepAlive() const { return m_keepAlive; }
+
 	@property bool connected() const { return m_socket >= 0; }
 	
 	@property bool dataAvailableForRead(){ return m_readBufferContent.length > 0; }

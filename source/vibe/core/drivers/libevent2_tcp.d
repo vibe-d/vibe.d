@@ -60,6 +60,7 @@ package class Libevent2TCPConnection : TCPConnection {
 		string m_peerAddress;
 		ubyte[64] m_peekBuffer;
 		bool m_tcpNoDelay = false;
+		bool m_tcpKeepAlive = false;
 		Duration m_readTimeout;
 		char[64] m_peerAddressBuf;
 		NetworkAddress m_localAddress, m_remoteAddress;
@@ -111,6 +112,16 @@ package class Libevent2TCPConnection : TCPConnection {
 		}
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
+
+	@property void keepAlive(bool enable)
+	{
+		m_tcpKeepAlive = enable;
+		auto fd = m_ctx.socketfd;
+		ubyte opt = enable;
+		assert(fd <= int.max, "Socket descriptor > int.max");
+		setsockopt(cast(int)fd, SOL_SOCKET, SO_KEEPALIVE, &opt, opt.sizeof);
+	}
+	@property bool keepAlive() const { return m_tcpKeepAlive; }
 
 	@property NetworkAddress localAddress() const { return m_localAddress; }
 	@property NetworkAddress remoteAddress() const { return m_remoteAddress; }

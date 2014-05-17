@@ -1061,6 +1061,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		Task m_writeOwner;
 		bool m_tcpNoDelay;
 		Duration m_readTimeout;
+		bool m_keepAlive;
 		SOCKET m_socket;
 		NetworkAddress m_localAddress;
 		NetworkAddress m_peerAddress;
@@ -1167,6 +1168,15 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, &vdw, vdw.sizeof);
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
+
+	@property void keepAlive(bool enabled)
+	{
+		m_keepAlive = enabled;
+		BOOL eni = enabled;
+		setsockopt(m_socket, SOL_SOCKET, SO_KEEPALIVE, &eni, eni.sizeof);
+		assert(false);
+	}
+	@property bool keepAlive() const { return m_keepAlive; }
 
 	@property bool connected() const { return m_status == ConnectionStatus.Connected; }
 

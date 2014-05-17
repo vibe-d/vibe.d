@@ -215,6 +215,12 @@ interface TCPConnection : ConnectionStream {
 	/// ditto
 	@property bool tcpNoDelay() const;
 
+
+	/// Enables TCP keep-alive packets.
+	@property void keepAlive(bool enable);
+	/// ditto
+	@property bool keepAlive() const;
+
 	/// Controls the read time out after which the connection is closed automatically.
 	@property void readTimeout(Duration duration);
 	/// ditto

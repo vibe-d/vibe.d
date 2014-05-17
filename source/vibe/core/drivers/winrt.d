@@ -286,6 +286,7 @@ version(VibeWinrtDriver)
 	class WinRTTCPConnection : TCPConnection {
 		private {
 			bool m_tcpNoDelay;
+			bool m_keepAlive;
 			Duration m_readTimeout;
 		}
 
@@ -301,6 +302,13 @@ version(VibeWinrtDriver)
 			assert(false);
 		}
 		@property Duration readTimeout() const { return m_readTimeout; }
+
+		@property void keepAlive(bool enabled)
+		{
+			m_keepAlive = enabled;
+			assert(false);
+		}
+		@property bool keepAlive() const { return m_keepAlive; }
 
 		void close()
 		{
