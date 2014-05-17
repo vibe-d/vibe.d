@@ -4,7 +4,7 @@ vibe.d
 vibe.d is an asynchronous I/O and web application framework written in D.
 It already contains many supplemental features such as database support
 to be able to offer a complete development toolbox. Extensions are
-supported in the form of [DUB modules](http://registry.vibed.org/).
+supported in the form of [DUB modules](http://code.dlang.org/?sort=updated&category=library.vibed).
 
 Visit the website at <http://vibed.org/> for more information.
 
@@ -14,22 +14,14 @@ Visit the website at <http://vibed.org/> for more information.
 Installation
 ------------
 
-Instead of explicitly installing vibe.d, it is now recommended to use 
+Instead of explicitly installing vibe.d, it is recommended to use 
 [DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
-applications. Once DUB is installed, you can create a new project by running
-`dub init <name>` and enable the use of vibe.d by adding the following
-dependency to the `package.json` file in your project's directory:
+applications. Once DUB is installed, you can create and run a new project
+using the following shell commands:
 
-    {
-        "name": "your-project-identifier",
-        "dependencies": {
-            "vibe-d": ">=0.7.16"
-        }
-    }
-
-The latest versions of DUB also support `dub init <name> vibe.d`, which
-automatically adds the required dependency. Invoking `dub` will then
-fetch the latest vibe.d and compile and run the project.
+    dub init <name> vibe.d
+    cd <name>
+    dub
 
 Similarly, you can run an example by invoking `dub` from any of the
 example project directories.
@@ -39,10 +31,11 @@ Additional setup on Windows
 ---------------------------
 
  - Just install DMD using the installer on <http://dlang.org/download.html>
+ - And get the latest [DUB release](http://code.dlang.org/download)
 
 ### Note for building on Win64
 
-There are currently no 64-bit Windows binaries of libevent included, so you'll either need to build those yourself, or you can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the package description of your project.
+There are currently no 64-bit Windows binaries of libevent included, so you'll either need to build those yourself, or you can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the dub.json file of your project.
 
 
 Additional setup on Mac using brew
@@ -54,6 +47,10 @@ install libevent.
 
     ruby -e "$(curl -fsSL https://raw.github.com/Homebrew/homebrew/go/install)"
     brew install libevent
+
+You can then also install DUB using brew:
+
+    brew install dub
 
 (Note: Install brew only if you do not have macports, as they will conflict)
 
