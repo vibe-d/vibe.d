@@ -26,6 +26,10 @@ using the following shell commands:
 Similarly, you can run an example by invoking `dub` from any of the
 example project directories.
 
+Note that on non-Windows operating systems, you also need to have
+libevent and OpenSSL installed - and of course a D compiler. See below
+for instructions.
+
 
 Additional setup on Windows
 ---------------------------
