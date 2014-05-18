@@ -54,9 +54,7 @@ int main()
 		
 		logDiagnostic("Running event loop...");
 		int status;
-		debug {
-			status = runEventLoop();
-		} else {
+		version (VibeDebugCatchAll) {
 			try {
 				status = runEventLoop();
 			} catch( Throwable th ){
@@ -64,6 +62,8 @@ int main()
 				logDiagnostic("Full exception: %s", th.toString().sanitize());
 				return 1;
 			}
+		} else {
+			status = runEventLoop();
 		}
 		logDiagnostic("Event loop exited with status %d.", status);
 		return status;

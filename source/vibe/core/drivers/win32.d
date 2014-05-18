@@ -401,7 +401,7 @@ class Win32EventDriver : EventDriver {
 		stat.finished = true;
 		if( stat.task )
 			try stat.driver.m_core.resumeTask(stat.task);
-			catch( Throwable th ) logWarn("Resuming task for DNS lookup has thrown: %s", th.msg);
+			catch (UncaughtException th) logWarn("Resuming task for DNS lookup has thrown: %s", th.msg);
 	}
 
 	private static nothrow extern(System)
@@ -418,7 +418,7 @@ class Win32EventDriver : EventDriver {
 					foreach( task, tid; lst )
 						if( tid is driver && task )
 							driver.m_core.resumeTask(task);
-				} catch(Throwable th){
+				} catch(UncaughtException th){
 					logWarn("Failed to resume signal listeners: %s", th.msg);
 					return 0;
 				}
@@ -761,7 +761,7 @@ class Win32FileStream : FileStream {
 				if( dwError != 0 ) ex = new Exception("File I/O error: "~to!string(dwError));
 				if( fileStream.m_task ) fileStream.m_driver.resumeTask(fileStream.m_task, ex);
 			}
-		} catch( Throwable e ){
+		} catch( UncaughtException e ){
 			logWarn("Exception while handling file I/O: %s", e.msg);
 		}
 	}
@@ -884,7 +884,7 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 					if( dwError != 0 ) ex = new Exception("Diretory watcher error: "~to!string(dwError));
 					if( watcher.m_task ) watcher.m_core.resumeTask(watcher.m_task, ex);
 				}
-			} catch( Throwable th ){
+			} catch( UncaughtException th ){
 				logWarn("Exception in directory watcher callback: %s", th.msg);
 			}
 		}
@@ -1040,7 +1040,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 			auto f = ctx.task;
 			if( f && f.state != Fiber.State.TERM )
 				ctx.core.resumeTask(f);
-		} catch( Throwable e ){
+		} catch( UncaughtException e ){
 			logError("Exception onUDPRead: %s", e.msg);
 			debug assert(false);
 		}*/
@@ -1443,7 +1443,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 			}
-		} catch( Throwable th ){
+		} catch( UncaughtException th ){
 			logWarn("Exception while handling socket event: %s", th.msg);
 		}
 	}
@@ -1473,7 +1473,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 				if( dwError != 0 ) ex = new Exception("Socket I/O error: "~to!string(dwError));
 				conn.m_driver.m_core.resumeTask(conn.m_writeOwner, ex);
 			}
-		} catch( Throwable th ){
+		} catch( UncaughtException th ){
 			logWarn("Exception while handling TCP I/O: %s", th.msg);
 		}
 	}
@@ -1556,5 +1556,7 @@ void setupWindowClass()
 	s_setupWindowClass = true;
 }
 
+version (VibeDebugCatchAll) private alias UncaughtException = Throwable;
+else private alias UncaughtException = Exception;
 
 } // version(VibeWin32Driver)

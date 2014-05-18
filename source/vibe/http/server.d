@@ -1424,7 +1424,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, err.toString().sanitize);
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
 			keep_alive = false;
-	} catch (Throwable e) {
+	} catch (UncaughtException e) {
 		auto status = parsed ? HTTPStatus.internalServerError : HTTPStatus.badRequest;
 		string dbg_msg;
 		if (settings.options & HTTPServerOption.errorStackTraces) dbg_msg = e.toString().sanitize;
@@ -1526,3 +1526,6 @@ private string formatRFC822DateAlloc(shared(Allocator) alloc, SysTime time)
 	writeRFC822DateTimeString(app, time);
 	return app.data;
 }
+
+version (VibeDebugCatchAll) private alias UncaughtException = Throwable;
+else private alias UncaughtException = Exception;

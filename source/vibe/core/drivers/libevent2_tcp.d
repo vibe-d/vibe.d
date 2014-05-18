@@ -454,6 +454,9 @@ alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
 
 package nothrow extern(C)
 {
+	version (VibeDebugCatchAll) alias UncaughtException = Throwable;
+	else alias UncaughtException = Exception;
+
 	void onConnect(evutil_socket_t listenfd, short evtype, void *arg)
 	{
 		logTrace("connect callback");
@@ -549,7 +552,7 @@ package nothrow extern(C)
 
 				runTask(&task.execute);
 			}
-		} catch (Throwable e) {
+		} catch (UncaughtException e) {
 			logWarn("Got exception while accepting new connections: %s", e.msg);
 			try logDebug("Full error: %s", e.toString().sanitize());
 			catch {}
@@ -567,7 +570,7 @@ package nothrow extern(C)
 		try {
 			if (f && f.running)
 				ctx.core.resumeTask(f);
-		} catch( Throwable e ){
+		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
 		}
 	}
@@ -582,7 +585,7 @@ package nothrow extern(C)
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 			}
 			if (ctx.writeOwner) ctx.core.resumeTask(ctx.writeOwner);
-		} catch( Throwable e ){
+		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
 		}
 	}
@@ -632,7 +635,7 @@ package nothrow extern(C)
 				if (ctx.writeOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
 				else ctx.core.resumeTask(ctx.writeOwner, ex);
 			}
-		} catch( Throwable e ){
+		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
 			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
 		}
@@ -646,7 +649,7 @@ package nothrow extern(C)
 			conn.m_timeout_triggered = true;
 			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.readOwner);
 			else logDebug("waitForData timeout after connection was closed!");
-		} catch( Throwable e ){
+		} catch (UncaughtException e) {
 			logWarn("Exception onTimeout: %s", e.msg);
 		}
 	}

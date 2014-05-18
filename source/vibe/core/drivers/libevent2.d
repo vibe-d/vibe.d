@@ -1047,13 +1047,16 @@ alias FreeListObjectAlloc!(Condition, false) ConditionAlloc;
 
 private nothrow extern(C)
 {
+	version (VibeDebugCatchAll) alias UncaughtException = Throwable;
+	else alias UncaughtException = Exception;
+
 	void* lev_alloc(size_t size)
 	{
 		try {
 			auto mem = manualAllocator().alloc(size+size_t.sizeof);
 			*cast(size_t*)mem.ptr = size;
 			return mem.ptr + size_t.sizeof;
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_alloc: %s", th.msg);
 			return null;
 		}
@@ -1067,7 +1070,7 @@ private nothrow extern(C)
 			auto newmem = manualAllocator().realloc(oldmem, newsize+size_t.sizeof);
 			*cast(size_t*)newmem.ptr = newsize;
 			return newmem.ptr + size_t.sizeof;
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_realloc: %s", th.msg);
 			return null;
 		}
@@ -1078,8 +1081,9 @@ private nothrow extern(C)
 			auto size = *cast(size_t*)(p-size_t.sizeof);
 			auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
 			manualAllocator().free(mem);
-		} catch( Throwable th ){
-			logWarn("Exception in lev_free: %s", th.msg);
+		} catch (UncaughtException th) {
+			logCritical("Exception in lev_free: %s", th.msg);
+			assert(false);
 		}
 	}
 
@@ -1096,7 +1100,7 @@ private nothrow extern(C)
 			debug if (!s_mutexesLock) s_mutexesLock = new Mutex;
 			debug synchronized (s_mutexesLock) s_mutexes[cast(void*)ret] = 0;
 			return ret;
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_alloc_mutex: %s", th.msg);
 			return null;
 		}
@@ -1117,8 +1121,9 @@ private nothrow extern(C)
 			if (lm.mutex) MutexAlloc.free(lm.mutex);
 			if (lm.rwmutex) ReadWriteMutexAlloc.free(lm.rwmutex);
 			LevMutexAlloc.free(lm);
-		} catch( Throwable th ){
-			logWarn("Exception in lev_free_mutex: %s", th.msg);
+		} catch (UncaughtException th) {
+			logCritical("Exception in lev_free_mutex: %s", th.msg);
+			assert(false);
 		}
 	}
 
@@ -1147,7 +1152,7 @@ private nothrow extern(C)
 				else mtx.mutex.lock();
 			}
 			return 0;
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_lock_mutex: %s", th.msg);
 			return -1;
 		}
@@ -1174,7 +1179,7 @@ private nothrow extern(C)
 				mtx.mutex.unlock();
 			}
 			return 0;
-		} catch( Throwable th ){
+		} catch (UncaughtException th ) {
 			logWarn("Exception in lev_unlock_mutex: %s", th.msg);
 			return -1;
 		}
@@ -1184,7 +1189,7 @@ private nothrow extern(C)
 	{
 		try {
 			return LevConditionAlloc.alloc();
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_alloc_condition: %s", th.msg);
 			return null;
 		}
@@ -1196,8 +1201,9 @@ private nothrow extern(C)
 			auto lc = cast(LevCondition*)cond;
 			if (lc.cond) ConditionAlloc.free(lc.cond);
 			LevConditionAlloc.free(lc);
-		} catch( Throwable th ){
-			logWarn("Exception in lev_free_condition: %s", th.msg);
+		} catch (UncaughtException th) {
+			logCritical("Exception in lev_free_condition: %s", th.msg);
+			assert(false);
 		}
 	}
 
@@ -1207,7 +1213,7 @@ private nothrow extern(C)
 			auto c = cast(LevCondition*)cond;
 			if( c.cond ) c.cond.notifyAll();
 			return 0;
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_signal_condition: %s", th.msg);
 			return -1;
 		}
@@ -1226,7 +1232,7 @@ private nothrow extern(C)
 					return 1;
 			} else c.cond.wait();
 			return 0;
-		} catch( Throwable th ){
+		} catch (UncaughtException th) {
 			logWarn("Exception in lev_wait_condition: %s", th.msg);
 			return -1;
 		}
@@ -1235,7 +1241,7 @@ private nothrow extern(C)
 	c_ulong lev_get_thread_id()
 	{
 		try return cast(c_ulong)cast(void*)Thread.getThis();
-		catch( Throwable th ){
+		catch (UncaughtException th) {
 			logWarn("Exception in lev_get_thread_id: %s", th.msg);
 			return 0;
 		}

@@ -850,6 +850,8 @@ private class CoreTask : TaskFiber {
 
 	private void run()
 	{
+		version (VibeDebugCatchAll) alias UncaughtException = Throwable;
+		else alias UncaughtException = Exception;
 		try {
 			while(true){
 				while (!m_taskFunc) {
@@ -892,7 +894,7 @@ private class CoreTask : TaskFiber {
 					s_availableFibers.capacity = 2 * s_availableFibers.capacity;
 				s_availableFibers.put(this);
 			}
-		} catch(Throwable th){
+		} catch(UncaughtException th) {
 			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
 			logDiagnostic("Full error: %s", th.toString().sanitize());
 			s_fiberCount--;
@@ -1000,10 +1002,14 @@ private class VibeDriverCore : DriverCore {
 		}
 		
 		auto uncaught_exception = ctask.call(false);
-		if( uncaught_exception ){
+		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
 			assert(ctask.state == Fiber.State.TERM);
-			logError("Task terminated with unhandled exception: %s", uncaught_exception.toString());
+			logError("Task terminated with unhandled exception: %s", th.msg);
+			logDebug("Full error: %s", th.toString().sanitize);
+			
+			// always pass Errors on
+			if (auto err = cast(Error)th) throw err;
 		}
 	}
 

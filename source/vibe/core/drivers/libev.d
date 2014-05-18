@@ -433,7 +433,7 @@ class LibevManualEvent : ManualEvent {
 		try {
 			if( tm.m_owner && tm.m_owner.running ) tm.m_driver.m_core.resumeTask(tm.m_owner);
 			if( tm.m_callback ) runTask(tm.m_callback);
-		} catch (Throwable e) {
+		} catch (UncaughtException e) {
 			logError("Exception while handling timer event: %s", e.msg);
 			try logDebug("Full exception: %s", sanitize(e.toString())); catch {}
 			debug assert(false);
