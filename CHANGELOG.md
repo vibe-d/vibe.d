@@ -21,8 +21,8 @@ The `vibe.web.web` web interface generator module has been extended with some im
  - Serialization system
 	- Added `@asArray` to force serialization of composite types as arrays instead of dictionaries
 	- Added support for using a pre-allocated buffer for `serializeToBson`
-	- Added support for custom serialization representations of user defined types using `toSerializedValue`/`fromSerializedValue` methods
-	- Made `DictionaryList` serializable as an array by adding `toSerializedValue`/`fromSerializedValue` - [issue #621][issue621]
+	- Added support for custom serialization representations of user defined types using `toRepresentation`/`fromRepresentation` methods - [issue #618][issue618]
+	- Made `DictionaryList` serializable as an array by adding `toRepresentation`/`fromRepresentation` - [issue #621][issue621]
  - SSL/TLS
 	- Using only strong ciphers by default for SSL server contexts
 	- Added out-of-the box support for perfect forward secrecy (PFS) (by Martin Nowak) - [pull #630][issue630]
@@ -79,6 +79,7 @@ The `vibe.web.web` web interface generator module has been extended with some im
 [issue601]: https://github.com/rejectedsoftware/vibe.d/issues/601
 [issue609]: https://github.com/rejectedsoftware/vibe.d/issues/609
 [issue614]: https://github.com/rejectedsoftware/vibe.d/issues/614
+[issue618]: https://github.com/rejectedsoftware/vibe.d/issues/618
 [issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
 [issue622]: https://github.com/rejectedsoftware/vibe.d/issues/622
 [issue630]: https://github.com/rejectedsoftware/vibe.d/issues/630

@@ -48,14 +48,14 @@ struct DictionaryList(VALUE, bool case_sensitive = true) {
 	@property size_t length() const { return m_fieldCount + m_extendedFields.length; }
 
 	/// Supports serialization using vibe.data.serialization.
-	static DictionaryList fromSerializedValue(FieldTuple[] array)
+	static DictionaryList fromRepresentation(FieldTuple[] array)
 	{
 		DictionaryList ret;
 		foreach (ref v; array) ret.addField(v[0], v[1]);
 		return ret;
 	}
 	/// ditto
-	FieldTuple[] toSerializedValue() {
+	FieldTuple[] toRepresentation() {
 		FieldTuple[] ret;
 		foreach (k, ref v; this) ret ~= FieldTuple(k, v);
 		return ret;

@@ -169,8 +169,8 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 		}
 		serializer.endWriteDictionary!TU();
 	} else static if (isCustomSerializable!T) {
-		alias CustomType = typeof(T.init.toSerializedValue());
-		serializeImpl!(Serializer, CustomType, ATTRIBUTES)(serializer, value.toSerializedValue());
+		alias CustomType = typeof(T.init.toRepresentation());
+		serializeImpl!(Serializer, CustomType, ATTRIBUTES)(serializer, value.toRepresentation());
 	} else static if (isISOExtStringSerializable!TU) {
 		serializer.writeValue(value.toISOExtString());
 	} else static if (isStringSerializable!TU) {
@@ -262,8 +262,8 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 		});
 		return ret;
 	} else static if (isCustomSerializable!T) {
-		alias CustomType = typeof(T.init.toSerializedValue());
-		return T.fromSerializedValue(deserializeImpl!(CustomType, Serializer, ATTRIBUTES)(deserializer));
+		alias CustomType = typeof(T.init.toRepresentation());
+		return T.fromRepresentation(deserializeImpl!(CustomType, Serializer, ATTRIBUTES)(deserializer));
 	} else static if (isISOExtStringSerializable!T) {
 		return T.fromISOExtString(deserializer.readValue!string());
 	} else static if (isStringSerializable!T) {
@@ -459,7 +459,7 @@ struct ByNameAttribute {}
 struct AsArrayAttribute {}
 
 
-template isCustomSerializable(T) { enum isCustomSerializable = is(typeof(T.init.toSerializedValue())) && is(typeof(T.fromSerializedValue(T.init.toSerializedValue())) == T); }
+template isCustomSerializable(T) { enum isCustomSerializable = is(typeof(T.init.toRepresentation())) && is(typeof(T.fromRepresentation(T.init.toRepresentation())) == T); }
 
 template isISOExtStringSerializable(T) { enum isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T); }
 
