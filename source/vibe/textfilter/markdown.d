@@ -44,7 +44,7 @@ string filterMarkdown()(string str, MarkdownFlags flags)
 {
 	scope settings = new MarkdownSettings;
 	settings.flags = flags;
-	return filterMarkdown(settings);
+	return filterMarkdown(str, settings);
 }
 /// ditto
 string filterMarkdown()(string str, scope MarkdownSettings settings = null)
