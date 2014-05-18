@@ -1,10 +1,11 @@
 [![vibe.d](http://vibed.org/images/logo-and-title.png)](http://vibed.org)
 
 vibe.d is a high-performance asynchronous I/O, concurrency and web application
-framework written in D. It already contains many supplemental features such as
-database support to be able to offer a complete development toolbox. Extensions
-are supported in the form of
-[DUB packages](http://code.dlang.org/?sort=updated&category=library.vibed).
+toolkit written in D. It already contains many supplemental features such as
+database support to be able to offer a complete development environment. For
+more specialized needs, there are also many compatible
+[DUB packages](http://code.dlang.org/?sort=updated&category=library.vibed)
+available.
 
 Visit the website at <http://vibed.org/> for more information.
 
