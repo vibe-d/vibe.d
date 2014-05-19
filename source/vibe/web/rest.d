@@ -132,7 +132,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 	import vibe.internal.meta.traits : baseInterface;
 
 	alias I = baseInterface!TImpl;
-	enum uda = findFirstUDA!(RootPath, I);
+	enum uda = findFirstUDA!(RootPathAttribute, I);
 
 	static if (!uda.found)
 		registerRestInterface!I(router, instance, "/", style);
@@ -260,7 +260,7 @@ class RestInterfaceClient(I) : I
 		import vibe.internal.meta.uda : findFirstUDA;
 		
 		URL url;
-		enum uda = findFirstUDA!(RootPath, I);
+		enum uda = findFirstUDA!(RootPathAttribute, I);
 		static if (!uda.found) {
 			url = URL.parse(base_url);
 		}

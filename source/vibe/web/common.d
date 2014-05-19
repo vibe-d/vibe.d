@@ -136,11 +136,11 @@ unittest
 	}
 	---	
  */
-OverriddenMethod method(HTTPMethod data)
+MethodAttribute method(HTTPMethod data)
 {
 	if (!__ctfe)
 		assert(false);
-	return OverriddenMethod(data);
+	return MethodAttribute(data);
 }
 
 /**
@@ -163,11 +163,11 @@ OverriddenMethod method(HTTPMethod data)
 	}
 	---	
 */
-OverriddenPath path(string data)
+PathAttribute path(string data)
 {
 	if (!__ctfe)
 		assert(false);
-	return OverriddenPath(data);
+	return PathAttribute(data);
 }
 
 
@@ -175,9 +175,9 @@ OverriddenPath path(string data)
 	UDA to define root URL prefix for annotated REST interface.
 	Empty path means deducing prefix from interface type name (see also rootPathFromName)
  */
-RootPath rootPath(string path)
+RootPathAttribute rootPath(string path)
 {
-	return RootPath(path);
+	return RootPathAttribute(path);
 }
 ///
 unittest
@@ -210,9 +210,9 @@ unittest
 /**
 	Convenience alias
  */
-@property RootPath rootPathFromName()
+@property RootPathAttribute rootPathFromName()
 {
-	return RootPath("");
+	return RootPathAttribute("");
 }
 ///
 unittest
@@ -243,25 +243,34 @@ unittest
 
 
 /// private
-struct OverriddenMethod
+struct MethodAttribute
 {
 	HTTPMethod data;
 	alias data this;
 }
 
 /// private
-struct OverriddenPath
+deprecated alias OverriddenMethod = MethodAttribute;
+
+/// private
+struct PathAttribute
 {
 	string data;
 	alias data this;
 }
 
 /// private
-struct RootPath
+deprecated alias OverriddenPath = PathAttribute;
+
+/// private
+struct RootPathAttribute
 {
 	string data;
 	alias data this;
 }
+
+/// private
+deprecated alias RootPath = RootPathAttribute;
 
 
 /**
@@ -348,8 +357,8 @@ auto extractHTTPMethodAndName(alias Func)()
 	// Cases may conflict and are listed in order of priority
 
 	// Workaround for Nullable incompetence
-	enum uda1 = findFirstUDA!(OverriddenMethod, Func);
-	enum uda2 = findFirstUDA!(OverriddenPath, Func);
+	enum uda1 = findFirstUDA!(MethodAttribute, Func);
+	enum uda2 = findFirstUDA!(PathAttribute, Func);
 
 	static if (uda1.found) {
 		udmethod = uda1.value;
