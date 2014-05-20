@@ -470,7 +470,7 @@ class Libevent2Driver : EventDriver {
 			rescheduleTimerEvent((timeout - now).hnsecs);
 		}
 		auto entry = TimeoutEntry(timeout, id);
-		static if (__VERSION__ < 2065) {
+		static if (__VERSION__ >= 2065) {
 			m_timeoutHeap.insert(entry);
 		} else {
 			auto existing = m_timeoutHeap[];
