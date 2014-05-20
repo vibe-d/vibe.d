@@ -72,7 +72,7 @@ class Libevent2Driver : EventDriver {
 		event* m_timerEvent;
 		int m_timerIDCounter = 1;
 		HashMap!(size_t, TimerInfo) m_timers;
-		static if (__VERSION__ < 2065) {
+		static if (__VERSION__ >= 2065) {
 			import std.container : Array, BinaryHeap, heapify;
 			BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
 		} else {
