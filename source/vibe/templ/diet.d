@@ -552,9 +552,13 @@ private struct DietCompiler(TRANSLATE...)
 							// tag had a '.' appended. treat child nodes as plain text
 							size_t next_tag = m_lineIndex + 1;
 							size_t unindent_count = level + start_indent_level - base_level + 1;
+							size_t last_line_number = curline.number;
 							while( next_tag < lineCount &&
 							      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
 							{
+								// TODO: output all empty lines between this and the previous one
+								foreach (i; last_line_number+1 .. line(next_tag).number) output.writeString("\n");
+								last_line_number = line(next_tag).number;
 								buildTextNodeWriter(output, unindent(line(next_tag++).text, indentStyle, unindent_count), level, prepend_whitespaces);
 							}
 							m_lineIndex = next_tag - 1;
