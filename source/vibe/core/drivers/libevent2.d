@@ -485,7 +485,7 @@ class Libevent2Driver : EventDriver {
 	{
 		event_del(m_timerEvent);
 		assert(dur.total!"seconds"() <= int.max);
-		dur += 9.hnsecs(); // round up to the next usec to avoid premature timer eventss
+		dur += 9.hnsecs(); // round up to the next usec to avoid premature timer events
 		timeval tvdur;
 		tvdur.tv_sec = cast(int)dur.total!"seconds"();
 		tvdur.tv_usec = dur.fracSec().usecs();
