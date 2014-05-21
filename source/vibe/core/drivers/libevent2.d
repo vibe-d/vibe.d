@@ -244,7 +244,7 @@ class Libevent2Driver : EventDriver {
 		}
 
 		logDebug("dnsresolve ret");
-		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, evutil_gai_strerror(msg.err)));
+		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, to!string(evutil_gai_strerror(msg.err))));
 
 		return msg.addr;
 	}
