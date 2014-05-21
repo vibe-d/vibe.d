@@ -71,6 +71,7 @@ The `vibe.web.web` web interface generator module has been extended with some im
  - Fixed rendering of Markdown links with styled captions
  - Fixed `Path.relativeTo` step over devices for UNC paths on Windows
  - Fixed compilation on 2.064 frontend based GDC - [issue #647][issue647]
+ - Fixed output of empty lines in "tag." style Diet template text blocks 
 
 [issue410]: https://github.com/rejectedsoftware/vibe.d/issues/410
 [issue443]: https://github.com/rejectedsoftware/vibe.d/issues/443
