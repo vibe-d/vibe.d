@@ -456,13 +456,15 @@ class SSLContext {
 						case SSLVersion.dtls1: method = DTLSv1_server_method(); break;
 					}
 					options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
-					setDHParams();
-					setECDHCurve();
 					break;
 			}
 
 			m_ctx = SSL_CTX_new(method);
 			SSL_CTX_set_options!()(m_ctx, options);
+			if (kind == SSLContextKind.server) {
+				setDHParams();
+				setECDHCurve();
+			}
 
 			setCipherList();
 		} else enforce(false, "No SSL support compiled in!");
