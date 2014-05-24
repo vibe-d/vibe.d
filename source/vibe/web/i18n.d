@@ -213,10 +213,11 @@ private size_t skipLine(size_t i, ref string text)
 
 private size_t skipString(size_t i, ref string text)
 {
+	size_t istart = i;
 	assert(text[i] == '"');
 	i++;
 	while (true) {
-		assert(i < text.length);
+		assert(i < text.length, "Missing closing '\"' for string: "~text[i .. min($, 10)]);
 		if (text[i] == '"') return i+1;
 		if (text[i] == '\\') i += 2;
 		else i++;
