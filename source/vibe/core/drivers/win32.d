@@ -12,6 +12,7 @@ version(VibeWin32Driver)
 
 import vibe.core.core;
 import vibe.core.driver;
+import vibe.core.drivers.timerqueue;
 import vibe.core.drivers.utils;
 import vibe.core.log;
 import vibe.inet.url;
@@ -28,6 +29,7 @@ import std.algorithm;
 import std.conv;
 import std.c.windows.windows;
 import std.c.windows.winsock;
+import std.datetime;
 import std.exception;
 import std.string : lastIndexOf;
 import std.typecons;
@@ -57,10 +59,7 @@ final class Win32EventDriver : EventDriver {
 		HANDLE m_fileCompletionEvent;
 		bool[Win32TCPConnection] m_fileWriters;
 
-		int m_timerIDCounter = 1;
-		HashMap!(size_t, TimerInfo) m_timers;
-		Array!TimeoutEntry m_timeoutHeapStore;
-		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
+		TimerQueue!TimerInfo m_timers;
 	}
 
 	this(DriverCore core)
@@ -79,8 +78,6 @@ final class Win32EventDriver : EventDriver {
 
 		m_fileCompletionEvent = CreateEventW(null, false, false, null);
 		m_registeredEvents ~= m_fileCompletionEvent;
-
-		m_timeoutHeap = heapify!"a.timeout > b.timeout"(m_timeoutHeapStore, 0);
 	}
 
 	~this()
@@ -143,9 +140,10 @@ final class Win32EventDriver : EventDriver {
 	private void waitForEvents(uint timeout_msecs)
 	{
 		// if timers are pending, limit the wait time to the first timer timeout
-		if (timeout_msecs > 0 && !m_timeoutHeap.empty) {
+		auto next_timer = m_timers.getFirstTimeout();
+		if (timeout_msecs > 0 && next_timer != SysTime.max) {
 			auto now = Clock.currStdTime();
-			auto timer_timeout = (m_timeoutHeap.front.timeout - now) / 10_000;
+			auto timer_timeout = (next_timer.stdTime - now) / 10_000;
 			if (timeout_msecs == INFINITE || timer_timeout < timeout_msecs)
 				timeout_msecs = cast(uint)(timer_timeout < 0 ? 0 : timer_timeout > uint.max ? uint.max : timer_timeout);
 		}
@@ -164,29 +162,14 @@ final class Win32EventDriver : EventDriver {
 	private void processTimers()
 	{
 		// process all timers that have expired up to now
-		auto now = Clock.currStdTime();
-		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
-			auto tm = m_timeoutHeap.front.id;
-			m_timeoutHeap.removeFront();
-
-			auto pt = tm in m_timers;
-			if (!pt || !pt.pending) continue;
-
-			Task owner = pt.owner;
-			auto callback = pt.callback;
-
-			if (pt.repeatDuration > 0) {
-				pt.timeout += pt.repeatDuration;
-				if (pt.timeout <= now) pt.timeout = now; // never try to process periodic timers faster than possible
-				m_timeoutHeap.insert(TimeoutEntry(pt.timeout, tm));
-			} else {
-				pt.pending = false;
-				releaseTimer(tm);
-			}
-
+		auto now = Clock.currTime(UTC());
+		m_timers.consumeTimeouts(now, (timer, periodic, ref data) {
+			Task owner = data.owner;
+			auto callback = data.callback;
+			if (!periodic) releaseTimer(timer);
 			if (owner && owner.running) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
-		}
+		});
 	}
 
 	void exitEventLoop()
@@ -327,60 +310,39 @@ final class Win32EventDriver : EventDriver {
 		assert(false, "Not implemented.");
 	}
 
-	size_t createTimer(void delegate() callback)
-	{
-		assert(m_tid == GetCurrentThreadId());
-		auto id = m_timerIDCounter++;
-		if (!id) id = m_timerIDCounter++;
-		m_timers[id] = TimerInfo(callback);
-		return id;
-	}
+	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
 
-	void acquireTimer(size_t timer_id) { m_timers[timer_id].refCount++; }
+	void acquireTimer(size_t timer_id) { m_timers.getUserData(timer_id).refCount++; }
 	void releaseTimer(size_t timer_id)
 	{
-		if (!--m_timers[timer_id].refCount)
-			m_timers.remove(timer_id);
+		if (!--m_timers.getUserData(timer_id).refCount)
+			m_timers.destroy(timer_id);
 	}
 
-	bool isTimerPending(size_t timer_id) { return m_timers[timer_id].pending; }
+	bool isTimerPending(size_t timer_id) { return m_timers.isPending(timer_id); }
 
 	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
 	{
-		auto timeout = Clock.currStdTime() + dur.total!"hnsecs";
-		auto pt = timer_id in m_timers;
-		assert(pt !is null, "Accessing non-existent timer ID.");
-		pt.timeout = timeout;
-		pt.repeatDuration = periodic ? dur.total!"hnsecs" : 0;
-		if (!pt.pending) {
-			pt.pending = true;
+		if (!m_timers.isPending(timer_id))
 			acquireTimer(timer_id);
-		}
-		m_timeoutHeap.insert(TimeoutEntry(timeout, timer_id));
+		m_timers.schedule(timer_id, dur, periodic);
 	}
 
 	void stopTimer(size_t timer_id)
 	{
-		auto pt = timer_id in m_timers;
-		if (pt.pending) {
-			pt.pending = false;
+		if (m_timers.isPending(timer_id))
 			releaseTimer(timer_id);
-		}
+		m_timers.unschedule(timer_id);
 	}
 
 	void waitTimer(size_t timer_id)
 	{
 		while (true) {
-			{
-				auto pt = timer_id in m_timers;
-				if (!pt || !pt.pending) return;
-				assert(pt.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
-				pt.owner = Task.getThis();
-			}
-			scope (exit) {
-				auto pt = timer_id in m_timers;
-				if (pt) pt.owner = Task.init;
-			}
+			auto data = &m_timers.getUserData(timer_id);
+			assert(data.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
+			if (!m_timers.isPending(timer_id)) return;
+			data.owner = Task.getThis();
+			scope (exit) m_timers.getUserData(timer_id).owner = Task.init;
 			m_core.yieldForEvent();
 		}
 	}
@@ -443,19 +405,11 @@ interface SocketEventHandler {
 }
 
 private struct TimerInfo {
-	long timeout;
-	long repeatDuration;
 	size_t refCount = 1;
 	void delegate() callback;
 	Task owner;
-	bool pending;
 
 	this(void delegate() callback) { this.callback = callback; }
-}
-
-private struct TimeoutEntry {
-	long timeout;
-	size_t id;
 }
 
 
@@ -521,7 +475,7 @@ final class Win32ManualEvent : ManualEvent {
 		m_waiter = Task.getThis();
 		auto timer = m_driver.createTimer(null);
 		scope(exit) m_driver.releaseTimer(timer);
-		m_driver.m_timers[timer].owner = Task.getThis();
+		m_driver.m_timers.getUserData(timer).owner = Task.getThis();
 		m_driver.rearmTimer(timer, timeout, false);
 		while (ec == reference_emit_count && !m_driver.isTimerPending(timer)) {
 			m_driver.m_core.yieldForEvent();
@@ -1222,7 +1176,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		scope(exit) releaseReader();
 		auto tm = m_driver.createTimer(null);
 		scope(exit) m_driver.releaseTimer(tm);
-		m_driver.m_timers[tm].owner = Task.getThis();
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 		while (m_readBuffer.empty) {
 			if (!connected) return false;

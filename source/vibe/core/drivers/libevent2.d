@@ -13,6 +13,7 @@ version(VibeLibeventDriver)
 import vibe.core.driver;
 import vibe.core.drivers.libevent2_tcp;
 import vibe.core.drivers.threadedfile;
+import vibe.core.drivers.timerqueue;
 import vibe.core.drivers.utils;
 import vibe.core.log;
 import vibe.utils.array : ArraySet;
@@ -36,6 +37,7 @@ import deimos.event2.event;
 import deimos.event2.thread;
 import deimos.event2.util;
 import std.conv;
+import std.datetime;
 import std.encoding : sanitize;
 import std.exception;
 import std.range : assumeSorted;
@@ -70,15 +72,7 @@ final class Libevent2Driver : EventDriver {
 		debug Thread m_ownerThread;
 
 		event* m_timerEvent;
-		int m_timerIDCounter = 1;
-		HashMap!(size_t, TimerInfo) m_timers;
-		static if (__VERSION__ >= 2065) {
-			import std.container : Array, BinaryHeap, heapify;
-			BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
-		} else {
-			import std.container : DList;
-			DList!TimeoutEntry m_timeoutHeap;
-		}
+		TimerQueue!TimerInfo m_timers;
 	}
 
 	this(DriverCore core)
@@ -364,46 +358,31 @@ final class Libevent2Driver : EventDriver {
 		return new Libevent2FileDescriptorEvent(this, fd, events);
 	}
 
-	size_t createTimer(void delegate() callback)
-	{
-		debug assert(m_ownerThread is Thread.getThis());
-		auto id = m_timerIDCounter++;
-		if (!id) id = m_timerIDCounter++;
-		m_timers[id] = TimerInfo(callback);
-		return id;
-	}
+	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
 
-	void acquireTimer(size_t timer_id) { m_timers[timer_id].refCount++; }
+	void acquireTimer(size_t timer_id) { m_timers.getUserData(timer_id).refCount++; }
 	void releaseTimer(size_t timer_id)
 	{
-		if (!--m_timers[timer_id].refCount)
-			m_timers.remove(timer_id);
+		debug assert(m_ownerThread is Thread.getThis());
+		if (!--m_timers.getUserData(timer_id).refCount)
+			m_timers.destroy(timer_id);
 	}
 
-	bool isTimerPending(size_t timer_id) { return m_timers[timer_id].pending; }
+	bool isTimerPending(size_t timer_id) { return m_timers.isPending(timer_id); }
 
 	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
 	{
 		debug assert(m_ownerThread is Thread.getThis());
-		auto timeout = Clock.currStdTime() + dur.total!"hnsecs";
-		auto pt = timer_id in m_timers;
-		assert(pt !is null, "Accessing non-existent timer ID.");
-		pt.timeout = timeout;
-		pt.repeatDuration = periodic ? dur.total!"hnsecs" : 0;
-		if (!pt.pending) {
-			pt.pending = true;
-			acquireTimer(timer_id);
-		}
-		logDebugV("rearming timer %s in %s s", timer_id, dur.total!"usecs" * 1e-6);
-		scheduleTimer(timeout, timer_id);
+		if (!isTimerPending(timer_id)) acquireTimer(timer_id);
+		m_timers.schedule(timer_id, dur, periodic);
+		rescheduleTimerEvent(Clock.currTime(UTC()));
 	}
 
 	void stopTimer(size_t timer_id)
 	{
 		logTrace("Stopping timer %s", timer_id);
-		auto pt = timer_id in m_timers;
-		if (pt.pending) {
-			pt.pending = false;
+		if (m_timers.isPending(timer_id)) {
+			m_timers.unschedule(timer_id);
 			releaseTimer(timer_id);
 		}
 	}
@@ -412,17 +391,12 @@ final class Libevent2Driver : EventDriver {
 	{
 		debug assert(m_ownerThread is Thread.getThis());
 		while (true) {
-			{
-				auto pt = timer_id in m_timers;
-				if (!pt || !pt.pending) return;
-				assert(pt.repeatDuration == 0, "Cannot wait for a periodic timer.");
-				assert(pt.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
-				pt.owner = Task.getThis();
-			}
-			scope (exit) {
-				auto pt = timer_id in m_timers;
-				if (pt) pt.owner = Task.init;
-			}
+			assert(!m_timers.isPeriodic(timer_id), "Cannot wait for a periodic timer.");
+			if (!m_timers.isPending(timer_id)) return;
+			auto data = &m_timers.getUserData(timer_id);
+			assert(data.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
+			data.owner = Task.getThis();
+			scope (exit) m_timers.getUserData(timer_id).owner = Task.init;
 			m_core.yieldForEvent();
 		}
 	}
@@ -430,59 +404,29 @@ final class Libevent2Driver : EventDriver {
 	private void processTimers()
 	{
 		logTrace("Processing due timers");
-
 		// process all timers that have expired up to now
-		auto now = Clock.currStdTime();
-		if (m_timeoutHeap.empty) logTrace("no timers scheduled");
-		else logTrace("first timeout: %s", (m_timeoutHeap.front.timeout - now) * 1e-7);
-		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now) / 10_000 <= 0) {
-			auto tm = m_timeoutHeap.front;
-			m_timeoutHeap.removeFront();
+		auto now = Clock.currTime(UTC());
+		m_timers.consumeTimeouts(now, (timer, periodic, ref data) {
+			Task owner = data.owner;
+			auto callback = data.callback;
 
-			auto pt = tm.id in m_timers;
-			if (!pt || !pt.pending || pt.timeout != tm.timeout) continue;
-	
-			Task owner = pt.owner;
-			auto callback = pt.callback;
+			logTrace("Timer %s fired (%s/%s)", timer, owner != Task.init, callback !is null);
 
-			if (pt.repeatDuration > 0) {
-				pt.timeout += pt.repeatDuration;
-				scheduleTimer(pt.timeout, tm.id);
-			} else {
-				pt.pending = false;
-				releaseTimer(tm.id);
-			}
-
-			logTrace("Timer %s fired (%s/%s)", tm.id, owner != Task.init, callback !is null);
+			if (!periodic) releaseTimer(timer);
 
 			if (owner && owner.running) m_core.resumeTask(owner);
 			if (callback) runTask(callback);
-		}
+		});
 
-		if (!m_timeoutHeap.empty) rescheduleTimerEvent((m_timeoutHeap.front.timeout - now).hnsecs);
+		rescheduleTimerEvent(now);
 	}
 
-	private void scheduleTimer(long timeout, size_t id)
+	private void rescheduleTimerEvent(SysTime now)
 	{
-		logTrace("Schedule timer %s", id);
-		auto now = Clock.currStdTime();
-		if (m_timeoutHeap.empty || timeout < m_timeoutHeap.front.timeout) {
-			rescheduleTimerEvent((timeout - now).hnsecs);
-		}
-		auto entry = TimeoutEntry(timeout, id);
-		static if (__VERSION__ >= 2065) {
-			m_timeoutHeap.insert(entry);
-		} else {
-			auto existing = m_timeoutHeap[];
-			while (!existing.empty && existing.front.timeout < entry.timeout)
-				existing.popFront();
-			m_timeoutHeap.insertBefore(existing, entry);
-		}
-		logDebugV("first timer %s in %s s", id, (timeout - now) * 1e-7);
-	}
+		auto next = m_timers.getFirstTimeout();
+		if (next == SysTime.max) return;
 
-	private void rescheduleTimerEvent(Duration dur)
-	{
+		auto dur = next - now;
 		event_del(m_timerEvent);
 		assert(dur.total!"seconds"() <= int.max);
 		dur += 9.hnsecs(); // round up to the next usec to avoid premature timer events
@@ -561,20 +505,13 @@ final class Libevent2Driver : EventDriver {
 }
 
 private struct TimerInfo {
-	long timeout;
-	long repeatDuration;
 	size_t refCount = 1;
 	void delegate() callback;
 	Task owner;
-	bool pending;
 
 	this(void delegate() callback) { this.callback = callback; }
 }
 
-private struct TimeoutEntry {
-	long timeout;
-	size_t id;
-}
 
 private struct GetAddrInfoMsg {
 	NetworkAddress addr;
@@ -668,7 +605,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		scope(exit) release();
 		auto tm = m_driver.createTimer(null);
 		scope (exit) m_driver.releaseTimer(tm);
-		m_driver.m_timers[tm].owner = Task.getThis();
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 
 		auto ec = this.emitCount;
@@ -805,7 +742,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 
 		auto tm = m_driver.createTimer(null);
 		scope (exit) m_driver.releaseTimer(tm);
-		m_driver.m_timers[tm].owner = Task.getThis();
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 
 		while ((m_activeEvents & which) == Trigger.none) {
