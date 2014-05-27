@@ -1,7 +1,7 @@
 /**
 	libevent based driver
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -53,7 +53,7 @@ private {
 	}
 }
 
-package class Libevent2TCPConnection : TCPConnection {
+package final class Libevent2TCPConnection : TCPConnection {
 	private {
 		bool m_timeout_triggered;
 		TCPContext* m_ctx;
@@ -375,7 +375,7 @@ package class Libevent2TCPConnection : TCPConnection {
 	}
 }
 
-class LibeventTCPListener : TCPListener {
+final class Libevent2TCPListener : TCPListener {
 	private {
 		TCPContext*[] m_ctx;
 	}

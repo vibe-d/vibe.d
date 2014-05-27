@@ -1,7 +1,7 @@
 /**
 	libev based driver implementation
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -47,7 +47,7 @@ private extern(C){
 	void* myrealloc(void* p, sizediff_t newsize){ return GC.realloc(p, newsize); }
 }
 
-class LibevDriver : EventDriver {
+final class LibevDriver : EventDriver {
 	private {
 		DriverCore m_core;
 		ev_loop_t* m_loop;
@@ -106,7 +106,7 @@ class LibevDriver : EventDriver {
 		ev_break(m_loop, EVBREAK_ALL);
 	}
 	
-	FileStream openFile(Path path, FileMode mode)
+	ThreadedFileStream openFile(Path path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);
 	}
@@ -257,7 +257,7 @@ sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 }
 
 
-class LibevManualEvent : ManualEvent {
+final class LibevManualEvent : ManualEvent {
 	private {
 		struct ThreadSlot {
 			LibevDriver driver;
@@ -442,7 +442,7 @@ class LibevManualEvent : ManualEvent {
 }*/
 
 
-class LibevTCPListener : TCPListener {
+final class LibevTCPListener : TCPListener {
 	private {
 		LibevDriver m_driver;
 		int m_socket;
@@ -469,7 +469,7 @@ class LibevTCPListener : TCPListener {
 	}
 }
 
-class LibevTCPConnection : TCPConnection {
+final class LibevTCPConnection : TCPConnection {
 	mixin SingleOwnerEventedObject;
 
 	private {

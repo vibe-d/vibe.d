@@ -43,7 +43,7 @@ pragma(lib, "ws2_32");
 /* class Win32EventDriver                                                     */
 /******************************************************************************/
 
-class Win32EventDriver : EventDriver {
+final class Win32EventDriver : EventDriver {
 	import std.container : Array, BinaryHeap, heapify;
 	import std.datetime : Clock;
 
@@ -307,7 +307,7 @@ class Win32EventDriver : EventDriver {
 		return new Win32TCPListener(this, sock, conn_callback, options);
 	}
 
-	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
+	Win32UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(m_tid == GetCurrentThreadId());
 		/*auto addr = resolveHost(bind_address);
@@ -463,7 +463,7 @@ private struct TimeoutEntry {
 /* class Win32ManualEvent                                                     */
 /******************************************************************************/
 
-class Win32ManualEvent : ManualEvent {
+final class Win32ManualEvent : ManualEvent {
 	private {
 		core.sync.mutex.Mutex m_mutex;
 		Win32EventDriver m_driver;
@@ -564,7 +564,7 @@ class Win32ManualEvent : ManualEvent {
 /* class Win32FileStream                                                      */
 /******************************************************************************/
 
-class Win32FileStream : FileStream {
+final class Win32FileStream : FileStream {
 	private {
 		Path m_path;
 		HANDLE m_handle;
@@ -772,7 +772,7 @@ class Win32FileStream : FileStream {
 /* class Win32Directory Watcher                                               */
 /******************************************************************************/
 
-class Win32DirectoryWatcher : DirectoryWatcher {
+final class Win32DirectoryWatcher : DirectoryWatcher {
 	private {
 		Path m_path;
 		bool m_recursive;
@@ -896,7 +896,7 @@ class Win32DirectoryWatcher : DirectoryWatcher {
 /* class Win32UDPConnection                                                   */
 /******************************************************************************/
 
-class Win32UDPConnection : UDPConnection, SocketEventHandler {
+final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 	private {
 		Task m_task;
 		Win32EventDriver m_driver;
@@ -1054,7 +1054,7 @@ class Win32UDPConnection : UDPConnection, SocketEventHandler {
 
 enum ConnectionStatus { Initialized, Connected, Disconnected }
 
-class Win32TCPConnection : TCPConnection, SocketEventHandler {
+final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	private {
 		Win32EventDriver m_driver;
 		Task m_readOwner;
@@ -1483,7 +1483,7 @@ class Win32TCPConnection : TCPConnection, SocketEventHandler {
 /* class Win32TCPListener                                                     */
 /******************************************************************************/
 
-class Win32TCPListener : TCPListener, SocketEventHandler {
+final class Win32TCPListener : TCPListener, SocketEventHandler {
 	private {
 		Win32EventDriver m_driver;
 		SOCKET m_socket;

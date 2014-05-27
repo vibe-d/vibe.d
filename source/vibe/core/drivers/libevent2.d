@@ -1,7 +1,7 @@
 /**
 	libevent based driver
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -58,7 +58,7 @@ version(Windows)
 }
 
 
-class Libevent2Driver : EventDriver {
+final class Libevent2Driver : EventDriver {
 	import std.datetime : Clock;
 
 	private {
@@ -206,7 +206,7 @@ class Libevent2Driver : EventDriver {
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
 
-	FileStream openFile(Path path, FileMode mode)
+	ThreadedFileStream openFile(Path path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);
 	}
@@ -249,7 +249,7 @@ class Libevent2Driver : EventDriver {
 		return msg.addr;
 	}
 
-	TCPConnection connectTCP(NetworkAddress addr)
+	Libevent2TCPConnection connectTCP(NetworkAddress addr)
 	{
 		
 		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
@@ -301,7 +301,7 @@ class Libevent2Driver : EventDriver {
 		return new Libevent2TCPConnection(cctx);
 	}
 
-	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
+	Libevent2TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
 	{
 		auto bind_addr = resolveHost(address, AF_UNSPEC, false);
 		bind_addr.port = port;
@@ -323,9 +323,9 @@ class Libevent2Driver : EventDriver {
 		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
 			"Error setting listening socket to non-blocking I/O.");
 
-		auto ret = new LibeventTCPListener;
+		auto ret = new Libevent2TCPListener;
 
-		static void setupConnectionHandler(shared(LibeventTCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback, TCPListenOptions options)
+		static void setupConnectionHandler(shared(Libevent2TCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback, TCPListenOptions options)
 		{
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
@@ -346,7 +346,7 @@ class Libevent2Driver : EventDriver {
 		return ret;
 	}
 
-	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
+	Libevent2UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		NetworkAddress bindaddr = resolveHost(bind_address, AF_UNSPEC, false);
 		bindaddr.port = port;
@@ -614,7 +614,7 @@ struct ThreadSlot {
 /// private
 alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
 
-class Libevent2ManualEvent : Libevent2Object, ManualEvent {
+final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	private {
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
@@ -756,7 +756,7 @@ class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 }
 
 
-class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent {
+final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent {
 	private {
 		int m_fd;
 		deimos.event2.event.event* m_event;
@@ -836,7 +836,7 @@ class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent {
 }
 
 
-class Libevent2UDPConnection : UDPConnection {
+final class Libevent2UDPConnection : UDPConnection {
 	private {
 		Libevent2Driver m_driver;
 		TCPContext* m_ctx;

@@ -18,18 +18,32 @@ import vibe.inet.url;
 import core.time;
 import std.exception;
 
+version (VibeLibevDriver) {
+	import vibe.core.drivers.libev;
+	alias NativeEventDriver = Win32EventDriver;
+} else version (VibeLibeventDriver) {
+	import vibe.core.drivers.libevent2;
+	alias NativeEventDriver = Libevent2Driver;
+} else version (VibeWin32Driver) {
+	import vibe.core.drivers.win32;
+	alias NativeEventDriver = Win32EventDriver;
+} else version (VibeWinrtDriver) {
+	import vibe.core.drivers.winrt;
+	alias NativeEventDriver = WinRTEventDriver;
+} else static assert(false, "No event driver has been selected. Please specify a -version=Vibe*Driver for the desired driver.");
+
 
 /**
 	Returns the active event driver
 */
-EventDriver getEventDriver(bool ignore_unloaded = false)
+NativeEventDriver getEventDriver(bool ignore_unloaded = false)
 {
 	assert(ignore_unloaded || s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
 }
 
 /// private
-package void setEventDriver(EventDriver driver)
+package void setEventDriver(NativeEventDriver driver)
 {
 	s_driver = driver;
 }
@@ -43,7 +57,7 @@ package void deleteEventDriver()
 
 
 private {
-	EventDriver s_driver;
+	NativeEventDriver s_driver;
 }
 
 

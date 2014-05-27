@@ -28,10 +28,6 @@ import core.sync.mutex;
 import core.stdc.stdlib;
 import core.thread;
 
-version(VibeLibevDriver) import vibe.core.drivers.libev;
-version(VibeLibeventDriver) import vibe.core.drivers.libevent2;
-version(VibeWin32Driver) import vibe.core.drivers.win32;
-version(VibeWinrtDriver) import vibe.core.drivers.winrt;
 
 version(Posix)
 {
@@ -1221,11 +1217,7 @@ private void setupDriver()
 	if (getEventDriver(true) !is null) return;
 
 	logTrace("create driver");
-	version(VibeWin32Driver) setEventDriver(new Win32EventDriver(s_core));
-	else version(VibeWinrtDriver) setEventDriver(new WinRTEventDriver(s_core));
-	else version(VibeLibevDriver) setEventDriver(new LibevDriver(s_core));
-	else version(VibeLibeventDriver) setEventDriver(new Libevent2Driver(s_core));
-	else static assert(false, "No event driver is available. Please specify a -version=Vibe*Driver for the desired driver.");
+	setEventDriver(new NativeEventDriver(s_core));
 	logTrace("driver %s created", (cast(Object)getEventDriver()).classinfo.name);
 }
 

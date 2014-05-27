@@ -35,7 +35,7 @@ version(VibeWinrtDriver)
 		RoUninitialize();
 	}
 
-	class WinRTEventDriver : EventDriver {
+	final class WinRTEventDriver : EventDriver {
 		private {
 			DriverCore m_core;
 			bool m_exit = false;
