@@ -22,7 +22,7 @@ import vibe.core.log;
 /**
 	Writes any data compressed in deflate format to the specified output stream.
 */
-class DeflateOutputStream : ZlibOutputStream {
+final class DeflateOutputStream : ZlibOutputStream {
 	this(OutputStream dst)
 	{
 		super(dst, HeaderFormat.deflate);
@@ -33,7 +33,7 @@ class DeflateOutputStream : ZlibOutputStream {
 /**
 	Writes any data compressed in gzip format to the specified output stream.
 */
-class GzipOutputStream : ZlibOutputStream {
+final class GzipOutputStream : ZlibOutputStream {
 	this(OutputStream dst)
 	{
 		super(dst, HeaderFormat.gzip);
@@ -63,7 +63,7 @@ class ZlibOutputStream : OutputStream {
 		zlibEnforce(deflateInit2(&m_zstream, level, Z_DEFLATED, 15 + (type == HeaderFormat.gzip ? 16 : 0), 8, Z_DEFAULT_STRATEGY));
 	}
 
-	void write(in ubyte[] data)
+	final void write(in ubyte[] data)
 	{
 		if (!data.length) return;
 		assert(!m_finalized);
@@ -76,19 +76,19 @@ class ZlibOutputStream : OutputStream {
 		m_zstream.next_in = null;
 	}
 
-	void write(InputStream stream, ulong nbytes = 0)
+	final void write(InputStream stream, ulong nbytes = 0)
 	{
 		writeDefault(stream, nbytes);
 	}
 
-	void flush()
+	final void flush()
 	{
 		assert(!m_finalized);
 		//doFlush(Z_SYNC_FLUSH);
 		m_out.flush();
 	}
 
-	void finalize()
+	final void finalize()
 	{
 		if (m_finalized) return;
 		m_finalized = true;
@@ -97,7 +97,7 @@ class ZlibOutputStream : OutputStream {
 		zlibEnforce(deflateEnd(&m_zstream));
 	}
 
-	private void doFlush(int how)
+	private final void doFlush(int how)
 	{
 		while (true) {
 			m_zstream.next_out = m_outbuffer.ptr;

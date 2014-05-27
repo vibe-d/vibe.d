@@ -21,7 +21,7 @@ import vibe.utils.array;
 /**
 	Implements a unidirectional data pipe between two tasks.
 */
-class TaskPipe : ConnectionStream {
+final class TaskPipe : ConnectionStream {
 	private {
 		TaskPipeImpl m_pipe;
 	}
@@ -70,7 +70,7 @@ class TaskPipe : ConnectionStream {
 /**
 	Underyling pipe implementation for TaskPipe with no Stream interface.
 */
-private class TaskPipeImpl {
+private final class TaskPipeImpl {
 	private {
 		Mutex m_mutex;
 		TaskCondition m_condition;

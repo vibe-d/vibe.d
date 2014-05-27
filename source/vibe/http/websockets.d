@@ -182,7 +182,7 @@ HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake
 /**
 	Represents a single _WebSocket connection.
 */
-class WebSocket {
+final class WebSocket {
 	private {
 		ConnectionStream m_conn;
 		bool m_sentCloseFrame = false;
@@ -385,7 +385,7 @@ class WebSocket {
 /**
 	Represents a single outgoing _WebSocket message as an OutputStream.
 */
-class OutgoingWebSocketMessage : OutputStream {
+final class OutgoingWebSocketMessage : OutputStream {
 	private {
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
@@ -443,7 +443,7 @@ class OutgoingWebSocketMessage : OutputStream {
 /**
 	Represents a single incoming _WebSocket message as an InputStream.
 */
-class IncomingWebSocketMessage : InputStream {
+final class IncomingWebSocketMessage : InputStream {
 	private {
 		Stream m_conn;
 		Frame m_currentFrame;

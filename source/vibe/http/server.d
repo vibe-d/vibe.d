@@ -286,7 +286,7 @@ interface HTTPServerRequestHandler {
 
 
 /// Aggregates all information about an HTTP error status.
-class HTTPServerErrorInfo {
+final class HTTPServerErrorInfo {
 	/// The HTTP status code
 	int code;
 	/// The error message
@@ -371,7 +371,7 @@ enum HTTPServerOption {
 
 	The defaults are sufficient for most normal uses.
 */
-class HTTPServerSettings {
+final class HTTPServerSettings {
 	/** The port on which the HTTP server is listening.
 
 		The default value is 80. If you are running a SSL enabled server you may want to set this
@@ -1121,7 +1121,7 @@ private struct HTTPServerListener {
 
 private enum MaxHTTPHeaderLineLength = 4096;
 
-private class LimitedHTTPInputStream : LimitedInputStream {
+private final class LimitedHTTPInputStream : LimitedInputStream {
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false) {
 		super(stream, byte_limit, silent_limit);
 	}
@@ -1130,7 +1130,7 @@ private class LimitedHTTPInputStream : LimitedInputStream {
 	}
 }
 
-private class TimeoutHTTPInputStream : InputStream {
+private final class TimeoutHTTPInputStream : InputStream {
 	private {
 		long m_timeref;
 		long m_timeleft;

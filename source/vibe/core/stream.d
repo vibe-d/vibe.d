@@ -199,7 +199,7 @@ interface RandomAccessStream : Stream {
 	Any data written to the stream will be ignored and discarded. This stream type is useful if
 	the output of a particular stream is not needed but the stream needs to be drained.
 */
-class NullOutputStream : OutputStream {
+final class NullOutputStream : OutputStream {
 	void write(in ubyte[] bytes) {}
 	void write(InputStream stream, ulong nbytes = 0)
 	{

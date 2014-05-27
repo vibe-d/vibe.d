@@ -36,7 +36,7 @@ class HTTPLogger {
 
 	void close() {}
 
-	void log(HTTPServerRequest req, HTTPServerResponse res)
+	final void log(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		synchronized (m_mutex) {
 			m_lineAppender.reset();
@@ -49,7 +49,7 @@ class HTTPLogger {
 }
 
 
-class HTTPConsoleLogger : HTTPLogger {
+final class HTTPConsoleLogger : HTTPLogger {
 	this(HTTPServerSettings settings, string format)
 	{
 		super(settings, format);
@@ -62,7 +62,7 @@ class HTTPConsoleLogger : HTTPLogger {
 }
 
 
-class HTTPFileLogger : HTTPLogger {
+final class HTTPFileLogger : HTTPLogger {
 	private {
 		FileStream m_stream;
 	}

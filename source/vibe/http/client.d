@@ -180,7 +180,7 @@ auto connectHTTP(string host, ushort port = 0, bool ssl = false)
 	pool of HTTPClient instances to keep the number of connection establishments low while not
 	blocking requests from different tasks.
 */
-class HTTPClient {
+final class HTTPClient {
 	enum maxHeaderLineLength = 4096;
 
 	private {

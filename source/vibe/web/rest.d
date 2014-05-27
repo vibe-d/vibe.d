@@ -293,13 +293,13 @@ class RestInterfaceClient(I) : I
 	/**
 		An optional request filter that allows to modify each request before it is made.
 	*/
-	@property RequestFilter requestFilter()
+	final @property RequestFilter requestFilter()
 	{
 		return m_requestFilter;
 	}
 
 	/// ditto
-	@property void requestFilter(RequestFilter v) {
+	final @property void requestFilter(RequestFilter v) {
 		m_requestFilter = v;
 		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
 	}

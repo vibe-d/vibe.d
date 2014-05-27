@@ -62,7 +62,7 @@ private {
 	enum SEEK_END = 2;
 }
 
-class ThreadedFileStream : FileStream {
+final class ThreadedFileStream : FileStream {
 	private {
 		int m_fileDescriptor;
 		Path m_path;

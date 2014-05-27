@@ -29,7 +29,7 @@ alias Base64URLOutputStream = Base64OutputStreamImpl!('-', '_');
 	are used to represent the 62nd and 63rd code units. CPAD is the character
 	used for padding the end of the result if necessary.
 */
-class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=') : OutputStream {
+final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=') : OutputStream {
 	private {
 		OutputStream m_out;
 		ulong m_maxBytesPerLine;

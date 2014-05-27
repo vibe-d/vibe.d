@@ -27,7 +27,7 @@ import std.string;
 	network conections to the server as necessary. It should be reused for all
 	fibers in a thread for optimum performance in high concurrency scenarios.
  */
-class MongoClient {
+final class MongoClient {
 	private {
 		ConnectionPool!MongoConnection m_connections;
 	}

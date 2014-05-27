@@ -156,7 +156,7 @@ version (OpenSSL) {
 	Note: Be sure to call finalize before finalizing/closing the outer stream so that the SSL
 		tunnel is properly closed first.
 */
-class SSLStream : Stream {
+final class SSLStream : Stream {
 	private {
 		Stream m_stream;
 		SSLContext m_sslCtx;
@@ -413,7 +413,7 @@ enum SSLStreamState {
 	but no trusted certificate authorities are added by default. Use
 	useTrustedCertificateFile to add those.
 */
-class SSLContext {
+final class SSLContext {
 	private {
 		SSLContextKind m_kind;
 		version (OpenSSL) ssl_ctx_st* m_ctx;

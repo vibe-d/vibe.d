@@ -264,7 +264,7 @@ class HTTPStatusException : Exception {
 }
 
 
-class MultiPart {
+final class MultiPart {
 	string contentType;
 	
 	InputStream stream;

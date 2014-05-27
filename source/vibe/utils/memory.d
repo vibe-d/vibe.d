@@ -98,7 +98,7 @@ shared interface Allocator {
 		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free()."); }
 }
 
-synchronized class DebugAllocator : Allocator {
+synchronized final class DebugAllocator : Allocator {
 	private {
 		shared(Allocator) m_baseAlloc;
 		size_t[void*] m_blocks;
@@ -154,7 +154,7 @@ synchronized class DebugAllocator : Allocator {
 	}
 }
 
-shared class MallocAllocator : Allocator {
+shared final class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
 		auto ptr = .malloc(sz + Allocator.alignment);
@@ -194,7 +194,7 @@ shared class MallocAllocator : Allocator {
 	}
 }
 
-shared class GCAllocator : Allocator {
+shared final class GCAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
 		auto mem = GC.malloc(sz+Allocator.alignment);
@@ -231,7 +231,7 @@ shared class GCAllocator : Allocator {
 	}
 }
 
-synchronized class AutoFreeListAllocator : Allocator {
+synchronized final class AutoFreeListAllocator : Allocator {
 	private {
 		FreeListAlloc[] m_freeLists;
 		shared(Allocator) m_baseAlloc;
@@ -291,7 +291,7 @@ synchronized class AutoFreeListAllocator : Allocator {
 	}
 }
 
-synchronized class PoolAllocator : Allocator {
+synchronized final class PoolAllocator : Allocator {
 	static struct Pool { Pool* next; void[] data; void[] remaining; }
 	static struct Destructor { Destructor* next; void function(void*) destructor; void* object; }
 	private {
@@ -433,7 +433,7 @@ synchronized class PoolAllocator : Allocator {
 	}
 }
 
-synchronized class FreeListAlloc : Allocator
+synchronized final class FreeListAlloc : Allocator
 {
 	private static struct FreeListSlot { FreeListSlot* next; }
 	private {

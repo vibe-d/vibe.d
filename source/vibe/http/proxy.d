@@ -158,7 +158,7 @@ HTTPServerRequestDelegate reverseProxyRequest(string destination_host, ushort de
 /**
 	Provides advanced configuration facilities for reverse proxy servers.
 */
-class HTTPReverseProxySettings {
+final class HTTPReverseProxySettings {
 	/// The destination host to forward requests to
 	string destinationHost;
 	/// The destination port to forward requests to

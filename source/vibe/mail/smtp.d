@@ -75,7 +75,7 @@ enum SMTPAuthType {
 /**
 	Configuration options for the SMTP client.
 */
-class SMTPClientSettings {
+final class SMTPClientSettings {
 	string host = "127.0.0.1";
 	ushort port = 25;
 	string localname = "localhost";
@@ -94,7 +94,7 @@ class SMTPClientSettings {
 /**
 	Represents an email message, including its headers.
 */
-class Mail {
+final class Mail {
 	InetHeaderMap headers;
 	string bodyText;
 }
