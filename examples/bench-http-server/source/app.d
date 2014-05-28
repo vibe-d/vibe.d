@@ -79,6 +79,7 @@ shared static this()
 	routes.get("/static/100k", &static_100k);
 	routes.get("/quit", &quit);
 	routes.get("/file/*", serveStaticFiles("./public", fsettings));
+	routes.rebuild();
 
 	listenHTTP(settings, routes);
 	listenTCP(8081, toDelegate(&staticAnswer), "127.0.0.1");

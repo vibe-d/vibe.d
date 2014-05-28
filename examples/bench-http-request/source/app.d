@@ -14,7 +14,7 @@ shared long nreqc = 1000;
 shared long ndisconns = 0;
 shared long nconn = 0;
 
-shared long g_concurrency = 1;
+shared long g_concurrency = 100;
 shared long g_requestDelay = 0;
 shared long g_maxKeepAliveRequests = 1000;
 
@@ -44,7 +44,7 @@ void request(bool disconnect)
 void distTask()
 {
 	static shared int s_threadCount = 0;
-	static shared long s_token = 0;
+	static shared int s_token = 0;
 	auto id = atomicOp!"+="(s_threadCount, 1) - 1;
 	
 	while (true) {
@@ -58,14 +58,14 @@ void distTask()
 				if (disconnect) keep_alives = 0;
 			}
 		});
-		g_concurrency--;
+		atomicOp!"+="(g_concurrency, -1);
 		atomicStore(s_token, (id + 1) % workerThreadCount);
 	}
 }
 
 void benchmark()
 {
-	g_concurrency--;
+	atomicOp!"+="(g_concurrency, -1);
 	if (g_concurrency > 0) {
 		runWorkerTaskDist(&distTask);
 		while (atomicLoad(nreq) == 0) { sleep(1.msecs); }
@@ -86,7 +86,7 @@ void benchmark()
 		bool disconnect = ++keep_alives >= g_maxKeepAliveRequests;
 		request(disconnect);
 		if (disconnect) keep_alives = 0;
-                if (nreq >= 5000) exitEventLoop(true);
+//                if (nreq >= 5000) exitEventLoop(true);
 	}
 }
 
