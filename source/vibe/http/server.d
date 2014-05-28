@@ -1026,15 +1026,16 @@ final class HTTPServerResponse : HTTPResponse {
 
 	private void writeHeader()
 	{
+		import vibe.stream.wrapper;
+
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
 		m_headerWritten = true;
-		auto app = AllocAppender!string(m_requestAlloc);
-		app.reserve(256);
+		auto dst = StreamOutputRange(m_conn);
 
 		void writeLine(T...)(string fmt, T args)
 		{
-			formattedWrite(&app, fmt, args);
-			app.put("\r\n");
+			formattedWrite(&dst, fmt, args);
+			dst.put("\r\n");
 			logTrace(fmt, args);
 		}
 
@@ -1064,40 +1065,36 @@ final class HTTPServerResponse : HTTPResponse {
 		// write cookies
 		if (!empty(cookies)) {
 			foreach (n, cookie; this.cookies) {
-				app.put("Set-Cookie: ");
-				app.put(n);
-				app.put('=');
-				auto appref = &app;
+				dst.put("Set-Cookie: ");
+				dst.put(n);
+				dst.put('=');
+				auto appref = &dst;
 				filterURLEncode(appref, cookie.value);
 				if (cookie.domain) {
-					app.put("; Domain=");
-					app.put(cookie.domain);
+					dst.put("; Domain=");
+					dst.put(cookie.domain);
 				}
 				if (cookie.path) {
-					app.put("; Path=");
-					app.put(cookie.path);
+					dst.put("; Path=");
+					dst.put(cookie.path);
 				}
 				if (cookie.expires) {
-					app.put("; Expires=");
-					app.put(cookie.expires);
+					dst.put("; Expires=");
+					dst.put(cookie.expires);
 				}
 				if (cookie.maxAge) {
-					app.put("; Max-Age=");
-					formattedWrite(&app, "%s", cookie.maxAge);
+					dst.put("; Max-Age=");
+					formattedWrite(&dst, "%s", cookie.maxAge);
 				}
-				if (cookie.secure) {
-					app.put("; Secure");
-				}
-				if (cookie.httpOnly) {
-					app.put("; HttpOnly");
-				}
-				app.put("\r\n");
+				if (cookie.secure) dst.put("; Secure");
+				if (cookie.httpOnly) dst.put("; HttpOnly");
+				dst.put("\r\n");
 			}
 		}
 
 		// finalize reposonse header
-		app.put("\r\n");
-		m_conn.write(app.data);
+		dst.put("\r\n");
+		dst.flush();
 		m_conn.flush();
 	}
 }

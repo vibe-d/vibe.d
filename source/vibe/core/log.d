@@ -16,6 +16,7 @@ import std.array;
 import std.datetime;
 import std.format;
 import std.stdio;
+import core.atomic;
 import core.thread;
 
 import std.traits : isSomeString;
@@ -125,7 +126,7 @@ void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*
 	static assert(level != LogLevel.none);
 	try {
 		foreach (l; getLoggers())
-			if (l.lock().acceptsLevel(level)) {
+			if (l.minLevel <= level) { // WARNING: TYPE SYSTEM HOLE: accessing field of shared class!
 				auto app = appender!string();
 				() @trusted { formattedWrite(app, fmt, args); }(); // not @safe as of 2.065
 				rawLog(/*mod, func,*/ file, line, level, app.data);
@@ -196,7 +197,10 @@ struct LogLine {
 
 /// Abstract base class for all loggers
 class Logger {
-	abstract bool acceptsLevel(LogLevel level) nothrow @safe;
+	LogLevel minLevel = LogLevel.min;
+
+	final bool acceptsLevel(LogLevel value) nothrow pure @safe { return value >= this.minLevel; }
+
 	abstract void log(ref LogLine message) @safe;
 }
 
@@ -217,7 +221,6 @@ final class FileLogger : Logger {
 	}
 
 	Format format = Format.thread;
-	LogLevel minLevel = LogLevel.min;
 
 	this(File info_file, File diag_file)
 	{
@@ -230,8 +233,6 @@ final class FileLogger : Logger {
 		m_infoFile = File(filename, "ab");
 		m_diagFile = m_infoFile;
 	}
-
-	override bool acceptsLevel(LogLevel value) nothrow pure @safe { return value >= this.minLevel; }
 
 	override void log(ref LogLine msg)
 		@trusted // FILE isn't @safe (as of DMD 2.065)
@@ -278,7 +279,6 @@ import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=70
 final class HTMLLogger : Logger {
 	private {
 		File m_logFile;
-		LogLevel m_minLogLevel = LogLevel.min;
 	}
 
 	this(string filename = "log.html")
@@ -295,9 +295,7 @@ final class HTMLLogger : Logger {
 		//version(FinalizerDebug) writeln("HtmlLogWritet.~this out");
 	}
 
-	@property void minLogLevel(LogLevel value) pure nothrow @safe { m_minLogLevel = value; }
-
-	override bool acceptsLevel(LogLevel value) pure nothrow @safe { return value >= m_minLogLevel; }
+	@property void minLogLevel(LogLevel value) pure nothrow @safe { this.minLevel = value; }
 
 	override void log(ref LogLine msg)
 		@trusted // FILE isn't @safe (as of DMD 2.065)
@@ -520,14 +518,7 @@ final class SyslogLogger : Logger {
 		m_appName = appName ? appName : NILVALUE;
 		m_ostream = stream;
 		m_facility = facility;
-	}
-
-	/**
-		Returns: true iff level >= debug_.
-	*/
-	override bool acceptsLevel(LogLevel level)
-	pure nothrow @safe {
-		return level >= LogLevel.debug_;
+		this.minLevel = LogLevel.debug_;
 	}
 
 	/**

@@ -249,7 +249,7 @@ final class GCAllocator : Allocator {
 
 final class AutoFreeListAllocator : Allocator {
 	private {
-		enum minExponent = 3;
+		enum minExponent = 5;
 		enum freeListCount = 14;
 		FreeListAlloc[freeListCount] m_freeLists;
 		Allocator m_baseAlloc;
@@ -267,7 +267,7 @@ final class AutoFreeListAllocator : Allocator {
 		if (sz > nthFreeListSize!(freeListCount-1)) return m_baseAlloc.alloc(sz);
 		foreach (i; iotaTuple!freeListCount)
 			if (sz <= nthFreeListSize!(i))
-				return m_freeLists[i].alloc(nthFreeListSize!(i))[0 .. sz];
+				return m_freeLists[i].alloc().ptr[0 .. sz];
 		//logTrace("AFL alloc %08X(%d)", ret.ptr, sz);
 		assert(false);
 	}
@@ -296,12 +296,16 @@ final class AutoFreeListAllocator : Allocator {
 	void free(void[] data)
 	{
 		//logTrace("AFL free %08X(%s)", data.ptr, data.length);
-		if (data.length > nthFreeListSize!(freeListCount-1)) m_baseAlloc.free(data);
+		if (data.length > nthFreeListSize!(freeListCount-1)) {
+			m_baseAlloc.free(data);
+			return;
+		}
 		foreach(i; iotaTuple!freeListCount)
-			if (data.length <= nthFreeListSize!(i)) {
-				m_freeLists[i].free(data.ptr[0 .. nthFreeListSize!(i)]);
+			if (data.length <= nthFreeListSize!i) {
+				m_freeLists[i].free(data.ptr[0 .. nthFreeListSize!i]);
 				return;
 			}
+		assert(false);
 	}
 
 	private static pure size_t nthFreeListSize(size_t i)() { return 1 << (i + minExponent); }
@@ -477,6 +481,11 @@ final class FreeListAlloc : Allocator
 	void[] alloc(size_t sz)
 	{
 		assert(sz == m_elemSize, "Invalid allocation size.");
+		return alloc();
+	}
+
+	void[] alloc()
+	{
 		void[] mem;
 		if( m_firstFree ){
 			auto slot = m_firstFree;

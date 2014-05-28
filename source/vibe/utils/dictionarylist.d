@@ -244,10 +244,14 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	// very simple check sum function with a good chance to match
 	// strings with different case equal
 	private static uint computeCheckSumI(string s)
-	{
+	@trusted {
 		uint csum = 0;
-		static if (case_sensitive) foreach (char ch; s) csum += 357 * (csum + ch);
-		foreach (char ch; s) csum += 347 * (csum + (ch & 0x1101_1111));
+		immutable(char)* pc = s.ptr, pe = s.ptr + s.length;
+		for (; pc != pe; pc++) {
+			static if (case_sensitive) csum ^= *pc;
+			else csum ^= *pc & 0x1101_1111;
+			csum = (csum << 1) | (csum >> 31);
+		}
 		return csum;
 	}
 }
