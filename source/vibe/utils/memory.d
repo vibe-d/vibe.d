@@ -74,7 +74,7 @@ T[] allocArray(T, bool MANAGED = true)(shared(Allocator) allocator, size_t n)
 	return ret;
 }
 
-void freeArray(T, bool MANAGED = true)(shared(Allocator) allocator, ref T[] array)
+void freeArray(T, bool MANAGED = true)(shared(Allocator) allocator, T[] array)
 {
 	static if (MANAGED && hasIndirections!T)
 		GC.removeRange(array.ptr);
