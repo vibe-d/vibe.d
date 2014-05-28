@@ -27,12 +27,12 @@ import std.exception : enforce;
 
 	Insertion and lookup has O(n) complexity.
 */
-struct DictionaryList(VALUE, bool case_sensitive = true) {
+struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELDS = 32) {
 	import std.typecons : Tuple;
 
 	private {
 		static struct Field { uint keyCheckSum; string key; VALUE value; }
-		Field[64] m_fields;
+		Field[NUM_STATIC_FIELDS] m_fields;
 		size_t m_fieldCount = 0;
 		Field[] m_extendedFields;
 		static char[256] s_keyBuffer;

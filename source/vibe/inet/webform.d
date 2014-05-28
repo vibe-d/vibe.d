@@ -108,8 +108,8 @@ void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 	while (parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary, max_line_length)) {}
 }
 
-alias FormFields = DictionaryList!(string, true);
-alias FilePartFormFields = DictionaryList!(FilePart, true);
+alias FormFields = DictionaryList!(string, true, 16);
+alias FilePartFormFields = DictionaryList!(FilePart, true, 1);
 
 struct FilePart {
 	InetHeaderMap headers;
