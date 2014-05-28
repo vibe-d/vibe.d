@@ -270,7 +270,7 @@ final class HTTPClient {
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	{
 		version (VibeManualMemoryManagement) {
-			scope request_allocator = new shared PoolAllocator(1024, defaultAllocator());
+			scope request_allocator = new PoolAllocator(1024, defaultAllocator());
 			scope(exit) request_allocator.reset();
 		} else auto request_allocator = defaultAllocator();
 
