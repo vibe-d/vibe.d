@@ -32,7 +32,7 @@ import std.string;
 		alloc = Custom allocator to use for allocating strings
 		rfc822_compatible = Flag indicating that duplicate fields should be merged using a comma
 */
-void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, shared(Allocator) alloc = defaultAllocator(), bool rfc822_compatible = true)
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator(), bool rfc822_compatible = true)
 {
 	string hdr, hdrvalue;
 

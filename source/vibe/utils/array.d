@@ -45,11 +45,11 @@ struct AllocAppender(ArrayType : E[], E) {
 	private {
 		ElemType[] m_data;
 		ElemType[] m_remaining;
-		shared(Allocator) m_alloc;
+		Allocator m_alloc;
 		bool m_allocatedBuffer = false;
 	}
 
-	this(shared(Allocator) alloc, ElemType[] initial_buffer = null)
+	this(Allocator alloc, ElemType[] initial_buffer = null)
 	{
 		m_alloc = alloc;
 		m_data = initial_buffer;

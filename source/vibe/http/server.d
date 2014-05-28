@@ -712,7 +712,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Stream m_conn;
 		ConnectionStream m_rawConnection;
 		OutputStream m_bodyWriter;
-		shared(Allocator) m_requestAlloc;
+		Allocator m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
 		FreeListRef!CountingOutputStream m_countingWriter;
 		FreeListRef!GzipOutputStream m_gzipOutputStream;
@@ -725,7 +725,7 @@ final class HTTPServerResponse : HTTPResponse {
 		SysTime m_timeFinalized;
 	}
 
-	this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, shared(Allocator) req_alloc)
+	this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, Allocator req_alloc)
 	{
 		m_conn = conn;
 		m_rawConnection = raw_connection;
@@ -1219,8 +1219,8 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	auto peer_address = tcp_connection.remoteAddress;
 	SysTime reqtime = Clock.currTime(UTC());
 
-	//auto request_allocator = scoped!(shared(PoolAllocator))(1024, defaultAllocator());
-	scope request_allocator = new shared PoolAllocator(1024, defaultAllocator());
+	//auto request_allocator = scoped!(PoolAllocator)(1024, defaultAllocator());
+	scope request_allocator = new PoolAllocator(1024, defaultAllocator());
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running
@@ -1461,7 +1461,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 }
 
 
-private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, shared(Allocator) alloc, ulong max_header_size)
+private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
 {
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 
@@ -1520,7 +1520,7 @@ shared static this()
 	setVibeDistHost(disthost, distport);
 }
 
-private string formatRFC822DateAlloc(shared(Allocator) alloc, SysTime time)
+private string formatRFC822DateAlloc(Allocator alloc, SysTime time)
 {
 	auto app = AllocAppender!string(alloc);
 	writeRFC822DateTimeString(app, time);

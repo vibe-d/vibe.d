@@ -509,7 +509,7 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 
 	/// private
-	this(HTTPClient client, bool has_body, bool close_conn, shared(Allocator) alloc = defaultAllocator())
+	this(HTTPClient client, bool has_body, bool close_conn, Allocator alloc = defaultAllocator())
 	{
 		m_client = client;
 		m_closeConn = close_conn;

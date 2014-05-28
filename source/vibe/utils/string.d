@@ -176,7 +176,7 @@ sizediff_t matchBracket(string str, bool nested = true)
 }
 
 /// Same as std.string.format, just using an allocator.
-string formatAlloc(ARGS...)(shared(Allocator) alloc, string fmt, ARGS args)
+string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
 {
 	auto app = AllocAppender!string(alloc);
 	formattedWrite(&app, fmt, args);

@@ -25,7 +25,7 @@ final class MemoryOutputStream : OutputStream {
 		AllocAppender!(ubyte[]) m_destination;
 	}
 
-	this(shared(Allocator) alloc = defaultAllocator())
+	this(Allocator alloc = defaultAllocator())
 	{
 		m_destination = AllocAppender!(ubyte[])(alloc);
 	}

@@ -33,12 +33,12 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 	private {
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
-		shared(Allocator) m_allocator;
+		Allocator m_allocator;
 		hash_t delegate(Key) m_hasher;
 		bool m_resizing;
 	}
 
-	this(shared(Allocator) allocator)
+	this(Allocator allocator)
 	{
 		m_allocator = allocator;
 	}

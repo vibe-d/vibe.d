@@ -375,7 +375,7 @@ final class ChunkedOutputStream : OutputStream {
 		bool m_finalized = false;
 	}
 	
-	this(OutputStream stream, shared(Allocator) alloc = defaultAllocator())
+	this(OutputStream stream, Allocator alloc = defaultAllocator())
 	{
 		m_out = stream;
 		m_buffer = AllocAppender!(ubyte[])(alloc);

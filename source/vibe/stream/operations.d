@@ -31,7 +31,7 @@ import std.typecons;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", shared(Allocator) alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes, alloc);
 }
@@ -73,7 +73,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string lines
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, shared(Allocator) alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	auto output = scoped!MemoryOutputStream(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
