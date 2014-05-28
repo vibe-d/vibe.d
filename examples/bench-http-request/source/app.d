@@ -45,7 +45,7 @@ void distTask()
 {
 	static shared int s_threadCount = 0;
 	static shared int s_token = 0;
-	auto id = atomicOp!"+="(s_threadCount, 1) - 1;
+	int id = atomicOp!"+="(s_threadCount, 1) - 1;
 	
 	while (true) {
 		while (atomicLoad(s_token) != id && g_concurrency > 0) {}
@@ -59,7 +59,7 @@ void distTask()
 			}
 		});
 		atomicOp!"+="(g_concurrency, -1);
-		atomicStore(s_token, (id + 1) % workerThreadCount);
+		atomicStore(s_token, cast(int)((id + 1) % workerThreadCount));
 	}
 }
 
