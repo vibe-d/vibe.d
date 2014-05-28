@@ -155,3 +155,57 @@ struct StreamInputRange {
 		m_buffer.fill = sz;
 	}
 }
+
+
+/**
+	Implements a buffered output range interface on top of an OutputStream.
+*/
+struct StreamOutputRange {
+	private {
+		OutputStream m_stream;
+		size_t m_fill = 0;
+		ubyte[256] m_data = void;
+	}
+
+	@disable this(this);
+
+	this(OutputStream stream)
+	{
+		m_stream = stream;
+	}
+
+	~this()
+	{
+		flush();
+	}
+
+	void flush()
+	{
+		if (m_fill == 0) return;
+		m_stream.write(m_data[0 .. m_fill]);
+		m_fill = 0;
+	}
+
+	void put(ubyte bt)
+	{
+		m_data[m_fill++] = bt;
+		if (m_fill >= m_data.length) flush();
+	}
+
+	void put(const(ubyte)[] bts)
+	{
+		while (bts.length) {
+			auto len = min(m_data.length - m_fill, bts.length);
+			m_data[m_fill .. m_fill + len] = bts[0 .. len];
+			m_fill += len;
+			bts = bts[len .. $];
+			if (m_fill >= m_data.length) flush();
+		}
+	}
+
+	void put(char elem) { put(cast(ubyte)elem); }
+	void put(const(char)[] elems) { put(cast(const(ubyte)[])elems); }
+
+	void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
+	void put(const(dchar)[] elems) { foreach( ch; elems ) put(ch); }
+}
