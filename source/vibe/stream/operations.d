@@ -318,4 +318,4 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 	destination.flush();
 }
 
-private struct Buffer { ubyte[64*1024] bytes = void; }
+private struct Buffer { ubyte[64*1024-4] bytes = void; } // 64k - 4 bytes for reference count

@@ -249,29 +249,27 @@ final class GCAllocator : Allocator {
 
 final class AutoFreeListAllocator : Allocator {
 	private {
-		FreeListAlloc[] m_freeLists;
+		enum minExponent = 3;
+		enum freeListCount = 14;
+		FreeListAlloc[freeListCount] m_freeLists;
 		Allocator m_baseAlloc;
 	}
 
 	this(Allocator base_allocator)
 	{
 		m_baseAlloc = base_allocator;
-		foreach( i; 3 .. 12 )
-			m_freeLists ~= new FreeListAlloc(1<<i, m_baseAlloc);
-		m_freeLists ~= new FreeListAlloc(65540, m_baseAlloc);
+		foreach (i; iotaTuple!freeListCount)
+			m_freeLists[i] = new FreeListAlloc(nthFreeListSize!(i), m_baseAlloc);
 	}
 
 	void[] alloc(size_t sz)
 	{
-		void[] ret;
-		foreach( fl; m_freeLists )
-			if( sz <= fl.elementSize ){
-				ret = fl.alloc(fl.elementSize)[0 .. sz];
-				break;
-			}
-		if( !ret ) ret = m_baseAlloc.alloc(sz);
+		if (sz > nthFreeListSize!(freeListCount-1)) return m_baseAlloc.alloc(sz);
+		foreach (i; iotaTuple!freeListCount)
+			if (sz <= nthFreeListSize!(i))
+				return m_freeLists[i].alloc(nthFreeListSize!(i))[0 .. sz];
 		//logTrace("AFL alloc %08X(%d)", ret.ptr, sz);
-		return ret;
+		assert(false);
 	}
 
 	void[] realloc(void[] data, size_t sz)
@@ -298,12 +296,18 @@ final class AutoFreeListAllocator : Allocator {
 	void free(void[] data)
 	{
 		//logTrace("AFL free %08X(%s)", data.ptr, data.length);
-		foreach( fl; m_freeLists )
-			if( data.length <= fl.elementSize ){
-				fl.free(data.ptr[0 .. fl.elementSize]);
+		if (data.length > nthFreeListSize!(freeListCount-1)) m_baseAlloc.free(data);
+		foreach(i; iotaTuple!freeListCount)
+			if (data.length <= nthFreeListSize!(i)) {
+				m_freeLists[i].free(data.ptr[0 .. nthFreeListSize!(i)]);
 				return;
 			}
-		return m_baseAlloc.free(data);
+	}
+
+	private static pure size_t nthFreeListSize(size_t i)() { return 1 << (i + minExponent); }
+	private template iotaTuple(size_t i) {
+		static if (i > 1) alias iotaTuple = TypeTuple!(iotaTuple!(i-1), i-1);
+		else alias iotaTuple = TypeTuple!(0);
 	}
 }
 

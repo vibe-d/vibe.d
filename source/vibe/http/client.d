@@ -25,6 +25,7 @@ import vibe.utils.array;
 import vibe.utils.memory;
 
 import core.exception : AssertError;
+import std.algorithm : splitter;
 import std.array;
 import std.conv;
 import std.encoding : sanitize;
@@ -361,7 +362,6 @@ final class HTTPClientRequest : HTTPRequest {
 	}
 
 	
-
 	/// private
 	this(Stream conn, NetworkAddress local_addr)
 	{
@@ -450,19 +450,23 @@ final class HTTPClientRequest : HTTPRequest {
 
 	private void writeHeader()
 	{
+		import vibe.stream.wrapper;
+
 		assert(!m_headerWritten, "HTTPClient tried to write headers twice.");
 		m_headerWritten = true;
 
-		formattedWrite(m_conn, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
+		auto output = StreamOutputRange(m_conn);
+
+		formattedWrite(&output, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		logTrace("--------------------");
 		logTrace("HTTP client request:");
 		logTrace("--------------------");
 		logTrace("%s", this);
 		foreach( k, v; headers ){
-			formattedWrite(m_conn, "%s: %s\r\n", k, v);
+			formattedWrite(&output, "%s: %s\r\n", k, v);
 			logTrace("%s: %s", k, v);
 		}
-		m_conn.write("\r\n");
+		output.put("\r\n");
 		logTrace("--------------------");
 	}
 
@@ -543,13 +547,14 @@ final class HTTPClientResponse : HTTPResponse {
 
 		int max = 2;
 		if (auto pka = "Keep-Alive" in this.headers) {
-			foreach(s; split(*pka, ",")){
-				auto pair = s.split("=");
-				auto name = pair[0].strip();
+			foreach(s; splitter(*pka, ',')){
+				auto pair = s.splitter('=');
+				auto name = pair.front.strip();
+				pair.popFront();
 				if (icmp(name, "timeout") == 0) {
-					m_client.m_timeout = pair[1].to!int();
+					m_client.m_timeout = pair.front.to!int();
 				} else if (icmp(name, "max") == 0) {
-					max = pair[1].to!int();
+					max = pair.front.to!int();
 				}
 			}
 		}
