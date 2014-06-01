@@ -177,19 +177,39 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 
 /**
 	Provides a HTTP request handler that responds with a static redirection to the specified URL.
+
+	Params:
+		url = The URL to redirect to
+		status = Redirection status to use (by default this is $(D HTTPStatus.found)
+
+	Returns:
+		Returns a $(D HTTPServerRequestDelegate) that performs the redirect
 */
-HTTPServerRequestDelegate staticRedirect(string url)
+HTTPServerRequestDelegate staticRedirect(string url, HTTPStatus status = HTTPStatus.found)
 {
 	return (HTTPServerRequest req, HTTPServerResponse res){
-		res.redirect(url);
+		res.redirect(url, status);
 	};
 }
 /// ditto
-HTTPServerRequestDelegate staticRedirect(URL url)
+HTTPServerRequestDelegate staticRedirect(URL url, HTTPStatus status = HTTPStatus.found)
 {
 	return (HTTPServerRequest req, HTTPServerResponse res){
-		res.redirect(url);
+		res.redirect(url, status);
 	};
+}
+
+///
+unittest {
+	import vibe.http.router;
+
+	void test()
+	{
+		auto router = new URLRouter;
+		router.get("/old_url", staticRedirect("http://example.org/new_url", HTTPStatus.movedPermanently));
+
+		listenHTTP(new HTTPServerSettings, router);
+	}
 }
 
 
@@ -878,7 +898,12 @@ final class HTTPServerResponse : HTTPResponse {
 		return m_bodyWriter;
 	}	
 
-	/// Sends a redirect request to the client.
+	/** Sends a redirect request to the client.
+
+		Params:
+			url = The URL to redirect to
+			status = The HTTP redirect status (3xx) to send - by default this is a 302 "found"
+	*/
 	void redirect(string url, int status = HTTPStatus.Found)
 	{
 		statusCode = status;
@@ -891,6 +916,25 @@ final class HTTPServerResponse : HTTPResponse {
 	{
 		redirect(url.toString(), status);
 	}
+
+	///
+	unittest {
+		import vibe.http.router;
+
+		void request_handler(HTTPServerRequest req, HTTPServerResponse res)
+		{
+			res.redirect("http://example.org/some_other_url");
+		}
+
+		void test()
+		{
+			auto router = new URLRouter;
+			router.get("/old_url", &request_handler);
+
+			listenHTTP(new HTTPServerSettings, router);
+		}
+	}
+
 
 	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
 	*/
