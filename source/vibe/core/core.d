@@ -201,7 +201,7 @@ Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 	f.m_taskDelegate = Variant(task);
 	static if (ARGS.length) f.m_taskArgs = VariantN!MaxTaskParameterSize(tuple(args));
 	f.m_taskFunc = &callDelegate;
-	f.m_taskCounter++;
+	atomicOp!"+="(f.m_taskCounter, 1);
 	auto handle = f.task();
 	debug Task self = Task.getThis();
 	debug if (s_taskEventCallback) {
