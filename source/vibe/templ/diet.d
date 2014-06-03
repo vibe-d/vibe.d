@@ -625,6 +625,32 @@ private struct DietCompiler(TRANSLATE...)
 						break;
 					case "script":
 					case "style":
+						// determine if this is a plain css/JS tag (without a trailing .) and output a warning
+						// for using deprecated behavior
+						auto tagline = ln[j .. $];
+						HTMLAttribute[] attribs;
+						size_t tli;
+						auto wst = parseHtmlTag(tagline, tli, attribs);
+						tagline = tagline[0 .. tli];
+						if (wst.block_tag) goto default;
+						enum legacy_types = [`"text/css"`, `"text/javascript"`, `'text/javascript'`, `'text/css'`];
+						bool is_legacy_type = true;
+						foreach (i, ref a; attribs)
+							if (a.key == "type") {
+								is_legacy_type = false;
+								foreach (t; legacy_types)
+									if (a.value == t) {
+										is_legacy_type = true;
+										break;
+									}
+								break;
+							}
+						if (!is_legacy_type) goto default;
+
+						output.writeCodeLine(`pragma(msg, "`~dstringEscape(currLine.file)~`:`~currLine.number.to!string~
+							`: Warning: Use an explicit text block '`~tag~dstringEscape(tagline)~
+							`.' for embedded css/javascript - old behavior will be removed soon.");`);
+
 						if (next_indent_level <= level) {
 							buildHtmlNodeWriter(output, tag, ln[j .. $], level, false, prepend_whitespaces);
 						} else {
