@@ -1,11 +1,10 @@
 ﻿Changelog
 =========
 
-v0.7.20 - 2014-05-
+v0.7.20 - 2014-06-03
 --------------------
 
 The `vibe.web.web` web interface generator module has been extended with some important features, making it a full replacement (and more) of the old `registerFormInterface` functionality. Other important changes include the use of strong TLS ciphers out of the box, as well as a heavily optimized `URLRouter` implementation and support for compile-time localization of Diet templates.
-
 
 ### Features and improvements ###
 

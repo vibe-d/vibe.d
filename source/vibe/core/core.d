@@ -653,7 +653,7 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.19";
+enum VibeVersionString = "0.7.20";
 
 /**
 	The maximum combined size of all parameters passed to a task delegate
