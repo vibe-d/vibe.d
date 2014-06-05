@@ -1166,11 +1166,11 @@ unittest {
 	assert(serializeToBson(D(123))       == serializeToBson(["value": 123]));
 
 	// test if const(class) is serializable
-	static class E { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
-	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
-	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
-	assert(serializeToBson(new const B(123)) == Bson(123));
-	assert(serializeToBson(new B(123))       == Bson(123));
+	static class E { int value; this(int v) { value = v; } static E fromBson(Bson val) { return new E(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
+	static assert(!isStringSerializable!E && !isJsonSerializable!E && isBsonSerializable!E);
+	static assert(!isStringSerializable!(const(E)) && !isJsonSerializable!(const(E)) && !isBsonSerializable!(const(E)));
+	assert(serializeToBson(new const E(123)) == Bson(123));
+	assert(serializeToBson(new E(123))       == Bson(123));
 }
 
 unittest {
@@ -1321,9 +1321,9 @@ struct BsonSerializer {
 	void endWriteArrayEntry(T)(size_t idx) {}
 
 	// auto ref does't work for DMD 2.064
-	void writeValue(T)(/*auto ref const*/T value) { writeValueH!(T, true)(value); }
+	void writeValue(T)(/*auto ref const*/ in T value) { writeValueH!(T, true)(value); }
 	
-	private void writeValueH(/*auto ref const*/T, bool write_header)(T value)
+	private void writeValueH(T, bool write_header)(/*auto ref const*/ in T value)
 	{
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
 
@@ -1427,7 +1427,7 @@ struct BsonSerializer {
 		return false;
 	}
 
-	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ T value)
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ in T value)
 	{
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;
