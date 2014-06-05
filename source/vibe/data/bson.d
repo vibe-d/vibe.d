@@ -1209,6 +1209,19 @@ unittest {
 }
 
 unittest {
+	static class C {
+		int a;
+		this(int a) { this.a = a; }
+		Bson toBson() const { return serializeToBson(a); }
+		static C fromBson(Bson bson) { return new C(bson.get!int); }
+	}
+	const C c = new C(123);
+	C d;
+	deserializeBson(d, serializeToBson(c));
+	assert(c.a == d.a);
+}
+
+unittest {
 	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
 	enum Color { Red, Green, Blue }
 	{
@@ -1321,9 +1334,9 @@ struct BsonSerializer {
 	void endWriteArrayEntry(T)(size_t idx) {}
 
 	// auto ref does't work for DMD 2.064
-	void writeValue(T)(/*auto ref const*/T value) { writeValueH!(T, true)(value); }
-	
-	private void writeValueH(/*auto ref const*/T, bool write_header)(T value)
+	void writeValue(T)(/*auto ref*/ const T value) { writeValueH!(T, true)(value); }
+
+	private void writeValueH(T, bool write_header)(/*auto ref*/ const T value)
 	{
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
 
@@ -1427,7 +1440,7 @@ struct BsonSerializer {
 		return false;
 	}
 
-	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ T value)
+	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref*/ const T value)
 	{
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;
