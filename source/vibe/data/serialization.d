@@ -458,12 +458,97 @@ struct ByNameAttribute {}
 /// ditto
 struct AsArrayAttribute {}
 
+/**
+	Checks if a given type has a custom serialization representation.
 
-template isCustomSerializable(T) { enum isCustomSerializable = is(typeof(T.init.toRepresentation())) && is(typeof(T.fromRepresentation(T.init.toRepresentation())) == T); }
+	A class or struct type is custom serializable if it defines a pair of
+	$(D toRepresentation)/$(D fromRepresentation) methods. Any class or
+	struct type that has this trait will be serialized by using the return
+	value of it's $(D toRepresentation) method instead of the original value.
 
-template isISOExtStringSerializable(T) { enum isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T); }
+	This trait has precedence over $(D isISOExtStringSerializable) and
+	$(D isStringSerializable).
+*/
+template isCustomSerializable(T)
+{
+	enum bool isCustomSerializable = is(typeof(T.init.toRepresentation())) && is(typeof(T.fromRepresentation(T.init.toRepresentation())) == T);
+}
+///
+unittest {
+	// represented as a single uint when serialized
+	static struct S {
+		ushort x, y;
 
-template isStringSerializable(T) { enum isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T); }
+		uint toRepresentation() const { return x + (y << 16); }
+		static S fromRepresentation(uint i) { return S(i & 0xFFFF, i >> 16); }
+	}
+
+	static assert(isCustomSerializable!S);
+}
+
+
+/**
+	Checks if a given type has an ISO extended string serialization representation.
+
+	A class or struct type is ISO extended string serializable if it defines a
+	pair of $(D toISOExtString)/$(D fromISOExtString) methods. Any class or
+	struct type that has this trait will be serialized by using the return
+	value of it's $(D toISOExtString) method instead of the original value.
+
+	This is mainly useful for supporting serialization of the the date/time
+	types in $(D std.datetime).
+
+	This trait has precedence over $(D isStringSerializable).
+*/
+template isISOExtStringSerializable(T)
+{
+	enum bool isISOExtStringSerializable = is(typeof(T.init.toISOExtString()) == string) && is(typeof(T.fromISOExtString("")) == T);
+}
+///
+unittest {
+	import std.datetime;
+
+	static assert(isISOExtStringSerializable!DateTime);
+	static assert(isISOExtStringSerializable!SysTime);
+
+	// represented as an ISO extended string when serialized
+	static struct S {
+		// dummy example implementations
+		string toISOExtString() const { return ""; }
+		static S fromISOExtString(string s) { return S.init; }
+	}
+
+	static assert(isISOExtStringSerializable!S);
+}
+
+
+/**
+	Checks if a given type has a string serialization representation.
+
+	A class or struct type is string serializable if it defines a pair of
+	$(D toString)/$(D fromString) methods. Any class or struct type that
+	has this trait will be serialized by using the return value of it's
+	$(D toString) method instead of the original value.
+*/
+template isStringSerializable(T)
+{
+	enum bool isStringSerializable = is(typeof(T.init.toString()) == string) && is(typeof(T.fromString("")) == T);
+}
+///
+unittest {
+	import std.conv;
+
+	// represented as a string when serialized
+	static struct S {
+		int value;
+		
+		// dummy example implementations
+		string toString() const { return value.to!string(); }
+		static S fromString(string s) { return S(s.to!int()); }
+	}
+
+	static assert(isStringSerializable!S);
+}
 
 
 package template isRWPlainField(T, string M)
