@@ -579,6 +579,10 @@ private int loadFormDataRecursiveSingle(T)(FormFields form, ref T elem, string f
 }
 
 unittest {
+	enum E {
+		someValue,
+		someOtherValue
+	}
 	struct Test1 {
 		int a;
 		float b;
@@ -589,6 +593,7 @@ unittest {
 		int[] c;
 		Test1[] d;
 		Test1 e;
+		E f;
 	}
 	
 	Test t;
@@ -604,6 +609,7 @@ unittest {
 	form["t_d0_a"] = "6";
 	form["t_d0_b"] = "7";
 	form["t_d1_a"] = "9";
+	form["t_f"] = "someOtherValue";
 
 	Error e;
 	assert(loadFormDataRecursive(form, t, "t", e, No.strict)==form.length);
@@ -615,4 +621,5 @@ unittest {
 	assert(t.d[0].a==6);
 	assert(t.d[0].b==7);
 	assert(t.d[1].a==9);
+	assert(t.f == E.someOtherValue);
 }
