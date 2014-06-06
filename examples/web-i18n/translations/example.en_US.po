@@ -4,5 +4,5 @@ msgstr "Welcome to the i18n example app!"
 msgid "This is the internationalization example app."
 msgstr "This is the internationalization example app."
 
-msgid "It can use string interpolation! See the tite \"#{title}\" here as an example."
-msgstr "It can use string interpolation! See the tite \"#{title}\" here as an example."
+msgid "It can use string interpolation! See the title \"#{title}\" here as an example."
+msgstr "It can use string interpolation! See the title \"#{title}\" here as an example."

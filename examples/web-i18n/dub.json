@@ -1,6 +1,6 @@
 ﻿{
-	"name": "web-framework-example",
-	"description": "Simple service using the web framework.",
+	"name": "web-framework-i18n-example",
+	"description": "Internationalized web framework example.",
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}

@@ -4,5 +4,5 @@ msgstr "Willkommen zum i18n-Beispiel!"
 msgid "This is the internationalization example app."
 msgstr "Dies ist das Beispielprogramm für Internationalisierung."
 
-msgid "It can use string interpolation! See the tite \"#{title}\" here as an example."
+msgid "It can use string interpolation! See the title \"#{title}\" here as an example."
 msgstr "Es kann String-Interpolationen benutzen! Nehmen Sie den Titel \"#{title}\" hier als Beispiel."
