@@ -41,7 +41,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	deprecated alias valueType = VALUE;
 	alias ValueType = VALUE;
 
-	alias FieldTuple = Tuple!(string, "key", ValueType, "value");
+	struct FieldTuple { string key; ValueType value; }
 
 	/** The number of fields present in the map.
 	*/
@@ -51,7 +51,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	static DictionaryList fromRepresentation(FieldTuple[] array)
 	{
 		DictionaryList ret;
-		foreach (ref v; array) ret.addField(v[0], v[1]);
+		foreach (ref v; array) ret.addField(v.key, v.value);
 		return ret;
 	}
 	/// ditto
@@ -278,7 +278,18 @@ unittest {
 	b.addField("A", 2);
 	assert(b["A"] == 1);
 	assert(b.getAll("a") == [1, 2]);
+}
 
+unittest {
+	import vibe.data.json;
 	import vibe.data.serialization;
+
 	static assert(isCustomSerializable!(DictionaryList!int));
+
+	DictionaryList!(int, false) b;
+	b.addField("a", 1);
+	b.addField("A", 2);
+	auto app = appender!string();
+	serializeToJson(app, b);
+	assert(app.data == `[{"key":"a","value":1},{"key":"A","value":2}]`, app.data);
 }
