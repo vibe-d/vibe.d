@@ -299,20 +299,38 @@ struct SessionVar(T, string name) {
 		T m_initValue;
 	}
 
+	/** Initializes a session var with a constant value.
+	*/
 	this(T init_val) { m_initValue = init_val; }
+	///
+	unittest {
+		class MyService {
+			SessionVar!(int, "someInt") m_someInt = 42;
+		
+			void index() {
+				assert(m_someInt == 42);
+			}
+		}
+	}
 
-	void opAssign(T new_value) { this.value = new_value; }
+	/** Accesses the current value of the session variable.
 
+		Any access will automatically start a new session and set the
+		initializer value, if necessary.
+	*/
 	@property T value()
 	{
 		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
 		alias ctx = s_requestContext;
-		if (ctx.req.session && ctx.req.session.isKeySet(name))
+		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
+
+		if (ctx.req.session.isKeySet(name))
 			return ctx.req.session.get!T(name);
 
+		ctx.req.session.set!T(name, m_initValue);
 		return m_initValue;
 	}
-
+	/// ditto
 	@property void value(T new_value)
 	{
 		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
@@ -320,6 +338,8 @@ struct SessionVar(T, string name) {
 		if (!ctx.req.session) ctx.req.session = ctx.res.startSession();
 		ctx.req.session.set(name, new_value);
 	}
+
+	void opAssign(T new_value) { this.value = new_value; }
 
 	alias value this;
 }
