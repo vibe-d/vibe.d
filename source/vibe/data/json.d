@@ -1526,7 +1526,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 	This function will convert the given JSON value to a string without adding
 	any white space between tokens (no newlines, no indentation and no padding).
-	The output size is thus minizized, at the cost of bad human readability.
+	The output size is thus minimized, at the cost of bad human readability.
 
 	Params:
 		dst   = References the string output range to which the result is written.
