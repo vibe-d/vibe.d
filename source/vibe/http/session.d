@@ -12,6 +12,7 @@ import vibe.crypto.cryptorand;
 
 import std.array;
 import std.base64;
+import std.traits : hasAliasing;
 import std.variant;
 
 //random number generator
@@ -53,8 +54,21 @@ final struct Session {
 	/// Queries the session for the existence of a particular key.
 	bool isKeySet(string key) { return m_store.isKeySet(m_id, key); }
 
-	T get(T)(string key, lazy T def_value = T.init) { return m_store.get(m_id, key, Variant(def_value)).get!T; }
-	void set(T)(string key, T value) { m_store.set(m_id, key, Variant(value)); }
+	/** Gets a typed field from the session.
+	*/
+	T get(T)(string key, lazy T def_value = T.init)
+	{
+		static assert(!hasAliasing!T, "Type "~T.stringof~" contains references, which is not supported for session storage.");
+		return m_store.get(m_id, key, Variant(def_value)).get!T;
+	}
+
+	/** Sets a typed field to the session.
+	*/
+	void set(T)(string key, T value)
+	{
+		static assert(!hasAliasing!T, "Type "~T.stringof~" contains references, which is not supported for session storage.");
+		m_store.set(m_id, key, Variant(value));
+	}
 
 	/**
 		Enables foreach-iteration over all key/value pairs of the session.
