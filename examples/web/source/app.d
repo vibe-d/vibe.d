@@ -8,7 +8,8 @@ import vibe.http.server;
 import vibe.utils.validation;
 import vibe.web.web;
 
-class UserSettings {
+struct UserSettings {
+	bool loggedIn = false;
 	string userName;
 	bool someSetting;
 }
@@ -35,7 +36,8 @@ class SampleService {
 			return;
 		}
 
-		auto s = new UserSettings;
+		UserSettings s;
+		s.loggedIn = true;
 		s.userName = user;
 		s.someSetting = false;
 		m_userSettings = s;
@@ -44,7 +46,7 @@ class SampleService {
 
 	void postLogout(HTTPServerResponse res)
 	{
-		m_userSettings = null;
+		m_userSettings = UserSettings.init;
 		res.terminateSession();
 		redirect("./");
 	}
@@ -58,10 +60,12 @@ class SampleService {
 	void postSettings(bool some_setting, string user_name)
 	{
 		try {
-			enforce(m_userSettings !is null, "Must be logged in to change settings.");
+			enforce(m_userSettings.loggedIn, "Must be logged in to change settings.");
 			validateUserName(user_name);
-			m_userSettings.userName = user_name;
-			m_userSettings.someSetting = some_setting;
+			UserSettings s = m_userSettings;
+			s.userName = user_name;
+			s.someSetting = some_setting;
+			m_userSettings = s;
 		} catch (Exception e) {
 			getSettings(e.msg);
 			return;

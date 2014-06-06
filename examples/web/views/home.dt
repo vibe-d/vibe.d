@@ -5,7 +5,7 @@ block head
 
 block contents
 
-	- if (settings)
+	- if (settings.loggedIn)
 		p Hello, #{settings.userName}! Welcome to your personal web service.
 
 		p You can <a href="settings">edit settings</a>. Currently your setting is #{settings.someSetting ? "on" : "off"}.

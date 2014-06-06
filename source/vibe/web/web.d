@@ -318,7 +318,7 @@ struct SessionVar(T, string name) {
 		Any access will automatically start a new session and set the
 		initializer value, if necessary.
 	*/
-	@property T value()
+	@property const(T) value()
 	{
 		assert(s_requestContext.req !is null, "SessionVar used outside of a web interface request!");
 		alias ctx = s_requestContext;

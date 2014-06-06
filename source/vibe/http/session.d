@@ -56,7 +56,7 @@ final struct Session {
 
 	/** Gets a typed field from the session.
 	*/
-	T get(T)(string key, lazy T def_value = T.init)
+	const(T) get(T)(string key, lazy T def_value = T.init)
 	{
 		static assert(!hasAliasing!T, "Type "~T.stringof~" contains references, which is not supported for session storage.");
 		return m_store.get(m_id, key, Variant(def_value)).get!T;
