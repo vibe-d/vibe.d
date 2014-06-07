@@ -248,6 +248,7 @@ final class GCAllocator : Allocator {
 }
 
 final class AutoFreeListAllocator : Allocator {
+
 	private {
 		enum minExponent = 5;
 		enum freeListCount = 14;

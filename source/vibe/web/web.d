@@ -389,6 +389,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 {
 	import std.array : startsWith;
 	import std.traits;
+	import vibe.data.json;
 	import vibe.internal.meta.uda : findFirstUDA;
 
 	alias RET = ReturnType!overload;
@@ -430,10 +431,17 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	}
 
 	try {
-		static if (is(RET : InputStream)) {
+		static if (is(RET : Json)) {
+			res.writeJsonBody(__traits(getMember, instance, M)(params));
+		} else static if (is(RET : InputStream) || is(RET : const ubyte[])) {
+			enum type = findFirstUDA!(ContentTypeAttribute,__traits(getMember, instance, M));
+			static if (type.found) {
+				res.writeBody(__traits(getMember, instance, M)(params),type.value);
+			} else {
 			res.writeBody(__traits(getMember, instance, M)(params));
+			}
 		} else {
-			static assert(is(RET == void), "Only InputStream and void are supported as return types.");
+			static assert(is(RET == void), "Only InputStream, Json and void are supported as return types.");
 			__traits(getMember, instance, M)(params);
 		}
 	} catch (Exception ex) {
