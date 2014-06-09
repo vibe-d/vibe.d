@@ -292,4 +292,13 @@ unittest {
 	auto app = appender!string();
 	serializeToJson(app, b);
 	assert(app.data == `[{"key":"a","value":1},{"key":"A","value":2}]`, app.data);
+
+	DictionaryList!(int, true, 2) c;
+	c.addField("a", 1);
+	c.addField("b", 2);
+	c.addField("a", 3);
+	c.remove("b");
+	auto appc = appender!string();
+	serializeToJson(appc, c);
+	assert(appc.data == `[{"key":"a","value":1},{"key":"a","value":3}]`, appc.data);
 }
