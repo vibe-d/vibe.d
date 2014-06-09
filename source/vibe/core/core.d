@@ -1129,9 +1129,11 @@ shared static this()
 	}
 
 	version(Windows){
-		signal(SIGABRT, &onSignal);
-		signal(SIGTERM, &onSignal);
-		signal(SIGINT, &onSignal);
+		// WORKAROUND: we don't care about viral @nogc attribute here!
+		import std.traits;
+		signal(SIGABRT, cast(ParameterTypeTuple!signal[1])&onSignal);
+		signal(SIGTERM, cast(ParameterTypeTuple!signal[1])&onSignal);
+		signal(SIGINT, cast(ParameterTypeTuple!signal[1])&onSignal);
 	}
 
 	auto thisthr = Thread.getThis();
@@ -1149,6 +1151,11 @@ shared static this()
 
 	getOption("uid|user", &s_privilegeLoweringUserName, "Sets the user name or id used for privilege lowering.");
 	getOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
+
+	static if (newStdConcurrency) {
+		import std.concurrency;
+		scheduler = new VibedScheduler;
+	}
 }
 
 shared static ~this()
@@ -1296,6 +1303,9 @@ private extern(C) void extrap()
 nothrow {
 	logTrace("exception trap");
 }
+
+// backwards compatibility with DMD < 2.066
+static if (__VERSION__ <= 2065) @property bool nogc() { return false; }
 
 private extern(C) void onSignal(int signal)
 nothrow {
