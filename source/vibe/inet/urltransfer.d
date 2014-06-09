@@ -47,10 +47,13 @@ void download(URL url, scope void delegate(scope InputStream) callback, HTTPClie
 					default:
 						throw new HTTPStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
 					case HTTPStatus.OK:
-						callback(res.bodyReader);
 						done = true;
+						callback(res.bodyReader);
 						break;
-					case 300: .. case 399:
+					case HTTPStatus.movedPermanently:
+					case HTTPStatus.found:
+					case HTTPStatus.seeOther:
+					case HTTPStatus.temporaryRedirect:
 			logTrace("Status code: %s", res.statusCode);
 						auto pv = "Location" in res.headers;
 						enforce(pv !is null, "Server responded with redirect but did not specify the redirect location for "~url.toString());
