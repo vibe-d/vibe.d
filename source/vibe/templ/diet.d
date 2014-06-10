@@ -55,6 +55,7 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	// some imports to make available by default inside templates
 	import vibe.http.common;
 	import vibe.utils.string;
+	version (GNU) import std.typetuple;
 
 	pragma(msg, "Compiling diet template '"~template_file~"'...");
 	static if (ALIASES.length > 0 && __VERSION__ < 2064) {
