@@ -438,7 +438,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			static if (type.found) {
 				res.writeBody(__traits(getMember, instance, M)(params),type.value);
 			} else {
-			res.writeBody(__traits(getMember, instance, M)(params));
+				res.writeBody(__traits(getMember, instance, M)(params));
 			}
 		} else {
 			static assert(is(RET == void), "Only InputStream, Json and void are supported as return types.");
