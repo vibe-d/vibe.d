@@ -167,11 +167,12 @@ void setIdleHandler(bool delegate() del)
 */
 Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 {
-	import std.typecons : Tuple, tuple;
+	return runTask_internal(makeTaskFuncInfo(task, args));
+}
 
-	static assert(Tuple!ARGS.sizeof <= MaxTaskParameterSize,
-		"The arguments passed to runTask must not exceed "~
-		MaxTaskParameterSize.to!string~" bytes in total size.");
+private Task runTask_internal(TaskFuncInfo tfi)
+{
+	import std.typecons : Tuple, tuple;
 
 	CoreTask f;
 	while (!f && !s_availableFibers.empty) {
@@ -188,17 +189,11 @@ Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 		f = new CoreTask;
 	}
 
-	static void callDelegate(CoreTask fiber) {
-		auto del = fiber.m_taskDelegate.get!(void delegate(ARGS))();
-		static if (ARGS.length) del(fiber.m_taskArgs.get!(Tuple!ARGS).expand);
-		else del();
-	}
-	
-	f.m_taskDelegate = Variant(task);
-	static if (ARGS.length) f.m_taskArgs = VariantN!MaxTaskParameterSize(tuple(args));
-	f.m_taskFunc = &callDelegate;
+	f.m_taskFunc = tfi;
+
 	atomicOp!"+="(f.m_taskCounter, 1);
 	auto handle = f.task();
+
 	debug Task self = Task.getThis();
 	debug if (s_taskEventCallback) {
 		if (self != Task.init) s_taskEventCallback(TaskEvent.yield, self);
@@ -222,14 +217,14 @@ Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 void runWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTask_unsafe({ func(args); });
+	runWorkerTask_unsafe(func, args);
 }
 /// ditto
 void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTask_unsafe({ __traits(getMember, object, __traits(identifier, method))(args); });
+	runWorkerTask_unsafe(&__traits(getMember, object, __traits(identifier, method)), args);
 }
 
 /**
@@ -246,30 +241,29 @@ Task runWorkerTaskH(R, ARGS...)(R function(ARGS) func, ARGS args)
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 	Task caller = Task.getThis();
-	runWorkerTask_unsafe({
+	static void taskFun(Task caller, R function(ARGS) func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
-		func(args);	
-	});
-	Task result;
-	receive((PrivateTask val) { result = to!Task(val); });
-	return result;
+		func(args);
+	}
+	runWorkerTask_unsafe(&taskFun, caller, func, args);
+	return cast(Task)receiveOnly!PrivateTask();
 }
 /// ditto
 Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
+	alias FT = typeof(&__traits(getMember, object, __traits(identifier, method)));
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 	Task caller = Task.getThis();
-	runWorkerTask_unsafe({
+	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
-		 __traits(getMember, object, __traits(identifier, method))(args);
-	});
-	Task result;
-	receive((PrivateTask val) {	result = to!Task(val); });
-	return result;
+		func(args);
+	}
+	runWorkerTask_unsafe(&taskFun, caller, &__traits(getMember, object, __traits(identifier, method)), args);
+	return cast(Task)receiveOnly!PrivateTask();
 }
 
 /// Running a worker task using a function
@@ -348,10 +342,13 @@ unittest {
 	}
 }
 
-private void runWorkerTask_unsafe(void delegate() del)
+private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
 {
 	setupWorkerThreads();
-	synchronized (st_threadsMutex) st_workerTasks ~= del;
+
+	auto tfi = makeTaskFuncInfo(callable, args);
+
+	synchronized (st_threadsMutex) st_workerTasks ~= tfi;
 	st_threadsSignal.emit();
 }
 
@@ -365,24 +362,57 @@ private void runWorkerTask_unsafe(void delegate() del)
 void runWorkerTaskDist(R, ARGS...)(R function(ARGS) func, ARGS args)
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTaskDist_unsafe({ func(args); });
+	runWorkerTaskDist_unsafe(func, args);
 }
 /// ditto
 void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTaskDist_unsafe({ object.method(args); });
+	runWorkerTaskDist_unsafe(&__traits(getMember, object, __traits(identifier, method)), args);
 }
 
-private void runWorkerTaskDist_unsafe(void delegate() del)
+private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
 {
 	setupWorkerThreads();
+
+	auto tfi = makeTaskFuncInfo(callable, args);
+
 	synchronized (st_threadsMutex) {
 		foreach (ref ctx; st_threads)
 			if (ctx.isWorker)
-				ctx.taskQueue ~= del;
+				ctx.taskQueue ~= tfi;
 	}
 	st_threadsSignal.emit();
+}
+
+private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+{
+	// work around for Variant not supporting shared function/delegate parameters
+	import std.traits;
+	static if (isFunctionPointer!CALLABLE) alias FPTP = void*;
+	else static if (isDelegate!CALLABLE) alias FPTP = Tuple!(void*, void*);
+	else alias FPTP = CALLABLE;
+
+	static assert(Tuple!ARGS.sizeof <= MaxTaskParameterSize,
+		"The arguments passed to run(Worker)Task must not exceed "~
+		MaxTaskParameterSize.to!string~" bytes in total size.");
+
+	static void callDelegate(TaskFuncInfo* tfi) {
+		static if (isFunctionPointer!CALLABLE) auto callable = cast(CALLABLE)tfi.callable.get!FPTP;
+		else static if (isDelegate!CALLABLE) { CALLABLE callable; callable.funcptr = cast(typeof(CALLABLE.init.funcptr))tfi.callable.get!FPTP()[0]; callable.ptr = tfi.callable.get!FPTP()[1]; }
+		else auto callable = tfi.callable.get!CALLABLE;
+
+		static if (ARGS.length) callable(tfi.args.get!(Tuple!ARGS).expand);
+		else callable();
+	}
+
+	TaskFuncInfo tfi;
+	static if (isFunctionPointer!CALLABLE) tfi.callable = cast(FPTP)callable;
+	else static if (isDelegate!CALLABLE) tfi.callable = FPTP(callable.funcptr, callable.ptr);
+	else tfi.callable = callable;
+	static if (ARGS.length) tfi.args = tuple(args);
+	tfi.func = &callDelegate;
+	return tfi;
 }
 
 /**
@@ -816,9 +846,7 @@ private class CoreTask : TaskFiber {
 		static CoreTask ms_coreTask;
 		CoreTask m_nextInQueue;
 		CoreTaskQueue* m_queue;
-		Variant m_taskDelegate;
-		VariantN!MaxTaskParameterSize m_taskArgs;
-		void function(CoreTask) m_taskFunc;
+		TaskFuncInfo m_taskFunc;
 		Exception m_exception;
 		Task[] m_yielders;
 
@@ -850,7 +878,7 @@ private class CoreTask : TaskFiber {
 		else alias UncaughtException = Exception;
 		try {
 			while(true){
-				while (!m_taskFunc) {
+				while (!m_taskFunc.func) {
 					try {
 						Fiber.yield();
 					} catch( Exception e ){
@@ -860,7 +888,7 @@ private class CoreTask : TaskFiber {
 				}
 
 				auto task = m_taskFunc;
-				m_taskFunc = null;
+				m_taskFunc = TaskFuncInfo.init;
 				Task handle = this.task;
 				try {
 					m_running = true;
@@ -872,7 +900,7 @@ private class CoreTask : TaskFiber {
 						.yield();
 						logTrace("Initial resume of task.");
 					}
-					task(this);
+					task.func(&task);
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.end, handle);
 				} catch( Exception e ){
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.fail, handle);
@@ -1049,10 +1077,18 @@ private class VibeDriverCore : DriverCore {
 private struct ThreadContext {
 	Thread thread;
 	bool isWorker;
-	void delegate()[] taskQueue;
+	TaskFuncInfo[] taskQueue;
 
 	this(Thread thr, bool worker) { this.thread = thr; this.isWorker = worker; }
 }
+
+private struct TaskFuncInfo {
+	void function(TaskFuncInfo*) func;
+	Variant callable;
+	TaskArgsVariant args; // tuple of parameters
+}
+
+alias TaskArgsVariant = VariantN!MaxTaskParameterSize;
 
 /**************************************************************************************************/
 /* private functions                                                                              */
@@ -1065,7 +1101,7 @@ private {
 	__gshared core.sync.mutex.Mutex st_threadsMutex;
 	__gshared ManualEvent st_threadsSignal;
 	__gshared ThreadContext[] st_threads;
-	__gshared void delegate()[] st_workerTasks;
+	__gshared TaskFuncInfo[] st_workerTasks;
 	__gshared Condition st_threadShutdownCondition;
 	__gshared debug void function(TaskEvent, Task) s_taskEventCallback;
 	shared bool st_term = false;
@@ -1268,7 +1304,7 @@ private void handleWorkerTasks()
 
 	logDebug("worker task loop enter");
 	while(true){
-		void delegate() t;
+		TaskFuncInfo t;
 		auto emit_count = st_threadsSignal.emitCount;
 		synchronized (st_threadsMutex) {
 			auto idx = st_threads.countUntil!(c => c.thread is thisthr);
@@ -1292,7 +1328,7 @@ private void handleWorkerTasks()
 				st_threads[idx].taskQueue.popFront();
 			}
 		}
-		if (t) runTask(t);
+		if (t.func) runTask_internal(t);
 		else st_threadsSignal.wait(emit_count);
 	}
 	logDebug("worker task exit");

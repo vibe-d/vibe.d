@@ -329,23 +329,39 @@ final class Libevent2Driver : EventDriver {
 
 		auto ret = new Libevent2TCPListener;
 
-		static void setupConnectionHandler(shared(Libevent2TCPListener) listener, typeof(listenfd) listenfd, NetworkAddress bind_addr, shared(void delegate(TCPConnection conn)) connection_callback, TCPListenOptions options)
+		static final class HandlerContext {
+			Libevent2TCPListener listener;
+			int listenfd;
+			NetworkAddress bind_addr;
+			void delegate(TCPConnection) connection_callback;
+			TCPListenOptions options;
+		}
+
+		auto hc = new HandlerContext;
+		hc.listener = ret;
+		hc.listenfd = listenfd;
+		hc.bind_addr = bind_addr;
+		hc.connection_callback = connection_callback;
+		hc.options = options;
+
+		static void setupConnectionHandler(shared(HandlerContext) handler_context_)
 		{
+			auto handler_context = cast(HandlerContext)handler_context_;
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
-			auto ctx = TCPContextAlloc.alloc(core, evloop, listenfd, null, bind_addr, NetworkAddress());
-			ctx.connectionCallback = cast()connection_callback;
-			ctx.listenEvent = event_new(evloop, listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
-			ctx.listenOptions = options;
+			auto ctx = TCPContextAlloc.alloc(core, evloop, handler_context.listenfd, null, handler_context.bind_addr, NetworkAddress());
+			ctx.connectionCallback = handler_context.connection_callback;
+			ctx.listenEvent = event_new(evloop, handler_context.listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+			ctx.listenOptions = handler_context.options;
 			enforce(event_add(ctx.listenEvent, null) == 0,
 				"Error scheduling connection event on the event loop.");
-			(cast()listener).addContext(ctx);
+			handler_context.listener.addContext(ctx);
 		}
 
 		// FIXME: the API needs improvement with proper shared annotations, so the the following casts are not necessary
-		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback, options);
-		else setupConnectionHandler(cast(shared)ret, listenfd, bind_addr, cast(shared)connection_callback, options);
+		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)hc);
+		else setupConnectionHandler(cast(shared)hc);
 
 		return ret;
 	}
