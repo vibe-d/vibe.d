@@ -123,6 +123,16 @@ unittest
 
 
 /**
+    UDA to defeine the ContentType for methods returning an InputStream or ubyte[]
+*/
+ContentTypeAttribute contentType(string data) 
+{
+	if (!__ctfe)
+		assert(false);
+	return ContentTypeAttribute(data);
+}
+
+/**
 	User Defined Attribute interface to force specific HTTP method in REST interface
 	for function in question. Usual URL generation rules are still applied so if there
 	are any "get", "query" or similar prefixes, they are filtered out.
@@ -163,7 +173,7 @@ MethodAttribute method(HTTPMethod data)
 	}
 	---	
 */
-PathAttribute path(string data)
+PathAttribute path(string data) 
 {
 	if (!__ctfe)
 		assert(false);
@@ -241,6 +251,12 @@ unittest
 	assert(routes[0].pattern == "/iapi/foo" && routes[0].method == HTTPMethod.GET);
 }
 
+/// private 
+struct ContentTypeAttribute 
+{
+	string data;
+	alias data this;
+}
 
 /// private
 struct MethodAttribute

@@ -7,6 +7,8 @@
 */
 module vibe.http.websockets;
 
+alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
+
 ///
 unittest {
 	void handleConn(scope WebSocket sock)
@@ -64,7 +66,7 @@ class WebSocketException: Exception
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegate handleWebSockets(void delegate(scope WebSocket) on_handshake)
+HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handshake)
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
