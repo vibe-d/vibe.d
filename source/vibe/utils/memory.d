@@ -581,7 +581,7 @@ struct FreeListRef(T, bool INIT = true)
 		FreeListRef ret;
 		auto mem = manualAllocator().alloc(ElemSize + int.sizeof);
 		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
-		static if( INIT ) ret.m_object = emplace!T(mem, args);	
+		static if( INIT ) ret.m_object = cast(TR)emplace!(Unqual!T)(mem, args);	
 		else ret.m_object = cast(TR)mem.ptr;
 		ret.refCount = 1;
 		return ret;
