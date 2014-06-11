@@ -167,10 +167,11 @@ void setIdleHandler(bool delegate() del)
 */
 Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 {
-	return runTask_internal(makeTaskFuncInfo(task, args));
+	auto tfi = makeTaskFuncInfo(task, args);
+	return runTask_internal(tfi);
 }
 
-private Task runTask_internal(TaskFuncInfo tfi)
+private Task runTask_internal(ref TaskFuncInfo tfi)
 {
 	import std.typecons : Tuple, tuple;
 
@@ -387,31 +388,33 @@ private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS
 
 private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
 {
-	// work around for Variant not supporting shared function/delegate parameters
-	import std.traits;
-	static if (isFunctionPointer!CALLABLE) alias FPTP = void*;
-	else static if (isDelegate!CALLABLE) alias FPTP = Tuple!(void*, void*);
-	else alias FPTP = CALLABLE;
+	alias TARGS = Tuple!ARGS;
 
-	static assert(Tuple!ARGS.sizeof <= MaxTaskParameterSize,
+	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
+	static assert(TARGS.sizeof <= MaxTaskParameterSize,
 		"The arguments passed to run(Worker)Task must not exceed "~
 		MaxTaskParameterSize.to!string~" bytes in total size.");
 
 	static void callDelegate(TaskFuncInfo* tfi) {
-		static if (isFunctionPointer!CALLABLE) auto callable = cast(CALLABLE)tfi.callable.get!FPTP;
-		else static if (isDelegate!CALLABLE) { CALLABLE callable; callable.funcptr = cast(typeof(CALLABLE.init.funcptr))tfi.callable.get!FPTP()[0]; callable.ptr = tfi.callable.get!FPTP()[1]; }
-		else auto callable = tfi.callable.get!CALLABLE;
+		assert(tfi.func is &callDelegate);
 
-		static if (ARGS.length) callable(tfi.args.get!(Tuple!ARGS).expand);
-		else callable();
+		// copy original call data
+		auto c = tfi.callable.reinterpretAs!CALLABLE();
+		auto args = tfi.args.reinterpretAs!TARGS;
+		
+		// reset the info and destroy the original data
+		tfi.func = null;
+		destroy(tfi.callable.reinterpretAs!CALLABLE);
+		destroy(tfi.args.reinterpretAs!TARGS);
+
+		// make the call
+		c(args.expand);
 	}
 
 	TaskFuncInfo tfi;
-	static if (isFunctionPointer!CALLABLE) tfi.callable = cast(FPTP)callable;
-	else static if (isDelegate!CALLABLE) tfi.callable = FPTP(callable.funcptr, callable.ptr);
-	else tfi.callable = callable;
-	static if (ARGS.length) tfi.args = tuple(args);
 	tfi.func = &callDelegate;
+	emplace(cast(CALLABLE*)tfi.callable.ptr, callable);
+	emplace(cast(TARGS*)tfi.args.ptr, tuple(args));
 	return tfi;
 }
 
@@ -1084,8 +1087,8 @@ private struct ThreadContext {
 
 private struct TaskFuncInfo {
 	void function(TaskFuncInfo*) func;
-	Variant callable;
-	TaskArgsVariant args; // tuple of parameters
+	void[2*size_t.sizeof] callable;
+	void[MaxTaskParameterSize] args;
 }
 
 alias TaskArgsVariant = VariantN!MaxTaskParameterSize;
@@ -1144,7 +1147,7 @@ shared static this()
 	//    without this, the stdout/stderr handles are not initialized before
 	//    the log module is set up.
 	import std.stdio; write("");
-	
+
 	initializeLogModule();
 	
 	logTrace("create driver core");
@@ -1309,7 +1312,7 @@ private void handleWorkerTasks()
 
 	logDebug("worker task loop enter");
 	while(true){
-		TaskFuncInfo t;
+		bool again = false;
 		auto emit_count = st_threadsSignal.emitCount;
 		synchronized (st_threadsMutex) {
 			auto idx = st_threads.countUntil!(c => c.thread is thisthr);
@@ -1325,16 +1328,17 @@ private void handleWorkerTasks()
 			}
 			if (!st_workerTasks.empty) {
 				logDebug("worker task got");
-				t = st_workerTasks.front;
+				runTask_internal(st_workerTasks.front);
 				st_workerTasks.popFront();
+				again = true;
 			} else if (!st_threads[idx].taskQueue.empty) {
 				logDebug("worker task got specific");
-				t = st_threads[idx].taskQueue.front;
+				runTask_internal(st_threads[idx].taskQueue.front);
 				st_threads[idx].taskQueue.popFront();
+				again = true;
 			}
 		}
-		if (t.func) runTask_internal(t);
-		else st_threadsSignal.wait(emit_count);
+		if (!again) st_threadsSignal.wait(emit_count);
 	}
 	logDebug("worker task exit");
 }
@@ -1448,3 +1452,5 @@ private struct CoreTaskQueue {
 	}
 }
 
+// helper for a reinterpret cast of a blob of memory
+private ref T reinterpretAs(T)(void[] mem) { return (cast(T[])mem[0 .. T.sizeof])[0]; }
