@@ -50,7 +50,7 @@ void parseURLEncodedForm(string str, ref FormFields params)
 		// name part
 		auto idx = str.indexOf("=");
 		if (idx == -1) {
-			idx = str.indexOfAny("&;");
+			idx = vibe.utils.string.indexOfAny(str, "&;");
 			if (idx == -1) {
 				params.addField(formDecode(str[0 .. $]), "");
 				return;
@@ -60,7 +60,7 @@ void parseURLEncodedForm(string str, ref FormFields params)
 				continue;
 			}
 		} else {
-			auto idx_amp = str.indexOfAny("&;");
+			auto idx_amp = vibe.utils.string.indexOfAny(str, "&;");
 			if (idx_amp > -1 && idx_amp < idx) {
 				params.addField(formDecode(str[0 .. idx_amp]), "");
 				str = str[idx_amp+1 .. $];
