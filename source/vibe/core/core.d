@@ -1140,6 +1140,11 @@ shared static this()
 		}
 	}
 
+	// COMPILER BUG: Must be some kind of module constructor order issue:
+	//    without this, the stdout/stderr handles are not initialized before
+	//    the log module is set up.
+	import std.stdio; write("");
+	
 	initializeLogModule();
 	
 	logTrace("create driver core");

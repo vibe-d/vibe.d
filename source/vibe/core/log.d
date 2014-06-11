@@ -671,7 +671,6 @@ nothrow @safe {
 
 package void initializeLogModule()
 {
-
 	version (Windows) {
 		version (VibeWinrtDriver) enum disable_stdout = true;
 		else {
