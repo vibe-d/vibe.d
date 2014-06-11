@@ -1086,7 +1086,7 @@ template isCopyable(T)
 */
 struct Future(T) {
 	private {
-		FreeListRef!T m_result;
+		FreeListRef!(shared(T)) m_result;
 		Task m_task;
 	}
 
@@ -1104,14 +1104,14 @@ struct Future(T) {
 	{
 		if (!ready) m_task.join();
 		assert(ready, "Task still running after join()!?");
-		return *m_result;
+		return *cast(T*)m_result.get(); // casting away shared is safe, because this is a unique reference
 	}
 
 	alias getResult this;
 
 	private void init()
 	{
-		m_result = FreeListRef!T();
+		m_result = FreeListRef!(shared(T))();
 	}
 }
 
@@ -1129,34 +1129,26 @@ struct Future(T) {
 		args: Arguments to pass to the callable.
 
 	Returns:
-		Returns a $(D Future) object that can be used to access the result. The
-		type of the value will be $(D shared) if $(D runWorkerTask) has been
-		used to perform the computation.
+		Returns a $(D Future) object that can be used to access the result.
 
 	See_also: $(D isWeaklyIsolated)
 */
-auto async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+Future!(ReturnType!CALLABLE) async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
 	if (is(typeof(callable(args)) == ReturnType!CALLABLE))
 {
 	import vibe.core.core;
 	alias RET = ReturnType!CALLABLE;
-	static if (isWeaklyIsolated!CALLABLE && isWeaklyIsolated!ARGS) {
-		Future!(shared(RET)) ret;
-		ret.init();
-		static void compute(FreeListRef!(shared(RET)) dst, CALLABLE callable, ARGS args) {
-			*dst = callable(args);
-		}
-		ret.m_task = runWorkerTaskH(&compute, ret.m_result, callable, args);
-		return ret;
-	} else {
-		Future!RET ret;
-		ret.init();
-		static void compute(FreeListRef!RET dst, CALLABLE callable, ARGS args) {
-			*dst = callable(args);
-		}
-		ret.m_task = runTask(&compute, ret.m_result, callable, args);
-		return ret;
+	Future!RET ret;
+	ret.init();
+	static void compute(FreeListRef!(shared(RET)) dst, CALLABLE callable, ARGS args) {
+		*dst = cast(shared(RET))callable(args);
 	}
+	static if (isWeaklyIsolated!CALLABLE && isWeaklyIsolated!ARGS) {
+		ret.m_task = runWorkerTaskH(&compute, ret.m_result, callable, args);
+	} else {
+		ret.m_task = runTask(&compute, ret.m_result, callable, args);
+	}
+	return ret;
 }
 
 ///

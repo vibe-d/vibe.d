@@ -248,7 +248,7 @@ final class GCAllocator : Allocator {
 }
 
 final class AutoFreeListAllocator : Allocator {
-	version (GNU) import std.typetuple;
+	import std.typetuple;
 
 	private {
 		enum minExponent = 5;

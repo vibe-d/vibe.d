@@ -21,7 +21,7 @@ import std.functional;
 import std.range : empty, front, popFront;
 import std.string;
 import std.variant;
-import std.typecons : Typedef;
+import std.typecons : Typedef, Tuple, tuple;
 import core.atomic;
 import core.sync.condition;
 import core.sync.mutex;

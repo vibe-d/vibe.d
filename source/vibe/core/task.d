@@ -86,6 +86,7 @@ struct Task {
 	void interrupt() { if (running) fiber.interrupt(); }
 	void terminate() { if (running) fiber.terminate(); }
 
+	string toString() const { import std.string; return format("%s:%s", cast(void*)m_fiber, m_taskCounter); }
 
 	bool opEquals(in ref Task other) const nothrow { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
 	bool opEquals(in Task other) const nothrow { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }

@@ -143,7 +143,8 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializeImpl!(Serializer, OriginalType!TU)(serializer, cast(OriginalType!TU)value);
 		}
 	} else static if (Serializer.isSupportedValueType!TU) {
-		serializer.writeValue!TU(value);
+		static if (is(TU == typeof(null))) serializer.writeValue!TU(null);
+		else serializer.writeValue!TU(value);
 	} else static if (isArray!TU) {
 		alias TV = typeof(value[0]);
 		serializer.beginWriteArray!TU(value.length);
