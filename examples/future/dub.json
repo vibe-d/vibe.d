@@ -1,0 +1,9 @@
+{
+	"name": "future-example",
+	"description": "Demonstrates async()/Future usage.",
+	"authors": ["Sönke Ludwig"],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}

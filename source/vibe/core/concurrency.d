@@ -17,6 +17,7 @@ import std.typetuple;
 import std.variant;
 import std.string;
 import vibe.core.task;
+import vibe.utils.memory;
 
 
 package enum newStdConcurrency = __VERSION__ >= 2066;
@@ -1002,11 +1003,11 @@ template isWeaklyIsolated(T...)
 		else static if (is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
 		else static if (is(T[0] == class)) enum bool isWeaklyIsolated = false;
 		else static if (is(T[0] == interface)) enum bool isWeaklyIsolated = false; // can't know if the implementation is isolated
-		else static if (is(T[0] == delegate)) enum bool isWeaklyIsolated = false; // can't know to what a delegate points
+		else static if (is(T[0] == delegate)) enum bool isWeaklyIsolated = T[0].stringof.endsWith(" shared"); // can't know to what a delegate points - FIXME: use something better than a string comparison
 		else static if (isDynamicArray!(T[0])) enum bool isWeaklyIsolated = is(typeof(T[0].init[0]) == immutable);
 		else static if (isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
 		else static if (isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
-		else static if (isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable);
+		else static if (isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable) || is(typeof(*T[0].init) == shared);
 		else static if (isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
 		else enum bool isWeaklyIsolated = true;
 	}
@@ -1072,6 +1073,112 @@ template isCopyable(T)
 	else enum isCopyable = false;
 }
 
+
+/******************************************************************************/
+/* Future (promise) suppport                                                  */
+/******************************************************************************/
+
+/**
+	Represents a values that will be computed asynchronously.
+
+	This type uses $(D alias this) to enable transparent access to the result
+	value.
+*/
+struct Future(T) {
+	private {
+		FreeListRef!T m_result;
+		Task m_task;
+	}
+
+	/// Checks if the values was fully computed.
+	@property bool ready() const { return !m_task.running; }
+
+	/** Returns the computed value.
+
+		This function waits for the computation to finish, if necessary, and
+		then returns the final value. In case of an uncaught exception
+		happening during the computation, the exception will be thrown
+		instead.
+	*/
+	ref T getResult()
+	{
+		if (!ready) m_task.join();
+		assert(ready, "Task still running after join()!?");
+		return *m_result;
+	}
+
+	alias getResult this;
+
+	private void init()
+	{
+		m_result = FreeListRef!T();
+	}
+}
+
+
+/**
+	Starts an asynchronous computation and returns a future for the result value.
+
+	If the supplied callable and arguments are all weakly isolated,
+	$(D vibe.core.core.runWorkerTask) will be used to perform the computation.
+	Otherwise, $(D vibe.core.core.runTask) will be used.
+
+	Params:
+		callable: A callable value, can be either a function, a delegate, or a
+			user defined type that defines an $(D opCall).
+		args: Arguments to pass to the callable.
+
+	Returns:
+		Returns a $(D Future) object that can be used to access the result. The
+		type of the value will be $(D shared) if $(D runWorkerTask) has been
+		used to perform the computation.
+
+	See_also: $(D isWeaklyIsolated)
+*/
+auto async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+	if (is(typeof(callable(args)) == ReturnType!CALLABLE))
+{
+	import vibe.core.core;
+	alias RET = ReturnType!CALLABLE;
+	static if (isWeaklyIsolated!CALLABLE && isWeaklyIsolated!ARGS) {
+		Future!(shared(RET)) ret;
+		ret.init();
+		static void compute(FreeListRef!(shared(RET)) dst, CALLABLE callable, ARGS args) {
+			*dst = callable(args);
+		}
+		ret.m_task = runWorkerTaskH(&compute, ret.m_result, callable, args);
+		return ret;
+	} else {
+		Future!RET ret;
+		ret.init();
+		static void compute(FreeListRef!RET dst, CALLABLE callable, ARGS args) {
+			*dst = callable(args);
+		}
+		ret.m_task = runTask(&compute, ret.m_result, callable, args);
+		return ret;
+	}
+}
+
+///
+unittest {
+	import vibe.core.core;
+	import vibe.core.log;
+
+	void test()
+	{
+		auto val = async({
+			logInfo("Starting to compute value.");
+			sleep(500.msecs); // simulate some lengthy computation
+			logInfo("Finished computing value.");
+			return 32;
+		});
+
+		logInfo("Starting computation in main task");
+		sleep(200.msecs); // simulate some lengthy computation
+		logInfo("Finished computation in main task. Waiting for async value.");
+		logInfo("Result: %s", val.getResult());
+	}
+}
 
 /******************************************************************************/
 /******************************************************************************/
