@@ -236,6 +236,7 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 
 
 /**
+	TODO: clear ring buffer fields upon removal (to run struct destructors, if T is a struct)
 */
 struct FixedRingBuffer(T, size_t N = 0) {
 	private {
@@ -277,6 +278,13 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	@property ref inout(T) front() inout { assert(!empty); return m_buffer[m_start]; }
 
 	@property ref inout(T) back() inout { assert(!empty); return m_buffer[mod(m_start+m_fill-1)]; }
+
+	void clear()
+	{
+		popFrontN(length);
+		assert(m_fill == 0);
+		m_start = 0;
+	}
 
 	void put()(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
 	void put(TC : T)(TC[] itms)
