@@ -390,6 +390,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	import std.array : startsWith;
 	import std.traits;
 	import vibe.data.json;
+	import vibe.http.websockets;
 	import vibe.internal.meta.uda : findFirstUDA;
 
 	alias RET = ReturnType!overload;
@@ -440,6 +441,8 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			} else {
 				res.writeBody(__traits(getMember, instance, M)(params));
 			}
+		} else static if (is(RET == WebSocketHandshakeDelegate) {
+			handleWebSockets(__traits(getMember,instance, M))(req,res);
 		} else {
 			static assert(is(RET == void), "Only InputStream, Json and void are supported as return types.");
 			__traits(getMember, instance, M)(params);
