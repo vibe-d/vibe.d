@@ -648,13 +648,13 @@ private struct DietCompiler(TRANSLATE...)
 							}
 						if (!is_legacy_type) goto default;
 
-						output.writeCodeLine(`pragma(msg, "`~dstringEscape(currLine.file)~`:`~currLine.number.to!string~
-							`: Warning: Use an explicit text block '`~tag~dstringEscape(tagline)~
-							`.' for embedded css/javascript - old behavior will be removed soon.");`);
-
 						if (next_indent_level <= level) {
 							buildHtmlNodeWriter(output, tag, ln[j .. $], level, false, prepend_whitespaces);
 						} else {
+							output.writeCodeLine(`pragma(msg, "`~dstringEscape(currLine.file)~`:`~currLine.number.to!string~
+								`: Warning: Use an explicit text block '`~tag~dstringEscape(tagline)~
+								`.' for embedded css/javascript - old behavior will be removed soon.");`);
+
 							// pass all child lines to buildRawTag and continue with the next sibling
 							size_t next_tag = m_lineIndex+1;
 							while( next_tag < lineCount &&
