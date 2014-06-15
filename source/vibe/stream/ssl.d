@@ -241,7 +241,7 @@ final class SSLStream : Stream {
 							version(Windows) import std.c.windows.winsock;
 							else import core.sys.posix.netinet.in_;
 
-							logWarn("peer name %s couldn't be verified, trying IP address.", vdata.peerName);
+							logWarn("peer name '%s' couldn't be verified, trying IP address.", vdata.peerName);
 							char* addr;
 							int addrlen;
 							switch (vdata.peerAddress.family) {
