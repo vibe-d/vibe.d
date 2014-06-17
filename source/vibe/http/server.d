@@ -1100,32 +1100,11 @@ final class HTTPServerResponse : HTTPResponse {
 		// write cookies
 		foreach (n, cookie; this.cookies) {
 			dst.put("Set-Cookie: ");
-			dst.put(n);
-			dst.put('=');
-			auto appref = &dst;
-			filterURLEncode(appref, cookie.value);
-			if (cookie.domain) {
-				dst.put("; Domain=");
-				dst.put(cookie.domain);
-			}
-			if (cookie.path) {
-				dst.put("; Path=");
-				dst.put(cookie.path);
-			}
-			if (cookie.expires) {
-				dst.put("; Expires=");
-				dst.put(cookie.expires);
-			}
-			if (cookie.maxAge) {
-				dst.put("; Max-Age=");
-				formattedWrite(&dst, "%s", cookie.maxAge);
-			}
-			if (cookie.secure) dst.put("; Secure");
-			if (cookie.httpOnly) dst.put("; HttpOnly");
+			cookie.serialize(&dst, n);
 			dst.put("\r\n");
 		}
 
-		// finalize reposonse header
+		// finalize response header
 		dst.put("\r\n");
 		dst.flush();
 		m_conn.flush();
