@@ -986,8 +986,7 @@ final class HTTPServerResponse : HTTPResponse {
 		m_session = m_settings.sessionStore.create();
 		m_session["$sessionCookiePath"] = path;
 		m_session["$sessionCookieSecure"] = secure.to!string();
-		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id);
-		cookie.path = path;
+		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id, path);
 		cookie.secure = secure;
 		cookie.httpOnly = (options & SessionOption.httpOnly) != 0;
 		return m_session;
@@ -1011,8 +1010,7 @@ final class HTTPServerResponse : HTTPResponse {
 	void terminateSession()
 	{
 		assert(m_session, "Try to terminate a session, but none is started.");
-		auto cookie = setCookie(m_settings.sessionIdCookie, null);
-		cookie.path = m_session["$sessionCookiePath"];
+		auto cookie = setCookie(m_settings.sessionIdCookie, null, m_session["$sessionCookiePath"]);
 		cookie.secure = m_session["$sessionCookieSecure"].to!bool();
 		m_session.destroy();
 		m_session = Session.init;
@@ -1099,41 +1097,32 @@ final class HTTPServerResponse : HTTPResponse {
 
 		logTrace("---------------------");
 
-		// NOTE: AA.length is very slow so this helper function is used to determine if an AA is empty.
-		static bool empty(AA)(AA aa)
-		{
-			foreach (_; aa) return false;
-			return true;
-		}
-
 		// write cookies
-		if (!empty(cookies)) {
-			foreach (n, cookie; this.cookies) {
-				dst.put("Set-Cookie: ");
-				dst.put(n);
-				dst.put('=');
-				auto appref = &dst;
-				filterURLEncode(appref, cookie.value);
-				if (cookie.domain) {
-					dst.put("; Domain=");
-					dst.put(cookie.domain);
-				}
-				if (cookie.path) {
-					dst.put("; Path=");
-					dst.put(cookie.path);
-				}
-				if (cookie.expires) {
-					dst.put("; Expires=");
-					dst.put(cookie.expires);
-				}
-				if (cookie.maxAge) {
-					dst.put("; Max-Age=");
-					formattedWrite(&dst, "%s", cookie.maxAge);
-				}
-				if (cookie.secure) dst.put("; Secure");
-				if (cookie.httpOnly) dst.put("; HttpOnly");
-				dst.put("\r\n");
+		foreach (n, cookie; this.cookies) {
+			dst.put("Set-Cookie: ");
+			dst.put(n);
+			dst.put('=');
+			auto appref = &dst;
+			filterURLEncode(appref, cookie.value);
+			if (cookie.domain) {
+				dst.put("; Domain=");
+				dst.put(cookie.domain);
 			}
+			if (cookie.path) {
+				dst.put("; Path=");
+				dst.put(cookie.path);
+			}
+			if (cookie.expires) {
+				dst.put("; Expires=");
+				dst.put(cookie.expires);
+			}
+			if (cookie.maxAge) {
+				dst.put("; Max-Age=");
+				formattedWrite(&dst, "%s", cookie.maxAge);
+			}
+			if (cookie.secure) dst.put("; Secure");
+			if (cookie.httpOnly) dst.put("; HttpOnly");
+			dst.put("\r\n");
 		}
 
 		// finalize reposonse header
