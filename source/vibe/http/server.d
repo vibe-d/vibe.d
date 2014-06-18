@@ -1100,7 +1100,7 @@ final class HTTPServerResponse : HTTPResponse {
 		// write cookies
 		foreach (n, cookie; this.cookies) {
 			dst.put("Set-Cookie: ");
-			cookie.serialize(&dst, n);
+			cookie.writeString(&dst, n);
 			dst.put("\r\n");
 		}
 

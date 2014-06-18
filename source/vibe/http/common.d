@@ -488,27 +488,28 @@ final class Cookie {
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
 
-	void serialize(OS)(OS outstream, string name)
+	void writeString(R)(R dst, string name)
+		if (isOutputRange!(R, char))
 	{
 		import vibe.textfilter.urlencode;
-		outstream.put(name);
-		outstream.put('=');
-		filterURLEncode(outstream, this.value);
+		dst.put(name);
+		dst.put('=');
+		filterURLEncode(dst, this.value);
 		if (this.domain) {
-			outstream.put("; Domain=");
-			outstream.put(this.domain);
+			dst.put("; Domain=");
+			dst.put(this.domain);
 		}
 		if (this.path) {
-			outstream.put("; Path=");
-			outstream.put(this.path);
+			dst.put("; Path=");
+			dst.put(this.path);
 		}
 		if (this.expires) {
-			outstream.put("; Expires=");
-			outstream.put(this.expires);
+			dst.put("; Expires=");
+			dst.put(this.expires);
 		}
-		if (this.maxAge) outstream.formattedWrite("; Max-Age=%s", this.maxAge);
-		if (this.secure) outstream.put("; Secure");
-		if (this.httpOnly) outstream.put("; HttpOnly");
+		if (this.maxAge) dst.formattedWrite("; Max-Age=%s", this.maxAge);
+		if (this.secure) dst.put("; Secure");
+		if (this.httpOnly) dst.put("; HttpOnly");
 	}
 }
 
