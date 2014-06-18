@@ -236,7 +236,7 @@ final class SSLStream : Stream {
 				if (auto peer = SSL_get_peer_certificate(m_ssl)) {
 					scope(exit) X509_free(peer);
 					auto result = SSL_get_verify_result(m_ssl);
-					if (result == X509_V_OK && ctx.peerValidationMode >= SSLPeerValidationMode.validCert) {
+					if (result == X509_V_OK && (ctx.peerValidationMode & SSLPeerValidationMode.checkPeer)) {
 						if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
 							version(Windows) import std.c.windows.winsock;
 							else import core.sys.posix.netinet.in_;
@@ -548,17 +548,15 @@ final class SSLContext {
 
 		version (OpenSSL) {
 			int sslmode;
-			final switch (mode) with (SSLPeerValidationMode) {
-				case none:
-					sslmode = SSL_VERIFY_NONE;
-					break;
-				case requireCert:
-				case validCert:
-				case trustedCert:
-					sslmode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT |
-						SSL_VERIFY_CLIENT_ONCE;
-					break;
+
+			with (SSLPeerValidationMode) {
+				if (mode == none) sslmode = SSL_VERIFY_NONE;
+				else {
+					sslmode |= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
+					if (mode & requireCert) sslmode |= SSL_VERIFY_FAIL_IF_NO_PEER_CERT;
+				}
 			}
+
 			SSL_CTX_set_verify(m_ctx, sslmode, &verify_callback);
 		}
 	}
@@ -761,13 +759,13 @@ final class SSLContext {
 				if (!valid && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
 					X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
 					logDebug("SSL unknown issuer cert: %s", buf.ptr.to!string);
-					if (vdata.validationMode < SSLPeerValidationMode.trustedCert) {
+					if (!(vdata.validationMode & SSLPeerValidationMode.checkTrust)) {
 						valid = true;
 						err = X509_V_OK;
 					}
 				}
 
-				if (vdata.validationMode < SSLPeerValidationMode.validCert) {
+				if (!(vdata.validationMode & SSLPeerValidationMode.checkCert)) {
 					valid = true;
 					err = X509_V_OK;
 				}
@@ -820,7 +818,8 @@ enum SSLVersion {
 
 /** Specifies how rigorously SSL peer certificates are validated.
 
-	Usually trustedCert
+	The individual options can be combined using a bitwise "or". Usually it is
+	recommended to use $(D trustedCert) for full validation.
 */
 enum SSLPeerValidationMode {
 	/** Accept any peer regardless if and which certificate is presented.
@@ -828,35 +827,68 @@ enum SSLPeerValidationMode {
 		This mode is generally discouraged and should only be used with
 		a custom validation callback set to do the verification.
 	*/
-	none,
+	none = 0,
 
-	/** Require the peer to persent a certificate without further validation.
+	/** Require the peer to always present a certificate.
 
-		Note that this mode does not verify the certificate at all. This mode
-		can be useful if a custom validation callback is used to validate
-		certificates.
+		Note that this option alone does not verify the certificate at all. It
+		can be used together with the "check" options, or by using a custom
+		validation callback to actually validate certificates.
 	*/
-	requireCert,
+	requireCert = 1<<0,
+
+	/** Check the certificate for basic validity.
+
+		This verifies the validity of the certificate chain and some other
+		general properties, such as expiration time. It doesn't verify
+		either the peer name or the trust state of the certificate.
+	*/
+	checkCert = 1<<1,
+
+	/** Validate the actual peer name/address against the certificate.
+
+		Compares the name/address of the connected peer, as passed to
+		$(D createSSLStream) to the list of patterns present in the
+		certificate, if any. If no match is found, the connection is
+		rejected.
+	*/
+	checkPeer = 1<<2,
+
+	/** Requires that the certificate or any parent certificate is trusted.
+
+		Searches list of trusted certificates for a match of the certificate
+		chain. If no match is found, the connection is rejected.
+
+		See_also: $(D useTrustedCertificateFile)
+	*/
+	checkTrust = 1<<3,
 
 	/** Require a valid certificate matching the peer name.
 
-		In this mode, the certificate is validated for general validity and
-		possible expiration and the peer name is checked to see if the
+		In this mode, the certificate is validated for general consistency and
+		possible expiration, and the peer name is checked to see if the
 		certificate actually applies.
 
 		However, the certificate chain is not matched against the system's
 		pool of trusted certificate authorities, so a custom validation
 		callback is still needed to get a secure validation process.
+
+		This option is a combination $(D requireCert), $(D checkCert) and
+		$(D checkPeer).
 	*/
-	validCert,
+	validCert = requireCert | checkCert | checkPeer,
 
 	/** Require a valid and trusted certificate (strongly recommended).
 
 		Checks the certificate and peer name for validity and requires that
 		the certificate chain originates from a trusted CA (based on the
-		systen's pool of certificate authorities).
+		registered pool of certificate authorities).
+
+		This option is a combination $(D validCert) and $(D checkTrust).
+
+		See_also: $(D useTrustedCertificateFile)
 	*/
-    trustedCert,
+    trustedCert = validCert | checkTrust,
 }
 
 struct SSLPeerValidationData {
