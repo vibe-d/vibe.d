@@ -518,6 +518,8 @@ private struct MatchTree(T) {
 
 	private Node* matchTerminals(string text)
 	{
+		if (!m_nodes.length) return null;
+
 		auto n = &m_nodes[0];
 
 		// follow the path through the match graph
@@ -574,6 +576,8 @@ private struct MatchTree(T) {
 
 		m_nodes = null;
 		m_terminalTags = null;
+
+		if (!m_terminals.length) return;
 
 		MatchGraphBuilder builder;
 		foreach (i, ref t; m_terminals)
@@ -757,6 +761,8 @@ private struct MatchGraphBuilder {
 	void disambiguate()
 	{
 //logInfo("Disambiguate");
+		if (!m_nodes.length) return;
+
 		import vibe.utils.hashmap;
 		HashMap!(immutable(size_t)[], size_t) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
