@@ -4,7 +4,7 @@
 	This module is modeled after std.concurrency, but provides a fiber-aware alternative
 	to it. All blocking operations will yield the calling fiber instead of blocking it.
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */

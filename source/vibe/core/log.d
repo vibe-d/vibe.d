@@ -703,7 +703,7 @@ package void initializeLogModule()
 	}
 }
 
-version (Windows) {
+private version (Windows) {
 	import core.sys.windows.windows;
 	enum STD_OUTPUT_HANDLE = cast(DWORD)-11;
 	enum STD_ERROR_HANDLE = cast(DWORD)-12;

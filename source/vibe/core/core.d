@@ -1,5 +1,5 @@
 /**
-	This module contains the core functionality of the vibe framework.
+	This module contains the core functionality of the vibe.d framework.
 
 	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.

@@ -902,7 +902,7 @@ final class HTTPServerResponse : HTTPResponse {
 
 		Params:
 			url = The URL to redirect to
-			status = The HTTP redirect status (3xx) to send - by default this is a 302 "found"
+			status = The HTTP redirect status (3xx) to send - by default this is $D(D HTTPStatus.found)
 	*/
 	void redirect(string url, int status = HTTPStatus.Found)
 	{
