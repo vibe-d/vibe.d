@@ -487,6 +487,29 @@ final class Cookie {
 
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
+
+	void serialize(OS)(OS outstream, string name)
+	{
+		import vibe.textfilter.urlencode;
+		outstream.put(name);
+		outstream.put('=');
+		filterURLEncode(outstream, this.value);
+		if (this.domain) {
+			outstream.put("; Domain=");
+			outstream.put(this.domain);
+		}
+		if (this.path) {
+			outstream.put("; Path=");
+			outstream.put(this.path);
+		}
+		if (this.expires) {
+			outstream.put("; Expires=");
+			outstream.put(this.expires);
+		}
+		if (this.maxAge) outstream.formattedWrite("; Max-Age=%s", this.maxAge);
+		if (this.secure) outstream.put("; Secure");
+		if (this.httpOnly) outstream.put("; HttpOnly");
+	}
 }
 
 
