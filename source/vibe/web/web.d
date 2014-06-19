@@ -445,6 +445,8 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			__traits(getMember, instance, M)(params);
 		}
 	} catch (Exception ex) {
+		import vibe.core.log;
+		logDebug("Web handler %s has thrown: %s", M, ex);
 		static if (erruda.found && ERROR.length == 0) {
 			auto err = erruda.value.getError(ex, null);
 			handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
@@ -477,6 +479,8 @@ private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname,
 		foreach (m; __traits(allMembers, T))
 			if (!readParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
 				return false;
+	} else static if (is(T == bool)) {
+		dst = (fieldname in req.form) !is null || (fieldname in req.query) !is null;
 	} else if (auto pv = fieldname in req.form) dst = (*pv).convTo!T;
 	else if (auto pv = fieldname in req.query) dst = (*pv).convTo!T;
 	else if (required) throw new HTTPStatusException(HTTPStatus.badRequest, "Missing parameter "~fieldname);
