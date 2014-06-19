@@ -634,7 +634,7 @@ private struct DietCompiler(TRANSLATE...)
 						auto wst = parseHtmlTag(tagline, tli, attribs);
 						tagline = tagline[0 .. tli];
 						if (wst.block_tag) goto default;
-						enum legacy_types = [`"text/css"`, `"text/javascript"`, `'text/javascript'`, `'text/css'`];
+						enum legacy_types = [`"text/css"`, `"text/javascript"`, `"application/javascript"`, `'text/css'`, `'text/javascript'`, `'application/javascript'`];
 						bool is_legacy_type = true;
 						foreach (i, ref a; attribs)
 							if (a.key == "type") {
