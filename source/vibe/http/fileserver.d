@@ -45,10 +45,14 @@ HTTPServerRequestDelegate serveStaticFiles(Path local_path, HTTPFileServerSettin
 		auto rel_path = srv_path[settings.serverPathPrefix.length .. $];
 		auto rpath = Path(rel_path);
 		logTrace("Processing '%s'", srv_path);
+
 		rpath.normalize();
 		logDebug("Path '%s' -> '%s'", rel_path, rpath.toNativeString());
 		if (rpath.empty) {
 			// TODO: support searching for an index file
+			return;
+		} else if (rpath.absolute) {
+			logDebug("Path is absolute, not responding");
 			return;
 		} else if (rpath[0] == "..") return; // don't respond to relative paths outside of the root path
 
