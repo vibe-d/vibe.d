@@ -184,34 +184,37 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 
 	/** Iterates over all fields, including duplicates.
 	*/
-	int opApply(int delegate(ref string key, ref ValueType val) del)
+	int opApply(scope int delegate(string key, ref ValueType val) del)
 	{
-		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
+		foreach (ref kv; m_fields[0 .. m_fieldCount]) {
+			if (auto ret = del(kv.key, kv.value))
 				return ret;
 		}
-		foreach( ref kv; m_extendedFields ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
+		foreach (ref kv; m_extendedFields) {
+			if (auto ret = del(kv.key, kv.value))
 				return ret;
 		}
 		return 0;
 	}
 
 	/// ditto
-	int opApply(int delegate(ref ValueType val) del)
+	int opApply(scope int delegate(ref ValueType val) del)
 	{
-		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			if( auto ret = del(kv.value) )
-				return ret;
-		}
-		foreach( ref kv; m_extendedFields ){
-			if( auto ret = del(kv.value) )
-				return ret;
-		}
-		return 0;
+		return this.opApply((string key, ref ValueType val) { return del(val); });
 	}
+
+	/// ditto
+	int opApply(scope int delegate(string key, ref const(ValueType) val) del) const
+	{
+		return (cast() this).opApply(cast(int delegate(string, ref ValueType)) del);
+	}
+
+	/// ditto
+	int opApply(scope int delegate(ref const(ValueType) val) del) const
+	{
+		return (cast() this).opApply(cast(int delegate(ref ValueType)) del);
+	}
+
 
 	static if (is(typeof({ const(ValueType) v; ValueType w; w = v; }))) {
 		/** Duplicates the header map.
