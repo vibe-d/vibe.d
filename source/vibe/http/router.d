@@ -150,8 +150,8 @@ final class URLRouter : HTTPRouter {
 		path = path[m_prefix.length .. $];
 
 		version (VibeRouterTreeMatch) {
-			bool done = false;
-			while (!done) {
+			while (true) {
+				bool done = false;
 				m_routes.match(path, (ridx, scope values) {
 					if (done) return;
 					auto r = &m_routes.getTerminalData(ridx);
@@ -163,6 +163,7 @@ final class URLRouter : HTTPRouter {
 						done = res.headerWritten;
 					}
 				});
+				if (done) return;
 				
 				if (method == HTTPMethod.HEAD) method = HTTPMethod.GET;
 				else break;
