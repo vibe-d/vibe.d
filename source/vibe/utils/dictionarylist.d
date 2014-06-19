@@ -184,16 +184,14 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 
 	/** Iterates over all fields, including duplicates.
 	*/
-	int opApply(int delegate(ref string key, ref ValueType val) del)
+	int opApply(int delegate(string key, ref ValueType val) del)
 	{
 		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
+			if( auto ret = del(kv.key, kv.value) )
 				return ret;
 		}
 		foreach( ref kv; m_extendedFields ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
+			if( auto ret = del(kv.key, kv.value) )
 				return ret;
 		}
 		return 0;
