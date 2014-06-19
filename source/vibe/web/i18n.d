@@ -106,7 +106,7 @@ package string determineLanguage(alias METHOD)(HTTPServerRequest req)
 
 			foreach (lang; CTX.languages) {
 				if (entrylang == replace(lang, "_", "-")) return lang;
-				if (entrylang == split(lang, "-")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
+				if (entrylang == split(lang, "_")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
 			}
 			
 			if (cidx >= accept_lang.length) break;
