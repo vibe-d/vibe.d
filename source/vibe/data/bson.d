@@ -1011,100 +1011,103 @@ Bson serializeToBsonOld(T)(T value)
 
 	The same types as for serializeToBson() are supported and handled inversely.
 */
-void deserializeBson(T)(ref T dst, Bson src)
-{
-	dst = deserializeBson!T(src);
-}
-/// ditto
-T deserializeBson(T)(Bson src)
-{
-	version (VibeOldSerialization) {
-		return deserializeBsonOld!T(src);
-	} else {
-		return deserialize!(BsonSerializer, T)(src);
-	}
-}
 
-/// private
-T deserializeBsonOld(T)(Bson src)
+template deserializeBson(T)
 {
-	static if (is(T == Bson)) return src;
-	else static if (is(T == Json)) return src.toJson();
-	else static if (is(T == BsonBinData)) return cast(T)src;
-	else static if (is(T == BsonObjectID)) return cast(T)src;
-	else static if (is(T == BsonDate)) return cast(T)src;
-	else static if (is(T == BsonTimestamp)) return cast(T)src;
-	else static if (is(T == BsonRegex)) return cast(T)src;
-	else static if (is(T == SysTime)) return src.get!BsonDate().toSysTime();
-	else static if (is(T == DateTime)) return cast(DateTime)src.get!BsonDate().toSysTime();
-	else static if (is(T == Date)) return cast(Date)src.get!BsonDate().toSysTime();
-	else static if (is(T == typeof(null))) return null;
-	else static if (is(T == bool)) return cast(bool)src;
-	else static if (is(T == float)) return cast(double)src;
-	else static if (is(T == double)) return cast(double)src;
-	else static if (is(T : int)) return cast(T)cast(int)src;
-	else static if (is(T : long)) return cast(T)cast(long)src;
-	else static if (is(T : string)) return cast(T)(cast(string)src);
-	else static if (is(T : const(ubyte)[])) return cast(T)src.get!BsonBinData.rawData.dup;
-	else static if (isArray!T) {
-		alias typeof(T.init[0]) TV;
-		auto ret = new Unqual!TV[src.length];
-		foreach (size_t i, v; cast(Bson[])src)
-			ret[i] = deserializeBson!(Unqual!TV)(v);
-		return ret;
-	} else static if (isAssociativeArray!T) {
-		alias typeof(T.init.values[0]) TV;
-		alias KeyType!T TK;
-		Unqual!TV[TK] dst;
-		foreach (string key, value; src) {
-			static if (is(TK == string)) {
-				dst[key] = deserializeBson!(Unqual!TV)(value);
-			} else static if (is(TK == enum)) {
-				dst[to!(TK)(key)] = deserializeBson!(Unqual!TV)(value);
-			} else static if (isStringSerializable!TK) {
-				auto dsk = TK.fromString(key);
-				dst[dsk] = deserializeBson!(Unqual!TV)(value);
-			} else static assert("AA key type %s not supported for BSON serialization.");
-		}
-		return dst;
-	} else static if (isBsonSerializable!T) {
-		return T.fromBson(src);
-	} else static if (isJsonSerializable!T) {
-		return T.fromJson(src.toJson());
-	} else static if (isStringSerializable!T) {
-		return T.fromString(cast(string)src);
-	} else static if (is(T == struct)) {
-		T dst;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias typeof(__traits(getMember, dst, m)) TM;
-				debug enforce(!src[underscoreStrip(m)].isNull() || is(TM == class) || isPointer!TM || is(TM == typeof(null)),
-					"Missing field '"~underscoreStrip(m)~"'.");
-				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
-			}
-		}
-		return dst;
-	} else static if (is(T == class)) {
-		if (src.isNull()) return null;
-		auto dst = new T;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias typeof(__traits(getMember, dst, m)) TM;
-				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
-			}
-		}
-		return dst;
-	} else static if (isPointer!T) {
-		if (src.type == Bson.Type.null_) return null;
-		alias typeof(*T.init) TD;
-		dst = new TD;
-		*dst = deserializeBson!TD(src);
-		return dst;
-	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
-	}
-}
+    void deserializeBson(ref T dst, Bson src)
+    {
+        dst = deserializeBson!T(src);
+    }
+    /// ditto
+    T deserializeBson(Bson src)
+    {
+        version (VibeOldSerialization) {
+            return deserializeBsonOld!T(src);
+        } else {
+            return deserialize!(BsonSerializer, T)(src);
+        }
+    }
 
+    /// private
+    T deserializeBsonOld(Bson src)
+    {
+        static if (is(T == Bson)) return src;
+        else static if (is(T == Json)) return src.toJson();
+        else static if (is(T == BsonBinData)) return cast(T)src;
+        else static if (is(T == BsonObjectID)) return cast(T)src;
+        else static if (is(T == BsonDate)) return cast(T)src;
+        else static if (is(T == BsonTimestamp)) return cast(T)src;
+        else static if (is(T == BsonRegex)) return cast(T)src;
+        else static if (is(T == SysTime)) return src.get!BsonDate().toSysTime();
+        else static if (is(T == DateTime)) return cast(DateTime)src.get!BsonDate().toSysTime();
+        else static if (is(T == Date)) return cast(Date)src.get!BsonDate().toSysTime();
+        else static if (is(T == typeof(null))) return null;
+        else static if (is(T == bool)) return cast(bool)src;
+        else static if (is(T == float)) return cast(double)src;
+        else static if (is(T == double)) return cast(double)src;
+        else static if (is(T : int)) return cast(T)cast(int)src;
+        else static if (is(T : long)) return cast(T)cast(long)src;
+        else static if (is(T : string)) return cast(T)(cast(string)src);
+        else static if (is(T : const(ubyte)[])) return cast(T)src.get!BsonBinData.rawData.dup;
+        else static if (isArray!T) {
+            alias typeof(T.init[0]) TV;
+            auto ret = new Unqual!TV[src.length];
+            foreach (size_t i, v; cast(Bson[])src)
+                ret[i] = deserializeBson!(Unqual!TV)(v);
+            return ret;
+        } else static if (isAssociativeArray!T) {
+            alias typeof(T.init.values[0]) TV;
+            alias KeyType!T TK;
+            Unqual!TV[TK] dst;
+            foreach (string key, value; src) {
+                static if (is(TK == string)) {
+                    dst[key] = deserializeBson!(Unqual!TV)(value);
+                } else static if (is(TK == enum)) {
+                    dst[to!(TK)(key)] = deserializeBson!(Unqual!TV)(value);
+                } else static if (isStringSerializable!TK) {
+                    auto dsk = TK.fromString(key);
+                    dst[dsk] = deserializeBson!(Unqual!TV)(value);
+                } else static assert("AA key type %s not supported for BSON serialization.");
+            }
+            return dst;
+        } else static if (isBsonSerializable!T) {
+            return T.fromBson(src);
+        } else static if (isJsonSerializable!T) {
+            return T.fromJson(src.toJson());
+        } else static if (isStringSerializable!T) {
+            return T.fromString(cast(string)src);
+        } else static if (is(T == struct)) {
+            T dst;
+            foreach (m; __traits(allMembers, T)) {
+                static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
+                    alias typeof(__traits(getMember, dst, m)) TM;
+                    debug enforce(!src[underscoreStrip(m)].isNull() || is(TM == class) || isPointer!TM || is(TM == typeof(null)),
+                        "Missing field '"~underscoreStrip(m)~"'.");
+                    __traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
+                }
+            }
+            return dst;
+        } else static if (is(T == class)) {
+            if (src.isNull()) return null;
+            auto dst = new T;
+            foreach (m; __traits(allMembers, T)) {
+                static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
+                    alias typeof(__traits(getMember, dst, m)) TM;
+                    __traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
+                }
+            }
+            return dst;
+        } else static if (isPointer!T) {
+            if (src.type == Bson.Type.null_) return null;
+            alias typeof(*T.init) TD;
+            dst = new TD;
+            *dst = deserializeBson!TD(src);
+            return dst;
+        } else {
+            static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
+        }
+    }
+}
 unittest {
 	import std.stdio;
 	enum Foo : string { k = "test" }
