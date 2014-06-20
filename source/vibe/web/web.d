@@ -222,6 +222,16 @@ void terminateSession()
 
 
 /**
+	Translates a text based on the language of the current web request.
+*/
+string trWeb(string text)
+{
+	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
+	return s_requestContext.tr(text);
+}
+
+
+/**
 	Attribute to customize error display of an interface method.
 
 
@@ -382,6 +392,7 @@ private struct RequestContext {
 	HTTPServerRequest req;
 	HTTPServerResponse res;
 	string language;
+	string function(string) tr;
 }
 
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
@@ -398,7 +409,8 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	enum param_names = [ParameterIdentifierTuple!overload];
 	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
 
-	s_requestContext = RequestContext(req, res, determineLanguage!overload(req));
+	s_requestContext = createRequestContext!overload(req, res);
+
 	PARAMS params;
 	foreach (i, PT; PARAMS) {
 		try {
@@ -493,4 +505,36 @@ private T convTo(T)(string str)
 	import std.conv;
 	static if (is(typeof(T.fromString(str)) == T)) return T.fromString(str);
 	else return str.to!T();
+}
+
+private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
+{
+	RequestContext ret;
+	ret.req = req;
+	ret.res = res;
+	ret.language = determineLanguage!handler(req);
+
+	import vibe.web.i18n;
+	import vibe.internal.meta.uda : findFirstUDA;
+
+	alias PARENT = typeof(__traits(parent, handler).init);
+	enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, handler);
+	enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+	static if (FUNCTRANS.found) alias TranslateContext = FUNCTRANS.value.Context;
+	else static if (PARENTTRANS.found) alias TranslateContext = PARENTTRANS.value.Context;
+
+	static if (is(TranslateContext) && TranslateContext.languages.length) {
+		static if (TranslateContext.languages.length > 1) {
+			switch (ret.language) {
+				default: ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]); break;
+				foreach (lang; TranslateContext.languages[1 .. $]) {
+					case lang:
+						ret.tr = &tr!(TranslateContext, lang);
+						break;
+				}
+			}
+		} else ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]);
+	} else ret.tr = t => t;
+
+	return ret;
 }
