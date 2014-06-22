@@ -1006,23 +1006,27 @@ Bson serializeToBsonOld(T)(T value)
 }
 
 
-/**
-	Deserializes a BSON value into the destination variable.
 
-	The same types as for serializeToBson() are supported and handled inversely.
-*/
-void deserializeBson(T)(ref T dst, Bson src)
+template deserializeBson(T)
 {
-	dst = deserializeBson!T(src);
-}
-/// ditto
-T deserializeBson(T)(Bson src)
-{
-	version (VibeOldSerialization) {
-		return deserializeBsonOld!T(src);
-	} else {
-		return deserialize!(BsonSerializer, T)(src);
-	}
+    /**
+        Deserializes a BSON value into the destination variable.
+
+        The same types as for serializeToBson() are supported and handled inversely.
+    */
+    void deserializeBson(ref T dst, Bson src)
+    {
+        dst = deserializeBson!T(src);
+    }
+    /// ditto
+    T deserializeBson(Bson src)
+    {
+        version (VibeOldSerialization) {
+            return deserializeBsonOld!T(src);
+        } else {
+            return deserialize!(BsonSerializer, T)(src);
+        }
+    }
 }
 
 /// private
