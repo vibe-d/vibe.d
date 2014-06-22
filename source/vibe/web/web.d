@@ -401,6 +401,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	import std.array : startsWith;
 	import std.traits;
 	import vibe.data.json;
+	import vibe.internal.meta.funcattr;
 	import vibe.internal.meta.uda : findFirstUDA;
 
 	alias RET = ReturnType!overload;
@@ -414,7 +415,11 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	PARAMS params;
 	foreach (i, PT; PARAMS) {
 		try {
-			static if (param_names[i] == "_error" && ERROR.length == 1) params[i] = error[0];
+			static if (IsAttributedParameter!(overload, param_names[i])) {
+				params[i] = computeAttributedParameter!(overload, param_names[i])(req, res);
+				if (res.headerWritten) return;
+			}
+			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i] = error[0];
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
@@ -443,18 +448,26 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	}
 
 	try {
-		static if (is(RET : Json)) {
-			res.writeJsonBody(__traits(getMember, instance, M)(params));
-		} else static if (is(RET : InputStream) || is(RET : const ubyte[])) {
-			enum type = findFirstUDA!(ContentTypeAttribute,__traits(getMember, instance, M));
-			static if (type.found) {
-				res.writeBody(__traits(getMember, instance, M)(params),type.value);
-			} else {
-				res.writeBody(__traits(getMember, instance, M)(params));
-			}
-		} else {
-			static assert(is(RET == void), "Only InputStream, Json and void are supported as return types.");
+		import vibe.internal.meta.funcattr;
+
+		static if (is(RET == void)) {
 			__traits(getMember, instance, M)(params);
+		} else {
+			auto ret = __traits(getMember, instance, M)(params);
+			ret = evaluateOutputModifiers!overload(ret);
+
+			static if (is(RET : Json)) {
+				res.writeJsonBody(ret);
+			} else static if (is(RET : InputStream) || is(RET : const ubyte[])) {
+				enum type = findFirstUDA!(ContentTypeAttribute, overload);
+				static if (type.found) {
+					res.writeBody(ret, type.value);
+				} else {
+					res.writeBody(ret);
+				}
+			} else {
+				static assert(is(RET == void), "Only InputStream, Json and void are supported as return types.");
+			}
 		}
 	} catch (Exception ex) {
 		import vibe.core.log;

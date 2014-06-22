@@ -151,6 +151,49 @@ template IsAttributedParameter(alias Function, string name)
 	enum IsAttributedParameter = Impl!Data;
 }
 
+/**
+	Computes the given attributed parameter using the corresponding @before modifier.
+*/
+auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
+{
+	import std.typetuple : Filter;
+	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
+	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
+	foreach (att; input_attributes)
+		static if (att.parameter == NAME)
+			return att.evaluator(args);
+	assert(false);
+}
+
+/**
+	Processes the function return value using all @after modifiers.
+*/
+ReturnType!FUNCTION evaluateOutputModifiers(alias FUNCTION)(ReturnType!FUNCTION result)
+{
+	import std.typetuple : Filter;
+	alias output_attributes = Filter!(isOutputAttribute, __traits(getAttributes, FUNCTION));
+	foreach (OA; output_attributes) {
+		import std.typetuple : TypeTuple;
+
+		static assert (
+			Compare!(
+				Group!(ParameterTypeTuple!(OA.modificator)),
+				Group!(ReturnType!Function, StoredArgTypes.expand)
+			),
+			format(
+				"Output attribute function '%s%s' argument list " ~
+				"does not match provided argument list %s",
+				fullyQualifiedName!(OA.modificator),
+				ParameterTypeTuple!(OA.modificator).stringof,
+				TypeTuple!(ReturnType!Function, StoredArgTypes.expand).stringof
+			)
+		);
+
+		result = OA.modificator(result, m_storedArgs);
+	}
+	return result;
+}
+
 ///
 unittest
 {
