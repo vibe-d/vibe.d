@@ -800,10 +800,13 @@ struct TaskLocal(T)
 
 		// lazily register in FLS storage
 		if (m_offset == size_t.max) {
-			// TODO: handle alignment properly
+			static assert(T.alignof <= 8, "Unsupported alignment for type "~T.stringof);
+			assert(CoreTask.ms_flsFill % 8 == 0, "Misaligned fiber local storage pool.");
 			m_offset = CoreTask.ms_flsFill;
 			m_id = CoreTask.ms_flsCounter++;
 			CoreTask.ms_flsFill += T.sizeof;
+			while (CoreTask.ms_flsFill % 8 != 0)
+				CoreTask.ms_flsFill++;
 		}
 
 		// make sure the current fiber has enough FLS storage
