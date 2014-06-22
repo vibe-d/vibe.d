@@ -419,9 +419,12 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	void writeJsonBody(T)(T data)
 	{
+		import vibe.stream.wrapper;
+
 		headers["Transfer-Encoding"] = "chunked";
 		headers["Content-Type"] = "application/json";
-		serializeToJson(bodyWriter, data);
+		auto rng = StreamOutputRange(bodyWriter);
+		serializeToJson(&rng, data);
 	}
 
 	void writePart(MultiPart part)

@@ -85,23 +85,36 @@ interface OutputStream {
 	*/
 	void write(InputStream stream, ulong nbytes = 0);
 
-	/** These methods provide an output range interface.
+	/** DEPRECATED: These methods provide an output range interface.
 
 		Note that these functions do not flush the output stream for performance reasons. flush()
 		needs to be called manually afterwards.
 
-		See_Also: $(LINK http://dlang.org/phobos/std_range.html#isOutputRange)
+		Deprecation_notice:
+			Since these functions operate through virtual function calls and possibly on a
+			raw, unbuffered file descriptor, writing can be very slow. Their use is discouraged.
+
+			Please use $(D vibe.stream.wrapper.StreamOutputRange) instead.
+
+		See_Also: $(LINK http://dlang.org/phobos/std_range.html#isOutputRange),
+			$(D vibe.stream.wrapper.StreamOutputRange)
 	*/
+	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(ubyte elem) { write((&elem)[0 .. 1]); }
 	/// ditto
+	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(in ubyte[] elems) { write(elems); }
 	/// ditto
+	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(char elem) { write((&elem)[0 .. 1]); }
 	/// ditto
+	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(in char[] elems) { write(elems); }
 	/// ditto
+	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
 	/// ditto
+	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(in dchar[] elems) { foreach( ch; elems ) put(ch); }
 
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0)

@@ -56,17 +56,21 @@ final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=') : Output
 
 	void write(in ubyte[] bytes_)
 	{
+		import vibe.stream.wrapper;
+		
 		const(ubyte)[] bytes = bytes_;
+
+		auto rng = StreamOutputRange(m_out);
 
 		while (bytes.length > 0) {
 			if (m_bytesInCurrentLine + bytes.length >= m_maxBytesPerLine) {
 				size_t bts = cast(size_t)(m_maxBytesPerLine - m_bytesInCurrentLine);
-				B64.encode(bytes[0 .. bts], m_out);
-				m_out.put("\r\n");
+				B64.encode(bytes[0 .. bts], &rng);
+				rng.put("\r\n");
 				bytes = bytes[bts .. $];
 				m_bytesInCurrentLine = 0;
 			} else {
-				B64.encode(bytes, m_out);
+				B64.encode(bytes, &rng);
 				m_bytesInCurrentLine += bytes.length;
 				break;
 			}

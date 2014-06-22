@@ -528,20 +528,25 @@ struct Frame {
 
 	void writeFrame(OutputStream stream)
 	{
+		import vibe.stream.wrapper;
+
+		auto rng = StreamOutputRange(stream);
+
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
-		stream.put(firstByte);
+		rng.put(firstByte);
 
 		if( payload.length < 126 ) {
-			stream.write(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length));
+			rng.put(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length));
 		} else if( payload.length <= 65536 ) {
-			stream.write(cast(ubyte[])[126]);
-			stream.write(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
+			rng.put(cast(ubyte[])[126]);
+			rng.put(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
 		} else {
-			stream.write(cast(ubyte[])[127]);
-			stream.write(std.bitmanip.nativeToBigEndian(payload.length));
+			rng.put(cast(ubyte[])[127]);
+			rng.put(std.bitmanip.nativeToBigEndian(payload.length));
 		}
-		stream.write(payload);
+		rng.put(payload);
+		rng.flush();
 		stream.flush();
 	}
 

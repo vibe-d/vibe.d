@@ -818,13 +818,16 @@ final class HTTPServerResponse : HTTPResponse {
 	void writeJsonBody(T)(T data, int status = HTTPStatus.OK, string content_type = "application/json; charset=UTF-8")
 	{
 		import std.traits;
+		import vibe.stream.wrapper;
+
 		static if (is(typeof(data.data())) && isArray!(typeof(data.data()))) {
 			static assert(!is(T == Appender!(typeof(data.data()))), "Passed an Appender!T to writeJsonBody - this is most probably not doing what's indended.");
 		}
 
 		statusCode = status;
 		headers["Content-Type"] = content_type;
-		serializeToJson(bodyWriter, data);
+		auto rng = StreamOutputRange(bodyWriter);
+		serializeToJson(&rng, data);
 	}
 
 	/**

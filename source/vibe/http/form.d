@@ -362,12 +362,14 @@ unittest {
 void writeFormBody(HTTPClientRequest req, in string[string] form)
 {
 	import vibe.http.form;
+	import vibe.stream.wrapper;
 
 	StringLengthCountingRange len;
 	writeFormData(&len, form);
 	req.contentType = "application/x-www-form-urlencoded";
 	req.contentLength = len.count;
-	writeFormData(req.bodyWriter, form);
+	auto rng = StreamOutputRange(req.bodyWriter);
+	writeFormData(&rng, form);
 }
 
 ///
