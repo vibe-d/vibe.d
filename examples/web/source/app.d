@@ -16,12 +16,12 @@ struct UserSettings {
 
 class SampleService {
 	private {
-		SessionVar!(UserSettings, "settings") m_userSettings;
+		static SessionVar!(UserSettings, "settings") ms_userSettings;
 	}
 
 	@path("/") void getHome()
 	{
-		auto settings = m_userSettings;
+		auto settings = ms_userSettings;
 		render!("home.dt", settings);
 	}
 
@@ -40,39 +40,44 @@ class SampleService {
 		s.loggedIn = true;
 		s.userName = user;
 		s.someSetting = false;
-		m_userSettings = s;
+		ms_userSettings = s;
 		redirect("./");
 	}
 
 	void postLogout(HTTPServerResponse res)
 	{
-		m_userSettings = UserSettings.init;
+		ms_userSettings = UserSettings.init;
 		res.terminateSession();
 		redirect("./");
 	}
 
-	void getSettings(string error = null)
+	@auth
+	void getSettings(string _authUser, string _error = null)
 	{
-		auto settings = m_userSettings;
+		UserSettings settings = ms_userSettings;
+		auto error = _error;
 		render!("settings.dt", error, settings);
 	}
 
-	void postSettings(bool some_setting, string user_name)
+	@auth @errorDisplay!getSettings
+	void postSettings(bool some_setting, string user_name, string _authUser)
 	{
-		try {
-			enforce(m_userSettings.loggedIn, "Must be logged in to change settings.");
-			validateUserName(user_name);
-			UserSettings s = m_userSettings;
-			s.userName = user_name;
-			s.someSetting = some_setting;
-			m_userSettings = s;
-		} catch (Exception e) {
-			getSettings(e.msg);
-			return;
-		}
-
+		assert(ms_userSettings.loggedIn);
+		validateUserName(user_name);
+		UserSettings s = ms_userSettings;
+		s.userName = user_name;
+		s.someSetting = some_setting;
+		ms_userSettings = s;
 		redirect("./");
 	}
+
+	private enum auth = before!ensureAuth("_authUser");
+}
+
+string ensureAuth(HTTPServerRequest req, HTTPServerResponse res)
+{
+	if (!SampleService.ms_userSettings.loggedIn) redirect("/login");
+	return SampleService.ms_userSettings.userName;
 }
 
 shared static this()
