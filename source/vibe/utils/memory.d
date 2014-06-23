@@ -93,11 +93,17 @@ interface Allocator {
 		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "alloc() returned misaligned data."); }
 	
 	void[] realloc(void[] mem, size_t new_sz)
-		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc()."); }
+		in {
+			assert(mem.ptr !is null, "realloc() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
+		}
 		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "realloc() returned misaligned data."); }
 
 	void free(void[] mem)
-		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free()."); }
+		in {
+			assert(mem.ptr !is null, "free() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
+		}
 }
 
 
@@ -110,8 +116,18 @@ class LockAllocator : Allocator {
 	}
 	this(Allocator base) { m_base = base; }
 	void[] alloc(size_t sz) { synchronized(this) return m_base.alloc(sz); }
-	void[] realloc(void[] mem, size_t new_sz) { synchronized(this) return m_base.realloc(mem, new_sz); }
-	void free(void[] mem) { synchronized(this) m_base.free(mem); }
+	void[] realloc(void[] mem, size_t new_sz)
+		in {
+			assert(mem.ptr !is null, "realloc() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
+		}
+		body { synchronized(this) return m_base.realloc(mem, new_sz); }
+	void free(void[] mem)
+		in {
+			assert(mem.ptr !is null, "free() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
+		}
+		body { synchronized(this) m_base.free(mem); }
 }
 
 final class DebugAllocator : Allocator {
