@@ -182,7 +182,6 @@ auto computeAttributedParameterCtx(alias FUNCTION, string NAME, T, ARGS...)(T ct
 	foreach (att; input_attributes)
 		static if (att.parameter == NAME) {
 			static if (is(typeof(__traits(parent, att.evaluator).init) == T)) {
-				pragma(msg, T);
 				static if (is(typeof(ctx.invokeProxy__!(att.evaluator)(args))))
 					return ctx.invokeProxy__!(att.evaluator)(args);
 				else return __traits(getMember, ctx, __traits(identifier, att.evaluator))(args);
