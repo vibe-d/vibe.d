@@ -7,7 +7,7 @@
 */
 module vibe.web.web;
 
-public import vibe.internal.meta.funcattr : before, after;
+public import vibe.internal.meta.funcattr : PrivateAccessProxy, before, after;
 public import vibe.web.common;
 public import vibe.web.i18n;
 
@@ -416,7 +416,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	foreach (i, PT; PARAMS) {
 		try {
 			static if (IsAttributedParameter!(overload, param_names[i])) {
-				params[i] = computeAttributedParameter!(overload, param_names[i])(req, res);
+				params[i] = computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res);
 				if (res.headerWritten) return;
 			}
 			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i] = error[0];

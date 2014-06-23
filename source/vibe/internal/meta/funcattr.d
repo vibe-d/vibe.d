@@ -160,10 +160,62 @@ auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
 	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
 	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
 	foreach (att; input_attributes)
-		static if (att.parameter == NAME)
+		static if (att.parameter == NAME) {
 			return att.evaluator(args);
+		}
 	assert(false);
 }
+
+
+/**
+	Computes the given attributed parameter using the corresponding @before modifier.
+
+	This overload tries to invoke the given function as a member of the $(D ctx)
+	parameter. It also supports accessing private member functions using the
+	$(D PrivateAccessProxy) mixin.
+*/
+auto computeAttributedParameterCtx(alias FUNCTION, string NAME, T, ARGS...)(T ctx, ARGS args)
+{
+	import std.typetuple : Filter;
+	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
+	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
+	foreach (att; input_attributes)
+		static if (att.parameter == NAME) {
+			static if (is(typeof(__traits(parent, att.evaluator).init) == T)) {
+				pragma(msg, T);
+				static if (is(typeof(ctx.invokeProxy__!(att.evaluator)(args))))
+					return ctx.invokeProxy__!(att.evaluator)(args);
+				else return __traits(getMember, ctx, __traits(identifier, att.evaluator))(args);
+			} else {
+				return att.evaluator(args);
+			}
+		}
+	assert(false);
+}
+
+
+/** 
+	Helper mixin to support private member functions for $(D @before) attributes.
+*/
+mixin template PrivateAccessProxy() {
+	auto invokeProxy__(alias MEMBER, ARGS...)(ARGS args) { return MEMBER(args); }
+}
+///
+unittest {
+	class MyClass {
+		@before!computeParam("param")
+		void method(bool param)
+		{
+			assert(param == true);
+		}
+
+		private bool computeParam()
+		{
+			return true;
+		}
+	}
+}
+
 
 /**
 	Processes the function return value using all @after modifiers.
@@ -288,6 +340,7 @@ private {
 	*/
 	template AttributedParameterMetadata(alias Function)
 	{
+		import std.array : join;
 		import std.typetuple : Filter, staticMap, staticIndexOf;
 		import std.traits : ParameterIdentifierTuple, ReturnType,
 			fullyQualifiedName, moduleName;
