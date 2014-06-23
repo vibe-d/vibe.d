@@ -16,12 +16,12 @@ struct UserSettings {
 
 class SampleService {
 	private {
-		static SessionVar!(UserSettings, "settings") ms_userSettings;
+		SessionVar!(UserSettings, "settings") m_userSettings;
 	}
 
 	@path("/") void getHome()
 	{
-		auto settings = ms_userSettings;
+		auto settings = m_userSettings;
 		render!("home.dt", settings);
 	}
 
@@ -40,13 +40,13 @@ class SampleService {
 		s.loggedIn = true;
 		s.userName = user;
 		s.someSetting = false;
-		ms_userSettings = s;
+		m_userSettings = s;
 		redirect("./");
 	}
 
 	void postLogout(HTTPServerResponse res)
 	{
-		ms_userSettings = UserSettings.init;
+		m_userSettings = UserSettings.init;
 		res.terminateSession();
 		redirect("./");
 	}
@@ -54,7 +54,7 @@ class SampleService {
 	@auth
 	void getSettings(string _authUser, string _error = null)
 	{
-		UserSettings settings = ms_userSettings;
+		UserSettings settings = m_userSettings;
 		auto error = _error;
 		render!("settings.dt", error, settings);
 	}
@@ -62,23 +62,25 @@ class SampleService {
 	@auth @errorDisplay!getSettings
 	void postSettings(bool some_setting, string user_name, string _authUser)
 	{
-		assert(ms_userSettings.loggedIn);
+		assert(m_userSettings.loggedIn);
 		validateUserName(user_name);
-		UserSettings s = ms_userSettings;
+		UserSettings s = m_userSettings;
 		s.userName = user_name;
 		s.someSetting = some_setting;
-		ms_userSettings = s;
+		m_userSettings = s;
 		redirect("./");
 	}
 
 	private enum auth = before!ensureAuth("_authUser");
+	private string ensureAuth(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		if (!SampleService.m_userSettings.loggedIn) redirect("/login");
+		return SampleService.m_userSettings.userName;
+	}
+
+	mixin PrivateAccessProxy; // adds support for using private member functions with "before"
 }
 
-string ensureAuth(HTTPServerRequest req, HTTPServerResponse res)
-{
-	if (!SampleService.ms_userSettings.loggedIn) redirect("/login");
-	return SampleService.ms_userSettings.userName;
-}
 
 shared static this()
 {
