@@ -10,6 +10,7 @@ module vibe.web.web;
 public import vibe.internal.meta.funcattr : PrivateAccessProxy, before, after;
 public import vibe.web.common;
 public import vibe.web.i18n;
+public import vibe.web.validation;
 
 import vibe.core.core;
 import vibe.http.common;
@@ -22,8 +23,6 @@ import vibe.http.server;
 		- support format patterns for redirect()
 		- add a way to specify response headers without explicit access to "res"
 		- support class/interface getter properties and register their methods as well
-		- support authentication somehow nicely
-		- support UDA based parameter validation
 */
 
 
@@ -32,7 +31,13 @@ import vibe.http.server;
 
 	Each public method corresponds to one or multiple request URLs.
 
-	Supported types...
+	Supported_types:
+
+	Supported_attributes:
+		The following attributes are supported for annotating methods of the
+		registered class:
+
+		$(D @before), $(D @after), $(D @errorDisplay), $(D @method), $(D @path), $(D @contentType)
 
 	...
 */
@@ -230,6 +235,23 @@ string trWeb(string text)
 	return s_requestContext.tr(text);
 }
 
+///
+unittest {
+	struct TRC {
+		import std.typetuple;
+		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		//mixin translationModule!"test";
+	}
+
+	@translationContext!TRC
+	class WebService {
+		void index(HTTPServerResponse res)
+		{
+			res.writeBody(trWeb("This text will be translated!"));
+		}
+	}
+}
+
 
 /**
 	Attribute to customize error display of an interface method.
@@ -398,8 +420,10 @@ private struct RequestContext {
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
 	if (ERROR.length <= 1)
 {
+	import std.algorithm : countUntil;
 	import std.array : startsWith;
 	import std.traits;
+	import std.typetuple : Filter;
 	import vibe.data.json;
 	import vibe.internal.meta.funcattr;
 	import vibe.internal.meta.uda : findFirstUDA;
@@ -412,6 +436,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 
 	s_requestContext = createRequestContext!overload(req, res);
 
+	// collect all parameter values
 	PARAMS params;
 	foreach (i, PT; PARAMS) {
 		try {
@@ -441,12 +466,38 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			static if (erruda.found && ERROR.length == 0) {
 				auto err = erruda.value.getError(ex, param_names[i]);
 				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+				return;
 			} else {
 				throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
 			}
 		}
 	}
 
+	// validate all parameters (in addition to basic type conversion)
+	foreach (va; Filter!(isValidationAttribute, __traits(getAttributes, overload))) {
+		enum pidx = param_names.countUntil(va.parameter);
+		static assert(pidx >= 0, "Undefined parameter for validation: "~va.parameter);
+		enum pcidx = param_names.countUntil(va.confirmationParameter);
+
+		try {
+			static if (va.kind == ValidationKind.email) {
+				vibe.utils.validation.validateEmail(params[pidx]);
+			} else static if (va.kind == ValidationKind.password) {
+				static assert(pcidx >= 0, "Undefined confirmation parameter for validation: "~va.confirmationParameter);
+				vibe.utils.validation.validatePassword(params[pidx], params[pcidx]);
+			} else static assert(false, "Unsupported validation kind: "~to!string(va.kind));
+		} catch (Exception ex) {
+			static if (erruda.found && ERROR.length == 0) {
+				auto err = erruda.value.getError(ex, param_names[pidx]);
+				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+				return;
+			} else {
+				throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
+			}
+		}
+	}
+
+	// execute the method and write the result
 	try {
 		import vibe.internal.meta.funcattr;
 
