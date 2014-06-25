@@ -384,9 +384,9 @@ struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 	enum displayMethodName = __traits(identifier, DISPLAY_METHOD);
 
 	private template GetErrorParamType(size_t idx) {
-		static assert(idx < ParameterIdentifierTuple!DISPLAY_METHOD.length,
-			"Error display method "~displayMethodName~" is missing the _error parameter.");
-		static if (ParameterIdentifierTuple!DISPLAY_METHOD[idx] == "_error")
+		static if (idx >= ParameterIdentifierTuple!DISPLAY_METHOD.length)
+			static assert(false, "Error display method "~displayMethodName~" is missing the _error parameter.");
+		else static if (ParameterIdentifierTuple!DISPLAY_METHOD[idx] == "_error")
 			alias GetErrorParamType = ParameterTypeTuple!DISPLAY_METHOD[idx];
 		else alias GetErrorParamType = GetErrorParamType!(idx+1);
 	}
@@ -451,7 +451,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (param_names[i].startsWith("_")) {
 				if (auto pv = param_names[i][1 .. $] in req.params) params[i] = (*pv).convTo!PT;
 				else static if (!is(default_values[i] == void)) params[i] = default_values[i];
-				else enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
+				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
@@ -473,26 +473,36 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		}
 	}
 
-	// validate all parameters (in addition to basic type conversion)
-	foreach (va; Filter!(isValidationAttribute, __traits(getAttributes, overload))) {
-		enum pidx = param_names.countUntil(va.parameter);
-		static assert(pidx >= 0, "Undefined parameter for validation: "~va.parameter);
-		enum pcidx = param_names.countUntil(va.confirmationParameter);
+	// validate all confirmation parameters
+	foreach (i, PT; PARAMS) {
+		static if (isNullable!PT)
+			alias ParamBaseType = typeof(PT.init.get());
+		else alias ParamBaseType = PT;
 
-		try {
-			static if (va.kind == ValidationKind.email) {
-				vibe.utils.validation.validateEmail(params[pidx]);
-			} else static if (va.kind == ValidationKind.password) {
-				static assert(pcidx >= 0, "Undefined confirmation parameter for validation: "~va.confirmationParameter);
-				vibe.utils.validation.validatePassword(params[pidx], params[pcidx]);
-			} else static assert(false, "Unsupported validation kind: "~to!string(va.kind));
-		} catch (Exception ex) {
-			static if (erruda.found && ERROR.length == 0) {
-				auto err = erruda.value.getError(ex, param_names[pidx]);
-				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
-				return;
+		static if (isInstanceOf!(Confirm, ParamBaseType)) {
+			enum pidx = param_names.countUntil(PT.confirmedParameter);
+			static assert(pidx >= 0, "Unknown confirmation parameter reference \""~PT.confirmedParameter~"\".");
+			static assert(pidx != i, "Confirmation parameter \""~PT.confirmedParameter~"\" may not reference itself.");
+			
+			bool matched;
+			static if (isNullable!PT && isNullable!(PARAMS[pidx])) {
+				matched = (params[pidx].isNull() && params[i].isNull()) || 
+					(!params[pidx].isNull() && !params[i].isNull() && params[pidx] == params[i]);
 			} else {
-				throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
+				static assert(!isNullable!PT && !isNullable!(PARAMS[pidx]),
+					"Either both or none of the confirmation and original fields must be nullable.");
+				matched = params[pidx] == params[i];
+			}
+
+			if (!matched) {
+				auto ex = new Exception("Comfirmation field mismatch.");
+				static if (erruda.found && ERROR.length == 0) {
+					auto err = erruda.value.getError(ex, param_names[i]);
+					handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+					return;
+				} else {
+					throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
+				}
 			}
 		}
 	}
@@ -547,11 +557,11 @@ private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname,
 			dst ~= el;
 			idx++;
 		}
-	} else static if (isInstanceOf!(Nullable, T)) {
+	} else static if (isNullable!T) {
 		typeof(dst.get()) el;
 		if (readParamRec(req, el, fieldname, false))
 			dst = el;
-	} else static if (is(T == struct) && !isStringSerializable!T) {
+	} else static if (is(T == struct) && !is(typeof(T.fromString(string.init))) && !is(typeof(T.fromStringValidate(string.init, null)))) {
 		foreach (m; __traits(allMembers, T))
 			if (!readParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
 				return false;
@@ -567,8 +577,17 @@ private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname,
 private T convTo(T)(string str)
 {
 	import std.conv;
-	static if (is(typeof(T.fromString(str)) == T)) return T.fromString(str);
-	else return str.to!T();
+	import std.exception;
+	string error;
+	static if (is(typeof(T.fromStringValidate(str, &error)))) {
+		static assert(is(typeof(T.fromStringValidate(str, &error)) == Nullable!T));
+		auto ret = T.fromStringValidate(str, &error);
+		enforce(!ret.isNull(), error); // TODO: refactor internally to work without exceptions
+		return ret.get();
+	} else static if (is(typeof(T.fromString(str)))) {
+		static assert(is(typeof(T.fromString(str)) == T));
+		return T.fromString(str);
+	} else return str.to!T();
 }
 
 private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
