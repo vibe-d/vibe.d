@@ -20,7 +20,10 @@ import vibe.core.task;
 import vibe.utils.memory;
 
 
-package enum newStdConcurrency = __VERSION__ >= 2066;
+// Workaround for master to compile.
+//package enum newStdConcurrency = __VERSION__ >= 2066;
+package enum newStdConcurrency = __traits(compiles, mixin("import std.concurrency : ThreadInfo, Tid;"));
+
 
 static if (newStdConcurrency) public import std.concurrency;
 else public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;
