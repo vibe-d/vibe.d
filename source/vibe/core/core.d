@@ -12,6 +12,7 @@ public import vibe.core.driver;
 import vibe.core.args;
 import vibe.core.concurrency;
 import vibe.core.log;
+import vibe.internal.newconcurrency;
 import vibe.utils.array;
 import std.algorithm;
 import std.conv;

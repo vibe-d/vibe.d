@@ -18,9 +18,7 @@ import std.variant;
 import std.string;
 import vibe.core.task;
 import vibe.utils.memory;
-
-
-package enum newStdConcurrency = __VERSION__ >= 2066;
+import vibe.internal.newconcurrency;
 
 static if (newStdConcurrency) public import std.concurrency;
 else public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;

@@ -7,8 +7,8 @@
 */
 module vibe.core.task;
 
-import vibe.core.concurrency : newStdConcurrency;
 import vibe.core.sync;
+import vibe.internal.newconcurrency;
 import vibe.utils.array;
 
 import core.thread;
