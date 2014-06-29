@@ -12,10 +12,12 @@
 /docs/styles
 
 .dub
+dub.selections.json
 
 # Unittest binaries
 vibe-d
 tests/*/tests
+__test__libevent__
 
 # Examples
 examples/app_skeleton/__test__library__
