@@ -169,23 +169,6 @@ final class SSLStream : Stream {
 		Exception[] m_exceptions;
 	}
 
-	/** Deprecated. Use createSSLStream instead.
-	*/
-	deprecated("Use createSSLStream instead of directly instantiating SSLStream.")
-	this(Stream underlying, SSLContext ctx, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
-	{
-		auto stream_state = ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting;
-		this(DEPRECATION_HACK.init, underlying, ctx, stream_state, peer_name, peer_address);
-	}
-
-	/** Deprecated. Use createSSLStream instead.
-	*/
-	deprecated("Use createSSLStream instead of directly instantiating SSLStream.")
-	this(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
-	{
-		this(DEPRECATION_HACK.init, underlying, ctx, state, peer_name, peer_address);
-	}
-
 	/// private
 	/*private*/ this(DEPRECATION_HACK, Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
@@ -422,14 +405,6 @@ final class SSLContext {
 		int m_verifyDepth;
 	}
 
-	/** Deprecated. Use createSSLContext instead.
-	*/
-	deprecated("Use createSSLContext instead of directly instantiating SSLContext.")
-	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
-	{
-		this(DEPRECATION_HACK.init, kind, ver);
-	}
-
 	private this(DEPRECATION_HACK, SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 	{
 		m_kind = kind;
@@ -499,28 +474,6 @@ final class SSLContext {
 				} 
 			}
 		}*/
-	}
-
-	/** Deprecated. Use createSSLContext instead.
-	*/
-	deprecated("Use createSSLContext instead of directly instantiating SSLContext.")
-	this(string cert_file, string key_file, SSLVersion ver = SSLVersion.any)
-	{
-		this(SSLContextKind.server, ver);
-		version (OpenSSL) {
-			scope(failure) SSL_CTX_free(m_ctx);
-			auto succ = SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(cert_file)) &&
-					SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(key_file), SSL_FILETYPE_PEM);
-			enforce(succ, "Failed to load server cert/key.");
-		}
-	}
-
-	/** Deprecated. Use createSSLContext instead.
-	*/
-	deprecated("Use createSSLContext instead of directly instantiating SSLContext.")
-	this(SSLVersion ver = SSLVersion.any)
-	{
-		this(SSLContextKind.client, ver);
 	}
 
 	~this()

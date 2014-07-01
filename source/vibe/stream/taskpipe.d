@@ -33,14 +33,6 @@ final class TaskPipe : ConnectionStream {
 		m_pipe = new TaskPipeImpl(grow_when_full);
 	}
 
-	/// Deprecated. Read end of the pipe.
-	deprecated("Use TaskPipe directly as an input stream instead.")
-	@property InputStream reader() { return this; }
-
-	/// Deprecated. Write end of the pipe.
-	deprecated("Use TaskPipe directly as an output stream instead.")
-	@property OutputStream writer() { return this; }
-
 	/// Size of the (fixed) FIFO buffer used to transfer data between tasks
 	@property size_t bufferSize() const { return m_pipe.bufferSize; }
 	/// ditto

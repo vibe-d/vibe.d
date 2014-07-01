@@ -67,15 +67,6 @@ final class RedisClient {
 	/// Returns Redis version
 	@property string redisVersion() { return m_version; }
 
-	deprecated("Use getDatabase() to access individual databases instead.")
-	@property RedisDatabase selectedDB() { return getDatabase(m_selectedDB); }
-
-	deprecated("Use getDatabase() to access individual databases instead.")
-	void select(long db_index) { m_selectedDB = db_index; }
-
-	deprecated("Use getDatabase() to access individual databases.")
-	alias selectedDB this;
-
 	/** Returns a handle to the given database.
 	*/
 	RedisDatabase getDatabase(long index) { return RedisDatabase(this, index); }

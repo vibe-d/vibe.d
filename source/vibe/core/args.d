@@ -28,22 +28,6 @@ import core.runtime;
 
 
 /**
-	Deprecated. Removes any recognized arguments from args leaving any unrecognized options.
-
-	Note that vibe.d parses all options on start up and calling this function is not necessary.
-	It is recommended to use
-	Currently does nothing - Vibe will parse arguments
-	automatically on startup. Call $(D finalizeCommandLineArgs) from your
-	$(D main()) if you use a custom one, to check for unrecognized options.
-*/
-deprecated("Please use getOption, finalizeCommandLineArgs and/or lowerPrivileges instead to achieve the desired functionality.")
-void processCommandLineArgs(ref string[] args)
-{
-	args = g_args.dup;
-}
-
-
-/**
 	Finds and reads an option from the configuration file or command line.
 
 	Command line options take precedence over configuration file entries.

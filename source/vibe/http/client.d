@@ -190,7 +190,7 @@ final class HTTPClient {
 		TCPConnection m_conn;
 		Stream m_stream;
 		SSLContext m_ssl;
-		static __gshared m_userAgent = "vibe.d/"~VibeVersionString~" (HTTPClient, +http://vibed.org/)";
+		static __gshared m_userAgent = "vibe.d/"~vibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		static __gshared void function(SSLContext) ms_sslSetup;
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit; 

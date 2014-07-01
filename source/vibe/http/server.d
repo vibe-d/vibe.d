@@ -452,7 +452,7 @@ final class HTTPServerSettings {
 	string sessionIdCookie = "vibe.session_id";
 
 	///
-	string serverString = "vibe.d/" ~ VibeVersionString;
+	string serverString = "vibe.d/" ~ vibeVersionString;
 
 	/** Specifies the format used for the access log.
 
@@ -993,18 +993,6 @@ final class HTTPServerResponse : HTTPResponse {
 		cookie.secure = secure;
 		cookie.httpOnly = (options & SessionOption.httpOnly) != 0;
 		return m_session;
-	}
-
-	/**
-		Deprecated compatibility overload.
-
-		Uses boolean parameters instead of SessionOption to specify the
-		session options SessionOption.secure and SessionOption.httpOnly.
-	*/
-	deprecated("Use startSession() with a SessionOption parameter instead.")
-	Session startSession(string path, bool secure, bool httpOnly = true)
-	{
-		return startSession(path, (secure ? SessionOption.secure : SessionOption.none) | (httpOnly ? SessionOption.httpOnly : SessionOption.none));
 	}
 
 	/**

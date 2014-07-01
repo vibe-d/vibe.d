@@ -34,20 +34,6 @@ nothrow @safe {
 
 
 /**
-	Deprecated. Enables/disables output of thread/task ids with each log message.
-
-	By default, only the log message is displayed (enable=true).
-
-	Please use setLogFormat with FileLogger.Format.plain or FileLogger.Format.thread instead.
-*/
-deprecated("Use setLogFormat instead.")
-void setPlainLogging(bool enable)
-nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
-	ss_stdoutLogger.lock().format = enable ? FileLogger.Format.plain : FileLogger.Format.thread;
-}
-
-/**
 	Sets the log format used for the default console logger.
 
 	This level applies to the default stdout/stderr logger only.

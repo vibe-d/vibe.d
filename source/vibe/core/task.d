@@ -106,7 +106,6 @@ class TaskFiber : Fiber {
 			import std.concurrency : ThreadInfo;
 			ThreadInfo m_tidInfo;
 		}
-		Variant[string] m_taskLocalStorage;
 		MessageQueue m_messageQueue;
 	}
 
@@ -146,46 +145,6 @@ class TaskFiber : Fiber {
 	/** Terminates the task without notice as soon as it calls a blocking function.
 	*/
 	abstract void terminate();
-
-	/** Deprecated. Sets a task local variable.
-
-		Please use vibe.core.core.TaskLocal instead.
-	*/
-	deprecated("Please use vibe.core.core.TaskLocal instead.")
-	void set(T)(string name, T value)
-	{
-		m_taskLocalStorage[name] = Variant(value);
-	}
-
-	/** Deprecated. Returns a task local variable.
-
-		Please use vibe.core.core.TaskLocal instead.
-	*/
-	deprecated("Please use vibe.core.core.TaskLocal instead.")
-	T get(T)(string name)
-	{
-		Variant* pvar;
-		pvar = name in m_taskLocalStorage;
-		enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
-		return pvar.get!T();
-	}
-
-	/** Deprecated. Determines if a certain task local variable is set.
-
-		Please use vibe.core.core.TaskLocal instead.
-	*/
-	deprecated("Please use vibe.core.core.TaskLocal instead.")
-	bool isSet(string name)
-	{
-		return (name in m_taskLocalStorage) !is null;
-	}
-
-	/** Clears all task local variables.
-	*/
-	protected void resetLocalStorage()
-	{
-		m_taskLocalStorage = null;
-	}
 }
 
 

@@ -392,7 +392,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ARGS
 	alias TARGS = Tuple!ARGS;
 
 	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
-	static assert(TARGS.sizeof <= MaxTaskParameterSize,
+	static assert(TARGS.sizeof <= maxTaskParameterSize,
 		"The arguments passed to run(Worker)Task must not exceed "~
 		MaxTaskParameterSize.to!string~" bytes in total size.");
 
@@ -550,60 +550,6 @@ FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescripto
 
 
 /**
-	Sets a variable specific to the calling task/fiber. Scheduled for deprecation.
-
-	Please use TaskLocal instead.
-
-	Remarks:
-		This function also works if called from outside if a fiber. In this
-		case, it will work on a thread local storage.
-*/
-deprecated("Please use TaskLocal instead.")
-void setTaskLocal(T)(string name, T value)
-{
-	auto self = cast(CoreTask)Fiber.getThis();
-	if( self ) self.set(name, value);
-	s_taskLocalStorageGlobal[name] = Variant(value);
-}
-
-/**
-	Deprecated. Returns a task/fiber specific variable.
-
-	Please use TaskLocal instead.
-
-	Remarks:
-		This function also works if called from outside if a fiber. In this
-		case, it will work on a thread local storage.
-*/
-deprecated("Please use TaskLocal instead.")
-T getTaskLocal(T)(string name)
-{
-	auto self = cast(CoreTask)Fiber.getThis();
-	if( self ) return self.get!T(name);
-	auto pvar = name in s_taskLocalStorageGlobal;
-	enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
-	return pvar.get!T();
-}
-
-/**
-	Deprecated. Returns a task/fiber specific variable.
-
-	Please use TaskLocal instead.
-
-	Remarks:
-		This function also works if called from outside if a fiber. In this
-		case, it will work on a thread local storage.
-*/
-deprecated("Please use TaskLocal instead.")
-bool isTaskLocalSet(string name)
-{
-	auto self = cast(CoreTask)Fiber.getThis();
-	if( self ) return self.isSet(name);
-	return (name in s_taskLocalStorageGlobal) !is null;
-}
-
-
-/**
 	Sets the stack size for tasks.
 
 	The default stack size is set to 16 KiB, which is sufficient for most tasks.
@@ -616,18 +562,6 @@ bool isTaskLocalSet(string name)
 void setTaskStackSize(size_t sz)
 {
 	s_taskStackSize = sz;
-}
-
-/**
-	Deprecated compatibility stub.
-
-	This function was used to start the worker threads necessary for
-	runWorkerTask and runWorkerTaskDist. These threads are now started
-	automatically, so there is no need to call this function anymore
-*/
-deprecated void enableWorkerThreads()
-{
-	logDiagnostic("enableWorkerThreads() does nothing and will be removed soon.");
 }
 
 
@@ -672,7 +606,8 @@ void lowerPrivileges()
 	Sets a callback that is invoked whenever a task changes its status.
 
 	This function is useful mostly for implementing debuggers that
-	analyze the life time of tasks, including task switches.
+	analyze the life time of tasks, including task switches. Note that
+	the callback will only be called for debug builds.
 */
 void setTaskEventCallback(void function(TaskEvent, Task) func)
 {
@@ -683,14 +618,20 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 /**
 	A version string representing the current vibe version
 */
-enum VibeVersionString = "0.7.20";
+enum vibeVersionString = "0.7.20";
+
+/// Compatibility alias
+deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersionString;
 
 /**
 	The maximum combined size of all parameters passed to a task delegate
 
 	See_Also: runTask
 */
-enum MaxTaskParameterSize = 128;
+enum maxTaskParameterSize = 128;
+
+/// Compatibility alias
+deprecated("Use maxTaskParameterSize instead.") alias MaxTaskParameterSize = maxTaskParameterSize;
 
 /**
 	Represents a timer.
@@ -915,7 +856,6 @@ private class CoreTask : TaskFiber {
 					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
-				resetLocalStorage();
 
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
@@ -1092,10 +1032,10 @@ private struct ThreadContext {
 private struct TaskFuncInfo {
 	void function(TaskFuncInfo*) func;
 	void[2*size_t.sizeof] callable;
-	void[MaxTaskParameterSize] args;
+	void[maxTaskParameterSize] args;
 }
 
-alias TaskArgsVariant = VariantN!MaxTaskParameterSize;
+alias TaskArgsVariant = VariantN!maxTaskParameterSize;
 
 /**************************************************************************************************/
 /* private functions                                                                              */

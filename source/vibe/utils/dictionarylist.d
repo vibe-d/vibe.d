@@ -38,7 +38,6 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		static char[256] s_keyBuffer;
 	}
 	
-	deprecated alias valueType = VALUE;
 	alias ValueType = VALUE;
 
 	struct FieldTuple { string key; ValueType value; }
