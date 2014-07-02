@@ -9,7 +9,6 @@ module vibe.templ.parsertools;
 
 import vibe.utils.string;
 
-import std.metastrings;
 import std.traits;
 
 
