@@ -16,14 +16,14 @@ shared static this()
 
 	subscriber.subscribe("test1", "test2");
 	sleep(1.seconds()); // give subscribe a chance to do it's job
-	publisher.publish("test1", "Hello World!");
-	publisher.publish("test2", "Hello from Channel 2");
+	publisher.getDatabase(0).publish("test1", "Hello World!");
+	publisher.getDatabase(0).publish("test2", "Hello from Channel 2");
 
 	auto task = subscriber.listen(toDelegate(&printReply));
 
 	runTask({
 		subscriber.subscribe("test-fiber");
-		publisher.publish("test-fiber", "Hello from the Fiber!");
+		publisher.getDatabase(0).publish("test-fiber", "Hello from the Fiber!");
 		subscriber.unsubscribe();
 	});
 }
