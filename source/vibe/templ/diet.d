@@ -25,7 +25,6 @@ import std.ascii : isAlpha;
 import std.array;
 import std.conv;
 import std.format;
-import std.metastrings;
 import std.typecons;
 import std.typetuple;
 import std.variant;
