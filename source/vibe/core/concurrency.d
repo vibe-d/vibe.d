@@ -1156,6 +1156,7 @@ unittest {
 
 	void test()
 	{
+		static if (__VERSION__ >= 2065) {
 		auto val = async({
 			logInfo("Starting to compute value.");
 			sleep(500.msecs); // simulate some lengthy computation
@@ -1167,6 +1168,7 @@ unittest {
 		sleep(200.msecs); // simulate some lengthy computation
 		logInfo("Finished computation in main task. Waiting for async value.");
 		logInfo("Result: %s", val.getResult());
+		}
 	}
 }
 
