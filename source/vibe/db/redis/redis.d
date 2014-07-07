@@ -855,6 +855,8 @@ private struct RangeCounter {
 
 private void _request_void(ARGS...)(RedisConnection conn, string command, ARGS args)
 {
+	import vibe.stream.wrapper;
+
 	if (!conn.conn || !conn.conn.connected) {
 		try conn.conn = connectTCP(conn.m_host, conn.m_port);
 		catch (Exception e) {
@@ -863,12 +865,15 @@ private void _request_void(ARGS...)(RedisConnection conn, string command, ARGS a
 	}
 	
 	auto nargs = conn.countArgs(args);
-	conn.conn.formattedWrite("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
-	conn.writeArgs(conn.conn, args);
+	auto rng = StreamOutputRange(conn.conn);
+	formattedWrite(&rng, "*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
+	RedisConnection.writeArgs(&rng, args);
 }
 
 private RedisReply _request_reply(ARGS...)(RedisConnection conn, string command, ARGS args)
 {
+	import vibe.stream.wrapper;
+
 	if (!conn.conn || !conn.conn.connected) {
 		try conn.conn = connectTCP(conn.m_host, conn.m_port);
 		catch (Exception e) {
@@ -877,8 +882,9 @@ private RedisReply _request_reply(ARGS...)(RedisConnection conn, string command,
 	}
 
 	auto nargs = conn.countArgs(args);
-	conn.conn.formattedWrite("*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
-	conn.writeArgs(conn.conn, args);
+	auto rng = StreamOutputRange(conn.conn);
+	formattedWrite(&rng, "*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
+	RedisConnection.writeArgs(&rng, args);
 
 	return RedisReply(conn);
 }

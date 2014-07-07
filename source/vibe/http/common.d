@@ -452,7 +452,9 @@ final class ChunkedOutputStream : OutputStream {
 	}
 	private void writeChunkSize(long length)
 	{
-		formattedWrite(m_out, "%x\r\n", length);
+		import vibe.stream.wrapper;
+		auto rng = StreamOutputRange(m_out);
+		formattedWrite(&rng, "%x\r\n", length);
 	}
 }
 
