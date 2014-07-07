@@ -8,7 +8,7 @@ import vibe.vibe;
 void runTest()
 {
 	/* open a redis server locally to run these tests
-	 * Windows download link: https://raw.github.com/MSOpenTech/redis/2.8.4_msopen/bin/release/redis-2.8.4.zip
+	 * Windows download link: https://github.com/MSOpenTech/redis/tree/2.8/bin/release
 	 * Linux: use "yum install redis" on RHEL or "apt-get install redis" on Debian-like
 	*/
 	RedisClient redis;
