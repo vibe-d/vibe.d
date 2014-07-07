@@ -107,7 +107,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 			bufferevent_set_timeouts(m_ctx.event, null, null);
 		} else {
 			assert(v.total!"seconds" <= int.max);
-			timeval toread = {tv_sec: cast(int)v.total!"seconds", tv_usec: v.fracSec.usecs};
+			timeval toread = v.toTimeVal();
 			bufferevent_set_timeouts(m_ctx.event, &toread, null);
 		}
 	}
@@ -263,10 +263,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 		scope(exit) releaseReader();
 		m_timeout_triggered = false;
 		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
-		timeval t;
 		assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
-		t.tv_sec = cast(int)timeout.total!"seconds"();
-		t.tv_usec = timeout.fracSec().usecs();
+		timeval t = timeout.toTimeVal();
 		logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
 		event_add(evtmout, &t);
 		scope (exit) {

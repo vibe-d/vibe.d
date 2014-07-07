@@ -183,7 +183,7 @@ SysTime parseRFC822DateTimeString(string str)
 
 	auto dt = DateTime(year, month, day, hour, minute, second);
 	if( tzoffset == 0 ) return SysTime(dt, UTC());
-	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100) * 60 + tzoffset % 100));
+	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100).hours + (tzoffset % 100).minutes));
 }
 
 unittest {
@@ -191,8 +191,8 @@ unittest {
 
 	auto times = [
 		tuple("Wed, 02 Oct 2002 08:00:00 GMT", SysTime(DateTime(2002, 10, 02, 8, 0, 0), UTC())),
-		tuple("Wed, 02 Oct 2002 08:00:00 +0200", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(120))),
-		tuple("Wed, 02 Oct 2002 08:00:00 -0130", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(-90)))
+		tuple("Wed, 02 Oct 2002 08:00:00 +0200", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(120.minutes))),
+		tuple("Wed, 02 Oct 2002 08:00:00 -0130", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(-90.minutes)))
 	];
 	foreach (t; times) {
 		auto st = parseRFC822DateTimeString(t[0]);

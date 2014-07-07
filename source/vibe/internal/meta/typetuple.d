@@ -36,9 +36,9 @@ unittest
 */
 template isGroup(T...)
 {
-	enum isGroup = 
-		   (T.length == 1)                         // not a type tuple
-		&& is(typeof(T[0]) == void) && !is(T[0])   // does not evaluate to something
+	static if (T.length != 1) enum isGroup = false;
+	else enum isGroup =
+		!is(T[0]) && is(typeof(T[0]) == void)      // does not evaluate to something
 		&& is(typeof(T[0].expand.length) : size_t) // expands to something with length
 		&& !is(typeof(&(T[0].expand)));            // expands to not addressable
 }

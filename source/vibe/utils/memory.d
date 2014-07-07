@@ -189,8 +189,9 @@ final class DebugAllocator : Allocator {
 final class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
+		static err = new immutable OutOfMemoryError;
 		auto ptr = .malloc(sz + Allocator.alignment);
-		enforceEx!OutOfMemoryError(ptr !is null);
+		if (ptr is null) throw err;
 		return adjustPointerAlignment(ptr)[0 .. sz];
 	}
 
