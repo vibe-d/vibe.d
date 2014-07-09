@@ -54,6 +54,7 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
+	import vibe.stream.wrapper;
 	import vibe.utils.string;
 
 	pragma(msg, "Compiling diet template '"~template_file~"'...");
@@ -67,6 +68,8 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 
 	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
 	else alias TRANSLATE = TypeTuple!();
+
+	auto output__ = StreamOutputRange(stream__);
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file(indent));
@@ -94,6 +97,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
+	import vibe.stream.wrapper;
 	import vibe.utils.string;
 
 	pragma(msg, "Compiling diet template '"~template_file~"' (compat)...");
@@ -102,6 +106,8 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 
 	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
 	else alias TRANSLATE = TypeTuple!();
+
+	auto output__ = StreamOutputRange(stream__);
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
@@ -137,7 +143,11 @@ alias compileDietFileCompat parseDietFileCompat;
 */
 template compileDietFileMixin(string template_file, string stream_variable, size_t base_indent = 0)
 {
-	enum compileDietFileMixin = "OutputStream stream__ = "~stream_variable~";\n" ~ dietParser!template_file(base_indent);
+	enum compileDietFileMixin =
+		"import vibe.stream.wrapper;\n" ~
+		"OutputStream stream__ = "~stream_variable~";\n" ~
+		"auto output__ = StreamOutputRange(stream__);\n" ~
+		dietParser!template_file(base_indent);
 }
 
 
@@ -148,6 +158,7 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 {
 	// some imports to make available by default inside templates
 	import vibe.http.common;
+	import vibe.stream.wrapper;
 	import vibe.utils.string;
 	import std.typetuple;
 	
@@ -158,6 +169,8 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	//pragma(msg, dietParser!template_file());
 	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
 	else alias TRANSLATE = TypeTuple!();
+
+	auto output__ = StreamOutputRange(stream__);
 
 	mixin(dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
 }
@@ -180,7 +193,7 @@ void registerDietTextFilter(string name, string function(string, size_t indent) 
 /**************************************************************************************************/
 
 private {
-	enum string StreamVariableName = "stream__";
+	enum string OutputVariableName = "output__";
 	string function(string, size_t indent)[string] s_filters;
 }
 
@@ -359,13 +372,13 @@ private class OutputContext {
 		writeRawString(str);
 	}
 
-	void writeStringExpr(string str) { writeCodeLine(StreamVariableName~".write("~str~");"); }
-	void writeStringExprHtmlEscaped(string str) { writeStringExpr("htmlEscape("~str~")"); }
-	void writeStringExprHtmlAttribEscaped(string str) { writeStringExpr("htmlAttribEscape("~str~")"); }
+	void writeStringExpr(string str) { writeCodeLine(OutputVariableName~".put("~str~");"); }
+	void writeStringExprHtmlEscaped(string str) { writeCodeLine("filterHTMLEscape("~OutputVariableName~", "~str~")"); }
+	void writeStringExprHtmlAttribEscaped(string str) { writeCodeLine("filterHTMLAttribEscape("~OutputVariableName~", "~str~")"); }
 
-	void writeExpr(string str) { writeStringExpr("_toString("~str~")"); }
-	void writeExprHtmlEscaped(string str) { writeStringExprHtmlEscaped("_toString("~str~")"); }
-	void writeExprHtmlAttribEscaped(string str) { writeStringExprHtmlAttribEscaped("_toString("~str~")"); }
+	void writeExpr(string str) { writeCodeLine("_toStringS!(s => "~OutputVariableName~".put(s))("~str~");"); }
+	void writeExprHtmlEscaped(string str) { writeCodeLine("_toStringS!(s => filterHTMLEscape("~OutputVariableName~", s))("~str~");"); }
+	void writeExprHtmlAttribEscaped(string str) { writeCodeLine("_toStringS!(s => filterHTMLAttribEscape("~OutputVariableName~", s))("~str~");"); }
 
 	void writeCodeLine(string stmt)
 	{
@@ -387,7 +400,7 @@ private class OutputContext {
 				m_result ~= lineMarker(m_line);
 				break;
 			case State.String:
-				m_result ~= StreamVariableName ~ ".write(\"";
+				m_result ~= OutputVariableName ~ ".put(\"";
 				break;
 		}
 
@@ -1283,6 +1296,16 @@ string _toString(T)(T v)
 	else static if (__traits(compiles, v.toString())) return v.toString();
 	else static if (__traits(compiles, v.opCast!string())) return cast(string)v;
 	else return to!string(v);
+}
+
+private void _toStringS(alias SINK, T)(T v)
+{
+	// TODO: support sink based toString() and use an output range based interface
+	//       instead of allocating a string
+	static if (is(T == string)) SINK(v);
+	else static if (__traits(compiles, v.toString())) SINK(v.toString());
+	else static if (__traits(compiles, v.opCast!string())) SINK(cast(string)v);
+	else SINK(to!string(v));
 }
 
 unittest {
