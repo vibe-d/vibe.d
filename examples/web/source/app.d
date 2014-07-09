@@ -25,16 +25,16 @@ class SampleService {
 		render!("home.dt", settings);
 	}
 
-	void getLogin(string error = null) { render!("login.dt", error); }
-	void postLogin(string user, string password)
+	void getLogin(string _error = null)
 	{
-		try {
-			validateUserName(user);
-			enforce(password == "secret", "Invalid password.");
-		} catch (Exception e) {
-			getLogin(e.msg);
-			return;
-		}
+		string error = _error;
+		render!("login.dt", error);
+	}
+
+	@errorDisplay!getLogin
+	void postLogin(ValidUsername user, string password)
+	{
+		enforce(password == "secret", "Invalid password.");
 
 		UserSettings s;
 		s.loggedIn = true;
@@ -60,10 +60,9 @@ class SampleService {
 	}
 
 	@auth @errorDisplay!getSettings
-	void postSettings(bool some_setting, string user_name, string _authUser)
+	void postSettings(bool some_setting, ValidUsername user_name, string _authUser)
 	{
 		assert(m_userSettings.loggedIn);
-		validateUserName(user_name);
 		UserSettings s = m_userSettings;
 		s.userName = user_name;
 		s.someSetting = some_setting;
