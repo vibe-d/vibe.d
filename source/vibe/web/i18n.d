@@ -13,7 +13,9 @@ import std.algorithm : canFind, min, startsWith;
 	Annotates an interface method or class with translation information.
 
 	The translation context contains information about supported languages
-	and the translated strings.
+	and the translated strings. Any translations will be automatically
+	applied to Diet templates, as well as strings passed to
+	$(D vibe.web.web.trWeb).
 */
 @property TranslationContextAttribute!CONTEXT translationContext(CONTEXT)() { return TranslationContextAttribute!CONTEXT.init; }
 

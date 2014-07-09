@@ -20,9 +20,12 @@ import std.algorithm : startsWith, endsWith;
 /**
 	Registers a REST interface and connects it the the given instance.
 
-	Each method is mapped to the corresponing HTTP verb. Property methods are mapped to GET/PUT and
-	all other methods are mapped according to their prefix verb. If the method has no known prefix,
-	POST is used. The following table lists the mappings from prefix verb to HTTP verb:
+	Each method of the given class instance is mapped to the corresponing HTTP
+	verb. Property methods are mapped to GET/PUT and all other methods are
+	mapped according to their prefix verb. If the method has no known prefix,
+	POST is used.
+
+	The following table lists the mappings from prefix verb to HTTP verb:
 
 	<table>
 		<tr><th>Prefix</th><th>HTTP verb</th></tr>
@@ -41,11 +44,20 @@ import std.algorithm : startsWith, endsWith;
     'id' is expected to be part of the URL instead of a JSON request. Parameters with default
     values will be optional in the corresponding JSON request.
 	
-	Any interface that you return from a getter will be made available with the base url and its name appended.
+	Any interface that you return from a getter will be made available with the
+	base url and its name appended.
+
+	Params:
+		router = The HTTP router on which the interface will be registered
+		instance = Class instance to use for the REST mapping - Note that TImpl
+			must either be an interface type, or a class which derives from a
+			single interface
+		url_prefix = Optional path prefix to use when registering the HTTP routes
+		style = The naming convention to use for the translation of method names
+			to HTTP paths
 
 	See_Also:
-	
-		RestInterfaceClient class for a seamless way to access such a generated API
+		$(D RestInterfaceClient) class for a seamless way to access such a generated API
 
 */
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
@@ -539,6 +551,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			res.writeJsonBody([ "statusMessage": e.msg ], e.status);
 		} catch (Exception e) {
 			// TODO: better error description!
+			logDebug("REST handler exception: %s", e.toString());
 			res.writeJsonBody(
 				[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
 				HTTPStatus.internalServerError
