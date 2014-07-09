@@ -1277,9 +1277,11 @@ private bool isStringLiteral(string str)
 /// Internal function used for converting an interpolation expression to string
 string _toString(T)(T v)
 {
-	static if( is(T == string) ) return v;
-	else static if( __traits(compiles, v.opCast!string()) ) return cast(string)v;
-	else static if( __traits(compiles, v.toString()) ) return v.toString();
+	// TODO: support sink based toString() and use an output range based interface
+	//       instead of allocating a string
+	static if (is(T == string)) return v;
+	else static if (__traits(compiles, v.toString())) return v.toString();
+	else static if (__traits(compiles, v.opCast!string())) return cast(string)v;
 	else return to!string(v);
 }
 
