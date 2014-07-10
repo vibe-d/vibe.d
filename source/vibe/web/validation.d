@@ -12,12 +12,18 @@ import vibe.utils.validation;
 struct ValidEmail {
 	private string m_value;
 
+	private this(string value) { m_value = value; }
+	@disable this();
+
 	string toString() const pure nothrow @safe { return m_value; }
 	alias toString this;
 
 	static Nullable!ValidEmail fromStringValidate(string str, string* error)
 	{
-		Nullable!ValidEmail ret;
+		// work around disabled default construction
+		Nullable!ValidEmail ret = Nullable!ValidEmail(ValidEmail(null));
+		ret.nullify();
+
 		auto err = appender!string(); // TODO: avoid allocations when possible
 		if (validateEmail(err, str)) ret = ValidEmail(str);
 		else *error = err.data;
@@ -50,12 +56,18 @@ unittest {
 struct ValidUsername {
 	private string m_value;
 
+	private this(string value) { m_value = value; }
+	@disable this();
+
 	string toString() const pure nothrow @safe { return m_value; }
 	alias toString this;
 
 	static Nullable!ValidUsername fromStringValidate(string str, string* error)
 	{
-		Nullable!ValidUsername ret;
+		// work around disabled default construction
+		Nullable!ValidUsername ret = Nullable!ValidUsername(ValidUsername(null));
+		ret.nullify();
+
 		auto err = appender!string(); // TODO: avoid allocations when possible
 		if (validateUserName(str)) ret = ValidUsername(str);
 		else *error = err.data;
@@ -88,12 +100,18 @@ unittest {
 struct ValidPassword {
 	private string m_value;
 
+	private this(string value) { m_value = value; }
+	@disable this();
+
 	string toString() const pure nothrow @safe { return m_value; }
 	alias toString this;
 
 	static Nullable!ValidPassword fromStringValidate(string str, string* error)
 	{
-		Nullable!ValidPassword ret;
+		// work around disabled default construction
+		Nullable!ValidPassword ret = Nullable!ValidPassword(ValidPassword(null));
+		ret.nullify();
+
 		auto err = appender!string(); // TODO: avoid allocations when possible
 		if (validatePassword(str, str)) ret = ValidPassword(str);
 		else *error = err.data;

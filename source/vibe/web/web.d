@@ -490,27 +490,27 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	s_requestContext = createRequestContext!overload(req, res);
 
 	// collect all parameter values
-	PARAMS params;
+	PARAMS params = void;
 	foreach (i, PT; PARAMS) {
 		try {
 			static if (IsAttributedParameter!(overload, param_names[i])) {
-				params[i] = computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res);
+				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
 				if (res.headerWritten) return;
 			}
-			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i] = error[0];
+			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i].setVoid(error[0]);
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
 			else static if (param_names[i].startsWith("_")) {
-				if (auto pv = param_names[i][1 .. $] in req.params) params[i] = (*pv).convTo!PT;
-				else static if (!is(default_values[i] == void)) params[i] = default_values[i];
+				if (auto pv = param_names[i][1 .. $] in req.params) params[i].setVoid((*pv).convTo!PT);
+				else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
 				static if (!is(default_values[i] == void)) {
 					if (!readParamRec(req, params[i], param_names[i], false))
-						params[i] = default_values[i];
+						params[i].setVoid(default_values[i]);
 				} else {
 					readParamRec(req, params[i], param_names[i], true);
 				}
@@ -593,6 +593,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	}
 }
 
+// NOTE: dst is assumed to be uninitialized
 private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname, bool required)
 {
 	import std.string;
@@ -603,25 +604,27 @@ private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname,
 	static if (isDynamicArray!T && !isSomeString!T) {
 		alias EL = typeof(T.init[0]);
 		size_t idx = 0;
+		dst = T.init;
 		while (true) {
-			EL el;
+			EL el = void;
 			if (!readParamRec(req, el, format("%s_%s", fieldname, idx), false))
 				break;
 			dst ~= el;
 			idx++;
 		}
 	} else static if (isNullable!T) {
-		typeof(dst.get()) el;
+		typeof(dst.get()) el = void;
 		if (readParamRec(req, el, fieldname, false))
-			dst = el;
+			dst.setVoid(el);
+		else dst.setVoid(T.init);
 	} else static if (is(T == struct) && !is(typeof(T.fromString(string.init))) && !is(typeof(T.fromStringValidate(string.init, null)))) {
 		foreach (m; __traits(allMembers, T))
 			if (!readParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
 				return false;
 	} else static if (is(T == bool)) {
 		dst = (fieldname in req.form) !is null || (fieldname in req.query) !is null;
-	} else if (auto pv = fieldname in req.form) dst = (*pv).convTo!T;
-	else if (auto pv = fieldname in req.query) dst = (*pv).convTo!T;
+	} else if (auto pv = fieldname in req.form) dst.setVoid((*pv).convTo!T);
+	else if (auto pv = fieldname in req.query) dst.setVoid((*pv).convTo!T);
 	else if (required) throw new HTTPStatusException(HTTPStatus.badRequest, "Missing parameter "~fieldname);
 	else return false;
 	return true;
@@ -673,4 +676,14 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 	} else ret.tr = t => t;
 
 	return ret;
+}
+
+// properly sets an uninitialized variable
+private static void setVoid(T)(ref T dst, T value)
+{
+	import std.traits;
+	static if (hasElaborateAssign!T) {
+		(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&value)[0 .. T.sizeof];
+		typeid(T).postblit(&dst);
+	} else dst = value;
 }
