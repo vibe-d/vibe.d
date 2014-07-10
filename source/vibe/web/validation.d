@@ -18,10 +18,9 @@ struct ValidEmail {
 	static Nullable!ValidEmail fromStringValidate(string str, string* error)
 	{
 		Nullable!ValidEmail ret;
-		try { // TODO: refactor internally to work witout exceptions
-			validateEmail(str);
-			ret = ValidEmail(str);
-		} catch (Exception e) *error = e.msg;
+		auto err = appender!string(); // TODO: avoid allocations when possible
+		if (validateEmail(err, str)) ret = ValidEmail(str);
+		else *error = err.data;
 		return ret;
 	}
 }
@@ -57,10 +56,9 @@ struct ValidUsername {
 	static Nullable!ValidUsername fromStringValidate(string str, string* error)
 	{
 		Nullable!ValidUsername ret;
-		try { // TODO: refactor internally to work witout exceptions
-			validateUserName(str);
-			ret = ValidUsername(str);
-		} catch (Exception e) *error = e.msg;
+		auto err = appender!string(); // TODO: avoid allocations when possible
+		if (validateUserName(str)) ret = ValidUsername(str);
+		else *error = err.data;
 		return ret;
 	}
 }
@@ -96,10 +94,9 @@ struct ValidPassword {
 	static Nullable!ValidPassword fromStringValidate(string str, string* error)
 	{
 		Nullable!ValidPassword ret;
-		try { // TODO: refactor internally to work witout exceptions
-			validatePassword(str, str);
-			ret = ValidPassword(str);
-		} catch (Exception e) *error = e.msg;
+		auto err = appender!string(); // TODO: avoid allocations when possible
+		if (validatePassword(str, str)) ret = ValidPassword(str);
+		else *error = err.data;
 		return ret;
 	}
 }
