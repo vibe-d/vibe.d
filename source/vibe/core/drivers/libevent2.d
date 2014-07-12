@@ -847,10 +847,8 @@ final class Libevent2UDPConnection : UDPConnection {
 		// create a context for storing connection information
 		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress());
 
-		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
-		if( !evt ) throw new Exception("Failed to create buffer event for socket.");
-
-		enforce(event_add(evt, null) == 0);
+		m_ctx.listenEvent = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
+		if (!m_ctx.listenEvent) throw new Exception("Failed to create buffer event for socket.");
 	}
 
 	@property string bindAddress() const { return m_bindAddressString; }
@@ -891,7 +889,7 @@ final class Libevent2UDPConnection : UDPConnection {
 		if (!m_ctx) return;
 		acquire();
 
-		if (m_ctx.event) bufferevent_free(m_ctx.event);
+		if (m_ctx.listenEvent) event_free(m_ctx.listenEvent);
 		TCPContextAlloc.free(m_ctx);
 		m_ctx = null;
 	}
@@ -937,8 +935,13 @@ final class Libevent2UDPConnection : UDPConnection {
 		}
 
 		acquire();
+		// TODO: adds the event only when we actually read to avoid event loop
+		// spinning when data is available, see #715. Since this may be
+		// performance critical, a proper benchmark should be performed!
+		enforce(event_add(m_ctx.listenEvent, null) == 0);
 
 		scope (exit) {
+			event_del(m_ctx.listenEvent);
 			release();
 			if (tm != size_t.max) m_driver.releaseTimer(tm);
 		}
