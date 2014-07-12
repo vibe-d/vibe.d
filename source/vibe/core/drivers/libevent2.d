@@ -881,6 +881,16 @@ final class Libevent2UDPConnection : UDPConnection {
 		m_ctx.readOwner = m_ctx.writeOwner = Task.init;
 	}
 
+	void close()
+	{
+		if (!m_ctx) return;
+		acquire();
+
+		if (m_ctx.event) bufferevent_free(m_ctx.event);
+		TCPContextAlloc.free(m_ctx);
+		m_ctx = null;
+	}
+
 	void connect(string host, ushort port)
 	{
 		NetworkAddress addr = m_driver.resolveHost(host, m_ctx.local_addr.family);

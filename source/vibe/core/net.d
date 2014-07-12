@@ -263,6 +263,10 @@ interface UDPConnection {
 	/// The local/bind address of the underlying socket.
 	@property NetworkAddress localAddress() const;
 
+	/** Stops listening for datagrams and frees all resources.
+	*/
+	void close();
+
 	/** Locks the UDP connection to a certain peer.
 
 		Once connected, the UDPConnection can only communicate with the specified peer.

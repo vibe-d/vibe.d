@@ -893,6 +893,12 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		m_canBroadcast = val;
 	}
 
+	void close()
+	{
+		if (m_socket == INVALID_SOCKET) return;
+		closesocket(m_socket);
+		m_socket = INVALID_SOCKET;
+	}
 
 	bool amOwner() {
 		return m_task != Task() && m_task == Task.getThis();
