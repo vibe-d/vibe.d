@@ -817,14 +817,6 @@ final class Libevent2UDPConnection : UDPConnection {
 	{
 		m_driver = driver;
 
-		m_bindAddress = bind_addr;
-		char buf[64];
-		void* ptr;
-		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
-		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
-		evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length);
-		m_bindAddressString = to!string(buf.ptr);
-
 		auto sockfd_raw = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
@@ -837,9 +829,22 @@ final class Libevent2UDPConnection : UDPConnection {
 		socketEnforce(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
 			"Error enabling socket address reuse on listening socket");
 
-		if( bind_addr.port )
-			socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
+		// bind the socket to a local inteface/port
+		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
+		// read back the actual bind address
+		socklen_t balen = bind_addr.sockAddrLen;
+		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
 		
+		// generate the bind address string
+		m_bindAddress = bind_addr;
+		char buf[64];
+		void* ptr;
+		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
+		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
+		evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length);
+		m_bindAddressString = to!string(buf.ptr);
+
+		// create a context for storing connection information
 		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress());
 
 		auto evt = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
