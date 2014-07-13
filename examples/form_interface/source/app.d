@@ -113,8 +113,9 @@ class App {
 
 	void getTable(HTTPServerRequest req, HTTPServerResponse res)
 	{
+		auto table = m_provider.users;
 		res.headers["Content-Type"] = "text/html";
-		res.render!("tableview.dt", req, res, dataProvider)();
+		res.render!("tableview.dt", req, res, table)();
 		//res.renderCompat!("tableview.dt",
 		//	HTTPServerRequest, "req",
 		//	HTTPServerResponse, "res",
@@ -123,8 +124,9 @@ class App {
 
 	void getTable(HTTPServerRequest req, HTTPServerResponse res, DataProvider.Fields field, string value)
 	{
+		auto table = m_provider.users.filter!((a) => value.length==0 || a[field]==value)().array();
 		res.headers["Content-Type"] = "text/html";
-		res.render!("tableview.dt", req, res, dataProvider, field, value)();
+		res.render!("tableview.dt", req, res, table, field, value)();
 		//res.renderCompat!("tableview.dt",
 		//	HTTPServerRequest, "req",
 		//	HTTPServerResponse, "res",

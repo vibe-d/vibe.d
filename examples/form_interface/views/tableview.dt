@@ -6,10 +6,7 @@ block content
 	h1 Welcome!
 	.datatable#datatable
 		h2 Users
-		- static if(__traits(compiles, value)) 
-			- dataProvider.getData(req, res, field, value); 
-		- else
-			- dataProvider.getData(req, res); 
+		include createTable
 	.filterbycontainer
 		h2 Filter users by field value
 		form(onsubmit="return getTable(this.field.value, this.value.value)", action='/getTable', method='GET')
