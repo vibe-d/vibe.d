@@ -124,6 +124,7 @@ import std.typecons;
 	---
 
 */
+deprecated("Please use vibe.web.web.registerWebInterface instead (slightly changed semantics).")
 void registerFormInterface(I)(URLRouter router, I instance, string url_prefix,
 		MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict)
 {
@@ -172,6 +173,7 @@ unittest {
 		method = The name of the method to register. It might be
 		overloaded, one overload has to match any given form data, otherwise an error is triggered.
 */
+deprecated
 void registerFormMethod(string method, I)(URLRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
 {
 	string url(string name) {
