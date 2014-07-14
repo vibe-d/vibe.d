@@ -57,7 +57,7 @@ block content
 					td
 					td
 						input(type='submit', value="Add")
-	script
+	script.
 		function getTable(field, value) {
 			var req = new XMLHttpRequest(); 
 			req.open('GET', '/dataProvider/getData?field='+field+'&value='+value, false);
