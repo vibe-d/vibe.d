@@ -1191,7 +1191,8 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	// If this is a HTTPS server, initiate SSL
 	if (listen_info.sslContext) {
 		logTrace("accept ssl");
-		ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting);
+		// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
+		ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting, null, connection.remoteAddress);
 		http_stream = ssl_stream;
 	}
 
