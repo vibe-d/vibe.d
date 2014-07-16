@@ -53,21 +53,30 @@ import std.datetime;
 	of the function it is recommended to put a $(D scope(exit)) right after the call in which
 	HTTPClientResponse.dropBody is called to avoid this.
 */
-HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null)
+HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null, HTTPClientSettings settings = defaultSettings)
 {
-	return requestHTTP(URL.parse(url), requester);
+	return requestHTTP(URL.parse(url), requester, settings);
 }
 /// ditto
-HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null)
+HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null, HTTPClientSettings settings = defaultSettings)
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
+	bool ssl;
 
-	bool ssl = url.schema == "https";
-	auto cli = connectHTTP(url.host, url.port, ssl);
+	if (settings.proxyURL.schema !is null)
+		ssl = settings.proxyURL.schema == "https";
+	else
+		ssl = url.schema == "https";
+
+	auto cli = connectHTTP(url.host, url.port, ssl, settings);
 	auto res = cli.request((req){
 			if (url.localURI.length)
 				req.requestURL = url.localURI;
+			if (settings.proxyURL.schema !is null)
+			{
+				req.requestURL = url.toString(); // proxy exception to the URL representation
+			}
 			req.headers["Host"] = url.host;
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
@@ -85,21 +94,30 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 	return res;
 }
 /// ditto
-void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
+void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, HTTPClientSettings settings = defaultSettings)
 {
-	requestHTTP(URL(url), requester, responder);
+	requestHTTP(URL(url), requester, responder, settings);
 }
 /// ditto
-void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder)
+void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, HTTPClientSettings settings = defaultSettings)
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-
-	bool ssl = url.schema == "https";
-	auto cli = connectHTTP(url.host, url.port, ssl);
+	bool ssl;
+	
+	if (settings.proxyURL.schema !is null)
+		ssl = settings.proxyURL.schema == "https";
+	else
+		ssl = url.schema == "https";
+	
+	auto cli = connectHTTP(url.host, url.port, ssl, settings);
 	cli.request((scope req){
-			if (url.localURI.length)
-				req.requestURL = url.localURI;
+		if (url.localURI.length)
+			req.requestURL = url.localURI;
+			if (settings.proxyURL.schema !is null)
+			{
+				req.requestURL = url.toString(); // proxy exception to the URL representation
+			}
 			req.headers["Host"] = url.host;
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
@@ -135,6 +153,18 @@ unittest {
 	}
 }
 
+/**
+	Contains all settings for configuring a more specialized HTTP Client Request.
+
+	usage: 
+		HTTPClientSettings settings = new HTTPClientSettings;
+		settings.proxyURL = URL.parse("http://user:pass@192.168.2.50:3128");
+		requestHTTP(..., settings);
+*/
+class HTTPClientSettings {
+	URL proxyURL;
+	int keepAliveTimeout = 60;
+}
 
 /**
 	Returns a HTTPClient proxy object that is connected to the specified host.
@@ -143,23 +173,23 @@ unittest {
 	usually requestHTTP should be used for making requests instead of manually using a
 	HTTPClient to do so.
 */
-auto connectHTTP(string host, ushort port = 0, bool ssl = false)
+auto connectHTTP(string host, ushort port = 0, bool ssl = false, HTTPClientSettings settings = defaultSettings)
 {
-	static struct ConnInfo { string host; ushort port; bool ssl; }
+	static struct ConnInfo { string host; ushort port; bool ssl; string proxyIP; ushort proxyPort; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 	if( port == 0 ) port = ssl ? 443 : 80;
-	auto ckey = ConnInfo(host, port, ssl);
+	auto ckey = ConnInfo(host, port, ssl, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].ssl == ssl)
+		if (c[0].host == host && c[0].port == port && c[0].ssl == ssl && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
 			pool = c[1];
 	
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s", host, port, ssl);
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, ssl, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
-				ret.connect(host, port, ssl);
+				ret.connect(host, port, ssl, settings);
 				return ret;
 			});
 		if (s_connections.full) s_connections.popFront();
@@ -185,6 +215,7 @@ final class HTTPClient {
 	enum maxHeaderLineLength = 4096;
 
 	private {
+		HTTPClientSettings m_settings;
 		string m_server;
 		ushort m_port;
 		TCPConnection m_conn;
@@ -195,6 +226,11 @@ final class HTTPClient {
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit; 
 		int m_timeout;
+	}
+
+	/** Get the current settings for the HTTP client. **/
+	@property const(HTTPClientSettings) settings() const {
+		return m_settings;
 	}
 
 	/**
@@ -209,18 +245,20 @@ final class HTTPClient {
 		of the SSL context.
 	*/
 	static void setSSLSetupCallback(void function(SSLContext) func) { ms_sslSetup = func; }
-	
+
 	/**
 		Connects to a specific server.
 
 		This method may only be called if any previous connection has been closed.
 	*/
-	void connect(string server, ushort port = 80, bool ssl = false)
+	void connect(string server, ushort port = 80, bool ssl = false, HTTPClientSettings settings = defaultSettings)
 	{
 		assert(m_conn is null);
 		assert(port != 0);
 		disconnect();
 		m_conn = null;
+		m_settings = settings;
+		m_timeout = settings.keepAliveTimeout;
 		m_server = server;
 		m_port = port;
 		if (ssl) {
@@ -279,6 +317,49 @@ final class HTTPClient {
 		bool has_body = doRequest(requester, &close_conn);
 		m_responding = true;
 		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator);
+
+
+		if (res.headers.get("Proxy-Authenticate", null) !is null) {
+			res.dropBody();
+			scope(failure) 
+				res.disconnect(); 
+			import std.conv : to;
+			if (res.statusCode != 407){
+				throw new HTTPStatusException(HTTPStatus.internalServerError, "Proxy returned Proxy-Authenticate without a 407 status code.");
+			}
+
+			// send the request again with the proxy authentication information if available
+			if (m_settings.proxyURL.username is null)
+			{
+				throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required.");
+			}
+			m_responding = false;
+			close_conn = false;
+			bool found_proxy_auth;
+
+			foreach (string proxyAuth; res.headers.getAll("Proxy-Authenticate"))
+			{
+				if (proxyAuth.length >= "Basic".length && proxyAuth[0.."Basic".length] == "Basic")
+				{
+					found_proxy_auth = true;
+					break;
+				}
+			}
+
+			if (!found_proxy_auth)
+			{
+				throw new HTTPStatusException(HTTPStatus.notAcceptable, "The Proxy Server didn't allow Basic Authentication");
+			}
+
+			has_body = doRequest(requester, &close_conn, true);
+			m_responding = true;
+			res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator);
+			if (res.headers.get("Proxy-Authenticate", null) !is null){
+				res.dropBody();
+				throw new HTTPStatusException(HTTPStatus.ProxyAuthenticationRequired, "Proxy Authentication Failed.");
+			}
+		}
+
 		Exception user_exception;
 		{
 			scope (failure) {
@@ -310,7 +391,9 @@ final class HTTPClient {
 		return new HTTPClientResponse(this, has_body, close_conn);
 	}
 
-	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn)
+
+
+	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn, bool confirmed_proxy_auth = false /* basic only */)
 	{
 		assert(!m_requesting, "Interleaved HTTP client requests detected!");
 		assert(!m_responding, "Interleaved HTTP client request/response detected!");
@@ -327,22 +410,78 @@ final class HTTPClient {
 
 		if (!m_conn || !m_conn.connected) {
 			if (m_conn) m_conn.close(); // make sure all resources are freed
-			m_conn = connectTCP(m_server, m_port);
+			if (m_settings.proxyURL.host !is null){
+
+				enum AddressType {
+					IPv4,
+					IPv6,
+					Host
+				}
+
+				static AddressType getAddressType(string host){
+					import std.regex : regex, Captures, Regex, matchFirst;
+				
+					__gshared auto IPv4Regex = regex(`^\s*((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\s*$`, ``);
+					__gshared auto IPv6Regex = regex(`^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$`, ``);
+
+					if (!matchFirst(host, IPv4Regex).empty)
+					{
+						return AddressType.IPv4;
+					}
+					else if (!matchFirst(host, IPv6Regex).empty)
+					{
+						return AddressType.IPv6;
+					}
+					else
+					{
+						return AddressType.Host;
+					}
+				}
+
+				import std.functional : memoize;
+				alias memoize!getAddressType findAddressType;
+
+				bool use_dns;
+				if (findAddressType(m_settings.proxyURL.host) == AddressType.Host)
+				{
+					use_dns = true;
+				}
+
+				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
+				proxyAddr.port = m_settings.proxyURL.port;
+				m_conn = connectTCP(proxyAddr);
+			}
+			else
+				m_conn = connectTCP(m_server, m_port);
+
 			m_stream = m_conn;
 			if (m_ssl) m_stream = createSSLStream(m_conn, m_ssl, SSLStreamState.connecting, m_server, m_conn.remoteAddress);
 
 			now = Clock.currTime(UTC());
 		}
 
-		m_keepAliveLimit = now;
+		m_keepAliveLimit = now + m_timeout.dur!"seconds";
 
 		auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
 		req.headers["User-Agent"] = m_userAgent;
-		req.headers["Connection"] = "keep-alive";
+		if (m_settings.proxyURL.host !is null){
+			req.headers["Proxy-Connection"] = "keep-alive";
+			*close_conn = false; // req.headers.get("Proxy-Connection", "keep-alive") != "keep-alive";
+			if (confirmed_proxy_auth)
+			{
+				import std.base64;
+				ubyte[] user_pass = cast(ubyte[])(m_settings.proxyURL.username ~ ":" ~ m_settings.proxyURL.password);
+
+				req.headers["Proxy-Authorization"] = "Basic " ~ cast(string) Base64.encode(user_pass);
+			}
+		}
+		else {
+			req.headers["Connection"] = "keep-alive";
+			*close_conn = false; // req.headers.get("Connection", "keep-alive") != "keep-alive";
+		}
 		req.headers["Accept-Encoding"] = "gzip, deflate";
 		req.headers["Host"] = m_server;
 		requester(req);
-		*close_conn = req.headers.get("Connection", "keep-alive") != "keep-alive";
 		req.finalize();
 
 		return req.method != HTTPMethod.HEAD;
@@ -528,6 +667,7 @@ final class HTTPClientResponse : HTTPResponse {
 		string stln = cast(string)client.m_stream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", alloc);
 		logTrace("stln: %s", stln);
 		this.httpVersion = parseHTTPVersion(stln);
+
 		enforce(stln.startsWith(" "));
 		stln = stln[1 .. $];
 		this.statusCode = parse!int(stln);
@@ -697,6 +837,9 @@ final class HTTPClientResponse : HTTPResponse {
 
 
 private __gshared NullOutputStream s_sink;
+
+// This object is a placeholder and should to never be modified.
+private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
 
 shared static this()
 {
