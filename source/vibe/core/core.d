@@ -84,10 +84,11 @@ int runEventLoop()
 	assert(!s_exitEventLoop);
 	s_exitEventLoop = false;
 	s_core.notifyIdle();
-	if (s_exitEventLoop) return 0;
+	if (getExitFlag()) return 0;
 
 	// handle worker tasks and st_term
 	runTask(toDelegate(&handleWorkerTasks));
+	if (getExitFlag()) return 0;
 
 	if (auto err = getEventDriver().runEventLoop() != 0) {
 		if (err == 1) {
@@ -986,7 +987,7 @@ private class VibeDriverCore : DriverCore {
 
 	void notifyIdle()
 	{
-		bool again = true;
+		bool again = !getExitFlag();
 		while (again) {
 			if (s_idleHandler)
 				again = s_idleHandler();
@@ -998,7 +999,7 @@ private class VibeDriverCore : DriverCore {
 				resumeCoreTask(tf);
 			}
 
-			if (!s_yieldedTasks.empty) again = true;
+			again = (again || !s_yieldedTasks.empty) && !getExitFlag();
 
 			if (again && !getEventDriver().processEvents()) {
 				s_exitEventLoop = true;
