@@ -111,7 +111,7 @@ final class MongoConnection {
 		int m_msgid = 1;
 	}
 
-	enum defaultPort = 27017;
+	enum ushort defaultPort = 27017;
 
 	/// Simplified constructor overload, with no m_settings
 	this(string server, ushort port = defaultPort)
@@ -143,7 +143,7 @@ final class MongoConnection {
 				if (!m_settings.sslverifycertificate) {
 					ctx.peerValidationMode = SSLPeerValidationMode.none;
 				}
-				
+
 				m_stream = createSSLStream(m_conn, ctx);
 			}
 			else {
