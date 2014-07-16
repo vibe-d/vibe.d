@@ -217,34 +217,57 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 	Only function pointers with weakly isolated arguments are allowed to be
 	able to guarantee thread-safety.
 */
-void runWorkerTask(R, ARGS...)(R function(ARGS) func, ARGS args)
+void runWorkerTask(FT, ARGS...)(FT func, auto ref ARGS args)
+	if (is(typeof(*func) == function))
 {
-	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTask_unsafe(func, args);
+	import std.traits : ParameterTypeTuple;
+
+	alias FARGS = ParameterTypeTuple!FT;
+	static assert(__traits(compiles, {FARGS fargs = args;}),
+				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+
+	runWorkerTask_unsafe!(FT, FARGS)(func, args);
 }
+
 /// ditto
-void runWorkerTask(alias method, T, ARGS...)(shared(T) object, ARGS args)
+void runWorkerTask(alias method, T, ARGS...)(shared(T) object, auto ref ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
-	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTask_unsafe(&__traits(getMember, object, __traits(identifier, method)), args);
+	import std.traits : ParameterTypeTuple;
+
+	auto func = &__traits(getMember, object, __traits(identifier, method));
+	alias FT = typeof(func);
+	alias FARGS = ParameterTypeTuple!FT;
+	static assert(__traits(compiles, {FARGS fargs = args;}),
+				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+
+	runWorkerTask_unsafe!(FT, FARGS)(func, args);
 }
 
 /**
 	Runs a new asynchronous task in a worker thread, returning the task handle.
 
-	This function will yield and wait for the new task to be created and started 
+	This function will yield and wait for the new task to be created and started
 	in the worker thread, then resume and return it.
 
 	Only function pointers with weakly isolated arguments are allowed to be
 	able to guarantee thread-safety.
 */
-Task runWorkerTaskH(R, ARGS...)(R function(ARGS) func, ARGS args)
+Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
+	if (is(typeof(*func) == function))
 {
+	import std.traits : ParameterTypeTuple;
+
+	alias FARGS = ParameterTypeTuple!FT;
+	static assert(__traits(compiles, {FARGS fargs = args;}),
+				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
-	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 	Task caller = Task.getThis();
-	static void taskFun(Task caller, R function(ARGS) func, ARGS args) {
+	static void taskFun(Task caller, FT func, ref ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
 		func(args);
@@ -253,19 +276,26 @@ Task runWorkerTaskH(R, ARGS...)(R function(ARGS) func, ARGS args)
 	return cast(Task)receiveOnly!PrivateTask();
 }
 /// ditto
-Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, ARGS args)
+Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
+	import std.traits : ParameterTypeTuple;
+
+	auto func = &__traits(getMember, object, __traits(identifier, method));
+	alias FT = typeof(func);
+	alias FARGS = ParameterTypeTuple!FT;
+	static assert(__traits(compiles, {FARGS fargs = args;}),
+				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
-	alias FT = typeof(&__traits(getMember, object, __traits(identifier, method)));
-	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 	Task caller = Task.getThis();
-	static void taskFun(Task caller, FT func, ARGS args) {
+	static void taskFun(Task caller, FT func, ref ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
 		func(args);
 	}
-	runWorkerTask_unsafe(&taskFun, caller, &__traits(getMember, object, __traits(identifier, method)), args);
+	runWorkerTask_unsafe(&taskFun, caller, func, args);
 	return cast(Task)receiveOnly!PrivateTask();
 }
 
@@ -279,6 +309,9 @@ unittest {
 	static void test()
 	{
 		runWorkerTask(&workerFunc, 42);
+		runWorkerTask(&workerFunc, cast(ubyte)42); // implicit conversion #719
+		runWorkerTaskDist(&workerFunc, 42);
+		runWorkerTaskDist(&workerFunc, cast(ubyte)42); // implicit conversion #719
 	}
 }
 
@@ -295,6 +328,9 @@ unittest {
 	{
 		auto cls = new shared Test;
 		runWorkerTask!(Test.workerMethod)(cls, 42);
+		runWorkerTask!(Test.workerMethod)(cls, cast(ubyte)42); // #719
+		runWorkerTaskDist!(Test.workerMethod)(cls, 42);
+		runWorkerTaskDist!(Test.workerMethod)(cls, cast(ubyte)42); // #719
 	}
 }
 
@@ -310,7 +346,7 @@ unittest {
 		caller.send("goodbye");
 
 	}
-	
+
 	static void test()
 	{
 		Task callee = runWorkerTaskH(&workerFunc, Task.getThis);
@@ -319,6 +355,9 @@ unittest {
 			callee.send("ping");
 		} while (receiveOnly!string() == "pong");
 	}
+
+	static void work719(int) {}
+	static void test719() { runWorkerTaskH(&work719, cast(ubyte)42); }
 }
 
 /// Running a worker task using a class method and communicating with it
@@ -333,7 +372,7 @@ unittest {
 			caller.send("goodbye");
 		}
 	}
-	
+
 	static void test()
 	{
 		auto cls = new shared Test;
@@ -343,9 +382,18 @@ unittest {
 			callee.send("ping");
 		} while (receiveOnly!string() == "pong");
 	}
+
+	static class Class719 {
+		void work(int) shared {}
+	}
+	static void test719() {
+		auto cls = new shared Class719;
+		runWorkerTaskH!(Class719.work)(cls, cast(ubyte)42);
+	}
 }
 
-private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+// no auto ref because of Bugzilla 13140
+private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*auto ref*/ ARGS args)
 {
 	setupWorkerThreads();
 
@@ -362,19 +410,35 @@ private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS arg
 	work across all CPU cores. Only function pointers with weakly isolated
 	arguments are allowed to be able to guarantee thread-safety.
 */
-void runWorkerTaskDist(R, ARGS...)(R function(ARGS) func, ARGS args)
+void runWorkerTaskDist(FT, ARGS...)(FT func, auto ref ARGS args)
+	if (is(typeof(*func) == function))
 {
-	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTaskDist_unsafe(func, args);
+	import std.traits : ParameterTypeTuple;
+
+	alias FARGS = ParameterTypeTuple!FT;
+	static assert(__traits(compiles, {FARGS fargs = args;}),
+				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+
+	runWorkerTaskDist_unsafe!(FT, FARGS)(func, args);
 }
 /// ditto
 void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
 {
-	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-	runWorkerTaskDist_unsafe(&__traits(getMember, object, __traits(identifier, method)), args);
+	import std.traits : ParameterTypeTuple;
+
+	auto func = &__traits(getMember, object, __traits(identifier, method));
+	alias FT = typeof(func);
+	alias FARGS = ParameterTypeTuple!FT;
+	static assert(__traits(compiles, {FARGS fargs = args;}),
+				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+
+	runWorkerTaskDist_unsafe!(FT, FARGS)(func, args);
 }
 
-private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+// no auto ref because of Bugzilla 13140
+private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*auto ref*/ ARGS args)
 {
 	setupWorkerThreads();
 
@@ -388,7 +452,7 @@ private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ARGS
 	st_threadsSignal.emit();
 }
 
-private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, auto ref ARGS args)
 {
 	alias TARGS = Tuple!ARGS;
 
@@ -403,7 +467,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ARGS
 		// copy original call data
 		auto c = tfi.callable.reinterpretAs!CALLABLE();
 		auto args = tfi.args.reinterpretAs!TARGS;
-		
+
 		// reset the info and destroy the original data
 		tfi.func = null;
 		destroy(tfi.callable.reinterpretAs!CALLABLE);
@@ -423,7 +487,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ARGS
 /**
 	Suspends the execution of the calling task to let other tasks and events be
 	handled.
-	
+
 	Calling this function in short intervals is recommended if long CPU
 	computations are carried out by a task. It can also be used in conjunction
 	with Signals to implement cross-fiber events with no polling.
@@ -757,7 +821,7 @@ struct TaskLocal(T)
 			fiber.m_fls.length = CoreTask.ms_flsFill + 128;
 			fiber.m_flsInit.length = CoreTask.ms_flsCounter + 64;
 		}
-		
+
 		// return (possibly default initialized) value
 		auto data = fiber.m_fls.ptr[m_offset .. m_offset+T.sizeof];
 		if (!fiber.m_flsInit[m_id]) {
@@ -860,7 +924,7 @@ private class CoreTask : TaskFiber {
 
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
-				
+
 				// make the fiber available for the next task
 				if (s_availableFibers.full)
 					s_availableFibers.capacity = 2 * s_availableFibers.capacity;
@@ -972,14 +1036,14 @@ private class VibeDriverCore : DriverCore {
 			extrap();
 			ctask.m_exception = event_exception;
 		}
-		
+
 		auto uncaught_exception = ctask.call(false);
 		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
 			assert(ctask.state == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", th.msg);
 			logDebug("Full error: %s", th.toString().sanitize);
-			
+
 			// always pass Errors on
 			if (auto err = cast(Error)th) throw err;
 		}
@@ -1094,9 +1158,9 @@ shared static this()
 	import std.stdio; write("");
 
 	initializeLogModule();
-	
+
 	logTrace("create driver core");
-	
+
 	s_core = new VibeDriverCore;
 	st_threadsMutex = new Mutex;
 	st_threadShutdownCondition = new Condition(st_threadsMutex);
@@ -1155,8 +1219,8 @@ shared static ~this()
 
 	synchronized (st_threadsMutex) {
 		if( !st_workerTasks.empty ) tasks_left = true;
-	}	
-	
+	}
+
 	if (!s_yieldedTasks.empty) tasks_left = true;
 	if (tasks_left) logWarn("There are still tasks running at exit.");
 
