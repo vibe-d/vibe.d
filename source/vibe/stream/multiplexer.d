@@ -19,7 +19,7 @@ class MultiplexerStream : OutputStream {
 	}
 
 	this(OutputStream[] outputs ...) { 
-		m_outputs = outputs;
+		m_outputs = outputs.dup;
 	}
 
 	void finalize() {
