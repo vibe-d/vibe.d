@@ -429,6 +429,8 @@ final class Libevent2Driver : EventDriver {
 
 	private void processTimers()
 	{
+		if (!m_timers.anyPending) return;
+
 		logTrace("Processing due timers");
 		// process all timers that have expired up to now
 		auto now = Clock.currTime(UTC());

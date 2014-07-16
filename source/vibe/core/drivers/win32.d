@@ -161,6 +161,8 @@ final class Win32EventDriver : EventDriver {
 
 	private void processTimers()
 	{
+		if (!m_timers.anyPending) return;
+
 		// process all timers that have expired up to now
 		auto now = Clock.currTime(UTC());
 		m_timers.consumeTimeouts(now, (timer, periodic, ref data) {

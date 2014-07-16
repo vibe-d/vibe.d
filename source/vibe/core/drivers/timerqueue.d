@@ -34,6 +34,8 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 		}
 	}
 
+	@property bool anyPending() { return !m_timeoutHeap.empty; }
+
 	size_t create(DATA data)
 	{
 		while (!m_timerIDCounter || m_timerIDCounter in m_timers) m_timerIDCounter++;
