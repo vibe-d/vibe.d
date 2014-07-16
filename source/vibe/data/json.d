@@ -1703,7 +1703,16 @@ private string jsonUnescape(R)(ref R range)
 							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
 							else enforceJson(false, "Unicode sequence must be '\\uXXXX'.");
 						}
-						ret.put(uch);
+						import std.utf;
+						try
+						{
+							ret.put(uch);
+						}
+						catch(UTFException e)
+						{	// Avoiding a server 500 error with e.msg = "Invalid UTF sequence: d83c - Encoding a surrogate code point in UTF-8"
+							ret.put("0");
+						}
+
 						break;
 				}
 				break;
