@@ -1703,7 +1703,14 @@ private string jsonUnescape(R)(ref R range)
 							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
 							else enforceJson(false, "Unicode sequence must be '\\uXXXX'.");
 						}
-						ret.put(uch);
+						try
+						{
+							ret.put(uch);
+						}
+						catch(Throwable e)
+						{
+							ret.put("");
+						}
 						break;
 				}
 				break;
