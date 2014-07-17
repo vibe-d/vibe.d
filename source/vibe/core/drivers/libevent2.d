@@ -624,7 +624,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		acquire();
 		scope(exit) release();
 		auto ec = this.emitCount;
-		while( ec == reference_emit_count ){
+		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
 		}
@@ -642,7 +642,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		m_driver.rearmTimer(tm, timeout, false);
 
 		auto ec = this.emitCount;
-		while( ec == reference_emit_count ){
+		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
 			if (!m_driver.isTimerPending(tm)) break;
@@ -653,8 +653,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	void acquire()
 	{
 		auto task = Task.getThis();
-		assert(task != Task(), "ManualEvent.wait works only when called from a task.");
-		auto thread = task.thread;
+		auto thread = task == Task() ? Thread.getThis() : task.thread;
+
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
 				ThreadSlot slot;
@@ -663,14 +663,19 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 				event_add(slot.event, null);
 				m_waiters[thread] = slot;
 			}
-			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
-			m_waiters[thread].tasks.insert(task);
+
+			if (task != Task()) {
+				assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
+				m_waiters[thread].tasks.insert(task);
+			}
 		}
 	}
 
 	void release()
 	{
 		auto self = Task.getThis();
+		if (self == Task()) return;
+
 		synchronized (m_mutex) {
 			assert(self.thread in m_waiters && self in m_waiters[self.thread].tasks,
 				"Releasing non-acquired signal.");
@@ -681,6 +686,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	bool amOwner()
 	{
 		auto self = Task.getThis();
+		if (self == Task()) return false;
 		synchronized (m_mutex) {
 			if (self.thread !in m_waiters) return false;
 			return self in m_waiters[self.thread].tasks;
