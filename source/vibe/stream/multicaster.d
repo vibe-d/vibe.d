@@ -1,11 +1,11 @@
 /**
-	Broadcaster Stream - broadcasts an input stream to multiple output streams
+	Multicaster Stream - multicasts an input stream to multiple output streams
 
 	Copyright: © 2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Eric Cornelius
 */
-module vibe.stream.broadcaster;
+module vibe.stream.multicaster;
 
 import vibe.core.core;
 import vibe.core.stream;
@@ -13,12 +13,13 @@ import vibe.utils.memory;
 
 import std.exception;
 
-class BroadcasterStream : OutputStream {
+class MulticasterStream : OutputStream {
 	private {
 		OutputStream[] m_outputs;
 	}
 
 	this(OutputStream[] outputs ...) { 
+		// NOTE: investigate .dup dmd workaround
 		m_outputs = outputs.dup;
 	}
 
