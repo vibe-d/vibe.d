@@ -1,11 +1,11 @@
 /**
-	Multiplexer Stream
+	Broadcaster Stream - broadcasts an input stream to multiple output streams
 
 	Copyright: © 2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Eric Cornelius
 */
-module vibe.stream.multiplexer;
+module vibe.stream.broadcaster;
 
 import vibe.core.core;
 import vibe.core.stream;
@@ -13,7 +13,7 @@ import vibe.utils.memory;
 
 import std.exception;
 
-class MultiplexerStream : OutputStream {
+class BroadcasterStream : OutputStream {
 	private {
 		OutputStream[] m_outputs;
 	}
