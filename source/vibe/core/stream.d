@@ -110,9 +110,17 @@ interface OutputStream {
 	/// ditto
 	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(in char[] elems) { write(elems); }
+
 	/// ditto
 	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
-	final void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
+	final void put(dchar elem)
+	{
+		import std.utf;
+		char[4] chars;
+		auto len = encode(chars, elem);
+		put(chars[0 .. len]);
+	}
+
 	/// ditto
 	deprecated("Please use vibe.stream.wrapper.StreamOutputRange instead.")
 	final void put(in dchar[] elems) { foreach( ch; elems ) put(ch); }
