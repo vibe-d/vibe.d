@@ -206,6 +206,13 @@ struct StreamOutputRange {
 	void put(char elem) { put(cast(ubyte)elem); }
 	void put(const(char)[] elems) { put(cast(const(ubyte)[])elems); }
 
-	void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
+	void put(dchar elem)
+	{
+		import std.utf;
+		char[4] chars;
+		auto len = encode(chars, elem);
+		put(chars[0 .. len]);
+	}
+
 	void put(const(dchar)[] elems) { foreach( ch; elems ) put(ch); }
 }
