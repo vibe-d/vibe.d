@@ -1552,14 +1552,14 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 			dst.put('[');
 			bool first = true;
 			foreach (ref const Json e; json) {
-				if( e.type == Json.Type.undefined ) continue;
 				if( !first ) dst.put(",");
 				first = false;
 				static if (pretty) {
 					dst.put('\n');
 					foreach (tab; 0 .. level+1) dst.put('\t');
 				}
-				writeJsonString!(R, pretty)(dst, e, level+1);
+				if (e.type == Json.Type.undefined) dst.put("null");
+				else writeJsonString!(R, pretty)(dst, e, level+1);
 			}
 			static if (pretty) {
 				if (json.length > 0) {
@@ -1612,6 +1612,16 @@ unittest {
 		{}
 	]
 }`);
+}
+
+unittest { // #735
+	auto a = Json.emptyArray;
+	a ~= "a";
+	a ~= Json();
+	a ~= "b";
+	a ~= null;
+	a ~= "c";
+	assert(a.toString() == `["a",null,"b",null,"c"]`);
 }
 
 unittest {
