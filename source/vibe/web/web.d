@@ -498,6 +498,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				if (res.headerWritten) return;
 			}
 			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i].setVoid(error[0]);
+			else static if (is(PT == Json)) params[i] = req.json;
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
