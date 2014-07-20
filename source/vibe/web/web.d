@@ -64,6 +64,8 @@ import vibe.http.server;
 				missing in the set of form fields. All other parameter types
 				require the corresponding field to be present and will result
 				in a runtime error otherwise.)
+			$(LI $(D Json) type parameters will take any parsed JSON content from the
+				request body and refer to the instance.
 			$(LI $(D struct) type parameters that don't define a $(D fromString)
 				or a $(D fromStringValidate) method will be mapped to one
 				form field per struct member with a scheme similar to how
