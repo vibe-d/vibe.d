@@ -69,6 +69,8 @@ struct Path {
 					break;
 			}
 		}
+		
+		m_endsWithSlash = false;
 		m_nodes = newnodes;
 	}
 	
@@ -321,6 +323,14 @@ unittest
 		assert(dotpathp.toString() == "/test/..////test2//./x/y");
 		dotpathp.normalize();
 		assert(dotpathp.toString() == "/test2/x/y");
+	}
+	
+	{
+		auto slashpath = "/test/";
+		auto slashpathp = Path(slashpath);
+		assert(slashpathp.toString() == "/test/");
+		slashpathp.normalize();
+		assert(slashpathp.toString() == "/test");
 	}
 	
 	{
