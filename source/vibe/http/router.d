@@ -200,6 +200,56 @@ final class URLRouter : HTTPRouter {
 	}
 }
 
+/**
+	Does everything a URLRouter does, but also normalizes URLs before matching them against routes.
+*/
+final class NormalizedURLRouter : HTTPRouter {
+	private URLRouter m_router;
+	
+	this(string prefix = null)
+	{
+		m_router = new URLRouter(prefix);
+	}
+	
+	@property string prefix() const { return m_router.prefix; }
+
+	/// Adds a new route for requests matching the specified HTTP method and pattern.
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
+	{
+		return m_router.match(method, path, cb);
+	}
+	
+	alias match = m_router.match;
+	
+	/// Handles an HTTP request by normalizing the path and dispatching the request to URLRouter
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		req.path = normalize(req.path);
+		m_router.handleRequest(req, res);
+	}
+	
+	/**
+		Normalizes path strings, using only transformations which usually preserve semantics.
+		
+		Currently, paths have all '..' and '.' segments removed. Also, empty paths are converted to
+		'/' and trailing slashes are otherwise removed.
+	*/
+	string normalize(string path)
+	{
+		import vibe.inet.path;
+		
+		auto pathp = Path(path);
+		pathp.normalize();
+		
+		if (pathp.empty) {
+			return "/";
+		} else {
+			assert(pathp.absolute);
+			return pathp.toString;
+		}
+	}
+}
+
 ///
 unittest {
 	import vibe.http.fileserver; 
@@ -352,6 +402,30 @@ unittest {
 	assert(result == "A");
 	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test/y")), res);
 	assert(result == "AB");
+}
+
+unittest {
+	import vibe.inet.url;
+	import std.stdio;
+	
+	string result;
+	void testHandle(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		result ~= "A";
+	}
+
+	auto router = new NormalizedURLRouter;
+	router.get("/", &testHandle);
+	
+	auto res = createTestHTTPServerResponse();
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost")), res);
+	assert(result == "A");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/")), res);	
+	assert(result == "AA");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost//")), res);
+	assert(result == "AAA");
+	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test/..")), res);
+	assert(result == "AAAA");
 }
 
 private enum maxRouteParameters = 64;
