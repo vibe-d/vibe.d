@@ -719,6 +719,7 @@ private struct MatchGraphBuilder {
 
 	string[] insert(string pattern, size_t terminal)
 	{
+		auto full_pattern = pattern;
 		string[] vars;
 		if (!m_nodes.length) addNode();
 
@@ -740,7 +741,7 @@ private struct MatchGraphBuilder {
 				pattern = pattern[1 .. $];
 				auto name = skipPathNode(pattern);
 				assert(name.length > 0, "Missing placeholder name.");
-				assert(!vars.canFind(name), "Duplicate placeholder name: ':"~name~"'");
+				assert(!vars.canFind(name), "Duplicate placeholder name ':"~name~"': '"~full_pattern~"'");
 				vars ~= name;
 				assert(!pattern.length || (pattern[0] != '*' && pattern[0] != ':'),
 					"Cannot have two placeholders directly follow each other.");

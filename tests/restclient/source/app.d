@@ -11,6 +11,10 @@ interface ITestAPI
 	string customParameters(string _param, string _param2);
 	@path("getCheck2/:param/:param2") @method(HTTPMethod.GET)
 	int customParameters2(int _param, bool _param2);
+	@path(":id/idtest1")
+	int testID1(int _id);
+	@path("idtest2")
+	int testID2(int id); // the special "id" parameter
 }
 
 class TestAPI : ITestAPI
@@ -19,6 +23,8 @@ class TestAPI : ITestAPI
 	string info() { return "description2"; }
 	string customParameters(string _param, string _param2) { return _param ~ _param2; }
 	int customParameters2(int _param, bool _param2) { return _param2 ? _param : -_param; }
+	int testID1(int _id) { return _id; }
+	int testID2(int id) { return id; }
 }
 
 void runTest()
@@ -37,6 +43,8 @@ void runTest()
 	assert(api.customParameters("one", "two") == "onetwo");
 	assert(api.customParameters2(10, false) == -10);
 	assert(api.customParameters2(10, true) == 10);
+	assert(api.testID1(2) == 2);
+	assert(api.testID2(3) == 3);
 	exitEventLoop(true);
 }
 

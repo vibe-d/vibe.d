@@ -429,6 +429,7 @@ unittest
 		api.addNewUser("Peter");
 		api.addNewUser("Igor");
 		logInfo("Users: %s", api.users);
+		logInfo("First user name: %s", api.getName(0));
 	}
 }
 
@@ -804,7 +805,7 @@ private string generateRestInterfaceMethods(I)()
 					);
 				} else {
 					auto parts = meta.url.split("/");
-					request_str ~= `url__ = ""`;
+					request_str ~= `url__ = ` ~ url_prefix;
 					foreach (i, p; parts) {
 						if (i > 0) {
 							request_str ~= `~ "/"`;
