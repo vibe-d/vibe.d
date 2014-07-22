@@ -30,7 +30,6 @@ import vibe.http.server;
 		- conversion errors of path place holder parameters should result in 404
 		- support format patterns for redirect()
 		- add a way to specify response headers without explicit access to "res"
-		- support class/interface getter properties and register their methods as well
 */
 
 
@@ -48,6 +47,11 @@ import vibe.http.server;
 	$(D errorDisplay) annotation, or data injected manually in a HTTP method
 	handler that processed the request prior to passing it to the generated
 	web interface handler routes.
+
+	Methods that return a $(D class) or $(D interface) instance, instead of
+	being mapped to a single HTTP route, will be mapped recursively by
+	iterating the public routes of the returned instance. This way, complex
+	path hierarchies can be mapped to class hierarchies.
 
 	Parameter_conversion_rules:
 		For mapping method parameters without a prefixed underscore to
@@ -102,12 +106,24 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 		}*/
 		static if (!is(typeof(__traits(getMember, Object, M)))) { // exclude Object's default methods and field
 			foreach (overload; MemberFunctionsTuple!(C, M)) {
+				alias RT = ReturnType!overload;
 				enum minfo = extractHTTPMethodAndName!overload();
 				enum url = minfo.hadPathUDA ? minfo.url : adjustMethodStyle(minfo.url, method_style);
 
-				router.match(minfo.method, concatURL(settings.urlPrefix, url), (req, res) {
-					handleRequest!(M, overload)(req, res, instance, settings);
-				});
+				static if (is(RT == class) || is(RT == interface)) {
+					// nested API
+					static assert(
+						ParameterTypeTuple!overload.length == 0,
+						"Instances may only be returned from parameter-less functions ("~M~")!"
+					);
+					auto subsettings = settings.dup;
+					subsettings.urlPrefix = concatURL(settings.urlPrefix, url, true);
+					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
+				} else {
+					router.match(minfo.method, concatURL(settings.urlPrefix, url), (req, res) {
+						handleRequest!(M, overload)(req, res, instance, settings);
+					});
+				}
 			}
 		}
 	}
@@ -364,6 +380,12 @@ unittest {
 */
 class WebInterfaceSettings {
 	string urlPrefix = "/";
+
+	@property WebInterfaceSettings dup() const {
+		auto ret = new WebInterfaceSettings;
+		ret.urlPrefix = this.urlPrefix;
+		return ret;
+	}
 }
 
 
