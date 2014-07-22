@@ -120,9 +120,18 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 					subsettings.urlPrefix = concatURL(settings.urlPrefix, url, true);
 					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
 				} else {
-					router.match(minfo.method, concatURL(settings.urlPrefix, url), (req, res) {
+					auto fullurl = concatURL(settings.urlPrefix, url);
+					router.match(minfo.method, fullurl, (req, res) {
 						handleRequest!(M, overload)(req, res, instance, settings);
 					});
+					if (settings.ignoreTrailingSlash) {
+						import std.array : endsWith;
+						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
+						router.match(minfo.method, m, (req, res) {
+							// TODO: redirect for GET requests instead?
+							handleRequest!(M, overload)(req, res, instance, settings);
+						});
+					}
 				}
 			}
 		}
@@ -380,6 +389,7 @@ unittest {
 */
 class WebInterfaceSettings {
 	string urlPrefix = "/";
+	bool ignoreTrailingSlash = true;
 
 	@property WebInterfaceSettings dup() const {
 		auto ret = new WebInterfaceSettings;
