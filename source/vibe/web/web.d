@@ -127,9 +127,15 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 					if (settings.ignoreTrailingSlash) {
 						import std.array : endsWith;
 						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
+						auto fullpath = Path(fullurl);
 						router.match(minfo.method, m, (req, res) {
-							// TODO: redirect for GET requests instead?
-							handleRequest!(M, overload)(req, res, instance, settings);
+							static if (minfo.method == HTTPMethod.GET) {
+								URL redurl = req.fullURL;
+								redurl.path = fullpath;
+								res.redirect(redurl);
+							} else {
+								handleRequest!(M, overload)(req, res, instance, settings);
+							}
 						});
 					}
 				}
