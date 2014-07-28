@@ -32,8 +32,8 @@ void runTest()
 		db.del("saddTests");
 		db.sadd("saddTests", "item1");
 		db.sadd("saddTests", "item2");
-		
-		
+
+
 		assert(db.get!string("test1") == "test1");
 		db.get!string("test2");
 		db.get!string("test3");
@@ -49,14 +49,14 @@ void runTest()
 		db.get!string("test1");
 		db.get!string("test2");
 		db.incr("test10");
-		
+
 		db.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
-		
+
 		db.srem("test1", "test1append");
 		db.srem("test2", "test2append");
-		
+
 		db.smembers("test1");
-	
+
 		db.smembers("test2");
 	}
 	RedisSubscriber sub = new RedisSubscriber(redis);
@@ -85,10 +85,12 @@ void runTest()
 int main()
 {
 	int ret = 0;
-	setLogLevel(LogLevel.info);
 	runTask({
-		runTest();
-		exitEventLoop(true);
+		try runTest();
+		catch (Throwable th) {
+			logError("Test failed: %s", th.msg);
+			ret = 1;
+		} finally exitEventLoop(true);
 	});
 	runEventLoop();
 	return ret;
