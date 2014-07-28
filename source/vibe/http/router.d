@@ -139,7 +139,7 @@ final class URLRouter : HTTPRouter {
 		version (VibeRouterTreeMatch)
 			m_routes.rebuildGraph();
 	}
-	
+
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -164,7 +164,7 @@ final class URLRouter : HTTPRouter {
 					}
 				});
 				if (done) return;
-				
+
 				if (method == HTTPMethod.HEAD) method = HTTPMethod.GET;
 				else break;
 			}
@@ -202,7 +202,7 @@ final class URLRouter : HTTPRouter {
 
 ///
 unittest {
-	import vibe.http.fileserver; 
+	import vibe.http.fileserver;
 
 	void addGroup(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -360,7 +360,7 @@ private struct Route {
 	HTTPMethod method;
 	string pattern;
 	HTTPServerRequestDelegate cb;
-	
+
 	bool matches(string url, ref string[string] params)
 	const {
 		size_t i, j;
@@ -453,6 +453,8 @@ private struct MatchTree(T) {
 
 	void match(string text, scope void delegate(size_t terminal, scope string[] vars) del)
 	{
+		import std.algorithm : canFind;
+
 		// lazily update the match graph
 		if (!m_upToDate) rebuildGraph();
 
@@ -475,6 +477,7 @@ private struct MatchTree(T) {
 
 	void print()
 	const {
+		import std.algorithm : map;
 		import std.array : join;
 		import std.conv : to;
 		import std.range : iota;
@@ -489,8 +492,8 @@ private struct MatchTree(T) {
 
 			static string mapChar(ubyte ch) {
 				if (ch == TerminalChar) return "$";
-				if (ch >= '0' && ch <= '9') return to!string(cast(dchar)ch); 
-				if (ch >= 'a' && ch <= 'z') return to!string(cast(dchar)ch); 
+				if (ch >= '0' && ch <= '9') return to!string(cast(dchar)ch);
+				if (ch >= 'a' && ch <= 'z') return to!string(cast(dchar)ch);
 				if (ch >= 'A' && ch <= 'Z') return to!string(cast(dchar)ch);
 				if (ch == '/') return "/";
 				if (ch == '^') return "^";
@@ -591,6 +594,8 @@ private struct MatchTree(T) {
 
 		uint process(size_t n)
 		{
+			import std.algorithm : canFind;
+
 			if (nodemap[n] != uint.max) return nodemap[n];
 			auto nmidx = cast(uint)m_nodes.length;
 			nodemap[n] = nmidx;
@@ -646,7 +651,7 @@ unittest {
 	testMatch("ab", [2], []);
 	testMatch("abc", [], []);
 	testMatch("b", [1], []);
-	
+
 	m = MatchTree!int.init;
 	m.addTerminal("ab", 0);
 	m.addTerminal("a*", 0);
@@ -681,7 +686,7 @@ unittest {
 	testMatch("a/bc", [0, 1], ["a", "bc", "bc"]);
 	testMatch("ab/b", [0, 2], ["ab", "b", "ab"]);
 	testMatch("ab/bc", [0], ["ab", "bc"]);
-	
+
 	m = MatchTree!int.init;
 	m.addTerminal(":var1/", 0);
 	m.rebuildGraph();
@@ -719,6 +724,8 @@ private struct MatchGraphBuilder {
 
 	string[] insert(string pattern, size_t terminal)
 	{
+		import std.algorithm : canFind;
+
 		auto full_pattern = pattern;
 		string[] vars;
 		if (!m_nodes.length) addNode();
@@ -822,6 +829,7 @@ private struct MatchGraphBuilder {
 
 	void print()
 	const {
+		import std.algorithm : map;
 		import std.array : join;
 		import std.conv : to;
 		import std.string : format;
@@ -830,8 +838,8 @@ private struct MatchGraphBuilder {
 		foreach (i, n; m_nodes) {
 			string mapChar(ubyte ch) {
 				if (ch == TerminalChar) return "$";
-				if (ch >= '0' && ch <= '9') return to!string(cast(dchar)ch); 
-				if (ch >= 'a' && ch <= 'z') return to!string(cast(dchar)ch); 
+				if (ch >= '0' && ch <= '9') return to!string(cast(dchar)ch);
+				if (ch >= 'a' && ch <= 'z') return to!string(cast(dchar)ch);
 				if (ch >= 'A' && ch <= 'Z') return to!string(cast(dchar)ch);
 				if (ch == '/') return "/";
 				return ch.to!string;
@@ -850,6 +858,7 @@ private struct MatchGraphBuilder {
 
 	private size_t addEdge(size_t from, ubyte ch, size_t terminal, string var)
 	{
+		import std.algorithm : canFind;
 		import std.string : format;
 		assert(!m_nodes[from].edges.canFind!(e => e.ch == ch), format("%s is in %s", ch, m_nodes[from].edges));
 		auto nidx = addNode();
@@ -877,5 +886,9 @@ private struct MatchGraphBuilder {
 	}
 
 	private static addToArray(T)(ref T[] arr, T[] elems) { foreach (e; elems) addToArray(arr, e); }
-	private static addToArray(T)(ref T[] arr, T elem) { if (!arr.canFind(elem)) arr ~= elem; }
+	private static addToArray(T)(ref T[] arr, T elem)
+	{
+		import std.algorithm : canFind;
+		if (!arr.canFind(elem)) arr ~= elem;
+	}
 }

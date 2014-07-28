@@ -38,9 +38,7 @@ import deimos.event2.thread;
 import deimos.event2.util;
 import std.conv;
 import std.datetime;
-import std.encoding : sanitize;
 import std.exception;
-import std.range : assumeSorted;
 import std.string;
 
 
@@ -115,7 +113,7 @@ final class Libevent2Driver : EventDriver {
 		s_eventLoop = m_eventLoop;
 		logDiagnostic("libevent is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
 		evthread_make_base_notifiable(m_eventLoop);
-		
+
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
 
@@ -255,7 +253,7 @@ final class Libevent2Driver : EventDriver {
 
 	Libevent2TCPConnection connectTCP(NetworkAddress addr)
 	{
-		
+
 		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
@@ -269,10 +267,10 @@ final class Libevent2Driver : EventDriver {
 		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
 		socklen_t balen = bind_addr.sockAddrLen;
 		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
-		
+
 		if( evutil_make_socket_nonblocking(sockfd) )
 			throw new Exception("Failed to make socket non-blocking.");
-			
+
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
@@ -287,7 +285,7 @@ final class Libevent2Driver : EventDriver {
 		assert(cctx.exception is null);
 		socketEnforce(bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) == 0,
 			"Failed to connect to " ~ addr.toString());
-		
+
 		try {
 			cctx.checkForException();
 
@@ -298,10 +296,10 @@ final class Libevent2Driver : EventDriver {
 		} catch (Exception e) {
 			throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
 		}
-		
+
 		logTrace("Connect result status: %d", cctx.status);
 		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
-		
+
 		return new Libevent2TCPConnection(cctx);
 	}
 
@@ -315,7 +313,7 @@ final class Libevent2Driver : EventDriver {
 		static if (typeof(listenfd_raw).max > int.max) assert(listenfd_raw <= int.max || listenfd_raw == ~0);
 		auto listenfd = cast(int)listenfd_raw;
 		socketEnforce(listenfd != -1, "Error creating listening socket");
-		int tmp_reuse = 1; 
+		int tmp_reuse = 1;
 		socketEnforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
 			"Error enabling socket address reuse on listening socket");
 		socketEnforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
@@ -467,6 +465,8 @@ final class Libevent2Driver : EventDriver {
 	private static nothrow extern(C)
 	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
 	{
+		import std.encoding : sanitize;
+
 		logTrace("timer event fired");
 		auto drv = cast(Libevent2Driver)userptr;
 		try drv.processTimers();
@@ -709,6 +709,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	private static nothrow extern(C)
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
+		import std.encoding : sanitize;
+
 		try {
 			auto sig = cast(Libevent2ManualEvent)userptr;
 			auto thread = Thread.getThis();
@@ -794,6 +796,8 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 	private static nothrow extern(C)
 	void onFileTriggered(evutil_socket_t fd, short events, void* userptr)
 	{
+		import std.encoding : sanitize;
+
 		try {
 			auto core = getThreadLibeventDriverCore();
 			auto evt = cast(Libevent2FileDescriptorEvent)userptr;
@@ -830,7 +834,7 @@ final class Libevent2UDPConnection : UDPConnection {
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
 		socketEnforce(sockfd != -1, "Failed to create socket.");
-		
+
 		enforce(evutil_make_socket_nonblocking(sockfd) == 0, "Failed to make socket non-blocking.");
 
 		int tmp_reuse = 1;
@@ -842,7 +846,7 @@ final class Libevent2UDPConnection : UDPConnection {
 		// read back the actual bind address
 		socklen_t balen = bind_addr.sockAddrLen;
 		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
-		
+
 		// generate the bind address string
 		m_bindAddress = bind_addr;
 		char buf[64];
@@ -908,7 +912,7 @@ final class Libevent2UDPConnection : UDPConnection {
 		addr.port = port;
 		connect(addr);
 	}
-	
+
 	void connect(NetworkAddress addr)
 	{
 		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(getLastSocketError()));
@@ -1131,7 +1135,7 @@ private nothrow extern(C)
 				(*pl)++;
 			}
 			auto mtx = cast(LevMutex*)lock;
-			
+
 			assert(mtx !is null, "null lock");
 			assert(mtx.mutex !is null || mtx.rwmutex !is null, "lock contains no mutex");
 			if( mode & EVTHREAD_WRITE ){
