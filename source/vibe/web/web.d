@@ -96,6 +96,7 @@ import vibe.http.server;
 */
 void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.lowerUnderscored)(URLRouter router, C instance, WebInterfaceSettings settings = null)
 {
+	import std.array : endsWith;
 	import std.traits;
 
 	if (!settings) settings = new WebInterfaceSettings;
@@ -124,8 +125,7 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 					router.match(minfo.method, fullurl, (req, res) {
 						handleRequest!(M, overload)(req, res, instance, settings);
 					});
-					if (settings.ignoreTrailingSlash) {
-						import std.array : endsWith;
+					if (settings.ignoreTrailingSlash && !fullurl.endsWith("*")) {
 						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
 						auto fullpath = Path(fullurl);
 						router.match(minfo.method, m, (req, res) {

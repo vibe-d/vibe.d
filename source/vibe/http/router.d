@@ -730,7 +730,7 @@ private struct MatchGraphBuilder {
 		while (pattern.length) {
 			auto ch = pattern[0];
 			if (ch == '*') {
-				assert(pattern.length == 1, "Asterisk is only allowed at the end of a pattern!");
+				assert(pattern.length == 1, "Asterisk is only allowed at the end of a pattern: "~full_pattern);
 				pattern = null;
 
 				foreach (v; ubyte.min .. ubyte.max+1) {
