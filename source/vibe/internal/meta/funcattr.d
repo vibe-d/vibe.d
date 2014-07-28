@@ -11,7 +11,7 @@
 
 module vibe.internal.meta.funcattr;
 
-import std.traits : isInstanceOf;
+import std.traits : isInstanceOf, ReturnType;
 
 /// example
 unittest
