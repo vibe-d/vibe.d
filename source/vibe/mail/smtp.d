@@ -206,8 +206,15 @@ private void expectStatus(InputStream conn, int expected_status, string in_respo
 	string ln = cast(string)conn.readLine();
 	auto sp = ln.indexOf(' ');
 	if( sp < 0 ) sp = ln.length;
-	auto status = to!int(ln[0 .. sp]);
-	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
+	auto dsh = ln.indexOf('-');
+	if (dsh != -1 && dsh < sp)
+	{
+		expectStatus(conn, expected_status, in_response_to);
+	}
+	else {
+		auto status = to!int(ln[0 .. sp]);
+		enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
+	}
 }
 
 private int recvStatus(InputStream conn)
