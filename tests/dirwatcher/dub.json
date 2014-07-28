@@ -1,0 +1,8 @@
+{
+	"name": "tests",
+	"description": "Test for vibe.d's DirectoryWatcher.",
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": ["VibeCustomMain"]
+}
