@@ -519,7 +519,15 @@ final class RedisSubscriber {
 			}
 			sw.stop();
 
-			if (!gotData) { m_listening = false; m_lockedConnection.destroy(); return; }
+			if (!gotData) {
+				m_listening = false;
+				// FIXME: it should be possible to avoid a disconnect, but
+				//        obviously we are not waiting for an "unsubscribe"
+				//        message after actively unsubscribing from all channels
+				m_lockedConnection.conn.close();
+				m_lockedConnection.destroy();
+				return;
+			}
 
 			if (m_capture !is null){
 				auto res = handler();
