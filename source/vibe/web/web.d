@@ -717,7 +717,7 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 }
 
 // properly sets an uninitialized variable
-private static void setVoid(T)(ref T dst, T value)
+private static void setVoid(T, U)(ref T dst, U value)
 {
 	import std.traits;
 	static if (hasElaborateAssign!T) {
