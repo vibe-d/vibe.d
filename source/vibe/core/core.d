@@ -1277,7 +1277,7 @@ private void setupDriver()
 	if (getEventDriver(true) !is null) return;
 
 	logTrace("create driver");
-	setEventDriver(new NativeEventDriver(s_core));
+	setupEventDriver(s_core);
 	logTrace("driver %s created", (cast(Object)getEventDriver()).classinfo.name);
 }
 
