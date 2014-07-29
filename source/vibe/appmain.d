@@ -12,18 +12,13 @@
 	vibe.d and define a -version=VibeCustomMain. Be sure to call vibe.core.core.runEventLoop
 	at the end of your main function in this case. Also beware that you have to make appropriate
 	calls to vibe.core.args.finalizeCommandLineOptions and vibe.core.core.lowerPrivileges to get the
-	same behavior. 
+	same behavior.
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
 module vibe.appmain;
-
-import vibe.core.args : finalizeCommandLineOptions;
-import vibe.core.core : runEventLoop, lowerPrivileges;
-import vibe.core.log;
-import std.encoding : sanitize;
 
 // only include main if VibeCustomMain is not set
 version (VibeCustomMain) {}
@@ -40,6 +35,11 @@ else { pragma(msg, "Warning: -version=VibeDefaultMain will be required in the fu
 */
 int main()
 {
+	import vibe.core.args : finalizeCommandLineOptions;
+	import vibe.core.core : runEventLoop, lowerPrivileges;
+	import vibe.core.log;
+	import std.encoding : sanitize;
+
 	version (unittest) {
 		logInfo("All unit tests were successful.");
 		return 0;
@@ -51,7 +51,7 @@ int main()
 		}
 
 		lowerPrivileges();
-		
+
 		logDiagnostic("Running event loop...");
 		int status;
 		version (VibeDebugCatchAll) {

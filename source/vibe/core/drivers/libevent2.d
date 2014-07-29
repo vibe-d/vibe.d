@@ -38,9 +38,7 @@ import deimos.event2.thread;
 import deimos.event2.util;
 import std.conv;
 import std.datetime;
-import std.encoding : sanitize;
 import std.exception;
-import std.range : assumeSorted;
 import std.string;
 
 
@@ -468,6 +466,8 @@ final class Libevent2Driver : EventDriver {
 	private static nothrow extern(C)
 	void onTimerTimeout(evutil_socket_t, short events, void* userptr)
 	{
+		import std.encoding : sanitize;
+
 		logTrace("timer event fired");
 		auto drv = cast(Libevent2Driver)userptr;
 		try drv.processTimers();
@@ -710,6 +710,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	private static nothrow extern(C)
 	void onSignalTriggered(evutil_socket_t, short events, void* userptr)
 	{
+		import std.encoding : sanitize;
+
 		try {
 			auto sig = cast(Libevent2ManualEvent)userptr;
 			auto thread = Thread.getThis();
@@ -795,6 +797,8 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 	private static nothrow extern(C)
 	void onFileTriggered(evutil_socket_t fd, short events, void* userptr)
 	{
+		import std.encoding : sanitize;
+
 		try {
 			auto core = getThreadLibeventDriverCore();
 			auto evt = cast(Libevent2FileDescriptorEvent)userptr;
