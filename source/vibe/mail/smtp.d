@@ -100,7 +100,9 @@ final class Mail {
 }
 
 /**
-	Sends am email using the given settings.
+	Sends an email using the given settings and mail. Your message must contain a
+	valid $(D Mail) object and should define the headers "To", "From", Sender" and "Subject".
+	Valid headers can be found at http://tools.ietf.org/html/rfc4021
 */
 void sendMail(SMTPClientSettings settings, Mail mail)
 {
@@ -199,6 +201,30 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	conn.write("QUIT\r\n");
 	expectStatus(conn, SMTPStatus.serviceClosing, "QUIT");
+}
+
+/**
+ * The following example demonstrates the complete construction of a 
+ * valid e-mail object with UTF-8 encoding. The Date header, as demonstrated, 
+ * must be converted with the local timezone using the $(D toRFC822DateTimeString) function.
+ */
+unittest {
+	import vibe.inet.message;
+	import std.datetime;
+	void testSmtp(string host, ushort port){
+		Mail email = new Mail;
+		email.headers["Date"] = Clock.currTime(TimeZone.getTimeZone("America/New_York")).toRFC822DateTimeString(); // uses UFCS
+		email.headers["Sender"] = "Domain.com Contact Form <no-reply@domain.com>";
+		email.headers["From"] = "John Doe <joe@doe.com>";
+		email.headers["To"] = "Customer Support <support@domain.com>";
+		email.headers["Subject"] = "My subject";
+		email.headers["Content-Type"] = "text/plain;charset=utf-8";
+		email.bodyText = "This message can contain utf-8 [κόσμε], and\nwill be displayed properly in mail clients with \\n line endings.";
+		
+		auto smtpSettings = new SMTPClientSettings(host, port);
+		sendMail(smtpSettings, email);
+	}
+	// testSmtp("localhost", 25);
 }
 
 private void expectStatus(InputStream conn, int expected_status, string in_response_to)
