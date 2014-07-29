@@ -1,7 +1,7 @@
 /**
 	Contains interfaces and enums for evented I/O drivers.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -18,10 +18,17 @@ import vibe.inet.url;
 import core.time;
 import std.exception;
 
+
+version (VibeUseNativeDriverType) {
+	import vibe.core.drivers.native;
+	alias StoredEventDriver = NativeEventDriver;
+} else alias StoredEventDriver = EventDriver;
+
+
 /**
 	Returns the active event driver
 */
-EventDriver getEventDriver(bool ignore_unloaded = false)
+StoredEventDriver getEventDriver(bool ignore_unloaded = false)
 {
 	assert(ignore_unloaded || s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
@@ -30,19 +37,8 @@ EventDriver getEventDriver(bool ignore_unloaded = false)
 /// private
 package void setupEventDriver(DriverCore core_)
 {
-	version (VibeLibevDriver) {
-		import vibe.core.drivers.libev;
-		alias NativeEventDriver = Win32EventDriver;
-	} else version (VibeLibeventDriver) {
-		import vibe.core.drivers.libevent2;
-		alias NativeEventDriver = Libevent2Driver;
-	} else version (VibeWin32Driver) {
-		import vibe.core.drivers.win32;
-		alias NativeEventDriver = Win32EventDriver;
-	} else version (VibeWinrtDriver) {
-		import vibe.core.drivers.winrt;
-		alias NativeEventDriver = WinRTEventDriver;
-	} else static assert(false, "No event driver has been selected. Please specify a -version=Vibe*Driver for the desired driver.");
+	version (VibeUseNativeDriverType) {}
+	else import vibe.core.drivers.native;
 
 	s_driver = new NativeEventDriver(core_);
 }
@@ -56,7 +52,7 @@ package void deleteEventDriver()
 
 
 private {
-	EventDriver s_driver;
+	StoredEventDriver s_driver;
 }
 
 
