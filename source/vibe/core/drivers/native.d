@@ -9,7 +9,7 @@ module vibe.core.drivers.native;
 
 version (VibeLibevDriver) {
 	import vibe.core.drivers.libev;
-	alias NativeEventDriver = Win32EventDriver;
+	alias NativeEventDriver = LibevDriver;
 } else version (VibeLibeventDriver) {
 	import vibe.core.drivers.libevent2;
 	alias NativeEventDriver = Libevent2Driver;
