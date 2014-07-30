@@ -796,14 +796,6 @@ struct TaskLocal(T)
 	}
 
 	this(T init_val) { m_initValue = init_val; }
-	~this() { 
-		auto fiber = CoreTask.getThis();
-
-		if (fiber.ms_flsInfo !is null && fiber.m_flsInit[m_id] == true && fiber.ms_flsInfo[m_id] != FLSInfo.init) {
-			fiber.ms_flsInfo[m_id].destroy(fiber.m_fls);
-			fiber.m_flsInit[m_id] = false;
-		}
-	}
 
 	@disable this(this);
 
@@ -972,7 +964,7 @@ private class CoreTask : TaskFiber {
 				// zero the fls initialization ByteArray for memory safety
 				foreach (ref size_t i, ref bool b; m_flsInit) {
 					if (b) {
-						if (ms_flsInfo[i] != FLSInfo.init)
+						if (ms_flsInfo !is null && ms_flsInfo.length >= i && ms_flsInfo[i] != FLSInfo.init)
 							ms_flsInfo[i].destroy(m_fls);
 						b = false;
 					}
