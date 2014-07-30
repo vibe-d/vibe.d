@@ -294,7 +294,8 @@ struct RedisDatabase {
 	*/
 
 	long zadd(ARGS...)(string key, ARGS args) { return request!long("ZADD", key, args); }
-	long Zcard(string key) { return request!long("ZCARD", key); }
+	long zcard(string key) { return request!long("ZCARD", key); }
+	deprecated("Use zcard() instead.") alias Zcard = zcard;
 	// TODO:
 	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
