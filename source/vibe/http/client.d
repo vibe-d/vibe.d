@@ -153,18 +153,6 @@ unittest {
 	}
 }
 
-/**
-	Contains all settings for configuring a more specialized HTTP Client Request.
-
-	usage: 
-		HTTPClientSettings settings = new HTTPClientSettings;
-		settings.proxyURL = URL.parse("http://user:pass@192.168.2.50:3128");
-		requestHTTP(..., settings);
-*/
-class HTTPClientSettings {
-	URL proxyURL;
-	int keepAliveTimeout = 60;
-}
 
 /**
 	Returns a HTTPClient proxy object that is connected to the specified host.
@@ -205,6 +193,34 @@ auto connectHTTP(string host, ushort port = 0, bool ssl = false, HTTPClientSetti
 /**************************************************************************************************/
 
 /**
+	Defines an HTTP/HTTPS proxy request or a connection timeout for an HTTPClient.
+*/
+class HTTPClientSettings {
+	URL proxyURL;
+	Duration defaultKeepAliveTimeout = 10.seconds;
+}
+
+///
+unittest {
+	void test() {
+		HTTPClientSettings settings = new HTTPClientSettings;
+		settings.proxyURL = URL.parse("http://proxyuser:proxypass@192.168.2.50:3128");
+		settings.defaultKeepAliveTimeout = 0.seconds; // closes connection immediately after receiving the data.
+		requestHTTP("http://www.example.org",
+		            (scope req){
+			req.method = HTTPMethod.GET;
+		},
+		(scope res){
+			logInfo("Headers:");
+			foreach(key, value; res.headers) {
+				logInfo("%s: %s", key, value);
+			}
+			logInfo("Response: %s", res.bodyReader.readAllUTF8());
+		}, settings);
+	}
+}
+
+/**
 	Implementation of a HTTP 1.0/1.1 client with keep-alive support.
 
 	Note that it is usually recommended to use requestHTTP for making requests as that will use a
@@ -225,7 +241,7 @@ final class HTTPClient {
 		static __gshared void function(SSLContext) ms_sslSetup;
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit; 
-		int m_timeout;
+		Duration m_keepAliveTimeout;
 	}
 
 	/** Get the current settings for the HTTP client. **/
@@ -258,7 +274,8 @@ final class HTTPClient {
 		disconnect();
 		m_conn = null;
 		m_settings = settings;
-		m_timeout = settings.keepAliveTimeout;
+		m_keepAliveTimeout = settings.defaultKeepAliveTimeout;
+		m_keepAliveLimit = Clock.currTime(UTC()) + m_keepAliveTimeout;
 		m_server = server;
 		m_port = port;
 		if (ssl) {
@@ -291,6 +308,60 @@ final class HTTPClient {
 		}
 	}
 
+	private void doProxyRequest(T, U)(T* res, U requester, ref bool close_conn, ref bool has_body)
+	{
+		version (VibeManualMemoryManagement) {
+			scope request_allocator = new PoolAllocator(1024, defaultAllocator());
+			scope(exit) request_allocator.reset();
+		} else auto request_allocator = defaultAllocator();
+		import std.conv : to;
+
+		res.dropBody();
+		scope(failure) 
+			res.disconnect(); 
+		if (res.statusCode != 407) {
+			throw new HTTPStatusException(HTTPStatus.internalServerError, "Proxy returned Proxy-Authenticate without a 407 status code.");
+		}
+		
+		// send the request again with the proxy authentication information if available
+		if (m_settings.proxyURL.username is null) {
+			throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required.");
+		}
+		
+		m_responding = false;
+		close_conn = false;
+		bool found_proxy_auth;
+		
+		foreach (string proxyAuth; res.headers.getAll("Proxy-Authenticate"))
+		{
+			if (proxyAuth.length >= "Basic".length && proxyAuth[0.."Basic".length] == "Basic")
+			{
+				found_proxy_auth = true;
+				break;
+			}
+		}
+		
+		if (!found_proxy_auth)
+		{
+			throw new HTTPStatusException(HTTPStatus.notAcceptable, "The Proxy Server didn't allow Basic Authentication");
+		}
+
+		SysTime connected_time = Clock.currTime(UTC());
+		has_body = doRequest(requester, &close_conn, true, connected_time);
+		m_responding = true;
+
+		static if (is (T == HTTPClientResponse*))
+			*res = new HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+		else
+			*res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
+
+		if (res.headers.get("Proxy-Authenticate", null) !is null){
+			res.dropBody();
+			throw new HTTPStatusException(HTTPStatus.ProxyAuthenticationRequired, "Proxy Authentication Failed.");
+		}
+
+	}
+
 	/**
 		Performs a HTTP request.
 
@@ -313,51 +384,16 @@ final class HTTPClient {
 			scope(exit) request_allocator.reset();
 		} else auto request_allocator = defaultAllocator();
 
+		SysTime connected_time = Clock.currTime(UTC());
+
 		bool close_conn = false;
-		bool has_body = doRequest(requester, &close_conn);
+		bool has_body = doRequest(requester, &close_conn, false, connected_time);
 		m_responding = true;
-		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator);
+		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
 
-
+		// proxy implementation
 		if (res.headers.get("Proxy-Authenticate", null) !is null) {
-			res.dropBody();
-			scope(failure) 
-				res.disconnect(); 
-			import std.conv : to;
-			if (res.statusCode != 407){
-				throw new HTTPStatusException(HTTPStatus.internalServerError, "Proxy returned Proxy-Authenticate without a 407 status code.");
-			}
-
-			// send the request again with the proxy authentication information if available
-			if (m_settings.proxyURL.username is null)
-			{
-				throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required.");
-			}
-			m_responding = false;
-			close_conn = false;
-			bool found_proxy_auth;
-
-			foreach (string proxyAuth; res.headers.getAll("Proxy-Authenticate"))
-			{
-				if (proxyAuth.length >= "Basic".length && proxyAuth[0.."Basic".length] == "Basic")
-				{
-					found_proxy_auth = true;
-					break;
-				}
-			}
-
-			if (!found_proxy_auth)
-			{
-				throw new HTTPStatusException(HTTPStatus.notAcceptable, "The Proxy Server didn't allow Basic Authentication");
-			}
-
-			has_body = doRequest(requester, &close_conn, true);
-			m_responding = true;
-			res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator);
-			if (res.headers.get("Proxy-Authenticate", null) !is null){
-				res.dropBody();
-				throw new HTTPStatusException(HTTPStatus.ProxyAuthenticationRequired, "Proxy Authentication Failed.");
-			}
+			doProxyRequest(&res, requester, close_conn, has_body);
 		}
 
 		Exception user_exception;
@@ -382,18 +418,27 @@ final class HTTPClient {
 		}
 		if (user_exception) throw user_exception;
 	}
+
 	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
 	{
 		bool close_conn = false;
-		bool has_body = doRequest(requester, &close_conn);
+		auto connected_time = Clock.currTime(UTC());
+		bool has_body = doRequest(requester, &close_conn, false, connected_time);
 		m_responding = true;
-		return new HTTPClientResponse(this, has_body, close_conn);
+		auto res = new HTTPClientResponse(this, has_body, close_conn, defaultAllocator(), connected_time);
+
+		// proxy implementation
+		if (res.headers.get("Proxy-Authenticate", null) !is null) {
+			doProxyRequest(&res, requester, close_conn, has_body);
+		}
+
+		return res;
 	}
 
 
 
-	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn, bool confirmed_proxy_auth = false /* basic only */)
+	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn, bool confirmed_proxy_auth = false /* basic only */, SysTime connected_time = Clock.currTime(UTC()))
 	{
 		assert(!m_requesting, "Interleaved HTTP client requests detected!");
 		assert(!m_responding, "Interleaved HTTP client request/response detected!");
@@ -401,9 +446,7 @@ final class HTTPClient {
 		m_requesting = true;
 		scope(exit) m_requesting = false;
 
-		auto now = Clock.currTime(UTC());
-
-		if (now > m_keepAliveLimit){
+		if (m_conn && m_conn.connected && connected_time > m_keepAliveLimit){
 			logDebug("Disconnected to avoid timeout");
 			disconnect();
 		}
@@ -456,11 +499,7 @@ final class HTTPClient {
 
 			m_stream = m_conn;
 			if (m_ssl) m_stream = createSSLStream(m_conn, m_ssl, SSLStreamState.connecting, m_server, m_conn.remoteAddress);
-
-			now = Clock.currTime(UTC());
 		}
-
-		m_keepAliveLimit = now + m_timeout.dur!"seconds";
 
 		auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
 		req.headers["User-Agent"] = m_userAgent;
@@ -652,10 +691,17 @@ final class HTTPClientResponse : HTTPResponse {
 		FreeListRef!EndCallbackInputStream m_endCallback;
 		InputStream m_bodyReader;
 		bool m_closeConn;
+		int m_maxRequests;
+	}
+
+	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can 
+	/// make before the server closes the connection.
+	@property int maxRequests() const {
+		return m_maxRequests;
 	}
 
 	/// private
-	this(HTTPClient client, bool has_body, bool close_conn, Allocator alloc = defaultAllocator())
+	this(HTTPClient client, bool has_body, bool close_conn, Allocator alloc = defaultAllocator(), SysTime connected_time = Clock.currTime(UTC()))
 	{
 		m_client = client;
 		m_closeConn = close_conn;
@@ -688,26 +734,28 @@ final class HTTPClientResponse : HTTPResponse {
 			logTrace("%s: %s", k, v);
 		logTrace("---------------------");
 
-		int max = 2;
+		Duration server_timeout;
+		bool has_server_timeout;
 		if (auto pka = "Keep-Alive" in this.headers) {
 			foreach(s; splitter(*pka, ',')){
 				auto pair = s.splitter('=');
 				auto name = pair.front.strip();
 				pair.popFront();
 				if (icmp(name, "timeout") == 0) {
-					m_client.m_timeout = pair.front.to!int();
+					has_server_timeout = true;
+					server_timeout = pair.front.to!int().seconds;
 				} else if (icmp(name, "max") == 0) {
-					max = pair.front.to!int();
+					m_maxRequests = pair.front.to!int();
 				}
 			}
 		}
-
+		Duration elapsed = Clock.currTime(UTC()) - connected_time;
 		if (this.headers.get("Connection") == "close") {
-			// do nothing, forcing disconnect() before next request
-		} else if (m_client.m_timeout > 0 && max > 1) {
-			m_client.m_keepAliveLimit += (m_client.m_timeout - 2).seconds;
+			// this header will trigger m_client.disconnect() in m_client.doRequest() when it goes out of scope
+		} else if (has_server_timeout && m_client.m_keepAliveTimeout > server_timeout) {
+			m_client.m_keepAliveLimit = Clock.currTime(UTC()) + server_timeout - elapsed;
 		} else if (this.httpVersion == HTTPVersion.HTTP_1_1) {
-			m_client.m_keepAliveLimit += 60.seconds;
+			m_client.m_keepAliveLimit = Clock.currTime(UTC()) + m_client.m_keepAliveTimeout;
 		}
 
 		if (!has_body) finalize();
