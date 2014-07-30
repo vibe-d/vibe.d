@@ -796,6 +796,14 @@ struct TaskLocal(T)
 	}
 
 	this(T init_val) { m_initValue = init_val; }
+	~this() { 
+		auto fiber = CoreTask.getThis();
+
+		if (fiber.ms_flsInfo !is null && fiber.m_flsInit[m_id] == true && fiber.ms_flsInfo[m_id] != FLSInfo.init) {
+			fiber.ms_flsInfo[m_id].destroy(fiber.m_fls);
+			fiber.m_flsInit[m_id] = false;
+		}
+	}
 
 	@disable this(this);
 
@@ -811,6 +819,8 @@ struct TaskLocal(T)
 			assert(CoreTask.ms_flsFill % 8 == 0, "Misaligned fiber local storage pool.");
 			m_offset = CoreTask.ms_flsFill;
 			m_id = CoreTask.ms_flsCounter++;
+
+
 			CoreTask.ms_flsFill += T.sizeof;
 			while (CoreTask.ms_flsFill % 8 != 0)
 				CoreTask.ms_flsFill++;
@@ -826,6 +836,32 @@ struct TaskLocal(T)
 		auto data = fiber.m_fls.ptr[m_offset .. m_offset+T.sizeof];
 		if (!fiber.m_flsInit[m_id]) {
 			fiber.m_flsInit[m_id] = true;
+			import std.traits : hasElaborateDestructor, hasAliasing;
+			static if (hasElaborateDestructor!T || hasAliasing!T) {
+				void function(void[], size_t) destructor = (void[] fls, size_t offset){
+					static if (hasElaborateDestructor!T) {
+						auto obj = cast(T*)&fls[offset];
+						// call the destructor on the object if a custom one is known declared
+						obj.destroy();
+					}
+					else static if (hasAliasing!T) {
+						// zero the memory to avoid false pointers
+						foreach (size_t i; offset .. offset + T.sizeof) {
+							ubyte* u = cast(ubyte*)&fls[i];
+							*u = 0;
+						}
+					}
+				};
+				FLSInfo fls_info;
+				fls_info.fct = destructor;
+				fls_info.offset = m_offset;
+
+				// make sure flsInfo has enough space
+				if (fiber.ms_flsInfo.length <= m_id)
+					fiber.ms_flsInfo.length = m_id + 64;
+
+				fiber.ms_flsInfo[m_id] = fls_info;
+			}
 			emplace!T(data, m_initValue);
 		}
 		return (cast(T[])data)[0];
@@ -834,6 +870,13 @@ struct TaskLocal(T)
 	alias storage this;
 }
 
+private struct FLSInfo {
+	void function(void[], size_t) fct;
+	size_t offset;
+	void destroy(void[] fls) {
+		fct(fls, offset);
+	}
+}
 
 /**
 	High level state change events for a Task
@@ -864,6 +907,7 @@ private class CoreTask : TaskFiber {
 		Task[] m_yielders;
 
 		// task local storage
+		static FLSInfo[] ms_flsInfo;
 		static size_t ms_flsFill = 0; // thread-local
 		static size_t ms_flsCounter = 0;
 		BitArray m_flsInit;
@@ -924,6 +968,15 @@ private class CoreTask : TaskFiber {
 
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
+
+				// zero the fls initialization ByteArray for memory safety
+				foreach (ref size_t i, ref bool b; m_flsInit) {
+					if (b) {
+						if (ms_flsInfo[i] != FLSInfo.init)
+							ms_flsInfo[i].destroy(m_fls);
+						b = false;
+					}
+				}
 
 				// make the fiber available for the next task
 				if (s_availableFibers.full)
