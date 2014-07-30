@@ -218,7 +218,7 @@ final class LibevDriver : EventDriver {
 		assert(false);
 	}
 
-	private LibevTCPListener listenTCPGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TCPConnection conn) connection_callback)
+	private LibevTCPListener listenTCPGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TCPConnection conn) connection_callback, TCPListenOptions options)
 	{
 		auto listenfd = socket(af, SOCK_STREAM, 0);
 		if( listenfd == -1 ){
@@ -483,6 +483,7 @@ final class LibevTCPConnection : TCPConnection {
 		int m_eventsExpected = 0;
 		Appender!(ubyte[]) m_writeBuffer;
 		bool m_tcpNoDelay = false;
+		bool m_keepAlive = false;
 		Duration m_readTimeout;
 	}
 	
