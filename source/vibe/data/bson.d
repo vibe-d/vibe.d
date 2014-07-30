@@ -1254,6 +1254,11 @@ unittest {
 	assert(deserializeBson!(ubyte[])(bson) == data);
 }
 
+unittest { // issue #709
+	ulong[] data = [2354877787627192443, 1, 2354877787627192442];
+	auto bson = Bson.fromJson(serializeToBson(data).toJson);
+	assert(deserializeBson!(ulong[])(bson) == data);
+}
 
 /**
 	Serializes to an in-memory BSON representation.
@@ -1474,6 +1479,34 @@ private Bson.Type jsonTypeToBsonType(Json.Type tp)
 	return JsonIDToBsonID[tp];
 }
 
+/*
+*	Json int_ handles both 32 and 64 bit values, thus we need to know
+*	if there any long value in an array to apply optimization and store
+*	array as int[].
+*/
+private Bson.Type jsonArrayFindNeededIntType(ref const Json v)
+{
+	assert(v.type == Json.Type.array);
+	
+	auto array = v.get!(Json[]);
+	assert(array.length);
+	
+	auto firstType = array[0].type; 
+	if(firstType == Json.Type.int_) {
+		// if we get at least one long, then whole array is long[]
+		foreach(ref const Json ev; array) {
+			auto lv = cast(long)ev;
+			if( lv < int.min || lv > int.max ) {
+				return Bson.Type.long_;
+			}
+		}
+		return Bson.Type.int_;
+	} 
+	// Should never occur
+	debug assert(false);
+	else return Bson.Type.undefined;
+}
+
 private Bson.Type writeBson(R)(ref R dst, in Json value)
 	if( isOutputRange!(R, ubyte) )
 {
@@ -1503,10 +1536,30 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			return Bson.Type.string;
 		case Json.Type.array:
 			auto app = appender!bdata_t();
+			auto elemIntType = Bson.Type.undefined;
 			foreach( size_t i, ref const Json v; value ){
-				app.put(cast(ubyte)(jsonTypeToBsonType(v.type)));
-				putCString(app, to!string(i));
-				writeBson(app, v);
+				if(v.type == Json.Type.int_)
+				{   
+					if(elemIntType == Bson.Type.undefined) {
+						elemIntType = jsonArrayFindNeededIntType(value);
+					}
+					
+					if(elemIntType == Bson.Type.long_)
+					{
+						// Converting all ints to longs if there is any long value
+						app.put(cast(ubyte)(Bson.Type.long_));
+						putCString(app, to!string(i));
+						app.put(toBsonData(cast(long)v));
+					} else {
+						app.put(cast(ubyte)(Bson.Type.int_));
+						putCString(app, to!string(i));
+						app.put(toBsonData(cast(int)v));
+					}
+				} else {
+					app.put(cast(ubyte)(jsonTypeToBsonType(v.type)));
+					putCString(app, to!string(i));
+					writeBson(app, v);
+				}
 			}
 
             dst.put(toBsonData(cast(int)(app.data.length + int.sizeof + 1)));
