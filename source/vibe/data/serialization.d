@@ -4,32 +4,81 @@
 	This module provides general means for implementing (de-)serialization with
 	a standardized behavior.
 
-	Serializers are implemented in terms of struct with template methods that
-	get called by the serialization framework:
+	Supported_types:
+		The following rules are applied in order when serializing or
+		deserializing a certain type:
 
-	---
-	struct ExampleSerializer {
-		enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null));
+		$(OL
+			$(LI An $(D enum) type is serialized as its raw value, except if
+				$(D @byName) is used, in which case the name of the enum value
+				is serialized.)
+			$(LI Any type that is specifically supported by the serializer
+				is directly serialized. For example, the BSON serializer
+				supports $(D BsonObjectID) directly.)
+			$(LI Arrays are serialized using the array serialization functions
+				where each element is serialized again according to these
+				rules.)
+			$(LI Associative arrays are serialized similar to arrays. The key
+				type of the AA must satisfy the $(D isStringSerializable) trait
+				and will always be serialized as a string.)
+			$(LI Any $(D Nullable!T) will be serialized as either $(D null), or
+				as the contained value (subject to these rules again).)
+			$(LI Types satisfying the $(D isCustomSerializable) trait will be
+				serialized as the value returned by their $(D toRepresentation)
+				method (again subject to these rules).)
+			$(LI Types satisfying the $(D isISOExtSerializable) trait will be
+				serialized as a string, as returned by their $(D toISOExtString)
+				method. This causes types such as $(D SysTime) to be serialized
+				as strings.)
+			$(LI Types satisfying the $(D isStringSerializable) trait will be
+				serialized as a string, as returned by their $(D toString)
+				method.)
+			$(LI Struct and class types by default will be serialized as
+				associative arrays, where the key is the name of the
+				corresponding field (can be overridden using the $(D @name)
+				attribute). If the struct/class is annotated with $(D @asArray),
+				it will instead be serialized as a flat array of values in the
+				order of declaration. Null class references will be serialized
+				as $(D null).)
+			$(LI Pointer types will be serialized as either $(D null), or as
+				the value they point to.)
+			$(LI Built-in integers and floating point values, as well as
+				boolean values will be converted to strings, if the serializer
+				doesn't support them directly.)
+		)
 
-		// serialization
-		auto getSerializedResult();
-		void beginWriteDictionary(T)();
-		void endWriteDictionary(T)();
-		void beginWriteDictionaryEntry(T)(string name);
-		void endWriteDictionaryEntry(T)();
-		void beginWriteArray(T)(size_t length);
-		void endWriteArray(T)();
-		void beginWriteArrayEntry(T)();
-		void endWriteArrayEntry(T)();
-		void writeValue(T)(T value);
+		Note that no aliasing detection is performed, so that pointers, class
+		references and arrays referencing the same memory will be serialized
+		as multiple copies. When in turn deserializing the data, they will also
+		end up as separate copies in memory.
 
-		// deserialization
-		void readDictionary(T)(scope void delegate(string) entry_callback);
-		void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback);
-		void readValue(T)();
-		bool tryReadNull();
-	}
-	---
+	Serializer_implementation:
+		Serializers are implemented in terms of a struct with template methods that
+		get called by the serialization framework:
+
+		---
+		struct ExampleSerializer {
+			enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null));
+
+			// serialization
+			auto getSerializedResult();
+			void beginWriteDictionary(T)();
+			void endWriteDictionary(T)();
+			void beginWriteDictionaryEntry(T)(string name);
+			void endWriteDictionaryEntry(T)();
+			void beginWriteArray(T)(size_t length);
+			void endWriteArray(T)();
+			void beginWriteArrayEntry(T)();
+			void endWriteArrayEntry(T)();
+			void writeValue(T)(T value);
+
+			// deserialization
+			void readDictionary(T)(scope void delegate(string) entry_callback);
+			void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback);
+			void readValue(T)();
+			bool tryReadNull();
+		}
+		---
 
 	Copyright: © 2013-2014 rejectedsoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -41,7 +90,6 @@ import vibe.internal.meta.uda;
 
 import std.array : Appender, appender;
 import std.conv : to;
-import std.datetime : Date, DateTime, SysTime;
 import std.exception : enforce;
 import std.traits;
 import std.typetuple;
@@ -131,6 +179,8 @@ unittest {
 
 private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializer, T value)
 {
+	import std.typecons : Nullable;
+
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
@@ -169,6 +219,9 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializer.endWriteDictionaryEntry!TV(keyname);
 		}
 		serializer.endWriteDictionary!TU();
+	} else static if (isInstanceOf!(Nullable, TU)) {
+		if (value.isNull()) serializeImpl!(Serializer, typeof(null))(serializer, null);
+		else serializeImpl!(Serializer, typeof(value.get()), ATTRIBUTES)(serializer, value.get());
 	} else static if (isCustomSerializable!T) {
 		alias CustomType = typeof(T.init.toRepresentation());
 		serializeImpl!(Serializer, CustomType, ATTRIBUTES)(serializer, value.toRepresentation());
@@ -221,6 +274,8 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 
 private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deserializer)
 {
+	import std.typecons : Nullable;
+
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
@@ -262,6 +317,9 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 			ret[key] = deserializeImpl!(TV, Serializer, ATTRIBUTES)(deserializer);
 		});
 		return ret;
+	} else static if (isInstanceOf!(Nullable, T)) {
+		if (deserializer.tryReadNull()) return T.init;
+		return T(deserializeImpl!(typeof(T.init.get()), Serializer, ATTRIBUTES)(deserializer));
 	} else static if (isCustomSerializable!T) {
 		alias CustomType = typeof(T.init.toRepresentation());
 		return T.fromRepresentation(deserializeImpl!(CustomType, Serializer, ATTRIBUTES)(deserializer));
@@ -282,7 +340,6 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
 			size_t idx = 0;
 			deserializer.readArray!T((sz){}, {
-				if (deserializer.tryReadNull()) return;
 				static if (hasSerializableFields!T) {
 					switch (idx++) {
 						default: break;
@@ -290,6 +347,8 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 							alias TM = typeof(__traits(getMember, ret, mname));
 							alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
 							case i:
+								static if (hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
+									if (deserializer.tryReadNull()) return;
 								set[i] = true;
 								__traits(getMember, ret, mname) = deserializeImpl!(TM, Serializer, TA)(deserializer);
 								break;
@@ -301,7 +360,6 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 			});
 		} else {
 			deserializer.readDictionary!T((name) {
-				if (deserializer.tryReadNull()) return;
 				static if (hasSerializableFields!T) {
 					switch (name) {
 						default: break;
@@ -310,6 +368,8 @@ private T deserializeImpl(T, Serializer, ATTRIBUTES...)(ref Serializer deseriali
 							alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
 							enum fname = getAttribute!(T, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
 							case fname:
+								static if (hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
+									if (deserializer.tryReadNull()) return;
 								set[i] = true;
 								__traits(getMember, ret, mname) = deserializeImpl!(TM, Serializer, TA)(deserializer);
 								break;

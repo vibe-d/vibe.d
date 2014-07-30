@@ -1238,6 +1238,22 @@ unittest {
 	}
 }
 
+unittest {
+	import std.typecons : Nullable;
+
+	struct S { Nullable!int a, b; }
+	S s;
+	s.a = 2;
+
+	auto j = serializeToJson(s);
+	assert(j.a.type == Json.Type.int_);
+	assert(j.b.type == Json.Type.null_);
+
+	auto t = deserializeJson!S(j);
+	assert(!t.a.isNull() && t.a == 2);
+	assert(t.b.isNull());
+}
+
 
 /**
 	Serializer for a plain Json representation.
@@ -1245,7 +1261,7 @@ unittest {
 	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonSerializer {
-	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : double) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
+	template isJsonBasicType(T) { enum isJsonBasicType = isNumeric!T || isBoolean!T || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 	
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
@@ -1643,6 +1659,7 @@ unittest {
 	assert(d == a[0..a.length-2]);
 	assert(d == a[0..$-2]);
 }
+
 
 /**
 	Writes the given JSON object as a prettified JSON string into the destination range.
