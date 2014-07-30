@@ -841,24 +841,13 @@ private final class RedisConnection {
 	{
 		static if (is(ARG == string)) return arg.length;
 		else {
+			import vibe.internal.rangeutil;
 			long length;
 			auto rangeCnt = RangeCounter(&length);
 			rangeCnt.formattedWrite("%s", arg);
 			return length;
 		}
 	}
-}
-
-private struct RangeCounter {
-	import std.utf;
-	long* length;
-
-	this(long* _captureLength) {
-		length = _captureLength;
-	}
-
-	void put(dchar ch) { *length += codeLength!char(ch); }
-	void put(string str) { *length += str.length; }
 }
 
 private void _request_void(ARGS...)(RedisConnection conn, string command, ARGS args)

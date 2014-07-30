@@ -815,7 +815,7 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	/// Writes a JSON message with the specified status
-	void writeJsonBody(T)(T data, int status = HTTPStatus.OK, string content_type = "application/json; charset=UTF-8")
+	void writeJsonBody(T)(T data, int status = HTTPStatus.OK, string content_type = "application/json; charset=UTF-8", bool allow_chunked = false)
 	{
 		import std.traits;
 		import vibe.stream.wrapper;
@@ -826,6 +826,16 @@ final class HTTPServerResponse : HTTPResponse {
 
 		statusCode = status;
 		headers["Content-Type"] = content_type;
+
+		// set an explicit content-length field if chunked encoding is not allowed
+		if (!allow_chunked) {
+			import vibe.internal.rangeutil;
+			long length = 0;
+			auto counter = RangeCounter(&length);
+			serializeToJson(counter, data);
+			headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", length);
+		}
+
 		auto rng = StreamOutputRange(bodyWriter);
 		serializeToJson(&rng, data);
 	}
