@@ -203,18 +203,19 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 private void expectStatus(InputStream conn, int expected_status, string in_response_to)
 {
-	string ln = cast(string)conn.readLine();
-	auto sp = ln.indexOf(' ');
-	if( sp < 0 ) sp = ln.length;
-	auto dsh = ln.indexOf('-');
-	if (dsh != -1 && dsh < sp)
-	{
-		expectStatus(conn, expected_status, in_response_to);
-	}
-	else {
-		auto status = to!int(ln[0 .. sp]);
-		enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
-	}
+	// TODO: make the full status message available in the exception
+	//       message or for general use (e.g. determine server features)
+	string ln;
+	sizediff_t sp, dsh;
+	do {
+		ln = cast(string)conn.readLine();
+		sp = ln.indexOf(' ');
+		if (sp < 0) sp = ln.length;
+		dsh = ln.indexOf('-');
+	} while (dsh >= 0 && dsh < sp);
+
+	auto status = to!int(ln[0 .. sp]);
+	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
 }
 
 private int recvStatus(InputStream conn)
