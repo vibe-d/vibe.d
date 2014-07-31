@@ -83,7 +83,7 @@ SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.any
 	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
 	else version (OpenSSL) {
 		import vibe.stream.openssl;
-		return new OpenSSLContext(DEPRECATION_HACK.init, kind, ver);
+		return new OpenSSLContext(kind, ver);
 	}
 }
 
@@ -121,7 +121,7 @@ SSLStream createSSLStream(Stream underlying, SSLContext ctx, SSLStreamState stat
 	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
 	else version (OpenSSL) {
 		import vibe.stream.openssl;
-		return new OpenSSLStream(DEPRECATION_HACK.init, underlying, cast(OpenSSLContext)ctx,
+		return new OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 								 state, peer_name, peer_address);
 	}
 }
@@ -140,7 +140,7 @@ auto createSSLStreamFL(Stream underlying, SSLContext ctx, SSLStreamState state, 
 		import vibe.utils.memory;
 		import vibe.stream.openssl;
 		static assert(AllocSize!SSLStream > 0);
-		return FreeListRef!OpenSSLStream(DEPRECATION_HACK.init, underlying, cast(OpenSSLContext)ctx,
+		return FreeListRef!OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
 	}
 }

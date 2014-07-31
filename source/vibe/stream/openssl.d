@@ -55,8 +55,7 @@ final class OpenSSLStream : SSLStream {
 		Exception[] m_exceptions;
 	}
 
-	/// package
-	/* package */ this(DEPRECATION_HACK, Stream underlying, OpenSSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	this(Stream underlying, OpenSSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		m_stream = underlying;
 		m_state = state;
@@ -270,7 +269,7 @@ final class OpenSSLContext : SSLContext {
 		int m_verifyDepth;
 	}
 
-	package this(DEPRECATION_HACK, SSLContextKind kind, SSLVersion ver = SSLVersion.any)
+	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 	{
 		m_kind = kind;
 
@@ -855,5 +854,3 @@ private BIO_METHOD s_bio_methods = {
 	&onBioFree,
 	null, // &onBioCallbackCtrl
 };
-
-package struct DEPRECATION_HACK {}
