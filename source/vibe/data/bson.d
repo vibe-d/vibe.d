@@ -693,8 +693,12 @@ struct BsonObjectID {
 	alias fromString fromHexString;
 
 	/** Generates a unique object ID.
+	 *
+	 *   By default it will use the Clock.currTime(UTC()) as timestamp
+	 *   which guarantees that BsonObjectIDs are chronologically
+	 *   sorted.
 	*/
-	static BsonObjectID generate()
+	static BsonObjectID generate(in SysTime time = Clock.currTime(UTC()))
 	{
 		import std.datetime;
 		import std.process;
@@ -702,10 +706,9 @@ struct BsonObjectID {
 
 		if( ms_pid == -1 ) ms_pid = getpid();
 		if( MACHINE_ID == 0 ) MACHINE_ID = uniform(0, 0xffffff);
-		auto unixTime = Clock.currTime(UTC()).toUnixTime();
 
 		BsonObjectID ret = void;
-		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)unixTime)[];
+		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)time.toUnixTime())[];
 		ret.m_bytes[4 .. 7] = toBsonData(MACHINE_ID)[0 .. 3];
 		ret.m_bytes[7 .. 9] = toBsonData(cast(ushort)ms_pid)[];
 		ret.m_bytes[9 .. 12] = toBigEndianData(ms_inc++)[1 .. 4];
@@ -720,10 +723,10 @@ struct BsonObjectID {
 		this date part is only 32-bit wide and is limited to the same timespan as a
 		32-bit Unix timestamp.
 	*/
-	static BsonObjectID createDateID(in SysTime date)
+	static BsonObjectID createDateID(in SysTime time)
 	{
 		BsonObjectID ret;
-		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)date.toUnixTime())[];
+		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)time.toUnixTime())[];
 		return ret;
 	}
 
@@ -772,6 +775,23 @@ struct BsonObjectID {
 	}
 }
 
+unittest {
+	auto t0 = SysTime(Clock.currTime(UTC()).toUnixTime.unixTimeToStdTime);
+	auto id = BsonObjectID.generate();
+	auto t1 = SysTime(Clock.currTime(UTC()).toUnixTime.unixTimeToStdTime);
+	assert(t0 <= id.timeStamp);
+	assert(id.timeStamp <= t1);
+
+	id = BsonObjectID.generate(t0);
+	assert(id.timeStamp == t0);
+
+	id = BsonObjectID.generate(t1);
+	assert(id.timeStamp == t1);
+
+	immutable dt = DateTime(2014, 07, 31, 19, 14, 55);
+	id = BsonObjectID.generate(SysTime(dt, UTC()));
+	assert(id.timeStamp == SysTime(dt, UTC()));
+}
 
 /**
 	Represents a BSON date value (Bson.Type.date).
@@ -1338,7 +1358,7 @@ struct BsonSerializer {
 
 	// auto ref does't work for DMD 2.064
 	void writeValue(T)(/*auto ref const*/ in T value) { writeValueH!(T, true)(value); }
-	
+
 	private void writeValueH(T, bool write_header)(/*auto ref const*/ in T value)
 	{
 		static if (write_header) writeCompositeEntryHeader(getBsonTypeID(value));
