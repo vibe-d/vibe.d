@@ -1191,7 +1191,8 @@ private {
 private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
 {
 	Stream http_stream = connection;
-	FreeListRef!SSLStream ssl_stream;
+	import std.traits : ReturnType;
+	ReturnType!createSSLStreamFL ssl_stream;
 
 	if (!connection.waitForData(10.seconds())) {
 		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
