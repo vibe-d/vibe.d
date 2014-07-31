@@ -176,8 +176,7 @@ enum SSLStreamState {
 */
 interface SSLContext {
 	/// The kind of SSL context (client/server)
-	@property SSLContextKind kind();
-
+	@property SSLContextKind kind() const;
 
 	/** Specifies the validation level of remote peers.
 
@@ -187,7 +186,7 @@ interface SSLContext {
 	*/
 	@property void peerValidationMode(SSLPeerValidationMode mode);
 	/// ditto
-	@property SSLPeerValidationMode peerValidationMode();
+	@property SSLPeerValidationMode peerValidationMode() const;
 
 	/** The maximum length of an accepted certificate chain.
 
@@ -196,9 +195,9 @@ interface SSLContext {
 
 		The default value is 9.
 	*/
-	@property int maxCertChainLength();
-	/// ditto
 	@property void maxCertChainLength(int val);
+	/// ditto
+	@property int maxCertChainLength() const;
 
 	/** An optional user callback for peer validation.
 

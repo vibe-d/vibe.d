@@ -383,8 +383,6 @@ final class OpenSSLContext : SSLContext {
 
 		The default value is 9.
 	*/
-	@property int maxCertChainLength() { return m_verifyDepth; }
-	/// ditto
 	@property void maxCertChainLength(int val)
 	{
 		m_verifyDepth = val;
@@ -392,6 +390,8 @@ final class OpenSSLContext : SSLContext {
 		SSL_CTX_set_verify_depth(m_ctx, val + 1);
 	}
 
+	/// ditto
+	@property int maxCertChainLength() const { return m_verifyDepth; }
 
 	/** An optional user callback for peer validation.
 
