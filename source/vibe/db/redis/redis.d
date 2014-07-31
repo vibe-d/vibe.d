@@ -91,8 +91,18 @@ final class RedisClient {
 	void configResetStat() { request("CONFIG RESETSTAT"); }
 	//TOOD: Debug Object
 	//TODO: Debug Segfault
-	void flushAll() { request("FLUSHALL"); }
+
+	/** Deletes all keys from all databases.
+
+		See_also: $(LINK2 http://redis.io/commands/flushall, FLUSHALL)
+	*/
+	void deleteAll() { request("FLUSHALL"); }
+	/// Scheduled for deprecation, use $(D deleteAll) instead.
+	alias flushAll = deleteAll;
+
+	/// Scheduled for deprecation, use $(D RedisDatabase.deleteAll) instead.
 	void flushDB() { request("FLUSHDB"); }
+
 	string info() { return request!string("INFO"); }
 	long lastSave() { return request!long("LASTSAVE"); }
 	//TODO monitor
@@ -188,19 +198,34 @@ struct RedisDatabase {
 		m_index = index;
 	}
 
+	/** The Redis client with which the database is accessed.
+	*/
+	@property inout(RedisClient) client() inout { return m_client; }
+
+	/** Index of the database.
+	*/
+	@property long index() const { return m_index; }
+
+	/** Deletes all keys of the database.
+
+		See_also: $(LINK2 http://redis.io/commands/flushdb, FLUSHDB)
+	*/
+	void deleteAll() { request!void("FLUSHDB"); }
+
 	long del(string[] keys...) { return request!long("DEL", keys); }
 	bool exists(string key) { return request!bool("EXISTS", key); }
 	bool expire(string key, long seconds) { return request!bool("EXPIRE", key, seconds); }
 	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
 	RedisReply keys(string pattern) { return request!RedisReply("KEYS", pattern); }
-	bool move(string key, string db) { return request!bool("MOVE", key, db); }
-	bool persists(string key) { return request!bool("PERSISTS", key); }
+	bool move(string key, long db) { return request!bool("MOVE", key, db); }
+	bool persist(string key) { return request!bool("PERSIST", key); }
 	//TODO: object
 	string randomKey() { return request!string("RANDOMKEY"); }
 	void rename(string key, string newkey) { request("RENAME", key, newkey); }
 	bool renameNX(string key, string newkey) { return request!bool("RENAMENX", key, newkey); }
 	//TODO sort
 	long ttl(string key) { return request!long("TTL", key); }
+	long pttl(string key) { return request!long("PTTL", key); }
 	string type(string key) { return request!string("TYPE", key); }
 	//TODO eval
 
@@ -253,6 +278,11 @@ struct RedisDatabase {
 	void hmset(ARGS...)(string key, ARGS args) { request("HMSET", key, args); }
 	bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
 	RedisReply hvals(string key) { return request!RedisReply("HVALS", key); }
+
+	/*
+		Lists
+	*/
+
 	T lindex(T : E[], E)(string key, long index) { return request!T("LINDEX", key, index); }
 	long linsertBefore(T1, T2)(string key, T1 pivot, T2 value) { return request!long("LINSERT", key, "BEFORE", pivot, value); }
 	long linsertAfter(T1, T2)(string key, T1 pivot, T2 value) { return request!long("LINSERT", key, "AFTER", pivot, value); }
