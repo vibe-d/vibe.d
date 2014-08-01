@@ -240,6 +240,7 @@ class MessageQueue {
 				if (receiveQueue(m_queue, args, filter)) break;
 				logTrace("received no message, waiting..");
 				m_condition.wait();
+				notify = this.full;
 			}
 		}
 
@@ -262,6 +263,7 @@ class MessageQueue {
 				auto now = Clock.currTime(UTC());
 				if (now >= limit_time) return false;
 				m_condition.wait(limit_time - now);
+				notify = this.full;
 			}
 		}
 
