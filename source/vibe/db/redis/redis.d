@@ -857,7 +857,7 @@ private final class RedisConnection {
 			} else static if (isArray!A) {
 				foreach (arg; args[i])
 					writeArgs(dst, arg);
-			} else static assert(false, "Unsupported Redis argument type: " ~ T.stringof);
+			} else static assert(false, "Unsupported Redis argument type: " ~ A.stringof);
 		}
 	}
 
@@ -927,6 +927,6 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 		auto result = reply.next!string();
 		return parse!T(result);
 	}
-	else static if (is(T == string)) return reply.next!string();
+	else static if (is(T == string) || is (T == ubyte[])) return reply.next!T();
 	else static assert(is(T == void), "Unsupported Redis reply type: " ~ T.stringof);
 }
