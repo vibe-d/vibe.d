@@ -170,7 +170,7 @@ struct RedisValue {
 
 		See_also: $(LINK2 http://redis.io/commands/del, DEL)
 	*/
-	bool erase() { return m_db.del(m_key) > 0; }
+	bool remove() { return m_db.del(m_key) > 0; }
 
 	/** Sets the key for expiration after the given timeout.
 
