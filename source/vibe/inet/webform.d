@@ -14,6 +14,8 @@ import vibe.stream.operations;
 import vibe.textfilter.urlencode;
 import vibe.utils.string;
 import vibe.utils.dictionarylist;
+import std.range : isOutputRange;
+import std.traits : ValueType, KeyType;
 
 import std.array;
 import std.exception;
@@ -21,6 +23,8 @@ import std.string;
 
 
 /**
+	Parses form data according to an HTTP Content-Type header.
+
 	Writes the form fields into a key-value of type $(D FormFields), parsed from the 
 	specified $(D InputStream) and using the corresponding Content-Type header. Parsing 
 	is gracefully aborted if the Content-Type header is unrelated.
@@ -189,6 +193,8 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 }
 
 /** 
+	Encodes a Key-Value map into a form URL encoded string.
+
 	Writes to the $(D OutputRange) an application/x-www-form-urlencoded MIME formatted string, 
 	ie. all spaces ' ' are replaced by the '+' character
 
@@ -197,8 +203,6 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 		map	= An iterable key-value map iterable with $(D foreach(string key, string value; map)).
 		sep	= A valid form separator, common values are '&' or ';'
 */
-import std.range : isOutputRange;
-import std.traits : ValueType, KeyType;
 void formEncode(R, T)(ref R dst, T map, char sep = '&')
 {
 	formEncodeImpl(dst, map, sep, true);
@@ -220,6 +224,8 @@ unittest {
 }
 
 /** 
+	Encodes a Key-Value map into a form URL encoded string.
+
 	Returns an application/x-www-form-urlencoded MIME formatted string, 
 	ie. all spaces ' ' are replaced by the '+' character
 
