@@ -17,6 +17,7 @@ import std.algorithm;
 import std.array;
 import std.datetime;
 import std.exception;
+import std.range : isOutputRange;
 import std.typecons;
 
 
@@ -31,10 +32,22 @@ import std.typecons;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes, alloc);
 }
+/// ditto
+void readLine()(InputStream stream, OutputStream dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+{
+	readUntil(stream, dst, max_bytes, linesep);
+}
+/// ditto
+void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+	if (isOutputRange!(R, ubyte))
+{
+	readUntil(stream, dst, max_bytes, linesep);
+}
+
 
 /**
 	Reads all data of a stream until the specified end marker is detected.
@@ -73,7 +86,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string lines
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	auto output = scoped!MemoryOutputStream(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -81,7 +94,15 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 	return output.data();
 }
 /// ditto
-void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+void readUntil()(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+{
+	import vibe.stream.wrapper;
+	auto dstrng = StreamOutputRange(dst);
+	readUntil(stream, dstrng, end_marker, max_bytes);
+}
+/// ditto
+void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+	if (isOutputRange!(R, ubyte))
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
 	
@@ -164,12 +185,12 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 
 		// write out any false match part of previous blocks
 		if( nmatched_start > 0 ){
-			if( nmatched <= i ) dst.write(end_marker[0 .. nmatched_start]);
-			else dst.write(end_marker[0 .. nmatched_start-nmatched+i]);
+			if( nmatched <= i ) dst.put(end_marker[0 .. nmatched_start]);
+			else dst.put(end_marker[0 .. nmatched_start-nmatched+i]);
 		}
 		
 		// write out any unmatched part of the current block
-		if( nmatched < i ) dst.write(str[0 .. i-nmatched]);
+		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
 
 		// got a full, match => out
 		if( nmatched >= end_marker.length ) return;
