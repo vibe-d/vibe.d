@@ -100,8 +100,11 @@ final class Mail {
 }
 
 /**
-	Sends an email using the given settings and mail. Your message must contain a
-	valid $(D Mail) object and should define the headers "To", "From", Sender" and "Subject".
+	Sends an e-mail using the given settings.
+
+	The mail parameter must point to a valid $(D Mail) object and should define
+	at least the headers "To", "From", Sender" and "Subject".
+
 	Valid headers can be found at http://tools.ietf.org/html/rfc4021
 */
 void sendMail(SMTPClientSettings settings, Mail mail)
@@ -204,10 +207,11 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 }
 
 /**
- * The following example demonstrates the complete construction of a 
- * valid e-mail object with UTF-8 encoding. The Date header, as demonstrated, 
- * must be converted with the local timezone using the $(D toRFC822DateTimeString) function.
- */
+	The following example demonstrates the complete construction of a valid
+	e-mail object with UTF-8 encoding. The Date header, as demonstrated, must
+	be converted with the local timezone using the $(D toRFC822DateTimeString)
+	function.
+*/
 unittest {
 	import vibe.inet.message;
 	import std.datetime;
