@@ -135,7 +135,7 @@ final class RedisClient {
 						arr ~= args[i].to!string; 
 					}
 				}
-				logInfo("Redis request: %s ( %s ) => (void)", command, arr);
+				logDebug("Redis request: %s ( %s ) => (void)", command, arr);
 			}
 			return _request!T(conn, command, args);
 		} else static if (!isInstanceOf!(RedisReply, T)) {
@@ -154,7 +154,7 @@ final class RedisClient {
 						arr ~= args[i].to!string;
 					}
 				}
-				logInfo("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
+				logDebug("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
 			}
 			return ret;
 		} else {
@@ -173,7 +173,7 @@ final class RedisClient {
 						arr ~= args[i].to!string;
 					}
 				}
-				logInfo("Redis request: %s ( %s ) => (RedisReply)", command, arr);
+				logDebug("Redis request: %s ( %s ) => (RedisReply)", command, arr);
 			}
 			return ret;
 		}
@@ -678,6 +678,7 @@ struct RedisReply(T = ubyte[]) {
 		assert(ctx.refCount == 0);
 		*ctx = RedisReplyContext.init;
 		ctx.refCount++;
+		init();
 	}
 
 	this(this)
@@ -699,7 +700,7 @@ struct RedisReply(T = ubyte[]) {
 		}
 	}
 
-	@property bool empty() const { return m_conn && m_conn.m_replyContext.index < m_conn.m_replyContext.length; }
+	@property bool empty() const { return !m_conn || m_conn.m_replyContext.index >= m_conn.m_replyContext.length; }
 
 	/** Returns the current element of the reply.
 
@@ -743,7 +744,6 @@ struct RedisReply(T = ubyte[]) {
 			ctx.refCount = 0;
 			m_conn = null;
 			m_lockedConnection.destroy();
-			return;
 		}
 	}
 
@@ -770,8 +770,7 @@ struct RedisReply(T = ubyte[]) {
 	private void readData()
 	{
 		auto ctx = &m_conn.m_replyContext;
-		assert(!ctx.hasData);
-		if (!ctx.initialized) init();
+		assert(!ctx.hasData && ctx.initialized);
 
 		if (ctx.multi) {
 			auto ln = cast(string)m_conn.conn.readLine();
@@ -809,6 +808,7 @@ struct RedisReply(T = ubyte[]) {
 	{
 		assert(m_conn !is null);
 		auto ctx = &m_conn.m_replyContext;
+		assert(!ctx.initialized);
 		ctx.initialized = true;
 
 		auto ln = cast(string)m_conn.conn.readLine();
@@ -973,6 +973,7 @@ private RedisReply!T _request_reply(T = ubyte[], ARGS...)(RedisConnection conn, 
 	auto rng = StreamOutputRange(conn.conn);
 	formattedWrite(&rng, "*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
 	RedisConnection.writeArgs(&rng, args);
+	rng.flush();
 
 	return RedisReply!T(conn);
 }
