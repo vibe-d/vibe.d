@@ -68,6 +68,8 @@ import vibe.http.server;
 				missing in the set of form fields. All other parameter types
 				require the corresponding field to be present and will result
 				in a runtime error otherwise.)
+			$(LI $(D Json) type parameters will take any parsed JSON content from the
+				request body and refer to the instance.
 			$(LI $(D struct) type parameters that don't define a $(D fromString)
 				or a $(D fromStringValidate) method will be mapped to one
 				form field per struct member with a scheme similar to how
@@ -536,6 +538,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				if (res.headerWritten) return;
 			}
 			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i].setVoid(error[0]);
+			else static if (is(PT == Json)) params[i] = req.json;
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
