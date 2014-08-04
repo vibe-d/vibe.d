@@ -959,6 +959,13 @@ void serializeToJson(R, T)(R destination, T value)
 {
 	serialize!(JsonStringSerializer!R)(value, destination);
 }
+/// ditto
+string serializeToJsonString(T)(T value)
+{
+	auto ret = appender!string;
+	serializeToJson(ret, value);
+	return ret.data;
+}
 
 /// private
 Json serializeToJsonOld(T)(T value)
