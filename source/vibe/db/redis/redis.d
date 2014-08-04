@@ -16,7 +16,7 @@ import vibe.stream.operations;
 import std.conv;
 import std.exception;
 import std.format;
-import std.range : isOutputRange;
+import std.range : isInputRange, isOutputRange;
 import std.string;
 import std.traits;
 import std.utf;
@@ -238,6 +238,7 @@ struct RedisDatabase {
 	T getRange(T : E[], E)(string key, long start, long end) { return request!T("GETRANGE", start, end); }
 	T getSet(T : E[], E)(string key, T value) { return request!T("GET", key, value); }
 	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
+	long incr(string key, double value) { return request!long("INCRBYFLOAT", key, value); }
 	RedisReply!T mget(T = string)(string[] keys) { return request!(RedisReply!T)("MGET", keys); }
 	
 	void mset(ARGS...)(ARGS args)
@@ -270,6 +271,7 @@ struct RedisDatabase {
 	T hget(T : E[], E)(string key, string field) { return request!T("HGET", key, field); }
 	RedisReply!T hgetAll(T = string)(string key) { return request!(RedisReply!T)("HGETALL", key); }
 	long hincr(string key, string field, long value=1) { return request!long("HINCRBY", key, field, value); }
+	long hincr(string key, string field, double value) { return request!long("HINCRBYFLOAT", key, field, value); }
 	RedisReply!T hkeys(T = string)(string key) { return request!(RedisReply!T)("HKEYS", key); }
 	long hlen(string key) { return request!long("HLEN", key); }
 	RedisReply!T hmget(T = string)(string key, string[] fields...) { return request!(RedisReply!T)("HMGET", key, fields); }
@@ -330,19 +332,19 @@ struct RedisDatabase {
 	long zcount(string key, double min, double max) { return request!long("ZCOUNT", key, min, max); }
 	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
 	//TODO: zinterstore
-	RedisReply!T zrange(T = string)(string key, long start, long end, bool withScores=false) {
-		string[] args = [key, to!string(start), to!string(end)];
-		if (withScores) args ~= "WITHSCORES";
-		return request!(RedisReply!T)("ZRANGE", args);
+	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
+	{
+		if (with_scores) return request!(RedisReply!T)("ZRANGE", key, start, end, "WITHSCORES");
+		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
 	// TODO:
 	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
-	RedisReply!T zrangeByScore(T = string)(string key, double start, double end, bool withScores=false) {
-		string[] args = [key, to!string(start), to!string(end)];
-		if (withScores) args ~= "WITHSCORES";
-		return request!(RedisReply!T)("ZRANGEBYSCORE", args);
+	RedisReply!T zrangeByScore(T = string)(string key, double start, double end, bool with_scores = false)
+	{
+		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, start, end, "WITHSCORES");
+		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, start, end);
 	}
 
 	// TODO:
@@ -663,6 +665,9 @@ final class RedisSubscriber {
 */
 struct RedisReply(T = ubyte[]) {
 	import vibe.utils.memory : FreeListRef;
+
+	static assert(isInputRange!RedisReply);
+
 	private {
 		uint m_magic = 0x15f67ab3;
 		RedisConnection m_conn;
@@ -678,7 +683,7 @@ struct RedisReply(T = ubyte[]) {
 		assert(ctx.refCount == 0);
 		*ctx = RedisReplyContext.init;
 		ctx.refCount++;
-		init();
+		initialize();
 	}
 
 	this(this)
@@ -804,7 +809,7 @@ struct RedisReply(T = ubyte[]) {
 		m_lockedConnection = conn;
 	}
 
-	private void init()
+	private void initialize()
 	{
 		assert(m_conn !is null);
 		auto ctx = &m_conn.m_replyContext;
