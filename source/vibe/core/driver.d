@@ -122,7 +122,7 @@ interface EventDriver {
 
 	/** Creates an event for waiting on a non-bocking file handle.
 	*/
-	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers);
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers, bool persist);
 
 	/** Creates a new timer.
 

@@ -602,15 +602,16 @@ Timer createTimer(void delegate() callback)
 	Params:
 		file_descriptor = The Posix file descriptor to watch
 		event_mask = Specifies which events will be listened for
+        persist = Specifies whether to persist the event in the event loop
 
 	Returns:
 		Returns a newly created FileDescriptorEvent associated with the given
 		file descriptor.
 */
-FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger event_mask)
+FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger event_mask, bool persist=true)
 {
 	auto drv = getEventDriver();
-	return drv.createFileDescriptorEvent(file_descriptor, event_mask);
+	return drv.createFileDescriptorEvent(file_descriptor, event_mask, persist);
 }
 
 

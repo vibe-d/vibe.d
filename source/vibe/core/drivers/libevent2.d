@@ -378,9 +378,9 @@ final class Libevent2Driver : EventDriver {
 		return new Libevent2ManualEvent(this);
 	}
 
-	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events)
+	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events, bool persist)
 	{
-		return new Libevent2FileDescriptorEvent(this, fd, events);
+		return new Libevent2FileDescriptorEvent(this, fd, events, persist);
 	}
 
 	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
@@ -738,21 +738,32 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent {
 	private {
 		int m_fd;
+		bool m_persist;
+		Libevent2Driver m_driver;
+		Trigger m_origEvents;
 		deimos.event2.event.event* m_event;
 		Trigger m_activeEvents;
 		Task m_waiter;
 	}
 
-	this(Libevent2Driver driver, int file_descriptor, Trigger events)
+	private void _armEvent() {
+		short evts = 0;
+		if (m_origEvents & Trigger.read) evts |= EV_READ;
+		if (m_origEvents & Trigger.write) evts |= EV_WRITE;
+		if (m_persist) evts |= EV_PERSIST;
+		m_event = event_new(m_driver.eventLoop, m_fd, evts, &onFileTriggered, cast(void*)this);
+		event_add(m_event, null);
+	}
+
+	this(Libevent2Driver driver, int file_descriptor, Trigger events, bool persist)
 	{
 		assert(events != Trigger.none);
 		super(driver);
 		m_fd = file_descriptor;
-		short evts = 0;
-		if (events & Trigger.read) evts |= EV_READ;
-		if (events & Trigger.write) evts |= EV_WRITE;
-		m_event = event_new(driver.eventLoop, file_descriptor, evts|EV_PERSIST, &onFileTriggered, cast(void*)this);
-		event_add(m_event, null);
+		m_driver = driver;
+		m_persist = persist;
+		m_origEvents = events;
+		_armEvent();
 	}
 
 	~this()
@@ -767,10 +778,12 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		scope (exit) {
 			m_waiter = Task.init;
 			m_activeEvents &= ~which;
+			if (!m_persist) _armEvent();
 		}
 
 		while ((m_activeEvents & which) == Trigger.none)
 			getThreadLibeventDriverCore().yieldForEvent();
+
 	}
 
 	bool wait(Duration timeout, Trigger which)
@@ -780,6 +793,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		scope (exit) {
 			m_waiter = Task.init;
 			m_activeEvents &= ~which;
+			if (!m_persist) _armEvent();
 		}
 
 		auto tm = m_driver.createTimer(null);
