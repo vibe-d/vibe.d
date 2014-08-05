@@ -99,7 +99,7 @@ unittest {
 	void test()
 	{
 		auto db = connectRedis("127.0.0.1").getDatabase(0);
-		auto list = db.getAsList("some_list");
+		auto list = db.getAsList!long("some_list");
 		list.insertFront(123);
 	}
 }

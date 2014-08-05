@@ -255,9 +255,12 @@ struct RedisDatabase {
 	}
 
 	void set(T : E[], E)(string key, T value) { request("SET", key, value); }
+	bool setNX(T : E[], E)(string key, T value) { return request!bool("SETNX", key, value); }
+	bool setXX(T : E[], E)(string key, T value) { return request!bool("SET", key, value, "XX"); }
+	bool setNX(T : E[], E)(string key, T value, Duration expire_time) { return request!bool("SET", key, value, "PX", expire_time.total!"msecs", "NX"); }
+	bool setXX(T : E[], E)(string key, T value, Duration expire_time) { return request!bool("SET", key, value, "PX", expire_time.total!"msecs", "XX"); }
 	bool setBit(string key, long offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
 	void setEX(T : E[], E)(string key, long seconds, T value) { request("SETEX", key, seconds, value); }
-	bool setNX(T : E[], E)(string key, T value) { return request!bool("SETNX", key, value); }
 	long setRange(T : E[], E)(string key, long offset, T value) { return request!long("SETRANGE", key, offset, value); }
 	long strlen(string key) { return request!long("STRLEN", key); }
 
@@ -426,6 +429,25 @@ struct RedisDatabase {
 	{
 		return m_client.requestDB!(T, ARGS)(m_index, command, args);
 	}
+
+	/*
+		LUA Scripts
+	*/
+	RedisReply!T eval(T = string, ARGS...)(string lua_code, scope string[] keys, ARGS args)
+	{
+		return request!(RedisReply!T)("EVAL", lua_code, keys.length, keys, args);
+	}
+
+	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope string[] keys, ARGS args)
+	{
+		return request!(RedisReply!T)("EVALSHA", sha, keys.length, keys, args);
+	}
+
+	//scriptExists
+	//scriptFlush
+	//scriptKill
+
+	string scriptLoad(string lua_code) { return request!string("SCRIPT", "LOAD", lua_code); }
 }
 
 
