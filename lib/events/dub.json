@@ -1,0 +1,11 @@
+{
+	"name": "native-events",
+	"description": "A cross-platform D event loop.",
+	"license": "MIT",
+	"authors": ["Etienne Cimon", "Sönke Ludwig"],
+	"targetType": "executable",
+	"mainSourceFile": "../../source/vibe/core/events/test.d",
+	"sourcePaths": ["../../source/vibe/core/events", "../../source/vibe/utils", "../../source/vibe/internal"],
+	"libs-win32": ["ws2_32", "advapi32", "user32"],
+	"versions": ["VibeManualMemoryManagement"]
+}

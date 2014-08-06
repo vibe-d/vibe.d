@@ -9,9 +9,6 @@
 	Authors: Sönke Ludwig
 */
 module vibe.utils.memory;
-
-import vibe.core.log;
-
 import core.exception : OutOfMemoryError;
 import core.stdc.stdlib;
 import core.memory;
@@ -156,7 +153,7 @@ final class DebugAllocator : Allocator {
 		m_bytes += sz;
 		if( m_bytes > m_maxBytes ){
 			m_maxBytes = m_bytes;
-			logDebug("New allocation maximum: %d (%d blocks)", m_maxBytes, m_blocks.length);
+			// logDebug("New allocation maximum: %d (%d blocks)", m_maxBytes, m_blocks.length);
 		}
 		return ret;
 	}
@@ -492,7 +489,7 @@ final class FreeListAlloc : Allocator
 		assert(elem_size >= size_t.sizeof);
 		m_elemSize = elem_size;
 		m_baseAlloc = base_allocator;
-		logDebug("Create FreeListAlloc %d", m_elemSize);
+		// logDebug("Create FreeListAlloc %d", m_elemSize);
 	}
 
 	@property size_t elementSize() const { return m_elemSize; }
