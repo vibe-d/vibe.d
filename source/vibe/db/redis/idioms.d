@@ -316,11 +316,11 @@ struct RedisLock {
 
 		if (!m_scriptSHA.length) {
 			m_scriptSHA = m_db.scriptLoad(
-	"if redis.call(\"get\",KEYS[1]) == ARGV[1] then
-	    return redis.call(\"del\",KEYS[1])
-	else
-	    return 0
-	end");
+`if redis.call("get",KEYS[1]) == ARGV[1] then
+    return redis.call("del",KEYS[1])
+else
+    return 0
+end`);
 		}
 
 		auto lockval = BsonObjectID.generate();
