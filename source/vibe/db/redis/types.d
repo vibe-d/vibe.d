@@ -374,7 +374,7 @@ struct RedisHash(T = string) {
 	T opIndex(string field) { return m_db.hget!string(m_key, field).fromRedis!T(); }
 
 	// FIXME: could also be a ubyte[]
-	int opApply(int delegate(string key, string value) del)
+	int opApply(scope int delegate(string key, string value) del)
 	{
 		auto reply = m_db.hgetAll(m_key);
 		while (reply.hasNext()) {
@@ -388,7 +388,7 @@ struct RedisHash(T = string) {
 
 	void opIndexOpAssign(string op)(T value, string field) if (op == "+") { m_db.hincr(m_key, field, value.toRedis()); }
 
-	int opApply(int delegate(string key) del)
+	int opApply(scope int delegate(string key) del)
 	{
 		auto reply = m_db.hkeys(m_key);
 		while (reply.hasNext()) {
@@ -453,18 +453,28 @@ struct RedisList(T = string) {
 		assert(index.offset < 0);
 		m_db.lset(m_key, index.offset, value.toRedis);
 	}
-	auto opSlice(long start, long end)
+	auto opSlice(S, E)(S start, E end)
+		if ((is(S : long) || is(S == Dollar)) && (is(E : long) || is(E == Dollar)))
 	{
 		import std.algorithm;
-		assert(start >= 0 && end >= 0);
-		return map!(e => e.fromRedis!T)(m_db.lrange(m_key, start, end-1));
+		long s, e;
+		static if (is(S == Dollar)) {
+			assert(start.offset <= 0);
+			s = start.offset;
+		} else {
+			assert(start >= 0);
+			s = start;
+		}
+		static if (is(E == Dollar)) {
+			assert(end.offset <= 0);
+			e = end.offset - 1;
+		} else {
+			assert(end >= 0);
+			e = end - 1;
+		}
+		return map!(e => e.fromRedis!T)(m_db.lrange(m_key, s, e));
 	}
-	auto opSlice(Dollar start, Dollar end)
-	{
-		import std.algorithm;
-		assert(start.offset <= 0 && end.offset <= 0);
-		return map!(e => e.fromRedis!T)(m_db.lrange(m_key, start.offset, end.offset-1));
-	}
+	auto opSlice()() { return this[0 .. $]; }
 
 	long length() { return m_db.llen(m_key); }
 
@@ -495,9 +505,9 @@ struct RedisList(T = string) {
 		Dollar opSub(long off) { return Dollar(offset - off); }
 	}
 
-	int opApply(int delegate(T) del)
+	int opApply(scope int delegate(T) del)
 	{
-		foreach (v; opSlice(0, -1))
+		foreach (v; this[0 .. $])
 			if (auto ret = del(v))
 				return ret;
 		return 0;
@@ -533,7 +543,7 @@ struct RedisSet(T = string) {
 	//long sinterStore(string destination, string[] keys...) { return request!long("SINTERSTORE", destination, keys); }
 	bool contains(T value) { return m_db.sisMember(m_key, value.toRedis()); }
 
-	int opApply(int delegate(T value) del)
+	int opApply(scope int delegate(T value) del)
 	{
 		foreach (m; m_db.smembers!string(m_key))
 			if (auto ret = del(m.fromRedis!T()))
@@ -546,6 +556,12 @@ struct RedisSet(T = string) {
 		import std.algorithm;
 		import std.array;
 		return !value.database.sinter(value.key ~ sets.map!(s => s.key).array).empty;
+	}
+
+	auto getAll()
+	{
+		import std.algorithm;
+		return map!(r => r.fromRedis!T)(value.database.smembers(value.key));
 	}
 
 	//bool smove(T : E[], E)(string source, string destination, T member) { return request!bool("SMOVE", source, destination, member); }
