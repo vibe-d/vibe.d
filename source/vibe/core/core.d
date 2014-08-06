@@ -962,7 +962,7 @@ private class CoreTask : TaskFiber {
 				m_yielders.length = 0;
 
 				// zero the fls initialization ByteArray for memory safety
-				foreach (ref size_t i, ref bool b; m_flsInit) {
+				foreach (size_t i, ref bool b; m_flsInit) {
 					if (b) {
 						if (ms_flsInfo !is null && ms_flsInfo.length >= i && ms_flsInfo[i] != FLSInfo.init)
 							ms_flsInfo[i].destroy(m_fls);
