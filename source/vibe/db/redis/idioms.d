@@ -323,20 +323,23 @@ struct RedisLock {
 		string m_scriptSHA;
 	}
 
-	void performLocked(scope void delegate() del)
+	this(RedisDatabase db, string lock_key)
 	{
-		import std.random;
-		import vibe.core.core;
-		import vibe.data.bson;
-
-		if (!m_scriptSHA.length) {
-			m_scriptSHA = m_db.scriptLoad(
+		m_db = db;
+		m_key = lock_key;
+		m_scriptSHA = m_db.scriptLoad(
 `if redis.call("get",KEYS[1]) == ARGV[1] then
     return redis.call("del",KEYS[1])
 else
     return 0
 end`);
-		}
+	}
+
+	void performLocked(scope void delegate() del)
+	{
+		import std.random;
+		import vibe.core.core;
+		import vibe.data.bson;
 
 		auto lockval = BsonObjectID.generate();
 		while (!m_db.setNX(m_key, cast(ubyte[])lockval, 30.seconds))
@@ -361,6 +364,7 @@ struct JsonEncoded(T) {
 
 	static assert(isStringSerializable!JsonEncoded);
 }
+JsonEncoded!T jsonEncoded(T)(T value) { return JsonEncoded!T(value); }
 
 // utility structure, temporarily placed here
 struct LazyString(T...) {
