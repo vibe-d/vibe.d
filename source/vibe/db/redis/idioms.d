@@ -26,17 +26,22 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 
 	private {
 		RedisDatabase m_db;
-		string m_prefix;
+		string[ID_LENGTH] m_prefix;
+		string m_suffix;
 		static if (SUPPORT_ITERATION) {
-			@property string m_idCounter() const { return m_prefix ~ "next_id"; }
-			@property string m_allSet() const { return m_prefix ~ "all"; }
+			@property string m_idCounter() const { return m_prefix[0] ~ "max"; }
+			@property string m_allSet() const { return m_prefix[0] ~ "all"; }
 		}
 	}
 
-	this(RedisDatabase db, string name)
+	this(RedisDatabase db, Replicate!(string, ID_LENGTH) name, string suffix = null)
 	{
 		m_db = db;
-		m_prefix = name ~ ":";
+		foreach (i, N; name) {
+			if (i == 0) m_prefix[i] = name[i] ~ ":";
+			else m_prefix[i] = ":" ~ name[i] ~ ":";
+		}
+		if (suffix.length) m_suffix = ":" ~ suffix;
 	}
 
 	@property inout(RedisDatabase) database() inout { return m_db; }
@@ -58,6 +63,11 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 			auto id = createID();
 			this[id] = args;
 			return id;
+		}
+
+		bool isMember(long id)
+		{
+			return m_db.sisMember(m_allSet, id);
 		}
 
 		int opApply(int delegate(long id) del)
@@ -91,11 +101,11 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 	{
 		import std.conv;
 		static if (ID_LENGTH == 1) {
-			return m_prefix ~ ids.to!string;
+			return m_prefix[0] ~ ids.to!string ~ m_suffix;
 		} else {
-			auto ret = m_prefix;
-			foreach (id; ids) ret ~= ":" ~ id.to!string;
-			return ret;
+			string ret;
+			foreach (i, id; ids) ret ~= m_prefix[i] ~ id.to!string;
+			return ret ~ m_suffix;
 		}
 	}
 }
@@ -176,8 +186,12 @@ struct RedisObject(T) {
 	{
 		T ret;
 		auto repl = m_hash.database.hmget(m_hash.key, keys);
-		foreach (f; ret.tupleof)
-			f = repl.next!string().fromRedis!(typeof(f));
+		foreach (i, F; typeof(ret.tupleof)) {
+			assert(!repl.empty);
+			__traits(getMember, ret, keys[i]) = repl.front.fromRedis!F;
+			repl.popFront();
+		}
+		assert(repl.empty);
 		return ret;
 	}
 
@@ -210,8 +224,9 @@ struct RedisObject(T) {
 	private static string[T.tupleof.length*2] toKeysAndValues(T val)
 	{
 		string[T.tupleof.length*2] ret;
+		enum keys = fieldNames!T;
 		foreach (i, m; val.tupleof) {
-			ret[i*2+0] = __traits(identifier, m);
+			ret[i*2+0] = keys[i];
 			ret[i*2+1] = m.toRedis();
 		}
 		return ret;
@@ -327,7 +342,7 @@ end`);
 		while (!m_db.setNX(m_key, cast(ubyte[])lockval, 30.seconds))
 			sleep(uniform(0, 50).msecs);
 
-		scope (exit) m_db.evalSHA(m_scriptSHA, null, cast(ubyte[])lockval);
+		scope (exit) m_db.evalSHA!(string, ubyte[])(m_scriptSHA, null, cast(ubyte[])lockval);
 
 		del();
 	}
@@ -377,13 +392,18 @@ private auto toTuple(size_t N, T)(T[N] values)
 
 private template fieldNames(T)
 {
-	pragma(msg, "Field names for "~T.stringof~" "~T.tupleof.length.stringof);
 	import std.typetuple;
 	template impl(size_t i) {
-		static if (i < T.tupleof.length) alias impl = TypeTuple!(__traits(identifier, T.tupleof[i]), impl!(i+1));
+		static if (i < T.tupleof.length)
+			alias impl = TypeTuple!(__traits(identifier, T.tupleof[i]), impl!(i+1));
 		else alias impl = TypeTuple!();
 	}
 	enum string[T.tupleof.length] fieldNames = [impl!0];
+}
+
+unittest {
+	static struct Test { int a; float b; void method() {} Test[] c; void opAssign(Test) {}; ~this() {} }
+	static assert(fieldNames!Test[] == ["a", "b", "c"]);
 }
 
 private template Replicate(T, size_t L)
