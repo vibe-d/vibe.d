@@ -56,9 +56,11 @@ bool parseFormData(ref FormFields fields, ref FilePartFormFields files, string c
 }
 
 /**
+	Parses a URL encoded form and stores the key/value pairs.
+
 	Writes to the $(D FormFields) the key-value map associated to an
-	application/x-www-form-urlencoded MIME formatted string, 
-		ie. all '+' characters are considered as ' ' spaces.
+	"application/x-www-form-urlencoded" MIME formatted string, ie. all '+'
+	characters are considered as ' ' spaces.
 */
 void parseURLEncodedForm(string str, ref FormFields params)
 {
@@ -140,7 +142,10 @@ alias FormFields = DictionaryList!(string, true, 16);
 alias FilePartFormFields = DictionaryList!(FilePart, true, 1);
 
 /**
-	A FilePart is the data structure for individual "multipart/form-data" parts according to RFC 1867 section 7.
+	Single part of a multipart form.
+
+	A FilePart is the data structure for individual "multipart/form-data" parts
+	according to RFC 1867 section 7.
 */
 struct FilePart {
 	InetHeaderMap headers;
