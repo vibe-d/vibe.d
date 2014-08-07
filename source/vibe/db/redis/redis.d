@@ -3,7 +3,7 @@
 
 	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Jan Krüger
+	Authors: Jan Krüger, Sönke Ludwig, Michael Eisendle, Etienne Cimon
 */
 module vibe.db.redis.redis;
 
