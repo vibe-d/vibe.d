@@ -370,23 +370,29 @@ struct RedisHash(T = string) {
 	bool exists(string field) { return m_db.hexists(m_key, field); }
 	
 	void opIndexAssign(T value, string field) { m_db.hset(m_key, field, value.toRedis()); }
-	// FIXME: support ubyte[] or something
 	T opIndex(string field) { return m_db.hget!string(m_key, field).fromRedis!T(); }
 
-	// FIXME: could also be a ubyte[]
-	int opApply(scope int delegate(string key, string value) del)
+	T get(string field, T def_value)
+	{
+		import std.typecons;
+		auto ret = m_db.hget!(Nullable!string)(m_key, field);
+		return ret.isNull ? def_value : ret.fromRedis!T;
+	}
+
+	void opIndexOpAssign(string op)(T value, string field) if (op == "+") { m_db.hincr(m_key, field, value.toRedis()); }
+
+	int opApply(scope int delegate(string key, T value) del)
 	{
 		auto reply = m_db.hgetAll(m_key);
 		while (reply.hasNext()) {
 			auto key = reply.next!string();
 			auto value = reply.next!string();
-			if (auto ret = del(key, value))
+			if (auto ret = del(key, value.fromRedis!T))
 				return ret;
 		}
 		return 0;
 	}
 
-	void opIndexOpAssign(string op)(T value, string field) if (op == "+") { m_db.hincr(m_key, field, value.toRedis()); }
 
 	int opApply(scope int delegate(string key) del)
 	{
