@@ -61,7 +61,7 @@ extern(System) nothrow
 		DWORD NextEntryOffset;
 		DWORD Action;
 		DWORD FileNameLength;
-		WCHAR FileName[1];
+		WCHAR[1] FileName;
 	}
 
 	BOOL ReadDirectoryChangesW(HANDLE hDirectory, void* lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, void* lpOverlapped, void* lpCompletionRoutine);
@@ -95,12 +95,12 @@ extern(System) nothrow
 		int              iSecurityScheme;
 		DWORD            dwMessageSize;
 		DWORD            dwProviderReserved;
-		wchar            szProtocol[WSAPROTOCOL_LEN+1];
+		WCHAR[WSAPROTOCOL_LEN+1] szProtocol;
 	};
 
 	struct WSAPROTOCOLCHAIN {
 		int ChainLen;                   
-		DWORD ChainEntries[MAX_PROTOCOL_CHAIN];
+		DWORD[MAX_PROTOCOL_CHAIN] ChainEntries;
 	};
 
 	struct WSABUF {
@@ -179,8 +179,28 @@ extern(System) nothrow
 		NS_DNS = 12
 	}
 
-
-	struct WSAPROTOCOL_INFO;
+	struct WSAPROTOCOL_INFO {
+		DWORD            dwServiceFlags1;
+		DWORD            dwServiceFlags2;
+		DWORD            dwServiceFlags3;
+		DWORD            dwServiceFlags4;
+		DWORD            dwProviderFlags;
+		GUID             ProviderId;
+		DWORD            dwCatalogEntryId;
+		WSAPROTOCOLCHAIN ProtocolChain;
+		int              iVersion;
+		int              iAddressFamily;
+		int              iMaxSockAddr;
+		int              iMinSockAddr;
+		int              iSocketType;
+		int              iProtocol;
+		int              iProtocolMaxOffset;
+		int              iNetworkByteOrder;
+		int              iSecurityScheme;
+		DWORD            dwMessageSize;
+		DWORD            dwProviderReserved;
+		CHAR[WSAPROTOCOL_LEN+1] szProtocol;
+	}
 	alias sockaddr SOCKADDR;
 
 	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
@@ -194,22 +214,24 @@ extern(System) nothrow
 	int WSARecv(SOCKET s, WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesRecvd, DWORD* lpFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASend(SOCKET s, in WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesSent, DWORD dwFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
-	INT WSAStringToAddressW(in LPWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
+	INT WSAStringToAddressA(in LPTSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
+	INT WSAStringToAddressW(in LPCWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFOW* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
 	INT WSAAddressToStringW(in SOCKADDR* lpsaAddress, DWORD dwAddressLength, in WSAPROTOCOL_INFO* lpProtocolInfo, LPWSTR lpszAddressString, DWORD* lpdwAddressStringLength);
 	int GetAddrInfoExW(LPCWSTR pName, LPCWSTR pServiceName, DWORD dwNameSpace, GUID* lpNspId, const ADDRINFOEXW *pHints, ADDRINFOEXW **ppResult, timeval *timeout, WSAOVERLAPPEDX* lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, HANDLE* lpNameHandle);
 	int GetAddrInfoW(LPCWSTR pName, LPCWSTR pServiceName, const ADDRINFOW *pHints, ADDRINFOW **ppResult);
 	int getaddrinfo(LPCSTR pName, LPCSTR pServiceName, const ADDRINFOA *pHints, ADDRINFOA **ppResult);
-	void FreeAddrInfoW(ADDRINFOEXW* pAddrInfo);
+	void FreeAddrInfoW(ADDRINFOW* pAddrInfo);
+	void FreeAddrInfoExW(ADDRINFOEXW* pAddrInfo);
 	void freeaddrinfo(ADDRINFOA* ai);
 	BOOL TransmitFile(SOCKET hSocket, HANDLE hFile, DWORD nNumberOfBytesToWrite, DWORD nNumberOfBytesPerSend, OVERLAPPED* lpOverlapped, LPTRANSMIT_FILE_BUFFERS lpTransmitBuffers, DWORD dwFlags);
 
 
 	struct GUID
 	{
-		uint Data1;
-		ushort Data2;
-		ushort Data3;
-		ubyte  Data4[8];
+		DWORD Data1;
+		WORD Data2;
+		WORD Data3;
+		BYTE[8]  Data4;
 	};
 
 	enum WM_USER = 0x0400;
