@@ -78,9 +78,31 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.sort)
 	*/
-	MongoCursor sort(T)(T order) {
+	MongoCursor sort(T)(T order)
+	{
 		m_data.sort(serializeToBson(order));
 		return this;
+	}
+
+	///
+	unittest {
+		import vibe.core.log;
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
+			auto coll = db["testcoll"];
+
+			// find all entries in reverse date order
+			foreach (entry; coll.find().sort(["date": -1]))
+				logInfo("Entry: %s", entry);
+
+			// the same, but using a struct to avoid memory allocations
+			static struct Order { int date; }
+			foreach (entry; coll.find().sort(Order(-1)))
+				logInfo("Entry: %s", entry);
+		}
 	}
 
 	/**
@@ -98,7 +120,8 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.limit)
 	*/
-	MongoCursor limit(size_t count) {
+	MongoCursor limit(size_t count)
+	{
 		m_data.limit(count);
 		return this;
 	}
