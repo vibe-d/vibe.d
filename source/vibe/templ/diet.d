@@ -1020,7 +1020,7 @@ private struct DietCompiler(TRANSLATE...)
 			string name = skipIdent(str, i, "-:");
 			string value;
 			skipWhitespace(str, i);
-			if( str[i] == '=' ){
+			if( i < str.length && str[i] == '=' ){
 				i++;
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
@@ -1348,6 +1348,8 @@ unittest {
 	assert(compile!("pre().\n\tfoo") == "<pre>\nfoo</pre>");
 	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
 	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
+
+	assert(compile!("input(autofocus)").length);
 }
 
 
