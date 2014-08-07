@@ -45,6 +45,11 @@ void runTest()
 		db.sadd("saddTests", "item2");
 		assert(db.smembers("saddTests").array.sort.equal(["item1", "item2"]));
 
+		db.zadd("zaddTests", 0.5, "a", 1.0, "b", 2.0, "c", 1.5, "d");
+		assert(db.zrangeByScore("zaddTests", 0.5, 1.5).equal(["a", "b", "d"]));
+		assert(db.zrangeByScore!(string, "()")("zaddTests", 0.5, 1.5).equal(["b"]));
+		assert(db.zrangeByScore!(string, "[)")("zaddTests", 0.5, 1.5).equal(["a", "b"]));
+		assert(db.zrangeByScore!(string, "(]")("zaddTests", 0.5, 1.5).equal(["b", "d"]));
 
 		db.append("test1", "test1append");
 		db.append("test2", "test2append");
@@ -55,7 +60,7 @@ void runTest()
 		assert(db.get!long("test10") == 1);
 
 		db.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
-		db.del("saddTests");
+		db.del("saddTests", "zaddTests");
 
 		db.srem("test1", "test1append");
 		db.srem("test2", "test2append");
@@ -94,6 +99,7 @@ int main()
 		try runTest();
 		catch (Throwable th) {
 			logError("Test failed: %s", th.msg);
+			logDiagnostic("Full error: %s", th);
 			ret = 1;
 		} finally exitEventLoop(true);
 	});

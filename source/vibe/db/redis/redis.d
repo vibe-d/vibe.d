@@ -120,61 +120,22 @@ final class RedisClient {
 		auto conn = m_connections.lockConnection();
 		conn.setAuth(m_authPassword);
 		conn.setDB(db);
+		version (RedisDebug) {
+			import std.conv;
+			string debugargs = command;
+			foreach (i, A; ARGS) debugargs ~= ", " ~ args[i].to!string; 
+		}
+
 		static if (is(T == void)) {
-			version (RedisDebug) {
-				import std.stdio;
-				
-				import std.array, std.traits, std.algorithm;
-				string[] arr;
-				foreach(i, A; ARGS){
-					static if (!isSomeString!A && isArray!A){
-						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
-					}
-					else
-					{
-						arr ~= args[i].to!string; 
-					}
-				}
-				logDebug("Redis request: %s ( %s ) => (void)", command, arr);
-			}
-			return _request!T(conn, command, args);
+			version (RedisDebug) logDebug("Redis request: %s => void", debugargs);
+			_request!void(conn, command, args);
 		} else static if (!isInstanceOf!(RedisReply, T)) {
 			auto ret = _request!T(conn, command, args);
-			version (RedisDebug) {
-				import std.stdio;
-
-				import std.array, std.traits, std.algorithm;
-				string[] arr;
-				foreach(i, A; ARGS){
-					static if (!isSomeString!A && isArray!A){
-						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
-					}
-					else
-					{
-						arr ~= args[i].to!string;
-					}
-				}
-				logDebug("Redis request: %s ( %s ) => %s", command, arr, ret.to!string);
-			}
+			version (RedisDebug) logDebug("Redis request: %s => %s", debugargs, ret.to!string);
 			return ret;
 		} else {
 			auto ret = _request!T(conn, command, args);
-			version (RedisDebug) {
-				import std.stdio;
-				
-				import std.array, std.traits, std.algorithm;
-				string[] arr;
-				foreach(i, A; ARGS){
-					static if (!isSomeString!A && isArray!A){
-						arr ~= "[" ~ (cast(string[])args[i].map!(a=> a.to!string).array).joiner(",").to!string ~ "]";
-					}
-					else
-					{
-						arr ~= args[i].to!string;
-					}
-				}
-				logDebug("Redis request: %s ( %s ) => (RedisReply)", command, arr);
-			}
+			version (RedisDebug) logDebug("Redis request: %s => RedisReply", debugargs);
 			return ret;
 		}
 	}
@@ -225,7 +186,6 @@ struct RedisDatabase {
 	long ttl(string key) { return request!long("TTL", key); }
 	long pttl(string key) { return request!long("PTTL", key); }
 	string type(string key) { return request!string("TYPE", key); }
-	//TODO eval
 
 	/*
 		String Commands
@@ -329,12 +289,11 @@ struct RedisDatabase {
 	long zadd(ARGS...)(string key, ARGS args) { return request!long("ZADD", key, args); }
 	long zcard(string key) { return request!long("ZCARD", key); }
 	deprecated("Use zcard() instead.") alias Zcard = zcard;
-	// TODO:
-	// supports only inclusive intervals
-	// see http://redis.io/commands/zrangebyscore
-	long zcount(string key, double min, double max) { return request!long("ZCOUNT", key, min, max); }
+	// see http://redis.io/commands/zcount
+	long zcount(string RNG = "[]")(string key, double min, double max) { return request!long("ZCOUNT", key, getMinMaxArgs!RNG(min, max)); }
 	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
 	//TODO: zinterstore
+	// see http://redis.io/commands/zrange
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -342,26 +301,22 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
-	// TODO:
-	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
-	RedisReply!T zrangeByScore(T = string)(string key, double start, double end, bool with_scores = false)
+	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
-		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, start, end, "WITHSCORES");
-		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, start, end);
+		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "WITHSCORES");
+		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end));
 	}
 
-	// TODO:
-	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
-	RedisReply!T zrangeByScore(T = string)(string key, double start, double end, long offset, long count, bool with_scores = false)
+	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, long offset, long count, bool with_scores = false)
 		if(isValidRedisValueType!T)
  	{
 		assert(offset >= 0);
 		assert(count >= 0);
-		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, start, end, "WITHSCORES", "LIMIT", offset, count);
-		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, start, end, "LIMIT", offset, count);
+		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "WITHSCORES", "LIMIT", offset, count);
+		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "LIMIT", offset, count);
 	}
 
 	long zrank(string key, string member)
@@ -371,10 +326,8 @@ struct RedisDatabase {
 	}
 	long zrem(string key, scope string[] members...) { return request!long("ZREM", key, members); }
 	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
-	// TODO:
-	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
-	long zremRangeByScore(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, min, max);}
+	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
 
 	RedisReply!T zrevRange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
@@ -384,27 +337,23 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGE", key, start, end);
 	}
 
-	// TODO:
-	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
-	RedisReply!T zrevRangeByScore(T = string)(string key, double min, double max, bool with_scores=false)
+	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
 		string[] args = [key, to!string(min), to!string(max)];
-		if (with_scores) return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, min, max, "WITHSCORES");
-		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, min, max);
+		if (with_scores) return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "WITHSCORES");
+		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));
 	}
 
-	// TODO:
-	// supports only inclusive intervals
 	// see http://redis.io/commands/zrangebyscore
-	RedisReply!T zrevRangeByScore(T = string)(string key, double min, double max, long offset, long count, bool with_scores=false)
+	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, long offset, long count, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
 		assert(offset >= 0);
 		assert(count >= 0);
-		if (with_scores) return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, min, max, "WITHSCORES", "LIMIT", offset, count);
-		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, min, max, "LIMIT", offset, count);
+		if (with_scores) return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "WITHSCORES", "LIMIT", offset, count);
+		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "LIMIT", offset, count);
 	}
 
 	long zrevRank(string key, string member)
@@ -461,6 +410,27 @@ struct RedisDatabase {
 	T request(T = void, ARGS...)(string command, scope ARGS args)
 	{
 		return m_client.requestDB!(T, ARGS)(m_index, command, args);
+	}
+
+	private static string[2] getMinMaxArgs(string RNG)(double min, double max)
+	{
+		// TODO: avoid GC allocations
+		static assert(RNG.length == 2, "The RNG range specification must be two characters long");
+
+		string[2] ret;
+		string mins, maxs;
+		mins = min == -double.infinity ? "-inf" : min == double.infinity ? "+inf" : min.to!string;
+		maxs = max == -double.infinity ? "-inf" : max == double.infinity ? "+inf" : max.to!string;
+
+		static if (RNG[0] == '[') ret[0] = mins;
+		else static if (RNG[0] == '(') ret[0] = '('~mins;
+		else static assert(false, "Opening range specification mist be either '[' or '('.");
+
+		static if (RNG[1] == ']') ret[1] = maxs;
+		else static if (RNG[1] == ')') ret[1] = '('~maxs;
+		else static assert(false, "Closing range specification mist be either ']' or ')'.");
+
+		return ret;
 	}
 }
 
