@@ -834,26 +834,6 @@ struct RedisReply(T = ubyte[]) {
 		ctx.hasData = false;
 	}
 
-	// is this necessary?
-	private void readBulk(string sizeLn)
-	{
-		assert(m_conn !is null);
-		auto ctx = &m_conn.m_replyContext;
-		if (sizeLn.startsWith("$-1")) {
-			ctx.frontIsNull = true;
-			ctx.hasData = true;
-			ctx.data = null;
-		} else {
-			auto size = to!size_t(sizeLn[1 .. $]);
-			auto data = new ubyte[size];
-			m_conn.conn.read(data);
-			m_conn.conn.readLine();
-			ctx.frontIsNull = false;
-			ctx.hasData = true;
-			ctx.data = data;
-		}
-	}
-
 	private @property void lockedConnection(ref LockedConnection!RedisConnection conn)
 	{
 		assert(m_conn !is null);
@@ -879,12 +859,31 @@ struct RedisReply(T = ubyte[]) {
 				break;
 			case '*':
 				if (ln.startsWith("*-1")) {
-					ctx.length = 0;
+					ctx.length = 0; // TODO: make this NIL reply distinguishable from a 0-length array
 				} else {
 					ctx.multi = true;
 					ctx.length = to!long(ln[ 1 .. $ ]);
 				}
 				break;
+		}
+	}
+
+	private void readBulk(string sizeLn)
+	{
+		assert(m_conn !is null);
+		auto ctx = &m_conn.m_replyContext;
+		if (sizeLn.startsWith("$-1")) {
+			ctx.frontIsNull = true;
+			ctx.hasData = true;
+			ctx.data = null;
+		} else {
+			auto size = to!size_t(sizeLn[1 .. $]);
+			auto data = new ubyte[size];
+			m_conn.conn.read(data);
+			m_conn.conn.readLine();
+			ctx.frontIsNull = false;
+			ctx.hasData = true;
+			ctx.data = data;
 		}
 	}
 }
