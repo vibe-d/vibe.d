@@ -119,7 +119,8 @@ string toRedis(T)(T value)
 	import std.format;
 	import std.traits;
 	import vibe.data.serialization;
-	static if (is(T : long) || is(T : double)) return value.to!string;
+	static if (is(T == bool)) return value ? "1": "0";
+	else static if (is(T : long) || is(T : double)) return value.to!string;
 	else static if (isSomeString!T) return value.to!string;
 	else static if (is(T : const(ubyte)[])) return cast(string)value;
 	else static if (isISOExtStringSerializable!T) return value.toISOExtString();
@@ -133,7 +134,7 @@ void toRedis(R, T)(ref R dst, T value)
 	import std.traits;
 	import vibe.data.serialization;
 	static if (is(T == bool)) dst.put(value ? '1' : '0');
-	static if (is(T : long)) dst.formattedWrite("%s", value);
+	else static if (is(T : long)) dst.formattedWrite("%s", value);
 	else static if (isSomeString!T) dst.formattedWrite("%s", value);
 	else static if(is(T : const(ubyte)[])) dst.put(value);
 	else static if (isISOExtStringSerializable!T) dst.put(value.toISOExtString());
@@ -155,7 +156,8 @@ T fromRedis(T)(string value)
 	import std.conv;
 	import std.traits;
 	import vibe.data.serialization;
-	static if (is(T : long) || is(T : double)) return value.to!T;
+	static if (is(T == bool)) return value != "0" && value != "false";
+	else static if (is(T : long) || is(T : double)) return value.to!T;
 	else static if (isSomeString!T) return value.to!T;
 	else static if (is(T : const(ubyte)[])) return cast(T)value;
 	else static if (isISOExtStringSerializable!T) return T.fromISOExtString(value);
