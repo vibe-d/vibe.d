@@ -236,7 +236,7 @@ struct RedisDatabase {
 	T get(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("GET", key); }
 	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
 	T getRange(T = string)(string key, long start, long end) if(isValidRedisValueReturn!T) { return request!T("GETRANGE", start, end); }
-	U getSet(T = string, U)(string key, T value) if(isValidRedisValueType!T && isValidRedisValueReturn!U) { return request!T("GETSET", key, value); }
+	T getSet(T = string, U)(string key, U value) if(isValidRedisValueReturn!T && isValidRedisValueType!U) { return request!T("GETSET", key, value); }
 	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
 	long incr(string key, double value) { return request!long("INCRBYFLOAT", key, value); }
 	RedisReply!T mget(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("MGET", keys); }
