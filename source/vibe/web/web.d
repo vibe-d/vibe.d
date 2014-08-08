@@ -336,24 +336,24 @@ unittest {
 
 
 /**
-	Attribute to customize error display of an interface method.
-
-
+	Attribute to customize how errors/exceptions are displayed.
 
 	The first template parameter takes a function that maps an exception and an
 	optional field name to a single error type. The result of this function
 	will then be passed as the $(D _error) parameter to the method referenced
 	by the second template parameter.
 
-	The field parameter, if present, will be set to null if the exception was
-	thrown after the field validation has finished.
+	Supported types for the $(D _error) parameter are $(D bool), $(D string),
+	$(D Exception), or a user defined $(D struct). The $(D field) member, if
+	present, will be set to null if the exception was thrown after the field
+	validation has finished. 
 */
 @property errorDisplay(alias DISPLAY_METHOD)()
 {
 	return ErrorDisplayAttribute!DISPLAY_METHOD.init;
 }
 
-/// Simple error message display
+/// Shows the basic error message display.
 unittest {
 	void getForm(string _error = null)
 	{
@@ -369,10 +369,12 @@ unittest {
 	}
 }
 
-/// Error message display with a matching
+/// Advanced error display including the offending form field.
 unittest {
 	struct FormError {
+		// receives the original error message
 		string error;
+		// receives the name of the field that caused the error, if applicable
 		string field;
 	}
 
