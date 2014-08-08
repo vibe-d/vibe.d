@@ -62,15 +62,18 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	@property R front() { return m_data.front; }
 
 	/**
-		Controls the order that the query returns matching documents.
+		Controls the order in which the query returns matching documents.
 
-		This method must be called before beginning iteration, otherwise exeption will be thrown.
-		Only the last sort() applied to cursor has any effect.
+		This method must be called before starting to iterate, or an exeption
+		will be thrown. If multiple calls to $(D sort()) are issued, only
+		the last one will have an effect.
 
 		Params:
-			order = a document that defines the sort order of the result set
+			order = A BSON object convertible value that defines the sort order
+				of the result. This BSON object must be structured according to
+				the MongoDB documentation (see below).
 
-		Returns: the same cursor
+		Returns: Reference to the modified original curser instance.
 
 		Throws:
 			An exception if there is a query or communication error.
