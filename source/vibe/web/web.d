@@ -721,7 +721,13 @@ private static void setVoid(T, U)(ref T dst, U value)
 {
 	import std.traits;
 	static if (hasElaborateAssign!T) {
-		(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&value)[0 .. T.sizeof];
-		typeid(T).postblit(&dst);
+		static if (is(T == U)) {
+			(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&value)[0 .. T.sizeof];
+			typeid(T).postblit(&dst);
+		} else {
+			static T init = T.init;
+			(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&init)[0 .. T.sizeof];
+			dst = value;
+		}
 	} else dst = value;
 }
