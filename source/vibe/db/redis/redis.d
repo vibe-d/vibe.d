@@ -195,7 +195,7 @@ struct RedisDatabase {
 	long decr(string key, long value = 1) { return value == 1 ? request!long("DECR", key) : request!long("DECRBY", key, value); }
 	T get(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("GET", key); }
 	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
-	T getRange(T = string)(string key, long start, long end) if(isValidRedisValueReturn!T) { return request!T("GETRANGE", start, end); }
+	T getRange(T = string)(string key, long start, long end) if(isValidRedisValueReturn!T) { return request!T("GETRANGE", key, start, end); }
 	T getSet(T = string, U)(string key, U value) if(isValidRedisValueReturn!T && isValidRedisValueType!U) { return request!T("GETSET", key, value); }
 	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
 	long incr(string key, double value) { return request!long("INCRBYFLOAT", key, value); }
@@ -255,7 +255,7 @@ struct RedisDatabase {
 	long rpush(ARGS...)(string key, ARGS args) { return request!long("RPUSH", key, args); }
 	long rpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("RPUSHX", key, value); }
 	RedisReply!T lrange(T = string)(string key, long start, long stop) { return request!(RedisReply!T)("LRANGE",  key, start, stop); }
-	long lrem(T)(string key, long count, T value) if(isValidRedisValueType!T) { return request!long("LREM", count, value); }
+	long lrem(T)(string key, long count, T value) if(isValidRedisValueType!T) { return request!long("LREM", key, count, value); }
 	void lset(T)(string key, long index, T value) if(isValidRedisValueType!T) { request("LSET", key, index, value); }
 	void ltrim(string key, long start, long stop) { request("LTRIM",  key, start, stop); }
 	T rpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("RPOP", key); }
@@ -291,7 +291,7 @@ struct RedisDatabase {
 	deprecated("Use zcard() instead.") alias Zcard = zcard;
 	// see http://redis.io/commands/zcount
 	long zcount(string RNG = "[]")(string key, double min, double max) { return request!long("ZCOUNT", key, getMinMaxArgs!RNG(min, max)); }
-	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", value, member); }
+	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", key, value, member); }
 	//TODO: zinterstore
 	// see http://redis.io/commands/zrange
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
@@ -332,7 +332,6 @@ struct RedisDatabase {
 	RedisReply!T zrevRange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
-		string[] args = [key, to!string(start), to!string(end)];
 		if (with_scores) return request!(RedisReply!T)("ZREVRANGE", key, start, end, "WITHSCORES");
 		else return request!(RedisReply!T)("ZREVRANGE", key, start, end);
 	}
@@ -341,7 +340,6 @@ struct RedisDatabase {
 	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
-		string[] args = [key, to!string(min), to!string(max)];
 		if (with_scores) return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "WITHSCORES");
 		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));
 	}
