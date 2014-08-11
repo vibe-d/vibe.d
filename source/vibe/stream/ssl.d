@@ -80,11 +80,13 @@ unittest {
 */
 SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 {
-	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
-	else version (OpenSSL) {
+	version (OpenSSL) {
 		import vibe.stream.openssl;
-		return new OpenSSLContext(kind, ver);
+		if (!gs_sslContextFactory)
+			setSSLContextFactory((k, v) => new OpenSSLContext(k, v));
 	}
+	assert(gs_sslContextFactory !is null, "No SSL context factory registered.");
+	return gs_sslContextFactory(kind, ver);
 }
 
 /** Constructs a new SSL tunnel and infers the stream state from the SSLContextKind.
@@ -118,12 +120,7 @@ SSLStream createSSLStream(Stream underlying, SSLContext ctx, string peer_name = 
 */
 SSLStream createSSLStream(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
-	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
-	else version (OpenSSL) {
-		import vibe.stream.openssl;
-		return new OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
-								 state, peer_name, peer_address);
-	}
+	return ctx.createStream(underlying, state, peer_name, peer_address);
 }
 
 /**
@@ -143,6 +140,11 @@ auto createSSLStreamFL(Stream underlying, SSLContext ctx, SSLStreamState state, 
 		return FreeListRef!OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
 	}
+}
+
+void setSSLContextFactory(SSLContext function(SSLContextKind, SSLVersion) factory)
+{
+	gs_sslContextFactory = factory;
 }
 
 
@@ -211,6 +213,10 @@ interface SSLContext {
 	@property void peerValidationCallback(SSLPeerValidationCallback callback);
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout;
+
+	/** Creates a new stream associated to this context.
+	*/
+	SSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
 
 	/** Set the list of cipher specifications to use for SSL/TLS tunnels.
 
@@ -361,3 +367,7 @@ struct SSLPeerValidationData {
 }
 
 alias SSLPeerValidationCallback = bool delegate(scope SSLPeerValidationData data);
+
+private {
+	__gshared SSLContext function(SSLContextKind, SSLVersion) gs_sslContextFactory;
+}
