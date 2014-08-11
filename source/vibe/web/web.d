@@ -542,17 +542,17 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
 			else static if (param_names[i].startsWith("_")) {
-				if (auto pv = param_names[i][1 .. $] in req.params) params[i].setVoid((*pv).convTo!PT);
+				if (auto pv = param_names[i][1 .. $] in req.params) params[i].setVoid((*pv).webConvTo!PT);
 				else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
 				static if (!is(default_values[i] == void)) {
-					if (!readParamRec(req, params[i], param_names[i], false))
+					if (!readFormParamRec(req, params[i], param_names[i], false))
 						params[i].setVoid(default_values[i]);
 				} else {
-					readParamRec(req, params[i], param_names[i], true);
+					readFormParamRec(req, params[i], param_names[i], true);
 				}
 			}
 		} catch (Exception ex) {
@@ -633,58 +633,6 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	}
 }
 
-// NOTE: dst is assumed to be uninitialized
-private bool readParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname, bool required)
-{
-	import std.string;
-	import std.traits;
-	import std.typecons;
-	import vibe.data.serialization;
-
-	static if (isDynamicArray!T && !isSomeString!T) {
-		alias EL = typeof(T.init[0]);
-		size_t idx = 0;
-		dst = T.init;
-		while (true) {
-			EL el = void;
-			if (!readParamRec(req, el, format("%s_%s", fieldname, idx), false))
-				break;
-			dst ~= el;
-			idx++;
-		}
-	} else static if (isNullable!T) {
-		typeof(dst.get()) el = void;
-		if (readParamRec(req, el, fieldname, false))
-			dst.setVoid(el);
-		else dst.setVoid(T.init);
-	} else static if (is(T == struct) && !is(typeof(T.fromString(string.init))) && !is(typeof(T.fromStringValidate(string.init, null)))) {
-		foreach (m; __traits(allMembers, T))
-			if (!readParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
-				return false;
-	} else static if (is(T == bool)) {
-		dst = (fieldname in req.form) !is null || (fieldname in req.query) !is null;
-	} else if (auto pv = fieldname in req.form) dst.setVoid((*pv).convTo!T);
-	else if (auto pv = fieldname in req.query) dst.setVoid((*pv).convTo!T);
-	else if (required) throw new HTTPStatusException(HTTPStatus.badRequest, "Missing parameter "~fieldname);
-	else return false;
-	return true;
-}
-
-private T convTo(T)(string str)
-{
-	import std.conv;
-	import std.exception;
-	string error;
-	static if (is(typeof(T.fromStringValidate(str, &error)))) {
-		static assert(is(typeof(T.fromStringValidate(str, &error)) == Nullable!T));
-		auto ret = T.fromStringValidate(str, &error);
-		enforce(!ret.isNull(), error); // TODO: refactor internally to work without exceptions
-		return ret.get();
-	} else static if (is(typeof(T.fromString(str)))) {
-		static assert(is(typeof(T.fromString(str)) == T));
-		return T.fromString(str);
-	} else return str.to!T();
-}
 
 private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
 {
@@ -716,20 +664,4 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 	} else ret.tr = t => t;
 
 	return ret;
-}
-
-// properly sets an uninitialized variable
-private static void setVoid(T, U)(ref T dst, U value)
-{
-	import std.traits;
-	static if (hasElaborateAssign!T) {
-		static if (is(T == U)) {
-			(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&value)[0 .. T.sizeof];
-			typeid(T).postblit(&dst);
-		} else {
-			static T init = T.init;
-			(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&init)[0 .. T.sizeof];
-			dst = value;
-		}
-	} else dst = value;
 }

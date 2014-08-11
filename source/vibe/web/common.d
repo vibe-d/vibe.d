@@ -1,17 +1,19 @@
 /**
 	Contains common functionality for the REST and WEB interface generators.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун
 */
 module vibe.web.common;
 
 import vibe.http.common;
+import vibe.http.server : HTTPServerRequest;
 import vibe.data.json;
 
 static import std.utf;
 static import std.string;
+import std.typecons : Nullable;
 
 
 /**
@@ -119,210 +121,6 @@ unittest
 	assert(adjustMethodStyle("IDTest", MethodStyle.lowerUnderscored) == "id_test");
 	assert(adjustMethodStyle("IDTest", MethodStyle.pascalCase) == "IDTest");
 	assert(adjustMethodStyle("IDTest", MethodStyle.camelCase) == "idTest");
-}
-
-
-/**
-    UDA to defeine the ContentType for methods returning an InputStream or ubyte[]
-*/
-ContentTypeAttribute contentType(string data) 
-{
-	if (!__ctfe)
-		assert(false);
-	return ContentTypeAttribute(data);
-}
-
-/**
-	User Defined Attribute interface to force specific HTTP method in REST interface
-	for function in question. Usual URL generation rules are still applied so if there
-	are any "get", "query" or similar prefixes, they are filtered out.
-
-	Example:
-	---
-	interface IAPI
-	{
-		// Will be "POST /info" instead of default "GET /info"
-		@method(HTTPMethod.POST) getInfo();
-	}
-	---	
- */
-MethodAttribute method(HTTPMethod data)
-{
-	if (!__ctfe)
-		assert(false);
-	return MethodAttribute(data);
-}
-
-/**
-	User Defined Attribute interface to force specific URL path n REST interface
-	for function in question. Path attribute is relative though, not absolute.
-
-	Example:
-	---
-	interface IAPI
-	{
-		@path("info2") getInfo();
-	}
-	
-	// ...
-	
-	shared static this()
-	{
-		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
-		// now IAPI.getInfo is tied to "GET /root/info2"
-	}
-	---	
-*/
-PathAttribute path(string data) 
-{
-	if (!__ctfe)
-		assert(false);
-	return PathAttribute(data);
-}
-
-
-/**
-	UDA to define root URL prefix for annotated REST interface.
-	Empty path means deducing prefix from interface type name (see also rootPathFromName)
- */
-RootPathAttribute rootPath(string path)
-{
-	return RootPathAttribute(path);
-}
-///
-unittest
-{
-	import vibe.http.router;
-	import vibe.web.rest;
-
-	@rootPath("/oops")
-	interface IAPI
-	{
-		int getFoo();
-	}
-
-	class API : IAPI
-	{
-		int getFoo()
-		{
-			return 42;
-		}
-	}
-
-	auto router = new URLRouter();
-	registerRestInterface(router, new API());
-	auto routes= router.getAllRoutes();
-
-	assert(routes[0].pattern == "/oops/foo" && routes[0].method == HTTPMethod.GET);
-}
-
-
-/**
-	Convenience alias
- */
-@property RootPathAttribute rootPathFromName()
-{
-	return RootPathAttribute("");
-}
-///
-unittest
-{
-	import vibe.http.router;
-	import vibe.web.rest;
-
-	@rootPathFromName
-	interface IAPI
-	{
-		int getFoo();
-	}
-
-	class API : IAPI
-	{
-		int getFoo()
-		{
-			return 42;
-		}
-	}
-
-	auto router = new URLRouter();
-	registerRestInterface(router, new API());
-	auto routes= router.getAllRoutes();
-
-	assert(routes[0].pattern == "/iapi/foo" && routes[0].method == HTTPMethod.GET);
-}
-
-/// private 
-struct ContentTypeAttribute 
-{
-	string data;
-	alias data this;
-}
-
-/// private
-struct MethodAttribute
-{
-	HTTPMethod data;
-	alias data this;
-}
-
-/// private
-deprecated alias OverriddenMethod = MethodAttribute;
-
-/// private
-struct PathAttribute
-{
-	string data;
-	alias data this;
-}
-
-/// private
-deprecated alias OverriddenPath = PathAttribute;
-
-/// private
-struct RootPathAttribute
-{
-	string data;
-	alias data this;
-}
-
-/// private
-deprecated alias RootPath = RootPathAttribute;
-
-
-/**
-	Determines the naming convention of an identifier.
-*/
-enum MethodStyle
-{
-	/// Special value for free-style conventions
-	unaltered,
-	/// camelCaseNaming
-	camelCase,
-	/// PascalCaseNaming
-	pascalCase,
-	/// lowercasenaming
-	lowerCase,
-	/// UPPERCASENAMING
-	upperCase,
-	/// lower_case_naming
-	lowerUnderscored,
-	/// UPPER_CASE_NAMING
-	upperUnderscored,
-	
-	/// deprecated
-	Unaltered = unaltered,
-	/// deprecated
-	CamelCase = camelCase,
-	/// deprecated
-	PascalCase = pascalCase,
-	/// deprecated
-	LowerCase = lowerCase,
-	/// deprecated
-	UpperCase = upperCase,
-	/// deprecated
-	LowerUnderscored = lowerUnderscored,
-	/// deprecated
-	UpperUnderscored = upperUnderscored,
 }
 
 
@@ -460,6 +258,236 @@ unittest
 }
 
 
+/**
+    UDA to defeine the ContentType for methods returning an InputStream or ubyte[]
+*/
+ContentTypeAttribute contentType(string data) 
+{
+	if (!__ctfe)
+		assert(false);
+	return ContentTypeAttribute(data);
+}
+
+/**
+	User Defined Attribute interface to force specific HTTP method in REST interface
+	for function in question. Usual URL generation rules are still applied so if there
+	are any "get", "query" or similar prefixes, they are filtered out.
+
+	Example:
+	---
+	interface IAPI
+	{
+		// Will be "POST /info" instead of default "GET /info"
+		@method(HTTPMethod.POST) getInfo();
+	}
+	---	
+ */
+MethodAttribute method(HTTPMethod data)
+{
+	if (!__ctfe)
+		assert(false);
+	return MethodAttribute(data);
+}
+
+/**
+	User Defined Attribute interface to force specific URL path n REST interface
+	for function in question. Path attribute is relative though, not absolute.
+
+	Example:
+	---
+	interface IAPI
+	{
+		@path("info2") getInfo();
+	}
+	
+	// ...
+	
+	shared static this()
+	{
+		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
+		// now IAPI.getInfo is tied to "GET /root/info2"
+	}
+	---	
+*/
+PathAttribute path(string data) 
+{
+	if (!__ctfe)
+		assert(false);
+	return PathAttribute(data);
+}
+
+
+/**
+	UDA to define root URL prefix for annotated REST interface.
+	Empty path means deducing prefix from interface type name (see also rootPathFromName)
+ */
+RootPathAttribute rootPath(string path)
+{
+	return RootPathAttribute(path);
+}
+///
+unittest
+{
+	import vibe.http.router;
+	import vibe.web.rest;
+
+	@rootPath("/oops")
+	interface IAPI
+	{
+		int getFoo();
+	}
+
+	class API : IAPI
+	{
+		int getFoo()
+		{
+			return 42;
+		}
+	}
+
+	auto router = new URLRouter();
+	registerRestInterface(router, new API());
+	auto routes= router.getAllRoutes();
+
+	assert(routes[0].pattern == "/oops/foo" && routes[0].method == HTTPMethod.GET);
+}
+
+
+/**
+	Convenience alias
+ */
+@property RootPathAttribute rootPathFromName()
+{
+	return RootPathAttribute("");
+}
+///
+unittest
+{
+	import vibe.http.router;
+	import vibe.web.rest;
+
+	@rootPathFromName
+	interface IAPI
+	{
+		int getFoo();
+	}
+
+	class API : IAPI
+	{
+		int getFoo()
+		{
+			return 42;
+		}
+	}
+
+	auto router = new URLRouter();
+	registerRestInterface(router, new API());
+	auto routes= router.getAllRoutes();
+
+	assert(routes[0].pattern == "/iapi/foo" && routes[0].method == HTTPMethod.GET);
+}
+
+
+/** 
+ 	Respresents a Rest error response
+*/
+class RestException : HTTPStatusException {
+	private {
+		Json m_jsonResult;
+	}
+	
+	///
+	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		if (jsonResult.type == Json.Type.Object && jsonResult.statusMessage.type == Json.Type.String) {
+			super(status, jsonResult.statusMessage.get!string, file, line, next);
+		}
+		else {
+			super(status, httpStatusText(status) ~ " (" ~ jsonResult.toString() ~ ")", file, line, next);
+		}
+		
+		m_jsonResult = jsonResult;
+	}
+	
+	/// The HTTP status code
+	@property const(Json) jsonResult() const { return m_jsonResult; }
+}
+
+/// private 
+struct ContentTypeAttribute 
+{
+	string data;
+	alias data this;
+}
+
+/// private
+struct MethodAttribute
+{
+	HTTPMethod data;
+	alias data this;
+}
+
+/// private
+deprecated alias OverriddenMethod = MethodAttribute;
+
+/// private
+struct PathAttribute
+{
+	string data;
+	alias data this;
+}
+
+/// private
+deprecated alias OverriddenPath = PathAttribute;
+
+/// private
+struct RootPathAttribute
+{
+	string data;
+	alias data this;
+}
+
+/// private
+deprecated alias RootPath = RootPathAttribute;
+
+
+/**
+	Determines the naming convention of an identifier.
+*/
+enum MethodStyle
+{
+	/// Special value for free-style conventions
+	unaltered,
+	/// camelCaseNaming
+	camelCase,
+	/// PascalCaseNaming
+	pascalCase,
+	/// lowercasenaming
+	lowerCase,
+	/// UPPERCASENAMING
+	upperCase,
+	/// lower_case_naming
+	lowerUnderscored,
+	/// UPPER_CASE_NAMING
+	upperUnderscored,
+	
+	/// deprecated
+	Unaltered = unaltered,
+	/// deprecated
+	CamelCase = camelCase,
+	/// deprecated
+	PascalCase = pascalCase,
+	/// deprecated
+	LowerCase = lowerCase,
+	/// deprecated
+	UpperCase = upperCase,
+	/// deprecated
+	LowerUnderscored = lowerUnderscored,
+	/// deprecated
+	UpperUnderscored = upperUnderscored,
+}
+
+
 // concatenates two URL parts avoiding any duplicate slashes
 // in resulting URL. `trailing` defines of result URL must
 // end with slash
@@ -497,27 +525,92 @@ unittest {
 	assert(concatURL("/test/", "", true) == "/test/");
 }
 
-/** 
- 	Respresents a Rest error response
-*/
-class RestException : HTTPStatusException {
-	private {
-		Json m_jsonResult;
-	}
-	
-	///
-	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
-	{
-		if (jsonResult.type == Json.Type.Object && jsonResult.statusMessage.type == Json.Type.String) {
-			super(status, jsonResult.statusMessage.get!string, file, line, next);
+
+// Little wrapper for Nullable!T to enable more comfortable initialization.
+/// private
+struct NullableW(T) {
+	Nullable!T storage;
+	alias storage this;
+
+	this(typeof(null)) {}
+	this(T val) { storage = val; }
+}
+
+/// private
+template isNullable(T) {
+	import std.traits;
+	enum isNullable = isInstanceOf!(Nullable, T) || isInstanceOf!(NullableW, T);
+}
+
+static assert(isNullable!(Nullable!int));
+static assert(isNullable!(NullableW!int));
+
+
+// NOTE: dst is assumed to be uninitialized
+package bool readFormParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname, bool required)
+{
+	import std.string;
+	import std.traits;
+	import std.typecons;
+	import vibe.data.serialization;
+
+	static if (isDynamicArray!T && !isSomeString!T) {
+		alias EL = typeof(T.init[0]);
+		size_t idx = 0;
+		dst = T.init;
+		while (true) {
+			EL el = void;
+			if (!readFormParamRec(req, el, format("%s_%s", fieldname, idx), false))
+				break;
+			dst ~= el;
+			idx++;
 		}
-		else {
-			super(status, httpStatusText(status) ~ " (" ~ jsonResult.toString() ~ ")", file, line, next);
+	} else static if (isNullable!T) {
+		typeof(dst.get()) el = void;
+		if (readFormParamRec(req, el, fieldname, false))
+			dst.setVoid(el);
+		else dst.setVoid(T.init);
+	} else static if (is(T == struct) && !is(typeof(T.fromString(string.init))) && !is(typeof(T.fromStringValidate(string.init, null)))) {
+		foreach (m; __traits(allMembers, T))
+			if (!readFormParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
+				return false;
+	} else static if (is(T == bool)) {
+		dst = (fieldname in req.form) !is null || (fieldname in req.query) !is null;
+	} else if (auto pv = fieldname in req.form) dst.setVoid((*pv).webConvTo!T);
+	else if (auto pv = fieldname in req.query) dst.setVoid((*pv).webConvTo!T);
+	else if (required) throw new HTTPStatusException(HTTPStatus.badRequest, "Missing parameter "~fieldname);
+	else return false;
+	return true;
+}
+
+package T webConvTo(T)(string str)
+{
+	import std.conv;
+	import std.exception;
+	string error;
+	static if (is(typeof(T.fromStringValidate(str, &error)))) {
+		static assert(is(typeof(T.fromStringValidate(str, &error)) == Nullable!T));
+		auto ret = T.fromStringValidate(str, &error);
+		enforce(!ret.isNull(), error); // TODO: refactor internally to work without exceptions
+		return ret.get();
+	} else static if (is(typeof(T.fromString(str)))) {
+		static assert(is(typeof(T.fromString(str)) == T));
+		return T.fromString(str);
+	} else return str.to!T();
+}
+
+// properly sets an uninitialized variable
+package void setVoid(T, U)(ref T dst, U value)
+{
+	import std.traits;
+	static if (hasElaborateAssign!T) {
+		static if (is(T == U)) {
+			(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&value)[0 .. T.sizeof];
+			typeid(T).postblit(&dst);
+		} else {
+			static T init = T.init;
+			(cast(ubyte*)&dst)[0 .. T.sizeof] = (cast(ubyte*)&init)[0 .. T.sizeof];
+			dst = value;
 		}
-		
-		m_jsonResult = jsonResult;
-	}
-	
-	/// The HTTP status code
-	@property const(Json) jsonResult() const { return m_jsonResult; }
+	} else dst = value;
 }
