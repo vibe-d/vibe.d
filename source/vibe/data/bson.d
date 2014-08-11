@@ -670,7 +670,10 @@ struct BsonObjectID {
 	*/
 	static BsonObjectID fromString(string str)
 	{
-		assert(str.length == 24, "BSON Object ID string s must be 24 characters.");
+		static const lengthex = new Exception("BSON Object ID string s must be 24 characters.");
+		static const charex = new Exception("Not a valid hex string.");
+
+		if (str.length != 24) throw lengthex;
 		BsonObjectID ret = void;
 		uint b = 0;
 		foreach( i, ch; str ){
@@ -678,7 +681,7 @@ struct BsonObjectID {
 			if( ch >= '0' && ch <= '9' ) n = cast(ubyte)(ch - '0');
 			else if( ch >= 'a' && ch <= 'f' ) n = cast(ubyte)(ch - 'a' + 10);
 			else if( ch >= 'A' && ch <= 'F' ) n = cast(ubyte)(ch - 'F' + 10);
-			else assert(false, "Not a valid hex string.");
+			else throw charex;
 			b <<= 4;
 			b += n;
 			if( i % 8 == 7 ){
