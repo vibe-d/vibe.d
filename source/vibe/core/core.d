@@ -1141,8 +1141,8 @@ private struct ThreadContext {
 
 private struct TaskFuncInfo {
 	void function(TaskFuncInfo*) func;
-	void[2*size_t.sizeof] callable;
-	void[maxTaskParameterSize] args;
+	void[2*size_t.sizeof] callable = void;
+	void[maxTaskParameterSize] args = void;
 }
 
 alias TaskArgsVariant = VariantN!maxTaskParameterSize;
