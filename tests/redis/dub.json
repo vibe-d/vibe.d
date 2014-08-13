@@ -4,5 +4,5 @@
     "dependencies": {
         "vibe-d": {"version": "~master", "path": "../../"}
     },
-    "versions": ["VibeCustomMain", "RedisDebug"]
+    "versions": ["VibeCustomMain"]
 }
