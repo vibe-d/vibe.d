@@ -1,5 +1,4 @@
-/// Requires mongo service running on localhost with default port
-/// Uses test database
+/// Requires redis service running on localhost with default port
 
 module app;
 
