@@ -67,8 +67,8 @@ void runTest()
 		logInfo("LISTEN Recv Channel: %s, Message: %s", channel.to!string, msg.to!string);
 		logInfo("LISTEN Recv Time: %s", Clock.currTime().toString());
 	});
-
 	assert(sub.isListening);
+	sleep(1.seconds);
 	sub.subscribe("SomeChannel");
 
 	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
@@ -84,7 +84,7 @@ void runTest()
 
 int main()
 {
-	int ret = 0;
+	int ret = 0; 
 	runTask({
 		try runTest();
 		catch (Throwable th) {

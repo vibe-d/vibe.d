@@ -488,7 +488,9 @@ final class RedisSubscriber {
 
 	bool bstop(){
 		if (!stop()) return false;
-		while (m_listening) sleep(1.msecs);
+		while (m_listening) {
+			sleep(1.msecs);
+		}
 		return true;
 	}
 
@@ -496,6 +498,8 @@ final class RedisSubscriber {
 		if (!m_listening)
 			return false;
 		m_stop = true;
+		// todo: publish some no-op data to wake up the listener?
+
 		return true;
 	}
 
@@ -567,7 +571,7 @@ final class RedisSubscriber {
 			sw.start();
 			while (!gotData){
 				if (m_lockedConnection.conn.waitForData(5.seconds))	gotData = true;
-				if (sw.peek().seconds > timeout.total!"seconds") { gotData = false;	break; }
+				if (timeout > 0.seconds && sw.peek().seconds > timeout.total!"seconds") { gotData = false;	break; }
 				if (m_stop){ gotData = false; break; }
 			}
 			sw.stop();
@@ -592,10 +596,10 @@ final class RedisSubscriber {
 
 			auto ln = cast(string)m_lockedConnection.conn.readLine();
 			string cmd;
-			if (ln[0] == "$"[0]){
+			if (ln[0] == '$'){
 				cmd = cast(string)m_lockedConnection.conn.readLine();
 			} 
-			else if (ln[0] == "*"[0]) {
+			else if (ln[0] == '*') {
 				cmd = getString();
 			}else {
 				enforceEx!RedisProtocolException(false, "expected $ or *");
@@ -676,8 +680,10 @@ final class RedisSubscriber {
 		auto task = runTask({
 			blisten(callback, timeout);
 		});
-		import std.datetime;
-		while(!m_listening) sleep(1.usecs);
+		import std.datetime : usecs;
+		while (!m_listening) {
+			sleep(1.usecs);
+		}
 		return task;
 	}
 }
