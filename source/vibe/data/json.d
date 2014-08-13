@@ -904,6 +904,8 @@ unittest {
 	assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
 	assert(parseJsonString("{\"a\": 1}") == Json(["a": Json(1)]));
 	assert(parseJsonString(`"\\\/\b\f\n\r\t\u1234"`).get!string == "\\/\b\f\n\r\t\u1234");
+	auto json = parseJsonString(`{"hey": "This is @à test éhééhhéhéé !%/??*&?\ud83d\udcec"}`);
+	assert(json.toPrettyString() == parseJsonString(json.toPrettyString()).toPrettyString());
 }
 
 
@@ -1691,15 +1693,56 @@ void writePrettyJsonString(R)(ref R dst, in Json json, int level = 0)
 /// private
 private void jsonEscape(R)(ref R dst, string s)
 {
-	foreach( ch; s ){
+	size_t pos;
+	for ( pos = 0; pos < s.length; pos++ ){
+		immutable(char) ch = s[pos];
+
 		switch(ch){
-			default: dst.put(ch); break;
+			default: 
+				import std.utf : stride;
+				size_t cnt = stride(s, pos);
+				if (cnt > 1)
+				{
+					import std.utf : decode;
+					char[13] buf;
+					int len;
+					dchar codepoint = decode(s, pos);
+					import std.c.stdio : sprintf;
+					/* codepoint is in BMP */
+					if(codepoint < 0x10000)
+					{
+						sprintf(&buf[0], "\\u%04X", codepoint);
+						len = 6;
+					}
+					/* not in BMP -> construct a UTF-16 surrogate pair */
+					else
+					{
+						int first, last;
+						
+						codepoint -= 0x10000;
+						first = 0xD800 | ((codepoint & 0xffc00) >> 10);
+						last = 0xDC00 | (codepoint & 0x003ff);
+						
+						sprintf(&buf[0], "\\u%04X\\u%04X", first, last);
+						len = 12;
+					}
+
+					pos -= 1;
+					foreach (i; 0 .. len)
+						dst.put(buf[i]);
+
+				}
+				else
+					dst.put(ch);
+				
+				break;
 			case '\\': dst.put("\\\\"); break;
 			case '\r': dst.put("\\r"); break;
 			case '\n': dst.put("\\n"); break;
 			case '\t': dst.put("\\t"); break;
 			case '\"': dst.put("\\\""); break;
 		}
+
 	}
 }
 
@@ -1725,17 +1768,39 @@ private string jsonUnescape(R)(ref R range)
 					case 'r': ret.put('\r'); range.popFront(); break;
 					case 't': ret.put('\t'); range.popFront(); break;
 					case 'u':
-						range.popFront();
-						dchar uch = 0;
-						foreach( i; 0 .. 4 ){
-							uch *= 16;
-							enforceJson(!range.empty, "Unicode sequence must be '\\uXXXX'.");
-							auto dc = range.front;
+
+						dchar decode_unicode_escape() {
+							enforceJson(range.front == 'u');
 							range.popFront();
-							if( dc >= '0' && dc <= '9' ) uch += dc - '0';
-							else if( dc >= 'a' && dc <= 'f' ) uch += dc - 'a' + 10;
-							else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
-							else enforceJson(false, "Unicode sequence must be '\\uXXXX'.");
+							dchar uch = 0;
+							foreach( i; 0 .. 4 ){
+								uch *= 16;
+								enforceJson(!range.empty, "Unicode sequence must be '\\uXXXX'.");
+								auto dc = range.front;
+								range.popFront();
+
+								if( dc >= '0' && dc <= '9' ) uch += dc - '0';
+								else if( dc >= 'a' && dc <= 'f' ) uch += dc - 'a' + 10;
+								else if( dc >= 'A' && dc <= 'F' ) uch += dc - 'A' + 10;
+								else enforceJson(false, "Unicode sequence must be '\\uXXXX'.");
+							}
+							return uch;
+						}
+
+						auto uch = decode_unicode_escape();
+
+						if(0xD800 <= uch && uch <= 0xDBFF) {
+							/* surrogate pair */
+							range.popFront(); // backslash '\'
+							auto uch2 = decode_unicode_escape();
+							enforceJson(0xDC00 <= uch2 && uch2 <= 0xDFFF, "invalid Unicode");
+							{
+								/* valid second surrogate */
+								uch =
+									((uch - 0xD800) << 10) +
+										(uch2 - 0xDC00) +
+										0x10000;
+							}
 						}
 						ret.put(uch);
 						break;
