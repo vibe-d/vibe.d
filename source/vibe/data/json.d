@@ -1699,10 +1699,11 @@ private void jsonEscape(R)(ref R dst, string s)
 
 		switch(ch){
 			default: 
-				import std.utf : stride;
-				size_t cnt = stride(s, pos);
-				if (cnt > 1)
+				if (ch < 0x80)
 				{
+					dst.put(ch);
+				}
+				else {
 					import std.utf : decode;
 					char[13] buf;
 					int len;
@@ -1732,9 +1733,6 @@ private void jsonEscape(R)(ref R dst, string s)
 						dst.put(buf[i]);
 
 				}
-				else
-					dst.put(ch);
-				
 				break;
 			case '\\': dst.put("\\\\"); break;
 			case '\r': dst.put("\\r"); break;
