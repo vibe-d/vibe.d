@@ -257,17 +257,14 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 	  See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
 	*/
 	Bson aggregate(ARGS...)(ARGS pipeline) {
-		static struct Pipeline {
-			ARGS args;
-		}
 		static struct CMD {
 			string aggregate;
-			@asArray Nodes pipeline;
+			@asArray ARGS pipeline;
 		}
 
 		CMD cmd;
 		cmd.aggregate = m_name;
-		cmd.pipeline.args = pipeline;
+		cmd.pipeline = pipeline;
 		auto ret = database.runCommand(cmd);
 		enforce(ret.ok.get!double == 1, "Aggregate command failed.");
 		return ret.result;
