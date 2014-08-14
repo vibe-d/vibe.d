@@ -1,5 +1,9 @@
 /**
+	Internationalization/translation support for the web interface module.
 
+	Copyright: © 2014 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Sönke Ludwig
 */
 module vibe.web.i18n;
 

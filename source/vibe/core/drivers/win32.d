@@ -239,7 +239,7 @@ final class Win32EventDriver : EventDriver {
 				case AF_INET: addr.sockAddrInet4 = *cast(sockaddr_in*)addr_ret.ai_addr; break;
 				case AF_INET6: addr.sockAddrInet6 = *cast(sockaddr_in6*)addr_ret.ai_addr; break;
 			}
-			FreeAddrInfoW(addr_ret);
+			FreeAddrInfoExW(addr_ret);
 		} else {
 			auto he = gethostbyname(toUTFz!(immutable(char)*)(host));
 			socketEnforce(he !is null, "Failed to look up host "~host);

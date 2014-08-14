@@ -87,6 +87,8 @@ enum MarkdownFlags {
 	keepLineBreaks = 1<<0,
 	backtickCodeBlocks = 1<<1,
 	noInlineHtml = 1<<2,
+	//noLinks = 1<<3,
+	//allowUnsafeHtml = 1<<4,
 	vanillaMarkdown = none,
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
 }
@@ -549,9 +551,15 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
 					dst.put("</a>");
 				} else {
-					if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
-					else dst.put(ln[0]);
-					ln = ln[1 .. $];
+					if (ln.startsWith("<br>")) {
+						// always support line breaks, since we embed them here ourselves!
+						dst.put("<br>");
+						ln = ln[4 .. $];
+					} else {
+						if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
+						else dst.put(ln[0]);
+						ln = ln[1 .. $];
+					}
 				}
 				break;
 		}
@@ -981,9 +989,29 @@ private struct Link {
 		== "<p><a href=\"https://travis-ci.org/rejectedsoftware/vibe.d\"><img src=\"https://travis-ci.org/rejectedsoftware/vibe.d.png\" alt=\"Build Status\"></a>\n</p>\n");
 }
 
-@safe unittest
-{
-    // check CTFE-ability
+@safe unittest { // check CTFE-ability
     enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
     assert(res == "<h3> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
 }
+
+@safe unittest { // correct line breaks in restrictive mode
+	auto res = filterMarkdown("hello\nworld", MarkdownFlags.forumDefault);
+	assert(res == "<p>hello<br>world\n</p>\n", res);
+}
+
+/*@safe unittest { // code blocks and blockquotes
+	assert(filterMarkdown("\tthis\n\tis\n\tcode") ==
+		"<pre><code>this\nis\ncode</code></pre>\n");
+	assert(filterMarkdown("    this\n    is\n    code") ==
+		"<pre><code>this\nis\ncode</code></pre>\n");
+	assert(filterMarkdown("    this\n    is\n\tcode") ==
+		"<pre><code>this\nis</code></pre>\n<pre><code>code</code></pre>\n");
+	assert(filterMarkdown("\tthis\n\n\tcode") ==
+		"<pre><code>this\n\ncode</code></pre>\n");
+	assert(filterMarkdown("\t> this") ==
+		"<pre><code>&gt; this</code></pre>\n");
+	assert(filterMarkdown(">     this") ==
+		"<blockquote><pre><code>this</code></pre></blockquote>\n");
+	assert(filterMarkdown(">     this\n    is code") ==
+		"<blockquote><pre><code>this\nis code</code></pre></blockquote>\n");
+}*/

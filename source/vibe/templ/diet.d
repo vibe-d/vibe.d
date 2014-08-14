@@ -1020,7 +1020,7 @@ private struct DietCompiler(TRANSLATE...)
 			string name = skipIdent(str, i, "-:");
 			string value;
 			skipWhitespace(str, i);
-			if( str[i] == '=' ){
+			if( i < str.length && str[i] == '=' ){
 				i++;
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
@@ -1062,14 +1062,20 @@ private struct DietCompiler(TRANSLATE...)
 		return false;
 	}
 
-	private void buildInterpolatedString(OutputContext output, string str, bool escape_quotes = false)
+	private void buildInterpolatedString(OutputContext output, string str, bool attribute = false)
 	{
 		size_t start = 0, i = 0;
 		while( i < str.length ){
 			// check for escaped characters
 			if( str[i] == '\\' ){
-				if( i > start ) output.writeString(str[start .. i]);
-				output.writeRawString(sanitizeEscaping(str[i .. i+2]));
+				if( i > start )
+				{
+					if (attribute) output.writeString(htmlAttribEscape(str[start .. i]));
+					else output.writeString(str[start .. i]);
+				}
+				if (attribute) output.writeString(htmlAttribEscape(
+							dstringUnescape(sanitizeEscaping(str[i .. i+2]))));
+				else output.writeRawString(sanitizeEscaping(str[i .. i+2]));
 				i += 2;
 				start = i;
 				continue;
@@ -1078,14 +1084,15 @@ private struct DietCompiler(TRANSLATE...)
 			if( (str[i] == '#' || str[i] == '!') && i+1 < str.length ){
 				bool escape = str[i] == '#';
 				if( i > start ){
-					output.writeString(str[start .. i]);
+					if (attribute) output.writeString(htmlAttribEscape(str[start .. i]));
+					else output.writeString(str[start .. i]);
 					start = i;
 				}
 				assertp(str[i+1] != str[i], "Please use \\ to escape # or ! instead of ## or !!.");
 				if( str[i+1] == '{' ){
 					i += 2;
 					auto expr = dstringUnescape(skipUntilClosingBrace(str, i));
-					if( escape && !escape_quotes ) output.writeExprHtmlEscaped(expr);
+					if( escape && !attribute ) output.writeExprHtmlEscaped(expr);
 					else if( escape ) output.writeExprHtmlAttribEscaped(expr);
 					else output.writeExpr(expr);
 					i++;
@@ -1094,7 +1101,11 @@ private struct DietCompiler(TRANSLATE...)
 			} else i++;
 		}
 
-		if( i > start ) output.writeString(str[start .. i]);
+		if( i > start )
+		{
+			if (attribute) output.writeString(htmlAttribEscape(str[start .. i]));
+			else output.writeString(str[start .. i]);
+		}
 	}
 
 	private string skipIdent(in ref string s, ref size_t idx, string additional_chars = null)
@@ -1348,6 +1359,13 @@ unittest {
 	assert(compile!("pre().\n\tfoo") == "<pre>\nfoo</pre>");
 	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
 	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
+
+	assert(compile!("input(autofocus)").length);
+
+	assert(compile!("- auto s = \"\";\ninput(type=\"text\",value=\"&\\\"#{s}\")")
+			== `<input type="text" value="&amp;&quot;"/>`);
+	assert(compile!("- auto param = \"t=1&u=1\";\na(href=\"/?#{param}&v=1\") foo")
+			== `<a href="/?t=1&amp;u=1&amp;v=1">foo</a>`);
 }
 
 

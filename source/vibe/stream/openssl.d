@@ -405,6 +405,11 @@ final class OpenSSLContext : SSLContext {
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
 
+	OpenSSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	{
+		return new OpenSSLStream(underlying, this, state, peer_name, peer_address);
+	}
+
 	/** Set the list of cipher specifications to use for SSL/TLS tunnels.
 
 		The list must be a colon separated list of cipher

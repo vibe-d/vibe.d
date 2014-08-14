@@ -1,3 +1,10 @@
+/**
+	Parameter validation types transparently supported for web interface methods.
+
+	Copyright: © 2014 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Sönke Ludwig
+*/
 module vibe.web.validation;
 
 import std.typecons : Nullable;
@@ -151,21 +158,3 @@ unittest {
 		}
 	}
 }
-
-
-/// Little wrapper for Nullable!T to enable more comfortable initialization.
-struct NullableW(T) {
-	Nullable!T storage;
-	alias storage this;
-
-	this(typeof(null)) {}
-	this(T val) { storage = val; }
-}
-
-template isNullable(T) {
-	import std.traits;
-	enum isNullable = isInstanceOf!(Nullable, T) || isInstanceOf!(NullableW, T);
-}
-
-static assert(isNullable!(Nullable!int));
-static assert(isNullable!(NullableW!int));

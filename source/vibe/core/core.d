@@ -963,7 +963,7 @@ private class CoreTask : TaskFiber {
 				m_yielders.length = 0;
 
 				// zero the fls initialization ByteArray for memory safety
-				foreach (ref size_t i, ref bool b; m_flsInit) {
+				foreach (size_t i, ref bool b; m_flsInit) {
 					if (b) {
 						if (ms_flsInfo !is null && ms_flsInfo.length >= i && ms_flsInfo[i] != FLSInfo.init)
 							ms_flsInfo[i].destroy(m_fls);
@@ -1142,8 +1142,8 @@ private struct ThreadContext {
 
 private struct TaskFuncInfo {
 	void function(TaskFuncInfo*) func;
-	void[2*size_t.sizeof] callable;
-	void[maxTaskParameterSize] args;
+	void[2*size_t.sizeof] callable = void;
+	void[maxTaskParameterSize] args = void;
 }
 
 alias TaskArgsVariant = VariantN!maxTaskParameterSize;

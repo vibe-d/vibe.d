@@ -62,15 +62,18 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	@property R front() { return m_data.front; }
 
 	/**
-		Controls the order that the query returns matching documents.
+		Controls the order in which the query returns matching documents.
 
-		This method must be called before beginning iteration, otherwise exeption will be thrown.
-		Only the last sort() applied to cursor has any effect.
+		This method must be called before starting to iterate, or an exeption
+		will be thrown. If multiple calls to $(D sort()) are issued, only
+		the last one will have an effect.
 
 		Params:
-			order = a document that defines the sort order of the result set
+			order = A BSON object convertible value that defines the sort order
+				of the result. This BSON object must be structured according to
+				the MongoDB documentation (see below).
 
-		Returns: the same cursor
+		Returns: Reference to the modified original curser instance.
 
 		Throws:
 			An exception if there is a query or communication error.
@@ -78,9 +81,31 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.sort)
 	*/
-	MongoCursor sort(T)(T order) {
+	MongoCursor sort(T)(T order)
+	{
 		m_data.sort(serializeToBson(order));
 		return this;
+	}
+
+	///
+	unittest {
+		import vibe.core.log;
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
+			auto coll = db["testcoll"];
+
+			// find all entries in reverse date order
+			foreach (entry; coll.find().sort(["date": -1]))
+				logInfo("Entry: %s", entry);
+
+			// the same, but using a struct to avoid memory allocations
+			static struct Order { int date; }
+			foreach (entry; coll.find().sort(Order(-1)))
+				logInfo("Entry: %s", entry);
+		}
 	}
 
 	/**
@@ -98,7 +123,8 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.limit)
 	*/
-	MongoCursor limit(size_t count) {
+	MongoCursor limit(size_t count)
+	{
 		m_data.limit(count);
 		return this;
 	}

@@ -887,10 +887,13 @@ private {
 
 	T fromRestString(T)(string value)
 	{
-		static if( is(T == bool) ) return value == "true";
+		import std.traits;
+		static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
+		else static if( is(T == bool) ) return value == "true";
 		else static if( is(T : int) ) return to!T(value);
 		else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
 		else static if( is(T : string) ) return value;
+		else static if( __traits(compiles, T.fromISOExtString("hello")) ) return T.fromISOExtString(value);
 		else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
 		else return deserializeJson!T(parseJson(value));
 	}

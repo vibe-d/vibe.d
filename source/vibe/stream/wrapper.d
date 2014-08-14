@@ -216,3 +216,22 @@ struct StreamOutputRange {
 
 	void put(const(dchar)[] elems) { foreach( ch; elems ) put(ch); }
 }
+
+unittest {
+	static long writeLength(ARGS...)(ARGS args) {
+		import vibe.stream.memory;
+		auto dst = new MemoryOutputStream;
+		{
+			auto rng = StreamOutputRange(dst);
+			foreach (a; args) rng.put(a);
+		}
+		return dst.data.length;
+	}
+	assert(writeLength("hello", ' ', "world") == "hello world".length);
+	assert(writeLength("h\u00E4llo", ' ', "world") == "h\u00E4llo world".length);
+	assert(writeLength("hello", '\u00E4', "world") == "hello\u00E4world".length);
+	assert(writeLength("h\u1000llo", '\u1000', "world") == "h\u1000llo\u1000world".length);
+	auto test = "häl";
+	assert(test.length == 4);
+	assert(writeLength(test[0], test[1], test[2], test[3]) == test.length);
+}
