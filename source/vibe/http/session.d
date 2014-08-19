@@ -39,6 +39,7 @@ final struct Session {
 		string m_id;
 	}
 
+	// created by the SessionStore using SessionStore.createSessionInstance
 	private this(SessionStore store, string id = null)
 	{
 		assert(id.length > 0);

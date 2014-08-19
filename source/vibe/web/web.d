@@ -411,13 +411,14 @@ class WebInterfaceSettings {
 	Maps a web interface member variable to a session field.
 
 	Setting a SessionVar variable will implicitly start a session, if none
-	has been started, yet. The content of the variable will be stored in
+	has been started yet. The content of the variable will be stored in
 	the session store and is automatically serialized and deserialized.
 
-	Note that variables of type SessionVar must always be normal members of a
-	class that was registered using registerWebInterface. However, the value
-	of a SessionVar is always bound to the session and not to web interface
-	class instance. It is also important to avoid name clashes
+	Note that variables of type SessionVar must only be used from within
+	handler functions of a class that was registered using
+	$(D registerWebInterface). Also note that two different session
+	variables with the same $(D name) parameter will access the same
+	underlying data.
 */
 struct SessionVar(T, string name) {
 	private {
