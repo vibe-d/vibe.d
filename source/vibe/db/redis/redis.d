@@ -30,7 +30,6 @@ RedisClient connectRedis(string host, ushort port = 6379)
 	return new RedisClient(host, port);
 }
 
-
 /**
 	A redis client with connection pooling.
 */
@@ -47,23 +46,29 @@ final class RedisClient {
 		m_connections = new ConnectionPool!RedisConnection({
 			return new RedisConnection(host, port);
 		});
-
-		import std.string;
-		auto info = info();
-		auto lines = info.splitLines();
-		if (lines.length > 1) {
-			foreach (string line; lines) {
-				auto lineParams = line.split(":");
-				if (lineParams.length > 1 && lineParams[0] == "redis_version") {
-					m_version = lineParams[1];
-					break;
-				}
-			}
-		} 
 	}
 
 	/// Returns Redis version
-	@property string redisVersion() { return m_version; }
+	@property string redisVersion()
+	{
+		if(!m_version)
+		{
+			import std.string;
+			auto info = info();
+			auto lines = info.splitLines();
+			if (lines.length > 1) {
+				foreach (string line; lines) {
+					auto lineParams = line.split(":");
+					if (lineParams.length > 1 && lineParams[0] == "redis_version") {
+						m_version = lineParams[1];
+						break;
+					}
+				}
+			}
+		}
+
+		return m_version;
+	}
 
 	/** Returns a handle to the given database.
 	*/
