@@ -46,7 +46,28 @@ final struct Session {
 		m_id = id;
 	}
 
+	/** Checks if the session is active.
+
+		This operator enables a $(D Session) value to be used in conditionals
+		to check if they are actially valid/active.
+	*/
 	bool opCast() const { return m_store !is null; }
+
+	///
+	unittest {
+		import vibe.http.server;
+
+		void login(HTTPServerRequest req, HTTPServerResponse res)
+		{
+			// TODO: validate username+password
+
+			// ensure that there is an active session
+			if (!req.session) req.session = res.startSession();
+
+			// update session variables
+			req.session["loginUser"] = req.form["user"];
+		}
+	}
 
 	/// Returns the unique session id of this session.
 	@property string id() const { return m_id; }
