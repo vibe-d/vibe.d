@@ -551,6 +551,7 @@ final class HTTPServerRequest : HTTPRequest {
 	private {
 		SysTime m_timeCreated;
 		FixedAppender!(string, 31) m_dateAppender;
+		HTTPServerSettings m_settings;
 		ushort m_port;
 	}
 
@@ -687,11 +688,15 @@ final class HTTPServerRequest : HTTPRequest {
 	@property URL fullURL()
 	const {
 		URL url;
-		if (auto pfh = "X-Forwarded-Host" in this.headers) {
+		auto fh = this.headers.get("X-Forwarded-Host", "");
+		if (!fh.empty) {
 			url.schema = this.headers.get("X-Forwarded-Proto", "http");
-			url.host = *pfh;
+			url.host = fh;
 		} else {
-			url.host = this.host;
+			if (!this.host.empty) url.host = this.host;
+			else if (!m_settings.hostName.empty) url.host = m_settings.hostName;
+			else url.host = m_settings.bindAddresses[0];
+
 			if (this.ssl) {
 				url.schema = "https";
 				if (m_port != 443) url.port = 443;
@@ -1330,6 +1335,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 				request_task = ctx.requestHandler;
 				break;
 			}
+		req.m_settings = settings;
 		res.m_settings = settings;
 
 		// setup compressed output
