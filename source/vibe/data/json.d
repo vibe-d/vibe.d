@@ -820,7 +820,7 @@ Json parseJson(R)(ref R range, int* line = null)
 			range.popFrontN(4);
 			ret = true;
 			break;
-		case '0': .. case '9'+1:
+		case '0': .. case '9':
 		case '-':
 			bool is_float;
 			auto num = skipNumber(range, is_float);
@@ -1061,7 +1061,7 @@ T deserializeJson(T, R)(R input)
 /// private
 T deserializeJsonOld(T)(Json src)
 {
-	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T ) 
+	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T )
 		if( src.type == Json.Type.null_ ) return T.init;
 	static if (is(T == Json)) return src;
 	else static if (is(T == typeof(null))) { return null; }
@@ -1086,7 +1086,7 @@ T deserializeJsonOld(T)(Json src)
 		foreach (string key, value; src) {
 			static if (is(TK == string)) {
 				dst[key] = deserializeJson!(Unqual!TV)(value);
-			} else static if (is(TK == enum)) { 
+			} else static if (is(TK == enum)) {
 				dst[to!(TK)(key)] = deserializeJson!(Unqual!TV)(value);
 			} else static if (isStringSerializable!TK) {
 				auto dsk = TK.fromString(key);
@@ -1271,7 +1271,7 @@ unittest {
 */
 struct JsonSerializer {
 	template isJsonBasicType(T) { enum isJsonBasicType = isNumeric!T || isBoolean!T || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
-	
+
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	private {
@@ -1356,7 +1356,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 	}
 
 	template isJsonBasicType(T) { enum isJsonBasicType = is(T : long) || is(T : real) || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
-	
+
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	this(R range)
@@ -1698,7 +1698,7 @@ private void jsonEscape(R)(ref R dst, string s)
 		immutable(char) ch = s[pos];
 
 		switch(ch){
-			default: 
+			default:
 				if (ch < 0x80)
 				{
 					dst.put(ch);
@@ -1719,11 +1719,11 @@ private void jsonEscape(R)(ref R dst, string s)
 					else
 					{
 						int first, last;
-						
+
 						codepoint -= 0x10000;
 						first = 0xD800 | ((codepoint & 0xffc00) >> 10);
 						last = 0xDC00 | (codepoint & 0x003ff);
-						
+
 						sprintf(&buf[0], "\\u%04X\\u%04X", first, last);
 						len = 12;
 					}
