@@ -839,17 +839,10 @@ final class HTTPServerResponse : HTTPResponse {
 			auto counter = RangeCounter(&length);
 			serializeToJson(counter, data);
 			headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", length);
-
-			{
-				auto rng = StreamOutputRange(bodyWriter);
-				serializeToJson(&rng, data);
-			}
-
-			assert(this.bytesWritten == length);
-		} else {
-			auto rng = StreamOutputRange(bodyWriter);
-			serializeToJson(&rng, data);
 		}
+
+		auto rng = StreamOutputRange(bodyWriter);
+		serializeToJson(&rng, data);
 	}
 
 	/**
