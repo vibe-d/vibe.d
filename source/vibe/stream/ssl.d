@@ -1,4 +1,4 @@
-﻿/**
+/**
 	SSL/TLS stream implementation
 
 	SSLStream can be used to implement SSL/TLS communication on top of a TCP connection. The
@@ -81,9 +81,12 @@ unittest {
 SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 {
 	version (OpenSSL) {
-		import vibe.stream.openssl;
+		static SSLContext createOpenSSLContext(SSLContextKind kind, SSLVersion ver) {
+			import vibe.stream.openssl;
+			return new OpenSSLContext(kind, ver);
+		}
 		if (!gs_sslContextFactory)
-			setSSLContextFactory((k, v) => new OpenSSLContext(k, v));
+			setSSLContextFactory(&createOpenSSLContext);
 	}
 	assert(gs_sslContextFactory !is null, "No SSL context factory registered.");
 	return gs_sslContextFactory(kind, ver);
