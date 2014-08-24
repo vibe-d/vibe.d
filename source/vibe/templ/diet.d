@@ -161,7 +161,7 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	import vibe.stream.wrapper;
 	import vibe.utils.string;
 	import std.typetuple;
-	
+
 	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
 
@@ -665,7 +665,7 @@ private struct DietCompiler(TRANSLATE...)
 						} else {
 							output.writeCodeLine(`pragma(msg, "`~dstringEscape(currLine.file)~`:`~currLine.number.to!string~
 								`: Warning: Use an explicit text block '`~tag~dstringEscape(tagline)~
-								`.' for embedded css/javascript - old behavior will be removed soon.");`);
+								`.' (with a trailing dot) for embedded css/javascript - old behavior will be removed soon.");`);
 
 							// pass all child lines to buildRawTag and continue with the next sibling
 							size_t next_tag = m_lineIndex+1;
@@ -1347,9 +1347,9 @@ unittest {
 	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? \"foo\" : null)") == "<div></div>");
 	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? true : false)") == "<div></div>");
 	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? true : false)") == "<div someattr=\"someattr\"></div>");
-	assert(compile!("doctype html\n- auto cond = true;\ndiv(someattr=cond ? true : false)") 
+	assert(compile!("doctype html\n- auto cond = true;\ndiv(someattr=cond ? true : false)")
 		== "<!DOCTYPE html>\n<div someattr></div>");
-	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)") 
+	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)")
 		== "<!DOCTYPE html>\n<div></div>");
 
 	// issue 510
