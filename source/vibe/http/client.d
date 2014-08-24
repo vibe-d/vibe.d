@@ -748,7 +748,7 @@ final class HTTPClientResponse : HTTPResponse {
 				m_gzipInputStream = FreeListRef!GzipInputStream(m_bodyReader);
 				m_bodyReader = m_gzipInputStream;
 			}
-			else enforce(false, "Unsuported content encoding: "~*pce);
+			else enforce(*pce == "identity", "Unsuported content encoding: "~*pce);
 		}
 
 		// be sure to free resouces as soon as the response has been read
