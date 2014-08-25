@@ -699,7 +699,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 			if (this.ssl) {
 				url.schema = "https";
-				if (m_port != 443) url.port = 443;
+				if (m_port != 443) url.port = m_port;
 			} else {
 				url.schema = "http";
 				if (m_port != 80) url.port = m_port;
