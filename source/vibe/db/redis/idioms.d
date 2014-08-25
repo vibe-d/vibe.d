@@ -15,10 +15,10 @@ import vibe.db.redis.types;
 
 /**
 */
-struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
+struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
 	static assert(ID_LENGTH > 0, "IDs must have a length of at least one.");
-	static assert(!SUPPORT_ITERATION || ID_LENGTH == 1, "ID generation currently not supported for ID lengths greater 2.");
+	static assert(!(OPTIONS & RedisCollectionOptions.supportIteration) || ID_LENGTH == 1, "ID generation currently not supported for ID lengths greater 2.");
 
 	alias IDS = Replicate!(long, ID_LENGTH);
 	static if (ID_LENGTH == 1) alias IDType = long;
@@ -28,7 +28,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = Redi
 		RedisDatabase m_db;
 		string[ID_LENGTH] m_prefix;
 		string m_suffix;
-		static if (options & RedisCollectionOptions.supportIteration) {
+		static if (OPTIONS & RedisCollectionOptions.supportIteration) {
 			@property string m_idCounter() const { return m_prefix[0] ~ "max"; }
 			@property string m_allSet() const { return m_prefix[0] ~ "all"; }
 		}
@@ -48,13 +48,13 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = Redi
 
 	T opIndex(IDS id) { return T(m_db, getKey(id)); }
 
-	static if (options & RedisCollectionOptions.supportIteration) {
+	static if (OPTIONS & RedisCollectionOptions.supportIteration) {
 		/** Creates an ID without setting a corresponding value.
 		*/
 		IDType createID()
 		{
 			auto id = m_db.incr(m_idCounter);
-			static if (options & RedisCollectionOptions.supportPaging)
+			static if (OPTIONS & RedisCollectionOptions.supportPaging)
 				m_db.zadd(m_allSet, id, id);
 			else m_db.sadd(m_allSet, id);
 			return id;
@@ -69,18 +69,18 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = Redi
 
 		bool isMember(long id)
 		{
-			static if (options & RedisCollectionOptions.supportPaging)
+			static if (OPTIONS & RedisCollectionOptions.supportPaging)
 				return m_db.zisMember(m_allSet, id);
 			else return m_db.sisMember(m_allSet, id);
 		}
 
-		static if (options & RedisCollectionOptions.supportPaging) {
+		static if (OPTIONS & RedisCollectionOptions.supportPaging) {
 			// TODO: add range queries
 		}
 
 		int opApply(int delegate(long id) del)
 		{
-			static if (options & RedisCollectionOptions.supportPaging) {
+			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
 				foreach (id; m_db.zmembers!long(m_allSet))
 					if (auto ret = del(id))
 						return ret;
@@ -94,7 +94,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = Redi
 
 		int opApply(int delegate(long id, T) del)
 		{
-			static if (options & RedisCollectionOptions.supportPaging) {
+			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
 				foreach (id; m_db.zmembers!long(m_allSet))
 					if (auto ret = del(id, this[id]))
 						return ret;
@@ -112,8 +112,12 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = Redi
 	void remove(IDS id)
 	{
 		this[id].remove();
-		static if (SUPPORT_ITERATION)
-			m_db.srem(m_allSet, id);
+		static if (OPTIONS & RedisCollectionOptions.supportIteration) {
+			static if (OPTIONS & RedisCollectionOptions.supportPaging)
+				m_db.zrem(m_allSet, id);
+			else
+				m_db.srem(m_allSet, id);
+		}
 	}
 
 
@@ -131,8 +135,9 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = Redi
 }
 
 enum RedisCollectionOptions {
-	supportIteration = 1<<0, // store IDs in a set to be able to iterate and check for existence
-	supportPaging    = 1<<1, // store IDs in a sorted set, to support range based queries
+	none             = 0,    // Plain collection without iteration/paging support
+	supportIteration = 1<<0, // Store IDs in a set to be able to iterate and check for existence
+	supportPaging    = 1<<1, // Store IDs in a sorted set, to support range based queries
 	defaults = supportIteration
 }
 
@@ -146,9 +151,9 @@ enum RedisCollectionOptions {
 
 	See_also: $(D RedisObjectCollection)
 */
-template RedisHashCollection(bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisHashCollection(RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisHashCollection = RedisCollection!(RedisHash, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisHashCollection = RedisCollection!(RedisHash, OPTIONS, ID_LENGTH);
 }
 
 
@@ -158,9 +163,9 @@ template RedisHashCollection(bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1
 
 	See_also: $(D RedisHashCollection)
 */
-template RedisObjectCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisObjectCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisObjectCollection = RedisCollection!(RedisObject!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisObjectCollection = RedisCollection!(RedisObject!T, OPTIONS, ID_LENGTH);
 }
 
 ///
@@ -293,9 +298,9 @@ struct RedisObjectField(T) {
 
 
 */
-template RedisSetCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisSetCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisSetCollection = RedisCollection!(RedisSet!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisSetCollection = RedisCollection!(RedisSet!T, OPTIONS, ID_LENGTH);
 }
 
 ///
@@ -303,7 +308,7 @@ unittest {
 	void test()
 	{
 		auto db = connectRedis("127.0.0.1").getDatabase(0);
-		auto user_groups = RedisSetCollection!(string, false)(db, "user_groups");
+		auto user_groups = RedisSetCollection!(string, RedisCollectionOptions.none)(db, "user_groups");
 
 		// add some groups for user with ID 0
 		user_groups[0].insert("cooking");
@@ -325,9 +330,9 @@ unittest {
 
 
 */
-template RedisListCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisListCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisListCollection = RedisCollection!(RedisList!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisListCollection = RedisCollection!(RedisList!T, OPTIONS, ID_LENGTH);
 }
 
 
@@ -335,9 +340,9 @@ template RedisListCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH 
 
 
 */
-template RedisStringCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisStringCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisStringCollection = RedisCollection!(RedisString!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisStringCollection = RedisCollection!(RedisString!T, OPTIONS, ID_LENGTH);
 }
 
 
