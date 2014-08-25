@@ -15,7 +15,7 @@ import vibe.db.redis.types;
 
 /**
 */
-struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions options = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
 	static assert(ID_LENGTH > 0, "IDs must have a length of at least one.");
 	static assert(!SUPPORT_ITERATION || ID_LENGTH == 1, "ID generation currently not supported for ID lengths greater 2.");
@@ -28,7 +28,7 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 		RedisDatabase m_db;
 		string[ID_LENGTH] m_prefix;
 		string m_suffix;
-		static if (SUPPORT_ITERATION) {
+		static if (options & RedisCollectionOptions.supportIteration) {
 			@property string m_idCounter() const { return m_prefix[0] ~ "max"; }
 			@property string m_allSet() const { return m_prefix[0] ~ "all"; }
 		}
@@ -48,13 +48,15 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 
 	T opIndex(IDS id) { return T(m_db, getKey(id)); }
 
-	static if (SUPPORT_ITERATION) {
+	static if (options & RedisCollectionOptions.supportIteration) {
 		/** Creates an ID without setting a corresponding value.
 		*/
 		IDType createID()
 		{
 			auto id = m_db.incr(m_idCounter);
-			m_db.sadd(m_allSet, id);
+			static if (options & RedisCollectionOptions.supportPaging)
+				m_db.zadd(m_allSet, id, id);
+			else m_db.sadd(m_allSet, id);
 			return id;
 		}
 
@@ -67,22 +69,40 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 
 		bool isMember(long id)
 		{
-			return m_db.sisMember(m_allSet, id);
+			static if (options & RedisCollectionOptions.supportPaging)
+				return m_db.zisMember(m_allSet, id);
+			else return m_db.sisMember(m_allSet, id);
+		}
+
+		static if (options & RedisCollectionOptions.supportPaging) {
+			// TODO: add range queries
 		}
 
 		int opApply(int delegate(long id) del)
 		{
-			foreach (id; m_db.smembers!long(m_allSet))
-				if (auto ret = del(id))
-					return ret;
+			static if (options & RedisCollectionOptions.supportPaging) {
+				foreach (id; m_db.zmembers!long(m_allSet))
+					if (auto ret = del(id))
+						return ret;
+			} else {
+				foreach (id; m_db.smembers!long(m_allSet))
+					if (auto ret = del(id))
+						return ret;
+			}
 			return 0;
 		}
 
 		int opApply(int delegate(long id, T) del)
 		{
-			foreach (id; m_db.smembers!long(m_allSet))
-				if (auto ret = del(id, this[id]))
-					return ret;
+			static if (options & RedisCollectionOptions.supportPaging) {
+				foreach (id; m_db.zmembers!long(m_allSet))
+					if (auto ret = del(id, this[id]))
+						return ret;
+			} else {
+				foreach (id; m_db.smembers!long(m_allSet))
+					if (auto ret = del(id, this[id]))
+						return ret;
+			}
 			return 0;
 		}
 	}
@@ -108,6 +128,12 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 			return ret ~ m_suffix;
 		}
 	}
+}
+
+enum RedisCollectionOptions {
+	supportIteration = 1<<0, // store IDs in a set to be able to iterate and check for existence
+	supportPaging    = 1<<1, // store IDs in a sorted set, to support range based queries
+	defaults = supportIteration
 }
 
 
@@ -278,7 +304,7 @@ unittest {
 	{
 		auto db = connectRedis("127.0.0.1").getDatabase(0);
 		auto user_groups = RedisSetCollection!(string, false)(db, "user_groups");
-		
+
 		// add some groups for user with ID 0
 		user_groups[0].insert("cooking");
 		user_groups[0].insert("hiking");
