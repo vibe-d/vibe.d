@@ -1433,8 +1433,11 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 
 		// if no one has written anything, return 404
 		if (!res.headerWritten) {
+			string dbg_msg;
 			logDiagnostic("No response written for %s", req.requestURL);
-			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), null, null);
+			if (settings.options & HTTPServerOption.errorStackTraces)
+				dbg_msg = format("Not routes match path '%s'", req.requestURL);
+			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), dbg_msg, null);
 		}
 	} catch (HTTPStatusException err) {
 		string dbg_msg;
