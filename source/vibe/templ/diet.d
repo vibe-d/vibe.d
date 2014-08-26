@@ -166,12 +166,12 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
-	//pragma(msg, dietParser!template_file());
 	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
 	else alias TRANSLATE = TypeTuple!();
 
 	auto output__ = StreamOutputRange(stream__);
 
+	//pragma(msg, dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
 	mixin(dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
 }
 
@@ -1287,15 +1287,56 @@ private void buildSpecialTag(OutputContext output, string tag, int level)
 private bool isStringLiteral(string str)
 {
 	size_t i = 0;
-	while( i < str.length && (str[i] == ' ' || str[i] == '\t') ) i++;
-	if( i >= str.length ) return false;
-	char delimiter = str[i];
-	if( delimiter != '"' && delimiter != '\'' ) return false;
-	while( i < str.length && str[i] != delimiter ){
-		if( str[i] == '\\' ) i++;
+
+	// skip leading white space
+	while (i < str.length && (str[i] == ' ' || str[i] == '\t')) i++;
+
+	// no string literal inside
+	if (i >= str.length) return false;
+
+	char delimiter = str[i++];
+	if (delimiter != '"' && delimiter != '\'') return false;
+
+	while (i < str.length && str[i] != delimiter) {
+		if (str[i] == '\\') i++;
 		i++;
 	}
-	return i < str.length;
+
+	// unterminated string literal
+	if (i >= str.length) return false;
+
+	i++; // skip delimiter
+
+	// skip trailing white space
+	while (i < str.length && (str[i] == ' ' || str[i] == '\t')) i++;
+
+	// check if the string has ended with the closing delimiter
+	return i == str.length;
+}
+
+unittest {
+	assert(isStringLiteral(`""`));
+	assert(isStringLiteral(`''`));
+	assert(isStringLiteral(`"hello"`));
+	assert(isStringLiteral(`'hello'`));
+	assert(isStringLiteral(` 	"hello"	 `));
+	assert(isStringLiteral(` 	'hello'	 `));
+	assert(isStringLiteral(`"hel\"lo"`));
+	assert(isStringLiteral(`"hel'lo"`));
+	assert(isStringLiteral(`'hel\'lo'`));
+	assert(isStringLiteral(`'hel"lo'`));
+	assert(!isStringLiteral(`"hello\`));
+	assert(!isStringLiteral(`"hello\"`));
+	assert(!isStringLiteral(`"hello\"`));
+	assert(!isStringLiteral(`"hello'`));
+	assert(!isStringLiteral(`'hello"`));
+	assert(!isStringLiteral(`"hello""world"`));
+	assert(!isStringLiteral(`"hello" "world"`));
+	assert(!isStringLiteral(`"hello" world`));
+	assert(!isStringLiteral(`'hello''world'`));
+	assert(!isStringLiteral(`'hello' 'world'`));
+	assert(!isStringLiteral(`'hello' world`));
+	assert(!isStringLiteral(`"name" value="#{name}"`));
 }
 
 /// Internal function used for converting an interpolation expression to string
