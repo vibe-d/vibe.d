@@ -1025,8 +1025,9 @@ private struct DietCompiler(TRANSLATE...)
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
 				value = skipExpression(str, i);
-				if( isStringLiteral(value) && value[0] == '\'' ){
-					value = '"' ~ value[1 .. $-1] ~ '"';
+				if (isStringLiteral(value) && value[0] == '\'') {
+					auto tmp = dstringUnescape(value[1 .. $-1]);
+					value = '"' ~ dstringEscape(tmp) ~ '"';
 				}
 			} else value = "true";
 
@@ -1325,6 +1326,7 @@ unittest {
 	assert(isStringLiteral(`"hel'lo"`));
 	assert(isStringLiteral(`'hel\'lo'`));
 	assert(isStringLiteral(`'hel"lo'`));
+	assert(isStringLiteral(`'#{"address_"~item}'`));
 	assert(!isStringLiteral(`"hello\`));
 	assert(!isStringLiteral(`"hello\"`));
 	assert(!isStringLiteral(`"hello\"`));
