@@ -1290,6 +1290,21 @@ unittest { // issue #709
 	assert(deserializeBson!(ulong[])(bson).equal(data));
 }
 
+unittest {
+	import std.typecons;
+	Nullable!bool x;
+	auto bson = serializeToBson(x);
+	assert(bson.type == Bson.Type.null_);
+	deserializeBson(x, bson);
+	assert(x.isNull);
+	x = true;
+	bson = serializeToBson(x);
+	assert(bson.type == Bson.Type.bool_ && bson.get!bool == true);
+	deserializeBson(x, bson);
+	assert(x == true);
+}
+
+
 /**
 	Serializes to an in-memory BSON representation.
 
@@ -1483,9 +1498,9 @@ struct BsonSerializer {
 		else static if (is(T == BsonRegex)) tp = Bson.Type.regex;
 		else static if (is(T == BsonTimestamp)) tp = Bson.Type.timestamp;
 		else static if (is(T == bool)) tp = Bson.Type.bool_;
-		else static if (is(T : int)) tp = Bson.Type.int_;
-		else static if (is(T : long)) tp = Bson.Type.long_;
-		else static if (is(T : double)) tp = Bson.Type.double_;
+		else static if (isIntegral!T && is(T : int)) tp = Bson.Type.int_;
+		else static if (isIntegral!T && is(T : long)) tp = Bson.Type.long_;
+		else static if (isFloatingPoint!T && is(T : double)) tp = Bson.Type.double_;
 		else static if (isBsonSerializable!T) tp = value.toBson().type; // FIXME: this is highly inefficient
 		else static if (isJsonSerializable!T) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
 		else static if (is(T : const(ubyte)[])) tp = Bson.Type.binData;
