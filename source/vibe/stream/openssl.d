@@ -233,7 +233,7 @@ final class OpenSSLStream : SSLStream {
 	private int enforceSSL(int ret, string message)
 	{
 		if (ret <= 0) {
-			auto err = SSL_get_error(m_ssl, ret);
+			auto err = ERR_get_error();
 			char[120] ebuf;
 			ERR_error_string(err, ebuf.ptr);
 			throw new Exception(format("%s: %s (%s)", message, ebuf.ptr.to!string(), err));
