@@ -1304,6 +1304,15 @@ unittest {
 	assert(x == true);
 }
 
+unittest { // issue #793
+	char[] test = "test".dup;
+	auto bson = serializeToBson(test);
+	//assert(bson.type == Bson.Type.string);
+	//assert(bson.get!string == "test");
+	assert(bson.type == Bson.Type.array);
+	assert(bson[0].type == Bson.Type.string && bson[0].get!string == "t");
+}
+
 
 /**
 	Serializes to an in-memory BSON representation.
