@@ -59,7 +59,6 @@ final class MongoClient {
 			import std.stdio;
 			auto ret = new MongoConnection(settings);
 			ret.connect();
-			writeln(ret.listDatabases());
 			return ret;
 		});
 
@@ -117,11 +116,7 @@ final class MongoClient {
 
 	string[] listDatabases()
 	{
-		//auto con = lockConnection();
-		//con.connect();
-		
-		//return con.listDatabases();
-		return [];
+		return lockConnection().listDatabases();
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }
