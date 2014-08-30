@@ -272,14 +272,13 @@ final class MongoConnection {
 
 		return ret;
 	}
-import std.stdio;
+
 	string[] listDatabases()
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
-		writeln(cn);
 
 		auto cmd = Bson(["listDatabases":Bson(1)]);
-		string[] result;
+		string [] result;
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), 
 			(cursor, flags, first_doc, num_docs) {
@@ -290,15 +289,11 @@ import std.stdio;
 				if (doc["ok"].get!double != 1.0)
 					throw new MongoAuthException("listDatabases failed.");
 
-				string[] result;
 				foreach(i, ref db_doc ; doc["databases"].get!(const(Bson)[])) {
 					result ~= db_doc["name"].get!string;
-					writeln(result);
 				}
 			}
 		);
-
-		writeln("from 299: ", result.length);
 
 		return result;
 	}
