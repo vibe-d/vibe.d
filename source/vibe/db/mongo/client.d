@@ -56,8 +56,10 @@ final class MongoClient {
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
 
 		m_connections = new ConnectionPool!MongoConnection({
+			import std.stdio;
 			auto ret = new MongoConnection(settings);
 			ret.connect();
+			writeln(ret.listDatabases());
 			return ret;
 		});
 
@@ -110,6 +112,16 @@ final class MongoClient {
 	MongoDatabase getDatabase(string dbName)
 	{
 		return MongoDatabase(this, dbName);
+	}
+
+
+	string[] listDatabases()
+	{
+		//auto con = lockConnection();
+		//con.connect();
+		
+		//return con.listDatabases();
+		return [];
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }
