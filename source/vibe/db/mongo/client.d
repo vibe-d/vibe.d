@@ -114,7 +114,7 @@ final class MongoClient {
 	}
 
 
-	string[] listDatabases()
+	MongoDbInfo[] listDatabases()
 	{
 		return lockConnection().listDatabases();
 	}

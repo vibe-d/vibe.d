@@ -16,10 +16,12 @@ void runTest()
 
 	import std.algorithm;
 	auto dbs = client.listDatabases();
-	assert(!find(dbs, "test").empty);
-	assert(!find(dbs, "local").empty);
-	assert(!find(dbs, "admin").empty);
-	assert(find(dbs, "peter").empty);
+
+	
+	assert(!find!"a.name == b"(dbs, "test").empty);
+	assert(!find!"a.name == b"(dbs, "local").empty);
+	assert(!find!"a.name == b"(dbs, "admin").empty);
+	assert(find!"a.name == b"(dbs, "peter").empty);
 
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);

@@ -273,12 +273,14 @@ final class MongoConnection {
 		return ret;
 	}
 
-	string[] listDatabases()
+
+
+	MongoDbInfo[] listDatabases()
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
 		auto cmd = Bson(["listDatabases":Bson(1)]);
-		string [] result;
+		MongoDbInfo[] result;
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), 
 			(cursor, flags, first_doc, num_docs) {
@@ -290,7 +292,11 @@ final class MongoConnection {
 					throw new MongoAuthException("listDatabases failed.");
 
 				foreach(i, ref db_doc ; doc["databases"].get!(const(Bson)[])) {
-					result ~= db_doc["name"].get!string;
+					MongoDbInfo info;
+					info.name = db_doc["name"].get!string;
+					info.sizeOnDisk = db_doc["sizeOnDisk"].get!double;
+					info.empty = db_doc["empty"].get!bool;
+					result ~= info;
 				}
 			}
 		);
@@ -777,11 +783,19 @@ class MongoClientSettings
 	}
 }
 
+struct MongoDbInfo 
+{
+	double sizeOnDisk; // seems like everything is using doubles?
+	bool empty;
+	string name;
+}
+
 private struct MongoHost
 {
 	string name;
 	ushort port;
 }
+
 
 private int sendLength(ARGS...)(ARGS args)
 {
