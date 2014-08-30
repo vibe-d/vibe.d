@@ -15,7 +15,6 @@ void runTest()
 	}
 
 	import std.algorithm;
-	import std.stdio;
 	auto dbs = client.listDatabases();
 	assert(!find(dbs, "test").empty);
 	assert(!find(dbs, "local").empty);
