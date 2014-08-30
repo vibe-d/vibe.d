@@ -4,7 +4,6 @@
 module app;
 
 import vibe.vibe;
-import std.stdio;
 
 void runTest()
 {
@@ -15,10 +14,13 @@ void runTest()
 		return;
 	}
 
+	import std.algorithm;
+	import std.stdio;
 	auto dbs = client.listDatabases();
-	writeln("number of dbs", dbs.length);
-	foreach(db ; dbs)
-		writeln(db);
+	assert(!find(dbs, "test").empty);
+	assert(!find(dbs, "local").empty);
+	assert(!find(dbs, "admin").empty);
+	assert(find(dbs, "peter").empty);
 
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);
@@ -47,9 +49,6 @@ void runTest()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
-
-
-	//assert("test" in dbs);
 }
 
 int main()
