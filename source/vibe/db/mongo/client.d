@@ -56,7 +56,6 @@ final class MongoClient {
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
 
 		m_connections = new ConnectionPool!MongoConnection({
-			import std.stdio;
 			auto ret = new MongoConnection(settings);
 			ret.connect();
 			return ret;

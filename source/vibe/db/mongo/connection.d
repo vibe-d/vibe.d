@@ -273,8 +273,6 @@ final class MongoConnection {
 		return ret;
 	}
 
-
-
 	MongoDbInfo[] getInfoDatabases()
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
