@@ -114,6 +114,19 @@ final class MongoClient {
 	}
 
 
+
+	/**
+	 	Return string array representing all current database names.
+
+	 	Returns:
+	 		String array of all current database names;
+
+	 	Examples:
+	 		---
+	 		auto names = client.getDatabaseNames();
+	 		writeln("Current databases are: ", names);
+	 		---
+	 */
 	string[] getDatabaseNames()
 	{
 		string[] names;

@@ -282,13 +282,13 @@ final class MongoConnection {
 		auto cmd = Bson(["listDatabases":Bson(1)]);
 		MongoDbInfo[] result;
 
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), 
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure))
-					throw new MongoDriverException("Calling listDatabases failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
+		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
+			if ((flags & ReplyFlags.QueryFailure))
+				throw new MongoDriverException("Calling listDatabases failed.");	
+		}
+
+		void on_doc(size_t idx, ref Bson doc) {
+			if (doc["ok"].get!double != 1.0)
 					throw new MongoAuthException("listDatabases failed.");
 
 				foreach(i, ref db_doc ; doc["databases"].get!(const(Bson)[])) {
@@ -298,8 +298,9 @@ final class MongoConnection {
 					info.empty = db_doc["empty"].get!bool;
 					result ~= info;
 				}
-			}
-		);
+		}
+
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
 
 		return result;
 	}
