@@ -114,9 +114,13 @@ final class MongoClient {
 	}
 
 
-	MongoDbInfo[] listDatabases()
+	string[] getDatabaseNames()
 	{
-		return lockConnection().listDatabases();
+		string[] names;
+		foreach(info; lockConnection.getInfoDatabases())
+			names ~= info.name;
+
+		return names;		
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }
