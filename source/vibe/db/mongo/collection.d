@@ -302,7 +302,16 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 
 	void dropIndex(string name)
 	{
-		assert(false);
+		static struct CMD {
+			string dropIndexes;
+			string index;
+		}
+
+		CMD cmd;
+		cmd.dropIndexes = m_name;
+		cmd.index = name;
+		auto reply = database.runCommand(cmd);
+		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
 	}
 }
 
