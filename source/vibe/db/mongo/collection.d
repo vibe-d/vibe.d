@@ -313,6 +313,17 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 		auto reply = database.runCommand(cmd);
 		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
 	}
+	
+    void drop() {
+		static struct CMD {
+			string drop;
+		}
+
+		CMD cmd;
+		cmd.drop = m_name;
+		auto reply = database.runCommand(cmd);
+		enforce(reply.ok.get!double == 1, "drop command failed.");
+    }
 }
 
 enum IndexFlags {
