@@ -273,7 +273,7 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 		return ret.result;
 	}
 
-	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None)
+	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None, ulong expireAfterSeconds = 0)
 	{
 		// TODO: support 2d indexes
 
@@ -296,13 +296,34 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 		if( flags & IndexFlags.DropDuplicates ) doc["dropDups"] = true;
 		if( flags & IndexFlags.Background ) doc["background"] = true;
 		if( flags & IndexFlags.Sparse ) doc["sparse"] = true;
+		if( flags & IndexFlags.ExpireAfterSeconds ) doc["expireAfterSeconds"] = expireAfterSeconds;
 		database["system.indexes"].insert(doc);
 	}
 
 	void dropIndex(string name)
 	{
-		assert(false);
+		static struct CMD {
+			string dropIndexes;
+			string index;
+		}
+
+		CMD cmd;
+		cmd.dropIndexes = m_name;
+		cmd.index = name;
+		auto reply = database.runCommand(cmd);
+		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
 	}
+	
+    void drop() {
+		static struct CMD {
+			string drop;
+		}
+
+		CMD cmd;
+		cmd.drop = m_name;
+		auto reply = database.runCommand(cmd);
+		enforce(reply.ok.get!double == 1, "drop command failed.");
+    }
 }
 
 enum IndexFlags {
@@ -310,5 +331,6 @@ enum IndexFlags {
 	Unique = 1<<0,
 	DropDuplicates = 1<<2,
 	Background = 1<<3,
-	Sparse = 1<<4
+	Sparse = 1<<4,
+	ExpireAfterSeconds = 1<<5
 }
