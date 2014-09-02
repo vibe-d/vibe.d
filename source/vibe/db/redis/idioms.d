@@ -28,7 +28,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 		RedisDatabase m_db;
 		string[ID_LENGTH] m_prefix;
 		string m_suffix;
-		static if (OPTIONS & RedisCollectionOptions.supportIteration) {
+		static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
 			@property string m_idCounter() const { return m_prefix[0] ~ "max"; }
 			@property string m_allSet() const { return m_prefix[0] ~ "all"; }
 		}
@@ -48,7 +48,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 
 	T opIndex(IDS id) { return T(m_db, getKey(id)); }
 
-	static if (OPTIONS & RedisCollectionOptions.supportIteration) {
+	static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
 		/** Creates an ID without setting a corresponding value.
 		*/
 		IDType createID()
@@ -70,7 +70,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 		bool isMember(long id)
 		{
 			static if (OPTIONS & RedisCollectionOptions.supportPaging)
-				return m_db.zisMember(m_allSet, id);
+				return m_db.zscore(m_allSet, id).hasNext();
 			else return m_db.sisMember(m_allSet, id);
 		}
 
@@ -81,7 +81,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 		int opApply(int delegate(long id) del)
 		{
 			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
-				foreach (id; m_db.zmembers!long(m_allSet))
+				foreach (id; m_db.zrange!long(m_allSet, 0, -1))
 					if (auto ret = del(id))
 						return ret;
 			} else {
@@ -95,7 +95,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 		int opApply(int delegate(long id, T) del)
 		{
 			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
-				foreach (id; m_db.zmembers!long(m_allSet))
+				foreach (id; m_db.zrange!long(m_allSet, 0, -1))
 					if (auto ret = del(id, this[id]))
 						return ret;
 			} else {
@@ -112,7 +112,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 	void remove(IDS id)
 	{
 		this[id].remove();
-		static if (OPTIONS & RedisCollectionOptions.supportIteration) {
+		static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
 			static if (OPTIONS & RedisCollectionOptions.supportPaging)
 				m_db.zrem(m_allSet, id);
 			else
