@@ -200,9 +200,11 @@ class HTTPClientSettings {
 	Duration defaultKeepAliveTimeout = 10.seconds;
 }
 
+/* DMD bug @ 2.065
 ///
 unittest {
 	void test() {
+
 		HTTPClientSettings settings = new HTTPClientSettings;
 		settings.proxyURL = URL.parse("http://proxyuser:proxypass@192.168.2.50:3128");
 		settings.defaultKeepAliveTimeout = 0.seconds; // closes connection immediately after receiving the data.
@@ -212,13 +214,15 @@ unittest {
 		},
 		(scope res){
 			logInfo("Headers:");
-			foreach(key, value; res.headers) {
+			foreach(key, ref value; res.headers) {
 				logInfo("%s: %s", key, value);
 			}
 			logInfo("Response: %s", res.bodyReader.readAllUTF8());
 		}, settings);
+	
 	}
 }
+*/
 
 /**
 	Implementation of a HTTP 1.0/1.1 client with keep-alive support.
