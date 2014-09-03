@@ -14,6 +14,7 @@ import vibe.core.log;
 import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
+import vibe.http.status : isSuccessCode;
 
 import std.algorithm : startsWith, endsWith;
 
@@ -385,7 +386,7 @@ class RestInterfaceClient(I) : I
 					ret.toString()
 				);
 
-				if (res.statusCode != HTTPStatus.OK)
+				if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
 					throw new RestException(res.statusCode, ret);
 			};
 

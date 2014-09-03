@@ -177,3 +177,11 @@ bool justifiesConnectionClose(int status) {
 			return true; 
 	}
 }
+
+/**
+    Determines if status code is generally successful (>= 200 && < 300)
+*/
+bool isSuccessCode(HTTPStatus status) {
+    return status >= 200 && status < 300;
+}
+
