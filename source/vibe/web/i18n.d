@@ -62,7 +62,7 @@ unittest {
 		static string determineLanguage(HTTPServerRequest req)
 		{
 			if (!req.session) return null; // use default language
-			return req.session.get("language", null);
+			return req.session.get("language", "");
 		}
 	}
 
