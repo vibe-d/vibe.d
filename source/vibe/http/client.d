@@ -81,7 +81,7 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
 				string pwstr = url.username ~ ":" ~ url.password;
-				req.headers["Authorization"] = "Basic " ~ 
+				req.headers["Authorization"] = "Basic " ~
 					cast(string)Base64.encode(cast(ubyte[])pwstr);
 			}
 			if( requester ) requester(req);
@@ -104,12 +104,12 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
 	bool ssl;
-	
+
 	if (settings.proxyURL.schema !is null)
 		ssl = settings.proxyURL.schema == "https";
 	else
 		ssl = url.schema == "https";
-	
+
 	auto cli = connectHTTP(url.host, url.port, ssl, settings);
 	cli.request((scope req){
 		if (url.localURI.length)
@@ -122,7 +122,7 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
 				string pwstr = url.username ~ ":" ~ url.password;
-				req.headers["Authorization"] = "Basic " ~ 
+				req.headers["Authorization"] = "Basic " ~
 					cast(string)Base64.encode(cast(ubyte[])pwstr);
 			}
 			if( requester ) requester(req);
@@ -172,7 +172,7 @@ auto connectHTTP(string host, ushort port = 0, bool ssl = false, HTTPClientSetti
 	foreach (c; s_connections)
 		if (c[0].host == host && c[0].port == port && c[0].ssl == ssl && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
 			pool = c[1];
-	
+
 	if (!pool) {
 		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, ssl, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
 		pool = new ConnectionPool!HTTPClient({
@@ -219,10 +219,11 @@ unittest {
 			}
 			logInfo("Response: %s", res.bodyReader.readAllUTF8());
 		}, settings);
-	
+
 	}
 }
 */
+
 
 /**
 	Implementation of a HTTP 1.0/1.1 client with keep-alive support.
@@ -244,7 +245,7 @@ final class HTTPClient {
 		static __gshared m_userAgent = "vibe.d/"~vibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		static __gshared void function(SSLContext) ms_sslSetup;
 		bool m_requesting = false, m_responding = false;
-		SysTime m_keepAliveLimit; 
+		SysTime m_keepAliveLimit;
 		Duration m_keepAliveTimeout;
 	}
 
@@ -321,21 +322,21 @@ final class HTTPClient {
 		import std.conv : to;
 
 		res.dropBody();
-		scope(failure) 
-			res.disconnect(); 
+		scope(failure)
+			res.disconnect();
 		if (res.statusCode != 407) {
 			throw new HTTPStatusException(HTTPStatus.internalServerError, "Proxy returned Proxy-Authenticate without a 407 status code.");
 		}
-		
+
 		// send the request again with the proxy authentication information if available
 		if (m_settings.proxyURL.username is null) {
 			throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required.");
 		}
-		
+
 		m_responding = false;
 		close_conn = false;
 		bool found_proxy_auth;
-		
+
 		foreach (string proxyAuth; res.headers.getAll("Proxy-Authenticate"))
 		{
 			if (proxyAuth.length >= "Basic".length && proxyAuth[0.."Basic".length] == "Basic")
@@ -344,7 +345,7 @@ final class HTTPClient {
 				break;
 			}
 		}
-		
+
 		if (!found_proxy_auth)
 		{
 			throw new HTTPStatusException(HTTPStatus.notAcceptable, "The Proxy Server didn't allow Basic Authentication");
@@ -467,7 +468,7 @@ final class HTTPClient {
 
 				static AddressType getAddressType(string host){
 					import std.regex : regex, Captures, Regex, matchFirst;
-				
+
 					__gshared auto IPv4Regex = regex(`^\s*((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\s*$`, ``);
 					__gshared auto IPv6Regex = regex(`^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$`, ``);
 
@@ -543,7 +544,7 @@ final class HTTPClientRequest : HTTPRequest {
 		NetworkAddress m_localAddress;
 	}
 
-	
+
 	/// private
 	this(Stream conn, NetworkAddress local_addr)
 	{
@@ -698,7 +699,7 @@ final class HTTPClientResponse : HTTPResponse {
 		int m_maxRequests;
 	}
 
-	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can 
+	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can
 	/// make before the server closes the connection.
 	@property int maxRequests() const {
 		return m_maxRequests;
@@ -726,7 +727,7 @@ final class HTTPClientResponse : HTTPResponse {
 			stln = stln[1 .. $];
 			this.statusPhrase = stln;
 		}
-		
+
 		// read headers until an empty line is hit
 		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc, false);
 
