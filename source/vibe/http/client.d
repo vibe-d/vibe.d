@@ -200,7 +200,6 @@ class HTTPClientSettings {
 	Duration defaultKeepAliveTimeout = 10.seconds;
 }
 
-/* DMD bug @ 2.065
 ///
 unittest {
 	void test() {
@@ -222,7 +221,6 @@ unittest {
 
 	}
 }
-*/
 
 
 /**
