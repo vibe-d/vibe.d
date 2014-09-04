@@ -833,13 +833,15 @@ Json parseJson(R)(ref R range, int* line = null)
 		case '[':
 			Json[] arr;
 			range.popFront();
-			while(true) {
+			while (true) {
 				skipWhitespace(range, line);
 				enforceJson(!range.empty);
 				if(range.front == ']') break;
 				arr ~= parseJson(range, line);
 				skipWhitespace(range, line);
-				enforceJson(!range.empty && (range.front == ',' || range.front == ']'), "Expected ']' or ','.");
+				enforceJson(!range.empty, "Missing ']' before EOF.");
+				enforceJson(range.front == ',' || range.front == ']',
+					format("Expected ']' or ',' - got '%s'.", range.front));
 				if( range.front == ']' ) break;
 				else range.popFront();
 			}
@@ -849,7 +851,7 @@ Json parseJson(R)(ref R range, int* line = null)
 		case '{':
 			Json[string] obj;
 			range.popFront();
-			while(true) {
+			while (true) {
 				skipWhitespace(range, line);
 				enforceJson(!range.empty);
 				if(range.front == '}') break;
@@ -861,8 +863,10 @@ Json parseJson(R)(ref R range, int* line = null)
 				Json itm = parseJson(range, line);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforceJson(!range.empty && (range.front == ',' || range.front == '}'), "Expected '}' or ',' - got '"~range[0]~"'.");
-				if( range.front == '}' ) break;
+				enforceJson(!range.empty, "Missing '}' before EOF.");
+				enforceJson(range.front == ',' || range.front == '}',
+					format("Expected '}' or ',' - got '%s'.", range.front));
+				if (range.front == '}') break;
 				else range.popFront();
 			}
 			range.popFront();
@@ -908,6 +912,16 @@ unittest {
 	assert(json.toPrettyString() == parseJsonString(json.toPrettyString()).toPrettyString());
 }
 
+unittest {
+	try parseJsonString(`{"a": 1`);
+	catch (Exception e) assert(e.msg.endsWith("Missing '}' before EOF."));
+	try parseJsonString(`{"a": 1 x`);
+	catch (Exception e) assert(e.msg.endsWith("Expected '}' or ',' - got 'x'."));
+	try parseJsonString(`[1`);
+	catch (Exception e) assert(e.msg.endsWith("Missing ']' before EOF."));
+	try parseJsonString(`[1 x`);
+	catch (Exception e) assert(e.msg.endsWith("Expected ']' or ',' - got 'x'."));
+}
 
 /**
 	Serializes the given value to JSON.
