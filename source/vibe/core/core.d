@@ -1394,7 +1394,7 @@ private void handleWorkerTasks()
 		}
 
 		if (task.func !is null) runTask_internal(task);
-		else st_threadsSignal.wait(emit_count);
+		else emit_count = st_threadsSignal.wait(emit_count);
 	}
 
 	logDebug("worker thread exit");
