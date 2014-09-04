@@ -803,6 +803,8 @@ version (unittest) {
 }
 
 unittest { // basic serialization behavior
+	import std.typecons : Nullable;
+
 	assert(serialize!TestSerializer("hello") == "V(string)(hello)");
 	assert(serialize!TestSerializer(12) == "V(int)(12)");
 	assert(serialize!TestSerializer(12.0) == "V(string)(12)");
@@ -812,19 +814,26 @@ unittest { // basic serialization behavior
 		"A(string[])[2][AE(string,0)(V(string)(hello))AE(string,0)AE(string,1)(V(string)(world))AE(string,1)]A(string[])");
 	assert(serialize!TestSerializer(["hello": "world"]) ==
 		"D(string[string]){DE(string,hello)(V(string)(world))DE(string,hello)}D(string[string])");
+	assert(serialize!TestSerializer(cast(int*)null) == "null");
+	int i = 42;
+	assert(serialize!TestSerializer(&i) == "V(int)(42)");
+	Nullable!int j;
+	assert(serialize!TestSerializer(j) == "null");
+	j = 42;
+	assert(serialize!TestSerializer(j) == "V(int)(42)");
 }
 
 unittest { // basic user defined types
 	static struct S { string f; }
 	auto s = S("hello");
-	assert(serialize!TestSerializer(s) == "D(S){DE(string,f)(V(string)(hello))DE(string,f)}D(S)", serialize!TestSerializer(s));
+	assert(serialize!TestSerializer(s) == "D(S){DE(string,f)(V(string)(hello))DE(string,f)}D(S)");
 
 	static class C { string f; }
 	C c;
 	assert(serialize!TestSerializer(c) == "null");
 	c = new C;
 	c.f = "hello";
-	assert(serialize!TestSerializer(c) == "D(C){DE(string,f)(V(string)(hello))DE(string,f)}D(C)", serialize!TestSerializer(c));
+	assert(serialize!TestSerializer(c) == "D(C){DE(string,f)(V(string)(hello))DE(string,f)}D(C)");
 
 	enum E { hello, world }
 	assert(serialize!TestSerializer(E.hello) == "V(int)(0)");
@@ -835,10 +844,51 @@ unittest { // tuple serialization
 	static struct S(T...) { T f; }
 	auto s = S!(int, string)(42, "hello");
 	assert(serialize!TestSerializer(s) ==
-		"D(S!(int, string)){DE(Tuple!(int, string),f)(A(Tuple!(int, string))[2][AE(int,0)(V(int)(42))AE(int,0)AE(string,1)(V(string)(hello))AE(string,1)]A(Tuple!(int, string)))DE(Tuple!(int, string),f)}D(S!(int, string))", serialize!TestSerializer(s));
+		"D(S!(int, string)){DE(Tuple!(int, string),f)(A(Tuple!(int, string))[2][AE(int,0)(V(int)(42))AE(int,0)AE(string,1)(V(string)(hello))AE(string,1)]A(Tuple!(int, string)))DE(Tuple!(int, string),f)}D(S!(int, string))");
 
 	static struct T { @asArray S!(int, string) g; }
 	auto t = T(s);
 	assert(serialize!TestSerializer(t) ==
-		"D(T){DE(S!(int, string),g)(A(S!(int, string))[2][AE(int,0)(V(int)(42))AE(int,0)AE(string,1)(V(string)(hello))AE(string,1)]A(S!(int, string)))DE(S!(int, string),g)}D(T)", serialize!TestSerializer(t));
+		"D(T){DE(S!(int, string),g)(A(S!(int, string))[2][AE(int,0)(V(int)(42))AE(int,0)AE(string,1)(V(string)(hello))AE(string,1)]A(S!(int, string)))DE(S!(int, string),g)}D(T)");
+}
+
+unittest { // testing the various UDAs
+	enum E { hello, world }
+	static struct S {
+		@byName E e;
+		@ignore int i;
+		@optional float f;
+	}
+	auto s = S(E.world, 42, 1.0f);
+	assert(serialize!TestSerializer(s) ==
+		"D(S){DE(E,e)(V(string)(world))DE(E,e)DE(float,f)(V(float)(1))DE(float,f)}D(S)");
+}
+
+unittest { // custom serialization support
+	// iso-ext
+	import std.datetime;
+	auto t = TimeOfDay(6, 31, 23);
+	assert(serialize!TestSerializer(t) == "V(string)(06:31:23)");
+	auto d = Date(1964, 1, 23);
+	assert(serialize!TestSerializer(d) == "V(string)(1964-01-23)");
+	auto dt = DateTime(d, t);
+	assert(serialize!TestSerializer(dt) == "V(string)(1964-01-23T06:31:23)");
+	auto st = SysTime(dt, UTC());
+	assert(serialize!TestSerializer(st) == "V(string)(1964-01-23T06:31:23Z)");
+
+	// string
+	struct S1 { int i; string toString() const { return "hello"; } static S1 fromString(string) { return S1.init; } }
+	struct S2 { int i; string toString() const { return "hello"; } }
+	struct S3 { int i; static S3 fromString(string) { return S3.init; } }
+	assert(serialize!TestSerializer(S1.init) == "V(string)(hello)");
+	assert(serialize!TestSerializer(S2.init) == "D(S2){DE(int,i)(V(int)(0))DE(int,i)}D(S2)");
+	assert(serialize!TestSerializer(S3.init) == "D(S3){DE(int,i)(V(int)(0))DE(int,i)}D(S3)");
+
+	// custom
+	struct C1 { int i; float toRepresentation() const { return 1.0f; } static C1 fromRepresentation(float f) { return C1.init; } }
+	struct C2 { int i; float toRepresentation() const { return 1.0f; } }
+	struct C3 { int i; static C3 fromRepresentation(float f) { return C3.init; } }
+	assert(serialize!TestSerializer(C1.init) == "V(float)(1)");
+	assert(serialize!TestSerializer(C2.init) == "D(C2){DE(int,i)(V(int)(0))DE(int,i)}D(C2)");
+	assert(serialize!TestSerializer(C3.init) == "D(C3){DE(int,i)(V(int)(0))DE(int,i)}D(C3)");
 }
