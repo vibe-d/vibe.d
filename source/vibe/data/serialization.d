@@ -65,11 +65,11 @@
 			void beginWriteDictionary(T)();
 			void endWriteDictionary(T)();
 			void beginWriteDictionaryEntry(T)(string name);
-			void endWriteDictionaryEntry(T)();
+			void endWriteDictionaryEntry(T)(string name);
 			void beginWriteArray(T)(size_t length);
 			void endWriteArray(T)();
-			void beginWriteArrayEntry(T)();
-			void endWriteArrayEntry(T)();
+			void beginWriteArrayEntry(T)(size_t index);
+			void endWriteArrayEntry(T)(size_t index);
 			void writeValue(T)(T value);
 
 			// deserialization
@@ -252,29 +252,35 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 		}
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
 			serializer.beginWriteArray!TU(SerializableFields!TU.length);
-			foreach (i, mname; SerializableFields!TU) {
-				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
-				static if (TM.length == 1)
-					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
-				else alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
-				auto vt = tuple(__traits(getMember, value, mname));
-				serializer.beginWriteArrayEntry!(typeof(vt))(i);
-				serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
-				serializer.endWriteArrayEntry!(typeof(vt))(i);
+			foreach (mname; SerializableFields!TU) {
+				alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
+				foreach (j, TM; TMS) {
+					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)[j]));
+					serializer.beginWriteArrayEntry!TM(j);
+					serializeImpl!(Serializer, TM, TA)(serializer, __traits(getMember, value, mname)[j]);
+					serializer.endWriteArrayEntry!TM(j);
+				}
 			}
 			serializer.endWriteArray!TU();
 		} else {
 			serializer.beginWriteDictionary!TU();
 			foreach (mname; SerializableFields!TU) {
 				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
-				static if (TM.length == 1)
+				static if (TM.length == 1) {
 					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
-				else alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
-				enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
-				auto vt = tuple(__traits(getMember, value, mname));
-				serializer.beginWriteDictionaryEntry!(typeof(vt))(name);
-				serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
-				serializer.endWriteDictionaryEntry!(typeof(vt))(name);
+					enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
+					auto vt = __traits(getMember, value, mname);
+					serializer.beginWriteDictionaryEntry!(typeof(vt))(name);
+					serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
+					serializer.endWriteDictionaryEntry!(typeof(vt))(name);
+				} else {
+					alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
+					enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
+					auto vt = tuple(__traits(getMember, value, mname));
+					serializer.beginWriteDictionaryEntry!(typeof(vt))(name);
+					serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
+					serializer.endWriteDictionaryEntry!(typeof(vt))(name);
+				}
 			}
 			serializer.endWriteDictionary!TU();
 		}
@@ -722,4 +728,98 @@ private template FilterSerializableFields(COMPOSITE, FIELDS...)
 			}
 		} else alias FilterSerializableFields = TypeTuple!();
 	} else alias FilterSerializableFields = TypeTuple!();
+}
+
+
+/******************************************************************************/
+/* General serialization unit testing                                         */
+/******************************************************************************/
+
+version (unittest) {
+	private struct TestSerializer {
+		import std.array, std.conv, std.string;
+
+		string result;
+
+		enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null)) || is(T == float) || is (T == int);
+
+		string getSerializedResult() { return result; }
+		void beginWriteDictionary(T)() { result ~= "D("~T.stringof~"){"; }
+		void endWriteDictionary(T)() { result ~= "}D("~T.stringof~")"; }
+		void beginWriteDictionaryEntry(T)(string name) { result ~= "DE("~T.stringof~","~name~")("; }
+		void endWriteDictionaryEntry(T)(string name) { result ~= ")DE("~T.stringof~","~name~")"; }
+		void beginWriteArray(T)(size_t length) { result ~= "A("~T.stringof~")["~length.to!string~"]["; }
+		void endWriteArray(T)() { result ~= "]A("~T.stringof~")"; }
+		void beginWriteArrayEntry(T)(size_t i) { result ~= "AE("~T.stringof~","~i.to!string~")("; }
+		void endWriteArrayEntry(T)(size_t i) { result ~= ")AE("~T.stringof~","~i.to!string~")"; }
+		void writeValue(T)(T value) {
+			if (is(T == typeof(null))) result ~= "null";
+			else {
+				assert(isSupportedValueType!T);
+				result ~= "V("~T.stringof~")("~value.to!string~")";
+			}
+		}
+
+		// deserialization
+		void readDictionary(T)(scope void delegate(string) entry_callback)
+		{
+			enum prefix = "D("~T.stringof~"){";
+			assert(result.startsWith(prefix));
+			result  = result[prefix.length .. $];
+			while (true) {
+				// ...
+				assert(false);
+			}
+		}
+
+		void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+		{
+			enum prefix = "A("~T.stringof~")[";
+			assert(result.startsWith(prefix));
+			result  = result[prefix.length .. $];
+			assert(false);
+		}
+
+		void readValue(T)()
+		{
+			assert(false);
+		}
+
+		bool tryReadNull()
+		{
+			if (result.startsWith("null")) {
+				result = result[4 .. $];
+				return true;
+			} else return false;
+		}
+	}
+}
+
+unittest { // basic serialization behavior
+	assert(serialize!TestSerializer("hello") == "V(string)(hello)");
+	assert(serialize!TestSerializer(12) == "V(int)(12)");
+	assert(serialize!TestSerializer(12.0) == "V(string)(12)");
+	assert(serialize!TestSerializer(12.0f) == "V(float)(12)");
+	assert(serialize!TestSerializer(null) == "null");
+	assert(serialize!TestSerializer(["hello", "world"]) ==
+		"A(string[])[2][AE(string,0)(V(string)(hello))AE(string,0)AE(string,1)(V(string)(world))AE(string,1)]A(string[])");
+	assert(serialize!TestSerializer(["hello": "world"]) ==
+		"D(string[string]){DE(string,hello)(V(string)(world))DE(string,hello)}D(string[string])");
+}
+
+unittest { // basic user defined types
+	struct S { string f; }
+	auto s = S("hello");
+	assert(serialize!TestSerializer(s) == "D(S){DE(string,f)(V(string)(hello))DE(string,f)}D(S)", serialize!TestSerializer(s));
+
+	class C { string f; }
+	C c;
+	assert(serialize!TestSerializer(c) == "null");
+	c = new C;
+	c.f = "hello";
+	assert(serialize!TestSerializer(c) == "D(C){DE(string,f)(V(string)(hello))DE(string,f)}D(C)", serialize!TestSerializer(c));
+
+	enum E { hello, world }
+	assert(serialize!TestSerializer(E.hello) == "V(int)(0)");
+	assert(serialize!TestSerializer(E.world) == "V(int)(1)");
 }
