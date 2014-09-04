@@ -215,8 +215,10 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						break;
 					case 'r': //First line of Request
 						ln.put(httpMethodString(req.method));
-                        ln.put(req.requestURL);
-                        ln.put(getHTTPVersionString(req.httpVersion));
+						ln.put(' ');
+						ln.put(req.requestURL);
+						ln.put(' ');
+						ln.put(getHTTPVersionString(req.httpVersion));
 						break;
 					case 's': //Status
 						formattedWrite(&ln, "%s", res.statusCode);

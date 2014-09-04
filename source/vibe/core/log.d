@@ -42,8 +42,8 @@ void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.
 nothrow @safe {
 	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
 	auto l = ss_stdoutLogger.lock();
-    l.format = fmt;
-    l.infoFormat = infoFmt;
+	l.format = fmt;
+	l.infoFormat = infoFmt;
 }
 
 
@@ -138,7 +138,7 @@ void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string fil
 void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
 void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
-/// ditto 
+/// ditto
 void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
 
 ///
@@ -260,7 +260,7 @@ final class FileLogger : Logger {
 
 import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=7016
 
-/**	
+/**
 	Logger implementation for logging to an HTML file with dynamic filtering support.
 */
 final class HTMLLogger : Logger {
