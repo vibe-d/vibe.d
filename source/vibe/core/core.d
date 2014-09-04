@@ -1360,41 +1360,45 @@ private void workerThreadFunc()
 
 private void handleWorkerTasks()
 {
-	logDebug("worker task enter");
+	logDebug("worker thread enter");
 
 	auto thisthr = Thread.getThis();
 
-	logDebug("worker task loop enter");
+	logDebug("worker thread loop enter");
 	while(true){
-		bool again = false;
 		auto emit_count = st_threadsSignal.emitCount;
+		TaskFuncInfo task;
+
 		synchronized (st_threadsMutex) {
 			auto idx = st_threads.countUntil!(c => c.thread is thisthr);
 			assert(idx >= 0);
-			logDebug("worker task check");
+			logDebug("worker thread check");
+
 			if (getExitFlag()) {
 				if (st_threads[idx].taskQueue.length > 0)
 					logWarn("Worker thread shuts down with specific worker tasks left in its queue.");
 				if (st_threads.count!(c => c.isWorker) == 1 && st_workerTasks.length > 0)
 					logWarn("Worker threads shut down with worker tasks still left in the queue.");
-				getEventDriver().exitEventLoop();
 				break;
 			}
+
 			if (!st_workerTasks.empty) {
-				logDebug("worker task got");
-				runTask_internal(st_workerTasks.front);
+				logDebug("worker thread got task");
+				task = st_workerTasks.front;
 				st_workerTasks.popFront();
-				again = true;
 			} else if (!st_threads[idx].taskQueue.empty) {
-				logDebug("worker task got specific");
-				runTask_internal(st_threads[idx].taskQueue.front);
+				logDebug("worker thread got specific task");
+				task = st_threads[idx].taskQueue.front;
 				st_threads[idx].taskQueue.popFront();
-				again = true;
 			}
 		}
-		if (!again) st_threadsSignal.wait(emit_count);
+
+		if (task.func !is null) runTask_internal(task);
+		else st_threadsSignal.wait(emit_count);
 	}
-	logDebug("worker task exit");
+
+	logDebug("worker thread exit");
+	getEventDriver().exitEventLoop();
 }
 
 
