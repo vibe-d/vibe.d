@@ -222,11 +222,11 @@ struct MongoCollection {
 	}
 
 	/**
-	  Counts the results of the specified query expression.
+		Counts the results of the specified query expression.
 
-	  Throws Exception if a DB communication error occured.
-See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQueries-{{count%28%29}})
-	 */
+		Throws Exception if a DB communication error occured.
+		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQueries-{{count%28%29}})
+	*/
 	ulong count(T)(T query)
 	{
 		static struct Empty {}
@@ -245,32 +245,71 @@ See_Also: $(LINK http://www.mongodb.org/display/DOCS/Advanced+Queries#AdvancedQu
 	}
 
 	/**
-	  Calculates aggregate values for the data in a collection.
+		Calculates aggregate values for the data in a collection.
 
-	  Params:
-		pipeline = a sequence of data aggregation processes
+		Params:
+			pipeline = A sequence of data aggregation processes. These can
+				either be given as separate parameters, or as a single array
+				parameter.
 
-	  Returns: an array of documents returned by the pipeline
+		Returns: An array of documents returned by the pipeline
 
-	  Throws: Exception if a DB communication error occured
+		Throws: Exception if a DB communication error occured
 
-	  See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/db.collection.aggregate)
 	*/
-	Bson aggregate(ARGS...)(ARGS pipeline) {
-		static struct Pipeline {
-			ARGS args;
-		}
+	Bson aggregate(ARGS...)(ARGS pipeline)
+	{
+		import std.traits;
+		
+		static if (ARGS.length == 1 && isArray!(ARGS[0]))
+			alias Pipeline = ARGS[0];
+		else static struct Pipeline { ARGS args; }
+
 		static struct CMD {
 			string aggregate;
-			@asArray Nodes pipeline;
+			@asArray Pipeline pipeline;
 		}
 
 		CMD cmd;
 		cmd.aggregate = m_name;
-		cmd.pipeline.args = pipeline;
+		static if (ARGS.length == 1 && isArray!(ARGS[0]))
+			cmd.pipeline = pipeline[0];
+		else cmd.pipeline.args = pipeline;
 		auto ret = database.runCommand(cmd);
 		enforce(ret.ok.get!double == 1, "Aggregate command failed.");
 		return ret.result;
+	}
+
+	/// Example taken from the MongoDB documentation
+	unittest {
+		import vibe.db.mongo.mongo;
+
+		void test() {
+			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
+			auto results = db["coll"].aggregate(
+				["$match": ["status": "A"]],
+				["$group": ["_id": Bson("$cust_id"),
+					"total": Bson(["$sum": Bson("$amount")])]],
+				["$sort": ["total": -1]]);
+		}
+	}
+
+	/// The same example, but using an array of arguments
+	unittest {
+		import vibe.db.mongo.mongo;
+
+		void test() {
+			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
+
+			Bson[] args;
+			args ~= serializeToBson(["$match": ["status": "A"]]);
+			args ~= serializeToBson(["$group": ["_id": Bson("$cust_id"),
+					"total": Bson(["$sum": Bson("$amount")])]]);
+			args ~= serializeToBson(["$sort": ["total": -1]]);
+
+			auto results = db["coll"].aggregate(args);
+		}
 	}
 
 	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None, ulong expireAfterSeconds = 0)
