@@ -622,9 +622,13 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	int wait(int reference_emit_count)
 	{
 		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
 		acquire();
 		scope(exit) release();
-		auto ec = this.emitCount;
+		
 		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
@@ -635,6 +639,10 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	int wait(Duration timeout, int reference_emit_count)
 	{
 		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
 		acquire();
 		scope(exit) release();
 		auto tm = m_driver.createTimer(null);
@@ -642,7 +650,6 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 
-		auto ec = this.emitCount;
 		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
