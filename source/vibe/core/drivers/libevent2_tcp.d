@@ -500,19 +500,35 @@ package nothrow extern(C)
 				}
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
-				auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
-				assert(conn.connected, "Connection closed directly after accept?!");
-				logDebug("start task (fd %d).", client_ctx.socketfd);
-				try {
-					listen_ctx.connectionCallback(conn);
-					logDebug("task out (fd %d).", client_ctx.socketfd);
-				} catch (Exception e) {
-					logWarn("Handling of connection failed: %s", e.msg);
-					logDiagnostic("%s", e.toString().sanitize);
-				} finally {
-					logDebug("task finished.");
-					FreeListObjectAlloc!ClientTask.free(&this);
-					if (!(options & TCPListenOptions.disableAutoClose)) conn.close();
+				if (options & TCPListenOptions.disableAutoClose) {
+					auto conn = new Libevent2TCPConnection(client_ctx);
+					assert(conn.connected, "Connection closed directly after accept?!");
+					logDebug("start task (fd %d).", client_ctx.socketfd);
+					try {
+						listen_ctx.connectionCallback(conn);
+						logDebug("task out (fd %d).", client_ctx.socketfd);
+					} catch (Exception e) {
+						logWarn("Handling of connection failed: %s", e.msg);
+						logDiagnostic("%s", e.toString().sanitize);
+					} finally {
+						logDebug("task finished.");
+						FreeListObjectAlloc!ClientTask.free(&this);
+					}
+				} else {
+					auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
+					assert(conn.connected, "Connection closed directly after accept?!");
+					logDebug("start task (fd %d).", client_ctx.socketfd);
+					try {
+						listen_ctx.connectionCallback(conn);
+						logDebug("task out (fd %d).", client_ctx.socketfd);
+					} catch (Exception e) {
+						logWarn("Handling of connection failed: %s", e.msg);
+						logDiagnostic("%s", e.toString().sanitize);
+					} finally {
+						logDebug("task finished.");
+						FreeListObjectAlloc!ClientTask.free(&this);
+						conn.close();
+					}
 				}
 			}
 		}
