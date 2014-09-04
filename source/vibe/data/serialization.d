@@ -179,7 +179,7 @@ unittest {
 
 private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializer, T value)
 {
-	import std.typecons : Nullable;
+	import std.typecons : Nullable, Tuple, tuple;
 
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
@@ -191,6 +191,18 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializeImpl!(Serializer, string)(serializer, value.to!string());
 		} else {
 			serializeImpl!(Serializer, OriginalType!TU)(serializer, cast(OriginalType!TU)value);
+		}
+	} else static if (isInstanceOf!(Tuple, TU)) {
+		static if (value.length == 1) {
+			serializeImpl!(Serializer, typeof(value[0]), ATTRIBUTES)(serializer, value[0]);
+		} else {
+			serializer.beginWriteArray!TU(value.length);
+			foreach (i, TV; T.Types) {
+				serializer.beginWriteArrayEntry!TV(i);
+				serializeImpl!(Serializer, TV, ATTRIBUTES)(serializer, value[i]);
+				serializer.endWriteArrayEntry!TV(i);
+			}
+			serializer.endWriteArray!TU();
 		}
 	} else static if (Serializer.isSupportedValueType!TU) {
 		static if (is(TU == typeof(null))) serializer.writeValue!TU(null);
@@ -241,22 +253,28 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
 			serializer.beginWriteArray!TU(SerializableFields!TU.length);
 			foreach (i, mname; SerializableFields!TU) {
-				alias TM = typeof(__traits(getMember, value, mname));
-				alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
-				serializer.beginWriteArrayEntry!TM(i);
-				serializeImpl!(Serializer, TM, TA)(serializer, __traits(getMember, value, mname));
-				serializer.endWriteArrayEntry!TM(i);
+				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
+				static if (TM.length == 1)
+					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
+				else alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
+				auto vt = tuple(__traits(getMember, value, mname));
+				serializer.beginWriteArrayEntry!(typeof(vt))(i);
+				serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
+				serializer.endWriteArrayEntry!(typeof(vt))(i);
 			}
 			serializer.endWriteArray!TU();
 		} else {
 			serializer.beginWriteDictionary!TU();
 			foreach (mname; SerializableFields!TU) {
-				alias TM = typeof(__traits(getMember, value, mname));
-				alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
+				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
+				static if (TM.length == 1)
+					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
+				else alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
 				enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
-				serializer.beginWriteDictionaryEntry!TM(name);
-				serializeImpl!(Serializer, TM, TA)(serializer, __traits(getMember, value, mname));
-				serializer.endWriteDictionaryEntry!TM(name);
+				auto vt = tuple(__traits(getMember, value, mname));
+				serializer.beginWriteDictionaryEntry!(typeof(vt))(name);
+				serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
+				serializer.endWriteDictionaryEntry!(typeof(vt))(name);
 			}
 			serializer.endWriteDictionary!TU();
 		}
@@ -694,9 +712,14 @@ private template FilterSerializableFields(COMPOSITE, FIELDS...)
 		alias T = COMPOSITE;
 		enum mname = FIELDS[0];
 		static if (isRWPlainField!(T, mname) || isRWField!(T, mname)) {
-			static if (!hasAttribute!(IgnoreAttribute, __traits(getMember, T, mname)))
+			alias Tup = TypeTuple!(__traits(getMember, COMPOSITE, FIELDS[0]));
+			static if (Tup.length != 1) {
 				alias FilterSerializableFields = TypeTuple!(mname);
-			else alias FilterSerializableFields = TypeTuple!();
+			} else {
+				static if (!hasAttribute!(IgnoreAttribute, __traits(getMember, T, mname)))
+					alias FilterSerializableFields = TypeTuple!(mname);
+				else alias FilterSerializableFields = TypeTuple!();
+			}
 		} else alias FilterSerializableFields = TypeTuple!();
 	} else alias FilterSerializableFields = TypeTuple!();
 }
