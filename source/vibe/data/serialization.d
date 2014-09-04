@@ -15,9 +15,9 @@
 			$(LI Any type that is specifically supported by the serializer
 				is directly serialized. For example, the BSON serializer
 				supports $(D BsonObjectID) directly.)
-			$(LI Arrays are serialized using the array serialization functions
-				where each element is serialized again according to these
-				rules.)
+			$(LI Arrays and tuples ($(D std.typecons.Tuple)) are serialized
+				using the array serialization functions where each element is
+				serialized again according to these rules.)
 			$(LI Associative arrays are serialized similar to arrays. The key
 				type of the AA must satisfy the $(D isStringSerializable) trait
 				and will always be serialized as a string.)
@@ -192,8 +192,11 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 		} else {
 			serializeImpl!(Serializer, OriginalType!TU)(serializer, cast(OriginalType!TU)value);
 		}
-	} else static if (isInstanceOf!(Tuple, TU)) {
-		static if (value.length == 1) {
+	} else static if (Serializer.isSupportedValueType!TU) {
+		static if (is(TU == typeof(null))) serializer.writeValue!TU(null);
+		else serializer.writeValue!TU(value);
+	} else static if (/*isInstanceOf!(Tuple, TU)*/is(T == Tuple!TPS, TPS...)) {
+		static if (TU.Types.length == 1) {
 			serializeImpl!(Serializer, typeof(value[0]), ATTRIBUTES)(serializer, value[0]);
 		} else {
 			serializer.beginWriteArray!TU(value.length);
@@ -204,9 +207,6 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			}
 			serializer.endWriteArray!TU();
 		}
-	} else static if (Serializer.isSupportedValueType!TU) {
-		static if (is(TU == typeof(null))) serializer.writeValue!TU(null);
-		else serializer.writeValue!TU(value);
 	} else static if (isArray!TU) {
 		alias TV = typeof(value[0]);
 		serializer.beginWriteArray!TU(value.length);
@@ -231,7 +231,7 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializer.endWriteDictionaryEntry!TV(keyname);
 		}
 		serializer.endWriteDictionary!TU();
-	} else static if (isInstanceOf!(Nullable, TU)) {
+	} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 		if (value.isNull()) serializeImpl!(Serializer, typeof(null))(serializer, null);
 		else serializeImpl!(Serializer, typeof(value.get()), ATTRIBUTES)(serializer, value.get());
 	} else static if (isCustomSerializable!T) {
@@ -251,7 +251,8 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			}
 		}
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
-			serializer.beginWriteArray!TU(SerializableFields!TU.length);
+			enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
+			serializer.beginWriteArray!TU(nfields);
 			foreach (mname; SerializableFields!TU) {
 				alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				foreach (j, TM; TMS) {
@@ -275,7 +276,7 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 					serializer.endWriteDictionaryEntry!(typeof(vt))(name);
 				} else {
 					alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
-					enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
+					enum name = underscoreStrip(mname);
 					auto vt = tuple(__traits(getMember, value, mname));
 					serializer.beginWriteDictionaryEntry!(typeof(vt))(name);
 					serializeImpl!(Serializer, typeof(vt), TA)(serializer, vt);
@@ -730,6 +731,12 @@ private template FilterSerializableFields(COMPOSITE, FIELDS...)
 	} else alias FilterSerializableFields = TypeTuple!();
 }
 
+private size_t getExpandedFieldCount(T, FIELDS...)()
+{
+	size_t ret = 0;
+	foreach (F; FIELDS) ret += TypeTuple!(__traits(getMember, T, F)).length;
+	return ret;
+}
 
 /******************************************************************************/
 /* General serialization unit testing                                         */
@@ -808,11 +815,11 @@ unittest { // basic serialization behavior
 }
 
 unittest { // basic user defined types
-	struct S { string f; }
+	static struct S { string f; }
 	auto s = S("hello");
 	assert(serialize!TestSerializer(s) == "D(S){DE(string,f)(V(string)(hello))DE(string,f)}D(S)", serialize!TestSerializer(s));
 
-	class C { string f; }
+	static class C { string f; }
 	C c;
 	assert(serialize!TestSerializer(c) == "null");
 	c = new C;
@@ -822,4 +829,16 @@ unittest { // basic user defined types
 	enum E { hello, world }
 	assert(serialize!TestSerializer(E.hello) == "V(int)(0)");
 	assert(serialize!TestSerializer(E.world) == "V(int)(1)");
+}
+
+unittest { // tuple serialization
+	static struct S(T...) { T f; }
+	auto s = S!(int, string)(42, "hello");
+	assert(serialize!TestSerializer(s) ==
+		"D(S!(int, string)){DE(Tuple!(int, string),f)(A(Tuple!(int, string))[2][AE(int,0)(V(int)(42))AE(int,0)AE(string,1)(V(string)(hello))AE(string,1)]A(Tuple!(int, string)))DE(Tuple!(int, string),f)}D(S!(int, string))", serialize!TestSerializer(s));
+
+	static struct T { @asArray S!(int, string) g; }
+	auto t = T(s);
+	assert(serialize!TestSerializer(t) ==
+		"D(T){DE(S!(int, string),g)(A(S!(int, string))[2][AE(int,0)(V(int)(42))AE(int,0)AE(string,1)(V(string)(hello))AE(string,1)]A(S!(int, string)))DE(S!(int, string),g)}D(T)", serialize!TestSerializer(t));
 }
