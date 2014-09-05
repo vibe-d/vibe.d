@@ -128,7 +128,7 @@ final class Libevent2Driver : EventDriver {
 		m_timerEvent = event_new(m_eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
 	}
 
-	~this()
+	void dispose()
 	{
 		debug assert(Thread.getThis() is m_ownerThread, "Event loop destroyed in foreign thread.");
 
@@ -628,7 +628,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 		acquire();
 		scope(exit) release();
-		
+
 		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;

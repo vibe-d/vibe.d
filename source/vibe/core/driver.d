@@ -45,7 +45,7 @@ package void setupEventDriver(DriverCore core_)
 
 package void deleteEventDriver()
 {
-	// TODO: use destroy() instead
+	s_driver.dispose();
 	delete s_driver;
 	s_driver = null;
 }
@@ -63,6 +63,13 @@ private {
 	not intended to be used directly by users of the library.
 */
 interface EventDriver {
+	/** Frees all resources of the driver and prepares it for consumption by the GC.
+
+		Note that the driver will not be usable after calling this method. Any
+		further calls are illegal and result in undefined behavior.
+	*/
+	void dispose();
+
 	/** Starts the event loop.
 
 		The loop will continue to run until either no more event listeners are active or until

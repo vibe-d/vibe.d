@@ -80,7 +80,7 @@ final class Win32EventDriver : EventDriver {
 		m_registeredEvents ~= m_fileCompletionEvent;
 	}
 
-	~this()
+	void dispose()
 	{
 //		DestroyWindow(m_hwnd);
 	}
@@ -269,7 +269,7 @@ final class Win32EventDriver : EventDriver {
 
 		auto conn = new Win32TCPConnection(this, sock, addr);
 		conn.connect(addr);
-		return conn;	
+		return conn;
 	}
 
 	Win32TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
@@ -655,7 +655,7 @@ final class Win32FileStream : FileStream {
 
 			// request to write the data
 			ReadFileEx(m_handle, cast(void*)dst, to_read, &overlapped, &onIOCompleted);
-			
+
 			// yield until the data is read
 			while( !m_bytesTransferred ) m_driver.yieldForEvent();
 
@@ -1043,7 +1043,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_socket = sock;
 		m_driver.m_socketHandlers[sock] = this;
 		m_status = status;
-		
+
 		m_localAddress.family = peer_address.family;
 		if (peer_address.family == AF_INET) m_localAddress.sockAddrInet4.sin_addr.s_addr = 0;
 		else m_localAddress.sockAddrInet6.sin6_addr.s6_addr[] = 0;
