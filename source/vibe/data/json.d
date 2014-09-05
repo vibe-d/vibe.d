@@ -1724,7 +1724,7 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 		switch (ch) {
 			default:
 				static if (escape_unicode) {
-					if (ch < 0x80) dst.put(ch);
+					if (ch > 0x20 && ch < 0x80) dst.put(ch);
 					else {
 						import std.utf : decode;
 						char[13] buf;
@@ -1755,7 +1755,10 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 							dst.put(buf[i]);
 
 					}
-				} else dst.put(ch);
+				} else {
+					if (ch < 0x20) dst.formattedWrite("\\u%04X", ch);
+					else dst.put(ch);
+				}
 				break;
 			case '\\': dst.put("\\\\"); break;
 			case '\r': dst.put("\\r"); break;
