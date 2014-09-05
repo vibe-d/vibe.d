@@ -69,9 +69,12 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 
 		bool isMember(long id)
 		{
-			static if (OPTIONS & RedisCollectionOptions.supportPaging)
-				return m_db.zscore(m_allSet, id).hasNext();
-			else return m_db.sisMember(m_allSet, id);
+			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
+				import std.conv;
+				return m_db.zscore!long(m_allSet, id.to!string).hasNext();
+			} else {
+				return m_db.sisMember(m_allSet, id);
+			}
 		}
 
 		static if (OPTIONS & RedisCollectionOptions.supportPaging) {
@@ -114,7 +117,7 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 		this[id].remove();
 		static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
 			static if (OPTIONS & RedisCollectionOptions.supportPaging)
-				m_db.zrem(m_allSet, id);
+				m_db.zrem(m_allSet, getKey(id));
 			else
 				m_db.srem(m_allSet, id);
 		}
