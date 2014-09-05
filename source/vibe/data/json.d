@@ -1704,49 +1704,58 @@ void writePrettyJsonString(R)(ref R dst, in Json json, int level = 0)
 }
 
 
-/// private
-private void jsonEscape(R)(ref R dst, string s)
+/**
+	Helper function that escapes all Unicode characters in a JSON string.
+*/
+string convertJsonToASCII(string json)
 {
-	size_t pos;
-	for ( pos = 0; pos < s.length; pos++ ){
+	auto ret = appender!string;
+	jsonEscape!true(ret, json);
+	return ret.data;
+}
+
+
+/// private
+private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
+{
+	for (size_t pos = 0; pos < s.length; pos++) {
 		immutable(char) ch = s[pos];
 
-		switch(ch){
+		switch (ch) {
 			default:
-				if (ch < 0x80)
-				{
-					dst.put(ch);
-				}
-				else {
-					import std.utf : decode;
-					char[13] buf;
-					int len;
-					dchar codepoint = decode(s, pos);
-					import std.c.stdio : sprintf;
-					/* codepoint is in BMP */
-					if(codepoint < 0x10000)
-					{
-						sprintf(&buf[0], "\\u%04X", codepoint);
-						len = 6;
+				static if (escape_unicode) {
+					if (ch < 0x80) dst.put(ch);
+					else {
+						import std.utf : decode;
+						char[13] buf;
+						int len;
+						dchar codepoint = decode(s, pos);
+						import std.c.stdio : sprintf;
+						/* codepoint is in BMP */
+						if(codepoint < 0x10000)
+						{
+							sprintf(&buf[0], "\\u%04X", codepoint);
+							len = 6;
+						}
+						/* not in BMP -> construct a UTF-16 surrogate pair */
+						else
+						{
+							int first, last;
+
+							codepoint -= 0x10000;
+							first = 0xD800 | ((codepoint & 0xffc00) >> 10);
+							last = 0xDC00 | (codepoint & 0x003ff);
+
+							sprintf(&buf[0], "\\u%04X\\u%04X", first, last);
+							len = 12;
+						}
+
+						pos -= 1;
+						foreach (i; 0 .. len)
+							dst.put(buf[i]);
+
 					}
-					/* not in BMP -> construct a UTF-16 surrogate pair */
-					else
-					{
-						int first, last;
-
-						codepoint -= 0x10000;
-						first = 0xD800 | ((codepoint & 0xffc00) >> 10);
-						last = 0xDC00 | (codepoint & 0x003ff);
-
-						sprintf(&buf[0], "\\u%04X\\u%04X", first, last);
-						len = 12;
-					}
-
-					pos -= 1;
-					foreach (i; 0 .. len)
-						dst.put(buf[i]);
-
-				}
+				} else dst.put(ch);
 				break;
 			case '\\': dst.put("\\\\"); break;
 			case '\r': dst.put("\\r"); break;
@@ -1754,7 +1763,6 @@ private void jsonEscape(R)(ref R dst, string s)
 			case '\t': dst.put("\\t"); break;
 			case '\"': dst.put("\\\""); break;
 		}
-
 	}
 }
 
