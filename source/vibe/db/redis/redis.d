@@ -128,7 +128,7 @@ final class RedisClient {
 		version (RedisDebug) {
 			import std.conv;
 			string debugargs = command;
-			foreach (i, A; ARGS) debugargs ~= ", " ~ args[i].to!string; 
+			foreach (i, A; ARGS) debugargs ~= ", " ~ args[i].to!string;
 		}
 
 		static if (is(T == void)) {
@@ -205,7 +205,7 @@ struct RedisDatabase {
 	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
 	long incr(string key, double value) { return request!long("INCRBYFLOAT", key, value); }
 	RedisReply!T mget(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("MGET", keys); }
-	
+
 	void mset(ARGS...)(ARGS args)
 	{
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
@@ -296,7 +296,7 @@ struct RedisDatabase {
 	deprecated("Use zcard() instead.") alias Zcard = zcard;
 	// see http://redis.io/commands/zcount
 	long zcount(string RNG = "[]")(string key, double min, double max) { return request!long("ZCOUNT", key, getMinMaxArgs!RNG(min, max)); }
-	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", key, value, member); }
+	double zincrby(T)(string key, double value, T member) { return request!double("ZINCRBY", key, value, member); }
 	//TODO: zinterstore
 	// see http://redis.io/commands/zrange
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
@@ -324,12 +324,12 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "LIMIT", offset, count);
 	}
 
-	long zrank(string key, string member)
+	long zrank(T)(string key, T member)
 	{
 		auto str = request!string("ZRANK", key, member);
 		return str ? parse!long(str) : -1;
 	}
-	long zrem(string key, scope string[] members...) { return request!long("ZREM", key, members); }
+	long zrem(ARGS...)(string key, ARGS members) { return request!long("ZREM", key, members); }
 	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
 	// see http://redis.io/commands/zrangebyscore
 	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
@@ -359,13 +359,13 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "LIMIT", offset, count);
 	}
 
-	long zrevRank(string key, string member)
+	long zrevRank(T)(string key, T member)
 	{
 		auto str = request!string("ZREVRANK", key, member);
 		return str ? parse!long(str) : -1;
 	}
 
-	RedisReply!T zscore(T = string)(string key, string member) if(isValidRedisValueType!T) { return request!(RedisReply!T)("ZSCORE", key, member); }
+	RedisReply!T zscore(T = string, U)(string key, U member) if(isValidRedisValueType!T) { return request!(RedisReply!T)("ZSCORE", key, member); }
 	//TODO: zunionstore
 
 	/*
@@ -392,13 +392,13 @@ struct RedisDatabase {
 		LUA Scripts
 	*/
 	RedisReply!T eval(T = string, ARGS...)(string lua_code, scope string[] keys, scope ARGS args)
-		if(isValidRedisValueType!T) 
+		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVAL", lua_code, keys.length, keys, args);
 	}
 
 	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope string[] keys, scope ARGS args)
-		if(isValidRedisValueType!T) 
+		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVALSHA", sha, keys.length, keys, args);
 	}
@@ -491,18 +491,18 @@ final class RedisSubscriber {
 	}
 
 	void subscribe(scope string[] args...)
-	{ 
+	{
 		assert(m_listening);
 		m_capture = (channels){
 			logInfo("Callback subscribe(%s)", channels);
 			foreach (channel; channels) m_subscriptions[channel] = true;
 		};
-		_request_void(m_lockedConnection, "SUBSCRIBE", args); 
+		_request_void(m_lockedConnection, "SUBSCRIBE", args);
 		while (m_capture !is null) sleep(1.msecs);
 	}
 
 	void unsubscribe(scope string[] args...)
-	{ 
+	{
 		assert(m_listening);
 		m_capture = (channels){
 			logInfo("Callback unsubscribe(%s)", channels);
@@ -514,7 +514,7 @@ final class RedisSubscriber {
 
 	void psubscribe(scope string[] args...)
 	{
-		assert(m_listening); 
+		assert(m_listening);
 		m_capture = (channels){
 			logInfo("Callback psubscribe(%s)", channels);
 			foreach (channel; channels) m_subscriptions[channel] = true;
@@ -524,7 +524,7 @@ final class RedisSubscriber {
 	}
 
 	void punsubscribe(scope string[] args...)
-	{ 
+	{
 		assert(m_listening);
 		m_capture = (channels){
 			logInfo("Callback punsubscribe(%s)", channels);
@@ -589,7 +589,7 @@ final class RedisSubscriber {
 			string cmd;
 			if (ln[0] == '$'){
 				cmd = cast(string)m_lockedConnection.conn.readLine();
-			} 
+			}
 			else if (ln[0] == '*') {
 				cmd = getString();
 			}else {
@@ -600,7 +600,7 @@ final class RedisSubscriber {
 				auto message = getString();
 				callback(channel, message);
 
-			} 
+			}
 			else {
 				handler(); // get rid of it
 			}
@@ -827,7 +827,7 @@ struct RedisReply(T = ubyte[]) {
 		ctx.initialized = true;
 
 		auto ln = cast(string)m_conn.conn.readLine();
-		
+
 		switch (ln[0]) {
 			default: throw new Exception(format("Unknown reply type: %s", ln[0]));
 			case '+': ctx.data = cast(ubyte[])ln[1 .. $]; ctx.hasData = true; break;
@@ -931,7 +931,7 @@ private final class RedisConnection {
 	{
 		if (index == m_selectedDB) return;
 		_request_reply(this, "SELECT", index);
-		m_selectedDB = index; 
+		m_selectedDB = index;
 	}
 
 	private static long countArgs(ARGS...)(scope ARGS args)
@@ -1003,7 +1003,7 @@ private void _request_void(ARGS...)(RedisConnection conn, string command, scope 
 			throw new Exception(format("Failed to connect to Redis server at %s:%s.", conn.m_host, conn.m_port), __FILE__, __LINE__, e);
 		}
 	}
-	
+
 	auto nargs = conn.countArgs(args);
 	auto rng = StreamOutputRange(conn.conn);
 	formattedWrite(&rng, "*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
