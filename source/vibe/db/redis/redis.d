@@ -296,7 +296,7 @@ struct RedisDatabase {
 	deprecated("Use zcard() instead.") alias Zcard = zcard;
 	// see http://redis.io/commands/zcount
 	long zcount(string RNG = "[]")(string key, double min, double max) { return request!long("ZCOUNT", key, getMinMaxArgs!RNG(min, max)); }
-	double zincrby(T)(string key, double value, T member) { return request!double("ZINCRBY", key, value, member); }
+	double zincrby(T)(string key, double value, T member) if (isValidRedisValueType!T) { return request!double("ZINCRBY", key, value, member); }
 	//TODO: zinterstore
 	// see http://redis.io/commands/zrange
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
@@ -325,6 +325,7 @@ struct RedisDatabase {
 	}
 
 	long zrank(T)(string key, T member)
+		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZRANK", key, member);
 		return str ? parse!long(str) : -1;
@@ -360,12 +361,17 @@ struct RedisDatabase {
 	}
 
 	long zrevRank(T)(string key, T member)
+		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZREVRANK", key, member);
 		return str ? parse!long(str) : -1;
 	}
 
-	RedisReply!T zscore(T = string, U)(string key, U member) if(isValidRedisValueType!T) { return request!(RedisReply!T)("ZSCORE", key, member); }
+	RedisReply!T zscore(T = string, U)(string key, U member)
+		if(isValidRedisValueType!T && isValidRedisValueType!U)
+	{
+		return request!(RedisReply!T)("ZSCORE", key, member);
+	}
 	//TODO: zunionstore
 
 	/*
