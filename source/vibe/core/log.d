@@ -38,10 +38,12 @@ nothrow @safe {
 
 	This level applies to the default stdout/stderr logger only.
 */
-void setLogFormat(FileLogger.Format fmt)
+void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.Format.plain)
 nothrow @safe {
 	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
-	ss_stdoutLogger.lock().format = fmt;
+	auto l = ss_stdoutLogger.lock();
+	l.format = fmt;
+	l.infoFormat = infoFmt;
 }
 
 
@@ -136,7 +138,7 @@ void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string fil
 void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
 void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
-/// ditto 
+/// ditto
 void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
 
 ///
@@ -207,6 +209,7 @@ final class FileLogger : Logger {
 	}
 
 	Format format = Format.thread;
+    Format infoFormat = Format.plain;
 
 	this(File info_file, File diag_file)
 	{
@@ -238,9 +241,7 @@ final class FileLogger : Logger {
 			case LogLevel.none: assert(false);
 		}
 
-		auto fmt = this.format;
-		// force informational output to be in plain form
-		if (file !is m_diagFile) fmt = Format.plain;
+		auto fmt = (file is m_diagFile) ? this.format : this.infoFormat;
 
 		final switch (fmt) {
 			case Format.plain: file.writeln(msg.text); break;
@@ -259,7 +260,7 @@ final class FileLogger : Logger {
 
 import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=7016
 
-/**	
+/**
 	Logger implementation for logging to an HTML file with dynamic filtering support.
 */
 final class HTMLLogger : Logger {
