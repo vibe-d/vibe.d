@@ -236,6 +236,7 @@ struct RedisDatabase {
 	long hdel(string key, scope string[] fields...) { return request!long("HDEL", key, fields); }
 	bool hexists(string key, string field) { return request!bool("HEXISTS", key, field); }
 	void hset(T)(string key, string field, T value) if(isValidRedisValueType!T) { request("HSET", key, field, value); }
+	bool hsetNX(T)(string key, string field, T value) if(isValidRedisValueType!T) { return request!bool("HSETNX", key, field, value); }
 	T hget(T = string)(string key, string field) if(isValidRedisValueReturn!T) { return request!T("HGET", key, field); }
 	RedisReply!T hgetAll(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HGETALL", key); }
 	long hincr(string key, string field, long value=1) { return request!long("HINCRBY", key, field, value); }

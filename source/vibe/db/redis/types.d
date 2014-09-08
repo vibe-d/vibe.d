@@ -370,7 +370,7 @@ struct RedisHash(T = string) {
 
 	size_t remove(scope string[] fields...) { return cast(size_t)m_db.hdel(m_key, fields); }
 	bool exists(string field) { return m_db.hexists(m_key, field); }
-	
+
 	void opIndexAssign(T value, string field) { m_db.hset(m_key, field, value.toRedis()); }
 	T opIndex(string field) { return m_db.hget!string(m_key, field).fromRedis!T(); }
 
@@ -379,6 +379,11 @@ struct RedisHash(T = string) {
 		import std.typecons;
 		auto ret = m_db.hget!(Nullable!string)(m_key, field);
 		return ret.isNull ? def_value : ret.fromRedis!T;
+	}
+
+	bool setIfNotExist(string field, T value)
+	{
+		return m_db.hsetNX(m_key, field, value);
 	}
 
 	void opIndexOpAssign(string op)(T value, string field) if (op == "+") { m_db.hincr(m_key, field, value.toRedis()); }
