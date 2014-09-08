@@ -53,7 +53,7 @@ auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args
 {
 	auto mem = allocator.alloc(AllocSize!T);
 	static if( MANAGED ){
-		static if( hasIndirections!T ) 
+		static if( hasIndirections!T )
 			GC.addRange(mem.ptr, mem.length);
 		return emplace!T(mem, args);
 	}
@@ -66,7 +66,7 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 	auto mem = allocator.alloc(T.sizeof * n);
 	auto ret = cast(T[])mem;
 	static if( MANAGED ){
-		static if( hasIndirections!T ) 
+		static if( hasIndirections!T )
 			GC.addRange(mem.ptr, mem.length);
 		// TODO: use memset for class, pointers and scalars
 		foreach (ref el; ret) {
@@ -91,7 +91,7 @@ interface Allocator {
 
 	void[] alloc(size_t sz)
 		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "alloc() returned misaligned data."); }
-	
+
 	void[] realloc(void[] mem, size_t new_sz)
 		in {
 			assert(mem.ptr !is null, "realloc() called with null array.");
@@ -168,7 +168,7 @@ final class DebugAllocator : Allocator {
 		assert(*pb == mem.length, "realloc() called with block of wrong size.");
 		auto ret = m_baseAlloc.realloc(mem, new_size);
 		assert(ret.length == new_size, "base.realloc() returned block with wrong size.");
-		assert(ret.ptr !in m_blocks, "base.realloc() returned block that is already allocated.");
+		assert(ret.ptr is mem.ptr || ret.ptr !in m_blocks, "base.realloc() returned block that is already allocated.");
 		m_bytes -= *pb;
 		m_blocks.remove(mem.ptr);
 		m_blocks[ret.ptr] = new_size;
@@ -600,7 +600,7 @@ struct FreeListRef(T, bool INIT = true)
 		FreeListRef ret;
 		auto mem = manualAllocator().alloc(ElemSize + int.sizeof);
 		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
-		static if( INIT ) ret.m_object = cast(TR)emplace!(Unqual!T)(mem, args);	
+		static if( INIT ) ret.m_object = cast(TR)emplace!(Unqual!T)(mem, args);
 		else ret.m_object = cast(TR)mem.ptr;
 		ret.refCount = 1;
 		return ret;
@@ -637,7 +637,7 @@ struct FreeListRef(T, bool INIT = true)
 
 	void clear()
 	{
-		checkInvariants(); 
+		checkInvariants();
 		if( m_object ){
 			if( --this.refCount == 0 ){
 				static if( INIT ){
