@@ -412,6 +412,113 @@ struct LazyString(T...) {
 	}
 }
 
+
+/**
+	Strips all non-Redis fields from a struct.
+
+	The returned struct will contain only fiels that can be converted using
+	$(D toRedis) and that have names different than "id" or "_id".
+
+	To reconstruct the full struct type, use the $(D RedisStripped.unstrip)
+	method.
+*/
+RedisStripped!T redisStrip(T)(T val) { return RedisStripped!T(val); }
+
+/**
+	Represents the stripped type of a struct.
+
+	See_also: $(D redisStrip)
+*/
+struct RedisStripped(T) {
+	import std.typetuple;
+
+	this(T src) { foreach (i, idx; unstrippedMemberIndices) this.tupleof[i] = src.tupleof[idx]; }
+
+	/** Reconstructs the full (unstripped) struct value.
+
+		The parameters for this method are all stripped fields in the order in
+		which they appear in the original struct definition.
+	*/
+	T unstrip(StrippedMembers stripped_members) {
+		T ret;
+		populateRedisFields(ret, this.tupleof);
+		populateNonRedisFields(ret, stripped_members);
+		return ret;
+	}
+
+	private void populateRedisFields(ref T dst, UnstrippedMembers values)
+	{
+		foreach (i, v; values)
+			dst.tupleof[unstrippedMemberIndices[i]] = v;
+	}
+
+	private void populateNonRedisFields(ref T dst, StrippedMembers values)
+	{
+		foreach (i, v; values)
+			dst.tupleof[strippedMemberIndices[i]] = v;
+	}
+
+	//pragma(msg, membersString!());
+	mixin(membersString!());
+
+	alias StrippedMembers = FilterToType!(isNonRedisType, T.tupleof);
+	alias UnstrippedMembers = FilterToType!(isRedisType, T.tupleof);
+	alias strippedMemberIndices = indicesOf!(isNonRedisType, T.tupleof);
+	alias unstrippedMemberIndices = indicesOf!(isRedisType, T.tupleof);
+
+	/*pragma(msg, T);
+	pragma(msg, "stripped: "~StrippedMembers.stringof~" - "~strippedMemberIndices.stringof);
+	pragma(msg, "unstripped: "~UnstrippedMembers.stringof~" - "~unstrippedMemberIndices.stringof);*/
+
+	template membersString() {
+		template impl(size_t i) {
+			static if (i < T.tupleof.length) {
+				enum m = __traits(identifier, T.tupleof[i]);
+				static if (isRedisType!(T.tupleof[i])) enum impl = "typeof(T."~m~") "~m~";\n" ~ impl!(i+1);
+				else enum impl = impl!(i+1);
+			} else enum impl = "";
+		}
+		enum membersString = impl!0;
+	}
+}
+
+unittest {
+	static struct S1 { int id; string field; string[] array; }
+	auto s1 = S1(42, "hello", ["world"]);
+	auto s1s = redisStrip(s1);
+	static assert(!is(typeof(s1s.id)));
+	static assert(is(typeof(s1s.field)));
+	static assert(!is(typeof(s1s.array)));
+	assert(s1s.field == "hello");
+	auto s1u = s1s.unstrip(42, ["world"]);
+	assert(s1u == s1);
+}
+
+private template indicesOf(alias PRED, T...)
+{
+	import std.typetuple;
+	template impl(size_t i) {
+		static if (i < T.length) {
+			static if (PRED!(T[i])) alias impl = TypeTuple!(i, impl!(i+1));
+			else alias impl = impl!(i+1);
+		} else alias impl = TypeTuple!();
+	}
+	alias indicesOf = impl!0;
+}
+private template FilterToType(alias PRED, T...) {
+	import std.typetuple;
+	template impl(size_t i) {
+		static if (i < T.length) {
+			static if (PRED!(T[i])) alias impl = TypeTuple!(typeof(T[i]), impl!(i+1));
+			else alias impl = impl!(i+1);
+		} else alias impl = TypeTuple!();
+	}
+	alias FilterToType = impl!0;
+}
+private template isRedisType(alias F) { import std.algorithm; enum isRedisType = !__traits(identifier, F).among("_id", "id") && is(typeof(&toRedis!(typeof(F)))); }
+private template isNonRedisType(alias F) { enum isNonRedisType = !isRedisType!F; }
+static assert(isRedisType!(int.init) && isRedisType!(string.init));
+
 private auto toTuple(size_t N, T)(T[N] values)
 {
 	import std.typecons;
