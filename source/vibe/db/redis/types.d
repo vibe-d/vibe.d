@@ -123,7 +123,7 @@ string toRedis(T)(T value)
 	else static if (is(T : long) || is(T : double)) return value.to!string;
 	else static if (isSomeString!T) return value.to!string;
 	else static if (is(T : const(ubyte)[])) return cast(string)value;
-	else static if (isISOExtStringSerializable!T) return value.toISOExtString();
+	else static if (isISOExtStringSerializable!T) return value == T.init ? null : value.toISOExtString();
 	else static if (isStringSerializable!T) return value.toString();
 	else static assert(false, "Unsupported type: "~T.stringof);
 }
@@ -137,7 +137,7 @@ void toRedis(R, T)(ref R dst, T value)
 	else static if (is(T : long)) dst.formattedWrite("%s", value);
 	else static if (isSomeString!T) dst.formattedWrite("%s", value);
 	else static if(is(T : const(ubyte)[])) dst.put(value);
-	else static if (isISOExtStringSerializable!T) dst.put(value.toISOExtString());
+	else static if (isISOExtStringSerializable!T) dst.put(value == T.init ? null : value.toISOExtString());
 	else static if (isStringSerializable!T) dst.put(value.toString());
 	else static assert(false, "Unsupported type: "~T.stringof);
 }
@@ -160,7 +160,7 @@ T fromRedis(T)(string value)
 	else static if (is(T : long) || is(T : double)) return value.to!T;
 	else static if (isSomeString!T) return value.to!T;
 	else static if (is(T : const(ubyte)[])) return cast(T)value;
-	else static if (isISOExtStringSerializable!T) return T.fromISOExtString(value);
+	else static if (isISOExtStringSerializable!T) return value.length ? T.fromISOExtString(value) : T.init;
 	else static if (isStringSerializable!T) return T.fromString(value);
 	else static assert(false, "Unsupported type: "~T.stringof);
 }
