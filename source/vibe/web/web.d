@@ -562,7 +562,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
 				return;
 			} else {
-				throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
+				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling parameter "~param_names[i]~": "~ex.msg);
+				hex.debugMessage = ex.toString().sanitize;
+				throw hex;
 			}
 		}
 	}

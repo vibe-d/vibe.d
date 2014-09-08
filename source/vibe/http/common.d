@@ -261,6 +261,8 @@ class HTTPStatusException : Exception {
 	
 	/// The HTTP status code
 	@property int status() const { return m_status; }
+
+	string debugMessage;
 }
 
 
