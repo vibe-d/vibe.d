@@ -115,16 +115,23 @@ final class URLRouter : HTTPRouter {
 	@property string prefix() const { return m_prefix; }
 
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
-	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb, RouteDelegate del /* = null */)
 	{
 		import std.algorithm;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		logDebug("add route %s %s", method, path);
-		version (VibeRouterTreeMatch) m_routes.addTerminal(path, Route(method, path, cb));
-		else m_routes ~= Route(method, path, cb);
+		del = del is null ? (scope p) => true : del;
+		version (VibeRouterTreeMatch) m_routes.addTerminal(path, Route(method, path, cb, del));
+		else m_routes ~= Route(method, path, cb, del);
 		return this;
 	}
 
+	/// Ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb) {
+		return match(method, path, cb, null);
+	}
+
+	alias RouteDelegate = bool delegate(scope HTTPServerRequest);
 	alias match = HTTPRouter.match;
 
 	/** Rebuilds the internal matching structures to account for newly added routes.
@@ -155,7 +162,7 @@ final class URLRouter : HTTPRouter {
 				m_routes.match(path, (ridx, scope values) {
 					if (done) return;
 					auto r = &m_routes.getTerminalData(ridx);
-					if (r.method == method) {
+					if (r.method == method && r.del(req)) {
 						logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
 						// TODO: use a different map type that avoids allocations for small amounts of keys
 						foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
@@ -172,7 +179,7 @@ final class URLRouter : HTTPRouter {
 			while(true)
 			{
 				foreach (ref r; m_routes) {
-					if (r.method == method && r.matches(path, req.params)) {
+					if (r.method == method && r.matches(path, req.params) && r.del(req)) {
 						logTrace("route match: %s -> %s %s", req.path, r.method, r.pattern);
 						// .. parse fields ..
 						r.cb(req, res);
@@ -360,6 +367,7 @@ private struct Route {
 	HTTPMethod method;
 	string pattern;
 	HTTPServerRequestDelegate cb;
+	URLRouter.RouteDelegate del;
 
 	bool matches(string url, ref string[string] params)
 	const {
@@ -548,7 +556,7 @@ private struct MatchTree(T) {
 
 		dst[] = null;
 
-		// folow the path throgh the match graph
+		// follow the path through the match graph
 		foreach (i, char ch; text) {
 			auto var = term.varMap[nidx];
 
