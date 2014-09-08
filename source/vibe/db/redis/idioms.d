@@ -226,6 +226,8 @@ struct RedisObject(T) {
 		return ret;
 	}
 
+	@property bool exists() { return m_hash.value.exists(); }
+
 	alias get this;
 
 	void remove() { m_hash.remove(); }
@@ -422,7 +424,7 @@ struct LazyString(T...) {
 	To reconstruct the full struct type, use the $(D RedisStripped.unstrip)
 	method.
 */
-RedisStripped!T redisStrip(T)(T val) { return RedisStripped!T(val); }
+RedisStripped!T redisStrip(T)(in T val) { return RedisStripped!T(val); }
 
 /**
 	Represents the stripped type of a struct.
@@ -432,7 +434,7 @@ RedisStripped!T redisStrip(T)(T val) { return RedisStripped!T(val); }
 struct RedisStripped(T) {
 	import std.typetuple;
 
-	this(T src) { foreach (i, idx; unstrippedMemberIndices) this.tupleof[i] = src.tupleof[idx]; }
+	this(in T src) { foreach (i, idx; unstrippedMemberIndices) this.tupleof[i] = src.tupleof[idx]; }
 
 	/** Reconstructs the full (unstripped) struct value.
 
