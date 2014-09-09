@@ -1306,7 +1306,8 @@ static ~this()
 		if (is_main_thread) { // we are the main thread, wait for others
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
-			while (st_threads.length)
+			// wait for all non-daemon threads to shut down
+			while (st_threads.any!(th => !th.thread.isDaemon))
 				st_threadShutdownCondition.wait();
 		}
 	}
