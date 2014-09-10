@@ -660,7 +660,7 @@ package template isRWField(T, string M)
 		enum isRWField = false;
 	}
 	// Normal assignment check for non-functions
-	else static if(!isSomeFunction!(__traits(getMember, T, M)))
+	else static if(!anySatisfy!(isSomeFunction, __traits(getMember, T, M)))
 	{
 		enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
 	}
