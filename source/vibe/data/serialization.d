@@ -649,7 +649,30 @@ package template isRWPlainField(T, string M)
 
 package template isRWField(T, string M)
 {
-	enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
+	// Reject inaccessible members
+	static if( !is(typeof(__traits(getMember, T, M))) )
+	{
+		enum isRWField = false;
+	}
+	// Reject templates
+	else static if( __traits(compiles, mixin("T.init."~M~"!()")) )
+	{
+		enum isRWField = false;
+	}
+	// Normal assignment check for non-functions
+	else static if(!isSomeFunction!(__traits(getMember, T, M)))
+	{
+		enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
+	}
+	// If M is a function, reject if not @property or returns by ref
+	else
+	{
+		private enum FA = functionAttributes!(__traits(getMember, T, M));
+		enum isRWField = 
+			__traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M)) &&
+			(FA & FunctionAttribute.property) != 0 &&
+			(FA & FunctionAttribute.ref_) == 0;
+	}
 	//pragma(msg, T.stringof~"."~M~": "~(isRWField?"1":"0"));
 }
 
