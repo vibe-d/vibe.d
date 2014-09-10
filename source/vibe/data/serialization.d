@@ -915,3 +915,39 @@ unittest { // custom serialization support
 	assert(serialize!TestSerializer(C2.init) == "D(C2){DE(int,i)(V(int)(0))DE(int,i)}D(C2)");
 	assert(serialize!TestSerializer(C3.init) == "D(C3){DE(int,i)(V(int)(0))DE(int,i)}D(C3)");
 }
+
+unittest // Testing corner case: member function returning by ref
+{
+	import vibe.data.json;
+
+	static struct S
+	{
+		int i;
+		ref int foo() { return i; }
+	}
+
+	static assert(__traits(compiles, { S().serializeToJson(); }));
+	static assert(__traits(compiles, { Json().deserializeJson!S(); }));
+
+	auto s = S(1);
+	assert(s.serializeToJson().deserializeJson!S() == s);
+}
+
+unittest // Testing corner case: Variadic template constructors and methods
+{
+	import vibe.data.json;
+
+	static struct S
+	{
+		int i;
+		this(Args...)(Args args) {}
+		int foo(Args...)(Args args) { return i; }
+		ref int bar(Args...)(Args args) { return i; }
+	}
+	
+	static assert(__traits(compiles, { S().serializeToJson(); }));
+	static assert(__traits(compiles, { Json().deserializeJson!S(); }));
+	
+	auto s = S(1);
+	assert(s.serializeToJson().deserializeJson!S() == s);
+}
