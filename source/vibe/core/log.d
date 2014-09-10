@@ -143,9 +143,12 @@ void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy 
 
 ///
 @safe unittest {
-	logInfo("Hello, World!");
-	logWarn("This may not be %s.", "good");
-	log!(LogLevel.info)("This is a %s.", "test");
+	void test()
+	{
+		logInfo("Hello, World!");
+		logWarn("This may not be %s.", "good");
+		log!(LogLevel.info)("This is a %s.", "test");
+	}
 }
 
 /// Specifies the log level for a particular log message.

@@ -542,7 +542,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 			void warnNotImplemented()
 			{
-				logWarn("MongoDB option %s not yet implemented.", option);
+				logDiagnostic("MongoDB option %s not yet implemented.", option);
 			}
 
 			switch( option.toLower() ){
