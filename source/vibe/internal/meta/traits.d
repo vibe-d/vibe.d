@@ -231,7 +231,7 @@ template isPublicMember(T, string M)
 {
 	import std.algorithm;
 
-	static if (!__traits(compiles, __traits(getMember, T.init, M))) enum isPublicMember = false;
+	static if (!__traits(compiles, __traits(getMember, T, M))) enum isPublicMember = false;
 	else {
 		alias MEM = TypeTuple!(__traits(getMember, T, M));
 		enum isPublicMember = __traits(getProtection, MEM).among("public", "export");
