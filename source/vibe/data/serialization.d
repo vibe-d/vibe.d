@@ -649,7 +649,30 @@ package template isRWPlainField(T, string M)
 
 package template isRWField(T, string M)
 {
-	enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
+	// Reject inaccessible members
+	static if( !is(typeof(__traits(getMember, T, M))) )
+	{
+		enum isRWField = false;
+	}
+	// Reject templates
+	else static if( __traits(compiles, mixin("T.init."~M~"!()")) )
+	{
+		enum isRWField = false;
+	}
+	// Normal assignment check for non-functions
+	else static if(!anySatisfy!(isSomeFunction, __traits(getMember, T, M)))
+	{
+		enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
+	}
+	// If M is a function, reject if not @property or returns by ref
+	else
+	{
+		private enum FA = functionAttributes!(__traits(getMember, T, M));
+		enum isRWField = 
+			__traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M)) &&
+			(FA & FunctionAttribute.property) != 0 &&
+			(FA & FunctionAttribute.ref_) == 0;
+	}
 	//pragma(msg, T.stringof~"."~M~": "~(isRWField?"1":"0"));
 }
 
@@ -891,4 +914,57 @@ unittest { // custom serialization support
 	assert(serialize!TestSerializer(C1.init) == "V(float)(1)");
 	assert(serialize!TestSerializer(C2.init) == "D(C2){DE(int,i)(V(int)(0))DE(int,i)}D(C2)");
 	assert(serialize!TestSerializer(C3.init) == "D(C3){DE(int,i)(V(int)(0))DE(int,i)}D(C3)");
+}
+
+unittest // Testing corner case: member function returning by ref
+{
+	import vibe.data.json;
+
+	static struct S
+	{
+		int i;
+		ref int foo() { return i; }
+	}
+
+	static assert(__traits(compiles, { S().serializeToJson(); }));
+	static assert(__traits(compiles, { Json().deserializeJson!S(); }));
+
+	auto s = S(1);
+	assert(s.serializeToJson().deserializeJson!S() == s);
+}
+
+unittest // Testing corner case: Variadic template constructors and methods
+{
+	import vibe.data.json;
+
+	static struct S
+	{
+		int i;
+		this(Args...)(Args args) {}
+		int foo(Args...)(Args args) { return i; }
+		ref int bar(Args...)(Args args) { return i; }
+	}
+	
+	static assert(__traits(compiles, { S().serializeToJson(); }));
+	static assert(__traits(compiles, { Json().deserializeJson!S(); }));
+	
+	auto s = S(1);
+	assert(s.serializeToJson().deserializeJson!S() == s);
+}
+
+unittest // Make sure serializing through properties still works
+{
+	import vibe.data.json;
+
+	static struct S
+	{
+		public int i;
+		private int privateJ;
+
+		@property int j() { return privateJ; }
+		@property void j(int j) { privateJ = j; }
+	}
+
+	auto s = S(1, 2);
+	assert(s.serializeToJson().deserializeJson!S() == s);
 }
