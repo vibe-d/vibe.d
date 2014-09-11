@@ -525,7 +525,7 @@ unittest {
 }
 
 
-/// 
+///
 enum FieldExistence
 {
 	missing,
@@ -627,7 +627,7 @@ unittest {
 	// represented as a string when serialized
 	static struct S {
 		int value;
-		
+
 		// dummy example implementations
 		string toString() const { return value.to!string(); }
 		static S fromString(string s) { return S(s.to!int()); }
@@ -639,44 +639,191 @@ unittest {
 
 package template isRWPlainField(T, string M)
 {
-	static if( !__traits(compiles, typeof(__traits(getMember, T, M))) ){
-		enum isRWPlainField = false;
-	} else {
+	static if (!isRWField!(T, M)) enum isRWPlainField = false;
+	else {
 		//pragma(msg, T.stringof~"."~M~":"~typeof(__traits(getMember, T, M)).stringof);
-		enum isRWPlainField = isRWField!(T, M) && __traits(compiles, *(&__traits(getMember, Tgen!T(), M)) = *(&__traits(getMember, Tgen!T(), M)));
+		enum isRWPlainField = __traits(compiles, *(&__traits(getMember, Tgen!T(), M)) = *(&__traits(getMember, Tgen!T(), M)));
 	}
 }
 
 package template isRWField(T, string M)
 {
-	// Reject inaccessible members
-	static if( !is(typeof(__traits(getMember, T, M))) )
-	{
-		enum isRWField = false;
+	import std.algorithm;
+
+	static void testAssign()() {
+		T* pt;
+		__traits(getMember, *pt, M) = __traits(getMember, *pt, M);
 	}
-	// Reject templates
-	else static if( __traits(compiles, mixin("T.init."~M~"!()")) )
-	{
-		enum isRWField = false;
-	}
-	// Normal assignment check for non-functions
-	else static if(!anySatisfy!(isSomeFunction, __traits(getMember, T, M)))
-	{
-		enum isRWField = __traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M));
-	}
-	// If M is a function, reject if not @property or returns by ref
-	else
-	{
+
+	// reject non-public members
+	static if (!isPublicMember!(T, M)) enum isRWField = false;
+	// reject static members
+	else static if (!isNonStaticMember!(T, M)) enum isRWField = false;
+	// reject non-typed members
+	else static if (!is(typeof(__traits(getMember, T, M)))) enum isRWField = false;
+	// reject void typed members (includes templates)
+	else static if (is(typeof(__traits(getMember, T, M)) == void)) enum isRWField = false;
+	// reject non-assignable members
+	else static if (!__traits(compiles, testAssign!()())) enum isRWField = false;
+	else static if (anySatisfy!(isSomeFunction, __traits(getMember, T, M))) {
+		// If M is a function, reject if not @property or returns by ref
 		private enum FA = functionAttributes!(__traits(getMember, T, M));
-		enum isRWField = 
-			__traits(compiles, __traits(getMember, Tgen!T(), M) = __traits(getMember, Tgen!T(), M)) &&
-			(FA & FunctionAttribute.property) != 0 &&
-			(FA & FunctionAttribute.ref_) == 0;
+		enum isRWField = (FA & FunctionAttribute.property) != 0;
+	} else {
+		enum isRWField = true;
 	}
-	//pragma(msg, T.stringof~"."~M~": "~(isRWField?"1":"0"));
+}
+
+unittest {
+	import std.algorithm;
+
+	struct S {
+		int i; // plain RW field
+		enum j = 42; // manifest constant
+		static int k = 42; // static field
+		private int privateJ; // private RW field
+
+		this(Args...)(Args args) {}
+
+		// read-write property (OK)
+		@property int p1() { return privateJ; }
+		@property void p1(int j) { privateJ = j; }
+		// read-only property (NO)
+		@property int p2() { return privateJ; }
+		// write-only property (NO)
+		@property void p3(int value) { privateJ = value; }
+		// ref returning property (OK)
+		@property ref int p4() { return i; }
+		// parameter-less template property (OK)
+		@property ref int p5()() { return i; }
+		// not treated as a property by DMD, so not a field
+		@property int p6()() { return privateJ; }
+		@property void p6(int j)() { privateJ = j; }
+
+		static @property int p7() { return k; }
+		static @property void p7(int value) { k = value; }
+
+		ref int f1() { return i; } // ref returning function (no field)
+
+		int f2(Args...)(Args args) { return i; }
+
+		ref int f3(Args...)(Args args) { return i; }
+
+		void someMethod() {}
+
+		ref int someTempl()() { return i; }
+	}
+
+	enum plainFields = ["i"];
+	enum fields = ["i", "p1", "p4", "p5"];
+
+	foreach (mem; __traits(allMembers, S)) {
+		static if (isRWField!(S, mem)) static assert(fields.canFind(mem), mem~" detected as field.");
+		else static assert(!fields.canFind(mem), mem~" not detected as field.");
+
+		static if (isRWPlainField!(S, mem)) static assert(plainFields.canFind(mem), mem~" not detected as plain field.");
+		else static assert(!plainFields.canFind(mem), mem~" not detected as plain field.");
+	}
 }
 
 package T Tgen(T)(){ return T.init; }
+
+private template isPublicMember(T, string M)
+{
+	import std.algorithm;
+
+	static if (!__traits(compiles, __traits(getMember, T.init, M))) enum isPublicMember = false;
+	else {
+		alias MEM = TypeTuple!(__traits(getMember, T, M));
+		enum isPublicMember = __traits(getProtection, MEM).among("public", "export");
+	}
+}
+
+unittest {
+	class C {
+		int a;
+		export int b;
+		protected int c;
+		private int d;
+		package int e;
+		void f() {}
+		static void g() {}
+		private void h() {}
+		private static void i() {}
+	}
+
+	static assert (isPublicMember!(C, "a"));
+	static assert (isPublicMember!(C, "b"));
+	static assert (!isPublicMember!(C, "c"));
+	static assert (!isPublicMember!(C, "d"));
+	static assert (!isPublicMember!(C, "e"));
+	static assert (isPublicMember!(C, "f"));
+	static assert (isPublicMember!(C, "g"));
+	static assert (!isPublicMember!(C, "h"));
+	static assert (!isPublicMember!(C, "i"));
+
+	struct S {
+		int a;
+		export int b;
+		private int d;
+		package int e;
+	}
+	static assert (isPublicMember!(S, "a"));
+	static assert (isPublicMember!(S, "b"));
+	static assert (!isPublicMember!(S, "d"));
+	static assert (!isPublicMember!(S, "e"));
+
+	S s;
+	s.a = 21;
+	assert(s.a == 21);
+}
+
+private template isNonStaticMember(T, string M)
+{
+	alias MF = TypeTuple!(__traits(getMember, T, M));
+	static if (M.length == 0) {
+		enum isNonStaticMember = false;
+	} else static if (anySatisfy!(isSomeFunction, MF)) {
+		enum isNonStaticMember = !__traits(isStaticFunction, MF);
+	} else {
+		enum isNonStaticMember = !__traits(compiles, (){ auto x = __traits(getMember, T, M); }());
+	}
+}
+
+unittest { // normal fields
+	struct S {
+		int a;
+		static int b;
+		enum c = 42;
+		void f();
+		static void g();
+		ref int h() { return a; }
+		static ref int i() { return b; }
+	}
+	static assert(isNonStaticMember!(S, "a"));
+	static assert(!isNonStaticMember!(S, "b"));
+	static assert(!isNonStaticMember!(S, "c"));
+	static assert(isNonStaticMember!(S, "f"));
+	static assert(!isNonStaticMember!(S, "g"));
+	static assert(isNonStaticMember!(S, "h"));
+	static assert(!isNonStaticMember!(S, "i"));
+}
+
+unittest { // tuple fields
+	struct S(T...) {
+		T a;
+		static T b;
+	}
+
+	alias T = S!(int, float);
+	auto p = T.b;
+	static assert(isNonStaticMember!(T, "a"));
+	static assert(!isNonStaticMember!(T, "b"));
+
+	alias U = S!();
+	static assert(!isNonStaticMember!(U, "a"));
+	static assert(!isNonStaticMember!(U, "b"));
+}
 
 private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
@@ -944,10 +1091,10 @@ unittest // Testing corner case: Variadic template constructors and methods
 		int foo(Args...)(Args args) { return i; }
 		ref int bar(Args...)(Args args) { return i; }
 	}
-	
+
 	static assert(__traits(compiles, { S().serializeToJson(); }));
 	static assert(__traits(compiles, { Json().deserializeJson!S(); }));
-	
+
 	auto s = S(1);
 	assert(s.serializeToJson().deserializeJson!S() == s);
 }
