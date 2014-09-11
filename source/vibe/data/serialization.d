@@ -951,3 +951,20 @@ unittest // Testing corner case: Variadic template constructors and methods
 	auto s = S(1);
 	assert(s.serializeToJson().deserializeJson!S() == s);
 }
+
+unittest // Make sure serializing through properties still works
+{
+	import vibe.data.json;
+
+	static struct S
+	{
+		public int i;
+		private int privateJ;
+
+		@property int j() { return privateJ; }
+		@property void j(int j) { privateJ = j; }
+	}
+
+	auto s = S(1, 2);
+	assert(s.serializeToJson().deserializeJson!S() == s);
+}
