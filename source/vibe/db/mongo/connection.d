@@ -16,6 +16,7 @@ import vibe.stream.ssl;
 
 import std.algorithm : map, splitter;
 import std.array;
+import std.range;
 import std.conv;
 import std.exception;
 import std.string;
@@ -273,7 +274,7 @@ final class MongoConnection {
 		return ret;
 	}
 
-	MongoDbInfo[] listDatabases()
+	InputRange!MongoDbInfo listDatabases()
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
@@ -284,17 +285,21 @@ final class MongoConnection {
 				throw new MongoDriverException("Calling listDatabases failed.");	
 		}
 
-		auto result;
+		InputRange!MongoDbInfo result;
 		void on_doc(size_t idx, ref Bson doc) {
 			if (doc["ok"].get!double != 1.0)
 					throw new MongoAuthException("listDatabases failed.");
 
-				result = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
+				auto infos = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
 					MongoDbInfo(
 					db_doc["name"].get!string,
 					db_doc["sizeOnDisk"].get!double,
 					db_doc["empty"].get!bool
-					)).range;
+					));
+
+				result = inputRangeObject(infos);
+
+
 		}
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);

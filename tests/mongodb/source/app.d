@@ -43,10 +43,10 @@ void runTest()
 	assert(converted.front == "value1value2");
 
 	import std.algorithm;
-	auto dbs = client.getDatabaseNames();
-	assert(!find(dbs, "test").empty);
-	assert(!find(dbs, "local").empty);
-	assert(!find(dbs, "admin").empty);
+	auto names = client.getDatabases().map!(dbs => dbs.name).array;
+	assert(!find(names, "test").empty);
+	assert(!find(names, "local").empty);
+	assert(!find(names, "admin").empty);
 }
 
 int main()
