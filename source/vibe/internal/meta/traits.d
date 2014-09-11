@@ -150,8 +150,10 @@ template isRWField(T, string M)
 		__traits(getMember, *pt, M) = __traits(getMember, *pt, M);
 	}
 
+	// reject type aliases
+	static if (is(TypeTuple!(__traits(getMember, T, M)))) enum isRWField = false;
 	// reject non-public members
-	static if (!isPublicMember!(T, M)) enum isRWField = false;
+	else static if (!isPublicMember!(T, M)) enum isRWField = false;
 	// reject static members
 	else static if (!isNonStaticMember!(T, M)) enum isRWField = false;
 	// reject non-typed members
@@ -173,6 +175,7 @@ unittest {
 	import std.algorithm;
 
 	struct S {
+		alias a = int; // alias
 		int i; // plain RW field
 		enum j = 42; // manifest constant
 		static int k = 42; // static field
