@@ -273,29 +273,28 @@ final class MongoConnection {
 		return ret;
 	}
 
-	MongoDbInfo[] getInfoDatabases()
+	MongoDbInfo[] listDatabases()
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
 		auto cmd = Bson(["listDatabases":Bson(1)]);
-		MongoDbInfo[] result;
 
 		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
 			if ((flags & ReplyFlags.QueryFailure))
 				throw new MongoDriverException("Calling listDatabases failed.");	
 		}
 
+		auto result;
 		void on_doc(size_t idx, ref Bson doc) {
 			if (doc["ok"].get!double != 1.0)
 					throw new MongoAuthException("listDatabases failed.");
 
-				foreach(i, ref db_doc ; doc["databases"].get!(const(Bson)[])) {
-					MongoDbInfo info;
-					info.name = db_doc["name"].get!string;
-					info.sizeOnDisk = db_doc["sizeOnDisk"].get!double;
-					info.empty = db_doc["empty"].get!bool;
-					result ~= info;
-				}
+				result = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
+					MongoDbInfo(
+					db_doc["name"].get!string,
+					db_doc["sizeOnDisk"].get!double,
+					db_doc["empty"].get!bool
+					)).range;
 		}
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
@@ -784,9 +783,9 @@ class MongoClientSettings
 
 struct MongoDbInfo 
 {
-	double sizeOnDisk; // seems like everything is using doubles?
-	bool empty;
 	string name;
+	double sizeOnDisk;
+	bool empty;
 }
 
 private struct MongoHost

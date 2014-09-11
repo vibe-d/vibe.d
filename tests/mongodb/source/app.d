@@ -14,12 +14,6 @@ void runTest()
 		return;
 	}
 
-	import std.algorithm;
-	auto dbs = client.getDatabaseNames();
-	assert(!find(dbs, "test").empty);
-	assert(!find(dbs, "local").empty);
-	assert(!find(dbs, "admin").empty);
-
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);
 	assert(coll.name == "collection");
@@ -47,6 +41,12 @@ void runTest()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
+
+	import std.algorithm;
+	auto dbs = client.getDatabaseNames();
+	assert(!find(dbs, "test").empty);
+	assert(!find(dbs, "local").empty);
+	assert(!find(dbs, "admin").empty);
 }
 
 int main()

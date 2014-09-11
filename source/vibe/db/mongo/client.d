@@ -129,7 +129,7 @@ final class MongoClient {
 	string[] getDatabaseNames()
 	{
 		string[] names;
-		foreach(info; lockConnection.getInfoDatabases())
+		foreach(info; lockConnection.listDatabases())
 			names ~= info.name;
 
 		return names;		
