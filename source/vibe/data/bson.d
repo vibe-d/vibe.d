@@ -961,6 +961,8 @@ Bson serializeToBson(T)(T value, ubyte[] buffer = null)
 /// private
 Bson serializeToBsonOld(T)(T value)
 {
+	import vibe.internal.meta.traits;
+
     alias Unqual!T Unqualified;
 	static if (is(Unqualified == Bson)) return value;
 	else static if (is(Unqualified == Json)) return Bson.fromJson(value);
@@ -1055,6 +1057,8 @@ template deserializeBson(T)
 /// private
 T deserializeBsonOld(T)(Bson src)
 {
+	import vibe.internal.meta.traits;
+
 	static if (is(T == Bson)) return src;
 	else static if (is(T == Json)) return src.toJson();
 	else static if (is(T == BsonBinData)) return cast(T)src;

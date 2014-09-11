@@ -986,6 +986,8 @@ string serializeToJsonString(T)(T value)
 /// private
 Json serializeToJsonOld(T)(T value)
 {
+	import vibe.internal.meta.traits;
+
 	alias Unqual!T TU;
 	static if (is(TU == Json)) return value;
 	else static if (is(TU == typeof(null))) return Json(null);
@@ -1075,6 +1077,8 @@ T deserializeJson(T, R)(R input)
 /// private
 T deserializeJsonOld(T)(Json src)
 {
+	import vibe.internal.meta.traits;
+
 	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T )
 		if( src.type == Json.Type.null_ ) return T.init;
 	static if (is(T == Json)) return src;
