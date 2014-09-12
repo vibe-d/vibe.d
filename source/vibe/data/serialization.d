@@ -220,7 +220,12 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 	} else static if (isAssociativeArray!TU) {
 		alias TK = KeyType!TU;
 		alias TV = ValueType!TU;
-		serializer.beginWriteDictionary!TU();
+		static if (__traits(compiles, serializer.beginWriteDictionary!TU(0))) {
+			auto nfields = value.length;
+			serializer.beginWriteDictionary!TU(nfields);
+		} else {
+			serializer.beginWriteDictionary!TU();
+		}
 		foreach (key, ref el; value) {
 			string keyname;
 			static if (is(TK : string)) keyname = key;
@@ -231,7 +236,11 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			serializeImpl!(Serializer, TV, ATTRIBUTES)(serializer, el);
 			serializer.endWriteDictionaryEntry!TV(keyname);
 		}
-		serializer.endWriteDictionary!TU();
+		static if (__traits(compiles, serializer.endWriteDictionary!TU(0))) {
+			serializer.endWriteDictionary!TU(nfields);
+		} else {
+			serializer.endWriteDictionary!TU();
+		}
 	} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 		if (value.isNull()) serializeImpl!(Serializer, typeof(null))(serializer, null);
 		else serializeImpl!(Serializer, typeof(value.get()), ATTRIBUTES)(serializer, value.get());
@@ -265,7 +274,12 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			}
 			serializer.endWriteArray!TU();
 		} else {
-			serializer.beginWriteDictionary!TU();
+			static if (__traits(compiles, serializer.beginWriteDictionary!TU(0))) {
+				enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
+				serializer.beginWriteDictionary!TU(nfields);
+			} else {
+				serializer.beginWriteDictionary!TU();
+			}
 			foreach (mname; SerializableFields!TU) {
 				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				static if (TM.length == 1) {
@@ -284,7 +298,11 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 					serializer.endWriteDictionaryEntry!(typeof(vt))(name);
 				}
 			}
-			serializer.endWriteDictionary!TU();
+			static if (__traits(compiles, serializer.endWriteDictionary!TU(0))) {
+				serializer.endWriteDictionary!TU(nfields);
+			} else {
+				serializer.endWriteDictionary!TU();
+			}
 		}
 	} else static if (isPointer!TU) {
 		if (value is null) {
