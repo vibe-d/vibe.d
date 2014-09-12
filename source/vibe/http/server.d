@@ -1070,6 +1070,11 @@ final class HTTPServerResponse : HTTPResponse {
 		catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
 
 		m_timeFinalized = Clock.currTime(UTC());
+
+		if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
+			logDebug("HTTP response only written partially before finalization. Terminating connection.");
+			m_rawConnection.close();
+		}
 	}
 
 	private void writeHeader()
