@@ -4,7 +4,6 @@
 module app;
 
 import vibe.vibe;
-import std.stdio;
 
 void runTest()
 {
@@ -14,11 +13,6 @@ void runTest()
 		logInfo("Failed to connect to local MongoDB server. Skipping test.");
 		return;
 	}
-
-	auto dbs = client.listDatabases();
-	writeln("number of dbs", dbs.length);
-	foreach(db ; dbs)
-		writeln(db);
 
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);
@@ -48,8 +42,11 @@ void runTest()
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
 
-
-	//assert("test" in dbs);
+	import std.algorithm;
+	auto names = client.getDatabases().map!(dbs => dbs.name).array;
+	assert(!find(names, "test").empty);
+	assert(!find(names, "local").empty);
+	assert(!find(names, "admin").empty);
 }
 
 int main()

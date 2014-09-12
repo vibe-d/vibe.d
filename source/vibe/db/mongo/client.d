@@ -19,6 +19,7 @@ import core.thread;
 
 import std.conv;
 import std.string;
+import std.range;
 
 /**
 	Represents a connection to a MongoDB server.
@@ -42,11 +43,11 @@ final class MongoClient {
 
 		The URL must be in the form documented at
 		$(LINK http://www.mongodb.org/display/DOCS/Connections) which is:
-		
+
 		mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
 
 		Throws:
-			An exception if the URL cannot be parsed as a valid MongoDB URL. 
+			An exception if the URL cannot be parsed as a valid MongoDB URL.
 	*/
 	package this(string url)
 	{
@@ -56,10 +57,8 @@ final class MongoClient {
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
 
 		m_connections = new ConnectionPool!MongoConnection({
-			import std.stdio;
 			auto ret = new MongoConnection(settings);
 			ret.connect();
-			writeln(ret.listDatabases());
 			return ret;
 		});
 
@@ -76,7 +75,7 @@ final class MongoClient {
 
 		Returns:
 			MongoCollection for the given combined database and collectiion name(path)
-		
+
 		Examples:
 			---
 			auto col = client.getCollection("test.collection");
@@ -92,7 +91,7 @@ final class MongoClient {
 
 		The returned object allows to access the database entity (which contains
 		a set of collections). There are two main use cases:
-		
+
 		1. Accessing collections using a relative path
 
 		2. Performing service commands on the database itself
@@ -115,13 +114,26 @@ final class MongoClient {
 	}
 
 
-	string[] listDatabases()
+
+	/**
+	 	Return string array representing all current database names.
+
+	 	Returns:
+	 		String array of all current database names;
+
+	 	Examples:
+	 		---
+	 		auto names = client.getDatabaseNames();
+	 		writeln("Current databases are: ", names);
+	 		---
+	 */
+	InputRange!MongoDatabase getDatabases()
 	{
-		//auto con = lockConnection();
-		//con.connect();
-		
-		//return con.listDatabases();
-		return [];
+
+		auto result = lockConnection.listDatabases().map!(
+			info => MongoDatabase(this, info.name));
+
+		return inputRangeObject(result);
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }
