@@ -16,6 +16,7 @@ import vibe.stream.ssl;
 
 import std.algorithm : map, splitter;
 import std.array;
+import std.range;
 import std.conv;
 import std.exception;
 import std.string;
@@ -271,6 +272,39 @@ final class MongoConnection {
 		);
 
 		return ret;
+	}
+
+	InputRange!MongoDbInfo listDatabases()
+	{
+		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
+
+		auto cmd = Bson(["listDatabases":Bson(1)]);
+
+		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
+			if ((flags & ReplyFlags.QueryFailure))
+				throw new MongoDriverException("Calling listDatabases failed.");	
+		}
+
+		InputRange!MongoDbInfo result;
+		void on_doc(size_t idx, ref Bson doc) {
+			if (doc["ok"].get!double != 1.0)
+					throw new MongoAuthException("listDatabases failed.");
+
+				auto infos = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
+					MongoDbInfo(
+					db_doc["name"].get!string,
+					db_doc["sizeOnDisk"].get!double,
+					db_doc["empty"].get!bool
+					));
+
+				result = inputRangeObject(infos);
+
+
+		}
+
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
+
+		return result;
 	}
 
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
@@ -752,11 +786,19 @@ class MongoClientSettings
 	}
 }
 
+struct MongoDbInfo 
+{
+	string name;
+	double sizeOnDisk;
+	bool empty;
+}
+
 private struct MongoHost
 {
 	string name;
 	ushort port;
 }
+
 
 private int sendLength(ARGS...)(ARGS args)
 {
