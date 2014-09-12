@@ -550,11 +550,13 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
-			res.writeJsonBody([ "statusMessage": e.msg ], e.status);
+			if (res.headerWritten) logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
+			else res.writeJsonBody([ "statusMessage": e.msg ], e.status);
 		} catch (Exception e) {
 			// TODO: better error description!
 			logDebug("REST handler exception: %s", e.toString());
-			res.writeJsonBody(
+			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
+			else res.writeJsonBody(
 				[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
 				HTTPStatus.internalServerError
 			);
