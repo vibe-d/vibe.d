@@ -1351,11 +1351,11 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		if (auto pcl = "Content-Length" in req.headers) {
 			string v = *pcl;
 			auto contentLength = parse!ulong(v); // DMDBUG: to! thinks there is a H in the string
-			enforce(v.length == 0, "Invalid content-length");
-			enforce(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
+			enforceBadRequest(v.length == 0, "Invalid content-length");
+			enforceBadRequest(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
 			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(reqReader, contentLength);
 		} else if (auto pt = "Transfer-Encoding" in req.headers) {
-			enforce(*pt == "chunked");
+			enforceBadRequest(*pt == "chunked");
 			chunked_input_stream = FreeListRef!ChunkedInputStream(reqReader);
 			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(chunked_input_stream, settings.maxRequestSize, true);
 		} else {
@@ -1506,13 +1506,13 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 
 	//Method
 	auto pos = reqln.indexOf(' ');
-	enforce(pos >= 0, "invalid request method");
+	enforceBadRequest(pos >= 0, "invalid request method");
 
 	req.method = httpMethodFromString(reqln[0 .. pos]);
 	reqln = reqln[pos+1 .. $];
 	//Path
 	pos = reqln.indexOf(' ');
-	enforce(pos >= 0, "invalid request path");
+	enforceBadRequest(pos >= 0, "invalid request path");
 
 	req.requestURL = reqln[0 .. pos];
 	reqln = reqln[pos+1 .. $];
@@ -1531,7 +1531,7 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 {
 	while(str.length > 0) {
 		auto idx = str.indexOf('=');
-		enforce(idx > 0, "Expected name=value.");
+		enforceBadRequest(idx > 0, "Expected name=value.");
 		string name = str[0 .. idx].strip();
 		str = str[idx+1 .. $];
 

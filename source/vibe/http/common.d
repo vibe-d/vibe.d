@@ -107,6 +107,14 @@ void enforceHTTP(T)(T condition, HTTPStatus statusCode, string message = null)
 	enforce(condition, new HTTPStatusException(statusCode, message));
 }
 
+/**
+	Utility function that throws a HTTPStatusException with status code "400 Bad Request" if the _condition is not met.
+*/
+void enforceBadRequest(T)(T condition, string message = null)
+{
+	enforceHTTP(condition, HTTPStatus.badRequest, message);
+}
+
 
 /**
 	Represents an HTTP request made to a server.
@@ -285,14 +293,14 @@ string getHTTPVersionString(HTTPVersion ver)
 
 HTTPVersion parseHTTPVersion(ref string str)
 {
-	enforce(str.startsWith("HTTP/"));
+	enforceBadRequest(str.startsWith("HTTP/"));
 	str = str[5 .. $];
 	int majorVersion = parse!int(str);
-	enforce(str.startsWith("."));
+	enforceBadRequest(str.startsWith("."));
 	str = str[1 .. $];
 	int minorVersion = parse!int(str);
 	
-	enforce( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
+	enforceBadRequest( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
 	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
 
@@ -327,9 +335,9 @@ final class ChunkedInputStream : InputStream {
 
 	void read(ubyte[] dst)
 	{
-		enforce(!empty, "Read past end of chunked stream.");
+		enforceBadRequest(!empty, "Read past end of chunked stream.");
 		while( dst.length > 0 ){
-			enforce(m_bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
+			enforceBadRequest(m_bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
 
 			auto sz = cast(size_t)min(m_bytesInCurrentChunk, dst.length);
 			m_in.read(dst[0 .. sz]);
@@ -340,7 +348,7 @@ final class ChunkedInputStream : InputStream {
 				// skip current chunk footer and read next chunk
 				ubyte[2] crlf;
 				m_in.read(crlf);
-				enforce(crlf[0] == '\r' && crlf[1] == '\n');
+				enforceBadRequest(crlf[0] == '\r' && crlf[1] == '\n');
 				readChunk();
 			}
 		}
@@ -360,7 +368,7 @@ final class ChunkedInputStream : InputStream {
 			// skip final chunk footer
 			ubyte[2] crlf;
 			m_in.read(crlf);
-			enforce(crlf[0] == '\r' && crlf[1] == '\n');
+			enforceBadRequest(crlf[0] == '\r' && crlf[1] == '\n');
 		}
 	}
 }

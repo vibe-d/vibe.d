@@ -204,7 +204,7 @@ private HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType f
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		string error;
-		enforce(applyParametersFromAssociativeArray(req, res, func, error, strict), error);
+		enforceBadRequest(applyParametersFromAssociativeArray(req, res, func, error, strict), error);
 	}
 	return &handler;
 }
@@ -232,7 +232,7 @@ private HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Fl
 			}
 			errors~="Overload "~method~typeid(ParameterTypeTuple!func).toString()~" failed: "~error~"\n\n";
 		}
-		enforce(false, "No method found that matches the found form data:\n"~errors);
+		enforceBadRequest(false, "No method found that matches the found form data:\n"~errors);
 	}
 	return &handler;
 }
@@ -449,7 +449,7 @@ struct StringLengthCountingRange {
 		// We have a default value for country if not provided, so we don't care that it is not:
 		p.address.country="Important Country";
 		p.name="Jane";
-		enforce(loadFormData(req, p, "customer"), "More data than needed provided!");
+		enforceBadRequest(loadFormData(req, p, "customer"), "More data than needed provided!");
 		// p will now contain the provided form data, non provided data stays untouched.
 		assert(p.address.country=="Important Country");
 		assert(p.name=="John");

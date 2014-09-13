@@ -500,10 +500,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 		ParameterDefaultValueTuple, ParameterIdentifierTuple;
 	import std.string : format;
 	import std.algorithm : startsWith;
-	import std.exception : enforce;
 
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
-	import vibe.http.common : HTTPStatusException, HTTPStatus;
+	import vibe.http.common : HTTPStatusException, HTTPStatus, enforceBadRequest;
 	import vibe.utils.string : sanitizeUTF8;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
@@ -541,7 +540,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
-						enforce(
+						enforceBadRequest(
 							ParamNames[i][1 .. $] in req.params,
 							format("req.param[%s] was not set!", ParamNames[i][1 .. $])
 						);
@@ -557,8 +556,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						logDebug("query %s of %s", pname, req.query);
 
 						static if (is (DefVal == void)) {
-							enforce(
-								pname in req.query,
+							enforceBadRequest(
+								ParamNames[i] in req.query,
 								format("Missing query parameter '%s'", pname)
 							);
 						} else {
@@ -572,22 +571,22 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 					} else {
 						logDebug("%s %s", method, pname);
 
-						enforce(
+						enforceBadRequest(
 							req.contentType == "application/json",
 							"The Content-Type header needs to be set to application/json."
 						);
-						enforce(
+						enforceBadRequest(
 							req.json.type != Json.Type.Undefined,
 							"The request body does not contain a valid JSON value."
 						);
-						enforce(
+						enforceBadRequest(
 							req.json.type == Json.Type.Object,
 							"The request body must contain a JSON object with an entry for each parameter."
 						);
 
 						static if (is(DefVal == void)) {
-							enforce(
-								req.json[pname].type != Json.Type.Undefined,
+							enforceBadRequest(
+								req.json[ParamNames[i]].type != Json.Type.Undefined,
 								format("Missing parameter %s", pname)
 							);
 						} else {
@@ -957,14 +956,20 @@ private {
 	T fromRestString(T)(string value)
 	{
 		import std.traits;
-		static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
-		else static if( is(T == bool) ) return value == "true";
-		else static if( is(T : int) ) return to!T(value);
-		else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
-		else static if( is(T : string) ) return value;
-		else static if( __traits(compiles, T.fromISOExtString("hello")) ) return T.fromISOExtString(value);
-		else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
-		else return deserializeJson!T(parseJson(value));
+		import std.conv : ConvException;
+		import vibe.web.common : HTTPStatusException, HTTPStatus;
+		try {
+			static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
+			else static if( is(T == bool) ) return value == "true";
+			else static if( is(T : int) ) return to!T(value);
+			else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
+			else static if( is(T : string) ) return value;
+			else static if( __traits(compiles, T.fromISOExtString("hello")) ) return T.fromISOExtString(value);
+			else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
+			else return deserializeJson!T(parseJson(value));
+		} catch(ConvException e) {
+			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
+		}
 	}
 }
 
