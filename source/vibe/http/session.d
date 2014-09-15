@@ -132,7 +132,7 @@ final struct Session {
 	*/
 	string opIndex(string name) { return m_store.get(m_id, name, Variant(string.init)).get!string; }
 	/// ditto
-	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
+	void opIndexAssign(T)(T value, string name) { m_store.set(m_id, name, Variant(value)); }
 
 	package void destroy() { m_store.destroy(m_id); }
 }
