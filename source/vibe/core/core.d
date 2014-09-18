@@ -793,9 +793,10 @@ struct TaskLocal(T)
 		size_t m_offset = size_t.max;
 		size_t m_id;
 		T m_initValue;
+		bool m_hasInitValue = false;
 	}
 
-	this(T init_val) { m_initValue = init_val; }
+	this(T init_val) { m_initValue = init_val; m_hasInitValue = true; }
 
 	@disable this(this);
 
@@ -854,7 +855,12 @@ struct TaskLocal(T)
 
 				fiber.ms_flsInfo[m_id] = fls_info;
 			}
-			emplace!T(data, m_initValue);
+
+			if (m_hasInitValue) {
+				static if (__traits(compiles, emplace!T(data, m_initValue)))
+					emplace!T(data, m_initValue);
+				else assert(false, "Cannot emplace initialization value for type "~T.stringof);
+			} else emplace!T(data);
 		}
 		return (cast(T[])data)[0];
 	}
