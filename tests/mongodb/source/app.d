@@ -41,6 +41,12 @@ void runTest()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
+
+	import std.algorithm;
+	auto names = client.getDatabases().map!(dbs => dbs.name).array;
+	assert(!find(names, "test").empty);
+	assert(!find(names, "local").empty);
+	assert(!find(names, "admin").empty);
 }
 
 int main()
