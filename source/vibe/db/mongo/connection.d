@@ -274,7 +274,12 @@ final class MongoConnection {
 		return ret;
 	}
 
-	InputRange!MongoDbInfo listDatabases()
+	/** Queries the server for all databases.
+
+		Returns:
+			An input range of $(D MongoDBInfo) values.
+	*/
+	auto listDatabases()
 	{
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
@@ -282,24 +287,23 @@ final class MongoConnection {
 
 		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
 			if ((flags & ReplyFlags.QueryFailure))
-				throw new MongoDriverException("Calling listDatabases failed.");	
+				throw new MongoDriverException("Calling listDatabases failed.");
 		}
 
-		InputRange!MongoDbInfo result;
+		InputRange!MongoDBInfo result;
 		void on_doc(size_t idx, ref Bson doc) {
 			if (doc["ok"].get!double != 1.0)
 					throw new MongoAuthException("listDatabases failed.");
 
-				auto infos = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
-					MongoDbInfo(
-					db_doc["name"].get!string,
-					db_doc["sizeOnDisk"].get!double,
-					db_doc["empty"].get!bool
-					));
+			auto infos = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
+				MongoDBInfo(
+				db_doc["name"].get!string,
+				db_doc["sizeOnDisk"].get!double,
+				db_doc["empty"].get!bool
+				));
 
-				result = inputRangeObject(infos);
-
-
+			// TODO: avoid using inputRangeObject to save the memory allocation
+			result = inputRangeObject(infos);
 		}
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
@@ -786,7 +790,7 @@ class MongoClientSettings
 	}
 }
 
-struct MongoDbInfo 
+struct MongoDBInfo
 {
 	string name;
 	double sizeOnDisk;

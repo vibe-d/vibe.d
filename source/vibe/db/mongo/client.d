@@ -119,7 +119,7 @@ final class MongoClient {
 	 	Return string array representing all current database names.
 
 	 	Returns:
-	 		String array of all current database names;
+	 		An input range of $(D MongoDatabase) objects.
 
 	 	Examples:
 	 		---
@@ -127,13 +127,10 @@ final class MongoClient {
 	 		writeln("Current databases are: ", names);
 	 		---
 	 */
-	InputRange!MongoDatabase getDatabases()
+	auto getDatabases()
 	{
-
-		auto result = lockConnection.listDatabases().map!(
-			info => MongoDatabase(this, info.name));
-
-		return inputRangeObject(result);
+		return lockConnection.listDatabases()
+			.map!(info => MongoDatabase(this, info.name));
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }
