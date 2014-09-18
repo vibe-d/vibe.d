@@ -15,6 +15,7 @@ import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
+import vibe.inet.url;
 
 import std.algorithm : startsWith, endsWith;
 
@@ -61,12 +62,28 @@ import std.algorithm : startsWith, endsWith;
 		$(D RestInterfaceClient) class for a seamless way to access such a generated API
 
 */
-void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
-                              MethodStyle style = MethodStyle.lowerUnderscored)
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
 	import vibe.internal.meta.traits : baseInterface;
+	import vibe.internal.meta.uda : findFirstUDA;
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;
+
+	if (!settings) settings = new RestInterfaceSettings;
+
+	string url_prefix = settings.baseURL.path.toString();
+
+	alias I = baseInterface!TImpl;
+
+	enum uda = findFirstUDA!(RootPathAttribute, I);
+	static if (uda.found) {
+		static if (uda.value.data == "") {
+			auto path = "/" ~ adjustMethodStyle(I.stringof, settings.methodStyle);
+			url_prefix = concatURL(url_prefix, path);
+		} else {
+			url_prefix = concatURL(url_prefix, uda.value.data);
+		}
+	}
 
 	void addRoute(HTTPMethod httpVerb, string url, HTTPServerRequestDelegate handler, string[] params)
 	{
@@ -81,8 +98,6 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_p
 			params.filter!(p => !p.startsWith("_") && p != "id")().array()
 		);
 	}
-
-	alias I = baseInterface!TImpl;
 
 	foreach (method; __traits(allMembers, I)) {
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
@@ -100,7 +115,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_p
 						" in the next release.");
 				}
 
-				string url = adjustMethodStyle(meta.url, style);
+				string url = adjustMethodStyle(meta.url, settings.methodStyle);
 			}
 
 			alias RT = ReturnType!overload;
@@ -137,36 +152,22 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_p
 }
 
 /// ditto
-void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style = MethodStyle.lowerUnderscored)
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style)
 {
-	// this shorter overload tries to deduce root path automatically
-
-	import vibe.internal.meta.uda : findFirstUDA;
-	import vibe.internal.meta.traits : baseInterface;
-
-	alias I = baseInterface!TImpl;
-	enum uda = findFirstUDA!(RootPathAttribute, I);
-
-	static if (!uda.found)
-		registerRestInterface!I(router, instance, "/", style);
-	else
-	{
-		static if (uda.value.data == "")
-		{
-			auto path = "/" ~ adjustMethodStyle(I.stringof, style);
-			registerRestInterface!I(router, instance, path, style);
-		}
-		else
-		{
-			registerRestInterface!I(
-				router,
-				instance,
-				concatURL("/", uda.value.data),
-				style
-			);
-		}
-	}
+	registerRestInterface(router, instance, "/", style);
 }
+
+/// ditto
+void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
+	MethodStyle style = MethodStyle.lowerUnderscored)
+{
+	scope settings = new RestInterfaceSettings;
+	if (!url_prefix.startsWith("/")) url_prefix = "/"~url_prefix;
+	settings.baseURL = URL("http://127.0.0.1"~url_prefix);
+	settings.methodStyle = style;
+	registerRestInterface(router, instance, settings);
+}
+
 
 /**
 	This is a very limited example of REST interface features. Please refer to
@@ -266,41 +267,41 @@ class RestInterfaceClient(I) : I
 	}
 
 	/**
-		Creates a new REST implementation of I
+		Creates a new REST client implementation of $(D I).
 	*/
-	this (string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
+	this(RestInterfaceSettings settings)
 	{
 		import vibe.internal.meta.uda : findFirstUDA;
 
-		URL url;
+		URL url = settings.baseURL;
 		enum uda = findFirstUDA!(RootPathAttribute, I);
-		static if (!uda.found) {
-			url = URL.parse(base_url);
-		}
-		else
-		{
+		static if (uda.found) {
 			static if (uda.value.data == "") {
-				url = URL.parse(
-					concatURL(base_url, adjustMethodStyle(I.stringof, style), true)
-				);
-			}
-			else {
-				url = URL.parse(
-					concatURL(base_url, uda.value.data, true)
-				);
+				url.path = Path(concatURL(url.path.toString(), adjustMethodStyle(I.stringof, settings.methodStyle), true));
+			} else {
+				url.path = Path(concatURL(url.path.toString(), uda.value.data, true));
 			}
 		}
 
-		this(url, style);
+		m_baseURL = url;
+		m_methodStyle = settings.methodStyle;
+
+		mixin (generateRestInterfaceSubInterfaceInstances!I());
+	}
+
+	/// ditto
+	this(string base_url, MethodStyle style = MethodStyle.lowerUnderscored)
+	{
+		this(URL(base_url), style);
 	}
 
 	/// ditto
 	this(URL base_url, MethodStyle style = MethodStyle.lowerUnderscored)
 	{
-		m_baseURL = base_url;
-		m_methodStyle = style;
-
-		mixin (generateRestInterfaceSubInterfaceInstances!I());
+		scope settings = new RestInterfaceSettings;
+		settings.baseURL = base_url;
+		settings.methodStyle = style;
+		this(settings);
 	}
 
 	/**
@@ -431,6 +432,23 @@ unittest
 		api.addNewUser("Igor");
 		logInfo("Users: %s", api.users);
 		logInfo("First user name: %s", api.getName(0));
+	}
+}
+
+
+/**
+	Encapsulates settings used to customize the generated REST interface.
+*/
+class RestInterfaceSettings {
+	URL baseURL;
+	MethodStyle methodStyle = MethodStyle.lowerUnderscored;
+
+	@property RestInterfaceSettings dup()
+	const {
+		auto ret = new RestInterfaceSettings;
+		ret.baseURL = this.baseURL;
+		ret.methodStyle = this.methodStyle;
+		return ret;
 	}
 }
 
