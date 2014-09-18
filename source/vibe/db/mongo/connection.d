@@ -290,20 +290,20 @@ final class MongoConnection {
 				throw new MongoDriverException("Calling listDatabases failed.");
 		}
 
-		InputRange!MongoDBInfo result;
+		MongoDBInfo toInfo(const(Bson) db_doc) {
+			return MongoDBInfo(
+				db_doc["name"].get!string,
+				db_doc["sizeOnDisk"].get!double,
+				db_doc["empty"].get!bool
+			);
+		}
+
+		typeof((const(Bson)[]).init.map!toInfo) result;
 		void on_doc(size_t idx, ref Bson doc) {
 			if (doc["ok"].get!double != 1.0)
 					throw new MongoAuthException("listDatabases failed.");
 
-			auto infos = doc["databases"].get!(const(Bson)[]).map!(db_doc =>
-				MongoDBInfo(
-				db_doc["name"].get!string,
-				db_doc["sizeOnDisk"].get!double,
-				db_doc["empty"].get!bool
-				));
-
-			// TODO: avoid using inputRangeObject to save the memory allocation
-			result = inputRangeObject(infos);
+			result = doc["databases"].get!(const(Bson)[]).map!toInfo;
 		}
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
