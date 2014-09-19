@@ -71,12 +71,12 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 
 	auto cli = connectHTTP(url.host, url.port, ssl, settings);
 	auto res = cli.request((req){
-			if (url.localURI.length)
+			if (url.localURI.length) {
+				assert(url.path.absolute, "Request URL path must be absolute.");
 				req.requestURL = url.localURI;
-			if (settings.proxyURL.schema !is null)
-			{
-				req.requestURL = url.toString(); // proxy exception to the URL representation
 			}
+			if (settings.proxyURL.schema !is null)
+				req.requestURL = url.toString(); // proxy exception to the URL representation
 			req.headers["Host"] = url.host;
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
@@ -84,7 +84,7 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 				req.headers["Authorization"] = "Basic " ~
 					cast(string)Base64.encode(cast(ubyte[])pwstr);
 			}
-			if( requester ) requester(req);
+			if (requester) requester(req);
 		});
 
 	// make sure the connection stays locked if the body still needs to be read
@@ -111,22 +111,22 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 		ssl = url.schema == "https";
 
 	auto cli = connectHTTP(url.host, url.port, ssl, settings);
-	cli.request((scope req){
-		if (url.localURI.length)
+	cli.request((scope req) {
+		if (url.localURI.length) {
+			assert(url.path.absolute, "Request URL path must be absolute.");
 			req.requestURL = url.localURI;
-			if (settings.proxyURL.schema !is null)
-			{
-				req.requestURL = url.toString(); // proxy exception to the URL representation
-			}
-			req.headers["Host"] = url.host;
-			if ("authorization" !in req.headers && url.username != "") {
-				import std.base64;
-				string pwstr = url.username ~ ":" ~ url.password;
-				req.headers["Authorization"] = "Basic " ~
-					cast(string)Base64.encode(cast(ubyte[])pwstr);
-			}
-			if( requester ) requester(req);
-		}, responder);
+		}
+		if (settings.proxyURL.schema !is null)
+			req.requestURL = url.toString(); // proxy exception to the URL representation
+		req.headers["Host"] = url.host;
+		if ("authorization" !in req.headers && url.username != "") {
+			import std.base64;
+			string pwstr = url.username ~ ":" ~ url.password;
+			req.headers["Authorization"] = "Basic " ~
+				cast(string)Base64.encode(cast(ubyte[])pwstr);
+		}
+		if (requester) requester(req);
+	}, responder);
 	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
 	assert(!cli.m_responding, "HTTP client still responding after return!?");
 }
