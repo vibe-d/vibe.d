@@ -266,9 +266,9 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 			foreach (mname; SerializableFields!TU) {
 				alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				foreach (j, TM; TMS) {
-					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)[j]));
+					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
 					serializer.beginWriteArrayEntry!TM(j);
-					serializeImpl!(Serializer, TM, TA)(serializer, __traits(getMember, value, mname)[j]);
+					serializeImpl!(Serializer, TM, TA)(serializer, tuple(__traits(getMember, value, mname))[j]);
 					serializer.endWriteArrayEntry!TM(j);
 				}
 			}
@@ -541,6 +541,9 @@ unittest {
 		// serialized as a sequential list of values [int, string, double]
 		@asArray Fields array;
 	}
+
+	import vibe.data.json;
+	static assert(is(typeof(serializeToJson(Test()))));
 }
 
 
