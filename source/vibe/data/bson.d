@@ -707,7 +707,7 @@ struct BsonObjectID {
 		import std.process;
 		import std.random;
 
-		if( ms_pid == -1 ) ms_pid = getpid();
+		if( ms_pid == -1 ) ms_pid = thisProcessID;
 		if( MACHINE_ID == 0 ) MACHINE_ID = uniform(0, 0xffffff);
 
 		BsonObjectID ret = void;
