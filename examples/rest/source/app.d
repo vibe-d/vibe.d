@@ -25,7 +25,7 @@ interface Example1API
 {
 	/* Default convention is based on camelCase
 	 */
-	 
+
 	/* Used HTTP method is "GET" because function name start with "get".
 	 * Remaining part is converted to lower case with words separated by _
 	 *
@@ -73,9 +73,9 @@ unittest
 	registerRestInterface(router, new Example1());
     auto routes = router.getAllRoutes();
 
-	assert (routes[HTTPMethod.GET][0].pattern == "/example1_api/some_info");
-	assert (routes[HTTPMethod.GET][1].pattern == "/example1_api/getter");
-	assert (routes[HTTPMethod.POST][0].pattern == "/example1_api/sum");
+	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example1_api/some_info");
+	assert (routes[1].method == HTTPMethod.POST && routes[1].pattern == "/example1_api/sum");
+	assert (routes[2].method == HTTPMethod.GET && routes[2].pattern == "/example1_api/getter");
 }
 
 /* --------- EXAMPLE 2 ---------- */
@@ -130,7 +130,7 @@ unittest
 	registerRestInterface(router, new Example2(), MethodStyle.upperUnderscored);
     auto routes = router.getAllRoutes();
 
-	assert (routes[HTTPMethod.GET][0].pattern == "/EXAMPLE2_API/ACCUMULATE_ALL");
+	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/EXAMPLE2_API/ACCUMULATE_ALL");
 }
 
 /* --------- EXAMPLE 3 ---------- */
@@ -168,11 +168,11 @@ interface Example3APINested
 class Example3 : Example3API
 {
 	private:
-		Example3Nested m_nestedImpl;  
+		Example3Nested m_nestedImpl;
 
 	public:
 		this()
-		{	
+		{
 			m_nestedImpl = new Example3Nested();
 		}
 
@@ -203,8 +203,8 @@ unittest
 	registerRestInterface(router, new Example3());
     auto routes = router.getAllRoutes();
 
-	assert (routes[HTTPMethod.GET][0].pattern == "/example3_api/nested_module/number");
-	assert (routes[HTTPMethod.GET][1].pattern == "/example3_api/:id/myid");
+	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example3_api/nested_module/number");
+	assert (routes[1].method == HTTPMethod.GET && routes[1].pattern == "/example3_api/:id/myid");
 }
 
 
@@ -228,6 +228,12 @@ interface Example4API
 	 */
 	@path(":param/:another_param/data")
 	int getParametersInURL(string _param, string _another_param);
+
+	/* The underscore at the end of each parameter will be dropped in the
+	 * protocol, so that D keywords, such as "body" or "in" can be used as
+	 * identifiers.
+	 */
+	int querySpecialParameterNames(int body_, bool in_);
 }
 
 class Example4 : Example4API
@@ -242,6 +248,11 @@ class Example4 : Example4API
 			import std.conv;
 			return to!int(_param) + to!int(_another_param);
 		}
+
+		int querySpecialParameterNames(int body_, bool in_)
+		{
+			return body_ * (in_ ? -1 : 1);
+		}
 }
 
 unittest
@@ -250,8 +261,9 @@ unittest
 	registerRestInterface(router, new Example4());
     auto routes = router.getAllRoutes();
 
-	assert (routes[HTTPMethod.POST][0].pattern == "/example4_api/simple");
-	assert (routes[HTTPMethod.GET][0].pattern == "/example4_api/:param/:another_param/data");
+	assert (routes[0].method == HTTPMethod.POST && routes[0].pattern == "/example4_api/simple");
+	assert (routes[1].method == HTTPMethod.GET && routes[1].pattern == "/example4_api/:param/:another_param/data");
+	assert (routes[2].method == HTTPMethod.GET && routes[2].pattern == "/example4_api/special_parameter_names");
 }
 
 /* It is possible to attach function hooks to methods via User-Define Attributes.
@@ -260,9 +272,9 @@ unittest
  *     1) accepts HTTPServerRequest and HTTPServerResponse
  *     2) is attached to specific parameter of a method
  *     3) has same return type as that parameter type
- * 
+ *
  * REST API framework will call attached functions before actual
- * method call and use their result as an input to method call. 
+ * method call and use their result as an input to method call.
  *
  * There is also another attribute function type that can be called
  * to post-process method return value.
@@ -303,7 +315,7 @@ class Example5 : Example5API
 
 		if (!user.authorized)
 			return "";
-			
+
 		return format("secret #%s for %s", num, user.name);
 	}
 }
@@ -314,7 +326,7 @@ unittest
 	registerRestInterface(router, new Example5());
 	auto routes = router.getAllRoutes();
 
-	assert (routes[HTTPMethod.GET][0].pattern == "/example5_api/secret");
+	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example5_api/secret");
 }
 
 shared static this()
@@ -338,7 +350,7 @@ shared static this()
 	/* At this moment, server is prepared to process requests.
 	 * After a small delay to let socket become ready, the very same D interfaces
 	 * will be used to define some form of Remote Procedure Calling via HTTP in client code.
-	 * 
+	 *
 	 * It greatly simplifies writing client applications and gurantees that server and client API
 	 * will always stay in sync. Care about method style naming convention mismatch though.
 	 */
@@ -358,7 +370,7 @@ shared static this()
 		{
 			auto api = new RestInterfaceClient!Example2API("http://127.0.0.1:8080", MethodStyle.upperUnderscored);
 			Example2API.Aggregate[] data = [
-				{ "one", 1, Example2API.Aggregate.Type.Type1 }, 
+				{ "one", 1, Example2API.Aggregate.Type.Type1 },
 				{ "two", 2, Example2API.Aggregate.Type.Type2 }
 			];
 			auto accumulated = api.queryAccumulateAll(data);
@@ -378,6 +390,7 @@ shared static this()
 			auto api = new RestInterfaceClient!Example4API("http://127.0.0.1:8080");
 			api.myNameDoesNotMatter();
 			assert(api.getParametersInURL("20", "30") == 50);
+			assert(api.querySpecialParameterNames(10, true) == -10);
 		}
 		// Example 5
 		{

@@ -99,6 +99,12 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 		);
 	}
 
+	string strip(string name) {
+		if (settings.stripTrailingUnderscore && name.endsWith("_"))
+			return name[0 .. $-1];
+		else return name;
+	}
+
 	foreach (method; __traits(allMembers, I)) {
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
@@ -115,7 +121,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 						" in the next release.");
 				}
 
-				string url = adjustMethodStyle(meta.url, settings.methodStyle);
+				string url = adjustMethodStyle(strip(meta.url), settings.methodStyle);
 			}
 
 			alias RT = ReturnType!overload;
@@ -133,7 +139,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 				);
 			} else {
 				// normal handler
-				auto handler = jsonMethodHandler!(I, method, overload)(instance);
+				auto handler = jsonMethodHandler!(I, method, overload)(instance, settings);
 
 				string[] params = [ ParameterIdentifierTuple!overload ];
 
@@ -264,6 +270,7 @@ class RestInterfaceClient(I) : I
 		URL m_baseURL;
 		MethodStyle m_methodStyle;
 		RequestFilter m_requestFilter;
+		RestInterfaceSettings m_settings;
 	}
 
 	/**
@@ -272,6 +279,13 @@ class RestInterfaceClient(I) : I
 	this(RestInterfaceSettings settings)
 	{
 		import vibe.internal.meta.uda : findFirstUDA;
+
+		m_settings = settings.dup;
+
+		if (!m_settings.baseURL.path.absolute) {
+			assert(m_settings.baseURL.path.empty, "Base URL path must be absolute.");
+			m_settings.baseURL.path = Path("/");
+		}
 
 		URL url = settings.baseURL;
 		enum uda = findFirstUDA!(RootPathAttribute, I);
@@ -285,6 +299,12 @@ class RestInterfaceClient(I) : I
 
 		m_baseURL = url;
 		m_methodStyle = settings.methodStyle;
+
+		string strip(string name) {
+			if (settings.stripTrailingUnderscore && name.endsWith("_"))
+				return name[0 .. $-1];
+			else return name;
+		}
 
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
 	}
@@ -396,6 +416,13 @@ class RestInterfaceClient(I) : I
 			return ret;
 		}
 	}
+
+	private string _stripName(string name)
+	{
+		if (m_settings.stripTrailingUnderscore && name.endsWith("_"))
+			return name[0 .. $-1];
+		else return name;
+	}
 }
 
 ///
@@ -440,21 +467,34 @@ unittest
 	Encapsulates settings used to customize the generated REST interface.
 */
 class RestInterfaceSettings {
+	/** The public URL below which the REST interface is registered.
+	*/
 	URL baseURL;
+
+	/** Naming convention used for the generated URLs.
+	*/
 	MethodStyle methodStyle = MethodStyle.lowerUnderscored;
+
+	/** Ignores a trailing underscore in method and function names.
+
+		With this setting set to $(D true), it's possible to use names in the
+		REST interface that are reserved words in D.
+	*/
+	bool stripTrailingUnderscore = true;
 
 	@property RestInterfaceSettings dup()
 	const {
 		auto ret = new RestInterfaceSettings;
 		ret.baseURL = this.baseURL;
 		ret.methodStyle = this.methodStyle;
+		ret.stripTrailingUnderscore = this.stripTrailingUnderscore;
 		return ret;
 	}
 }
 
 
 /// private
-private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst)
+private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst, RestInterfaceSettings settings)
 {
 	import std.traits : ParameterTypeTuple, ReturnType,
 		ParameterDefaultValueTuple, ParameterIdentifierTuple;
@@ -475,6 +515,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		PT params;
+
+		string strip(string name) {
+			if (settings.stripTrailingUnderscore && name.endsWith("_"))
+				return name[0 .. $-1];
+			else return name;
+		}
 
 		foreach (i, P; PT) {
 			static assert (
@@ -505,24 +551,26 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				} else {
 					// normal parameter
 					alias DefVal = ParamDefaults[i];
+					auto pname = strip(ParamNames[i]);
+
 					if (req.method == HTTPMethod.GET) {
-						logDebug("query %s of %s" ,ParamNames[i], req.query);
+						logDebug("query %s of %s", pname, req.query);
 
 						static if (is (DefVal == void)) {
 							enforce(
-								ParamNames[i] in req.query,
-								format("Missing query parameter '%s'", ParamNames[i])
+								pname in req.query,
+								format("Missing query parameter '%s'", pname)
 							);
 						} else {
-							if (ParamNames[i] !in req.query) {
+							if (pname !in req.query) {
 								params[i] = DefVal;
 								continue;
 							}
 						}
 
-						params[i] = fromRestString!P(req.query[ParamNames[i]]);
+						params[i] = fromRestString!P(req.query[pname]);
 					} else {
-						logDebug("%s %s", method, ParamNames[i]);
+						logDebug("%s %s", method, pname);
 
 						enforce(
 							req.contentType == "application/json",
@@ -539,17 +587,17 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 						static if (is(DefVal == void)) {
 							enforce(
-								req.json[ParamNames[i]].type != Json.Type.Undefined,
-								format("Missing parameter %s", ParamNames[i])
+								req.json[pname].type != Json.Type.Undefined,
+								format("Missing parameter %s", pname)
 							);
 						} else {
-							if (req.json[ParamNames[i]].type == Json.Type.Undefined) {
+							if (req.json[pname].type == Json.Type.Undefined) {
 								params[i] = DefVal;
 								continue;
 							}
 						}
 
-						params[i] = deserializeJson!P(req.json[ParamNames[i]]);
+						params[i] = deserializeJson!P(req.json[pname]);
 					}
 				}
 			}
@@ -671,14 +719,12 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 
 					ret ~= format(
 						q{
-							if (%s)
-								m_%s = new %s(m_baseURL.toString() ~ PathEntry("%s").toString() ~ "/", m_methodStyle);
-							else
-								m_%s = new %s(m_baseURL.toString() ~ adjustMethodStyle(PathEntry("%s").toString() ~ "/", m_methodStyle), m_methodStyle);
+							auto settings_%1$s = m_settings.dup;
+							settings_%1$s.baseURL.path = m_baseURL.path ~
+								(%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
+							m_%1$s = new %1$s(settings_%1$s);
 						},
-						meta.hadPathUDA,
-						implname, implname, meta.url,
-						implname, implname, meta.url
+						implname, meta.url, meta.hadPathUDA
 					);
 					ret ~= "\n";
 				}
@@ -803,8 +849,8 @@ private string generateRestInterfaceMethods(I)()
 						// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
 						param_handling_str ~= format(
 							q{
-								jparams__["%s"] = serializeToJson(%s);
-								jparamsj__["%s"] = %s;
+								jparams__[_stripName("%s")] = serializeToJson(%s);
+								jparamsj__[_stripName("%s")] = %s;
 							},
 							ParamNames[i],
 							ParamNames[i],
@@ -820,6 +866,8 @@ private string generateRestInterfaceMethods(I)()
 				static if (!meta.hadPathUDA) {
 					request_str = format(
 						q{
+							if (m_settings.stripTrailingUnderscore && url__.endsWith("_"))
+								url__ = url__[0 .. $-1];
 							url__ = %s ~ adjustMethodStyle(url__, m_methodStyle);
 						},
 						url_prefix
