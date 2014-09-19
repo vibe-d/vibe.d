@@ -167,7 +167,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle 
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
 	MethodStyle style = MethodStyle.lowerUnderscored)
 {
-	scope settings = new RestInterfaceSettings;
+	auto settings = new RestInterfaceSettings;
 	if (!url_prefix.startsWith("/")) url_prefix = "/"~url_prefix;
 	settings.baseURL = URL("http://127.0.0.1"~url_prefix);
 	settings.methodStyle = style;
