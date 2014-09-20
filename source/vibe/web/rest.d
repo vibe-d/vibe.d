@@ -557,7 +557,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 						static if (is (DefVal == void)) {
 							enforceBadRequest(
-								ParamNames[i] in req.query,
+								pname in req.query,
 								format("Missing query parameter '%s'", pname)
 							);
 						} else {
@@ -586,7 +586,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 						static if (is(DefVal == void)) {
 							enforceBadRequest(
-								req.json[ParamNames[i]].type != Json.Type.Undefined,
+								req.json[pname].type != Json.Type.Undefined,
 								format("Missing parameter %s", pname)
 							);
 						} else {
