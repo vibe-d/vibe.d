@@ -591,7 +591,7 @@ package T webConvTo(T)(string str)
 	static if (is(typeof(T.fromStringValidate(str, &error)))) {
 		static assert(is(typeof(T.fromStringValidate(str, &error)) == Nullable!T));
 		auto ret = T.fromStringValidate(str, &error);
-		enforce(!ret.isNull(), error); // TODO: refactor internally to work without exceptions
+		enforceBadRequest(!ret.isNull(), error); // TODO: refactor internally to work without exceptions
 		return ret.get();
 	} else static if (is(typeof(T.fromString(str)))) {
 		static assert(is(typeof(T.fromString(str)) == T));

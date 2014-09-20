@@ -28,7 +28,7 @@ HTTPServerRequestDelegate performBasicAuth(string realm, bool delegate(string us
 			string user_pw = cast(string)Base64.decode((*pauth)[6 .. $]);
 
 			auto idx = user_pw.indexOf(":");
-			enforce(idx >= 0, "Invalid auth string format!");
+			enforceBadRequest(idx >= 0, "Invalid auth string format!");
 			string user = user_pw[0 .. idx];
 			string password = user_pw[idx+1 .. $];
 
@@ -69,7 +69,7 @@ string performBasicAuth(HTTPServerRequest req, HTTPServerResponse res, string re
 		string user_pw = cast(string)Base64.decode((*pauth)[6 .. $]);
 
 		auto idx = user_pw.indexOf(":");
-		enforce(idx >= 0, "Invalid auth string format!");
+		enforceBadRequest(idx >= 0, "Invalid auth string format!");
 		string user = user_pw[0 .. idx];
 		string password = user_pw[idx+1 .. $];
 
