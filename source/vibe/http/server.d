@@ -1201,8 +1201,6 @@ private {
 private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
 {
 	Stream http_stream = connection;
-	import std.traits : ReturnType;
-	ReturnType!createSSLStreamFL ssl_stream;
 
 	if (!connection.waitForData(10.seconds())) {
 		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
@@ -1211,10 +1209,15 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 
 	// If this is a HTTPS server, initiate SSL
 	if (listen_info.sslContext) {
-		logTrace("accept ssl");
-		// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
-		ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting, null, connection.remoteAddress);
-		http_stream = ssl_stream;
+		version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
+		else {
+			import std.traits : ReturnType;
+			ReturnType!createSSLStreamFL ssl_stream;
+			logTrace("accept ssl");
+			// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
+			ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting, null, connection.remoteAddress);
+			http_stream = ssl_stream;
+		}
 	}
 
 	do {
