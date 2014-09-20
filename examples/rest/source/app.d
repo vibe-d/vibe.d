@@ -329,6 +329,44 @@ unittest
 	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example5_api/secret");
 }
 
+/**
+ * The default convention of this module  is to pass parameters via:
+ * - the URI for parameter starting with underscore (see example 4);
+ * - query for GET/PUT requests;
+ * - body for POST requests;
+ *
+ * This is configurable by means of:
+ * - headerParam : Get a parameter from the query header;
+ */
+@rootPathFromName
+interface Example6API
+{
+	// The first parameter of HeaderParam is the identifier (must match one of the parameter name).
+	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
+	@headerParam("auth", "Authorization")
+	string getResponse(string auth);
+}
+
+class Example6 : Example6API
+{
+	override string getResponse(string auth) {
+		// If the user provided credentials Aladdin / 'open sesame'
+		if (auth == "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
+			return "The response is 42";
+		return "The cake is a lie";
+	}
+}
+
+unittest
+{
+	auto router = new URLRouter;
+	registerRestInterface(router, new Example6());
+	auto routes = router.getAllRoutes();
+
+	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example6_api/response");
+}
+
+
 shared static this()
 {
 	// Registering our REST services in router
@@ -340,6 +378,7 @@ shared static this()
 	registerRestInterface(routes, new Example3());
 	registerRestInterface(routes, new Example4());
 	registerRestInterface(routes, new Example5());
+	registerRestInterface(routes, new Example6());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
@@ -397,6 +436,25 @@ shared static this()
 			auto api = new RestInterfaceClient!Example5API("http://127.0.0.1:8080");
 			auto secret = api.getSecret(42, User.init);
 			assert(secret == "{secret #42 for admin}");
+		}
+		// Example 6
+		{
+			import vibe.http.client : requestHTTP;
+			import vibe.stream.operations : readAllUTF8;
+
+			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
+			// First we make sure parameters are transmitted via headers.
+			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/response",
+			                       (scope r) {
+				r.method = HTTPMethod.GET;
+				r.headers["Authorization"] = "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==";
+			});
+
+			assert(res.statusCode == 200);
+			assert(res.bodyReader.readAllUTF8() == `"The response is 42"`);
+			// Then we check that both can communicate together.
+			auto answer = api.getResponse("Hello there");
+			assert(answer == "The cake is a lie");
 		}
 
 		logInfo("Success.");
