@@ -750,7 +750,7 @@ private struct DietCompiler(TRANSLATE...)
 				doctype_str = "!DOCTYPE " ~ ln[j .. $];
 			break;
 		}
-		buildSpecialTag(output, doctype_str, level);
+		buildSpecialTag(output, doctype_str, level, false);
 	}
 
 	private bool buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes, ref bool prepend_whitespaces)
@@ -1278,9 +1278,9 @@ private struct HTMLAttribute {
 }
 
 /// private
-private void buildSpecialTag(OutputContext output, string tag, int level)
+private void buildSpecialTag(OutputContext output, string tag, int level, bool leading_newline = true)
 {
-	output.writeString("\n");
+	if (leading_newline) output.writeString("\n");
 	output.writeIndent(level);
 	output.writeString("<" ~ tag ~ ">");
 }
