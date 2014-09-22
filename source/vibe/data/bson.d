@@ -670,7 +670,7 @@ struct BsonObjectID {
 	*/
 	static BsonObjectID fromString(string str)
 	{
-		static const lengthex = new Exception("BSON Object ID string s must be 24 characters.");
+		static const lengthex = new Exception("BSON Object ID string must be 24 characters.");
 		static const charex = new Exception("Not a valid hex string.");
 
 		if (str.length != 24) throw lengthex;

@@ -301,7 +301,7 @@ final class MongoConnection {
 		typeof((const(Bson)[]).init.map!toInfo) result;
 		void on_doc(size_t idx, ref Bson doc) {
 			if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("listDatabases failed.");
+				throw new MongoAuthException("listDatabases failed.");
 
 			result = doc["databases"].get!(const(Bson)[]).map!toInfo;
 		}

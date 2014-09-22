@@ -1,4 +1,4 @@
-﻿/**
+/**
 	OpenSSL based SSL/TLS stream implementation
 
 	Copyright: © 2012-2014 RejectedSoftware e.K.
@@ -190,7 +190,7 @@ final class OpenSSLStream : SSLStream {
 
 	void flush()
 	{
-
+		m_stream.flush();
 	}
 
 	void finalize()
