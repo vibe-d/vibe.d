@@ -8,6 +8,7 @@
 
 module vibe.internal.meta.uda;
 
+import std.typetuple : TypeTuple;
 //import vibe.internal.meta.traits;
 
 
@@ -36,6 +37,13 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
 	enum findFirstUDA = findNextUDA!(UDA, Symbol, 0, allow_types);
 }
 
+private struct UdaSearchResult(alias UDA)
+{
+	alias value = UDA;
+	bool found = false;
+	long index = -1;
+}
+
 /**
 	Small convenience wrapper to find and extract certain UDA from given type.
 	Will start at the given index and stop on the next element which is of required type.
@@ -53,20 +61,12 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
  */
 template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false)
 {
-	import std.typetuple : TypeTuple;
 	import std.traits : isInstanceOf;
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
 	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
-
-	private struct UdaSearchResult(alias UDA)
-	{
-		alias value = UDA;
-		bool found = false;
-		long index = -1;
-	}
 
     private template extract(size_t index, list...)
     {
@@ -94,20 +94,12 @@ template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false
 /// ditto
 template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 {
-	import std.typetuple : TypeTuple;
 	import std.traits : isInstanceOf;
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
 	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
-
-	private struct UdaSearchResult(alias UDA)
-	{
-		alias value = UDA;
-		bool found = false;
-		long index = -1;
-	}
 
     private template extract(size_t index, list...)
     {
@@ -167,7 +159,7 @@ unittest
 
 	@(Attribute) void symbol();
 
-	static assert (!__traits(compiles, findNextUDA!(Attribute, symbol, 0)));
+	static assert (!is(findNextUDA!(Attribute, symbol, 0)));
 
 	enum result0 = findNextUDA!(Attribute, symbol, 0, true);
 	static assert (result0.found);
@@ -191,4 +183,45 @@ unittest
 	static assert (result0.found);
 	static assert (result0.index == 1);
 	static assert (result0.value == Attribute(42));
+}
+
+/// Eager version of findNextUDA that represent all instances of UDA in a Tuple.
+/// If one of the attribute is a type instead of an instance, compilation will fail.
+template UDATuple(alias UDA, alias Sym) {
+	import std.typetuple : TypeTuple;
+
+	private template extract(size_t maxSize, Founds...)
+	{
+		private alias LastFound = Founds[$ - 1];
+		// No more to find
+		static if (!LastFound.found)
+			enum extract = Founds[0 .. $ - 1];
+		else {
+			// For ease of use, this is a Tuple of UDA, not a tuple of UdaSearchResult!(...)
+			private alias Result = TypeTuple!(Founds[0 .. $ - 1], LastFound.value);
+			// We're at the last parameter
+			static if (LastFound.index == maxSize)
+				enum extract = Result;
+			else
+				enum extract = extract!(maxSize, Result, findNextUDA!(UDA, Sym, LastFound.index + 1));
+		}
+	}
+
+	private enum maxIndex = TypeTuple!(__traits(getAttributes, Sym)).length;
+	enum UDATuple = extract!(maxIndex, findNextUDA!(UDA, Sym, 0));
+}
+
+unittest
+{
+	import std.typetuple : TypeTuple;
+
+	struct Attribute { int x; }
+	enum Dummy;
+
+	@(Dummy, Attribute(21), Dummy, Attribute(42), Attribute(84)) void symbol() {}
+	@(Dummy, Attribute(21), Dummy, Attribute(42), Attribute) void wrong() {}
+
+	enum CMP = TypeTuple!(Attribute(21), Attribute(42), Attribute(84));
+	static assert(CMP == UDATuple!(Attribute, symbol));
+	static assert(!is(UDATuple!(Attribute, wrong)));
 }
