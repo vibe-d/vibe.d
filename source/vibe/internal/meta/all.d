@@ -8,6 +8,8 @@
 
 module vibe.internal.meta.all;
 
-public import vibe.internal.meta.traits;
 public import vibe.internal.meta.codegen;
+public import vibe.internal.meta.funcattr;
+public import vibe.internal.meta.traits;
+public import vibe.internal.meta.typetuple;
 public import vibe.internal.meta.uda;
