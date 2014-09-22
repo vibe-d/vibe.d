@@ -598,14 +598,25 @@ final class HTTPClientRequest : HTTPRequest {
 	/**
 		Writes the response body as JSON data.
 	*/
-	void writeJsonBody(T)(T data)
+	void writeJsonBody(T)(T data, bool allow_chunked = false)
 	{
 		import vibe.stream.wrapper;
 
-		headers["Transfer-Encoding"] = "chunked";
 		headers["Content-Type"] = "application/json";
+
+		// set an explicit content-length field if chunked encoding is not allowed
+		if (!allow_chunked) {
+			import vibe.internal.rangeutil;
+			long length = 0;
+			auto counter = RangeCounter(&length);
+			serializeToJson(counter, data);
+			headers["Content-Length"] = clengthString(length);
+		}
+
 		auto rng = StreamOutputRange(bodyWriter);
 		serializeToJson(&rng, data);
+		rng.flush();
+		finalize();
 	}
 
 	void writePart(MultiPart part)
@@ -621,12 +632,20 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	@property OutputStream bodyWriter()
 	{
-		if( m_bodyWriter ) return m_bodyWriter;
+		if (m_bodyWriter) return m_bodyWriter;
+
 		assert(!m_headerWritten, "Trying to write request body after body was already written.");
+
+		if ("Content-Length" !in headers && "Transfer-Encoding" !in headers
+			&& headers.get("Connection", "") != "close")
+		{
+			headers["Transfer-Encoding"] = "chunked";
+		}
+
 		writeHeader();
 		m_bodyWriter = m_conn;
 
-		if( headers.get("Transfer-Encoding", null) == "chunked" )
+		if (headers.get("Transfer-Encoding", null) == "chunked")
 			m_bodyWriter = new ChunkedOutputStream(m_bodyWriter);
 
 		return m_bodyWriter;
@@ -657,11 +676,11 @@ final class HTTPClientRequest : HTTPRequest {
 	private void finalize()
 	{
 		// test if already finalized
-		if( m_headerWritten && !m_bodyWriter )
+		if (m_headerWritten && !m_bodyWriter)
 			return;
 
 		// force the request to be sent
-		if( !m_headerWritten ) bodyWriter();
+		if (!m_headerWritten) bodyWriter();
 
 		m_bodyWriter.flush();
 		if (m_bodyWriter !is m_conn) {
