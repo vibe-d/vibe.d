@@ -102,17 +102,17 @@ unittest
 /**
 	Utility function that throws a HTTPStatusException if the _condition is not met.
 */
-void enforceHTTP(T)(T condition, HTTPStatus statusCode, string message = null)
+T enforceHTTP(T)(T condition, HTTPStatus statusCode, lazy string message = null)
 {
-	enforce(condition, new HTTPStatusException(statusCode, message));
+	return enforce(condition, new HTTPStatusException(statusCode, message));
 }
 
 /**
 	Utility function that throws a HTTPStatusException with status code "400 Bad Request" if the _condition is not met.
 */
-void enforceBadRequest(T)(T condition, string message = null)
+T enforceBadRequest(T)(T condition, lazy string message = null)
 {
-	enforceHTTP(condition, HTTPStatus.badRequest, message);
+	return enforceHTTP(condition, HTTPStatus.badRequest, message);
 }
 
 
