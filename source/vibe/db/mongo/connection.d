@@ -480,9 +480,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	// Reslice to get rid of 'mongodb://'
 	tmpUrl = tmpUrl[10..$];
 
-	auto slashIndex = tmpUrl.indexOf("/");
-	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
-	auto authIndex = tmpUrl[0 .. slashIndex].indexOf('@');
+	auto authIndex = tmpUrl.indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
 
 	// Parse out the username and optional password.
@@ -509,6 +507,10 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 		cfg.digest = MongoClientSettings.makeDigest(cfg.username, password);
 	}
+
+	auto slashIndex = tmpUrl[hostIndex..$].indexOf("/");
+	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
+	else slashIndex += hostIndex;
 
 	// Parse the hosts section.
 	try
@@ -713,6 +715,18 @@ unittest
 	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:thepass@localhost")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:badport/")));
+
+	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost"));
+	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost/mydb"));
+	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
+	assert(cfg.database == "mydb");
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
 }
 
 private enum OpCode : int {
