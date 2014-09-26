@@ -581,7 +581,7 @@ struct Json {
 			if (m_type == Type.string) m_string ~= other.m_string;
 			else if (m_type == Type.array) {
 				if (other.m_type == Type.array) m_array ~= other.m_array;
-				else m_array ~= other;
+				else appendArrayElement(other);
 			} else enforceJson(false, "'~=' only allowed for string and array types, not "~.to!string(m_type)~".");
 		} else static assert("Unsupported operator '"~op~"=' for type JSON.");
 	}
@@ -619,6 +619,15 @@ struct Json {
 	}
 	/// ditto
 	Json opBinaryRight(string op)(Json[] other) { checkType!(Json[])(); mixin("return Json(other "~op~" m_array);"); }
+
+	/**
+	 * The append operator will append arrays. This method always appends it's argument as an array element, so nested arrays can be created.
+	 */
+	void appendArrayElement(Json element)
+	{
+		enforceJson(m_type == Type.array, "'appendArrayElement' only allowed for array types, not "~.to!string(m_type)~".");
+		m_array ~= element;
+	}
 
 	/**
 		Allows to access existing fields of a JSON object using dot syntax.
@@ -1281,6 +1290,11 @@ unittest {
 	assert(t.b.isNull());
 }
 
+unittest { // #840
+	int[2][2] nestedArray = 1;
+	assert(nestedArray.serializeToJson.deserializeJson!(typeof(nestedArray)) == nestedArray);
+}
+
 
 /**
 	Serializer for a plain Json representation.
@@ -1313,7 +1327,7 @@ struct JsonSerializer {
 	void beginWriteArray(T)(size_t) { m_compositeStack ~= Json.emptyArray; }
 	void endWriteArray(T)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
 	void beginWriteArrayEntry(T)(size_t) {}
-	void endWriteArrayEntry(T)(size_t) { m_compositeStack[$-1] ~= m_current; }
+	void endWriteArrayEntry(T)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
 	void writeValue(T)(T value)
 	{
