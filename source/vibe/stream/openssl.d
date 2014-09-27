@@ -222,7 +222,7 @@ final class OpenSSLStream : SSLStream {
 			char[120] ebuf;
 			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
 				ERR_error_string(eret, ebuf.ptr);
-				logDiagnostic("%s error at at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
+				logDiagnostic("%s error at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
 			}
 		}
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
@@ -232,13 +232,23 @@ final class OpenSSLStream : SSLStream {
 
 	private int enforceSSL(int ret, string message)
 	{
-		if (ret <= 0) {
-			auto err = ERR_get_error();
-			char[120] ebuf;
-			ERR_error_string(err, ebuf.ptr);
-			throw new Exception(format("%s: %s (%s)", message, ebuf.ptr.to!string(), err));
+		if (ret > 0) return ret;
+
+		c_ulong eret;
+		const(char)* file = null, data = null;
+		int line;
+		int flags;
+		string estr;
+		char[120] ebuf;
+
+		while ((eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0) {
+			estr = ebuf.ptr.to!string;
+			// throw the last error code as an exception
+			if (!ERR_peek_error()) break;
+			logDiagnostic("OpenSSL error at %s:%d: %s (%s)", file.to!string, line, estr, flags & ERR_TXT_STRING ? to!string(data) : "-");
 		}
-		return ret;
+
+		throw new Exception(format("%s: %s (%s)", message, estr, eret));
 	}
 
 	private void checkExceptions()
