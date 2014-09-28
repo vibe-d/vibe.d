@@ -661,8 +661,9 @@ package nothrow extern(C)
 			logTrace("data wait timeout");
 			auto conn = cast(Libevent2TCPConnection)userptr;
 			conn.m_timeout_triggered = true;
-			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.readOwner);
-			else logDebug("waitForData timeout after connection was closed!");
+			if (conn.m_ctx) {
+				if (conn.m_ctx.readOwner) conn.m_ctx.core.resumeTask(conn.m_ctx.readOwner);
+			} else logDebug("waitForData timeout after connection was closed!");
 		} catch (UncaughtException e) {
 			logWarn("Exception onTimeout: %s", e.msg);
 		}
