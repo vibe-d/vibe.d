@@ -10,15 +10,16 @@ module vibe.db.mongo.collection;
 public import vibe.db.mongo.cursor;
 public import vibe.db.mongo.connection;
 
+import vibe.core.log;
 import vibe.db.mongo.client;
 
-import vibe.core.log;
-
+import core.time;
 import std.algorithm : countUntil, find;
 import std.array;
 import std.conv;
 import std.exception;
 import std.string;
+import std.typecons : Tuple, tuple;
 
 
 /**
@@ -146,7 +147,7 @@ struct MongoCollection {
 			By default, a Bson value of the matching document is returned, or $(D Bson(null))
 			when no document matched. For types R that are not Bson, the returned value is either
 			of type $(D R), or of type $(Nullable!R), if $(D R) is not a reference/pointer type.
-		
+
 		Throws: Exception if a DB communication error or a query error occured.
 		See_Also: $(LINK http://www.mongodb.org/display/DOCS/Querying)
 	 */
@@ -261,7 +262,7 @@ struct MongoCollection {
 	Bson aggregate(ARGS...)(ARGS pipeline)
 	{
 		import std.traits;
-		
+
 		static if (ARGS.length == 1 && isArray!(ARGS[0]))
 			alias Pipeline = ARGS[0];
 		else static struct Pipeline { ARGS args; }
@@ -312,31 +313,48 @@ struct MongoCollection {
 		}
 	}
 
-	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None, ulong expireAfterSeconds = 0)
+	/**
+		Creates or updates an index.
+
+		Note that the overload taking an associative array of field orders is
+		scheduled for deprecation. Since the order of fields matters, it is
+		only suitable for single-field indices.
+	*/
+	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.None, Duration expire_time = 0.seconds)
 	{
 		// TODO: support 2d indexes
 
+		auto key = Bson.emptyObject;
 		auto indexname = appender!string();
 		bool first = true;
-		foreach( f, d; field_orders ){
-			if( !first ) indexname.put('_');
+		foreach (fo; field_orders) {
+			if (!first) indexname.put('_');
 			else first = false;
-			indexname.put(f);
+			indexname.put(fo[0]);
 			indexname.put('_');
-			indexname.put(to!string(d));
+			indexname.put(to!string(fo[1]));
+			key[fo[0]] = Bson(fo[1]);
 		}
 
 		Bson[string] doc;
 		doc["v"] = 1;
-		doc["key"] = serializeToBson(field_orders);
+		doc["key"] = key;
 		doc["ns"] = m_fullPath;
 		doc["name"] = indexname.data;
-		if( flags & IndexFlags.Unique ) doc["unique"] = true;
-		if( flags & IndexFlags.DropDuplicates ) doc["dropDups"] = true;
-		if( flags & IndexFlags.Background ) doc["background"] = true;
-		if( flags & IndexFlags.Sparse ) doc["sparse"] = true;
-		if( flags & IndexFlags.ExpireAfterSeconds ) doc["expireAfterSeconds"] = expireAfterSeconds;
+		if (flags & IndexFlags.Unique) doc["unique"] = true;
+		if (flags & IndexFlags.DropDuplicates) doc["dropDups"] = true;
+		if (flags & IndexFlags.Background) doc["background"] = true;
+		if (flags & IndexFlags.Sparse) doc["sparse"] = true;
+		if (flags & IndexFlags.ExpireAfterSeconds) doc["expireAfterSeconds"] = expire_time.total!"seconds";
 		database["system.indexes"].insert(doc);
+	}
+	/// ditto
+	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None, ulong expireAfterSeconds = 0)
+	{
+		Tuple!(string, int)[] orders;
+		foreach (k, v; field_orders)
+			orders ~= tuple(k, v);
+		ensureIndex(orders, flags, expireAfterSeconds.seconds);
 	}
 
 	void dropIndex(string name)
@@ -352,7 +370,7 @@ struct MongoCollection {
 		auto reply = database.runCommand(cmd);
 		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
 	}
-	
+
     void drop() {
 		static struct CMD {
 			string drop;
