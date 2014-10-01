@@ -1,6 +1,218 @@
 ﻿Changelog
 =========
 
+v0.7.21 - 2014-10-
+--------------------
+
+### Features and improvements ###
+
+ - Compiles on DMD 2.064 up to DMD 2.067.0-b1
+ - `SessionVar`, if necessary, now starts a new session also for read accesses
+ - Added a check to disallow storing types with aliasing in sessions
+ - Session values are now always returned as `const` to avoid unintended mutation of the returned temporary
+ - Made the handling of redirect responses more specific in the HTTP client (reject unknown status codes)
+ - Enabled the use of `shared` delegates for `runWorkerTask` and avoid creation of a heap delegate
+ - Added support for more parameter types in `runTask`/`runWorkerTask` by avoiding `Variant`
+ - Added an initial implementation of a `Future!T` (future/promise) in `vibe.core.concurrency`
+ - Added support for `Json` as a return type for web interface methods (by Stefan Koch) - [pull #684][issue684]
+ - Added support for a `@contentType` attribute for web interface methods (by Stefan Koch) - [pull #684][issue684]
+ - Changed `SSLPeerValidationMode` into a set of bit flags (different modes can now be combined)
+ - Added `vibe.web.web.trWeb` for runtime string translation support
+ - Deprecated the output range interface of `OutputStream`, use `vibe.stream.wrapper.StreamOutputRange` instead
+ - Added support for `@before`/`@after` attributes for web interface methods
+ - Added a `PrivateAccessProxy` mixin as a way to enable use of private and non-static methods for `@before` in web interfaces
+ - Added support for validating parameter types to `vibe.web.web` (`vibe.web.validation`)
+ - Removed deprecated symbols of 0.7.20
+ - Prefer `.toString()` to `cast(string)` when converting values to string in Diet templates (changes how `Json` values are converted!) - [issue #714][issue714]
+ - Added variants of the `vibe.utils.validation` functions that don't throw
+ - Added `UDPConnection.close()`
+ - Deprecated `registerFormInterface` and `registerFormMethod`
+ - Added support for IP based client certificate validation in the HTTP server (by Eric Cornelius) - [pull #723][issue723]
+ - `MongoConnection.defaultPort` is now an `ushort` (by Martin Nowak) - [pull #725][issue725]
+ - Added support for implicit parameter conversion of arguments passed to `runTask`/`runWorkerTask` (by Martin Nowak) - [pull #719][issue719]
+ - Added `vibe.stream.stdio` for vibe.d compatible wrapping of stdin/stdout and `std.stdio.File` (by Eric Cornelius) - [pull #729][issue729]
+ - Added `vibe.stream.multicast.MultiCastStream` for duplicating a stream to multiple output streams (by Eric Cornelius) - [pull #732][issue732]
+ - Added support for nesting web interface classes using properties that return a class instance
+ - Added optional support for matching request paths with mismatching trailing slash in web interfaces
+ - Added support for an `inotify` based directory watcher in the libevent driver (by Martin Nowak) - [pull #743][issue743]
+ - Added support for using a proxy server in the HTTP client (by Etienne Cimon) - [pull #731][issue731]
+ - Avoid using chunked encoding for `HTTPServerResponse.writeJsonBody` - [issue #619][issue619]
+ - Added support for `Nullable!T` in `vibe.data.serialization` - [issue #752][issue752]
+ - Moved all OpenSSL code into a separate module to avoid importing the OpenSSL headers in `vibe.stream.ssl` (by Martin Nowak) - [pull #757][issue757]
+ - Added some missing Redis methods and rename `RedisClient.flushAll` to `deleteAll`
+ - Added the `vibe.db.redis.types` module for type safe access of Redis keys
+ - Added a constructor for `BsonObjectID` that takes a specific time stamp (by Martin Nowak) - [pull #759][issue759]
+ - Added support for `ubyte[]` as a return type for various Redis methods (by sinkuu) - [pull #761][issue761]
+ - Added output range based overloads of `std.stream.operations.readUntil` and `readLine`
+ - `RedisReply` is now a typed output range
+ - Added `vibe.data.json.serializeToJsonString`
+ - Added a module for Redis with common high level idioms (`vibe.db.redis.idioms`)
+ - Improved the Redis interface with better template constraints, support for interval specifications and support for `Nullable!T` to determine key existence
+ - Added `vibe.inet.webform.formEncode` for encoding a dictionary/AA as a web form (by Etienne Cimon) - [pull #748][issue748]
+ - `BsonObjectID.fromString` now throws an `Exception` instead of an `AssertError` for invalid inputs
+ - Made the SSL implementation pluggable (currently only OpenSSL is supported)
+ - Avoid using initialized static array for storing task parameters (by Михаил Страшун aka Dicebot) - [pull #778][issue778]
+ - Deprecated the simple password hash functions due to their weak security - [issue #794][issue794]
+ - Added the possibility to customize the language selection in the translation context for web interface translations
+ - Added support for expiring indexes and dropping indexes/collections in the MongoDB client (by Márcio Martins) - [pull #799][issue799]
+ - Added `HTTPClientSettings.defaultKeepAliveTimeout` and handle the optional request count limit of keep-alive connections (by Etienne Cimon) - [issue 744][issue744], [pull #756][issue756]
+ - Added support for serializing tuple fields
+ - Added `convertJsonToASCII` to force escaping of all Unicode characters - see [issue #809][issue809]
+ - Made the `member` argument to the sorted set methods in `RedisDatabase` generic instead of `string` - [issue #811][issue811]
+ - Added a parameter to set the information log format for `setLogFormat` (by Márcio Martins) - [pull #808][issue808]
+ - Serializer implementations now get the number of dictionary elements passed up front (by Johannes Pfau) - [pull #823][issue823]
+ - Added `MongoClient.getDatabases` (by Peter Eisenhower) - [pull #822][issue822]
+ - Changed `readRequiredOption` to not throw when the `--help` switch was passed (by Jack Applegame) - [pull #803][issue803]
+ - Added `RestInterfaceSettings` as the new way to configure REST interfaces
+ - Implemented optional stripping of trailing underscores for REST parameters (allows the use of keywords as parameter names)
+ - Added an assertion to the HTTP client when a relative path is used for the request URL instead of constructing an invalid request
+ - Avoid using chunked encoding for `HTTPClientRequest.writeJsonBody`
+ - Made the `message` parameter of `enforceHTTP` `lazy` (by Mathias Lang aka Geod24) - [pull #839][issue839]
+ - Added an array based overload of `MongoCollection.ensureIndex` - [issue #824][issue824]
+
+### Bug fixes ###
+
+ - Fixed BSON custom serialization of `const` classes
+ - Fixed serialization of `DictionaryList` - [issue #621][issue621]
+ - Fixed a bogus deprecation message for Diet script/style blocks without child nodes
+ - Fixed an infinite loop in `HTTPRouter` when no routes were registered - [issue #691][issue691]
+ - Fixed iterating over `const(DictionaryList)` (by Mathias Lang aka Geod24) - [pull #693][issue693]
+ - Fixed an assertion in the HTTP file server that was triggered when drive letters were contained in the request path - [pull #694][issue694]
+ - Fixed recognizing `application/javascript` in script tags to trigger the block syntax deprecation message
+ - Fixed support for boolean parameters in web interfaces
+ - Fixed falling back to languages without country suffix in the web interface generator
+ - Fixed alignment of the backing memory for a `TaskLocal!T`
+ - Fixed the port reported by `UDPConnection.bindAddress` when 0 was specified as the bind port (libevent)
+ - Fixed busy looping the event loop when there is unprocessed UDP data - [issue #715][issue715]
+ - Fixed `exitEventLoop()` to work when there is a busy tasks that calls `yield()` - [issue #720][issue720]
+ - Avoid querying the clock when processing timers and no timers are pending (performance bug)
+ - Fixed `ManualEvent.wait()` to work outside of a task (fixes various secondary facilities that use `ManualEvent` implicitly) - [issue #663][issue663]
+ - Fixed encoding of `StreamOutputRange.put(dchar)` (by sinkuu) - [pull #733][issue733]
+ - Fixed treating `undefined` JSON values as `null` when converting to a string - [issue #735][issue735]
+ - Fixed using an `id` parameter together with `@path` in REST interfaces - [issue #738][issue738]
+ - Fixed handling of multi-line responses in the SMTP client (by Etienne Cimon) - [pull #746][issue746]
+ - Fixed compile error for certain uses of `Nullable!T` in web interfaces
+ - Enable use of non-virtual access of the event driver using `VibeUseNativeDriverType`
+ - Fixed building the "libev" configuration (by Lionello Lunesu) - [pull #755][issue755]
+ - Fixed `TaskLocal!T` top properly call destructors after a task has ended (by Etienne Cimon) - [issue #753][issue753], [pull #754][issue754]
+ - Fixed the name of `RedisDatabase.zcard` (was `Zcard`)
+ - Fixed a possible race condition causing a hang in `MessageQueue.receive`/`receiveTimeout`(by Ilya Lyubimov) - [pull #760][issue760]
+ - Fixed `RangeCounter` to behave properly when inserting single `char` values
+ - Fixed `RedisDatabase.getSet` (by Stephan Dilly) - [pull #769][issue769]
+ - Fixed out-of-range array access in the Diet template compiler when the last attribute of a tag is value-less (by Martin Nowak) - [pull #771][issue771]
+ - Fixed output of line breaks in the Markdown compiler
+ - Fixed handling of the `key` argument of `getRange`, `lrem` and `zincrby` in `RedisDatabase` (by sinkuu) - [pull #772][issue772]
+ - Fixed handling of `Nullable!T` and `isISOExtStringSerializable` parameters in REST interfaces
+ - Fixed escaping of Diet tag attributes with string interpolations (by sinkuu) - [pull #779][issue779]
+ - Fixed handling a timeout smaller or equal to zero (infinity) for `RedisSubscriber.blisten` (by Etienne Cimon aka etcimon) - [issue #776][issue776], [pull #781][issue781]
+ - Fixed handling of Unicode escape sequences in the JSON parser (by Etienne Cimon aka etcimon) - [pull #782][issue782]
+ - Fixed `HTTPServerRequest.fullURL` for requests without a `Host` header - [issue #786][issue786]
+ - Fixed `RedisClient` initialization for servers that require authentication (by Pedro Yamada aka yamadapc) - [pull #785][issue785]
+ - Fixed the JSON parser to not accept numbers containing ':'
+ - Removed an invalid assertion in `HTTPServerResponse.writeJsonBody` - [issue #788][issue788]
+ - Fixed handling of explicit "identity" content encoding in the HTTP client (by sinkuu) - [pull #789][issue789]
+ - Fixed `HTTPServerRequest.fullURL` for HTTPS requests with a non-default port (by Arjuna aka arjunadeltoso) - [pull #790][issue790]
+ - Fixed detection of string literals in Diet template attributes - [issue #792][issue792]
+ - Fixed output of Diet attributes using `'` as the string delimiter
+ - Fixed detection of numeric types in `BsonSerializer` (do not treat `Nullable!T` as numeric)
+ - Fixed the REST interface client to accept 201 responses (by Yuriy Glukhov) - [pull #806][issue806]
+ - Fixed some potential lock related issues in the worker task handler loop
+ - Fixed memory corruption when `TCPListenOptions.disableAutoClose` is used and the `TCPConnection` outlives the accepting task - [issue #807][issue807]
+ - Fixed a range violation when parsing JSON strings that end with `[` or `{` - [issue #805][issue805]
+ - Fixed compilation of `MongoCollection.aggregate` and support passing an array instead of multiple parameters - [issue #783][issue783]
+ - Fixed compilation and formatting issues in the HTTP logger (by Márcio Martins) - [pull #808][issue808]
+ - Fixed assertion condition in `DebugAllocator.realloc`
+ - Fixed shutdown when daemon threads are involved - [issue #758][issue758]
+ - Fixed some serialization errors for structs with variadic constructors or properties or with nested type declarations/aliases (by Rene Zwanenburg) - [pull #817][issue817], [issue #818][issue818], [pull #819][issue819]
+ - The HTTP server now terminates a connection if the response was not completely written to avoid protocol errors
+ - Fixed an assertion triggered by a `vibe.web.rest` server trying to write an error message when a response had already been made - [issue #821][issue821]
+ - Fixed using `TaskLocal!T` with types that have certain kinds of "copy constructors" - [issue #825][issue825]
+ - Fixed `-version=VibeNoSSL` (by Dragos Carp) - [pull #834][issue834]
+ - Use "bad request" replies instead of "internal server error" for various cases where a HTTP request is invalid (by Marc Schütz) - [pull #827][issue827]
+ - Removed a leading newline in compiled Diet templates
+ - Fixed serialization of nested arrays as JSON (by Rene Zwanenburg) - [issue #840][issue840], [pull #841][issue841]
+ - Fixed OpenSSL error messages in certain cases (by Andrea Agosti) - [pull #796][issue796]
+ - Fixed parsing of MongoDB URLs containing `/` in the password field (by Martin Nowak) - [pull #843][issue843]
+ - Fixed an assertion in `TCPConnection.waitForData` when called outside of a task (libevent) - [issue #829][issue829]
+ - Fixed an `InvalidMemoryOperationError` in `HTTPClientResponse.~this()`
+
+[issue619]: https://github.com/rejectedsofware/vibe.d/issues/619
+[issue621]: https://github.com/rejectedsofware/vibe.d/issues/621
+[issue663]: https://github.com/rejectedsofware/vibe.d/issues/663
+[issue684]: https://github.com/rejectedsofware/vibe.d/issues/684
+[issue684]: https://github.com/rejectedsofware/vibe.d/issues/684
+[issue691]: https://github.com/rejectedsofware/vibe.d/issues/691
+[issue693]: https://github.com/rejectedsofware/vibe.d/issues/693
+[issue694]: https://github.com/rejectedsofware/vibe.d/issues/694
+[issue714]: https://github.com/rejectedsofware/vibe.d/issues/714
+[issue715]: https://github.com/rejectedsofware/vibe.d/issues/715
+[issue719]: https://github.com/rejectedsofware/vibe.d/issues/719
+[issue720]: https://github.com/rejectedsofware/vibe.d/issues/720
+[issue723]: https://github.com/rejectedsofware/vibe.d/issues/723
+[issue725]: https://github.com/rejectedsofware/vibe.d/issues/725
+[issue729]: https://github.com/rejectedsofware/vibe.d/issues/729
+[issue731]: https://github.com/rejectedsofware/vibe.d/issues/731
+[issue732]: https://github.com/rejectedsofware/vibe.d/issues/732
+[issue733]: https://github.com/rejectedsofware/vibe.d/issues/733
+[issue735]: https://github.com/rejectedsofware/vibe.d/issues/735
+[issue738]: https://github.com/rejectedsofware/vibe.d/issues/738
+[issue743]: https://github.com/rejectedsofware/vibe.d/issues/743
+[issue744]: https://github.com/rejectedsofware/vibe.d/issues/744
+[issue746]: https://github.com/rejectedsofware/vibe.d/issues/746
+[issue748]: https://github.com/rejectedsofware/vibe.d/issues/748
+[issue752]: https://github.com/rejectedsofware/vibe.d/issues/752
+[issue753]: https://github.com/rejectedsofware/vibe.d/issues/753
+[issue754]: https://github.com/rejectedsofware/vibe.d/issues/754
+[issue755]: https://github.com/rejectedsofware/vibe.d/issues/755
+[issue756]: https://github.com/rejectedsofware/vibe.d/issues/756
+[issue757]: https://github.com/rejectedsofware/vibe.d/issues/757
+[issue758]: https://github.com/rejectedsofware/vibe.d/issues/758
+[issue759]: https://github.com/rejectedsofware/vibe.d/issues/759
+[issue760]: https://github.com/rejectedsofware/vibe.d/issues/760
+[issue761]: https://github.com/rejectedsofware/vibe.d/issues/761
+[issue769]: https://github.com/rejectedsofware/vibe.d/issues/769
+[issue771]: https://github.com/rejectedsofware/vibe.d/issues/771
+[issue772]: https://github.com/rejectedsofware/vibe.d/issues/772
+[issue776]: https://github.com/rejectedsofware/vibe.d/issues/776
+[issue778]: https://github.com/rejectedsofware/vibe.d/issues/778
+[issue779]: https://github.com/rejectedsofware/vibe.d/issues/779
+[issue781]: https://github.com/rejectedsofware/vibe.d/issues/781
+[issue782]: https://github.com/rejectedsofware/vibe.d/issues/782
+[issue783]: https://github.com/rejectedsofware/vibe.d/issues/783
+[issue785]: https://github.com/rejectedsofware/vibe.d/issues/785
+[issue786]: https://github.com/rejectedsofware/vibe.d/issues/786
+[issue788]: https://github.com/rejectedsofware/vibe.d/issues/788
+[issue789]: https://github.com/rejectedsofware/vibe.d/issues/789
+[issue790]: https://github.com/rejectedsofware/vibe.d/issues/790
+[issue792]: https://github.com/rejectedsofware/vibe.d/issues/792
+[issue794]: https://github.com/rejectedsofware/vibe.d/issues/794
+[issue796]: https://github.com/rejectedsofware/vibe.d/issues/796
+[issue799]: https://github.com/rejectedsofware/vibe.d/issues/799
+[issue803]: https://github.com/rejectedsofware/vibe.d/issues/803
+[issue805]: https://github.com/rejectedsofware/vibe.d/issues/805
+[issue806]: https://github.com/rejectedsofware/vibe.d/issues/806
+[issue807]: https://github.com/rejectedsofware/vibe.d/issues/807
+[issue808]: https://github.com/rejectedsofware/vibe.d/issues/808
+[issue808]: https://github.com/rejectedsofware/vibe.d/issues/808
+[issue809]: https://github.com/rejectedsofware/vibe.d/issues/809
+[issue811]: https://github.com/rejectedsofware/vibe.d/issues/811
+[issue817]: https://github.com/rejectedsofware/vibe.d/issues/817
+[issue818]: https://github.com/rejectedsofware/vibe.d/issues/818
+[issue819]: https://github.com/rejectedsofware/vibe.d/issues/819
+[issue821]: https://github.com/rejectedsofware/vibe.d/issues/821
+[issue822]: https://github.com/rejectedsofware/vibe.d/issues/822
+[issue823]: https://github.com/rejectedsofware/vibe.d/issues/823
+[issue824]: https://github.com/rejectedsofware/vibe.d/issues/824
+[issue825]: https://github.com/rejectedsofware/vibe.d/issues/825
+[issue827]: https://github.com/rejectedsofware/vibe.d/issues/827
+[issue829]: https://github.com/rejectedsofware/vibe.d/issues/829
+[issue834]: https://github.com/rejectedsofware/vibe.d/issues/834
+[issue839]: https://github.com/rejectedsofware/vibe.d/issues/839
+[issue840]: https://github.com/rejectedsofware/vibe.d/issues/840
+[issue841]: https://github.com/rejectedsofware/vibe.d/issues/841
+[issue843]: https://github.com/rejectedsofware/vibe.d/issues/843
+
+
 v0.7.20 - 2014-06-03
 --------------------
 
