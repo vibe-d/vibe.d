@@ -5,5 +5,5 @@
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
 	},
-	"versions": ["VibeCustomMain", "VibeNewSerialization"]
+	"versions": ["VibeCustomMain"]
 }
