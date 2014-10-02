@@ -1430,7 +1430,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			static if (is(T == typeof(null))) m_range.put("null");
 			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
 			else static if (is(T : long)) m_range.formattedWrite("%s", value);
-			else static if (is(T : real)) m_range.formattedWrite("%s", value);
+			else static if (is(T : real)) m_range.formattedWrite("%.16g", value);
 			else static if (is(T == string)) {
 				m_range.put('"');
 				m_range.jsonEscape(value);
