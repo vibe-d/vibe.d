@@ -37,6 +37,13 @@
 			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
 		},
 		{
+			"name": "libasync",
+			"dependencies": {
+			  "libasync": { "version": "0.6.2" }
+			},
+			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
+		},
+		{
 			"name": "libev",
 			"dependencies": {"libev": "~>4.0.0+4.04"},
 			"platforms": ["posix"],
