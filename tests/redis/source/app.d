@@ -77,17 +77,21 @@ void runTest()
 		logInfo("LISTEN Recv Time: %s", Clock.currTime().toString());
 	});
 	assert(sub.isListening);
-	sleep(1.seconds);
 	sub.subscribe("SomeChannel");
+	sleep(1.seconds);
+
+	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
 	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
-	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	sleep(1.seconds);
+
 	sub.unsubscribe("SomeChannel");
+
+	sleep(1.seconds);
 	auto stopped = sub.bstop();
 	logInfo("LISTEN Stopped: %s", stopped.to!string);
 	assert(!sub.isListening);
 	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-	sleep(1.seconds);
 	logInfo("Redis Test Succeeded.");
 }
 
