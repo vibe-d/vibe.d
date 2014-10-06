@@ -180,7 +180,7 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	Registers a new text filter for use in Diet templates.
 
 	The filter will be available using :filtername inside of the template. The following filters are
-	predefined: css, javascript, markdown
+	predefined: css, javascript, markdown, htmlescape
 */
 void registerDietTextFilter(string name, string function(string, size_t indent) filter)
 {
