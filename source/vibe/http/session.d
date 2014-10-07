@@ -68,7 +68,7 @@ final struct Session {
 			if (!req.session) req.session = res.startSession();
 
 			// update session variables
-			req.session["loginUser"] = req.form["user"];
+			req.session.set("loginUser", req.form["user"]);
 		}
 	}
 
@@ -156,8 +156,10 @@ final struct Session {
 		}
 		---
 	*/
+	deprecated("Use get() instead.")
 	string opIndex(string name) { return m_store.get(m_id, name, Variant(string.init)).get!string; }
 	/// ditto
+	deprecated("Use set() instead.")
 	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
 
 	package void destroy() { m_store.destroy(m_id); }

@@ -1002,8 +1002,8 @@ final class HTTPServerResponse : HTTPResponse {
 		else secure = this.ssl;
 
 		m_session = m_settings.sessionStore.create();
-		m_session["$sessionCookiePath"] = path;
-		m_session["$sessionCookieSecure"] = secure.to!string();
+		m_session.set("$sessionCookiePath", path);
+		m_session.set("$sessionCookieSecure", secure);
 		auto cookie = setCookie(m_settings.sessionIdCookie, m_session.id, path);
 		cookie.secure = secure;
 		cookie.httpOnly = (options & SessionOption.httpOnly) != 0;
@@ -1016,8 +1016,8 @@ final class HTTPServerResponse : HTTPResponse {
 	void terminateSession()
 	{
 		assert(m_session, "Try to terminate a session, but none is started.");
-		auto cookie = setCookie(m_settings.sessionIdCookie, null, m_session["$sessionCookiePath"]);
-		cookie.secure = m_session["$sessionCookieSecure"].to!bool();
+		auto cookie = setCookie(m_settings.sessionIdCookie, null, m_session.get!string("$sessionCookiePath"));
+		cookie.secure = m_session.get!bool("$sessionCookieSecure");
 		m_session.destroy();
 		m_session = Session.init;
 	}
