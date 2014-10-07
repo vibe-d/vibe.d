@@ -179,6 +179,7 @@ struct RedisDatabase {
 	long del(scope string[] keys...) { return request!long("DEL", keys); }
 	bool exists(string key) { return request!bool("EXISTS", key); }
 	bool expire(string key, long seconds) { return request!bool("EXPIRE", key, seconds); }
+	bool expire(string key, Duration timeout) { return request!bool("PEXPIRE", key, timeout.total!"msecs"); }
 	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
 	RedisReply!T keys(T = string)(string pattern) if(isValidRedisValueType!T) { return request!(RedisReply!T)("KEYS", pattern); }
 	bool move(string key, long db) { return request!bool("MOVE", key, db); }
