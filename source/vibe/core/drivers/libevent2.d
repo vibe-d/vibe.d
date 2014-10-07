@@ -71,6 +71,7 @@ final class Libevent2Driver : EventDriver {
 		debug Thread m_ownerThread;
 
 		event* m_timerEvent;
+		SysTime m_timerTimeout = SysTime.max;
 		TimerQueue!TimerInfo m_timers;
 		DList!AddressInfo m_addressInfoCache;
 		size_t m_addressInfoCacheLength = 0;
@@ -453,8 +454,9 @@ final class Libevent2Driver : EventDriver {
 	private void rescheduleTimerEvent(SysTime now)
 	{
 		auto next = m_timers.getFirstTimeout();
-		if (next == SysTime.max) return;
+		if (next == SysTime.max || next == m_timerTimeout) return;
 
+		m_timerTimeout = now;
 		auto dur = next - now;
 		event_del(m_timerEvent);
 		assert(dur.total!"seconds"() <= int.max);
