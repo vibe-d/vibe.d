@@ -146,8 +146,8 @@ template isRWField(T, string M)
 	import std.typetuple;
 
 	static void testAssign()() {
-		T* pt;
-		__traits(getMember, *pt, M) = __traits(getMember, *pt, M);
+		static T t = void;
+		__traits(getMember, t, M) = __traits(getMember, t, M);
 	}
 
 	// reject type aliases
