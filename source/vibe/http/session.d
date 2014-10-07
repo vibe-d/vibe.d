@@ -37,6 +37,7 @@ final struct Session {
 	private {
 		SessionStore m_store;
 		string m_id;
+		SessionStorageType m_storageType;
 	}
 
 	// created by the SessionStore using SessionStore.createSessionInstance
@@ -45,6 +46,7 @@ final struct Session {
 		assert(id.length > 0);
 		m_store = store;
 		m_id = id;
+		m_storageType = store.storageType;
 	}
 
 	/** Checks if the session is active.
@@ -81,7 +83,7 @@ final struct Session {
 	const(T) get(T)(string key, lazy T def_value = T.init)
 	{
 		static assert(!hasAliasing!T, "Type "~T.stringof~" contains references, which is not supported for session storage.");
-		return m_store.get(m_id, key, Variant(def_value)).get!T;
+		return deserialize!T(m_store.get(m_id, key, serialize(def_value)));
 	}
 
 	/** Sets a typed field to the session.
@@ -89,11 +91,14 @@ final struct Session {
 	void set(T)(string key, T value)
 	{
 		static assert(!hasAliasing!T, "Type "~T.stringof~" contains references, which is not supported for session storage.");
-		m_store.set(m_id, key, Variant(value));
+		m_store.set(m_id, key, serialize(value));
 	}
 
 	/**
 		Enables foreach-iteration over all key/value pairs of the session.
+
+		Note that this overload is deprecated and works only for
+		MemorySessionStore.
 
 		Examples:
 		---
@@ -106,14 +111,35 @@ final struct Session {
 		}
 		---
 	*/
+	deprecated("Manage a separate array field with all keys instead.")
 	int opApply(int delegate(ref string key, ref Variant value) del)
 	{
-		foreach( key, ref value; m_store.iterateSession(m_id) )
-			if( auto ret = del(key, value) != 0 )
+		foreach (key, ref value; m_store.iterateSession(m_id))
+			if (auto ret = del(key, value))
 				return ret;
 		return 0;
 	}
-	
+
+	/**
+		Enables foreach-iteration over all keys of the session.
+
+		Examples:
+		---
+		// sends all session entries to the requesting browser
+		// assumes that all entries are strings
+		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+		{
+			res.contentType = "text/plain";
+			foreach(key; req.session)
+				res.bodyWriter.write(key ~ ": " ~ req.session.get!string(key) ~ "\n");
+		}
+		---
+	*/
+	int opApply(scope int delegate(string key) del)
+	{
+		return m_store.iterateSession(m_id, del);
+	}
+
 	/**
 		Gets/sets a key/value pair stored within the session.
 
@@ -135,6 +161,30 @@ final struct Session {
 	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
 
 	package void destroy() { m_store.destroy(m_id); }
+
+	private Variant serialize(T)(T val)
+	{
+		import vibe.data.json;
+		import vibe.data.bson;
+
+		final switch (m_storageType) with (SessionStorageType) {
+			case native: return Variant(val);
+			case json: return Variant(serializeToJson(val));
+			case bson: return Variant(serializeToBson(val));
+		}
+	}
+
+	private T deserialize(T)(Variant val)
+	{
+		import vibe.data.json;
+		import vibe.data.bson;
+
+		final switch (m_storageType) with (SessionStorageType) {
+			case native: return val.get!T;
+			case json: return deserializeJson!T(val.get!Json);
+			case bson: return deserializeBson!T(val.get!Bson);
+		}
+	}
 }
 
 
@@ -145,6 +195,9 @@ final struct Session {
 	session.
 */
 interface SessionStore {
+	/// Returns the internal type used for storing session keys.
+	@property SessionStorageType storageType() const;
+
 	/// Creates a new session.
 	Session create();
 
@@ -163,8 +216,11 @@ interface SessionStore {
 	/// Terminates the given sessiom.
 	void destroy(string id);
 
-	/// Iterates all key/value pairs stored in the given session. 
+	/// Iterates all key/value pairs stored in the given session (deprecated, implement as assert(false)).
 	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id);
+
+	/// Iterates all keys stored in the given session.
+	int iterateSession(string id, scope int delegate(string key) del);
 
 	/// Creates a new Session object which sources its contents from this store.
 	protected final Session createSessionInstance(string id = null)
@@ -176,6 +232,12 @@ interface SessionStore {
 		}
 		return Session(this, id);
 	}
+}
+
+enum SessionStorageType {
+	native,
+	json,
+	bson
 }
 
 
@@ -191,6 +253,11 @@ final class MemorySessionStore : SessionStore {
 		Variant[string][string] m_sessions;
 	}
 
+	@property SessionStorageType storageType()
+	const {
+		return SessionStorageType.native;
+	}
+
 	Session create()
 	{
 		auto s = createSessionInstance();
@@ -201,7 +268,7 @@ final class MemorySessionStore : SessionStore {
 	Session open(string id)
 	{
 		auto pv = id in m_sessions;
-		return pv ? createSessionInstance(id) : Session.init;	
+		return pv ? createSessionInstance(id) : Session.init;
 	}
 
 	void set(string id, string name, Variant value)
@@ -215,7 +282,7 @@ final class MemorySessionStore : SessionStore {
 		assert(id in m_sessions, "session not in store");
 		foreach(k, v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
 		if (auto pv = name in m_sessions[id]) {
-			return *pv;			
+			return *pv;
 		} else {
 			return defaultVal;
 		}
@@ -231,7 +298,7 @@ final class MemorySessionStore : SessionStore {
 		m_sessions.remove(id);
 	}
 
-	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id)
+	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id, )
 	{
 		assert(id in m_sessions, "session not in store");
 		int iterator(int delegate(ref string key, ref Variant value) del)
@@ -242,5 +309,14 @@ final class MemorySessionStore : SessionStore {
 			return 0;
 		}
 		return &iterator;
+	}
+
+	int iterateSession(string id, scope int delegate(string key) del)
+	{
+		assert(id in m_sessions, "session not in store");
+		foreach (key; m_sessions[id].byKey)
+			if (auto ret = del(key))
+				return ret;
+		return 0;
 	}
 }
