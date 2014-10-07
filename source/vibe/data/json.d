@@ -814,17 +814,17 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 
 	switch( range.front ){
 		case 'f':
-			enforceJson(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.", filename, *line);
+			enforceJson(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.", filename, line);
 			range.popFrontN(5);
 			ret = false;
 			break;
 		case 'n':
-			enforceJson(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.", filename, *line);
+			enforceJson(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.", filename, line);
 			range.popFrontN(4);
 			ret = null;
 			break;
 		case 't':
-			enforceJson(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.", filename, *line);
+			enforceJson(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.", filename, line);
 			range.popFrontN(4);
 			ret = true;
 			break;
@@ -843,13 +843,13 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			range.popFront();
 			while (true) {
 				skipWhitespace(range, line);
-				enforceJson(!range.empty, "Missing ']' before EOF.", filename, *line);
+				enforceJson(!range.empty, "Missing ']' before EOF.", filename, line);
 				if(range.front == ']') break;
 				arr ~= parseJson(range, line, filename);
 				skipWhitespace(range, line);
-				enforceJson(!range.empty, "Missing ']' before EOF.", filename, *line);
+				enforceJson(!range.empty, "Missing ']' before EOF.", filename, line);
 				enforceJson(range.front == ',' || range.front == ']',
-					format("Expected ']' or ',' - got '%s'.", range.front), filename, *line);
+					format("Expected ']' or ',' - got '%s'.", range.front), filename, line);
 				if( range.front == ']' ) break;
 				else range.popFront();
 			}
@@ -861,19 +861,19 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			range.popFront();
 			while (true) {
 				skipWhitespace(range, line);
-				enforceJson(!range.empty, "Missing '}' before EOF.", filename, *line);
+				enforceJson(!range.empty, "Missing '}' before EOF.", filename, line);
 				if(range.front == '}') break;
 				string key = skipJsonString(range);
 				skipWhitespace(range, line);
-				enforceJson(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'", filename, *line);
+				enforceJson(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'", filename, line);
 				range.popFront();
 				skipWhitespace(range, line);
 				Json itm = parseJson(range, line, filename);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforceJson(!range.empty, "Missing '}' before EOF.", filename, *line);
+				enforceJson(!range.empty, "Missing '}' before EOF.", filename, line);
 				enforceJson(range.front == ',' || range.front == '}',
-					format("Expected '}' or ',' - got '%s'.", range.front), filename, *line);
+					format("Expected '}' or ',' - got '%s'.", range.front), filename, line);
 				if (range.front == '}') break;
 				else range.popFront();
 			}
@@ -881,7 +881,8 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			ret = obj;
 			break;
 		default:
-			enforceJson(false, format("Expected valid JSON token, got '%s'.", range[0 .. min(12, $)]), filename, *line);
+			enforceJson(false, format("Expected valid JSON token, got '%s'.", range[0 .. min(12, $)]), filename, line);
+			assert(false);
 	}
 
 	assert(ret.type != Json.Type.undefined);
@@ -1940,4 +1941,9 @@ private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool co
 	auto errmsg = format("%s(%s): Error: %s", err_file, err_line+1, message);
 	static if (__VERSION__ >= 2065) enforceEx!JSONException(cond, errmsg, file, line);
 	else if (!cond) throw new JSONException(errmsg);
+}
+
+private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int* err_line)
+{
+	enforceJson!(file, line)(cond, message, err_file, err_line ? *err_line : -1);
 }
