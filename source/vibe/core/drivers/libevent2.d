@@ -82,30 +82,32 @@ final class Libevent2Driver : EventDriver {
 		m_core = core;
 		s_driverCore = core;
 
-		if (!s_threadObjectsMutex) s_threadObjectsMutex = new Mutex;
+		synchronized if (!s_threadObjectsMutex) {
+			s_threadObjectsMutex = new Mutex;
 
-		// set the malloc/free versions of our runtime so we don't run into trouble
-		// because the libevent DLL uses a different one.
-		event_set_mem_functions(&lev_alloc, &lev_realloc, &lev_free);
+			// set the malloc/free versions of our runtime so we don't run into trouble
+			// because the libevent DLL uses a different one.
+			event_set_mem_functions(&lev_alloc, &lev_realloc, &lev_free);
 
-		evthread_lock_callbacks lcb;
-		lcb.lock_api_version = EVTHREAD_LOCK_API_VERSION;
-		lcb.supported_locktypes = EVTHREAD_LOCKTYPE_RECURSIVE|EVTHREAD_LOCKTYPE_READWRITE;
-		lcb.alloc = &lev_alloc_mutex;
-		lcb.free = &lev_free_mutex;
-		lcb.lock = &lev_lock_mutex;
-		lcb.unlock = &lev_unlock_mutex;
-		evthread_set_lock_callbacks(&lcb);
+			evthread_lock_callbacks lcb;
+			lcb.lock_api_version = EVTHREAD_LOCK_API_VERSION;
+			lcb.supported_locktypes = EVTHREAD_LOCKTYPE_RECURSIVE|EVTHREAD_LOCKTYPE_READWRITE;
+			lcb.alloc = &lev_alloc_mutex;
+			lcb.free = &lev_free_mutex;
+			lcb.lock = &lev_lock_mutex;
+			lcb.unlock = &lev_unlock_mutex;
+			evthread_set_lock_callbacks(&lcb);
 
-		evthread_condition_callbacks ccb;
-		ccb.condition_api_version = EVTHREAD_CONDITION_API_VERSION;
-		ccb.alloc_condition = &lev_alloc_condition;
-		ccb.free_condition = &lev_free_condition;
-		ccb.signal_condition = &lev_signal_condition;
-		ccb.wait_condition = &lev_wait_condition;
-		evthread_set_condition_callbacks(&ccb);
+			evthread_condition_callbacks ccb;
+			ccb.condition_api_version = EVTHREAD_CONDITION_API_VERSION;
+			ccb.alloc_condition = &lev_alloc_condition;
+			ccb.free_condition = &lev_free_condition;
+			ccb.signal_condition = &lev_signal_condition;
+			ccb.wait_condition = &lev_wait_condition;
+			evthread_set_condition_callbacks(&ccb);
 
-		evthread_set_id_callback(&lev_get_thread_id);
+			evthread_set_id_callback(&lev_get_thread_id);
+		}
 
 		// initialize libevent
 		logDiagnostic("libevent version: %s", to!string(event_get_version()));
