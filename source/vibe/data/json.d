@@ -799,33 +799,32 @@ struct Json {
 
 	Throws a JSONException if any parsing error occured.
 */
-Json parseJson(R)(ref R range, int* line = null)
+Json parseJson(R)(ref R range, int* line = null, string filename = null)
 	if( is(R == string) )
 {
 	Json ret;
-	enforceJson(!range.empty, "JSON string is empty.");
+	enforceJson(!range.empty, "JSON string is empty.", filename, 0);
 
 	skipWhitespace(range, line);
 
-	version(JsonLineNumbers){
+	version(JsonLineNumbers) {
 		import vibe.core.log;
 		int curline = line ? *line : 0;
-		scope(failure) logError("Error in line: %d", curline);
 	}
 
 	switch( range.front ){
 		case 'f':
-			enforceJson(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.");
+			enforceJson(range[1 .. $].startsWith("alse"), "Expected 'false', got '"~range[0 .. min(5, $)]~"'.", filename, *line);
 			range.popFrontN(5);
 			ret = false;
 			break;
 		case 'n':
-			enforceJson(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.");
+			enforceJson(range[1 .. $].startsWith("ull"), "Expected 'null', got '"~range[0 .. min(4, $)]~"'.", filename, *line);
 			range.popFrontN(4);
 			ret = null;
 			break;
 		case 't':
-			enforceJson(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.");
+			enforceJson(range[1 .. $].startsWith("rue"), "Expected 'true', got '"~range[0 .. min(4, $)]~"'.", filename, *line);
 			range.popFrontN(4);
 			ret = true;
 			break;
@@ -844,13 +843,13 @@ Json parseJson(R)(ref R range, int* line = null)
 			range.popFront();
 			while (true) {
 				skipWhitespace(range, line);
-				enforceJson(!range.empty);
+				enforceJson(!range.empty, "Missing ']' before EOF.", filename, *line);
 				if(range.front == ']') break;
-				arr ~= parseJson(range, line);
+				arr ~= parseJson(range, line, filename);
 				skipWhitespace(range, line);
-				enforceJson(!range.empty, "Missing ']' before EOF.");
+				enforceJson(!range.empty, "Missing ']' before EOF.", filename, *line);
 				enforceJson(range.front == ',' || range.front == ']',
-					format("Expected ']' or ',' - got '%s'.", range.front));
+					format("Expected ']' or ',' - got '%s'.", range.front), filename, *line);
 				if( range.front == ']' ) break;
 				else range.popFront();
 			}
@@ -862,19 +861,19 @@ Json parseJson(R)(ref R range, int* line = null)
 			range.popFront();
 			while (true) {
 				skipWhitespace(range, line);
-				enforceJson(!range.empty);
+				enforceJson(!range.empty, "Missing '}' before EOF.", filename, *line);
 				if(range.front == '}') break;
 				string key = skipJsonString(range);
 				skipWhitespace(range, line);
-				enforceJson(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'");
+				enforceJson(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'", filename, *line);
 				range.popFront();
 				skipWhitespace(range, line);
-				Json itm = parseJson(range, line);
+				Json itm = parseJson(range, line, filename);
 				obj[key] = itm;
 				skipWhitespace(range, line);
-				enforceJson(!range.empty, "Missing '}' before EOF.");
+				enforceJson(!range.empty, "Missing '}' before EOF.", filename, *line);
 				enforceJson(range.front == ',' || range.front == '}',
-					format("Expected '}' or ',' - got '%s'.", range.front));
+					format("Expected '}' or ',' - got '%s'.", range.front), filename, *line);
 				if (range.front == '}') break;
 				else range.popFront();
 			}
@@ -882,7 +881,7 @@ Json parseJson(R)(ref R range, int* line = null)
 			ret = obj;
 			break;
 		default:
-			enforceJson(false, "Expected valid json token, got '"~to!string(range.length)~range[0 .. min(12, $)]~"'.");
+			enforceJson(false, format("Expected valid JSON token, got '%s'.", range[0 .. min(12, $)]), filename, *line);
 	}
 
 	assert(ret.type != Json.Type.undefined);
@@ -895,16 +894,13 @@ Json parseJson(R)(ref R range, int* line = null)
 
 	Throws a JSONException if any parsing error occurs.
 */
-Json parseJsonString(string str)
+Json parseJsonString(string str, string filename = null)
 {
 	auto strcopy = str;
-	try {
-		auto ret = parseJson(strcopy);
-		enforceJson(strcopy.strip().length == 0, "Expected end of string after JSON value.");
-		return ret;
-	} catch (Exception e) {
-		throw new JSONException(format("JSON format error at byte %s: %s", str.length - strcopy.length, e.msg));
-	}
+	int line = 0;
+	auto ret = parseJson(strcopy, &line, filename);
+	enforceJson(strcopy.strip().length == 0, "Expected end of string after JSON value.", filename, line);
+	return ret;
 }
 
 unittest {
@@ -1937,4 +1933,11 @@ private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool co
 {
 	static if (__VERSION__ >= 2065) enforceEx!JSONException(cond, message, file, line);
 	else if (!cond) throw new JSONException(message);
+}
+
+private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int err_line)
+{
+	auto errmsg = format("%s(%s): Error: %s", err_file, err_line+1, message);
+	static if (__VERSION__ >= 2065) enforceEx!JSONException(cond, errmsg, file, line);
+	else if (!cond) throw new JSONException(errmsg);
 }
