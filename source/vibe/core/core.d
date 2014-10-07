@@ -1097,7 +1097,7 @@ private class VibeDriverCore : DriverCore {
 
 			// always pass Errors on
 			if (auto err = cast(Error)th) throw err;
-		}
+		} else assert(!uncaught_exception, "Fiber returned exception object that is not a Throwable!?");
 	}
 
 	void notifyIdle()
