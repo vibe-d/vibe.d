@@ -621,6 +621,8 @@ final class HTTPServerRequest : HTTPRequest {
 
 		/** Contains all _form fields supplied using the _query string.
 
+			The fields are stored in the same order as they are received.
+
 			Remarks: This field is only set if HTTPServerOption.parseQueryString is set.
 		*/
 		FormFields query;
@@ -654,6 +656,8 @@ final class HTTPServerRequest : HTTPRequest {
 		Json json;
 
 		/** Contains the parsed parameters of a HTML POST _form request.
+
+			The fields are stored in the same order as they are received.
 
 			Remarks:
 				This field is only set if HTTPServerOption.parseFormBody is set.
