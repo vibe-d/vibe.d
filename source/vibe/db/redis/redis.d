@@ -430,8 +430,8 @@ struct RedisDatabase {
 
 		string[2] ret;
 		string mins, maxs;
-		mins = min == -double.infinity ? "-inf" : min == double.infinity ? "+inf" : min.to!string;
-		maxs = max == -double.infinity ? "-inf" : max == double.infinity ? "+inf" : max.to!string;
+		mins = min == -double.infinity ? "-inf" : min == double.infinity ? "+inf" : format(typeFormatString!double, min);
+		maxs = max == -double.infinity ? "-inf" : max == double.infinity ? "+inf" : format(typeFormatString!double, max);
 
 		static if (RNG[0] == '[') ret[0] = mins;
 		else static if (RNG[0] == '(') ret[0] = '('~mins;
@@ -969,7 +969,8 @@ private final class RedisConnection {
 				writeArgs(dst, args[i] ? "1" : "0");
 			} else static if (is(A : long) || is(A : real) || is(A == string)) {
 				auto alen = formattedLength(args[i]);
-				dst.formattedWrite("$%d\r\n%s\r\n", alen, args[i]);
+				enum fmt = "$%d\r\n"~typeFormatString!A~"\r\n";
+				dst.formattedWrite(fmt, alen, args[i]);
 			} else static if (is(A : const(ubyte[])) || is(A : const(char[]))) {
 				dst.formattedWrite("$%s\r\n", args[i].length);
 				dst.put(args[i]);
@@ -995,9 +996,15 @@ private final class RedisConnection {
 			import vibe.internal.rangeutil;
 			long length;
 			auto rangeCnt = RangeCounter(&length);
-			rangeCnt.formattedWrite("%s", arg);
+			rangeCnt.formattedWrite(typeFormatString!ARG, arg);
 			return length;
 		}
+	}
+
+	private template typeFormatString(T)
+	{
+		static if (isFloatingPoint!T) enum typeFormatString = "%.16g";
+		else enum typeFormatString = "%s";
 	}
 }
 
