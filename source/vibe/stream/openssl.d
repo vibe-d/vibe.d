@@ -277,6 +277,7 @@ final class OpenSSLContext : SSLContext {
 		SSLPeerValidationCallback m_peerValidationCallback;
 		SSLPeerValidationMode m_validationMode;
 		int m_verifyDepth;
+		SSLServerNameCallback m_sniCallback;
 	}
 
 	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
@@ -297,6 +298,7 @@ final class OpenSSLContext : SSLContext {
 				}
 				break;
 			case SSLContextKind.server:
+			case SSLContextKind.serverSNI:
 				final switch (ver) {
 					case SSLVersion.any: method = SSLv23_server_method(); break;
 					case SSLVersion.ssl3: method = SSLv3_server_method(); break;
@@ -414,6 +416,28 @@ final class OpenSSLContext : SSLContext {
 	@property void peerValidationCallback(SSLPeerValidationCallback callback) { m_peerValidationCallback = callback; }
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
+
+	@property void sniCallback(SSLServerNameCallback callback)
+	{
+		m_sniCallback = callback;
+		if (m_kind == SSLContextKind.serverSNI) {
+			SSL_CTX_callback_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_CB, cast(OSSLCallback)&onContextForServerName);
+			SSL_CTX_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_ARG, 0, cast(void*)this);
+		}
+	}
+	@property inout(SSLServerNameCallback) sniCallback() inout { return m_sniCallback; }
+
+	private extern(C) alias OSSLCallback = void function();
+	private static extern(C) int onContextForServerName(SSL *s, int *ad, void *arg)
+	{
+		auto ctx = cast(OpenSSLContext)arg;
+		auto servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
+		if (!servername) return SSL_TLSEXT_ERR_NOACK;
+		auto newctx = cast(OpenSSLContext)ctx.m_sniCallback(servername.to!string);
+		if (!newctx) return SSL_TLSEXT_ERR_NOACK;
+		SSL_set_SSL_CTX(s, newctx.m_ctx);
+		return SSL_TLSEXT_ERR_OK;
+	}
 
 	OpenSSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{

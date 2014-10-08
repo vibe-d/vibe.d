@@ -217,6 +217,14 @@ interface SSLContext {
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout;
 
+	/** The callback used to associcate host names with SSL certificates/contexts.
+
+		This property is only used for kind $(D SSLContextKind.serverSNI).
+	*/
+	@property void sniCallback(SSLServerNameCallback callback);
+	/// ditto
+	@property inout(SSLServerNameCallback) sniCallback() inout;
+
 	/** Creates a new stream associated to this context.
 	*/
 	SSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
@@ -272,8 +280,9 @@ interface SSLContext {
 }
 
 enum SSLContextKind {
-	client,
-	server
+	client,     /// Client context (active connector)
+	server,     /// Server context (passive connector)
+	serverSNI,  /// Server context with multiple certificate support (SNI)
 }
 
 enum SSLVersion {
@@ -370,6 +379,8 @@ struct SSLPeerValidationData {
 }
 
 alias SSLPeerValidationCallback = bool delegate(scope SSLPeerValidationData data);
+
+alias SSLServerNameCallback = SSLContext delegate(string hostname);
 
 private {
 	__gshared SSLContext function(SSLContextKind, SSLVersion) gs_sslContextFactory;
