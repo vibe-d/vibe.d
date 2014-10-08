@@ -1000,12 +1000,6 @@ private final class RedisConnection {
 			return length;
 		}
 	}
-
-	private template typeFormatString(T)
-	{
-		static if (isFloatingPoint!T) enum typeFormatString = "%.16g";
-		else enum typeFormatString = "%s";
-	}
 }
 
 private void _request_void(ARGS...)(RedisConnection conn, string command, scope ARGS args)
@@ -1064,4 +1058,10 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 		auto reply = _request_reply!T(conn, command, args);
 		return reply.front;
 	}
+}
+
+private template typeFormatString(T)
+{
+	static if (isFloatingPoint!T) enum typeFormatString = "%.16g";
+	else enum typeFormatString = "%s";
 }
