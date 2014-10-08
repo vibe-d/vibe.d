@@ -90,6 +90,7 @@ final class OpenSSLStream : SSLStream {
 					enforceSSL(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
 					break;
 				case SSLStreamState.connecting:
+					SSL_ctrl(m_ssl, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
 					//SSL_set_connect_state(m_ssl);
 					enforceSSL(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
 					break;
