@@ -79,7 +79,7 @@ struct Bson {
 	/// Returns a new, empty Bson value of type Object.
 	static @property Bson emptyObject() { return Bson(cast(Bson[string])null); }
 
-	/// Returns a new, empty Bson value of type Object.
+	/// Returns a new, empty Bson value of type Array.
 	static @property Bson emptyArray() { return Bson(cast(Bson[])null); }
 
 	/// Deprecated compatibility alias.
