@@ -126,26 +126,45 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 		}
 	}
 
-	bool any_succeeded = false;
+	void addVHost(ref HTTPServerListener lst)
+	{
+		SSLContext onSNI(string servername)
+		{
+			foreach (ctx; g_contexts)
+				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
+					&& ctx.settings.port == lst.bindPort
+					&& ctx.settings.hostName.icmp(servername) == 0)
+				{
+					return ctx.settings.sslContext;
+				}
+			return null;
+		}
+
+		if (settings.sslContext !is lst.sslContext && lst.sslContext.kind != SSLContextKind.serverSNI) {
+			lst.sslContext = createSSLContext(SSLContextKind.serverSNI);
+			lst.sslContext.sniCallback = &onSNI;
+		}
+
+		foreach (ctx; g_contexts) {
+			if (ctx.settings.port != settings.port) continue;
+			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
+			/*enforce(ctx.settings.hostName != settings.hostName,
+				"A server with the host name '"~settings.hostName~"' is already "
+				"listening on "~addr~":"~to!string(settings.port)~".");*/
+		}
+	}
+
+	bool any_successful = false;
 
 	// Check for every bind address/port, if a new listening socket needs to be created and
 	// check for conflicting servers
 	foreach (addr; settings.bindAddresses) {
 		bool found_listener = false;
-		foreach (lst; g_listeners) {
+		foreach (ref lst; g_listeners) {
 			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
-				enforce(settings.sslContext is lst.sslContext,
-					"A HTTP server is already listening on "~addr~":"~to!string(settings.port)~
-					" but the SSL context differs.");
-				foreach (ctx; g_contexts) {
-					if (ctx.settings.port != settings.port) continue;
-					if (!ctx.settings.bindAddresses.canFind(addr)) continue;
-					/*enforce(ctx.settings.hostName != settings.hostName,
-						"A server with the host name '"~settings.hostName~"' is already "
-						"listening on "~addr~":"~to!string(settings.port)~".");*/
-				}
+				addVHost(lst);
 				found_listener = true;
-				any_succeeded = true;
+				any_successful = true;
 				break;
 			}
 		}
@@ -153,13 +172,14 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
 			if (doListen(settings, listener, addr)) // DMD BUG 2043
 			{
-				any_succeeded = true;
+				found_listener = true;
+				any_successful = true;
 				g_listeners ~= listener;
 			}
 		}
 	}
 
-	enforce(any_succeeded, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
 
 
