@@ -501,27 +501,32 @@ final class OpenSSLContext : SSLContext {
 	 *    function without argument will restore the default.
 	 *
 	 */
-	void setECDHCurve(string curve=null)
+	void setECDHCurve(string curve = null)
 	{
-		static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
-			// use automatic ecdh curve selection by default
-			if (curve is null) {
-				SSL_CTX_set_ecdh_auto(m_ctx, true);
-				return;
+		version (VibeUseOldOpenSSL) enum have_ecdh = false;
+		else enum have_ecdh = OPENSSL_VERSION_NUMBER >= 0x10001000;
+
+		static if (have_ecdh) {
+			static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
+				// use automatic ecdh curve selection by default
+				if (curve is null) {
+					SSL_CTX_set_ecdh_auto(m_ctx, true);
+					return;
+				}
+				// but disable it when an explicit curve is given
+				SSL_CTX_set_ecdh_auto(m_ctx, false);
 			}
-			// but disable it when an explicit curve is given
-			SSL_CTX_set_ecdh_auto(m_ctx, false);
-		}
 
-		int nid;
-		if (curve is null)
-			nid = NID_X9_62_prime256v1;
-		else
-			nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
+			int nid;
+			if (curve is null)
+				nid = NID_X9_62_prime256v1;
+			else
+				nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
 
-		auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
-		SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
-		EC_KEY_free(ecdh);
+			auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
+			SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
+			EC_KEY_free(ecdh);
+		} else assert(false, "ECDH curve selection not available for old versions of OpenSSL");
 	}
 
 	/// Sets a certificate file to use for authenticating to the remote peer
