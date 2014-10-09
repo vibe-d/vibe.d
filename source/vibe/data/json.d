@@ -360,7 +360,7 @@ struct Json {
 		else static if (is(T == string)) return m_string;
 		else static if (is(T == Json[])) return m_array;
 		else static if (is(T == Json[string])) return m_object;
-		else static assert("JSON can only be casted to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
+		else static assert("JSON can only be cast to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 	/// ditto
 	@property const(T) opt(T)(const(T) def = T.init)
@@ -451,7 +451,7 @@ struct Json {
 				default: return Json(["value": this]);
 				case Type.object: return m_object;
 			}
-		} else static assert("JSON can only be casted to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
+		} else static assert("JSON can only be cast to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 
 	/**
@@ -1363,8 +1363,13 @@ struct JsonSerializer {
 	{
 		static if (is(T == Json)) return m_current;
 		else static if (isJsonSerializable!T) return T.fromJson(m_current);
-		else static if (is(T == float) || is(T == double)) return m_current.type == Json.Type.float_ ? cast(T)m_current.get!double : cast(T)m_current.get!long;
-		else return m_current.get!T();
+		else static if (is(T == float) || is(T == double)) {
+			if (m_current.type == Json.Type.undefined) return T.nan;
+			return m_current.type == Json.Type.float_ ? cast(T)m_current.get!double : cast(T)m_current.get!long;
+		}
+		else {
+			return m_current.get!T();
+		}
 	}
 
 	bool tryReadNull() { return m_current.type == Json.Type.null_; }
@@ -1542,7 +1547,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			} else static if (is(T : long)) {
 				bool is_float;
 				auto num = m_range.skipNumber(is_float);
-				enforceJson(!is_float, "Expecing integer number.");
+				enforceJson(!is_float, "Expecting integer number.");
 				return to!T(num);
 			} else static if (is(T : real)) {
 				bool is_float;
@@ -1596,7 +1601,13 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.null_: dst.put("null"); break;
 		case Json.Type.bool_: dst.put(cast(bool)json ? "true" : "false"); break;
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
-		case Json.Type.float_: formattedWrite(dst, "%.16g", json.get!double); break;
+		case Json.Type.float_: 
+			auto d = json.get!double;
+			if (d != d) 
+				dst.put("undefined"); // JSON has no NaN value so set null
+			else
+				formattedWrite(dst, "%.16g", json.get!double); 
+			break;
 		case Json.Type.string:
 			dst.put('\"');
 			jsonEscape(dst, cast(string)json);
@@ -1698,7 +1709,17 @@ unittest {
 	assert(d == a[0..$-2]);
 }
 
+unittest {
+	auto j = Json(double.init);
 
+	assert(j.toString == "undefined"); // A double nan should serialize to undefined
+	j = 17.04f;
+	assert(j.toString == "17.04");	// A proper double should serialize correctly
+
+	double d;
+	deserializeJson(d, Json.undefined); // Json.undefined should deserialize to nan
+	assert(d != d);
+}
 /**
 	Writes the given JSON object as a prettified JSON string into the destination range.
 
