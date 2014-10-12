@@ -770,14 +770,14 @@ final class RedisSubscriberImpl {
 		init();
 
 		void onSubscribe(string channel) {
-			logInfo("Callback subscribe(%s)", channel);
+			logTrace("Callback subscribe(%s)", channel);
 			m_subscriptions[channel] = true;
 			if (m_waiter != Task())
 				m_waiter.send(Action.SUBSCRIBE);
 		}
 
 		void onUnsubscribe(string channel) {
-			logInfo("Callback unsubscribe(%s)", channel);
+			logTrace("Callback unsubscribe(%s)", channel);
 			m_subscriptions.remove(channel);
 			if (m_waiter != Task())
 				m_waiter.send(Action.UNSUBSCRIBE);
@@ -819,7 +819,7 @@ final class RedisSubscriberImpl {
 			TCPConnection conn = m_lockedConnection.conn;
 			ubyte[] newLine = allocArray!ubyte(manualAllocator(), 1);
 			scope(exit) freeArray(manualAllocator(), newLine);
-			logInfo("Pubsub handler");
+			logTrace("Pubsub handler");
 			void delegate() dropCRLF = {
 				conn.read(newLine);
 				conn.read(newLine);
@@ -864,7 +864,7 @@ final class RedisSubscriberImpl {
 			dropCRLF();
 			string channel = cast(string) str.idup; // copy to GC to avoid bugs
 			freeArray(manualAllocator(), str);
-			logInfo("chan: %s", channel);
+			logTrace("chan: %s", channel);
 
 			if (cmd == "message") { // find the message
 				conn.read((&symbol)[0 .. 1]);
@@ -873,7 +873,7 @@ final class RedisSubscriberImpl {
 				str = allocArray!ubyte(manualAllocator(), cnt);
 				conn.read(str); // channel
 				string message = cast(string) str.idup; // copy to GC to avoid bugs
-				logInfo("msg: %s", message);
+				logTrace("msg: %s", message);
 				freeArray(manualAllocator(), str);
 				dropCRLF();
 				onMessage(channel, message);
@@ -883,7 +883,7 @@ final class RedisSubscriberImpl {
 				conn.read((&symbol)[0 .. 1]);
 				enforce(symbol == ':', "Expected ':', got '" ~ symbol.to!string ~ "'");
 				cnt = readArgs(); // number of subscriptions
-				logInfo("subscriptions: %d", cnt);
+				logTrace("subscriptions: %d", cnt);
 				if (is_subscribe)
 					onSubscribe(channel);
 				else
