@@ -14,7 +14,7 @@ RedisSubscriber subscriber;
 shared static this()
 {
 	auto publisher = new RedisClient();
-	subscriber = RedisSubscriber(new RedisClient());
+	subscriber = publisher.createSubscriber();
 
 	subscriber.subscribe("test1", "test2");
 	auto task = subscriber.listen(toDelegate(&printReply));

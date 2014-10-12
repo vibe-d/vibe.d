@@ -75,6 +75,12 @@ final class RedisClient {
 	*/
 	RedisDatabase getDatabase(long index) { return RedisDatabase(this, index); }
 
+	/** Creates a RedisSubscriber instance for launching a pubsub listener
+	*/
+	RedisSubscriber createSubscriber() {
+		return RedisSubscriber(this);
+	}
+
 	/*
 		Connection
 	*/

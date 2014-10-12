@@ -71,7 +71,7 @@ void runTest()
 	}
 	RedisSubscriber sub;
 	{
-		RedisSubscriber scoped = RedisSubscriber(redis);
+		RedisSubscriber scoped = redis.createSubscriber();
 		sub = scoped;
 	}
 	import std.datetime;
