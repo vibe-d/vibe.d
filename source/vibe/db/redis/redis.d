@@ -12,6 +12,7 @@ public import vibe.core.net;
 import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
+import vibe.utils.memory : allocArray, freeArray, manualAllocator, defaultAllocator;
 import vibe.stream.operations;
 import std.conv;
 import std.exception;
@@ -73,6 +74,12 @@ final class RedisClient {
 	/** Returns a handle to the given database.
 	*/
 	RedisDatabase getDatabase(long index) { return RedisDatabase(this, index); }
+
+	/** Creates a RedisSubscriber instance for launching a pubsub listener
+	*/
+	RedisSubscriber createSubscriber() {
+		return RedisSubscriber(this);
+	}
 
 	/*
 		Connection
@@ -211,13 +218,13 @@ struct RedisDatabase {
 	{
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-	    request("MSET", args);
+		request("MSET", args);
 	}
 
 	bool msetNX(ARGS...)(ARGS args) {
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-	    return request!bool("MSETEX", args);
+		return request!bool("MSETEX", args);
 	}
 
 	void set(T)(string key, T value) if(isValidRedisValueType!T) { request("SET", key, value); }
@@ -319,7 +326,7 @@ struct RedisDatabase {
 	// see http://redis.io/commands/zrangebyscore
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, long offset, long count, bool with_scores = false)
 		if(isValidRedisValueType!T)
- 	{
+	{
 		assert(offset >= 0);
 		assert(count >= 0);
 		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "WITHSCORES", "LIMIT", offset, count);
@@ -453,16 +460,36 @@ import std.datetime;
 import vibe.core.concurrency;
 import std.variant;
 import std.typecons : Tuple, tuple;
-import std.datetime;
+import std.container : Array;
+import std.algorithm : canFind;
+import std.range : takeOne;
+import std.array : array;
 
-final class RedisSubscriber {
+import vibe.utils.memory;
+
+alias RedisSubscriber = FreeListRef!RedisSubscriberImpl;
+
+final class RedisSubscriberImpl {
 	private {
 		RedisClient m_client;
 		LockedConnection!RedisConnection m_lockedConnection;
 		bool[string] m_subscriptions;
-		void delegate(string[] args) m_capture;
+		string[] m_pendingSubscriptions;
 		bool m_listening;
 		bool m_stop;
+		Task m_listener;
+		Task m_listenerHelper;
+		Task m_waiter;
+		RecursiveTaskMutex m_mutex;
+		TaskMutex m_connMutex;
+	}
+
+	private enum Action {
+		DATA,
+		STOP,
+		STARTED,
+		SUBSCRIBE,
+		UNSUBSCRIBE
 	}
 
 	@property bool isListening() const {
@@ -478,214 +505,504 @@ final class RedisSubscriber {
 	}
 
 	this(RedisClient client) {
+
+		logTrace("this()");
 		m_client = client;
+		m_mutex = new RecursiveTaskMutex;
+		m_connMutex = new TaskMutex;
 	}
 
-	bool bstop(){
-		if (!stop()) return false;
-		while (m_listening) {
-			sleep(1.msecs);
-		}
-		return true;
+	~this() {
+		logTrace("~this");
+		bstop();
 	}
 
-	bool stop(){
+	void bstop(){
+		logTrace("bstop");
 		if (!m_listening)
+			return;
+		void impl() {
+			synchronized (m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				stop();
+
+				bool stopped;
+				do {
+					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
+						break;
+				}
+				while (!stopped);
+				
+				enforce(stopped, "Failed to wait for Redis listener to stop");
+			}
+		}
+		inTask(&impl);
+	}
+
+
+	void stop(){
+		logTrace("stop");
+		if (!m_listening)
+			return;
+
+		void impl() {
+			synchronized (m_mutex) {
+				m_stop = true;
+				m_listener.send(Action.STOP);
+				// send a message to wake up the listenerHelper from the reply
+				if (m_subscriptions.length > 0) {
+					synchronized(m_connMutex)
+						_request_void(m_lockedConnection, "UNSUBSCRIBE", cast(string[]) m_subscriptions.keys.takeOne.array );
+					sleep(30.msecs);
+				}
+			}
+		}
+		inTask(&impl);
+	}
+
+	private bool hasNewSubscriptionIn(scope string[] args) {
+		bool has_new;
+		foreach (arg; args)
+			if (!hasSubscription(arg))
+				has_new = true;
+		if (!has_new)
 			return false;
-		m_stop = true;
-		// todo: publish some no-op data to wake up the listener?
 
 		return true;
 	}
 
+	private bool anySubscribed(scope string[] args) {
+
+		bool any_subscribed;
+		foreach (arg ; args) {
+			if (hasSubscription(arg))
+				any_subscribed = true;
+		}
+		return any_subscribed;
+	}
+
+	/// Completes the subscription for a listener to start receiving pubsub messages
+	/// on the corresponding channel(s). Returns instantly if already subscribed.
+	/// If a connection error is thrown here, it stops the listener.
 	void subscribe(scope string[] args...)
 	{
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback subscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions[channel] = true;
-		};
-		_request_void(m_lockedConnection, "SUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
+		logTrace("subscribe");
+		if (!m_listening) {
+			foreach (arg; args)
+				m_pendingSubscriptions ~= arg;
+			return;
+		}
+
+		if (!hasNewSubscriptionIn(args))
+			return;
+
+		void impl() {
+
+			scope(failure) { logTrace("Failure"); bstop(); }
+			try synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool subscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "SUBSCRIBE", args);
+				while(!m_subscriptions.keys.canFind(args)) {
+					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+						break;
+
+					subscribed = true;
+				}
+				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(subscribed, "Could not complete subscription(s).");
+
+			} catch (Throwable e) {
+				logTrace(e.toString());
+			}
+		}
+		inTask(&impl);
 	}
 
+	/// Unsubscribes from the channel(s) specified, returns immediately if none
+	/// is currently being listened.
+	/// If a connection error is thrown here, it stops the listener.
 	void unsubscribe(scope string[] args...)
 	{
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback unsubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions.remove(channel);
-		};
-		_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
+		logTrace("unsubscribe");
+
+		void impl() {
+
+			if (!anySubscribed(args))
+				return;
+
+			scope(failure) bstop();
+			assert(m_listening);
+			synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool unsubscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
+				while(m_subscriptions.keys.canFind(args)) {
+					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  })) {
+						unsubscribed = false;
+						break;
+					}
+					unsubscribed = true;
+				}
+				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(unsubscribed, "Could not complete unsubscription(s).");
+				
+			}
+
+		}
+		inTask(&impl);
 	}
 
+	/// Same as subscribe, but uses glob patterns, and does not return instantly if
+	/// the subscriptions are already registered.
+	/// throws Exception if the pattern does not yield a new subscription.
 	void psubscribe(scope string[] args...)
 	{
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback psubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions[channel] = true;
-		};
-		_request_void(m_lockedConnection, "PSUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
-	}
+		logTrace("psubscribe");
+		void impl() {
+			scope(failure) bstop();
+			assert(m_listening);
+			synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool subscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "PSUBSCRIBE", args);
 
+				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+					subscribed = false;
+				else
+					subscribed = true;
+
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(subscribed, "Could not complete subscription(s).");
+				
+			}
+		}
+		inTask(&impl);
+	}
+	
+	/// Same as unsubscribe, but uses glob patterns, and does not return instantly if
+	/// the subscriptions are not registered.
+	/// throws Exception if the pattern does not yield a new unsubscription.
 	void punsubscribe(scope string[] args...)
 	{
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback punsubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions.remove(channel);
-		};
-		_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
+		logTrace("punsubscribe");
+		void impl() {
+			scope(failure) bstop();
+			assert(m_listening);
+			synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool unsubscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
+				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  }))
+					unsubscribed = false;
+				else
+					unsubscribed = true;
+				
+				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(unsubscribed, "Could not complete unsubscription(s).");
+				
+			}
+		}
+		inTask(&impl);
 	}
 
-	private string getString(){
-		auto ln = cast(string)m_lockedConnection.conn.readLine();
-		enforceEx!RedisProtocolException(ln[0] == "$"[0], "Expected a string length, received bad response : " ~ ln);
-		//auto strLen = ln[1..$].to!long;
-		auto str = cast(string)m_lockedConnection.conn.readLine();
-		return str;
+	private void inTask(void delegate() impl) {
+		logTrace("inTask");
+		if (Task.getThis() == Task())
+		{
+			import vibe.core.driver;
+			Throwable ex;
+			bool done;
+			Task task = runTask({
+				logDebug("inTask" ~ Task.getThis().to!string);
+				try impl();
+				catch (Throwable e) {
+					ex = e;
+				}
+				done = true;
+			});
+			while(!done && !ex) {
+				processEvents();
+			}
+			logDebug("done");
+			if (ex)
+				throw ex;
+		}
+		else
+			impl();
 	}
 
 	private void init(){
-		if (m_lockedConnection is null){
+
+		logTrace("init");
+		if (m_lockedConnection.__conn is null){
 			m_lockedConnection = m_client.m_connections.lockConnection();
 			m_lockedConnection.setAuth(m_client.m_authPassword);
+			m_lockedConnection.setDB(m_client.m_selectedDB);
+		}
+
+		if (!m_lockedConnection.conn || !m_lockedConnection.conn.connected) {
+			try m_lockedConnection.conn = connectTCP(m_lockedConnection.m_host, m_lockedConnection.m_port);
+			catch (Exception e) {
+				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_lockedConnection.m_host, m_lockedConnection.m_port), __FILE__, __LINE__, e);
+			}
+			
+			m_lockedConnection.setAuth(m_client.m_authPassword); 
 			m_lockedConnection.setDB(m_client.m_selectedDB);
 		}
 	}
 
 	// Same as listen, but blocking
-	void blisten(void delegate(string, string) callback, Duration timeout)
+	void blisten(void delegate(string, string) onMessage, Duration timeout = 0.seconds)
 	{
 		init();
+
+		void onSubscribe(string channel) {
+			logTrace("Callback subscribe(%s)", channel);
+			m_subscriptions[channel] = true;
+			if (m_waiter != Task())
+				m_waiter.send(Action.SUBSCRIBE);
+		}
+
+		void onUnsubscribe(string channel) {
+			logTrace("Callback unsubscribe(%s)", channel);
+			m_subscriptions.remove(channel);
+			if (m_waiter != Task())
+				m_waiter.send(Action.UNSUBSCRIBE);
+		}
+
+		void teardown() { // teardown
+			logTrace("Redis listener exiting");
+			// More publish commands may be sent to this connection after recycling it, so we
+			// actively destroy it
+			Action act;
+			// wait for the listener helper to send its stop message
+			while (act != Action.STOP) 
+				act = receiveOnly!Action();
+			m_lockedConnection.conn.close();
+			m_lockedConnection.destroy();
+			m_listening = false;
+			return;
+		}
+		// http://redis.io/topics/pubsub
+		/**
+			 	SUBSCRIBE first second
+				*3
+				$9
+				subscribe
+				$5
+				first
+				:1
+				*3
+				$9
+				subscribe
+				$6
+				second
+				:2
+			*/
+		// This is a simple parser/handler for subscribe/unsubscribe/publish
+		// commands sent by redis. The PubSub client protocol is simple enough
+
+		void pubsub_handler() {
+			TCPConnection conn = m_lockedConnection.conn;
+			ubyte[] newLine = allocArray!ubyte(manualAllocator(), 1);
+			scope(exit) freeArray(manualAllocator(), newLine);
+			logTrace("Pubsub handler");
+			void delegate() dropCRLF = {
+				conn.read(newLine);
+				conn.read(newLine);
+			};
+			size_t delegate() readArgs = {
+				char[] ucnt = allocArray!char(manualAllocator(), 8);
+				scope(exit) freeArray(manualAllocator(), ucnt);
+				ubyte num;
+				size_t i;
+				do {
+					conn.read((&num)[0..1]);
+					if (num >= 48 && num <= 57)
+						ucnt[i] = num;
+					else break;
+					i++;
+				}
+				while (true); // ascii
+				conn.read(newLine);
+				logTrace("Found %s", ucnt);
+				// the new line is consumed when num is not in range.
+				return ucnt[0 .. i].to!size_t;
+			};
+			// find the number of arguments in the array
+			ubyte symbol;
+			conn.read((&symbol)[0 .. 1]);
+			enforce(symbol == '*', "Expected '*', got '" ~ symbol.to!string ~ "'");
+			size_t args = readArgs();
+			// get the number of characters in the first string (the command)
+			conn.read((&symbol)[0 .. 1]);
+			enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
+			size_t cnt = readArgs();
+			ubyte[] cmd = allocArray!ubyte(manualAllocator(), cnt);
+			scope(exit) freeArray(manualAllocator(), cmd);
+			conn.read(cmd);
+			dropCRLF();
+			// find the channel
+			conn.read((&symbol)[0 .. 1]);
+			enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
+			cnt = readArgs();
+			ubyte[] str = allocArray!ubyte(manualAllocator(), cnt);
+			conn.read(str);
+			dropCRLF();
+			string channel = cast(string) str.idup; // copy to GC to avoid bugs
+			freeArray(manualAllocator(), str);
+			logTrace("chan: %s", channel);
+
+			if (cmd == "message") { // find the message
+				conn.read((&symbol)[0 .. 1]);
+				enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
+				cnt = readArgs();
+				str = allocArray!ubyte(manualAllocator(), cnt);
+				conn.read(str); // channel
+				string message = cast(string) str.idup; // copy to GC to avoid bugs
+				logTrace("msg: %s", message);
+				freeArray(manualAllocator(), str);
+				dropCRLF();
+				onMessage(channel, message);
+			}
+			else if (cmd == "subscribe" || cmd == "unsubscribe") { // find the remaining subscriptions
+				bool is_subscribe = (cmd == "subscribe");
+				conn.read((&symbol)[0 .. 1]);
+				enforce(symbol == ':', "Expected ':', got '" ~ symbol.to!string ~ "'");
+				cnt = readArgs(); // number of subscriptions
+				logTrace("subscriptions: %d", cnt);
+				if (is_subscribe)
+					onSubscribe(channel);
+				else
+					onUnsubscribe(channel);
+			
+				// todo: enforce the number of subscriptions?
+			}
+			else assert(false, "Unrecognized pubsub wire protocol command received");
+		}
+
+		// Waits for data and advises the handler
+		m_listenerHelper = runTask( {
+			while(true) {
+				if (!m_stop && m_lockedConnection.conn && m_lockedConnection.conn.waitForData(100.msecs)) {
+					// We check every 5 seconds if this task should stay active
+					if (m_stop)	break;
+					else if (m_lockedConnection.conn && !m_lockedConnection.conn.dataAvailableForRead) continue;
+					// Data has arrived, this task is in charge of notifying the main handler loop
+					logTrace("Notify data arrival");
+
+					Task.getThis().messageQueue.clear();
+					m_listener.send(Action.DATA);
+					if (!receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }))
+						assert(false);
+
+				} else if (m_stop || !m_lockedConnection.conn) break;
+				logTrace("No data arrival in 100 ms...");
+			}
+			logTrace("Listener Helper exit.");
+			m_listener.send(Action.STOP);
+		} );
+
 		m_listening = true;
+		logTrace("Redis listener now listening");
+		if (m_waiter != Task())
+			m_waiter.send(Action.STARTED);
+
+		if (timeout == 0.seconds)
+			timeout = 365.days; // make sure 0.seconds is considered as big.
+
+		scope(exit) {
+			logTrace("Redis Listener exit.");
+			if (!m_stop) {
+				stop(); // notifies the listenerHelper
+			}
+			// close the data connections
+			teardown();
+			
+			if (m_waiter != Task())
+				m_waiter.send(Action.STOP);
+			
+			m_listenerHelper = Task();
+			m_listener = Task();
+			m_stop = false;
+		}
+
+		// Start waiting for data notifications to arrive
 		while(true) {
 
-			bool gotData;
-			StopWatch sw;
-			sw.start();
-			while (!gotData){
-				if (m_lockedConnection.conn.waitForData(5.seconds))	gotData = true;
-				if (timeout > 0.seconds && sw.peek().seconds > timeout.total!"seconds") { gotData = false;	break; }
-				if (m_stop){ gotData = false; break; }
-			}
-			sw.stop();
+			auto handler = (Action act) {
+				if (act == Action.STOP) m_stop = true;
+				if (m_stop) return;
+				logTrace("Calling PubSub Handler");
+				synchronized(m_connMutex)
+					pubsub_handler(); // handles one command at a time
+				m_listenerHelper.send(Action.DATA);
+			};
 
-			if (!gotData) {
-				m_listening = false;
-				// FIXME: it should be possible to avoid a disconnect, but
-				//        obviously we are not waiting for an "unsubscribe"
-				//        message after actively unsubscribing from all channels
-				m_lockedConnection.conn.close();
-				m_lockedConnection.destroy();
-				return;
+			if (!receiveTimeout(timeout, handler) || m_stop) {
+				logTrace("Redis Listener stopped");
+				break;
 			}
 
-			if (m_capture !is null){
-				auto res = handler();
-				m_capture(res[1]);
-				enforceEx!RedisProtocolException(m_subscriptions.length == res[0], "Subscription count is different than reported by the Redis server");
-				m_capture = null;
-				continue;
-			}
-
-			auto ln = cast(string)m_lockedConnection.conn.readLine();
-			string cmd;
-			if (ln[0] == '$'){
-				cmd = cast(string)m_lockedConnection.conn.readLine();
-			}
-			else if (ln[0] == '*') {
-				cmd = getString();
-			}else {
-				enforceEx!RedisProtocolException(false, "expected $ or *");
-			}
-			if(cmd == "message") {
-				auto channel = getString();
-				auto message = getString();
-				callback(channel, message);
-
-			}
-			else {
-				handler(); // get rid of it
-			}
 		}
 
 	}
-	private Tuple!(long, string[]) handler(){
-		assert(m_lockedConnection !is null);
 
-		auto ctx = RedisReplyContext.init;
-		string[] channels;
-		long subscriptions;
-
-		void readBulk(string sizeLn)
-		{
-			assert(m_lockedConnection !is null);
-			if (sizeLn.startsWith("$-1")) return;
-			if (sizeLn.startsWith(':')){
-				subscriptions = sizeLn[1..$].to!long;
-				return;
-			}
-			else {
-				auto data = cast(string)m_lockedConnection.conn.readLine();
-				if (data != "subscribe" && data != "unsubscribe"){
-					channels ~= cast(string)data;
-				}
-			}
-		}
-
-		@property bool hasNext() const { return m_lockedConnection && ctx.index < ctx.length; }
-
-		void next(){
-
-			if (!ctx.initialized){
-				auto ln = cast(string)m_lockedConnection.conn.readLine();
-
-				switch (ln[0]) {
-					default: throw new Exception(format("Unknown reply type: %s", ln[0]));
-					//case '+': ctx.data = cast(ubyte[])ln[1 .. $]; break;
-					//case '-': throw new Exception(ln[1 .. $]);
-					//case ':': ctx.data = cast(ubyte[])ln[1 .. $]; break;
-					case '$': readBulk(ln); break;
-					case '*':
-						if (ln.startsWith("*-1")) {
-							ctx.length = 0;
-						} else {
-							ctx.multi = true;
-							ctx.length = to!long(ln[ 1 .. $ ]);
-						}
-						break;
-				}
-			}
-			ctx.initialized = true;
-			ctx.index++;
-			if (ctx.multi) {
-				auto ln = cast(string)m_lockedConnection.conn.readLine();
-				readBulk(ln);
-			}
-		}
-		while(hasNext) next();
-		return tuple(subscriptions, channels);
-	}
-
-
-	// Waits for messages and calls the callback with the channel and the message as arguments
+	/// Waits for messages and calls the callback with the channel and the message as arguments.
+	/// The timeout is passed over to the listener, which closes after the period of inactivity.
+	/// Use 0.seconds timeout to specify a very long time (365 days)
+	/// Errors will be sent to Callback Delegate on channel "Error".
 	Task listen(void delegate(string, string) callback, Duration timeout = 0.seconds)
 	{
-		auto task = runTask({
-			blisten(callback, timeout);
-		});
-		import std.datetime : usecs;
-		while (!m_listening) {
-			sleep(1.usecs);
+		logTrace("Listen");
+		void impl() {
+			logTrace("Listen");
+			m_waiter = Task.getThis();
+			scope(exit) m_waiter = Task();
+			Throwable ex;
+			m_listener = runTask({
+				try blisten(callback, timeout);
+				catch(Throwable e) {
+					ex = e;
+					if (m_waiter != Task() && !m_listening) {
+						m_waiter.send(Action.STARTED);
+						return;
+					}
+					callback("Error", e.toString());
+				}
+			});
+			synchronized(m_mutex) {
+				import std.datetime : usecs;
+				receiveTimeout(2.seconds, (Action act) { assert( act == Action.STARTED); });
+				if (ex) throw ex;
+				enforce(m_listening, "Failed to start listening, timeout of 2 seconds expired");
+			}
+
+
+			foreach (channel; m_pendingSubscriptions) {
+				subscribe(channel);
+			}
+
+			m_pendingSubscriptions = null;
 		}
-		return task;
+		inTask(&impl);
+		return m_listener;
 	}
 }
+
 
 
 /** Range interface to a single Redis reply.

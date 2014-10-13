@@ -6,6 +6,7 @@ import vibe.vibe;
 
 void runTest()
 {
+	//setLogLevel(LogLevel.trace);
 	/* open a redis server locally to run these tests
 	 * Windows download link: https://github.com/MSOpenTech/redis/tree/2.8/bin/release
 	 * Linux: use "yum install redis" on RHEL or "apt-get install redis" on Debian-like
@@ -68,7 +69,11 @@ void runTest()
 		assert(db.smembers("test2").empty);
 		assert(!db.smembers("test1").hasNext());
 	}
-	RedisSubscriber sub = new RedisSubscriber(redis);
+	RedisSubscriber sub;
+	{
+		RedisSubscriber scoped = redis.createSubscriber();
+		sub = scoped;
+	}
 	import std.datetime;
 
 	assert(!sub.isListening);
@@ -77,17 +82,23 @@ void runTest()
 		logInfo("LISTEN Recv Time: %s", Clock.currTime().toString());
 	});
 	assert(sub.isListening);
-	sleep(1.seconds);
 	sub.subscribe("SomeChannel");
+	sub.subscribe("SomeChannel");
+	sub.subscribe("SomeChannel");
+	sleep(100.msecs);
+
+	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 
 	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
-	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+	sleep(100.msecs);
+
 	sub.unsubscribe("SomeChannel");
-	auto stopped = sub.bstop();
-	logInfo("LISTEN Stopped: %s", stopped.to!string);
+	sub.unsubscribe("SomeChannel");
+	sub.unsubscribe("SomeChannel");
+	sub.bstop();
+	logInfo("LISTEN Stopped");
 	assert(!sub.isListening);
 	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-	sleep(1.seconds);
 	logInfo("Redis Test Succeeded.");
 }
 
