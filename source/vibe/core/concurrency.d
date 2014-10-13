@@ -32,41 +32,56 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 	Using this function will ensure that there are no data races. For this reason, the class
 	type T is required to contain no unshared or unisolated aliasing.
 
-	Examples:
+	See_Also: core.concurrency.isWeaklyIsolated
+*/
+ScopedLock!T lock(T : const(Object))(shared(T) object)
+pure nothrow @safe {
+	return ScopedLock!T(object);
+}
+/// ditto
+void lock(T : const(Object))(shared(T) object, scope void delegate(scope T) accessor)
+nothrow {
+	auto l = lock(object);
+	accessor(l.unsafeGet());
+}
 
-	---
+///
+unittest {
 	import vibe.core.concurrency;
 
-	class Item {
+	static class Item {
 		private double m_value;
 
-		this(double value) { m_value = value; }
+		this(double value) pure { m_value = value; }
 
-		@property double value() const { return m_value; }
+		@property double value() const pure { return m_value; }
 	}
 
-	class Manager {
+	static class Manager {
 		private {
 			string m_name;
 			Isolated!(Item) m_ownedItem;
 			Isolated!(shared(Item)[]) m_items;
 		}
 
-		this(string name)
+		pure this(string name)
 		{
 			m_name = name;
 			auto itm = makeIsolated!Item(3.5);
-			m_ownedItem = itm;
+			m_ownedItem = itm.move;
 		}
 
-		void addItem(shared(Item) item) { m_items ~= item; }
+		void addItem(shared(Item) item) pure { m_items ~= item; }
 
 		double getTotalValue()
-		const {
+		const pure {
 			double sum = 0;
 
 			// lock() is required to access shared objects
-			foreach( itm; m_items ) sum += itm.lock().value;
+			foreach (itm; m_items.unsafeGet) {
+				auto l = itm.lock();
+				sum += l.value;
+			}
 
 			// owned objects can be accessed without locking
 			sum += m_ownedItem.value;
@@ -75,11 +90,11 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 		}
 	}
 
-	void main()
+	void test()
 	{
 		import std.stdio;
 
-		auto man = new shared(Manager)("My manager");
+		auto man = cast(shared)new Manager("My manager");
 		{
 			auto l = man.lock();
 			l.addItem(new shared(Item)(1.5));
@@ -88,19 +103,6 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 
 		writefln("Total value: %s", man.lock().getTotalValue());
 	}
-	---
-
-	See_Also: core.concurrency.isWeaklyIsolated
-*/
-ScopedLock!T lock(T : Object)(shared(T) object)
-pure nothrow @safe {
-	return ScopedLock!T(object);
-}
-/// ditto
-void lock(T : Object)(shared(T) object, scope void delegate(scope T) accessor)
-nothrow {
-	auto l = lock(object);
-	accessor(l.unsafeGet());
 }
 
 
@@ -154,8 +156,8 @@ struct ScopedLock(T)
 
 	private Object getObject()
 		pure nothrow {
-			static if( is(Rebindable!T == struct) ) return cast()m_ref.get();
-			else return cast()m_ref;
+			static if( is(Rebindable!T == struct) ) return cast(Unqual!T)m_ref.get();
+			else return cast(Unqual!T)m_ref;
 		}
 }
 
@@ -169,24 +171,34 @@ struct ScopedLock(T)
 	The function returns an instance of Isolated that will allow proxied access to the members of
 	the object, as well as providing means to convert the object to immutable or to an ordinary
 	mutable object.
+*/
+pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
+{
+	static if (is(T == class)) return Isolated!T(new T(args));
+	else static if (is(T == struct)) return T(args);
+	else static if (isPointer!T && is(PointerTarget!T == struct)) {
+		alias TB = PointerTarget!T;
+		return Isolated!T(new TB(args));
+	} else static assert(false, "makeIsolated works only for class and (pointer to) struct types.");
+}
 
-	Examples:
-
-	---
+///
+unittest {
 	import vibe.core.concurrency;
+	import vibe.core.core;
 
-	class Item {
+	static class Item {
 		double value;
 		string name;
 	}
 
-	void modifyItem(Isolated!Item itm)
+	static void modifyItem(Isolated!Item itm)
 	{
 		itm.value = 1.3;
 		// TODO: send back to initiating thread
 	}
 
-	void main()
+	void test()
 	{
 		immutable(Item)[] items;
 
@@ -198,19 +210,9 @@ struct ScopedLock(T)
 
 		// send isolated item to other thread
 		auto itm2 = makeIsolated!Item();
-		spawn(&modifyItem, itm2.move());
+		runWorkerTask(&modifyItem, itm2.move());
 		// ...
 	}
-	---
-*/
-pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
-{
-	static if (is(T == class)) return Isolated!T(new T(args));
-	else static if (is(T == struct)) return T(args);
-	else static if (isPointer!T && is(PointerTarget!T == struct)) {
-		alias TB = PointerTarget!T;
-		return Isolated!T(new TB(args));
-	} else static assert(false, "makeIsolated works only for class and (pointer to) struct types.");
 }
 
 unittest {
@@ -231,13 +233,20 @@ unittest {
 
 /**
 	Creates a new isolated array.
+*/
+pure Isolated!(T[]) makeIsolatedArray(T)(size_t size)
+{
+	Isolated!(T[]) ret;
+	ret.length = size;
+	return ret.move();
+}
 
-	Examples:
-
-	---
+///
+unittest {
 	import vibe.core.concurrency;
+	import vibe.core.core;
 
-	void compute(Tid tid, Isolated!(double[]) array, size_t start_index)
+	static void compute(Tid tid, Isolated!(double[]) array, size_t start_index)
 	{
 		foreach( i; 0 .. array.length )
 			array[i] = (start_index + i) * 0.5;
@@ -245,7 +254,7 @@ unittest {
 		send(tid, array.move());
 	}
 
-	void main()
+	void test()
 	{
 		import std.stdio;
 
@@ -258,14 +267,14 @@ unittest {
 
 		// start processing in threads
 		Tid[] tids;
-		foreach( i, idx; indices )
-			tids ~= spawn(&compute, thisTid, subarrays[i].move(), idx);
+		foreach (i, idx; indices)
+			tids ~= runWorkerTaskH(&compute, thisTid, subarrays[i].move(), idx);
 
 		// collect results
 		auto resultarrays = new Isolated!(double[])[tids.length];
 		foreach( i, tid; tids )
 			resultarrays[i] = receiveOnly!(Isolated!(double[])).move();
-		
+
 		// BUG: the arrays must be sorted here, but since there is no way to tell
 		// from where something was received, this is difficult here.
 
@@ -278,13 +287,6 @@ unittest {
 
 		writefln("Result: %s", result);
 	}
-	---
-*/
-pure Isolated!(T[]) makeIsolatedArray(T)(size_t size)
-{
-	Isolated!(T[]) ret;
-	ret.length = size;
-	return ret.move();
 }
 
 
@@ -630,7 +632,7 @@ private struct ScopedRefArray(T)
 {
 	alias typeof(T.init[0]) V;
 	private T* m_ref;
-	
+
 	private @property ref T m_array() pure { return *m_ref; }
 	private @property ref const(T) m_array() const pure { return *m_ref; }
 
@@ -680,11 +682,13 @@ private struct ScopedRefAssociativeArray(K, V)
 /// private
 private string isolatedAggregateMethodsString(T)()
 {
+	import vibe.internal.meta.traits;
+
 	string ret = generateModuleImports!T();
 	//pragma(msg, "Type '"~T.stringof~"'");
 	foreach( mname; __traits(allMembers, T) ){
-		static if( !is(FunctionTypeOf!(__traits(getMember, T, mname)) == function) ){
-			static if( isMemberPublic!(T, mname) ){
+		static if (isPublicMember!(T, mname)) {
+			static if (isRWPlainField!(T, mname)) {
 				alias typeof(__traits(getMember, T, mname)) mtype;
 				auto mtypename = fullyQualifiedName!mtype;
 				//pragma(msg, "  field " ~ mname ~ " : " ~ mtype.stringof);
@@ -697,51 +701,51 @@ private string isolatedAggregateMethodsString(T)()
 						ret ~= "@property void "~mname~"(AT)(AT value) pure { static assert(isWeaklyIsolated!AT); m_ref."~mname~" = value.unsafeGet(); }\n";
 					}
 				}
-			} //else pragma(msg, "  non-public field " ~ mname);
-		} else {
-			foreach( method; __traits(getOverloads, T, mname) ){
-				alias FunctionTypeOf!method ftype;
+			} else {
+				foreach( method; __traits(getOverloads, T, mname) ){
+					alias FunctionTypeOf!method ftype;
 
-				// only pure functions are allowed (or they could escape references to global variables)
-				// don't allow non-isolated references to be escaped
-				if( functionAttributes!ftype & FunctionAttribute.pure_ &&
-					isWeaklyIsolated!(ReturnType!ftype) )
-				{
-					static if( __traits(isStaticFunction, method) ){
-						//pragma(msg, "  static method " ~ mname ~ " : " ~ ftype.stringof);
-						ret ~= "static "~fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
+					// only pure functions are allowed (or they could escape references to global variables)
+					// don't allow non-isolated references to be escaped
+					if( functionAttributes!ftype & FunctionAttribute.pure_ &&
+						isWeaklyIsolated!(ReturnType!ftype) )
+					{
+						static if( __traits(isStaticFunction, method) ){
+							//pragma(msg, "  static method " ~ mname ~ " : " ~ ftype.stringof);
+							ret ~= "static "~fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
+							}
+							ret ~= "){ return "~fullyQualifiedName!T~"."~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= "p"~i.stringof;
+							}
+							ret ~= "); }\n";
+						} else if (mname != "__ctor") {
+							//pragma(msg, "  normal method " ~ mname ~ " : " ~ ftype.stringof);
+							if( is(ftype == const) ) ret ~= "const ";
+							if( is(ftype == shared) ) ret ~= "shared ";
+							if( is(ftype == immutable) ) ret ~= "immutable ";
+							if( functionAttributes!ftype & FunctionAttribute.pure_ ) ret ~= "pure ";
+							if( functionAttributes!ftype & FunctionAttribute.property ) ret ~= "@property ";
+							ret ~= fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
+							}
+							ret ~= "){ return m_ref."~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= "p"~i.stringof;
+							}
+							ret ~= "); }\n";
 						}
-						ret ~= "){ return "~fullyQualifiedName!T~"."~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= "p"~i.stringof;
-						}
-						ret ~= "); }\n";
-					} else if (mname != "__ctor") {
-						//pragma(msg, "  normal method " ~ mname ~ " : " ~ ftype.stringof);
-						if( is(ftype == const) ) ret ~= "const ";
-						if( is(ftype == shared) ) ret ~= "shared ";
-						if( is(ftype == immutable) ) ret ~= "immutable ";
-						if( functionAttributes!ftype & FunctionAttribute.pure_ ) ret ~= "pure ";
-						if( functionAttributes!ftype & FunctionAttribute.property ) ret ~= "@property ";
-						ret ~= fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
-						}
-						ret ~= "){ return m_ref."~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= "p"~i.stringof;
-						}
-						ret ~= "); }\n";
 					}
 				}
 			}
-		}
+		} //else pragma(msg, "  non-public field " ~ mname);
 	}
 	return ret;
 }
@@ -903,7 +907,7 @@ private @property string generateModuleImportsImpl(T, TYPES...)(ref bool[string]
 			addModule(moduleName!T);
 
 			foreach( member; __traits(allMembers, T) ){
-				//static if( isMemberPublic!(T, member) ){
+				//static if( isPublicMember!(T, member) ){
 					static if( !is(typeof(__traits(getMember, T, member))) ){
 						// ignore sub types
 					} else static if( !is(FunctionTypeOf!(__traits(getMember, T, member)) == function) ){
@@ -932,21 +936,6 @@ template haveTypeAlready(T, TYPES...)
 	static if( TYPES.length == 0 ) enum haveTypeAlready = false;
 	else static if( is(T == TYPES[0]) ) enum haveTypeAlready = true;
 	else alias haveTypeAlready!(T, TYPES[1 ..$]) haveTypeAlready;
-}
-
-template isMemberPublic(T, string member)
-{
-	static if( __traits(compiles, {tryAccess!(T, member)(); }()) ){
-		enum isMemberPublic = true;
-	} else enum isMemberPublic = false;
-}
-
-/// private
-private void tryAccess(T, string member)()
-{
-	mixin(generateModuleImports!T());
-	mixin(fullyQualifiedName!T~" inst;");
-	mixin("auto p = &inst."~member~";");
 }
 
 
@@ -1158,9 +1147,9 @@ unittest {
 	{
 		static if (__VERSION__ >= 2065) {
 		auto val = async({
-			logInfo("Starting to compute value.");
+			logInfo("Starting to compute value in worker task.");
 			sleep(500.msecs); // simulate some lengthy computation
-			logInfo("Finished computing value.");
+			logInfo("Finished computing value in worker task.");
 			return 32;
 		});
 
@@ -1229,10 +1218,11 @@ static if (newStdConcurrency) {
 
 	auto receiveOnly(ARGS...)()
 	{
+		import std.algorithm : move;
 		ARGS ret;
 
 		receive(
-			(ARGS val) { ret = val; },
+			(ARGS val) { move(val, ret); },
 			(LinkTerminated e) { throw e; },
 			(OwnerTerminated e) { throw e; },
 			(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, ARGS.stringof)); }

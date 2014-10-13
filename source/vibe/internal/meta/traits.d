@@ -9,6 +9,9 @@
 
 module vibe.internal.meta.traits;
 
+import vibe.internal.meta.typetuple;
+
+
 /**
 	Checks if given type is a getter function type
 
@@ -331,4 +334,18 @@ unittest { // tuple fields
 	alias U = S!();
 	static assert(!isNonStaticMember!(U, "a"));
 	static assert(!isNonStaticMember!(U, "b"));
+}
+
+
+/**
+	Tests if a Group of types is implicitly convertible to a Group of target types.
+*/
+bool areConvertibleTo(alias TYPES, alias TARGET_TYPES)()
+	if (isGroup!TYPES && isGroup!TARGET_TYPES)
+{
+	static assert(TYPES.expand.length == TARGET_TYPES.expand.length);
+	foreach (i, V; TYPES.expand)
+		if (!is(V : TARGET_TYPES.expand[i]))
+			return false;
+	return true;
 }
