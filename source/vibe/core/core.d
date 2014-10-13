@@ -615,14 +615,21 @@ FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescripto
 
 
 /**
-	Sets the stack size for tasks.
+	Sets the stack size to use for tasks.
 
-	The default stack size is set to 16 KiB, which is sufficient for most tasks.
-	Tuning this value can be used to reduce memory usage for great numbers of
-	concurrent tasks or to enable applications with heavy stack use.
+	The default stack size is set to 512 KiB on 32-bit systems and to 16 MiB
+	on 64-bit systems, which is sufficient for most tasks. Tuning this value
+	can be used to reduce memory usage for large numbers of concurrent tasks
+	or to avoid stack overflows for applications with heavy stack use.
 
-	Note that this function must be called before any task is started to have an
-	effect.
+	Note that this function must be called at initialization time, before any
+	task is started to have an effect.
+
+	Also note that the stack will initially not consume actual physical memory -
+	it just reserves virtual address space. Only once the stack gets actually
+	filled up with data will physical memory then be reserved page by page. This
+	means that the stack can safely be set to large sizes on 64-bit systems
+	without having to worry about memory usage.
 */
 void setTaskStackSize(size_t sz)
 {
@@ -1158,8 +1165,11 @@ alias TaskArgsVariant = VariantN!maxTaskParameterSize;
 /**************************************************************************************************/
 
 private {
+	static if ((void*).sizeof >= 8) enum defaultTaskStackSize = 16*1024*1024;
+	else enum defaultTaskStackSize = 512*1024;
+
 	__gshared VibeDriverCore s_core;
-	__gshared size_t s_taskStackSize = 16*4096;
+	__gshared size_t s_taskStackSize = defaultTaskStackSize;
 
 	__gshared core.sync.mutex.Mutex st_threadsMutex;
 	__gshared ManualEvent st_threadsSignal;
