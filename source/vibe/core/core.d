@@ -220,30 +220,17 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 void runWorkerTask(FT, ARGS...)(FT func, auto ref ARGS args)
 	if (is(typeof(*func) == function))
 {
-	import std.traits : ParameterTypeTuple;
-
-	alias FARGS = ParameterTypeTuple!FT;
-	static assert(__traits(compiles, {FARGS fargs = args;}),
-				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
-	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-
-	runWorkerTask_unsafe!(FT, FARGS)(func, args);
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	runWorkerTask_unsafe(func, args);
 }
 
 /// ditto
 void runWorkerTask(alias method, T, ARGS...)(shared(T) object, auto ref ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
-	import std.traits : ParameterTypeTuple;
-
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 	auto func = &__traits(getMember, object, __traits(identifier, method));
-	alias FT = typeof(func);
-	alias FARGS = ParameterTypeTuple!FT;
-	static assert(__traits(compiles, {FARGS fargs = args;}),
-				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
-	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-
-	runWorkerTask_unsafe!(FT, FARGS)(func, args);
+	runWorkerTask_unsafe(func, args);
 }
 
 /**
@@ -258,19 +245,14 @@ void runWorkerTask(alias method, T, ARGS...)(shared(T) object, auto ref ARGS arg
 Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 	if (is(typeof(*func) == function))
 {
-	import std.traits : ParameterTypeTuple;
-
-	alias FARGS = ParameterTypeTuple!FT;
-	static assert(__traits(compiles, {FARGS fargs = args;}),
-				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
-	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
 	Task caller = Task.getThis();
-	static void taskFun(Task caller, FT func, ref ARGS args) {
+	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
-		func(args);
+		mixin(callWithMove!ARGS("func", "args"));
 	}
 	runWorkerTask_unsafe(&taskFun, caller, func, args);
 	return cast(Task)receiveOnly!PrivateTask();
@@ -279,21 +261,17 @@ Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS args)
 	if (is(typeof(__traits(getMember, object, __traits(identifier, method)))))
 {
-	import std.traits : ParameterTypeTuple;
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 
 	auto func = &__traits(getMember, object, __traits(identifier, method));
 	alias FT = typeof(func);
-	alias FARGS = ParameterTypeTuple!FT;
-	static assert(__traits(compiles, {FARGS fargs = args;}),
-				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
-	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 
 	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
 	Task caller = Task.getThis();
-	static void taskFun(Task caller, FT func, ref ARGS args) {
+	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
-		func(args);
+		mixin(callWithMove!ARGS("func", "args"));
 	}
 	runWorkerTask_unsafe(&taskFun, caller, func, args);
 	return cast(Task)receiveOnly!PrivateTask();
@@ -392,9 +370,16 @@ unittest {
 	}
 }
 
-// no auto ref because of Bugzilla 13140
-private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*auto ref*/ ARGS args)
+private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS args)
 {
+	import std.traits : ParameterTypeTuple;
+	import vibe.internal.meta.traits : areConvertibleTo;
+	import vibe.internal.meta.typetuple;
+
+	alias FARGS = ParameterTypeTuple!CALLABLE;
+	static assert(areConvertibleTo!(Group!ARGS, Group!FARGS),
+		"Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+
 	setupWorkerThreads();
 
 	auto tfi = makeTaskFuncInfo(callable, args);
@@ -402,6 +387,7 @@ private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*auto r
 	synchronized (st_threadsMutex) st_workerTasks ~= tfi;
 	st_threadsSignal.emit();
 }
+
 
 /**
 	Runs a new asynchronous task in all worker threads concurrently.
@@ -413,33 +399,28 @@ private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*auto r
 void runWorkerTaskDist(FT, ARGS...)(FT func, auto ref ARGS args)
 	if (is(typeof(*func) == function))
 {
-	import std.traits : ParameterTypeTuple;
-
-	alias FARGS = ParameterTypeTuple!FT;
-	static assert(__traits(compiles, {FARGS fargs = args;}),
-				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
-	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
-
-	runWorkerTaskDist_unsafe!(FT, FARGS)(func, args);
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	runWorkerTaskDist_unsafe(func, args);
 }
 /// ditto
 void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
 {
-	import std.traits : ParameterTypeTuple;
-
 	auto func = &__traits(getMember, object, __traits(identifier, method));
-	alias FT = typeof(func);
-	alias FARGS = ParameterTypeTuple!FT;
-	static assert(__traits(compiles, {FARGS fargs = args;}),
-				  "Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
-	foreach (T; FARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
+	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 
-	runWorkerTaskDist_unsafe!(FT, FARGS)(func, args);
+	runWorkerTaskDist_unsafe(func, args);
 }
 
-// no auto ref because of Bugzilla 13140
-private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*auto ref*/ ARGS args)
+private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS args)
 {
+	import std.traits : ParameterTypeTuple;
+	import vibe.internal.meta.traits : areConvertibleTo;
+	import vibe.internal.meta.typetuple;
+
+	alias FARGS = ParameterTypeTuple!CALLABLE;
+	static assert(areConvertibleTo!(Group!ARGS, Group!FARGS),
+		"Cannot convert arguments '"~ARGS.stringof~"' to function arguments '"~FARGS.stringof~"'.");
+
 	setupWorkerThreads();
 
 	auto tfi = makeTaskFuncInfo(callable, args);
@@ -452,9 +433,11 @@ private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, /*au
 	st_threadsSignal.emit();
 }
 
-private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, auto ref ARGS args)
+private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS args)
 {
-	alias TARGS = Tuple!ARGS;
+	import std.algorithm : move;
+
+	struct TARGS { ARGS expand; }
 
 	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
 	static assert(TARGS.sizeof <= maxTaskParameterSize,
@@ -464,23 +447,23 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, auto
 	static void callDelegate(TaskFuncInfo* tfi) {
 		assert(tfi.func is &callDelegate);
 
-		// copy original call data
-		auto c = tfi.callable.reinterpretAs!CALLABLE();
-		auto args = tfi.args.reinterpretAs!TARGS;
+		// copy original call data to stack
+		CALLABLE c;
+		TARGS args;
+		move(*(cast(CALLABLE*)tfi.callable.ptr), c);
+		move(*(cast(TARGS*)tfi.args.ptr), args);
 
-		// reset the info and destroy the original data
+		// reset the info
 		tfi.func = null;
-		destroy(tfi.callable.reinterpretAs!CALLABLE);
-		destroy(tfi.args.reinterpretAs!TARGS);
 
 		// make the call
-		c(args.expand);
+		mixin(callWithMove!ARGS("c", "args.expand"));
 	}
 
 	TaskFuncInfo tfi;
 	tfi.func = &callDelegate;
-	emplace(cast(CALLABLE*)tfi.callable.ptr, callable);
-	emplace(cast(TARGS*)tfi.args.ptr, tuple(args));
+	move(callable, *cast(CALLABLE*)tfi.callable.ptr);
+	foreach (i, A; ARGS) move(args[i], (cast(TARGS*)tfi.args.ptr).expand[i]);
 	return tfi;
 }
 
@@ -1527,5 +1510,17 @@ private struct CoreTaskQueue {
 	}
 }
 
-// helper for a reinterpret cast of a blob of memory
-private ref T reinterpretAs(T)(void[] mem) { return (cast(T[])mem[0 .. T.sizeof])[0]; }
+// mixin string helper to call a function with arguments that potentially have
+// to be moved
+string callWithMove(ARGS...)(string func, string args)
+{
+	import std.string;
+	string ret = func ~ "(";
+	foreach (i, T; ARGS) {
+		if (i > 0) ret ~= ", ";
+		ret ~= format("%s[%s]", args, i);
+		// FIXME: reverse the condition and only call .move for non-copyable types!
+		static if (is(typeof(T.init.move))) ret ~= ".move";
+	}
+	return ret ~ ");";
+}
