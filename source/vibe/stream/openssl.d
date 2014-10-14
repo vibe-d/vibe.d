@@ -245,9 +245,10 @@ final class OpenSSLStream : SSLStream {
 		int line;
 		int flags;
 		string estr;
-		char[120] ebuf;
+		char[120] ebuf = 0;
 
 		while ((eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0) {
+			ERR_error_string_n(eret, ebuf.ptr, ebuf.length);
 			estr = ebuf.ptr.to!string;
 			// throw the last error code as an exception
 			if (!ERR_peek_error()) break;
