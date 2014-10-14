@@ -113,11 +113,11 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 {
 	import std.algorithm : canFind;
 
-	static bool doListen(HTTPServerSettings settings, HTTPServerListener listener, string addr)
+	static bool doListen(HTTPServerSettings settings, size_t listener_idx, string addr)
 	{
 		try {
 			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
-			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, listener); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
+			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, g_listeners[listener_idx]); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
 			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 			return true;
 		} catch( Exception e ) {
@@ -135,12 +135,15 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 					&& ctx.settings.port == lst.bindPort
 					&& ctx.settings.hostName.icmp(servername) == 0)
 				{
+					logDebug("Found context for SNI host '%s'.", servername);
 					return ctx.settings.sslContext;
 				}
+			logDebug("No context found for SNI host '%s'.", servername);
 			return null;
 		}
 
 		if (settings.sslContext !is lst.sslContext && lst.sslContext.kind != SSLContextKind.serverSNI) {
+			logDebug("Create SNI SSL context for %s, port %s", lst.bindAddress, lst.bindPort);
 			lst.sslContext = createSSLContext(SSLContextKind.serverSNI);
 			lst.sslContext.sniCallback = &onSNI;
 		}
@@ -160,9 +163,11 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 	// check for conflicting servers
 	foreach (addr; settings.bindAddresses) {
 		bool found_listener = false;
-		foreach (ref lst; g_listeners) {
+		foreach (i, ref lst; g_listeners) {
 			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
 				addVHost(lst);
+				assert(!settings.sslContext || lst.sslContext.kind == SSLContextKind.serverSNI);
+				assert(g_listeners[i] == lst);
 				found_listener = true;
 				any_successful = true;
 				break;
@@ -170,7 +175,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 		}
 		if (!found_listener) {
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
-			if (doListen(settings, listener, addr)) // DMD BUG 2043
+			if (doListen(settings, g_listeners.length, addr)) // DMD BUG 2043
 			{
 				found_listener = true;
 				any_successful = true;
@@ -178,6 +183,8 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			}
 		}
 	}
+
+	foreach (lst; g_listeners) logInfo("LST: %s %s", lst.bindAddress, lst.sslContext.kind);
 
 	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
@@ -1240,7 +1247,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	if (listen_info.sslContext) {
 		version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
 		else {
-			logTrace("accept ssl");
+			logDebug("Accept SSL connection: %s", listen_info.sslContext.kind);
 			// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
 			ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting, null, connection.remoteAddress);
 			http_stream = ssl_stream;
@@ -1350,8 +1357,16 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		logTrace("Got request header.");
 
 		// find the matching virtual host
+		string reqhost;
+		ushort reqport = 0;
+		auto reqhostparts = req.host.splitter(":");
+		if (!reqhostparts.empty) { reqhost = reqhostparts.front; reqhostparts.popFront(); }
+		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }
+		enforce(reqhostparts.empty, "Invalid suffix found in host header");
 		foreach (ctx; g_contexts)
-			if (icmp2(ctx.settings.hostName, req.host) == 0) {
+			if (icmp2(ctx.settings.hostName, reqhost) == 0 && 
+				(!reqport || reqport == ctx.settings.port))
+			{
 				if (ctx.settings.port != listen_info.bindPort) continue;
 				bool found = false;
 				foreach (addr; ctx.settings.bindAddresses)
