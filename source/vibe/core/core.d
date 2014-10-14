@@ -411,7 +411,7 @@ void runWorkerTaskDist(alias method, T, ARGS...)(shared(T) object, ARGS args)
 	runWorkerTaskDist_unsafe(func, args);
 }
 
-private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS args)
+private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(ref CALLABLE callable, ref ARGS args)
 {
 	import std.traits : ParameterTypeTuple;
 	import vibe.internal.meta.traits : areConvertibleTo;
@@ -433,9 +433,10 @@ private void runWorkerTaskDist_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ref 
 	st_threadsSignal.emit();
 }
 
-private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS args)
+private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, ref ARGS args)
 {
 	import std.algorithm : move;
+	import std.traits : hasElaborateAssign;
 
 	struct TARGS { ARGS expand; }
 
@@ -462,8 +463,14 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(CALLABLE callable, ref 
 
 	TaskFuncInfo tfi;
 	tfi.func = &callDelegate;
-	move(callable, *cast(CALLABLE*)tfi.callable.ptr);
-	foreach (i, A; ARGS) move(args[i], (cast(TARGS*)tfi.args.ptr).expand[i]);
+	static if (hasElaborateAssign!CALLABLE) tfi.initCallable!CALLABLE();
+	static if (hasElaborateAssign!TARGS) tfi.initArgs!TARGS();
+
+	tfi.typedCallable!CALLABLE = callable;
+	foreach (i, A; ARGS) {
+		static if (needsMove!A) tfi.typedArgs!TARGS.expand[i] = args[i].move;
+		else tfi.typedArgs!TARGS.expand[i] = args[i];
+	}
 	return tfi;
 }
 
@@ -1139,6 +1146,30 @@ private struct TaskFuncInfo {
 	void function(TaskFuncInfo*) func;
 	void[2*size_t.sizeof] callable = void;
 	void[maxTaskParameterSize] args = void;
+
+	@property ref C typedCallable(C)()
+	{
+		static assert(C.sizeof <= callable.sizeof);
+		return *cast(C*)callable.ptr;
+	}
+
+	@property ref A typedArgs(A)()
+	{
+		static assert(A.sizeof <= args.sizeof);
+		return *cast(A*)args.ptr;
+	}
+
+	void initCallable(C)()
+	{
+		C cinit;
+		this.callable[0 .. C.sizeof] = cast(void[])(&cinit)[0 .. 1];
+	}
+
+	void initArgs(A)()
+	{
+		A ainit;
+		this.args[0 .. A.sizeof] = cast(void[])(&ainit)[0 .. 1];
+	}
 }
 
 alias TaskArgsVariant = VariantN!maxTaskParameterSize;
@@ -1512,15 +1543,20 @@ private struct CoreTaskQueue {
 
 // mixin string helper to call a function with arguments that potentially have
 // to be moved
-string callWithMove(ARGS...)(string func, string args)
+private string callWithMove(ARGS...)(string func, string args)
 {
 	import std.string;
 	string ret = func ~ "(";
 	foreach (i, T; ARGS) {
 		if (i > 0) ret ~= ", ";
 		ret ~= format("%s[%s]", args, i);
-		// FIXME: reverse the condition and only call .move for non-copyable types!
-		static if (is(typeof(T.init.move))) ret ~= ".move";
+		static if (needsMove!T) ret ~= ".move";
 	}
 	return ret ~ ");";
+}
+
+private template needsMove(T)
+{
+	// FIXME: reverse the condition and only call .move for non-copyable types!
+	enum needsMove = is(typeof(T.init.move));
 }
