@@ -468,7 +468,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 
 	tfi.typedCallable!CALLABLE = callable;
 	foreach (i, A; ARGS) {
-		static if (needsMove!A) tfi.typedArgs!TARGS.expand[i] = args[i].move;
+		static if (needsMove!A) args[i].move(tfi.typedArgs!TARGS.expand[i]);
 		else tfi.typedArgs!TARGS.expand[i] = args[i];
 	}
 	return tfi;

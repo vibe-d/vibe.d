@@ -394,6 +394,8 @@ private struct IsolatedRef(T)
 		this instance will be set to null after the call returns.
 	*/
 	IsolatedRef move() { auto r = m_ref; m_ref = null; return IsolatedRef(r); }
+	/// ditto
+	void move(ref IsolatedRef target) { target.m_ref = m_ref; m_ref = null; }
 
 	/**
 		Convert the isolated reference to a normal mutable reference.
@@ -469,6 +471,7 @@ private struct IsolatedArray(T)
 	inout(T[]) unsafeGet() inout { return m_array; }
 
 	IsolatedArray!T move() pure { auto r = m_array; m_array = null; return IsolatedArray(r); }
+	void move(ref IsolatedArray target) pure { target.m_array = m_array; m_array = null; }
 
 	T[] extract()
 	pure {
@@ -553,6 +556,7 @@ private struct IsolatedAssociativeArray(K, V)
 	inout(V[K]) unsafeGet() inout { return m_aa; }
 
 	IsolatedAssociativeArray move() { auto r = m_aa; m_aa = null; return IsolatedAssociativeArray(r); }
+	void move(ref IsolatedAssociativeArray target) { target.m_aa = m_aa; m_aa = null; }
 
 	V[K] extract()
 	{
