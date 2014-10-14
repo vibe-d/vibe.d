@@ -131,9 +131,10 @@ class LockAllocator : Allocator {
 }
 
 final class DebugAllocator : Allocator {
+	import vibe.utils.hashmap : HashMap;
 	private {
 		Allocator m_baseAlloc;
-		size_t[void*] m_blocks;
+		HashMap!(void*, size_t) m_blocks;
 		size_t m_bytes;
 		size_t m_maxBytes;
 	}
@@ -141,6 +142,7 @@ final class DebugAllocator : Allocator {
 	this(Allocator base_allocator)
 	{
 		m_baseAlloc = base_allocator;
+		m_blocks = HashMap!(void*, size_t)(manualAllocator());
 	}
 
 	@property size_t allocatedBlockCount() const { return m_blocks.length; }
@@ -151,7 +153,7 @@ final class DebugAllocator : Allocator {
 	{
 		auto ret = m_baseAlloc.alloc(sz);
 		assert(ret.length == sz, "base.alloc() returned block with wrong size.");
-		assert(ret !in m_blocks, "base.alloc() returned block that is already allocated.");
+		assert(m_blocks.get(ret.ptr, size_t.max) == size_t.max, "base.alloc() returned block that is already allocated.");
 		m_blocks[ret.ptr] = sz;
 		m_bytes += sz;
 		if( m_bytes > m_maxBytes ){
@@ -163,13 +165,13 @@ final class DebugAllocator : Allocator {
 
 	void[] realloc(void[] mem, size_t new_size)
 	{
-		auto pb = mem.ptr in m_blocks;
-		assert(pb, "realloc() called with non-allocated pointer.");
-		assert(*pb == mem.length, "realloc() called with block of wrong size.");
+		auto sz = m_blocks.get(mem.ptr, size_t.max);
+		assert(sz != size_t.max, "realloc() called with non-allocated pointer.");
+		assert(sz == mem.length, "realloc() called with block of wrong size.");
 		auto ret = m_baseAlloc.realloc(mem, new_size);
 		assert(ret.length == new_size, "base.realloc() returned block with wrong size.");
-		assert(ret.ptr is mem.ptr || ret.ptr !in m_blocks, "base.realloc() returned block that is already allocated.");
-		m_bytes -= *pb;
+		assert(ret.ptr is mem.ptr || m_blocks.get(ret.ptr, size_t.max) == size_t.max, "base.realloc() returned block that is already allocated.");
+		m_bytes -= sz;
 		m_blocks.remove(mem.ptr);
 		m_blocks[ret.ptr] = new_size;
 		m_bytes += new_size;
@@ -177,11 +179,11 @@ final class DebugAllocator : Allocator {
 	}
 	void free(void[] mem)
 	{
-		auto pb = mem.ptr in m_blocks;
-		assert(pb, "free() called with non-allocated object.");
-		assert(*pb == mem.length, "free() called with block of wrong size.");
+		auto sz = m_blocks.get(mem.ptr, size_t.max);
+		assert(sz != size_t.max, "free() called with non-allocated object.");
+		assert(sz == mem.length, "free() called with block of wrong size.");
 		m_baseAlloc.free(mem);
-		m_bytes -= *pb;
+		m_bytes -= sz;
 		m_blocks.remove(mem.ptr);
 	}
 }
@@ -293,7 +295,7 @@ final class AutoFreeListAllocator : Allocator {
 
 	void[] realloc(void[] data, size_t sz)
 	{
-		foreach (fl; m_freeLists)
+		foreach (fl; m_freeLists) {
 			if (data.length <= fl.elementSize) {
 				// just grow the slice if it still fits into the free list slot
 				if (sz <= fl.elementSize)
@@ -307,7 +309,7 @@ final class AutoFreeListAllocator : Allocator {
 				free(data);
 				return newd;
 			}
-
+		}
 		// forward large blocks to the base allocator
 		return m_baseAlloc.realloc(data, sz);
 	}
@@ -319,11 +321,12 @@ final class AutoFreeListAllocator : Allocator {
 			m_baseAlloc.free(data);
 			return;
 		}
-		foreach(i; iotaTuple!freeListCount)
+		foreach(i; iotaTuple!freeListCount) {
 			if (data.length <= nthFreeListSize!i) {
 				m_freeLists[i].free(data.ptr[0 .. nthFreeListSize!i]);
 				return;
 			}
+		}
 		assert(false);
 	}
 
