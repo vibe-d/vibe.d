@@ -167,7 +167,6 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
 				addVHost(lst);
 				assert(!settings.sslContext || lst.sslContext.kind == SSLContextKind.serverSNI);
-				assert(g_listeners[i] == lst);
 				found_listener = true;
 				any_successful = true;
 				break;
@@ -183,8 +182,6 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			}
 		}
 	}
-
-	foreach (lst; g_listeners) logInfo("LST: %s %s", lst.bindAddress, lst.sslContext.kind);
 
 	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
@@ -1364,7 +1361,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }
 		enforce(reqhostparts.empty, "Invalid suffix found in host header");
 		foreach (ctx; g_contexts)
-			if (icmp2(ctx.settings.hostName, reqhost) == 0 && 
+			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
 			{
 				if (ctx.settings.port != listen_info.bindPort) continue;
