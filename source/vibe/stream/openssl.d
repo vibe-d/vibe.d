@@ -38,6 +38,11 @@ version (VibePragmaLib) {
 	version (Windows) pragma(lib, "eay");
 }
 
+version (VibeUseOldOpenSSL) private enum haveECDH = false;
+else private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
+
+
+
 /**
 	Creates an SSL/TLS tunnel within an existing stream.
 
@@ -314,7 +319,7 @@ final class OpenSSLContext : SSLContext {
 		SSL_CTX_set_options!()(m_ctx, options);
 		if (kind == SSLContextKind.server) {
 			setDHParams();
-			setECDHCurve();
+			static if (haveECDH) setECDHCurve();
 		}
 
 		setCipherList();
@@ -503,10 +508,7 @@ final class OpenSSLContext : SSLContext {
 	 */
 	void setECDHCurve(string curve = null)
 	{
-		version (VibeUseOldOpenSSL) enum have_ecdh = false;
-		else enum have_ecdh = OPENSSL_VERSION_NUMBER >= 0x10001000;
-
-		static if (have_ecdh) {
+		static if (haveECDH) {
 			static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
 				// use automatic ecdh curve selection by default
 				if (curve is null) {
