@@ -56,7 +56,7 @@ final class OpenSSLStream : SSLStream {
 		SSLStreamState m_state;
 		SSLState m_ssl;
 		BIO* m_bio;
-		ubyte m_peekBuffer[64];
+		ubyte[64] m_peekBuffer;
 		Exception[] m_exceptions;
 	}
 
