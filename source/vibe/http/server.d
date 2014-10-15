@@ -378,6 +378,8 @@ enum HTTPServerOption {
 		help an attacker to abuse possible security holes.
 	*/
 	errorStackTraces          = 1<<7,
+	/// Auto open sessions when parsing the request, if a session id is present in the cookie
+    autoOpenSession           = 1<<8,
 
 	/** The default set of options.
 
@@ -390,6 +392,7 @@ enum HTTPServerOption {
 		parseJsonBody |
 		parseMultiPartBody |
 		parseCookies |
+		autoOpenSession |
 		errorStackTraces,
 
 	/// deprecated
@@ -1038,6 +1041,26 @@ final class HTTPServerResponse : HTTPResponse {
 		return m_session;
 	}
 
+    /**
+		Open an existing session if a session id is present in the cookie.
+
+		The session is stored in the SessionStore that was specified when
+		creating the server. Depending on this, the session can be persistent
+		or temporary and specific to this server instance.
+	*/
+	Session openSession(HTTPServerRequest req) {
+		auto pv = m_settings.sessionIdCookie in req.cookies;
+		if (pv) {
+			// use the first cookie that contains a valid session ID in case
+			// of multiple matching session cookies
+			foreach (v; req.cookies.getAll(m_settings.sessionIdCookie)) {
+				m_session = m_settings.sessionStore.open(v);
+				if (m_session) return m_session;
+			}
+		}
+		return Session.init;
+    }
+
 	/**
 		Terminates the current session (if any).
 	*/
@@ -1435,19 +1458,9 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			if (pv) parseCookies(*pv, req.cookies);
 		}
 
-		// lookup the session
-		if (settings.sessionStore) {
-			auto pv = settings.sessionIdCookie in req.cookies;
-			if (pv) {
-				// use the first cookie that contains a valid session ID in case
-				// of multiple matching session cookies
-				foreach (v; req.cookies.getAll(settings.sessionIdCookie)) {
-					req.session = settings.sessionStore.open(v);
-					res.m_session = req.session;
-					if (req.session) break;
-				}
-			}
-		}
+		// lookup the session if desired
+		if ((settings.options & HTTPServerOption.autoOpenSession) && settings.sessionStore)
+			req.session = res.openSession(req);
 
 		if (settings.options & HTTPServerOption.parseFormBody) {
 			auto ptype = "Content-Type" in req.headers;
