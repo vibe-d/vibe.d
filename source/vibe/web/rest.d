@@ -352,7 +352,7 @@ class RestInterfaceClient(I) : I
 		import vibe.data.json : Json;
 		import vibe.textfilter.urlencode;
 
-		Json request(string verb, string name, Json params, bool[string] param_is_json) const
+		Json request(string verb, string name, Json params, bool[string] param_is_json, string[string] hdrs) const
 		{
 			import vibe.http.client : HTTPClientRequest, HTTPClientResponse,
 				requestHTTP;
@@ -388,6 +388,8 @@ class RestInterfaceClient(I) : I
 
 			auto reqdg = (scope HTTPClientRequest req) {
 				req.method = httpMethodFromString(verb);
+				foreach (k, v; hdrs)
+					req.headers[k] = v;
 
 				if (m_requestFilter) {
 					m_requestFilter(req);
@@ -833,7 +835,7 @@ private string generateRestInterfaceMethods(I)()
 	if (!__ctfe)
 		assert(false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
+	import std.traits : MemberFunctionsTuple, FunctionTypeOf, fullyQualifiedName,
 		ReturnType, ParameterTypeTuple, ParameterIdentifierTuple;
 	import std.string : format;
 	import std.algorithm : canFind, startsWith;
@@ -854,6 +856,20 @@ private string generateRestInterfaceMethods(I)()
 			alias ParamNames = ParameterIdentifierTuple!overload;
 
 			enum meta = extractHTTPMethodAndName!overload();
+			enum paramAttr = UDATuple!(WebParamAttribute, overload);
+			enum FuncId = (fullyQualifiedName!I ~ "." ~ __traits(identifier, overload));
+
+			// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
+			static if (paramAttr.length) {
+				foreach (i, uda; paramAttr) {
+					// Note: See server code to see why it's necessary (or Template definition).
+					mixin(GenOrphan!(i).Decl);
+					// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
+					static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!overload),
+					              format("No parameter '%s' on %s (referenced by attribute @from%s)",
+					       uda.identifier, FuncId, uda.origin));
+				}
+			}
 
 			// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
 
@@ -882,14 +898,23 @@ private string generateRestInterfaceMethods(I)()
 						)
 					);
 
+					// Check origin of parameter
+					mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Decl);
+
 					// legacy :id special case, left for backwards-compatibility reasons
 					static if (i == 0 && ParamNames[0] == "id") {
 						static if (is(PT == Json))
 							url_prefix = q{urlEncode(id.toString())~"/"};
 						else
 							url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
-					}
-					else static if (
+					} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
+						enum PARAM = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, overload));
+						static assert(PARAM.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
+						static if (PARAM[0].origin == WebParamAttribute.Origin.Header)
+							param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PARAM[0].field, PARAM[0].identifier);
+						else
+							static assert(0, "Only header parameter are currently supported client-side");
+					} else static if (
 						!ParamNames[i].startsWith("_") &&
 						!IsAttributedParameter!(overload, ParamNames[i])
 					) {
@@ -950,7 +975,7 @@ private string generateRestInterfaceMethods(I)()
 
 				request_str ~= format(
 					q{
-						auto jret__ = request("%s", url__ , jparams__, jparamsj__);
+						auto jret__ = request("%s", url__ , jparams__, jparamsj__, headers__);
 					},
 					httpMethodString(meta.method)
 				);
@@ -968,6 +993,7 @@ private string generateRestInterfaceMethods(I)()
 					q{
 						override %s {
 							Json jparams__ = Json.emptyObject;
+							string[string] headers__;
 							bool[string] jparamsj__;
 							string url__ = "%s";
 							%s
