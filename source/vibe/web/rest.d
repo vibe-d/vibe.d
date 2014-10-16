@@ -15,9 +15,11 @@ import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
+import vibe.internal.meta.uda : UDATuple;
 import vibe.inet.url;
 
 import std.algorithm : startsWith, endsWith;
+import std.typetuple : anySatisfy, Filter;
 
 /**
 	Registers a REST interface and connects it the the given instance.
@@ -494,7 +496,7 @@ class RestInterfaceSettings {
 /// private
 private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst, RestInterfaceSettings settings)
 {
-	import std.traits : ParameterTypeTuple, ReturnType,
+	import std.traits : ParameterTypeTuple, ReturnType, fullyQualifiedName,
 		ParameterDefaultValueTuple, ParameterIdentifierTuple;
 	import std.string : format;
 	import std.algorithm : startsWith;
@@ -508,6 +510,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	alias RT = ReturnType!Func;
 	alias ParamDefaults = ParameterDefaultValueTuple!Func;
 	enum ParamNames = [ ParameterIdentifierTuple!Func ];
+	enum FuncId = (fullyQualifiedName!T~ "." ~ __traits(identifier, Func));
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -517,6 +520,21 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			if (settings.stripTrailingUnderscore && name.endsWith("_"))
 				return name[0 .. $-1];
 			else return name;
+		}
+
+		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
+		static if (UDATuple!(WebParamAttribute, Func).length) {
+			foreach (i, uda; UDATuple!(WebParamAttribute, Func)) {
+				// Note: static foreach gets unrolled, generating multiple nested sub-scope.
+				// The spec / DMD doesn't like when you have the same symbol in those,
+				// leading to wrong codegen / wrong template being reused.
+				// That's why those templates need different names.
+				mixin(GenOrphan!(i).Decl);
+				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
+				static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+				              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
+				       uda.identifier, FuncId, uda.origin));
+			}
 		}
 
 		foreach (i, P; PT) {
@@ -531,10 +549,40 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
+				// Comparison template for anySatisfy
+				//template Cmp(WebParamAttribute attr) { enum Cmp = (attr.identifier == ParamNames[i]); }
+				mixin(GenCmp!("Loop", i, ParamNames[i]).Decl);
+				// Find origin of parameter
 				static if (i == 0 && ParamNames[i] == "id") {
 					// legacy special case for :id, backwards-compatibility
 					logDebug("id %s", req.params["id"]);
 					params[i] = fromRestString!P(req.params["id"]);
+				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
+					// User anotated the origin of this parameter.
+					enum PARAM = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
+					static assert(PARAM.length == 1, "Parameter '"~ParamNames[i]~"' of "
+					~FuncId~" has multiple origin (@*Param attributes).");
+					// @headerParam.
+					static if (PARAM[0].origin == WebParamAttribute.Origin.Header) {
+						// If it has no default value
+						static if (is (ParamDefaults[i] == void)) {
+							auto fld = enforceBadRequest(PARAM[0].field in req.headers,
+							format("Expected field '%s' in header", PARAM[0].field));
+						} else {
+							auto fld = PARAM[0].field in req.headers;
+								if (fld is null) {
+								params[i] = ParamDefaults[i];
+								logDebug("No header param %s, using default value", PARAM[0].identifier);
+								continue;
+							}
+						}
+						logDebug("Header param: %s <- %s", PARAM[0].identifier, *fld);
+						params[i] = fromRestString!P(*fld);
+					} else static if (PARAM[0].origin == WebParamAttribute.Origin.Query) {
+						static assert(0, "@QueryParam is not yet supported");
+					} else static if (PARAM[0].origin == WebParamAttribute.Origin.Body) {
+						static assert(0, "@BodyParam is not yet supported");
+					} else static assert (false, "Internal error: Origin "~PARAM[0].origin~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
@@ -1003,3 +1051,27 @@ unittest
 	static assert(imports == "static import vibe.web.rest;");
 }
 
+
+// Workarounds @@DMD:9748@@, and maybe more
+private template GenCmp(string name, int id, string cmpTo) {
+	import std.string : format;
+	import std.conv : to;
+	enum Decl = q{
+		template %1$s(alias uda) {
+			enum %1$s = (uda.identifier == "%2$s");
+		}
+	}.format(Name, cmpTo);
+	enum Name = name~to!string(id);
+}
+
+// Ditto
+private template GenOrphan(int id) {
+    import std.string : format;
+    import std.conv : to;
+    enum Decl = q{
+        template %1$s(string name) {
+            enum %1$s = (uda.identifier == name);
+        }
+    }.format(Name);
+    enum Name = "OrphanCheck"~to!string(id);
+}
