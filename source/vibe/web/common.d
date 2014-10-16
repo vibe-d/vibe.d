@@ -450,6 +450,93 @@ struct RootPathAttribute
 /// private
 deprecated alias RootPath = RootPathAttribute;
 
+/// Private struct describing the origin of a parameter (Query, Header, Body).
+package struct WebParamAttribute {
+	enum Origin {
+		Body,
+		Header,
+		Query,
+	}
+
+	Origin origin;
+	/// Parameter name
+	string identifier;
+	/// The meaning of this field depends on the origin.
+	string field;
+}
+
+// Leave it undocummented: It's not yet implemented in the REST and web interface.
+/*
+ * Declare that a parameter will be transmitted to the API through the body.
+ *
+ * It will be serialized as part of a JSON object.
+ * The serialization format is currently not customizable.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The name of the field in the JSON object.
+ *
+ * ----
+ * @bodyParam("pack", "package")
+ * void ship(int pack);
+ * // The server will receive the following body for a call to ship(42):
+ * // { "package": 42 }
+ * ----
+ */
+private WebParamAttribute bodyParam(string identifier, string field) {
+	if (!__ctfe)
+		assert(false);
+	return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
+}
+
+/**
+ * Declare that a parameter will be transmitted to the API through the headers.
+ *
+ * If the parameter is a string, or any scalar type (float, int, char[], ...), it will be send as a string.
+ * If it's an aggregate, it will be serialized as JSON.
+ * However, passing aggregate via header isn't a good practice and should be avoided for new production code.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The name of the header field to use (e.g: 'Accept', 'Content-Type'...).
+ *
+ * ----
+ * // The server will receive the content of the "Authorization" header.
+ * @headerParam("auth", "Authorization")
+ * void login(string auth);
+ * ----
+ */
+WebParamAttribute headerParam(string identifier, string field) {
+	if (!__ctfe)
+		assert(false);
+	return WebParamAttribute(WebParamAttribute.Origin.Header, identifier, field);
+}
+
+// Leave it undocummented: It's not yet implemented in the REST and web interface.
+/*
+ * Declare that a parameter will be transmitted to the API through the query string.
+ *
+ * It will be serialized as part of a JSON object, and will go through URL serialization.
+ * The serialization format is not customizable.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The field name to use.
+ *
+ * ----
+ * // For a call to postData("D is awesome"), the server will receive the query:
+ * // POST /data?test=%22D is awesome%22
+ * @queryParam("data", "test")
+ * void postData(string data);
+ * ----
+ */
+private WebParamAttribute queryParam(string identifier, string field) {
+
+	if (!__ctfe)
+		assert(false);
+	return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
+}
+
 
 /**
 	Determines the naming convention of an identifier.
