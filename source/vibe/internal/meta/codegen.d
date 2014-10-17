@@ -225,6 +225,9 @@ template cloneFunction(alias Symbol)
 				psc & PSC.lazy_ ? "lazy " : ""
 			);
 		}
+
+		template defaultValue(T : void) { enum defaultValue = ""; }
+		template defaultValue(alias Value) { enum defaultValue = " = "~Value.stringof; }
 		
 		string parametersString(alias T)()
 		{
@@ -234,6 +237,7 @@ template cloneFunction(alias Symbol)
 			alias ParameterTypeTuple!T parameters;
 			alias ParameterStorageClassTuple!T parameterStC;
 			alias ParameterIdentifierTuple!T parameterNames;
+			alias parameterDefVal = ParameterDefaultValueTuple!T;
 			
 			string variadicStr;
 			
@@ -257,10 +261,10 @@ template cloneFunction(alias Symbol)
 				import std.range : join, zip;
 
 				string result = join(
-					map!(a => format("%s%s %s", a[0], a[1], a[2]))(
+					map!(a => format("%s%s %s%s", a[0], a[1], a[2], a[3]))(
 						zip([staticMap!(storageClassesString, parameterStC)],
 				            [staticMap!(fullyQualifiedName, parameters)],
-			                [parameterNames])
+							[parameterNames], [staticMap!(defaultValue, parameterDefVal)])
 					),
 					", "
 				);
