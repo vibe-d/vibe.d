@@ -185,7 +185,7 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
-	alias Unqual!T TU;
+	alias TU = Unqual!T;
 
 	static if (is(TU == enum)) {
 		static if (hasAttributeL!(ByNameAttribute, ATTRIBUTES)) {

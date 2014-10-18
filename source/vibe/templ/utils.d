@@ -157,9 +157,9 @@ package string cttostring(T)(T x)
 /// private
 private template injectReverse(Injectors...)
 {
-	alias Injectors[0] First;
-	alias Injectors[1 .. $] Rest;
-	alias First!(Rest) injectReverse;
+	alias First = Injectors[0];
+	alias Rest = Injectors[1 .. $];
+	alias injectReverse = First!(Rest);
 }
 
 /// private

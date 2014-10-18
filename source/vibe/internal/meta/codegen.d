@@ -180,7 +180,7 @@ template cloneFunction(alias Symbol)
 	private:
 		import std.traits, std.typetuple;
 
-		alias FunctionTypeOf!(Symbol) T;
+		alias T = FunctionTypeOf!(Symbol);
 
 		static if (is(T F == delegate) || isFunctionPointer!T)
 			static assert(0, "Plain function or method symbols are expected");
@@ -194,7 +194,7 @@ template cloneFunction(alias Symbol)
 				_inout = 3
 			}
 
-			alias TypeTuple!(is(T == const), is(T == immutable), is(T == shared), is(T == inout)) qualifiers;
+			alias qualifiers = TypeTuple!(is(T == const), is(T == immutable), is(T == shared), is(T == inout));
 			
 			auto result = type;
 
@@ -215,7 +215,7 @@ template cloneFunction(alias Symbol)
 
 		template storageClassesString(uint psc)
 		{
-			alias ParameterStorageClass PSC;
+			alias PSC = ParameterStorageClass;
 			
 			enum storageClassesString = format(
 				"%s%s%s%s",
@@ -231,9 +231,9 @@ template cloneFunction(alias Symbol)
 			if (!__ctfe)
 				assert(false);
 			
-			alias ParameterTypeTuple!T parameters;
-			alias ParameterStorageClassTuple!T parameterStC;
-			alias ParameterIdentifierTuple!T parameterNames;
+			alias parameters = ParameterTypeTuple!T;
+			alias parameterStC = ParameterStorageClassTuple!T;
+			alias parameterNames = ParameterIdentifierTuple!T;
 			
 			string variadicStr;
 			
@@ -283,7 +283,7 @@ template cloneFunction(alias Symbol)
 		
 		template functionAttributeString(T)
 		{
-			alias FunctionAttribute FA;
+			alias FA = FunctionAttribute;
 			enum attrs = functionAttributes!T;
 			
 			static if (attrs == FA.none)

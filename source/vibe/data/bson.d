@@ -21,7 +21,7 @@ import std.range;
 import std.traits;
 
 
-alias immutable(ubyte)[] bdata_t;
+alias bdata_t = immutable(ubyte)[];
 
 /**
 	Represents a BSON value.
@@ -493,7 +493,7 @@ struct Bson {
 		}
 
 		static if( is(T == Bson) )
-			alias value bval;
+			alias bval = value;
 		else
 			auto bval = Bson(value);
 
@@ -693,7 +693,7 @@ struct BsonObjectID {
 		return ret;
 	}
 	/// ditto
-	alias fromString fromHexString;
+	alias fromHexString = fromString;
 
 	/** Generates a unique object ID.
 	 *
@@ -963,7 +963,7 @@ Bson serializeToBsonOld(T)(T value)
 {
 	import vibe.internal.meta.traits;
 
-    alias Unqual!T Unqualified;
+    alias Unqualified = Unqual!T;
 	static if (is(Unqualified == Bson)) return value;
 	else static if (is(Unqualified == Json)) return Bson.fromJson(value);
 	else static if (is(Unqualified == BsonBinData)) return Bson(value);
@@ -989,7 +989,7 @@ Bson serializeToBsonOld(T)(T value)
 		return Bson(ret);
 	} else static if (isAssociativeArray!T) {
 		Bson[string] ret;
-		alias KeyType!T TK;
+		alias TK = KeyType!T;
 		foreach (key, value; value) {
 			static if(is(TK == string)) {
 				ret[key] = serializeToBson(value);
@@ -1078,14 +1078,14 @@ T deserializeBsonOld(T)(Bson src)
 	else static if (is(T : string)) return cast(T)(cast(string)src);
 	else static if (is(T : const(ubyte)[])) return cast(T)src.get!BsonBinData.rawData.dup;
 	else static if (isArray!T) {
-		alias typeof(T.init[0]) TV;
+		alias TV = typeof(T.init[0]) ;
 		auto ret = new Unqual!TV[src.length];
 		foreach (size_t i, v; cast(Bson[])src)
 			ret[i] = deserializeBson!(Unqual!TV)(v);
 		return ret;
 	} else static if (isAssociativeArray!T) {
-		alias typeof(T.init.values[0]) TV;
-		alias KeyType!T TK;
+		alias TV = typeof(T.init.values[0]) ;
+		alias TK = KeyType!T;
 		Unqual!TV[TK] dst;
 		foreach (string key, value; src) {
 			static if (is(TK == string)) {
@@ -1108,7 +1108,7 @@ T deserializeBsonOld(T)(Bson src)
 		T dst;
 		foreach (m; __traits(allMembers, T)) {
 			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias typeof(__traits(getMember, dst, m)) TM;
+				alias TM = typeof(__traits(getMember, dst, m)) ;
 				debug enforce(!src[underscoreStrip(m)].isNull() || is(TM == class) || isPointer!TM || is(TM == typeof(null)),
 					"Missing field '"~underscoreStrip(m)~"'.");
 				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
@@ -1120,14 +1120,14 @@ T deserializeBsonOld(T)(Bson src)
 		auto dst = new T;
 		foreach (m; __traits(allMembers, T)) {
 			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias typeof(__traits(getMember, dst, m)) TM;
+				alias TM = typeof(__traits(getMember, dst, m)) ;
 				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
 			}
 		}
 		return dst;
 	} else static if (isPointer!T) {
 		if (src.type == Bson.Type.null_) return null;
-		alias typeof(*T.init) TD;
+		alias TD = typeof(*T.init) ;
 		dst = new TD;
 		*dst = deserializeBson!TD(src);
 		return dst;

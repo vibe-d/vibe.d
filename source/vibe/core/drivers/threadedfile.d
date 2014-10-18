@@ -29,7 +29,7 @@ version(Windows){
 
 	private {
 		extern(C){
-			alias long off_t;
+			alias off_t = long;
 			int open(in char* name, int mode, ...);
 			int chmod(in char* name, int mode);
 			int close(int fd);
@@ -48,7 +48,7 @@ version(Windows){
 
 		enum _S_IREAD = 0x0100;          /* read permission, owner */
 		enum _S_IWRITE = 0x0080;          /* write permission, owner */
-		alias struct_stat stat_t;
+		alias stat_t = struct_stat;
 	}
 }
 else
@@ -178,7 +178,7 @@ final class ThreadedFileStream : FileStream {
 		}
 	}
 
-	alias Stream.write write;
+	alias write = Stream.write;
 	void write(in ubyte[] bytes_)
 	{
 		const(ubyte)[] bytes = bytes_;

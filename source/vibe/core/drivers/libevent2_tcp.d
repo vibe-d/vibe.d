@@ -42,14 +42,14 @@ private {
 		enum EWOULDBLOCK = WSAEWOULDBLOCK;
 
 		// make some neccessary parts of the socket interface public
-		alias std.c.windows.winsock.in6_addr in6_addr;
-		alias std.c.windows.winsock.INADDR_ANY INADDR_ANY;
-		alias std.c.windows.winsock.IN6ADDR_ANY IN6ADDR_ANY;
+		alias in6_addr = std.c.windows.winsock.in6_addr;
+		alias INADDR_ANY = std.c.windows.winsock.INADDR_ANY;
+		alias IN6ADDR_ANY = std.c.windows.winsock.IN6ADDR_ANY;
 	} else {
-		alias core.sys.posix.netinet.in_.in6_addr in6_addr;
-		alias core.sys.posix.netinet.in_.in6addr_any IN6ADDR_ANY;
-		alias core.sys.posix.netinet.in_.INADDR_ANY INADDR_ANY;
-		alias core.sys.posix.netinet.tcp.TCP_NODELAY TCP_NODELAY;
+		alias in6_addr = core.sys.posix.netinet.in_.in6_addr;
+		alias IN6ADDR_ANY = core.sys.posix.netinet.in_.in6addr_any;
+		alias INADDR_ANY = core.sys.posix.netinet.in_.INADDR_ANY;
+		alias TCP_NODELAY = core.sys.posix.netinet.tcp.TCP_NODELAY;
 	}
 }
 
@@ -286,7 +286,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		return false;
 	}
 
-	alias Stream.write write;
+	alias write = Stream.write;
 
 	/** Writes the given byte array.
 	*/
@@ -443,7 +443,7 @@ package struct TCPContext
 	Exception exception; // set during onSocketEvent calls that were emitted synchronously
 	TCPListenOptions listenOptions;
 }
-alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
+alias TCPContextAlloc = FreeListObjectAlloc!(TCPContext, false, true);
 
 
 /**************************************************************************************************/
@@ -569,7 +569,7 @@ package nothrow extern(C)
 		} catch (UncaughtException e) {
 			logWarn("Got exception while accepting new connections: %s", e.msg);
 			try logDebug("Full error: %s", e.toString().sanitize());
-			catch {}
+			catch (Throwable) {}
 		}
 
 		logTrace("handled incoming connections...");
@@ -651,7 +651,7 @@ package nothrow extern(C)
 			}
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
-			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
 		}
 	}
 

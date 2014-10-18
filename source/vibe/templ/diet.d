@@ -80,7 +80,7 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 }
 
 /// compatibility alias
-alias compileDietFile parseDietFile;
+alias parseDietFile = compileDietFile;
 
 /**
 	Compatibility version of parseDietFile().
@@ -115,7 +115,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 }
 
 /// compatibility alias
-alias compileDietFileCompat parseDietFileCompat;
+alias parseDietFileCompat = compileDietFileCompat;
 
 /**
 	Generates a diet template compiler to use as a mixin.

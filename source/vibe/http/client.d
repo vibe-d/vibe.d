@@ -485,7 +485,7 @@ final class HTTPClient {
 				}
 
 				import std.functional : memoize;
-				alias memoize!getAddressType findAddressType;
+				alias findAddressType = memoize!getAddressType;
 
 				bool use_dns;
 				if (findAddressType(m_settings.proxyURL.host) == AddressType.Host)

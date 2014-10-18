@@ -192,7 +192,7 @@ final class OpenSSLStream : SSLStream {
 		}
 	}
 
-	alias Stream.write write;
+	alias write = Stream.write;
 
 	void flush()
 	{
@@ -464,7 +464,7 @@ final class OpenSSLContext : SSLContext {
 		if (list is null)
 			SSL_CTX_set_cipher_list(m_ctx,
 				"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:"
-				"RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
+				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
 		else
 			SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
 	}

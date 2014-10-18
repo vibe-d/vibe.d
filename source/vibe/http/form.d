@@ -290,7 +290,7 @@ private bool applyParametersFromAssociativeArray(Func)(HTTPServerRequest req, HT
 // Overload which takes additional parameter for handling overloads of func.
 /// private
 private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
-	alias ParameterTypeTuple!Overload ParameterTypes;
+	alias ParameterTypes = ParameterTypeTuple!Overload;
 	ParameterTypes args;
 	auto form = (req.method == HTTPMethod.GET ? req.query : req.form);
 	int count = 0;

@@ -13,7 +13,7 @@ version (Windows) {
 	import std.c.windows.windows;
 	import std.c.windows.winsock;
 
-	alias WSAEWOULDBLOCK EWOULDBLOCK;
+	alias EWOULDBLOCK = WSAEWOULDBLOCK;
 
 	extern(System) DWORD FormatMessageW(DWORD dwFlags, const(void)* lpSource, DWORD dwMessageId, DWORD dwLanguageId, LPWSTR lpBuffer, DWORD nSize, void* Arguments);
 

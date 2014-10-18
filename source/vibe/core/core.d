@@ -247,7 +247,7 @@ Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 {
 	foreach (T; ARGS) static assert(isWeaklyIsolated!T, "Argument type "~T.stringof~" is not safe to pass between threads.");
 
-	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
+	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
@@ -266,7 +266,7 @@ Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS ar
 	auto func = &__traits(getMember, object, __traits(identifier, method));
 	alias FT = typeof(func);
 
-	alias Typedef!(Task, Task.init, __PRETTY_FUNCTION__) PrivateTask;
+	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
@@ -1444,7 +1444,7 @@ static if (__VERSION__ <= 2065) @property bool nogc() { return false; }
 private extern(C) void onSignal(int signal)
 nothrow {
 	atomicStore(st_term, true);
-	try st_threadsSignal.emit(); catch {}
+	try st_threadsSignal.emit(); catch (Throwable) {}
 
 	logInfo("Received signal %d. Shutting down.", signal);
 }
