@@ -344,7 +344,8 @@ class RestInterfaceClient(I) : I
 
 	//pragma(msg, "restinterface:");
 	//pragma(msg, generateRestInterfaceMethods!(I)());
-	mixin (generateRestInterfaceMethods!I());
+	//mixin (generateRestInterfaceMethods!I());
+	mixin RestClientMethods!I;
 
 	protected {
 		import vibe.data.json : Json;
@@ -779,7 +780,171 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	return ret;
 }
 
+private:
+mixin template RestClientMethods(I) if (is(I == interface)) {
+	mixin RestClientMethods_MemberImpl!(__traits(allMembers, I));
+}
+
+// Poor men's `foreach (method; __traits(allMembers, I))`
+// The only way to emulate a foreach in a mixin template is to mixin a recursion
+// of that template.
+mixin template RestClientMethods_MemberImpl(Members...) {
+	import std.traits : MemberFunctionsTuple;
+	static assert(Members.length > 0);
+	private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
+	// Members can be declaration / fields.
+	static if (Ovrlds.length > 0) {
+		mixin RestClientMethods_OverloadImpl!(Ovrlds);
+	}
+	static if (Members.length > 1) {
+		mixin RestClientMethods_MemberImpl!(Members[1..$]);
+	}
+}
+
+// Poor men's foreach (overload; MemberFunctionsTuple!(I, method))
+mixin template RestClientMethods_OverloadImpl(Overloads...) {
+	import vibe.internal.meta.codegen : CloneFunction;
+	static assert(Overloads.length > 0);
+	//pragma(msg, "===== Body for: "~__traits(identifier, Overloads[0])~" =====");
+	//pragma(msg, genClientBody!(Overloads[0]));
+	mixin CloneFunction!(Overloads[0], genClientBody!(Overloads[0])());
+	static if (Overloads.length > 1) {
+		mixin RestClientMethods_OverloadImpl!(Overloads[1..$]);
+	}
+}
+
+private string genClientBody(alias Func)() {
+	import std.string : format;
+	import std.traits : ReturnType, FunctionTypeOf, ParameterTypeTuple, ParameterIdentifierTuple;
+	import vibe.internal.meta.funcattr : IsAttributedParameter;
+	import vibe.http.common : httpMethodString;
+
+	alias FT = FunctionTypeOf!Func;
+	alias RT = ReturnType!FT;
+	alias PTT = ParameterTypeTuple!Func;
+	alias ParamNames = ParameterIdentifierTuple!Func;
+
+	enum meta = extractHTTPMethodAndName!Func();
+
+	// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
+	static if (is(RT == interface)) {
+		return q{ return m_%sImpl; }.format(RT.stringof);
+	} else {
+		string ret;
+		string param_handling_str;
+		string url_prefix = `""`;
+
+		// Block 2
+		foreach (i, PT; PTT){
+			static assert (
+				ParamNames[i].length,
+			format(
+				"Parameter %s of %s has no name.",
+				i,
+				method
+				)
+			);
+
+			// legacy :id special case, left for backwards-compatibility reasons
+			static if (i == 0 && ParamNames[0] == "id") {
+				static if (is(PT == Json))
+				url_prefix = q{urlEncode(id.toString())~"/"};
+				else
+				url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
+			}
+			else static if (
+				!ParamNames[i].startsWith("_") &&
+			!IsAttributedParameter!(Func, ParamNames[i])
+			) {
+				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
+				param_handling_str ~= format(
+					q{
+					jparams__[_stripName("%s")] = serializeToJson(%s);
+					jparamsj__[_stripName("%s")] = %s;
+				},
+				ParamNames[i],
+				ParamNames[i],
+				ParamNames[i],
+				is(PT == Json) ? "true" : "false"
+				);
+			}
+		}
+
+		// Block 3
+		string request_str;
+
+		static if (!meta.hadPathUDA) {
+			request_str = format(
+				q{
+				if (m_settings.stripTrailingUnderscore && url__.endsWith("_"))
+					url__ = url__[0 .. $-1];
+				url__ = %s ~ adjustMethodStyle(url__, m_methodStyle);
+			},
+			url_prefix
+			);
+		} else {
+			import std.array : split;
+			auto parts = meta.url.split("/");
+			request_str ~= `url__ = ` ~ url_prefix;
+			foreach (i, p; parts) {
+				if (i > 0) {
+					request_str ~= `~ "/"`;
+				}
+				bool match = false;
+				if (p.startsWith(":")) {
+					foreach (pn; ParamNames) {
+						if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
+							request_str ~= format(
+								q{ ~ urlEncode(toRestString(serializeToJson(%s)))},
+							pn
+							);
+							match = true;
+							break;
+						}
+					}
+				}
+
+				if (!match) {
+					request_str ~= `~ "` ~ p ~ `"`;
+				}
+			}
+
+			request_str ~= ";\n";
+		}
+
+		request_str ~= format(
+			q{
+			auto jret__ = request("%s", url__ , jparams__, jparamsj__);
+		},
+		httpMethodString(meta.method)
+		);
+
+		static if (!is(RT == void)) {
+			request_str ~= q{
+				typeof(return) ret__;
+				deserializeJson(ret__, jret__);
+				return ret__;
+			};
+		}
+
+		// Block 1
+		ret ~= format(
+			q{
+				Json jparams__ = Json.emptyObject;
+				bool[string] jparamsj__;
+				string url__ = "%s";
+				%s
+					%s },
+		meta.url,
+		param_handling_str,
+		request_str
+		);
+		return ret;
+	}
+}
+
 /// private
+deprecated("Please use genClientBody instead")
 private string generateRestInterfaceMethods(I)()
 {
 	if (!__ctfe)
