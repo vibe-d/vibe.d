@@ -39,7 +39,7 @@ private struct _MongoErrorDescription
  * Can be used also to check how many documents where updated upon
  * a successful query via "n" field.
  */
-alias immutable(_MongoErrorDescription) MongoErrorDescription;
+alias MongoErrorDescription = immutable(_MongoErrorDescription);
 
 /**
  * Root class for vibe.d Mongo driver exception hierarchy.
@@ -689,7 +689,7 @@ unittest
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg,
 				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
-				"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
+				~ "27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
 	//assert(cfg.password == "flinstone");
 	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "flinstone"));

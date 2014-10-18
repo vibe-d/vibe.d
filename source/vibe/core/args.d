@@ -223,6 +223,6 @@ private void init()
 
 private enum configName = "vibe.conf";
 
-private template ValueTuple(T...) { alias T ValueTuple; }
+private template ValueTuple(T...) { alias ValueTuple = T; }
 
 private alias getoptConfig = ValueTuple!(std.getopt.config.passThrough, std.getopt.config.bundling);

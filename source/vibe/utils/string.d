@@ -127,7 +127,7 @@ sizediff_t indexOfAny(string str, string chars)
 			return i;
 	return -1;
 }
-alias indexOfAny countUntilAny;
+alias countUntilAny = indexOfAny;
 
 /**
 	Finds the closing bracket (works with any of '[', '(', '<', '{').

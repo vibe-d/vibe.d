@@ -30,7 +30,7 @@ template findFirstUDA(alias UDA, alias Symbol, bool allow_types = false)
 	import std.typetuple : TypeTuple;
 	import std.traits : isInstanceOf;
 
-    private alias TypeTuple!(__traits(getAttributes, Symbol)) udaTuple;
+    private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
 	private struct UdaSearchResult(alias UDA)
 	{
@@ -68,7 +68,7 @@ template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
 	import std.typetuple : TypeTuple;
 	import std.traits : isInstanceOf;
 
-    private alias TypeTuple!(__traits(getAttributes, Symbol)) udaTuple;
+    private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
 	private struct UdaSearchResult(alias UDA)
 	{

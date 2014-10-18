@@ -249,7 +249,7 @@ struct Path {
 		hash_t ret;
 		auto strhash = &typeid(string).getHash;
 		try foreach (n; nodes) ret ^= strhash(&n.m_name);
-		catch assert(false);
+		catch (Throwable) assert(false);
 		if (m_absolute) ret ^= 0xfe3c1738;
 		if (m_endsWithSlash) ret ^= 0x6aa4352d;
 		return ret;

@@ -19,8 +19,8 @@ extern(System) nothrow
 	}
 
 	version(Win32){ // avoiding linking errors with out-of-the-box dmd
-		alias SetWindowLongA SetWindowLongPtrA;
-		alias GetWindowLongA GetWindowLongPtrA;
+		alias SetWindowLongPtrA = SetWindowLongA;
+		alias GetWindowLongPtrA = GetWindowLongA;
 	} else {
 		LONG_PTR SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 		LONG_PTR GetWindowLongPtrA(HWND hWnd, int nIndex);
@@ -30,7 +30,7 @@ extern(System) nothrow
 	LONG_PTR SetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong);
 	LONG_PTR GetWindowLongA(HWND hWnd, int nIndex);
 
-	alias void function(DWORD, DWORD, OVERLAPPED*) LPOVERLAPPED_COMPLETION_ROUTINE;
+	alias LPOVERLAPPED_COMPLETION_ROUTINE = void function(DWORD, DWORD, OVERLAPPED*);
 
 	HANDLE CreateEventW(SECURITY_ATTRIBUTES* lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 	BOOL PostThreadMessageW(DWORD idThread, UINT Msg, WPARAM wParam, LPARAM lParam);
@@ -201,12 +201,12 @@ extern(System) nothrow
 		DWORD            dwProviderReserved;
 		CHAR[WSAPROTOCOL_LEN+1] szProtocol;
 	}
-	alias sockaddr SOCKADDR;
+	alias SOCKADDR = sockaddr;
 
-	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
-	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*) LPLOOKUPSERVICE_COMPLETION_ROUTINE;
-	alias void* LPCONDITIONPROC;
-	alias void* LPTRANSMIT_FILE_BUFFERS;
+	alias LPWSAOVERLAPPED_COMPLETION_ROUTINEX = void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD);
+	alias LPLOOKUPSERVICE_COMPLETION_ROUTINE = void function(DWORD, DWORD, WSAOVERLAPPEDX*);
+	alias LPCONDITIONPROC = void*;
+	alias LPTRANSMIT_FILE_BUFFERS = void*;
 
 	SOCKET WSAAccept(SOCKET s, sockaddr *addr, INT* addrlen, LPCONDITIONPROC lpfnCondition, DWORD_PTR dwCallbackData);
 	int WSAAsyncSelect(SOCKET s, HWND hWnd, uint wMsg, sizediff_t lEvent);

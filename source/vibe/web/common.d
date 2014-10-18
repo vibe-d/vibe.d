@@ -163,7 +163,7 @@ auto extractHTTPMethodAndName(alias Func)()
 	];
 	
 	string name = __traits(identifier, Func);
-	alias typeof(&Func) T;
+	alias T = typeof(&Func) ;
 
 	Nullable!HTTPMethod udmethod;
 	Nullable!string udurl;

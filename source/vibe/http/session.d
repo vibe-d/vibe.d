@@ -25,7 +25,7 @@ static this()
 }
 
 //The "URL and Filename safe" Base64 without padding
-alias Base64Impl!('-', '_', Base64.NoPadding) Base64URLNoPadding;
+alias Base64URLNoPadding = Base64Impl!('-', '_', Base64.NoPadding);
 
 
 /**

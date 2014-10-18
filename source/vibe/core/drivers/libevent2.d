@@ -54,7 +54,7 @@ version(Windows)
 {
 	import std.c.windows.winsock;
 
-	alias WSAEWOULDBLOCK EWOULDBLOCK;
+	alias EWOULDBLOCK = WSAEWOULDBLOCK;
 }
 
 
@@ -477,7 +477,7 @@ final class Libevent2Driver : EventDriver {
 		try drv.processTimers();
 		catch (Exception e) {
 			logError("Failed to process timers: %s", e.msg);
-			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
 		}
 	}
 
@@ -861,7 +861,7 @@ final class Libevent2UDPConnection : UDPConnection {
 
 		// generate the bind address string
 		m_bindAddress = bind_addr;
-		char buf[64];
+		char[64] buf;
 		void* ptr;
 		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
 		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
@@ -1200,11 +1200,11 @@ struct LevMutex {
 	ReadWriteMutex rwmutex;
 }
 
-alias FreeListObjectAlloc!(LevCondition, false) LevConditionAlloc;
-alias FreeListObjectAlloc!(LevMutex, false) LevMutexAlloc;
-alias FreeListObjectAlloc!(core.sync.mutex.Mutex, false) MutexAlloc;
-alias FreeListObjectAlloc!(ReadWriteMutex, false) ReadWriteMutexAlloc;
-alias FreeListObjectAlloc!(Condition, false) ConditionAlloc;
+alias LevConditionAlloc = FreeListObjectAlloc!(LevCondition, false);
+alias LevMutexAlloc = FreeListObjectAlloc!(LevMutex, false);
+alias MutexAlloc = FreeListObjectAlloc!(core.sync.mutex.Mutex, false);
+alias ReadWriteMutexAlloc = FreeListObjectAlloc!(ReadWriteMutex, false);
+alias ConditionAlloc = FreeListObjectAlloc!(Condition, false);
 
 private nothrow extern(C)
 {

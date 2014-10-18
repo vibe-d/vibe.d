@@ -306,15 +306,15 @@ Isolated!T assumeIsolated(T)(T object)
 template Isolated(T)
 {
 	static if( isWeaklyIsolated!T ){
-		alias T Isolated;
+		alias Isolated = T;
 	} else static if( is(T == class) ){
-		alias IsolatedRef!T Isolated;
+		alias Isolated = IsolatedRef!T;
 	} else static if( isPointer!T ){
-		alias IsolatedRef!(PointerTarget!T) Isolated;
+		alias Isolated = IsolatedRef!(PointerTarget!T);
 	} else static if( isDynamicArray!T ){
-		alias IsolatedArray!(typeof(T.init[0])) Isolated;
+		alias Isolated = IsolatedArray!(typeof(T.init[0]));
 	} else static if( isAssociativeArray!T ){
-		alias IsolatedAssociativeArray!(KeyType!T, ValueType!T) Isolated;
+		alias Isolated = IsolatedAssociativeArray!(KeyType!T, ValueType!T);
 	} else static assert(false, T.stringof~": Unsupported type for Isolated!T - must be class, pointer, array or associative array.");
 }
 
@@ -344,14 +344,14 @@ private struct IsolatedRef(T)
 	static if( isStronglyIsolated!(FieldTypeTuple!T) )
 		enum __isIsolatedType = true;
 
-	alias T BaseType;
+	alias BaseType = T;
 
 	static if( is(T == class) ){
-		alias T Tref;
-		alias immutable(T) Tiref;
+		alias Tref = T;
+		alias Tiref = immutable(T);
 	} else {
-		alias T* Tref;
-		alias immutable(T)* Tiref;
+		alias Tref = T*;
+		alias Tiref = immutable(T)*;
 	}
 
 	private Tref m_ref;
@@ -455,7 +455,7 @@ private struct IsolatedArray(T)
 	static if( isStronglyIsolated!T )
 		enum __isIsolatedType = true;
 
-	alias T[] BaseType;
+	alias BaseType = T[];
 
 	private T[] m_array;
 
@@ -540,7 +540,7 @@ private struct IsolatedAssociativeArray(K, V)
 	static if( isStronglyIsolated!K && isStronglyIsolated!V )
 		enum __isIsolatedType = true;
 
-	alias V[K] BaseType;
+	alias BaseType = V[K];
 
 	private {
 		V[K] m_aa;
@@ -587,10 +587,10 @@ private struct IsolatedAssociativeArray(K, V)
 */
 template ScopedRef(T)
 {
-	static if( isAggregateType!T ) alias ScopedRefAggregate!T ScopedRef;
-	else static if( isAssociativeArray!T ) alias ScopedRefAssociativeArray!T ScopedRef;
-	else static if( isArray!T ) alias ScopedRefArray!T ScopedRef;
-	else static if( isBasicType!T ) alias ScopedRefBasic!T ScopedRef;
+	static if( isAggregateType!T ) alias ScopedRef = ScopedRefAggregate!T;
+	else static if( isAssociativeArray!T ) alias ScopedRef = ScopedRefAssociativeArray!T;
+	else static if( isArray!T ) alias ScopedRef = ScopedRefArray!T;
+	else static if( isBasicType!T ) alias ScopedRef = ScopedRefBasic!T;
 	else static assert(false, "Unsupported type for ScopedRef: "~T.stringof);
 }
 
@@ -634,7 +634,7 @@ private struct ScopedRefAggregate(T)
 /// private
 private struct ScopedRefArray(T)
 {
-	alias typeof(T.init[0]) V;
+	alias V = typeof(T.init[0]) ;
 	private T* m_ref;
 
 	private @property ref T m_array() pure { return *m_ref; }
@@ -654,8 +654,8 @@ private struct ScopedRefArray(T)
 /// private
 private struct ScopedRefAssociativeArray(K, V)
 {
-	alias KeyType!T K;
-	alias ValueType!T V;
+	alias K = KeyType!T;
+	alias V = ValueType!T;
 	private T* m_ref;
 
 	private @property ref T m_array() pure { return *m_ref; }
@@ -693,7 +693,7 @@ private string isolatedAggregateMethodsString(T)()
 	foreach( mname; __traits(allMembers, T) ){
 		static if (isPublicMember!(T, mname)) {
 			static if (isRWPlainField!(T, mname)) {
-				alias typeof(__traits(getMember, T, mname)) mtype;
+				alias mtype = typeof(__traits(getMember, T, mname)) ;
 				auto mtypename = fullyQualifiedName!mtype;
 				//pragma(msg, "  field " ~ mname ~ " : " ~ mtype.stringof);
 				ret ~= "@property ScopedRef!(const("~mtypename~")) "~mname~"() const pure { return ScopedRef!(const("~mtypename~"))(m_ref."~mname~"); }\n";
@@ -707,7 +707,7 @@ private string isolatedAggregateMethodsString(T)()
 				}
 			} else {
 				foreach( method; __traits(getOverloads, T, mname) ){
-					alias FunctionTypeOf!method ftype;
+					alias ftype = FunctionTypeOf!method;
 
 					// only pure functions are allowed (or they could escape references to global variables)
 					// don't allow non-isolated references to be escaped
@@ -915,7 +915,7 @@ private @property string generateModuleImportsImpl(T, TYPES...)(ref bool[string]
 					static if( !is(typeof(__traits(getMember, T, member))) ){
 						// ignore sub types
 					} else static if( !is(FunctionTypeOf!(__traits(getMember, T, member)) == function) ){
-						alias typeof(__traits(getMember, T, member)) mtype;
+						alias mtype = typeof(__traits(getMember, T, member)) ;
 						ret ~= generateModuleImportsImpl!(mtype, T, TYPES)(visited);
 					} else static if( is(T == class) || is(T == interface) ){
 						foreach( overload; MemberFunctionsTuple!(T, member) ){
@@ -939,7 +939,7 @@ template haveTypeAlready(T, TYPES...)
 {
 	static if( TYPES.length == 0 ) enum haveTypeAlready = false;
 	else static if( is(T == TYPES[0]) ) enum haveTypeAlready = true;
-	else alias haveTypeAlready!(T, TYPES[1 ..$]) haveTypeAlready;
+	else alias haveTypeAlready = haveTypeAlready!(T, TYPES[1 ..$]);
 }
 
 
@@ -1187,7 +1187,7 @@ static if (newStdConcurrency) {
 		override TaskCondition newCondition(Mutex m) { return new TaskCondition(m); }
 	}
 } else {
-	alias Task Tid;
+	alias Tid = Task;
 
 	/// Returns the Tid of the caller (same as Task.getThis())
 	@property Tid thisTid() { return Task.getThis(); }

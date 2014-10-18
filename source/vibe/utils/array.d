@@ -38,7 +38,7 @@ enum AppenderResetMode {
 }
 
 struct AllocAppender(ArrayType : E[], E) {
-	alias Unqual!E ElemType;
+	alias ElemType = Unqual!E;
 
 	static assert(!hasIndirections!E && !hasElaborateDestructor!E);
 
@@ -181,7 +181,7 @@ unittest {
 }
 
 struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
-	alias Unqual!E ElemType;
+	alias ElemType = Unqual!E;
 	private {
 		ElemType[NELEM] m_data;
 		size_t m_fill;
