@@ -316,6 +316,138 @@ template cloneFunction(alias Symbol)
 	}
 }
 
+/**
+ * Returns a Tuple of the parameters.
+ * It can be used to declare function.
+ */
+template ParameterTuple(alias Func)
+{
+	static if (is(FunctionTypeOf!Func Params == __parameters)) {
+		alias ParameterTuple = Params;
+	} else static assert(0, "Argument to ParameterTuple must be a function");
+}
+
+///
+unittest
+{
+	void foo(string val = "Test", int = 10);
+	void bar(ParameterTuple!foo) { assert(val == "Test"); }
+	// Variadic functions require special handling:
+	import core.vararg;
+	void foo2(string val, ...);
+	void bar2(ParameterTuple!foo2, ...) { assert(val == "42"); }
+
+	bar();
+	bar2("42");
+
+	// Note: outside of a parameter list, it's value is the type of the param.
+	import std.traits : ParameterDefaultValueTuple;
+	ParameterTuple!(foo)[0] test = ParameterDefaultValueTuple!(foo)[0];
+	assert(test == "Test");
+}
+
+/// Returns a Tuple containing a 1-element parameter list, with an optional default value.
+/// Can be used to concatenate a parameter to a parameter list, or to create one.
+template ParameterTuple(T, string identifier, TUnused = void)
+{
+	import std.string : format;
+	mixin(q{private void __func(T %s);}.format(identifier));
+	alias ParameterTuple = ParameterTuple!__func;
+}
+
+
+/// Ditto
+template ParameterTuple(T, string identifier, T DefVal)
+{
+	import std.string : format;
+	mixin(q{private void __func(T %s = DefVal);}.format(identifier));
+	alias ParameterTuple = ParameterTuple!__func;
+}
+
+///
+unittest
+{
+	void foo(ParameterTuple!(int, "arg2")) { assert(arg2 == 42); }
+	foo(42);
+
+	void bar(string arg);
+	void bar2(ParameterTuple!bar, ParameterTuple!(string, "val")) { assert(val == arg); }
+	bar2("isokay", "isokay");
+
+	// For convenience, you can directly pass the result of std.traits.ParameterDefaultValueTuple
+	// without checking for void.
+	import std.traits : PDVT = ParameterDefaultValueTuple;
+	import std.traits : arity;
+	void baz(string test, int = 10);
+
+	static assert(is(PDVT!(baz)[0] == void));
+	// void baz2(string test2, string test);
+	void baz2(ParameterTuple!(string, "test2", PDVT!(baz)[0]), ParameterTuple!(baz)[0..$-1]) { assert(test == test2); }
+	static assert(arity!baz2 == 2);
+	baz2("Try", "Try");
+
+	// void baz3(string test, int = 10, int ident = 10);
+	void baz3(ParameterTuple!baz, ParameterTuple!(int, "ident", PDVT!(baz)[1])) { assert(ident == 10); }
+	baz3("string");
+}
+
+/// Returns a string of the functions attributes, suitable to be mixed
+/// on the LHS of the function declaration.
+///
+/// Unfortunately there is no "nice" syntax for declaring a function,
+/// so we have to resort on string for functions attributes.
+template FuncAttributes(alias Func)
+{
+	import std.array : join;
+	enum FuncAttributes = join([__traits(getFunctionAttributes, Func)], " ");
+}
+
+
+
+/// A template mixin which allow you to clone a function, and specify the implementation.
+mixin template CloneFunction(alias Func, string body_, string identifier = __traits(identifier, Func))
+{
+	// Template mixin: everything has to be self-contained.
+	import std.string : format;
+	import std.traits : ReturnType;
+	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
+	// Sadly this is not possible:
+	// class Test {
+	//   int foo(string par) pure @safe nothrow { /* ... */ }
+	//   typeof(foo) bar {
+	//      return foo(par);
+	//   }
+	// }
+	mixin(q{
+		ReturnType!Func %s(ParameterTuple!Func) %s {
+			%s
+		}
+	}.format(identifier, FuncAttributes!Func, body_));
+}
+
+///
+unittest
+{
+	interface ITest
+	{
+	  int foo(string par, int, string p = "foo", int = 10) pure @safe nothrow const;
+	}
+
+	class Test : ITest
+	{
+		mixin CloneFunction!(ITest.foo, q{
+			return 84;
+		}, "customname");
+	override:
+		mixin CloneFunction!(ITest.foo, q{
+			return 42;
+		});
+	}
+
+	assert(new Test().foo("", 21) == 42);
+	assert(new Test().customname("", 21) == 84);
+}
+
 ///
 unittest
 {
