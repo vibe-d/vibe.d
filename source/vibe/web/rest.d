@@ -54,9 +54,8 @@ import std.algorithm : startsWith, endsWith;
 		instance = Class instance to use for the REST mapping - Note that TImpl
 			must either be an interface type, or a class which derives from a
 			single interface
-		url_prefix = Optional path prefix to use when registering the HTTP routes
-		style = The naming convention to use for the translation of method names
-			to HTTP paths
+		settings = Additional settings, such as the $(D MethodStyle), or the prefix.
+                           See $(D RestInterfaceSettings) for more details.
 
 	See_Also:
 		$(D RestInterfaceClient) class for a seamless way to access such a generated API

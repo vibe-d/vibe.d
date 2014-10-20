@@ -7,8 +7,6 @@
 */
 module vibe.http.websockets;
 
-alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
-
 ///
 unittest {
 	void handleConn(scope WebSocket sock)
@@ -29,6 +27,8 @@ unittest {
 		// Start HTTP server using listenHTTP()...
 	}
 }
+
+alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
 
 import vibe.core.core;
 import vibe.core.log;

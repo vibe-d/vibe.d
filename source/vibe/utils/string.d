@@ -130,7 +130,7 @@ sizediff_t indexOfAny(string str, string chars)
 alias countUntilAny = indexOfAny;
 
 /**
-	Finds the closing bracket (works with any of '[', '(', '<', '{').
+	Finds the closing bracket (works with any of '[', '$(LPAREN)', '<', '{').
 
 	Params:
 		str = input string
