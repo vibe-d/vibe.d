@@ -660,7 +660,15 @@ struct FreeListRef(T, bool INIT = true)
 	}
 
 	@property const(TR) get() const { checkInvariants(); return m_object; }
-	@property TR get() { checkInvariants(); return m_object; }
+	@property TR get() 
+	{ 
+		static if (__traits(compiles, new TR()))
+			if (!m_object)
+				this = opCall();
+		checkInvariants();
+		return m_object; 
+	}
+
 	alias get this;
 
 	private @property ref int refCount()
