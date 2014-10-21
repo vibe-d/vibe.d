@@ -203,7 +203,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 
 	Params:
 		url = The URL to redirect to
-		status = Redirection status to use (by default this is $(D HTTPStatus.found)
+		status = Redirection status to use $(LPAREN)by default this is $(D HTTPStatus.found)$(RPAREN).
 
 	Returns:
 		Returns a $(D HTTPServerRequestDelegate) that performs the redirect
