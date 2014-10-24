@@ -1084,12 +1084,36 @@ final class HTTPServerResponse : HTTPResponse {
 		compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(bodyWriter, _argptr, _arguments);
 	}
 
+	/**
+		Waits until either the connection closes or until the given timeout is
+		reached.
+
+		Returns:
+			$(D true) if the connection was closed and $(D false) when the
+			timeout was reached.
+	*/
+	bool waitForConnectionClose(Duration timeout = Duration.max)
+	{
+		if (!m_rawConnection || !m_rawConnection.connected) return true;
+		m_rawConnection.waitForData(timeout);
+		return !m_rawConnection.connected;
+	}
+
 	// Finalizes the response. This is called automatically by the server.
 	private void finalize()
 	{
-		if (m_gzipOutputStream) m_gzipOutputStream.finalize();
-		if (m_deflateOutputStream) m_deflateOutputStream.finalize();
-		if (m_chunkedBodyWriter) m_chunkedBodyWriter.finalize();
+		if (m_gzipOutputStream) {
+			m_gzipOutputStream.finalize();
+			m_gzipOutputStream.destroy();
+		}
+		if (m_deflateOutputStream) {
+			m_deflateOutputStream.finalize();
+			m_deflateOutputStream.destroy();
+		}
+		if (m_chunkedBodyWriter) {
+			m_chunkedBodyWriter.finalize();
+			m_chunkedBodyWriter.destroy();
+		}
 
 		// ignore exceptions caused by an already closed connection - the client
 		// may have closed the connection already and this doesn't usually indicate
@@ -1103,6 +1127,9 @@ final class HTTPServerResponse : HTTPResponse {
 			logDebug("HTTP response only written partially before finalization. Terminating connection.");
 			m_rawConnection.close();
 		}
+
+		m_conn = null;
+		m_rawConnection = null;
 	}
 
 	private void writeHeader()
