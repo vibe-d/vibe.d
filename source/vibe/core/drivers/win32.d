@@ -1032,6 +1032,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		ConnectionStatus m_status;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
 		void delegate(TCPConnection) m_connectionCallback;
+		Exception m_exception;
 
 		HANDLE m_transferredFile;
 		OVERLAPPED m_fileOverlapped;
@@ -1066,7 +1067,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_fileOverlapped.OffsetHigh = 0;
 		m_fileOverlapped.hEvent = m_driver.m_fileCompletionEvent;
 
-		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
+		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CONNECT|FD_CLOSE);
 	}
 
 	~this()
@@ -1092,8 +1093,10 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 			logDebugV("connect err: %s", err);
 			import std.string;
 			socketEnforce(err == WSAEWOULDBLOCK, "Connect call failed");
-			while (m_status != ConnectionStatus.Connected)
+			while (m_status != ConnectionStatus.Connected) {
 				m_driver.m_core.yieldForEvent();
+				if (m_exception) throw m_exception;
+			}
 		}
 		assert(m_status == ConnectionStatus.Connected);
 	}
@@ -1338,12 +1341,12 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					break;
 				case FD_READ:
 					logTrace("TCP read event");
-					while( m_readBuffer.freeSpace > 0 ){
+					while (m_readBuffer.freeSpace > 0) {
 						auto dst = m_readBuffer.peekDst();
 						assert(dst.length <= int.max);
 						logTrace("Try to read up to %s bytes", dst.length);
 						auto ret = .recv(m_socket, dst.ptr, cast(int)dst.length, 0);
-						if( ret >= 0 ){
+						if (ret >= 0) {
 							logTrace("received %s bytes", ret);
 							if( ret == 0 ) break;
 							m_readBuffer.putN(ret);
@@ -1405,6 +1408,8 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 			}
+
+			if (ex) m_exception = ex;
 		} catch( UncaughtException th ){
 			logWarn("Exception while handling socket event: %s", th.msg);
 		}
