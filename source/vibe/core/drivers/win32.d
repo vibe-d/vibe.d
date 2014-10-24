@@ -1334,7 +1334,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 				default: break;
 				case FD_CONNECT: // doesn't seem to occur, but we handle it just in case
 					if (error) {
-						ex = new Exception("Failed to connect to host: "~to!string(error));
+						ex = new SystemSocketException("Failed to connect to host", error);
 						m_status = ConnectionStatus.Disconnected;
 					} else m_status = ConnectionStatus.Connected;
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
@@ -1354,7 +1354,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 							auto err = WSAGetLastError();
 							if( err != WSAEWOULDBLOCK ){
 								logTrace("receive error %s", err);
-								ex = new Exception("Socket error: "~to!string(err));
+								ex = new SystemSocketException("Error reading data from socket", error);
 							}
 							break;
 						}
@@ -1386,19 +1386,19 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					if (m_readOwner) m_driver.m_core.resumeTask(m_readOwner, ex);
 					break;
 				case FD_WRITE:
-					if( m_status == ConnectionStatus.Initialized ){
+					if (m_status == ConnectionStatus.Initialized) {
 						if( error ){
-							ex = new Exception("Failed to connect to host: "~to!string(error));
+							ex = new SystemSocketException("Failed to connect to host", error);
 						} else m_status = ConnectionStatus.Connected;
 					}
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 				case FD_CLOSE:
-					if( error ){
-						if( m_status == ConnectionStatus.Initialized ){
-							ex = new Exception("Failed to connect to host: "~to!string(error));
+					if (error) {
+						if (m_status == ConnectionStatus.Initialized) {
+							ex = new SystemSocketException("Failed to connect to host", error);
 						} else {
-							ex = new Exception("The connection was closed with error: "~to!string(error));
+							ex = new SystemSocketException("The connection was closed with an error", error);
 						}
 					} else {
 						m_status = ConnectionStatus.Disconnected;

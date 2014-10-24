@@ -22,11 +22,15 @@ version (Windows) {
 
 		this(string message, string file = __FILE__, size_t line = __LINE__)
 		{
-			import std.string : format;
-
 			error = WSAGetLastError();
+			this(message, error, file, line);
+		}
+
+		this(string message, int error, string file = __FILE__, size_t line = __LINE__)
+		{
+			import std.string : format;
 			ushort* errmsg;
-			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS, 
+			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_IGNORE_INSERTS,
 						   null, error, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), cast(LPWSTR)&errmsg, 0, null);
 			size_t len = 0;
 			while (errmsg[len]) len++;
