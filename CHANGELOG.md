@@ -69,6 +69,18 @@ v0.7.21 - 2014-10-
  - Avoid using chunked encoding for `HTTPClientRequest.writeJsonBody`
  - Made the `message` parameter of `enforceHTTP` `lazy` (by Mathias Lang aka Geod24) - [pull #839][issue839]
  - Added an array based overload of `MongoCollection.ensureIndex` - [issue #824][issue824]
+ - All external dependencies are now version based (OpenSSL/libevent/libev)
+ - Improve the format of JSON parse errors to enable IDE go-to-line support
+ - Removed all console and file system output from unit tests (partially by Etienne Cimon, [pull #852][issue852])
+ - Improved performance of libevent timers by avoiding redundant rescheduling of the master timer
+ - Added initial support for JSON and BSON based session stores
+ - Added a Redis based HTTP session store (`vibe.db.redis.sessionstore.RedisSessionStore`)
+ - Deprecated index operator based access of session values (recommended to use `vibe.web.web.SessionVar` instead)
+ - Added support for TLS server name indication (SNI) to the SSL support clases and the HTTP client and server implementation
+ - Added support for a `VibeUseOldOpenSSL` version to enable use with pre 1.0 versions of OpenSSL
+ - Increased the default fiber stack size to 512 KiB (32-bit) and 16 MiB (64-bit) respectively - [issue #861][issue861]
+ - Upgraded the included OpenSSL Windows binaries to 1.0.1j
+ - Added `HTTPServerResponse.waitForConnectionClose` to support certain kinds of long-polling applications
 
 ### Bug fixes ###
 
@@ -135,6 +147,16 @@ v0.7.21 - 2014-10-
  - Fixed parsing of MongoDB URLs containing `/` in the password field (by Martin Nowak) - [pull #843][issue843]
  - Fixed an assertion in `TCPConnection.waitForData` when called outside of a task (libevent) - [issue #829][issue829]
  - Fixed an `InvalidMemoryOperationError` in `HTTPClientResponse.~this()`
+ - Fixed a memory corruption issue for HTTPS servers (by Etienne Cimon) - [issue #846][issue846], [pull #849][issue849]
+ - Fixed low-precision floating point number output in `JsonStringSerializer`
+ - Fixed compilation in release mode (not recommended for safety reasons!) - [issue #847][issue847]
+ - Fixed low-precision floating point number output in the Redis client - [issue #857][issue857]
+ - Fixed handling of NaN in the JSON module (output as `undefined`) (by David Monagle)- [pull #860][issue860]
+ - Fixed the Redis subscriber implementation (by Etienne Cimon) - [issue #855][issue855], [pull #815][issue815]
+ - Fixed compilation of the `Isolated!T` framework - [issue #801][issue801]
+ - Fixed an `InvalidMemoryOperationError` in `DebugAllocator` (by Etienne Cimon) - [pull #848][issue848]
+ - Fixed detection of numeric types in `JsonSerializer` (do not treat `Nullable!T` as numeric) (by Jack Applegame) - [issue #686][issue868], [pull #869][issue869]
+ - Fixed error handling in `Win32TCPConnection.connect` and improved error messages
 
 [issue619]: https://github.com/rejectedsoftware/vibe.d/issues/619
 [issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
@@ -188,6 +210,7 @@ v0.7.21 - 2014-10-
 [issue794]: https://github.com/rejectedsoftware/vibe.d/issues/794
 [issue796]: https://github.com/rejectedsoftware/vibe.d/issues/796
 [issue799]: https://github.com/rejectedsoftware/vibe.d/issues/799
+[issue801]: https://github.com/rejectedsoftware/vibe.d/issues/801
 [issue803]: https://github.com/rejectedsoftware/vibe.d/issues/803
 [issue805]: https://github.com/rejectedsoftware/vibe.d/issues/805
 [issue806]: https://github.com/rejectedsoftware/vibe.d/issues/806
@@ -196,6 +219,7 @@ v0.7.21 - 2014-10-
 [issue808]: https://github.com/rejectedsoftware/vibe.d/issues/808
 [issue809]: https://github.com/rejectedsoftware/vibe.d/issues/809
 [issue811]: https://github.com/rejectedsoftware/vibe.d/issues/811
+[issue815]: https://github.com/rejectedsoftware/vibe.d/issues/815
 [issue817]: https://github.com/rejectedsoftware/vibe.d/issues/817
 [issue818]: https://github.com/rejectedsoftware/vibe.d/issues/818
 [issue819]: https://github.com/rejectedsoftware/vibe.d/issues/819
@@ -211,6 +235,16 @@ v0.7.21 - 2014-10-
 [issue840]: https://github.com/rejectedsoftware/vibe.d/issues/840
 [issue841]: https://github.com/rejectedsoftware/vibe.d/issues/841
 [issue843]: https://github.com/rejectedsoftware/vibe.d/issues/843
+[issue845]: https://github.com/rejectedsoftware/vibe.d/issues/845
+[issue846]: https://github.com/rejectedsoftware/vibe.d/issues/846
+[issue847]: https://github.com/rejectedsoftware/vibe.d/issues/847
+[issue848]: https://github.com/rejectedsoftware/vibe.d/issues/848
+[issue849]: https://github.com/rejectedsoftware/vibe.d/issues/849
+[issue855]: https://github.com/rejectedsoftware/vibe.d/issues/855
+[issue860]: https://github.com/rejectedsoftware/vibe.d/issues/860
+[issue861]: https://github.com/rejectedsoftware/vibe.d/issues/861
+[issue868]: https://github.com/rejectedsoftware/vibe.d/issues/868
+[issue869]: https://github.com/rejectedsoftware/vibe.d/issues/869
 
 
 v0.7.20 - 2014-06-03
