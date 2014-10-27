@@ -503,8 +503,12 @@ final class IncomingWebSocketMessage : InputStream {
 					m_currentFrame = frame;
 					break;
 				case FrameOpcode.ping:
-					frame.opcode = FrameOpcode.pong;
-					frame.writeFrame(m_conn);
+					Frame pong;
+					pong.opcode = FrameOpcode.pong;
+					pong.fin = true;
+					pong.payload = frame.payload;
+
+					pong.writeFrame(m_conn);
 					break;
 				default:
 					throw new WebSocketException("unknown frame opcode");
