@@ -39,6 +39,9 @@ void runTest()
 		assert(db.get("test8") == "test8");
 		assert(db.get("test9") == "test9");
 		assert(db.get("test10") == "0");
+		
+		assert(db.setNX("setnxtest", "foo", 30.seconds));
+		assert(!db.setNX("setnxtest", "foo", 30.seconds));
 
 		db.del("saddTests");
 		db.sadd("saddTests", "item1");
