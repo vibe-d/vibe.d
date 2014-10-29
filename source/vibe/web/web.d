@@ -687,3 +687,78 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 
 	return ret;
 }
+
+
+/* JDAVIDLS
+	I18n model field
+
+	i must to place here intread of i18n.d to can access to private s_requestContext
+*/
+
+
+
+
+private string generateI18nProperties(T)(){
+	string ret;
+	foreach(M; __traits(allMembers, T)) {
+		ret ~= "@property
+			auto "~M~"(){
+				return map[s_requestContext.language]."~M~";
+			}";
+	}
+	return ret;
+}
+
+struct I18n(T){
+
+
+	struct Representation {
+		string language;
+		T translation;
+	}
+
+	T[string] map;
+
+	ref T opIndex(string lang){
+		if( lang !in map ) {
+			map[lang] = T.init;
+		}
+
+		return map[lang];
+	}
+
+	@property ref T translation() {
+		return opIndex(s_requestContext.language);
+	}
+
+
+	Representation[] toRepresentation(){
+		Representation[] repr;
+
+		foreach(language, ref translation; map) {
+			repr ~= Representation(language, translation);
+		}
+
+		return repr;
+	}
+
+	static I18n fromRepresentation(Representation[] repr){
+		I18n i18n;
+
+		for(uint i; i < repr.length; i++) {
+			i18n.map[repr[i].language] = repr[i].translation;
+		}
+
+		return i18n;
+	}
+
+	static if(is(T == struct) || is(T == class)) {
+		pragma(msg, generateI18nProperties!T);
+		mixin(generateI18nProperties!T);
+	}
+
+
+
+}
+
+
