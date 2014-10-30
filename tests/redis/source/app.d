@@ -78,6 +78,9 @@ void runTest()
 		assert(db.smembers("test2").empty);
 		assert(!db.smembers("test1").hasNext());
 	}
+	
+	testLocking(redis.getDatabase(0));
+	
 	RedisSubscriber sub;
 	{
 		RedisSubscriber scoped = redis.createSubscriber();
@@ -109,6 +112,33 @@ void runTest()
 	assert(!sub.isListening);
 	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 	logInfo("Redis Test Succeeded.");
+}
+
+void testLocking(RedisDatabase _db)
+{
+	logInfo("run lock test...");
+	
+	import vibe.db.redis.idioms;
+	
+	auto lock = RedisLock(_db,"lock_key");
+	
+	auto testMethod = {
+		foreach(i; 0..100)
+		{
+			lock.performLocked({
+				assert(_db.setNX("lockedWriteTest","foo"));
+				assert(1 == _db.del("lockedWriteTest"));
+			});
+		}
+	};
+	
+	auto t1 = runTask(testMethod);
+	auto t2 = runTask(testMethod);
+	
+	t1.join();
+	t2.join();
+	
+	logInfo("lock test finished");
 }
 
 int main()
