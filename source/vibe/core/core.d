@@ -515,6 +515,8 @@ void rawYield()
 */
 void sleep(Duration timeout)
 {
+	assert(timeout >= 0.seconds, "Argument to sleep must not be negative.");
+	if (timeout <= 0.seconds) return;
 	auto tm = setTimer(timeout, null);
 	tm.wait();
 }
