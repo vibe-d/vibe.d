@@ -1069,7 +1069,7 @@ struct RedisReply(T = ubyte[]) {
 
 		static if (is(T == ubyte[])) return ret;
 		else static if (is(T == string)) return cast(T)ret.idup;
-		else static if (is(T == bool)) return ret[0] == '1';
+		else static if (is(T == bool)) return ret.length>=2 ? (ret[0] == 'O' && ret[1] == 'K') : false;
 		else static if (is(T == int) || is(T == long) || is(T == size_t) || is(T == double)) {
 			auto str = cast(string)ret;
 			return parse!T(str);

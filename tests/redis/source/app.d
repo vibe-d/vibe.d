@@ -19,6 +19,11 @@ void runTest()
 	}
 	{
 		auto db = redis.getDatabase(0);
+		db.deleteAll();
+
+		assert(db.setNX("testSetNX", "foo", 10.seconds));
+		assert(!db.setNX("testSetNX", "foo", 10.seconds));
+		
 		db.setEX("test1", 1000, "test1");
 		db.setEX("test2", 1000, "test2");
 		db.setEX("test3", 1000, "test3");
