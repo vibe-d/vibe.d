@@ -166,7 +166,9 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 		foreach (i, ref lst; g_listeners) {
 			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
 				addVHost(lst);
-				assert(!settings.sslContext || lst.sslContext.kind == SSLContextKind.serverSNI);
+				assert(!settings.sslContext || settings.sslContext is lst.sslContext
+					|| lst.sslContext.kind == SSLContextKind.serverSNI,
+					format("Got multiple overlapping SSL bind addresses (port %s), but no SNI SSL context!?", settings.port));
 				found_listener = true;
 				any_successful = true;
 				break;
