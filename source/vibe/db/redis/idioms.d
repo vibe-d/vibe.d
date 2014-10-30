@@ -376,7 +376,7 @@ end`);
 
 		auto lockval = BsonObjectID.generate();
 		while (!m_db.setNX(m_key, cast(ubyte[])lockval, 30.seconds))
-			sleep(uniform(0, 50).msecs);
+			sleep(uniform(1, 50).msecs);
 
 		scope (exit) m_db.evalSHA!(string, ubyte[])(m_scriptSHA, null, cast(ubyte[])lockval);
 
