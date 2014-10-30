@@ -19,6 +19,15 @@ void runTest()
 	}
 	{
 		auto db = redis.getDatabase(0);
+		db.deleteAll();
+		
+		assert(db.setNX("setNXTest","foo", 30.seconds));
+		assert(!db.setNX("setNXTest","foo", 30.seconds));
+		assert(db.setNX("setNXTest2","foo"));
+		assert(!db.setNX("setNXTest2","foo"));
+		assert(db.setXX("setNXTest2","foo"));
+		assert(!db.setXX("setXXTestNegative","foo"));
+		
 		db.setEX("test1", 1000, "test1");
 		db.setEX("test2", 1000, "test2");
 		db.setEX("test3", 1000, "test3");
@@ -39,18 +48,18 @@ void runTest()
 		assert(db.get("test8") == "test8");
 		assert(db.get("test9") == "test9");
 		assert(db.get("test10") == "0");
-
+		
 		db.del("saddTests");
 		db.sadd("saddTests", "item1");
 		db.sadd("saddTests", "item2");
 		assert(db.smembers("saddTests").array.sort.equal(["item1", "item2"]));
-
+		
 		db.zadd("zaddTests", 0.5, "a", 1.0, "b", 2.0, "c", 1.5, "d");
 		assert(db.zrangeByScore("zaddTests", 0.5, 1.5).equal(["a", "b", "d"]));
 		assert(db.zrangeByScore!(string, "()")("zaddTests", 0.5, 1.5).equal(["b"]));
 		assert(db.zrangeByScore!(string, "[)")("zaddTests", 0.5, 1.5).equal(["a", "b"]));
 		assert(db.zrangeByScore!(string, "(]")("zaddTests", 0.5, 1.5).equal(["b", "d"]));
-
+		
 		db.append("test1", "test1append");
 		db.append("test2", "test2append");
 		assert(db.get!string("test1") == "test1test1append");
@@ -58,13 +67,13 @@ void runTest()
 		
 		db.incr("test10");
 		assert(db.get!long("test10") == 1);
-
+		
 		db.del("test1", "test2","test3","test4","test5","test6","test7","test8","test9","test10");
 		db.del("saddTests", "zaddTests");
-
+		
 		db.srem("test1", "test1append");
 		db.srem("test2", "test2append");
-
+		
 		assert(db.smembers("test1").empty);
 		assert(db.smembers("test2").empty);
 		assert(!db.smembers("test1").hasNext());
@@ -75,7 +84,7 @@ void runTest()
 		sub = scoped;
 	}
 	import std.datetime;
-
+	
 	assert(!sub.isListening);
 	sub.listen((string channel, string msg){
 		logInfo("LISTEN Recv Channel: %s, Message: %s", channel.to!string, msg.to!string);
@@ -86,12 +95,12 @@ void runTest()
 	sub.subscribe("SomeChannel");
 	sub.subscribe("SomeChannel");
 	sleep(100.msecs);
-
+	
 	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
-
+	
 	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
 	sleep(100.msecs);
-
+	
 	sub.unsubscribe("SomeChannel");
 	sub.unsubscribe("SomeChannel");
 	sub.unsubscribe("SomeChannel");

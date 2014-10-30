@@ -229,9 +229,9 @@ struct RedisDatabase {
 
 	void set(T)(string key, T value) if(isValidRedisValueType!T) { request("SET", key, value); }
 	bool setNX(T)(string key, T value) if(isValidRedisValueType!T) { return request!bool("SETNX", key, value); }
-	bool setXX(T)(string key, T value) if(isValidRedisValueType!T) { return request!bool("SET", key, value, "XX"); }
-	bool setNX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return request!bool("SET", key, value, "PX", expire_time.total!"msecs", "NX"); }
-	bool setXX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return request!bool("SET", key, value, "PX", expire_time.total!"msecs", "XX"); }
+	bool setXX(T)(string key, T value) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "XX"); }
+	bool setNX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "PX", expire_time.total!"msecs", "NX"); }
+	bool setXX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "PX", expire_time.total!"msecs", "XX"); }
 	bool setBit(string key, long offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
 	void setEX(T)(string key, long seconds, T value) if(isValidRedisValueType!T) { request("SETEX", key, seconds, value); }
 	long setRange(T)(string key, long offset, T value) if(isValidRedisValueType!T) { return request!long("SETRANGE", key, offset, value); }
