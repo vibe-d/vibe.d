@@ -13,7 +13,7 @@ import vibe.db.mongo.connection;
 import vibe.db.mongo.client;
 
 import std.array : array;
-import std.algorithm : map, min;
+import std.algorithm : map, max, min;
 import std.exception;
 
 
@@ -109,7 +109,7 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	}
 
 	/**
-		Limits the maximum documents that cursor returns.
+		Limits the number of documents that the cursor returns.
 
 		This method must be called before beginnig iteration in order to have
 		effect. If multiple calls to limit() are made, the one with the lowest
@@ -126,6 +126,26 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	MongoCursor limit(size_t count)
 	{
 		m_data.limit(count);
+		return this;
+	}
+
+	/**
+		Skips a given number of elements at the beginning of the cursor.
+
+		This method must be called before beginnig iteration in order to have
+		effect. If multiple calls to skip() are made, the one with the maximum
+		number will be chosen.
+
+		Params:
+			count = The number of documents to skip.
+
+		Returns: the same cursor
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/method/cursor.skip)
+	*/
+	MongoCursor skip(int count)
+	{
+		m_data.skip(count);
 		return this;
 	}
 
@@ -259,6 +279,11 @@ private class MongoCursorData(Q, R, S) {
 			if (m_limit == 0 || m_limit > count)
 				m_limit = count;
 		}
+	}
+
+	void skip(int count) {
+		// A skip() value of 0 (e.g. “.skip(0)”) is equivalent to setting no skip.
+		m_nskip = max(m_nskip, count);
 	}
 
 	void popFront()
