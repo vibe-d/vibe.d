@@ -244,7 +244,7 @@ private void serializeImpl(Serializer, T, ATTRIBUTES...)(ref Serializer serializ
 	} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 		if (value.isNull()) serializeImpl!(Serializer, typeof(null))(serializer, null);
 		else serializeImpl!(Serializer, typeof(value.get()), ATTRIBUTES)(serializer, value.get());
-	} else static if (isCustomSerializable!T) {
+	} else static if (isCustomSerializable!TU) {
 		alias CustomType = typeof(T.init.toRepresentation());
 		serializeImpl!(Serializer, CustomType, ATTRIBUTES)(serializer, value.toRepresentation());
 	} else static if (isISOExtStringSerializable!TU) {
