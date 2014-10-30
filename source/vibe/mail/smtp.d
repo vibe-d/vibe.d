@@ -259,7 +259,7 @@ private int recvStatus(InputStream conn)
 private string addressMailPart(string str)
 {
 	auto idx = str.indexOf('<');
-	if( idx < 0 ) return str;
+	if( idx < 0 ) return "<"~ str ~">";
 	str = str[idx .. $];
 	enforce(str[$-1] == '>', "Malformed email address field: '"~str~"'.");
 	return str;
