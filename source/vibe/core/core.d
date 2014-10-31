@@ -1307,6 +1307,11 @@ shared static ~this()
 // per thread setup
 static this()
 {
+	/// workaround for:
+	// object.Exception@src/rt/minfo.d(162): Aborting: Cycle detected between modules with ctors/dtors:
+	// vibe.core.core -> vibe.core.drivers.native -> vibe.core.drivers.libasync -> vibe.core.core
+	if (Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor") return;
+			
 	assert(s_core !is null);
 
 	auto thisthr = Thread.getThis();
