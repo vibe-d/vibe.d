@@ -432,7 +432,6 @@ final class LibasyncFileStream : FileStream {
 	
 	~this()
 	{
-		m_impl.kill();
 		close();
 	}
 
@@ -451,6 +450,10 @@ final class LibasyncFileStream : FileStream {
 	
 	void close()
 	{
+		if (m_impl) {
+			m_impl.kill();
+			m_impl = null;
+		}
 		m_started = false;
 	}
 	
@@ -736,8 +739,10 @@ final class LibasyncManualEvent : ManualEvent {
 		recycleID(m_instance);
 		synchronized (m_mutex) {
 			foreach (ref signal; ms_signals[]) {
-				(cast(shared AsyncSignal) signal).kill();
-				signal = null;
+				if (signal) {
+					(cast(shared AsyncSignal) signal).kill();
+					signal = null;
+				}
 			}
 		}
 	}
@@ -920,7 +925,7 @@ final class LibasyncTCPListener : TCPListener {
 	private void delegate(TCPEvent) initConnection(AsyncTCPConnection conn) {
 		logTrace("Connection initialized in thread: " ~ Thread.getThis().name);
 
-		LibasyncTCPConnection native_conn = FreeListObjectAlloc!LibasyncTCPConnection.alloc(conn, m_connectionCallback);
+		LibasyncTCPConnection native_conn = new LibasyncTCPConnection(conn, m_connectionCallback);
 		native_conn.m_tcpImpl.conn = conn;
 		return &native_conn.handler;
 	}
@@ -988,9 +993,10 @@ final class LibasyncTCPConnection : TCPConnection {
 
 	@property bool keepAlive() const { return m_settings.keepAlive; }
 	
-	@property bool connected() const { return !m_closed; }
+	@property bool connected() const { return !m_closed && m_tcpImpl.conn && m_tcpImpl.conn.isConnected; }
 	
 	@property bool dataAvailableForRead(){ 
+		logTrace("dataAvailableForRead");
 		acquireReader();
 		scope(exit) releaseReader();
 		return !m_readBuffer.empty;
@@ -1005,6 +1011,7 @@ final class LibasyncTCPConnection : TCPConnection {
 	
 	@property ulong leastSize()
 	{
+		logTrace("leastSize()");
 		acquireReader();
 		scope(exit) releaseReader();
 		
@@ -1024,13 +1031,7 @@ final class LibasyncTCPConnection : TCPConnection {
 
 		checkConnected();
 
-		if (!m_tcpImpl.conn.inbound && !conn.kill(true)) {
-			throw new Exception(conn.error);
-		}
-		else
-			m_closed = true;
-
-		return;
+		onClose();
 	}
 
 	bool waitForData(Duration timeout = 0.seconds) 
@@ -1045,6 +1046,7 @@ final class LibasyncTCPConnection : TCPConnection {
 		}
 		_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		_driver.rearmTimer(tm, timeout, false);
+		logTrace("waitForData()");
 		while (m_readBuffer.empty) {
 			checkConnected();
 			if (m_mustRecv)
@@ -1068,15 +1070,18 @@ final class LibasyncTCPConnection : TCPConnection {
 		acquireReader();
 		scope(exit) releaseReader();
 
-		return m_readBuffer.peek();
+		if (!m_readBuffer.empty)
+			return m_readBuffer.peek();
+		else
+			return null;
 	}
 	
 	void read(ubyte[] dst)
 	{
+		assert(dst !is null);
 		logTrace("Read enter :: ptr %s",  (cast(void*)this).to!string);
 		acquireReader();
 		scope(exit) releaseReader();
-		
 		while( dst.length > 0 ){
 			while( m_readBuffer.empty ){
 				checkConnected();
@@ -1084,10 +1089,11 @@ final class LibasyncTCPConnection : TCPConnection {
 					onRead();
 				else {
 					getDriverCore().yieldForEvent();
+					checkConnected();
 				}
 			}
 			size_t amt = min(dst.length, m_readBuffer.length);
-			
+
 			m_readBuffer.read(dst[0 .. amt]);
 			dst = dst[amt .. $];
 		}
@@ -1095,6 +1101,7 @@ final class LibasyncTCPConnection : TCPConnection {
 	
 	void write(in ubyte[] bytes_)
 	{
+		assert(bytes_ !is null);
 		logTrace("%s", "write enter");
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -1106,9 +1113,10 @@ final class LibasyncTCPConnection : TCPConnection {
 		size_t offset;
 		size_t len = bytes.length;
 		do {
-			if (!first)
+			if (!first) {
 				getDriverCore().yieldForEvent();
-			
+			}
+			checkConnected();
 			offset += conn.send(bytes[offset .. $]);
 			
 			if (conn.hasError) {
@@ -1117,7 +1125,6 @@ final class LibasyncTCPConnection : TCPConnection {
 			first = false;
 		} while (offset != len);
 
-		logTrace("%s", "Success in write");
 	}
 	
 	void flush()
@@ -1156,13 +1163,12 @@ final class LibasyncTCPConnection : TCPConnection {
 	void releaseReader() { 
 		if (Task.getThis() == Task()) return;
 		logTrace("%s", "Release Reader");
-		assert(amReadOwner()); 
-		m_settings.reader.task = Task.init; 
+		assert(amReadOwner());
 		m_settings.reader.isWaiting = false;
 	}
 
 	bool amReadOwner() const {
-		if (m_settings.reader.task == Task.getThis())
+		if (m_settings.reader.isWaiting && m_settings.reader.task == Task.getThis())
 			return true;
 		return false;
 	}
@@ -1179,12 +1185,11 @@ final class LibasyncTCPConnection : TCPConnection {
 		if (Task.getThis() == Task()) return;
 		logTrace("%s", "Release Writer");
 		assert(amWriteOwner()); 
-		m_settings.writer.task = Task(); 
 		m_settings.writer.isWaiting = false;
 	}
 
 	bool amWriteOwner() const { 
-		if (m_settings.writer.task == Task.getThis()) 
+		if (m_settings.writer.isWaiting && m_settings.writer.task == Task.getThis()) 
 			return true;
 		return false;
 	}
@@ -1235,17 +1240,21 @@ final class LibasyncTCPConnection : TCPConnection {
 	 * We're given some time to cleanup.
 	*/
 	private void onClose(in string msg = null) {
-		logTrace(msg);
-		if (m_tcpImpl.conn && !m_tcpImpl.conn.inbound && m_tcpImpl.conn.isConnected) {
+		logTrace("onClose");
+
+		if (m_closed)
+			return;
+
+		if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected) {
 			m_tcpImpl.conn.kill(true); // close the connection
 			m_tcpImpl.conn = null;
-			m_closed = true;
-			logTrace("Closing inbound connection");
 		}
+		m_closed = true;
 		Exception ex;
 		if (!msg)
 			ex = new Exception("Connection closed");
 		else	ex = new Exception(msg);
+
 		bool hasUniqueReader;
 		bool hasUniqueWriter;
 		Task reader;
@@ -1260,8 +1269,32 @@ final class LibasyncTCPConnection : TCPConnection {
 			writer = m_settings.writer.task;
 			hasUniqueWriter = true;
 		}
-		if (hasUniqueReader) getDriverCore().resumeTask(reader, ex);
-		if (hasUniqueWriter) getDriverCore().resumeTask(writer, ex);
+		if (hasUniqueReader && Task.getThis() != reader) {
+			getDriverCore().resumeTask(reader, ex);
+		}
+		if (hasUniqueWriter && Task.getThis() != writer) {
+			getDriverCore().resumeTask(writer, ex);
+		}
+	}
+
+	void onConnect() {
+		scope(failure) onClose();
+
+		if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected)
+		{
+			bool inbound = m_tcpImpl.conn.inbound;
+
+			try m_settings.onConnect(this); 
+			catch ( Exception e) {
+				logError(e.toString);
+				throw e;
+			}
+			catch ( Throwable e) {
+				logError(e.toString);
+				throw e;
+			}
+		}
+		logTrace("Finished callback");
 	}
 
 	void handler(TCPEvent ev) {
@@ -1273,47 +1306,21 @@ final class LibasyncTCPConnection : TCPConnection {
 				// read & write are guaranteed to be successful on any platform at this point
 
 				if (m_tcpImpl.conn.inbound)
-				{
-					logTrace("Inbound: " ~ (cast(void*)this).to!string);
-					auto handler = {
-						logTrace("In task: " ~ (cast(void*)this).to!string);
-						if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected)
-						{
-							try m_settings.onConnect(cast(TCPConnection)this); 
-							catch ( Exception e) {
-								logError(e.toString);
-							}
-							finally {
-								m_tcpImpl.conn.kill(true); // close the connection when it goes out of scope
-								m_tcpImpl.conn = null;
-								m_closed = true;
-								logTrace("Closing inbound connection");
-							}
-						}
-						logTrace("Finished using callback");
-						FreeListObjectAlloc!LibasyncTCPConnection.free(this);
-					};
-					runTask(handler);
-				}
-				else {
-					if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected)
-						m_settings.onConnect(this); 
-					logTrace("Finished using callback");
-				}
+					runTask(&onConnect);
+				else onConnect();
+
 				break;
 			case TCPEvent.READ:
 				// fill the read buffer and resume any task if waiting
 				try onRead();
 				catch (Exception e) ex = e;
-				logTrace("m_settings.reader.task? %s", m_settings.reader.isWaiting);
-
-				logTrace("Task Resuming in: " ~ (cast(void*)this).to!string);
 				if (m_settings.reader.isWaiting) 
 					getDriverCore().resumeTask(m_settings.reader.task, ex);
 				break;
 			case TCPEvent.WRITE:
 				// The kernel is ready to have some more data written, all we need to do is wake up the writer
-				if (m_settings.writer.isWaiting) getDriverCore().resumeTask(m_settings.writer.task, ex);
+				if (m_settings.writer.isWaiting) 
+					getDriverCore().resumeTask(m_settings.writer.task, ex);
 				break;
 			case TCPEvent.CLOSE:
 				onClose();
