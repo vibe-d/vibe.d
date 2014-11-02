@@ -45,7 +45,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 
 	~this()
 	{
-		if (m_table) m_allocator.free(cast(void[])m_table);
+		if (m_table) freeArray(m_allocator, m_table);
 	}
 
 	@disable this(this);
