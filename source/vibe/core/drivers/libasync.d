@@ -1029,7 +1029,7 @@ final class LibasyncTCPConnection : TCPConnection {
 		acquireWriter();
 		scope(exit) releaseWriter();
 
-		checkConnected();
+		// checkConnected();
 
 		onClose();
 	}
