@@ -212,6 +212,45 @@ string keyToIdentifier(string key)
 	return ret;
 }
 
+// Example po header
+/*
+ * # Translation of kstars.po into Spanish.
+ * # This file is distributed under the same license as the kdeedu package.
+ * # Pablo de Vicente <pablo@foo.com>, 2005, 2006, 2007, 2008.
+ * # Eloy Cuadra <eloy@bar.net>, 2007, 2008.
+ * msgid ""
+ * msgstr ""
+ * "Project-Id-Version: kstars\n"
+ * "Report-Msgid-Bugs-To: http://bugs.kde.org\n"
+ * "POT-Creation-Date: 2008-09-01 09:37+0200\n"
+ * "PO-Revision-Date: 2008-07-22 18:13+0200\n"
+ * "Last-Translator: Eloy Cuadra <eloy@bar.net>\n"
+ * "Language-Team: Spanish <kde-l10n-es@kde.org>\n"
+ * "MIME-Version: 1.0\n"
+ * "Content-Type: text/plain; charset=UTF-8\n"
+ * "Content-Transfer-Encoding: 8bit\n"
+ * "Plural-Forms: nplurals=2; plural=n != 1;\n"
+ */
+
+// PO format notes
+/*
+ * # - Translator comment
+ * #: - source reference
+ * #. - extracted comments
+ * #, - flags such as "c-format" to indicate what king of substitutions may be present
+ * #| msgid - previous string comment
+ * #~ - obsolete message
+ * msgctxt - disabmbiguating context, like variable scope (optional, defaults to null)
+ * msgid - key to translate from (required)
+ * msgid_plural - plural form of the msg id (optional)
+ * msgstr - value to translate to (required)
+ * msgstr[0] - indexed translation for handling the various plural forms
+ * msgstr[1] - ditto
+ * msgstr[2] - ditto
+ */
+
+// TODO: Handle msgctxt
+// TODO: Handle plural translations
 DeclString[] extractDeclStrings(string text)
 {
 	DeclString[] ret;
@@ -227,7 +266,7 @@ DeclString[] extractDeclStrings(string text)
 		i = skipWhitespace(i, text);
 
 		auto iknext = skipString(i, text);
-		auto key = dstringUnescape(text[i+1 .. iknext-1]);
+		auto key = dstringUnescape(wrapText(text[i+1 .. iknext-1]));
 		i = iknext;
 
 		i = skipToDirective(i, text);
@@ -238,13 +277,64 @@ DeclString[] extractDeclStrings(string text)
 		i = skipWhitespace(i, text);
 
 		auto ivnext = skipString(i, text);
-		auto value = dstringUnescape(text[i+1 .. ivnext-1]);
+		auto value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
 		i = ivnext;
 
 		ret ~= DeclString(key, value);
 	}
 
 	return ret;
+}
+
+/// Verify that two simple messages can be read and parsed correctly
+unittest {
+	auto str = `
+# first string
+msgid "ordinal.1"
+msgstr "first"
+
+# second string
+msgid "ordinal.2"
+msgstr "second"`;
+	auto ds = extractDeclStrings(str);
+
+	assert(2 == ds.length, "Not enough DeclStrings have been processed");
+
+	assert(ds[0].key == "ordinal.1", "The first key is not right.");
+	assert(ds[0].value == "first", "The first value is not right.");
+
+	assert(ds[1].key == "ordinal.2", "The second key is not right.");
+	assert(ds[1].value == "second", "The second value is not right.");
+}
+
+// Verify that the fields cannot be defined out of order
+unittest {
+	import core.exception : AssertError;
+	import std.exception : assertThrown;
+
+	auto str1 = `
+# unexpected field ahead
+msgstr "world"
+msgid "hello"`;
+	assertThrown!AssertError(extractDeclStrings(str1));
+}
+
+// Verify that string wrapping is handled correctly
+unittest {
+	auto str = `
+# The following text is wrapped
+msgid ""
+"This is an example of text that "
+"has been wrapped on two lines."
+msgstr ""
+"It should not matter where it takes place, "
+"the strings should all be concatenated properly."`;
+
+	import std.conv : to;
+	auto ds = extractDeclStrings(str);
+	assert(ds.length == 1, "Expected one element, found " ~ to!string(ds.length));
+	assert(ds[0].key == "This is an example of text that has been wrapped on two lines.", "Failed to properly wrap the key");
+	assert(ds[0].value == "It should not matter where it takes place, the strings should all be concatenated properly.", "Failed to properly wrap the key");
 }
 
 private size_t skipToDirective(size_t i, ref string text)
@@ -278,8 +368,36 @@ private size_t skipString(size_t i, ref string text)
 	i++;
 	while (true) {
 		assert(i < text.length, "Missing closing '\"' for string: "~text[i .. min($, 10)]);
-		if (text[i] == '"') return i+1;
+		if (text[i] == '"') {
+			if (i+1 < text.length) {
+				auto j = skipWhitespace(i+1, text);
+				if (j<text.length && text[j] == '"') return skipString(j, text);
+			}
+			return i+1;
+		}
 		if (text[i] == '\\') i += 2;
 		else i++;
 	}
+}
+
+private string wrapText(string str)
+{
+	string ret;
+	bool wrapped = false;
+
+	for (size_t i=0; i<str.length; ++i) {
+		if (str[i] == '\\') {
+			ret ~= str[i..i+1];
+			++i;
+		} else if (str[i] == '"') {
+			wrapped = true;
+			size_t j = skipWhitespace(i+1, str);
+			if (j < str.length && str[j] == '"') {
+				i=j;
+			}
+		} else ret ~= str[i];
+	}
+
+	if (wrapped) return ret;
+	return str;
 }
