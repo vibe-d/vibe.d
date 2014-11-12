@@ -93,9 +93,9 @@ html
 
 mixin template translationModule(string NAME)
 {
-	mixin template decls_mixin(string LANG, size_t i) {
-		mixin("enum "~LANG~"_"~keyToIdentifier(decl_strings[i].key)~" = "~decl_strings[i].value~";");
-	}
+//	mixin template decls_mixin(string LANG, size_t i) {
+//		mixin("enum "~LANG~"_"~keyToIdentifier(decl_strings[i].key)~" = "~decl_strings[i].value~";");
+//	}
 
 	mixin template file_mixin(size_t i) {
 		static if (i < languages.length) {
@@ -109,15 +109,17 @@ mixin template translationModule(string NAME)
 	mixin file_mixin!0;
 }
 
-string tr(CTX, string LANG)(string key)
+string tr(CTX, string LANG)(string key, string context = null)
 {
 	static assert([CTX.languages].canFind(LANG), "Unknown language: "~LANG);
 
 	foreach (i, mname; __traits(allMembers, CTX))
 		static if (mname.startsWith(LANG~"_")) {
 			foreach (entry; __traits(getMember, CTX, mname))
-				if (entry.key == key)
-					return entry.value;
+				if ((context is null) == (entry.context is null))
+					if (context is null || entry.context == context)
+						if (entry.key == key)
+							return entry.value;
 		}
 
 	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys)
@@ -191,26 +193,27 @@ package template GetTranslationContext(alias METHOD)
 
 
 private struct DeclString {
+	string context;
 	string key;
 	string value;
 }
 
-string keyToIdentifier(string key)
-{
-	enum hexdigits = "0123456789ABCDEF";
-	string ret;
-	size_t istart = 0;
-	foreach (i; 0 .. key.length) {
-		auto ch = key[i];
-		if (!(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z')) {
-			if (i > istart) ret ~= key[istart .. i];
-			istart = i+1;
-			ret ~= "_"~hexdigits[ch%0xF]~hexdigits[ch/0x100];
-		}
-	}
-	if (istart < key.length) ret ~= key[istart .. $];
-	return ret;
-}
+//string keyToIdentifier(string key)
+//{
+//	enum hexdigits = "0123456789ABCDEF";
+//	string ret;
+//	size_t istart = 0;
+//	foreach (i; 0 .. key.length) {
+//		auto ch = key[i];
+//		if (!(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z')) {
+//			if (i > istart) ret ~= key[istart .. i];
+//			istart = i+1;
+//			ret ~= "_"~hexdigits[ch%0xF]~hexdigits[ch/0x100];
+//		}
+//	}
+//	if (istart < key.length) ret ~= key[istart .. $];
+//	return ret;
+//}
 
 // Example po header
 /*
@@ -246,7 +249,7 @@ string keyToIdentifier(string key)
  * msgstr - value to translate to (required)
  * msgstr[0] - indexed translation for handling the various plural forms
  * msgstr[1] - ditto
- * msgstr[2] - ditto
+ * msgstr[2] - ditto and etc...
  */
 
 // TODO: Handle msgctxt
@@ -259,6 +262,15 @@ DeclString[] extractDeclStrings(string text)
 	while (true) {
 		i = skipToDirective(i, text);
 		if (i >= text.length) break;
+
+		string context = null;
+		if (text.length - i >= 7 && text[i .. i+7] == "msgctxt") {
+			i = skipWhitespace(i+7, text);
+
+			auto icntxt = skipString(i, text);
+			context = dstringUnescape(wrapText(text[i+1 .. icntxt-1]));
+			i = skipToDirective(icntxt, text);
+		}
 
 		assert(text.length - i >= 5 && text[i .. i+5] == "msgid", "Expected 'msgid', got '"~text[i .. min(i+10, $)]~"'.");
 		i += 5;
@@ -280,7 +292,7 @@ DeclString[] extractDeclStrings(string text)
 		auto value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
 		i = ivnext;
 
-		ret ~= DeclString(key, value);
+		ret ~= DeclString(context, key, value);
 	}
 
 	return ret;
@@ -296,13 +308,11 @@ msgstr "first"
 # second string
 msgid "ordinal.2"
 msgstr "second"`;
+
 	auto ds = extractDeclStrings(str);
-
 	assert(2 == ds.length, "Not enough DeclStrings have been processed");
-
 	assert(ds[0].key == "ordinal.1", "The first key is not right.");
 	assert(ds[0].value == "first", "The first value is not right.");
-
 	assert(ds[1].key == "ordinal.2", "The second key is not right.");
 	assert(ds[1].value == "second", "The second value is not right.");
 }
@@ -316,6 +326,7 @@ unittest {
 # unexpected field ahead
 msgstr "world"
 msgid "hello"`;
+
 	assertThrown!AssertError(extractDeclStrings(str1));
 }
 
@@ -330,11 +341,69 @@ msgstr ""
 "It should not matter where it takes place, "
 "the strings should all be concatenated properly."`;
 
-	import std.conv : to;
 	auto ds = extractDeclStrings(str);
-	assert(ds.length == 1, "Expected one element, found " ~ to!string(ds.length));
+	assert(1 == ds.length, "Expected one DeclString to have been processed.");
 	assert(ds[0].key == "This is an example of text that has been wrapped on two lines.", "Failed to properly wrap the key");
 	assert(ds[0].value == "It should not matter where it takes place, the strings should all be concatenated properly.", "Failed to properly wrap the key");
+}
+
+// Verify that the message context is properly parsed
+unittest {
+	auto str1 = `
+# "C" is for cookie
+msgctxt "food"
+msgid "C"
+msgstr "C is for cookie, that's good enough for me."`;
+
+	auto ds1 = extractDeclStrings(str1);
+	assert(1 == ds1.length, "Expected one DeclString to have been processed.");
+	assert(ds1[0].context == "food", "Expected a context of food");
+	assert(ds1[0].key == "C", "Expected to find the letter C for the msgid.");
+	assert(ds1[0].value == "C is for cookie, that's good enough for me.", "Unexpected value encountered for the msgstr.");
+
+	auto str2 = `
+# No context validation
+msgid "alpha"
+msgstr "First greek letter."`;
+
+	auto ds2 = extractDeclStrings(str2);
+	assert(1 == ds2.length, "Expected one DeclString to have been processed.");
+	assert(ds2[0].context is null, "Expected the context to be null when it is not defined.");
+}
+
+unittest {
+	enum str = `
+# "C" is for cookie
+msgctxt "food"
+msgid "C"
+msgstr "C is for cookie, that's good enough for me."
+
+# "C" is for language
+msgctxt "lang"
+msgid "C"
+msgstr "Catalan"
+
+# Just "C"
+msgid "C"
+msgstr "Third letter"
+`;
+
+	enum ds = extractDeclStrings(str);
+
+	struct TranslationContext {
+		import std.typetuple;
+		enum enforceExistingKeys = true;
+		alias languages = TypeTuple!("en_US");
+		enum en_US_unittest = ds;
+	}
+
+	auto newTr(string msgid, string msgcntxt = null) {
+		return tr!(TranslationContext, "en_US")(msgid, msgcntxt);
+	}
+
+	assert(newTr("C", "food") == "C is for cookie, that's good enough for me.", "Unexpected translation based on context.");
+	assert(newTr("C", "lang") == "Catalan", "Unexpected translation based on context.");
+	assert(newTr("C") == "Third letter", "Unexpected translation based on context.");
 }
 
 private size_t skipToDirective(size_t i, ref string text)

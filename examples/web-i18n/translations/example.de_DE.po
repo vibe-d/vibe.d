@@ -6,3 +6,44 @@ msgstr "Dies ist das Beispielprogramm für Internationalisierung."
 
 msgid "It can use string interpolation! See the title \"#{title}\" here as an example."
 msgstr "Es kann String-Interpolationen benutzen! Nehmen Sie den Titel \"#{title}\" hier als Beispiel."
+
+msgid "Here are some examples of context being used."
+msgstr "Hier sind einige Beispiele von Kontext verwendet."
+
+msgid "Cardinal directions:"
+msgstr "Himmelsrichtungen:"
+
+msgctxt "direction"
+msgid "N"
+msgstr "Norden"
+
+msgctxt "direction"
+msgid "S"
+msgstr "Süden"
+
+msgctxt "direction"
+msgid "E"
+msgstr "Osten"
+
+msgctxt "direction"
+msgid "W"
+msgstr "Westen"
+
+msgid "Letter mnemonics:"
+msgstr "Schreiben Mnemotechnik:"
+
+msgctxt "letter"
+msgid "N"
+msgstr "Nordpol"
+
+msgctxt "letter"
+msgid "S"
+msgstr "Sigfried"
+
+msgctxt "letter"
+msgid "E"
+msgstr "Emil"
+
+msgctxt "letter"
+msgid "W"
+msgstr "Wilhelm"
