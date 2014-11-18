@@ -7,7 +7,7 @@ v0.7.21 - 2014-11-18
 ### Features and improvements ###
 
  - SSL/TLS support
-	 - Added support for TLS server name indication (SNI) to the SSL support clases and the HTTP client and server implementation
+	 - Added support for TLS server name indication (SNI) to the SSL support classes and the HTTP client and server implementation
 	 - Changed `SSLPeerValidationMode` into a set of bit flags (different modes can now be combined)
 	 - Made the SSL implementation pluggable (currently only OpenSSL is supported)
 	 - Moved all OpenSSL code into a separate module to avoid importing the OpenSSL headers in `vibe.stream.ssl` (by Martin Nowak) - [pull #757][issue757]
@@ -169,7 +169,7 @@ v0.7.21 - 2014-11-18
  - Fixed always wrapping the e-mail address in angular brackets in the SMTP client (by ohenley) - [pull #887][issue887]
  - Fixed custom serialization of `const` instances (by Jack Applegame) - [pull #879][issue879]
  - Fixed the `RedisDatabase.set*X` to properly test the success condition (by Stephan Dilly aka Extrawurst) - [pull #890][issue890]
- - Fuxed `sleep(0.seconds)` to be a no-op instead of throwing an assertion error
+ - Fixed `sleep(0.seconds)` to be a no-op instead of throwing an assertion error
  - Fixed a potential resource leak in `HashMap` by using `freeArray` instead of directly deallocating the block of memory (by Etienne Cimon) - [pull #893][issue893]
 
 [issue619]: https://github.com/rejectedsoftware/vibe.d/issues/619
