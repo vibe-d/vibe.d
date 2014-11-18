@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.21 - 2014-10-
+v0.7.21 - 2014-11-18
 --------------------
 
 ### Features and improvements ###
@@ -81,6 +81,7 @@ v0.7.21 - 2014-10-
  - Increased the default fiber stack size to 512 KiB (32-bit) and 16 MiB (64-bit) respectively - [issue #861][issue861]
  - Upgraded the included OpenSSL Windows binaries to 1.0.1j
  - Added `HTTPServerResponse.waitForConnectionClose` to support certain kinds of long-polling applications
+ - Added `MongoCursor.skip` as an alternative to setting the skip value using an argument to `find` (by Martin Nowak) - [pull 888][issue888]
 
 ### Bug fixes ###
 
@@ -157,6 +158,12 @@ v0.7.21 - 2014-10-
  - Fixed an `InvalidMemoryOperationError` in `DebugAllocator` (by Etienne Cimon) - [pull #848][issue848]
  - Fixed detection of numeric types in `JsonSerializer` (do not treat `Nullable!T` as numeric) (by Jack Applegame) - [issue #686][issue868], [pull #869][issue869]
  - Fixed error handling in `Win32TCPConnection.connect` and improved error messages
+ - Fixed ping handling of WebSocket ping messages (by Vytautas Mickus aka Eximius) - [pull #883][issue883]
+ - Fixed always wrapping the e-mail address in angular brackets in the SMTP client (by ohenley) - [pull #887][issue887]
+ - Fixed custom serialization of `const` instances (by Jack Applegame) - [pull #879][issue879]
+ - Fixed the `RedisDatabase.set*X` to properly test the success condition (by Stephan Dilly aka Extrawurst) - [pull #890][issue890]
+ - Fuxed `sleep(0.seconds)` to be a no-op instead of throwing an assertion error
+ - Fixed a potential resource leak in `HashMap` by using `freeArray` instead of directly deallocating the block of memory (by Etienne Cimon) - [pull #893][issue893]
 
 [issue619]: https://github.com/rejectedsoftware/vibe.d/issues/619
 [issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
@@ -245,6 +252,12 @@ v0.7.21 - 2014-10-
 [issue861]: https://github.com/rejectedsoftware/vibe.d/issues/861
 [issue868]: https://github.com/rejectedsoftware/vibe.d/issues/868
 [issue869]: https://github.com/rejectedsoftware/vibe.d/issues/869
+[issue879]: https://github.com/rejectedsoftware/vibe.d/issues/879
+[issue883]: https://github.com/rejectedsoftware/vibe.d/issues/883
+[issue887]: https://github.com/rejectedsoftware/vibe.d/issues/887
+[issue888]: https://github.com/rejectedsoftware/vibe.d/issues/888
+[issue890]: https://github.com/rejectedsoftware/vibe.d/issues/890
+[issue893]: https://github.com/rejectedsoftware/vibe.d/issues/893
 
 
 v0.7.20 - 2014-06-03
@@ -316,7 +329,7 @@ The `vibe.web.web` web interface generator module has been extended with some im
  - Fixed rendering of Markdown links with styled captions
  - Fixed `Path.relativeTo` step over devices for UNC paths on Windows
  - Fixed compilation on 2.064 frontend based GDC - [issue #647][issue647]
- - Fixed output of empty lines in "tag." style Diet template text blocks 
+ - Fixed output of empty lines in "tag." style Diet template text blocks
 
 [issue410]: https://github.com/rejectedsoftware/vibe.d/issues/410
 [issue443]: https://github.com/rejectedsoftware/vibe.d/issues/443
