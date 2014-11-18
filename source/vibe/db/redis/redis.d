@@ -84,9 +84,14 @@ final class RedisClient {
 	/*
 		Connection
 	*/
+
+	/// Authenticate to the server
 	void auth(string password) { m_authPassword = password; }
+	/// Echo the given string
 	T echo(T, U)(U data) if(isValidRedisValueReturn!T && isValidRedisValueType!U) { return request!T("ECHO", data); }
+	/// Ping the server
 	void ping() { request("PING"); }
+	/// Close the connection
 	void quit() { request("QUIT"); }
 
 	/*
@@ -96,9 +101,13 @@ final class RedisClient {
 	//TODO: BGREWRITEAOF
 	//TODO: BGSAVE
 
+	/// Get the value of a configuration parameter
 	T getConfig(T)(string parameter) if(isValidRedisValueReturn!T) { return request!T("GET CONFIG", parameter); }
+	/// Set a configuration parameter to the given value
 	void setConfig(T)(string parameter, T value) if(isValidRedisValueType!T) { request("SET CONFIG", parameter, value); }
+	/// Reset the stats returned by INFO
 	void configResetStat() { request("CONFIG RESETSTAT"); }
+
 	//TOOD: Debug Object
 	//TODO: Debug Segfault
 
@@ -112,13 +121,18 @@ final class RedisClient {
 
 	/// Scheduled for deprecation, use $(D RedisDatabase.deleteAll) instead.
 	void flushDB() { request("FLUSHDB"); }
-
+	/// Get information and statistics about the server
 	string info() { return request!string("INFO"); }
+	/// Get the UNIX time stamp of the last successful save to disk
 	long lastSave() { return request!long("LASTSAVE"); }
 	//TODO monitor
+	/// Synchronously save the dataset to disk
 	void save() { request("SAVE"); }
+	/// Synchronously save the dataset to disk and then shut down the server
 	void shutdown() { request("SHUTDOWN"); }
+	/// Make the server a slave of another instance, or promote it as master
 	void slaveOf(string host, ushort port) { request("SLAVEOF", host, port); }
+
 	//TODO slowlog
 	//TODO sync
 
@@ -182,38 +196,61 @@ struct RedisDatabase {
 		See_also: $(LINK2 http://redis.io/commands/flushdb, FLUSHDB)
 	*/
 	void deleteAll() { request!void("FLUSHDB"); }
-
+	/// Delete a key
 	long del(scope string[] keys...) { return request!long("DEL", keys); }
+	/// Determine if a key exists
 	bool exists(string key) { return request!bool("EXISTS", key); }
+	/// Set a key's time to live in seconds
 	bool expire(string key, long seconds) { return request!bool("EXPIRE", key, seconds); }
+	/// Set a key's time to live with D notation. E.g. $(D 5.minutes) for 60 * 5 seconds.
 	bool expire(string key, Duration timeout) { return request!bool("PEXPIRE", key, timeout.total!"msecs"); }
+	/// Set the expiration for a key as a UNIX timestamp
 	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
+	/// Find all keys matching the given glob-style pattern (Supported wildcards: *, ?, [ABC])
 	RedisReply!T keys(T = string)(string pattern) if(isValidRedisValueType!T) { return request!(RedisReply!T)("KEYS", pattern); }
+	/// Move a key to another database
 	bool move(string key, long db) { return request!bool("MOVE", key, db); }
+	/// Remove the expiration from a key
 	bool persist(string key) { return request!bool("PERSIST", key); }
 	//TODO: object
+	/// Return a random key from the keyspace
 	string randomKey() { return request!string("RANDOMKEY"); }
+	/// Rename a key
 	void rename(string key, string newkey) { request("RENAME", key, newkey); }
+	/// Rename a key, only if the new key does not exist
 	bool renameNX(string key, string newkey) { return request!bool("RENAMENX", key, newkey); }
 	//TODO sort
+	/// Get the time to live for a key
 	long ttl(string key) { return request!long("TTL", key); }
+	/// Get the time to live for a key in milliseconds
 	long pttl(string key) { return request!long("PTTL", key); }
+	/// Determine the type stored at key (string, list, set, zset and hash.)
 	string type(string key) { return request!string("TYPE", key); }
 
 	/*
 		String Commands
 	*/
 
+	/// Append a value to a key
 	long append(T)(string key, T suffix) if(isValidRedisValueType!T) { return request!long("APPEND", key, suffix); }
+	/// Decrement the integer value of a key by one
 	long decr(string key, long value = 1) { return value == 1 ? request!long("DECR", key) : request!long("DECRBY", key, value); }
+	/// Get the value of a key
 	T get(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("GET", key); }
+	/// Returns the bit value at offset in the string value stored at key
 	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
+	/// Get a substring of the string stored at a key
 	T getRange(T = string)(string key, long start, long end) if(isValidRedisValueReturn!T) { return request!T("GETRANGE", key, start, end); }
+	/// Set the string value of a key and return its old value
 	T getSet(T = string, U)(string key, U value) if(isValidRedisValueReturn!T && isValidRedisValueType!U) { return request!T("GETSET", key, value); }
+	/// Increment the integer value of a key
 	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
+	/// Increment the real number value of a key
 	long incr(string key, double value) { return request!long("INCRBYFLOAT", key, value); }
+	/// Get the values of all the given keys
 	RedisReply!T mget(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("MGET", keys); }
 
+	/// Set multiple keys to multiple values
 	void mset(ARGS...)(ARGS args)
 	{
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
@@ -221,93 +258,158 @@ struct RedisDatabase {
 		request("MSET", args);
 	}
 
+	/// Set multiple keys to multiple values, only if none of the keys exist
 	bool msetNX(ARGS...)(ARGS args) {
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
 		return request!bool("MSETEX", args);
 	}
 
+	/// Set the string value of a key
 	void set(T)(string key, T value) if(isValidRedisValueType!T) { request("SET", key, value); }
+	/// Set the value of a key, only if the key does not exist
 	bool setNX(T)(string key, T value) if(isValidRedisValueType!T) { return request!bool("SETNX", key, value); }
+	/// Set the value of a key, only if the key already exists
 	bool setXX(T)(string key, T value) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "XX"); }
+	/// Set the value of a key, only if the key does not exist, and also set the specified expire time using D notation, e.g. $(D 5.minutes) for 5 minutes.
 	bool setNX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "PX", expire_time.total!"msecs", "NX"); }
+	/// Set the value of a key, only if the key already exists, and also set the specified expire time using D notation, e.g. $(D 5.minutes) for 5 minutes.
 	bool setXX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "PX", expire_time.total!"msecs", "XX"); }
+	/// Sets or clears the bit at offset in the string value stored at key
 	bool setBit(string key, long offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
+	/// Set the value and expiration of a key
 	void setEX(T)(string key, long seconds, T value) if(isValidRedisValueType!T) { request("SETEX", key, seconds, value); }
+	/// Overwrite part of a string at key starting at the specified offset
 	long setRange(T)(string key, long offset, T value) if(isValidRedisValueType!T) { return request!long("SETRANGE", key, offset, value); }
+	/// Get the length of the value stored in a key
 	long strlen(string key) { return request!long("STRLEN", key); }
 
 	/*
 		Hashes
 	*/
-
+	/// Delete one or more hash fields
 	long hdel(string key, scope string[] fields...) { return request!long("HDEL", key, fields); }
+	/// Determine if a hash field exists
 	bool hexists(string key, string field) { return request!bool("HEXISTS", key, field); }
+	/// Set multiple hash fields to multiple values
 	void hset(T)(string key, string field, T value) if(isValidRedisValueType!T) { request("HSET", key, field, value); }
+	/// Set the value of a hash field, only if the field does not exist
 	bool hsetNX(T)(string key, string field, T value) if(isValidRedisValueType!T) { return request!bool("HSETNX", key, field, value); }
+	/// Get the value of a hash field.
 	T hget(T = string)(string key, string field) if(isValidRedisValueReturn!T) { return request!T("HGET", key, field); }
+	/// Get all the fields and values in a hash
 	RedisReply!T hgetAll(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HGETALL", key); }
+	/// Increment the integer value of a hash field
 	long hincr(string key, string field, long value=1) { return request!long("HINCRBY", key, field, value); }
+	/// Increment the real number value of a hash field
 	long hincr(string key, string field, double value) { return request!long("HINCRBYFLOAT", key, field, value); }
+	/// Get all the fields in a hash
 	RedisReply!T hkeys(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HKEYS", key); }
+	/// Get the number of fields in a hash
 	long hlen(string key) { return request!long("HLEN", key); }
+	/// Get the values of all the given hash fields
 	RedisReply!T hmget(T = string)(string key, scope string[] fields...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HMGET", key, fields); }
+	/// Set multiple hash fields to multiple values
 	void hmset(ARGS...)(string key, ARGS args) { request("HMSET", key, args); }
-	bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
+
+	/// This command does not exist in redis and must be implemented at a higher level
+	deprecated bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
+
+	/// Get all the values in a hash
 	RedisReply!T hvals(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HVALS", key); }
 
 	/*
 		Lists
 	*/
-
+	/// Get an element from a list by its index
 	T lindex(T = string)(string key, long index) if(isValidRedisValueReturn!T) { return request!T("LINDEX", key, index); }
+	/// Insert value in the list stored at key before the reference value pivot.
 	long linsertBefore(T1, T2)(string key, T1 pivot, T2 value) if(isValidRedisValueType!T1 && isValidRedisValueType!T2) { return request!long("LINSERT", key, "BEFORE", pivot, value); }
+	/// Insert value in the list stored at key after the reference value pivot.
 	long linsertAfter(T1, T2)(string key, T1 pivot, T2 value) if(isValidRedisValueType!T1 && isValidRedisValueType!T2) { return request!long("LINSERT", key, "AFTER", pivot, value); }
+	/// Returns the length of the list stored at key. If key does not exist, it is interpreted as an empty list and 0 is returned. 
 	long llen(string key) { return request!long("LLEN", key); }
+	/// Insert all the specified values at the head of the list stored at key.
 	long lpush(ARGS...)(string key, ARGS args) { return request!long("LPUSH", key, args); }
+	/// Inserts value at the head of the list stored at key, only if key already exists and holds a list. 
 	long lpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("LPUSHX", key, value); }
+	/// Insert all the specified values at the tail of the list stored at key.
 	long rpush(ARGS...)(string key, ARGS args) { return request!long("RPUSH", key, args); }
+	/// Inserts value at the tail of the list stored at key, only if key already exists and holds a list.
 	long rpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("RPUSHX", key, value); }
+	/// Returns the specified elements of the list stored at key. 
 	RedisReply!T lrange(T = string)(string key, long start, long stop) { return request!(RedisReply!T)("LRANGE",  key, start, stop); }
+	/// Removes the first count occurrences of elements equal to value from the list stored at key. 
 	long lrem(T)(string key, long count, T value) if(isValidRedisValueType!T) { return request!long("LREM", key, count, value); }
+	/// Sets the list element at index to value.
 	void lset(T)(string key, long index, T value) if(isValidRedisValueType!T) { request("LSET", key, index, value); }
+	/// Trim an existing list so that it will contain only the specified range of elements specified.
+	/// Equivalent to $(D range = range[start .. stop+1])
 	void ltrim(string key, long start, long stop) { request("LTRIM",  key, start, stop); }
+	/// Removes and returns the last element of the list stored at key.
 	T rpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("RPOP", key); }
+	/// Removes and returns the first element of the list stored at key.
 	T lpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("LPOP", key); }
+	/// BLPOP is a blocking list pop primitive. It is the blocking version of LPOP because it blocks 
+	/// the connection when there are no elements to pop from any of the given lists. 
 	T blpop(T = string)(string key, long seconds) if(isValidRedisValueReturn!T) { return request!T("BLPOP", key, seconds); }
+	/// Atomically returns and removes the last element (tail) of the list stored at source, 
+	/// and pushes the element at the first element (head) of the list stored at destination.
 	T rpoplpush(T = string)(string key, string destination) if(isValidRedisValueReturn!T) { return request!T("RPOPLPUSH", key, destination); }
 
 	/*
 		Sets
 	*/
-
+	/// Add the specified members to the set stored at key. Specified members that are already a member of this set are ignored. 
+	/// If key does not exist, a new set is created before adding the specified members.
 	long sadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
+	/// Returns the set cardinality (number of elements) of the set stored at key.
 	long scard(string key) { return request!long("SCARD", key); }
+	/// Returns the members of the set resulting from the difference between the first set and all the successive sets.
 	RedisReply!T sdiff(T = string)(scope string[] keys...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SDIFF", keys); }
+	/// This command is equal to SDIFF, but instead of returning the resulting set, it is stored in destination. 
+	/// If destination already exists, it is overwritten.
 	long sdiffStore(string destination, scope string[] keys...) { return request!long("SDIFFSTORE", destination, keys); }
+	/// Returns the members of the set resulting from the intersection of all the given sets.
 	RedisReply!T sinter(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SINTER", keys); }
+	/// This command is equal to SINTER, but instead of returning the resulting set, it is stored in destination. 
+	/// If destination already exists, it is overwritten.
 	long sinterStore(string destination, scope string[] keys...) { return request!long("SINTERSTORE", destination, keys); }
+	/// Returns if member is a member of the set stored at key.
 	bool sisMember(T)(string key, T member) if(isValidRedisValueType!T) { return request!bool("SISMEMBER", key, member); }
+	/// Returns all the members of the set value stored at key.
 	RedisReply!T smembers(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SMEMBERS", key); }
+	/// Move member from the set at source to the set at destination. This operation is atomic. 
+	/// In every given moment the element will appear to be a member of source or destination for other clients.
 	bool smove(T)(string source, string destination, T member) if(isValidRedisValueType!T) { return request!bool("SMOVE", source, destination, member); }
+	/// Removes and returns a random element from the set value stored at key.
 	T spop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("SPOP", key ); }
+	/// Returns a random element from the set stored at key.
 	T srandMember(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("SRANDMEMBER", key ); }
+
+	// TODO: SRANDMEMBER key [count]
+
+	/// Remove the specified members from the set stored at key.
 	long srem(ARGS...)(string key, ARGS args) { return request!long("SREM", key, args); }
+	/// Returns the members of the set resulting from the union of all the given sets.
 	RedisReply!T sunion(T = string)(scope string[] keys...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SUNION", keys); }
+	/// This command is equal to SUNION, but instead of returning the resulting set, it is stored in destination.
 	long sunionStore(scope string[] keys...) { return request!long("SUNIONSTORE", keys); }
 
 	/*
 		Sorted Sets
 	*/
-
+	/// Add one or more members to a sorted set, or update its score if it already exists
 	long zadd(ARGS...)(string key, ARGS args) { return request!long("ZADD", key, args); }
+	/// Returns the sorted set cardinality (number of elements) of the sorted set stored at key.
 	long zcard(string key) { return request!long("ZCARD", key); }
 	deprecated("Use zcard() instead.") alias Zcard = zcard;
-	// see http://redis.io/commands/zcount
+	/// Returns the number of elements in the sorted set at key with a score between min and max
 	long zcount(string RNG = "[]")(string key, double min, double max) { return request!long("ZCOUNT", key, getMinMaxArgs!RNG(min, max)); }
+	/// Increments the score of member in the sorted set stored at key by increment.
 	double zincrby(T)(string key, double value, T member) if (isValidRedisValueType!T) { return request!double("ZINCRBY", key, value, member); }
 	//TODO: zinterstore
-	// see http://redis.io/commands/zrange
+	/// Returns the specified range of elements in the sorted set stored at key. 
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -315,7 +417,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Returns all the elements in the sorted set at key with a score between start and end inclusively
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -323,7 +425,8 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end));
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Computes an internal list of elements in the sorted set at key with a score between start and end inclusively, 
+	/// and returns a range subselection similar to $(D results[offset .. offset+count])
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, long offset, long count, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -333,17 +436,21 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "LIMIT", offset, count);
 	}
 
+	/// Returns the rank of member in the sorted set stored at key, with the scores ordered from low to high. 
 	long zrank(T)(string key, T member)
 		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZRANK", key, member);
 		return str ? parse!long(str) : -1;
 	}
-	long zrem(ARGS...)(string key, ARGS members) { return request!long("ZREM", key, members); }
-	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
-	// see http://redis.io/commands/zrangebyscore
-	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
 
+	/// Removes the specified members from the sorted set stored at key.
+	long zrem(ARGS...)(string key, ARGS members) { return request!long("ZREM", key, members); }
+	/// Removes all elements in the sorted set stored at key with rank between start and stop.
+	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
+	/// Removes all elements in the sorted set stored at key with a score between min and max (inclusive).
+	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
+	/// Returns the specified range of elements in the sorted set stored at key. 
 	RedisReply!T zrevRange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -351,7 +458,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGE", key, start, end);
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Returns all the elements in the sorted set at key with a score between max and min (including elements with score equal to max or min).
 	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
@@ -359,7 +466,8 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Computes an internal list of elements in the sorted set at key with a score between max and min, and
+	/// returns a window of elements selected in a way equivalent to $(D results[offset .. offset + count])
 	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, long offset, long count, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
@@ -369,6 +477,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "LIMIT", offset, count);
 	}
 
+	/// Returns the rank of member in the sorted set stored at key, with the scores ordered from high to low.
 	long zrevRank(T)(string key, T member)
 		if (isValidRedisValueType!T)
 	{
@@ -376,6 +485,7 @@ struct RedisDatabase {
 		return str ? parse!long(str) : -1;
 	}
 
+	/// Returns the score of member in the sorted set at key.
 	RedisReply!T zscore(T = string, U)(string key, U member)
 		if(isValidRedisValueType!T && isValidRedisValueType!U)
 	{
@@ -386,12 +496,15 @@ struct RedisDatabase {
 	/*
 		Pub / Sub
 	*/
+
+	/// Publishes a message to all clients subscribed at the channel
 	long publish(string channel, string message)
 	{
 		auto str = request!string("PUBLISH", channel, message);
 		return str ? parse!long(str) : -1;
 	}
 
+	/// Inspect the state of the Pub/Sub subsystem
 	RedisReply!T pubsub(T = string)(string subcommand, scope string[] args...)
 		if(isValidRedisValueType!T)
 	{
@@ -401,17 +514,19 @@ struct RedisDatabase {
 	/*
 		TODO: Transactions
 	*/
+	/// Return the number of keys in the selected database
 	long dbSize() { return request!long("DBSIZE"); }
 
 	/*
 		LUA Scripts
 	*/
+	/// Execute a Lua script server side
 	RedisReply!T eval(T = string, ARGS...)(string lua_code, scope string[] keys, scope ARGS args)
 		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVAL", lua_code, keys.length, keys, args);
 	}
-
+	/// Evaluates a script cached on the server side by its SHA1 digest. Scripts are cached on the server side using the scriptLoad function. 
 	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope string[] keys, scope ARGS args)
 		if(isValidRedisValueType!T)
 	{
@@ -422,9 +537,10 @@ struct RedisDatabase {
 	//scriptFlush
 	//scriptKill
 
+	/// Load a script into the scripts cache, without executing it. Run it using evalSHA.
 	string scriptLoad(string lua_code) { return request!string("SCRIPT", "LOAD", lua_code); }
 
-
+	/// Run the specified command and arguments in the Redis database server
 	T request(T = void, ARGS...)(string command, scope ARGS args)
 	{
 		return m_client.requestDB!(T, ARGS)(m_index, command, args);
@@ -496,6 +612,7 @@ final class RedisSubscriberImpl {
 		return m_listening;
 	}
 
+	/// Get a list of channels with active subscriptions
 	@property string[] subscriptions() const {
 		return m_subscriptions.keys;
 	}
@@ -517,6 +634,7 @@ final class RedisSubscriberImpl {
 		bstop();
 	}
 
+	/// Stop listening and yield until the operation is complete.
 	void bstop(){
 		logTrace("bstop");
 		if (!m_listening)
@@ -540,7 +658,7 @@ final class RedisSubscriberImpl {
 		inTask(&impl);
 	}
 
-
+	/// Stop listening asynchroneously
 	void stop(){
 		logTrace("stop");
 		if (!m_listening)
