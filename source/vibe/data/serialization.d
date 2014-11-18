@@ -75,7 +75,7 @@
 			// deserialization
 			void readDictionary(T)(scope void delegate(string) entry_callback);
 			void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback);
-			void readValue(T)();
+			T readValue(T)();
 			bool tryReadNull();
 		}
 		---
