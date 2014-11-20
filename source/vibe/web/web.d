@@ -557,7 +557,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
 				if (res.headerWritten) return;
 			}
-			else static if (param_names[i] == "_error"){
+			else static if (param_names[i] == "_error") {
 				static if (ERROR.length == 1)
 					params[i].setVoid(error[0]);
 				else static if (!is(default_values[i] == void))
