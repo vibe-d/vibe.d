@@ -25,13 +25,13 @@ import std.string;
 /**
 	Parses form data according to an HTTP Content-Type header.
 
-	Writes the form fields into a key-value of type $(D FormFields), parsed from the 
-	specified $(D InputStream) and using the corresponding Content-Type header. Parsing 
+	Writes the form fields into a key-value of type $(D FormFields), parsed from the
+	specified $(D InputStream) and using the corresponding Content-Type header. Parsing
 	is gracefully aborted if the Content-Type header is unrelated.
-	
+
 	Params:
 		fields = The key-value map to which form fields must be written
-		files = The $(D FilePart)s mapped to the corresponding key in which details on 
+		files = The $(D FilePart)s mapped to the corresponding key in which details on
 				transmitted files will be written to.
 		content_type = The value of the Content-Type HTTP header.
 		body_reader = A valid $(D InputSteram) data stream consumed by the parser.
@@ -82,7 +82,7 @@ void parseURLEncodedForm(string str, ref FormFields params)
 			if (idx_amp > -1 && idx_amp < idx) {
 				params.addField(formDecode(str[0 .. idx_amp]), "");
 				str = str[idx_amp+1 .. $];
-				continue;				
+				continue;
 			} else {
 				string name = formDecode(str[0 .. idx]);
 				str = str[idx+1 .. $];
@@ -120,7 +120,7 @@ unittest
 
 	Params:
 		fields = The key-value map to which form fields must be written
-		files = The $(D FilePart)s mapped to the corresponding key in which details on 
+		files = The $(D FilePart)s mapped to the corresponding key in which details on
 				transmitted files will be written to.
 		content_type = The value of the Content-Type HTTP header.
 		body_reader = A valid $(D InputSteram) data stream consumed by the parser.
@@ -129,7 +129,7 @@ unittest
 void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 	string content_type, InputStream body_reader, size_t max_line_length)
 {
-	auto pos = content_type.indexOf("boundary=");			
+	auto pos = content_type.indexOf("boundary=");
 	enforce(pos >= 0 , "no boundary for multipart form found");
 	auto boundary = content_type[pos+9 .. $];
 	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
@@ -197,10 +197,10 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 	return stream.readLine(max_line_length) != "--";
 }
 
-/** 
+/**
 	Encodes a Key-Value map into a form URL encoded string.
 
-	Writes to the $(D OutputRange) an application/x-www-form-urlencoded MIME formatted string, 
+	Writes to the $(D OutputRange) an application/x-www-form-urlencoded MIME formatted string,
 	ie. all spaces ' ' are replaced by the '+' character
 
 	Params:
@@ -209,6 +209,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 		sep	= A valid form separator, common values are '&' or ';'
 */
 void formEncode(R, T)(ref R dst, T map, char sep = '&')
+	if (isFormMap!T)
 {
 	formEncodeImpl(dst, map, sep, true);
 }
@@ -228,10 +229,10 @@ unittest {
 	assert(app.data == "spaces=1+2+3+4+a+b+c+d&numbers=123456789");
 }
 
-/** 
+/**
 	Encodes a Key-Value map into a form URL encoded string.
 
-	Returns an application/x-www-form-urlencoded MIME formatted string, 
+	Returns an application/x-www-form-urlencoded MIME formatted string,
 	ie. all spaces ' ' are replaced by the '+' character
 
 	Params:
@@ -239,18 +240,20 @@ unittest {
 		sep = A valid form separator, common values are '&' or ';'
 */
 string formEncode(T)(T map, char sep = '&')
+	if (isFormMap!T)
 {
 	return formEncodeImpl(map, sep, true);
 }
 
 /**
 	Writes to the $(D OutputRange) an URL encoded string as specified in RFC 3986 section 2
-	
+
 	Params:
 		dst	= The destination $(D OutputRange) where the resulting string must be written to.
 		map	= An iterable key-value map iterable with $(D foreach(string key, string value; map)).
 */
 void urlEncode(R, T)(ref R dst, T map)
+	if (isFormMap!T)
 {
 	formEncodeImpl(dst, map, "&", false);
 }
@@ -258,29 +261,76 @@ void urlEncode(R, T)(ref R dst, T map)
 
 /**
 	Returns an URL encoded string as specified in RFC 3986 section 2
-	
+
 	Params:
 		map = An iterable key-value map iterable with $(D foreach(string key, string value; map)).
 */
 string urlEncode(T)(T map)
+	if (isFormMap!T)
 {
 	return formEncodeImpl(map, '&', false);
 }
 
+/**
+	Tests if a given type is suitable for storing a web form.
+
+	Types that define iteration support with the key typed as $(D string) and
+	the value either also typed as $(D string), or as a $(D vibe.data.json.Json)
+	like value. The latter case specifically requires a $(D .type) property that
+	is tested for equality with $(D T.Type.string), as well as a
+	$(D .get!string) method.
+*/
+template isFormMap(T)
+{
+	import std.conv;
+	enum isFormMap = isStringMap!T || isJsonLike!T;
+}
+
+private template isStringMap(T)
+{
+	enum isStringMap = __traits(compiles, () {
+		foreach (string key, string value; T.init) {}
+	} ());
+}
+
+unittest {
+	static assert(isStringMap!(string[string]));
+
+	static struct M {
+		int opApply(int delegate(string key, string value)) { return 0; }
+	}
+	static assert(isStringMap!M);
+}
+
+private template isJsonLike(T)
+{
+	enum isJsonLike = __traits(compiles, () {
+		import std.conv;
+		string r;
+		foreach (string key, value; T.init)
+			r = value.type == T.Type.string ? value.get!string : value.to!string;
+	} ());
+}
+
+unittest {
+	import vibe.data.json;
+	import vibe.data.bson;
+	static assert(isJsonLike!Json);
+	static assert(isJsonLike!Bson);
+}
+
 private string formEncodeImpl(T)(T map, char sep, bool form_encode)
-	if ((is(T.ValueType == string) ||
-	     (is(ValueType!T == string) && is(KeyType!T == string))) &&
-	    __traits(compiles, (){ foreach(k, ref v; map){} }()))
+	if (isStringMap!T)
 {
 	import std.array : Appender;
 	Appender!string dst;
 	size_t len;
-	
+
 	foreach (key, ref value; map) {
 		len += key.length;
 		len += value.length;
 	}
-	
+
 	// characters will be expanded, better use more space the first time and avoid additional allocations
 	dst.reserve(len*2);
 	dst.formEncodeImpl(map, sep, form_encode);
@@ -289,18 +339,17 @@ private string formEncodeImpl(T)(T map, char sep, bool form_encode)
 
 
 private string formEncodeImpl(T)(T map, char sep, bool form_encode)
-	if ((T.stringof == "Json" || T.stringof == "Bson") &&
-	    __traits(compiles, (){ foreach(ref string k, ref T v; map){} }()))
+	if (isJsonLike!T)
 {
 	import std.array : Appender;
 	Appender!string dst;
 	size_t len;
-	
+
 	foreach (ref string key, ref T value; map) {
 		len += key.length;
 		len += value.length;
 	}
-	
+
 	// characters will be expanded, better use more space the first time and avoid additional allocations
 	dst.reserve(len*2);
 	dst.formEncodeImpl(map, sep, form_encode);
@@ -308,17 +357,14 @@ private string formEncodeImpl(T)(T map, char sep, bool form_encode)
 }
 
 private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
-	if (isOutputRange!(R, string) && 
-	    (is(T.ValueType == string) ||
-	 (is(ValueType!T == string) && is(KeyType!T == string))) &&
-	    __traits(compiles, (){ foreach(k, ref v; map){} }()))
+	if (isOutputRange!(R, string) && isStringMap!T)
 {
 	bool flag;
-	
+
 	foreach (key, ref value; map) {
 		if (flag)
 			dst.put(sep);
-		else 
+		else
 			flag = true;
 		filterURLEncode(dst, key, null, form_encode);
 		dst.put("=");
@@ -327,16 +373,14 @@ private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
 }
 
 private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
-	if (isOutputRange!(R, string) && 
-	    (T.stringof == "Json" || T.stringof == "Bson") &&
-	    __traits(compiles, (){ foreach(ref string k, ref T v; map){} }()))
+	if (isOutputRange!(R, string) && isJsonLike!T)
 {
 	bool flag;
-	
+
 	foreach (ref string key, ref T value; map) {
 		if (flag)
 			dst.put(sep);
-		else 
+		else
 			flag = true;
 		filterURLEncode(dst, key, null, form_encode);
 		dst.put("=");
@@ -357,12 +401,12 @@ unittest
 	import vibe.utils.dictionarylist : DictionaryList;
 	import vibe.data.json : Json;
 	import vibe.data.bson : Bson;
-	
+
 	string[string] aaMap;
 	DictionaryList!string dlMap;
 	Json jsonMap = Json.emptyObject;
 	Bson bsonMap = Bson.emptyObject;
-	
+
 	aaMap["unicode"] = "╤╳";
 	aaMap["numbers"] = "123456789";
 	aaMap["spaces"] = "1 2 3 4 a b c d";
@@ -370,8 +414,8 @@ unittest
 	aaMap["equals"] = "1=2=3=4=5=6=7";
 	aaMap["complex"] = "╤╳/=$$\"'1!2()'\"";
 	aaMap["╤╳"] = "1";
-	
-	
+
+
 	dlMap["unicode"] = "╤╳";
 	dlMap["numbers"] = "123456789";
 	dlMap["spaces"] = "1 2 3 4 a b c d";
@@ -379,8 +423,8 @@ unittest
 	dlMap["equals"] = "1=2=3=4=5=6=7";
 	dlMap["complex"] = "╤╳/=$$\"'1!2()'\"";
 	dlMap["╤╳"] = "1";
-	
-	
+
+
 	jsonMap["unicode"] = "╤╳";
 	jsonMap["numbers"] = "123456789";
 	jsonMap["spaces"] = "1 2 3 4 a b c d";
@@ -388,7 +432,7 @@ unittest
 	jsonMap["equals"] = "1=2=3=4=5=6=7";
 	jsonMap["complex"] = "╤╳/=$$\"'1!2()'\"";
 	jsonMap["╤╳"] = "1";
-	
+
 	bsonMap["unicode"] = "╤╳";
 	bsonMap["numbers"] = "123456789";
 	bsonMap["spaces"] = "1 2 3 4 a b c d";
@@ -396,7 +440,7 @@ unittest
 	bsonMap["equals"] = "1=2=3=4=5=6=7";
 	bsonMap["complex"] = "╤╳/=$$\"'1!2()'\"";
 	bsonMap["╤╳"] = "1";
-	
+
 	assert(urlEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1");
 	assert(urlEncode(dlMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1%202%203%204%20a%20b%20c%20d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
 	assert(urlEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5");
@@ -405,38 +449,38 @@ unittest
 		FormFields aaFields;
 		parseURLEncodedForm(urlEncode(aaMap), aaFields);
 		assert(urlEncode(aaMap) == urlEncode(aaFields));
-		
+
 		FormFields dlFields;
 		parseURLEncodedForm(urlEncode(dlMap), dlFields);
 		assert(urlEncode(dlMap) == urlEncode(dlFields));
-		
+
 		FormFields jsonFields;
 		parseURLEncodedForm(urlEncode(jsonMap), jsonFields);
 		assert(urlEncode(jsonMap) == urlEncode(jsonFields));
-		
+
 		FormFields bsonFields;
 		parseURLEncodedForm(urlEncode(bsonMap), bsonFields);
 		assert(urlEncode(bsonMap) == urlEncode(bsonFields));
 	}
-	
+
 	assert(formEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1");
 	assert(formEncode(dlMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1+2+3+4+a+b+c+d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
 	assert(formEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5");
 	assert(formEncode(bsonMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1+2+3+4+a+b+c+d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
-	
+
 	{
 		FormFields aaFields;
 		parseURLEncodedForm(formEncode(aaMap), aaFields);
 		assert(formEncode(aaMap) == formEncode(aaFields));
-		
+
 		FormFields dlFields;
 		parseURLEncodedForm(formEncode(dlMap), dlFields);
 		assert(formEncode(dlMap) == formEncode(dlFields));
-		
+
 		FormFields jsonFields;
 		parseURLEncodedForm(formEncode(jsonMap), jsonFields);
 		assert(formEncode(jsonMap) == formEncode(jsonFields));
-		
+
 		FormFields bsonFields;
 		parseURLEncodedForm(formEncode(bsonMap), bsonFields);
 		assert(formEncode(bsonMap) == formEncode(bsonFields));
