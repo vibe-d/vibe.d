@@ -58,9 +58,33 @@ unittest {
 	}
 }
 
+/**
+	Encodes the given ranges of `Tuple!(string, string)` as URL encoded form data
+*/
+void writeFormData(R, PairRange)(R dst, PairRange pr)
+	if (isOutputRange!(R, char) && isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
+{
+	import vibe.textfilter.urlencode;
+
+   if(pr.empty) return;
+
+   auto fst = pr.front;
+   pr.popFront();
+
+   filterURLEncode(dst, fst[0]);
+   dst.put("=");
+   filterURLEncode(dst, fst[1]);
+
+	foreach (pair; pr) {
+		dst.put("&");
+		filterURLEncode(dst, pair[0]);
+		dst.put("=");
+		filterURLEncode(dst, pair[1]);
+	}
+}
 
 /**
-	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
+	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
 */
 void writeFormBody(HTTPClientRequest req, in string[string] form)
 {
@@ -94,6 +118,44 @@ unittest {
 			});
 	}
 }
+
+/**
+	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
+*/
+void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
+   if(isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
+{
+	import vibe.http.form;
+	import vibe.stream.wrapper;
+
+	StringLengthCountingRange len;
+	writeFormData(&len, form);
+	req.contentType = "application/x-www-form-urlencoded";
+	req.contentLength = len.count;
+	auto rng = StreamOutputRange(req.bodyWriter);
+	writeFormData(&rng, form);
+}
+
+///
+unittest {
+	import vibe.core.log;
+	import vibe.http.client;
+	import vibe.http.form;
+	import vibe.stream.operations;
+
+	void sendForm()
+	{
+		requestHTTP("http://example.com/form",
+			(scope req) {
+				req.method = HTTPMethod.POST;
+				req.writeFormBody(["field1": "value1", "field2": "value2"]);
+			},
+			(scope res) {
+				logInfo("Response: %s", res.bodyReader.readAllUTF8());
+			});
+	}
+}
+
 
 /// private
 struct StringLengthCountingRange {
@@ -144,7 +206,7 @@ struct StringLengthCountingRange {
 		string surname;
 		Address address;
    }
-   // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"] 
+   // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"]
    void postPerson(HTTPServerRequest req, HTTPServerResponse res) {
 		Person p;
 		// We have a default value for country if not provided, so we don't care that it is not:
@@ -156,7 +218,7 @@ struct StringLengthCountingRange {
 		assert(p.name=="John");
 		assert(p.surname=="Smith");
    }
-   --- 
+   ---
   * The mechanism is more useful in get requests, when you have good default values for unspecified parameters.
   * Params:
   *		req  = The HTTPServerRequest that contains the form data. (req.query or req.form will be used depending on HTTPMethod)
@@ -300,7 +362,7 @@ unittest {
 		Test1 e;
 		E f;
 	}
-	
+
 	Test t;
 	t.b=8;
 	t.e.a=9;
