@@ -149,7 +149,7 @@ template isRWField(T, string M)
 	import std.typetuple;
 
 	static void testAssign()() {
-		static T t = void;
+		T t = void;
 		__traits(getMember, t, M) = __traits(getMember, t, M);
 	}
 
