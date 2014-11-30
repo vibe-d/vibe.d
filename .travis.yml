@@ -42,3 +42,5 @@ script:
 services:
   - mongodb
   - redis-server
+
+sudo: false
