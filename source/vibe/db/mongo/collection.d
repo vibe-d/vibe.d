@@ -198,19 +198,14 @@ struct MongoCollection {
 	  Throws Exception if a DB communication error occured.
 	  See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	 */
-	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
+	Bson findAndModify(T, U, V)(T query, U update, V options)
 	{
-		static struct CMD {
-			string findAndModify;
-			T query;
-			U update;
-			V fields;
-		}
-		CMD cmd;
+		auto cmd = Bson.emptyObject;
 		cmd.findAndModify = m_name;
 		cmd.query = query;
 		cmd.update = update;
-		cmd.fields = returnFieldSelector;
+		static if (!is(V == typeof(null))) 
+			foreach(key, value; options) cmd[key] = value;
 		auto ret = database.runCommand(cmd);
 		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
 		return ret.value;
