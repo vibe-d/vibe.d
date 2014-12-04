@@ -123,8 +123,8 @@ unittest {
 	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
 
 	Params:
-      form = range of t = Tuple!(string, string), 
-             where t[0] is the name and t[1] the 
+      form = range of `t = Tuple!(string, string)`,
+             where `t[0]` is the name and `t[1]` the
              value of a form entry.
 */
 void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
@@ -151,9 +151,9 @@ unittest {
 
 	void sendForm()
 	{
-      string[] names = ["foo", "bar", "baz"];
-      string[] values = ["1", "2", "3"];
-      auto form = zip(names, values);
+		string[] names = ["foo", "bar", "baz"];
+		string[] values = ["1", "2", "3"];
+		auto form = zip(names, values);
 		requestHTTP("http://example.com/form",
 			(scope req) {
 				req.method = HTTPMethod.POST;
