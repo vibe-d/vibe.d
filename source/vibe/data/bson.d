@@ -1470,7 +1470,10 @@ struct BsonSerializer {
 		else static if (is(T == Json)) return m_inputData.toJson();
 		else static if (is(T == bool)) return m_inputData.get!bool();
 		else static if (is(T == uint)) return cast(T)m_inputData.get!int();
-		else static if (is(T : int)) return m_inputData.get!int().to!T;
+		else static if (is(T : int)) {
+			if(m_inputData.type == Bson.Type.long_) return cast(T)m_inputData.get!long();
+			else return m_inputData.get!int().to!T;
+		}
 		else static if (is(T : long)) {
 			if(m_inputData.type == Bson.Type.int_) return cast(T)m_inputData.get!int();
 			else return cast(T)m_inputData.get!long();
