@@ -1,5 +1,5 @@
 /**
-	Implements a descriptive framework for building web interfaces.
+	Implements a declarative framework for building web interfaces.
 
 	This module contains the sister funtionality to the $(D vibe.web.rest)
 	module. While the REST interface generator is meant for stateless
@@ -59,7 +59,7 @@ import vibe.http.server;
 
 		$(UL
 			$(LI An array of values is mapped to
-				"&lt;parameter_name&gt;_&lt;index&gt;", where "index"
+				$(D &lt;parameter_name&gt;_&lt;index&gt;), where $(D index)
 				denotes the zero based index of the array entry. The length
 				of the array is determined by searching for the first
 				non-existent index in the set of form fields.)
@@ -71,7 +71,7 @@ import vibe.http.server;
 			$(LI $(D struct) type parameters that don't define a $(D fromString)
 				or a $(D fromStringValidate) method will be mapped to one
 				form field per struct member with a scheme similar to how
-				arrays are treated: "&lt;parameter_name&gt;_&lt;member_name&gt;")
+				arrays are treated: $(D &lt;parameter_name&gt;_&lt;member_name&gt;))
 			$(LI Boolean parameters will be set to $(D true) if a form field of
 				the corresponding name is present and to $(D false) otherwise.
 				This is compatible to how check boxes in HTML forms work.)
@@ -83,13 +83,32 @@ import vibe.http.server;
 				possible to nest arrays and structs appropriately.)
 		)
 
+	Special_parameters:
+		$(UL
+			$(LI A parameter named $(D __error) will be populated automatically
+				with error information, when an $(D @errorDisplay) attribute
+				is in use.)
+			$(LI An $(D InputStream) typed parameter will receive the request
+				body as an input stream. Note that this stream may be already
+				emptied if the request was subject to certain body parsing
+				options. See $(D vibe.http.server.HTTPServerOption).)
+			$(LI Parameters of types $(D vibe.http.server.HTTPServerRequest),
+				$(D vibe.http.server.HTTPServerResponse),
+				$(D vibe.http.common.HTTPRequest) or
+				$(D vibe.http.common.HTTPResponse) will receive the
+				request/response objects of the invoking request.)
+		)
+
+
 	Supported_attributes:
 		The following attributes are supported for annotating methods of the
 		registered class:
 
-		$(D @before), $(D @after), $(D @errorDisplay), $(D @method), $(D @path), $(D @contentType)
+		$(D @before), $(D @after), $(D @errorDisplay),
+		$(D @vibe.web.common.method), $(D @vibe.web.common.path),
+		$(D @vibe.web.common.contentType)
 
-	Params: 
+	Params:
 		router = The HTTP router to register to
 		instance = Class instance to use for the web interface mapping
 		settings = Optional parameter to customize the mapping process
@@ -346,7 +365,7 @@ unittest {
 	Supported types for the $(D _error) parameter are $(D bool), $(D string),
 	$(D Exception), or a user defined $(D struct). The $(D field) member, if
 	present, will be set to null if the exception was thrown after the field
-	validation has finished. 
+	validation has finished.
 */
 @property errorDisplay(alias DISPLAY_METHOD)()
 {
@@ -411,13 +430,14 @@ class WebInterfaceSettings {
 	Maps a web interface member variable to a session field.
 
 	Setting a SessionVar variable will implicitly start a session, if none
-	has been started, yet. The content of the variable will be stored in
+	has been started yet. The content of the variable will be stored in
 	the session store and is automatically serialized and deserialized.
 
-	Note that variables of type SessionVar must always be normal members of a
-	class that was registered using registerWebInterface. However, the value
-	of a SessionVar is always bound to the session and not to web interface
-	class instance. It is also important to avoid name clashes
+	Note that variables of type SessionVar must only be used from within
+	handler functions of a class that was registered using
+	$(D registerWebInterface). Also note that two different session
+	variables with the same $(D name) parameter will access the same
+	underlying data.
 */
 struct SessionVar(T, string name) {
 	private {
@@ -431,7 +451,7 @@ struct SessionVar(T, string name) {
 	unittest {
 		class MyService {
 			SessionVar!(int, "someInt") m_someInt = 42;
-		
+
 			void index() {
 				assert(m_someInt == 42);
 			}
@@ -483,7 +503,7 @@ struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 			alias GetErrorParamType = ParameterTypeTuple!DISPLAY_METHOD[idx];
 		else alias GetErrorParamType = GetErrorParamType!(idx+1);
 	}
-	
+
 	alias ErrorParamType = GetErrorParamType!0;
 
 	ErrorParamType getError(Exception ex, string field)
@@ -561,7 +581,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
 				return;
 			} else {
-				throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
+				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling parameter "~param_names[i]~": "~ex.msg);
+				hex.debugMessage = ex.toString().sanitize;
+				throw hex;
 			}
 		}
 	}
@@ -576,10 +598,10 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			enum pidx = param_names.countUntil(PT.confirmedParameter);
 			static assert(pidx >= 0, "Unknown confirmation parameter reference \""~PT.confirmedParameter~"\".");
 			static assert(pidx != i, "Confirmation parameter \""~PT.confirmedParameter~"\" may not reference itself.");
-			
+
 			bool matched;
 			static if (isNullable!PT && isNullable!(PARAMS[pidx])) {
-				matched = (params[pidx].isNull() && params[i].isNull()) || 
+				matched = (params[pidx].isNull() && params[i].isNull()) ||
 					(!params[pidx].isNull() && !params[i].isNull() && params[pidx] == params[i]);
 			} else {
 				static assert(!isNullable!PT && !isNullable!(PARAMS[pidx]),

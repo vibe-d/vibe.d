@@ -80,7 +80,7 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 }
 
 /// compatibility alias
-alias compileDietFile parseDietFile;
+alias parseDietFile = compileDietFile;
 
 /**
 	Compatibility version of parseDietFile().
@@ -115,7 +115,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 }
 
 /// compatibility alias
-alias compileDietFileCompat parseDietFileCompat;
+alias parseDietFileCompat = compileDietFileCompat;
 
 /**
 	Generates a diet template compiler to use as a mixin.
@@ -161,17 +161,17 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	import vibe.stream.wrapper;
 	import vibe.utils.string;
 	import std.typetuple;
-	
+
 	//pragma(msg, localAliases!(0, ALIASES));
 	mixin(localAliases!(0, ALIASES));
 
 	// Generate the D source code for the diet template
-	//pragma(msg, dietParser!template_file());
 	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
 	else alias TRANSLATE = TypeTuple!();
 
 	auto output__ = StreamOutputRange(stream__);
 
+	//pragma(msg, dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
 	mixin(dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
 }
 
@@ -180,7 +180,7 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	Registers a new text filter for use in Diet templates.
 
 	The filter will be available using :filtername inside of the template. The following filters are
-	predefined: css, javascript, markdown
+	predefined: css, javascript, markdown, htmlescape
 */
 void registerDietTextFilter(string name, string function(string, size_t indent) filter)
 {
@@ -665,7 +665,7 @@ private struct DietCompiler(TRANSLATE...)
 						} else {
 							output.writeCodeLine(`pragma(msg, "`~dstringEscape(currLine.file)~`:`~currLine.number.to!string~
 								`: Warning: Use an explicit text block '`~tag~dstringEscape(tagline)~
-								`.' for embedded css/javascript - old behavior will be removed soon.");`);
+								`.' (with a trailing dot) for embedded css/javascript - old behavior will be removed soon.");`);
 
 							// pass all child lines to buildRawTag and continue with the next sibling
 							size_t next_tag = m_lineIndex+1;
@@ -750,7 +750,7 @@ private struct DietCompiler(TRANSLATE...)
 				doctype_str = "!DOCTYPE " ~ ln[j .. $];
 			break;
 		}
-		buildSpecialTag(output, doctype_str, level);
+		buildSpecialTag(output, doctype_str, level, false);
 	}
 
 	private bool buildHtmlNodeWriter(OutputContext output, in ref string tag, in string line, int level, bool has_child_nodes, ref bool prepend_whitespaces)
@@ -1025,8 +1025,9 @@ private struct DietCompiler(TRANSLATE...)
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
 				value = skipExpression(str, i);
-				if( isStringLiteral(value) && value[0] == '\'' ){
-					value = '"' ~ value[1 .. $-1] ~ '"';
+				if (isStringLiteral(value) && value[0] == '\'') {
+					auto tmp = dstringUnescape(value[1 .. $-1]);
+					value = '"' ~ dstringEscape(tmp) ~ '"';
 				}
 			} else value = "true";
 
@@ -1277,9 +1278,9 @@ private struct HTMLAttribute {
 }
 
 /// private
-private void buildSpecialTag(OutputContext output, string tag, int level)
+private void buildSpecialTag(OutputContext output, string tag, int level, bool leading_newline = true)
 {
-	output.writeString("\n");
+	if (leading_newline) output.writeString("\n");
 	output.writeIndent(level);
 	output.writeString("<" ~ tag ~ ">");
 }
@@ -1287,15 +1288,57 @@ private void buildSpecialTag(OutputContext output, string tag, int level)
 private bool isStringLiteral(string str)
 {
 	size_t i = 0;
-	while( i < str.length && (str[i] == ' ' || str[i] == '\t') ) i++;
-	if( i >= str.length ) return false;
-	char delimiter = str[i];
-	if( delimiter != '"' && delimiter != '\'' ) return false;
-	while( i < str.length && str[i] != delimiter ){
-		if( str[i] == '\\' ) i++;
+
+	// skip leading white space
+	while (i < str.length && (str[i] == ' ' || str[i] == '\t')) i++;
+
+	// no string literal inside
+	if (i >= str.length) return false;
+
+	char delimiter = str[i++];
+	if (delimiter != '"' && delimiter != '\'') return false;
+
+	while (i < str.length && str[i] != delimiter) {
+		if (str[i] == '\\') i++;
 		i++;
 	}
-	return i < str.length;
+
+	// unterminated string literal
+	if (i >= str.length) return false;
+
+	i++; // skip delimiter
+
+	// skip trailing white space
+	while (i < str.length && (str[i] == ' ' || str[i] == '\t')) i++;
+
+	// check if the string has ended with the closing delimiter
+	return i == str.length;
+}
+
+unittest {
+	assert(isStringLiteral(`""`));
+	assert(isStringLiteral(`''`));
+	assert(isStringLiteral(`"hello"`));
+	assert(isStringLiteral(`'hello'`));
+	assert(isStringLiteral(` 	"hello"	 `));
+	assert(isStringLiteral(` 	'hello'	 `));
+	assert(isStringLiteral(`"hel\"lo"`));
+	assert(isStringLiteral(`"hel'lo"`));
+	assert(isStringLiteral(`'hel\'lo'`));
+	assert(isStringLiteral(`'hel"lo'`));
+	assert(isStringLiteral(`'#{"address_"~item}'`));
+	assert(!isStringLiteral(`"hello\`));
+	assert(!isStringLiteral(`"hello\"`));
+	assert(!isStringLiteral(`"hello\"`));
+	assert(!isStringLiteral(`"hello'`));
+	assert(!isStringLiteral(`'hello"`));
+	assert(!isStringLiteral(`"hello""world"`));
+	assert(!isStringLiteral(`"hello" "world"`));
+	assert(!isStringLiteral(`"hello" world`));
+	assert(!isStringLiteral(`'hello''world'`));
+	assert(!isStringLiteral(`'hello' 'world'`));
+	assert(!isStringLiteral(`'hello' world`));
+	assert(!isStringLiteral(`"name" value="#{name}"`));
 }
 
 /// Internal function used for converting an interpolation expression to string
@@ -1347,9 +1390,9 @@ unittest {
 	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? \"foo\" : null)") == "<div></div>");
 	assert(compile!("- auto cond = false;\ndiv(someattr=cond ? true : false)") == "<div></div>");
 	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? true : false)") == "<div someattr=\"someattr\"></div>");
-	assert(compile!("doctype html\n- auto cond = true;\ndiv(someattr=cond ? true : false)") 
+	assert(compile!("doctype html\n- auto cond = true;\ndiv(someattr=cond ? true : false)")
 		== "<!DOCTYPE html>\n<div someattr></div>");
-	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)") 
+	assert(compile!("doctype html\n- auto cond = false;\ndiv(someattr=cond ? true : false)")
 		== "<!DOCTYPE html>\n<div></div>");
 
 	// issue 510

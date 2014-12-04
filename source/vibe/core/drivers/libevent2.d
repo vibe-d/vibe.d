@@ -54,7 +54,7 @@ version(Windows)
 {
 	import std.c.windows.winsock;
 
-	alias WSAEWOULDBLOCK EWOULDBLOCK;
+	alias EWOULDBLOCK = WSAEWOULDBLOCK;
 }
 
 
@@ -71,6 +71,7 @@ final class Libevent2Driver : EventDriver {
 		debug Thread m_ownerThread;
 
 		event* m_timerEvent;
+		SysTime m_timerTimeout = SysTime.max;
 		TimerQueue!TimerInfo m_timers;
 		DList!AddressInfo m_addressInfoCache;
 		size_t m_addressInfoCacheLength = 0;
@@ -82,30 +83,32 @@ final class Libevent2Driver : EventDriver {
 		m_core = core;
 		s_driverCore = core;
 
-		if (!s_threadObjectsMutex) s_threadObjectsMutex = new Mutex;
+		synchronized if (!s_threadObjectsMutex) {
+			s_threadObjectsMutex = new Mutex;
 
-		// set the malloc/free versions of our runtime so we don't run into trouble
-		// because the libevent DLL uses a different one.
-		event_set_mem_functions(&lev_alloc, &lev_realloc, &lev_free);
+			// set the malloc/free versions of our runtime so we don't run into trouble
+			// because the libevent DLL uses a different one.
+			event_set_mem_functions(&lev_alloc, &lev_realloc, &lev_free);
 
-		evthread_lock_callbacks lcb;
-		lcb.lock_api_version = EVTHREAD_LOCK_API_VERSION;
-		lcb.supported_locktypes = EVTHREAD_LOCKTYPE_RECURSIVE|EVTHREAD_LOCKTYPE_READWRITE;
-		lcb.alloc = &lev_alloc_mutex;
-		lcb.free = &lev_free_mutex;
-		lcb.lock = &lev_lock_mutex;
-		lcb.unlock = &lev_unlock_mutex;
-		evthread_set_lock_callbacks(&lcb);
+			evthread_lock_callbacks lcb;
+			lcb.lock_api_version = EVTHREAD_LOCK_API_VERSION;
+			lcb.supported_locktypes = EVTHREAD_LOCKTYPE_RECURSIVE|EVTHREAD_LOCKTYPE_READWRITE;
+			lcb.alloc = &lev_alloc_mutex;
+			lcb.free = &lev_free_mutex;
+			lcb.lock = &lev_lock_mutex;
+			lcb.unlock = &lev_unlock_mutex;
+			evthread_set_lock_callbacks(&lcb);
 
-		evthread_condition_callbacks ccb;
-		ccb.condition_api_version = EVTHREAD_CONDITION_API_VERSION;
-		ccb.alloc_condition = &lev_alloc_condition;
-		ccb.free_condition = &lev_free_condition;
-		ccb.signal_condition = &lev_signal_condition;
-		ccb.wait_condition = &lev_wait_condition;
-		evthread_set_condition_callbacks(&ccb);
+			evthread_condition_callbacks ccb;
+			ccb.condition_api_version = EVTHREAD_CONDITION_API_VERSION;
+			ccb.alloc_condition = &lev_alloc_condition;
+			ccb.free_condition = &lev_free_condition;
+			ccb.signal_condition = &lev_signal_condition;
+			ccb.wait_condition = &lev_wait_condition;
+			evthread_set_condition_callbacks(&ccb);
 
-		evthread_set_id_callback(&lev_get_thread_id);
+			evthread_set_id_callback(&lev_get_thread_id);
+		}
 
 		// initialize libevent
 		logDiagnostic("libevent version: %s", to!string(event_get_version()));
@@ -128,7 +131,7 @@ final class Libevent2Driver : EventDriver {
 		m_timerEvent = event_new(m_eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
 	}
 
-	~this()
+	void dispose()
 	{
 		debug assert(Thread.getThis() is m_ownerThread, "Event loop destroyed in foreign thread.");
 
@@ -451,8 +454,9 @@ final class Libevent2Driver : EventDriver {
 	private void rescheduleTimerEvent(SysTime now)
 	{
 		auto next = m_timers.getFirstTimeout();
-		if (next == SysTime.max) return;
+		if (next == SysTime.max || next == m_timerTimeout) return;
 
+		m_timerTimeout = now;
 		auto dur = next - now;
 		event_del(m_timerEvent);
 		assert(dur.total!"seconds"() <= int.max);
@@ -473,7 +477,7 @@ final class Libevent2Driver : EventDriver {
 		try drv.processTimers();
 		catch (Exception e) {
 			logError("Failed to process timers: %s", e.msg);
-			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
 		}
 	}
 
@@ -622,9 +626,13 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	int wait(int reference_emit_count)
 	{
 		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
 		acquire();
 		scope(exit) release();
-		auto ec = this.emitCount;
+
 		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
@@ -635,6 +643,10 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	int wait(Duration timeout, int reference_emit_count)
 	{
 		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
 		acquire();
 		scope(exit) release();
 		auto tm = m_driver.createTimer(null);
@@ -642,7 +654,6 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		m_driver.rearmTimer(tm, timeout, false);
 
-		auto ec = this.emitCount;
 		while (ec == reference_emit_count) {
 			getThreadLibeventDriverCore().yieldForEvent();
 			ec = this.emitCount;
@@ -864,7 +875,7 @@ final class Libevent2UDPConnection : UDPConnection {
 
 		// generate the bind address string
 		m_bindAddress = bind_addr;
-		char buf[64];
+		char[64] buf;
 		void* ptr;
 		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
 		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
@@ -1203,11 +1214,11 @@ struct LevMutex {
 	ReadWriteMutex rwmutex;
 }
 
-alias FreeListObjectAlloc!(LevCondition, false) LevConditionAlloc;
-alias FreeListObjectAlloc!(LevMutex, false) LevMutexAlloc;
-alias FreeListObjectAlloc!(core.sync.mutex.Mutex, false) MutexAlloc;
-alias FreeListObjectAlloc!(ReadWriteMutex, false) ReadWriteMutexAlloc;
-alias FreeListObjectAlloc!(Condition, false) ConditionAlloc;
+alias LevConditionAlloc = FreeListObjectAlloc!(LevCondition, false);
+alias LevMutexAlloc = FreeListObjectAlloc!(LevMutex, false);
+alias MutexAlloc = FreeListObjectAlloc!(core.sync.mutex.Mutex, false);
+alias ReadWriteMutexAlloc = FreeListObjectAlloc!(ReadWriteMutex, false);
+alias ConditionAlloc = FreeListObjectAlloc!(Condition, false);
 
 private nothrow extern(C)
 {

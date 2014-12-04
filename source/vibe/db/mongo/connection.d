@@ -16,6 +16,7 @@ import vibe.stream.ssl;
 
 import std.algorithm : map, splitter;
 import std.array;
+import std.range;
 import std.conv;
 import std.exception;
 import std.string;
@@ -38,7 +39,7 @@ private struct _MongoErrorDescription
  * Can be used also to check how many documents where updated upon
  * a successful query via "n" field.
  */
-alias immutable(_MongoErrorDescription) MongoErrorDescription;
+alias MongoErrorDescription = immutable(_MongoErrorDescription);
 
 /**
  * Root class for vibe.d Mongo driver exception hierarchy.
@@ -273,6 +274,43 @@ final class MongoConnection {
 		return ret;
 	}
 
+	/** Queries the server for all databases.
+
+		Returns:
+			An input range of $(D MongoDBInfo) values.
+	*/
+	auto listDatabases()
+	{
+		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
+
+		auto cmd = Bson(["listDatabases":Bson(1)]);
+
+		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
+			if ((flags & ReplyFlags.QueryFailure))
+				throw new MongoDriverException("Calling listDatabases failed.");
+		}
+
+		MongoDBInfo toInfo(const(Bson) db_doc) {
+			return MongoDBInfo(
+				db_doc["name"].get!string,
+				db_doc["sizeOnDisk"].get!double,
+				db_doc["empty"].get!bool
+			);
+		}
+
+		typeof((const(Bson)[]).init.map!toInfo) result;
+		void on_doc(size_t idx, ref Bson doc) {
+			if (doc["ok"].get!double != 1.0)
+				throw new MongoAuthException("listDatabases failed.");
+
+			result = doc["databases"].get!(const(Bson)[]).map!toInfo;
+		}
+
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
+
+		return result;
+	}
+
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		import std.traits;
@@ -442,9 +480,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	// Reslice to get rid of 'mongodb://'
 	tmpUrl = tmpUrl[10..$];
 
-	auto slashIndex = tmpUrl.indexOf("/");
-	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
-	auto authIndex = tmpUrl[0 .. slashIndex].indexOf('@');
+	auto authIndex = tmpUrl.indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
 
 	// Parse out the username and optional password.
@@ -471,6 +507,10 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 		cfg.digest = MongoClientSettings.makeDigest(cfg.username, password);
 	}
+
+	auto slashIndex = tmpUrl[hostIndex..$].indexOf("/");
+	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
+	else slashIndex += hostIndex;
 
 	// Parse the hosts section.
 	try
@@ -542,7 +582,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 			void warnNotImplemented()
 			{
-				logWarn("MongoDB option %s not yet implemented.", option);
+				logDiagnostic("MongoDB option %s not yet implemented.", option);
 			}
 
 			switch( option.toLower() ){
@@ -649,7 +689,7 @@ unittest
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg,
 				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
-				"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
+				~ "27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
 	//assert(cfg.password == "flinstone");
 	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "flinstone"));
@@ -675,6 +715,18 @@ unittest
 	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:thepass@localhost")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:badport/")));
+
+	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost"));
+	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost/mydb"));
+	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
+	assert(cfg.database == "mydb");
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
 }
 
 private enum OpCode : int {
@@ -752,11 +804,19 @@ class MongoClientSettings
 	}
 }
 
+struct MongoDBInfo
+{
+	string name;
+	double sizeOnDisk;
+	bool empty;
+}
+
 private struct MongoHost
 {
 	string name;
 	ushort port;
 }
+
 
 private int sendLength(ARGS...)(ARGS args)
 {

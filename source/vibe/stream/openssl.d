@@ -1,4 +1,4 @@
-﻿/**
+/**
 	OpenSSL based SSL/TLS stream implementation
 
 	Copyright: © 2012-2014 RejectedSoftware e.K.
@@ -38,6 +38,11 @@ version (VibePragmaLib) {
 	version (Windows) pragma(lib, "eay");
 }
 
+version (VibeUseOldOpenSSL) private enum haveECDH = false;
+else private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
+
+
+
 /**
 	Creates an SSL/TLS tunnel within an existing stream.
 
@@ -51,7 +56,7 @@ final class OpenSSLStream : SSLStream {
 		SSLStreamState m_state;
 		SSLState m_ssl;
 		BIO* m_bio;
-		ubyte m_peekBuffer[64];
+		ubyte[64] m_peekBuffer;
 		Exception[] m_exceptions;
 	}
 
@@ -90,6 +95,7 @@ final class OpenSSLStream : SSLStream {
 					enforceSSL(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
 					break;
 				case SSLStreamState.connecting:
+					SSL_ctrl(m_ssl, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
 					//SSL_set_connect_state(m_ssl);
 					enforceSSL(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
 					break;
@@ -186,11 +192,11 @@ final class OpenSSLStream : SSLStream {
 		}
 	}
 
-	alias Stream.write write;
+	alias write = Stream.write;
 
 	void flush()
 	{
-
+		m_stream.flush();
 	}
 
 	void finalize()
@@ -222,7 +228,7 @@ final class OpenSSLStream : SSLStream {
 			char[120] ebuf;
 			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
 				ERR_error_string(eret, ebuf.ptr);
-				logDiagnostic("%s error at at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
+				logDiagnostic("%s error at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
 			}
 		}
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
@@ -232,13 +238,24 @@ final class OpenSSLStream : SSLStream {
 
 	private int enforceSSL(int ret, string message)
 	{
-		if (ret <= 0) {
-			auto err = SSL_get_error(m_ssl, ret);
-			char[120] ebuf;
-			ERR_error_string(err, ebuf.ptr);
-			throw new Exception(format("%s: %s (%s)", message, ebuf.ptr.to!string(), err));
+		if (ret > 0) return ret;
+
+		c_ulong eret;
+		const(char)* file = null, data = null;
+		int line;
+		int flags;
+		string estr;
+		char[120] ebuf = 0;
+
+		while ((eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0) {
+			ERR_error_string_n(eret, ebuf.ptr, ebuf.length);
+			estr = ebuf.ptr.to!string;
+			// throw the last error code as an exception
+			if (!ERR_peek_error()) break;
+			logDiagnostic("OpenSSL error at %s:%d: %s (%s)", file.to!string, line, estr, flags & ERR_TXT_STRING ? to!string(data) : "-");
 		}
-		return ret;
+
+		throw new Exception(format("%s: %s (%s)", message, estr, eret));
 	}
 
 	private void checkExceptions()
@@ -267,6 +284,7 @@ final class OpenSSLContext : SSLContext {
 		SSLPeerValidationCallback m_peerValidationCallback;
 		SSLPeerValidationMode m_validationMode;
 		int m_verifyDepth;
+		SSLServerNameCallback m_sniCallback;
 	}
 
 	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
@@ -287,6 +305,7 @@ final class OpenSSLContext : SSLContext {
 				}
 				break;
 			case SSLContextKind.server:
+			case SSLContextKind.serverSNI:
 				final switch (ver) {
 					case SSLVersion.any: method = SSLv23_server_method(); break;
 					case SSLVersion.ssl3: method = SSLv3_server_method(); break;
@@ -301,7 +320,7 @@ final class OpenSSLContext : SSLContext {
 		SSL_CTX_set_options!()(m_ctx, options);
 		if (kind == SSLContextKind.server) {
 			setDHParams();
-			setECDHCurve();
+			static if (haveECDH) setECDHCurve();
 		}
 
 		setCipherList();
@@ -405,6 +424,28 @@ final class OpenSSLContext : SSLContext {
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
 
+	@property void sniCallback(SSLServerNameCallback callback)
+	{
+		m_sniCallback = callback;
+		if (m_kind == SSLContextKind.serverSNI) {
+			SSL_CTX_callback_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_CB, cast(OSSLCallback)&onContextForServerName);
+			SSL_CTX_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_ARG, 0, cast(void*)this);
+		}
+	}
+	@property inout(SSLServerNameCallback) sniCallback() inout { return m_sniCallback; }
+
+	private extern(C) alias OSSLCallback = void function();
+	private static extern(C) int onContextForServerName(SSL *s, int *ad, void *arg)
+	{
+		auto ctx = cast(OpenSSLContext)arg;
+		auto servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
+		if (!servername) return SSL_TLSEXT_ERR_NOACK;
+		auto newctx = cast(OpenSSLContext)ctx.m_sniCallback(servername.to!string);
+		if (!newctx) return SSL_TLSEXT_ERR_NOACK;
+		SSL_set_SSL_CTX(s, newctx.m_ctx);
+		return SSL_TLSEXT_ERR_OK;
+	}
+
 	OpenSSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		return new OpenSSLStream(underlying, this, state, peer_name, peer_address);
@@ -423,7 +464,7 @@ final class OpenSSLContext : SSLContext {
 		if (list is null)
 			SSL_CTX_set_cipher_list(m_ctx,
 				"ECDH+AESGCM:DH+AESGCM:ECDH+AES256:DH+AES256:ECDH+AES128:DH+AES:"
-				"RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
+				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
 		else
 			SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
 	}
@@ -466,27 +507,29 @@ final class OpenSSLContext : SSLContext {
 	 *    function without argument will restore the default.
 	 *
 	 */
-	void setECDHCurve(string curve=null)
+	void setECDHCurve(string curve = null)
 	{
-		static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
-			// use automatic ecdh curve selection by default
-			if (curve is null) {
-				SSL_CTX_set_ecdh_auto(m_ctx, true);
-				return;
+		static if (haveECDH) {
+			static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
+				// use automatic ecdh curve selection by default
+				if (curve is null) {
+					SSL_CTX_set_ecdh_auto(m_ctx, true);
+					return;
+				}
+				// but disable it when an explicit curve is given
+				SSL_CTX_set_ecdh_auto(m_ctx, false);
 			}
-			// but disable it when an explicit curve is given
-			SSL_CTX_set_ecdh_auto(m_ctx, false);
-		}
 
-		int nid;
-		if (curve is null)
-			nid = NID_X9_62_prime256v1;
-		else
-			nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
+			int nid;
+			if (curve is null)
+				nid = NID_X9_62_prime256v1;
+			else
+				nid = enforce(OBJ_sn2nid(toStringz(curve)), "Unknown ECDH curve '"~curve~"'.");
 
-		auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
-		SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
-		EC_KEY_free(ecdh);
+			auto ecdh = enforce(EC_KEY_new_by_curve_name(nid), "Unable to create ECDH curve.");
+			SSL_CTX_set_tmp_ecdh(m_ctx, ecdh);
+			EC_KEY_free(ecdh);
+		} else assert(false, "ECDH curve selection not available for old versions of OpenSSL");
 	}
 
 	/// Sets a certificate file to use for authenticating to the remote peer

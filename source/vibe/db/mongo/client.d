@@ -19,6 +19,7 @@ import core.thread;
 
 import std.conv;
 import std.string;
+import std.range;
 
 /**
 	Represents a connection to a MongoDB server.
@@ -42,11 +43,11 @@ final class MongoClient {
 
 		The URL must be in the form documented at
 		$(LINK http://www.mongodb.org/display/DOCS/Connections) which is:
-		
+
 		mongodb://[username:password@]host1[:port1][,host2[:port2],...[,hostN[:portN]]][/[database][?options]]
 
 		Throws:
-			An exception if the URL cannot be parsed as a valid MongoDB URL. 
+			An exception if the URL cannot be parsed as a valid MongoDB URL.
 	*/
 	package this(string url)
 	{
@@ -74,7 +75,7 @@ final class MongoClient {
 
 		Returns:
 			MongoCollection for the given combined database and collectiion name(path)
-		
+
 		Examples:
 			---
 			auto col = client.getCollection("test.collection");
@@ -90,7 +91,7 @@ final class MongoClient {
 
 		The returned object allows to access the database entity (which contains
 		a set of collections). There are two main use cases:
-		
+
 		1. Accessing collections using a relative path
 
 		2. Performing service commands on the database itself
@@ -110,6 +111,26 @@ final class MongoClient {
 	MongoDatabase getDatabase(string dbName)
 	{
 		return MongoDatabase(this, dbName);
+	}
+
+
+
+	/**
+	 	Return string array representing all current database names.
+
+	 	Returns:
+	 		An input range of $(D MongoDatabase) objects.
+
+	 	Examples:
+	 		---
+	 		auto names = client.getDatabaseNames();
+	 		writeln("Current databases are: ", names);
+	 		---
+	 */
+	auto getDatabases()
+	{
+		return lockConnection.listDatabases()
+			.map!(info => MongoDatabase(this, info.name));
 	}
 
 	package auto lockConnection() { return m_connections.lockConnection(); }

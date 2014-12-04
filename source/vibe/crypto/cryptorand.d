@@ -304,7 +304,7 @@ final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
 }
 
 /// A SHA-1 based mixing RNG. Alias for HashMixerRNG!(SHA1, 5).
-alias HashMixerRNG!(SHA1, 5) SHA1HashMixerRNG;
+alias SHA1HashMixerRNG = HashMixerRNG!(SHA1, 5);
 
 //test heap-based arrays
 unittest
@@ -464,14 +464,14 @@ version(Windows)
 	
 	private extern(Windows) nothrow
 	{
-		alias ULONG_PTR HCRYPTPROV;
+		alias HCRYPTPROV = ULONG_PTR;
 		
 		enum LPCTSTR NULL = cast(LPCTSTR)0;
 		enum DWORD PROV_RSA_FULL = 1;
 		enum DWORD CRYPT_VERIFYCONTEXT = 0xF0000000;
 		
 		BOOL CryptAcquireContextA(HCRYPTPROV *phProv, LPCTSTR pszContainer, LPCTSTR pszProvider, DWORD dwProvType, DWORD dwFlags);
-		alias CryptAcquireContextA CryptAcquireContext;
+		alias CryptAcquireContext = CryptAcquireContextA;
 		
 		BOOL CryptReleaseContext(HCRYPTPROV hProv, DWORD dwFlags);
 		

@@ -47,6 +47,10 @@ version(VibeWinrtDriver)
 
 		}
 
+		void dispose()
+		{
+		}
+
 		int runEventLoop()
 		{
 			processEventsInternal(CoreProcessEventsOption.ProcessUntilQuit);

@@ -3,7 +3,8 @@ import vibe.http.server;
 
 void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 {
-	res.writeBody(cast(ubyte[])"Hello, World!", "text/plain");
+	if (req.path == "/")
+		res.writeBody("Hello, World!", "text/plain");
 }
 
 shared static this()

@@ -65,8 +65,8 @@ final class LibevDriver : EventDriver {
 		enforce(m_loop !is null, "Failed to create libev loop");
 		logInfo("Got libev backend: %d", ev_backend(m_loop));
 	}
-	
-	~this()
+
+	void dispose()
 	{
 		ms_alreadyDeinitialized = true;
 	}
@@ -81,7 +81,7 @@ final class LibevDriver : EventDriver {
 		logInfo("Event loop exit", m_break);
 		return 0;
 	}
-	
+
 	int runEventLoopOnce()
 	{
 		ev_run(m_loop, EVRUN_ONCE);
@@ -98,19 +98,19 @@ final class LibevDriver : EventDriver {
 		}
 		return true;
 	}
-	
+
 	void exitEventLoop()
 	{
 		logInfo("Exiting (%s)", m_break);
 		m_break = true;
 		ev_break(m_loop, EVBREAK_ALL);
 	}
-	
+
 	ThreadedFileStream openFile(Path path, FileMode mode)
 	{
 		return new ThreadedFileStream(path, mode);
 	}
-	
+
 	DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
 		assert(false);
@@ -167,7 +167,7 @@ final class LibevDriver : EventDriver {
 		enforce(false, "Invalid IP address string: '"~address~"'");
 		assert(false);
 	}
-	
+
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(false);
@@ -225,7 +225,7 @@ final class LibevDriver : EventDriver {
 			logError("Error creating listening socket> %s", af);
 			return null;
 		}
-		int tmp_reuse = 1; 
+		int tmp_reuse = 1;
 		if( setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) ){
 			logError("Error enabling socket address reuse on listening socket");
 			return null;
@@ -242,11 +242,11 @@ sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 
 		// Set socket for non-blocking I/O
 		setNonBlocking(listenfd);
-		
+
 		auto w_accept = new ev_io;
 		ev_io_init(w_accept, &accept_cb, listenfd, EV_READ);
 		ev_io_start(m_loop, w_accept);
-		
+
 		w_accept.data = cast(void*)this;
 		//addEventReceiver(m_core, listenfd, new LibevTCPListener(connection_callback));
 
@@ -381,14 +381,14 @@ final class LibevManualEvent : ManualEvent {
 
 /*class LibevTimer : Timer {
 	mixin SingleOwnerEventedObject;
-	
+
 	private {
 		LibevDriver m_driver;
 		ev_timer m_timer;
 		void delegate() m_callback;
 		bool m_pending;
 	}
-	
+
 	this(LibevDriver driver, void delegate() callback)
 	{
 		m_driver = driver;
@@ -423,11 +423,11 @@ final class LibevManualEvent : ManualEvent {
 		while (pending)
 			m_driver.m_core.yieldForEvent();
 	}
-	
+
 	extern(C) static nothrow onTimer(ev_loop_t *loop, ev_timer *w, int revents)
 	{
 		auto tm = cast(LibevTimer)w.data;
-		
+
 		logTrace("Timer event %s/%s", tm.m_pending, w.repeat > 0);
 		if (!tm.m_pending) return;
 		try {
@@ -460,7 +460,7 @@ final class LibevTCPListener : TCPListener {
 		m_io.data = cast(void*)this;
 		m_options = options;
 	}
-	
+
 	@property void delegate(TCPConnection conn) connectionCallback() { return m_connectionCallback; }
 
 	void stopListening()
@@ -486,7 +486,7 @@ final class LibevTCPConnection : TCPConnection {
 		bool m_keepAlive = false;
 		Duration m_readTimeout;
 	}
-	
+
 	this(LibevDriver driver, int fd, ev_io* read_watcher, ev_io* write_watcher)
 	{
 		assert(fd >= 0);
@@ -499,7 +499,7 @@ final class LibevTCPConnection : TCPConnection {
 		m_writeWatcher.data = cast(void*)this;
 		//logInfo("fd %d %d", fd, watcher.fd);
 	}
-	
+
 	@property void tcpNoDelay(bool enabled)
 	{
 		m_tcpNoDelay = enabled;
@@ -518,7 +518,7 @@ final class LibevTCPConnection : TCPConnection {
 		}
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
-	
+
 	@property void keepAlive(bool enabled)
 	{
 		m_keepAlive = enabled;
@@ -528,15 +528,15 @@ final class LibevTCPConnection : TCPConnection {
 	@property bool keepAlive() const { return m_keepAlive; }
 
 	@property bool connected() const { return m_socket >= 0; }
-	
+
 	@property bool dataAvailableForRead(){ return m_readBufferContent.length > 0; }
-	
+
 	@property string peerAddress() const { return "xxx"; } // TODO!
 	@property NetworkAddress localAddress() const { return NetworkAddress.init; } // TODO!
 	@property NetworkAddress remoteAddress() const { return NetworkAddress.init; } // TODO!
-	
+
 	@property bool empty() { return leastSize == 0; }
-	
+
 	@property ulong leastSize()
 	{
 		if( m_readBufferContent.length == 0 ){
@@ -545,7 +545,7 @@ final class LibevTCPConnection : TCPConnection {
 		}
 		return m_readBufferContent.length;
 	}
-	
+
 	void close()
 	{
 		//logTrace("closing");
@@ -572,13 +572,13 @@ final class LibevTCPConnection : TCPConnection {
 		m_socket = -1;
 
 	}
-	
+
 	bool waitForData(Duration timeout)
 	{
 		if (!m_readBufferContent.empty) return true;
-		
+
 		logTrace("wait for data");
-		
+
 		auto timer = m_driver.createTimer(null);
 		scope (exit) m_driver.releaseTimer(timer);
 //		m_driver.m_timers[timer].owner = Task.getThis();
@@ -588,7 +588,7 @@ final class LibevTCPConnection : TCPConnection {
 		yieldFor(EV_READ);
 		return readChunk(true);
 	}
-	
+
 	const(ubyte)[] peek()
 	{
 		return null;
@@ -606,13 +606,13 @@ final class LibevTCPConnection : TCPConnection {
 			m_readBufferContent = m_readBufferContent[n .. $];
 		}
 	}
-	
+
 	const(ubyte)[] peek(size_t nbytes = 0)
 	{
 		if( !m_readBufferContent.length ) readChunk();
 		return m_readBufferContent;
 	}
-	
+
 	void drain(size_t nbytes){
 		while( nbytes > 0 ){
 			if( m_readBufferContent.length == 0 ) readChunk();
@@ -621,14 +621,14 @@ final class LibevTCPConnection : TCPConnection {
 			nbytes -= amt;
 		}
 	}
-		
+
 	void write(in ubyte[] bytes_)
 	{
 		m_writeBuffer.put(bytes_);
-		
+
 		/*if( do_flush )*/ flush();
 	}
-	
+
 	void flush()
 	{
 		const(ubyte)[] bytes = m_writeBuffer.data();//bytes_;
@@ -648,17 +648,17 @@ final class LibevTCPConnection : TCPConnection {
 			if( bytes.length > 0 ) yieldFor(EV_WRITE);
 		}
 	}
-	
+
 	void finalize()
 	{
 		flush();
 	}
-	
+
 	void write(InputStream stream, ulong nbytes = 0)
 	{
 		writeDefault(stream, nbytes);
 	}
-	
+
 	private bool readChunk(bool try_only = false)
 	{
 		checkConnected();
@@ -675,7 +675,7 @@ final class LibevTCPConnection : TCPConnection {
 			if (try_only) return false;
 			yieldFor(EV_READ);
 		}
-		
+
 		logTrace(" <%s>", cast(string)m_readBuffer[0 .. nbytes]);
 		if( nbytes == 0 ){
 			logInfo("detected connection close during read!");
@@ -685,12 +685,12 @@ final class LibevTCPConnection : TCPConnection {
 		m_readBufferContent = m_readBuffer[0 .. nbytes];
 		return true;
 	}
-	
+
 	private void checkConnected()
 	{
 		enforce(m_socket >= 0, "Operating on closed connection.");
 	}
-	
+
 	private void yieldFor(int events)
 	{
 		if( m_eventsExpected != events ){
@@ -700,7 +700,7 @@ final class LibevTCPConnection : TCPConnection {
 		}
 		LibevDriver.ms_core.yieldForEvent();
 	}
-	
+
 	private void stopYield()
 	{
 		if( m_eventsExpected ){
@@ -720,7 +720,7 @@ private extern(C){
 		enforce((EV_ERROR & revents) == 0);
 
 		auto client_sd = accept(watcher.fd, cast(sockaddr*)&client_addr, &client_len);
-		
+
 		setNonBlocking(client_sd);
 
 		enforce(client_sd >= 0);
@@ -730,10 +730,10 @@ private extern(C){
 		/*ev_io* w_client = new ev_io;
 		ev_io_init(w_client, &write_cb, client_sd, EV_WRITE);
 		ev_io_start(loop, w_client);*/
-		
+
 		auto obj = cast(LibevTCPListener)watcher.data;
 		auto driver = obj.m_driver;
-		
+
 		void client_task()
 		{
 			ev_io* r_client = new ev_io;
@@ -753,15 +753,15 @@ private extern(C){
 				if (conn.connected && !(obj.m_options & TCPListenOptions.disableAutoClose)) conn.close();
 			}
 		}
-		
+
 		runTask(&client_task);
 	}
-	
+
 	void read_cb(ev_loop_t *loop, ev_io *watcher, int revents)
 	{
 		logTrace("i/o event on %d: %d", watcher.fd, revents);
 		auto conn = cast(LibevTCPConnection)watcher.data;
-		
+
 		if( (conn.m_eventsExpected & revents) != 0 )
 			LibevDriver.ms_core.resumeTask(conn.m_owner);
 	}

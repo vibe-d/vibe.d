@@ -21,7 +21,7 @@ import std.range;
 import std.traits;
 
 
-alias immutable(ubyte)[] bdata_t;
+alias bdata_t = immutable(ubyte)[];
 
 /**
 	Represents a BSON value.
@@ -79,7 +79,7 @@ struct Bson {
 	/// Returns a new, empty Bson value of type Object.
 	static @property Bson emptyObject() { return Bson(cast(Bson[string])null); }
 
-	/// Returns a new, empty Bson value of type Object.
+	/// Returns a new, empty Bson value of type Array.
 	static @property Bson emptyArray() { return Bson(cast(Bson[])null); }
 
 	/// Deprecated compatibility alias.
@@ -493,7 +493,7 @@ struct Bson {
 		}
 
 		static if( is(T == Bson) )
-			alias value bval;
+			alias bval = value;
 		else
 			auto bval = Bson(value);
 
@@ -670,7 +670,7 @@ struct BsonObjectID {
 	*/
 	static BsonObjectID fromString(string str)
 	{
-		static const lengthex = new Exception("BSON Object ID string s must be 24 characters.");
+		static const lengthex = new Exception("BSON Object ID string must be 24 characters.");
 		static const charex = new Exception("Not a valid hex string.");
 
 		if (str.length != 24) throw lengthex;
@@ -693,7 +693,7 @@ struct BsonObjectID {
 		return ret;
 	}
 	/// ditto
-	alias fromString fromHexString;
+	alias fromHexString = fromString;
 
 	/** Generates a unique object ID.
 	 *
@@ -707,7 +707,7 @@ struct BsonObjectID {
 		import std.process;
 		import std.random;
 
-		if( ms_pid == -1 ) ms_pid = getpid();
+		if( ms_pid == -1 ) ms_pid = thisProcessID;
 		if( MACHINE_ID == 0 ) MACHINE_ID = uniform(0, 0xffffff);
 
 		BsonObjectID ret = void;
@@ -961,7 +961,9 @@ Bson serializeToBson(T)(T value, ubyte[] buffer = null)
 /// private
 Bson serializeToBsonOld(T)(T value)
 {
-    alias Unqual!T Unqualified;
+	import vibe.internal.meta.traits;
+
+    alias Unqualified = Unqual!T;
 	static if (is(Unqualified == Bson)) return value;
 	else static if (is(Unqualified == Json)) return Bson.fromJson(value);
 	else static if (is(Unqualified == BsonBinData)) return Bson(value);
@@ -987,7 +989,7 @@ Bson serializeToBsonOld(T)(T value)
 		return Bson(ret);
 	} else static if (isAssociativeArray!T) {
 		Bson[string] ret;
-		alias KeyType!T TK;
+		alias TK = KeyType!T;
 		foreach (key, value; value) {
 			static if(is(TK == string)) {
 				ret[key] = serializeToBson(value);
@@ -1055,6 +1057,8 @@ template deserializeBson(T)
 /// private
 T deserializeBsonOld(T)(Bson src)
 {
+	import vibe.internal.meta.traits;
+
 	static if (is(T == Bson)) return src;
 	else static if (is(T == Json)) return src.toJson();
 	else static if (is(T == BsonBinData)) return cast(T)src;
@@ -1074,14 +1078,14 @@ T deserializeBsonOld(T)(Bson src)
 	else static if (is(T : string)) return cast(T)(cast(string)src);
 	else static if (is(T : const(ubyte)[])) return cast(T)src.get!BsonBinData.rawData.dup;
 	else static if (isArray!T) {
-		alias typeof(T.init[0]) TV;
+		alias TV = typeof(T.init[0]) ;
 		auto ret = new Unqual!TV[src.length];
 		foreach (size_t i, v; cast(Bson[])src)
 			ret[i] = deserializeBson!(Unqual!TV)(v);
 		return ret;
 	} else static if (isAssociativeArray!T) {
-		alias typeof(T.init.values[0]) TV;
-		alias KeyType!T TK;
+		alias TV = typeof(T.init.values[0]) ;
+		alias TK = KeyType!T;
 		Unqual!TV[TK] dst;
 		foreach (string key, value; src) {
 			static if (is(TK == string)) {
@@ -1104,7 +1108,7 @@ T deserializeBsonOld(T)(Bson src)
 		T dst;
 		foreach (m; __traits(allMembers, T)) {
 			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias typeof(__traits(getMember, dst, m)) TM;
+				alias TM = typeof(__traits(getMember, dst, m)) ;
 				debug enforce(!src[underscoreStrip(m)].isNull() || is(TM == class) || isPointer!TM || is(TM == typeof(null)),
 					"Missing field '"~underscoreStrip(m)~"'.");
 				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
@@ -1116,14 +1120,14 @@ T deserializeBsonOld(T)(Bson src)
 		auto dst = new T;
 		foreach (m; __traits(allMembers, T)) {
 			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias typeof(__traits(getMember, dst, m)) TM;
+				alias TM = typeof(__traits(getMember, dst, m)) ;
 				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
 			}
 		}
 		return dst;
 	} else static if (isPointer!T) {
 		if (src.type == Bson.Type.null_) return null;
-		alias typeof(*T.init) TD;
+		alias TD = typeof(*T.init) ;
 		dst = new TD;
 		*dst = deserializeBson!TD(src);
 		return dst;
@@ -1289,6 +1293,30 @@ unittest { // issue #709
 //	assert(deserializeBson!(uint[])(bson) == data);
 	assert(deserializeBson!(ulong[])(bson).equal(data));
 }
+
+unittest {
+	import std.typecons;
+	Nullable!bool x;
+	auto bson = serializeToBson(x);
+	assert(bson.type == Bson.Type.null_);
+	deserializeBson(x, bson);
+	assert(x.isNull);
+	x = true;
+	bson = serializeToBson(x);
+	assert(bson.type == Bson.Type.bool_ && bson.get!bool == true);
+	deserializeBson(x, bson);
+	assert(x == true);
+}
+
+unittest { // issue #793
+	char[] test = "test".dup;
+	auto bson = serializeToBson(test);
+	//assert(bson.type == Bson.Type.string);
+	//assert(bson.get!string == "test");
+	assert(bson.type == Bson.Type.array);
+	assert(bson[0].type == Bson.Type.string && bson[0].get!string == "t");
+}
+
 
 /**
 	Serializes to an in-memory BSON representation.
@@ -1483,9 +1511,9 @@ struct BsonSerializer {
 		else static if (is(T == BsonRegex)) tp = Bson.Type.regex;
 		else static if (is(T == BsonTimestamp)) tp = Bson.Type.timestamp;
 		else static if (is(T == bool)) tp = Bson.Type.bool_;
-		else static if (is(T : int)) tp = Bson.Type.int_;
-		else static if (is(T : long)) tp = Bson.Type.long_;
-		else static if (is(T : double)) tp = Bson.Type.double_;
+		else static if (isIntegral!T && is(T : int)) tp = Bson.Type.int_;
+		else static if (isIntegral!T && is(T : long)) tp = Bson.Type.long_;
+		else static if (isFloatingPoint!T && is(T : double)) tp = Bson.Type.double_;
 		else static if (isBsonSerializable!T) tp = value.toBson().type; // FIXME: this is highly inefficient
 		else static if (isJsonSerializable!T) tp = jsonTypeToBsonType(value.toJson().type); // FIXME: this is highly inefficient
 		else static if (is(T : const(ubyte)[])) tp = Bson.Type.binData;

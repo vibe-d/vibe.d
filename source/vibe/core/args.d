@@ -86,7 +86,7 @@ T readRequiredOption(T)(string names, string help_text)
 		return names.split("|").map!(s => s.length == 1 ? "-" ~ s : "--" ~ s).join("/");
 	}
 	T ret;
-	enforce(readOption(names, &ret, help_text),
+	enforce(readOption(names, &ret, help_text) || g_help,
 		format("Missing mandatory option %s.", formattedNames()));
 	return ret;
 }
@@ -199,7 +199,7 @@ private void init()
 {
 	version (VibeDisableCommandLineParsing) {}
 	else g_args = Runtime.args;
-	
+
 	if (!g_args.length) g_args = ["dummy"];
 
 	// TODO: let different config files override individual fields
@@ -223,6 +223,6 @@ private void init()
 
 private enum configName = "vibe.conf";
 
-private template ValueTuple(T...) { alias T ValueTuple; }
+private template ValueTuple(T...) { alias ValueTuple = T; }
 
 private alias getoptConfig = ValueTuple!(std.getopt.config.passThrough, std.getopt.config.bundling);

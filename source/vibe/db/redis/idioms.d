@@ -15,10 +15,10 @@ import vibe.db.redis.types;
 
 /**
 */
-struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
 	static assert(ID_LENGTH > 0, "IDs must have a length of at least one.");
-	static assert(!SUPPORT_ITERATION || ID_LENGTH == 1, "ID generation currently not supported for ID lengths greater 2.");
+	static assert(!(OPTIONS & RedisCollectionOptions.supportIteration) || ID_LENGTH == 1, "ID generation currently not supported for ID lengths greater 2.");
 
 	alias IDS = Replicate!(long, ID_LENGTH);
 	static if (ID_LENGTH == 1) alias IDType = long;
@@ -28,7 +28,7 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 		RedisDatabase m_db;
 		string[ID_LENGTH] m_prefix;
 		string m_suffix;
-		static if (SUPPORT_ITERATION) {
+		static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
 			@property string m_idCounter() const { return m_prefix[0] ~ "max"; }
 			@property string m_allSet() const { return m_prefix[0] ~ "all"; }
 		}
@@ -48,13 +48,15 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 
 	T opIndex(IDS id) { return T(m_db, getKey(id)); }
 
-	static if (SUPPORT_ITERATION) {
+	static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
 		/** Creates an ID without setting a corresponding value.
 		*/
 		IDType createID()
 		{
 			auto id = m_db.incr(m_idCounter);
-			m_db.sadd(m_allSet, id);
+			static if (OPTIONS & RedisCollectionOptions.supportPaging)
+				m_db.zadd(m_allSet, id, id);
+			else m_db.sadd(m_allSet, id);
 			return id;
 		}
 
@@ -67,22 +69,40 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 
 		bool isMember(long id)
 		{
-			return m_db.sisMember(m_allSet, id);
+			static if (OPTIONS & RedisCollectionOptions.supportPaging)
+				return m_db.zscore(m_allSet, id).hasNext();
+			else return m_db.sisMember(m_allSet, id);
+		}
+
+		static if (OPTIONS & RedisCollectionOptions.supportPaging) {
+			// TODO: add range queries
 		}
 
 		int opApply(int delegate(long id) del)
 		{
-			foreach (id; m_db.smembers!long(m_allSet))
-				if (auto ret = del(id))
-					return ret;
+			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
+				foreach (id; m_db.zrange!long(m_allSet, 0, -1))
+					if (auto ret = del(id))
+						return ret;
+			} else {
+				foreach (id; m_db.smembers!long(m_allSet))
+					if (auto ret = del(id))
+						return ret;
+			}
 			return 0;
 		}
 
 		int opApply(int delegate(long id, T) del)
 		{
-			foreach (id; m_db.smembers!long(m_allSet))
-				if (auto ret = del(id, this[id]))
-					return ret;
+			static if (OPTIONS & RedisCollectionOptions.supportPaging) {
+				foreach (id; m_db.zrange!long(m_allSet, 0, -1))
+					if (auto ret = del(id, this[id]))
+						return ret;
+			} else {
+				foreach (id; m_db.smembers!long(m_allSet))
+					if (auto ret = del(id, this[id]))
+						return ret;
+			}
 			return 0;
 		}
 	}
@@ -92,8 +112,12 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 	void remove(IDS id)
 	{
 		this[id].remove();
-		static if (SUPPORT_ITERATION)
-			m_db.srem(m_allSet, id);
+		static if (OPTIONS & RedisCollectionOptions.supportIteration || OPTIONS & RedisCollectionOptions.supportPaging) {
+			static if (OPTIONS & RedisCollectionOptions.supportPaging)
+				m_db.zrem(m_allSet, id);
+			else
+				m_db.srem(m_allSet, id);
+		}
 	}
 
 
@@ -110,6 +134,13 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 	}
 }
 
+enum RedisCollectionOptions {
+	none             = 0,    // Plain collection without iteration/paging support
+	supportIteration = 1<<0, // Store IDs in a set to be able to iterate and check for existence
+	supportPaging    = 1<<1, // Store IDs in a sorted set, to support range based queries
+	defaults = supportIteration
+}
+
 
 /** Models a set of numbered hashes.
 
@@ -120,9 +151,9 @@ struct RedisCollection(T /*: RedisValue*/, bool SUPPORT_ITERATION = true, size_t
 
 	See_also: $(D RedisObjectCollection)
 */
-template RedisHashCollection(bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisHashCollection(RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisHashCollection = RedisCollection!(RedisHash, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisHashCollection = RedisCollection!(RedisHash, OPTIONS, ID_LENGTH);
 }
 
 
@@ -132,9 +163,9 @@ template RedisHashCollection(bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1
 
 	See_also: $(D RedisHashCollection)
 */
-template RedisObjectCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisObjectCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisObjectCollection = RedisCollection!(RedisObject!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisObjectCollection = RedisCollection!(RedisObject!T, OPTIONS, ID_LENGTH);
 }
 
 ///
@@ -194,6 +225,8 @@ struct RedisObject(T) {
 		assert(repl.empty);
 		return ret;
 	}
+
+	@property bool exists() { return m_hash.value.exists(); }
 
 	alias get this;
 
@@ -267,9 +300,9 @@ struct RedisObjectField(T) {
 
 
 */
-template RedisSetCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisSetCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisSetCollection = RedisCollection!(RedisSet!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisSetCollection = RedisCollection!(RedisSet!T, OPTIONS, ID_LENGTH);
 }
 
 ///
@@ -277,8 +310,8 @@ unittest {
 	void test()
 	{
 		auto db = connectRedis("127.0.0.1").getDatabase(0);
-		auto user_groups = RedisSetCollection!(string, false)(db, "user_groups");
-		
+		auto user_groups = RedisSetCollection!(string, RedisCollectionOptions.none)(db, "user_groups");
+
 		// add some groups for user with ID 0
 		user_groups[0].insert("cooking");
 		user_groups[0].insert("hiking");
@@ -299,9 +332,9 @@ unittest {
 
 
 */
-template RedisListCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisListCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisListCollection = RedisCollection!(RedisList!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisListCollection = RedisCollection!(RedisList!T, OPTIONS, ID_LENGTH);
 }
 
 
@@ -309,9 +342,9 @@ template RedisListCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH 
 
 
 */
-template RedisStringCollection(T, bool SUPPORT_ITERATION = true, size_t ID_LENGTH = 1)
+template RedisStringCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
-	alias RedisStringCollection = RedisCollection!(RedisString!T, SUPPORT_ITERATION, ID_LENGTH);
+	alias RedisStringCollection = RedisCollection!(RedisString!T, OPTIONS, ID_LENGTH);
 }
 
 
@@ -343,9 +376,9 @@ end`);
 
 		auto lockval = BsonObjectID.generate();
 		while (!m_db.setNX(m_key, cast(ubyte[])lockval, 30.seconds))
-			sleep(uniform(0, 50).msecs);
+			sleep(uniform(1, 50).msecs);
 
-		scope (exit) m_db.evalSHA!(string, ubyte[])(m_scriptSHA, null, cast(ubyte[])lockval);
+		scope (exit) m_db.evalSHA!(string, ubyte[])(m_scriptSHA, [m_key], cast(ubyte[])lockval);
 
 		del();
 	}
@@ -380,6 +413,113 @@ struct LazyString(T...) {
 			dst.formattedWrite("%s", v);
 	}
 }
+
+
+/**
+	Strips all non-Redis fields from a struct.
+
+	The returned struct will contain only fiels that can be converted using
+	$(D toRedis) and that have names different than "id" or "_id".
+
+	To reconstruct the full struct type, use the $(D RedisStripped.unstrip)
+	method.
+*/
+RedisStripped!T redisStrip(T)(in T val) { return RedisStripped!T(val); }
+
+/**
+	Represents the stripped type of a struct.
+
+	See_also: $(D redisStrip)
+*/
+struct RedisStripped(T) {
+	import std.typetuple;
+
+	this(in T src) { foreach (i, idx; unstrippedMemberIndices) this.tupleof[i] = src.tupleof[idx]; }
+
+	/** Reconstructs the full (unstripped) struct value.
+
+		The parameters for this method are all stripped fields in the order in
+		which they appear in the original struct definition.
+	*/
+	T unstrip(StrippedMembers stripped_members) {
+		T ret;
+		populateRedisFields(ret, this.tupleof);
+		populateNonRedisFields(ret, stripped_members);
+		return ret;
+	}
+
+	private void populateRedisFields(ref T dst, UnstrippedMembers values)
+	{
+		foreach (i, v; values)
+			dst.tupleof[unstrippedMemberIndices[i]] = v;
+	}
+
+	private void populateNonRedisFields(ref T dst, StrippedMembers values)
+	{
+		foreach (i, v; values)
+			dst.tupleof[strippedMemberIndices[i]] = v;
+	}
+
+	//pragma(msg, membersString!());
+	mixin(membersString!());
+
+	alias StrippedMembers = FilterToType!(isNonRedisType, T.tupleof);
+	alias UnstrippedMembers = FilterToType!(isRedisType, T.tupleof);
+	alias strippedMemberIndices = indicesOf!(isNonRedisType, T.tupleof);
+	alias unstrippedMemberIndices = indicesOf!(isRedisType, T.tupleof);
+
+	/*pragma(msg, T);
+	pragma(msg, "stripped: "~StrippedMembers.stringof~" - "~strippedMemberIndices.stringof);
+	pragma(msg, "unstripped: "~UnstrippedMembers.stringof~" - "~unstrippedMemberIndices.stringof);*/
+
+	template membersString() {
+		template impl(size_t i) {
+			static if (i < T.tupleof.length) {
+				enum m = __traits(identifier, T.tupleof[i]);
+				static if (isRedisType!(T.tupleof[i])) enum impl = "typeof(T."~m~") "~m~";\n" ~ impl!(i+1);
+				else enum impl = impl!(i+1);
+			} else enum impl = "";
+		}
+		enum membersString = impl!0;
+	}
+}
+
+unittest {
+	static struct S1 { int id; string field; string[] array; }
+	auto s1 = S1(42, "hello", ["world"]);
+	auto s1s = redisStrip(s1);
+	static assert(!is(typeof(s1s.id)));
+	static assert(is(typeof(s1s.field)));
+	static assert(!is(typeof(s1s.array)));
+	assert(s1s.field == "hello");
+	auto s1u = s1s.unstrip(42, ["world"]);
+	assert(s1u == s1);
+}
+
+private template indicesOf(alias PRED, T...)
+{
+	import std.typetuple;
+	template impl(size_t i) {
+		static if (i < T.length) {
+			static if (PRED!(T[i])) alias impl = TypeTuple!(i, impl!(i+1));
+			else alias impl = impl!(i+1);
+		} else alias impl = TypeTuple!();
+	}
+	alias indicesOf = impl!0;
+}
+private template FilterToType(alias PRED, T...) {
+	import std.typetuple;
+	template impl(size_t i) {
+		static if (i < T.length) {
+			static if (PRED!(T[i])) alias impl = TypeTuple!(typeof(T[i]), impl!(i+1));
+			else alias impl = impl!(i+1);
+		} else alias impl = TypeTuple!();
+	}
+	alias FilterToType = impl!0;
+}
+private template isRedisType(alias F) { import std.algorithm; enum isRedisType = !__traits(identifier, F).among("_id", "id") && is(typeof(&toRedis!(typeof(F)))); }
+private template isNonRedisType(alias F) { enum isNonRedisType = !isRedisType!F; }
+static assert(isRedisType!(int.init) && isRedisType!(string.init));
 
 private auto toTuple(size_t N, T)(T[N] values)
 {

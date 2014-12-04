@@ -6,9 +6,9 @@ language: d
 install:
   # dmd
   # dub
-  - DMD_VER=2.065.0
+  - DMD_VER=2.066.0
   - DMD=dmd_${DMD_VER}-0_amd64.deb
-  - DUB_VER=0.9.21
+  - DUB_VER=0.9.22
   - DUB=dub-${DUB_VER}-linux-x86_64
   - wget http://downloads.dlang.org/releases/2014/${DMD}
   - sudo dpkg -i ${DMD} || true

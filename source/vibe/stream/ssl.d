@@ -1,4 +1,4 @@
-﻿/**
+/**
 	SSL/TLS stream implementation
 
 	SSLStream can be used to implement SSL/TLS communication on top of a TCP connection. The
@@ -81,9 +81,12 @@ unittest {
 SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
 {
 	version (OpenSSL) {
-		import vibe.stream.openssl;
+		static SSLContext createOpenSSLContext(SSLContextKind kind, SSLVersion ver) {
+			import vibe.stream.openssl;
+			return new OpenSSLContext(kind, ver);
+		}
 		if (!gs_sslContextFactory)
-			setSSLContextFactory((k, v) => new OpenSSLContext(k, v));
+			setSSLContextFactory(&createOpenSSLContext);
 	}
 	assert(gs_sslContextFactory !is null, "No SSL context factory registered.");
 	return gs_sslContextFactory(kind, ver);
@@ -214,6 +217,14 @@ interface SSLContext {
 	/// ditto
 	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout;
 
+	/** The callback used to associcate host names with SSL certificates/contexts.
+
+		This property is only used for kind $(D SSLContextKind.serverSNI).
+	*/
+	@property void sniCallback(SSLServerNameCallback callback);
+	/// ditto
+	@property inout(SSLServerNameCallback) sniCallback() inout;
+
 	/** Creates a new stream associated to this context.
 	*/
 	SSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
@@ -269,8 +280,9 @@ interface SSLContext {
 }
 
 enum SSLContextKind {
-	client,
-	server
+	client,     /// Client context (active connector)
+	server,     /// Server context (passive connector)
+	serverSNI,  /// Server context with multiple certificate support (SNI)
 }
 
 enum SSLVersion {
@@ -367,6 +379,8 @@ struct SSLPeerValidationData {
 }
 
 alias SSLPeerValidationCallback = bool delegate(scope SSLPeerValidationData data);
+
+alias SSLServerNameCallback = SSLContext delegate(string hostname);
 
 private {
 	__gshared SSLContext function(SSLContextKind, SSLVersion) gs_sslContextFactory;

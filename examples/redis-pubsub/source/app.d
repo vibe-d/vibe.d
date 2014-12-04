@@ -9,17 +9,18 @@ void printReply(string channel, string message)
 	logInfo("Received a message from channel %s: %s", channel, message);
 }
 
+RedisSubscriber subscriber;
+
 shared static this()
 {
 	auto publisher = new RedisClient();
-	auto subscriber = new RedisSubscriber(new RedisClient());
+	subscriber = publisher.createSubscriber();
 
 	subscriber.subscribe("test1", "test2");
-	sleep(1.seconds()); // give subscribe a chance to do it's job
+	auto task = subscriber.listen(toDelegate(&printReply));
 	publisher.getDatabase(0).publish("test1", "Hello World!");
 	publisher.getDatabase(0).publish("test2", "Hello from Channel 2");
 
-	auto task = subscriber.listen(toDelegate(&printReply));
 
 	runTask({
 		subscriber.subscribe("test-fiber");

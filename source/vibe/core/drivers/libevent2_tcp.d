@@ -42,14 +42,14 @@ private {
 		enum EWOULDBLOCK = WSAEWOULDBLOCK;
 
 		// make some neccessary parts of the socket interface public
-		alias std.c.windows.winsock.in6_addr in6_addr;
-		alias std.c.windows.winsock.INADDR_ANY INADDR_ANY;
-		alias std.c.windows.winsock.IN6ADDR_ANY IN6ADDR_ANY;
+		alias in6_addr = std.c.windows.winsock.in6_addr;
+		alias INADDR_ANY = std.c.windows.winsock.INADDR_ANY;
+		alias IN6ADDR_ANY = std.c.windows.winsock.IN6ADDR_ANY;
 	} else {
-		alias core.sys.posix.netinet.in_.in6_addr in6_addr;	
-		alias core.sys.posix.netinet.in_.in6addr_any IN6ADDR_ANY;	
-		alias core.sys.posix.netinet.in_.INADDR_ANY INADDR_ANY;	
-		alias core.sys.posix.netinet.tcp.TCP_NODELAY TCP_NODELAY;
+		alias in6_addr = core.sys.posix.netinet.in_.in6_addr;
+		alias IN6ADDR_ANY = core.sys.posix.netinet.in_.in6addr_any;
+		alias INADDR_ANY = core.sys.posix.netinet.in_.INADDR_ANY;
+		alias TCP_NODELAY = core.sys.posix.netinet.tcp.TCP_NODELAY;
 	}
 }
 
@@ -65,7 +65,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		char[64] m_peerAddressBuf;
 		NetworkAddress m_localAddress, m_remoteAddress;
 	}
-	
+
 	this(TCPContext* ctx)
 	{
 		m_ctx = ctx;
@@ -84,12 +84,12 @@ package final class Libevent2TCPConnection : TCPConnection {
 		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
 		bufferevent_setwatermark(m_ctx.event, EV_READ, 0, 65536);
 	}
-	
+
 	/*~this()
 	{
 		//assert(m_ctx is null, "Leaking TCPContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
 	}*/
-	
+
 	@property void tcpNoDelay(bool enabled)
 	{
 		m_tcpNoDelay = enabled;
@@ -145,7 +145,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 	{
 		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}
-	
+
 	/// Closes the connection.
 	void close()
 	{
@@ -242,7 +242,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 			auto nbytes = bufferevent_read(m_ctx.event, dst.ptr, dst.length);
 			logTrace(" .. got %d bytes", nbytes);
 			dst = dst[nbytes .. $];
-			
+
 			if( dst.length == 0 ) break;
 
 			checkConnected(false);
@@ -250,7 +250,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		}
 		logTrace("read data");
 	}
-	
+
 	bool waitForData(Duration timeout)
 	{
 		if (!m_ctx || !m_ctx.event) return false;
@@ -258,7 +258,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		auto inbuf = bufferevent_get_input(m_ctx.event);
 		if (evbuffer_get_length(inbuf) > 0) return true;
 		if (m_ctx.eof) return false;
-		
+
 		acquireReader();
 		scope(exit) releaseReader();
 		m_timeout_triggered = false;
@@ -286,7 +286,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		return false;
 	}
 
-	alias Stream.write write;
+	alias write = Stream.write;
 
 	/** Writes the given byte array.
 	*/
@@ -303,7 +303,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		auto outbuf = bufferevent_get_output(m_ctx.event);
 		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
 			throw new Exception("Failed to write data to buffer");
-		
+
 		// wait for the data to be written up the the low watermark
 		while (evbuffer_get_length(outbuf) > 4096) {
 			rawYield();
@@ -333,7 +333,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		writeDefault(stream, nbytes);
 		logTrace("wrote stream %s", nbytes);
 	}
-		
+
 	/** Causes any buffered data to be written.
 	*/
 	void flush()
@@ -443,7 +443,7 @@ package struct TCPContext
 	Exception exception; // set during onSocketEvent calls that were emitted synchronously
 	TCPListenOptions listenOptions;
 }
-alias FreeListObjectAlloc!(TCPContext, false, true) TCPContextAlloc;
+alias TCPContextAlloc = FreeListObjectAlloc!(TCPContext, false, true);
 
 
 /**************************************************************************************************/
@@ -500,19 +500,35 @@ package nothrow extern(C)
 				}
 
 				assert(client_ctx.event !is null, "Client task called without event!?");
-				auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
-				assert(conn.connected, "Connection closed directly after accept?!");
-				logDebug("start task (fd %d).", client_ctx.socketfd);
-				try {
-					listen_ctx.connectionCallback(conn);
-					logDebug("task out (fd %d).", client_ctx.socketfd);
-				} catch (Exception e) {
-					logWarn("Handling of connection failed: %s", e.msg);
-					logDiagnostic("%s", e.toString().sanitize);
-				} finally {
-					logDebug("task finished.");
-					FreeListObjectAlloc!ClientTask.free(&this);
-					if (!(options & TCPListenOptions.disableAutoClose)) conn.close();
+				if (options & TCPListenOptions.disableAutoClose) {
+					auto conn = new Libevent2TCPConnection(client_ctx);
+					assert(conn.connected, "Connection closed directly after accept?!");
+					logDebug("start task (fd %d).", client_ctx.socketfd);
+					try {
+						listen_ctx.connectionCallback(conn);
+						logDebug("task out (fd %d).", client_ctx.socketfd);
+					} catch (Exception e) {
+						logWarn("Handling of connection failed: %s", e.msg);
+						logDiagnostic("%s", e.toString().sanitize);
+					} finally {
+						logDebug("task finished.");
+						FreeListObjectAlloc!ClientTask.free(&this);
+					}
+				} else {
+					auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
+					assert(conn.connected, "Connection closed directly after accept?!");
+					logDebug("start task (fd %d).", client_ctx.socketfd);
+					try {
+						listen_ctx.connectionCallback(conn);
+						logDebug("task out (fd %d).", client_ctx.socketfd);
+					} catch (Exception e) {
+						logWarn("Handling of connection failed: %s", e.msg);
+						logDiagnostic("%s", e.toString().sanitize);
+					} finally {
+						logDebug("task finished.");
+						FreeListObjectAlloc!ClientTask.free(&this);
+						conn.close();
+					}
 				}
 			}
 		}
@@ -553,7 +569,7 @@ package nothrow extern(C)
 		} catch (UncaughtException e) {
 			logWarn("Got exception while accepting new connections: %s", e.msg);
 			try logDebug("Full error: %s", e.toString().sanitize());
-			catch {}
+			catch (Throwable) {}
 		}
 
 		logTrace("handled incoming connections...");
@@ -587,7 +603,7 @@ package nothrow extern(C)
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
 		}
 	}
-		
+
 	void onSocketEvent(bufferevent *buf_event, short status, void *arg)
 	{
 		try {
@@ -595,10 +611,10 @@ package nothrow extern(C)
 			ctx.status = status;
 			logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
 			assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TCPContext");
-	
+
 			Exception ex;
 			bool free_event = false;
-			
+
 			string errorMessage;
 			if (status & BEV_EVENT_EOF) {
 				logDebug("Connection was closed (fd %d).", ctx.socketfd);
@@ -616,7 +632,7 @@ package nothrow extern(C)
 				free_event = true;
 			}
 
-			if (free_event) {	
+			if (free_event) {
 				bufferevent_free(buf_event);
 				ctx.event = null;
 			}
@@ -635,7 +651,7 @@ package nothrow extern(C)
 			}
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
-			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
 		}
 	}
 
@@ -645,8 +661,9 @@ package nothrow extern(C)
 			logTrace("data wait timeout");
 			auto conn = cast(Libevent2TCPConnection)userptr;
 			conn.m_timeout_triggered = true;
-			if( conn.m_ctx ) conn.m_ctx.core.resumeTask(conn.m_ctx.readOwner);
-			else logDebug("waitForData timeout after connection was closed!");
+			if (conn.m_ctx) {
+				if (conn.m_ctx.readOwner) conn.m_ctx.core.resumeTask(conn.m_ctx.readOwner);
+			} else logDebug("waitForData timeout after connection was closed!");
 		} catch (UncaughtException e) {
 			logWarn("Exception onTimeout: %s", e.msg);
 		}

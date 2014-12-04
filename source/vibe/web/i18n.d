@@ -20,6 +20,12 @@ import std.algorithm : canFind, min, startsWith;
 	and the translated strings. Any translations will be automatically
 	applied to Diet templates, as well as strings passed to
 	$(D vibe.web.web.trWeb).
+
+	By default, the "Accept-Language" header of the incoming request will be
+	used to determine the language used. To override this behavior, add a
+	static method $(D determineLanguage) to the translation context, which
+	takes the request and returns a language string (see also the second
+	example).
 */
 @property TranslationContextAttribute!CONTEXT translationContext(CONTEXT)() { return TranslationContextAttribute!CONTEXT.init; }
 
@@ -30,6 +36,34 @@ unittest {
 		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
 		//mixin translationModule!"app";
 		//mixin translationModule!"somelib";
+	}
+
+	@translationContext!TranslationContext
+	class MyWebInterface {
+		void getHome()
+		{
+			//render!("home.dt")
+		}
+	}
+}
+
+/// Defining a custom function for determining the language.
+unittest {
+	import vibe.http.server;
+
+	struct TranslationContext {
+		import std.typetuple;
+		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		//mixin translationModule!"app";
+		//mixin translationModule!"somelib";
+
+		// use language settings from the session instead of using the
+		// "Accept-Language" header
+		static string determineLanguage(HTTPServerRequest req)
+		{
+			if (!req.session) return null; // use default language
+			return req.session.get("language", "");
+		}
 	}
 
 	@translationContext!TranslationContext
@@ -99,28 +133,48 @@ package string determineLanguage(alias METHOD)(HTTPServerRequest req)
 	alias CTX = GetTranslationContext!METHOD;
 
 	static if (!is(CTX == void)) {
-		auto accept_lang = req.headers.get("Accept-Language", null);
+		static if (is(typeof(CTX.determineLanguage(req)))) {
+			static assert(is(typeof(CTX.determineLanguage(req)) == string),
+				"determineLanguage in a translation context must return a language string.");
+			return CTX.determineLanguage(req);
+		} else {
+			auto accept_lang = req.headers.get("Accept-Language", null);
 
-		size_t csidx = 0;
-		while (accept_lang.length) {
-			auto cidx = accept_lang[csidx .. $].indexOf(',');
-			if (cidx < 0) cidx = accept_lang.length;
-			auto entry = accept_lang[csidx .. csidx + cidx];
-			auto sidx = entry.indexOf(';');
-			if (sidx < 0) sidx = entry.length;
-			auto entrylang = entry[0 .. sidx];
+			size_t csidx = 0;
+			while (accept_lang.length) {
+				auto cidx = accept_lang[csidx .. $].indexOf(',');
+				if (cidx < 0) cidx = accept_lang.length;
+				auto entry = accept_lang[csidx .. csidx + cidx];
+				auto sidx = entry.indexOf(';');
+				if (sidx < 0) sidx = entry.length;
+				auto entrylang = entry[0 .. sidx];
 
-			foreach (lang; CTX.languages) {
-				if (entrylang == replace(lang, "_", "-")) return lang;
-				if (entrylang == split(lang, "_")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
+				foreach (lang; CTX.languages) {
+					if (entrylang == replace(lang, "_", "-")) return lang;
+					if (entrylang == split(lang, "_")[0]) return lang; // FIXME: ensure that only one single-lang entry exists!
+				}
+
+				if (cidx >= accept_lang.length) break;
+				accept_lang = accept_lang[cidx+1 .. $];
 			}
-			
-			if (cidx >= accept_lang.length) break;
-			accept_lang = accept_lang[cidx+1 .. $];
+
+			return null;
+		}
+	} else return null;
+}
+
+unittest { // make sure that the custom determineLanguage is called
+	static struct CTX {
+		static string determineLanguage(Object a) { return "test"; }
+	}
+	@translationContext!CTX
+	static class Test {
+		void test()
+		{
 		}
 	}
-
-	return null;
+	auto test = new Test;
+	assert(determineLanguage!(test.test)(null) == "test");
 }
 
 package template GetTranslationContext(alias METHOD)

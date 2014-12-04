@@ -12,6 +12,7 @@ public import vibe.core.net;
 import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
+import vibe.utils.memory : allocArray, freeArray, manualAllocator, defaultAllocator;
 import vibe.stream.operations;
 import std.conv;
 import std.exception;
@@ -30,7 +31,6 @@ RedisClient connectRedis(string host, ushort port = 6379)
 	return new RedisClient(host, port);
 }
 
-
 /**
 	A redis client with connection pooling.
 */
@@ -47,34 +47,51 @@ final class RedisClient {
 		m_connections = new ConnectionPool!RedisConnection({
 			return new RedisConnection(host, port);
 		});
-
-		import std.string;
-		auto info = info();
-		auto lines = info.splitLines();
-		if (lines.length > 1) {
-			foreach (string line; lines) {
-				auto lineParams = line.split(":");
-				if (lineParams.length > 1 && lineParams[0] == "redis_version") {
-					m_version = lineParams[1];
-					break;
-				}
-			}
-		} 
 	}
 
 	/// Returns Redis version
-	@property string redisVersion() { return m_version; }
+	@property string redisVersion()
+	{
+		if(!m_version)
+		{
+			import std.string;
+			auto info = info();
+			auto lines = info.splitLines();
+			if (lines.length > 1) {
+				foreach (string line; lines) {
+					auto lineParams = line.split(":");
+					if (lineParams.length > 1 && lineParams[0] == "redis_version") {
+						m_version = lineParams[1];
+						break;
+					}
+				}
+			}
+		}
+
+		return m_version;
+	}
 
 	/** Returns a handle to the given database.
 	*/
 	RedisDatabase getDatabase(long index) { return RedisDatabase(this, index); }
 
+	/** Creates a RedisSubscriber instance for launching a pubsub listener
+	*/
+	RedisSubscriber createSubscriber() {
+		return RedisSubscriber(this);
+	}
+
 	/*
 		Connection
 	*/
+
+	/// Authenticate to the server
 	void auth(string password) { m_authPassword = password; }
+	/// Echo the given string
 	T echo(T, U)(U data) if(isValidRedisValueReturn!T && isValidRedisValueType!U) { return request!T("ECHO", data); }
+	/// Ping the server
 	void ping() { request("PING"); }
+	/// Close the connection
 	void quit() { request("QUIT"); }
 
 	/*
@@ -84,9 +101,13 @@ final class RedisClient {
 	//TODO: BGREWRITEAOF
 	//TODO: BGSAVE
 
+	/// Get the value of a configuration parameter
 	T getConfig(T)(string parameter) if(isValidRedisValueReturn!T) { return request!T("GET CONFIG", parameter); }
+	/// Set a configuration parameter to the given value
 	void setConfig(T)(string parameter, T value) if(isValidRedisValueType!T) { request("SET CONFIG", parameter, value); }
+	/// Reset the stats returned by INFO
 	void configResetStat() { request("CONFIG RESETSTAT"); }
+
 	//TOOD: Debug Object
 	//TODO: Debug Segfault
 
@@ -100,13 +121,18 @@ final class RedisClient {
 
 	/// Scheduled for deprecation, use $(D RedisDatabase.deleteAll) instead.
 	void flushDB() { request("FLUSHDB"); }
-
+	/// Get information and statistics about the server
 	string info() { return request!string("INFO"); }
+	/// Get the UNIX time stamp of the last successful save to disk
 	long lastSave() { return request!long("LASTSAVE"); }
 	//TODO monitor
+	/// Synchronously save the dataset to disk
 	void save() { request("SAVE"); }
+	/// Synchronously save the dataset to disk and then shut down the server
 	void shutdown() { request("SHUTDOWN"); }
+	/// Make the server a slave of another instance, or promote it as master
 	void slaveOf(string host, ushort port) { request("SLAVEOF", host, port); }
+
 	//TODO slowlog
 	//TODO sync
 
@@ -123,7 +149,7 @@ final class RedisClient {
 		version (RedisDebug) {
 			import std.conv;
 			string debugargs = command;
-			foreach (i, A; ARGS) debugargs ~= ", " ~ args[i].to!string; 
+			foreach (i, A; ARGS) debugargs ~= ", " ~ args[i].to!string;
 		}
 
 		static if (is(T == void)) {
@@ -170,130 +196,220 @@ struct RedisDatabase {
 		See_also: $(LINK2 http://redis.io/commands/flushdb, FLUSHDB)
 	*/
 	void deleteAll() { request!void("FLUSHDB"); }
-
+	/// Delete a key
 	long del(scope string[] keys...) { return request!long("DEL", keys); }
+	/// Determine if a key exists
 	bool exists(string key) { return request!bool("EXISTS", key); }
+	/// Set a key's time to live in seconds
 	bool expire(string key, long seconds) { return request!bool("EXPIRE", key, seconds); }
+	/// Set a key's time to live with D notation. E.g. $(D 5.minutes) for 60 * 5 seconds.
+	bool expire(string key, Duration timeout) { return request!bool("PEXPIRE", key, timeout.total!"msecs"); }
+	/// Set the expiration for a key as a UNIX timestamp
 	bool expireAt(string key, long timestamp) { return request!bool("EXPIREAT", key, timestamp); }
+	/// Find all keys matching the given glob-style pattern (Supported wildcards: *, ?, [ABC])
 	RedisReply!T keys(T = string)(string pattern) if(isValidRedisValueType!T) { return request!(RedisReply!T)("KEYS", pattern); }
+	/// Move a key to another database
 	bool move(string key, long db) { return request!bool("MOVE", key, db); }
+	/// Remove the expiration from a key
 	bool persist(string key) { return request!bool("PERSIST", key); }
 	//TODO: object
+	/// Return a random key from the keyspace
 	string randomKey() { return request!string("RANDOMKEY"); }
+	/// Rename a key
 	void rename(string key, string newkey) { request("RENAME", key, newkey); }
+	/// Rename a key, only if the new key does not exist
 	bool renameNX(string key, string newkey) { return request!bool("RENAMENX", key, newkey); }
 	//TODO sort
+	/// Get the time to live for a key
 	long ttl(string key) { return request!long("TTL", key); }
+	/// Get the time to live for a key in milliseconds
 	long pttl(string key) { return request!long("PTTL", key); }
+	/// Determine the type stored at key (string, list, set, zset and hash.)
 	string type(string key) { return request!string("TYPE", key); }
 
 	/*
 		String Commands
 	*/
 
+	/// Append a value to a key
 	long append(T)(string key, T suffix) if(isValidRedisValueType!T) { return request!long("APPEND", key, suffix); }
+	/// Decrement the integer value of a key by one
 	long decr(string key, long value = 1) { return value == 1 ? request!long("DECR", key) : request!long("DECRBY", key, value); }
+	/// Get the value of a key
 	T get(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("GET", key); }
+	/// Returns the bit value at offset in the string value stored at key
 	bool getBit(string key, long offset) { return request!bool("GETBIT", key, offset); }
+	/// Get a substring of the string stored at a key
 	T getRange(T = string)(string key, long start, long end) if(isValidRedisValueReturn!T) { return request!T("GETRANGE", key, start, end); }
+	/// Set the string value of a key and return its old value
 	T getSet(T = string, U)(string key, U value) if(isValidRedisValueReturn!T && isValidRedisValueType!U) { return request!T("GETSET", key, value); }
+	/// Increment the integer value of a key
 	long incr(string key, long value = 1) { return value == 1 ? request!long("INCR", key) : request!long("INCRBY", key, value); }
+	/// Increment the real number value of a key
 	long incr(string key, double value) { return request!long("INCRBYFLOAT", key, value); }
+	/// Get the values of all the given keys
 	RedisReply!T mget(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("MGET", keys); }
-	
+
+	/// Set multiple keys to multiple values
 	void mset(ARGS...)(ARGS args)
 	{
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-	    request("MSET", args);
+		request("MSET", args);
 	}
 
+	/// Set multiple keys to multiple values, only if none of the keys exist
 	bool msetNX(ARGS...)(ARGS args) {
 		static assert(ARGS.length % 2 == 0 && ARGS.length >= 2, "Arguments to mset must be pairs of key/value");
 		foreach (i, T; ARGS ) static assert(i % 2 != 0 || is(T == string), "Keys must be strings.");
-	    return request!bool("MSETEX", args);
+		return request!bool("MSETEX", args);
 	}
 
+	/// Set the string value of a key
 	void set(T)(string key, T value) if(isValidRedisValueType!T) { request("SET", key, value); }
+	/// Set the value of a key, only if the key does not exist
 	bool setNX(T)(string key, T value) if(isValidRedisValueType!T) { return request!bool("SETNX", key, value); }
-	bool setXX(T)(string key, T value) if(isValidRedisValueType!T) { return request!bool("SET", key, value, "XX"); }
-	bool setNX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return request!bool("SET", key, value, "PX", expire_time.total!"msecs", "NX"); }
-	bool setXX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return request!bool("SET", key, value, "PX", expire_time.total!"msecs", "XX"); }
+	/// Set the value of a key, only if the key already exists
+	bool setXX(T)(string key, T value) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "XX"); }
+	/// Set the value of a key, only if the key does not exist, and also set the specified expire time using D notation, e.g. $(D 5.minutes) for 5 minutes.
+	bool setNX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "PX", expire_time.total!"msecs", "NX"); }
+	/// Set the value of a key, only if the key already exists, and also set the specified expire time using D notation, e.g. $(D 5.minutes) for 5 minutes.
+	bool setXX(T)(string key, T value, Duration expire_time) if(isValidRedisValueType!T) { return "OK" == request!string("SET", key, value, "PX", expire_time.total!"msecs", "XX"); }
+	/// Sets or clears the bit at offset in the string value stored at key
 	bool setBit(string key, long offset, bool value) { return request!bool("SETBIT", key, offset, value ? "1" : "0"); }
+	/// Set the value and expiration of a key
 	void setEX(T)(string key, long seconds, T value) if(isValidRedisValueType!T) { request("SETEX", key, seconds, value); }
+	/// Overwrite part of a string at key starting at the specified offset
 	long setRange(T)(string key, long offset, T value) if(isValidRedisValueType!T) { return request!long("SETRANGE", key, offset, value); }
+	/// Get the length of the value stored in a key
 	long strlen(string key) { return request!long("STRLEN", key); }
 
 	/*
 		Hashes
 	*/
-
+	/// Delete one or more hash fields
 	long hdel(string key, scope string[] fields...) { return request!long("HDEL", key, fields); }
+	/// Determine if a hash field exists
 	bool hexists(string key, string field) { return request!bool("HEXISTS", key, field); }
+	/// Set multiple hash fields to multiple values
 	void hset(T)(string key, string field, T value) if(isValidRedisValueType!T) { request("HSET", key, field, value); }
+	/// Set the value of a hash field, only if the field does not exist
+	bool hsetNX(T)(string key, string field, T value) if(isValidRedisValueType!T) { return request!bool("HSETNX", key, field, value); }
+	/// Get the value of a hash field.
 	T hget(T = string)(string key, string field) if(isValidRedisValueReturn!T) { return request!T("HGET", key, field); }
+	/// Get all the fields and values in a hash
 	RedisReply!T hgetAll(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HGETALL", key); }
+	/// Increment the integer value of a hash field
 	long hincr(string key, string field, long value=1) { return request!long("HINCRBY", key, field, value); }
+	/// Increment the real number value of a hash field
 	long hincr(string key, string field, double value) { return request!long("HINCRBYFLOAT", key, field, value); }
+	/// Get all the fields in a hash
 	RedisReply!T hkeys(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HKEYS", key); }
+	/// Get the number of fields in a hash
 	long hlen(string key) { return request!long("HLEN", key); }
+	/// Get the values of all the given hash fields
 	RedisReply!T hmget(T = string)(string key, scope string[] fields...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HMGET", key, fields); }
+	/// Set multiple hash fields to multiple values
 	void hmset(ARGS...)(string key, ARGS args) { request("HMSET", key, args); }
-	bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
+
+	/// This command does not exist in redis and must be implemented at a higher level
+	deprecated bool hmsetNX(ARGS...)(string key, ARGS args) { return request!bool("HMSET", key, args); }
+
+	/// Get all the values in a hash
 	RedisReply!T hvals(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("HVALS", key); }
 
 	/*
 		Lists
 	*/
-
+	/// Get an element from a list by its index
 	T lindex(T = string)(string key, long index) if(isValidRedisValueReturn!T) { return request!T("LINDEX", key, index); }
+	/// Insert value in the list stored at key before the reference value pivot.
 	long linsertBefore(T1, T2)(string key, T1 pivot, T2 value) if(isValidRedisValueType!T1 && isValidRedisValueType!T2) { return request!long("LINSERT", key, "BEFORE", pivot, value); }
+	/// Insert value in the list stored at key after the reference value pivot.
 	long linsertAfter(T1, T2)(string key, T1 pivot, T2 value) if(isValidRedisValueType!T1 && isValidRedisValueType!T2) { return request!long("LINSERT", key, "AFTER", pivot, value); }
+	/// Returns the length of the list stored at key. If key does not exist, it is interpreted as an empty list and 0 is returned. 
 	long llen(string key) { return request!long("LLEN", key); }
+	/// Insert all the specified values at the head of the list stored at key.
 	long lpush(ARGS...)(string key, ARGS args) { return request!long("LPUSH", key, args); }
+	/// Inserts value at the head of the list stored at key, only if key already exists and holds a list. 
 	long lpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("LPUSHX", key, value); }
+	/// Insert all the specified values at the tail of the list stored at key.
 	long rpush(ARGS...)(string key, ARGS args) { return request!long("RPUSH", key, args); }
+	/// Inserts value at the tail of the list stored at key, only if key already exists and holds a list.
 	long rpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("RPUSHX", key, value); }
+	/// Returns the specified elements of the list stored at key. 
 	RedisReply!T lrange(T = string)(string key, long start, long stop) { return request!(RedisReply!T)("LRANGE",  key, start, stop); }
+	/// Removes the first count occurrences of elements equal to value from the list stored at key. 
 	long lrem(T)(string key, long count, T value) if(isValidRedisValueType!T) { return request!long("LREM", key, count, value); }
+	/// Sets the list element at index to value.
 	void lset(T)(string key, long index, T value) if(isValidRedisValueType!T) { request("LSET", key, index, value); }
+	/// Trim an existing list so that it will contain only the specified range of elements specified.
+	/// Equivalent to $(D range = range[start .. stop+1])
 	void ltrim(string key, long start, long stop) { request("LTRIM",  key, start, stop); }
+	/// Removes and returns the last element of the list stored at key.
 	T rpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("RPOP", key); }
+	/// Removes and returns the first element of the list stored at key.
 	T lpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("LPOP", key); }
+	/// BLPOP is a blocking list pop primitive. It is the blocking version of LPOP because it blocks 
+	/// the connection when there are no elements to pop from any of the given lists. 
 	T blpop(T = string)(string key, long seconds) if(isValidRedisValueReturn!T) { return request!T("BLPOP", key, seconds); }
+	/// Atomically returns and removes the last element (tail) of the list stored at source, 
+	/// and pushes the element at the first element (head) of the list stored at destination.
 	T rpoplpush(T = string)(string key, string destination) if(isValidRedisValueReturn!T) { return request!T("RPOPLPUSH", key, destination); }
 
 	/*
 		Sets
 	*/
-
+	/// Add the specified members to the set stored at key. Specified members that are already a member of this set are ignored. 
+	/// If key does not exist, a new set is created before adding the specified members.
 	long sadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
+	/// Returns the set cardinality (number of elements) of the set stored at key.
 	long scard(string key) { return request!long("SCARD", key); }
+	/// Returns the members of the set resulting from the difference between the first set and all the successive sets.
 	RedisReply!T sdiff(T = string)(scope string[] keys...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SDIFF", keys); }
+	/// This command is equal to SDIFF, but instead of returning the resulting set, it is stored in destination. 
+	/// If destination already exists, it is overwritten.
 	long sdiffStore(string destination, scope string[] keys...) { return request!long("SDIFFSTORE", destination, keys); }
+	/// Returns the members of the set resulting from the intersection of all the given sets.
 	RedisReply!T sinter(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SINTER", keys); }
+	/// This command is equal to SINTER, but instead of returning the resulting set, it is stored in destination. 
+	/// If destination already exists, it is overwritten.
 	long sinterStore(string destination, scope string[] keys...) { return request!long("SINTERSTORE", destination, keys); }
+	/// Returns if member is a member of the set stored at key.
 	bool sisMember(T)(string key, T member) if(isValidRedisValueType!T) { return request!bool("SISMEMBER", key, member); }
+	/// Returns all the members of the set value stored at key.
 	RedisReply!T smembers(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SMEMBERS", key); }
+	/// Move member from the set at source to the set at destination. This operation is atomic. 
+	/// In every given moment the element will appear to be a member of source or destination for other clients.
 	bool smove(T)(string source, string destination, T member) if(isValidRedisValueType!T) { return request!bool("SMOVE", source, destination, member); }
+	/// Removes and returns a random element from the set value stored at key.
 	T spop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("SPOP", key ); }
+	/// Returns a random element from the set stored at key.
 	T srandMember(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("SRANDMEMBER", key ); }
+
+	// TODO: SRANDMEMBER key [count]
+
+	/// Remove the specified members from the set stored at key.
 	long srem(ARGS...)(string key, ARGS args) { return request!long("SREM", key, args); }
+	/// Returns the members of the set resulting from the union of all the given sets.
 	RedisReply!T sunion(T = string)(scope string[] keys...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SUNION", keys); }
+	/// This command is equal to SUNION, but instead of returning the resulting set, it is stored in destination.
 	long sunionStore(scope string[] keys...) { return request!long("SUNIONSTORE", keys); }
 
 	/*
 		Sorted Sets
 	*/
-
+	/// Add one or more members to a sorted set, or update its score if it already exists
 	long zadd(ARGS...)(string key, ARGS args) { return request!long("ZADD", key, args); }
+	/// Returns the sorted set cardinality (number of elements) of the sorted set stored at key.
 	long zcard(string key) { return request!long("ZCARD", key); }
 	deprecated("Use zcard() instead.") alias Zcard = zcard;
-	// see http://redis.io/commands/zcount
+	/// Returns the number of elements in the sorted set at key with a score between min and max
 	long zcount(string RNG = "[]")(string key, double min, double max) { return request!long("ZCOUNT", key, getMinMaxArgs!RNG(min, max)); }
-	double zincrby(string key, double value, string member) { return request!double("ZINCRBY", key, value, member); }
+	/// Increments the score of member in the sorted set stored at key by increment.
+	double zincrby(T)(string key, double value, T member) if (isValidRedisValueType!T) { return request!double("ZINCRBY", key, value, member); }
 	//TODO: zinterstore
-	// see http://redis.io/commands/zrange
+	/// Returns the specified range of elements in the sorted set stored at key. 
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -301,7 +417,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Returns all the elements in the sorted set at key with a score between start and end inclusively
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -309,26 +425,32 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end));
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Computes an internal list of elements in the sorted set at key with a score between start and end inclusively, 
+	/// and returns a range subselection similar to $(D results[offset .. offset+count])
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, long offset, long count, bool with_scores = false)
 		if(isValidRedisValueType!T)
- 	{
+	{
 		assert(offset >= 0);
 		assert(count >= 0);
 		if (with_scores) return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "WITHSCORES", "LIMIT", offset, count);
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "LIMIT", offset, count);
 	}
 
-	long zrank(string key, string member)
+	/// Returns the rank of member in the sorted set stored at key, with the scores ordered from low to high. 
+	long zrank(T)(string key, T member)
+		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZRANK", key, member);
 		return str ? parse!long(str) : -1;
 	}
-	long zrem(string key, scope string[] members...) { return request!long("ZREM", key, members); }
-	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
-	// see http://redis.io/commands/zrangebyscore
-	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
 
+	/// Removes the specified members from the sorted set stored at key.
+	long zrem(ARGS...)(string key, ARGS members) { return request!long("ZREM", key, members); }
+	/// Removes all elements in the sorted set stored at key with rank between start and stop.
+	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
+	/// Removes all elements in the sorted set stored at key with a score between min and max (inclusive).
+	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
+	/// Returns the specified range of elements in the sorted set stored at key. 
 	RedisReply!T zrevRange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -336,7 +458,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGE", key, start, end);
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Returns all the elements in the sorted set at key with a score between max and min (including elements with score equal to max or min).
 	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
@@ -344,7 +466,8 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));
 	}
 
-	// see http://redis.io/commands/zrangebyscore
+	/// Computes an internal list of elements in the sorted set at key with a score between max and min, and
+	/// returns a window of elements selected in a way equivalent to $(D results[offset .. offset + count])
 	RedisReply!T zrevRangeByScore(T = string, string RNG = "[]")(string key, double min, double max, long offset, long count, bool with_scores=false)
 		if(isValidRedisValueType!T)
 	{
@@ -354,24 +477,34 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZREVRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max), "LIMIT", offset, count);
 	}
 
-	long zrevRank(string key, string member)
+	/// Returns the rank of member in the sorted set stored at key, with the scores ordered from high to low.
+	long zrevRank(T)(string key, T member)
+		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZREVRANK", key, member);
 		return str ? parse!long(str) : -1;
 	}
 
-	RedisReply!T zscore(T = string)(string key, string member) if(isValidRedisValueType!T) { return request!(RedisReply!T)("ZSCORE", key, member); }
+	/// Returns the score of member in the sorted set at key.
+	RedisReply!T zscore(T = string, U)(string key, U member)
+		if(isValidRedisValueType!T && isValidRedisValueType!U)
+	{
+		return request!(RedisReply!T)("ZSCORE", key, member);
+	}
 	//TODO: zunionstore
 
 	/*
 		Pub / Sub
 	*/
+
+	/// Publishes a message to all clients subscribed at the channel
 	long publish(string channel, string message)
 	{
 		auto str = request!string("PUBLISH", channel, message);
 		return str ? parse!long(str) : -1;
 	}
 
+	/// Inspect the state of the Pub/Sub subsystem
 	RedisReply!T pubsub(T = string)(string subcommand, scope string[] args...)
 		if(isValidRedisValueType!T)
 	{
@@ -381,19 +514,21 @@ struct RedisDatabase {
 	/*
 		TODO: Transactions
 	*/
+	/// Return the number of keys in the selected database
 	long dbSize() { return request!long("DBSIZE"); }
 
 	/*
 		LUA Scripts
 	*/
+	/// Execute a Lua script server side
 	RedisReply!T eval(T = string, ARGS...)(string lua_code, scope string[] keys, scope ARGS args)
-		if(isValidRedisValueType!T) 
+		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVAL", lua_code, keys.length, keys, args);
 	}
-
+	/// Evaluates a script cached on the server side by its SHA1 digest. Scripts are cached on the server side using the scriptLoad function. 
 	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope string[] keys, scope ARGS args)
-		if(isValidRedisValueType!T) 
+		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVALSHA", sha, keys.length, keys, args);
 	}
@@ -402,9 +537,10 @@ struct RedisDatabase {
 	//scriptFlush
 	//scriptKill
 
+	/// Load a script into the scripts cache, without executing it. Run it using evalSHA.
 	string scriptLoad(string lua_code) { return request!string("SCRIPT", "LOAD", lua_code); }
 
-
+	/// Run the specified command and arguments in the Redis database server
 	T request(T = void, ARGS...)(string command, scope ARGS args)
 	{
 		return m_client.requestDB!(T, ARGS)(m_index, command, args);
@@ -417,8 +553,8 @@ struct RedisDatabase {
 
 		string[2] ret;
 		string mins, maxs;
-		mins = min == -double.infinity ? "-inf" : min == double.infinity ? "+inf" : min.to!string;
-		maxs = max == -double.infinity ? "-inf" : max == double.infinity ? "+inf" : max.to!string;
+		mins = min == -double.infinity ? "-inf" : min == double.infinity ? "+inf" : format(typeFormatString!double, min);
+		maxs = max == -double.infinity ? "-inf" : max == double.infinity ? "+inf" : format(typeFormatString!double, max);
 
 		static if (RNG[0] == '[') ret[0] = mins;
 		else static if (RNG[0] == '(') ret[0] = '('~mins;
@@ -440,22 +576,43 @@ import std.datetime;
 import vibe.core.concurrency;
 import std.variant;
 import std.typecons : Tuple, tuple;
-import std.datetime;
+import std.container : Array;
+import std.algorithm : canFind;
+import std.range : takeOne;
+import std.array : array;
 
-final class RedisSubscriber {
+import vibe.utils.memory;
+
+alias RedisSubscriber = FreeListRef!RedisSubscriberImpl;
+
+final class RedisSubscriberImpl {
 	private {
 		RedisClient m_client;
 		LockedConnection!RedisConnection m_lockedConnection;
 		bool[string] m_subscriptions;
-		void delegate(string[] args) m_capture;
+		string[] m_pendingSubscriptions;
 		bool m_listening;
 		bool m_stop;
+		Task m_listener;
+		Task m_listenerHelper;
+		Task m_waiter;
+		RecursiveTaskMutex m_mutex;
+		TaskMutex m_connMutex;
+	}
+
+	private enum Action {
+		DATA,
+		STOP,
+		STARTED,
+		SUBSCRIBE,
+		UNSUBSCRIBE
 	}
 
 	@property bool isListening() const {
 		return m_listening;
 	}
 
+	/// Get a list of channels with active subscriptions
 	@property string[] subscriptions() const {
 		return m_subscriptions.keys;
 	}
@@ -465,214 +622,505 @@ final class RedisSubscriber {
 	}
 
 	this(RedisClient client) {
+
+		logTrace("this()");
 		m_client = client;
+		m_mutex = new RecursiveTaskMutex;
+		m_connMutex = new TaskMutex;
 	}
 
-	bool bstop(){
-		if (!stop()) return false;
-		while (m_listening) {
-			sleep(1.msecs);
-		}
-		return true;
+	~this() {
+		logTrace("~this");
+		bstop();
 	}
 
-	bool stop(){
+	/// Stop listening and yield until the operation is complete.
+	void bstop(){
+		logTrace("bstop");
 		if (!m_listening)
+			return;
+		void impl() {
+			synchronized (m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				stop();
+
+				bool stopped;
+				do {
+					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
+						break;
+				}
+				while (!stopped);
+				
+				enforce(stopped, "Failed to wait for Redis listener to stop");
+			}
+		}
+		inTask(&impl);
+	}
+
+	/// Stop listening asynchroneously
+	void stop(){
+		logTrace("stop");
+		if (!m_listening)
+			return;
+
+		void impl() {
+			synchronized (m_mutex) {
+				m_stop = true;
+				m_listener.send(Action.STOP);
+				// send a message to wake up the listenerHelper from the reply
+				if (m_subscriptions.length > 0) {
+					synchronized(m_connMutex)
+						_request_void(m_lockedConnection, "UNSUBSCRIBE", cast(string[]) m_subscriptions.keys.takeOne.array );
+					sleep(30.msecs);
+				}
+			}
+		}
+		inTask(&impl);
+	}
+
+	private bool hasNewSubscriptionIn(scope string[] args) {
+		bool has_new;
+		foreach (arg; args)
+			if (!hasSubscription(arg))
+				has_new = true;
+		if (!has_new)
 			return false;
-		m_stop = true;
-		// todo: publish some no-op data to wake up the listener?
 
 		return true;
 	}
 
+	private bool anySubscribed(scope string[] args) {
+
+		bool any_subscribed;
+		foreach (arg ; args) {
+			if (hasSubscription(arg))
+				any_subscribed = true;
+		}
+		return any_subscribed;
+	}
+
+	/// Completes the subscription for a listener to start receiving pubsub messages
+	/// on the corresponding channel(s). Returns instantly if already subscribed.
+	/// If a connection error is thrown here, it stops the listener.
 	void subscribe(scope string[] args...)
-	{ 
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback subscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions[channel] = true;
-		};
-		_request_void(m_lockedConnection, "SUBSCRIBE", args); 
-		while (m_capture !is null) sleep(1.msecs);
+	{
+		logTrace("subscribe");
+		if (!m_listening) {
+			foreach (arg; args)
+				m_pendingSubscriptions ~= arg;
+			return;
+		}
+
+		if (!hasNewSubscriptionIn(args))
+			return;
+
+		void impl() {
+
+			scope(failure) { logTrace("Failure"); bstop(); }
+			try synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool subscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "SUBSCRIBE", args);
+				while(!m_subscriptions.keys.canFind(args)) {
+					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+						break;
+
+					subscribed = true;
+				}
+				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(subscribed, "Could not complete subscription(s).");
+
+			} catch (Throwable e) {
+				logTrace(e.toString());
+			}
+		}
+		inTask(&impl);
 	}
 
+	/// Unsubscribes from the channel(s) specified, returns immediately if none
+	/// is currently being listened.
+	/// If a connection error is thrown here, it stops the listener.
 	void unsubscribe(scope string[] args...)
-	{ 
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback unsubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions.remove(channel);
-		};
-		_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
+	{
+		logTrace("unsubscribe");
+
+		void impl() {
+
+			if (!anySubscribed(args))
+				return;
+
+			scope(failure) bstop();
+			assert(m_listening);
+			synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool unsubscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
+				while(m_subscriptions.keys.canFind(args)) {
+					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  })) {
+						unsubscribed = false;
+						break;
+					}
+					unsubscribed = true;
+				}
+				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(unsubscribed, "Could not complete unsubscription(s).");
+				
+			}
+
+		}
+		inTask(&impl);
 	}
 
+	/// Same as subscribe, but uses glob patterns, and does not return instantly if
+	/// the subscriptions are already registered.
+	/// throws Exception if the pattern does not yield a new subscription.
 	void psubscribe(scope string[] args...)
 	{
-		assert(m_listening); 
-		m_capture = (channels){
-			logInfo("Callback psubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions[channel] = true;
-		};
-		_request_void(m_lockedConnection, "PSUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
-	}
+		logTrace("psubscribe");
+		void impl() {
+			scope(failure) bstop();
+			assert(m_listening);
+			synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool subscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "PSUBSCRIBE", args);
 
+				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+					subscribed = false;
+				else
+					subscribed = true;
+
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(subscribed, "Could not complete subscription(s).");
+				
+			}
+		}
+		inTask(&impl);
+	}
+	
+	/// Same as unsubscribe, but uses glob patterns, and does not return instantly if
+	/// the subscriptions are not registered.
+	/// throws Exception if the pattern does not yield a new unsubscription.
 	void punsubscribe(scope string[] args...)
-	{ 
-		assert(m_listening);
-		m_capture = (channels){
-			logInfo("Callback punsubscribe(%s)", channels);
-			foreach (channel; channels) m_subscriptions.remove(channel);
-		};
-		_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
-		while (m_capture !is null) sleep(1.msecs);
+	{
+		logTrace("punsubscribe");
+		void impl() {
+			scope(failure) bstop();
+			assert(m_listening);
+			synchronized(m_mutex) {
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				bool unsubscribed;
+				synchronized(m_connMutex)
+					_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
+				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  }))
+					unsubscribed = false;
+				else
+					unsubscribed = true;
+				
+				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+				enforce(unsubscribed, "Could not complete unsubscription(s).");
+				
+			}
+		}
+		inTask(&impl);
 	}
 
-	private string getString(){
-		auto ln = cast(string)m_lockedConnection.conn.readLine();
-		enforceEx!RedisProtocolException(ln[0] == "$"[0], "Expected a string length, received bad response : " ~ ln);
-		//auto strLen = ln[1..$].to!long;
-		auto str = cast(string)m_lockedConnection.conn.readLine();
-		return str;
+	private void inTask(void delegate() impl) {
+		logTrace("inTask");
+		if (Task.getThis() == Task())
+		{
+			import vibe.core.driver;
+			Throwable ex;
+			bool done;
+			Task task = runTask({
+				logDebug("inTask" ~ Task.getThis().to!string);
+				try impl();
+				catch (Throwable e) {
+					ex = e;
+				}
+				done = true;
+			});
+			while(!done && !ex) {
+				processEvents();
+			}
+			logDebug("done");
+			if (ex)
+				throw ex;
+		}
+		else
+			impl();
 	}
 
 	private void init(){
-		if (m_lockedConnection is null){
+
+		logTrace("init");
+		if (m_lockedConnection.__conn is null){
 			m_lockedConnection = m_client.m_connections.lockConnection();
 			m_lockedConnection.setAuth(m_client.m_authPassword);
+			m_lockedConnection.setDB(m_client.m_selectedDB);
+		}
+
+		if (!m_lockedConnection.conn || !m_lockedConnection.conn.connected) {
+			try m_lockedConnection.conn = connectTCP(m_lockedConnection.m_host, m_lockedConnection.m_port);
+			catch (Exception e) {
+				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_lockedConnection.m_host, m_lockedConnection.m_port), __FILE__, __LINE__, e);
+			}
+			
+			m_lockedConnection.setAuth(m_client.m_authPassword); 
 			m_lockedConnection.setDB(m_client.m_selectedDB);
 		}
 	}
 
 	// Same as listen, but blocking
-	void blisten(void delegate(string, string) callback, Duration timeout)
+	void blisten(void delegate(string, string) onMessage, Duration timeout = 0.seconds)
 	{
 		init();
+
+		void onSubscribe(string channel) {
+			logTrace("Callback subscribe(%s)", channel);
+			m_subscriptions[channel] = true;
+			if (m_waiter != Task())
+				m_waiter.send(Action.SUBSCRIBE);
+		}
+
+		void onUnsubscribe(string channel) {
+			logTrace("Callback unsubscribe(%s)", channel);
+			m_subscriptions.remove(channel);
+			if (m_waiter != Task())
+				m_waiter.send(Action.UNSUBSCRIBE);
+		}
+
+		void teardown() { // teardown
+			logTrace("Redis listener exiting");
+			// More publish commands may be sent to this connection after recycling it, so we
+			// actively destroy it
+			Action act;
+			// wait for the listener helper to send its stop message
+			while (act != Action.STOP) 
+				act = receiveOnly!Action();
+			m_lockedConnection.conn.close();
+			m_lockedConnection.destroy();
+			m_listening = false;
+			return;
+		}
+		// http://redis.io/topics/pubsub
+		/**
+			 	SUBSCRIBE first second
+				*3
+				$9
+				subscribe
+				$5
+				first
+				:1
+				*3
+				$9
+				subscribe
+				$6
+				second
+				:2
+			*/
+		// This is a simple parser/handler for subscribe/unsubscribe/publish
+		// commands sent by redis. The PubSub client protocol is simple enough
+
+		void pubsub_handler() {
+			TCPConnection conn = m_lockedConnection.conn;
+			ubyte[] newLine = allocArray!ubyte(manualAllocator(), 1);
+			scope(exit) freeArray(manualAllocator(), newLine);
+			logTrace("Pubsub handler");
+			void delegate() dropCRLF = {
+				conn.read(newLine);
+				conn.read(newLine);
+			};
+			size_t delegate() readArgs = {
+				char[] ucnt = allocArray!char(manualAllocator(), 8);
+				scope(exit) freeArray(manualAllocator(), ucnt);
+				ubyte num;
+				size_t i;
+				do {
+					conn.read((&num)[0..1]);
+					if (num >= 48 && num <= 57)
+						ucnt[i] = num;
+					else break;
+					i++;
+				}
+				while (true); // ascii
+				conn.read(newLine);
+				logTrace("Found %s", ucnt);
+				// the new line is consumed when num is not in range.
+				return ucnt[0 .. i].to!size_t;
+			};
+			// find the number of arguments in the array
+			ubyte symbol;
+			conn.read((&symbol)[0 .. 1]);
+			enforce(symbol == '*', "Expected '*', got '" ~ symbol.to!string ~ "'");
+			size_t args = readArgs();
+			// get the number of characters in the first string (the command)
+			conn.read((&symbol)[0 .. 1]);
+			enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
+			size_t cnt = readArgs();
+			ubyte[] cmd = allocArray!ubyte(manualAllocator(), cnt);
+			scope(exit) freeArray(manualAllocator(), cmd);
+			conn.read(cmd);
+			dropCRLF();
+			// find the channel
+			conn.read((&symbol)[0 .. 1]);
+			enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
+			cnt = readArgs();
+			ubyte[] str = allocArray!ubyte(manualAllocator(), cnt);
+			conn.read(str);
+			dropCRLF();
+			string channel = cast(string) str.idup; // copy to GC to avoid bugs
+			freeArray(manualAllocator(), str);
+			logTrace("chan: %s", channel);
+
+			if (cmd == "message") { // find the message
+				conn.read((&symbol)[0 .. 1]);
+				enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
+				cnt = readArgs();
+				str = allocArray!ubyte(manualAllocator(), cnt);
+				conn.read(str); // channel
+				string message = cast(string) str.idup; // copy to GC to avoid bugs
+				logTrace("msg: %s", message);
+				freeArray(manualAllocator(), str);
+				dropCRLF();
+				onMessage(channel, message);
+			}
+			else if (cmd == "subscribe" || cmd == "unsubscribe") { // find the remaining subscriptions
+				bool is_subscribe = (cmd == "subscribe");
+				conn.read((&symbol)[0 .. 1]);
+				enforce(symbol == ':', "Expected ':', got '" ~ symbol.to!string ~ "'");
+				cnt = readArgs(); // number of subscriptions
+				logTrace("subscriptions: %d", cnt);
+				if (is_subscribe)
+					onSubscribe(channel);
+				else
+					onUnsubscribe(channel);
+			
+				// todo: enforce the number of subscriptions?
+			}
+			else assert(false, "Unrecognized pubsub wire protocol command received");
+		}
+
+		// Waits for data and advises the handler
+		m_listenerHelper = runTask( {
+			while(true) {
+				if (!m_stop && m_lockedConnection.conn && m_lockedConnection.conn.waitForData(100.msecs)) {
+					// We check every 5 seconds if this task should stay active
+					if (m_stop)	break;
+					else if (m_lockedConnection.conn && !m_lockedConnection.conn.dataAvailableForRead) continue;
+					// Data has arrived, this task is in charge of notifying the main handler loop
+					logTrace("Notify data arrival");
+
+					Task.getThis().messageQueue.clear();
+					m_listener.send(Action.DATA);
+					if (!receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }))
+						assert(false);
+
+				} else if (m_stop || !m_lockedConnection.conn) break;
+				logTrace("No data arrival in 100 ms...");
+			}
+			logTrace("Listener Helper exit.");
+			m_listener.send(Action.STOP);
+		} );
+
 		m_listening = true;
+		logTrace("Redis listener now listening");
+		if (m_waiter != Task())
+			m_waiter.send(Action.STARTED);
+
+		if (timeout == 0.seconds)
+			timeout = 365.days; // make sure 0.seconds is considered as big.
+
+		scope(exit) {
+			logTrace("Redis Listener exit.");
+			if (!m_stop) {
+				stop(); // notifies the listenerHelper
+			}
+			// close the data connections
+			teardown();
+			
+			if (m_waiter != Task())
+				m_waiter.send(Action.STOP);
+			
+			m_listenerHelper = Task();
+			m_listener = Task();
+			m_stop = false;
+		}
+
+		// Start waiting for data notifications to arrive
 		while(true) {
 
-			bool gotData;
-			StopWatch sw;
-			sw.start();
-			while (!gotData){
-				if (m_lockedConnection.conn.waitForData(5.seconds))	gotData = true;
-				if (timeout > 0.seconds && sw.peek().seconds > timeout.total!"seconds") { gotData = false;	break; }
-				if (m_stop){ gotData = false; break; }
-			}
-			sw.stop();
+			auto handler = (Action act) {
+				if (act == Action.STOP) m_stop = true;
+				if (m_stop) return;
+				logTrace("Calling PubSub Handler");
+				synchronized(m_connMutex)
+					pubsub_handler(); // handles one command at a time
+				m_listenerHelper.send(Action.DATA);
+			};
 
-			if (!gotData) {
-				m_listening = false;
-				// FIXME: it should be possible to avoid a disconnect, but
-				//        obviously we are not waiting for an "unsubscribe"
-				//        message after actively unsubscribing from all channels
-				m_lockedConnection.conn.close();
-				m_lockedConnection.destroy();
-				return;
+			if (!receiveTimeout(timeout, handler) || m_stop) {
+				logTrace("Redis Listener stopped");
+				break;
 			}
 
-			if (m_capture !is null){
-				auto res = handler();
-				m_capture(res[1]);
-				enforceEx!RedisProtocolException(m_subscriptions.length == res[0], "Subscription count is different than reported by the Redis server");
-				m_capture = null;
-				continue;
-			}
-
-			auto ln = cast(string)m_lockedConnection.conn.readLine();
-			string cmd;
-			if (ln[0] == '$'){
-				cmd = cast(string)m_lockedConnection.conn.readLine();
-			} 
-			else if (ln[0] == '*') {
-				cmd = getString();
-			}else {
-				enforceEx!RedisProtocolException(false, "expected $ or *");
-			}
-			if(cmd == "message") {
-				auto channel = getString();
-				auto message = getString();
-				callback(channel, message);
-
-			} 
-			else {
-				handler(); // get rid of it
-			}
 		}
 
 	}
-	private Tuple!(long, string[]) handler(){
-		assert(m_lockedConnection !is null);
 
-		auto ctx = RedisReplyContext.init;
-		string[] channels;
-		long subscriptions;
-
-		void readBulk(string sizeLn)
-		{
-			assert(m_lockedConnection !is null);
-			if (sizeLn.startsWith("$-1")) return;
-			if (sizeLn.startsWith(':')){
-				subscriptions = sizeLn[1..$].to!long;
-				return;
-			}
-			else {
-				auto data = cast(string)m_lockedConnection.conn.readLine();
-				if (data != "subscribe" && data != "unsubscribe"){
-					channels ~= cast(string)data;
-				}
-			}
-		}
-
-		@property bool hasNext() const { return m_lockedConnection && ctx.index < ctx.length; }
-
-		void next(){
-
-			if (!ctx.initialized){
-				auto ln = cast(string)m_lockedConnection.conn.readLine();
-
-				switch (ln[0]) {
-					default: throw new Exception(format("Unknown reply type: %s", ln[0]));
-					//case '+': ctx.data = cast(ubyte[])ln[1 .. $]; break;
-					//case '-': throw new Exception(ln[1 .. $]);
-					//case ':': ctx.data = cast(ubyte[])ln[1 .. $]; break;
-					case '$': readBulk(ln); break;
-					case '*':
-						if (ln.startsWith("*-1")) {
-							ctx.length = 0;
-						} else {
-							ctx.multi = true;
-							ctx.length = to!long(ln[ 1 .. $ ]);
-						}
-						break;
-				}
-			}
-			ctx.initialized = true;
-			ctx.index++;
-			if (ctx.multi) {
-				auto ln = cast(string)m_lockedConnection.conn.readLine();
-				readBulk(ln);
-			}
-		}
-		while(hasNext) next();
-		return tuple(subscriptions, channels);
-	}
-
-
-	// Waits for messages and calls the callback with the channel and the message as arguments
+	/// Waits for messages and calls the callback with the channel and the message as arguments.
+	/// The timeout is passed over to the listener, which closes after the period of inactivity.
+	/// Use 0.seconds timeout to specify a very long time (365 days)
+	/// Errors will be sent to Callback Delegate on channel "Error".
 	Task listen(void delegate(string, string) callback, Duration timeout = 0.seconds)
 	{
-		auto task = runTask({
-			blisten(callback, timeout);
-		});
-		import std.datetime : usecs;
-		while (!m_listening) {
-			sleep(1.usecs);
+		logTrace("Listen");
+		void impl() {
+			logTrace("Listen");
+			m_waiter = Task.getThis();
+			scope(exit) m_waiter = Task();
+			Throwable ex;
+			m_listener = runTask({
+				try blisten(callback, timeout);
+				catch(Throwable e) {
+					ex = e;
+					if (m_waiter != Task() && !m_listening) {
+						m_waiter.send(Action.STARTED);
+						return;
+					}
+					callback("Error", e.toString());
+				}
+			});
+			synchronized(m_mutex) {
+				import std.datetime : usecs;
+				receiveTimeout(2.seconds, (Action act) { assert( act == Action.STARTED); });
+				if (ex) throw ex;
+				enforce(m_listening, "Failed to start listening, timeout of 2 seconds expired");
+			}
+
+
+			foreach (channel; m_pendingSubscriptions) {
+				subscribe(channel);
+			}
+
+			m_pendingSubscriptions = null;
 		}
-		return task;
+		inTask(&impl);
+		return m_listener;
 	}
 }
+
 
 
 /** Range interface to a single Redis reply.
@@ -822,7 +1270,7 @@ struct RedisReply(T = ubyte[]) {
 		ctx.initialized = true;
 
 		auto ln = cast(string)m_conn.conn.readLine();
-		
+
 		switch (ln[0]) {
 			default: throw new Exception(format("Unknown reply type: %s", ln[0]));
 			case '+': ctx.data = cast(ubyte[])ln[1 .. $]; ctx.hasData = true; break;
@@ -926,7 +1374,7 @@ private final class RedisConnection {
 	{
 		if (index == m_selectedDB) return;
 		_request_reply(this, "SELECT", index);
-		m_selectedDB = index; 
+		m_selectedDB = index;
 	}
 
 	private static long countArgs(ARGS...)(scope ARGS args)
@@ -956,7 +1404,8 @@ private final class RedisConnection {
 				writeArgs(dst, args[i] ? "1" : "0");
 			} else static if (is(A : long) || is(A : real) || is(A == string)) {
 				auto alen = formattedLength(args[i]);
-				dst.formattedWrite("$%d\r\n%s\r\n", alen, args[i]);
+				enum fmt = "$%d\r\n"~typeFormatString!A~"\r\n";
+				dst.formattedWrite(fmt, alen, args[i]);
 			} else static if (is(A : const(ubyte[])) || is(A : const(char[]))) {
 				dst.formattedWrite("$%s\r\n", args[i].length);
 				dst.put(args[i]);
@@ -982,7 +1431,7 @@ private final class RedisConnection {
 			import vibe.internal.rangeutil;
 			long length;
 			auto rangeCnt = RangeCounter(&length);
-			rangeCnt.formattedWrite("%s", arg);
+			rangeCnt.formattedWrite(typeFormatString!ARG, arg);
 			return length;
 		}
 	}
@@ -998,7 +1447,7 @@ private void _request_void(ARGS...)(RedisConnection conn, string command, scope 
 			throw new Exception(format("Failed to connect to Redis server at %s:%s.", conn.m_host, conn.m_port), __FILE__, __LINE__, e);
 		}
 	}
-	
+
 	auto nargs = conn.countArgs(args);
 	auto rng = StreamOutputRange(conn.conn);
 	formattedWrite(&rng, "*%d\r\n$%d\r\n%s\r\n", nargs + 1, command.length, command);
@@ -1044,4 +1493,10 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 		auto reply = _request_reply!T(conn, command, args);
 		return reply.front;
 	}
+}
+
+private template typeFormatString(T)
+{
+	static if (isFloatingPoint!T) enum typeFormatString = "%.16g";
+	else enum typeFormatString = "%s";
 }

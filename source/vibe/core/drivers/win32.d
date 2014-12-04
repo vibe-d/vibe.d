@@ -80,7 +80,7 @@ final class Win32EventDriver : EventDriver {
 		m_registeredEvents ~= m_fileCompletionEvent;
 	}
 
-	~this()
+	void dispose()
 	{
 //		DestroyWindow(m_hwnd);
 	}
@@ -269,7 +269,7 @@ final class Win32EventDriver : EventDriver {
 
 		auto conn = new Win32TCPConnection(this, sock, addr);
 		conn.connect(addr);
-		return conn;	
+		return conn;
 	}
 
 	Win32TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
@@ -655,7 +655,7 @@ final class Win32FileStream : FileStream {
 
 			// request to write the data
 			ReadFileEx(m_handle, cast(void*)dst, to_read, &overlapped, &onIOCompleted);
-			
+
 			// yield until the data is read
 			while( !m_bytesTransferred ) m_driver.yieldForEvent();
 
@@ -1032,6 +1032,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		ConnectionStatus m_status;
 		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer;
 		void delegate(TCPConnection) m_connectionCallback;
+		Exception m_exception;
 
 		HANDLE m_transferredFile;
 		OVERLAPPED m_fileOverlapped;
@@ -1043,7 +1044,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_socket = sock;
 		m_driver.m_socketHandlers[sock] = this;
 		m_status = status;
-		
+
 		m_localAddress.family = peer_address.family;
 		if (peer_address.family == AF_INET) m_localAddress.sockAddrInet4.sin_addr.s_addr = 0;
 		else m_localAddress.sockAddrInet6.sin6_addr.s6_addr[] = 0;
@@ -1066,7 +1067,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_fileOverlapped.OffsetHigh = 0;
 		m_fileOverlapped.hEvent = m_driver.m_fileCompletionEvent;
 
-		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CLOSE);
+		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_READ|FD_WRITE|FD_CONNECT|FD_CLOSE);
 	}
 
 	~this()
@@ -1092,8 +1093,10 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 			logDebugV("connect err: %s", err);
 			import std.string;
 			socketEnforce(err == WSAEWOULDBLOCK, "Connect call failed");
-			while (m_status != ConnectionStatus.Connected)
+			while (m_status != ConnectionStatus.Connected) {
 				m_driver.m_core.yieldForEvent();
+				if (m_exception) throw m_exception;
+			}
 		}
 		assert(m_status == ConnectionStatus.Connected);
 	}
@@ -1331,19 +1334,19 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 				default: break;
 				case FD_CONNECT: // doesn't seem to occur, but we handle it just in case
 					if (error) {
-						ex = new Exception("Failed to connect to host: "~to!string(error));
+						ex = new SystemSocketException("Failed to connect to host", error);
 						m_status = ConnectionStatus.Disconnected;
 					} else m_status = ConnectionStatus.Connected;
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 				case FD_READ:
 					logTrace("TCP read event");
-					while( m_readBuffer.freeSpace > 0 ){
+					while (m_readBuffer.freeSpace > 0) {
 						auto dst = m_readBuffer.peekDst();
 						assert(dst.length <= int.max);
 						logTrace("Try to read up to %s bytes", dst.length);
 						auto ret = .recv(m_socket, dst.ptr, cast(int)dst.length, 0);
-						if( ret >= 0 ){
+						if (ret >= 0) {
 							logTrace("received %s bytes", ret);
 							if( ret == 0 ) break;
 							m_readBuffer.putN(ret);
@@ -1351,7 +1354,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 							auto err = WSAGetLastError();
 							if( err != WSAEWOULDBLOCK ){
 								logTrace("receive error %s", err);
-								ex = new Exception("Socket error: "~to!string(err));
+								ex = new SystemSocketException("Error reading data from socket", error);
 							}
 							break;
 						}
@@ -1383,19 +1386,19 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					if (m_readOwner) m_driver.m_core.resumeTask(m_readOwner, ex);
 					break;
 				case FD_WRITE:
-					if( m_status == ConnectionStatus.Initialized ){
+					if (m_status == ConnectionStatus.Initialized) {
 						if( error ){
-							ex = new Exception("Failed to connect to host: "~to!string(error));
+							ex = new SystemSocketException("Failed to connect to host", error);
 						} else m_status = ConnectionStatus.Connected;
 					}
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 				case FD_CLOSE:
-					if( error ){
-						if( m_status == ConnectionStatus.Initialized ){
-							ex = new Exception("Failed to connect to host: "~to!string(error));
+					if (error) {
+						if (m_status == ConnectionStatus.Initialized) {
+							ex = new SystemSocketException("Failed to connect to host", error);
 						} else {
-							ex = new Exception("The connection was closed with error: "~to!string(error));
+							ex = new SystemSocketException("The connection was closed with an error", error);
 						}
 					} else {
 						m_status = ConnectionStatus.Disconnected;
@@ -1405,6 +1408,8 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 					if (m_writeOwner) m_driver.m_core.resumeTask(m_writeOwner, ex);
 					break;
 			}
+
+			if (ex) m_exception = ex;
 		} catch( UncaughtException th ){
 			logWarn("Exception while handling socket event: %s", th.msg);
 		}

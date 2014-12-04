@@ -7,8 +7,6 @@
 */
 module vibe.http.websockets;
 
-alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
-
 ///
 unittest {
 	void handleConn(scope WebSocket sock)
@@ -25,10 +23,12 @@ unittest {
 		import vibe.http.router;
 		auto router = new URLRouter;
 		router.get("/ws", handleWebSockets(&handleConn));
-		
+
 		// Start HTTP server using listenHTTP()...
 	}
 }
+
+alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
 
 import vibe.core.core;
 import vibe.core.log;
@@ -85,10 +85,10 @@ HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handsha
 					isUpgrade = true;
 					break;
 				}
-			}	
+			}
 		}
 		if( !(isUpgrade &&
-			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 && 
+			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
@@ -142,10 +142,10 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 					isUpgrade = true;
 					break;
 				}
-			}	
+			}
 		}
 		if( !(isUpgrade &&
-			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 && 
+			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
@@ -208,6 +208,12 @@ final class WebSocket {
 
 	/**
 		Determines if the WebSocket connection is still alive and ready for sending.
+
+		Note that for determining the ready state for $(EM reading), you need
+		to use $(D waitForData) instead, because both methods can return
+		different values while a disconnect is in proress.
+
+		See_also: $(D waitForData)
 	*/
 	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
 
@@ -313,7 +319,7 @@ final class WebSocket {
 
 		Params:
 			strict = If set, ensures the exact frame type (text/binary) is received and throws an execption otherwise.
-		Throws: WebSocketException if the connection is closed or 
+		Throws: WebSocketException if the connection is closed or
 			if $(D strict == true) and the frame received is not the right type
 	*/
 	ubyte[] receiveBinary(bool strict = true)
@@ -340,7 +346,7 @@ final class WebSocket {
 
 	/**
 		Receives a new message using an InputStream.
-		Throws: WebSocketException if the connection is closed. 
+		Throws: WebSocketException if the connection is closed.
 	*/
 	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
 	{
@@ -368,7 +374,7 @@ final class WebSocket {
 					logDebug("Terminating connection (%s)", m_sentCloseFrame);
 					m_conn.close();
 					return;
-				} 
+				}
 				synchronized (m_readMutex) {
 					m_nextMessage = msg;
 					m_readCondition.notifyAll();
@@ -424,7 +430,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 	{
 		if (m_finalized) return;
 		m_finalized = true;
-		
+
 		Frame frame;
 		frame.fin = true;
 		frame.opcode = m_frameOpcode;
@@ -497,8 +503,12 @@ final class IncomingWebSocketMessage : InputStream {
 					m_currentFrame = frame;
 					break;
 				case FrameOpcode.ping:
-					frame.opcode = FrameOpcode.pong;
-					frame.writeFrame(m_conn);
+					Frame pong;
+					pong.opcode = FrameOpcode.pong;
+					pong.fin = true;
+					pong.payload = frame.payload;
+
+					pong.writeFrame(m_conn);
 					break;
 				default:
 					throw new WebSocketException("unknown frame opcode");
@@ -571,11 +581,11 @@ struct Frame {
 			stream.read(data8);
 			length = bigEndianToNative!ulong(data8);
 		}
-		
+
 		//masking key
 		ubyte[4] maskingKey;
 		if( masked ) stream.read(maskingKey);
-		
+
 		//payload
 		enforceEx!WebSocketException(length <= size_t.max);
 		frame.payload = new ubyte[cast(size_t)length];

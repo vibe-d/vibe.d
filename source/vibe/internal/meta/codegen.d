@@ -158,204 +158,133 @@ unittest
 }
 
 /**
-	Clones function declaration.
-	
-	Acts similar to std.traits.fullyQualifiedName run on function typem
-	but includes original name so that resulting string can be mixed into
-	descendant class to override it. All symbols in resulting string are
-	fully qualified.
-
-	Probably it can be merged with fullyQualifiedName to form a more 
-	generic method but no elegant solution was proposed so far.
-
-	Params:
-		Symbol = function declaration to clone
-
-	Returns:
-		string that can be mixed in to declare exact duplicate of Symbol
+ * Returns a Tuple of the parameters.
+ * It can be used to declare function.
  */
-template cloneFunction(alias Symbol)
-	if (isSomeFunction!(Symbol))
+template ParameterTuple(alias Func)
 {
-	private:
-		import std.traits, std.typetuple;
-
-		alias FunctionTypeOf!(Symbol) T;
-
-		static if (is(T F == delegate) || isFunctionPointer!T)
-			static assert(0, "Plain function or method symbols are expected");
-
-		static string addTypeQualifiers(string type)
-		{
-			enum {
-				_const = 0,
-				_immutable = 1,
-				_shared = 2,
-				_inout = 3
-			}
-
-			alias TypeTuple!(is(T == const), is(T == immutable), is(T == shared), is(T == inout)) qualifiers;
-			
-			auto result = type;
-
-			if (qualifiers[_shared]) {
-				result = format("shared(%s)", result);
-			}
-
-			if (qualifiers[_const] || qualifiers[_immutable] || qualifiers[_inout]) {
-				result = format(
-					"%s %s",
-					result,
-					qualifiers[_const] ? "const" : (qualifiers[_immutable] ? "immutable" : "inout")
-                );
-			}
-
-			return result;
-		}		
-
-		template storageClassesString(uint psc)
-		{
-			alias ParameterStorageClass PSC;
-			
-			enum storageClassesString = format(
-				"%s%s%s%s",
-				psc & PSC.scope_ ? "scope " : "",
-				psc & PSC.out_ ? "out " : "",
-				psc & PSC.ref_ ? "ref " : "",
-				psc & PSC.lazy_ ? "lazy " : ""
-			);
-		}
-		
-		string parametersString(alias T)()
-		{
-			if (!__ctfe)
-				assert(false);
-			
-			alias ParameterTypeTuple!T parameters;
-			alias ParameterStorageClassTuple!T parameterStC;
-			alias ParameterIdentifierTuple!T parameterNames;
-			
-			string variadicStr;
-			
-			final switch (variadicFunctionStyle!T) {
-				case Variadic.no:
-					variadicStr = "";
-					break;
-				case Variadic.c:
-					variadicStr = ", ...";
-					break;
-				case Variadic.d:
-					variadicStr = parameters.length ? ", ..." : "...";
-					break;
-				case Variadic.typesafe:
-					variadicStr = " ...";
-					break;
-			}
-			
-			static if (parameters.length) {
-				import std.algorithm : map;
-				import std.range : join, zip;
-
-				string result = join(
-					map!(a => format("%s%s %s", a[0], a[1], a[2]))(
-						zip([staticMap!(storageClassesString, parameterStC)],
-				            [staticMap!(fullyQualifiedName, parameters)],
-			                [parameterNames])
-					),
-					", "
-				);
-				
-				return result ~= variadicStr;
-			}
-			else
-				return variadicStr;
-		}
-		
-		template linkageString(T)
-		{
-			static if (functionLinkage!T != "D") {
-				enum string linkageString = format("extern(%s) ", functionLinkage!T);
-			}
-			else {
-				enum string linkageString = "";
-			}
-		}
-		
-		template functionAttributeString(T)
-		{
-			alias FunctionAttribute FA;
-			enum attrs = functionAttributes!T;
-			
-			static if (attrs == FA.none)
-				enum string functionAttributeString = "";
-			else
-				enum string functionAttributeString = format(
-					"%s%s%s%s%s%s",
-					attrs & FA.pure_ ? "pure " : "",
-					attrs & FA.nothrow_ ? "nothrow " : "",
-					attrs & FA.ref_ ? "ref " : "",
-					attrs & FA.property ? "@property " : "",
-					attrs & FA.trusted ? "@trusted " : "",
-					attrs & FA.safe ? "@safe " : ""
-				);
-		}
-
-	public {
-		import std.string : format;
-
-		enum string cloneFunction = addTypeQualifiers(
-			format(
-				"%s%s%s %s(%s)",
-				linkageString!T,
-				functionAttributeString!T,
-				fullyQualifiedName!(ReturnType!T),
-				__traits(identifier, Symbol),
-				parametersString!Symbol()				
-			)
-		);
-	}
+	static if (is(FunctionTypeOf!Func Params == __parameters)) {
+		alias ParameterTuple = Params;
+	} else static assert(0, "Argument to ParameterTuple must be a function");
 }
 
 ///
 unittest
 {
-	static int foo(double[] param);
+	void foo(string val = "Test", int = 10);
+	void bar(ParameterTuple!foo) { assert(val == "Test"); }
+	// Variadic functions require special handling:
+	import core.vararg;
+	void foo2(string val, ...);
+	void bar2(ParameterTuple!foo2, ...) { assert(val == "42"); }
 
-	static assert(cloneFunction!foo == "int foo(double[] param)");
+	bar();
+	bar2("42");
+
+	// Note: outside of a parameter list, it's value is the type of the param.
+	import std.traits : ParameterDefaultValueTuple;
+	ParameterTuple!(foo)[0] test = ParameterDefaultValueTuple!(foo)[0];
+	assert(test == "Test");
 }
 
-version(unittest)
+/// Returns a Tuple containing a 1-element parameter list, with an optional default value.
+/// Can be used to concatenate a parameter to a parameter list, or to create one.
+template ParameterTuple(T, string identifier, TUnused = void)
 {
-	// helper for cloneFunction unit-tests that clones all method declarations of given interface,
-	string generateStubMethods(alias iface)()
-	{
-		if (!__ctfe)
-			assert(false);
-
-		import std.traits : MemberFunctionsTuple;
-
-		string result;
-		foreach (method; __traits(allMembers, iface)) {
-			foreach (overload; MemberFunctionsTuple!(iface, method)) {
-				result ~= cloneFunction!overload;
-				result ~= "{ static typeof(return) ret; return ret; }";
-				result ~= "\n";
-			}
-		}
-		return result;
-	}
+	import std.string : format;
+	mixin(q{private void __func(T %s);}.format(identifier));
+	alias ParameterTuple = ParameterTuple!__func;
 }
 
+
+/// Ditto
+template ParameterTuple(T, string identifier, T DefVal)
+{
+	import std.string : format;
+	mixin(q{private void __func(T %s = DefVal);}.format(identifier));
+	alias ParameterTuple = ParameterTuple!__func;
+}
+
+///
 unittest
 {
-	class TestClass : TestInterface
-	{
-		import core.vararg;
+	void foo(ParameterTuple!(int, "arg2")) { assert(arg2 == 42); }
+	foo(42);
 
-		override:
-			mixin(generateStubMethods!TestInterface);
+	void bar(string arg);
+	void bar2(ParameterTuple!bar, ParameterTuple!(string, "val")) { assert(val == arg); }
+	bar2("isokay", "isokay");
+
+	// For convenience, you can directly pass the result of std.traits.ParameterDefaultValueTuple
+	// without checking for void.
+	import std.traits : PDVT = ParameterDefaultValueTuple;
+	import std.traits : arity;
+	void baz(string test, int = 10);
+
+	static assert(is(PDVT!(baz)[0] == void));
+	// void baz2(string test2, string test);
+	void baz2(ParameterTuple!(string, "test2", PDVT!(baz)[0]), ParameterTuple!(baz)[0..$-1]) { assert(test == test2); }
+	static assert(arity!baz2 == 2);
+	baz2("Try", "Try");
+
+	// void baz3(string test, int = 10, int ident = 10);
+	void baz3(ParameterTuple!baz, ParameterTuple!(int, "ident", PDVT!(baz)[1])) { assert(ident == 10); }
+	baz3("string");
+}
+
+/// Returns a string of the functions attributes, suitable to be mixed
+/// on the LHS of the function declaration.
+///
+/// Unfortunately there is no "nice" syntax for declaring a function,
+/// so we have to resort on string for functions attributes.
+template FuncAttributes(alias Func)
+{
+	import std.array : join;
+	enum FuncAttributes = join([__traits(getFunctionAttributes, Func)], " ");
+}
+
+
+
+/// A template mixin which allow you to clone a function, and specify the implementation.
+mixin template CloneFunction(alias Func, string body_, string identifier = __traits(identifier, Func))
+{
+	// Template mixin: everything has to be self-contained.
+	import std.string : format;
+	import std.traits : ReturnType;
+	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
+	// Sadly this is not possible:
+	// class Test {
+	//   int foo(string par) pure @safe nothrow { /* ... */ }
+	//   typeof(foo) bar {
+	//      return foo(par);
+	//   }
+	// }
+	mixin(q{
+		ReturnType!Func %s(ParameterTuple!Func) %s {
+			%s
+		}
+	}.format(identifier, FuncAttributes!Func, body_));
+}
+
+///
+unittest
+{
+	interface ITest
+	{
+	  int foo(string par, int, string p = "foo", int = 10) pure @safe nothrow const;
 	}
 
-	// any mismatch in types between class and interface will be a compile-time
-	// error, no extra asserts needed
+	class Test : ITest
+	{
+		mixin CloneFunction!(ITest.foo, q{
+			return 84;
+		}, "customname");
+	override:
+		mixin CloneFunction!(ITest.foo, q{
+			return 42;
+		});
+	}
+
+	assert(new Test().foo("", 21) == 42);
+	assert(new Test().customname("", 21) == 84);
 }
