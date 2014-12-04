@@ -414,9 +414,9 @@ unittest {
 
 	void sendForm()
 	{
-      string[] names = ["foo", "bar", "baz"];
-      string[] values = ["1", "2", "3"];
-      auto form = zip(names, values);
+		string[] names = ["foo", "bar", "baz"];
+		string[] values = ["1", "2", "3"];
+		auto form = zip(names, values);
 		requestHTTP("http://example.com/form",
 			(scope req) {
 				req.method = HTTPMethod.POST;
