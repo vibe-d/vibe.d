@@ -383,6 +383,11 @@ unittest {
 
 /**
 	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
+
+   params:
+      form = range of t = Tuple!(string, string), 
+             where t[0] is the name and t[1] the 
+             value of a form entry.
 */
 void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
    if(isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
@@ -391,7 +396,7 @@ void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
 	import vibe.stream.wrapper;
 
 	StringLengthCountingRange len;
-	writeFormData(&len, form);
+	writeFormData(&len, form.save);
 	req.contentType = "application/x-www-form-urlencoded";
 	req.contentLength = len.count;
 	auto rng = StreamOutputRange(req.bodyWriter);
@@ -405,12 +410,17 @@ unittest {
 	import vibe.http.form;
 	import vibe.stream.operations;
 
+   import std.range;
+
 	void sendForm()
 	{
+      string[] names = ["foo", "bar", "baz"];
+      string[] values = ["1", "2", "3"];
+      auto form = zip(names, values);
 		requestHTTP("http://example.com/form",
 			(scope req) {
 				req.method = HTTPMethod.POST;
-				req.writeFormBody(["field1": "value1", "field2": "value2"]);
+				req.writeFormBody(form);
 			},
 			(scope res) {
 				logInfo("Response: %s", res.bodyReader.readAllUTF8());
