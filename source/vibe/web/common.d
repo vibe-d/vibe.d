@@ -417,42 +417,42 @@ class RestException : HTTPStatusException {
 	@property const(Json) jsonResult() const { return m_jsonResult; }
 }
 
-/// private 
-struct ContentTypeAttribute 
+/// private
+package struct ContentTypeAttribute
 {
 	string data;
 	alias data this;
 }
 
 /// private
-struct MethodAttribute
+package struct MethodAttribute
 {
 	HTTPMethod data;
 	alias data this;
 }
 
 /// private
-deprecated alias OverriddenMethod = MethodAttribute;
+package deprecated alias OverriddenMethod = MethodAttribute;
 
 /// private
-struct PathAttribute
+package struct PathAttribute
 {
 	string data;
 	alias data this;
 }
 
 /// private
-deprecated alias OverriddenPath = PathAttribute;
+package deprecated alias OverriddenPath = PathAttribute;
 
 /// private
-struct RootPathAttribute
+package struct RootPathAttribute
 {
 	string data;
 	alias data this;
 }
 
 /// private
-deprecated alias RootPath = RootPathAttribute;
+package deprecated alias RootPath = RootPathAttribute;
 
 /// Private struct describing the origin of a parameter (Query, Header, Body).
 package struct WebParamAttribute {
