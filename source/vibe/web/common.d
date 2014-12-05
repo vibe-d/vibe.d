@@ -323,6 +323,8 @@ PathAttribute path(string data)
  */
 RootPathAttribute rootPath(string path)
 {
+	if (!__ctfe)
+		assert(false);
 	return RootPathAttribute(path);
 }
 ///
@@ -358,6 +360,8 @@ unittest
  */
 @property RootPathAttribute rootPathFromName()
 {
+	if (!__ctfe)
+		assert(false);
 	return RootPathAttribute("");
 }
 ///
