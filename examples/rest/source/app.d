@@ -71,7 +71,7 @@ unittest
 {
 	auto router = new URLRouter;
 	registerRestInterface(router, new Example1());
-    auto routes = router.getAllRoutes();
+	auto routes = router.getAllRoutes();
 
 	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example1_api/some_info");
 	assert (routes[1].method == HTTPMethod.POST && routes[1].pattern == "/example1_api/sum");
@@ -128,7 +128,7 @@ unittest
 {
 	auto router = new URLRouter;
 	registerRestInterface(router, new Example2(), MethodStyle.upperUnderscored);
-    auto routes = router.getAllRoutes();
+	auto routes = router.getAllRoutes();
 
 	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/EXAMPLE2_API/ACCUMULATE_ALL");
 }
@@ -201,7 +201,7 @@ unittest
 {
 	auto router = new URLRouter;
 	registerRestInterface(router, new Example3());
-    auto routes = router.getAllRoutes();
+	auto routes = router.getAllRoutes();
 
 	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example3_api/nested_module/number");
 	assert (routes[1].method == HTTPMethod.GET && routes[1].pattern == "/example3_api/:id/myid");
@@ -259,7 +259,7 @@ unittest
 {
 	auto router = new URLRouter;
 	registerRestInterface(router, new Example4());
-    auto routes = router.getAllRoutes();
+	auto routes = router.getAllRoutes();
 
 	assert (routes[0].method == HTTPMethod.POST && routes[0].pattern == "/example4_api/simple");
 	assert (routes[1].method == HTTPMethod.GET && routes[1].pattern == "/example4_api/:param/:another_param/data");
