@@ -1471,7 +1471,10 @@ struct BsonSerializer {
 		else static if (is(T == bool)) return m_inputData.get!bool();
 		else static if (is(T == uint)) return cast(T)m_inputData.get!int();
 		else static if (is(T : int)) {
-			if(m_inputData.type == Bson.Type.long_) return cast(T)m_inputData.get!long();
+			if(m_inputData.type == Bson.Type.long_) {
+				enforce((m_inputData.get!long() >= int.min) && (m_inputData.get!long() <= int.max), "Long out of range while attempting to deserialize to int: " ~ m_inputData.get!long.to!string);
+				return cast(T)m_inputData.get!long();
+			}
 			else return m_inputData.get!int().to!T;
 		}
 		else static if (is(T : long)) {
