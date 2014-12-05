@@ -3,6 +3,8 @@
 *.lib
 *.dll
 .*.sw*
+
+docs.json
 /docs/index.html
 /docs/sitemap.xml
 /docs/vibe
@@ -13,6 +15,9 @@
 
 .dub
 dub.selections.json
+
+# Mono-D files
+*.userprefs
 
 # Unittest binaries
 vibe-d
