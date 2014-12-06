@@ -68,16 +68,16 @@ template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false
 	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
 
-    private template extract(size_t index, list...)
-    {
-        static if (!list.length) enum extract = UdaSearchResult!(null)(false, -1);
-        else {
-        	static if (is(list[0])) {
+	private template extract(size_t index, list...)
+	{
+		static if (!list.length) enum extract = UdaSearchResult!(null)(false, -1);
+		else {
+			static if (is(list[0])) {
 				static if (is(UDA) && is(list[0] == UDA) || !is(UDA) && isInstanceOf!(UDA, list[0])) {
 					static assert (allow_types, "findNextUDA is designed to look up values, not types");
 					enum extract = UdaSearchResult!(list[0])(true, index);
 				} else enum extract = extract!(index + 1, list[1..$]);
-        	} else {
+			} else {
 				static if (is(UDA) && is(typeof(list[0]) == UDA) || !is(UDA) && isInstanceOf!(UDA, typeof(list[0]))) {
 					import vibe.internal.meta.traits : isPropertyGetter;
 					static if (isPropertyGetter!(list[0])) {
@@ -87,7 +87,7 @@ template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false
 				} else enum extract = extract!(index + 1, list[1..$]);
 			}
 		}
-    }
+	}
 
 	enum findNextUDA = extract!(idx, udaTuple[idx .. $]);
 }
@@ -101,16 +101,16 @@ template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
 
-    private template extract(size_t index, list...)
-    {
-        static if (!list.length) enum extract = UdaSearchResult!(null)(false, -1);
-        else {
-        	static if (is(list[0])) {
+	private template extract(size_t index, list...)
+	{
+		static if (!list.length) enum extract = UdaSearchResult!(null)(false, -1);
+		else {
+			static if (is(list[0])) {
 				static if (is(list[0] == UDA)) {
 					static assert (allow_types, "findNextUDA is designed to look up values, not types");
 					enum extract = UdaSearchResult!(list[0])(true, index);
 				} else enum extract = extract!(index + 1, list[1..$]);
-        	} else {
+			} else {
 				static if (is(typeof(list[0]) == UDA)) {
 					import vibe.internal.meta.traits : isPropertyGetter;
 					static if (isPropertyGetter!(list[0])) {
@@ -129,12 +129,12 @@ template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 ///
 unittest
 {
-    struct Attribute { int x; }
+	struct Attribute { int x; }
 
-    @("something", Attribute(42), Attribute(41))
+	@("something", Attribute(42), Attribute(41))
 	void symbol();
 
-    enum result0 = findNextUDA!(string, symbol, 0);
+	enum result0 = findNextUDA!(string, symbol, 0);
 	static assert (result0.found);
 	static assert (result0.index == 0);
 	static assert (result0.value == "something");
@@ -155,7 +155,7 @@ unittest
 
 unittest
 {
-    struct Attribute { int x; }
+	struct Attribute { int x; }
 
 	@(Attribute) void symbol();
 
@@ -169,8 +169,8 @@ unittest
 
 unittest
 {
-    struct Attribute { int x; }
-    enum Dummy;
+	struct Attribute { int x; }
+	enum Dummy;
 
 	@property static Attribute getter()
 	{
