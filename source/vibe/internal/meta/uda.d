@@ -8,7 +8,6 @@
 
 module vibe.internal.meta.uda;
 
-import std.typetuple : TypeTuple;
 //import vibe.internal.meta.traits;
 
 
@@ -62,6 +61,7 @@ private struct UdaSearchResult(alias UDA)
 template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false)
 {
 	import std.traits : isInstanceOf;
+	import std.typetuple : TypeTuple;
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
@@ -95,6 +95,7 @@ template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false
 template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 {
 	import std.traits : isInstanceOf;
+	import std.typetuple : TypeTuple;
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
