@@ -983,12 +983,8 @@ private string genClientBody(alias Func)() {
 			request_str ~= ";\n";
 		}
 
-		request_str ~= format(
-			q{
-			auto jret__ = request("%s", url__ , jparams__, jparamsj__, headers__);
-		},
-		httpMethodString(meta.method)
-		);
+		request_str ~= format(q{auto jret__ = request("%s", url__ , jparams__, jparamsj__, headers__); },
+				      httpMethodString(meta.method));
 
 		static if (!is(RT == void)) {
 			request_str ~= q{
