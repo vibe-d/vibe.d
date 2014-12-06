@@ -222,7 +222,7 @@ unittest
 	@(Dummy, Attribute(21), Dummy, Attribute(42), Attribute(84)) void symbol() {}
 	@(Dummy, Attribute(21), Dummy, Attribute(42), Attribute) void wrong() {}
 
-	enum CMP = TypeTuple!(Attribute(21), Attribute(42), Attribute(84));
-	static assert(CMP == UDATuple!(Attribute, symbol));
+	alias Cmp = TypeTuple!(Attribute(21), Attribute(42), Attribute(84));
+	static assert(Cmp == UDATuple!(Attribute, symbol));
 	static assert(!is(UDATuple!(Attribute, wrong)));
 }

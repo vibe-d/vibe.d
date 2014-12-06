@@ -531,6 +531,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				// The spec / DMD doesn't like when you have the same symbol in those,
 				// leading to wrong codegen / wrong template being reused.
 				// That's why those templates need different names.
+				// See DMD bug #9748.
 				mixin(GenOrphan!(i).Decl);
 				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
 				static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
@@ -561,30 +562,30 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 					params[i] = fromRestString!P(req.params["id"]);
 				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
 					// User anotated the origin of this parameter.
-					enum PARAM = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-					static assert(PARAM.length == 1, "Parameter '"~ParamNames[i]~"' of "
+					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
+					static assert(paramsArgList.length == 1, "Parameter '"~ParamNames[i]~"' of "
 					~FuncId~" has multiple origin (@*Param attributes).");
 					// @headerParam.
-					static if (PARAM[0].origin == WebParamAttribute.Origin.Header) {
+					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
 						static if (is (ParamDefaults[i] == void)) {
-							auto fld = enforceBadRequest(PARAM[0].field in req.headers,
-							format("Expected field '%s' in header", PARAM[0].field));
+							auto fld = enforceBadRequest(paramsArgList[0].field in req.headers,
+							format("Expected field '%s' in header", paramsArgList[0].field));
 						} else {
-							auto fld = PARAM[0].field in req.headers;
+							auto fld = paramsArgList[0].field in req.headers;
 								if (fld is null) {
 								params[i] = ParamDefaults[i];
-								logDebug("No header param %s, using default value", PARAM[0].identifier);
+								logDebug("No header param %s, using default value", paramsArgList[0].identifier);
 								continue;
 							}
 						}
-						logDebug("Header param: %s <- %s", PARAM[0].identifier, *fld);
+						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
-					} else static if (PARAM[0].origin == WebParamAttribute.Origin.Query) {
+					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
 						static assert(0, "@QueryParam is not yet supported");
-					} else static if (PARAM[0].origin == WebParamAttribute.Origin.Body) {
+					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
 						static assert(0, "@BodyParam is not yet supported");
-					} else static assert (false, "Internal error: Origin "~PARAM[0].origin~" is not implemented.");
+					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
@@ -916,10 +917,10 @@ private string genClientBody(alias Func)() {
 				else
 				url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
-				enum PARAM = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static assert(PARAM.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
-				static if (PARAM[0].origin == WebParamAttribute.Origin.Header)
-					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PARAM[0].field, PARAM[0].identifier);
+				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
+				static assert(paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
+				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
+					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
 				else
 					static assert(0, "Only header parameter are currently supported client-side");
 			} else static if (
