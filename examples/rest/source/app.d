@@ -337,23 +337,36 @@ unittest
  *
  * This is configurable by means of:
  * - headerParam : Get a parameter from the query header;
+ * - queryParam : Get a parameter from the query URL;
  */
 @rootPathFromName
 interface Example6API
 {
-	// The first parameter of HeaderParam is the identifier (must match one of the parameter name).
+	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
 	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
 	@headerParam("auth", "Authorization")
 	string getResponse(string auth);
+	// As with @headerParam, the first parameter of @queryParam is the identifier.
+	// The second being the field name, e.g for a query such as: 'GET /root/node?foo=bar', "foo" will be the second parameter.
+	@queryParam("fortyTwo", "qparam")
+	string postAnswer(string fortyTwo);
 }
 
 class Example6 : Example6API
 {
-	override string getResponse(string auth) {
+override:
+	string getResponse(string auth)
+	{
 		// If the user provided credentials Aladdin / 'open sesame'
 		if (auth == "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
 			return "The response is 42";
 		return "The cake is a lie";
+	}
+	string postAnswer(string fortyTwo)
+	{
+		if (fortyTwo == "Life_universe_and_the_rest")
+			return "True";
+		return "False";
 	}
 }
 
@@ -364,6 +377,7 @@ unittest
 	auto routes = router.getAllRoutes();
 
 	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example6_api/response");
+	assert (routes[1].method == HTTPMethod.POST && routes[1].pattern == "/example6_api/answer");
 }
 
 
@@ -455,6 +469,22 @@ shared static this()
 			// Then we check that both can communicate together.
 			auto answer = api.getResponse("Hello there");
 			assert(answer == "The cake is a lie");
+		}
+
+		// Example 6 -- Query
+		{
+			import vibe.http.client : requestHTTP;
+			import vibe.stream.operations : readAllUTF8;
+
+			// First we make sure parameters are transmitted via query.
+			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/answer?qparam=Life_universe_and_the_rest",
+			                       (scope r) { r.method = HTTPMethod.POST; });
+			assert(res.statusCode == 200);
+			assert(res.bodyReader.readAllUTF8() == `"True"`);
+			// Then we check that both can communicate together.
+			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
+			auto answer = api.postAnswer("IDK");
+			assert(answer == "False");
 		}
 
 		logInfo("Success.");
