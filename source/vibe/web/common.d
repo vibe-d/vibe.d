@@ -513,37 +513,35 @@ version (none) {
  * void login(string auth);
  * ----
  */
-WebParamAttribute headerParam(string identifier, string field) {
+WebParamAttribute headerParam(string identifier, string field)
+{
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(WebParamAttribute.Origin.Header, identifier, field);
 }
 
-version (none) {
-	// It's not yet implemented in the REST and web interface.
-	/*
-	 * Declare that a parameter will be transmitted to the API through the query string.
-	 *
-	 * It will be serialized as part of a JSON object, and will go through URL serialization.
-	 * The serialization format is not customizable.
-	 *
-	 * Params:
-	 * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
-	 * - field: The field name to use.
-	 *
-	 * ----
-	 * // For a call to postData("D is awesome"), the server will receive the query:
-	 * // POST /data?test=%22D is awesome%22
-	 * @queryParam("data", "test")
-	 * void postData(string data);
-	 * ----
-	 */
-	private WebParamAttribute queryParam(string identifier, string field) {
-
-		if (!__ctfe)
-			assert(false, onlyAsUda!__FUNCTION__);
-		return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
-	}
+/**
+ * Declare that a parameter will be transmitted to the API through the query string.
+ *
+ * It will be serialized as part of a JSON object, and will go through URL serialization.
+ * The serialization format is not customizable.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The field name to use.
+ *
+ * ----
+ * // For a call to postData("D is awesome"), the server will receive the query:
+ * // POST /data?test=%22D is awesome%22
+ * @queryParam("data", "test")
+ * void postData(string data);
+ * ----
+ */
+WebParamAttribute queryParam(string identifier, string field)
+{
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
 }
 
 /**
