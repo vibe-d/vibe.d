@@ -631,7 +631,20 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
-						static assert (0, "@QueryParam is not yet supported");
+						// Note: Doesn't work if HTTPServerOption.parseQueryString is disabled.
+						static if (is (ParamDefaults[i] == void)) {
+							auto fld = enforceBadRequest(paramsArgList[0].field in req.query,
+										     format("Expected form field '%s' in query", paramsArgList[0].field));
+						} else {
+							auto fld = paramsArgList[0].field in req.query;
+							if (fld is null) {
+								params[i] = ParamDefaults[i];
+								logDebug("No query param %s, using default value", paramsArgList[0].identifier);
+								continue;
+							}
+						}
+						logDebug("Query param: %s <- %s", paramsArgList[0].identifier, *fld);
+						params[i] = fromRestString!P(*fld);
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
 						static assert (0, "@BodyParam is not yet supported");
 					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
