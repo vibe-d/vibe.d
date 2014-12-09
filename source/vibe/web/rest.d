@@ -351,12 +351,11 @@ class RestInterfaceClient(I) : I
 		import vibe.data.json : Json;
 		import vibe.textfilter.urlencode;
 
-		Json request(string verb, string name, Json params, bool[string] param_is_json, in ref InetHeaderMap hdrs) const
+		Json request(HTTPMethod verb, string name, Json params, bool[string] param_is_json, in ref InetHeaderMap hdrs) const
 		{
 			import vibe.http.client : HTTPClientRequest, HTTPClientResponse,
 				requestHTTP;
-			import vibe.http.common : HTTPStatusException, HTTPStatus,
-				httpMethodFromString, httpStatusText;
+			import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
 			import vibe.inet.url : Path;
 			import std.array : appender;
 
@@ -364,7 +363,7 @@ class RestInterfaceClient(I) : I
 
 			if (name.length) url ~= Path(name);
 
-			if ((verb == "GET" || verb == "HEAD") && params.length > 0) {
+			if ((verb == HTTPMethod.GET || verb == HTTPMethod.HEAD) && params.length > 0) {
 				auto query = appender!string();
 				bool first = true;
 
@@ -386,7 +385,7 @@ class RestInterfaceClient(I) : I
 			Json ret;
 
 			auto reqdg = (scope HTTPClientRequest req) {
-				req.method = httpMethodFromString(verb);
+				req.method = verb;
 				foreach (k, v; hdrs)
 					req.headers[k] = v;
 
@@ -394,7 +393,7 @@ class RestInterfaceClient(I) : I
 					m_requestFilter(req);
 				}
 
-				if (verb != "GET" && verb != "HEAD") {
+				if (verb != HTTPMethod.GET && verb != HTTPMethod.HEAD) {
 					req.writeJsonBody(params);
 				}
 			};
@@ -404,7 +403,7 @@ class RestInterfaceClient(I) : I
 
 				logDebug(
 					"REST call: %s %s -> %d, %s",
-					verb,
+					httpMethodString(verb),
 					url.toString(),
 					res.statusCode,
 					ret.toString()
@@ -866,7 +865,6 @@ private string genClientBody(alias Func)() {
 	import std.string : format;
 	import std.traits : ReturnType, FunctionTypeOf, ParameterTypeTuple, ParameterIdentifierTuple;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
-	import vibe.http.common : httpMethodString;
 
 	alias FT = FunctionTypeOf!Func;
 	alias RT = ReturnType!FT;
@@ -984,8 +982,7 @@ private string genClientBody(alias Func)() {
 			request_str ~= ";\n";
 		}
 
-		request_str ~= format(q{auto jret__ = request("%s", url__ , jparams__, jparamsj__, headers__); },
-				      httpMethodString(meta.method));
+		request_str ~= format(q{auto jret__ = request(HTTPMethod.%s, url__ , jparams__, jparamsj__, headers__);}, to!string(meta.method));
 
 		static if (!is(RT == void)) {
 			request_str ~= q{
