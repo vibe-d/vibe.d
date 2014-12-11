@@ -17,6 +17,7 @@ import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
 import vibe.internal.meta.uda : UDATuple;
 import vibe.inet.url;
+import vibe.inet.message : InetHeaderMap;
 
 import std.algorithm : startsWith, endsWith;
 import std.typetuple : anySatisfy, Filter;
@@ -350,7 +351,7 @@ class RestInterfaceClient(I) : I
 		import vibe.data.json : Json;
 		import vibe.textfilter.urlencode;
 
-		Json request(string verb, string name, Json params, bool[string] param_is_json, string[string] hdrs) const
+		Json request(string verb, string name, Json params, bool[string] param_is_json, in ref InetHeaderMap hdrs) const
 		{
 			import vibe.http.client : HTTPClientRequest, HTTPClientResponse,
 				requestHTTP;
@@ -998,7 +999,7 @@ private string genClientBody(alias Func)() {
 		ret ~= format(
 			q{
 				Json jparams__ = Json.emptyObject;
-				string[string] headers__;
+				InetHeaderMap headers__;
 				bool[string] jparamsj__;
 				string url__ = "%s";
 				%s
