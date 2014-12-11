@@ -226,3 +226,14 @@ unittest
 	static assert(Cmp == UDATuple!(Attribute, symbol));
 	static assert(!is(UDATuple!(Attribute, wrong)));
 }
+
+/// Avoid repeating the same error message again and again.
+/// ----
+/// if (!__ctfe)
+///	assert(0, onlyAsUda!func);
+/// ----
+template onlyAsUda(string from /*= __FUNCTION__*/)
+{
+	// With default param, DMD think expression is void, even when writing 'enum string onlyAsUda = ...'
+	enum onlyAsUda = from~" must only be used as an attribute - not called as a runtime function.";
+}
