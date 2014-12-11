@@ -13,7 +13,7 @@
 
 	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
 	"dependencies": {
-		"openssl": "1.0.0+1.0.0e"
+		"openssl": ">=1.0.0+1.0.0e"
 	},
 
 	"targetType": "library",
