@@ -10,6 +10,7 @@ module vibe.web.common;
 import vibe.http.common;
 import vibe.http.server : HTTPServerRequest;
 import vibe.data.json;
+import vibe.internal.meta.uda : onlyAsUda;
 
 static import std.utf;
 static import std.string;
@@ -264,7 +265,7 @@ unittest
 ContentTypeAttribute contentType(string data) 
 {
 	if (!__ctfe)
-		assert(false);
+		assert(false, onlyAsUda!__FUNCTION__);
 	return ContentTypeAttribute(data);
 }
 
@@ -285,7 +286,7 @@ ContentTypeAttribute contentType(string data)
 MethodAttribute method(HTTPMethod data)
 {
 	if (!__ctfe)
-		assert(false);
+		assert(false, onlyAsUda!__FUNCTION__);
 	return MethodAttribute(data);
 }
 
@@ -312,7 +313,7 @@ MethodAttribute method(HTTPMethod data)
 PathAttribute path(string data) 
 {
 	if (!__ctfe)
-		assert(false);
+		assert(false, onlyAsUda!__FUNCTION__);
 	return PathAttribute(data);
 }
 
@@ -324,7 +325,7 @@ PathAttribute path(string data)
 RootPathAttribute rootPath(string path)
 {
 	if (!__ctfe)
-		assert(false);
+		assert(false, onlyAsUda!__FUNCTION__);
 	return RootPathAttribute(path);
 }
 ///
@@ -361,7 +362,7 @@ unittest
 @property RootPathAttribute rootPathFromName()
 {
 	if (!__ctfe)
-		assert(false);
+		assert(false, onlyAsUda!__FUNCTION__);
 	return RootPathAttribute("");
 }
 ///
@@ -490,7 +491,7 @@ version (none) {
 	 */
 	private WebParamAttribute bodyParam(string identifier, string field) {
 		if (!__ctfe)
-			assert(false);
+			assert(false, onlyAsUda!__FUNCTION__);
 		return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
 	}
 }
@@ -514,7 +515,7 @@ version (none) {
  */
 WebParamAttribute headerParam(string identifier, string field) {
 	if (!__ctfe)
-		assert(false);
+		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(WebParamAttribute.Origin.Header, identifier, field);
 }
 
@@ -540,7 +541,7 @@ version (none) {
 	private WebParamAttribute queryParam(string identifier, string field) {
 
 		if (!__ctfe)
-			assert(false);
+			assert(false, onlyAsUda!__FUNCTION__);
 		return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
 	}
 }
