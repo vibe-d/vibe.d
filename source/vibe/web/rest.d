@@ -15,9 +15,12 @@ import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
+import vibe.internal.meta.uda : UDATuple;
 import vibe.inet.url;
+import vibe.inet.message : InetHeaderMap;
 
 import std.algorithm : startsWith, endsWith;
+import std.typetuple : anySatisfy, Filter;
 
 /**
 	Registers a REST interface and connects it the the given instance.
@@ -348,7 +351,7 @@ class RestInterfaceClient(I) : I
 		import vibe.data.json : Json;
 		import vibe.textfilter.urlencode;
 
-		Json request(string verb, string name, Json params, bool[string] param_is_json) const
+		Json request(string verb, string name, Json params, bool[string] param_is_json, in ref InetHeaderMap hdrs) const
 		{
 			import vibe.http.client : HTTPClientRequest, HTTPClientResponse,
 				requestHTTP;
@@ -384,6 +387,8 @@ class RestInterfaceClient(I) : I
 
 			auto reqdg = (scope HTTPClientRequest req) {
 				req.method = httpMethodFromString(verb);
+				foreach (k, v; hdrs)
+					req.headers[k] = v;
 
 				if (m_requestFilter) {
 					m_requestFilter(req);
@@ -494,7 +499,7 @@ class RestInterfaceSettings {
 /// private
 private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst, RestInterfaceSettings settings)
 {
-	import std.traits : ParameterTypeTuple, ReturnType,
+	import std.traits : ParameterTypeTuple, ReturnType, fullyQualifiedName,
 		ParameterDefaultValueTuple, ParameterIdentifierTuple;
 	import std.string : format;
 	import std.algorithm : startsWith;
@@ -508,6 +513,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	alias RT = ReturnType!Func;
 	alias ParamDefaults = ParameterDefaultValueTuple!Func;
 	enum ParamNames = [ ParameterIdentifierTuple!Func ];
+	enum FuncId = (fullyQualifiedName!T~ "." ~ __traits(identifier, Func));
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -517,6 +523,22 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			if (settings.stripTrailingUnderscore && name.endsWith("_"))
 				return name[0 .. $-1];
 			else return name;
+		}
+
+		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
+		static if (UDATuple!(WebParamAttribute, Func).length) {
+			foreach (i, uda; UDATuple!(WebParamAttribute, Func)) {
+				// Note: static foreach gets unrolled, generating multiple nested sub-scope.
+				// The spec / DMD doesn't like when you have the same symbol in those,
+				// leading to wrong codegen / wrong template being reused.
+				// That's why those templates need different names.
+				// See DMD bug #9748.
+				mixin(GenOrphan!(i).Decl);
+				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
+				static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+				              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
+				       uda.identifier, FuncId, uda.origin));
+			}
 		}
 
 		foreach (i, P; PT) {
@@ -531,10 +553,40 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
+				// Comparison template for anySatisfy
+				//template Cmp(WebParamAttribute attr) { enum Cmp = (attr.identifier == ParamNames[i]); }
+				mixin(GenCmp!("Loop", i, ParamNames[i]).Decl);
+				// Find origin of parameter
 				static if (i == 0 && ParamNames[i] == "id") {
 					// legacy special case for :id, backwards-compatibility
 					logDebug("id %s", req.params["id"]);
 					params[i] = fromRestString!P(req.params["id"]);
+				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
+					// User anotated the origin of this parameter.
+					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
+					static assert(paramsArgList.length == 1, "Parameter '"~ParamNames[i]~"' of "
+					~FuncId~" has multiple origin (@*Param attributes).");
+					// @headerParam.
+					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
+						// If it has no default value
+						static if (is (ParamDefaults[i] == void)) {
+							auto fld = enforceBadRequest(paramsArgList[0].field in req.headers,
+							format("Expected field '%s' in header", paramsArgList[0].field));
+						} else {
+							auto fld = paramsArgList[0].field in req.headers;
+								if (fld is null) {
+								params[i] = ParamDefaults[i];
+								logDebug("No header param %s, using default value", paramsArgList[0].identifier);
+								continue;
+							}
+						}
+						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
+						params[i] = fromRestString!P(*fld);
+					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
+						static assert(0, "@QueryParam is not yet supported");
+					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
+						static assert(0, "@BodyParam is not yet supported");
+					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
@@ -822,6 +874,20 @@ private string genClientBody(alias Func)() {
 	alias ParamNames = ParameterIdentifierTuple!Func;
 
 	enum meta = extractHTTPMethodAndName!Func();
+	enum paramAttr = UDATuple!(WebParamAttribute, Func);
+	enum FuncId = __traits(identifier, Func);
+
+	// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
+	static if (paramAttr.length) {
+		foreach (i, uda; paramAttr) {
+			// Note: See server code to see why it's necessary (or Template definition).
+			mixin(GenOrphan!(i).Decl);
+			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
+			static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+			              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
+			       uda.identifier, FuncId, uda.origin));
+		}
+	}
 
 	// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
 	static if (is(RT == interface)) {
@@ -842,14 +908,23 @@ private string genClientBody(alias Func)() {
 				)
 			);
 
+			// Check origin of parameter
+			mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Decl);
+
 			// legacy :id special case, left for backwards-compatibility reasons
 			static if (i == 0 && ParamNames[0] == "id") {
 				static if (is(PT == Json))
 				url_prefix = q{urlEncode(id.toString())~"/"};
 				else
 				url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
-			}
-			else static if (
+			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
+				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
+				static assert(paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
+				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
+					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
+				else
+					static assert(0, "Only header parameter are currently supported client-side");
+			} else static if (
 				!ParamNames[i].startsWith("_") &&
 			!IsAttributedParameter!(Func, ParamNames[i])
 			) {
@@ -909,12 +984,8 @@ private string genClientBody(alias Func)() {
 			request_str ~= ";\n";
 		}
 
-		request_str ~= format(
-			q{
-			auto jret__ = request("%s", url__ , jparams__, jparamsj__);
-		},
-		httpMethodString(meta.method)
-		);
+		request_str ~= format(q{auto jret__ = request("%s", url__ , jparams__, jparamsj__, headers__); },
+				      httpMethodString(meta.method));
 
 		static if (!is(RT == void)) {
 			request_str ~= q{
@@ -928,6 +999,7 @@ private string genClientBody(alias Func)() {
 		ret ~= format(
 			q{
 				Json jparams__ = Json.emptyObject;
+				InetHeaderMap headers__;
 				bool[string] jparamsj__;
 				string url__ = "%s";
 				%s
@@ -1003,3 +1075,27 @@ unittest
 	static assert(imports == "static import vibe.web.rest;");
 }
 
+
+// Workarounds @@DMD:9748@@, and maybe more
+private template GenCmp(string name, int id, string cmpTo) {
+	import std.string : format;
+	import std.conv : to;
+	enum Decl = q{
+		template %1$s(alias uda) {
+			enum %1$s = (uda.identifier == "%2$s");
+		}
+	}.format(Name, cmpTo);
+	enum Name = name~to!string(id);
+}
+
+// Ditto
+private template GenOrphan(int id) {
+    import std.string : format;
+    import std.conv : to;
+    enum Decl = q{
+        template %1$s(string name) {
+            enum %1$s = (uda.identifier == name);
+        }
+    }.format(Name);
+    enum Name = "OrphanCheck"~to!string(id);
+}
