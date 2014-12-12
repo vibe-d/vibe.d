@@ -451,6 +451,7 @@ struct Bson {
 			case Bson.Type.int_: return Json(get!int());
 			case Bson.Type.timestamp: return Json(get!BsonTimestamp().m_time);
 			case Bson.Type.long_: return Json(get!long());
+			case Bson.Type.undefined: return Json();
 		}
 	}
 
