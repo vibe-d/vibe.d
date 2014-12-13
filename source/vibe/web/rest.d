@@ -130,7 +130,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 
 			static if (is(RT == interface)) {
 				// nested API
-				static assert(
+				static assert (
 					ParameterTypeTuple!overload.length == 0,
 					"Interfaces may only be returned from parameter-less functions!"
 				);
@@ -285,7 +285,7 @@ class RestInterfaceClient(I) : I
 		m_settings = settings.dup;
 
 		if (!m_settings.baseURL.path.absolute) {
-			assert(m_settings.baseURL.path.empty, "Base URL path must be absolute.");
+			assert (m_settings.baseURL.path.empty, "Base URL path must be absolute.");
 			m_settings.baseURL.path = Path("/");
 		}
 
@@ -534,9 +534,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				// See DMD bug #9748.
 				mixin(GenOrphan!(i).Decl);
 				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-				static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+				static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
 				              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
-				       uda.identifier, FuncId, uda.origin));
+						     uda.identifier, FuncId, uda.origin));
 			}
 		}
 
@@ -544,9 +544,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			static assert (
 				ParamNames[i].length,
 				format(
-					"Parameter %s of %s has no name",
-					i.stringof,
-					method
+				       "Parameter %s of %s has no name",
+				       i.stringof,
+				       method
 				)
 			);
 
@@ -563,8 +563,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
 					// User anotated the origin of this parameter.
 					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-					static assert(paramsArgList.length == 1, "Parameter '"~ParamNames[i]~"' of "
-					~FuncId~" has multiple origin (@*Param attributes).");
+					static assert (
+						paramsArgList.length == 1,
+						"Parameter '"~ParamNames[i]~"' of "~FuncId~" has multiple origin (@*Param attributes)."
+					);
 					// @headerParam.
 					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
@@ -582,9 +584,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
-						static assert(0, "@QueryParam is not yet supported");
+						static assert (0, "@QueryParam is not yet supported");
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
-						static assert(0, "@BodyParam is not yet supported");
+						static assert (0, "@BodyParam is not yet supported");
 					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
@@ -684,7 +686,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 private string generateRestInterfaceSubInterfaces(I)()
 {
 	if (!__ctfe)
-		assert(false);
+		assert (false);
 
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
 		ReturnType, ParameterTypeTuple, fullyQualifiedName;
@@ -710,20 +712,12 @@ private string generateRestInterfaceSubInterfaces(I)()
 				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof ~ "Impl";
-					ret ~= format(
-						q{
-							alias RestInterfaceClient!(%s) %s;
-						},
-						fullyQualifiedName!RT,
-						implname
-					);
-					ret ~= format(
-						q{
-							private %s m_%s;
-						},
-						implname,
-						implname
-					);
+					ret ~= q{
+						alias RestInterfaceClient!(%s) %s;
+					}.format(fullyQualifiedName!RT, implname);
+					ret ~= q{
+						private %1$s m_%1$s;
+					}.format(implname);
 					ret ~= "\n";
 				}
 			}
@@ -736,7 +730,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 private string generateRestInterfaceSubInterfaceInstances(I)()
 {
 	if (!__ctfe)
-		assert(false);
+		assert (false);
 
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
 		ReturnType, ParameterTypeTuple;
@@ -765,14 +759,14 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 
 					enum meta = extractHTTPMethodAndName!overload();
 
-					ret ~= format(
-						q{
-							auto settings_%1$s = m_settings.dup;
-							settings_%1$s.baseURL.path = m_baseURL.path ~
-								(%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
-							m_%1$s = new %1$s(settings_%1$s);
-						},
-						implname, meta.url, meta.hadPathUDA
+					ret ~= q{
+						auto settings_%1$s = m_settings.dup;
+						settings_%1$s.baseURL.path = m_baseURL.path ~ (%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
+						m_%1$s = new %1$s(settings_%1$s);
+					}.format(
+						 implname,
+						 meta.url,
+						 meta.hadPathUDA
 					);
 					ret ~= "\n";
 				}
@@ -787,7 +781,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 {
 	if (!__ctfe)
-		assert(false);
+		assert (false);
 
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
 		ReturnType, ParameterTypeTuple;
@@ -814,12 +808,9 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 					tps ~= RT.stringof;
 					string implname = RT.stringof ~ "Impl";
 
-					ret ~= format(
-						q{
-							m_%s.requestFilter = m_requestFilter;
-						},
-						implname
-					);
+					ret ~= q{
+						m_%s.requestFilter = m_requestFilter;
+					}.format(implname);
 					ret ~= "\n";
 				}
 			}
@@ -838,7 +829,7 @@ mixin template RestClientMethods(I) if (is(I == interface)) {
 // of that template.
 mixin template RestClientMethods_MemberImpl(Members...) {
 	import std.traits : MemberFunctionsTuple;
-	static assert(Members.length > 0);
+	static assert (Members.length > 0);
 	private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
 	// Members can be declaration / fields.
 	static if (Ovrlds.length > 0) {
@@ -852,7 +843,7 @@ mixin template RestClientMethods_MemberImpl(Members...) {
 // Poor men's foreach (overload; MemberFunctionsTuple!(I, method))
 mixin template RestClientMethods_OverloadImpl(Overloads...) {
 	import vibe.internal.meta.codegen : CloneFunction;
-	static assert(Overloads.length > 0);
+	static assert (Overloads.length > 0);
 	//pragma(msg, "===== Body for: "~__traits(identifier, Overloads[0])~" =====");
 	//pragma(msg, genClientBody!(Overloads[0]));
 	mixin CloneFunction!(Overloads[0], genClientBody!(Overloads[0])());
@@ -881,9 +872,8 @@ private string genClientBody(alias Func)() {
 			// Note: See server code to see why it's necessary (or Template definition).
 			mixin(GenOrphan!(i).Decl);
 			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-			static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
-			              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
-			       uda.identifier, FuncId, uda.origin));
+			static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+			              format("No parameter '%s' on %s (referenced by attribute @%sParam)", uda.identifier, FuncId, uda.origin));
 		}
 	}
 
@@ -899,10 +889,10 @@ private string genClientBody(alias Func)() {
 		foreach (i, PT; PTT){
 			static assert (
 				ParamNames[i].length,
-			format(
-				"Parameter %s of %s has no name.",
-				i,
-				method
+				format(
+				       "Parameter %s of %s has no name.",
+				       i,
+				       method
 				)
 			);
 
@@ -912,31 +902,23 @@ private string genClientBody(alias Func)() {
 			// legacy :id special case, left for backwards-compatibility reasons
 			static if (i == 0 && ParamNames[0] == "id") {
 				static if (is(PT == Json))
-				url_prefix = q{urlEncode(id.toString())~"/"};
+					url_prefix = q{urlEncode(id.toString())~"/"};
 				else
-				url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
+					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
 				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static assert(paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
+				static assert (paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
 				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
 					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
 				else
-					static assert(0, "Only header parameter are currently supported client-side");
-			} else static if (
-				!ParamNames[i].startsWith("_") &&
-			!IsAttributedParameter!(Func, ParamNames[i])
-			) {
+					static assert (0, "Only header parameter are currently supported client-side");
+			} else static if (!ParamNames[i].startsWith("_")
+					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-				param_handling_str ~= format(
-					q{
-					jparams__[_stripName("%s")] = serializeToJson(%s);
-					jparamsj__[_stripName("%s")] = %s;
-				},
-				ParamNames[i],
-				ParamNames[i],
-				ParamNames[i],
-				is(PT == Json) ? "true" : "false"
-				);
+				param_handling_str ~= q{
+					jparams__[_stripName("%1$s")] = serializeToJson(%1$s);
+					jparamsj__[_stripName("%1$s")] = %2$s;
+				}.format(ParamNames[i], is(PT == Json) ? "true" : "false");
 			}
 		}
 
@@ -944,14 +926,11 @@ private string genClientBody(alias Func)() {
 		string request_str;
 
 		static if (!meta.hadPathUDA) {
-			request_str = format(
-				q{
+			request_str = q{
 				if (m_settings.stripTrailingUnderscore && url__.endsWith("_"))
 					url__ = url__[0 .. $-1];
 				url__ = %s ~ adjustMethodStyle(url__, m_methodStyle);
-			},
-			url_prefix
-			);
+			}.format(url_prefix);
 		} else {
 			import std.array : split;
 			auto parts = meta.url.split("/");
@@ -964,10 +943,7 @@ private string genClientBody(alias Func)() {
 				if (p.startsWith(":")) {
 					foreach (pn; ParamNames) {
 						if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
-							request_str ~= format(
-								q{ ~ urlEncode(toRestString(serializeToJson(%s)))},
-							pn
-							);
+							request_str ~= q{ ~ urlEncode(toRestString(serializeToJson(%s)))}.format(pn);
 							match = true;
 							break;
 						}
@@ -982,7 +958,7 @@ private string genClientBody(alias Func)() {
 			request_str ~= ";\n";
 		}
 
-		request_str ~= format(q{auto jret__ = request(HTTPMethod.%s, url__ , jparams__, jparamsj__, headers__);}, to!string(meta.method));
+		request_str ~= q{auto jret__ = request(HTTPMethod.%s, url__ , jparams__, jparamsj__, headers__);}.format(to!string(meta.method));
 
 		static if (!is(RT == void)) {
 			request_str ~= q{
@@ -993,18 +969,14 @@ private string genClientBody(alias Func)() {
 		}
 
 		// Block 1
-		ret ~= format(
-			q{
-				Json jparams__ = Json.emptyObject;
-				InetHeaderMap headers__;
-				bool[string] jparamsj__;
-				string url__ = "%s";
-				%s
-					%s },
-		meta.url,
-		param_handling_str,
-		request_str
-		);
+		ret ~= q{
+			Json jparams__ = Json.emptyObject;
+			InetHeaderMap headers__;
+			bool[string] jparamsj__;
+			string url__ = "%s";
+			%s
+			%s
+		}.format(meta.url, param_handling_str, request_str);
 		return ret;
 	}
 }
@@ -1015,7 +987,7 @@ private {
 
 	string toRestString(Json value)
 	{
-		switch( value.type ){
+		switch (value.type) {
 			default: return value.toString();
 			case Json.Type.Bool: return value.get!bool ? "true" : "false";
 			case Json.Type.Int: return to!string(value.get!long);
@@ -1031,14 +1003,14 @@ private {
 		import vibe.web.common : HTTPStatusException, HTTPStatus;
 		try {
 			static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
-			else static if( is(T == bool) ) return value == "true";
-			else static if( is(T : int) ) return to!T(value);
-			else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
-			else static if( is(T : string) ) return value;
-			else static if( __traits(compiles, T.fromISOExtString("hello")) ) return T.fromISOExtString(value);
-			else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
+			else static if (is(T == bool)) return value == "true";
+			else static if (is(T : int)) return to!T(value);
+			else static if (is(T : double)) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
+			else static if (is(T : string)) return value;
+			else static if (__traits(compiles, T.fromISOExtString("hello"))) return T.fromISOExtString(value);
+			else static if (__traits(compiles, T.fromString("hello"))) return T.fromString(value);
 			else return deserializeJson!T(parseJson(value));
-		} catch(ConvException e) {
+		} catch (ConvException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		}
 	}
@@ -1046,8 +1018,8 @@ private {
 
 private string generateModuleImports(I)()
 {
-	if( !__ctfe )
-		assert(false);
+	if (!__ctfe)
+		assert (false);
 
 	import vibe.internal.meta.codegen : getRequiredImports;
 	import std.algorithm : map;
@@ -1069,9 +1041,8 @@ version(unittest)
 unittest
 {
 	enum imports = generateModuleImports!Interface;
-	static assert(imports == "static import vibe.web.rest;");
+	static assert (imports == "static import vibe.web.rest;");
 }
-
 
 // Workarounds @@DMD:9748@@, and maybe more
 private template GenCmp(string name, int id, string cmpTo) {
@@ -1087,12 +1058,12 @@ private template GenCmp(string name, int id, string cmpTo) {
 
 // Ditto
 private template GenOrphan(int id) {
-    import std.string : format;
-    import std.conv : to;
-    enum Decl = q{
-        template %1$s(string name) {
-            enum %1$s = (uda.identifier == name);
-        }
-    }.format(Name);
-    enum Name = "OrphanCheck"~to!string(id);
+	import std.string : format;
+	import std.conv : to;
+	enum Decl = q{
+		template %1$s(string name) {
+			enum %1$s = (uda.identifier == name);
+		}
+	}.format(Name);
+	enum Name = "OrphanCheck"~to!string(id);
 }
