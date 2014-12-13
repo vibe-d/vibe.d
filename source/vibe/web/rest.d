@@ -351,36 +351,29 @@ class RestInterfaceClient(I) : I
 		import vibe.data.json : Json;
 		import vibe.textfilter.urlencode;
 
-		Json request(HTTPMethod verb, string name, Json params, bool[string] param_is_json, in ref InetHeaderMap hdrs) const
+		/**
+		 * Perform a request to the interface using the given parameters.
+		 *
+		 * Params:
+		 * verb = Kind of request (See $(D HTTPMethod) enum).
+		 * name = Location to request. For a request on https://github.com/rejectedsoftware/vibe.d/issues?q=author%3ASantaClaus,
+		 *		it will be '/rejectedsoftware/vibe.d/issues'.
+		 * hdrs = The headers to send. Some field might be overriden (such as Content-Length). However, Content-Type will NOT be overriden.
+		 * query = The $(B encoded) query string. For a request on https://github.com/rejectedsoftware/vibe.d/issues?q=author%3ASantaClaus,
+		 *		it will be 'author%3ASantaClaus'.
+		 * body_ = The body to send, as a string. If a Content-Type is present in $(D hdrs), it will be used, otherwise it will default to
+		 *		the generic type "application/json".
+		 */
+		Json request(HTTPMethod verb, string name, in ref InetHeaderMap hdrs, string query, string body_) const
 		{
-			import vibe.http.client : HTTPClientRequest, HTTPClientResponse,
-				requestHTTP;
+			import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 			import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
 			import vibe.inet.url : Path;
-			import std.array : appender;
 
 			URL url = m_baseURL;
 
 			if (name.length) url ~= Path(name);
-
-			if ((verb == HTTPMethod.GET || verb == HTTPMethod.HEAD) && params.length > 0) {
-				auto query = appender!string();
-				bool first = true;
-
-				foreach (string pname, p; params) {
-					if (!first) {
-						query.put('&');
-					}
-					else {
-						first = false;
-					}
-					filterURLEncode(query, pname);
-					query.put('=');
-					filterURLEncode(query, param_is_json[pname] ? p.toString() : toRestString(p));
-				}
-
-				url.queryString = query.data();
-			}
+			if (query) url.queryString = query;
 
 			Json ret;
 
@@ -393,21 +386,20 @@ class RestInterfaceClient(I) : I
 					m_requestFilter(req);
 				}
 
-				if (verb != HTTPMethod.GET && verb != HTTPMethod.HEAD) {
-					req.writeJsonBody(params);
-				}
+				if (body_)
+					req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
 			};
 
 			auto resdg = (scope HTTPClientResponse res) {
 				ret = res.readJson();
 
 				logDebug(
-					"REST call: %s %s -> %d, %s",
-					httpMethodString(verb),
-					url.toString(),
-					res.statusCode,
-					ret.toString()
-				);
+					 "REST call: %s %s -> %d, %s",
+					 httpMethodString(verb),
+					 url.toString(),
+					 res.statusCode,
+					 ret.toString()
+					 );
 
 				if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
 					throw new RestException(res.statusCode, ret);
@@ -416,6 +408,61 @@ class RestInterfaceClient(I) : I
 			requestHTTP(url, reqdg, resdg);
 
 			return ret;
+		}
+	}
+
+	/// Params are passed in a deterministic order: [Name, value]*
+	private string genQuery(Ts...)(Ts params) {
+		import std.array : appender;
+
+		static assert(!(params.length % 2), "Internal error ("~__FUNCTION__~"): Expected [Name, value] pairs.");
+		static if (!params.length)
+			return null;
+		else {
+			auto query = appender!string();
+
+			foreach (idx, p; params) {
+				static if (!(idx % 2)) {
+					// Parameter name
+					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
+					query.put('&');
+					filterURLEncode(query, p);
+				} else {
+					// Parameter value
+					query.put('=');
+					static if (is(typeof(p) == Json))
+						filterURLEncode(query, p.toString());
+					else // Note: CTFE triggers compiler bug here (think we are returning Json, not string).
+						filterURLEncode(query, toRestString(serializeToJson(p)));
+				}
+			}
+			return query.data();
+		}
+	}
+
+	/// Params are passed in a deterministic order: [Name, value]*
+	private string genBody(Ts...)(Ts params) {
+		import std.array : appender;
+
+		static assert(!(params.length % 2), "Internal error ("~__FUNCTION__~"): Expected [Name, value] pairs.");
+		static if (!params.length)
+			return null;
+		else {
+			auto jsonBody = Json.emptyObject;
+
+			string nextName;
+			foreach (idx, p; params) {
+				static if (!(idx % 2)) {
+					// Parameter name
+					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
+					nextName = p;
+				} else {
+					// Parameter value
+					jsonBody[nextName] = serializeToJson(p);
+				}
+			}
+			debug return jsonBody.toPrettyString();
+			else return jsonBody.toString();
 		}
 	}
 
@@ -884,6 +931,15 @@ private string genClientBody(alias Func)() {
 		string ret;
 		string param_handling_str;
 		string url_prefix = `""`;
+		// Those store the way parameter should be handled afterward.
+		// A parameter that bears doesn't a WebParamAttribute (which documents origin explicitly)
+		// will be stored in defaultParamCTMap. Else, it will either go to headers__ (via request_str),
+		// or queryParamCTMap / bodyParamCTMap, and be passed to genQuery / genBody just before calling request.
+		// Note: The key is the HTTP parameter name, and the value the parameter *identifier*.
+		// Ex: @queryParam("llama", "alpaca") void postSpit(string llama) => queryParamCTMap["alpaca"] = "llama";
+		string[string] defaultParamCTMap;
+		string[string] queryParamCTMap;
+		string[string] bodyParamCTMap;
 
 		// Block 2
 		foreach (i, PT; PTT){
@@ -915,10 +971,7 @@ private string genClientBody(alias Func)() {
 			} else static if (!ParamNames[i].startsWith("_")
 					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-				param_handling_str ~= q{
-					jparams__[_stripName("%1$s")] = serializeToJson(%1$s);
-					jparamsj__[_stripName("%1$s")] = %2$s;
-				}.format(ParamNames[i], is(PT == Json) ? "true" : "false");
+				defaultParamCTMap[_stripNameHelper(ParamNames[i])] = ParamNames[i];
 			}
 		}
 
@@ -958,7 +1011,19 @@ private string genClientBody(alias Func)() {
 			request_str ~= ";\n";
 		}
 
-		request_str ~= q{auto jret__ = request(HTTPMethod.%s, url__ , jparams__, jparamsj__, headers__);}.format(to!string(meta.method));
+		request_str ~= q{
+			// By default for GET / HEAD, params are send via the query string.
+			static if (HTTPMethod.%1$s == HTTPMethod.GET || HTTPMethod.%1$s == HTTPMethod.HEAD) {
+				auto jret__ = request(HTTPMethod.%1$s, url__ , headers__, genQuery(%2$s%5$s%3$s), genBody(%4$s));
+			} else {
+				// Otherwise, they're send as a Json object via the body.
+				auto jret__ = request(HTTPMethod.%1$s, url__ , headers__, genQuery(%3$s), genBody(%2$s%6$s%4$s));
+			}
+
+		}.format(to!string(meta.method),
+			 paramCTMap(defaultParamCTMap), paramCTMap(queryParamCTMap), paramCTMap(bodyParamCTMap), // params map
+			 (defaultParamCTMap.length && queryParamCTMap.length) ? ", " : "", // genQuery(%2$s, %3$s);
+			 (defaultParamCTMap.length && bodyParamCTMap.length) ? ", " : ""); // genBody(%2$s, %4$s);
 
 		static if (!is(RT == void)) {
 			request_str ~= q{
@@ -970,9 +1035,7 @@ private string genClientBody(alias Func)() {
 
 		// Block 1
 		ret ~= q{
-			Json jparams__ = Json.emptyObject;
 			InetHeaderMap headers__;
-			bool[string] jparamsj__;
 			string url__ = "%s";
 			%s
 			%s
@@ -1042,6 +1105,28 @@ unittest
 {
 	enum imports = generateModuleImports!Interface;
 	static assert (imports == "static import vibe.web.rest;");
+}
+
+// Small helper for client code generation
+private string paramCTMap(string[string] params)
+{
+	import std.array : appender, join;
+	if (!__ctfe)
+		assert (false, "This helper is only supposed to be called for codegen in RestClientInterface.");
+	auto app = appender!(string[]);
+	foreach (key, val; params) {
+		app ~= "\""~key~"\"";
+		app ~= val;
+	}
+	return app.data.join(", ");
+}
+
+// Copy behavior of _stripName (private member of RestClientInterface).
+private string _stripNameHelper(string name)
+{
+	if (name.endsWith("_"))
+		return name[0 .. $-1];
+	else return name;
 }
 
 // Workarounds @@DMD:9748@@, and maybe more
