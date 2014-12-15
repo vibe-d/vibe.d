@@ -658,7 +658,7 @@ unittest {
 	static assert(isStringSerializable!S);
 }
 
-private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!(T, decl).found; }
+private template hasAttribute(T, alias decl) { enum hasAttribute = findNextUDA!(T, decl, 0).found; }
 
 unittest {
 	@asArray int i1;
@@ -684,7 +684,7 @@ unittest {
 
 private static T getAttribute(TT, string mname, T)(T default_value)
 {
-	enum val = findFirstUDA!(T, __traits(getMember, TT, mname));
+	enum val = findNextUDA!(T, __traits(getMember, TT, mname), 0);
 	static if (val.found) return val.value;
 	else return default_value;
 }

@@ -67,7 +67,7 @@ import std.typetuple : anySatisfy, Filter;
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
 	import vibe.internal.meta.traits : baseInterface;
-	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.uda : findNextUDA;
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;
 
@@ -77,7 +77,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 
 	alias I = baseInterface!TImpl;
 
-	enum uda = findFirstUDA!(RootPathAttribute, I);
+	enum uda = findNextUDA!(RootPathAttribute, I, 0);
 	static if (uda.found) {
 		static if (uda.value.data == "") {
 			auto path = "/" ~ adjustMethodStyle(I.stringof, settings.methodStyle);
@@ -280,7 +280,7 @@ class RestInterfaceClient(I) : I
 	*/
 	this(RestInterfaceSettings settings)
 	{
-		import vibe.internal.meta.uda : findFirstUDA;
+		import vibe.internal.meta.uda : findNextUDA;
 
 		m_settings = settings.dup;
 
@@ -290,7 +290,7 @@ class RestInterfaceClient(I) : I
 		}
 
 		URL url = settings.baseURL;
-		enum uda = findFirstUDA!(RootPathAttribute, I);
+		enum uda = findNextUDA!(RootPathAttribute, I, 0);
 		static if (uda.found) {
 			static if (uda.value.data == "") {
 				url.path = Path(concatURL(url.path.toString(), adjustMethodStyle(I.stringof, settings.methodStyle), true));

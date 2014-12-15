@@ -182,8 +182,8 @@ package template GetTranslationContext(alias METHOD)
 	import vibe.internal.meta.uda;
 
 	alias PARENT = typeof(__traits(parent, METHOD).init);
-	enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, METHOD);
-	enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+	enum FUNCTRANS = findNextUDA!(TranslationContextAttribute, METHOD, 0);
+	enum PARENTTRANS = findNextUDA!(TranslationContextAttribute, PARENT, 0);
 	static if (FUNCTRANS.found) alias GetTranslationContext = FUNCTRANS.value.Context;
 	else static if (PARENTTRANS.found) alias GetTranslationContext = PARENTTRANS.value.Context;
 	else alias GetTranslationContext = void;
