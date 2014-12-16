@@ -20,6 +20,7 @@ import vibe.inet.url;
 import vibe.stream.counting;
 import vibe.stream.ssl;
 import vibe.stream.operations;
+import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
 import vibe.utils.memory;
@@ -881,6 +882,26 @@ final class HTTPClientResponse : HTTPResponse {
 	void disconnect()
 	{
 		finalize(true);
+	}
+
+	/**
+		Upgrades the connection to and returns the resulting ConnectionStream.
+
+		The caller caller gets ownership of the ConnectionStream and is responsible
+		for closing it.
+		Params:
+			newProtocol = The protocol to which the connection is expected to upgrade. Should match the Upgrade header of the request.
+	*/
+	ConnectionStream upgradeConnection(in string newProtocol)
+	{
+		enforce(statusCode == HTTPStatus.switchingProtocols, "Server did not send a 101 - Switching Protocols response");
+		string *resNewProto = "Upgrade" in headers;
+		enforce(resNewProto, "Server did not send an Upgrade header");
+		enforce(*resNewProto == newProtocol, "Expected Upgrade: " ~ newProtocol ~", received Upgrade: " ~ *resNewProto);
+		auto stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
+		m_client.m_responding = false;
+		m_client = null;
+		return stream;
 	}
 
 	private void finalize()
