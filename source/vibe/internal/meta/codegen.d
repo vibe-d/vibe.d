@@ -44,10 +44,10 @@ version(unittest)
 	Implementation is incomplete and tuned for REST interface generation needs.
 
 	Params:
-		T = type to introspect for qualified symbols 
+		T = type to introspect for qualified symbols
 
 	Returns:
-		tuple of "interesting" symbols, no duplicates		
+		tuple of "interesting" symbols, no duplicates
 */
 template getSymbols(T)
 {
@@ -101,7 +101,7 @@ unittest
 
 	Params:
 		I = interface to inspect
-	
+
 	Returns:
 		list of module name strings, no duplicates
 */
@@ -144,7 +144,7 @@ string[] getRequiredImports(I)()
 			}
 		}
 	}
-	
+
 	return ret;
 }
 
@@ -239,8 +239,31 @@ unittest
 /// so we have to resort on string for functions attributes.
 template FuncAttributes(alias Func)
 {
-	import std.array : join;
-	enum FuncAttributes = join([__traits(getFunctionAttributes, Func)], " ");
+	static if (__VERSION__ <= 2065)
+	{
+		import std.traits;
+		enum FuncAttributes = {
+			alias FA = FunctionAttribute;
+			string res;
+			enum attr = functionAttributes!Func;
+			if (attr & FA.nothrow_) res ~= "nothrow ";
+			if (attr & FA.property) res ~= "@property ";
+			if (attr & FA.pure_) res ~= "pure ";
+			if (attr & FA.ref_) res ~= "ref ";
+			if (attr & FA.safe) res ~= "@safe ";
+			if (attr & FA.trusted) res ~= "@trusted ";
+			static if (is(FunctionTypeOf!Func == const)) res ~= "const ";
+			static if (is(FunctionTypeOf!Func == immutable)) res ~= "immutable ";
+			static if (is(FunctionTypeOf!Func == inout)) res ~= "inout ";
+			static if (is(FunctionTypeOf!Func == shared)) res ~= "shared ";
+			return res.length ? res[0 .. $-1] : res;
+		}();
+	}
+	else
+	{
+		import std.array : join;
+		enum FuncAttributes = [__traits(getFunctionAttributes, Func)].join(" ");
+	}
 }
 
 
@@ -272,6 +295,7 @@ unittest
 	interface ITest
 	{
 	  int foo(string par, int, string p = "foo", int = 10) pure @safe nothrow const;
+	  @property int foo2() pure @safe nothrow const;
 	}
 
 	class Test : ITest
@@ -283,8 +307,12 @@ unittest
 		mixin CloneFunction!(ITest.foo, q{
 			return 42;
 		});
+		mixin CloneFunction!(ITest.foo2, q{
+			return 42;
+		});
 	}
 
 	assert(new Test().foo("", 21) == 42);
+	assert(new Test().foo2 == 42);
 	assert(new Test().customname("", 21) == 84);
 }
