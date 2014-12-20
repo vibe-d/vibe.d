@@ -1,38 +1,11 @@
 language: d
 
-install:
-  - DUB_VER=0.9.22
-
-  - if [[ "$DC" = "dmd" ]]; then
-      BIN_PATH=${HOME}/dmd2/linux/bin64;
-      LIB_PATH=${HOME}/dmd2/linux/lib64;
-      curl -fsSL http://downloads.dlang.org/releases/2014/dmd.${DMD_VER}.linux.zip > dmd.zip;
-      unzip -q -d ~ dmd.zip;
-    fi
-  - if [[ "$DC" = "ldc2" ]]; then
-      BIN_PATH=${HOME}/ldc/bin;
-      LIB_PATH=${HOME}/ldc/lib;
-      mkdir ~/ldc;
-      curl -fsSL https://github.com/ldc-developers/ldc/releases/download/v${LDC_VER}/ldc2-${LDC_VER}-linux-x86_64.tar.xz | tar --strip-components=1 -C ~/ldc -Jxf -;
-    fi
-  - if [[ "$DC" = "gdc" ]]; then
-      BIN_PATH=${HOME}/gdc/bin;
-      LIB_PATH=${HOME}/gdc/lib;
-      mkdir ~/gdc;
-      curl -fsSL http://gdcproject.org/downloads/binaries/x86_64-linux-gnu/gdc-${GDC_VER}.tar.xz | tar --strip-components=1 -C ~/gdc -Jxf -;
-      curl -fsSL https://raw.githubusercontent.com/D-Programming-GDC/GDMD/master/dmd-script > ~/gdc/bin/gdmd && chmod +x ~/gdc/bin/gdmd;
-    fi
-  - curl -fsSL http://code.dlang.org/files/dub-${DUB_VER}-linux-x86_64.tar.gz | tar -C ${BIN_PATH} -xzf -
-  - export PATH="${BIN_PATH}:${PATH}"
-  - export LIBRARY_PATH="${LIB_PATH}:${LIBRARY_PATH}"
-  - export LD_LIBRARY_PATH="${LIB_PATH}:${LD_LIBRARY_PATH}"
-
-env:
-  matrix:
-    - DMD=dmd DC=dmd DMD_VER=2.065.0
-    - DMD=dmd DC=dmd DMD_VER=2.066.1
-    - DMD=ldmd2 DC=ldc2 LDC_VER=0.14.0
-    - DMD=gdmd DC=gdc GDC_VER=4.9.0
+d:
+  - dmd-2.065.0
+  - dmd-2.066.1
+  - ldc-0.14.0
+  - ldc-0.15.1
+  - gdc-4.9.0
 
 script:
   - dub test --compiler=$DC
