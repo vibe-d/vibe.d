@@ -978,6 +978,10 @@ private class CoreTask : TaskFiber {
 				// make the fiber available for the next task
 				if (s_availableFibers.full)
 					s_availableFibers.capacity = 2 * s_availableFibers.capacity;
+
+				// clear the message queue for the next task
+				messageQueue.clear();
+
 				s_availableFibers.put(this);
 			}
 		} catch(UncaughtException th) {
