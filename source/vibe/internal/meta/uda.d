@@ -8,34 +8,6 @@
 
 module vibe.internal.meta.uda;
 
-//import vibe.internal.meta.traits;
-
-
-/**
-	Small convenience wrapper to find and extract certain UDA from given type.
-	Will stop on first element which is of required type.
-
-	Params:
-		UDA = type or template to search for in UDA list
-		Symbol = symbol to query for UDA's
-		allow_types = if set to `false` considers attached `UDA` types an error
-			(only accepts instances/values)
-
-	Returns: aggregated search result struct with 3 field. `value` aliases found UDA.
-		`found` is boolean flag for having a valid find. `index` is integer index in
-		attribute list this UDA was found at.
-*/
-template findFirstUDA(alias UDA, alias Symbol, bool allow_types = false)
-{
-	enum findFirstUDA = findNextUDA!(UDA, Symbol, 0, allow_types);
-}
-
-/// Ditto
-template findFirstUDA(UDA, alias Symbol, bool allow_types = false)
-{
-	enum findFirstUDA = findNextUDA!(UDA, Symbol, 0, allow_types);
-}
-
 private struct UdaSearchResult(alias UDA)
 {
 	alias value = UDA;

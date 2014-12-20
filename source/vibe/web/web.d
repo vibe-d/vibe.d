@@ -238,12 +238,12 @@ template render(string diet_file, ALIASES...) {
 	void render(string MODULE = __MODULE__, string FUNCTION = __FUNCTION__)()
 	{
 		import vibe.web.i18n;
-		import vibe.internal.meta.uda : findFirstUDA;
+		import vibe.internal.meta.uda : findNextUDA;
 		mixin("static import "~MODULE~";");
 
 		alias PARENT = typeof(__traits(parent, mixin(FUNCTION)).init);
-		enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, mixin(FUNCTION));
-		enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+		enum FUNCTRANS = findNextUDA!(TranslationContextAttribute, mixin(FUNCTION), 0);
+		enum PARENTTRANS = findNextUDA!(TranslationContextAttribute, PARENT, 0);
 		static if (FUNCTRANS.found) alias TranslateContext = FUNCTRANS.value.Context;
 		else static if (PARENTTRANS.found) alias TranslateContext = PARENTTRANS.value.Context;
 
@@ -539,13 +539,13 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	import std.typetuple : Filter;
 	import vibe.data.json;
 	import vibe.internal.meta.funcattr;
-	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.uda : findNextUDA;
 
 	alias RET = ReturnType!overload;
 	alias PARAMS = ParameterTypeTuple!overload;
 	alias default_values = ParameterDefaultValueTuple!overload;
 	enum param_names = [ParameterIdentifierTuple!overload];
-	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
+	enum erruda = findNextUDA!(ErrorDisplayAttribute, overload, 0);
 
 	s_requestContext = createRequestContext!overload(req, res);
 
@@ -642,7 +642,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			static if (is(RET : Json)) {
 				res.writeJsonBody(ret);
 			} else static if (is(RET : InputStream) || is(RET : const ubyte[])) {
-				enum type = findFirstUDA!(ContentTypeAttribute, overload);
+					enum type = findNextUDA!(ContentTypeAttribute, overload, 0);
 				static if (type.found) {
 					res.writeBody(ret, type.value);
 				} else {
@@ -671,11 +671,11 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 	ret.language = determineLanguage!handler(req);
 
 	import vibe.web.i18n;
-	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.uda : findNextUDA;
 
 	alias PARENT = typeof(__traits(parent, handler).init);
-	enum FUNCTRANS = findFirstUDA!(TranslationContextAttribute, handler);
-	enum PARENTTRANS = findFirstUDA!(TranslationContextAttribute, PARENT);
+	enum FUNCTRANS = findNextUDA!(TranslationContextAttribute, handler, 0);
+	enum PARENTTRANS = findNextUDA!(TranslationContextAttribute, PARENT, 0);
 	static if (FUNCTRANS.found) alias TranslateContext = FUNCTRANS.value.Context;
 	else static if (PARENTTRANS.found) alias TranslateContext = PARENTTRANS.value.Context;
 

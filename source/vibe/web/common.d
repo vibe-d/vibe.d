@@ -149,7 +149,7 @@ auto extractHTTPMethodAndName(alias Func)()
 		string url;
 	}
 
-	import vibe.internal.meta.uda : findFirstUDA;
+	import vibe.internal.meta.uda : findNextUDA;
 	import vibe.internal.meta.traits : isPropertySetter,
 		isPropertyGetter;
 	import std.algorithm : startsWith;
@@ -172,8 +172,8 @@ auto extractHTTPMethodAndName(alias Func)()
 	// Cases may conflict and are listed in order of priority
 
 	// Workaround for Nullable incompetence
-	enum uda1 = findFirstUDA!(MethodAttribute, Func);
-	enum uda2 = findFirstUDA!(PathAttribute, Func);
+	enum uda1 = findNextUDA!(MethodAttribute, Func, 0);
+	enum uda2 = findNextUDA!(PathAttribute, Func, 0);
 
 	static if (uda1.found) {
 		udmethod = uda1.value;
