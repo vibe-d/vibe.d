@@ -1,10 +1,9 @@
-﻿{
+{
 	"name": "http-server-example",
 	"description": "A minimal HTTP server.",
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
 	},
-	"subConfigurations": { "vibe-d": "libasync" },
 	"versions": ["VibeDefaultMain"]
 }
