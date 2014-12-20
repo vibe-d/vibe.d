@@ -25,7 +25,7 @@ module vibe.internal.meta.uda;
 		`found` is boolean flag for having a valid find. `index` is integer index in
 		attribute list this UDA was found at.
 */
-template findFirstUDA(alias UDA, alias Symbol, bool allow_types = false)
+template findFirstUDA(alias UDA, alias Symbol, bool allow_types = false) if (!is(UDA))
 {
 	enum findFirstUDA = findNextUDA!(UDA, Symbol, 0, allow_types);
 }
@@ -58,7 +58,7 @@ private struct UdaSearchResult(alias UDA)
 		`found` is boolean flag for having a valid find. `index` is integer index in
 		attribute list this UDA was found at.
  */
-template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false)
+template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false) if (!is(UDA))
 {
 	import std.traits : isInstanceOf;
 	import std.typetuple : TypeTuple;
