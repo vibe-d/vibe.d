@@ -979,8 +979,10 @@ private string genClientBody(alias Func)() {
 				static assert (paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
 				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
 					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
+				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query)
+					queryParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
 				else
-					static assert (0, "Only header parameter are currently supported client-side");
+					static assert (0, "Internal error: Unknown WebParamAttribute.Origin in REST client code generation.");
 			} else static if (!ParamNames[i].startsWith("_")
 					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
