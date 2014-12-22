@@ -1095,7 +1095,10 @@ private class VibeDriverCore : DriverCore {
 			ctask.m_exception = event_exception;
 		}
 
-		auto uncaught_exception = ctask.call(false);
+		static if (__VERSION__ > 2067)
+			auto uncaught_exception = ctask.call!(Fiber.Rethrow.no)();
+		else
+			auto uncaught_exception = ctask.call(false);
 		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
 			assert(ctask.state == Fiber.State.TERM);
