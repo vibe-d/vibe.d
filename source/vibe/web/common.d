@@ -470,30 +470,27 @@ package struct WebParamAttribute {
 	string field;
 }
 
-version (none) {
-	// It's not yet implemented in the REST and web interface.
-	/*
-	 * Declare that a parameter will be transmitted to the API through the body.
-	 *
-	 * It will be serialized as part of a JSON object.
-	 * The serialization format is currently not customizable.
-	 *
-	 * Params:
-	 * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
-	 * - field: The name of the field in the JSON object.
-	 *
-	 * ----
-	 * @bodyParam("pack", "package")
-	 * void ship(int pack);
-	 * // The server will receive the following body for a call to ship(42):
-	 * // { "package": 42 }
-	 * ----
-	 */
-	private WebParamAttribute bodyParam(string identifier, string field) {
-		if (!__ctfe)
-			assert(false, onlyAsUda!__FUNCTION__);
-		return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
-	}
+/**
+ * Declare that a parameter will be transmitted to the API through the body.
+ *
+ * It will be serialized as part of a JSON object.
+ * The serialization format is currently not customizable.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The name of the field in the JSON object.
+ *
+ * ----
+ * @bodyParam("pack", "package")
+ * void ship(int pack);
+ * // The server will receive the following body for a call to ship(42):
+ * // { "package": 42 }
+ * ----
+ */
+WebParamAttribute bodyParam(string identifier, string field) {
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
 }
 
 /**

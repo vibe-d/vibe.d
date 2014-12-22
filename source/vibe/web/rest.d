@@ -646,7 +646,33 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						logDebug("Query param: %s <- %s", paramsArgList[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
-						static assert (0, "@BodyParam is not yet supported");
+						enforceBadRequest(
+								  req.contentType == "application/json",
+								  "The Content-Type header needs to be set to application/json."
+								  );
+						enforceBadRequest(
+								  req.json.type != Json.Type.Undefined,
+								  "The request body does not contain a valid JSON value."
+								  );
+						enforceBadRequest(
+								  req.json.type == Json.Type.Object,
+								  "The request body must contain a JSON object with an entry for each parameter."
+								  );
+
+						static if (is(ParamDefaults[i] == void)) {
+							auto par = req.json[paramsArgList[0].field];
+							enforceBadRequest(par.type != Json.Type.Undefined,
+									  format("Missing parameter %s", paramsArgList[0].field)
+									  );
+							logDebug("Body param: %s <- %s", paramsArgList[0].identifier, par);
+							params[i] = deserializeJson!P(par);
+						} else {
+							if (req.json[paramsArgList[0].field].type == Json.Type.Undefined) {
+								logDebug("No body param %s, using default value", paramsArgList[0].identifier);
+								params[i] = ParamDefaults[i];
+								continue;
+							}
+						}
 					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
@@ -696,18 +722,17 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						);
 
 						static if (is(DefVal == void)) {
-							enforceBadRequest(
-								req.json[pname].type != Json.Type.Undefined,
-								format("Missing parameter %s", pname)
-							);
+							auto par = req.json[pname];
+							enforceBadRequest(par.type != Json.Type.Undefined,
+									  format("Missing parameter %s", pname)
+									  );
+							params[i] = deserializeJson!P(par);
 						} else {
 							if (req.json[pname].type == Json.Type.Undefined) {
 								params[i] = DefVal;
 								continue;
 							}
 						}
-
-						params[i] = deserializeJson!P(req.json[pname]);
 					}
 				}
 			}
@@ -981,6 +1006,8 @@ private string genClientBody(alias Func)() {
 					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
 				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query)
 					queryParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
+				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body)
+					bodyParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
 				else
 					static assert (0, "Internal error: Unknown WebParamAttribute.Origin in REST client code generation.");
 			} else static if (!ParamNames[i].startsWith("_")
