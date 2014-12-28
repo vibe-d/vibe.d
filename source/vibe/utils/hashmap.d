@@ -123,7 +123,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return &m_table[idx].value;
 	}
 
-	int opApply(int delegate(ref Value) del)
+	int opApply(int delegate(ref Value) nothrow del) nothrow
 	{
 		foreach (i; 0 .. m_table.length)
 			if (!Traits.equals(m_table[i].key, Traits.clearValue))
@@ -132,26 +132,8 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return 0;
 	}
 
-	int opApply(int delegate(in ref Value) del)
-	const {
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, ref Value) del)
+	int opApply(int delegate(in ref Key, ref Value) nothrow del) nothrow
 	{
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].key, m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, in ref Value) del)
-	const {
 		foreach (i; 0 .. m_table.length)
 			if (!Traits.equals(m_table[i].key, Traits.clearValue))
 				if (auto ret = del(m_table[i].key, m_table[i].value))
