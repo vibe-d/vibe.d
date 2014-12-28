@@ -165,7 +165,7 @@ interface EventDriver {
 interface DriverCore {
 	@property void eventException(Exception e);
 	void yieldForEvent();
-	void resumeTask(Task f, Exception event_exception = null);
+	void resumeTask(Task f, Exception event_exception = null) nothrow;
 	void notifyIdle();
 }
 

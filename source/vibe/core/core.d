@@ -1074,33 +1074,40 @@ private class VibeDriverCore : DriverCore {
 		}
 	}
 
-	void resumeTask(Task task, Exception event_exception = null)
+	void resumeTask(Task task, Exception event_exception = null) nothrow
 	{
 		resumeTask(task, event_exception, false);
 	}
 
-	void resumeTask(Task task, Exception event_exception, bool initial_resume)
+	void resumeTask(Task task, Exception event_exception, bool initial_resume) nothrow
 	{
 		assert(initial_resume || task.running, "Resuming terminated task.");
 		resumeCoreTask(cast(CoreTask)task.fiber, event_exception);
 	}
 
-	void resumeCoreTask(CoreTask ctask, Exception event_exception = null)
+	void resumeCoreTask(CoreTask ctask, Exception event_exception = null) nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
-		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ to!string(ctask.state));
+		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
 
 		if( event_exception ){
 			extrap();
 			ctask.m_exception = event_exception;
 		}
 
-		static if (__VERSION__ > 2067)
+		static if (__VERSION__ > 2066)
 			auto uncaught_exception = ctask.call!(Fiber.Rethrow.no)();
 		else
 			auto uncaught_exception = ctask.call(false);
 		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
+
 			assert(ctask.state == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", th.msg);
 			logDebug("Full error: %s", th.toString().sanitize);

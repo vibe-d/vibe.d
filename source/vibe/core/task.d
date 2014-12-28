@@ -34,18 +34,24 @@ struct Task {
 		}
 	}
 
-	private this(TaskFiber fiber, size_t task_counter)
+	private this(TaskFiber fiber, size_t task_counter) nothrow
 	{
 		m_fiber = cast(shared)fiber;
 		m_taskCounter = task_counter;
 	}
 
-	this(in Task other) { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
+	this(in Task other) nothrow { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
 
 	/** Returns the Task instance belonging to the calling task.
 	*/
-	static Task getThis()
+	static Task getThis() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto fiber = Fiber.getThis();
 		if (!fiber) return Task.init;
 		auto tfiber = cast(TaskFiber)fiber;
