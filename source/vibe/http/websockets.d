@@ -208,8 +208,10 @@ final class WebSocket {
 		m_writeMutex = new TaskMutex;
 		m_readMutex = new TaskMutex;
 		m_readCondition = new TaskCondition(m_readMutex);
-		m_pingTimer = setTimer(dur!"seconds"(60), &sendPing, true);
-		m_pongReceived = true;
+		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
+			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
+			m_pongReceived = true;
+		}
 	}
 
 	/**
