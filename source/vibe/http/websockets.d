@@ -66,7 +66,7 @@ class WebSocketException: Exception
 /**
     Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
 */
-void doHandleWebsocket(WebSocketHandshakeDelegate on_handshake, HTTPServerRequest req, HTTPServerResponse res)
+void handleWebsocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRequest req, HTTPServerResponse res)
 {
 	auto pUpgrade = "Upgrade" in req.headers;
 	auto pConnection = "Connection" in req.headers;
@@ -101,14 +101,11 @@ void doHandleWebsocket(WebSocketHandshakeDelegate on_handshake, HTTPServerReques
 	res.headers["Connection"] = "Upgrade";
 	ConnectionStream conn = res.switchProtocol("websocket");
 
-	scope socket = new WebSocket(conn, req);
-	try on_handshake(socket);
-	catch (Exception e) {
+	WebSocket socket = new WebSocket(conn, req);
+	try {
+		on_handshake(socket);
+	} catch (Exception e) {
 		logDiagnostic("WebSocket handler failed: %s", e.msg);
-	} catch (Throwable th) {
-		// pretend to have sent a closing frame so that any further sends will fail
-		socket.m_sentCloseFrame = true;
-		throw th;
 	}
 	socket.close();
 }
@@ -120,7 +117,7 @@ HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handsha
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		doHandleWebsocket(on_handshake, req, res);
+		handleWebsocket(on_handshake, req, res);
 	}
 	return &callback;
 }
