@@ -700,6 +700,14 @@ final class HTTPServerRequest : HTTPRequest {
 		Session session;
 	}
 
+	package {
+		/** The settings of the server serving this request.
+		 */
+		@property const(HTTPServerSettings) serverSettings() const
+		{
+			return m_settings;
+		}
+	}
 
 	this(SysTime time, ushort port)
 	{
