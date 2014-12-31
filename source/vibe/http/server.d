@@ -522,11 +522,19 @@ final class HTTPServerSettings {
 	*/
 	bool useCompressionIfPossible = false;
 
+
+	/** Interval between WebSocket ping frames.
+
+		The default value is 60 seconds; set to Duration.zero to disable pings.
+	*/
+	Duration webSocketPingInterval;// = dur!"seconds"(60);
+
 	this()
 	{
 		// need to use the contructor because the Ubuntu 13.10 GDC cannot CTFE dur()
 		maxRequestTime = 0.seconds;
 		keepAliveTimeout = 10.seconds;
+		webSocketPingInterval = 60.seconds;
 	}
 }
 
