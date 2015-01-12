@@ -682,7 +682,7 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 /**
 	A version string representing the current vibe version
 */
-enum vibeVersionString = "0.7.21";
+enum vibeVersionString = "0.7.22";
 
 /// Compatibility alias
 deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersionString;
