@@ -1,8 +1,42 @@
 ﻿Changelog
 =========
 
+v0.7.22 - 2015-01-12
+--------------------
+
+A small release mostly fixing compilation issues on DMD 2.065, LDC 0.14.0 and GDC. It also contains the new optional libasync based event driver for initial testing.
+
+### Features and improvements ###
+
+ - Added a new event driver based on the [libasync](https://github.com/etcimon/libasync) native D event loop abstraction library (by Etienne Cimon) - [pull #814][issue814]
+ - Added support for `@headerParam` in the REST interface generator (by Mathias Lang aka Geod24) - [pull #908][issue908]
+ - Added `font/woff` as a recognized compressed MIME type to avoid redundant compression for HTTP transfers (by Márcio Martins) - [pull #923][issue923]
+ - The BSON deserialization routines now transparently convert from `long` to `int` where required (by David Monagle) - [pull #913][issue913]
+
+### Bug fixes ###
+
+ - Fixed an overload conflict for `urlEncode` introduced in 0.7.21
+ - Fixed a compilation issue with `Exception` typed `_error` parameters in web interface methods (by Denis Hlyakin) - [pull #900][issue900]
+ - Fixed conversion of `Bson.Type.undefined` to `Json` (by Márcio Martins) - [pull #922][issue922]
+ - Fixed messages leaking past the end of a task to the next task handled by the same fiber (by Luca Niccoli) - [pull #934][issue934]
+ - Fixed various compilation errors and ICEs for DMD 2.065, GDC and LDC 0.14.0 (by Martin Nowak) - [pull #901][issue901], [pull #907][issue907], [pull #927][issue927]
+
+[issue814]: https://github.com/rejectedsoftware/vibe.d/issues/814
+[issue900]: https://github.com/rejectedsoftware/vibe.d/issues/900
+[issue901]: https://github.com/rejectedsoftware/vibe.d/issues/901
+[issue907]: https://github.com/rejectedsoftware/vibe.d/issues/907
+[issue908]: https://github.com/rejectedsoftware/vibe.d/issues/908
+[issue913]: https://github.com/rejectedsoftware/vibe.d/issues/913
+[issue922]: https://github.com/rejectedsoftware/vibe.d/issues/922
+[issue923]: https://github.com/rejectedsoftware/vibe.d/issues/923
+[issue927]: https://github.com/rejectedsoftware/vibe.d/issues/927
+[issue934]: https://github.com/rejectedsoftware/vibe.d/issues/934
+
+
 v0.7.21 - 2014-11-18
 --------------------
+
+Due to a number of highly busy months (more to come), this release got delayed far more than planned. However, development didn't stall and, finally, a huge list of over 150 changes found its way into the new version. Major changes are all over the place, including some notable changes in the SSL/TLS support and the web interface generator.
 
 ### Features and improvements ###
 
