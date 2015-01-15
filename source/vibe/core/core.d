@@ -645,11 +645,9 @@ void setTaskStackSize(size_t sz)
 	they only need for initialization (such as listening on ports <= 1024 or opening
 	system log files).
 */
-void lowerPrivileges()
+void lowerPrivileges(string uname, string gname)
 {
 	if (!isRoot()) return;
-	auto uname = s_privilegeLoweringUserName;
-	auto gname = s_privilegeLoweringGroupName;
 	if (uname || gname) {
 		static bool tryParse(T)(string s, out T n)
 		{
@@ -663,6 +661,12 @@ void lowerPrivileges()
 		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
 		setUID(uid, gid);
 	} else logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering. Running with full permissions.");
+}
+
+// ditto
+void lowerPrivileges()
+{
+	lowerPrivileges(s_privilegeLoweringUserName, s_privilegeLoweringGroupName);
 }
 
 
