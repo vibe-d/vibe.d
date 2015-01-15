@@ -130,7 +130,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 
 			static if (is(RT == interface)) {
 				// nested API
-				static assert(
+				static assert (
 					ParameterTypeTuple!overload.length == 0,
 					"Interfaces may only be returned from parameter-less functions!"
 				);
@@ -285,7 +285,7 @@ class RestInterfaceClient(I) : I
 		m_settings = settings.dup;
 
 		if (!m_settings.baseURL.path.absolute) {
-			assert(m_settings.baseURL.path.empty, "Base URL path must be absolute.");
+			assert (m_settings.baseURL.path.empty, "Base URL path must be absolute.");
 			m_settings.baseURL.path = Path("/");
 		}
 
@@ -351,36 +351,29 @@ class RestInterfaceClient(I) : I
 		import vibe.data.json : Json;
 		import vibe.textfilter.urlencode;
 
-		Json request(HTTPMethod verb, string name, Json params, bool[string] param_is_json, in ref InetHeaderMap hdrs) const
+		/**
+		 * Perform a request to the interface using the given parameters.
+		 *
+		 * Params:
+		 * verb = Kind of request (See $(D HTTPMethod) enum).
+		 * name = Location to request. For a request on https://github.com/rejectedsoftware/vibe.d/issues?q=author%3ASantaClaus,
+		 *		it will be '/rejectedsoftware/vibe.d/issues'.
+		 * hdrs = The headers to send. Some field might be overriden (such as Content-Length). However, Content-Type will NOT be overriden.
+		 * query = The $(B encoded) query string. For a request on https://github.com/rejectedsoftware/vibe.d/issues?q=author%3ASantaClaus,
+		 *		it will be 'author%3ASantaClaus'.
+		 * body_ = The body to send, as a string. If a Content-Type is present in $(D hdrs), it will be used, otherwise it will default to
+		 *		the generic type "application/json".
+		 */
+		Json request(HTTPMethod verb, string name, in ref InetHeaderMap hdrs, string query, string body_) const
 		{
-			import vibe.http.client : HTTPClientRequest, HTTPClientResponse,
-				requestHTTP;
+			import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 			import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
 			import vibe.inet.url : Path;
-			import std.array : appender;
 
 			URL url = m_baseURL;
 
 			if (name.length) url ~= Path(name);
-
-			if ((verb == HTTPMethod.GET || verb == HTTPMethod.HEAD) && params.length > 0) {
-				auto query = appender!string();
-				bool first = true;
-
-				foreach (string pname, p; params) {
-					if (!first) {
-						query.put('&');
-					}
-					else {
-						first = false;
-					}
-					filterURLEncode(query, pname);
-					query.put('=');
-					filterURLEncode(query, param_is_json[pname] ? p.toString() : toRestString(p));
-				}
-
-				url.queryString = query.data();
-			}
+			if (query) url.queryString = query;
 
 			Json ret;
 
@@ -393,21 +386,20 @@ class RestInterfaceClient(I) : I
 					m_requestFilter(req);
 				}
 
-				if (verb != HTTPMethod.GET && verb != HTTPMethod.HEAD) {
-					req.writeJsonBody(params);
-				}
+				if (body_)
+					req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
 			};
 
 			auto resdg = (scope HTTPClientResponse res) {
 				ret = res.readJson();
 
 				logDebug(
-					"REST call: %s %s -> %d, %s",
-					httpMethodString(verb),
-					url.toString(),
-					res.statusCode,
-					ret.toString()
-				);
+					 "REST call: %s %s -> %d, %s",
+					 httpMethodString(verb),
+					 url.toString(),
+					 res.statusCode,
+					 ret.toString()
+					 );
 
 				if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
 					throw new RestException(res.statusCode, ret);
@@ -416,6 +408,61 @@ class RestInterfaceClient(I) : I
 			requestHTTP(url, reqdg, resdg);
 
 			return ret;
+		}
+	}
+
+	/// Params are passed in a deterministic order: [Name, value]*
+	private string genQuery(Ts...)(Ts params) {
+		import std.array : appender;
+
+		static assert(!(params.length % 2), "Internal error ("~__FUNCTION__~"): Expected [Name, value] pairs.");
+		static if (!params.length)
+			return null;
+		else {
+			auto query = appender!string();
+
+			foreach (idx, p; params) {
+				static if (!(idx % 2)) {
+					// Parameter name
+					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
+					query.put('&');
+					filterURLEncode(query, p);
+				} else {
+					// Parameter value
+					query.put('=');
+					static if (is(typeof(p) == Json))
+						filterURLEncode(query, p.toString());
+					else // Note: CTFE triggers compiler bug here (think we are returning Json, not string).
+						filterURLEncode(query, toRestString(serializeToJson(p)));
+				}
+			}
+			return query.data();
+		}
+	}
+
+	/// Params are passed in a deterministic order: [Name, value]*
+	private string genBody(Ts...)(Ts params) {
+		import std.array : appender;
+
+		static assert(!(params.length % 2), "Internal error ("~__FUNCTION__~"): Expected [Name, value] pairs.");
+		static if (!params.length)
+			return null;
+		else {
+			auto jsonBody = Json.emptyObject;
+
+			string nextName;
+			foreach (idx, p; params) {
+				static if (!(idx % 2)) {
+					// Parameter name
+					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
+					nextName = p;
+				} else {
+					// Parameter value
+					jsonBody[nextName] = serializeToJson(p);
+				}
+			}
+			debug return jsonBody.toPrettyString();
+			else return jsonBody.toString();
 		}
 	}
 
@@ -534,9 +581,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				// See DMD bug #9748.
 				mixin(GenOrphan!(i).Decl);
 				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-				static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+				static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
 				              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
-				       uda.identifier, FuncId, uda.origin));
+						     uda.identifier, FuncId, uda.origin));
 			}
 		}
 
@@ -544,9 +591,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			static assert (
 				ParamNames[i].length,
 				format(
-					"Parameter %s of %s has no name",
-					i.stringof,
-					method
+				       "Parameter %s of %s has no name",
+				       i.stringof,
+				       method
 				)
 			);
 
@@ -563,8 +610,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
 					// User anotated the origin of this parameter.
 					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-					static assert(paramsArgList.length == 1, "Parameter '"~ParamNames[i]~"' of "
-					~FuncId~" has multiple origin (@*Param attributes).");
+					static assert (
+						paramsArgList.length == 1,
+						"Parameter '"~ParamNames[i]~"' of "~FuncId~" has multiple origin (@*Param attributes)."
+					);
 					// @headerParam.
 					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
@@ -582,9 +631,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
-						static assert(0, "@QueryParam is not yet supported");
+						static assert (0, "@QueryParam is not yet supported");
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
-						static assert(0, "@BodyParam is not yet supported");
+						static assert (0, "@BodyParam is not yet supported");
 					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
@@ -684,7 +733,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 private string generateRestInterfaceSubInterfaces(I)()
 {
 	if (!__ctfe)
-		assert(false);
+		assert (false);
 
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
 		ReturnType, ParameterTypeTuple, fullyQualifiedName;
@@ -710,20 +759,12 @@ private string generateRestInterfaceSubInterfaces(I)()
 				if (!tps.canFind(RT.stringof)) {
 					tps ~= RT.stringof;
 					string implname = RT.stringof ~ "Impl";
-					ret ~= format(
-						q{
-							alias RestInterfaceClient!(%s) %s;
-						},
-						fullyQualifiedName!RT,
-						implname
-					);
-					ret ~= format(
-						q{
-							private %s m_%s;
-						},
-						implname,
-						implname
-					);
+					ret ~= q{
+						alias RestInterfaceClient!(%s) %s;
+					}.format(fullyQualifiedName!RT, implname);
+					ret ~= q{
+						private %1$s m_%1$s;
+					}.format(implname);
 					ret ~= "\n";
 				}
 			}
@@ -736,7 +777,7 @@ private string generateRestInterfaceSubInterfaces(I)()
 private string generateRestInterfaceSubInterfaceInstances(I)()
 {
 	if (!__ctfe)
-		assert(false);
+		assert (false);
 
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
 		ReturnType, ParameterTypeTuple;
@@ -765,14 +806,14 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 
 					enum meta = extractHTTPMethodAndName!overload();
 
-					ret ~= format(
-						q{
-							auto settings_%1$s = m_settings.dup;
-							settings_%1$s.baseURL.path = m_baseURL.path ~
-								(%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
-							m_%1$s = new %1$s(settings_%1$s);
-						},
-						implname, meta.url, meta.hadPathUDA
+					ret ~= q{
+						auto settings_%1$s = m_settings.dup;
+						settings_%1$s.baseURL.path = m_baseURL.path ~ (%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
+						m_%1$s = new %1$s(settings_%1$s);
+					}.format(
+						 implname,
+						 meta.url,
+						 meta.hadPathUDA
 					);
 					ret ~= "\n";
 				}
@@ -787,7 +828,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 {
 	if (!__ctfe)
-		assert(false);
+		assert (false);
 
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
 		ReturnType, ParameterTypeTuple;
@@ -814,12 +855,9 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 					tps ~= RT.stringof;
 					string implname = RT.stringof ~ "Impl";
 
-					ret ~= format(
-						q{
-							m_%s.requestFilter = m_requestFilter;
-						},
-						implname
-					);
+					ret ~= q{
+						m_%s.requestFilter = m_requestFilter;
+					}.format(implname);
 					ret ~= "\n";
 				}
 			}
@@ -838,7 +876,7 @@ mixin template RestClientMethods(I) if (is(I == interface)) {
 // of that template.
 mixin template RestClientMethods_MemberImpl(Members...) {
 	import std.traits : MemberFunctionsTuple;
-	static assert(Members.length > 0);
+	static assert (Members.length > 0);
 	private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
 	// Members can be declaration / fields.
 	static if (Ovrlds.length > 0) {
@@ -852,7 +890,7 @@ mixin template RestClientMethods_MemberImpl(Members...) {
 // Poor men's foreach (overload; MemberFunctionsTuple!(I, method))
 mixin template RestClientMethods_OverloadImpl(Overloads...) {
 	import vibe.internal.meta.codegen : CloneFunction;
-	static assert(Overloads.length > 0);
+	static assert (Overloads.length > 0);
 	//pragma(msg, "===== Body for: "~__traits(identifier, Overloads[0])~" =====");
 	//pragma(msg, genClientBody!(Overloads[0]));
 	mixin CloneFunction!(Overloads[0], genClientBody!(Overloads[0])());
@@ -881,9 +919,8 @@ private string genClientBody(alias Func)() {
 			// Note: See server code to see why it's necessary (or Template definition).
 			mixin(GenOrphan!(i).Decl);
 			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-			static assert(anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
-			              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
-			       uda.identifier, FuncId, uda.origin));
+			static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
+			              format("No parameter '%s' on %s (referenced by attribute @%sParam)", uda.identifier, FuncId, uda.origin));
 		}
 	}
 
@@ -894,15 +931,24 @@ private string genClientBody(alias Func)() {
 		string ret;
 		string param_handling_str;
 		string url_prefix = `""`;
+		// Those store the way parameter should be handled afterward.
+		// A parameter that bears doesn't a WebParamAttribute (which documents origin explicitly)
+		// will be stored in defaultParamCTMap. Else, it will either go to headers__ (via request_str),
+		// or queryParamCTMap / bodyParamCTMap, and be passed to genQuery / genBody just before calling request.
+		// Note: The key is the HTTP parameter name, and the value the parameter *identifier*.
+		// Ex: @queryParam("llama", "alpaca") void postSpit(string llama) => queryParamCTMap["alpaca"] = "llama";
+		string[string] defaultParamCTMap;
+		string[string] queryParamCTMap;
+		string[string] bodyParamCTMap;
 
 		// Block 2
 		foreach (i, PT; PTT){
 			static assert (
 				ParamNames[i].length,
-			format(
-				"Parameter %s of %s has no name.",
-				i,
-				method
+				format(
+				       "Parameter %s of %s has no name.",
+				       i,
+				       method
 				)
 			);
 
@@ -912,31 +958,20 @@ private string genClientBody(alias Func)() {
 			// legacy :id special case, left for backwards-compatibility reasons
 			static if (i == 0 && ParamNames[0] == "id") {
 				static if (is(PT == Json))
-				url_prefix = q{urlEncode(id.toString())~"/"};
+					url_prefix = q{urlEncode(id.toString())~"/"};
 				else
-				url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
+					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
 				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static assert(paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
+				static assert (paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
 				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
 					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
 				else
-					static assert(0, "Only header parameter are currently supported client-side");
-			} else static if (
-				!ParamNames[i].startsWith("_") &&
-			!IsAttributedParameter!(Func, ParamNames[i])
-			) {
+					static assert (0, "Only header parameter are currently supported client-side");
+			} else static if (!ParamNames[i].startsWith("_")
+					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-				param_handling_str ~= format(
-					q{
-					jparams__[_stripName("%s")] = serializeToJson(%s);
-					jparamsj__[_stripName("%s")] = %s;
-				},
-				ParamNames[i],
-				ParamNames[i],
-				ParamNames[i],
-				is(PT == Json) ? "true" : "false"
-				);
+				defaultParamCTMap[_stripNameHelper(ParamNames[i])] = ParamNames[i];
 			}
 		}
 
@@ -944,14 +979,11 @@ private string genClientBody(alias Func)() {
 		string request_str;
 
 		static if (!meta.hadPathUDA) {
-			request_str = format(
-				q{
+			request_str = q{
 				if (m_settings.stripTrailingUnderscore && url__.endsWith("_"))
 					url__ = url__[0 .. $-1];
 				url__ = %s ~ adjustMethodStyle(url__, m_methodStyle);
-			},
-			url_prefix
-			);
+			}.format(url_prefix);
 		} else {
 			import std.array : split;
 			auto parts = meta.url.split("/");
@@ -964,10 +996,7 @@ private string genClientBody(alias Func)() {
 				if (p.startsWith(":")) {
 					foreach (pn; ParamNames) {
 						if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
-							request_str ~= format(
-								q{ ~ urlEncode(toRestString(serializeToJson(%s)))},
-							pn
-							);
+							request_str ~= q{ ~ urlEncode(toRestString(serializeToJson(%s)))}.format(pn);
 							match = true;
 							break;
 						}
@@ -982,7 +1011,19 @@ private string genClientBody(alias Func)() {
 			request_str ~= ";\n";
 		}
 
-		request_str ~= format(q{auto jret__ = request(HTTPMethod.%s, url__ , jparams__, jparamsj__, headers__);}, to!string(meta.method));
+		request_str ~= q{
+			// By default for GET / HEAD, params are send via the query string.
+			static if (HTTPMethod.%1$s == HTTPMethod.GET || HTTPMethod.%1$s == HTTPMethod.HEAD) {
+				auto jret__ = request(HTTPMethod.%1$s, url__ , headers__, genQuery(%2$s%5$s%3$s), genBody(%4$s));
+			} else {
+				// Otherwise, they're send as a Json object via the body.
+				auto jret__ = request(HTTPMethod.%1$s, url__ , headers__, genQuery(%3$s), genBody(%2$s%6$s%4$s));
+			}
+
+		}.format(to!string(meta.method),
+			 paramCTMap(defaultParamCTMap), paramCTMap(queryParamCTMap), paramCTMap(bodyParamCTMap), // params map
+			 (defaultParamCTMap.length && queryParamCTMap.length) ? ", " : "", // genQuery(%2$s, %3$s);
+			 (defaultParamCTMap.length && bodyParamCTMap.length) ? ", " : ""); // genBody(%2$s, %4$s);
 
 		static if (!is(RT == void)) {
 			request_str ~= q{
@@ -993,18 +1034,12 @@ private string genClientBody(alias Func)() {
 		}
 
 		// Block 1
-		ret ~= format(
-			q{
-				Json jparams__ = Json.emptyObject;
-				InetHeaderMap headers__;
-				bool[string] jparamsj__;
-				string url__ = "%s";
-				%s
-					%s },
-		meta.url,
-		param_handling_str,
-		request_str
-		);
+		ret ~= q{
+			InetHeaderMap headers__;
+			string url__ = "%s";
+			%s
+			%s
+		}.format(meta.url, param_handling_str, request_str);
 		return ret;
 	}
 }
@@ -1015,7 +1050,7 @@ private {
 
 	string toRestString(Json value)
 	{
-		switch( value.type ){
+		switch (value.type) {
 			default: return value.toString();
 			case Json.Type.Bool: return value.get!bool ? "true" : "false";
 			case Json.Type.Int: return to!string(value.get!long);
@@ -1031,14 +1066,14 @@ private {
 		import vibe.web.common : HTTPStatusException, HTTPStatus;
 		try {
 			static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
-			else static if( is(T == bool) ) return value == "true";
-			else static if( is(T : int) ) return to!T(value);
-			else static if( is(T : double) ) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
-			else static if( is(T : string) ) return value;
-			else static if( __traits(compiles, T.fromISOExtString("hello")) ) return T.fromISOExtString(value);
-			else static if( __traits(compiles, T.fromString("hello")) ) return T.fromString(value);
+			else static if (is(T == bool)) return value == "true";
+			else static if (is(T : int)) return to!T(value);
+			else static if (is(T : double)) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
+			else static if (is(T : string)) return value;
+			else static if (__traits(compiles, T.fromISOExtString("hello"))) return T.fromISOExtString(value);
+			else static if (__traits(compiles, T.fromString("hello"))) return T.fromString(value);
 			else return deserializeJson!T(parseJson(value));
-		} catch(ConvException e) {
+		} catch (ConvException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		}
 	}
@@ -1046,8 +1081,8 @@ private {
 
 private string generateModuleImports(I)()
 {
-	if( !__ctfe )
-		assert(false);
+	if (!__ctfe)
+		assert (false);
 
 	import vibe.internal.meta.codegen : getRequiredImports;
 	import std.algorithm : map;
@@ -1069,9 +1104,30 @@ version(unittest)
 unittest
 {
 	enum imports = generateModuleImports!Interface;
-	static assert(imports == "static import vibe.web.rest;");
+	static assert (imports == "static import vibe.web.rest;");
 }
 
+// Small helper for client code generation
+private string paramCTMap(string[string] params)
+{
+	import std.array : appender, join;
+	if (!__ctfe)
+		assert (false, "This helper is only supposed to be called for codegen in RestClientInterface.");
+	auto app = appender!(string[]);
+	foreach (key, val; params) {
+		app ~= "\""~key~"\"";
+		app ~= val;
+	}
+	return app.data.join(", ");
+}
+
+// Copy behavior of _stripName (private member of RestClientInterface).
+private string _stripNameHelper(string name)
+{
+	if (name.endsWith("_"))
+		return name[0 .. $-1];
+	else return name;
+}
 
 // Workarounds @@DMD:9748@@, and maybe more
 private template GenCmp(string name, int id, string cmpTo) {
@@ -1087,12 +1143,12 @@ private template GenCmp(string name, int id, string cmpTo) {
 
 // Ditto
 private template GenOrphan(int id) {
-    import std.string : format;
-    import std.conv : to;
-    enum Decl = q{
-        template %1$s(string name) {
-            enum %1$s = (uda.identifier == name);
-        }
-    }.format(Name);
-    enum Name = "OrphanCheck"~to!string(id);
+	import std.string : format;
+	import std.conv : to;
+	enum Decl = q{
+		template %1$s(string name) {
+			enum %1$s = (uda.identifier == name);
+		}
+	}.format(Name);
+	enum Name = "OrphanCheck"~to!string(id);
 }
