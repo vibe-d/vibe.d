@@ -93,10 +93,6 @@ html
 
 mixin template translationModule(string NAME)
 {
-//	mixin template decls_mixin(string LANG, size_t i) {
-//		mixin("enum "~LANG~"_"~keyToIdentifier(decl_strings[i].key)~" = "~decl_strings[i].value~";");
-//	}
-
 	mixin template file_mixin(size_t i) {
 		static if (i < languages.length) {
 			enum decl_strings = extractDeclStrings(import(NAME~"."~languages[i]~".po"));
@@ -198,23 +194,6 @@ private struct DeclString {
 	string value;
 }
 
-//string keyToIdentifier(string key)
-//{
-//	enum hexdigits = "0123456789ABCDEF";
-//	string ret;
-//	size_t istart = 0;
-//	foreach (i; 0 .. key.length) {
-//		auto ch = key[i];
-//		if (!(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z')) {
-//			if (i > istart) ret ~= key[istart .. i];
-//			istart = i+1;
-//			ret ~= "_"~hexdigits[ch%0xF]~hexdigits[ch/0x100];
-//		}
-//	}
-//	if (istart < key.length) ret ~= key[istart .. $];
-//	return ret;
-//}
-
 // Example po header
 /*
  * # Translation of kstars.po into Spanish.
@@ -252,7 +231,6 @@ private struct DeclString {
  * msgstr[2] - ditto and etc...
  */
 
-// TODO: Handle msgctxt
 // TODO: Handle plural translations
 DeclString[] extractDeclStrings(string text)
 {
