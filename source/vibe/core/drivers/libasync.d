@@ -12,6 +12,7 @@ import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.drivers.threadedfile;
 import vibe.core.log;
+import vibe.inet.path;
 
 import libasync.all;
 import libasync.types : Status;
@@ -944,7 +945,7 @@ final class LibasyncTCPListener : TCPListener {
 final class LibasyncTCPConnection : TCPConnection {
 
 	private {
-		FixedRingBuffer!(ubyte, 64*1024) m_readBuffer; // todo: use a file failover for tasks too busy to read
+		FixedRingBuffer!ubyte m_readBuffer; // todo: use a file failover for tasks too busy to read
 		TCPConnectionImpl m_tcpImpl;
 		Settings m_settings;
 
@@ -960,7 +961,8 @@ final class LibasyncTCPConnection : TCPConnection {
 	in { assert(conn !is null); }
 	body {
 		m_settings.onConnect = cb;
-
+		m_readBuffer.freeOnDestruct = true;
+		m_readBuffer.capacity = 64*1024;
 	}
 
 	private @property AsyncTCPConnection conn() {
@@ -1247,6 +1249,7 @@ final class LibasyncTCPConnection : TCPConnection {
 
 		if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected) {
 			m_tcpImpl.conn.kill(true); // close the connection
+			destroy(m_readBuffer);
 			m_tcpImpl.conn = null;
 		}
 		m_closed = true;
@@ -1293,6 +1296,7 @@ final class LibasyncTCPConnection : TCPConnection {
 				logError(e.toString);
 				throw e;
 			}
+			if (inbound) onClose();
 		}
 		logTrace("Finished callback");
 	}
@@ -1573,10 +1577,10 @@ version(unittest){
 			exit(0);
 	}
 } else {
-	static ~this() {
-		version(Windows){ // these would cause exit code -11 on linux
-			if (thread_isMainThread) 
-				destroyAsyncThreads(); // destroy threads
-		}
+	version(Windows) static ~this() {
+		// these would cause exit code -11 on linux
+		if (thread_isMainThread) 
+			destroyAsyncThreads(); // destroy threads
+
 	}
 }

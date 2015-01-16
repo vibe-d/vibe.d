@@ -247,7 +247,9 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	}
 
 	static if( N == 0 ){
+		bool m_freeOnDestruct;
 		this(size_t capacity) { m_buffer = new T[capacity]; }
+		~this() { if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer; }
 	}
 
 	@property bool empty() const { return m_fill == 0; }
@@ -261,6 +263,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	@property size_t capacity() const { return m_buffer.length; }
 
 	static if( N == 0 ){
+		@property void freeOnDestruct(bool b) { m_freeOnDestruct = b; }
 		@property void capacity(size_t new_size)
 		{
 			if( m_buffer.length ){
@@ -268,10 +271,14 @@ struct FixedRingBuffer(T, size_t N = 0) {
 				auto dst = newbuffer;
 				auto newfill = min(m_fill, new_size);
 				read(dst[0 .. newfill]);
+				if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer;
 				m_buffer = newbuffer;
 				m_start = 0;
 				m_fill = newfill;
-			} else m_buffer = new T[new_size];
+			} else {
+				if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer;
+				m_buffer = new T[new_size];
+			}
 		}
 	}
 	
