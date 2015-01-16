@@ -254,20 +254,20 @@ template render(string diet_file, ALIASES...) {
 			static if (TranslateContext.languages.length > 1) {
 				switch (s_requestContext.language) {
 					default: {
-						static string diet_translate__(string key) { return tr!(TranslateContext, TranslateContext.languages[0])(key); }
+						static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, TranslateContext.languages[0])(key,context); }
 						vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res);
 						return;
 						}
 					foreach (lang; TranslateContext.languages[1 .. $])
 						case lang: {
-							mixin("struct "~lang~" { static string diet_translate__(string key) { return tr!(TranslateContext, lang)(key); } void render() { vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res); } }");
+							mixin("struct "~lang~" { static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, lang)(key,context); } void render() { vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res); } }");
 							mixin(lang~" renderctx;");
 							renderctx.render();
 							return;
 							}
 				}
 			} else {
-				static string diet_translate__(string key) { return tr!(TranslateContext, TranslateContext.languages[0])(key); }
+				static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, TranslateContext.languages[0])(key,context); }
 				vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res);
 			}
 		} else {
@@ -330,10 +330,10 @@ void terminateSession()
 
 	See_also: $(D vibe.web.i18n.translationContext)
 */
-string trWeb(string text)
+string trWeb(string text, string context = null)
 {
 	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
-	return s_requestContext.tr(text);
+	return s_requestContext.tr(text, context);
 }
 
 ///
@@ -527,7 +527,7 @@ private struct RequestContext {
 	HTTPServerRequest req;
 	HTTPServerResponse res;
 	string language;
-	string function(string) tr;
+	string function(string, string) tr;
 }
 
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
@@ -690,7 +690,7 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 				}
 			}
 		} else ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]);
-	} else ret.tr = t => t;
+	} else ret.tr = (t,c) => t;
 
 	return ret;
 }

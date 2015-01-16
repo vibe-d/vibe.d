@@ -7,3 +7,15 @@ block contents
 
 	p& This is the internationalization example app.
 	p& It can use string interpolation! See the title "#{title}" here as an example.
+
+	- import vibe.web.web;
+	p& Here are some examples of context being used.
+	p& Cardinal directions:
+	ul
+		- foreach (direction; ["N","S","E","W"])
+			li= trWeb(direction, "direction")
+
+	p& Letter mnemonics:
+	ul
+		- foreach (letter; ["N","S","E","W"])
+			li= trWeb(letter, "letter")
