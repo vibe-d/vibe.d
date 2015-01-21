@@ -930,7 +930,7 @@ final class LibasyncTCPListener : TCPListener {
 
 		LibasyncTCPConnection native_conn = new LibasyncTCPConnection(conn, m_connectionCallback);
 		native_conn.m_tcpImpl.conn = conn;
-		native_conn.m_tcpImpl.localAddr = conn.local;
+		native_conn.m_tcpImpl.localAddr = m_local;
 		return &native_conn.handler;
 	}
 
