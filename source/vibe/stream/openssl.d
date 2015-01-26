@@ -158,10 +158,10 @@ final class OpenSSLStream : SSLStream {
             ASN1_OBJECT *obj = X509_NAME_ENTRY_get_object(e);
             ASN1_STRING *val = X509_NAME_ENTRY_get_data(e);
 
-            auto longName = fromStringz(OBJ_nid2ln(OBJ_obj2nid(obj)));
+            auto longName = OBJ_nid2ln(OBJ_obj2nid(obj)).to!string;
             auto valStr = cast(string)val.data[0 .. val.length];
 
-            m_peerCertificate.subjectName[longName] = valStr;
+            m_peerCertificate.subjectName.addField(longName, valStr);
         }
     }
 

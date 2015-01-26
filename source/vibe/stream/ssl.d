@@ -16,6 +16,8 @@ import vibe.core.net;
 import vibe.core.stream;
 import vibe.core.sync;
 
+import vibe.utils.dictionarylist;
+
 import std.algorithm;
 import std.array;
 import std.conv;
@@ -379,7 +381,7 @@ struct SSLCertificateInformation {
         Maps fields to their values. For example, typical fields on a
         certificate will be 'commonName', 'countryName', 'emailAddress', etc.
     */
-    string[string] subjectName;
+    DictionaryList!(string, false) subjectName;
 }
 
 struct SSLPeerValidationData {
