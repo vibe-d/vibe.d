@@ -1,7 +1,7 @@
 /**
 	Internationalization/translation support for the web interface module.
 
-	Copyright: © 2014 RejectedSoftware e.K.
+	Copyright: © 2014-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -115,8 +115,8 @@ mixin template translationModule(string FILENAME)
 	enum NAME = FILENAME.tr(`/.-\`, "____");
 	private mixin template file_mixin(size_t i) {
 		static if (i < languages.length) {
-			enum decl_strings = extractDeclStrings(import(FILENAME~"."~languages[i]~".po"));
-			mixin("enum "~languages[i]~"_"~NAME~" = decl_strings;");
+			enum components = extractDeclStrings(import(FILENAME~"."~languages[i]~".po"));
+			mixin("enum "~languages[i]~"_"~NAME~" = components;");
 			//mixin decls_mixin!(languages[i], 0);
 			mixin file_mixin!(i+1);
 		}
@@ -127,20 +127,49 @@ mixin template translationModule(string FILENAME)
 
 string tr(CTX, string LANG)(string key, string context = null)
 {
+	return tr_plural!(CTX,LANG)(key, null, 0, context);
+}
+
+string tr_plural(CTX, string LANG)(string key, string key_plural, int n, string context = null) {
 	static assert([CTX.languages].canFind(LANG), "Unknown language: "~LANG);
 
-	foreach (i, mname; __traits(allMembers, CTX))
+	foreach (i, mname; __traits(allMembers, CTX)) {
 		static if (mname.startsWith(LANG~"_")) {
-			foreach (entry; __traits(getMember, CTX, mname))
-				if ((context is null) == (entry.context is null))
-					if (context is null || entry.context == context)
-						if (entry.key == key)
-							return entry.value;
+			enum langComponents = __traits(getMember, CTX, mname);
+			foreach (entry; langComponents.messages) {
+				if ((context is null) == (entry.context is null)) {
+					if (context is null || entry.context == context) {
+						if (entry.key == key) {
+							if (key_plural !is null) {
+								if (entry.pluralKey !is null && entry.pluralKey == key_plural) {
+									static if (langComponents.nplurals_expr !is null && langComponents.plural_func_expr !is null) {
+										mixin("int nplurals = "~langComponents.nplurals_expr~";");
+										if (nplurals > 0) {
+											mixin("int index = "~langComponents.plural_func_expr~";");
+											return entry.pluralValues[index];
+										}
+										return entry.value;
+									}
+									assert(false, "Plural translations are not supported when the po file does not contain an entry for Plural-Forms.");
+								}
+							} else {
+								return entry.value;
+							}
+						}
+					}
+				}
+			}
 		}
+	}
 
-	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys)
-		assert(false, "Missing translation key for "~LANG~": "~key);
-	else return key;
+	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys) {
+		if (context is null) {
+			assert(false, "Missing translation key for "~LANG~": "~key);
+		}
+		assert(false, "Missing translation key for "~LANG~"; "~context~": "~key);
+	} else {
+		return key;
+	}
 }
 
 package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
@@ -211,7 +240,15 @@ package template GetTranslationContext(alias METHOD)
 private struct DeclString {
 	string context;
 	string key;
+	string pluralKey;
 	string value;
+	string[] pluralValues;
+}
+
+private struct LangComponents {
+	DeclString[] messages;
+	string nplurals_expr;
+	string plural_func_expr;
 }
 
 // Example po header
@@ -251,10 +288,11 @@ private struct DeclString {
  * msgstr[2] - ditto and etc...
  */
 
-// TODO: Handle plural translations
-DeclString[] extractDeclStrings(string text)
+private LangComponents extractDeclStrings(string text)
 {
-	DeclString[] ret;
+	DeclString[] declStrings;
+	string nplurals_expr;
+	string plural_func_expr;
 
 	size_t i = 0;
 	while (true) {
@@ -262,6 +300,8 @@ DeclString[] extractDeclStrings(string text)
 		if (i >= text.length) break;
 
 		string context = null;
+
+		// msgctxt is an optional field
 		if (text.length - i >= 7 && text[i .. i+7] == "msgctxt") {
 			i = skipWhitespace(i+7, text);
 
@@ -270,6 +310,7 @@ DeclString[] extractDeclStrings(string text)
 			i = skipToDirective(icntxt, text);
 		}
 
+		// msgid is a required field
 		assert(text.length - i >= 5 && text[i .. i+5] == "msgid", "Expected 'msgid', got '"~text[i .. min(i+10, $)]~"'.");
 		i += 5;
 
@@ -281,19 +322,51 @@ DeclString[] extractDeclStrings(string text)
 
 		i = skipToDirective(i, text);
 
+		// msgid_plural is an optional field
+		string key_plural = null;
+		if (text.length - i >= 12 && text[i .. i+12] == "msgid_plural") {
+			i = skipWhitespace(i+12, text);
+			auto iprl = skipString(i, text);
+			key_plural = dstringUnescape(wrapText(text[i+1 .. iprl-1]));
+			i = skipToDirective(iprl, text);
+		}
+
+		// msgstr is a required field
 		assert(text.length - i >= 6 && text[i .. i+6] == "msgstr", "Expected 'msgstr', got '"~text[i .. min(i+10, $)]~"'.");
 		i += 6;
 
 		i = skipWhitespace(i, text);
-
 		auto ivnext = skipString(i, text);
 		auto value = dstringUnescape(wrapText(text[i+1 .. ivnext-1]));
 		i = ivnext;
+		i = skipToDirective(i, text);
 
-		ret ~= DeclString(context, key, value);
+		// msgstr[n] is a required field when msgid_plural is not null, and ignored otherwise
+		string[] value_plural;
+		if (key_plural !is null) {
+			while (text.length - i >= 6 && text[i .. i+6] == "msgstr") {
+				i = skipIndex(i+6, text);
+				i = skipWhitespace(i, text);
+				auto ims = skipString(i, text);
+
+				string plural = dstringUnescape(wrapText(text[i+1 .. ims-1]));
+				i = skipLine(ims, text);
+
+				// Is it safe to assume that the entries are always sequential?
+				value_plural ~= plural;
+			}
+		}
+
+		// Add the translation for the current language
+		if (key == "") {
+			nplurals_expr = parse_nplurals(value);
+			plural_func_expr = parse_plural_expression(value);
+		}
+
+		declStrings ~= DeclString(context, key, key_plural, value, value_plural);
 	}
 
-	return ret;
+	return LangComponents(declStrings, nplurals_expr, plural_func_expr);
 }
 
 // Verify that two simple messages can be read and parsed correctly
@@ -307,7 +380,8 @@ msgstr "first"
 msgid "ordinal.2"
 msgstr "second"`;
 
-	auto ds = extractDeclStrings(str);
+	auto components = extractDeclStrings(str);
+	auto ds = components.messages;
 	assert(2 == ds.length, "Not enough DeclStrings have been processed");
 	assert(ds[0].key == "ordinal.1", "The first key is not right.");
 	assert(ds[0].value == "first", "The first value is not right.");
@@ -339,7 +413,7 @@ msgstr ""
 "It should not matter where it takes place, "
 "the strings should all be concatenated properly."`;
 
-	auto ds = extractDeclStrings(str);
+	auto ds = extractDeclStrings(str).messages;
 	assert(1 == ds.length, "Expected one DeclString to have been processed.");
 	assert(ds[0].key == "This is an example of text that has been wrapped on two lines.", "Failed to properly wrap the key");
 	assert(ds[0].value == "It should not matter where it takes place, the strings should all be concatenated properly.", "Failed to properly wrap the key");
@@ -379,7 +453,7 @@ Content-Transfer-Encoding: 8bit
 Plural-Forms: nplurals=2; plural=(n != 1);
 `;
 
-	auto ds = extractDeclStrings(str);
+	auto ds = extractDeclStrings(str).messages;
 	assert(1 == ds.length, "Expected one DeclString to have been processed.");
 	assert(ds[0].key == "", "Failed to properly wrap or unescape the key");
 	assert(ds[0].value == expected, "Failed to properly wrap or unescape the value");
@@ -393,7 +467,7 @@ msgctxt "food"
 msgid "C"
 msgstr "C is for cookie, that's good enough for me."`;
 
-	auto ds1 = extractDeclStrings(str1);
+	auto ds1 = extractDeclStrings(str1).messages;
 	assert(1 == ds1.length, "Expected one DeclString to have been processed.");
 	assert(ds1[0].context == "food", "Expected a context of food");
 	assert(ds1[0].key == "C", "Expected to find the letter C for the msgid.");
@@ -404,7 +478,7 @@ msgstr "C is for cookie, that's good enough for me."`;
 msgid "alpha"
 msgstr "First greek letter."`;
 
-	auto ds2 = extractDeclStrings(str2);
+	auto ds2 = extractDeclStrings(str2).messages;
 	assert(1 == ds2.length, "Expected one DeclString to have been processed.");
 	assert(ds2[0].context is null, "Expected the context to be null when it is not defined.");
 }
@@ -426,13 +500,15 @@ msgid "C"
 msgstr "Third letter"
 `;
 
-	enum ds = extractDeclStrings(str);
+	enum components = extractDeclStrings(str);
 
 	struct TranslationContext {
 		import std.typetuple;
 		enum enforceExistingKeys = true;
 		alias languages = TypeTuple!("en_US");
-		enum en_US_unittest = ds;
+
+		// Note that this is normally handled by mixing in an external file.
+		enum en_US_unittest = components;
 	}
 
 	auto newTr(string msgid, string msgcntxt = null) {
@@ -442,6 +518,46 @@ msgstr "Third letter"
 	assert(newTr("C", "food") == "C is for cookie, that's good enough for me.", "Unexpected translation based on context.");
 	assert(newTr("C", "lang") == "Catalan", "Unexpected translation based on context.");
 	assert(newTr("C") == "Third letter", "Unexpected translation based on context.");
+}
+
+unittest {
+	enum str = `msgid ""
+msgstr ""
+"Project-Id-Version: kstars\\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\\n"
+
+msgid "One file was deleted."
+msgid_plural "Files were deleted."
+msgstr "One file was deleted."
+msgstr[0] "1 file was deleted"
+msgstr[1] "%d files were deleted."
+
+msgid "One file was created."
+msgid_plural "Several files were created."
+msgstr "One file was created."
+msgstr[0] "1 file was created"
+msgstr[1] "%d files were created."
+`;
+
+	import std.stdio;
+	enum components = extractDeclStrings(str);
+
+	struct TranslationContext {
+		import std.typetuple;
+		enum enforceExistingKeys = true;
+		alias languages = TypeTuple!("en_US");
+
+		// Note that this is normally handled by mixing in an external file.
+		enum en_US_unittest2 = components;
+	}
+	
+	auto newTr(string msgid, string msgid_plural, int count, string msgcntxt = null) {
+		return tr_plural!(TranslationContext, "en_US")(msgid, msgid_plural, count, msgcntxt);
+	}
+
+	//writeln(newTr("", null, 1));
+	writefln(newTr("One file was deleted.", "Files were deleted.", 1), 1);
+	writefln(newTr("One file was deleted.", "Files were deleted.", 42), 42);
 }
 
 private size_t skipToDirective(size_t i, ref string text)
@@ -470,8 +586,8 @@ private size_t skipLine(size_t i, ref string text)
 
 private size_t skipString(size_t i, ref string text)
 {
-	size_t istart = i;
-	assert(text[i] == '"');
+	import std.conv : to;
+	assert(text[i] == '"', "Expected to encounter the start of a string at position: "~to!string(i));
 	i++;
 	while (true) {
 		assert(i < text.length, "Missing closing '\"' for string: "~text[i .. min($, 10)]);
@@ -485,6 +601,17 @@ private size_t skipString(size_t i, ref string text)
 		if (text[i] == '\\') i += 2;
 		else i++;
 	}
+}
+
+private size_t skipIndex(size_t i, ref string text) {
+	import std.conv : to;
+	assert(text[i] == '[', "Expected to encounter a plural form of msgstr at position: "~to!string(i));
+	for (; i<text.length; ++i) {
+		if (text[i] == ']') {
+			return i+1;
+		}
+	}
+	assert(false, "Missing a ']' for a msgstr in a translation file.");
 }
 
 private string wrapText(string str)
@@ -508,4 +635,54 @@ private string wrapText(string str)
 
 	if (wrapped) return ret;
 	return str;
+}
+
+private string parse_nplurals(string msgstr)
+in { assert(msgstr, "An empty string cannot be parsed for Plural-Forms."); }
+body {
+	import std.string : indexOf, CaseSensitive;
+
+	auto start = msgstr.indexOf("Plural-Forms:", CaseSensitive.no);
+	if (start > -1) {
+		auto beg = msgstr.indexOf("nplurals=", start+13, CaseSensitive.no);
+		if (beg > -1) {
+			auto end = msgstr.indexOf(';', beg+9, CaseSensitive.no);
+			if (end > -1) {
+				return msgstr[beg+9 .. end];
+			}
+			return msgstr[beg+9 .. $];
+		}
+	}
+
+	return null;
+}
+
+unittest {
+	auto res = parse_nplurals("Plural-Forms: nplurals=2; plural=n != 1;\n");
+	assert(res == "2", "Failed to parse the correct number of plural forms for a language.");
+}
+
+private string parse_plural_expression(string msgstr)
+in { assert(msgstr, "An empty string cannot be parsed for Plural-Forms."); }
+body {
+	import std.string : indexOf, CaseSensitive;
+
+	auto start = msgstr.indexOf("Plural-Forms:", CaseSensitive.no);
+	if (start > -1) {
+		auto beg = msgstr.indexOf("plural=", start+13, CaseSensitive.no);
+		if (beg > -1) {
+			auto end = msgstr.indexOf(';', beg+7, CaseSensitive.no);
+			if (end > -1) {
+				return msgstr[beg+7 .. end];
+			}
+			return msgstr[beg+7 .. $];
+		}
+	}
+
+	return null;
+}
+
+unittest {
+	auto res = parse_plural_expression("Plural-Forms: nplurals=2; plural=n != 1;\n");
+	assert(res == "n != 1", "Failed to parse the plural expression for a language.");
 }
