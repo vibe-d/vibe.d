@@ -19,3 +19,9 @@ block contents
 	ul
 		- foreach (letter; ["N","S","E","W"])
 			li= trWeb(letter, "letter")
+
+	p& Plural forms:
+	- import std.string : format;
+	ul
+		li= format(trWeb("One file created.", "Several files created.", 1), 1)
+		li= format(trWeb("One file created.", "Several files created.", 42), 42)

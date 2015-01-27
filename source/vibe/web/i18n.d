@@ -140,6 +140,13 @@ string tr_plural(CTX, string LANG)(string msgid, string msgid_plural, int n, str
 	}
 
 	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys) {
+		if (msgid_plural !is null) {
+			if (msgctxt is null) {
+				assert(false, "Missing translation keys for "~LANG~": "~msgid~"&"~msgid_plural);
+			}
+			assert(false, "Missing translation key for "~LANG~"; "~msgctxt~": "~msgid~"&"~msgid_plural);
+		}
+
 		if (msgctxt is null) {
 			assert(false, "Missing translation key for "~LANG~": "~msgid);
 		}
