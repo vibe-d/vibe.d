@@ -163,6 +163,13 @@ string tr_plural(CTX, string LANG)(string key, string key_plural, int n, string 
 	}
 
 	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys) {
+		if (key_plural !is null) {
+			if (context is null) {
+				assert(false, "Missing translation keys for "~LANG~": "~key~"&"~key_plural);
+			}
+			assert(false, "Missing translation key for "~LANG~"; "~context~": "~key~"&"~key_plural);
+		}
+
 		if (context is null) {
 			assert(false, "Missing translation key for "~LANG~": "~key);
 		}
