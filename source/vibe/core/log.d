@@ -158,7 +158,7 @@ enum LogLevel {
 	debug_,     /// Developer information useful for algorithm debugging
 	diagnostic, /// Extended user information (e.g. for more detailed error information)
 	info,       /// Informational message for normal user education
-	warn,       /// Unexpected condition that count indicate an error but has no direct consequences
+	warn,       /// Unexpected condition that could indicate an error but has no direct consequences
 	error,      /// Normal error that is handled gracefully
 	critical,   /// Error that severely influences the execution of the application
 	fatal,      /// Error that forces the application to terminate

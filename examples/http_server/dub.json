@@ -1,4 +1,4 @@
-﻿{
+{
 	"name": "http-server-example",
 	"description": "A minimal HTTP server.",
 	"authors": [ "Sönke Ludwig" ],

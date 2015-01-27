@@ -149,7 +149,7 @@ template isRWField(T, string M)
 	import std.typetuple;
 
 	static void testAssign()() {
-		static T t = void;
+		T t = void;
 		__traits(getMember, t, M) = __traits(getMember, t, M);
 	}
 
@@ -235,7 +235,7 @@ package T Tgen(T)(){ return T.init; }
 */
 template isPublicMember(T, string M)
 {
-	import std.algorithm;
+	import std.algorithm, std.typetuple : TypeTuple;
 
 	static if (!__traits(compiles, TypeTuple!(__traits(getMember, T, M)))) enum isPublicMember = false;
 	else {
