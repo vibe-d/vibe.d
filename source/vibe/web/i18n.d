@@ -469,7 +469,7 @@ msgstr ""
 msgid "One file was deleted."
 msgid_plural "Files were deleted."
 msgstr "One file was deleted."
-msgstr[0] "1 file was deleted"
+msgstr[0] "1 file was deleted."
 msgstr[1] "%d files were deleted."
 
 msgid "One file was created."
@@ -495,9 +495,13 @@ msgstr[1] "%d files were created."
 		return tr_plural!(TranslationContext, "en_US")(msgid, msgid_plural, count, msgcntxt);
 	}
 
-	//writeln(newTr("", null, 1));
-	writefln(newTr("One file was deleted.", "Files were deleted.", 1), 1);
-	writefln(newTr("One file was deleted.", "Files were deleted.", 42), 42);
+	string expected = "1 file was deleted.";
+	auto actual = newTr("One file was deleted.", "Files were deleted.", 1);
+	assert(expected == actual, "Expected: '"~expected~"' but got '"~actual~"'");
+
+	expected = "%d files were deleted.";
+	actual = newTr("One file was deleted.", "Files were deleted.", 42);
+	assert(expected == actual, "Expected: '"~expected~"' but got '"~actual~"'");
 }
 
 private size_t skipToDirective(size_t i, ref string text)
