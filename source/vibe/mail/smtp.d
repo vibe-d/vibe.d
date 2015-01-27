@@ -82,7 +82,8 @@ final class SMTPClientSettings {
 	SMTPConnectionType connectionType = SMTPConnectionType.plain;
 	SMTPAuthType authType = SMTPAuthType.none;
 	SSLPeerValidationMode sslValidationMode = SSLPeerValidationMode.trustedCert;
-	void delegate(scope SSLContext) sseContextSetup;
+	void delegate(scope SSLContext) sslContextSetup;
+	deprecated("Use sslContextSetup instead.") alias sseContextSetup = sslContextSetup;
 	string username;
 	string password;
 
@@ -123,7 +124,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	if( settings.connectionType == SMTPConnectionType.ssl ){
 		auto ctx = createSSLContext(SSLContextKind.client);
 		ctx.peerValidationMode = settings.sslValidationMode;
-		if (settings.sseContextSetup) settings.sseContextSetup(ctx);
+		if (settings.sslContextSetup) settings.sslContextSetup(ctx);
 		conn = createSSLStream(raw_conn, ctx, SSLStreamState.connecting);
 	}
 
@@ -131,7 +132,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	void greet(){
 		conn.write("EHLO "~settings.localname~"\r\n");
-		while(true){ // simple skipping of 
+		while(true){ // simple skipping of
 			auto ln = cast(string)conn.readLine();
 			logDebug("EHLO response: %s", ln);
 			auto sidx = ln.indexOf(' ');
@@ -224,7 +225,7 @@ unittest {
 		email.headers["Subject"] = "My subject";
 		email.headers["Content-Type"] = "text/plain;charset=utf-8";
 		email.bodyText = "This message can contain utf-8 [κόσμε], and\nwill be displayed properly in mail clients with \\n line endings.";
-		
+
 		auto smtpSettings = new SMTPClientSettings(host, port);
 		sendMail(smtpSettings, email);
 	}

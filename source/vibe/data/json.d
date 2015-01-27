@@ -362,7 +362,13 @@ struct Json {
 		else static if (is(T == Json[string])) return m_object;
 		else static assert("JSON can only be cast to (bool, long, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
-	/// ditto
+
+	/**
+		Returns the native type for this JSON if it matches the current runtime type.
+
+		If the runtime type does not match the given native type, the 'def' parameter is returned
+		instead.
+	*/
 	@property const(T) opt(T)(const(T) def = T.init)
 	const {
 		if( typeId!T != m_type ) return def;

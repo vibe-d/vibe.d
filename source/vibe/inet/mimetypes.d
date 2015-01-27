@@ -743,7 +743,8 @@ bool isCompressedFormat(string mimetype)
 		default: return false;
 		case "application/gzip", "application/x-compress", "application/png", "application/zip",
 				"audio/x-mpeg", "image/png", "image/jpeg",
-				"video/mpeg", "video/quicktime", "video/x-msvideo":
+				"video/mpeg", "video/quicktime", "video/x-msvideo",
+				"application/font-woff", "application/x-font-woff", "font/woff":
 			return true;
 	}
 }

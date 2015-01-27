@@ -1,5 +1,5 @@
 /**
-	Implements a descriptive framework for building web interfaces.
+	Implements a declarative framework for building web interfaces.
 
 	This module contains the sister funtionality to the $(D vibe.web.rest)
 	module. While the REST interface generator is meant for stateless
@@ -59,7 +59,7 @@ import vibe.http.server;
 
 		$(UL
 			$(LI An array of values is mapped to
-				"&lt;parameter_name&gt;_&lt;index&gt;", where "index"
+				$(D &lt;parameter_name&gt;_&lt;index&gt;), where $(D index)
 				denotes the zero based index of the array entry. The length
 				of the array is determined by searching for the first
 				non-existent index in the set of form fields.)
@@ -71,7 +71,7 @@ import vibe.http.server;
 			$(LI $(D struct) type parameters that don't define a $(D fromString)
 				or a $(D fromStringValidate) method will be mapped to one
 				form field per struct member with a scheme similar to how
-				arrays are treated: "&lt;parameter_name&gt;_&lt;member_name&gt;")
+				arrays are treated: $(D &lt;parameter_name&gt;_&lt;member_name&gt;))
 			$(LI Boolean parameters will be set to $(D true) if a form field of
 				the corresponding name is present and to $(D false) otherwise.
 				This is compatible to how check boxes in HTML forms work.)
@@ -569,7 +569,14 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
 				if (res.headerWritten) return;
 			}
-			else static if (param_names[i] == "_error" && ERROR.length == 1) params[i].setVoid(error[0]);
+			else static if (param_names[i] == "_error") {
+				static if (ERROR.length == 1)
+					params[i].setVoid(error[0]);
+				else static if (!is(default_values[i] == void))
+					params[i].setVoid(default_values[i]);
+				else
+					params[i] = typeof(params[i]).init;
+			}
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;

@@ -127,7 +127,7 @@ final class MongoClient {
 	 		writeln("Current databases are: ", names);
 	 		---
 	 */
-	auto getDatabases()
+	auto getDatabases()()
 	{
 		return lockConnection.listDatabases()
 			.map!(info => MongoDatabase(this, info.name));

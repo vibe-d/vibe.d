@@ -645,11 +645,9 @@ void setTaskStackSize(size_t sz)
 	they only need for initialization (such as listening on ports <= 1024 or opening
 	system log files).
 */
-void lowerPrivileges()
+void lowerPrivileges(string uname, string gname)
 {
 	if (!isRoot()) return;
-	auto uname = s_privilegeLoweringUserName;
-	auto gname = s_privilegeLoweringGroupName;
 	if (uname || gname) {
 		static bool tryParse(T)(string s, out T n)
 		{
@@ -663,6 +661,12 @@ void lowerPrivileges()
 		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
 		setUID(uid, gid);
 	} else logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering. Running with full permissions.");
+}
+
+// ditto
+void lowerPrivileges()
+{
+	lowerPrivileges(s_privilegeLoweringUserName, s_privilegeLoweringGroupName);
 }
 
 
@@ -682,7 +686,7 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 /**
 	A version string representing the current vibe version
 */
-enum vibeVersionString = "0.7.21";
+enum vibeVersionString = "0.7.22";
 
 /// Compatibility alias
 deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersionString;
@@ -978,6 +982,10 @@ private class CoreTask : TaskFiber {
 				// make the fiber available for the next task
 				if (s_availableFibers.full)
 					s_availableFibers.capacity = 2 * s_availableFibers.capacity;
+
+				// clear the message queue for the next task
+				messageQueue.clear();
+
 				s_availableFibers.put(this);
 			}
 		} catch(UncaughtException th) {
@@ -1307,6 +1315,11 @@ shared static ~this()
 // per thread setup
 static this()
 {
+	/// workaround for:
+	// object.Exception@src/rt/minfo.d(162): Aborting: Cycle detected between modules with ctors/dtors:
+	// vibe.core.core -> vibe.core.drivers.native -> vibe.core.drivers.libasync -> vibe.core.core
+	if (Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor") return;
+			
 	assert(s_core !is null);
 
 	auto thisthr = Thread.getThis();

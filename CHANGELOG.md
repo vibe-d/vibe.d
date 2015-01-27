@@ -1,86 +1,128 @@
 ﻿Changelog
 =========
 
-v0.7.21 - 2014-10-
+v0.7.22 - 2015-01-12
 --------------------
+
+A small release mostly fixing compilation issues on DMD 2.065, LDC 0.14.0 and GDC. It also contains the new optional libasync based event driver for initial testing.
 
 ### Features and improvements ###
 
+ - Added a new event driver based on the [libasync](https://github.com/etcimon/libasync) native D event loop abstraction library (by Etienne Cimon) - [pull #814][issue814]
+ - Added support for `@headerParam` in the REST interface generator (by Mathias Lang aka Geod24) - [pull #908][issue908]
+ - Added `font/woff` as a recognized compressed MIME type to avoid redundant compression for HTTP transfers (by Márcio Martins) - [pull #923][issue923]
+ - The BSON deserialization routines now transparently convert from `long` to `int` where required (by David Monagle) - [pull #913][issue913]
+
+### Bug fixes ###
+
+ - Fixed an overload conflict for `urlEncode` introduced in 0.7.21
+ - Fixed a compilation issue with `Exception` typed `_error` parameters in web interface methods (by Denis Hlyakin) - [pull #900][issue900]
+ - Fixed conversion of `Bson.Type.undefined` to `Json` (by Márcio Martins) - [pull #922][issue922]
+ - Fixed messages leaking past the end of a task to the next task handled by the same fiber (by Luca Niccoli) - [pull #934][issue934]
+ - Fixed various compilation errors and ICEs for DMD 2.065, GDC and LDC 0.14.0 (by Martin Nowak) - [pull #901][issue901], [pull #907][issue907], [pull #927][issue927]
+
+[issue814]: https://github.com/rejectedsoftware/vibe.d/issues/814
+[issue900]: https://github.com/rejectedsoftware/vibe.d/issues/900
+[issue901]: https://github.com/rejectedsoftware/vibe.d/issues/901
+[issue907]: https://github.com/rejectedsoftware/vibe.d/issues/907
+[issue908]: https://github.com/rejectedsoftware/vibe.d/issues/908
+[issue913]: https://github.com/rejectedsoftware/vibe.d/issues/913
+[issue922]: https://github.com/rejectedsoftware/vibe.d/issues/922
+[issue923]: https://github.com/rejectedsoftware/vibe.d/issues/923
+[issue927]: https://github.com/rejectedsoftware/vibe.d/issues/927
+[issue934]: https://github.com/rejectedsoftware/vibe.d/issues/934
+
+
+v0.7.21 - 2014-11-18
+--------------------
+
+Due to a number of highly busy months (more to come), this release got delayed far more than planned. However, development didn't stall and, finally, a huge list of over 150 changes found its way into the new version. Major changes are all over the place, including some notable changes in the SSL/TLS support and the web interface generator.
+
+### Features and improvements ###
+
+ - SSL/TLS support
+	 - Added support for TLS server name indication (SNI) to the SSL support classes and the HTTP client and server implementation
+	 - Changed `SSLPeerValidationMode` into a set of bit flags (different modes can now be combined)
+	 - Made the SSL implementation pluggable (currently only OpenSSL is supported)
+	 - Moved all OpenSSL code into a separate module to avoid importing the OpenSSL headers in `vibe.stream.ssl` (by Martin Nowak) - [pull #757][issue757]
+	 - Added support for a `VibeUseOldOpenSSL` version to enable use with pre 1.0 versions of OpenSSL
+	 - Upgraded the included OpenSSL Windows binaries to 1.0.1j
+ - Web interface generator
+	 - Added support for `Json` as a return type for web interface methods (by Stefan Koch) - [pull #684][issue684]
+	 - Added support for a `@contentType` attribute for web interface methods (by Stefan Koch) - [pull #684][issue684]
+	 - Added `vibe.web.web.trWeb` for runtime string translation support
+	 - Added support for nesting web interface classes using properties that return a class instance
+	 - Added support for `@before`/`@after` attributes for web interface methods
+	 - Added a `PrivateAccessProxy` mixin as a way to enable use of private and non-static methods for `@before` in web interfaces
+	 - Added support for validating parameter types to `vibe.web.web` (`vibe.web.validation`)
+	 - Added the possibility to customize the language selection in the translation context for web interface translations
+	 - Added optional support for matching request paths with mismatching trailing slash in web interfaces
+	 - `SessionVar`, if necessary, now starts a new session also for read accesses
+ - HTTP sessions
+	 - Added a check to disallow storing types with aliasing in sessions
+	 - Session values are now always returned as `const` to avoid unintended mutation of the returned temporary
+	 - Added initial support for JSON and BSON based session stores
+	 - Added a Redis based HTTP session store (`vibe.db.redis.sessionstore.RedisSessionStore`)
+	 - Deprecated index operator based access of session values (recommended to use `vibe.web.web.SessionVar` instead)
+ - Redis database driver
+	 - Added some missing Redis methods and rename `RedisClient.flushAll` to `deleteAll`
+	 - Added the `vibe.db.redis.types` module for type safe access of Redis keys
+	 - `RedisReply` is now a typed output range
+	 - Added a module for Redis with common high level idioms (`vibe.db.redis.idioms`)
+	 - Improved the Redis interface with better template constraints, support for interval specifications and support for `Nullable!T` to determine key existence
+	 - Made the `member` argument to the sorted set methods in `RedisDatabase` generic instead of `string` - [issue #811][issue811]
+	 - Added support for `ubyte[]` as a return type for various Redis methods (by sinkuu) - [pull #761][issue761]
+ - MongoDB database driver
+	 - `MongoConnection.defaultPort` is now an `ushort` (by Martin Nowak) - [pull #725][issue725]
+	 - Added support for expiring indexes and dropping indexes/collections in the MongoDB client (by Márcio Martins) - [pull #799][issue799]
+	 - Added `MongoClient.getDatabases` (by Peter Eisenhower) - [pull #822][issue822]
+	 - Added an array based overload of `MongoCollection.ensureIndex` - [issue #824][issue824]
+	 - Added `MongoCursor.skip` as an alternative to setting the skip value using an argument to `find` (by Martin Nowak) - [pull 888][issue888]
+ - HTTP client
+	 - Made the handling of redirect responses more specific in the HTTP client (reject unknown status codes)
+	 - Added support for using a proxy server in the HTTP client (by Etienne Cimon) - [pull #731][issue731]
+	 - Added `HTTPClientSettings.defaultKeepAliveTimeout` and handle the optional request count limit of keep-alive connections (by Etienne Cimon) - [issue 744][issue744], [pull #756][issue756]
+	 - Added an assertion to the HTTP client when a relative path is used for the request URL instead of constructing an invalid request
+	 - Avoid using chunked encoding for `HTTPClientRequest.writeJsonBody`
+ - HTTP server
+	 - Added support for IP based client certificate validation in the HTTP server (by Eric Cornelius) - [pull #723][issue723]
+	 - Avoid using chunked encoding for `HTTPServerResponse.writeJsonBody` - [issue #619][issue619]
+	 - Added `HTTPServerResponse.waitForConnectionClose` to support certain kinds of long-polling applications
  - Compiles on DMD 2.064 up to DMD 2.067.0-b1
- - `SessionVar`, if necessary, now starts a new session also for read accesses
- - Added a check to disallow storing types with aliasing in sessions
- - Session values are now always returned as `const` to avoid unintended mutation of the returned temporary
- - Made the handling of redirect responses more specific in the HTTP client (reject unknown status codes)
+ - All external dependencies are now version based (OpenSSL/libevent/libev)
+ - Removed deprecated symbols of 0.7.20
+ - Increased the default fiber stack size to 512 KiB (32-bit) and 16 MiB (64-bit) respectively - [issue #861][issue861]
  - Enabled the use of `shared` delegates for `runWorkerTask` and avoid creation of a heap delegate
  - Added support for more parameter types in `runTask`/`runWorkerTask` by avoiding `Variant`
  - Added an initial implementation of a `Future!T` (future/promise) in `vibe.core.concurrency`
- - Added support for `Json` as a return type for web interface methods (by Stefan Koch) - [pull #684][issue684]
- - Added support for a `@contentType` attribute for web interface methods (by Stefan Koch) - [pull #684][issue684]
- - Changed `SSLPeerValidationMode` into a set of bit flags (different modes can now be combined)
- - Added `vibe.web.web.trWeb` for runtime string translation support
  - Deprecated the output range interface of `OutputStream`, use `vibe.stream.wrapper.StreamOutputRange` instead
- - Added support for `@before`/`@after` attributes for web interface methods
- - Added a `PrivateAccessProxy` mixin as a way to enable use of private and non-static methods for `@before` in web interfaces
- - Added support for validating parameter types to `vibe.web.web` (`vibe.web.validation`)
- - Removed deprecated symbols of 0.7.20
  - Prefer `.toString()` to `cast(string)` when converting values to string in Diet templates (changes how `Json` values are converted!) - [issue #714][issue714]
  - Added variants of the `vibe.utils.validation` functions that don't throw
  - Added `UDPConnection.close()`
  - Deprecated `registerFormInterface` and `registerFormMethod`
- - Added support for IP based client certificate validation in the HTTP server (by Eric Cornelius) - [pull #723][issue723]
- - `MongoConnection.defaultPort` is now an `ushort` (by Martin Nowak) - [pull #725][issue725]
  - Added support for implicit parameter conversion of arguments passed to `runTask`/`runWorkerTask` (by Martin Nowak) - [pull #719][issue719]
  - Added `vibe.stream.stdio` for vibe.d compatible wrapping of stdin/stdout and `std.stdio.File` (by Eric Cornelius) - [pull #729][issue729]
  - Added `vibe.stream.multicast.MultiCastStream` for duplicating a stream to multiple output streams (by Eric Cornelius) - [pull #732][issue732]
- - Added support for nesting web interface classes using properties that return a class instance
- - Added optional support for matching request paths with mismatching trailing slash in web interfaces
  - Added support for an `inotify` based directory watcher in the libevent driver (by Martin Nowak) - [pull #743][issue743]
- - Added support for using a proxy server in the HTTP client (by Etienne Cimon) - [pull #731][issue731]
- - Avoid using chunked encoding for `HTTPServerResponse.writeJsonBody` - [issue #619][issue619]
  - Added support for `Nullable!T` in `vibe.data.serialization` - [issue #752][issue752]
- - Moved all OpenSSL code into a separate module to avoid importing the OpenSSL headers in `vibe.stream.ssl` (by Martin Nowak) - [pull #757][issue757]
- - Added some missing Redis methods and rename `RedisClient.flushAll` to `deleteAll`
- - Added the `vibe.db.redis.types` module for type safe access of Redis keys
  - Added a constructor for `BsonObjectID` that takes a specific time stamp (by Martin Nowak) - [pull #759][issue759]
- - Added support for `ubyte[]` as a return type for various Redis methods (by sinkuu) - [pull #761][issue761]
  - Added output range based overloads of `std.stream.operations.readUntil` and `readLine`
- - `RedisReply` is now a typed output range
  - Added `vibe.data.json.serializeToJsonString`
- - Added a module for Redis with common high level idioms (`vibe.db.redis.idioms`)
- - Improved the Redis interface with better template constraints, support for interval specifications and support for `Nullable!T` to determine key existence
  - Added `vibe.inet.webform.formEncode` for encoding a dictionary/AA as a web form (by Etienne Cimon) - [pull #748][issue748]
  - `BsonObjectID.fromString` now throws an `Exception` instead of an `AssertError` for invalid inputs
- - Made the SSL implementation pluggable (currently only OpenSSL is supported)
  - Avoid using initialized static array for storing task parameters (by Михаил Страшун aka Dicebot) - [pull #778][issue778]
  - Deprecated the simple password hash functions due to their weak security - [issue #794][issue794]
- - Added the possibility to customize the language selection in the translation context for web interface translations
- - Added support for expiring indexes and dropping indexes/collections in the MongoDB client (by Márcio Martins) - [pull #799][issue799]
- - Added `HTTPClientSettings.defaultKeepAliveTimeout` and handle the optional request count limit of keep-alive connections (by Etienne Cimon) - [issue 744][issue744], [pull #756][issue756]
  - Added support for serializing tuple fields
  - Added `convertJsonToASCII` to force escaping of all Unicode characters - see [issue #809][issue809]
- - Made the `member` argument to the sorted set methods in `RedisDatabase` generic instead of `string` - [issue #811][issue811]
  - Added a parameter to set the information log format for `setLogFormat` (by Márcio Martins) - [pull #808][issue808]
  - Serializer implementations now get the number of dictionary elements passed up front (by Johannes Pfau) - [pull #823][issue823]
- - Added `MongoClient.getDatabases` (by Peter Eisenhower) - [pull #822][issue822]
  - Changed `readRequiredOption` to not throw when the `--help` switch was passed (by Jack Applegame) - [pull #803][issue803]
  - Added `RestInterfaceSettings` as the new way to configure REST interfaces
  - Implemented optional stripping of trailing underscores for REST parameters (allows the use of keywords as parameter names)
- - Added an assertion to the HTTP client when a relative path is used for the request URL instead of constructing an invalid request
- - Avoid using chunked encoding for `HTTPClientRequest.writeJsonBody`
  - Made the `message` parameter of `enforceHTTP` `lazy` (by Mathias Lang aka Geod24) - [pull #839][issue839]
- - Added an array based overload of `MongoCollection.ensureIndex` - [issue #824][issue824]
- - All external dependencies are now version based (OpenSSL/libevent/libev)
  - Improve the format of JSON parse errors to enable IDE go-to-line support
  - Removed all console and file system output from unit tests (partially by Etienne Cimon, [pull #852][issue852])
  - Improved performance of libevent timers by avoiding redundant rescheduling of the master timer
- - Added initial support for JSON and BSON based session stores
- - Added a Redis based HTTP session store (`vibe.db.redis.sessionstore.RedisSessionStore`)
- - Deprecated index operator based access of session values (recommended to use `vibe.web.web.SessionVar` instead)
- - Added support for TLS server name indication (SNI) to the SSL support clases and the HTTP client and server implementation
- - Added support for a `VibeUseOldOpenSSL` version to enable use with pre 1.0 versions of OpenSSL
- - Increased the default fiber stack size to 512 KiB (32-bit) and 16 MiB (64-bit) respectively - [issue #861][issue861]
- - Upgraded the included OpenSSL Windows binaries to 1.0.1j
- - Added `HTTPServerResponse.waitForConnectionClose` to support certain kinds of long-polling applications
 
 ### Bug fixes ###
 
@@ -157,6 +199,12 @@ v0.7.21 - 2014-10-
  - Fixed an `InvalidMemoryOperationError` in `DebugAllocator` (by Etienne Cimon) - [pull #848][issue848]
  - Fixed detection of numeric types in `JsonSerializer` (do not treat `Nullable!T` as numeric) (by Jack Applegame) - [issue #686][issue868], [pull #869][issue869]
  - Fixed error handling in `Win32TCPConnection.connect` and improved error messages
+ - Fixed ping handling of WebSocket ping messages (by Vytautas Mickus aka Eximius) - [pull #883][issue883]
+ - Fixed always wrapping the e-mail address in angular brackets in the SMTP client (by ohenley) - [pull #887][issue887]
+ - Fixed custom serialization of `const` instances (by Jack Applegame) - [pull #879][issue879]
+ - Fixed the `RedisDatabase.set*X` to properly test the success condition (by Stephan Dilly aka Extrawurst) - [pull #890][issue890]
+ - Fixed `sleep(0.seconds)` to be a no-op instead of throwing an assertion error
+ - Fixed a potential resource leak in `HashMap` by using `freeArray` instead of directly deallocating the block of memory (by Etienne Cimon) - [pull #893][issue893]
 
 [issue619]: https://github.com/rejectedsoftware/vibe.d/issues/619
 [issue621]: https://github.com/rejectedsoftware/vibe.d/issues/621
@@ -245,6 +293,12 @@ v0.7.21 - 2014-10-
 [issue861]: https://github.com/rejectedsoftware/vibe.d/issues/861
 [issue868]: https://github.com/rejectedsoftware/vibe.d/issues/868
 [issue869]: https://github.com/rejectedsoftware/vibe.d/issues/869
+[issue879]: https://github.com/rejectedsoftware/vibe.d/issues/879
+[issue883]: https://github.com/rejectedsoftware/vibe.d/issues/883
+[issue887]: https://github.com/rejectedsoftware/vibe.d/issues/887
+[issue888]: https://github.com/rejectedsoftware/vibe.d/issues/888
+[issue890]: https://github.com/rejectedsoftware/vibe.d/issues/890
+[issue893]: https://github.com/rejectedsoftware/vibe.d/issues/893
 
 
 v0.7.20 - 2014-06-03
@@ -316,7 +370,7 @@ The `vibe.web.web` web interface generator module has been extended with some im
  - Fixed rendering of Markdown links with styled captions
  - Fixed `Path.relativeTo` step over devices for UNC paths on Windows
  - Fixed compilation on 2.064 frontend based GDC - [issue #647][issue647]
- - Fixed output of empty lines in "tag." style Diet template text blocks 
+ - Fixed output of empty lines in "tag." style Diet template text blocks
 
 [issue410]: https://github.com/rejectedsoftware/vibe.d/issues/410
 [issue443]: https://github.com/rejectedsoftware/vibe.d/issues/443

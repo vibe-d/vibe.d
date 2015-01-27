@@ -220,7 +220,6 @@ package template GetTranslationContext(alias METHOD)
 	else alias GetTranslationContext = void;
 }
 
-
 private struct DeclString {
 	string msgctxt;
 	string msgid;

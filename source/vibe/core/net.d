@@ -97,7 +97,9 @@ UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	return getEventDriver().listenUDP(port, bind_address);
 }
 
-
+version(VibeLibasyncDriver) {
+	public import libasync.events : NetworkAddress;
+} else {
 /**
 	Represents a network/socket address.
 */
@@ -204,7 +206,7 @@ struct NetworkAddress {
 		test("102:304:506:708:90a:b0c:d0e:f10");
 	}
 }
-
+}
 
 /**
 	Represents a single TCP connection.

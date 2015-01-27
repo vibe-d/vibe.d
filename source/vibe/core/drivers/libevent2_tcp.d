@@ -455,6 +455,75 @@ package nothrow extern(C)
 	version (VibeDebugCatchAll) alias UncaughtException = Throwable;
 	else alias UncaughtException = Exception;
 
+	// should be a nested static struct in onConnect, but that triggers an ICE in ldc2-0.14.0
+	private extern(D) struct ClientTask {
+		TCPContext* listen_ctx;
+		NetworkAddress bind_addr;
+		NetworkAddress remote_addr;
+		int sockfd;
+		TCPListenOptions options;
+
+		void execute()
+		{
+			assert(sockfd > 0);
+			if( evutil_make_socket_nonblocking(sockfd) ){
+				logError("Error setting non-blocking I/O on an incoming connection.");
+			}
+
+			auto eventloop = getThreadLibeventEventLoop();
+			auto drivercore = getThreadLibeventDriverCore();
+
+			// Initialize a buffered I/O event
+			auto buf_event = bufferevent_socket_new(eventloop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
+			if( !buf_event ){
+				logError("Error initializing buffered I/O event for fd %d.", sockfd);
+				return;
+			}
+
+			auto client_ctx = TCPContextAlloc.alloc(drivercore, eventloop, sockfd, buf_event, bind_addr, remote_addr);
+			assert(client_ctx.event !is null, "event is null although it was just != null?");
+			bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
+			if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
+				bufferevent_free(buf_event);
+				TCPContextAlloc.free(client_ctx);
+				logError("Error enabling buffered I/O event for fd %d.", sockfd);
+				return;
+			}
+
+			assert(client_ctx.event !is null, "Client task called without event!?");
+			if (options & TCPListenOptions.disableAutoClose) {
+				auto conn = new Libevent2TCPConnection(client_ctx);
+				assert(conn.connected, "Connection closed directly after accept?!");
+				logDebug("start task (fd %d).", client_ctx.socketfd);
+				try {
+					listen_ctx.connectionCallback(conn);
+					logDebug("task out (fd %d).", client_ctx.socketfd);
+				} catch (Exception e) {
+					logWarn("Handling of connection failed: %s", e.msg);
+					logDiagnostic("%s", e.toString().sanitize);
+				} finally {
+					logDebug("task finished.");
+					FreeListObjectAlloc!ClientTask.free(&this);
+				}
+			} else {
+				auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
+				assert(conn.connected, "Connection closed directly after accept?!");
+				logDebug("start task (fd %d).", client_ctx.socketfd);
+				try {
+					listen_ctx.connectionCallback(conn);
+					logDebug("task out (fd %d).", client_ctx.socketfd);
+				} catch (Exception e) {
+					logWarn("Handling of connection failed: %s", e.msg);
+					logDiagnostic("%s", e.toString().sanitize);
+				} finally {
+					logDebug("task finished.");
+					FreeListObjectAlloc!ClientTask.free(&this);
+					conn.close();
+				}
+			}
+		}
+	}
+
 	void onConnect(evutil_socket_t listenfd, short evtype, void *arg)
 	{
 		logTrace("connect callback");
@@ -463,74 +532,6 @@ package nothrow extern(C)
 		if( !(evtype & EV_READ) ){
 			logError("Unknown event type in connect callback: 0x%hx", evtype);
 			return;
-		}
-
-		static struct ClientTask {
-			TCPContext* listen_ctx;
-			NetworkAddress bind_addr;
-			NetworkAddress remote_addr;
-			int sockfd;
-			TCPListenOptions options;
-
-			void execute()
-			{
-				assert(sockfd > 0);
-				if( evutil_make_socket_nonblocking(sockfd) ){
-					logError("Error setting non-blocking I/O on an incoming connection.");
-				}
-
-				auto eventloop = getThreadLibeventEventLoop();
-				auto drivercore = getThreadLibeventDriverCore();
-
-				// Initialize a buffered I/O event
-				auto buf_event = bufferevent_socket_new(eventloop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
-				if( !buf_event ){
-					logError("Error initializing buffered I/O event for fd %d.", sockfd);
-					return;
-				}
-
-				auto client_ctx = TCPContextAlloc.alloc(drivercore, eventloop, sockfd, buf_event, bind_addr, remote_addr);
-				assert(client_ctx.event !is null, "event is null although it was just != null?");
-				bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, client_ctx);
-				if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) ){
-					bufferevent_free(buf_event);
-					TCPContextAlloc.free(client_ctx);
-					logError("Error enabling buffered I/O event for fd %d.", sockfd);
-					return;
-				}
-
-				assert(client_ctx.event !is null, "Client task called without event!?");
-				if (options & TCPListenOptions.disableAutoClose) {
-					auto conn = new Libevent2TCPConnection(client_ctx);
-					assert(conn.connected, "Connection closed directly after accept?!");
-					logDebug("start task (fd %d).", client_ctx.socketfd);
-					try {
-						listen_ctx.connectionCallback(conn);
-						logDebug("task out (fd %d).", client_ctx.socketfd);
-					} catch (Exception e) {
-						logWarn("Handling of connection failed: %s", e.msg);
-						logDiagnostic("%s", e.toString().sanitize);
-					} finally {
-						logDebug("task finished.");
-						FreeListObjectAlloc!ClientTask.free(&this);
-					}
-				} else {
-					auto conn = FreeListRef!Libevent2TCPConnection(client_ctx);
-					assert(conn.connected, "Connection closed directly after accept?!");
-					logDebug("start task (fd %d).", client_ctx.socketfd);
-					try {
-						listen_ctx.connectionCallback(conn);
-						logDebug("task out (fd %d).", client_ctx.socketfd);
-					} catch (Exception e) {
-						logWarn("Handling of connection failed: %s", e.msg);
-						logDiagnostic("%s", e.toString().sanitize);
-					} finally {
-						logDebug("task finished.");
-						FreeListObjectAlloc!ClientTask.free(&this);
-						conn.close();
-					}
-				}
-			}
 		}
 
 		try {

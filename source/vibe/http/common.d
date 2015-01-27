@@ -102,17 +102,17 @@ unittest
 /**
 	Utility function that throws a HTTPStatusException if the _condition is not met.
 */
-T enforceHTTP(T)(T condition, HTTPStatus statusCode, lazy string message = null)
+T enforceHTTP(T)(T condition, HTTPStatus statusCode, lazy string message = null, string file = __FILE__, typeof(__LINE__) line = __LINE__)
 {
-	return enforce(condition, new HTTPStatusException(statusCode, message));
+	return enforce(condition, new HTTPStatusException(statusCode, message, file, line));
 }
 
 /**
 	Utility function that throws a HTTPStatusException with status code "400 Bad Request" if the _condition is not met.
 */
-T enforceBadRequest(T)(T condition, lazy string message = null)
+T enforceBadRequest(T)(T condition, lazy string message = null, string file = __FILE__, typeof(__LINE__) line = __LINE__)
 {
-	return enforceHTTP(condition, HTTPStatus.badRequest, message);
+	return enforceHTTP(condition, HTTPStatus.badRequest, message, file, line);
 }
 
 
