@@ -34,7 +34,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
 		Allocator m_allocator;
-		hash_t delegate(Key) m_hasher;
+		hash_t delegate(Key) nothrow m_hasher;
 		bool m_resizing;
 	}
 
@@ -123,7 +123,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return &m_table[idx].value;
 	}
 
-	int opApply(int delegate(ref Value) nothrow del) nothrow
+	int opApply(int delegate(ref Value) del)
 	{
 		foreach (i; 0 .. m_table.length)
 			if (!Traits.equals(m_table[i].key, Traits.clearValue))
@@ -132,7 +132,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return 0;
 	}
 
-	int opApply(int delegate(in ref Key, ref Value) nothrow del) nothrow
+	int opApply(int delegate(in ref Key, ref Value) del)
 	{
 		foreach (i; 0 .. m_table.length)
 			if (!Traits.equals(m_table[i].key, Traits.clearValue))
