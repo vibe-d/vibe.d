@@ -143,47 +143,53 @@ string toRFC822DateTimeString(SysTime time)
 	return ret.data;
 }
 
-/**
-	Parses a date+time string according to RFC-822/5322.
-*/
-SysTime parseRFC822DateTimeString(string str)
+static if (__VERSION__ >= 2066)
 {
-	auto idx = str.indexOf(',');
-	if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
+	/// Parses a date+time string according to RFC-822/5322.
+	alias parseRFC822DateTimeString = parseRFC822DateTime;
+}
+else
+{
+	/// Parses a date+time string according to RFC-822/5322.
+	SysTime parseRFC822DateTimeString(string str)
+	{
+		auto idx = str.indexOf(',');
+		if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
 
-	str = str.stripLeft();
-	auto day = parse!int(str);
-	str = str.stripLeft();
-	int month = -1;
-	foreach( i, ms; monthStrings )
-		if( str.startsWith(ms) ){
-			month = cast(int)i+1;
-			str = str[ms.length .. $];
-			break;
+		str = str.stripLeft();
+		auto day = parse!int(str);
+		str = str.stripLeft();
+		int month = -1;
+		foreach( i, ms; monthStrings )
+			if( str.startsWith(ms) ){
+				month = cast(int)i+1;
+				str = str[ms.length .. $];
+				break;
+			}
+		enforce(month > 0);
+		str = str.stripLeft();
+		auto year = str.parse!int();
+		str = str.stripLeft();
+
+		int hour, minute, second, tzoffset = 0;
+		hour = str.parse!int();
+		enforce(str.startsWith(':'));
+		str = str[1 .. $];
+		minute = str.parse!int();
+		enforce(str.startsWith(':'));
+		str = str[1 .. $];
+		second = str.parse!int();
+		str = str.stripLeft();
+		enforce(str.length > 0);
+		if( str != "GMT" ){
+			if( str.startsWith('+') ) str = str[1 .. $];
+			tzoffset = str.parse!int();
 		}
-	enforce(month > 0);
-	str = str.stripLeft();
-	auto year = str.parse!int();
-	str = str.stripLeft();
 
-	int hour, minute, second, tzoffset = 0;
-	hour = str.parse!int();
-	enforce(str.startsWith(':'));
-	str = str[1 .. $];
-	minute = str.parse!int();
-	enforce(str.startsWith(':'));
-	str = str[1 .. $];
-	second = str.parse!int();
-	str = str.stripLeft();
-	enforce(str.length > 0);
-	if( str != "GMT" ){
-		if( str.startsWith('+') ) str = str[1 .. $];
-		tzoffset = str.parse!int();
+		auto dt = DateTime(year, month, day, hour, minute, second);
+		if( tzoffset == 0 ) return SysTime(dt, UTC());
+		else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100).hours + (tzoffset % 100).minutes));
 	}
-
-	auto dt = DateTime(year, month, day, hour, minute, second);
-	if( tzoffset == 0 ) return SysTime(dt, UTC());
-	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100).hours + (tzoffset % 100).minutes));
 }
 
 unittest {
