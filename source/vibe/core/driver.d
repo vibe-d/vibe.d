@@ -46,7 +46,7 @@ package void setupEventDriver(DriverCore core_)
 package void deleteEventDriver()
 {
 	s_driver.dispose();
-	delete s_driver;
+	destroy(s_driver);
 	s_driver = null;
 }
 

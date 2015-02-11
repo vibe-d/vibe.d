@@ -726,7 +726,7 @@ struct Timer {
 	~this()
 	{
 		debug assert(m_magicNumber == 0x4d34f916);
-		if (m_driver) m_driver.releaseTimer(m_id);
+		if (m_driver && s_core) m_driver.releaseTimer(m_id);
 	}
 
 	/// True if the timer is yet to fire.
@@ -1309,7 +1309,8 @@ shared static ~this()
 	if (!s_yieldedTasks.empty) tasks_left = true;
 	if (tasks_left) logWarn("There are still tasks running at exit.");
 
-	delete s_core;
+	destroy(s_core);
+	s_core = null;
 }
 
 // per thread setup
@@ -1319,7 +1320,7 @@ static this()
 	// object.Exception@src/rt/minfo.d(162): Aborting: Cycle detected between modules with ctors/dtors:
 	// vibe.core.core -> vibe.core.drivers.native -> vibe.core.drivers.libasync -> vibe.core.core
 	if (Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor") return;
-			
+
 	assert(s_core !is null);
 
 	auto thisthr = Thread.getThis();
