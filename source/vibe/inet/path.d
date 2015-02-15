@@ -94,17 +94,17 @@ struct Path {
 	}
 	
 	/// Converts the Path object to a native path string (backslash as path separator on Windows).
-	string toNativeString()
+	string toNativeString() nothrow
 	const {
 		Appender!string ret;
 		
 		// for absolute unix paths start with /
-		version(Posix) { if(absolute) ret.put('/'); }
+		version(Posix) { if (m_absolute) ret.put('/'); }
 		
 		foreach( i, f; m_nodes ){
 			version(Windows) { if( i > 0 ) ret.put('\\'); }
 			version(Posix) { if( i > 0 ) ret.put('/'); }
-			else { enforce("Unsupported OS"); }
+			else { static assert(0, "Unsupported OS"); }
 			ret.put(f.toString());
 		}
 		
@@ -366,7 +366,7 @@ struct PathEntry {
 		m_name = str;
 	}
 	
-	string toString() const { return m_name; }
+	string toString() const nothrow { return m_name; }
 
 	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Path(cast(immutable)[this, rhs], false); }
 	
