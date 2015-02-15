@@ -12,6 +12,19 @@ Visit the website at <http://vibed.org/> for more information.
 [![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)
 
 
+Support
+-------
+
+Vibe.d aims to support the 3 latest minor releases of D.
+At the moment, it means that the following compilers are supported and tested:
+- DMD 2.065
+- DMD 2.066
+- DMD 2.067
+- GDC 4.9.0 (FE: 2.065)
+- LDC 0.14.0 (FE: 2.065)
+- LDC 0.15.1 (FE: 2.066)
+
+
 Installation
 ------------
 
