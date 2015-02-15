@@ -28,14 +28,14 @@ version (VibeUseNativeDriverType) {
 /**
 	Returns the active event driver
 */
-StoredEventDriver getEventDriver(bool ignore_unloaded = false)
+StoredEventDriver getEventDriver(bool ignore_unloaded = false) nothrow
 {
 	assert(ignore_unloaded || s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
 }
 
 /// private
-package void setupEventDriver(DriverCore core_)
+package void setupEventDriver(DriverCore core_) nothrow
 {
 	version (VibeUseNativeDriverType) {}
 	else import vibe.core.drivers.native;

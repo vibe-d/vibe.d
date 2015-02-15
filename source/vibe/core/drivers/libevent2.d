@@ -77,11 +77,17 @@ final class Libevent2Driver : EventDriver {
 		size_t m_addressInfoCacheLength = 0;
 	}
 
-	this(DriverCore core)
+	this(DriverCore core) nothrow
 	{
 		debug m_ownerThread = Thread.getThis();
 		m_core = core;
 		s_driverCore = core;
+
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
 
 		synchronized if (!s_threadObjectsMutex) {
 			s_threadObjectsMutex = new Mutex;
@@ -1195,17 +1201,17 @@ private {
 	bool s_alreadyDeinitialized = false;
 }
 
-package event_base* getThreadLibeventEventLoop()
+package event_base* getThreadLibeventEventLoop() nothrow
 {
 	return s_eventLoop;
 }
 
-package DriverCore getThreadLibeventDriverCore()
+package DriverCore getThreadLibeventDriverCore() nothrow
 {
 	return s_driverCore;
 }
 
-private int getLastSocketError()
+private int getLastSocketError() nothrow
 {
 	version(Windows) return WSAGetLastError();
 	else {
