@@ -29,6 +29,7 @@ import core.sync.mutex;
 import core.stdc.stdlib;
 import core.thread;
 
+alias TaskEventCb = void function(TaskEvent, Task) nothrow;
 
 version(Posix)
 {
@@ -677,7 +678,7 @@ void lowerPrivileges()
 	analyze the life time of tasks, including task switches. Note that
 	the callback will only be called for debug builds.
 */
-void setTaskEventCallback(void function(TaskEvent, Task) func)
+void setTaskEventCallback(TaskEventCb func)
 {
 	debug s_taskEventCallback = func;
 }
@@ -1210,7 +1211,7 @@ private {
 	__gshared ThreadContext[] st_threads;
 	__gshared TaskFuncInfo[] st_workerTasks;
 	__gshared Condition st_threadShutdownCondition;
-	__gshared debug void function(TaskEvent, Task) s_taskEventCallback;
+	__gshared debug TaskEventCb s_taskEventCallback;
 	shared bool st_term = false;
 
 	bool s_exitEventLoop = false;
