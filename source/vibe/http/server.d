@@ -831,6 +831,18 @@ final class HTTPServerResponse : HTTPResponse {
 	{
 		writeBody(cast(ubyte[])data, content_type);
 	}
+	/// ditto
+	void writeBody(in ubyte[] data, int status, string content_type = null)
+	{
+		statusCode = status;
+		writeBody(data, content_type);
+	}
+	/// ditto
+	void writeBody(string data, int status, string content_type = "text/plain; charset=UTF-8")
+	{
+		statusCode = status;
+		writeBody(data, content_type);
+	}
 
 	/** Writes the whole response body at once, without doing any further encoding.
 
@@ -863,6 +875,18 @@ final class HTTPServerResponse : HTTPResponse {
 			m_conn.write(stream, num_bytes);
 			m_countingWriter.increment(num_bytes);
 		} else  m_countingWriter.write(stream, num_bytes);
+	}
+	/// ditto
+	void writeRawBody(RandomAccessStream stream, int status)
+	{
+		statusCode = status;
+		writeRawBody(stream);
+	}
+	/// ditto
+	void writeRawBody(InputStream stream, int status, size_t num_bytes = 0)
+	{
+		statusCode = status;
+		writeRawBody(stream, num_bytes);
 	}
 
 	/// Writes a JSON message with the specified status
