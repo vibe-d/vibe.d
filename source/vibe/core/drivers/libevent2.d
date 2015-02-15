@@ -171,8 +171,8 @@ final class Libevent2Driver : EventDriver {
 		s_alreadyDeinitialized = true;
 	}
 
-	@property event_base* eventLoop() { return m_eventLoop; }
-	@property evdns_base* dnsEngine() { return m_dnsBase; }
+	@property event_base* eventLoop() nothrow { return m_eventLoop; }
+	@property evdns_base* dnsEngine() nothrow { return m_dnsBase; }
 
 	int runEventLoop()
 	{
