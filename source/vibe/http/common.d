@@ -601,9 +601,15 @@ struct CookieValueMap {
 
 	inout(string)* opBinaryRight(string op)(string name) inout if(op == "in")
 	{
-		foreach(ref c; m_entries)
-			if( c.name == name )
-				return &c.value;
+		static if (__VERSION__ < 2066) {
+			foreach(c; m_entries)
+				if( c.name == name )
+					return &c.value;
+		} else {
+			foreach(ref c; m_entries)
+				if( c.name == name )
+					return &c.value;
+		}
 		return null;
 	}
 }

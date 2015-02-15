@@ -79,15 +79,15 @@ final class Libevent2Driver : EventDriver {
 
 	this(DriverCore core) nothrow
 	{
-		debug m_ownerThread = Thread.getThis();
-		m_core = core;
-		s_driverCore = core;
-
 		// In 2067, synchronized statements where annotated nothrow.
 		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 		// However, they were "logically" nothrow before.
 		static if (__VERSION__ <= 2066)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
+
+		debug m_ownerThread = Thread.getThis();
+		m_core = core;
+		s_driverCore = core;
 
 		synchronized if (!s_threadObjectsMutex) {
 			s_threadObjectsMutex = new Mutex;
@@ -676,14 +676,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	void acquire() nothrow
 	{
-		auto task = Task.getThis();
-		auto thread = task == Task() ? Thread.getThis() : task.thread;
-
 		// In 2067, synchronized statements where annotated nothrow.
 		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 		// However, they were "logically" nothrow before.
 		static if (__VERSION__ <= 2066)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
+
+		auto task = Task.getThis();
+		auto thread = task == Task() ? Thread.getThis() : task.thread;
 
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
