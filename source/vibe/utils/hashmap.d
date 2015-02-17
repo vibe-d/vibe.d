@@ -22,8 +22,13 @@ struct DefaultHashMapTraits(Key) {
 	}
 }
 
-struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
+struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 {
+	import vibe.internal.meta.traits : isOpApplyDg;
+
+	alias Key = TKey;
+	alias Value = TValue;
+
 	struct TableEntry {
 		UnConst!Key key;
 		Value value;
@@ -131,21 +136,20 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return &m_table[idx].value;
 	}
 
-	int opApply(int delegate(ref Value) del)
+	int opApply(DG)(DG del) if (isOpApplyDg!(DG, Key, Value))
 	{
+		import std.traits : arity;
 		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, ref Value) del)
-	{
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].key, m_table[i].value))
-					return ret;
+			if (!Traits.equals(m_table[i].key, Traits.clearValue)) {
+				static assert(arity!del > 0 && arity!del < 2,
+					      "isOpApplyDg should have prevented this");
+				static if (arity!del == 1) {
+					if (int ret = del(m_table[i].value))
+						return ret;
+				} else
+					if (int ret = del(m_table[i].key, m_table[i].value))
+						return ret;
+			}
 		return 0;
 	}
 

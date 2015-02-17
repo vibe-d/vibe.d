@@ -611,7 +611,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	~this()
 	{
-		foreach (ts; m_waiters)
+		foreach (ref m_waiters.Value ts; m_waiters)
 			event_free(ts.event);
 	}
 
@@ -625,7 +625,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
-			foreach (ref sl; m_waiters)
+			foreach (ref m_waiters.Value sl; m_waiters)
 				event_active(sl.event, 0, 0);
 		}
 	}
@@ -701,8 +701,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	void release()
+	void release() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto self = Task.getThis();
 		if (self == Task()) return;
 
