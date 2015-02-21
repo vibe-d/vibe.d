@@ -1219,8 +1219,11 @@ package DriverCore getThreadLibeventDriverCore() nothrow
 
 private int getLastSocketError() nothrow
 {
-	version(Windows) return WSAGetLastError();
-	else {
+	version(Windows) {
+		static if (__VERSION__ < 2066)
+			scope (failure) assert(false); // assert nothrow condition
+		return WSAGetLastError();
+	} else {
 		import core.stdc.errno;
 		return errno;
 	}
