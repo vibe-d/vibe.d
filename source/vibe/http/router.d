@@ -82,8 +82,16 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// ditto
 	final HTTPRouter any(string url_match, HTTPServerRequestDelegate cb)
 	{
-		return get(url_match, cb).post(url_match, cb)
-			.put(url_match, cb).delete_(url_match, cb).patch(url_match, cb);
+		import std.traits;
+		HTTPRouter route;
+
+		foreach(immutable method; [EnumMembers!HTTPMethod])
+			if(route is null)
+				route = match(method, url_match, cb);
+			else
+				route = route.match(method, url_match, cb);
+
+		return route;
 	}
 }
 
