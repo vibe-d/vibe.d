@@ -44,7 +44,7 @@ enum HTTPMethod {
 	OPTIONS,
 	TRACE,
 	CONNECT,
-	
+
 	// WEBDAV extensions
 	COPY,
 	LOCK,
@@ -90,7 +90,7 @@ HTTPMethod httpMethodFromString(string str)
 	}
 }
 
-unittest 
+unittest
 {
 	assert(httpMethodString(HTTPMethod.GET) == "GET");
 	assert(httpMethodString(HTTPMethod.UNLOCK) == "UNLOCK");
@@ -123,7 +123,7 @@ class HTTPRequest {
 	protected {
 		Stream m_conn;
 	}
-	
+
 	public {
 		/// The HTTP protocol version used for the request
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
@@ -142,12 +142,12 @@ class HTTPRequest {
 		/// All request _headers
 		InetHeaderMap headers;
 	}
-	
+
 	protected this(Stream conn)
 	{
 		m_conn = conn;
 	}
-	
+
 	protected this()
 	{
 	}
@@ -195,7 +195,7 @@ class HTTPRequest {
 
 	/** Determines if the connection persists across requests.
 	*/
-	@property bool persistent() const 
+	@property bool persistent() const
 	{
 		auto ph = "connection" in headers;
 		switch(httpVersion) {
@@ -205,7 +205,7 @@ class HTTPRequest {
 			case HTTPVersion.HTTP_1_1:
 				if (ph && toLower(*ph) == "close") return false;
 				return true;
-			default: 
+			default:
 				return false;
 		}
 	}
@@ -266,7 +266,7 @@ class HTTPStatusException : Exception {
 		super(message ? message : httpStatusText(status), file, line, next);
 		m_status = status;
 	}
-	
+
 	/// The HTTP status code
 	@property int status() const { return m_status; }
 
@@ -276,7 +276,7 @@ class HTTPStatusException : Exception {
 
 final class MultiPart {
 	string contentType;
-	
+
 	InputStream stream;
 	//JsonValue json;
 	string[string] form;
@@ -299,7 +299,7 @@ HTTPVersion parseHTTPVersion(ref string str)
 	enforceBadRequest(str.startsWith("."));
 	str = str[1 .. $];
 	int minorVersion = parse!int(str);
-	
+
 	enforceBadRequest( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
 	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
@@ -384,7 +384,7 @@ final class ChunkedOutputStream : OutputStream {
 		size_t m_maxBufferSize = 512*1024;
 		bool m_finalized = false;
 	}
-	
+
 	this(OutputStream stream, Allocator alloc = defaultAllocator())
 	{
 		m_out = stream;
@@ -416,7 +416,7 @@ final class ChunkedOutputStream : OutputStream {
 				flush();
 		}
 	}
-	
+
 	void write(InputStream data, ulong nbytes = 0)
 	{
 		assert(!m_finalized);
@@ -438,7 +438,7 @@ final class ChunkedOutputStream : OutputStream {
 		}
 	}
 
-	void flush() 
+	void flush()
 	{
 		assert(!m_finalized);
 		auto data = m_buffer.data();
@@ -455,7 +455,7 @@ final class ChunkedOutputStream : OutputStream {
 	{
 		if (m_finalized) return;
 		flush();
-		m_buffer.reset(AppenderResetMode.freeData);		
+		m_buffer.reset(AppenderResetMode.freeData);
 		m_finalized = true;
 		m_out.write("0\r\n\r\n");
 		m_out.flush();
@@ -476,7 +476,7 @@ final class Cookie {
 		string m_expires;
 		long m_maxAge;
 		bool m_secure;
-		bool m_httpOnly; 
+		bool m_httpOnly;
 	}
 
 	@property void value(string value) { m_value = value; }
@@ -526,7 +526,7 @@ final class Cookie {
 }
 
 
-/** 
+/**
 */
 struct CookieValueMap {
 	struct Cookie {
@@ -601,15 +601,13 @@ struct CookieValueMap {
 
 	inout(string)* opBinaryRight(string op)(string name) inout if(op == "in")
 	{
-		static if (__VERSION__ < 2066) {
-			foreach(c; m_entries)
-				if( c.name == name )
+		foreach(c; m_entries)
+			if( c.name == name ) {
+				static if (__VERSION__ < 2066)
+					return cast(inout(string)*)&c.value;
+				else
 					return &c.value;
-		} else {
-			foreach(ref c; m_entries)
-				if( c.name == name )
-					return &c.value;
-		}
+			}
 		return null;
 	}
 }
