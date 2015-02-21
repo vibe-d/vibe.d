@@ -440,7 +440,6 @@ private struct MatchTree(T) {
 
 		enum TerminalChar = 0;
 		bool m_upToDate = false;
-		string[maxRouteParameters] m_varBuffer = void;
 	}
 
 	@property size_t terminalCount() const { return m_terminals.length; }
@@ -453,23 +452,10 @@ private struct MatchTree(T) {
 
 	void match(string text, scope void delegate(size_t terminal, scope string[] vars) del)
 	{
-		import std.algorithm : canFind;
-
 		// lazily update the match graph
 		if (!m_upToDate) rebuildGraph();
 
-		// first, determine the end node, if any
-		auto n = matchTerminals(text);
-		if (!n) return;
-
-		// then, go through the terminals and match their variables
-		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
-			auto term = &m_terminals[t.index];
-			auto vars = m_varBuffer[0 .. term.varNames.length];
-			matchVars(vars, term, text);
-			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
-			del(t.index, vars);
-		}
+		doMatch(text, del);
 	}
 
 	const(string)[] getTerminalVarNames(size_t terminal) const { return m_terminals[terminal].varNames; }
@@ -520,8 +506,28 @@ private struct MatchTree(T) {
 		}
 	}
 
-	private Node* matchTerminals(string text)
-	{
+	private void doMatch(string text, scope void delegate(size_t terminal, scope string[] vars) del)
+	const {
+		string[maxRouteParameters] vars_buf = void;
+
+		import std.algorithm : canFind;
+
+		// first, determine the end node, if any
+		auto n = matchTerminals(text);
+		if (!n) return;
+
+		// then, go through the terminals and match their variables
+		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
+			auto term = &m_terminals[t.index];
+			auto vars = vars_buf[0 .. term.varNames.length];
+			matchVars(vars, term, text);
+			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
+			del(t.index, vars);
+		}
+	}
+
+	private inout(Node)* matchTerminals(string text)
+	inout {
 		if (!m_nodes.length) return null;
 
 		auto n = &m_nodes[0];
@@ -540,8 +546,8 @@ private struct MatchTree(T) {
 		return n;
 	}
 
-	private void matchVars(string[] dst, Terminal* term, string text)
-	{
+	private void matchVars(string[] dst, in Terminal* term, string text)
+	const {
 		auto nidx = 0;
 		size_t activevar = size_t.max;
 		size_t activevarstart;
