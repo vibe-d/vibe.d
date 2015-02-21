@@ -13,11 +13,7 @@ public import vibe.inet.url;
 import vibe.core.drivers.threadedfile; // temporarily needed tp get mkstemps to work
 import vibe.core.driver;
 
-static if (__VERSION__ > 2066)
-	import core.stdc.stdio;
-else
-	import std.c.stdio;
-
+import core.stdc.stdio;
 import std.datetime;
 import std.exception;
 import std.file;
