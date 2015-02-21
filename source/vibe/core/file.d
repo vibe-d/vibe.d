@@ -13,8 +13,11 @@ public import vibe.inet.url;
 import vibe.core.drivers.threadedfile; // temporarily needed tp get mkstemps to work
 import vibe.core.driver;
 
-import std.conv;
-import std.c.stdio;
+static if (__VERSION__ > 2066)
+	import core.stdc.stdio;
+else
+	import std.c.stdio;
+
 import std.datetime;
 import std.exception;
 import std.file;
@@ -136,6 +139,7 @@ void writeFileUTF8(Path path, string contents)
 FileStream createTempFile(string suffix = null)
 {
 	version(Windows){
+		import std.conv : to;
 		char[L_tmpnam] tmp;
 		tmpnam(tmp.ptr);
 		auto tmpname = to!string(tmp.ptr);
@@ -210,19 +214,24 @@ void removeFile(Path path)
 	removeFile(path.toNativeString());
 }
 /// ditto
-void removeFile(string path) {
+void removeFile(string path)
+{
 	std.file.remove(path);
 }
 
 /**
 	Checks if a file exists
 */
-bool existsFile(Path path) {
+bool existsFile(Path path) nothrow
+{
 	return existsFile(path.toNativeString());
 }
 /// ditto
-bool existsFile(string path)
+bool existsFile(string path) nothrow
 {
+	// This was *annotated* nothrow in 2.067.
+	static if (__VERSION__ < 2067)
+		scope(failure) assert(0, "Error: existsFile should never throw");
 	return std.file.exists(path);
 }
 

@@ -22,8 +22,13 @@ struct DefaultHashMapTraits(Key) {
 	}
 }
 
-struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
+struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 {
+	import vibe.internal.meta.traits : isOpApplyDg;
+
+	alias Key = TKey;
+	alias Value = TValue;
+
 	struct TableEntry {
 		UnConst!Key key;
 		Value value;
@@ -34,7 +39,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
 		Allocator m_allocator;
-		hash_t delegate(Key) m_hasher;
+		hash_t delegate(Key) nothrow m_hasher;
 		bool m_resizing;
 	}
 
@@ -75,6 +80,14 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 	}
 
 	Value get(Key key, lazy Value default_value = Value.init)
+	{
+		auto idx = findIndex(key);
+		if (idx == size_t.max) return default_value;
+		return m_table[idx].value;
+	}
+
+	/// Workaround #12647
+	package Value getNothrow(Key key, Value default_value = Value.init)
 	{
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return default_value;
@@ -123,39 +136,20 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return &m_table[idx].value;
 	}
 
-	int opApply(int delegate(ref Value) del)
+	int opApply(DG)(DG del) if (isOpApplyDg!(DG, Key, Value))
 	{
+		import std.traits : arity;
 		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Value) del)
-	const {
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, ref Value) del)
-	{
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].key, m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, in ref Value) del)
-	const {
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].key, m_table[i].value))
-					return ret;
+			if (!Traits.equals(m_table[i].key, Traits.clearValue)) {
+				static assert(arity!del > 0 && arity!del < 2,
+					      "isOpApplyDg should have prevented this");
+				static if (arity!del == 1) {
+					if (int ret = del(m_table[i].value))
+						return ret;
+				} else
+					if (int ret = del(m_table[i].key, m_table[i].value))
+						return ret;
+			}
 		return 0;
 	}
 
@@ -193,7 +187,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		resize(newcap);
 	}
 
-	private void resize(size_t new_size)
+	private void resize(size_t new_size) nothrow
 	{
 		assert(!m_resizing);
 		m_resizing = true;

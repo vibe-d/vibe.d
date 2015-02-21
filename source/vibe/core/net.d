@@ -166,6 +166,7 @@ struct NetworkAddress {
 		import std.array : appender;
 		import std.string : format;
 		import std.format : formattedWrite;
+		ubyte[2] _dummy = void; // Workaround for DMD regression in master
 
 		switch (this.family) {
 			default: assert(false, "toAddressString() called for invalid address family.");
@@ -178,7 +179,8 @@ struct NetworkAddress {
 				ret.reserve(40);
 				foreach (i; 0 .. 8) {
 					if (i > 0) ret.put(':');
-					ret.formattedWrite("%x", bigEndianToNative!ushort(cast(ubyte[2])ip[i*2 .. i*2+2]));
+					_dummy[] = ip[i*2 .. i*2+2];
+					ret.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
 				}
 				return ret.data;
 		}

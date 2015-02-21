@@ -349,3 +349,24 @@ bool areConvertibleTo(alias TYPES, alias TARGET_TYPES)()
 			return false;
 	return true;
 }
+
+/// Test if the type $(D DG) is a correct delegate for an opApply where the
+/// key/index is of type $(D TKEY) and the value of type $(D TVALUE).
+template isOpApplyDg(DG, TKEY, TVALUE) {
+	import std.traits;
+	static if (is(DG == delegate) && is(ReturnType!DG : int)) {
+		private alias PTT = ParameterTypeTuple!(DG);
+		private alias PSCT = ParameterStorageClassTuple!(DG);
+		private alias STC = ParameterStorageClass;
+		// Just a value
+		static if (PTT.length == 1) {
+			enum isOpApplyDg = (is(PTT[0] == TVALUE) && PSCT[0] == STC.ref_);
+		} else static if (PTT.length == 2) {
+			enum isOpApplyDg = (is(PTT[0] == TKEY) && PSCT[0] == STC.ref_)
+				&& (is(PTT[1] == TKEY) && PSCT[1] == STC.ref_);
+		} else
+			enum isOpApplyDg = false;
+	} else {
+		enum isOpApplyDg = false;
+	}
+}

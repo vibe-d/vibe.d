@@ -77,8 +77,14 @@ final class Libevent2Driver : EventDriver {
 		size_t m_addressInfoCacheLength = 0;
 	}
 
-	this(DriverCore core)
+	this(DriverCore core) nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		debug m_ownerThread = Thread.getThis();
 		m_core = core;
 		s_driverCore = core;
@@ -165,8 +171,8 @@ final class Libevent2Driver : EventDriver {
 		s_alreadyDeinitialized = true;
 	}
 
-	@property event_base* eventLoop() { return m_eventLoop; }
-	@property evdns_base* dnsEngine() { return m_dnsBase; }
+	@property event_base* eventLoop() nothrow { return m_eventLoop; }
+	@property evdns_base* dnsEngine() nothrow { return m_dnsBase; }
 
 	int runEventLoop()
 	{
@@ -577,7 +583,7 @@ private class Libevent2Object {
 		m_driver.unregisterObject(this);
 	}
 
-	protected void onThreadShutdown() {}
+	protected void onThreadShutdown() nothrow {}
 }
 
 /// private
@@ -605,15 +611,21 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	~this()
 	{
-		foreach (ts; m_waiters)
+		foreach (ref m_waiters.Value ts; m_waiters)
 			event_free(ts.event);
 	}
 
 	void emit()
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
-			foreach (ref sl; m_waiters)
+			foreach (ref m_waiters.Value sl; m_waiters)
 				event_active(sl.event, 0, 0);
 		}
 	}
@@ -662,8 +674,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		return ec;
 	}
 
-	void acquire()
+	void acquire() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto task = Task.getThis();
 		auto thread = task == Task() ? Thread.getThis() : task.thread;
 
@@ -683,8 +701,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	void release()
+	void release() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto self = Task.getThis();
 		if (self == Task()) return;
 
@@ -695,8 +719,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	bool amOwner()
+	bool amOwner() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto self = Task.getThis();
 		if (self == Task()) return false;
 		synchronized (m_mutex) {
@@ -709,6 +739,12 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	protected override void onThreadShutdown()
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto thr = Thread.getThis();
 		synchronized (m_mutex) {
 			if (thr in m_waiters) {
@@ -1171,17 +1207,17 @@ private {
 	bool s_alreadyDeinitialized = false;
 }
 
-package event_base* getThreadLibeventEventLoop()
+package event_base* getThreadLibeventEventLoop() nothrow
 {
 	return s_eventLoop;
 }
 
-package DriverCore getThreadLibeventDriverCore()
+package DriverCore getThreadLibeventDriverCore() nothrow
 {
 	return s_driverCore;
 }
 
-private int getLastSocketError()
+private int getLastSocketError() nothrow
 {
 	version(Windows) return WSAGetLastError();
 	else {

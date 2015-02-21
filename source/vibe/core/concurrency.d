@@ -320,7 +320,7 @@ template Isolated(T)
 
 
 // unit tests fails with DMD 2.064 due to some cyclic import regression
-version (none) unittest
+unittest
 {
 	static class CE {}
 	static struct SE {}
