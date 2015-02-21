@@ -20,6 +20,23 @@ struct DefaultHashMapTraits(Key) {
 		static if (is(Key == class)) return a is b;
 		else return a == b;
 	}
+	static size_t hashOf(in ref Key k)
+	{
+		static if (is(Key == class) && &Key.toHash == &Object.toHash)
+			return cast(size_t)cast(void*)k;
+		else static if (__traits(compiles, Key.init.toHash()))
+			return k.toHash();
+		else static if (__traits(compiles, Key.init.toHashShared()))
+			return k.toHashShared();
+		else {
+			// evil casts to be able to get the most basic operations of
+			// HashMap nothrow and @nogc
+			static import core.internal.hash;
+			static size_t hashWrapper(in ref Key k) { return core.internal.hash.hashOf(k); }
+			static @nogc nothrow size_t properlyTypedWrapper(in ref Key k) { return 0; }
+			return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k);
+		}
+	}
 }
 
 struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
@@ -39,7 +56,6 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
 		Allocator m_allocator;
-		hash_t delegate(Key) nothrow m_hasher;
 		bool m_resizing;
 	}
 
@@ -73,7 +89,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 					m_length--;
 					return;
 				}
-				r = m_hasher(m_table[i].key) & (m_table.length-1);
+				r = Traits.hashOf(m_table[i].key) & (m_table.length-1);
 			} while ((j<r && r<=i) || (i<j && j<r) || (r<=i && i<j));
 			m_table[j] = m_table[i];
 		}
@@ -141,7 +157,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		import std.traits : arity;
 		foreach (i; 0 .. m_table.length)
 			if (!Traits.equals(m_table[i].key, Traits.clearValue)) {
-				static assert(arity!del > 0 && arity!del < 2,
+				static assert(arity!del >= 1 && arity!del <= 2,
 					      "isOpApplyDg should have prevented this");
 				static if (arity!del == 1) {
 					if (int ret = del(m_table[i].value))
@@ -156,7 +172,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	private size_t findIndex(Key key)
 	const {
 		if (m_length == 0) return size_t.max;
-		size_t start = m_hasher(key) & (m_table.length-1);
+		size_t start = Traits.hashOf(key) & (m_table.length-1);
 		auto i = start;
 		while (!Traits.equals(m_table[i].key, key)) {
 			if (Traits.equals(m_table[i].key, Traits.clearValue)) return size_t.max;
@@ -168,7 +184,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 
 	private size_t findInsertIndex(Key key)
 	const {
-		auto hash = m_hasher(key);
+		auto hash = Traits.hashOf(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
 		while (!Traits.equals(m_table[i].key, Traits.clearValue) && !Traits.equals(m_table[i].key, key)) {
@@ -194,18 +210,6 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		scope(exit) m_resizing = false;
 
 		if (!m_allocator) m_allocator = defaultAllocator();
-		if (!m_hasher) {
-			static if (__traits(compiles, (){ Key t; size_t hash = t.toHash(); }())) {
-				static if (isPointer!Key || is(Unqual!Key == class)) m_hasher = k => k ? k.toHash() : 0;
-				else m_hasher = k => k.toHash();
-			} else static if (__traits(compiles, (){ Key t; size_t hash = t.toHashShared(); }())) {
-				static if (isPointer!Key || is(Unqual!Key == class)) m_hasher = k => k ? k.toHashShared() : 0;
-				else m_hasher = k => k.toHashShared();
-			} else {
-				auto typeinfo = typeid(Key);
-				m_hasher = k => typeinfo.getHash(&k);
-			}
-		}
 
 		uint pot = 0;
 		while (new_size > 1) pot++, new_size /= 2;
@@ -258,6 +262,55 @@ unittest {
 		assert(pe !is null && *pe == str ~ "+");
 		assert(map[str] == str ~ "+");
 	}
+}
+
+// test for @nogc compliance
+unittest {
+	HashMap!(int, int) map1;
+	HashMap!(string, string) map2;
+	map1[1] = 2;
+	map2["1"] = "2";
+
+	@nogc void performNoGCOps()
+	{
+		foreach (int v; map1) {}
+		foreach (int k, int v; map1) {}
+		assert(1 in map1);
+		assert(map1.length == 1);
+		assert(map1[1] == 2);
+		assert(map1.getNothrow(1, -1) == 2);
+
+		foreach (string v; map2) {}
+		foreach (string k, string v; map2) {}
+		assert("1" in map2);
+		assert(map2.length == 1);
+		assert(map2["1"] == "2");
+		assert(map2.getNothrow("1", "") == "2");
+	}
+
+	performNoGCOps();
+}
+
+// test nothrow compliance
+nothrow unittest {
+	HashMap!(int, int) map1;
+	HashMap!(string, string) map2;
+	map1[1] = 2;
+	map2["1"] = "2";
+
+	foreach (int v; map1) {}
+	foreach (int k, int v; map1) {}
+	assert(1 in map1);
+	assert(map1.length == 1);
+	assert(map1[1] == 2);
+	assert(map1.getNothrow(1, -1) == 2);
+
+	foreach (string v; map2) {}
+	foreach (string k, string v; map2) {}
+	assert("1" in map2);
+	assert(map2.length == 1);
+	assert(map2["1"] == "2");
+	assert(map2.getNothrow("1", "") == "2");
 }
 
 private template UnConst(T) {
