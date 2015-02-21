@@ -84,7 +84,7 @@ struct Task {
 	}
 
 	/// Reserved for internal use!
-	@property inout(MessageQueue) messageQueue() inout { assert(running); return fiber.messageQueue; }
+	@property inout(MessageQueue) messageQueue() inout { assert(running, "Task is not running"); return fiber.messageQueue; }
 
 	T opCast(T)() const nothrow if (is(T == bool)) { return m_fiber !is null; }
 
