@@ -65,7 +65,7 @@ template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
-	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
+	static assert(idx >= 0, "Index given to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
 
 	private template extract(size_t index, list...)
@@ -99,7 +99,7 @@ template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
-	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
+	static assert(idx >= 0, "Index given to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
 
 	private template extract(size_t index, list...)
