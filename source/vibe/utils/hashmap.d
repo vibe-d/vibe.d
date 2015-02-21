@@ -264,14 +264,15 @@ unittest {
 	}
 }
 
-// test for @nogc compliance
-unittest {
+// test for nothrow/@nogc compliance
+static if (__VERSION__ >= 2066)
+nothrow unittest {
 	HashMap!(int, int) map1;
 	HashMap!(string, string) map2;
 	map1[1] = 2;
 	map2["1"] = "2";
 
-	@nogc void performNoGCOps()
+	@nogc nothrow void performNoGCOps()
 	{
 		foreach (int v; map1) {}
 		foreach (int k, int v; map1) {}
@@ -291,28 +292,6 @@ unittest {
 	performNoGCOps();
 }
 
-// test nothrow compliance
-nothrow unittest {
-	HashMap!(int, int) map1;
-	HashMap!(string, string) map2;
-	map1[1] = 2;
-	map2["1"] = "2";
-
-	foreach (int v; map1) {}
-	foreach (int k, int v; map1) {}
-	assert(1 in map1);
-	assert(map1.length == 1);
-	assert(map1[1] == 2);
-	assert(map1.getNothrow(1, -1) == 2);
-
-	foreach (string v; map2) {}
-	foreach (string k, string v; map2) {}
-	assert("1" in map2);
-	assert(map2.length == 1);
-	assert(map2["1"] == "2");
-	assert(map2.getNothrow("1", "") == "2");
-}
-
 private template UnConst(T) {
 	static if (is(T U == const(U))) {
 		alias UnConst = U;
@@ -320,3 +299,5 @@ private template UnConst(T) {
 		alias UnConst = V;
 	} else alias UnConst = T;
 }
+
+static if (__VERSION__ < 2066) private static bool nogc() { return false; }
