@@ -83,15 +83,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	final HTTPRouter any(string url_match, HTTPServerRequestDelegate cb)
 	{
 		import std.traits;
-		HTTPRouter route;
+		static HTTPMethod[] all_methods = [EnumMembers!HTTPMethod];
 
-		foreach(immutable method; [EnumMembers!HTTPMethod])
-			if(route is null)
-				route = match(method, url_match, cb);
-			else
-				route = route.match(method, url_match, cb);
+		foreach(immutable method; all_methods)
+			match(method, url_match, cb);
 
-		return route;
+		return this;
 	}
 }
 
