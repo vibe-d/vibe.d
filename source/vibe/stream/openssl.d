@@ -322,7 +322,7 @@ final class OpenSSLContext : SSLContext {
 		if (kind == SSLContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
-	        setContextID();
+			setContextID();
 		}
 
 		setCipherList();
