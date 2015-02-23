@@ -16,6 +16,8 @@ import vibe.core.net;
 import vibe.core.stream;
 import vibe.core.sync;
 
+import vibe.utils.dictionarylist;
+
 import std.algorithm;
 import std.array;
 import std.conv;
@@ -162,6 +164,7 @@ void setSSLContextFactory(SSLContext function(SSLContextKind, SSLVersion) factor
 		tunnel is properly closed first.
 */
 interface SSLStream : Stream {
+	@property SSLCertificateInformation peerCertificate();
 }
 
 enum SSLStreamState {
@@ -367,7 +370,18 @@ enum SSLPeerValidationMode {
 
 		See_also: $(D useTrustedCertificateFile)
 	*/
-    trustedCert = validCert | checkTrust,
+	trustedCert = validCert | checkTrust,
+}
+
+/** Certificate information  */
+struct SSLCertificateInformation {
+
+	/** Information about the certificate's subject name.
+
+		Maps fields to their values. For example, typical fields on a
+		certificate will be 'commonName', 'countryName', 'emailAddress', etc.
+	*/
+	DictionaryList!(string, false) subjectName;
 }
 
 struct SSLPeerValidationData {

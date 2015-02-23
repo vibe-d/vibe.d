@@ -58,6 +58,7 @@ final class OpenSSLStream : SSLStream {
 		BIO* m_bio;
 		ubyte[64] m_peekBuffer;
 		Exception[] m_exceptions;
+		SSLCertificateInformation m_peerCertificate;
 	}
 
 	this(Stream underlying, OpenSSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
@@ -108,6 +109,8 @@ final class OpenSSLStream : SSLStream {
 
 			if (auto peer = SSL_get_peer_certificate(m_ssl)) {
 				scope(exit) X509_free(peer);
+
+				readPeerCertInfo(peer);
 				auto result = SSL_get_verify_result(m_ssl);
 				if (result == X509_V_OK && (ctx.peerValidationMode & SSLPeerValidationMode.checkPeer)) {
 					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
@@ -141,6 +144,25 @@ final class OpenSSLStream : SSLStream {
 		}
 
 		checkExceptions();
+	}
+
+	/** Read certificate info into the clientInformation field */
+	private void readPeerCertInfo(X509 *cert)
+	{
+		X509_NAME* name = X509_get_subject_name(cert);
+
+		int c = X509_NAME_entry_count(name);
+		foreach (i; 0 .. c) {
+			X509_NAME_ENTRY *e = X509_NAME_get_entry(name, i);
+
+			ASN1_OBJECT *obj = X509_NAME_ENTRY_get_object(e);
+			ASN1_STRING *val = X509_NAME_ENTRY_get_data(e);
+
+			auto longName = OBJ_nid2ln(OBJ_obj2nid(obj)).to!string;
+			auto valStr = cast(string)val.data[0 .. val.length];
+
+			m_peerCertificate.subjectName.addField(longName, valStr);
+		}
 	}
 
 	~this()
@@ -265,6 +287,11 @@ final class OpenSSLStream : SSLStream {
 				logDiagnostic("Exception occured on SSL source stream: %s", e.toString());
 			throw m_exceptions[0];
 		}
+	}
+
+	@property SSLCertificateInformation peerCertificate()
+	{
+		return m_peerCertificate;
 	}
 }
 
