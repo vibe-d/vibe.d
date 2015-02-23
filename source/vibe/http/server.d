@@ -598,12 +598,12 @@ final class HTTPServerRequest : HTTPRequest {
 		/// Determines if the request was issued over an SSL encrypted channel.
 		bool ssl;
 
-        /** Information about the SSL certificate provided by the client.
+		/** Information about the SSL certificate provided by the client.
 
-            Remarks: This field is only set if ssl is true, and the peer
-            presented a client certificate.
-        */
-        SSLCertificateInformation clientCertificate;
+			Remarks: This field is only set if ssl is true, and the peer
+			presented a client certificate.
+		*/
+		SSLCertificateInformation clientCertificate;
 
 		/** The _path part of the URL.
 
@@ -1358,7 +1358,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	// Create the response object
 	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
 	req.ssl = res.m_ssl = listen_info.sslContext !is null;
-    if (req.ssl) req.clientCertificate = (cast(SSLStream)http_stream).peerCertificate;
+	if (req.ssl) req.clientCertificate = (cast(SSLStream)http_stream).peerCertificate;
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
