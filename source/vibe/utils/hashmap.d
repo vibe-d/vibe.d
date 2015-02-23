@@ -31,8 +31,10 @@ struct DefaultHashMapTraits(Key) {
 		else {
 			// evil casts to be able to get the most basic operations of
 			// HashMap nothrow and @nogc
-			static import core.internal.hash;
-			static size_t hashWrapper(in ref Key k) { return core.internal.hash.hashOf(k); }
+			static size_t hashWrapper(in ref Key k) {
+				static typeinfo = typeid(Key);
+				return typeinfo.getHash(&k);
+			}
 			static @nogc nothrow size_t properlyTypedWrapper(in ref Key k) { return 0; }
 			return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k);
 		}
