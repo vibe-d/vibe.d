@@ -597,7 +597,8 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 		static if( INIT ){
 			scope(failure) assert(0, "You shouldn't throw in destructors");
 			auto objc = obj;
-			.destroy(objc);//typeid(T).destroy(cast(void*)obj);
+			static if (is(TR == T*)) .destroy(*objc);//typeid(T).destroy(cast(void*)obj);
+			else .destroy(objc);
 		}
 		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
 		manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
