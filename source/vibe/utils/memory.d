@@ -81,8 +81,13 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 
 void freeArray(T, bool MANAGED = true)(Allocator allocator, ref T[] array)
 {
-	static if (MANAGED && hasIndirections!T)
-		GC.removeRange(array.ptr);
+	static if (MANAGED) {
+		static if (hasIndirections!T)
+			GC.removeRange(array.ptr);
+		static if (hasElaborateDestructor!T)
+			foreach (ref el; array)
+				destroy(el);
+	}
 	allocator.free(cast(void[])array);
 	array = null;
 }
@@ -680,7 +685,8 @@ struct FreeListRef(T, bool INIT = true)
 					//logInfo("ref %s destroy", T.stringof);
 					//typeid(T).destroy(cast(void*)m_object);
 					auto objc = m_object;
-					.destroy(objc);
+					static if (is(TR == T)) .destroy(objc);
+					else .destroy(*objc);
 					//logInfo("ref %s destroyed", T.stringof);
 				}
 				static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
