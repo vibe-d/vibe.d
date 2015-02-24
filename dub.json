@@ -45,7 +45,7 @@
 		},
 		{
 			"name": "libev",
-			"dependencies": {"libev": "~>4.0.0+4.04"},
+			"dependencies": {"libev": "~>5.0.0+4.04"},
 			"platforms": ["posix"],
 			"versions": ["VibeLibevDriver", "LIBEV4"],
 		},
