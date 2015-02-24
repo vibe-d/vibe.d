@@ -85,7 +85,7 @@ void freeArray(T, bool MANAGED = true)(Allocator allocator, ref T[] array)
 		static if (hasIndirections!T)
 			GC.removeRange(array.ptr);
 		static if (hasElaborateDestructor!T)
-			foreach (ref el; array)
+			foreach_reverse (ref el; array)
 				destroy(el);
 	}
 	allocator.free(cast(void[])array);
