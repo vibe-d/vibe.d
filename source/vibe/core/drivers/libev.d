@@ -56,13 +56,13 @@ final class LibevDriver : EventDriver {
 		static bool ms_alreadyDeinitialized;
 	}
 
-	this(DriverCore core)
+	this(DriverCore core) nothrow
 	{
 		m_core = core;
 		ms_core = core;
 		ev_set_allocator(&myrealloc);
 		m_loop = ev_loop_new(EVFLAG_AUTO);
-		enforce(m_loop !is null, "Failed to create libev loop");
+		assert(m_loop !is null, "Failed to create libev loop");
 		logInfo("Got libev backend: %d", ev_backend(m_loop));
 	}
 
