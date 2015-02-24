@@ -50,6 +50,13 @@
 			"versions": ["VibeLibevDriver", "LIBEV4"],
 		},
 		{
+			"name": "libev-travis",
+			"dependencies": {"libev": "~>5.0.0+4.04"},
+			"platforms": ["posix"],
+			"versions": ["VibeLibevDriver", "LIBEV4"],
+			"lflags": ["-Llibev-4.19/.libs/", "-rpath=libev-4.19/.libs/"],
+		},
+		{
 			"name": "win32",
 			"platforms": ["windows"],
 			"versions": ["VibeWin32Driver"],
