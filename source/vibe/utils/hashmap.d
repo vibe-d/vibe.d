@@ -154,7 +154,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		return &m_table[idx].value;
 	}
 
-	int opApply(DG)(DG del) if (isOpApplyDg!(DG, Key, Value))
+	int opApply(DG)(scope DG del) if (isOpApplyDg!(DG, Key, Value))
 	{
 		import std.traits : arity;
 		foreach (i; 0 .. m_table.length)
