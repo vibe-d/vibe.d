@@ -417,6 +417,15 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
+	/// When all the elements in a sorted set are inserted with the same score, in order to force lexicographical ordering, 
+	/// this command returns all the elements in the sorted set at key with a value between min and max.
+	RedisReply!T zrangeByLex(T = string)(string key, string min = "-", string max = "+", long offset = 0, long count = -1)
+		if(isValidRedisValueType!T)
+	{
+		if (offset > 0 || count != -1) return request!(RedisReply!T)("ZRANGEBYLEX", key, min, max, "LIMIT", offset, count);
+		else return request!(RedisReply!T)("ZRANGEBYLEX", key, min, max);
+	}
+
 	/// Returns all the elements in the sorted set at key with a score between start and end inclusively
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, bool with_scores = false)
 		if(isValidRedisValueType!T)
