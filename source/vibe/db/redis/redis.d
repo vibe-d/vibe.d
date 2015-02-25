@@ -605,8 +605,8 @@ final class RedisSubscriberImpl {
 		Task m_listener;
 		Task m_listenerHelper;
 		Task m_waiter;
-		RecursiveTaskMutex m_mutex;
-		TaskMutex m_connMutex;
+		RecursiveTaskMutexInt m_mutex;
+		TaskMutexInt m_connMutex;
 	}
 
 	private enum Action {
@@ -634,8 +634,8 @@ final class RedisSubscriberImpl {
 
 		logTrace("this()");
 		m_client = client;
-		m_mutex = new RecursiveTaskMutex;
-		m_connMutex = new TaskMutex;
+		m_mutex = new RecursiveTaskMutexInt;
+		m_connMutex = new TaskMutexInt;
 	}
 
 	~this() {
@@ -649,20 +649,20 @@ final class RedisSubscriberImpl {
 		if (!m_listening)
 			return;
 		void impl() {
-			synchronized (m_mutex) {
-				m_waiter = Task.getThis();
-				scope(exit) m_waiter = Task();
-				stop();
+			auto lock = scopedLock(m_mutex);
+			m_waiter = Task.getThis();
+			scope(exit) m_waiter = Task();
+			stop();
 
-				bool stopped;
-				do {
-					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
-						break;
-				}
-				while (!stopped);
-				
-				enforce(stopped, "Failed to wait for Redis listener to stop");
+			bool stopped;
+			do {
+				if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
+					break;
 			}
+			while (!stopped);
+			
+			enforce(stopped, "Failed to wait for Redis listener to stop");
+
 		}
 		inTask(&impl);
 	}
@@ -674,15 +674,17 @@ final class RedisSubscriberImpl {
 			return;
 
 		void impl() {
-			synchronized (m_mutex) {
-				m_stop = true;
-				m_listener.send(Action.STOP);
-				// send a message to wake up the listenerHelper from the reply
-				if (m_subscriptions.length > 0) {
-					synchronized(m_connMutex)
-						_request_void(m_lockedConnection, "UNSUBSCRIBE", cast(string[]) m_subscriptions.keys.takeOne.array );
-					sleep(30.msecs);
+			auto l = m_mutex.scopedLock;
+			m_stop = true;
+			m_listener.send(Action.STOP);
+			// send a message to wake up the listenerHelper from the reply
+			if (m_subscriptions.length > 0) {
+				{
+					auto l2 = m_connMutex.scopedLock;
+					_request_void(m_lockedConnection, "UNSUBSCRIBE", cast(string[]) m_subscriptions.keys.takeOne.array );
+				
 				}
+				sleep(30.msecs);
 			}
 		}
 		inTask(&impl);
@@ -727,12 +729,15 @@ final class RedisSubscriberImpl {
 		void impl() {
 
 			scope(failure) { logTrace("Failure"); bstop(); }
-			try synchronized(m_mutex) {
+			try {
+				auto l = scopedLock(m_mutex);
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool subscribed;
-				synchronized(m_connMutex)
+				{
+					auto l2 = m_connMutex.scopedLock;
 					_request_void(m_lockedConnection, "SUBSCRIBE", args);
+				}
 				while(!m_subscriptions.keys.canFind(args)) {
 					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
 						break;
@@ -764,12 +769,16 @@ final class RedisSubscriberImpl {
 
 			scope(failure) bstop();
 			assert(m_listening);
-			synchronized(m_mutex) {
+
+			{
+				auto l = m_mutex.scopedLock;
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool unsubscribed;
-				synchronized(m_connMutex)
+				{
+					auto l2 = m_connMutex.scopedLock;
 					_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
+				}
 				while(m_subscriptions.keys.canFind(args)) {
 					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  })) {
 						unsubscribed = false;
@@ -796,12 +805,15 @@ final class RedisSubscriberImpl {
 		void impl() {
 			scope(failure) bstop();
 			assert(m_listening);
-			synchronized(m_mutex) {
+			{
+				auto l = m_mutex.scopedLock;
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool subscribed;
-				synchronized(m_connMutex)
+				{
+					auto l2 = m_connMutex.scopedLock;
 					_request_void(m_lockedConnection, "PSUBSCRIBE", args);
+				}
 
 				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
 					subscribed = false;
@@ -825,12 +837,15 @@ final class RedisSubscriberImpl {
 		void impl() {
 			scope(failure) bstop();
 			assert(m_listening);
-			synchronized(m_mutex) {
+			{ 
+				auto l = m_mutex.scopedLock;
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool unsubscribed;
-				synchronized(m_connMutex)
+				{
+					auto l2 = m_connMutex.scopedLock;
 					_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
+				}
 				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  }))
 					unsubscribed = false;
 				else
@@ -1074,8 +1089,10 @@ final class RedisSubscriberImpl {
 				if (act == Action.STOP) m_stop = true;
 				if (m_stop) return;
 				logTrace("Calling PubSub Handler");
-				synchronized(m_connMutex)
+				{
+					auto l = m_connMutex.scopedLock;
 					pubsub_handler(); // handles one command at a time
+				}
 				m_listenerHelper.send(Action.DATA);
 			};
 
@@ -1111,7 +1128,8 @@ final class RedisSubscriberImpl {
 					callback("Error", e.toString());
 				}
 			});
-			synchronized(m_mutex) {
+			{
+				auto l = m_mutex.scopedLock;
 				import std.datetime : usecs;
 				receiveTimeout(2.seconds, (Action act) { assert( act == Action.STARTED); });
 				if (ex) throw ex;

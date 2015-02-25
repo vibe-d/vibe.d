@@ -583,7 +583,7 @@ private class Libevent2Object {
 		m_driver.unregisterObject(this);
 	}
 
-	protected void onThreadShutdown() nothrow {}
+	protected void onThreadShutdown() {}
 }
 
 /// private
@@ -674,14 +674,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		return ec;
 	}
 
-	void acquire() nothrow
+	void acquire()
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		auto task = Task.getThis();
 		auto thread = task == Task() ? Thread.getThis() : task.thread;
 
@@ -701,14 +695,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	void release() nothrow
+	void release()
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		auto self = Task.getThis();
 		if (self == Task()) return;
 
@@ -719,14 +707,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	bool amOwner() nothrow
+	bool amOwner()
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		auto self = Task.getThis();
 		if (self == Task()) return false;
 		synchronized (m_mutex) {
@@ -739,12 +721,6 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	protected override void onThreadShutdown()
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		auto thr = Thread.getThis();
 		synchronized (m_mutex) {
 			if (thr in m_waiters) {

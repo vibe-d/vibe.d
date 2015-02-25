@@ -1433,6 +1433,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		// find the matching virtual host
 		string reqhost;
 		ushort reqport = 0;
+		import std.algorithm : splitter;
 		auto reqhostparts = req.host.splitter(":");
 		if (!reqhostparts.empty) { reqhost = reqhostparts.front; reqhostparts.popFront(); }
 		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }

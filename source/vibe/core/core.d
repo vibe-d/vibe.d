@@ -1346,13 +1346,18 @@ static this()
 
 static ~this()
 {
+	version(VibeLibasyncDriver) {
+		import vibe.core.drivers.libasync;
+		if (LibasyncDriver.isControlThread)
+			return;
+	}
 	auto thisthr = Thread.getThis();
 
 	bool is_main_thread = false;
 
 	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
-		assert(idx >= 0);
+		assert(idx >= 0, "No more threads registered");
 		if (idx >= 0) {
 			st_threads[idx] = st_threads[$-1];
 			st_threads.length--;
@@ -1586,4 +1591,11 @@ private template needsMove(T)
 {
 	// FIXME: reverse the condition and only call .move for non-copyable types!
 	enum needsMove = is(typeof(T.init.move));
+}
+
+version(VibeLibasyncDriver) {
+	shared static ~this() {
+		import libasync.threads : destroyAsyncThreads;
+		destroyAsyncThreads(); // destroy threads		
+	}
 }

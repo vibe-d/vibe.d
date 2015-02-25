@@ -10,10 +10,6 @@
 */
 module vibe.utils.memory;
 
-version(VibeLibasyncDriver) {
-	public import libasync.internals.memory;
-} else :
-
 import vibe.core.log;
 
 import core.exception : OutOfMemoryError;

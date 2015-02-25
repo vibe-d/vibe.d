@@ -38,9 +38,7 @@
 		},
 		{
 			"name": "libasync",
-			"dependencies": {
-			  "libasync": { "version": "0.6.6" }
-			},
+			"dependencies": {"libasync": "0.7.0" },
 			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
 		},
 		{
