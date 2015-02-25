@@ -17,6 +17,7 @@ import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
+import std.socket;
 import std.string;
 
 import core.stdc.string : strlen;
@@ -348,6 +349,7 @@ final class OpenSSLContext : SSLContext {
 		if (kind == SSLContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
+			guessSessionIDContext();
 		}
 
 		setCipherList();
@@ -494,6 +496,21 @@ final class OpenSSLContext : SSLContext {
 				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
 		else
 			SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
+	}
+
+	/** Make up a context ID to assign to the SSL context.
+
+		This is required when doing client cert authentication, otherwise many
+		connections will go aborted as the client tries to revive a session
+		that it used to have on another machine.
+
+		The session ID context should be unique within a pool of servers.
+		Currently, this is achieved by taking the hostname.
+	*/
+	private void guessSessionIDContext()
+	{
+		string contextID = Socket.hostName;
+		SSL_CTX_set_session_id_context(m_ctx, cast(ubyte*)contextID.toStringz(), cast(uint)contextID.length);
 	}
 
 	/** Set params to use for DH cipher.
