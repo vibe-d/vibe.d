@@ -8,9 +8,14 @@ d:
   - ldc-0.15.1
   - gdc-4.9.0
 
+before_install:
+  - wget http://dist.schmorp.de/libev/Attic/libev-4.19.tar.gz
+  - tar -xf libev-4.19.tar.gz
+  - (cd libev-4.19 && ./configure && make)
+
 env:
   - VIBED_DRIVER=libevent
-  - VIBED_DRIVER=libev
+  - VIBED_DRIVER=libev-travis
   - VIBED_DRIVER=libasync
 
 script:

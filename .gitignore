@@ -23,6 +23,7 @@ dub.selections.json
 vibe-d
 tests/*/tests
 __test__libevent__
+__test__libev__
 
 # Examples
 examples/app_skeleton/__test__library__
