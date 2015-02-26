@@ -18,16 +18,6 @@ env:
   - VIBED_DRIVER=libev-travis
   - VIBED_DRIVER=libasync
 
-matrix:
-  exclude:
-    - dmd-2.065.0
-      env: VIBED_DRIVER=libasync
-    - ldc-0.14.0
-      env: VIBED_DRIVER=libasync
-    - ldc-0.15.1
-      env: VIBED_DRIVER=libasync
-    - gdc-4.9.0
-      env: VIBED_DRIVER=libasync
 script:
   - dub test --compiler=$DC --config=${VIBED_DRIVER} || exit 1
   - if [ ${VIBED_DRIVER} == "libevent" ]; then
