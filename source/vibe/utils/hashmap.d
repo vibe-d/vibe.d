@@ -49,7 +49,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	alias Value = TValue;
 
 	struct TableEntry {
-		UnConst!Key key;
+		UnConst!Key key = Traits.clearValue;
 		Value value;
 
 		this(Key key, Value value) { this.key = cast(UnConst!Key)key; this.value = value; }
@@ -205,8 +205,8 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		resize(newcap);
 	}
 
-	private void resize(size_t new_size) nothrow
-	{
+	private void resize(size_t new_size)
+	@trusted {
 		assert(!m_resizing);
 		m_resizing = true;
 		scope(exit) m_resizing = false;
@@ -218,21 +218,19 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		new_size = 1 << pot;
 
 		auto oldtable = m_table;
+
+		// allocate the new array, automatically initializes with empty entries (Traits.clearValue)
 		m_table = allocArray!TableEntry(m_allocator, new_size);
-		foreach (ref el; m_table) {
-			static if (is(Key == struct)) {
-				emplace(cast(UnConst!Key*)&el.key);
-				static if (Traits.clearValue !is Key.init)
-					el.key = cast(UnConst!Key)Traits.clearValue;
-			} else el.key = cast(UnConst!Key)Traits.clearValue;
-			emplace(&el.value);
-		}
+
+		// perform a move operation of all non-empty elements from the old array to the new one
 		foreach (ref el; oldtable)
 			if (!Traits.equals(el.key, Traits.clearValue)) {
 				auto idx = findInsertIndex(el.key);
 				(cast(ubyte[])(&m_table[idx])[0 .. 1])[] = (cast(ubyte[])(&el)[0 .. 1])[];
 			}
-		if (oldtable) freeArray(m_allocator, oldtable);
+
+		// all elements have been moved to the new array, so free the old one without calling destructors
+		if (oldtable) freeArray(m_allocator, oldtable, false);
 	}
 }
 
@@ -292,6 +290,77 @@ nothrow unittest {
 	}
 
 	performNoGCOps();
+}
+
+unittest { // test for proper use of constructor/post-blit/destructor
+	static struct Test {
+		static size_t constructedCounter = 0;
+		bool constructed = false;
+		this(int) { constructed = true; constructedCounter++; }
+		this(this) { if (constructed) constructedCounter++; }
+		~this() { if (constructed) constructedCounter--; }
+	}
+
+	assert(Test.constructedCounter == 0);
+
+	{ // sanity check
+		Test t;
+		assert(Test.constructedCounter == 0);
+		t = Test(1);
+		assert(Test.constructedCounter == 1);
+		auto u = t;
+		assert(Test.constructedCounter == 2);
+		t = Test.init;
+		assert(Test.constructedCounter == 1);
+	}
+	assert(Test.constructedCounter == 0);
+	
+	{ // basic insertion and hash map resizing
+		HashMap!(int, Test) map;
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+	}
+
+	assert(Test.constructedCounter == 0);
+
+	{ // test clear() and overwriting existing entries
+		HashMap!(int, Test) map;
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+		map.clear();
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == 66);
+		}
+	}
+
+	assert(Test.constructedCounter == 0);
+
+	{ // test removing entries and adding entries after remove
+		HashMap!(int, Test) map;
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+		foreach (i; 1 .. 33) {
+			map.remove(i);
+			assert(Test.constructedCounter == 66 - i);
+		}
+		foreach (i; 67 .. 130) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i - 32);
+		}
+	}
+
+	assert(Test.constructedCounter == 0);
 }
 
 private template UnConst(T) {

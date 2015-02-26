@@ -79,14 +79,15 @@ T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 	return ret;
 }
 
-void freeArray(T, bool MANAGED = true)(Allocator allocator, ref T[] array)
+void freeArray(T, bool MANAGED = true)(Allocator allocator, ref T[] array, bool call_destructors = true)
 {
 	static if (MANAGED) {
 		static if (hasIndirections!T)
 			GC.removeRange(array.ptr);
 		static if (hasElaborateDestructor!T)
-			foreach_reverse (ref el; array)
-				destroy(el);
+			if (call_destructors)
+				foreach_reverse (ref el; array)
+					destroy(el);
 	}
 	allocator.free(cast(void[])array);
 	array = null;
