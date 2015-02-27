@@ -115,7 +115,7 @@ import vibe.http.server;
 */
 void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.lowerUnderscored)(URLRouter router, C instance, WebInterfaceSettings settings = null)
 {
-	import std.array : endsWith;
+	import std.algorithm : endsWith;
 	import std.traits;
 
 	if (!settings) settings = new WebInterfaceSettings;
@@ -533,8 +533,7 @@ private struct RequestContext {
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
 	if (ERROR.length <= 1)
 {
-	import std.algorithm : countUntil;
-	import std.array : startsWith;
+	import std.algorithm : countUntil, startsWith;
 	import std.traits;
 	import std.typetuple : Filter;
 	import vibe.data.json;

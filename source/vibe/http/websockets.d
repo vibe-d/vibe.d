@@ -196,8 +196,8 @@ final class WebSocket {
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
 		Task m_reader;
-		TaskMutex m_readMutex, m_writeMutex;
-		TaskCondition m_readCondition;
+		TaskMutexInt m_readMutex, m_writeMutex;
+		TaskConditionInt m_readCondition;
 		Timer m_pingTimer;
 		uint m_lastPingIndex;
 		bool m_pongReceived;
@@ -210,9 +210,9 @@ final class WebSocket {
 		m_request = request;
 		assert(m_conn);
 		m_reader = runTask(&startReader);
-		m_writeMutex = new TaskMutex;
-		m_readMutex = new TaskMutex;
-		m_readCondition = new TaskCondition(m_readMutex);
+		m_writeMutex = new TaskMutexInt;
+		m_readMutex = new TaskMutexInt;
+		m_readCondition = new TaskConditionInt(m_readMutex);
 		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
 			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			m_pongReceived = true;
@@ -248,7 +248,8 @@ final class WebSocket {
 	{
 		if (m_nextMessage) return true;
 
-		synchronized (m_readMutex) {
+		{
+			auto l = m_readMutex.scopedLock;
 			while (connected && m_nextMessage is null)
 				m_readCondition.wait();
 		}
@@ -264,7 +265,8 @@ final class WebSocket {
 
 		immutable limit_time = Clock.currTime(UTC()) + timeout;
 
-		synchronized (m_readMutex) {
+		{
+			auto l = m_readMutex.scopedLock;
 			while (connected && m_nextMessage is null && timeout > 0.seconds) {
 				m_readCondition.wait(timeout);
 				timeout = limit_time - Clock.currTime(UTC());
@@ -301,12 +303,11 @@ final class WebSocket {
 	*/
 	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
-		synchronized (m_writeMutex) {
-			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
-			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
-			scope(exit) message.finalize();
-			sender(message);
-		}
+		auto lock = scopedLock(m_writeMutex);
+		enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
+		scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
+		scope(exit) message.finalize();
+		sender(message);
 	}
 
 	/**
@@ -315,13 +316,13 @@ final class WebSocket {
 	void close()
 	{
 		if (connected) {
-			synchronized (m_writeMutex) {
-				m_sentCloseFrame = true;
-				Frame frame;
-				frame.opcode = FrameOpcode.close;
-				frame.fin = true;
-				frame.writeFrame(m_conn);
-			}
+			auto l = m_writeMutex.scopedLock;
+			m_sentCloseFrame = true;
+			Frame frame;
+			frame.opcode = FrameOpcode.close;
+			frame.fin = true;
+			frame.writeFrame(m_conn);
+
 		}
 		if (m_pingTimer) m_pingTimer.stop();
 		if (Task.getThis() != m_reader) m_reader.join();
@@ -363,7 +364,8 @@ final class WebSocket {
 	*/
 	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
 	{
-		synchronized (m_readMutex) {
+		{
+			auto l = m_readMutex.scopedLock;
 			while (!m_nextMessage) {
 				enforceEx!WebSocketException(connected, "Connection closed while reading message.");
 				m_readCondition.wait();
@@ -383,7 +385,8 @@ final class WebSocket {
 				if (m_pingTimer) {
 					if (m_pongSkipped) {
 						logDebug("Pong not received, closing connection");
-						synchronized(m_writeMutex) {
+						{
+							auto l = m_writeMutex.scopedLock;
 							m_conn.close();
 						}
 						return;
@@ -405,7 +408,8 @@ final class WebSocket {
 					m_conn.close();
 					return;
 				}
-				synchronized (m_readMutex) {
+				{
+					auto l = m_readMutex.scopedLock;
 					m_nextMessage = msg;
 					m_readCondition.notifyAll();
 					while (m_nextMessage) m_readCondition.wait();
@@ -425,7 +429,8 @@ final class WebSocket {
 			m_pingTimer.stop();
 			return;
 		}
-		synchronized(m_writeMutex) {
+		{
+			auto l = m_writeMutex.scopedLock;
 			m_pongReceived = false;
 			Frame ping;
 			ping.opcode = FrameOpcode.ping;

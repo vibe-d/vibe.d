@@ -1,5 +1,5 @@
 /**
-	Task synchronization facilities
+	Interruptible Task synchronization facilities
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	Authors: Leonid Kramer
@@ -14,30 +14,71 @@ import vibe.core.driver;
 import core.atomic;
 import core.sync.mutex;
 import core.sync.condition;
-
-enum LockMode{
+import std.stdio;
+enum LockMode {
 	lock,
 	tryLock,
 	defer
 }
 
+interface Lockable {
+	@trusted bool tryLock();
+	@trusted void lock();
+	@trusted void unlock();
+}
+
+class LockableMutex : Lockable
+{
+	core.sync.mutex.Mutex m_mutex;
+
+	@property core.sync.mutex.Mutex get() {
+		return m_mutex;
+	}
+
+	this(core.sync.mutex.Mutex mtx) {
+		m_mutex = mtx;
+	}
+
+	~this() { }
+
+	@trusted bool tryLock() { return m_mutex.tryLock(); }
+	@trusted void lock() { m_mutex.lock(); }
+	@trusted void unlock() { m_mutex.unlock(); }
+}
+
+ScopedMutexLock scopedLock(core.sync.mutex.Mutex mutex, LockMode mode = LockMode.lock) {
+	return ScopedMutexLock(mutex, mode);
+}
+
+ScopedMutexLock scopedLock(T : Lockable)(LockMode mode = LockMode.lock) {
+	return ScopedMutexLock(new T, mode);
+}
+
+ScopedMutexLock scopedLock(T : Lockable)(T mutex, LockMode mode = LockMode.lock) {
+	return ScopedMutexLock(mutex, mode);
+}
 
 /** RAII lock for the Mutex class.
 */
-struct ScopedMutexLock {
+struct ScopedMutexLock
+{
+	@disable this(this);
 	private {
-		core.sync.mutex.Mutex m_mutex;
+		Lockable m_mutex;
 		bool m_locked;
 		LockMode m_mode;
 	}
-
-	@disable this(this);
-
-	this(core.sync.mutex.Mutex mutex, LockMode mode=LockMode.lock)
+	
+	this(core.sync.mutex.Mutex mutex, LockMode mode=LockMode.lock) {
+		Lockable mtx = new LockableMutex(mutex);
+		this(mtx, mode);
+	}
+	
+	this(Lockable mutex, LockMode mode=LockMode.lock)
 	{
 		assert(mutex !is null);
 		m_mutex = mutex;
-
+		
 		switch(mode){
 			default:
 				assert(false, "unsupported enum value");
@@ -51,21 +92,28 @@ struct ScopedMutexLock {
 				break;
 		}
 	}
-
+	
 	~this()
 	{
 		if( m_locked )
 			m_mutex.unlock();
 	}
-
+	
 	@property bool locked() const { return m_locked; }
-
+	
+	void unlock()
+	{
+		enforce(m_locked);
+		m_mutex.unlock();
+		m_locked = false;
+	}
+	
 	bool tryLock()
 	{
 		enforce(!m_locked);
 		return m_locked = m_mutex.tryLock();
 	}
-
+	
 	void lock()
 	{
 		enforce(!m_locked);
@@ -73,12 +121,7 @@ struct ScopedMutexLock {
 		m_mutex.lock();
 	}
 
-	void unlock()
-	{
-		enforce(m_locked);
-		m_mutex.unlock();
-		m_locked = false;
-	}
+
 }
 
 /**
@@ -90,24 +133,49 @@ struct ScopedMutexLock {
 
 	See_Also: RecursiveTaskMutex, core.sync.mutex.Mutex
 */
-class TaskMutex : core.sync.mutex.Mutex {
+
+static if (__VERSION__ <= 2066) {
+	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use TaskMutexInt instead.")
+	class TaskMutex : core.sync.mutex.Mutex {
+
+		this(Object o) {
+			super(o);
+			m_signal = createManualEvent();
+		}
+
+		
+		this()
+		{
+			m_signal = createManualEvent();
+		}
+
+		mixin TaskMutexImpl!();
+	}
+} else {
+	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use TaskMutexInt instead.")
+	alias TaskMutex = TaskMutexInt;
+
+}
+
+
+class TaskMutexInt : Lockable {
+	
+	
+	this()
+	{
+		m_signal = createManualEvent();
+	}
+	
+	mixin TaskMutexImpl!();
+}
+
+mixin template TaskMutexImpl() {
 	import std.stdio;
 	private {
 		shared(bool) m_locked = false;
 		shared(uint) m_waiters = 0;
 		ManualEvent m_signal;
 		debug Task m_owner;
-	}
-
-	this()
-	{
-		m_signal = createManualEvent();
-	}
-
-	this(Object o)
-	{
-		super(o);
-		m_signal = createManualEvent();
 	}
 
 	override @trusted bool tryLock()
@@ -119,7 +187,7 @@ class TaskMutex : core.sync.mutex.Mutex {
 		}
 		return false;
 	}
-
+	
 	override @trusted void lock()
 	{
 		if (tryLock()) return;
@@ -130,7 +198,7 @@ class TaskMutex : core.sync.mutex.Mutex {
 		auto ecnt = m_signal.emitCount();
 		while (!tryLock()) ecnt = m_signal.wait(ecnt);
 	}
-
+	
 	override @trusted void unlock()
 	{
 		assert(m_locked);
@@ -145,29 +213,59 @@ class TaskMutex : core.sync.mutex.Mutex {
 	}
 }
 
-unittest {
-	auto mutex = new TaskMutex;
+static if (__VERSION__ <= 2066) {
+	unittest {
+		auto mutex = new TaskMutex;
+		
+		{
+			auto lock = ScopedMutexLock(mutex);
+			assert(lock.locked);
+			assert(mutex.m_locked);
+			
+			auto lock2 = ScopedMutexLock(mutex, LockMode.tryLock);
+			assert(!lock2.locked);
+		}
+		assert(!mutex.m_locked);
+		
+		auto lock = ScopedMutexLock(mutex, LockMode.tryLock);
+		assert(lock.locked);
+		lock.unlock();
+		assert(!lock.locked);
+		
+		synchronized(mutex){
+			assert(mutex.m_locked);
+		}
+	}
+}
 
+unittest {
+	auto mutex = new TaskMutexInt;
 	{
-		auto lock = ScopedMutexLock(mutex);
+		auto lock = mutex.scopedLock;
+		assert(lock.locked);
+		assert(mutex.m_locked);
+	}
+	{
+		auto lock = scopedLock(mutex);
 		assert(lock.locked);
 		assert(mutex.m_locked);
 
-		auto lock2 = ScopedMutexLock(mutex, LockMode.tryLock);
+		auto lock2 = scopedLock(mutex, LockMode.tryLock);
 		assert(!lock2.locked);
 	}
 	assert(!mutex.m_locked);
 
-	auto lock = ScopedMutexLock(mutex, LockMode.tryLock);
+	auto lock = scopedLock(mutex, LockMode.tryLock);
 	assert(lock.locked);
 	lock.unlock();
 	assert(!lock.locked);
 
-	synchronized(mutex){
-		assert(mutex.m_locked);
+	static if (__VERSION__ >= 2067) {
+		with(mutex.scopedLock) {
+			assert(mutex.m_locked);
+		}
 	}
 }
-
 
 /**
 	Recursive mutex implementation for tasks.
@@ -177,27 +275,48 @@ unittest {
 
 	See_Also: TaskMutex, core.sync.mutex.Mutex
 */
-class RecursiveTaskMutex : core.sync.mutex.Mutex {
+static if (__VERSION__ <= 2066) {
+	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use RecursiveTaskMutexInt instead.")
+	class RecursiveTaskMutex : core.sync.mutex.Mutex {
+		this()
+		{
+			m_signal = createManualEvent();
+			m_mutex = new core.sync.mutex.Mutex;
+		}
+
+		this(Object o) {
+			super(o);
+			m_signal = createManualEvent();
+			m_mutex = new core.sync.mutex.Mutex;
+		}
+
+		mixin RecursiveTaskMutexImpl!();
+	}
+}
+else {
+	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use RecursiveTaskMutexInt instead.")
+	alias RecursiveTaskMutex = RecursiveTaskMutexInt;
+}
+
+class RecursiveTaskMutexInt : Lockable {
+	this()
+	{
+		m_signal = createManualEvent();
+		m_mutex = new core.sync.mutex.Mutex;
+	}
+	
+	mixin RecursiveTaskMutexImpl!();
+	
+}
+
+mixin template RecursiveTaskMutexImpl() {
 	import std.stdio;
 	private {
-		Mutex m_mutex;
+		core.sync.mutex.Mutex m_mutex;
 		Task m_owner;
 		size_t m_recCount = 0;
 		shared(uint) m_waiters = 0;
 		ManualEvent m_signal;
-	}
-
-	this()
-	{
-		m_signal = createManualEvent();
-		m_mutex = new Mutex;
-	}
-
-	this(Object o)
-	{
-		super(o);
-		m_signal = createManualEvent();
-		m_mutex = new Mutex;
 	}
 
 	override @trusted bool tryLock()
@@ -216,7 +335,7 @@ class RecursiveTaskMutex : core.sync.mutex.Mutex {
 		}
 		return false;
 	}
-
+	
 	override @trusted void lock()
 	{
 		if (tryLock()) return;
@@ -226,7 +345,7 @@ class RecursiveTaskMutex : core.sync.mutex.Mutex {
 		auto ecnt = m_signal.emitCount();
 		while (!tryLock()) ecnt = m_signal.wait(ecnt);
 	}
-
+	
 	override @trusted void unlock()
 	{
 		auto self = Task.getThis();
@@ -237,7 +356,7 @@ class RecursiveTaskMutex : core.sync.mutex.Mutex {
 			if (m_recCount == 0) {
 				m_owner = Task.init;
 			}
-
+			
 		}
 		version(MutexPrint) writefln("mutex %s unlock %s", cast(void*)this, atomicLoad(m_waiters));
 		if (atomicLoad(m_waiters) > 0)
@@ -245,60 +364,138 @@ class RecursiveTaskMutex : core.sync.mutex.Mutex {
 	}
 }
 
+static if (__VERSION__ <= 2066) {
+	deprecated("You cannot inherit from TaskCondition anymore. Use TaskConditionInt instead")
+	class TaskCondition : core.sync.condition.Condition {
+		private {
+			Lockable m_mutex;
+			ManualEvent m_signal;
+		}
+		
+		this(LockableMutex mtx)
+		{
+			super(mtx.get);
+			m_mutex = mtx;
+			m_signal = createManualEvent();
+		}
+		
+		this(core.sync.mutex.Mutex mtx) {
+			super(mtx);
+			m_mutex = new LockableMutex(mtx);
+			m_signal = createManualEvent();
+		}
+		
+		~this() { }
+		
+		override @trusted @property Mutex mutex() { if (auto mtx = cast(LockableMutex)m_mutex) return mtx.m_mutex; return null; }
+		
+		override @trusted void wait()
+		{
+			if (auto tm = cast(TaskMutex)m_mutex) {
+				assert(tm.m_locked);
+				debug assert(tm.m_owner == Task.getThis());
+			}
+			
+			auto refcount = m_signal.emitCount;
+			m_mutex.unlock();
+			scope(failure) m_mutex.lock();
+			m_signal.wait(refcount);
+			m_mutex.lock();
+		}
+		
+		override @trusted bool wait(Duration timeout)
+		{
+			assert(!timeout.isNegative());
+			if (auto tm = cast(TaskMutex)m_mutex) {
+				assert(tm.m_locked);
+				debug assert(tm.m_owner == Task.getThis());
+			}
+			
+			auto refcount = m_signal.emitCount;
+			m_mutex.unlock();
+			scope(failure) m_mutex.lock();
+			
+			auto succ = m_signal.wait(timeout, refcount) != refcount;
+			
+			m_mutex.lock();
+			return succ;
+		}
+		
+		override @trusted void notify()
+		{
+			m_signal.emit(); 
+		}
+		
+		override @trusted void notifyAll()
+		{
+			m_signal.emit();
+		}
+	}
+}
+else {
+	deprecated("You cannot inherit from TaskCondition anymore. Use TaskConditionInt instead")
+	alias TaskCondition = TaskConditionInt;
+}
 
-class TaskCondition : core.sync.condition.Condition {
+class TaskConditionInt {
 	private {
-		Mutex m_mutex;
+		Lockable m_mutex;
 		ManualEvent m_signal;
 	}
-
-	this(Mutex mutex)
+	
+	this(Lockable mutex)
 	{
-		super(mutex);
 		m_mutex = mutex;
 		m_signal = createManualEvent();
 	}
-
-	override @trusted @property Mutex mutex() { return m_mutex; }
-
-	override @trusted void wait()
+	
+	this(core.sync.mutex.Mutex mutex) {
+		m_mutex = new LockableMutex(mutex);
+		m_signal = createManualEvent();
+	}
+	
+	~this() { }
+	
+	@property Lockable mutex() { return m_mutex; }
+	
+	void wait()
 	{
-		if (auto tm = cast(TaskMutex)m_mutex) {
+		if (auto tm = cast(TaskMutexInt)m_mutex) {
 			assert(tm.m_locked);
 			debug assert(tm.m_owner == Task.getThis());
 		}
-
+		
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
 		scope(failure) m_mutex.lock();
 		m_signal.wait(refcount);
 		m_mutex.lock();
 	}
-
-	override @trusted bool wait(Duration timeout)
+	
+	bool wait(Duration timeout)
 	{
 		assert(!timeout.isNegative());
-		if (auto tm = cast(TaskMutex)m_mutex) {
+		if (auto tm = cast(TaskMutexInt)m_mutex) {
 			assert(tm.m_locked);
 			debug assert(tm.m_owner == Task.getThis());
 		}
-
+		
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
 		scope(failure) m_mutex.lock();
-
+		
 		auto succ = m_signal.wait(timeout, refcount) != refcount;
-
+		
 		m_mutex.lock();
 		return succ;
 	}
-
-	override @trusted void notify()
+	
+	void notify()
 	{
-		m_signal.emit();
+		m_signal.emit(); 
 	}
-
-	override @trusted void notifyAll()
+	
+	void notifyAll()
 	{
 		m_signal.emit();
 	}

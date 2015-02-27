@@ -3,6 +3,7 @@
 module app;
 
 import vibe.vibe;
+import std.algorithm : sort;
 
 void runTest()
 {
@@ -52,7 +53,7 @@ void runTest()
 		db.del("saddTests");
 		db.sadd("saddTests", "item1");
 		db.sadd("saddTests", "item2");
-		assert(db.smembers("saddTests").array.sort.equal(["item1", "item2"]));
+		assert(sort(db.smembers("saddTests").array).equal(["item1", "item2"]));
 		
 		db.zadd("zaddTests", 0.5, "a", 1.0, "b", 2.0, "c", 1.5, "d");
 		assert(db.zrangeByScore("zaddTests", 0.5, 1.5).equal(["a", "b", "d"]));

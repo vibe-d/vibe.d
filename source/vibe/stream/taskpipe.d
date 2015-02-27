@@ -65,7 +65,7 @@ final class TaskPipe : ConnectionStream {
 private final class TaskPipeImpl {
 	private {
 		Mutex m_mutex;
-		TaskCondition m_condition;
+		TaskConditionInt m_condition;
 		FixedRingBuffer!ubyte m_buffer;
 		bool m_closed = false;
 		bool m_growWhenFull;
@@ -76,7 +76,7 @@ private final class TaskPipeImpl {
 	this(bool grow_when_full = false)
 	{
 		m_mutex = new Mutex;
-		m_condition = new TaskCondition(m_mutex);
+		m_condition = new TaskConditionInt(m_mutex);
 		m_buffer.capacity = 2048;
 		m_growWhenFull = grow_when_full;
 	}

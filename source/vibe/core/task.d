@@ -166,8 +166,8 @@ class InterruptException : Exception {
 
 class MessageQueue {
 	private {
-		TaskMutex m_mutex;
-		TaskCondition m_condition;
+		TaskMutexInt m_mutex;
+		TaskConditionInt m_condition;
 		FixedRingBuffer!Variant m_queue;
 		FixedRingBuffer!Variant m_priorityQueue;
 		size_t m_maxMailboxSize = 0;
@@ -176,8 +176,8 @@ class MessageQueue {
 
 	this()
 	{
-		m_mutex = new TaskMutex;
-		m_condition = new TaskCondition(m_mutex);
+		m_mutex = new TaskMutexInt;
+		m_condition = new TaskConditionInt(m_mutex);
 		m_queue.capacity = 32;
 		m_priorityQueue.capacity = 8;
 	}
@@ -186,7 +186,8 @@ class MessageQueue {
 
 	void clear()
 	{
-		synchronized(m_mutex){
+		{
+			auto l = m_mutex.scopedLock;
 			m_queue.clear();
 			m_priorityQueue.clear();
 		}
@@ -202,7 +203,8 @@ class MessageQueue {
 	void send(Variant msg)
 	{
 		import vibe.core.log;
-		synchronized(m_mutex){
+		{
+			auto l = m_mutex.scopedLock;
 			if( this.full ){
 				if( !m_onCrowding ){
 					while(this.full)
@@ -223,7 +225,8 @@ class MessageQueue {
 
 	void prioritySend(Variant msg)
 	{
-		synchronized (m_mutex) {
+		{
+			auto l = m_mutex.scopedLock;
 			if (m_priorityQueue.full)
 				m_priorityQueue.capacity = (m_priorityQueue.capacity * 3) / 2;
 			m_priorityQueue.put(msg);
@@ -237,7 +240,8 @@ class MessageQueue {
 		scope (exit) if (notify) m_condition.notify();
 
 		Variant args;
-		synchronized (m_mutex) {
+		{
+			auto l = m_mutex.scopedLock;
 			notify = this.full;
 			while (true) {
 				import vibe.core.log;
@@ -261,7 +265,8 @@ class MessageQueue {
 		scope (exit) if (notify) m_condition.notify();
 		auto limit_time = Clock.currTime(UTC()) + timeout;
 		Variant args;
-		synchronized (m_mutex) {
+		{
+			auto l = m_mutex.scopedLock;
 			notify = this.full;
 			while (true) {
 				if (receiveQueue(m_priorityQueue, args, filter)) break;

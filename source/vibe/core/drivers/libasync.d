@@ -6,6 +6,7 @@
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
 module vibe.core.drivers.libasync;
+
 version(VibeLibasyncDriver):
 
 import vibe.core.core;
@@ -14,7 +15,7 @@ import vibe.core.drivers.threadedfile;
 import vibe.core.log;
 import vibe.inet.path;
 
-import libasync.all;
+import libasync;
 import libasync.types : Status;
 
 import std.algorithm : min;
@@ -33,14 +34,15 @@ import core.sync.mutex;
 import std.container : Array;
 
 import vibe.core.drivers.timerqueue;
-import vibe.utils.memory;
+import libasync.internals.memory;
 import vibe.utils.array : FixedRingBuffer;
 import std.stdio : File;
 
 private __gshared EventLoop gs_evLoop;
 private EventLoop s_evLoop;
 private DriverCore s_driverCore;
-EventLoop getEventLoop()
+
+EventLoop getEventLoop() nothrow
 {
 	if (s_evLoop is null)
 		return gs_evLoop;
@@ -48,7 +50,7 @@ EventLoop getEventLoop()
 	return s_evLoop;
 }
 
-DriverCore getDriverCore()
+DriverCore getDriverCore() nothrow
 {
 	assert(s_driverCore !is null);
 	return s_driverCore;
@@ -72,7 +74,7 @@ final class LibasyncDriver : EventDriver {
 		SysTime m_nextSched;
 	}
 		
-	this(DriverCore core)
+	this(DriverCore core) nothrow
 	{
 		//if (isControlThread) return;
 
@@ -99,7 +101,7 @@ final class LibasyncDriver : EventDriver {
 		s_evLoop = getThreadEventLoop();
 		if (!gs_evLoop)
 			gs_evLoop = s_evLoop;
-		logInfo("Loaded event-d backend in thread %s", Thread.getThis().name);
+		logTrace("Loaded libasync backend in thread %s", Thread.getThis().name);
 
 	}
 
@@ -300,7 +302,7 @@ final class LibasyncDriver : EventDriver {
 			m_timers.destroy(timer_id);
 	}
 	
-	bool isTimerPending(size_t timer_id) { return m_timers.isPending(timer_id); }
+	bool isTimerPending(size_t timer_id) nothrow { return m_timers.isPending(timer_id); }
 	
 	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
 	{
@@ -1571,19 +1573,5 @@ void recycleID(size_t id) {
 	}
 	catch (Exception e) {
 		assert(false, "Error destroying Manual Event ID: " ~ id.to!string ~ " [" ~ e.msg ~ "]");
-	}
-}
-version(unittest){
-	static ~this() {
-		import std.c.stdlib : exit;
-		if (thread_isMainThread)
-			exit(0);
-	}
-} else {
-	version(Windows) static ~this() {
-		// these would cause exit code -11 on linux
-		if (thread_isMainThread) 
-			destroyAsyncThreads(); // destroy threads
-
 	}
 }

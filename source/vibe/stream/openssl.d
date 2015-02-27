@@ -697,7 +697,7 @@ alias SSLState = ssl_st*;
 /**************************************************************************************************/
 
 private {
-	__gshared Mutex[] g_cryptoMutexes;
+	__gshared TaskMutexInt[] g_cryptoMutexes;
 	__gshared int gs_verifyDataIndex;
 }
 
@@ -710,7 +710,7 @@ shared static this()
 	g_cryptoMutexes.length = CRYPTO_num_locks();
 	// TODO: investigate if a normal Mutex is enough - not sure if BIO is called in a locked state
 	foreach (i; 0 .. g_cryptoMutexes.length)
-		g_cryptoMutexes[i] = new TaskMutex;
+		g_cryptoMutexes[i] = new TaskMutexInt;
 	foreach (ref m; g_cryptoMutexes) {
 		assert(m !is null);
 	}
