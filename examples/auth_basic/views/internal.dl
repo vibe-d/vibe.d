@@ -1,0 +1,8 @@
+doctype html
+html
+    head
+        title Basic Authentication Example
+    body
+        p This page is protected.
+
+
