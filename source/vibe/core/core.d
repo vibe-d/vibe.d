@@ -1443,19 +1443,20 @@ private void setupWorkerThreads()
 }
 
 private void workerThreadFunc()
-{
-	scope (failure) {
-		logFatal("Worker thread terminated due to uncaught error.");
+nothrow {
+	try {
+		assert(s_core !is null);
+		if (getExitFlag()) return;
+		logDebug("entering worker thread");
+		runTask(toDelegate(&handleWorkerTasks));
+		logDebug("running event loop");
+		if (!getExitFlag()) runEventLoop();
+		logDebug("Worker thread exit.");
+	} catch (Throwable th) {
+		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
+		logDebug("Full error: %s", th.toString().sanitize());
 		exit(-1);
 	}
-
-	assert(s_core !is null);
-	if (getExitFlag()) return;
-	logDebug("entering worker thread");
-	runTask(toDelegate(&handleWorkerTasks));
-	logDebug("running event loop");
-	if (!getExitFlag()) runEventLoop();
-	logDebug("Worker thread exit.");
 }
 
 private void handleWorkerTasks()
