@@ -1065,25 +1065,19 @@ private class VibeDriverCore : DriverCore {
 		processDeferredExceptions(task);
 	}
 
-	void resumeTask(Task task, Exception event_exception = null) nothrow
+	void resumeTask(Task task, Exception event_exception = null)
 	{
 		resumeTask(task, event_exception, false);
 	}
 
-	void resumeTask(Task task, Exception event_exception, bool initial_resume) nothrow
+	void resumeTask(Task task, Exception event_exception, bool initial_resume)
 	{
 		assert(initial_resume || task.running, "Resuming terminated task.");
 		resumeCoreTask(cast(CoreTask)task.fiber, event_exception);
 	}
 
-	void resumeCoreTask(CoreTask ctask, Exception event_exception = null) nothrow
+	void resumeCoreTask(CoreTask ctask, Exception event_exception = null)
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
 		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
 

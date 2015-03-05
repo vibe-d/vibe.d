@@ -197,7 +197,7 @@ interface DriverCore {
 		yielded task. The optional $(D event_exception) will be thrown in the
 		context of the resumed task.
 	*/
-	void resumeTask(Task f, Exception event_exception = null) nothrow;
+	void resumeTask(Task f, Exception event_exception = null);
 
 	/** Notifies the core that all events have been processed.
 
