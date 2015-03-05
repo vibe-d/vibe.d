@@ -972,6 +972,16 @@ private class CoreTask : TaskFiber {
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
 
+				// check for any unhandled deferred exceptions
+				if (m_exception !is null) {
+					if (cast(InterruptException)m_exception) {
+						logDebug("InterruptException not handled by task before exit.");
+					} else {
+						logCritical("Deferred exception not handled by task before exit: %s", m_exception.msg);
+						logDebug("Full error: %s", m_exception.toString().sanitize());
+					}
+				}
+
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
 
