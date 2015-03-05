@@ -1,7 +1,7 @@
 /**
 	This module contains the core functionality of the vibe.d framework.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -485,6 +485,9 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 */
 void yield()
 {
+	// throw any deferred exceptions
+	s_core.processDeferredExceptions();
+
 	auto t = CoreTask.getThis();
 	if (t && t !is CoreTask.ms_coreTask) {
 		// it can happen that a task with the same fiber was
@@ -1044,35 +1047,22 @@ private class VibeDriverCore : DriverCore {
 
 	@property void eventException(Exception e) { m_eventException = e; }
 
+	void yieldForEventDeferThrow()
+	nothrow {
+		yieldForEventDeferThrow(Task.getThis());
+	}
+
+	void processDeferredExceptions()
+	{
+		processDeferredExceptions(Task.getThis());
+	}
+
 	void yieldForEvent()
 	{
 		auto task = Task.getThis();
-		if (task != Task.init) {
-			auto fiber = cast(CoreTask)task.fiber;
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
-			fiber.yield();
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
-			auto e = fiber.m_exception;
-			if( e ){
-				fiber.m_exception = null;
-				throw e;
-			}
-		} else {
-			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			m_eventException = null;
-			if (auto err = getEventDriver().runEventLoopOnce()) {
-				if (err == 1) {
-					logDebug("No events registered, exiting event loop.");
-					throw new Exception("No events registered in vibeYieldForEvent.");
-				}
-				logError("Error running event loop: %d", err);
-				throw new Exception("Error waiting for events.");
-			}
-			if (auto e = m_eventException) {
-				m_eventException = null;
-				throw e;
-			}
-		}
+		processDeferredExceptions(task);
+		yieldForEventDeferThrow(task);
+		processDeferredExceptions(task);
 	}
 
 	void resumeTask(Task task, Exception event_exception = null) nothrow
@@ -1143,6 +1133,43 @@ private class VibeDriverCore : DriverCore {
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
 		} else m_ignoreIdleForGC = false;
+	}
+
+	private void yieldForEventDeferThrow(Task task)
+	nothrow {
+		if (task != Task.init) {
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
+			static if (__VERSION__ < 2067) scope (failure) assert(false); // Fiber.yield() not nothrow on 2.066 and below
+			task.fiber.yield();
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
+			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
+		} else {
+			scope (failure) assert(false); // runEventLoopOnce is not yet nothrow
+			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
+			m_eventException = null;
+			if (auto err = getEventDriver().runEventLoopOnce()) {
+				logError("Error running event loop: %d", err);
+				assert(err != 1, "No events registered, exiting event loop.");
+				assert(false, "Error waiting for events.");
+			}
+			// leave m_eventException untouched, so that it gets thrown on the next yieldForEvent call
+		}
+	}
+
+	private void processDeferredExceptions(Task task)
+	{
+		if (task != Task.init) {
+			auto fiber = cast(CoreTask)task.fiber;
+			if (auto e = fiber.m_exception) {
+				fiber.m_exception = null;
+				throw e;
+			}
+		} else {
+			if (auto e = m_eventException) {
+				m_eventException = null;
+				throw e;
+			}
+		}
 	}
 
 	private void collectGarbage()
