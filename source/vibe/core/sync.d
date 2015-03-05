@@ -348,10 +348,10 @@ interface ManualEvent {
 		This method is annotated $(D nothrow) at the expense that it cannot be
 		interrupted.
 	*/
-	int waitDeferThrow(int reference_emit_count) nothrow;
+	int waitUninterruptible(int reference_emit_count) nothrow;
 
 	/// ditto
-	int waitDeferThrow(Duration timeout, int reference_emit_count) nothrow;
+	int waitUninterruptible(Duration timeout, int reference_emit_count) nothrow;
 }
 
 
@@ -390,7 +390,7 @@ private struct TaskMutexImpl(bool INTERRUPTIBLE) {
 		auto ecnt = m_signal.emitCount();
 		while (!tryLock()) {
 			static if (INTERRUPTIBLE) ecnt = m_signal.wait(ecnt);
-			else ecnt = m_signal.waitDeferThrow(ecnt);
+			else ecnt = m_signal.waitUninterruptible(ecnt);
 		}
 	}
 	
@@ -450,7 +450,7 @@ private struct RecursiveTaskMutexImpl(bool INTERRUPTIBLE) {
 		auto ecnt = m_signal.emitCount();
 		while (!tryLock()) {
 			static if (INTERRUPTIBLE) ecnt = m_signal.wait(ecnt);
-			else ecnt = m_signal.waitDeferThrow(ecnt);
+			else ecnt = m_signal.waitUninterruptible(ecnt);
 		}
 	}
 	
@@ -512,7 +512,7 @@ private struct TaskConditionImpl(bool INTERRUPTIBLE, LOCKABLE) {
 		m_mutex.unlock();
 		scope(exit) m_mutex.lock();
 		static if (INTERRUPTIBLE) m_signal.wait(refcount);
-		else m_signal.waitDeferThrow(refcount);
+		else m_signal.waitUninterruptible(refcount);
 	}
 	
 	@trusted bool wait(Duration timeout)
@@ -528,7 +528,7 @@ private struct TaskConditionImpl(bool INTERRUPTIBLE, LOCKABLE) {
 		scope(exit) m_mutex.lock();
 		
 		static if (INTERRUPTIBLE) return m_signal.wait(timeout, refcount) != refcount;
-		else return m_signal.waitDeferThrow(timeout, refcount) != refcount;
+		else return m_signal.waitUninterruptible(timeout, refcount) != refcount;
 	}
 	
 	@trusted void notify()

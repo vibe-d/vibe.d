@@ -296,8 +296,8 @@ final class LibevManualEvent : ManualEvent {
 	void wait() { wait(m_emitCount); }
 	int wait(int reference_emit_count) { return doWait!true(reference_emit_count); }
 	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
-	int waitDeferThrow(int reference_emit_count) { return doWait!false(reference_emit_count); }
-	int waitDeferThrow(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
+	int waitUninterruptible(int reference_emit_count) { return doWait!false(reference_emit_count); }
+	int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
 
 	void acquire()
 	{
