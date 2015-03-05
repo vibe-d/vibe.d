@@ -754,6 +754,7 @@ final class LibasyncManualEvent : ManualEvent {
 
 	void emit()
 	{
+		scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below and Array is not nothrow at all
 		logTrace("Emitting signal");
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
@@ -761,49 +762,16 @@ final class LibasyncManualEvent : ManualEvent {
 			foreach (ref signal; ms_signals[]) {
 				auto evloop = getEventLoop();
 				shared AsyncSignal sig = cast(shared AsyncSignal) signal;
-				if (!sig.trigger(evloop))
-					throw new Exception(sig.error);
+				if (!sig.trigger(evloop)) logError("Failed to trigger ManualEvent: %s", sig.error);
 			}
 		}
 	}
 	
-	void wait()
-	{
-		wait(this.emitCount);
-	}
-	
-	int wait(int reference_emit_count)
-	{
-		assert(!amOwner());
-		acquire();
-		scope(exit) release();
-		auto ec = this.emitCount;
-		while( ec == reference_emit_count ){
-			synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
-			getDriverCore().yieldForEvent();
-			ec = this.emitCount;
-		}
-		return ec;
-	}
-	
-	int wait(Duration timeout, int reference_emit_count)
-	{
-		assert(!amOwner());
-		acquire();
-		scope(exit) release();
-		auto tm = getEventDriver().createTimer(null);
-		scope (exit) getEventDriver().releaseTimer(tm);
-		getEventDriver().m_timers.getUserData(tm).owner = Task.getThis();
-		getEventDriver().rearmTimer(tm, timeout, false);
-		
-		auto ec = this.emitCount;
-		while (ec == reference_emit_count) {
-			getDriverCore().yieldForEvent();
-			ec = this.emitCount;
-			if (!getEventDriver().isTimerPending(tm)) break;
-		} 
-		return ec;
-	}
+	void wait() { wait(m_emitCount); }
+	int wait(int reference_emit_count) { return  doWait!true(reference_emit_count); }
+	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
+	int waitDeferThrow(int reference_emit_count) { return  doWait!false(reference_emit_count); }
+	int waitDeferThrow(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
 	
 	void acquire()
 	{
@@ -855,6 +823,43 @@ final class LibasyncManualEvent : ManualEvent {
 	}
 	
 	@property int emitCount() const { return atomicLoad(m_emitCount); }
+
+	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
+		assert(!amOwner());
+		acquire();
+		scope(exit) release();
+		auto ec = this.emitCount;
+		while( ec == reference_emit_count ){
+			synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
+			static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
+			else getDriverCore().yieldForEventDeferThrow();
+			ec = this.emitCount;
+		}
+		return ec;
+	}
+	
+	private int doWait(bool INTERRUPTIBLE)(Duration timeout, int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
+		assert(!amOwner());
+		acquire();
+		scope(exit) release();
+		auto tm = getEventDriver().createTimer(null);
+		scope (exit) getEventDriver().releaseTimer(tm);
+		getEventDriver().m_timers.getUserData(tm).owner = Task.getThis();
+		getEventDriver().rearmTimer(tm, timeout, false);
+		
+		auto ec = this.emitCount;
+		while (ec == reference_emit_count) {
+			static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
+			else getDriverCore().yieldForEventDeferThrow();
+			ec = this.emitCount;
+			if (!getEventDriver().isTimerPending(tm)) break;
+		} 
+		return ec;
+	}
 
 	private void removeMySignal() {
 		import std.algorithm : countUntil;
