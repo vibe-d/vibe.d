@@ -9,7 +9,7 @@ available.
 
 Visit the website at <http://vibed.org/> for more information.
 
-[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)
+[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=master)](https://travis-ci.org/rejectedsoftware/vibe.d)
 
 
 Support
