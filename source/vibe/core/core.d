@@ -1434,6 +1434,11 @@ private void setupWorkerThreads()
 
 private void workerThreadFunc()
 {
+	scope (failure) {
+		logFatal("Worker thread terminated due to uncaught error.");
+		exit(-1);
+	}
+
 	assert(s_core !is null);
 	if (getExitFlag()) return;
 	logDebug("entering worker thread");
