@@ -138,24 +138,6 @@ class TaskMutex : core.sync.mutex.Mutex, Lockable {
 	override void unlock() nothrow { m_impl.unlock(); }
 }
 
-
-/**
-	Alternative to $(D TaskMutex) that supports interruption.
-
-	This class supports the use of $(D vibe.core.task.Task.interrupt()) while
-	waiting in the $(D lock()) method. However, because the interface is not
-	$(D nothrow), it cannot be used as an object monitor.
-
-	See_Also: $(D TaskMutex), $(D InterruptibleRecursiveTaskMutex)
-*/
-final class InterruptibleTaskMutex : Lockable {
-	private TaskMutexImpl!true m_impl;
-
-	bool tryLock() nothrow { return m_impl.tryLock(); }
-	void lock() { m_impl.lock(); }
-	void unlock() nothrow { m_impl.unlock(); }
-}
-
 unittest {
 	auto mutex = new TaskMutex;
 	
@@ -189,6 +171,59 @@ unittest {
 			assert(mutex.m_impl.m_locked);
 		}
 	}
+}
+
+unittest { // test deferred throwing
+	import vibe.core.core;
+
+	auto mutex = new TaskMutex;
+	runTask({
+		scope (failure) assert(false, "No exception expected in first task!");
+		mutex.lock();
+		scope (exit) mutex.unlock();
+		sleep(20.msecs);
+	});
+
+	auto t2 = runTask({
+		scope (failure) assert(false, "Only InterruptException supposed to be thrown!");
+		mutex.lock();
+		scope (exit) mutex.unlock();
+		try {
+			yield();
+			assert(false, "Yield is supposed to have thrown an InterruptException.");
+		} catch (InterruptException) {
+			// as expected!
+		}
+	});
+
+	runTask({
+		// mutex is now locked in first task for 20 ms
+		// the second tasks is waiting in lock()
+		t2.interrupt();
+		t2.join();
+		assert(!mutex.m_impl.m_locked); // ensure that the scope(exit) has been executed
+		exitEventLoop();
+	});
+
+	runEventLoop();
+}
+
+
+/**
+	Alternative to $(D TaskMutex) that supports interruption.
+
+	This class supports the use of $(D vibe.core.task.Task.interrupt()) while
+	waiting in the $(D lock()) method. However, because the interface is not
+	$(D nothrow), it cannot be used as an object monitor.
+
+	See_Also: $(D TaskMutex), $(D InterruptibleRecursiveTaskMutex)
+*/
+final class InterruptibleTaskMutex : Lockable {
+	private TaskMutexImpl!true m_impl;
+
+	bool tryLock() nothrow { return m_impl.tryLock(); }
+	void lock() { m_impl.lock(); }
+	void unlock() nothrow { m_impl.unlock(); }
 }
 
 unittest {
