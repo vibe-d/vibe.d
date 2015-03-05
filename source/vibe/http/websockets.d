@@ -196,8 +196,8 @@ final class WebSocket {
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
 		Task m_reader;
-		TaskMutexInt m_readMutex, m_writeMutex;
-		TaskConditionInt m_readCondition;
+		InterruptibleTaskMutex m_readMutex, m_writeMutex;
+		InterruptibleTaskCondition m_readCondition;
 		Timer m_pingTimer;
 		uint m_lastPingIndex;
 		bool m_pongReceived;
@@ -210,9 +210,9 @@ final class WebSocket {
 		m_request = request;
 		assert(m_conn);
 		m_reader = runTask(&startReader);
-		m_writeMutex = new TaskMutexInt;
-		m_readMutex = new TaskMutexInt;
-		m_readCondition = new TaskConditionInt(m_readMutex);
+		m_writeMutex = new InterruptibleTaskMutex;
+		m_readMutex = new InterruptibleTaskMutex;
+		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
 		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
 			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			m_pongReceived = true;
@@ -248,11 +248,10 @@ final class WebSocket {
 	{
 		if (m_nextMessage) return true;
 
-		{
-			auto l = m_readMutex.scopedLock;
+		m_readMutex.performLocked!({
 			while (connected && m_nextMessage is null)
 				m_readCondition.wait();
-		}
+		});
 		return m_nextMessage !is null;
 	}
 
@@ -265,13 +264,12 @@ final class WebSocket {
 
 		immutable limit_time = Clock.currTime(UTC()) + timeout;
 
-		{
-			auto l = m_readMutex.scopedLock;
+		m_readMutex.performLocked!({
 			while (connected && m_nextMessage is null && timeout > 0.seconds) {
 				m_readCondition.wait(timeout);
 				timeout = limit_time - Clock.currTime(UTC());
 			}
-		}
+		});
 		return m_nextMessage !is null;
 	}
 
@@ -303,11 +301,12 @@ final class WebSocket {
 	*/
 	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
-		auto lock = scopedLock(m_writeMutex);
-		enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
-		scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
-		scope(exit) message.finalize();
-		sender(message);
+		m_writeMutex.performLocked!({
+			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
+			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
+			scope(exit) message.finalize();
+			sender(message);
+		});
 	}
 
 	/**
@@ -316,13 +315,13 @@ final class WebSocket {
 	void close()
 	{
 		if (connected) {
-			auto l = m_writeMutex.scopedLock;
-			m_sentCloseFrame = true;
-			Frame frame;
-			frame.opcode = FrameOpcode.close;
-			frame.fin = true;
-			frame.writeFrame(m_conn);
-
+			m_writeMutex.performLocked!({
+				m_sentCloseFrame = true;
+				Frame frame;
+				frame.opcode = FrameOpcode.close;
+				frame.fin = true;
+				frame.writeFrame(m_conn);
+			});
 		}
 		if (m_pingTimer) m_pingTimer.stop();
 		if (Task.getThis() != m_reader) m_reader.join();
@@ -364,8 +363,7 @@ final class WebSocket {
 	*/
 	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
 	{
-		{
-			auto l = m_readMutex.scopedLock;
+		m_readMutex.performLocked!({
 			while (!m_nextMessage) {
 				enforceEx!WebSocketException(connected, "Connection closed while reading message.");
 				m_readCondition.wait();
@@ -373,7 +371,7 @@ final class WebSocket {
 			receiver(m_nextMessage);
 			m_nextMessage = null;
 			m_readCondition.notifyAll();
-		}
+		});
 	}
 
 	private void startReader()
@@ -385,10 +383,9 @@ final class WebSocket {
 				if (m_pingTimer) {
 					if (m_pongSkipped) {
 						logDebug("Pong not received, closing connection");
-						{
-							auto l = m_writeMutex.scopedLock;
+						m_writeMutex.performLocked!({
 							m_conn.close();
-						}
+						});
 						return;
 					}
 					if (!m_conn.waitForData(request.serverSettings.webSocketPingInterval))
@@ -408,12 +405,11 @@ final class WebSocket {
 					m_conn.close();
 					return;
 				}
-				{
-					auto l = m_readMutex.scopedLock;
+				m_readMutex.performLocked!({
 					m_nextMessage = msg;
 					m_readCondition.notifyAll();
 					while (m_nextMessage) m_readCondition.wait();
-				}
+				});
 			}
 		} catch (Exception e) {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
@@ -429,17 +425,15 @@ final class WebSocket {
 			m_pingTimer.stop();
 			return;
 		}
-		{
-			auto l = m_writeMutex.scopedLock;
+		m_writeMutex.performLocked!({
 			m_pongReceived = false;
 			Frame ping;
 			ping.opcode = FrameOpcode.ping;
 			ping.fin = true;
 			ping.payload = nativeToLittleEndian(++m_lastPingIndex);
-
 			ping.writeFrame(m_conn);
 			logDebug("Ping sent");
-		}
+		});
 	}
 }
 
