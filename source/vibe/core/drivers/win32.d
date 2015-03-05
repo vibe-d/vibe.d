@@ -71,7 +71,7 @@ final class Win32EventDriver : EventDriver {
 		m_hwnd = CreateWindowA("VibeWin32MessageWindow", "VibeWin32MessageWindow", 0, 0,0,0,0, HWND_MESSAGE,null,null,null);
 
 		SetWindowLongPtrA(m_hwnd, GWLP_USERDATA, cast(ULONG_PTR)cast(void*)this);
-		assert( cast(Win32EventDriver)cast(void*)GetWindowLongPtrA(m_hwnd, GWLP_USERDATA) == this );
+		assert(cast(Win32EventDriver)cast(void*)GetWindowLongPtrA(m_hwnd, GWLP_USERDATA) is this);
 
 		WSADATA wd;
 		enforce(WSAStartup(0x0202, &wd) == 0, "Failed to initialize WinSock");
@@ -437,6 +437,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void emit()
 	{
+		scope (failure) assert(false); // AA.opApply is not nothrow
 		/*auto newcnt =*/ atomicOp!"+="(m_emitCount, 1);
 		bool[Win32EventDriver] threads;
 		synchronized(m_mutex)
@@ -449,27 +450,62 @@ final class Win32ManualEvent : ManualEvent {
 				logWarn("Failed to post thread message.");
 	}
 
-	void wait()
-	{
-		wait(emitCount);
+	void wait() { wait(m_emitCount); }
+	int wait(int reference_emit_count) { return  doWait!true(reference_emit_count); }
+	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
+	int waitUninterruptible(int reference_emit_count) { return  doWait!false(reference_emit_count); }
+	int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
+
+	void acquire()
+	nothrow {
+		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		synchronized(m_mutex)
+		{
+			m_listeners[Task.getThis()] = cast(Win32EventDriver)getEventDriver();
+		}
 	}
 
-	int wait(int reference_emit_count)
+	void release()
+	nothrow {
+		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		auto self = Task.getThis();
+		synchronized(m_mutex)
+		{
+			if( self in m_listeners )
+				m_listeners.remove(self);
+		}
+	}
+
+	bool amOwner()
+	nothrow {
+		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		synchronized(m_mutex)
+		{
+			return (Task.getThis() in m_listeners) !is null;
+		}
+	}
+
+	@property int emitCount() const { return atomicLoad(m_emitCount); }
+
+	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
 	{
 		//logDebugV("Signal %s wait enter %s", cast(void*)this, reference_emit_count);
 		acquire();
 		scope(exit) release();
 		auto ec = atomicLoad(m_emitCount);
 		while( ec == reference_emit_count ){
-			m_driver.m_core.yieldForEvent();
+			static if (INTERRUPTIBLE) m_driver.m_core.yieldForEvent();
+			else m_driver.m_core.yieldForEventDeferThrow();
 			ec = atomicLoad(m_emitCount);
 		}
 		//logDebugV("Signal %s wait leave %s", cast(void*)this, ec);
 		return ec;
 	}
 
-	int wait(Duration timeout, int reference_emit_count = emitCount)
+	private int doWait(bool INTERRUPTIBLE)(Duration timeout, int reference_emit_count = emitCount)
 	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // timer functions are still not nothrow
+
 		acquire();
 		scope(exit) release();
 		auto ec = atomicLoad(m_emitCount);
@@ -480,39 +516,12 @@ final class Win32ManualEvent : ManualEvent {
 		m_driver.m_timers.getUserData(timer).owner = Task.getThis();
 		m_driver.rearmTimer(timer, timeout, false);
 		while (ec == reference_emit_count && !m_driver.isTimerPending(timer)) {
-			m_driver.m_core.yieldForEvent();
+			static if (INTERRUPTIBLE) m_driver.m_core.yieldForEvent();
+			else m_driver.m_core.yieldForEventDeferThrow();
 			ec = atomicLoad(m_emitCount);
 		}
 		return ec;
 	}
-
-	void acquire()
-	{
-		synchronized(m_mutex)
-		{
-			m_listeners[Task.getThis()] = cast(Win32EventDriver)getEventDriver();
-		}
-	}
-
-	void release()
-	{
-		auto self = Task.getThis();
-		synchronized(m_mutex)
-		{
-			if( self in m_listeners )
-				m_listeners.remove(self);
-		}
-	}
-
-	bool amOwner()
-	{
-		synchronized(m_mutex)
-		{
-			return (Task.getThis() in m_listeners) !is null;
-		}
-	}
-
-	@property int emitCount() const { return atomicLoad(m_emitCount); }
 }
 
 
@@ -1513,7 +1522,7 @@ private {
 	__gshared s_setupWindowClass = false;
 }
 
-void setupWindowClass()
+void setupWindowClass() nothrow
 {
 	if( s_setupWindowClass ) return;
 	WNDCLASS wc;

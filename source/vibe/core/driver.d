@@ -35,7 +35,7 @@ StoredEventDriver getEventDriver(bool ignore_unloaded = false) nothrow
 }
 
 /// private
-package void setupEventDriver(DriverCore core_) nothrow
+package void setupEventDriver(DriverCore core_)
 {
 	version (VibeUseNativeDriverType) {}
 	else import vibe.core.drivers.native;
