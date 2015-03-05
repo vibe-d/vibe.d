@@ -87,9 +87,10 @@ int runEventLoop()
 	s_core.notifyIdle();
 	if (getExitFlag()) return 0;
 
-	// handle worker tasks and st_term
-	runTask(toDelegate(&handleWorkerTasks));
-	if (getExitFlag()) return 0;
+	// handle exit flag in the main thread to exit when
+	// exitEventLoop(true) is called from a thread)
+	if (Thread.getThis() is st_threads[0].thread)
+		runTask(toDelegate(&watchExitFlag));
 
 	if (auto err = getEventDriver().runEventLoop() != 0) {
 		if (err == 1) {
@@ -1485,6 +1486,20 @@ private void handleWorkerTasks()
 	getEventDriver().exitEventLoop();
 }
 
+private void watchExitFlag()
+{
+	auto emit_count = st_threadsSignal.emitCount;
+	while (true) {
+		synchronized (st_threadsMutex) {
+			if (getExitFlag()) break;
+		}
+
+		emit_count = st_threadsSignal.wait(emit_count);
+	}
+
+	logDebug("main thread exit");
+	getEventDriver().exitEventLoop();
+}
 
 private extern(C) void extrap()
 nothrow {
