@@ -15,6 +15,12 @@ import core.atomic;
 import core.sync.mutex;
 import core.sync.condition;
 import std.stdio;
+
+version(VibeForceInterrupt) {
+	const Interruptible = true;
+}
+else const Interruptible = false;
+
 enum LockMode {
 	lock,
 	tryLock,
@@ -134,8 +140,7 @@ struct ScopedMutexLock
 	See_Also: RecursiveTaskMutex, core.sync.mutex.Mutex
 */
 
-static if (__VERSION__ <= 2066) {
-	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use TaskMutexInt instead.")
+static if (__VERSION__ <= 2066 || !Interruptible) {
 	class TaskMutex : core.sync.mutex.Mutex {
 
 		this(Object o) {
@@ -149,10 +154,9 @@ static if (__VERSION__ <= 2066) {
 			m_signal = createManualEvent();
 		}
 
-		mixin TaskMutexImpl!();
+		mixin TaskMutexImpl!false;
 	}
 } else {
-	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use TaskMutexInt instead.")
 	alias TaskMutex = TaskMutexInt;
 
 }
@@ -166,10 +170,10 @@ class TaskMutexInt : Lockable {
 		m_signal = createManualEvent();
 	}
 	
-	mixin TaskMutexImpl!();
+	mixin TaskMutexImpl!true;
 }
 
-mixin template TaskMutexImpl() {
+mixin template TaskMutexImpl(bool IsInterruptible = false) {
 	import std.stdio;
 	private {
 		shared(bool) m_locked = false;
@@ -195,8 +199,16 @@ mixin template TaskMutexImpl() {
 		atomicOp!"+="(m_waiters, 1);
 		version(MutexPrint) writefln("mutex %s wait %s", cast(void*)this, atomicLoad(m_waiters));
 		scope(exit) atomicOp!"-="(m_waiters, 1);
-		auto ecnt = m_signal.emitCount();
-		while (!tryLock()) ecnt = m_signal.wait(ecnt);
+		static if (__VERSION__ >= 2067 && !Interruptible && !IsInterruptible) {
+			try {
+				auto ecnt = m_signal.emitCount();
+				while (!tryLock()) ecnt = m_signal.wait(ecnt);
+			} catch (Throwable) { assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`"); }
+		}
+		else {
+			auto ecnt = m_signal.emitCount();
+			while (!tryLock()) ecnt = m_signal.wait(ecnt);
+		}
 	}
 	
 	override @trusted void unlock()
@@ -208,12 +220,17 @@ mixin template TaskMutexImpl() {
 		}
 		atomicStore!(MemoryOrder.rel)(m_locked, false);
 		version(MutexPrint) writefln("mutex %s unlock %s", cast(void*)this, atomicLoad(m_waiters));
-		if (atomicLoad(m_waiters) > 0)
-			m_signal.emit();
+		if (atomicLoad(m_waiters) > 0) {
+			static if (__VERSION__ >= 2067 && !Interruptible && !IsInterruptible) {
+				try m_signal.emit();
+				catch (Throwable) assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`");
+			}
+			else m_signal.emit();			
+		}
 	}
 }
 
-static if (__VERSION__ <= 2066) {
+static if (__VERSION__ <= 2066 || !Interruptible) {
 	unittest {
 		auto mutex = new TaskMutex;
 		
@@ -275,8 +292,7 @@ unittest {
 
 	See_Also: TaskMutex, core.sync.mutex.Mutex
 */
-static if (__VERSION__ <= 2066) {
-	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use RecursiveTaskMutexInt instead.")
+static if (__VERSION__ <= 2066 || !Interruptible) {
 	class RecursiveTaskMutex : core.sync.mutex.Mutex {
 		this()
 		{
@@ -290,11 +306,10 @@ static if (__VERSION__ <= 2066) {
 			m_mutex = new core.sync.mutex.Mutex;
 		}
 
-		mixin RecursiveTaskMutexImpl!();
+		mixin RecursiveTaskMutexImpl!false;
 	}
 }
 else {
-	deprecated("Synchronized and Object.Monitor/inheritance is now unavailable. Use RecursiveTaskMutexInt instead.")
 	alias RecursiveTaskMutex = RecursiveTaskMutexInt;
 }
 
@@ -305,11 +320,11 @@ class RecursiveTaskMutexInt : Lockable {
 		m_mutex = new core.sync.mutex.Mutex;
 	}
 	
-	mixin RecursiveTaskMutexImpl!();
+	mixin RecursiveTaskMutexImpl!true;
 	
 }
 
-mixin template RecursiveTaskMutexImpl() {
+mixin template RecursiveTaskMutexImpl(bool IsInterruptible = false) {
 	import std.stdio;
 	private {
 		core.sync.mutex.Mutex m_mutex;
@@ -342,8 +357,16 @@ mixin template RecursiveTaskMutexImpl() {
 		atomicOp!"+="(m_waiters, 1);
 		version(MutexPrint) writefln("mutex %s wait %s", cast(void*)this, atomicLoad(m_waiters));
 		scope(exit) atomicOp!"-="(m_waiters, 1);
-		auto ecnt = m_signal.emitCount();
-		while (!tryLock()) ecnt = m_signal.wait(ecnt);
+
+		static if (__VERSION__ >= 2067 && !Interruptible && !IsInterruptible) {
+			try {
+				auto ecnt = m_signal.emitCount();
+				while (!tryLock()) ecnt = m_signal.wait(ecnt);
+			} catch (Throwable) { assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`"); }
+		} else {
+			auto ecnt = m_signal.emitCount();
+			while (!tryLock()) ecnt = m_signal.wait(ecnt);
+		}
 	}
 	
 	override @trusted void unlock()
@@ -359,12 +382,17 @@ mixin template RecursiveTaskMutexImpl() {
 			
 		}
 		version(MutexPrint) writefln("mutex %s unlock %s", cast(void*)this, atomicLoad(m_waiters));
-		if (atomicLoad(m_waiters) > 0)
-			m_signal.emit();
+		if (atomicLoad(m_waiters) > 0) {
+			static if (__VERSION__ >= 2067 && !Interruptible && !IsInterruptible) {
+				try m_signal.emit();
+				catch (Throwable) assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`");
+			}
+			else m_signal.emit();
+		}
 	}
 }
 
-static if (__VERSION__ <= 2066) {
+static if (__VERSION__ <= 2066 || !Interruptible) {
 	deprecated("You cannot inherit from TaskCondition anymore. Use TaskConditionInt instead")
 	class TaskCondition : core.sync.condition.Condition {
 		private {
@@ -395,12 +423,16 @@ static if (__VERSION__ <= 2066) {
 				assert(tm.m_locked);
 				debug assert(tm.m_owner == Task.getThis());
 			}
-			
-			auto refcount = m_signal.emitCount;
-			m_mutex.unlock();
-			scope(failure) m_mutex.lock();
-			m_signal.wait(refcount);
-			m_mutex.lock();
+
+			try {
+				auto refcount = m_signal.emitCount;
+				m_mutex.unlock();
+				scope(failure) m_mutex.lock();
+				m_signal.wait(refcount);
+				m_mutex.lock();
+			}
+			catch (Throwable) assert(false, "Cannot interrupt mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`");
+
 		}
 		
 		override @trusted bool wait(Duration timeout)
@@ -410,25 +442,31 @@ static if (__VERSION__ <= 2066) {
 				assert(tm.m_locked);
 				debug assert(tm.m_owner == Task.getThis());
 			}
-			
-			auto refcount = m_signal.emitCount;
-			m_mutex.unlock();
-			scope(failure) m_mutex.lock();
-			
-			auto succ = m_signal.wait(timeout, refcount) != refcount;
-			
-			m_mutex.lock();
+			bool succ;
+			try {
+				auto refcount = m_signal.emitCount;
+				m_mutex.unlock();
+				scope(failure) m_mutex.lock();
+				
+				succ = m_signal.wait(timeout, refcount) != refcount;
+				
+				m_mutex.lock();
+			}
+			catch (Throwable) assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`");
+		
 			return succ;
 		}
 		
 		override @trusted void notify()
 		{
-			m_signal.emit(); 
+			try m_signal.emit();
+			catch (Throwable) assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`");
 		}
 		
 		override @trusted void notifyAll()
 		{
-			m_signal.emit();
+			try m_signal.emit();
+			catch (Throwable) assert(false, "Cannot interrupt Monitor mutexes. Compile with `version(VibeForceInterruptible)` or use `TaskMutexInt`");
 		}
 	}
 }
