@@ -1452,6 +1452,10 @@ nothrow {
 		logDebug("running event loop");
 		if (!getExitFlag()) runEventLoop();
 		logDebug("Worker thread exit.");
+	} catch (Exception e) {
+		scope (failure) exit(-1);
+		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
+		logDebug("Full error: %s", e.toString().sanitize());
 	} catch (Throwable th) {
 		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
 		logDebug("Full error: %s", th.toString().sanitize());
