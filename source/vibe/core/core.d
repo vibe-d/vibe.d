@@ -1412,13 +1412,20 @@ private void setupWorkerThreads()
 
 private void workerThreadFunc()
 {
-	assert(s_core !is null);
-	if (getExitFlag()) return;
-	logDebug("entering worker thread");
-	runTask(toDelegate(&handleWorkerTasks));
-	logDebug("running event loop");
-	if (!getExitFlag()) runEventLoop();
-	logDebug("Worker thread exit.");
+	try {
+		assert(s_core !is null);
+		if (getExitFlag()) return;
+		logDebug("entering worker thread");
+		runTask(toDelegate(&handleWorkerTasks));
+		logDebug("running event loop");
+		if (!getExitFlag()) runEventLoop();
+		
+		logDebug("Worker thread exit.");	
+	}
+	catch (Throwable e) {
+		logError(e.toString());
+		exitEventLoop(true);
+	}
 }
 
 private void handleWorkerTasks()
