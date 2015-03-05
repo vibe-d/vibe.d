@@ -285,7 +285,7 @@ final class LibevManualEvent : ManualEvent {
 
 	void emit()
 	{
-		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below, AA.opApply is not nothrow
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
 			foreach (sl; m_waiters)
