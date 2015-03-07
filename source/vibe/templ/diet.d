@@ -605,7 +605,6 @@ private struct DietCompiler(TRANSLATE...)
 						output.pushNode("<![endif]-->");
 						break;
 					case "block": // Block insertion place
-						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
 						output.pushDummyNode();
 						auto block = getBlock(ln[6 .. $].ctstrip());
 						if( block ){
