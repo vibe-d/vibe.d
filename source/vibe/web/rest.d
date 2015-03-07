@@ -79,7 +79,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 
 	string url_prefix = settings.baseURL.path.toString();
 
-	enum uda = findFirstUDA!(RootPathAttribute, I);
+	enum uda = findFirstUDA!(PathAttribute, I);
 	static if (uda.found) {
 		static if (uda.value.data == "") {
 			auto path = "/" ~ adjustMethodStyle(I.stringof, settings.methodStyle);
@@ -129,10 +129,12 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 					ParameterTypeTuple!overload.length == 0,
 					"Interfaces may only be returned from parameter-less functions!"
 				);
+				auto subSettings = settings.dup;
+				subSettings.baseURL = URL(concatURL(url_prefix, url, true));
 				registerRestInterface!RT(
 					router,
 					__traits(getMember, instance, method)(),
-					concatURL(url_prefix, url, true)
+					subSettings
 				);
 			} else {
 				// normal handler
@@ -180,6 +182,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_p
 */
 unittest
 {
+	@path("/")
 	interface IMyAPI
 	{
 		// GET /api/greeting
@@ -287,7 +290,7 @@ class RestInterfaceClient(I) : I
 		}
 
 		URL url = settings.baseURL;
-		enum uda = findFirstUDA!(RootPathAttribute, I);
+		enum uda = findFirstUDA!(PathAttribute, I);
 		static if (uda.found) {
 			static if (uda.value.data == "") {
 				url.path = Path(concatURL(url.path.toString(), adjustMethodStyle(I.stringof, settings.methodStyle), true));
@@ -474,6 +477,7 @@ class RestInterfaceClient(I) : I
 ///
 unittest
 {
+	@path("/")
 	interface IMyApi
 	{
 		// GET /status
@@ -1251,11 +1255,11 @@ unittest {
 	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IGithubPR.getPullRequests";
 	enum msg = ": Path contains ':owner', but not parameter '_owner' defined.";
 
-	@rootPath("/repos/")
-		interface IGithubPR {
-			@path(":owner/:repo/pulls")
-			string getPullRequests(string owner, string repo);
-		}
+	@path("/repos/")
+	interface IGithubPR {
+		@path(":owner/:repo/pulls")
+		string getPullRequests(string owner, string repo);
+	}
 	static assert(getInterfaceValidationError!(IGithubPR)
 		      && msg == getInterfaceValidationError!(IGithubPR)[FuncId.length..$],
 		      getInterfaceValidationError!(IGithubPR));
