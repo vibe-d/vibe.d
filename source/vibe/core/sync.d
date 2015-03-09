@@ -83,7 +83,8 @@ struct ScopedMutexLock
 }
 
 
-/**
+/*
+	Only for internal use:
 	Ensures that a mutex is locked while executing the given procedure.
 
 	This function works for all kinds of mutexes, in particular for
@@ -92,6 +93,7 @@ struct ScopedMutexLock
 	Returns:
 		Returns the value returned from $(D PROC), if any.
 */
+/// private
 ReturnType!PROC performLocked(alias PROC, MUTEX)(MUTEX mutex)
 {
 	mutex.lock();
