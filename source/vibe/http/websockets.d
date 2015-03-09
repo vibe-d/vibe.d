@@ -66,7 +66,7 @@ class WebSocketException: Exception
 /**
     Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
 */
-void handleWebsocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRequest req, HTTPServerResponse res)
+void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRequest req, HTTPServerResponse res)
 {
 	auto pUpgrade = "Upgrade" in req.headers;
 	auto pConnection = "Connection" in req.headers;
