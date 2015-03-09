@@ -117,7 +117,7 @@ HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handsha
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		handleWebsocket(on_handshake, req, res);
+		handleWebSocket(on_handshake, req, res);
 	}
 	return &callback;
 }
