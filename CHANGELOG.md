@@ -1,6 +1,65 @@
 ﻿Changelog
 =========
 
+v0.7.23 - 2015-03-
+--------------------
+
+Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` module to support `nothrow`, notable changes are extended parameter support in `vibe.web.rest`, improved translation support in `vibe.web.web` and new support for policy based customization of (de-)serialization.
+
+### Features and improvements ###
+
+ - Compiles on DMD frontend 2.065 up to 2.067 (most fixes for 2.067 are by Mathias Lang) - [pull #972][pull 972], [pull #992][issue992]
+ - Changed semantics of `TaskMutex` and `TaskCondition` - **this can be a breaking change for certain applications**
+   - The classes are now `nothrow` to stay forward compatible with D's `Mutex` and `Condition` classes,
+   - Interruption using `Task.interrupt()` now gets deferred to the next wait/yield operation
+   - The old behavior can be achieved using the new `InterruptipleTaskMutex` and `InterruptibleTaskCondition` classes
+ - Added an overload of `lowerPrivileges` that takes explicit user/group arguments (by Darius Clark) - [pull #948][issue948]
+ - Added `handleWebSocket` as a procedural alternative to `handleWebSockets` (by Luca Niccoli) - [pull #946][issue946]
+ - Added support for "msgctxt" in .po files for the `vibe.web.web` translation framework (by Nathan Coe) - [pull #896][issue896]
+ - Added overloads of `HTTPServerResponse.writeBody` and `writeRawBody` with an additional status code parameter (by Martin Nowak) - [pull #980][issue980]
+ - Added `@queryParam` and `@bodyParam` to the `vibe.web.rest` module (by Mathias Lang) - [pull #969][issue969]
+ - Added support for serving an "index.html" file when requesting a directory (by Martin Nowak) - [pull #902][issue902]
+ - Added policy based customization for `vibe.data.serialization` (by Luca Niccoli) - [pull #937][issue937]
+ - Added `SSLStream.peerCertificate` and `HTTPServerRequest.clientCertificate` properties (by Rico Huijbers) - [pull #965][issue965]
+ - Added `RedisDatabase.zrangeByLex` (by Etienne Cimon) - [pull #993][issue993]
+ - Diet templates now support default and "prepend" modes for blocks - [issue #905][issue905], [pull #1002][issue1002]
+
+### Bug fixes ###
+
+ - Fixed ping handling for WebSockets and added automatic keep-alive pinging (by Luca Niccoli) - [pull #947][issue947]
+ - Fixed wrapped texts in .po files for the `vibe.web.web` translation framework (by Nathan Coe) - [pull #896][issue896]
+ - Fixed a crash issue when storing a `Timer` in a class instance that does not get destroyed before application exit - [issue #978][issue978]
+ - Fixed `HTTPRouter.any` to match all supported HTTP verbs (by Szabo Bogdan) - [pull #984][issue984]
+ - Fixed setting `TCPConnection.localAddr` in the libasync driver (by Etienne Cimon) - [issue #961][issue961], [pull #962][issue962]
+ - Fixed some cases of missing destructor calls in `vibe.utils.memory` (partially by Etienne Cimon) - [pull #987][issue987]
+ - Fixed some failed incoming SSL connection attempts by setting a default session context ID (by Rico Huijbers) - [pull #970][issue970]
+ - Fixed `RedisSessionStore.create()` (by Yusuke Suzuki) - [pull #996][issue996]
+ - Fixed HTML output of `//` style comments in Diet templates (by Kai Nacke) - [pull #1004][issue1004]
+
+[issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
+[issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
+[issue902]: https://github.com/rejectedsoftware/vibe.d/issues/902
+[issue905]: https://github.com/rejectedsoftware/vibe.d/issues/905
+[issue937]: https://github.com/rejectedsoftware/vibe.d/issues/937
+[issue946]: https://github.com/rejectedsoftware/vibe.d/issues/946
+[issue947]: https://github.com/rejectedsoftware/vibe.d/issues/947
+[issue948]: https://github.com/rejectedsoftware/vibe.d/issues/948
+[issue961]: https://github.com/rejectedsoftware/vibe.d/issues/961
+[issue962]: https://github.com/rejectedsoftware/vibe.d/issues/962
+[issue965]: https://github.com/rejectedsoftware/vibe.d/issues/965
+[issue969]: https://github.com/rejectedsoftware/vibe.d/issues/969
+[issue970]: https://github.com/rejectedsoftware/vibe.d/issues/970
+[issue978]: https://github.com/rejectedsoftware/vibe.d/issues/978
+[issue980]: https://github.com/rejectedsoftware/vibe.d/issues/980
+[issue984]: https://github.com/rejectedsoftware/vibe.d/issues/984
+[issue987]: https://github.com/rejectedsoftware/vibe.d/issues/987
+[issue992]: https://github.com/rejectedsoftware/vibe.d/issues/992
+[issue993]: https://github.com/rejectedsoftware/vibe.d/issues/993
+[issue996]: https://github.com/rejectedsoftware/vibe.d/issues/996
+[issue1002]: https://github.com/rejectedsoftware/vibe.d/issues/1002
+[issue1004]: https://github.com/rejectedsoftware/vibe.d/issues/1004
+
+
 v0.7.22 - 2015-01-12
 --------------------
 
