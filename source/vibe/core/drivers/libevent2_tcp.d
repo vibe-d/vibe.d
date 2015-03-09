@@ -420,6 +420,11 @@ package struct TCPContext
 		event = evt;
 	}
 
+	~this()
+	{
+		magic__ = 0;
+	}
+
 	void checkForException() {
 		if (auto ex = this.exception) {
 			this.exception = null;
@@ -427,6 +432,8 @@ package struct TCPContext
 		}
 	}
 
+	enum MAGIC = 0x1F3EC272;
+	uint magic__ = MAGIC;
 	DriverCore core;
 	event_base* eventLoop;
 	void delegate(TCPConnection conn) connectionCallback;
@@ -528,6 +535,7 @@ package nothrow extern(C)
 	{
 		logTrace("connect callback");
 		auto ctx = cast(TCPContext*)arg;
+		assert(ctx.magic__ == TCPContext.MAGIC);
 
 		if( !(evtype & EV_READ) ){
 			logError("Unknown event type in connect callback: 0x%hx", evtype);
@@ -579,6 +587,7 @@ package nothrow extern(C)
 	void onSocketRead(bufferevent *buf_event, void *arg)
 	{
 		auto ctx = cast(TCPContext*)arg;
+		assert(ctx.magic__ == TCPContext.MAGIC);
 		logTrace("socket %d read event!", ctx.socketfd);
 
 		auto f = ctx.readOwner;
@@ -594,6 +603,7 @@ package nothrow extern(C)
 	{
 		try {
 			auto ctx = cast(TCPContext*)arg;
+			assert(ctx.magic__ == TCPContext.MAGIC);
 			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TCPContext");
 			logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
 			if (ctx.writeOwner && ctx.writeOwner.running) {
@@ -609,6 +619,7 @@ package nothrow extern(C)
 	{
 		try {
 			auto ctx = cast(TCPContext*)arg;
+			assert(ctx.magic__ == TCPContext.MAGIC);
 			ctx.status = status;
 			logDebug("Socket event on fd %d: %d (%s vs %s)", ctx.socketfd, status, cast(void*)buf_event, cast(void*)ctx.event);
 			assert(ctx.event is buf_event, "Status event on bufferevent that does not match the TCPContext");

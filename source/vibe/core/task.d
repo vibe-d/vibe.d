@@ -69,7 +69,7 @@ struct Task {
 		*/
 		@property bool running()
 		const {
-			assert(m_fiber, "Invalid task handle");
+			assert(m_fiber !is null, "Invalid task handle");
 			try if (this.fiber.state == Fiber.State.TERM) return false; catch (Throwable) {}
 			return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
 		}
