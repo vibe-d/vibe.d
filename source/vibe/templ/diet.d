@@ -581,6 +581,9 @@ private struct DietCompiler(TRANSLATE...)
 				output.pushNode("-}");
 			} else if( ln[0] == '|' ){ // plain text node
 				buildTextNodeWriter(output, ln[1 .. ln.length], level, prepend_whitespaces);
+			} else if( ln[0] == '<' ){ // plain text node starting with <
+				assertp(next_indent_level <= level, "Child elements for plain text starting with '<' are not supported.");
+				buildTextNodeWriter(output, ln, level, prepend_whitespaces);
 			} else if( ln[0] == ':' ){ // filter node (filtered raw text)
 				// find all child lines
 				size_t next_tag = m_lineIndex+1;
@@ -1449,6 +1452,7 @@ unittest {
 	assert(compile!(`script= 5`) == `<script>5</script>`);
 	assert(compile!(`style= 5`) == `<style>5</style>`);
 	assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
+	assert(compile!(`<p>Hello</p>`) == "<p>Hello</p>");
 
 	// issue 372
 	assert(compile!(`div(class="")`) == `<div></div>`);
