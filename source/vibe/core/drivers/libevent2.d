@@ -630,49 +630,11 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	void wait()
-	{
-		wait(m_emitCount);
-	}
-
-	int wait(int reference_emit_count)
-	{
-		assert(!amOwner());
-
-		auto ec = this.emitCount;
-		if (ec != reference_emit_count) return ec;
-
-		acquire();
-		scope(exit) release();
-
-		while (ec == reference_emit_count) {
-			getThreadLibeventDriverCore().yieldForEvent();
-			ec = this.emitCount;
-		}
-		return ec;
-	}
-
-	int wait(Duration timeout, int reference_emit_count)
-	{
-		assert(!amOwner());
-
-		auto ec = this.emitCount;
-		if (ec != reference_emit_count) return ec;
-
-		acquire();
-		scope(exit) release();
-		auto tm = m_driver.createTimer(null);
-		scope (exit) m_driver.releaseTimer(tm);
-		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
-		m_driver.rearmTimer(tm, timeout, false);
-
-		while (ec == reference_emit_count) {
-			getThreadLibeventDriverCore().yieldForEvent();
-			ec = this.emitCount;
-			if (!m_driver.isTimerPending(tm)) break;
-		}
-		return ec;
-	}
+	void wait() { wait(m_emitCount); }
+	int wait(int reference_emit_count) { return  doWait!true(reference_emit_count); }
+	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
+	int waitUninterruptible(int reference_emit_count) { return  doWait!false(reference_emit_count); }
+	int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
 
 	void acquire()
 	{
@@ -728,6 +690,49 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 				m_waiters.remove(thr);
 			}
 		}
+	}
+
+	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
+		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
+		acquire();
+		scope(exit) release();
+
+		while (ec == reference_emit_count) {
+			static if (INTERRUPTIBLE) getThreadLibeventDriverCore().yieldForEvent();
+			else getThreadLibeventDriverCore().yieldForEventDeferThrow();
+			ec = this.emitCount;
+		}
+		return ec;
+	}
+
+	private int doWait(bool INTERRUPTIBLE)(Duration timeout, int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
+		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
+		acquire();
+		scope(exit) release();
+		auto tm = m_driver.createTimer(null);
+		scope (exit) m_driver.releaseTimer(tm);
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
+		m_driver.rearmTimer(tm, timeout, false);
+
+		while (ec == reference_emit_count) {
+			static if (INTERRUPTIBLE) getThreadLibeventDriverCore().yieldForEvent();
+			else getThreadLibeventDriverCore().yieldForEventDeferThrow();
+			ec = this.emitCount;
+			if (!m_driver.isTimerPending(tm)) break;
+		}
+		return ec;
 	}
 
 	private static nothrow extern(C)

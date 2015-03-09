@@ -1,7 +1,7 @@
 /**
 	This module contains the core functionality of the vibe.d framework.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -87,9 +87,10 @@ int runEventLoop()
 	s_core.notifyIdle();
 	if (getExitFlag()) return 0;
 
-	// handle worker tasks and st_term
-	runTask(toDelegate(&handleWorkerTasks));
-	if (getExitFlag()) return 0;
+	// handle exit flag in the main thread to exit when
+	// exitEventLoop(true) is called from a thread)
+	if (Thread.getThis() is st_threads[0].thread)
+		runTask(toDelegate(&watchExitFlag));
 
 	if (auto err = getEventDriver().runEventLoop() != 0) {
 		if (err == 1) {
@@ -485,6 +486,9 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 */
 void yield()
 {
+	// throw any deferred exceptions
+	s_core.processDeferredExceptions();
+
 	auto t = CoreTask.getThis();
 	if (t && t !is CoreTask.ms_coreTask) {
 		// it can happen that a task with the same fiber was
@@ -968,6 +972,16 @@ private class CoreTask : TaskFiber {
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
 
+				// check for any unhandled deferred exceptions
+				if (m_exception !is null) {
+					if (cast(InterruptException)m_exception) {
+						logDebug("InterruptException not handled by task before exit.");
+					} else {
+						logCritical("Deferred exception not handled by task before exit: %s", m_exception.msg);
+						logDebug("Full error: %s", m_exception.toString().sanitize());
+					}
+				}
+
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
 
@@ -1044,56 +1058,37 @@ private class VibeDriverCore : DriverCore {
 
 	@property void eventException(Exception e) { m_eventException = e; }
 
+	void yieldForEventDeferThrow()
+	nothrow {
+		yieldForEventDeferThrow(Task.getThis());
+	}
+
+	void processDeferredExceptions()
+	{
+		processDeferredExceptions(Task.getThis());
+	}
+
 	void yieldForEvent()
 	{
 		auto task = Task.getThis();
-		if (task != Task.init) {
-			auto fiber = cast(CoreTask)task.fiber;
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
-			fiber.yield();
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
-			auto e = fiber.m_exception;
-			if( e ){
-				fiber.m_exception = null;
-				throw e;
-			}
-		} else {
-			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			m_eventException = null;
-			if (auto err = getEventDriver().runEventLoopOnce()) {
-				if (err == 1) {
-					logDebug("No events registered, exiting event loop.");
-					throw new Exception("No events registered in vibeYieldForEvent.");
-				}
-				logError("Error running event loop: %d", err);
-				throw new Exception("Error waiting for events.");
-			}
-			if (auto e = m_eventException) {
-				m_eventException = null;
-				throw e;
-			}
-		}
+		processDeferredExceptions(task);
+		yieldForEventDeferThrow(task);
+		processDeferredExceptions(task);
 	}
 
-	void resumeTask(Task task, Exception event_exception = null) nothrow
+	void resumeTask(Task task, Exception event_exception = null)
 	{
 		resumeTask(task, event_exception, false);
 	}
 
-	void resumeTask(Task task, Exception event_exception, bool initial_resume) nothrow
+	void resumeTask(Task task, Exception event_exception, bool initial_resume)
 	{
 		assert(initial_resume || task.running, "Resuming terminated task.");
 		resumeCoreTask(cast(CoreTask)task.fiber, event_exception);
 	}
 
-	void resumeCoreTask(CoreTask ctask, Exception event_exception = null) nothrow
+	void resumeCoreTask(CoreTask ctask, Exception event_exception = null)
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
 		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
 
@@ -1143,6 +1138,43 @@ private class VibeDriverCore : DriverCore {
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
 		} else m_ignoreIdleForGC = false;
+	}
+
+	private void yieldForEventDeferThrow(Task task)
+	nothrow {
+		if (task != Task.init) {
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
+			static if (__VERSION__ < 2067) scope (failure) assert(false); // Fiber.yield() not nothrow on 2.066 and below
+			task.fiber.yield();
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
+			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
+		} else {
+			scope (failure) assert(false); // runEventLoopOnce is not yet nothrow
+			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
+			m_eventException = null;
+			if (auto err = getEventDriver().runEventLoopOnce()) {
+				logError("Error running event loop: %d", err);
+				assert(err != 1, "No events registered, exiting event loop.");
+				assert(false, "Error waiting for events.");
+			}
+			// leave m_eventException untouched, so that it gets thrown on the next yieldForEvent call
+		}
+	}
+
+	private void processDeferredExceptions(Task task)
+	{
+		if (task != Task.init) {
+			auto fiber = cast(CoreTask)task.fiber;
+			if (auto e = fiber.m_exception) {
+				fiber.m_exception = null;
+				throw e;
+			}
+		} else {
+			if (auto e = m_eventException) {
+				m_eventException = null;
+				throw e;
+			}
+		}
 	}
 
 	private void collectGarbage()
@@ -1411,14 +1443,24 @@ private void setupWorkerThreads()
 }
 
 private void workerThreadFunc()
-{
-	assert(s_core !is null);
-	if (getExitFlag()) return;
-	logDebug("entering worker thread");
-	runTask(toDelegate(&handleWorkerTasks));
-	logDebug("running event loop");
-	if (!getExitFlag()) runEventLoop();
-	logDebug("Worker thread exit.");
+nothrow {
+	try {
+		assert(s_core !is null);
+		if (getExitFlag()) return;
+		logDebug("entering worker thread");
+		runTask(toDelegate(&handleWorkerTasks));
+		logDebug("running event loop");
+		if (!getExitFlag()) runEventLoop();
+		logDebug("Worker thread exit.");
+	} catch (Exception e) {
+		scope (failure) exit(-1);
+		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
+		logDebug("Full error: %s", e.toString().sanitize());
+	} catch (Throwable th) {
+		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
+		logDebug("Full error: %s", th.toString().sanitize());
+		exit(-1);
+	}
 }
 
 private void handleWorkerTasks()
@@ -1464,6 +1506,20 @@ private void handleWorkerTasks()
 	getEventDriver().exitEventLoop();
 }
 
+private void watchExitFlag()
+{
+	auto emit_count = st_threadsSignal.emitCount;
+	while (true) {
+		synchronized (st_threadsMutex) {
+			if (getExitFlag()) break;
+		}
+
+		emit_count = st_threadsSignal.wait(emit_count);
+	}
+
+	logDebug("main thread exit");
+	getEventDriver().exitEventLoop();
+}
 
 private extern(C) void extrap()
 nothrow {

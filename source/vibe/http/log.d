@@ -9,7 +9,7 @@ module vibe.http.log;
 
 import vibe.core.file;
 import vibe.core.log;
-import vibe.core.sync : TaskMutexInt, scopedLock;
+import vibe.core.sync : InterruptibleTaskMutex, performLocked;
 import vibe.http.server;
 import vibe.utils.array : FixedAppender;
 
@@ -23,7 +23,7 @@ class HTTPLogger {
 	private {
 		string m_format;
 		HTTPServerSettings m_settings;
-		TaskMutexInt m_mutex;
+		InterruptibleTaskMutex m_mutex;
 		FixedAppender!(const(char)[], 2048) m_lineAppender;
 	}
 
@@ -31,18 +31,18 @@ class HTTPLogger {
 	{
 		m_format = format;
 		m_settings = settings;
-		m_mutex = new TaskMutexInt;
+		m_mutex = new InterruptibleTaskMutex;
 	}
 
 	void close() {}
 
 	final void log(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		auto lock = scopedLock(m_mutex);
-		m_lineAppender.reset();
-		formatApacheLog(m_lineAppender, m_format, req, res, m_settings);
-		writeLine(m_lineAppender.data);
-
+		m_mutex.performLocked!({
+			m_lineAppender.reset();
+			formatApacheLog(m_lineAppender, m_format, req, res, m_settings);
+			writeLine(m_lineAppender.data);
+		});
 	}
 
 	protected abstract void writeLine(const(char)[] ln);

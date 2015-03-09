@@ -1,7 +1,7 @@
 /**
 	Contains interfaces and enums for evented I/O drivers.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -35,7 +35,7 @@ StoredEventDriver getEventDriver(bool ignore_unloaded = false) nothrow
 }
 
 /// private
-package void setupEventDriver(DriverCore core_) nothrow
+package void setupEventDriver(DriverCore core_)
 {
 	version (VibeUseNativeDriverType) {}
 	else import vibe.core.drivers.native;
@@ -68,26 +68,26 @@ interface EventDriver {
 		Note that the driver will not be usable after calling this method. Any
 		further calls are illegal and result in undefined behavior.
 	*/
-	void dispose();
+	void dispose() /*nothrow*/;
 
 	/** Starts the event loop.
 
 		The loop will continue to run until either no more event listeners are active or until
 		exitEventLoop() is called.
 	*/
-	int runEventLoop();
+	int runEventLoop() /*nothrow*/;
 
 	/* Processes all outstanding events, potentially blocking to wait for the first event.
 	*/
-	int runEventLoopOnce();
+	int runEventLoopOnce() /*nothrow*/;
 
 	/** Processes all outstanding events if any, does not block.
 	*/
-	bool processEvents();
+	bool processEvents() /*nothrow*/;
 
 	/** Exits any running event loop.
 	*/
-	void exitEventLoop();
+	void exitEventLoop() /*nothrow*/;
 
 	/** Opens a file on disk with the speficied file mode.
 	*/
@@ -163,9 +163,47 @@ interface EventDriver {
 	Provides an event driver with core functions for task/fiber control.
 */
 interface DriverCore {
+	/** Sets an exception to be thrown on the next call to $(D yieldForEvent).
+
+		Note that this only has an effect if $(D yieldForEvent) is called
+		outside of a task. To throw an exception in a task, use the
+		$(D event_exception) parameter to $(D resumeTask).
+	*/
 	@property void eventException(Exception e);
+
+	/** Yields execution until the event loop receives an event.
+
+		Throws:
+			May throw an $(D InterruptException) if the task got interrupted
+			using $(D vibe.core.task.Task.interrupt()). Rethrows any
+			exception that is passed to the $(D resumeTask) call that wakes
+			up the task.
+	*/
 	void yieldForEvent();
-	void resumeTask(Task f, Exception event_exception = null) nothrow;
+
+	/** Yields execution until the event loop receives an event.
+
+		Throws:
+			This method doesn't throw. Any exceptions, such as
+			$(D InterruptException) or an exception passed to $(D resumeTask),
+			are stored and thrown on the next call to $(D yieldForEvent).
+
+	*/
+	void yieldForEventDeferThrow() nothrow;
+
+	/** Resumes the given task.
+
+		This function may only be called outside of a task to resume a
+		yielded task. The optional $(D event_exception) will be thrown in the
+		context of the resumed task.
+	*/
+	void resumeTask(Task f, Exception event_exception = null);
+
+	/** Notifies the core that all events have been processed.
+
+		This should be called by the driver whenever the event queue has been
+		fully processed.
+	*/
 	void notifyIdle();
 }
 

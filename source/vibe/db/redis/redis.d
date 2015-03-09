@@ -605,8 +605,8 @@ final class RedisSubscriberImpl {
 		Task m_listener;
 		Task m_listenerHelper;
 		Task m_waiter;
-		RecursiveTaskMutexInt m_mutex;
-		TaskMutexInt m_connMutex;
+		InterruptibleRecursiveTaskMutex m_mutex;
+		InterruptibleTaskMutex m_connMutex;
 	}
 
 	private enum Action {
@@ -634,8 +634,8 @@ final class RedisSubscriberImpl {
 
 		logTrace("this()");
 		m_client = client;
-		m_mutex = new RecursiveTaskMutexInt;
-		m_connMutex = new TaskMutexInt;
+		m_mutex = new InterruptibleRecursiveTaskMutex;
+		m_connMutex = new InterruptibleTaskMutex;
 	}
 
 	~this() {
@@ -646,23 +646,22 @@ final class RedisSubscriberImpl {
 	/// Stop listening and yield until the operation is complete.
 	void bstop(){
 		logTrace("bstop");
-		if (!m_listening)
-			return;
+		if (!m_listening) return;
+		
 		void impl() {
-			auto lock = scopedLock(m_mutex);
-			m_waiter = Task.getThis();
-			scope(exit) m_waiter = Task();
-			stop();
+			m_mutex.performLocked!({
+				m_waiter = Task.getThis();
+				scope(exit) m_waiter = Task();
+				stop();
 
-			bool stopped;
-			do {
-				if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
-					break;
-			}
-			while (!stopped);
-			
-			enforce(stopped, "Failed to wait for Redis listener to stop");
-
+				bool stopped;
+				do {
+					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
+						break;
+				} while (!stopped);
+				
+				enforce(stopped, "Failed to wait for Redis listener to stop");
+			});
 		}
 		inTask(&impl);
 	}
@@ -674,18 +673,17 @@ final class RedisSubscriberImpl {
 			return;
 
 		void impl() {
-			auto l = m_mutex.scopedLock;
-			m_stop = true;
-			m_listener.send(Action.STOP);
-			// send a message to wake up the listenerHelper from the reply
-			if (m_subscriptions.length > 0) {
-				{
-					auto l2 = m_connMutex.scopedLock;
-					_request_void(m_lockedConnection, "UNSUBSCRIBE", cast(string[]) m_subscriptions.keys.takeOne.array );
-				
+			m_mutex.performLocked!({
+				m_stop = true;
+				m_listener.send(Action.STOP);
+				// send a message to wake up the listenerHelper from the reply
+				if (m_subscriptions.length > 0) {
+					m_connMutex.performLocked!({
+						_request_void(m_lockedConnection, "UNSUBSCRIBE", cast(string[]) m_subscriptions.keys.takeOne.array );
+					});
+					sleep(30.msecs);
 				}
-				sleep(30.msecs);
-			}
+			});
 		}
 		inTask(&impl);
 	}
@@ -730,24 +728,23 @@ final class RedisSubscriberImpl {
 
 			scope(failure) { logTrace("Failure"); bstop(); }
 			try {
-				auto l = scopedLock(m_mutex);
-				m_waiter = Task.getThis();
-				scope(exit) m_waiter = Task();
-				bool subscribed;
-				{
-					auto l2 = m_connMutex.scopedLock;
-					_request_void(m_lockedConnection, "SUBSCRIBE", args);
-				}
-				while(!m_subscriptions.keys.canFind(args)) {
-					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
-						break;
+				m_mutex.performLocked!({
+					m_waiter = Task.getThis();
+					scope(exit) m_waiter = Task();
+					bool subscribed;
+					m_connMutex.performLocked!({
+						_request_void(m_lockedConnection, "SUBSCRIBE", args);
+					});
+					while(!m_subscriptions.keys.canFind(args)) {
+						if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+							break;
 
-					subscribed = true;
-				}
-				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
-				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
-				enforce(subscribed, "Could not complete subscription(s).");
-
+						subscribed = true;
+					}
+					logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
+					logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
+					enforce(subscribed, "Could not complete subscription(s).");
+				});
 			} catch (Throwable e) {
 				logTrace(e.toString());
 			}
@@ -770,15 +767,13 @@ final class RedisSubscriberImpl {
 			scope(failure) bstop();
 			assert(m_listening);
 
-			{
-				auto l = m_mutex.scopedLock;
+			m_mutex.performLocked!({
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool unsubscribed;
-				{
-					auto l2 = m_connMutex.scopedLock;
+				m_connMutex.performLocked!({
 					_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
-				}
+				});
 				while(m_subscriptions.keys.canFind(args)) {
 					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  })) {
 						unsubscribed = false;
@@ -789,9 +784,7 @@ final class RedisSubscriberImpl {
 				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
 				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
 				enforce(unsubscribed, "Could not complete unsubscription(s).");
-				
-			}
-
+			});
 		}
 		inTask(&impl);
 	}
@@ -805,15 +798,13 @@ final class RedisSubscriberImpl {
 		void impl() {
 			scope(failure) bstop();
 			assert(m_listening);
-			{
-				auto l = m_mutex.scopedLock;
+			m_mutex.performLocked!({
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool subscribed;
-				{
-					auto l2 = m_connMutex.scopedLock;
+				m_connMutex.performLocked!({
 					_request_void(m_lockedConnection, "PSUBSCRIBE", args);
-				}
+				});
 
 				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
 					subscribed = false;
@@ -822,8 +813,7 @@ final class RedisSubscriberImpl {
 
 				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
 				enforce(subscribed, "Could not complete subscription(s).");
-				
-			}
+			});
 		}
 		inTask(&impl);
 	}
@@ -837,15 +827,13 @@ final class RedisSubscriberImpl {
 		void impl() {
 			scope(failure) bstop();
 			assert(m_listening);
-			{ 
-				auto l = m_mutex.scopedLock;
+			m_mutex.performLocked!({ 
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool unsubscribed;
-				{
-					auto l2 = m_connMutex.scopedLock;
+				m_connMutex.performLocked!({
 					_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
-				}
+				});
 				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  }))
 					unsubscribed = false;
 				else
@@ -854,8 +842,7 @@ final class RedisSubscriberImpl {
 				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
 				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
 				enforce(unsubscribed, "Could not complete unsubscription(s).");
-				
-			}
+			});
 		}
 		inTask(&impl);
 	}
@@ -1089,10 +1076,9 @@ final class RedisSubscriberImpl {
 				if (act == Action.STOP) m_stop = true;
 				if (m_stop) return;
 				logTrace("Calling PubSub Handler");
-				{
-					auto l = m_connMutex.scopedLock;
+				m_connMutex.performLocked!({
 					pubsub_handler(); // handles one command at a time
-				}
+				});
 				m_listenerHelper.send(Action.DATA);
 			};
 
@@ -1128,14 +1114,12 @@ final class RedisSubscriberImpl {
 					callback("Error", e.toString());
 				}
 			});
-			{
-				auto l = m_mutex.scopedLock;
+			m_mutex.performLocked!({
 				import std.datetime : usecs;
 				receiveTimeout(2.seconds, (Action act) { assert( act == Action.STARTED); });
 				if (ex) throw ex;
 				enforce(m_listening, "Failed to start listening, timeout of 2 seconds expired");
-			}
-
+			});
 
 			foreach (channel; m_pendingSubscriptions) {
 				subscribe(channel);
