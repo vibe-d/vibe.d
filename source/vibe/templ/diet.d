@@ -632,7 +632,19 @@ private struct DietCompiler(TRANSLATE...)
 					case "//": // HTML comment
 						skipWhitespace(ln, j);
 						output.writeString("<!-- " ~ htmlEscape(ln[j .. $]));
+						size_t next_tag = m_lineIndex+1;
+						while( next_tag < lineCount &&
+							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+						{
+							output.writeString("\n");
+							output.writeStringHtmlEscaped(line(next_tag).text);
+							next_tag++;
+						}
 						output.pushNode(" -->");
+
+						// skip to the next tag
+						m_lineIndex = next_tag-1;
+						next_indent_level = computeNextIndentLevel();
 						break;
 					case "//-": // non-output comment
 						// find all child lines
