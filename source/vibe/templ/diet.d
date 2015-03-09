@@ -5,7 +5,7 @@
 	embedded D source instead of JavaScript. The Diet syntax reference is found at
 	$(LINK http://vibed.org/templates/diet).
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -14,6 +14,7 @@ module vibe.templ.diet;
 public import vibe.core.stream;
 
 import vibe.core.file;
+import vibe.internal.meta.typetuple;
 import vibe.templ.parsertools;
 import vibe.templ.utils;
 import vibe.textfilter.html;
@@ -172,9 +173,34 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	auto output__ = StreamOutputRange(stream__);
 
 	//pragma(msg, dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
-	mixin(dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
+	mixin(dietStringParser!(Group!(diet_code, "__diet_code__"), TRANSLATE)(0));
 }
 
+
+/**
+	The same as $(D compileDietStrings), but taking multiple source codes as a $(D Group).
+*/
+private void compileDietStrings(SOURCE_AND_ALIASES...)(OutputStream stream__)
+	if (SOURCE_AND_ALIASES.length >= 1 && isGroup!(SOURCE_AND_ALIASES[0]))
+{
+	// some imports to make available by default inside templates
+	import vibe.http.common;
+	import vibe.stream.wrapper;
+	import vibe.utils.string;
+	import std.typetuple;
+
+	//pragma(msg, localAliases!(0, ALIASES));
+	mixin(localAliases!(0, SOURCE_AND_ALIASES[1 .. $]));
+
+	// Generate the D source code for the diet template
+	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
+	else alias TRANSLATE = TypeTuple!();
+
+	auto output__ = StreamOutputRange(stream__);
+
+	//pragma(msg, dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
+	mixin(dietStringParser!(SOURCE_AND_ALIASES[0], TRANSLATE)(0));
+}
 
 /**
 	Registers a new text filter for use in Diet templates.
@@ -214,21 +240,41 @@ private string dietParser(string template_file, TRANSLATE...)(size_t base_indent
 	return compiler.buildWriter(base_indent);
 }
 
-private string dietStringParser(string diet_code, string name, TRANSLATE...)(size_t base_indent)
+private string dietStringParser(TEXT_NAME_PAIRS_AND_TRANSLATE...)(size_t base_indent)
+	if (TEXT_NAME_PAIRS_AND_TRANSLATE.length >= 1 && isGroup!(TEXT_NAME_PAIRS_AND_TRANSLATE[0]))
 {
-	enum LINES = removeEmptyLines(diet_code, name);
+	alias TEXT_NAME_PAIRS = TypeTuple!(TEXT_NAME_PAIRS_AND_TRANSLATE[0].expand);
+	static if (TEXT_NAME_PAIRS_AND_TRANSLATE.length >= 2)
+		alias TRANSLATE = TEXT_NAME_PAIRS_AND_TRANSLATE[1];
+	else alias TRANSLATE = TypeTuple!();
 
-	TemplateBlock ret;
-	ret.name = name;
-	ret.lines = LINES;
-	ret.indentStyle = detectIndentStyle(ret.lines);
+	enum ROOT_LINES = removeEmptyLines(TEXT_NAME_PAIRS[0], TEXT_NAME_PAIRS[1]);
 
 	TemplateBlock[] files;
-	files ~= ret;
-	readFilesRec!(extractDependencies(LINES), name)(files);
+	foreach (i, N; TEXT_NAME_PAIRS) {
+		static if (i % 2 == 1) {
+			TemplateBlock blk;
+			blk.name = N;
+			static if (i == 1) blk.lines = ROOT_LINES;
+			else blk.lines = removeEmptyLines(TEXT_NAME_PAIRS[i-1], N);
+			blk.indentStyle = detectIndentStyle(blk.lines);
+			files ~= blk;
+		}
+	}
+	
+	readFilesRec!(extractDependencies(ROOT_LINES), extractNames!TEXT_NAME_PAIRS)(files);
 
 	auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
+}
+
+private template extractNames(PAIRS...)
+{
+	static if (PAIRS.length >= 2) {
+		alias extractNames = TypeTuple!(PAIRS[1], extractNames!(PAIRS[2 .. $]));
+	} else {
+		alias extractNames = TypeTuple!();
+	}
 }
 
 
@@ -379,6 +425,8 @@ private class OutputContext {
 	void writeExpr(string str) { writeCodeLine("_toStringS!(s => "~OutputVariableName~".put(s))("~str~");"); }
 	void writeExprHtmlEscaped(string str) { writeCodeLine("_toStringS!(s => filterHTMLEscape("~OutputVariableName~", s))("~str~");"); }
 	void writeExprHtmlAttribEscaped(string str) { writeCodeLine("_toStringS!(s => filterHTMLAttribEscape("~OutputVariableName~", s))("~str~");"); }
+
+	void writeDebugString(string str) { /* ignore */ }
 
 	void writeCodeLine(string stmt)
 	{
@@ -608,21 +656,34 @@ private struct DietCompiler(TRANSLATE...)
 						output.pushDummyNode();
 						auto block = getBlock(ln[6 .. $].ctstrip());
 						if( block ){
-							output.writeString("<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
+							output.writeDebugString("<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
 							if( block.mode == 1 ){
-								// output defaults
+								// TODO: output defaults
+								assertp(next_indent_level <= level, "Append mode for blocks is currently not supported.");
 							}
 							auto blockcompiler = new DietCompiler(block, m_files, m_blocks);
 							/*blockcompiler.m_block = block;
 							blockcompiler.m_blocks = m_blocks;*/
 							blockcompiler.buildWriter(output, cast(int)output.m_nodeStack.length);
 
-							if( block.mode == -1 ){
-								// output defaults
+							if( block.mode != -1 ){
+								// skip over the default block contents if the block mode is not prepend
+
+								// find all child lines
+								size_t next_tag = m_lineIndex+1;
+								while( next_tag < lineCount &&
+									indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+								{
+									next_tag++;
+								}
+
+								// skip to the next tag
+								m_lineIndex = next_tag-1;
+								next_indent_level = computeNextIndentLevel();
 							}
 						} else {
 							// output defaults
-							output.writeString("<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
+							output.writeDebugString("<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
 						}
 						break;
 					case "include": // Diet file include
@@ -630,7 +691,7 @@ private struct DietCompiler(TRANSLATE...)
 						auto content = ln[8 .. $].ctstrip();
 						if (content.startsWith("#{")) {
 							assertp(content.endsWith("}"), "Missing closing '}'.");
-							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\", TRANSLATE)("~to!string(level)~"));");
+							output.writeCodeLine("mixin(dietStringParser!(Group!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\"), TRANSLATE)("~to!string(level)~"));");
 						} else {
 							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\", TRANSLATE)("~to!string(level)~"));");
 						}
@@ -1408,6 +1469,24 @@ unittest {
 			== `<input type="text" value="&amp;&quot;"/>`);
 	assert(compile!("- auto param = \"t=1&u=1\";\na(href=\"/?#{param}&v=1\") foo")
 			== `<a href="/?t=1&amp;u=1&amp;v=1">foo</a>`);
+}
+
+unittest { // blocks and extensions
+	static string compilePair(string extension, string base, ALIASES...)() {
+		import vibe.stream.memory;
+		auto dst = new MemoryOutputStream;
+		compileDietStrings!(Group!(extension, "extension.dt", base, "base.dt"), ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
+
+	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test")
+		 == "<body>\n\t<p>Hello</p>\n</body>");
+	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Hello</p>\n</body>", compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default"));
+	assert(compilePair!("extends base", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Default</p>\n</body>");
+	assert(compilePair!("extends base\nprepend test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Hello</p>\n\t<p>Default</p>\n</body>");
 }
 
 
