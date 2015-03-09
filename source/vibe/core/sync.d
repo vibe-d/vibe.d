@@ -175,6 +175,8 @@ unittest {
 	}
 }
 
+
+version (VibeLibevDriver) {} else // timers are not implemented for libev, yet
 unittest { // test deferred throwing
 	import vibe.core.core;
 
