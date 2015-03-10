@@ -88,15 +88,15 @@ Install vibe.d's dependencies (*)
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://ftp.digitalmars.com/dmd_2.062-0_i386.deb"
-    sudo dpkg -i dmd_2.062-0_i386.deb
+    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_i386.deb"
+    sudo dpkg -i dmd_2.066.1-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://ftp.digitalmars.com/dmd_2.062-0_amd64.deb"
-    sudo dpkg -i dmd_2.062-0_amd64.deb
+    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_amd64.deb"
+    sudo dpkg -i dmd_2.066.1-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
