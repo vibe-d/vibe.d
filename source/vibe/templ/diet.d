@@ -1016,6 +1016,14 @@ private struct DietCompiler(TRANSLATE...)
 			else break;
 		}
 
+		// check for multiple occurances of id
+		bool has_id = false;
+		foreach( a; attribs )
+			if( a.key == "id" ) {
+				assertp(!has_id, "Id may only be set once.");
+				has_id = true;
+			}
+
 		// add special attribute for extra classes that is handled by buildHtmlTag
 		if( classes.length ){
 			bool has_class = false;
