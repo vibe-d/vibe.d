@@ -617,10 +617,10 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	void emit()
 	{
-		// In 2067, synchronized statements where annotated nothrow.
+		// Since 2068, synchronized statements are annotated nothrow.
 		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
+		static if (__VERSION__ <= 2067)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
 
 		atomicOp!"+="(m_emitCount, 1);

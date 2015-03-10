@@ -122,13 +122,13 @@ class LockAllocator : Allocator {
 	}
 	this(Allocator base) nothrow { m_base = base; }
 	void[] alloc(size_t sz) {
-		// In 2067, synchronized statements where annotated nothrow.
+		// Since 2068, synchronized statements are annotated nothrow.
 		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
+		static if (__VERSION__ <= 2067)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
 
-		synchronized(this)
+		synchronized (this)
 			return m_base.alloc(sz);
 	}
 	void[] realloc(void[] mem, size_t new_sz)
@@ -137,10 +137,10 @@ class LockAllocator : Allocator {
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
 		}
 		body {
-			// In 2067, synchronized statements where annotated nothrow.
+			// Since 2068, synchronized statements are annotated nothrow.
 			// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 			// However, they were "logically" nothrow before.
-			static if (__VERSION__ <= 2066)
+			static if (__VERSION__ <= 2067)
 				scope (failure) assert(0, "Internal error: function should be nothrow");
 
 			synchronized(this)
@@ -152,10 +152,10 @@ class LockAllocator : Allocator {
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
 		}
 		body {
-			// In 2067, synchronized statements where annotated nothrow.
+			// Since 2068, synchronized statements are annotated nothrow.
 			// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 			// However, they were "logically" nothrow before.
-			static if (__VERSION__ <= 2066)
+			static if (__VERSION__ <= 2067)
 				scope (failure) assert(0, "Internal error: function should be nothrow");
 			synchronized(this)
 				m_base.free(mem);
