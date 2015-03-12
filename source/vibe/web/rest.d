@@ -117,7 +117,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 			}
 			else {
 				static if (__traits(identifier, overload) == "index") {
-					pragma(msg, "Processing interface " ~ T.stringof ~
+					pragma(msg, "Processing interface " ~ I.stringof ~
 						": please use @path(\"/\") to define '/' path" ~
 						" instead of 'index' method. Special behavior will be removed" ~
 						" in the next release.");
