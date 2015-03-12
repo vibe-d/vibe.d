@@ -71,11 +71,13 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;
 
+	alias I = baseInterface!TImpl;
+
+	static assert(getInterfaceValidationError!(I) is null, getInterfaceValidationError!(I));
+
 	if (!settings) settings = new RestInterfaceSettings;
 
 	string url_prefix = settings.baseURL.path.toString();
-
-	alias I = baseInterface!TImpl;
 
 	enum uda = findFirstUDA!(RootPathAttribute, I);
 	static if (uda.found) {
@@ -259,6 +261,8 @@ unittest
 */
 class RestInterfaceClient(I) : I
 {
+	static assert(getInterfaceValidationError!(I) is null, getInterfaceValidationError!(I));
+
 	//pragma(msg, "imports for "~I.stringof~":");
 	//pragma(msg, generateModuleImports!(I)());
 	mixin(generateModuleImports!I());
@@ -571,32 +575,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			else return name;
 		}
 
-		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
-		static if (UDATuple!(WebParamAttribute, Func).length) {
-			foreach (i, uda; UDATuple!(WebParamAttribute, Func)) {
-				// Note: static foreach gets unrolled, generating multiple nested sub-scope.
-				// The spec / DMD doesn't like when you have the same symbol in those,
-				// leading to wrong codegen / wrong template being reused.
-				// That's why those templates need different names.
-				// See DMD bug #9748.
-				mixin(GenOrphan!(i).Decl);
-				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-				static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
-				              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
-						     uda.identifier, FuncId, uda.origin));
-			}
-		}
-
 		foreach (i, P; PT) {
-			static assert (
-				ParamNames[i].length,
-				format(
-				       "Parameter %s of %s has no name",
-				       i.stringof,
-				       method
-				)
-			);
-
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
 				// Comparison template for anySatisfy
@@ -610,10 +589,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
 					// User anotated the origin of this parameter.
 					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-					static assert (
-						paramsArgList.length == 1,
-						"Parameter '"~ParamNames[i]~"' of "~FuncId~" has multiple origin (@*Param attributes)."
-					);
 					// @headerParam.
 					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
@@ -951,17 +926,6 @@ private string genClientBody(alias Func)() {
 	enum paramAttr = UDATuple!(WebParamAttribute, Func);
 	enum FuncId = __traits(identifier, Func);
 
-	// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
-	static if (paramAttr.length) {
-		foreach (i, uda; paramAttr) {
-			// Note: See server code to see why it's necessary (or Template definition).
-			mixin(GenOrphan!(i).Decl);
-			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-			static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
-			              format("No parameter '%s' on %s (referenced by attribute @%sParam)", uda.identifier, FuncId, uda.origin));
-		}
-	}
-
 	// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
 	static if (is(RT == interface)) {
 		return q{ return m_%sImpl; }.format(RT.stringof);
@@ -981,15 +945,6 @@ private string genClientBody(alias Func)() {
 
 		// Block 2
 		foreach (i, PT; PTT){
-			static assert (
-				ParamNames[i].length,
-				format(
-				       "Parameter %s of %s has no name.",
-				       i,
-				       method
-				)
-			);
-
 			// Check origin of parameter
 			mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Decl);
 
@@ -1001,7 +956,6 @@ private string genClientBody(alias Func)() {
 					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
 				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static assert (paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
 				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
 					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
 				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query)
@@ -1147,6 +1101,167 @@ unittest
 {
 	enum imports = generateModuleImports!Interface;
 	static assert (imports == "static import vibe.web.rest;");
+}
+
+// Check that the interface is valid. Every checks on the correctness of the
+// interface should be put in checkRestInterface, which allows to have consistent
+// errors in the server and client.
+private string getInterfaceValidationError(I)() {
+	import std.traits : MemberFunctionsTuple, FunctionTypeOf;
+	import std.typetuple : TypeTuple;
+
+	// The hack parameter is to kill "Statement is not reachable" warnings.
+	string validateMethod(alias Func)(bool hack = true) {
+		import vibe.internal.meta.uda;
+		import std.traits : fullyQualifiedName, FunctionTypeOf,
+			ParameterIdentifierTuple, ParameterTypeTuple;
+		import std.string : format;
+
+		static assert(is(FunctionTypeOf!Func), "Internal error");
+
+		if (!__ctfe)
+			assert(false, "Internal error");
+
+		enum FuncId = (fullyQualifiedName!I~ "." ~ __traits(identifier, Func));
+		alias PT = ParameterTypeTuple!Func;
+		static if (!__traits(compiles, ParameterIdentifierTuple!Func)) {
+			if (hack) return "%s: A parameter has no name.".format(FuncId);
+			alias PN = TypeTuple!("-DummyInvalid-");
+		} else
+			alias PN = ParameterIdentifierTuple!Func;
+
+		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
+		foreach (i, uda; UDATuple!(WebParamAttribute, Func)) {
+			// Note: static foreach gets unrolled, generating multiple nested sub-scope.
+			// The spec / DMD doesn't like when you have the same symbol in those,
+			// leading to wrong codegen / wrong template being reused.
+			// That's why those templates need different names.
+			// See DMD bug #9748.
+			mixin(GenOrphan!(i).Decl);
+			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
+			static if (!anySatisfy!(mixin(GenOrphan!(i).Name), PN)) {
+				return "%s: No parameter '%s' (referenced by attribute @%sParam)"
+					.format(FuncId, uda.identifier, uda.origin);
+			}
+		}
+
+		foreach (i, P; PT) {
+			static if (!PN[i].length)
+				return "%s: Parameter %d has no name."
+					.format(FuncId, i);
+			// Check for multiple origins
+			static if (UDATuple!(WebParamAttribute, Func).length) {
+				// It's okay to reuse GenCmp, as the order of params won't change.
+				// It should/might not be reinstantiated by the compiler.
+				mixin(GenCmp!("Loop", i, PN[i]).Decl);
+				alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), UDATuple!(WebParamAttribute, Func));
+				static if (paramsArgList.length > 1)
+					return "%s: Parameter '%s' has multiple @*Param attributes on it."
+						.format(FuncId, PN[i]);
+			}
+		}
+
+		// Check for @path(":name")
+		enum pathAttr = findFirstUDA!(PathAttribute, Func);
+		static if (pathAttr.found) {
+			import std.algorithm : canFind, splitter;
+			// splitter doesn't work with alias this ?
+			auto sp = pathAttr.value.data.splitter('/');
+			foreach (elem; sp) {
+				if (elem[0] ==  ':') {
+					// typeof(PN) is void when length is 0.
+					static if (!PN.length) {
+						if (hack)
+							return "%s: Path contains '%s', but not parameter '_%s' defined."
+								.format(FuncId, elem, elem[1..$]);
+					} else {
+						if (![PN].canFind("_"~elem[1..$]))
+							return "%s: Path contains '%s', but not parameter '_%s' defined."
+								.format(FuncId, elem, elem[1..$]);
+						elem = elem[1..$];
+					}
+				}
+				// TODO: Check for validity of the subpath.
+			}
+		}
+		return null;
+	}
+
+	if (!__ctfe)
+		assert(false, "Internal error");
+	foreach (method; __traits(allMembers, I)) {
+		foreach (overload; MemberFunctionsTuple!(I, method)) {
+			static if (validateMethod!(overload)())
+				return validateMethod!(overload)();
+		}
+	}
+	return null;
+}
+
+// Test detection of user typos (e.g., if the attribute is on a parameter that doesn't exist).
+unittest {
+	// This file might get edited, so we don't compare the string litteraly, we avoid the lines number.
+	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.ITypo.getResponse";
+	enum msg = ": No parameter 'ath' (referenced by attribute @HeaderParam)";
+
+	interface ITypo {
+		@headerParam("ath", "Authorization")
+		string getResponse(string auth);
+	}
+	static assert(getInterfaceValidationError!(ITypo)
+		      && msg == getInterfaceValidationError!(ITypo)[FuncId.length..$],
+		      getInterfaceValidationError!(ITypo));
+}
+
+// Multiple origin for a parameter
+unittest {
+	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IMultipleOrigin.getResponse";
+	enum msg = ": Parameter 'arg1' has multiple @*Param attributes on it.";
+
+	interface IMultipleOrigin {
+		@headerParam("arg1", "Authorization") @bodyParam("arg1", "Authorization")
+		string getResponse(string arg1, int arg2);
+	}
+	static assert(getInterfaceValidationError!(IMultipleOrigin)
+		      && msg == getInterfaceValidationError!(IMultipleOrigin)[FuncId.length..$],
+		      getInterfaceValidationError!(IMultipleOrigin));
+}
+
+// Missing parameter name
+unittest {
+	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IMissingName1.getResponse";
+	static if (__VERSION__ < 2067)
+		enum msg = ": A parameter has no name.";
+	else
+		enum msg = ": Parameter 0 has no name.";
+
+	interface IMissingName1 {
+		string getResponse(string = "troublemaker");
+	}
+	interface IMissingName2 {
+		string getResponse(string);
+	}
+	static assert(getInterfaceValidationError!(IMissingName1)
+		      && msg == getInterfaceValidationError!(IMissingName1)[FuncId.length..$],
+		      getInterfaceValidationError!(IMissingName1));
+	static assert(getInterfaceValidationError!(IMissingName2)
+		      && msg == getInterfaceValidationError!(IMissingName2)[FuncId.length..$],
+		      getInterfaceValidationError!(IMissingName2));
+}
+
+// Issue 949
+unittest {
+	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IGithubPR.getPullRequests";
+	enum msg = ": Path contains ':owner', but not parameter '_owner' defined.";
+
+	@rootPath("/repos/")
+		interface IGithubPR {
+			@path(":owner/:repo/pulls")
+			string getPullRequests(string owner, string repo);
+		}
+	static assert(getInterfaceValidationError!(IGithubPR)
+		      && msg == getInterfaceValidationError!(IGithubPR)[FuncId.length..$],
+		      getInterfaceValidationError!(IGithubPR));
 }
 
 // Small helper for client code generation
