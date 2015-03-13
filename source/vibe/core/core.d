@@ -1037,7 +1037,7 @@ private class CoreTask : TaskFiber {
 			assert(caller != this.task, "A task cannot interrupt itself.");
 			assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
 		} else assert(Thread.getThis() is this.thread, "Interrupting tasks in different threads is not yet supported.");
-		s_core.resumeTask(this.task, new InterruptException);
+		s_core.yieldAndResumeTask(this.task, new InterruptException);
 	}
 
 	override void terminate()
