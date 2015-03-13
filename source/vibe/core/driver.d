@@ -196,8 +196,20 @@ interface DriverCore {
 		This function may only be called outside of a task to resume a
 		yielded task. The optional $(D event_exception) will be thrown in the
 		context of the resumed task.
+
+		See_also: $(D yieldAndResumeTask)
 	*/
-	void resumeTask(Task f, Exception event_exception = null);
+	void resumeTask(Task task, Exception event_exception = null);
+
+	/** Yields the current task and resumes another one.
+
+		This is the same as $(D resumeTask), but also works from within a task.
+		If called from a task, that task will be yielded first before resuming
+		the other one.
+
+		See_also: $(D resumeTask)
+	*/
+	void yieldAndResumeTask(Task task, Exception event_exception = null);
 
 	/** Notifies the core that all events have been processed.
 
