@@ -149,8 +149,26 @@ package final class Libevent2TCPConnection : TCPConnection {
 	/// Closes the connection.
 	void close()
 	{
-		if (!m_ctx) return;
-		acquire();
+		logDebug("TCP close request %s %s", m_ctx !is null, m_ctx ? m_ctx.state : ConnectionState.open);
+		if (!m_ctx || m_ctx.state == ConnectionState.activeClose) return;
+
+		// acquire write access
+		acquireWriter();
+
+		// set the closing flag
+		m_ctx.state = ConnectionState.activeClose;
+
+		// resumy any reader, so that the read operation can be ended with a failure
+		while (m_ctx.readOwner != Task.init) {
+			logTrace("resuming reader first");
+			m_ctx.core.yieldAndResumeTask(m_ctx.readOwner);
+			logTrace("back (%s)!", m_ctx !is null);
+			// test if the resumed task has already closed the connection
+			if (!m_ctx) return;
+		}
+
+		// acquire remaining access
+		acquireReader();
 
 		scope (exit) {
 			TCPContextAlloc.free(m_ctx);
@@ -158,6 +176,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		}
 
 		if (m_ctx.event) {
+			logDiagnostic("Actively closing TCP connection");
 			auto fd = m_ctx.socketfd;
 
 			scope (exit) {
@@ -178,7 +197,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 	}
 
 	/// The 'connected' status of this connection
-	@property bool connected() const { return m_ctx !is null && m_ctx.event !is null && !m_ctx.eof; }
+	@property bool connected() const { return m_ctx !is null && m_ctx.state == ConnectionState.open && m_ctx.event !is null; }
 
 	@property bool empty() { return leastSize == 0; }
 
@@ -191,7 +210,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 		size_t len;
 		while ((len = evbuffer_get_length(inbuf)) == 0) {
 			if (!connected) {
-				if (m_ctx) {
+				if (m_ctx && m_ctx.status == ConnectionState.passiveClose) {
+					logDiagnostic("TCP connection terminated in leastSize after passive close");
 					if (m_ctx.event) bufferevent_free(m_ctx.event);
 					TCPContextAlloc.free(m_ctx);
 					m_ctx = null;
@@ -257,7 +277,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		assert(m_ctx !is null);
 		auto inbuf = bufferevent_get_input(m_ctx.event);
 		if (evbuffer_get_length(inbuf) > 0) return true;
-		if (m_ctx.eof) return false;
+		if (m_ctx.state != ConnectionState.open) return false;
 
 		acquireReader();
 		scope(exit) releaseReader();
@@ -364,8 +384,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 			m_ctx = null;
 			throw new Exception(format("Connection error while %s TCPConnection.", write ? "writing to" : "reading from"));
 		}
-		enforce (!write || !m_ctx.eof, "Remote hung up while writing to TCPConnection.");
-		if (!write && m_ctx.eof) {
+		enforce (!write || m_ctx.state == ConnectionState.open, "Remote hung up while writing to TCPConnection.");
+		if (!write && m_ctx.state == ConnectionState.passiveClose) {
 			auto buf = bufferevent_get_input(m_ctx.event);
 			auto data_left = evbuffer_get_length(buf) > 0;
 			enforce(data_left, "Remote hung up while reading from TCPConnection.");
@@ -444,14 +464,19 @@ package struct TCPContext
 	bool shutdown = false;
 	int socketfd = -1;
 	int status = 0;
-	bool eof = false; // remomte has hung up
 	Task readOwner;
 	Task writeOwner;
 	Exception exception; // set during onSocketEvent calls that were emitted synchronously
 	TCPListenOptions listenOptions;
+	ConnectionState state;
 }
 alias TCPContextAlloc = FreeListObjectAlloc!(TCPContext, false, true);
 
+package enum ConnectionState {
+	open,         // connection CTR and CTS
+	activeClose,  // TCPConnection.close() was called
+	passiveClose, // remote has hung up
+}
 
 /**************************************************************************************************/
 /* Private functions                                                                              */
@@ -606,10 +631,10 @@ package nothrow extern(C)
 			assert(ctx.magic__ == TCPContext.MAGIC);
 			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TCPContext");
 			logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
-			if (ctx.writeOwner && ctx.writeOwner.running) {
+			if (ctx.writeOwner != Task.init && ctx.writeOwner.running) {
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
+				ctx.core.resumeTask(ctx.writeOwner);
 			}
-			if (ctx.writeOwner) ctx.core.resumeTask(ctx.writeOwner);
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
 		}
@@ -630,7 +655,7 @@ package nothrow extern(C)
 			string errorMessage;
 			if (status & BEV_EVENT_EOF) {
 				logDebug("Connection was closed (fd %d).", ctx.socketfd);
-				ctx.eof = true;
+				ctx.state = ConnectionState.passiveClose;
 				evbuffer* buf = bufferevent_get_input(buf_event);
 				if (evbuffer_get_length(buf) == 0) free_event = true;
 			} else if (status & BEV_EVENT_TIMEOUT) {
