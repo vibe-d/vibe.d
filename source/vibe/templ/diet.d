@@ -600,9 +600,40 @@ private struct DietCompiler(TRANSLATE...)
 				//output.pushDummyNode();
 				m_lineIndex = next_tag-1;
 				next_indent_level = computeNextIndentLevel();
+			} else if( ln[0] == '/' && ln.length > 1 && ln[1] == '/' ){ // all sorts of comments
+				if( ln.length >= 5 && ln[2..5] == "if " ){ // IE conditional comment
+					size_t j = 5;
+					skipWhitespace(ln, j);
+					buildSpecialTag(output, "!--[if "~ln[j .. $]~"]", level);
+					output.pushNode("<![endif]-->");
+				} else { // HTML and non-output comment
+					auto output_comment = !(ln.length > 2 && ln[2] == '-');
+					if( output_comment ) {
+						size_t j = 2;
+						skipWhitespace(ln, j);
+						output.writeString("<!-- " ~ htmlEscape(ln[j .. $]));
+					}
+					size_t next_tag = m_lineIndex+1;
+					while( next_tag < lineCount &&
+						indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+					{
+						if( output_comment ) {
+							output.writeString("\n");
+							output.writeStringHtmlEscaped(line(next_tag).text);
+						}
+						next_tag++;
+					}
+					if( output_comment ) {
+						output.pushNode(" -->");
+					}
+
+					// skip to the next tag
+					m_lineIndex = next_tag-1;
+					next_indent_level = computeNextIndentLevel();
+				}
 			} else {
 				size_t j = 0;
-				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
+				auto tag = isAlpha(ln[0]) ? skipIdent(ln, j, ":-_") : "div";
 
 				if (ln.startsWith("!!! ")) {
 					//output.writeCodeLine(`pragma(msg, "\"!!!\" is deprecated, use \"doctype\" instead.");`);
@@ -631,41 +662,6 @@ private struct DietCompiler(TRANSLATE...)
 						break;
 					case "doctype": // HTML Doctype header
 						buildDoctypeNodeWriter(output, ln, j, level);
-						break;
-					case "//": // HTML comment
-						skipWhitespace(ln, j);
-						output.writeString("<!-- " ~ htmlEscape(ln[j .. $]));
-						size_t next_tag = m_lineIndex+1;
-						while( next_tag < lineCount &&
-							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
-						{
-							output.writeString("\n");
-							output.writeStringHtmlEscaped(line(next_tag).text);
-							next_tag++;
-						}
-						output.pushNode(" -->");
-
-						// skip to the next tag
-						m_lineIndex = next_tag-1;
-						next_indent_level = computeNextIndentLevel();
-						break;
-					case "//-": // non-output comment
-						// find all child lines
-						size_t next_tag = m_lineIndex+1;
-						while( next_tag < lineCount &&
-							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
-						{
-							next_tag++;
-						}
-
-						// skip to the next tag
-						m_lineIndex = next_tag-1;
-						next_indent_level = computeNextIndentLevel();
-						break;
-					case "//if": // IE conditional comment
-						skipWhitespace(ln, j);
-						buildSpecialTag(output, "!--[if "~ln[j .. $]~"]", level);
-						output.pushNode("<![endif]-->");
 						break;
 					case "block": // Block insertion place
 						output.pushDummyNode();
@@ -1461,6 +1457,9 @@ unittest {
 	assert(compile!(`style= 5`) == `<style>5</style>`);
 	assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
 	assert(compile!(`<p>Hello</p>`) == "<p>Hello</p>");
+	assert(compile!(`// I show up`) == "<!-- I show up\n -->");
+	assert(compile!(`//-I don't show up`) == "");
+	assert(compile!(`//- I don't show up`) == "");
 
 	// issue 372
 	assert(compile!(`div(class="")`) == `<div></div>`);
