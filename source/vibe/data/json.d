@@ -1376,11 +1376,9 @@ struct JsonSerializer {
 		else m_current = Json(value);
 	}
 
-	void writeValue(T)(in T value)
+	void writeValue(T)(in Json value) if (is(T == Json))
 	{
-		static if (is(T == Json)) m_current = value.clone;
-		else static if (isJsonSerializable!T) m_current = value.toJson();
-		else m_current = Json(value);
+		m_current = value.clone;
 	}
 
 	//
