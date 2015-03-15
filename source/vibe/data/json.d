@@ -214,25 +214,6 @@ struct Json {
 	*/
 	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
 
-	Json clone() const {
-		final switch (m_type) {
-			case Type.undefined: return Json.undefined;
-			case Type.null_: return Json(null);
-			case Type.bool_: return Json(m_bool);
-			case Type.int_: return Json(m_int);
-			case Type.float_: return Json(m_float);
-			case Type.string: return Json(m_string);
-			case Type.array:
-				auto ret = Json.emptyArray;
-				foreach (v; this) ret ~= v.clone();
-				return ret;
-			case Type.object:
-				auto ret = Json.emptyObject;
-				foreach (string name, v; this) ret[name] = v.clone();
-				return ret;
-		}
-	}
-
 	/**
 		Allows direct indexing of object typed JSON values using a string as
 		the key.
@@ -1014,24 +995,6 @@ string serializeToJsonString(T)(T value)
 	return ret.data;
 }
 
-/**
-	Serializes the given value to a pretty printed JSON string.
-
-	See_also: $(D serializeToJson)
-*/
-void serializeToPrettyJson(R, T)(R destination, T value)
-	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
-{
-	serialize!(JsonStringSerializer!(R, true))(value, destination);
-}
-/// ditto
-string serializeToPrettyJson(T)(T value)
-{
-	auto ret = appender!string;
-	serializeToPrettyJson(ret, value);
-	return ret.data;
-}
-
 /// private
 Json serializeToJsonOld(T)(T value)
 {
@@ -1376,13 +1339,6 @@ struct JsonSerializer {
 		else m_current = Json(value);
 	}
 
-	void writeValue(T)(in T value)
-	{
-		static if (is(T == Json)) m_current = value.clone;
-		else static if (isJsonSerializable!T) m_current = value.toJson();
-		else m_current = Json(value);
-	}
-
 	//
 	// deserialization
 	//
@@ -1477,7 +1433,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 		void beginWriteArrayEntry(T)(size_t) { startCompositeEntry(); }
 		void endWriteArrayEntry(T)(size_t) {}
 
-		void writeValue(T)(in T value)
+		void writeValue(T)(T value)
 		{
 			static if (is(T == typeof(null))) m_range.put("null");
 			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
