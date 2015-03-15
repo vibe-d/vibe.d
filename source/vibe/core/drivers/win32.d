@@ -458,7 +458,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void acquire()
 	nothrow {
-		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		static if (__VERSION__ <= 2067) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
 		synchronized(m_mutex)
 		{
 			m_listeners[Task.getThis()] = cast(Win32EventDriver)getEventDriver();
@@ -467,7 +467,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void release()
 	nothrow {
-		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		static if (__VERSION__ <= 2067) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
 		auto self = Task.getThis();
 		synchronized(m_mutex)
 		{
@@ -478,7 +478,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	bool amOwner()
 	nothrow {
-		static if (__VERSION__ <= 2066) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		static if (__VERSION__ <= 2067) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
 		synchronized(m_mutex)
 		{
 			return (Task.getThis() in m_listeners) !is null;
