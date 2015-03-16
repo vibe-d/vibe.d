@@ -324,6 +324,30 @@ private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServe
 	return true;
 }
 
+/**
+	Encodes the given ranges of Tuple!(string, string) as URL encoded form data
+*/
+void writeFormData(R, PairRange)(R dst, PairRange pr)
+	if (isOutputRange!(R, char) && isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
+{
+	import vibe.textfilter.urlencode;
+
+   if(pr.empty) return;
+   
+   auto fst = pr.front;
+   pr.popFront();
+   
+   filterURLEncode(dst, fst[0]);
+   dst.put("=");
+   filterURLEncode(dst, fst[1]);
+
+	foreach (pair; pr) {
+		dst.put("&");
+		filterURLEncode(dst, pair[0]);
+		dst.put("=");
+		filterURLEncode(dst, pair[1]);
+	}
+}
 
 /**
 	Encodes the given dictionary as URL encoded form data.
@@ -357,6 +381,52 @@ unittest {
 	}
 }
 
+/**
+	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
+
+   params:
+      form = range of t = Tuple!(string, string), 
+             where t[0] is the name and t[1] the 
+             value of a form entry.
+*/
+void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
+   if(isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
+{
+	import vibe.http.form;
+	import vibe.stream.wrapper;
+
+	StringLengthCountingRange len;
+	writeFormData(&len, form.save);
+	req.contentType = "application/x-www-form-urlencoded";
+	req.contentLength = len.count;
+	auto rng = StreamOutputRange(req.bodyWriter);
+	writeFormData(&rng, form);
+}
+
+///
+unittest {
+	import vibe.core.log;
+	import vibe.http.client;
+	import vibe.http.form;
+	import vibe.stream.operations;
+
+   import std.range;
+
+	void sendForm()
+	{
+		string[] names = ["foo", "bar", "baz"];
+		string[] values = ["1", "2", "3"];
+		auto form = zip(names, values);
+		requestHTTP("http://example.com/form",
+			(scope req) {
+				req.method = HTTPMethod.POST;
+				req.writeFormBody(form);
+			},
+			(scope res) {
+				logInfo("Response: %s", res.bodyReader.readAllUTF8());
+			});
+	}
+}
 
 /**
 	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
