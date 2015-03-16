@@ -1475,7 +1475,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			enforceBadRequest(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
 			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(reqReader, contentLength);
 		} else if (auto pt = "Transfer-Encoding" in req.headers) {
-			enforceBadRequest(*pt == "chunked");
+			enforceBadRequest(*pt == "chunked" || *pt == "Chunked");
 			chunked_input_stream = FreeListRef!ChunkedInputStream(reqReader);
 			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(chunked_input_stream, settings.maxRequestSize, true);
 		} else {
