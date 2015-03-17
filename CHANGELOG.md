@@ -4,7 +4,7 @@
 v0.7.23 - 2015-03-
 --------------------
 
-Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` module to support `nothrow`, notable changes are extended parameter support in `vibe.web.rest`, improved translation support in `vibe.web.web` and new support for policy based customization of (de-)serialization.
+Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` module to support `nothrow`, notable changes are extended parameter support in `vibe.web.rest`, improved translation support in `vibe.web.web` and new support for policy based customization of (de-)serialization. The Diet template parser has also received a good chunk of fixes and improvements in this release.
 
 ### Features and improvements ###
 
@@ -22,7 +22,11 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
  - Added policy based customization for `vibe.data.serialization` (by Luca Niccoli) - [pull #937][issue937]
  - Added `SSLStream.peerCertificate` and `HTTPServerRequest.clientCertificate` properties (by Rico Huijbers) - [pull #965][issue965]
  - Added `RedisDatabase.zrangeByLex` (by Etienne Cimon) - [pull #993][issue993]
- - Diet templates now support default and "prepend" modes for blocks - [issue #905][issue905], [pull #1002][issue1002]
+ - Added support for HTTP digest authentication (by Kai Nacke aka redstar) - [pull #1000][issue1000]
+ - Diet template features
+ 	- Added support for plain text lines starting with `<` (plain HTML lines) (by Kai Nacke aka redstar) - [pull #1007][issue1007]
+ 	- Added support for default and "prepend" modes for blocks (help from Kai Nacke aka redstar) - [issue #905][issue905], [pull #1002][issue1002]
+ 	- Multiple "id" attributes are now explicitly disallowed (by Kai Nacke aka redstar) - [pull #1008][issue1008]
 
 ### Bug fixes ###
 
@@ -35,6 +39,11 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
  - Fixed some failed incoming SSL connection attempts by setting a default session context ID (by Rico Huijbers) - [pull #970][issue970]
  - Fixed `RedisSessionStore.create()` (by Yusuke Suzuki) - [pull #996][issue996]
  - Fixed HTML output of `//` style comments in Diet templates (by Kai Nacke) - [pull #1004][issue1004]
+ - Fixed the error message for mismatched `@path` placeholder parameters in `vibe.web.rest` (by Mathias Lang aka Geod24) - [issue #949][issue949], [pull #1001][issue1001]
+ - Fixed parsing of hidden comments in Diet templates that have no leading space (by Kai Nacke) - [pull #1012][issue1012]
+ - Fixed serialization of `const(Json)` values
+ - Fixed handling of struct parameter types in `vibe.web.rest` that implicitly convert to `string`, but not vice-versa
+ - Fixed HTTP request parsing with uppercase letters in the "Transfer-Encoding" header (by Szabo Bogdan) - [pull #1015][issue1015]
 
 [issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
 [issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
@@ -44,6 +53,7 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
 [issue946]: https://github.com/rejectedsoftware/vibe.d/issues/946
 [issue947]: https://github.com/rejectedsoftware/vibe.d/issues/947
 [issue948]: https://github.com/rejectedsoftware/vibe.d/issues/948
+[issue949]: https://github.com/rejectedsoftware/vibe.d/issues/949
 [issue961]: https://github.com/rejectedsoftware/vibe.d/issues/961
 [issue962]: https://github.com/rejectedsoftware/vibe.d/issues/962
 [issue965]: https://github.com/rejectedsoftware/vibe.d/issues/965
@@ -56,8 +66,14 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
 [issue992]: https://github.com/rejectedsoftware/vibe.d/issues/992
 [issue993]: https://github.com/rejectedsoftware/vibe.d/issues/993
 [issue996]: https://github.com/rejectedsoftware/vibe.d/issues/996
+[issue1000]: https://github.com/rejectedsoftware/vibe.d/issues/1000
+[issue1001]: https://github.com/rejectedsoftware/vibe.d/issues/1001
 [issue1002]: https://github.com/rejectedsoftware/vibe.d/issues/1002
 [issue1004]: https://github.com/rejectedsoftware/vibe.d/issues/1004
+[issue1007]: https://github.com/rejectedsoftware/vibe.d/issues/1007
+[issue1008]: https://github.com/rejectedsoftware/vibe.d/issues/1008
+[issue1012]: https://github.com/rejectedsoftware/vibe.d/issues/1012
+[issue1015]: https://github.com/rejectedsoftware/vibe.d/issues/1015
 
 
 v0.7.22 - 2015-01-12
