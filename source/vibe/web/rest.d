@@ -1166,9 +1166,13 @@ private string getInterfaceValidationError(I)() {
 		static if (pathAttr.found) {
 			import std.algorithm : canFind, splitter;
 			// splitter doesn't work with alias this ?
-			auto sp = pathAttr.value.data.splitter('/');
+			auto str = pathAttr.value.startsWith("/") ? pathAttr.value[1 .. $] : pathAttr.value.data;
+			auto sp = str.splitter('/');
 			foreach (elem; sp) {
-				if (elem.length > 0 && elem[0] ==  ':') {
+				if (!elem.length)
+					return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
+				
+				if (elem[0] == ':') {
 					// typeof(PN) is void when length is 0.
 					static if (!PN.length) {
 						if (hack)
@@ -1262,6 +1266,21 @@ unittest {
 	static assert(getInterfaceValidationError!(IGithubPR)
 		      && msg == getInterfaceValidationError!(IGithubPR)[FuncId.length..$],
 		      getInterfaceValidationError!(IGithubPR));
+}
+
+// Issue 1017
+unittest {
+	static string stripIdent(string msg) {
+		import std.string;
+		auto idx = msg.indexOf(": ");
+		return idx >= 0 ? msg[idx+2 .. $] : msg;
+	}
+
+	interface TestSuccess { @path("/") void test(); }
+	interface TestFail { @path("//") void test(); }
+	static assert(getInterfaceValidationError!TestSuccess is null);
+	static assert(stripIdent(getInterfaceValidationError!TestFail)
+		== "Path '//' contains empty entries.");
 }
 
 // Small helper for client code generation
