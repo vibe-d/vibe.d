@@ -1013,21 +1013,15 @@ private class CoreTask : TaskFiber {
 	override void join()
 	{
 		auto caller = Task.getThis();
-		auto run_count = m_taskCounter;
 		if (!m_running) return;
 		if (caller != Task.init) {
 			assert(caller.fiber !is this, "A task cannot join itself.");
 			assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
 			m_yielders ~= caller;
-			if (m_running && run_count == m_taskCounter) {
-				s_core.resumeTask(this.task);
-				while (m_running && run_count == m_taskCounter) rawYield();
-			}
-		} else {
-			assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
-			while (m_running && run_count == m_taskCounter)
-				s_core.resumeTask(this.task);
-		}
+		} else assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
+		auto run_count = m_taskCounter;
+		if (caller == Task.init) s_core.resumeTask(this.task);
+		while (m_running && run_count == m_taskCounter) rawYield();
 	}
 
 	override void interrupt()
