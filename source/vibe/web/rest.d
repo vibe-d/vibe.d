@@ -1168,7 +1168,7 @@ private string getInterfaceValidationError(I)() {
 			// splitter doesn't work with alias this ?
 			auto sp = pathAttr.value.data.splitter('/');
 			foreach (elem; sp) {
-				if (elem[0] ==  ':') {
+				if (elem.length > 0 && elem[0] ==  ':') {
 					// typeof(PN) is void when length is 0.
 					static if (!PN.length) {
 						if (hack)
