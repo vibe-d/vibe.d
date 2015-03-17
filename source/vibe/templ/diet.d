@@ -1294,7 +1294,7 @@ private struct DietCompiler(TRANSLATE...)
 		}
 
 		assertp(clamp_stack.length == 0, "Expected '"~clamp_stack[$-1]~"' before end of attribute expression.");
-		return s[start .. $];
+		return ctstrip(s[start .. $]);
 	}
 
 	private string unindent(in ref string str, in ref string indent)
@@ -1492,6 +1492,10 @@ unittest {
 			== `<input type="text" value="&amp;&quot;"/>`);
 	assert(compile!("- auto param = \"t=1&u=1\";\na(href=\"/?#{param}&v=1\") foo")
 			== `<a href="/?t=1&amp;u=1&amp;v=1">foo</a>`);
+
+	// issue #1021
+	assert(compile!("html( lang=\"en\" )")
+		== "<html lang=\"en\"></html>");
 }
 
 unittest { // blocks and extensions
