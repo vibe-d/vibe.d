@@ -512,6 +512,17 @@ void rawYield()
 }
 
 /**
+	Resumes a task that was paused with $(D rawYield) on the next run of the
+	event loop.
+*/
+void rawResume(Task t, Exception ex = null)
+{
+	CoreTask ct = cast(CoreTask)t.fiber;
+	ct.m_exception = ex;
+	s_yieldedTasks.insertBack(ct);
+}
+
+/**
 	Suspends the execution of the calling task for the specified amount of time.
 
 	Note that other tasks of the same thread will continue to run during the
