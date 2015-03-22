@@ -180,7 +180,7 @@ unittest { // test deferred throwing
 	import vibe.core.core;
 
 	auto mutex = new TaskMutex;
-	runTask({
+	auto t1 = runTask({
 		scope (failure) assert(false, "No exception expected in first task!");
 		mutex.lock();
 		scope (exit) mutex.unlock();
@@ -203,6 +203,7 @@ unittest { // test deferred throwing
 		// mutex is now locked in first task for 20 ms
 		// the second tasks is waiting in lock()
 		t2.interrupt();
+		t1.join();
 		t2.join();
 		assert(!mutex.m_impl.m_locked); // ensure that the scope(exit) has been executed
 		exitEventLoop();
@@ -309,24 +310,29 @@ private void runMutexUnitTests(M)()
 	auto m = new M;
 	Task t1, t2;
 	void runContendedTasks(bool interrupt_t1, bool interrupt_t2) {
+		assert(!m.m_impl.m_locked);
+
 		// t1 starts first and acquires the mutex for 20 ms
 		// t2 starts second and has to wait in m.lock()
-
-		auto t1 = runTask({
+		t1 = runTask({
 			assert(!m.m_impl.m_locked);
 			m.lock();
 			assert(m.m_impl.m_locked);
-			if (interrupt_t1) assertThrown(sleep(100.msecs));
+			if (interrupt_t1) assertThrown!InterruptException(sleep(100.msecs));
 			else assertNotThrown(sleep(20.msecs));
 			m.unlock();
 		});
-		auto t2 = runTask({
+		t2 = runTask({
 			assert(!m.tryLock());
 			if (interrupt_t2) {
-				assertThrown({
-					m.lock();
-					yield();
-				});
+				try m.lock();
+				catch (InterruptException) return;
+				try yield(); // rethrows any deferred exceptions
+				catch (InterruptException) {
+					m.unlock();
+					return;
+				}
+				assert(false, "Supposed to have thrown an InterruptException.");
 			} else assertNotThrown(m.lock());
 			assert(m.m_impl.m_locked);
 			sleep(20.msecs);
@@ -355,6 +361,7 @@ private void runMutexUnitTests(M)()
 		exitEventLoop();
 	});
 	runEventLoop();
+	assert(!m.m_impl.m_locked);
 
 	// interruption test #1
 	runContendedTasks(true, false);
@@ -364,6 +371,7 @@ private void runMutexUnitTests(M)()
 		t1.interrupt();
 		t1.join();
 		assert(!t1.running && t2.running);
+		yield(); // give t2 a chance to take the lock
 		assert(m.m_impl.m_locked);
 		t2.join();
 		assert(!t2.running);
@@ -371,6 +379,7 @@ private void runMutexUnitTests(M)()
 		exitEventLoop();
 	});
 	runEventLoop();
+	assert(!m.m_impl.m_locked);
 
 	// interruption test #2
 	runContendedTasks(false, true);
@@ -379,14 +388,16 @@ private void runMutexUnitTests(M)()
 		assert(m.m_impl.m_locked);
 		t2.interrupt();
 		t2.join();
-		assert(t1.running && !t2.running);
-		assert(m.m_impl.m_locked);
+		assert(!t2.running);
+		static if (is(M == InterruptibleTaskMutex) || is (M == InterruptibleRecursiveTaskMutex))
+			assert(t1.running && m.m_impl.m_locked);
 		t1.join();
 		assert(!t1.running);
 		assert(!m.m_impl.m_locked);
 		exitEventLoop();
 	});
 	runEventLoop();
+	assert(!m.m_impl.m_locked);
 }
 
 
