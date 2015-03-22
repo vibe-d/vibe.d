@@ -354,6 +354,7 @@ private void runMutexUnitTests(M)()
 		assert(m.m_impl.m_locked);
 		t1.join();
 		assert(!t1.running && t2.running);
+		yield();
 		assert(m.m_impl.m_locked);
 		t2.join();
 		assert(!t2.running);

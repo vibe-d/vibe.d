@@ -120,7 +120,6 @@ final class LibasyncDriver : EventDriver {
 		while(!m_break && getEventLoop().loop()){
 			getDriverCore().notifyIdle();
 		}
-		getEventLoop().exit();
 		m_break = false;
 		logInfo("Event loop exit", m_break);
 		return 0;

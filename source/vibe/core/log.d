@@ -540,6 +540,7 @@ final class SyslogLogger : Logger {
 		}
 
 		assert(msg.level >= LogLevel.debug_);
+		import std.conv : to; // temporary workaround for issue 1016 (DMD cross-module template overloads error out before second attempted module)
 		auto priVal = (m_facility * 8 + syslogSeverity).to!string();
 
 		alias procId = NILVALUE;
