@@ -1401,8 +1401,12 @@ static ~this()
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
 			// wait for all non-daemon threads to shut down
-			while (st_threads.any!(th => !th.thread.isDaemon))
+			while (st_threads.any!(th => !th.thread.isDaemon)) {
+				logDiagnostic("Main thread still waiting for other threads: %s",
+					st_threads.map!(t => t.thread.name ~ (t.isWorker ? " (worker thread)")).join(", "));
 				st_threadShutdownCondition.wait();
+			}
+			logDiagnostic("Main thread exiting");
 		}
 	}
 
