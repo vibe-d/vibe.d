@@ -74,6 +74,7 @@ version (Windows)
 */
 int runEventLoop()
 {
+	logDebug("Starting event loop.");
 	s_eventLoopRunning = true;
 	scope (exit) {
 		s_eventLoopRunning = false;
@@ -100,6 +101,8 @@ int runEventLoop()
 		logError("Error running event loop: %d", err);
 		return 1;
 	}
+
+	logDebug("Event loop done.");
 	return 0;
 }
 
@@ -117,6 +120,8 @@ int runEventLoop()
 */
 void exitEventLoop(bool shutdown_all_threads = false)
 {
+	logDebug("exitEventLoop called (%s)", shutdown_all_threads);
+
 	assert(s_eventLoopRunning || shutdown_all_threads);
 	if (shutdown_all_threads) {
 		atomicStore(st_term, true);
@@ -1130,10 +1135,12 @@ private class VibeDriverCore : DriverCore {
 			again = (again || !s_yieldedTasks.empty) && !getExitFlag();
 
 			if (again && !getEventDriver().processEvents()) {
+				logDebug("Setting exit flag due to driver signalling exit");
 				s_exitEventLoop = true;
 				return;
 			}
 		}
+		if (!s_yieldedTasks.empty) logDebug("Exiting from idle processing although there are still yielded tasks");
 
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
