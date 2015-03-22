@@ -28,6 +28,7 @@ struct Task {
 	private {
 		shared(TaskFiber) m_fiber;
 		size_t m_taskCounter;
+		ubyte m_priority = 16; // default weight from http/2
 		static if (newStdConcurrency) {
 			import std.concurrency : ThreadInfo, Tid;
 			static ThreadInfo s_tidInfo;
@@ -64,6 +65,8 @@ struct Task {
 		@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
 		@property size_t taskCounter() const { return m_taskCounter; }
 		@property inout(Thread) thread() inout { if (m_fiber) return this.fiber.thread; return null; }
+		@property ubyte priority() const { return m_priority; }
+		@property void priority(ubyte p) { m_priority = p; }
 
 		/** Determines if the task is still running.
 		*/

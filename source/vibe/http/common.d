@@ -13,6 +13,8 @@ import vibe.core.log;
 import vibe.core.net;
 import vibe.inet.message;
 import vibe.stream.operations;
+import vibe.stream.tls : TLSStream;
+import vibe.http.http2 : HTTP2Stream;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
@@ -29,7 +31,8 @@ import std.typecons;
 
 enum HTTPVersion {
 	HTTP_1_0,
-	HTTP_1_1
+	HTTP_1_1,
+	HTTP_2
 }
 
 
@@ -122,9 +125,6 @@ T enforceBadRequest(T)(T condition, lazy string message = null, string file = __
 	Represents an HTTP request made to a server.
 */
 class HTTPRequest {
-	protected {
-		Stream m_conn;
-	}
 
 	public {
 		/// The HTTP protocol version used for the request
@@ -145,11 +145,6 @@ class HTTPRequest {
 		InetHeaderMap headers;
 	}
 
-	protected this(Stream conn)
-	{
-		m_conn = conn;
-	}
-
 	protected this()
 	{
 	}
@@ -158,6 +153,7 @@ class HTTPRequest {
 	{
 		return httpMethodString(method) ~ " " ~ requestURL ~ " " ~ getHTTPVersionString(httpVersion);
 	}
+
 
 	/** Shortcut to the 'Host' header (always present for HTTP 1.1)
 	*/
@@ -199,15 +195,26 @@ class HTTPRequest {
 	*/
 	@property bool persistent() const
 	{
-		auto ph = "connection" in headers;
-		switch(httpVersion) {
+		if (auto ph = "connection" in headers)
+		{
+			final switch(httpVersion) {
+				case HTTPVersion.HTTP_1_0:
+					if (icmp2(*ph, "keep-alive") == 0) return true;
+					return false;
+				case HTTPVersion.HTTP_1_1:
+					if (icmp2(*ph, "close") == 0) return false;
+					return true;
+				case HTTPVersion.HTTP_2:
+					return false;
+			}
+		}
+
+		final switch(httpVersion) {
 			case HTTPVersion.HTTP_1_0:
-				if (ph && toLower(*ph) == "keep-alive") return true;
 				return false;
 			case HTTPVersion.HTTP_1_1:
-				if (ph && toLower(*ph) == "close") return false;
 				return true;
-			default:
+			case HTTPVersion.HTTP_2:
 				return false;
 		}
 	}
@@ -289,6 +296,7 @@ string getHTTPVersionString(HTTPVersion ver)
 	final switch(ver){
 		case HTTPVersion.HTTP_1_0: return "HTTP/1.0";
 		case HTTPVersion.HTTP_1_1: return "HTTP/1.1";
+		case HTTPVersion.HTTP_2: return "HTTP/2";
 	}
 }
 
@@ -384,6 +392,7 @@ final class ChunkedOutputStream : OutputStream {
 		OutputStream m_out;
 		AllocAppender!(ubyte[]) m_buffer;
 		size_t m_maxBufferSize = 512*1024;
+		ulong m_bytesWritten;
 		bool m_finalized = false;
 	}
 
@@ -401,6 +410,8 @@ final class ChunkedOutputStream : OutputStream {
 	@property size_t maxBufferSize() const { return m_maxBufferSize; }
 	/// ditto
 	@property void maxBufferSize(size_t bytes) { m_maxBufferSize = bytes; if (m_buffer.data.length >= m_maxBufferSize) flush(); }
+
+	@property ulong bytesWritten() { return m_bytesWritten; }
 
 	void write(in ubyte[] bytes_)
 	{
@@ -430,12 +441,14 @@ final class ChunkedOutputStream : OutputStream {
 				writeChunkSize(sz);
 				m_out.write(data, sz);
 				m_out.write("\r\n");
+				m_bytesWritten += "\r\n".length;
 				m_out.flush();
 			}
 		} else {
 			writeChunkSize(nbytes);
 			m_out.write(data, nbytes);
 			m_out.write("\r\n");
+			m_bytesWritten += "\r\n".length;
 			m_out.flush();
 		}
 	}
@@ -460,6 +473,7 @@ final class ChunkedOutputStream : OutputStream {
 		m_buffer.reset(AppenderResetMode.freeData);
 		m_finalized = true;
 		m_out.write("0\r\n\r\n");
+		m_bytesWritten += "0\r\n\r\n".length;
 		m_out.flush();
 	}
 	private void writeChunkSize(long length)
@@ -467,6 +481,7 @@ final class ChunkedOutputStream : OutputStream {
 		import vibe.stream.wrapper;
 		auto rng = StreamOutputRange(m_out);
 		formattedWrite(&rng, "%x\r\n", length);
+		m_bytesWritten += length + rng.length;
 	}
 }
 
@@ -502,14 +517,23 @@ final class Cookie {
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
 
-	void writeString(R)(R dst, string name)
+	string toString(string name = "Cookie") {
+		Appender!string dst;
+		writeString(dst, name);
+		return dst.data;
+	}
+
+	void writeString(R)(R dst, string name, bool encode = true)
 		if (isOutputRange!(R, char))
 	{
 		import vibe.textfilter.urlencode;
 		dst.put(name);
 		dst.put('=');
-		filterURLEncode(dst, this.value);
-		if (this.domain != "") {
+		if (encode)
+			filterURLEncode(dst, this.value);
+		else
+			dst.put(this.value);
+		if (this.domain && this.domain != "") {
 			dst.put("; Domain=");
 			dst.put(this.domain);
 		}
@@ -612,4 +636,16 @@ struct CookieValueMap {
 			}
 		return null;
 	}
+}
+
+interface CookieStore
+{
+	/// Send the '; '-joined concatenation of the cookies corresponding to the URL into sink
+	void get(string host, string path, bool secure, void delegate(string) send_to) const;
+
+	/// Send each matching cookie value individually to the specified sink
+	void get(string host, string path, bool secure, void delegate(string[]) send_to) const;
+
+	/// Sets the cookies using the provided Set-Cookie: header value entry
+	void set(string host, string set_cookie);
 }

@@ -164,6 +164,12 @@ class EndCallbackInputStream : InputStream {
 		checkEOF();
 	}
 
+	void drop() {
+		m_in = null;
+		m_callback = null;
+		m_eof = true;
+	}
+
 	@property bool empty()
 	{
 		checkEOF();

@@ -241,6 +241,7 @@ class ZlibInputStream : InputStream {
 			m_ninflated += m_outbuffer.peekDst().length - m_zstream.avail_out;
 			n_read += avins - m_zstream.avail_in;
 			m_outbuffer.putN(m_outbuffer.peekDst().length - m_zstream.avail_out);
+			//logDebug("Inflated: %s", cast(string)m_outbuffer.peek());
 			assert(m_zstream.avail_out == 0 || m_zstream.avail_out == m_outbuffer.peekDst().length);
 
 			if (ret == Z_STREAM_END) {

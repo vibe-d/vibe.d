@@ -165,7 +165,8 @@ void moveFile(Path from, Path to)
 /// ditto
 void moveFile(string from, string to)
 {
-	std.file.rename(from, to);
+	std.file.copy(from, to);
+	std.file.remove(from);
 }
 
 /**
