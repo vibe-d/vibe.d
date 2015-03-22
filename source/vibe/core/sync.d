@@ -175,7 +175,6 @@ unittest {
 	}
 }
 
-
 version (VibeLibevDriver) {} else // timers are not implemented for libev, yet
 unittest { // test deferred throwing
 	import vibe.core.core;
@@ -212,6 +211,11 @@ unittest { // test deferred throwing
 	runEventLoop();
 }
 
+version (VibeLibevDriver) {} else // timers are not implemented for libev, yet
+unittest {
+	runMutexUnitTests!TaskMutex();
+}
+
 
 /**
 	Alternative to $(D TaskMutex) that supports interruption.
@@ -225,18 +229,18 @@ unittest { // test deferred throwing
 final class InterruptibleTaskMutex : Lockable {
 	private TaskMutexImpl!true m_impl;
 
+	this() { m_impl.setup(); }
+
 	bool tryLock() nothrow { return m_impl.tryLock(); }
 	void lock() { m_impl.lock(); }
 	void unlock() nothrow { m_impl.unlock(); }
 }
 
+version (VibeLibevDriver) {} else // timers are not implemented for libev, yet
 unittest {
-	auto mutex = new InterruptibleTaskMutex;
-	mutex.performLocked!({
-		assert(mutex.m_impl.m_locked);
-	});
-	assert(!mutex.m_impl.m_locked);
+	runMutexUnitTests!InterruptibleTaskMutex();
 }
+
 
 
 /**
@@ -267,6 +271,11 @@ class RecursiveTaskMutex : core.sync.mutex.Mutex, Lockable {
 	override void unlock() { m_impl.unlock(); }
 }
 
+version (VibeLibevDriver) {} else // timers are not implemented for libev, yet
+unittest {
+	runMutexUnitTests!RecursiveTaskMutex();
+}
+
 
 /**
 	Alternative to $(D RecursiveTaskMutex) that supports interruption.
@@ -285,6 +294,99 @@ final class InterruptibleRecursiveTaskMutex : Lockable {
 	bool tryLock() { return m_impl.tryLock(); }
 	void lock() { m_impl.lock(); }
 	void unlock() { m_impl.unlock(); }
+}
+
+version (VibeLibevDriver) {} else // timers are not implemented for libev, yet
+unittest {
+	runMutexUnitTests!InterruptibleRecursiveTaskMutex();
+}
+
+
+private void runMutexUnitTests(M)()
+{
+	import vibe.core.core;
+
+	auto m = new M;
+	Task t1, t2;
+	void runContendedTasks(bool interrupt_t1, bool interrupt_t2) {
+		// t1 starts first and acquires the mutex for 20 ms
+		// t2 starts second and has to wait in m.lock()
+
+		auto t1 = runTask({
+			assert(!m.m_impl.m_locked);
+			m.lock();
+			assert(m.m_impl.m_locked);
+			if (interrupt_t1) assertThrown(sleep(100.msecs));
+			else assertNotThrown(sleep(20.msecs));
+			m.unlock();
+		});
+		auto t2 = runTask({
+			assert(!m.tryLock());
+			if (interrupt_t2) {
+				assertThrown({
+					m.lock();
+					yield();
+				});
+			} else assertNotThrown(m.lock());
+			assert(m.m_impl.m_locked);
+			sleep(20.msecs);
+			m.unlock();
+			assert(!m.m_impl.m_locked);
+		});
+	}
+
+	// basic lock test
+	m.performLocked!({
+		assert(m.m_impl.m_locked);
+	});
+	assert(!m.m_impl.m_locked);
+
+	// basic contention test
+	runContendedTasks(false, false);
+	runTask({
+		assert(t1.running && t2.running);
+		assert(m.m_impl.m_locked);
+		t1.join();
+		assert(!t1.running && t2.running);
+		assert(m.m_impl.m_locked);
+		t2.join();
+		assert(!t2.running);
+		assert(!m.m_impl.m_locked);
+		exitEventLoop();
+	});
+	runEventLoop();
+
+	// interruption test #1
+	runContendedTasks(true, false);
+	runTask({
+		assert(t1.running && t2.running);
+		assert(m.m_impl.m_locked);
+		t1.interrupt();
+		t1.join();
+		assert(!t1.running && t2.running);
+		assert(m.m_impl.m_locked);
+		t2.join();
+		assert(!t2.running);
+		assert(!m.m_impl.m_locked);
+		exitEventLoop();
+	});
+	runEventLoop();
+
+	// interruption test #2
+	runContendedTasks(false, true);
+	runTask({
+		assert(t1.running && t2.running);
+		assert(m.m_impl.m_locked);
+		t2.interrupt();
+		t2.join();
+		assert(t1.running && !t2.running);
+		assert(m.m_impl.m_locked);
+		t1.join();
+		assert(!t1.running);
+		assert(!m.m_impl.m_locked);
+		exitEventLoop();
+	});
+	runEventLoop();
 }
 
 
@@ -455,6 +557,7 @@ private struct RecursiveTaskMutexImpl(bool INTERRUPTIBLE) {
 		size_t m_recCount = 0;
 		shared(uint) m_waiters = 0;
 		ManualEvent m_signal;
+		@property bool m_locked() const { return m_recCount > 0; }
 	}
 
 	void setup()
