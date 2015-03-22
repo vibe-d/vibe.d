@@ -648,7 +648,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 					res.writeBody(ret);
 				}
 			} else {
-				static assert(is(RET == void), "Only InputStream, Json and void are supported as return types.");
+				static assert(is(RET == void), M~": Only InputStream, Json and void are supported as return types for route methods.");
 			}
 		}
 	} catch (Exception ex) {
