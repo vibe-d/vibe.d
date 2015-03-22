@@ -964,7 +964,6 @@ private class CoreTask : TaskFiber {
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					if (!s_eventLoopRunning) {
 						logTrace("Event loop not running at task start - yielding.");
-						assert(!m_queue);
 						.yield();
 						logTrace("Initial resume of task.");
 					}
