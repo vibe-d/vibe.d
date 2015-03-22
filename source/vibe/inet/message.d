@@ -21,7 +21,6 @@ import std.exception;
 import std.range;
 import std.string;
 
-
 /**
 	Parses an internet header according to RFC5322 (with RFC822 compatibility).
 

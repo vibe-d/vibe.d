@@ -40,6 +40,8 @@ import std.conv;
 import std.datetime;
 import std.exception;
 import std.string;
+import std.container : Array;
+
 
 
 version (Windows)
@@ -604,6 +606,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
 		ThreadSlotMap m_waiters;
+		Array!Task m_localWaiters;
+		debug Thread m_owner;
 	}
 
 	this(Libevent2Driver driver)
@@ -619,8 +623,42 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 			event_free(ts.event);
 	}
 
+	void emitLocal()
+	{
+		assert(m_owner == Thread.getThis());
+		foreach (Task t; m_localWaiters[])
+			resumeLocal(t);
+		m_localWaiters.clear();
+		m_owner = Thread.init;
+	}
+	
+	void waitLocal()
+	{
+		if (m_localWaiters.length > 0)
+			assert(m_owner == Thread.getThis());
+		else m_owner = Thread.getThis();
+		m_localWaiters.insertBack(Task.getThis());
+		getThreadLibeventDriverCore().yieldForEvent();
+	}
+	
+	void waitLocal(Duration timeout)
+	{
+		if (m_localWaiters.length > 0)
+			assert(m_owner == Thread.getThis());
+		else m_owner = Thread.getThis();
+		
+		auto tm = m_driver.createTimer(null);
+		scope (exit) m_driver.releaseTimer(tm);
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
+		m_driver.rearmTimer(tm, timeout, false);
+			m_localWaiters.insertBack(Task.getThis());
+		
+		getThreadLibeventDriverCore().yieldForEvent();
+	}
+	
 	void emit()
 	{
+		assert(m_owner is Thread.init);
 		// Since 2068, synchronized statements are annotated nothrow.
 		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
 		// However, they were "logically" nothrow before.
@@ -642,6 +680,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	void acquire()
 	{
+		assert(m_owner is Thread.init);
 		auto task = Task.getThis();
 		auto thread = task == Task() ? Thread.getThis() : task.thread;
 

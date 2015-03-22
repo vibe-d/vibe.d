@@ -65,6 +65,12 @@ int main()
 		} else {
 			status = runEventLoop();
 		}
+
+		version(VibeLibasyncDriver) {
+			import libasync.threads : destroyAsyncThreads;
+			destroyAsyncThreads(); // destroy threads
+		}
+
 		logDiagnostic("Event loop exited with status %d.", status);
 		return status;
 	}

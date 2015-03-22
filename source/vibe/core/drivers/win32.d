@@ -34,6 +34,8 @@ import std.exception;
 import std.string : lastIndexOf;
 import std.typecons;
 import std.utf;
+import std.container : Array;
+
 
 enum WM_USER_SIGNAL = WM_USER+101;
 enum WM_USER_SOCKET = WM_USER+102;
@@ -427,6 +429,8 @@ final class Win32ManualEvent : ManualEvent {
 		shared int m_emitCount = 0;
 		Task m_waiter;
 		bool m_timedOut;
+		Array!Task m_localWaiters;
+		debug Thread m_owner;
 	}
 
 	this(Win32EventDriver driver)
@@ -435,8 +439,41 @@ final class Win32ManualEvent : ManualEvent {
 		m_driver = driver;
 	}
 
+	void emitLocal()
+	{
+		assert(m_owner == Thread.getThis());
+		foreach (Task t; m_localWaiters[])
+			resumeLocal(t);
+		m_localWaiters.clear();
+		m_owner = Thread();
+	}
+	
+	void waitLocal()
+	{
+		if (m_localWaiters.length > 0)
+			assert(m_owner == Thread.getThis());
+		else m_owner = Thread.getThis();
+		m_localWaiters.insertBack(Thread.getThis());
+		getDriverCore().yieldForEvent();
+	}
+	
+	void waitLocal(Duration timeout)
+	{
+		if (m_localWaiters.length > 0)
+			assert(m_owner == Thread.getThis());
+		else m_owner = Thread.getThis();
+		
+		auto tm = getEventDriver().createTimer(null);
+		scope (exit) getEventDriver().releaseTimer(tm);
+		getEventDriver().m_timers.getUserData(tm).owner = Task.getThis();
+		getEventDriver().rearmTimer(tm, timeout, false);
+		
+		getDriverCore().yieldForEvent();
+	}
+	
 	void emit()
 	{
+		assert(m_owner == Thread());
 		scope (failure) assert(false); // AA.opApply is not nothrow
 		/*auto newcnt =*/ atomicOp!"+="(m_emitCount, 1);
 		bool[Win32EventDriver] threads;
@@ -458,6 +495,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void acquire()
 	nothrow {
+		assert(m_owner == Thread());
 		static if (__VERSION__ <= 2067) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
 		synchronized(m_mutex)
 		{
