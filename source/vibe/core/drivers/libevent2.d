@@ -182,6 +182,7 @@ final class Libevent2Driver : EventDriver {
 			processTimers();
 			s_driverCore.notifyIdle();
 		}
+		m_exit = false;
 		return ret;
 	}
 
@@ -195,8 +196,10 @@ final class Libevent2Driver : EventDriver {
 
 	bool processEvents()
 	{
+		logDebugV("process events with exit == %s", m_exit);
 		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
 		processTimers();
+		logDebugV("processed events with exit == %s", m_exit);
 		if (m_exit) {
 			m_exit = false;
 			return false;
@@ -206,6 +209,7 @@ final class Libevent2Driver : EventDriver {
 
 	void exitEventLoop()
 	{
+		logDebug("Libevent2Driver.exitEventLoop called");
 		m_exit = true;
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
