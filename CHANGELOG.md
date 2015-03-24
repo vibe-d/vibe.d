@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.23 - 2015-03-
+v0.7.23 - 2015-03-25
 --------------------
 
 Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` module to support `nothrow`, notable changes are extended parameter support in `vibe.web.rest`, improved translation support in `vibe.web.web` and new support for policy based customization of (de-)serialization. The Diet template parser has also received a good chunk of fixes and improvements in this release.
@@ -46,6 +46,7 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
  - Fixed handling of struct parameter types in `vibe.web.rest` that implicitly convert to `string`, but not vice-versa
  - Fixed HTTP request parsing with uppercase letters in the "Transfer-Encoding" header (by Szabo Bogdan) - [pull #1015][issue1015]
  - Fixed parsing of Diet attributes that are followed by whitespace - [issue #1021][issue1021]
+ - Fixed parsing of Diet string literal attributes that contain unbalanced parenthesis - [issue #1033][issue1033]
 
 [issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
 [issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
@@ -77,6 +78,7 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
 [issue1012]: https://github.com/rejectedsoftware/vibe.d/issues/1012
 [issue1015]: https://github.com/rejectedsoftware/vibe.d/issues/1015
 [issue1021]: https://github.com/rejectedsoftware/vibe.d/issues/1021
+[issue1033]: https://github.com/rejectedsoftware/vibe.d/issues/1033
 
 
 v0.7.22 - 2015-01-12
