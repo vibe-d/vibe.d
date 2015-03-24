@@ -462,6 +462,19 @@ struct Bson {
 		return toJson().toString();
 	}
 
+	import std.typecons : Nullable;
+
+	/**
+		Check whether the BSON object contains the given key.
+	*/
+	Nullable!Bson tryIndex(string key) const {
+		checkType(Type.object);
+		foreach(string idx, v; this)
+			if(idx == key)
+				return Nullable!Bson(v);
+		return Nullable!Bson.init;
+	}
+
 	/** Allows accessing fields of a BSON object using [].
 
 		Returns a null value if the specified field does not exist.

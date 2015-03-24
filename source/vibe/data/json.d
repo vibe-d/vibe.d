@@ -210,6 +210,15 @@ struct Json {
 	@property Type type() const { return m_type; }
 
 	/**
+		Check whether the JSON object contains the given key and if yes,
+		return a pointer to the corresponding object, otherwise return NULL.
+	*/
+	inout(Json*) opBinaryRight(string op : "in")(string key) inout {
+		checkType!(Json[string])();
+		return key in m_object;
+	}
+
+	/**
 		Allows direct indexing of array typed JSON values.
 	*/
 	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
