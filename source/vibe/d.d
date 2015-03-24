@@ -15,5 +15,3 @@
 module vibe.d;
 
 public import vibe.vibe;
-
-import vibe.appmain;
