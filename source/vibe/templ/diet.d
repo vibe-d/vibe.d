@@ -999,8 +999,7 @@ private struct DietCompiler(TRANSLATE...)
 			} else if (line[i] == '(') {
 				// parse other attributes
 				i++;
-				string attribstring = skipUntilClosingClamp(line, i);
-				parseAttributes(attribstring, attribs);
+				parseAttributes(line, i, attribs);
 				i++;
 			} else break;
 		}
@@ -1091,11 +1090,10 @@ private struct DietCompiler(TRANSLATE...)
 		output.writeString(is_singular_tag ? "/>" : ">");
 	}
 
-	private void parseAttributes(in ref string str, ref HTMLAttribute[] attribs)
+	private void parseAttributes(in ref string str, ref size_t i, ref HTMLAttribute[] attribs)
 	{
-		size_t i = 0;
 		skipWhitespace(str, i);
-		while( i < str.length ){
+		while (i < str.length && str[i] != ')') {
 			string name = skipIdent(str, i, "-:");
 			string value;
 			skipWhitespace(str, i);
@@ -1104,14 +1102,16 @@ private struct DietCompiler(TRANSLATE...)
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
 				value = skipExpression(str, i);
+				assert(i <= str.length);
 				if (isStringLiteral(value) && value[0] == '\'') {
 					auto tmp = dstringUnescape(value[1 .. $-1]);
 					value = '"' ~ dstringEscape(tmp) ~ '"';
 				}
 			} else value = "true";
 
-			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
-			if( i < str.length ){
+			assertp(i < str.length, "Unterminated attribute section.");
+			assertp(str[i] == ')' || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
+			if (str[i] == ',') {
 				i++;
 				skipWhitespace(str, i);
 			}
@@ -1119,6 +1119,8 @@ private struct DietCompiler(TRANSLATE...)
 			if (name == "class" && value == `""`) continue;
 			attribs ~= HTMLAttribute(name, value);
 		}
+
+		assertp(i < str.length, "Missing closing clamp.");
 	}
 
 	private bool hasInterpolations(in char[] str)
@@ -1236,20 +1238,6 @@ private struct DietCompiler(TRANSLATE...)
 		assert(false);
 	}
 
-	private string skipUntilClosingClamp(in ref string s, ref size_t idx)
-	{
-		int level = 0;
-		auto start = idx;
-		while( idx < s.length ){
-			if( s[idx] == '(' ) level++;
-			else if( s[idx] == ')' ) level--;
-			if( level < 0 ) return s[start .. idx];
-			idx++;
-		}
-		assertp(false, "Missing closing clamp");
-		assert(false);
-	}
-
 	private string skipAttribString(in ref string s, ref size_t idx, char delimiter)
 	{
 		size_t start = idx;
@@ -1261,6 +1249,7 @@ private struct DietCompiler(TRANSLATE...)
 			} else if( s[idx] == delimiter ) break;
 			idx++;
 		}
+		assertp(idx < s.length, "Unterminated attribute string: "~s[start-1 .. $]~"||");
 		return s[start .. idx];
 	}
 
@@ -1268,12 +1257,13 @@ private struct DietCompiler(TRANSLATE...)
 	{
 		string clamp_stack;
 		size_t start = idx;
-		while( idx < s.length ){
-			switch( s[idx] ){
+		outer:
+		while (idx < s.length) {
+			switch (s[idx]) {
 				default: break;
 				case ',':
-					if( clamp_stack.length == 0 )
-						return s[start .. idx];
+					if (clamp_stack.length == 0)
+						break outer;
 					break;
 				case '"', '\'':
 					idx++;
@@ -1283,8 +1273,8 @@ private struct DietCompiler(TRANSLATE...)
 				case '[': clamp_stack ~= ']'; break;
 				case '{': clamp_stack ~= '}'; break;
 				case ')', ']', '}':
-					if( s[idx] == ')' && clamp_stack.length == 0 )
-						return s[start .. idx];
+					if (s[idx] == ')' && clamp_stack.length == 0)
+						break outer;
 					assertp(clamp_stack.length > 0 && clamp_stack[$-1] == s[idx],
 						"Unexpected '"~s[idx]~"'");
 					clamp_stack.length--;
@@ -1294,7 +1284,7 @@ private struct DietCompiler(TRANSLATE...)
 		}
 
 		assertp(clamp_stack.length == 0, "Expected '"~clamp_stack[$-1]~"' before end of attribute expression.");
-		return ctstrip(s[start .. $]);
+		return ctstrip(s[start .. idx]);
 	}
 
 	private string unindent(in ref string str, in ref string indent)
@@ -1496,6 +1486,10 @@ unittest {
 	// issue #1021
 	assert(compile!("html( lang=\"en\" )")
 		== "<html lang=\"en\"></html>");
+
+	// issue #1033
+	assert(compile!("input(placeholder=')')")
+		== "<input placeholder=\")\"/>");
 }
 
 unittest { // blocks and extensions
