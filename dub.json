@@ -68,12 +68,5 @@
 		}
 	],
 
-	"buildTypes": {
-		"unittest": {
-			"buildOptions": ["unittests", "debugMode"],
-			"buildOptions-posix": ["debugInfo"]
-		}
-	},
-
 	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Protected", "--ex", "vibe.core.drivers.", "--ex", "vibe.internal."]
 }
