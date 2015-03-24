@@ -13,6 +13,7 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
    - The classes are now `nothrow` to stay forward compatible with D's `Mutex` and `Condition` classes,
    - Interruption using `Task.interrupt()` now gets deferred to the next wait/yield operation
    - The old behavior can be achieved using the new `InterruptipleTaskMutex` and `InterruptibleTaskCondition` classes
+ - Definition of either `VibeCustomMain` or `VibeDefaultMain` is now a hard requirement - this is the final deprecation phase for `VibeCustomMain`
  - Added an overload of `lowerPrivileges` that takes explicit user/group arguments (by Darius Clark) - [pull #948][issue948]
  - Added `handleWebSocket` as a procedural alternative to `handleWebSockets` (by Luca Niccoli) - [pull #946][issue946]
  - Added support for "msgctxt" in .po files for the `vibe.web.web` translation framework (by Nathan Coe) - [pull #896][issue896]
@@ -44,6 +45,7 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
  - Fixed serialization of `const(Json)` values
  - Fixed handling of struct parameter types in `vibe.web.rest` that implicitly convert to `string`, but not vice-versa
  - Fixed HTTP request parsing with uppercase letters in the "Transfer-Encoding" header (by Szabo Bogdan) - [pull #1015][issue1015]
+ - Fixed parsing of Diet attributes that are followed by whitespace - [issue #1021][issue1021]
 
 [issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
 [issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
@@ -74,6 +76,7 @@ Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` mo
 [issue1008]: https://github.com/rejectedsoftware/vibe.d/issues/1008
 [issue1012]: https://github.com/rejectedsoftware/vibe.d/issues/1012
 [issue1015]: https://github.com/rejectedsoftware/vibe.d/issues/1015
+[issue1021]: https://github.com/rejectedsoftware/vibe.d/issues/1021
 
 
 v0.7.22 - 2015-01-12
