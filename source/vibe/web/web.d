@@ -127,7 +127,7 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 		static if (!is(typeof(__traits(getMember, Object, M)))) { // exclude Object's default methods and field
 			foreach (overload; MemberFunctionsTuple!(C, M)) {
 				alias RT = ReturnType!overload;
-				enum minfo = extractHTTPMethodAndName!overload();
+				enum minfo = extractHTTPMethodAndName!(overload, true)();
 				enum url = minfo.hadPathUDA ? minfo.url : adjustMethodStyle(minfo.url, method_style);
 
 				static if (is(RT == class) || is(RT == interface)) {

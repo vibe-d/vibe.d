@@ -112,19 +112,12 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 	foreach (method; __traits(allMembers, I)) {
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
-			enum meta = extractHTTPMethodAndName!overload();
+			enum meta = extractHTTPMethodAndName!(overload, false)();
 
 			static if (meta.hadPathUDA) {
 				string url = meta.url;
 			}
 			else {
-				static if (__traits(identifier, overload) == "index") {
-					pragma(msg, "Processing interface " ~ I.stringof ~
-						": please use @path(\"/\") to define '/' path" ~
-						" instead of 'index' method. Special behavior will be removed" ~
-						" in the next release.");
-				}
-
 				string url = adjustMethodStyle(strip(meta.url), settings.methodStyle);
 			}
 
@@ -817,7 +810,7 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					tps ~= RT.stringof;
 					string implname = RT.stringof ~ "Impl";
 
-					enum meta = extractHTTPMethodAndName!overload();
+					enum meta = extractHTTPMethodAndName!(overload, false)();
 
 					ret ~= q{
 						auto settings_%1$s = m_settings.dup;
@@ -922,7 +915,7 @@ private string genClientBody(alias Func)() {
 	alias PTT = ParameterTypeTuple!Func;
 	alias ParamNames = ParameterIdentifierTuple!Func;
 
-	enum meta = extractHTTPMethodAndName!Func();
+	enum meta = extractHTTPMethodAndName!(Func, false)();
 	enum paramAttr = UDATuple!(WebParamAttribute, Func);
 	enum FuncId = __traits(identifier, Func);
 

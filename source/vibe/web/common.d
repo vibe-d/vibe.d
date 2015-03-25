@@ -137,7 +137,7 @@ unittest
 			* HTTPMethod extracted
 			* url path extracted
  */
-auto extractHTTPMethodAndName(alias Func)()
+auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 {   
 	if (!__ctfe)
 		assert(false);
@@ -162,8 +162,8 @@ auto extractHTTPMethodAndName(alias Func)()
 		HTTPMethod.POST   : [ "add", "create", "post" ],
 		HTTPMethod.DELETE : [ "remove", "erase", "delete" ],
 	];
-	
-	string name = __traits(identifier, Func);
+
+	enum name = __traits(identifier, Func);
 	alias T = typeof(&Func) ;
 
 	Nullable!HTTPMethod udmethod;
@@ -186,7 +186,7 @@ auto extractHTTPMethodAndName(alias Func)()
 	if (!udmethod.isNull() && !udurl.isNull()) {
 		return HandlerMeta(true, udmethod.get(), udurl.get());
 	}
-	
+
 	// Anti-copy-paste delegate
 	typeof(return) udaOverride( HTTPMethod method, string url ){
 		return HandlerMeta(
@@ -195,7 +195,7 @@ auto extractHTTPMethodAndName(alias Func)()
 			udurl.isNull() ? url : udurl.get()
 		);
 	}
-	
+
 	if (isPropertyGetter!T) {
 		return udaOverride(HTTPMethod.GET, name);
 	}
@@ -211,10 +211,10 @@ auto extractHTTPMethodAndName(alias Func)()
 				}
 			}
 		}
-		
-		if (name == "index")
+
+		static if (indexSpecialCase && name == "index") {
 			return udaOverride(HTTPMethod.GET, "");
-		else
+		} else
 			return udaOverride(HTTPMethod.POST, name);
 	}
 }
@@ -236,23 +236,23 @@ unittest
 		string mattersnot();
 	}
 	
-	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo);
+	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo, false,);
 	static assert (ret1.hadPathUDA == false);
 	static assert (ret1.method == HTTPMethod.GET);
 	static assert (ret1.url == "Info");
-	enum ret2 = extractHTTPMethodAndName!(Sample.updateDescription);
+	enum ret2 = extractHTTPMethodAndName!(Sample.updateDescription, false);
 	static assert (ret2.hadPathUDA == false);
 	static assert (ret2.method == HTTPMethod.PATCH);
 	static assert (ret2.url == "Description");
-	enum ret3 = extractHTTPMethodAndName!(Sample.putInfo);
+	enum ret3 = extractHTTPMethodAndName!(Sample.putInfo, false);
 	static assert (ret3.hadPathUDA == false);
 	static assert (ret3.method == HTTPMethod.DELETE);
 	static assert (ret3.url == "Info");
-	enum ret4 = extractHTTPMethodAndName!(Sample.getMattersnot);
+	enum ret4 = extractHTTPMethodAndName!(Sample.getMattersnot, false);
 	static assert (ret4.hadPathUDA == true);
 	static assert (ret4.method == HTTPMethod.GET);
 	static assert (ret4.url == "matters");
-	enum ret5 = extractHTTPMethodAndName!(Sample.mattersnot);
+	enum ret5 = extractHTTPMethodAndName!(Sample.mattersnot, false);
 	static assert (ret5.hadPathUDA == true);
 	static assert (ret5.method == HTTPMethod.POST);
 	static assert (ret5.url == "compound/path");
