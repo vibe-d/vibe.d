@@ -12,6 +12,7 @@ docs.json
 /docs/prettify
 /docs/scripts
 /docs/styles
+__dummy.html
 
 .dub
 dub.selections.json
@@ -22,8 +23,7 @@ dub.selections.json
 # Unittest binaries
 vibe-d
 tests/*/tests
-__test__libevent__
-__test__libev__
+__test__*__
 
 # Examples
 examples/app_skeleton/__test__library__

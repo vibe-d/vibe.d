@@ -32,22 +32,22 @@ import std.typetuple : anySatisfy, Filter;
 
 	The following table lists the mappings from prefix verb to HTTP verb:
 
-	<table>
-		<tr><th>Prefix</th><th>HTTP verb</th></tr>
-		<tr><td>get</td><td>GET</td></tr>
-		<tr><td>query</td><td>GET</td></tr>
-		<tr><td>set</td><td>PUT</td></tr>
-		<tr><td>put</td><td>PUT</td></tr>
-		<tr><td>update</td><td>PATCH</td></tr>
-		<tr><td>patch</td><td>PATCH</td></tr>
-		<tr><td>add</td><td>POST</td></tr>
-		<tr><td>create</td><td>POST</td></tr>
-		<tr><td>post</td><td>POST</td></tr>
-	</table>
+	$(TABLE
+		$(TR $(TH Prefix) $(TH HTTP verb))
+		$(TR $(TD get)	  $(TD GET))
+		$(TR $(TD query)  $(TD GET))
+		$(TR $(TD set)    $(TD PUT))
+		$(TR $(TD put)    $(TD PUT))
+		$(TR $(TD update) $(TD PATCH))
+		$(TR $(TD patch)  $(TD PATCH))
+		$(TR $(TD add)    $(TD POST))
+		$(TR $(TD create) $(TD POST))
+		$(TR $(TD post)   $(TD POST))
+	)
 
 	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
-    'id' is expected to be part of the URL instead of a JSON request. Parameters with default
-    values will be optional in the corresponding JSON request.
+	'id' is expected to be part of the URL instead of a JSON request. Parameters with default
+	values will be optional in the corresponding JSON request.
 
 	Any interface that you return from a getter will be made available with the
 	base url and its name appended.
@@ -58,7 +58,7 @@ import std.typetuple : anySatisfy, Filter;
 			must either be an interface type, or a class which derives from a
 			single interface
 		settings = Additional settings, such as the $(D MethodStyle), or the prefix.
-                           See $(D RestInterfaceSettings) for more details.
+			See $(D RestInterfaceSettings) for more details.
 
 	See_Also:
 		$(D RestInterfaceClient) class for a seamless way to access such a generated API
