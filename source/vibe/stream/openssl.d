@@ -190,7 +190,7 @@ final class OpenSSLStream : SSLStream {
 
 	const(ubyte)[] peek()
 	{
-		auto ret = SSL_peek(m_ssl, m_peekBuffer.ptr, m_peekBuffer.length);
+		auto ret = SSL_peek(m_ssl, cast(void*) m_peekBuffer.ptr, cast(int)m_peekBuffer.length);
 		checkExceptions();
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
