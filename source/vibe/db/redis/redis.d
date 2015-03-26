@@ -1352,7 +1352,6 @@ private struct RedisReplyContext {
 	bool frontIsNull = false;
 	long length = 1;
 	long index = 0;
-	ubyte[128] dataBuffer;
 }
 
 private final class RedisConnection {

@@ -164,13 +164,14 @@ struct StreamOutputRange {
 	private {
 		OutputStream m_stream;
 		size_t m_fill = 0;
-		ubyte[256] m_data = void;
+		ubyte[] m_data;
 	}
 
 	@disable this(this);
 
 	this(OutputStream stream)
 	{
+		m_data = new ubyte[256];
 		m_stream = stream;
 	}
 

@@ -58,16 +58,15 @@ package final class Libevent2TCPConnection : TCPConnection {
 		bool m_timeout_triggered;
 		TCPContext* m_ctx;
 		string m_peerAddress;
-		ubyte[64] m_peekBuffer;
 		bool m_tcpNoDelay = false;
 		bool m_tcpKeepAlive = false;
 		Duration m_readTimeout;
-		char[64] m_peerAddressBuf;
 		NetworkAddress m_localAddress, m_remoteAddress;
 	}
 
 	this(TCPContext* ctx)
 	{
+		static char[64] peer_address_buf = void;
 		m_ctx = ctx;
 
 		assert(!amOwner());
@@ -78,9 +77,9 @@ package final class Libevent2TCPConnection : TCPConnection {
 		void* ptr;
 		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
 		else ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr;
-		evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length);
-		m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf.indexOf('\0')];
-
+		evutil_inet_ntop(ctx.remote_addr.family, ptr, peer_address_buf.ptr, peer_address_buf.length);
+		m_peerAddress = cast(string)peer_address_buf[0 .. peer_address_buf.indexOf('\0')].idup;
+		
 		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
 		bufferevent_setwatermark(m_ctx.event, EV_READ, 0, 65536);
 	}

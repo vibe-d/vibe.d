@@ -47,7 +47,7 @@ class ZlibOutputStream : OutputStream {
 	private {
 		OutputStream m_out;
 		z_stream m_zstream;
-		ubyte[1024] m_outbuffer;
+		ubyte[] m_outbuffer;
 		//ubyte[4096] m_inbuffer;
 		bool m_finalized = false;
 	}
@@ -59,6 +59,7 @@ class ZlibOutputStream : OutputStream {
 
 	this(OutputStream dst, HeaderFormat type, int level = Z_DEFAULT_COMPRESSION)
 	{
+		m_outbuffer = new ubyte[1024];
 		m_out = dst;
 		zlibEnforce(deflateInit2(&m_zstream, level, Z_DEFLATED, 15 + (type == HeaderFormat.gzip ? 16 : 0), 8, Z_DEFAULT_STRATEGY));
 	}
@@ -158,8 +159,8 @@ class ZlibInputStream : InputStream {
 	private {
 		InputStream m_in;
 		z_stream m_zstream;
-		FixedRingBuffer!(ubyte, 4096) m_outbuffer;
-		ubyte[1024] m_inbuffer;
+		FixedRingBuffer!(ubyte) m_outbuffer;
+		ubyte[] m_inbuffer;
 		bool m_finished = false;
 		ulong m_ninflated, n_read;
 	}
@@ -172,6 +173,9 @@ class ZlibInputStream : InputStream {
 
 	this(InputStream src, HeaderFormat type)
 	{
+		m_inbuffer = new ubyte[1024];
+		m_outbuffer.m_freeOnDestruct = true;
+		m_outbuffer.capacity = 4096;
 		m_in = src;
 		if (m_in.empty) {
 			m_finished = true;

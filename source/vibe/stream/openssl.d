@@ -57,13 +57,14 @@ final class OpenSSLStream : SSLStream {
 		SSLStreamState m_state;
 		SSLState m_ssl;
 		BIO* m_bio;
-		ubyte[64] m_peekBuffer;
+		ubyte[] m_peekBuffer;
 		Exception[] m_exceptions;
 		SSLCertificateInformation m_peerCertificate;
 	}
 
 	this(Stream underlying, OpenSSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
+		m_peekBuffer = new ubyte[64];
 		m_stream = underlying;
 		m_state = state;
 		m_sslCtx = ctx;
