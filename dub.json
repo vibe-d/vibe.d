@@ -40,7 +40,6 @@
 		{
 			"name": "libasync",
 			"dependencies": {"libasync": "0.7.1"},
-			"platforms": ["posix"],
 			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
 		},
 		{
