@@ -477,7 +477,6 @@ class RestInterfaceClient(I) : I
 ///
 unittest
 {
-	@path("/")
 	interface IMyApi
 	{
 		// GET /status
@@ -498,7 +497,7 @@ unittest
 		Json getSomeCustomJson();
 	}
 
-	void application()
+	void test()
 	{
 		auto api = new RestInterfaceClient!IMyApi("http://127.0.0.1/api/");
 

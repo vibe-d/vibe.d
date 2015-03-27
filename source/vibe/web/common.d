@@ -126,16 +126,20 @@ unittest
 
 
 /**
-	Uses given function symbol to determine which HTTP method and
-	what URL path should be used to access it in REST API.
+	Determines the HTTP method and path for a given function symbol.
 
-	Is designed for CTFE usage and will assert at run time.
+	The final method and path are determined from the function name, as well as
+	any $(D @method) and $(D @path) attributes that may be applied to it.
+
+	This function is designed for CTFE usage and will assert at run time.
 
 	Returns:
-		Tuple of three elements:
-			* flag "was UDA used to override path"
-			* HTTPMethod extracted
-			* url path extracted
+		A tuple of three elements is returned:
+		$(UL
+			$(LI flag "was UDA used to override path")
+			$(LI $(D HTTPMethod) extracted)
+			$(LI URL path extracted)
+		)
  */
 auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 {   
@@ -260,7 +264,10 @@ unittest
 
 
 /**
-    UDA to define the ContentType for methods returning an InputStream or ubyte[]
+    Attribute to define the content type for methods.
+
+    This currently applies only to methods returning an $(D InputStream) or
+    $(D ubyte[]).
 */
 ContentTypeAttribute contentType(string data) 
 {
@@ -269,19 +276,12 @@ ContentTypeAttribute contentType(string data)
 	return ContentTypeAttribute(data);
 }
 
-/**
-	User Defined Attribute interface to force specific HTTP method in REST interface
-	for function in question. Usual URL generation rules are still applied so if there
-	are any "get", "query" or similar prefixes, they are filtered out.
 
-	Example:
-	---
-	interface IAPI
-	{
-		// Will be "POST /info" instead of default "GET /info"
-		@method(HTTPMethod.POST) getInfo();
-	}
-	---	
+/**
+	Attribute to force a specific HTTP method for an interface method.
+
+	The usual URL generation rules are still applied, so if there
+	are any "get", "query" or similar prefixes, they are filtered out.
  */
 MethodAttribute method(HTTPMethod data)
 {
@@ -290,8 +290,18 @@ MethodAttribute method(HTTPMethod data)
 	return MethodAttribute(data);
 }
 
+///
+unittest {
+	interface IAPI
+	{
+		// Will be "POST /info" instead of default "GET /info"
+		@method(HTTPMethod.POST) string getInfo();
+	}
+}
+
+
 /**
-	UDA to force a specific URL path for REST interfaces.
+	Attibute to force a specific URL path.
 
 	This attribute can be applied either to an interface itself, in which
 	case it defines the root path for all methods within it,
@@ -301,25 +311,6 @@ MethodAttribute method(HTTPMethod data)
 	see in the example below.
 
 	See_Also: $(D rootPathFromName) for automatic name generation.
-
-	Example:
-	---
-	@path("/foo")
-	interface IAPI
-	{
-		@path("info2") getInfo();
-	}
-	
-	// ...
-	
-	shared static this()
-	{
-		// Tie IAPI.getInfo to "GET /root/foo/info2"
-		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
-		// Or just to "GET /foo/info2"
-		registerRestInterface!IAPI(new URLRouter(), new API());
-	}
-	---	
 */
 PathAttribute path(string data) 
 {
@@ -328,10 +319,40 @@ PathAttribute path(string data)
 	return PathAttribute(data);
 }
 
+///
+unittest {
+	@path("/foo")
+	interface IAPI
+	{
+		@path("info2") string getInfo();
+	}
+
+	class API : IAPI {
+		string getInfo() { return "Hello, World!"; }
+	}
+	
+	void test()
+	{
+		import vibe.http.router;
+		import vibe.web.rest;
+
+		auto router = new URLRouter;
+		
+		// Tie IAPI.getInfo to "GET /root/foo/info2"
+		router.registerRestInterface!IAPI(new API(), "/root/");
+		
+		// Or just to "GET /foo/info2"
+		router.registerRestInterface!IAPI(new API());
+
+		// ...
+	}
+}
+
 
 /**
-	Will be deprecated in the next release.
-	Use @$(D path) instead.
+	Scheduled for deprecation - use @$(D path) instead.
+
+	See_Also: $(D path)
  */
 PathAttribute rootPath(string path)
 {

@@ -154,7 +154,6 @@ interface Example3API
 	int getMyID(int id);
 }
 
-@path("/")
 interface Example3APINested
 {
 	/* In this example it will be available under "GET /nested_module/number"
