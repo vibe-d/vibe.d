@@ -116,11 +116,13 @@ final class RedisClient {
 		See_also: $(LINK2 http://redis.io/commands/flushall, FLUSHALL)
 	*/
 	void deleteAll() { request("FLUSHALL"); }
-	/// Scheduled for deprecation, use $(D deleteAll) instead.
-	alias flushAll = deleteAll;
 
-	/// Scheduled for deprecation, use $(D RedisDatabase.deleteAll) instead.
-	void flushDB() { request("FLUSHDB"); }
+	/// Compatibility alias - use ´$(D deleteAll) instead.
+	deprecated("Use deleteAll instead.") alias flushAll = deleteAll;
+
+	/// Compatibility alias - use ´$(D RedisDatabase.deleteAll) instead.
+	deprecated("Use RedisDatabase.deleteAll instead.") void flushDB() { request("FLUSHDB"); }
+
 	/// Get information and statistics about the server
 	string info() { return request!string("INFO"); }
 	/// Get the UNIX time stamp of the last successful save to disk
