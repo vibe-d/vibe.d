@@ -681,10 +681,13 @@ package void initializeLogModule()
 		registerLogger(ss_stdoutLogger);
 
 		bool[4] verbose;
-		getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
-		getOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
-		getOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
-		getOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+		version (VibeNoDefaultArgs) {}
+		else {
+			readOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
+			readOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
+			readOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
+			readOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+		}
 
 		foreach_reverse (i, v; verbose)
 			if (v) {

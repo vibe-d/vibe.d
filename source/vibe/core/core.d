@@ -1336,8 +1336,11 @@ shared static this()
 		s_core.setupGcTimer();
 	}
 
-	getOption("uid|user", &s_privilegeLoweringUserName, "Sets the user name or id used for privilege lowering.");
-	getOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
+	version (VibeNoDefaultArgs) {}
+	else {
+		readOption("uid|user", &s_privilegeLoweringUserName, "Sets the user name or id used for privilege lowering.");
+		readOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
+	}
 
 	static if (newStdConcurrency) {
 		import std.concurrency;

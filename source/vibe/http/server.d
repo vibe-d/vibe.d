@@ -1664,12 +1664,14 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 
 shared static this()
 {
-	import vibe.core.args : getOption;
-
 	string disthost = s_distHost;
 	ushort distport = s_distPort;
-	getOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
-	getOption("distport", &distport, "Sets the port used for load balancing.");
+	version (VibeNoDefaultArgs) {}
+	else {
+		import vibe.core.args : readOption;
+		readOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
+		readOption("distport", &distport, "Sets the port used for load balancing.");
+	}
 	setVibeDistHost(disthost, distport);
 }
 
