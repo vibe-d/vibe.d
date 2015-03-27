@@ -1,5 +1,0 @@
-table
-	- foreach(row; table)
-		tr
-			- foreach(column; row)
-				td #{column}

@@ -1,9 +1,0 @@
-{
-	"name": "form-interface-example",
-	"description": "Uses the registerFormInterface function for making functions available to JavaScript and to Diet templates.",
-	"authors": [ "Robert Klotzner" ],
-	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
-	},
-	"versions": ["VibeDefaultMain"]
-}

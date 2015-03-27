@@ -93,9 +93,9 @@ void benchmark()
 void main()
 {
 	import vibe.core.args;
-	getOption("c", &g_concurrency, "The maximum number of concurrent requests");
-	getOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
-	getOption("k", &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
+	readOption("c", &g_concurrency, "The maximum number of concurrent requests");
+	readOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
+	readOption("k", &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
 	if (!finalizeCommandLineOptions()) return;
 	runTask(toDelegate(&benchmark));
 	runEventLoop();
