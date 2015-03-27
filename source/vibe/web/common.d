@@ -260,7 +260,7 @@ unittest
 
 
 /**
-    UDA to defeine the ContentType for methods returning an InputStream or ubyte[]
+    UDA to define the ContentType for methods returning an InputStream or ubyte[]
 */
 ContentTypeAttribute contentType(string data) 
 {
@@ -291,11 +291,20 @@ MethodAttribute method(HTTPMethod data)
 }
 
 /**
-	User Defined Attribute interface to force specific URL path n REST interface
-	for function in question. Path attribute is relative though, not absolute.
+	UDA to force a specific URL path for REST interfaces.
+
+	This attribute can be applied either to an interface itself, in which
+	case it defines the root path for all methods within it,
+	or on any function, in which case it defines the relative path
+	of this method.
+	Path are always relative, even path on interfaces, as you can
+	see in the example below.
+
+	See_Also: $(D rootPathFromName) for automatic name generation.
 
 	Example:
 	---
+	@path("/foo")
 	interface IAPI
 	{
 		@path("info2") getInfo();
@@ -305,8 +314,10 @@ MethodAttribute method(HTTPMethod data)
 	
 	shared static this()
 	{
+		// Tie IAPI.getInfo to "GET /root/foo/info2"
 		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
-		// now IAPI.getInfo is tied to "GET /root/info2"
+		// Or just to "GET /foo/info2"
+		registerRestInterface!IAPI(new URLRouter(), new API());
 	}
 	---	
 */
@@ -319,51 +330,23 @@ PathAttribute path(string data)
 
 
 /**
-	UDA to define root URL prefix for annotated REST interface.
-	Empty path means deducing prefix from interface type name (see also rootPathFromName)
+	Will be deprecated in the next release.
+	Use @$(D path) instead.
  */
-RootPathAttribute rootPath(string path)
+PathAttribute rootPath(string path)
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return RootPathAttribute(path);
-}
-///
-unittest
-{
-	import vibe.http.router;
-	import vibe.web.rest;
-
-	@rootPath("/oops")
-	interface IAPI
-	{
-		int getFoo();
-	}
-
-	class API : IAPI
-	{
-		int getFoo()
-		{
-			return 42;
-		}
-	}
-
-	auto router = new URLRouter();
-	registerRestInterface(router, new API());
-	auto routes= router.getAllRoutes();
-
-	assert(routes[0].pattern == "/oops/foo" && routes[0].method == HTTPMethod.GET);
+	return PathAttribute(path);
 }
 
 
-/**
-	Convenience alias
- */
-@property RootPathAttribute rootPathFromName()
+/// Convenience alias to generate a name from the interface's name.
+@property PathAttribute rootPathFromName()
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return RootPathAttribute("");
+	return PathAttribute("");
 }
 ///
 unittest
