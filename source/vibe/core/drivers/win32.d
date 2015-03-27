@@ -278,7 +278,7 @@ final class Win32EventDriver : EventDriver {
 		auto addr = resolveHost(bind_address);
 		addr.port = port;
 
-		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
+		auto sock = WSASocketW(addr.family, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
 		socketEnforce(sock != INVALID_SOCKET, "Failed to create socket");
 
 		socketEnforce(bind(sock, addr.sockAddr, addr.sockAddrLen) == 0,
