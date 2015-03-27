@@ -29,6 +29,7 @@
 		{
 			"name": "libevent",
 			"dependencies": {"libevent": "~>2.0.1+2.0.16"},
+			"platforms": ["windows-x86", "posix"],
 			"versions": ["VibeLibeventDriver"],
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
@@ -39,6 +40,7 @@
 		{
 			"name": "libasync",
 			"dependencies": {"libasync": "0.7.1"},
+			"platforms": ["posix"],
 			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
 		},
 		{
