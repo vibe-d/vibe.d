@@ -218,7 +218,7 @@ private void init()
 	if (!g_haveConfig)
 		logDiagnostic("No config file found in %s", searchpaths);
 
-	getOption("h|help", &g_help, "Prints this help screen.");
+	readOption("h|help", &g_help, "Prints this help screen.");
 }
 
 private enum configName = "vibe.conf";

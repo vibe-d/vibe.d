@@ -698,8 +698,6 @@ void setTaskEventCallback(TaskEventCb func)
 */
 enum vibeVersionString = "0.7.23";
 
-/// Compatibility alias
-deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersionString;
 
 /**
 	The maximum combined size of all parameters passed to a task delegate
@@ -708,8 +706,6 @@ deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersi
 */
 enum maxTaskParameterSize = 128;
 
-/// Compatibility alias
-deprecated("Use maxTaskParameterSize instead.") alias MaxTaskParameterSize = maxTaskParameterSize;
 
 /**
 	Represents a timer.

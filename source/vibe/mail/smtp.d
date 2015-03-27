@@ -83,7 +83,6 @@ final class SMTPClientSettings {
 	SMTPAuthType authType = SMTPAuthType.none;
 	SSLPeerValidationMode sslValidationMode = SSLPeerValidationMode.trustedCert;
 	void delegate(scope SSLContext) sslContextSetup;
-	deprecated("Use sslContextSetup instead.") alias sseContextSetup = sslContextSetup;
 	string username;
 	string password;
 

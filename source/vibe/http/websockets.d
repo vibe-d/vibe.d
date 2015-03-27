@@ -113,22 +113,12 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRe
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handshake)
-{
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
-	{
-		handleWebSocket(on_handshake, req, res);
-	}
-	return &callback;
-}
-/// ditto
 HTTPServerRequestDelegate handleWebSockets(void function(scope WebSocket) on_handshake)
 {
 	return handleWebSockets(toDelegate(on_handshake));
 }
 /// ditto
-deprecated("Please add 'scope' to the WebSocket parameter of the callback.")
-HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
+HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handshake)
 {
 	void callback(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -165,6 +155,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		res.headers["Connection"] = "Upgrade";
 		ConnectionStream conn = res.switchProtocol("websocket");
 
+		// TODO: put back 'scope' once it is actually enforced by DMD
 		/*scope*/ auto socket = new WebSocket(conn, req);
 		try on_handshake(socket);
 		catch (Exception e) {
@@ -177,12 +168,6 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		socket.close();
 	}
 	return &callback;
-}
-/// ditto
-deprecated("Please add 'scope' to the WebSocket parameter of the callback.")
-HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake)
-{
-	return handleWebSockets(toDelegate(on_handshake));
 }
 
 

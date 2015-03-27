@@ -437,27 +437,11 @@ package struct MethodAttribute
 }
 
 /// private
-package deprecated alias OverriddenMethod = MethodAttribute;
-
-/// private
 package struct PathAttribute
 {
 	string data;
 	alias data this;
 }
-
-/// private
-package deprecated alias OverriddenPath = PathAttribute;
-
-/// private
-package struct RootPathAttribute
-{
-	string data;
-	alias data this;
-}
-
-/// private
-package deprecated alias RootPath = RootPathAttribute;
 
 /// Private struct describing the origin of a parameter (Query, Header, Body).
 package struct WebParamAttribute {
