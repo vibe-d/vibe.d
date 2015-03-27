@@ -661,7 +661,9 @@ private struct DietCompiler(TRANSLATE...)
 						}
 						break;
 					case "doctype": // HTML Doctype header
+						assertp(level == 0, "'doctype' may only be used as a top level tag.");
 						buildDoctypeNodeWriter(output, ln, j, level);
+						assertp(next_indent_level <= level, "'doctype' may not have child tags.");
 						break;
 					case "block": // Block insertion place
 						output.pushDummyNode();
@@ -1490,6 +1492,8 @@ unittest {
 	// issue #1033
 	assert(compile!("input(placeholder=')')")
 		== "<input placeholder=\")\"/>");
+	assert(compile!("input(placeholder='(')")
+		== "<input placeholder=\"(\"/>");
 }
 
 unittest { // blocks and extensions
