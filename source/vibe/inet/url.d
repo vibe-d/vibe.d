@@ -179,13 +179,13 @@ struct URL {
 		if( ai >= 0 ){
 			m_anchor = str[ai+1 .. $];
 			str = str[0 .. ai];
-		}
+		} else m_anchor = null;
 
 		auto qi = str.indexOfCT('?');
 		if( qi >= 0 ){
 			m_queryString = str[qi+1 .. $];
 			str = str[0 .. qi];
-		}
+		} else m_queryString = null;
 
 		m_pathString = str;
 	}
@@ -282,4 +282,31 @@ unittest {
 	assert(url.queryString == "query", url.queryString);
 	assert(url.anchor == "anchor", url.anchor);
 	assert(url.toString == urlstr);
+}
+
+unittest { // issue #1044
+	URL url = URL.parse("http://example.com/p?query#anchor");
+	assert(url.schema == "http");
+	assert(url.host == "example.com");
+	assert(url.queryString == "query");
+	assert(url.anchor == "anchor");
+	assert(url.pathString == "/p");
+	url.localURI = "/q";
+	assert(url.schema == "http");
+	assert(url.host == "example.com");
+	assert(url.queryString == "");
+	assert(url.anchor == "");
+	assert(url.pathString == "/q");
+	url.localURI = "/q?query";
+	assert(url.schema == "http");
+	assert(url.host == "example.com");
+	assert(url.queryString == "query");
+	assert(url.anchor == "");
+	assert(url.pathString == "/q");
+	url.localURI = "/q#anchor";
+	assert(url.schema == "http");
+	assert(url.host == "example.com");
+	assert(url.queryString == "");
+	assert(url.anchor == "anchor");
+	assert(url.pathString == "/q");
 }
