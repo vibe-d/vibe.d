@@ -1375,13 +1375,15 @@ unittest {
 				     MethodAttribute(HTTPMethod.POST),
 				     WPA(WPA.Origin.Header, "auth", "Authorization"))));
 
-	void register() {
-		auto router = new URLRouter();
-		router.registerRestInterface(new KeysImpl());
-	}
+	static if (__VERSION__ > 2065) {
+		void register() {
+			auto router = new URLRouter();
+			router.registerRestInterface(new KeysImpl());
+		}
 
-	void query() {
-		auto client = new RestInterfaceClient!(IKeys!())("http://127.0.0.1:8080");
-		assert(client.create("Hello", 0) == "4242-4242");
+		void query() {
+			auto client = new RestInterfaceClient!(IKeys!())("http://127.0.0.1:8080");
+			assert(client.create("Hello", 0) == "4242-4242");
+		}
 	}
 }
