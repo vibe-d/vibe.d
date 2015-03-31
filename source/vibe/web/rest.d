@@ -110,6 +110,8 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 	}
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			enum meta = extractHTTPMethodAndName!(overload, false)();
@@ -753,6 +755,8 @@ private string generateRestInterfaceSubInterfaces(I)()
 	string[] tps; // list of already processed interface types
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			alias FT = FunctionTypeOf!overload;
@@ -797,6 +801,8 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 	string[] tps; // list of of already processed interface types
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			alias FT = FunctionTypeOf!overload;
@@ -848,6 +854,8 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	string[] tps; // list of already processed interface types
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			alias FT = FunctionTypeOf!overload;
@@ -886,10 +894,13 @@ mixin template RestClientMethods(I) if (is(I == interface)) {
 mixin template RestClientMethods_MemberImpl(Members...) {
 	import std.traits : MemberFunctionsTuple;
 	static assert (Members.length > 0);
-	private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
-	// Members can be declaration / fields.
-	static if (Ovrlds.length > 0) {
-		mixin RestClientMethods_OverloadImpl!(Ovrlds);
+	// WORKAROUND #1045 / @@BUG14375@@
+	static if (Members[0].length != 0) {
+		private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
+		// Members can be declaration / fields.
+		static if (Ovrlds.length > 0) {
+			mixin RestClientMethods_OverloadImpl!(Ovrlds);
+		}
 	}
 	static if (Members.length > 1) {
 		mixin RestClientMethods_MemberImpl!(Members[1..$]);
@@ -1190,10 +1201,12 @@ private string getInterfaceValidationError(I)() {
 	if (!__ctfe)
 		assert(false, "Internal error");
 	foreach (method; __traits(allMembers, I)) {
-		foreach (overload; MemberFunctionsTuple!(I, method)) {
-			static if (validateMethod!(overload)())
-				return validateMethod!(overload)();
-		}
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
+			foreach (overload; MemberFunctionsTuple!(I, method)) {
+				static if (validateMethod!(overload)())
+					return validateMethod!(overload)();
+			}
 	}
 	return null;
 }
@@ -1323,4 +1336,52 @@ private template GenOrphan(int id) {
 		}
 	}.format(Name);
 	enum Name = "OrphanCheck"~to!string(id);
+}
+
+// Workaround for issue #1045 / DMD bug 14375
+// Also, an example of policy-based design using this module.
+unittest {
+	import std.traits, std.typetuple;
+	import vibe.internal.meta.codegen;
+	import vibe.internal.meta.typetuple;
+
+	interface Policies {
+		@headerParam("auth", "Authorization")
+		string BasicAuth(string auth, ulong expiry);
+	}
+
+	@path("/keys/")
+	interface IKeys(alias AuthenticationPolicy = Policies.BasicAuth) {
+		static assert(is(FunctionTypeOf!AuthenticationPolicy == function),
+			      "Policies needs to be functions");
+		@path("/") @method(HTTPMethod.POST)
+		mixin CloneFunctionDecl!(AuthenticationPolicy, true, "create");
+	}
+
+	class KeysImpl : IKeys!() {
+	override:
+		string create(string auth, ulong expiry) {
+			return "4242-4242";
+		}
+	}
+
+	// Some sanity checks
+        // Note: order is most likely implementation dependent.
+	// Good thing we only have one frontend...
+	alias WPA = WebParamAttribute;
+	static assert(Compare!(
+			      Group!(__traits(getAttributes, IKeys!().create)),
+			      Group!(PathAttribute("/"),
+				     MethodAttribute(HTTPMethod.POST),
+				     WPA(WPA.Origin.Header, "auth", "Authorization"))));
+
+	void register() {
+		auto router = new URLRouter();
+		router.registerRestInterface(new KeysImpl());
+	}
+
+	void query() {
+		auto client = new RestInterfaceClient!(IKeys!())("http://127.0.0.1:8080");
+		assert(client.create("Hello", 0) == "4242-4242");
+	}
 }
