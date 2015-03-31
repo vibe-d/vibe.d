@@ -1,15 +1,15 @@
 /**
-	SSL/TLS stream implementation
+	TLS stream implementation
 
-	SSLStream can be used to implement SSL/TLS communication on top of a TCP connection. The
-	SSLContextKind of an SSLStream determines if the SSL tunnel is established actively (client) or
+	TLSStream can be used to implement TLS communication on top of a TCP connection. The
+	TLSContextKind of an TLSStream determines if the TLS tunnel is established actively (client) or
 	passively (server).
 
 	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
-module vibe.stream.ssl;
+module vibe.stream.tls;
 
 import vibe.core.log;
 import vibe.core.net;
@@ -28,20 +28,20 @@ import core.stdc.string : strlen;
 import core.sync.mutex;
 import core.thread;
 
-version (VibeNoSSL) {}
+version (VibeNoTLS) {}
 else version = OpenSSL;
 
 
-/// A simple SSL client
+/// A simple TLS client
 unittest {
 	import vibe.core.net;
 	import vibe.stream.ssl;
 
-	void sendSSLMessage()
+	void sendTLSMessage()
 	{
 		auto conn = connectTCP("127.0.0.1", 1234);
-		auto sslctx = createSSLContext(SSLContextKind.client);
-		auto stream = createSSLStream(conn, sslctx);
+		auto sslctx = createTLSContext(TLSContextKind.client);
+		auto stream = createTLSStream(conn, sslctx);
 		stream.write("Hello, World!");
 		stream.finalize();
 		conn.close();
@@ -55,13 +55,13 @@ unittest {
 	import vibe.stream.operations;
 	import vibe.stream.ssl;
 
-	void listenForSSL()
+	void listenForTLS()
 	{
-		auto sslctx = createSSLContext(SSLContextKind.server);
+		auto sslctx = createTLSContext(TLSContextKind.server);
 		sslctx.useCertificateChainFile("server.crt");
 		sslctx.usePrivateKeyFile("server.key");
 		listenTCP(1234, (conn){
-			auto stream = createSSLStream(conn, sslctx);
+			auto stream = createTLSStream(conn, sslctx);
 			logInfo("Got message: %s", stream.readAllUTF8());
 			stream.finalize();
 		});
@@ -77,77 +77,77 @@ unittest {
 
 	Params:
 		kind = Specifies if the context is going to be used on the client
-			or on the server end of the SSL tunnel
-		ver = The SSL/TLS protocol used for negotiating the tunnel
+			or on the server end of the TLS tunnel
+		ver = The TLS protocol used for negotiating the tunnel
 */
-SSLContext createSSLContext(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
+TLSContext createTLSContext(TLSContextKind kind, TLSVersion ver = TLSVersion.any)
 {
 	version (OpenSSL) {
-		static SSLContext createOpenSSLContext(SSLContextKind kind, SSLVersion ver) {
+		static TLSContext createOpenSSLContext(TLSContextKind kind, TLSVersion ver) {
 			import vibe.stream.openssl;
 			return new OpenSSLContext(kind, ver);
 		}
 		if (!gs_sslContextFactory)
-			setSSLContextFactory(&createOpenSSLContext);
+			setTLSContextFactory(&createOpenSSLContext);
 	}
-	assert(gs_sslContextFactory !is null, "No SSL context factory registered.");
+	assert(gs_sslContextFactory !is null, "No TLS context factory registered.");
 	return gs_sslContextFactory(kind, ver);
 }
 
-/** Constructs a new SSL tunnel and infers the stream state from the SSLContextKind.
+/** Constructs a new TLS tunnel and infers the stream state from the TLSContextKind.
 
-	Depending on the SSLContextKind of ctx, the tunnel will try to establish an SSL
+	Depending on the TLSContextKind of ctx, the tunnel will try to establish an TLS
 	tunnel by either passively accepting or by actively connecting.
 
 	Params:
-		underlying = The base stream which is used for the SSL tunnel
-		ctx = SSL context used for initiating the tunnel
+		underlying = The base stream which is used for the TLS tunnel
+		ctx = TLS context used for initiating the tunnel
 		peer_name = DNS name of the remote peer, used for certificate validation
 		peer_address = IP address of the remote peer, used for certificate validation
 */
-SSLStream createSSLStream(Stream underlying, SSLContext ctx, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+TLSStream createTLSStream(Stream underlying, TLSContext ctx, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
-	auto stream_state = ctx.kind == SSLContextKind.client ? SSLStreamState.connecting : SSLStreamState.accepting;
-	return createSSLStream(underlying, ctx, stream_state, peer_name, peer_address);
+	auto stream_state = ctx.kind == TLSContextKind.client ? TLSStreamState.connecting : TLSStreamState.accepting;
+	return createTLSStream(underlying, ctx, stream_state, peer_name, peer_address);
 }
 
-/** Constructs a new SSL tunnel, allowing to override the stream state.
+/** Constructs a new TLS tunnel, allowing to override the stream state.
 
 	This constructor allows to specify a custom tunnel state, which can
 	be useful when a tunnel has already been established by other means.
 
 	Params:
-		underlying = The base stream which is used for the SSL tunnel
-		ctx = SSL context used for initiating the tunnel
+		underlying = The base stream which is used for the TLS tunnel
+		ctx = TLS context used for initiating the tunnel
 		state = The manually specified tunnel state
 		peer_name = DNS name of the remote peer, used for certificate validation
 		peer_address = IP address of the remote peer, used for certificate validation
 */
-SSLStream createSSLStream(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+TLSStream createTLSStream(Stream underlying, TLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
 	return ctx.createStream(underlying, state, peer_name, peer_address);
 }
 
 /**
-	Constructs a new SSL stream using manual memory allocator.
+	Constructs a new TLS stream using manual memory allocator.
 */
-auto createSSLStreamFL(Stream underlying, SSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+auto createTLSStreamFL(Stream underlying, TLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 {
-	// This function has an auto return type to avoid the import of the SSL
+	// This function has an auto return type to avoid the import of the TLS
 	// implementation headers.  When client code uses this function the compiler
-	// will have to semantically analyse it and subsequently will import the SSL
+	// will have to semantically analyse it and subsequently will import the TLS
 	// implementation headers.
-	version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
+	version (VibeNoTLS) assert(false, "No TLS support compiled in (VibeNoTLS)");
 	else {
 		import vibe.utils.memory;
 		import vibe.stream.openssl;
-		static assert(AllocSize!SSLStream > 0);
+		static assert(AllocSize!TLSStream > 0);
 		return FreeListRef!OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
 	}
 }
 
-void setSSLContextFactory(SSLContext function(SSLContextKind, SSLVersion) factory)
+void setTLSContextFactory(TLSContext function(TLSContextKind, TLSVersion) factory)
 {
 	gs_sslContextFactory = factory;
 }
@@ -158,16 +158,16 @@ void setSSLContextFactory(SSLContext function(SSLContextKind, SSLVersion) factor
 /**************************************************************************************************/
 
 /**
-	Creates an SSL/TLS tunnel within an existing stream.
+	Creates an TLS tunnel within an existing stream.
 
-	Note: Be sure to call finalize before finalizing/closing the outer stream so that the SSL
+	Note: Be sure to call finalize before finalizing/closing the outer stream so that the TLS
 		tunnel is properly closed first.
 */
-interface SSLStream : Stream {
-	@property SSLCertificateInformation peerCertificate();
+interface TLSStream : Stream {
+	@property TLSCertificateInformation peerCertificate();
 }
 
-enum SSLStreamState {
+enum TLSStreamState {
 	connecting,
 	accepting,
 	connected
@@ -175,30 +175,30 @@ enum SSLStreamState {
 
 
 /**
-	Encapsulates the configuration for an SSL tunnel.
+	Encapsulates the configuration for an TLS tunnel.
 
-	Note that when creating an SSLContext with SSLContextKind.client, the
-	peerValidationMode will be set to SSLPeerValidationMode.trustedCert,
+	Note that when creating an TLSContext with TLSContextKind.client, the
+	peerValidationMode will be set to TLSPeerValidationMode.trustedCert,
 	but no trusted certificate authorities are added by default. Use
 	useTrustedCertificateFile to add those.
 */
-interface SSLContext {
-	/// The kind of SSL context (client/server)
-	@property SSLContextKind kind() const;
+interface TLSContext {
+	/// The kind of TLS context (client/server)
+	@property TLSContextKind kind() const;
 
 	/** Specifies the validation level of remote peers.
 
-		The default mode for SSLContextKind.client is
-		SSLPeerValidationMode.trustedCert and the default for
-		SSLContextKind.server is SSLPeerValidationMode.none.
+		The default mode for TLSContextKind.client is
+		TLSPeerValidationMode.trustedCert and the default for
+		TLSContextKind.server is TLSPeerValidationMode.none.
 	*/
-	@property void peerValidationMode(SSLPeerValidationMode mode);
+	@property void peerValidationMode(TLSPeerValidationMode mode);
 	/// ditto
-	@property SSLPeerValidationMode peerValidationMode() const;
+	@property TLSPeerValidationMode peerValidationMode() const;
 
 	/** The maximum length of an accepted certificate chain.
 
-		Any certificate chain longer than this will result in the SSL/TLS
+		Any certificate chain longer than this will result in the TLS
 		negitiation failing.
 
 		The default value is 9.
@@ -216,23 +216,23 @@ interface SSLContext {
 		presenting the user with a dialog in case of untrusted or mismatching
 		certificates.
 	*/
-	@property void peerValidationCallback(SSLPeerValidationCallback callback);
+	@property void peerValidationCallback(TLSPeerValidationCallback callback);
 	/// ditto
-	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout;
+	@property inout(TLSPeerValidationCallback) peerValidationCallback() inout;
 
-	/** The callback used to associcate host names with SSL certificates/contexts.
+	/** The callback used to associcate host names with TLS certificates/contexts.
 
-		This property is only used for kind $(D SSLContextKind.serverSNI).
+		This property is only used for kind $(D TLSContextKind.serverSNI).
 	*/
-	@property void sniCallback(SSLServerNameCallback callback);
+	@property void sniCallback(TLSServerNameCallback callback);
 	/// ditto
-	@property inout(SSLServerNameCallback) sniCallback() inout;
+	@property inout(TLSServerNameCallback) sniCallback() inout;
 
 	/** Creates a new stream associated to this context.
 	*/
-	SSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
+	TLSStream createStream(Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
 
-	/** Set the list of cipher specifications to use for SSL/TLS tunnels.
+	/** Set the list of cipher specifications to use for TLS tunnels.
 
 		The list must be a colon separated list of cipher
 		specifications as accepted by OpenSSL. Calling this function
@@ -282,13 +282,13 @@ interface SSLContext {
 	void useTrustedCertificateFile(string path);
 }
 
-enum SSLContextKind {
+enum TLSContextKind {
 	client,     /// Client context (active connector)
 	server,     /// Server context (passive connector)
 	serverSNI,  /// Server context with multiple certificate support (SNI)
 }
 
-enum SSLVersion {
+enum TLSVersion {
 	any, /// Accept SSLv3 or TLSv1.0 and greater
 	ssl3, /// Accept only SSLv3
 	tls1, /// Accept only TLSv1.0
@@ -298,12 +298,12 @@ enum SSLVersion {
 }
 
 
-/** Specifies how rigorously SSL peer certificates are validated.
+/** Specifies how rigorously TLS peer certificates are validated.
 
 	The individual options can be combined using a bitwise "or". Usually it is
 	recommended to use $(D trustedCert) for full validation.
 */
-enum SSLPeerValidationMode {
+enum TLSPeerValidationMode {
 	/** Accept any peer regardless if and which certificate is presented.
 
 		This mode is generally discouraged and should only be used with
@@ -330,7 +330,7 @@ enum SSLPeerValidationMode {
 	/** Validate the actual peer name/address against the certificate.
 
 		Compares the name/address of the connected peer, as passed to
-		$(D createSSLStream) to the list of patterns present in the
+		$(D createTLSStream) to the list of patterns present in the
 		certificate, if any. If no match is found, the connection is
 		rejected.
 	*/
@@ -374,7 +374,7 @@ enum SSLPeerValidationMode {
 }
 
 /** Certificate information  */
-struct SSLCertificateInformation {
+struct TLSCertificateInformation {
 
 	/** Information about the certificate's subject name.
 
@@ -384,7 +384,7 @@ struct SSLCertificateInformation {
 	DictionaryList!(string, false) subjectName;
 }
 
-struct SSLPeerValidationData {
+struct TLSPeerValidationData {
 	char[] certName;
 	string errorString;
 	// certificate chain
@@ -392,10 +392,10 @@ struct SSLPeerValidationData {
 	// public key fingerprint
 }
 
-alias SSLPeerValidationCallback = bool delegate(scope SSLPeerValidationData data);
+alias TLSPeerValidationCallback = bool delegate(scope TLSPeerValidationData data);
 
-alias SSLServerNameCallback = SSLContext delegate(string hostname);
+alias TLSServerNameCallback = TLSContext delegate(string hostname);
 
 private {
-	__gshared SSLContext function(SSLContextKind, SSLVersion) gs_sslContextFactory;
+	__gshared TLSContext function(TLSContextKind, TLSVersion) gs_sslContextFactory;
 }
