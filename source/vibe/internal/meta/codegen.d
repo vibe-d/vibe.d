@@ -189,7 +189,7 @@ unittest
 
 /// Returns a Tuple containing a 1-element parameter list, with an optional default value.
 /// Can be used to concatenate a parameter to a parameter list, or to create one.
-template ParameterTuple(T, string identifier, TUnused = void)
+template ParameterTuple(T, string identifier, DefVal : void = void)
 {
 	import std.string : format;
 	mixin(q{private void __func(T %s);}.format(identifier));
@@ -198,7 +198,7 @@ template ParameterTuple(T, string identifier, TUnused = void)
 
 
 /// Ditto
-template ParameterTuple(T, string identifier, T DefVal)
+template ParameterTuple(T, string identifier, alias DefVal)
 {
 	import std.string : format;
 	mixin(q{private void __func(T %s = DefVal);}.format(identifier));
@@ -230,6 +230,22 @@ unittest
 	// void baz3(string test, int = 10, int ident = 10);
 	void baz3(ParameterTuple!baz, ParameterTuple!(int, "ident", PDVT!(baz)[1])) { assert(ident == 10); }
 	baz3("string");
+
+	import std.datetime;
+	void baz4(ParameterTuple!(SysTime, "epoch", Clock.currTime)) { assert((Clock.currTime - epoch) < 30.seconds); }
+	baz4();
+
+	// Convertion are possible for default parameters...
+	alias baz5PT = ParameterTuple!(SysTime, "epoch", uint.min);
+
+	// However this blows up because of @@bug 14369@@
+	// alias baz6PT = ParameterTuple!(SysTime, "epoch", PDVT!(baz4)[0]));
+
+	alias baz7PT = ParameterTuple!(SysTime, "epoch", uint.max);
+	// Non existing convertion are detected.
+	static assert(!__traits(compiles, { alias baz7PT = ParameterTuple!(SysTime, "epoch", Object.init); }));
+	// And types are refused
+	static assert(!__traits(compiles, { alias baz7PT = ParameterTuple!(SysTime, "epoch", uint); }));
 }
 
 /// Returns a string of the functions attributes, suitable to be mixed
@@ -269,11 +285,22 @@ template FuncAttributes(alias Func)
 
 
 /// A template mixin which allow you to clone a function, and specify the implementation.
-mixin template CloneFunction(alias Func, string body_, string identifier = __traits(identifier, Func))
+///
+/// Params:
+/// Func       = An alias to the function to copy.
+/// body_      = The implementation of the class which will be mixed in.
+/// keepUDA    = Whether or not to copy UDAs. Since the primary use case for this template
+///                is implementing classes from interface, this defaults to $(D false).
+/// identifier = The identifier to give to the new function. Default to the identifier of
+///                $(D Func).
+///
+/// See_Also: $(D CloneFunctionDecl) to clone a prototype.
+mixin template CloneFunction(alias Func, string body_, bool keepUDA = false, string identifier = __traits(identifier, Func))
 {
 	// Template mixin: everything has to be self-contained.
 	import std.string : format;
 	import std.traits : ReturnType;
+	import std.typetuple : TypeTuple;
 	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
 	// Sadly this is not possible:
 	// class Test {
@@ -282,8 +309,12 @@ mixin template CloneFunction(alias Func, string body_, string identifier = __tra
 	//      return foo(par);
 	//   }
 	// }
+	static if (keepUDA)
+		private alias UDA = TypeTuple!(__traits(getAttributes, Func));
+	else
+		private alias UDA = TypeTuple!();
 	mixin(q{
-		ReturnType!Func %s(ParameterTuple!Func) %s {
+			@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s {
 			%s
 		}
 	}.format(identifier, FuncAttributes!Func, body_));
@@ -292,27 +323,71 @@ mixin template CloneFunction(alias Func, string body_, string identifier = __tra
 ///
 unittest
 {
+	import std.typetuple : TypeTuple;
+
 	interface ITest
 	{
-	  int foo(string par, int, string p = "foo", int = 10) pure @safe nothrow const;
-	  @property int foo2() pure @safe nothrow const;
+		@("42") int foo(string par, int, string p = "foo", int = 10) pure @safe nothrow const;
+		@property int foo2() pure @safe nothrow const;
 	}
 
 	class Test : ITest
 	{
-		mixin CloneFunction!(ITest.foo, q{
-			return 84;
-		}, "customname");
+		mixin CloneFunction!(ITest.foo, q{return 84;}, false, "customname");
 	override:
-		mixin CloneFunction!(ITest.foo, q{
-			return 42;
-		});
-		mixin CloneFunction!(ITest.foo2, q{
-			return 42;
-		});
+		mixin CloneFunction!(ITest.foo, q{return 42;}, true);
+		mixin CloneFunction!(ITest.foo2, q{return 42;});
 	}
+
+	// UDA tests
+	static assert(__traits(getAttributes, Test.customname).length == 0);
+	static assert(__traits(getAttributes, Test.foo2).length == 0);
+	static assert(__traits(getAttributes, Test.foo) == TypeTuple!("42"));
 
 	assert(new Test().foo("", 21) == 42);
 	assert(new Test().foo2 == 42);
 	assert(new Test().customname("", 21) == 84);
+}
+
+/// A template mixin which allow you to clone a function declaration
+///
+/// Params:
+/// Func       = An alias to the function to copy.
+/// keepUDA    = Whether or not to copy UDAs. Since the primary use case for this template
+///                is copying a definition, this defaults to $(D true).
+/// identifier = The identifier to give to the new function. Default to the identifier of
+///                $(D Func).
+///
+/// See_Also : $(D CloneFunction) to implement a function.
+mixin template CloneFunctionDecl(alias Func, bool keepUDA = true, string identifier = __traits(identifier, Func))
+{
+	// Template mixin: everything has to be self-contained.
+	import std.string : format;
+	import std.traits : ReturnType;
+	import std.typetuple : TypeTuple;
+	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
+
+	static if (keepUDA)
+		private alias UDA = TypeTuple!(__traits(getAttributes, Func));
+	else
+		private alias UDA = TypeTuple!();
+	mixin(q{
+			@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s;
+		}.format(identifier, FuncAttributes!Func));
+}
+
+///
+unittest {
+	import std.typetuple : TypeTuple;
+
+	enum Foo;
+	interface IUDATest {
+		@(Foo, "forty-two", 42) const(Object) bar() @safe;
+	}
+	interface UDATest {
+		mixin CloneFunctionDecl!(IUDATest.bar);
+	}
+	// Tuples don't like when you compare types using '=='.
+	static assert(is(TypeTuple!(__traits(getAttributes, UDATest.bar))[0] == Foo));
+	static assert(__traits(getAttributes, UDATest.bar)[1 .. $] == TypeTuple!("forty-two", 42));
 }
