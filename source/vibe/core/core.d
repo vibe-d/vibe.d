@@ -1013,15 +1013,20 @@ private class CoreTask : TaskFiber {
 	override void join()
 	{
 		auto caller = Task.getThis();
+		auto run_count = m_taskCounter;
+		if (!m_running) return;
 		if (caller != Task.init) {
 			assert(caller.fiber !is this, "A task cannot join itself.");
 			assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
 			m_yielders ~= caller;
-		} else assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
-		auto run_count = m_taskCounter;
-		if (m_running && run_count == m_taskCounter) {
-			s_core.resumeTask(this.task);
-			while (m_running && run_count == m_taskCounter) rawYield();
+			if (m_running && run_count == m_taskCounter) {
+				s_core.resumeTask(this.task);
+				while (m_running && run_count == m_taskCounter) rawYield();
+			}
+		} else {
+			assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
+			while (m_running && run_count == m_taskCounter)
+				s_core.resumeTask(this.task);
 		}
 	}
 
@@ -1124,7 +1129,7 @@ private class VibeDriverCore : DriverCore {
 			for (auto limit = s_yieldedTasks.length; limit > 0 && !s_yieldedTasks.empty; limit--) {
 				auto tf = s_yieldedTasks.front;
 				s_yieldedTasks.popFront();
-				resumeCoreTask(tf);
+				if (tf.state == Fiber.State.HOLD) resumeCoreTask(tf);
 			}
 
 			again = (again || !s_yieldedTasks.empty) && !getExitFlag();
@@ -1151,13 +1156,15 @@ private class VibeDriverCore : DriverCore {
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
 			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
 		} else {
-			scope (failure) assert(false); // runEventLoopOnce is not yet nothrow
 			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
 			m_eventException = null;
-			if (auto err = getEventDriver().runEventLoopOnce()) {
+			try if (auto err = getEventDriver().runEventLoopOnce()) {
 				logError("Error running event loop: %d", err);
 				assert(err != 1, "No events registered, exiting event loop.");
 				assert(false, "Error waiting for events.");
+			}
+			catch (Exception e) {
+				assert(false, "Driver.runEventLoopOnce() threw: "~e.msg);
 			}
 			// leave m_eventException untouched, so that it gets thrown on the next yieldForEvent call
 		}
