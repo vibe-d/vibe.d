@@ -298,7 +298,7 @@ unittest {
 		// now the following routes will be matched:
 		// / -> showHome
 		// /component1/ -> showComponentHome
-		// /component1/:user -> showComponentUser
+		// /component1/users/:user -> showComponentUser
 
 		// Start the HTTP server
 		auto settings = new HTTPServerSettings;
