@@ -40,6 +40,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// Handles the HTTP request by dispatching it to the registered request handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
 
+	/// Adds a new route for GET requests matching the "/" pattern
+	final HTTPRouter get(HTTPServerRequestHandler cb) { return get(&cb.handleRequest); }
+	final HTTPRouter get(HTTPServerRequestFunction cb) { return get(toDelegate(cb)); }
+	final HTTPRouter get(HTTPServerRequestDelegate cb) { return get("/", cb); }
 	/// Adds a new route for GET requests matching the specified pattern.
 	final HTTPRouter get(string url_match, HTTPServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
 	/// ditto
@@ -47,6 +51,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// ditto
 	final HTTPRouter get(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.GET, url_match, cb); }
 
+	/// Adds a new route for POST requests matching the "/" pattern.
+	final HTTPRouter post(HTTPServerRequestHandler cb) { return post(&cb.handleRequest); }
+	final HTTPRouter post(HTTPServerRequestFunction cb) { return post(toDelegate(cb)); }
+	final HTTPRouter post(HTTPServerRequestDelegate cb) { return post("/", cb); }
 	/// Adds a new route for POST requests matching the specified pattern.
 	final HTTPRouter post(string url_match, HTTPServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
 	/// ditto
@@ -54,6 +62,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// ditto
 	final HTTPRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
 
+	/// Adds a new route for PUT requests matching the "/" pattern.
+	final HTTPRouter put(HTTPServerRequestHandler cb) { return put(&cb.handleRequest); }
+	final HTTPRouter put(HTTPServerRequestFunction cb) { return put(toDelegate(cb)); }
+	final HTTPRouter put(HTTPServerRequestDelegate cb) { return put("/", cb); }
 	/// Adds a new route for PUT requests matching the specified pattern.
 	final HTTPRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
 	/// ditto
@@ -61,6 +73,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// ditto
 	final HTTPRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
 
+	/// Adds a new route for DELETE requests matching the "/" pattern.
+	final HTTPRouter delete_(HTTPServerRequestHandler cb) { return delete_(&cb.handleRequest); }
+	final HTTPRouter delete_(HTTPServerRequestFunction cb) { return delete_(toDelegate(cb)); }
+	final HTTPRouter delete_(HTTPServerRequestDelegate cb) { return delete_("/", cb); }
 	/// Adds a new route for DELETE requests matching the specified pattern.
 	final HTTPRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
 	/// ditto
@@ -68,6 +84,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// ditto
 	final HTTPRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
 
+	/// Adds a new route for PATCH requests matching the "/" pattern.
+	final HTTPRouter patch(HTTPServerRequestHandler cb) { return patch(&cb.handleRequest); }
+	final HTTPRouter patch(HTTPServerRequestFunction cb) { return patch(toDelegate(cb)); }
+	final HTTPRouter patch(HTTPServerRequestDelegate cb) { return patch("/", cb); }
 	/// Adds a new route for PATCH requests matching the specified pattern.
 	final HTTPRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
 	/// ditto
@@ -75,6 +95,10 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	/// ditto
 	final HTTPRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
 
+	/// Adds a new route for requests matching the "/" pattern, regardless of their HTTP verb.
+	final HTTPRouter any(HTTPServerRequestHandler cb) { return any(&cb.handleRequest); }
+	final HTTPRouter any(HTTPServerRequestFunction cb) { return any(toDelegate(cb)); }
+	final HTTPRouter any(HTTPServerRequestDelegate cb) { return any("/", cb); }
 	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
 	final HTTPRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
 	/// ditto
@@ -89,6 +113,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 			match(method, url_match, cb);
 
 		return this;
+	}
+	/// Adds a new subroute without a handler for requests matching the specified pattern, regardless of their HTTP verb.
+	final HTTPRouter route(string url_match) {
+		HTTPRouter r = new HTTPRouter(url_match);
+		any("*", r);
+		return r;
 	}
 }
 
