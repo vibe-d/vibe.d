@@ -267,7 +267,7 @@ unittest {
 		// the place holders in req.params as 'username' and 'groupname'.
 		router.get("/users/:username/groups/:groupname", &addGroup);
 
-		// Natches all requests. This can be useful for authorization and
+		// Matches all requests. This can be useful for authorization and
 		// similar tasks. The auth method will only write a response if the
 		// user is _not_ authorized. Otherwise, the router will fall through
 		// and continue with the following routes.
@@ -326,6 +326,51 @@ unittest {
 
 		auto mainrouter = new URLRouter;
 		mainrouter.get("/", &showHome);
+		// forward all unprocessed requests to the component router
+		mainrouter.any("*", c1router);
+
+		// now the following routes will be matched:
+		// / -> showHome
+		// /component1/ -> showComponentHome
+		// /component1/users/:user -> showComponentUser
+
+		// Start the HTTP server
+		auto settings = new HTTPServerSettings;
+		// ...
+		listenHTTP(settings, mainrouter);
+	}
+}
+
+/** Using nested routers to map components to different sub paths. A component
+	could for example be an embedded blog engine.
+*/
+unittest {
+	// some embedded component:
+
+	void showComponentHome(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	void showComponentUser(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	// main application:
+
+	void showHome(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// ...
+	}
+
+	void setup()
+	{
+		auto mainrouter = new URLRouter;
+		mainrouter.get("/", &showHome);
+    mainrouter.route("/component1")
+    .get(&showComponentHome)
+    .get("/users/:user", &showComponentUser);
 		// forward all unprocessed requests to the component router
 		mainrouter.any("*", c1router);
 
