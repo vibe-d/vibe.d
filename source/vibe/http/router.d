@@ -371,8 +371,6 @@ unittest {
     mainrouter.route("/component1")
     .get(&showComponentHome)
     .get("/users/:user", &showComponentUser);
-		// forward all unprocessed requests to the component router
-		mainrouter.any("*", c1router);
 
 		// now the following routes will be matched:
 		// / -> showHome
