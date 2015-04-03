@@ -114,12 +114,9 @@ interface HTTPRouter : HTTPServerRequestHandler {
 
 		return this;
 	}
+
 	/// Adds a new subroute without a handler for requests matching the specified pattern, regardless of their HTTP verb.
-	final HTTPRouter route(string url_match) {
-		HTTPRouter r = new HTTPRouter(url_match);
-		any("*", r);
-		return r;
-	}
+	HTTPRouter route(string url_match);
 }
 
 
@@ -232,6 +229,13 @@ final class URLRouter : HTTPRouter {
 				r = m_routes.getTerminalData(i);
 			return routes;
 		} else return m_routes;
+	}
+
+	/// Adds a new subroute without a handler for requests matching the specified pattern, regardless of their HTTP verb.
+	URLRouter route(string url_match) {
+		URLRouter r = new URLRouter(url_match);
+		any("*", r);
+		return r;
 	}
 }
 
