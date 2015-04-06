@@ -1661,8 +1661,53 @@ private string callWithMove(ARGS...)(string func, string args)
 
 private template needsMove(T)
 {
-	// FIXME: reverse the condition and only call .move for non-copyable types!
-	enum needsMove = is(typeof(T.init.move));
+	private T testCopy()()
+	{
+		T a = void;
+		T b = void;
+		T fun(T x) { T y = x; return y; }
+		b = fun(a);
+		return b;
+	}
+
+	private void testMove()()
+	{
+		T a = void;
+		void test(T) {}
+		test(a.move);
+	}
+
+	static if (is(typeof(testCopy!()()) == T)) enum needsMove = false;
+	else {
+		enum needsMove = true;
+		void test() { testMove!()(); }
+		static assert(is(typeof(testMove!()())), "Non-copyable type "~T.stringof~" must be movable with a .move property."~ typeof(testMove!()()));
+	}
+}
+
+unittest {
+	enum E { a, move }
+	static struct S {
+		@disable this(this);
+		@property S move() { return S.init; }
+	}
+	static struct T { @property T move() { return T.init; } }
+	static struct U { }
+	static struct V {
+		@disable this();
+		@disable this(this);
+		@property V move() { return V.init; }
+	}
+	static struct W { @disable this(); }
+
+	static assert(needsMove!S);
+	static assert(!needsMove!int);
+	static assert(!needsMove!string);
+	static assert(!needsMove!E);
+	static assert(!needsMove!T);
+	static assert(!needsMove!U);
+	static assert(needsMove!V);
+	static assert(!needsMove!W);
 }
 
 version(VibeLibasyncDriver) {
