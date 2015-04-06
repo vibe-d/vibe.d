@@ -241,8 +241,13 @@ struct MongoCollection {
 		cmd.count = m_name;
 		cmd.query = query;
 		auto reply = database.runCommand(cmd);
-		enforce(reply.ok.get!double == 1, "Count command failed.");
-		return cast(ulong)reply.n.get!double;
+		enforce(reply.ok.opt!double == 1 || reply.ok.opt!int == 1, "Count command failed.");
+		switch (reply.n.type) with (Bson.Type) {
+			default: assert(false, "Unsupported data type in BSON reply for COUNT");
+			case double_: return cast(ulong)reply.n.get!double; // v2.x
+			case int_: return reply.n.get!int; // v3.x
+			case long_: return reply.n.get!long; // just in case
+		}
 	}
 
 	/**
