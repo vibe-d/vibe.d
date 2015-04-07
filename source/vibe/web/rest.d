@@ -373,7 +373,7 @@ class RestInterfaceClient(I) : I
 			URL url = m_baseURL;
 
 			if (name.length) url ~= Path(name);
-			if (query) url.queryString = query;
+			if (query.length) url.queryString = query;
 
 			Json ret;
 
@@ -386,7 +386,7 @@ class RestInterfaceClient(I) : I
 					m_requestFilter(req);
 				}
 
-				if (body_)
+				if (body_ != "")
 					req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
 			};
 
@@ -1208,7 +1208,7 @@ unittest {
 		@headerParam("ath", "Authorization")
 		string getResponse(string auth);
 	}
-	static assert(getInterfaceValidationError!(ITypo)
+	static assert(getInterfaceValidationError!(ITypo) !is null
 		      && msg == getInterfaceValidationError!(ITypo)[FuncId.length..$],
 		      getInterfaceValidationError!(ITypo));
 }
@@ -1222,7 +1222,7 @@ unittest {
 		@headerParam("arg1", "Authorization") @bodyParam("arg1", "Authorization")
 		string getResponse(string arg1, int arg2);
 	}
-	static assert(getInterfaceValidationError!(IMultipleOrigin)
+	static assert(getInterfaceValidationError!(IMultipleOrigin) !is null
 		      && msg == getInterfaceValidationError!(IMultipleOrigin)[FuncId.length..$],
 		      getInterfaceValidationError!(IMultipleOrigin));
 }
@@ -1241,10 +1241,10 @@ unittest {
 	interface IMissingName2 {
 		string getResponse(string);
 	}
-	static assert(getInterfaceValidationError!(IMissingName1)
+	static assert(getInterfaceValidationError!(IMissingName1) !is null
 		      && msg == getInterfaceValidationError!(IMissingName1)[FuncId.length..$],
 		      getInterfaceValidationError!(IMissingName1));
-	static assert(getInterfaceValidationError!(IMissingName2)
+	static assert(getInterfaceValidationError!(IMissingName2) !is null
 		      && msg == getInterfaceValidationError!(IMissingName2)[FuncId.length..$],
 		      getInterfaceValidationError!(IMissingName2));
 }
@@ -1259,7 +1259,7 @@ unittest {
 		@path(":owner/:repo/pulls")
 		string getPullRequests(string owner, string repo);
 	}
-	static assert(getInterfaceValidationError!(IGithubPR)
+	static assert(getInterfaceValidationError!(IGithubPR) !is null
 		      && msg == getInterfaceValidationError!(IGithubPR)[FuncId.length..$],
 		      getInterfaceValidationError!(IGithubPR));
 }

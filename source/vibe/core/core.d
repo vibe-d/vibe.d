@@ -658,7 +658,7 @@ void setTaskStackSize(size_t sz)
 void lowerPrivileges(string uname, string gname)
 {
 	if (!isRoot()) return;
-	if (uname || gname) {
+	if (uname != "" || gname != "") {
 		static bool tryParse(T)(string s, out T n)
 		{
 			import std.conv, std.ascii;
@@ -667,8 +667,8 @@ void lowerPrivileges(string uname, string gname)
 			return s.length==0;
 		}
 		int uid = -1, gid = -1;
-		if (uname && !tryParse(uname, uid)) uid = getUID(uname);
-		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
+		if (uname != "" && !tryParse(uname, uid)) uid = getUID(uname);
+		if (gname != "" && !tryParse(gname, gid)) gid = getGID(gname);
 		setUID(uid, gid);
 	} else logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering. Running with full permissions.");
 }

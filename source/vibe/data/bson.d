@@ -1428,7 +1428,7 @@ struct BsonSerializer {
 			m_type = tp;
 		}
 
-		if (m_entryName) {
+		if (m_entryName !is null) {
 			m_dst.put(tp);
 			m_dst.putCString(m_entryName);
 			m_entryName = null;

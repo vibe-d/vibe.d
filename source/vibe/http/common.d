@@ -263,7 +263,7 @@ class HTTPStatusException : Exception {
 
 	this(int status, string message = null, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
-		super(message ? message : httpStatusText(status), file, line, next);
+		super(message != "" ? message : httpStatusText(status), file, line, next);
 		m_status = status;
 	}
 
@@ -507,15 +507,15 @@ final class Cookie {
 		dst.put(name);
 		dst.put('=');
 		filterURLEncode(dst, this.value);
-		if (this.domain) {
+		if (this.domain != "") {
 			dst.put("; Domain=");
 			dst.put(this.domain);
 		}
-		if (this.path) {
+		if (this.path != "") {
 			dst.put("; Path=");
 			dst.put(this.path);
 		}
-		if (this.expires) {
+		if (this.expires != "") {
 			dst.put("; Expires=");
 			dst.put(this.expires);
 		}

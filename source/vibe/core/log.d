@@ -504,8 +504,8 @@ final class SyslogLogger : Logger {
 	*/
 	this(OutputStream stream, Facility facility, string appName = null, string hostName = hostName())
 	{
-		m_hostName = hostName ? hostName : NILVALUE;
-		m_appName = appName ? appName : NILVALUE;
+		m_hostName = hostName != "" ? hostName : NILVALUE;
+		m_appName = appName != "" ? appName : NILVALUE;
 		m_ostream = stream;
 		m_facility = facility;
 		this.minLevel = LogLevel.debug_;

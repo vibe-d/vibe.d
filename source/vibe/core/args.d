@@ -47,7 +47,7 @@ import core.runtime;
 bool readOption(T)(string names, T* pvalue, string help_text)
 {
 	// May happen due to http://d.puremagic.com/issues/show_bug.cgi?id=9881
-	if (!g_args) init();
+	if (g_args is null) init();
 
 	OptionInfo info;
 	info.names = names.split("|").sort!((a, b) => a.length < b.length)().array();
