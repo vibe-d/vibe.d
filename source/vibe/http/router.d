@@ -362,8 +362,9 @@ unittest {
 private enum maxRouteParameters = 64;
 
 private struct Route {
+  import std.regex;
 	HTTPMethod method;
-	string pattern;
+	Regex!char pattern;
 	HTTPServerRequestDelegate cb;
 
   this(HTTPMethod method, string url_match, HTTPServerRequestDelegate cb){
@@ -376,11 +377,10 @@ private struct Route {
     ***/
     this.method = method;
     this.cb = cb;
-    replaceAllInto!(p => "(P<"~p[1]~">(?!/).*)")(this.pattern, "^" ~ replaceFirst(url_match, regex(r"\*.*"), ""), regex(":((?!/).+)"));
-    this.pattern = regex(this.pattern);
+    this.pattern = regex(replaceAll!(p => "(P<"~p[1]~">(?!/).*)")("^" ~ replaceFirst(url_match, regex(r"\*.*"), ""), regex(":((?!/).+)")));
   }
 
-  this(HTTPMethod method, Regex url_match, HTTPServerRequestDelegate cb){
+  this(HTTPMethod method, Regex!char url_match, HTTPServerRequestDelegate cb){
     this.method = method;
     this.cb = cb;
     this.pattern = url_match;
@@ -393,13 +393,12 @@ private struct Route {
     * If it matches, populate params with any captures returned by the regex,
     * including named captures.
     ***/
-    Captures cap = url.matchFirst(this.pattern);
+    Captures!(string) cap = url.matchFirst(this.pattern);
     if (!cap.length) return false;
     assert(cap.length < maxRouteParameters, "Maximum number of route parameters exceeded.");
     foreach(n; this.pattern.namedCaptures)
       params[n] = cap[n];
-    for(i=1; i<cap.length; i++)
-      params[i] = cap[i];
+    params ~= cap[1..$];
     return true;
   }
 }
