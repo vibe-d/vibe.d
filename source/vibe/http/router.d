@@ -1,7 +1,9 @@
 /**
-	Pattern based URL router.
+	Pattern based URL router for HTTP request.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	See `URLRouter` for more details.
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -96,14 +98,43 @@ interface HTTPRouter : HTTPServerRequestHandler {
 /**
 	Routes HTTP requests based on the request method and URL.
 
-	Routes are matched using a special URL match string that supports two forms of placeholders.
-	The following example shows how these are used.
+	Routes are matched using a special URL match string that supports two forms
+	of placeholders. See the sections below for more details.
 
-	Registered routes are matched in the same sequence as initially specified.
-	Matching ends as soon as a route handler writes a response using res.writeBody()
-	or similar means. If no route matches or if no route handler writes a response,
-	the router will simply not handle the request and the HTTP server will generate
-	a 404 error.
+	Registered routes are matched according to the same sequence as initially
+	specified using `match`, `get`, `post` etc. Matching ends as soon as a route
+	handler writes a response using `res.writeBody()` or similar means. If no
+	route matches or if no route handler writes a response, the router will
+	simply not handle the request and the HTTP server will automatically
+	generate a 404 error.
+
+	Match_patterns:
+		Match patterns are character sequences that can optionally contain
+		placeholders or raw wildcards ("*"). Raw wild cards match any character
+		sequence, while placeholders match only sequences containing no slash
+		("/") characters.
+
+		Placeholders are started using a colon (":") and are directly followed
+		by their name. The first "/" character (or the end of the match string)
+		denotes the end of the placeholder name. The part of the string that
+		matches a placeholder will be stored in the `HTTPServerRequest.params`
+		map using the placeholder name as the key.
+
+		Match strings are subject to the following rules:
+		$(UL
+			$(LI A raw wildcard ("*") may only occur at the end of the match string)
+			$(LI At least one character must be placed between any two placeholders or wildcards)
+			$(LI The maximum allowed number of placeholders in a single match string is 64)
+		)
+
+	Match_String_Examples:
+		$(UL
+			$(LI `"/foo/bar"` matches only `"/foo/bar"` itself)
+			$(LI `"/foo/*"` matches `"/foo/"`, `"/foo/bar"`, `"/foo/bar/baz"` or _any other string beginning with `"/foo/"`)
+			$(LI `"/:x/"` matches `"/foo/"`, `"/bar/"` and similar strings (and stores `"foo"`/`"bar"` in `req.params["x"]`), but not `"/foo/bar/"`)
+			$(LI Matching partial path entries with wildcards is possible: `"/foo:x"` matches `"/foo"`, `"/foobar"`, but not `"/foo/bar"`)
+			$(LI Multiple placeholders and raw wildcards can be combined: `"/:x/:y/*"`)
+		)
 */
 final class URLRouter : HTTPRouter {
 	private {
