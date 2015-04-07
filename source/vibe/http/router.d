@@ -376,7 +376,7 @@ private struct Route {
     ***/
     this.method = method;
     this.cb = cb;
-    replaceAllInto!(p => "(P<"~p[1]~">(?!/).*)")(this.pattern, "^" ~ replaceFirst(url_match, regex("\*.*"), ""), regex(":((?!/).+)"));
+    replaceAllInto!(p => "(P<"~p[1]~">(?!/).*)")(this.pattern, "^" ~ replaceFirst(url_match, regex(r"\*.*"), ""), regex(":((?!/).+)"));
     this.pattern = regex(this.pattern);
   }
 
