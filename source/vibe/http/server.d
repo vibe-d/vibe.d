@@ -1380,7 +1380,8 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 
 	// Create the response object
-	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
+	auto res = FreeListObjectAlloc!HTTPServerResponse.alloc(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
+	scope(exit) FreeListObjectAlloc!HTTPServerResponse.free(res);
 	req.ssl = res.m_ssl = listen_info.sslContext !is null;
 	if (req.ssl) req.clientCertificate = (cast(SSLStream)http_stream).peerCertificate;
 
