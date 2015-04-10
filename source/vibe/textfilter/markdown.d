@@ -13,7 +13,6 @@ import vibe.utils.string;
 
 import std.algorithm : canFind, countUntil, min;
 import std.array;
-import std.ascii : isAlpha, isWhite;
 import std.format;
 import std.range;
 import std.string;
@@ -49,7 +48,7 @@ string filterMarkdown()(string str, MarkdownFlags flags)
 /// ditto
 string filterMarkdown()(string str, scope MarkdownSettings settings = null)
 @trusted { // Appender not @safe as of 2.065
-	auto dst = appender!string(); 
+	auto dst = appender!string();
 	filterMarkdown(dst, str, settings);
 	return dst.data;
 }
@@ -63,7 +62,7 @@ void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags)
 	settings.flags = flags;
 	filterMarkdown(dst, src, settings);
 }
-/// ditto	
+/// ditto
 void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = null)
 {
 	auto defsettings = new MarkdownSettings;
@@ -677,7 +676,8 @@ pure @safe {
 		ret.open = false;
 		ln = ln[1 .. $];
 	}
-	if( !std.ascii.isAlpha(ln[1]) ) return ret;
+	import std.ascii : isAlpha;
+	if( !isAlpha(ln[1]) ) return ret;
 	ln = ln[1 .. $];
 	size_t idx = 0;
 	while( idx < ln.length && ln[idx] != ' ' && ln[idx] != '>' )
@@ -794,6 +794,7 @@ pure @safe {
 		if( cidx < 1 ) return false;
 		auto inner = pstr[1 .. cidx];
 		immutable qidx = inner.indexOfCT('"');
+		import std.ascii : isWhite;
 		if( qidx > 1 && inner[qidx - 1].isWhite()){
 			dst.url = inner[0 .. qidx].stripRight();
 			immutable len = inner[qidx .. $].lastIndexOf('"');
