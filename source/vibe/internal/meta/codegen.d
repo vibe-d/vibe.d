@@ -126,6 +126,8 @@ string[] getRequiredImports(I)()
 	}
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 			alias FuncType = FunctionTypeOf!overload;
 
