@@ -211,20 +211,10 @@ struct Json {
 	@property Type type() const { return m_type; }
 
 	/**
-		Check whether the JSON object contains the given key and if yes,
-		return a pointer to the corresponding object, otherwise return NULL.
+		Clones a JSON value recursively.
 	*/
-	inout(Json*) opBinaryRight(string op : "in")(string key) inout {
-		checkType!(Json[string])();
-		return key in m_object;
-	}
-
-	/**
-		Allows direct indexing of array typed JSON values.
-	*/
-	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
-
-	Json clone() const {
+	Json clone()
+	const {
 		final switch (m_type) {
 			case Type.undefined: return Json.undefined;
 			case Type.null_: return Json(null);
@@ -242,6 +232,32 @@ struct Json {
 				return ret;
 		}
 	}
+
+	/**
+		Check whether the JSON object contains the given key and if yes,
+		return a pointer to the corresponding object, otherwise return NULL.
+	*/
+	inout(Json*) opBinaryRight(string op : "in")(string key) inout {
+		checkType!(Json[string])();
+		return key in m_object;
+	}
+
+	/**
+		Allows direct indexing of array typed JSON values.
+	*/
+	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
+
+	///
+	unittest {
+		Json value = Json.emptyArray;
+		value ~= 1;
+		value ~= true;
+		value ~= "foo";
+		assert(value[0] == 1);
+		assert(value[1] == true);
+		assert(value[2] == "foo");
+	}
+
 
 	/**
 		Allows direct indexing of object typed JSON values using a string as
@@ -274,6 +290,17 @@ struct Json {
 		m_object[key].m_string = key;
 		version (VibeJsonFieldNames) m_object[key].m_name = format("%s.%s", m_name, key);
 		return m_object[key];
+	}
+
+	///
+	unittest {
+		Json value = Json.emptyObject;
+		value["a"] = 1;
+		value["b"] = true;
+		value["c"] = "foo";
+		assert(value["a"] == 1);
+		assert(value["b"] == true);
+		assert(value["c"] == "foo");
 	}
 
 	/**
@@ -699,6 +726,8 @@ struct Json {
 	bool opEquals(typeof(null)) const { return m_type == Type.null_; }
 	/// ditto
 	bool opEquals(bool v) const { return m_type == Type.bool_ && m_bool == v; }
+	/// ditto
+	bool opEquals(int v) const { return m_type == Type.int_ && m_int == v; }
 	/// ditto
 	bool opEquals(long v) const { return m_type == Type.int_ && m_int == v; }
 	/// ditto

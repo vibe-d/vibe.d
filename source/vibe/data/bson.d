@@ -545,6 +545,17 @@ struct Bson {
 		m_data = newdata.data;
 	}
 
+	///
+	unittest {
+		Bson value = Bson.emptyObject;
+		value["a"] = 1;
+		value["b"] = true;
+		value["c"] = "foo";
+		assert(value["a"] == Bson(1));
+		assert(value["b"] == Bson(true));
+		assert(value["c"] == Bson("foo"));
+	}
+
 	/** Allows index based access of a BSON array value.
 
 		Returns a null value if the index is out of bounds.
@@ -554,6 +565,19 @@ struct Bson {
 			if( i == idx )
 				return v;
 		return Bson(null);
+	}
+
+	///
+	unittest {
+		Bson[] entries;
+		entries ~= Bson(1);
+		entries ~= Bson(true);
+		entries ~= Bson("foo");
+		
+		Bson value = Bson(entries);
+		assert(value[0] == Bson(1));
+		assert(value[1] == Bson(true));
+		assert(value[2] == Bson("foo"));
 	}
 
 	/**
