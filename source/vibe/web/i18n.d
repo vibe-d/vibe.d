@@ -276,7 +276,7 @@ DeclString[] extractDeclStrings(string text)
 	return ret;
 }
 
-/// Verify that two simple messages can be read and parsed correctly
+// Verify that two simple messages can be read and parsed correctly
 unittest {
 	auto str = `
 # first string
