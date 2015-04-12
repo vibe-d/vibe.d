@@ -4,40 +4,41 @@
 	This module provides the Json struct for reading, writing and manipulating JSON values in a seamless,
 	JavaScript like way. De(serialization) of arbitrary D types is also supported.
 
-	Examples:
+	Copyright: © 2012-2015 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Sönke Ludwig
+*/
+module vibe.data.json;
 
-	---
+///
+unittest {
+	import vibe.core.log : logInfo;
+
 	void manipulateJson(Json j)
 	{
-		// object members can be accessed using member syntax, just like in JavaScript
-		j = Json.emptyObject;
-		j.name = "Example";
-		j.id = 1;
-
 		// retrieving the values is done using get()
 		assert(j["name"].get!string == "Example");
 		assert(j["id"].get!int == 1);
 
 		// semantic conversions can be done using to()
-		assert(j.id.to!string == "1");
+		assert(j["id"].to!string == "1");
 
 		// prints:
 		// name: "Example"
 		// id: 1
-		foreach( string key, value; j ){
-			writefln("%s: %s", key, value);
+		foreach (string key, value; j) {
+			logInfo("%s: %s", key, value);
 		}
 
 		// print out as JSON: {"name": "Example", "id": 1}
-		writefln("JSON: %s", j.toString());
-	}
-	---
+		logInfo("JSON: %s", j.toString());
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
-	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Sönke Ludwig
-*/
-module vibe.data.json;
+		// DEPRECATED: object members can be accessed using member syntax, just like in JavaScript
+		//j = Json.emptyObject;
+		//j.name = "Example";
+		//j.id = 1;
+	}
+}
 
 public import vibe.data.serialization;
 
@@ -384,7 +385,7 @@ struct Json {
 		else static if (is(T == float)) return cast(T)m_float;
 		else static if (is(T == long)) return m_int;
 		else static if (is(T == ulong)) return cast(ulong)m_int;
-		else static if (is(T : long)){ enforceJson(m_int <= T.max && m_int >= T.min); return cast(T)m_int; }
+		else static if (is(T : long)){ enforceJson(m_int <= T.max && m_int >= T.min, "Integer conversion out of bounds error"); return cast(T)m_int; }
 		else static if (is(T == string)) return m_string;
 		else static if (is(T == Json[])) return m_array;
 		else static if (is(T == Json[string])) return m_object;
@@ -663,7 +664,8 @@ struct Json {
 		m_array ~= element;
 	}
 
-	/**
+	/** Scheduled for deprecation, please use `opIndex` instead.
+		
 		Allows to access existing fields of a JSON object using dot syntax.
 	*/
 	@property const(Json) opDispatch(string prop)() const { return opIndex(prop); }
@@ -1395,7 +1397,7 @@ struct JsonSerializer {
 	//
 	void readDictionary(T)(scope void delegate(string) field_handler)
 	{
-		enforceJson(m_current.type == Json.Type.object);
+		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
 		foreach (string key, value; m_current) {
 			m_current = value;
@@ -1406,7 +1408,7 @@ struct JsonSerializer {
 
 	void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
-		enforceJson(m_current.type == Json.Type.array);
+		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
 		auto old = m_current;
 		size_callback(m_current.length);
 		foreach (ent; old) {
@@ -1561,7 +1563,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 				auto name = m_range.skipJsonString(&m_line);
 
 				m_range.skipWhitespace(&m_line);
-				enforceJson(!m_range.empty && m_range.front == ':');
+				enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
 				m_range.popFront();
 
 				entry_callback(name);

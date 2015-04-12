@@ -1,11 +1,41 @@
 /**
 	BSON serialization and value handling.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
 module vibe.data.bson;
+
+///
+unittest {
+	import vibe.core.log : logInfo;
+
+	void manipulateBson(Bson b)
+	{
+		// retrieving the values is done using get()
+		assert(b["name"].get!string == "Example");
+		assert(b["id"].get!int == 1);
+
+		// semantic conversions can be done using to()
+		assert(b["id"].to!string == "1");
+
+		// prints:
+		// name: "Example"
+		// id: 1
+		foreach (string key, value; b) {
+			logInfo("%s: %s", key, value);
+		}
+
+		// print out with JSON syntax: {"name": "Example", "id": 1}
+		logInfo("BSON: %s", b.toString());
+
+		// DEPRECATED: object members can be accessed using member syntax, just like in JavaScript
+		//j = Bson.emptyObject;
+		//j.name = "Example";
+		//j.id = 1;
+	}
+}
 
 public import vibe.data.json;
 import vibe.core.log;
@@ -590,7 +620,9 @@ struct Bson {
 		return 0;
 	}
 
-	/** Allows to access existing fields of a JSON object using dot syntax.
+	/** Scheduled for deprecation, please use `opIndex` instead.
+
+		Allows to access existing fields of a JSON object using dot syntax.
 
 		Returns a null value for non-existent fields.
 	*/
