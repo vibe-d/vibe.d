@@ -84,6 +84,7 @@ string dstringUnescape(in string str)
 				if( start > 0 ) ret ~= str[start .. i];
 				else ret = str[0 .. i];
 			}
+			assert(i+1 < str.length, "The string ends with the escape char: " ~ str);
 			switch(str[i+1]){
 				default: ret ~= str[i+1]; break;
 				case 'r': ret ~= '\r'; break;
