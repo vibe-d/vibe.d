@@ -325,6 +325,46 @@ msgstr ""
 	assert(ds[0].value == "It should not matter where it takes place, the strings should all be concatenated properly.", "Failed to properly wrap the key");
 }
 
+// Verify that string wrapping and unescaping is handled correctly on example of PO headers
+unittest {
+	auto str = `
+# English translations for ThermoWebUI package.
+# This file is put in the public domain.
+# Automatically generated, 2015.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: developer@example.com\n"
+"POT-Creation-Date: 2015-04-13 17:55+0600\n"
+"PO-Revision-Date: 2015-04-13 14:13+0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+`;
+	auto expected = `Project-Id-Version: PROJECT VERSION
+Report-Msgid-Bugs-To: developer@example.com
+POT-Creation-Date: 2015-04-13 17:55+0600
+PO-Revision-Date: 2015-04-13 14:13+0600
+Last-Translator: Automatically generated
+Language-Team: none
+Language: en
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Plural-Forms: nplurals=2; plural=(n != 1);
+`;
+
+	auto ds = extractDeclStrings(str);
+	assert(1 == ds.length, "Expected one DeclString to have been processed.");
+	assert(ds[0].key == "", "Failed to properly wrap or unescape the key");
+	assert(ds[0].value == expected, "Failed to properly wrap or unescape the value");
+}
+
 // Verify that the message context is properly parsed
 unittest {
 	auto str1 = `
@@ -434,7 +474,8 @@ private string wrapText(string str)
 
 	for (size_t i=0; i<str.length; ++i) {
 		if (str[i] == '\\') {
-			ret ~= str[i..i+1];
+			assert(i+1 < str.length, "The string ends with the escape char: " ~ str);
+			ret ~= str[i..i+2];
 			++i;
 		} else if (str[i] == '"') {
 			wrapped = true;
