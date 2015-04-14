@@ -52,7 +52,8 @@ enum HTTPMethod {
 	MOVE,
 	PROPFIND,
 	PROPPATCH,
-	UNLOCK
+	UNLOCK,
+	REPORT
 }
 
 
@@ -87,6 +88,7 @@ HTTPMethod httpMethodFromString(string str)
 		case "PROPFIND": return HTTPMethod.PROPFIND;
 		case "PROPPATCH": return HTTPMethod.PROPPATCH;
 		case "UNLOCK": return HTTPMethod.UNLOCK;
+		case "REPORT": return HTTPMethod.REPORT;
 	}
 }
 
