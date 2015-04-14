@@ -68,6 +68,6 @@
 			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
 		}
 	],
-
+	"versions": ["Have_vibe_d"],
 	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Protected", "--ex", "vibe.core.drivers.", "--ex", "vibe.internal."]
 }
