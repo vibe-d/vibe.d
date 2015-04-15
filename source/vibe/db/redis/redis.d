@@ -52,7 +52,7 @@ final class RedisClient {
 	/// Returns Redis version
 	@property string redisVersion()
 	{
-		if(!m_version)
+		if(m_version == "")
 		{
 			import std.string;
 			auto info = info();
@@ -448,7 +448,7 @@ struct RedisDatabase {
 		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZRANK", key, member);
-		return str ? parse!long(str) : -1;
+		return str != "" ? parse!long(str) : -1;
 	}
 
 	/// Removes the specified members from the sorted set stored at key.
@@ -489,7 +489,7 @@ struct RedisDatabase {
 		if (isValidRedisValueType!T)
 	{
 		auto str = request!string("ZREVRANK", key, member);
-		return str ? parse!long(str) : -1;
+		return str != "" ? parse!long(str) : -1;
 	}
 
 	/// Returns the score of member in the sorted set at key.
@@ -508,7 +508,7 @@ struct RedisDatabase {
 	long publish(string channel, string message)
 	{
 		auto str = request!string("PUBLISH", channel, message);
-		return str ? parse!long(str) : -1;
+		return str != "" ? parse!long(str) : -1;
 	}
 
 	/// Inspect the state of the Pub/Sub subsystem

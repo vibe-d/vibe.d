@@ -829,7 +829,7 @@ final class HTTPServerResponse : HTTPResponse {
 	/// Writes the entire response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
-		if (content_type) headers["Content-Type"] = content_type;
+		if (content_type != "") headers["Content-Type"] = content_type;
 		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", data.length);
 		bodyWriter.write(data);
 	}
@@ -1567,7 +1567,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	} catch (HTTPStatusException err) {
 		string dbg_msg;
 		if (settings.options & HTTPServerOption.errorStackTraces) {
-			if (err.debugMessage) dbg_msg = err.debugMessage;
+			if (err.debugMessage != "") dbg_msg = err.debugMessage;
 			else dbg_msg = err.toString().sanitize;
 		}
 		if (!res.headerWritten) errorOut(err.status, err.msg, dbg_msg, err);

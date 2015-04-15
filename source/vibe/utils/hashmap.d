@@ -68,7 +68,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 
 	~this()
 	{
-		if (m_table) freeArray(m_allocator, m_table);
+		if (m_table.ptr !is null) freeArray(m_allocator, m_table);
 	}
 
 	@disable this(this);
@@ -230,7 +230,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 			}
 
 		// all elements have been moved to the new array, so free the old one without calling destructors
-		if (oldtable) freeArray(m_allocator, oldtable, false);
+		if (oldtable !is null) freeArray(m_allocator, oldtable, false);
 	}
 }
 

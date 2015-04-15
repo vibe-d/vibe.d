@@ -1076,7 +1076,7 @@ private struct DietCompiler(TRANSLATE...)
 				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
 				output.writeString(`"`);
 				output.writeCodeLine("} else static if(is(typeof("~att.value~") == string)) {");
-				output.writeCodeLine("if ("~att.value~"){");
+				output.writeCodeLine("if (("~att.value~") != \"\"){");
 				output.writeString(` `~att.key~`="`);
 				output.writeExprHtmlAttribEscaped(att.value);
 				output.writeString(`"`);
