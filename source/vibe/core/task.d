@@ -151,6 +151,12 @@ class TaskFiber : Fiber {
 	/** Terminates the task without notice as soon as it calls a blocking function.
 	*/
 	abstract void terminate();
+
+	void bumpTaskCounter()
+	{
+		import core.atomic : atomicOp;
+		atomicOp!"+="(this.m_taskCounter, 1);
+	}
 }
 
 
