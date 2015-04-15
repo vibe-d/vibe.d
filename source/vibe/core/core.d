@@ -201,7 +201,7 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 
 	f.m_taskFunc = tfi;
 
-	atomicOp!"+="(f.m_taskCounter, 1);
+	f.bumpTaskCounter();
 	auto handle = f.task();
 
 	debug Task self = Task.getThis();
