@@ -410,7 +410,7 @@ final class HTTPClient {
 				logDebug("Error while handling response: %s", e.toString().sanitize());
 				user_exception = e;
 			}
-			if (user_exception || m_responding) {
+			if (m_responding) {
 				logDebug("Failed to handle the complete response of the server - disconnecting.");
 				res.disconnect();
 			}
