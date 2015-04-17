@@ -1215,40 +1215,35 @@ body {
 
 // Test detection of user typos (e.g., if the attribute is on a parameter that doesn't exist).
 unittest {
-	// This file might get edited, so we don't compare the string litteraly, we avoid the lines number.
-	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.ITypo.getResponse";
-	enum msg = ": No parameter 'ath' (referenced by attribute @HeaderParam)";
+	enum msg = "No parameter 'ath' (referenced by attribute @HeaderParam)";
 
 	interface ITypo {
 		@headerParam("ath", "Authorization") // mistyped parameter name
 		string getResponse(string auth);
 	}
-	static assert(getInterfaceValidationError!ITypo !is null
-		&& msg == getInterfaceValidationError!ITypo[FuncId.length..$],
-		"Expected validation error for getResponse, got "~getInterfaceValidationError!ITypo);
+	enum err = getInterfaceValidationError!ITypo;
+	static assert(err !is null && stripTestIdent(err) == msg,
+		"Expected validation error for getResponse, got "~err);
 }
 
 // Multiple origin for a parameter
 unittest {
-	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IMultipleOrigin.getResponse";
-	enum msg = ": Parameter 'arg1' has multiple @*Param attributes on it.";
+	enum msg = "Parameter 'arg1' has multiple @*Param attributes on it.";
 
 	interface IMultipleOrigin {
 		@headerParam("arg1", "Authorization") @bodyParam("arg1", "Authorization")
 		string getResponse(string arg1, int arg2);
 	}
-	static assert(getInterfaceValidationError!(IMultipleOrigin) !is null
-		      && msg == getInterfaceValidationError!(IMultipleOrigin)[FuncId.length..$],
-		      getInterfaceValidationError!(IMultipleOrigin));
+	enum err = getInterfaceValidationError!IMultipleOrigin;
+	static assert(err !is null && stripTestIdent(err) == msg, err);
 }
 
 // Missing parameter name
 unittest {
-	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IMissingName1.getResponse";
 	static if (__VERSION__ < 2067)
-		enum msg = ": A parameter has no name.";
+		enum msg = "A parameter has no name.";
 	else
-		enum msg = ": Parameter 0 has no name.";
+		enum msg = "Parameter 0 has no name.";
 
 	interface IMissingName1 {
 		string getResponse(string = "troublemaker");
@@ -1256,42 +1251,38 @@ unittest {
 	interface IMissingName2 {
 		string getResponse(string);
 	}
-	static assert(getInterfaceValidationError!(IMissingName1) !is null
-		      && msg == getInterfaceValidationError!(IMissingName1)[FuncId.length..$],
-		      getInterfaceValidationError!(IMissingName1));
-	static assert(getInterfaceValidationError!(IMissingName2) !is null
-		      && msg == getInterfaceValidationError!(IMissingName2)[FuncId.length..$],
-		      getInterfaceValidationError!(IMissingName2));
+	enum err1 = getInterfaceValidationError!IMissingName1;
+	static assert(err1 !is null && stripTestIdent(err1) == msg, err1);
+	enum err2 = getInterfaceValidationError!IMissingName2;
+	static assert(err2 !is null && stripTestIdent(err2) == msg, err2);
 }
 
 // Issue 949
 unittest {
-	enum FuncId = "vibe.web.rest.__unittestLXXXX_XXX.IGithubPR.getPullRequests";
-	enum msg = ": Path contains ':owner', but not parameter '_owner' defined.";
+	enum msg = "Path contains ':owner', but not parameter '_owner' defined.";
 
 	@path("/repos/")
 	interface IGithubPR {
 		@path(":owner/:repo/pulls")
 		string getPullRequests(string owner, string repo);
 	}
-	static assert(getInterfaceValidationError!(IGithubPR) !is null
-		      && msg == getInterfaceValidationError!(IGithubPR)[FuncId.length..$],
-		      getInterfaceValidationError!(IGithubPR));
+	enum err = getInterfaceValidationError!IGithubPR;
+	static assert(err !is null && stripTestIdent(err) == msg, err);
 }
 
 // Issue 1017
 unittest {
-	static string stripIdent(string msg) {
-		import std.string;
-		auto idx = msg.indexOf(": ");
-		return idx >= 0 ? msg[idx+2 .. $] : msg;
-	}
-
 	interface TestSuccess { @path("/") void test(); }
 	interface TestFail { @path("//") void test(); }
 	static assert(getInterfaceValidationError!TestSuccess is null);
-	static assert(stripIdent(getInterfaceValidationError!TestFail)
+	static assert(stripTestIdent(getInterfaceValidationError!TestFail)
 		== "Path '//' contains empty entries.");
+}
+
+private string stripTestIdent(string msg) {
+	import std.string;
+	auto idx = msg.indexOf(": ");
+	return idx >= 0 ? msg[idx+2 .. $] : msg;
 }
 
 // Small helper for client code generation
