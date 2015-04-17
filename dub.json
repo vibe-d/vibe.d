@@ -15,6 +15,7 @@
 
 	"dependencies": {
 		":base": "*",
+		":data": "*",
 		":http": "*",
 		":mail": "*",
 		":diet": "*",
@@ -30,6 +31,7 @@
 	"subPackages": [
 		{
 			"name": "base",
+			"description": "Basic I/O and concurrency primitives, as well as utility functions",
 			"dependencies": {
 				"openssl": ">=1.0.0+1.0.0e",
 				"botan": {
@@ -45,7 +47,6 @@
 			"sourcePaths": [
 				"source/vibe/core",
 				"source/vibe/crypto",
-				"source/vibe/data",
 				"source/vibe/inet",
 				"source/vibe/internal",
 				"source/vibe/stream",
@@ -98,37 +99,50 @@
 			],
 		},
 		{
-			"name": "http",
+			"name": "data",
+			"description": "Data format and serialization support",
 			"targetType": "library",
 			"dependencies": {"vibe-d:base": "*"},
+			"sourcePaths": ["source/vibe/data"]
+		},
+		{
+			"name": "http",
+			"description": "HTTP server and client implementation and higher level HTTP functionality",
+			"targetType": "library",
+			"dependencies": {"vibe-d:base": "*", "vibe-d:data": "*"},
 			"sourcePaths": ["source/vibe/http"],
 		},
 		{
 			"name": "mail",
+			"description": "SMTP client support",
 			"targetType": "library",
 			"dependencies": {"vibe-d:base": "*"},
 			"sourcePaths": ["source/vibe/mail"],
 		},
 		{
 			"name": "diet",
+			"description": "Diet HTML template system",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*"},
 			"sourcePaths": ["source/vibe/templ"],
 		},
 		{
 			"name": "mongodb",
+			"description": "MongoDB database client implementation",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*"},
 			"sourcePaths": ["source/vibe/db/mongo"],
 		},
 		{
 			"name": "redis",
+			"description": "Redis database client implementation",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*"},
 			"sourcePaths": ["source/vibe/db/redis"],
 		},
 		{
 			"name": "web",
+			"description": "High level web and REST service framework",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*", "vibe-d:diet": "*"},
 			"sourcePaths": ["source/vibe/web"],

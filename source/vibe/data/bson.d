@@ -9,10 +9,10 @@ module vibe.data.bson;
 
 ///
 unittest {
-	import vibe.core.log : logInfo;
-
 	void manipulateBson(Bson b)
 	{
+		import std.stdio;
+
 		// retrieving the values is done using get()
 		assert(b["name"].get!string == "Example");
 		assert(b["id"].get!int == 1);
@@ -23,12 +23,11 @@ unittest {
 		// prints:
 		// name: "Example"
 		// id: 1
-		foreach (string key, value; b) {
-			logInfo("%s: %s", key, value);
-		}
+		foreach (string key, value; b)
+			writefln("%s: %s", key, value);
 
 		// print out with JSON syntax: {"name": "Example", "id": 1}
-		logInfo("BSON: %s", b.toString());
+		writefln("BSON: %s", b.toString());
 
 		// DEPRECATED: object members can be accessed using member syntax, just like in JavaScript
 		//j = Bson.emptyObject;
@@ -38,7 +37,6 @@ unittest {
 }
 
 public import vibe.data.json;
-import vibe.core.log;
 
 import std.algorithm;
 import std.array;

@@ -13,10 +13,10 @@ module vibe.data.json;
 
 ///
 unittest {
-	import vibe.core.log : logInfo;
-
 	void manipulateJson(Json j)
 	{
+		import std.stdio;
+
 		// retrieving the values is done using get()
 		assert(j["name"].get!string == "Example");
 		assert(j["id"].get!int == 1);
@@ -27,12 +27,11 @@ unittest {
 		// prints:
 		// name: "Example"
 		// id: 1
-		foreach (string key, value; j) {
-			logInfo("%s: %s", key, value);
-		}
+		foreach (string key, value; j)
+			writefln("%s: %s", key, value);
 
 		// print out as JSON: {"name": "Example", "id": 1}
-		logInfo("JSON: %s", j.toString());
+		writefln("JSON: %s", j.toString());
 
 		// DEPRECATED: object members can be accessed using member syntax, just like in JavaScript
 		//j = Json.emptyObject;
