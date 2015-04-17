@@ -120,7 +120,9 @@ void serialize(Serializer, T)(ref Serializer serializer, T value)
 	serializeImpl!(Serializer, DefaultPolicy, T)(serializer, value);
 }
 
-///
+/** Note that there is a convenience function `vibe.data.json.serializeToJson`
+	that can be used instead of manually invoking `serialize`.
+*/
 unittest {
 	import vibe.data.json;
 
@@ -189,6 +191,7 @@ version (unittest)
 		}
 	}
 }
+
 ///
 unittest {
 	import vibe.data.json;
@@ -210,6 +213,7 @@ unittest {
 	assert(serializedF.get!string == "0.1x0.2");
 }
 
+
 /**
 	Deserializes and returns a serialized value.
 
@@ -224,7 +228,9 @@ T deserialize(Serializer, T, ARGS...)(ARGS args)
 	return deserializeImpl!(T, DefaultPolicy, Serializer)(deserializer);
 }
 
-///
+/** Note that there is a convenience function `vibe.data.json.deserializeJson`
+	that can be used instead of manually invoking `deserialize`.
+*/
 unittest {
 	import vibe.data.json;
 
