@@ -236,7 +236,7 @@ struct Json {
 
 	/**
 		Check whether the JSON object contains the given key and if yes,
-		return a pointer to the corresponding object, otherwise return NULL.
+		return a pointer to the corresponding object, otherwise return `null`.
 	*/
 	inout(Json*) opBinaryRight(string op : "in")(string key) inout {
 		checkType!(Json[string])();
@@ -402,6 +402,20 @@ struct Json {
 
 	/**
 		Converts the JSON value to the corresponding D type - types must match exactly.
+
+		Available_Types:
+			$(UL
+				$(LI `bool` (`Type.bool_`))
+				$(LI `double` (`Type.float_`))
+				$(LI `float` (Converted from `double`))
+				$(LI `long` (`Type.int_`))
+				$(LI `ulong`, `int`, `uint`, `short`, `ushort`, `byte`, `ubyte` (Converted from `long`))
+				$(LI `string` (`Type.string`))
+				$(LI `Json[]` (`Type.array`))
+				$(LI `Json[string]` (`Type.object`))
+			)
+
+		See_Also: `opt`, `to`, `deserializeJson`
 	*/
 	inout(T) opCast(T)() inout { return get!T; }
 	/// ditto
@@ -425,6 +439,8 @@ struct Json {
 
 		If the runtime type does not match the given native type, the 'def' parameter is returned
 		instead.
+
+		See_Also: `get`
 	*/
 	@property const(T) opt(T)(const(T) def = T.init)
 	const {
@@ -440,6 +456,12 @@ struct Json {
 
 	/**
 		Converts the JSON value to the corresponding D type - types are converted as necessary.
+
+		Automatically performs conversions between strings and numbers. See
+		`get` for the list of available types. For converting/deserializing
+		JSON to complex data types see `deserializeJson`.
+
+		See_Also: `get`, `deserializeJson`
 	*/
 	@property inout(T) to(T)()
 	inout {
@@ -1001,16 +1023,16 @@ unittest {
 	The following types of values are supported:
 
 	$(DL
-		$(DT Json)            $(DD Used as-is)
-		$(DT null)            $(DD Converted to Json.Type.Null)
-		$(DT bool)            $(DD Converted to Json.Type.Bool)
-		$(DT float, double)   $(DD Converted to Json.Type.Double)
-		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Json.Type.Int)
-		$(DT string)          $(DD Converted to Json.Type.String)
-		$(DT T[])             $(DD Converted to Json.Type.Array)
-		$(DT T[string])       $(DD Converted to Json.Type.Object)
-		$(DT struct)          $(DD Converted to Json.Type.Object)
-		$(DT class)           $(DD Converted to Json.Type.Object or Json.Type.Null)
+		$(DT `Json`)            $(DD Used as-is)
+		$(DT `null`)            $(DD Converted to `Json.Type.null_`)
+		$(DT `bool`)            $(DD Converted to `Json.Type.bool_`)
+		$(DT `float`, `double`)   $(DD Converted to `Json.Type.float_`)
+		$(DT `short`, `ushort`, `int`, `uint`, `long`, `ulong`) $(DD Converted to `Json.Type.int_`)
+		$(DT `string`)          $(DD Converted to `Json.Type.string`)
+		$(DT `T[]`)             $(DD Converted to `Json.Type.array`)
+		$(DT `T[string]`)       $(DD Converted to `Json.Type.object`)
+		$(DT `struct`)          $(DD Converted to `Json.Type.object`)
+		$(DT `class`)           $(DD Converted to `Json.Type.object` or `Json.Type.null_`)
 	)
 
 	All entries of an array or an associative array, as well as all R/W properties and
@@ -1031,7 +1053,9 @@ unittest {
 	---
 
 	The methods will have to be defined in pairs. The first pair that is implemented by
-	the type will be used for serialization (i.e. toJson overrides toString).
+	the type will be used for serialization (i.e. `toJson` overrides `toString`).
+
+	See_Also: `deserializeJson`, `vibe.data.serialization`
 */
 Json serializeToJson(T)(T value)
 {
@@ -1055,10 +1079,31 @@ string serializeToJsonString(T)(T value)
 	return ret.data;
 }
 
+///
+unittest {
+	struct Foo {
+		int number;
+		string str;
+	}
+
+	Foo f;
+	f.number = 12;
+	f.str = "hello";
+
+	string json = serializeToJsonString(f);
+	assert(json == `{"number":12,"str":"hello"}`);
+
+	Json jsonval = serializeToJson(f);
+	assert(jsonval.type == Json.Type.object);
+	assert(jsonval["number"] == Json(12));
+	assert(jsonval["str"] == Json("hello"));
+}
+
+
 /**
 	Serializes the given value to a pretty printed JSON string.
 
-	See_also: $(D serializeToJson)
+	See_also: `serializeToJson`, `vibe.data.serialization`
 */
 void serializeToPrettyJson(R, T)(R destination, T value)
 	if (isOutputRange!(R, char) || isOutputRange!(R, ubyte))
@@ -1072,6 +1117,26 @@ string serializeToPrettyJson(T)(T value)
 	serializeToPrettyJson(ret, value);
 	return ret.data;
 }
+
+///
+unittest {
+	struct Foo {
+		int number;
+		string str;
+	}
+
+	Foo f;
+	f.number = 12;
+	f.str = "hello";
+
+	string json = serializeToPrettyJson(f);
+	assert(json ==
+`{
+	"number": 12,
+	"str": "hello"
+}`);
+}
+
 
 /// private
 Json serializeToJsonOld(T)(T value)
@@ -1142,7 +1207,9 @@ Json serializeToJsonOld(T)(T value)
 /**
 	Deserializes a JSON value into the destination variable.
 
-	The same types as for serializeToJson() are supported and handled inversely.
+	The same types as for `serializeToJson()` are supported and handled inversely.
+
+	See_Also: `serializeToJson`, `serializeToJsonString`, `vibe.data.serialization`
 */
 void deserializeJson(T)(ref T dst, Json src)
 {
@@ -1234,6 +1301,18 @@ T deserializeJsonOld(T)(Json src)
 	} else {
 		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
 	}
+}
+
+///
+unittest {
+	struct Foo {
+		int number;
+		string str;
+	}
+
+	Foo f = deserializeJson!Foo(`{"number": 12, "str": "hello"}`);
+	assert(f.number == 12);
+	assert(f.str == "hello");
 }
 
 unittest {
