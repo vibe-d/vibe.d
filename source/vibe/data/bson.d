@@ -120,8 +120,8 @@ struct Bson {
 	/**
 		Creates a new BSON value using raw data.
 
-		A slice of the first bytes of 'data' is stored, containg the data related to the value. An
-		exception is thrown if 'data' is too short.
+		A slice of the first bytes of `data` is stored, containg the data related to the value. An
+		exception is thrown if `data` is too short.
 	*/
 	this(Type type, bdata_t data)
 	{
@@ -339,6 +339,8 @@ struct Bson {
 		Converts the BSON value to a D value.
 
 		If the BSON type of the value does not match the D type, an exception is thrown.
+
+		See_Also: `deserializeBson`, `opt`
 	*/
 	T opCast(T)() const { return get!T(); }
 	/// ditto
@@ -498,7 +500,7 @@ struct Bson {
 		return Nullable!Bson.init;
 	}
 
-	/** Allows accessing fields of a BSON object using [].
+	/** Allows accessing fields of a BSON object using `[]`.
 
 		Returns a null value if the specified field does not exist.
 	*/
@@ -582,13 +584,8 @@ struct Bson {
 
 	/**
 		Allows foreach iterating over BSON objects and arrays.
-
-		Note that although D requires to provide a 'ref' argument for
-		opApply, in-place editing of the array/object fields is not possible.
-		Any modification attempty will work on a temporary, even if the
-		loop variable is declared 'ref'.
 	*/
-	int opApply(int delegate(ref Bson obj) del)
+	int opApply(int delegate(Bson obj) del)
 	const {
 		checkType(Type.array, Type.object);
 		if( m_type == Type.array ){
@@ -604,7 +601,7 @@ struct Bson {
 		}
 	}
 	/// ditto
-	int opApply(int delegate(ref size_t idx, ref Bson obj) del)
+	int opApply(int delegate(ref size_t idx, Bson obj) del)
 	const {
 		checkType(Type.array);
 		auto d = m_data[4 .. $];
@@ -626,7 +623,7 @@ struct Bson {
 		return 0;
 	}
 	/// ditto
-	int opApply(int delegate(ref string idx, ref Bson obj) del)
+	int opApply(int delegate(ref string idx, Bson obj) del)
 	const {
 		checkType(Type.object);
 		auto d = m_data[4 .. $];
@@ -760,8 +757,8 @@ struct BsonObjectID {
 
 	/** Generates a unique object ID.
 	 *
-	 *   By default it will use the Clock.currTime(UTC()) as timestamp
-	 *   which guarantees that BsonObjectIDs are chronologically
+	 *   By default it will use `Clock.currTime(UTC())` as the timestamp
+	 *   which guarantees that `BsonObjectID`s are chronologically
 	 *   sorted.
 	*/
 	static BsonObjectID generate(in SysTime time = Clock.currTime(UTC()))
@@ -860,7 +857,7 @@ unittest {
 }
 
 /**
-	Represents a BSON date value (Bson.Type.date).
+	Represents a BSON date value (`Bson.Type.date`).
 
 	BSON date values are stored in UNIX time format, counting the number of
 	milliseconds from 1970/01/01.
@@ -893,7 +890,7 @@ struct BsonDate {
 	*/
 	static BsonDate fromString(string iso_ext_string) { return BsonDate(SysTime.fromISOExtString(iso_ext_string)); }
 
-	/** Constructs a BsonDate from the given date/time in standard time as defined in std.datetime.
+	/** Constructs a BsonDate from the given date/time in standard time as defined in `std.datetime`.
 	*/
 	static BsonDate fromStdTime(long std_time)
 	{
@@ -933,7 +930,7 @@ struct BsonDate {
 
 
 /**
-	Represents a BSON timestamp value (Bson.Type.timestamp)
+	Represents a BSON timestamp value `(Bson.Type.timestamp)`.
 */
 struct BsonTimestamp {
 	private long m_time;
@@ -945,7 +942,7 @@ struct BsonTimestamp {
 
 
 /**
-	Represents a BSON regular expression value (Bson.Type.regex).
+	Represents a BSON regular expression value `(Bson.Type.regex)`.
 */
 struct BsonRegex {
 	private {
@@ -970,23 +967,23 @@ struct BsonRegex {
 	The following types of values are supported:
 
 	$(DL
-		$(DT Bson)            $(DD Used as-is)
-		$(DT Json)            $(DD Converted to BSON)
-		$(DT BsonBinData)     $(DD Converted to Bson.Type.binData)
-		$(DT BsonObjectID)    $(DD Converted to Bson.Type.objectID)
-		$(DT BsonDate)        $(DD Converted to Bson.Type.date)
-		$(DT BsonTimestamp)   $(DD Converted to Bson.Type.timestamp)
-		$(DT BsonRegex)       $(DD Converted to Bson.Type.regex)
-		$(DT null)            $(DD Converted to Bson.Type.null_)
-		$(DT bool)            $(DD Converted to Bson.Type.bool_)
-		$(DT float, double)   $(DD Converted to Bson.Type.double_)
-		$(DT short, ushort, int, uint, long, ulong) $(DD Converted to Bson.Type.long_)
-		$(DT string)          $(DD Converted to Bson.Type.string)
-		$(DT ubyte[])         $(DD Converted to Bson.Type.binData)
-		$(DT T[])             $(DD Converted to Bson.Type.array)
-		$(DT T[string])       $(DD Converted to Bson.Type.object)
-		$(DT struct)          $(DD Converted to Bson.Type.object)
-		$(DT class)           $(DD Converted to Bson.Type.object or Bson.Type.null_)
+		$(DT `Bson`)            $(DD Used as-is)
+		$(DT `Json`)            $(DD Converted to BSON)
+		$(DT `BsonBinData`)     $(DD Converted to `Bson.Type.binData`)
+		$(DT `BsonObjectID`)    $(DD Converted to `Bson.Type.objectID`)
+		$(DT `BsonDate`)        $(DD Converted to `Bson.Type.date`)
+		$(DT `BsonTimestamp`)   $(DD Converted to `Bson.Type.timestamp`)
+		$(DT `BsonRegex`)       $(DD Converted to `Bson.Type.regex`)
+		$(DT `null`)            $(DD Converted to `Bson.Type.null_`)
+		$(DT `bool`)            $(DD Converted to `Bson.Type.bool_`)
+		$(DT `float`, `double`)   $(DD Converted to `Bson.Type.double_`)
+		$(DT `short`, `ushort`, `int`, `uint`, `long`, `ulong`) $(DD Converted to `Bson.Type.long_`)
+		$(DT `string`)          $(DD Converted to `Bson.Type.string`)
+		$(DT `ubyte[]`)         $(DD Converted to `Bson.Type.binData`)
+		$(DT `T[]`)             $(DD Converted to `Bson.Type.array`)
+		$(DT `T[string]`)       $(DD Converted to `Bson.Type.object`)
+		$(DT `struct`)          $(DD Converted to `Bson.Type.object`)
+		$(DT `class`)           $(DD Converted to `Bson.Type.object` or `Bson.Type.null_`)
 	)
 
 	All entries of an array or an associative array, as well as all R/W properties and
@@ -1010,7 +1007,9 @@ struct BsonRegex {
 	---
 
 	The methods will have to be defined in pairs. The first pair that is implemented by
-	the type will be used for serialization (i.e. toBson overrides toJson).
+	the type will be used for serialization (i.e. `toBson` overrides `toJson`).
+
+	See_Also: `deserializeBson`
 */
 Bson serializeToBson(T)(T value, ubyte[] buffer = null)
 {
@@ -1100,7 +1099,9 @@ template deserializeBson(T)
     /**
         Deserializes a BSON value into the destination variable.
 
-        The same types as for serializeToBson() are supported and handled inversely.
+        The same types as for `serializeToBson()` are supported and handled inversely.
+
+        See_Also: `serializeToBson`
     */
     void deserializeBson(ref T dst, Bson src)
     {
@@ -1384,7 +1385,7 @@ unittest { // issue #793
 /**
 	Serializes to an in-memory BSON representation.
 
-	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToBson, deserializeBson
+	See_Also: `vibe.data.serialization.serialize`, `vibe.data.serialization.deserialize`, `serializeToBson`, `deserializeBson`
 */
 struct BsonSerializer {
 	import vibe.utils.array : AllocAppender;
