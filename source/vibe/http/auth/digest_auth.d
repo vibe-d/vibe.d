@@ -60,7 +60,7 @@ class DigestAuthInfo
 	}
 }
 
-private bool checkDigest(HTTPServerRequest req, DigestAuthInfo info, string delegate(string realm, string user) pwhash, out bool stale, out string username)
+private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope string delegate(string realm, string user) pwhash, out bool stale, out string username)
 {
 	stale = false;
         username = "";
@@ -98,7 +98,7 @@ private bool checkDigest(HTTPServerRequest req, DigestAuthInfo info, string dele
 /**
 	Returns a request handler that enforces request to be authenticated using HTTP Digest Auth.
 */
-HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, string delegate(string realm, string user) pwhash)
+HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, scope string delegate(string realm, string user) pwhash)
 {
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -131,7 +131,7 @@ HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, string delegate
 
 	Throws: Throws a HTTPStatusExeption in case of an authentication failure.
 */
-string performDigestAuth(HTTPServerRequest req, HTTPServerResponse res, DigestAuthInfo info, string delegate(string realm, string user) pwhash)
+string performDigestAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, DigestAuthInfo info, scope string delegate(string realm, string user) pwhash)
 {
 	bool stale;
 	string username;

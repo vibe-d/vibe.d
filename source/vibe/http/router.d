@@ -15,7 +15,9 @@ import vibe.core.log;
 
 import std.functional;
 
-version (VibeOldRouterImpl) {}
+version (VibeOldRouterImpl) {
+	pragma(msg, "-version=VibeOldRouterImpl is deprecated and will be removed in the next release.");
+}
 else version = VibeRouterTreeMatch;
 
 
@@ -32,15 +34,21 @@ else version = VibeRouterTreeMatch;
 interface HTTPRouter : HTTPServerRequestHandler {
 	@property string prefix() const;
 
+	/// Handles the HTTP request by dispatching it to the registered request handlers.
+	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
+
 	/// Adds a new route for request that match the path and method
 	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
 	/// ditto
 	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
 	/// ditto
 	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
-
-	/// Handles the HTTP request by dispatching it to the registered request handlers.
-	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
+	/// ditto
+	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegateS cb) { return match(method, path, cast(HTTPServerRequestDelegate)cb); }
+	/// ditto
+	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestHandlerS cb) { return match(method, path, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestFunctionS cb) { return match(method, path, toDelegate(cb)); }
 
 	/// Adds a new route for GET requests matching the specified pattern.
 	final HTTPRouter get(string url_match, HTTPServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
@@ -48,6 +56,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	final HTTPRouter get(string url_match, HTTPServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
 	/// ditto
 	final HTTPRouter get(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.GET, url_match, cb); }
+	/// ditto
+	final HTTPRouter get(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter get(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	final HTTPRouter get(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
 
 	/// Adds a new route for POST requests matching the specified pattern.
 	final HTTPRouter post(string url_match, HTTPServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
@@ -55,6 +69,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	final HTTPRouter post(string url_match, HTTPServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
 	/// ditto
 	final HTTPRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
+	/// ditto
+	final HTTPRouter post(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter post(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	final HTTPRouter post(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
 
 	/// Adds a new route for PUT requests matching the specified pattern.
 	final HTTPRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
@@ -62,6 +82,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	final HTTPRouter put(string url_match, HTTPServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
 	/// ditto
 	final HTTPRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
+	/// ditto
+	final HTTPRouter put(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter put(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	final HTTPRouter put(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
 
 	/// Adds a new route for DELETE requests matching the specified pattern.
 	final HTTPRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
@@ -69,6 +95,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	final HTTPRouter delete_(string url_match, HTTPServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
 	/// ditto
 	final HTTPRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
+	/// ditto
+	final HTTPRouter delete_(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter delete_(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	final HTTPRouter delete_(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
 
 	/// Adds a new route for PATCH requests matching the specified pattern.
 	final HTTPRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
@@ -76,6 +108,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 	final HTTPRouter patch(string url_match, HTTPServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
 	/// ditto
 	final HTTPRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
+	/// ditto
+	final HTTPRouter patch(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter patch(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	final HTTPRouter patch(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
 
 	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
 	final HTTPRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
@@ -92,6 +130,12 @@ interface HTTPRouter : HTTPServerRequestHandler {
 
 		return this;
 	}
+	/// ditto
+	final HTTPRouter any(string url_match, HTTPServerRequestHandlerS cb) { return any(url_match, &cb.handleRequest); }
+	/// ditto
+	final HTTPRouter any(string url_match, HTTPServerRequestFunctionS cb) { return any(url_match, toDelegate(cb)); }
+	/// ditto
+	final HTTPRouter any(string url_match, HTTPServerRequestDelegateS cb) { return any(url_match, cast(HTTPServerRequestDelegate)cb); }
 }
 
 
@@ -151,7 +195,7 @@ final class URLRouter : HTTPRouter {
 	@property string prefix() const { return m_prefix; }
 
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
-	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
+	override URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
 		import std.algorithm;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");

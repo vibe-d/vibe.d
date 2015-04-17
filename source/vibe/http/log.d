@@ -22,12 +22,12 @@ import std.string;
 class HTTPLogger {
 	private {
 		string m_format;
-		HTTPServerSettings m_settings;
+		const(HTTPServerSettings) m_settings;
 		InterruptibleTaskMutex m_mutex;
 		FixedAppender!(const(char)[], 2048) m_lineAppender;
 	}
 
-	this(HTTPServerSettings settings, string format)
+	this(in HTTPServerSettings settings, string format)
 	{
 		m_format = format;
 		m_settings = settings;
@@ -36,7 +36,7 @@ class HTTPLogger {
 
 	void close() {}
 
-	final void log(HTTPServerRequest req, HTTPServerResponse res)
+	final void log(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		m_mutex.performLocked!({
 			m_lineAppender.reset();
@@ -88,7 +88,7 @@ final class HTTPFileLogger : HTTPLogger {
 	}
 }
 
-void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
+void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, scope HTTPServerResponse res, in HTTPServerSettings settings)
 {
 	import std.format : formattedWrite;
 	enum State {Init, Directive, Status, Key, Command}

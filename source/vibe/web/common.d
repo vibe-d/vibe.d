@@ -625,7 +625,7 @@ static assert(isNullable!(NullableW!int));
 
 
 // NOTE: dst is assumed to be uninitialized
-package bool readFormParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname, bool required)
+package bool readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required)
 {
 	import std.string;
 	import std.traits;

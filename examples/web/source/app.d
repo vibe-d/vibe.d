@@ -44,7 +44,7 @@ class SampleService {
 		redirect("./");
 	}
 
-	void postLogout(HTTPServerResponse res)
+	void postLogout(scope HTTPServerResponse res)
 	{
 		m_userSettings = UserSettings.init;
 		res.terminateSession();
@@ -71,7 +71,7 @@ class SampleService {
 	}
 
 	private enum auth = before!ensureAuth("_authUser");
-	private string ensureAuth(HTTPServerRequest req, HTTPServerResponse res)
+	private string ensureAuth(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		if (!SampleService.m_userSettings.loggedIn) redirect("/login");
 		return SampleService.m_userSettings.userName;

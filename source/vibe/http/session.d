@@ -60,7 +60,7 @@ final struct Session {
 	unittest {
 		import vibe.http.server;
 
-		void login(HTTPServerRequest req, HTTPServerResponse res)
+		void login(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
 			// TODO: validate username+password
 
@@ -96,22 +96,23 @@ final struct Session {
 
 	/**
 		Enables foreach-iteration over all keys of the session.
-
-		Examples:
-		---
+	*/
+	int opApply(scope int delegate(string key) del)
+	{
+		return m_store.iterateSession(m_id, del);
+	}
+	///
+	unittest {
+		import vibe.http.server;
+		
 		// sends all session entries to the requesting browser
 		// assumes that all entries are strings
-		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+		void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
 			res.contentType = "text/plain";
 			foreach(key; req.session)
 				res.bodyWriter.write(key ~ ": " ~ req.session.get!string(key) ~ "\n");
 		}
-		---
-	*/
-	int opApply(scope int delegate(string key) del)
-	{
-		return m_store.iterateSession(m_id, del);
 	}
 
 	/**

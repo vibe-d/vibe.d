@@ -25,12 +25,12 @@ import std.string;
 
 	See_Also: serveStaticFile
 */
-HTTPServerRequestDelegate serveStaticFiles(Path local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSettings settings = null)
 {
 	if (!settings) settings = new HTTPFileServerSettings;
 	if (!settings.serverPathPrefix.endsWith("/")) settings.serverPathPrefix ~= "/";
 
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		string srv_path;
 		if (auto pp = "pathMatch" in req.params) srv_path = *pp;
@@ -60,7 +60,7 @@ HTTPServerRequestDelegate serveStaticFiles(Path local_path, HTTPFileServerSettin
 	return &callback;
 }
 /// ditto
-HTTPServerRequestDelegate serveStaticFiles(string local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFiles(string local_path, HTTPFileServerSettings settings = null)
 {
 	return serveStaticFiles(Path(local_path), settings);
 }
@@ -111,12 +111,12 @@ unittest {
 
 	See_Also: serveStaticFiles
 */
-HTTPServerRequestDelegate serveStaticFile(Path local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFile(Path local_path, HTTPFileServerSettings settings = null)
 {
 	if (!settings) settings = new HTTPFileServerSettings;
 	assert(settings.serverPathPrefix == "/", "serverPathPrefix is not supported for single file serving.");
 
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		sendFile(req, res, local_path, settings);
 	}
@@ -124,7 +124,7 @@ HTTPServerRequestDelegate serveStaticFile(Path local_path, HTTPFileServerSetting
 	return &callback;
 }
 /// ditto
-HTTPServerRequestDelegate serveStaticFile(string local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSettings settings = null)
 {
 	return serveStaticFile(Path(local_path), settings);
 }
@@ -147,7 +147,7 @@ class HTTPFileServerSettings {
 		else during this function will NOT be verified by Vibe.d for correctness.
 		Make sure any alterations you make are complete and correct according to HTTP spec.
 	*/
-	void delegate(HTTPServerRequest req, HTTPServerResponse res, ref string physicalPath) preWriteCallback = null;
+	void delegate(scope HTTPServerRequest req, scope HTTPServerResponse res, ref string physicalPath) preWriteCallback = null;
 
 	this()
 	{
@@ -188,7 +188,7 @@ enum HTTPFileServerOption {
 }
 
 
-private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, HTTPFileServerSettings settings)
+private void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings)
 {
 	auto pathstr = path.toNativeString();
 

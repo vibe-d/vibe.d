@@ -42,12 +42,12 @@ host name entered.
 `);
 }
 
-void handleRequestA(HTTPServerRequest req, HTTPServerResponse res)
+void handleRequestA(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody(cast(ubyte[])"Hello, this is host A!", "text/plain");
 }
 
-void handleRequestB(HTTPServerRequest req, HTTPServerResponse res)
+void handleRequestB(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody(cast(ubyte[])"Hello, this is host B!", "text/plain");
 }

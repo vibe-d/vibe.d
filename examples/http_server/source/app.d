@@ -1,7 +1,7 @@
 import vibe.appmain;
 import vibe.http.server;
 
-void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	if (req.path == "/")
 		res.writeBody("Hello, World!", "text/plain");

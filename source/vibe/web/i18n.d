@@ -59,7 +59,7 @@ unittest {
 
 		// use language settings from the session instead of using the
 		// "Accept-Language" header
-		static string determineLanguage(HTTPServerRequest req)
+		static string determineLanguage(scope HTTPServerRequest req)
 		{
 			if (!req.session) return null; // use default language
 			return req.session.get("language", "");
@@ -123,7 +123,7 @@ string tr(CTX, string LANG)(string key, string context = null)
 	else return key;
 }
 
-package string determineLanguage(alias METHOD)(HTTPServerRequest req)
+package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
 {
 	import std.string : indexOf;
 	import std.array;

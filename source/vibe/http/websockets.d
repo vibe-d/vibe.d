@@ -66,7 +66,7 @@ class WebSocketException: Exception
 /**
     Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
 */
-void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRequest req, HTTPServerResponse res)
+void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	auto pUpgrade = "Upgrade" in req.headers;
 	auto pConnection = "Connection" in req.headers;
@@ -113,14 +113,14 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRe
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegate handleWebSockets(void function(scope WebSocket) on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) on_handshake)
 {
 	return handleWebSockets(toDelegate(on_handshake));
 }
 /// ditto
-HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handshake)
 {
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;

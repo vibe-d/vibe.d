@@ -18,9 +18,9 @@ import std.string;
 /**
 	Returns a request handler that enforces request to be authenticated using HTTP Basic Auth.
 */
-HTTPServerRequestDelegate performBasicAuth(string realm, bool delegate(string user, string name) pwcheck)
+HTTPServerRequestDelegateS performBasicAuth(string realm, bool delegate(string user, string name) pwcheck)
 {
-	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		auto pauth = "Authorization" in req.headers;
 
@@ -62,7 +62,7 @@ HTTPServerRequestDelegate performBasicAuth(string realm, bool delegate(string us
 
 	Throws: Throws a HTTPStatusExeption in case of an authentication failure.
 */
-string performBasicAuth(HTTPServerRequest req, HTTPServerResponse res, string realm, bool delegate(string user, string name) pwcheck)
+string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, string realm, scope bool delegate(string user, string name) pwcheck)
 {
 	auto pauth = "Authorization" in req.headers;
 	if( pauth && (*pauth).startsWith("Basic ") ){
@@ -87,7 +87,7 @@ string performBasicAuth(HTTPServerRequest req, HTTPServerResponse res, string re
 /**
 	Augments the given HTTP request with an HTTP Basic Auth header.
 */
-void addBasicAuth(HTTPRequest req, string user, string password)
+void addBasicAuth(scope HTTPRequest req, string user, string password)
 {
 	string pwstr = user ~ ":" ~ password;
 	string authstr = cast(string)Base64.encode(cast(ubyte[])pwstr);

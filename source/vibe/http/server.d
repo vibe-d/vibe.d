@@ -101,101 +101,30 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_ha
 {
 	listenHTTP(settings, &request_handler.handleRequest);
 }
-
-
-/**
-	[private] Starts a HTTP server listening on the specified port.
-
-	This is the same as listenHTTP() except that it does not use a VibeDist host for
-	remote listening, even if specified on the command line.
-*/
-private void listenHTTPPlain(HTTPServerSettings settings)
+/// ditto
+void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegateS request_handler)
 {
-	import std.algorithm : canFind;
-
-	static bool doListen(HTTPServerSettings settings, size_t listener_idx, string addr)
-	{
-		try {
-			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
-			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, g_listeners[listener_idx]); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
-			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
-			return true;
-		} catch( Exception e ) {
-			logWarn("Failed to listen on %s:%s", addr, settings.port);
-			return false;
-		}
-	}
-
-	void addVHost(ref HTTPServerListener lst)
-	{
-		SSLContext onSNI(string servername)
-		{
-			foreach (ctx; g_contexts)
-				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
-					&& ctx.settings.port == lst.bindPort
-					&& ctx.settings.hostName.icmp(servername) == 0)
-				{
-					logDebug("Found context for SNI host '%s'.", servername);
-					return ctx.settings.sslContext;
-				}
-			logDebug("No context found for SNI host '%s'.", servername);
-			return null;
-		}
-
-		if (settings.sslContext !is lst.sslContext && lst.sslContext.kind != SSLContextKind.serverSNI) {
-			logDebug("Create SNI SSL context for %s, port %s", lst.bindAddress, lst.bindPort);
-			lst.sslContext = createSSLContext(SSLContextKind.serverSNI);
-			lst.sslContext.sniCallback = &onSNI;
-		}
-
-		foreach (ctx; g_contexts) {
-			if (ctx.settings.port != settings.port) continue;
-			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
-			/*enforce(ctx.settings.hostName != settings.hostName,
-				"A server with the host name '"~settings.hostName~"' is already "
-				"listening on "~addr~":"~to!string(settings.port)~".");*/
-		}
-	}
-
-	bool any_successful = false;
-
-	// Check for every bind address/port, if a new listening socket needs to be created and
-	// check for conflicting servers
-	foreach (addr; settings.bindAddresses) {
-		bool found_listener = false;
-		foreach (i, ref lst; g_listeners) {
-			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
-				addVHost(lst);
-				assert(!settings.sslContext || settings.sslContext is lst.sslContext
-					|| lst.sslContext.kind == SSLContextKind.serverSNI,
-					format("Got multiple overlapping SSL bind addresses (port %s), but no SNI SSL context!?", settings.port));
-				found_listener = true;
-				any_successful = true;
-				break;
-			}
-		}
-		if (!found_listener) {
-			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
-			if (doListen(settings, g_listeners.length, addr)) // DMD BUG 2043
-			{
-				found_listener = true;
-				any_successful = true;
-				g_listeners ~= listener;
-			}
-		}
-	}
-
-	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+	listenHTTP(settings, cast(HTTPServerRequestDelegate)request_handler);
+}
+/// ditto
+void listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunctionS request_handler)
+{
+	listenHTTP(settings, toDelegate(request_handler));
+}
+/// ditto
+void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS request_handler)
+{
+	listenHTTP(settings, &request_handler.handleRequest);
 }
 
 
 /**
 	Provides a HTTP request handler that responds with a static Diet template.
 */
-@property HTTPServerRequestDelegate staticTemplate(string template_file)()
+@property HTTPServerRequestDelegateS staticTemplate(string template_file)()
 {
 	import vibe.templ.diet;
-	return (HTTPServerRequest req, HTTPServerResponse res){
+	return (scope HTTPServerRequest req, scope HTTPServerResponse res){
 		res.render!(template_file, req);
 	};
 }
@@ -329,6 +258,20 @@ interface HTTPServerRequestHandler {
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
 }
 
+/// Delegate based request handler with scoped parameters
+alias HTTPServerRequestDelegateS = void delegate(scope HTTPServerRequest req, scope HTTPServerResponse res);
+/// Static function based request handler with scoped parameters
+alias HTTPServerRequestFunctionS = void function(scope HTTPServerRequest req, scope HTTPServerResponse res);
+/// Interface for class based request handlers with scoped parameters
+interface HTTPServerRequestHandlerS {
+	/// Handles incoming HTTP requests
+	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res);
+}
+
+unittest {
+	static assert(is(HTTPServerRequestDelegateS : HTTPServerRequestDelegate));
+	static assert(is(HTTPServerRequestFunctionS : HTTPServerRequestFunction));
+}
 
 /// Aggregates all information about an HTTP error status.
 final class HTTPServerErrorInfo {
@@ -1301,6 +1244,92 @@ private {
 	__gshared HTTPServerContext[] g_contexts;
 	__gshared HTTPServerListener[] g_listeners;
 }
+
+/**
+	[private] Starts a HTTP server listening on the specified port.
+
+	This is the same as listenHTTP() except that it does not use a VibeDist host for
+	remote listening, even if specified on the command line.
+*/
+private void listenHTTPPlain(HTTPServerSettings settings)
+{
+	import std.algorithm : canFind;
+
+	static bool doListen(HTTPServerSettings settings, size_t listener_idx, string addr)
+	{
+		try {
+			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
+			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, g_listeners[listener_idx]); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
+			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
+			return true;
+		} catch( Exception e ) {
+			logWarn("Failed to listen on %s:%s", addr, settings.port);
+			return false;
+		}
+	}
+
+	void addVHost(ref HTTPServerListener lst)
+	{
+		SSLContext onSNI(string servername)
+		{
+			foreach (ctx; g_contexts)
+				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
+					&& ctx.settings.port == lst.bindPort
+					&& ctx.settings.hostName.icmp(servername) == 0)
+				{
+					logDebug("Found context for SNI host '%s'.", servername);
+					return ctx.settings.sslContext;
+				}
+			logDebug("No context found for SNI host '%s'.", servername);
+			return null;
+		}
+
+		if (settings.sslContext !is lst.sslContext && lst.sslContext.kind != SSLContextKind.serverSNI) {
+			logDebug("Create SNI SSL context for %s, port %s", lst.bindAddress, lst.bindPort);
+			lst.sslContext = createSSLContext(SSLContextKind.serverSNI);
+			lst.sslContext.sniCallback = &onSNI;
+		}
+
+		foreach (ctx; g_contexts) {
+			if (ctx.settings.port != settings.port) continue;
+			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
+			/*enforce(ctx.settings.hostName != settings.hostName,
+				"A server with the host name '"~settings.hostName~"' is already "
+				"listening on "~addr~":"~to!string(settings.port)~".");*/
+		}
+	}
+
+	bool any_successful = false;
+
+	// Check for every bind address/port, if a new listening socket needs to be created and
+	// check for conflicting servers
+	foreach (addr; settings.bindAddresses) {
+		bool found_listener = false;
+		foreach (i, ref lst; g_listeners) {
+			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
+				addVHost(lst);
+				assert(!settings.sslContext || settings.sslContext is lst.sslContext
+					|| lst.sslContext.kind == SSLContextKind.serverSNI,
+					format("Got multiple overlapping SSL bind addresses (port %s), but no SNI SSL context!?", settings.port));
+				found_listener = true;
+				any_successful = true;
+				break;
+			}
+		}
+		if (!found_listener) {
+			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
+			if (doListen(settings, g_listeners.length, addr)) // DMD BUG 2043
+			{
+				found_listener = true;
+				any_successful = true;
+				g_listeners ~= listener;
+			}
+		}
+	}
+
+	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+}
+
 
 private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
 {
