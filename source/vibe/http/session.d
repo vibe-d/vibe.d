@@ -19,11 +19,6 @@ import std.variant;
 //TODO: Use Whirlpool or SHA-512 here
 private SHA1HashMixerRNG g_rng;
 
-static this()
-{
-	g_rng = new SHA1HashMixerRNG();
-}
-
 //The "URL and Filename safe" Base64 without padding
 alias Base64URLNoPadding = Base64Impl!('-', '_', Base64.NoPadding);
 
@@ -201,6 +196,7 @@ interface SessionStore {
 	{
 		if (!id.length) {
 			ubyte[64] rand;
+			if (!g_rng) g_rng = new SHA1HashMixerRNG();
 			g_rng.read(rand);
 			id = cast(immutable)Base64URLNoPadding.encode(rand);
 		}
