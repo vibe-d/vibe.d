@@ -1,9 +1,8 @@
 ﻿{
 	"name": "tcp-separate-example",
 	"description": "Example using a single TCP connection from different tasks.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:core": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

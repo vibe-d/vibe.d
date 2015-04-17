@@ -3,7 +3,7 @@
 	"description": "Demonstrates async()/Future usage.",
 	"authors": ["Sönke Ludwig"],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:core": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

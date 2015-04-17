@@ -1,9 +1,8 @@
 ﻿{
 	"name": "web-framework-example",
 	"description": "Simple service using the web framework.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:web": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

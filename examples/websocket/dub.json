@@ -1,9 +1,8 @@
 {
 	"name": "websocket-example",
 	"description": "Example for using the WebSocket feature",
-	"authors": ["Sönke Ludwig"],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

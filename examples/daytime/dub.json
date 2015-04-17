@@ -1,9 +1,8 @@
 ﻿{
 	"name": "daytime-example",
 	"description": "Requests the current time using the daytime protocol.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:core": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }

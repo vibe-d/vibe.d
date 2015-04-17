@@ -1,9 +1,8 @@
 {
 	"name": "web-ajax-example",
 	"description": "Uses the registerWebInterface function for making functions available to JavaScript and to Diet templates.",
-	"authors": ["Robert Klotzner", "Sönke Ludwig"],
 	"dependencies": {
-		"vibe-d": {"path": "../../"}
+		"vibe-d:web": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

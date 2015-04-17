@@ -3,7 +3,7 @@
 	"description": "Performs a custom HTTP request.",
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }

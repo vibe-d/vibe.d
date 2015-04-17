@@ -1,9 +1,8 @@
 {
 	"name": "message-example",
 	"description": "Demonstrates cross-task message communication.",
-	"authors": ["Sönke Ludwig"],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:core": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }
