@@ -1113,7 +1113,9 @@ unittest
 // Check that the interface is valid. Every checks on the correctness of the
 // interface should be put in checkRestInterface, which allows to have consistent
 // errors in the server and client.
-private string getInterfaceValidationError(I)() {
+private string getInterfaceValidationError(I)()
+out { assert((__result is null) == !__result.length); }
+body {
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf;
 	import std.typetuple : TypeTuple;
 
@@ -1218,12 +1220,12 @@ unittest {
 	enum msg = ": No parameter 'ath' (referenced by attribute @HeaderParam)";
 
 	interface ITypo {
-		@headerParam("ath", "Authorization")
+		@headerParam("ath", "Authorization") // mistyped parameter name
 		string getResponse(string auth);
 	}
-	static assert(getInterfaceValidationError!(ITypo) !is null
-		      && msg == getInterfaceValidationError!(ITypo)[FuncId.length..$],
-		      getInterfaceValidationError!(ITypo));
+	static assert(getInterfaceValidationError!ITypo !is null
+		&& msg == getInterfaceValidationError!ITypo[FuncId.length..$],
+		"Expected validation error for getResponse, got "~getInterfaceValidationError!ITypo);
 }
 
 // Multiple origin for a parameter
