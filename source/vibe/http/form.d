@@ -163,7 +163,7 @@ struct StringLengthCountingRange {
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T)
+deprecated FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T)
 {
 	FormFields form = req.method == HTTPMethod.GET ? req.query : req.form;
 	if (form.length == 0)
