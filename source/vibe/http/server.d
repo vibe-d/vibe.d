@@ -1691,17 +1691,17 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 	}
 }
 
-shared static this()
-{
-	string disthost = s_distHost;
-	ushort distport = s_distPort;
-	version (VibeNoDefaultArgs) {}
-	else {
+version (VibeNoDefaultArgs) {}
+else {
+	shared static this()
+	{
+		string disthost = s_distHost;
+		ushort distport = s_distPort;
 		import vibe.core.args : readOption;
 		readOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
 		readOption("distport", &distport, "Sets the port used for load balancing.");
+		setVibeDistHost(disthost, distport);
 	}
-	setVibeDistHost(disthost, distport);
 }
 
 private string formatRFC822DateAlloc(Allocator alloc, SysTime time)
