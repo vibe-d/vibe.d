@@ -14,8 +14,9 @@
 	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
 
 	"dependencies": {
-		":base": "*",
+		":utils": "*",
 		":data": "*",
+		":core": "*",
 		":http": "*",
 		":mail": "*",
 		":diet": "*",
@@ -30,14 +31,16 @@
 
 	"subPackages": [
 		{
-			"name": "base",
-			"description": "Basic I/O and concurrency primitives, as well as utility functions",
+			"name": "core",
+			"description": "Basic I/O and concurrency primitives, as well as low level utility functions",
 			"dependencies": {
 				"openssl": ">=1.0.0+1.0.0e",
 				"botan": {
 					"version": "~>1.12.0",
 					"optional": true
-				}
+				},
+				"vibe-d:utils": "*",
+				"vibe-d:data": "*"
 			},
 
 			"targetType": "library",
@@ -48,10 +51,8 @@
 				"source/vibe/core",
 				"source/vibe/crypto",
 				"source/vibe/inet",
-				"source/vibe/internal",
 				"source/vibe/stream",
 				"source/vibe/textfilter",
-				"source/vibe/utils",
 			],
 
 
@@ -99,24 +100,30 @@
 			],
 		},
 		{
+			"name": "utils",
+			"description": "Low level utility functionality",
+			"targetType": "library",
+			"sourcePaths": ["source/vibe/utils", "source/vibe/internal"]
+		},
+		{
 			"name": "data",
 			"description": "Data format and serialization support",
 			"targetType": "library",
-			"dependencies": {"vibe-d:base": "*"},
+			"dependencies": {"vibe-d:utils": "*"},
 			"sourcePaths": ["source/vibe/data"]
 		},
 		{
 			"name": "http",
 			"description": "HTTP server and client implementation and higher level HTTP functionality",
 			"targetType": "library",
-			"dependencies": {"vibe-d:base": "*", "vibe-d:data": "*"},
+			"dependencies": {"vibe-d:core": "*", "vibe-d:data": "*"},
 			"sourcePaths": ["source/vibe/http"],
 		},
 		{
 			"name": "mail",
 			"description": "SMTP client support",
 			"targetType": "library",
-			"dependencies": {"vibe-d:base": "*"},
+			"dependencies": {"vibe-d:core": "*"},
 			"sourcePaths": ["source/vibe/mail"],
 		},
 		{
