@@ -280,26 +280,3 @@ unittest {
 	assert(b["A"] == 1);
 	assert(b.getAll("a") == [1, 2]);
 }
-
-unittest {
-	import vibe.data.json;
-	import vibe.data.serialization;
-
-	static assert(isCustomSerializable!(DictionaryList!int));
-
-	DictionaryList!(int, false) b;
-	b.addField("a", 1);
-	b.addField("A", 2);
-	auto app = appender!string();
-	serializeToJson(app, b);
-	assert(app.data == `[{"key":"a","value":1},{"key":"A","value":2}]`, app.data);
-
-	DictionaryList!(int, true, 2) c;
-	c.addField("a", 1);
-	c.addField("b", 2);
-	c.addField("a", 3);
-	c.remove("b");
-	auto appc = appender!string();
-	serializeToJson(appc, c);
-	assert(appc.data == `[{"key":"a","value":1},{"key":"a","value":3}]`, appc.data);
-}
