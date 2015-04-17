@@ -1114,7 +1114,7 @@ unittest
 // interface should be put in checkRestInterface, which allows to have consistent
 // errors in the server and client.
 private string getInterfaceValidationError(I)()
-out { assert((__result is null) == !__result.length); }
+out (result) { assert((result is null) == !result.length); }
 body {
 	import std.traits : MemberFunctionsTuple, FunctionTypeOf;
 	import std.typetuple : TypeTuple;
