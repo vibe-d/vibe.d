@@ -15,11 +15,28 @@ import std.conv;
 
 
 /**************************************************************************************************/
+/* Public functions                                                                               */
+/**************************************************************************************************/
+
+/**
+	Returns a `NullOutputStream` instance.
+
+	The instance will only be created on the first request and gets reused for
+	all subsequent calls from the same thread.
+*/
+NullOutputStream nullSink()
+{
+	static NullOutputStream ret;
+	if (!ret) ret = new NullOutputStream;
+	return ret;
+}
+
+/**************************************************************************************************/
 /* Public types                                                                                   */
 /**************************************************************************************************/
 
 /**
-Interface for all classes implementing readable streams.
+	Interface for all classes implementing readable streams.
 */
 interface InputStream {
 	/** Returns true iff the end of the input stream has been reached.
