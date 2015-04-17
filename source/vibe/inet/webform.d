@@ -345,7 +345,7 @@ private string formEncodeImpl(T)(T map, char sep, bool form_encode)
 	Appender!string dst;
 	size_t len;
 
-	foreach (ref string key, ref T value; map) {
+	foreach (string key, T value; map) {
 		len += key.length;
 		len += value.length;
 	}
@@ -361,7 +361,7 @@ private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
 {
 	bool flag;
 
-	foreach (key, ref value; map) {
+	foreach (key, value; map) {
 		if (flag)
 			dst.put(sep);
 		else
@@ -377,7 +377,7 @@ private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
 {
 	bool flag;
 
-	foreach (ref string key, ref T value; map) {
+	foreach (string key, T value; map) {
 		if (flag)
 			dst.put(sep);
 		else
