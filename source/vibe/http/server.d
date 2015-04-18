@@ -1335,7 +1335,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 {
 	Stream http_stream = connection;
 
-	version(VibeNoSSL) {} else {
+	version(VibeNoTLS) {} else {
 		import std.traits : ReturnType;
 		ReturnType!createSSLStreamFL ssl_stream;
 	}
@@ -1347,7 +1347,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 
 	// If this is a HTTPS server, initiate SSL
 	if (listen_info.sslContext) {
-		version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
+		version (VibeNoTLS) assert(false, "No SSL support compiled in (VibeNoTLS)");
 		else {
 			logDebug("Accept SSL connection: %s", listen_info.sslContext.kind);
 			// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
@@ -1409,7 +1409,8 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 
 	// Create the response object
-	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
+	auto res = FreeListObjectAlloc!HTTPServerResponse.alloc(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
+	scope(exit) FreeListObjectAlloc!HTTPServerResponse.free(res);
 	req.ssl = res.m_ssl = listen_info.sslContext !is null;
 	if (req.ssl) req.clientCertificate = (cast(SSLStream)http_stream).peerCertificate;
 

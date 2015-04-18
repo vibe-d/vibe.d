@@ -7,6 +7,8 @@
 */
 module vibe.stream.openssl;
 
+version(VibeNoTLS) {} else:
+
 import vibe.core.log;
 import vibe.core.net;
 import vibe.core.stream;
