@@ -1280,8 +1280,13 @@ unittest {
 }
 
 private string stripTestIdent(string msg) {
-	import std.string;
-	auto idx = msg.indexOf(": ");
+	static if (__VERSION__ <= 2065) {
+		import vibe.utils.string;
+		auto idx = msg.indexOfCT(": ");
+	} else {
+		import std.string;
+		auto idx = msg.indexOf(": ");
+	}
 	return idx >= 0 ? msg[idx+2 .. $] : msg;
 }
 

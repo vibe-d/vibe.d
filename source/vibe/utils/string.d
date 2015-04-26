@@ -84,6 +84,16 @@ ptrdiff_t indexOfCT(Char)(in Char[] s, dchar c, CaseSensitive cs = CaseSensitive
 		return -1;
 	} else return std.string.indexOf(s, c, cs);
 }
+ptrdiff_t indexOfCT(Char)(in Char[] s, in Char[] needle)
+{
+	if (__ctfe) {
+		if (s.length < needle.length) return -1;
+		foreach (i; 0 .. s.length - needle.length)
+			if (s[i .. i+needle.length] == needle)
+				return i;
+		return -1;
+	} else return std.string.indexOf(s, needle);
+}
 
 /**
 	Checks if any character in 'str' is contained in 'chars'.
