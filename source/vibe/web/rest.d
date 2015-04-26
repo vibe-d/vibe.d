@@ -1280,7 +1280,7 @@ unittest {
 }
 
 private string stripTestIdent(string msg) {
-	static if (__VERSION__ <= 2065) {
+	static if (__VERSION__ <= 2066) {
 		import vibe.utils.string;
 		auto idx = msg.indexOfCT(": ");
 	} else {
