@@ -106,12 +106,8 @@ final class LibasyncDriver : EventDriver {
 	}
 
 	static @property bool isControlThread() nothrow {
-		bool is_ctrl_thr;
-
-		try is_ctrl_thr = Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor";
-		catch {}
-
-		return is_ctrl_thr;
+		scope(failure) assert(false);
+		return Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor";
 	}
 
 	void dispose() {

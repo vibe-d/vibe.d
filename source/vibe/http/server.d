@@ -537,9 +537,7 @@ final class HTTPServerSettings {
 	/// Sets a custom handler for displaying error pages for HTTP errors
 	HTTPServerErrorPageHandler errorPageHandler = null;
 
-	deprecated("Use tlsContext instead")
 	@property void sslContext(TLSContext ctx) { tlsContext = ctx; }
-	deprecated("Use tlsContext instead")
 	@property TLSContext sslContext() { return tlsContext; }
 
 	/// If set, a HTTPS server will be started instead of plain HTTP.
@@ -1006,12 +1004,12 @@ final class HTTPServerResponse : HTTPResponse {
 
 	}
 
-	private @property bool isHTTP2() { return (!m_isTest && m_conn.stack.http2 !is null)?true:false; }
+	private @property bool isHTTP2() { return !m_isTest && m_conn.stack.http2 !is null; }
 
 	@property SysTime timeFinalized() { return m_timeFinalized; }
 
 	/// Determines if compression is used in this response.
-	@property bool hasCompression() { return (m_compressionStream.gzip !is null) ? true : false; }
+	@property bool hasCompression() { return m_compressionStream.gzip !is null; }
 
 	/// Determines if the HTTP header has already been written.
 	@property bool headerWritten() const { return m_headerWritten; }
@@ -1022,7 +1020,7 @@ final class HTTPServerResponse : HTTPResponse {
 	/// Determines if the response is sent over an encrypted connection.
 	bool tls() const { return (!m_isTest && m_conn.stack.tls) ? true : false; }
 
-	deprecated("Use tls")
+	/// ditto
 	bool ssl() const { return tls(); }
 
 	/// Writes the entire response body at once.
@@ -1853,7 +1851,14 @@ void handleRequest(TCPConnection tcp_conn,
 				   ref HTTP2HandlerContext http2_handler,
 				   ref bool keep_alive)
 {
-	ConnectionStream topStream() { return http2_stream ? cast(ConnectionStream) http2_stream : ( tls_stream ? cast(ConnectionStream) tls_stream : cast(ConnectionStream) tcp_conn); }
+	ConnectionStream topStream() 
+	{ 
+		if (http2_stream !is null)
+			return cast(ConnectionStream) http2_stream;
+		if (tls_stream !is null)
+			return cast(ConnectionStream) tls_stream;
+		return cast(ConnectionStream) tcp_conn;
+	}
 
 	static void errorOut(HTTPServerRequest req, HTTPServerResponse res, int code, string msg, string debug_msg, Throwable ex)
 	in { assert(!res.headerWritten); }

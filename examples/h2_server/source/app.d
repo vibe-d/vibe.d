@@ -9,7 +9,8 @@ import std.datetime;
 
 void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
-	res.writeBody(cast(ubyte[])"Hello, World!", "text/plain");
+	if (req.path == "/")
+		res.writeBody("Hello, World!", "text/plain");
 }
 
 shared static this()
@@ -23,5 +24,4 @@ shared static this()
 	settings.tlsContext.usePrivateKeyFile("server.key");
 
 	listenHTTP(settings, &handleRequest);
-
 }

@@ -3,7 +3,7 @@
 	"description": "Performs a custom HTTP/2 request.",
 	"authors": [ "Sönke Ludwig", "Etienne Cimon" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d": {"path": "../../"}
 	},
 	"subConfigurations": { "vibe-d": "libasync_botan" },
 	"versions": ["SecurePool","VibeCustomMain"]
