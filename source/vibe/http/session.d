@@ -21,6 +21,9 @@ private SHA1HashMixerRNG g_rng;
 
 static this()
 {
+	import core.thread;
+	auto thisthr = Thread.getThis();	
+	if (thisthr.name.length < 2 || thisthr.name[0 .. 2] != "V|") return;
 	g_rng = new SHA1HashMixerRNG();
 }
 

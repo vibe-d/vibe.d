@@ -39,6 +39,12 @@ final class MemoryOutputStream : OutputStream {
 		m_destination.reset();
 	}
 
+	/// Resets the stream to its initial state containing no data.
+	void clear()
+	{
+		m_destination.reset(AppenderResetMode.freeData);
+	}
+
 	/// Reserves space for data - useful for optimization.
 	void reserve(size_t nbytes)
 	{

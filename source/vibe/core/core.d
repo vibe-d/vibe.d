@@ -17,6 +17,7 @@ import vibe.utils.array;
 import std.algorithm;
 import std.conv;
 import std.encoding;
+import core.exception;
 import std.exception;
 import std.functional;
 import std.range : empty, front, popFront;
@@ -194,7 +195,7 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 	if (f is null) {
 		// if there is no fiber available, create one.
 		if (s_availableFibers.capacity == 0) s_availableFibers.capacity = 1024;
-		logDebug("Creating new fiber...");
+		logTrace("Creating new fiber...");
 		s_fiberCount++;
 		f = new CoreTask;
 	}
@@ -514,6 +515,13 @@ void yield()
 void rawYield()
 {
 	s_core.yieldForEvent();
+}
+
+// Resumes a task waiting in this thread's event loop (used in ManualEvent)
+package void rawResume(Task t)
+{
+	CoreTask ct = cast(CoreTask)t.fiber;
+	s_yieldedTasks.insertBack(ct);
 }
 
 /**
@@ -1169,12 +1177,13 @@ private class VibeDriverCore : DriverCore {
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
 			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
 		} else {
-			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			m_eventException = null;
+
+				assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
+				m_eventException = null;
 			try if (auto err = getEventDriver().runEventLoopOnce()) {
-				logError("Error running event loop: %d", err);
-				assert(err != 1, "No events registered, exiting event loop.");
-				assert(false, "Error waiting for events.");
+					logError("Error running event loop: %d", err);
+					assert(err != 1, "No events registered, exiting event loop.");
+					assert(false, "Error waiting for events.");
 			}
 			catch (Exception e) {
 				assert(false, "Driver.runEventLoopOnce() threw: "~e.msg);
@@ -1340,7 +1349,7 @@ shared static this()
 	}
 
 	auto thisthr = Thread.getThis();
-	thisthr.name = "Main";
+	thisthr.name = "V|Main";
 	st_threads ~= ThreadContext(thisthr, false);
 
 	setupDriver();
@@ -1366,16 +1375,19 @@ shared static this()
 
 shared static ~this()
 {
+	if (!s_core) return;
 	deleteEventDriver();
 
-	bool tasks_left = false;
+	size_t tasks_left;
 
 	synchronized (st_threadsMutex) {
-		if( !st_workerTasks.empty ) tasks_left = true;
+		if( !st_workerTasks.empty ) tasks_left = st_workerTasks.length;
 	}
 
-	if (!s_yieldedTasks.empty) tasks_left = true;
-	if (tasks_left) logWarn("There are still tasks running at exit.");
+	if (!s_yieldedTasks.empty) tasks_left += s_yieldedTasks.length;
+	if (tasks_left > 0) {
+		logWarn("There were still %d tasks running at exit.", tasks_left);
+	}
 
 	destroy(s_core);
 	s_core = null;
@@ -1383,15 +1395,11 @@ shared static ~this()
 
 // per thread setup
 static this()
-{
-	/// workaround for:
-	// object.Exception@src/rt/minfo.d(162): Aborting: Cycle detected between modules with ctors/dtors:
-	// vibe.core.core -> vibe.core.drivers.native -> vibe.core.drivers.libasync -> vibe.core.core
-	if (Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor") return;
-
+{	
+	auto thisthr = Thread.getThis();	
+	if (thisthr.name.length < 2 || thisthr.name[0 .. 2] != "V|") return;
 	assert(s_core !is null);
 
-	auto thisthr = Thread.getThis();
 	synchronized (st_threadsMutex)
 		if (!st_threads.any!(c => c.thread is thisthr))
 			st_threads ~= ThreadContext(thisthr, false);
@@ -1403,18 +1411,15 @@ static this()
 
 static ~this()
 {
-	version(VibeLibasyncDriver) {
-		import vibe.core.drivers.libasync;
-		if (LibasyncDriver.isControlThread)
-			return;
-	}
+
 	auto thisthr = Thread.getThis();
+	if (thisthr.name.length < 2 || thisthr.name[0 .. 2] != "V|") return;
 
 	bool is_main_thread = false;
-
 	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
-		assert(idx >= 0, "No more threads registered");
+		// Assertion would segfault in a thread destructor
+		//assert(idx >= 0, "No more threads registered");
 		if (idx >= 0) {
 			st_threads[idx] = st_threads[$-1];
 			st_threads.length--;
@@ -1423,6 +1428,12 @@ static ~this()
 		// if we are the main thread, wait for all others before terminating
 		is_main_thread = idx == 0;
 		if (is_main_thread) { // we are the main thread, wait for others
+			
+			version(VibeLibasyncDriver) {
+				import libasync.threads : destroyAsyncThreads;
+				destroyAsyncThreads(); // destroy threads
+			}
+
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
 			// wait for all non-daemon threads to shut down
@@ -1464,7 +1475,7 @@ private void setupWorkerThreads()
 
 		foreach (i; 0 .. threadsPerCPU) {
 			auto thr = new Thread(&workerThreadFunc);
-			thr.name = format("Vibe Task Worker #%s", i);
+			thr.name = format("V|Vibe Task Worker #%s", i);
 			st_threads ~= ThreadContext(thr, true);
 			thr.start();
 		}
@@ -1485,6 +1496,12 @@ nothrow {
 		scope (failure) exit(-1);
 		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
 		logDebug("Full error: %s", e.toString().sanitize());
+	} catch (InvalidMemoryOperationError e) {
+		import std.stdio;
+		scope(failure) assert(false);
+		writeln("Error message: ", e.msg);
+		writeln("Full error: ", e.toString().sanitize());
+		exit(-1);
 	} catch (Throwable th) {
 		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
 		logDebug("Full error: %s", th.toString().sanitize());
@@ -1635,7 +1652,7 @@ private struct CoreTaskQueue {
 
 	void insertBack(CoreTask task)
 	{
-		assert(task.m_queue == null, "Task is already scheduled to be resumed!");
+		if(task.m_queue !is null) return; // Task is already scheduled to be resumed!
 		assert(task.m_nextInQueue is null, "Task has m_nextInQueue set without being in a queue!?");
 		task.m_queue = &this;
 		if (empty)
@@ -1721,11 +1738,4 @@ unittest {
 	static assert(!needsMove!U);
 	static assert(needsMove!V);
 	static assert(!needsMove!W);
-}
-
-version(VibeLibasyncDriver) {
-	shared static ~this() {
-		import libasync.threads : destroyAsyncThreads;
-		destroyAsyncThreads(); // destroy threads
-	}
 }

@@ -225,6 +225,9 @@ private {
 
 static this()
 {
+	import core.thread;
+	auto thisthr = Thread.getThis();	
+	if (thisthr.name.length < 2 || thisthr.name[0 .. 2] != "V|") return;
 	registerDietTextFilter("css", &filterCSS);
 	registerDietTextFilter("javascript", &filterJavaScript);
 	registerDietTextFilter("markdown", &filterMarkdown);

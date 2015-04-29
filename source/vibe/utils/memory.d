@@ -190,7 +190,7 @@ final class DebugAllocator : Allocator {
 		m_bytes += sz;
 		if( m_bytes > m_maxBytes ){
 			m_maxBytes = m_bytes;
-			logDebug("New allocation maximum: %d (%d blocks)", m_maxBytes, m_blocks.length);
+			//logDebug("New allocation maximum: %d (%d blocks)", m_maxBytes, m_blocks.length);
 		}
 		return ret;
 	}
@@ -528,7 +528,7 @@ nothrow:
 		assert(elem_size >= size_t.sizeof);
 		m_elemSize = elem_size;
 		m_baseAlloc = base_allocator;
-		logDebug("Create FreeListAlloc %d", m_elemSize);
+		//logDebug("Create FreeListAlloc %d", m_elemSize);
 	}
 
 	@property size_t elementSize() const { return m_elemSize; }
@@ -597,10 +597,14 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 	void free(TR obj)
 	{
 		static if( INIT ){
-			scope(failure) assert(0, "You shouldn't throw in destructors");
-			auto objc = obj;
-			static if (is(TR == T*)) .destroy(*objc);//typeid(T).destroy(cast(void*)obj);
-			else .destroy(objc);
+			try {
+				scope(failure) assert(0, "You shouldn't throw in destructors");
+				auto objc = obj;
+				static if (is(TR == T*)) .destroy(*objc);//typeid(T).destroy(cast(void*)obj);
+				else .destroy(objc);
+			} catch (Throwable e) {
+				logError("%s", e.toString());
+			}
 		}
 		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
 		manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);

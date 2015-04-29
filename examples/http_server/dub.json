@@ -3,7 +3,7 @@
 	"description": "A minimal HTTP server.",
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

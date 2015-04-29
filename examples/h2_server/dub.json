@@ -1,0 +1,10 @@
+﻿{
+	"name": "h2-server-example",
+	"description": "Uses the HTTPS and HTTP/2 protocol for serving requests.",
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"path": "../../"}
+	},
+	"subConfigurations": {"vibe-d": "libasync_botan"},
+	"versions": ["SecurePool", "VibeDefaultMain"]
+}
