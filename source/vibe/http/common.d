@@ -107,31 +107,31 @@ HTTPMethod httpMethodFromString(string str)
 
 		// WEBDAV extensions, RFC 2518
 		case "PROPFIND": return HTTPMethod.PROPFIND;
-	    case "PROPPATCH": return HTTPMethod.PROPPATCH;
-	    case "MKCOL": return HTTPMethod.MKCOL;
-	    case "COPY": return HTTPMethod.COPY;
-	    case "MOVE": return HTTPMethod.MOVE;
-	    case "LOCK": return HTTPMethod.LOCK;
-	    case "UNLOCK": return HTTPMethod.UNLOCK;
+		case "PROPPATCH": return HTTPMethod.PROPPATCH;
+		case "MKCOL": return HTTPMethod.MKCOL;
+		case "COPY": return HTTPMethod.COPY;
+		case "MOVE": return HTTPMethod.MOVE;
+		case "LOCK": return HTTPMethod.LOCK;
+		case "UNLOCK": return HTTPMethod.UNLOCK;
 
 		// Versioning Extensions to WebDAV, RFC 3253
 		case "VERSION-CONTROL": return HTTPMethod.VERSIONCONTROL;
-	    case "REPORT": return HTTPMethod.REPORT;
-	    case "CHECKOUT": return HTTPMethod.CHECKOUT;
-	    case "CHECKIN": return HTTPMethod.CHECKIN;
-	    case "UNCHECKOUT": return HTTPMethod.UNCHECKOUT;
-	    case "MKWORKSPACE": return HTTPMethod.MKWORKSPACE;
-	    case "UPDATE": return HTTPMethod.UPDATE;
-	    case "LABEL": return HTTPMethod.LABEL;
-	    case "MERGE": return HTTPMethod.MERGE;
-	    case "BASELINE-CONTROL": return HTTPMethod.BASELINECONTROL;
-	    case "MKACTIVITY": return HTTPMethod.MKACTIVITY;
+		case "REPORT": return HTTPMethod.REPORT;
+		case "CHECKOUT": return HTTPMethod.CHECKOUT;
+		case "CHECKIN": return HTTPMethod.CHECKIN;
+		case "UNCHECKOUT": return HTTPMethod.UNCHECKOUT;
+		case "MKWORKSPACE": return HTTPMethod.MKWORKSPACE;
+		case "UPDATE": return HTTPMethod.UPDATE;
+		case "LABEL": return HTTPMethod.LABEL;
+		case "MERGE": return HTTPMethod.MERGE;
+		case "BASELINE-CONTROL": return HTTPMethod.BASELINECONTROL;
+		case "MKACTIVITY": return HTTPMethod.MKACTIVITY;
 
-	    // Ordered Collections Protocol, RFC 3648
-	    case "ORDERPATCH": return HTTPMethod.ORDERPATCH;
+		// Ordered Collections Protocol, RFC 3648
+		case "ORDERPATCH": return HTTPMethod.ORDERPATCH;
 
-	    // Access Control Protocol, RFC 3744
-	    case "ACL": return HTTPMethod.ACL;
+		// Access Control Protocol, RFC 3744
+		case "ACL": return HTTPMethod.ACL;
 	}
 }
 
