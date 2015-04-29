@@ -112,6 +112,40 @@ unittest
 	@after!filter()
 	int foo() { return 42; }
 }
+
+/**
+	Marks function/method for usage with `AttributedFunction`.
+
+	Former will call a Function if the given exception is thrown.
+
+	There can be only one "onError"-attribute attached to a single symbol.
+
+	Params:
+		Function = function/method symbol to run after attributed function/method;
+				   void handleError(HTTPServerRequest req, HTTPServerResponse res, Exc ex);
+		Exc		 = type of exception to be caught
+
+	Returns:
+		internal attribute struct that embeds supplied information
+*/
+auto onError(alias Function, alias Exc = Exception)()
+{
+	return ErrorAttribute!(Function, Exc)();
+}
+
+///
+unittest
+{
+	import vibe.http.server;
+
+	void handleError(HTTPServerRequest req, HTTPServerResponse res, Throwable ex)
+	{
+	}
+
+	@onError!(handleError, Throwable)()
+	int foo() { return 42; }
+}
+
 /**
 	Checks if parameter is calculated by one of attached
 	functions.
@@ -307,6 +341,31 @@ private {
 
 		static assert (isOutputAttribute!correct);
 		static assert (!isOutputAttribute!wrong);
+	}
+}
+
+package {
+	struct ErrorAttribute(alias Function, alias Exc)
+	{
+		alias handler = Function;
+		alias ExceptionType = Exc;
+	}
+
+	template isErrorAttribute(T...)
+	{
+		enum isErrorAttribute = (T.length == 1) && isInstanceOf!(ErrorAttribute, typeof(T[0]));
+	}
+
+	unittest
+	{
+		import vibe.http.server;
+		void foo(HTTPServerRequest req, HTTPServerResponse res, Exception ex) {}
+
+		enum correct = ErrorAttribute!(foo, Exception)();
+		enum wrong = InputAttribute!foo("name");
+
+		static assert (isErrorAttribute!correct);
+		static assert (!isErrorAttribute!wrong);
 	}
 }
 

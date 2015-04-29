@@ -7,7 +7,7 @@
 */
 module vibe.web.rest;
 
-public import vibe.internal.meta.funcattr : before, after;
+public import vibe.internal.meta.funcattr : before, after, onError;
 public import vibe.web.common;
 
 import vibe.core.log;
@@ -732,17 +732,34 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 			}
 		}
 
-		try {
-			import vibe.internal.meta.funcattr;
+		import vibe.internal.meta.funcattr;
+		auto handler = createAttributedFunction!Func(req, res);
 
-			auto handler = createAttributedFunction!Func(req, res);
+		alias error_attributes = Filter!(isErrorAttribute, __traits(getAttributes, Func));
+		static if(error_attributes.length > 1)
+			static assert(0, "function must not have more than one error attribute");
 
+		void runHandler() {
 			static if (is(RT == void)) {
 				handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(Json.emptyObject);
 			} else {
 				auto ret = handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(ret);
+			}
+		}
+
+		try {
+			static if (error_attributes.length == 1) {
+				auto Attr = error_attributes[0];
+				alias Exc = Attr.ExceptionType;
+				try {
+					runHandler();
+				} catch (Exc e) {
+					error_attributes[0].handler(req, res, e);
+				}
+			} else {
+				runHandler();
 			}
 		} catch (HTTPStatusException e) {
 			if (res.headerWritten) logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
@@ -752,8 +769,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 			logDebug("REST handler exception: %s", e.toString());
 			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
 			else res.writeJsonBody(
-				[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
-				HTTPStatus.internalServerError
+			[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
+			HTTPStatus.internalServerError
 			);
 		}
 	}
