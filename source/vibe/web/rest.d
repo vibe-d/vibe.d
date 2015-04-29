@@ -529,12 +529,22 @@ class RestInterfaceSettings {
 	*/
 	bool stripTrailingUnderscore = true;
 
+	/** By default, vibe.d's REST module will handle $(D HTTPStatusException)s and
+	    turn other exceptions into a JSON exception object with an HTTP status
+	    code of 500 (Internal Server Error).
+
+	    By setting this to $(D false), the exceptions will pass through,
+	    allowing them to be handled by $(D HTTPServerSettings.errorPageHandler).
+	*/
+	bool handleExceptions = true;
+
 	@property RestInterfaceSettings dup()
 	const {
 		auto ret = new RestInterfaceSettings;
 		ret.baseURL = this.baseURL;
 		ret.methodStyle = this.methodStyle;
 		ret.stripTrailingUnderscore = this.stripTrailingUnderscore;
+		ret.handleExceptions = this.handleExceptions;
 		return ret;
 	}
 }
@@ -732,11 +742,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 			}
 		}
 
-		try {
-			import vibe.internal.meta.funcattr;
+		import vibe.internal.meta.funcattr;
+		auto handler = createAttributedFunction!Func(req, res);
 
-			auto handler = createAttributedFunction!Func(req, res);
-
+		void runHandler() {
 			static if (is(RT == void)) {
 				handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(Json.emptyObject);
@@ -744,17 +753,25 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 				auto ret = handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(ret);
 			}
-		} catch (HTTPStatusException e) {
-			if (res.headerWritten) logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
-			else res.writeJsonBody([ "statusMessage": e.msg ], e.status);
-		} catch (Exception e) {
-			// TODO: better error description!
-			logDebug("REST handler exception: %s", e.toString());
-			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
-			else res.writeJsonBody(
+		}
+
+		if (settings.handleExceptions) {
+			try {
+				runHandler();
+			} catch (HTTPStatusException e) {
+				if (res.headerWritten) logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
+				else res.writeJsonBody([ "statusMessage": e.msg ], e.status);
+			} catch (Exception e) {
+				// TODO: better error description!
+				logDebug("REST handler exception: %s", e.toString());
+				if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
+				else res.writeJsonBody(
 				[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
 				HTTPStatus.internalServerError
-			);
+				);
+			}
+		} else {
+			runHandler();
 		}
 	}
 
