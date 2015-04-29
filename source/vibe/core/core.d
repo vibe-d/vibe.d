@@ -17,6 +17,7 @@ import vibe.utils.array;
 import std.algorithm;
 import std.conv;
 import std.encoding;
+import core.exception;
 import std.exception;
 import std.functional;
 import std.range : empty, front, popFront;
@@ -1176,14 +1177,13 @@ private class VibeDriverCore : DriverCore {
 			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
 			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
 		} else {
-			try {
+
 				assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
 				m_eventException = null;
-				if (auto err = getEventDriver().runEventLoopOnce()) {
+			try if (auto err = getEventDriver().runEventLoopOnce()) {
 					logError("Error running event loop: %d", err);
 					assert(err != 1, "No events registered, exiting event loop.");
 					assert(false, "Error waiting for events.");
-				}
 			}
 			catch (Exception e) {
 				assert(false, "Driver.runEventLoopOnce() threw: "~e.msg);
@@ -1386,8 +1386,7 @@ shared static ~this()
 
 	if (!s_yieldedTasks.empty) tasks_left += s_yieldedTasks.length;
 	if (tasks_left > 0) {
-		import vibe.http.http2 : HTTP2Session;
-		logWarn("There were still %d tasks running at exit, of which %d HTTP/2 sessions were forcefully to close.", tasks_left, HTTP2Session.total_sessions_running);
+		logWarn("There were still %d tasks running at exit.", tasks_left);
 	}
 
 	destroy(s_core);
@@ -1497,6 +1496,16 @@ nothrow {
 		scope (failure) exit(-1);
 		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
 		logDebug("Full error: %s", e.toString().sanitize());
+	} catch (InvalidMemoryOperationError e) {
+		import std.stdio;
+		scope(failure) assert(false);
+		writeln("Error message: ", e.msg);
+		writeln("Full error: ", e.toString().sanitize());
+		exit(-1);
+	} catch (Throwable th) {
+		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
+		logDebug("Full error: %s", th.toString().sanitize());
+		exit(-1);
 	}
 }
 

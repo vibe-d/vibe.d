@@ -3,7 +3,7 @@
 	"description": "Uses the HTTPS and HTTP/2 protocol for serving requests.",
 	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d": {"path": "../../"}
 	},
 	"subConfigurations": {"vibe-d": "libasync_botan"},
 	"versions": ["SecurePool", "VibeDefaultMain"]
