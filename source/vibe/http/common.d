@@ -47,31 +47,31 @@ enum HTTPMethod {
 
 	// WEBDAV extensions, RFC 2518
 	PROPFIND,
-    PROPPATCH,
-    MKCOL,
-    COPY,
-    MOVE,
-    LOCK,
-    UNLOCK,
+	PROPPATCH,
+	MKCOL,
+	COPY,
+	MOVE,
+	LOCK,
+	UNLOCK,
 
 	// Versioning Extensions to WebDAV, RFC 3253
 	VERSIONCONTROL,
-    REPORT,
-    CHECKOUT,
-    CHECKIN,
-    UNCHECKOUT,
-    MKWORKSPACE,
-    UPDATE,
-    LABEL,
-    MERGE,
-    BASELINECONTROL,
-    MKACTIVITY,
+	REPORT,
+	CHECKOUT,
+	CHECKIN,
+	UNCHECKOUT,
+	MKWORKSPACE,
+	UPDATE,
+	LABEL,
+	MERGE,
+	BASELINECONTROL,
+	MKACTIVITY,
 
-    // Ordered Collections Protocol, RFC 3648
-    ORDERPATCH,
+	// Ordered Collections Protocol, RFC 3648
+	ORDERPATCH,
 
-    // Access Control Protocol, RFC 3744
-    ACL
+	// Access Control Protocol, RFC 3744
+	ACL
 }
 
 
