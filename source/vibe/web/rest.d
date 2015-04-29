@@ -1310,6 +1310,58 @@ unittest {
 	// interface ImplicitlyEmptyPath { void get(); }
 }
 
+// Accept @headerParam ref / out parameters
+unittest {
+	interface HeaderRef {
+		@headerParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderRef is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderRef));
+
+	interface HeaderOut {
+		@headerParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderOut is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderOut));
+}
+
+// Reject unattributed / @queryParam or @bodyParam ref / out parameters
+unittest {
+	interface QueryRef {
+		@queryParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!QueryRef)
+		== "Query parameter 'auth' cannot be ref");
+
+	interface QueryOut {
+		@queryParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!QueryOut)
+		== "Query parameter 'auth' cannot be out");
+
+	interface BodyRef {
+		@bodyParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!BodyRef)
+		== "Body parameter 'auth' cannot be ref");
+
+	interface BodyOut {
+		@bodyParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!BodyOut)
+		== "Body parameter 'auth' cannot be out");
+
+	// There's also the possibility of someone using an out unnamed
+	// parameter (don't ask me why), but this is catched as unnamed
+	// parameter, so we don't need to check it here.
+}
+
 private string stripTestIdent(string msg) {
 	static if (__VERSION__ <= 2066) {
 		import vibe.utils.string;
