@@ -9,8 +9,6 @@ import core.thread;
 import vibe.stream.botan;
 void main()
 {
-	StopWatch sw;
-	sw.start();
 	setLogLevel(LogLevel.debug_);
 	FileCookieJar cookies = new FileCookieJar("hello.cookies");
 	HTTPClientSettings settings = new HTTPClientSettings;
@@ -23,7 +21,8 @@ void main()
 	void secondTask() {
 		runTask(
 			{
-				sw.reset(); sw.start();
+				StopWatch sw;
+				sw.start();
 				requestHTTP("https://google.com",
 					(scope req) {
 						
@@ -47,7 +46,8 @@ void main()
 							logInfo("Header: %s: %s", k, v);
 						result = res.bodyReader.readAllUTF8(true);
 						sw.stop();
-						logDebug("Finished reading result in %s ms", sw.peek().msecs);
+						auto sw_msecs = sw.peek().msecs;
+						logDebug("Finished reading result in %s ms", sw_msecs);
 						Thread.sleep(30.msecs);
 					}, settings);
 				
@@ -60,7 +60,8 @@ void main()
 
 	runTask(
 		{
-
+			StopWatch sw;
+			sw.start();
 			requestHTTP("https://127.0.0.1:8080/static/10k",
 				(scope req) {
 
@@ -84,7 +85,8 @@ void main()
 						logInfo("Header: %s: %s", k, v);
 					result = res.bodyReader.readAllUTF8();
 					sw.stop();
-					logDebug("Finished reading result in %s ms", sw.peek().msecs);
+					auto sw_msecs = sw.peek().msecs;
+					logDebug("Finished reading result in %s ms", sw_msecs);
 					Thread.sleep(30.msecs);
 				}, settings);
 	

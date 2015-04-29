@@ -2,11 +2,6 @@ language: d
 
 d:
   - dmd-2.067.1
-  - dmd-2.066.1
-  - dmd-2.065.0
-  - ldc-0.14.0
-  - ldc-0.15.1
-  - gdc-4.9.0
 
 before_install:
   - wget http://dist.schmorp.de/libev/Attic/libev-4.19.tar.gz
@@ -16,25 +11,14 @@ before_install:
 env:
   - VIBED_DRIVER=libevent
   - VIBED_DRIVER=libev-travis
-  - VIBED_DRIVER=libasync
-
-matrix:
-  exclude:
-    - d: dmd-2.065.0
-      env: VIBED_DRIVER=libasync
-    - d: ldc-0.14.0
-      env: VIBED_DRIVER=libasync
-    - d: ldc-0.15.1
-      env: VIBED_DRIVER=libasync
-    - d: gdc-4.9.0
-      env: VIBED_DRIVER=libasync
+  - VIBED_DRIVER=libasync_botan
 
 script:
   - dub test --compiler=$DC --config=${VIBED_DRIVER} || exit 1
-  - if [ ${VIBED_DRIVER} == "libevent" ]; then
+  - if [ ${VIBED_DRIVER} == "libasync_botan" ]; then
       for ex in `\ls -1 examples/`; do (echo "[INFO] Building example $ex"; cd examples/$ex && dub build --compiler=$DC) || exit 1; done
     fi
-  - if [ ${VIBED_DRIVER} == "libevent" ]; then
+  - if [ ${VIBED_DRIVER} == "libasync_botan" ]; then
       for ex in `\ls -1 tests/`; do (echo "[INFO] Running test $ex"; cd tests/$ex && dub --compiler=$DC) || exit 1; done
     fi
 

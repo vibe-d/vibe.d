@@ -1013,7 +1013,8 @@ final class HTTPClientRequest : HTTPRequest {
 			}
 
 		}
-		m_cookieJar.get(headers["Host"], requestURL, tlsStream?true:false, &cookieSinkConcatenate);
+		if (m_cookieJar !is null)
+			m_cookieJar.get(headers["Host"], requestURL, tlsStream !is null, &cookieSinkConcatenate);
 		output.put("\r\n");
 		logDebug("Done with cookies");
 		logTrace("--------------------");
