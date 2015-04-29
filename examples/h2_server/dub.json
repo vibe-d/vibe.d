@@ -5,6 +5,6 @@
 	"dependencies": {
 		"vibe-d": {"path": "../../"}
 	},
-	"subConfigurations": {"vibe-d": "libasync_botan_win32"},
+	"subConfigurations": {"vibe-d": "libasync_botan"},
 	"versions": ["SecurePool", "VibeDefaultMain"]
 }
