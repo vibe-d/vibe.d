@@ -1184,6 +1184,24 @@ body {
 			}
 		}
 
+		// Check for misplaced ref / out
+		alias PSC = ParameterStorageClass;
+		foreach (i, SC; ParameterStorageClassTuple!Func) {
+			static if (SC & PSC.out_ || SC & PSC.ref_) {
+				mixin(GenCmp!("Loop", i, PN[i]).Decl);
+				alias Attr
+					= Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
+				static if (Attr.length != 1)
+					return "%s: Parameter '%s' cannot be %s"
+						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
+				else static if (Attr[0].origin != WebParamAttribute.Origin.Header) {
+					return "%s: %s parameter '%s' cannot be %s"
+						.format(FuncId, Attr[0].origin, PN[i],
+							SC & PSC.out_ ? "out" : "ref");
+				}
+			}
+		}
+
 		// Check for @path(":name")
 		enum pathAttr = findFirstUDA!(PathAttribute, Func);
 		static if (pathAttr.found) {
