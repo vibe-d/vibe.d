@@ -607,7 +607,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		core.sync.mutex.Mutex m_mutex;
 		ThreadSlotMap m_waiters;
 		Array!Task m_localWaiters;
-		debug Thread m_owner;
+		Thread m_owner;
 	}
 
 	this(Libevent2Driver driver)

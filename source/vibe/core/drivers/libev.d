@@ -269,7 +269,7 @@ final class LibevManualEvent : ManualEvent {
 		__gshared core.sync.mutex.Mutex m_mutex;
 		__gshared ThreadSlot[Thread] m_waiters;
 		Array!Task m_localWaiters;
-		debug Thread m_owner;
+		Thread m_owner;
 	}
 
 	this()
@@ -292,7 +292,7 @@ final class LibevManualEvent : ManualEvent {
 		foreach (Task t; m_localWaiters[])
 			resumeLocal(t);
 		m_localWaiters.clear();
-		m_owner = Thread();
+		m_owner = Thread.init;
 	}
 	
 	void waitLocal()
@@ -300,27 +300,18 @@ final class LibevManualEvent : ManualEvent {
 		if (m_localWaiters.length > 0)
 			assert(m_owner == Thread.getThis());
 		else m_owner = Thread.getThis();
-		m_localWaiters.insertBack(Thread.getThis());
-		getDriverCore().yieldForEvent();
+		m_localWaiters.insertBack(Task.getThis());
+		LibevDriver.ms_core.yieldForEvent();
 	}
 	
 	void waitLocal(Duration timeout)
 	{
-		if (m_localWaiters.length > 0)
-			assert(m_owner == Thread.getThis());
-		else m_owner = Thread.getThis();
-		
-		auto tm = getEventDriver().createTimer(null);
-		scope (exit) getEventDriver().releaseTimer(tm);
-		getEventDriver().m_timers.getUserData(tm).owner = Task.getThis();
-		getEventDriver().rearmTimer(tm, timeout, false);
-		
-		getDriverCore().yieldForEvent();
+		assert(false, "Unimplemented!");
 	}
-
+	
 	void emit()
 	{
-		assert(m_owner == Thread());
+		assert(m_owner == Thread.init);
 		scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below, AA.opApply is not nothrow
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
@@ -337,7 +328,7 @@ final class LibevManualEvent : ManualEvent {
 
 	void acquire()
 	{
-		assert(m_owner == Thread());
+		assert(m_owner == Thread.init);
 		auto task = Task.getThis();
 		auto thread = task.thread;
 		synchronized (m_mutex) {

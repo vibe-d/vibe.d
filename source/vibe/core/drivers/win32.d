@@ -430,7 +430,7 @@ final class Win32ManualEvent : ManualEvent {
 		Task m_waiter;
 		bool m_timedOut;
 		Array!Task m_localWaiters;
-		debug Thread m_owner;
+		Thread m_owner;
 	}
 
 	this(Win32EventDriver driver)
@@ -439,13 +439,14 @@ final class Win32ManualEvent : ManualEvent {
 		m_driver = driver;
 	}
 
+
 	void emitLocal()
 	{
 		assert(m_owner == Thread.getThis());
 		foreach (Task t; m_localWaiters[])
 			resumeLocal(t);
 		m_localWaiters.clear();
-		m_owner = Thread();
+		m_owner = Thread.init;
 	}
 	
 	void waitLocal()
@@ -453,8 +454,8 @@ final class Win32ManualEvent : ManualEvent {
 		if (m_localWaiters.length > 0)
 			assert(m_owner == Thread.getThis());
 		else m_owner = Thread.getThis();
-		m_localWaiters.insertBack(Thread.getThis());
-		getDriverCore().yieldForEvent();
+		m_localWaiters.insertBack(Task.getThis());
+		m_driver.m_core.yieldForEvent();
 	}
 	
 	void waitLocal(Duration timeout)
@@ -463,17 +464,18 @@ final class Win32ManualEvent : ManualEvent {
 			assert(m_owner == Thread.getThis());
 		else m_owner = Thread.getThis();
 		
-		auto tm = getEventDriver().createTimer(null);
-		scope (exit) getEventDriver().releaseTimer(tm);
-		getEventDriver().m_timers.getUserData(tm).owner = Task.getThis();
-		getEventDriver().rearmTimer(tm, timeout, false);
+		auto tm = m_driver.createTimer(null);
+		scope (exit) m_driver.releaseTimer(tm);
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
+		m_driver.rearmTimer(tm, timeout, false);
+		m_localWaiters.insertBack(Task.getThis());
 		
-		getDriverCore().yieldForEvent();
+		m_driver.m_core.yieldForEvent();
 	}
-	
+
 	void emit()
 	{
-		assert(m_owner == Thread());
+		assert(m_owner == Thread.init);
 		scope (failure) assert(false); // AA.opApply is not nothrow
 		/*auto newcnt =*/ atomicOp!"+="(m_emitCount, 1);
 		bool[Win32EventDriver] threads;
@@ -495,7 +497,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void acquire()
 	nothrow {
-		assert(m_owner == Thread());
+		assert(m_owner == Thread.init);
 		static if (__VERSION__ <= 2067) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
 		synchronized(m_mutex)
 		{
