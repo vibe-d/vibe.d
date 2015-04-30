@@ -475,7 +475,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void emit()
 	{
-		assert(m_owner == Thread.init);
+		assert(m_owner is Thread.init);
 		scope (failure) assert(false); // AA.opApply is not nothrow
 		/*auto newcnt =*/ atomicOp!"+="(m_emitCount, 1);
 		bool[Win32EventDriver] threads;
@@ -497,7 +497,7 @@ final class Win32ManualEvent : ManualEvent {
 
 	void acquire()
 	nothrow {
-		assert(m_owner == Thread.init);
+		assert(m_owner is Thread.init);
 		static if (__VERSION__ <= 2067) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
 		synchronized(m_mutex)
 		{

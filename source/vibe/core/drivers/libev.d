@@ -311,7 +311,7 @@ final class LibevManualEvent : ManualEvent {
 	
 	void emit()
 	{
-		assert(m_owner == Thread.init);
+		assert(m_owner is Thread.init);
 		scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below, AA.opApply is not nothrow
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
@@ -328,7 +328,7 @@ final class LibevManualEvent : ManualEvent {
 
 	void acquire()
 	{
-		assert(m_owner == Thread.init);
+		assert(m_owner is Thread.init);
 		auto task = Task.getThis();
 		auto thread = task.thread;
 		synchronized (m_mutex) {
