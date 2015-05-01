@@ -326,6 +326,24 @@ struct Json {
 	}
 
 	/**
+		Return Json object keys
+	*/
+	string[] keys() {
+		checkType!(Json[string])();
+		return m_object.keys;
+	}
+
+	unittest {
+		auto obj = Json.emptyObject;
+		obj.key = "value";
+		assert(obj.keys == ["key"]);
+
+		obj = Json.emptyArray;
+		try obj.keys;
+		catch (Exception e) assert(e.msg.endsWith("expected object."));
+	}
+
+	/**
 		Allows foreach iterating over JSON objects and arrays.
 	*/
 	int opApply(int delegate(ref Json obj) del)
@@ -715,7 +733,7 @@ struct Json {
 	}
 
 	/** Scheduled for deprecation, please use `opIndex` instead.
-		
+
 		Allows to access existing fields of a JSON object using dot syntax.
 	*/
 	@property const(Json) opDispatch(string prop)() const { return opIndex(prop); }
@@ -1769,12 +1787,12 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.null_: dst.put("null"); break;
 		case Json.Type.bool_: dst.put(cast(bool)json ? "true" : "false"); break;
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
-		case Json.Type.float_: 
+		case Json.Type.float_:
 			auto d = json.get!double;
-			if (d != d) 
+			if (d != d)
 				dst.put("undefined"); // JSON has no NaN value so set null
 			else
-				formattedWrite(dst, "%.16g", json.get!double); 
+				formattedWrite(dst, "%.16g", json.get!double);
 			break;
 		case Json.Type.string:
 			dst.put('\"');
