@@ -69,12 +69,13 @@ private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope
 		string realm, nonce, response, uri, algorithm;
 		foreach (param; split((*pauth)[7 .. $], ",")) {
 			auto kv = split(param, "=");
-			if( kv[0] == "realm") realm = kv[1][1..$-1];
-			if( kv[0] == "username") username = kv[1][1..$-1];
-			if( kv[0] == "nonce") nonce = kv[1][1..$-1];
-			if( kv[0] == "uri") uri = kv[1][1..$-1];
-			if( kv[0] == "response") response = kv[1][1..$-1];
-			if( kv[0] == "algorithm") algorithm = kv[1][1..$-1];
+			auto key = kv[0].strip().toLower();
+			if( key == "realm") realm = kv[1][1..$-1];
+			if( key == "username") username = kv[1][1..$-1];
+			if( key == "nonce") nonce = kv[1][1..$-1];
+			if( key == "uri") uri = kv[1][1..$-1];
+			if( key == "response") response = kv[1][1..$-1];
+			if( key == "algorithm") algorithm = kv[1][1..$-1];
 		}
 
 		if (realm != info.realm)
