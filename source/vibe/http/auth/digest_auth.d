@@ -63,30 +63,34 @@ class DigestAuthInfo
 private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope string delegate(string realm, string user) pwhash, out bool stale, out string username)
 {
 	stale = false;
-        username = "";
+	username = "";
 	auto pauth = "Authorization" in req.headers;
+
 	if (pauth && (*pauth).startsWith("Digest ")) {
 		string realm, nonce, response, uri, algorithm;
 		foreach (param; split((*pauth)[7 .. $], ",")) {
 			auto kv = split(param, "=");
-			auto key = kv[0].strip().toLower();
-			if( key == "realm") realm = kv[1][1..$-1];
-			if( key == "username") username = kv[1][1..$-1];
-			if( key == "nonce") nonce = kv[1][1..$-1];
-			if( key == "uri") uri = kv[1][1..$-1];
-			if( key == "response") response = kv[1][1..$-1];
-			if( key == "algorithm") algorithm = kv[1][1..$-1];
+			switch (kv[0].strip().toLower()) {
+				case "realm": realm = kv[1][1..$-1]; break;
+				case "username": username = kv[1][1..$-1]; break;
+				case "nonce": nonce = kv[1][1..$-1]; break;
+				case "uri": uri = kv[1][1..$-1]; break;
+				case "response": response = kv[1][1..$-1]; break;
+				case "algorithm": algorithm = kv[1][1..$-1]; break;
+			}
 		}
 
 		if (realm != info.realm)
 			return false;
 		if (algorithm !is null && algorithm != "MD5")
 			return false;
+
 		auto nonceState = info.checkNonce(nonce, req);
 		if (nonceState != NonceState.Valid) {
 			stale = nonceState == NonceState.Expired;
 			return false;
 		}
+
 		auto ha1 = pwhash(realm, username);
 		auto ha2 = toHexString!(LetterCase.lower)(md5Of(httpMethodString(req.method) ~ ":" ~ uri));
 		auto calcresponse = toHexString!(LetterCase.lower)(md5Of(ha1 ~ ":" ~ nonce ~ ":" ~ ha2 ));
