@@ -1191,11 +1191,11 @@ body {
 					// typeof(PN) is void when length is 0.
 					static if (!PN.length) {
 						if (hack)
-							return "%s: Path contains '%s', but not parameter '_%s' defined."
+							return "%s: Path contains '%s', but no parameter '_%s' defined."
 								.format(FuncId, elem, elem[1..$]);
 					} else {
 						if (![PN].canFind("_"~elem[1..$]))
-							return "%s: Path contains '%s', but not parameter '_%s' defined."
+							return "%s: Path contains '%s', but no parameter '_%s' defined."
 								.format(FuncId, elem, elem[1..$]);
 						elem = elem[1..$];
 					}
@@ -1265,7 +1265,7 @@ unittest {
 
 // Issue 949
 unittest {
-	enum msg = "Path contains ':owner', but not parameter '_owner' defined.";
+	enum msg = "Path contains ':owner', but no parameter '_owner' defined.";
 
 	@path("/repos/")
 	interface IGithubPR {
