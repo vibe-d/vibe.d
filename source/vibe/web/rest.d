@@ -111,12 +111,6 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 		);
 	}
 
-	string strip(string name) {
-		if (settings.stripTrailingUnderscore && name.endsWith("_"))
-			return name[0 .. $-1];
-		else return name;
-	}
-
 	foreach (method; __traits(allMembers, I)) {
 		// WORKAROUND #1045 / @@BUG14375@@
 		static if (method.length != 0)
@@ -128,7 +122,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 				string url = meta.url;
 			}
 			else {
-				string url = adjustMethodStyle(strip(meta.url), settings.methodStyle);
+				string url = adjustMethodStyle(stripTUnderscore(meta.url, settings), settings.methodStyle);
 			}
 
 			alias RT = ReturnType!overload;
@@ -312,12 +306,6 @@ class RestInterfaceClient(I) : I
 		m_baseURL = url;
 		m_methodStyle = settings.methodStyle;
 
-		string strip(string name) {
-			if (settings.stripTrailingUnderscore && name.endsWith("_"))
-				return name[0 .. $-1];
-			else return name;
-		}
-
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
 	}
 
@@ -475,13 +463,6 @@ class RestInterfaceClient(I) : I
 			else return jsonBody.toString();
 		}
 	}
-
-	private string _stripName(string name)
-	{
-		if (m_settings.stripTrailingUnderscore && name.endsWith("_"))
-			return name[0 .. $-1];
-		else return name;
-	}
 }
 
 ///
@@ -605,12 +586,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 	{
 		PT params;
 
-		string strip(string name) {
-			if (settings.stripTrailingUnderscore && name.endsWith("_"))
-				return name[0 .. $-1];
-			else return name;
-		}
-
 		foreach (i, P; PT) {
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
@@ -698,7 +673,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 				} else {
 					// normal parameter
 					alias DefVal = ParamDefaults[i];
-					auto pname = strip(ParamNames[i]);
+					auto pname = stripTUnderscore(ParamNames[i], settings);
 
 					if (req.method == HTTPMethod.GET) {
 						logDebug("query %s of %s", pname, req.query);
@@ -857,7 +832,10 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 
 					ret ~= q{
 						auto settings_%1$s = m_settings.dup;
-						settings_%1$s.baseURL.path = m_baseURL.path ~ (%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
+						settings_%1$s.baseURL.path
+							= m_baseURL.path ~ (%3$s
+									    ? "%2$s/"
+									    : (adjustMethodStyle(stripTUnderscore("%2$s", settings), m_methodStyle) ~ "/"));
 						m_%1$s = new %1$s(settings_%1$s);
 					}.format(
 						 implname,
@@ -1005,7 +983,7 @@ private string genClientBody(alias Func)() {
 			} else static if (!ParamNames[i].startsWith("_")
 					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-				defaultParamCTMap[_stripNameHelper(ParamNames[i])] = ParamNames[i];
+				defaultParamCTMap[stripTUnderscore(ParamNames[i], null)] = ParamNames[i];
 			}
 		}
 
@@ -1332,10 +1310,9 @@ private string paramCTMap(string[string] params)
 	return app.data.join(", ");
 }
 
-// Copy behavior of _stripName (private member of RestClientInterface).
-private string _stripNameHelper(string name)
-{
-	if (name.endsWith("_"))
+string stripTUnderscore(string name, RestInterfaceSettings settings) {
+	if ((settings is null || settings.stripTrailingUnderscore)
+	    && name.endsWith("_"))
 		return name[0 .. $-1];
 	else return name;
 }
