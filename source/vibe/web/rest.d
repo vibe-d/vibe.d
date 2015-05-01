@@ -21,6 +21,7 @@ import vibe.inet.message : InetHeaderMap;
 
 import std.algorithm : startsWith, endsWith;
 import std.typetuple : anySatisfy, Filter;
+import std.traits;
 
 /**
 	Registers a REST interface and connects it the the given instance.
@@ -68,8 +69,6 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 {
 	import std.traits : InterfacesTuple;
 	import vibe.internal.meta.uda : findFirstUDA;
-	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
-		ParameterTypeTuple, ReturnType;
 
 	alias IT = InterfacesTuple!TImpl;
 	static assert (IT.length > 0 || is (TImpl == interface),
@@ -556,8 +555,6 @@ class RestInterfaceSettings {
 /// private
 private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst, RestInterfaceSettings settings)
 {
-	import std.traits : ParameterTypeTuple, ReturnType, fullyQualifiedName,
-		ParameterDefaultValueTuple, ParameterIdentifierTuple;
 	import std.string : format;
 	import std.algorithm : startsWith;
 
@@ -755,8 +752,6 @@ private string generateRestInterfaceSubInterfaces(I)()
 	if (!__ctfe)
 		assert (false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
-		ReturnType, ParameterTypeTuple, fullyQualifiedName;
 	import std.algorithm : canFind;
 	import std.string : format;
 
@@ -801,8 +796,6 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 	if (!__ctfe)
 		assert (false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
-		ReturnType, ParameterTypeTuple;
 	import std.string : format;
 	import std.algorithm : canFind;
 
@@ -854,8 +847,6 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	if (!__ctfe)
 		assert (false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
-		ReturnType, ParameterTypeTuple;
 	import std.string : format;
 	import std.algorithm : canFind;
 
@@ -930,7 +921,6 @@ mixin template RestClientMethods_OverloadImpl(Overloads...) {
 
 private string genClientBody(alias Func)() {
 	import std.string : format;
-	import std.traits : ReturnType, FunctionTypeOf, ParameterTypeTuple, ParameterIdentifierTuple;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
 	alias FT = FunctionTypeOf!Func;
@@ -1073,7 +1063,6 @@ private {
 
 	T fromRestString(T)(string value)
 	{
-		import std.traits;
 		import std.conv : ConvException;
 		import vibe.web.common : HTTPStatusException, HTTPStatus;
 		try {
@@ -1125,14 +1114,11 @@ unittest
 private string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 body {
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf;
 	import std.typetuple : TypeTuple;
 
 	// The hack parameter is to kill "Statement is not reachable" warnings.
 	string validateMethod(alias Func)(bool hack = true) {
 		import vibe.internal.meta.uda;
-		import std.traits : fullyQualifiedName, FunctionTypeOf,
-			ParameterIdentifierTuple, ParameterTypeTuple;
 		import std.string : format;
 
 		static assert(is(FunctionTypeOf!Func), "Internal error");
