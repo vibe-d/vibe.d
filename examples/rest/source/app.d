@@ -340,6 +340,16 @@ unittest
  * - @headerParam : Get a parameter from the query header;
  * - @queryParam : Get a parameter from the query URL;
  * - @bodyParam : Get a parameter from the body;
+ *
+ * In addition, @headerParam have a special handling of 'out' and
+ * 'ref' parameters:
+ * - 'out' are neither send by the client nor read by the server, but
+ *	their value (except for null string) is returned by the server.
+ * - 'ref' are send by the client, read by the server, returned by
+ *	the server, and read by the client.
+ * This is to be consistent with the way D 'out' and 'ref' works.
+ * However, it makes no sense to have 'ref' or 'out' parameters on
+ * body or query parameter, so those are treated as error at compile time.
  */
 @rootPathFromName
 interface Example6API
@@ -347,7 +357,12 @@ interface Example6API
 	// The first parameter of @headerParam is the identifier (must match one of the parameter name).
 	// The second is the name of the field in the header, such as "Accept", "Content-Type", "User-Agent"...
 	@headerParam("auth", "Authorization")
-	string getResponse(string auth);
+	@headerParam("tester", "X-Custom-Tester")
+	@headerParam("www", "WWW-Authenticate")
+	string getPortal(string auth,
+					 ref string tester,
+					 out Nullable!string www);
+
 	// As with @headerParam, the first parameter of @queryParam is the identifier.
 	// The second being the field name, e.g for a query such as: 'GET /root/node?foo=bar', "foo" will be the second parameter.
 	@queryParam("fortyTwo", "qparam")
@@ -367,19 +382,31 @@ interface Example6API
 class Example6 : Example6API
 {
 override:
-	string getResponse(string auth)
+	string getPortal(string auth, ref string tester,
+					 out Nullable!string www)
 	{
+		// For a string parameter, null means 'not returned'
+		// If you want to return something empty, use "".
+		if (tester == "Chell")
+			tester = "The cake is a lie";
+		else
+			tester = null;
+
 		// If the user provided credentials Aladdin / 'open sesame'
 		if (auth == "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==")
-			return "The response is 42";
-		return "The cake is a lie";
+			return "Hello, Caroline";
+
+		www = `Basic realm="Aperture"`;
+		throw new HTTPStatusException(401);
 	}
+
 	string postAnswer(string fortyTwo)
 	{
 		if (fortyTwo == "Life_universe_and_the_rest")
 			return "True";
 		return "False";
 	}
+
 	string getConcat(FooType myFoo)
 	{
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
@@ -392,7 +419,7 @@ unittest
 	registerRestInterface(router, new Example6());
 	auto routes = router.getAllRoutes();
 
-	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example6_api/response");
+	assert (routes[0].method == HTTPMethod.GET && routes[0].pattern == "/example6_api/portal");
 	assert (routes[1].method == HTTPMethod.POST && routes[1].pattern == "/example6_api/answer");
 	assert (routes[0].method == HTTPMethod.GET && routes[2].pattern == "/example6_api/concat");
 }
@@ -490,17 +517,28 @@ shared static this()
 
 			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
 			// First we make sure parameters are transmitted via headers.
-			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/response",
-								   (scope r) {
+			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/portal",
+			                       (scope r) {
 				r.method = HTTPMethod.GET;
 				r.headers["Authorization"] = "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==";
+				r.headers["X-Custom-Tester"] = "GladOS";
 			});
 
 			assert(res.statusCode == 200);
-			assert(res.bodyReader.readAllUTF8() == `"The response is 42"`);
+			assert(!res.headers["X-Custom-Tester"].length, res.headers["X-Custom-Tester"]);
+			assert(!("WWW-Authenticate" in res.headers), res.headers["WWW-Authenticate"]);
+			assert(res.bodyReader.readAllUTF8() == `"Hello, Caroline"`);
 			// Then we check that both can communicate together.
-			auto answer = api.getResponse("Hello there");
-			assert(answer == "The cake is a lie");
+			string tester = "Chell";
+			Nullable!string www;
+			try {
+				// We shouldn't reach the assert, this will throw
+				auto answer = api.getPortal("Oops", tester, www);
+				assert(0, answer);
+			} catch (RestException e) {
+				assert(tester == "The cake is a lie", tester);
+				assert(www == `Basic realm="Aperture"`, www);
+			}
 		}
 
 		// Example 6 -- Query
