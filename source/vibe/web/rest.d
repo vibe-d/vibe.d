@@ -618,6 +618,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 	import vibe.utils.string : sanitizeUTF8;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
+	alias PSC = ParameterStorageClass;
+	alias PSCT = ParameterStorageClassTuple!Func;
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
 	alias ParamDefaults = ParameterDefaultValueTuple!Func;
@@ -647,20 +649,26 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
 					// @headerParam.
 					static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
-						// If it has no default value
-						static if (is (ParamDefaults[i] == void)) {
-							auto fld = enforceBadRequest(PWPAT[0].field in req.headers,
-							format("Expected field '%s' in header", PWPAT[0].field));
+						// 'out' parameter are not read from the headers
+						static if (PSCT[i] & PSC.out_) {
+							continue;
 						} else {
-							auto fld = PWPAT[0].field in req.headers;
+							static if (is (ParamDefaults[i] == void)) {
+								// If it has no default value
+								auto fld = enforceBadRequest(PWPAT[0].field in req.headers,
+															 format("Expected field '%s' in header",
+																	PWPAT[0].field));
+							} else {
+								auto fld = PWPAT[0].field in req.headers;
 								if (fld is null) {
-								params[i] = ParamDefaults[i];
-								logDebug("No header param %s, using default value", PWPAT[0].identifier);
-								continue;
+									params[i] = ParamDefaults[i];
+									logDebug("No header param %s, using default value", PWPAT[0].identifier);
+									continue;
+								}
 							}
+							logDebug("Header param: %s <- %s", PWPAT[0].identifier, *fld);
+							params[i] = fromRestString!P(*fld);
 						}
-						logDebug("Header param: %s <- %s", PWPAT[0].identifier, *fld);
-						params[i] = fromRestString!P(*fld);
 					} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query) {
 						// Note: Doesn't work if HTTPServerOption.parseQueryString is disabled.
 						static if (is (ParamDefaults[i] == void)) {
@@ -770,6 +778,24 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 			}
 		}
 
+		// Anti copy-paste
+		void returnHeaders()
+		{
+			foreach (i, P; PT) {
+				static if (PSCT[i] & PSC.ref_ || PSCT[i] & PSC.out_) {
+					mixin(GenCmp!("Loop", i, ParamNames[i]).Decl);
+					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
+					static assert (PWPAT.length == 1 && PWPAT[0].origin == WebParamAttribute.Origin.Header);
+					static if (isInstanceOf!(Nullable, typeof(params[i]))) {
+						if (!params[i].isNull)
+							res.headers[PWPAT[0].field] = to!string(params[i]);
+					} else {
+						res.headers[PWPAT[0].field] = to!string(params[i]);
+					}
+				}
+			}
+		}
+
 		try {
 			import vibe.internal.meta.funcattr;
 
@@ -777,22 +803,32 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 
 			static if (is(RT == void)) {
 				handler(&__traits(getMember, inst, Method), params);
+				returnHeaders();
 				res.writeJsonBody(Json.emptyObject);
 			} else {
 				auto ret = handler(&__traits(getMember, inst, Method), params);
+				returnHeaders();
 				res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
-			if (res.headerWritten) logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
-			else res.writeJsonBody([ "statusMessage": e.msg ], e.status);
+			if (res.headerWritten)
+				logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
+			else {
+				returnHeaders();
+				res.writeJsonBody([ "statusMessage": e.msg ], e.status);
+			}
 		} catch (Exception e) {
 			// TODO: better error description!
 			logDebug("REST handler exception: %s", e.toString());
 			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
-			else res.writeJsonBody(
-				[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
-				HTTPStatus.internalServerError
-			);
+			else
+			{
+				returnHeaders();
+				res.writeJsonBody(
+					[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
+					HTTPStatus.internalServerError
+					);
+			}
 		}
 	}
 
