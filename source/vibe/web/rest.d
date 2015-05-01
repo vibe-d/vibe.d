@@ -15,7 +15,7 @@ import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
-import vibe.internal.meta.uda : UDATuple;
+import vibe.internal.meta.uda;
 import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
 
@@ -148,7 +148,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 				);
 			} else {
 				// normal handler
-				auto handler = jsonMethodHandler!(I, method, overload)(instance, settings);
+				auto handler = jsonMethodHandler!(I, overload)(instance, settings);
 
 				string[] params = [ ParameterIdentifierTuple!overload ];
 
@@ -552,8 +552,37 @@ class RestInterfaceSettings {
 }
 
 
-/// private
-private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst, RestInterfaceSettings settings)
+/**
+ * Generate an handler that will wrap the server's method
+ *
+ * This function returns an handler, generated at compile time, that
+ * will deserialize the parameters, pass them to the function implemented
+ * by the user, and return what it needs to return, be it header parameters
+ * or body, which is at the moment either a pure string or a Json object.
+ *
+ * One thing that makes this method more complex that it needs be is the
+ * inability for D to attach UDA to parameters. This means we have to roll
+ * our own implementation, which tries to be as easy to use as possible.
+ * We'll require the user to give the name of the parameter as a string to
+ * our UDA. Hopefully, we're also able to detect at compile time if the user
+ * made a typo of any kind (see $(D genInterfaceValidationError)).
+ *
+ * Note:
+ * Lots of abbreviations are used to ease the code, such as
+ * PTT (ParameterTypeTuple), WPAT (WebParamAttributeTuple)
+ * and PWPAT (ParameterWebParamAttributeTuple).
+ *
+ * Params:
+ *	T = type of the object which represent the REST server (user implemented).
+ *	Func = An alias to the function of $(D T) to wrap.
+ *
+ *	inst = REST server on which to call our $(D Func).
+ *	settings = REST server configuration.
+ *
+ * Returns:
+ *	A delegate suitable to use as an handler for an HTTP request.
+ */
+private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestInterfaceSettings settings)
 {
 	import std.string : format;
 	import std.algorithm : startsWith;
@@ -566,8 +595,11 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
 	alias ParamDefaults = ParameterDefaultValueTuple!Func;
+	alias WPAT = UDATuple!(WebParamAttribute, Func);
+
+	enum Method = __traits(identifier, Func);
 	enum ParamNames = [ ParameterIdentifierTuple!Func ];
-	enum FuncId = (fullyQualifiedName!T~ "." ~ __traits(identifier, Func));
+	enum FuncId = (fullyQualifiedName!T~ "." ~ Method);
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -590,41 +622,41 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 					// legacy special case for :id, backwards-compatibility
 					logDebug("id %s", req.params["id"]);
 					params[i] = fromRestString!P(req.params["id"]);
-				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
+				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT)) {
 					// User anotated the origin of this parameter.
-					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
+					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
 					// @headerParam.
-					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
+					static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
 						static if (is (ParamDefaults[i] == void)) {
-							auto fld = enforceBadRequest(paramsArgList[0].field in req.headers,
-							format("Expected field '%s' in header", paramsArgList[0].field));
+							auto fld = enforceBadRequest(PWPAT[0].field in req.headers,
+							format("Expected field '%s' in header", PWPAT[0].field));
 						} else {
-							auto fld = paramsArgList[0].field in req.headers;
+							auto fld = PWPAT[0].field in req.headers;
 								if (fld is null) {
 								params[i] = ParamDefaults[i];
-								logDebug("No header param %s, using default value", paramsArgList[0].identifier);
+								logDebug("No header param %s, using default value", PWPAT[0].identifier);
 								continue;
 							}
 						}
-						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
+						logDebug("Header param: %s <- %s", PWPAT[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
-					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
+					} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query) {
 						// Note: Doesn't work if HTTPServerOption.parseQueryString is disabled.
 						static if (is (ParamDefaults[i] == void)) {
-							auto fld = enforceBadRequest(paramsArgList[0].field in req.query,
-										     format("Expected form field '%s' in query", paramsArgList[0].field));
+							auto fld = enforceBadRequest(PWPAT[0].field in req.query,
+										     format("Expected form field '%s' in query", PWPAT[0].field));
 						} else {
-							auto fld = paramsArgList[0].field in req.query;
+							auto fld = PWPAT[0].field in req.query;
 							if (fld is null) {
 								params[i] = ParamDefaults[i];
-								logDebug("No query param %s, using default value", paramsArgList[0].identifier);
+								logDebug("No query param %s, using default value", PWPAT[0].identifier);
 								continue;
 							}
 						}
-						logDebug("Query param: %s <- %s", paramsArgList[0].identifier, *fld);
+						logDebug("Query param: %s <- %s", PWPAT[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
-					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
+					} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Body) {
 						enforceBadRequest(
 								  req.contentType == "application/json",
 								  "The Content-Type header needs to be set to application/json."
@@ -638,21 +670,21 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 								  "The request body must contain a JSON object with an entry for each parameter."
 								  );
 
-                        auto par = req.json[paramsArgList[0].field];
+                        auto par = req.json[PWPAT[0].field];
 						static if (is(ParamDefaults[i] == void)) {
 							enforceBadRequest(par.type != Json.Type.Undefined,
-									  format("Missing parameter %s", paramsArgList[0].field)
+									  format("Missing parameter %s", PWPAT[0].field)
 									  );
 						} else {
 							if (par.type == Json.Type.Undefined) {
-								logDebug("No body param %s, using default value", paramsArgList[0].identifier);
+								logDebug("No body param %s, using default value", PWPAT[0].identifier);
 								params[i] = ParamDefaults[i];
 								continue;
 							}
                         }
                         params[i] = deserializeJson!P(par);
-                        logDebug("Body param: %s <- %s", paramsArgList[0].identifier, par);
-					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
+                        logDebug("Body param: %s <- %s", PWPAT[0].identifier, par);
+					} else static assert (false, "Internal error: Origin "~to!string(PWPAT[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
@@ -685,7 +717,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 						params[i] = fromRestString!P(req.query[pname]);
 					} else {
-						logDebug("%s %s", method, pname);
+						logDebug("%s %s", FuncId, pname);
 
 						enforceBadRequest(
 							req.contentType == "application/json",
@@ -723,10 +755,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			auto handler = createAttributedFunction!Func(req, res);
 
 			static if (is(RT == void)) {
-				handler(&__traits(getMember, inst, method), params);
+				handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(Json.emptyObject);
 			} else {
-				auto ret = handler(&__traits(getMember, inst, method), params);
+				auto ret = handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
@@ -927,9 +959,9 @@ private string genClientBody(alias Func)() {
 	alias RT = ReturnType!FT;
 	alias PTT = ParameterTypeTuple!Func;
 	alias ParamNames = ParameterIdentifierTuple!Func;
+	alias WPAT = UDATuple!(WebParamAttribute, Func);
 
 	enum meta = extractHTTPMethodAndName!(Func, false)();
-	enum paramAttr = UDATuple!(WebParamAttribute, Func);
 	enum FuncId = __traits(identifier, Func);
 
 	// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
@@ -960,14 +992,14 @@ private string genClientBody(alias Func)() {
 					url_prefix = q{urlEncode(id.toString())~"/"};
 				else
 					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
-			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
-				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
-					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
-				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query)
-					queryParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
-				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body)
-					bodyParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
+			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT)) {
+				alias PWPAT = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT);
+				static if (PWPAT[0].origin == WebParamAttribute.Origin.Header)
+					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PWPAT[0].field, PWPAT[0].identifier);
+				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query)
+					queryParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
+				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Body)
+					bodyParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
 				else
 					static assert (0, "Internal error: Unknown WebParamAttribute.Origin in REST client code generation.");
 			} else static if (!ParamNames[i].startsWith("_")
@@ -1133,9 +1165,10 @@ body {
 			alias PN = TypeTuple!("-DummyInvalid-");
 		} else
 			alias PN = ParameterIdentifierTuple!Func;
+		alias WPAT = UDATuple!(WebParamAttribute, Func);
 
 		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
-		foreach (i, uda; UDATuple!(WebParamAttribute, Func)) {
+		foreach (i, uda; WPAT) {
 			// Note: static foreach gets unrolled, generating multiple nested sub-scope.
 			// The spec / DMD doesn't like when you have the same symbol in those,
 			// leading to wrong codegen / wrong template being reused.
@@ -1154,12 +1187,12 @@ body {
 				return "%s: Parameter %d has no name."
 					.format(FuncId, i);
 			// Check for multiple origins
-			static if (UDATuple!(WebParamAttribute, Func).length) {
+			static if (WPAT.length) {
 				// It's okay to reuse GenCmp, as the order of params won't change.
 				// It should/might not be reinstantiated by the compiler.
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
-				alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static if (paramsArgList.length > 1)
+				alias WPA = Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
+				static if (WPA.length > 1)
 					return "%s: Parameter '%s' has multiple @*Param attributes on it."
 						.format(FuncId, PN[i]);
 			}
