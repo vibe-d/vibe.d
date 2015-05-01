@@ -77,6 +77,7 @@ private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope
 				case "uri": uri = kv[1][1..$-1]; break;
 				case "response": response = kv[1][1..$-1]; break;
 				case "algorithm": algorithm = kv[1][1..$-1]; break;
+				default: break;	// ignore unknown keys
 			}
 		}
 
