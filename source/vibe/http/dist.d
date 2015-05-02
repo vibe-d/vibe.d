@@ -23,7 +23,7 @@ import std.process;
 
 	This function is usable as direct replacement of 
 */
-void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
+TCPListener[] listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
 	Json regmsg = Json.emptyObject;
 	regmsg.host_name = settings.hostName;
@@ -36,7 +36,7 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 	local_settings.bindAddresses = ["127.0.0.1"];
 	local_settings.port = 0;
 	local_settings.disableDistHost = true;
-	listenHTTP(local_settings, handler);
+	TCPListener[] listener = listenHTTP(local_settings, handler);
 
 	requestHTTP(URL("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
 			logInfo("Listening for VibeDist connections on port %d", req.localAddress.port);
@@ -47,4 +47,6 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 		}, (scope res){
 			enforce(res.statusCode == HTTPStatus.ok, "Failed to register with load balancer.");
 		});
+	
+	return listener;
 }

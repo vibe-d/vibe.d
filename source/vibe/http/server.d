@@ -68,7 +68,7 @@ import std.uri;
 		request_handler = This callback is invoked for each incoming request and is responsible
 			for generating the response.
 */
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
+TCPListener[] listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 {
 	enforce(settings.bindAddresses.length, "Must provide at least one bind address for a HTTP server.");
 
@@ -86,35 +86,35 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_h
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
 	if (s_distHost.length && !settings.disableDistHost) {
-		listenHTTPDist(settings, request_handler, s_distHost, s_distPort);
+		return listenHTTPDist(settings, request_handler, s_distHost, s_distPort);
 	} else {
-		listenHTTPPlain(settings);
+		return listenHTTPPlain(settings);
 	}
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
+TCPListener[] listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
 {
-	listenHTTP(settings, toDelegate(request_handler));
+	return listenHTTP(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
+TCPListener[] listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
 {
-	listenHTTP(settings, &request_handler.handleRequest);
+	return listenHTTP(settings, &request_handler.handleRequest);
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegateS request_handler)
+TCPListener[] listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegateS request_handler)
 {
-	listenHTTP(settings, cast(HTTPServerRequestDelegate)request_handler);
+	return listenHTTP(settings, cast(HTTPServerRequestDelegate)request_handler);
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunctionS request_handler)
+TCPListener[] listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunctionS request_handler)
 {
-	listenHTTP(settings, toDelegate(request_handler));
+	return listenHTTP(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS request_handler)
+TCPListener[] listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS request_handler)
 {
-	listenHTTP(settings, &request_handler.handleRequest);
+	return listenHTTP(settings, &request_handler.handleRequest);
 }
 
 
@@ -1251,15 +1251,17 @@ private {
 	This is the same as listenHTTP() except that it does not use a VibeDist host for
 	remote listening, even if specified on the command line.
 */
-private void listenHTTPPlain(HTTPServerSettings settings)
+private TCPListener[] listenHTTPPlain(HTTPServerSettings settings)
 {
 	import std.algorithm : canFind;
 
-	static bool doListen(HTTPServerSettings settings, size_t listener_idx, string addr)
+	TCPListener[] listeners;
+	
+	static bool doListen(HTTPServerSettings settings, size_t listener_idx, string addr, TCPListener[] listeners)
 	{
 		try {
 			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
-			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, g_listeners[listener_idx]); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
+			listeners ~= listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, g_listeners[listener_idx]); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
 			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
 			return true;
 		} catch( Exception e ) {
@@ -1318,7 +1320,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 		}
 		if (!found_listener) {
 			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
-			if (doListen(settings, g_listeners.length, addr)) // DMD BUG 2043
+			if (doListen(settings, g_listeners.length, addr, listeners)) // DMD BUG 2043
 			{
 				found_listener = true;
 				any_successful = true;
@@ -1328,6 +1330,8 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 	}
 
 	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+	
+	return listeners;
 }
 
 
