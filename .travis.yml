@@ -4,9 +4,6 @@ d:
   - dmd-2.068.2-b1
   - dmd-2.068.0
   - dmd-2.067.1
-  - dmd-2.066.1
-  - ldc-0.15.1
-  - gdc-4.9.2
 
 addons:
   apt:
@@ -14,16 +11,9 @@ addons:
     - libev-dev
 
 env:
-  - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
-  - VIBED_DRIVER=libev BUILD_EXAMPLE=0 RUN_TEST=0
-  - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
-
-matrix:
-  exclude:
-    - d: ldc-0.15.1
-      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
-    - d: gdc-4.9.2
-      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+  - VIBED_DRIVER=libevent
+  - VIBED_DRIVER=libev
+  - VIBED_DRIVER=libasync_botan
 
 script: ./travis-ci.sh
 

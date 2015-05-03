@@ -11,9 +11,9 @@
 		"see github for more"
 	],
 
-	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
 	"dependencies": {
 		"openssl": ">=1.0.0+1.0.0e",
+		"libhttp2": { "version": "~>0.2.4" },
 		"botan": {
 			"version": "~>1.12.0",
 			"optional": true
@@ -24,47 +24,83 @@
 	"mainSourceFile": "source/vibe/appmain.d",
 	"buildRequirements": ["requireBoundsCheck"],
 
-	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
-	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
-	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
-	"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
-
 	"configurations": [
 		{
 			"name": "libevent",
-			"dependencies": {"libevent": "~>2.0.1+2.0.16"},
+			"systemDependencies": "libevent 2.0.x, OpenSSL 1.0.x",
+			"dependencies": {"libevent": "~>2.0.1+2.0.16","openssl": ">=1.0.0+1.0.0e"},
 			"platforms": ["windows-x86", "posix"],
 			"versions": ["VibeLibeventDriver"],
-			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
-			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
-			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
-			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
+			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib","lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll","lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib","lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll","lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
 			"libs-windows": ["wsock32", "ws2_32", "advapi32"]
 		},
 		{
-			"name": "libasync",
-			"dependencies": {"libasync": "0.7.5"},
-			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
+			"name": "libasync_botan",
+			"dependencies": {
+				"botan": {"version": "~>1.11.13" },
+				"libasync": {"version": "~>0.7.3" }
+			},
+			"versions": ["Botan", "VibeUseNativeDriverType", "VibeLibasyncDriver"]
+		},
+		{
+			"name": "libasync_botan_win32",
+			"dependencies": { 
+				"botan": {"version": "~>1.11.13" },
+				"libasync": {"version": "~>0.7.4"  }
+			},
+			"dflags-windows-x86": ["-m32mscoff"],
+			"versions": ["Botan", "VibeUseNativeDriverType", "VibeLibasyncDriver"],
+			"subConfigurations": { "libasync": "32mscoff", "botan": "32mscoff", "libhttp2": "32mscoff", "memutils": "32mscoff" }
+		},
+		{
+			"systemDependencies": "OpenSSL 1.0.x",
+			"name": "libasync_openssl",
+			"dependencies": { 
+				"libasync": {"version": "~>0.7.4" },
+				"openssl": ">=1.0.0+1.0.0e"
+			},
+			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"],
+			"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+			"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+			"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"]
 		},
 		{
 			"name": "libev",
-			"dependencies": {"libev": "~>5.0.0+4.04"},
+			"systemDependencies": "libev, OpenSSL 1.0.x",
+			"dependencies": {"libev": "~>5.0.0+4.04","openssl": ">=1.0.0+1.0.0e"},
 			"platforms": ["posix"],
-			"versions": ["VibeLibevDriver", "LIBEV4"]
+			"versions": ["VibeLibevDriver", "LIBEV4"],
+			"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+			"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+			"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"]
 		},
 		{
 			"name": "win32",
+			"systemDependencies": "OpenSSL 1.0.x",
+			"dependencies": {"openssl": ">=1.0.0+1.0.0e"},
 			"platforms": ["windows"],
 			"versions": ["VibeWin32Driver"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"]
+			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"],
+			"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+			"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+			"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"]
 		},
 		{
 			"name": "winrt",
+			"dependencies": {"openssl": ">=1.0.0+1.0.0e"},
 			"platforms": ["windows"],
 			"versions": ["VibeWinrtDriver"],
-			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"]
+			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib","lib/win-i386/eay.lib","lib/win-i386/ssl.lib"],
+			"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+			"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"]
 		}
 	],
-
 	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Protected", "--ex", "vibe.core.drivers.", "--ex", "vibe.internal."]
 }
