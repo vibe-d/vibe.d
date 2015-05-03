@@ -157,15 +157,26 @@ FileStream createTempFile(string suffix = null)
 
 /**
 	Moves or renames a file.
+
+	Params:
+		from = Path to the file/directory to move/rename.
+		to = The target path
+		copy_fallback = Determines if copy/remove should be used in case of the
+			source and destination path pointing to different devices.
 */
-void moveFile(Path from, Path to)
+void moveFile(Path from, Path to, bool copy_fallback = false)
 {
 	moveFile(from.toNativeString(), to.toNativeString());
 }
 /// ditto
-void moveFile(string from, string to)
+void moveFile(string from, string to, bool copy_fallback = false)
 {
-	std.file.rename(from, to);
+	try {
+		std.file.rename(from, to);
+	} catch (FileException e) {
+		std.file.copy(from, to);
+		std.file.remove(from);
+	}
 }
 
 /**
