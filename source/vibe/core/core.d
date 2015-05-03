@@ -17,6 +17,7 @@ import vibe.utils.array;
 import std.algorithm;
 import std.conv;
 import std.encoding;
+import core.exception;
 import std.exception;
 import std.functional;
 import std.range : empty, front, popFront;
@@ -194,7 +195,7 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 	if (f is null) {
 		// if there is no fiber available, create one.
 		if (s_availableFibers.capacity == 0) s_availableFibers.capacity = 1024;
-		logDebug("Creating new fiber...");
+		logDebugV("Creating new fiber...");
 		s_fiberCount++;
 		f = new CoreTask;
 	}
@@ -1368,14 +1369,16 @@ shared static ~this()
 {
 	deleteEventDriver();
 
-	bool tasks_left = false;
+	size_t tasks_left;
 
 	synchronized (st_threadsMutex) {
-		if( !st_workerTasks.empty ) tasks_left = true;
+		if( !st_workerTasks.empty ) tasks_left = st_workerTasks.length;
 	}
 
-	if (!s_yieldedTasks.empty) tasks_left = true;
-	if (tasks_left) logWarn("There are still tasks running at exit.");
+	if (!s_yieldedTasks.empty) tasks_left += s_yieldedTasks.length;
+	if (tasks_left > 0) {
+		logWarn("There were still %d tasks running at exit.", tasks_left);
+	}
 
 	destroy(s_core);
 	s_core = null;
@@ -1485,6 +1488,12 @@ nothrow {
 		scope (failure) exit(-1);
 		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
 		logDebug("Full error: %s", e.toString().sanitize());
+	} catch (InvalidMemoryOperationError e) {
+		import std.stdio;
+		scope(failure) assert(false);
+		writeln("Error message: ", e.msg);
+		writeln("Full error: ", e.toString().sanitize());
+		exit(-1);
 	} catch (Throwable th) {
 		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
 		logDebug("Full error: %s", th.toString().sanitize());
