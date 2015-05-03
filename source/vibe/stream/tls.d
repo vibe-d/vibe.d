@@ -28,7 +28,7 @@ import core.stdc.string : strlen;
 import core.sync.mutex;
 import core.thread;
 
-version (VibeNoTLS) {}
+version (VibeNoSSL) {}
 else version = OpenSSL;
 
 
