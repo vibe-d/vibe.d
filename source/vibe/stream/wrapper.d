@@ -76,15 +76,25 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 	}
 
 	this(Stream stream, ConnectionStream connection_stream)
-	{
+	in { assert(stream !is null); }
+	body {
 		super(stream);
 		m_connection = connection_stream;
 	}
 
-	@property bool connected() const { return m_connection.connected; }
+	@property bool connected()
+	const {
+		if (!m_connection) 
+			return true;
+
+		return m_connection.connected;
+	}
 
 	void close()
 	{
+		if (!m_connection) 
+			return;
+
 		if (m_connection.connected) finalize();
 		m_connection.close();
 	}
@@ -92,6 +102,10 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 	bool waitForData(Duration timeout = 0.seconds)
 	{
 		if (this.dataAvailableForRead) return true;
+
+		if (!m_connection)
+			return timeout == 0.seconds ? !this.empty : false;
+
 		return m_connection.waitForData(timeout);
 	}
 
