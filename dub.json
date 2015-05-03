@@ -124,7 +124,11 @@
 			"name": "http",
 			"description": "HTTP server and client implementation and higher level HTTP functionality",
 			"targetType": "library",
-			"dependencies": {"vibe-d:core": "*", "vibe-d:data": "*"},
+			"dependencies": {
+				"vibe-d:core": "*",
+				"vibe-d:data": "*",
+				"libhttp2": "~>0.2.5"
+			},
 			"sourcePaths": ["source/vibe/http"],
 		},
 		{
@@ -163,6 +167,5 @@
 			"sourcePaths": ["source/vibe/web"],
 		}
 	],
-
 	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Protected", "--ex", "vibe.core.drivers.", "--ex", "vibe.internal."]
 }
