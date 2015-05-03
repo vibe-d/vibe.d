@@ -165,6 +165,10 @@ void setTLSContextFactory(TLSContext function(TLSContextKind, TLSVersion) factor
 */
 interface TLSStream : Stream {
 	@property TLSCertificateInformation peerCertificate();
+	/// The host name reported through SNI
+	//@property string hostName() const;
+	/// The ALPN that has been negotiated for this connection
+	@property string alpn() const;
 }
 
 enum TLSStreamState {
@@ -227,6 +231,14 @@ interface TLSContext {
 	@property void sniCallback(TLSServerNameCallback callback);
 	/// ditto
 	@property inout(TLSServerNameCallback) sniCallback() inout;
+
+	/// Callback function invoked to choose alpn
+	@property void alpnCallback(TLSALPNCallback alpn_chooser);
+	/// ditto
+	@property TLSALPNCallback alpnCallback() const;
+
+	/// Setter method invoked to offer ALPN
+	void setClientALPN(string[] alpn);
 
 	/** Creates a new stream associated to this context.
 	*/
@@ -395,6 +407,7 @@ struct TLSPeerValidationData {
 alias TLSPeerValidationCallback = bool delegate(scope TLSPeerValidationData data);
 
 alias TLSServerNameCallback = TLSContext delegate(string hostname);
+alias TLSALPNCallback = string delegate(string[] alpn_choices);
 
 private {
 	__gshared TLSContext function(TLSContextKind, TLSVersion) gs_sslContextFactory;
