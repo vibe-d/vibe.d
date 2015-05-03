@@ -110,6 +110,104 @@ unittest {
 	});
 }
 
+/** Semaphore implementation for tasks.
+
+	It is not thread-safe, which is on purpose for performance reasons.
+	It will lock up to an adjustable maximum count of internal tasks.
+	Usage example is to limit concurrent connections in a connection pool
+*/
+class LocalTaskSemaphore
+{
+	// requires a queue
+	import std.container.binaryheap;
+	import std.container.array;
+	import vibe.utils.memory;
+
+	private {
+		struct Waiter {
+			ManualEvent signal;
+			ubyte priority;
+			uint seq;
+		}
+
+		BinaryHeap!(Array!Waiter, asc) m_waiters;
+		uint m_maxLocks;
+		uint m_locks;
+		uint m_seq;
+	}
+
+	@property void maxLocks(uint max_locks) { m_maxLocks = max_locks; }
+	@property uint maxLocks() const { return m_maxLocks; }
+	@property uint available() const { return m_maxLocks - m_locks; }
+
+	this(uint max_locks) 
+	{ 
+		m_maxLocks = max_locks;
+	}
+
+	bool tryLock()
+	{
+		return m_waiters.empty && available > 0;
+	}
+
+	void lock(ubyte priority = 0)
+	{ 
+		if (tryLock()) {
+			m_locks++;
+			return;
+		}
+
+		Waiter w;
+		w.signal = getEventDriver().createManualEvent();
+		w.priority = priority;
+		w.seq = min(0, m_seq - w.priority);
+		if (++m_seq == uint.max)
+			rewindSeq();
+
+		m_waiters.insert(w);
+		w.signal.wait();
+		// on resume:
+		destroy(w.signal);
+		assert(available > 0, "An available slot was taken from us!");
+	}
+
+	void unlock() 
+	{
+		m_locks--;
+		if (m_waiters.length > 0 && available > 0) {
+			Waiter w = m_waiters.front();
+			w.signal.emit(); // resume one
+			m_waiters.removeFront();
+		}
+	}
+
+	// if true, a goes after b. ie. b comes out front()
+	static bool asc(ref Waiter a, ref Waiter b) 
+	{
+		if (a.seq == b.seq) {
+			if (a.priority == b.priority) {
+				// resolve using the pointer address
+				return (cast(size_t)&a.signal) > (cast(size_t) &b.signal);
+			}
+			// resolve using priority
+			return a.priority < b.priority;
+		}
+		// resolve using seq number
+		return a.seq > b.seq;
+	}
+
+	void rewindSeq()
+	{
+		Array!Waiter waiters = m_waiters.release();
+		ushort min_seq;
+		import std.algorithm : min;
+		foreach (ref waiter; waiters[])
+			min_seq = min(waiter.seq, min_seq);
+		foreach (ref waiter; waiters[])
+			waiter.seq -= min_seq;
+		m_waiters.assume(waiters);
+	}
+}
 
 /**
 	Mutex implementation for fibers.
