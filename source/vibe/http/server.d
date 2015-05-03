@@ -21,7 +21,7 @@ import vibe.inet.url;
 import vibe.inet.webform;
 import vibe.stream.counting;
 import vibe.stream.operations;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;
@@ -221,15 +221,15 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method = HTTPM
 /// ditto
 HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHeaderMap headers, InputStream data = null)
 {
-	auto ssl = url.schema == "https";
-	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : ssl ? 443 : 80);
+	auto tls = url.schema == "https";
+	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
 	ret.path = url.pathString;
 	ret.queryString = url.queryString;
 	ret.username = url.username;
 	ret.password = url.password;
 	ret.requestURL = url.localURI;
 	ret.method = method;
-	ret.ssl = ssl;
+	ret.tls = tls;
 	ret.headers = headers;
 	ret.bodyReader = data;
 	return ret;
@@ -372,7 +372,7 @@ enum HTTPServerOption {
 final class HTTPServerSettings {
 	/** The port on which the HTTP server is listening.
 
-		The default value is 80. If you are running a SSL enabled server you may want to set this
+		The default value is 80. If you are running a TLS enabled server you may want to set this
 		to 443 instead.
 	*/
 	ushort port = 80;
@@ -423,7 +423,10 @@ final class HTTPServerSettings {
 	HTTPServerErrorPageHandler errorPageHandler = null;
 
 	/// If set, a HTTPS server will be started instead of plain HTTP.
-	SSLContext sslContext;
+	TLSContext tlsContext;
+
+	/// Compatibility alias - use `tlsContext` instead.
+	alias sslContext = tlsContext;
 
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
@@ -548,15 +551,18 @@ final class HTTPServerRequest : HTTPRequest {
 		/// ditto
 		NetworkAddress clientAddress;
 
-		/// Determines if the request was issued over an SSL encrypted channel.
-		bool ssl;
+		/// Determines if the request was issued over an TLS encrypted channel.
+		bool tls;
 
-		/** Information about the SSL certificate provided by the client.
+		/// Compatibility alias - use `tls` instead.
+		alias ssl = tls;
 
-			Remarks: This field is only set if ssl is true, and the peer
+		/** Information about the TLS certificate provided by the client.
+
+			Remarks: This field is only set if `tls` is true, and the peer
 			presented a client certificate.
 		*/
-		SSLCertificateInformation clientCertificate;
+		TLSCertificateInformation clientCertificate;
 
 		/** The _path part of the URL.
 
@@ -703,7 +709,7 @@ final class HTTPServerRequest : HTTPRequest {
 			else if (!m_settings.hostName.empty) url.host = m_settings.hostName;
 			else url.host = m_settings.bindAddresses[0];
 
-			if (this.ssl) {
+			if (this.tls) {
 				url.schema = "https";
 				if (m_port != 443) url.port = m_port;
 			} else {
@@ -752,7 +758,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Session m_session;
 		bool m_headerWritten = false;
 		bool m_isHeadResponse = false;
-		bool m_ssl;
+		bool m_tls;
 		SysTime m_timeFinalized;
 	}
 
@@ -777,7 +783,10 @@ final class HTTPServerResponse : HTTPResponse {
 
 	/** Determines if the response is sent over an encrypted connection.
 	*/
-	bool ssl() const { return m_ssl; }
+	bool tls() const { return m_tls; }
+
+	/// Compatibility alias - use `tls` instead.
+	alias ssl = tls;
 
 	/// Writes the entire response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)
@@ -1029,7 +1038,7 @@ final class HTTPServerResponse : HTTPResponse {
 		bool secure;
 		if (options & SessionOption.secure) secure = true;
 		else if (options & SessionOption.noSecure) secure = false;
-		else secure = this.ssl;
+		else secure = this.tls;
 
 		m_session = m_settings.sessionStore.create();
 		m_session.set("$sessionCookiePath", path);
@@ -1218,7 +1227,7 @@ struct HTTPListener {
 				auto lidx = g_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
 				if (lidx >= 0) {
 					g_listeners[lidx].listener.stopListening();
-					logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.sslContext ? "S": "", addr, port);
+					logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
 					g_listeners = g_listeners[0 .. lidx] ~ g_listeners[lidx+1 .. $];
 				}
 			}
@@ -1242,7 +1251,7 @@ private struct HTTPListenInfo {
 	TCPListener listener;
 	string bindAddress;
 	ushort bindPort;
-	SSLContext sslContext;
+	TLSContext tlsContext;
 }
 
 private enum MaxHTTPHeaderLineLength = 4096;
@@ -1359,7 +1368,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) {
 					handleHTTPConnection(conn, listen_info);
 				}, listen_info.bindAddress, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
-			logInfo("Listening for HTTP%s requests on %s:%s", listen_info.sslContext ? "S" : "", listen_info.bindAddress, listen_info.bindPort);
+			logInfo("Listening for HTTP%s requests on %s:%s", listen_info.tlsContext ? "S" : "", listen_info.bindAddress, listen_info.bindPort);
 			return ret;
 		} catch( Exception e ) {
 			logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
@@ -1371,7 +1380,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 	{
 		auto contexts = getContexts();
 
-		SSLContext onSNI(string servername)
+		TLSContext onSNI(string servername)
 		{
 			foreach (ctx; contexts)
 				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
@@ -1379,16 +1388,16 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 					&& ctx.settings.hostName.icmp(servername) == 0)
 				{
 					logDebug("Found context for SNI host '%s'.", servername);
-					return ctx.settings.sslContext;
+					return ctx.settings.tlsContext;
 				}
 			logDebug("No context found for SNI host '%s'.", servername);
 			return null;
 		}
 
-		if (settings.sslContext !is lst.sslContext && lst.sslContext.kind != SSLContextKind.serverSNI) {
-			logDebug("Create SNI SSL context for %s, port %s", lst.bindAddress, lst.bindPort);
-			lst.sslContext = createSSLContext(SSLContextKind.serverSNI);
-			lst.sslContext.sniCallback = &onSNI;
+		if (settings.tlsContext !is lst.tlsContext && lst.tlsContext.kind != TLSContextKind.serverSNI) {
+			logDebug("Create SNI TLS context for %s, port %s", lst.bindAddress, lst.bindPort);
+			lst.tlsContext = createTLSContext(TLSContextKind.serverSNI);
+			lst.tlsContext.sniCallback = &onSNI;
 		}
 
 		foreach (ctx; contexts) {
@@ -1410,16 +1419,16 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			foreach (i, ref lst; g_listeners) {
 				if (lst.bindAddress == addr && lst.bindPort == settings.port) {
 					addVHost(lst);
-					assert(!settings.sslContext || settings.sslContext is lst.sslContext
-						|| lst.sslContext.kind == SSLContextKind.serverSNI,
-						format("Got multiple overlapping SSL bind addresses (port %s), but no SNI SSL context!?", settings.port));
+					assert(!settings.tlsContext || settings.tlsContext is lst.tlsContext
+						|| lst.tlsContext.kind == TLSContextKind.serverSNI,
+						format("Got multiple overlapping TLS bind addresses (port %s), but no SNI TLS context!?", settings.port));
 					found_listener = true;
 					any_successful = true;
 					break;
 				}
 			}
 			if (!found_listener) {
-				auto linfo = HTTPListenInfo(null, addr, settings.port, settings.sslContext);
+				auto linfo = HTTPListenInfo(null, addr, settings.port, settings.tlsContext);
 				if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0)) // DMD BUG 2043
 				{
 					linfo.listener = tcp_lst;
@@ -1441,7 +1450,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 
 	version(VibeNoSSL) {} else {
 		import std.traits : ReturnType;
-		ReturnType!createSSLStreamFL ssl_stream;
+		ReturnType!createTLSStreamFL tls_stream;
 	}
 
 	if (!connection.waitForData(10.seconds())) {
@@ -1449,14 +1458,14 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 		return;
 	}
 
-	// If this is a HTTPS server, initiate SSL
-	if (listen_info.sslContext) {
-		version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
+	// If this is a HTTPS server, initiate TLS
+	if (listen_info.tlsContext) {
+		version (VibeNoSSL) assert(false, "No TLS support compiled in (VibeNoSSL)");
 		else {
-			logDebug("Accept SSL connection: %s", listen_info.sslContext.kind);
-			// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
-			ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting, null, connection.remoteAddress);
-			http_stream = ssl_stream;
+			logDebug("Accept TLS connection: %s", listen_info.tlsContext.kind);
+			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
+			tls_stream = createTLSStreamFL(http_stream, listen_info.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
+			http_stream = tls_stream;
 		}
 	}
 
@@ -1520,8 +1529,8 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 
 	// Create the response object
 	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
-	req.ssl = res.m_ssl = listen_info.sslContext !is null;
-	if (req.ssl) req.clientCertificate = (cast(SSLStream)http_stream).peerCertificate;
+	req.tls = res.m_tls = listen_info.tlsContext !is null;
+	if (req.tls) req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
