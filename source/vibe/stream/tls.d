@@ -89,6 +89,13 @@ TLSContext createTLSContext(TLSContextKind kind, TLSVersion ver = TLSVersion.any
 		}
 		if (!gs_sslContextFactory)
 			setTLSContextFactory(&createOpenSSLContext);
+	} else version(Have_botan) {
+		static TLSContext createBotanContext(TLSContextKind kind, TLSVersion ver) {
+			import vibe.stream.botan;
+			return new BotanTLSContext(kind);
+		}
+		if (!gs_tlsContextFactory)
+			setTLSContextFactory(&createBotanContext);
 	}
 	assert(gs_sslContextFactory !is null, "No TLS context factory registered.");
 	return gs_sslContextFactory(kind, ver);
@@ -137,14 +144,17 @@ auto createTLSStreamFL(Stream underlying, TLSContext ctx, TLSStreamState state, 
 	// implementation headers.  When client code uses this function the compiler
 	// will have to semantically analyse it and subsequently will import the TLS
 	// implementation headers.
-	version (VibeNoTLS) assert(false, "No TLS support compiled in (VibeNoTLS)");
-	else {
+	version (OpenSSL) {
 		import vibe.utils.memory;
 		import vibe.stream.openssl;
 		static assert(AllocSize!TLSStream > 0);
 		return FreeListRef!OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
-	}
+	} else version (Have_botan) {
+		import vibe.utils.memory;
+		import vibe.stream.botan;
+		return FreeListRef!BotanTLSStream(cast(ConnectionStream) underlying, cast(BotanTLSContext) ctx, state, peer_name, peer_address);
+	} else assert(false, "No TLS support compiled in (VibeNoTLS)");
 }
 
 void setTLSContextFactory(TLSContext function(TLSContextKind, TLSVersion) factory)
