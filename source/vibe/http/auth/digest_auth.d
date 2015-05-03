@@ -71,6 +71,7 @@ private bool checkDigest(scope HTTPServerRequest req, DigestAuthInfo info, scope
 		foreach (param; split((*pauth)[7 .. $], ",")) {
 			auto kv = split(param, "=");
 			switch (kv[0].strip().toLower()) {
+				default: break;
 				case "realm": realm = kv[1][1..$-1]; break;
 				case "username": username = kv[1][1..$-1]; break;
 				case "nonce": nonce = kv[1][1..$-1]; break;
