@@ -548,14 +548,23 @@ final class Cookie {
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
 
-	void writeString(R)(R dst, string name)
+	string toString(string name = "Cookie") {
+		Appender!string dst;
+		writeString(dst, name);
+		return dst.data;
+	}
+
+	void writeString(R)(R dst, string name, bool encode = true)
 		if (isOutputRange!(R, char))
 	{
 		import vibe.textfilter.urlencode;
 		dst.put(name);
 		dst.put('=');
-		filterURLEncode(dst, this.value);
-		if (this.domain != "") {
+		if (encode)
+			filterURLEncode(dst, this.value);
+		else
+			dst.put(this.value);
+		if (this.domain && this.domain != "") {
 			dst.put("; Domain=");
 			dst.put(this.domain);
 		}
