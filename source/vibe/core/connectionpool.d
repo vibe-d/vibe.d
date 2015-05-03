@@ -11,7 +11,8 @@ import vibe.core.log;
 import vibe.core.driver;
 
 import core.thread;
-
+import vibe.core.sync;
+import vibe.utils.memory;
 
 /**
 	Generic connection pool class.
@@ -27,11 +28,21 @@ class ConnectionPool(Connection)
 		Connection delegate() m_connectionFactory;
 		Connection[] m_connections;
 		int[const(Connection)] m_lockCount;
+		FreeListRef!LocalTaskSemaphore m_sem;
 	}
 
-	this(Connection delegate() connection_factory)
+	this(Connection delegate() connection_factory, uint max_concurrent = uint.max)
 	{
 		m_connectionFactory = connection_factory;
+		m_sem = FreeListRef!LocalTaskSemaphore(max_concurrent);
+	}
+
+	@property void maxConcurrency(uint max_concurrent) {
+		m_sem.maxLocks = max_concurrent;
+	}
+
+	@property uint maxConcurrency() {
+		return m_sem.maxLocks;
 	}
 
 	LockedConnection!Connection lockConnection()
@@ -75,6 +86,7 @@ struct LockedConnection(Connection) {
 	private this(ConnectionPool!Connection pool, Connection conn)
 	{
 		assert(conn !is null);
+		pool.m_sem.lock();
 		m_pool = pool;
 		m_conn = conn;
 		m_task = Task.getThis();
@@ -102,6 +114,7 @@ struct LockedConnection(Connection) {
 			assert(*plc >= 1);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
 			if( --*plc == 0 ){
+				m_pool.m_sem.unlock();
 				//logTrace("conn %s release", cast(void*)m_conn);
 			}
 			m_conn = null;
