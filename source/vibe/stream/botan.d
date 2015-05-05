@@ -1,4 +1,10 @@
-﻿module vibe.stream.botan;
+﻿/**
+	Botan TLS implementation
+	Copyright: © 2015 RejectedSoftware e.K., GlobecSys Inc
+	Authors: Sönke Ludwig, Etienne Cimon
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+*/
+module vibe.stream.botan;
 
 version(Botan):
 version = X509;
