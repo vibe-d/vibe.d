@@ -452,7 +452,7 @@ final class HTTP2Stream : ConnectionStream
 	}
 
 	/// Queue client request headers, sent when requesting data from a server. The session must be opened as a client.
-	void writeHeader(in string path, in string scheme, in HTTPMethod method, const ref InetHeaderMap header)
+	void writeHeader(in string path, in string scheme, in HTTPMethod method, const ref InetHeaderMap header, in CookieStore cookie_jar, bool concatenate_cookies)
 	in { assert(!m_session.isServer); }
 	body {
 		acquireWriter();
@@ -460,11 +460,33 @@ final class HTTP2Stream : ConnectionStream
 
 		immutable string[] methods = ["GET","HEAD","PUT","POST","PATCH","DELETE","OPTIONS","TRACE","CONNECT","COPY","LOCK","MKCOL","MOVE","PROPFIND","PROPPATCH","UNLOCK"];
 
+		Vector!(char[]) cookie_arr;
+		char[] cookie_concat;
+
+		void cookieSinkIndividually(string[] cookies) {
+			foreach (c; cookies) {
+				char[] cookie = Mem.alloc!(char[])(c.length);
+				cookie[] = cast(char[])c[];
+				cookie_arr ~= cookie;
+			}
+		}
+		void cookieSinkConcatenate(string cookies) {
+			cookie_concat = Mem.alloc!(char[])(cookies.length);
+			cookie_concat[] = cast(char[])cookies[];
+		}
+
 		string authority = header.get("Host", null);
 		if (!authority)
 			throw new Exception("Cannot write headers, Host was not present");
 
-		int len = cast(int)( 2 /* :scheme :path */ + 1 /* :method */ + header.length) /* one per field for indexing */;
+		if (cookie_jar) {
+			if (concatenate_cookies)
+				cookie_jar.get(authority, path, scheme == "https", &cookieSinkConcatenate);
+			else
+				cookie_jar.get(authority, path, scheme == "https", &cookieSinkIndividually);
+		}
+		logDebug("Cookie jar got ", cookie_arr.length, " concat: ", cookie_concat.length);
+		int len = cast(int)( 2 /* :scheme :path */ + 1 /* :method */ + header.length + cookie_arr.length + (cookie_jar && cookie_concat?1:0) ) /* one per field for indexing */;
 		HeaderField[] headers = Mem.alloc!(HeaderField[])(len);
 		scope(failure) {
 			foreach (hf; headers)
@@ -478,12 +500,46 @@ final class HTTP2Stream : ConnectionStream
 		headers[i++] = HeaderField(":path", path);
 		headers[i++] = HeaderField(":authority", authority);
 
+		bool wrote_cookie;
+
 		// write headers
 		foreach (string name, const ref string value; header) 
 		{
 			if (name == "Host") continue;
+			if (cookie_jar) {
+				if (name == "Cookie" && !concatenate_cookies) {
+					foreach (char[] cookie; cookie_arr[])
+						headers[i++] = HeaderField("Cookie", cast(string) cookie);
+					wrote_cookie = true;
+					if (value.length > 0) {
+						char[] cookie_val = Mem.alloc!(char[])(value.length);
+						cookie_val[] = cast(char[]) value;
+						headers[i++] = HeaderField("Cookie", cast(string) cookie_val);
+					}
+					else len--;
+					continue;
+				}
+				else if (name == "Cookie" && concatenate_cookies) {
+					char[] cookie_val;
+					if (value.length > 0) {
+						char[] cookie_tmp = Mem.alloc!(char[])(value.length + cookie_concat.length + 2);
+						cookie_tmp[0 .. value.length] = cast(char[])value[0 .. $];
+						cookie_tmp[value.length .. value.length + 2] = "; ";
+						cookie_tmp[value.length + 2 .. $] = cookie_concat[0 .. $];
+						Mem.free(cookie_concat);
+						cookie_concat = cookie_tmp;
+					}
+					headers[i++] = HeaderField("Cookie", cast(string) cookie_concat);
+					wrote_cookie = true;
+				}
+			}
 			headers[i++] = HeaderField(name, value);
 		}
+
+		// write cookies, individually by default to use indexing
+		if (!wrote_cookie && cookie_jar)
+			foreach (char[] cookie; cookie_arr[])
+				headers[i++] = HeaderField("Cookie", cast(string) cookie);
 
 		//commit
 		m_tx.headers = headers;
@@ -508,7 +564,7 @@ final class HTTP2Stream : ConnectionStream
 		stream.m_push = true;
 		stream.setParent(this, false);
 		// cookies must be in the headers already
-		stream.writeHeader(url.localURI, url.schema, method, header); 
+		stream.writeHeader(url.localURI, url.schema, method, header, null, false); 
 	}
 
 	/// can produce multiple concurrent requests by calling it with using multiple tasks simultaneously
