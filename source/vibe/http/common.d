@@ -664,3 +664,15 @@ struct CookieValueMap {
 		return null;
 	}
 }
+
+interface CookieStore
+{
+	/// Send the '; '-joined concatenation of the cookies corresponding to the URL into sink
+	void get(string host, string path, bool secure, scope void delegate(string) send_to) const;
+
+	/// Send each matching cookie value individually to the specified sink
+	void get(string host, string path, bool secure, scope void delegate(string[]) send_to) const;
+
+	/// Sets the cookies using the provided Set-Cookie: header value entry
+	void set(string host, string set_cookie);
+}
