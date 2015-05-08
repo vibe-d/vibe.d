@@ -169,9 +169,6 @@ T enforceBadRequest(T)(T condition, lazy string message = null, string file = __
 	Represents an HTTP request made to a server.
 */
 class HTTPRequest {
-	protected {
-		Stream m_conn;
-	}
 
 	public {
 		/// The HTTP protocol version used for the request
@@ -190,11 +187,6 @@ class HTTPRequest {
 
 		/// All request _headers
 		InetHeaderMap headers;
-	}
-
-	protected this(Stream conn)
-	{
-		m_conn = conn;
 	}
 
 	protected this()
