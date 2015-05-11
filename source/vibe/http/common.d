@@ -521,6 +521,11 @@ final class Cookie {
 		bool m_httpOnly;
 	}
 
+	enum Encoding {
+		url,
+		none
+	}
+
 	@property void value(string value) { m_value = value; }
 	@property string value() const { return m_value; }
 
@@ -542,22 +547,19 @@ final class Cookie {
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
 
-	string toString(string name = "Cookie") {
-		Appender!string dst;
-		writeString(dst, name);
-		return dst.data;
-	}
-
-	void writeString(R)(R dst, string name, bool encode = true)
+	void writeString(R)(R dst, string name, Encoding encoding = Encoding.url)
 		if (isOutputRange!(R, char))
 	{
 		import vibe.textfilter.urlencode;
 		dst.put(name);
 		dst.put('=');
-		if (encode)
-			filterURLEncode(dst, this.value);
-		else
-			dst.put(this.value);
+		final switch (encoding) {
+			case Encoding.url: filterURLEncode(dst, this.value); break;
+			case Encoding.none:
+				assert(!this.value.canFind(';') && !this.value.canFind('"'));
+				dst.put(this.value);
+				break;
+		}
 		if (this.domain && this.domain != "") {
 			dst.put("; Domain=");
 			dst.put(this.domain);
