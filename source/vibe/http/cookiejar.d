@@ -174,7 +174,7 @@ public:
 		{
 			FileStream stream = openFile(m_filePath, FileMode.append);
 			auto range = StreamOutputRange(stream);
-			cookie.writeString(&range, name, false);
+			cookie.writeString(&range, name, Cookie.Encoding.none);
 			range.put('\n');
 		}
 	}
@@ -461,14 +461,14 @@ unittest {
 void parseSetCookieString(string set_cookie_str, ref Cookie cookie, scope void delegate(CookiePair) sink) {
 	string name;
 	size_t i;
-	foreach (string part; set_cookie_str.splitter!"a is ';'"())
+	foreach (string part; set_cookie_str.splitter(';'))
 	{
 		scope(exit) i++;
 		if (part.length <= 1)
 			continue;
 		if (i > 0 && part[0] == ' ')
 			part = part[1 .. $]; // remove whitespace
-		int idx = cast(int)part.countUntil!"a is '='"();
+		int idx = cast(int)part.countUntil('=');
 		if (i == 0) {
 			auto pair = parseNameValue(part, idx);
 			name = pair[0];
