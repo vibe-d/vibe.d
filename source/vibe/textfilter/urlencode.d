@@ -1,7 +1,7 @@
 /**
 	URL-encoding implementation
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger, Sönke Ludwig
 */
@@ -20,7 +20,7 @@ import std.format;
 */
 string urlEncode(string str, string allowed_chars = null)
 @safe {
-	foreach(char c; str) {
+	foreach (char c; str) {
 		switch(c) {
 			case '-':
 			case '.':
@@ -31,21 +31,18 @@ string urlEncode(string str, string allowed_chars = null)
 			case '~':
 				break;
 			default:
-				goto needsEncoding;
+				auto dst = appender!string();
+				dst.reserve(str.length);
+				filterURLEncode(dst, str, allowed_chars);
+				return dst.data;
 		}
 	}
-    return str;
-
-needsEncoding:
-	auto dst = appender!string();
-	dst.reserve(str.length);
-	filterURLEncode(dst, str, allowed_chars);
-	return dst.data;
+	return str;
 }
 
 unittest {
-    string s = "hello-world";
-    assert(s.urlEncode().ptr == s.ptr);
+	string s = "hello-world";
+	assert(s.urlEncode().ptr == s.ptr);
 }
 
 /** Returns the decoded version of a given URL encoded string.
