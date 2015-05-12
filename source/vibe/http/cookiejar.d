@@ -284,7 +284,9 @@ public:
 		PoolAllocator pool = FreeListObjectAlloc!PoolAllocator.alloc(4096, manualAllocator());
 		scope(exit) FreeListObjectAlloc!PoolAllocator.free(pool);
 
-		FileStream new_file = createTempFile();
+		auto new_file_path = m_filePath[0 .. $-1] ~ (m_filePath.head.toString() ~ ".tmp");
+		auto old_file_path = m_filePath[0 .. $-1] ~ (m_filePath.head.toString() ~ ".old");
+		auto new_file = openFile(new_file_path, FileMode.createTrunc);
 		AllocAppender!(ubyte[]) new_file_data = AllocAppender!(ubyte[])(manualAllocator());
 		scope(exit) new_file_data.reset(AppenderResetMode.freeData);
 
@@ -339,9 +341,12 @@ public:
 			}
 		}
 		new_file.write(cast(ubyte[]) new_file_data.data);
-		new_file.finalize();
-		removeFile(m_filePath);
+		new_file.close();
+
+		/// exchange old and new files and finally delete the old one
+		moveFile(m_filePath, old_file_path);
 		moveFile(new_file.path, m_filePath);
+		removeFile(old_file_path);
 	}
 
 }
