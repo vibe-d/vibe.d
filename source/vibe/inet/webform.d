@@ -190,8 +190,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 			long to_read;
 			do {
 				to_read = min(len, buf.length);
-				stream.read(buf[0 .. to_read]);
-				file.write(buf[0 .. to_read]);
+				file.write(stream, to_read);
 				len -= to_read;
 			} while (to_read == buf.length && len > 0);
 		}
