@@ -194,6 +194,36 @@ final class URLRouter : HTTPRouter {
 
 	@property string prefix() const { return m_prefix; }
 
+	/// Returns a single route handle to conveniently register multiple methods.
+	URLRoute route(string path) { return URLRoute(this, path); }
+
+	///
+	unittest {
+		void getFoo(scope HTTPServerRequest req, scope HTTPServerResponse res) { /* ... */ }
+		void postFoo(scope HTTPServerRequest req, scope HTTPServerResponse res) { /* ... */ }
+		void deleteFoo(scope HTTPServerRequest req, scope HTTPServerResponse res) { /* ... */ }
+
+		auto r = new URLRouter;
+
+		// using 'with' statement
+		with (r.route("/foo")) {
+			get(&getFoo);
+			post(&postFoo);
+			delete_(&deleteFoo);
+		}
+
+		// using method chaining
+		r.route("/foo")
+			.get(&getFoo)
+			.post(&postFoo)
+			.delete_(&deleteFoo);
+
+		// without using route()
+		r.get("/foo", &getFoo);
+		r.post("/foo", &postFoo);
+		r.delete_("/foo", &deleteFoo);
+	}
+
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
 	override URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
 	{
@@ -433,6 +463,26 @@ unittest {
 	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test/y")), res);
 	assert(result == "AB");
 }
+
+
+/**
+	Convenience abstraction for a single `URLRouter` route.
+
+	See `URLRouter.route` for a usage example.
+*/
+struct URLRoute {
+	URLRouter router;
+	string path;
+
+	ref URLRoute get(Handler)(Handler h) { router.get(path, h); return this; }
+	ref URLRoute post(Handler)(Handler h) { router.post(path, h); return this; }
+	ref URLRoute put(Handler)(Handler h) { router.put(path, h); return this; }
+	ref URLRoute delete_(Handler)(Handler h) { router.delete_(path, h); return this; }
+	ref URLRoute patch(Handler)(Handler h) { router.patch(path, h); return this; }
+	ref URLRoute any(Handler)(Handler h) { router.any(path, h); return this; }
+	ref URLRoute match(Handler)(HTTPMethod method, Handler h) { router.match(method, path, h); return this; }
+}
+
 
 private enum maxRouteParameters = 64;
 
