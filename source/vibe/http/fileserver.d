@@ -97,12 +97,12 @@ unittest {
 		// add other routes here
 
 		auto fsettings = new HTTPFileServerSettings;
- 		fsettings.serverPathPrefix = "/static";
- 		router.get("static/*", serveStaticFiles("public/", fsettings));
+		fsettings.serverPathPrefix = "/static";
+		router.get("static/*", serveStaticFiles("public/", fsettings));
 
 		auto settings = new HTTPServerSettings;
 		listenHTTP(settings, router);
- 	}
+	}
 }
 
 

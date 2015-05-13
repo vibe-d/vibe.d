@@ -1064,11 +1064,9 @@ final class HTTPServerResponse : HTTPResponse {
 	@property ulong bytesWritten() { return m_countingWriter.bytesWritten; }
 
 	/**
-		Compatibility version of render() that takes a list of explicit names and types instead
-		of variable aliases.
+		Scheduled for deprecation - use `render` instead.
 
-		This version of render() works around a compiler bug in DMD (Issue 2962). You should use
-		this method instead of render() as long as this bug is not fixed.
+		This version of render() works around an old compiler bug in DMD < 2.064 (Issue 2962).
 
 		The first template argument is the name of the template file. All following arguments
 		must be pairs of a type and a string, each specifying one parameter. Parameter values
