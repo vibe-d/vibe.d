@@ -1865,16 +1865,18 @@ private:
 							stream.m_rx.ex = new Exception("Push Promise being sent by client stream... and with no headers.");
 						// header request/response/push-response
 						} else {
+							bool is_push;
 							// Clients: Is possible that we received this request as a push response?
 							if (!isServer) {
 								// To verify, we "pop" the push response that corresponds to this stream's headers, or null if none
 								if (HTTP2Stream push_stream = popPushResponse(stream)) {
+									is_push = true;
 									assert(!isServer);
 									stream.readPushResponse(push_stream);
 								}
 							}
 							// header request/response
-							else 
+							if (!is_push) 
 							{ 
 								if (close) close_processed = true;
 								prispec_processed = true;
