@@ -289,7 +289,8 @@ unittest {
 
 private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Serializer serializer, T value)
 {
-	import std.typecons : BitFlags, Nullable, Tuple, tuple;
+	import std.typecons : Nullable, Tuple, tuple;
+	static if (__VERSION__ >= 2067) import std.typecons : BitFlags;
 
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
@@ -353,7 +354,7 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 	} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 		if (value.isNull()) serializeImpl!(Serializer, Policy, typeof(null))(serializer, null);
 		else serializeImpl!(Serializer, Policy, typeof(value.get()), ATTRIBUTES)(serializer, value.get());
-	} else static if (is(T == BitFlags!E, E)) {
+	} else static if (__VERSION__ >= 2067 && is(T == BitFlags!E, E)) {
 		size_t cnt = 0;
 		foreach (v; EnumMembers!E)
 			if (value & v)
@@ -446,7 +447,8 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 
 private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serializer deserializer)
 {
-	import std.typecons : BitFlags, Nullable;
+	import std.typecons : Nullable;
+	static if (__VERSION__ >= 2067) import std.typecons : ButFlags;
 
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
@@ -492,7 +494,7 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 	} else static if (isInstanceOf!(Nullable, T)) {
 		if (deserializer.tryReadNull()) return T.init;
 		return T(deserializeImpl!(typeof(T.init.get()), Policy, Serializer, ATTRIBUTES)(deserializer));
-	} else static if (is(T == BitFlags!E, E)) {
+	} else static if (__VERSION__ >= 2067 && is(T == BitFlags!E, E)) {
 		T ret;
 		deserializer.readArray!(E[])((sz) {}, {
 			ret |= deserializeImpl!(E, Policy, Serializer, ATTRIBUTES)(deserializer);
@@ -1271,6 +1273,7 @@ unittest // Make sure serializing through properties still works
 	assert(s.serializeToJson().deserializeJson!S() == s);
 }
 
+static if (__VERSION__ >= 2067)
 unittest { // test BitFlags serialization
 	import std.typecons : BitFlags;
 
