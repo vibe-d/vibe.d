@@ -71,7 +71,8 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 		{
 			creq.method = req.method;
 			creq.headers = req.headers.dup;
-			creq.headers["Connection"] = "keep-alive";
+			if (!creq.isHTTP2)
+				creq.headers["Connection"] = "keep-alive";
 			creq.headers["Host"] = settings.destinationHost;
 			if (settings.avoidCompressedRequests && "Accept-Encoding" in creq.headers)
 				creq.headers.remove("Accept-Encoding");
