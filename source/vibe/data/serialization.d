@@ -9,43 +9,43 @@
 		deserializing a certain type:
 
 		$(OL
-			$(LI An $(D enum) type is serialized as its raw value, except if
-				$(D @byName) is used, in which case the name of the enum value
+			$(LI An `enum` type is serialized as its raw value, except if
+				`@byName` is used, in which case the name of the enum value
 				is serialized.)
 			$(LI Any type that is specifically supported by the serializer
 				is directly serialized. For example, the BSON serializer
-				supports $(D BsonObjectID) directly.)
-			$(LI Arrays and tuples ($(D std.typecons.Tuple)) are serialized
+				supports `BsonObjectID` directly.)
+			$(LI Arrays and tuples (`std.typecons.Tuple`) are serialized
 				using the array serialization functions where each element is
 				serialized again according to these rules.)
 			$(LI Associative arrays are serialized similar to arrays. The key
-				type of the AA must satisfy the $(D isStringSerializable) trait
+				type of the AA must satisfy the `isStringSerializable` trait
 				and will always be serialized as a string.)
-			$(LI Any $(D Nullable!T) will be serialized as either $(D null), or
+			$(LI Any `Nullable!T` will be serialized as either `null`, or
 				as the contained value (subject to these rules again).)
 			$(LI Any `BitFlags!T` value will be serialized as `T[]`)
-			$(LI Types satisfying the $(D isPolicySerializable) trait for the
-				supplied $(D Policy) will be serialized as the value returned
-				by the policy $(D toRepresentation) function (again subject to
+			$(LI Types satisfying the `isPolicySerializable` trait for the
+				supplied `Policy` will be serialized as the value returned
+				by the policy `toRepresentation` function (again subject to
 				these rules).)
-			$(LI Types satisfying the $(D isCustomSerializable) trait will be
-				serialized as the value returned by their $(D toRepresentation)
+			$(LI Types satisfying the `isCustomSerializable` trait will be
+				serialized as the value returned by their `toRepresentation`
 				method (again subject to these rules).)
-			$(LI Types satisfying the $(D isISOExtStringSerializable) trait will be
-				serialized as a string, as returned by their $(D toISOExtString)
-				method. This causes types such as $(D SysTime) to be serialized
+			$(LI Types satisfying the `isISOExtStringSerializable` trait will be
+				serialized as a string, as returned by their `toISOExtString`
+				method. This causes types such as `SysTime` to be serialized
 				as strings.)
-			$(LI Types satisfying the $(D isStringSerializable) trait will be
-				serialized as a string, as returned by their $(D toString)
+			$(LI Types satisfying the `isStringSerializable` trait will be
+				serialized as a string, as returned by their `toString`
 				method.)
 			$(LI Struct and class types by default will be serialized as
 				associative arrays, where the key is the name of the
-				corresponding field (can be overridden using the $(D @name)
-				attribute). If the struct/class is annotated with $(D @asArray),
+				corresponding field (can be overridden using the `@name`
+				attribute). If the struct/class is annotated with `@asArray`,
 				it will instead be serialized as a flat array of values in the
 				order of declaration. Null class references will be serialized
-				as $(D null).)
-			$(LI Pointer types will be serialized as either $(D null), or as
+				as `null`.)
+			$(LI Pointer types will be serialized as either `null`, or as
 				the value they point to.)
 			$(LI Built-in integers and floating point values, as well as
 				boolean values will be converted to strings, if the serializer
@@ -107,7 +107,7 @@ import std.typetuple;
 	The serializer must have a value result for the first form
 	to work. Otherwise, use the range based form.
 
-	See_Also: vibe.data.json.JsonSerializer, vibe.data.json.JsonStringSerializer, vibe.data.bson.BsonSerializer
+	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
 auto serialize(Serializer, T, ARGS...)(T value, ARGS args)
 {
@@ -153,12 +153,12 @@ unittest {
 }
 
 /**
-	Serializes a value with the given serializer, representing values according to $(D Policy) when possible.
+	Serializes a value with the given serializer, representing values according to `Policy` when possible.
 
 	The serializer must have a value result for the first form
 	to work. Otherwise, use the range based form.
 
-	See_Also: vibe.data.json.JsonSerializer, vibe.data.json.JsonStringSerializer, vibe.data.bson.BsonSerializer
+	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
 auto serializeWithPolicy(Serializer, alias Policy, T, ARGS...)(T value, ARGS args)
 {
@@ -221,7 +221,7 @@ unittest {
 	serialized_data can be either an input range or a value containing
 	the serialized data, depending on the type of serializer used.
 
-	See_Also: vibe.data.json.JsonSerializer, vibe.data.json.JsonStringSerializer, vibe.data.bson.BsonSerializer
+	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
 T deserialize(Serializer, T, ARGS...)(ARGS args)
 {
@@ -250,12 +250,12 @@ unittest {
 }
 
 /**
-	Deserializes and returns a serialized value, interpreting values according to $(D Policy) when possible.
+	Deserializes and returns a serialized value, interpreting values according to `Policy` when possible.
 
 	serialized_data can be either an input range or a value containing
 	the serialized data, depending on the type of serializer used.
 
-	See_Also: vibe.data.json.JsonSerializer, vibe.data.json.JsonStringSerializer, vibe.data.bson.BsonSerializer
+	See_Also: `vibe.data.json.JsonSerializer`, `vibe.data.json.JsonStringSerializer`, `vibe.data.bson.BsonSerializer`
 */
 T deserializeWithPolicy(Serializer, alias Policy, T, ARGS...)(ARGS args)
 {
@@ -707,12 +707,12 @@ struct AsArrayAttribute {}
 	Checks if a given type has a custom serialization representation.
 
 	A class or struct type is custom serializable if it defines a pair of
-	$(D toRepresentation)/$(D fromRepresentation) methods. Any class or
+	`toRepresentation`/`fromRepresentation` methods. Any class or
 	struct type that has this trait will be serialized by using the return
-	value of it's $(D toRepresentation) method instead of the original value.
+	value of it's `toRepresentation` method instead of the original value.
 
-	This trait has precedence over $(D isISOExtStringSerializable) and
-	$(D isStringSerializable).
+	This trait has precedence over `isISOExtStringSerializable` and
+	`isStringSerializable`.
 */
 template isCustomSerializable(T)
 {
@@ -736,14 +736,14 @@ unittest {
 	Checks if a given type has an ISO extended string serialization representation.
 
 	A class or struct type is ISO extended string serializable if it defines a
-	pair of $(D toISOExtString)/$(D fromISOExtString) methods. Any class or
+	pair of `toISOExtString`/`fromISOExtString` methods. Any class or
 	struct type that has this trait will be serialized by using the return
-	value of it's $(D toISOExtString) method instead of the original value.
+	value of it's `toISOExtString` method instead of the original value.
 
 	This is mainly useful for supporting serialization of the the date/time
-	types in $(D std.datetime).
+	types in `std.datetime`.
 
-	This trait has precedence over $(D isStringSerializable).
+	This trait has precedence over `isStringSerializable`.
 */
 template isISOExtStringSerializable(T)
 {
@@ -771,9 +771,9 @@ unittest {
 	Checks if a given type has a string serialization representation.
 
 	A class or struct type is string serializable if it defines a pair of
-	$(D toString)/$(D fromString) methods. Any class or struct type that
+	`toString`/`fromString` methods. Any class or struct type that
 	has this trait will be serialized by using the return value of it's
-	$(D toString) method instead of the original value.
+	`toString` method instead of the original value.
 */
 template isStringSerializable(T)
 {
@@ -809,15 +809,15 @@ private template DefaultPolicy(T)
 	Checks if a given policy supports custom serialization for a given type.
 
 	A class or struct type is custom serializable according to a policy if
-	the policy defines a pair of $(D toRepresentation)/$(D fromRepresentation)
+	the policy defines a pair of `toRepresentation`/`fromRepresentation`
 	functions. Any class or struct type that has this trait for the policy supplied to
-	$D(serializeWithPolicy) will be serialized by using the return value of the
-	policy $(D toRepresentation) function instead of the original value.
+	`serializeWithPolicy` will be serialized by using the return value of the
+	policy `toRepresentation` function instead of the original value.
 
-	This trait has precedence over $(D isCustomSerializable),
-	$(D isISOExtStringSerializable) and $(D isStringSerializable).
+	This trait has precedence over `isCustomSerializable`,
+	`isISOExtStringSerializable` and `isStringSerializable`.
 
-	See_Also: vibe.data.serialization.serializeWithPolicy
+	See_Also: `vibe.data.serialization.serializeWithPolicy`
 */
 template isPolicySerializable(alias Policy, T)
 {
@@ -843,12 +843,12 @@ unittest {
 /**
 	Chains serialization policy.
 
-	Constructs a serialization policy that given a type $(D T) will apply the
-	first compatible policy $(D toRepresentation) and $(D fromRepresentation)
+	Constructs a serialization policy that given a type `T` will apply the
+	first compatible policy `toRepresentation` and `fromRepresentation`
 	functions. Policies are evaluated left-to-right according to
-	$(D isPolicySerializable).
+	`isPolicySerializable`.
 
-	See_Also: vibe.data.serialization.serializeWithPolicy 
+	See_Also: `vibe.data.serialization.serializeWithPolicy`
 */
 template ChainedPolicy(alias Primary, Fallbacks...)
 {
