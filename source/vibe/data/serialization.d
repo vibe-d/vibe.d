@@ -23,6 +23,7 @@
 				and will always be serialized as a string.)
 			$(LI Any $(D Nullable!T) will be serialized as either $(D null), or
 				as the contained value (subject to these rules again).)
+			$(LI Any `BitFlags!T` value will be serialized as `T[]`)
 			$(LI Types satisfying the $(D isPolicySerializable) trait for the
 				supplied $(D Policy) will be serialized as the value returned
 				by the policy $(D toRepresentation) function (again subject to
@@ -30,7 +31,7 @@
 			$(LI Types satisfying the $(D isCustomSerializable) trait will be
 				serialized as the value returned by their $(D toRepresentation)
 				method (again subject to these rules).)
-			$(LI Types satisfying the $(D isISOExtSerializable) trait will be
+			$(LI Types satisfying the $(D isISOExtStringSerializable) trait will be
 				serialized as a string, as returned by their $(D toISOExtString)
 				method. This causes types such as $(D SysTime) to be serialized
 				as strings.)
@@ -288,7 +289,7 @@ unittest {
 
 private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Serializer serializer, T value)
 {
-	import std.typecons : Nullable, Tuple, tuple;
+	import std.typecons : BitFlags, Nullable, Tuple, tuple;
 
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
@@ -352,6 +353,22 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 	} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 		if (value.isNull()) serializeImpl!(Serializer, Policy, typeof(null))(serializer, null);
 		else serializeImpl!(Serializer, Policy, typeof(value.get()), ATTRIBUTES)(serializer, value.get());
+	} else static if (is(T == BitFlags!E, E)) {
+		size_t cnt = 0;
+		foreach (v; EnumMembers!E)
+			if (value & v)
+				cnt++;
+
+		serializer.beginWriteArray!(E[])(cnt);
+		cnt = 0;
+		foreach (v; EnumMembers!E)
+			if (value & v) {
+				serializer.beginWriteArrayEntry!E(cnt);
+				serializeImpl!(Serializer, Policy, E, ATTRIBUTES)(serializer, v);
+				serializer.endWriteArrayEntry!E(cnt);
+				cnt++;
+			}
+		serializer.endWriteArray!(E[])();
 	} else static if (isPolicySerializable!(Policy, TU)) {
 		alias CustomType = typeof(Policy!TU.toRepresentation(TU.init));
 		serializeImpl!(Serializer, Policy, CustomType, ATTRIBUTES)(serializer, Policy!TU.toRepresentation(value));
@@ -429,7 +446,7 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 
 private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serializer deserializer)
 {
-	import std.typecons : Nullable;
+	import std.typecons : BitFlags, Nullable;
 
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
@@ -475,6 +492,12 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 	} else static if (isInstanceOf!(Nullable, T)) {
 		if (deserializer.tryReadNull()) return T.init;
 		return T(deserializeImpl!(typeof(T.init.get()), Policy, Serializer, ATTRIBUTES)(deserializer));
+	} else static if (is(T == BitFlags!E, E)) {
+		T ret;
+		deserializer.readArray!(E[])((sz) {}, {
+			ret |= deserializeImpl!(E, Policy, Serializer, ATTRIBUTES)(deserializer);
+		});
+		return ret;
 	} else static if (isPolicySerializable!(Policy, T)) {
 		alias CustomType = typeof(Policy!T.toRepresentation(T.init));
 		return Policy!T.fromRepresentation(deserializeImpl!(CustomType, Policy, Serializer, ATTRIBUTES)(deserializer));
@@ -1246,4 +1269,34 @@ unittest // Make sure serializing through properties still works
 
 	auto s = S(1, 2);
 	assert(s.serializeToJson().deserializeJson!S() == s);
+}
+
+unittest { // test BitFlags serialization
+	import std.typecons : BitFlags;
+
+	enum Flag {
+		a = 1<<0,
+		b = 1<<1,
+		c = 1<<2
+	}
+	enum Flagm = Flag.mangleof;
+
+	alias Flags = BitFlags!Flag;
+	enum Flagsm = Flags.mangleof;
+
+	enum Fi_ser = "A(A"~Flagm~")[0][]A(A"~Flagm~")";
+	assert(serialize!TestSerializer(Flags.init) == Fi_ser);
+
+	enum Fac_ser = "A(A"~Flagm~")[2][AE("~Flagm~",0)(V(i)(1))AE("~Flagm~",0)AE("~Flagm~",1)(V(i)(4))AE("~Flagm~",1)]A(A"~Flagm~")";
+	assert(serialize!TestSerializer(Flags(Flag.a, Flag.c)) == Fac_ser);
+
+	struct S { @byName Flags f; }
+	enum Sm = S.mangleof;
+	enum Sac_ser = "D("~Sm~"){DE("~Flagsm~",f)(A(A"~Flagm~")[2][AE("~Flagm~",0)(V(Aya)(a))AE("~Flagm~",0)AE("~Flagm~",1)(V(Aya)(c))AE("~Flagm~",1)]A(A"~Flagm~"))DE("~Flagsm~",f)}D("~Sm~")";
+
+	assert(serialize!TestSerializer(S(Flags(Flag.a, Flag.c))) == Sac_ser);
+
+	assert(deserialize!(TestSerializer, Flags)(Fi_ser) == Flags.init);
+	assert(deserialize!(TestSerializer, Flags)(Fac_ser) == Flags(Flag.a, Flag.c));
+	assert(deserialize!(TestSerializer, S)(Sac_ser) == S(Flags(Flag.a, Flag.c)));
 }
