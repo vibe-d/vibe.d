@@ -1021,6 +1021,7 @@ Bson serializeToBson(T)(T value, ubyte[] buffer = null)
 }
 
 /// private
+deprecated("VibeOldSerialization is deprecated, please migrate to the new serialization framework.")
 Bson serializeToBsonOld(T)(T value)
 {
 	import vibe.internal.meta.traits;

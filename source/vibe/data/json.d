@@ -1139,6 +1139,7 @@ unittest {
 
 
 /// private
+deprecated("VibeOldSerialization is deprecated, please migrate to the new serialization framework.")
 Json serializeToJsonOld(T)(T value)
 {
 	import vibe.internal.meta.traits;
