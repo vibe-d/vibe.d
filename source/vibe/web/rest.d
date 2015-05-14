@@ -66,12 +66,21 @@ import std.typetuple : anySatisfy, Filter;
 */
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
-	import vibe.internal.meta.traits : baseInterface;
+	import std.traits : InterfacesTuple;
 	import vibe.internal.meta.uda : findFirstUDA;
 	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
 		ParameterTypeTuple, ReturnType;
 
-	alias I = baseInterface!TImpl;
+	alias IT = InterfacesTuple!TImpl;
+	static assert (IT.length > 0 || is (TImpl == interface),
+		       "Cannot registerRestInterface type '" ~ TImpl.stringof
+		       ~ "' because it doesn't implement an interface");
+	static if (IT.length > 1)
+		pragma(msg, "Type '" ~ TImpl.stringof ~ "' implements more than one interface: make sure the one describing the REST server is the first one");
+	static if (is(TImpl == interface))
+		alias I = TImpl;
+	else
+		alias I = IT[0];
 
 	static assert(getInterfaceValidationError!(I) is null, getInterfaceValidationError!(I));
 
