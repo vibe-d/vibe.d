@@ -296,14 +296,22 @@ final class WebSocket {
 
 	/**
 		Actively closes the connection.
+
+		Params:
+			reason = Message describing why the connection was terminated.
+			code = Numeric code indicating a termination reason.
 	*/
-	void close()
+	void close(string reason = "", short code = 0)
 	{
+		//payload lengths >= 126 causes an error, but only on close frames?
+		assert(reason.length <= 123);
+
 		if (connected) {
 			m_writeMutex.performLocked!({
 				m_sentCloseFrame = true;
 				Frame frame;
 				frame.opcode = FrameOpcode.close;
+				frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(ubyte[])reason;
 				frame.fin = true;
 				frame.writeFrame(m_conn);
 			});
