@@ -298,12 +298,12 @@ final class WebSocket {
 		Actively closes the connection.
 
 		Params:
-			reason = Message describing why the connection was terminated.
 			code = Numeric code indicating a termination reason.
+			reason = Message describing why the connection was terminated.
 	*/
-	void close(string reason = "", short code = 0)
+	void close(short code = 0, string reason = "")
 	{
-		//payload lengths >= 126 causes an error, but only on close frames?
+		//control frame payloads are limited to 125 bytes
 		assert(reason.length <= 123);
 
 		if (connected) {
@@ -311,7 +311,8 @@ final class WebSocket {
 				m_sentCloseFrame = true;
 				Frame frame;
 				frame.opcode = FrameOpcode.close;
-				frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(ubyte[])reason;
+				if(code != 0)
+					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(ubyte[])reason;
 				frame.fin = true;
 				frame.writeFrame(m_conn);
 			});
