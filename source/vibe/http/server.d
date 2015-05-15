@@ -941,10 +941,10 @@ final class HTTPServerResponse : HTTPResponse {
 		}
 
 		if (auto pce = "Content-Encoding" in headers) {
-			if (*pce == "gzip") {
+			if (icmp2(*pce, "gzip") == 0) {
 				m_gzipOutputStream = FreeListRef!GzipOutputStream(m_bodyWriter);
 				m_bodyWriter = m_gzipOutputStream;
-			} else if (*pce == "deflate") {
+			} else if (icmp2(*pce, "deflate") == 0) {
 				m_deflateOutputStream = FreeListRef!DeflateOutputStream(m_bodyWriter);
 				m_bodyWriter = m_deflateOutputStream;
 			} else {
@@ -1631,7 +1631,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 
 		// handle Expect header
 		if (auto pv = "Expect" in req.headers) {
-			if (*pv == "100-continue") {
+			if (icmp2(*pv, "100-continue") == 0) {
 				logTrace("sending 100 continue");
 				http_stream.write("HTTP/1.1 100 Continue\r\n\r\n");
 			}
@@ -1679,7 +1679,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 
 		if (settings.options & HTTPServerOption.parseJsonBody) {
-			if (req.contentType == "application/json") {
+			if (icmp2(req.contentType, "application/json") == 0) {
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				if (!bodyStr.empty) req.json = parseJson(bodyStr);
 			}
