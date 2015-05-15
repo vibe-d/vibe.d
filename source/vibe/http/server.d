@@ -1489,8 +1489,6 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 {
 	import std.algorithm : canFind;
 
-	auto peer_address_string = tcp_connection.peerAddress;
-	auto peer_address = tcp_connection.remoteAddress;
 	SysTime reqtime = Clock.currTime(UTC());
 
 	//auto request_allocator = scoped!(PoolAllocator)(1024, defaultAllocator());
@@ -1502,6 +1500,13 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	FreeListRef!TimeoutHTTPInputStream timeout_http_input_stream;
 	FreeListRef!LimitedHTTPInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
+
+	// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+	auto peer_address_string = tcp_connection.peerAddress;
+	if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(":") < 0)
+		req.peer = peer_address_string[7 .. $];
+	else req.peer = peer_address_string;
+	req.clientAddress = tcp_connection.remoteAddress;
 
 	// Default to the first virtual host for this listener
 	HTTPServerRequestDelegate request_task;
@@ -1565,12 +1570,6 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			timeout_http_input_stream = FreeListRef!TimeoutHTTPInputStream(http_stream, settings.maxRequestTime, reqtime);
 			reqReader = timeout_http_input_stream;
 		}
-
-		// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-		if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(":") < 0)
-			req.peer = peer_address_string[7 .. $];
-		else req.peer = peer_address_string;
-		req.clientAddress = peer_address;
 
 		// basic request parsing
 		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
