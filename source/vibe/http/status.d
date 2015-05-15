@@ -45,6 +45,7 @@ enum HTTPStatus {
 	unsupportedMediaType         = 415,
 	requestedrangenotsatisfiable = 416,
 	expectationFailed            = 417,
+	tooManyRequests              = 429,
 	internalServerError          = 500,
 	notImplemented               = 501,
 	badGateway                   = 502,
