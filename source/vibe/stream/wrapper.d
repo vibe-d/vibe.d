@@ -82,6 +82,12 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 		m_connection = connection_stream;
 	}
 
+	this(InputStream input, OutputStream output, ConnectionStream connection_stream)
+	{
+		super(input, output);
+		m_connection = connection_stream;
+	}
+
 	@property bool connected()
 	const {
 		if (!m_connection) 
