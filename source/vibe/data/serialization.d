@@ -448,7 +448,7 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serializer deserializer)
 {
 	import std.typecons : Nullable;
-	static if (__VERSION__ >= 2067) import std.typecons : ButFlags;
+	static if (__VERSION__ >= 2067) import std.typecons : BitFlags;
 
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
