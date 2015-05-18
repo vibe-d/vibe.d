@@ -860,11 +860,11 @@ final class HTTPClientResponse : HTTPResponse {
 	*/
 	void dropBody()
 	{
-		if( m_client ){
+		if (m_client) {
 			if( bodyReader.empty ){
 				finalize();
 			} else {
-				s_sink.write(bodyReader);
+				nullSink().write(bodyReader);
 				assert(!lockedConnection.__conn);
 			}
 		}
@@ -927,13 +927,5 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 }
 
-
-private __gshared NullOutputStream s_sink;
-
 // This object is a placeholder and should to never be modified.
 private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
-
-shared static this()
-{
-	s_sink = new NullOutputStream;
-}
