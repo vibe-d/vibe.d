@@ -18,7 +18,7 @@ import vibe.data.json;
 import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 import vibe.stream.operations;
 import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
@@ -63,14 +63,14 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool ssl;
+	bool tls;
 
 	if (settings.proxyURL.schema !is null)
-		ssl = settings.proxyURL.schema == "https";
+		tls = settings.proxyURL.schema == "https";
 	else
-		ssl = url.schema == "https";
+		tls = url.schema == "https";
 
-	auto cli = connectHTTP(url.host, url.port, ssl, settings);
+	auto cli = connectHTTP(url.host, url.port, tls, settings);
 	auto res = cli.request((req){
 			if (url.localURI.length) {
 				assert(url.path.absolute, "Request URL path must be absolute.");
@@ -104,14 +104,14 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool ssl;
+	bool tls;
 
 	if (settings.proxyURL.schema !is null)
-		ssl = settings.proxyURL.schema == "https";
+		tls = settings.proxyURL.schema == "https";
 	else
-		ssl = url.schema == "https";
+		tls = url.schema == "https";
 
-	auto cli = connectHTTP(url.host, url.port, ssl, settings);
+	auto cli = connectHTTP(url.host, url.port, tls, settings);
 	cli.request((scope req) {
 		if (url.localURI.length) {
 			assert(url.path.absolute, "Request URL path must be absolute.");
@@ -162,23 +162,23 @@ unittest {
 	usually requestHTTP should be used for making requests instead of manually using a
 	HTTPClient to do so.
 */
-auto connectHTTP(string host, ushort port = 0, bool ssl = false, HTTPClientSettings settings = defaultSettings)
+auto connectHTTP(string host, ushort port = 0, bool tls = false, HTTPClientSettings settings = defaultSettings)
 {
-	static struct ConnInfo { string host; ushort port; bool ssl; string proxyIP; ushort proxyPort; }
+	static struct ConnInfo { string host; ushort port; bool tls; string proxyIP; ushort proxyPort; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-	if( port == 0 ) port = ssl ? 443 : 80;
-	auto ckey = ConnInfo(host, port, ssl, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
+	if( port == 0 ) port = tls ? 443 : 80;
+	auto ckey = ConnInfo(host, port, tls, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].ssl == ssl && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+		if (c[0].host == host && c[0].port == port && c[0].tls == tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
 			pool = c[1];
 
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, ssl, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
-				ret.connect(host, port, ssl, settings);
+				ret.connect(host, port, tls, settings);
 				return ret;
 			});
 		if (s_connections.full) s_connections.popFront();
@@ -240,9 +240,9 @@ final class HTTPClient {
 		ushort m_port;
 		TCPConnection m_conn;
 		Stream m_stream;
-		SSLContext m_ssl;
+		TLSContext m_tls;
 		static __gshared m_userAgent = "vibe.d/"~vibeVersionString~" (HTTPClient, +http://vibed.org/)";
-		static __gshared void function(SSLContext) ms_sslSetup;
+		static __gshared void function(TLSContext) ms_tlsSetup;
 		bool m_requesting = false, m_responding = false;
 		SysTime m_keepAliveLimit;
 		Duration m_keepAliveTimeout;
@@ -259,19 +259,22 @@ final class HTTPClient {
 	static void setUserAgentString(string str) { m_userAgent = str; }
 
 	/**
-		Sets a callback that will be called for every SSL context that is created.
+		Sets a callback that will be called for every TLS context that is created.
 
 		Setting such a callback is useful for adjusting the validation parameters
-		of the SSL context.
+		of the TLS context.
 	*/
-	static void setSSLSetupCallback(void function(SSLContext) func) { ms_sslSetup = func; }
+	static void setTLSSetupCallback(void function(TLSContext) func) { ms_tlsSetup = func; }
+
+	/// Compatibility alias - will be deprecated soon.
+	alias setSSLSetupCallback = setTLSSetupCallback;
 
 	/**
 		Connects to a specific server.
 
 		This method may only be called if any previous connection has been closed.
 	*/
-	void connect(string server, ushort port = 80, bool ssl = false, HTTPClientSettings settings = defaultSettings)
+	void connect(string server, ushort port = 80, bool tls = false, HTTPClientSettings settings = defaultSettings)
 	{
 		assert(m_conn is null);
 		assert(port != 0);
@@ -282,11 +285,11 @@ final class HTTPClient {
 		m_keepAliveLimit = Clock.currTime(UTC()) + m_keepAliveTimeout;
 		m_server = server;
 		m_port = port;
-		if (ssl) {
-			m_ssl = createSSLContext(SSLContextKind.client);
+		if (tls) {
+			m_tls = createTLSContext(TLSContextKind.client);
 			// this will be changed to trustedCert once a proper root CA store is available by default
-			m_ssl.peerValidationMode = SSLPeerValidationMode.none;
-			if (ms_sslSetup) ms_sslSetup(m_ssl);
+			m_tls.peerValidationMode = TLSPeerValidationMode.none;
+			if (ms_tlsSetup) ms_tlsSetup(m_tls);
 		}
 	}
 
@@ -502,7 +505,7 @@ final class HTTPClient {
 				m_conn = connectTCP(m_server, m_port);
 
 			m_stream = m_conn;
-			if (m_ssl) m_stream = createSSLStream(m_conn, m_ssl, SSLStreamState.connecting, m_server, m_conn.remoteAddress);
+			if (m_tls) m_stream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
 		}
 
 		auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
