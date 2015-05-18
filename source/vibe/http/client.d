@@ -15,6 +15,7 @@ import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.data.json;
+import vibe.http.internal.http2;
 import vibe.inet.message;
 import vibe.inet.url;
 import vibe.stream.counting;
@@ -24,6 +25,7 @@ import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
 import vibe.utils.memory;
+import vibe.utils.string : icmp2;
 
 import core.exception : AssertError;
 import std.algorithm : splitter;
@@ -69,22 +71,18 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool use_tls;
-
-	if (settings.proxyURL.schema !is null)
-		use_tls = settings.proxyURL.schema == "https";
-	else
-		use_tls = url.schema == "https";
+	bool use_tls = url.schema == "https";
 
 	auto cli = connectHTTP(url.host, url.port, use_tls, settings);
 	auto res = cli.request((req){
-			if (url.localURI.length) {
+			// When sending through a proxy, full URL to the resource must be on the first line of the request
+			if (settings.proxyURL.schema !is null) {
+				req.requestURL = url.toString();
+			} else if (url.localURI.length) {
 				assert(url.path.absolute, "Request URL path must be absolute.");
 				req.requestURL = url.localURI;
 			}
-			if (settings.proxyURL.schema !is null)
-				req.requestURL = url.toString(); // proxy exception to the URL representation
-			req.headers["Host"] = url.host;
+
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
 				string pwstr = url.username ~ ":" ~ url.password;
@@ -95,7 +93,7 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 		});
 
 	// make sure the connection stays locked if the body still needs to be read
-	if( res.m_client ) res.lockedConnection = cli;
+	if( res.m_client && !res.m_client.isHTTP2Started ) res.lockedConnection = cli;
 
 	logTrace("Returning HTTPClientResponse for conn %s", cast(void*)res.lockedConnection.__conn);
 	return res;
@@ -110,22 +108,19 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool use_tls;
-
-	if (settings.proxyURL.schema !is null)
-		use_tls = settings.proxyURL.schema == "https";
-	else
-		use_tls = url.schema == "https";
+	bool use_tls = url.schema == "https";
 
 	auto cli = connectHTTP(url.host, url.port, use_tls, settings);
+
 	cli.request((scope req) {
-		if (url.localURI.length) {
+		// When sending through a proxy, full URL to the resource must be on the first line of the request		
+		if (settings.proxyURL.schema !is null) {
+			req.requestURL = url.toString();
+		} else if (url.localURI.length) {
 			assert(url.path.absolute, "Request URL path must be absolute.");
 			req.requestURL = url.localURI;
 		}
-		if (settings.proxyURL.schema !is null)
-			req.requestURL = url.toString(); // proxy exception to the URL representation
-		req.headers["Host"] = url.host;
+
 		if ("authorization" !in req.headers && url.username != "") {
 			import std.base64;
 			string pwstr = url.username ~ ":" ~ url.password;
@@ -134,8 +129,8 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 		}
 		if (requester) requester(req);
 	}, responder);
-	assert(!cli.m_requesting, "HTTP client still requesting after return!?");
-	assert(!cli.m_responding, "HTTP client still responding after return!?");
+	assert(!cli.m_state.requesting, "HTTP client still requesting after return!?");
+	assert(!cli.m_state.responding, "HTTP client still responding after return!?");
 }
 
 /** Posts a simple JSON request. Note that the server www.example.org does not
@@ -170,14 +165,15 @@ unittest {
 */
 auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
 {
-	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
+	static struct ConnInfo { string host; ushort port; HTTPClientSettings settings; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+
 	if( port == 0 ) port = use_tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, use_tls, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
+	auto ckey = ConnInfo(host, port, settings);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+		if (c[0].host == host && c[0].port == port && settings is c[0].settings)
 			pool = c[1];
 
 	if (!pool) {
@@ -190,8 +186,12 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 		if (s_connections.full) s_connections.popFront();
 		s_connections.put(tuple(ckey, pool));
 	}
-
-	return pool.lockConnection();
+	auto conn = pool.lockConnection();
+	if (conn.isHTTP2Started) {
+		logDebug("Lock http/2 connection pool");
+		return conn.lockConnection();
+	}
+	return conn;
 }
 
 
@@ -200,12 +200,72 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 /**************************************************************************************************/
 
 /**
-	Defines an HTTP/HTTPS proxy request or a connection timeout for an HTTPClient.
+	Defines the options used in an HTTPClient for defining its requests.
+
+	A new connection will be opened in requestHTTP for each different HTTPClientSettings.
 */
-class HTTPClientSettings {
+final class HTTPClientSettings {
+	/// If an HTTP proxy is used, the URL must be provided. It will be resolved,
+	/// and the HTTPClient will throw if it cannot connect to it
 	URL proxyURL;
-	Duration defaultKeepAliveTimeout = 10.seconds;
+
+	/// Maximum amount of time the client should wait for the next request when there are none active (observed by HTTP/1.1 and HTTP/2)
+	Duration defaultKeepAliveTimeout = 10.seconds; 
+
+	/// If left empty, the default vibe.d user-agent string will be entered automatically in the headers
+	string userAgent;
+
+	/// General option flags
+	HTTPClientOptions options = HTTPClientOption.defaults;
+
+	/** If set, sends ping frames at regular intervals to avoid peer inactivity timeout.
+
+		Note that this field only has an effect for HTTP/2 connections.
+	*/
+	Duration pingInterval; 
+	
+	/** Maxiumum time to wait when reading or writing data.
+
+		This setting only has an effect for HTTP/2 connections. When a read or
+		write operation takes longer than set here, the connection gets dropped.
+	*/
+	Duration connectionTimeout = 5.minutes;
+	
+	/// Custom TLS context for this client
+	TLSContext tlsContext;
 }
+
+
+/** Option flags used to configure the HTTP client.
+*/
+enum HTTPClientOption {
+	/** Uses HTTP/2 requests without prior checks.
+
+		If enabled, the client will always send a client preface without trying
+		upgrade or checking the ALPN value.
+	*/
+	forceHTTP2,
+	
+	/** Disables HTTP/2 and performs only HTTP/1.x requests.
+	
+		If left enabled, HTTP/2 upgrade will take place and after a successful
+		connection, all further (concurrent or sequential) requests will be
+		multiplexed over the same TCP Connection until it is timed out through
+		keep-alive or inactivity.
+	*/
+	disableHTTP2,
+
+	/// Will not try to upgrade the connection on non-TLS connections.
+	onlyEncryptedHTTP2,
+
+	/// Default set of flags - enables normal HTTP/2 upgrades on TLS connections.
+	defaults = onlyEncryptedHTTP2,
+}
+
+/*static if (__VERSION__ >= 2067) {
+	import std.typecons : BitFlags;
+	alias HTTPClientOptions = BitFlags!HTTPClientOption;
+} else*/ alias HTTPClientOptions = HTTPClientOption;
 
 ///
 unittest {
@@ -241,17 +301,23 @@ final class HTTPClient {
 	enum maxHeaderLineLength = 4096;
 
 	private {
-		HTTPClientSettings m_settings;
-		string m_server;
-		ushort m_port;
-		TCPConnection m_conn;
-		Stream m_stream;
-		TLSContext m_tls;
-		static __gshared m_userAgent = "vibe.d/"~vibeVersionString~" (HTTPClient, +http://vibed.org/)";
+		static __gshared ms_userAgent = "vibe.d/"~vibeVersionString~" (HTTPClient, +http://vibed.org/)";
 		static __gshared void function(TLSContext) ms_tlsSetup;
-		bool m_requesting = false, m_responding = false;
-		SysTime m_keepAliveLimit;
-		Duration m_keepAliveTimeout;
+
+		HTTPClientConnection m_conn;
+		HTTPClientState m_state; // by-value
+		HTTPClientSettings m_settings;
+
+		HTTP2ClientContext m_http2Context;
+
+		@property bool isHTTP2Started() { return m_http2Context !is null && m_conn.tcp !is null && m_conn.tcp.connected && m_http2Context.isSupported && m_http2Context.isValidated && m_http2Context.session !is null; }
+		@property bool canUpgradeHTTP2() { return !(m_settings.options & HTTPClientOption.disableHTTP2)&& !(m_settings.options & HTTPClientOption.onlyEncryptedHTTP2) && !isHTTP2Started && !m_conn.forceTLS && !unsupportedHTTP2; }
+		@property bool unsupportedHTTP2() { return m_http2Context is null || (!m_http2Context.isSupported && m_http2Context.isValidated); }
+		@property Stream topStream() {
+			if (isHTTP2Started) return m_state.http2Stream;
+			if (m_conn.tlsStream) return m_conn.tlsStream;
+			return m_conn.tcp;
+		}
 	}
 
 	/** Get the current settings for the HTTP client. **/
@@ -259,120 +325,192 @@ final class HTTPClient {
 		return m_settings;
 	}
 
+	@property bool connected() const { return m_conn.tcp && m_conn.tcp.connected; }
+
 	/**
 		Sets the default user agent string for new HTTP requests.
 	*/
-	static void setUserAgentString(string str) { m_userAgent = str; }
+	static void setUserAgentString(string str) { ms_userAgent = str; }
 
 	/**
 		Sets a callback that will be called for every TLS context that is created.
+
+		If a TLS Context was specified in the HTTPClientSettings, this callback is unused.
 
 		Setting such a callback is useful for adjusting the validation parameters
 		of the TLS context.
 	*/
 	static void setTLSSetupCallback(void function(TLSContext) func) { ms_tlsSetup = func; }
 
-	/// Compatibility alias - will be deprecated soon.
-	alias setSSLSetupCallback = setTLSSetupCallback;
-
+	deprecated("Use setTLSSetupCallback")
+	static void setSSLSetupCallback(void function(TLSContext) func) { ms_tlsSetup = func; }
 	/**
 		Connects to a specific server.
 
 		This method may only be called if any previous connection has been closed.
 	*/
 	void connect(string server, ushort port = 80, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
-	{
-		assert(m_conn is null);
-		assert(port != 0);
-		disconnect();
-		m_conn = null;
+	in { assert(!isHTTP2Started && (!m_conn || !m_conn.tcp || !m_conn.tcp.connected) && port != 0, "Cannot establish a new connection on a connected client. Use disconnect() before, or reconnect()."); }
+	body {
 		m_settings = settings;
-		m_keepAliveTimeout = settings.defaultKeepAliveTimeout;
-		m_keepAliveLimit = Clock.currTime(UTC()) + m_keepAliveTimeout;
-		m_server = server;
-		m_port = port;
-		if (use_tls) {
-			m_tls = createTLSContext(TLSContextKind.client);
+		m_http2Context = new HTTP2ClientContext();
+		m_conn = new HTTPClientConnection();
+		m_conn.server = server;
+		m_conn.port = port;
+		if (use_tls)
+			setupTLS();
+
+		connect();
+	}
+
+	private void setupTLS()
+	{
+		if (m_conn.forceTLS || (m_settings.proxyURL.schema !is null && m_settings.proxyURL.schema == "https"))
+			return;
+		m_conn.forceTLS = true;
+
+		// use TLS either if the web server or the proxy has it
+		if ((m_conn.forceTLS && !m_settings.proxyURL.schema) || (m_settings.proxyURL.schema !is null && m_settings.proxyURL.schema == "https")) {
+			m_conn.tlsContext = m_settings.tlsContext;
+			
+			if (!m_settings.tlsContext) {
+				m_conn.tlsContext = createTLSContext(TLSContextKind.client);
+				if (ms_tlsSetup) 
+					ms_tlsSetup(m_conn.tlsContext);
+			}
+			
 			// this will be changed to trustedCert once a proper root CA store is available by default
-			m_tls.peerValidationMode = TLSPeerValidationMode.none;
-			if (ms_tlsSetup) ms_tlsSetup(m_tls);
+			m_conn.tlsContext.peerValidationMode = TLSPeerValidationMode.none;
+			
+			if (m_settings.options & HTTPClientOption.disableHTTP2)
+				m_conn.tlsContext.setClientALPN(["http/1.1"]);
+			else
+				m_conn.tlsContext.setClientALPN(["h2", "h2-14", "h2-16", "http/1.1"]);
 		}
+
+	}
+
+	private void connect()
+	{
+		if (m_settings.proxyURL.schema !is null){
+			
+			bool use_dns;
+			NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
+			proxyAddr.port = m_settings.proxyURL.port;
+
+			// we connect to the proxy directly
+			m_conn.tcp = connectTCP(proxyAddr);
+			if (m_settings.proxyURL.schema == "https") {
+				if (use_dns)
+					m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, m_settings.proxyURL.host, proxyAddr);
+				else
+					m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, null, proxyAddr);
+			}
+		}
+		else // connect to the requested server/port
+		{
+			logDebug("Connect without proxy");
+			m_conn.tcp = connectTCP(m_conn.server, m_conn.port);
+			if (m_conn.tlsContext) {
+				m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, m_conn.server, m_conn.tcp.remoteAddress);
+				logDebug("Got alpn: %s", m_conn.tlsStream.alpn);
+			}
+		}
+
+		if (m_settings.pingInterval != Duration.zero) {
+			m_http2Context.pinger = setTimer(m_settings.pingInterval, &onPing, true);
+		}
+
+		// alpn http/2 connection
+		if ((m_settings.options & HTTPClientOption.forceHTTP2) || (m_conn.tlsStream && !(m_settings.options & HTTPClientOption.disableHTTP2) && m_conn.tlsStream.alpn.length >= 2 && m_conn.tlsStream.alpn[0 .. 2] == "h2")) {
+			logDebug("Got alpn: %s", m_conn.tlsStream.alpn);
+			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
+			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, m_conn.tlsStream, local_settings, &onRemoteSettings);
+			m_http2Context.worker = runTask(&runHTTP2Worker, false);
+			yield();
+			logDebug("Worker started, continuing");
+			m_http2Context.isValidated = true;
+			m_http2Context.isSupported = true;
+		}
+		// pre-verified http/2 cleartext connection
+		else if (canUpgradeHTTP2 && m_http2Context.isSupported) {
+			logDebug("Upgrading HTTP/2");
+			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
+			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, null, local_settings, &onRemoteSettings);
+			m_http2Context.worker = runTask(&runHTTP2Worker, false);
+			m_http2Context.isValidated = true;
+			m_http2Context.isSupported = true;
+		}
+	}
+
+	void reconnect(string reason = "")
+	{
+		if (m_conn.tcp && m_conn.tcp.connected)
+			disconnect(false, reason);
+		
+		connect();
 	}
 
 	/**
-		Forcefully closes the TCP connection.
+		Forcefully closes the connection or HTTP/2 stream
 
-		Before calling this method, be sure that no request is currently being processed.
+		Before calling this method, be sure that the request is not currently being processed.
 	*/
-	void disconnect()
+	void disconnect(bool rst_stream = true, string reason = "")
 	{
-		if (m_conn) {
-			if (m_conn.connected) {
-				try m_stream.finalize();
+
+		m_conn.totRequest = 0;
+		m_conn.maxRequests = int.max;
+		void finalize() {
+			try topStream().finalize();
+			catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
+		}
+
+		void closeTCP()
+		{
+			if (m_conn.keepAlive !is Timer.init && m_conn.keepAlive.pending)
+				m_conn.keepAlive.stop();
+			if (m_conn.tlsStream) m_conn.tlsStream.finalize(); // TLS has an alert for connection closure
+			if (m_conn.tcp) {
+				m_conn.tcp.finalize();
+				m_conn.tcp.close();
+			}
+			m_conn.tcp = null;
+			m_conn.tlsStream = null;
+		}
+
+		if (isHTTP2Started && !rst_stream && !m_http2Context.closing) {
+			if (m_http2Context.pinger !is Timer.init && m_http2Context.pinger.pending)
+				m_http2Context.pinger.stop();
+			// closing an HTTP2 Session & TCP Connection
+
+			// the event loop may take time, so make sure no other streams get started
+			m_http2Context.closing = true;
+
+			import libhttp2.frame : FrameError;
+			if (m_state.http2Stream && m_state.http2Stream.connected) {
+				finalize();
+			}
+			m_http2Context.session.stop(FrameError.NO_ERROR, reason);
+			closeTCP();
+			m_http2Context.worker.join();
+			m_http2Context.closing = false;
+		}
+		else if (isHTTP2Started && rst_stream) {
+			if (m_state.http2Stream && m_state.http2Stream.connected) {
+				try m_state.http2Stream.close();
 				catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
-				m_conn.close();
 			}
-			if (m_stream !is m_conn) {
-				destroy(m_stream);
-				m_stream = null;
-			}
-			destroy(m_conn);
-			m_conn = null;
+			m_state.http2Stream.destroy();
+			m_state.http2Stream = null;
 		}
-	}
-
-	private void doProxyRequest(T, U)(T* res, U requester, ref bool close_conn, ref bool has_body)
-	{
-		version (VibeManualMemoryManagement) {
-			scope request_allocator = new PoolAllocator(1024, defaultAllocator());
-			scope(exit) request_allocator.reset();
-		} else auto request_allocator = defaultAllocator();
-		import std.conv : to;
-
-		res.dropBody();
-		scope(failure)
-			res.disconnect();
-		if (res.statusCode != 407) {
-			throw new HTTPStatusException(HTTPStatus.internalServerError, "Proxy returned Proxy-Authenticate without a 407 status code.");
+		else if (!isHTTP2Started && m_conn.tcp && m_conn.tcp.connected) {
+			finalize();
+			closeTCP();
 		}
-
-		// send the request again with the proxy authentication information if available
-		if (m_settings.proxyURL.username is null) {
-			throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required.");
+		else {
+			// no need to disconnect anything...
 		}
-
-		m_responding = false;
-		close_conn = false;
-		bool found_proxy_auth;
-
-		foreach (string proxyAuth; res.headers.getAll("Proxy-Authenticate"))
-		{
-			if (proxyAuth.length >= "Basic".length && proxyAuth[0.."Basic".length] == "Basic")
-			{
-				found_proxy_auth = true;
-				break;
-			}
-		}
-
-		if (!found_proxy_auth)
-		{
-			throw new HTTPStatusException(HTTPStatus.notAcceptable, "The Proxy Server didn't allow Basic Authentication");
-		}
-
-		SysTime connected_time = Clock.currTime(UTC());
-		has_body = doRequest(requester, &close_conn, true, connected_time);
-		m_responding = true;
-
-		static if (is (T == HTTPClientResponse*))
-			*res = new HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
-		else
-			*res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
-
-		if (res.headers.get("Proxy-Authenticate", null) !is null){
-			res.dropBody();
-			throw new HTTPStatusException(HTTPStatus.ProxyAuthenticationRequired, "Proxy Authentication Failed.");
-		}
-
 	}
 
 	/**
@@ -392,151 +530,264 @@ final class HTTPClient {
 	*/
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	{
-		version (VibeManualMemoryManagement) {
-			scope request_allocator = new PoolAllocator(1024, defaultAllocator());
-			scope(exit) request_allocator.reset();
-		} else auto request_allocator = defaultAllocator();
-
-		SysTime connected_time = Clock.currTime(UTC());
-
-		bool close_conn = false;
-		bool has_body = doRequest(requester, &close_conn, false, connected_time);
-		m_responding = true;
-		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
-
-		// proxy implementation
-		if (res.headers.get("Proxy-Authenticate", null) !is null) {
-			doProxyRequest(&res, requester, close_conn, has_body);
+				
+		if (m_conn.nextTimeout == Duration.zero) {
+			logDebug("Set keep-alive timer to: %s", m_settings.defaultKeepAliveTimeout.total!"msecs");
+			m_conn.keepAlive = setTimer(m_settings.defaultKeepAliveTimeout, &onKeepAlive, false);
+			m_conn.nextTimeout = m_settings.defaultKeepAliveTimeout;
 		}
-
-		Exception user_exception;
+		if (isHTTP2Started && m_http2Context.closing)
 		{
-			scope (failure) {
-				m_responding = false;
-				disconnect();
-			}
-			try responder(res);
-			catch (Exception e) {
-				logDebug("Error while handling response: %s", e.toString().sanitize());
-				user_exception = e;
-			}
-			if (m_responding) {
-				logDebug("Failed to handle the complete response of the server - disconnecting.");
-				res.disconnect();
-			}
-			assert(!m_responding, "Still in responding state after finalizing the response!?");
-
-			if (user_exception || res.headers.get("Connection") == "close")
-				disconnect();
+			m_http2Context.worker.join(); // finish closing ...
+			connect();
 		}
-		if (user_exception) throw user_exception;
+		else if (!m_conn.tcp || !m_conn.tcp.connected)
+			connect();
+		else if (++m_conn.totRequest >= m_conn.maxRequests)
+			reconnect("Max keep-alive requests exceeded");
+
+		bool keepalive;
+		HTTPMethod req_method;
+		processRequest(requester, req_method, keepalive);
+		processResponse(responder, req_method, keepalive);
+
+		if (!keepalive)
+			m_conn.keepAliveTimeout = Duration.zero;
 	}
 
 	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
 	{
-		bool close_conn = false;
-		auto connected_time = Clock.currTime(UTC());
-		bool has_body = doRequest(requester, &close_conn, false, connected_time);
-		m_responding = true;
-		auto res = new HTTPClientResponse(this, has_body, close_conn, defaultAllocator(), connected_time);
-
-		// proxy implementation
-		if (res.headers.get("Proxy-Authenticate", null) !is null) {
-			doProxyRequest(&res, requester, close_conn, has_body);
+		if (isHTTP2Started && m_http2Context.closing)
+		{
+			m_http2Context.worker.join();
+			connect();
 		}
+		else if (!m_conn.tcp || !m_conn.tcp.connected)
+			connect();
+		else if (++m_conn.totRequest >= m_conn.maxRequests)
+			reconnect("Max keep-alive requests exceeded");
 
+		bool keepalive;
+		HTTPClientResponse res;
+		m_state.responding = false;
+		HTTPMethod req_method;
+		processRequest(requester, req_method, keepalive);
+		m_state.responding = true;
+		res = new HTTPClientResponse(this, req_method, keepalive);
 		return res;
 	}
 
 
-
-	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn, bool confirmed_proxy_auth = false /* basic only */, SysTime connected_time = Clock.currTime(UTC()))
+	private LockedConnection!HTTPClient lockConnection()
 	{
-		assert(!m_requesting, "Interleaved HTTP client requests detected!");
-		assert(!m_responding, "Interleaved HTTP client request/response detected!");
+		if (!m_http2Context.pool)
+			m_http2Context.pool = new ConnectionPool!HTTPClient(&connectionFactory);
+		return m_http2Context.pool.lockConnection();
+	}
 
-		m_requesting = true;
-		scope(exit) m_requesting = false;
+	private auto connectionFactory() {
+		HTTPClient client = new HTTPClient;
+		client.m_conn = m_conn;
+		client.m_http2Context = m_http2Context;
+		client.m_settings = m_settings;
+		return client;
+	}
+	
+	private void processRequest(scope void delegate(HTTPClientRequest req) requester, ref HTTPMethod req_method, ref bool keepalive)
+	{
+		assert(!m_state.requesting, "Interleaved HTTP client requests detected!");
+		assert(!m_state.responding, "Interleaved HTTP client request/response detected!");
 
-		if (m_conn && m_conn.connected && connected_time > m_keepAliveLimit){
-			logDebug("Disconnected to avoid timeout");
-			disconnect();
-		}
-
-		if (!m_conn || !m_conn.connected) {
-			if (m_conn) m_conn.close(); // make sure all resources are freed
-			if (m_settings.proxyURL.host !is null){
-
-				enum AddressType {
-					IPv4,
-					IPv6,
-					Host
-				}
-
-				static AddressType getAddressType(string host){
-					import std.regex : regex, Captures, Regex, matchFirst;
-
-					__gshared auto IPv4Regex = regex(`^\s*((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\s*$`, ``);
-					__gshared auto IPv6Regex = regex(`^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$`, ``);
-
-					if (!matchFirst(host, IPv4Regex).empty)
-					{
-						return AddressType.IPv4;
-					}
-					else if (!matchFirst(host, IPv6Regex).empty)
-					{
-						return AddressType.IPv6;
-					}
-					else
-					{
-						return AddressType.Host;
-					}
-				}
-
-				import std.functional : memoize;
-				alias findAddressType = memoize!getAddressType;
-
-				bool use_dns;
-				if (findAddressType(m_settings.proxyURL.host) == AddressType.Host)
-				{
-					use_dns = true;
-				}
-
-				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
-				proxyAddr.port = m_settings.proxyURL.port;
-				m_conn = connectTCP(proxyAddr);
-			}
-			else
-				m_conn = connectTCP(m_server, m_port);
-
-			m_stream = m_conn;
-			if (m_tls) m_stream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
-		}
-
-		auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
-		req.headers["User-Agent"] = m_userAgent;
-		if (m_settings.proxyURL.host !is null){
-			req.headers["Proxy-Connection"] = "keep-alive";
-			*close_conn = false; // req.headers.get("Proxy-Connection", "keep-alive") != "keep-alive";
-			if (confirmed_proxy_auth)
-			{
-				import std.base64;
-				ubyte[] user_pass = cast(ubyte[])(m_settings.proxyURL.username ~ ":" ~ m_settings.proxyURL.password);
-
-				req.headers["Proxy-Authorization"] = "Basic " ~ cast(string) Base64.encode(user_pass);
-			}
-		}
-		else {
-			req.headers["Connection"] = "keep-alive";
-			*close_conn = false; // req.headers.get("Connection", "keep-alive") != "keep-alive";
-		}
-		req.headers["Accept-Encoding"] = "gzip, deflate";
-		req.headers["Host"] = m_server;
+		m_state.requesting = true;
+		if (isHTTP2Started) m_state.http2Stream = m_http2Context.session.startRequest();
+		scope(exit) m_state.requesting = false;
+		string user_agent = m_settings.userAgent ? m_settings.userAgent : ms_userAgent;
+		Duration latency = Duration.zero;
+		logDebug("Creating scoped client");
+		auto req = scoped!HTTPClientRequest(m_conn, m_state.http2Stream, m_settings.proxyURL, user_agent, canUpgradeHTTP2,
+											m_http2Context ? m_http2Context.latency : latency, keepalive);
+		logDebug("Calling callback");
 		requester(req);
-		req.finalize();
 
-		return req.method != HTTPMethod.HEAD;
+		// after requester, to make sure it doesn't get corrupted
+		if (canUpgradeHTTP2)
+			startHTTP2Upgrade(req.headers);
+		req.finalize();
+		logDebug("Sent request");
+		req_method = req.method;
+	}
+
+	private void processResponse(scope void delegate(scope HTTPClientResponse) responder, ref HTTPMethod req_method, ref bool keepalive) 
+	{
+		// fixme: Close HTTP/2 session when a response is not handled properly?
+
+		m_state.responding = true;
+		logDebug("Processing response");
+		if (m_settings.defaultKeepAliveTimeout != Duration.zero)
+			keepalive = true;
+		auto res = scoped!HTTPClientResponse(this, req_method, keepalive);
+		logDebug("Response loaded");
+		Exception user_exception;
+		{
+			scope (failure) {
+				if (!isHTTP2Started) disconnect();
+			}
+
+			/// Throws exception if a proxy request was invalid
+			if (m_settings.proxyURL.host !is null)
+				verifyProxy(res.headers, cast(HTTPStatus)res.statusCode);
+
+			try // Response callback
+				responder(res);
+			catch (Exception e) {
+				logDebug("Error while handling response: %s", e.toString().sanitize());
+				disconnect(false, "Internal error");
+				user_exception = e;
+			}
+			if (m_state.responding) {
+				logDebug("Failed to handle the complete response of the server - disconnecting.");
+				res.disconnect();
+			}
+			assert(!m_state.responding, "Still in responding state after finalizing the response!?");
+			
+			if (!isHTTP2Started && res.headers.get("Connection") == "close")
+				disconnect();
+		}
+		if (user_exception) throw user_exception;
+	}
+
+	private void startHTTP2Upgrade(ref InetHeaderMap headers) {
+		logDebug("Starting HTTP/2 Upgrade");
+		HTTP2Settings local_settings = getHTTP2Settings(m_settings);
+		HTTP2Stream stream;
+		m_http2Context.session = new HTTP2Session(m_conn.tcp, stream, local_settings, &onRemoteSettings);
+		m_state.http2Stream = stream;
+		m_http2Context.worker = runTask(&runHTTP2Worker, true); // delayed start
+		m_http2Context.isUpgrading = true;
+
+		headers["Connection"] = "Upgrade, HTTP2-Settings";
+		headers["Upgrade"] = "h2c";
+		headers["HTTP2-Settings"] = cast(string)local_settings.toBase64Settings();
+
+	}
+
+	// returns true if now using HTTP/2
+	private void finalizeHTTP2Upgrade(string upgrade_hd) {
+		// continue HTTP/2 initialization using upgrade mechanism
+		if (m_http2Context.isUpgrading && upgrade_hd.length >= 3 && upgrade_hd[0 .. 3] == "h2c") {
+			// we have an HTTP/2 connection
+			m_http2Context.isUpgrading = false;
+			m_http2Context.isSupported = true;
+			m_http2Context.isValidated = true;
+			logDebug("Session resume");
+			m_http2Context.session.resume();
+		}
+		else if (m_http2Context.isUpgrading && (upgrade_hd.length < 3 || upgrade_hd[0 .. 3] != "h2c"))
+		{
+			m_http2Context.isUpgrading = false;
+			m_http2Context.isSupported = false;
+			m_http2Context.isValidated = true;
+			logDebug("Session abort");
+			m_http2Context.session.abort(m_state.http2Stream);
+			m_state.http2Stream = null;
+			m_http2Context.worker.join();
+		}
+	}
+
+	private void extendKeepAliveTimeout() {
+		m_conn.rearmKeepAlive();
+	}
+
+	/// Verify proxy response
+	private void verifyProxy(ref InetHeaderMap headers, HTTPStatus status_code) {
+		// proxy implementation
+		if (headers.get("Proxy-Authenticate", null) !is null) {
+			if (status_code == 407) {
+				// send the request again with the proxy authentication information if available
+				if (m_settings.proxyURL.username is null) {
+					throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required - No Username Provided.");
+				}
+				throw new HTTPStatusException(HTTPStatus.proxyAuthenticationRequired, "Proxy Authentication Required - Wrong Username Provided.");
+			}
+			
+			throw new HTTPStatusException(HTTPStatus.ProxyAuthenticationRequired, "Proxy Authentication Failed With Error: " ~ status_code.to!string);
+		}
+	}
+	
+
+	private void runHTTP2Worker(bool upgrade = false) 
+	{
+		logDebug("Running HTTP/2 worker");
+
+		m_http2Context.session.setReadTimeout(m_settings.connectionTimeout);
+		m_http2Context.session.setWriteTimeout(m_settings.connectionTimeout);
+		m_http2Context.session.setPauseTimeout(m_settings.connectionTimeout);
+
+		// starting...
+		m_http2Context.session.run(upgrade);
+		// stopped here
+
+		// all data is cleaned up in run()
+		m_http2Context.session = null;
+		m_http2Context.worker = Task();
+		if (m_http2Context.pinger !is Timer.init && m_http2Context.pinger.pending)
+			m_http2Context.pinger.stop();
+		m_http2Context.closing = false;
+		m_http2Context.pool.destroy();
+		m_http2Context.pool = null;
+		m_state.http2Stream = null;
+
+		if (!upgrade || (upgrade && !unsupportedHTTP2)) {
+			m_conn.keepAliveTimeout = 0.seconds;
+			m_conn.tlsStream = null;
+			m_conn.tcp = null;
+		}
+		logDebug("Cleaned HTTP/2 worker");
+		
+	}
+
+	private void onKeepAlive() {
+		logDebug("Keep-alive timeout");
+		disconnect(false, "Keep-alive Timeout");
+	}
+
+	/// will update m_http2Context.latency with the latest latency
+	private void ping()
+	{
+		Duration latency;
+		logDebug("Running ping");
+		auto cb = getEventDriver().createManualEvent();
+		SysTime start = Clock.currTime();
+		long sent = start.stdTime();
+		SysTime recv;
+		PingData data = PingData(sent, &recv, cb);
+		
+		m_http2Context.session.ping(data);
+		
+		cb.wait();
+		cb.destroy();
+		m_http2Context.latency = recv - start;
+	}
+
+	private void onPing() {
+		if (!isHTTP2Started && !canUpgradeHTTP2)
+			m_http2Context.pinger.stop();
+		else runTask(&ping);
+	}
+
+	private void onRemoteSettings(ref HTTP2Settings settings)
+	{
+		if (!m_http2Context.pool)
+			m_http2Context.pool = new ConnectionPool!HTTPClient(&connectionFactory);
+		m_http2Context.pool.maxConcurrency = settings.maxConcurrentStreams;
+	}
+
+	private HTTP2Settings getHTTP2Settings(HTTPClientSettings settings)
+	{
+		HTTP2Settings ret;
+		// ...
+		return ret;
 	}
 }
 
@@ -546,21 +797,65 @@ final class HTTPClient {
 */
 final class HTTPClientRequest : HTTPRequest {
 	private {
+		HTTPClientConnection m_conn;
+		HTTP2Stream m_http2Stream;
 		OutputStream m_bodyWriter;
-		bool m_headerWritten = false;
+		bool m_headerWritten;
+		bool m_isUpgrading;
 		FixedAppender!(string, 22) m_contentLengthBuffer;
 		NetworkAddress m_localAddress;
-	}
+		Duration* m_latency;
 
+		@property inout(Stream) topStream()
+		inout {
+			if (m_http2Stream && !m_isUpgrading) return m_http2Stream;
+			if (m_conn.tlsStream) return m_conn.tlsStream;
+			return m_conn.tcp;
+		}
+	}
 
 	/// private
-	this(Stream conn, NetworkAddress local_addr)
+	this(HTTPClientConnection conn, HTTP2Stream http2, URL proxy, string user_agent, bool is_http2_upgrading, 
+		 ref Duration latency, ref bool keepalive)
 	{
-		super(conn);
-		m_localAddress = local_addr;
+
+		m_conn = conn;
+		m_http2Stream = http2;
+		m_latency = &latency;
+		m_isUpgrading = is_http2_upgrading;
+
+		if (!m_http2Stream)
+			httpVersion = HTTPVersion.HTTP_1_1;
+		else
+			httpVersion = HTTPVersion.HTTP_2;
+
+		if (m_conn.port != 0 && m_conn.port != 80)
+			headers["Host"] = format("%s:%d", m_conn.server, m_conn.port);
+		else headers["Host"] = m_conn.server;
+		headers["User-Agent"] = user_agent;
+
+		if (proxy.host !is null){
+			headers["Proxy-Connection"] = "keep-alive";
+
+			import std.base64;			
+			headers["Proxy-Authorization"] = "Basic " ~ cast(string) Base64.encode(cast(ubyte[])format("%s:%s", proxy.username, proxy.password));
+
+		}
+		else if (!m_http2Stream && !is_http2_upgrading && httpVersion == HTTPVersion.HTTP_1_1) {
+			headers["Connection"] = "keep-alive";
+			keepalive = true; // req.headers.get("Connection", "keep-alive") != "keep-alive";
+		}
+
+		headers["Accept-Encoding"] = "gzip, deflate";
 	}
 
-	@property NetworkAddress localAddress() const { return m_localAddress; }
+	/// True if this request is being made under an established HTTP/2 session
+	@property bool isHTTP2() { return m_http2Stream !is null; }
+
+	/// Returns the last latency recorded by the HTTP/2 session
+	@property Duration latency() { return *m_latency; }
+
+	@property NetworkAddress localAddress() const { return m_conn.tcp.localAddress; }
 
 	/**
 		Accesses the Content-Length header of the request.
@@ -573,6 +868,16 @@ final class HTTPClientRequest : HTTPRequest {
 	{
 		if (value >= 0) headers["Content-Length"] = clengthString(value);
 		else if ("Content-Length" in headers) headers.remove("Content-Length");
+	}
+
+	/// Produces a ping request to evaluate the connection latency, or zero if HTTP/2 was not active
+	Duration ping()
+	{
+		if (isHTTP2) {
+			*m_latency = m_http2Stream.ping();
+			return *m_latency;
+		}
+		return Duration.zero;
 	}
 
 	/**
@@ -646,14 +951,13 @@ final class HTTPClientRequest : HTTPRequest {
 
 		assert(!m_headerWritten, "Trying to write request body after body was already written.");
 
-		if ("Content-Length" !in headers && "Transfer-Encoding" !in headers
-			&& headers.get("Connection", "") != "close")
+		if (!isHTTP2 && "Content-Length" !in headers && "Transfer-Encoding" !in headers && headers.get("Connection", "") != "close")
 		{
 			headers["Transfer-Encoding"] = "chunked";
 		}
 
 		writeHeader();
-		m_bodyWriter = m_conn;
+		m_bodyWriter = topStream();
 
 		if (headers.get("Transfer-Encoding", null) == "chunked")
 			m_bodyWriter = new ChunkedOutputStream(m_bodyWriter);
@@ -664,11 +968,18 @@ final class HTTPClientRequest : HTTPRequest {
 	private void writeHeader()
 	{
 		import vibe.stream.wrapper;
-
 		assert(!m_headerWritten, "HTTPClient tried to write headers twice.");
 		m_headerWritten = true;
 
-		auto output = StreamOutputRange(m_conn);
+		// http/2
+		if (isHTTP2) {
+			logDebug("Writing HTTP/2 headers");
+			m_http2Stream.writeHeader(requestURL, m_conn.tlsStream ? "https" : "http", method, headers);
+			return;
+		}
+
+		/// http/1.1 or lower
+		auto output = StreamOutputRange(topStream);
 
 		formattedWrite(&output, "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		logTrace("--------------------");
@@ -685,20 +996,25 @@ final class HTTPClientRequest : HTTPRequest {
 
 	private void finalize()
 	{
+		logDebug("Finalize request");
 		// test if already finalized
-		if (m_headerWritten && !m_bodyWriter)
+		if (m_headerWritten && !m_bodyWriter) {
+			logDebug("Already finalized...");
 			return;
-
+		}
 		// force the request to be sent
 		if (!m_headerWritten) writeHeader();
 		else {
 			bodyWriter.flush();
-			if (m_bodyWriter !is m_conn) {
+			if (m_bodyWriter !is cast(OutputStream)topStream) {
 				m_bodyWriter.finalize();
-				m_conn.flush();
+				topStream.flush();
 			}
 			m_bodyWriter = null;
 		}
+
+		// we may have a shot at an atomic request here. This will half-close the stream
+		if (m_http2Stream) m_http2Stream.finalize();
 	}
 
 	private string clengthString(ulong len)
@@ -717,14 +1033,19 @@ final class HTTPClientResponse : HTTPResponse {
 	private {
 		HTTPClient m_client;
 		LockedConnection!HTTPClient lockedConnection;
+
+		// todo: move these to unions and manual allocations
 		FreeListRef!LimitedInputStream m_limitedInputStream;
 		FreeListRef!ChunkedInputStream m_chunkedInputStream;
 		FreeListRef!GzipInputStream m_gzipInputStream;
 		FreeListRef!DeflateInputStream m_deflateInputStream;
 		FreeListRef!EndCallbackInputStream m_endCallback;
+
 		InputStream m_bodyReader;
-		bool m_closeConn;
-		int m_maxRequests;
+		Allocator m_alloc;
+		bool m_keepAlive;
+		bool m_finalized;
+		int m_maxRequests = int.max;
 	}
 
 	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can
@@ -733,70 +1054,126 @@ final class HTTPClientResponse : HTTPResponse {
 		return m_maxRequests;
 	}
 
+	// fixme: This isn't the best approximation
+	private bool expectBody(HTTPMethod req_method) {
+		if (req_method == HTTPMethod.HEAD)
+			return false;
+
+		return true;
+	}
+
 	/// private
-	this(HTTPClient client, bool has_body, bool close_conn, Allocator alloc = defaultAllocator(), SysTime connected_time = Clock.currTime(UTC()))
+	this(HTTPClient client, HTTPMethod req_method, ref bool keepalive)
 	{
+		version (VibeManualMemoryManagement) {
+			m_alloc = new PoolAllocator(1024, defaultAllocator());
+		} else m_alloc = defaultAllocator();
+
 		m_client = client;
-		m_closeConn = close_conn;
+		m_keepAlive = keepalive;
 
 		scope(failure) finalize(true);
+		scope(exit) if (!expectBody(req_method)) finalize();
 
-		// read and parse status line ("HTTP/#.# #[ $]\r\n")
-		logTrace("HTTP client reading status line");
-		string stln = cast(string)client.m_stream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", alloc);
-		logTrace("stln: %s", stln);
-		this.httpVersion = parseHTTPVersion(stln);
+		m_client.m_conn.rearmKeepAlive();
 
-		enforce(stln.startsWith(" "));
-		stln = stln[1 .. $];
-		this.statusCode = parse!int(stln);
-		if( stln.length > 0 ){
+		if (m_client.isHTTP2Started) {
+			logDebug("get response");
+			// process HTTP/2 compressed headers
+			m_client.m_state.http2Stream.readHeader(this.statusCode, this.headers, m_alloc);
+			this.statusPhrase = httpStatusText(this.statusCode);
+		}
+		else {
+			// read and parse status line ("HTTP/#.# #[ $]\r\n")
+			logTrace("HTTP client reading status line");
+			string stln = cast(string)client.topStream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", m_alloc);
+			logTrace("stln: %s", stln);
+			this.httpVersion = parseHTTPVersion(stln);
+
 			enforce(stln.startsWith(" "));
 			stln = stln[1 .. $];
-			this.statusPhrase = stln;
-		}
+			this.statusCode = parse!int(stln);
+			if( stln.length > 0 ){
+				enforce(stln.startsWith(" "));
+				stln = stln[1 .. $];
+				this.statusPhrase = stln;
+			}
 
-		// read headers until an empty line is hit
-		parseRFC5322Header(client.m_stream, this.headers, HTTPClient.maxHeaderLineLength, alloc, false);
+			// read headers until an empty line is hit
+			parseRFC5322Header(client.topStream, this.headers, HTTPClient.maxHeaderLineLength, m_alloc, false);
+
+			auto upgrade_hd = this.headers.get("Upgrade", "");
+			logDebug("Finalizing the upgrade process");
+			m_client.finalizeHTTP2Upgrade(upgrade_hd);
+		}
 
 		logTrace("---------------------");
 		logTrace("HTTP client response:");
 		logTrace("---------------------");
 		logTrace("%s", this);
-		foreach (k, v; this.headers)
+		foreach (k, v; this.headers) {
 			logTrace("%s: %s", k, v);
+		}
 		logTrace("---------------------");
 
-		Duration server_timeout;
-		bool has_server_timeout;
-		if (auto pka = "Keep-Alive" in this.headers) {
-			foreach(s; splitter(*pka, ',')){
-				auto pair = s.splitter('=');
-				auto name = pair.front.strip();
-				pair.popFront();
-				if (icmp(name, "timeout") == 0) {
-					has_server_timeout = true;
-					server_timeout = pair.front.to!int().seconds;
-				} else if (icmp(name, "max") == 0) {
-					m_maxRequests = pair.front.to!int();
+		// Treat HTTP/2 keep-alive and return
+		if (m_client.isHTTP2Started)
+			return;
+
+		// Additional routines for HTTP/1.1 keep-alive headers handling
+		{
+			Duration server_timeout;
+			bool has_server_timeout;
+
+			if (auto pka = "Keep-Alive" in this.headers) {
+				foreach(s; splitter(*pka, ',')){
+					auto pair = s.splitter('=');
+					auto name = pair.front.strip();
+					pair.popFront();
+					if (icmp2(name, "timeout") == 0) {
+						has_server_timeout = true;
+						server_timeout = pair.front.to!int().seconds;
+					} else if (icmp2(name, "max") == 0) {
+						m_maxRequests = pair.front.to!int();
+						m_client.m_conn.maxRequests = m_maxRequests;
+					}
 				}
+				keepalive = true;
+			}
+
+			if (has_server_timeout && m_client.m_settings.defaultKeepAliveTimeout > server_timeout)
+				m_client.m_conn.keepAliveTimeout = server_timeout;
+			else if (this.httpVersion == HTTPVersion.HTTP_1_0) {
+				keepalive = false;
+				m_client.m_conn.keepAliveTimeout = Duration.zero;
 			}
 		}
-		Duration elapsed = Clock.currTime(UTC()) - connected_time;
-		if (this.headers.get("Connection") == "close") {
-			// this header will trigger m_client.disconnect() in m_client.doRequest() when it goes out of scope
-		} else if (has_server_timeout && m_client.m_keepAliveTimeout > server_timeout) {
-			m_client.m_keepAliveLimit = Clock.currTime(UTC()) + server_timeout - elapsed;
-		} else if (this.httpVersion == HTTPVersion.HTTP_1_1) {
-			m_client.m_keepAliveLimit = Clock.currTime(UTC()) + m_client.m_keepAliveTimeout;
-		}
 
-		if (!has_body) finalize();
 	}
 
 	~this()
 	{
-		debug if (m_client) { import std.stdio; writefln("WARNING: HTTPClientResponse not fully processed before being finalized"); }
+		debug if (m_client && m_client.m_state.responding) { import std.stdio; writefln("WARNING: HTTPClientResponse not fully processed before being finalized"); }
+		if (m_client && m_client.m_state.responding) finalize();
+	}
+
+	/// True if this response is encapsulated by an HTTP/2 session
+	@property bool isHTTP2() {
+		return m_client.isHTTP2Started;
+	}
+
+	/// Returns the last recorded latency for this HTTP/2 session
+	@property Duration latency() {
+		return isHTTP2 ? m_client.m_http2Context.latency : Duration.zero();
+	}
+
+	/// Produces a ping request to evaluate the connection latency, or zero if HTTP/2 was not active
+	Duration ping() {
+		if (isHTTP2) {
+			m_client.ping();
+			return m_client.m_http2Context.latency;
+		}
+		return Duration.zero;
 	}
 
 	/**
@@ -804,33 +1181,48 @@ final class HTTPClientResponse : HTTPResponse {
 	*/
 	@property InputStream bodyReader()
 	{
-		if( m_bodyReader ) return m_bodyReader;
+		if( m_bodyReader ) { 
+			logDebug("Returning bodyreader: http2? %s", isHTTP2.to!string);
+			return m_bodyReader;
+		}
 
+		logDebug("Creating bodyreader: http2? %s", isHTTP2.to!string);
 		assert (m_client, "Response was already read or no response body, may not use bodyReader.");
 
+		m_bodyReader = m_client.topStream;
 		// prepare body the reader
 		if( auto pte = "Transfer-Encoding" in this.headers ){
-			enforce(*pte == "chunked");
-			m_chunkedInputStream = FreeListRef!ChunkedInputStream(m_client.m_stream);
-			m_bodyReader = this.m_chunkedInputStream;
+			if (icmp2(*pte, "chunked") == 0) {
+				m_chunkedInputStream = FreeListRef!ChunkedInputStream(m_client.topStream);
+				m_bodyReader = this.m_chunkedInputStream;
+			}
+			// todo: Handle Transfer-Encoding: gzip
+			//else if (!handleCompression(*pte))
+			else enforce(icmp2(*pte, "identity") == 0, "Unsuported Transfer-Encoding: "~*pte);
 		} else if( auto pcl = "Content-Length" in this.headers ){
-			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.m_stream, to!ulong(*pcl));
+			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.topStream, to!ulong(*pcl));
 			m_bodyReader = m_limitedInputStream;
-		} else {
-			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.m_stream, 0);
+		} else if (!isHTTP2) {
+			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.topStream, 0);
 			m_bodyReader = m_limitedInputStream;
 		}
 
-		if( auto pce = "Content-Encoding" in this.headers ){
-			if( *pce == "deflate" ){
+		bool handleCompression(string val) {
+			if (icmp2(val, "deflate") == 0){
 				m_deflateInputStream = FreeListRef!DeflateInputStream(m_bodyReader);
 				m_bodyReader = m_deflateInputStream;
-			} else if( *pce == "gzip" ){
+				return true;
+			} else if (icmp2(val, "gzip") == 0){
 				m_gzipInputStream = FreeListRef!GzipInputStream(m_bodyReader);
 				m_bodyReader = m_gzipInputStream;
+				return true;
 			}
-			else enforce(*pce == "identity", "Unsuported content encoding: "~*pce);
+			return false;
 		}
+
+		if( auto pce = "Content-Encoding" in this.headers )
+			if (!handleCompression(*pce))
+				enforce(icmp2(*pce, "identity") == 0, "Unsuported Content-Encoding: "~*pce);
 
 		// be sure to free resouces as soon as the response has been read
 		m_endCallback = FreeListRef!EndCallbackInputStream(m_bodyReader, &this.finalize);
@@ -852,7 +1244,7 @@ final class HTTPClientResponse : HTTPResponse {
 	void readRawBody(scope void delegate(scope InputStream stream) del)
 	{
 		assert(!m_bodyReader, "May not mix use of readRawBody and bodyReader.");
-		del(m_client.m_stream);
+		del(cast(InputStream)m_client.topStream);
 		finalize();
 	}
 
@@ -869,8 +1261,8 @@ final class HTTPClientResponse : HTTPResponse {
 	*/
 	void dropBody()
 	{
-		if (m_client) {
-			if( bodyReader.empty ){
+		if (!m_finalized && m_client) {
+			if (bodyReader.empty) {
 				finalize();
 			} else {
 				nullSink().write(bodyReader);
@@ -881,16 +1273,20 @@ final class HTTPClientResponse : HTTPResponse {
 
 	/**
 		Forcefully terminates the connection regardless of the current state.
+		If a reason is used and this is an HTTP/2 stream, all HTTP/2 streams
+		will be forcefully closed as well.
 
-		Note that this will only actually disconnect if the request has not yet
-		been fully processed. If the whole body was already read, the
-		connection is not owned by the current request operation anymore and
-		cannot be accessed. Use a "Connection: close" header instead in this
-		case to let the server close the connection.
+		Note that for HTTP/1.0 and HTTP/1.1,  this will only actually disconnect 
+		if the request has not yet been fully processed. If the whole body was 
+		already read, the connection is not owned by the current request operation 
+		anymore and cannot be accessed. Use a "Connection: close" header instead 
+		in this case to let the server close the connection.
 	*/
-	void disconnect()
+	void disconnect(string reason = "")
 	{
-		finalize(true);
+		if (m_client && m_client.isHTTP2Started)
+			m_client.disconnect(false, reason);
+		else finalize(false);
 	}
 
 	/**
@@ -907,34 +1303,117 @@ final class HTTPClientResponse : HTTPResponse {
 		string *resNewProto = "Upgrade" in headers;
 		enforce(resNewProto, "Server did not send an Upgrade header");
 		enforce(*resNewProto == newProtocol, "Expected Upgrade: " ~ newProtocol ~", received Upgrade: " ~ *resNewProto);
-		auto stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
-		m_client.m_responding = false;
-		m_client = null;
-		return stream;
+		if (auto cs = cast(ConnectionStream)m_client.topStream) return cs;
+		return new ConnectionProxyStream(m_client.topStream, m_client.m_conn.tcp);
 	}
 
 	private void finalize()
 	{
-		finalize(m_closeConn);
+		finalize(m_keepAlive);
 	}
 
-	private void finalize(bool disconnect)
+	private void finalize(bool keepalive)
 	{
 		// ignore duplicate and too early calls to finalize
 		// (too early happesn for empty response bodies)
-		if (!m_client) return;
+		if (m_finalized) return;
+		m_finalized = true;
 
 		auto cli = m_client;
-		m_client = null;
-		cli.m_responding = false;
+		cli.m_state.responding = false;
 		destroy(m_deflateInputStream);
 		destroy(m_gzipInputStream);
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
-		if (disconnect) cli.disconnect();
+		if (!keepalive && !cli.isHTTP2Started) cli.disconnect();
+		destroy(m_endCallback);
 		destroy(lockedConnection);
+		if (auto alloc = cast(PoolAllocator) m_alloc)
+			alloc.reset();
+		m_alloc = null;
+		m_keepAlive = false;
+		m_maxRequests = int.max;
 	}
 }
+
+private class HTTPClientConnection {
+	string server;
+	ushort port;
+	bool forceTLS;
+	TCPConnection tcp;
+	TLSStream tlsStream;
+	TLSContext tlsContext;
+	Timer keepAlive;
+	Duration nextTimeout; //keepalive
+	int totRequest;
+	int maxRequests = int.max;
+
+	void rearmKeepAlive() {
+		if (keepAlive is Timer.init) {
+			logTrace("Keep-alive is init");
+			return;
+		}
+		if (nextTimeout == Duration.zero) {
+			logTrace("NextTimeout is zero");
+			if (keepAlive.pending) {
+				logTrace("Stopped timer");
+				keepAlive.stop();
+			}
+			return;
+		}
+		logTrace("Rearming to: %s", nextTimeout);
+		keepAlive.rearm(nextTimeout);
+	}
+
+	@property Duration keepAliveTimeout() { return nextTimeout; }
+
+	@property void keepAliveTimeout(Duration timeout) {
+		if (keepAlive is Timer.init) {
+			logTrace("Keep-alive is init");
+			return;
+		}
+		if (timeout != nextTimeout) {
+			logTrace("Keep-alive from %s to %s", nextTimeout.total!"msecs", timeout.total!"msecs");
+			nextTimeout = timeout;
+		}
+		if (Duration.zero == timeout) {
+			logTrace("Got zero keep-alive timeout");
+			if (keepAlive.pending) {
+				logTrace("Stop keep-alive");
+				keepAlive.stop();
+			}
+		}
+		else {
+			logTrace("Re-arming keep-alive to: %s", timeout.total!"msecs");
+			keepAlive.rearm(timeout);
+		}
+	}
+}
+
+private class HTTP2ClientContext {
+	int refcnt;
+	HTTP2Session session;
+	Task worker; // running the event loop async
+	ConnectionPool!HTTPClient pool;
+
+	/// true if peer was validated for HTTP/2 support
+	bool isValidated; 
+	/// true if peer has HTTP/2 support
+	bool isSupported;
+	/// true if upgrade is ongoing
+	bool isUpgrading;
+	/// true if the connection is going away, streams shouldn't open until reconnected
+	bool closing;
+
+	Duration latency;
+	Timer pinger;
+} 
+
+private struct HTTPClientState {
+	HTTP2Stream http2Stream;
+	bool requesting;
+	bool responding;
+} 
 
 // This object is a placeholder and should to never be modified.
 private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
