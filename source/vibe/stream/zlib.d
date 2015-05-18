@@ -93,7 +93,7 @@ class ZlibOutputStream : OutputStream {
 		if (m_finalized) return;
 		m_finalized = true;
 		doFlush(Z_FINISH);
-		m_out.flush();
+		m_out.finalize();
 		zlibEnforce(deflateEnd(&m_zstream));
 	}
 
