@@ -1,0 +1,10 @@
+﻿{
+	"name": "h2-request-example",
+	"description": "Performs a custom HTTP/2 request.",
+	"authors": [ "Sönke Ludwig", "Etienne Cimon" ],
+	"dependencies": {
+		"vibe-d": {"path": "../../"}
+	},
+	"subConfigurations": { "vibe-d": "libasync_botan" },
+	"versions": ["SecurePool","VibeCustomMain"]
+}
