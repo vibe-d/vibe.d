@@ -119,7 +119,8 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 		if ("authorization" !in req.headers && url.username != "") {
 			import std.base64;
 			string pwstr = url.username ~ ":" ~ url.password;
-			req.headers["Authorization"] = "Basic " ~ cast(string)Base64.encode(cast(ubyte[])pwstr);
+			req.headers["Authorization"] = "Basic " ~
+				cast(string)Base64.encode(cast(ubyte[])pwstr);
 		}
 		if (requester) requester(req);
 	}, responder);
@@ -148,6 +149,7 @@ unittest {
 		);
 	}
 }
+
 
 /**
 	Returns a HTTPClient proxy object that is connected to the specified host.
@@ -197,7 +199,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 
 	A new connection will be opened in requestHTTP for each different HTTPClientSettings.
 */
-class HTTPClientSettings {
+final class HTTPClientSettings {
 	/// If an HTTP proxy is used, the URL must be provided. It will be resolved,
 	/// and the HTTPClient will throw if it cannot connect to it
 	URL proxyURL;
@@ -211,27 +213,57 @@ class HTTPClientSettings {
 	/// All cookies will be processed from and to the cookiejar if specified
 	CookieStore cookieJar;
 
-	struct HTTP2 {
-		// If enabled, the client will always send a client preface without trying upgrade or checking the ALPN value.
-		bool forced;
-		/// If left enabled, HTTP/2 upgrade will take place and after a successful connection,
-		/// all further (concurrent or sequential) requests will be multiplexed over the same TCP Connection
-		/// until it is timed out through KeepAlive or inactivity.
-		bool disable;
-		/// Will not try upgrading the connection
-		bool disablePlainUpgrade = true;
-		/// send ping frames at pingInterval intervals to avoid peer inactivity timeout. Disabled by default
-		Duration pingInterval; 
-		/// max time the event loop is allowed to wait in read() or write()
-		Duration maxInactivity = 5.minutes;
-		/// Settings sent through protocol
-		/// fixme: Make this private and use properties?
-		HTTP2Settings settings;
-	} HTTP2 http2;
+	/// General option flags
+	HTTPClientOptions options = HTTPClientOption.defaults;
 
+	/** If set, sends ping frames at regular intervals to avoid peer inactivity timeout.
+
+		Note that this field only has an effect for HTTP/2 connections.
+	*/
+	Duration pingInterval; 
+	
+	/** Maxiumum time to wait when reading or writing data.
+
+		This setting only has an effect for HTTP/2 connections. When a read or
+		write operation takes longer than set here, the connection gets dropped.
+	*/
+	Duration connectionTimeout = 5.minutes;
+	
 	/// Custom TLS context for this client
 	TLSContext tlsContext;
 }
+
+
+/** Option flags used to configure the HTTP client.
+*/
+enum HTTPClientOption {
+	/** Uses HTTP/2 requests without prior checks.
+
+		If enabled, the client will always send a client preface without trying
+		upgrade or checking the ALPN value.
+	*/
+	forceHTTP2,
+	
+	/** Disables HTTP/2 and performs only HTTP/1.x requests.
+	
+		If left enabled, HTTP/2 upgrade will take place and after a successful
+		connection, all further (concurrent or sequential) requests will be
+		multiplexed over the same TCP Connection until it is timed out through
+		keep-alive or inactivity.
+	*/
+	disableHTTP2,
+
+	/// Will not try to upgrade the connection on non-TLS connections.
+	onlyEncryptedHTTP2,
+
+	/// Default set of flags - enables normal HTTP/2 upgrades on TLS connections.
+	defaults = onlyEncryptedHTTP2,
+}
+
+/*static if (__VERSION__ >= 2067) {
+	import std.typecons : BitFlags;
+	alias HTTPClientOptions = BitFlags!HTTPClientOption;
+} else*/ alias HTTPClientOptions = HTTPClientOption;
 
 ///
 unittest {
@@ -277,9 +309,13 @@ final class HTTPClient {
 		HTTP2ClientContext m_http2Context;
 
 		@property bool isHTTP2Started() { return m_http2Context !is null && m_conn.tcp !is null && m_conn.tcp.connected && m_http2Context.isSupported && m_http2Context.isValidated && m_http2Context.session !is null; }
-		@property bool canUpgradeHTTP2() { return !m_settings.http2.disable && !m_settings.http2.disablePlainUpgrade && !isHTTP2Started && !m_conn.forceTLS && !unsupportedHTTP2; }
+		@property bool canUpgradeHTTP2() { return !(m_settings.options & HTTPClientOption.disableHTTP2)&& !(m_settings.options & HTTPClientOption.onlyEncryptedHTTP2) && !isHTTP2Started && !m_conn.forceTLS && !unsupportedHTTP2; }
 		@property bool unsupportedHTTP2() { return m_http2Context is null || (!m_http2Context.isSupported && m_http2Context.isValidated); }
-		@property ConnectionStream topStream() { return (isHTTP2Started?cast(ConnectionStream) m_state.http2Stream:(m_conn.tlsStream?cast(ConnectionStream) m_conn.tlsStream:cast(ConnectionStream) m_conn.tcp)); }
+		@property Stream topStream() {
+			if (isHTTP2Started) return m_state.http2Stream;
+			if (m_conn.tlsStream) return m_conn.tlsStream;
+			return m_conn.tcp;
+		}
 	}
 
 	/** Get the current settings for the HTTP client. **/
@@ -344,7 +380,7 @@ final class HTTPClient {
 			// this will be changed to trustedCert once a proper root CA store is available by default
 			m_conn.tlsContext.peerValidationMode = TLSPeerValidationMode.none;
 			
-			if (m_settings.http2.disable)
+			if (m_settings.options & HTTPClientOption.disableHTTP2)
 				m_conn.tlsContext.setClientALPN(["http/1.1"]);
 			else
 				m_conn.tlsContext.setClientALPN(["h2", "h2-14", "h2-16", "http/1.1"]);
@@ -379,14 +415,14 @@ final class HTTPClient {
 			}
 		}
 
-		if (m_settings.http2.pingInterval != Duration.zero) {
-			m_http2Context.pinger = setTimer(m_settings.http2.pingInterval, &onPing, true);
+		if (m_settings.pingInterval != Duration.zero) {
+			m_http2Context.pinger = setTimer(m_settings.pingInterval, &onPing, true);
 		}
 
 		// alpn http/2 connection
-		if (m_settings.http2.forced || (m_conn.tlsStream && !m_settings.http2.disable && m_conn.tlsStream.alpn.length >= 2 && m_conn.tlsStream.alpn[0 .. 2] == "h2")) {
+		if ((m_settings.options & HTTPClientOption.forceHTTP2) || (m_conn.tlsStream && !(m_settings.options & HTTPClientOption.disableHTTP2) && m_conn.tlsStream.alpn.length >= 2 && m_conn.tlsStream.alpn[0 .. 2] == "h2")) {
 			logDebug("Got alpn: %s", m_conn.tlsStream.alpn);
-			HTTP2Settings local_settings = m_settings.http2.settings;
+			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
 			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, m_conn.tlsStream, local_settings, &onRemoteSettings);
 			m_http2Context.worker = runTask(&runHTTP2Worker, false);
 			yield();
@@ -397,7 +433,7 @@ final class HTTPClient {
 		// pre-verified http/2 cleartext connection
 		else if (canUpgradeHTTP2 && m_http2Context.isSupported) {
 			logDebug("Upgrading HTTP/2");
-			HTTP2Settings local_settings = m_settings.http2.settings;
+			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
 			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, null, local_settings, &onRemoteSettings);
 			m_http2Context.worker = runTask(&runHTTP2Worker, false);
 			m_http2Context.isValidated = true;
@@ -541,15 +577,14 @@ final class HTTPClient {
 	}
 
 
-private:
-	LockedConnection!HTTPClient lockConnection()
+	private LockedConnection!HTTPClient lockConnection()
 	{
 		if (!m_http2Context.pool)
 			m_http2Context.pool = new ConnectionPool!HTTPClient(&connectionFactory);
 		return m_http2Context.pool.lockConnection();
 	}
 
-	auto connectionFactory() {
+	private auto connectionFactory() {
 		HTTPClient client = new HTTPClient;
 		client.m_conn = m_conn;
 		client.m_http2Context = m_http2Context;
@@ -557,7 +592,7 @@ private:
 		return client;
 	}
 	
-	void processRequest(scope void delegate(HTTPClientRequest req) requester, ref HTTPMethod req_method, ref bool keepalive)
+	private void processRequest(scope void delegate(HTTPClientRequest req) requester, ref HTTPMethod req_method, ref bool keepalive)
 	{
 		assert(!m_state.requesting, "Interleaved HTTP client requests detected!");
 		assert(!m_state.responding, "Interleaved HTTP client request/response detected!");
@@ -581,7 +616,7 @@ private:
 		req_method = req.method;
 	}
 
-	void processResponse(scope void delegate(scope HTTPClientResponse) responder, ref HTTPMethod req_method, ref bool keepalive) 
+	private void processResponse(scope void delegate(scope HTTPClientResponse) responder, ref HTTPMethod req_method, ref bool keepalive) 
 	{
 		// fixme: Close HTTP/2 session when a response is not handled properly?
 
@@ -620,9 +655,9 @@ private:
 		if (user_exception) throw user_exception;
 	}
 
-	void startHTTP2Upgrade(ref InetHeaderMap headers) {
+	private void startHTTP2Upgrade(ref InetHeaderMap headers) {
 		logDebug("Starting HTTP/2 Upgrade");
-		HTTP2Settings local_settings = m_settings.http2.settings;
+		HTTP2Settings local_settings = getHTTP2Settings(m_settings);
 		HTTP2Stream stream;
 		m_http2Context.session = new HTTP2Session(m_conn.tcp, stream, local_settings, &onRemoteSettings);
 		m_state.http2Stream = stream;
@@ -636,7 +671,7 @@ private:
 	}
 
 	// returns true if now using HTTP/2
-	void finalizeHTTP2Upgrade(string upgrade_hd) {
+	private void finalizeHTTP2Upgrade(string upgrade_hd) {
 		// continue HTTP/2 initialization using upgrade mechanism
 		if (m_http2Context.isUpgrading && upgrade_hd.length >= 3 && upgrade_hd[0 .. 3] == "h2c") {
 			// we have an HTTP/2 connection
@@ -658,12 +693,12 @@ private:
 		}
 	}
 
-	void extendKeepAliveTimeout() {
+	private void extendKeepAliveTimeout() {
 		m_conn.rearmKeepAlive();
 	}
 
 	/// Verify proxy response
-	void verifyProxy(ref InetHeaderMap headers, HTTPStatus status_code) {
+	private void verifyProxy(ref InetHeaderMap headers, HTTPStatus status_code) {
 		// proxy implementation
 		if (headers.get("Proxy-Authenticate", null) !is null) {
 			if (status_code == 407) {
@@ -679,13 +714,13 @@ private:
 	}
 	
 
-	void runHTTP2Worker(bool upgrade = false) 
+	private void runHTTP2Worker(bool upgrade = false) 
 	{
 		logDebug("Running HTTP/2 worker");
 
-		m_http2Context.session.setReadTimeout(m_settings.http2.maxInactivity);
-		m_http2Context.session.setWriteTimeout(m_settings.http2.maxInactivity);
-		m_http2Context.session.setPauseTimeout(m_settings.http2.maxInactivity);
+		m_http2Context.session.setReadTimeout(m_settings.connectionTimeout);
+		m_http2Context.session.setWriteTimeout(m_settings.connectionTimeout);
+		m_http2Context.session.setPauseTimeout(m_settings.connectionTimeout);
 
 		// starting...
 		m_http2Context.session.run(upgrade);
@@ -710,7 +745,7 @@ private:
 		
 	}
 
-	void onKeepAlive() {
+	private void onKeepAlive() {
 		logDebug("Keep-alive timeout");
 		disconnect(false, "Keep-alive Timeout");
 	}
@@ -733,19 +768,25 @@ private:
 		m_http2Context.latency = recv - start;
 	}
 
-	void onPing() {
+	private void onPing() {
 		if (!isHTTP2Started && !canUpgradeHTTP2)
 			m_http2Context.pinger.stop();
 		else runTask(&ping);
 	}
 
-	void onRemoteSettings(ref HTTP2Settings settings)
+	private void onRemoteSettings(ref HTTP2Settings settings)
 	{
 		if (!m_http2Context.pool)
 			m_http2Context.pool = new ConnectionPool!HTTPClient(&connectionFactory);
 		m_http2Context.pool.maxConcurrency = settings.maxConcurrentStreams;
 	}
 
+	private HTTP2Settings getHTTP2Settings(HTTPClientSettings settings)
+	{
+		HTTP2Settings ret;
+		// ...
+		return ret;
+	}
 }
 
 
@@ -1282,7 +1323,8 @@ final class HTTPClientResponse : HTTPResponse {
 		string *resNewProto = "Upgrade" in headers;
 		enforce(resNewProto, "Server did not send an Upgrade header");
 		enforce(*resNewProto == newProtocol, "Expected Upgrade: " ~ newProtocol ~", received Upgrade: " ~ *resNewProto);
-		return m_client.topStream;
+		if (auto cs = cast(ConnectionStream)m_client.topStream) return cs;
+		return new ConnectionProxyStream(m_client.topStream, m_client.m_conn.tcp);
 	}
 
 	private void finalize()
