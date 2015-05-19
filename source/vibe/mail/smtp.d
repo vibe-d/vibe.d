@@ -87,14 +87,18 @@ final class SMTPClientSettings {
 	SMTPConnectionType connectionType = SMTPConnectionType.plain;
 	/// Authentication type to use
 	SMTPAuthType authType = SMTPAuthType.none;
+
 	/// Determines how the server certificate gets validated.
 	TLSPeerValidationMode tlsValidationMode = TLSPeerValidationMode.trustedCert;
 	/// Compatibility alias - will be deprecated soon.
 	alias sslValidationMode = tlsValidationMode;
+	/// Version(s) of the TLS/SSL protocol to use
+	TLSVersion tlsVersion = TLSVersion.any;
 	/// Callback to invoke to enable additional setup of the TLS context.
 	void delegate(scope TLSContext) tlsContextSetup;
 	/// Compatibility alias - will be deprecated soon.
 	alias sslContextSetup = tlsContextSetup;
+
 	/// User name to use for authentication
 	string username;
 	/// Password to use for authentication
@@ -135,7 +139,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	Stream conn = raw_conn;
 
 	if( settings.connectionType == SMTPConnectionType.tls ){
-		auto ctx = createTLSContext(TLSContextKind.client);
+		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
 		ctx.peerValidationMode = settings.tlsValidationMode;
 		if (settings.tlsContextSetup) settings.tlsContextSetup(ctx);
 		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting);
@@ -143,7 +147,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
 
-	void greet(){
+	void greet() {
 		conn.write("EHLO "~settings.localname~"\r\n");
 		while(true){ // simple skipping of
 			auto ln = cast(string)conn.readLine();
@@ -159,16 +163,16 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	greet();
 
-	if( settings.connectionType == SMTPConnectionType.startTLS ){
+	if (settings.connectionType == SMTPConnectionType.startTLS) {
 		conn.write("STARTTLS\r\n");
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
-		auto ctx = createTLSContext(TLSContextKind.client);
+		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
 		ctx.peerValidationMode = settings.tlsValidationMode;
 		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting);
 		greet();
 	}
 
-	final switch(settings.authType){
+	final switch (settings.authType) {
 		case SMTPAuthType.none: break;
 		case SMTPAuthType.plain:
 			logDebug("seding auth");
@@ -208,7 +212,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	conn.write("DATA\r\n");
 	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
-	foreach( name, value; mail.headers ){
+	foreach (name, value; mail.headers) {
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");
