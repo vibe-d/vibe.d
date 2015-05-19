@@ -1,7 +1,7 @@
 /**
 	SMTP client implementation
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -11,7 +11,7 @@ import vibe.core.log;
 import vibe.core.net;
 import vibe.inet.message;
 import vibe.stream.operations;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
 import std.algorithm : map, splitter;
 import std.base64;
@@ -25,8 +25,9 @@ import std.string;
 */
 enum SMTPConnectionType {
 	plain,
-	ssl,
-	startTLS
+	tls,
+	startTLS,
+	ssl = tls /// deprecated
 }
 
 
@@ -76,14 +77,27 @@ enum SMTPAuthType {
 	Configuration options for the SMTP client.
 */
 final class SMTPClientSettings {
+	/// SMTP host to connect to
 	string host = "127.0.0.1";
+	/// Port on which to connect
 	ushort port = 25;
+	/// Own network name to report to the SMTP server
 	string localname = "localhost";
+	/// Type of encryption protocol to use
 	SMTPConnectionType connectionType = SMTPConnectionType.plain;
+	/// Authentication type to use
 	SMTPAuthType authType = SMTPAuthType.none;
-	SSLPeerValidationMode sslValidationMode = SSLPeerValidationMode.trustedCert;
-	void delegate(scope SSLContext) sslContextSetup;
+	/// Determines how the server certificate gets validated.
+	TLSPeerValidationMode tlsValidationMode = TLSPeerValidationMode.trustedCert;
+	/// Compatibility alias - will be deprecated soon.
+	alias sslValidationMode = tlsValidationMode;
+	/// Callback to invoke to enable additional setup of the TLS context.
+	void delegate(scope TLSContext) tlsContextSetup;
+	/// Compatibility alias - will be deprecated soon.
+	alias sslContextSetup = tlsContextSetup;
+	/// User name to use for authentication
 	string username;
+	/// Password to use for authentication
 	string password;
 
 	this() {}
@@ -120,11 +134,11 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	Stream conn = raw_conn;
 
-	if( settings.connectionType == SMTPConnectionType.ssl ){
-		auto ctx = createSSLContext(SSLContextKind.client);
-		ctx.peerValidationMode = settings.sslValidationMode;
-		if (settings.sslContextSetup) settings.sslContextSetup(ctx);
-		conn = createSSLStream(raw_conn, ctx, SSLStreamState.connecting);
+	if( settings.connectionType == SMTPConnectionType.tls ){
+		auto ctx = createTLSContext(TLSContextKind.client);
+		ctx.peerValidationMode = settings.tlsValidationMode;
+		if (settings.tlsContextSetup) settings.tlsContextSetup(ctx);
+		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting);
 	}
 
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
@@ -148,9 +162,9 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	if( settings.connectionType == SMTPConnectionType.startTLS ){
 		conn.write("STARTTLS\r\n");
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
-		auto ctx = createSSLContext(SSLContextKind.client);
-		ctx.peerValidationMode = settings.sslValidationMode;
-		conn = createSSLStream(raw_conn, ctx, SSLStreamState.connecting);
+		auto ctx = createTLSContext(TLSContextKind.client);
+		ctx.peerValidationMode = settings.tlsValidationMode;
+		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting);
 		greet();
 	}
 
