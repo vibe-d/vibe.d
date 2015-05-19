@@ -42,6 +42,7 @@ alias B64 = Base64Impl!('-', '_', Base64.NoPadding);
 
 alias HTTP2RequestHandler = void delegate(HTTP2Stream stream);
 
+
 struct PingData
 {
 	long sent;
@@ -65,6 +66,7 @@ enum SafetyLevel {
 final class HTTP2Stream : ConnectionStream
 {
 	@property bool isOpener() const { return m_opener; }
+	@property bool headersWritten() const { return m_headersWritten; }
 	private {
 		// state
 		int m_stream_id = -1; // -1 if fresh client request. >0 and always defined on server streams
@@ -78,9 +80,11 @@ final class HTTP2Stream : ConnectionStream
 		bool m_paused; // the session r/w loops will pause, but may or may not be paused because of this stream
 		bool m_unpaused;
 
+		bool m_headersWritten;
 		bool m_push; // this stream was initialized as a push promise. This is a push response
 		bool m_safety_level_changed;
 		int m_maxFrameSize; // The buffers also allocate their additional storage at these intervals
+
 		PrioritySpec m_priSpec;
 		SafetyLevel m_safety_level;
 		ubyte m_priority = 0;
@@ -181,6 +185,8 @@ final class HTTP2Stream : ConnectionStream
 			bool dataSignalRaised;
 			bool dirty;
 			bool halfClosed; // On finalize(), the application must be finished with the request/response. submitRequest or submitResponse can then be used on this stream.
+			bool deferred;
+			bool finalized;
 			bool close;
 			FrameError error;
 
@@ -216,6 +222,7 @@ final class HTTP2Stream : ConnectionStream
 				if (bufs) {
 					bufs.free();
 					Mem.free(bufs);
+					bufs = null;
 				}
 				freeHeaders();
 				//if (signal) destroy(signal);
@@ -223,12 +230,13 @@ final class HTTP2Stream : ConnectionStream
 			}
 
 			void freeHeaders() {
+				import vibe.utils.dictionarylist : icmp2;
 				if (headers) { // When the headers are outbound, strings are references only except cookies
 					foreach (HeaderField hf; headers) {
-						if (hf.name == "Cookie") Mem.free(hf.value);
+						if (icmp2(hf.name, "Cookie") == 0) Mem.free(hf.value);
 						if (hf.name == ":status") Mem.free(hf.value);
-						if (hf.name == "Set-Cookie") Mem.free(hf.value);
-						if (hf.name == "HTTP2-Settings") Mem.free(hf.value);
+						if (icmp2(hf.name, "Set-Cookie") == 0) Mem.free(hf.value);
+						if (icmp2(hf.name, "HTTP2-Settings") == 0) Mem.free(hf.value);
 					}
 					Mem.free(headers);
 				}
@@ -307,7 +315,8 @@ final class HTTP2Stream : ConnectionStream
 	/// This may be important if you wish to add a layer of security for sensitive 
 	/// data (password or private information) to counter possible memory attacks.
 	/// 
-	/// Note: This may slow down the application quite a bit
+	/// Note: Higher safety levels may slow down the application quite a bit.
+	/// The buffers will not adapt to new safety levels while they contain data.
 	@property void memorySafety(SafetyLevel sl) { 
 		m_safety_level = sl; 
 		m_safety_level_changed = true;
@@ -318,13 +327,16 @@ final class HTTP2Stream : ConnectionStream
 	in { assert(m_session.isServer); }
 	body
 	{
+		import vibe.utils.dictionarylist : icmp2;
 		acquireReader();
 		scope(exit) releaseReader();
 
 		while (!m_active)
 		{
 			m_rx.waitingHeaders = true;
+			m_rx.dataSignalRaised = false;
 			m_rx.signal.wait();
+			m_rx.dataSignalRaised = false;
 			m_rx.waitingHeaders = false;
 			processExceptions();
 		}
@@ -339,7 +351,7 @@ final class HTTP2Stream : ConnectionStream
 				schema = hf.value;
 			else if (hf.name == ":method")
 				method = httpMethodFromString(hf.value);
-			else if ((hf.name == "host" && !host) || hf.name == ":authority") {
+			else if ((icmp2(hf.name, "host") == 0 && !host) || hf.name == ":authority") {
 				import std.algorithm : countUntil;
 				int idx = cast(int)hf.value.countUntil(":");
 				if (idx == -1)
@@ -371,6 +383,7 @@ final class HTTP2Stream : ConnectionStream
 		{
 			m_rx.waitingHeaders = true;
 			logDebug("Waiting for response headers");
+			m_rx.dataSignalRaised = false;
 			m_rx.signal.wait();
 			m_rx.dataSignalRaised = false;
 			m_rx.waitingHeaders = false;
@@ -396,16 +409,17 @@ final class HTTP2Stream : ConnectionStream
 	void writeHeader(in HTTPStatus status, const ref InetHeaderMap header, ref Cookie[string] cookies)
 	in { assert(m_session.isServer); }
 	body {
+		import vibe.utils.dictionarylist : icmp2;
 		acquireWriter();
 		scope(exit) releaseWriter();
-
+		scope(success) m_headersWritten = true;
 		int len = cast(int)( 1 /*:status*/ + header.length + cookies.length );
 		HeaderField[] headers = Mem.alloc!(HeaderField[])(len);
 		scope(failure) {
 			foreach (hf; headers)
 			{
 				if (hf.name == ":status") Mem.free(hf.value);
-				if (hf.name == "Set-Cookie") Mem.free(hf.value);
+				if (icmp2(hf.name, "Set-Cookie") == 0) Mem.free(hf.value);
 			}
 			Mem.free(headers);
 		}
@@ -419,7 +433,7 @@ final class HTTP2Stream : ConnectionStream
 		// write headers
 		foreach (string name, const ref string value; header) 
 		{
-			if (name == "Host")
+			if (icmp2(name, "Host") == 0)
 				headers[i++] = HeaderField(":authority", value);
 			else
 				headers[i++] = HeaderField(name, value);
@@ -455,13 +469,21 @@ final class HTTP2Stream : ConnectionStream
 	void writeHeader(in string path, in string scheme, in HTTPMethod method, const ref InetHeaderMap header, in CookieStore cookie_jar, bool concatenate_cookies)
 	in { assert(!m_session.isServer); }
 	body {
+		import vibe.utils.dictionarylist : icmp2;
 		acquireWriter();
 		scope(exit) releaseWriter();
+		scope(success) m_headersWritten = true;
 
 		immutable string[] methods = ["GET","HEAD","PUT","POST","PATCH","DELETE","OPTIONS","TRACE","CONNECT","COPY","LOCK","MKCOL","MOVE","PROPFIND","PROPPATCH","UNLOCK"];
 
 		Vector!(char[]) cookie_arr;
 		char[] cookie_concat;
+		scope(failure) {
+			foreach (char[] cookie; cookie_arr)
+				Mem.free(cookie);
+			if (cookie_concat)
+				Mem.free(cookie_concat);
+		}
 
 		void cookieSinkIndividually(string[] cookies) {
 			foreach (c; cookies) {
@@ -489,8 +511,6 @@ final class HTTP2Stream : ConnectionStream
 		int len = cast(int)( 2 /* :scheme :path */ + 1 /* :method */ + header.length + cookie_arr.length + (cookie_jar && cookie_concat?1:0) ) /* one per field for indexing */;
 		HeaderField[] headers = Mem.alloc!(HeaderField[])(len);
 		scope(failure) {
-			foreach (hf; headers)
-				if (hf.name == "Cookie") Mem.free(hf.value);
 			Mem.free(headers);
 		}
 		size_t i;
@@ -505,41 +525,32 @@ final class HTTP2Stream : ConnectionStream
 		// write headers
 		foreach (string name, const ref string value; header) 
 		{
-			if (name == "Host") continue;
-			if (cookie_jar) {
-				if (name == "Cookie" && !concatenate_cookies) {
-					foreach (char[] cookie; cookie_arr[])
-						headers[i++] = HeaderField("Cookie", cast(string) cookie);
-					wrote_cookie = true;
-					if (value.length > 0) {
-						char[] cookie_val = Mem.alloc!(char[])(value.length);
-						cookie_val[] = cast(char[]) value;
-						headers[i++] = HeaderField("Cookie", cast(string) cookie_val);
-					}
-					else len--;
-					continue;
-				}
-				else if (name == "Cookie" && concatenate_cookies) {
-					char[] cookie_val;
-					if (value.length > 0) {
-						char[] cookie_tmp = Mem.alloc!(char[])(value.length + cookie_concat.length + 2);
-						cookie_tmp[0 .. value.length] = cast(char[])value[0 .. $];
-						cookie_tmp[value.length .. value.length + 2] = "; ";
-						cookie_tmp[value.length + 2 .. $] = cookie_concat[0 .. $];
-						Mem.free(cookie_concat);
-						cookie_concat = cookie_tmp;
-					}
-					headers[i++] = HeaderField("Cookie", cast(string) cookie_concat);
-					wrote_cookie = true;
-				}
+			if (icmp2(name, "Host") == 0) continue;
+			if (cookie_jar && icmp2(name, "Cookie") == 0 && concatenate_cookies && value.length > 0) {
+				char[] cookie_tmp = Mem.alloc!(char[])(value.length + cookie_concat.length + 2);
+				cookie_tmp[0 .. value.length] = cast(char[])value[0 .. $];
+				cookie_tmp[value.length .. value.length + 2] = "; ";
+				cookie_tmp[value.length + 2 .. $] = cookie_concat[0 .. $];
+				Mem.free(cookie_concat);
+				cookie_concat = cookie_tmp;
+			} else if (icmp2(name, "Cookie") == 0) {
+				if (value.length > 0) {
+					char[] cookie_val = Mem.alloc!(char[])(value.length);
+					cookie_val[] = cast(char[]) value;
+					cookie_arr ~= cookie_val;
+					headers[i++] = HeaderField("Cookie", cast(string) cookie_val);	
+				} else len--;
 			}
-			headers[i++] = HeaderField(name, value);
+			else headers[i++] = HeaderField(name, value);
 		}
 
 		// write cookies, individually by default to use indexing
-		if (!wrote_cookie && cookie_jar)
-			foreach (char[] cookie; cookie_arr[])
+		if (cookie_jar) {
+			if (concatenate_cookies)
+				headers[i++] = HeaderField("Cookie", cast(string) cookie_concat);
+			else if (!wrote_cookie) foreach (char[] cookie; cookie_arr[])
 				headers[i++] = HeaderField("Cookie", cast(string) cookie);
+		}
 
 		//commit
 		m_tx.headers = headers;
@@ -580,7 +591,7 @@ final class HTTP2Stream : ConnectionStream
 		PingData data = PingData(sent, &recv, cb);
 		logDebug("send ping data"); 
 		m_session.ping(data);
-		logDebug("Waitlocal");
+		logDebug("wait");
 		cb.wait();
 
 		latency = recv - start;
@@ -603,7 +614,7 @@ final class HTTP2Stream : ConnectionStream
 	/// Stop transfer through this stream until unpaused. Untested.
 	void pause() { m_paused = true; }
 	/// Resume transfer through this stream. Untested.
-	void unpaused() { m_unpaused = true; }
+	void unpaused() { m_session.get().consumeStream(streamId, m_tx.windowUpdatePaused); m_session.m_tx.notify(); m_unpaused = true; }
 
 	/// The parent stream will not close if this stream is active, and this stream
 	/// will automatically close if the parent stream dies. 
@@ -661,6 +672,7 @@ final class HTTP2Stream : ConnectionStream
 			if (!connected)
 				return 0;
 			m_rx.waitingData = true;
+			m_rx.dataSignalRaised = false;
 			m_rx.signal.wait();
 			m_rx.dataSignalRaised = false;
 			m_rx.waitingData = false;
@@ -669,7 +681,14 @@ final class HTTP2Stream : ConnectionStream
 	}
 
 	void close(FrameError error) {
-		logDebug("HTTP/2 close");
+		if (m_session.isServer && m_tx.finalized) return;
+		if (!m_session.connected) return;
+		// This could be called by a keep-alive timer. In this case we must forcefully free the read lock
+		if (m_rx.owner !is Task.init && m_rx.owner != Task.getThis())
+		{
+			m_rx.owner.interrupt();
+			yield();
+		}
 		acquireReader();
 		scope(exit) releaseReader();
 		m_tx.halfClosed = true; // attempts an atomic response in some cases
@@ -679,6 +698,7 @@ final class HTTP2Stream : ConnectionStream
 
 		while (m_stream_id > 0 && !m_rx.close) {
 			m_rx.waitingStreamExit = true;
+			m_rx.dataSignalRaised = false;
 			m_rx.signal.wait();
 			m_rx.dataSignalRaised = false;
 			m_rx.waitingStreamExit = false;
@@ -702,6 +722,7 @@ final class HTTP2Stream : ConnectionStream
 			checkConnected();
 			assert(!m_rx.waitingData, "Another task is waiting already.");
 			m_rx.waitingData = true;
+			m_rx.dataSignalRaised = false;
 			m_rx.signal.wait(timeout, m_rx.signal.emitCount);
 			m_rx.dataSignalRaised = false;
 			m_rx.waitingData = false;
@@ -756,19 +777,7 @@ final class HTTP2Stream : ConnectionStream
 		assert(dst !is null);
 		acquireReader();
 		scope(exit) releaseReader();
-
 		Buffers bufs = m_rx.bufs;
-
-		if (m_safety_level_changed) {
-			if (m_safety_level & SafetyLevel.LockMemory)
-				bufs.use_secure_mem = true;
-			else bufs.use_secure_mem = false;
-			if (m_safety_level & SafetyLevel.ZeroizeBuffers)
-				bufs.zeroize_on_free = true;
-			else bufs.zeroize_on_free = false;
-			m_safety_level_changed = false;
-		}
-
 		ubyte[] ub = dst;
 		
 		while(ub.length > 0)
@@ -776,28 +785,41 @@ final class HTTP2Stream : ConnectionStream
 			ubyte[] payload = bufs.removeOne(ub);
 
 			if (ub.length > payload.length) {
-				m_tx.windowUpdate += payload.length; // notify remote of local buffer size change
-				dirty();
+				if (m_paused)
+				{
+					m_session.get().consumeConnection(payload.length);
+					m_tx.windowUpdatePaused += payload.length;
+				}
+				else if (connected) {
+					m_session.get().consume(streamId, payload.length);
+					m_session.m_tx.notify();
+				} else if (m_session.get()) {
+					m_session.get().consumeConnection(payload.length);
+					break;
+				}
 				ub = ub[payload.length .. $];
-				
-				if (bufs.length == 0) { // we should wait for more data...
+
+				if (ub.length > 0 && bufs.length == 0) { // we should wait for more data...
+					enforce(connected);
 					m_rx.waitingData = true;
+					m_rx.dataSignalRaised = false;
 					logDebug("HTTP/2: Waiting for more data in read()");
 					m_rx.signal.wait();
 					m_rx.dataSignalRaised = false;
 					m_rx.waitingData = false;
-					processExceptions();
 				}
 			}
 			else if (connected) {
-				m_tx.windowUpdate += ub.length; // notify remote of local buffer size change
-				dirty();
+				m_session.get().consume(streamId, payload.length); // notify remote of local buffer size change
+				m_session.m_tx.notify();
 				break;
 			}
-			else {
-				m_session.get().consumeConnection(ub.length);
+			else if (m_session.get()) {
+				m_session.get().consumeConnection(payload.length);
 				break;
 			}
+
+			processExceptions();
 		
 		}
 
@@ -813,20 +835,24 @@ final class HTTP2Stream : ConnectionStream
 	{
 		acquireWriter();
 		scope(exit) releaseWriter();
+		const(ubyte)[] ub = cast()src;
 
-		if (src.length > m_session.get().getStreamRemoteWindowSize(m_stream_id)) {
-			throw new Exception("The remote window size prohibits sending a data array of this size. Consider sending it in multiple calls.");
-		}
-
-		while (ErrorCode.BUFFER_ERROR == m_tx.bufs.add(cast(string) src))
+		while (ub.length > 0)
 		{
+			size_t to_send = min(m_tx.bufs.available, ub.length);
+			ErrorCode rv = m_tx.bufs.add(cast(string) ub[0 .. to_send]);
+			enforce(rv >= 0, "Error adding data to buffer");
+			if (to_send == ub.length) break;
+			ub = ub[to_send .. $];
+			dirty();
 			m_tx.waitingData = true;
-			enforce(m_tx.signal);
+			assert(m_tx.signal);
+			m_tx.dataSignalRaised = false;
 			m_tx.signal.wait();
 			m_tx.dataSignalRaised = false;
 			m_tx.waitingData = false;
-			checkConnected();
 			processExceptions();
+			checkConnected();
 		}
 
 		dirty();
@@ -834,6 +860,7 @@ final class HTTP2Stream : ConnectionStream
 
 	void flush()
 	{
+		if (!m_tx.bufs || m_tx.bufs.length == 0) return;
 		acquireWriter();
 		scope(exit) releaseWriter();
 		// enforce dirty?
@@ -847,12 +874,21 @@ final class HTTP2Stream : ConnectionStream
 	{
 		acquireWriter();
 		scope(exit) releaseWriter();
-		logDebug("HTTP/2: finalize");
 		halfClose();
-		while (m_tx.dirty) {
-			m_session.m_tx.notify();
+		if (!m_session.isServer) {
 			yield();
 		}
+		else {
+			while (!m_tx.finalized) {
+				m_rx.waitingStreamExit = true;
+				m_rx.dataSignalRaised = false;
+				m_rx.signal.wait();
+				m_rx.dataSignalRaised = false;
+				m_rx.waitingStreamExit = false;
+			}
+		}
+		processExceptions();
+
 	}
 	
 	void write(InputStream stream, ulong nbytes = 0)
@@ -861,6 +897,37 @@ final class HTTP2Stream : ConnectionStream
 	}
 
 private:
+
+	void checkSafetyLevel() {
+		if (!m_safety_level_changed) return;
+
+		void checkBufs(ref Buffers bufs) {
+			if (bufs.length == 0) {
+				if ((m_safety_level & SafetyLevel.LockMemory) != 0 && !bufs.use_secure_mem) {
+					bufs.free();
+					Buffers old = bufs;
+					bufs = Mem.alloc!Buffers(old.chunk_length, old.max_chunk, 1, 0, true, false);
+					Mem.free(old);
+				}
+				else if ((m_safety_level & SafetyLevel.LockMemory) == 0 && bufs.use_secure_mem)
+				{ // switch from Secure to Insecure
+					bufs.free();
+					Buffers old = bufs;
+					bufs = Mem.alloc!Buffers(old.chunk_length, old.max_chunk, 1, 0, false, false);
+					Mem.free(old);
+				}
+				
+				if (m_safety_level & SafetyLevel.ZeroizeBuffers)
+					bufs.zeroize_on_free = true;
+				else bufs.zeroize_on_free = false;
+				
+				m_safety_level_changed = false;
+			}
+		}
+		checkBufs(m_tx.bufs);
+		checkBufs(m_rx.bufs);
+	}
+
 	void readPushResponse(HTTP2Stream push_response)
 	{
 		import std.algorithm : swap;
@@ -875,7 +942,6 @@ private:
 		m_active = true;
 		logDebug("Destroy stream: ", push_response.streamId);
 		push_response.destroy();
-		// fixme: destroy?
 	}
 
 	/// optimization used when the request or response data are completely buffered
@@ -895,6 +961,7 @@ private:
 			m_tx.priSpec.weight = m_priority;
 
 		m_tx.dirty = true;
+		enforce(m_session.m_tcpConn !is null);
 		m_session.m_tx.schedule(this);
 	}
 
@@ -908,6 +975,7 @@ private:
 		assert(!m_rx.owner || m_rx.owner == Task.getThis()); 
 		m_rx.owner = Task.getThis();
 		processExceptions();
+		checkSafetyLevel();
 	}
 	
 	void releaseReader() { 
@@ -925,6 +993,7 @@ private:
 
 		processExceptions();
 		checkConnected();
+		checkSafetyLevel();
 	}
 	
 	void releaseWriter() { 
@@ -977,72 +1046,77 @@ private:
 	}
 
 	void onClose() {
-		m_session.get().consumeConnection(m_tx.windowUpdate);
-		m_tx.windowUpdate = 0;
 		m_connected = false;
-		if (m_session) {
+		if (m_session && m_session.m_tcpConn) {
 			if (m_session.m_closing && !m_session.m_tx.dataSignalRaised) {
 				m_session.m_tx.dataSignalRaised = true;
-				m_session.m_tx.signal.emit();
+				if (m_session.m_tx.signal)
+					m_session.m_tx.signal.emit();
 			}
-		}
-		streamId = -1;
+			streamId = -1;
+		} else m_stream_id = -1;
 		m_tx.free();
 	}
 
 	// This function retrieves the length of the next write and calls Connector.writeData when ready
 	int dataProvider(ubyte[] dst, ref DataFlags data_flags)
 	{
-		logDebug("Called data provider");
+		if (!m_rx.bufs)
+			return ErrorCode.CALLBACK_FAILURE;
 		// this function may be called many times for a single send operation		
 		Buffers bufs = m_tx.bufs;
 		int wlen;
-		if (bufs.length == 0) {
-			data_flags |= DataFlags.EOF;
-			return 0;
-		}
-		// if COPY is necessary
-		if (dst.length < bufs.head.buf.length) {
-			wlen = cast(int)dst.length;
-			bufs.head.buf.pos += wlen;
-			return wlen;
-		}
-
-		// if EMPTY return EOF
-		if (!bufs.nextPresent() && bufs.length == 0)
-			data_flags |= DataFlags.EOF;
-		else { // if NO_COPY is possible, reserve the buf for Connector.writeData
+		if (bufs.length > 0) {
 			data_flags |= DataFlags.NO_COPY; // dst is unused
 			Buffers.Chain c;
 			int i;
 			// find the next buffer scheduled to be sent
 			for(c = bufs.head; i++ < m_tx.queued; c = c.next)
 				continue;
-			wlen = cast(int)c.buf.length;
+			if (i == 1)
+				assert(c == bufs.head);
 
+			bool remove_one = dst.length >= c.buf.length;
+			wlen = min(cast(int) dst.length, cast(int) c.buf.length);
+
+			if (wlen == 0) {
+				m_tx.notify();
+				if (m_tx.halfClosed) {
+					dirty();
+					m_tx.finalized = true;
+					data_flags |= DataFlags.EOF;
+					return 0;
+				}
+				m_tx.deferred = true;
+				return ErrorCode.DEFERRED;
+			}
 			// make sure this buffer is not going to enlarge while it is queued
 			if (bufs.head is bufs.cur)
 				bufs.advance();
 
-			// move queue for next send
-			m_tx.queued++;
-			m_tx.queued_len += wlen;
+			if (remove_one)
+				// move queue for next send
+				m_tx.queued++;
 
-			// if EOF
-			if (bufs.length <= m_tx.queued_len)
-				data_flags |= DataFlags.EOF;
+			m_tx.queued_len += wlen;
 		}
-		logDebug("Return wlen: ", wlen );
+		
+		if (bufs.length == 0 || (m_tx.halfClosed && m_tx.bufs.length - wlen == 0))
+		{
+			dirty();
+			m_tx.finalized = true;
+			data_flags |= DataFlags.EOF;
+		}
 		return wlen;
 	}
 
 	void allocateBuffers(int chunk_size) {
 		int remote_chunk_size = m_session.get().getRemoteSettings(Setting.MAX_FRAME_SIZE);
-		int remote_window_size = m_session.get().getRemoteWindowSize();
+		int remote_window_size = m_session.get().getRemoteSettings(Setting.INITIAL_WINDOW_SIZE);
 		int local_window_size = m_session.m_defaultStreamWindowSize;
 		m_maxFrameSize = min(chunk_size, remote_chunk_size);
-		m_rx.bufs = Mem.alloc!Buffers(min(m_maxFrameSize, local_window_size), max(1, m_session.m_defaultStreamWindowSize/min(m_maxFrameSize, local_window_size)), 1, 0, m_session.m_tlsStream?true:false);
-		m_tx.bufs = Mem.alloc!Buffers(min(m_maxFrameSize, remote_window_size), max(1, m_session.get().getRemoteWindowSize()/min(m_maxFrameSize, remote_window_size)), 1, 0, m_session.m_tlsStream?true:false);
+		m_rx.bufs = Mem.alloc!Buffers(m_maxFrameSize, local_window_size/m_maxFrameSize+1, 1, 0, m_session.m_tlsStream?true:false, false);
+		m_tx.bufs = Mem.alloc!Buffers(m_maxFrameSize, remote_window_size/m_maxFrameSize+1, 1, 0, m_session.m_tlsStream?true:false, false);
 		// once read is called, the buffers will adjust to the user's desired memory safety level.
 		m_safety_level_changed = m_session.m_tlsStream?true:false;
 	}
@@ -1056,8 +1130,7 @@ struct HTTP2Settings {
 	int maxConcurrentStreams = INITIAL_MAX_CONCURRENT_STREAMS; // should be set to 100
 	uint maxHeadersListSize = int.max;
 
-	/// Serializes this for client HTTP2-Settings header data. Must deallocate manually on failure
-	ubyte[] toBase64Settings() {
+	private ubyte[] toSettingsPayload() {
 		Setting[] iva = Mem.alloc!(Setting[])(5);
 		iva[0].id = Setting.INITIAL_WINDOW_SIZE;
 		iva[0].value = connectionWindowSize;
@@ -1069,21 +1142,24 @@ struct HTTP2Settings {
 		iva[3].value = enablePush;
 		iva[4].id = Setting.MAX_HEADER_LIST_SIZE;
 		iva[4].value = maxHeadersListSize;
-
+		
 		Settings settings = Settings(FrameFlags.NONE, iva);
-
-		Buffers bufs = Mem.alloc!Buffers(2048, 1);
-		scope(exit) { bufs.free(); Mem.free(bufs); }
-		settings.pack(bufs);
-		ubyte[] buf = Mem.copy(bufs.cur.buf[]);
-		scope(exit) Mem.free(buf);
-		ubyte[] ret = Mem.alloc!(ubyte[])(B64.encodeLength(buf.length));
-		B64.encode(buf, ret);
-		return ret;
+		import libhttp2.constants : FRAME_HDLEN;
+		Buffers bufs = Mem.alloc!Buffers(2048, 1, FRAME_HDLEN + 1);
+		scope(exit) Mem.free(bufs);
+		ErrorCode rv = settings.pack(bufs);
+		if (rv != 0)
+			throw new Exception("Could not pack settings: " ~ libhttp2.types.toString(rv));
+		return Mem.copy(bufs.cur.buf[][FRAME_HDLEN .. $]);
 	}
 
-	static void free(ubyte[] ub) {
-		Mem.free(ub);
+	/// Serializes this for client HTTP2-Settings header data. 
+	string toBase64Settings() {
+		ubyte[] buf = toSettingsPayload();
+		scope(exit) Mem.free(buf);
+		char[] enc_buf = Mem.alloc!(char[])(B64.encodeLength(buf.length));
+		scope(exit) Mem.free(enc_buf);
+		return B64.encode(buf, enc_buf).idup;
 	}
 
 }
@@ -1105,10 +1181,12 @@ final class HTTP2Session
 	int m_totConnected;
 	uint m_maxConcurrency;
 	bool m_closing;
+	bool m_forcedClose;
 	bool m_server;
 	bool m_gotPreface;
 	bool m_paused;
 	bool m_aborted;
+	bool m_resume;
 	void delegate(ref HTTP2Settings) m_settingsUpdater;
 
 	Duration m_readTimeout = 10.minutes; // max inactivity waiting for any data
@@ -1119,7 +1197,7 @@ final class HTTP2Session
 	WriteLoop m_tx;
 
 	@property bool isServer() { return m_server; }
-	@property bool connected() { return m_tcpConn && m_tcpConn.connected() && !m_rx.closed && !m_tx.closed && m_gotPreface; }
+	@property bool connected() { return m_tx.owner != Task() && m_tcpConn && m_tcpConn.connected() && !m_rx.closed && !m_tx.closed && m_gotPreface; }
 	@property string httpVersion() { if (m_tlsStream) return "h2"; else return "h2c"; }
 	@property ConnectionStream topStream() { return m_tlsStream ? cast(ConnectionStream) m_tlsStream : cast(ConnectionStream) m_tcpConn; }
 
@@ -1153,14 +1231,13 @@ final class HTTP2Session
 			if (op == "in")
 		{
 			foreach(HTTP2Stream stream; dirty) {
-				if (stream.m_stream_id == needle.m_stream_id)
+				if (stream is needle)
 					return true;
 			}
 			return false;
 		}
 
 		void schedule(HTTP2Stream stream) {
-			assert(owner != Task());
 			if (stream !in this)
 				dirty ~= stream;
 			notify();
@@ -1205,7 +1282,7 @@ final class HTTP2Session
 	}
 
 	/// Starts a server "HTTP/2 over cleartext" session requested from a client with the HTTP/1.1 upgrade mechanism
-	this(HTTP2RequestHandler handler, TCPConnection conn, ubyte[] remote_settings_base64, HTTP2Settings local_settings = HTTP2Settings.init, void delegate(ref HTTP2Settings) on_remote_settings = null)
+	this(HTTP2RequestHandler handler, TCPConnection conn, string remote_settings_base64, HTTP2Settings local_settings = HTTP2Settings.init, void delegate(ref HTTP2Settings) on_remote_settings = null)
 	{
 		
 		m_server = true;
@@ -1221,16 +1298,21 @@ final class HTTP2Session
 
 		Options options;
 		options.setNoAutoWindowUpdate(true); // we will send them when reading the buffers, it's safer
-		options.setRecvClientPreface(true);
+		options.setRecvClientPreface(false);
 		options.setPeerMaxConcurrentStreams(local_settings.maxConcurrentStreams); // safer value
 		m_session = Mem.alloc!Session(m_server, m_connector, options);
 		
 		HTTP2Stream stream = new HTTP2Stream(this, 1, m_defaultChunkSize);
-		
+		stream.m_connected = true;
+		stream.m_active = true;
 		ubyte[] raw_buf = Mem.alloc!(ubyte[])(B64.decodeLength(remote_settings_base64.length));
 		scope(exit) Mem.free(raw_buf);
 		ubyte[] settings = B64.decode(remote_settings_base64, raw_buf);
-		m_session.upgrade(settings, cast(void*)stream); // starts the stream
+		ErrorCode rv = m_session.upgrade(settings, cast(void*)stream); // starts the stream
+		if (rv != 0)
+			throw new Exception("Error upgrading server: " ~ libhttp2.types.toString(rv));
+		// server preface
+		update(local_settings);
 		m_rx.buffer = Mem.alloc!(ubyte[])(local_settings.connectionWindowSize);
 	}
 	
@@ -1258,44 +1340,47 @@ final class HTTP2Session
 		
 		stream = new HTTP2Stream(this, 1);
 
-		ubyte[] settings = local_settings.toBase64Settings();
-		m_session.upgrade(settings, cast(void*)stream); // starts the stream
-		Mem.free(settings);
+		ubyte[] settings = local_settings.toSettingsPayload();
+		scope(exit) Mem.free(settings);
+		ErrorCode rv = m_session.upgrade(settings, cast(void*)stream); // starts the stream
+		if (rv != 0)
+			throw new Exception("Client HTTP/2 upgrade failed: " ~ libhttp2.types.toString(rv));
 		m_rx.buffer = Mem.alloc!(ubyte[])(local_settings.connectionWindowSize);
 	}
 
 	// Used exclusively by the server to send an initial response
 	HTTP2Stream getUpgradeStream()
-	in { assert(isServer && m_session.getLastProcStreamID == 1);}
+	in { assert(isServer);}
 	body {
-		return cast(HTTP2Stream) m_session.getStreamUserData(1);
+		HTTP2Stream upgrade_stream = cast(HTTP2Stream) m_session.getStreamUserData(1);
+		logDebug("Get upgrade stream: ", cast(void*)upgrade_stream);
+		return upgrade_stream;
 	}
 
 	HTTP2Stream startRequest()
 	{
-		assert(!m_closing && m_tcpConn);
+		enforce(!m_closing && m_tcpConn);
 		return new HTTP2Stream(this, -1, m_defaultChunkSize);
 	}
 
 	/// Blocking event loop that runs this session and handles new streams
 	/// Returns when stop() is called.
-	void run(bool wait_read = false)
-	in { assert(!wait_read || (!isServer && !m_tlsStream), "The delayed HTTP/2 r/w loop is only available for h2c upgrades"); }
+	void run(bool is_upgrade = false)
+	in { assert(!is_upgrade || (is_upgrade && !m_tlsStream), "Aborting is only available when a client was initially waiting for an h2c upgrade"); }
 	body {
 		total_sessions_running++;
 		scope(exit) {
 			total_sessions_running--;
 			onClose();
 		}
-		Task reader = runTask(&readLoop, wait_read);
-		writeLoop();
-		if (!m_aborted) m_tcpConn.close();
-		reader.join();
+		Task reader = runTask(&readLoop, is_upgrade);
+		writeLoop(is_upgrade);
+		reader.interrupt();
 	}
 
 	/// Used when trying upgrade from HTTP/1.1 and the remote peer doesn't support HTTP/2
 	void abort(HTTP2Stream stream) 
-	in { assert(!isServer && !m_tlsStream, "Aborting is only available when a client was initially waiting for an h2c upgrade"); }
+	in { assert(!m_tlsStream, "Aborting is only available when a client was initially waiting for an h2c upgrade"); }
 	body {
 		m_aborted = true;
 		m_closing = true;
@@ -1309,9 +1394,12 @@ final class HTTP2Session
 
 	/// Used when an upgrade from HTTP/1.1 is confirmed. Will resume the read loop
 	void resume()
-	in { assert(!isServer && !m_tlsStream, "Resuming is only available when a client was initially waiting for an h2c upgrade. Use unpause to unpause"); }
+	in { assert(!m_tlsStream, "Resuming is only available when a client was initially waiting for an h2c upgrade. Use unpause to unpause"); }
 	body  {
+		m_resume = true;
 		m_rx.signal.emit();
+		m_tx.signal.emit();
+		yield(); // start the loops and send the settings
 	}
 
 	void pause() {
@@ -1332,6 +1420,7 @@ final class HTTP2Session
 	void stop() 
 	{
 		assert(isServer, "Use stop(error) to shutdown client connections");
+		m_tx.notify();
 		if (m_closing) return;
 		ErrorCode rv = submitShutdownNotice(m_session);
 		if (rv != ErrorCode.OK)
@@ -1347,6 +1436,8 @@ final class HTTP2Session
 	/// Clients can use this with FrameError.NO_ERROR for "graceful" close if no streams are active
 	void stop(FrameError error, string reason = "")
 	{
+		m_forcedClose = true;
+		m_tx.notify();
 		if (m_closing) return;
 		m_closing = true;
 		ErrorCode rv = submitGoAway(m_session, 0, error, reason);
@@ -1390,14 +1481,16 @@ final class HTTP2Session
 	}
 	// todo: Use an external PUSH_PROMISE handler rather than intercepting them through new requests
 
-	private void removeInactivePushPromise(Duration sleepdur, HTTP2Stream push_promise)
+private:
+
+	void removeInactivePushPromise(Duration sleepdur, HTTP2Stream push_promise)
 	{
 		sleep(sleepdur);
 		if (!push_promise.m_connected)
 			removePushResponse(push_promise, true);
 	}
 
-	private void removePushResponse(HTTP2Stream push_response, bool close = false) {
+	void removePushResponse(HTTP2Stream push_response, bool close = false) {
 		foreach(i, HTTP2Stream stream; m_pushResponses[]) {
 			if (stream.m_stream_id == push_response.m_stream_id)
 			{
@@ -1410,7 +1503,7 @@ final class HTTP2Session
 		}
 	}
 
-	private HTTP2Stream popPushResponse(HTTP2Stream stream)
+	HTTP2Stream popPushResponse(HTTP2Stream stream)
 	{
 		foreach (HTTP2Stream push_response; m_pushResponses)
 		{
@@ -1424,9 +1517,10 @@ final class HTTP2Session
 	}
 
 	// The remote endpoint is gone
-	private void remoteStop(FrameError error, string reason) {
+	void remoteStop(FrameError error, string reason) {
 		logDebug("HTTP/2: GoAway received: ", error, " reason: ", reason);
 		m_closing = true;
+		m_forcedClose = true;
 		if (reason) 
 			m_rx.ex = new Exception("GoAway received: " ~ error.to!string ~ " reason: "  ~ reason);
 		m_rx.error = error;
@@ -1435,13 +1529,13 @@ final class HTTP2Session
 	}
 
 	// When push promise is goes through at `onFrameSent`, this is called with already created HTTP2Stream
-	private void handleRequest(HTTP2Stream stream)
+	void handleRequest(HTTP2Stream stream)
 	{
 		stream.m_push = false; // not relevant anymore
 		runTask({ m_requestHandler(stream); });
 	}
 
-	private void handleRequest(int stream_id)
+	void handleRequest(int stream_id)
 	{
 		assert(!m_closing, "A new request is being handled while the session is trying to close");
 		logDebug("Handling new HTTP/2 request ID: ", stream_id);
@@ -1452,7 +1546,7 @@ final class HTTP2Session
 		runTask({ m_requestHandler(stream); });
 	}
 
-	private void onPushPromise(int stream_id)
+	void onPushPromise(int stream_id)
 	in { assert(!isServer); }
 	body {
 		logDebug("Got push promise on stream ", stream_id); 
@@ -1477,29 +1571,37 @@ final class HTTP2Session
 			stream.m_rx.ex = new Exception("An existing stream ID was used for a push promise.");
 	}
 
-	private void onClose() {
-		if (m_session) m_session.free();
-		if (m_connector) Mem.free(m_connector);
-		if (m_session) Mem.free(m_session);
+	void onClose() {
 		m_tcpConn = null;
-		m_tlsStream = null;
-		m_requestHandler = null;
-		if (m_rx.buffer && m_tlsStream) SecureMem.free(m_rx.buffer);
-		else if (m_rx.buffer) Mem.free(m_rx.buffer);
 		foreach(HTTP2Stream stream; m_pushResponses) {
-			assert(!stream.m_connected);
+			if (stream.m_connected) {
+				stream.m_rx.notifyAll();
+				stream.m_tx.notify();
+				stream.onClose();
+			}
 		}
 		m_pushResponses.clear();
 		foreach(HTTP2Stream stream; m_tx.dirty) {
-			assert(!stream.m_connected);
+			if (stream.m_connected) {
+				stream.m_rx.notifyAll();
+				stream.m_tx.notify();
+				stream.onClose();
+			}
 		}
+		if (m_session) m_session.free();
+		if (m_connector) Mem.free(m_connector);
+		if (m_session) Mem.free(m_session);
+		if (m_rx.buffer && m_tlsStream) SecureMem.free(m_rx.buffer);
+		else if (m_rx.buffer) Mem.free(m_rx.buffer);
+		m_tlsStream = null;
+		m_requestHandler = null;
 		destroy(m_tx);
 		destroy(m_rx);
 		m_tx.closed = true;
 		m_rx.closed = true;
 	}
 
-	private void pong(long sent) 
+	void pong(long sent) 
 	{
 		logDebug("Got pong");
 		foreach (i, PingData ping; m_pong[])
@@ -1532,11 +1634,10 @@ final class HTTP2Session
 	}
 
 	// Task-blocking read event loop
-	private void readLoop(bool wait_read)
+	void readLoop(bool wait_read)
 	{
 		m_rx.closed = false;
 		scope(exit) {
-			logDebug("HTTP/2: ReadLoop exit");
 			m_closing = true;
 			m_rx.closed = true;
 			m_tx.notify();
@@ -1546,7 +1647,7 @@ final class HTTP2Session
 		scope(exit) m_rx.owner = Task();
 
 		// HTTP/1.1 upgrade mechanism
-		if (wait_read) {
+		while (wait_read && !m_resume && !m_aborted) {
 			logDebug("HTTP/2: ReadLoop Waiting for upgrade");
 			m_rx.signal.wait(); // triggered in abort() or continue()
 			if (m_closing) {
@@ -1584,6 +1685,7 @@ final class HTTP2Session
 					if (len > 0)
 						buf = m_rx.buffer[offset + 1 .. offset + 1 + len];
 					m_tlsStream.read(buf);
+
 				//}
 			}
 
@@ -1600,8 +1702,9 @@ final class HTTP2Session
 			// everything is processed correctly. We also prevent forever loops by keeping an eye on rv
 			do {
 				rv = m_session.memRecv(buf);
+				if (m_forcedClose) break;
 				//logDebug("Buffer length was: ", buf.length);
-				if (rv == ErrorCode.PAUSE || rv != buf.length)
+				if (rv == ErrorCode.PAUSE)
 				{
 					m_rx.paused = true;
 					logDebug("HTTP/2: Waiting for pause");
@@ -1639,7 +1742,7 @@ final class HTTP2Session
 	}
 
 	// Task-blocking write event loop
-	private void writeLoop()
+	void writeLoop(bool wait_write = false)
 	{
 		logDebug("HTTP/2: Starting write loop");
 		m_tx.closed = false;
@@ -1651,12 +1754,21 @@ final class HTTP2Session
 		m_tx.owner = Task.getThis();
 		scope(exit) m_tx.owner = Task();
 
+		// HTTP/1.1 upgrade mechanism
+		while (wait_write && !m_resume && !m_aborted) {
+			logDebug("HTTP/2: ReadLoop Waiting for upgrade");
+			m_tx.signal.wait(); // triggered in abort() or continue()
+			if (m_closing) {
+				return;
+			}
+		}
+
 		// write is more simple, the sendWrite() and send() Connector callbacks are called and 
 		// they block in the underlying stream until everything is sent.
 
 		// We can loop until all streams are closed when session is closing
 		while(!m_closing || m_totConnected > 0) {
-			logDebug("Write loop: closing? ", m_closing, " total connected: ", m_totConnected); 
+			logDebug("Write loop: closing? ", m_closing, " Total connected: ", m_totConnected); 
 			if (m_closing && !m_tx.pending.empty) {
 				foreach (HTTP2Stream stream; m_tx.pending) {
 					stream.m_tx.dirty = false;
@@ -1669,6 +1781,7 @@ final class HTTP2Session
 			processDirtyStreams();
 
 			ErrorCode rv = m_session.send();
+			if (m_forcedClose) break;
 			if (rv == ErrorCode.PAUSE) {
 				m_tx.paused = true;
 				if (!m_tx.dataSignalRaised) {
@@ -1689,11 +1802,10 @@ final class HTTP2Session
 				m_tx.signal.wait(m_writeTimeout, m_tx.signal.emitCount); // triggers when dirty streams are available
 			m_tx.dataSignalRaised = false;
 		}
-		logDebug("HTTP/2: WriteLoop exit");
 
 	}
 
-	private void processDirtyStreams()
+	void processDirtyStreams()
 	{
 		// fixme: Is this the best way to implement connection-level pausing?
 		if (m_paused) return;
@@ -1704,18 +1816,19 @@ final class HTTP2Session
 		}
 		foreach (HTTP2Stream stream; m_tx.dirty)
 		{
-			with (stream.m_tx) 
+			if (stream.m_tx.bufs) with (stream.m_tx) 
 			{
 				bool close_processed;
 				bool headers_processed;
 				bool prispec_processed;
 				bool data_processed;
 
+				logDebug("Stream information: ", stream.toString()); 
 				if (!dirty) continue;
-
+				if (finalized && isServer) close = true;
 				if (stream.m_rx.close)
 				{ // stream was closed remotely, no need to try and transmit something
-					bufs.reset();
+					if (bufs) bufs.reset();
 					dirty = false;
 					continue;
 				}
@@ -1735,25 +1848,8 @@ final class HTTP2Session
 					continue;
 				}
 
-				logDebug("Stream information: ", stream.toString()); 
-
-				// We can pause an individual stream if we avoid sending WINDOW_UPDATE for it
-				if (windowUpdate > 0 && stream.m_paused) {
-					m_session.consumeConnection(windowUpdate);
-					windowUpdatePaused = windowUpdate;
-					windowUpdate = 0;
-				}
-				// Sends notification to remote endpoint about data consumption, so that more can be scheduled
-				if (windowUpdate > 0 && !stream.m_paused) {
-					m_session.consume(stream.m_stream_id, windowUpdate);
-					windowUpdate = 0;
-				}
-
-				// Unpausing a stream is done by sending the WINDOW_UPDATE for it.
-				if (windowUpdatePaused > 0 && !stream.m_paused)
-				{
-					m_session.consumeStream(stream.m_stream_id, windowUpdatePaused);
-					windowUpdatePaused = 0;
+				if (windowUpdate > 0) {
+					submitWindowUpdate(m_session, stream.streamId, windowUpdate);
 				}
 
 				// This stream needs to send a header, in which case it may send additional information and coalesce to optimize
@@ -1814,9 +1910,10 @@ final class HTTP2Session
 								int stream_id = submitRequest(m_session, stream.m_tx.priSpec, headers, (bufs.length>0)?&stream.dataProvider:null, cast(void*)stream);
 								logDebug("HTTP/2: Submit request id ", stream_id);
 								data_processed = true;
-								if (stream_id < 0)
+								if (stream_id < 0) {
+									stream.m_rx.ex = new Exception("Error while submitting request: " ~ libhttp2.types.toString(cast(ErrorCode)stream_id));
 									throw new Exception("Error while submitting request: " ~ libhttp2.types.toString(cast(ErrorCode)stream_id));
-
+								}
 								stream.streamId = stream_id; // client stream initiated!
 							}
 						}
@@ -1841,16 +1938,19 @@ final class HTTP2Session
 							stream.m_rx.ex = new Exception("Push Promise being sent by client stream... and with no headers.");
 						// header request/response/push-response
 						} else {
+							bool was_push;
 							// Clients: Is possible that we received this request as a push response?
 							if (!isServer) {
 								// To verify, we "pop" the push response that corresponds to this stream's headers, or null if none
 								if (HTTP2Stream push_stream = popPushResponse(stream)) {
 									assert(!isServer);
 									stream.readPushResponse(push_stream);
+									was_push = true;
+
 								}
 							}
 							// header request/response
-							else 
+							if (!was_push) 
 							{ 
 								if (close) close_processed = true;
 								prispec_processed = true;
@@ -1878,8 +1978,11 @@ final class HTTP2Session
 				}
 
 				// Send the data if it wasn't done earlier
-				if (!data_processed && stream.m_connected && stream.m_stream_id > 0 && bufs.length > 0 && ((isServer && stream.m_active) || !isServer))
+				if ((!data_processed && !finalized && halfClosed && stream.m_connected && stream.m_stream_id > 0) || 
+					(!data_processed && stream.m_connected && stream.m_stream_id > 0 && bufs.length > 0 && ((isServer && stream.m_active) || !isServer)))
 				{
+					if (halfClosed)
+						stream.m_rx.notifyAll();
 					FrameFlags fflags;
 					if (close) {
 						close_processed = true;
@@ -1888,9 +1991,17 @@ final class HTTP2Session
 
 					logDebug("HTTP/2: Submit data id ", stream.m_stream_id);
 					ErrorCode rv = submitData(m_session, fflags, stream.m_stream_id, &stream.dataProvider);
-					data_processed = true;
-					if (rv != ErrorCode.OK)
+					if (rv == ErrorCode.DATA_EXIST) {
+						close_processed = false;
+						deferred = false;
+						rv = m_session.resumeData(stream.m_stream_id);
+					}
+					else if (rv != ErrorCode.OK) {
+						close_processed = false;
 						stream.m_rx.ex = new Exception("Could not send Data: " ~ rv.to!string);
+					}
+
+					data_processed = true;
 				}
 
 				// This stream was closed and we didn't "submit" this info earlier
@@ -2011,6 +2122,13 @@ override:
 			m_session.pong(sent);
 		}
 
+		if (frame.hd.type == FrameType.WINDOW_UPDATE)
+		{
+			if (stream) {
+				stream.m_tx.notify();
+			}
+		}
+
 		return true;
 	}
 	
@@ -2071,14 +2189,18 @@ override:
 	{
 		HTTP2Stream stream = getStream(stream_id);
 		Buffers bufs = stream.m_rx.bufs;
-		if (!bufs)
+		if (!bufs) {
+			m_session.get().consumeConnection(data.length);
 			return false; // the stream errored out...
+		}
 		if (stream.m_paused)
 			pause = true;
 
-		if (ErrorCode.BUFFER_ERROR == bufs.add(cast(string)data)) 
+		if (ErrorCode.BUFFER_ERROR == bufs.add(cast(string)data)) {
+			m_session.get().consumeConnection(data.length);
+			stream.m_rx.ex = new Exception("Remote peer didn't respect WINDOW SIZE");
 			return false; // protocol error, peer didn't respect WINDOW SIZE
-
+		}
 		stream.m_rx.notifyData();
 
 		return true;
@@ -2157,15 +2279,17 @@ override:
 			padlen[0] = cast(ubyte)(frame.data.padlen - 1);
 			write(padlen[0 .. 1]);
 		}
-		logDebug("WRITING DATA: ", buf.pos[0 .. length]);
+		//logDebug("WRITING DATA: ", buf.pos[0 .. length]);
 		// write the data directly from buffers (NO_COPY)
-		write(buf.pos[0 .. length]); 
-
+		write(buf.pos[0 .. length]);
 		// deschedule the buffer and free the memory
-		stream.m_tx.bufs.removeOne();
-		stream.m_tx.queued--;
+		if (buf.length == length) {
+			stream.m_tx.bufs.removeOne();
+			stream.m_tx.queued--;
+		}
+		else buf.pos += length;
 		stream.m_tx.queued_len -= length;
-
+		stream.m_tx.notify();
 		// add padding bytes
 		if (frame.data.padlen > 1) {
 			ubyte[] ub = Mem.alloc!(ubyte[])(frame.data.padlen - 1);
@@ -2180,8 +2304,7 @@ override:
 	{
 		ConnectionStream stream = m_session.topStream;
 		stream.write(data);
-		logDebug("Write: ", cast(string) data);
-		logDebug("Write bytes ", data);
+		//logDebug("Write: ", cast(string) data);
 		return cast(int)data.length;
 	}
 	
@@ -2213,8 +2336,8 @@ class TimeoutException : Exception
 	}
 }
 
-
-private HeaderField find(HeaderField[] hfa, string name) {
+private:
+HeaderField find(HeaderField[] hfa, string name) {
 	foreach (HeaderField hf; hfa) {
 		if (hf.name == name)
 			return hf;
@@ -2223,7 +2346,7 @@ private HeaderField find(HeaderField[] hfa, string name) {
 }
 
 // returns true if the headers of a are push equivalent to headers of request
-private bool pushcmp(HeaderField[] req, HeaderField[] push)
+bool pushcmp(HeaderField[] req, HeaderField[] push)
 {
 	// todo: Check for deflate/gzip?
 	return (isCacheable(req) && req.find(":path").value == push.find(":path").value
@@ -2232,7 +2355,7 @@ private bool pushcmp(HeaderField[] req, HeaderField[] push)
 
 }
 
-private bool isCacheable(HeaderField[] hfa) {
+bool isCacheable(HeaderField[] hfa) {
 	bool has_nostore = hfa.find("Pragma").value == "no-cache";
 	bool has_authorization = hfa.find("Authorization").value !is null;
 	auto method = hfa.find(":method").value;
