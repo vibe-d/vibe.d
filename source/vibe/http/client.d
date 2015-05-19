@@ -63,14 +63,14 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool tls;
+	bool use_tls;
 
 	if (settings.proxyURL.schema !is null)
-		tls = settings.proxyURL.schema == "https";
+		use_tls = settings.proxyURL.schema == "https";
 	else
-		tls = url.schema == "https";
+		use_tls = url.schema == "https";
 
-	auto cli = connectHTTP(url.host, url.port, tls, settings);
+	auto cli = connectHTTP(url.host, url.port, use_tls, settings);
 	auto res = cli.request((req){
 			if (url.localURI.length) {
 				assert(url.path.absolute, "Request URL path must be absolute.");
@@ -104,14 +104,14 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
-	bool tls;
+	bool use_tls;
 
 	if (settings.proxyURL.schema !is null)
-		tls = settings.proxyURL.schema == "https";
+		use_tls = settings.proxyURL.schema == "https";
 	else
-		tls = url.schema == "https";
+		use_tls = url.schema == "https";
 
-	auto cli = connectHTTP(url.host, url.port, tls, settings);
+	auto cli = connectHTTP(url.host, url.port, use_tls, settings);
 	cli.request((scope req) {
 		if (url.localURI.length) {
 			assert(url.path.absolute, "Request URL path must be absolute.");
@@ -162,23 +162,23 @@ unittest {
 	usually requestHTTP should be used for making requests instead of manually using a
 	HTTPClient to do so.
 */
-auto connectHTTP(string host, ushort port = 0, bool tls = false, HTTPClientSettings settings = defaultSettings)
+auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
 {
-	static struct ConnInfo { string host; ushort port; bool tls; string proxyIP; ushort proxyPort; }
+	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-	if( port == 0 ) port = tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, tls, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
+	if( port == 0 ) port = use_tls ? 443 : 80;
+	auto ckey = ConnInfo(host, port, use_tls, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].tls == tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
 			pool = c[1];
 
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
-				ret.connect(host, port, tls, settings);
+				ret.connect(host, port, use_tls, settings);
 				return ret;
 			});
 		if (s_connections.full) s_connections.popFront();
@@ -274,7 +274,7 @@ final class HTTPClient {
 
 		This method may only be called if any previous connection has been closed.
 	*/
-	void connect(string server, ushort port = 80, bool tls = false, HTTPClientSettings settings = defaultSettings)
+	void connect(string server, ushort port = 80, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
 	{
 		assert(m_conn is null);
 		assert(port != 0);
@@ -285,7 +285,7 @@ final class HTTPClient {
 		m_keepAliveLimit = Clock.currTime(UTC()) + m_keepAliveTimeout;
 		m_server = server;
 		m_port = port;
-		if (tls) {
+		if (use_tls) {
 			m_tls = createTLSContext(TLSContextKind.client);
 			// this will be changed to trustedCert once a proper root CA store is available by default
 			m_tls.peerValidationMode = TLSPeerValidationMode.none;
