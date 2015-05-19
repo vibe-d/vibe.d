@@ -1400,7 +1400,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 			try m_settings.onConnect(this); 
 			catch ( Exception e) {
-				logError(e.toString);
+				//logError(e.toString);
 				throw e;
 			}
 			catch ( Throwable e) {

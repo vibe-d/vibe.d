@@ -1825,7 +1825,7 @@ private:
 
 				logDebug("Stream information: ", stream.toString()); 
 				if (!dirty) continue;
-				if (finalized && isServer) close = true;
+				//if (finalized && isServer) close = true;
 				if (stream.m_rx.close)
 				{ // stream was closed remotely, no need to try and transmit something
 					if (bufs) bufs.reset();
@@ -1990,14 +1990,16 @@ private:
 					}
 
 					logDebug("HTTP/2: Submit data id ", stream.m_stream_id);
+					if (isServer) {
+						close_processed = true;
+						fflags = FrameFlags.END_STREAM;
+					}
 					ErrorCode rv = submitData(m_session, fflags, stream.m_stream_id, &stream.dataProvider);
 					if (rv == ErrorCode.DATA_EXIST) {
-						close_processed = false;
 						deferred = false;
 						rv = m_session.resumeData(stream.m_stream_id);
 					}
 					else if (rv != ErrorCode.OK) {
-						close_processed = false;
 						stream.m_rx.ex = new Exception("Could not send Data: " ~ rv.to!string);
 					}
 
