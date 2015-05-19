@@ -104,7 +104,9 @@ struct Path {
 
 		if( m_nodes.length > 0 && m_endsWithSlash )
 			ret.put('/');
-
+		// Temporary files have a trailing . for some reason
+		if (ret.data.length > 1 && ret.data[$-1] == '.')
+			return ret.data[0 .. $-1];
 		return ret.data;
 	}
 
@@ -127,6 +129,9 @@ struct Path {
 			version(Windows) { ret.put('\\'); }
 			version(Posix) { ret.put('/'); }
 		}
+		// Temporary files have a trailing . for some reason
+		if (ret.data.length > 1 && ret.data[$-1] == '.')
+			return ret.data[0 .. $-1];
 
 		return ret.data;
 	}

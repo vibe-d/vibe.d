@@ -121,7 +121,7 @@ interface OutputStream {
 				write(buffer[0 .. chunk]);
 			}
 		} else {
-			while( nbytes > 0 ){
+			while( stream !is null && nbytes > 0 ){
 				size_t chunk = min(nbytes, buffer.length);
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);

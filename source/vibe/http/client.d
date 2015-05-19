@@ -480,6 +480,7 @@ final class HTTPClient {
 	*/
 	void disconnect(bool rst_stream = true, string reason = "")
 	{
+		m_state.responding = false;
 		m_conn.totRequest = 0;
 		m_conn.maxRequests = int.max;
 		void finalize() {
@@ -510,6 +511,7 @@ final class HTTPClient {
 
 			import libhttp2.frame : FrameError;
 			if (m_state.http2Stream && m_state.http2Stream.connected) {
+				m_state.http2Stream.close();
 				finalize();
 			}
 			m_http2Context.session.stop(FrameError.NO_ERROR, reason);
@@ -559,6 +561,7 @@ final class HTTPClient {
 		}
 		if (isHTTP2Started && m_http2Context.closing)
 		{
+			m_http2Context.session.stop("Must reconnect now");
 			m_http2Context.worker.join(); // finish closing ...
 			connect();
 		}
@@ -581,6 +584,7 @@ final class HTTPClient {
 	{
 		if (isHTTP2Started && m_http2Context.closing)
 		{
+			m_http2Context.session.stop("Must reconnect now");
 			m_http2Context.worker.join();
 			connect();
 		}
@@ -682,7 +686,7 @@ final class HTTPClient {
 
 		headers["Connection"] = "Upgrade, HTTP2-Settings";
 		headers["Upgrade"] = "h2c";
-		headers["HTTP2-Settings"] = cast(string)local_settings.toBase64Settings();
+		headers["HTTP2-Settings"] = local_settings.toBase64Settings();
 
 	}
 
@@ -1084,6 +1088,16 @@ final class HTTPClientResponse : HTTPResponse {
 		return m_maxRequests;
 	}
 
+	// fixme: This isn't the best approximation
+	private bool expectBody(HTTPMethod req_method) {
+		if ("Content-Encoding" !in headers && "Content-Length" !in headers && "Transfer-Encoding" !in headers)
+			return false;
+		if (req_method == HTTPMethod.HEAD)
+			return false;
+
+		return true;
+	}
+
 	/// private
 	this(HTTPClient client, HTTPMethod req_method, ref bool keepalive)
 	{
@@ -1099,13 +1113,8 @@ final class HTTPClientResponse : HTTPResponse {
 
 		m_client.m_conn.rearmKeepAlive();
 
-		if (m_client.isHTTP2Started) {
-			logDebug("get response");
-			// process HTTP/2 compressed headers
-			m_client.m_state.http2Stream.readHeader(this.statusCode, this.headers, m_alloc);
-			this.statusPhrase = httpStatusText(this.statusCode);
-		}
-		else {
+		bool is_upgrade = m_client.canUpgradeHTTP2;
+		if (!m_client.isHTTP2Started) {
 			// read and parse status line ("HTTP/#.# #[ $]\r\n")
 			logTrace("HTTP client reading status line");
 			string stln = cast(string)client.topStream.readLine(HTTPClient.maxHeaderLineLength, "\r\n", m_alloc);
@@ -1127,6 +1136,13 @@ final class HTTPClientResponse : HTTPResponse {
 			auto upgrade_hd = this.headers.get("Upgrade", "");
 			logDebug("Finalizing the upgrade process");
 			m_client.finalizeHTTP2Upgrade(upgrade_hd);
+		}
+		
+		if (m_client.isHTTP2Started) {
+			httpVersion = HTTPVersion.HTTP_2;
+			if (is_upgrade) this.headers.destroy();
+			m_client.m_state.http2Stream.readHeader(this.statusCode, this.headers, m_alloc);
+			this.statusPhrase = httpStatusText(this.statusCode);
 		}
 
 		logTrace("---------------------");
