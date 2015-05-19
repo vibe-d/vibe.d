@@ -71,7 +71,7 @@ class ZlibOutputStream : OutputStream {
 		m_zstream.next_in = cast(ubyte*)data.ptr;
 		assert(data.length < uint.max);
 		m_zstream.avail_in = cast(uint)data.length;
-		doFlush(Z_NO_FLUSH);
+		doFlush(Z_SYNC_FLUSH);
 		assert(m_zstream.avail_in == 0);
 		m_zstream.next_in = null;
 	}
