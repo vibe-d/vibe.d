@@ -183,6 +183,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 	}
 	auto conn = pool.lockConnection();
 	if (conn.isHTTP2Started) {
+		conn.master = true;
 		logDebug("Lock http/2 connection pool");
 		if (!conn.m_http2Context.pool)
 			conn.m_http2Context.pool = new ConnectionPool!HTTPClient(&conn.connectionFactory);
@@ -329,6 +330,8 @@ final class HTTPClient {
 
 		HTTP2ClientContext m_http2Context;
 
+		@property bool master() const { return m_state.master; }
+		@property void master(bool m) { m_state.master = m; }
 		@property bool isHTTP2Started() { return m_http2Context !is null && m_conn.tcp !is null && m_conn.tcp.connected && m_http2Context.isSupported && m_http2Context.isValidated && m_http2Context.session !is null; }
 		@property bool canUpgradeHTTP2() { return !(m_settings.options & HTTPClientOption.disableHTTP2)&& !(m_settings.options & HTTPClientOption.onlyEncryptedHTTP2) && !isHTTP2Started && !m_conn.forceTLS && !unsupportedHTTP2; }
 		@property bool unsupportedHTTP2() { return m_http2Context is null || (!m_http2Context.isSupported && m_http2Context.isValidated); }
@@ -337,6 +340,16 @@ final class HTTPClient {
 			if (m_conn.tlsStream) return m_conn.tlsStream;
 			return m_conn.tcp;
 		}
+	}
+
+	~this() {
+		if (master) {
+			m_conn.destroy();
+			m_http2Context.destroy();
+		} else if (!m_http2Context) {
+			m_conn.destroy();
+		}
+
 	}
 
 	/** Get the current settings for the HTTP client. **/
@@ -413,6 +426,10 @@ final class HTTPClient {
 
 	private void connect()
 	{
+		scope(failure) {
+			m_conn.tcp = null;
+			m_conn.tlsStream = null;
+		}
 		if (m_settings.proxyURL.schema !is null){
 			NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host);
 			proxyAddr.port = m_settings.proxyURL.port;
@@ -761,6 +778,11 @@ final class HTTPClient {
 
 	private void onKeepAlive() {
 		logDebug("Keep-alive timeout");
+		if (m_state.responding || m_state.requesting || (m_http2Context && m_http2Context.session && m_http2Context.session.streams > 0))
+		{
+			m_conn.rearmKeepAlive();
+			return;
+		}
 		disconnect(false, "Keep-alive Timeout");
 	}
 
@@ -1385,6 +1407,13 @@ private class HTTPClientConnection {
 	int totRequest;
 	int maxRequests = int.max;
 
+	~this() {
+		if (tcp)
+			tcp.destroy();
+		if (tlsStream)
+			tlsStream.destroy();
+	}
+
 	void rearmKeepAlive() {
 		if (keepAlive is Timer.init) {
 			logTrace("Keep-alive is init");
@@ -1444,10 +1473,16 @@ private class HTTP2ClientContext {
 
 	Duration latency;
 	Timer pinger;
+
+	~this() {
+		if (session)
+			session.destroy();
+	}
 } 
 
 private struct HTTPClientState {
 	HTTP2Stream http2Stream;
+	bool master;
 	bool requesting;
 	bool responding;
 } 
