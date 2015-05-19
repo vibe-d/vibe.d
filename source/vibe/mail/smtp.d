@@ -142,7 +142,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
 		ctx.peerValidationMode = settings.tlsValidationMode;
 		if (settings.tlsContextSetup) settings.tlsContextSetup(ctx);
-		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting);
+		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting, settings.host, raw_conn.remoteAddress);
 	}
 
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
@@ -168,7 +168,7 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
 		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
 		ctx.peerValidationMode = settings.tlsValidationMode;
-		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting);
+		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting, settings.host, raw_conn.remoteAddress);
 		greet();
 	}
 
