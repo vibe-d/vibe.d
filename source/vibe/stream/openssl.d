@@ -647,14 +647,21 @@ final class OpenSSLContext : TLSContext {
 			}
 
 			if (err != X509_V_OK)
-				logDebug("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
+				logDebug("SSL cert initial error: %s", X509_verify_cert_error_string(err).to!string);
 
-			if (!valid && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
-				X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
-				logDebug("SSL unknown issuer cert: %s", buf.ptr.to!string);
-				if (!(vdata.validationMode & TLSPeerValidationMode.checkTrust)) {
-					valid = true;
-					err = X509_V_OK;
+			if (!valid) {
+				switch (err) {
+					default: break;
+					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+					case X509_V_ERR_CERT_UNTRUSTED:
+						X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
+						logDebug("SSL cert not trusted or unknown issuer: %s", buf.ptr.to!string);
+						if (!(vdata.validationMode & TLSPeerValidationMode.checkTrust)) {
+							valid = true;
+							err = X509_V_OK;
+						}
+						break;
 				}
 			}
 
@@ -673,6 +680,7 @@ final class OpenSSLContext : TLSContext {
 					}
 				} else {
 					if (!vdata.callback(pvdata)) {
+						logDebug("SSL application verification failed");
 						valid = false;
 						err = X509_V_ERR_APPLICATION_VERIFICATION;
 					}
@@ -685,6 +693,8 @@ final class OpenSSLContext : TLSContext {
 		}
 
 		X509_STORE_CTX_set_error(ctx, err);
+
+		logDebug("SSL validation result: %s (%s)", valid, err);
 
 		return valid;
 	}
