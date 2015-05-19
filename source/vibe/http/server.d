@@ -888,6 +888,8 @@ final class HTTPServerResponse : HTTPResponse {
 		m_tcpStream = tcp_conn;
 		m_tlsStream = tls_stream;
 		m_http2Stream = http2_stream;
+		if (http2_stream)
+			httpVersion = HTTPVersion.HTTP_2;
 		m_settings = settings;
 		m_requestAlloc = req_alloc;
 	}
@@ -1331,12 +1333,13 @@ final class HTTPServerResponse : HTTPResponse {
 		m_headerWritten = true;
 
 		if (isHTTP2) {
+			httpVersion = HTTPVersion.HTTP_2;
 			// Use integrated header writer
 			m_http2Stream.writeHeader(cast(HTTPStatus)this.statusCode, this.headers, this.cookies); 
 			return;
 		}
 
-		auto dst = StreamOutputRange(outputStream);
+		auto dst = StreamOutputRange(topStream);
 
 		void writeLine(T...)(string fmt, T args)
 		{
@@ -1743,8 +1746,6 @@ private struct HTTP2HandlerContext
 	
 	HTTP2Stream tryStartUpgrade(ref InetHeaderMap headers)
 	{
-		// assert(!isTLS, "Can only upgrade over cleartext TCP");
-
 		// using HTTP/1.1 upgrade mechanism over cleartext
 		string upgrade_hd = headers.get("Upgrade", null);
 		if (!upgrade_hd || upgrade_hd.length < 3 || upgrade_hd[0 .. 3] != "h2c")
@@ -1758,9 +1759,9 @@ private struct HTTP2HandlerContext
 		if (!base64_settings)
 			return null;
 
-		session = FreeListObjectAlloc!HTTP2Session.alloc(&handler, tcpConn, cast(ubyte[]) base64_settings, getHTTP2Settings());
+		session = FreeListObjectAlloc!HTTP2Session.alloc(&handler, tcpConn, base64_settings, getHTTP2Settings());
 		tcpConn.write("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n");
-		evloop = runTask( { session.run(); } );
+		evloop = runTask( { session.run(true); } );
 		started = true;
 		return session.getUpgradeStream();
 	}
@@ -1898,7 +1899,7 @@ private bool handleRequest(TCPConnection tcp_connection,
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
-		assert(!res.headerWritten);
+		assert(!res.headerWritten || (http2_stream !is null && http2_stream.headersWritten)); 
 
 		// stack traces sometimes contain random bytes - make sure they are replaced
 		debug_msg = sanitizeUTF8(cast(ubyte[])debug_msg);
@@ -1919,6 +1920,7 @@ private bool handleRequest(TCPConnection tcp_connection,
 
 	// parse the request
 	try {
+		bool is_upgrade;
 		logTrace("reading request..");
 		// During an upgrade, we would need to read with HTTP/1.1 and write with HTTP/2, 
 		// so we define the InputStream before the upgrade starts
@@ -1936,8 +1938,30 @@ private bool handleRequest(TCPConnection tcp_connection,
 			if (!contextn.isNull()) context = contextn;
 
 			// Replace topStream with the HTTP/2 stream
-			if (!(settings.options & HTTPServerOption.disableHTTP2) && !tls_stream)
+			if (!(settings.options & HTTPServerOption.disableHTTP2) && !tls_stream) {
 				http2_stream = http2_handler.tryStartUpgrade(req.headers);
+				if (http2_stream !is null) {
+					scope(exit) {
+						http2_handler.session.resume();					
+					}
+					is_upgrade = true;
+					req.m_settings = settings;
+					import vibe.stream.memory;
+					if (req.bodyReader && !req.bodyReader.empty)
+					{
+						auto tmp = scoped!MemoryOutputStream(manualAllocator());
+						tmp.write(req.bodyReader);
+						// Usually, this shouldn't be a heavy allocation...
+						// todo: pipe to a file if it gets too big
+						req.bodyReader = FreeListObjectAlloc!MemoryStream.alloc(tmp.data.dup, false);
+						tmp.clear();
+					}
+					req.httpVersion = HTTPVersion.HTTP_2;
+					res.httpVersion = HTTPVersion.HTTP_2;
+					res.m_http2_stream = http2_stream;
+				}
+				
+			}
 		}
 		else
 		{ 
