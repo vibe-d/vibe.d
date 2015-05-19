@@ -104,6 +104,7 @@ void readUntil()(InputStream stream, OutputStream dst, in ubyte[] end_marker, ul
 void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
 	if (isOutputRange!(R, ubyte))
 {
+	enforce(stream !is null);
 	assert(max_bytes > 0 && end_marker.length > 0);
 
 	// allocate internal jump table to optimize the number of comparisons

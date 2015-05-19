@@ -307,8 +307,11 @@ final class HTTP2Stream : ConnectionStream
 
 	~this()
 	{
-		onClose();
+		if (m_session && m_session.get() && streamId > 0)
+			m_session.get().destroyStream(m_session.get().getStream(streamId));
+		else onClose();
 		m_rx.free();
+		m_session = null;
 	}
 
 	/// Set the memory safety to > None to secure memory operations for the active stream.
@@ -681,8 +684,7 @@ final class HTTP2Stream : ConnectionStream
 	}
 
 	void close(FrameError error) {
-		if (m_session.isServer && m_tx.finalized) return;
-		if (!m_session.connected) return;
+		if (!m_tx.bufs) return;
 		// This could be called by a keep-alive timer. In this case we must forcefully free the read lock
 		if (m_rx.owner !is Task.init && m_rx.owner != Task.getThis())
 		{
@@ -705,6 +707,7 @@ final class HTTP2Stream : ConnectionStream
 		}
 
 		onClose();
+		m_rx.free();
 	}
 
 	void close()
@@ -833,6 +836,7 @@ final class HTTP2Stream : ConnectionStream
 	
 	void write(in ubyte[] src)
 	{
+		if (src.length == 0) return;
 		acquireWriter();
 		scope(exit) releaseWriter();
 		const(ubyte)[] ub = cast()src;
@@ -886,6 +890,7 @@ final class HTTP2Stream : ConnectionStream
 				m_rx.dataSignalRaised = false;
 				m_rx.waitingStreamExit = false;
 			}
+			m_rx.free();
 		}
 		processExceptions();
 
@@ -1061,13 +1066,13 @@ private:
 	// This function retrieves the length of the next write and calls Connector.writeData when ready
 	int dataProvider(ubyte[] dst, ref DataFlags data_flags)
 	{
+		data_flags |= DataFlags.NO_COPY; // dst is unused
 		if (!m_rx.bufs)
 			return ErrorCode.CALLBACK_FAILURE;
 		// this function may be called many times for a single send operation		
 		Buffers bufs = m_tx.bufs;
 		int wlen;
 		if (bufs.length > 0) {
-			data_flags |= DataFlags.NO_COPY; // dst is unused
 			Buffers.Chain c;
 			int i;
 			// find the next buffer scheduled to be sent
@@ -1101,12 +1106,13 @@ private:
 			m_tx.queued_len += wlen;
 		}
 		
-		if (bufs.length == 0 || (m_tx.halfClosed && m_tx.bufs.length - wlen == 0))
+		if (m_tx.halfClosed && bufs.length == 0)
 		{
 			dirty();
 			m_tx.finalized = true;
 			data_flags |= DataFlags.EOF;
 		}
+		else if (bufs.length == 0) return ErrorCode.DEFERRED;
 		return wlen;
 	}
 
@@ -1200,6 +1206,7 @@ final class HTTP2Session
 	@property bool connected() { return m_tx.owner != Task() && m_tcpConn && m_tcpConn.connected() && !m_rx.closed && !m_tx.closed && m_gotPreface; }
 	@property string httpVersion() { if (m_tlsStream) return "h2"; else return "h2c"; }
 	@property ConnectionStream topStream() { return m_tlsStream ? cast(ConnectionStream) m_tlsStream : cast(ConnectionStream) m_tcpConn; }
+	@property int streams() { return m_totConnected; }
 
 	/// Sets the max amount of time we wait for data. You can use ping to avoid reaching the timeout
 	void setReadTimeout(Duration timeout) { m_readTimeout = timeout; }
@@ -1347,6 +1354,8 @@ final class HTTP2Session
 			throw new Exception("Client HTTP/2 upgrade failed: " ~ libhttp2.types.toString(rv));
 		m_rx.buffer = Mem.alloc!(ubyte[])(local_settings.connectionWindowSize);
 	}
+	
+	~this() { if (m_tcpConn !is null) onClose(); }
 
 	// Used exclusively by the server to send an initial response
 	HTTP2Stream getUpgradeStream()
@@ -1588,6 +1597,7 @@ private:
 				stream.onClose();
 			}
 		}
+		m_tx.dirty.clear();
 		if (m_session) m_session.free();
 		if (m_connector) Mem.free(m_connector);
 		if (m_session) Mem.free(m_session);
@@ -1825,7 +1835,7 @@ private:
 
 				logDebug("Stream information: ", stream.toString()); 
 				if (!dirty) continue;
-				if (finalized && isServer) close = true;
+				//if (finalized && isServer) close = true;
 				if (stream.m_rx.close)
 				{ // stream was closed remotely, no need to try and transmit something
 					if (bufs) bufs.reset();
@@ -1990,14 +2000,16 @@ private:
 					}
 
 					logDebug("HTTP/2: Submit data id ", stream.m_stream_id);
+					if (isServer) {
+						close_processed = true;
+						fflags = FrameFlags.END_STREAM;
+					}
 					ErrorCode rv = submitData(m_session, fflags, stream.m_stream_id, &stream.dataProvider);
 					if (rv == ErrorCode.DATA_EXIST) {
-						close_processed = false;
 						deferred = false;
 						rv = m_session.resumeData(stream.m_stream_id);
 					}
 					else if (rv != ErrorCode.OK) {
-						close_processed = false;
 						stream.m_rx.ex = new Exception("Could not send Data: " ~ rv.to!string);
 					}
 
@@ -2047,6 +2059,8 @@ private final class HTTP2Connector : Connector {
 	this(HTTP2Session session) {
 		m_session = session;
 	}
+
+	~this() { m_session = null; m_stream = null; }
 
 	HTTP2Stream getStream(int stream_id) {
 		logDebug("HTTP/2: Get stream: ", stream_id);
