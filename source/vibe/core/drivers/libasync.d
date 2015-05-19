@@ -187,38 +187,35 @@ final class LibasyncDriver : EventDriver {
 				bool* finished;
 				void handler(NetworkAddress addr) {
 					*address = addr;
-					Exception ex;
-					if (addr == NetworkAddress.init)
-						ex = new Exception("Could not resolve the specified host.");
 					*finished = true;
-					if (waiter != Task())
-						getDriverCore().resumeTask(waiter, ex);
-					else if (ex)
-						throw ex;
+					if (waiter != Task() && waiter != Task.getThis())
+						getDriverCore().resumeTask(waiter);
 				}
 			}
-
+			
 			DNSCallback* cb = FreeListObjectAlloc!DNSCallback.alloc();
 			cb.waiter = Task.getThis();
 			cb.address = &ret;
 			cb.finished = &done;
-
+			
 			// todo: remove the shared attribute to avoid GC?
 			shared AsyncDNS dns = new shared AsyncDNS(getEventLoop());
-
+			scope(exit) dns.destroy();
 			bool success = dns.handler(&cb.handler).resolveHost(host, is_ipv6);
-			if (!success)
+			if (!success || dns.status.code != Status.OK)
 				throw new Exception(dns.status.text);
 			while(!done)
 				getDriverCore.yieldForEvent();
+			if (dns.status.code != Status.OK)
+				throw new Exception(dns.status.text);
 			assert(ret != NetworkAddress.init);
 			assert(ret.family != 0);
 			logTrace("Async resolved address %s", ret.toString());
 			FreeListObjectAlloc!DNSCallback.free(cb);
-
+			
 			if (ret.family == 0)
 				ret.family = family;
-
+			
 			return ret;
 		} 
 		else {
