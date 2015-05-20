@@ -206,23 +206,39 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 	A new connection will be opened in requestHTTP for each different HTTPClientSettings.
 */
 final class HTTPClientSettings {
-	/// If an HTTP proxy is used, the URL must be provided. It will be resolved,
-	/// and the HTTPClient will throw if it cannot connect to it
+	/** Sets the URL of a proxy to use for requests.
+
+		If an HTTP proxy is used, the URL must be provided. It will be resolved,
+		and the `HTTPClient` will throw if it cannot connect to it.
+	*/
 	URL proxyURL;
 
-	/// Maximum amount of time the client should wait for the next request when there are none active (observed by HTTP/1.1 and HTTP/2)
+	/** Default maximum amount of time to keep a connection open after a request.
+
+		Maximum amount of time the client should wait for the next request when
+		there are none active. Note that the server will usually report its own
+		keep-alive timeout, which will then be used instead.
+
+		This setting is obeyed for HTTP/1.1 and HTTP/2 connections.
+	*/
 	Duration defaultKeepAliveTimeout = 10.seconds; 
 
-	/// If left empty, the default vibe.d user-agent string will be entered automatically in the headers
+	/** Sets the user agent string to report in requests.
+
+		If left empty, the default vibe.d user agent string will be used. Use
+		`HTTPClient.setUserAgentString` to set a different default user agent
+		globally.
+	*/
 	string userAgent;
 
 	/// General option flags
 	HTTPClientOptions options = HTTPClientOption.defaults;
 
-	/// All cookies will be processed from and to the cookiejar if specified
+	/// All cookies will be processed from and to the cookie jar if specified
 	CookieStore cookieJar;
 
-	/** If set, sends ping frames at regular intervals to avoid peer inactivity timeout.
+	/** If set, sends ping frames at regular intervals to avoid peer
+		inactivity timeout.
 
 		Note that this field only has an effect for HTTP/2 connections.
 	*/
@@ -346,8 +362,9 @@ final class HTTPClient {
 	*/
 	static void setTLSSetupCallback(void function(TLSContext) func) { ms_tlsSetup = func; }
 
-	deprecated("Use setTLSSetupCallback")
-	static void setSSLSetupCallback(void function(TLSContext) func) { ms_tlsSetup = func; }
+	/// Compatibility alias - will be deprecated soon.
+	alias setSSLSetupCallback = setTLSSetupCallback;
+	
 	/**
 		Connects to a specific server.
 
