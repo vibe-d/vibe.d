@@ -1145,6 +1145,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	
 	void read(ubyte[] dst)
 	{
+		if (!dst) return;
 		assert(dst !is null && !m_slice);
 		logTrace("Read TCP");
 		acquireReader();
@@ -1400,7 +1401,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 			try m_settings.onConnect(this); 
 			catch ( Exception e) {
-				logError(e.toString);
+				//logError(e.toString);
 				throw e;
 			}
 			catch ( Throwable e) {
@@ -1423,7 +1424,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 				if (m_tcpImpl.conn.inbound)
 					runTask(&onConnect);
 				else onConnect();
-
+				m_settings.onConnect = null;
 				break;
 			case TCPEvent.READ:
 				// fill the read buffer and resume any task if waiting

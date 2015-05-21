@@ -63,6 +63,11 @@ class ZlibOutputStream : OutputStream {
 		zlibEnforce(deflateInit2(&m_zstream, level, Z_DEFLATED, 15 + (type == HeaderFormat.gzip ? 16 : 0), 8, Z_DEFAULT_STRATEGY));
 	}
 
+	~this() {
+		if (!m_finalized)
+			deflateEnd(&m_zstream);
+	}
+
 	final void write(in ubyte[] data)
 	{
 		if (!data.length) return;
@@ -184,6 +189,11 @@ class ZlibInputStream : InputStream {
 		}
 	}
 
+	~this() {
+		if (!m_finished)
+			inflateEnd(&m_zstream);
+	}
+
 	@property bool empty() { return this.leastSize == 0; }
 
 	@property ulong leastSize()
@@ -192,7 +202,6 @@ class ZlibInputStream : InputStream {
 		if (m_outbuffer.length > 0) return m_outbuffer.length;
 		if (m_finished) return 0;
 		readChunk();
-		assert(m_outbuffer.length || m_finished);
 		return m_outbuffer.length;
 	}
 
@@ -245,6 +254,7 @@ class ZlibInputStream : InputStream {
 
 			if (ret == Z_STREAM_END) {
 				m_finished = true;
+				zlibEnforce(inflateEnd(&m_zstream));
 				assert(m_in.empty, "Input expected to be empty at this point.");
 				return;
 			}
