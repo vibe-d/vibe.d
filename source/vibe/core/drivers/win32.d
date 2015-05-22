@@ -115,7 +115,10 @@ final class Win32EventDriver : EventDriver {
 		MSG msg;
 		//uint cnt = 0;
 		while (PeekMessageW(&msg, null, 0, 0, PM_REMOVE)) {
-			if( msg.message == WM_QUIT ) return false;
+			if( msg.message == WM_QUIT ) {
+				m_exit = true;
+				return false;
+			}
 			if( msg.message == WM_USER_SIGNAL )
 				msg.hwnd = m_hwnd;
 			TranslateMessage(&msg);
