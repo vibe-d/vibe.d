@@ -575,7 +575,7 @@ struct Bson {
 		entries ~= Bson(1);
 		entries ~= Bson(true);
 		entries ~= Bson("foo");
-		
+
 		Bson value = Bson(entries);
 		assert(value[0] == Bson(1));
 		assert(value[1] == Bson(true));
@@ -730,8 +730,9 @@ struct BsonObjectID {
 	*/
 	static BsonObjectID fromString(string str)
 	{
-		static const lengthex = new Exception("BSON Object ID string must be 24 characters.");
-		static const charex = new Exception("Not a valid hex string.");
+		import std.conv : ConvException;
+		static const lengthex = new ConvException("BSON Object ID string must be 24 characters.");
+		static const charex = new ConvException("Not a valid hex string.");
 
 		if (str.length != 24) throw lengthex;
 		BsonObjectID ret = void;
