@@ -125,7 +125,8 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 	}
 
 	size_t nmatched = 0;
-	auto bufferobj = FreeListRef!(Buffer, false)();
+	auto bufferobj = FreeListObjectAlloc!(Buffer, false, false).alloc();
+	scope(exit) FreeListObjectAlloc!(Buffer, false, false).free(bufferObj);
 	auto buf = bufferobj.bytes[];
 
 	ulong bytes_read = 0;
