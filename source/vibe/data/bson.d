@@ -1627,7 +1627,7 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 		case Json.Type.int_:
 			dst.put(toBsonData(cast(long)value));
 			return Bson.Type.long_;
-		case Json.Type.bigint:
+		case Json.Type.bigInt:
 			dst.put(toBsonData(cast(long)value));
 			return Bson.Type.long_;
 		case Json.Type.float_:
