@@ -71,6 +71,9 @@ import std.bigint;
 */
 
 struct Json {
+	static assert(!hasElaborateDestructor!BigInt && !hasElaborateCopyConstructor!BigInt,
+		"struct Json is missing required ~this and/or this(this) members for BigInt.");
+
 	private {
 		// putting all fields in a union results in many false pointers leading to
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
@@ -78,7 +81,6 @@ struct Json {
 		// the issues.
 		void*[max((BigInt.sizeof+(void*).sizeof-1)/(void*).sizeof, 2)] m_data;
 		ref inout(T) getDataAs(T)() inout { static assert(T.sizeof <= m_data.sizeof); return *cast(inout(T)*)m_data.ptr; }
-
 
 		@property ref inout(BigInt) m_bigInt() inout { return getDataAs!BigInt(); }
 		@property ref inout(long) m_int() inout { return getDataAs!long(); }
