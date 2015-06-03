@@ -1604,6 +1604,7 @@ private Bson.Type jsonTypeToBsonType(Json.Type tp)
 		Bson.Type.null_,
 		Bson.Type.bool_,
 		Bson.Type.long_,
+		Bson.Type.long_,
 		Bson.Type.double_,
 		Bson.Type.string,
 		Bson.Type.array,
@@ -1624,6 +1625,9 @@ private Bson.Type writeBson(R)(ref R dst, in Json value)
 			dst.put(cast(ubyte)(cast(bool)value ? 0x01 : 0x00));
 			return Bson.Type.bool_;
 		case Json.Type.int_:
+			dst.put(toBsonData(cast(long)value));
+			return Bson.Type.long_;
+		case Json.Type.bigint:
 			dst.put(toBsonData(cast(long)value));
 			return Bson.Type.long_;
 		case Json.Type.float_:

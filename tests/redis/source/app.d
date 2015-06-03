@@ -3,7 +3,7 @@
 module app;
 
 import vibe.vibe;
-import std.algorithm : sort;
+import std.algorithm : sort, equal;
 
 void runTest()
 {
