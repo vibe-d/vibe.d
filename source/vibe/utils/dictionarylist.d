@@ -59,6 +59,12 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		foreach (k, ref v; this) ret ~= FieldTuple(k, v);
 		return ret;
 	}
+	/// ditto
+	const(FieldTuple)[] toRepresentation() const {
+		const(FieldTuple)[] ret;
+		foreach (k, ref v; this) ret ~= const(FieldTuple)(k, v);
+		return ret;
+	}
 
 	/** Removes the first field that matches the given key.
 	*/

@@ -433,18 +433,22 @@ class RestInterfaceClient(I) : I
 			auto query = appender!string();
 
 			foreach (idx, p; params) {
-				static if (!(idx % 2)) {
-					// Parameter name
-					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
-					query.put('&');
-					filterURLEncode(query, p);
-				} else {
-					// Parameter value
-					query.put('=');
-					static if (is(typeof(p) == Json))
-						filterURLEncode(query, p.toString());
-					else // Note: CTFE triggers compiler bug here (think we are returning Json, not string).
-						filterURLEncode(query, toRestString(serializeToJson(p)));
+				// gets value corresponding to the current parameter
+				auto value = params[(idx / 2) * 2 + 1];
+				// generates condition for inclusion of this parameter
+				enum condition = isNullable!(typeof(value)) ? q{ !value.isNull } : q{ true };
+				if (mixin(condition))
+				{
+					static if (!(idx % 2)) {
+						// Parameter name
+						static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
+						query.put('&');
+						filterURLEncode(query, p);
+					} else {
+						// Parameter value
+						query.put('=');
+						filterURLEncode(query, toRestString(p));
+					}
 				}
 			}
 			return query.data();
@@ -469,7 +473,11 @@ class RestInterfaceClient(I) : I
 					nextName = p;
 				} else {
 					// Parameter value
-					jsonBody[nextName] = serializeToJson(p);
+					static if (isNullable!(typeof(p))) {
+						if (!p.isNull) jsonBody[nextName] = serializeToJson(p);
+					} else {
+						jsonBody[nextName] = serializeToJson(p);
+					}
 				}
 			}
 			debug return jsonBody.toPrettyString();
@@ -523,7 +531,7 @@ unittest
 }
 
 
-/**
+/**dictionary list
 	Encapsulates settings used to customize the generated REST interface.
 */
 class RestInterfaceSettings {
@@ -599,14 +607,19 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 					// @headerParam.
 					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
-						static if (is (ParamDefaults[i] == void)) {
+						static if (is (ParamDefaults[i] == void) && !isNullable!P) {
 							auto fld = enforceBadRequest(paramsArgList[0].field in req.headers,
 							format("Expected field '%s' in header", paramsArgList[0].field));
 						} else {
 							auto fld = paramsArgList[0].field in req.headers;
-								if (fld is null) {
-								params[i] = ParamDefaults[i];
-								logDebug("No header param %s, using default value", paramsArgList[0].identifier);
+							if (fld is null) {
+								static if (is (ParamDefaults[i] == void)) {
+									params[i] = P();
+									logDebug("No header param %s, using empty nullable", paramsArgList[0].identifier);
+								} else {
+									params[i] = ParamDefaults[i];
+									logDebug("No header param %s, using default value", paramsArgList[0].identifier);
+								}
 								continue;
 							}
 						}
@@ -614,14 +627,19 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						params[i] = fromRestString!P(*fld);
 					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
 						// Note: Doesn't work if HTTPServerOption.parseQueryString is disabled.
-						static if (is (ParamDefaults[i] == void)) {
+						static if (is (ParamDefaults[i] == void) && !isNullable!P) {
 							auto fld = enforceBadRequest(paramsArgList[0].field in req.query,
 										     format("Expected form field '%s' in query", paramsArgList[0].field));
 						} else {
 							auto fld = paramsArgList[0].field in req.query;
 							if (fld is null) {
-								params[i] = ParamDefaults[i];
-								logDebug("No query param %s, using default value", paramsArgList[0].identifier);
+								static if (is (ParamDefaults[i] == void)) {
+									params[i] = P();
+									logDebug("No query param %s, using empty nullable", paramsArgList[0].identifier);
+								} else {
+									params[i] = ParamDefaults[i];
+									logDebug("No query param %s, using default value", paramsArgList[0].identifier);
+								}
 								continue;
 							}
 						}
@@ -969,12 +987,13 @@ private string genClientBody(alias Func)() {
 				static if (is(PT == Json))
 					url_prefix = q{urlEncode(id.toString())~"/"};
 				else
-					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
+					url_prefix = q{urlEncode(toRestString(id))~"/"};
 			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
 				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
-					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
-				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query)
+				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
+					static if (isNullable!PT) param_handling_str ~= format(q{ if (!%s.isNull) }, paramsArgList[0].identifier);
+					param_handling_str ~= format(q{headers__["%s"] = toRestString(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
+				} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query)
 					queryParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
 				else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body)
 					bodyParamCTMap[paramsArgList[0].field] = paramsArgList[0].identifier;
@@ -1008,7 +1027,7 @@ private string genClientBody(alias Func)() {
 				if (p.startsWith(":")) {
 					foreach (pn; ParamNames) {
 						if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
-							request_str ~= q{ ~ urlEncode(toRestString(serializeToJson(%s)))}.format(pn);
+							request_str ~= q{ ~ urlEncode(toRestString(%s))}.format(pn);
 							match = true;
 							break;
 						}
@@ -1060,7 +1079,19 @@ private {
 	import vibe.data.json;
 	import std.conv : to;
 
-	string toRestString(Json value)
+	// this probably isn't orthogonal with fromRestString
+	string toRestString(T)(in T value)
+	{
+		static if (isNullable!T) {
+			assert (!value.isNull, "Internal error ("~__FUNCTION__~"): empty nullable values must not be transferred over REST");
+			return toRestString(value.get());
+		} 
+		else static if (is(T == Json)) return toRestStringFromJson(value);
+		else return toRestStringFromJson(serializeToJson(value));
+	}
+
+	// ditto
+	string toRestStringFromJson(Json value)
 	{
 		switch (value.type) {
 			default: return value.toString();
@@ -1077,7 +1108,7 @@ private {
 		import std.conv : ConvException;
 		import vibe.web.common : HTTPStatusException, HTTPStatus;
 		try {
-			static if (isInstanceOf!(Nullable, T)) return T(fromRestString!(typeof(T.init.get()))(value));
+			static if (isNullable!T) return T(fromRestString!(typeof(T.init.get()))(value));
 			else static if (is(T == bool)) return value == "true";
 			else static if (is(T : int)) return to!T(value);
 			else static if (is(T : double)) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
