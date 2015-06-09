@@ -198,7 +198,14 @@ struct Json {
 	/// ditto
 	long opAssign(long v) { runDestructors(); m_type = Type.int_; m_int = v; return v; }
 	/// ditto
-	BigInt opAssign(BigInt v) { runDestructors(); m_type = Type.bigInt; m_bigInt = v; return v; }
+	BigInt opAssign(BigInt v)
+	{
+		if (m_type != Type.bigInt)
+			initBigInt();
+		m_type = Type.bigInt;
+		m_bigInt = v;
+		return v;
+	}
 	/// ditto
 	double opAssign(double v) { runDestructors(); m_type = Type.float_; m_float = v; return v; }
 	/// ditto
