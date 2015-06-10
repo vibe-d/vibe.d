@@ -641,20 +641,20 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 								  "The request body must contain a JSON object with an entry for each parameter."
 								  );
 
+                        auto par = req.json[paramsArgList[0].field];
 						static if (is(ParamDefaults[i] == void)) {
-							auto par = req.json[paramsArgList[0].field];
 							enforceBadRequest(par.type != Json.Type.Undefined,
 									  format("Missing parameter %s", paramsArgList[0].field)
 									  );
-							logDebug("Body param: %s <- %s", paramsArgList[0].identifier, par);
-							params[i] = deserializeJson!P(par);
 						} else {
-							if (req.json[paramsArgList[0].field].type == Json.Type.Undefined) {
+							if (par.type == Json.Type.Undefined) {
 								logDebug("No body param %s, using default value", paramsArgList[0].identifier);
 								params[i] = ParamDefaults[i];
 								continue;
 							}
-						}
+                        }
+                        params[i] = deserializeJson!P(par);
+                        logDebug("Body param: %s <- %s", paramsArgList[0].identifier, par);
 					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
 					// URL parameter
@@ -1189,7 +1189,7 @@ body {
 			foreach (elem; sp) {
 				if (!elem.length)
 					return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
-				
+
 				if (elem[0] == ':') {
 					// typeof(PN) is void when length is 0.
 					static if (!PN.length) {
