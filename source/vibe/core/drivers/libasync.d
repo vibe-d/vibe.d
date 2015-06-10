@@ -92,7 +92,7 @@ final class LibasyncDriver : EventDriver {
 				gs_maxID = 32;
 			}
 		}
-		catch {
+		catch (Throwable) {
 			assert(false, "Couldn't reserve necessary space for available Manual Events");
 		}
 
@@ -399,7 +399,7 @@ final class LibasyncDriver : EventDriver {
 		try processTimers();
 		catch (Exception e) {
 			logError("Failed to process timers: %s", e.msg);
-			try logDiagnostic("Full error: %s", e.toString().sanitize); catch {}
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
 		}
 	}
 }
@@ -496,7 +496,7 @@ final class LibasyncFileStream : FileStream {
 		assert(m_impl.offset == m_offset, "Incoherent offset returned from file reader: " ~ m_offset.to!string ~ "B assumed but the implementation is at: " ~ m_impl.offset.to!string ~ "B");
 	}
 	
-	alias Stream.write write;
+	alias write = Stream.write;
 	void write(in ubyte[] bytes_)
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");

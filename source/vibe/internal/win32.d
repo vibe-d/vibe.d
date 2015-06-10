@@ -96,12 +96,12 @@ extern(System) nothrow
 		DWORD            dwMessageSize;
 		DWORD            dwProviderReserved;
 		WCHAR[WSAPROTOCOL_LEN+1] szProtocol;
-	};
+	}
 
 	struct WSAPROTOCOLCHAIN {
 		int ChainLen;                   
 		DWORD[MAX_PROTOCOL_CHAIN] ChainEntries;
-	};
+	}
 
 	struct WSABUF {
 		size_t   len;
@@ -232,7 +232,7 @@ extern(System) nothrow
 		WORD Data2;
 		WORD Data3;
 		BYTE[8]  Data4;
-	};
+	}
 
 	enum WM_USER = 0x0400;
 
