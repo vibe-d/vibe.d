@@ -7,6 +7,7 @@ d:
   - ldc-0.14.0
   - ldc-0.15.1
   - gdc-4.9.0
+  - gdc-4.9.2
 
 before_install:
   - wget http://dist.schmorp.de/libev/Attic/libev-4.19.tar.gz
@@ -27,6 +28,8 @@ matrix:
     - d: ldc-0.15.1
       env: VIBED_DRIVER=libasync
     - d: gdc-4.9.0
+      env: VIBED_DRIVER=libasync
+    - d: gdc-4.9.2
       env: VIBED_DRIVER=libasync
 
 script:
