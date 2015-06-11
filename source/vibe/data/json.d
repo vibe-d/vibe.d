@@ -1604,6 +1604,18 @@ unittest { // #840
 	assert(nestedArray.serializeToJson.deserializeJson!(typeof(nestedArray)) == nestedArray);
 }
 
+unittest { // #1109
+	static class C {
+		int mem;
+		this(int m) { mem = m; }
+		static C fromJson(Json j) { return new C(j.get!int-1); }
+		Json toJson() const { return Json(mem+1); }
+	}
+	const c = new C(13);
+	assert(serializeToJson(c) == Json(14));
+	assert(deserializeJson!C(Json(14)).mem == 13);
+}
+
 
 /**
 	Serializer for a plain Json representation.
