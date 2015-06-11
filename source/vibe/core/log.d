@@ -28,8 +28,8 @@ import std.traits : isSomeString;
 */
 void setLogLevel(LogLevel level)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled due to missing console.");
-	ss_stdoutLogger.lock().minLevel = level;
+	if (ss_stdoutLogger)
+		ss_stdoutLogger.lock().minLevel = level;
 }
 
 
@@ -40,10 +40,11 @@ nothrow @safe {
 */
 void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.Format.plain)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
-	auto l = ss_stdoutLogger.lock();
-	l.format = fmt;
-	l.infoFormat = infoFmt;
+	if (ss_stdoutLogger) {
+		auto l = ss_stdoutLogger.lock();
+		l.format = fmt;
+		l.infoFormat = infoFmt;
+	}
 }
 
 
