@@ -1638,7 +1638,7 @@ struct JsonSerializer {
 	void beginWriteArrayEntry(T)(size_t) {}
 	void endWriteArrayEntry(T)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
-	void writeValue(T)(T value)
+	void writeValue(T)(in T value)
 	{
 		static if (is(T == Json)) m_current = value;
 		else static if (isJsonSerializable!T) m_current = value.toJson();
