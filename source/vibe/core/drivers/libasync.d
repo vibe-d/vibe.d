@@ -1057,7 +1057,6 @@ final class LibasyncTCPConnection : TCPConnection {
 		auto tm = _driver.createTimer(null);
 		scope(exit) { 
 			_driver.releaseTimer(tm);
-			_driver.processTimers();
 			releaseReader();
 		}
 		_driver.m_timers.getUserData(tm).owner = Task.getThis();
