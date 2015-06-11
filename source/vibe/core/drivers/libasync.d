@@ -249,8 +249,8 @@ final class LibasyncDriver : EventDriver {
 
 		enforce(conn.run(&tcp_connection.handler), "An error occured while starting a new connection: " ~ conn.error);
 
-		while (!tcp_connection.connected) getDriverCore().yieldForEvent();
-		
+		while (!tcp_connection.connected && !tcp_connection.m_error) getDriverCore().yieldForEvent();
+		enforce(!tcp_connection.m_error, tcp_connection.m_error);
 		tcp_connection.m_tcpImpl.localAddr = conn.local;
 		
 		if (Task.getThis() != Task()) 
@@ -960,6 +960,7 @@ final class LibasyncTCPConnection : TCPConnection {
 
 		bool m_closed = true;
 		bool m_mustRecv = true;
+		string m_error;
 
 		// The socket descriptor is unavailable to motivate low-level/API feature additions 
 		// rather than high-lvl platform-dependent hacking
@@ -1027,8 +1028,11 @@ final class LibasyncTCPConnection : TCPConnection {
 		scope(exit) releaseReader();
 		
 		while( m_readBuffer.empty ){
-			checkConnected();
+			if (!connected)
+				return 0;
+			m_settings.reader.noExcept = true;
 			getDriverCore().yieldForEvent();
+			m_settings.reader.noExcept = false;
 		}
 		return m_readBuffer.length;
 	}
@@ -1058,22 +1062,26 @@ final class LibasyncTCPConnection : TCPConnection {
 		}
 		_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		_driver.rearmTimer(tm, timeout, false);
-		logTrace("waitForData()");
+		logTrace("waitForData TCP");
 		while (m_readBuffer.empty) {
-			checkConnected();
+			if (!connected) return false;
+
 			if (m_mustRecv)
 				onRead();
 			else {
-				logTrace("Yielding for event in waitForData, waiting? %s", m_settings.reader.isWaiting);
+				//logTrace("Yielding for event in waitForData, waiting? %s", m_settings.reader.isWaiting);
+				m_settings.reader.noExcept = true;
 				getDriverCore().yieldForEvent();
+				m_settings.reader.noExcept = false;
 			}
 			if (!_driver.isTimerPending(tm)) {
-				logTrace("WaitForData exit: timer signal");
+				logTrace("WaitForData TCP: timer signal");
 				return false;
 			}
 		}
+		if (m_readBuffer.empty && !connected) return false;
 		logTrace("WaitForData exit: fiber resumed with read buffer");
-		return true;
+		return !m_readBuffer.empty;
 	}
 	
 	const(ubyte)[] peek()
@@ -1254,36 +1262,35 @@ final class LibasyncTCPConnection : TCPConnection {
 	private void onClose(in string msg = null) {
 		logTrace("onClose");
 
-		if (m_closed)
-			return;
-
-		if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected) {
-			m_tcpImpl.conn.kill(true); // close the connection
-			destroy(m_readBuffer);
-			m_tcpImpl.conn = null;
+		if (msg)
+			m_error = msg;
+		if (!m_closed) {
+			
+			m_closed = true;
+			
+			if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected) {
+				m_tcpImpl.conn.kill(Task.getThis() != Task.init); // close the connection
+				destroy(m_readBuffer);
+				m_tcpImpl.conn = null;
+			}
 		}
-		m_closed = true;
+		if (Task.getThis() != Task.init) {
+			return;
+		}
 		Exception ex;
 		if (!msg)
 			ex = new Exception("Connection closed");
 		else	ex = new Exception(msg);
 
-		bool hasUniqueReader;
-		bool hasUniqueWriter;
-		Task reader;
-		Task writer;
-
-		if (m_settings.reader.isWaiting && m_settings.reader.task != writer) 
-		{
-			reader = m_settings.reader.task;
-			hasUniqueReader = true;
-		}
-		if (m_settings.writer.isWaiting) {
-			writer = m_settings.writer.task;
-			hasUniqueWriter = true;
-		}
+		
+		Task reader = m_settings.reader.task;
+		Task writer = m_settings.writer.task;
+		
+		bool hasUniqueReader = m_settings.reader.isWaiting;
+		bool hasUniqueWriter = m_settings.writer.isWaiting && reader != writer;
+		
 		if (hasUniqueReader && Task.getThis() != reader) {
-			getDriverCore().resumeTask(reader, ex);
+			getDriverCore().resumeTask(reader, m_settings.reader.noExcept?null:ex);
 		}
 		if (hasUniqueWriter && Task.getThis() != writer) {
 			getDriverCore().resumeTask(writer, ex);
@@ -1322,6 +1329,7 @@ final class LibasyncTCPConnection : TCPConnection {
 				if (m_tcpImpl.conn.inbound)
 					runTask(&onConnect);
 				else onConnect();
+				m_settings.onConnect = null;
 
 				break;
 			case TCPEvent.READ:
@@ -1337,10 +1345,18 @@ final class LibasyncTCPConnection : TCPConnection {
 					getDriverCore().resumeTask(m_settings.writer.task, ex);
 				break;
 			case TCPEvent.CLOSE:
+				m_closed = false;
 				onClose();
+				if (m_settings.onConnect)
+					m_settings.onConnect(this);
+				m_settings.onConnect = null;
 				break;
 			case TCPEvent.ERROR:
+				m_closed = false;
 				onClose(conn.error);
+				if (m_settings.onConnect)
+					m_settings.onConnect(this);
+				m_settings.onConnect = null;
 				break;
 		}
 		return;
@@ -1349,6 +1365,7 @@ final class LibasyncTCPConnection : TCPConnection {
 	struct Waiter {
 		Task task; // we can only have one task waiting for read/write operations
 		bool isWaiting; // if a task is actively waiting
+		bool noExcept;
 	}
 	
 	struct Settings {
