@@ -37,7 +37,7 @@ version(Windows){
 			int write(int fd, in void *buffer, uint count);
 			off_t lseek(int fd, off_t offset, int whence);
 		}
-		
+
 		enum O_RDONLY = 0;
 		enum O_WRONLY = 1;
 		enum O_RDWR = 2;
@@ -71,7 +71,7 @@ final class ThreadedFileStream : FileStream {
 		FileMode m_mode;
 		bool m_ownFD = true;
 	}
-	
+
 	this(Path path, FileMode mode)
 	{
 		auto pathstr = path.toNativeString();
@@ -92,7 +92,7 @@ final class ThreadedFileStream : FileStream {
 		if( m_fileDescriptor < 0 )
 			//throw new Exception(format("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
 			throw new Exception("Failed to open file '"~pathstr~"'.");
-		
+
 		this(m_fileDescriptor, path, mode);
 	}
 
@@ -110,7 +110,7 @@ final class ThreadedFileStream : FileStream {
 			stat_t st;
 			fstat(m_fileDescriptor, &st);
 			m_size = st.st_size;
-			
+
 			// (at least) on windows, the created file is write protected
 			version(Windows){
 				if( mode == FileMode.createTrunc )
@@ -118,7 +118,7 @@ final class ThreadedFileStream : FileStream {
 			}
 		}
 		lseek(m_fileDescriptor, 0, SEEK_SET);
-		
+
 		logDebug("opened file %s with %d bytes as %d", path.toNativeString(), m_size, m_fileDescriptor);
 	}
 
@@ -126,7 +126,7 @@ final class ThreadedFileStream : FileStream {
 	{
 		close();
 	}
-	
+
 	@property int fd() { return m_fileDescriptor; }
 	@property Path path() const { return m_path; }
 	@property bool isOpen() const { return m_fileDescriptor >= 0; }
@@ -147,7 +147,7 @@ final class ThreadedFileStream : FileStream {
 	}
 
 	ulong tell() { return m_ptr; }
-	
+
 	void close()
 	{
 		if( m_fileDescriptor != -1 && m_ownFD ){

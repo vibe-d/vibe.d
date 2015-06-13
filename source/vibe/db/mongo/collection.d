@@ -376,7 +376,7 @@ struct MongoCollection {
 		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
 	}
 
-    void drop() {
+	void drop() {
 		static struct CMD {
 			string drop;
 		}
@@ -385,7 +385,7 @@ struct MongoCollection {
 		cmd.drop = m_name;
 		auto reply = database.runCommand(cmd);
 		enforce(reply.ok.get!double == 1, "drop command failed.");
-    }
+	}
 }
 
 enum IndexFlags {

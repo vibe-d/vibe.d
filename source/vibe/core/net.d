@@ -78,9 +78,9 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 	Establishes a connection to the given host/port.
 */
 TCPConnection connectTCP(string host, ushort port)
-{	
+{
 	NetworkAddress addr = resolveHost(host);
-	addr.port = port; 
+	addr.port = port;
 	return connectTCP(addr);
 }
 /// ditto
@@ -204,7 +204,7 @@ struct NetworkAddress {
 			void test(string ip) {
 				auto res = resolveHost(ip, AF_UNSPEC, false).toAddressString();
 				assert(res == ip,
-				       "IP "~ip~" yielded wrong string representation: "~res);
+					   "IP "~ip~" yielded wrong string representation: "~res);
 			}
 			test("1.2.3.4");
 			test("102:304:506:708:90a:b0c:d0e:f10");
@@ -317,7 +317,7 @@ enum TCPListenOptions {
 
 private pure nothrow {
 	import std.bitmanip;
-	
+
 	ushort ntoh(ushort val)
 	{
 		version (LittleEndian) return swapEndian(val);

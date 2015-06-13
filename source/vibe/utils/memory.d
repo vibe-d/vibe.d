@@ -784,32 +784,32 @@ private T internalEmplace(T, Args...)(void[] chunk, auto ref Args args)
 in {
 	import std.string, std.format;
 	assert(chunk.length >= T.sizeof,
-	       format("emplace: Chunk size too small: %s < %s size = %s",
-		      chunk.length, T.stringof, T.sizeof));
+		   format("emplace: Chunk size too small: %s < %s size = %s",
+			  chunk.length, T.stringof, T.sizeof));
 	assert((cast(size_t) chunk.ptr) % T.alignof == 0,
-	       format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
+		   format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
 
 } body {
-    enum classSize = __traits(classInstanceSize, T);
-    auto result = cast(T) chunk.ptr;
+	enum classSize = __traits(classInstanceSize, T);
+	auto result = cast(T) chunk.ptr;
 
-    // Initialize the object in its pre-ctor state
-    chunk[0 .. classSize] = typeid(T).init[];
+	// Initialize the object in its pre-ctor state
+	chunk[0 .. classSize] = typeid(T).init[];
 
-    // Call the ctor if any
-    static if (is(typeof(result.__ctor(args))))
-    {
-        // T defines a genuine constructor accepting args
-        // Go the classic route: write .init first, then call ctor
-        result.__ctor(args);
-    }
-    else
-    {
-        static assert(args.length == 0 && !is(typeof(&T.__ctor)),
-                "Don't know how to initialize an object of type "
-                ~ T.stringof ~ " with arguments " ~ Args.stringof);
-    }
-    return result;
+	// Call the ctor if any
+	static if (is(typeof(result.__ctor(args))))
+	{
+		// T defines a genuine constructor accepting args
+		// Go the classic route: write .init first, then call ctor
+		result.__ctor(args);
+	}
+	else
+	{
+		static assert(args.length == 0 && !is(typeof(&T.__ctor)),
+				"Don't know how to initialize an object of type "
+				~ T.stringof ~ " with arguments " ~ Args.stringof);
+	}
+	return result;
 }
 
 /// Dittor
@@ -818,10 +818,10 @@ private auto internalEmplace(T, Args...)(void[] chunk, auto ref Args args)
 in {
 	import std.string, std.format;
 	assert(chunk.length >= T.sizeof,
-	       format("emplace: Chunk size too small: %s < %s size = %s",
-		      chunk.length, T.stringof, T.sizeof));
+		   format("emplace: Chunk size too small: %s < %s size = %s",
+			  chunk.length, T.stringof, T.sizeof));
 	assert((cast(size_t) chunk.ptr) % T.alignof == 0,
-	       format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
+		   format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
 
 } body {
 	return emplace(cast(T*)chunk.ptr, args);

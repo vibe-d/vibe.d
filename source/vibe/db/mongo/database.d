@@ -18,7 +18,7 @@ import vibe.data.bson;
 /** Represents a single database accessible through a given MongoClient.
 */
 struct MongoDatabase
-{ 
+{
 	private {
 		string m_name;
 		string m_commandCollection;
@@ -79,11 +79,11 @@ struct MongoDatabase
 	/** Returns recent log messages for this database from the database server.
 
 		See $(LINK http://www.mongodb.org/display/DOCS/getLog+Command).
-     	
+
 	 	Params:
 	 		mask = "global" or "rs" or "startupWarnings". Refer to official MongoDB docs.
 
-     	Returns: Bson document with recent log messages from MongoDB service.
+	 	Returns: Bson document with recent log messages from MongoDB service.
  	 */
 	Bson getLog(string mask)
 	{
@@ -98,7 +98,7 @@ struct MongoDatabase
 	/** Performs a filesystem/disk sync of the database on the server.
 
 		See $(LINK http://www.mongodb.org/display/DOCS/fsync+Command)
-		
+
 		Returns: check documentation
  	 */
 	Bson fsync(bool async = false)

@@ -29,7 +29,7 @@ void download(URL url, scope void delegate(scope InputStream) callback, HTTPClie
 	assert(url.schema == "http" || url.schema == "https", "Only http(s):// supported for now.");
 
 	if(!client) client = new HTTPClient();
-	
+
 	foreach( i; 0 .. 10 ){
 		bool ssl = url.schema == "https";
 		client.connect(url.host, url.port ? url.port : ssl ? 443 : 80, ssl);

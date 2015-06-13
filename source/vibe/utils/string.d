@@ -173,16 +173,16 @@ sizediff_t matchBracket(string str, bool nested = true)
 
 @safe unittest
 {
-    static struct Test { string str; sizediff_t res; }
-    enum tests = [
-        Test("[foo]", 4), Test("<bar>", 4), Test("{baz}", 4),
-        Test("[", -1), Test("[foo", -1), Test("ab[f]", -1),
-        Test("[foo[bar]]", 9), Test("[foo{bar]]", 8),
-    ];
-    foreach (test; tests)
-        assert(matchBracket(test.str) == test.res);
-    assert(matchBracket("[foo[bar]]", false) == 8);
-    static assert(matchBracket("[foo]") == 4);
+	static struct Test { string str; sizediff_t res; }
+	enum tests = [
+		Test("[foo]", 4), Test("<bar>", 4), Test("{baz}", 4),
+		Test("[", -1), Test("[foo", -1), Test("ab[f]", -1),
+		Test("[foo[bar]]", 9), Test("[foo{bar]]", 8),
+	];
+	foreach (test; tests)
+		assert(matchBracket(test.str) == test.res);
+	assert(matchBracket("[foo[bar]]", false) == 8);
+	static assert(matchBracket("[foo]") == 4);
 }
 
 /// Same as std.string.format, just using an allocator.
@@ -197,7 +197,7 @@ string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
 int icmp2(string a, string b)
 @safe pure {
 	size_t i = 0, j = 0;
-	
+
 	// fast skip equal prefix
 	size_t min_len = min(a.length, b.length);
 	while( i < min_len && a[i] == b[i] ) i++;

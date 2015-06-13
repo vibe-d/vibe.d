@@ -64,7 +64,7 @@ class WebSocketException: Exception
 }
 
 /**
-    Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
+	Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
 */
 void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
@@ -73,9 +73,9 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	auto pKey = "Sec-WebSocket-Key" in req.headers;
 	//auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
 	auto pVersion = "Sec-WebSocket-Version" in req.headers;
-	
+
 	auto isUpgrade = false;
-	
+
 	if( pConnection ) {
 		auto connectionTypes = split(*pConnection, ",");
 		foreach( t ; connectionTypes ) {
@@ -86,9 +86,9 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 		}
 	}
 	if( !(isUpgrade &&
-	      pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
-	      pKey &&
-	      pVersion && *pVersion == "13") )
+		  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
+		  pKey &&
+		  pVersion && *pVersion == "13") )
 	{
 		logDebug("Browser sent invalid WebSocket request.");
 		res.statusCode = HTTPStatus.badRequest;

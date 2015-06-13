@@ -24,74 +24,74 @@ class StdFileStream : ConnectionStream {
 		Thread m_readThread;
 		Thread m_writeThread;
 	}
- 
+
 	this(bool read, bool write)
 	{
 		if (read) m_readPipe = new TaskPipe;
 		if (write) m_writePipe = new TaskPipe;
 	}
- 
+
 	void setup(std.stdio.File file)
 	{
 		m_file = file;
- 
+
 		if (m_readPipe) {
 			m_readThread = new Thread(&readThreadFunc);
 			m_readThread.name = "StdFileStream reader";
 			m_readThread.start();
 		}
- 
+
 		if (m_writePipe) {
 			m_writeThread = new Thread(&writeThreadFunc);
 			m_writeThread.name = "StdFileStream writer";
 			m_writeThread.start();
 		}
 	}
- 
+
 	override @property bool empty() { enforceReadable(); return m_readPipe.empty; }
-	
+
 	override @property ulong leastSize()
 	{
 		enforceReadable();
 		return m_readPipe.leastSize;
 	}
- 
+
 	override @property bool dataAvailableForRead()
 	{
 		enforceReadable();
 		return m_readPipe.dataAvailableForRead;
 	}
- 
+
 	override @property bool connected() const { return m_readPipe.connected; }
- 
+
 	override void close() { m_writePipe.close(); }
- 
+
 	override bool waitForData(Duration timeout) { return m_readPipe.waitForData(timeout); }
- 
+
 	override const(ubyte)[] peek()
 	{
 		enforceReadable();
 		return m_readPipe.peek();
 	}
- 
+
 	override void read(ubyte[] dst)
 	{
 		enforceReadable();
 		m_readPipe.read(dst);
 	}
- 
+
 	override void write(in ubyte[] bytes_)
 	{
 		enforceWritable();
 		m_writePipe.write(bytes_);
 	}
- 
+
 	override void flush()
 	{
 		enforceWritable();
 		m_writePipe.flush();
 	}
- 
+
 	override void finalize()
 	{
 		enforceWritable();
@@ -99,15 +99,15 @@ class StdFileStream : ConnectionStream {
 		flush();
 		m_writePipe.finalize();
 	}
- 
+
 	override void write(InputStream stream, ulong nbytes = 0)
 	{
 		writeDefault(stream, nbytes);
 	}
- 
+
 	void enforceReadable() { enforce(m_readPipe, "Stream is not readable!"); }
 	void enforceWritable() { enforce(m_writePipe, "Stream is not writable!"); }
- 
+
 	private void readThreadFunc()
 	{
 		bool loop_flag = false;
@@ -131,7 +131,7 @@ class StdFileStream : ConnectionStream {
 			runEventLoop();
 		}
 	}
- 
+
 	private void writeThreadFunc()
 	{
 		bool loop_flag = false;

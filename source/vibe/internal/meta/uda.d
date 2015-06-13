@@ -121,7 +121,7 @@ template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 				} else enum extract = extract!(index + 1, list[1..$]);
 			}
 		}
-    }
+	}
 
 	enum findNextUDA = extract!(idx, udaTuple[idx .. $]);
 }

@@ -104,7 +104,7 @@ final struct Session {
 	///
 	unittest {
 		import vibe.http.server;
-		
+
 		// sends all session entries to the requesting browser
 		// assumes that all entries are strings
 		void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)

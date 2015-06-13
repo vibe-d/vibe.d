@@ -57,7 +57,7 @@ final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=') : Output
 	void write(in ubyte[] bytes_)
 	{
 		import vibe.stream.wrapper;
-		
+
 		const(ubyte)[] bytes = bytes_;
 
 		auto rng = StreamOutputRange(m_out);

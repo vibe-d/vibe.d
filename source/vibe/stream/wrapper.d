@@ -90,7 +90,7 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 
 	@property bool connected()
 	const {
-		if (!m_connection) 
+		if (!m_connection)
 			return true;
 
 		return m_connection.connected;
@@ -98,7 +98,7 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 
 	void close()
 	{
-		if (!m_connection) 
+		if (!m_connection)
 			return;
 
 		if (m_connection.connected) finalize();

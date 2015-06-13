@@ -94,7 +94,7 @@ string dstringUnescape(in string str)
 			i++;
 			start = i+1;
 		}
-	
+
 	if( i > start ){
 		if( start == 0 ) return str;
 		else ret ~= str[start .. i];
@@ -161,7 +161,7 @@ Line[] removeEmptyLines(string text, string file)
 		auto ln = text[start_idx .. end_idx];
 		if( ctstrip(ln).length > 0 )
 			ret ~= Line(file, num, ln);
-		
+
 		num++;
 	}
 	return ret;

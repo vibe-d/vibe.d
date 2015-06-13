@@ -38,7 +38,7 @@ extern(System) nothrow
 	static if (!is(typeof(&CreateFileW))) BOOL CloseHandle(HANDLE hObject);
 	static if (!is(typeof(&CreateFileW))) HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 					   DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
+	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped,
 					 LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
 	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
 					LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
@@ -99,7 +99,7 @@ extern(System) nothrow
 	}
 
 	struct WSAPROTOCOLCHAIN {
-		int ChainLen;                   
+		int ChainLen;
 		DWORD[MAX_PROTOCOL_CHAIN] ChainEntries;
 	}
 
@@ -246,7 +246,7 @@ extern(System) nothrow
 		QS_POSTMESSAGE = 0x0008,
 		QS_RAWINPUT = 0x0400,
 		QS_SENDMESSAGE = 0x0040,
-		QS_TIMER = 0x0010, 
+		QS_TIMER = 0x0010,
 
 		QS_MOUSE = (QS_MOUSEMOVE | QS_MOUSEBUTTON),
 		QS_INPUT = (QS_MOUSE | QS_KEY | QS_RAWINPUT),

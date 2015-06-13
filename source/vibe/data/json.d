@@ -817,7 +817,7 @@ struct Json {
 	}
 
 	/** Scheduled for deprecation, please use `opIndex` instead.
-		
+
 		Allows to access existing fields of a JSON object using dot syntax.
 	*/
 	@property const(Json) opDispatch(string prop)() const { return opIndex(prop); }
@@ -1557,7 +1557,7 @@ unittest {
 			string[C] stringableIndexedMap;
 			this() {
 				enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
-                                stringableIndexedMap = [ C(42) : "forty-two" ];
+								stringableIndexedMap = [ C(42) : "forty-two" ];
 			}
 		}
 
@@ -1576,7 +1576,7 @@ unittest {
 		S *original = new S;
 		original.enumIndexedMap = [ Color.Red : "magenta", Color.Blue : "deep blue" ];
 		original.enumIndexedMap[Color.Green] = "olive";
-                original.stringableIndexedMap = [ C(42) : "forty-two" ];
+				original.stringableIndexedMap = [ C(42) : "forty-two" ];
 		S other;
 		deserializeJson(other, serializeToJson(original));
 		assert(serializeToJson(other) == serializeToJson(original));
@@ -1941,12 +1941,12 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.bool_: dst.put(cast(bool)json ? "true" : "false"); break;
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
 		case Json.Type.bigInt: formattedWrite(dst, "%d", json.get!BigInt); break;
-		case Json.Type.float_: 
+		case Json.Type.float_:
 			auto d = json.get!double;
-			if (d != d) 
+			if (d != d)
 				dst.put("undefined"); // JSON has no NaN value so set null
 			else
-				formattedWrite(dst, "%.16g", json.get!double); 
+				formattedWrite(dst, "%.16g", json.get!double);
 			break;
 		case Json.Type.string:
 			dst.put('\"');
@@ -2017,7 +2017,7 @@ unittest {
 		{}
 	]
 }`
-        || a.toPrettyString() == `{
+		|| a.toPrettyString() == `{
 	"b": [
 		1,
 		{}
@@ -2076,7 +2076,7 @@ unittest {
 		dst   = References the string output range to which the result is written.
 		json  = Specifies the JSON value that is to be stringified.
 		level = Specifies the base amount of indentation for the output. Indentation  is always
-		        done using tab characters.
+				done using tab characters.
 
 	See_Also: Json.toPrettyString, writeJsonString
 */
@@ -2235,7 +2235,7 @@ private string skipNumber(R)(ref R s, out bool is_float, out bool is_long_overfl
 		enforceJson(isDigit(s[idx]), "Digit expected at beginning of number.");
 		int_part = s[idx++] - '0';
 		while( idx < s.length && isDigit(s[idx]) )
-        {
+		{
 			if (!is_long_overflow)
 			{
 				auto dig = s[idx] - '0';

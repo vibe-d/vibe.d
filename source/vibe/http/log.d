@@ -113,7 +113,7 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 					state = State.Directive;
 				}
 				break;
-			case State.Directive: 
+			case State.Directive:
 				if( format[0] == '!' ) {
 					conditional = true;
 					negate = true;
@@ -185,7 +185,7 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 						formattedWrite(&ln, "%s", d.total!"msecs"());
 						break;
 					//case 'e': //Environment variable {variable}
-					//case 'f': //Filename 
+					//case 'f': //Filename
 					case 'h': //Remote host
 						ln.put(req.peer);
 						break;

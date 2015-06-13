@@ -141,8 +141,8 @@ void printCommandLineHelp()
 
 	Params:
 		args_out = Optional parameter for storing any arguments not handled
-		           by any readOption call. If this is left to null, an error
-		           will be triggered whenever unhandled arguments exist.
+				   by any readOption call. If this is left to null, an error
+				   will be triggered whenever unhandled arguments exist.
 
 	Returns:
 		If "--help" was passed, the function returns false. In all other

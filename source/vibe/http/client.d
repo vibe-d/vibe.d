@@ -209,7 +209,7 @@ unittest {
 		settings.proxyURL = URL.parse("http://proxyuser:proxypass@192.168.2.50:3128");
 		settings.defaultKeepAliveTimeout = 0.seconds; // closes connection immediately after receiving the data.
 		requestHTTP("http://www.example.org",
-		            (scope req){
+					(scope req){
 			req.method = HTTPMethod.GET;
 		},
 		(scope res){
