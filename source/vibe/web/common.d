@@ -92,7 +92,7 @@ string adjustMethodStyle(string name, MethodStyle style)
 			if (i < name.length) {
 				ret ~= "_" ~ name[start .. $];
 			}
-			return style == MethodStyle.lowerUnderscored ? 
+			return style == MethodStyle.lowerUnderscored ?
 				std.string.toLower(ret) : std.string.toUpper(ret);
 	}
 }
@@ -142,7 +142,7 @@ unittest
 		)
  */
 auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
-{   
+{
 	if (!__ctfe)
 		assert(false);
 
@@ -158,7 +158,7 @@ auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 		isPropertyGetter;
 	import std.algorithm : startsWith;
 	import std.typecons : Nullable;
-	
+
 	immutable httpMethodPrefixes = [
 		HTTPMethod.GET    : [ "get", "query" ],
 		HTTPMethod.PUT    : [ "put", "set" ],
@@ -195,7 +195,7 @@ auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 	typeof(return) udaOverride( HTTPMethod method, string url ){
 		return HandlerMeta(
 			!udurl.isNull(),
-			udmethod.isNull() ? method : udmethod.get(), 
+			udmethod.isNull() ? method : udmethod.get(),
 			udurl.isNull() ? url : udurl.get()
 		);
 	}
@@ -211,13 +211,13 @@ auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 			foreach (prefix; prefixes) {
 				if (name.startsWith(prefix)) {
 					string tmp = name[prefix.length..$];
-					return udaOverride(method, tmp);
+					return udaOverride(method, tmp.length ? tmp : "/");
 				}
 			}
 		}
 
 		static if (indexSpecialCase && name == "index") {
-			return udaOverride(HTTPMethod.GET, "");
+			return udaOverride(HTTPMethod.GET, "/");
 		} else
 			return udaOverride(HTTPMethod.POST, name);
 	}
@@ -229,17 +229,19 @@ unittest
 	{
 		string getInfo();
 		string updateDescription();
-		
+
 		@method(HTTPMethod.DELETE)
 		string putInfo();
-		
+
 		@path("matters")
 		string getMattersnot();
-		
+
 		@path("compound/path") @method(HTTPMethod.POST)
 		string mattersnot();
+
+		string get();
 	}
-	
+
 	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo, false,);
 	static assert (ret1.hadPathUDA == false);
 	static assert (ret1.method == HTTPMethod.GET);
@@ -260,6 +262,10 @@ unittest
 	static assert (ret5.hadPathUDA == true);
 	static assert (ret5.method == HTTPMethod.POST);
 	static assert (ret5.url == "compound/path");
+	enum ret6 = extractHTTPMethodAndName!(Sample.get, false);
+	static assert (ret6.hadPathUDA == false);
+	static assert (ret6.method == HTTPMethod.GET);
+	static assert (ret6.url == "/");
 }
 
 
@@ -269,7 +275,7 @@ unittest
     This currently applies only to methods returning an $(D InputStream) or
     $(D ubyte[]).
 */
-ContentTypeAttribute contentType(string data) 
+ContentTypeAttribute contentType(string data)
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
@@ -312,7 +318,7 @@ unittest {
 
 	See_Also: $(D rootPathFromName) for automatic name generation.
 */
-PathAttribute path(string data) 
+PathAttribute path(string data)
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
@@ -330,17 +336,17 @@ unittest {
 	class API : IAPI {
 		string getInfo() { return "Hello, World!"; }
 	}
-	
+
 	void test()
 	{
 		import vibe.http.router;
 		import vibe.web.rest;
 
 		auto router = new URLRouter;
-		
+
 		// Tie IAPI.getInfo to "GET /root/foo/info2"
 		router.registerRestInterface!IAPI(new API(), "/root/");
-		
+
 		// Or just to "GET /foo/info2"
 		router.registerRestInterface!IAPI(new API());
 
@@ -397,14 +403,14 @@ unittest
 }
 
 
-/** 
+/**
  	Respresents a Rest error response
 */
 class RestException : HTTPStatusException {
 	private {
 		Json m_jsonResult;
 	}
-	
+
 	///
 	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
@@ -414,10 +420,10 @@ class RestException : HTTPStatusException {
 		else {
 			super(status, httpStatusText(status) ~ " (" ~ jsonResult.toString() ~ ")", file, line, next);
 		}
-		
+
 		m_jsonResult = jsonResult;
 	}
-	
+
 	/// The HTTP status code
 	@property const(Json) jsonResult() const { return m_jsonResult; }
 }
@@ -548,7 +554,7 @@ enum MethodStyle
 	lowerUnderscored,
 	/// UPPER_CASE_NAMING
 	upperUnderscored,
-	
+
 	/// deprecated
 	Unaltered = unaltered,
 	/// deprecated
