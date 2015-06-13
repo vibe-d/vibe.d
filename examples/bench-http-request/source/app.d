@@ -46,7 +46,7 @@ void distTask()
 	static shared int s_threadCount = 0;
 	static shared int s_token = 0;
 	int id = atomicOp!"+="(s_threadCount, 1) - 1;
-	
+
 	while (true) {
 		while (atomicLoad(s_token) != id && g_concurrency > 0) {}
 		if (g_concurrency == 0) break;

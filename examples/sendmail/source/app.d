@@ -15,7 +15,7 @@ void main()
 	mail.headers["To"] = "<recipient@domain.com>";
 	mail.headers["Subject"] = "Testmail";
 	mail.bodyText = "Hello, World!";
-	
+
 	logInfo("Sending mail...");
 	sendMail(settings, mail);
 	logInfo("done.");

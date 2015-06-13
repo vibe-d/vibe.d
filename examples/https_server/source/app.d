@@ -15,6 +15,6 @@ shared static this()
 	settings.sslContext = createSSLContext(SSLContextKind.server);
 	settings.sslContext.useCertificateChainFile("server.crt");
 	settings.sslContext.usePrivateKeyFile("server.key");
-	
+
 	listenHTTP(settings, &handleRequest);
 }

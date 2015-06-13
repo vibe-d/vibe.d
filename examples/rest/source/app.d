@@ -119,8 +119,8 @@ class Example2 : Example2API
 			import std.algorithm;
 			// Some sweet functional D
 			return reduce!(
-                (a, b) => Aggregate(a.name ~ b.name, a.count + b.count, Aggregate.Type.Type3)
-            )(Aggregate.init, input);
+				(a, b) => Aggregate(a.name ~ b.name, a.count + b.count, Aggregate.Type.Type3)
+			)(Aggregate.init, input);
 		}
 }
 
@@ -475,7 +475,7 @@ shared static this()
 			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
 			// First we make sure parameters are transmitted via headers.
 			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/response",
-			                       (scope r) {
+								   (scope r) {
 				r.method = HTTPMethod.GET;
 				r.headers["Authorization"] = "Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==";
 			});
@@ -494,7 +494,7 @@ shared static this()
 
 			// First we make sure parameters are transmitted via query.
 			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/answer?qparam=Life_universe_and_the_rest",
-			                       (scope r) { r.method = HTTPMethod.POST; });
+								   (scope r) { r.method = HTTPMethod.POST; });
 			assert(res.statusCode == 200);
 			assert(res.bodyReader.readAllUTF8() == `"True"`);
 			// Then we check that both can communicate together.
@@ -513,13 +513,13 @@ shared static this()
 			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
 			// First we make sure parameters are transmitted via query.
 			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat",
-			                       (scope r) {
-						       import vibe.data.json;
-						       r.method = HTTPMethod.GET;
-						       Json obj = Json.emptyObject;
-						       obj["parameter"] = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
-						       r.writeJsonBody(obj);
-					       });
+								   (scope r) {
+							   import vibe.data.json;
+							   r.method = HTTPMethod.GET;
+							   Json obj = Json.emptyObject;
+							   obj["parameter"] = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
+							   r.writeJsonBody(obj);
+						   });
 
 			assert(res.statusCode == 200);
 			assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);

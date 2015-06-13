@@ -91,7 +91,7 @@ class App {
 
 	// the methods of DataProvider will be available at /data_provider/*
 	@property DataProvider dataProvider() { return m_provider; }
-	
+
 	// GET /
 	void get()
 	{
@@ -116,14 +116,14 @@ class App {
 	void postAddUser(string name, string surname, string address)
 	{
 		dataProvider.postAddUser(name, surname, address);
-		redirect("/");	
+		redirect("/");
 	}
 
 	// POST /add_user_structured
 	void postAddUserStructured(string name, string surname, Address address)
 	{
 		dataProvider.postAddUserStructured(name, surname, address);
-		redirect("/");	
+		redirect("/");
 	}
 
 	// static methods are ignored.
