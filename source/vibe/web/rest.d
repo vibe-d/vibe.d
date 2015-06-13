@@ -1179,25 +1179,30 @@ body {
 		// Check for @path(":name")
 		enum pathAttr = findFirstUDA!(PathAttribute, Func);
 		static if (pathAttr.found) {
-			import std.algorithm : canFind, splitter;
-			// splitter doesn't work with alias this ?
-			auto str = pathAttr.value.startsWith("/") ? pathAttr.value[1 .. $] : pathAttr.value.data;
-			auto sp = str.splitter('/');
-			foreach (elem; sp) {
-				if (!elem.length)
-					return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
+			static if (!pathAttr.value.length) {
+				if (hack)
+					return "%s: Path is null or empty".format(FuncId);
+			} else {
+				import std.algorithm : canFind, splitter;
+				// splitter doesn't work with alias this ?
+				auto str = pathAttr.value.startsWith("/") ? pathAttr.value[1 .. $] : pathAttr.value.data;
+				auto sp = str.splitter('/');
+				foreach (elem; sp) {
+					if (!elem.length)
+						return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
 
-				if (elem[0] == ':') {
-					// typeof(PN) is void when length is 0.
-					static if (!PN.length) {
-						if (hack)
-							return "%s: Path contains '%s', but no parameter '_%s' defined."
-								.format(FuncId, elem, elem[1..$]);
-					} else {
-						if (![PN].canFind("_"~elem[1..$]))
-							return "%s: Path contains '%s', but no parameter '_%s' defined."
-								.format(FuncId, elem, elem[1..$]);
-						elem = elem[1..$];
+					if (elem[0] == ':') {
+						// typeof(PN) is void when length is 0.
+						static if (!PN.length) {
+							if (hack)
+								return "%s: Path contains '%s', but no parameter '_%s' defined."
+									.format(FuncId, elem, elem[1..$]);
+						} else {
+							if (![PN].canFind("_"~elem[1..$]))
+								return "%s: Path contains '%s', but no parameter '_%s' defined."
+									.format(FuncId, elem, elem[1..$]);
+							elem = elem[1..$];
+						}
 					}
 				}
 				// TODO: Check for validity of the subpath.
@@ -1283,6 +1288,18 @@ unittest {
 	static assert(getInterfaceValidationError!TestSuccess is null);
 	static assert(stripTestIdent(getInterfaceValidationError!TestFail)
 		== "Path '//' contains empty entries.");
+}
+
+unittest {
+	interface NullPath  { @path(null) void test(); }
+	interface ExplicitlyEmptyPath { @path("") void test(); }
+	static assert(stripTestIdent(getInterfaceValidationError!NullPath)
+				  == "Path is null or empty");
+	static assert(stripTestIdent(getInterfaceValidationError!ExplicitlyEmptyPath)
+				  == "Path is null or empty");
+
+	// Note: Implicitly empty path are valid:
+	// interface ImplicitlyEmptyPath { void get(); }
 }
 
 private string stripTestIdent(string msg) {
