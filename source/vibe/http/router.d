@@ -94,7 +94,9 @@ final class URLRouter : HTTPServerRequestHandler {
 	@property string prefix() const { return m_prefix; }
 
 	/// Returns a single route handle to conveniently register multiple methods.
-	URLRoute route(string path) { return URLRoute(this, path); }
+	URLRoute route(string path)
+	in { assert(path.length, "Cannot register null or empty path!"); }
+	body { return URLRoute(this, path); }
 
 	///
 	unittest {
@@ -125,7 +127,8 @@ final class URLRouter : HTTPServerRequestHandler {
 
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
-	{
+	in { assert(path.length, "Cannot register null or empty path!"); }
+	body {
 		import std.algorithm;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		logDebug("add route %s %s", method, path);
