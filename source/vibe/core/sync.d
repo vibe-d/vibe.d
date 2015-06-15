@@ -41,39 +41,39 @@ struct ScopedMutexLock
 		bool m_locked;
 		LockMode m_mode;
 	}
-	
+
 	this(core.sync.mutex.Mutex mutex, LockMode mode = LockMode.lock) {
 		assert(mutex !is null);
 		m_mutex = mutex;
-		
+
 		final switch (mode) {
 			case LockMode.lock: lock(); break;
 			case LockMode.tryLock: tryLock(); break;
 			case LockMode.defer: break;
 		}
 	}
-	
+
 	~this()
 	{
 		if( m_locked )
 			m_mutex.unlock();
 	}
-	
+
 	@property bool locked() const { return m_locked; }
-	
+
 	void unlock()
 	{
 		enforce(m_locked);
 		m_mutex.unlock();
 		m_locked = false;
 	}
-	
+
 	bool tryLock()
 	{
 		enforce(!m_locked);
 		return m_locked = m_mutex.tryLock();
 	}
-	
+
 	void lock()
 	{
 		enforce(!m_locked);
@@ -142,22 +142,22 @@ class TaskMutex : core.sync.mutex.Mutex, Lockable {
 
 unittest {
 	auto mutex = new TaskMutex;
-	
+
 	{
 		auto lock = ScopedMutexLock(mutex);
 		assert(lock.locked);
 		assert(mutex.m_impl.m_locked);
-		
+
 		auto lock2 = ScopedMutexLock(mutex, LockMode.tryLock);
 		assert(!lock2.locked);
 	}
 	assert(!mutex.m_impl.m_locked);
-	
+
 	auto lock = ScopedMutexLock(mutex, LockMode.tryLock);
 	assert(lock.locked);
 	lock.unlock();
 	assert(!lock.locked);
-	
+
 	synchronized(mutex){
 		assert(mutex.m_impl.m_locked);
 	}
@@ -532,7 +532,7 @@ private struct TaskMutexImpl(bool INTERRUPTIBLE) {
 		}
 		return false;
 	}
-	
+
 	@trusted void lock()
 	{
 		if (tryLock()) return;
@@ -546,7 +546,7 @@ private struct TaskMutexImpl(bool INTERRUPTIBLE) {
 			else ecnt = m_signal.waitUninterruptible(ecnt);
 		}
 	}
-	
+
 	@trusted void unlock()
 	{
 		assert(m_locked);
@@ -594,7 +594,7 @@ private struct RecursiveTaskMutexImpl(bool INTERRUPTIBLE) {
 			return false;
 		});
 	}
-	
+
 	@trusted void lock()
 	{
 		if (tryLock()) return;
@@ -607,7 +607,7 @@ private struct RecursiveTaskMutexImpl(bool INTERRUPTIBLE) {
 			else ecnt = m_signal.waitUninterruptible(ecnt);
 		}
 	}
-	
+
 	@trusted void unlock()
 	{
 		auto self = Task.getThis();
@@ -652,23 +652,23 @@ private struct TaskConditionImpl(bool INTERRUPTIBLE, LOCKABLE) {
 		m_mutex = mtx;
 		m_signal = createManualEvent();
 	}
-	
+
 	@property LOCKABLE mutex() { return m_mutex; }
-	
+
 	@trusted void wait()
 	{
 		if (auto tm = cast(TaskMutex)m_mutex) {
 			assert(tm.m_impl.m_locked);
 			debug assert(tm.m_impl.m_owner == Task.getThis());
 		}
-		
+
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
 		scope(exit) m_mutex.lock();
 		static if (INTERRUPTIBLE) m_signal.wait(refcount);
 		else m_signal.waitUninterruptible(refcount);
 	}
-	
+
 	@trusted bool wait(Duration timeout)
 	{
 		assert(!timeout.isNegative());
@@ -676,22 +676,22 @@ private struct TaskConditionImpl(bool INTERRUPTIBLE, LOCKABLE) {
 			assert(tm.m_impl.m_locked);
 			debug assert(tm.m_impl.m_owner == Task.getThis());
 		}
-		
+
 		auto refcount = m_signal.emitCount;
 		m_mutex.unlock();
 		scope(exit) m_mutex.lock();
-		
+
 		static if (INTERRUPTIBLE) return m_signal.wait(timeout, refcount) != refcount;
 		else return m_signal.waitUninterruptible(timeout, refcount) != refcount;
 	}
-	
+
 	@trusted void notify()
 	{
-		m_signal.emit(); 
+		m_signal.emit();
 	}
-	
+
 	@trusted void notifyAll()
 	{
 		m_signal.emit();
-	}	
+	}
 }

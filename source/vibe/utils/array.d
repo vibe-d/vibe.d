@@ -281,7 +281,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 			}
 		}
 	}
-	
+
 	@property ref inout(T) front() inout { assert(!empty); return m_buffer[m_start]; }
 
 	@property ref inout(T) back() inout { assert(!empty); return m_buffer[mod(m_start+m_fill-1)]; }

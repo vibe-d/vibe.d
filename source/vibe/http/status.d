@@ -167,7 +167,7 @@ string httpStatusText(int code)
 }
 
 /**
-	Determines if the given status code justifies closing the connection (e.g. evil big request bodies) 
+	Determines if the given status code justifies closing the connection (e.g. evil big request bodies)
 */
 bool justifiesConnectionClose(int status) {
 	switch(status) {
@@ -175,14 +175,14 @@ bool justifiesConnectionClose(int status) {
 		case HTTPStatus.requestEntityTooLarge:
 		case HTTPStatus.requestURITooLarge:
 		case HTTPStatus.requestTimeout:
-			return true; 
+			return true;
 	}
 }
 
 /**
-    Determines if status code is generally successful (>= 200 && < 300)
+	Determines if status code is generally successful (>= 200 && < 300)
 */
 bool isSuccessCode(HTTPStatus status) {
-    return status >= 200 && status < 300;
+	return status >= 200 && status < 300;
 }
 

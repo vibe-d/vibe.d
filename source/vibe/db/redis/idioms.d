@@ -362,9 +362,9 @@ struct RedisLock {
 		m_key = lock_key;
 		m_scriptSHA = m_db.scriptLoad(
 `if redis.call("get",KEYS[1]) == ARGV[1] then
-    return redis.call("del",KEYS[1])
+	return redis.call("del",KEYS[1])
 else
-    return 0
+	return 0
 end`);
 	}
 

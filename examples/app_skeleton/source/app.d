@@ -18,7 +18,7 @@ shared static this()
 	router.get("/", &showHome);
 	router.get("/about", staticTemplate!"about.dt");
 	router.get("*", serveStaticFiles("public"));
-	
+
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.errorPageHandler = toDelegate(&showError);

@@ -836,48 +836,48 @@ pure @safe {
 
 @safe unittest
 {
-    static void testLink(string s, Link exp, in LinkRef[string] refs)
-    {
-        Link link;
-        assert(parseLink(s, link, refs), s);
-        assert(link == exp);
-    }
-    LinkRef[string] refs;
-    refs["ref"] = LinkRef("ref", "target", "title");
+	static void testLink(string s, Link exp, in LinkRef[string] refs)
+	{
+		Link link;
+		assert(parseLink(s, link, refs), s);
+		assert(link == exp);
+	}
+	LinkRef[string] refs;
+	refs["ref"] = LinkRef("ref", "target", "title");
 
-    testLink(`[link](target)`, Link("link", "target"), null);
-    testLink(`[link](target "title")`, Link("link", "target", "title"), null);
-    testLink(`[link](target  "title")`, Link("link", "target", "title"), null);
-    testLink(`[link](target "title"  )`, Link("link", "target", "title"), null);
+	testLink(`[link](target)`, Link("link", "target"), null);
+	testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+	testLink(`[link](target  "title")`, Link("link", "target", "title"), null);
+	testLink(`[link](target "title"  )`, Link("link", "target", "title"), null);
 
-    testLink(`[link](target)`, Link("link", "target"), null);
-    testLink(`[link](target "title")`, Link("link", "target", "title"), null);
+	testLink(`[link](target)`, Link("link", "target"), null);
+	testLink(`[link](target "title")`, Link("link", "target", "title"), null);
 
-    testLink(`[link][ref]`, Link("link", "target", "title"), refs);
-    testLink(`[ref][]`, Link("ref", "target", "title"), refs);
+	testLink(`[link][ref]`, Link("link", "target", "title"), refs);
+	testLink(`[ref][]`, Link("ref", "target", "title"), refs);
 
-    testLink(`[link[with brackets]](target)`, Link("link[with brackets]", "target"), null);
-    testLink(`[link[with brackets]][ref]`, Link("link[with brackets]", "target", "title"), refs);
+	testLink(`[link[with brackets]](target)`, Link("link[with brackets]", "target"), null);
+	testLink(`[link[with brackets]][ref]`, Link("link[with brackets]", "target", "title"), refs);
 
-    testLink(`[link](/target with spaces )`, Link("link", "/target with spaces"), null);
-    testLink(`[link](/target with spaces "title")`, Link("link", "/target with spaces", "title"), null);
+	testLink(`[link](/target with spaces )`, Link("link", "/target with spaces"), null);
+	testLink(`[link](/target with spaces "title")`, Link("link", "/target with spaces", "title"), null);
 
-    testLink(`[link](white-space  "around title" )`, Link("link", "white-space", "around title"), null);
-    testLink(`[link](tabs	"around title"	)`, Link("link", "tabs", "around title"), null);
+	testLink(`[link](white-space  "around title" )`, Link("link", "white-space", "around title"), null);
+	testLink(`[link](tabs	"around title"	)`, Link("link", "tabs", "around title"), null);
 
-    testLink(`[link](target "")`, Link("link", "target", ""), null);
-    testLink(`[link](target-no-title"foo" )`, Link("link", "target-no-title\"foo\"", ""), null);
+	testLink(`[link](target "")`, Link("link", "target", ""), null);
+	testLink(`[link](target-no-title"foo" )`, Link("link", "target-no-title\"foo\"", ""), null);
 
-    testLink(`[link](<target>)`, Link("link", "target"), null);
+	testLink(`[link](<target>)`, Link("link", "target"), null);
 
-    auto failing = [
-        `text`, `[link](target`, `[link]target)`, `[link]`,
-        `[link(target)`, `link](target)`, `[link] (target)`,
-        `[link][noref]`, `[noref][]`
-    ];
-    Link link;
-    foreach (s; failing)
-        assert(!parseLink(s, link, refs), s);
+	auto failing = [
+		`text`, `[link](target`, `[link]target)`, `[link]`,
+		`[link(target)`, `link](target)`, `[link] (target)`,
+		`[link][noref]`, `[noref][]`
+	];
+	Link link;
+	foreach (s; failing)
+		assert(!parseLink(s, link, refs), s);
 }
 
 private bool parseAutoLink(ref string str, ref string url)
@@ -991,8 +991,8 @@ private struct Link {
 }
 
 @safe unittest { // check CTFE-ability
-    enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
-    assert(res == "<h3> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
+	enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
+	assert(res == "<h3> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
 }
 
 @safe unittest { // correct line breaks in restrictive mode

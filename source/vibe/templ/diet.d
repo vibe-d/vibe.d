@@ -261,7 +261,7 @@ private string dietStringParser(TEXT_NAME_PAIRS_AND_TRANSLATE...)(size_t base_in
 			files ~= blk;
 		}
 	}
-	
+
 	readFilesRec!(extractDependencies(ROOT_LINES), extractNames!TEXT_NAME_PAIRS)(files);
 
 	auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
@@ -652,7 +652,7 @@ private struct DietCompiler(TRANSLATE...)
 							size_t unindent_count = level + start_indent_level - base_level + 1;
 							size_t last_line_number = curline.number;
 							while( next_tag < lineCount &&
-							      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+								  indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
 							{
 								// TODO: output all empty lines between this and the previous one
 								foreach (i; last_line_number+1 .. line(next_tag).number) output.writeString("\n");
@@ -1481,7 +1481,7 @@ unittest {
 	assert(compile!("pre.test. foo") == "<pre class=\"test\"></pre>");
 	assert(compile!("pre().\n\tfoo") == "<pre>\nfoo</pre>");
 	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
-	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
+		   "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
 
 	assert(compile!("input(autofocus)").length);
 

@@ -326,19 +326,19 @@ struct RedisDatabase {
 	long linsertBefore(T1, T2)(string key, T1 pivot, T2 value) if(isValidRedisValueType!T1 && isValidRedisValueType!T2) { return request!long("LINSERT", key, "BEFORE", pivot, value); }
 	/// Insert value in the list stored at key after the reference value pivot.
 	long linsertAfter(T1, T2)(string key, T1 pivot, T2 value) if(isValidRedisValueType!T1 && isValidRedisValueType!T2) { return request!long("LINSERT", key, "AFTER", pivot, value); }
-	/// Returns the length of the list stored at key. If key does not exist, it is interpreted as an empty list and 0 is returned. 
+	/// Returns the length of the list stored at key. If key does not exist, it is interpreted as an empty list and 0 is returned.
 	long llen(string key) { return request!long("LLEN", key); }
 	/// Insert all the specified values at the head of the list stored at key.
 	long lpush(ARGS...)(string key, ARGS args) { return request!long("LPUSH", key, args); }
-	/// Inserts value at the head of the list stored at key, only if key already exists and holds a list. 
+	/// Inserts value at the head of the list stored at key, only if key already exists and holds a list.
 	long lpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("LPUSHX", key, value); }
 	/// Insert all the specified values at the tail of the list stored at key.
 	long rpush(ARGS...)(string key, ARGS args) { return request!long("RPUSH", key, args); }
 	/// Inserts value at the tail of the list stored at key, only if key already exists and holds a list.
 	long rpushX(T)(string key, T value) if(isValidRedisValueType!T) { return request!long("RPUSHX", key, value); }
-	/// Returns the specified elements of the list stored at key. 
+	/// Returns the specified elements of the list stored at key.
 	RedisReply!T lrange(T = string)(string key, long start, long stop) { return request!(RedisReply!T)("LRANGE",  key, start, stop); }
-	/// Removes the first count occurrences of elements equal to value from the list stored at key. 
+	/// Removes the first count occurrences of elements equal to value from the list stored at key.
 	long lrem(T)(string key, long count, T value) if(isValidRedisValueType!T) { return request!long("LREM", key, count, value); }
 	/// Sets the list element at index to value.
 	void lset(T)(string key, long index, T value) if(isValidRedisValueType!T) { request("LSET", key, index, value); }
@@ -349,36 +349,36 @@ struct RedisDatabase {
 	T rpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("RPOP", key); }
 	/// Removes and returns the first element of the list stored at key.
 	T lpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("LPOP", key); }
-	/// BLPOP is a blocking list pop primitive. It is the blocking version of LPOP because it blocks 
-	/// the connection when there are no elements to pop from any of the given lists. 
+	/// BLPOP is a blocking list pop primitive. It is the blocking version of LPOP because it blocks
+	/// the connection when there are no elements to pop from any of the given lists.
 	T blpop(T = string)(string key, long seconds) if(isValidRedisValueReturn!T) { return request!T("BLPOP", key, seconds); }
-	/// Atomically returns and removes the last element (tail) of the list stored at source, 
+	/// Atomically returns and removes the last element (tail) of the list stored at source,
 	/// and pushes the element at the first element (head) of the list stored at destination.
 	T rpoplpush(T = string)(string key, string destination) if(isValidRedisValueReturn!T) { return request!T("RPOPLPUSH", key, destination); }
 
 	/*
 		Sets
 	*/
-	/// Add the specified members to the set stored at key. Specified members that are already a member of this set are ignored. 
+	/// Add the specified members to the set stored at key. Specified members that are already a member of this set are ignored.
 	/// If key does not exist, a new set is created before adding the specified members.
 	long sadd(ARGS...)(string key, ARGS args) { return request!long("SADD", key, args); }
 	/// Returns the set cardinality (number of elements) of the set stored at key.
 	long scard(string key) { return request!long("SCARD", key); }
 	/// Returns the members of the set resulting from the difference between the first set and all the successive sets.
 	RedisReply!T sdiff(T = string)(scope string[] keys...) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SDIFF", keys); }
-	/// This command is equal to SDIFF, but instead of returning the resulting set, it is stored in destination. 
+	/// This command is equal to SDIFF, but instead of returning the resulting set, it is stored in destination.
 	/// If destination already exists, it is overwritten.
 	long sdiffStore(string destination, scope string[] keys...) { return request!long("SDIFFSTORE", destination, keys); }
 	/// Returns the members of the set resulting from the intersection of all the given sets.
 	RedisReply!T sinter(T = string)(string[] keys) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SINTER", keys); }
-	/// This command is equal to SINTER, but instead of returning the resulting set, it is stored in destination. 
+	/// This command is equal to SINTER, but instead of returning the resulting set, it is stored in destination.
 	/// If destination already exists, it is overwritten.
 	long sinterStore(string destination, scope string[] keys...) { return request!long("SINTERSTORE", destination, keys); }
 	/// Returns if member is a member of the set stored at key.
 	bool sisMember(T)(string key, T member) if(isValidRedisValueType!T) { return request!bool("SISMEMBER", key, member); }
 	/// Returns all the members of the set value stored at key.
 	RedisReply!T smembers(T = string)(string key) if(isValidRedisValueType!T) { return request!(RedisReply!T)("SMEMBERS", key); }
-	/// Move member from the set at source to the set at destination. This operation is atomic. 
+	/// Move member from the set at source to the set at destination. This operation is atomic.
 	/// In every given moment the element will appear to be a member of source or destination for other clients.
 	bool smove(T)(string source, string destination, T member) if(isValidRedisValueType!T) { return request!bool("SMOVE", source, destination, member); }
 	/// Removes and returns a random element from the set value stored at key.
@@ -407,7 +407,7 @@ struct RedisDatabase {
 	/// Increments the score of member in the sorted set stored at key by increment.
 	double zincrby(T)(string key, double value, T member) if (isValidRedisValueType!T) { return request!double("ZINCRBY", key, value, member); }
 	//TODO: zinterstore
-	/// Returns the specified range of elements in the sorted set stored at key. 
+	/// Returns the specified range of elements in the sorted set stored at key.
 	RedisReply!T zrange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -415,7 +415,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGE", key, start, end);
 	}
 
-	/// When all the elements in a sorted set are inserted with the same score, in order to force lexicographical ordering, 
+	/// When all the elements in a sorted set are inserted with the same score, in order to force lexicographical ordering,
 	/// this command returns all the elements in the sorted set at key with a value between min and max.
 	RedisReply!T zrangeByLex(T = string)(string key, string min = "-", string max = "+", long offset = 0, long count = -1)
 		if(isValidRedisValueType!T)
@@ -432,7 +432,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end));
 	}
 
-	/// Computes an internal list of elements in the sorted set at key with a score between start and end inclusively, 
+	/// Computes an internal list of elements in the sorted set at key with a score between start and end inclusively,
 	/// and returns a range subselection similar to $(D results[offset .. offset+count])
 	RedisReply!T zrangeByScore(T = string, string RNG = "[]")(string key, double start, double end, long offset, long count, bool with_scores = false)
 		if(isValidRedisValueType!T)
@@ -443,7 +443,7 @@ struct RedisDatabase {
 		else return request!(RedisReply!T)("ZRANGEBYSCORE", key, getMinMaxArgs!RNG(start, end), "LIMIT", offset, count);
 	}
 
-	/// Returns the rank of member in the sorted set stored at key, with the scores ordered from low to high. 
+	/// Returns the rank of member in the sorted set stored at key, with the scores ordered from low to high.
 	long zrank(T)(string key, T member)
 		if (isValidRedisValueType!T)
 	{
@@ -457,7 +457,7 @@ struct RedisDatabase {
 	long zremRangeByRank(string key, long start, long stop) { return request!long("ZREMRANGEBYRANK", key, start, stop); }
 	/// Removes all elements in the sorted set stored at key with a score between min and max (inclusive).
 	long zremRangeByScore(string RNG = "[]")(string key, double min, double max) { return request!long("ZREMRANGEBYSCORE", key, getMinMaxArgs!RNG(min, max));}
-	/// Returns the specified range of elements in the sorted set stored at key. 
+	/// Returns the specified range of elements in the sorted set stored at key.
 	RedisReply!T zrevRange(T = string)(string key, long start, long end, bool with_scores = false)
 		if(isValidRedisValueType!T)
 	{
@@ -533,7 +533,7 @@ struct RedisDatabase {
 	{
 		return request!(RedisReply!T)("EVAL", lua_code, keys.length, keys, args);
 	}
-	/// Evaluates a script cached on the server side by its SHA1 digest. Scripts are cached on the server side using the scriptLoad function. 
+	/// Evaluates a script cached on the server side by its SHA1 digest. Scripts are cached on the server side using the scriptLoad function.
 	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope string[] keys, scope ARGS args)
 		if(isValidRedisValueType!T)
 	{
@@ -645,7 +645,7 @@ final class RedisSubscriberImpl {
 	void bstop(){
 		logTrace("bstop");
 		if (!m_listening) return;
-		
+
 		void impl() {
 			m_mutex.performLocked!({
 				m_waiter = Task.getThis();
@@ -654,10 +654,10 @@ final class RedisSubscriberImpl {
 
 				bool stopped;
 				do {
-					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  })) 
+					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  }))
 						break;
 				} while (!stopped);
-				
+
 				enforce(stopped, "Failed to wait for Redis listener to stop");
 			});
 		}
@@ -734,7 +734,7 @@ final class RedisSubscriberImpl {
 						_request_void(m_lockedConnection, "SUBSCRIBE", args);
 					});
 					while(!m_subscriptions.keys.canFind(args)) {
-						if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+						if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  }))
 							break;
 
 						subscribed = true;
@@ -804,7 +804,7 @@ final class RedisSubscriberImpl {
 					_request_void(m_lockedConnection, "PSUBSCRIBE", args);
 				});
 
-				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  })) 
+				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  }))
 					subscribed = false;
 				else
 					subscribed = true;
@@ -815,7 +815,7 @@ final class RedisSubscriberImpl {
 		}
 		inTask(&impl);
 	}
-	
+
 	/// Same as unsubscribe, but uses glob patterns, and does not return instantly if
 	/// the subscriptions are not registered.
 	/// throws Exception if the pattern does not yield a new unsubscription.
@@ -825,7 +825,7 @@ final class RedisSubscriberImpl {
 		void impl() {
 			scope(failure) bstop();
 			assert(m_listening);
-			m_mutex.performLocked!({ 
+			m_mutex.performLocked!({
 				m_waiter = Task.getThis();
 				scope(exit) m_waiter = Task();
 				bool unsubscribed;
@@ -836,7 +836,7 @@ final class RedisSubscriberImpl {
 					unsubscribed = false;
 				else
 					unsubscribed = true;
-				
+
 				logTrace("Can find keys? : " ~ m_subscriptions.keys.canFind(args).to!string);
 				logTrace("Subscriptions: " ~ m_subscriptions.keys.to!string);
 				enforce(unsubscribed, "Could not complete unsubscription(s).");
@@ -885,8 +885,8 @@ final class RedisSubscriberImpl {
 			catch (Exception e) {
 				throw new Exception(format("Failed to connect to Redis server at %s:%s.", m_lockedConnection.m_host, m_lockedConnection.m_port), __FILE__, __LINE__, e);
 			}
-			
-			m_lockedConnection.setAuth(m_client.m_authPassword); 
+
+			m_lockedConnection.setAuth(m_client.m_authPassword);
 			m_lockedConnection.setDB(m_client.m_selectedDB);
 		}
 	}
@@ -916,7 +916,7 @@ final class RedisSubscriberImpl {
 			// actively destroy it
 			Action act;
 			// wait for the listener helper to send its stop message
-			while (act != Action.STOP) 
+			while (act != Action.STOP)
 				act = receiveOnly!Action();
 			m_lockedConnection.conn.close();
 			m_lockedConnection.destroy();
@@ -1015,7 +1015,7 @@ final class RedisSubscriberImpl {
 					onSubscribe(channel);
 				else
 					onUnsubscribe(channel);
-			
+
 				// todo: enforce the number of subscriptions?
 			}
 			else assert(false, "Unrecognized pubsub wire protocol command received");
@@ -1058,10 +1058,10 @@ final class RedisSubscriberImpl {
 			}
 			// close the data connections
 			teardown();
-			
+
 			if (m_waiter != Task())
 				m_waiter.send(Action.STOP);
-			
+
 			m_listenerHelper = Task();
 			m_listener = Task();
 			m_stop = false;

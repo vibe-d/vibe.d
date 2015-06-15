@@ -1,6 +1,6 @@
 /**
-    Extensions to `std.traits` module of Phobos. Some may eventually make it into Phobos,
-    some are dirty hacks that work only for vibe.d
+	Extensions to `std.traits` module of Phobos. Some may eventually make it into Phobos,
+	some are dirty hacks that work only for vibe.d
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.

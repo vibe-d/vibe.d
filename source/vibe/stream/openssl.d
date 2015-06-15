@@ -642,8 +642,8 @@ final class OpenSSLContext : TLSContext {
 
 			if (depth > vdata.verifyDepth) {
 				logDiagnostic("SSL cert chain too long: %s vs. %s", depth, vdata.verifyDepth);
-			    valid = false;
-			    err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+				valid = false;
+				err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
 			}
 
 			if (err != X509_V_OK)

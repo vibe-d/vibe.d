@@ -123,9 +123,9 @@ unittest {
 	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
 
 	Params:
-      form = range of `t = Tuple!(string, string)`,
-             where `t[0]` is the name and `t[1]` the
-             value of a form entry.
+	  form = range of `t = Tuple!(string, string)`,
+			 where `t[0]` is the name and `t[1]` the
+			 value of a form entry.
 */
 void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
    if(isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)

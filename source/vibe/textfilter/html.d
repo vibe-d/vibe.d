@@ -158,9 +158,9 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		case 'A': .. case 'Z': goto case;
 		case '0': .. case '9': goto case;
 		case ' ', '\t', '-', '_', '.', ':', ',', ';',
-		     '#', '+', '*', '?', '=', '(', ')', '/', '!',
-		     '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
-		    dst.put(cast(char)ch);
+			 '#', '+', '*', '?', '=', '(', ')', '/', '!',
+			 '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
+			dst.put(cast(char)ch);
 			break;
 		case '<': dst.put("&lt;"); break;
 		case '>': dst.put("&gt;"); break;

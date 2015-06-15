@@ -1189,7 +1189,7 @@ final class HTTPServerResponse : HTTPResponse {
 /**
 	Represents the request listener for a specific `listenHTTP` call.
 
-	This struct can be used to stop listening for HTTP requests at runtime. 
+	This struct can be used to stop listening for HTTP requests at runtime.
 */
 struct HTTPListener {
 	private {
@@ -1319,7 +1319,7 @@ private {
 	// arrays (COW). shared immutable(HTTPServerContext)[] would be the right candidate here, but
 	// is impractical due to type system limitations.
 	shared HTTPServerContext[] g_contexts;
-	
+
 	HTTPServerContext[] getContexts()
 	{
 		static if (__VERSION__ >= 2067)
