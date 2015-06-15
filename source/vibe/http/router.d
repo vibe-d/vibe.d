@@ -136,6 +136,8 @@ final class URLRouter : HTTPServerRequestHandler {
 		else m_routes ~= Route(method, path, cb);
 		return this;
 	}
+	/// Adds a new route for request that match the path and method
+	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
 	/// ditto
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
 	/// ditto
@@ -167,11 +169,11 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// ditto
 	URLRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
 	/// ditto
-	URLRouter post(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	URLRouter post(string url_match, HTTPServerRequestHandlerS cb) { return post(url_match, &cb.handleRequest); }
 	/// ditto
-	URLRouter post(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	URLRouter post(string url_match, HTTPServerRequestFunctionS cb) { return post(url_match, toDelegate(cb)); }
 	/// ditto
-	URLRouter post(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
+	URLRouter post(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.POST, url_match, cb); }
 
 	/// Adds a new route for PUT requests matching the specified pattern.
 	URLRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
@@ -180,11 +182,11 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// ditto
 	URLRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
 	/// ditto
-	URLRouter put(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	URLRouter put(string url_match, HTTPServerRequestHandlerS cb) { return put(url_match, &cb.handleRequest); }
 	/// ditto
-	URLRouter put(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	URLRouter put(string url_match, HTTPServerRequestFunctionS cb) { return put(url_match, toDelegate(cb)); }
 	/// ditto
-	URLRouter put(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
+	URLRouter put(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.PUT, url_match, cb); }
 
 	/// Adds a new route for DELETE requests matching the specified pattern.
 	URLRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
@@ -193,11 +195,11 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// ditto
 	URLRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
 	/// ditto
-	URLRouter delete_(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	URLRouter delete_(string url_match, HTTPServerRequestHandlerS cb) { return delete_(url_match, &cb.handleRequest); }
 	/// ditto
-	URLRouter delete_(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	URLRouter delete_(string url_match, HTTPServerRequestFunctionS cb) { return delete_(url_match, toDelegate(cb)); }
 	/// ditto
-	URLRouter delete_(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
+	URLRouter delete_(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.DELETE, url_match, cb); }
 
 	/// Adds a new route for PATCH requests matching the specified pattern.
 	URLRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
@@ -206,11 +208,11 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// ditto
 	URLRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
 	/// ditto
-	URLRouter patch(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	URLRouter patch(string url_match, HTTPServerRequestHandlerS cb) { return patch(url_match, &cb.handleRequest); }
 	/// ditto
-	URLRouter patch(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	URLRouter patch(string url_match, HTTPServerRequestFunctionS cb) { return patch(url_match, toDelegate(cb)); }
 	/// ditto
-	URLRouter patch(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
+	URLRouter patch(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.PATCH, url_match, cb); }
 
 	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
 	URLRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
