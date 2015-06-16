@@ -370,7 +370,14 @@ class RestInterfaceClient(I) : I
 
 			URL url = m_baseURL;
 
-			if (name.length) url ~= Path(name);
+			if (name.length)
+			{
+				string sep = "";
+				if (name[0] != '/' && (!url.pathString.length || url.pathString[0] != '/'))
+					sep = "/";
+				url.pathString = url.pathString ~ sep ~ name;
+			}
+
 			if (query.length) url.queryString = query;
 
 			Json ret;
@@ -661,6 +668,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
                         logDebug("Body param: %s <- %s", PWPAT[0].identifier, par);
 					} else static assert (false, "Internal error: Origin "~to!string(PWPAT[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
+					import vibe.textfilter.urlencode;
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
 						enforceBadRequest(
@@ -668,7 +676,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 							format("req.param[%s] was not set!", ParamNames[i][1 .. $])
 						);
 						logDebug("param %s %s", ParamNames[i], req.params[ParamNames[i][1 .. $]]);
-						params[i] = fromRestString!P(req.params[ParamNames[i][1 .. $]]);
+						params[i] = fromRestString!P(urlDecode(req.params[ParamNames[i][1 .. $]]));
 					}
 				} else {
 					// normal parameter
