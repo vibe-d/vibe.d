@@ -1616,6 +1616,13 @@ unittest { // #1109
 	assert(deserializeJson!C(Json(14)).mem == 13);
 }
 
+unittest { // const and mutable json
+	Json j = Json(1);
+	const k = Json(2);
+	assert(serializeToJson(j) == Json(1));
+	assert(serializeToJson(k) == Json(2));
+}
+
 
 /**
 	Serializer for a plain Json representation.
@@ -1651,16 +1658,14 @@ struct JsonSerializer {
 	void endWriteArrayEntry(T)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
 	void writeValue(T)(in T value)
+		if (!is(T == Json))
 	{
-		static if (is(T == Json)) m_current = value;
-		else static if (isJsonSerializable!T) m_current = value.toJson();
+		static if (isJsonSerializable!T) m_current = value.toJson();
 		else m_current = Json(value);
 	}
 
-	void writeValue(T)(in Json value) if (is(T == Json))
-	{
-		m_current = value.clone;
-	}
+	void writeValue(T)(Json value) if (is(T == Json)) { m_current = value; }
+	void writeValue(T)(in Json value) if (is(T == Json)) { m_current = value.clone; }
 
 	//
 	// deserialization
