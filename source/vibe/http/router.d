@@ -336,7 +336,7 @@ unittest {
 		// the place holders in req.params as 'username' and 'groupname'.
 		router.get("/users/:username/groups/:groupname", &addGroup);
 
-		// Natches all requests. This can be useful for authorization and
+		// Matches all requests. This can be useful for authorization and
 		// similar tasks. The auth method will only write a response if the
 		// user is _not_ authorized. Otherwise, the router will fall through
 		// and continue with the following routes.
