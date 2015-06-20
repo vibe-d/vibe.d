@@ -151,6 +151,32 @@ template IsAttributedParameter(alias Function, string name)
 	enum IsAttributedParameter = Impl!Data;
 }
 
+template HasFuncAttributes(alias Func)
+{
+	import std.typetuple;
+	enum HasFuncAttributes = (anySatisfy!(isOutputAttribute, __traits(getAttributes, Func))
+							  || anySatisfy!(isInputAttribute, __traits(getAttributes, Func)));
+}
+
+unittest {
+	string foo() { return "Hello"; }
+	string bar(int) { return foo(); }
+
+	@before!foo("b") void baz1(string b) {}
+	@after!bar() string baz2() { return "Hi"; }
+	@before!foo("b") @after!bar() string baz3(string b) { return "Hi"; }
+
+	static assert (HasFuncAttributes!baz1);
+	static assert (HasFuncAttributes!baz2);
+	static assert (HasFuncAttributes!baz3);
+
+	string foobar1(string b) { return b; }
+	@("Irrelevant", 42) string foobar2(string b) { return b; }
+
+	static assert (!HasFuncAttributes!foobar1);
+	static assert (!HasFuncAttributes!foobar2);
+}
+
 /**
 	Computes the given attributed parameter using the corresponding @before modifier.
 */
