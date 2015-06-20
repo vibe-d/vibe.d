@@ -381,6 +381,7 @@ override:
 	}
 	string getConcat(FooType myFoo)
 	{
+		import std.conv;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
 	}
 }
