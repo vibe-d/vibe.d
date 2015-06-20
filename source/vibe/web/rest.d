@@ -616,7 +616,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, enforceBadRequest;
 	import vibe.utils.string : sanitizeUTF8;
-	import vibe.internal.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.funcattr : IsAttributedParameter, HasFuncAttributes;
 
 	alias PSC = ParameterStorageClass;
 	alias PSCT = ParameterStorageClassTuple!Func;
@@ -633,6 +633,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 	{
 		PT params;
 
+		enum hasFuncAttr = HasFuncAttributes!(Func);
 		foreach (i, P; PT) {
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
@@ -799,14 +800,22 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 		try {
 			import vibe.internal.meta.funcattr;
 
-			auto handler = createAttributedFunction!Func(req, res);
+			static if (hasFuncAttr)
+				auto handler = createAttributedFunction!Func(req, res);
 
 			static if (is(RT == void)) {
-				handler(&__traits(getMember, inst, Method), params);
+				static if (hasFuncAttr)
+					handler(&__traits(getMember, inst, Method), params);
+				else
+					__traits(getMember, inst, Method)(params);
 				returnHeaders();
 				res.writeJsonBody(Json.emptyObject);
 			} else {
-				auto ret = handler(&__traits(getMember, inst, Method), params);
+				static if (hasFuncAttr)
+					auto ret = handler(&__traits(getMember, inst, Method), params);
+				else
+					auto ret = __traits(getMember, inst, Method)(params);
+
 				returnHeaders();
 				res.writeJsonBody(ret);
 			}
