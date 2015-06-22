@@ -39,7 +39,7 @@ struct URL {
 		m_schema = schema;
 		m_host = host;
 		m_port = port;
-		m_pathString = path.toString();
+		m_pathString = urlEncode(path.toString(), "/");
 	}
 	/// ditto
 	this(string schema, Path path)
@@ -111,13 +111,25 @@ struct URL {
 		return URL(url_string);
 	}
 
+	invariant()
+	{
+		assert(isURLEncoded(m_pathString, "/"), "Wrong encoding of '"~m_pathString~"'");
+	}
+
 	/// The schema/protocol part of the URL
 	@property string schema() const { return m_schema; }
 	/// ditto
 	@property void schema(string v) { m_schema = v; }
 
-	/// The path part of the URL in the original string form
+	/// The url encoded path part of the URL
 	@property string pathString() const { return m_pathString; }
+
+	/// Set the path part of the URL. It should be properly encoded.
+	@property void pathString(string s)
+	{
+		enforce(isURLEncoded(m_pathString, "/"), "Wrong encoding of '"~m_pathString~"'");
+		m_pathString = s;
+	}
 
 	/// The path part of the URL
 	@property Path path() const { return Path(urlDecode(m_pathString)); }
@@ -125,7 +137,7 @@ struct URL {
 	@property void path(Path p)
 	{
 		auto pstr = p.toString();
-		m_pathString = urlEncode(pstr);
+		m_pathString = urlEncode(pstr, "/");
 	}
 
 	/// The host part of the URL (depends on the schema)
@@ -160,8 +172,8 @@ struct URL {
 	@property string localURI()
 	const {
 		auto str = appender!string();
-		str.reserve(m_pathString.length + 2 + queryString.length + anchor.length);
-		filterURLEncode(str, path.toString(), "/");
+		// m_pathString is already encoded
+		str.put(m_pathString);
 		if( queryString.length ) {
 			str.put("?");
 			str.put(queryString);
@@ -187,7 +199,7 @@ struct URL {
 			str = str[0 .. qi];
 		} else m_queryString = null;
 
-		m_pathString = str;
+		m_pathString = urlEncode(str, "/");
 	}
 
 	/// The URL to the parent path with query string and anchor stripped.
@@ -309,4 +321,17 @@ unittest { // issue #1044
 	assert(url.queryString == "");
 	assert(url.anchor == "anchor");
 	assert(url.pathString == "/q");
+}
+
+unittest {
+	Path p = Path("/foo bar/boo oom/");
+    URL url = URL("http", "example.com", 0, p); // constructor test
+    assert(url.path == p);
+    url.path = p;
+    assert(url.path == p);                       // path assignement test
+    assert(url.pathString == "/foo%20bar/boo%20oom/");
+    assert(url.toString() == "http://example.com/foo%20bar/boo%20oom/");
+    url.pathString = "/foo%20bar/boo%2foom/";
+    assert(url.pathString == "/foo%20bar/boo%2foom/");
+    assert(url.toString() == "http://example.com/foo%20bar/boo%2foom/");
 }

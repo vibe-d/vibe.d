@@ -45,6 +45,56 @@ unittest {
 	assert(s.urlEncode().ptr == s.ptr);
 }
 
+private bool isCorrectHexNum(string str)
+@safe {
+	foreach (char c; str) {
+		switch(c) {
+			case '0': .. case '9':
+			case 'A': .. case 'F':
+			case 'a': .. case 'f':
+				break;
+			default:
+				return false;
+		}
+	}
+	return true;
+}
+bool isURLEncoded(string str, string allowed_chars = null)
+@safe {
+	for (size_t i = 0; i < str.length; i++) {
+		switch(str[i]) {
+			case '-':
+			case '.':
+			case '0': .. case '9':
+			case 'A': .. case 'Z':
+			case '_':
+			case 'a': .. case 'z':
+			case '~':
+				break;
+			case '%':
+				if (i + 2 >= str.length)
+					return false;
+				if (!isCorrectHexNum(str[i+1 .. i+3]))
+					return false;
+				i += 2;
+				break;
+			default:
+				if (allowed_chars.canFind(str[i]))
+					break;
+				return false;
+		}
+	}
+	return true;
+}
+
+unittest {
+	assert(isURLEncoded("hello-world"));
+	assert(isURLEncoded("he%2F%af"));
+	assert(!isURLEncoded("hello world"));
+	assert(!isURLEncoded("he%f"));
+	assert(!isURLEncoded("he%fx"));
+}
+
 /** Returns the decoded version of a given URL encoded string.
 */
 string urlDecode(string str)
