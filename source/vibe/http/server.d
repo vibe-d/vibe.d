@@ -1322,8 +1322,10 @@ private {
 
 	HTTPServerContext[] getContexts()
 	{
-		static if (__VERSION__ >= 2067)
-			return cast(HTTPServerContext[])atomicLoad(g_contexts);
+		static if (__VERSION__ >= 2067) {
+			version (Win64) return cast(HTTPServerContext[])g_contexts;
+			else return cast(HTTPServerContext[])atomicLoad(g_contexts);
+		}
 		else
 			return cast(HTTPServerContext[])g_contexts;
 	}
