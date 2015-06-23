@@ -136,8 +136,6 @@ final class URLRouter : HTTPServerRequestHandler {
 		else m_routes ~= Route(method, path, cb);
 		return this;
 	}
-	/// Adds a new route for request that match the path and method
-	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
 	/// ditto
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
 	/// ditto
