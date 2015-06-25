@@ -557,6 +557,10 @@ final class SyslogLogger : Logger {
 
 	unittest
 	{
+		version(VibeLibasyncDriver) {
+			import libasync.threads;
+			spawnAsyncThreads();
+		}
 		import vibe.core.file;
 		auto fstream = createTempFile();
 		auto logger = new SyslogLogger(fstream, Facility.local1, "appname", null);
