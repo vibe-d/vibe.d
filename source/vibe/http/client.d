@@ -190,7 +190,9 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 	auto conn = pool.lockConnection();
 	if (conn.isHTTP2Started) {
 		logDebug("Lock http/2 connection pool");
-		return conn.lockConnection();
+		if (!conn.m_http2Context.pool)
+			conn.m_http2Context.pool = new ConnectionPool!HTTPClient(&conn.connectionFactory);
+		return conn.m_http2Context.pool.lockConnection();
 	}
 	return conn;
 }
@@ -221,7 +223,7 @@ final class HTTPClientSettings {
 
 		This setting is obeyed for HTTP/1.1 and HTTP/2 connections.
 	*/
-	Duration defaultKeepAliveTimeout = 10.seconds; 
+	Duration maxKeepAliveTimeout = 10.seconds; 
 
 	/** Sets the user agent string to report in requests.
 
@@ -293,7 +295,7 @@ unittest {
 
 		HTTPClientSettings settings = new HTTPClientSettings;
 		settings.proxyURL = URL.parse("http://proxyuser:proxypass@192.168.2.50:3128");
-		settings.defaultKeepAliveTimeout = 0.seconds; // closes connection immediately after receiving the data.
+		settings.maxKeepAliveTimeout = 0.seconds; // closes connection immediately after receiving the data.
 		requestHTTP("http://www.example.org",
 					(scope req){
 			req.method = HTTPMethod.GET;
@@ -355,7 +357,7 @@ final class HTTPClient {
 	/**
 		Sets a callback that will be called for every TLS context that is created.
 
-		If a TLS Context was specified in the HTTPClientSettings, this callback is unused.
+		If a TLS context was specified in the HTTPClientSettings, this callback is unused.
 
 		Setting such a callback is useful for adjusting the validation parameters
 		of the TLS context.
@@ -364,7 +366,7 @@ final class HTTPClient {
 
 	/// Compatibility alias - will be deprecated soon.
 	alias setSSLSetupCallback = setTLSSetupCallback;
-	
+
 	/**
 		Connects to a specific server.
 
@@ -391,18 +393,19 @@ final class HTTPClient {
 		m_conn.forceTLS = true;
 
 		// use TLS either if the web server or the proxy has it
-		if ((m_conn.forceTLS && !m_settings.proxyURL.schema) || (m_settings.proxyURL.schema !is null && m_settings.proxyURL.schema == "https")) {
+		if ((m_conn.forceTLS && !m_settings.proxyURL.schema) || m_settings.proxyURL.schema == "https") {
 			m_conn.tlsContext = m_settings.tlsContext;
 			
 			if (!m_settings.tlsContext) {
 				m_conn.tlsContext = createTLSContext(TLSContextKind.client);
+
+				// this will be changed to trustedCert once a proper root CA store is available by default
+				m_conn.tlsContext.peerValidationMode = TLSPeerValidationMode.none;
+
 				if (ms_tlsSetup) 
 					ms_tlsSetup(m_conn.tlsContext);
 			}
-			
-			// this will be changed to trustedCert once a proper root CA store is available by default
-			m_conn.tlsContext.peerValidationMode = TLSPeerValidationMode.none;
-			
+						
 			if (m_settings.options & HTTPClientOption.disableHTTP2)
 				m_conn.tlsContext.setClientALPN(["http/1.1"]);
 			else
@@ -414,18 +417,13 @@ final class HTTPClient {
 	private void connect()
 	{
 		if (m_settings.proxyURL.schema !is null){
-			
-			bool use_dns;
-			NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
+			NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host);
 			proxyAddr.port = m_settings.proxyURL.port;
 
 			// we connect to the proxy directly
 			m_conn.tcp = connectTCP(proxyAddr);
 			if (m_settings.proxyURL.schema == "https") {
-				if (use_dns)
-					m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, m_settings.proxyURL.host, proxyAddr);
-				else
-					m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, null, proxyAddr);
+				m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, m_settings.proxyURL.host, proxyAddr);
 			}
 		}
 		else // connect to the requested server/port
@@ -443,7 +441,7 @@ final class HTTPClient {
 		}
 
 		// alpn http/2 connection
-		if ((m_settings.options & HTTPClientOption.forceHTTP2) || (m_conn.tlsStream && !(m_settings.options & HTTPClientOption.disableHTTP2) && m_conn.tlsStream.alpn.length >= 2 && m_conn.tlsStream.alpn[0 .. 2] == "h2")) {
+		if ((m_settings.options & HTTPClientOption.forceHTTP2) || (m_conn.tlsStream && !(m_settings.options & HTTPClientOption.disableHTTP2) && m_conn.tlsStream.alpn.startsWith("h2"))) {
 			logDebug("Got alpn: %s", m_conn.tlsStream.alpn);
 			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
 			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, m_conn.tlsStream, local_settings, &onRemoteSettings);
@@ -479,7 +477,6 @@ final class HTTPClient {
 	*/
 	void disconnect(bool rst_stream = true, string reason = "")
 	{
-
 		m_conn.totRequest = 0;
 		m_conn.maxRequests = int.max;
 		void finalize() {
@@ -553,9 +550,9 @@ final class HTTPClient {
 	{
 				
 		if (m_conn.nextTimeout == Duration.zero) {
-			logDebug("Set keep-alive timer to: %s", m_settings.defaultKeepAliveTimeout.total!"msecs");
-			m_conn.keepAlive = setTimer(m_settings.defaultKeepAliveTimeout, &onKeepAlive, false);
-			m_conn.nextTimeout = m_settings.defaultKeepAliveTimeout;
+			logDebug("Set keep-alive timer to: %s", m_settings.maxKeepAliveTimeout.total!"msecs");
+			m_conn.keepAlive = setTimer(m_settings.maxKeepAliveTimeout, &onKeepAlive, false);
+			m_conn.nextTimeout = m_settings.maxKeepAliveTimeout;
 		}
 		if (isHTTP2Started && m_http2Context.closing)
 		{
@@ -599,15 +596,8 @@ final class HTTPClient {
 		return res;
 	}
 
-
-	private LockedConnection!HTTPClient lockConnection()
+	private HTTPClient connectionFactory()
 	{
-		if (!m_http2Context.pool)
-			m_http2Context.pool = new ConnectionPool!HTTPClient(&connectionFactory);
-		return m_http2Context.pool.lockConnection();
-	}
-
-	private auto connectionFactory() {
 		HTTPClient client = new HTTPClient;
 		client.m_conn = m_conn;
 		client.m_http2Context = m_http2Context;
@@ -621,8 +611,8 @@ final class HTTPClient {
 		assert(!m_state.responding, "Interleaved HTTP client request/response detected!");
 
 		m_state.requesting = true;
-		if (isHTTP2Started) m_state.http2Stream = m_http2Context.session.startRequest();
 		scope(exit) m_state.requesting = false;
+		if (isHTTP2Started) m_state.http2Stream = m_http2Context.session.startRequest();
 		string user_agent = m_settings.userAgent ? m_settings.userAgent : ms_userAgent;
 		Duration latency = Duration.zero;
 		logDebug("Creating scoped client");
@@ -645,7 +635,7 @@ final class HTTPClient {
 
 		m_state.responding = true;
 		logDebug("Processing response");
-		if (m_settings.defaultKeepAliveTimeout != Duration.zero)
+		if (m_settings.maxKeepAliveTimeout != Duration.zero)
 			keepalive = true;
 		auto res = scoped!HTTPClientResponse(this, req_method, keepalive);
 		logDebug("Response loaded");
@@ -861,13 +851,14 @@ final class HTTPClientRequest : HTTPRequest {
 		if (proxy.host !is null){
 			headers["Proxy-Connection"] = "keep-alive";
 
-			import std.base64;			
-			headers["Proxy-Authorization"] = "Basic " ~ cast(string) Base64.encode(cast(ubyte[])format("%s:%s", proxy.username, proxy.password));
-
+			if (proxy.username.length || proxy.password.length) {
+				import std.base64;			
+				headers["Proxy-Authorization"] = "Basic " ~ cast(string) Base64.encode(cast(ubyte[])format("%s:%s", proxy.username, proxy.password));
+			}
 		}
 		else if (!m_http2Stream && !is_http2_upgrading && httpVersion == HTTPVersion.HTTP_1_1) {
 			headers["Connection"] = "keep-alive";
-			keepalive = true; // req.headers.get("Connection", "keep-alive") != "keep-alive";
+			keepalive = true;
 		}
 
 		headers["Accept-Encoding"] = "gzip, deflate";
@@ -1090,14 +1081,6 @@ final class HTTPClientResponse : HTTPResponse {
 		return m_maxRequests;
 	}
 
-	// fixme: This isn't the best approximation
-	private bool expectBody(HTTPMethod req_method) {
-		if (req_method == HTTPMethod.HEAD)
-			return false;
-
-		return true;
-	}
-
 	/// private
 	this(HTTPClient client, HTTPMethod req_method, ref bool keepalive)
 	{
@@ -1108,8 +1091,8 @@ final class HTTPClientResponse : HTTPResponse {
 		m_client = client;
 		m_keepAlive = keepalive;
 
-		scope(failure) finalize(true);
-		scope(exit) if (!expectBody(req_method)) finalize();
+		scope(failure) finalize(false);
+		scope(success) finalize(keepalive);
 
 		m_client.m_conn.rearmKeepAlive();
 
@@ -1147,9 +1130,8 @@ final class HTTPClientResponse : HTTPResponse {
 		logTrace("HTTP client response:");
 		logTrace("---------------------");
 		logTrace("%s", this);
-		foreach (k, v; this.headers) {
+		foreach (k, v; this.headers)
 			logTrace("%s: %s", k, v);
-		}
 
 		if (m_client.m_settings.cookieJar) {
 			this.headers.getAll("Set-Cookie", (value) {
@@ -1184,7 +1166,7 @@ final class HTTPClientResponse : HTTPResponse {
 				keepalive = true;
 			}
 
-			if (has_server_timeout && m_client.m_settings.defaultKeepAliveTimeout > server_timeout)
+			if (has_server_timeout && m_client.m_settings.maxKeepAliveTimeout > server_timeout)
 				m_client.m_conn.keepAliveTimeout = server_timeout;
 			else if (this.httpVersion == HTTPVersion.HTTP_1_0) {
 				keepalive = false;
@@ -1197,7 +1179,6 @@ final class HTTPClientResponse : HTTPResponse {
 	~this()
 	{
 		debug if (m_client && m_client.m_state.responding) { import std.stdio; writefln("WARNING: HTTPClientResponse not fully processed before being finalized"); }
-		if (m_client && m_client.m_state.responding) finalize();
 	}
 
 	/// True if this response is encapsulated by an HTTP/2 session
@@ -1225,11 +1206,11 @@ final class HTTPClientResponse : HTTPResponse {
 	@property InputStream bodyReader()
 	{
 		if( m_bodyReader ) { 
-			logDebug("Returning bodyreader: http2? %s", isHTTP2.to!string);
+			logDebug("Returning bodyreader: http2=%s", isHTTP2);
 			return m_bodyReader;
 		}
 
-		logDebug("Creating bodyreader: http2? %s", isHTTP2.to!string);
+		logDebug("Creating bodyreader: http2=%s", isHTTP2);
 		assert (m_client, "Response was already read or no response body, may not use bodyReader.");
 
 		m_bodyReader = m_client.topStream;
@@ -1287,7 +1268,7 @@ final class HTTPClientResponse : HTTPResponse {
 	void readRawBody(scope void delegate(scope InputStream stream) del)
 	{
 		assert(!m_bodyReader, "May not mix use of readRawBody and bodyReader.");
-		del(cast(InputStream)m_client.topStream);
+		del(m_client.topStream);
 		finalize();
 	}
 
