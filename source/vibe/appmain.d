@@ -65,6 +65,7 @@ int main()
 		} else {
 			status = runEventLoop();
 		}
+
 		logDiagnostic("Event loop exited with status %d.", status);
 		return status;
 	}
