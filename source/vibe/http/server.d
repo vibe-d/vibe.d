@@ -772,6 +772,7 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	@property SysTime timeFinalized() { return m_timeFinalized; }
+	@property void timeFinalized(SysTime time) { m_timeFinalized = time; }
 
 	/** Determines if the HTTP header has already been written.
 	*/
@@ -1129,8 +1130,6 @@ final class HTTPServerResponse : HTTPResponse {
 		// a problem.
 		try m_conn.flush();
 		catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
-
-		m_timeFinalized = Clock.currTime(UTC());
 
 		if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
 			logDebug("HTTP response only written partially before finalization. Terminating connection.");
@@ -1742,6 +1741,8 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		// finalize (e.g. for chunked encoding)
 		res.finalize();
 	}
+
+	res.timeFinalized = Clock.currTime(UTC());
 
 	foreach (k, v ; req.files) {
 		if (existsFile(v.tempPath)) {
