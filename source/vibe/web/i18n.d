@@ -91,11 +91,13 @@ html
 			This is a complete paragraph of translated text.
 */
 
-mixin template translationModule(string NAME)
+mixin template translationModule(string FILENAME)
 {
+	import std.string : tr;
+	enum NAME = FILENAME.tr(`/.-\`, "____");
 	mixin template file_mixin(size_t i) {
 		static if (i < languages.length) {
-			enum decl_strings = extractDeclStrings(import(NAME~"."~languages[i]~".po"));
+			enum decl_strings = extractDeclStrings(import(FILENAME~"."~languages[i]~".po"));
 			mixin("enum "~languages[i]~"_"~NAME~" = decl_strings;");
 			//mixin decls_mixin!(languages[i], 0);
 			mixin file_mixin!(i+1);
