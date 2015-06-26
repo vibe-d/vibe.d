@@ -91,11 +91,29 @@ html
 			This is a complete paragraph of translated text.
 */
 
+/** Makes a set of PO files available to a web interface class.
+
+	This mixin template needs to be mixed in at the class scope. It will parse all
+	translation files with the specified file name prefix and make their
+	translations available.
+
+	Params:
+		FILENAME = Base name of the set of PO files to mix in. A file with the
+			name "<FILENAME>.<LANGUAGE>.po" must be available as a string import
+			for each language defined in the translation context.
+
+	Bugs:
+		`FILENAME` should not contain (back)slash characters, as string imports
+		from sub directories will currently fail on Windows. See
+		$(LINK https://issues.dlang.org/show_bug.cgi?id=14349).
+
+	See_Also: `translationContext`
+*/
 mixin template translationModule(string FILENAME)
 {
 	import std.string : tr;
 	enum NAME = FILENAME.tr(`/.-\`, "____");
-	mixin template file_mixin(size_t i) {
+	private mixin template file_mixin(size_t i) {
 		static if (i < languages.length) {
 			enum decl_strings = extractDeclStrings(import(FILENAME~"."~languages[i]~".po"));
 			mixin("enum "~languages[i]~"_"~NAME~" = decl_strings;");
