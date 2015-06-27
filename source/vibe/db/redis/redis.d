@@ -102,9 +102,9 @@ final class RedisClient {
 	//TODO: BGSAVE
 
 	/// Get the value of a configuration parameter
-	T getConfig(T)(string parameter) if(isValidRedisValueReturn!T) { return request!T("GET CONFIG", parameter); }
+	T getConfig(T)(string parameter) if(isValidRedisValueReturn!T) { return request!T("CONFIG", "GET", parameter); }
 	/// Set a configuration parameter to the given value
-	void setConfig(T)(string parameter, T value) if(isValidRedisValueType!T) { request("SET CONFIG", parameter, value); }
+	void setConfig(T)(string parameter, T value) if(isValidRedisValueType!T) { request("CONFIG", "SET", parameter, value); }
 	/// Reset the stats returned by INFO
 	void configResetStat() { request("CONFIG RESETSTAT"); }
 
