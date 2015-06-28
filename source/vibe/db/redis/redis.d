@@ -106,7 +106,7 @@ final class RedisClient {
 	/// Set a configuration parameter to the given value
 	void setConfig(T)(string parameter, T value) if(isValidRedisValueType!T) { request("CONFIG", "SET", parameter, value); }
 	/// Reset the stats returned by INFO
-	void configResetStat() { request("CONFIG RESETSTAT"); }
+	void configResetStat() { request("CONFIG", "RESETSTAT"); }
 
 	//TOOD: Debug Object
 	//TODO: Debug Segfault
