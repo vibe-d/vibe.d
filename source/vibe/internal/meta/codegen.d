@@ -300,7 +300,7 @@ template FuncAttributes(alias Func)
 mixin template CloneFunction(alias Func, string body_, bool keepUDA = false, string identifier = __traits(identifier, Func))
 {
 	// Template mixin: everything has to be self-contained.
-	import std.string : format;
+	import std.string : format, variadicFunctionStyle, Variadic;
 	import std.traits : ReturnType;
 	import std.typetuple : TypeTuple;
 	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
@@ -315,11 +315,21 @@ mixin template CloneFunction(alias Func, string body_, bool keepUDA = false, str
 		private alias UDA = TypeTuple!(__traits(getAttributes, Func));
 	else
 		private alias UDA = TypeTuple!();
-	mixin(q{
-			@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s {
-			%s
-		}
-	}.format(identifier, FuncAttributes!Func, body_));
+	static if (variadicFunctionStyle!Func == Variadic.no) {
+		mixin(q{
+				@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s {
+					%s
+				}
+			}.format(identifier, FuncAttributes!Func, body_));
+	} else static if (variadicFunctionStyle!Func == Variadic.typesafe) {
+		mixin(q{
+				@(UDA) ReturnType!Func %s(ParameterTuple!Func...) %s {
+					%s
+				}
+			}.format(identifier, FuncAttributes!Func, body_));
+	} else
+		static assert(0, "Variadic style " ~ variadicFunctionStyle!Func.stringof
+					  ~ " not implemented.");
 }
 
 ///
@@ -331,6 +341,10 @@ unittest
 	{
 		@("42") int foo(string par, int, string p = "foo", int = 10) pure @safe nothrow const;
 		@property int foo2() pure @safe nothrow const;
+		// Issue #1144
+		void variadicFun(ref size_t bar, string[] args...);
+		// Gives weird error message, not supported so far
+		//bool variadicDFun(...);
 	}
 
 	class Test : ITest
@@ -339,6 +353,8 @@ unittest
 	override:
 		mixin CloneFunction!(ITest.foo, q{return 42;}, true);
 		mixin CloneFunction!(ITest.foo2, q{return 42;});
+		mixin CloneFunction!(ITest.variadicFun, q{bar = args.length;});
+		//mixin CloneFunction!(ITest.variadicDFun, q{return true;});
 	}
 
 	// UDA tests
@@ -349,6 +365,12 @@ unittest
 	assert(new Test().foo("", 21) == 42);
 	assert(new Test().foo2 == 42);
 	assert(new Test().customname("", 21) == 84);
+
+	size_t l;
+	new Test().variadicFun(l, "Hello", "variadic", "world");
+	assert(l == 3);
+
+	//assert(new Test().variadicDFun("Hello", "again", "variadic", "world"));
 }
 
 /// A template mixin which allow you to clone a function declaration
@@ -364,7 +386,7 @@ unittest
 mixin template CloneFunctionDecl(alias Func, bool keepUDA = true, string identifier = __traits(identifier, Func))
 {
 	// Template mixin: everything has to be self-contained.
-	import std.string : format;
+	import std.string : format, variadicFunctionStyle, Variadic;
 	import std.traits : ReturnType;
 	import std.typetuple : TypeTuple;
 	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
@@ -373,9 +395,19 @@ mixin template CloneFunctionDecl(alias Func, bool keepUDA = true, string identif
 		private alias UDA = TypeTuple!(__traits(getAttributes, Func));
 	else
 		private alias UDA = TypeTuple!();
-	mixin(q{
-			@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s;
-		}.format(identifier, FuncAttributes!Func));
+
+	static if (variadicFunctionStyle!Func == Variadic.no) {
+		mixin(q{
+				@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s;
+			}.format(identifier, FuncAttributes!Func));
+	} else static if (variadicFunctionStyle!Func == Variadic.typesafe) {
+		mixin(q{
+				@(UDA) ReturnType!Func %s(ParameterTuple!Func...) %s;
+			}.format(identifier, FuncAttributes!Func));
+	} else
+		static assert(0, "Variadic style " ~ variadicFunctionStyle!Func.stringof
+					  ~ " not implemented.");
+
 }
 
 ///
