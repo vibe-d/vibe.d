@@ -1,7 +1,7 @@
 /**
 	Efficient timer management routines for large number of timers.
 
-	Copyright: © 2014 RejectedSoftware e.K.
+	Copyright: © 2014-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -92,7 +92,13 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 			if (!pt || !pt.pending || pt.timeout != tm.timeout) continue;
 
 			if (pt.repeatDuration > 0) {
-				pt.timeout += pt.repeatDuration;
+				auto nskipped = (now.stdTime - pt.timeout) / pt.repeatDuration;
+				if (nskipped > 0) {
+					import vibe.core.log;
+					logDebugV("Skipped %s iterations of repeating timer %s (%s ms).",
+						nskipped, tm.id, pt.repeatDuration / 10_000);
+				}
+				pt.timeout += (1 + nskipped) * pt.repeatDuration;
 				scheduleTimer(pt.timeout, tm.id);
 			} else pt.pending = false;
 
