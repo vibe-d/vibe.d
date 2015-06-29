@@ -223,7 +223,10 @@ final class HTTPClientSettings {
 
 		This setting is obeyed for HTTP/1.1 and HTTP/2 connections.
 	*/
-	Duration maxKeepAliveTimeout = 10.seconds; 
+	Duration maxKeepAliveTimeout = 10.seconds;
+
+	/// Compatibility alias - will be deprecated soon.
+	alias defaultKeepAliveTimeout = maxKeepAliveTimeout;
 
 	/** Sets the user agent string to report in requests.
 
