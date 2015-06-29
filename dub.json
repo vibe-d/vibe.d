@@ -35,7 +35,7 @@
 		{
 			"name": "libasync_botan",
 			"dependencies": {
-				"botan": {"version": "~>1.11.12" },
+				"botan": {"version": "~>1.11.13" },
 				"libasync": {"version": "~>0.7.3" },
 				"openssl": "~>1.0.0"
 			},
@@ -44,7 +44,7 @@
 		{
 			"name": "libasync_botan_win32",
 			"dependencies": { 
-				"botan": {"version": "~>1.11.12" },
+				"botan": {"version": "~>1.11.13" },
 				"libasync": {"version": "~>0.7.3"  },
 				"openssl": "~>1.0.0"
 			},
