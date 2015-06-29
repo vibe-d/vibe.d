@@ -1127,15 +1127,16 @@ final class HTTPServerResponse : HTTPResponse {
 		// ignore exceptions caused by an already closed connection - the client
 		// may have closed the connection already and this doesn't usually indicate
 		// a problem.
-		try m_conn.flush();
-		catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
+		if (m_rawConnection && m_rawConnection.connected) {
+			try if (m_conn) m_conn.flush();
+			catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
+			if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
+				logDebug("HTTP response only written partially before finalization. Terminating connection.");
+				m_rawConnection.close();
+			}
+		}
 
 		m_timeFinalized = Clock.currTime(UTC());
-
-		if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
-			logDebug("HTTP response only written partially before finalization. Terminating connection.");
-			m_rawConnection.close();
-		}
 
 		m_conn = null;
 		m_rawConnection = null;
@@ -1738,10 +1739,10 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			nullWriter.write(req.bodyReader);
 			logTrace("dropped body");
 		}
-
-		// finalize (e.g. for chunked encoding)
-		res.finalize();
 	}
+
+	// finalize (e.g. for chunked encoding)
+	res.finalize();
 
 	foreach (k, v ; req.files) {
 		if (existsFile(v.tempPath)) {
