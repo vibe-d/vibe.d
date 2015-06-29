@@ -281,7 +281,7 @@ class BotanTLSContext : TLSContext {
 		else
 			m_offer_version = TLSProtocolVersion.TLS_V12;
 
-		m_rng = AutoSeededRNG();
+		m_rng = new AutoSeededRNG();
 		if (!session_manager)
 			session_manager = new TLSSessionManagerInMemory(m_rng);
 		m_sessionManager = session_manager;
@@ -772,7 +772,7 @@ private CustomTLSCredentials createCreds()
 	import botan.pubkey.algo.rsa;
 	import botan.codec.hex;
 	import botan.utils.types;
-	auto rng = AutoSeededRNG();
+	scope rng = new AutoSeededRNG();
 	PrivateKey ca_key = RSAPrivateKey(rng, 1024);
 	
 	X509CertOptions ca_opts;
