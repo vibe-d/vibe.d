@@ -92,7 +92,7 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 			if (!pt || !pt.pending || pt.timeout != tm.timeout) continue;
 
 			if (pt.repeatDuration > 0) {
-				pt.timeout += pt.repeatDuration;
+				pt.timeout = Clock.currStdTime() + pt.repeatDuration;
 				scheduleTimer(pt.timeout, tm.id);
 			} else pt.pending = false;
 
