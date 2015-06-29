@@ -848,7 +848,7 @@ final class LibasyncManualEvent : ManualEvent {
 		scope(exit) release();
 		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
-			synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
+			//synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
 			static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
 			else getDriverCore().yieldForEventDeferThrow();
 			ec = this.emitCount;
@@ -1650,7 +1650,7 @@ final class LibasyncUDPConnection : UDPConnection {
 import std.container : Array;
 Array!(Array!Task) s_eventWaiters; // Task list in the current thread per instance ID
 __gshared Array!size_t gs_availID;
-__gshared size_t gs_maxID = 1;
+__gshared size_t gs_maxID;
 __gshared core.sync.mutex.Mutex gs_mutex;
 
 private size_t generateID() {
@@ -1670,8 +1670,8 @@ private size_t generateID() {
 			idx = getIdx();
 			if (idx == 0) {
 				import std.range : iota;
-				gs_availID.insert( iota(gs_maxID, max(32, gs_maxID * 2), 1) );
-				gs_maxID = max(32, gs_maxID * 2);
+				gs_availID.insert( iota(gs_maxID + 1, max(32, gs_maxID * 2), 1) );
+				gs_maxID = gs_availID[$-1];
 				idx = getIdx();
 			}
 		}
