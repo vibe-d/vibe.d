@@ -10,7 +10,7 @@ addons:
 
 env:
   - VIBED_DRIVER=libevent
-  - VIBED_DRIVER=libev-travis
+  - VIBED_DRIVER=libev
   - VIBED_DRIVER=libasync_botan
 
 script:
