@@ -174,24 +174,30 @@ final class LibasyncDriver : EventDriver {
 			is_ipv6 = isIPv6.yes;
 		else
 			is_ipv6 = isIPv6.no;
+		
+		import std.regex : regex, Captures, Regex, matchFirst, ctRegex;
+		import std.traits : ReturnType;
 
-		if (use_dns || family == AF_UNSPEC) {
-			import std.regex : regex, Captures, Regex, matchFirst;
-				
-			__gshared auto IPv4Regex = regex(`^\s*((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\s*$`, ``);
-			__gshared auto IPv6Regex = regex(`^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$`, ``);
-				
-			if (!matchFirst(host, IPv4Regex).empty) {
-				enforce (family == AF_INET || family == AF_UNSPEC, "Failed to resolve host due to address family mismatch.");
-				is_ipv6 = isIPv6.no;
-				use_dns = false; // skip DNS lookup
-			} else if (!matchFirst(host, IPv6Regex).empty) {
-				enforce (family == AF_INET6 || family == AF_UNSPEC, "Failed to resolve host due to address family mismatch.");
-				is_ipv6 = isIPv6.yes;
-				use_dns = false; // skip DNS lookup
-			} else enforce(use_dns, "Cannot resolve named host '"~host~"' with DNS disabled.");
+		auto IPv4Regex = ctRegex!(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$`, ``);
+		auto IPv6Regex = ctRegex!(`^([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4}$|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4})$`, ``);
+		auto ipv4 = matchFirst(host, IPv4Regex);
+		auto ipv6 = matchFirst(host, IPv6Regex);
+		if (!ipv4.empty)
+		{
+			if (!ipv4.empty)
+			is_ipv6 = isIPv6.no;
+			use_dns = false;
 		}
-
+		else if (!ipv6.empty)
+		{ // fixme: match host instead?
+			is_ipv6 = isIPv6.yes;
+			use_dns = false;
+		}
+		else
+		{
+			use_dns = true;
+		}
+		
 		NetworkAddress ret;
 
 		if (use_dns) {
