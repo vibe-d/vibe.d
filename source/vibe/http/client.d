@@ -178,9 +178,10 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 			pool = c[1];
 
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
+		logTrace("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
+				ret.master = true;
 				ret.connect(host, port, use_tls, settings);
 				return ret;
 			});
@@ -189,8 +190,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 	}
 	auto conn = pool.lockConnection();
 	if (conn.isHTTP2Started) {
-		conn.master = true;
-		logDebug("Lock http/2 connection pool");
+		logTrace("Lock http/2 connection pool");
 		if (!conn.m_http2Context.pool)
 			conn.m_http2Context.pool = new ConnectionPool!HTTPClient(&conn.connectionFactory);
 		return conn.m_http2Context.pool.lockConnection();
@@ -338,7 +338,7 @@ final class HTTPClient {
 
 		@property bool master() const { return m_state.master; }
 		@property void master(bool m) { m_state.master = m; }
-		@property bool isHTTP2Started() { return m_http2Context !is null && m_conn.tcp !is null && m_conn.tcp.connected && m_http2Context.isSupported && m_http2Context.isValidated && m_http2Context.session !is null; }
+		@property bool isHTTP2Started() { return m_http2Context !is null && m_conn !is null && m_conn.tcp !is null && m_conn.tcp.connected && m_http2Context.isSupported && m_http2Context.isValidated && m_http2Context.session !is null; }
 		@property bool canUpgradeHTTP2() { return !(m_settings.options & HTTPClientOption.disableHTTP2)&& !(m_settings.options & HTTPClientOption.onlyEncryptedHTTP2) && !isHTTP2Started && !m_conn.forceTLS && !unsupportedHTTP2; }
 		@property bool unsupportedHTTP2() { return m_http2Context is null || (!m_http2Context.isSupported && m_http2Context.isValidated); }
 		@property Stream topStream() {
@@ -409,7 +409,7 @@ final class HTTPClient {
 		m_conn.forceTLS = true;
 
 		// use TLS either if the web server or the proxy has it
-		if ((m_conn.forceTLS && !m_settings.proxyURL.schema) || m_settings.proxyURL.schema == "https") {
+		if ((m_conn.forceTLS && !m_settings.proxyURL.schema) || (m_settings.proxyURL.schema !is null && m_settings.proxyURL.schema == "https")) {
 			m_conn.tlsContext = m_settings.tlsContext;
 			
 			if (!m_settings.tlsContext) {
@@ -432,10 +432,12 @@ final class HTTPClient {
 
 	private void connect()
 	{
-		scope(failure) {
-			m_conn.tcp = null;
-			m_conn.tlsStream = null;
-		}
+		scope(failure)
+			disconnect(false);
+			
+		if (m_conn.tcp || m_conn.tlsStream || m_http2Context)
+			disconnect(false, "Cleaning up");
+		
 		if (m_settings.proxyURL.schema !is null){
 			NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host);
 			proxyAddr.port = m_settings.proxyURL.port;
@@ -448,13 +450,16 @@ final class HTTPClient {
 		}
 		else // connect to the requested server/port
 		{
-			logDebug("Connect without proxy");
+			logTrace("Connect without proxy");
 			m_conn.tcp = connectTCP(m_conn.server, m_conn.port);
 			if (m_conn.tlsContext) {
 				m_conn.tlsStream = createTLSStream(m_conn.tcp, m_conn.tlsContext, TLSStreamState.connecting, m_conn.server, m_conn.tcp.remoteAddress);
-				logDebug("Got alpn: %s", m_conn.tlsStream.alpn);
+				logTrace("Got alpn: %s", m_conn.tlsStream.alpn);
 			}
 		}
+		
+		// check here to avoid access violations
+		enforce(m_conn.tcp !is null, "Connection failed");
 
 		if (m_settings.pingInterval != Duration.zero) {
 			m_http2Context.pinger = setTimer(m_settings.pingInterval, &onPing, true);
@@ -462,18 +467,20 @@ final class HTTPClient {
 
 		// alpn http/2 connection
 		if ((m_settings.options & HTTPClientOption.forceHTTP2) || (m_conn.tlsStream && !(m_settings.options & HTTPClientOption.disableHTTP2) && m_conn.tlsStream.alpn.startsWith("h2"))) {
-			logDebug("Got alpn: %s", m_conn.tlsStream.alpn);
+			logTrace("Got alpn: %s", m_conn.tlsStream.alpn);
 			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
+			// should be connected
+			enforce(m_conn.tcp !is null && m_conn.tcp.connected, "Not connected");
 			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, m_conn.tlsStream, local_settings, &onRemoteSettings);
 			m_http2Context.worker = runTask(&runHTTP2Worker, false);
 			yield();
-			logDebug("Worker started, continuing");
+			logTrace("Worker started, continuing");
 			m_http2Context.isValidated = true;
 			m_http2Context.isSupported = true;
 		}
 		// pre-verified http/2 cleartext connection
 		else if (canUpgradeHTTP2 && m_http2Context.isSupported) {
-			logDebug("Upgrading HTTP/2");
+			logTrace("Upgrading HTTP/2");
 			HTTP2Settings local_settings = getHTTP2Settings(m_settings);
 			m_http2Context.session = new HTTP2Session(false, null, cast(TCPConnection) m_conn.tcp, null, local_settings, &onRemoteSettings);
 			m_http2Context.worker = runTask(&runHTTP2Worker, false);
@@ -490,6 +497,28 @@ final class HTTPClient {
 		connect();
 	}
 
+	
+	private void closeTCP() {
+		if (!m_conn) return;
+		if (m_conn.keepAlive !is Timer.init && m_conn.keepAlive.pending)
+			m_conn.keepAlive.stop();
+		if (m_conn.tlsStream !is null) {
+			m_conn.tlsStream.finalize();
+			m_conn.tlsStream.destroy();
+		}
+		if (m_conn.tcp !is null) {
+			if (m_conn.tcp.connected)
+			{
+				m_conn.tcp.finalize();
+				m_conn.tcp.close();			
+			}
+		}
+		m_conn.tcp = null;
+		m_conn.tlsStream = null;
+		m_state.http2Stream = null;
+
+	}
+	
 	/**
 		Forcefully closes the connection or HTTP/2 stream
 
@@ -500,23 +529,6 @@ final class HTTPClient {
 		m_state.responding = false;
 		m_conn.totRequest = 0;
 		m_conn.maxRequests = int.max;
-		void finalize() {
-			try topStream().finalize();
-			catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
-		}
-
-		void closeTCP()
-		{
-			if (m_conn.keepAlive !is Timer.init && m_conn.keepAlive.pending)
-				m_conn.keepAlive.stop();
-			if (m_conn.tlsStream) m_conn.tlsStream.finalize(); // TLS has an alert for connection closure
-			if (m_conn.tcp) {
-				m_conn.tcp.finalize();
-				m_conn.tcp.close();
-			}
-			m_conn.tcp = null;
-			m_conn.tlsStream = null;
-		}
 
 		if (isHTTP2Started && !rst_stream && !m_http2Context.closing) {
 			if (m_http2Context.pinger !is Timer.init && m_http2Context.pinger.pending)
@@ -529,23 +541,20 @@ final class HTTPClient {
 			import libhttp2.frame : FrameError;
 			if (m_state.http2Stream && m_state.http2Stream.connected) {
 				m_state.http2Stream.close();
-				finalize();
+				m_state.http2Stream = null;
 			}
 			m_http2Context.session.stop(FrameError.NO_ERROR, reason);
+			m_http2Context.worker.join(); // will set m_http2Context.closing = false
 			closeTCP();
-			m_http2Context.worker.join();
-			m_http2Context.closing = false;
 		}
 		else if (isHTTP2Started && rst_stream) {
-			if (m_state.http2Stream && m_state.http2Stream.connected) {
-				try m_state.http2Stream.close();
+			if (m_state.http2Stream) {
+				try  m_state.http2Stream.close();
 				catch (Exception e) logDebug("Failed to finalize connection stream when closing HTTP client connection: %s", e.msg);
 			}
-			m_state.http2Stream.destroy();
 			m_state.http2Stream = null;
 		}
 		else if (!isHTTP2Started && m_conn.tcp && m_conn.tcp.connected) {
-			finalize();
 			closeTCP();
 		}
 		else {
@@ -572,7 +581,7 @@ final class HTTPClient {
 	{
 				
 		if (m_conn.nextTimeout == Duration.zero) {
-			logDebug("Set keep-alive timer to: %s", m_settings.maxKeepAliveTimeout.total!"msecs");
+			logTrace("Set keep-alive timer to: %s", m_settings.maxKeepAliveTimeout.total!"msecs");
 			m_conn.keepAlive = setTimer(m_settings.maxKeepAliveTimeout, &onKeepAlive, false);
 			m_conn.nextTimeout = m_settings.maxKeepAliveTimeout;
 		}
@@ -639,17 +648,17 @@ final class HTTPClient {
 		if (isHTTP2Started) m_state.http2Stream = m_http2Context.session.startRequest();
 		string user_agent = m_settings.userAgent ? m_settings.userAgent : ms_userAgent;
 		Duration latency = Duration.zero;
-		logDebug("Creating scoped client");
+		logTrace("Creating scoped client");
 		auto req = scoped!HTTPClientRequest(m_conn, m_state.http2Stream, m_settings.proxyURL, user_agent, canUpgradeHTTP2,
 											m_http2Context ? m_http2Context.latency : latency, keepalive, m_settings.cookieJar);
-		logDebug("Calling callback");
+		logTrace("Calling callback");
 		requester(req);
 
 		// after requester, to make sure it doesn't get corrupted
 		if (canUpgradeHTTP2)
 			startHTTP2Upgrade(req.headers);
 		req.finalize();
-		logDebug("Sent request");
+		logTrace("Sent request");
 		req_method = req.method;
 	}
 
@@ -658,11 +667,11 @@ final class HTTPClient {
 		// fixme: Close HTTP/2 session when a response is not handled properly?
 
 		m_state.responding = true;
-		logDebug("Processing response");
+		logTrace("Processing response");
 		if (m_settings.maxKeepAliveTimeout != Duration.zero)
 			keepalive = true;
 		auto res = scoped!HTTPClientResponse(this, req_method, keepalive);
-		logDebug("Response loaded");
+		logTrace("Response loaded");
 		Exception user_exception;
 		{
 			scope (failure) {
@@ -693,7 +702,7 @@ final class HTTPClient {
 	}
 
 	private void startHTTP2Upgrade(ref InetHeaderMap headers) {
-		logDebug("Starting HTTP/2 Upgrade");
+		logTrace("Starting HTTP/2 Upgrade");
 		HTTP2Settings local_settings = getHTTP2Settings(m_settings);
 		HTTP2Stream stream;
 		m_http2Context.session = new HTTP2Session(m_conn.tcp, stream, local_settings, &onRemoteSettings);
@@ -715,7 +724,7 @@ final class HTTPClient {
 			m_http2Context.isUpgrading = false;
 			m_http2Context.isSupported = true;
 			m_http2Context.isValidated = true;
-			logDebug("Session resume");
+			logTrace("Session resume");
 			m_http2Context.session.resume();
 		}
 		else if (m_http2Context.isUpgrading && (upgrade_hd.length < 3 || upgrade_hd[0 .. 3] != "h2c"))
@@ -723,7 +732,7 @@ final class HTTPClient {
 			m_http2Context.isUpgrading = false;
 			m_http2Context.isSupported = false;
 			m_http2Context.isValidated = true;
-			logDebug("Session abort");
+			logTrace("Session abort");
 			m_http2Context.session.abort(m_state.http2Stream);
 			m_state.http2Stream = null;
 			m_http2Context.worker.join();
@@ -753,14 +762,17 @@ final class HTTPClient {
 
 	private void runHTTP2Worker(bool upgrade = false) 
 	{
-		logDebug("Running HTTP/2 worker");
-
+		logTrace("Running HTTP/2 worker");
 		m_http2Context.session.setReadTimeout(m_settings.connectionTimeout);
 		m_http2Context.session.setWriteTimeout(m_settings.connectionTimeout);
 		m_http2Context.session.setPauseTimeout(m_settings.connectionTimeout);
 
 		// starting...
-		m_http2Context.session.run(upgrade);
+		enforce(m_conn.tcp.connected);
+		try m_http2Context.session.run(upgrade);
+		catch (Exception e) { 
+			logDebug("Exception in HTTP/2 Event Loop: %s", e);
+		}
 		// stopped here
 
 		// all data is cleaned up in run()
@@ -770,20 +782,18 @@ final class HTTPClient {
 			m_http2Context.pinger.stop();
 		m_http2Context.closing = false;
 		m_http2Context.pool.destroy();
-		m_http2Context.pool = null;
-		m_state.http2Stream = null;
+		m_http2Context.pool = null;	
 
 		if (!upgrade || (upgrade && !unsupportedHTTP2)) {
 			m_conn.keepAliveTimeout = 0.seconds;
-			m_conn.tlsStream = null;
-			m_conn.tcp = null;
+			closeTCP();
 		}
-		logDebug("Cleaned HTTP/2 worker");
+		logTrace("Cleaned HTTP/2 worker");
 		
 	}
 
 	private void onKeepAlive() {
-		logDebug("Keep-alive timeout");
+		logTrace("Keep-alive timeout");
 		if (m_state.responding || m_state.requesting || (m_http2Context && m_http2Context.session && m_http2Context.session.streams > 0))
 		{
 			m_conn.rearmKeepAlive();
@@ -796,7 +806,7 @@ final class HTTPClient {
 	private void ping()
 	{
 		Duration latency;
-		logDebug("Running ping");
+		logTrace("Running ping");
 		auto cb = getEventDriver().createManualEvent();
 		SysTime start = Clock.currTime();
 		long sent = start.stdTime();
@@ -1020,7 +1030,7 @@ final class HTTPClientRequest : HTTPRequest {
 
 		// http/2
 		if (isHTTP2) {
-			logDebug("Writing HTTP/2 headers");
+			logTrace("Writing HTTP/2 headers");
 			m_http2Stream.writeHeader(requestURL, m_conn.tlsStream ? "https" : "http", method, headers, m_cookieJar, m_concatCookies);
 			return;
 		}
@@ -1040,11 +1050,11 @@ final class HTTPClientRequest : HTTPRequest {
 		if (m_cookieJar !is null) {
 			m_cookieJar.get(headers["Host"], requestURL, m_conn.tlsStream !is null, (string cookie) {
 				if (cookie.length) {
-					logDebug("Cookie: %s", cookie);
+					logTrace("Cookie: %s", cookie);
 					formattedWrite(&output, "Cookie: %s\r\n", cookie);
 				}
 			});
-			logDebug("Done with cookies");
+			logTrace("Done with cookies");
 		}
 		output.put("\r\n");
 		logTrace("--------------------");
@@ -1052,10 +1062,10 @@ final class HTTPClientRequest : HTTPRequest {
 
 	private void finalize()
 	{
-		logDebug("Finalize request");
+		logTrace("Finalize request");
 		// test if already finalized
 		if (m_headerWritten && !m_bodyWriter) {
-			logDebug("Already finalized...");
+			logTrace("Already finalized...");
 			return;
 		}
 		// force the request to be sent
@@ -1114,7 +1124,12 @@ final class HTTPClientResponse : HTTPResponse {
 	private bool expectBody(HTTPMethod req_method) {
 		if ("Content-Encoding" !in headers && "Content-Length" !in headers && "Transfer-Encoding" !in headers)
 			return false;
+		else if (auto ptr = "Content-Length" in headers)
+			if (*ptr == "0")
+				return false;
 		if (req_method == HTTPMethod.HEAD)
+			return false;
+		if (this.statusCode == HTTPStatus.notModified || statusCode == HTTPStatus.noContent)
 			return false;
 
 		return true;
@@ -1131,7 +1146,7 @@ final class HTTPClientResponse : HTTPResponse {
 		m_keepAlive = keepalive;
 
 		scope(failure) finalize(false);
-		scope(success) finalize(keepalive);
+		scope(exit) if (!expectBody(req_method)) finalize();
 
 		m_client.m_conn.rearmKeepAlive();
 
@@ -1156,14 +1171,15 @@ final class HTTPClientResponse : HTTPResponse {
 			parseRFC5322Header(client.topStream, this.headers, HTTPClient.maxHeaderLineLength, m_alloc, false);
 
 			auto upgrade_hd = this.headers.get("Upgrade", "");
-			logDebug("Finalizing the upgrade process");
+			logTrace("Finalizing the upgrade process");
 			m_client.finalizeHTTP2Upgrade(upgrade_hd);
 		}
 		
 		if (m_client.isHTTP2Started) {
 			httpVersion = HTTPVersion.HTTP_2;
 			if (is_upgrade) this.headers.destroy();
-			m_client.m_state.http2Stream.readHeader(this.statusCode, this.headers, m_alloc);
+			try m_client.m_state.http2Stream.readHeader(this.statusCode, this.headers, m_alloc);
+			catch (Exception cc) { m_keepAlive = false; keepalive = false; disconnect("Read Header timeout"); return; }
 			this.statusPhrase = httpStatusText(this.statusCode);
 		}
 
@@ -1176,7 +1192,7 @@ final class HTTPClientResponse : HTTPResponse {
 
 		if (m_client.m_settings.cookieJar) {
 			this.headers.getAll("Set-Cookie", (value) {
-				logDebug("Save cookie: %s", value);
+				logTrace("Save cookie: %s", value);
 				m_client.m_settings.cookieJar.set(client.m_conn.server, value);
 			});
 		}
@@ -1220,8 +1236,9 @@ final class HTTPClientResponse : HTTPResponse {
 	~this()
 	{
 		debug if (m_client && m_client.m_state.responding) { import std.stdio; writefln("WARNING: HTTPClientResponse not fully processed before being finalized"); }
+		try if (m_client && m_client.m_state.responding) finalize(); catch {}
 	}
-
+	
 	/// True if this response is encapsulated by an HTTP/2 session
 	@property bool isHTTP2() {
 		return m_client.isHTTP2Started;
@@ -1245,13 +1262,15 @@ final class HTTPClientResponse : HTTPResponse {
 		An input stream suitable for reading the response body.
 	*/
 	@property InputStream bodyReader()
-	{
+	{	
+		if (m_finalized) return null;
+		
 		if( m_bodyReader ) { 
-			logDebug("Returning bodyreader: http2=%s", isHTTP2);
+			logTrace("Returning bodyreader: http2=%s", isHTTP2);
 			return m_bodyReader;
 		}
 
-		logDebug("Creating bodyreader: http2=%s", isHTTP2);
+		logTrace("Creating bodyreader: http2=%s", isHTTP2);
 		assert (m_client, "Response was already read or no response body, may not use bodyReader.");
 
 		m_bodyReader = m_client.topStream;
@@ -1317,6 +1336,7 @@ final class HTTPClientResponse : HTTPResponse {
 		Reads the whole response body and tries to parse it as JSON.
 	*/
 	Json readJson(){
+		enforce(bodyReader !is null, "Connection closed");
 		auto bdy = bodyReader.readAllUTF8();
 		return parseJson(bdy);
 	}
@@ -1390,7 +1410,7 @@ final class HTTPClientResponse : HTTPResponse {
 		destroy(m_gzipInputStream);
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
-		if (!keepalive && !cli.isHTTP2Started) cli.disconnect();
+		if (!keepalive || cli.isHTTP2Started) cli.disconnect();
 		destroy(m_endCallback);
 		destroy(lockedConnection);
 		if (auto alloc = cast(PoolAllocator) m_alloc)
@@ -1412,13 +1432,6 @@ private class HTTPClientConnection {
 	Duration nextTimeout; //keepalive
 	int totRequest;
 	int maxRequests = int.max;
-
-	~this() {
-		if (tcp)
-			tcp.destroy();
-		if (tlsStream)
-			tlsStream.destroy();
-	}
 
 	void rearmKeepAlive() {
 		if (keepAlive is Timer.init) {
@@ -1481,8 +1494,6 @@ private class HTTP2ClientContext {
 	Timer pinger;
 
 	~this() {
-		if (session)
-			session.destroy();
 	}
 } 
 
