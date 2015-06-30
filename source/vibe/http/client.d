@@ -1411,7 +1411,7 @@ final class HTTPClientResponse : HTTPResponse {
 		destroy(m_chunkedInputStream);
 		destroy(m_limitedInputStream);
 		if (!keepalive || cli.isHTTP2Started) cli.disconnect();
-		destroy(m_endCallback);
+		//destroy(m_endCallback); This will trigger segfault in stream.operations where .empty must be available even if the stream was completely drained
 		destroy(lockedConnection);
 		if (auto alloc = cast(PoolAllocator) m_alloc)
 			alloc.reset();
