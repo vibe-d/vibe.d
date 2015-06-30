@@ -12,7 +12,7 @@
 	],
 
 	"dependencies": {
-		"libhttp2": { "version": "~>0.2.4" },
+		"libhttp2": { "version": "~>0.2.5" },
 	},
 
 	"targetType": "library",
@@ -35,16 +35,16 @@
 		{
 			"name": "libasync_botan",
 			"dependencies": {
-				"botan": {"version": "~>1.11.13" },
-				"libasync": {"version": "~>0.7.3" }
+				"botan": {"version": "~>1.11.14" },
+				"libasync": {"version": "~>0.7.5" }
 			},
 			"versions": ["Botan", "VibeUseNativeDriverType", "VibeLibasyncDriver"]
 		},
 		{
 			"name": "libasync_botan_win32",
 			"dependencies": { 
-				"botan": {"version": "~>1.11.13" },
-				"libasync": {"version": "~>0.7.4"  }
+				"botan": {"version": "~>1.11.14" },
+				"libasync": {"version": "~>0.7.5"  }
 			},
 			"dflags-windows-x86": ["-m32mscoff"],
 			"versions": ["Botan", "VibeUseNativeDriverType", "VibeLibasyncDriver"],
@@ -54,7 +54,7 @@
 			"systemDependencies": "OpenSSL 1.0.x",
 			"name": "libasync_openssl",
 			"dependencies": { 
-				"libasync": {"version": "~>0.7.4" },
+				"libasync": {"version": "~>0.7.5" },
 				"openssl": ">=1.0.0+1.0.0e"
 			},
 			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"],
