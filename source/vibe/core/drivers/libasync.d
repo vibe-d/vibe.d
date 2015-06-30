@@ -763,15 +763,17 @@ final class LibasyncManualEvent : ManualEvent {
 
 	~this()
 	{
-		recycleID(m_instance);
-		synchronized (m_mutex) {
+		try {
+			recycleID(m_instance);
+
 			foreach (ref signal; ms_signals[]) {
 				if (signal) {
 					(cast(shared AsyncSignal) signal).kill();
 					signal = null;
 				}
 			}
-		}
+
+		} catch { }
 	}
 
 	void emit()
