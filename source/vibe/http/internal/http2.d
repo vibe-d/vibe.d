@@ -1249,7 +1249,7 @@ final class HTTP2Session
 		import vibe.stream.tls : TLSStream;
 		Session m_session; // libhttp2 implementation
 		TCPConnection m_tcpConn;
-		TLSStream m_tlsStream;
+		ConnectionProxyStream m_tlsStream;
 		HTTP2RequestHandler m_requestHandler;
 		HTTP2Connector m_connector;
 		Vector!HTTP2Stream m_pushResponses;
@@ -1278,7 +1278,7 @@ final class HTTP2Session
 	@property bool isServer() { return m_server; }
 	@property bool connected() { return m_tx.owner != Task() && m_tcpConn && m_tcpConn.connected() && !m_rx.closed && !m_tx.closed && m_gotPreface; }
 	@property string httpVersion() { if (m_tlsStream) return "h2"; else return "h2c"; }
-	@property ConnectionStream topStream() { return m_tlsStream ? cast(ConnectionStream) m_tlsStream : cast(ConnectionStream) m_tcpConn; }
+	@property ConnectionStream topStream() { return m_tlsStream ? m_tlsStream : cast(ConnectionStream) m_tcpConn; }
 	@property int streams() { return m_totConnected; }
 
 	/// Sets the max amount of time we wait for data. You can use ping to avoid reaching the timeout
@@ -1337,7 +1337,7 @@ final class HTTP2Session
 		m_server = is_server;
 		m_requestHandler = handler;
 		m_tcpConn = conn;
-		m_tlsStream = tls;
+		m_tlsStream = new ConnectionProxyStream(tls, conn);
 		m_defaultStreamWindowSize = local_settings.streamWindowSize;
 		m_defaultChunkSize = local_settings.chunkSize;
 		m_settingsUpdater = on_remote_settings;
@@ -1785,15 +1785,10 @@ private:
 				/*if (auto conn = cast(Buffered) m_tlsStream)
 					buf = conn.readBuf(m_rx.buffer[offset .. $]);
 				else {*/
-					buf = null;
-					// 1 byte read to trigger retrieval of TCP data within the TLS stream
-					buf = m_rx.buffer[offset .. offset + 1];
-					m_tlsStream.read(buf);
-					// receive the rest if any available
-					size_t len = std.algorithm.min(m_tlsStream.dataAvailableForRead(), m_rx.buffer.length - offset);
-					if (len > 0)
-						buf = m_rx.buffer[offset + 1 .. offset + 1 + len];
-					m_tlsStream.read(buf);
+				size_t len = std.algorithm.min(m_tlsStream.leastSize(), m_rx.buffer.length - offset);
+				if (len > 0)
+					buf = m_rx.buffer[offset .. offset + len];
+				m_tlsStream.read(buf);
 
 				//}
 			}

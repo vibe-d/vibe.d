@@ -1305,6 +1305,7 @@ final class HTTPServerResponse : HTTPResponse {
 			FreeListObjectAlloc!ChunkedOutputStream.free(m_chunkedBodyWriter);
 			m_chunkedBodyWriter = null;
 		}
+		auto bytes_written = this.bytesWritten;
 
 		FreeListObjectAlloc!CountingOutputStream.free(m_countingWriter);
 		m_countingWriter = null;
@@ -1320,7 +1321,7 @@ final class HTTPServerResponse : HTTPResponse {
 			}
 			catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
 
-			if (!isHeadResponse && this.bytesWritten < headers.get("Content-Length", "0").to!long) {
+			if (!isHeadResponse && bytes_written < headers.get("Content-Length", "0").to!long) {
 				logDebug("HTTP response only written partially before finalization. Terminating connection.");
 				connectionStream.close();
 			}
@@ -1953,6 +1954,9 @@ private bool handleRequest(TCPConnection tcp_connection,
 	try {
 		bool is_upgrade;
 		logTrace("reading request..");
+		// During an upgrade, we would need to read with HTTP/1.1 and write with HTTP/2, 
+		// so we define the InputStream before the upgrade starts
+		req.m_bodyReader = http_stream;
 
 		if (!http2_stream) {
 			// HTTP/1.1 headers
@@ -2000,8 +2004,9 @@ private bool handleRequest(TCPConnection tcp_connection,
 			// find/verify context
 			string authority = req.headers.get("Host", null);
 			enforceBadRequest(authority, "No Host header was defined");
+			auto contextn_ = listen_info.getServerContext(authority);
 
-			enforceBadRequest(listen_info.getServerContext(authority) == http2_handler.context, "Invalid hostname requested for this session.");
+			enforceBadRequest(contextn_.isNull() || contextn_.get() == http2_handler.context, "Invalid hostname requested for this session.");
 		}
 		scope(exit) {
 			import vibe.stream.memory : MemoryStream;
@@ -2013,7 +2018,7 @@ private bool handleRequest(TCPConnection tcp_connection,
 			
 		}
 		logTrace("Got request header.");
-
+		enforce(settings);
 		req.m_settings = settings;
 		
 		if (req.tls) req.clientCertificate = tls_stream.peerCertificate;
