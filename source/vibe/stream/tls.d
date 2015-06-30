@@ -29,7 +29,7 @@ import core.sync.mutex;
 import core.thread;
 
 version (VibeNoSSL) {}
-else version = OpenSSL;
+else version(Have_openssl) version = OpenSSL;
 
 
 /// A simple TLS client
@@ -94,7 +94,7 @@ TLSContext createTLSContext(TLSContextKind kind, TLSVersion ver = TLSVersion.any
 			import vibe.stream.botan;
 			return new BotanTLSContext(kind);
 		}
-		if (!gs_tlsContextFactory)
+		if (!gs_sslContextFactory)
 			setTLSContextFactory(&createBotanContext);
 	}
 	assert(gs_sslContextFactory !is null, "No TLS context factory registered.");

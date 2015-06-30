@@ -888,6 +888,8 @@ final class HTTPServerResponse : HTTPResponse {
 		m_tcpStream = tcp_conn;
 		m_tlsStream = tls_stream;
 		m_http2Stream = http2_stream;
+		if (http2_stream)
+			httpVersion = HTTPVersion.HTTP_2;
 		m_settings = settings;
 		m_requestAlloc = req_alloc;
 	}
@@ -1293,6 +1295,7 @@ final class HTTPServerResponse : HTTPResponse {
 			FreeListObjectAlloc!ChunkedOutputStream.free(m_chunkedBodyWriter);
 			m_chunkedBodyWriter = null;
 		}
+		auto bytes_written = this.bytesWritten;
 
 		FreeListObjectAlloc!CountingOutputStream.free(m_countingWriter);
 		m_countingWriter = null;
@@ -1309,7 +1312,7 @@ final class HTTPServerResponse : HTTPResponse {
 
 		m_timeFinalized = Clock.currTime(UTC());
 
-		if (!isHeadResponse && this.bytesWritten < headers.get("Content-Length", "0").to!long) {
+		if (!isHeadResponse && bytes_written < headers.get("Content-Length", "0").to!long) {
 			logDebug("HTTP response only written partially before finalization. Terminating connection.");
 			connectionStream.close();
 		}
@@ -1331,12 +1334,13 @@ final class HTTPServerResponse : HTTPResponse {
 		m_headerWritten = true;
 
 		if (isHTTP2) {
+			httpVersion = HTTPVersion.HTTP_2;
 			// Use integrated header writer
 			m_http2Stream.writeHeader(cast(HTTPStatus)this.statusCode, this.headers, this.cookies); 
 			return;
 		}
 
-		auto dst = StreamOutputRange(outputStream);
+		auto dst = StreamOutputRange(topStream);
 
 		void writeLine(T...)(string fmt, T args)
 		{
@@ -1671,7 +1675,7 @@ private Nullable!HTTPServerContext getServerContext(ref HTTPListenInfo listen_in
 	return Nullable!HTTPServerContext.init;
 }
 
-private struct HTTP2HandlerContext
+private class HTTP2HandlerContext
 {
 	bool started;
 	
@@ -1690,10 +1694,6 @@ private struct HTTP2HandlerContext
 	@property bool isTLS() { return tlsStream?true:false; }
 	
 	~this() {
-		if (session) {
-			FreeListObjectAlloc!HTTP2Session.free(session);
-			session = null;
-		}
 	}
 	
 	this(TCPConnection tcp_conn, TLSStream tls_stream, HTTPListenInfo listen_info, HTTPServerContext _context) {
@@ -1726,7 +1726,10 @@ private struct HTTP2HandlerContext
 		}
 		
 		started = true;
-		session = FreeListObjectAlloc!HTTP2Session.alloc(true, &handler, tcpConn, tlsStream, getHTTP2Settings());
+		// fixme: there's always a slight chance that some streams are still active when the event loop finishes
+		// we need the GC to help us avoid an access violation here until it can be proven to never fail
+		session = new HTTP2Session(true, &handler, tcpConn, tlsStream, getHTTP2Settings());
+		scope(exit) session = null;
 		session.run(); // blocks, loops and handles requests here
 		return true;
 	}
@@ -1745,8 +1748,6 @@ private struct HTTP2HandlerContext
 	
 	HTTP2Stream tryStartUpgrade(ref InetHeaderMap headers)
 	{
-		// assert(!isTLS, "Can only upgrade over cleartext TCP");
-
 		// using HTTP/1.1 upgrade mechanism over cleartext
 		string upgrade_hd = headers.get("Upgrade", null);
 		if (!upgrade_hd || upgrade_hd.length < 3 || upgrade_hd[0 .. 3] != "h2c")
@@ -1760,9 +1761,9 @@ private struct HTTP2HandlerContext
 		if (!base64_settings)
 			return null;
 
-		session = FreeListObjectAlloc!HTTP2Session.alloc(&handler, tcpConn, cast(ubyte[]) base64_settings, getHTTP2Settings());
+		session = FreeListObjectAlloc!HTTP2Session.alloc(&handler, tcpConn, base64_settings, getHTTP2Settings());
 		tcpConn.write("HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: h2c\r\n\r\n");
-		evloop = runTask( { session.run(); } );
+		evloop = runTask( { session.run(true); } );
 		started = true;
 		return session.getUpgradeStream();
 	}
@@ -1778,6 +1779,7 @@ private struct HTTP2HandlerContext
 	void handler(HTTP2Stream stream)
 	{
 		bool keep_alive = false;
+		enforce(context !is HTTPServerContext.init);
 		.handleRequest(tcpConn, tlsStream, stream, listenInfo, context, this, keep_alive);
 	}
 }
@@ -1786,11 +1788,12 @@ private struct HTTP2HandlerContext
 private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo listen_info)
 {
 	version(VibeNoSSL) {} else {
-		import std.traits : ReturnType;
-		ReturnType!createTLSStreamFL tls_stream;
+		TLSStream tls_stream;		
+		scope(exit) tls_stream.destroy();
 	}
 
 	if (!connection.waitForData(10.seconds())) {
+		connection.write("HTTP/1.1 408 Request timeout\r\nContent-Length: 66\r\n\r\n408 Request timeout\n\nNo request was received in 10 seconds. Abort.");
 		logDebug("Client didn't send the initial request in a timely manner. Closing connection.");
 		return;
 	}
@@ -1801,9 +1804,15 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 		// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
 		version (VibeNoSSL) assert(false, "No TLS support compiled in (VibeNoSSL)");
 		else {
+			const(ubyte)[] check_tls = connection.peek();
+			if (check_tls.length < 6 || check_tls[0] != 0x16 || check_tls[1] != 0x03 || check_tls[5] != 0x01)
+			{
+				connection.write("HTTP/1.1 497 HTTP to HTTPS\r\nContent-Length: 91\r\n\r\n497 HTTP to HTTPS\n\nThis page requires a secured connection. Please use https:// in the URL.");
+				return;
+			}
 			logTrace("Accept TLS connection: %s", listen_info.tlsContext.kind);
 			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
-			tls_stream = createTLSStreamFL(connection, listen_info.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
+			tls_stream = createTLSStream(connection, listen_info.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
 		}
 		chosen_alpn = tls_stream.alpn;
 		logTrace("Chose alpn: %s", chosen_alpn);
@@ -1811,28 +1820,24 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	auto contextn = listen_info.getServerContext();
 	if (contextn.isNull()) {
 		logWarn("No HTTP listen context for incoming connection. Disconnecting.");
-		connection.close();
 		return;
 	}
 	auto context = contextn.get();
 
 	//assert(context.settings, "Request being loaded without settings");
-	auto http2_handler = HTTP2HandlerContext(connection, tls_stream, listen_info, context);
+	auto http2_handler = new HTTP2HandlerContext(connection, tls_stream, listen_info, context);
 	
 	// Will block here if it succeeds. The handler is kept handy in case HTTP/2 Upgrade is attempted in the headers of an HTTP/1.1 request
 	if (http2_handler.tryStart(chosen_alpn))
 		// HTTP/2 session terminated, exit
 		return;
-	else if (tls_stream)
-		// That was the only way to start HTTP/2 over TLS
-		http2_handler.destroy();
 	
 	/// Loop for HTTP/1.1 or HTTP/1.0 only
 	do {
 		bool keep_alive;
 		handleRequest(connection, tls_stream, null, listen_info, context, http2_handler, keep_alive);
 		
-		if (http2_handler.isUpgrade) {
+		if (http2_handler !is null && http2_handler.isUpgrade) {
 			// The HTTP/2 Upgrade request was turned into HTTP/2 stream ID#1, we can now listen for more with an HTTP/2 session
 			http2_handler.continueHTTP2Upgrade();
 			return;
@@ -1841,12 +1846,12 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 		
 		logTrace("Waiting for next request...");
 		// wait for another possible request on a keep-alive connection
-		if (!connection.waitForData(context.settings.keepAliveTimeout)) {
-			if (!connection.connected) logTrace("Client disconnected.");
+		if (!connection || !connection.waitForData(context.settings.keepAliveTimeout)) {
+			if (!connection || !connection.connected) logTrace("Client disconnected.");
 			else logDebug("Keep-alive connection timed out!");
 			break;
 		}
-	} while(!connection.empty);
+	} while(connection !is null && !connection.empty);
 
 	logTrace("Done handling connection.");
 }
@@ -1856,7 +1861,7 @@ private bool handleRequest(TCPConnection tcp_connection,
 	HTTP2Stream http2_stream,
 	HTTPListenInfo listen_info,
 	ref HTTPServerContext context,
-	ref HTTP2HandlerContext http2_handler,
+	HTTP2HandlerContext http2_handler,
 	ref bool keep_alive)
 {
 	auto settings = context.settings;
@@ -1900,7 +1905,7 @@ private bool handleRequest(TCPConnection tcp_connection,
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
-		assert(!res.headerWritten);
+		if (!res || !res.m_settings) return;
 
 		// stack traces sometimes contain random bytes - make sure they are replaced
 		debug_msg = sanitizeUTF8(cast(ubyte[])debug_msg);
@@ -1916,11 +1921,25 @@ private bool handleRequest(TCPConnection tcp_connection,
 		} else {
 			res.writeBody(format("%s - %s\n\n%s\n\nInternal error information:\n%s", code, httpStatusText(code), msg, debug_msg));
 		}
-		assert(res.headerWritten, "Error page handler did not write a body!");
+		
+		try {
+			string response = format("%s - %s\n\n%s\n\nInternal error information:\n%s", code, httpStatusText(code), msg, debug_msg);
+			res.contentType = "text/plain";
+			res.bodyWriter.write(cast(ubyte[])response);
+		}
+		catch (Exception ex) 
+		{ // do something...?
+			logError("errorOut Exception: %s", ex.msg);
+		}
+		finally {
+			res.bodyWriter.flush();
+			res.finalize();
+		}
 	}
 
 	// parse the request
 	try {
+		bool is_upgrade;
 		logTrace("reading request..");
 		// During an upgrade, we would need to read with HTTP/1.1 and write with HTTP/2, 
 		// so we define the InputStream before the upgrade starts
@@ -1938,24 +1957,55 @@ private bool handleRequest(TCPConnection tcp_connection,
 			if (!contextn.isNull()) context = contextn;
 
 			// Replace topStream with the HTTP/2 stream
-			if (!(settings.options & HTTPServerOption.disableHTTP2) && !tls_stream)
-				http2_stream = http2_handler.tryStartUpgrade(req.headers);
+			if (!(settings.options & HTTPServerOption.disableHTTP2) && !tls_stream) {
+				http2_stream = http2_handler ? http2_handler.tryStartUpgrade(req.headers) : null;
+				if (http2_stream !is null) {
+					scope(exit) {
+						http2_handler.session.resume();					
+					}
+					is_upgrade = true;
+					req.m_settings = settings;
+					import vibe.stream.memory;
+					if (req.bodyReader && !req.bodyReader.empty)
+					{
+						auto tmp = scoped!MemoryOutputStream(manualAllocator());
+						tmp.write(req.bodyReader);
+						// Usually, this shouldn't be a heavy allocation...
+						// todo: pipe to a file if it gets too big
+						req.m_bodyReader = FreeListObjectAlloc!MemoryStream.alloc(tmp.data.dup, false);
+						tmp.reset(AppenderResetMode.freeData);
+					}
+					req.httpVersion = HTTPVersion.HTTP_2;
+					res.httpVersion = HTTPVersion.HTTP_2;
+					res.m_http2Stream = http2_stream;
+				}
+				
+			}
 		}
 		else
 		{ 
 			// HTTP/2 headers
-			enforce(http2_handler.started, "HTTP/2 session is invalid");
+			enforce(http2_handler && http2_handler.started, "HTTP/2 session is invalid");
 			parseHTTP2RequestHeader(req, http2_stream, request_allocator);
 
 			// find/verify context
 			string authority = req.headers.get("Host", null);
 			enforceBadRequest(authority, "No Host header was defined");
+			auto contextn_ = listen_info.getServerContext(authority);
 
-			enforceBadRequest(listen_info.getServerContext(authority) == http2_handler.context, "Invalid hostname requested for this session.");
+			enforceBadRequest(contextn_.isNull() || contextn_.get() == http2_handler.context, "Invalid hostname requested for this session.");
 		}
-
+		scope(exit) {
+			import vibe.stream.memory : MemoryStream;
+			// Free the HTTP/2 clear-text upgrade memory, used if the request had a body before switching
+			if (is_upgrade) 
+				if (auto reader_ = cast(MemoryStream)req.m_bodyReader) 
+					FreeListObjectAlloc!MemoryStream.free(reader_);
+				
+			
+		}
 		logTrace("Got request header.");
-
+		enforce(settings);
 		req.m_settings = settings;
 		
 		if (req.tls) req.clientCertificate = tls_stream.peerCertificate;

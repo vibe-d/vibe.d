@@ -125,7 +125,7 @@ final class LibasyncDriver : EventDriver {
 			getDriverCore().notifyIdle();
 		}
 		m_break = false;
-		logInfo("Event loop exit", m_break);
+		logInfo("Event loop exit %d", m_break);
 		return 0;
 	}
 
@@ -174,24 +174,30 @@ final class LibasyncDriver : EventDriver {
 			is_ipv6 = isIPv6.yes;
 		else
 			is_ipv6 = isIPv6.no;
+		
+		import std.regex : regex, Captures, Regex, matchFirst, ctRegex;
+		import std.traits : ReturnType;
 
-		if (use_dns || family == AF_UNSPEC) {
-			import std.regex : regex, Captures, Regex, matchFirst;
-				
-			__gshared auto IPv4Regex = regex(`^\s*((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\s*$`, ``);
-			__gshared auto IPv6Regex = regex(`^\s*((([0-9A-Fa-f]{1,4}:){7}([0-9A-Fa-f]{1,4}|:))|(([0-9A-Fa-f]{1,4}:){6}(:[0-9A-Fa-f]{1,4}|((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){5}(((:[0-9A-Fa-f]{1,4}){1,2})|:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3})|:))|(([0-9A-Fa-f]{1,4}:){4}(((:[0-9A-Fa-f]{1,4}){1,3})|((:[0-9A-Fa-f]{1,4})?:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){3}(((:[0-9A-Fa-f]{1,4}){1,4})|((:[0-9A-Fa-f]{1,4}){0,2}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){2}(((:[0-9A-Fa-f]{1,4}){1,5})|((:[0-9A-Fa-f]{1,4}){0,3}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(([0-9A-Fa-f]{1,4}:){1}(((:[0-9A-Fa-f]{1,4}){1,6})|((:[0-9A-Fa-f]{1,4}){0,4}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:))|(:(((:[0-9A-Fa-f]{1,4}){1,7})|((:[0-9A-Fa-f]{1,4}){0,5}:((25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(\.(25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}))|:)))(%.+)?\s*$`, ``);
-				
-			if (!matchFirst(host, IPv4Regex).empty) {
-				enforce (family == AF_INET || family == AF_UNSPEC, "Failed to resolve host due to address family mismatch.");
-				is_ipv6 = isIPv6.no;
-				use_dns = false; // skip DNS lookup
-			} else if (!matchFirst(host, IPv6Regex).empty) {
-				enforce (family == AF_INET6 || family == AF_UNSPEC, "Failed to resolve host due to address family mismatch.");
-				is_ipv6 = isIPv6.yes;
-				use_dns = false; // skip DNS lookup
-			} else enforce(use_dns, "Cannot resolve named host '"~host~"' with DNS disabled.");
+		auto IPv4Regex = ctRegex!(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$`, ``);
+		auto IPv6Regex = ctRegex!(`^([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4}$|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4})$`, ``);
+		auto ipv4 = matchFirst(host, IPv4Regex);
+		auto ipv6 = matchFirst(host, IPv6Regex);
+		if (!ipv4.empty)
+		{
+			if (!ipv4.empty)
+			is_ipv6 = isIPv6.no;
+			use_dns = false;
 		}
-
+		else if (!ipv6.empty)
+		{ // fixme: match host instead?
+			is_ipv6 = isIPv6.yes;
+			use_dns = false;
+		}
+		else
+		{
+			use_dns = true;
+		}
+		
 		NetworkAddress ret;
 
 		if (use_dns) {
@@ -757,15 +763,17 @@ final class LibasyncManualEvent : ManualEvent {
 
 	~this()
 	{
-		recycleID(m_instance);
-		synchronized (m_mutex) {
+		try {
+			recycleID(m_instance);
+
 			foreach (ref signal; ms_signals[]) {
 				if (signal) {
 					(cast(shared AsyncSignal) signal).kill();
 					signal = null;
 				}
 			}
-		}
+
+		} catch { }
 	}
 
 	void emit()
@@ -848,7 +856,7 @@ final class LibasyncManualEvent : ManualEvent {
 		scope(exit) release();
 		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
-			synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
+			//synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
 			static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
 			else getDriverCore().yieldForEventDeferThrow();
 			ec = this.emitCount;
@@ -1149,6 +1157,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 	void read(ubyte[] dst)
 	{
+		if (!dst) return;
 		assert(dst !is null && !m_slice);
 		logTrace("Read TCP");
 		acquireReader();
@@ -1399,7 +1408,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 			try m_settings.onConnect(this);
 			catch ( Exception e) {
-				logError(e.toString);
+				//logError(e.toString);
 				throw e;
 			}
 			catch ( Throwable e) {
@@ -1423,7 +1432,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 					runTask(&onConnect);
 				else onConnect();
 				m_settings.onConnect = null;
-
 				break;
 			case TCPEvent.READ:
 				// fill the read buffer and resume any task if waiting
@@ -1650,7 +1658,7 @@ final class LibasyncUDPConnection : UDPConnection {
 import std.container : Array;
 Array!(Array!Task) s_eventWaiters; // Task list in the current thread per instance ID
 __gshared Array!size_t gs_availID;
-__gshared size_t gs_maxID = 1;
+__gshared size_t gs_maxID;
 __gshared core.sync.mutex.Mutex gs_mutex;
 
 private size_t generateID() {
@@ -1670,8 +1678,8 @@ private size_t generateID() {
 			idx = getIdx();
 			if (idx == 0) {
 				import std.range : iota;
-				gs_availID.insert( iota(gs_maxID, max(32, gs_maxID * 2), 1) );
-				gs_maxID = max(32, gs_maxID * 2);
+				gs_availID.insert( iota(gs_maxID + 1, max(32, gs_maxID * 2), 1) );
+				gs_maxID = gs_availID[$-1];
 				idx = getIdx();
 			}
 		}
