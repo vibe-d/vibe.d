@@ -4,5 +4,6 @@
     "dependencies": {
         "vibe-d": {"version": "~master", "path": "../../"}
     },
-    "versions": ["VibeCustomMain"]
+    "versions": ["VibeCustomMain"],
+    "subConfigurations": { "vibe-d": "libasync_botan"}
 }

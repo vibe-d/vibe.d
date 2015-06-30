@@ -119,8 +119,7 @@ final class LibasyncDriver : EventDriver {
 		logTrace("Deleting event driver");
 		m_break = true;
 		getEventLoop().exit();
-		s_refCount.atomicOp!"-="(1);
-		if (s_refCount.atomicLoad() == 0) {
+		if (s_refCount.atomicOp!"-="(1) == 0) {
 			import libasync.threads : destroyAsyncThreads;
 			destroyAsyncThreads();
 		}
