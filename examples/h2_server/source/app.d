@@ -20,8 +20,8 @@ shared static this()
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
 	version(Botan) settings.tlsContext = new BotanTLSContext(TLSContextKind.server/*, createCreds()*/); // see stream/botan for more options
-	settings.tlsContext.useCertificateChainFile("server.crt");
-	settings.tlsContext.usePrivateKeyFile("server.key");
+	settings.tlsContext.useCertificateChainFile("server_insecure.crt");
+	settings.tlsContext.usePrivateKeyFile("server_insecure.key");
 
 	listenHTTP(settings, &handleRequest);
 }
