@@ -1998,7 +1998,15 @@ private bool handleRequest(TCPConnection tcp_connection,
 
 			enforceBadRequest(listen_info.getServerContext(authority) == http2_handler.context, "Invalid hostname requested for this session.");
 		}
-
+		scope(exit) {
+			import vibe.stream.memory : MemoryStream;
+			// Free the HTTP/2 clear-text upgrade memory, used if the request had a body before switching
+			if (is_upgrade) 
+				if (auto reader_ = cast(MemoryStream)req.m_bodyReader) 
+					FreeListObjectAlloc!MemoryStream.free(reader_);
+				
+			
+		}
 		logTrace("Got request header.");
 
 		req.m_settings = settings;
