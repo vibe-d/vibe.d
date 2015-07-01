@@ -1,6 +1,102 @@
 ﻿Changelog
 =========
 
+v0.7.24 - 2015-07-
+--------------------
+
+### Features and improvements ###
+
+ - Added operator `in` to `Json` and `Bson` (my Marc Schütz) - [pull #1032][issue1032]
+ - Removed support for `index()` methods in the REST interface generator (use `get()` or `@path("/")`) (by Mathias Lang) - [pull #1010][issue1010]
+ - Deprecated the `@rootPath` attribute for REST interfaces (use `@path` instead) (by Mathias Lang) - [pull #999][issue999]
+ - Deprecated symbols that were scheduled for deprecation and removed deprecated symbols
+ - Added version `VibeNoDefaultArgs` to disable the built-in command line options
+ - Replaced the deprecated form interface example project with a `vibe.web.web` based "web_ajax" example
+ - Renamed "SSL" to "TLS" in most places
+ - Scheduled `Json.opDispatch` and `Bson.opDispatch` for deprecation (use `opIndex` instead)
+ - Added support for all standard HTTP methods (RFC) (by Szabo Bogdan) - [pull #1068][issue1068], [pull #1082][issue1082]
+ - Fixed compilation on DMD 2.068 (most fixes by Mathias Lang)
+ - Added overloads for `scope` based HTTP server callbacks
+   - These will later be used for safe, allocation-less HTTP request processing
+   - Always prefer this over the non-`scope` callbacks, as these will imply a performance impact in later versions
+ - Added `vibe.core.stream.nullSink` as a convenient way to get a generic data sink stream
+ - Added overloads of `writeFormData` and `writeFormBody` that accept ranges of key/value tuples (by Tobias Pankrath)
+ - Added `HTTPClientResponse.switchProtocol` (by Luca Niccoli) - [pull #945][issue945]
+ - `listenHTTP` now returns a `HTTPListener` instance that can be used to stop listening - [issue #1074][issue1074]
+ - Added an `AppenderResetMode` parameter to `MemoryOutputStream.reset()` (by Etienne Cimon)
+ - Changed `urlEncode` to only allocate if necessary (by Marc Schütz) - [pull #1076][issue1076]
+ - Optimize multi-part form decoding for cases where "Content-Length" is given (by Etienne Cimon) - [pull #1101][issue1101]
+ - Added serialization support for `std.typecons.BitFlags!T`
+ - Removed the `HTTPRouter` interface (now just a compatibility alias to `URLRouter`) (by Mathias Lang) - [pull #1106][issue1106]
+ - Added `HTTPStatus.tooManyRequests` (by Jack Applegame) - [pull #1103][issue1103]
+ - Added optional `code` and `reason` parameters to `WebSocket.close()` (by Steven Dwy) - [pull #1107][issue1107]
+ - Added an optional copy+delete fallback to `moveFile()` (by Etienne Cimon)
+ - Let `ConnectionProxyStream` work without an underlying `ConnectionStream` (by Etienne Cimon)
+ - Added a `ConnectionProxyStream` constructor taking separate input and output streams
+ - Updated the OpenSSL Windows binaries to 1.0.1m
+ - Added `BigInt` support to the JSON module (by Igor Stepanov) - [pull #1118][issue1118]
+
+### Bug fixes ###
+
+ - Fixed listening on IPv6 interfaces for the win32 driver
+ - Fixed `URL.localURI` updating the query string and anchor parts properly - [issue #1044][issue1044]
+ - Fixed `Task.join()` to work outside of a running event loop
+ - Fixed the automatic redirection in `vibe.web.web` in case of mismatching trailing slash
+ - Fixed `MongoCollection.count()` when used with MongoDB 3.x - [issue #1058][issue1058]
+ - Fixed detection of non-copyable, but movable types for `runTask`
+ - Fixed processing of translation strings with escape sequences in `vibe.web.web` (by Andrey Zelenchuk) - [pull #1067][issue1067]
+ - Fixed unnecessarily closing HTTP client connections
+ - Fixed using `TCPConnection.close()` with a concurrent `read()` operation (libevent driver)
+ - Fixed parsing of HTTP digest authentication headers with different whitespace padding or differing case (by Денис Хлякин aka aka-demik) - [pull 1083][issue1083]
+ - Fixed parsing various HTTP request headers case insensitively
+ - Fixed validation of untrusted certificates without `TLSPeerValidationMode.checkTrust` for `OpenSSLStream`
+ - Fixed TLS certificate host/address validation in the SMTP client
+ - Fixed `@bodyParam` parameters with default value in the REST interface generator (by Mathias Lang) - [issue #1125][issue1125], [pull #1129][issue1129]
+ - Fixed running the TLS context setup for STARTTLS SMTP connections (by Nathan Christenson) - [pull #1132][issue1132]
+ - Fixed JSON serialization of `const(Json)` (by Jack Applegame) - [pull #1109][issue1109]
+ - Fixed runtime error for Windows GUI apps that use the Visual Studio runtime
+ - Various fixes in the libasync event driver (by Etienne Cimon)
+ - Fixed the REST interface generator to treat `get`/`post`/... methods as `@path("/")` (by Mathias Lang) - [pull #1135][issue1135]
+ - Fixed `URL`'s internal encoding of the path string (by Igor Stepanov) - [pull #1148][issue1148]
+ - Fixed decoding query parameters in the REST interface generator (by Igor Stepanov) - [pull #1143][issue1143]
+ - Fixed a possible range voilation when writing long HTTP access log messages (by Márcio Martins) - [pull #1156][issue1156]
+ - Fixed support of typesafe variadic methods in the REST interface generator (by Mathias Lang) - [issue #1144][issue1144], [pull #1159][issue1159]
+ - Fixed `getConfig`, `setConfig` and `configResetStat` in `RedisClient` (by Henning Pohl) - [pull #1158][issue1158]
+ - Fixed possible CPU hog in timer code for periodic timer events that were triggered too fast
+ - Fixed a possible memory leak and wrongly reported request times for HTTP connections that get terminated before finishing a response - [issue #1157][issue1157]
+
+
+[issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
+[issue999]: https://github.com/rejectedsoftware/vibe.d/issues/999
+[issue1010]: https://github.com/rejectedsoftware/vibe.d/issues/1010
+[issue1032]: https://github.com/rejectedsoftware/vibe.d/issues/1032
+[issue1044]: https://github.com/rejectedsoftware/vibe.d/issues/1044
+[issue1058]: https://github.com/rejectedsoftware/vibe.d/issues/1058
+[issue1067]: https://github.com/rejectedsoftware/vibe.d/issues/1067
+[issue1068]: https://github.com/rejectedsoftware/vibe.d/issues/1068
+[issue1074]: https://github.com/rejectedsoftware/vibe.d/issues/1074
+[issue1076]: https://github.com/rejectedsoftware/vibe.d/issues/1076
+[issue1082]: https://github.com/rejectedsoftware/vibe.d/issues/1082
+[issue1083]: https://github.com/rejectedsoftware/vibe.d/issues/1083
+[issue1101]: https://github.com/rejectedsoftware/vibe.d/issues/1101
+[issue1103]: https://github.com/rejectedsoftware/vibe.d/issues/1103
+[issue1106]: https://github.com/rejectedsoftware/vibe.d/issues/1106
+[issue1107]: https://github.com/rejectedsoftware/vibe.d/issues/1107
+[issue1109]: https://github.com/rejectedsoftware/vibe.d/issues/1109
+[issue1118]: https://github.com/rejectedsoftware/vibe.d/issues/1118
+[issue1125]: https://github.com/rejectedsoftware/vibe.d/issues/1125
+[issue1129]: https://github.com/rejectedsoftware/vibe.d/issues/1129
+[issue1132]: https://github.com/rejectedsoftware/vibe.d/issues/1132
+[issue1135]: https://github.com/rejectedsoftware/vibe.d/issues/1135
+[issue1143]: https://github.com/rejectedsoftware/vibe.d/issues/1143
+[issue1144]: https://github.com/rejectedsoftware/vibe.d/issues/1144
+[issue1148]: https://github.com/rejectedsoftware/vibe.d/issues/1148
+[issue1156]: https://github.com/rejectedsoftware/vibe.d/issues/1156
+[issue1157]: https://github.com/rejectedsoftware/vibe.d/issues/1157
+[issue1158]: https://github.com/rejectedsoftware/vibe.d/issues/1158
+[issue1159]: https://github.com/rejectedsoftware/vibe.d/issues/1159
+
+
 v0.7.23 - 2015-03-25
 --------------------
 
