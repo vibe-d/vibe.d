@@ -6,7 +6,7 @@ v0.7.24 - 2015-07-
 
 ### Features and improvements ###
 
- - Added operator `in` to `Json` and `Bson` (my Marc Schütz) - [pull #1032][issue1032]
+ - Added operator `in` to `Json` and `Bson` (by Marc Schütz) - [pull #1032][issue1032]
  - Removed support for `index()` methods in the REST interface generator (use `get()` or `@path("/")`) (by Mathias Lang) - [pull #1010][issue1010]
  - Deprecated the `@rootPath` attribute for REST interfaces (use `@path` instead) (by Mathias Lang) - [pull #999][issue999]
  - Deprecated symbols that were scheduled for deprecation and removed deprecated symbols
@@ -59,7 +59,7 @@ v0.7.24 - 2015-07-
  - Fixed the REST interface generator to treat `get`/`post`/... methods as `@path("/")` (by Mathias Lang) - [pull #1135][issue1135]
  - Fixed `URL`'s internal encoding of the path string (by Igor Stepanov) - [pull #1148][issue1148]
  - Fixed decoding query parameters in the REST interface generator (by Igor Stepanov) - [pull #1143][issue1143]
- - Fixed a possible range voilation when writing long HTTP access log messages (by Márcio Martins) - [pull #1156][issue1156]
+ - Fixed a possible range violation when writing long HTTP access log messages (by Márcio Martins) - [pull #1156][issue1156]
  - Fixed support of typesafe variadic methods in the REST interface generator (by Mathias Lang) - [issue #1144][issue1144], [pull #1159][issue1159]
  - Fixed `getConfig`, `setConfig` and `configResetStat` in `RedisClient` (by Henning Pohl) - [pull #1158][issue1158]
  - Fixed possible CPU hog in timer code for periodic timer events that were triggered too fast
