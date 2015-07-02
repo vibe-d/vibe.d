@@ -1731,10 +1731,3 @@ unittest {
 	static assert(needsMove!V);
 	static assert(!needsMove!W);
 }
-
-version(VibeLibasyncDriver) {
-	shared static ~this() {
-		import libasync.threads : destroyAsyncThreads;
-		destroyAsyncThreads(); // destroy threads
-	}
-}
