@@ -144,7 +144,7 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 					router.match(minfo.method, fullurl, (req, res) {
 						handleRequest!(M, overload)(req, res, instance, settings);
 					});
-					if (settings.ignoreTrailingSlash && !fullurl.endsWith("*")) {
+					if (settings.ignoreTrailingSlash && !fullurl.endsWith("*") && fullurl != "/") {
 						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
 						router.match(minfo.method, m, (req, res) {
 							static if (minfo.method == HTTPMethod.GET) {
