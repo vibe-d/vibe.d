@@ -1184,6 +1184,24 @@ body {
 			}
 		}
 
+		// Check for misplaced ref / out
+		alias PSC = ParameterStorageClass;
+		foreach (i, SC; ParameterStorageClassTuple!Func) {
+			static if (SC & PSC.out_ || SC & PSC.ref_) {
+				mixin(GenCmp!("Loop", i, PN[i]).Decl);
+				alias Attr
+					= Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
+				static if (Attr.length != 1)
+					return "%s: Parameter '%s' cannot be %s"
+						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
+				else static if (Attr[0].origin != WebParamAttribute.Origin.Header) {
+					return "%s: %s parameter '%s' cannot be %s"
+						.format(FuncId, Attr[0].origin, PN[i],
+							SC & PSC.out_ ? "out" : "ref");
+				}
+			}
+		}
+
 		// Check for @path(":name")
 		enum pathAttr = findFirstUDA!(PathAttribute, Func);
 		static if (pathAttr.found) {
@@ -1308,6 +1326,58 @@ unittest {
 
 	// Note: Implicitly empty path are valid:
 	// interface ImplicitlyEmptyPath { void get(); }
+}
+
+// Accept @headerParam ref / out parameters
+unittest {
+	interface HeaderRef {
+		@headerParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderRef is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderRef));
+
+	interface HeaderOut {
+		@headerParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderOut is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderOut));
+}
+
+// Reject unattributed / @queryParam or @bodyParam ref / out parameters
+unittest {
+	interface QueryRef {
+		@queryParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!QueryRef)
+		== "Query parameter 'auth' cannot be ref");
+
+	interface QueryOut {
+		@queryParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!QueryOut)
+		== "Query parameter 'auth' cannot be out");
+
+	interface BodyRef {
+		@bodyParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!BodyRef)
+		== "Body parameter 'auth' cannot be ref");
+
+	interface BodyOut {
+		@bodyParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!BodyOut)
+		== "Body parameter 'auth' cannot be out");
+
+	// There's also the possibility of someone using an out unnamed
+	// parameter (don't ask me why), but this is catched as unnamed
+	// parameter, so we don't need to check it here.
 }
 
 private string stripTestIdent(string msg) {
