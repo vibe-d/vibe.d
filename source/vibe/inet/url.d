@@ -199,7 +199,7 @@ struct URL {
 			str = str[0 .. qi];
 		} else m_queryString = null;
 
-		m_pathString = str;
+		this.pathString = str;
 	}
 
 	/// The URL to the parent path with query string and anchor stripped.
