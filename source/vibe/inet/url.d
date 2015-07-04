@@ -199,7 +199,7 @@ struct URL {
 			str = str[0 .. qi];
 		} else m_queryString = null;
 
-		m_pathString = urlEncode(str, "/");
+		m_pathString = str;
 	}
 
 	/// The URL to the parent path with query string and anchor stripped.
@@ -334,4 +334,9 @@ unittest {
     url.pathString = "/foo%20bar/boo%2foom/";
     assert(url.pathString == "/foo%20bar/boo%2foom/");
     assert(url.toString() == "http://example.com/foo%20bar/boo%2foom/");
+}
+
+unittest {
+	auto url = URL("http://example.com/some%2bpath");
+	assert(url.path.toString() == "/some+path", url.path.toString());
 }
