@@ -93,7 +93,7 @@ bool isURLEncoded(string str, string reserved_chars = null)
 unittest {
 	assert(isURLEncoded("hello-world"));
 	assert(isURLEncoded("he%2F%af"));
-	assert(!isURLEncoded("hello world"));
+	assert(!isURLEncoded("hello world", " "));
 	assert(!isURLEncoded("he%f"));
 	assert(!isURLEncoded("he%fx"));
 }

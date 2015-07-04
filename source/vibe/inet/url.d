@@ -127,7 +127,7 @@ struct URL {
 	/// Set the path part of the URL. It should be properly encoded.
 	@property void pathString(string s)
 	{
-		enforce(isURLEncoded(m_pathString, "/"), "Wrong encoding of '"~m_pathString~"'");
+		enforce(isURLEncoded(m_pathString), "Wrong encoding of '"~m_pathString~"'");
 		m_pathString = s;
 	}
 
