@@ -59,7 +59,10 @@ private bool isCorrectHexNum(string str)
 	}
 	return true;
 }
-bool isURLEncoded(string str, string allowed_chars = null)
+
+/** Checks whether a given string has valid URL encoding.
+*/
+bool isURLEncoded(string str, string reserved_chars = null)
 @safe {
 	for (size_t i = 0; i < str.length; i++) {
 		switch(str[i]) {
@@ -79,9 +82,9 @@ bool isURLEncoded(string str, string allowed_chars = null)
 				i += 2;
 				break;
 			default:
-				if (allowed_chars.canFind(str[i]))
-					break;
-				return false;
+				if (reserved_chars.canFind(str[i]))
+					return false;
+				break;
 		}
 	}
 	return true;

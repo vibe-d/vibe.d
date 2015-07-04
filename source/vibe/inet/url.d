@@ -113,7 +113,7 @@ struct URL {
 
 	invariant()
 	{
-		assert(isURLEncoded(m_pathString, "/"), "Wrong encoding of '"~m_pathString~"'");
+		assert(isURLEncoded(m_pathString), "Wrong encoding of '"~m_pathString~"'");
 	}
 
 	/// The schema/protocol part of the URL
