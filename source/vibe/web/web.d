@@ -292,7 +292,7 @@ template render(string diet_file, ALIASES...) {
 */
 void redirect(string url)
 {
-	import std.algorithm : canFind, startsWith;
+	import std.algorithm : canFind, endsWith, startsWith;
 
 	assert(s_requestContext.req !is null, "redirect() used outside of a web interface request!");
 	alias ctx = s_requestContext;
@@ -302,9 +302,13 @@ void redirect(string url)
 		fullurl.localURI = url;
 	} else if (url.canFind(":")) { // TODO: better URL recognition
 		fullurl = URL(url);
+	} else  if (ctx.req.fullURL.path.endsWithSlash) {
+		fullurl = ctx.req.fullURL;
+		fullurl.localURI = fullurl.path.toString() ~ url;
 	} else {
-		if (ctx.req.fullURL.path.endsWithSlash) fullurl = ctx.req.fullURL ~ Path(url);
-		else fullurl = ctx.req.fullURL.parentURL ~ Path(url);
+		fullurl = ctx.req.fullURL.parentURL;
+		assert(fullurl.localURI.endsWith("/"), "Parent URL not ending in a slash?!");
+		fullurl.localURI = fullurl.localURI ~ url;
 	}
 	ctx.res.redirect(fullurl);
 }
