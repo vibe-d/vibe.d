@@ -372,10 +372,14 @@ class RestInterfaceClient(I) : I
 
 			if (name.length)
 			{
-				string sep = "";
-				if (name[0] != '/' && (!url.pathString.length || url.pathString[0] != '/'))
-					sep = "/";
-				url.pathString = url.pathString ~ sep ~ name;
+				if (url.pathString.length && url.pathString[$ - 1] == '/'
+					&& name[0] == '/')
+					url.pathString = url.pathString ~ name[1 .. $];
+				else if (url.pathString.length && url.pathString[$ - 1] == '/'
+						 || name[0] == '/')
+					url.pathString = url.pathString ~ name;
+				else
+					url.pathString = url.pathString ~ '/' ~ name;
 			}
 
 			if (query.length) url.queryString = query;
