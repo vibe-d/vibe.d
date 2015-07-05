@@ -24,6 +24,7 @@ public import vibe.data.json;
 public import vibe.db.mongo.mongo;
 public import vibe.db.redis.redis;
 public import vibe.http.auth.basic_auth;
+public import vibe.http.auth.digest_auth;
 public import vibe.http.client;
 public import vibe.http.fileserver;
 public import vibe.http.form;
