@@ -35,7 +35,7 @@
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
 			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
 			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"]
 		},
 		{
 			"name": "libasync",
@@ -46,19 +46,19 @@
 			"name": "libev",
 			"dependencies": {"libev": "~>5.0.0+4.04"},
 			"platforms": ["posix"],
-			"versions": ["VibeLibevDriver", "LIBEV4"],
+			"versions": ["VibeLibevDriver", "LIBEV4"]
 		},
 		{
 			"name": "win32",
 			"platforms": ["windows"],
 			"versions": ["VibeWin32Driver"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"]
 		},
 		{
 			"name": "winrt",
 			"platforms": ["windows"],
 			"versions": ["VibeWinrtDriver"],
-			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
+			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"]
 		}
 	],
 
