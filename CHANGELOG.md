@@ -35,6 +35,7 @@ v0.7.24 - 2015-07-
  - Added a `ConnectionProxyStream` constructor taking separate input and output streams
  - Updated the OpenSSL Windows binaries to 1.0.1m
  - Added `BigInt` support to the JSON module (by Igor Stepanov) - [pull #1118][issue1118]
+ - The event loop of the win32 driver can now be stopped by sending a `WM_QUIT` message (by Денис Хлякин aka aka-demik) - [pull #1120][issue1120]
 
 ### Bug fixes ###
 
@@ -64,6 +65,7 @@ v0.7.24 - 2015-07-
  - Fixed `getConfig`, `setConfig` and `configResetStat` in `RedisClient` (by Henning Pohl) - [pull #1158][issue1158]
  - Fixed possible CPU hog in timer code for periodic timer events that were triggered too fast
  - Fixed a possible memory leak and wrongly reported request times for HTTP connections that get terminated before finishing a response - [issue #1157][issue1157]
+ - Fixed `vibe.web.web.redirect()` to work properly for relative paths with query strings
 
 
 [issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
@@ -84,6 +86,7 @@ v0.7.24 - 2015-07-
 [issue1107]: https://github.com/rejectedsoftware/vibe.d/issues/1107
 [issue1109]: https://github.com/rejectedsoftware/vibe.d/issues/1109
 [issue1118]: https://github.com/rejectedsoftware/vibe.d/issues/1118
+[issue1120]: https://github.com/rejectedsoftware/vibe.d/issues/1120
 [issue1125]: https://github.com/rejectedsoftware/vibe.d/issues/1125
 [issue1129]: https://github.com/rejectedsoftware/vibe.d/issues/1129
 [issue1132]: https://github.com/rejectedsoftware/vibe.d/issues/1132
