@@ -41,7 +41,7 @@ import std.stdio : File;
 private __gshared EventLoop gs_evLoop;
 private EventLoop s_evLoop;
 private DriverCore s_driverCore;
-
+private shared int s_refCount; // will destroy async threads when 0
 EventLoop getEventLoop() nothrow
 {
 	if (s_evLoop is null)
@@ -77,8 +77,9 @@ final class LibasyncDriver : EventDriver {
 	this(DriverCore core) nothrow
 	{
 		//if (isControlThread) return;
-
-		try {
+		try {			
+			import core.atomic : atomicOp;
+			s_refCount.atomicOp!"+="(1);
 			if (!gs_mutex) {
 				import core.sync.mutex;
 				gs_mutex = new core.sync.mutex.Mutex;
@@ -90,6 +91,7 @@ final class LibasyncDriver : EventDriver {
 				}
 
 				gs_maxID = 32;
+
 			}
 		}
 		catch (Throwable) {
@@ -113,6 +115,11 @@ final class LibasyncDriver : EventDriver {
 		logTrace("Deleting event driver");
 		m_break = true;
 		getEventLoop().exit();
+		s_refCount.atomicOp!"-="(1);
+		if (s_refCount.atomicLoad() == 0) {
+			import libasync.threads : destroyAsyncThreads;
+			destroyAsyncThreads();
+		}
 	}
 
 	int runEventLoop()
@@ -738,12 +745,10 @@ final class LibasyncManualEvent : ManualEvent {
 	~this()
 	{
 		recycleID(m_instance);
-		synchronized (m_mutex) {
-			foreach (ref signal; ms_signals[]) {
-				if (signal) {
-					(cast(shared AsyncSignal) signal).kill();
-					signal = null;
-				}
+		foreach (ref signal; ms_signals[]) {
+			if (signal) {
+				(cast(shared AsyncSignal) signal).kill();
+				signal = null;
 			}
 		}
 	}
@@ -828,7 +833,7 @@ final class LibasyncManualEvent : ManualEvent {
 		scope(exit) release();
 		auto ec = this.emitCount;
 		while( ec == reference_emit_count ){
-			synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
+			//synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
 			static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
 			else getDriverCore().yieldForEventDeferThrow();
 			ec = this.emitCount;
@@ -1553,7 +1558,7 @@ final class LibasyncUDPConnection : UDPConnection {
 import std.container : Array;
 Array!(Array!Task) s_eventWaiters; // Task list in the current thread per instance ID
 __gshared Array!size_t gs_availID;
-__gshared size_t gs_maxID = 1;
+__gshared size_t gs_maxID;
 __gshared core.sync.mutex.Mutex gs_mutex;
 
 private size_t generateID() {
@@ -1573,8 +1578,8 @@ private size_t generateID() {
 			idx = getIdx();
 			if (idx == 0) {
 				import std.range : iota;
-				gs_availID.insert( iota(gs_maxID, max(32, gs_maxID * 2), 1) );
-				gs_maxID = max(32, gs_maxID * 2);
+				gs_availID.insert( iota(gs_maxID + 1, max(32, gs_maxID * 2), 1) );
+				gs_maxID = gs_availID[$-1];
 				idx = getIdx();
 			}
 		}
