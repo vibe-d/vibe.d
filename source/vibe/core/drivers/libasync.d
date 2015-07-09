@@ -435,7 +435,7 @@ final class LibasyncFileStream : FileStream {
 			{ // touch
 				import std.c.stdio;
 				import std.string : toStringz;
-				FILE * f = fopen(path_str.toStringz, "w\0".ptr);
+				FILE * f = fopen(path_str.toStringz, "w");
 				fclose(f);
 				m_truncated = true;
 			}
