@@ -330,6 +330,135 @@ final class MultiPart {
 	string[string] form;
 }
 
+
+/// The client multipart requires the full size to be known beforehand in the Content-Length header.
+/// For this reason, we require the underlying data to be of type RandomAccessStream
+class MultiPartPart {
+	import vibe.stream.memory : MemoryStream;
+	private MultiPartPart m_sibling;
+	private	string m_boundary;
+	// todo: MultiPartPart child;
+	protected {
+		MemoryStream m_headers;
+		RandomAccessStream m_data;
+	}
+	
+	@property void sibling(MultiPartPart part) { m_sibling = part; }
+	
+	this(ref InetHeaderMap headers, string boundary) {
+		headers.resolveBoundary(boundary);
+		m_boundary = boundary;
+	}
+	
+	final @property ulong size() { return m_headers.size + m_data.size + (m_sibling ? m_sibling.size : (m_boundary.length + "\r\n----".length)); }
+	
+	final void read(OutputStream sink) { 
+		sink.write(m_headers);
+		sink.write(m_data);
+		if (m_sibling)
+			m_sibling.read(sink);
+		else { // we're done
+			sink.write("\r\n--");
+			sink.write(m_boundary);
+			sink.write("--");
+		}
+	}
+	
+}
+
+final class FileMultiPart : MultiPartPart
+{
+	import vibe.core.file : openFile;
+	import vibe.inet.mimetypes : getMimeTypeForFile;
+	
+	this(ref InetHeaderMap headers, string field_name, string file_path, string boundary = null, string content_type = null) {
+		super(headers, boundary);
+		
+		Appender!string app;
+		m_data = openFile(file_path);
+		if (!content_type) {
+			content_type = getMimeTypeForFile(file_path);
+			if (content_type == "text/plain")
+				content_type ~= "; charset=UTF-8";
+		}
+		// we generate the headers here because we need the payload size to be available at all times.
+		app ~= "\r\n";
+		app ~= "--";
+		app ~= m_boundary;
+		app ~= "\r\n";
+		app ~= "Content-Type: ";
+		app ~= content_type;
+		app ~= "\r\n";
+		app ~= "Content-Disposition: form-data; name=\"";
+		app ~= field_name;
+		app ~= "\"\r\n";
+		app ~= "Content-Transfer-Encoding: binary\r\n\r\n";
+		
+		m_headers = new MemoryStream(cast(ubyte[])app.data, false);
+	}
+	
+}
+
+final class MemoryMultiPart : MultiPartPart
+{
+	this(ref InetHeaderMap headers, string field_name, ubyte[] form_data, string boundary = null, string charset = "UTF-8") {
+		super(headers, boundary);
+		
+		/*headers*/{
+			Appender!string app;
+			// we generate the headers here because we need the payload size to be available at all times.
+			app ~= "\r\n";
+			app ~= "--";
+			app ~= m_boundary;
+			app ~= "\r\n";
+			app ~= "Content-Type: text/plain; charset=";
+			app ~= charset;
+			app ~= "\r\n";
+			app ~= "Content-Disposition: form-data; name=\"";
+			app ~= field_name;
+			app ~= "\"\r\n";
+			app ~= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+			
+			m_headers = new MemoryStream(cast(ubyte[])app.data, false);
+		}
+		
+		/*data*/{
+			m_data = new MemoryStream(form_data, false);
+		}
+		
+	}
+}
+
+string getBoundary(ref InetHeaderMap headers)
+{
+	string boundary;
+	if (icmp2(headers.get("Content-Type", ""), "boundary=") != 0)
+		return null;
+	auto content_type = headers["Content-Type"];
+	boundary = content_type[content_type.indexOf("boundary=", CaseSensitive.no) + "boundary=".length .. $];
+	if (boundary.indexOf(";") != -1) {
+		boundary = boundary[0 .. boundary.indexOf(";")];
+	}
+	return boundary;
+}
+
+private void resolveBoundary(ref InetHeaderMap headers, ref string boundary)
+{
+	if (icmp2(headers.get("Content-Type", ""), "boundary=") != 0) {
+		if (!boundary) { // by default, we create a boundary 
+			import std.uuid : randomUUID;
+			boundary = randomUUID().toString();
+		}
+		// and we assign it into the headers
+		headers["Content-Type"] = "multipart/form-data; boundary=" ~ boundary;
+	}
+	else { 
+		if (!boundary)  // by default, we extract the boundary from the headers
+			boundary = headers.getBoundary();
+		
+	}
+}
+
 string getHTTPVersionString(HTTPVersion ver)
 {
 	final switch(ver){

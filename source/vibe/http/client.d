@@ -598,6 +598,14 @@ final class HTTPClientRequest : HTTPRequest {
 		bodyWriter.write(data);
 		finalize();
 	}
+	/// ditto
+	void writeBody(MultiPartPart linked_parts) 
+	{
+		headers["Content-Length"] = linked_parts.size.to!string;
+		linked_parts.read(bodyWriter);
+		finalize();
+	}
+
 
 	/**
 		Writes the response body as JSON data.
