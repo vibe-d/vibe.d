@@ -53,11 +53,14 @@ interface InputStream {
 	*/
 	@property bool dataAvailableForRead();
 
-	/** Returns a temporary reference to the data that is currently buffered, typically has the size
-		leastSize() or 0 if dataAvailableForRead() returns false.
+	/** Returns a temporary reference to the data that is currently buffered.
 
-		Note that any method invocation on the same stream invalidates the contents of the returned
-		buffer.
+		The returned slice typically has the size `leastSize()` or `0` if
+		`dataAvailableForRead()` returns false. Streams that don't have an
+		internal buffer will always return an empty slice.
+
+		Note that any method invocation on the same stream potentially
+		invalidates the contents of the returned buffer.
 	*/
 	const(ubyte)[] peek();
 
