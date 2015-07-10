@@ -482,13 +482,7 @@ final class LibasyncFileStream : FileStream {
 
 	const(ubyte)[] peek()
 	{
-		assert(this.readable); 
-		auto sz = m_size - m_offset;
-		if (sz == 0) return null;
-		auto ub = new ubyte[cast(size_t)sz];
-		read(ub);
-		m_offset -= ub.length;
-		return ub;
+		return null;
 	}
 
 	void read(ubyte[] dst)
