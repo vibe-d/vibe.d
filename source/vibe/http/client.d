@@ -598,10 +598,14 @@ final class HTTPClientRequest : HTTPRequest {
 		bodyWriter.write(data);
 		finalize();
 	}
-	/// ditto
+
+	/// Writes a multipart upload as a body to the request. This must be written in its entirety because the Content-Length
+	/// must be known beforehand.
+	/// Usage: req.writeBody(new FileMultiPart(req.headers, "Photo", "images/picture.jpg"));
 	void writeBody(MultiPartPart linked_parts) 
 	{
 		headers["Content-Length"] = linked_parts.size.to!string;
+		method = HTTPMethod.POST;
 		linked_parts.read(bodyWriter);
 		finalize();
 	}
