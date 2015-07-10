@@ -166,16 +166,20 @@ FileStream createTempFile(string suffix = null)
 */
 void moveFile(Path from, Path to, bool copy_fallback = false)
 {
-	moveFile(from.toNativeString(), to.toNativeString());
+	moveFile(from.toNativeString(), to.toNativeString(), copy_fallback);
 }
 /// ditto
 void moveFile(string from, string to, bool copy_fallback = false)
 {
-	try {
+	if (!copy_fallback) {
 		std.file.rename(from, to);
-	} catch (FileException e) {
-		std.file.copy(from, to);
-		std.file.remove(from);
+	} else {
+		try {
+			std.file.rename(from, to);
+		} catch (FileException e) {
+			std.file.copy(from, to);
+			std.file.remove(from);
+		}
 	}
 }
 
@@ -445,4 +449,3 @@ private FileInfo makeFileInfo(DirEntry ent)
 	ret.isDirectory = ent.isDir;
 	return ret;
 }
-
