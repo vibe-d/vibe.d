@@ -248,13 +248,11 @@ bool existsFile(string path) nothrow
 
 /** Stores information about the specified file/directory into 'info'
 
-	Returns false if the file does not exist.
+	Throws: A `FileException` is thrown if the file does not exist.
 */
 FileInfo getFileInfo(Path path)
 {
-	DirEntry ent;
-	static if (!is(typeof({ DirEntry de = {}; }))) ent = DirEntry(path.toNativeString()); // DMD 2.064 and up
-	else ent = std.file.dirEntry(path.toNativeString());
+	auto ent = DirEntry(path.toNativeString());
 	return makeFileInfo(ent);
 }
 /// ditto
