@@ -389,7 +389,7 @@ unittest {
 		Bson usr = users.findOne(["_id": uid]);
 
 		// JSON is another possibility
-		Json jusr = parseJsonString("{\"name\": \"admin\", \"password\": \"secret\"}");
+		Json jusr = parseJsonString(`{"name": "admin", "password": "secret"}`);
 		users.insert(jusr);
 	}
 }
