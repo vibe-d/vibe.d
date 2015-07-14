@@ -392,13 +392,15 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
 			enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
 			serializer.beginWriteArray!TU(nfields);
+			size_t fcount = 0;
 			foreach (mname; SerializableFields!TU) {
 				alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				foreach (j, TM; TMS) {
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
-					serializer.beginWriteArrayEntry!TM(j);
+					serializer.beginWriteArrayEntry!TM(fcount);
 					serializeImpl!(Serializer, Policy, TM, TA)(serializer, tuple(__traits(getMember, value, mname))[j]);
-					serializer.endWriteArrayEntry!TM(j);
+					serializer.endWriteArrayEntry!TM(fcount);
+					fcount++;
 				}
 			}
 			serializer.endWriteArray!TU();
@@ -1302,4 +1304,23 @@ unittest { // test BitFlags serialization
 	assert(deserialize!(TestSerializer, Flags)(Fi_ser) == Flags.init);
 	assert(deserialize!(TestSerializer, Flags)(Fac_ser) == Flags(Flag.a, Flag.c));
 	assert(deserialize!(TestSerializer, S)(Sac_ser) == S(Flags(Flag.a, Flag.c)));
+}
+
+unittest { // issue #1182
+	struct T {
+		int x;
+		string y;
+	}
+	struct S {
+		@asArray T t;
+	}
+
+	auto s = S(T(42, "foo"));
+	enum Sm = S.mangleof;
+	enum Tm = T.mangleof;
+	enum s_ser = "D("~Sm~"){DE("~Tm~",t)(A("~Tm~")[2][AE(i,0)(V(i)(42))AE(i,0)AE(Aya,1)(V(Aya)(foo))AE(Aya,1)]A("~Tm~"))DE("~Tm~",t)}D("~Sm~")";
+
+	auto serialized = serialize!TestSerializer(s);
+	assert(serialized == s_ser, serialized);
+	assert(deserialize!(TestSerializer, S)(serialized) == s);
 }
