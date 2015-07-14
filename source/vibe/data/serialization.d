@@ -533,7 +533,7 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 								static if (hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
 									if (deserializer.tryReadNull()) return;
 								set[i] = true;
-								__traits(getMember, ret, mname) = deserializeImpl!(TM, Serializer, TA)(deserializer);
+								__traits(getMember, ret, mname) = deserializeImpl!(TM, Policy, Serializer, TA)(deserializer);
 								break;
 						}
 					}
