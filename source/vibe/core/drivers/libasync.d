@@ -142,6 +142,7 @@ final class LibasyncDriver : EventDriver {
 
 	bool processEvents()
 	{
+		processTimers();
 		getEventLoop().loop(0.seconds);
 		if (m_break) {
 			m_break = false;
