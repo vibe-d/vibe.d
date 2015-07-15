@@ -129,9 +129,11 @@ unittest
 void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 	string content_type, InputStream body_reader, size_t max_line_length)
 {
+	import std.algorithm : strip;
+
 	auto pos = content_type.indexOf("boundary=");
 	enforce(pos >= 0 , "no boundary for multipart form found");
-	auto boundary = content_type[pos+9 .. $];
+	auto boundary = content_type[pos+9 .. $].strip('"');
 	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
 	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
 
@@ -140,6 +142,33 @@ void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 
 alias FormFields = DictionaryList!(string, true, 16);
 alias FilePartFormFields = DictionaryList!(FilePart, true, 1);
+
+unittest
+{
+	import vibe.stream.memory;
+
+	auto content_type = "multipart/form-data; boundary=\"AaB03x\"";
+
+	auto input = new MemoryStream(cast(ubyte[])
+			"--AaB03x\r\n"
+			"Content-Disposition: form-data; name=\"submit-name\"\r\n"
+			"\r\n"
+			"Larry\r\n"
+			"--AaB03x\r\n"
+			"Content-Disposition: form-data; name=\"files\"; filename=\"file1.txt\"\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"... contents of file1.txt ...\r\n"
+			"--AaB03x--\r\n".dup, false);
+
+	FormFields fields;
+	FilePartFormFields files;
+
+	parseMultiPartForm(fields, files, content_type, input, 4096);
+
+	assert(fields["submit-name"] == "Larry");
+	assert(files["files"].filename == "file1.txt");
+}
 
 /**
 	Single part of a multipart form.
