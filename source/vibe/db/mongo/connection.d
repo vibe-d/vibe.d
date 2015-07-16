@@ -1,7 +1,7 @@
 /**
 	Low level mongodb protocol.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -12,9 +12,11 @@ public import vibe.data.bson;
 import vibe.core.log;
 import vibe.core.net;
 import vibe.inet.webform;
+import vibe.stream.ssl;
 
-import std.algorithm : splitter;
+import std.algorithm : map, splitter;
 import std.array;
+import std.range;
 import std.conv;
 import std.exception;
 import std.string;
@@ -37,7 +39,7 @@ private struct _MongoErrorDescription
  * Can be used also to check how many documents where updated upon
  * a successful query via "n" field.
  */
-alias immutable(_MongoErrorDescription) MongoErrorDescription;
+alias MongoErrorDescription = immutable(_MongoErrorDescription);
 
 /**
  * Root class for vibe.d Mongo driver exception hierarchy.
@@ -101,15 +103,16 @@ class MongoAuthException : MongoException
   It is not intended for direct usage. Please use vibe.db.mongo.db and vibe.db.mongo.collection modules for your code.
   Note that a MongoConnection may only be used from one fiber/thread at a time.
  */
-class MongoConnection {
+final class MongoConnection {
 	private {
 		MongoClientSettings m_settings;
 		TCPConnection m_conn;
+		Stream m_stream;
 		ulong m_bytesRead;
 		int m_msgid = 1;
 	}
 
-	enum defaultPort = 27017;
+	enum ushort defaultPort = 27017;
 
 	/// Simplified constructor overload, with no m_settings
 	this(string server, ushort port = defaultPort)
@@ -134,10 +137,24 @@ class MongoConnection {
 		 * TODO: Connect to one of the specified hosts taking into consideration
 		 * options such as connect timeouts and so on.
 		 */
-		try m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+		try {
+			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+			if (m_settings.ssl) {
+				auto ctx =  createSSLContext(SSLContextKind.client);
+				if (!m_settings.sslverifycertificate) {
+					ctx.peerValidationMode = SSLPeerValidationMode.none;
+				}
+
+				m_stream = createSSLStream(m_conn, ctx);
+			}
+			else {
+				m_stream = m_conn;
+			}
+		}
 		catch (Exception e) {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
 		}
+
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
 		{
@@ -147,6 +164,11 @@ class MongoConnection {
 
 	void disconnect()
 	{
+		if (m_stream) {
+			m_stream.finalize();
+			m_stream = null;
+		}
+
 		if (m_conn) {
 			m_conn.close();
 			m_conn = null;
@@ -155,89 +177,52 @@ class MongoConnection {
 
 	@property bool connected() const { return m_conn && m_conn.connected; }
 
+
 	void update(string collection_name, UpdateFlags flags, Bson selector, Bson update)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Update);
-		msg.addInt(0);
-		msg.addCString(collection_name);
-		msg.addInt(flags);
-		msg.addBSON(selector);
-		msg.addBSON(update);
-		send(msg);
-		if(m_settings.safe)
-		{
-			checkForError(collection_name);
-		}
+		send(OpCode.Update, -1, cast(int)0, collection_name, cast(int)flags, selector, update);
+		if (m_settings.safe) checkForError(collection_name);
 	}
 
 	void insert(string collection_name, InsertFlags flags, Bson[] documents)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Insert);
-		msg.addInt(flags);
-		msg.addCString(collection_name);
-		foreach( d; documents ){
-			if( d["_id"].isNull() ) d["_id"] = Bson(BsonObjectID.generate());
-			msg.addBSON(d);
-		}
-		send(msg);
-
-		if(m_settings.safe)
-		{
-			checkForError(collection_name);
-		}
+		foreach (d; documents) if (d["_id"].isNull()) d["_id"] = Bson(BsonObjectID.generate());
+		send(OpCode.Insert, -1, cast(int)flags, collection_name, documents);
+		if (m_settings.safe) checkForError(collection_name);
 	}
 
-	Reply query(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector = Bson(null))
+	void query(T)(string collection_name, QueryFlags flags, int nskip, int nret, Bson query, Bson returnFieldSelector, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Query);
-		msg.addInt(flags | m_settings.defQueryFlags);
-		msg.addCString(collection_name);
-		msg.addInt(nskip);
-		msg.addInt(nret);
-		msg.addBSON(query);
-		if( returnFieldSelector.type != Bson.Type.Null )
-			msg.addBSON(returnFieldSelector);
-		return call(msg);
+		flags |= m_settings.defQueryFlags;
+		int id;
+		if (returnFieldSelector.isNull)
+			id = send(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query);
+		else
+			id = send(OpCode.Query, -1, cast(int)flags, collection_name, nskip, nret, query, returnFieldSelector);
+		recvReply!T(id, on_msg, on_doc);
 	}
 
-	Reply getMore(string collection_name, int nret, long cursor_id)
+	void getMore(T)(string collection_name, int nret, long cursor_id, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.GetMore);
-		msg.addInt(0);
-		msg.addCString(collection_name);
-		msg.addInt(nret);
-		msg.addLong(cursor_id);
-		return call(msg);
+		auto id = send(OpCode.GetMore, -1, cast(int)0, collection_name, nret, cursor_id);
+		recvReply!T(id, on_msg, on_doc);
 	}
 
 	void delete_(string collection_name, DeleteFlags flags, Bson selector)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.Delete);
-		msg.addInt(0);
-		msg.addCString(collection_name);
-		msg.addInt(flags);
-		msg.addBSON(selector);
-		send(msg);
-		if(m_settings.safe)
-		{
-			checkForError(collection_name);
-		}
+		send(OpCode.Delete, -1, cast(int)0, collection_name, cast(int)flags, selector);
+		if (m_settings.safe) checkForError(collection_name);
 	}
 
 	void killCursors(long[] cursors)
 	{
 		scope(failure) disconnect();
-		scope msg = new Message(OpCode.KillCursors);
-		msg.addInt(0);
-		msg.addInt(cast(int)cursors.length);
-		foreach( c; cursors )
-			msg.addLong(c);
-		send(msg);
+		send(OpCode.KillCursors, -1, cast(int)0, cast(int)cursors.length, cursors);
 	}
 
 	MongoErrorDescription getLastError(string db)
@@ -246,7 +231,8 @@ class MongoConnection {
 		// is implemented here to allow to check errors upon every request
 		// on conncetion level.
 
-		Bson[string] command_and_options = [ "getLastError": Bson(1.0) ];
+		Bson command_and_options = Bson.emptyObject;
+		command_and_options["getLastError"] = Bson(1.0);
 
 		if(m_settings.w != m_settings.w.init)
 			command_and_options["w"] = m_settings.w; // Already a Bson struct
@@ -257,54 +243,78 @@ class MongoConnection {
 		if(m_settings.fsync)
 			command_and_options["fsync"] = Bson(true);
 
-		Reply reply = query(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
-				0, -1, serializeToBson(command_and_options));
+		_MongoErrorDescription ret;
 
-		logTrace(
-				"getLastEror(%s)\n\tResult flags: %s\n\tCursor: %s\n\tDocument count: %s",
-				db,
-				reply.flags,
-				reply.cursor,
-				reply.documents.length
+		query!Bson(db ~ ".$cmd", QueryFlags.NoCursorTimeout | m_settings.defQueryFlags,
+			0, -1, command_and_options, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				logTrace("getLastEror(%s) flags: %s, cursor: %s, documents: %s", db, flags, cursor, num_docs);
+				enforce(!(flags & ReplyFlags.QueryFailure),
+					new MongoDriverException(format("MongoDB error: getLastError(%s) call failed.", db))
 				);
-
-		enforce(
-			!(reply.flags & ReplyFlags.QueryFailure),
-			new MongoDriverException(format(
-				"MongoDB error: getLastError(%s) call failed.",
-				db
-			))
+				enforce(
+					num_docs == 1,
+					new MongoDriverException(format("getLastError(%s) returned %s documents instead of one.", db, num_docs))
+				);
+			},
+			(idx, ref error) {
+				try {
+					ret = MongoErrorDescription(
+						error.err.opt!string(""),
+						error.code.opt!int(-1),
+						error.connectionId.get!int(),
+						error.n.get!int(),
+						error.ok.get!double()
+					);
+				} catch (Exception e) {
+					throw new MongoDriverException(e.msg);
+				}
+			}
 		);
 
-		enforce(
-			reply.documents.length == 1,
-			new MongoDriverException(format(
-				"getLastError(%s) returned %s documents instead of one.",
-				db,
-				to!string(reply.documents.length)
-			))
-		);
-
-		auto error = reply.documents[0];
-
-		try
-		{
-			return MongoErrorDescription(
-				error.err.opt!string(""),
-				error.code.opt!int(-1),
-				error.connectionId.get!int(),
-				error.n.get!int(),
-				error.ok.get!double()
-			);
-		}
-		catch (Exception e)
-		{
-			throw new MongoDriverException(e.msg);
-		}
+		return ret;
 	}
 
-	private Reply recvReply(int reqid)
+	/** Queries the server for all databases.
+
+		Returns:
+			An input range of $(D MongoDBInfo) values.
+	*/
+	auto listDatabases()
 	{
+		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
+
+		auto cmd = Bson(["listDatabases":Bson(1)]);
+
+		void on_msg(long cursor, ReplyFlags flags, int first_doc, int num_docs) {
+			if ((flags & ReplyFlags.QueryFailure))
+				throw new MongoDriverException("Calling listDatabases failed.");
+		}
+
+		MongoDBInfo toInfo(const(Bson) db_doc) {
+			return MongoDBInfo(
+				db_doc["name"].get!string,
+				db_doc["sizeOnDisk"].get!double,
+				db_doc["empty"].get!bool
+			);
+		}
+
+		typeof((const(Bson)[]).init.map!toInfo) result;
+		void on_doc(size_t idx, ref Bson doc) {
+			if (doc["ok"].get!double != 1.0)
+				throw new MongoAuthException("listDatabases failed.");
+
+			result = doc["databases"].get!(const(Bson)[]).map!toInfo;
+		}
+
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
+
+		return result;
+	}
+
+	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
+	{
+		import std.traits;
 
 		auto bytes_read = m_bytesRead;
 		int msglen = recvInt();
@@ -319,61 +329,80 @@ class MongoConnection {
 		long cursor = recvLong();
 		int start = recvInt();
 		int numret = recvInt();
-		auto docs = new Bson[numret];
-		foreach( i; 0 .. numret )
-			docs[i] = recvBson();
 
-		if( m_bytesRead - bytes_read < msglen ){
-			logWarn("MongoDB reply was longer than expected, skipping the rest: %d vs. %d", msglen, m_bytesRead - bytes_read);
-			ubyte[] dst = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
-			recv(dst);
-		} else if( m_bytesRead - bytes_read > msglen ){
-			logWarn("MongoDB reply was shorter than expected. Dropping connection.");
-			disconnect();
-			throw new MongoDriverException("MongoDB reply was too short for data.");
+		scope (exit) {
+			if (m_bytesRead - bytes_read < msglen) {
+				logWarn("MongoDB reply was longer than expected, skipping the rest: %d vs. %d", msglen, m_bytesRead - bytes_read);
+				ubyte[] dst = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
+				recv(dst);
+			} else if (m_bytesRead - bytes_read > msglen) {
+				logWarn("MongoDB reply was shorter than expected. Dropping connection.");
+				disconnect();
+				throw new MongoDriverException("MongoDB reply was too short for data.");
+			}
 		}
 
-		auto msg = new Reply;
-		msg.cursor = cursor;
-		msg.flags = flags;
-		msg.firstDocument = start;
-		msg.documents = docs;
-		return msg;
+		on_msg(cursor, flags, start, numret);
+		foreach (i; 0 .. cast(size_t)numret) {
+			// TODO: directly deserialize from the wire
+			static if (!hasIndirections!T && !is(T == Bson)) {
+				ubyte[256] buf = void;
+				auto bson = recvBson(buf);
+			} else {
+				auto bson = recvBson(null);
+			}
+
+			static if (is(T == Bson)) on_doc(i, bson);
+			else {
+				T doc = deserializeBson!T(bson);
+				on_doc(i, doc);
+			}
+		}
+
+		return resid;
 	}
 
-	private Reply call(Message req)
-	{
-		auto id = send(req);
-		auto res = recvReply(id);
-		return res;
-	}
-
-	private int send(Message req, int response_to = -1)
+	private int send(ARGS...)(OpCode code, int response_to, ARGS args)
 	{
 		if( !connected() ) connect();
 		int id = nextMessageId();
-		sendInt(16 + cast(int)req.m_data.data.length);
-		sendInt(id);
-		sendInt(response_to);
-		sendInt(req.m_opCode);
-		send(req.m_data.data);
-		m_conn.flush();
+		sendValue(16 + sendLength(args));
+		sendValue(id);
+		sendValue(response_to);
+		sendValue(cast(int)code);
+		foreach (a; args) sendValue(a);
+		m_stream.flush();
 		return id;
 	}
 
-	private void sendInt(int v) { send(toBsonData(v)); }
-	private void sendLong(long v) { send(toBsonData(v)); }
-	private void send(in ubyte[] data){ m_conn.write(data); }
+	private void sendValue(T)(T value)
+	{
+		import std.traits;
+		static if (is(T == int)) sendBytes(toBsonData(value));
+		else static if (is(T == long)) sendBytes(toBsonData(value));
+		else static if (is(T == Bson)) sendBytes(value.data);
+		else static if (is(T == string)) {
+			sendBytes(cast(ubyte[])value);
+			sendBytes(cast(ubyte[])"\0");
+		} else static if (isArray!T) {
+			foreach (v; value)
+				sendValue(v);
+		} else static assert(false, "Unexpected type: "~T.stringof);
+	}
+
+	private void sendBytes(in ubyte[] data){ m_stream.write(data); }
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
-	private Bson recvBson() {
+	private Bson recvBson(ubyte[] buf) {
 		int len = recvInt();
-		auto bson = new ubyte[len-4];
-		recv(bson);
-		return Bson(Bson.Type.Object, cast(immutable)(toBsonData(len) ~ bson));
+		if (len > buf.length) buf = new ubyte[len];
+		else buf = buf[0 .. len];
+		buf[0 .. 4] = toBsonData(len)[];
+		recv(buf[4 .. $]);
+		return Bson(Bson.Type.Object, cast(immutable)buf);
 	}
-	private void recv(ubyte[] dst) { enforce(m_conn); m_conn.read(dst); m_bytesRead += dst.length; }
+	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
 
 	private int nextMessageId() { return m_msgid++; }
 
@@ -390,38 +419,39 @@ class MongoConnection {
 
 	private void authenticate()
 	{
-		Reply rep;
-		Bson cmd, doc;
 		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
 
-		cmd = Bson(["getnonce":Bson(1)]);
-		rep = query(cn, QueryFlags.None, 0, -1, cmd);
-		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
-		{
-			throw new MongoDriverException("Calling getNonce failed.");
-		}
-		doc = rep.documents[0];
-		if (doc["ok"].get!double != 1.0)
-		{
-			throw new MongoDriverException("getNonce failed.");
-		}
-		string nonce = doc["nonce"].get!string;
-		string key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
-		cmd = Bson.EmptyObject;
+		string nonce, key;
+
+		auto cmd = Bson(["getnonce":Bson(1)]);
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
+					throw new MongoDriverException("Calling getNonce failed.");
+			},
+			(idx, ref doc) {
+				if (doc["ok"].get!double != 1.0)
+					throw new MongoDriverException("getNonce failed.");
+				nonce = doc["nonce"].get!string;
+				key = toLower(toHexString(md5Of(nonce ~ m_settings.username ~ m_settings.digest)).idup);
+			}
+		);
+
+		cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
-		rep = query(cn, QueryFlags.None, 0, -1, cmd);
-		if ((rep.flags & ReplyFlags.QueryFailure) || rep.documents.length != 1)
-		{
-			throw new MongoDriverException("Calling authenticate failed.");
-		}
-		doc = rep.documents[0];
-		if (doc["ok"].get!double != 1.0)
-		{
-			throw new MongoAuthException("Authentication failed.");
-		}
+		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
+					throw new MongoDriverException("Calling authenticate failed.");
+			},
+			(idx, ref doc) {
+				if (doc["ok"].get!double != 1.0)
+					throw new MongoAuthException("Authentication failed.");
+			}
+		);
 	}
 }
 
@@ -451,9 +481,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	// Reslice to get rid of 'mongodb://'
 	tmpUrl = tmpUrl[10..$];
 
-	auto slashIndex = tmpUrl.indexOf("/");
-	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
-	auto authIndex = tmpUrl[0 .. slashIndex].indexOf('@');
+	auto authIndex = tmpUrl.indexOf('@');
 	sizediff_t hostIndex = 0; // Start of the host portion of the URL.
 
 	// Parse out the username and optional password.
@@ -480,6 +508,10 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 		cfg.digest = MongoClientSettings.makeDigest(cfg.username, password);
 	}
+
+	auto slashIndex = tmpUrl[hostIndex..$].indexOf("/");
+	if( slashIndex == -1 ) slashIndex = tmpUrl.length;
+	else slashIndex += hostIndex;
 
 	// Parse the hosts section.
 	try
@@ -524,7 +556,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 	cfg.database = tmpUrl[slashIndex+1..queryIndex];
 	if(queryIndex != tmpUrl.length)
 	{
-		string[string] options;
+		FormFields options;
 		parseURLEncodedForm(tmpUrl[queryIndex+1 .. $], options);
 		foreach (option, value; options) {
 			bool setBool(ref bool dst)
@@ -551,7 +583,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 
 			void warnNotImplemented()
 			{
-				logWarn("MongoDB option %s not yet implemented.", option);
+				logDiagnostic("MongoDB option %s not yet implemented.", option);
 			}
 
 			switch( option.toLower() ){
@@ -563,6 +595,8 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "journal": setBool(cfg.journal); break;
 				case "connecttimeoutms": setLong(cfg.connectTimeoutMS); warnNotImplemented(); break;
 				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
+				case "ssl": setBool(cfg.ssl); break;
+				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
 				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
 				case "w":
 					try {
@@ -610,6 +644,8 @@ unittest
 	assert(cfg.journal == false);
 	assert(cfg.connectTimeoutMS == long.init);
 	assert(cfg.socketTimeoutMS == long.init);
+	assert(cfg.ssl == bool.init);
+	assert(cfg.sslverifycertificate == true);
 
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg, "mongodb://fred:foobar@localhost"));
@@ -632,7 +668,7 @@ unittest
 	assert(cfg.hosts[0].port == 27017);
 
 	cfg = MongoClientSettings.init;
-	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true"));
+	assert(parseMongoDBUrl(cfg, "mongodb://host1,host2,host3/?safe=true&w=2&wtimeoutMS=2000&slaveOk=true&ssl=true&sslverifycertificate=false"));
 	assert(cfg.username == "");
 	//assert(cfg.password == "");
 	assert(cfg.digest == "");
@@ -648,11 +684,13 @@ unittest
 	assert(cfg.w == Bson(2L));
 	assert(cfg.wTimeoutMS == 2000);
 	assert(cfg.defQueryFlags == QueryFlags.SlaveOk);
+	assert(cfg.ssl == true);
+	assert(cfg.sslverifycertificate == false);
 
 	cfg = MongoClientSettings.init;
 	assert(parseMongoDBUrl(cfg,
 				"mongodb://fred:flinstone@host1.example.com,host2.other.example.com:27108,host3:"
-				"27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
+				~ "27019/mydb?journal=true;fsync=true;connectTimeoutms=1500;sockettimeoutMs=1000;w=majority"));
 	assert(cfg.username == "fred");
 	//assert(cfg.password == "flinstone");
 	assert(cfg.digest == MongoClientSettings.makeDigest("fred", "flinstone"));
@@ -678,6 +716,18 @@ unittest
 	assert(! (parseMongoDBUrl(cfg, "mongodb://@localhost")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:thepass@localhost")));
 	assert(! (parseMongoDBUrl(cfg, "mongodb://:badport/")));
+
+	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost"));
+	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
+	assert(parseMongoDBUrl(cfg, "mongodb://me:sl$ash/w0+rd@localhost/mydb"));
+	assert(cfg.digest == MongoClientSettings.makeDigest("me", "sl$ash/w0+rd"));
+	assert(cfg.database == "mydb");
+	assert(cfg.hosts.length == 1);
+	assert(cfg.hosts[0].name == "localhost");
+	assert(cfg.hosts[0].port == 27017);
 }
 
 private enum OpCode : int {
@@ -691,6 +741,9 @@ private enum OpCode : int {
 	Delete       = 2006,
 	KillCursors  = 2007
 }
+
+alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs);
+template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc); }
 
 enum UpdateFlags {
 	None         = 0,
@@ -728,32 +781,6 @@ enum ReplyFlags {
 }
 
 /// [internal]
-class Reply {
-	long cursor;
-	ReplyFlags flags;
-	int firstDocument;
-	Bson[] documents;
-}
-
-private class Message {
-	private {
-		OpCode m_opCode;
-		Appender!(ubyte[]) m_data;
-	}
-
-	this(OpCode code)
-	{
-		m_opCode = code;
-		m_data = appender!(ubyte[])();
-	}
-
-	void addInt(int v) { m_data.put(toBsonData(v)); }
-	void addLong(long v) { m_data.put(toBsonData(v)); }
-	void addCString(string v) { m_data.put(cast(bdata_t)v); m_data.put(cast(ubyte)0); }
-	void addBSON(Bson v) { m_data.put(v.data); }
-}
-
-/// [internal]
 class MongoClientSettings
 {
 	string username;
@@ -769,6 +796,8 @@ class MongoClientSettings
 	bool journal;
 	long connectTimeoutMS;
 	long socketTimeoutMS;
+	bool ssl;
+	bool sslverifycertificate = true;
 
 	static string makeDigest(string username, string password)
 	{
@@ -776,8 +805,35 @@ class MongoClientSettings
 	}
 }
 
+struct MongoDBInfo
+{
+	string name;
+	double sizeOnDisk;
+	bool empty;
+}
+
 private struct MongoHost
 {
 	string name;
 	ushort port;
+}
+
+
+private int sendLength(ARGS...)(ARGS args)
+{
+	import std.traits;
+	static if (ARGS.length == 1) {
+		alias T = ARGS[0];
+		static if (is(T == string)) return cast(int)args[0].length + 1;
+		else static if (is(T == int)) return 4;
+		else static if (is(T == long)) return 8;
+		else static if (is(T == Bson)) return cast(int)args[0].data.length;
+		else static if (isArray!T) {
+			int ret = 0;
+			foreach (el; args[0]) ret += sendLength(el);
+			return ret;
+		} else static assert(false, "Unexpected type: "~T.stringof);
+	}
+	else if (ARGS.length == 0) return 0;
+	else return sendLength(args[0 .. $/2]) + sendLength(args[$/2 .. $]);
 }

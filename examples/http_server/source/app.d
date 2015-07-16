@@ -1,9 +1,10 @@
 import vibe.appmain;
 import vibe.http.server;
 
-void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
-	res.writeBody(cast(ubyte[])"Hello, World!", "text/plain");
+	if (req.path == "/")
+		res.writeBody("Hello, World!", "text/plain");
 }
 
 shared static this()

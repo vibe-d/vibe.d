@@ -9,7 +9,7 @@ module vibe.http.log;
 
 import vibe.core.file;
 import vibe.core.log;
-import vibe.core.sync : TaskMutex;
+import vibe.core.sync : InterruptibleTaskMutex, performLocked;
 import vibe.http.server;
 import vibe.utils.array : FixedAppender;
 
@@ -22,47 +22,48 @@ import std.string;
 class HTTPLogger {
 	private {
 		string m_format;
-		HTTPServerSettings m_settings;
-		TaskMutex m_mutex;
-		FixedAppender!(const(char)[], 2048) m_lineAppender;
+		const(HTTPServerSettings) m_settings;
+		InterruptibleTaskMutex m_mutex;
+		Appender!(char[]) m_lineAppender;
 	}
 
-	this(HTTPServerSettings settings, string format)
+	this(in HTTPServerSettings settings, string format)
 	{
 		m_format = format;
 		m_settings = settings;
-		m_mutex = new TaskMutex;
+		m_mutex = new InterruptibleTaskMutex;
+		m_lineAppender.reserve(2048);
 	}
 
 	void close() {}
 
-	void log(HTTPServerRequest req, HTTPServerResponse res)
+	final void log(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
-		synchronized (m_mutex) {
-			m_lineAppender.reset();
+		m_mutex.performLocked!({
+			m_lineAppender.clear();
 			formatApacheLog(m_lineAppender, m_format, req, res, m_settings);
 			writeLine(m_lineAppender.data);
-		}
+		});
 	}
 
-	protected abstract void writeLine(string ln);
+	protected abstract void writeLine(const(char)[] ln);
 }
 
 
-class HTTPConsoleLogger : HTTPLogger {
+final class HTTPConsoleLogger : HTTPLogger {
 	this(HTTPServerSettings settings, string format)
 	{
 		super(settings, format);
 	}
 
-	protected override void writeLine(string ln)
+	protected override void writeLine(const(char)[] ln)
 	{
 		logInfo("%s", ln);
 	}
 }
 
 
-class HTTPFileLogger : HTTPLogger {
+final class HTTPFileLogger : HTTPLogger {
 	private {
 		FileStream m_stream;
 	}
@@ -79,7 +80,7 @@ class HTTPFileLogger : HTTPLogger {
 		m_stream = null;
 	}
 
-	protected override void writeLine(string ln)
+	protected override void writeLine(const(char)[] ln)
 	{
 		assert(m_stream);
 		m_stream.write(ln);
@@ -88,8 +89,9 @@ class HTTPFileLogger : HTTPLogger {
 	}
 }
 
-void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
+void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, scope HTTPServerResponse res, in HTTPServerSettings settings)
 {
+	import std.format : formattedWrite;
 	enum State {Init, Directive, Status, Key, Command}
 
 	State state = State.Init;
@@ -112,7 +114,7 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 					state = State.Directive;
 				}
 				break;
-			case State.Directive: 
+			case State.Directive:
 				if( format[0] == '!' ) {
 					conditional = true;
 					negate = true;
@@ -171,19 +173,20 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 					//TODO case 'A': //Local IP-address
 					//case 'B': //Size of Response in bytes, excluding headers
 					case 'b': //same as 'B' but a '-' is written if no bytes where sent
-						ln.put( res.bytesWritten == 0 ? "-" : to!string(res.bytesWritten) );
+						if (!res.bytesWritten) ln.put('-');
+						else formattedWrite(&ln, "%s", res.bytesWritten);
 						break;
 					case 'C': //Cookie content {cookie}
-						enforce(key, "cookie name missing");
-						if( auto pv = key in req.cookies ) ln.put(*pv);
+						enforce(key != "", "cookie name missing");
+						if (auto pv = key in req.cookies) ln.put(*pv);
 						else ln.put("-");
 						break;
 					case 'D': //The time taken to serve the request
 						auto d = res.timeFinalized - req.timeCreated;
-						ln.put(to!string(d.total!"msecs"()));
+						formattedWrite(&ln, "%s", d.total!"msecs"());
 						break;
 					//case 'e': //Environment variable {variable}
-					//case 'f': //Filename 
+					//case 'f': //Filename
 					case 'h': //Remote host
 						ln.put(req.peer);
 						break;
@@ -191,37 +194,42 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						ln.put("HTTP");
 						break;
 					case 'i': //Request header {header}
-						enforce(key, "header name missing");
-						if( auto pv = key in req.headers ) ln.put(*pv);
+						enforce(key != "", "header name missing");
+						if (auto pv = key in req.headers) ln.put(*pv);
 						else ln.put("-");
 						break;
 					case 'm': //Request method
 						ln.put(httpMethodString(req.method));
 						break;
-					case 'o': //Response header {header}						
-						enforce(key, "header name missing");
+					case 'o': //Response header {header}
+						enforce(key != "", "header name missing");
 						if( auto pv = key in res.headers ) ln.put(*pv);
 						else ln.put("-");
 						break;
 					case 'p': //port
-						ln.put(to!string(settings.port));
+						formattedWrite(&ln, "%s", settings.port);
 						break;
 					//case 'P': //Process ID
 					case 'q': //query string (with prepending '?')
-						ln.put("?" ~ req.queryString);
+						ln.put("?");
+						ln.put(req.queryString);
 						break;
 					case 'r': //First line of Request
-						ln.put(httpMethodString(req.method) ~ " " ~ req.requestURL ~ " " ~ getHTTPVersionString(req.httpVersion));
+						ln.put(httpMethodString(req.method));
+						ln.put(' ');
+						ln.put(req.requestURL);
+						ln.put(' ');
+						ln.put(getHTTPVersionString(req.httpVersion));
 						break;
 					case 's': //Status
-						ln.put(to!string(res.statusCode));
+						formattedWrite(&ln, "%s", res.statusCode);
 						break;
 					case 't': //Time the request was received {format}
 						ln.put(req.timeCreated.toSimpleString());
 						break;
 					case 'T': //Time taken to server the request in seconds
 						auto d = res.timeFinalized - req.timeCreated;
-						ln.put(to!string(d.total!"seconds"));
+						formattedWrite(&ln, "%s", d.total!"seconds");
 						break;
 					case 'u': //Remote user
 						ln.put(req.username.length ? req.username : "-");

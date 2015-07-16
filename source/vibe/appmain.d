@@ -12,7 +12,7 @@
 	vibe.d and define a -version=VibeCustomMain. Be sure to call vibe.core.core.runEventLoop
 	at the end of your main function in this case. Also beware that you have to make appropriate
 	calls to vibe.core.args.finalizeCommandLineOptions and vibe.core.core.lowerPrivileges to get the
-	same behavior. 
+	same behavior.
 
 	Copyright: © 2012 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -20,17 +20,12 @@
 */
 module vibe.appmain;
 
-import vibe.core.args : finalizeCommandLineOptions;
-import vibe.core.core : runEventLoop, lowerPrivileges;
-import vibe.core.log;
-import std.encoding : sanitize;
-
 // only include main if VibeCustomMain is not set
 version (VibeCustomMain) {}
 else:
 
 version (VibeDefaultMain) {}
-else { pragma(msg, "Warning: -version=VibeDefaultMain will be required in the future to use vibe.d's default main(). Please update your build scripts."); }
+else { static assert(false, "Error: -version=VibeDefaultMain is required to use vibe.d's default main(). Or use -version=VibeCustomMain to use your own main() instead. Please update your build scripts."); }
 
 /**
 	The predefined vibe.d application entry point.
@@ -40,6 +35,11 @@ else { pragma(msg, "Warning: -version=VibeDefaultMain will be required in the fu
 */
 int main()
 {
+	import vibe.core.args : finalizeCommandLineOptions;
+	import vibe.core.core : runEventLoop, lowerPrivileges;
+	import vibe.core.log;
+	import std.encoding : sanitize;
+
 	version (unittest) {
 		logInfo("All unit tests were successful.");
 		return 0;
@@ -51,12 +51,10 @@ int main()
 		}
 
 		lowerPrivileges();
-		
+
 		logDiagnostic("Running event loop...");
 		int status;
-		debug {
-			status = runEventLoop();
-		} else {
+		version (VibeDebugCatchAll) {
 			try {
 				status = runEventLoop();
 			} catch( Throwable th ){
@@ -64,7 +62,10 @@ int main()
 				logDiagnostic("Full exception: %s", th.toString().sanitize());
 				return 1;
 			}
+		} else {
+			status = runEventLoop();
 		}
+
 		logDiagnostic("Event loop exited with status %d.", status);
 		return status;
 	}

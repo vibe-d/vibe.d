@@ -1,13 +1,14 @@
 /**
 	Contains interfaces and enums for evented I/O drivers.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
 module vibe.core.task;
 
 import vibe.core.sync;
+import vibe.internal.newconcurrency : newStdConcurrency;
 import vibe.utils.array;
 
 import core.thread;
@@ -19,65 +20,98 @@ import std.variant;
 
 /** Represents a single task as started using vibe.core.runTask.
 
-	All methods of TaskFiber are also available as methods of Task.
+	Note that the Task type is considered weakly isolated and thus can be
+	passed between threads using vibe.core.concurrency.send or by passing
+	it as a parameter to vibe.core.core.runWorkerTask.
 */
 struct Task {
 	private {
 		shared(TaskFiber) m_fiber;
 		size_t m_taskCounter;
+		static if (newStdConcurrency) {
+			import std.concurrency : ThreadInfo, Tid;
+			static ThreadInfo s_tidInfo;
+		}
 	}
 
-	private this(TaskFiber fiber, size_t task_counter)
+	private this(TaskFiber fiber, size_t task_counter) nothrow
 	{
 		m_fiber = cast(shared)fiber;
 		m_taskCounter = task_counter;
 	}
 
-	this(in Task other) { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
-
-	/// Makes all methods of TaskFiber available for Task.
-	alias fiber this;
+	this(in Task other) nothrow { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
 
 	/** Returns the Task instance belonging to the calling task.
 	*/
-	static Task getThis()
+	static Task getThis() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto fiber = Fiber.getThis();
-		if( !fiber ) return Task(null, 0);
+		if (!fiber) return Task.init;
 		auto tfiber = cast(TaskFiber)fiber;
 		assert(tfiber !is null, "Invalid or null fiber used to construct Task handle.");
+		if (!tfiber.m_running) return Task.init;
 		return Task(tfiber, tfiber.m_taskCounter);
 	}
 
-	nothrow:
-	@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
-	@property size_t taskCounter() const { return m_taskCounter; }
-	@property inout(Thread) thread() inout { if( m_fiber ) return (cast(inout(TaskFiber))m_fiber).thread; return null; }
+	nothrow {
+		@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
+		@property size_t taskCounter() const { return m_taskCounter; }
+		@property inout(Thread) thread() inout { if (m_fiber) return this.fiber.thread; return null; }
 
-	/** Determines if the task is still running.
-	*/
-	@property bool running()
-	const {
-		assert(m_fiber, "Invalid task handle");
-		try if (this.fiber.state == Fiber.State.TERM ) return false; catch {}
-		return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
+		/** Determines if the task is still running.
+		*/
+		@property bool running()
+		const {
+			assert(m_fiber !is null, "Invalid task handle");
+			try if (this.fiber.state == Fiber.State.TERM) return false; catch (Throwable) {}
+			return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
+		}
+
+		static if (newStdConcurrency) {
+			// FIXME: this is not thread safe!
+			@property ref ThreadInfo tidInfo() { return m_fiber ? fiber.tidInfo : s_tidInfo; }
+			@property Tid tid() { return tidInfo.ident; }
+		} else {
+			@property Task tid() { return this; }
+		}
 	}
 
-	bool opEquals(in ref Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
-	bool opEquals(in Task other) const { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
+	/// Reserved for internal use!
+	@property inout(MessageQueue) messageQueue() inout { assert(running, "Task is not running"); return fiber.messageQueue; }
+
+	T opCast(T)() const nothrow if (is(T == bool)) { return m_fiber !is null; }
+
+	void join() { if (running) fiber.join(); }
+	void interrupt() { if (running) fiber.interrupt(); }
+	void terminate() { if (running) fiber.terminate(); }
+
+	string toString() const { import std.string; return format("%s:%s", cast(void*)m_fiber, m_taskCounter); }
+
+	bool opEquals(in ref Task other) const nothrow { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
+	bool opEquals(in Task other) const nothrow { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
 }
 
 
 
 /** The base class for a task aka Fiber.
 
-	This class represents a single task that is executed concurrencly
+	This class represents a single task that is executed concurrently
 	with other tasks. Each task is owned by a single thread.
 */
 class TaskFiber : Fiber {
 	private {
 		Thread m_thread;
-		Variant[string] m_taskLocalStorage;
+		static if (newStdConcurrency) {
+			import std.concurrency : ThreadInfo;
+			ThreadInfo m_tidInfo;
+		}
 		MessageQueue m_messageQueue;
 	}
 
@@ -101,7 +135,10 @@ class TaskFiber : Fiber {
 	*/
 	@property Task task() { return Task(this, m_taskCounter); }
 
+	/// Reserved for internal use!
 	@property inout(MessageQueue) messageQueue() inout { return m_messageQueue; }
+
+	static if (newStdConcurrency) @property ref inout(ThreadInfo) tidInfo() inout nothrow { return m_tidInfo; }
 
 	/** Blocks until the task has ended.
 	*/
@@ -115,35 +152,10 @@ class TaskFiber : Fiber {
 	*/
 	abstract void terminate();
 
-	/** Sets a task local variable.
-	*/
-	void set(T)(string name, T value)
+	void bumpTaskCounter()
 	{
-		m_taskLocalStorage[name] = Variant(value);
-	}
-
-	/** Returns a task local variable.
-	*/
-	T get(T)(string name)
-	{
-		Variant* pvar;
-		pvar = name in m_taskLocalStorage;
-		enforce(pvar !is null, "Accessing unset TLS variable '"~name~"'.");
-		return pvar.get!T();
-	}
-
-	/** Determines if a certain task local variable is set.
-	*/
-	bool isSet(string name)
-	{
-		return (name in m_taskLocalStorage) !is null;
-	}
-
-	/** Clears all task local variables.
-	*/
-	protected void resetLocalStorage()
-	{
-		m_taskLocalStorage = null;
+		import core.atomic : atomicOp;
+		atomicOp!"+="(this.m_taskCounter, 1);
 	}
 }
 
@@ -157,10 +169,11 @@ class InterruptException : Exception {
 	}
 }
 
+
 class MessageQueue {
 	private {
-		TaskMutex m_mutex;
-		TaskCondition m_condition;
+		InterruptibleTaskMutex m_mutex;
+		InterruptibleTaskCondition m_condition;
 		FixedRingBuffer!Variant m_queue;
 		FixedRingBuffer!Variant m_priorityQueue;
 		size_t m_maxMailboxSize = 0;
@@ -169,8 +182,8 @@ class MessageQueue {
 
 	this()
 	{
-		m_mutex = new TaskMutex;
-		m_condition = new TaskCondition(m_mutex);
+		m_mutex = new InterruptibleTaskMutex;
+		m_condition = new InterruptibleTaskCondition(m_mutex);
 		m_queue.capacity = 32;
 		m_priorityQueue.capacity = 8;
 	}
@@ -179,10 +192,10 @@ class MessageQueue {
 
 	void clear()
 	{
-		synchronized(m_mutex){
+		m_mutex.performLocked!({
 			m_queue.clear();
 			m_priorityQueue.clear();
-		}
+		});
 		m_condition.notifyAll();
 	}
 
@@ -195,7 +208,7 @@ class MessageQueue {
 	void send(Variant msg)
 	{
 		import vibe.core.log;
-		synchronized(m_mutex){
+		m_mutex.performLocked!({
 			if( this.full ){
 				if( !m_onCrowding ){
 					while(this.full)
@@ -210,17 +223,17 @@ class MessageQueue {
 				m_queue.capacity = (m_queue.capacity * 3) / 2;
 
 			m_queue.put(msg);
-		}
+		});
 		m_condition.notify();
 	}
 
 	void prioritySend(Variant msg)
 	{
-		synchronized (m_mutex) {
+		m_mutex.performLocked!({
 			if (m_priorityQueue.full)
 				m_priorityQueue.capacity = (m_priorityQueue.capacity * 3) / 2;
 			m_priorityQueue.put(msg);
-		}
+		});
 		m_condition.notify();
 	}
 
@@ -230,7 +243,7 @@ class MessageQueue {
 		scope (exit) if (notify) m_condition.notify();
 
 		Variant args;
-		synchronized (m_mutex) {
+		m_mutex.performLocked!({
 			notify = this.full;
 			while (true) {
 				import vibe.core.log;
@@ -239,8 +252,9 @@ class MessageQueue {
 				if (receiveQueue(m_queue, args, filter)) break;
 				logTrace("received no message, waiting..");
 				m_condition.wait();
+				notify = this.full;
 			}
-		}
+		});
 
 		handler(args);
 	}
@@ -253,7 +267,7 @@ class MessageQueue {
 		scope (exit) if (notify) m_condition.notify();
 		auto limit_time = Clock.currTime(UTC()) + timeout;
 		Variant args;
-		synchronized (m_mutex) {
+		if (!m_mutex.performLocked!({
 			notify = this.full;
 			while (true) {
 				if (receiveQueue(m_priorityQueue, args, filter)) break;
@@ -261,8 +275,10 @@ class MessageQueue {
 				auto now = Clock.currTime(UTC());
 				if (now >= limit_time) return false;
 				m_condition.wait(limit_time - now);
+				notify = this.full;
 			}
-		}
+			return true;
+		})) return false;
 
 		handler(args);
 		return true;

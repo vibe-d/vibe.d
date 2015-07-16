@@ -20,12 +20,12 @@ import std.typecons;
 /** OutputStream that collects the written data in memory and allows to query it
 	as a byte array.
 */
-class MemoryOutputStream : OutputStream {
+final class MemoryOutputStream : OutputStream {
 	private {
 		AllocAppender!(ubyte[]) m_destination;
 	}
 
-	this(shared(Allocator) alloc = defaultAllocator())
+	this(Allocator alloc = defaultAllocator())
 	{
 		m_destination = AllocAppender!(ubyte[])(alloc);
 	}
@@ -34,9 +34,9 @@ class MemoryOutputStream : OutputStream {
 	@property ubyte[] data() { return m_destination.data(); }
 
 	/// Resets the stream to its initial state containing no data.
-	void reset()
+	void reset(AppenderResetMode mode = AppenderResetMode.keepData)
 	{
-		m_destination.reset();
+		m_destination.reset(mode);
 	}
 
 	/// Reserves space for data - useful for optimization.
@@ -68,7 +68,7 @@ class MemoryOutputStream : OutputStream {
 /**
 	Provides a random access stream interface for accessing an array of bytes.
 */
-class MemoryStream : RandomAccessStream {
+final class MemoryStream : RandomAccessStream {
 	private {
 		ubyte[] m_data;
 		size_t m_size;

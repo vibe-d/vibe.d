@@ -13,6 +13,7 @@ import core.sync.mutex;
 import core.time;
 import std.algorithm : min;
 import std.exception;
+import vibe.core.core;
 import vibe.core.sync;
 import vibe.utils.array;
 
@@ -20,7 +21,7 @@ import vibe.utils.array;
 /**
 	Implements a unidirectional data pipe between two tasks.
 */
-class TaskPipe : ConnectionStream {
+final class TaskPipe : ConnectionStream {
 	private {
 		TaskPipeImpl m_pipe;
 	}
@@ -31,12 +32,6 @@ class TaskPipe : ConnectionStream {
 	{
 		m_pipe = new TaskPipeImpl(grow_when_full);
 	}
-
-	/// Read end of the pipe (scheduled for deprecation)
-	@property InputStream reader() { return this; }
-
-	/// Write end of the pipe (scheduled for deprecation)
-	@property OutputStream writer() { return this; }
 
 	/// Size of the (fixed) FIFO buffer used to transfer data between tasks
 	@property size_t bufferSize() const { return m_pipe.bufferSize; }
@@ -67,10 +62,10 @@ class TaskPipe : ConnectionStream {
 /**
 	Underyling pipe implementation for TaskPipe with no Stream interface.
 */
-private class TaskPipeImpl {
+private final class TaskPipeImpl {
 	private {
 		Mutex m_mutex;
-		TaskCondition m_condition;
+		InterruptibleTaskCondition m_condition;
 		FixedRingBuffer!ubyte m_buffer;
 		bool m_closed = false;
 		bool m_growWhenFull;
@@ -81,7 +76,7 @@ private class TaskPipeImpl {
 	this(bool grow_when_full = false)
 	{
 		m_mutex = new Mutex;
-		m_condition = new TaskCondition(m_mutex);
+		m_condition = new InterruptibleTaskCondition(m_mutex);
 		m_buffer.capacity = 2048;
 		m_growWhenFull = grow_when_full;
 	}

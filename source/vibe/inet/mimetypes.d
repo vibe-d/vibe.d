@@ -20,9 +20,9 @@ string getMimeTypeForFile(string filename)
 {
 	string ext = extension(filename);
 	if( ext.length == 0 ) return "application/octet-stream";
-	
+
 	assert(ext[0] == '.');
-	
+
 	switch(toLower(ext[1 .. $])){
 		default: return "application/octet-stream";
 		case "ez": return "application/andrew-inset";
@@ -743,7 +743,8 @@ bool isCompressedFormat(string mimetype)
 		default: return false;
 		case "application/gzip", "application/x-compress", "application/png", "application/zip",
 				"audio/x-mpeg", "image/png", "image/jpeg",
-				"video/mpeg", "video/quicktime", "video/x-msvideo":
+				"video/mpeg", "video/quicktime", "video/x-msvideo",
+				"application/font-woff", "application/x-font-woff", "font/woff":
 			return true;
 	}
 }

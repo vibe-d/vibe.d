@@ -19,33 +19,46 @@ import core.time;
 */
 class ProxyStream : Stream {
 	private {
+		InputStream m_input;
+		OutputStream m_output;
 		Stream m_underlying;
 	}
 
-	this(Stream stream = null) { m_underlying = stream; }
+	this(Stream stream = null)
+	{
+		m_underlying = stream;
+		m_input = stream;
+		m_output = stream;
+	}
+
+	this(InputStream input, OutputStream output)
+	{
+		m_input = input;
+		m_output = output;
+	}
 
 	/// The stream that is wrapped by this one
 	@property inout(Stream) underlying() inout { return m_underlying; }
 	/// ditto
-	@property void underlying(Stream value) { m_underlying = value; }
+	@property void underlying(Stream value) { m_underlying = value; m_input = value; m_output = value; }
 
-	@property bool empty() { return m_underlying ? m_underlying.empty : true; }
+	@property bool empty() { return m_input ? m_input.empty : true; }
 
-	@property ulong leastSize() { return m_underlying ? m_underlying.leastSize : 0; }
+	@property ulong leastSize() { return m_input ? m_input.leastSize : 0; }
 
-	@property bool dataAvailableForRead() { return m_underlying ? m_underlying.dataAvailableForRead : false; }
+	@property bool dataAvailableForRead() { return m_input ? m_input.dataAvailableForRead : false; }
 
-	const(ubyte)[] peek() { return m_underlying.peek(); }
+	const(ubyte)[] peek() { return m_input.peek(); }
 
-	void read(ubyte[] dst) { m_underlying.read(dst); }
+	void read(ubyte[] dst) { m_input.read(dst); }
 
-	void write(in ubyte[] bytes) { m_underlying.write(bytes); }
+	void write(in ubyte[] bytes) { m_output.write(bytes); }
 
-	void flush() { m_underlying.flush(); }
+	void flush() { m_output.flush(); }
 
-	void finalize() { m_underlying.finalize(); }
+	void finalize() { m_output.finalize(); }
 
-	void write(InputStream stream, ulong nbytes = 0) { m_underlying.write(stream, nbytes); }
+	void write(InputStream stream, ulong nbytes = 0) { m_output.write(stream, nbytes); }
 }
 
 
@@ -63,15 +76,31 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 	}
 
 	this(Stream stream, ConnectionStream connection_stream)
-	{
+	in { assert(stream !is null); }
+	body {
 		super(stream);
 		m_connection = connection_stream;
 	}
 
-	@property bool connected() const { return m_connection.connected; }
+	this(InputStream input, OutputStream output, ConnectionStream connection_stream)
+	{
+		super(input, output);
+		m_connection = connection_stream;
+	}
+
+	@property bool connected()
+	const {
+		if (!m_connection)
+			return true;
+
+		return m_connection.connected;
+	}
 
 	void close()
 	{
+		if (!m_connection)
+			return;
+
 		if (m_connection.connected) finalize();
 		m_connection.close();
 	}
@@ -79,6 +108,10 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 	bool waitForData(Duration timeout = 0.seconds)
 	{
 		if (this.dataAvailableForRead) return true;
+
+		if (!m_connection)
+			return timeout == 0.seconds ? !this.empty : false;
+
 		return m_connection.waitForData(timeout);
 	}
 
@@ -141,4 +174,84 @@ struct StreamInputRange {
 		m_stream.read(m_buffer.data[$-sz .. $]);
 		m_buffer.fill = sz;
 	}
+}
+
+
+/**
+	Implements a buffered output range interface on top of an OutputStream.
+*/
+struct StreamOutputRange {
+	private {
+		OutputStream m_stream;
+		size_t m_fill = 0;
+		ubyte[256] m_data = void;
+	}
+
+	@disable this(this);
+
+	this(OutputStream stream)
+	{
+		m_stream = stream;
+	}
+
+	~this()
+	{
+		flush();
+	}
+
+	void flush()
+	{
+		if (m_fill == 0) return;
+		m_stream.write(m_data[0 .. m_fill]);
+		m_fill = 0;
+	}
+
+	void put(ubyte bt)
+	{
+		m_data[m_fill++] = bt;
+		if (m_fill >= m_data.length) flush();
+	}
+
+	void put(const(ubyte)[] bts)
+	{
+		while (bts.length) {
+			auto len = min(m_data.length - m_fill, bts.length);
+			m_data[m_fill .. m_fill + len] = bts[0 .. len];
+			m_fill += len;
+			bts = bts[len .. $];
+			if (m_fill >= m_data.length) flush();
+		}
+	}
+
+	void put(char elem) { put(cast(ubyte)elem); }
+	void put(const(char)[] elems) { put(cast(const(ubyte)[])elems); }
+
+	void put(dchar elem)
+	{
+		import std.utf;
+		char[4] chars;
+		auto len = encode(chars, elem);
+		put(chars[0 .. len]);
+	}
+
+	void put(const(dchar)[] elems) { foreach( ch; elems ) put(ch); }
+}
+
+unittest {
+	static long writeLength(ARGS...)(ARGS args) {
+		import vibe.stream.memory;
+		auto dst = new MemoryOutputStream;
+		{
+			auto rng = StreamOutputRange(dst);
+			foreach (a; args) rng.put(a);
+		}
+		return dst.data.length;
+	}
+	assert(writeLength("hello", ' ', "world") == "hello world".length);
+	assert(writeLength("h\u00E4llo", ' ', "world") == "h\u00E4llo world".length);
+	assert(writeLength("hello", '\u00E4', "world") == "hello\u00E4world".length);
+	assert(writeLength("h\u1000llo", '\u1000', "world") == "h\u1000llo\u1000world".length);
+	auto test = "häl";
+	assert(test.length == 4);
+	assert(writeLength(test[0], test[1], test[2], test[3]) == test.length);
 }

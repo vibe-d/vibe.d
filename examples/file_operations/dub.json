@@ -1,0 +1,9 @@
+﻿{
+	"name": "file-operations-example",
+	"description": "Read/write/append with task yielding.",
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}

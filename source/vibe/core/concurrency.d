@@ -4,13 +4,11 @@
 	This module is modeled after std.concurrency, but provides a fiber-aware alternative
 	to it. All blocking operations will yield the calling fiber instead of blocking it.
 
-	Copyright: © 2013 RejectedSoftware e.K.
+	Copyright: © 2013-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
 module vibe.core.concurrency;
-
-public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;
 
 import core.time;
 import std.traits;
@@ -19,6 +17,11 @@ import std.typetuple;
 import std.variant;
 import std.string;
 import vibe.core.task;
+import vibe.utils.memory;
+import vibe.internal.newconcurrency;
+
+static if (newStdConcurrency) public import std.concurrency;
+else public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;
 
 private extern (C) pure nothrow void _d_monitorenter(Object h);
 private extern (C) pure nothrow void _d_monitorexit(Object h);
@@ -29,41 +32,56 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 	Using this function will ensure that there are no data races. For this reason, the class
 	type T is required to contain no unshared or unisolated aliasing.
 
-	Examples:
+	See_Also: core.concurrency.isWeaklyIsolated
+*/
+ScopedLock!T lock(T : const(Object))(shared(T) object)
+pure nothrow @safe {
+	return ScopedLock!T(object);
+}
+/// ditto
+void lock(T : const(Object))(shared(T) object, scope void delegate(scope T) accessor)
+nothrow {
+	auto l = lock(object);
+	accessor(l.unsafeGet());
+}
 
-	---
+///
+unittest {
 	import vibe.core.concurrency;
 
-	class Item {
+	static class Item {
 		private double m_value;
 
-		this(double value) { m_value = value; }
+		this(double value) pure { m_value = value; }
 
-		@property double value() const { return m_value; }
+		@property double value() const pure { return m_value; }
 	}
 
-	class Manager {
+	static class Manager {
 		private {
 			string m_name;
 			Isolated!(Item) m_ownedItem;
 			Isolated!(shared(Item)[]) m_items;
 		}
 
-		this(string name)
+		pure this(string name)
 		{
 			m_name = name;
 			auto itm = makeIsolated!Item(3.5);
-			m_ownedItem = itm;
+			m_ownedItem = itm.move;
 		}
 
-		void addItem(shared(Item) item) { m_items ~= item; }
+		void addItem(shared(Item) item) pure { m_items ~= item; }
 
 		double getTotalValue()
-		const {
+		const pure {
 			double sum = 0;
 
 			// lock() is required to access shared objects
-			foreach( itm; m_items ) sum += itm.lock().value;
+			foreach (itm; m_items.unsafeGet) {
+				auto l = itm.lock();
+				sum += l.value;
+			}
 
 			// owned objects can be accessed without locking
 			sum += m_ownedItem.value;
@@ -72,11 +90,11 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 		}
 	}
 
-	void main()
+	void test()
 	{
 		import std.stdio;
 
-		auto man = new shared(Manager)("My manager");
+		auto man = cast(shared)new Manager("My manager");
 		{
 			auto l = man.lock();
 			l.addItem(new shared(Item)(1.5));
@@ -85,19 +103,6 @@ private extern (C) pure nothrow void _d_monitorexit(Object h);
 
 		writefln("Total value: %s", man.lock().getTotalValue());
 	}
-	---
-
-	See_Also: core.concurrency.isWeaklyIsolated
-*/
-ScopedLock!T lock(T : Object)(shared(T) object)
-pure nothrow {
-	return ScopedLock!T(object);
-}
-/// ditto
-void lock(T : Object)(shared(T) object, scope void delegate(scope T) accessor)
-nothrow {
-	auto l = lock(object);
-	accessor(l.unsafeGet());
 }
 
 
@@ -120,14 +125,16 @@ struct ScopedLock(T)
 	@disable this(this);
 
 	this(shared(T) obj)
-		pure nothrow {
-			assert(obj !is null, "Attempting to lock null object.");
-			m_ref = cast(T)obj;
-			_d_monitorenter(getObject());
-			assert(getObject().__monitor !is null);
-		}
+		pure nothrow @trusted
+	{
+		assert(obj !is null, "Attempting to lock null object.");
+		m_ref = cast(T)obj;
+		_d_monitorenter(getObject());
+		assert(getObject().__monitor !is null);
+	}
 
-	pure nothrow ~this()
+	~this()
+		pure nothrow @trusted
 	{
 		assert(m_ref !is null);
 		assert(getObject().__monitor !is null);
@@ -145,14 +152,12 @@ struct ScopedLock(T)
 	inout(T) opDot() inout nothrow { return m_ref; }
 	//pragma(msg, "In ScopedLock!("~T.stringof~")");
 	//pragma(msg, isolatedRefMethods!T());
-	#line 1 "isolatedAggreateMethodsString"
 //	mixin(isolatedAggregateMethodsString!T());
-	#line 151 "source/vibe/core/concurrency.d"
 
 	private Object getObject()
 		pure nothrow {
-			static if( is(Rebindable!T == struct) ) return cast()m_ref.get();
-			else return cast()m_ref;
+			static if( is(Rebindable!T == struct) ) return cast(Unqual!T)m_ref.get();
+			else return cast(Unqual!T)m_ref;
 		}
 }
 
@@ -166,24 +171,34 @@ struct ScopedLock(T)
 	The function returns an instance of Isolated that will allow proxied access to the members of
 	the object, as well as providing means to convert the object to immutable or to an ordinary
 	mutable object.
+*/
+pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
+{
+	static if (is(T == class)) return Isolated!T(new T(args));
+	else static if (is(T == struct)) return T(args);
+	else static if (isPointer!T && is(PointerTarget!T == struct)) {
+		alias TB = PointerTarget!T;
+		return Isolated!T(new TB(args));
+	} else static assert(false, "makeIsolated works only for class and (pointer to) struct types.");
+}
 
-	Examples:
-
-	---
+///
+unittest {
 	import vibe.core.concurrency;
+	import vibe.core.core;
 
-	class Item {
+	static class Item {
 		double value;
 		string name;
 	}
 
-	void modifyItem(Isolated!Item itm)
+	static void modifyItem(Isolated!Item itm)
 	{
 		itm.value = 1.3;
 		// TODO: send back to initiating thread
 	}
 
-	void main()
+	void test()
 	{
 		immutable(Item)[] items;
 
@@ -195,26 +210,43 @@ struct ScopedLock(T)
 
 		// send isolated item to other thread
 		auto itm2 = makeIsolated!Item();
-		spawn(&modifyItem, itm2.move());
+		runWorkerTask(&modifyItem, itm2.move());
 		// ...
 	}
-	---
-*/
-pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
-{
-	return Isolated!T(new T(args));
+}
+
+unittest {
+	static class C { this(int x) pure {} }
+	static struct S { this(int x) pure {} }
+
+	alias CI = typeof(makeIsolated!C(0));
+	alias SI = typeof(makeIsolated!S(0));
+	alias SPI = typeof(makeIsolated!(S*)(0));
+	static assert(isStronglyIsolated!CI);
+	static assert(is(CI == IsolatedRef!C));
+	static assert(isStronglyIsolated!SI);
+	static assert(is(SI == S));
+	static assert(isStronglyIsolated!SPI);
+	static assert(is(SPI == IsolatedRef!S));
 }
 
 
 /**
 	Creates a new isolated array.
+*/
+pure Isolated!(T[]) makeIsolatedArray(T)(size_t size)
+{
+	Isolated!(T[]) ret;
+	ret.length = size;
+	return ret.move();
+}
 
-	Examples:
-
-	---
+///
+unittest {
 	import vibe.core.concurrency;
+	import vibe.core.core;
 
-	void compute(Tid tid, Isolated!(double[]) array, size_t start_index)
+	static void compute(Tid tid, Isolated!(double[]) array, size_t start_index)
 	{
 		foreach( i; 0 .. array.length )
 			array[i] = (start_index + i) * 0.5;
@@ -222,7 +254,7 @@ pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
 		send(tid, array.move());
 	}
 
-	void main()
+	void test()
 	{
 		import std.stdio;
 
@@ -235,14 +267,14 @@ pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
 
 		// start processing in threads
 		Tid[] tids;
-		foreach( i, idx; indices )
-			tids ~= spawn(&compute, thisTid, subarrays[i].move(), idx);
+		foreach (i, idx; indices)
+			tids ~= runWorkerTaskH(&compute, thisTid, subarrays[i].move(), idx);
 
 		// collect results
 		auto resultarrays = new Isolated!(double[])[tids.length];
 		foreach( i, tid; tids )
 			resultarrays[i] = receiveOnly!(Isolated!(double[])).move();
-		
+
 		// BUG: the arrays must be sorted here, but since there is no way to tell
 		// from where something was received, this is difficult here.
 
@@ -255,13 +287,6 @@ pure Isolated!T makeIsolated(T, ARGS...)(ARGS args)
 
 		writefln("Result: %s", result);
 	}
-	---
-*/
-pure Isolated!(T[]) makeIsolatedArray(T)(size_t size)
-{
-	Isolated!(T[]) ret;
-	ret.length = size;
-	return ret.move();
 }
 
 
@@ -281,21 +306,21 @@ Isolated!T assumeIsolated(T)(T object)
 template Isolated(T)
 {
 	static if( isWeaklyIsolated!T ){
-		alias T Isolated;
+		alias Isolated = T;
 	} else static if( is(T == class) ){
-		alias IsolatedRef!T Isolated;
+		alias Isolated = IsolatedRef!T;
 	} else static if( isPointer!T ){
-		alias IsolatedRef!(PointerTarget!T) Isolated;
+		alias Isolated = IsolatedRef!(PointerTarget!T);
 	} else static if( isDynamicArray!T ){
-		alias IsolatedArray!(typeof(T.init[0])) Isolated;
+		alias Isolated = IsolatedArray!(typeof(T.init[0]));
 	} else static if( isAssociativeArray!T ){
-		alias IsolatedAssociativeArray!(KeyType!T, ValueType!T) Isolated;
+		alias Isolated = IsolatedAssociativeArray!(KeyType!T, ValueType!T);
 	} else static assert(false, T.stringof~": Unsupported type for Isolated!T - must be class, pointer, array or associative array.");
 }
 
 
 // unit tests fails with DMD 2.064 due to some cyclic import regression
-version (none) unittest
+unittest
 {
 	static class CE {}
 	static struct SE {}
@@ -319,22 +344,21 @@ private struct IsolatedRef(T)
 	static if( isStronglyIsolated!(FieldTypeTuple!T) )
 		enum __isIsolatedType = true;
 
-	alias T BaseType;
+	alias BaseType = T;
 
 	static if( is(T == class) ){
-		alias T Tref;
-		alias immutable(T) Tiref;
+		alias Tref = T;
+		alias Tiref = immutable(T);
 	} else {
-		alias T* Tref;
-		alias immutable(T)* Tiref;
+		alias Tref = T*;
+		alias Tiref = immutable(T)*;
 	}
 
 	private Tref m_ref;
 
 	//mixin isolatedAggregateMethods!T;
-	#line 1 "isolatedAggregateMethodsString"
+	//pragma(msg, isolatedAggregateMethodsString!T());
 	mixin(isolatedAggregateMethodsString!T());
-	#line 340 "source/vibe/core/concurrency.d"
 
 	@disable this(this);
 
@@ -370,6 +394,8 @@ private struct IsolatedRef(T)
 		this instance will be set to null after the call returns.
 	*/
 	IsolatedRef move() { auto r = m_ref; m_ref = null; return IsolatedRef(r); }
+	/// ditto
+	void move(ref IsolatedRef target) { target.m_ref = m_ref; m_ref = null; }
 
 	/**
 		Convert the isolated reference to a normal mutable reference.
@@ -429,7 +455,7 @@ private struct IsolatedArray(T)
 	static if( isStronglyIsolated!T )
 		enum __isIsolatedType = true;
 
-	alias T[] BaseType;
+	alias BaseType = T[];
 
 	private T[] m_array;
 
@@ -445,6 +471,7 @@ private struct IsolatedArray(T)
 	inout(T[]) unsafeGet() inout { return m_array; }
 
 	IsolatedArray!T move() pure { auto r = m_array; m_array = null; return IsolatedArray(r); }
+	void move(ref IsolatedArray target) pure { target.m_array = m_array; m_array = null; }
 
 	T[] extract()
 	pure {
@@ -513,7 +540,7 @@ private struct IsolatedAssociativeArray(K, V)
 	static if( isStronglyIsolated!K && isStronglyIsolated!V )
 		enum __isIsolatedType = true;
 
-	alias V[K] BaseType;
+	alias BaseType = V[K];
 
 	private {
 		V[K] m_aa;
@@ -529,6 +556,7 @@ private struct IsolatedAssociativeArray(K, V)
 	inout(V[K]) unsafeGet() inout { return m_aa; }
 
 	IsolatedAssociativeArray move() { auto r = m_aa; m_aa = null; return IsolatedAssociativeArray(r); }
+	void move(ref IsolatedAssociativeArray target) { target.m_aa = m_aa; m_aa = null; }
 
 	V[K] extract()
 	{
@@ -559,10 +587,10 @@ private struct IsolatedAssociativeArray(K, V)
 */
 template ScopedRef(T)
 {
-	static if( isAggregateType!T ) alias ScopedRefAggregate!T ScopedRef;
-	else static if( isAssociativeArray!T ) alias ScopedRefAssociativeArray!T ScopedRef;
-	else static if( isArray!T ) alias ScopedRefArray!T ScopedRef;
-	else static if( isBasicType!T ) alias ScopedRefBasic!T ScopedRef;
+	static if( isAggregateType!T ) alias ScopedRef = ScopedRefAggregate!T;
+	else static if( isAssociativeArray!T ) alias ScopedRef = ScopedRefAssociativeArray!T;
+	else static if( isArray!T ) alias ScopedRef = ScopedRefArray!T;
+	else static if( isBasicType!T ) alias ScopedRef = ScopedRefBasic!T;
 	else static assert(false, "Unsupported type for ScopedRef: "~T.stringof);
 }
 
@@ -598,10 +626,7 @@ private struct ScopedRefAggregate(T)
 	static if( is(T == shared) ){
 		auto lock() pure { return .lock(unsafeGet()); }
 	} else {
-		#line 1 "isolatedAggregateMethodsString"
 		mixin(isolatedAggregateMethodsString!T());
-		#line 607 "source/vibe/concurrency.d"
-		static assert(__LINE__ == 582);
 		//mixin isolatedAggregateMethods!T;
 	}
 }
@@ -609,9 +634,9 @@ private struct ScopedRefAggregate(T)
 /// private
 private struct ScopedRefArray(T)
 {
-	alias typeof(T.init[0]) V;
+	alias V = typeof(T.init[0]) ;
 	private T* m_ref;
-	
+
 	private @property ref T m_array() pure { return *m_ref; }
 	private @property ref const(T) m_array() const pure { return *m_ref; }
 
@@ -629,8 +654,8 @@ private struct ScopedRefArray(T)
 /// private
 private struct ScopedRefAssociativeArray(K, V)
 {
-	alias KeyType!T K;
-	alias ValueType!T V;
+	alias K = KeyType!T;
+	alias V = ValueType!T;
 	private T* m_ref;
 
 	private @property ref T m_array() pure { return *m_ref; }
@@ -655,21 +680,20 @@ private struct ScopedRefAssociativeArray(K, V)
 /// private
 /*private mixin template(T) isolatedAggregateMethods
 {
-#line 1 "isolatedAggregateMethodsString"
 	mixin(isolatedAggregateMethodsString!T());
-#line 664 "source/vibe/concurrency.d"
-static assert(__LINE__ == 639);
 }*/
 
 /// private
 private string isolatedAggregateMethodsString(T)()
 {
+	import vibe.internal.meta.traits;
+
 	string ret = generateModuleImports!T();
 	//pragma(msg, "Type '"~T.stringof~"'");
 	foreach( mname; __traits(allMembers, T) ){
-		static if( !is(FunctionTypeOf!(__traits(getMember, T, mname)) == function) ){
-			static if( isMemberPublic!(T, mname) ){
-				alias typeof(__traits(getMember, T, mname)) mtype;
+		static if (isPublicMember!(T, mname)) {
+			static if (isRWPlainField!(T, mname)) {
+				alias mtype = typeof(__traits(getMember, T, mname)) ;
 				auto mtypename = fullyQualifiedName!mtype;
 				//pragma(msg, "  field " ~ mname ~ " : " ~ mtype.stringof);
 				ret ~= "@property ScopedRef!(const("~mtypename~")) "~mname~"() const pure { return ScopedRef!(const("~mtypename~"))(m_ref."~mname~"); }\n";
@@ -681,51 +705,51 @@ private string isolatedAggregateMethodsString(T)()
 						ret ~= "@property void "~mname~"(AT)(AT value) pure { static assert(isWeaklyIsolated!AT); m_ref."~mname~" = value.unsafeGet(); }\n";
 					}
 				}
-			} //else pragma(msg, "  non-public field " ~ mname);
-		} else {
-			foreach( method; __traits(getOverloads, T, mname) ){
-				alias FunctionTypeOf!method ftype;
+			} else {
+				foreach( method; __traits(getOverloads, T, mname) ){
+					alias ftype = FunctionTypeOf!method;
 
-				// only pure functions are allowed (or they could escape references to global variables)
-				// don't allow non-isolated references to be escaped
-				if( functionAttributes!ftype & FunctionAttribute.pure_ &&
-					isWeaklyIsolated!(ReturnType!ftype) )
-				{
-					static if( __traits(isStaticFunction, method) ){
-						//pragma(msg, "  static method " ~ mname ~ " : " ~ ftype.stringof);
-						ret ~= "static "~fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
+					// only pure functions are allowed (or they could escape references to global variables)
+					// don't allow non-isolated references to be escaped
+					if( functionAttributes!ftype & FunctionAttribute.pure_ &&
+						isWeaklyIsolated!(ReturnType!ftype) )
+					{
+						static if( __traits(isStaticFunction, method) ){
+							//pragma(msg, "  static method " ~ mname ~ " : " ~ ftype.stringof);
+							ret ~= "static "~fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
+							}
+							ret ~= "){ return "~fullyQualifiedName!T~"."~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= "p"~i.stringof;
+							}
+							ret ~= "); }\n";
+						} else if (mname != "__ctor") {
+							//pragma(msg, "  normal method " ~ mname ~ " : " ~ ftype.stringof);
+							if( is(ftype == const) ) ret ~= "const ";
+							if( is(ftype == shared) ) ret ~= "shared ";
+							if( is(ftype == immutable) ) ret ~= "immutable ";
+							if( functionAttributes!ftype & FunctionAttribute.pure_ ) ret ~= "pure ";
+							if( functionAttributes!ftype & FunctionAttribute.property ) ret ~= "@property ";
+							ret ~= fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
+							}
+							ret ~= "){ return m_ref."~mname~"(";
+							foreach( i, P; ParameterTypeTuple!ftype ){
+								if( i > 0 ) ret ~= ", ";
+								ret ~= "p"~i.stringof;
+							}
+							ret ~= "); }\n";
 						}
-						ret ~= "){ return "~fullyQualifiedName!T~"."~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= "p"~i.stringof;
-						}
-						ret ~= "); }\n";
-					} else {
-						//pragma(msg, "  normal method " ~ mname ~ " : " ~ ftype.stringof);
-						if( is(ftype == const) ) ret ~= "const ";
-						if( is(ftype == shared) ) ret ~= "shared ";
-						if( is(ftype == immutable) ) ret ~= "immutable ";
-						if( functionAttributes!ftype & FunctionAttribute.pure_ ) ret ~= "pure ";
-						if( functionAttributes!ftype & FunctionAttribute.property ) ret ~= "@property ";
-						ret ~= fullyQualifiedName!(ReturnType!ftype)~" "~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= fullyQualifiedName!P ~ " p"~i.stringof;
-						}
-						ret ~= "){ return m_ref."~mname~"(";
-						foreach( i, P; ParameterTypeTuple!ftype ){
-							if( i > 0 ) ret ~= ", ";
-							ret ~= "p"~i.stringof;
-						}
-						ret ~= "); }\n";
 					}
 				}
 			}
-		}
+		} //else pragma(msg, "  non-public field " ~ mname);
 	}
 	return ret;
 }
@@ -887,11 +911,11 @@ private @property string generateModuleImportsImpl(T, TYPES...)(ref bool[string]
 			addModule(moduleName!T);
 
 			foreach( member; __traits(allMembers, T) ){
-				//static if( isMemberPublic!(T, member) ){
+				//static if( isPublicMember!(T, member) ){
 					static if( !is(typeof(__traits(getMember, T, member))) ){
 						// ignore sub types
 					} else static if( !is(FunctionTypeOf!(__traits(getMember, T, member)) == function) ){
-						alias typeof(__traits(getMember, T, member)) mtype;
+						alias mtype = typeof(__traits(getMember, T, member)) ;
 						ret ~= generateModuleImportsImpl!(mtype, T, TYPES)(visited);
 					} else static if( is(T == class) || is(T == interface) ){
 						foreach( overload; MemberFunctionsTuple!(T, member) ){
@@ -915,22 +939,7 @@ template haveTypeAlready(T, TYPES...)
 {
 	static if( TYPES.length == 0 ) enum haveTypeAlready = false;
 	else static if( is(T == TYPES[0]) ) enum haveTypeAlready = true;
-	else alias haveTypeAlready!(T, TYPES[1 ..$]) haveTypeAlready;
-}
-
-template isMemberPublic(T, string member)
-{
-	static if( __traits(compiles, {tryAccess!(T, member)(); }()) ){
-		enum isMemberPublic = true;
-	} else enum isMemberPublic = false;
-}
-
-/// private
-private void tryAccess(T, string member)()
-{
-	mixin(generateModuleImports!T());
-	mixin(fullyQualifiedName!T~" inst;");
-	mixin("auto p = &inst."~member~";");
+	else alias haveTypeAlready = haveTypeAlready!(T, TYPES[1 ..$]);
 }
 
 
@@ -953,6 +962,7 @@ template isStronglyIsolated(T...)
 		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isStronglyIsolated = isStronglyIsolated!(typeof(T[0].get()));
 		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isStronglyIsolated = true;
 		else static if (is(T[0] == class)) enum bool isStronglyIsolated = false;
+		else static if (is(T[0] == interface)) enum bool isStronglyIsolated = false; // can't know if the implementation is isolated
 		else static if (is(T[0] == delegate)) enum bool isStronglyIsolated = false; // can't know to what a delegate points
 		else static if (isDynamicArray!(T[0])) enum bool isStronglyIsolated = is(typeof(T[0].init[0]) == immutable);
 		else static if (isAssociativeArray!(T[0])) enum bool isStronglyIsolated = false; // TODO: be less strict here
@@ -977,19 +987,20 @@ template isWeaklyIsolated(T...)
 	else static if (T.length > 1) enum bool isWeaklyIsolated = isWeaklyIsolated!(T[0 .. $/2]) && isWeaklyIsolated!(T[$/2 .. $]);
 	else {
 		static if(is(T[0] == immutable)) enum bool isWeaklyIsolated = true;
-		else static if(is(T[0] == shared)) enum bool isWeaklyIsolated = true;
-		else static if(isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
-		else static if(is(T[0] : Throwable)) enum bool isWeaklyIsolated = true; // WARNING: this is unsafe, but needed for send/receive!
-		else static if(is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
-		else static if(is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
-		else static if(is(T[0] == class)) enum bool isWeaklyIsolated = false;
-		else static if(is(T[0] == delegate)) enum bool isWeaklyIsolated = false; // can't know to what a delegate points
-		else static if(isDynamicArray!(T[0])) enum bool isWeaklyIsolated = is(typeof(T[0].init[0]) == immutable);
-		else static if(isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
-		else static if(isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
-		else static if(isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable);
-		else static if(isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
-		else enum bool isWeaklyIsolated = true; //
+		else static if (is(T[0] == shared)) enum bool isWeaklyIsolated = true;
+		else static if (isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
+		else static if (is(T[0] : Throwable)) enum bool isWeaklyIsolated = true; // WARNING: this is unsafe, but needed for send/receive!
+		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
+		else static if (is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
+		else static if (is(T[0] == class)) enum bool isWeaklyIsolated = false;
+		else static if (is(T[0] == interface)) enum bool isWeaklyIsolated = false; // can't know if the implementation is isolated
+		else static if (is(T[0] == delegate)) enum bool isWeaklyIsolated = T[0].stringof.endsWith(" shared"); // can't know to what a delegate points - FIXME: use something better than a string comparison
+		else static if (isDynamicArray!(T[0])) enum bool isWeaklyIsolated = is(typeof(T[0].init[0]) == immutable);
+		else static if (isAssociativeArray!(T[0])) enum bool isWeaklyIsolated = false; // TODO: be less strict here
+		else static if (isSomeFunction!(T[0])) enum bool isWeaklyIsolated = true; // functions are immutable
+		else static if (isPointer!(T[0])) enum bool isWeaklyIsolated = is(typeof(*T[0].init) == immutable) || is(typeof(*T[0].init) == shared);
+		else static if (isAggregateType!(T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(FieldTypeTuple!(T[0]));
+		else enum bool isWeaklyIsolated = true;
 	}
 }
 
@@ -1021,6 +1032,7 @@ unittest {
 	static struct F { void function() a; } // strongly isolated (functions are immutable)
 	static struct G { void test(); } // strongly isolated
 	static struct H { A[] a; } // not isolated
+	static interface I {}
 
 	static assert(!isStronglyIsolated!A);
 	static assert(isStronglyIsolated!(FieldTypeTuple!A));
@@ -1031,6 +1043,7 @@ unittest {
 	static assert(isStronglyIsolated!F);
 	static assert(isStronglyIsolated!G);
 	static assert(!isStronglyIsolated!H);
+	static assert(!isStronglyIsolated!I);
 
 	static assert(!isWeaklyIsolated!A);
 	static assert(isWeaklyIsolated!(FieldTypeTuple!A));
@@ -1041,6 +1054,7 @@ unittest {
 	static assert(isWeaklyIsolated!F);
 	static assert(isWeaklyIsolated!G);
 	static assert(!isWeaklyIsolated!H);
+	static assert(!isWeaklyIsolated!I);
 }
 
 
@@ -1052,184 +1066,306 @@ template isCopyable(T)
 
 
 /******************************************************************************/
+/* Future (promise) suppport                                                  */
+/******************************************************************************/
+
+/**
+	Represents a values that will be computed asynchronously.
+
+	This type uses $(D alias this) to enable transparent access to the result
+	value.
+*/
+struct Future(T) {
+	private {
+		FreeListRef!(shared(T)) m_result;
+		Task m_task;
+	}
+
+	/// Checks if the values was fully computed.
+	@property bool ready() const { return !m_task.running; }
+
+	/** Returns the computed value.
+
+		This function waits for the computation to finish, if necessary, and
+		then returns the final value. In case of an uncaught exception
+		happening during the computation, the exception will be thrown
+		instead.
+	*/
+	ref T getResult()
+	{
+		if (!ready) m_task.join();
+		assert(ready, "Task still running after join()!?");
+		return *cast(T*)m_result.get(); // casting away shared is safe, because this is a unique reference
+	}
+
+	alias getResult this;
+
+	private void init()
+	{
+		m_result = FreeListRef!(shared(T))();
+	}
+}
+
+
+/**
+	Starts an asynchronous computation and returns a future for the result value.
+
+	If the supplied callable and arguments are all weakly isolated,
+	$(D vibe.core.core.runWorkerTask) will be used to perform the computation.
+	Otherwise, $(D vibe.core.core.runTask) will be used.
+
+	Params:
+		callable: A callable value, can be either a function, a delegate, or a
+			user defined type that defines an $(D opCall).
+		args: Arguments to pass to the callable.
+
+	Returns:
+		Returns a $(D Future) object that can be used to access the result.
+
+	See_also: $(D isWeaklyIsolated)
+*/
+Future!(ReturnType!CALLABLE) async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+	if (is(typeof(callable(args)) == ReturnType!CALLABLE))
+{
+	import vibe.core.core;
+	alias RET = ReturnType!CALLABLE;
+	Future!RET ret;
+	ret.init();
+	static void compute(FreeListRef!(shared(RET)) dst, CALLABLE callable, ARGS args) {
+		*dst = cast(shared(RET))callable(args);
+	}
+	static if (isWeaklyIsolated!CALLABLE && isWeaklyIsolated!ARGS) {
+		ret.m_task = runWorkerTaskH(&compute, ret.m_result, callable, args);
+	} else {
+		ret.m_task = runTask(&compute, ret.m_result, callable, args);
+	}
+	return ret;
+}
+
+///
+unittest {
+	import vibe.core.core;
+	import vibe.core.log;
+
+	void test()
+	{
+		static if (__VERSION__ >= 2065) {
+		auto val = async({
+			logInfo("Starting to compute value in worker task.");
+			sleep(500.msecs); // simulate some lengthy computation
+			logInfo("Finished computing value in worker task.");
+			return 32;
+		});
+
+		logInfo("Starting computation in main task");
+		sleep(200.msecs); // simulate some lengthy computation
+		logInfo("Finished computation in main task. Waiting for async value.");
+		logInfo("Result: %s", val.getResult());
+		}
+	}
+}
+
+/******************************************************************************/
 /******************************************************************************/
 /* std.concurrency compatible interface for message passing                   */
 /******************************************************************************/
 /******************************************************************************/
 
-alias Task Tid;
+static if (newStdConcurrency) {
+	void send(ARGS...)(Task task, ARGS args) { std.concurrency.send(task.tidInfo.ident, args); }
+	void prioritySend(ARGS...)(Task task, ARGS args) { std.concurrency.prioritySend(task.tidInfo.ident, args); }
 
-void send(ARGS...)(Tid tid, ARGS args)
-{
-	assert (tid != Task(), "Invalid task handle");
-	static assert(args.length > 0, "Need to send at least one value.");
-	foreach(A; ARGS){
-		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
+	package class VibedScheduler : Scheduler {
+		import core.sync.mutex;
+		import vibe.core.core;
+		import vibe.core.sync;
+
+		override void start(void delegate() op) { op(); }
+		override void spawn(void delegate() op) { runTask(op); }
+		override void yield() {}
+		override @property ref ThreadInfo thisInfo() { return Task.getThis().tidInfo; }
+		override TaskCondition newCondition(Mutex m) { return new TaskCondition(m); }
 	}
-	tid.messageQueue.send(Variant(IsolatedValueProxyTuple!ARGS(args)));
-}
+} else {
+	alias Tid = Task;
 
-void prioritySend(ARGS...)(Tid tid, ARGS args)
-{
-	assert (tid != Task(), "Invalid task handle");
-	static assert(args.length > 0, "Need to send at least one value.");
-	foreach(A; ARGS){
-		static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
-	}
-	tid.messageQueue.prioritySend(Variant(IsolatedValueProxyTuple!ARGS(args)));
-}
+	/// Returns the Tid of the caller (same as Task.getThis())
+	@property Tid thisTid() { return Task.getThis(); }
 
-// TODO: handle special exception types
-
-void receive(OPS...)(OPS ops)
-{
-	auto tid = Task.getThis();
-	tid.messageQueue.receive(opsFilter(ops), opsHandler(ops));
-}
-
-auto receiveOnly(ARGS...)()
-{
-	ARGS ret;
-
-	receive(
-		(ARGS val) { ret = val; },
-		(LinkTerminated e) { throw e; },
-		(OwnerTerminated e) { throw e; },
-		(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, ARGS.stringof)); }
-	);
-
-	static if(ARGS.length == 1) return ret[0];
-	else return tuple(ret);
-}
-
-bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
-{
-	auto tid = Task.getThis();
-	return tid.messageQueue.receiveTimeout!OPS(timeout, opsFilter(ops), opsHandler(ops));
-}
-
-void setMaxMailboxSize(Tid tid, size_t messages, OnCrowding on_crowding)
-{
-	final switch(on_crowding){
-		case OnCrowding.block: setMaxMailboxSize(tid, messages, null); break;
-		case OnCrowding.throwException: setMaxMailboxSize(tid, messages, &onCrowdingThrow); break;
-		case OnCrowding.ignore: setMaxMailboxSize(tid, messages, &onCrowdingDrop); break;
-	}
-}
-
-void setMaxMailboxSize(Tid tid, size_t messages, bool function(Tid) on_crowding)
-{
-	tid.messageQueue.setMaxSize(messages, on_crowding);
-}
-
-unittest {
-	static class CLS {}
-	static assert(is(typeof(send(Tid.init, makeIsolated!CLS()))));
-	static assert(is(typeof(send(Tid.init, 1))));
-	static assert(is(typeof(send(Tid.init, 1, "str", makeIsolated!CLS()))));
-	static assert(!is(typeof(send(Tid.init, new CLS))));
-	static assert(is(typeof(receive((Isolated!CLS){}))));
-	static assert(is(typeof(receive((int){}))));
-	static assert(is(typeof(receive!(void delegate(int, string, Isolated!CLS))((int, string, Isolated!CLS){}))));
-	static assert(!is(typeof(receive((CLS){}))));
-}
-
-private bool onCrowdingThrow(Task tid){
-	throw new MailboxFull(std.concurrency.Tid());
-}
-
-private bool onCrowdingDrop(Task tid){
-	return false;
-}
-
-private struct IsolatedValueProxyTuple(T...)
-{
-	staticMap!(IsolatedValueProxy, T) fields;
-
-	this(ref T values)
+	void send(ARGS...)(Tid tid, ARGS args)
 	{
-		foreach (i, Ti; T) {
-			static if (isInstanceOf!(IsolatedSendProxy, IsolatedValueProxy!Ti)) {
-				fields[i] = IsolatedValueProxy!Ti(values[i].unsafeGet());
-			} else fields[i] = values[i];
+		assert (tid != Task(), "Invalid task handle");
+		static assert(args.length > 0, "Need to send at least one value.");
+		foreach(A; ARGS){
+			static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
+		}
+		tid.messageQueue.send(Variant(IsolatedValueProxyTuple!ARGS(args)));
+	}
+
+	void prioritySend(ARGS...)(Tid tid, ARGS args)
+	{
+		assert (tid != Task(), "Invalid task handle");
+		static assert(args.length > 0, "Need to send at least one value.");
+		foreach(A; ARGS){
+			static assert(isWeaklyIsolated!A, "Only objects with no unshared or unisolated aliasing may be sent, not "~A.stringof~".");
+		}
+		tid.messageQueue.prioritySend(Variant(IsolatedValueProxyTuple!ARGS(args)));
+	}
+
+	// TODO: handle special exception types
+
+	void receive(OPS...)(OPS ops)
+	{
+		auto tid = Task.getThis();
+		tid.messageQueue.receive(opsFilter(ops), opsHandler(ops));
+	}
+
+	auto receiveOnly(ARGS...)()
+	{
+		import std.algorithm : move;
+		ARGS ret;
+
+		receive(
+			(ARGS val) { move(val, ret); },
+			(LinkTerminated e) { throw e; },
+			(OwnerTerminated e) { throw e; },
+			(Variant val) { throw new MessageMismatch(format("Unexpected message type %s, expected %s.", val.type, ARGS.stringof)); }
+		);
+
+		static if(ARGS.length == 1) return ret[0];
+		else return tuple(ret);
+	}
+
+	bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
+	{
+		auto tid = Task.getThis();
+		return tid.messageQueue.receiveTimeout!OPS(timeout, opsFilter(ops), opsHandler(ops));
+	}
+
+	void setMaxMailboxSize(Tid tid, size_t messages, OnCrowding on_crowding)
+	{
+		final switch(on_crowding){
+			case OnCrowding.block: setMaxMailboxSize(tid, messages, null); break;
+			case OnCrowding.throwException: setMaxMailboxSize(tid, messages, &onCrowdingThrow); break;
+			case OnCrowding.ignore: setMaxMailboxSize(tid, messages, &onCrowdingDrop); break;
 		}
 	}
-}
 
-private template IsolatedValueProxy(T)
-{
-	static if (isInstanceOf!(IsolatedRef, T) || isInstanceOf!(IsolatedArray, T) || isInstanceOf!(IsolatedAssociativeArray, T)) {
-		alias IsolatedValueProxy = IsolatedSendProxy!(T.BaseType);
-	} else {
-		alias IsolatedValueProxy = T;
-	}
-}
-
-/+unittest {
-	static class Test {}
-	void test() {
-		Task.getThis().send(new immutable Test, makeIsolated!Test());
-	}
-}+/
-
-private struct IsolatedSendProxy(T) { alias BaseType = T; T value; }
-
-private bool callBool(F, T...)(F fnc, T args)
-{
-	static string caller(string prefix)
+	void setMaxMailboxSize(Tid tid, size_t messages, bool function(Tid) on_crowding)
 	{
-		import std.conv;
-		string ret = prefix ~ "fnc(";
-		foreach (i, Ti; T) {
-			static if (i > 0) ret ~= ", ";
-			static if (isInstanceOf!(IsolatedSendProxy, Ti)) ret ~= "assumeIsolated(args["~to!string(i)~"].value)";
-			else ret ~= "args["~to!string(i)~"]";
-		}
-		ret ~= ");";
-		return ret;
+		tid.messageQueue.setMaxSize(messages, on_crowding);
 	}
-	static assert(is(ReturnType!F == bool) || is(ReturnType!F == void),
-		"Message handlers must return either bool or void.");
-	static if (is(ReturnType!F == bool)) mixin(caller("return "));
-	else {
-		mixin(caller(""));
-		return true;
-	}
-}
 
-private bool delegate(Variant) opsFilter(OPS...)(OPS ops)
-{
-	return (Variant msg) {
-		if (msg.convertsTo!Throwable) return true;
-		foreach (i, OP; OPS)
-			if (matchesHandler!OP(msg))
-				return true;
+	unittest {
+		static class CLS {}
+		static assert(is(typeof(send(Tid.init, makeIsolated!CLS()))));
+		static assert(is(typeof(send(Tid.init, 1))));
+		static assert(is(typeof(send(Tid.init, 1, "str", makeIsolated!CLS()))));
+		static assert(!is(typeof(send(Tid.init, new CLS))));
+		static assert(is(typeof(receive((Isolated!CLS){}))));
+		static assert(is(typeof(receive((int){}))));
+		static assert(is(typeof(receive!(void delegate(int, string, Isolated!CLS))((int, string, Isolated!CLS){}))));
+		static assert(!is(typeof(receive((CLS){}))));
+	}
+
+	private bool onCrowdingThrow(Task tid){
+		import std.concurrency : Tid;
+		throw new MailboxFull(Tid());
+	}
+
+	private bool onCrowdingDrop(Task tid){
 		return false;
-	};
-}
+	}
 
-private void delegate(Variant) opsHandler(OPS...)(OPS ops)
-{
-	return (Variant msg) {
-		foreach (i, OP; OPS) {
-			alias PTypes = ParameterTypeTuple!OP;
-			if (matchesHandler!OP(msg)) {
-				static if (PTypes.length == 1 && is(PTypes[0] == Variant)) {
-					if (callBool(ops[i], msg)) return; // WARNING: proxied isolated values will go through verbatim!
-				} else {
-					auto msgt = msg.get!(IsolatedValueProxyTuple!PTypes);
-					if (callBool(ops[i], msgt.fields)) return;
-				}
+	private struct IsolatedValueProxyTuple(T...)
+	{
+		staticMap!(IsolatedValueProxy, T) fields;
+
+		this(ref T values)
+		{
+			foreach (i, Ti; T) {
+				static if (isInstanceOf!(IsolatedSendProxy, IsolatedValueProxy!Ti)) {
+					fields[i] = IsolatedValueProxy!Ti(values[i].unsafeGet());
+				} else fields[i] = values[i];
 			}
 		}
-		if (msg.convertsTo!Throwable)
-			throw msg.get!Throwable();
-	};
-}
+	}
 
-private bool matchesHandler(F)(Variant msg)
-{
-	alias PARAMS = ParameterTypeTuple!F;
-	if (PARAMS.length == 1 && is(PARAMS[0] == Variant)) return true;
-	else return msg.convertsTo!(IsolatedValueProxyTuple!PARAMS);
+	private template IsolatedValueProxy(T)
+	{
+		static if (isInstanceOf!(IsolatedRef, T) || isInstanceOf!(IsolatedArray, T) || isInstanceOf!(IsolatedAssociativeArray, T)) {
+			alias IsolatedValueProxy = IsolatedSendProxy!(T.BaseType);
+		} else {
+			alias IsolatedValueProxy = T;
+		}
+	}
+
+	/+unittest {
+		static class Test {}
+		void test() {
+			Task.getThis().send(new immutable Test, makeIsolated!Test());
+		}
+	}+/
+
+	private struct IsolatedSendProxy(T) { alias BaseType = T; T value; }
+
+	private bool callBool(F, T...)(F fnc, T args)
+	{
+		static string caller(string prefix)
+		{
+			import std.conv;
+			string ret = prefix ~ "fnc(";
+			foreach (i, Ti; T) {
+				static if (i > 0) ret ~= ", ";
+				static if (isInstanceOf!(IsolatedSendProxy, Ti)) ret ~= "assumeIsolated(args["~to!string(i)~"].value)";
+				else ret ~= "args["~to!string(i)~"]";
+			}
+			ret ~= ");";
+			return ret;
+		}
+		static assert(is(ReturnType!F == bool) || is(ReturnType!F == void),
+			"Message handlers must return either bool or void.");
+		static if (is(ReturnType!F == bool)) mixin(caller("return "));
+		else {
+			mixin(caller(""));
+			return true;
+		}
+	}
+
+	private bool delegate(Variant) opsFilter(OPS...)(OPS ops)
+	{
+		return (Variant msg) {
+			if (msg.convertsTo!Throwable) return true;
+			foreach (i, OP; OPS)
+				if (matchesHandler!OP(msg))
+					return true;
+			return false;
+		};
+	}
+
+	private void delegate(Variant) opsHandler(OPS...)(OPS ops)
+	{
+		return (Variant msg) {
+			foreach (i, OP; OPS) {
+				alias PTypes = ParameterTypeTuple!OP;
+				if (matchesHandler!OP(msg)) {
+					static if (PTypes.length == 1 && is(PTypes[0] == Variant)) {
+						if (callBool(ops[i], msg)) return; // WARNING: proxied isolated values will go through verbatim!
+					} else {
+						auto msgt = msg.get!(IsolatedValueProxyTuple!PTypes);
+						if (callBool(ops[i], msgt.fields)) return;
+					}
+				}
+			}
+			if (msg.convertsTo!Throwable)
+				throw msg.get!Throwable();
+		};
+	}
+
+	private bool matchesHandler(F)(Variant msg)
+	{
+		alias PARAMS = ParameterTypeTuple!F;
+		if (PARAMS.length == 1 && is(PARAMS[0] == Variant)) return true;
+		else return msg.convertsTo!(IsolatedValueProxyTuple!PARAMS);
+	}
 }

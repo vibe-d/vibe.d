@@ -7,7 +7,13 @@ import vibe.vibe;
 
 void runTest()
 {
-	auto client = connectMongoDB("localhost");
+	MongoClient client;
+	try client = connectMongoDB("localhost");
+	catch (Exception e) {
+		logInfo("Failed to connect to local MongoDB server. Skipping test.");
+		return;
+	}
+
 	auto coll = client.getCollection("test.collection");
 	assert(coll.database.getLastError().code < 0);
 	assert(coll.name == "collection");
@@ -35,11 +41,24 @@ void runTest()
 	auto converted = zip(data1, data2).map!( a => a[0].key1.get!string() ~ a[1].key1.get!string() )();
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
+
+	import std.algorithm;
+	auto names = client.getDatabases().map!(dbs => dbs.name).array;
+	assert(!find(names, "test").empty);
+	assert(!find(names, "local").empty);
+	assert(!find(names, "admin").empty);
 }
 
 int main()
 {
-	setLogLevel(LogLevel.Debug);
-	runTask(toDelegate(&runTest));
-	return runEventLoop();
+	int ret = 0;
+	runTask({
+		try runTest();
+		catch (Throwable th) {
+			logError("Test failed: %s", th.msg);
+			ret = 1;
+		} finally exitEventLoop(true);
+	});
+	runEventLoop();
+	return ret;
 }

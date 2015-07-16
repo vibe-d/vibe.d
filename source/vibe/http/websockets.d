@@ -1,30 +1,34 @@
 /**
 	Implements WebSocket support and fallbacks for older browsers.
 
-	Examples:
-	---
-	void handleConn(WebSocket sock)
+	Copyright: © 2012-2014 RejectedSoftware e.K.
+	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+	Authors: Jan Krüger
+*/
+module vibe.http.websockets;
+
+///
+unittest {
+	void handleConn(scope WebSocket sock)
 	{
 		// simple echo server
-		while( sock.connected ){
+		while (sock.connected) {
 			auto msg = sock.receiveText();
 			sock.send(msg);
 		}
 	}
 
-	static this {
+	void startServer()
+	{
+		import vibe.http.router;
 		auto router = new URLRouter;
-		router.get("/websocket", handleWebSockets(&handleConn))
-		
-		// Start HTTP server...
-	}
-	---
+		router.get("/ws", handleWebSockets(&handleConn));
 
-	Copyright: © 2012 RejectedSoftware e.K.
-	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Jan Krüger
-*/
-module vibe.http.websockets;
+		// Start HTTP server using listenHTTP()...
+	}
+}
+
+alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
 
 import vibe.core.core;
 import vibe.core.log;
@@ -43,32 +47,85 @@ import std.string;
 import std.functional;
 
 
+/// Exception thrown by $(D vibe.http.websockets).
+class WebSocketException: Exception
+{
+	///
+	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(msg, file, line, next);
+	}
+
+	///
+	this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+	{
+		super(msg, next, file, line);
+	}
+}
+
+/**
+	Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
+*/
+void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
+{
+	auto pUpgrade = "Upgrade" in req.headers;
+	auto pConnection = "Connection" in req.headers;
+	auto pKey = "Sec-WebSocket-Key" in req.headers;
+	//auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
+	auto pVersion = "Sec-WebSocket-Version" in req.headers;
+
+	auto isUpgrade = false;
+
+	if( pConnection ) {
+		auto connectionTypes = split(*pConnection, ",");
+		foreach( t ; connectionTypes ) {
+			if( t.strip().toLower() == "upgrade" ) {
+				isUpgrade = true;
+				break;
+			}
+		}
+	}
+	if( !(isUpgrade &&
+		  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
+		  pKey &&
+		  pVersion && *pVersion == "13") )
+	{
+		logDebug("Browser sent invalid WebSocket request.");
+		res.statusCode = HTTPStatus.badRequest;
+		res.writeVoidBody();
+		return;
+	}
+
+	auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
+	res.headers["Sec-WebSocket-Accept"] = accept;
+	res.headers["Connection"] = "Upgrade";
+	ConnectionStream conn = res.switchProtocol("websocket");
+
+	WebSocket socket = new WebSocket(conn, req);
+	try {
+		on_handshake(socket);
+	} catch (Exception e) {
+		logDiagnostic("WebSocket handler failed: %s", e.msg);
+	}
+	socket.close();
+}
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
-
-	Note:
-		The overloads taking non-scoped callback parameters are scheduled to
-		be deprecated soon.
 */
-HTTPServerRequestDelegate handleWebSockets(void delegate(scope WebSocket) on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) on_handshake)
 {
-	return handleWebSockets(ws => on_handshake(ws));
+	return handleWebSockets(toDelegate(on_handshake));
 }
 /// ditto
-HTTPServerRequestDelegate handleWebSockets(void function(scope WebSocket) on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handshake)
 {
-	return handleWebSockets(ws => on_handshake(ws));
-}
-/// ditto
-HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
-{
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
 		auto pKey = "Sec-WebSocket-Key" in req.headers;
-		auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
+		//auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
 		auto pVersion = "Sec-WebSocket-Version" in req.headers;
 
 		auto isUpgrade = false;
@@ -80,10 +137,10 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 					isUpgrade = true;
 					break;
 				}
-			}	
+			}
 		}
 		if( !(isUpgrade &&
-			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 && 
+			  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
 			  pKey &&
 			  pVersion && *pVersion == "13") )
 		{
@@ -98,6 +155,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		res.headers["Connection"] = "Upgrade";
 		ConnectionStream conn = res.switchProtocol("websocket");
 
+		// TODO: put back 'scope' once it is actually enforced by DMD
 		/*scope*/ auto socket = new WebSocket(conn, req);
 		try on_handshake(socket);
 		catch (Exception e) {
@@ -111,25 +169,24 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 	}
 	return &callback;
 }
-/// ditto
-HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake)
-{
-	return handleWebSockets(toDelegate(on_handshake));
-}
 
 
 /**
 	Represents a single _WebSocket connection.
 */
-class WebSocket {
+final class WebSocket {
 	private {
 		ConnectionStream m_conn;
 		bool m_sentCloseFrame = false;
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
 		Task m_reader;
-		TaskMutex m_readMutex, m_writeMutex;
-		TaskCondition m_readCondition;
+		InterruptibleTaskMutex m_readMutex, m_writeMutex;
+		InterruptibleTaskCondition m_readCondition;
+		Timer m_pingTimer;
+		uint m_lastPingIndex;
+		bool m_pongReceived;
+		bool m_pongSkipped;
 	}
 
 	this(ConnectionStream conn, in HTTPServerRequest request)
@@ -138,18 +195,28 @@ class WebSocket {
 		m_request = request;
 		assert(m_conn);
 		m_reader = runTask(&startReader);
-		m_writeMutex = new TaskMutex;
-		m_readMutex = new TaskMutex;
-		m_readCondition = new TaskCondition(m_readMutex);
+		m_writeMutex = new InterruptibleTaskMutex;
+		m_readMutex = new InterruptibleTaskMutex;
+		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
+		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
+			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
+			m_pongReceived = true;
+		}
 	}
 
 	/**
 		Determines if the WebSocket connection is still alive and ready for sending.
+
+		Note that for determining the ready state for $(EM reading), you need
+		to use $(D waitForData) instead, because both methods can return
+		different values while a disconnect is in proress.
+
+		See_also: $(D waitForData)
 	*/
 	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
 
 	/**
-		The HTTP request the established the web socket connection.
+		The HTTP request that established the web socket connection.
 	*/
 	@property const(HTTPServerRequest) request() const { return m_request; }
 
@@ -162,23 +229,40 @@ class WebSocket {
 
 		This function can be used in a read loop to cleanly determine when to stop reading.
 	*/
-	bool waitForData(Duration timeout = 0.seconds)
+	bool waitForData()
 	{
 		if (m_nextMessage) return true;
-		synchronized (m_readMutex) {
-			while (connected) {
-				if (timeout > 0.seconds) m_readCondition.wait(timeout);
-				else m_readCondition.wait();
-				if (m_nextMessage) return true;
+
+		m_readMutex.performLocked!({
+			while (connected && m_nextMessage is null)
+				m_readCondition.wait();
+		});
+		return m_nextMessage !is null;
+	}
+
+	/// ditto
+	bool waitForData(Duration timeout)
+	{
+		import std.datetime;
+
+		if (m_nextMessage) return true;
+
+		immutable limit_time = Clock.currTime(UTC()) + timeout;
+
+		m_readMutex.performLocked!({
+			while (connected && m_nextMessage is null && timeout > 0.seconds) {
+				m_readCondition.wait(timeout);
+				timeout = limit_time - Clock.currTime(UTC());
 			}
-		}
-		return false;
+		});
+		return m_nextMessage !is null;
 	}
 
 	/**
 		Sends a text message.
 
 		On the JavaScript side, the text will be available as message.data (type string).
+		Throws: WebSocketException if the connection is closed.
 	*/
 	void send(string data)
 	{
@@ -189,6 +273,7 @@ class WebSocket {
 		Sends a binary message.
 
 		On the JavaScript side, the text will be available as message.data (type Blob).
+		Throws: WebSocketException if the connection is closed.
 	*/
 	void send(ubyte[] data)
 	{
@@ -197,32 +282,42 @@ class WebSocket {
 
 	/**
 		Sends a message using an output stream.
+		Throws: WebSocketException if the connection is closed.
 	*/
 	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
-		synchronized (m_writeMutex) {
-			enforce(!m_sentCloseFrame, "WebSocket connection already actively closed.");
+		m_writeMutex.performLocked!({
+			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
 			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
 			scope(exit) message.finalize();
 			sender(message);
-		}
+		});
 	}
 
 	/**
 		Actively closes the connection.
+
+		Params:
+			code = Numeric code indicating a termination reason.
+			reason = Message describing why the connection was terminated.
 	*/
-	void close()
+	void close(short code = 0, string reason = "")
 	{
+		//control frame payloads are limited to 125 bytes
+		assert(reason.length <= 123);
+
 		if (connected) {
-			synchronized (m_writeMutex) {
+			m_writeMutex.performLocked!({
 				m_sentCloseFrame = true;
 				Frame frame;
 				frame.opcode = FrameOpcode.close;
+				if(code != 0)
+					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(ubyte[])reason;
 				frame.fin = true;
 				frame.writeFrame(m_conn);
-			}
+			});
 		}
-
+		if (m_pingTimer) m_pingTimer.stop();
 		if (Task.getThis() != m_reader) m_reader.join();
 	}
 
@@ -231,23 +326,25 @@ class WebSocket {
 
 		Params:
 			strict = If set, ensures the exact frame type (text/binary) is received and throws an execption otherwise.
+		Throws: WebSocketException if the connection is closed or
+			if $(D strict == true) and the frame received is not the right type
 	*/
-	ubyte[] receiveBinary(bool strict = false)
+	ubyte[] receiveBinary(bool strict = true)
 	{
 		ubyte[] ret;
 		receive((scope message){
-			enforce(!strict || message.frameOpcode == FrameOpcode.binary,
+			enforceEx!WebSocketException(!strict || message.frameOpcode == FrameOpcode.binary,
 				"Expected a binary message, got "~message.frameOpcode.to!string());
 			ret = message.readAll();
 		});
 		return ret;
 	}
 	/// ditto
-	string receiveText(bool strict = false)
+	string receiveText(bool strict = true)
 	{
 		string ret;
 		receive((scope message){
-			enforce(!strict || message.frameOpcode == FrameOpcode.text,
+			enforceEx!WebSocketException(!strict || message.frameOpcode == FrameOpcode.text,
 				"Expected a text message, got "~message.frameOpcode.to!string());
 			ret = message.readAllUTF8();
 		});
@@ -256,18 +353,19 @@ class WebSocket {
 
 	/**
 		Receives a new message using an InputStream.
+		Throws: WebSocketException if the connection is closed.
 	*/
 	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
 	{
-		synchronized (m_readMutex) {
+		m_readMutex.performLocked!({
 			while (!m_nextMessage) {
-				enforce(connected, "Connection closed while reading message.");
+				enforceEx!WebSocketException(connected, "Connection closed while reading message.");
 				m_readCondition.wait();
 			}
 			receiver(m_nextMessage);
 			m_nextMessage = null;
 			m_readCondition.notifyAll();
-		}
+		});
 	}
 
 	private void startReader()
@@ -276,19 +374,36 @@ class WebSocket {
 		try {
 			while (!m_conn.empty) {
 				assert(!m_nextMessage);
+				if (m_pingTimer) {
+					if (m_pongSkipped) {
+						logDebug("Pong not received, closing connection");
+						m_writeMutex.performLocked!({
+							m_conn.close();
+						});
+						return;
+					}
+					if (!m_conn.waitForData(request.serverSettings.webSocketPingInterval))
+						continue;
+				}
 				scope msg = new IncomingWebSocketMessage(m_conn);
+				if (msg.frameOpcode == FrameOpcode.pong) {
+					enforce(msg.peek().length == uint.sizeof, "Pong payload has wrong length");
+					enforce(m_lastPingIndex == littleEndianToNative!uint(msg.peek()[0..uint.sizeof]), "Pong payload has wrong value");
+					m_pongReceived = true;
+					continue;
+				}
 				if(msg.frameOpcode == FrameOpcode.close) {
 					logDebug("Got closing frame (%s)", m_sentCloseFrame);
 					if(!m_sentCloseFrame) close();
 					logDebug("Terminating connection (%s)", m_sentCloseFrame);
 					m_conn.close();
 					return;
-				} 
-				synchronized (m_readMutex) {
+				}
+				m_readMutex.performLocked!({
 					m_nextMessage = msg;
 					m_readCondition.notifyAll();
 					while (m_nextMessage) m_readCondition.wait();
-				}
+				});
 			}
 		} catch (Exception e) {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
@@ -296,13 +411,30 @@ class WebSocket {
 		}
 		m_conn.close();
 	}
-}
 
+	private void sendPing() {
+		if (!m_pongReceived) {
+			logDebug("Pong skipped");
+			m_pongSkipped = true;
+			m_pingTimer.stop();
+			return;
+		}
+		m_writeMutex.performLocked!({
+			m_pongReceived = false;
+			Frame ping;
+			ping.opcode = FrameOpcode.ping;
+			ping.fin = true;
+			ping.payload = nativeToLittleEndian(++m_lastPingIndex);
+			ping.writeFrame(m_conn);
+			logDebug("Ping sent");
+		});
+	}
+}
 
 /**
 	Represents a single outgoing _WebSocket message as an OutputStream.
 */
-class OutgoingWebSocketMessage : OutputStream {
+final class OutgoingWebSocketMessage : OutputStream {
 	private {
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
@@ -339,7 +471,7 @@ class OutgoingWebSocketMessage : OutputStream {
 	{
 		if (m_finalized) return;
 		m_finalized = true;
-		
+
 		Frame frame;
 		frame.fin = true;
 		frame.opcode = m_frameOpcode;
@@ -360,7 +492,7 @@ class OutgoingWebSocketMessage : OutputStream {
 /**
 	Represents a single incoming _WebSocket message as an InputStream.
 */
-class IncomingWebSocketMessage : InputStream {
+final class IncomingWebSocketMessage : InputStream {
 	private {
 		Stream m_conn;
 		Frame m_currentFrame;
@@ -387,9 +519,10 @@ class IncomingWebSocketMessage : InputStream {
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ) {
-			enforce( !empty , "cannot read from empty stream");
-			enforce( leastSize > 0, "no data available" );
+			enforceEx!WebSocketException( !empty , "cannot read from empty stream");
+			enforceEx!WebSocketException( leastSize > 0, "no data available" );
 
+			import std.algorithm : min;
 			auto sz = cast(size_t)min(leastSize, dst.length);
 			dst[0 .. sz] = m_currentFrame.payload[0 .. sz];
 			dst = dst[sz .. $];
@@ -408,14 +541,19 @@ class IncomingWebSocketMessage : InputStream {
 				case FrameOpcode.text:
 				case FrameOpcode.binary:
 				case FrameOpcode.close:
+				case FrameOpcode.pong:
 					m_currentFrame = frame;
 					break;
 				case FrameOpcode.ping:
-					frame.opcode = FrameOpcode.pong;
-					frame.writeFrame(m_conn);
+					Frame pong;
+					pong.opcode = FrameOpcode.pong;
+					pong.fin = true;
+					pong.payload = frame.payload;
+
+					pong.writeFrame(m_conn);
 					break;
 				default:
-					throw new Exception("unknown frame opcode");
+					throw new WebSocketException("unknown frame opcode");
 			}
 		} while( frame.opcode == FrameOpcode.ping );
 	}
@@ -442,20 +580,25 @@ struct Frame {
 
 	void writeFrame(OutputStream stream)
 	{
+		import vibe.stream.wrapper;
+
+		auto rng = StreamOutputRange(stream);
+
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
-		stream.put(firstByte);
+		rng.put(firstByte);
 
 		if( payload.length < 126 ) {
-			stream.write(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length));
+			rng.put(std.bitmanip.nativeToBigEndian(cast(ubyte)payload.length));
 		} else if( payload.length <= 65536 ) {
-			stream.write(cast(ubyte[])[126]);
-			stream.write(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
+			rng.put(cast(ubyte[])[126]);
+			rng.put(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
 		} else {
-			stream.write(cast(ubyte[])[127]);
-			stream.write(std.bitmanip.nativeToBigEndian(payload.length));
+			rng.put(cast(ubyte[])[127]);
+			rng.put(std.bitmanip.nativeToBigEndian(payload.length));
 		}
-		stream.write(payload);
+		rng.put(payload);
+		rng.flush();
 		stream.flush();
 	}
 
@@ -465,7 +608,7 @@ struct Frame {
 		ubyte[2] data2;
 		ubyte[8] data8;
 		stream.read(data2);
-		//enforce( (data[0] & 0x70) != 0, "reserved bits must be unset" );
+		//enforceEx!WebSocketException( (data[0] & 0x70) != 0, "reserved bits must be unset" );
 		frame.fin = (data2[0] & 0x80) == 0x80;
 		bool masked = (data2[1] & 0x80) == 0x80;
 		frame.opcode = cast(FrameOpcode)(data2[0] & 0xf);
@@ -480,13 +623,13 @@ struct Frame {
 			stream.read(data8);
 			length = bigEndianToNative!ulong(data8);
 		}
-		
+
 		//masking key
 		ubyte[4] maskingKey;
 		if( masked ) stream.read(maskingKey);
-		
+
 		//payload
-		enforce(length <= size_t.max);
+		enforceEx!WebSocketException(length <= size_t.max);
 		frame.payload = new ubyte[cast(size_t)length];
 		stream.read(frame.payload);
 

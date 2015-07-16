@@ -10,7 +10,7 @@ module vibe.templ.utils;
 import vibe.http.server;
 
 import std.traits;
-import std.typecons : Rebindable, Unqual;
+import std.typecons : Rebindable;
 
 
 /**
@@ -56,7 +56,7 @@ import std.typecons : Rebindable, Unqual;
 		{
 			auto router = new URLRouter;
 			router.get("/", inject!(page, authInjector, somethingInjector));
-		} 
+		}
 		---
 */
 @property auto inject(alias Page, Injectors...)()
@@ -117,7 +117,7 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 		enum TYPE = "TYPES_AND_NAMES["~cttostring(i)~"]";
 		enum NAME = TYPES_AND_NAMES[i+1];
 		enum INDEX = cttostring(i/2);
-		enum string localAliasesCompat = 
+		enum string localAliasesCompat =
 			"Rebindable2!("~TYPE~") "~NAME~";\n"~
 			"if( _arguments["~INDEX~"] == typeid(Variant) )\n"~
 			"\t"~NAME~" = *va_arg!Variant(_argptr).peek!("~TYPE~")();\n"~
@@ -157,9 +157,9 @@ package string cttostring(T)(T x)
 /// private
 private template injectReverse(Injectors...)
 {
-	alias Injectors[0] First;
-	alias Injectors[1 .. $] Rest;
-	alias First!(Rest) injectReverse;
+	alias First = Injectors[0];
+	alias Rest = Injectors[1 .. $];
+	alias injectReverse = First!(Rest);
 }
 
 /// private

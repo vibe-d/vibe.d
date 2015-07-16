@@ -24,6 +24,7 @@ public import vibe.data.json;
 public import vibe.db.mongo.mongo;
 public import vibe.db.redis.redis;
 public import vibe.http.auth.basic_auth;
+public import vibe.http.auth.digest_auth;
 public import vibe.http.client;
 public import vibe.http.fileserver;
 public import vibe.http.form;
@@ -41,6 +42,7 @@ public import vibe.stream.counting;
 public import vibe.stream.memory;
 public import vibe.stream.operations;
 public import vibe.stream.ssl;
+public import vibe.stream.tls;
 public import vibe.stream.zlib;
 public import vibe.templ.diet;
 public import vibe.templ.utils;
@@ -48,6 +50,8 @@ public import vibe.textfilter.html;
 public import vibe.textfilter.markdown;
 public import vibe.textfilter.urlencode;
 public import vibe.utils.string;
+public import vibe.web.web;
+public import vibe.web.rest;
 
 // make some useful D standard library functions available
 public import std.functional : toDelegate;

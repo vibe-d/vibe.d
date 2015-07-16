@@ -34,6 +34,7 @@ import std.random;
 	See_Also:
 		testSimplePasswordHash, vibe.crypto.md5
 */
+deprecated("This function is considered insecure and will be removed. The DUB packages dauth or scrypt may be suitable alternatives.")
 string generateSimplePasswordHash(string password, string additional_salt = null)
 {
 	ubyte[4] salt;
@@ -58,10 +59,12 @@ string generateSimplePasswordHash(string password, string additional_salt = null
 	See_Also:
 		generateSimplePasswordHash, vibe.crypto.md5
 */
+deprecated("This function is considered insecure and will be removed. The DUB packages dauth or scrypt may be suitable alternatives.")
 bool testSimplePasswordHash(string hashstring, string password, string additional_salt = null)
 {
+	import std.string : format;
 	ubyte[] upass = Base64.decode(hashstring);
-	enforce(upass.length == 20);
+	enforce(upass.length == 20, format("Invalid binary password hash length: %s", upass.length));
 	auto salt = upass[0 .. 4];
 	auto hashcmp = upass[4 .. 20];
 	ubyte[16] hash = md5hash(salt, password, additional_salt);

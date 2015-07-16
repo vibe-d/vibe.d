@@ -1,0 +1,9 @@
+﻿{
+	"name": "redis-pubsub-example",
+	"description": "Basic Redis Pub/Sub usage example.",
+	"authors": [ "Michael Eisendle" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}

@@ -1,7 +1,7 @@
 /**
 	TCP/UDP connection and server handling.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -59,9 +59,6 @@ TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) connectio
 	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use listenTCP instead.") alias listenTcp = listenTCP;
-
 /**
 	Starts listening on the specified port.
 
@@ -77,19 +74,19 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 	return listenTCP(port, toDelegate(connection_callback), address, options);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use listenTCP_s instead.") alias listenTcpS = listenTCP_s;
-
 /**
 	Establishes a connection to the given host/port.
 */
 TCPConnection connectTCP(string host, ushort port)
 {
-	return getEventDriver().connectTCP(host, port);
+	NetworkAddress addr = resolveHost(host);
+	addr.port = port;
+	return connectTCP(addr);
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use connectTCP instead.")alias connectTcp = connectTCP;
+/// ditto
+TCPConnection connectTCP(NetworkAddress addr) {
+	return getEventDriver().connectTCP(addr);
+}
 
 
 /**
@@ -100,10 +97,9 @@ UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	return getEventDriver().listenUDP(port, bind_address);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use listenUDP instead.")alias listenUdp = listenUDP;
-
-
+version(VibeLibasyncDriver) {
+	public import libasync.events : NetworkAddress;
+} else {
 /**
 	Represents a network/socket address.
 */
@@ -116,48 +112,106 @@ struct NetworkAddress {
 
 	/** Family (AF_) of the socket address.
 	*/
-	@property ushort family() const nothrow { return addr.sa_family; }
+	@property ushort family() const pure nothrow { return addr.sa_family; }
 	/// ditto
-	@property void family(ushort val) nothrow { addr.sa_family = cast(ubyte)val; }
+	@property void family(ushort val) pure nothrow { addr.sa_family = cast(ubyte)val; }
 
 	/** The port in host byte order.
 	*/
 	@property ushort port()
-	const {
-		switch(this.family){
+	const pure nothrow {
+		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
-			case AF_INET: return ntohs(addr_ip4.sin_port);
-			case AF_INET6: return ntohs(addr_ip6.sin6_port);
+			case AF_INET: return ntoh(addr_ip4.sin_port);
+			case AF_INET6: return ntoh(addr_ip6.sin6_port);
 		}
 	}
 	/// ditto
 	@property void port(ushort val)
-	{
-		switch(this.family){
+	pure nothrow {
+		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
-			case AF_INET: addr_ip4.sin_port = htons(val); break;
-			case AF_INET6: addr_ip6.sin6_port = htons(val); break;
+			case AF_INET: addr_ip4.sin_port = hton(val); break;
+			case AF_INET6: addr_ip6.sin6_port = hton(val); break;
 		}
 	}
 
 	/** A pointer to a sockaddr struct suitable for passing to socket functions.
 	*/
-	@property inout(sockaddr)* sockAddr() inout nothrow { return &addr; }
+	@property inout(sockaddr)* sockAddr() inout pure nothrow { return &addr; }
 
 	/** Size of the sockaddr struct that is returned by sockAddr().
 	*/
-	@property int sockAddrLen() const nothrow {
-		switch(this.family){
+	@property int sockAddrLen()
+	const pure nothrow {
+		switch (this.family) {
 			default: assert(false, "sockAddrLen() called for invalid address family.");
 			case AF_INET: return addr_ip4.sizeof;
 			case AF_INET6: return addr_ip6.sizeof;
 		}
 	}
 
-	@property inout(sockaddr_in)* sockAddrInet4() inout { enforce(family == AF_INET); return &addr_ip4; }
-	@property inout(sockaddr_in6)* sockAddrInet6() inout { enforce(family == AF_INET6); return &addr_ip6; }
-}
+	@property inout(sockaddr_in)* sockAddrInet4() inout pure nothrow
+		in { assert (family == AF_INET); }
+		body { return &addr_ip4; }
 
+	@property inout(sockaddr_in6)* sockAddrInet6() inout pure nothrow
+		in { assert (family == AF_INET6); }
+		body { return &addr_ip6; }
+
+	/** Returns a string representation of the IP address
+	*/
+	string toAddressString()
+	const {
+		import std.array : appender;
+		import std.string : format;
+		import std.format : formattedWrite;
+		ubyte[2] _dummy = void; // Workaround for DMD regression in master
+
+		switch (this.family) {
+			default: assert(false, "toAddressString() called for invalid address family.");
+			case AF_INET:
+				ubyte[4] ip = (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4];
+				return format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+			case AF_INET6:
+				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr;
+				auto ret = appender!string();
+				ret.reserve(40);
+				foreach (i; 0 .. 8) {
+					if (i > 0) ret.put(':');
+					_dummy[] = ip[i*2 .. i*2+2];
+					ret.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
+				}
+				return ret.data;
+		}
+	}
+
+	/** Returns a full string representation of the address, including the port number.
+	*/
+	string toString()
+	const {
+		auto ret = toAddressString();
+		switch (this.family) {
+			default: assert(false, "toString() called for invalid address family.");
+			case AF_INET: return ret ~ format(":%s", port);
+			case AF_INET6: return format("[%s]:%s", ret, port);
+		}
+	}
+
+	version(Have_libev) {}
+	else {
+		unittest {
+			void test(string ip) {
+				auto res = resolveHost(ip, AF_UNSPEC, false).toAddressString();
+				assert(res == ip,
+					   "IP "~ip~" yielded wrong string representation: "~res);
+			}
+			test("1.2.3.4");
+			test("102:304:506:708:90a:b0c:d0e:f10");
+		}
+	}
+}
+}
 
 /**
 	Represents a single TCP connection.
@@ -167,6 +221,12 @@ interface TCPConnection : ConnectionStream {
 	@property void tcpNoDelay(bool enabled);
 	/// ditto
 	@property bool tcpNoDelay() const;
+
+
+	/// Enables TCP keep-alive packets.
+	@property void keepAlive(bool enable);
+	/// ditto
+	@property bool keepAlive() const;
 
 	/// Controls the read time out after which the connection is closed automatically.
 	@property void readTimeout(Duration duration);
@@ -183,9 +243,6 @@ interface TCPConnection : ConnectionStream {
 	@property NetworkAddress remoteAddress() const;
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use TCPConnection instead.")alias TcpConnection = TCPConnection;
-
 
 /**
 	Represents a listening TCP socket.
@@ -194,9 +251,6 @@ interface TCPListener {
 	/// Stops listening and closes the socket.
 	void stopListening();
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use TCPListener instead.")alias TcpListener = TCPListener;
 
 
 /**
@@ -215,6 +269,10 @@ interface UDPConnection {
 
 	/// The local/bind address of the underlying socket.
 	@property NetworkAddress localAddress() const;
+
+	/** Stops listening for datagrams and frees all resources.
+	*/
+	void close();
 
 	/** Locks the UDP connection to a certain peer.
 
@@ -235,18 +293,42 @@ interface UDPConnection {
 	/** Receives a single packet.
 
 		If a buffer is given, it must be large enough to hold the full packet.
+
+		The timeout overload will throw an Exception if no data arrives before the
+		specified duration has elapsed.
 	*/
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
+	/// ditto
+	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null);
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use UDPConnection instead.")alias UdpConnection = UDPConnection;
 
-
+/**
+	Flags to control the behavior of listenTCP.
+*/
 enum TCPListenOptions {
+	/// Don't enable any particular option
 	defaults = 0,
-	distribute = 1<<0
+	/// Causes incoming connections to be distributed across the thread pool
+	distribute = 1<<0,
+	/// Disables automatic closing of the connection when the connection callback exits
+	disableAutoClose = 1<<1,
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use TCPListenOptions instead.")alias TcpListenOptions = TCPListenOptions;
+private pure nothrow {
+	import std.bitmanip;
+
+	ushort ntoh(ushort val)
+	{
+		version (LittleEndian) return swapEndian(val);
+		else version (BigEndian) return val;
+		else static assert(false, "Unknown endianness.");
+	}
+
+	ushort hton(ushort val)
+	{
+		version (LittleEndian) return swapEndian(val);
+		else version (BigEndian) return val;
+		else static assert(false, "Unknown endianness.");
+	}
+}

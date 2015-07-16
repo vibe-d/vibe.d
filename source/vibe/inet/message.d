@@ -1,7 +1,7 @@
 /**
 	Internet message handling according to RFC822/RFC5322
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -13,6 +13,7 @@ import vibe.stream.operations;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
+import vibe.utils.dictionarylist;
 
 import std.conv;
 import std.datetime;
@@ -31,7 +32,7 @@ import std.string;
 		alloc = Custom allocator to use for allocating strings
 		rfc822_compatible = Flag indicating that duplicate fields should be merged using a comma
 */
-void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, shared(Allocator) alloc = defaultAllocator(), bool rfc822_compatible = true)
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator(), bool rfc822_compatible = true)
 {
 	string hdr, hdrvalue;
 
@@ -61,9 +62,6 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 	}
 	addPreviousHeader();
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use parseRFC5322Header instead.") alias parseRfc5322Header = parseRFC5322Header;
 
 
 private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -145,47 +143,53 @@ string toRFC822DateTimeString(SysTime time)
 	return ret.data;
 }
 
-/**
-	Parses a date+time string according to RFC-822/5322.
-*/
-SysTime parseRFC822DateTimeString(string str)
+static if (__VERSION__ >= 2066)
 {
-	auto idx = str.indexOf(',');
-	if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
+	/// Parses a date+time string according to RFC-822/5322.
+	alias parseRFC822DateTimeString = parseRFC822DateTime;
+}
+else
+{
+	/// Parses a date+time string according to RFC-822/5322.
+	SysTime parseRFC822DateTimeString(string str)
+	{
+		auto idx = str.indexOf(',');
+		if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
 
-	str = str.stripLeft();
-	auto day = parse!int(str);
-	str = str.stripLeft();
-	int month = -1;
-	foreach( i, ms; monthStrings )
-		if( str.startsWith(ms) ){
-			month = cast(int)i+1;
-			str = str[ms.length .. $];
-			break;
+		str = str.stripLeft();
+		auto day = parse!int(str);
+		str = str.stripLeft();
+		int month = -1;
+		foreach( i, ms; monthStrings )
+			if( str.startsWith(ms) ){
+				month = cast(int)i+1;
+				str = str[ms.length .. $];
+				break;
+			}
+		enforce(month > 0);
+		str = str.stripLeft();
+		auto year = str.parse!int();
+		str = str.stripLeft();
+
+		int hour, minute, second, tzoffset = 0;
+		hour = str.parse!int();
+		enforce(str.startsWith(':'));
+		str = str[1 .. $];
+		minute = str.parse!int();
+		enforce(str.startsWith(':'));
+		str = str[1 .. $];
+		second = str.parse!int();
+		str = str.stripLeft();
+		enforce(str.length > 0);
+		if( str != "GMT" ){
+			if( str.startsWith('+') ) str = str[1 .. $];
+			tzoffset = str.parse!int();
 		}
-	enforce(month > 0);
-	str = str.stripLeft();
-	auto year = str.parse!int();
-	str = str.stripLeft();
 
-	int hour, minute, second, tzoffset = 0;
-	hour = str.parse!int();
-	enforce(str.startsWith(':'));
-	str = str[1 .. $];
-	minute = str.parse!int();
-	enforce(str.startsWith(':'));
-	str = str[1 .. $];
-	second = str.parse!int();
-	str = str.stripLeft();
-	enforce(str.length > 0);
-	if( str != "GMT" ){
-		if( str.startsWith('+') ) str = str[1 .. $];
-		tzoffset = str.parse!int();
+		auto dt = DateTime(year, month, day, hour, minute, second);
+		if( tzoffset == 0 ) return SysTime(dt, UTC());
+		else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100).hours + (tzoffset % 100).minutes));
 	}
-
-	auto dt = DateTime(year, month, day, hour, minute, second);
-	if( tzoffset == 0 ) return SysTime(dt, UTC());
-	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100) * 60 + tzoffset % 100));
 }
 
 unittest {
@@ -193,8 +197,8 @@ unittest {
 
 	auto times = [
 		tuple("Wed, 02 Oct 2002 08:00:00 GMT", SysTime(DateTime(2002, 10, 02, 8, 0, 0), UTC())),
-		tuple("Wed, 02 Oct 2002 08:00:00 +0200", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(120))),
-		tuple("Wed, 02 Oct 2002 08:00:00 -0130", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(-90)))
+		tuple("Wed, 02 Oct 2002 08:00:00 +0200", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(120.minutes))),
+		tuple("Wed, 02 Oct 2002 08:00:00 -0130", SysTime(DateTime(2002, 10, 02, 8, 0, 0), new immutable SimpleTimeZone(-90.minutes)))
 	];
 	foreach (t; times) {
 		auto st = parseRFC822DateTimeString(t[0]);
@@ -330,7 +334,8 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 
 
 /**
-	Behaves like string[string] but case does not matter for the key and the insertion order is not changed.
+	Behaves similar to string[string] but case does not matter for the key, the insertion order is not
+	changed and multiple values per key are supported.
 
 	This kind of map is used for MIME headers (e.g. for HTTP), where the case of the key strings
 	does not matter. Note that the map can contain fields with the same key multiple times if
@@ -339,158 +344,8 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 	Note that despite case not being relevant for matching keyse, iterating over the map will yield
 	the original case of the key that was put in.
 */
-struct InetHeaderMap {
-	private {
-		static struct Field { uint keyCheckSum; string key; string value; }
-		Field[64] m_fields;
-		size_t m_fieldCount = 0;
-		Field[] m_extendedFields;
-		static char[256] s_keyBuffer;
-	}
-	
-	/** The number of fields present in the map.
-	*/
-	@property size_t length() const { return m_fieldCount + m_extendedFields.length; }
+alias InetHeaderMap = DictionaryList!(string, false);
 
-	/** Removes the first field that matches the given key.
-	*/
-	void remove(string key)
-	{
-		auto keysum = computeCheckSumI(key);
-		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
-		if( idx >= 0 ){
-			auto slice = m_fields[0 .. m_fieldCount];
-			removeFromArrayIdx(slice, idx);
-			m_fieldCount--;
-		} else {
-			idx = getIndex(m_extendedFields, key, keysum);
-			enforce(idx >= 0);
-			removeFromArrayIdx(m_extendedFields, idx);
-		}
-	}
-
-	/** Adds a new field to the map.
-
-		The new field will be added regardless of any existing fields that
-		have the same key, possibly resulting in duplicates. Use opIndexAssign
-		if you want to avoid duplicates.
-	*/
-	void addField(string key, string value)
-	{
-		auto keysum = computeCheckSumI(key);
-		if (m_fieldCount < m_fields.length)
-			m_fields[m_fieldCount++] = Field(keysum, key, value);
-		else m_extendedFields ~= Field(keysum, key, value);
-	}
-
-	/** Returns the first field that matches the given key.
-
-		If no field is found, def_val is returned.
-	*/
-	string get(string key, string def_val = null)
-	const {
-		if( auto pv = key in this ) return *pv;
-		return def_val;
-	}
-
-	/** Returns the first value matching the given key.
-	*/
-	string opIndex(string key)
-	const {
-		auto pitm = key in this;
-		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
-		return *pitm;
-	}
-	
-	/** Adds or replaces the given field with a new value.
-	*/
-	string opIndexAssign(string val, string key)
-	{
-		auto pitm = key in this;
-		if( pitm ) *pitm = val;
-		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = Field(computeCheckSumI(key), key, val);
-		else m_extendedFields ~= Field(computeCheckSumI(key), key, val);
-		return val;
-	}
-
-	/** Returns a pointer to the first field that matches the given key.
-	*/
-	inout(string)* opBinaryRight(string op)(string key) inout if(op == "in") {
-		uint keysum = computeCheckSumI(key);
-		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
-		if( idx >= 0 ) return &m_fields[idx].value;
-		idx = getIndex(m_extendedFields, key, keysum);
-		if( idx >= 0 ) return &m_extendedFields[idx].value;
-		return null;
-	}
-	/// ditto
-	bool opBinaryRight(string op)(string key) inout if(op == "!in") {
-		return !(key in this);
-	}
-
-	/** Iterates over all fields, including duplicates.
-	*/
-	int opApply(int delegate(ref string key, ref string val) del)
-	{
-		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
-				return ret;
-		}
-		foreach( ref kv; m_extendedFields ){
-			string kcopy = kv.key;
-			if( auto ret = del(kcopy, kv.value) )
-				return ret;
-		}
-		return 0;
-	}
-
-	/// ditto
-	int opApply(int delegate(ref string val) del)
-	{
-		foreach( ref kv; m_fields[0 .. m_fieldCount] ){
-			if( auto ret = del(kv.value) )
-				return ret;
-		}
-		foreach( ref kv; m_extendedFields ){
-			if( auto ret = del(kv.value) )
-				return ret;
-		}
-		return 0;
-	}
-
-	/** Duplicates the header map.
-	*/
-	@property InetHeaderMap dup()
-	const {
-		InetHeaderMap ret;
-		ret.m_fields[0 .. m_fieldCount] = m_fields[0 .. m_fieldCount];
-		ret.m_fieldCount = m_fieldCount;
-		ret.m_extendedFields = m_extendedFields.dup;
-		return ret;
-	}
-
-	private ptrdiff_t getIndex(in Field[] map, string key, uint keysum)
-	const {
-		foreach( i, ref const(Field) entry; map ){
-			if( entry.keyCheckSum != keysum ) continue;
-			if( icmp2(entry.key, key) == 0 )
-				return i;
-		}
-		return -1;
-	}
-	
-	// very simple check sum function with a good chance to match
-	// strings with different case equal
-	private static uint computeCheckSumI(string s)
-	{
-		import std.uni;
-		uint csum = 0;
-		foreach( i; 0 .. s.length )
-			csum += 357*(s[i]&0x1101_1111);
-		return csum;
-	}
-}
 
 
 /**

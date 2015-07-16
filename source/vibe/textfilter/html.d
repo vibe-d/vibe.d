@@ -1,7 +1,9 @@
 /**
 	HTML character entity escaping.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	TODO: Make things @safe once Appender is.
+
+	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -28,18 +30,20 @@ string htmlEscape(R)(R str)
 	}
 }
 
+///
+unittest {
+	assert(htmlEscape(`"Hello", <World>!`) == `"Hello", &lt;World&gt;!`);
+}
+
 
 /** Writes the HTML escaped version of a given string to an output range.
 */
-void filterHTMLEscape(R, S)(ref R dst, S str)
+void filterHTMLEscape(R, S)(ref R dst, S str, HTMLEscapeFlags flags = HTMLEscapeFlags.escapeNewline)
 	if (isOutputRange!(R, dchar) && isInputRange!S)
 {
 	for (;!str.empty;str.popFront())
-		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline);
+		filterHTMLEscape(dst, str.front, flags);
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use filterHTMLEscape instead.") alias filterHtmlEscape = filterHTMLEscape;
 
 
 /** Returns the HTML escaped version of a given string (also escapes double quotes).
@@ -58,6 +62,12 @@ string htmlAttribEscape(R)(R str)
 	}
 }
 
+///
+unittest {
+	assert(htmlAttribEscape(`"Hello", <World>!`) == `&quot;Hello&quot;, &lt;World&gt;!`);
+}
+
+
 /** Writes the HTML escaped version of a given string to an output range (also escapes double quotes).
 */
 void filterHTMLAttribEscape(R, S)(ref R dst, S str)
@@ -66,9 +76,6 @@ void filterHTMLAttribEscape(R, S)(ref R dst, S str)
 	for (; !str.empty; str.popFront())
 		filterHTMLEscape(dst, str.front, HTMLEscapeFlags.escapeNewline|HTMLEscapeFlags.escapeQuotes);
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use filterHTMLAttribEscape instead.") alias filterHtmlAttribEscape = filterHTMLAttribEscape;
 
 
 /** Returns the HTML escaped version of a given string (escapes every character).
@@ -87,6 +94,12 @@ string htmlAllEscape(R)(R str)
 	}
 }
 
+///
+unittest {
+	assert(htmlAllEscape("Hello!") == "&#72;&#101;&#108;&#108;&#111;&#33;");
+}
+
+
 /** Writes the HTML escaped version of a given string to an output range (escapes every character).
 */
 void filterHTMLAllEscape(R, S)(ref R dst, S str)
@@ -98,9 +111,6 @@ void filterHTMLAllEscape(R, S)(ref R dst, S str)
 		dst.put(';');
 	}
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use filterHTMLAllEscape instead.") alias filterHtmlAllEscape = filterHTMLAllEscape;
 
 
 /**
@@ -148,9 +158,9 @@ void filterHTMLEscape(R)(ref R dst, dchar ch, HTMLEscapeFlags flags = HTMLEscape
 		case 'A': .. case 'Z': goto case;
 		case '0': .. case '9': goto case;
 		case ' ', '\t', '-', '_', '.', ':', ',', ';',
-		     '#', '+', '*', '?', '=', '(', ')', '/', '!',
-		     '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
-		    dst.put(cast(char)ch);
+			 '#', '+', '*', '?', '=', '(', ')', '/', '!',
+			 '%' , '{', '}', '[', ']', '`', '´', '$', '^', '~':
+			dst.put(cast(char)ch);
 			break;
 		case '<': dst.put("&lt;"); break;
 		case '>': dst.put("&gt;"); break;
@@ -165,9 +175,6 @@ enum HTMLEscapeFlags {
 	escapeNewline = 1<<1,
 	escapeUnknown = 1<<2
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTMLEscapeFlags instead.") alias HtmlEscapeFlags = HTMLEscapeFlags;
 
 private struct StringAppender {
 	string data;

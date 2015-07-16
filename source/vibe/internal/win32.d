@@ -19,8 +19,8 @@ extern(System) nothrow
 	}
 
 	version(Win32){ // avoiding linking errors with out-of-the-box dmd
-		alias SetWindowLongA SetWindowLongPtrA;
-		alias GetWindowLongA GetWindowLongPtrA;
+		alias SetWindowLongPtrA = SetWindowLongA;
+		alias GetWindowLongPtrA = GetWindowLongA;
 	} else {
 		LONG_PTR SetWindowLongPtrA(HWND hWnd, int nIndex, LONG_PTR dwNewLong);
 		LONG_PTR GetWindowLongPtrA(HWND hWnd, int nIndex);
@@ -30,7 +30,7 @@ extern(System) nothrow
 	LONG_PTR SetWindowLongA(HWND hWnd, int nIndex, LONG dwNewLong);
 	LONG_PTR GetWindowLongA(HWND hWnd, int nIndex);
 
-	alias void function(DWORD, DWORD, OVERLAPPED*) LPOVERLAPPED_COMPLETION_ROUTINE;
+	alias LPOVERLAPPED_COMPLETION_ROUTINE = void function(DWORD, DWORD, OVERLAPPED*);
 
 	HANDLE CreateEventW(SECURITY_ATTRIBUTES* lpEventAttributes, BOOL bManualReset, BOOL bInitialState, LPCWSTR lpName);
 	BOOL PostThreadMessageW(DWORD idThread, UINT Msg, WPARAM wParam, LPARAM lParam);
@@ -38,27 +38,30 @@ extern(System) nothrow
 	static if (!is(typeof(&CreateFileW))) BOOL CloseHandle(HANDLE hObject);
 	static if (!is(typeof(&CreateFileW))) HANDLE CreateFileW(LPCWSTR lpFileName, DWORD dwDesiredAccess, DWORD dwShareMode, LPSECURITY_ATTRIBUTES lpSecurityAttributes,
 					   DWORD dwCreationDisposition, DWORD dwFlagsAndAttributes, HANDLE hTemplateFile);
-	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped, 
+	BOOL WriteFileEx(HANDLE hFile, LPCVOID lpBuffer, DWORD nNumberOfBytesToWrite, OVERLAPPED* lpOverlapped,
 					 LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
 	BOOL ReadFileEx(HANDLE hFile, LPVOID lpBuffer, DWORD nNumberOfBytesToRead, OVERLAPPED* lpOverlapped,
 					LPOVERLAPPED_COMPLETION_ROUTINE lpCompletionRoutine);
 	BOOL GetFileSizeEx(HANDLE hFile, long *lpFileSize);
-	BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
-	LONG DispatchMessageW(MSG *lpMsg);
-	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
 	BOOL SetEndOfFile(HANDLE hFile);
 	BOOL GetOverlappedResult(HANDLE hFile, OVERLAPPED* lpOverlapped, DWORD* lpNumberOfBytesTransferred, BOOL bWait);
+	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
 
-	enum {
-		ERROR_ALREADY_EXISTS = 183,
-		ERROR_IO_PENDING = 997
+	static if (__VERSION__ < 2065) {
+		BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
+		LONG DispatchMessageW(MSG *lpMsg);
+
+		enum {
+			ERROR_ALREADY_EXISTS = 183,
+			ERROR_IO_PENDING = 997
+		}
 	}
 
 	struct FILE_NOTIFY_INFORMATION {
 		DWORD NextEntryOffset;
 		DWORD Action;
 		DWORD FileNameLength;
-		WCHAR FileName[1];
+		WCHAR[1] FileName;
 	}
 
 	BOOL ReadDirectoryChangesW(HANDLE hDirectory, void* lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, void* lpOverlapped, void* lpCompletionRoutine);
@@ -92,13 +95,13 @@ extern(System) nothrow
 		int              iSecurityScheme;
 		DWORD            dwMessageSize;
 		DWORD            dwProviderReserved;
-		wchar            szProtocol[WSAPROTOCOL_LEN+1];
-	};
+		WCHAR[WSAPROTOCOL_LEN+1] szProtocol;
+	}
 
 	struct WSAPROTOCOLCHAIN {
-		int ChainLen;                   
-		DWORD ChainEntries[MAX_PROTOCOL_CHAIN];
-	};
+		int ChainLen;
+		DWORD[MAX_PROTOCOL_CHAIN] ChainEntries;
+	}
 
 	struct WSABUF {
 		size_t   len;
@@ -176,14 +179,34 @@ extern(System) nothrow
 		NS_DNS = 12
 	}
 
+	struct WSAPROTOCOL_INFO {
+		DWORD            dwServiceFlags1;
+		DWORD            dwServiceFlags2;
+		DWORD            dwServiceFlags3;
+		DWORD            dwServiceFlags4;
+		DWORD            dwProviderFlags;
+		GUID             ProviderId;
+		DWORD            dwCatalogEntryId;
+		WSAPROTOCOLCHAIN ProtocolChain;
+		int              iVersion;
+		int              iAddressFamily;
+		int              iMaxSockAddr;
+		int              iMinSockAddr;
+		int              iSocketType;
+		int              iProtocol;
+		int              iProtocolMaxOffset;
+		int              iNetworkByteOrder;
+		int              iSecurityScheme;
+		DWORD            dwMessageSize;
+		DWORD            dwProviderReserved;
+		CHAR[WSAPROTOCOL_LEN+1] szProtocol;
+	}
+	alias SOCKADDR = sockaddr;
 
-	struct WSAPROTOCOL_INFO;
-	alias sockaddr SOCKADDR;
-
-	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD) LPWSAOVERLAPPED_COMPLETION_ROUTINEX;
-	alias void function(DWORD, DWORD, WSAOVERLAPPEDX*) LPLOOKUPSERVICE_COMPLETION_ROUTINE;
-	alias void* LPCONDITIONPROC;
-	alias void* LPTRANSMIT_FILE_BUFFERS;
+	alias LPWSAOVERLAPPED_COMPLETION_ROUTINEX = void function(DWORD, DWORD, WSAOVERLAPPEDX*, DWORD);
+	alias LPLOOKUPSERVICE_COMPLETION_ROUTINE = void function(DWORD, DWORD, WSAOVERLAPPEDX*);
+	alias LPCONDITIONPROC = void*;
+	alias LPTRANSMIT_FILE_BUFFERS = void*;
 
 	SOCKET WSAAccept(SOCKET s, sockaddr *addr, INT* addrlen, LPCONDITIONPROC lpfnCondition, DWORD_PTR dwCallbackData);
 	int WSAAsyncSelect(SOCKET s, HWND hWnd, uint wMsg, sizediff_t lEvent);
@@ -191,23 +214,25 @@ extern(System) nothrow
 	int WSARecv(SOCKET s, WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesRecvd, DWORD* lpFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASend(SOCKET s, in WSABUF* lpBuffers, DWORD dwBufferCount, DWORD* lpNumberOfBytesSent, DWORD dwFlags, in WSAOVERLAPPEDX* lpOverlapped, LPWSAOVERLAPPED_COMPLETION_ROUTINEX lpCompletionRoutine);
 	int WSASendDisconnect(SOCKET s, WSABUF* lpOutboundDisconnectData);
-	INT WSAStringToAddressW(in LPWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
+	INT WSAStringToAddressA(in LPTSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFO* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
+	INT WSAStringToAddressW(in LPWSTR AddressString, INT AddressFamily, in WSAPROTOCOL_INFOW* lpProtocolInfo, SOCKADDR* lpAddress, INT* lpAddressLength);
 	INT WSAAddressToStringW(in SOCKADDR* lpsaAddress, DWORD dwAddressLength, in WSAPROTOCOL_INFO* lpProtocolInfo, LPWSTR lpszAddressString, DWORD* lpdwAddressStringLength);
 	int GetAddrInfoExW(LPCWSTR pName, LPCWSTR pServiceName, DWORD dwNameSpace, GUID* lpNspId, const ADDRINFOEXW *pHints, ADDRINFOEXW **ppResult, timeval *timeout, WSAOVERLAPPEDX* lpOverlapped, LPLOOKUPSERVICE_COMPLETION_ROUTINE lpCompletionRoutine, HANDLE* lpNameHandle);
 	int GetAddrInfoW(LPCWSTR pName, LPCWSTR pServiceName, const ADDRINFOW *pHints, ADDRINFOW **ppResult);
 	int getaddrinfo(LPCSTR pName, LPCSTR pServiceName, const ADDRINFOA *pHints, ADDRINFOA **ppResult);
-	void FreeAddrInfoW(ADDRINFOEXW* pAddrInfo);
+	void FreeAddrInfoW(ADDRINFOW* pAddrInfo);
+	void FreeAddrInfoExW(ADDRINFOEXW* pAddrInfo);
 	void freeaddrinfo(ADDRINFOA* ai);
 	BOOL TransmitFile(SOCKET hSocket, HANDLE hFile, DWORD nNumberOfBytesToWrite, DWORD nNumberOfBytesPerSend, OVERLAPPED* lpOverlapped, LPTRANSMIT_FILE_BUFFERS lpTransmitBuffers, DWORD dwFlags);
 
 
 	struct GUID
 	{
-		uint Data1;
-		ushort Data2;
-		ushort Data3;
-		ubyte  Data4[8];
-	};
+		DWORD Data1;
+		WORD Data2;
+		WORD Data3;
+		BYTE[8]  Data4;
+	}
 
 	enum WM_USER = 0x0400;
 
@@ -221,7 +246,7 @@ extern(System) nothrow
 		QS_POSTMESSAGE = 0x0008,
 		QS_RAWINPUT = 0x0400,
 		QS_SENDMESSAGE = 0x0040,
-		QS_TIMER = 0x0010, 
+		QS_TIMER = 0x0010,
 
 		QS_MOUSE = (QS_MOUSEMOVE | QS_MOUSEBUTTON),
 		QS_INPUT = (QS_MOUSE | QS_KEY | QS_RAWINPUT),

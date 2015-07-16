@@ -86,10 +86,6 @@ fremove()
 	rm -f $CONFIG_FILE
 	rmdir $CONFIG_DIR >/dev/null 2>&1 || :
 
-	# remove symlink
-	echo "Removing symlink $SYMLINK_FILE..."
-	rm -f $SYMLINK_FILE
-
 	# remove menu entry
 	rm -f $MENU_FILE
 	rmdir $MENU_DIR >/dev/null 2>&1 || :
@@ -162,7 +158,6 @@ finstall()
 	# set files/folders permissions
 	chmod 0755 $(find $BASE_DIR/ -type d) $CONFIG_DIR $MENU_DIR
 	chmod 0644 $(find $BASE_DIR/ ! -type d) $CONFIG_FILE $MENU_FILE
-	chmod 0755 $SYMLINK_FILE
 
 	# if everything went fine
 	echo -e "\n  \033[32;40;7;1mvibe.d installed successfully!\033[0m\n"

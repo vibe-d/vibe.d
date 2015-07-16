@@ -1,0 +1,10 @@
+﻿{
+	"name": "web-framework-i18n-example",
+	"description": "Internationalized web framework example.",
+	"authors": [ "Sönke Ludwig" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"stringImportPaths": ["views", "translations"],
+	"versions": ["VibeDefaultMain"]
+}

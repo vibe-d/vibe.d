@@ -1,58 +1,80 @@
-vibe.d
-======
+[![vibe.d](http://vibed.org/images/logo-and-title.png)](http://vibed.org)
 
-vibe.d is an asynchronous I/O and web application framework written in D.
-It already contains many supplemental features such as database support
-to be able to offer a complete development toolbox. Extensions are
-supported in the form of [DUB modules](http://registry.vibed.org/).
+vibe.d is a high-performance asynchronous I/O, concurrency and web application
+toolkit written in D. It already contains many supplemental features such as
+database support to be able to offer a complete development environment. For
+more specialized needs, there are also many compatible
+[DUB packages](http://code.dlang.org/?sort=updated&category=library.vibed)
+available.
 
 Visit the website at <http://vibed.org/> for more information.
+
+[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=master)](https://travis-ci.org/rejectedsoftware/vibe.d)
+
+
+Support
+-------
+
+Vibe.d aims to support the 3 latest minor releases of D.
+At the moment, it means that the following compilers are supported and tested:
+- DMD 2.065
+- DMD 2.066
+- DMD 2.067
+- GDC 4.9.0 (FE: 2.065)
+- GDC 4.9.2 (FE: 2.066)
+- LDC 0.14.0 (FE: 2.065)
+- LDC 0.15.1 (FE: 2.066)
 
 
 Installation
 ------------
 
-Instead of explicitly installing vibe.d, it is now recommended to use 
+Instead of explicitly installing vibe.d, it is recommended to use
 [DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
-applications. Once DUB is installed, you can create a new project by running
-`dub init <name>` and enable the use of vibe.d by adding the following
-dependency to the `package.json` file in your project's directory:
+applications. Once DUB is installed, you can create and run a new project
+using the following shell commands:
 
-    {
-        "name": "your-project-identifier",
-        "dependencies": {
-            "vibe-d": ">=0.7.16"
-        }
-    }
-
-The latest versions of DUB also support `dub init <name> vibe.d`, which
-automatically adds the required dependency. Invoking `dub` will then
-fetch the latest vibe.d and compile and run the project.
+    dub init <name> vibe.d
+    cd <name>
+    dub
 
 Similarly, you can run an example by invoking `dub` from any of the
 example project directories.
+
+Note that on non-Windows operating systems, you also need to have
+libevent and OpenSSL installed - and of course a D compiler. See below
+for instructions.
 
 
 Additional setup on Windows
 ---------------------------
 
  - Just install DMD using the installer on <http://dlang.org/download.html>
+ - And get the latest [DUB release](http://code.dlang.org/download)
+
+### Note for building on Win64
+
+There are currently no 64-bit Windows binaries of libevent included, so you'll either need to build those yourself, or you can switch to the "win32" event driver by inserting `"subConfigurations": {"vibe-d": "win32"}` into the dub.json file of your project.
 
 
 Additional setup on Mac using brew
 ----------------------------------
 
 If you don't have brew installed, install it according to their [install
-instructions](<https://github.com/mxcl/homebrew/wiki/installation>) and
+instructions](<http://www.brew.sh>) and
 install libevent.
 
-    ruby -e "$(curl -fsSkL raw.github.com/mxcl/homebrew/go)"
+    ruby -e "$(curl -fsSL https://raw.github.com/Homebrew/homebrew/go/install)"
     brew install libevent
+
+You can then also install DUB using brew:
+
+    brew install dub
 
 (Note: Install brew only if you do not have macports, as they will conflict)
 
 Install DMD using the installer on <http://dlang.org/download.html>.
- 
+
 Optionally, run `./setup-mac.sh` to create a user/group pair for privilege lowering.
 
 
@@ -67,15 +89,15 @@ Install vibe.d's dependencies (*)
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://ftp.digitalmars.com/dmd_2.062-0_i386.deb"
-    sudo dpkg -i dmd_2.062-0_i386.deb
+    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_i386.deb"
+    sudo dpkg -i dmd_2.066.1-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://ftp.digitalmars.com/dmd_2.062-0_amd64.deb"
-    sudo dpkg -i dmd_2.062-0_amd64.deb
+    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_amd64.deb"
+    sudo dpkg -i dmd_2.066.1-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.

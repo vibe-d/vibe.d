@@ -35,7 +35,7 @@ version(VibeWinrtDriver)
 		RoUninitialize();
 	}
 
-	class WinRTEventDriver : EventDriver {
+	final class WinRTEventDriver : EventDriver {
 		private {
 			DriverCore m_core;
 			bool m_exit = false;
@@ -45,6 +45,10 @@ version(VibeWinrtDriver)
 		{
 			m_core = core;
 
+		}
+
+		void dispose()
+		{
 		}
 
 		int runEventLoop()
@@ -89,7 +93,7 @@ version(VibeWinrtDriver)
 			assert(false);
 		}
 
-		NetworkAddress resolveHost(string host, ushort family, bool no_dns)
+		NetworkAddress resolveHost(string host, ushort family, bool use_dns)
 		{
 			assert(false);
 		}
@@ -286,6 +290,7 @@ version(VibeWinrtDriver)
 	class WinRTTCPConnection : TCPConnection {
 		private {
 			bool m_tcpNoDelay;
+			bool m_keepAlive;
 			Duration m_readTimeout;
 		}
 
@@ -301,6 +306,13 @@ version(VibeWinrtDriver)
 			assert(false);
 		}
 		@property Duration readTimeout() const { return m_readTimeout; }
+
+		@property void keepAlive(bool enabled)
+		{
+			m_keepAlive = enabled;
+			assert(false);
+		}
+		@property bool keepAlive() const { return m_keepAlive; }
 
 		void close()
 		{

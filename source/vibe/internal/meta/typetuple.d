@@ -13,10 +13,10 @@ import std.traits;
 
 /**
 	TypeTuple which does not auto-expand.
-	
+
 	Useful when you need
 	to multiple several type tuples as different template argument
-	list parameters, without merging those.	
+	list parameters, without merging those.
 */
 template Group(T...)
 {
@@ -36,9 +36,9 @@ unittest
 */
 template isGroup(T...)
 {
-	enum isGroup = 
-		   (T.length == 1)                         // not a type tuple
-		&& is(typeof(T[0]) == void) && !is(T[0])   // does not evaluate to something
+	static if (T.length != 1) enum isGroup = false;
+	else enum isGroup =
+		!is(T[0]) && is(typeof(T[0]) == void)      // does not evaluate to something
 		&& is(typeof(T[0].expand.length) : size_t) // expands to something with length
 		&& !is(typeof(&(T[0].expand)));            // expands to not addressable
 }
@@ -47,7 +47,7 @@ version (unittest) // NOTE: GDC complains about template definitions in unittest
 {
 	alias group = Group!(int, double, string);
 	alias group2 = Group!();
-	
+
 	template Fake(T...)
 	{
 		int[] expand;
@@ -65,32 +65,32 @@ version (unittest) // NOTE: GDC complains about template definitions in unittest
 /* Copied from Phobos as it is private there.
  */
 private template isSame(ab...)
-    if (ab.length == 2)
+	if (ab.length == 2)
 {
-    static if (is(ab[0]) && is(ab[1]))
-    {
-        enum isSame = is(ab[0] == ab[1]);
-    }
-    else static if (!is(ab[0]) &&
-                    !is(ab[1]) &&
-                    is(typeof(ab[0] == ab[1]) == bool) &&
+	static if (is(ab[0]) && is(ab[1]))
+	{
+		enum isSame = is(ab[0] == ab[1]);
+	}
+	else static if (!is(ab[0]) &&
+					!is(ab[1]) &&
+					is(typeof(ab[0] == ab[1]) == bool) &&
 					(ab[0] == ab[1]))
-    {
-        static if (!__traits(compiles, &ab[0]) ||
-                   !__traits(compiles, &ab[1]))
-            enum isSame = (ab[0] == ab[1]);
-        else
-            enum isSame = __traits(isSame, ab[0], ab[1]);
-    }
-    else
-    {
-        enum isSame = __traits(isSame, ab[0], ab[1]);
-    }
+	{
+		static if (!__traits(compiles, &ab[0]) ||
+				   !__traits(compiles, &ab[1]))
+			enum isSame = (ab[0] == ab[1]);
+		else
+			enum isSame = __traits(isSame, ab[0], ab[1]);
+	}
+	else
+	{
+		enum isSame = __traits(isSame, ab[0], ab[1]);
+	}
 }
 
 /**
 	Compares two groups for element identity
-	
+
 	Params:
 		Group1, Group2 = any instances of `Group`
 

@@ -1,7 +1,7 @@
 /**
 	SMTP client implementation
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -11,8 +11,9 @@ import vibe.core.log;
 import vibe.core.net;
 import vibe.inet.message;
 import vibe.stream.operations;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
+import std.algorithm : map, splitter;
 import std.base64;
 import std.conv;
 import std.exception;
@@ -24,12 +25,10 @@ import std.string;
 */
 enum SMTPConnectionType {
 	plain,
-	ssl,
-	startTLS
+	tls,
+	startTLS,
+	ssl = tls /// deprecated
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use SMTPConnectionType instead.") alias SmtpConnectionType = SMTPConnectionType;
 
 
 /** Represents the different status codes for SMTP replies.
@@ -62,9 +61,6 @@ enum SMTPStatus {
 	transactionFailed = 554
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use SMTPStatus instead.") alias SmtpStatus = SMTPStatus;
-
 
 /**
 	Represents the authentication mechanism used by the SMTP client.
@@ -76,40 +72,58 @@ enum SMTPAuthType {
 	cramMd5
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use SMTPAuthType instead.") alias SmtpAuthType = SMTPAuthType;
-
 
 /**
 	Configuration options for the SMTP client.
 */
-class SMTPClientSettings {
+final class SMTPClientSettings {
+	/// SMTP host to connect to
 	string host = "127.0.0.1";
+	/// Port on which to connect
 	ushort port = 25;
+	/// Own network name to report to the SMTP server
 	string localname = "localhost";
+	/// Type of encryption protocol to use
 	SMTPConnectionType connectionType = SMTPConnectionType.plain;
+	/// Authentication type to use
 	SMTPAuthType authType = SMTPAuthType.none;
+
+	/// Determines how the server certificate gets validated.
+	TLSPeerValidationMode tlsValidationMode = TLSPeerValidationMode.trustedCert;
+	/// Compatibility alias - will be deprecated soon.
+	alias sslValidationMode = tlsValidationMode;
+	/// Version(s) of the TLS/SSL protocol to use
+	TLSVersion tlsVersion = TLSVersion.any;
+	/// Callback to invoke to enable additional setup of the TLS context.
+	void delegate(scope TLSContext) tlsContextSetup;
+	/// Compatibility alias - will be deprecated soon.
+	alias sslContextSetup = tlsContextSetup;
+
+	/// User name to use for authentication
 	string username;
+	/// Password to use for authentication
 	string password;
 
 	this() {}
 	this(string host, ushort port) { this.host = host; this.port = port; }
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use SMTPClientSettings instead.") alias SmtpClientSettings = SMTPClientSettings;
-
 
 /**
 	Represents an email message, including its headers.
 */
-class Mail {
+final class Mail {
 	InetHeaderMap headers;
 	string bodyText;
 }
 
 /**
-	Sends am email using the given settings.
+	Sends an e-mail using the given settings.
+
+	The mail parameter must point to a valid $(D Mail) object and should define
+	at least the headers "To", "From", Sender" and "Subject".
+
+	Valid headers can be found at http://tools.ietf.org/html/rfc4021
 */
 void sendMail(SMTPClientSettings settings, Mail mail)
 {
@@ -124,11 +138,18 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 
 	Stream conn = raw_conn;
 
+	if( settings.connectionType == SMTPConnectionType.tls ){
+		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
+		ctx.peerValidationMode = settings.tlsValidationMode;
+		if (settings.tlsContextSetup) settings.tlsContextSetup(ctx);
+		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting, settings.host, raw_conn.remoteAddress);
+	}
+
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
 
-	void greet(){
+	void greet() {
 		conn.write("EHLO "~settings.localname~"\r\n");
-		while(true){ // simple skipping of 
+		while(true){ // simple skipping of
 			auto ln = cast(string)conn.readLine();
 			logDebug("EHLO response: %s", ln);
 			auto sidx = ln.indexOf(' ');
@@ -140,22 +161,19 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 		}
 	}
 
-	if( settings.connectionType == SMTPConnectionType.ssl ){
-		auto ctx = new SSLContext(SSLContextKind.client);
-		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
-	}
-
 	greet();
 
-	if( settings.connectionType == SMTPConnectionType.startTLS ){
+	if (settings.connectionType == SMTPConnectionType.startTLS) {
 		conn.write("STARTTLS\r\n");
 		expectStatus(conn, SMTPStatus.serviceReady, "STARTTLS");
-		auto ctx = new SSLContext(SSLContextKind.client);
-		conn = new SSLStream(raw_conn, ctx, SSLStreamState.connecting);
+		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
+		ctx.peerValidationMode = settings.tlsValidationMode;
+		if (settings.tlsContextSetup) settings.tlsContextSetup(ctx);
+		conn = createTLSStream(raw_conn, ctx, TLSStreamState.connecting, settings.host, raw_conn.remoteAddress);
 		greet();
 	}
 
-	final switch(settings.authType){
+	final switch (settings.authType) {
 		case SMTPAuthType.none: break;
 		case SMTPAuthType.plain:
 			logDebug("seding auth");
@@ -181,12 +199,21 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	conn.write("MAIL FROM:"~addressMailPart(mail.headers["From"])~"\r\n");
 	expectStatus(conn, SMTPStatus.success, "MAIL FROM");
 
-	conn.write("RCPT TO:"~addressMailPart(mail.headers["To"])~"\r\n"); // TODO: support multiple recipients
-	expectStatus(conn, SMTPStatus.success, "RCPT TO");
+	static immutable rcpt_headers = ["To", "Cc", "Bcc"];
+	foreach (h; rcpt_headers) {
+		mail.headers.getAll(h, (v) {
+			foreach (a; v.splitter(',').map!(a => a.strip)) {
+				conn.write("RCPT TO:"~addressMailPart(a)~"\r\n");
+				expectStatus(conn, SMTPStatus.success, "RCPT TO");
+			}
+		});
+	}
+
+	mail.headers.removeAll("Bcc");
 
 	conn.write("DATA\r\n");
 	expectStatus(conn, SMTPStatus.startMailInput, "DATA");
-	foreach( name, value; mail.headers ){
+	foreach (name, value; mail.headers) {
 		conn.write(name~": "~value~"\r\n");
 	}
 	conn.write("\r\n");
@@ -198,11 +225,44 @@ void sendMail(SMTPClientSettings settings, Mail mail)
 	expectStatus(conn, SMTPStatus.serviceClosing, "QUIT");
 }
 
+/**
+	The following example demonstrates the complete construction of a valid
+	e-mail object with UTF-8 encoding. The Date header, as demonstrated, must
+	be converted with the local timezone using the $(D toRFC822DateTimeString)
+	function.
+*/
+unittest {
+	import vibe.inet.message;
+	import std.datetime;
+	void testSmtp(string host, ushort port){
+		Mail email = new Mail;
+		email.headers["Date"] = Clock.currTime(TimeZone.getTimeZone("America/New_York")).toRFC822DateTimeString(); // uses UFCS
+		email.headers["Sender"] = "Domain.com Contact Form <no-reply@domain.com>";
+		email.headers["From"] = "John Doe <joe@doe.com>";
+		email.headers["To"] = "Customer Support <support@domain.com>";
+		email.headers["Subject"] = "My subject";
+		email.headers["Content-Type"] = "text/plain;charset=utf-8";
+		email.bodyText = "This message can contain utf-8 [κόσμε], and\nwill be displayed properly in mail clients with \\n line endings.";
+
+		auto smtpSettings = new SMTPClientSettings(host, port);
+		sendMail(smtpSettings, email);
+	}
+	// testSmtp("localhost", 25);
+}
+
 private void expectStatus(InputStream conn, int expected_status, string in_response_to)
 {
-	string ln = cast(string)conn.readLine();
-	auto sp = ln.indexOf(' ');
-	if( sp < 0 ) sp = ln.length;
+	// TODO: make the full status message available in the exception
+	//       message or for general use (e.g. determine server features)
+	string ln;
+	sizediff_t sp, dsh;
+	do {
+		ln = cast(string)conn.readLine();
+		sp = ln.indexOf(' ');
+		if (sp < 0) sp = ln.length;
+		dsh = ln.indexOf('-');
+	} while (dsh >= 0 && dsh < sp);
+
 	auto status = to!int(ln[0 .. sp]);
 	enforce(status == expected_status, "Expected status "~to!string(expected_status)~" in response to "~in_response_to~", got "~to!string(status)~": "~ln[sp .. $]);
 }
@@ -218,7 +278,7 @@ private int recvStatus(InputStream conn)
 private string addressMailPart(string str)
 {
 	auto idx = str.indexOf('<');
-	if( idx < 0 ) return str;
+	if( idx < 0 ) return "<"~ str ~">";
 	str = str[idx .. $];
 	enforce(str[$-1] == '>', "Malformed email address field: '"~str~"'.");
 	return str;

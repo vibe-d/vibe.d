@@ -1,7 +1,7 @@
 /**
 	Helpers for working with user-defined attributes that can be attached to
 	function or method to modify its behavior. In some sense those are similar to
-    Python decorator. D does not support this feature natively but
+	Python decorator. D does not support this feature natively but
 	it can be emulated within certain code generation framework.
 
 	Copyright: © 2013 RejectedSoftware e.K.
@@ -11,7 +11,7 @@
 
 module vibe.internal.meta.funcattr;
 
-import std.traits : isInstanceOf;
+import std.traits : isInstanceOf, ReturnType;
 
 /// example
 unittest
@@ -57,7 +57,7 @@ unittest
 
 /**
 	Marks function/method for usage with `AttributedFunction`.
-	
+
 	Former will call a Hook before calling attributed function/method and
 	provide its return value as input parameter.
 
@@ -84,7 +84,7 @@ unittest
 
 /**
 	Marks function/method for usage with `AttributedFunction`.
-	
+
 	Former will call a Hook after calling attributed function/method and provide
 	its return value as a single input parameter for a Hook.
 
@@ -119,7 +119,7 @@ unittest
 	Params:
 		Function = function symbol to query for attributes
 		name = parameter name to check
-	
+
 	Returns:
 		`true` if it is calculated
 */
@@ -149,6 +149,100 @@ template IsAttributedParameter(alias Function, string name)
 	}
 
 	enum IsAttributedParameter = Impl!Data;
+}
+
+/**
+	Computes the given attributed parameter using the corresponding @before modifier.
+*/
+auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
+{
+	import std.typetuple : Filter;
+	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
+	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
+	foreach (att; input_attributes)
+		static if (att.parameter == NAME) {
+			return att.evaluator(args);
+		}
+	assert(false);
+}
+
+
+/**
+	Computes the given attributed parameter using the corresponding @before modifier.
+
+	This overload tries to invoke the given function as a member of the $(D ctx)
+	parameter. It also supports accessing private member functions using the
+	$(D PrivateAccessProxy) mixin.
+*/
+auto computeAttributedParameterCtx(alias FUNCTION, string NAME, T, ARGS...)(T ctx, ARGS args)
+{
+	import std.typetuple : Filter;
+	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
+	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
+	foreach (att; input_attributes)
+		static if (att.parameter == NAME) {
+			static if (is(typeof(__traits(parent, att.evaluator).init) == T)) {
+				static if (is(typeof(ctx.invokeProxy__!(att.evaluator)(args))))
+					return ctx.invokeProxy__!(att.evaluator)(args);
+				else return __traits(getMember, ctx, __traits(identifier, att.evaluator))(args);
+			} else {
+				return att.evaluator(args);
+			}
+		}
+	assert(false);
+}
+
+
+/**
+	Helper mixin to support private member functions for $(D @before) attributes.
+*/
+mixin template PrivateAccessProxy() {
+	auto invokeProxy__(alias MEMBER, ARGS...)(ARGS args) { return MEMBER(args); }
+}
+///
+unittest {
+	class MyClass {
+		@before!computeParam("param")
+		void method(bool param)
+		{
+			assert(param == true);
+		}
+
+		private bool computeParam()
+		{
+			return true;
+		}
+	}
+}
+
+
+/**
+	Processes the function return value using all @after modifiers.
+*/
+ReturnType!FUNCTION evaluateOutputModifiers(alias FUNCTION)(ReturnType!FUNCTION result)
+{
+	import std.typetuple : Filter;
+	alias output_attributes = Filter!(isOutputAttribute, __traits(getAttributes, FUNCTION));
+	foreach (OA; output_attributes) {
+		import std.typetuple : TypeTuple;
+
+		static assert (
+			Compare!(
+				Group!(ParameterTypeTuple!(OA.modificator)),
+				Group!(ReturnType!Function, StoredArgTypes.expand)
+			),
+			format(
+				"Output attribute function '%s%s' argument list " ~
+				"does not match provided argument list %s",
+				fullyQualifiedName!(OA.modificator),
+				ParameterTypeTuple!(OA.modificator).stringof,
+				TypeTuple!(ReturnType!Function, StoredArgTypes.expand).stringof
+			)
+		);
+
+		result = OA.modificator(result, m_storedArgs);
+	}
+	return result;
 }
 
 ///
@@ -183,7 +277,7 @@ private {
 		alias modificator = Function;
 	}
 
-	template isInputAttribute(T...)	
+	template isInputAttribute(T...)
 	{
 		enum isInputAttribute = (T.length == 1) && isInstanceOf!(InputAttribute, typeof(T[0]));
 	}
@@ -199,7 +293,7 @@ private {
 		static assert (!isInputAttribute!wrong);
 	}
 
-	template isOutputAttribute(T...)	
+	template isOutputAttribute(T...)
 	{
 		enum isOutputAttribute = (T.length == 1) && isInstanceOf!(OutputAttribute, typeof(T[0]));
 	}
@@ -227,7 +321,7 @@ private {
 		// that parameter index in attributed function parameter list
 		int index;
 		// fully qualified return type of attached function
-		string type; 
+		string type;
 		// for non-basic types - module to import
 		string origin;
 	}
@@ -245,10 +339,11 @@ private {
 	*/
 	template AttributedParameterMetadata(alias Function)
 	{
+		import std.array : join;
 		import std.typetuple : Filter, staticMap, staticIndexOf;
 		import std.traits : ParameterIdentifierTuple, ReturnType,
 			fullyQualifiedName, moduleName;
-	
+
 		private alias attributes = Filter!(
 			isInputAttribute,
 			__traits(getAttributes, Function)
@@ -259,7 +354,7 @@ private {
 		/*
 			Creates single Parameter instance. Used in pair with
 			staticMap.
-		*/	
+		*/
 		template BuildParameter(alias attribute)
 		{
 			enum name = attribute.parameter;
@@ -269,7 +364,7 @@ private {
 				"hook functions attached for usage with `AttributedFunction` " ~
 				"must have a return type"
 			);
-		
+
 			static if (is(typeof(moduleName!(ReturnType!(attribute.evaluator))))) {
 				enum origin = moduleName!(ReturnType!(attribute.evaluator));
 			}
@@ -311,7 +406,7 @@ private {
 	// does not compile for wrong attribute data
 	unittest
 	{
-		int attached1() { return int.init; }		
+		int attached1() { return int.init; }
 		void attached2() {}
 
 		@before!attached1("doesnotexist")
@@ -328,7 +423,7 @@ private {
 
 	// generates expected tuple for valid input
 	unittest
-	{		
+	{
 		int attached1() { return int.init; }
 		double attached2() { return double.init; }
 
@@ -356,7 +451,7 @@ private {
 			type tuple of expected combined function argument list
 	*/
 	template MergeParameterTypes(alias ParameterMeta, alias ParameterList)
-	{	
+	{
 		import vibe.internal.meta.typetuple : isGroup, Group;
 
 		static assert (isGroup!ParameterMeta);
@@ -386,7 +481,7 @@ private {
 			alias MergeParameterTypes = ParameterList.expand;
 		}
 	}
-	
+
 	// normal
 	unittest
 	{
@@ -459,7 +554,7 @@ private {
 		StoredArgTypes = Group of argument types for attached functions
 
 */
-struct AttributedFunction(alias Function, alias StoredArgTypes)	
+struct AttributedFunction(alias Function, alias StoredArgTypes)
 {
 	import std.traits : isSomeFunction, ReturnType, FunctionTypeOf,
 		ParameterTypeTuple, ParameterIdentifierTuple;
@@ -498,6 +593,9 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 	*/
 	ReturnType!Function opCall(T...)(FunctionDg dg, T args)
 	{
+				import std.traits : fullyQualifiedName;
+				import std.string : format;
+
 		enum hasReturnType = is(ReturnType!Function) && !is(ReturnType!Function == void);
 
 		static if (hasReturnType) {
@@ -534,8 +632,6 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 		);
 
 		static if (output_attributes.length) {
-			import std.traits : fullyQualifiedName;
-			import std.string : format;
 			import std.typetuple : TypeTuple;
 
 			static assert (
@@ -564,7 +660,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 			return result;
 		}
 	}
-	
+
 	/**
 		Convenience wrapper tha creates stub delegate for free functions.
 
@@ -643,7 +739,6 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 				// tuple from previous spot to current attributed parameter index
 				// (including)
 
-				enum name = uda.parameter;
 				enum index = attributed_parameters[i].index;
 
 				static if (i == 0) {
@@ -658,7 +753,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 					enum lEnd = index;
 					enum rStart = previousIndex + 1 - i;
 					enum rEnd = index - i;
-				}				
+				}
 
 				static if (lStart != lEnd) {
 					input[lStart..lEnd] = args[rStart..rEnd];
@@ -698,7 +793,7 @@ struct AttributedFunction(alias Function, alias StoredArgTypes)
 			}
 
 			return dg(args);
-		} 
+		}
 	}
 }
 
@@ -768,7 +863,7 @@ unittest
 	Syntax sugar in top of AttributedFunction
 
 	Creates AttributedFunction with stored argument types that
-	match `T` and stores `args` there before returning.	
+	match `T` and stores `args` there before returning.
 */
 auto createAttributedFunction(alias Function, T...)(T args)
 {

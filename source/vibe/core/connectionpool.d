@@ -19,7 +19,7 @@ import core.thread;
 	The connection pool is creating connections using the supplied factory function as needed
 	whenever lockConnection() is called. Connections are associated to the calling fiber, as long
 	as any copy of the returned LockedConnection object still exists. Connections that are not
-	associated 
+	associated
 */
 class ConnectionPool(Connection)
 {
@@ -71,7 +71,7 @@ struct LockedConnection(Connection) {
 		Connection m_conn;
 		debug uint m_magic = 0xB1345AC2;
 	}
-	
+
 	private this(ConnectionPool!Connection pool, Connection conn)
 	{
 		assert(conn !is null);
@@ -84,7 +84,7 @@ struct LockedConnection(Connection) {
 	{
 		debug assert(m_magic == 0xB1345AC2, "LockedConnection value corrupted.");
 		if( m_conn ){
-			auto fthis = Fiber.getThis();
+			auto fthis = Task.getThis();
 			assert(fthis is m_task);
 			m_pool.m_lockCount[m_conn]++;
 			logTrace("conn %s copy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]);
@@ -95,8 +95,8 @@ struct LockedConnection(Connection) {
 	{
 		debug assert(m_magic == 0xB1345AC2, "LockedConnection value corrupted.");
 		if( m_conn ){
-			auto fthis = Fiber.getThis();
-			assert(fthis is m_task, "Locked connection destroyed in foreign fiber.");
+			auto fthis = Task.getThis();
+			assert(fthis is m_task, "Locked connection destroyed in foreign task.");
 			auto plc = m_conn in m_pool.m_lockCount;
 			assert(plc !is null);
 			assert(*plc >= 1);

@@ -16,8 +16,8 @@ module vibe.core.args;
 import vibe.core.log;
 import vibe.data.json;
 
-import std.algorithm : any, array, map, sort;
-import std.array : join, replicate, split;
+import std.algorithm : any, map, sort;
+import std.array : array, join, replicate, split;
 import std.exception;
 import std.file;
 import std.getopt;
@@ -25,22 +25,6 @@ import std.path : buildPath;
 import std.string : format, stripRight, wrap;
 
 import core.runtime;
-
-
-/**
-	Deprecated. Removes any recognized arguments from args leaving any unrecognized options.
-
-	Note that vibe.d parses all options on start up and calling this function is not necessary.
-	It is recommended to use
-	Currently does nothing - Vibe will parse arguments
-	automatically on startup. Call $(D finalizeCommandLineArgs) from your
-	$(D main()) if you use a custom one, to check for unrecognized options.
-*/
-deprecated("Please use getOption, finalizeCommandLineArgs and/or lowerPrivileges instead to achieve the desired functionality.")
-void processCommandLineArgs(ref string[] args)
-{
-	args = g_args.dup;
-}
 
 
 /**
@@ -57,17 +41,19 @@ void processCommandLineArgs(ref string[] args)
 
 	Returns:
 		$(D true) if the value was found, $(D false) otherwise.
+
+	See_Also: readRequiredOption
 */
-bool getOption(T)(string names, T* pvalue, string help_text)
+bool readOption(T)(string names, T* pvalue, string help_text)
 {
 	// May happen due to http://d.puremagic.com/issues/show_bug.cgi?id=9881
-	if (!g_args) init();
+	if (g_args is null) init();
 
 	OptionInfo info;
 	info.names = names.split("|").sort!((a, b) => a.length < b.length)().array();
 	info.hasValue = !is(T == bool);
 	info.helpText = help_text;
-	assert(!g_options.any!(o => o.names == info.names)(), "getOption() may only be called once per option name.");
+	assert(!g_options.any!(o => o.names == info.names)(), "readOption() may only be called once per option name.");
 	g_options ~= info;
 
 	immutable olen = g_args.length;
@@ -83,6 +69,26 @@ bool getOption(T)(string names, T* pvalue, string help_text)
 	}
 
 	return false;
+}
+
+/// Compatibility alias
+deprecated("Use readOption instead.") alias getOption = readOption;
+
+
+/**
+	The same as readOption, but throws an exception if the given option is missing.
+
+	See_Also: readOption
+*/
+T readRequiredOption(T)(string names, string help_text)
+{
+	string formattedNames() {
+		return names.split("|").map!(s => s.length == 1 ? "-" ~ s : "--" ~ s).join("/");
+	}
+	T ret;
+	enforce(readOption(names, &ret, help_text) || g_help,
+		format("Missing mandatory option %s.", formattedNames()));
+	return ret;
 }
 
 
@@ -135,8 +141,8 @@ void printCommandLineHelp()
 
 	Params:
 		args_out = Optional parameter for storing any arguments not handled
-		           by any getOption call. If this is left to null, an error
-		           will be triggered whenever unhandled arguments exist.
+				   by any readOption call. If this is left to null, an error
+				   will be triggered whenever unhandled arguments exist.
 
 	Returns:
 		If "--help" was passed, the function returns false. In all other
@@ -188,10 +194,12 @@ private string[] getConfigPaths()
 	return result;
 }
 
-// this is invoked by the first getOption call (at least vibe.core will perform one)
+// this is invoked by the first readOption call (at least vibe.core will perform one)
 private void init()
 {
-	g_args = Runtime.args;
+	version (VibeDisableCommandLineParsing) {}
+	else g_args = Runtime.args;
+
 	if (!g_args.length) g_args = ["dummy"];
 
 	// TODO: let different config files override individual fields
@@ -210,11 +218,11 @@ private void init()
 	if (!g_haveConfig)
 		logDiagnostic("No config file found in %s", searchpaths);
 
-	getOption("h|help", &g_help, "Prints this help screen.");
+	readOption("h|help", &g_help, "Prints this help screen.");
 }
 
 private enum configName = "vibe.conf";
 
-private template ValueTuple(T...) { alias T ValueTuple; }
+private template ValueTuple(T...) { alias ValueTuple = T; }
 
 private alias getoptConfig = ValueTuple!(std.getopt.config.passThrough, std.getopt.config.bundling);

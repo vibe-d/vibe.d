@@ -1,0 +1,10 @@
+doctype html
+html
+    head
+        title Digest Authentication Example
+    body
+        p Click on the
+            a(href="/internal") link
+            | to access a protected page.
+
+

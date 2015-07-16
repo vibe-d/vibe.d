@@ -20,29 +20,30 @@ import std.exception : enforceEx;
 import std.traits;
 import std.algorithm;
 
-
-shared(Allocator) defaultAllocator()
+Allocator defaultAllocator() nothrow
 {
 	version(VibeManualMemoryManagement){
 		return manualAllocator();
 	} else {
-		static shared Allocator alloc;
+		static __gshared Allocator alloc;
 		if( !alloc ){
-			alloc = new shared GCAllocator;
+			alloc = new GCAllocator;
 			//alloc = new AutoFreeListAllocator(alloc);
 			//alloc = new DebugAllocator(alloc);
+			alloc = new LockAllocator(alloc);
 		}
 		return alloc;
 	}
 }
 
-shared(Allocator) manualAllocator()
+Allocator manualAllocator() nothrow
 {
-	static shared Allocator alloc;
+	static __gshared Allocator alloc;
 	if( !alloc ){
-		alloc = new shared MallocAllocator;
-		alloc = new shared AutoFreeListAllocator(alloc);
-		//alloc = new shared DebugAllocator(alloc);
+		alloc = new MallocAllocator;
+		alloc = new AutoFreeListAllocator(alloc);
+		//alloc = new DebugAllocator(alloc);
+		alloc = new LockAllocator(alloc);
 	}
 	return alloc;
 }
@@ -51,56 +52,129 @@ auto allocObject(T, bool MANAGED = true, ARGS...)(Allocator allocator, ARGS args
 {
 	auto mem = allocator.alloc(AllocSize!T);
 	static if( MANAGED ){
-		static if( hasIndirections!T ) 
+		static if( hasIndirections!T )
 			GC.addRange(mem.ptr, mem.length);
-		auto ret = emplace!T(mem, args);
+		return internalEmplace!T(mem, args);
 	}
 	else static if( is(T == class) ) return cast(T)mem.ptr;
 	else return cast(T*)mem.ptr;
 }
 
-T[] allocArray(T, bool MANAGED = true)(shared(Allocator) allocator, size_t n)
+T[] allocArray(T, bool MANAGED = true)(Allocator allocator, size_t n)
 {
 	auto mem = allocator.alloc(T.sizeof * n);
 	auto ret = cast(T[])mem;
 	static if( MANAGED ){
-		static if( hasIndirections!T ) 
+		static if( hasIndirections!T )
 			GC.addRange(mem.ptr, mem.length);
 		// TODO: use memset for class, pointers and scalars
 		foreach (ref el; ret) {
-			emplace!T(cast(void[])((&el)[0 .. 1]));
+			internalEmplace!T(cast(void[])((&el)[0 .. 1]));
 		}
 	}
 	return ret;
 }
 
+void freeArray(T, bool MANAGED = true)(Allocator allocator, ref T[] array, bool call_destructors = true)
+{
+	static if (MANAGED) {
+		static if (hasIndirections!T)
+			GC.removeRange(array.ptr);
+		static if (hasElaborateDestructor!T)
+			if (call_destructors)
+				foreach_reverse (ref el; array)
+					destroy(el);
+	}
+	allocator.free(cast(void[])array);
+	array = null;
+}
 
-shared interface Allocator {
+
+interface Allocator {
+nothrow:
 	enum size_t alignment = 0x10;
 	enum size_t alignmentMask = alignment-1;
 
 	void[] alloc(size_t sz)
 		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "alloc() returned misaligned data."); }
-	
+
 	void[] realloc(void[] mem, size_t new_sz)
-		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc()."); }
+		in {
+			assert(mem.ptr !is null, "realloc() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
+		}
 		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "realloc() returned misaligned data."); }
 
 	void free(void[] mem)
-		in { assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free()."); }
+		in {
+			assert(mem.ptr !is null, "free() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
+		}
 }
 
-synchronized class DebugAllocator : Allocator {
+
+/**
+	Simple proxy allocator protecting its base allocator with a mutex.
+*/
+class LockAllocator : Allocator {
 	private {
-		shared(Allocator) m_baseAlloc;
-		size_t[void*] m_blocks;
+		Allocator m_base;
+	}
+	this(Allocator base) nothrow { m_base = base; }
+	void[] alloc(size_t sz) {
+		// Since 2068, synchronized statements are annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2068)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
+		synchronized (this)
+			return m_base.alloc(sz);
+	}
+	void[] realloc(void[] mem, size_t new_sz)
+		in {
+			assert(mem.ptr !is null, "realloc() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
+		}
+		body {
+			// Since 2068, synchronized statements are annotated nothrow.
+			// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+			// However, they were "logically" nothrow before.
+			static if (__VERSION__ <= 2068)
+				scope (failure) assert(0, "Internal error: function should be nothrow");
+
+			synchronized(this)
+				return m_base.realloc(mem, new_sz);
+		}
+	void free(void[] mem)
+		in {
+			assert(mem.ptr !is null, "free() called with null array.");
+			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
+		}
+		body {
+			// Since 2068, synchronized statements are annotated nothrow.
+			// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+			// However, they were "logically" nothrow before.
+			static if (__VERSION__ <= 2068)
+				scope (failure) assert(0, "Internal error: function should be nothrow");
+			synchronized(this)
+				m_base.free(mem);
+		}
+}
+
+final class DebugAllocator : Allocator {
+	import vibe.utils.hashmap : HashMap;
+	private {
+		Allocator m_baseAlloc;
+		HashMap!(void*, size_t) m_blocks;
 		size_t m_bytes;
 		size_t m_maxBytes;
 	}
 
-	shared this(shared(Allocator) base_allocator)
+	this(Allocator base_allocator) nothrow
 	{
 		m_baseAlloc = base_allocator;
+		m_blocks = HashMap!(void*, size_t)(manualAllocator());
 	}
 
 	@property size_t allocatedBlockCount() const { return m_blocks.length; }
@@ -111,7 +185,7 @@ synchronized class DebugAllocator : Allocator {
 	{
 		auto ret = m_baseAlloc.alloc(sz);
 		assert(ret.length == sz, "base.alloc() returned block with wrong size.");
-		assert(ret !in m_blocks, "base.alloc() returned block that is already allocated.");
+		assert(m_blocks.getNothrow(ret.ptr, size_t.max) == size_t.max, "base.alloc() returned block that is already allocated.");
 		m_blocks[ret.ptr] = sz;
 		m_bytes += sz;
 		if( m_bytes > m_maxBytes ){
@@ -123,13 +197,13 @@ synchronized class DebugAllocator : Allocator {
 
 	void[] realloc(void[] mem, size_t new_size)
 	{
-		auto pb = mem.ptr in m_blocks;
-		assert(pb, "realloc() called with non-allocated pointer.");
-		assert(*pb == mem.length, "realloc() called with block of wrong size.");
+		auto sz = m_blocks.getNothrow(mem.ptr, size_t.max);
+		assert(sz != size_t.max, "realloc() called with non-allocated pointer.");
+		assert(sz == mem.length, "realloc() called with block of wrong size.");
 		auto ret = m_baseAlloc.realloc(mem, new_size);
 		assert(ret.length == new_size, "base.realloc() returned block with wrong size.");
-		assert(ret.ptr !in m_blocks, "base.realloc() returned block that is already allocated.");
-		m_bytes -= *pb;
+		assert(ret.ptr is mem.ptr || m_blocks.getNothrow(ret.ptr, size_t.max) == size_t.max, "base.realloc() returned block that is already allocated.");
+		m_bytes -= sz;
 		m_blocks.remove(mem.ptr);
 		m_blocks[ret.ptr] = new_size;
 		m_bytes += new_size;
@@ -137,20 +211,21 @@ synchronized class DebugAllocator : Allocator {
 	}
 	void free(void[] mem)
 	{
-		auto pb = mem.ptr in m_blocks;
-		assert(pb, "free() called with non-allocated object.");
-		assert(*pb == mem.length, "free() called with block of wrong size.");
+		auto sz = m_blocks.getNothrow(mem.ptr, size_t.max);
+		assert(sz != size_t.max, "free() called with non-allocated object.");
+		assert(sz == mem.length, "free() called with block of wrong size.");
 		m_baseAlloc.free(mem);
-		m_bytes -= *pb;
+		m_bytes -= sz;
 		m_blocks.remove(mem.ptr);
 	}
 }
 
-shared class MallocAllocator : Allocator {
+final class MallocAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
+		static err = new immutable OutOfMemoryError;
 		auto ptr = .malloc(sz + Allocator.alignment);
-		enforceEx!OutOfMemoryError(ptr !is null);
+		if (ptr is null) throw err;
 		return adjustPointerAlignment(ptr)[0 .. sz];
 	}
 
@@ -159,6 +234,7 @@ shared class MallocAllocator : Allocator {
 		size_t csz = min(mem.length, new_size);
 		auto p = extractUnalignedPointer(mem.ptr);
 		size_t oldmisalign = mem.ptr - p;
+
 		auto pn = cast(ubyte*).realloc(p, new_size+Allocator.alignment);
 		if (p == pn) return pn[oldmisalign .. new_size+oldmisalign];
 
@@ -168,10 +244,10 @@ shared class MallocAllocator : Allocator {
 		// account for changed alignment after realloc (move memory back to aligned position)
 		if (oldmisalign != newmisalign) {
 			if (newmisalign > oldmisalign) {
-				foreach_reverse (i; 0 .. mem.length)
+				foreach_reverse (i; 0 .. csz)
 					pn[i + newmisalign] = pn[i + oldmisalign];
 			} else {
-				foreach (i; 0 .. mem.length)
+				foreach (i; 0 .. csz)
 					pn[i + newmisalign] = pn[i + oldmisalign];
 			}
 		}
@@ -185,10 +261,15 @@ shared class MallocAllocator : Allocator {
 	}
 }
 
-shared class GCAllocator : Allocator {
+final class GCAllocator : Allocator {
 	void[] alloc(size_t sz)
 	{
-		return adjustPointerAlignment(GC.malloc(sz+Allocator.alignment))[0 .. sz];
+		auto mem = GC.malloc(sz+Allocator.alignment);
+		auto alignedmem = adjustPointerAlignment(mem);
+		assert(alignedmem - mem <= Allocator.alignment);
+		auto ret = alignedmem[0 .. sz];
+		ensureValidMemory(ret);
+		return ret;
 	}
 	void[] realloc(void[] mem, size_t new_size)
 	{
@@ -196,17 +277,19 @@ shared class GCAllocator : Allocator {
 
 		auto p = extractUnalignedPointer(mem.ptr);
 		size_t misalign = mem.ptr - p;
-		auto pn = cast(ubyte*)GC.realloc(p, new_size+Allocator.alignment);
-		if (p == pn) return pn[misalign .. new_size+misalign];
+		assert(misalign <= Allocator.alignment);
 
-		auto pna = cast(ubyte*)adjustPointerAlignment(pn);
-
-		// account for both, possibly changed alignment and a possible
-		// GC bug where only part of the old memory chunk is copied to
-		// the new one
-		pna[0 .. csz] = (cast(ubyte[])mem)[0 .. csz];
-
-		return pna[0 .. new_size];
+		void[] ret;
+		auto extended = GC.extend(p, new_size - mem.length, new_size - mem.length);
+		if (extended) {
+			assert(extended >= new_size+Allocator.alignment);
+			ret = p[misalign .. new_size+misalign];
+		} else {
+			ret = alloc(new_size);
+			ret[0 .. csz] = mem[0 .. csz];
+		}
+		ensureValidMemory(ret);
+		return ret;
 	}
 	void free(void[] mem)
 	{
@@ -215,36 +298,36 @@ shared class GCAllocator : Allocator {
 	}
 }
 
-synchronized class AutoFreeListAllocator : Allocator {
+final class AutoFreeListAllocator : Allocator {
+	import std.typetuple;
+
 	private {
-		FreeListAlloc[] m_freeLists;
-		shared(Allocator) m_baseAlloc;
+		enum minExponent = 5;
+		enum freeListCount = 14;
+		FreeListAlloc[freeListCount] m_freeLists;
+		Allocator m_baseAlloc;
 	}
 
-	shared this(shared(Allocator) base_allocator)
+	this(Allocator base_allocator) nothrow
 	{
 		m_baseAlloc = base_allocator;
-		foreach( i; 3 .. 12 )
-			m_freeLists ~= new shared FreeListAlloc(1<<i, m_baseAlloc);
-		m_freeLists ~= new shared FreeListAlloc(65540, m_baseAlloc);
+		foreach (i; iotaTuple!freeListCount)
+			m_freeLists[i] = new FreeListAlloc(nthFreeListSize!(i), m_baseAlloc);
 	}
 
 	void[] alloc(size_t sz)
 	{
-		void[] ret;
-		foreach( fl; m_freeLists )
-			if( sz <= fl.elementSize ){
-				ret = fl.alloc(fl.elementSize)[0 .. sz];
-				break;
-			}
-		if( !ret ) ret = m_baseAlloc.alloc(sz);
+		if (sz > nthFreeListSize!(freeListCount-1)) return m_baseAlloc.alloc(sz);
+		foreach (i; iotaTuple!freeListCount)
+			if (sz <= nthFreeListSize!(i))
+				return m_freeLists[i].alloc().ptr[0 .. sz];
 		//logTrace("AFL alloc %08X(%d)", ret.ptr, sz);
-		return ret;
+		assert(false);
 	}
 
 	void[] realloc(void[] data, size_t sz)
 	{
-		foreach (fl; m_freeLists)
+		foreach (fl; m_freeLists) {
 			if (data.length <= fl.elementSize) {
 				// just grow the slice if it still fits into the free list slot
 				if (sz <= fl.elementSize)
@@ -258,7 +341,7 @@ synchronized class AutoFreeListAllocator : Allocator {
 				free(data);
 				return newd;
 			}
-
+		}
 		// forward large blocks to the base allocator
 		return m_baseAlloc.realloc(data, sz);
 	}
@@ -266,27 +349,38 @@ synchronized class AutoFreeListAllocator : Allocator {
 	void free(void[] data)
 	{
 		//logTrace("AFL free %08X(%s)", data.ptr, data.length);
-		foreach( fl; m_freeLists )
-			if( data.length <= fl.elementSize ){
-				fl.free(data.ptr[0 .. fl.elementSize]);
+		if (data.length > nthFreeListSize!(freeListCount-1)) {
+			m_baseAlloc.free(data);
+			return;
+		}
+		foreach(i; iotaTuple!freeListCount) {
+			if (data.length <= nthFreeListSize!i) {
+				m_freeLists[i].free(data.ptr[0 .. nthFreeListSize!i]);
 				return;
 			}
-		return m_baseAlloc.free(data);
+		}
+		assert(false);
+	}
+
+	private static pure size_t nthFreeListSize(size_t i)() { return 1 << (i + minExponent); }
+	private template iotaTuple(size_t i) {
+		static if (i > 1) alias iotaTuple = TypeTuple!(iotaTuple!(i-1), i-1);
+		else alias iotaTuple = TypeTuple!(0);
 	}
 }
 
-synchronized class PoolAllocator : Allocator {
+final class PoolAllocator : Allocator {
 	static struct Pool { Pool* next; void[] data; void[] remaining; }
 	static struct Destructor { Destructor* next; void function(void*) destructor; void* object; }
 	private {
-		shared(Allocator) m_baseAllocator;
+		Allocator m_baseAllocator;
 		Pool* m_freePools;
 		Pool* m_fullPools;
 		Destructor* m_destructors;
 		size_t m_poolSize;
 	}
 
-	shared this(size_t pool_size, shared(Allocator) base)
+	this(size_t pool_size, Allocator base) nothrow
 	{
 		m_poolSize = pool_size;
 		m_baseAllocator = base;
@@ -326,11 +420,11 @@ synchronized class PoolAllocator : Allocator {
 		if( !p ){
 			auto pmem = m_baseAllocator.alloc(AllocSize!Pool);
 
-			p = emplace!Pool(pmem);
+			p = emplace!Pool(cast(Pool*)pmem.ptr);
 			p.data = m_baseAllocator.alloc(max(aligned_sz, m_poolSize));
 			p.remaining = p.data;
 			p.next = cast(Pool*)m_freePools;
-			m_freePools = cast(shared)p;
+			m_freePools = p;
 			pprev = null;
 		}
 
@@ -340,10 +434,10 @@ synchronized class PoolAllocator : Allocator {
 			if( pprev ){
 				pprev.next = p.next;
 			} else {
-				m_freePools = cast(shared)p.next;
+				m_freePools = p.next;
 			}
 			p.next = cast(Pool*)m_fullPools;
-			m_fullPools = cast(shared)p;
+			m_fullPools = p;
 		}
 
 		return ret[0 .. sz];
@@ -387,7 +481,7 @@ synchronized class PoolAllocator : Allocator {
 			for (Pool* p = cast(Pool*)m_fullPools, pnext; p; p = pnext) {
 				pnext = p.next;
 				p.next = cast(Pool*)m_freePools;
-				m_freePools = cast(shared(Pool)*)p;
+				m_freePools = cast(Pool*)p;
 			}
 
 			// free up all pools
@@ -417,18 +511,19 @@ synchronized class PoolAllocator : Allocator {
 	}
 }
 
-synchronized class FreeListAlloc : Allocator
+final class FreeListAlloc : Allocator
 {
+nothrow:
 	private static struct FreeListSlot { FreeListSlot* next; }
 	private {
 		immutable size_t m_elemSize;
-		shared(Allocator) m_baseAlloc;
+		Allocator m_baseAlloc;
 		FreeListSlot* m_firstFree = null;
 		size_t m_nalloc = 0;
 		size_t m_nfree = 0;
 	}
 
-	shared this(size_t elem_size, shared(Allocator) base_allocator)
+	this(size_t elem_size, Allocator base_allocator)
 	{
 		assert(elem_size >= size_t.sizeof);
 		m_elemSize = elem_size;
@@ -441,6 +536,11 @@ synchronized class FreeListAlloc : Allocator
 	void[] alloc(size_t sz)
 	{
 		assert(sz == m_elemSize, "Invalid allocation size.");
+		return alloc();
+	}
+
+	void[] alloc()
+	{
 		void[] mem;
 		if( m_firstFree ){
 			auto slot = m_firstFree;
@@ -467,7 +567,7 @@ synchronized class FreeListAlloc : Allocator
 	void free(void[] mem)
 	{
 		assert(mem.length == m_elemSize, "Memory block passed to free has wrong size.");
-		auto s = cast(shared(FreeListSlot)*)mem.ptr;
+		auto s = cast(FreeListSlot*)mem.ptr;
 		s.next = m_firstFree;
 		m_firstFree = s;
 		m_nalloc--;
@@ -480,9 +580,9 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 	enum ElemSize = AllocSize!T;
 
 	static if( is(T == class) ){
-		alias T TR;
+		alias TR = T;
 	} else {
-		alias T* TR;
+		alias TR = T*;
 	}
 
 	TR alloc(ARGS...)(ARGS args)
@@ -490,25 +590,33 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 		//logInfo("alloc %s/%d", T.stringof, ElemSize);
 		auto mem = manualAllocator().alloc(ElemSize);
 		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
-		static if( INIT ) return emplace!T(mem, args);
+		static if( INIT ) return internalEmplace!T(mem, args);
 		else return cast(TR)mem.ptr;
 	}
 
 	void free(TR obj)
 	{
 		static if( INIT ){
+			scope(failure) assert(0, "You shouldn't throw in destructors");
 			auto objc = obj;
-			.destroy(objc);//typeid(T).destroy(cast(void*)obj);
+			static if (is(TR == T*)) .destroy(*objc);//typeid(T).destroy(cast(void*)obj);
+			else .destroy(objc);
 		}
 		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
 		manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
 	}
 }
 
+
 template AllocSize(T)
 {
-	static if( is(T == class) ) enum AllocSize = __traits(classInstanceSize, T);
-	else enum AllocSize = T.sizeof;
+	static if (is(T == class)) {
+		// workaround for a strange bug where AllocSize!SSLStream == 0: TODO: dustmite!
+		enum dummy = T.stringof ~ __traits(classInstanceSize, T).stringof;
+		enum AllocSize = __traits(classInstanceSize, T);
+	} else {
+		enum AllocSize = T.sizeof;
+	}
 }
 
 struct FreeListRef(T, bool INIT = true)
@@ -516,9 +624,9 @@ struct FreeListRef(T, bool INIT = true)
 	enum ElemSize = AllocSize!T;
 
 	static if( is(T == class) ){
-		alias T TR;
+		alias TR = T;
 	} else {
-		alias T* TR;
+		alias TR = T*;
 	}
 
 	private TR m_object;
@@ -530,7 +638,7 @@ struct FreeListRef(T, bool INIT = true)
 		FreeListRef ret;
 		auto mem = manualAllocator().alloc(ElemSize + int.sizeof);
 		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
-		static if( INIT ) ret.m_object = emplace!T(mem, args);	
+		static if( INIT ) ret.m_object = cast(TR)internalEmplace!(Unqual!T)(mem, args);
 		else ret.m_object = cast(TR)mem.ptr;
 		ret.refCount = 1;
 		return ret;
@@ -567,14 +675,15 @@ struct FreeListRef(T, bool INIT = true)
 
 	void clear()
 	{
-		checkInvariants(); 
+		checkInvariants();
 		if( m_object ){
 			if( --this.refCount == 0 ){
 				static if( INIT ){
 					//logInfo("ref %s destroy", T.stringof);
 					//typeid(T).destroy(cast(void*)m_object);
 					auto objc = m_object;
-					.destroy(objc);
+					static if (is(TR == T)) .destroy(objc);
+					else .destroy(*objc);
 					//logInfo("ref %s destroyed", T.stringof);
 				}
 				static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
@@ -604,14 +713,14 @@ struct FreeListRef(T, bool INIT = true)
 	}
 }
 
-private void* extractUnalignedPointer(void* base)
+private void* extractUnalignedPointer(void* base) nothrow
 {
 	ubyte misalign = *(cast(ubyte*)base-1);
 	assert(misalign <= Allocator.alignment);
 	return base - misalign;
 }
 
-private void* adjustPointerAlignment(void* base)
+private void* adjustPointerAlignment(void* base) nothrow
 {
 	ubyte misalign = Allocator.alignment - (cast(size_t)base & Allocator.alignmentMask);
 	base += misalign;
@@ -648,7 +757,7 @@ unittest {
 	test_align(ptr++, 0x10);
 }
 
-private size_t alignedSize(size_t sz)
+private size_t alignedSize(size_t sz) nothrow
 {
 	return ((sz + Allocator.alignment - 1) / Allocator.alignment) * Allocator.alignment;
 }
@@ -660,4 +769,60 @@ unittest {
 		assert((ia & Allocator.alignmentMask) == 0);
 		assert(ia < i+Allocator.alignment);
 	}
+}
+
+private void ensureValidMemory(void[] mem) nothrow
+{
+	auto bytes = cast(ubyte[])mem;
+	swap(bytes[0], bytes[$-1]);
+	swap(bytes[0], bytes[$-1]);
+}
+
+/// See issue #14194
+private T internalEmplace(T, Args...)(void[] chunk, auto ref Args args)
+	if (is(T == class))
+in {
+	import std.string, std.format;
+	assert(chunk.length >= T.sizeof,
+		   format("emplace: Chunk size too small: %s < %s size = %s",
+			  chunk.length, T.stringof, T.sizeof));
+	assert((cast(size_t) chunk.ptr) % T.alignof == 0,
+		   format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
+
+} body {
+	enum classSize = __traits(classInstanceSize, T);
+	auto result = cast(T) chunk.ptr;
+
+	// Initialize the object in its pre-ctor state
+	chunk[0 .. classSize] = typeid(T).init[];
+
+	// Call the ctor if any
+	static if (is(typeof(result.__ctor(args))))
+	{
+		// T defines a genuine constructor accepting args
+		// Go the classic route: write .init first, then call ctor
+		result.__ctor(args);
+	}
+	else
+	{
+		static assert(args.length == 0 && !is(typeof(&T.__ctor)),
+				"Don't know how to initialize an object of type "
+				~ T.stringof ~ " with arguments " ~ Args.stringof);
+	}
+	return result;
+}
+
+/// Dittor
+private auto internalEmplace(T, Args...)(void[] chunk, auto ref Args args)
+	if (!is(T == class))
+in {
+	import std.string, std.format;
+	assert(chunk.length >= T.sizeof,
+		   format("emplace: Chunk size too small: %s < %s size = %s",
+			  chunk.length, T.stringof, T.sizeof));
+	assert((cast(size_t) chunk.ptr) % T.alignof == 0,
+		   format("emplace: Misaligned memory block (0x%X): it must be %s-byte aligned for type %s", chunk.ptr, T.alignof, T.stringof));
+
+} body {
+	return emplace(cast(T*)chunk.ptr, args);
 }

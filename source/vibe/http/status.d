@@ -45,12 +45,19 @@ enum HTTPStatus {
 	unsupportedMediaType         = 415,
 	requestedrangenotsatisfiable = 416,
 	expectationFailed            = 417,
+	tooManyRequests              = 429,
 	internalServerError          = 500,
 	notImplemented               = 501,
 	badGateway                   = 502,
 	serviceUnavailable           = 503,
 	gatewayTimeout               = 504,
 	httpVersionNotSupported      = 505,
+	// WebDAV status codes
+	multiStatus                  = 207,
+	unprocessableEntity          = 422,
+	locked                       = 423,
+	failedDependency             = 424,
+	insufficientStorage          = 507,
 
 	Continue = continue_, /// deprecated
 	SwitchingProtocols = switchingProtocols, /// deprecated
@@ -93,9 +100,6 @@ enum HTTPStatus {
 	GatewayTimeout = gatewayTimeout, /// deprecated
 	HTTPVersionNotSupported = httpVersionNotSupported, /// deprecated
 }
-
-/// Deprecated compatibility alias
-deprecated("Please use HTTPStatus instead.") alias HttpStatus = HTTPStatus;
 
 
 /**
@@ -146,6 +150,12 @@ string httpStatusText(int code)
 		case HTTPStatus.serviceUnavailable           : return "Service Unavailable";
 		case HTTPStatus.gatewayTimeout               : return "Gateway Time-out";
 		case HTTPStatus.httpVersionNotSupported      : return "HTTP Version not supported";
+		// WebDAV
+		case HTTPStatus.multiStatus                  : return "Multi-Status";
+		case HTTPStatus.unprocessableEntity          : return "Unprocessable Entity";
+		case HTTPStatus.locked                       : return "Locked";
+		case HTTPStatus.failedDependency             : return "Failed Dependency";
+		case HTTPStatus.insufficientStorage          : return "Insufficient Storage";
 	}
 	if( code >= 600 ) return "Unknown";
 	if( code >= 500 ) return "Unknown server error";
@@ -157,7 +167,7 @@ string httpStatusText(int code)
 }
 
 /**
-	Determines if the given status code justifies closing the connection (e.g. evil big request bodies) 
+	Determines if the given status code justifies closing the connection (e.g. evil big request bodies)
 */
 bool justifiesConnectionClose(int status) {
 	switch(status) {
@@ -165,6 +175,14 @@ bool justifiesConnectionClose(int status) {
 		case HTTPStatus.requestEntityTooLarge:
 		case HTTPStatus.requestURITooLarge:
 		case HTTPStatus.requestTimeout:
-			return true; 
+			return true;
 	}
 }
+
+/**
+	Determines if status code is generally successful (>= 200 && < 300)
+*/
+bool isSuccessCode(HTTPStatus status) {
+	return status >= 200 && status < 300;
+}
+

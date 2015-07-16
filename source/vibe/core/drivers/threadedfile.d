@@ -29,7 +29,7 @@ version(Windows){
 
 	private {
 		extern(C){
-			alias long off_t;
+			alias off_t = long;
 			int open(in char* name, int mode, ...);
 			int chmod(in char* name, int mode);
 			int close(int fd);
@@ -37,7 +37,7 @@ version(Windows){
 			int write(int fd, in void *buffer, uint count);
 			off_t lseek(int fd, off_t offset, int whence);
 		}
-		
+
 		enum O_RDONLY = 0;
 		enum O_WRONLY = 1;
 		enum O_RDWR = 2;
@@ -48,7 +48,7 @@ version(Windows){
 
 		enum _S_IREAD = 0x0100;          /* read permission, owner */
 		enum _S_IWRITE = 0x0080;          /* write permission, owner */
-		alias struct_stat stat_t;
+		alias stat_t = struct_stat;
 	}
 }
 else
@@ -62,7 +62,7 @@ private {
 	enum SEEK_END = 2;
 }
 
-class ThreadedFileStream : FileStream {
+final class ThreadedFileStream : FileStream {
 	private {
 		int m_fileDescriptor;
 		Path m_path;
@@ -71,7 +71,7 @@ class ThreadedFileStream : FileStream {
 		FileMode m_mode;
 		bool m_ownFD = true;
 	}
-	
+
 	this(Path path, FileMode mode)
 	{
 		auto pathstr = path.toNativeString();
@@ -92,7 +92,7 @@ class ThreadedFileStream : FileStream {
 		if( m_fileDescriptor < 0 )
 			//throw new Exception(format("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
 			throw new Exception("Failed to open file '"~pathstr~"'.");
-		
+
 		this(m_fileDescriptor, path, mode);
 	}
 
@@ -110,7 +110,7 @@ class ThreadedFileStream : FileStream {
 			stat_t st;
 			fstat(m_fileDescriptor, &st);
 			m_size = st.st_size;
-			
+
 			// (at least) on windows, the created file is write protected
 			version(Windows){
 				if( mode == FileMode.createTrunc )
@@ -118,7 +118,7 @@ class ThreadedFileStream : FileStream {
 			}
 		}
 		lseek(m_fileDescriptor, 0, SEEK_SET);
-		
+
 		logDebug("opened file %s with %d bytes as %d", path.toNativeString(), m_size, m_fileDescriptor);
 	}
 
@@ -126,7 +126,7 @@ class ThreadedFileStream : FileStream {
 	{
 		close();
 	}
-	
+
 	@property int fd() { return m_fileDescriptor; }
 	@property Path path() const { return m_path; }
 	@property bool isOpen() const { return m_fileDescriptor >= 0; }
@@ -147,7 +147,7 @@ class ThreadedFileStream : FileStream {
 	}
 
 	ulong tell() { return m_ptr; }
-	
+
 	void close()
 	{
 		if( m_fileDescriptor != -1 && m_ownFD ){
@@ -178,7 +178,7 @@ class ThreadedFileStream : FileStream {
 		}
 	}
 
-	alias Stream.write write;
+	alias write = Stream.write;
 	void write(in ubyte[] bytes_)
 	{
 		const(ubyte)[] bytes = bytes_;

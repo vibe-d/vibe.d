@@ -10,8 +10,9 @@ module vibe.utils.array;
 import vibe.utils.memory;
 
 import std.algorithm;
-import std.range;
+import std.range : isInputRange, isOutputRange;
 import std.traits;
+static import std.utf;
 
 
 void removeFromArray(T)(ref T[] array, T item)
@@ -37,16 +38,22 @@ enum AppenderResetMode {
 }
 
 struct AllocAppender(ArrayType : E[], E) {
-	alias Unqual!E ElemType;
+	alias ElemType = Unqual!E;
+
+	static assert(!hasIndirections!E && !hasElaborateDestructor!E);
+
 	private {
 		ElemType[] m_data;
 		ElemType[] m_remaining;
-		shared(Allocator) m_alloc;
+		Allocator m_alloc;
+		bool m_allocatedBuffer = false;
 	}
 
-	this(shared(Allocator) alloc)
+	this(Allocator alloc, ElemType[] initial_buffer = null)
 	{
 		m_alloc = alloc;
+		m_data = initial_buffer;
+		m_remaining = initial_buffer;
 	}
 
 	@disable this(this);
@@ -56,26 +63,31 @@ struct AllocAppender(ArrayType : E[], E) {
 	void reset(AppenderResetMode reset_mode = AppenderResetMode.keepData)
 	{
 		if (reset_mode == AppenderResetMode.keepData) m_data = null;
-		else if( reset_mode == AppenderResetMode.freeData) { m_alloc.free(m_data); m_data = null; }
+		else if (reset_mode == AppenderResetMode.freeData) { if (m_allocatedBuffer) m_alloc.free(m_data); m_data = null; }
 		m_remaining = m_data;
 	}
 
 	void reserve(size_t amt)
 	{
 		size_t nelems = m_data.length - m_remaining.length;
-		if( !m_data.length ){
+		if (!m_data.length) {
 			m_data = cast(ElemType[])m_alloc.alloc(amt*E.sizeof);
 			m_remaining = m_data;
+			m_allocatedBuffer = true;
 		}
-		if( m_remaining.length < amt ){
-			size_t n = m_data.length - m_remaining.length;
+		if (m_remaining.length < amt) {
 			debug {
 				import std.digest.crc;
-				auto checksum = crc32Of(m_data);
-				auto oldlen = m_data.length;
+				auto checksum = crc32Of(m_data[0 .. nelems]);
 			}
-			m_data = cast(ElemType[])m_alloc.realloc(m_data, (n+amt)*E.sizeof);
-			debug assert(crc32Of(m_data[0 .. oldlen]) == checksum);
+			if (m_allocatedBuffer) m_data = cast(ElemType[])m_alloc.realloc(m_data, (nelems+amt)*E.sizeof);
+			else {
+				auto newdata = cast(ElemType[])m_alloc.alloc((nelems+amt)*E.sizeof);
+				newdata[0 .. nelems] = m_data[0 .. nelems];
+				m_data = newdata;
+				m_allocatedBuffer = true;
+			}
+			debug assert(crc32Of(m_data[0 .. nelems]) == checksum);
 		}
 		m_remaining = m_data[nelems .. m_data.length];
 	}
@@ -89,7 +101,7 @@ struct AllocAppender(ArrayType : E[], E) {
 
 	void put(ArrayType arr)
 	{
-		if( m_remaining.length < arr.length ) grow(arr.length);
+		if (m_remaining.length < arr.length) grow(arr.length);
 		m_remaining[0 .. arr.length] = arr[];
 		m_remaining = m_remaining[arr.length .. $];
 	}
@@ -136,8 +148,40 @@ struct AllocAppender(ArrayType : E[], E) {
 	}
 }
 
+unittest {
+	auto a = AllocAppender!string(defaultAllocator());
+	a.put("Hello");
+	a.put(' ');
+	a.put("World");
+	assert(a.data == "Hello World");
+	a.reset();
+	assert(a.data == "");
+}
+
+unittest {
+	char[4] buf;
+	auto a = AllocAppender!string(defaultAllocator(), buf);
+	a.put("He");
+	assert(a.data == "He");
+	assert(a.data.ptr == buf.ptr);
+	a.put("ll");
+	assert(a.data == "Hell");
+	assert(a.data.ptr == buf.ptr);
+	a.put('o');
+	assert(a.data == "Hello");
+	assert(a.data.ptr != buf.ptr);
+}
+
+unittest {
+	char[4] buf;
+	auto a = AllocAppender!string(defaultAllocator(), buf);
+	a.put("Hello");
+	assert(a.data == "Hello");
+	assert(a.data.ptr != buf.ptr);
+}
+
 struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
-	alias Unqual!E ElemType;
+	alias ElemType = Unqual!E;
 	private {
 		ElemType[NELEM] m_data;
 		size_t m_fill;
@@ -192,13 +236,9 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 
 
 /**
+	TODO: clear ring buffer fields upon removal (to run struct destructors, if T is a struct)
 */
 struct FixedRingBuffer(T, size_t N = 0) {
-	static assert(isInputRange!FixedRingBuffer && isOutputRange!(FixedRingBuffer, T));
-
-	static if (is(typeof({ T t; const(T) u; t = u; }))) alias TC = const(T);
-	else alias TC = T;
-
 	private {
 		static if( N > 0 ) T[N] m_buffer;
 		else T[] m_buffer;
@@ -207,7 +247,9 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	}
 
 	static if( N == 0 ){
+		bool m_freeOnDestruct;
 		this(size_t capacity) { m_buffer = new T[capacity]; }
+		~this() { if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer; }
 	}
 
 	@property bool empty() const { return m_fill == 0; }
@@ -221,6 +263,7 @@ struct FixedRingBuffer(T, size_t N = 0) {
 	@property size_t capacity() const { return m_buffer.length; }
 
 	static if( N == 0 ){
+		@property void freeOnDestruct(bool b) { m_freeOnDestruct = b; }
 		@property void capacity(size_t new_size)
 		{
 			if( m_buffer.length ){
@@ -228,19 +271,30 @@ struct FixedRingBuffer(T, size_t N = 0) {
 				auto dst = newbuffer;
 				auto newfill = min(m_fill, new_size);
 				read(dst[0 .. newfill]);
+				if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer;
 				m_buffer = newbuffer;
 				m_start = 0;
 				m_fill = newfill;
-			} else m_buffer = new T[new_size];
+			} else {
+				if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer;
+				m_buffer = new T[new_size];
+			}
 		}
 	}
-	
+
 	@property ref inout(T) front() inout { assert(!empty); return m_buffer[m_start]; }
 
 	@property ref inout(T) back() inout { assert(!empty); return m_buffer[mod(m_start+m_fill-1)]; }
 
-	void put(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
-	void put(TC[] itms)
+	void clear()
+	{
+		popFrontN(length);
+		assert(m_fill == 0);
+		m_start = 0;
+	}
+
+	void put()(T itm) { assert(m_fill < m_buffer.length); m_buffer[mod(m_start + m_fill++)] = itm; }
+	void put(TC : T)(TC[] itms)
 	{
 		if( !itms.length ) return;
 		assert(m_fill+itms.length <= m_buffer.length);
@@ -380,6 +434,8 @@ struct FixedRingBuffer(T, size_t N = 0) {
 }
 
 unittest {
+	static assert(isInputRange!(FixedRingBuffer!int) && isOutputRange!(FixedRingBuffer!int, int));
+
 	FixedRingBuffer!(int, 5) buf;
 	assert(buf.length == 0 && buf.freeSpace == 5); buf.put(1); // |1 . . . .
 	assert(buf.length == 1 && buf.freeSpace == 4); buf.put(2); // |1 2 . . .

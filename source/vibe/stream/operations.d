@@ -17,6 +17,7 @@ import std.algorithm;
 import std.array;
 import std.datetime;
 import std.exception;
+import std.range : isOutputRange;
 import std.typecons;
 
 
@@ -31,10 +32,22 @@ import std.typecons;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", shared(Allocator) alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes, alloc);
 }
+/// ditto
+void readLine()(InputStream stream, OutputStream dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+{
+	readUntil(stream, dst, max_bytes, linesep);
+}
+/// ditto
+void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+	if (isOutputRange!(R, ubyte))
+{
+	readUntil(stream, dst, max_bytes, linesep);
+}
+
 
 /**
 	Reads all data of a stream until the specified end marker is detected.
@@ -61,7 +74,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string lines
 
 	Remarks:
 		This function uses an algorithm inspired by the
-		$(LINK2 http://en.wikipedia.org/wiki/Boyer%E2%80%93Moore_string_search_algorithm, 
+		$(LINK2 http://en.wikipedia.org/wiki/Boyer%E2%80%93Moore_string_search_algorithm,
 		Boyer-Moore string search algorithm). However, contrary to the original
 		algorithm, it will scan the whole input string exactly once, without
 		jumping over portions of it. This allows the algorithm to work with
@@ -73,7 +86,7 @@ ubyte[] readLine(InputStream stream, size_t max_bytes = size_t.max, string lines
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, shared(Allocator) alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
 	auto output = scoped!MemoryOutputStream(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -81,16 +94,24 @@ ubyte[] readUntil(InputStream stream, in ubyte[] end_marker, size_t max_bytes = 
 	return output.data();
 }
 /// ditto
-void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+void readUntil()(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+{
+	import vibe.stream.wrapper;
+	auto dstrng = StreamOutputRange(dst);
+	readUntil(stream, dstrng, end_marker, max_bytes);
+}
+/// ditto
+void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+	if (isOutputRange!(R, ubyte))
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
-	
+
 	// allocate internal jump table to optimize the number of comparisons
-	size_t[8] nmatchoffsetbuffer;
+	size_t[8] nmatchoffsetbuffer = void;
 	size_t[] nmatchoffset;
 	if (end_marker.length <= nmatchoffsetbuffer.length) nmatchoffset = nmatchoffsetbuffer[0 .. end_marker.length];
 	else nmatchoffset = new size_t[end_marker.length];
-	
+
 	// precompute the jump table
 	nmatchoffset[0] = 0;
 	foreach( i; 1 .. end_marker.length ){
@@ -164,12 +185,12 @@ void readUntil(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulon
 
 		// write out any false match part of previous blocks
 		if( nmatched_start > 0 ){
-			if( nmatched <= i ) dst.write(end_marker[0 .. nmatched_start]);
-			else dst.write(end_marker[0 .. nmatched_start-nmatched+i]);
+			if( nmatched <= i ) dst.put(end_marker[0 .. nmatched_start]);
+			else dst.put(end_marker[0 .. nmatched_start-nmatched+i]);
 		}
-		
+
 		// write out any unmatched part of the current block
-		if( nmatched < i ) dst.write(str[0 .. i-nmatched]);
+		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
 
 		// got a full, match => out
 		if( nmatched >= end_marker.length ) return;
@@ -211,7 +232,7 @@ unittest {
 		test("114", 70);
 		test("111111111114", 61);
 	}
-	// TODO: test 
+	// TODO: test
 }
 
 /**
@@ -277,9 +298,9 @@ string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes =
 		destination = The destination stram to pipe into
 		source =      The source stream to read data from
 		nbytes =      Number of bytes to pipe through. The default of zero means to pipe
-		              the whole input stream.
+					  the whole input stream.
 		max_latency = The maximum time before data is flushed to destination. The default value
-		              of 0 s will flush after each chunk of data read from source.
+					  of 0 s will flush after each chunk of data read from source.
 
 	See_also: OutputStream.write
 */
@@ -318,7 +339,4 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 	destination.flush();
 }
 
-/// Deprecated compatibility alias
-deprecated("Please use readAllUTF8 instead.") alias readAllUtf8 = readAllUTF8;
-
-private struct Buffer { ubyte[64*1024] bytes = void; }
+private struct Buffer { ubyte[64*1024-4] bytes = void; } // 64k - 4 bytes for reference count

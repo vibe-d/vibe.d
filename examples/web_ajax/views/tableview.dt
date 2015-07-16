@@ -1,0 +1,78 @@
+extends layout
+
+prepend block head
+	title Welcome!
+
+block content
+	.clear
+	h1 Welcome!
+
+	.datatable#datatable
+		h2 Users
+		include createTable
+
+	.filterbycontainer
+		h2 Filter users by field value
+		form(onsubmit="return getTable(this.field.value, this.value.value)", action='/table', method='GET')
+			table
+				tr
+					td Filter by:
+					td 
+						select(name="field")
+							option(value="nameid") Name
+							option(value="surnameid") Surname
+							option(value="addressid") Address
+				tr
+					td Value:
+					td 
+						input(type="text", width="160", name="value")
+				tr
+					td
+					td
+						button(type="submit") Filter
+		
+	.additemcontainer
+		h2 Add new user
+		form(action='/add_user', method='POST')
+			table
+				- import std.string;
+				- foreach ( item ; ["name", "surname", "address"] )
+					tr
+						td= item[0..1].toUpper()~item[1..$]
+						td
+							input(type="text", width="160", name="#{item}")
+				tr
+					td
+					td
+						input(type='submit', value="Add")
+
+	.additemcontainer
+		h2 Add new user (structured address)
+		form(action='/add_user_structured', method='POST')
+			table
+				- import std.string;
+				- foreach ( item ; ["name", "surname"] )
+					tr
+						td= item[0..1].toUpper()~item[1..$]
+						td
+							input(type="text", width="160", name="#{item}")
+				tr
+				- foreach ( item ; ["street", "door", "zip_code"] )
+					tr
+						td= item[0..1].toUpper()~item[1..$]
+						td
+							input(type="text", width="160", name='#{"address_"~item}')
+				tr
+					td
+					td
+						input(type='submit', value="Add")
+
+	script.
+		function getTable(field, value) {
+			var req = new XMLHttpRequest(); 
+			req.open('GET', '/data_provider/data_filtered?field='+field+'&value='+value, false);
+			req.send();
+			var tablediv=document.getElementById('datatable');
+			tablediv.innerHTML = req.responseText;
+			return false;
+		}

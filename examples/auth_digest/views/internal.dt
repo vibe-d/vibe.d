@@ -1,0 +1,8 @@
+doctype html
+html
+    head
+        title Digest Authentication Example
+    body
+        p This page is protected.
+
+

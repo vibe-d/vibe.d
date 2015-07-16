@@ -1,7 +1,7 @@
 /**
 	Contains interfaces and enums for evented I/O drivers.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -19,30 +19,40 @@ import core.time;
 import std.exception;
 
 
+version (VibeUseNativeDriverType) {
+	import vibe.core.drivers.native;
+	alias StoredEventDriver = NativeEventDriver;
+} else alias StoredEventDriver = EventDriver;
+
+
 /**
 	Returns the active event driver
 */
-EventDriver getEventDriver(bool ignore_unloaded = false)
+StoredEventDriver getEventDriver(bool ignore_unloaded = false) nothrow
 {
 	assert(ignore_unloaded || s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
 }
 
 /// private
-package void setEventDriver(EventDriver driver)
+package void setupEventDriver(DriverCore core_)
 {
-	s_driver = driver;
+	version (VibeUseNativeDriverType) {}
+	else import vibe.core.drivers.native;
+
+	s_driver = new NativeEventDriver(core_);
 }
 
 package void deleteEventDriver()
 {
-	// TODO: use destroy() instead
-	delete s_driver;
+	s_driver.dispose();
+	destroy(s_driver);
+	s_driver = null;
 }
 
 
 private {
-	EventDriver s_driver;
+	StoredEventDriver s_driver;
 }
 
 
@@ -53,24 +63,31 @@ private {
 	not intended to be used directly by users of the library.
 */
 interface EventDriver {
+	/** Frees all resources of the driver and prepares it for consumption by the GC.
+
+		Note that the driver will not be usable after calling this method. Any
+		further calls are illegal and result in undefined behavior.
+	*/
+	void dispose() /*nothrow*/;
+
 	/** Starts the event loop.
 
 		The loop will continue to run until either no more event listeners are active or until
 		exitEventLoop() is called.
 	*/
-	int runEventLoop();
+	int runEventLoop() /*nothrow*/;
 
 	/* Processes all outstanding events, potentially blocking to wait for the first event.
 	*/
-	int runEventLoopOnce();
+	int runEventLoopOnce() /*nothrow*/;
 
 	/** Processes all outstanding events if any, does not block.
 	*/
-	bool processEvents();
+	bool processEvents() /*nothrow*/;
 
 	/** Exits any running event loop.
 	*/
-	void exitEventLoop();
+	void exitEventLoop() /*nothrow*/;
 
 	/** Opens a file on disk with the speficied file mode.
 	*/
@@ -81,17 +98,15 @@ interface EventDriver {
 	DirectoryWatcher watchDirectory(Path path, bool recursive);
 
 	/** Resolves the given host name or IP address string.
+
+		'host' can be a DNS name (if use_dns is set) or an IPv4 or IPv6
+		address string.
 	*/
-	NetworkAddress resolveHost(string host, ushort family, bool no_dns);
+	NetworkAddress resolveHost(string host, ushort family, bool use_dns);
 
 	/** Establiches a tcp connection on the specified host/port.
-
-		'host' can be a DNS name or an IPv4 or IPv6 address string.
 	*/
-	TCPConnection connectTCP(string host, ushort port);
-
-	/// Deprecated compatibility alias
-	deprecated("Please use connectTCP instead.") alias connectTcp = connectTCP;
+	TCPConnection connectTCP(NetworkAddress address);
 
 	/** Listens on the specified port and interface for TCP connections.
 
@@ -101,9 +116,6 @@ interface EventDriver {
 	*/
 	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options);
 
-	/// Deprecated compatibility alias
-	deprecated("Please use listenTCP instead.") alias listenTcp = listenTCP;
-
 	/** Creates a new UDP socket and sets the specified address/port as the destination for packets.
 
 		If a bind port is specified, the socket will be able to receive UDP packets on that port.
@@ -111,15 +123,13 @@ interface EventDriver {
 	*/
 	UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0");
 
-	/// Deprecated compatibility alias
-	deprecated("Please use listenUDP instead.") alias listenUdp = listenUDP;
-
 	/** Creates a new manually triggered event.
 	*/
 	ManualEvent createManualEvent();
 
-	/// Deprecated compatibility alias
-	deprecated("Please use createNanualEvent instead.") alias createSignal = createManualEvent;
+	/** Creates an event for waiting on a non-bocking file handle.
+	*/
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers);
 
 	/** Creates a new timer.
 
@@ -153,9 +163,91 @@ interface EventDriver {
 	Provides an event driver with core functions for task/fiber control.
 */
 interface DriverCore {
+	/** Sets an exception to be thrown on the next call to $(D yieldForEvent).
+
+		Note that this only has an effect if $(D yieldForEvent) is called
+		outside of a task. To throw an exception in a task, use the
+		$(D event_exception) parameter to $(D resumeTask).
+	*/
 	@property void eventException(Exception e);
+
+	/** Yields execution until the event loop receives an event.
+
+		Throws:
+			May throw an $(D InterruptException) if the task got interrupted
+			using $(D vibe.core.task.Task.interrupt()). Rethrows any
+			exception that is passed to the $(D resumeTask) call that wakes
+			up the task.
+	*/
 	void yieldForEvent();
-	void resumeTask(Task f, Exception event_exception = null);
+
+	/** Yields execution until the event loop receives an event.
+
+		Throws:
+			This method doesn't throw. Any exceptions, such as
+			$(D InterruptException) or an exception passed to $(D resumeTask),
+			are stored and thrown on the next call to $(D yieldForEvent).
+
+	*/
+	void yieldForEventDeferThrow() nothrow;
+
+	/** Resumes the given task.
+
+		This function may only be called outside of a task to resume a
+		yielded task. The optional $(D event_exception) will be thrown in the
+		context of the resumed task.
+
+		See_also: $(D yieldAndResumeTask)
+	*/
+	void resumeTask(Task task, Exception event_exception = null);
+
+	/** Yields the current task and resumes another one.
+
+		This is the same as $(D resumeTask), but also works from within a task.
+		If called from a task, that task will be yielded first before resuming
+		the other one.
+
+		See_also: $(D resumeTask)
+	*/
+	void yieldAndResumeTask(Task task, Exception event_exception = null);
+
+	/** Notifies the core that all events have been processed.
+
+		This should be called by the driver whenever the event queue has been
+		fully processed.
+	*/
 	void notifyIdle();
 }
 
+
+/**
+	Generic file descriptor event.
+
+	This kind of event can be used to wait for events on a non-blocking
+	file descriptor. Note that this can usually only be used on socket
+	based file descriptors.
+*/
+interface FileDescriptorEvent {
+	/** Event mask selecting the kind of events to listen for.
+	*/
+	enum Trigger {
+		none = 0,         /// Match no event (invalid value)
+		read = 1<<0,      /// React on read-ready events
+		write = 1<<1,     /// React on write-ready events
+		any = read|write  /// Match any kind of event
+	}
+
+	/** Waits for the selected event to occur.
+
+		Params:
+			which = Optional event mask to react only on certain events
+			timeout = Maximum time to wait for an event
+
+		Returns:
+			The overload taking the timeout parameter returns true if
+			an event was received on time and false otherwise.
+	*/
+	void wait(Trigger which = Trigger.any);
+	/// ditto
+	bool wait(Duration timeout, Trigger which = Trigger.any);
+}

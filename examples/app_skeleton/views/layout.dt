@@ -1,4 +1,4 @@
-!!! 5
+doctype html
 html
 	head
 		link(rel="stylesheet", href="styles/common.css")

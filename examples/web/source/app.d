@@ -8,7 +8,8 @@ import vibe.http.server;
 import vibe.utils.validation;
 import vibe.web.web;
 
-class UserSettings {
+struct UserSettings {
+	bool loggedIn = false;
 	string userName;
 	bool someSetting;
 }
@@ -24,52 +25,61 @@ class SampleService {
 		render!("home.dt", settings);
 	}
 
-	void getLogin(string error = null) { render!("login.dt", error); }
-	void postLogin(string user, string password)
+	void getLogin(string _error = null)
 	{
-		try {
-			validateUserName(user);
-			enforce(password == "secret", "Invalid password.");
-		} catch (Exception e) {
-			getLogin(e.msg);
-			return;
-		}
+		string error = _error;
+		render!("login.dt", error);
+	}
 
-		auto s = new UserSettings;
+	@errorDisplay!getLogin
+	void postLogin(ValidUsername user, string password)
+	{
+		enforce(password == "secret", "Invalid password.");
+
+		UserSettings s;
+		s.loggedIn = true;
 		s.userName = user;
 		s.someSetting = false;
 		m_userSettings = s;
 		redirect("./");
 	}
 
-	void postLogout(HTTPServerResponse res)
+	void postLogout(scope HTTPServerResponse res)
 	{
-		m_userSettings = null;
+		m_userSettings = UserSettings.init;
 		res.terminateSession();
 		redirect("./");
 	}
 
-	void getSettings(string error = null)
+	@auth
+	void getSettings(string _authUser, string _error = null)
 	{
-		auto settings = m_userSettings;
+		UserSettings settings = m_userSettings;
+		auto error = _error;
 		render!("settings.dt", error, settings);
 	}
 
-	void postSettings(bool some_setting, string user_name)
+	@auth @errorDisplay!getSettings
+	void postSettings(bool some_setting, ValidUsername user_name, string _authUser)
 	{
-		try {
-			enforce(m_userSettings !is null, "Must be logged in to change settings.");
-			validateUserName(user_name);
-			m_userSettings.userName = user_name;
-			m_userSettings.someSetting = some_setting;
-		} catch (Exception e) {
-			getSettings(e.msg);
-			return;
-		}
-
+		assert(m_userSettings.loggedIn);
+		UserSettings s = m_userSettings;
+		s.userName = user_name;
+		s.someSetting = some_setting;
+		m_userSettings = s;
 		redirect("./");
 	}
+
+	private enum auth = before!ensureAuth("_authUser");
+	private string ensureAuth(scope HTTPServerRequest req, scope HTTPServerResponse res)
+	{
+		if (!SampleService.m_userSettings.loggedIn) redirect("/login");
+		return SampleService.m_userSettings.userName;
+	}
+
+	mixin PrivateAccessProxy; // adds support for using private member functions with "before"
 }
+
 
 shared static this()
 {

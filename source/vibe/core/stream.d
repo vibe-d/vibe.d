@@ -15,11 +15,28 @@ import std.conv;
 
 
 /**************************************************************************************************/
+/* Public functions                                                                               */
+/**************************************************************************************************/
+
+/**
+	Returns a `NullOutputStream` instance.
+
+	The instance will only be created on the first request and gets reused for
+	all subsequent calls from the same thread.
+*/
+NullOutputStream nullSink()
+{
+	static NullOutputStream ret;
+	if (!ret) ret = new NullOutputStream;
+	return ret;
+}
+
+/**************************************************************************************************/
 /* Public types                                                                                   */
 /**************************************************************************************************/
 
 /**
-Interface for all classes implementing readable streams.
+	Interface for all classes implementing readable streams.
 */
 interface InputStream {
 	/** Returns true iff the end of the input stream has been reached.
@@ -36,11 +53,14 @@ interface InputStream {
 	*/
 	@property bool dataAvailableForRead();
 
-	/** Returns a temporary reference to the data that is currently buffered, typically has the size
-		leastSize() or 0 if dataAvailableForRead() returns false.
+	/** Returns a temporary reference to the data that is currently buffered.
 
-		Note that any method invocation on the same stream invalidates the contents of the returned
-		buffer.
+		The returned slice typically has the size `leastSize()` or `0` if
+		`dataAvailableForRead()` returns false. Streams that don't have an
+		internal buffer will always return an empty slice.
+
+		Note that any method invocation on the same stream potentially
+		invalidates the contents of the returned buffer.
 	*/
 	const(ubyte)[] peek();
 
@@ -84,25 +104,6 @@ interface OutputStream {
 		is thrown.
 	*/
 	void write(InputStream stream, ulong nbytes = 0);
-
-	/** These methods provide an output range interface.
-
-		Note that these functions do not flush the output stream for performance reasons. flush()
-		needs to be called manually afterwards.
-
-		See_Also: $(LINK http://dlang.org/phobos/std_range.html#isOutputRange)
-	*/
-	final void put(ubyte elem) { write((&elem)[0 .. 1]); }
-	/// ditto
-	final void put(in ubyte[] elems) { write(elems); }
-	/// ditto
-	final void put(char elem) { write((&elem)[0 .. 1]); }
-	/// ditto
-	final void put(in char[] elems) { write(elems); }
-	/// ditto
-	final void put(dchar elem) { import std.utf; char[4] chars; encode(chars, elem); put(chars); }
-	/// ditto
-	final void put(in dchar[] elems) { foreach( ch; elems ) put(ch); }
 
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0)
 	{
@@ -161,6 +162,9 @@ interface ConnectionStream : Stream {
 		Note that close must always be called, even if the remote has already
 		closed the connection. Failure to do so will result in resource and
 		memory leakage.
+
+		Closing a connection implies a call to finalize, so that it doesn't
+		need to be called explicitly (it will be a no-op in that case).
 	*/
 	void close();
 
@@ -196,7 +200,7 @@ interface RandomAccessStream : Stream {
 	Any data written to the stream will be ignored and discarded. This stream type is useful if
 	the output of a particular stream is not needed but the stream needs to be drained.
 */
-class NullOutputStream : OutputStream {
+final class NullOutputStream : OutputStream {
 	void write(in ubyte[] bytes) {}
 	void write(InputStream stream, ulong nbytes = 0)
 	{
