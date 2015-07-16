@@ -44,6 +44,9 @@ import std.traits;
 		$(TR $(TD add)    $(TD POST))
 		$(TR $(TD create) $(TD POST))
 		$(TR $(TD post)   $(TD POST))
+		$(TR $(TD remove) $(TD DELETE))
+		$(TR $(TD erase)  $(TD DELETE))
+		$(TR $(TD delete) $(TD DELETE))
 	)
 
 	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
