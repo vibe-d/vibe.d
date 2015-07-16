@@ -47,6 +47,7 @@ class ConnectionPool(Connection)
 
 	LockedConnection!Connection lockConnection()
 	{
+		m_sem.lock();
 		size_t cidx = size_t.max;
 		foreach( i, c; m_connections ){
 			auto plc = c in m_lockCount;
@@ -86,7 +87,6 @@ struct LockedConnection(Connection) {
 	private this(ConnectionPool!Connection pool, Connection conn)
 	{
 		assert(conn !is null);
-		pool.m_sem.lock();
 		m_pool = pool;
 		m_conn = conn;
 		m_task = Task.getThis();

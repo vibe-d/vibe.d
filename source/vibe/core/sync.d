@@ -112,9 +112,8 @@ unittest {
 
 /** Semaphore implementation for tasks.
 
-	It is not thread-safe, which is on purpose for performance reasons.
-	It will lock up to an adjustable maximum count of internal tasks.
-	Usage example is to limit concurrent connections in a connection pool
+	If no slots are available, the semaphore will lock the task, up to an adjustable maximum count of internal tasks.
+	The primary use for this in vibe.d is to limit concurrent connections in a connection pool
 */
 class LocalTaskSemaphore
 {
@@ -146,29 +145,31 @@ class LocalTaskSemaphore
 	}
 
 	bool tryLock()
-	{
-		return m_waiters.empty && available > 0;
+	{		
+		if (available > 0) 
+		{
+			m_locks++; 
+			return true;
+		}
+		return false;
 	}
 
 	void lock(ubyte priority = 0)
 	{ 
-		if (tryLock()) {
-			m_locks++;
+		if (tryLock())
 			return;
-		}
-
+		
 		Waiter w;
 		w.signal = getEventDriver().createManualEvent();
 		w.priority = priority;
 		w.seq = min(0, m_seq - w.priority);
 		if (++m_seq == uint.max)
 			rewindSeq();
-
+		
 		m_waiters.insert(w);
-		w.signal.wait();
+		do w.signal.wait(); while (!tryLock());
 		// on resume:
 		destroy(w.signal);
-		assert(available > 0, "An available slot was taken from us!");
 	}
 
 	void unlock() 
