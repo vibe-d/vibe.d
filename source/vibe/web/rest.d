@@ -35,6 +35,9 @@ import std.array : startsWith, endsWith;
 		<tr><td>add</td><td>POST</td></tr>
 		<tr><td>create</td><td>POST</td></tr>
 		<tr><td>post</td><td>POST</td></tr>
+		<tr><td>remove</td><td>DELETE</td></tr>
+		<tr><td>erase</td><td>DELETE</td></tr>
+		<tr><td>delete</td><td>DELETE</td></tr>
 	</table>
 
 	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
