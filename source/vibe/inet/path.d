@@ -28,10 +28,24 @@ struct Path {
 		bool m_endsWithSlash = false;
 	}
 
+	hash_t toHash()
+	const nothrow @trusted {
+		hash_t ret;
+		auto strhash = &typeid(string).getHash;
+		try foreach (n; nodes) ret ^= strhash(&n.m_name);
+		catch (Throwable) assert(false);
+		if (m_absolute) ret ^= 0xfe3c1738;
+		if (m_endsWithSlash) ret ^= 0x6aa4352d;
+		return ret;
+	}
+
+	pure:
+
 	/// Constructs a Path object by parsing a path string.
 	this(string pathstr)
 	{
-		m_nodes = cast(immutable)splitPath(pathstr);
+		static if (__VERSION__ < 2067) m_nodes = cast(immutable)splitPath(pathstr);
+		else m_nodes = splitPath(pathstr);
 		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && (m_nodes[0].toString().canFind(':') || m_nodes[0] == "\\"));
 		m_endsWithSlash = pathstr.endsWith("/");
 	}
@@ -44,7 +58,8 @@ struct Path {
 	}
 
 	/// Constructs a relative path with one path entry.
-	this(PathEntry entry){
+	this(PathEntry entry)
+	{
 		m_nodes = [entry];
 		m_absolute = false;
 	}
@@ -243,17 +258,6 @@ struct Path {
 		if( m_nodes.length < rhs.m_nodes.length ) return -1;
 		return 0;
 	}
-
-	hash_t toHash()
-	const nothrow @trusted {
-		hash_t ret;
-		auto strhash = &typeid(string).getHash;
-		try foreach (n; nodes) ret ^= strhash(&n.m_name);
-		catch (Throwable) assert(false);
-		if (m_absolute) ret ^= 0xfe3c1738;
-		if (m_endsWithSlash) ret ^= 0x6aa4352d;
-		return ret;
-	}
 }
 
 
@@ -360,6 +364,8 @@ struct PathEntry {
 		string m_name;
 	}
 
+	pure:
+
 	this(string str)
 	{
 		assert(!str.canFind('/') && (!str.canFind('\\') || str.length == 1), "Invalid path entry: " ~ str);
@@ -368,7 +374,7 @@ struct PathEntry {
 
 	string toString() const nothrow { return m_name; }
 
-	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Path(cast(immutable)[this, rhs], false); }
+	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Path([this, rhs], false); }
 
 	bool opEquals(ref const PathEntry rhs) const { return m_name == rhs.m_name; }
 	bool opEquals(PathEntry rhs) const { return m_name == rhs.m_name; }
@@ -378,7 +384,7 @@ struct PathEntry {
 }
 
 private bool isValidFilename(string str)
-{
+pure {
 	foreach( ch; str )
 		if( ch == '/' || /*ch == ':' ||*/ ch == '\\' ) return false;
 	return true;
@@ -386,7 +392,7 @@ private bool isValidFilename(string str)
 
 /// Joins two path strings. subpath must be relative.
 string joinPath(string basepath, string subpath)
-{
+pure {
 	Path p1 = Path(basepath);
 	Path p2 = Path(subpath);
 	return (p1 ~ p2).toString();
@@ -394,7 +400,7 @@ string joinPath(string basepath, string subpath)
 
 /// Splits up a path string into its elements/folders
 PathEntry[] splitPath(string path)
-{
+pure {
 	if( path.startsWith("/") || path.startsWith("\\") ) path = path[1 .. $];
 	if( path.empty ) return null;
 	if( path.endsWith("/") || path.endsWith("\\") ) path = path[0 .. $-1];
