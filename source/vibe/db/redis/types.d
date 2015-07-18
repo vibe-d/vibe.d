@@ -227,7 +227,7 @@ struct RedisValue {
 
 	/** Removes the referenced key.
 
-		Returns: $(D true) if the key was successfully removed.
+		Returns: $(D true) $(I iff) the key was successfully removed.
 
 		See_also: $(LINK2 http://redis.io/commands/del, DEL)
 	*/
@@ -238,7 +238,7 @@ struct RedisValue {
 		Note that Redis handles timeouts in second resolution, so that the
 		timeout must be at least one second.
 
-		Returns: $(D true) if the expiration time was successfully set.
+		Returns: $(D true) $(I iff) the expiration time was successfully set.
 
 		See_also: $(LINK2 http://redis.io/commands/expire, EXPIRE)
 	*/
@@ -249,7 +249,7 @@ struct RedisValue {
 		Note that Redis handles timeouts in second resolution, so that any
 		fractional seconds of the given $(D expire_time) will be truncated.
 
-		Returns: $(D true) if the expiration time was successfully set.
+		Returns: $(D true) $(I iff) the expiration time was successfully set.
 
 		See_also: $(LINK2 http://redis.io/commands/expireat, EXPIREAT)
 	*/
@@ -258,7 +258,7 @@ struct RedisValue {
 	/** Removes any existing expiration time for the key.
 
 		Returns:
-			$(D true) if the key exists and an existing timeout was removed.
+			$(D true) $(I iff) the key exists and an existing timeout was removed.
 
 		See_also: $(LINK2 http://redis.io/commands/persist, PERSIST)
 	*/
@@ -269,7 +269,7 @@ struct RedisValue {
 		Existing keys will not be overwritten.
 
 		Returns:
-			$(D true) if the key exists and was successfully moved to the
+			$(D true) $(I iff) the key exists and was successfully moved to the
 			destination database.
 
 		See_also: $(LINK2 http://redis.io/commands/move, MOVE)
@@ -291,7 +291,7 @@ struct RedisValue {
 		key if the rename was successful.
 
 		Returns:
-			$(D true) if the source key exists and the destination key doesn't
+			$(D true) $(I iff) the source key exists and the destination key doesn't
 			exist.
 
 		See_also: $(LINK2 http://redis.io/commands/renamenx, RENAMENX), $(D rename)
