@@ -139,7 +139,7 @@ void exitEventLoop(bool shutdown_all_threads = false)
 
 	Checks if events are ready to trigger immediately, and run their callbacks if so.
 
-	Returns: Returns false iff exitEventLoop was called in the process.
+	Returns: Returns false $(I iff) exitEventLoop was called in the process.
 */
 bool processEvents()
 {
