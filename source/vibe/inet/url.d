@@ -73,6 +73,8 @@ struct URL {
 					enforce(str.startsWith("//"), "URL must start with proto://...");
 					requires_host = true;
 					str = str[2 .. $];
+					if (m_schema == "file")
+						break;
 					goto default;
 				default:
 					auto si = str.indexOfCT('/');
@@ -339,4 +341,13 @@ unittest {
 unittest {
 	auto url = URL("http://example.com/some%2bpath");
 	assert(url.path.toString() == "/some+path", url.path.toString());
+}
+
+unittest {
+	assert(URL("file:///test").pathString == "/test");
+	assert(URL("file:///test").path.toString() == "/test");
+	assert(URL("file://test").pathString == "test");
+	assert(URL("file://test").path.toString() == "test");
+	assert(URL("file://./test").pathString == "./test");
+	assert(URL("file://./test").path.toString() == "./test");
 }
