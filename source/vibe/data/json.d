@@ -999,7 +999,7 @@ struct Json {
 
 	private long bigIntToLong() inout
 	{
-		assert(m_type == Type.bigInt);
+		assert(m_type == Type.bigInt, format("Converting non-bigInt type with bitIntToLong!?: %s", cast(Type)m_type));
 		enforceJson(m_bigInt >= long.min && m_bigInt <= long.max, "Number out of range while converting BigInt("~format("%d", m_bigInt)~") to long.");
 		return m_bigInt.toLong();
 	}
@@ -1698,8 +1698,12 @@ struct JsonSerializer {
 		static if (is(T == Json)) return m_current;
 		else static if (isJsonSerializable!T) return T.fromJson(m_current);
 		else static if (is(T == float) || is(T == double)) {
-			if (m_current.type == Json.Type.undefined) return T.nan;
-			return m_current.type == Json.Type.float_ ? cast(T)m_current.get!double : Json.Type.bigInt ? cast(T)m_current.bigIntToLong() : cast(T)m_current.get!long;
+			switch (m_current.type) {
+				default: return cast(T)m_current.get!long;
+				case Json.Type.undefined: return T.nan;
+				case Json.Type.float_: return cast(T)m_current.get!double;
+				case Json.Type.bigInt: return cast(T)m_current.bigIntToLong();
+			}
 		}
 		else {
 			return m_current.get!T();
