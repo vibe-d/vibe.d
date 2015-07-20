@@ -1219,6 +1219,7 @@ body {
 				import std.algorithm : canFind, splitter;
 				// splitter doesn't work with alias this ?
 				auto str = pathAttr.value.startsWith("/") ? pathAttr.value[1 .. $] : pathAttr.value.data;
+				if (str.endsWith("/")) str = str[0 .. $-1];
 				auto sp = str.splitter('/');
 				foreach (elem; sp) {
 					if (!elem.length)
@@ -1317,8 +1318,10 @@ unittest {
 // Issue 1017
 unittest {
 	interface TestSuccess { @path("/") void test(); }
+	interface TestSuccess2 { @path("/test/") void test(); }
 	interface TestFail { @path("//") void test(); }
 	static assert(getInterfaceValidationError!TestSuccess is null);
+	static assert(getInterfaceValidationError!TestSuccess2 is null);
 	static assert(stripTestIdent(getInterfaceValidationError!TestFail)
 		== "Path '//' contains empty entries.");
 }
