@@ -1140,6 +1140,7 @@ private string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 body {
 	import std.typetuple : TypeTuple;
+	import std.algorithm : strip;
 
 	// The hack parameter is to kill "Statement is not reachable" warnings.
 	string validateMethod(alias Func)(bool hack = true) {
@@ -1218,12 +1219,11 @@ body {
 			} else {
 				import std.algorithm : canFind, splitter;
 				// splitter doesn't work with alias this ?
-				auto str = pathAttr.value.startsWith("/") ? pathAttr.value[1 .. $] : pathAttr.value.data;
-				if (str.endsWith("/")) str = str[0 .. $-1];
-				auto sp = str.splitter('/');
-				foreach (elem; sp) {
-					if (!elem.length)
-						return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
+				auto str = pathAttr.value.data;
+				if (str.canFind("//")) return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
+				str = str.strip('/');
+				foreach (elem; str.splitter('/')) {
+					assert(elem.length, "Empty path entry not caught yet!?");
 
 					if (elem[0] == ':') {
 						// typeof(PN) is void when length is 0.
@@ -1320,10 +1320,13 @@ unittest {
 	interface TestSuccess { @path("/") void test(); }
 	interface TestSuccess2 { @path("/test/") void test(); }
 	interface TestFail { @path("//") void test(); }
+	interface TestFail2 { @path("/test//it/") void test(); }
 	static assert(getInterfaceValidationError!TestSuccess is null);
 	static assert(getInterfaceValidationError!TestSuccess2 is null);
 	static assert(stripTestIdent(getInterfaceValidationError!TestFail)
 		== "Path '//' contains empty entries.");
+	static assert(stripTestIdent(getInterfaceValidationError!TestFail2)
+		== "Path '/test//it/' contains empty entries.");
 }
 
 unittest {
