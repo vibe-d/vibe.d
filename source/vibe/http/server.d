@@ -812,6 +812,12 @@ final class HTTPServerResponse : HTTPResponse {
 		statusCode = status;
 		writeBody(data, content_type);
 	}
+	/// ditto
+	void writeBody(scope InputStream data, string content_type = null)
+	{
+		if (content_type != "") headers["Content-Type"] = content_type;
+		bodyWriter.write(data);
+	}
 
 	/** Writes the whole response body at once, without doing any further encoding.
 
