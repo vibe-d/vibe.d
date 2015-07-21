@@ -257,6 +257,7 @@ Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 
 	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
+	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
@@ -276,6 +277,7 @@ Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS ar
 
 	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
+	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);

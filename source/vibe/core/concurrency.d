@@ -1217,6 +1217,7 @@ static if (newStdConcurrency) {
 	void receive(OPS...)(OPS ops)
 	{
 		auto tid = Task.getThis();
+		assert(tid != Task.init, "Cannot receive task messages outside of a task.");
 		tid.messageQueue.receive(opsFilter(ops), opsHandler(ops));
 	}
 
@@ -1239,6 +1240,7 @@ static if (newStdConcurrency) {
 	bool receiveTimeout(OPS...)(Duration timeout, OPS ops)
 	{
 		auto tid = Task.getThis();
+		assert(tid != Task.init, "Cannot receive task messages outside of a task.");
 		return tid.messageQueue.receiveTimeout!OPS(timeout, opsFilter(ops), opsHandler(ops));
 	}
 
