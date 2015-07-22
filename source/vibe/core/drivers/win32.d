@@ -572,7 +572,7 @@ final class Win32FileStream : FileStream {
 		{
 			// truncate file
 			// TODO: seek to start pos?
-			BOOL ret = SetEndOfFile(m_handle);
+			BOOL ret = vibe.internal.win32.SetEndOfFile(m_handle);
 			errorcode = GetLastError();
 			enforce(ret, "Failed to call SetFileEndPos for path "~path.toNativeString()~", Error: " ~ to!string(errorcode));
 		}
