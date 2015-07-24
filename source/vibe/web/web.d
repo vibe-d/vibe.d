@@ -586,6 +586,8 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 					readFormParamRec(req, params[i], param_names[i], true);
 				}
 			}
+		} catch (HTTPStatusException ex) {
+			throw ex;
 		} catch (Exception ex) {
 			static if (erruda.found && ERROR.length == 0) {
 				auto err = erruda.value.getError(ex, param_names[i]);
