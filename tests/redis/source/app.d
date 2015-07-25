@@ -91,8 +91,8 @@ void runTest()
 	
 	assert(!sub.isListening);
 	sub.listen((string channel, string msg){
-		logInfo("LISTEN Recv Channel: %s, Message: %s", channel.to!string, msg.to!string);
-		logInfo("LISTEN Recv Time: %s", Clock.currTime().toString());
+		logInfo("LISTEN Recv Channel: %s, Message: %s", channel, msg);
+		logInfo("LISTEN Recv Time: %s", Clock.currTime());
 	});
 	assert(sub.isListening);
 	sub.subscribe("SomeChannel");
@@ -102,7 +102,7 @@ void runTest()
 	
 	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
 	
-	logInfo("PUBLISH Sent: %s", Clock.currTime().toString());
+	logInfo("PUBLISH Sent: %s", Clock.currTime());
 	sleep(100.msecs);
 	
 	sub.unsubscribe("SomeChannel");
