@@ -24,6 +24,7 @@ import vibe.core.core;
 import vibe.http.common;
 import vibe.http.router;
 import vibe.http.server;
+import vibe.http.websockets;
 
 /*
 	TODO:
@@ -97,6 +98,10 @@ import vibe.http.server;
 				$(D vibe.http.common.HTTPRequest) or
 				$(D vibe.http.common.HTTPResponse) will receive the
 				request/response objects of the invoking request.)
+			$(LI If a parameter of the type `WebSocket` is found, the route
+				is registered as a web socket endpoint. It will automatically
+				upgrade the connection and pass the resulting WebSocket to
+				the connection.)
 		)
 
 
@@ -540,7 +545,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 {
 	import std.algorithm : countUntil, startsWith;
 	import std.traits;
-	import std.typetuple : Filter;
+	import std.typetuple : Filter, staticIndexOf;
 	import vibe.data.json;
 	import vibe.internal.meta.funcattr;
 	import vibe.internal.meta.uda : findFirstUDA;
@@ -572,6 +577,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (is(PT == InputStream)) params[i] = req.bodyReader;
 			else static if (is(PT == HTTPServerRequest) || is(PT == HTTPRequest)) params[i] = req;
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
+			else static if (is(PT == WebSocket)) {} // handled below
 			else static if (param_names[i].startsWith("_")) {
 				if (auto pv = param_names[i][1 .. $] in req.params) params[i].setVoid((*pv).webConvTo!PT);
 				else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
@@ -639,7 +645,16 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	try {
 		import vibe.internal.meta.funcattr;
 
-		static if (is(RET == void)) {
+		static if (staticIndexOf!(WebSocket, PARAMS) >= 0) {
+			static assert(is(RET == void), "WebSocket handlers must return void.");
+			handleWebSocket((scope ws) {
+				foreach (i, PT; PARAMS)
+					static if (is(PT == WebSocket))
+						params[i] = ws;
+
+				__traits(getMember, instance, M)(params);
+			}, req, res);
+		} else static if (is(RET == void)) {
 			__traits(getMember, instance, M)(params);
 		} else {
 			auto ret = __traits(getMember, instance, M)(params);
