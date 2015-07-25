@@ -39,8 +39,8 @@ nothrow @safe {
 	This level applies to the default stdout/stderr logger only.
 
 	Params:
-		fmt = The log format for the stdout (default is FileLogger.Format.thread)
-		infoFmt = The log format for the stderr (default is FileLogger.Format.plain)
+		fmt = The log format for the stdout (default is `FileLogger.Format.plain`)
+		infoFmt = The log format for the stderr (default is `FileLogger.Format.thread`)
 */
 void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.Format.plain)
 nothrow @safe {
