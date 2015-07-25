@@ -46,19 +46,12 @@ import vibe.http.websockets;
 	The following table lists the mappings from prefix verb to HTTP verb:
 
 	$(TABLE
-		$(TR $(TH Prefix) $(TH HTTP verb))
-		$(TR $(TD get)	  $(TD GET))
-		$(TR $(TD query)  $(TD GET))
-		$(TR $(TD set)    $(TD PUT))
-		$(TR $(TD put)    $(TD PUT))
-		$(TR $(TD update) $(TD PATCH))
-		$(TR $(TD patch)  $(TD PATCH))
-		$(TR $(TD add)    $(TD POST))
-		$(TR $(TD create) $(TD POST))
-		$(TR $(TD post)   $(TD POST))
-		$(TR $(TD remove) $(TD DELETE))
-		$(TR $(TD erase)  $(TD DELETE))
-		$(TR $(TD delete) $(TD DELETE))
+		$(TR $(TH HTTP method) $(TH Recognized prefixes))
+		$(TR $(TD GET)	  $(TD get, query))
+		$(TR $(TD PUT)    $(TD set, put))
+		$(TR $(TD POST)   $(TD add, create, post))
+		$(TR $(TD DELETE) $(TD remove, erase, delete))
+		$(TR $(TD PATCH)  $(TD update, patch))
 	)
 
 	Method parameters will be sourced from either the query string
