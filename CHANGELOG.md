@@ -19,6 +19,7 @@ v0.7.24 - 2015-07-
  - Added overloads for `scope` based HTTP server callbacks
    - These will later be used for safe, allocation-less HTTP request processing
    - Always prefer this over the non-`scope` callbacks, as these will imply a performance impact in later versions
+ - Added support for `WebSocket` routes in `vibe.web.web` - [issue #952][issue952]
  - Added `vibe.core.stream.nullSink` as a convenient way to get a generic data sink stream
  - Added overloads of `writeFormData` and `writeFormBody` that accept ranges of key/value tuples (by Tobias Pankrath)
  - Added `HTTPClientResponse.switchProtocol` (by Luca Niccoli) - [pull #945][issue945]
@@ -30,12 +31,16 @@ v0.7.24 - 2015-07-
  - Removed the `HTTPRouter` interface (now just a compatibility alias to `URLRouter`) (by Mathias Lang) - [pull #1106][issue1106]
  - Added `HTTPStatus.tooManyRequests` (by Jack Applegame) - [pull #1103][issue1103]
  - Added optional `code` and `reason` parameters to `WebSocket.close()` (by Steven Dwy) - [pull #1107][issue1107]
- - Added an optional copy+delete fallback to `moveFile()` (by Etienne Cimon)
+ - Added an optional copy+delete fallback to `moveFile()` (by Etienne Cimon and Martin Nowak)
  - Let `ConnectionProxyStream` work without an underlying `ConnectionStream` (by Etienne Cimon)
  - Added a `ConnectionProxyStream` constructor taking separate input and output streams
  - Updated the OpenSSL Windows binaries to 1.0.1m
  - Added `BigInt` support to the JSON module (by Igor Stepanov) - [pull #1118][issue1118]
  - The event loop of the win32 driver can now be stopped by sending a `WM_QUIT` message (by Денис Хлякин aka aka-demik) - [pull #1120][issue1120]
+ - Marked `vibe.inet.path` as `pure` and removed casts that became superfluous
+ - Added an `InputStream` based overload of `HTTPServerResponse.writeBody`
+ - The web interface generator doesn't intercept `HTTPStatusException`s thrown during parameter assembly anymore
+ - Added all Redis modules to the `vibe.vibe` module
 
 ### Bug fixes ###
 
@@ -66,9 +71,17 @@ v0.7.24 - 2015-07-
  - Fixed possible CPU hog in timer code for periodic timer events that were triggered too fast
  - Fixed a possible memory leak and wrongly reported request times for HTTP connections that get terminated before finishing a response - [issue #1157][issue1157]
  - Fixed `vibe.web.web.redirect()` to work properly for relative paths with query strings
+ - Fixed invalid JSON syntax in dub.json - [issue #1172][issue1172]
+ - Fixed `LibasyncFileStream` when used with `FileMode.createTrunc` (by Etienne Cimon) - [pull #1176][issue1176]
+ - Fixed `deserialize` when operating on a struct/class that is annotated with `@asArray` (by Colden Cullen) - [pull #1182][issue1182]
+ - Fixed parsing quoted HTTP multi part form boundaries (by Mathias L. Baumann aka Marenz) - [pull #1183][issue1183]
+ - Fixed `LibasyncFileStream.peek()` to always return `null` (by Etienne Cimon) - [pull #1179][issue1179]
+ - Fixed `ThreadedFile.seek` for 32-bit Windows applications (libevent driver) - [issue #1189][issue1189]
+ - Fixed parsing of relative `file://` URLs
 
 
 [issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
+[issue952]: https://github.com/rejectedsoftware/vibe.d/issues/952
 [issue999]: https://github.com/rejectedsoftware/vibe.d/issues/999
 [issue1010]: https://github.com/rejectedsoftware/vibe.d/issues/1010
 [issue1032]: https://github.com/rejectedsoftware/vibe.d/issues/1032
@@ -98,6 +111,12 @@ v0.7.24 - 2015-07-
 [issue1157]: https://github.com/rejectedsoftware/vibe.d/issues/1157
 [issue1158]: https://github.com/rejectedsoftware/vibe.d/issues/1158
 [issue1159]: https://github.com/rejectedsoftware/vibe.d/issues/1159
+[issue1172]: https://github.com/rejectedsoftware/vibe.d/issues/1172
+[issue1176]: https://github.com/rejectedsoftware/vibe.d/issues/1176
+[issue1179]: https://github.com/rejectedsoftware/vibe.d/issues/1179
+[issue1182]: https://github.com/rejectedsoftware/vibe.d/issues/1182
+[issue1183]: https://github.com/rejectedsoftware/vibe.d/issues/1183
+[issue1189]: https://github.com/rejectedsoftware/vibe.d/issues/1189
 
 
 v0.7.23 - 2015-03-25
