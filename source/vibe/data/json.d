@@ -1155,6 +1155,8 @@ unittest {
 }
 
 unittest {
+	try parseJsonString(" \t\n ");
+	catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
 	try parseJsonString(`{"a": 1`);
 	catch (Exception e) assert(e.msg.endsWith("Missing '}' before EOF."));
 	try parseJsonString(`{"a": 1 x`);
