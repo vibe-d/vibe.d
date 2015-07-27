@@ -1031,6 +1031,8 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 
 	skipWhitespace(range, line);
 
+	enforceJson(!range.empty, "JSON string contains only whitespaces.", filename, 0);
+
 	version(JsonLineNumbers) {
 		import vibe.core.log;
 		int curline = line ? *line : 0;
