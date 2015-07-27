@@ -2,7 +2,7 @@
 	"name": "vibe-d",
 	"description": "Event driven web and concurrency framework",
 	"license": "MIT",
-	"copyright": "Copyright © 2012-2014 rejectedsoftware e.K.",
+	"copyright": "Copyright © 2012-2015 rejectedsoftware e.K.",
 	"homepage": "http://vibed.org/",
 	"authors": [
 		"Sönke Ludwig",
