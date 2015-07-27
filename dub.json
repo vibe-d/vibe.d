@@ -1,6 +1,6 @@
 {
 	"name": "vibe-d",
-	"description": "Asynchronous I/O framework",
+	"description": "Event driven web and concurrency framework",
 	"license": "MIT",
 	"copyright": "Copyright © 2012-2014 rejectedsoftware e.K.",
 	"homepage": "http://vibed.org/",
