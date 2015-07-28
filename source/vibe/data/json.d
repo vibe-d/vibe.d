@@ -268,15 +268,6 @@ struct Json {
 	}
 
 	/**
-		Check whether the JSON object contains the given key and if yes,
-		return a pointer to the corresponding object, otherwise return `null`.
-	*/
-	inout(Json*) opBinaryRight(string op : "in")(string key) inout {
-		checkType!(Json[string])();
-		return key in m_object;
-	}
-
-	/**
 		Allows direct indexing of array typed JSON values.
 	*/
 	ref inout(Json) opIndex(size_t idx) inout { checkType!(Json[])(); return m_array[idx]; }
@@ -797,15 +788,36 @@ struct Json {
 	/// ditto
 	Json opBinaryRight(string op)(string other) const if(op == "~") { checkType!string(); return Json(other ~ m_string); }
 	/// ditto
-	inout(Json)* opBinaryRight(string op)(string other) inout if(op == "in") {
+	Json opBinaryRight(string op)(Json[] other) { checkType!(Json[])(); mixin("return Json(other "~op~" m_array);"); }
+
+
+	/** Checks wheter a particular key is set and returns a pointer to it.
+
+		For field that don't exist or have a type of `Type.undefined`,
+		the `in` operator will return `null`.
+	*/
+	inout(Json)* opBinaryRight(string op)(string other) inout
+		if(op == "in")
+	{
 		checkType!(Json[string])();
 		auto pv = other in m_object;
-		if( !pv ) return null;
-		if( pv.type == Type.undefined ) return null;
+		if (!pv) return null;
+		if (pv.type == Type.undefined) return null;
 		return pv;
 	}
-	/// ditto
-	Json opBinaryRight(string op)(Json[] other) { checkType!(Json[])(); mixin("return Json(other "~op~" m_array);"); }
+
+	///
+	unittest {
+		auto j = Json.emptyObject;
+		j["a"] = "foo";
+		j["b"] = Json.undefined;
+
+		assert("a" in j);
+		assert(("a" in j).get!string == "foo");
+		assert("b" !in j);
+		assert("c" !in j);
+	}
+
 
 	/**
 	 * The append operator will append arrays. This method always appends it's argument as an array element, so nested arrays can be created.
