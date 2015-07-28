@@ -651,6 +651,7 @@ final class RedisSubscriberImpl {
 			m_mutex.performLocked!({
 				m_stopWaiter = Task.getThis();
 			});
+			if (!m_listening) return; // verify again in case the mutex was locked by bstop
 			scope(exit) {
 				m_mutex.performLocked!({
 					m_stopWaiter = Task();
