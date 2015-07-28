@@ -603,6 +603,7 @@ final class RedisSubscriberImpl {
 		Task m_listener;
 		Task m_listenerHelper;
 		Task m_waiter;
+		Task m_stopWaiter;
 		InterruptibleRecursiveTaskMutex m_mutex;
 		InterruptibleTaskMutex m_connMutex;
 	}
@@ -648,12 +649,12 @@ final class RedisSubscriberImpl {
 		
 		void impl() {
 			m_mutex.performLocked!({
-					m_waiter = Task.getThis();
-				});
+				m_stopWaiter = Task.getThis();
+			});
 			scope(exit) {
 				m_mutex.performLocked!({
-						m_waiter = Task();
-					});
+					m_stopWaiter = Task();
+				});
 			}
 			bool stopped;
 			do {
@@ -1085,7 +1086,8 @@ final class RedisSubscriberImpl {
 
 			if (m_waiter != Task())
 				m_waiter.send(Action.STOP);
-
+			if (m_stopWaiter != Task())
+				m_stopWaiter.send(Action.STOP);
 			m_listenerHelper = Task();
 			m_listener = Task();
 			m_stop = false;
