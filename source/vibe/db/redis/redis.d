@@ -637,8 +637,32 @@ final class RedisSubscriberImpl {
 	}
 
 	~this() {
-		logTrace("~this");
-		bstop();
+		//logTrace("~this");
+		waitForStop();
+	}
+
+	// Task will block until the listener is finished
+	void waitForStop() {
+		logTrace("waitForStop");
+		if (!m_listening) return;
+		
+		void impl() {
+			m_mutex.performLocked!({
+					m_waiter = Task.getThis();
+				});
+			scope(exit) {
+				m_mutex.performLocked!({
+						m_waiter = Task();
+					});
+			}
+			bool stopped;
+			do {
+				receive((Action act) { if (act == Action.STOP) stopped = true;  });
+			} while (!stopped);
+			
+			enforce(stopped, "Failed to wait for Redis listener to stop");
+		}
+		inTask(&impl);
 	}
 
 	/// Stop listening and yield until the operation is complete.

@@ -7,9 +7,8 @@ import std.algorithm : sort, equal;
 
 void runTest()
 {
-	//setLogLevel(LogLevel.trace);
 	/* open a redis server locally to run these tests
-	 * Windows download link: https://github.com/MSOpenTech/redis/tree/2.8/bin/release
+	 * Windows download link: https://github.com/MSOpenTech/redis/releases
 	 * Linux: use "yum install redis" on RHEL or "apt-get install redis" on Debian-like
 	*/
 	RedisClient redis;
@@ -81,20 +80,22 @@ void runTest()
 	}
 	
 	testLocking(redis.getDatabase(0));
-	
-	RedisSubscriber sub;
-	{
+	RedisSubscriberImpl sub;
+	runTask({
 		RedisSubscriber scoped = redis.createSubscriber();
-		sub = scoped;
-	}
+		sub = scoped.get();
+		sleep(50.msecs);
+	});
 	import std.datetime;
 	
 	assert(!sub.isListening);
+	logInfo("Listen");
 	sub.listen((string channel, string msg){
 		logInfo("LISTEN Recv Channel: %s, Message: %s", channel, msg);
 		logInfo("LISTEN Recv Time: %s", Clock.currTime());
 	});
 	assert(sub.isListening);
+	logInfo("Subscribe");
 	sub.subscribe("SomeChannel");
 	sub.subscribe("SomeChannel");
 	sub.subscribe("SomeChannel");
@@ -108,6 +109,7 @@ void runTest()
 	sub.unsubscribe("SomeChannel");
 	sub.unsubscribe("SomeChannel");
 	sub.unsubscribe("SomeChannel");
+	logInfo("Stopping");
 	sub.bstop();
 	logInfo("LISTEN Stopped");
 	assert(!sub.isListening);
