@@ -378,6 +378,24 @@ struct FixedRingBuffer(T, size_t N = 0) {
 		return 0;
 	}
 
+	/// iterate through elements with index
+	int opApply(scope int delegate(size_t i, ref T itm) del)
+	{
+		if( m_start+m_fill > m_buffer.length ){
+			foreach(i; m_start .. m_buffer.length)
+				if( auto ret = del(i - m_start, m_buffer[i]) )
+					return ret;
+			foreach(i; 0 .. mod(m_start+m_fill))
+				if( auto ret = del(i + m_buffer.length - m_start, m_buffer[i]) )
+					return ret;
+		} else {
+			foreach(i; m_start .. m_start+m_fill)
+				if( auto ret = del(i - m_start, m_buffer[i]) )
+					return ret;
+		}
+		return 0;
+	}
+
 	ref inout(T) opIndex(size_t idx) inout { assert(idx < length); return m_buffer[mod(m_start+idx)]; }
 
 	Range opSlice() { return Range(m_buffer, m_start, m_fill); }
@@ -459,6 +477,14 @@ unittest {
 	assert(buf.length == 2 && buf.freeSpace == 3);
 	buf.read(dst[0 .. 2]); //|. . . . .
 	assert(dst[0 .. 2] == [1, 2]);
+
+	buf.put([0, 0, 0, 1, 2]); //|0 0 0 1 2
+	buf.popFrontN(2); //. .|0 1 2
+	buf.put([3, 4]); // 3 4|0 1 2
+	foreach(i, item; buf)
+	{
+		assert(i == item);
+	}
 }
 
 
