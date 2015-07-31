@@ -294,6 +294,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		logTrace("wait for data");
 		while (m_ctx && m_ctx.event) {
 			if (evbuffer_get_length(inbuf) > 0) return true;
+			if (m_ctx.state != ConnectionState.open) return false;
 			if (m_timeout_triggered) {
 				logTrace(" -> timeout = %s", m_timeout_triggered);
 				return false;
