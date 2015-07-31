@@ -611,6 +611,8 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
+			} else static if (is(PT == struct) && __traits(compiles, { PT(req, res); }())) {
+				params[i] = PT(req, res);
 			} else {
 				static if (!is(default_values[i] == void)) {
 					if (!readFormParamRec(req, params[i], param_names[i], false))
