@@ -129,6 +129,10 @@ import vibe.http.websockets;
 		$(D @vibe.web.common.method), $(D @vibe.web.common.path),
 		$(D @vibe.web.common.contentType)
 
+		The `@path` attribute can also be applied to the class itself, in which
+		case it will be used as an additional prefix to the one in 
+		`WebInterfaceSettings.urlPrefix`.
+
 	Params:
 		router = The HTTP router to register to
 		instance = Class instance to use for the web interface mapping
@@ -138,8 +142,15 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 {
 	import std.algorithm : endsWith;
 	import std.traits;
+	import vibe.internal.meta.uda : findFirstUDA;
 
 	if (!settings) settings = new WebInterfaceSettings;
+
+	string url_prefix = settings.urlPrefix;
+	enum cls_path = findFirstUDA!(PathAttribute, C);
+	static if (cls_path.found) {
+		url_prefix = concatURL(url_prefix, cls_path.value, true);
+	}
 
 	foreach (M; __traits(allMembers, C)) {
 		/*static if (isInstanceOf!(SessionVar, __traits(getMember, instance, M))) {
@@ -158,10 +169,10 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 						"Instances may only be returned from parameter-less functions ("~M~")!"
 					);
 					auto subsettings = settings.dup;
-					subsettings.urlPrefix = concatURL(settings.urlPrefix, url, true);
+					subsettings.urlPrefix = concatURL(url_prefix, url, true);
 					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
 				} else {
-					auto fullurl = concatURL(settings.urlPrefix, url);
+					auto fullurl = concatURL(url_prefix, url);
 					router.match(minfo.method, fullurl, (req, res) {
 						handleRequest!(M, overload)(req, res, instance, settings);
 					});
