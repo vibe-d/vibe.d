@@ -142,6 +142,7 @@ final class LibasyncDriver : EventDriver {
 
 	bool processEvents()
 	{
+		processTimers();
 		getEventLoop().loop(0.seconds);
 		if (m_break) {
 			m_break = false;
@@ -359,8 +360,11 @@ final class LibasyncDriver : EventDriver {
 			logTrace("Timer %s fired (%s/%s)", timer, owner != Task.init, callback !is null);
 
 			if (!periodic) releaseTimer(timer);
-
-			if (owner && owner.running) getDriverCore().resumeTask(owner);
+			
+			if (owner && owner.running) {
+				if (Task.getThis == Task.init) getDriverCore().resumeTask(owner);
+				else getDriverCore().yieldAndResumeTask(owner);
+			}
 			if (callback) runTask(callback);
 		});
 
@@ -373,13 +377,21 @@ final class LibasyncDriver : EventDriver {
 
 		bool first;
 		auto next = m_timers.getFirstTimeout();
+		Duration dur;
 		if (next == SysTime.max) return;
-		if (m_nextSched == next)
+		dur = next - now;
+		if (dur == Duration.zero || dur.isNegative) {
+			processTimers();
+			next = m_timers.getFirstTimeout();
+			dur = next - now;
+		}
+		if (m_nextSched == next) {
+			logDebug("No upcoming timeouts beyond in: %s ms", (next-now).total!"msecs".to!string);
 			return;
+		}
 		else
 			m_nextSched = next;
-		Duration dur = next - now;
-		if (dur == Duration.zero || dur.isNegative) return;
+
 		assert(dur.total!"seconds"() <= int.max);
 		if (!m_timerEvent) {
 			//logTrace("creating new async timer");
