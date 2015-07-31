@@ -322,7 +322,11 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 		destination.write(buffer[0 .. chunk]);
 		if (nbytes > 0) nbytes -= chunk;
 
-		if (max_latency <= 0.seconds || cast(Duration)sw.peek() >= max_latency || !source.waitForData(max_latency)) {
+		auto remaining_latency = max_latency - cast(Duration)sw.peek();
+		if (remaining_latency > 0.seconds)
+			source.waitForData(remaining_latency);
+
+		if (cast(Duration)sw.peek >= max_latency) {
 			logTrace("pipeRealtime flushing.");
 			destination.flush();
 			sw.reset();
