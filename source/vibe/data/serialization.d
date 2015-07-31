@@ -446,8 +446,12 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 	} else static assert(false, "Unsupported serialization type: " ~ T.stringof);
 }
 
+private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serializer deserializer) if(!isMutable!T)
+{
+	return cast(T) deserializeImpl!(Unqual!T, Policy, Serializer, ATTRIBUTES)(deserializer);
+}
 
-private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serializer deserializer)
+private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serializer deserializer) if(isMutable!T) 
 {
 	import std.typecons : Nullable;
 	static if (__VERSION__ >= 2067) import std.typecons : BitFlags;
@@ -1273,6 +1277,24 @@ unittest // Make sure serializing through properties still works
 
 	auto s = S(1, 2);
 	assert(s.serializeToJson().deserializeJson!S() == s);
+}
+
+unittest // Immutable data deserialization
+{
+	import vibe.data.json;
+	
+	static struct S {
+		int a;
+	}
+	static class C {
+		immutable(S)[] arr;
+	}
+	
+	auto c = new C;
+	c.arr ~= S(10);
+	auto d = c.serializeToJson().deserializeJson!(immutable C);
+	static assert(is(typeof(d) == immutable C));
+	assert(d.arr == c.arr);
 }
 
 static if (__VERSION__ >= 2067)
