@@ -6,20 +6,24 @@ v0.7.24 - 2015-07-
 
 ### Features and improvements ###
 
- - Added operator `in` to `Json` and `Bson` (by Marc Schütz) - [pull #1032][issue1032]
- - Removed support for `index()` methods in the REST interface generator (use `get()` or `@path("/")`) (by Mathias Lang) - [pull #1010][issue1010]
- - Deprecated the `@rootPath` attribute for REST interfaces (use `@path` instead) (by Mathias Lang) - [pull #999][issue999]
+ - Fixed compilation on DMD 2.068 (most fixes by Mathias Lang)
+ - Web interface generator (`vibe.web.web`)
+   - Added support for `WebSocket` routes - [issue #952][issue952]
+   - Doesn't intercept `HTTPStatusException`s thrown during parameter assembly anymore
+   - Replaced the deprecated form interface example project with a `vibe.web.web` based "web_ajax" example
+   - Added support for the `@path` attribute on registered classes
+ - REST interface generator (`vibe.web.rest`)
+   - Removed support for `index()` methods (use `get()` or `@path("/")`) (by Mathias Lang) - [pull #1010][issue1010]
+   - Deprecated the `@rootPath` attribute (use `@path` instead) (by Mathias Lang) - [pull #999][issue999]
  - Deprecated symbols that were scheduled for deprecation and removed deprecated symbols
  - Added version `VibeNoDefaultArgs` to disable the built-in command line options
- - Replaced the deprecated form interface example project with a `vibe.web.web` based "web_ajax" example
  - Renamed "SSL" to "TLS" in most places
  - Scheduled `Json.opDispatch` and `Bson.opDispatch` for deprecation (use `opIndex` instead)
+ - Added `Bson.tryIndex` (by Marc Schütz) - [pull #1032][issue1032]
  - Added support for all standard HTTP methods (RFC) (by Szabo Bogdan) - [pull #1068][issue1068], [pull #1082][issue1082]
- - Fixed compilation on DMD 2.068 (most fixes by Mathias Lang)
  - Added overloads for `scope` based HTTP server callbacks
    - These will later be used for safe, allocation-less HTTP request processing
    - Always prefer this over the non-`scope` callbacks, as these will imply a performance impact in later versions
- - Added support for `WebSocket` routes in `vibe.web.web` - [issue #952][issue952]
  - Added `vibe.core.stream.nullSink` as a convenient way to get a generic data sink stream
  - Added overloads of `writeFormData` and `writeFormBody` that accept ranges of key/value tuples (by Tobias Pankrath)
  - Added `HTTPClientResponse.switchProtocol` (by Luca Niccoli) - [pull #945][issue945]
@@ -39,8 +43,8 @@ v0.7.24 - 2015-07-
  - The event loop of the win32 driver can now be stopped by sending a `WM_QUIT` message (by Денис Хлякин aka aka-demik) - [pull #1120][issue1120]
  - Marked `vibe.inet.path` as `pure` and removed casts that became superfluous
  - Added an `InputStream` based overload of `HTTPServerResponse.writeBody`
- - The web interface generator doesn't intercept `HTTPStatusException`s thrown during parameter assembly anymore
  - Added all Redis modules to the `vibe.vibe` module
+ - Added a version of `FixedRingBuffer.opApply` that supports an index (by Tomáš Chaloupka) - [pull #1198][issue1198]
 
 ### Bug fixes ###
 
@@ -78,6 +82,10 @@ v0.7.24 - 2015-07-
  - Fixed `LibasyncFileStream.peek()` to always return `null` (by Etienne Cimon) - [pull #1179][issue1179]
  - Fixed `ThreadedFile.seek` for 32-bit Windows applications (libevent driver) - [issue #1189][issue1189]
  - Fixed parsing of relative `file://` URLs
+ - Fixed a possible `RangeError` in the JSON parser (by Takaaki Seki) - [pull #1199][issue1199]
+ - Fixed a possible resource leak in `HashMap` (destructors not run)
+ - Fixed `pipeRealtime` to always adhere to the maximum latency
+ - Fixed deserialization of `immutable` fields (by Jack Applegame) - [pull #1190][issue1190]
 
 
 [issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
@@ -117,6 +125,9 @@ v0.7.24 - 2015-07-
 [issue1182]: https://github.com/rejectedsoftware/vibe.d/issues/1182
 [issue1183]: https://github.com/rejectedsoftware/vibe.d/issues/1183
 [issue1189]: https://github.com/rejectedsoftware/vibe.d/issues/1189
+[issue1190]: https://github.com/rejectedsoftware/vibe.d/issues/1190
+[issue1198]: https://github.com/rejectedsoftware/vibe.d/issues/1198
+[issue1199]: https://github.com/rejectedsoftware/vibe.d/issues/1199
 
 
 v0.7.23 - 2015-03-25
