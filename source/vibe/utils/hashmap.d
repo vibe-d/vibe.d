@@ -68,6 +68,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 
 	~this()
 	{
+		clear();
 		if (m_table.ptr !is null) freeArray(m_allocator, m_table);
 	}
 
