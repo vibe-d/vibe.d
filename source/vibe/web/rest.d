@@ -640,15 +640,16 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
 				// Comparison template for anySatisfy
 				//template Cmp(WebParamAttribute attr) { enum Cmp = (attr.identifier == ParamNames[i]); }
-				mixin(GenCmp!("Loop", i, ParamNames[i]).Decl);
+				alias CompareParamName = GenCmp!("Loop", i, ParamNames[i]);
+				mixin(CompareParamName.Decl);
 				// Find origin of parameter
 				static if (i == 0 && ParamNames[i] == "id") {
 					// legacy special case for :id, backwards-compatibility
 					logDebug("id %s", req.params["id"]);
 					params[i] = fromRestString!P(req.params["id"]);
-				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT)) {
+				} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
 					// User anotated the origin of this parameter.
-					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
+					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
 					// @headerParam.
 					static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
 						// 'out' parameter are not read from the headers
@@ -985,15 +986,14 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	return ret;
 }
 
-private:
-mixin template RestClientMethods(I) if (is(I == interface)) {
+private mixin template RestClientMethods(I) if (is(I == interface)) {
 	mixin RestClientMethods_MemberImpl!(__traits(allMembers, I));
 }
 
 // Poor men's `foreach (method; __traits(allMembers, I))`
 // The only way to emulate a foreach in a mixin template is to mixin a recursion
 // of that template.
-mixin template RestClientMethods_MemberImpl(Members...) {
+private mixin template RestClientMethods_MemberImpl(Members...) {
 	import std.traits : MemberFunctionsTuple;
 	static assert (Members.length > 0);
 	// WORKAROUND #1045 / @@BUG14375@@
@@ -1010,7 +1010,7 @@ mixin template RestClientMethods_MemberImpl(Members...) {
 }
 
 // Poor men's foreach (overload; MemberFunctionsTuple!(I, method))
-mixin template RestClientMethods_OverloadImpl(Overloads...) {
+private mixin template RestClientMethods_OverloadImpl(Overloads...) {
 	import vibe.internal.meta.codegen : CloneFunction;
 	static assert (Overloads.length > 0);
 	//pragma(msg, "===== Body for: "~__traits(identifier, Overloads[0])~" =====");
@@ -1055,8 +1055,8 @@ private string genClientBody(alias Func)() {
 
 		// Block 2
 		foreach (i, PT; PTT){
-			// Check origin of parameter
-			mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Decl);
+			alias CompareParamName = GenCmp!("ClientFilter", i, ParamNames[i]);
+			mixin(CompareParamName.Decl);
 
 			// legacy :id special case, left for backwards-compatibility reasons
 			static if (i == 0 && ParamNames[0] == "id") {
@@ -1064,8 +1064,8 @@ private string genClientBody(alias Func)() {
 					url_prefix = q{urlEncode(id.toString())~"/"};
 				else
 					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
-			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT)) {
-				alias PWPAT = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT);
+			} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
+				alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
 				static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
 					// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
 					static if (!(PSCT[i] & PSC.out_)) {
@@ -1242,7 +1242,7 @@ unittest
 // Check that the interface is valid. Every checks on the correctness of the
 // interface should be put in checkRestInterface, which allows to have consistent
 // errors in the server and client.
-private string getInterfaceValidationError(I)()
+package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 body {
 	import std.typetuple : TypeTuple;
@@ -1524,7 +1524,7 @@ private string paramCTMap(string[string] params)
 	return app.data.join(", ");
 }
 
-string stripTUnderscore(string name, RestInterfaceSettings settings) {
+package string stripTUnderscore(string name, RestInterfaceSettings settings) {
 	if ((settings is null || settings.stripTrailingUnderscore)
 	    && name.endsWith("_"))
 		return name[0 .. $-1];
@@ -1532,7 +1532,7 @@ string stripTUnderscore(string name, RestInterfaceSettings settings) {
 }
 
 // Workarounds @@DMD:9748@@, and maybe more
-private template GenCmp(string name, int id, string cmpTo) {
+package template GenCmp(string name, int id, string cmpTo) {
 	import std.string : format;
 	import std.conv : to;
 	enum Decl = q{
