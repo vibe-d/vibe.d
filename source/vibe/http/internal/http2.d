@@ -815,7 +815,6 @@ final class HTTP2Stream : ConnectionStream
 				} else if (m_session.get()) {
 					m_session.get().consumeConnection(payload.length);
 					m_session.m_tx.notify();
-					break;
 				}
 				ub = ub[payload.length .. $];
 
@@ -1145,7 +1144,7 @@ private:
 			if (i == 1)
 				assert(c == bufs.head);
 
-			bool remove_one = dst.length >= c.buf.length;
+			bool remove_one = (c.buf.available == 0 && dst.length >= c.buf.length);
 			wlen = min(cast(int) dst.length, cast(int) c.buf.length);
 
 			if (wlen == 0) {
@@ -1162,12 +1161,10 @@ private:
 				return ErrorCode.DEFERRED;
 			}
 			// make sure this buffer is not going to enlarge while it is queued
-			if (bufs.head is bufs.cur)
-				bufs.advance();
-
-			if (remove_one)
+			if (remove_one) {
 				// move queue for next send
 				m_tx.queued++;
+			}
 
 			m_tx.queued_len += wlen;
 		}
@@ -1181,6 +1178,7 @@ private:
 		}
 		else if (bufs.length == 0 && wlen == 0) { m_tx.notify(); m_rx.notifyAll(); return ErrorCode.DEFERRED; }
 		//writeln(m_stream_id, " wlen: ", wlen, " bufs: ", bufs.length);
+
 		return wlen;
 	}
 
@@ -2414,13 +2412,15 @@ override:
 		}
 		//logDebug("WRITING DATA: ", buf.pos[0 .. length]);
 		// write the data directly from buffers (NO_COPY)
-		write(buf.pos[0 .. length]);
+		ubyte* pos = buf.pos;
+		buf.pos += length;
+		bool remove_one = buf.length == 0 && buf.available == 0;
+		write(pos[0 .. length]); // this could block
 		// deschedule the buffer and free the memory
-		if (buf.length == length) {
+		if (remove_one) {
 			stream.m_tx.bufs.removeOne();
 			stream.m_tx.queued--;
-		}
-		else buf.pos += length;
+		} 
 		stream.m_tx.queued_len -= length;
 		stream.m_tx.notify();
 		// add padding bytes
