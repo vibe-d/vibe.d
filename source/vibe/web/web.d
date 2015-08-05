@@ -699,7 +699,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			__traits(getMember, instance, M)(params);
 		} else {
 			auto ret = __traits(getMember, instance, M)(params);
-			ret = evaluateOutputModifiers!overload(ret);
+			ret = evaluateOutputModifiers!overload(ret, req, res);
 
 			static if (is(RET : Json)) {
 				res.writeJsonBody(ret);
