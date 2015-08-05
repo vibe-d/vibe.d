@@ -881,7 +881,7 @@ private struct MatchGraphBuilder {
 			} else if (ch == ':') {
 				pattern = pattern[1 .. $];
 				auto name = skipPathNode(pattern);
-				assert(name.length > 0, "Missing placeholder name.");
+				assert(name.length > 0, "Missing placeholder name: "~full_pattern);
 				assert(!vars.canFind(name), "Duplicate placeholder name ':"~name~"': '"~full_pattern~"'");
 				vars ~= name;
 				assert(!pattern.length || (pattern[0] != '*' && pattern[0] != ':'),
