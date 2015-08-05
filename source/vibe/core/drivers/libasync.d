@@ -1327,11 +1327,11 @@ final class LibasyncTCPConnection : TCPConnection {
 
 			try m_settings.onConnect(this);
 			catch ( Exception e) {
-				logError(e.toString);
+				logError("%s", e.toString);
 				throw e;
 			}
 			catch ( Throwable e) {
-				logError(e.toString);
+				logError("%s", e.toString);
 				throw e;
 			}
 			if (inbound) onClose();
