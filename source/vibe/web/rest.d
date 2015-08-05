@@ -20,6 +20,7 @@ import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
 
 import std.algorithm : startsWith, endsWith;
+import std.range : isOutputRange;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
@@ -244,6 +245,113 @@ unittest
 		auto router = new URLRouter;
 		router.registerRestInterface(new API());
 		listenHTTP(new HTTPServerSettings(), router);
+	}
+}
+
+
+/**
+	Returns a HTTP handler delegate that serves a JavaScript REST client.
+*/
+HTTPServerRequestDelegate serveRestJSClient(I)(RestInterfaceSettings settings)
+	if (is(I == interface))
+{
+	import std.digest.md : md5Of;
+	import std.digest.digest : toHexString;
+	import std.array : appender;
+	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+	import vibe.http.status : HTTPStatus;
+
+	auto app = appender!string();
+	generateRestJSClient!I(app, settings);
+	auto hash = app.data.md5Of.toHexString.idup;
+
+	void serve(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		if (auto pv = "If-None-Match" in res.headers) {
+			res.statusCode = HTTPStatus.notModified;
+			res.writeVoidBody();
+			return;
+		}
+
+		res.headers["Etag"] = hash;
+		res.writeBody(app.data, "application/javascript; charset=UTF-8");
+	}
+
+	return &serve;
+}
+/// ditto
+HTTPServerRequestDelegate serveRestJSClient(I)(URL base_url)
+{
+	auto settings = new RestInterfaceSettings;
+	settings.baseURL = base_url;
+	return serveRestJSClient(settings);
+}
+/// ditto
+HTTPServerRequestDelegate serveRestJSClient(I)(string base_url)
+{
+	auto settings = new RestInterfaceSettings;
+	settings.baseURL = URL(base_url);
+	return serveRestJSClient(settings);
+}
+
+///
+unittest {
+	import vibe.http.server;
+
+	interface MyAPI {
+		string getFoo();
+		void postBar(string param);
+	}
+
+	void test()
+	{
+		auto restsettings = new RestInterfaceSettings;
+		restsettings.baseURL = URL("http://api.example.org/");
+
+		auto router = new URLRouter;
+		router.get("/myapi.js", serveRestJSClient!MyAPI(restsettings));
+		//router.get("/", staticTemplate!"index.dt");
+
+		listenHTTP(new HTTPServerSettings, router);
+	}
+
+	/*
+		index.dt:
+		html
+			head
+				title JS REST client test
+				script(src="test.js")
+			body
+				button(onclick="MyAPI.postBar('hello');")
+	*/
+}
+
+
+/**
+	Generates JavaScript code to access a REST interface from the browser.
+*/
+void generateRestJSClient(I, R)(ref R output, RestInterfaceSettings settings = null)
+	if (is(I == interface) && isOutputRange!(R, char))
+{
+	import vibe.web.internal.rest.common : RestInterface;
+	import vibe.web.internal.rest.jsclient : generateInterface;
+	output.generateInterface!I(null, settings);
+}
+
+/// Writes a JavaScript REST client to a local .js file.
+unittest {
+	import vibe.core.file;
+
+	interface MyAPI {
+		void getFoo();
+		void postBar(string param);
+	}
+
+	void generateJSClientImpl()
+	{
+		auto app = appender!string;
+		generateRestJSClient!MyAPI(app);
+		writeFileUTF8(Path("myapi.js"), app.data);
 	}
 }
 
