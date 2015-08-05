@@ -1187,8 +1187,8 @@ private:
 		int remote_window_size = m_session.get().getRemoteSettings(Setting.INITIAL_WINDOW_SIZE);
 		int local_window_size = m_session.m_defaultStreamWindowSize;
 		m_maxFrameSize = min(chunk_size, remote_chunk_size);
-		m_rx.bufs = Mem.alloc!Buffers(m_maxFrameSize, local_window_size/m_maxFrameSize+1, 1, 0, m_session.m_tlsStream?true:false, false);
-		m_tx.bufs = Mem.alloc!Buffers(m_maxFrameSize, remote_window_size/m_maxFrameSize+1, 1, 0, m_session.m_tlsStream?true:false, false);
+		m_rx.bufs = Mem.alloc!Buffers(m_maxFrameSize, local_window_size/m_maxFrameSize+2, 1, 0, m_session.m_tlsStream?true:false, false);
+		m_tx.bufs = Mem.alloc!Buffers(m_maxFrameSize, remote_window_size/m_maxFrameSize+2, 1, 0, m_session.m_tlsStream?true:false, false);
 		// once read is called, the buffers will adjust to the user's desired memory safety level.
 		m_safety_level_changed = m_session.m_tlsStream?true:false;
 	}
