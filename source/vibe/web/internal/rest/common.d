@@ -16,13 +16,14 @@ import vibe.web.rest;
 	The given `TImpl` must be an `interface` or a `class` deriving from one.
 */
 /*package(vibe.web.web)*/ struct RestInterface(TImpl)
+	if (is(TImpl == class) || is(TImpl == interface))
 {
 	import std.traits : FunctionTypeOf, InterfacesTuple, MemberFunctionsTuple,
 		ParameterIdentifierTuple, ParameterStorageClass,
 		ParameterStorageClassTuple, ParameterTypeTuple, ReturnType;
 	import std.typetuple : TypeTuple;
 	import vibe.inet.url : URL;
-	import vibe.internal.meta.funcattr;
+	import vibe.internal.meta.funcattr : IsAttributedParameter;
 	import vibe.internal.meta.uda;
 
 	/// The settings used to generate the interface
@@ -55,24 +56,23 @@ import vibe.web.rest;
 	/// Aliases to all interface methods
 	alias AllMethods = GetAllMethods!();
 
-	/** Information about each route
-
-		This array has the same number of fields as `RouteFunctions`
-	*/
-	Route[] routes;
-
 	/** Aliases for each route method
 
 		This tuple has the same number of entries as `routes`.
 	*/
 	alias RouteFunctions = GetRouteFunctions!();
 
-	/** Information about sub interfaces
+	enum routeCount = RouteFunctions.length;
 
-		This array has the same number of entries as `SubInterfaceFunctions` and
-		`SubInterfaceTypes`.
+	/** Information about each route
+
+		This array has the same number of fields as `RouteFunctions`
 	*/
-	SubInterface[] subInterfaces;
+	Route[routeCount] routes;
+
+	/// Static (compile-time) information about each route
+	static if (routeCount) static const StaticRoute[routeCount] staticRoutes = computeStaticRoutes();
+	else static const StaticRoute[0] staticRoutes;
 
 	/** Aliases for each sub interface method
 
@@ -87,6 +87,15 @@ import vibe.web.rest;
 		`SubInterfaceFunctions`.
 	*/
 	alias SubInterfaceTypes = GetSubInterfaceTypes!();
+
+	enum subInterfaceCount = SubInterfaceFunctions.length;
+
+	/** Information about sub interfaces
+
+		This array has the same number of entries as `SubInterfaceFunctions` and
+		`SubInterfaceTypes`.
+	*/
+	SubInterface[subInterfaceCount] subInterfaces;
 
 
 	/** Fills the struct with information.
@@ -126,12 +135,67 @@ import vibe.web.rest;
 		computeSubInterfaces();
 	}
 
+	// copying this struct is costly, so we forbid it
+	@disable this(this);
+
 	private void computeRoutes()
 	{
-		assert(routes.length == 0);
-
-		foreach (func; RouteFunctions) {
+		foreach (si, RF; RouteFunctions) {
+			enum sroute = staticRoutes[si];
 			Route route;
+			route.functionName = sroute.functionName;
+			route.method = sroute.method;
+
+			static if (sroute.pathOverride) route.pattern = sroute.rawName;
+			else route.pattern = adjustMethodStyle(stripTUnderscore(sroute.rawName, settings), settings.methodStyle);
+			route.method = sroute.method;
+			route.parameters.length = sroute.parameters.length;
+
+			alias PT = ParameterTypeTuple!RF;
+			foreach (i, _; PT) {
+				enum sparam = sroute.parameters[i];
+				Parameter pi;
+				pi.name = sparam.name;
+				pi.kind = sparam.kind;
+				pi.isIn = sparam.isIn;
+				pi.isOut = sparam.isOut;
+
+				static if (sparam.kind != ParameterKind.attributed && sparam.fieldName.length == 0) {
+					pi.fieldName = stripTUnderscore(pi.name, settings);
+				} else pi.fieldName = sparam.fieldName;
+
+				static if (i == 0 && sparam.name == "id") {
+					route.pattern = concatURL(":id", route.pattern);
+					route.pathParts = PathPart(true, "id") ~ route.pathParts;
+					route.pathHasPlaceholders = true;
+				}
+
+				route.parameters[i] = pi;
+
+				final switch (pi.kind) {
+					case ParameterKind.query: route.queryParameters ~= pi; break;
+					case ParameterKind.body_: route.bodyParameters ~= pi; break;
+					case ParameterKind.header: route.headerParameters ~= pi; break;
+					case ParameterKind.internal: route.internalParameters ~= pi; break;
+					case ParameterKind.attributed: route.attributedParameters ~= pi; break;
+				}
+			}
+
+			route.fullPattern = concatURL(this.basePath, route.pattern);
+			extractPathParts(route);
+
+			routes[si] = route;
+		}
+	}
+
+	private static StaticRoute[routeCount] computeStaticRoutes()
+	{
+		assert(__ctfe);
+
+		StaticRoute[routeCount] ret;
+
+		foreach (fi, func; RouteFunctions) {
+			StaticRoute route;
 			route.functionName = __traits(identifier, func);
 
 			alias FuncType = FunctionTypeOf!func;
@@ -140,11 +204,9 @@ import vibe.web.rest;
 			enum parameterNames = [ParameterIdentifierTuple!func];
 
 			enum meta = extractHTTPMethodAndName!(func, false)();
-			static if (meta.hadPathUDA) route.pattern = meta.url;
-			else route.pattern = adjustMethodStyle(stripTUnderscore(meta.url, settings), settings.methodStyle);
 			route.method = meta.method;
-
-			extractPathParts(route);
+			route.rawName = meta.url;
+			route.pathOverride = meta.hadPathUDA;
 
 			foreach (i, PT; ParameterTypes) {
 				enum pname = parameterNames[i];
@@ -155,7 +217,7 @@ import vibe.web.rest;
 				alias CompareParamName = GenCmp!("Loop", i, parameterNames[i]);
 				mixin(CompareParamName.Decl);
 
-				ParameterInfo pi;
+				StaticParameter pi;
 				pi.name = parameterNames[i];
 
 				// determine in/out storage class
@@ -187,37 +249,22 @@ import vibe.web.rest;
 				} else static if (i == 0 && pname == "id") {
 					pi.kind = ParameterKind.internal;
 					pi.fieldName = "id";
-					route.pattern = concatURL(":id", route.pattern);
-					route.pathParts = PathPart(true, "id") ~ route.pathParts;
-					route.pathHasPlaceholders = true;
 				} else {
 					pi.kind = route.method == HTTPMethod.GET ? ParameterKind.query : ParameterKind.body_;
-					pi.fieldName = stripTUnderscore(pname, settings);
 				}
 
 				route.parameters ~= pi;
-				final switch (pi.kind) {
-					case ParameterKind.query: route.queryParameters ~= pi; break;
-					case ParameterKind.body_: route.bodyParameters ~= pi; break;
-					case ParameterKind.header: route.headerParameters ~= pi; break;
-					case ParameterKind.internal: route.internalParameters ~= pi; break;
-					case ParameterKind.attributed: route.attributedParameters ~= pi; break;
-				}
 			}
 
-			route.fullPattern = concatURL(this.basePath, route.pattern);
-
-			routes ~= route;
+			ret[fi] = route;
 		}
 
-		assert(routes.length == RouteFunctions.length);
+		return ret;
 	}
 
 	private void computeSubInterfaces()
 	{
-		assert(subInterfaces.length == 0);
-
-		foreach (func; SubInterfaceFunctions) {
+		foreach (i, func; SubInterfaceFunctions) {
 			enum meta = extractHTTPMethodAndName!(func, false)();
 
 			static if (meta.hadPathUDA) string url = meta.url;
@@ -226,7 +273,7 @@ import vibe.web.rest;
 			SubInterface si;
 			si.settings = settings.dup;
 			si.settings.baseURL = URL(concatURL(this.baseURL, url, true));
-			subInterfaces ~= si;
+			subInterfaces[i] = si;
 		}
 
 		assert(subInterfaces.length == SubInterfaceFunctions.length);
@@ -288,17 +335,17 @@ import vibe.web.rest;
 
 struct Route {
 	string functionName; // D name of the function
+	HTTPMethod method;
 	string pattern; // relative route path (relative to baseURL)
 	string fullPattern; // absolute version of 'pattern'
 	bool pathHasPlaceholders; // true if path/pattern contains any :placeholers
 	PathPart[] pathParts; // path separated into text and placeholder parts
-	HTTPMethod method;
-	ParameterInfo[] parameters;
-	ParameterInfo[] queryParameters;
-	ParameterInfo[] bodyParameters;
-	ParameterInfo[] headerParameters;
-	ParameterInfo[] attributedParameters;
-	ParameterInfo[] internalParameters;
+	Parameter[] parameters;
+	Parameter[] queryParameters;
+	Parameter[] bodyParameters;
+	Parameter[] headerParameters;
+	Parameter[] attributedParameters;
+	Parameter[] internalParameters;
 }
 
 struct PathPart {
@@ -307,12 +354,26 @@ struct PathPart {
 	string text;
 }
 
-struct ParameterInfo {
+struct Parameter {
 	ParameterKind kind;
 	string name;
 	string fieldName;
-	bool isIn;
-	bool isOut;
+	bool isIn, isOut;
+}
+
+struct StaticRoute {
+	string functionName; // D name of the function
+	string rawName; // raw name as returned 
+	bool pathOverride; // @path UDA was used
+	HTTPMethod method;
+	StaticParameter[] parameters;
+}
+
+struct StaticParameter {
+	ParameterKind kind;
+	string name;
+	string fieldName; // only set for parameters where the field name can be statically determined - use Parameter.fieldName in usual cases
+	bool isIn, isOut;
 }
 
 enum ParameterKind {

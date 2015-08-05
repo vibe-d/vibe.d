@@ -105,8 +105,8 @@ import vibe.web.rest;
 }
 
 version (unittest) {
-	interface IDUMMY {}
-	class DUMMY : IDUMMY {}
+	interface IDUMMY { void test(int dummy); }
+	class DUMMY : IDUMMY { void test(int) {} }
 	private void dummy()
 	{
 		import std.array;
