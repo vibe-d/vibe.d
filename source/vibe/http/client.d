@@ -1263,7 +1263,13 @@ final class HTTPClientResponse : HTTPResponse {
 	*/
 	@property InputStream bodyReader()
 	{	
-		if (m_finalized) return null;
+		if (m_finalized) {
+			import vibe.stream.memory;
+			static MemoryStream empty_memory_stream;
+			if (!empty_memory_stream)
+				empty_memory_stream = new MemoryStream(null, false, 0);
+			return cast(InputStream)empty_memory_stream;
+		}
 		
 		if( m_bodyReader ) { 
 			logTrace("Returning bodyreader: http2=%s", isHTTP2);
