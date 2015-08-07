@@ -1,0 +1,13 @@
+doctype html
+html
+  head
+    title WebSocket Test
+    script(type='text/javascript', src='/scripts/websocket.js')
+    style.
+      pre#timer {
+      border: 1px solid black;
+      }
+  body(onload='connect()')
+    p The following box should show a running counter, updated by the server:
+    pre#timer.
+    button(type='button', onclick='closeConnection()') Close connection
