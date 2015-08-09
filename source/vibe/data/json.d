@@ -2365,9 +2365,7 @@ private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool co
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int err_line)
 {
-	auto errmsg = format("%s(%s): Error: %s", err_file, err_line+1, message);
-	static if (__VERSION__ >= 2065) enforceEx!JSONException(cond, errmsg, file, line);
-	else if (!cond) throw new JSONException(errmsg);
+	enforceEx!JSONException(cond, format("%s(%s): Error: %s", err_file, err_line+1, message), file, line);
 }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int* err_line)
