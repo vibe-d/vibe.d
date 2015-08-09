@@ -86,6 +86,7 @@ v0.7.24 - 2015-07-
  - Fixed a possible resource leak in `HashMap` (destructors not run)
  - Fixed `pipeRealtime` to always adhere to the maximum latency
  - Fixed deserialization of `immutable` fields (by Jack Applegame) - [pull #1190][issue1190]
+ - Fixed `runWorkerTaskH` to work when called from outside of a task
 
 
 [issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
