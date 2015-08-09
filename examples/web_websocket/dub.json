@@ -1,7 +1,7 @@
 ﻿{
 	"name": "web-websockets-example",
 	"description": "Example for using the WebSocket feature with WebInterface",
-	"authors": [ "Sönke Ludwig" ],
+	"authors": [ "Darius C." ],
 	"dependencies": {
 		"vibe-d": {"version": "~master", "path": "../../"}
 	},
