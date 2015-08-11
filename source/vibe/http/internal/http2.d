@@ -1,4 +1,4 @@
-﻿/**
+/**
 	HTTP/2 implementation
 
 	Copyright: © 2015 RejectedSoftware e.K., GlobecSys Inc
@@ -2067,7 +2067,11 @@ private:
 									m_tx.pending.put(stream);
 									continue; // try again later
 								}
-								int rv = submitHeaders(m_session, fflags, stream.m_stream_id, stream.m_priSpec, headers, cast(void*)stream);
+								int rv;
+								if (!isServer)
+									rv = submitRequest(m_session, stream.m_tx.priSpec, headers, (bufs.length>0)?&stream.dataProvider:null, cast(void*)stream);
+								else rv = submitHeaders(m_session, fflags, stream.m_stream_id, stream.m_priSpec, headers, cast(void*)stream);
+
 								if (rv < 0)
 									stream.m_rx.ex = new Exception("Error submitting headers: " ~ libhttp2.types.toString(cast(ErrorCode)rv));
 								logDebug("HTTP/2: Submit headers request id ", rv);
