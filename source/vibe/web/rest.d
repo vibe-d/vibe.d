@@ -940,6 +940,7 @@ private mixin template RestClientMethods_OverloadImpl(Overloads...) {
 private string genClientBody(alias Func)() {
 	import std.string : format;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
+	import vibe.web.internal.rest.common : ParameterKind;
 
 	alias PSC = ParameterStorageClass;
 	alias FT = FunctionTypeOf!Func;
@@ -982,7 +983,7 @@ private string genClientBody(alias Func)() {
 					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 			} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
 				alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
-				static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
+				static if (PWPAT[0].origin == ParameterKind.header) {
 					// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
 					static if (!(PSCT[i] & PSC.out_)) {
 						param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PWPAT[0].field, PWPAT[0].identifier);
@@ -1005,12 +1006,12 @@ private string genClientBody(alias Func)() {
 							}.format(ParamNames[i], PWPAT[0].field);
 						}
 					}
-				} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query)
+				} else static if (PWPAT[0].origin == ParameterKind.query)
 					queryParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
-				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Body)
+				else static if (PWPAT[0].origin == ParameterKind.body_)
 					bodyParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
 				else
-					static assert (0, "Internal error: Unknown WebParamAttribute.Origin in REST client code generation.");
+					static assert (0, "Internal error: Unknown ParameterKind in REST client code generation.");
 			} else static if (!ParamNames[i].startsWith("_")
 					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
@@ -1161,6 +1162,7 @@ unittest
 package string getInterfaceValidationError(I)()
 out (result) { assert((result is null) == !result.length); }
 body {
+	import vibe.web.internal.rest.common : ParameterKind;
 	import std.typetuple : TypeTuple;
 	import std.algorithm : strip;
 
@@ -1224,7 +1226,7 @@ body {
 				static if (Attr.length != 1)
 					return "%s: Parameter '%s' cannot be %s"
 						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
-				else static if (Attr[0].origin != WebParamAttribute.Origin.Header) {
+				else static if (Attr[0].origin != ParameterKind.header) {
 					return "%s: %s parameter '%s' cannot be %s"
 						.format(FuncId, Attr[0].origin, PN[i],
 							SC & PSC.out_ ? "out" : "ref");
@@ -1282,7 +1284,7 @@ body {
 
 // Test detection of user typos (e.g., if the attribute is on a parameter that doesn't exist).
 unittest {
-	enum msg = "No parameter 'ath' (referenced by attribute @HeaderParam)";
+	enum msg = "No parameter 'ath' (referenced by attribute @headerParam)";
 
 	interface ITypo {
 		@headerParam("ath", "Authorization") // mistyped parameter name
@@ -1290,7 +1292,7 @@ unittest {
 	}
 	enum err = getInterfaceValidationError!ITypo;
 	static assert(err !is null && stripTestIdent(err) == msg,
-		"Expected validation error for getResponse, got "~err);
+		"Expected validation error for getResponse, got: "~stripTestIdent(err));
 }
 
 // Multiple origin for a parameter
@@ -1387,28 +1389,28 @@ unittest {
 		string getData(ref string auth);
 	}
 	static assert(stripTestIdent(getInterfaceValidationError!QueryRef)
-		== "Query parameter 'auth' cannot be ref");
+		== "query parameter 'auth' cannot be ref");
 
 	interface QueryOut {
 		@queryParam("auth", "auth")
 		void getData(out string auth);
 	}
 	static assert(stripTestIdent(getInterfaceValidationError!QueryOut)
-		== "Query parameter 'auth' cannot be out");
+		== "query parameter 'auth' cannot be out");
 
 	interface BodyRef {
 		@bodyParam("auth", "auth")
 		string getData(ref string auth);
 	}
 	static assert(stripTestIdent(getInterfaceValidationError!BodyRef)
-		== "Body parameter 'auth' cannot be ref");
+		== "body_ parameter 'auth' cannot be ref");
 
 	interface BodyOut {
 		@bodyParam("auth", "auth")
 		void getData(out string auth);
 	}
 	static assert(stripTestIdent(getInterfaceValidationError!BodyOut)
-		== "Body parameter 'auth' cannot be out");
+		== "body_ parameter 'auth' cannot be out");
 
 	// There's also the possibility of someone using an out unnamed
 	// parameter (don't ask me why), but this is catched as unnamed
@@ -1477,6 +1479,7 @@ unittest {
 	import std.traits, std.typetuple;
 	import vibe.internal.meta.codegen;
 	import vibe.internal.meta.typetuple;
+	import vibe.web.internal.rest.common : ParameterKind;
 
 	interface Policies {
 		@headerParam("auth", "Authorization")
@@ -1506,7 +1509,7 @@ unittest {
 			      Group!(__traits(getAttributes, IKeys!().create)),
 			      Group!(PathAttribute("/"),
 				     MethodAttribute(HTTPMethod.POST),
-				     WPA(WPA.Origin.Header, "auth", "Authorization"))));
+				     WPA(ParameterKind.header, "auth", "Authorization"))));
 
 	static if (__VERSION__ > 2065) {
 		void register() {
