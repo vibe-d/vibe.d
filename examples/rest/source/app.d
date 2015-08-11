@@ -7,6 +7,7 @@
 import vibe.appmain;
 import vibe.core.core;
 import vibe.core.log;
+import vibe.data.json;
 import vibe.http.rest;
 import vibe.http.router;
 import vibe.http.server;
@@ -396,6 +397,20 @@ unittest
 	assert (routes[0].method == HTTPMethod.GET && routes[2].pattern == "/example6_api/concat");
 }
 
+@rootPathFromName
+interface Example7API {
+	// GET /example7_api/
+	// returns a custom JSON response
+	Json get();
+}
+
+class Example7 : Example7API {
+	Json get()
+	{
+		return serializeToJson(["foo": 42, "bar": 13]);
+	}
+}
+
 
 shared static this()
 {
@@ -409,6 +424,7 @@ shared static this()
 	registerRestInterface(routes, new Example4());
 	registerRestInterface(routes, new Example5());
 	registerRestInterface(routes, new Example6());
+	registerRestInterface(routes, new Example7());
 
 	auto settings = new HTTPServerSettings();
 	settings.port = 8080;
@@ -501,6 +517,13 @@ shared static this()
 			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
 			auto answer = api.postAnswer("IDK");
 			assert(answer == "False");
+		}
+
+		// Example 7 -- Custom JSON response
+		{
+			auto api = new RestInterfaceClient!Example7API("http://127.0.0.1:8080");
+			auto result = api.get();
+			assert(result["foo"] == 42 && result["bar"] == 13);
 		}
 
 		// Example 6 -- Body
