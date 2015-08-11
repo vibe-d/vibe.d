@@ -4,6 +4,8 @@
 v0.7.24 - 2015-08-10
 --------------------
 
+Adds DMD 2.068.0 compatibility and contains a number of additions and fixes in all parts of the library. Some notable changes are the addition of WebSocket support in the `vibe.web.web` module and the planned deprecation of `opDispatch` for `Json` and `Bson`, as well as the rename of all "SSL" symbols to "TLS". HTTP request handlers can, and should, now take the request/response parameters as `scope`, which will later allow to improve performance without compromising safety.
+
 ### Features and improvements ###
 
  - Fixed compilation on DMD 2.068 (most fixes by Mathias Lang)
@@ -11,7 +13,7 @@ v0.7.24 - 2015-08-10
    - Added support for `WebSocket` routes - [issue #952][issue952]
    - Doesn't intercept `HTTPStatusException`s thrown during parameter assembly anymore
    - Replaced the deprecated form interface example project with a `vibe.web.web` based "web_ajax" example
-   - Added support for the `@path` attribute on registered classes
+   - Added support for the `@path` attribute on registered classes - [issue #1036][issue1036]
  - REST interface generator (`vibe.web.rest`)
    - Removed support for `index()` methods (use `get()` or `@path("/")`) (by Mathias Lang) - [pull #1010][issue1010]
    - Deprecated the `@rootPath` attribute (use `@path` instead) (by Mathias Lang) - [pull #999][issue999]
@@ -93,6 +95,7 @@ v0.7.24 - 2015-08-10
 [issue999]: https://github.com/rejectedsoftware/vibe.d/issues/999
 [issue1010]: https://github.com/rejectedsoftware/vibe.d/issues/1010
 [issue1032]: https://github.com/rejectedsoftware/vibe.d/issues/1032
+[issue1036]: https://github.com/rejectedsoftware/vibe.d/issues/1036
 [issue1044]: https://github.com/rejectedsoftware/vibe.d/issues/1044
 [issue1058]: https://github.com/rejectedsoftware/vibe.d/issues/1058
 [issue1067]: https://github.com/rejectedsoftware/vibe.d/issues/1067
