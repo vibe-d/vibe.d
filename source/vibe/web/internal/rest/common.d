@@ -237,11 +237,7 @@ import vibe.web.rest;
 					pi.kind = ParameterKind.attributed;
 				} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
 					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
-					final switch (PWPAT[0].origin) with (WebParamAttribute.Origin) {
-						case Header: pi.kind = ParameterKind.header; break;
-						case Query: pi.kind = ParameterKind.query; break;
-						case Body: pi.kind = ParameterKind.body_; break;
-					}
+					pi.kind = PWPAT[0].origin;
 					pi.fieldName = PWPAT[0].field;
 				} else static if (pname.startsWith("_")) {
 					pi.kind = ParameterKind.internal;
