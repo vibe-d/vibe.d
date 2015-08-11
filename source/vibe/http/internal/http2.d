@@ -2090,7 +2090,7 @@ private:
 
 				// Send the data if it wasn't done earlier
 				if ((!data_processed && !finalized && halfClosed && stream.m_connected && stream.m_stream_id > 0) || 
-					(!data_processed && stream.m_stream_id > 0 && ((isServer && stream.m_active) || !isServer)))
+					(!data_processed && stream.m_stream_id > 0 && stream.m_active))
 				{
 					data_processed = true;
 					if (halfClosed)
