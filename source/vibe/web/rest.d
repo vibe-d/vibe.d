@@ -357,8 +357,25 @@ class RestInterfaceClient(I) : I
 		 *		it will be 'author%3ASantaClaus'.
 		 * body_ = The body to send, as a string. If a Content-Type is present in $(D hdrs), it will be used, otherwise it will default to
 		 *		the generic type "application/json".
+		 * reqReturnHdrs = A map of required return headers.
+		 *				   To avoid returning unused headers, nothing is written
+		 *				   to this structure unless there's an (usually empty)
+		 *				   entry (= the key exists) with the same key.
+		 *				   If any key present in `reqReturnHdrs` is not present
+		 *				   in the response, an Exception is thrown.
+		 * optReturnHdrs = A map of optional return headers.
+		 *				   This behaves almost as exactly as reqReturnHdrs,
+		 *				   except that non-existent key in the response will
+		 *				   not cause it to throw, but rather to set this entry
+		 *				   to 'null'.
+		 *
+		 * Returns:
+		 *     The Json object returned by the request
 		 */
-		Json request(HTTPMethod verb, string name, in ref InetHeaderMap hdrs, string query, string body_) const
+		Json request(HTTPMethod verb, string name,
+					 in ref InetHeaderMap hdrs, string query, string body_,
+					 ref InetHeaderMap reqReturnHdrs,
+					 ref InetHeaderMap optReturnHdrs) const
 		{
 			import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 			import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
@@ -405,6 +422,27 @@ class RestInterfaceClient(I) : I
 					 res.statusCode,
 					 ret.toString()
 					 );
+
+				// Get required headers - Don't throw yet
+				string[] missingKeys;
+				foreach (k, ref v; reqReturnHdrs)
+					if (auto ptr = k in res.headers)
+						v = (*ptr).idup;
+					else
+						missingKeys ~= k;
+
+				// Get optional headers
+				foreach (k, ref v; optReturnHdrs)
+					if (auto ptr = k in res.headers)
+						v = (*ptr).idup;
+					else
+						v = null;
+
+				if (missingKeys.length)
+					throw new Exception(
+						"REST interface mismatch: Missing required header field(s): "
+						~ missingKeys.to!string);
+
 
 				if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
 					throw new RestException(res.statusCode, ret);
@@ -578,8 +616,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, enforceBadRequest;
 	import vibe.utils.string : sanitizeUTF8;
-	import vibe.internal.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.funcattr : IsAttributedParameter, HasFuncAttributes;
 
+	alias PSC = ParameterStorageClass;
+	alias PSCT = ParameterStorageClassTuple!Func;
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
 	alias ParamDefaults = ParameterDefaultValueTuple!Func;
@@ -593,6 +633,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 	{
 		PT params;
 
+		enum hasFuncAttr = HasFuncAttributes!(Func);
 		foreach (i, P; PT) {
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
@@ -609,20 +650,26 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
 					// @headerParam.
 					static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
-						// If it has no default value
-						static if (is (ParamDefaults[i] == void)) {
-							auto fld = enforceBadRequest(PWPAT[0].field in req.headers,
-							format("Expected field '%s' in header", PWPAT[0].field));
+						// 'out' parameter are not read from the headers
+						static if (PSCT[i] & PSC.out_) {
+							continue;
 						} else {
-							auto fld = PWPAT[0].field in req.headers;
+							static if (is (ParamDefaults[i] == void)) {
+								// If it has no default value
+								auto fld = enforceBadRequest(PWPAT[0].field in req.headers,
+															 format("Expected field '%s' in header",
+																	PWPAT[0].field));
+							} else {
+								auto fld = PWPAT[0].field in req.headers;
 								if (fld is null) {
-								params[i] = ParamDefaults[i];
-								logDebug("No header param %s, using default value", PWPAT[0].identifier);
-								continue;
+									params[i] = ParamDefaults[i];
+									logDebug("No header param %s, using default value", PWPAT[0].identifier);
+									continue;
+								}
 							}
+							logDebug("Header param: %s <- %s", PWPAT[0].identifier, *fld);
+							params[i] = fromRestString!P(*fld);
 						}
-						logDebug("Header param: %s <- %s", PWPAT[0].identifier, *fld);
-						params[i] = fromRestString!P(*fld);
 					} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query) {
 						// Note: Doesn't work if HTTPServerOption.parseQueryString is disabled.
 						static if (is (ParamDefaults[i] == void)) {
@@ -732,29 +779,65 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestI
 			}
 		}
 
+		// Anti copy-paste
+		void returnHeaders()
+		{
+			foreach (i, P; PT) {
+				static if (PSCT[i] & PSC.ref_ || PSCT[i] & PSC.out_) {
+					mixin(GenCmp!("Loop", i, ParamNames[i]).Decl);
+					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
+					static assert (PWPAT.length == 1 && PWPAT[0].origin == WebParamAttribute.Origin.Header);
+					static if (isInstanceOf!(Nullable, typeof(params[i]))) {
+						if (!params[i].isNull)
+							res.headers[PWPAT[0].field] = to!string(params[i]);
+					} else {
+						res.headers[PWPAT[0].field] = to!string(params[i]);
+					}
+				}
+			}
+		}
+
 		try {
 			import vibe.internal.meta.funcattr;
 
-			auto handler = createAttributedFunction!Func(req, res);
+			static if (hasFuncAttr)
+				auto handler = createAttributedFunction!Func(req, res);
 
 			static if (is(RT == void)) {
-				handler(&__traits(getMember, inst, Method), params);
+				static if (hasFuncAttr)
+					handler(&__traits(getMember, inst, Method), params);
+				else
+					__traits(getMember, inst, Method)(params);
+				returnHeaders();
 				res.writeJsonBody(Json.emptyObject);
 			} else {
-				auto ret = handler(&__traits(getMember, inst, Method), params);
+				static if (hasFuncAttr)
+					auto ret = handler(&__traits(getMember, inst, Method), params);
+				else
+					auto ret = __traits(getMember, inst, Method)(params);
+
+				returnHeaders();
 				res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
-			if (res.headerWritten) logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
-			else res.writeJsonBody([ "statusMessage": e.msg ], e.status);
+			if (res.headerWritten)
+				logDebug("Response already started when a HTTPStatusException was thrown. Client will not receive the proper error code (%s)!", e.status);
+			else {
+				returnHeaders();
+				res.writeJsonBody([ "statusMessage": e.msg ], e.status);
+			}
 		} catch (Exception e) {
 			// TODO: better error description!
 			logDebug("REST handler exception: %s", e.toString());
 			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
-			else res.writeJsonBody(
-				[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
-				HTTPStatus.internalServerError
-			);
+			else
+			{
+				returnHeaders();
+				res.writeJsonBody(
+					[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
+					HTTPStatus.internalServerError
+					);
+			}
 		}
 	}
 
@@ -941,9 +1024,11 @@ private string genClientBody(alias Func)() {
 	import std.string : format;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
+	alias PSC = ParameterStorageClass;
 	alias FT = FunctionTypeOf!Func;
 	alias RT = ReturnType!FT;
 	alias PTT = ParameterTypeTuple!Func;
+	alias PSCT = ParameterStorageClassTuple!Func;
 	alias ParamNames = ParameterIdentifierTuple!Func;
 	alias WPAT = UDATuple!(WebParamAttribute, Func);
 
@@ -958,7 +1043,7 @@ private string genClientBody(alias Func)() {
 		string param_handling_str;
 		string url_prefix = `""`;
 		// Those store the way parameter should be handled afterward.
-		// A parameter that bears doesn't a WebParamAttribute (which documents origin explicitly)
+		// A parameter that doesn't bears a WebParamAttribute (which documents origin explicitly)
 		// will be stored in defaultParamCTMap. Else, it will either go to headers__ (via request_str),
 		// or queryParamCTMap / bodyParamCTMap, and be passed to genQuery / genBody just before calling request.
 		// Note: The key is the HTTP parameter name, and the value the parameter *identifier*.
@@ -980,9 +1065,30 @@ private string genClientBody(alias Func)() {
 					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
 			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT)) {
 				alias PWPAT = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT);
-				static if (PWPAT[0].origin == WebParamAttribute.Origin.Header)
-					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PWPAT[0].field, PWPAT[0].identifier);
-				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query)
+				static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
+					// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
+					static if (!(PSCT[i] & PSC.out_)) {
+						param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PWPAT[0].field, PWPAT[0].identifier);
+					}
+					static if (PSCT[i] & PSC.ref_ || PSCT[i] & PSC.out_) {
+						// Optional parameter
+						static if (isInstanceOf!(Nullable, PT)) {
+							param_handling_str ~= q{
+								optHdrs__["%2$s"] = null;
+								scope (exit)
+									%1$s = to!(TemplateArgsOf!(typeof(%1$s)))(
+										optHdrs__.get("%2$s", null));
+							}.format(ParamNames[i], PWPAT[0].field);
+						} else {
+							param_handling_str ~= q{
+								reqHdrs__["%2$s"] = null;
+								scope (exit)
+									if (auto ptr = "%2$s" in reqHdrs__)
+										%1$s = to!(typeof(%1$s))(*ptr);
+							}.format(ParamNames[i], PWPAT[0].field);
+						}
+					}
+				} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query)
 					queryParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
 				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Body)
 					bodyParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
@@ -1034,10 +1140,14 @@ private string genClientBody(alias Func)() {
 		request_str ~= q{
 			// By default for GET / HEAD, params are send via the query string.
 			static if (HTTPMethod.%1$s == HTTPMethod.GET || HTTPMethod.%1$s == HTTPMethod.HEAD) {
-				auto jret__ = request(HTTPMethod.%1$s, url__ , headers__, genQuery(%2$s%5$s%3$s), genBody(%4$s));
+				auto jret__ = request(HTTPMethod.%1$s, url__ ,
+									  headers__, genQuery(%2$s%5$s%3$s), genBody(%4$s),
+									  reqHdrs__, optHdrs__);
 			} else {
 				// Otherwise, they're send as a Json object via the body.
-				auto jret__ = request(HTTPMethod.%1$s, url__ , headers__, genQuery(%3$s), genBody(%2$s%6$s%4$s));
+				auto jret__ = request(HTTPMethod.%1$s, url__ ,
+									  headers__, genQuery(%3$s), genBody(%2$s%6$s%4$s),
+									  reqHdrs__, optHdrs__);
 			}
 
 		}.format(to!string(meta.method),
@@ -1056,6 +1166,8 @@ private string genClientBody(alias Func)() {
 		// Block 1
 		ret ~= q{
 			InetHeaderMap headers__;
+			InetHeaderMap reqHdrs__;
+			InetHeaderMap optHdrs__;
 			string url__ = "%s";
 			%s
 			%s
