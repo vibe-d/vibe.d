@@ -37,6 +37,10 @@ nothrow @safe {
 	Sets the log format used for the default console logger.
 
 	This level applies to the default stdout/stderr logger only.
+
+	Params:
+		fmt = The log format for the stdout (default is `FileLogger.Format.plain`)
+		infoFmt = The log format for the stderr (default is `FileLogger.Format.thread`)
 */
 void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.Format.plain)
 nothrow @safe {
@@ -201,10 +205,11 @@ class Logger {
 	Plain-text based logger for logging to regular files or stdout/stderr
 */
 final class FileLogger : Logger {
+	/// The log format used by the FileLogger
 	enum Format {
-		plain,
-		thread,
-		threadTime
+		plain, /// simply outputs text as it is provided
+		thread, /// prefixes text with [threadID:fiberID LogLevel]
+		threadTime /// prefixes text with [threadID:fiberID CurrentTime LogLevel]
 	}
 
 	private {
