@@ -137,7 +137,7 @@ void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
 	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
 
-	while (parseMultipartFormPart(body_reader, fields, files, "\r\n--" ~ boundary, max_line_length)) {}
+	while (parseMultipartFormPart(body_reader, fields, files, cast(const(ubyte)[])("\r\n--" ~ boundary), max_line_length)) {}
 }
 
 alias FormFields = DictionaryList!(string, true, 16);
@@ -215,7 +215,7 @@ struct FilePart {
 }
 
 
-private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref FilePartFormFields files, string boundary, size_t max_line_length)
+private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref FilePartFormFields files, const(ubyte)[] boundary, size_t max_line_length)
 {
 	InetHeaderMap headers;
 	stream.parseRFC5322Header(headers);
@@ -247,8 +247,8 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 		if (auto plen = "Content-Length" in headers) {
 			import std.conv : to;
 			file.write(stream, (*plen).to!long);
-		}
-		stream.readUntil(file, cast(ubyte[])boundary);
+			enforce(stream.skipBytes(boundary), "Missing multi-part end boundary marker.");
+		} else stream.readUntil(file, boundary);
 		logDebug("file: %s", fp.tempPath.toString());
 		file.close();
 
@@ -256,7 +256,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 
 		// TODO: temp files must be deleted after the request has been processed!
 	} else {
-		auto data = cast(string)stream.readUntil(cast(ubyte[])boundary);
+		auto data = cast(string)stream.readUntil(boundary);
 		form.addField(name, data);
 	}
 	return stream.readLine(max_line_length) != "--";
