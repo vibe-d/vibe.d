@@ -1031,6 +1031,8 @@ final class HTTPClientRequest : HTTPRequest {
 		// http/2
 		if (isHTTP2) {
 			logTrace("Writing HTTP/2 headers");
+			if (auto pka = "Connection" in headers)
+				headers.remove("Connection");
 			m_http2Stream.writeHeader(requestURL, m_conn.tlsStream ? "https" : "http", method, headers, m_cookieJar, m_concatCookies);
 			return;
 		}
