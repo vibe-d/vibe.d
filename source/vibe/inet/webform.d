@@ -259,7 +259,16 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 		auto data = cast(string)stream.readUntil(boundary);
 		form.addField(name, data);
 	}
-	return stream.readLine(max_line_length) != "--";
+	
+	ubyte[2] ub;
+	stream.read(ub);
+	if (ub == "--")
+	{
+		nullSink().write(stream);
+		return false;
+	}
+	enforce(ub == cast(ubyte[])"\r\n");
+	return true;
 }
 
 /**
