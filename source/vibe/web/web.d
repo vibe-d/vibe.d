@@ -130,7 +130,7 @@ import vibe.http.websockets;
 		$(D @vibe.web.common.contentType)
 
 		The `@path` attribute can also be applied to the class itself, in which
-		case it will be used as an additional prefix to the one in 
+		case it will be used as an additional prefix to the one in
 		`WebInterfaceSettings.urlPrefix`.
 
 	Params:
@@ -138,7 +138,7 @@ import vibe.http.websockets;
 		instance = Class instance to use for the web interface mapping
 		settings = Optional parameter to customize the mapping process
 */
-void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.lowerUnderscored)(URLRouter router, C instance, WebInterfaceSettings settings = null)
+URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.lowerUnderscored)(URLRouter router, C instance, WebInterfaceSettings settings = null)
 {
 	import std.algorithm : endsWith;
 	import std.traits;
@@ -194,6 +194,7 @@ void registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.low
 			}
 		}
 	}
+	return router;
 }
 
 
