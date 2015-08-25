@@ -61,7 +61,7 @@ import std.traits;
 		$(D RestInterfaceClient) class for a seamless way to access such a generated API
 
 */
-void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
+URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
 	import std.traits : InterfacesTuple;
 	import vibe.internal.meta.uda : findFirstUDA;
@@ -154,23 +154,24 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 			}
 		}
 	}
+	return router;
 }
 
 /// ditto
-void registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style)
+URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, MethodStyle style)
 {
-	registerRestInterface(router, instance, "/", style);
+	return registerRestInterface(router, instance, "/", style);
 }
 
 /// ditto
-void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
+URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_prefix,
 	MethodStyle style = MethodStyle.lowerUnderscored)
 {
 	auto settings = new RestInterfaceSettings;
 	if (!url_prefix.startsWith("/")) url_prefix = "/"~url_prefix;
 	settings.baseURL = URL("http://127.0.0.1"~url_prefix);
 	settings.methodStyle = style;
-	registerRestInterface(router, instance, settings);
+	return registerRestInterface(router, instance, settings);
 }
 
 
@@ -240,8 +241,8 @@ unittest
 	{
 		import vibe.http.server, vibe.http.router;
 
-		auto router = new URLRouter();
-		registerRestInterface(router, new API());
+		auto router = new URLRouter;
+		router.registerRestInterface(new API());
 		listenHTTP(new HTTPServerSettings(), router);
 	}
 }
