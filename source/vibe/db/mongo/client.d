@@ -66,6 +66,18 @@ final class MongoClient {
 		lockConnection();
 	}
 
+	public this(MongoClientSettings settings)
+	{
+		m_connections = new ConnectionPool!MongoConnection({
+			auto ret = new MongoConnection(settings);
+			ret.connect();
+			return ret;
+		});
+
+		// force a connection to cause an exception for wrong URLs
+		lockConnection();
+	}
+
 	/**
 		Accesses a collection using an absolute path.
 
