@@ -459,6 +459,7 @@ class WebInterfaceSettings {
 	@property WebInterfaceSettings dup() const {
 		auto ret = new WebInterfaceSettings;
 		ret.urlPrefix = this.urlPrefix;
+		ret.ignoreTrailingSlash = this.ignoreTrailingSlash;
 		return ret;
 	}
 }
