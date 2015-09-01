@@ -1507,7 +1507,7 @@ final class LibasyncUDPConnection : UDPConnection {
 
 	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
-		size_t tm;
+		size_t tm = size_t.max;
 		auto m_driver = getEventDriver();
 		if (timeout != Duration.max && timeout > 0.seconds) {
 			tm = m_driver.createTimer(null);
