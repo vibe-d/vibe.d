@@ -62,7 +62,7 @@ If you don't have brew installed, install it according to their [install
 instructions](<http://www.brew.sh>) and
 install libevent.
 
-    ruby -e "$(curl -fsSL https://raw.github.com/Homebrew/homebrew/go/install)"
+    ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
     brew install libevent
 
 You can then also install DUB using brew:
