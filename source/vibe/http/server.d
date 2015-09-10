@@ -1325,7 +1325,7 @@ private {
 	// accessed for every request, needs to be kept thread-safe by only atomically assigning new
 	// arrays (COW). shared immutable(HTTPServerContext)[] would be the right candidate here, but
 	// is impractical due to type system limitations.
-	shared HTTPServerContext[] g_contexts;
+	align(16) shared HTTPServerContext[] g_contexts;
 
 	HTTPServerContext[] getContexts()
 	{
