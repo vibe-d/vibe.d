@@ -262,7 +262,7 @@ final class MongoConnection {
 					ret = MongoErrorDescription(
 						error.err.opt!string(""),
 						error.code.opt!int(-1),
-						error.connectionId.get!int(),
+						error.connectionId.opt!int(-1),
 						error.n.get!int(),
 						error.ok.get!double()
 					);
