@@ -453,7 +453,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
 	static assert(TARGS.sizeof <= maxTaskParameterSize,
 		"The arguments passed to run(Worker)Task must not exceed "~
-		MaxTaskParameterSize.to!string~" bytes in total size.");
+		maxTaskParameterSize.to!string~" bytes in total size.");
 
 	static void callDelegate(TaskFuncInfo* tfi) {
 		assert(tfi.func is &callDelegate);
