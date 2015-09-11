@@ -173,7 +173,7 @@ void setIdleHandler(bool delegate() del)
 	continue to run until vibeYield() or any of the I/O or wait functions is
 	called.
 
-	Note that the maximum size of all args must not exceed MaxTaskParameterSize.
+	Note that the maximum size of all args must not exceed `maxTaskParameterSize`.
 */
 Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 {
