@@ -439,6 +439,7 @@ final class MongoConnection {
 
 		cmd = Bson.emptyObject;
 		cmd["authenticate"] = Bson(1);
+		cmd["mechanism"] = Bson("MONGODB-CR");
 		cmd["nonce"] = Bson(nonce);
 		cmd["user"] = Bson(m_settings.username);
 		cmd["key"] = Bson(key);
