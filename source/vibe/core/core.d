@@ -1685,28 +1685,20 @@ private string callWithMove(ARGS...)(string func, string args)
 
 private template needsMove(T)
 {
-	private T testCopy()()
+	template isCopyable(T)
 	{
-		T a = void;
-		T b = void;
-		T fun(T x) { T y = x; return y; }
-		b = fun(a);
-		return b;
+		enum isCopyable = __traits(compiles, (T a) { return a; });
 	}
 
-	private void testMove()()
+	template isMoveable(T)
 	{
-		T a = void;
-		void test(T) {}
-		test(a.move);
+		enum isMoveable = __traits(compiles, (T a) { return a.move; });
 	}
 
-	static if (is(typeof(testCopy!()()) == T)) enum needsMove = false;
-	else {
-		enum needsMove = true;
-		void test() { testMove!()(); }
-		static assert(is(typeof(testMove!()())), "Non-copyable type "~T.stringof~" must be movable with a .move property."~ typeof(testMove!()()));
-	}
+	enum needsMove = !isCopyable!T;
+
+	static assert(isCopyable!T || isMoveable!T,
+				  "Non-copyable type "~T.stringof~" must be movable with a .move property.");
 }
 
 unittest {
