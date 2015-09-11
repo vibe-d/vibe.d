@@ -2,6 +2,7 @@
 
 set -e -o pipefail
 
+dub build -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
 dub test --compiler=$DC --config=${VIBED_DRIVER=libevent}
 
 if [ ${RUN_EXAMPLE} -eq 1 ]; then
