@@ -53,7 +53,8 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 			addPreviousHeader();
 
 			auto colonpos = ln.indexOf(':');
-			enforce(colonpos > 0 && colonpos < ln.length-1, "Header is missing ':'.");
+			enforce(colonpos >= 0, "Header is missing ':'.");
+			enforce(colonpos > 0, "Header name is empty.");
 			hdr = ln[0..colonpos].stripA();
 			hdrvalue = ln[colonpos+1..$].stripA();
 		} else {
@@ -61,6 +62,25 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 		}
 	}
 	addPreviousHeader();
+}
+
+unittest { // test usual, empty and multiline header
+	import vibe.stream.memory;
+	ubyte[] hdr = cast(ubyte[])"A: a \r\nB: \r\nC:\r\n\tc\r\n\r\n".dup;
+	InetHeaderMap map;
+	parseRFC5322Header(new MemoryStream(hdr), map);
+	assert(map.length == 3);
+	assert(map["A"] == "a");
+	assert(map["B"] == "");
+	assert(map["C"] == " c");
+}
+
+unittest { // fail for empty header names
+	import std.exception;
+	import vibe.stream.memory;
+	auto hdr = cast(ubyte[])": test\r\n\r\n".dup;
+	InetHeaderMap map;
+	assertThrown(parseRFC5322Header(new MemoryStream(hdr), map));
 }
 
 
