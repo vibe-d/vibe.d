@@ -16,6 +16,7 @@ import botan.cert.x509.x509path;
 import botan.tls.blocking;
 import botan.tls.channel;
 import botan.tls.credentials_manager;
+import botan.tls.exceptn;
 import botan.tls.server;
 import botan.tls.session_manager;
 import botan.tls.server_info;
@@ -80,10 +81,10 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		TLSServerInformation server_info = TLSServerInformation(peer_name, peer_address.port);
 		m_tlsChannel = TLSBlockingChannel(&onRead, &onWrite,  &onAlert, &onHandhsakeComplete, m_ctx.m_sessionManager, m_ctx.m_credentials, m_ctx.m_policy, m_ctx.m_rng, server_info, m_ctx.m_offer_version, m_ctx.m_clientOffers.dup);
 
-		scope(exit) 
-			processException();
-		
-		m_tlsChannel.doHandshake();
+		try m_tlsChannel.doHandshake();
+		catch (Exception e) {
+			m_ex = e;
+		}
 	}
 
 	// This constructor is used by the TLS Context for both server and client streams
@@ -107,13 +108,19 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 			m_tlsChannel = TLSBlockingChannel.init;
 			throw new Exception("Cannot load BotanTLSSteam from a connected TLS session");
 		}
-		scope(exit) 
-			processException();
-
-		m_tlsChannel.doHandshake();
-
+		
+		try m_tlsChannel.doHandshake();
+		catch (Exception e) {
+			m_ex = e;
+		}
 	}
-
+	
+	~this() {
+		try m_tlsChannel.destroy();
+		catch (Exception e) {
+		}
+	}
+		
 	void flush()
 	{ 
 		processException();
@@ -126,7 +133,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 			return;
 
 		processException();
-		scope(exit) 
+		scope(success) 
 			processException();
 
 		m_tlsChannel.close();
@@ -138,7 +145,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	void read(ubyte[] dst)
 	{ 
 		processException();
-		scope(exit) 
+		scope(success) 
 			processException();
 		m_tlsChannel.read(dst);
 	}
@@ -146,7 +153,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	ubyte[] readChunk(ubyte[] buf)
 	{ 
 		processException();
-		scope(exit) 
+		scope(success) 
 			processException();
 		return m_tlsChannel.readBuf(buf);
 	}
@@ -154,7 +161,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	void write(in ubyte[] src)
 	{
 		processException();
-		scope(exit) 
+		scope(success) 
 			processException();
 		m_tlsChannel.write(src);
 	}
@@ -169,10 +176,14 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	{
 		size_t ret = m_tlsChannel.pending();
 		if (ret > 0) return ret;
-		if (m_stream.empty) return 0;
-		return 1; // can't we do better?
+		if (m_tlsChannel.isClosed() || m_ex !is null) return 0;
+		try m_tlsChannel.readBuf(null); // force an exchange
+		catch (Exception e) { return 0; }
+		ret = m_tlsChannel.pending();
+		//logDebug("Least size returned: ", ret);
+		return ret > 0 ? ret : m_stream.empty ? 0 : 1;
 	}
-	
+		
 	@property bool dataAvailableForRead()
 	{
 		processException();
@@ -262,6 +273,7 @@ class BotanTLSContext : TLSContext {
 		TLSALPNCallback m_serverCb;
 		Vector!string m_clientOffers;
 		bool m_is_datagram;
+		bool m_certChecked;
 	}
 
 	this(TLSContextKind kind, 
@@ -293,7 +305,7 @@ class BotanTLSContext : TLSContext {
 		}
 		m_policy = policy;
 	}
-
+	
 	/// The kind of TLS context (client/server)
 	@property TLSContextKind kind() const { 
 		return m_kind;
@@ -331,6 +343,8 @@ class BotanTLSContext : TLSContext {
 	*/
 	TLSStream createStream(Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
+		if (!m_certChecked)
+			checkCert();	
 		return new BotanTLSStream(underlying, this, state, peer_name, peer_address);
 	}
 
@@ -412,6 +426,7 @@ class BotanTLSContext : TLSContext {
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path) { 
 		if (auto credentials = cast(CustomTLSCredentials)m_credentials) {
+			m_certChecked = false;
 			credentials.m_server_cert = X509Certificate(path);
 			return;
 		}
@@ -482,6 +497,28 @@ class BotanTLSContext : TLSContext {
 
 		// We cannot use anything else than a Botan stream, and any null value with serverSNI is a failure
 		throw new Exception("Could not find specified hostname");
+	}
+	
+	private void checkCert() {
+		m_certChecked = true;
+		if (m_kind == TLSContextKind.client) return;
+		if (auto creds = cast(CustomTLSCredentials) m_credentials) {
+			auto sigs = m_policy.allowedSignatureMethods();
+			import botan.asn1.oids : OIDS;
+			import vibe.core.log : logDebug;
+			auto sig_algo = OIDS.lookup(creds.m_server_cert.signatureAlgorithm().oid());
+			import std.range : front;
+			import std.algorithm.iteration : splitter;
+			string sig_algo_str = sig_algo.splitter("/").front.to!string;
+			logDebug("Certificate algorithm: %s", sig_algo_str);
+			bool found;
+			foreach (sig; sigs[]) {
+				if (sig == sig_algo_str) {
+					found = true; break;
+				}
+			}
+			assert(found, "Server Certificate uses a signing algorithm that is not accepted in the server policy.");
+		}
 	}
 }
 
@@ -773,24 +810,25 @@ private CustomTLSCredentials createCreds()
 	import botan.codec.hex;
 	import botan.utils.types;
 	scope rng = new AutoSeededRNG();
-	PrivateKey ca_key = RSAPrivateKey(rng, 1024);
+	auto ca_key = RSAPrivateKey(rng, 1024);
+	scope(exit) ca_key.destroy();
 	
 	X509CertOptions ca_opts;
 	ca_opts.common_name = "Test CA";
 	ca_opts.country = "US";
 	ca_opts.CAKey(1);
 	
-	X509Certificate ca_cert = x509self.createSelfSignedCert(ca_opts, ca_key, "SHA-256", rng);
+	X509Certificate ca_cert = x509self.createSelfSignedCert(ca_opts, *ca_key, "SHA-256", rng);
 	
-	PrivateKey server_key = RSAPrivateKey(rng, 1024);
+	auto server_key = RSAPrivateKey(rng, 1024);
 	
 	X509CertOptions server_opts;
 	server_opts.common_name = "localhost";
 	server_opts.country = "US";
 	
-	PKCS10Request req = x509self.createCertReq(server_opts, server_key, "SHA-256", rng);
+	PKCS10Request req = x509self.createCertReq(server_opts, *server_key, "SHA-256", rng);
 	
-	X509CA ca = X509CA(ca_cert, ca_key, "SHA-256");
+	X509CA ca = X509CA(ca_cert, *ca_key, "SHA-256");
 	
 	auto now = Clock.currTime(UTC());
 	X509Time start_time = X509Time(now);
@@ -798,7 +836,8 @@ private CustomTLSCredentials createCreds()
 	
 	X509Certificate server_cert = ca.signRequest(req, rng, start_time, end_time);
 	
-	return new CustomTLSCredentials(server_cert, ca_cert, server_key);
+	return new CustomTLSCredentials(server_cert, ca_cert, server_key.release());
+
 }
 
 private {
