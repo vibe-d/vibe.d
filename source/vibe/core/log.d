@@ -189,7 +189,7 @@ struct LogLine {
 	Fiber fiber;
 	uint fiberID;
 	SysTime time;
-	string text;
+	string text; /// Legacy field used in `Logger.log`
 }
 
 /// Abstract base class for all loggers
@@ -340,7 +340,7 @@ final class HTMLLogger : Logger {
 
 	@property void minLogLevel(LogLevel value) pure nothrow @safe { this.minLevel = value; }
 
-	override void log(ref LogLine msg)
+	override void beginLine(ref LogLine msg)
 		@trusted // FILE isn't @safe (as of DMD 2.065)
 	{
 		if( !m_logFile.isOpen ) return;
@@ -361,18 +361,25 @@ final class HTMLLogger : Logger {
 		if (msg.thread)
 			m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
 		m_logFile.write(`<div class="message">`);
-		{
-			auto dst = m_logFile.lockingTextWriter();
-			auto txt = msg.text;
-			while (!txt.empty && (txt.front == ' ' || txt.front == '\t')) {
-				foreach (i; 0 .. txt.front == ' ' ? 1 : 4)
-					dst.put("&nbsp;");
-				txt.popFront();
-			}
-			filterHTMLEscape(dst, txt);
+	}
+
+	override void put(scope const(char)[] text)
+	{
+		auto dst = () @trusted { return m_logFile.lockingTextWriter(); } (); // LockingTextWriter not @safe for DMD 2.066
+		while (!text.empty && (text.front == ' ' || text.front == '\t')) {
+			foreach (i; 0 .. text.front == ' ' ? 1 : 4)
+				() @trusted { dst.put("&nbsp;"); } (); // LockingTextWriter not @safe for DMD 2.066
+			text.popFront();
 		}
-		m_logFile.write(`</div>`);
-		m_logFile.writeln(`</div>`);
+		() @trusted { filterHTMLEscape(dst, text); } (); // LockingTextWriter not @safe for DMD 2.066
+	}
+
+	override void endLine()
+	{
+		() @trusted { // not @safe for DMD 2.066
+			m_logFile.write(`</div>`);
+			m_logFile.writeln(`</div>`);
+		} ();
 		m_logFile.flush();
 	}
 
