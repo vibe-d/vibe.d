@@ -110,10 +110,13 @@ unittest {
 	});
 }
 
-/** Semaphore implementation for tasks.
 
-	If no slots are available, the semaphore will lock the task, up to an adjustable maximum count of internal tasks.
-	The primary use for this in vibe.d is to limit concurrent connections in a connection pool
+/**
+	Thread-local semaphore implementation for tasks.
+
+	When the semaphore runs out of concurrent locks, it will suspend. This class
+	is used in `vibe.core.connectionpool` to limit the number of concurrent
+	connections.
 */
 class LocalTaskSemaphore
 {
@@ -135,15 +138,28 @@ class LocalTaskSemaphore
 		uint m_seq;
 	}
 
-	@property void maxLocks(uint max_locks) { m_maxLocks = max_locks; }
-	@property uint maxLocks() const { return m_maxLocks; }
-	@property uint available() const { return m_maxLocks - m_locks; }
-
 	this(uint max_locks) 
 	{ 
 		m_maxLocks = max_locks;
 	}
 
+	/// Maximum number of concurrent locks
+	@property void maxLocks(uint max_locks) { m_maxLocks = max_locks; }
+	/// ditto
+	@property uint maxLocks() const { return m_maxLocks; }
+
+	/// Number of concurrent locks still available
+	@property uint available() const { return m_maxLocks - m_locks; }
+
+	/** Try to acquire a lock.
+
+		If a lock cannot be acquired immediately, returns `false` and leaves the
+		semaphore in its previous state.
+
+		Returns:
+			`true` is returned $(I iff) the number of available locks is greater
+			than one.
+	*/
 	bool tryLock()
 	{		
 		if (available > 0) 
@@ -154,6 +170,11 @@ class LocalTaskSemaphore
 		return false;
 	}
 
+	/** Acquires a lock.
+
+		Once the limit of concurrent locks is reaced, this method will block
+		until the number of locks drops below the limit.
+	*/
 	void lock(ubyte priority = 0)
 	{ 
 		if (tryLock())
@@ -172,6 +193,8 @@ class LocalTaskSemaphore
 		destroy(w.signal);
 	}
 
+	/** Gives up an existing lock.
+	*/
 	void unlock() 
 	{
 		m_locks--;
@@ -183,7 +206,7 @@ class LocalTaskSemaphore
 	}
 
 	// if true, a goes after b. ie. b comes out front()
-	static bool asc(ref Waiter a, ref Waiter b) 
+	private static bool asc(ref Waiter a, ref Waiter b) 
 	{
 		if (a.seq == b.seq) {
 			if (a.priority == b.priority) {
@@ -197,7 +220,7 @@ class LocalTaskSemaphore
 		return a.seq > b.seq;
 	}
 
-	void rewindSeq()
+	private void rewindSeq()
 	{
 		Array!Waiter waiters = m_waiters.release();
 		ushort min_seq;
@@ -209,6 +232,7 @@ class LocalTaskSemaphore
 		m_waiters.assume(waiters);
 	}
 }
+
 
 /**
 	Mutex implementation for fibers.
