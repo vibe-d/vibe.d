@@ -191,7 +191,7 @@ public:
 	{
 		m_writeLock.lock();
 		scope(exit) m_writeLock.unlock();
-		removeCookies( (CookiePair cookie) { return cookie.value.expires == "Thu, 01 Jan 1970 00:00:00 GMT"; } );
+		removeCookies( (CookiePair cookie) { return parseCookieDate(cookie.value.expires) == epoch_parsed; } );
 	}
 
 	void cleanup()
@@ -353,7 +353,6 @@ public:
 
 struct StrictCookieSearch
 {
-	enum epoch = "Thu, 01 Jan 1970 00:00:00 GMT";
 	string name = "*";
 	string domain = "*";
 	string path = "/";
@@ -361,9 +360,15 @@ struct StrictCookieSearch
 	bool httpOnly = false;
 	// by default, only session/current cookies are returned
 	// to get expired cookies, set this to the cutoff date after which they are expired
-	string expires = epoch;
+	string expires = "Thu, 01 Jan 1970 00:00:00 GMT";
+	private SysTime expires_parsed;
+	private string expires_parsed_at;
 
 	bool match(CookiePair cookie) {
+		if (expires != "" && expires && expires !is expires_parsed_at) {
+			expires_parsed = parseCookieDate(expires);
+			expires_parsed_at = expires;
+		}
 		if (name != "*") {
 			if (cookie.name != name) {
 				logTrace("Cookie name match failed: %s != %s", name, cookie.name);
@@ -397,31 +402,35 @@ struct StrictCookieSearch
 			}
 		}
 
-		if (expires == epoch) {
+		if (expires_parsed == epoch_parsed) {
 			// give me valid cookies, both session and according to current time
 			if (cookie.value.expires !is null && 
-				cookie.value.expires != epoch && 
-				cookie.value.expires != "" && 
-				cookie.value.expires.parseCookieDate() < Clock.currTime(UTC()))
+				cookie.value.expires != "")
 			{
-				logTrace("Cookie date check failed: %s != %s", expires, cookie.value.expires);
-				logTrace("Cookie date check parse values: %s != %s", expires.parseCookieDate().toString(), cookie.value.expires.parseCookieDate().toString());
-				return false;
+				SysTime cookie_expires_parsed = cookie.value.expires.parseCookieDate();
+				if (cookie_expires_parsed < Clock.currTime(UTC()) &&
+					cookie_expires_parsed != epoch_parsed)
+				{
+					logTrace("Cookie date check failed: %s != %s", expires, cookie.value.expires);
+					logTrace("Cookie date check parse values: %s != %s", expires_parsed.toString(), cookie_expires_parsed.toString());
+					return false;
+				}
 			}
 		}
-		else if (expires != "") {
+		else if (expires != "" && cookie.value.expires != "") {
+			SysTime cookie_expires_parsed = cookie.value.expires.parseCookieDate();
 			// give me expired cookies according to expires
-			if (expires.parseCookieDate() < cookie.value.expires.parseCookieDate() || cookie.value.expires == epoch)
+			if (expires_parsed < cookie_expires_parsed || cookie_expires_parsed == epoch_parsed)
 			{
 				logTrace("Cookie date check failed: %s != %s", expires, cookie.value.expires);
-				logTrace("Cookie date check parse values: %s != %s", expires.parseCookieDate().toString(), cookie.value.expires.parseCookieDate().toString());
+				logTrace("Cookie date check parse values: %s != %s", expires_parsed.toString(), cookie_expires_parsed.toString());
 				return false; // it's valid
 			}
 		}
 		else if (expires == "")
 		{
 			// give me only session cookies
-			if (cookie.value.expires != epoch)
+			if (cookie.value.expires.parseCookieDate() != epoch_parsed)
 				return false;
 		}
 		// else don't filter expires
@@ -539,3 +548,7 @@ void parseAttributeValue(string part, int idx, ref Cookie cookie) {
 			break;
 	}
 }
+
+static SysTime epoch_parsed;
+
+static this() { epoch_parsed = parseCookieDate("Thu, 01 Jan 1970 00:00:00 GMT"); }
