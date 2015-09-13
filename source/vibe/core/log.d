@@ -576,7 +576,7 @@ final class SyslogLogger : Logger {
 
 		It uses the msg's time, level, and text field.
 	*/
-	override void log(ref LogLine msg)
+	override void beginLine(ref LogLine msg)
 	@trusted { // OutputStream isn't @safe
 		auto tm = msg.time;
 		import core.time;
@@ -601,16 +601,29 @@ final class SyslogLogger : Logger {
 
 		assert(msg.level >= LogLevel.debug_);
 		import std.conv : to; // temporary workaround for issue 1016 (DMD cross-module template overloads error out before second attempted module)
-		auto priVal = (m_facility * 8 + syslogSeverity).to!string();
+		auto priVal = m_facility * 8 + syslogSeverity;
 
 		alias procId = NILVALUE;
 		alias msgId = NILVALUE;
 		alias structuredData = NILVALUE;
 
 		auto text = msg.text;
-		import std.string : format;
-		m_ostream.write(SYSLOG_MESSAGE_FORMAT_VERSION1.format(
-					  priVal, timestamp, m_hostName, BOM ~ m_appName, procId, msgId, structuredData, BOM ~ text) ~ "\n");
+		import std.format : formattedWrite;
+		import vibe.stream.wrapper : StreamOutputRange;
+		auto str = StreamOutputRange(m_ostream);
+		(&str).formattedWrite(SYSLOG_MESSAGE_FORMAT_VERSION1, priVal,
+			timestamp, m_hostName, BOM ~ m_appName, procId, msgId,
+			structuredData, BOM);
+	}
+
+	override void put(scope const(char)[] text)
+	@trusted {
+		m_ostream.write(text);
+	}
+
+	override void endLine()
+	@trusted {
+		m_ostream.write("\n");
 		m_ostream.flush();
 	}
 
@@ -623,22 +636,13 @@ final class SyslogLogger : Logger {
 		import std.datetime;
 		import core.thread;
 		msg.time = SysTime(DateTime(0, 1, 1, 0, 0, 0), FracSec.from!"usecs"(1));
-		msg.text = "αβγ";
 
-		msg.level = LogLevel.debug_;
-		logger.log(msg);
-		msg.level = LogLevel.diagnostic;
-		logger.log(msg);
-		msg.level = LogLevel.info;
-		logger.log(msg);
-		msg.level = LogLevel.warn;
-		logger.log(msg);
-		msg.level = LogLevel.error;
-		logger.log(msg);
-		msg.level = LogLevel.critical;
-		logger.log(msg);
-		msg.level = LogLevel.fatal;
-		logger.log(msg);
+		foreach (lvl; [LogLevel.debug_, LogLevel.diagnostic, LogLevel.info, LogLevel.warn, LogLevel.error, LogLevel.critical, LogLevel.fatal]) {
+			msg.level = lvl;
+			logger.beginLine(msg);
+			logger.put("αβγ");
+			logger.endLine();
+		}
 		fstream.close();
 
 		import std.file;
