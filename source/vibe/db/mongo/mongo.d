@@ -30,11 +30,19 @@ import std.algorithm;
 	of options. Note that 'sslverifycertificate' is only present in some client
 	bindings, including here.
 
-
 	Note that the returned MongoClient uses a vibe.core.connectionpool.ConnectionPool
 	internally to create and reuse connections as necessary. Thus, the
 	MongoClient instance can - and should - be shared among all fibers in a
 	thread by storing in in a thread local variable.
+
+	Authentication:
+		Authenticated connections are supported by using a URL connection string
+		such as "mongodb://user:password@host". Note that the driver currently
+		only supports the "MongoDB-CR" authentication mechanism. Since new
+		MongoDB versions, starting with 3.0, default to the new "SCRAM-SHA-1"
+		method, it is necessary to manually switch to the old method. See
+		$(WEB http://stackoverflow.com/questions/29006887/mongodb-cr-authentication-failed)
+		for more information.
 
 	Examples:
 		---
