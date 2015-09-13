@@ -20,16 +20,10 @@ env:
 
 matrix:
   exclude:
-    - d: dmd-2.065.0
-      env: VIBED_DRIVER=libasync
-    - d: ldc-0.14.0
-      env: VIBED_DRIVER=libasync
     - d: ldc-0.15.1
-      env: VIBED_DRIVER=libasync
-    - d: gdc-4.9.0
-      env: VIBED_DRIVER=libasync
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: gdc-4.9.2
-      env: VIBED_DRIVER=libasync
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
 
