@@ -1,0 +1,8 @@
+{
+	"name": "rest-js-example",
+	"description": "Simple dynamic web UI that accesses a REST interface",
+	"dependencies": {
+		"vibe-d": { "path": "../../" }
+	},
+	"versions": ["VibeDefaultMain"]
+}

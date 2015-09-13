@@ -1,0 +1,37 @@
+doctype html
+html
+	head
+		script(src="test.js")
+		script.
+			function computeSum() {
+				var a = document.getElementById('a').value;
+				var b = document.getElementById('b').value;
+
+				// perform the RESTful request using a simple function call,
+				// similar to RestInterfaceClient within D code
+				ITest.computeSum(a, b, function (r) {
+					// the result comes back asynchronously
+					document.getElementById('res').innerHTML = r;
+				});
+			}
+
+			function writeConsoleMessage() {
+				var text = document.getElementById('test').value;
+
+				// similar to the call above, but this time call a void
+				// function with no result
+				ITest.postToConsole(text);
+			}
+
+	body
+		h1 Calculator
+		input#a
+		| +
+		input#b
+		button(onclick="computeSum()") Compute sum
+		p Result:
+			span#res
+
+		h2 Console
+		input#test
+		button(onclick="writeConsoleMessage()") Write to console

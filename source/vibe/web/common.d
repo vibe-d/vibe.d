@@ -451,13 +451,9 @@ package struct PathAttribute
 
 /// Private struct describing the origin of a parameter (Query, Header, Body).
 package struct WebParamAttribute {
-	enum Origin {
-		Body,
-		Header,
-		Query,
-	}
+	import vibe.web.internal.rest.common : ParameterKind;
 
-	Origin origin;
+	ParameterKind origin;
 	/// Parameter name
 	string identifier;
 	/// The meaning of this field depends on the origin.
@@ -482,9 +478,10 @@ package struct WebParamAttribute {
  * ----
  */
 WebParamAttribute bodyParam(string identifier, string field) {
+	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
+	return WebParamAttribute(ParameterKind.body_, identifier, field);
 }
 
 /**
@@ -506,9 +503,10 @@ WebParamAttribute bodyParam(string identifier, string field) {
  */
 WebParamAttribute headerParam(string identifier, string field)
 {
+	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return WebParamAttribute(WebParamAttribute.Origin.Header, identifier, field);
+	return WebParamAttribute(ParameterKind.header, identifier, field);
 }
 
 /**
@@ -530,9 +528,10 @@ WebParamAttribute headerParam(string identifier, string field)
  */
 WebParamAttribute queryParam(string identifier, string field)
 {
+	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
+	return WebParamAttribute(ParameterKind.query, identifier, field);
 }
 
 /**
