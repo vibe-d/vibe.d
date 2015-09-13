@@ -880,7 +880,7 @@ final class HTTP2Stream : ConnectionStream
 
 	void flush()
 	{
-		if (!m_tx.bufs || m_tx.bufs.length == 0) return;
+		if (!m_tx.bufs || m_tx.bufs.length == 0 || (!m_session.isServer && m_tx.halfClosed)) return;
 		acquireWriter();
 		scope(exit) releaseWriter();
 		// enforce dirty?
@@ -2068,8 +2068,10 @@ private:
 									continue; // try again later
 								}
 								int rv;
-								if (!isServer)
+								if (!isServer) {
 									rv = submitRequest(m_session, stream.m_tx.priSpec, headers, (bufs.length>0)?&stream.dataProvider:null, cast(void*)stream);
+									data_processed = true;
+								}
 								else rv = submitHeaders(m_session, fflags, stream.m_stream_id, stream.m_priSpec, headers, cast(void*)stream);
 
 								if (rv < 0)
@@ -2089,7 +2091,7 @@ private:
 				}
 
 				// Send the data if it wasn't done earlier
-				if ((!data_processed && !finalized && halfClosed && stream.m_connected && stream.m_stream_id > 0) || 
+				if ((!data_processed && !finalized && (!isServer || halfClosed) && stream.m_connected && stream.m_stream_id > 0) || 
 					(!data_processed && stream.m_stream_id > 0 && stream.m_active))
 				{
 					data_processed = true;
@@ -2303,10 +2305,12 @@ override:
 		HTTP2Stream stream = getStream(frame.hd.stream_id);
 		assert(stream, "Could not find stream");
 		HeaderField hf_copy;
-		hf_copy.name = cast(string)Mem.copy(hf.name);
-		hf_copy.value = cast(string)Mem.copy(hf.value);
-		//if (hf_copy.name == ":path") writeln(m_stream_id, " ", hf_copy.value);
-		stream.m_rx.headers ~= hf_copy;
+		if (hf.value.length > 0) {
+			hf_copy.name = cast(string)Mem.copy(hf.name);
+			hf_copy.value = cast(string)Mem.copy(hf.value);
+			//if (hf_copy.name == ":path") writeln(m_stream_id, " ", hf_copy.value);
+			stream.m_rx.headers ~= hf_copy;
+		}
 		logDebug("Got response header: ", hf_copy); 
 		return true;
 	}
