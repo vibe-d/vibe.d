@@ -1,8 +1,8 @@
 /**
 	Uses libasync
 
-	Copyright: © 2014 RejectedSoftware e.K.
-	Authors: Sönke Ludwig
+	Copyright: © 2014 RejectedSoftware e.K., GlobecSys Inc
+	Authors: Sönke Ludwig, Etienne Cimon
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
 module vibe.core.drivers.libasync;
@@ -12,31 +12,34 @@ version(VibeLibasyncDriver):
 import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.drivers.threadedfile;
+import vibe.core.drivers.timerqueue;
 import vibe.core.log;
 import vibe.inet.path;
+import vibe.utils.array : FixedRingBuffer;
 
 import libasync;
+import libasync.internals.memory;
 import libasync.types : Status;
 
 import std.algorithm : min;
 import std.array;
+import std.container : Array;
+import std.conv;
+import std.datetime;
 import std.encoding;
 import std.exception;
-import std.conv;
 import std.string;
+import std.stdio : File;
 import std.typecons;
-import std.datetime;
 
 import core.atomic;
 import core.memory;
 import core.thread;
 import core.sync.mutex;
-import std.container : Array;
+import core.sys.posix.netinet.in_;
 
-import vibe.core.drivers.timerqueue;
-import libasync.internals.memory;
-import vibe.utils.array : FixedRingBuffer;
-import std.stdio : File;
+version (Posix) import core.sys.posix.sys.socket;
+version (Windows) import core.sys.windows.winsock2;
 
 private __gshared EventLoop gs_evLoop;
 private EventLoop s_evLoop;
@@ -76,7 +79,7 @@ final class LibasyncDriver : EventDriver {
 
 	this(DriverCore core) nothrow
 	{
-		//if (isControlThread) return;
+		assert(!isControlThread, "Libasync driver created in control thread");
 		try {			
 			import core.atomic : atomicOp;
 			s_refCount.atomicOp!"+="(1);
@@ -107,8 +110,9 @@ final class LibasyncDriver : EventDriver {
 
 	}
 
-	static @property bool isControlThread() {
-		return Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor" ;
+	static @property bool isControlThread() nothrow {
+		scope(failure) assert(false);
+		return Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor";
 	}
 
 	void dispose() {
@@ -171,21 +175,38 @@ final class LibasyncDriver : EventDriver {
 	/** Resolves the given host name or IP address string. */
 	NetworkAddress resolveHost(string host, ushort family = 2, bool use_dns = true)
 	{
-		// todo: force use_dns false if host is an IP to avoid yielding... do this at a lower level?
-
-		NetworkAddress ret;
-
-		enum : ushort {
-			AF_INET = 2,
-			AF_INET6 = 23
-		}
-
 		import libasync.types : isIPv6;
 		isIPv6 is_ipv6;
+
 		if (family == AF_INET6)
 			is_ipv6 = isIPv6.yes;
 		else
 			is_ipv6 = isIPv6.no;
+		
+		import std.regex : regex, Captures, Regex, matchFirst, ctRegex;
+		import std.traits : ReturnType;
+
+		auto IPv4Regex = ctRegex!(`^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4}$`, ``);
+		auto IPv6Regex = ctRegex!(`^([0-9A-Fa-f]{0,4}:){2,7}([0-9A-Fa-f]{1,4}$|((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)(\.|$)){4})$`, ``);
+		auto ipv4 = matchFirst(host, IPv4Regex);
+		auto ipv6 = matchFirst(host, IPv6Regex);
+		if (!ipv4.empty)
+		{
+			if (!ipv4.empty)
+			is_ipv6 = isIPv6.no;
+			use_dns = false;
+		}
+		else if (!ipv6.empty)
+		{ // fixme: match host instead?
+			is_ipv6 = isIPv6.yes;
+			use_dns = false;
+		}
+		else
+		{
+			use_dns = true;
+		}
+		
+		NetworkAddress ret;
 
 		if (use_dns) {
 			bool done;
@@ -500,8 +521,6 @@ final class LibasyncFileStream : FileStream {
 	void read(ubyte[] dst)
 	{
 		assert(this.readable, "To read a file, it must be opened in a read-enabled mode.");
-		acquire();
-		scope(exit) release();
 		shared ubyte[] bytes = cast(shared) dst;
 		bool truncate_if_exists;
 		if (!m_truncated && m_mode == FileMode.createTrunc) {
@@ -511,8 +530,11 @@ final class LibasyncFileStream : FileStream {
 		}
 		enforce(dst.length <= leastSize);
 		enforce(m_impl.read(m_path.toNativeString(), bytes, m_offset, true, truncate_if_exists), "Failed to read data from disk: " ~ m_impl.error);
-		while(!m_finished) {
-			getDriverCore().yieldForEvent();
+
+		{
+			acquire();
+			scope(exit) release();
+			while(!m_finished) getDriverCore().yieldForEvent();
 		}
 		m_finished = false;
 		m_offset += dst.length;
@@ -523,8 +545,6 @@ final class LibasyncFileStream : FileStream {
 	void write(in ubyte[] bytes_)
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");
-		acquire();
-		scope(exit) release();
 		shared const(ubyte)[] bytes = cast(shared const(ubyte)[]) bytes_;
 
 		bool truncate_if_exists;
@@ -533,14 +553,16 @@ final class LibasyncFileStream : FileStream {
 			m_truncated = true;
 			m_size = 0;
 		}
+		m_finished = false;
 
 		if (m_mode == FileMode.append)
 			enforce(m_impl.append(m_path.toNativeString(), cast(shared ubyte[]) bytes, true, truncate_if_exists), "Failed to write data to disk: " ~ m_impl.error);
 		else
 			enforce(m_impl.write(m_path.toNativeString(), bytes, m_offset, true, truncate_if_exists), "Failed to write data to disk: " ~ m_impl.error);
-
-		while(!m_finished) {
-			getDriverCore().yieldForEvent();
+		{
+			acquire();
+			scope(exit) release();
+			while(!m_finished) getDriverCore().yieldForEvent();
 		}
 		m_finished = false;
 
@@ -596,8 +618,12 @@ final class LibasyncFileStream : FileStream {
 		if (m_impl.status.code != Status.OK)
 			ex = new Exception(m_impl.error);
 		m_finished = true;
-		if (m_task != Task())
-			getDriverCore().resumeTask(m_task, ex);
+		if (m_task != Task.init && m_task.running) {
+			try getDriverCore().resumeTask(m_task, ex);
+			catch (Exception e) {
+				logError("Error returning from file read: %s", e.toString());
+			}
+		}
 	}
 }
 
@@ -916,7 +942,6 @@ final class LibasyncManualEvent : ManualEvent {
 			logError("Exception while handling signal event: %s", e.msg);
 			try logDebug("Full error: %s", sanitize(e.msg));
 			catch (Exception) {}
-			debug assert(false);
 		}
 	}
 }
@@ -973,10 +998,11 @@ final class LibasyncTCPListener : TCPListener {
 	}
 }
 
-final class LibasyncTCPConnection : TCPConnection {
-
+final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	private {
-		FixedRingBuffer!ubyte m_readBuffer; // todo: use a file failover for tasks too busy to read
+		FixedRingBuffer!ubyte m_readBuffer;
+		ubyte[] m_buffer;
+		ubyte[] m_slice;
 		TCPConnectionImpl m_tcpImpl;
 		Settings m_settings;
 
@@ -987,6 +1013,37 @@ final class LibasyncTCPConnection : TCPConnection {
 		// The socket descriptor is unavailable to motivate low-level/API feature additions
 		// rather than high-lvl platform-dependent hacking
 		// fd_t socket;
+	}
+
+	ubyte[] readChunk(ubyte[] buffer = null)
+	{
+		logTrace("readBuf TCP: %d", buffer.length);
+		import std.algorithm : swap;
+		ubyte[] ret;
+
+		if (m_slice.length > 0) {
+			swap(ret, m_slice);
+			logTrace("readBuf returned instantly with slice length: %d", ret.length);
+			return ret;
+		}
+
+		if (m_readBuffer.length > 0) {
+			size_t amt = min(buffer.length, m_readBuffer.length);
+			m_readBuffer.read(buffer[0 .. amt]);
+			logTrace("readBuf returned with existing amount: %d", amt);
+			return buffer[0 .. amt];
+		}
+
+		if (buffer) {
+			m_buffer = buffer;
+			destroy(m_readBuffer);
+		}
+
+		leastSize();
+
+		swap(ret, m_slice);
+		logTrace("readBuf returned with buffered length: %d", ret.length);
+		return ret;
 	}
 
 	this(AsyncTCPConnection conn, void delegate(TCPConnection) cb)
@@ -1033,7 +1090,11 @@ final class LibasyncTCPConnection : TCPConnection {
 		logTrace("dataAvailableForRead");
 		acquireReader();
 		scope(exit) releaseReader();
-		return !m_readBuffer.empty;
+		return !readEmpty;
+	}
+
+	private @property bool readEmpty() {
+		return (m_buffer && !m_slice) || (!m_buffer && m_readBuffer.empty);
 	}
 
 	@property string peerAddress() const { return m_tcpImpl.conn.peer.toString(); }
@@ -1045,7 +1106,7 @@ final class LibasyncTCPConnection : TCPConnection {
 
 	@property ulong leastSize()
 	{
-		logTrace("leastSize()");
+		logTrace("leastSize TCP");
 		acquireReader();
 		scope(exit) releaseReader();
 
@@ -1056,19 +1117,19 @@ final class LibasyncTCPConnection : TCPConnection {
 			getDriverCore().yieldForEvent();
 			m_settings.reader.noExcept = false;
 		}
-		return m_readBuffer.length;
+		return (m_slice.length > 0) ? m_slice.length : m_readBuffer.length;
 	}
 
 	void close()
 	{
-		logTrace("%s", "Close enter");
+		logTrace("Close TCP enter");
 		//logTrace("closing");
 		acquireWriter();
 		scope(exit) releaseWriter();
 
 		// checkConnected();
 
-		onClose();
+		onClose(null, false);
 	}
 
 	bool waitForData(Duration timeout = 0.seconds)
@@ -1107,20 +1168,20 @@ final class LibasyncTCPConnection : TCPConnection {
 
 	const(ubyte)[] peek()
 	{
-		logTrace("%s", "Peek enter");
+		logTrace("Peek TCP enter");
 		acquireReader();
 		scope(exit) releaseReader();
 
-		if (!m_readBuffer.empty)
-			return m_readBuffer.peek();
+		if (!readEmpty)
+			return (m_slice.length > 0) ? cast(const(ubyte)[]) m_slice : m_readBuffer.peek();
 		else
 			return null;
 	}
 
 	void read(ubyte[] dst)
 	{
-		assert(dst !is null);
-		logTrace("Read enter :: ptr %s",  (cast(void*)this).to!string);
+		assert(dst !is null && !m_slice);
+		logTrace("Read TCP");
 		acquireReader();
 		scope(exit) releaseReader();
 		while( dst.length > 0 ){
@@ -1241,9 +1302,51 @@ final class LibasyncTCPConnection : TCPConnection {
 		logTrace("Check Connected");
 	}
 
+	private bool tryReadBuf() {
+		//logTrace("TryReadBuf with m_buffer: %s", m_buffer.length);
+		if (m_buffer) {
+			ubyte[] buf = m_buffer[m_slice.length .. $];
+			uint ret = conn.recv(buf);
+			//logTrace("Received: %s", buf[0 .. ret]);
+			// check for overflow
+			if (ret == buf.length) {
+				logTrace("Overflow detected, revert to ring buffer");
+				m_slice = null;
+				m_readBuffer.freeOnDestruct = true;
+				m_readBuffer.capacity = 64*1024;
+				m_readBuffer.put(buf);
+				m_buffer = null;
+				return false; // cancel slices and revert to the fixed ring buffer
+			}
+
+			if (m_slice.length > 0) { 
+				//logDebug("post-assign m_slice "); 
+				m_slice = m_slice.ptr[0 .. m_slice.length + ret];
+			}
+			else {
+				//logDebug("using m_buffer");
+				m_slice = m_buffer[0 .. ret];
+			}
+			return true;
+		}	
+		logTrace("TryReadBuf exit with %d bytes in m_slice, %d bytes in m_readBuffer ", m_slice.length, m_readBuffer.length);
+
+		return false;
+	}
+
 	private void onRead() {
 		m_mustRecv = true; // assume we didn't receive everything
+
+		if (tryReadBuf()) {
+			m_mustRecv = false;
+			return;
+		}
+
+		assert(!m_slice);
+
 		logTrace("OnRead with %s", m_readBuffer.freeSpace);
+
+
 		while( m_readBuffer.freeSpace > 0 ) {
 			ubyte[] dst = m_readBuffer.peekDst();
 			assert(dst.length <= int.max);
@@ -1280,7 +1383,7 @@ final class LibasyncTCPConnection : TCPConnection {
 	/* The AsyncTCPConnection object will be automatically disposed when this returns.
 	 * We're given some time to cleanup.
 	*/
-	private void onClose(in string msg = null) {
+	private void onClose(in string msg = null, bool wake_ex = true) {
 		logTrace("onClose");
 
 		if (msg)
@@ -1299,9 +1402,9 @@ final class LibasyncTCPConnection : TCPConnection {
 			return;
 		}
 		Exception ex;
-		if (!msg)
+		if (!msg && wake_ex)
 			ex = new Exception("Connection closed");
-		else	ex = new Exception(msg);
+		else if (wake_ex)	ex = new Exception(msg);
 
 
 		Task reader = m_settings.reader.task;
@@ -1313,7 +1416,7 @@ final class LibasyncTCPConnection : TCPConnection {
 		if (hasUniqueReader && Task.getThis() != reader) {
 			getDriverCore().resumeTask(reader, m_settings.reader.noExcept?null:ex);
 		}
-		if (hasUniqueWriter && Task.getThis() != writer) {
+		if (hasUniqueWriter && Task.getThis() != writer && wake_ex) {
 			getDriverCore().resumeTask(writer, ex);
 		}
 	}
