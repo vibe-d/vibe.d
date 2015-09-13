@@ -120,9 +120,10 @@ void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*
 	try {
 		foreach (l; getLoggers())
 			if (l.minLevel <= level) { // WARNING: TYPE SYSTEM HOLE: accessing field of shared class!
-				auto app = appender!string();
-				() @trusted { formattedWrite(app, fmt, args); }(); // not @safe as of 2.065
-				rawLog(/*mod, func,*/ file, line, level, app.data);
+				auto ll = l.lock();
+				auto rng = LogOutputRange(ll, file, line, level);
+				/*() @trusted {*/ rng.formattedWrite(fmt, args); //} (); // formattedWrite is not @safe at least up to 2.068.0
+				rng.finalize();
 				break;
 			}
 	} catch(Exception e) debug assert(false, e.msg);
@@ -195,9 +196,41 @@ struct LogLine {
 class Logger {
 	LogLevel minLevel = LogLevel.min;
 
+	private {
+		LogLine m_curLine;
+		Appender!string m_curLineText;
+	}
+
 	final bool acceptsLevel(LogLevel value) nothrow pure @safe { return value >= this.minLevel; }
 
-	abstract void log(ref LogLine message) @safe;
+	/** Legacy logging interface relying on dynamic memory allocation.
+		
+		Override `beginLine`, `put`, `endLine` instead for a more efficient and
+		possibly allocation-free implementation.
+	*/
+	void log(ref LogLine line) @safe {}
+
+	/// Starts a new log line.
+	void beginLine(ref LogLine line_info)
+	@safe {
+		m_curLine = line_info;
+		m_curLineText = appender!string();
+	}
+
+	/// Writes part of a log line message.
+	void put(scope const(char)[] text)
+	@safe {
+		m_curLineText.put(text);
+	}
+
+	/// Finalizes a log line.
+	void endLine()
+	@safe {
+		m_curLine.text = m_curLineText.data;
+		log(m_curLine);
+		m_curLine.text = null;
+		m_curLineText = Appender!string.init;
+	}
 }
 
 
@@ -215,6 +248,7 @@ final class FileLogger : Logger {
 	private {
 		File m_infoFile;
 		File m_diagFile;
+		File m_curFile;
 	}
 
 	Format format = Format.thread;
@@ -232,38 +266,47 @@ final class FileLogger : Logger {
 		m_diagFile = m_infoFile;
 	}
 
-	override void log(ref LogLine msg)
+	override void beginLine(ref LogLine msg)
 		@trusted // FILE isn't @safe (as of DMD 2.065)
 	{
 		string pref;
-		File file;
 		final switch (msg.level) {
-			case LogLevel.trace: pref = "trc"; file = m_diagFile; break;
-			case LogLevel.debugV: pref = "dbv"; file = m_diagFile; break;
-			case LogLevel.debug_: pref = "dbg"; file = m_diagFile; break;
-			case LogLevel.diagnostic: pref = "dia"; file = m_diagFile; break;
-			case LogLevel.info: pref = "INF"; file = m_infoFile; break;
-			case LogLevel.warn: pref = "WRN"; file = m_diagFile; break;
-			case LogLevel.error: pref = "ERR"; file = m_diagFile; break;
-			case LogLevel.critical: pref = "CRITICAL"; file = m_diagFile; break;
-			case LogLevel.fatal: pref = "FATAL"; file = m_diagFile; break;
+			case LogLevel.trace: pref = "trc"; m_curFile = m_diagFile; break;
+			case LogLevel.debugV: pref = "dbv"; m_curFile = m_diagFile; break;
+			case LogLevel.debug_: pref = "dbg"; m_curFile = m_diagFile; break;
+			case LogLevel.diagnostic: pref = "dia"; m_curFile = m_diagFile; break;
+			case LogLevel.info: pref = "INF"; m_curFile = m_infoFile; break;
+			case LogLevel.warn: pref = "WRN"; m_curFile = m_diagFile; break;
+			case LogLevel.error: pref = "ERR"; m_curFile = m_diagFile; break;
+			case LogLevel.critical: pref = "CRITICAL"; m_curFile = m_diagFile; break;
+			case LogLevel.fatal: pref = "FATAL"; m_curFile = m_diagFile; break;
 			case LogLevel.none: assert(false);
 		}
 
-		auto fmt = (file is m_diagFile) ? this.format : this.infoFormat;
+		auto fmt = (m_curFile is m_diagFile) ? this.format : this.infoFormat;
 
 		final switch (fmt) {
-			case Format.plain: file.writeln(msg.text); break;
-			case Format.thread: file.writefln("[%08X:%08X %s] %s", msg.threadID, msg.fiberID, pref, msg.text); break;
+			case Format.plain: break;
+			case Format.thread: m_curFile.writef("[%08X:%08X %s] ", msg.threadID, msg.fiberID, pref); break;
 			case Format.threadTime:
 				auto tm = msg.time;
-				file.writefln("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] %s",
+				m_curFile.writefln("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
 					msg.threadID, msg.fiberID,
 					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,
-					pref, msg.text);
+					pref);
 				break;
 		}
-		file.flush();
+	}
+
+	override void put(scope const(char)[] text)
+	{
+		m_curFile.write(text);
+	}
+
+	override void endLine()
+	{
+		m_curFile.writeln();
+		m_curFile.flush();
 	}
 }
 
@@ -632,41 +675,6 @@ private {
 
 private shared(Logger)[] getLoggers() nothrow @trusted { return ss_loggers; }
 
-private void rawLog(/*string mod, string func,*/ string file, int line, LogLevel level, string text)
-nothrow @safe {
-	static uint makeid(T)(T ptr) @trusted { return (cast(ulong)cast(void*)ptr & 0xFFFFFFFF) ^ (cast(ulong)cast(void*)ptr >> 32); }
-
-	LogLine msg;
-	try {
-		() @trusted { msg.time = Clock.currTime(UTC()); }(); // not @safe as of 2.065
-		//msg.mod = mod;
-		//msg.func = func;
-		msg.file = file;
-		msg.line = line;
-		msg.level = level;
-		msg.thread = () @trusted { return Thread.getThis(); }(); // not @safe as of 2.065
-		msg.threadID = makeid(msg.thread);
-		msg.fiber = () @trusted { return Fiber.getThis(); }(); // not @safe as of 2.065
-		msg.fiberID = makeid(msg.fiber);
-
-		() @trusted { // splitter not @safe as of 2.065
-			foreach (ln; text.splitter("\n")) {
-				msg.text = ln;
-				foreach (l; getLoggers()) {
-					auto ll = l.lock();
-					if (ll.acceptsLevel(msg.level))
-						ll.log(msg);
-				}
-			}
-		}();
-	} catch (Exception e) {
-		try {
-			() @trusted { writefln("Error during logging: %s", e.toString()); }(); // not @safe as of 2.065
-		} catch(Exception) {}
-		assert(false, "Exception during logging: "~e.msg);
-	}
-}
-
 package void initializeLogModule()
 {
 	version (Windows) {
@@ -702,6 +710,68 @@ package void initializeLogModule()
 				break;
 			}
 	}
+}
+
+private struct LogOutputRange {
+	LogLine info;
+	ScopedLock!Logger* logger;
+
+	@safe:
+
+	this(ref ScopedLock!Logger logger, string file, int line, LogLevel level)
+	{
+		() @trusted { this.logger = &logger; } ();
+		try {
+			() @trusted { this.info.time = Clock.currTime(UTC()); }(); // not @safe as of 2.065
+			//this.info.mod = mod;
+			//this.info.func = func;
+			this.info.file = file;
+			this.info.line = line;
+			this.info.level = level;
+			this.info.thread = () @trusted { return Thread.getThis(); }(); // not @safe as of 2.065
+			this.info.threadID = makeid(this.info.thread);
+			this.info.fiber = () @trusted { return Fiber.getThis(); }(); // not @safe as of 2.065
+			this.info.fiberID = makeid(this.info.fiber);
+		} catch (Exception e) {
+			try {
+				() @trusted { writefln("Error during logging: %s", e.toString()); }(); // not @safe as of 2.065
+			} catch(Exception) {}
+			assert(false, "Exception during logging: "~e.msg);
+		}
+
+		this.logger.beginLine(info);
+	}
+
+	void finalize()
+	{
+		logger.endLine();
+	}
+
+	void put(scope const(char)[] text)
+	{
+		import std.string : indexOf;
+		auto idx = text.indexOf('\n');
+		if (idx >= 0) {
+			logger.put(text[0 .. idx]);
+			logger.endLine();
+			logger.beginLine(info);
+			logger.put(text[idx+1 .. $]);
+		} else logger.put(text);
+	}
+
+	void put(char ch) @trusted { put((&ch)[0 .. 1]); }
+
+	void put(dchar ch)
+	{
+		if (ch < 128) put(cast(char)ch);
+		else {
+			char[4] buf;
+			auto len = std.utf.encode(buf, ch);
+			put(buf[0 .. len]);
+		}
+	}
+
+	private uint makeid(T)(T ptr) @trusted { return (cast(ulong)cast(void*)ptr & 0xFFFFFFFF) ^ (cast(ulong)cast(void*)ptr >> 32); }
 }
 
 private version (Windows) {
