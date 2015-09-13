@@ -120,13 +120,58 @@ void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*
 	try {
 		foreach (l; getLoggers())
 			if (l.minLevel <= level) { // WARNING: TYPE SYSTEM HOLE: accessing field of shared class!
-				auto app = appender!string();
-				() @trusted { formattedWrite(app, fmt, args); }(); // not @safe as of 2.065
-				rawLog(/*mod, func,*/ file, line, level, app.data);
-				break;
+				import std.format : formattedWrite, FormatException;
+				
+				Sink sink;
+				char[1024*16] buf = void;
+				sink.buf = buf[];
+				uint n;
+				try n = formattedWrite(&sink, fmt, args);
+				catch (Exception e) {
+				writeln(e);
 			}
-	} catch(Exception e) debug assert(false, e.msg);
+			rawLog(/*mod, func,*/ file, line, level, cast(string)buf[0 .. sink.i]);
+
+			break;
+		}
+	} catch(Exception e) assert(false, e.msg);
 }
+
+struct Sink
+{
+	import std.utf : encode;
+	size_t i;
+	char[] buf;
+	void put(dchar c)
+	{
+		char[4] enc;
+		auto n = encode(enc, c);
+		
+		if (buf.length < i + n)
+			return;
+		
+		buf[i .. i + n] = enc[0 .. n];
+		i += n;
+	}
+	void put(const(char)[] s)
+	{
+		if (buf.length < i + s.length)
+			return;
+		buf[i .. i + s.length] = s[];
+		i += s.length;
+	}
+	void put(const(wchar)[] s)
+	{
+		for (; !s.empty; s.popFront())
+			put(s.front);
+	}
+	void put(const(dchar)[] s)
+	{
+		for (; !s.empty; s.popFront())
+			put(s.front);
+	}
+}
+
 /// ditto
 void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
