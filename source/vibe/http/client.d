@@ -763,6 +763,8 @@ final class HTTPClient {
 	private void runHTTP2Worker(bool upgrade = false) 
 	{
 		logTrace("Running HTTP/2 worker");
+		// make sure the connection wasn't closed while the worker was starting
+		enforce(m_http2Context && m_http2Context.session);
 		m_http2Context.session.setReadTimeout(m_settings.connectionTimeout);
 		m_http2Context.session.setWriteTimeout(m_settings.connectionTimeout);
 		m_http2Context.session.setPauseTimeout(m_settings.connectionTimeout);
@@ -961,7 +963,7 @@ final class HTTPClientRequest : HTTPRequest {
 	/// ditto
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
-		if( content_type != "" ) headers["Content-Type"] = content_type;
+		if( content_type.length > 0 ) headers["Content-Type"] = content_type;
 		headers["Content-Length"] = clengthString(data.length);
 		bodyWriter.write(data);
 		finalize();
