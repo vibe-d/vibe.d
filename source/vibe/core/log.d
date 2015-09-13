@@ -795,3 +795,19 @@ private version (Windows) {
 	enum STD_ERROR_HANDLE = cast(DWORD)-12;
 	extern(System) HANDLE GetStdHandle(DWORD nStdHandle);
 }
+
+unittest { // make sure the default logger doesn't allocate/is usable within finalizers
+	bool destroyed = false;
+
+	class Test {
+		~this()
+		{
+			logInfo("logInfo doesn't allocate.");
+			destroyed = true;
+		}
+	}
+
+	auto t = new Test;
+	destroy(t);
+	assert(destroyed);
+}
