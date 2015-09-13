@@ -1,6 +1,41 @@
 ﻿Changelog
 =========
 
+v0.7.25 - 2015-09-
+--------------------
+
+Mostly a bugfix release, including a regression fix in the web form parser. This release also drops official support for the DMD 2.065.0 front end (released February 2014), although it may continue to work for some time.
+
+### Features and improvements ###
+
+- Contains some compile fixes for the upcoming 2.069 version of DMD
+- The REST interface generator adds support for `out`/`ref` `@headerParam` parameters
+- Stripping `id`/`_id` fields for `RedisStripped!T` is now optional
+- `registerWebInterface` and `registerRestInterface` now return the `URLRouter` instance to enable method chaining (by Martin Nowak) - [pull #1208][issue1208]
+
+### Bug fixes ###
+
+- Fixed parsing of multi-part forms when a `Content-Length` part header is present (by sigod) - [issue #1220][issue1220], [pull #1221][issue1221]
+- Fixed parsing of multi-part forms that don't end in `"--\r\n"` (by Etienne Cimon) - [pull #1232][issue1232]
+- Fixed an exception occurring in `waitForData()` when calling `Libevent2TCPConnection.close()` concurrently (by machindertech) - [pull #1205][issue1205]
+- Fixed handling of `WebInterfaceSettings.ignoreTrailingSlash` for sub interfaces (by Marc Schütz) - [pull #1237][issue1237]
+- Fixed an alignment issue in conjunction with atomic operations on the upcoming LDC 0.16.0 (by Kai Nacke aka redstar) - [pull #1255][issue1255]
+- Fixed parsing of empty HTTP request headers - [issue #1254][issue1254]
+- Fixed using the MongoDB client on a mongos instance - [pull #1246][issue1246]
+- Fixed using `LibasyncUDPConnection.recv` without a timeout (by Daniel Kozak) - [pull #1242][issue1242]
+- Fixed a regression in `RestInterfaceClient`, where a `get(T id)` method would result in a URL with two consecutive underscores
+
+[issue1205]: https://github.com/rejectedsoftware/vibe.d/issues/1205
+[issue1220]: https://github.com/rejectedsoftware/vibe.d/issues/1220
+[issue1221]: https://github.com/rejectedsoftware/vibe.d/issues/1221
+[issue1232]: https://github.com/rejectedsoftware/vibe.d/issues/1232
+[issue1237]: https://github.com/rejectedsoftware/vibe.d/issues/1237
+[issue1242]: https://github.com/rejectedsoftware/vibe.d/issues/1242
+[issue1246]: https://github.com/rejectedsoftware/vibe.d/issues/1246
+[issue1254]: https://github.com/rejectedsoftware/vibe.d/issues/1254
+[issue1255]: https://github.com/rejectedsoftware/vibe.d/issues/1255
+
+
 v0.7.24 - 2015-08-10
 --------------------
 
