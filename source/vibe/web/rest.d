@@ -1109,7 +1109,7 @@ private string genClientBody(alias Func)() {
 			request_str = q{
 				if (m_settings.stripTrailingUnderscore && url__.endsWith("_"))
 					url__ = url__[0 .. $-1];
-				url__ = %s ~ adjustMethodStyle(url__, m_methodStyle);
+				url__ = concatURL(%s, adjustMethodStyle(url__, m_methodStyle));
 			}.format(url_prefix);
 		} else {
 			import std.array : split;
