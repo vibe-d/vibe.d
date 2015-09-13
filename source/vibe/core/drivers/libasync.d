@@ -790,12 +790,18 @@ final class LibasyncManualEvent : ManualEvent {
 
 	~this()
 	{
-		recycleID(m_instance);
-		foreach (ref signal; ms_signals[]) {
-			if (signal) {
-				(cast(shared AsyncSignal) signal).kill();
-				signal = null;
+		try {
+			recycleID(m_instance);
+
+			foreach (ref signal; ms_signals[]) {
+				if (signal) {
+					(cast(shared AsyncSignal) signal).kill();
+					signal = null;
+				}
 			}
+		} catch (Exception e) {
+			import std.stdio;
+			writefln("Exception thrown while finalizing LibasyncManualEvent: %s", e.msg);
 		}
 	}
 
