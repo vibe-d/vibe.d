@@ -206,7 +206,8 @@ class LocalTaskSemaphore
 	}
 
 	// if true, a goes after b. ie. b comes out front()
-	private static bool asc(ref Waiter a, ref Waiter b) 
+	/// private
+	static bool asc(ref Waiter a, ref Waiter b) 
 	{
 		if (a.seq == b.seq) {
 			if (a.priority == b.priority) {
