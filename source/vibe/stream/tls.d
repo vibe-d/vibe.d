@@ -165,9 +165,14 @@ void setTLSContextFactory(TLSContext function(TLSContextKind, TLSVersion) factor
 */
 interface TLSStream : Stream {
 	@property TLSCertificateInformation peerCertificate();
-	/// The host name reported through SNI
+
+	//-/ The host name reported through SNI
 	//@property string hostName() const;
-	/// The ALPN that has been negotiated for this connection
+
+	/** The ALPN that has been negotiated for this connection.
+
+		See_also: $(WEB https://en.wikipedia.org/wiki/Application-Layer_Protocol_Negotiation)
+	*/
 	@property string alpn() const;
 }
 
@@ -232,12 +237,12 @@ interface TLSContext {
 	/// ditto
 	@property inout(TLSServerNameCallback) sniCallback() inout;
 
-	/// Callback function invoked to choose alpn
+	/// Callback function invoked to choose alpn (client side)
 	@property void alpnCallback(TLSALPNCallback alpn_chooser);
 	/// ditto
 	@property TLSALPNCallback alpnCallback() const;
 
-	/// Setter method invoked to offer ALPN
+	/// Setter method invoked to offer ALPN (server side)
 	void setClientALPN(string[] alpn);
 
 	/** Creates a new stream associated to this context.
