@@ -92,7 +92,7 @@ void runTest()
 	listenHTTP(settings, router);
 
 	auto api = new RestInterfaceClient!API("http://127.0.0.1:8000/");
-	//assert(api.items["foo"].subItems.length == 2);
+	assert(api.items["foo"].subItems.length == 2);
 	assert(api.items["foo"].subItems[0].name == "hello");
 	assert(api.items["foo"].subItems[1].name == "world");
 	exitEventLoop(true);

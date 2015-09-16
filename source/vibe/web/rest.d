@@ -511,8 +511,9 @@ struct Collection(I)
 	import std.typetuple;
 
 	alias Interface = I;
-	alias ItemID = TypeTuple!(I.ItemID)[$-1];
-	alias ParentIDs = TypeTuple!(I.ItemID)[0 .. $-1];
+	alias AllIDs = TypeTuple!(I.ItemID);
+	alias ItemID = AllIDs[$-1];
+	alias ParentIDs = AllIDs[0 .. $-1];
 
 	private {
 		I m_interface;
@@ -537,21 +538,40 @@ struct Collection(I)
 			m_id = id;
 		}
 
-		mixin(methodProxies!I());
-
-		static private string methodProxies(I)()
-		{
+		// forward all item methods
+		mixin(() {
 			string ret;
-			foreach (m; __traits(allMembers, I))
-				ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_id, args); }\n";
+			foreach (m; __traits(allMembers, I)) {
+				foreach (ovrld; MemberFunctionsTuple!(I, m)) {
+					alias PT = ParameterTypeTuple!ovrld;
+					static if (is(PT[0 .. AllIDs.length] == AllIDs))
+						ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_id, args); }\n";
+				}
+			}
 			return ret;
-		}
+		} ());
 	}
 
 	Item opIndex(ItemID id)
 	{
 		return Item(m_interface, m_parentIDs, id);
 	}
+
+	// forward all non-item methods
+	mixin(() {
+		string ret;
+		foreach (m; __traits(allMembers, I)) {
+			foreach (ovrld; MemberFunctionsTuple!(I, m)) {
+				alias PT = ParameterTypeTuple!ovrld;
+				static if (!is(PT[0 .. AllIDs.length] == AllIDs)) {
+					static assert(is(PT[0 .. ParentIDs.length] == ParentIDs),
+						"Collection methods must take all parent IDs as the first parameters.");
+					ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_parentIDs, args); }\n";
+				}
+			}
+		}
+		return ret;
+	} ());
 }
 
 ///
