@@ -523,7 +523,7 @@ struct Collection(I)
 	import std.typetuple;
 
 	alias Interface = I;
-	alias AllIDs = TypeTuple!(I.ItemID);
+	alias AllIDs = TypeTuple!(typeof(I.CollectionIndices.tupleof));
 	alias ItemID = AllIDs[$-1];
 	alias ParentIDs = AllIDs[0 .. $-1];
 
@@ -541,10 +541,10 @@ struct Collection(I)
 	static struct Item {
 		private {
 			I m_interface;
-			I.ItemID m_id;
+			AllIDs m_id;
 		}
 
-		this(I api, I.ItemID id)
+		this(I api, AllIDs id)
 		{
 			m_interface = api;
 			m_id = id;
@@ -577,7 +577,7 @@ struct Collection(I)
 				alias PT = ParameterTypeTuple!ovrld;
 				static if (!is(PT[0 .. AllIDs.length] == AllIDs)) {
 					static assert(is(PT[0 .. ParentIDs.length] == ParentIDs),
-						"Collection methods must take all parent IDs as the first parameters.");
+						"Collection methods must take all parent IDs as the first parameters."~PT.stringof~"   "~ParentIDs.stringof);
 					ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_parentIDs, args); }\n";
 				}
 			}
@@ -592,18 +592,24 @@ unittest {
 	// API definition
 
 	interface SubItemAPI {
-		import std.typetuple : TypeTuple;
-		alias ItemID = TypeTuple!(string, int);
+		struct CollectionIndices {
+			string item;
+			int index;
+		}
 
-		//@property int length();
+		@property int length(string item);
 
-		int getSquaredPosition(ItemID item);
+		int getSquaredPosition(string item, int index);
 	}
 
 	interface ItemAPI {
-		alias ItemID = string;
-		Collection!SubItemAPI subItems(ItemID item);
-		string name(ItemID item);
+		struct CollectionIndices {
+			string item;
+		}
+
+		Collection!SubItemAPI subItems(string item);
+
+		string name(string item);
 	}
 
 	interface API {
@@ -614,9 +620,9 @@ unittest {
 	// Local API implementation
 
 	class SubItemAPIImpl : SubItemAPI {
-		//@property int length() { return 10; }
+		@property int length(string item) { return 10; }
 
-		int getSquaredPosition(ItemID item) { return item[1] ^^ 2; }
+		int getSquaredPosition(string item, int index) { return index ^^ 2; }
 	}
 
 	class ItemAPIImpl : ItemAPI {
@@ -624,9 +630,9 @@ unittest {
 
 		this() { m_subItems = new SubItemAPIImpl; }
 
-		Collection!SubItemAPI subItems(ItemID item) { return Collection!SubItemAPI(m_subItems, item); }
+		Collection!SubItemAPI subItems(string item) { return Collection!SubItemAPI(m_subItems, item); }
 
-		string name(ItemID item) { return item; }
+		string name(string item) { return item; }
 	}
 
 	class APIImpl : API {
@@ -637,14 +643,12 @@ unittest {
 		Collection!ItemAPI items() { return Collection!ItemAPI(m_items); }
 	}
 
-	// Using the API
+	// API usage
 
-	void test()
-	{
-		API api = new APIImpl;
-		assert(api.items["foo"].name == "foo");
-		assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
-	}
+	API api = new APIImpl;
+	assert(api.items["foo"].name == "foo");
+	assert(api.items["foo"].subItems.length == 10);
+	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
 }
 
 
