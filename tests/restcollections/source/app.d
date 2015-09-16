@@ -9,7 +9,8 @@ interface API {
 interface ItemAPI {
 	alias ItemID = string;
 
-	Collection!SubItemAPI subItems(string id);
+	@path(":item/sub_items")
+	Collection!SubItemAPI subItems(string _item);
 	ItemManagerAPI manager();
 
 
@@ -19,10 +20,10 @@ interface SubItemAPI {
 	import std.typetuple;
 	alias ItemID = TypeTuple!(string, int);
 
-	@property int length(string item);
+	@property int length(string _item);
 
-	@method(HTTPMethod.GET)
-	string name(string item, int index);
+	@method(HTTPMethod.GET) @path(":index/name")
+	string name(string _item, int _index);
 }
 
 interface ItemManagerAPI {
@@ -61,9 +62,9 @@ class LocalSubItemAPI : SubItemAPI {
 		m_manager = manager;
 	}
 	
-	@property int length(string item) { return cast(int)m_manager.items[item].length; }
+	@property int length(string _item) { return cast(int)m_manager.items[_item].length; }
 
-	string name(string item, int index) { return m_manager.items[item][index]; }
+	string name(string _item, int _index) { return m_manager.items[_item][_index]; }
 }
 
 class LocalItemManagerAPI : ItemManagerAPI {
@@ -95,6 +96,7 @@ void runTest()
 	assert(api.items["foo"].subItems.length == 2);
 	assert(api.items["foo"].subItems[0].name == "hello");
 	assert(api.items["foo"].subItems[1].name == "world");
+	assert(api.items.manager.databaseURL == "in-memory://");
 	exitEventLoop(true);
 }
 

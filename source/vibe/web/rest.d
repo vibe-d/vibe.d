@@ -422,7 +422,19 @@ class RestInterfaceClient(I) : I
 					 ref InetHeaderMap reqReturnHdrs,
 					 ref InetHeaderMap optReturnHdrs) const
 		{
-			return .request(URL(m_intf.baseURL), m_requestFilter, verb, name, hdrs, query, body_, reqReturnHdrs, optReturnHdrs);
+			auto path = URL(m_intf.baseURL).pathString;
+			
+			if (name.length)
+			{
+				if (path.length && path[$ - 1] == '/' && name[0] == '/')
+					path ~= name[1 .. $];
+				else if (path.length && path[$ - 1] == '/' || name[0] == '/')
+					path ~= name;
+				else
+					path ~= '/' ~ name;
+			}
+
+			return .request(URL(m_intf.baseURL), m_requestFilter, verb, path, hdrs, query, body_, reqReturnHdrs, optReturnHdrs);
 		}
 	}
 }
@@ -997,7 +1009,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	else body_ = jsonBody.toString();
 
 	string url;
-	foreach (i, p; route.pathParts) {
+	foreach (i, p; route.fullPathParts) {
 		if (p.isParameter) {
 			switch (p.text) {
 				foreach (j, PT; PTT) {
@@ -1066,7 +1078,7 @@ import vibe.http.client : HTTPClientRequest;
  */
 private Json request(URL base_url,
 	void delegate(HTTPClientRequest) request_filter, HTTPMethod verb,
-	string name, in ref InetHeaderMap hdrs, string query, string body_,
+	string path, in ref InetHeaderMap hdrs, string query, string body_,
 	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs)
 {
 	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
@@ -1074,18 +1086,7 @@ private Json request(URL base_url,
 	import vibe.inet.url : Path;
 
 	URL url = base_url;
-
-	if (name.length)
-	{
-		if (url.pathString.length && url.pathString[$ - 1] == '/'
-			&& name[0] == '/')
-			url.pathString = url.pathString ~ name[1 .. $];
-		else if (url.pathString.length && url.pathString[$ - 1] == '/'
-				 || name[0] == '/')
-			url.pathString = url.pathString ~ name;
-		else
-			url.pathString = url.pathString ~ '/' ~ name;
-	}
+	url.pathString = path;
 
 	if (query.length) url.queryString = query;
 
