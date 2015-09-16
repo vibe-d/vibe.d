@@ -401,6 +401,7 @@ private void extractPathParts(ref Route route)
 		assert(sidx > 0, "Empty path placeholders are illegal.");
 		route.pathParts ~= PathPart(true, "_" ~ p[0 .. sidx]);
 		route.pathHasPlaceholders = true;
+		p = p[sidx .. $];
 	}
 
 	if (p.length) route.pathParts ~= PathPart(false, p);
