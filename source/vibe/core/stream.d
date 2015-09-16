@@ -145,7 +145,7 @@ interface Stream : InputStream, OutputStream {
 	Connection streams are based on streaming socket connections, pipes and
 	similar end-to-end streams.
 
-	See_also: vibe.core.new.TCPConnection
+	See_also: vibe.core.net.TCPConnection
 */
 interface ConnectionStream : Stream {
 	/** Determines The current connection status.
