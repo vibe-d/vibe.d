@@ -296,52 +296,35 @@ unittest {
 */
 class RestInterfaceClient(I) : I
 {
-	static assert(getInterfaceValidationError!(I) is null, getInterfaceValidationError!(I));
+	import vibe.inet.url : URL, PathEntry;
+	import vibe.http.client : HTTPClientRequest;
+	import std.typetuple : staticMap;
+
+	private alias Info = RestInterface!I;
 
 	//pragma(msg, "imports for "~I.stringof~":");
 	//pragma(msg, generateModuleImports!(I)());
 	mixin(generateModuleImports!I());
 
-	import vibe.inet.url : URL, PathEntry;
-	import vibe.http.client : HTTPClientRequest;
+	private {
+		RestInterfaceSettings m_settings;
+		RequestFilter m_requestFilter;
+		staticMap!(RestInterfaceClient, Info.SubInterfaceTypes) m_subInterfaces;
+	}
 
 	alias RequestFilter = void delegate(HTTPClientRequest req);
-
-	private {
-		URL m_baseURL;
-		MethodStyle m_methodStyle;
-		RequestFilter m_requestFilter;
-		RestInterfaceSettings m_settings;
-	}
 
 	/**
 		Creates a new REST client implementation of $(D I).
 	*/
 	this(RestInterfaceSettings settings)
 	{
-		import vibe.internal.meta.uda : findFirstUDA;
+		auto info = Info(settings, true);
+		m_settings = info.settings.dup;
+		m_settings.baseURL = URL(info.baseURL);
 
-		m_settings = settings.dup;
-
-		if (!m_settings.baseURL.path.absolute) {
-			assert (m_settings.baseURL.path.empty, "Base URL path must be absolute.");
-			m_settings.baseURL.path = Path("/");
-		}
-
-		URL url = settings.baseURL;
-		enum uda = findFirstUDA!(PathAttribute, I);
-		static if (uda.found) {
-			static if (uda.value.data == "") {
-				url.path = Path(concatURL(url.path.toString(), adjustMethodStyle(I.stringof, settings.methodStyle), true));
-			} else {
-				url.path = Path(concatURL(url.path.toString(), uda.value.data, true));
-			}
-		}
-
-		m_settings.baseURL = m_baseURL = url;
-		m_methodStyle = settings.methodStyle;
-
-		mixin (generateRestInterfaceSubInterfaceInstances!I());
+		foreach (i, SI; Info.SubInterfaceTypes)
+			m_subInterfaces[i] = new RestInterfaceClient!SI(info.subInterfaces[i].settings);
 	}
 
 	/// ditto
@@ -368,17 +351,15 @@ class RestInterfaceClient(I) : I
 	}
 
 	/// ditto
-	final @property void requestFilter(RequestFilter v) {
+	final @property void requestFilter(RequestFilter v)
+	{
 		m_requestFilter = v;
-		mixin (generateRestInterfaceSubInterfaceRequestFilter!I());
+		foreach (i, SI; Info.SubInterfaceTypes)
+			m_subInterfaces[i].requestFilter = v;
 	}
 
-	//pragma(msg, "subinterfaces:");
-	//pragma(msg, generateRestInterfaceSubInterfaces!(I)());
-	mixin (generateRestInterfaceSubInterfaces!I());
-
 	//pragma(msg, "restinterface:");
-	mixin RestClientMethods!I;
+	mixin(generateRestClientMethods!I());
 
 	protected {
 		import vibe.data.json : Json;
@@ -634,196 +615,43 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	return &handler;
 }
 
-/// private
-private string generateRestInterfaceSubInterfaces(I)()
+
+string generateRestClientMethods(I)()
 {
-	if (!__ctfe)
-		assert (false);
-
-	import std.algorithm : canFind;
-	import std.string : format;
-
-	string ret;
-	string[] tps; // list of already processed interface types
-
-	foreach (method; __traits(allMembers, I)) {
-		// WORKAROUND #1045 / @@BUG14375@@
-		static if (method.length != 0)
-		foreach (overload; MemberFunctionsTuple!(I, method)) {
-
-			alias FT = FunctionTypeOf!overload;
-			alias PTT = ParameterTypeTuple!FT;
-			alias RT = ReturnType!FT;
-
-			static if (is(RT == interface)) {
-				static assert (
-					PTT.length == 0,
-					"Interface getters may not have parameters."
-				);
-
-				if (!tps.canFind(RT.stringof)) {
-					tps ~= RT.stringof;
-					string implname = RT.stringof ~ "Impl";
-					ret ~= q{
-						alias RestInterfaceClient!(%s) %s;
-					}.format(fullyQualifiedName!RT, implname);
-					ret ~= q{
-						private %1$s m_%1$s;
-					}.format(implname);
-					ret ~= "\n";
-				}
-			}
-		}
-	}
-	return ret;
-}
-
-/// private
-private string generateRestInterfaceSubInterfaceInstances(I)()
-{
-	if (!__ctfe)
-		assert (false);
-
-	import std.string : format;
-	import std.algorithm : canFind;
-
-	string ret;
-	string[] tps; // list of of already processed interface types
-
-	foreach (method; __traits(allMembers, I)) {
-		// WORKAROUND #1045 / @@BUG14375@@
-		static if (method.length != 0)
-		foreach (overload; MemberFunctionsTuple!(I, method)) {
-
-			alias FT = FunctionTypeOf!overload;
-			alias PTT = ParameterTypeTuple!FT;
-			alias RT = ReturnType!FT;
-
-			static if (is(RT == interface)) {
-				static assert (
-					PTT.length == 0,
-					"Interface getters may not have parameters."
-				);
-
-				if (!tps.canFind(RT.stringof)) {
-					tps ~= RT.stringof;
-					string implname = RT.stringof ~ "Impl";
-
-					enum meta = extractHTTPMethodAndName!(overload, false)();
-
-					ret ~= q{
-						auto settings_%1$s = m_settings.dup;
-						settings_%1$s.baseURL.path
-							= m_baseURL.path ~ (%3$s
-									    ? "%2$s/"
-									    : (adjustMethodStyle(stripTUnderscore("%2$s", settings), m_methodStyle) ~ "/"));
-						m_%1$s = new %1$s(settings_%1$s);
-					}.format(
-						 implname,
-						 meta.url,
-						 meta.hadPathUDA
-					);
-					ret ~= "\n";
-				}
-			}
-		}
-	}
-
-	return ret;
-}
-
-/// private
-private string generateRestInterfaceSubInterfaceRequestFilter(I)()
-{
-	if (!__ctfe)
-		assert (false);
-
-	import std.string : format;
-	import std.algorithm : canFind;
-
-	string ret;
-	string[] tps; // list of already processed interface types
-
-	foreach (method; __traits(allMembers, I)) {
-		// WORKAROUND #1045 / @@BUG14375@@
-		static if (method.length != 0)
-		foreach (overload; MemberFunctionsTuple!(I, method)) {
-
-			alias FT = FunctionTypeOf!overload;
-			alias PTT = ParameterTypeTuple!FT;
-			alias RT = ReturnType!FT;
-
-			static if (is(RT == interface)) {
-				static assert (
-					PTT.length == 0,
-					"Interface getters may not have parameters."
-				);
-
-				if (!tps.canFind(RT.stringof)) {
-					tps ~= RT.stringof;
-					string implname = RT.stringof ~ "Impl";
-
-					ret ~= q{
-						m_%s.requestFilter = m_requestFilter;
-					}.format(implname);
-					ret ~= "\n";
-				}
-			}
-		}
-	}
-	return ret;
-}
-
-private mixin template RestClientMethods(I) if (is(I == interface)) {
-	mixin RestClientMethods_MemberImpl!(__traits(allMembers, I));
-}
-
-// Poor men's `foreach (method; __traits(allMembers, I))`
-// The only way to emulate a foreach in a mixin template is to mixin a recursion
-// of that template.
-private mixin template RestClientMethods_MemberImpl(Members...) {
-	import std.traits : MemberFunctionsTuple;
-	static assert (Members.length > 0);
-	// WORKAROUND #1045 / @@BUG14375@@
-	static if (Members[0].length != 0) {
-		private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
-		// Members can be declaration / fields.
-		static if (Ovrlds.length > 0) {
-			mixin RestClientMethods_OverloadImpl!(Ovrlds);
-		}
-	}
-	static if (Members.length > 1) {
-		mixin RestClientMethods_MemberImpl!(Members[1..$]);
-	}
-}
-
-// Poor men's foreach (overload; MemberFunctionsTuple!(I, method))
-private mixin template RestClientMethods_OverloadImpl(Overloads...) {
-	import std.format : format;
 	import std.array : join;
-	import vibe.internal.meta.codegen : CloneFunction;
-	static assert (Overloads.length > 0);
-	alias ParamNames = ParameterIdentifierTuple!(Overloads[0]);
-	static if (ParamNames.length == 0) enum pnames = "";
-	else enum pnames = ", " ~ [ParamNames].join(", ");
-	alias RT = ReturnType!(Overloads[0]);
-	//pragma(msg, "===== Body for: "~__traits(identifier, Overloads[0])~" =====");
-	//pragma(msg, genClientBody!(Overloads[0]));
+	import std.string : format;
 
-	static if (/*!is(SI == void)*/is(RT == interface)) {
-		mixin CloneFunction!(Overloads[0], q{
-			return m_%sImpl;
-		}.format(RT.stringof));
-	} else {
-		mixin CloneFunction!(Overloads[0], q{
-			return executeClientMethod!(Overloads[0]%s)(m_settings, m_requestFilter);
-		}.format(pnames));
+	alias Info = RestInterface!I;
+	
+	string ret = q{
+		import vibe.internal.meta.codegen : CloneFunction;
+	};
+
+	// generate sub interface methods
+	foreach (i, SI; Info.SubInterfaceTypes) {
+		ret ~= q{
+				mixin CloneFunction!(Info.SubInterfaceFunctions[%1$s], q{
+					return m_subInterfaces[%1$s];
+				});
+			}.format(i);
 	}
 
-	static if (Overloads.length > 1) {
-		mixin RestClientMethods_OverloadImpl!(Overloads[1..$]);
+	// generate route methods
+	foreach (i, F; Info.RouteFunctions) {
+		alias ParamNames = ParameterIdentifierTuple!F;
+		static if (ParamNames.length == 0) enum pnames = "";
+		else enum pnames = ", " ~ [ParamNames].join(", ");
+
+		ret ~= q{
+				mixin CloneFunction!(Info.RouteFunctions[%1$s], q{
+					return executeClientMethod!(Info.RouteFunctions[%1$s]%2$s)(m_settings, m_requestFilter);
+				});
+			}.format(i, pnames);
 	}
+
+	return ret;
 }
+
 
 ReturnType!Func executeClientMethod(alias Func, ARGS...)(
 	RestInterfaceSettings settings, void delegate(HTTPClientRequest) request_filter)
