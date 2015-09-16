@@ -18,7 +18,7 @@ import vibe.http.status : isSuccessCode;
 import vibe.internal.meta.uda;
 import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
-import vibe.web.internal.rest.common : RestInterface, Route;
+import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
@@ -75,9 +75,17 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInt
 
 	auto intf = RestInterface!TImpl(settings, false);
 
-	foreach (i, T; intf.SubInterfaceTypes) {
+	foreach (i, ovrld; intf.SubInterfaceFunctions) {
 		enum fname = __traits(identifier, intf.SubInterfaceFunctions[i]);
-		router.registerRestInterface!T(__traits(getMember, instance, fname)(), intf.subInterfaces[i].settings);
+		alias R = ReturnType!ovrld;
+
+		static if (isInstanceOf!(Collection, R)) {
+			auto ret = __traits(getMember, instance, fname)(R.ParentIDs.init);
+			router.registerRestInterface!(R.Interface)(ret.m_interface, intf.subInterfaces[i].settings);
+		} else {
+			auto ret = __traits(getMember, instance, fname)();
+			router.registerRestInterface!R(ret, intf.subInterfaces[i].settings);
+		}
 	}
 
 
@@ -495,6 +503,120 @@ class RestInterfaceSettings {
 
 
 /**
+	Makes item collection interfaces accessible using `opIndex`.
+*/
+struct Collection(I)
+	if (is(I == interface))
+{
+	import std.typetuple;
+
+	alias Interface = I;
+	alias ItemID = TypeTuple!(I.ItemID)[$-1];
+	alias ParentIDs = TypeTuple!(I.ItemID)[0 .. $-1];
+
+	private {
+		I m_interface;
+		ParentIDs m_parentIDs;
+	}
+
+	this(I api, ParentIDs pids)
+	{
+		m_interface = api;
+		m_parentIDs = pids;
+	}
+
+	static struct Item {
+		private {
+			I m_interface;
+			I.ItemID m_id;
+		}
+
+		this(I api, I.ItemID id)
+		{
+			m_interface = api;
+			m_id = id;
+		}
+
+		mixin(methodProxies!I());
+
+		static private string methodProxies(I)()
+		{
+			string ret;
+			foreach (m; __traits(allMembers, I))
+				ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_id, args); }\n";
+			return ret;
+		}
+	}
+
+	Item opIndex(ItemID id)
+	{
+		return Item(m_interface, m_parentIDs, id);
+	}
+}
+
+///
+unittest {
+
+	// API definition
+
+	interface SubItemAPI {
+		import std.typetuple : TypeTuple;
+		alias ItemID = TypeTuple!(string, int);
+
+		//@property int length();
+
+		int getSquaredPosition(ItemID item);
+	}
+
+	interface ItemAPI {
+		alias ItemID = string;
+		Collection!SubItemAPI subItems(ItemID item);
+		string name(ItemID item);
+	}
+
+	interface API {
+		Collection!ItemAPI items();
+	}
+
+
+	// Local API implementation
+
+	class SubItemAPIImpl : SubItemAPI {
+		//@property int length() { return 10; }
+
+		int getSquaredPosition(ItemID item) { return item[1] ^^ 2; }
+	}
+
+	class ItemAPIImpl : ItemAPI {
+		private SubItemAPIImpl m_subItems;
+
+		this() { m_subItems = new SubItemAPIImpl; }
+
+		Collection!SubItemAPI subItems(ItemID item) { return Collection!SubItemAPI(m_subItems, item); }
+
+		string name(ItemID item) { return item; }
+	}
+
+	class APIImpl : API {
+		private ItemAPIImpl m_items;
+
+		this() { m_items = new ItemAPIImpl; }
+
+		Collection!ItemAPI items() { return Collection!ItemAPI(m_items); }
+	}
+
+	// Using the API
+
+	void test()
+	{
+		API api = new APIImpl;
+		assert(api.items["foo"].name == "foo");
+		assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
+	}
+}
+
+
+/**
  * Generate an handler that will wrap the server's method
  *
  * This function returns an handler, generated at compile time, that
@@ -744,6 +866,7 @@ private string generateRestClientMethods(I)()
 {
 	import std.array : join;
 	import std.string : format;
+	import std.traits : fullyQualifiedName, isInstanceOf;
 
 	alias Info = RestInterface!I;
 	
@@ -753,11 +876,24 @@ private string generateRestClientMethods(I)()
 
 	// generate sub interface methods
 	foreach (i, SI; Info.SubInterfaceTypes) {
-		ret ~= q{
-				mixin CloneFunction!(Info.SubInterfaceFunctions[%1$s], q{
-					return m_subInterfaces[%1$s];
-				});
-			}.format(i);
+		alias F = Info.SubInterfaceFunctions[i];
+		alias RT = ReturnType!F;
+		alias ParamNames = ParameterIdentifierTuple!F;
+		static if (ParamNames.length == 0) enum pnames = "";
+		else enum pnames = ", " ~ [ParamNames].join(", ");
+		static if (isInstanceOf!(Collection, RT)) {
+			ret ~= q{
+					mixin CloneFunction!(Info.SubInterfaceFunctions[%1$s], q{
+						return Collection!(%2$s)(m_subInterfaces[%1$s]%3$s);
+					});
+				}.format(i, fullyQualifiedName!SI, pnames);
+		} else {
+			ret ~= q{
+					mixin CloneFunction!(Info.SubInterfaceFunctions[%1$s], q{
+						return m_subInterfaces[%1$s];
+					});
+				}.format(i);
+		}
 	}
 
 	// generate route methods
@@ -789,7 +925,6 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	alias PTT = ParameterTypeTuple!Func;
 	enum sroute = Info.staticRoutes[ridx];
 	auto route = intf.routes[ridx];
-
 
 	InetHeaderMap headers;
 	InetHeaderMap reqhdrs;
