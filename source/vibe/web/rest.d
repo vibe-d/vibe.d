@@ -338,7 +338,7 @@ class RestInterfaceClient(I) : I
 			}
 		}
 
-		m_baseURL = url;
+		m_settings.baseURL = m_baseURL = url;
 		m_methodStyle = settings.methodStyle;
 
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
@@ -416,135 +416,7 @@ class RestInterfaceClient(I) : I
 					 ref InetHeaderMap reqReturnHdrs,
 					 ref InetHeaderMap optReturnHdrs) const
 		{
-			import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
-			import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
-			import vibe.inet.url : Path;
-
-			URL url = m_baseURL;
-
-			if (name.length)
-			{
-				if (url.pathString.length && url.pathString[$ - 1] == '/'
-					&& name[0] == '/')
-					url.pathString = url.pathString ~ name[1 .. $];
-				else if (url.pathString.length && url.pathString[$ - 1] == '/'
-						 || name[0] == '/')
-					url.pathString = url.pathString ~ name;
-				else
-					url.pathString = url.pathString ~ '/' ~ name;
-			}
-
-			if (query.length) url.queryString = query;
-
-			Json ret;
-
-			auto reqdg = (scope HTTPClientRequest req) {
-				req.method = verb;
-				foreach (k, v; hdrs)
-					req.headers[k] = v;
-
-				if (m_requestFilter) {
-					m_requestFilter(req);
-				}
-
-				if (body_ != "")
-					req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
-			};
-
-			auto resdg = (scope HTTPClientResponse res) {
-				ret = res.readJson();
-
-				logDebug(
-					 "REST call: %s %s -> %d, %s",
-					 httpMethodString(verb),
-					 url.toString(),
-					 res.statusCode,
-					 ret.toString()
-					 );
-
-				// Get required headers - Don't throw yet
-				string[] missingKeys;
-				foreach (k, ref v; reqReturnHdrs)
-					if (auto ptr = k in res.headers)
-						v = (*ptr).idup;
-					else
-						missingKeys ~= k;
-
-				// Get optional headers
-				foreach (k, ref v; optReturnHdrs)
-					if (auto ptr = k in res.headers)
-						v = (*ptr).idup;
-					else
-						v = null;
-
-				if (missingKeys.length)
-					throw new Exception(
-						"REST interface mismatch: Missing required header field(s): "
-						~ missingKeys.to!string);
-
-
-				if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
-					throw new RestException(res.statusCode, ret);
-			};
-
-			requestHTTP(url, reqdg, resdg);
-
-			return ret;
-		}
-	}
-
-	/// Params are passed in a deterministic order: [Name, value]*
-	private string genQuery(Ts...)(Ts params) {
-		import std.array : appender;
-
-		static assert(!(params.length % 2), "Internal error ("~__FUNCTION__~"): Expected [Name, value] pairs.");
-		static if (!params.length)
-			return null;
-		else {
-			auto query = appender!string();
-
-			foreach (idx, p; params) {
-				static if (!(idx % 2)) {
-					// Parameter name
-					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
-					query.put('&');
-					filterURLEncode(query, p);
-				} else {
-					// Parameter value
-					query.put('=');
-					static if (is(typeof(p) == Json))
-						filterURLEncode(query, p.toString());
-					else // Note: CTFE triggers compiler bug here (think we are returning Json, not string).
-						filterURLEncode(query, toRestString(serializeToJson(p)));
-				}
-			}
-			return query.data();
-		}
-	}
-
-	/// Params are passed in a deterministic order: [Name, value]*
-	private string genBody(Ts...)(Ts params) {
-		import std.array : appender;
-
-		static assert(!(params.length % 2), "Internal error ("~__FUNCTION__~"): Expected [Name, value] pairs.");
-		static if (!params.length)
-			return null;
-		else {
-			auto jsonBody = Json.emptyObject;
-
-			string nextName;
-			foreach (idx, p; params) {
-				static if (!(idx % 2)) {
-					// Parameter name
-					static assert(is(typeof(p) == string), "Internal error ("~__FUNCTION__~"): Parameter name is not string.");
-					nextName = p;
-				} else {
-					// Parameter value
-					jsonBody[nextName] = serializeToJson(p);
-				}
-			}
-			debug return jsonBody.toPrettyString();
-			else return jsonBody.toString();
+			return .request(m_settings, m_requestFilter, verb, name, hdrs, query, body_, reqReturnHdrs, optReturnHdrs);
 		}
 	}
 }
@@ -927,20 +799,39 @@ private mixin template RestClientMethods_MemberImpl(Members...) {
 
 // Poor men's foreach (overload; MemberFunctionsTuple!(I, method))
 private mixin template RestClientMethods_OverloadImpl(Overloads...) {
+	import std.format : format;
+	import std.array : join;
 	import vibe.internal.meta.codegen : CloneFunction;
 	static assert (Overloads.length > 0);
+	alias ParamNames = ParameterIdentifierTuple!(Overloads[0]);
+	static if (ParamNames.length == 0) enum pnames = "";
+	else enum pnames = ", " ~ [ParamNames].join(", ");
+	alias RT = ReturnType!(Overloads[0]);
 	//pragma(msg, "===== Body for: "~__traits(identifier, Overloads[0])~" =====");
 	//pragma(msg, genClientBody!(Overloads[0]));
-	mixin CloneFunction!(Overloads[0], genClientBody!(Overloads[0])());
+
+	static if (/*!is(SI == void)*/is(RT == interface)) {
+		mixin CloneFunction!(Overloads[0], q{
+			return m_%sImpl;
+		}.format(RT.stringof));
+	} else {
+		mixin CloneFunction!(Overloads[0], q{
+			return executeClientMethod!(Overloads[0]%s)(m_settings, m_requestFilter);
+		}.format(pnames));
+	}
+
 	static if (Overloads.length > 1) {
 		mixin RestClientMethods_OverloadImpl!(Overloads[1..$]);
 	}
 }
 
-private string genClientBody(alias Func)() {
+ReturnType!Func executeClientMethod(alias Func, ARGS...)(
+	RestInterfaceSettings settings, void delegate(HTTPClientRequest) request_filter)
+{
 	import std.string : format;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
 	import vibe.web.internal.rest.common : ParameterKind;
+	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
 
 	alias PSC = ParameterStorageClass;
 	alias FT = FunctionTypeOf!Func;
@@ -953,145 +844,227 @@ private string genClientBody(alias Func)() {
 	enum meta = extractHTTPMethodAndName!(Func, false)();
 	enum FuncId = __traits(identifier, Func);
 
-	// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
-	static if (is(RT == interface)) {
-		return q{ return m_%sImpl; }.format(RT.stringof);
-	} else {
-		string ret;
-		string param_handling_str;
-		string url_prefix = `""`;
-		// Those store the way parameter should be handled afterward.
-		// A parameter that doesn't bears a WebParamAttribute (which documents origin explicitly)
-		// will be stored in defaultParamCTMap. Else, it will either go to headers__ (via request_str),
-		// or queryParamCTMap / bodyParamCTMap, and be passed to genQuery / genBody just before calling request.
-		// Note: The key is the HTTP parameter name, and the value the parameter *identifier*.
-		// Ex: @queryParam("llama", "alpaca") void postSpit(string llama) => queryParamCTMap["alpaca"] = "llama";
-		string[string] defaultParamCTMap;
-		string[string] queryParamCTMap;
-		string[string] bodyParamCTMap;
+	InetHeaderMap headers__;
+	InetHeaderMap reqHdrs__;
+	InetHeaderMap optHdrs__;
 
-		// Block 2
-		foreach (i, PT; PTT){
-			alias CompareParamName = GenCmp!("ClientFilter", i, ParamNames[i]);
-			mixin(CompareParamName.Decl);
+	string url_prefix;
 
-			// legacy :id special case, left for backwards-compatibility reasons
-			static if (i == 0 && ParamNames[0] == "id") {
-				static if (is(PT == Json))
-					url_prefix = q{urlEncode(id.toString())~"/"};
-				else
-					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
-			} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
-				alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
-				static if (PWPAT[0].origin == ParameterKind.header) {
-					// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
-					static if (!(PSCT[i] & PSC.out_)) {
-						param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PWPAT[0].field, PWPAT[0].identifier);
-					}
-					static if (PSCT[i] & PSC.ref_ || PSCT[i] & PSC.out_) {
-						// Optional parameter
-						static if (isInstanceOf!(Nullable, PT)) {
-							param_handling_str ~= q{
-								optHdrs__["%2$s"] = null;
-								scope (exit)
-									%1$s = to!(TemplateArgsOf!(typeof(%1$s)))(
-										optHdrs__.get("%2$s", null));
-							}.format(ParamNames[i], PWPAT[0].field);
-						} else {
-							param_handling_str ~= q{
-								reqHdrs__["%2$s"] = null;
-								scope (exit)
-									if (auto ptr = "%2$s" in reqHdrs__)
-										%1$s = to!(typeof(%1$s))(*ptr);
-							}.format(ParamNames[i], PWPAT[0].field);
-						}
-					}
-				} else static if (PWPAT[0].origin == ParameterKind.query)
-					queryParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
-				else static if (PWPAT[0].origin == ParameterKind.body_)
-					bodyParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
-				else
-					static assert (0, "Internal error: Unknown ParameterKind in REST client code generation.");
-			} else static if (!ParamNames[i].startsWith("_")
-					  && !IsAttributedParameter!(Func, ParamNames[i])) {
-				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-				defaultParamCTMap[stripTUnderscore(ParamNames[i], null)] = ParamNames[i];
-			}
-		}
+	auto query = appender!string();
+	auto jsonBody = Json.emptyObject;
+	string body_;
 
-		// Block 3
-		string request_str;
+	// TODO: avoid this runtime hack and iterate over all header params again instead at scope(exit)
+	void delegate()[] exit_code;
 
-		static if (!meta.hadPathUDA) {
-			request_str = q{
-				if (m_settings.stripTrailingUnderscore && url__.endsWith("_"))
-					url__ = url__[0 .. $-1];
-				url__ = concatURL(%s, adjustMethodStyle(url__, m_methodStyle));
-			}.format(url_prefix);
-		} else {
-			import std.array : split;
-			auto parts = meta.url.split("/");
-			request_str ~= `url__ = ` ~ url_prefix;
-			foreach (i, p; parts) {
-				if (i > 0) {
-					request_str ~= `~ "/"`;
-				}
-				bool match = false;
-				if (p.startsWith(":")) {
-					foreach (pn; ParamNames) {
-						if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
-							request_str ~= q{ ~ urlEncode(toRestString(serializeToJson(%s)))}.format(pn);
-							match = true;
-							break;
-						}
-					}
-				}
-
-				if (!match) {
-					request_str ~= `~ "` ~ p ~ `"`;
-				}
-			}
-
-			request_str ~= ";\n";
-		}
-
-		request_str ~= q{
-			// By default for GET / HEAD, params are send via the query string.
-			static if (HTTPMethod.%1$s == HTTPMethod.GET || HTTPMethod.%1$s == HTTPMethod.HEAD) {
-				auto jret__ = request(HTTPMethod.%1$s, url__ ,
-									  headers__, genQuery(%2$s%5$s%3$s), genBody(%4$s),
-									  reqHdrs__, optHdrs__);
-			} else {
-				// Otherwise, they're send as a Json object via the body.
-				auto jret__ = request(HTTPMethod.%1$s, url__ ,
-									  headers__, genQuery(%3$s), genBody(%2$s%6$s%4$s),
-									  reqHdrs__, optHdrs__);
-			}
-
-		}.format(to!string(meta.method),
-			 paramCTMap(defaultParamCTMap), paramCTMap(queryParamCTMap), paramCTMap(bodyParamCTMap), // params map
-			 (defaultParamCTMap.length && queryParamCTMap.length) ? ", " : "", // genQuery(%2$s, %3$s);
-			 (defaultParamCTMap.length && bodyParamCTMap.length) ? ", " : ""); // genBody(%2$s, %4$s);
-
-		static if (!is(RT == void)) {
-			request_str ~= q{
-				typeof(return) ret__;
-				deserializeJson(ret__, jret__);
-				return ret__;
-			};
-		}
-
-		// Block 1
-		ret ~= q{
-			InetHeaderMap headers__;
-			InetHeaderMap reqHdrs__;
-			InetHeaderMap optHdrs__;
-			string url__ = "%s";
-			%s
-			%s
-		}.format(meta.url, param_handling_str, request_str);
-		return ret;
+	void addQueryParam(size_t i)(string name)
+	{
+		if (query.data.length) query.put('&');
+		query.filterURLEncode(name);
+		query.put("=");
+		static if (is(PT == Json))
+			query.filterURLEncode(ARGS[i].toString());
+		else // Note: CTFE triggers compiler bug here (think we are returning Json, not string).
+			query.filterURLEncode(toRestString(serializeToJson(ARGS[i])));
 	}
+
+	foreach (i, PT; PTT){
+		alias CompareParamName = GenCmp!("ClientFilter", i, ParamNames[i]);
+		mixin(CompareParamName.Decl);
+
+		// legacy :id special case, left for backwards-compatibility reasons
+		static if (i == 0 && ParamNames[0] == "id") {
+			static if (is(PT == Json))
+				url_prefix = urlEncode(ARGS[0].toString())~"/";
+			else
+				url_prefix = urlEncode(toRestString(serializeToJson(ARGS[i])))~"/";
+		} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
+			alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
+			static if (PWPAT[0].origin == ParameterKind.header) {
+				// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
+				static if (!(PSCT[i] & PSC.out_)) {
+					headers__[PWPAT[0].field] = to!string(ARGS[i]);
+				}
+				static if (PSCT[i] & PSC.ref_ || PSCT[i] & PSC.out_) {
+					// Optional parameter
+					static if (isInstanceOf!(Nullable, PT)) {
+						optHdrs__[PWPAT[0].field] = null;
+						exit_code ~= {
+							ARGS[i] = to!(TemplateArgsOf!PT)(
+								optHdrs__.get(PWPAT[0].field, null));
+						};
+					} else {
+						reqHdrs__[PWPAT[0].field] = null;
+						exit_code ~= {
+							if (auto ptr = PWPAT[0].field in reqHdrs__)
+								ARGS[i] = to!PT(*ptr);
+						};
+					}
+				}
+			} else static if (PWPAT[0].origin == ParameterKind.query) {
+				addQueryParam!i(PWPAT[0].field);
+			} else static if (PWPAT[0].origin == ParameterKind.body_) {
+				jsonBody[PWPAT[0].field] = serializeToJson(ARGS[i]);
+			}
+			else
+				static assert (0, "Internal error: Unknown ParameterKind in REST client code generation.");
+		} else static if (!ParamNames[i].startsWith("_")
+				  && !IsAttributedParameter!(Func, ParamNames[i])) {
+			// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
+			static if (meta.method == HTTPMethod.GET || meta.method == HTTPMethod.HEAD) {
+				// By default for GET / HEAD, params are send via the query string.
+				addQueryParam!i(stripTUnderscore(ParamNames[i], settings));
+			} else {
+				jsonBody[stripTUnderscore(ParamNames[i], settings)] = serializeToJson(ARGS[i]);
+			}
+		}
+	}
+
+	debug body_ = jsonBody.toPrettyString();
+	else body_ = jsonBody.toString();
+
+	string url__ = meta.url;
+	static if (!meta.hadPathUDA) {
+		if (settings.stripTrailingUnderscore && url__.endsWith("_"))
+			url__ = url__[0 .. $-1];
+		url__ = concatURL(url_prefix, adjustMethodStyle(url__, settings.methodStyle));
+	} else {
+		import std.array : split;
+		auto parts = meta.url.split("/");
+		url__ = url_prefix;
+		foreach (i, p; parts) {
+			if (i > 0) url__ ~= "/";
+
+			bool match = false;
+			if (p.startsWith(":")) {
+				foreach (j, pn; ParamNames) {
+					if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
+						url__ ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
+						match = true;
+						break;
+					}
+				}
+			}
+
+			if (!match) url__ ~= p;
+		}
+	}
+
+	scope (exit)
+		foreach_reverse (d; exit_code) d();
+
+	auto jret__ = request(settings, request_filter, meta.method, url__, headers__, query.data, body_, reqHdrs__, optHdrs__);
+
+	static if (!is(RT == void))
+		return deserializeJson!RT(jret__);
+}
+
+
+import vibe.http.client : HTTPClientRequest;
+/**
+ * Perform a request to the interface using the given parameters.
+ *
+ * Params:
+ * verb = Kind of request (See $(D HTTPMethod) enum).
+ * name = Location to request. For a request on https://github.com/rejectedsoftware/vibe.d/issues?q=author%3ASantaClaus,
+ *		it will be '/rejectedsoftware/vibe.d/issues'.
+ * hdrs = The headers to send. Some field might be overriden (such as Content-Length). However, Content-Type will NOT be overriden.
+ * query = The $(B encoded) query string. For a request on https://github.com/rejectedsoftware/vibe.d/issues?q=author%3ASantaClaus,
+ *		it will be 'author%3ASantaClaus'.
+ * body_ = The body to send, as a string. If a Content-Type is present in $(D hdrs), it will be used, otherwise it will default to
+ *		the generic type "application/json".
+ * reqReturnHdrs = A map of required return headers.
+ *				   To avoid returning unused headers, nothing is written
+ *				   to this structure unless there's an (usually empty)
+ *				   entry (= the key exists) with the same key.
+ *				   If any key present in `reqReturnHdrs` is not present
+ *				   in the response, an Exception is thrown.
+ * optReturnHdrs = A map of optional return headers.
+ *				   This behaves almost as exactly as reqReturnHdrs,
+ *				   except that non-existent key in the response will
+ *				   not cause it to throw, but rather to set this entry
+ *				   to 'null'.
+ *
+ * Returns:
+ *     The Json object returned by the request
+ */
+private Json request(in RestInterfaceSettings settings,
+	void delegate(HTTPClientRequest) request_filter, HTTPMethod verb,
+	string name, in ref InetHeaderMap hdrs, string query, string body_,
+	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs)
+{
+	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
+	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
+	import vibe.inet.url : Path;
+
+	URL url = settings.baseURL;
+
+	if (name.length)
+	{
+		if (url.pathString.length && url.pathString[$ - 1] == '/'
+			&& name[0] == '/')
+			url.pathString = url.pathString ~ name[1 .. $];
+		else if (url.pathString.length && url.pathString[$ - 1] == '/'
+				 || name[0] == '/')
+			url.pathString = url.pathString ~ name;
+		else
+			url.pathString = url.pathString ~ '/' ~ name;
+	}
+
+	if (query.length) url.queryString = query;
+
+	Json ret;
+
+	auto reqdg = (scope HTTPClientRequest req) {
+		req.method = verb;
+		foreach (k, v; hdrs)
+			req.headers[k] = v;
+
+		if (request_filter) request_filter(req);
+
+		if (body_ != "")
+			req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
+	};
+
+	auto resdg = (scope HTTPClientResponse res) {
+		ret = res.readJson();
+
+		logDebug(
+			 "REST call: %s %s -> %d, %s",
+			 httpMethodString(verb),
+			 url.toString(),
+			 res.statusCode,
+			 ret.toString()
+			 );
+
+		// Get required headers - Don't throw yet
+		string[] missingKeys;
+		foreach (k, ref v; reqReturnHdrs)
+			if (auto ptr = k in res.headers)
+				v = (*ptr).idup;
+			else
+				missingKeys ~= k;
+
+		// Get optional headers
+		foreach (k, ref v; optReturnHdrs)
+			if (auto ptr = k in res.headers)
+				v = (*ptr).idup;
+			else
+				v = null;
+
+		if (missingKeys.length)
+			throw new Exception(
+				"REST interface mismatch: Missing required header field(s): "
+				~ missingKeys.to!string);
+
+
+		if (!isSuccessCode(cast(HTTPStatus)res.statusCode))
+			throw new RestException(res.statusCode, ret);
+	};
+
+	requestHTTP(url, reqdg, resdg);
+
+	return ret;
 }
 
 private {
