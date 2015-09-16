@@ -36,10 +36,11 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 	HTTPClient client;
 	static if (is(HTTPClient_ == HTTPClient)) client = client_;
 	if(!client) client = new HTTPClient();
+	if (!url.port)
+		url.port = url.defaultPort;
 
 	foreach( i; 0 .. 10 ){
-		bool ssl = url.schema == "https";
-		client.connect(url.host, url.port ? url.port : ssl ? 443 : 80, ssl);
+		client.connect(url.host, url.port, url.schema == "https");
 		logTrace("connect to %s", url.host);
 		bool done = false;
 		client.request(
@@ -61,14 +62,21 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 					case HTTPStatus.found:
 					case HTTPStatus.seeOther:
 					case HTTPStatus.temporaryRedirect:
-			logTrace("Status code: %s", res.statusCode);
+						logTrace("Status code: %s", res.statusCode);
 						auto pv = "Location" in res.headers;
 						enforce(pv !is null, "Server responded with redirect but did not specify the redirect location for "~url.toString());
 						logDebug("Redirect to '%s'", *pv);
 						if( startsWith((*pv), "http:") || startsWith((*pv), "https:") ){
-			logTrace("parsing %s", *pv);
-							url = URL(*pv);
-						} else url.localURI = *pv;
+							logTrace("parsing %s", *pv);
+							auto nurl = URL(*pv);
+							if (!nurl.port)
+								nurl.port = nurl.defaultPort;
+							if (url.host != nurl.host || url.schema != nurl.schema ||
+								url.port != nurl.port)
+								client.disconnect();
+							url = nurl;
+						} else
+							url.localURI = *pv;
 						break;
 				}
 			}

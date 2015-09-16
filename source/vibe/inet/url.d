@@ -174,6 +174,23 @@ struct URL {
 	/// ditto
 	@property port(ushort v) { m_port = v; }
 
+	/// Get the default port for the given schema or 0
+	static ushort defaultPort(string schema) {
+		switch(schema){
+			default:
+			case "file": return 0;
+			case "http": return 80;
+			case "https": return 443;
+			case "ftp": return 21;
+			case "spdy": return 443;
+			case "sftp": return 22;
+		}
+	}
+	/// ditto
+	ushort defaultPort() {
+		return defaultPort(m_schema);
+	}
+
 	/// The user name part of the URL (optional)
 	@property string username() const { return m_username; }
 	/// ditto
