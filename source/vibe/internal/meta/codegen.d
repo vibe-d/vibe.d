@@ -51,13 +51,16 @@ version(unittest)
 */
 template getSymbols(T)
 {
-	import std.typetuple : TypeTuple, NoDuplicates;
+	import std.typetuple : TypeTuple, NoDuplicates, staticMap;
 	import std.traits;
 
 	private template Implementation(T)
 	{
-		static if (isAggregateType!T || is(T == enum)) {
-			alias Implementation = TypeTuple!T;
+		static if (is(T == U!V, alias U, V)) { // single-argument template support
+			alias Implementation = TypeTuple!(U, Implementation!V);
+		}
+		else static if (isAggregateType!T || is(T == enum)) {
+			alias Implementation = T;
 		}
 		else static if (isStaticArray!T || isArray!T) {
 			alias Implementation = Implementation!(typeof(T.init[0]));
@@ -86,10 +89,12 @@ unittest
 	struct A {}
 	interface B {}
 	alias Type = A[const(B[A*])];
+	struct C(T) {}
 
 	// can't directly compare tuples thus comparing their string representation
 	static assert (getSymbols!Type.stringof == TypeTuple!(A, B).stringof);
 	static assert (getSymbols!int.stringof == TypeTuple!().stringof);
+	static assert (getSymbols!(C!A).stringof == TypeTuple!(C, A).stringof);
 }
 
 /**
