@@ -149,9 +149,11 @@ import vibe.web.rest;
 			static if (sroute.pathOverride) route.pattern = sroute.rawName;
 			else route.pattern = adjustMethodStyle(stripTUnderscore(sroute.rawName, settings), settings.methodStyle);
 			route.method = sroute.method;
-			extractPathParts(route);
+			extractPathParts(route.fullPathParts, this.basePath);
 
 			route.parameters.length = sroute.parameters.length;
+
+			bool prefix_id = false;
 
 			alias PT = ParameterTypeTuple!RF;
 			foreach (i, _; PT) {
@@ -167,14 +169,11 @@ import vibe.web.rest;
 				} else pi.fieldName = sparam.fieldName;
 
 				static if (i == 0 && sparam.name == "id") {
-					route.pattern = concatURL(":id", route.pattern);
-					if (route.pathParts.length > 0) {
-						if (route.pathParts[0].isParameter) 
-							route.pathParts = PathPart(false, "/") ~ route.pathParts;
-						else if (!route.pathParts[0].text.startsWith("/")) 
-							route.pathParts[0].text = "/" ~ route.pathParts[0].text;
-					}
-					route.pathParts = PathPart(true, "id") ~ route.pathParts;
+					prefix_id = true;
+					if (route.pattern.length && route.pattern[0] != '/')
+						route.pattern = '/' ~ route.pattern;
+					route.pathParts ~= PathPart(true, "id");
+					route.fullPathParts ~= PathPart(true, "id");
 					route.pathHasPlaceholders = true;
 				}
 
@@ -189,6 +188,9 @@ import vibe.web.rest;
 				}
 			}
 
+			extractPathParts(route.pathParts, route.pattern);
+			extractPathParts(route.fullPathParts, route.pattern);
+			if (prefix_id) route.pattern = ":id" ~ route.pattern;
 			route.fullPattern = concatURL(this.basePath, route.pattern);
 
 			routes[si] = route;
@@ -343,7 +345,7 @@ struct Route {
 	string fullPattern; // absolute version of 'pattern'
 	bool pathHasPlaceholders; // true if path/pattern contains any :placeholers
 	PathPart[] pathParts; // path separated into text and placeholder parts
-	//PathPart[] fullPathParts; // full path separated into text and placeholder parts
+	PathPart[] fullPathParts; // full path separated into text and placeholder parts
 	Parameter[] parameters;
 	Parameter[] queryParameters;
 	Parameter[] bodyParameters;
@@ -392,27 +394,37 @@ struct SubInterface {
 	RestInterfaceSettings settings;
 }
 
-private void extractPathParts(ref Route route)
+private bool extractPathParts(ref PathPart[] parts, string pattern)
 {
 	import std.string : indexOf;
 
-	string p = route.pattern;
+	string p = pattern;
+
+	bool has_placeholders = false;
+
+	void addText(string str) {
+		if (parts.length > 0 && !parts[$-1].isParameter)
+			parts[$-1].text ~= str;
+		else parts ~= PathPart(false, str);
+	}
 
 	while (p.length) {
 		auto cidx = p.indexOf(':');
 		if (cidx < 0) break;
-		if (cidx > 0) route.pathParts ~= PathPart(false, p[0 .. cidx]);
+		if (cidx > 0) addText(p[0 .. cidx]);
 		p = p[cidx+1 .. $];
 
 		auto sidx = p.indexOf('/');
 		if (sidx < 0) sidx = p.length;
 		assert(sidx > 0, "Empty path placeholders are illegal.");
-		route.pathParts ~= PathPart(true, "_" ~ p[0 .. sidx]);
-		route.pathHasPlaceholders = true;
+		parts ~= PathPart(true, "_" ~ p[0 .. sidx]);
+		has_placeholders = true;
 		p = p[sidx .. $];
 	}
 
-	if (p.length) route.pathParts ~= PathPart(false, p);
+	if (p.length) addText(p);
+
+	return has_placeholders;
 }
 
 unittest {
@@ -443,30 +455,30 @@ unittest {
 	assert(test.routes[0].pattern == "a");
 	assert(test.routes[0].fullPattern == "/a");
 	assert(test.routes[0].pathParts == [PathPart(false, "a")]);
-	//assert(test.routes[0].fullPathParts == [PathPart(false, "/a")]);
+	assert(test.routes[0].fullPathParts == [PathPart(false, "/a")]);
 
 	assert(test.routes[1].pattern == "foo");
 	assert(test.routes[1].fullPattern == "/foo");
 	assert(test.routes[1].pathParts == [PathPart(false, "foo")]);
-	//assert(test.routes[1].fullPathParts == [PathPart(false, "/foo")]);
+	assert(test.routes[1].fullPathParts == [PathPart(false, "/foo")]);
 
 	assert(test.routes[2].pattern == ":id/c");
 	assert(test.routes[2].fullPattern == "/:id/c");
 	assert(test.routes[2].pathParts == [PathPart(true, "id"), PathPart(false, "/c")]);
-	//assert(test.routes[2].fullPathParts == [PathPart(false, "/"), PathPart(true, "id"), PathPart(false, "/c")]);
+	assert(test.routes[2].fullPathParts == [PathPart(false, "/"), PathPart(true, "id"), PathPart(false, "/c")]);
 
 	assert(test.routes[3].pattern == ":id/bar");
 	assert(test.routes[3].fullPattern == "/:id/bar");
 	assert(test.routes[3].pathParts == [PathPart(true, "id"), PathPart(false, "/bar")]);
-	//assert(test.routes[3].fullPathParts == [PathPart(false, "/"), PathPart(true, "id"), PathPart(false, "/bar")]);
+	assert(test.routes[3].fullPathParts == [PathPart(false, "/"), PathPart(true, "id"), PathPart(false, "/bar")]);
 
 	assert(test.routes[4].pattern == ":baz");
 	assert(test.routes[4].fullPattern == "/:baz");
 	assert(test.routes[4].pathParts == [PathPart(true, "_baz")]);
-	//assert(test.routes[4].fullPathParts == [PathPart(false, "/"), PathPart(true, "_baz")]);
+	assert(test.routes[4].fullPathParts == [PathPart(false, "/"), PathPart(true, "_baz")]);
 
 	assert(test.routes[5].pattern == ":foo/:bar/baz");
 	assert(test.routes[5].fullPattern == "/:foo/:bar/baz");
 	assert(test.routes[5].pathParts == [PathPart(true, "_foo"), PathPart(false, "/"), PathPart(true, "_bar"), PathPart(false, "/baz")]);
-	//assert(test.routes[5].fullPathParts == [PathPart(false, "/"), PathPart(true, "_foo"), PathPart(false, "/"), PathPart(true, "_bar"), PathPart(false, "/baz")]);
+	assert(test.routes[5].fullPathParts == [PathPart(false, "/"), PathPart(true, "_foo"), PathPart(false, "/"), PathPart(true, "_bar"), PathPart(false, "/baz")]);
 }
