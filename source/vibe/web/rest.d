@@ -665,9 +665,9 @@ auto executeClientMethod(I, size_t ridx, ARGS...)
 	auto route = intf.routes[ridx];
 
 
-	InetHeaderMap headers__;
-	InetHeaderMap reqHdrs__;
-	InetHeaderMap optHdrs__;
+	InetHeaderMap headers;
+	InetHeaderMap reqhdrs;
+	InetHeaderMap opthdrs;
 
 	string url_prefix;
 
@@ -698,15 +698,15 @@ auto executeClientMethod(I, size_t ridx, ARGS...)
 			static if (sparam.isIn) {
 				static if (isInstanceOf!(Nullable, PT)) {
 					if (!ARGS[i].isNull)
-						headers__[fieldname] = to!string(ARGS[i]);
-				} else headers__[fieldname] = to!string(ARGS[i]);
+						headers[fieldname] = to!string(ARGS[i]);
+				} else headers[fieldname] = to!string(ARGS[i]);
 			}
 			static if (sparam.isOut) {
 				// Optional parameter
 				static if (isInstanceOf!(Nullable, PT)) {
-					optHdrs__[fieldname] = null;
+					opthdrs[fieldname] = null;
 				} else {
-					reqHdrs__[fieldname] = null;
+					reqhdrs[fieldname] = null;
 				}
 			}
 		}
@@ -715,19 +715,19 @@ auto executeClientMethod(I, size_t ridx, ARGS...)
 	debug body_ = jsonBody.toPrettyString();
 	else body_ = jsonBody.toString();
 
-	string url__;
+	string url;
 	foreach (i, p; route.pathParts) {
 		if (p.isParameter) {
 			switch (p.text) {
 				foreach (j, PT; PTT) {
 					case sroute.parameters[j].name:
-						url__ ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
+						url ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
 						goto sbrk;
 				}
-				default: url__ ~= ":" ~ p.text; break;
+				default: url ~= ":" ~ p.text; break;
 			}
 			sbrk:;
-		} else url__ ~= p.text;
+		} else url ~= p.text;
 	}
 
 	scope (exit) {
@@ -738,9 +738,9 @@ auto executeClientMethod(I, size_t ridx, ARGS...)
 				static if (sparam.isOut) {
 					static if (isInstanceOf!(Nullable, PT)) {
 						ARGS[i] = to!(TemplateArgsOf!PT)(
-							optHdrs__.get(fieldname, null));
+							opthdrs.get(fieldname, null));
 					} else {
-						if (auto ptr = fieldname in reqHdrs__)
+						if (auto ptr = fieldname in reqhdrs)
 							ARGS[i] = to!PT(*ptr);
 					}
 				}
@@ -748,10 +748,10 @@ auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	auto jret__ = request(URL(intf.baseURL), request_filter, sroute.method, url__, headers__, query.data, body_, reqHdrs__, optHdrs__);
+	auto jret = request(URL(intf.baseURL), request_filter, sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs);
 
 	static if (!is(RT == void))
-		return deserializeJson!RT(jret__);
+		return deserializeJson!RT(jret);
 }
 
 
