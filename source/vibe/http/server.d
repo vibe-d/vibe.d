@@ -1411,6 +1411,8 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 		foreach (ctx; contexts) {
 			if (ctx.settings.port != settings.port) continue;
 			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
+      auto proto = lst.tlsContext ? "https" : "http";
+      logInfo("Listening for virtual host requests on %s://%s:%s", proto, settings.hostName, lst.bindPort);
 			/*enforce(ctx.settings.hostName != settings.hostName,
 				"A server with the host name '"~settings.hostName~"' is already "
 				"listening on "~addr~":"~to!string(settings.port)~".");*/
