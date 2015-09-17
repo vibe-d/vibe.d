@@ -307,7 +307,7 @@ class RestInterfaceClient(I) : I
 	mixin(generateModuleImports!I());
 
 	private {
-		RestInterfaceSettings m_settings;
+		RestInterface!I m_intf;
 		RequestFilter m_requestFilter;
 		staticMap!(RestInterfaceClient, Info.SubInterfaceTypes) m_subInterfaces;
 	}
@@ -319,12 +319,10 @@ class RestInterfaceClient(I) : I
 	*/
 	this(RestInterfaceSettings settings)
 	{
-		auto info = Info(settings, true);
-		m_settings = info.settings.dup;
-		m_settings.baseURL = URL(info.baseURL);
+		m_intf = Info(settings, true);
 
 		foreach (i, SI; Info.SubInterfaceTypes)
-			m_subInterfaces[i] = new RestInterfaceClient!SI(info.subInterfaces[i].settings);
+			m_subInterfaces[i] = new RestInterfaceClient!SI(m_intf.subInterfaces[i].settings);
 	}
 
 	/// ditto
@@ -397,7 +395,7 @@ class RestInterfaceClient(I) : I
 					 ref InetHeaderMap reqReturnHdrs,
 					 ref InetHeaderMap optReturnHdrs) const
 		{
-			return .request(m_settings, m_requestFilter, verb, name, hdrs, query, body_, reqReturnHdrs, optReturnHdrs);
+			return .request(URL(m_intf.baseURL), m_requestFilter, verb, name, hdrs, query, body_, reqReturnHdrs, optReturnHdrs);
 		}
 	}
 }
@@ -644,7 +642,7 @@ string generateRestClientMethods(I)()
 
 		ret ~= q{
 				mixin CloneFunction!(Info.RouteFunctions[%1$s], q{
-					return executeClientMethod!(Info.RouteFunctions[%1$s]%2$s)(m_settings, m_requestFilter);
+					return executeClientMethod!(I, %1$s%2$s)(m_intf, m_requestFilter);
 				});
 			}.format(i, pnames);
 	}
@@ -653,24 +651,19 @@ string generateRestClientMethods(I)()
 }
 
 
-ReturnType!Func executeClientMethod(alias Func, ARGS...)(
-	RestInterfaceSettings settings, void delegate(HTTPClientRequest) request_filter)
+auto executeClientMethod(I, size_t ridx, ARGS...)
+	(in ref RestInterface!I intf, void delegate(HTTPClientRequest) request_filter)
 {
-	import std.string : format;
-	import vibe.internal.meta.funcattr : IsAttributedParameter;
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
 
-	alias PSC = ParameterStorageClass;
-	alias FT = FunctionTypeOf!Func;
-	alias RT = ReturnType!FT;
+	alias Info = RestInterface!I;
+	alias Func = Info.RouteFunctions[ridx];
+	alias RT = ReturnType!Func;
 	alias PTT = ParameterTypeTuple!Func;
-	alias PSCT = ParameterStorageClassTuple!Func;
-	alias ParamNames = ParameterIdentifierTuple!Func;
-	alias WPAT = UDATuple!(WebParamAttribute, Func);
+	enum sroute = Info.staticRoutes[ridx];
+	auto route = intf.routes[ridx];
 
-	enum meta = extractHTTPMethodAndName!(Func, false)();
-	enum FuncId = __traits(identifier, Func);
 
 	InetHeaderMap headers__;
 	InetHeaderMap reqHdrs__;
@@ -681,9 +674,6 @@ ReturnType!Func executeClientMethod(alias Func, ARGS...)(
 	auto query = appender!string();
 	auto jsonBody = Json.emptyObject;
 	string body_;
-
-	// TODO: avoid this runtime hack and iterate over all header params again instead at scope(exit)
-	void delegate()[] exit_code;
 
 	void addQueryParam(size_t i)(string name)
 	{
@@ -696,54 +686,28 @@ ReturnType!Func executeClientMethod(alias Func, ARGS...)(
 			query.filterURLEncode(toRestString(serializeToJson(ARGS[i])));
 	}
 
-	foreach (i, PT; PTT){
-		alias CompareParamName = GenCmp!("ClientFilter", i, ParamNames[i]);
-		mixin(CompareParamName.Decl);
-
-		// legacy :id special case, left for backwards-compatibility reasons
-		static if (i == 0 && ParamNames[0] == "id") {
-			static if (is(PT == Json))
-				url_prefix = urlEncode(ARGS[0].toString())~"/";
-			else
-				url_prefix = urlEncode(toRestString(serializeToJson(ARGS[i])))~"/";
-		} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
-			alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
-			static if (PWPAT[0].origin == ParameterKind.header) {
-				// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
-				static if (!(PSCT[i] & PSC.out_)) {
-					headers__[PWPAT[0].field] = to!string(ARGS[i]);
-				}
-				static if (PSCT[i] & PSC.ref_ || PSCT[i] & PSC.out_) {
-					// Optional parameter
-					static if (isInstanceOf!(Nullable, PT)) {
-						optHdrs__[PWPAT[0].field] = null;
-						exit_code ~= {
-							ARGS[i] = to!(TemplateArgsOf!PT)(
-								optHdrs__.get(PWPAT[0].field, null));
-						};
-					} else {
-						reqHdrs__[PWPAT[0].field] = null;
-						exit_code ~= {
-							if (auto ptr = PWPAT[0].field in reqHdrs__)
-								ARGS[i] = to!PT(*ptr);
-						};
-					}
-				}
-			} else static if (PWPAT[0].origin == ParameterKind.query) {
-				addQueryParam!i(PWPAT[0].field);
-			} else static if (PWPAT[0].origin == ParameterKind.body_) {
-				jsonBody[PWPAT[0].field] = serializeToJson(ARGS[i]);
+	foreach (i, PT; PTT) {
+		enum sparam = sroute.parameters[i];
+		auto fieldname = route.parameters[i].fieldName;
+		static if (sparam.kind == ParameterKind.query) {
+			addQueryParam!i(fieldname);
+		} else static if (sparam.kind == ParameterKind.body_) {
+			jsonBody[fieldname] = serializeToJson(ARGS[i]);
+		} else static if (sparam.kind == ParameterKind.header) {
+			// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
+			static if (sparam.isIn) {
+				static if (isInstanceOf!(Nullable, PT)) {
+					if (!ARGS[i].isNull)
+						headers__[fieldname] = to!string(ARGS[i]);
+				} else headers__[fieldname] = to!string(ARGS[i]);
 			}
-			else
-				static assert (0, "Internal error: Unknown ParameterKind in REST client code generation.");
-		} else static if (!ParamNames[i].startsWith("_")
-				  && !IsAttributedParameter!(Func, ParamNames[i])) {
-			// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-			static if (meta.method == HTTPMethod.GET || meta.method == HTTPMethod.HEAD) {
-				// By default for GET / HEAD, params are send via the query string.
-				addQueryParam!i(stripTUnderscore(ParamNames[i], settings));
-			} else {
-				jsonBody[stripTUnderscore(ParamNames[i], settings)] = serializeToJson(ARGS[i]);
+			static if (sparam.isOut) {
+				// Optional parameter
+				static if (isInstanceOf!(Nullable, PT)) {
+					optHdrs__[fieldname] = null;
+				} else {
+					reqHdrs__[fieldname] = null;
+				}
 			}
 		}
 	}
@@ -751,37 +715,40 @@ ReturnType!Func executeClientMethod(alias Func, ARGS...)(
 	debug body_ = jsonBody.toPrettyString();
 	else body_ = jsonBody.toString();
 
-	string url__ = meta.url;
-	static if (!meta.hadPathUDA) {
-		if (settings.stripTrailingUnderscore && url__.endsWith("_"))
-			url__ = url__[0 .. $-1];
-		url__ = concatURL(url_prefix, adjustMethodStyle(url__, settings.methodStyle));
-	} else {
-		import std.array : split;
-		auto parts = meta.url.split("/");
-		url__ = url_prefix;
-		foreach (i, p; parts) {
-			if (i > 0) url__ ~= "/";
-
-			bool match = false;
-			if (p.startsWith(":")) {
-				foreach (j, pn; ParamNames) {
-					if (pn.startsWith("_") && p[1 .. $] == pn[1 .. $]) {
+	string url__;
+	foreach (i, p; route.pathParts) {
+		if (p.isParameter) {
+			switch (p.text) {
+				foreach (j, PT; PTT) {
+					case sroute.parameters[j].name:
 						url__ ~= urlEncode(toRestString(serializeToJson(ARGS[j])));
-						match = true;
-						break;
+						goto sbrk;
+				}
+				default: url__ ~= ":" ~ p.text; break;
+			}
+			sbrk:;
+		} else url__ ~= p.text;
+	}
+
+	scope (exit) {
+		foreach (i, PT; PTT) {
+			enum sparam = sroute.parameters[i];
+			auto fieldname = route.parameters[i].fieldName;
+			static if (sparam.kind == ParameterKind.header) {
+				static if (sparam.isOut) {
+					static if (isInstanceOf!(Nullable, PT)) {
+						ARGS[i] = to!(TemplateArgsOf!PT)(
+							optHdrs__.get(fieldname, null));
+					} else {
+						if (auto ptr = fieldname in reqHdrs__)
+							ARGS[i] = to!PT(*ptr);
 					}
 				}
 			}
-
-			if (!match) url__ ~= p;
 		}
 	}
 
-	scope (exit)
-		foreach_reverse (d; exit_code) d();
-
-	auto jret__ = request(settings, request_filter, meta.method, url__, headers__, query.data, body_, reqHdrs__, optHdrs__);
+	auto jret__ = request(URL(intf.baseURL), request_filter, sroute.method, url__, headers__, query.data, body_, reqHdrs__, optHdrs__);
 
 	static if (!is(RT == void))
 		return deserializeJson!RT(jret__);
@@ -816,7 +783,7 @@ import vibe.http.client : HTTPClientRequest;
  * Returns:
  *     The Json object returned by the request
  */
-private Json request(in RestInterfaceSettings settings,
+private Json request(URL base_url,
 	void delegate(HTTPClientRequest) request_filter, HTTPMethod verb,
 	string name, in ref InetHeaderMap hdrs, string query, string body_,
 	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs)
@@ -825,7 +792,7 @@ private Json request(in RestInterfaceSettings settings,
 	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
 	import vibe.inet.url : Path;
 
-	URL url = settings.baseURL;
+	URL url = base_url;
 
 	if (name.length)
 	{
