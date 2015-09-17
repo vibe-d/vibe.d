@@ -149,7 +149,7 @@ import vibe.web.rest;
 			static if (sroute.pathOverride) route.pattern = sroute.rawName;
 			else route.pattern = adjustMethodStyle(stripTUnderscore(sroute.rawName, settings), settings.methodStyle);
 			route.method = sroute.method;
-			extractPathParts(route.fullPathParts, this.basePath);
+			extractPathParts(route.fullPathParts, this.basePath.endsWith("/") ? this.basePath : this.basePath ~ "/");
 
 			route.parameters.length = sroute.parameters.length;
 
@@ -189,7 +189,7 @@ import vibe.web.rest;
 			}
 
 			extractPathParts(route.pathParts, route.pattern);
-			extractPathParts(route.fullPathParts, route.pattern);
+			extractPathParts(route.fullPathParts, !prefix_id && route.pattern.startsWith("/") ? route.pattern[1 .. $] : route.pattern);
 			if (prefix_id) route.pattern = ":id" ~ route.pattern;
 			route.fullPattern = concatURL(this.basePath, route.pattern);
 
@@ -481,4 +481,37 @@ unittest {
 	assert(test.routes[5].fullPattern == "/:foo/:bar/baz");
 	assert(test.routes[5].pathParts == [PathPart(true, "_foo"), PathPart(false, "/"), PathPart(true, "_bar"), PathPart(false, "/baz")]);
 	assert(test.routes[5].fullPathParts == [PathPart(false, "/"), PathPart(true, "_foo"), PathPart(false, "/"), PathPart(true, "_bar"), PathPart(false, "/baz")]);
+}
+
+unittest {
+	@rootPathFromName
+	interface Foo
+	{
+		string bar();
+	}
+
+	auto test = RestInterface!Foo(null, false);
+
+	assert(test.routeCount == 1);
+	assert(test.routes[0].pattern == "bar");
+	assert(test.routes[0].fullPattern == "/foo/bar");
+	assert(test.routes[0].pathParts == [PathPart(false, "bar")]);
+	assert(test.routes[0].fullPathParts == [PathPart(false, "/foo/bar")]);
+}
+
+unittest {
+	@path("/foo/")
+	interface Foo
+	{
+		@path("/bar/")
+		string bar();
+	}
+
+	auto test = RestInterface!Foo(null, false);
+
+	assert(test.routeCount == 1);
+	assert(test.routes[0].pattern == "/bar/");
+	assert(test.routes[0].fullPattern == "/foo/bar/");
+	assert(test.routes[0].pathParts == [PathPart(false, "/bar/")]);
+	assert(test.routes[0].fullPathParts == [PathPart(false, "/foo/bar/")]);
 }
