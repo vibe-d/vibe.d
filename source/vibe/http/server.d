@@ -1713,7 +1713,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			string dbg_msg;
 			logDiagnostic("No response written for %s", req.requestURL);
 			if (settings.options & HTTPServerOption.errorStackTraces)
-				dbg_msg = format("Not routes match path '%s'", req.requestURL);
+				dbg_msg = format("No routes match path '%s'", req.requestURL);
 			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), dbg_msg, null);
 		}
 	} catch (HTTPStatusException err) {
