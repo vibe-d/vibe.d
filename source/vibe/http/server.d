@@ -190,8 +190,6 @@ void setVibeDistHost(string host, ushort port)
 /**
 	Renders the given template and makes all ALIASES available to the template.
 
-	This currently suffers from multiple DMD bugs - use renderCompat() instead for the time being.
-
 	You can call this function as a member of HTTPServerResponse using D's uniform function
 	call syntax.
 
