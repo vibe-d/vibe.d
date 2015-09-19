@@ -188,18 +188,18 @@ void setVibeDistHost(string host, ushort port)
 
 
 /**
-	Renders the given template and makes all ALIASES available to the template.
+	Renders the given Diet template and makes all ALIASES available to the template.
 
-	This currently suffers from multiple DMD bugs - use renderCompat() instead for the time being.
+	You can call this function as a pseudo-member of `HTTPServerResponse` using
+	D's uniform function call syntax.
 
-	You can call this function as a member of HTTPServerResponse using D's uniform function
-	call syntax.
+	See_also: `vibe.templ.diet.compileDietFile`
 
 	Examples:
 		---
 		string title = "Hello, World!";
 		int pageNumber = 1;
-		res.render!("mytemplate.jd", title, pageNumber);
+		res.render!("mytemplate.dt", title, pageNumber);
 		---
 */
 @property void render(string template_file, ALIASES...)(HTTPServerResponse res)
@@ -1716,7 +1716,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			string dbg_msg;
 			logDiagnostic("No response written for %s", req.requestURL);
 			if (settings.options & HTTPServerOption.errorStackTraces)
-				dbg_msg = format("Not routes match path '%s'", req.requestURL);
+				dbg_msg = format("No routes match path '%s'", req.requestURL);
 			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), dbg_msg, null);
 		}
 	} catch (HTTPStatusException err) {
