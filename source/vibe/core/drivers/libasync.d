@@ -475,6 +475,8 @@ final class LibasyncFileStream : FileStream {
 					FILE* f = _wfopen(path_str.toUTF16z(), "w");
 				}
 				else FILE * f = fopen(path_str.toStringz, "w");
+				fclose(f);
+				m_truncated = true;
 			}
 		} 
 		m_path = path;
