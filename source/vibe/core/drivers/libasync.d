@@ -31,6 +31,7 @@ import std.exception;
 import std.string;
 import std.stdio : File;
 import std.typecons;
+import std.c.stdio;
 
 import core.atomic;
 import core.memory;
