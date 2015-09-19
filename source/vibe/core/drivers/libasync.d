@@ -31,6 +31,7 @@ import std.exception;
 import std.string;
 import std.stdio : File;
 import std.typecons;
+import std.c.stdio;
 
 import core.atomic;
 import core.memory;
@@ -45,6 +46,9 @@ private __gshared EventLoop gs_evLoop;
 private EventLoop s_evLoop;
 private DriverCore s_driverCore;
 private shared int s_refCount; // will destroy async threads when 0
+
+version(Windows) extern(C) FILE* _wfopen(const(wchar)* filename, in wchar* mode);
+
 EventLoop getEventLoop() nothrow
 {
 	if (s_evLoop is null)
@@ -465,9 +469,12 @@ final class LibasyncFileStream : FileStream {
 			auto path_str = path.toNativeString();
 			if (!exists(path_str))
 			{ // touch
-				import std.c.stdio;
 				import std.string : toStringz;
-				FILE * f = fopen(path_str.toStringz, "w");
+				version(Windows) {
+					import std.utf : toUTF16z;
+					FILE* f = _wfopen(path_str.toUTF16z(), "w");
+				}
+				else FILE * f = fopen(path_str.toStringz, "w");
 				fclose(f);
 				m_truncated = true;
 			}
