@@ -188,16 +188,18 @@ void setVibeDistHost(string host, ushort port)
 
 
 /**
-	Renders the given template and makes all ALIASES available to the template.
+	Renders the given Diet template and makes all ALIASES available to the template.
 
-	You can call this function as a member of HTTPServerResponse using D's uniform function
-	call syntax.
+	You can call this function as a pseudo-member of `HTTPServerResponse` using
+	D's uniform function call syntax.
+
+	See_also: `vibe.templ.diet.compileDietFile`
 
 	Examples:
 		---
 		string title = "Hello, World!";
 		int pageNumber = 1;
-		res.render!("mytemplate.jd", title, pageNumber);
+		res.render!("mytemplate.dt", title, pageNumber);
 		---
 */
 @property void render(string template_file, ALIASES...)(HTTPServerResponse res)
