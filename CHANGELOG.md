@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.25 - 2015-09-
+v0.7.25 - 2015-09-20
 --------------------
 
 Mostly a bugfix release, including a regression fix in the web form parser. This release also drops official support for the DMD 2.065.0 front end (released February 2014), although it may continue to work for some time.
