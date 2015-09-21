@@ -410,8 +410,7 @@ final class LibasyncDriver : EventDriver {
 		Duration dur;
 		if (next == SysTime.max) return;
 		dur = next - now;
-		if (m_nextSched != next)
-			m_nextSched = next;
+		m_nextSched = next;
 		if (dur.total!"seconds"() >= int.max)
 			return; // will never trigger, don't bother
 		if (!m_timerEvent) {
