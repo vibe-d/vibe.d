@@ -504,13 +504,13 @@ final class LibasyncFileStream : FileStream {
 
 	void close()
 	{
-		if (m_task != Task())
-			getDriverCore().resumeTask(m_task, new Exception("The file was closed during an operation"));
 		if (m_impl) {
 			m_impl.kill();
 			m_impl = null;
 		}
 		m_started = false;
+		if (m_task != Task() && Task.getThis() == Task())
+        		getDriverCore().yieldAndResumeTask(m_task, new Exception("The file was closed during an operation"));
 	}
 
 	@property bool empty() const { assert(this.readable); return m_offset >= m_size; }
