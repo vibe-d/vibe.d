@@ -20,12 +20,7 @@
 */
 module vibe.appmain;
 
-// only include main if VibeCustomMain is not set
-version (VibeCustomMain) {}
-else:
-
-version (VibeDefaultMain) {}
-else { static assert(false, "Error: -version=VibeDefaultMain is required to use vibe.d's default main(). Or use -version=VibeCustomMain to use your own main() instead. Please update your build scripts."); }
+version (VibeDefaultMain):
 
 /**
 	The predefined vibe.d application entry point.
