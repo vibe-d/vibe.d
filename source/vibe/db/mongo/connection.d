@@ -747,38 +747,63 @@ alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc
 template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc); }
 
 enum UpdateFlags {
-	None         = 0,
-	Upsert       = 1<<0,
-	MultiUpdate  = 1<<1
+	none         = 0,
+	upsert       = 1<<0,
+	multiUpdate  = 1<<1,
+
+	None = none, /// Deprecated compatibility alias
+	Upsert = upsert, /// Deprecated compatibility alias
+	MultiUpdate = multiUpdate /// Deprecated compatibility alias
 }
 
 enum InsertFlags {
-	None             = 0,
-	ContinueOnError  = 1<<0
+	none             = 0,
+	continueOnError  = 1<<0,
+
+	None = none, /// Deprecated compatibility alias
+	ContinueOnError = continueOnError /// Deprecated compatibility alias
 }
 
 enum QueryFlags {
-	None             = 0,
-	TailableCursor   = 1<<1,
-	SlaveOk          = 1<<2,
-	OplogReplay      = 1<<3,
-	NoCursorTimeout  = 1<<4,
-	AwaitData        = 1<<5,
-	Exhaust          = 1<<6,
-	Partial          = 1<<7
+	none             = 0,
+	tailableCursor   = 1<<1,
+	slaveOk          = 1<<2,
+	oplogReplay      = 1<<3,
+	noCursorTimeout  = 1<<4,
+	awaitData        = 1<<5,
+	exhaust          = 1<<6,
+	partial          = 1<<7,
+
+	None = none, /// Deprecated compatibility alias
+	TailableCursor = tailableCursor, /// Deprecated compatibility alias
+	SlaveOk = slaveOk, /// Deprecated compatibility alias
+	OplogReplay = oplogReplay, /// Deprecated compatibility alias
+	NoCursorTimeout = noCursorTimeout, /// Deprecated compatibility alias
+	AwaitData = awaitData, /// Deprecated compatibility alias
+	Exhaust = exhaust, /// Deprecated compatibility alias
+	Partial = partial /// Deprecated compatibility alias
 }
 
 enum DeleteFlags {
-	None          = 0,
-	SingleRemove  = 1<<0,
+	none          = 0,
+	singleRemove  = 1<<0,
+
+	None = none, /// Deprecated compatibility alias
+	SingleRemove = singleRemove /// Deprecated compatibility alias
 }
 
 enum ReplyFlags {
-	None              = 0,
-	CursorNotFound    = 1<<0,
-	QueryFailure      = 1<<1,
-	ShardConfigStale  = 1<<2,
-	AwaitCapable      = 1<<3
+	none              = 0,
+	cursorNotFound    = 1<<0,
+	queryFailure      = 1<<1,
+	shardConfigStale  = 1<<2,
+	awaitCapable      = 1<<3,
+
+	None = none, /// Deprecated compatibility alias
+	CursorNotFound = cursorNotFound, /// Deprecated compatibility alias
+	QueryFailure = queryFailure, /// Deprecated compatibility alias
+	ShardConfigStale = shardConfigStale, /// Deprecated compatibility alias
+	AwaitCapable = awaitCapable /// Deprecated compatibility alias
 }
 
 /// [internal]
