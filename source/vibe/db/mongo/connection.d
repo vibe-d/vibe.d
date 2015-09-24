@@ -747,9 +747,9 @@ alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc
 template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc); }
 
 enum UpdateFlags {
-	none         = 0,
-	upsert       = 1<<0,
-	multiUpdate  = 1<<1,
+	none         = 0,    /// Normal update of a single document.
+	upsert       = 1<<0, /// Creates a document if none exists.
+	multiUpdate  = 1<<1, /// Updates all matching documents.
 
 	None = none, /// Deprecated compatibility alias
 	Upsert = upsert, /// Deprecated compatibility alias
@@ -757,22 +757,22 @@ enum UpdateFlags {
 }
 
 enum InsertFlags {
-	none             = 0,
-	continueOnError  = 1<<0,
+	none             = 0,    /// Normal insert.
+	continueOnError  = 1<<0, /// For multiple inserted documents, continues inserting further documents after a failure.
 
 	None = none, /// Deprecated compatibility alias
 	ContinueOnError = continueOnError /// Deprecated compatibility alias
 }
 
 enum QueryFlags {
-	none             = 0,
-	tailableCursor   = 1<<1,
-	slaveOk          = 1<<2,
-	oplogReplay      = 1<<3,
-	noCursorTimeout  = 1<<4,
-	awaitData        = 1<<5,
-	exhaust          = 1<<6,
-	partial          = 1<<7,
+	none             = 0,    /// Normal query
+	tailableCursor   = 1<<1, /// 
+	slaveOk          = 1<<2, /// 
+	oplogReplay      = 1<<3, /// 
+	noCursorTimeout  = 1<<4, /// 
+	awaitData        = 1<<5, /// 
+	exhaust          = 1<<6, /// 
+	partial          = 1<<7, /// 
 
 	None = none, /// Deprecated compatibility alias
 	TailableCursor = tailableCursor, /// Deprecated compatibility alias
