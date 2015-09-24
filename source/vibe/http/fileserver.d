@@ -1,7 +1,7 @@
 /**
 	A static HTTP file server.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -23,7 +23,18 @@ import std.string;
 /**
 	Returns a request handler that serves files from the specified directory.
 
-	See_Also: serveStaticFile
+	See `sendFile` for more information.
+
+	Params:
+		local_path = Path to the folder to serve files from.
+		settings = Optional settings object enabling customization of how
+			the files get served.
+
+	Returns:
+		A request delegate is returned, which is suitable for registering in
+		a `URLRouter` or for passing to `listenHTTP`.
+
+	See_Also: `serveStaticFile`, `sendFile`
 */
 HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSettings settings = null)
 {
@@ -54,7 +65,7 @@ HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSetti
 		} else if (!rpath.empty && rpath[0] == "..")
 			return; // don't respond to relative paths outside of the root path
 
-		sendFile(req, res, local_path ~ rpath, settings);
+		sendFileImpl(req, res, local_path ~ rpath, settings);
 	}
 
 	return &callback;
@@ -109,7 +120,18 @@ unittest {
 /**
 	Returns a request handler that serves a specific file on disk.
 
-	See_Also: serveStaticFiles
+	See `sendFile` for more information.
+
+	Params:
+		local_path = Path to the file to serve.
+		settings = Optional settings object enabling customization of how
+			the file gets served.
+
+	Returns:
+		A request delegate is returned, which is suitable for registering in
+		a `URLRouter` or for passing to `listenHTTP`.
+
+	See_Also: `serveStaticFiles`, `sendFile`
 */
 HTTPServerRequestDelegateS serveStaticFile(Path local_path, HTTPFileServerSettings settings = null)
 {
@@ -118,7 +140,7 @@ HTTPServerRequestDelegateS serveStaticFile(Path local_path, HTTPFileServerSettin
 
 	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
-		sendFile(req, res, local_path, settings);
+		sendFileImpl(req, res, local_path, settings);
 	}
 
 	return &callback;
@@ -131,12 +153,65 @@ HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSett
 
 
 /**
+	Sends a file to the given HTTP server response object.
+
+	When serving a file, certain request headers are supported to avoid sending
+	the file if the client has it already cached. These headers are
+	`"If-Modified-Since"` and `"If-None-Match"`. The client will be delivered
+	with the necessary `"Etag"` (generated from the path, size and last
+	modification time of the file) and `"Last-Modified"` headers.
+
+	The cache control directives `"Expires"` and `"Cache-Control"` will also be
+	emitted if the `HTTPFileServerSettings.maxAge` field is set to a positive
+	duration.
+
+	Finally, HEAD requests will automatically be handled without reading the
+	actual file contents. Am empty response body is written instead.
+
+	Params:
+		req = The incoming HTTP request - cache and modification headers of the
+			request can influence the generated response.
+		res = The response object to write to.
+		settings = Optional settings object enabling customization of how the
+			file gets served.
+*/
+void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings = null)
+{
+	static HTTPFileServerSettings default_settings;
+	if (!settings) {
+		if (!default_settings) default_settings = new HTTPFileServerSettings;
+		settings = default_settings;
+	}
+
+	sendFileImpl(req, res, path, settings);
+}
+
+
+/**
 	Configuration options for the static file server.
 */
 class HTTPFileServerSettings {
+	/// Prefix of the request path to strip before looking up files
 	string serverPathPrefix = "/";
+
+	/// Maximum cache age to report to the client (24 hours by default)
 	Duration maxAge;// = hours(24);
+
+	/// General options
 	HTTPFileServerOption options = HTTPFileServerOption.defaults; /// additional options
+
+	/** Maps from encoding scheme (e.g. "gzip") to file extension.
+
+		If a request accepts a supported encoding scheme, then the file server
+		will look for a file with the extension as a suffix and, if that exists,
+		sends it as the encoded representation instead of sending the original
+		file.
+
+		Example:
+			```
+			settings.encodingFileExtension["gzip"] = ".gz";
+			```
+	*/
 	string[string] encodingFileExtension;
 
 	/**
@@ -188,7 +263,7 @@ enum HTTPFileServerOption {
 }
 
 
-private void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings)
+private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings = null)
 {
 	auto pathstr = path.toNativeString();
 
@@ -207,7 +282,7 @@ private void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res,
 
 	if (dirent.isDirectory) {
 		if (settings.options & HTTPFileServerOption.serveIndexHTML)
-			return sendFile(req, res, path ~ "index.html", settings);
+			return sendFileImpl(req, res, path ~ "index.html", settings);
 		logDebugV("Hit directory when serving files, ignoring: %s", pathstr);
 		if (settings.options & HTTPFileServerOption.failIfNotFound)
 			throw new HTTPStatusException(HTTPStatus.NotFound);
