@@ -600,8 +600,11 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	s_requestContext = createRequestContext!overload(req, res);
 
 	// collect all parameter values
-	PARAMS params = void;
+	PARAMS params = void; // FIXME: in case of errors, destructors could be called on uninitialized variables!
 	foreach (i, PT; PARAMS) {
+		bool got_error = false;
+		ParamError err;
+		err.field = param_names[i];
 		try {
 			static if (IsAttributedParameter!(overload, param_names[i])) {
 				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
@@ -620,29 +623,39 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (is(PT == HTTPServerResponse) || is(PT == HTTPResponse)) params[i] = res;
 			else static if (is(PT == WebSocket)) {} // handled below
 			else static if (param_names[i].startsWith("_")) {
-				if (auto pv = param_names[i][1 .. $] in req.params) params[i].setVoid((*pv).webConvTo!PT);
-				else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
+				if (auto pv = param_names[i][1 .. $] in req.params) {
+					got_error = webConvTo(*pv, params[i], err);
+				} else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
-				static if (!is(default_values[i] == void)) {
-					if (!readFormParamRec(req, params[i], param_names[i], false))
+				enum has_default = !is(default_values[i] == void);
+				ParamResult pres = readFormParamRec(req, params[i], param_names[i], !has_default, err);
+				static if (has_default) {
+					if (pres == ParamResult.skipped)
 						params[i].setVoid(default_values[i]);
-				} else {
-					readFormParamRec(req, params[i], param_names[i], true);
-				}
+				} else assert(pres != ParamResult.skipped);
+
+				if (pres == ParamResult.error)
+					got_error = true;
 			}
 		} catch (HTTPStatusException ex) {
 			throw ex;
 		} catch (Exception ex) {
+			got_error = true;
+			err.text = ex.msg;
+			err.debugText = ex.toString().sanitize;
+		}
+
+		if (got_error) {
 			static if (erruda.found && ERROR.length == 0) {
-				auto err = erruda.value.getError(ex, param_names[i]);
-				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+				auto errnfo = erruda.value.getError(new Exception(err.text), err.field);
+				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, errnfo);
 				return;
 			} else {
-				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling parameter "~param_names[i]~": "~ex.msg);
-				hex.debugMessage = ex.toString().sanitize;
+				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling field "~err.field~": "~err.text);
+				hex.debugMessage = err.debugText;
 				throw hex;
 			}
 		}
