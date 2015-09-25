@@ -628,9 +628,20 @@ template isNullable(T) {
 static assert(isNullable!(Nullable!int));
 static assert(isNullable!(NullableW!int));
 
+package struct ParamError {
+	string field;
+	string text;
+	string debugText;
+}
+
+package enum ParamResult {
+	ok,
+	skipped,
+	error
+}
 
 // NOTE: dst is assumed to be uninitialized
-package bool readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required)
+package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required, ref ParamError err)
 {
 	import std.string;
 	import std.traits;
@@ -643,43 +654,62 @@ package bool readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string 
 		dst = T.init;
 		while (true) {
 			EL el = void;
-			if (!readFormParamRec(req, el, format("%s_%s", fieldname, idx), false))
-				break;
+			auto r = readFormParamRec(req, el, format("%s_%s", fieldname, idx), false, err);
+			if (r == ParamResult.error) return r;
+			if (r == ParamResult.skipped) break;
 			dst ~= el;
 			idx++;
 		}
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
-		if (readFormParamRec(req, el, fieldname, false))
+		auto r = readFormParamRec(req, el, fieldname, false, err);
+		if (r == ParamResult.ok)
 			dst.setVoid(el);
 		else dst.setVoid(T.init);
 	} else static if (is(T == struct) && !is(typeof(T.fromString(string.init))) && !is(typeof(T.fromStringValidate(string.init, null)))) {
-		foreach (m; __traits(allMembers, T))
-			if (!readFormParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required))
-				return false;
+		foreach (m; __traits(allMembers, T)) {
+			auto r = readFormParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required, err);
+			if (r != ParamResult.ok)
+				return r; // FIXME: in case of errors the struct will be only partially initialized! All previous fields should be deinitialized first.
+		}
 	} else static if (is(T == bool)) {
 		dst = (fieldname in req.form) !is null || (fieldname in req.query) !is null;
-	} else if (auto pv = fieldname in req.form) dst.setVoid((*pv).webConvTo!T);
-	else if (auto pv = fieldname in req.query) dst.setVoid((*pv).webConvTo!T);
-	else if (required) throw new HTTPStatusException(HTTPStatus.badRequest, "Missing parameter "~fieldname);
-	else return false;
-	return true;
+	} else if (auto pv = fieldname in req.form) {
+		if (!(*pv).webConvTo(dst, err)) {
+			err.field = fieldname;
+			return ParamResult.error;
+		}
+	} else if (auto pv = fieldname in req.query) {
+		if (!(*pv).webConvTo(dst, err)) {
+			err.field = fieldname;
+			return ParamResult.error;
+		}
+	} else if (required) {
+		err.field = fieldname;
+		err.text = "Missing form field.";
+		return ParamResult.error;
+	}
+	else return ParamResult.skipped;
+
+	return ParamResult.ok;
 }
 
-package T webConvTo(T)(string str)
+package bool webConvTo(T)(string str, ref T dst, ref ParamError err)
 {
 	import std.conv;
 	import std.exception;
-	string error;
-	static if (is(typeof(T.fromStringValidate(str, &error)))) {
-		static assert(is(typeof(T.fromStringValidate(str, &error)) == Nullable!T));
-		auto ret = T.fromStringValidate(str, &error);
-		enforceBadRequest(!ret.isNull(), error); // TODO: refactor internally to work without exceptions
-		return ret.get();
+	static if (is(typeof(T.fromStringValidate(str, &err.text)))) {
+		static assert(is(typeof(T.fromStringValidate(str, &err.text)) == Nullable!T));
+		auto res = T.fromStringValidate(str, &err.text);
+		if (res.isNull()) return false;
+		dst.setVoid(res);
 	} else static if (is(typeof(T.fromString(str)))) {
 		static assert(is(typeof(T.fromString(str)) == T));
-		return T.fromString(str);
-	} else return str.to!T();
+		dst.setVoid(T.fromString(str));
+	} else {
+		dst.setVoid(str.to!T());
+	}
+	return true;
 }
 
 // properly sets an uninitialized variable
