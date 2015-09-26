@@ -135,9 +135,9 @@ struct Json {
 	/**
 		Constructor for a JSON object.
 	*/
-	this(typeof(null)) { m_type = Type.null_; }
+	this(typeof(null)) @trusted { m_type = Type.null_; }
 	/// ditto
-	this(bool v) { m_type = Type.bool_; m_bool = v; }
+	this(bool v) @trusted { m_type = Type.bool_; m_bool = v; }
 	/// ditto
 	this(byte v) { this(cast(long)v); }
 	/// ditto
@@ -151,17 +151,17 @@ struct Json {
 	/// ditto
 	this(uint v) { this(cast(long)v); }
 	/// ditto
-	this(long v) { m_type = Type.int_; m_int = v; }
+	this(long v) @trusted { m_type = Type.int_; m_int = v; }
 	/// ditto
-	this(BigInt v) { m_type = Type.bigInt; initBigInt(); m_bigInt = v; }
+	this(BigInt v) @trusted { m_type = Type.bigInt; initBigInt(); m_bigInt = v; }
 	/// ditto
-	this(double v) { m_type = Type.float_; m_float = v; }
+	this(double v) @trusted { m_type = Type.float_; m_float = v; }
 	/// ditto
-	this(string v) { m_type = Type.string; m_string = v; }
+	this(string v) @trusted { m_type = Type.string; m_string = v; }
 	/// ditto
-	this(Json[] v) { m_type = Type.array; m_array = v; }
+	this(Json[] v) @trusted { m_type = Type.array; m_array = v; }
 	/// ditto
-	this(Json[string] v) { m_type = Type.object; m_object = v; }
+	this(Json[string] v) @trusted { m_type = Type.object; m_object = v; }
 
 	/**
 		Allows assignment of D values to a JSON value.
@@ -241,7 +241,7 @@ struct Json {
 	/**
 		The current type id of this JSON object.
 	*/
-	@property Type type() const { return m_type; }
+	@property Type type() const @safe { return m_type; }
 
 	/**
 		Clones a JSON value recursively.
@@ -339,7 +339,7 @@ struct Json {
 		Returns the number of entries of string, array or object typed JSON values.
 	*/
 	@property size_t length()
-	const {
+	const @trusted {
 		checkType!(string, Json[], Json[string])("property length");
 		switch(m_type){
 			case Type.string: return m_string.length;
@@ -353,7 +353,7 @@ struct Json {
 		Allows foreach iterating over JSON objects and arrays.
 	*/
 	int opApply(int delegate(ref Json obj) del)
-	{
+	@trusted {
 		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
 			foreach( ref v; m_array )
@@ -370,7 +370,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(int delegate(ref const Json obj) del)
-	const {
+	const @trusted {
 		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
 			foreach( ref v; m_array )
@@ -387,7 +387,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(int delegate(ref size_t idx, ref Json obj) del)
-	{
+	@trusted {
 		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
 			if( auto ret = del(idx, v) )
@@ -396,7 +396,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(int delegate(ref size_t idx, ref const Json obj) del)
-	const {
+	const @trusted {
 		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
 			if( auto ret = del(idx, v) )
@@ -405,7 +405,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(int delegate(ref string idx, ref Json obj) del)
-	{
+	@trusted {
 		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
 			if( v.type != Type.undefined )
@@ -415,7 +415,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(int delegate(ref string idx, ref const Json obj) del)
-	const {
+	const @trusted {
 		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
 			if( v.type != Type.undefined )
@@ -444,7 +444,7 @@ struct Json {
 	inout(T) opCast(T)() inout { return get!T; }
 	/// ditto
 	@property inout(T) get(T)()
-	inout {
+	inout @trusted {
 		static if (!is(T : bool) && is(T : long))
 			checkType!(long, BigInt)();
 		else
@@ -931,10 +931,25 @@ struct Json {
 		See_Also: writeJsonString, toPrettyString
 	*/
 	string toString()
-	const {
+	const @trusted {
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
 		auto ret = appender!string();
 		writeJsonString(ret, this);
 		return ret.data;
+	}
+	/// ditto
+	void toString(scope void delegate(const(char)[]) @safe sink, FormatSpec!char fmt)
+	@trusted {
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
+		static struct DummyRange {
+			void delegate(const(char)[]) @safe sink;
+			void put(const(char)[] str) @safe { sink(str); }
+			void put(char ch) @trusted { sink((&ch)[0 .. 1]); }
+		}
+		auto r = DummyRange(sink);
+		writeJsonString(r, this);
 	}
 
 	/**
@@ -1020,6 +1035,12 @@ struct Json {
 	{
 		assert(m_type >= Type.Undefined && m_type <= Type.Object);
 	}*/
+}
+
+@safe unittest { // issue #1234 - @safe toString
+	auto j = Json(true);
+	j.toString((str){}, FormatSpec!char("s"));
+	assert(j.toString() == "true");
 }
 
 
@@ -1965,7 +1986,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.null_: dst.put("null"); break;
 		case Json.Type.bool_: dst.put(cast(bool)json ? "true" : "false"); break;
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
-		case Json.Type.bigInt: formattedWrite(dst, "%d", json.get!BigInt); break;
+		case Json.Type.bigInt: () @trusted { formattedWrite(dst, "%d", json.get!BigInt); } (); break;
 		case Json.Type.float_:
 			auto d = json.get!double;
 			if (d != d)
