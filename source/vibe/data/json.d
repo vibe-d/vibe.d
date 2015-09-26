@@ -1039,7 +1039,7 @@ struct Json {
 
 @safe unittest { // issue #1234 - @safe toString
 	auto j = Json(true);
-	j.toString((str){}, FormatSpec!char("s"));
+	j.toString((str) @safe {}, FormatSpec!char("s"));
 	assert(j.toString() == "true");
 }
 
