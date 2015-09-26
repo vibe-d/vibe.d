@@ -951,6 +951,19 @@ struct Json {
 		auto r = DummyRange(sink);
 		writeJsonString(r, this);
 	}
+	/// ditto
+	void toString(scope void delegate(const(char)[]) @system sink, FormatSpec!char fmt)
+	{
+		// DMD BUG: this should actually be all @safe, but for some reason
+		// @safe inference for writeJsonString doesn't work.
+		static struct DummyRange {
+			void delegate(const(char)[]) @safe sink;
+			void put(const(char)[] str) @safe { sink(str); }
+			void put(char ch) @trusted { sink((&ch)[0 .. 1]); }
+		}
+		auto r = DummyRange(sink);
+		writeJsonString(r, this);
+	}
 
 	/**
 		Returns the JSON object as a "pretty" string.
