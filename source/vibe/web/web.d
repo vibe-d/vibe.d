@@ -624,7 +624,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (is(PT == WebSocket)) {} // handled below
 			else static if (param_names[i].startsWith("_")) {
 				if (auto pv = param_names[i][1 .. $] in req.params) {
-					got_error = webConvTo(*pv, params[i], err);
+					got_error = !webConvTo(*pv, params[i], err);
 				} else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
