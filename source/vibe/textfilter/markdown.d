@@ -77,8 +77,14 @@ void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = 
 }
 
 final class MarkdownSettings {
+	/// Controls the capabilities of the parser.
 	MarkdownFlags flags = MarkdownFlags.vanillaMarkdown;
+
+	/// Heading tags will start at this level.
 	size_t headingBaseLevel = 1;
+
+	/// Called for every link/image URL to perform arbitrary transformations.
+	string delegate(string) linkFilter;
 }
 
 enum MarkdownFlags {
@@ -444,6 +450,10 @@ private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRe
 /// private
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, scope MarkdownSettings settings)
 {
+	string filterLink(string lnk) {
+		return settings.linkFilter ? settings.linkFilter(lnk) : lnk;
+	}
+
 	bool br = ln.endsWith("  ");
 	while( ln.length > 0 ){
 		switch( ln[0] ){
@@ -496,7 +506,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<a href=\"");
-					filterHTMLAttribEscape(dst, link.url);
+					filterHTMLAttribEscape(dst, filterLink(link.url));
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
@@ -515,7 +525,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<img src=\"");
-					filterHTMLAttribEscape(dst, link.url);
+					filterHTMLAttribEscape(dst, filterLink(link.url));
 					dst.put("\" alt=\"");
 					filterHTMLAttribEscape(dst, link.text);
 					dst.put("\"");
@@ -544,7 +554,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
 					if( is_email ) filterHTMLAllEscape(dst, url);
-					else filterHTMLAttribEscape(dst, url);
+					else filterHTMLAttribEscape(dst, filterLink(url));
 					dst.put("\">");
 					if( is_email ) filterHTMLAllEscape(dst, url[7 .. $]);
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
