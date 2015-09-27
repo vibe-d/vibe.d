@@ -614,7 +614,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 }
 
 
-string generateRestClientMethods(I)()
+private string generateRestClientMethods(I)()
 {
 	import std.array : join;
 	import std.string : format;
@@ -651,7 +651,7 @@ string generateRestClientMethods(I)()
 }
 
 
-auto executeClientMethod(I, size_t ridx, ARGS...)
+private auto executeClientMethod(I, size_t ridx, ARGS...)
 	(in ref RestInterface!I intf, void delegate(HTTPClientRequest) request_filter)
 {
 	import vibe.web.internal.rest.common : ParameterKind;
