@@ -32,7 +32,7 @@ Instead of explicitly installing vibe.d, it is recommended to use
 applications. Once DUB is installed, you can create and run a new project
 using the following shell commands:
 
-    dub init <name> vibe.d
+    dub init <name> -t vibe.d
     cd <name>
     dub
 
@@ -87,15 +87,15 @@ Install vibe.d's dependencies (*)
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_i386.deb"
-    sudo dpkg -i dmd_2.066.1-0_i386.deb
+    wget "http://downloads.dlang.org/releases/2.x/2.068.2/dmd_2.068.2-0_i386.deb"
+    sudo dpkg -i dmd_2.068.2-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_amd64.deb"
-    sudo dpkg -i dmd_2.066.1-0_amd64.deb
+    wget "http://downloads.dlang.org/releases/2.x/2.068.2/dmd_2.068.2-0_amd64.deb"
+    sudo dpkg -i dmd_2.068.2-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.
