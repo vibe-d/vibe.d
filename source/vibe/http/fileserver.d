@@ -208,9 +208,9 @@ class HTTPFileServerSettings {
 		file.
 
 		Example:
-			```
+			---
 			settings.encodingFileExtension["gzip"] = ".gz";
-			```
+			---
 	*/
 	string[string] encodingFileExtension;
 
