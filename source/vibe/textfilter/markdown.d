@@ -84,7 +84,7 @@ final class MarkdownSettings {
 	size_t headingBaseLevel = 1;
 
 	/// Called for every link/image URL to perform arbitrary transformations.
-	string delegate(string) linkFilter;
+	string delegate(string url_or_path, bool is_image) urlFilter;
 }
 
 enum MarkdownFlags {
@@ -450,8 +450,8 @@ private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRe
 /// private
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, scope MarkdownSettings settings)
 {
-	string filterLink(string lnk) {
-		return settings.linkFilter ? settings.linkFilter(lnk) : lnk;
+	string filterLink(string lnk, bool is_image) {
+		return settings.urlFilter ? settings.urlFilter(lnk, is_image) : lnk;
 	}
 
 	bool br = ln.endsWith("  ");
@@ -506,7 +506,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<a href=\"");
-					filterHTMLAttribEscape(dst, filterLink(link.url));
+					filterHTMLAttribEscape(dst, filterLink(link.url, false));
 					dst.put("\"");
 					if( link.title.length ){
 						dst.put(" title=\"");
@@ -525,7 +525,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				Link link;
 				if( parseLink(ln, link, linkrefs) ){
 					dst.put("<img src=\"");
-					filterHTMLAttribEscape(dst, filterLink(link.url));
+					filterHTMLAttribEscape(dst, filterLink(link.url, true));
 					dst.put("\" alt=\"");
 					filterHTMLAttribEscape(dst, link.text);
 					dst.put("\"");
@@ -554,7 +554,7 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
 					if( is_email ) filterHTMLAllEscape(dst, url);
-					else filterHTMLAttribEscape(dst, filterLink(url));
+					else filterHTMLAttribEscape(dst, filterLink(url, false));
 					dst.put("\">");
 					if( is_email ) filterHTMLAllEscape(dst, url[7 .. $]);
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
