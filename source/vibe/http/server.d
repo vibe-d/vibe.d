@@ -551,6 +551,9 @@ final class HTTPServerRequest : HTTPRequest {
 		/// ditto
 		NetworkAddress clientAddress;
 
+		/// Determines if the request should be logged to the access log file.
+		bool noLog;
+
 		/// Determines if the request was issued over an TLS encrypted channel.
 		bool tls;
 
@@ -725,7 +728,7 @@ final class HTTPServerRequest : HTTPRequest {
 		return url;
 	}
 
-	/** The relative path the the root folder.
+	/** The relative path to the root folder.
 
 		Using this function instead of absolute URLs for embedded links can be
 		useful to avoid dead link when the site is piped through a
@@ -1758,9 +1761,11 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 	}
 
-	// log the request to access log
-	foreach (log; context.loggers)
-		log.log(req, res);
+	if (!req.noLog) {
+		// log the request to access log
+		foreach (log; context.loggers)
+			log.log(req, res);
+	}
 
 	logTrace("return %s (used pool memory: %s/%s)", keep_alive, request_allocator.allocatedSize, request_allocator.totalSize);
 	return keep_alive != false;
