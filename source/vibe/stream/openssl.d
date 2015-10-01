@@ -324,7 +324,7 @@ final class OpenSSLStream : TLSStream {
 		foreach (string alpn_val; alpn_list)
 			len += alpn_val.length + 1;
 		alpn = allocArray!ubyte(manualAllocator(), len);
-		
+
 		size_t i;
 		foreach (string alpn_val; alpn_list)
 		{
@@ -336,7 +336,7 @@ final class OpenSSLStream : TLSStream {
 
 		static if (haveALPN)
 			SSL_set_alpn_protos(m_ssl, cast(const char*) alpn.ptr, cast(uint) len);
-		
+
 		freeArray(manualAllocator(), alpn);
 	}
 }
@@ -372,18 +372,22 @@ final class OpenSSLContext : TLSContext {
 		final switch (kind) {
 			case TLSContextKind.client:
 				final switch (ver) {
-					case TLSVersion.any: method = SSLv23_client_method(); break;
+					case TLSVersion.any: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: method = SSLv3_client_method(); break;
 					case TLSVersion.tls1: method = TLSv1_client_method(); break;
+					case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
+					case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
 					case TLSVersion.dtls1: method = DTLSv1_client_method(); break;
 				}
 				break;
 			case TLSContextKind.server:
 			case TLSContextKind.serverSNI:
 				final switch (ver) {
-					case TLSVersion.any: method = SSLv23_server_method(); break;
+					case TLSVersion.any: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: method = SSLv3_server_method(); break;
 					case TLSVersion.tls1: method = TLSv1_server_method(); break;
+					case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
+					case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
 					case TLSVersion.dtls1: method = DTLSv1_server_method(); break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
@@ -441,7 +445,7 @@ final class OpenSSLContext : TLSContext {
 
 	/// The kind of SSL context (client/server)
 	@property TLSContextKind kind() const { return m_kind; }
-		
+
 	/// Callback function invoked by server to choose alpn
 	@property void alpnCallback(string delegate(string[]) alpn_chooser)
 	{
@@ -924,7 +928,7 @@ private nothrow extern(C)
 {
 	import core.stdc.config;
 
-	
+
 	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input, uint inlen, void* arg) {
 		logDebug("Got chooser input: %s", input[0 .. inlen]);
 		OpenSSLContext ctx = cast(OpenSSLContext) arg;
