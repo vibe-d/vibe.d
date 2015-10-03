@@ -11,6 +11,7 @@
 module vibe.utils.memory;
 
 import vibe.core.log;
+import vibe.internal.meta.traits : synchronizedIsNothrow;
 
 import core.exception : OutOfMemoryError;
 import core.stdc.stdlib;
@@ -122,10 +123,7 @@ class LockAllocator : Allocator {
 	}
 	this(Allocator base) nothrow { m_base = base; }
 	void[] alloc(size_t sz) {
-		// Since 2068, synchronized statements are annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2069)
+		static if (!synchronizedIsNothrow)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
 
 		synchronized (this)
@@ -137,10 +135,7 @@ class LockAllocator : Allocator {
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
 		}
 		body {
-			// Since 2068, synchronized statements are annotated nothrow.
-			// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-			// However, they were "logically" nothrow before.
-			static if (__VERSION__ <= 2069)
+			static if (!synchronizedIsNothrow)
 				scope (failure) assert(0, "Internal error: function should be nothrow");
 
 			synchronized(this)
@@ -152,10 +147,7 @@ class LockAllocator : Allocator {
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
 		}
 		body {
-			// Since 2068, synchronized statements are annotated nothrow.
-			// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-			// However, they were "logically" nothrow before.
-			static if (__VERSION__ <= 2069)
+			static if (!synchronizedIsNothrow)
 				scope (failure) assert(0, "Internal error: function should be nothrow");
 			synchronized(this)
 				m_base.free(mem);

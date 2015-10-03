@@ -16,6 +16,7 @@ import vibe.core.drivers.threadedfile;
 import vibe.core.drivers.timerqueue;
 import vibe.core.drivers.utils;
 import vibe.core.log;
+import vibe.internal.meta.traits : synchronizedIsNothrow;
 import vibe.utils.array : ArraySet;
 import vibe.utils.hashmap;
 import vibe.utils.memory;
@@ -621,10 +622,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	void emit()
 	{
-		// Since 2068, synchronized statements are annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2069)
+		static if (!synchronizedIsNothrow)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
 
 		atomicOp!"+="(m_emitCount, 1);
