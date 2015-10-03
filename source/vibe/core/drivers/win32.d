@@ -17,6 +17,7 @@ import vibe.core.drivers.utils;
 import vibe.core.log;
 import vibe.inet.url;
 import vibe.internal.win32;
+import vibe.internal.meta.traits : synchronizedIsNothrow;
 import vibe.utils.array;
 import vibe.utils.hashmap;
 
@@ -461,7 +462,9 @@ final class Win32ManualEvent : ManualEvent {
 
 	void acquire()
 	nothrow {
-		static if (__VERSION__ <= 2068) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		static if (!synchronizedIsNothrow)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		synchronized(m_mutex)
 		{
 			m_listeners[Task.getThis()] = cast(Win32EventDriver)getEventDriver();
@@ -470,7 +473,9 @@ final class Win32ManualEvent : ManualEvent {
 
 	void release()
 	nothrow {
-		static if (__VERSION__ <= 2068) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		static if (!synchronizedIsNothrow)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto self = Task.getThis();
 		synchronized(m_mutex)
 		{
@@ -481,7 +486,9 @@ final class Win32ManualEvent : ManualEvent {
 
 	bool amOwner()
 	nothrow {
-		static if (__VERSION__ <= 2068) scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below
+		static if (!synchronizedIsNothrow)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		synchronized(m_mutex)
 		{
 			return (Task.getThis() in m_listeners) !is null;
