@@ -1,0 +1,7 @@
+{
+	"name": "1140",
+	"dependencies": {
+		"vibe-d": { "path": "../../" }
+	},
+	"versions": ["VibeDefaultMain"]
+}
