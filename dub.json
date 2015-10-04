@@ -29,6 +29,14 @@
 	"sourcePaths": [],
 	"sourceFiles": ["source/vibe/d.d", "source/vibe/vibe.d"],
 
+	"configurations": [
+		{"name": "libevent", "subConfigurations": {":core": "libevent"}},
+		{"name": "libasync", "subConfigurations": {":core": "libasync"}},
+		{"name": "libev", "subConfigurations": {":core": "libev"}},
+		{"name": "win32", "subConfigurations": {":core": "win32"}},
+		{"name": "winrt", "subConfigurations": {":core": "winrt"}}
+	],
+
 	"subPackages": [
 		{
 			"name": "core",
