@@ -8,7 +8,7 @@ import std.stdio;
 shared static this()
 {
 	string argtest;
-	getOption("argtest", &argtest, "Test argument");
+	readOption("argtest", &argtest, "Test argument");
 	writeln("argtest=", argtest);
 }
 
