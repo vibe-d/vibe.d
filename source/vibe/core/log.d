@@ -290,7 +290,7 @@ final class FileLogger : Logger {
 			case Format.thread: m_curFile.writef("[%08X:%08X %s] ", msg.threadID, msg.fiberID, pref); break;
 			case Format.threadTime:
 				auto tm = msg.time;
-				m_curFile.writefln("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
+				m_curFile.writef("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
 					msg.threadID, msg.fiberID,
 					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,
 					pref);
