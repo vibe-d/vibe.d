@@ -52,17 +52,11 @@
 			},
 
 			"targetType": "library",
-			"mainSourceFile": "source/vibe/appmain.d",
+			"mainSourceFile": "core/vibe/appmain.d",
 			"buildRequirements": ["requireBoundsCheck"],
 
-			"sourcePaths": [
-				"source/vibe/core",
-				"source/vibe/crypto",
-				"source/vibe/inet",
-				"source/vibe/stream",
-				"source/vibe/textfilter",
-			],
-
+			"sourcePaths": ["core"],
+			"importPaths": ["core"],
 
 			"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
 			"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
@@ -111,56 +105,64 @@
 			"name": "utils",
 			"description": "Low level utility functionality",
 			"targetType": "library",
-			"sourcePaths": ["source/vibe/utils", "source/vibe/internal"]
+			"sourcePaths": ["utils"],
+			"importPaths": ["utils"],
 		},
 		{
 			"name": "data",
 			"description": "Data format and serialization support",
 			"targetType": "library",
 			"dependencies": {"vibe-d:utils": "*"},
-			"sourcePaths": ["source/vibe/data"]
+			"sourcePaths": ["data"],
+			"importPaths": ["data"],
 		},
 		{
 			"name": "http",
 			"description": "HTTP server and client implementation and higher level HTTP functionality",
 			"targetType": "library",
 			"dependencies": {"vibe-d:core": "*", "vibe-d:data": "*"},
-			"sourcePaths": ["source/vibe/http"],
+			"sourcePaths": ["http"],
+			"importPaths": ["http"],
 		},
 		{
 			"name": "mail",
 			"description": "SMTP client support",
 			"targetType": "library",
 			"dependencies": {"vibe-d:core": "*"},
-			"sourcePaths": ["source/vibe/mail"],
+			"sourcePaths": ["mail"],
+			"importPaths": ["mail"],
 		},
 		{
 			"name": "diet",
 			"description": "Diet HTML template system",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*"},
-			"sourcePaths": ["source/vibe/templ"],
+			"sourcePaths": ["diet"],
+			"importPaths": ["diet"],
 		},
 		{
 			"name": "mongodb",
 			"description": "MongoDB database client implementation",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*"},
-			"sourcePaths": ["source/vibe/db/mongo"],
+			"sourcePaths": ["mongodb"],
+			"importPaths": ["mongodb"],
 		},
 		{
 			"name": "redis",
 			"description": "Redis database client implementation",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*"},
-			"sourcePaths": ["source/vibe/db/redis"],
+			"sourcePaths": ["redis"],
+			"importPaths": ["redis"],
 		},
 		{
 			"name": "web",
 			"description": "High level web and REST service framework",
 			"targetType": "library",
 			"dependencies": {"vibe-d:http": "*", "vibe-d:diet": "*"},
-			"sourcePaths": ["source/vibe/web"],
+			"sourcePaths": ["web"],
+			"importPaths": ["web"],
 		}
 	],
 
