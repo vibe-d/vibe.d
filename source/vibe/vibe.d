@@ -32,7 +32,6 @@ public import vibe.http.client;
 public import vibe.http.fileserver;
 public import vibe.http.form;
 public import vibe.http.proxy;
-public import vibe.http.rest;
 public import vibe.http.router;
 public import vibe.http.server;
 public import vibe.http.websockets;
