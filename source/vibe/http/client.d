@@ -272,7 +272,8 @@ final class HTTPClient {
 	*/
 	static void setTLSSetupCallback(void function(TLSContext) func) { ms_tlsSetup = func; }
 
-	/// Compatibility alias - will be deprecated soon.
+	/// Deprecated compatibility alias.
+	deprecated("Use setTLSSetupCallback instead.")
 	alias setSSLSetupCallback = setTLSSetupCallback;
 
 	/**

@@ -641,14 +641,16 @@ struct Bson {
 		return 0;
 	}
 
-	/** Scheduled for deprecation, please use `opIndex` instead.
+	/** Deprecated, please use `opIndex` instead.
 
 		Allows to access existing fields of a JSON object using dot syntax.
 
 		Returns a null value for non-existent fields.
 	*/
+	deprecated("Use opIndex instead.")
 	@property inout(Bson) opDispatch(string prop)() inout { return opIndex(prop); }
 	/// ditto
+	deprecated("Use opIndexAssign instead.")
 	@property void opDispatch(string prop, T)(T val) { opIndexAssign(val, prop); }
 
 	///
@@ -1014,86 +1016,8 @@ struct BsonRegex {
 */
 Bson serializeToBson(T)(T value, ubyte[] buffer = null)
 {
-	version (VibeOldSerialization) {
-		return serializeToBsonOld(value);
-	} else {
-		return serialize!BsonSerializer(value, buffer);
-	}
+	return serialize!BsonSerializer(value, buffer);
 }
-
-/// private
-deprecated("VibeOldSerialization is deprecated, please migrate to the new serialization framework.")
-Bson serializeToBsonOld(T)(T value)
-{
-	import vibe.internal.meta.traits;
-
-	alias Unqualified = Unqual!T;
-	static if (is(Unqualified == Bson)) return value;
-	else static if (is(Unqualified == Json)) return Bson.fromJson(value);
-	else static if (is(Unqualified == BsonBinData)) return Bson(value);
-	else static if (is(Unqualified == BsonObjectID)) return Bson(value);
-	else static if (is(Unqualified == BsonDate)) return Bson(value);
-	else static if (is(Unqualified == BsonTimestamp)) return Bson(value);
-	else static if (is(Unqualified == BsonRegex)) return Bson(value);
-	else static if (is(Unqualified == DateTime)) return Bson(BsonDate(value, UTC()));
-	else static if (is(Unqualified == SysTime)) return Bson(BsonDate(value));
-	else static if (is(Unqualified == Date)) return Bson(BsonDate(value, UTC()));
-	else static if (is(Unqualified == typeof(null))) return Bson(null);
-	else static if (is(Unqualified == bool)) return Bson(value);
-	else static if (is(Unqualified == float)) return Bson(cast(double)value);
-	else static if (is(Unqualified == double)) return Bson(value);
-	else static if (is(Unqualified : int)) return Bson(cast(int)value);
-	else static if (is(Unqualified : long)) return Bson(cast(long)value);
-	else static if (is(Unqualified : string)) return Bson(value);
-	else static if (is(Unqualified : const(ubyte)[])) return Bson(BsonBinData(BsonBinData.Type.generic, value.idup));
-	else static if (isArray!T) {
-		auto ret = new Bson[value.length];
-		foreach (i; 0 .. value.length)
-			ret[i] = serializeToBson(value[i]);
-		return Bson(ret);
-	} else static if (isAssociativeArray!T) {
-		Bson[string] ret;
-		alias TK = KeyType!T;
-		foreach (key, value; value) {
-			static if(is(TK == string)) {
-				ret[key] = serializeToBson(value);
-			} else static if (is(TK == enum)) {
-				ret[to!string(key)] = serializeToBson(value);
-			} else static if (isStringSerializable!(TK)) {
-				ret[key.toString()] = serializeToBson(value);
-			} else static assert("AA key type %s not supported for BSON serialization.");
-		}
-		return Bson(ret);
-	} else static if (isBsonSerializable!Unqualified) {
-		return value.toBson();
-	} else static if (isJsonSerializable!Unqualified) {
-		return Bson.fromJson(value.toJson());
-	} else static if (isStringSerializable!Unqualified) {
-		return Bson(value.toString());
-	} else static if (is(Unqualified == struct)) {
-		Bson[string] ret;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWField!(Unqualified, m)) {
-				auto mv = __traits(getMember, value, m);
-				ret[underscoreStrip(m)] = serializeToBson(mv);
-			}
-		}
-		return Bson(ret);
-	} else static if (is(Unqualified == class)) {
-		if (value is null) return Bson(null);
-		Bson[string] ret;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWField!(Unqualified, m)) {
-				auto mv = __traits(getMember, value, m);
-				ret[underscoreStrip(m)] = serializeToBson(mv);
-			}
-		}
-		return Bson(ret);
-	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
-	}
-}
-
 
 
 template deserializeBson(T)
@@ -1112,93 +1036,7 @@ template deserializeBson(T)
 	/// ditto
 	T deserializeBson(Bson src)
 	{
-		version (VibeOldSerialization) {
-			return deserializeBsonOld!T(src);
-		} else {
-			return deserialize!(BsonSerializer, T)(src);
-		}
-	}
-}
-
-/// private
-T deserializeBsonOld(T)(Bson src)
-{
-	import vibe.internal.meta.traits;
-
-	static if (is(T == Bson)) return src;
-	else static if (is(T == Json)) return src.toJson();
-	else static if (is(T == BsonBinData)) return cast(T)src;
-	else static if (is(T == BsonObjectID)) return cast(T)src;
-	else static if (is(T == BsonDate)) return cast(T)src;
-	else static if (is(T == BsonTimestamp)) return cast(T)src;
-	else static if (is(T == BsonRegex)) return cast(T)src;
-	else static if (is(T == SysTime)) return src.get!BsonDate().toSysTime();
-	else static if (is(T == DateTime)) return cast(DateTime)src.get!BsonDate().toSysTime();
-	else static if (is(T == Date)) return cast(Date)src.get!BsonDate().toSysTime();
-	else static if (is(T == typeof(null))) return null;
-	else static if (is(T == bool)) return cast(bool)src;
-	else static if (is(T == float)) return cast(double)src;
-	else static if (is(T == double)) return cast(double)src;
-	else static if (is(T : int)) return cast(T)cast(int)src;
-	else static if (is(T : long)) return cast(T)cast(long)src;
-	else static if (is(T : string)) return cast(T)(cast(string)src);
-	else static if (is(T : const(ubyte)[])) return cast(T)src.get!BsonBinData.rawData.dup;
-	else static if (isArray!T) {
-		alias TV = typeof(T.init[0]) ;
-		auto ret = new Unqual!TV[src.length];
-		foreach (size_t i, v; cast(Bson[])src)
-			ret[i] = deserializeBson!(Unqual!TV)(v);
-		return ret;
-	} else static if (isAssociativeArray!T) {
-		alias TV = typeof(T.init.values[0]) ;
-		alias TK = KeyType!T;
-		Unqual!TV[TK] dst;
-		foreach (string key, value; src) {
-			static if (is(TK == string)) {
-				dst[key] = deserializeBson!(Unqual!TV)(value);
-			} else static if (is(TK == enum)) {
-				dst[to!(TK)(key)] = deserializeBson!(Unqual!TV)(value);
-			} else static if (isStringSerializable!TK) {
-				auto dsk = TK.fromString(key);
-				dst[dsk] = deserializeBson!(Unqual!TV)(value);
-			} else static assert("AA key type %s not supported for BSON serialization.");
-		}
-		return dst;
-	} else static if (isBsonSerializable!T) {
-		return T.fromBson(src);
-	} else static if (isJsonSerializable!T) {
-		return T.fromJson(src.toJson());
-	} else static if (isStringSerializable!T) {
-		return T.fromString(cast(string)src);
-	} else static if (is(T == struct)) {
-		T dst;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias TM = typeof(__traits(getMember, dst, m)) ;
-				debug enforce(!src[underscoreStrip(m)].isNull() || is(TM == class) || isPointer!TM || is(TM == typeof(null)),
-					"Missing field '"~underscoreStrip(m)~"'.");
-				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
-			}
-		}
-		return dst;
-	} else static if (is(T == class)) {
-		if (src.isNull()) return null;
-		auto dst = new T;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias TM = typeof(__traits(getMember, dst, m)) ;
-				__traits(getMember, dst, m) = deserializeBson!TM(src[underscoreStrip(m)]);
-			}
-		}
-		return dst;
-	} else static if (isPointer!T) {
-		if (src.type == Bson.Type.null_) return null;
-		alias TD = typeof(*T.init) ;
-		dst = new TD;
-		*dst = deserializeBson!TD(src);
-		return dst;
-	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for BSON serialization.");
+		return deserialize!(BsonSerializer, T)(src);
 	}
 }
 

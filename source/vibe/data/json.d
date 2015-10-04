@@ -828,12 +828,14 @@ struct Json {
 		m_array ~= element;
 	}
 
-	/** Scheduled for deprecation, please use `opIndex` instead.
+	/** Deprecated, please use `opIndex` instead.
 
 		Allows to access existing fields of a JSON object using dot syntax.
 	*/
+	deprecated("Use opIndex instead")
 	@property const(Json) opDispatch(string prop)() const { return opIndex(prop); }
 	/// ditto
+	deprecated("Use opIndex instead")
 	@property ref Json opDispatch(string prop)() { return opIndex(prop); }
 
 	/**
@@ -1255,11 +1257,7 @@ unittest {
 */
 Json serializeToJson(T)(T value)
 {
-	version (VibeOldSerialization) {
-		return serializeToJsonOld(value);
-	} else {
-		return serialize!JsonSerializer(value);
-	}
+	return serialize!JsonSerializer(value);
 }
 /// ditto
 void serializeToJson(R, T)(R destination, T value)
@@ -1334,74 +1332,6 @@ unittest {
 }
 
 
-/// private
-deprecated("VibeOldSerialization is deprecated, please migrate to the new serialization framework.")
-Json serializeToJsonOld(T)(T value)
-{
-	import vibe.internal.meta.traits;
-
-	alias TU = Unqual!T;
-	static if (is(TU == Json)) return value;
-	else static if (is(TU == typeof(null))) return Json(null);
-	else static if (is(TU == bool)) return Json(value);
-	else static if (is(TU == float)) return Json(cast(double)value);
-	else static if (is(TU == double)) return Json(value);
-	else static if (is(TU == DateTime)) return Json(value.toISOExtString());
-	else static if (is(TU == SysTime)) return Json(value.toISOExtString());
-	else static if (is(TU == Date)) return Json(value.toISOExtString());
-	else static if (is(TU == BigInt)) return Json(value);
-	else static if (is(TU : long)) return Json(cast(long)value);
-	else static if (is(TU : string)) return Json(value);
-	else static if (isArray!T) {
-		auto ret = new Json[value.length];
-		foreach (i; 0 .. value.length)
-			ret[i] = serializeToJson(value[i]);
-		return Json(ret);
-	} else static if (isAssociativeArray!TU) {
-		Json[string] ret;
-		alias TK = KeyType!T;
-		foreach (key, value; value) {
-			static if(is(TK == string)) {
-				ret[key] = serializeToJson(value);
-			} else static if (is(TK == enum)) {
-				ret[to!string(key)] = serializeToJson(value);
-			} else static if (isStringSerializable!(TK)) {
-				ret[key.toString()] = serializeToJson(value);
-			} else static assert("AA key type %s not supported for JSON serialization.");
-		}
-		return Json(ret);
-	} else static if (isJsonSerializable!TU) {
-		return value.toJson();
-	} else static if (isStringSerializable!TU) {
-		return Json(value.toString());
-	} else static if (is(TU == struct)) {
-		Json[string] ret;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWField!(TU, m)) {
-				auto mv = __traits(getMember, value, m);
-				ret[underscoreStrip(m)] = serializeToJson(mv);
-			}
-		}
-		return Json(ret);
-	} else static if(is(TU == class)) {
-		if (value is null) return Json(null);
-		Json[string] ret;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWField!(TU, m)) {
-				auto mv = __traits(getMember, value, m);
-				ret[underscoreStrip(m)] = serializeToJson(mv);
-			}
-		}
-		return Json(ret);
-	} else static if (isPointer!TU) {
-		if (value is null) return Json(null);
-		return serializeToJson(*value);
-	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
-	}
-}
-
-
 /**
 	Deserializes a JSON value into the destination variable.
 
@@ -1416,90 +1346,13 @@ void deserializeJson(T)(ref T dst, Json src)
 /// ditto
 T deserializeJson(T)(Json src)
 {
-	version (VibeOldSerialization) {
-		return deserializeJsonOld!T(src);
-	} else {
-		return deserialize!(JsonSerializer, T)(src);
-	}
+	return deserialize!(JsonSerializer, T)(src);
 }
 /// ditto
 T deserializeJson(T, R)(R input)
 	if (isInputRange!R && !is(R == Json))
 {
 	return deserialize!(JsonStringSerializer!R, T)(input);
-}
-
-/// private
-T deserializeJsonOld(T)(Json src)
-{
-	import vibe.internal.meta.traits;
-
-	static if( is(T == struct) || isSomeString!T || isIntegral!T || isFloatingPoint!T )
-		if( src.type == Json.Type.null_ ) return T.init;
-	static if (is(T == Json)) return src;
-	else static if (is(T == typeof(null))) { return null; }
-	else static if (is(T == bool)) return src.get!bool;
-	else static if (is(T == float)) return src.to!float;   // since doubles are frequently serialized without
-	else static if (is(T == double)) return src.to!double; // a decimal point, we allow conversions here
-	else static if (is(T == DateTime)) return DateTime.fromISOExtString(src.get!string);
-	else static if (is(T == SysTime)) return SysTime.fromISOExtString(src.get!string);
-	else static if (is(T == Date)) return Date.fromISOExtString(src.get!string);
-	else static if (is(T == BigInt)) return cast(T)src.get!BigInt;
-	else static if (is(T : long)) return cast(T)src.get!long;
-	else static if (is(T : string)) return cast(T)src.get!string;
-	else static if (isArray!T) {
-		alias TV = typeof(T.init[0]) ;
-		auto dst = new Unqual!TV[src.length];
-		foreach (size_t i, v; src)
-			dst[i] = deserializeJson!(Unqual!TV)(v);
-		return cast(T)dst;
-	} else static if( isAssociativeArray!T ) {
-		alias TV = typeof(T.init.values[0]) ;
-		alias TK = KeyType!T;
-		Unqual!TV[TK] dst;
-		foreach (string key, value; src) {
-			static if (is(TK == string)) {
-				dst[key] = deserializeJson!(Unqual!TV)(value);
-			} else static if (is(TK == enum)) {
-				dst[to!(TK)(key)] = deserializeJson!(Unqual!TV)(value);
-			} else static if (isStringSerializable!TK) {
-				auto dsk = TK.fromString(key);
-				dst[dsk] = deserializeJson!(Unqual!TV)(value);
-			} else static assert("AA key type %s not supported for JSON serialization.");
-		}
-		return dst;
-	} else static if (isJsonSerializable!T) {
-		return T.fromJson(src);
-	} else static if (isStringSerializable!T) {
-		return T.fromString(src.get!string);
-	} else static if (is(T == struct)) {
-		T dst;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias TM = typeof(__traits(getMember, dst, m)) ;
-				__traits(getMember, dst, m) = deserializeJson!TM(src[underscoreStrip(m)]);
-			}
-		}
-		return dst;
-	} else static if (is(T == class)) {
-		if (src.type == Json.Type.null_) return null;
-		auto dst = new T;
-		foreach (m; __traits(allMembers, T)) {
-			static if (isRWPlainField!(T, m) || isRWField!(T, m)) {
-				alias TM = typeof(__traits(getMember, dst, m)) ;
-				__traits(getMember, dst, m) = deserializeJson!TM(src[underscoreStrip(m)]);
-			}
-		}
-		return dst;
-	} else static if (isPointer!T) {
-		if (src.type == Json.Type.null_) return null;
-		alias TD = typeof(*T.init) ;
-		dst = new TD;
-		*dst = deserializeJson!TD(src);
-		return dst;
-	} else {
-		static assert(false, "Unsupported type '"~T.stringof~"' for JSON serialization.");
-	}
 }
 
 ///

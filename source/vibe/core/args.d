@@ -71,9 +71,6 @@ bool readOption(T)(string names, T* pvalue, string help_text)
 	return false;
 }
 
-/// Compatibility alias
-deprecated("Use readOption instead.") alias getOption = readOption;
-
 
 /**
 	The same as readOption, but throws an exception if the given option is missing.

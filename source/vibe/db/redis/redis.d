@@ -117,12 +117,6 @@ final class RedisClient {
 	*/
 	void deleteAll() { request("FLUSHALL"); }
 
-	/// Compatibility alias - use $(D deleteAll) instead.
-	deprecated("Use deleteAll instead.") alias flushAll = deleteAll;
-
-	/// Compatibility alias - use $(D RedisDatabase.deleteAll) instead.
-	deprecated("Use RedisDatabase.deleteAll instead.") void flushDB() { request("FLUSHDB"); }
-
 	/// Get information and statistics about the server
 	string info() { return request!string("INFO"); }
 	/// Get the UNIX time stamp of the last successful save to disk
