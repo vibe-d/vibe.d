@@ -12,57 +12,126 @@
 	],
 
 	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
+
 	"dependencies": {
-		"openssl": ">=1.0.0+1.0.0e",
-		"botan": {
-			"version": "~>1.12.0",
-			"optional": true
-		}
+		":base": "*",
+		":http": "*",
+		":mail": "*",
+		":diet": "*",
+		":mongodb": "*",
+		":redis": "*",
+		":web": "*"
 	},
 
 	"targetType": "library",
-	"mainSourceFile": "source/vibe/appmain.d",
-	"buildRequirements": ["requireBoundsCheck"],
+	"sourcePaths": [],
+	"sourceFiles": ["source/vibe/d.d", "source/vibe/vibe.d"],
 
-	"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
-	"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
-	"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
-	"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
+	"subPackages": [
+		{
+			"name": "base",
+			"dependencies": {
+				"openssl": ">=1.0.0+1.0.0e",
+				"botan": {
+					"version": "~>1.12.0",
+					"optional": true
+				}
+			},
 
-	"configurations": [
-		{
-			"name": "libevent",
-			"dependencies": {"libevent": "~>2.0.1+2.0.16"},
-			"platforms": ["windows-x86", "posix"],
-			"versions": ["VibeLibeventDriver"],
-			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
-			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
-			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
-			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32"]
+			"targetType": "library",
+			"mainSourceFile": "source/vibe/appmain.d",
+			"buildRequirements": ["requireBoundsCheck"],
+
+			"sourcePaths": [
+				"source/vibe/core",
+				"source/vibe/crypto",
+				"source/vibe/data",
+				"source/vibe/inet",
+				"source/vibe/internal",
+				"source/vibe/stream",
+				"source/vibe/textfilter",
+				"source/vibe/utils",
+			],
+
+
+			"copyFiles-windows-x86": ["lib/win-i386/libeay32.dll", "lib/win-i386/ssleay32.dll"],
+			"sourceFiles-windows-x86" : ["lib/win-i386/eay.lib", "lib/win-i386/ssl.lib"],
+			"copyFiles-windows-x86_64": ["lib/win-amd64/libeay32.dll", "lib/win-amd64/ssleay32.dll"],
+			"sourceFiles-windows-x86_64" : ["lib/win-amd64/libeay32.lib", "lib/win-amd64/ssleay32.lib"],
+
+			"configurations": [
+				{
+					"name": "libevent",
+					"dependencies": {"libevent": "~>2.0.1+2.0.16"},
+					"versions": ["VibeLibeventDriver"],
+					"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
+					"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
+					"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
+					"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
+					"libs-windows": ["wsock32", "ws2_32", "advapi32"],
+				},
+				{
+					"name": "libasync",
+					"dependencies": {
+					  "libasync": { "version": "0.7.5" }
+					},
+					"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
+				},
+				{
+					"name": "libev",
+					"dependencies": {"libev": "~>5.0.0+4.04"},
+					"platforms": ["posix"],
+					"versions": ["VibeLibevDriver", "LIBEV4"],
+				},
+				{
+					"name": "win32",
+					"platforms": ["windows"],
+					"versions": ["VibeWin32Driver"],
+					"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"],
+				},
+				{
+					"name": "winrt",
+					"platforms": ["windows"],
+					"versions": ["VibeWinrtDriver"],
+					"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
+				}
+			],
 		},
 		{
-			"name": "libasync",
-			"dependencies": {"libasync": "0.7.5"},
-			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
+			"name": "http",
+			"targetType": "library",
+			"dependencies": {"vibe-d:base": "*"},
+			"sourcePaths": ["source/vibe/http"],
 		},
 		{
-			"name": "libev",
-			"dependencies": {"libev": "~>5.0.0+4.04"},
-			"platforms": ["posix"],
-			"versions": ["VibeLibevDriver", "LIBEV4"]
+			"name": "mail",
+			"targetType": "library",
+			"dependencies": {"vibe-d:base": "*"},
+			"sourcePaths": ["source/vibe/mail"],
 		},
 		{
-			"name": "win32",
-			"platforms": ["windows"],
-			"versions": ["VibeWin32Driver"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"]
+			"name": "diet",
+			"targetType": "library",
+			"dependencies": {"vibe-d:http": "*"},
+			"sourcePaths": ["source/vibe/templ"],
 		},
 		{
-			"name": "winrt",
-			"platforms": ["windows"],
-			"versions": ["VibeWinrtDriver"],
-			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"]
+			"name": "mongodb",
+			"targetType": "library",
+			"dependencies": {"vibe-d:http": "*"},
+			"sourcePaths": ["source/vibe/db/mongo"],
+		},
+		{
+			"name": "redis",
+			"targetType": "library",
+			"dependencies": {"vibe-d:http": "*"},
+			"sourcePaths": ["source/vibe/db/redis"],
+		},
+		{
+			"name": "web",
+			"targetType": "library",
+			"dependencies": {"vibe-d:http": "*", "vibe-d:diet": "*"},
+			"sourcePaths": ["source/vibe/web"],
 		}
 	],
 
