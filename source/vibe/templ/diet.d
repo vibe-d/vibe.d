@@ -77,18 +77,21 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 }
 
 /// compatibility alias
+deprecated("Use compileDietFile instead.")
 alias parseDietFile = compileDietFile;
 
 /**
-	Compatibility version of `parseDietFile` - scheduled for deprecation.
+	Deprecated Compatibility version of `compileDietFile`.
 
 	This function should only be called indirectly through `HTTPServerResponse.renderCompat()`.	
 */
+deprecated("Use compileDietFile instead.")
 void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
 {
 	compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
 }
 /// ditto
+deprecated("Use compileDietFile instead.")
 void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, va_list _argptr, TypeInfo[] _arguments)
 {
 	// some imports to make available by default inside templates
@@ -111,6 +114,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 }
 
 /// compatibility alias
+deprecated("Use compileDietFile instead.")
 alias parseDietFileCompat = compileDietFileCompat;
 
 /**

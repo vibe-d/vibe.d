@@ -235,17 +235,6 @@ class HTTPFileServerSettings {
 		this();
 		serverPathPrefix = path_prefix;
 	}
-
-	deprecated("Use .options and HTTPFileServerOption.failIfNotFound instead.")
-	@property bool failIfNotFound() const { return options & HTTPFileServerOption.failIfNotFound; }
-
-	deprecated("Use .options and HTTPFileServerOption.failIfNotFound instead.")
-	@property void failIfNotFound(bool val) {
-		if (val)
-			options |= HTTPFileServerOption.failIfNotFound;
-		else
-			options &= ~HTTPFileServerOption.failIfNotFound;
-	}
 }
 
 

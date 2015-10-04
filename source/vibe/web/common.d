@@ -356,10 +356,11 @@ unittest {
 
 
 /**
-	Scheduled for deprecation - use @$(D path) instead.
+	Deprecated - use @$(D path) instead.
 
 	See_Also: $(D path)
  */
+deprecated("Use @path instead.")
 PathAttribute rootPath(string path)
 {
 	if (!__ctfe)

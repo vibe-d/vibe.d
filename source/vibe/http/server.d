@@ -1073,7 +1073,7 @@ final class HTTPServerResponse : HTTPResponse {
 	@property ulong bytesWritten() { return m_countingWriter.bytesWritten; }
 
 	/**
-		Scheduled for deprecation - use `render` instead.
+		Deprecated - use `render` instead.
 
 		This version of render() works around an old compiler bug in DMD < 2.064 (Issue 2962).
 
@@ -1095,6 +1095,7 @@ final class HTTPServerResponse : HTTPResponse {
 				(title, pageNumber);
 			---
 	*/
+	deprecated("Use the non-compatibility render() call instead.")
 	void renderCompat(string template_file, TYPES_AND_NAMES...)(...)
 	{
 		import vibe.templ.diet;
