@@ -330,6 +330,7 @@ private string[] extractDependencies(in Line[] lines)
 	foreach (ref ln; lines) {
 		auto lnstr = ln.text.ctstrip();
 		if (lnstr.startsWith("extends ")) ret ~= lnstr[8 .. $].ctstrip() ~ ".dt";
+		if (lnstr.length) break;
 	}
 	return ret;
 }
