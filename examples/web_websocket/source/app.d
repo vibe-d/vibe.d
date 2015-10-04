@@ -13,13 +13,12 @@ import core.time;
 import std.conv : to;
 
 class WebsocketService {
-
 	@path("/") void getHome()
 	{
 		render!("index.dt");
 	}
 
-	@path("/ws") void getWebsocket(WebSocket socket){
+	@path("/ws") void getWebsocket(scope WebSocket socket){
 		int counter = 0;
 		logInfo("Got new web socket connection.");
 		while (true) {
@@ -31,8 +30,6 @@ class WebsocketService {
 		}
 		logInfo("Client disconnected.");
 	}
-
-
 }
 
 
