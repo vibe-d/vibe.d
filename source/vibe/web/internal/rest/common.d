@@ -230,15 +230,14 @@ import vibe.web.rest;
 				pi.name = parameterNames[i];
 
 				// determine in/out storage class
-				foreach (SC; ParameterStorageClassTuple!func) {
-					static if (SC & ParameterStorageClass.out_) {
-						pi.isOut = true;
-					} else static if (SC & ParameterStorageClass.ref_) {
-						pi.isIn = true;
-						pi.isOut = true;
-					} else {
-						pi.isIn = true;
-					}
+				enum SC = ParameterStorageClassTuple!func[i];
+				static if (SC & ParameterStorageClass.out_) {
+					pi.isOut = true;
+				} else static if (SC & ParameterStorageClass.ref_) {
+					pi.isIn = true;
+					pi.isOut = true;
+				} else {
+					pi.isIn = true;
 				}
 
 				// determine parameter source/destination
@@ -514,4 +513,18 @@ unittest {
 	assert(test.routes[0].fullPattern == "/foo/bar/");
 	assert(test.routes[0].pathParts == [PathPart(false, "/bar/")]);
 	assert(test.routes[0].fullPathParts == [PathPart(false, "/foo/bar/")]);
+}
+
+unittest { // #1285
+	interface I {
+		@headerParam("b", "foo") @headerParam("c", "bar")
+		void a(int a, out int b, ref int c);
+	}
+	alias RI = RestInterface!I;
+	static assert(RI.staticRoutes[0].parameters[0].name == "a");
+	static assert(RI.staticRoutes[0].parameters[0].isIn && !RI.staticRoutes[0].parameters[0].isOut);
+	static assert(RI.staticRoutes[0].parameters[1].name == "b");
+	static assert(!RI.staticRoutes[0].parameters[1].isIn && RI.staticRoutes[0].parameters[1].isOut);
+	static assert(RI.staticRoutes[0].parameters[2].name == "c");
+	static assert(RI.staticRoutes[0].parameters[2].isIn && RI.staticRoutes[0].parameters[2].isOut);
 }
