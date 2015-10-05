@@ -1,0 +1,63 @@
+{
+	"name": "core",
+	"description": "Basic vibe.d I/O and concurrency primitives, as well as low level utility functions",
+	"dependencies": {
+		"openssl": ">=1.0.0+1.0.0e",
+		"botan": {
+			"version": "~>1.12.0",
+			"optional": true
+		},
+		"vibe-d:utils": "*",
+		"vibe-d:data": "*"
+	},
+
+	"targetType": "library",
+	"mainSourceFile": "vibe/appmain.d",
+	"buildRequirements": ["requireBoundsCheck"],
+
+	"sourcePaths": ["."],
+	"importPaths": ["."],
+
+	"copyFiles-windows-x86": ["../lib/win-i386/libeay32.dll", "../lib/win-i386/ssleay32.dll"],
+	"sourceFiles-windows-x86" : ["../lib/win-i386/eay.lib", "../lib/win-i386/ssl.lib"],
+	"copyFiles-windows-x86_64": ["../lib/win-amd64/libeay32.dll", "../lib/win-amd64/ssleay32.dll"],
+	"sourceFiles-windows-x86_64" : ["../lib/win-amd64/libeay32.lib", "../lib/win-amd64/ssleay32.lib"],
+
+	"configurations": [
+		{
+			"name": "libevent",
+			"dependencies": {"libevent": "~>2.0.1+2.0.16"},
+			"versions": ["VibeLibeventDriver"],
+			"sourceFiles-windows-x86": ["../lib/win-i386/event2.lib"],
+			"copyFiles-windows-x86": ["../lib/win-i386/libevent.dll"],
+			"sourceFiles-windows-x86_64": ["../lib/win-amd64/event2.lib"],
+			"copyFiles-windows-x86_64": ["../lib/win-amd64/libevent.dll"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
+		},
+		{
+			"name": "libasync",
+			"dependencies": {
+			  "libasync": { "version": "0.7.5" }
+			},
+			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
+		},
+		{
+			"name": "libev",
+			"dependencies": {"libev": "~>5.0.0+4.04"},
+			"platforms": ["posix"],
+			"versions": ["VibeLibevDriver", "LIBEV4"],
+		},
+		{
+			"name": "win32",
+			"platforms": ["windows"],
+			"versions": ["VibeWin32Driver"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"],
+		},
+		{
+			"name": "winrt",
+			"platforms": ["windows"],
+			"versions": ["VibeWinrtDriver"],
+			"sourceFiles-windows-x86": ["../lib/win-i386/runtimeobject.lib"],
+		}
+	]
+}

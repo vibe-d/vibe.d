@@ -1,0 +1,8 @@
+{
+	"name": "diet",
+	"description": "Diet HTML template system",
+	"targetType": "library",
+	"dependencies": {"vibe-d:http": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

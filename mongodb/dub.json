@@ -1,0 +1,8 @@
+{
+	"name": "mongodb",
+	"description": "MongoDB database client implementation",
+	"targetType": "library",
+	"dependencies": {"vibe-d:http": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

@@ -1,0 +1,8 @@
+{
+	"name": "mail",
+	"description": "SMTP client support",
+	"targetType": "library",
+	"dependencies": {"vibe-d:core": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

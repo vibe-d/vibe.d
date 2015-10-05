@@ -1,0 +1,8 @@
+{
+	"name": "redis",
+	"description": "Redis database client implementation",
+	"targetType": "library",
+	"dependencies": {"vibe-d:http": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

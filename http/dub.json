@@ -1,0 +1,8 @@
+{
+	"name": "http",
+	"description": "HTTP server and client implementation and higher level HTTP functionality",
+	"targetType": "library",
+	"dependencies": {"vibe-d:core": "*", "vibe-d:data": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

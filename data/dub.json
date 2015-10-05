@@ -1,0 +1,8 @@
+{
+	"name": "data",
+	"description": "Data format and serialization support",
+	"targetType": "library",
+	"dependencies": {"vibe-d:utils": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

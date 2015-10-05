@@ -1,0 +1,8 @@
+{
+	"name": "web",
+	"description": "High level web and REST service framework",
+	"targetType": "library",
+	"dependencies": {"vibe-d:http": "*", "vibe-d:diet": "*"},
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}

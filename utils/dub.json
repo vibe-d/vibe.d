@@ -1,0 +1,7 @@
+{
+	"name": "utils",
+	"description": "Low level utility functionality",
+	"targetType": "library",
+	"sourcePaths": ["."],
+	"importPaths": ["."]
+}
