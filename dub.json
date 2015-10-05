@@ -26,8 +26,6 @@
 	},
 
 	"targetType": "library",
-	"sourcePaths": [],
-	"sourceFiles": ["source/vibe/d.d", "source/vibe/vibe.d"],
 
 	"configurations": [
 		{"name": "libevent", "subConfigurations": {":core": "libevent"}},
