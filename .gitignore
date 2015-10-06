@@ -55,3 +55,4 @@ examples/udp/udp-example
 examples/uploader/uploader-example
 examples/web/web-framework-example
 examples/websocket/websocket-example
+*.exe
