@@ -290,9 +290,11 @@ final class FileLogger : Logger {
 			case Format.thread: m_curFile.writef("[%08X:%08X %s] ", msg.threadID, msg.fiberID, pref); break;
 			case Format.threadTime:
 				auto tm = msg.time;
+				static if (is(typeof(tm.fracSecs))) auto msecs = tm.fracSecs.total!"msecs"; // 2.069 has deprecated "fracSec"
+				else tm.fracSec.msecs;
 				m_curFile.writef("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
 					msg.threadID, msg.fiberID,
-					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,
+					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, msecs,
 					pref);
 				break;
 		}
@@ -581,7 +583,8 @@ final class SyslogLogger : Logger {
 		auto tm = msg.time;
 		import core.time;
 		// at most 6 digits for fractional seconds according to RFC
-		tm.fracSec = FracSec.from!"usecs"(tm.fracSec.usecs);
+		static if (is(typeof(tm.fracSecs))) tm.fracSecs = tm.fracSecs.total!"usecs".dur!"usecs";
+		else tm.fracSec = FracSec.from!"usecs"(tm.fracSec.usecs);
 		auto timestamp = tm.toISOExtString();
 
 		Severity syslogSeverity;
@@ -635,7 +638,9 @@ final class SyslogLogger : Logger {
 		LogLine msg;
 		import std.datetime;
 		import core.thread;
-		msg.time = SysTime(DateTime(0, 1, 1, 0, 0, 0), FracSec.from!"usecs"(1));
+		static if (is(typeof(SysTime.init.fracSecs))) auto fs = 1.dur!"usecs";
+		else auto fs = FracSec.from!"usecs"(1);
+		msg.time = SysTime(DateTime(0, 1, 1, 0, 0, 0), fs);
 
 		foreach (lvl; [LogLevel.debug_, LogLevel.diagnostic, LogLevel.info, LogLevel.warn, LogLevel.error, LogLevel.critical, LogLevel.fatal]) {
 			msg.level = lvl;
