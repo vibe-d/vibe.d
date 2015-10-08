@@ -322,10 +322,12 @@ private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 /// private
 private bool isPartOf(string str, STRINGS...)()
 {
-	foreach( s; STRINGS )
-		if( str == s )
-			return true;
-	return false;
+	template impl(size_t i) {
+		static if (i >= STRINGS.length) enum impl = false;
+		else static if (STRINGS[i] == str) enum impl = true;
+		else enum impl = impl!(i+1);
+	}
+	return impl!0;
 }
 
 private string[] extractDependencies(in Line[] lines)
