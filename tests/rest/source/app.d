@@ -562,6 +562,14 @@ void runTests()
 
 shared static this()
 {
+	version (LDC) {
+		if (__VERSION__ == 2066) {
+			import core.stdc.stdlib;
+			logWarn("Warning: Skipping test due to codegen issue on LDC 0.15.x.");
+			exit(0);
+		}
+	}
+
 	// Registering our REST services in router
 	auto routes = new URLRouter;
 	registerRestInterface(routes, new Example1());
