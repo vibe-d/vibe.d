@@ -1195,14 +1195,14 @@ body {
 			mixin(GenOrphan!(i).Decl);
 			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
 			static if (!anySatisfy!(mixin(GenOrphan!(i).Name), PN)) {
-				return "%s: No parameter '%s' (referenced by attribute @%sParam)"
+				if (hack) return "%s: No parameter '%s' (referenced by attribute @%sParam)"
 					.format(FuncId, uda.identifier, uda.origin);
 			}
 		}
 
 		foreach (i, P; PT) {
 			static if (!PN[i].length)
-				return "%s: Parameter %d has no name."
+				if (hack) return "%s: Parameter %d has no name."
 					.format(FuncId, i);
 			// Check for multiple origins
 			static if (WPAT.length) {
@@ -1211,7 +1211,7 @@ body {
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
 				alias WPA = Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
 				static if (WPA.length > 1)
-					return "%s: Parameter '%s' has multiple @*Param attributes on it."
+					if (hack) return "%s: Parameter '%s' has multiple @*Param attributes on it."
 						.format(FuncId, PN[i]);
 			}
 		}
@@ -1223,11 +1223,11 @@ body {
 				mixin(GenCmp!("Loop", i, PN[i]).Decl);
 				alias Attr
 					= Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
-				static if (Attr.length != 1)
-					return "%s: Parameter '%s' cannot be %s"
+				static if (Attr.length != 1) {
+					if (hack) return "%s: Parameter '%s' cannot be %s"
 						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
-				else static if (Attr[0].origin != ParameterKind.header) {
-					return "%s: %s parameter '%s' cannot be %s"
+				} else static if (Attr[0].origin != ParameterKind.header) {
+					if (hack) return "%s: %s parameter '%s' cannot be %s"
 						.format(FuncId, Attr[0].origin, PN[i],
 							SC & PSC.out_ ? "out" : "ref");
 				}
@@ -1257,7 +1257,7 @@ body {
 									.format(FuncId, elem, elem[1..$]);
 						} else {
 							if (![PN].canFind("_"~elem[1..$]))
-								return "%s: Path contains '%s', but no parameter '_%s' defined."
+								if (hack) return "%s: Path contains '%s', but no parameter '_%s' defined."
 									.format(FuncId, elem, elem[1..$]);
 							elem = elem[1..$];
 						}
@@ -1271,12 +1271,13 @@ body {
 
 	if (!__ctfe)
 		assert(false, "Internal error");
+	bool hack = true;
 	foreach (method; __traits(allMembers, I)) {
 		// WORKAROUND #1045 / @@BUG14375@@
 		static if (method.length != 0)
 			foreach (overload; MemberFunctionsTuple!(I, method)) {
 				static if (validateMethod!(overload)())
-					return validateMethod!(overload)();
+					if (hack) return validateMethod!(overload)();
 			}
 	}
 	return null;

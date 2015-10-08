@@ -101,23 +101,15 @@ private template isSame(ab...)
 template Compare(alias Group1, alias Group2)
 	if (isGroup!Group1 && isGroup!Group2)
 {
-	private bool implementation()
+	private template implementation(size_t index)
 	{
-		static if (Group1.expand.length == Group2.expand.length) {
-			foreach (index, element; Group1.expand)
-			{
-				static if (!isSame!(Group1.expand[index], Group2.expand[index])) {
-					return false;
-				}
-			}
-			return true;
-		}
-		else {
-			return false;
-		}
+		static if (Group1.expand.length != Group2.expand.length) enum implementation = false;
+		else static if (index >= Group1.expand.length) enum implementation = true;
+		else static if (!isSame!(Group1.expand[index], Group2.expand[index])) enum implementation = false;
+		else enum implementation = implementation!(index+1);
 	}
 
-	enum Compare = implementation();
+	enum Compare = implementation!0;
 }
 
 ///
