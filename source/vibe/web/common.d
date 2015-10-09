@@ -651,6 +651,9 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 
 	static if (isDynamicArray!T && !isSomeString!T) {
 		alias EL = typeof(T.init[0]);
+		static assert(!is(EL == bool),
+			"Boolean arrays are not allowed, because their length cannot " ~
+			"be uniquely determined. Use a static array instead.");
 		size_t idx = 0;
 		dst = T.init;
 		while (true) {
@@ -660,6 +663,12 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 			if (r == ParamResult.skipped) break;
 			dst ~= el;
 			idx++;
+		}
+	} else static if (isStaticArray!T) {
+		foreach (i; 0 .. T.length) {
+			auto r = readFormParamRec(req, dst[i], format("%s_%s", fieldname, i), true, err);
+			if (r == ParamResult.error) return r;
+			assert(r != ParamResult.skipped); break;
 		}
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
@@ -727,4 +736,9 @@ package void setVoid(T, U)(ref T dst, U value)
 			dst = value;
 		}
 	} else dst = value;
+}
+
+unittest {
+	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, err); }));
+	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, err); }));
 }
