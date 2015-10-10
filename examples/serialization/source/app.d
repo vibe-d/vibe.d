@@ -5,7 +5,7 @@ import vibe.data.bson;
 
 
 void main()
-{ 
+{
 	// set up some data to serialize
 	Data data;
 	data.number = 13;

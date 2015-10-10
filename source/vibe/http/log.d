@@ -9,7 +9,7 @@ module vibe.http.log;
 
 import vibe.core.file;
 import vibe.core.log;
-import vibe.core.sync : TaskMutex;
+import vibe.core.sync : InterruptibleTaskMutex, performLocked;
 import vibe.http.server;
 import vibe.utils.array : FixedAppender;
 
@@ -22,27 +22,28 @@ import std.string;
 class HTTPLogger {
 	private {
 		string m_format;
-		HTTPServerSettings m_settings;
-		TaskMutex m_mutex;
-		FixedAppender!(const(char)[], 2048) m_lineAppender;
+		const(HTTPServerSettings) m_settings;
+		InterruptibleTaskMutex m_mutex;
+		Appender!(char[]) m_lineAppender;
 	}
 
-	this(HTTPServerSettings settings, string format)
+	this(in HTTPServerSettings settings, string format)
 	{
 		m_format = format;
 		m_settings = settings;
-		m_mutex = new TaskMutex;
+		m_mutex = new InterruptibleTaskMutex;
+		m_lineAppender.reserve(2048);
 	}
 
 	void close() {}
 
-	final void log(HTTPServerRequest req, HTTPServerResponse res)
+	final void log(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
-		synchronized (m_mutex) {
-			m_lineAppender.reset();
+		m_mutex.performLocked!({
+			m_lineAppender.clear();
 			formatApacheLog(m_lineAppender, m_format, req, res, m_settings);
 			writeLine(m_lineAppender.data);
-		}
+		});
 	}
 
 	protected abstract void writeLine(const(char)[] ln);
@@ -88,7 +89,7 @@ final class HTTPFileLogger : HTTPLogger {
 	}
 }
 
-void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServerResponse res, HTTPServerSettings settings)
+void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, scope HTTPServerResponse res, in HTTPServerSettings settings)
 {
 	import std.format : formattedWrite;
 	enum State {Init, Directive, Status, Key, Command}
@@ -113,7 +114,7 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 					state = State.Directive;
 				}
 				break;
-			case State.Directive: 
+			case State.Directive:
 				if( format[0] == '!' ) {
 					conditional = true;
 					negate = true;
@@ -176,7 +177,7 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						else formattedWrite(&ln, "%s", res.bytesWritten);
 						break;
 					case 'C': //Cookie content {cookie}
-						enforce(key, "cookie name missing");
+						enforce(key != "", "cookie name missing");
 						if (auto pv = key in req.cookies) ln.put(*pv);
 						else ln.put("-");
 						break;
@@ -185,7 +186,7 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						formattedWrite(&ln, "%s", d.total!"msecs"());
 						break;
 					//case 'e': //Environment variable {variable}
-					//case 'f': //Filename 
+					//case 'f': //Filename
 					case 'h': //Remote host
 						ln.put(req.peer);
 						break;
@@ -193,15 +194,15 @@ void formatApacheLog(R)(ref R ln, string format, HTTPServerRequest req, HTTPServ
 						ln.put("HTTP");
 						break;
 					case 'i': //Request header {header}
-						enforce(key, "header name missing");
+						enforce(key != "", "header name missing");
 						if (auto pv = key in req.headers) ln.put(*pv);
 						else ln.put("-");
 						break;
 					case 'm': //Request method
 						ln.put(httpMethodString(req.method));
 						break;
-					case 'o': //Response header {header}						
-						enforce(key, "header name missing");
+					case 'o': //Response header {header}
+						enforce(key != "", "header name missing");
 						if( auto pv = key in res.headers ) ln.put(*pv);
 						else ln.put("-");
 						break;

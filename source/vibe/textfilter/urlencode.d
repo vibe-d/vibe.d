@@ -1,7 +1,7 @@
 /**
 	URL-encoding implementation
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger, Sönke Ludwig
 */
@@ -20,10 +20,82 @@ import std.format;
 */
 string urlEncode(string str, string allowed_chars = null)
 @safe {
-	auto dst = appender!string();
-	dst.reserve(str.length);
-	filterURLEncode(dst, str, allowed_chars);
-	return dst.data;
+	foreach (char c; str) {
+		switch(c) {
+			case '-':
+			case '.':
+			case '0': .. case '9':
+			case 'A': .. case 'Z':
+			case '_':
+			case 'a': .. case 'z':
+			case '~':
+				break;
+			default:
+				auto dst = appender!string();
+				dst.reserve(str.length);
+				filterURLEncode(dst, str, allowed_chars);
+				return dst.data;
+		}
+	}
+	return str;
+}
+
+unittest {
+	string s = "hello-world";
+	assert(s.urlEncode().ptr == s.ptr);
+}
+
+private bool isCorrectHexNum(string str)
+@safe {
+	foreach (char c; str) {
+		switch(c) {
+			case '0': .. case '9':
+			case 'A': .. case 'F':
+			case 'a': .. case 'f':
+				break;
+			default:
+				return false;
+		}
+	}
+	return true;
+}
+
+/** Checks whether a given string has valid URL encoding.
+*/
+bool isURLEncoded(string str, string reserved_chars = null)
+@safe {
+	for (size_t i = 0; i < str.length; i++) {
+		switch(str[i]) {
+			case '-':
+			case '.':
+			case '0': .. case '9':
+			case 'A': .. case 'Z':
+			case '_':
+			case 'a': .. case 'z':
+			case '~':
+				break;
+			case '%':
+				if (i + 2 >= str.length)
+					return false;
+				if (!isCorrectHexNum(str[i+1 .. i+3]))
+					return false;
+				i += 2;
+				break;
+			default:
+				if (reserved_chars.canFind(str[i]))
+					return false;
+				break;
+		}
+	}
+	return true;
+}
+
+unittest {
+	assert(isURLEncoded("hello-world"));
+	assert(isURLEncoded("he%2F%af"));
+	assert(!isURLEncoded("hello world", " "));
+	assert(!isURLEncoded("he%f"));
+	assert(!isURLEncoded("he%fx"));
 }
 
 /** Returns the decoded version of a given URL encoded string.
@@ -69,7 +141,7 @@ string formDecode(string str)
 
 /** Writes the URL encoded version of the given string to an output range.
 */
-void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool form_encoding = false) 
+void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool form_encoding = false)
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
@@ -96,7 +168,7 @@ void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool
 
 /** Writes the decoded version of the given URL encoded string to an output range.
 */
-void filterURLDecode(R)(ref R dst, string str, bool form_encoding = false) 
+void filterURLDecode(R)(ref R dst, string str, bool form_encoding = false)
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {

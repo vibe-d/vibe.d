@@ -15,12 +15,13 @@ import vibe.http.router : URLRouter;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
-import vibe.internal.meta.uda : UDATuple;
+import vibe.internal.meta.uda;
 import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
 
 import std.algorithm : startsWith, endsWith;
 import std.typetuple : anySatisfy, Filter;
+import std.traits;
 
 /**
 	Registers a REST interface and connects it the the given instance.
@@ -32,22 +33,18 @@ import std.typetuple : anySatisfy, Filter;
 
 	The following table lists the mappings from prefix verb to HTTP verb:
 
-	<table>
-		<tr><th>Prefix</th><th>HTTP verb</th></tr>
-		<tr><td>get</td><td>GET</td></tr>
-		<tr><td>query</td><td>GET</td></tr>
-		<tr><td>set</td><td>PUT</td></tr>
-		<tr><td>put</td><td>PUT</td></tr>
-		<tr><td>update</td><td>PATCH</td></tr>
-		<tr><td>patch</td><td>PATCH</td></tr>
-		<tr><td>add</td><td>POST</td></tr>
-		<tr><td>create</td><td>POST</td></tr>
-		<tr><td>post</td><td>POST</td></tr>
-	</table>
+	$(TABLE
+		$(TR $(TH HTTP method) $(TH Recognized prefixes))
+		$(TR $(TD GET)	  $(TD get, query))
+		$(TR $(TD PUT)    $(TD set, put))
+		$(TR $(TD POST)   $(TD add, create, post))
+		$(TR $(TD DELETE) $(TD remove, erase, delete))
+		$(TR $(TD PATCH)  $(TD update, patch))
+	)
 
 	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
-    'id' is expected to be part of the URL instead of a JSON request. Parameters with default
-    values will be optional in the corresponding JSON request.
+	'id' is expected to be part of the URL instead of a JSON request. Parameters with default
+	values will be optional in the corresponding JSON request.
 
 	Any interface that you return from a getter will be made available with the
 	base url and its name appended.
@@ -58,7 +55,7 @@ import std.typetuple : anySatisfy, Filter;
 			must either be an interface type, or a class which derives from a
 			single interface
 		settings = Additional settings, such as the $(D MethodStyle), or the prefix.
-                           See $(D RestInterfaceSettings) for more details.
+			See $(D RestInterfaceSettings) for more details.
 
 	See_Also:
 		$(D RestInterfaceClient) class for a seamless way to access such a generated API
@@ -66,18 +63,27 @@ import std.typetuple : anySatisfy, Filter;
 */
 void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
-	import vibe.internal.meta.traits : baseInterface;
+	import std.traits : InterfacesTuple;
 	import vibe.internal.meta.uda : findFirstUDA;
-	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple,
-		ParameterTypeTuple, ReturnType;
+
+	alias IT = InterfacesTuple!TImpl;
+	static assert (IT.length > 0 || is (TImpl == interface),
+		       "Cannot registerRestInterface type '" ~ TImpl.stringof
+		       ~ "' because it doesn't implement an interface");
+	static if (IT.length > 1)
+		pragma(msg, "Type '" ~ TImpl.stringof ~ "' implements more than one interface: make sure the one describing the REST server is the first one");
+	static if (is(TImpl == interface))
+		alias I = TImpl;
+	else
+		alias I = IT[0];
+
+	static assert(getInterfaceValidationError!(I) is null, getInterfaceValidationError!(I));
 
 	if (!settings) settings = new RestInterfaceSettings;
 
 	string url_prefix = settings.baseURL.path.toString();
 
-	alias I = baseInterface!TImpl;
-
-	enum uda = findFirstUDA!(RootPathAttribute, I);
+	enum uda = findFirstUDA!(PathAttribute, I);
 	static if (uda.found) {
 		static if (uda.value.data == "") {
 			auto path = "/" ~ adjustMethodStyle(I.stringof, settings.methodStyle);
@@ -101,29 +107,18 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 		);
 	}
 
-	string strip(string name) {
-		if (settings.stripTrailingUnderscore && name.endsWith("_"))
-			return name[0 .. $-1];
-		else return name;
-	}
-
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
-			enum meta = extractHTTPMethodAndName!overload();
+			enum meta = extractHTTPMethodAndName!(overload, false)();
 
 			static if (meta.hadPathUDA) {
 				string url = meta.url;
 			}
 			else {
-				static if (__traits(identifier, overload) == "index") {
-					pragma(msg, "Processing interface " ~ T.stringof ~
-						": please use @path(\"/\") to define '/' path" ~
-						" instead of 'index' method. Special behavior will be removed" ~
-						" in the next release.");
-				}
-
-				string url = adjustMethodStyle(strip(meta.url), settings.methodStyle);
+				string url = adjustMethodStyle(stripTUnderscore(meta.url, settings), settings.methodStyle);
 			}
 
 			alias RT = ReturnType!overload;
@@ -134,14 +129,16 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfac
 					ParameterTypeTuple!overload.length == 0,
 					"Interfaces may only be returned from parameter-less functions!"
 				);
+				auto subSettings = settings.dup;
+				subSettings.baseURL = URL(concatURL(url_prefix, url, true));
 				registerRestInterface!RT(
 					router,
 					__traits(getMember, instance, method)(),
-					concatURL(url_prefix, url, true)
+					subSettings
 				);
 			} else {
 				// normal handler
-				auto handler = jsonMethodHandler!(I, method, overload)(instance, settings);
+				auto handler = jsonMethodHandler!(I, overload)(instance, settings);
 
 				string[] params = [ ParameterIdentifierTuple!overload ];
 
@@ -185,6 +182,7 @@ void registerRestInterface(TImpl)(URLRouter router, TImpl instance, string url_p
 */
 unittest
 {
+	@path("/")
 	interface IMyAPI
 	{
 		// GET /api/greeting
@@ -259,6 +257,8 @@ unittest
 */
 class RestInterfaceClient(I) : I
 {
+	static assert(getInterfaceValidationError!(I) is null, getInterfaceValidationError!(I));
+
 	//pragma(msg, "imports for "~I.stringof~":");
 	//pragma(msg, generateModuleImports!(I)());
 	mixin(generateModuleImports!I());
@@ -290,7 +290,7 @@ class RestInterfaceClient(I) : I
 		}
 
 		URL url = settings.baseURL;
-		enum uda = findFirstUDA!(RootPathAttribute, I);
+		enum uda = findFirstUDA!(PathAttribute, I);
 		static if (uda.found) {
 			static if (uda.value.data == "") {
 				url.path = Path(concatURL(url.path.toString(), adjustMethodStyle(I.stringof, settings.methodStyle), true));
@@ -301,12 +301,6 @@ class RestInterfaceClient(I) : I
 
 		m_baseURL = url;
 		m_methodStyle = settings.methodStyle;
-
-		string strip(string name) {
-			if (settings.stripTrailingUnderscore && name.endsWith("_"))
-				return name[0 .. $-1];
-			else return name;
-		}
 
 		mixin (generateRestInterfaceSubInterfaceInstances!I());
 	}
@@ -372,8 +366,19 @@ class RestInterfaceClient(I) : I
 
 			URL url = m_baseURL;
 
-			if (name.length) url ~= Path(name);
-			if (query) url.queryString = query;
+			if (name.length)
+			{
+				if (url.pathString.length && url.pathString[$ - 1] == '/'
+					&& name[0] == '/')
+					url.pathString = url.pathString ~ name[1 .. $];
+				else if (url.pathString.length && url.pathString[$ - 1] == '/'
+						 || name[0] == '/')
+					url.pathString = url.pathString ~ name;
+				else
+					url.pathString = url.pathString ~ '/' ~ name;
+			}
+
+			if (query.length) url.queryString = query;
 
 			Json ret;
 
@@ -386,7 +391,7 @@ class RestInterfaceClient(I) : I
 					m_requestFilter(req);
 				}
 
-				if (body_)
+				if (body_ != "")
 					req.writeBody(cast(ubyte[])body_, hdrs.get("Content-Type", "application/json"));
 			};
 
@@ -465,13 +470,6 @@ class RestInterfaceClient(I) : I
 			else return jsonBody.toString();
 		}
 	}
-
-	private string _stripName(string name)
-	{
-		if (m_settings.stripTrailingUnderscore && name.endsWith("_"))
-			return name[0 .. $-1];
-		else return name;
-	}
 }
 
 ///
@@ -497,7 +495,7 @@ unittest
 		Json getSomeCustomJson();
 	}
 
-	void application()
+	void test()
 	{
 		auto api = new RestInterfaceClient!IMyApi("http://127.0.0.1/api/");
 
@@ -542,11 +540,38 @@ class RestInterfaceSettings {
 }
 
 
-/// private
-private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func)(T inst, RestInterfaceSettings settings)
+/**
+ * Generate an handler that will wrap the server's method
+ *
+ * This function returns an handler, generated at compile time, that
+ * will deserialize the parameters, pass them to the function implemented
+ * by the user, and return what it needs to return, be it header parameters
+ * or body, which is at the moment either a pure string or a Json object.
+ *
+ * One thing that makes this method more complex that it needs be is the
+ * inability for D to attach UDA to parameters. This means we have to roll
+ * our own implementation, which tries to be as easy to use as possible.
+ * We'll require the user to give the name of the parameter as a string to
+ * our UDA. Hopefully, we're also able to detect at compile time if the user
+ * made a typo of any kind (see $(D genInterfaceValidationError)).
+ *
+ * Note:
+ * Lots of abbreviations are used to ease the code, such as
+ * PTT (ParameterTypeTuple), WPAT (WebParamAttributeTuple)
+ * and PWPAT (ParameterWebParamAttributeTuple).
+ *
+ * Params:
+ *	T = type of the object which represent the REST server (user implemented).
+ *	Func = An alias to the function of $(D T) to wrap.
+ *
+ *	inst = REST server on which to call our $(D Func).
+ *	settings = REST server configuration.
+ *
+ * Returns:
+ *	A delegate suitable to use as an handler for an HTTP request.
+ */
+private HTTPServerRequestDelegate jsonMethodHandler(T, alias Func)(T inst, RestInterfaceSettings settings)
 {
-	import std.traits : ParameterTypeTuple, ReturnType, fullyQualifiedName,
-		ParameterDefaultValueTuple, ParameterIdentifierTuple;
 	import std.string : format;
 	import std.algorithm : startsWith;
 
@@ -558,45 +583,17 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 	alias PT = ParameterTypeTuple!Func;
 	alias RT = ReturnType!Func;
 	alias ParamDefaults = ParameterDefaultValueTuple!Func;
+	alias WPAT = UDATuple!(WebParamAttribute, Func);
+
+	enum Method = __traits(identifier, Func);
 	enum ParamNames = [ ParameterIdentifierTuple!Func ];
-	enum FuncId = (fullyQualifiedName!T~ "." ~ __traits(identifier, Func));
+	enum FuncId = (fullyQualifiedName!T~ "." ~ Method);
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
 		PT params;
 
-		string strip(string name) {
-			if (settings.stripTrailingUnderscore && name.endsWith("_"))
-				return name[0 .. $-1];
-			else return name;
-		}
-
-		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
-		static if (UDATuple!(WebParamAttribute, Func).length) {
-			foreach (i, uda; UDATuple!(WebParamAttribute, Func)) {
-				// Note: static foreach gets unrolled, generating multiple nested sub-scope.
-				// The spec / DMD doesn't like when you have the same symbol in those,
-				// leading to wrong codegen / wrong template being reused.
-				// That's why those templates need different names.
-				// See DMD bug #9748.
-				mixin(GenOrphan!(i).Decl);
-				// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-				static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
-				              format("No parameter '%s' on %s (referenced by attribute @%sParam)",
-						     uda.identifier, FuncId, uda.origin));
-			}
-		}
-
 		foreach (i, P; PT) {
-			static assert (
-				ParamNames[i].length,
-				format(
-				       "Parameter %s of %s has no name",
-				       i.stringof,
-				       method
-				)
-			);
-
 			// will be re-written by UDA function anyway
 			static if (!IsAttributedParameter!(Func, ParamNames[i])) {
 				// Comparison template for anySatisfy
@@ -607,35 +604,71 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 					// legacy special case for :id, backwards-compatibility
 					logDebug("id %s", req.params["id"]);
 					params[i] = fromRestString!P(req.params["id"]);
-				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func))) {
+				} else static if (anySatisfy!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT)) {
 					// User anotated the origin of this parameter.
-					alias paramsArgList = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-					static assert (
-						paramsArgList.length == 1,
-						"Parameter '"~ParamNames[i]~"' of "~FuncId~" has multiple origin (@*Param attributes)."
-					);
+					alias PWPAT = Filter!(mixin(GenCmp!("Loop", i, ParamNames[i]).Name), WPAT);
 					// @headerParam.
-					static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header) {
+					static if (PWPAT[0].origin == WebParamAttribute.Origin.Header) {
 						// If it has no default value
 						static if (is (ParamDefaults[i] == void)) {
-							auto fld = enforceBadRequest(paramsArgList[0].field in req.headers,
-							format("Expected field '%s' in header", paramsArgList[0].field));
+							auto fld = enforceBadRequest(PWPAT[0].field in req.headers,
+							format("Expected field '%s' in header", PWPAT[0].field));
 						} else {
-							auto fld = paramsArgList[0].field in req.headers;
+							auto fld = PWPAT[0].field in req.headers;
 								if (fld is null) {
 								params[i] = ParamDefaults[i];
-								logDebug("No header param %s, using default value", paramsArgList[0].identifier);
+								logDebug("No header param %s, using default value", PWPAT[0].identifier);
 								continue;
 							}
 						}
-						logDebug("Header param: %s <- %s", paramsArgList[0].identifier, *fld);
+						logDebug("Header param: %s <- %s", PWPAT[0].identifier, *fld);
 						params[i] = fromRestString!P(*fld);
-					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Query) {
-						static assert (0, "@QueryParam is not yet supported");
-					} else static if (paramsArgList[0].origin == WebParamAttribute.Origin.Body) {
-						static assert (0, "@BodyParam is not yet supported");
-					} else static assert (false, "Internal error: Origin "~to!string(paramsArgList[0].origin)~" is not implemented.");
+					} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query) {
+						// Note: Doesn't work if HTTPServerOption.parseQueryString is disabled.
+						static if (is (ParamDefaults[i] == void)) {
+							auto fld = enforceBadRequest(PWPAT[0].field in req.query,
+										     format("Expected form field '%s' in query", PWPAT[0].field));
+						} else {
+							auto fld = PWPAT[0].field in req.query;
+							if (fld is null) {
+								params[i] = ParamDefaults[i];
+								logDebug("No query param %s, using default value", PWPAT[0].identifier);
+								continue;
+							}
+						}
+						logDebug("Query param: %s <- %s", PWPAT[0].identifier, *fld);
+						params[i] = fromRestString!P(*fld);
+					} else static if (PWPAT[0].origin == WebParamAttribute.Origin.Body) {
+						enforceBadRequest(
+								  req.contentType == "application/json",
+								  "The Content-Type header needs to be set to application/json."
+								  );
+						enforceBadRequest(
+								  req.json.type != Json.Type.Undefined,
+								  "The request body does not contain a valid JSON value."
+								  );
+						enforceBadRequest(
+								  req.json.type == Json.Type.Object,
+								  "The request body must contain a JSON object with an entry for each parameter."
+								  );
+
+                        auto par = req.json[PWPAT[0].field];
+						static if (is(ParamDefaults[i] == void)) {
+							enforceBadRequest(par.type != Json.Type.Undefined,
+									  format("Missing parameter %s", PWPAT[0].field)
+									  );
+						} else {
+							if (par.type == Json.Type.Undefined) {
+								logDebug("No body param %s, using default value", PWPAT[0].identifier);
+								params[i] = ParamDefaults[i];
+								continue;
+							}
+                        }
+                        params[i] = deserializeJson!P(par);
+                        logDebug("Body param: %s <- %s", PWPAT[0].identifier, par);
+					} else static assert (false, "Internal error: Origin "~to!string(PWPAT[0].origin)~" is not implemented.");
 				} else static if (ParamNames[i].startsWith("_")) {
+					import vibe.textfilter.urlencode;
 					// URL parameter
 					static if (ParamNames[i] != "_dummy") {
 						enforceBadRequest(
@@ -643,12 +676,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 							format("req.param[%s] was not set!", ParamNames[i][1 .. $])
 						);
 						logDebug("param %s %s", ParamNames[i], req.params[ParamNames[i][1 .. $]]);
-						params[i] = fromRestString!P(req.params[ParamNames[i][1 .. $]]);
+						params[i] = fromRestString!P(urlDecode(req.params[ParamNames[i][1 .. $]]));
 					}
 				} else {
 					// normal parameter
 					alias DefVal = ParamDefaults[i];
-					auto pname = strip(ParamNames[i]);
+					auto pname = stripTUnderscore(ParamNames[i], settings);
 
 					if (req.method == HTTPMethod.GET) {
 						logDebug("query %s of %s", pname, req.query);
@@ -667,7 +700,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 
 						params[i] = fromRestString!P(req.query[pname]);
 					} else {
-						logDebug("%s %s", method, pname);
+						logDebug("%s %s", FuncId, pname);
 
 						enforceBadRequest(
 							req.contentType == "application/json",
@@ -683,18 +716,17 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 						);
 
 						static if (is(DefVal == void)) {
-							enforceBadRequest(
-								req.json[pname].type != Json.Type.Undefined,
-								format("Missing parameter %s", pname)
-							);
+							auto par = req.json[pname];
+							enforceBadRequest(par.type != Json.Type.Undefined,
+									  format("Missing parameter %s", pname)
+									  );
+							params[i] = deserializeJson!P(par);
 						} else {
 							if (req.json[pname].type == Json.Type.Undefined) {
 								params[i] = DefVal;
 								continue;
 							}
 						}
-
-						params[i] = deserializeJson!P(req.json[pname]);
 					}
 				}
 			}
@@ -706,10 +738,10 @@ private HTTPServerRequestDelegate jsonMethodHandler(T, string method, alias Func
 			auto handler = createAttributedFunction!Func(req, res);
 
 			static if (is(RT == void)) {
-				handler(&__traits(getMember, inst, method), params);
+				handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(Json.emptyObject);
 			} else {
-				auto ret = handler(&__traits(getMember, inst, method), params);
+				auto ret = handler(&__traits(getMember, inst, Method), params);
 				res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
@@ -735,8 +767,6 @@ private string generateRestInterfaceSubInterfaces(I)()
 	if (!__ctfe)
 		assert (false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
-		ReturnType, ParameterTypeTuple, fullyQualifiedName;
 	import std.algorithm : canFind;
 	import std.string : format;
 
@@ -744,6 +774,8 @@ private string generateRestInterfaceSubInterfaces(I)()
 	string[] tps; // list of already processed interface types
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			alias FT = FunctionTypeOf!overload;
@@ -779,8 +811,6 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 	if (!__ctfe)
 		assert (false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
-		ReturnType, ParameterTypeTuple;
 	import std.string : format;
 	import std.algorithm : canFind;
 
@@ -788,6 +818,8 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 	string[] tps; // list of of already processed interface types
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			alias FT = FunctionTypeOf!overload;
@@ -804,11 +836,14 @@ private string generateRestInterfaceSubInterfaceInstances(I)()
 					tps ~= RT.stringof;
 					string implname = RT.stringof ~ "Impl";
 
-					enum meta = extractHTTPMethodAndName!overload();
+					enum meta = extractHTTPMethodAndName!(overload, false)();
 
 					ret ~= q{
 						auto settings_%1$s = m_settings.dup;
-						settings_%1$s.baseURL.path = m_baseURL.path ~ (%3$s ? "%2$s/" : adjustMethodStyle(strip("%2$s"), m_methodStyle) ~ "/");
+						settings_%1$s.baseURL.path
+							= m_baseURL.path ~ (%3$s
+									    ? "%2$s/"
+									    : (adjustMethodStyle(stripTUnderscore("%2$s", settings), m_methodStyle) ~ "/"));
 						m_%1$s = new %1$s(settings_%1$s);
 					}.format(
 						 implname,
@@ -830,8 +865,6 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	if (!__ctfe)
 		assert (false);
 
-	import std.traits : MemberFunctionsTuple, FunctionTypeOf,
-		ReturnType, ParameterTypeTuple;
 	import std.string : format;
 	import std.algorithm : canFind;
 
@@ -839,6 +872,8 @@ private string generateRestInterfaceSubInterfaceRequestFilter(I)()
 	string[] tps; // list of already processed interface types
 
 	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
 		foreach (overload; MemberFunctionsTuple!(I, method)) {
 
 			alias FT = FunctionTypeOf!overload;
@@ -877,10 +912,13 @@ mixin template RestClientMethods(I) if (is(I == interface)) {
 mixin template RestClientMethods_MemberImpl(Members...) {
 	import std.traits : MemberFunctionsTuple;
 	static assert (Members.length > 0);
-	private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
-	// Members can be declaration / fields.
-	static if (Ovrlds.length > 0) {
-		mixin RestClientMethods_OverloadImpl!(Ovrlds);
+	// WORKAROUND #1045 / @@BUG14375@@
+	static if (Members[0].length != 0) {
+		private alias Ovrlds = MemberFunctionsTuple!(I, Members[0]);
+		// Members can be declaration / fields.
+		static if (Ovrlds.length > 0) {
+			mixin RestClientMethods_OverloadImpl!(Ovrlds);
+		}
 	}
 	static if (Members.length > 1) {
 		mixin RestClientMethods_MemberImpl!(Members[1..$]);
@@ -901,28 +939,16 @@ mixin template RestClientMethods_OverloadImpl(Overloads...) {
 
 private string genClientBody(alias Func)() {
 	import std.string : format;
-	import std.traits : ReturnType, FunctionTypeOf, ParameterTypeTuple, ParameterIdentifierTuple;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
 
 	alias FT = FunctionTypeOf!Func;
 	alias RT = ReturnType!FT;
 	alias PTT = ParameterTypeTuple!Func;
 	alias ParamNames = ParameterIdentifierTuple!Func;
+	alias WPAT = UDATuple!(WebParamAttribute, Func);
 
-	enum meta = extractHTTPMethodAndName!Func();
-	enum paramAttr = UDATuple!(WebParamAttribute, Func);
+	enum meta = extractHTTPMethodAndName!(Func, false)();
 	enum FuncId = __traits(identifier, Func);
-
-	// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
-	static if (paramAttr.length) {
-		foreach (i, uda; paramAttr) {
-			// Note: See server code to see why it's necessary (or Template definition).
-			mixin(GenOrphan!(i).Decl);
-			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
-			static assert (anySatisfy!(mixin(GenOrphan!(i).Name), ParameterIdentifierTuple!Func),
-			              format("No parameter '%s' on %s (referenced by attribute @%sParam)", uda.identifier, FuncId, uda.origin));
-		}
-	}
 
 	// NB: block formatting is coded in dependency order, not in 1-to-1 code flow order
 	static if (is(RT == interface)) {
@@ -943,15 +969,6 @@ private string genClientBody(alias Func)() {
 
 		// Block 2
 		foreach (i, PT; PTT){
-			static assert (
-				ParamNames[i].length,
-				format(
-				       "Parameter %s of %s has no name.",
-				       i,
-				       method
-				)
-			);
-
 			// Check origin of parameter
 			mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Decl);
 
@@ -961,17 +978,20 @@ private string genClientBody(alias Func)() {
 					url_prefix = q{urlEncode(id.toString())~"/"};
 				else
 					url_prefix = q{urlEncode(toRestString(serializeToJson(id)))~"/"};
-			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), paramAttr)) {
-				alias paramsArgList = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), UDATuple!(WebParamAttribute, Func));
-				static assert (paramsArgList.length == 1, "Multiple attribute for parameter '"~ParamNames[i]~"' in "~FuncId);
-				static if (paramsArgList[0].origin == WebParamAttribute.Origin.Header)
-					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, paramsArgList[0].field, paramsArgList[0].identifier);
+			} else static if (anySatisfy!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT)) {
+				alias PWPAT = Filter!(mixin(GenCmp!("ClientFilter", i, ParamNames[i]).Name), WPAT);
+				static if (PWPAT[0].origin == WebParamAttribute.Origin.Header)
+					param_handling_str ~= format(q{headers__["%s"] = to!string(%s);}, PWPAT[0].field, PWPAT[0].identifier);
+				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Query)
+					queryParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
+				else static if (PWPAT[0].origin == WebParamAttribute.Origin.Body)
+					bodyParamCTMap[PWPAT[0].field] = PWPAT[0].identifier;
 				else
-					static assert (0, "Only header parameter are currently supported client-side");
+					static assert (0, "Internal error: Unknown WebParamAttribute.Origin in REST client code generation.");
 			} else static if (!ParamNames[i].startsWith("_")
 					  && !IsAttributedParameter!(Func, ParamNames[i])) {
 				// underscore parameters are sourced from the HTTPServerRequest.params map or from url itself
-				defaultParamCTMap[_stripNameHelper(ParamNames[i])] = ParamNames[i];
+				defaultParamCTMap[stripTUnderscore(ParamNames[i], null)] = ParamNames[i];
 			}
 		}
 
@@ -1061,7 +1081,6 @@ private {
 
 	T fromRestString(T)(string value)
 	{
-		import std.traits;
 		import std.conv : ConvException;
 		import vibe.web.common : HTTPStatusException, HTTPStatus;
 		try {
@@ -1069,7 +1088,7 @@ private {
 			else static if (is(T == bool)) return value == "true";
 			else static if (is(T : int)) return to!T(value);
 			else static if (is(T : double)) return to!T(value); // FIXME: formattedWrite(dst, "%.16g", json.get!double);
-			else static if (is(T : string)) return value;
+			else static if (is(string : T)) return value;
 			else static if (__traits(compiles, T.fromISOExtString("hello"))) return T.fromISOExtString(value);
 			else static if (__traits(compiles, T.fromString("hello"))) return T.fromString(value);
 			else return deserializeJson!T(parseJson(value));
@@ -1107,6 +1126,277 @@ unittest
 	static assert (imports == "static import vibe.web.rest;");
 }
 
+// Check that the interface is valid. Every checks on the correctness of the
+// interface should be put in checkRestInterface, which allows to have consistent
+// errors in the server and client.
+private string getInterfaceValidationError(I)()
+out (result) { assert((result is null) == !result.length); }
+body {
+	import std.typetuple : TypeTuple;
+	import std.algorithm : strip;
+
+	// The hack parameter is to kill "Statement is not reachable" warnings.
+	string validateMethod(alias Func)(bool hack = true) {
+		import vibe.internal.meta.uda;
+		import std.string : format;
+
+		static assert(is(FunctionTypeOf!Func), "Internal error");
+
+		if (!__ctfe)
+			assert(false, "Internal error");
+
+		enum FuncId = (fullyQualifiedName!I~ "." ~ __traits(identifier, Func));
+		alias PT = ParameterTypeTuple!Func;
+		static if (!__traits(compiles, ParameterIdentifierTuple!Func)) {
+			if (hack) return "%s: A parameter has no name.".format(FuncId);
+			alias PN = TypeTuple!("-DummyInvalid-");
+		} else
+			alias PN = ParameterIdentifierTuple!Func;
+		alias WPAT = UDATuple!(WebParamAttribute, Func);
+
+		// Check if there is no orphan UDATuple (e.g. typo while writing the name of the parameter).
+		foreach (i, uda; WPAT) {
+			// Note: static foreach gets unrolled, generating multiple nested sub-scope.
+			// The spec / DMD doesn't like when you have the same symbol in those,
+			// leading to wrong codegen / wrong template being reused.
+			// That's why those templates need different names.
+			// See DMD bug #9748.
+			mixin(GenOrphan!(i).Decl);
+			// template CmpOrphan(string name) { enum CmpOrphan = (uda.identifier == name); }
+			static if (!anySatisfy!(mixin(GenOrphan!(i).Name), PN)) {
+				return "%s: No parameter '%s' (referenced by attribute @%sParam)"
+					.format(FuncId, uda.identifier, uda.origin);
+			}
+		}
+
+		foreach (i, P; PT) {
+			static if (!PN[i].length)
+				return "%s: Parameter %d has no name."
+					.format(FuncId, i);
+			// Check for multiple origins
+			static if (WPAT.length) {
+				// It's okay to reuse GenCmp, as the order of params won't change.
+				// It should/might not be reinstantiated by the compiler.
+				mixin(GenCmp!("Loop", i, PN[i]).Decl);
+				alias WPA = Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
+				static if (WPA.length > 1)
+					return "%s: Parameter '%s' has multiple @*Param attributes on it."
+						.format(FuncId, PN[i]);
+			}
+		}
+
+		// Check for misplaced ref / out
+		alias PSC = ParameterStorageClass;
+		foreach (i, SC; ParameterStorageClassTuple!Func) {
+			static if (SC & PSC.out_ || SC & PSC.ref_) {
+				mixin(GenCmp!("Loop", i, PN[i]).Decl);
+				alias Attr
+					= Filter!(mixin(GenCmp!("Loop", i, PN[i]).Name), WPAT);
+				static if (Attr.length != 1)
+					return "%s: Parameter '%s' cannot be %s"
+						.format(FuncId, PN[i], SC & PSC.out_ ? "out" : "ref");
+				else static if (Attr[0].origin != WebParamAttribute.Origin.Header) {
+					return "%s: %s parameter '%s' cannot be %s"
+						.format(FuncId, Attr[0].origin, PN[i],
+							SC & PSC.out_ ? "out" : "ref");
+				}
+			}
+		}
+
+		// Check for @path(":name")
+		enum pathAttr = findFirstUDA!(PathAttribute, Func);
+		static if (pathAttr.found) {
+			static if (!pathAttr.value.length) {
+				if (hack)
+					return "%s: Path is null or empty".format(FuncId);
+			} else {
+				import std.algorithm : canFind, splitter;
+				// splitter doesn't work with alias this ?
+				auto str = pathAttr.value.data;
+				if (str.canFind("//")) return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
+				str = str.strip('/');
+				foreach (elem; str.splitter('/')) {
+					assert(elem.length, "Empty path entry not caught yet!?");
+
+					if (elem[0] == ':') {
+						// typeof(PN) is void when length is 0.
+						static if (!PN.length) {
+							if (hack)
+								return "%s: Path contains '%s', but no parameter '_%s' defined."
+									.format(FuncId, elem, elem[1..$]);
+						} else {
+							if (![PN].canFind("_"~elem[1..$]))
+								return "%s: Path contains '%s', but no parameter '_%s' defined."
+									.format(FuncId, elem, elem[1..$]);
+							elem = elem[1..$];
+						}
+					}
+				}
+				// TODO: Check for validity of the subpath.
+			}
+		}
+		return null;
+	}
+
+	if (!__ctfe)
+		assert(false, "Internal error");
+	foreach (method; __traits(allMembers, I)) {
+		// WORKAROUND #1045 / @@BUG14375@@
+		static if (method.length != 0)
+			foreach (overload; MemberFunctionsTuple!(I, method)) {
+				static if (validateMethod!(overload)())
+					return validateMethod!(overload)();
+			}
+	}
+	return null;
+}
+
+// Test detection of user typos (e.g., if the attribute is on a parameter that doesn't exist).
+unittest {
+	enum msg = "No parameter 'ath' (referenced by attribute @HeaderParam)";
+
+	interface ITypo {
+		@headerParam("ath", "Authorization") // mistyped parameter name
+		string getResponse(string auth);
+	}
+	enum err = getInterfaceValidationError!ITypo;
+	static assert(err !is null && stripTestIdent(err) == msg,
+		"Expected validation error for getResponse, got "~err);
+}
+
+// Multiple origin for a parameter
+unittest {
+	enum msg = "Parameter 'arg1' has multiple @*Param attributes on it.";
+
+	interface IMultipleOrigin {
+		@headerParam("arg1", "Authorization") @bodyParam("arg1", "Authorization")
+		string getResponse(string arg1, int arg2);
+	}
+	enum err = getInterfaceValidationError!IMultipleOrigin;
+	static assert(err !is null && stripTestIdent(err) == msg, err);
+}
+
+// Missing parameter name
+unittest {
+	static if (__VERSION__ < 2067)
+		enum msg = "A parameter has no name.";
+	else
+		enum msg = "Parameter 0 has no name.";
+
+	interface IMissingName1 {
+		string getResponse(string = "troublemaker");
+	}
+	interface IMissingName2 {
+		string getResponse(string);
+	}
+	enum err1 = getInterfaceValidationError!IMissingName1;
+	static assert(err1 !is null && stripTestIdent(err1) == msg, err1);
+	enum err2 = getInterfaceValidationError!IMissingName2;
+	static assert(err2 !is null && stripTestIdent(err2) == msg, err2);
+}
+
+// Issue 949
+unittest {
+	enum msg = "Path contains ':owner', but no parameter '_owner' defined.";
+
+	@path("/repos/")
+	interface IGithubPR {
+		@path(":owner/:repo/pulls")
+		string getPullRequests(string owner, string repo);
+	}
+	enum err = getInterfaceValidationError!IGithubPR;
+	static assert(err !is null && stripTestIdent(err) == msg, err);
+}
+
+// Issue 1017
+unittest {
+	interface TestSuccess { @path("/") void test(); }
+	interface TestSuccess2 { @path("/test/") void test(); }
+	interface TestFail { @path("//") void test(); }
+	interface TestFail2 { @path("/test//it/") void test(); }
+	static assert(getInterfaceValidationError!TestSuccess is null);
+	static assert(getInterfaceValidationError!TestSuccess2 is null);
+	static assert(stripTestIdent(getInterfaceValidationError!TestFail)
+		== "Path '//' contains empty entries.");
+	static assert(stripTestIdent(getInterfaceValidationError!TestFail2)
+		== "Path '/test//it/' contains empty entries.");
+}
+
+unittest {
+	interface NullPath  { @path(null) void test(); }
+	interface ExplicitlyEmptyPath { @path("") void test(); }
+	static assert(stripTestIdent(getInterfaceValidationError!NullPath)
+				  == "Path is null or empty");
+	static assert(stripTestIdent(getInterfaceValidationError!ExplicitlyEmptyPath)
+				  == "Path is null or empty");
+
+	// Note: Implicitly empty path are valid:
+	// interface ImplicitlyEmptyPath { void get(); }
+}
+
+// Accept @headerParam ref / out parameters
+unittest {
+	interface HeaderRef {
+		@headerParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderRef is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderRef));
+
+	interface HeaderOut {
+		@headerParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(getInterfaceValidationError!HeaderOut is null,
+		      stripTestIdent(getInterfaceValidationError!HeaderOut));
+}
+
+// Reject unattributed / @queryParam or @bodyParam ref / out parameters
+unittest {
+	interface QueryRef {
+		@queryParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!QueryRef)
+		== "Query parameter 'auth' cannot be ref");
+
+	interface QueryOut {
+		@queryParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!QueryOut)
+		== "Query parameter 'auth' cannot be out");
+
+	interface BodyRef {
+		@bodyParam("auth", "auth")
+		string getData(ref string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!BodyRef)
+		== "Body parameter 'auth' cannot be ref");
+
+	interface BodyOut {
+		@bodyParam("auth", "auth")
+		void getData(out string auth);
+	}
+	static assert(stripTestIdent(getInterfaceValidationError!BodyOut)
+		== "Body parameter 'auth' cannot be out");
+
+	// There's also the possibility of someone using an out unnamed
+	// parameter (don't ask me why), but this is catched as unnamed
+	// parameter, so we don't need to check it here.
+}
+
+private string stripTestIdent(string msg) {
+	static if (__VERSION__ <= 2066) {
+		import vibe.utils.string;
+		auto idx = msg.indexOfCT(": ");
+	} else {
+		import std.string;
+		auto idx = msg.indexOf(": ");
+	}
+	return idx >= 0 ? msg[idx+2 .. $] : msg;
+}
+
 // Small helper for client code generation
 private string paramCTMap(string[string] params)
 {
@@ -1121,10 +1411,9 @@ private string paramCTMap(string[string] params)
 	return app.data.join(", ");
 }
 
-// Copy behavior of _stripName (private member of RestClientInterface).
-private string _stripNameHelper(string name)
-{
-	if (name.endsWith("_"))
+string stripTUnderscore(string name, RestInterfaceSettings settings) {
+	if ((settings is null || settings.stripTrailingUnderscore)
+	    && name.endsWith("_"))
 		return name[0 .. $-1];
 	else return name;
 }
@@ -1151,4 +1440,54 @@ private template GenOrphan(int id) {
 		}
 	}.format(Name);
 	enum Name = "OrphanCheck"~to!string(id);
+}
+
+// Workaround for issue #1045 / DMD bug 14375
+// Also, an example of policy-based design using this module.
+unittest {
+	import std.traits, std.typetuple;
+	import vibe.internal.meta.codegen;
+	import vibe.internal.meta.typetuple;
+
+	interface Policies {
+		@headerParam("auth", "Authorization")
+		string BasicAuth(string auth, ulong expiry);
+	}
+
+	@path("/keys/")
+	interface IKeys(alias AuthenticationPolicy = Policies.BasicAuth) {
+		static assert(is(FunctionTypeOf!AuthenticationPolicy == function),
+			      "Policies needs to be functions");
+		@path("/") @method(HTTPMethod.POST)
+		mixin CloneFunctionDecl!(AuthenticationPolicy, true, "create");
+	}
+
+	class KeysImpl : IKeys!() {
+	override:
+		string create(string auth, ulong expiry) {
+			return "4242-4242";
+		}
+	}
+
+	// Some sanity checks
+        // Note: order is most likely implementation dependent.
+	// Good thing we only have one frontend...
+	alias WPA = WebParamAttribute;
+	static assert(Compare!(
+			      Group!(__traits(getAttributes, IKeys!().create)),
+			      Group!(PathAttribute("/"),
+				     MethodAttribute(HTTPMethod.POST),
+				     WPA(WPA.Origin.Header, "auth", "Authorization"))));
+
+	static if (__VERSION__ > 2065) {
+		void register() {
+			auto router = new URLRouter();
+			router.registerRestInterface(new KeysImpl());
+		}
+
+		void query() {
+			auto client = new RestInterfaceClient!(IKeys!())("http://127.0.0.1:8080");
+			assert(client.create("Hello", 0) == "4242-4242");
+		}
+	}
 }

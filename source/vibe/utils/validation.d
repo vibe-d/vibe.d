@@ -30,7 +30,7 @@ import std.utf;
 	Note that the validation could be stricter in some cases than required. The user name
 	is forced to be ASCII, which is not strictly required as of RFC 6531. It also does not
 	allow quotiations for the user name part (RFC 5321).
-	
+
 	Invalid email adresses will cause an exception with the error description to be thrown.
 */
 string validateEmail()(string str, size_t max_length = 64)
@@ -55,7 +55,7 @@ bool validateEmail(R)(ref R error_sink, string str, size_t max_length = 64)
 
 	if (!validateIdent(error_sink, str[0 .. at_idx], "!#$%&'*+-/=?^_`{|}~.(),:;<>@[\\]", "An email user name", false))
 		return false;
-	
+
 	auto domain = str[at_idx+1 .. $];
 	auto dot_idx = domain.indexOf('.');
 	if (dot_idx <= 0 || dot_idx >= str.length-2) {
@@ -71,7 +71,7 @@ bool validateEmail(R)(ref R error_sink, string str, size_t max_length = 64)
 		error_sink.put("The email address is invalid.");
 		return false;
 	}
-	
+
 	return true;
 }
 
@@ -85,7 +85,7 @@ unittest {
 
 	User names may only contain ASCII letters and digits or any of the specified additional
 	letters.
-	
+
 	Invalid user names will cause an exception with the error description to be thrown.
 */
 string validateUserName()(string str, int min_length = 3, int max_length = 32, string additional_chars = "-_", bool no_number_start = true)
@@ -111,7 +111,7 @@ bool validateUserName(R)(ref R error_sink, string str, int min_length = 3, int m
 
 	if (!validateIdent(error_sink, str, additional_chars, "A user name", no_number_start))
 		return false;
-	
+
 	return true;
 }
 
@@ -119,7 +119,7 @@ bool validateUserName(R)(ref R error_sink, string str, int min_length = 3, int m
 
 	The identifier must begin with a letter or with any of the additional_chars and may
 	contain only ASCII letters and digits and any of the additional_chars.
-	
+
 	Invalid identifiers will cause an exception with the error description to be thrown.
 */
 string validateIdent()(string str, string additional_chars = "_", string entity_name = "An identifier", bool no_number_start = true)
@@ -142,12 +142,12 @@ bool validateIdent(R)(ref R error_sink, string str, string additional_chars = "_
 				error_sink.formattedWrite("%s must not begin with a number.", entity_name);
 				return false;
 			}
-		}	
+		}
 		if (additional_chars.canFind(ch)) continue;
 		error_sink.formattedWrite("%s may only contain numbers, letters and one of (%s)", entity_name, additional_chars);
 		return false;
 	}
-	
+
 	return true;
 }
 

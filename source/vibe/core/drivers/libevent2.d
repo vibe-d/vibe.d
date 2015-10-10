@@ -77,8 +77,14 @@ final class Libevent2Driver : EventDriver {
 		size_t m_addressInfoCacheLength = 0;
 	}
 
-	this(DriverCore core)
+	this(DriverCore core) nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		debug m_ownerThread = Thread.getThis();
 		m_core = core;
 		s_driverCore = core;
@@ -165,8 +171,8 @@ final class Libevent2Driver : EventDriver {
 		s_alreadyDeinitialized = true;
 	}
 
-	@property event_base* eventLoop() { return m_eventLoop; }
-	@property evdns_base* dnsEngine() { return m_dnsBase; }
+	@property event_base* eventLoop() nothrow { return m_eventLoop; }
+	@property evdns_base* dnsEngine() nothrow { return m_dnsBase; }
 
 	int runEventLoop()
 	{
@@ -176,6 +182,7 @@ final class Libevent2Driver : EventDriver {
 			processTimers();
 			s_driverCore.notifyIdle();
 		}
+		m_exit = false;
 		return ret;
 	}
 
@@ -189,8 +196,10 @@ final class Libevent2Driver : EventDriver {
 
 	bool processEvents()
 	{
+		logDebugV("process events with exit == %s", m_exit);
 		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
 		processTimers();
+		logDebugV("processed events with exit == %s", m_exit);
 		if (m_exit) {
 			m_exit = false;
 			return false;
@@ -200,6 +209,7 @@ final class Libevent2Driver : EventDriver {
 
 	void exitEventLoop()
 	{
+		logDebug("Libevent2Driver.exitEventLoop called");
 		m_exit = true;
 		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
 	}
@@ -605,62 +615,30 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	~this()
 	{
-		foreach (ts; m_waiters)
+		foreach (ref m_waiters.Value ts; m_waiters)
 			event_free(ts.event);
 	}
 
 	void emit()
 	{
+		// Since 2068, synchronized statements are annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2068)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
-			foreach (ref sl; m_waiters)
+			foreach (ref m_waiters.Value sl; m_waiters)
 				event_active(sl.event, 0, 0);
 		}
 	}
 
-	void wait()
-	{
-		wait(m_emitCount);
-	}
-
-	int wait(int reference_emit_count)
-	{
-		assert(!amOwner());
-
-		auto ec = this.emitCount;
-		if (ec != reference_emit_count) return ec;
-
-		acquire();
-		scope(exit) release();
-
-		while (ec == reference_emit_count) {
-			getThreadLibeventDriverCore().yieldForEvent();
-			ec = this.emitCount;
-		}
-		return ec;
-	}
-
-	int wait(Duration timeout, int reference_emit_count)
-	{
-		assert(!amOwner());
-
-		auto ec = this.emitCount;
-		if (ec != reference_emit_count) return ec;
-
-		acquire();
-		scope(exit) release();
-		auto tm = m_driver.createTimer(null);
-		scope (exit) m_driver.releaseTimer(tm);
-		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
-		m_driver.rearmTimer(tm, timeout, false);
-
-		while (ec == reference_emit_count) {
-			getThreadLibeventDriverCore().yieldForEvent();
-			ec = this.emitCount;
-			if (!m_driver.isTimerPending(tm)) break;
-		}
-		return ec;
-	}
+	void wait() { wait(m_emitCount); }
+	int wait(int reference_emit_count) { return  doWait!true(reference_emit_count); }
+	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
+	int waitUninterruptible(int reference_emit_count) { return  doWait!false(reference_emit_count); }
+	int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
 
 	void acquire()
 	{
@@ -716,6 +694,49 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 				m_waiters.remove(thr);
 			}
 		}
+	}
+
+	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
+		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
+		acquire();
+		scope(exit) release();
+
+		while (ec == reference_emit_count) {
+			static if (INTERRUPTIBLE) getThreadLibeventDriverCore().yieldForEvent();
+			else getThreadLibeventDriverCore().yieldForEventDeferThrow();
+			ec = this.emitCount;
+		}
+		return ec;
+	}
+
+	private int doWait(bool INTERRUPTIBLE)(Duration timeout, int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
+		assert(!amOwner());
+
+		auto ec = this.emitCount;
+		if (ec != reference_emit_count) return ec;
+
+		acquire();
+		scope(exit) release();
+		auto tm = m_driver.createTimer(null);
+		scope (exit) m_driver.releaseTimer(tm);
+		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
+		m_driver.rearmTimer(tm, timeout, false);
+
+		while (ec == reference_emit_count) {
+			static if (INTERRUPTIBLE) getThreadLibeventDriverCore().yieldForEvent();
+			else getThreadLibeventDriverCore().yieldForEventDeferThrow();
+			ec = this.emitCount;
+			if (!m_driver.isTimerPending(tm)) break;
+		}
+		return ec;
 	}
 
 	private static nothrow extern(C)
@@ -1171,20 +1192,23 @@ private {
 	bool s_alreadyDeinitialized = false;
 }
 
-package event_base* getThreadLibeventEventLoop()
+package event_base* getThreadLibeventEventLoop() nothrow
 {
 	return s_eventLoop;
 }
 
-package DriverCore getThreadLibeventDriverCore()
+package DriverCore getThreadLibeventDriverCore() nothrow
 {
 	return s_driverCore;
 }
 
-private int getLastSocketError()
+private int getLastSocketError() nothrow
 {
-	version(Windows) return WSAGetLastError();
-	else {
+	version(Windows) {
+		static if (__VERSION__ < 2066)
+			scope (failure) assert(false); // assert nothrow condition
+		return WSAGetLastError();
+	} else {
 		import core.stdc.errno;
 		return errno;
 	}

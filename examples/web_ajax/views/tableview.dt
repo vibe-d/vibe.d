@@ -1,15 +1,19 @@
 extends layout
+
 prepend block head
-	title ="Welcome!"
+	title Welcome!
+
 block content
 	.clear
 	h1 Welcome!
+
 	.datatable#datatable
 		h2 Users
 		include createTable
+
 	.filterbycontainer
 		h2 Filter users by field value
-		form(onsubmit="return getTable(this.field.value, this.value.value)", action='/getTable', method='GET')
+		form(onsubmit="return getTable(this.field.value, this.value.value)", action='/table', method='GET')
 			table
 				tr
 					td Filter by:
@@ -22,10 +26,14 @@ block content
 					td Value:
 					td 
 						input(type="text", width="160", name="value")
+				tr
+					td
+					td
+						button(type="submit") Filter
 		
 	.additemcontainer
 		h2 Add new user
-		form(action='/addUser', method='POST')
+		form(action='/add_user', method='POST')
 			table
 				- import std.string;
 				- foreach ( item ; ["name", "surname", "address"] )
@@ -37,9 +45,10 @@ block content
 					td
 					td
 						input(type='submit', value="Add")
+
 	.additemcontainer
 		h2 Add new user (structured address)
-		form(action='/addUser', method='POST')
+		form(action='/add_user_structured', method='POST')
 			table
 				- import std.string;
 				- foreach ( item ; ["name", "surname"] )
@@ -57,10 +66,11 @@ block content
 					td
 					td
 						input(type='submit', value="Add")
+
 	script.
 		function getTable(field, value) {
 			var req = new XMLHttpRequest(); 
-			req.open('GET', '/dataProvider/getData?field='+field+'&value='+value, false);
+			req.open('GET', '/data_provider/data_filtered?field='+field+'&value='+value, false);
 			req.send();
 			var tablediv=document.getElementById('datatable');
 			tablediv.innerHTML = req.responseText;

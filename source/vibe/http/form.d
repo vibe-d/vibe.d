@@ -27,305 +27,6 @@ import std.typecons;
 
 
 /**
-	Generates a form based interface to the given instance - scheduled to be
-	deprecated in favor of vibe.web.web.registerWebInterface.
-
-	Each function is callable with either GET or POST using form encoded
-	parameters.  All methods of I that start with "get", "query", "add", "create",
-	"post" are made available via the URL url_prefix~method_name. A method named
-	"index" will be made available via url_prefix. method_name is generated from
-	the original method name by the same rules as for
-	vibe.http.rest.registerRestInterface. All these methods might take a
-	HTTPServerRequest parameter and a HTTPServerResponse parameter, but don't have
-	to.
-
-	All additional parameters will be filled with available form-data fields.
-	Every parameter name has to match a form field name (or is a fillable
-	struct). The registered handler will throw an exception if no overload is
-	found that is compatible with all available form data fields.
-
-	If a parameter name is not found in the form data and the parameter is a
-	struct, all accessible fields of the struct (might also be properties) will
-	be searched in the form, with the parameter (struct) name prefixed. An underscore is
-	used as delimiter. So if you have a struct parameter with name 'foo' of type:
-	---
-	struct FooBar {
-		int bar;
-		int another_foo;
-	}
-	---
-	the form data must contain the keys 'foo_bar' and 'foo_another_foo'. Their
-	corresponding values will be applied to the structure's fields. If not all
-	fields of the struct are found, this is considered an error and the next
-	overload (if any) will be tried.
-	
-	The registered handler gives really good error messages if no appropriate
-	overload is found, but this comes at the price of some allocations for the
-	error messages, which are not used at all if eventually a valid overload is
-	found. So because of this and because the search for an appropriate
-	overload is done at run time (according to the provided form data) you
-	might want to avoid overloads for performance critical sites.
-
-	For a thorough example of how to use this method, see the form_interface
-	example in the examples directory.
-
-	See_Also: registerFormMethod, vibe.http.rest.registerRestInterface
-
-	Params:
-		router = The router the found methods are registered with.
-
-		instance = The instance whose methods should be called via the registered URLs.
-
-		url_prefix = The prefix before the method name. A method named getWelcomePage
-		with a given url_prefix="/mywebapp/welcomePage/" would be made available as
-		"/mywebapp/welcomePage/getWelcomePage" if MethodStyle is Unaltered.
-
-		style = How the url part representing the method name should be altered.
-        strict = Yes.strict if you want missing parameters in the form to be an error. No.strict if you are happy with the types' default value in this case. 
-                (If you have overloads this might cause not the best matching overload to be chosen.)
-
-	Examples:
-
-	---
-	class FrontEnd {
-		// GET /
-		void index(HTTPServerResponse res)
-		{
-			res.render!("index.dt");
-		}
-
-		/// GET /files?folder=...
-		void getFiles(HTTPServerRequest req, HTTPServerResponse res, string folder)
-		{
-			res.render!("files.dt", req, folder);
-		}
-
-		/// POST /login
-		void postLogin(HTTPServerRequest req, HTTPServerResponse res, string username,
-			string password)
-		{
-			if( username != "tester" || password != "secret" )
-				throw new HTTPStatusException(HTTPStatus.Unauthorized);
-			auto session = req.session;
-			if( !session ) session = res.startSession();
-			session["username"] = username;
-			res.redirect("/");
-		}
-	}
-
-	shared static this()
-	{
-		auto settings = new HTTPServerSettings;
-		settings.port = 8080;
-		auto router = new URLRouter;
-		registerFormInterface(router, new FrontEnd, "/");
-		listenHTTP(settings, router);
-	}
-	---
-
-*/
-deprecated("Please use vibe.web.web.registerWebInterface instead (slightly changed semantics).")
-void registerFormInterface(I)(URLRouter router, I instance, string url_prefix,
-		MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict)
-{
-	foreach( method; __traits(allMembers, I) ){
-		//pragma(msg, "What: "~"&instance."~method);
-		//pragma(msg, "Compiles: "~to!string(__traits(compiles, {mixin("auto dg=&instance."~method);}))); 
-		//pragma(msg, "Is function: "~to!string(is(typeof(mixin("I."~method)) == function )));
-		//pragma(msg, "Is delegate: "~to!string(is(typeof(mixin("I."~method)) == delegate )));
-		static if( is(typeof(mixin("I."~method)) == function) && !__traits(isStaticFunction, mixin("I."~method)) && (method.startsWith("get") || method.startsWith("query") || method.startsWith("add") 
-					|| method.startsWith("create") || method.startsWith("post") || method == "index" ))  {
-			registerFormMethod!method(router, instance, url_prefix, style, strict);
-		}
-	}
-}
-unittest {
-	class Test {
-		static void f() {
-		}
-		int h(int a) {
-			return a;
-		}
-		void b()  {
-		}
-		int c;
-	}
-	static assert(is(typeof(Test.f) == function));
-	static assert(!is(typeof(Test.c) == function));
-	static assert(is(typeof(Test.h) == function));
-	static assert(is(typeof(Test.b) == function));
-	static assert(__traits(isStaticFunction, Test.f));
-	static assert(!__traits(isStaticFunction, Test.h));
-	static assert(!__traits(isStaticFunction, Test.b));
-}
-
-
-/**
-	Registers just a single method.
-
-	For details see registerFormInterface. This method does exactly the
-	same, but instead of registering found methods that match a scheme it just
-	registers the method specified.
-
-	See_Also: registerFormInterface
-
-	Params:
-		method = The name of the method to register. It might be
-		overloaded, one overload has to match any given form data, otherwise an error is triggered.
-*/
-deprecated
-void registerFormMethod(string method, I)(URLRouter router, I instance, string url_prefix, MethodStyle style = MethodStyle.Unaltered, Flag!"strict" strict=Yes.strict) 
-{
-	string url(string name) {
-		if (name.length) return url_prefix ~ adjustMethodStyle(name, style);
-		else return url_prefix;
-	}
-	
-	auto handler=formMethodHandler!(I, method)(instance, strict);
-	string url_method= method=="index" ? "" : method;
-	router.get(url(url_method), handler);
-	router.post(url(url_method), handler);
-}
-
-
-/*
-	Generate a HTTPServerRequestDelegate from a generic function with arbitrary arguments.
-	The arbitrary arguments will be filled in with data from the form in req. For details see applyParametersFromAssociativeArrays.
-	See_Also: applyParametersFromAssociativeArrays
-	Params:
-		delegate = Some function, which some arguments which must be constructible from strings with to!ArgType(some_string), except one optional parameter
-		of type HTTPServerRequest and one of type HTTPServerResponse which are passed over.
-
-	Returns: A HTTPServerRequestDelegate which passes over any form data to the given function.
-*/
-/// private
-private HTTPServerRequestDelegate formMethodHandler(DelegateType)(DelegateType func, Flag!"strict" strict=Yes.strict) if(isCallable!DelegateType) 
-{
-	void handler(HTTPServerRequest req, HTTPServerResponse res)
-	{
-		string error;
-		enforceBadRequest(applyParametersFromAssociativeArray(req, res, func, error, strict), error);
-	}
-	return &handler;
-}
-
-/*
-	Create a delegate handling form data for any matching overload of T.method.
-
-	T is some class or struct. Method some probably overloaded method of T. The returned delegate will try all overloads
-	of the passed method and will only raise an error if no conforming overload is found.
-*/
-/// private
-private HTTPServerRequestDelegate formMethodHandler(T, string method)(T inst, Flag!"strict" strict)
-{
-	import std.stdio;
-	void handler(HTTPServerRequest req, HTTPServerResponse res)
-	{
-		import std.traits;
-//		alias MemberFunctionsTuple!(T, method) overloads;
-		string errors;
-		foreach(func; __traits(getOverloads, T, method)) {
-			string error;
-			ReturnType!func delegate(ParameterTypeTuple!func) myoverload=&__traits(getMember, inst, method);
-			if(applyParametersFromAssociativeArray!func(req, res, myoverload, error, strict)) {
-				return;
-			}
-			errors~="Overload "~method~typeid(ParameterTypeTuple!func).toString()~" failed: "~error~"\n\n";
-		}
-		enforceBadRequest(false, "No method found that matches the found form data:\n"~errors);
-	}
-	return &handler;
-}
-
-/*
-	Tries to apply all named arguments in args to func.
-
-	If it succeeds it calls the function with req, res (if it has one
-	parameter of type HTTPServerRequest and one of type HTTPServerResponse), and
-	all the values found in args. 
-
-	If any supplied argument could not be applied or the method 
-	requires more arguments than given, the method returns false and does not call
-	func.  In this case error gets filled with some string describing which
-	parameters could not be applied. Exceptions are not used in this situation,
-	because when traversing overloads this might be a quite common scenario.
-
-	Applying data happens as follows: 
-	
-	1. All parameters are traversed
-	2. If parameter is of type HTTPServerRequest or HTTPServerResponse req/res will be applied.
-	3. If the parameters name is found in the form, the form data has to be convertible with conv.to to the parameters type, otherwise this method returns false.
-	4. If the parameters name is not found in the form, but is a struct, its fields are traversed and searched in the form. The form needs to contain keys in the form: parameterName_structField.
-		So if you have a struct paramter foo with a field bar and a field fooBar, the form would need to contain keys: foo_bar and foo_fooBar. The struct fields maybe datafields or properties.
-	5. If a struct field is not found in the form or the struct has no fields that are assignable, the method returns false.
-
-	Calls: applyParametersFromAssociativeArray!(Func,Func)(req, res, func, error),
-	if you want to handle overloads of func, use the second version of this method
-	and pass the overload alias as first template parameter. (For retrieving parameter names)
-	
-	See_Also: formMethodHandler
-
-	Params:
-		req = The HTTPServerRequest object that gets queried for form
-		data (req.query for GET requests, req.form for POST requests) and that is
-		passed on to func, if func has a parameter of matching type. Each key in the
-		form data must match a parameter name, the corresponding value is then applied.
-		HTTPServerRequest and HTTPServerResponse arguments are excluded as they are
-		qrovided by the passed req and res objects.
-
-
-		res = The response object that gets passed on to func if func
-		has a parameter of matching type.
-
-		error = This string will be set to a descriptive message if not all parameters could be matched.
-        strict = Yes.strict if you want missing parameters in the form to be an error. No.strict if you are happy with the types default value in this case.
-
-	Returns: true if successful, false otherwise.
-*/
-/// private
-private bool applyParametersFromAssociativeArray(Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
-	return applyParametersFromAssociativeArray!(Func, Func)(req, res, func, error);
-}
-
-// Overload which takes additional parameter for handling overloads of func.
-/// private
-private bool applyParametersFromAssociativeArray(alias Overload, Func)(HTTPServerRequest req, HTTPServerResponse res, Func func, out string error, Flag!"strict" strict) {
-	alias ParameterTypes = ParameterTypeTuple!Overload;
-	ParameterTypes args;
-	auto form = (req.method == HTTPMethod.GET ? req.query : req.form);
-	int count = 0;
-	Error e;
-	foreach(i, item; ParameterIdentifierTuple!Overload) {
-		static if(is(ParameterTypes[i] : HTTPServerRequest)) {
-			args[i] = req;
-		}
-		else static if(is(ParameterTypes[i] : HTTPServerResponse)) {
-			args[i] = res;
-		}
-		else {
-			count+=loadFormDataRecursiveSingle(form, args[i], item, e, strict);
-		}
-	}
-	error=e.message;
-	if(e.missing_parameters.length) {
-		error~="The following parameters have not been found in the form data: "~to!string(e.missing_parameters)~"\n";
-		error~="Provided form data was: ";
-                foreach(k, v; form)
-                    error ~= "[" ~ k ~ ":" ~ v ~ "] ";
-	}
-	if(count!=form.length) {
-		error~="The form had "~to!string(form.length)~" element(s), of which "~to!string(count)~" element(s) were applicable.\n";
-	}
-	if(error) {
-		error="\n------\n"~error~"------";
-		return false;
-	}
-	func(args);
-	return true;
-}
-
-
-/**
 	Encodes the given dictionary as URL encoded form data.
 */
 void writeFormData(R)(R dst, in string[string] data)
@@ -357,9 +58,33 @@ unittest {
 	}
 }
 
+/**
+	Encodes the given ranges of `Tuple!(string, string)` as URL encoded form data
+*/
+void writeFormData(R, PairRange)(R dst, PairRange pr)
+	if (isOutputRange!(R, char) && isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
+{
+	import vibe.textfilter.urlencode;
+
+   if(pr.empty) return;
+
+   auto fst = pr.front;
+   pr.popFront();
+
+   filterURLEncode(dst, fst[0]);
+   dst.put("=");
+   filterURLEncode(dst, fst[1]);
+
+	foreach (pair; pr) {
+		dst.put("&");
+		filterURLEncode(dst, pair[0]);
+		dst.put("=");
+		filterURLEncode(dst, pair[1]);
+	}
+}
 
 /**
-	Writes a vibe.http.client.HTTPClientRequest body as URL encoded form data.
+	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
 */
 void writeFormBody(HTTPClientRequest req, in string[string] form)
 {
@@ -393,6 +118,53 @@ unittest {
 			});
 	}
 }
+
+/**
+	Writes a `vibe.http.client.HTTPClientRequest` body as URL encoded form data.
+
+	Params:
+	  form = range of `t = Tuple!(string, string)`,
+			 where `t[0]` is the name and `t[1]` the
+			 value of a form entry.
+*/
+void writeFormBody(PairRange)(HTTPClientRequest req, PairRange form)
+   if(isTuple!(ElementType!PairRange) && ElementType!PairRange.length == 2)
+{
+	import vibe.http.form;
+	import vibe.stream.wrapper;
+
+	StringLengthCountingRange len;
+	writeFormData(&len, form.save);
+	req.contentType = "application/x-www-form-urlencoded";
+	req.contentLength = len.count;
+	auto rng = StreamOutputRange(req.bodyWriter);
+	writeFormData(&rng, form);
+}
+
+///
+unittest {
+	import vibe.core.log;
+	import vibe.http.client;
+	import vibe.http.form;
+	import vibe.stream.operations;
+	import std.range;
+
+	void sendForm()
+	{
+		string[] names = ["foo", "bar", "baz"];
+		string[] values = ["1", "2", "3"];
+		auto form = zip(names, values);
+		requestHTTP("http://example.com/form",
+			(scope req) {
+				req.method = HTTPMethod.POST;
+				req.writeFormBody(form);
+			},
+			(scope res) {
+				logInfo("Response: %s", res.bodyReader.readAllUTF8());
+			});
+	}
+}
+
 
 /// private
 struct StringLengthCountingRange {
@@ -443,7 +215,7 @@ struct StringLengthCountingRange {
 		string surname;
 		Address address;
    }
-   // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"] 
+   // Assume form data: [ "customer_name" : "John", "customer_surname" : "Smith", "customer_address_street" : "Broadway", "customer_address_door" : "12", "customer_address_zipCode" : "1002"]
    void postPerson(HTTPServerRequest req, HTTPServerResponse res) {
 		Person p;
 		// We have a default value for country if not provided, so we don't care that it is not:
@@ -455,14 +227,14 @@ struct StringLengthCountingRange {
 		assert(p.name=="John");
 		assert(p.surname=="Smith");
    }
-   --- 
+   ---
   * The mechanism is more useful in get requests, when you have good default values for unspecified parameters.
   * Params:
   *		req  = The HTTPServerRequest that contains the form data. (req.query or req.form will be used depending on HTTPMethod)
   *		load_to = The struct you wan to be filled.
   *		name = The name of the struct, it is used to find data in the form.	(form is queried for name_fieldName).
   */
-FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T)
+deprecated FormDataLoadResult loadFormData(T)(HTTPServerRequest req, ref T load_to, string name="") if(is(T == struct) || isDynamicArray!T)
 {
 	FormFields form = req.method == HTTPMethod.GET ? req.query : req.form;
 	if (form.length == 0)
@@ -599,7 +371,7 @@ unittest {
 		Test1 e;
 		E f;
 	}
-	
+
 	Test t;
 	t.b=8;
 	t.e.a=9;

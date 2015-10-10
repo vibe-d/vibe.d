@@ -58,7 +58,7 @@ unittest {
 
 		// use language settings from the session instead of using the
 		// "Accept-Language" header
-		static string determineLanguage(HTTPServerRequest req)
+		static string determineLanguage(scope HTTPServerRequest req)
 		{
 			if (!req.session) return null; // use default language
 			return req.session.get("language", "");
@@ -90,12 +90,33 @@ html
 			This is a complete paragraph of translated text.
 */
 
-mixin template translationModule(string NAME)
+/** Makes a set of PO files available to a web interface class.
+
+	This mixin template needs to be mixed in at the class scope. It will parse all
+	translation files with the specified file name prefix and make their
+	translations available.
+
+	Params:
+		FILENAME = Base name of the set of PO files to mix in. A file with the
+			name "<FILENAME>.<LANGUAGE>.po" must be available as a string import
+			for each language defined in the translation context.
+
+	Bugs:
+		`FILENAME` should not contain (back)slash characters, as string imports
+		from sub directories will currently fail on Windows. See
+		$(LINK https://issues.dlang.org/show_bug.cgi?id=14349).
+
+	See_Also: `translationContext`
+*/
+mixin template translationModule(string FILENAME)
 {
-	mixin template file_mixin(size_t i) {
+	import std.string : tr;
+	enum NAME = FILENAME.tr(`/.-\`, "____");
+	private mixin template file_mixin(size_t i) {
 		static if (i < languages.length) {
-			enum components = extractDeclStrings(import(NAME~"."~languages[i]~".po"));
-			mixin("enum "~languages[i]~"_"~NAME~" = components;");
+			enum decl_strings = extractDeclStrings(import(FILENAME~"."~languages[i]~".po"));
+			mixin("enum "~languages[i]~"_"~NAME~" = decl_strings;");
+			//mixin decls_mixin!(languages[i], 0);
 			mixin file_mixin!(i+1);
 		}
 	}
@@ -156,7 +177,7 @@ string tr_plural(CTX, string LANG)(string msgid, string msgid_plural, int n, str
 	}
 }
 
-package string determineLanguage(alias METHOD)(HTTPServerRequest req)
+package string determineLanguage(alias METHOD)(scope HTTPServerRequest req)
 {
 	import std.string : indexOf;
 	import std.array;
@@ -345,7 +366,7 @@ LangComponents extractDeclStrings(string text) {
 	return LangComponents(declStrings, nplurals_expr, plural_func_expr);
 }
 
-/// Verify that two simple messages can be read and parsed correctly
+// Verify that two simple messages can be read and parsed correctly
 unittest {
 	auto str = `
 # first string
@@ -394,6 +415,45 @@ msgstr ""
 	assert(1 == ds.length, "Expected one DeclString to have been processed.");
 	assert(ds[0].msgid == "This is an example of text that has been wrapped on two lines.", "Failed to properly wrap the key");
 	assert(ds[0].msgstr == "It should not matter where it takes place, the strings should all be concatenated properly.", "Failed to properly wrap the key");
+}
+
+// Verify that string wrapping and unescaping is handled correctly on example of PO headers
+unittest {
+	auto str = `
+# English translations for ThermoWebUI package.
+# This file is put in the public domain.
+# Automatically generated, 2015.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: developer@example.com\n"
+"POT-Creation-Date: 2015-04-13 17:55+0600\n"
+"PO-Revision-Date: 2015-04-13 14:13+0600\n"
+"Last-Translator: Automatically generated\n"
+"Language-Team: none\n"
+"Language: en\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+`;
+	auto expected = `Project-Id-Version: PROJECT VERSION
+Report-Msgid-Bugs-To: developer@example.com
+POT-Creation-Date: 2015-04-13 17:55+0600
+PO-Revision-Date: 2015-04-13 14:13+0600
+Last-Translator: Automatically generated
+Language-Team: none
+Language: en
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+Plural-Forms: nplurals=2; plural=(n != 1);
+`;
+
+	auto components = extractDeclStrings(str);
+	auto ds = components.messages;
+	assert(0 == ds.length, "Expected one DeclString to have been processed.");
 }
 
 // Verify that the message context is properly parsed
@@ -564,7 +624,8 @@ private string wrapText(string str)
 
 	for (size_t i=0; i<str.length; ++i) {
 		if (str[i] == '\\') {
-			ret ~= str[i..i+1];
+			assert(i+1 < str.length, "The string ends with the escape char: " ~ str);
+			ret ~= str[i..i+2];
 			++i;
 		} else if (str[i] == '"') {
 			wrapped = true;

@@ -9,32 +9,32 @@ import std.functional;
 
 shared string data;
 
-void empty(HTTPServerRequest req, HTTPServerResponse res)
+void empty(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody("");
 }
 
-void static_10(HTTPServerRequest req, HTTPServerResponse res)
+void static_10(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody(cast(string)data[0 .. 10]);
 }
 
-void static_1k(HTTPServerRequest req, HTTPServerResponse res)
+void static_1k(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody(cast(string)data[0 .. 1000]);
 }
 
-void static_10k(HTTPServerRequest req, HTTPServerResponse res)
+void static_10k(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody(cast(string)data[0 .. 10_000]);
 }
 
-void static_100k(HTTPServerRequest req, HTTPServerResponse res)
+void static_100k(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody(cast(string)data[0 .. 100_000]);
 }
 
-void quit(HTTPServerRequest req, HTTPServerResponse res)
+void quit(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	res.writeBody("Exiting event loop...");
 	exitEventLoop();

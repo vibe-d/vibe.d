@@ -25,7 +25,7 @@ version (VibeCustomMain) {}
 else:
 
 version (VibeDefaultMain) {}
-else { pragma(msg, "Warning: -version=VibeDefaultMain will be required in the future to use vibe.d's default main(). Please update your build scripts."); }
+else { static assert(false, "Error: -version=VibeDefaultMain is required to use vibe.d's default main(). Or use -version=VibeCustomMain to use your own main() instead. Please update your build scripts."); }
 
 /**
 	The predefined vibe.d application entry point.
@@ -65,6 +65,7 @@ int main()
 		} else {
 			status = runEventLoop();
 		}
+
 		logDiagnostic("Event loop exited with status %d.", status);
 		return status;
 	}

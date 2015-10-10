@@ -37,7 +37,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		Field[] m_extendedFields;
 		static char[256] s_keyBuffer;
 	}
-	
+
 	alias ValueType = VALUE;
 
 	struct FieldTuple { string key; ValueType value; }
@@ -154,7 +154,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		enforce(pitm !is null, "Accessing non-existent key '"~key~"'.");
 		return *pitm;
 	}
-	
+
 	/** Adds or replaces the given field with a new value.
 	*/
 	ValueType opIndexAssign(ValueType val, string key)
@@ -241,7 +241,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		static if (case_sensitive) return a == b;
 		else return icmp2(a, b) == 0;
 	}
-	
+
 	// very simple check sum function with a good chance to match
 	// strings with different case equal
 	private static uint computeCheckSumI(string s)

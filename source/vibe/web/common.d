@@ -92,7 +92,7 @@ string adjustMethodStyle(string name, MethodStyle style)
 			if (i < name.length) {
 				ret ~= "_" ~ name[start .. $];
 			}
-			return style == MethodStyle.lowerUnderscored ? 
+			return style == MethodStyle.lowerUnderscored ?
 				std.string.toLower(ret) : std.string.toUpper(ret);
 	}
 }
@@ -126,19 +126,23 @@ unittest
 
 
 /**
-	Uses given function symbol to determine which HTTP method and
-	what URL path should be used to access it in REST API.
+	Determines the HTTP method and path for a given function symbol.
 
-	Is designed for CTFE usage and will assert at run time.
+	The final method and path are determined from the function name, as well as
+	any $(D @method) and $(D @path) attributes that may be applied to it.
+
+	This function is designed for CTFE usage and will assert at run time.
 
 	Returns:
-		Tuple of three elements:
-			* flag "was UDA used to override path"
-			* HTTPMethod extracted
-			* url path extracted
+		A tuple of three elements is returned:
+		$(UL
+			$(LI flag "was UDA used to override path")
+			$(LI $(D HTTPMethod) extracted)
+			$(LI URL path extracted)
+		)
  */
-auto extractHTTPMethodAndName(alias Func)()
-{   
+auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
+{
 	if (!__ctfe)
 		assert(false);
 
@@ -154,7 +158,7 @@ auto extractHTTPMethodAndName(alias Func)()
 		isPropertyGetter;
 	import std.algorithm : startsWith;
 	import std.typecons : Nullable;
-	
+
 	immutable httpMethodPrefixes = [
 		HTTPMethod.GET    : [ "get", "query" ],
 		HTTPMethod.PUT    : [ "put", "set" ],
@@ -162,8 +166,8 @@ auto extractHTTPMethodAndName(alias Func)()
 		HTTPMethod.POST   : [ "add", "create", "post" ],
 		HTTPMethod.DELETE : [ "remove", "erase", "delete" ],
 	];
-	
-	string name = __traits(identifier, Func);
+
+	enum name = __traits(identifier, Func);
 	alias T = typeof(&Func) ;
 
 	Nullable!HTTPMethod udmethod;
@@ -186,16 +190,16 @@ auto extractHTTPMethodAndName(alias Func)()
 	if (!udmethod.isNull() && !udurl.isNull()) {
 		return HandlerMeta(true, udmethod.get(), udurl.get());
 	}
-	
+
 	// Anti-copy-paste delegate
 	typeof(return) udaOverride( HTTPMethod method, string url ){
 		return HandlerMeta(
 			!udurl.isNull(),
-			udmethod.isNull() ? method : udmethod.get(), 
+			udmethod.isNull() ? method : udmethod.get(),
 			udurl.isNull() ? url : udurl.get()
 		);
 	}
-	
+
 	if (isPropertyGetter!T) {
 		return udaOverride(HTTPMethod.GET, name);
 	}
@@ -207,14 +211,14 @@ auto extractHTTPMethodAndName(alias Func)()
 			foreach (prefix; prefixes) {
 				if (name.startsWith(prefix)) {
 					string tmp = name[prefix.length..$];
-					return udaOverride(method, tmp);
+					return udaOverride(method, tmp.length ? tmp : "/");
 				}
 			}
 		}
-		
-		if (name == "index")
-			return udaOverride(HTTPMethod.GET, "");
-		else
+
+		static if (indexSpecialCase && name == "index") {
+			return udaOverride(HTTPMethod.GET, "/");
+		} else
 			return udaOverride(HTTPMethod.POST, name);
 	}
 }
@@ -225,63 +229,65 @@ unittest
 	{
 		string getInfo();
 		string updateDescription();
-		
+
 		@method(HTTPMethod.DELETE)
 		string putInfo();
-		
+
 		@path("matters")
 		string getMattersnot();
-		
+
 		@path("compound/path") @method(HTTPMethod.POST)
 		string mattersnot();
+
+		string get();
 	}
-	
-	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo);
+
+	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo, false,);
 	static assert (ret1.hadPathUDA == false);
 	static assert (ret1.method == HTTPMethod.GET);
 	static assert (ret1.url == "Info");
-	enum ret2 = extractHTTPMethodAndName!(Sample.updateDescription);
+	enum ret2 = extractHTTPMethodAndName!(Sample.updateDescription, false);
 	static assert (ret2.hadPathUDA == false);
 	static assert (ret2.method == HTTPMethod.PATCH);
 	static assert (ret2.url == "Description");
-	enum ret3 = extractHTTPMethodAndName!(Sample.putInfo);
+	enum ret3 = extractHTTPMethodAndName!(Sample.putInfo, false);
 	static assert (ret3.hadPathUDA == false);
 	static assert (ret3.method == HTTPMethod.DELETE);
 	static assert (ret3.url == "Info");
-	enum ret4 = extractHTTPMethodAndName!(Sample.getMattersnot);
+	enum ret4 = extractHTTPMethodAndName!(Sample.getMattersnot, false);
 	static assert (ret4.hadPathUDA == true);
 	static assert (ret4.method == HTTPMethod.GET);
 	static assert (ret4.url == "matters");
-	enum ret5 = extractHTTPMethodAndName!(Sample.mattersnot);
+	enum ret5 = extractHTTPMethodAndName!(Sample.mattersnot, false);
 	static assert (ret5.hadPathUDA == true);
 	static assert (ret5.method == HTTPMethod.POST);
 	static assert (ret5.url == "compound/path");
+	enum ret6 = extractHTTPMethodAndName!(Sample.get, false);
+	static assert (ret6.hadPathUDA == false);
+	static assert (ret6.method == HTTPMethod.GET);
+	static assert (ret6.url == "/");
 }
 
 
 /**
-    UDA to defeine the ContentType for methods returning an InputStream or ubyte[]
+    Attribute to define the content type for methods.
+
+    This currently applies only to methods returning an $(D InputStream) or
+    $(D ubyte[]).
 */
-ContentTypeAttribute contentType(string data) 
+ContentTypeAttribute contentType(string data)
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return ContentTypeAttribute(data);
 }
 
-/**
-	User Defined Attribute interface to force specific HTTP method in REST interface
-	for function in question. Usual URL generation rules are still applied so if there
-	are any "get", "query" or similar prefixes, they are filtered out.
 
-	Example:
-	---
-	interface IAPI
-	{
-		// Will be "POST /info" instead of default "GET /info"
-		@method(HTTPMethod.POST) getInfo();
-	}
-	---	
+/**
+	Attribute to force a specific HTTP method for an interface method.
+
+	The usual URL generation rules are still applied, so if there
+	are any "get", "query" or similar prefixes, they are filtered out.
  */
 MethodAttribute method(HTTPMethod data)
 {
@@ -290,80 +296,84 @@ MethodAttribute method(HTTPMethod data)
 	return MethodAttribute(data);
 }
 
-/**
-	User Defined Attribute interface to force specific URL path n REST interface
-	for function in question. Path attribute is relative though, not absolute.
-
-	Example:
-	---
+///
+unittest {
 	interface IAPI
 	{
-		@path("info2") getInfo();
+		// Will be "POST /info" instead of default "GET /info"
+		@method(HTTPMethod.POST) string getInfo();
 	}
-	
-	// ...
-	
-	shared static this()
-	{
-		registerRestInterface!IAPI(new URLRouter(), new API(), "/root/");
-		// now IAPI.getInfo is tied to "GET /root/info2"
-	}
-	---	
+}
+
+
+/**
+	Attibute to force a specific URL path.
+
+	This attribute can be applied either to an interface itself, in which
+	case it defines the root path for all methods within it,
+	or on any function, in which case it defines the relative path
+	of this method.
+	Path are always relative, even path on interfaces, as you can
+	see in the example below.
+
+	See_Also: $(D rootPathFromName) for automatic name generation.
 */
-PathAttribute path(string data) 
+PathAttribute path(string data)
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return PathAttribute(data);
 }
 
-
-/**
-	UDA to define root URL prefix for annotated REST interface.
-	Empty path means deducing prefix from interface type name (see also rootPathFromName)
- */
-RootPathAttribute rootPath(string path)
-{
-	if (!__ctfe)
-		assert(false, onlyAsUda!__FUNCTION__);
-	return RootPathAttribute(path);
-}
 ///
-unittest
-{
-	import vibe.http.router;
-	import vibe.web.rest;
-
-	@rootPath("/oops")
+unittest {
+	@path("/foo")
 	interface IAPI
 	{
-		int getFoo();
+		@path("info2") string getInfo();
 	}
 
-	class API : IAPI
+	class API : IAPI {
+		string getInfo() { return "Hello, World!"; }
+	}
+
+	void test()
 	{
-		int getFoo()
-		{
-			return 42;
-		}
+		import vibe.http.router;
+		import vibe.web.rest;
+
+		auto router = new URLRouter;
+
+		// Tie IAPI.getInfo to "GET /root/foo/info2"
+		router.registerRestInterface!IAPI(new API(), "/root/");
+
+		// Or just to "GET /foo/info2"
+		router.registerRestInterface!IAPI(new API());
+
+		// ...
 	}
-
-	auto router = new URLRouter();
-	registerRestInterface(router, new API());
-	auto routes= router.getAllRoutes();
-
-	assert(routes[0].pattern == "/oops/foo" && routes[0].method == HTTPMethod.GET);
 }
 
 
 /**
-	Convenience alias
+	Scheduled for deprecation - use @$(D path) instead.
+
+	See_Also: $(D path)
  */
-@property RootPathAttribute rootPathFromName()
+PathAttribute rootPath(string path)
 {
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return RootPathAttribute("");
+	return PathAttribute(path);
+}
+
+
+/// Convenience alias to generate a name from the interface's name.
+@property PathAttribute rootPathFromName()
+{
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return PathAttribute("");
 }
 ///
 unittest
@@ -393,14 +403,14 @@ unittest
 }
 
 
-/** 
+/**
  	Respresents a Rest error response
 */
 class RestException : HTTPStatusException {
 	private {
 		Json m_jsonResult;
 	}
-	
+
 	///
 	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
@@ -410,10 +420,10 @@ class RestException : HTTPStatusException {
 		else {
 			super(status, httpStatusText(status) ~ " (" ~ jsonResult.toString() ~ ")", file, line, next);
 		}
-		
+
 		m_jsonResult = jsonResult;
 	}
-	
+
 	/// The HTTP status code
 	@property const(Json) jsonResult() const { return m_jsonResult; }
 }
@@ -433,27 +443,11 @@ package struct MethodAttribute
 }
 
 /// private
-package deprecated alias OverriddenMethod = MethodAttribute;
-
-/// private
 package struct PathAttribute
 {
 	string data;
 	alias data this;
 }
-
-/// private
-package deprecated alias OverriddenPath = PathAttribute;
-
-/// private
-package struct RootPathAttribute
-{
-	string data;
-	alias data this;
-}
-
-/// private
-package deprecated alias RootPath = RootPathAttribute;
 
 /// Private struct describing the origin of a parameter (Query, Header, Body).
 package struct WebParamAttribute {
@@ -470,30 +464,27 @@ package struct WebParamAttribute {
 	string field;
 }
 
-version (none) {
-	// It's not yet implemented in the REST and web interface.
-	/*
-	 * Declare that a parameter will be transmitted to the API through the body.
-	 *
-	 * It will be serialized as part of a JSON object.
-	 * The serialization format is currently not customizable.
-	 *
-	 * Params:
-	 * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
-	 * - field: The name of the field in the JSON object.
-	 *
-	 * ----
-	 * @bodyParam("pack", "package")
-	 * void ship(int pack);
-	 * // The server will receive the following body for a call to ship(42):
-	 * // { "package": 42 }
-	 * ----
-	 */
-	private WebParamAttribute bodyParam(string identifier, string field) {
-		if (!__ctfe)
-			assert(false, onlyAsUda!__FUNCTION__);
-		return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
-	}
+/**
+ * Declare that a parameter will be transmitted to the API through the body.
+ *
+ * It will be serialized as part of a JSON object.
+ * The serialization format is currently not customizable.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The name of the field in the JSON object.
+ *
+ * ----
+ * @bodyParam("pack", "package")
+ * void ship(int pack);
+ * // The server will receive the following body for a call to ship(42):
+ * // { "package": 42 }
+ * ----
+ */
+WebParamAttribute bodyParam(string identifier, string field) {
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(WebParamAttribute.Origin.Body, identifier, field);
 }
 
 /**
@@ -513,37 +504,35 @@ version (none) {
  * void login(string auth);
  * ----
  */
-WebParamAttribute headerParam(string identifier, string field) {
+WebParamAttribute headerParam(string identifier, string field)
+{
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(WebParamAttribute.Origin.Header, identifier, field);
 }
 
-version (none) {
-	// It's not yet implemented in the REST and web interface.
-	/*
-	 * Declare that a parameter will be transmitted to the API through the query string.
-	 *
-	 * It will be serialized as part of a JSON object, and will go through URL serialization.
-	 * The serialization format is not customizable.
-	 *
-	 * Params:
-	 * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
-	 * - field: The field name to use.
-	 *
-	 * ----
-	 * // For a call to postData("D is awesome"), the server will receive the query:
-	 * // POST /data?test=%22D is awesome%22
-	 * @queryParam("data", "test")
-	 * void postData(string data);
-	 * ----
-	 */
-	private WebParamAttribute queryParam(string identifier, string field) {
-
-		if (!__ctfe)
-			assert(false, onlyAsUda!__FUNCTION__);
-		return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
-	}
+/**
+ * Declare that a parameter will be transmitted to the API through the query string.
+ *
+ * It will be serialized as part of a JSON object, and will go through URL serialization.
+ * The serialization format is not customizable.
+ *
+ * Params:
+ * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
+ * - field: The field name to use.
+ *
+ * ----
+ * // For a call to postData("D is awesome"), the server will receive the query:
+ * // POST /data?test=%22D is awesome%22
+ * @queryParam("data", "test")
+ * void postData(string data);
+ * ----
+ */
+WebParamAttribute queryParam(string identifier, string field)
+{
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(WebParamAttribute.Origin.Query, identifier, field);
 }
 
 /**
@@ -565,7 +554,7 @@ enum MethodStyle
 	lowerUnderscored,
 	/// UPPER_CASE_NAMING
 	upperUnderscored,
-	
+
 	/// deprecated
 	Unaltered = unaltered,
 	/// deprecated
@@ -642,7 +631,7 @@ static assert(isNullable!(NullableW!int));
 
 
 // NOTE: dst is assumed to be uninitialized
-package bool readFormParamRec(T)(HTTPServerRequest req, ref T dst, string fieldname, bool required)
+package bool readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required)
 {
 	import std.string;
 	import std.traits;

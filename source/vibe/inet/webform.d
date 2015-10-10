@@ -129,9 +129,11 @@ unittest
 void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 	string content_type, InputStream body_reader, size_t max_line_length)
 {
+	import std.algorithm : strip;
+
 	auto pos = content_type.indexOf("boundary=");
 	enforce(pos >= 0 , "no boundary for multipart form found");
-	auto boundary = content_type[pos+9 .. $];
+	auto boundary = content_type[pos+9 .. $].strip('"');
 	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
 	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
 
@@ -140,6 +142,33 @@ void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 
 alias FormFields = DictionaryList!(string, true, 16);
 alias FilePartFormFields = DictionaryList!(FilePart, true, 1);
+
+unittest
+{
+	import vibe.stream.memory;
+
+	auto content_type = "multipart/form-data; boundary=\"AaB03x\"";
+
+	auto input = new MemoryStream(cast(ubyte[])
+			"--AaB03x\r\n"
+			"Content-Disposition: form-data; name=\"submit-name\"\r\n"
+			"\r\n"
+			"Larry\r\n"
+			"--AaB03x\r\n"
+			"Content-Disposition: form-data; name=\"files\"; filename=\"file1.txt\"\r\n"
+			"Content-Type: text/plain\r\n"
+			"\r\n"
+			"... contents of file1.txt ...\r\n"
+			"--AaB03x--\r\n".dup, false);
+
+	FormFields fields;
+	FilePartFormFields files;
+
+	parseMultiPartForm(fields, files, content_type, input, 4096);
+
+	assert(fields["submit-name"] == "Larry");
+	assert(files["files"].filename == "file1.txt");
+}
 
 /**
 	Single part of a multipart form.
@@ -183,7 +212,11 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 
 		auto file = createTempFile();
 		fp.tempPath = file.path;
-		stream.readUntil(file, cast(ubyte[])boundary);
+		if (auto plen = "Content-Length" in headers) {
+			import std.conv : to;
+			file.write(stream, (*plen).to!long);
+		}
+		else stream.readUntil(file, cast(ubyte[])boundary);
 		logDebug("file: %s", fp.tempPath.toString());
 		file.close();
 
@@ -226,7 +259,8 @@ unittest {
 
 	Appender!string app;
 	app.formEncode(map);
-	assert(app.data == "spaces=1+2+3+4+a+b+c+d&numbers=123456789");
+	assert(app.data == "spaces=1+2+3+4+a+b+c+d&numbers=123456789" ||
+		   app.data == "numbers=123456789&spaces=1+2+3+4+a+b+c+d");
 }
 
 /**
@@ -345,7 +379,7 @@ private string formEncodeImpl(T)(T map, char sep, bool form_encode)
 	Appender!string dst;
 	size_t len;
 
-	foreach (ref string key, ref T value; map) {
+	foreach (string key, T value; map) {
 		len += key.length;
 		len += value.length;
 	}
@@ -361,7 +395,7 @@ private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
 {
 	bool flag;
 
-	foreach (key, ref value; map) {
+	foreach (key, value; map) {
 		if (flag)
 			dst.put(sep);
 		else
@@ -377,7 +411,7 @@ private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
 {
 	bool flag;
 
-	foreach (ref string key, ref T value; map) {
+	foreach (string key, T value; map) {
 		if (flag)
 			dst.put(sep);
 		else
@@ -441,9 +475,11 @@ unittest
 	bsonMap["complex"] = "╤╳/=$$\"'1!2()'\"";
 	bsonMap["╤╳"] = "1";
 
-	assert(urlEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1");
+	assert(urlEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1" ||
+		   urlEncode(aaMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1%202%203%204%20a%20b%20c%20d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
 	assert(urlEncode(dlMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1%202%203%204%20a%20b%20c%20d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
-	assert(urlEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5");
+	assert(urlEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1%202%203%204%20a%20b%20c%20d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5" ||
+		   urlEncode(jsonMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1%202%203%204%20a%20b%20c%20d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
 	assert(urlEncode(bsonMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1%202%203%204%20a%20b%20c%20d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
 	{
 		FormFields aaFields;
@@ -463,9 +499,11 @@ unittest
 		assert(urlEncode(bsonMap) == urlEncode(bsonFields));
 	}
 
-	assert(formEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1");
+	assert(formEncode(aaMap) == "complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1" ||
+		   formEncode(aaMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1+2+3+4+a+b+c+d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
 	assert(formEncode(dlMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1+2+3+4+a+b+c+d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
-	assert(formEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5");
+	assert(formEncode(jsonMap) == "%E2%95%A4%E2%95%B3=1&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&unicode=%E2%95%A4%E2%95%B3&spaces=1+2+3+4+a+b+c+d&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&slashes=1%2F2%2F3%2F4%2F5" ||
+		   formEncode(jsonMap) == "slashes=1%2F2%2F3%2F4%2F5&spaces=1+2+3+4+a+b+c+d&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&%E2%95%A4%E2%95%B3=1&unicode=%E2%95%A4%E2%95%B3&numbers=123456789&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22");
 	assert(formEncode(bsonMap) == "unicode=%E2%95%A4%E2%95%B3&numbers=123456789&spaces=1+2+3+4+a+b+c+d&slashes=1%2F2%2F3%2F4%2F5&equals=1%3D2%3D3%3D4%3D5%3D6%3D7&complex=%E2%95%A4%E2%95%B3%2F%3D%24%24%22%271%212%28%29%27%22&%E2%95%A4%E2%95%B3=1");
 
 	{

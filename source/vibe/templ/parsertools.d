@@ -84,6 +84,7 @@ string dstringUnescape(in string str)
 				if( start > 0 ) ret ~= str[start .. i];
 				else ret = str[0 .. i];
 			}
+			assert(i+1 < str.length, "The string ends with the escape char: " ~ str);
 			switch(str[i+1]){
 				default: ret ~= str[i+1]; break;
 				case 'r': ret ~= '\r'; break;
@@ -93,7 +94,7 @@ string dstringUnescape(in string str)
 			i++;
 			start = i+1;
 		}
-	
+
 	if( i > start ){
 		if( start == 0 ) return str;
 		else ret ~= str[start .. i];
@@ -160,7 +161,7 @@ Line[] removeEmptyLines(string text, string file)
 		auto ln = text[start_idx .. end_idx];
 		if( ctstrip(ln).length > 0 )
 			ret ~= Line(file, num, ln);
-		
+
 		num++;
 	}
 	return ret;

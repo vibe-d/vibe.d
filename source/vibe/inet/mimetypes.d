@@ -20,9 +20,9 @@ string getMimeTypeForFile(string filename)
 {
 	string ext = extension(filename);
 	if( ext.length == 0 ) return "application/octet-stream";
-	
+
 	assert(ext[0] == '.');
-	
+
 	switch(toLower(ext[1 .. $])){
 		default: return "application/octet-stream";
 		case "ez": return "application/andrew-inset";

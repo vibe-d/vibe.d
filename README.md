@@ -9,13 +9,27 @@ available.
 
 Visit the website at <http://vibed.org/> for more information.
 
-[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.png)](https://travis-ci.org/rejectedsoftware/vibe.d)
+[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=master)](https://travis-ci.org/rejectedsoftware/vibe.d)
+
+
+Support
+-------
+
+Vibe.d aims to support the 3 latest minor releases of D.
+At the moment, it means that the following compilers are supported and tested:
+- DMD 2.065
+- DMD 2.066
+- DMD 2.067
+- GDC 4.9.0 (FE: 2.065)
+- GDC 4.9.2 (FE: 2.066)
+- LDC 0.14.0 (FE: 2.065)
+- LDC 0.15.1 (FE: 2.066)
 
 
 Installation
 ------------
 
-Instead of explicitly installing vibe.d, it is recommended to use 
+Instead of explicitly installing vibe.d, it is recommended to use
 [DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
 applications. Once DUB is installed, you can create and run a new project
 using the following shell commands:
@@ -60,7 +74,7 @@ You can then also install DUB using brew:
 (Note: Install brew only if you do not have macports, as they will conflict)
 
 Install DMD using the installer on <http://dlang.org/download.html>.
- 
+
 Optionally, run `./setup-mac.sh` to create a user/group pair for privilege lowering.
 
 
@@ -75,15 +89,15 @@ Install vibe.d's dependencies (*)
 On 32-bit linux: Install DMD-i386
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://ftp.digitalmars.com/dmd_2.062-0_i386.deb"
-    sudo dpkg -i dmd_2.062-0_i386.deb
+    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_i386.deb"
+    sudo dpkg -i dmd_2.066.1-0_i386.deb
 
 
 On 64-bit linux: Install DMD-amd64
 
     sudo apt-get install g++ gcc-multilib xdg-utils
-    wget "http://ftp.digitalmars.com/dmd_2.062-0_amd64.deb"
-    sudo dpkg -i dmd_2.062-0_amd64.deb
+    wget "http://downloads.dlang.org/releases/2014/dmd_2.066.1-0_amd64.deb"
+    sudo dpkg -i dmd_2.066.1-0_amd64.deb
 
 
 Optionally, run `./setup-linux.sh` to create a user/group pair for privilege lowering.

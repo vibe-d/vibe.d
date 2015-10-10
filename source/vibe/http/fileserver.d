@@ -25,12 +25,12 @@ import std.string;
 
 	See_Also: serveStaticFile
 */
-HTTPServerRequestDelegate serveStaticFiles(Path local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSettings settings = null)
 {
 	if (!settings) settings = new HTTPFileServerSettings;
 	if (!settings.serverPathPrefix.endsWith("/")) settings.serverPathPrefix ~= "/";
 
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		string srv_path;
 		if (auto pp = "pathMatch" in req.params) srv_path = *pp;
@@ -41,20 +41,18 @@ HTTPServerRequestDelegate serveStaticFiles(Path local_path, HTTPFileServerSettin
 			logDebug("path '%s' not starting with '%s'", srv_path, settings.serverPathPrefix);
 			return;
 		}
-		
+
 		auto rel_path = srv_path[settings.serverPathPrefix.length .. $];
 		auto rpath = Path(rel_path);
 		logTrace("Processing '%s'", srv_path);
 
 		rpath.normalize();
 		logDebug("Path '%s' -> '%s'", rel_path, rpath.toNativeString());
-		if (rpath.empty) {
-			// TODO: support searching for an index file
-			return;
-		} else if (rpath.absolute) {
+		if (rpath.absolute) {
 			logDebug("Path is absolute, not responding");
 			return;
-		} else if (rpath[0] == "..") return; // don't respond to relative paths outside of the root path
+		} else if (!rpath.empty && rpath[0] == "..")
+			return; // don't respond to relative paths outside of the root path
 
 		sendFile(req, res, local_path ~ rpath, settings);
 	}
@@ -62,7 +60,7 @@ HTTPServerRequestDelegate serveStaticFiles(Path local_path, HTTPFileServerSettin
 	return &callback;
 }
 /// ditto
-HTTPServerRequestDelegate serveStaticFiles(string local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFiles(string local_path, HTTPFileServerSettings settings = null)
 {
 	return serveStaticFiles(Path(local_path), settings);
 }
@@ -99,12 +97,12 @@ unittest {
 		// add other routes here
 
 		auto fsettings = new HTTPFileServerSettings;
- 		fsettings.serverPathPrefix = "/static";
- 		router.get("static/*", serveStaticFiles("public/", fsettings));
+		fsettings.serverPathPrefix = "/static";
+		router.get("static/*", serveStaticFiles("public/", fsettings));
 
 		auto settings = new HTTPServerSettings;
 		listenHTTP(settings, router);
- 	}
+	}
 }
 
 
@@ -113,12 +111,12 @@ unittest {
 
 	See_Also: serveStaticFiles
 */
-HTTPServerRequestDelegate serveStaticFile(Path local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFile(Path local_path, HTTPFileServerSettings settings = null)
 {
 	if (!settings) settings = new HTTPFileServerSettings;
 	assert(settings.serverPathPrefix == "/", "serverPathPrefix is not supported for single file serving.");
 
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		sendFile(req, res, local_path, settings);
 	}
@@ -126,7 +124,7 @@ HTTPServerRequestDelegate serveStaticFile(Path local_path, HTTPFileServerSetting
 	return &callback;
 }
 /// ditto
-HTTPServerRequestDelegate serveStaticFile(string local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSettings settings = null)
 {
 	return serveStaticFile(Path(local_path), settings);
 }
@@ -138,9 +136,9 @@ HTTPServerRequestDelegate serveStaticFile(string local_path, HTTPFileServerSetti
 class HTTPFileServerSettings {
 	string serverPathPrefix = "/";
 	Duration maxAge;// = hours(24);
-	bool failIfNotFound = false;
+	HTTPFileServerOption options = HTTPFileServerOption.defaults; /// additional options
 	string[string] encodingFileExtension;
-	
+
 	/**
 		Called just before headers and data are sent.
 		Allows headers to be customized, or other custom processing to be performed.
@@ -149,7 +147,7 @@ class HTTPFileServerSettings {
 		else during this function will NOT be verified by Vibe.d for correctness.
 		Make sure any alterations you make are complete and correct according to HTTP spec.
 	*/
-	void delegate(HTTPServerRequest req, HTTPServerResponse res, ref string physicalPath) preWriteCallback = null;
+	void delegate(scope HTTPServerRequest req, scope HTTPServerResponse res, ref string physicalPath) preWriteCallback = null;
 
 	this()
 	{
@@ -162,17 +160,43 @@ class HTTPFileServerSettings {
 		this();
 		serverPathPrefix = path_prefix;
 	}
-} 
+
+	deprecated("Use .options and HTTPFileServerOption.failIfNotFound instead.")
+	@property bool failIfNotFound() const { return options & HTTPFileServerOption.failIfNotFound; }
+
+	deprecated("Use .options and HTTPFileServerOption.failIfNotFound instead.")
+	@property void failIfNotFound(bool val) {
+		if (val)
+			options |= HTTPFileServerOption.failIfNotFound;
+		else
+			options &= ~HTTPFileServerOption.failIfNotFound;
+	}
+}
 
 
-private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, HTTPFileServerSettings settings)
+/**
+   Additional options for the static file server.
+ */
+enum HTTPFileServerOption {
+	none = 0,
+	/// respond with 404 if a file was not found
+	failIfNotFound = 1 << 0,
+	/// serve index.html for directories
+	serveIndexHTML = 1 << 1,
+	/// default options are serveIndexHTML
+	defaults = serveIndexHTML,
+}
+
+
+private void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings)
 {
 	auto pathstr = path.toNativeString();
 
 	// return if the file does not exist
-	if( !existsFile(pathstr) ){
-		if( settings.failIfNotFound ) throw new HTTPStatusException(HTTPStatus.NotFound);
-		else return;
+	if (!existsFile(pathstr)){
+		if (settings.options & HTTPFileServerOption.failIfNotFound)
+			throw new HTTPStatusException(HTTPStatus.NotFound);
+		return;
 	}
 
 	FileInfo dirent;
@@ -182,15 +206,18 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 	}
 
 	if (dirent.isDirectory) {
+		if (settings.options & HTTPFileServerOption.serveIndexHTML)
+			return sendFile(req, res, path ~ "index.html", settings);
 		logDebugV("Hit directory when serving files, ignoring: %s", pathstr);
-		if( settings.failIfNotFound ) throw new HTTPStatusException(HTTPStatus.NotFound);
-		else return;
+		if (settings.options & HTTPFileServerOption.failIfNotFound)
+			throw new HTTPStatusException(HTTPStatus.NotFound);
+		return;
 	}
 
 	auto lastModified = toRFC822DateTimeString(dirent.timeModified.toUTC());
 	// simple etag generation
 	auto etag = "\"" ~ hexDigest!MD5(pathstr ~ ":" ~ lastModified ~ ":" ~ to!string(dirent.size)).idup ~ "\"";
-	
+
 	res.headers["Last-Modified"] = lastModified;
 	res.headers["Etag"] = etag;
 	if (settings.maxAge > seconds(0)) {
@@ -221,7 +248,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		res.headers.remove("Content-Encoding");
 	res.headers["Content-Type"] = mimetype;
 	res.headers["Content-Length"] = to!string(dirent.size);
-	
+
 	// check for already encoded file if configured
 	string encodedFilepath;
 	auto pce = "Content-Encoding" in res.headers;
@@ -251,10 +278,10 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 			encodedFilepath = null;
 		}
 	}
-	
+
 	if(settings.preWriteCallback)
 		settings.preWriteCallback(req, res, pathstr);
-	
+
 	// for HEAD responses, stop here
 	if( res.isHeadResponse() ){
 		res.writeVoidBody();
@@ -262,7 +289,7 @@ private void sendFile(HTTPServerRequest req, HTTPServerResponse res, Path path, 
 		logDebug("sent file header %d, %s!", dirent.size, res.headers["Content-Type"]);
 		return;
 	}
-	
+
 	// else write out the file contents
 	//logTrace("Open file '%s' -> '%s'", srv_path, pathstr);
 	FileStream fil;

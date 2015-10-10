@@ -18,11 +18,10 @@ html(lang="en")
 				dd=value
 				
 		h2 Session
-		- if( req.session )
-			dl
-				- foreach( name, value; req.session )
-					dt=name
-					dd=value
+		- if (req.session)
+			ul
+				- foreach (name; req.session)
+					li=name
 		- else
 			p No session.
 			

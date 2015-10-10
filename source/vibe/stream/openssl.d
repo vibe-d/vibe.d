@@ -11,12 +11,13 @@ import vibe.core.log;
 import vibe.core.net;
 import vibe.core.stream;
 import vibe.core.sync;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
 import std.algorithm;
 import std.array;
 import std.conv;
 import std.exception;
+import std.socket;
 import std.string;
 
 import core.stdc.string : strlen;
@@ -49,26 +50,27 @@ else private enum haveECDH = OPENSSL_VERSION_NUMBER >= 0x10001000;
 	Note: Be sure to call finalize before finalizing/closing the outer stream so that the SSL
 		tunnel is properly closed first.
 */
-final class OpenSSLStream : SSLStream {
+final class OpenSSLStream : TLSStream {
 	private {
 		Stream m_stream;
-		SSLContext m_sslCtx;
-		SSLStreamState m_state;
-		SSLState m_ssl;
+		TLSContext m_tlsCtx;
+		TLSStreamState m_state;
+		SSLState m_tls;
 		BIO* m_bio;
 		ubyte[64] m_peekBuffer;
 		Exception[] m_exceptions;
+		TLSCertificateInformation m_peerCertificate;
 	}
 
-	this(Stream underlying, OpenSSLContext ctx, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	this(Stream underlying, OpenSSLContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		m_stream = underlying;
 		m_state = state;
-		m_sslCtx = ctx;
-		m_ssl = ctx.createClientCtx();
+		m_tlsCtx = ctx;
+		m_tls = ctx.createClientCtx();
 		scope (failure) {
-			SSL_free(m_ssl);
-			m_ssl = null;
+			SSL_free(m_tls);
+			m_tls = null;
 		}
 
 		m_bio = BIO_new(&s_bio_methods);
@@ -77,39 +79,41 @@ final class OpenSSLStream : SSLStream {
 		m_bio.ptr = cast(void*)this;
 		m_bio.shutdown = 0;
 
-		SSL_set_bio(m_ssl, m_bio, m_bio);
+		SSL_set_bio(m_tls, m_bio, m_bio);
 
-		if (state != SSLStreamState.connected) {
+		if (state != TLSStreamState.connected) {
 			OpenSSLContext.VerifyData vdata;
 			vdata.verifyDepth = ctx.maxCertChainLength;
 			vdata.validationMode = ctx.peerValidationMode;
 			vdata.callback = ctx.peerValidationCallback;
 			vdata.peerName = peer_name;
 			vdata.peerAddress = peer_address;
-			SSL_set_ex_data(m_ssl, gs_verifyDataIndex, &vdata);
-			scope (exit) SSL_set_ex_data(m_ssl, gs_verifyDataIndex, null);
+			SSL_set_ex_data(m_tls, gs_verifyDataIndex, &vdata);
+			scope (exit) SSL_set_ex_data(m_tls, gs_verifyDataIndex, null);
 
 			final switch (state) {
-				case SSLStreamState.accepting:
-					//SSL_set_accept_state(m_ssl);
-					enforceSSL(SSL_accept(m_ssl), "Failed to accept SSL tunnel");
+				case TLSStreamState.accepting:
+					//SSL_set_accept_state(m_tls);
+					enforceSSL(SSL_accept(m_tls), "Failed to accept SSL tunnel");
 					break;
-				case SSLStreamState.connecting:
-					SSL_ctrl(m_ssl, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
-					//SSL_set_connect_state(m_ssl);
-					enforceSSL(SSL_connect(m_ssl), "Failed to connect SSL tunnel.");
+				case TLSStreamState.connecting:
+					SSL_ctrl(m_tls, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
+					//SSL_set_connect_state(m_tls);
+					enforceSSL(SSL_connect(m_tls), "Failed to connect SSL tunnel.");
 					break;
-				case SSLStreamState.connected:
+				case TLSStreamState.connected:
 					break;
 			}
 
 			// ensure that the SSL tunnel gets terminated when an error happens during verification
-			scope (failure) SSL_shutdown(m_ssl);
+			scope (failure) SSL_shutdown(m_tls);
 
-			if (auto peer = SSL_get_peer_certificate(m_ssl)) {
+			if (auto peer = SSL_get_peer_certificate(m_tls)) {
 				scope(exit) X509_free(peer);
-				auto result = SSL_get_verify_result(m_ssl);
-				if (result == X509_V_OK && (ctx.peerValidationMode & SSLPeerValidationMode.checkPeer)) {
+
+				readPeerCertInfo(peer);
+				auto result = SSL_get_verify_result(m_tls);
+				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
 					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
 						version(Windows) import std.c.windows.winsock;
 						else import core.sys.posix.netinet.in_;
@@ -143,9 +147,28 @@ final class OpenSSLStream : SSLStream {
 		checkExceptions();
 	}
 
+	/** Read certificate info into the clientInformation field */
+	private void readPeerCertInfo(X509 *cert)
+	{
+		X509_NAME* name = X509_get_subject_name(cert);
+
+		int c = X509_NAME_entry_count(name);
+		foreach (i; 0 .. c) {
+			X509_NAME_ENTRY *e = X509_NAME_get_entry(name, i);
+
+			ASN1_OBJECT *obj = X509_NAME_ENTRY_get_object(e);
+			ASN1_STRING *val = X509_NAME_ENTRY_get_data(e);
+
+			auto longName = OBJ_nid2ln(OBJ_obj2nid(obj)).to!string;
+			auto valStr = cast(string)val.data[0 .. val.length];
+
+			m_peerCertificate.subjectName.addField(longName, valStr);
+		}
+	}
+
 	~this()
 	{
-		if (m_ssl) SSL_free(m_ssl);
+		if (m_tls) SSL_free(m_tls);
 	}
 
 	@property bool empty()
@@ -155,18 +178,18 @@ final class OpenSSLStream : SSLStream {
 
 	@property ulong leastSize()
 	{
-		auto ret = SSL_pending(m_ssl);
+		auto ret = SSL_pending(m_tls);
 		return ret > 0 ? ret : m_stream.empty ? 0 : 1;
 	}
 
 	@property bool dataAvailableForRead()
 	{
-		return SSL_pending(m_ssl) > 0 || m_stream.dataAvailableForRead;
+		return SSL_pending(m_tls) > 0 || m_stream.dataAvailableForRead;
 	}
 
 	const(ubyte)[] peek()
 	{
-		auto ret = SSL_peek(m_ssl, m_peekBuffer.ptr, m_peekBuffer.length);
+		auto ret = SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length);
 		checkExceptions();
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
@@ -175,7 +198,7 @@ final class OpenSSLStream : SSLStream {
 	{
 		while( dst.length > 0 ){
 			int readlen = min(dst.length, int.max);
-			auto ret = checkSSLRet("SSL_read", SSL_read(m_ssl, dst.ptr, readlen));
+			auto ret = checkSSLRet("SSL_read", SSL_read(m_tls, dst.ptr, readlen));
 			//logTrace("SSL read %d/%d", ret, dst.length);
 			dst = dst[ret .. $];
 		}
@@ -186,7 +209,7 @@ final class OpenSSLStream : SSLStream {
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
 			int writelen = min(bytes.length, int.max);
-			auto ret = checkSSLRet("SSL_write", SSL_write(m_ssl, bytes.ptr, writelen));
+			auto ret = checkSSLRet("SSL_write", SSL_write(m_tls, bytes.ptr, writelen));
 			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
 		}
@@ -201,13 +224,13 @@ final class OpenSSLStream : SSLStream {
 
 	void finalize()
 	{
-		if( !m_ssl ) return;
+		if( !m_tls ) return;
 		logTrace("SSLStream finalize");
 
-		SSL_shutdown(m_ssl);
-		SSL_free(m_ssl);
+		SSL_shutdown(m_tls);
+		SSL_free(m_tls);
 
-		m_ssl = null;
+		m_tls = null;
 
 		checkExceptions();
 	}
@@ -232,7 +255,7 @@ final class OpenSSLStream : SSLStream {
 			}
 		}
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
-		enforce(ret >= 0, format("%s returned an error: %s", what, SSL_get_error(m_ssl, ret)));
+		enforce(ret >= 0, format("%s returned an error: %s", what, SSL_get_error(m_tls, ret)));
 		return ret;
 	}
 
@@ -266,6 +289,11 @@ final class OpenSSLStream : SSLStream {
 			throw m_exceptions[0];
 		}
 	}
+
+	@property TLSCertificateInformation peerCertificate()
+	{
+		return m_peerCertificate;
+	}
 }
 
 
@@ -277,17 +305,17 @@ final class OpenSSLStream : SSLStream {
 	but no trusted certificate authorities are added by default. Use
 	useTrustedCertificateFile to add those.
 */
-final class OpenSSLContext : SSLContext {
+final class OpenSSLContext : TLSContext {
 	private {
-		SSLContextKind m_kind;
+		TLSContextKind m_kind;
 		ssl_ctx_st* m_ctx;
-		SSLPeerValidationCallback m_peerValidationCallback;
-		SSLPeerValidationMode m_validationMode;
+		TLSPeerValidationCallback m_peerValidationCallback;
+		TLSPeerValidationMode m_validationMode;
 		int m_verifyDepth;
-		SSLServerNameCallback m_sniCallback;
+		TLSServerNameCallback m_sniCallback;
 	}
 
-	this(SSLContextKind kind, SSLVersion ver = SSLVersion.any)
+	this(TLSContextKind kind, TLSVersion ver = TLSVersion.any)
 	{
 		m_kind = kind;
 
@@ -296,21 +324,21 @@ final class OpenSSLContext : SSLContext {
 			SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
 
 		final switch (kind) {
-			case SSLContextKind.client:
+			case TLSContextKind.client:
 				final switch (ver) {
-					case SSLVersion.any: method = SSLv23_client_method(); break;
-					case SSLVersion.ssl3: method = SSLv3_client_method(); break;
-					case SSLVersion.tls1: method = TLSv1_client_method(); break;
-					case SSLVersion.dtls1: method = DTLSv1_client_method(); break;
+					case TLSVersion.any: method = SSLv23_client_method(); break;
+					case TLSVersion.ssl3: method = SSLv3_client_method(); break;
+					case TLSVersion.tls1: method = TLSv1_client_method(); break;
+					case TLSVersion.dtls1: method = DTLSv1_client_method(); break;
 				}
 				break;
-			case SSLContextKind.server:
-			case SSLContextKind.serverSNI:
+			case TLSContextKind.server:
+			case TLSContextKind.serverSNI:
 				final switch (ver) {
-					case SSLVersion.any: method = SSLv23_server_method(); break;
-					case SSLVersion.ssl3: method = SSLv3_server_method(); break;
-					case SSLVersion.tls1: method = TLSv1_server_method(); break;
-					case SSLVersion.dtls1: method = DTLSv1_server_method(); break;
+					case TLSVersion.any: method = SSLv23_server_method(); break;
+					case TLSVersion.ssl3: method = SSLv3_server_method(); break;
+					case TLSVersion.tls1: method = TLSv1_server_method(); break;
+					case TLSVersion.dtls1: method = DTLSv1_server_method(); break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 				break;
@@ -318,16 +346,17 @@ final class OpenSSLContext : SSLContext {
 
 		m_ctx = SSL_CTX_new(method);
 		SSL_CTX_set_options!()(m_ctx, options);
-		if (kind == SSLContextKind.server) {
+		if (kind == TLSContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
+			guessSessionIDContext();
 		}
 
 		setCipherList();
 
 		maxCertChainLength = 9;
-		if (kind == SSLContextKind.client) peerValidationMode = SSLPeerValidationMode.trustedCert;
-		else peerValidationMode = SSLPeerValidationMode.none;
+		if (kind == TLSContextKind.client) peerValidationMode = TLSPeerValidationMode.trustedCert;
+		else peerValidationMode = TLSPeerValidationMode.none;
 
 		// while it would be nice to use the system's certificate store, this
 		// seems to be difficult to get right across all systems. The most
@@ -365,22 +394,22 @@ final class OpenSSLContext : SSLContext {
 
 
 	/// The kind of SSL context (client/server)
-	@property SSLContextKind kind() const { return m_kind; }
+	@property TLSContextKind kind() const { return m_kind; }
 
 
 	/** Specifies the validation level of remote peers.
 
-		The default mode for SSLContextKind.client is
-		SSLPeerValidationMode.trustedCert and the default for
-		SSLContextKind.server is SSLPeerValidationMode.none.
+		The default mode for TLSContextKind.client is
+		TLSPeerValidationMode.trustedCert and the default for
+		TLSContextKind.server is TLSPeerValidationMode.none.
 	*/
-	@property void peerValidationMode(SSLPeerValidationMode mode)
+	@property void peerValidationMode(TLSPeerValidationMode mode)
 	{
 		m_validationMode = mode;
 
 		int sslmode;
 
-		with (SSLPeerValidationMode) {
+		with (TLSPeerValidationMode) {
 			if (mode == none) sslmode = SSL_VERIFY_NONE;
 			else {
 				sslmode |= SSL_VERIFY_PEER | SSL_VERIFY_CLIENT_ONCE;
@@ -391,7 +420,7 @@ final class OpenSSLContext : SSLContext {
 		SSL_CTX_set_verify(m_ctx, sslmode, &verify_callback);
 	}
 	/// ditto
-	@property SSLPeerValidationMode peerValidationMode() const { return m_validationMode; }
+	@property TLSPeerValidationMode peerValidationMode() const { return m_validationMode; }
 
 
 	/** The maximum length of an accepted certificate chain.
@@ -420,19 +449,19 @@ final class OpenSSLContext : SSLContext {
 		presenting the user with a dialog in case of untrusted or mismatching
 		certificates.
 	*/
-	@property void peerValidationCallback(SSLPeerValidationCallback callback) { m_peerValidationCallback = callback; }
+	@property void peerValidationCallback(TLSPeerValidationCallback callback) { m_peerValidationCallback = callback; }
 	/// ditto
-	@property inout(SSLPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
+	@property inout(TLSPeerValidationCallback) peerValidationCallback() inout { return m_peerValidationCallback; }
 
-	@property void sniCallback(SSLServerNameCallback callback)
+	@property void sniCallback(TLSServerNameCallback callback)
 	{
 		m_sniCallback = callback;
-		if (m_kind == SSLContextKind.serverSNI) {
+		if (m_kind == TLSContextKind.serverSNI) {
 			SSL_CTX_callback_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_CB, cast(OSSLCallback)&onContextForServerName);
 			SSL_CTX_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_ARG, 0, cast(void*)this);
 		}
 	}
-	@property inout(SSLServerNameCallback) sniCallback() inout { return m_sniCallback; }
+	@property inout(TLSServerNameCallback) sniCallback() inout { return m_sniCallback; }
 
 	private extern(C) alias OSSLCallback = void function();
 	private static extern(C) int onContextForServerName(SSL *s, int *ad, void *arg)
@@ -446,7 +475,7 @@ final class OpenSSLContext : SSLContext {
 		return SSL_TLSEXT_ERR_OK;
 	}
 
-	OpenSSLStream createStream(Stream underlying, SSLStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	OpenSSLStream createStream(Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		return new OpenSSLStream(underlying, this, state, peer_name, peer_address);
 	}
@@ -467,6 +496,21 @@ final class OpenSSLContext : SSLContext {
 				~ "RSA+AESGCM:RSA+AES:RSA+3DES:!aNULL:!MD5:!DSS");
 		else
 			SSL_CTX_set_cipher_list(m_ctx, toStringz(list));
+	}
+
+	/** Make up a context ID to assign to the SSL context.
+
+		This is required when doing client cert authentication, otherwise many
+		connections will go aborted as the client tries to revive a session
+		that it used to have on another machine.
+
+		The session ID context should be unique within a pool of servers.
+		Currently, this is achieved by taking the hostname.
+	*/
+	private void guessSessionIDContext()
+	{
+		string contextID = Socket.hostName;
+		SSL_CTX_set_session_id_context(m_ctx, cast(ubyte*)contextID.toStringz(), cast(uint)contextID.length);
 	}
 
 	/** Set params to use for DH cipher.
@@ -560,7 +604,7 @@ final class OpenSSLContext : SSLContext {
 		enforce(SSL_CTX_load_verify_locations(m_ctx, cPath, null),
 			"Failed to load trusted certificate file " ~ path);
 
-		if (m_kind == SSLContextKind.server) {
+		if (m_kind == TLSContextKind.server) {
 			auto certNames = enforce(SSL_load_client_CA_file(cPath),
 				"Failed to load client CA name list from file " ~ path);
 			SSL_CTX_set_client_CA_list(m_ctx, certNames);
@@ -574,8 +618,8 @@ final class OpenSSLContext : SSLContext {
 
 	private static struct VerifyData {
 		int verifyDepth;
-		SSLPeerValidationMode validationMode;
-		SSLPeerValidationCallback callback;
+		TLSPeerValidationMode validationMode;
+		TLSPeerValidationCallback callback;
 		string peerName;
 		NetworkAddress peerAddress;
 	}
@@ -598,29 +642,36 @@ final class OpenSSLContext : SSLContext {
 
 			if (depth > vdata.verifyDepth) {
 				logDiagnostic("SSL cert chain too long: %s vs. %s", depth, vdata.verifyDepth);
-			    valid = false;
-			    err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
+				valid = false;
+				err = X509_V_ERR_CERT_CHAIN_TOO_LONG;
 			}
 
 			if (err != X509_V_OK)
-				logDebug("SSL cert error: %s", X509_verify_cert_error_string(err).to!string);
+				logDebug("SSL cert initial error: %s", X509_verify_cert_error_string(err).to!string);
 
-			if (!valid && (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT)) {
-				X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
-				logDebug("SSL unknown issuer cert: %s", buf.ptr.to!string);
-				if (!(vdata.validationMode & SSLPeerValidationMode.checkTrust)) {
-					valid = true;
-					err = X509_V_OK;
+			if (!valid) {
+				switch (err) {
+					default: break;
+					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+					case X509_V_ERR_CERT_UNTRUSTED:
+						X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
+						logDebug("SSL cert not trusted or unknown issuer: %s", buf.ptr.to!string);
+						if (!(vdata.validationMode & TLSPeerValidationMode.checkTrust)) {
+							valid = true;
+							err = X509_V_OK;
+						}
+						break;
 				}
 			}
 
-			if (!(vdata.validationMode & SSLPeerValidationMode.checkCert)) {
+			if (!(vdata.validationMode & TLSPeerValidationMode.checkCert)) {
 				valid = true;
 				err = X509_V_OK;
 			}
 
 			if (vdata.callback) {
-				SSLPeerValidationData pvdata;
+				TLSPeerValidationData pvdata;
 				// ...
 				if (!valid) {
 					if (vdata.callback(pvdata)) {
@@ -629,6 +680,7 @@ final class OpenSSLContext : SSLContext {
 					}
 				} else {
 					if (!vdata.callback(pvdata)) {
+						logDebug("SSL application verification failed");
 						valid = false;
 						err = X509_V_ERR_APPLICATION_VERIFICATION;
 					}
@@ -642,6 +694,8 @@ final class OpenSSLContext : SSLContext {
 
 		X509_STORE_CTX_set_error(ctx, err);
 
+		logDebug("SSL validation result: %s (%s)", valid, err);
+
 		return valid;
 	}
 }
@@ -653,7 +707,7 @@ alias SSLState = ssl_st*;
 /**************************************************************************************************/
 
 private {
-	__gshared Mutex[] g_cryptoMutexes;
+	__gshared InterruptibleTaskMutex[] g_cryptoMutexes;
 	__gshared int gs_verifyDataIndex;
 }
 
@@ -666,7 +720,7 @@ shared static this()
 	g_cryptoMutexes.length = CRYPTO_num_locks();
 	// TODO: investigate if a normal Mutex is enough - not sure if BIO is called in a locked state
 	foreach (i; 0 .. g_cryptoMutexes.length)
-		g_cryptoMutexes[i] = new TaskMutex;
+		g_cryptoMutexes[i] = new InterruptibleTaskMutex;
 	foreach (ref m; g_cryptoMutexes) {
 		assert(m !is null);
 	}

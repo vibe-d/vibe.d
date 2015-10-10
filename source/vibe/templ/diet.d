@@ -5,7 +5,7 @@
 	embedded D source instead of JavaScript. The Diet syntax reference is found at
 	$(LINK http://vibed.org/templates/diet).
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -14,6 +14,7 @@ module vibe.templ.diet;
 public import vibe.core.stream;
 
 import vibe.core.file;
+import vibe.internal.meta.typetuple;
 import vibe.templ.parsertools;
 import vibe.templ.utils;
 import vibe.textfilter.html;
@@ -172,9 +173,34 @@ void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 	auto output__ = StreamOutputRange(stream__);
 
 	//pragma(msg, dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
-	mixin(dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
+	mixin(dietStringParser!(Group!(diet_code, "__diet_code__"), TRANSLATE)(0));
 }
 
+
+/**
+	The same as $(D compileDietStrings), but taking multiple source codes as a $(D Group).
+*/
+private void compileDietStrings(SOURCE_AND_ALIASES...)(OutputStream stream__)
+	if (SOURCE_AND_ALIASES.length >= 1 && isGroup!(SOURCE_AND_ALIASES[0]))
+{
+	// some imports to make available by default inside templates
+	import vibe.http.common;
+	import vibe.stream.wrapper;
+	import vibe.utils.string;
+	import std.typetuple;
+
+	//pragma(msg, localAliases!(0, ALIASES));
+	mixin(localAliases!(0, SOURCE_AND_ALIASES[1 .. $]));
+
+	// Generate the D source code for the diet template
+	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
+	else alias TRANSLATE = TypeTuple!();
+
+	auto output__ = StreamOutputRange(stream__);
+
+	//pragma(msg, dietStringParser!(diet_code, "__diet_code__", TRANSLATE)(0));
+	mixin(dietStringParser!(SOURCE_AND_ALIASES[0], TRANSLATE)(0));
+}
 
 /**
 	Registers a new text filter for use in Diet templates.
@@ -214,21 +240,41 @@ private string dietParser(string template_file, TRANSLATE...)(size_t base_indent
 	return compiler.buildWriter(base_indent);
 }
 
-private string dietStringParser(string diet_code, string name, TRANSLATE...)(size_t base_indent)
+private string dietStringParser(TEXT_NAME_PAIRS_AND_TRANSLATE...)(size_t base_indent)
+	if (TEXT_NAME_PAIRS_AND_TRANSLATE.length >= 1 && isGroup!(TEXT_NAME_PAIRS_AND_TRANSLATE[0]))
 {
-	enum LINES = removeEmptyLines(diet_code, name);
+	alias TEXT_NAME_PAIRS = TypeTuple!(TEXT_NAME_PAIRS_AND_TRANSLATE[0].expand);
+	static if (TEXT_NAME_PAIRS_AND_TRANSLATE.length >= 2)
+		alias TRANSLATE = TEXT_NAME_PAIRS_AND_TRANSLATE[1];
+	else alias TRANSLATE = TypeTuple!();
 
-	TemplateBlock ret;
-	ret.name = name;
-	ret.lines = LINES;
-	ret.indentStyle = detectIndentStyle(ret.lines);
+	enum ROOT_LINES = removeEmptyLines(TEXT_NAME_PAIRS[0], TEXT_NAME_PAIRS[1]);
 
 	TemplateBlock[] files;
-	files ~= ret;
-	readFilesRec!(extractDependencies(LINES), name)(files);
+	foreach (i, N; TEXT_NAME_PAIRS) {
+		static if (i % 2 == 1) {
+			TemplateBlock blk;
+			blk.name = N;
+			static if (i == 1) blk.lines = ROOT_LINES;
+			else blk.lines = removeEmptyLines(TEXT_NAME_PAIRS[i-1], N);
+			blk.indentStyle = detectIndentStyle(blk.lines);
+			files ~= blk;
+		}
+	}
+
+	readFilesRec!(extractDependencies(ROOT_LINES), extractNames!TEXT_NAME_PAIRS)(files);
 
 	auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
 	return compiler.buildWriter(base_indent);
+}
+
+private template extractNames(PAIRS...)
+{
+	static if (PAIRS.length >= 2) {
+		alias extractNames = TypeTuple!(PAIRS[1], extractNames!(PAIRS[2 .. $]));
+	} else {
+		alias extractNames = TypeTuple!();
+	}
 }
 
 
@@ -316,6 +362,7 @@ private class OutputContext {
 	Line m_line = Line(null, -1, null);
 	size_t m_baseIndent;
 	bool m_isHTML5;
+	bool warnTranslationContext = false;
 
 	this(size_t base_indent = 0)
 	{
@@ -380,6 +427,8 @@ private class OutputContext {
 	void writeExprHtmlEscaped(string str) { writeCodeLine("_toStringS!(s => filterHTMLEscape("~OutputVariableName~", s))("~str~");"); }
 	void writeExprHtmlAttribEscaped(string str) { writeCodeLine("_toStringS!(s => filterHTMLAttribEscape("~OutputVariableName~", s))("~str~");"); }
 
+	void writeDebugString(string str) { /* ignore */ }
+
 	void writeCodeLine(string stmt)
 	{
 		if( !enterState(State.Code) )
@@ -440,6 +489,8 @@ private struct DietCompiler(TRANSLATE...)
 		auto output = new OutputContext(base_indent);
 		buildWriter(output, 0);
 		assert(output.m_nodeStack.length == 0, "Template writer did not consume all nodes!?");
+		if (output.warnTranslationContext)
+			output.writeCodeLine(`pragma(msg, "Warning: No translation context found, ignoring '&' suffixes. Note that you have to use @translationContext in conjunction with vibe.web.web.render() (vibe.http.server.render() does not work) to enable translation support.");`);
 		return output.m_result;
 	}
 
@@ -533,6 +584,9 @@ private struct DietCompiler(TRANSLATE...)
 				output.pushNode("-}");
 			} else if( ln[0] == '|' ){ // plain text node
 				buildTextNodeWriter(output, ln[1 .. ln.length], level, prepend_whitespaces);
+			} else if( ln[0] == '<' ){ // plain text node starting with <
+				assertp(next_indent_level <= level, "Child elements for plain text starting with '<' are not supported.");
+				buildTextNodeWriter(output, ln, level, prepend_whitespaces);
 			} else if( ln[0] == ':' ){ // filter node (filtered raw text)
 				// find all child lines
 				size_t next_tag = m_lineIndex+1;
@@ -549,9 +603,40 @@ private struct DietCompiler(TRANSLATE...)
 				//output.pushDummyNode();
 				m_lineIndex = next_tag-1;
 				next_indent_level = computeNextIndentLevel();
+			} else if( ln[0] == '/' && ln.length > 1 && ln[1] == '/' ){ // all sorts of comments
+				if( ln.length >= 5 && ln[2..5] == "if " ){ // IE conditional comment
+					size_t j = 5;
+					skipWhitespace(ln, j);
+					buildSpecialTag(output, "!--[if "~ln[j .. $]~"]", level);
+					output.pushNode("<![endif]-->");
+				} else { // HTML and non-output comment
+					auto output_comment = !(ln.length > 2 && ln[2] == '-');
+					if( output_comment ) {
+						size_t j = 2;
+						skipWhitespace(ln, j);
+						output.writeString("<!-- " ~ htmlEscape(ln[j .. $]));
+					}
+					size_t next_tag = m_lineIndex+1;
+					while( next_tag < lineCount &&
+						indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+					{
+						if( output_comment ) {
+							output.writeString("\n");
+							output.writeStringHtmlEscaped(line(next_tag).text);
+						}
+						next_tag++;
+					}
+					if( output_comment ) {
+						output.pushNode(" -->");
+					}
+
+					// skip to the next tag
+					m_lineIndex = next_tag-1;
+					next_indent_level = computeNextIndentLevel();
+				}
 			} else {
 				size_t j = 0;
-				auto tag = isAlpha(ln[0]) || ln[0] == '/' ? skipIdent(ln, j, "/:-_") : "div";
+				auto tag = isAlpha(ln[0]) ? skipIdent(ln, j, ":-_") : "div";
 
 				if (ln.startsWith("!!! ")) {
 					//output.writeCodeLine(`pragma(msg, "\"!!!\" is deprecated, use \"doctype\" instead.");`);
@@ -567,7 +652,7 @@ private struct DietCompiler(TRANSLATE...)
 							size_t unindent_count = level + start_indent_level - base_level + 1;
 							size_t last_line_number = curline.number;
 							while( next_tag < lineCount &&
-							      indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+								  indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
 							{
 								// TODO: output all empty lines between this and the previous one
 								foreach (i; last_line_number+1 .. line(next_tag).number) output.writeString("\n");
@@ -579,51 +664,42 @@ private struct DietCompiler(TRANSLATE...)
 						}
 						break;
 					case "doctype": // HTML Doctype header
+						assertp(level == 0, "'doctype' may only be used as a top level tag.");
 						buildDoctypeNodeWriter(output, ln, j, level);
-						break;
-					case "//": // HTML comment
-						skipWhitespace(ln, j);
-						output.writeString("<!-- " ~ htmlEscape(ln[j .. $]));
-						output.pushNode(" -->");
-						break;
-					case "//-": // non-output comment
-						// find all child lines
-						size_t next_tag = m_lineIndex+1;
-						while( next_tag < lineCount &&
-							indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
-						{
-							next_tag++;
-						}
-
-						// skip to the next tag
-						m_lineIndex = next_tag-1;
-						next_indent_level = computeNextIndentLevel();
-						break;
-					case "//if": // IE conditional comment
-						skipWhitespace(ln, j);
-						buildSpecialTag(output, "!--[if "~ln[j .. $]~"]", level);
-						output.pushNode("<![endif]-->");
+						assertp(next_indent_level <= level, "'doctype' may not have child tags.");
 						break;
 					case "block": // Block insertion place
-						assertp(next_indent_level <= level, "Child elements for 'include' are not supported.");
 						output.pushDummyNode();
 						auto block = getBlock(ln[6 .. $].ctstrip());
 						if( block ){
-							output.writeString("<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
+							output.writeDebugString("<!-- using block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
 							if( block.mode == 1 ){
-								// output defaults
+								// TODO: output defaults
+								assertp(next_indent_level <= level, "Append mode for blocks is currently not supported.");
 							}
 							auto blockcompiler = new DietCompiler(block, m_files, m_blocks);
 							/*blockcompiler.m_block = block;
 							blockcompiler.m_blocks = m_blocks;*/
 							blockcompiler.buildWriter(output, cast(int)output.m_nodeStack.length);
 
-							if( block.mode == -1 ){
-								// output defaults
+							if( block.mode != -1 ){
+								// skip over the default block contents if the block mode is not prepend
+
+								// find all child lines
+								size_t next_tag = m_lineIndex+1;
+								while( next_tag < lineCount &&
+									indentLevel(line(next_tag).text, indentStyle, false) - start_indent_level > level-base_level )
+								{
+									next_tag++;
+								}
+
+								// skip to the next tag
+								m_lineIndex = next_tag-1;
+								next_indent_level = computeNextIndentLevel();
 							}
 						} else {
 							// output defaults
-							output.writeString("<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
+							output.writeDebugString("<!-- Default block " ~ ln[6 .. $] ~ " in " ~ curline.file ~ "-->");
 						}
 						break;
 					case "include": // Diet file include
@@ -631,7 +707,7 @@ private struct DietCompiler(TRANSLATE...)
 						auto content = ln[8 .. $].ctstrip();
 						if (content.startsWith("#{")) {
 							assertp(content.endsWith("}"), "Missing closing '}'.");
-							output.writeCodeLine("mixin(dietStringParser!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\", TRANSLATE)("~to!string(level)~"));");
+							output.writeCodeLine("mixin(dietStringParser!(Group!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\"), TRANSLATE)("~to!string(level)~"));");
 						} else {
 							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\", TRANSLATE)("~to!string(level)~"));");
 						}
@@ -781,7 +857,9 @@ private struct DietCompiler(TRANSLATE...)
 			output.writeExpr(ctstrip(line[i+2 .. line.length]));
 		} else {
 			string rawtext = line[i .. line.length];
-			static if (TRANSLATE.length > 0) if (ws_type.isTranslated) rawtext = TRANSLATE[0](rawtext);
+			static if (TRANSLATE.length > 0) {
+				if (ws_type.isTranslated) rawtext = TRANSLATE[0](rawtext);
+			} else if (ws_type.isTranslated) output.warnTranslationContext = true;
 			if (hasInterpolations(rawtext)) {
 				buildInterpolatedString(output, rawtext);
 			} else {
@@ -928,8 +1006,7 @@ private struct DietCompiler(TRANSLATE...)
 			} else if (line[i] == '(') {
 				// parse other attributes
 				i++;
-				string attribstring = skipUntilClosingClamp(line, i);
-				parseAttributes(attribstring, attribs);
+				parseAttributes(line, i, attribs);
 				i++;
 			} else break;
 		}
@@ -940,6 +1017,14 @@ private struct DietCompiler(TRANSLATE...)
 			else if(line[i] == '>') ws_type.outer = false;
 			else break;
 		}
+
+		// check for multiple occurances of id
+		bool has_id = false;
+		foreach( a; attribs )
+			if( a.key == "id" ) {
+				assertp(!has_id, "Id may only be set once.");
+				has_id = true;
+			}
 
 		// add special attribute for extra classes that is handled by buildHtmlTag
 		if( classes.length ){
@@ -996,7 +1081,7 @@ private struct DietCompiler(TRANSLATE...)
 				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
 				output.writeString(`"`);
 				output.writeCodeLine("} else static if(is(typeof("~att.value~") == string)) {");
-				output.writeCodeLine("if ("~att.value~"){");
+				output.writeCodeLine("if (("~att.value~") != \"\"){");
 				output.writeString(` `~att.key~`="`);
 				output.writeExprHtmlAttribEscaped(att.value);
 				output.writeString(`"`);
@@ -1012,11 +1097,10 @@ private struct DietCompiler(TRANSLATE...)
 		output.writeString(is_singular_tag ? "/>" : ">");
 	}
 
-	private void parseAttributes(in ref string str, ref HTMLAttribute[] attribs)
+	private void parseAttributes(in ref string str, ref size_t i, ref HTMLAttribute[] attribs)
 	{
-		size_t i = 0;
 		skipWhitespace(str, i);
-		while( i < str.length ){
+		while (i < str.length && str[i] != ')') {
 			string name = skipIdent(str, i, "-:");
 			string value;
 			skipWhitespace(str, i);
@@ -1025,14 +1109,16 @@ private struct DietCompiler(TRANSLATE...)
 				skipWhitespace(str, i);
 				assertp(i < str.length, "'=' must be followed by attribute string.");
 				value = skipExpression(str, i);
+				assert(i <= str.length);
 				if (isStringLiteral(value) && value[0] == '\'') {
 					auto tmp = dstringUnescape(value[1 .. $-1]);
 					value = '"' ~ dstringEscape(tmp) ~ '"';
 				}
 			} else value = "true";
 
-			assertp(i == str.length || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
-			if( i < str.length ){
+			assertp(i < str.length, "Unterminated attribute section.");
+			assertp(str[i] == ')' || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
+			if (str[i] == ',') {
 				i++;
 				skipWhitespace(str, i);
 			}
@@ -1040,6 +1126,8 @@ private struct DietCompiler(TRANSLATE...)
 			if (name == "class" && value == `""`) continue;
 			attribs ~= HTMLAttribute(name, value);
 		}
+
+		assertp(i < str.length, "Missing closing clamp.");
 	}
 
 	private bool hasInterpolations(in char[] str)
@@ -1157,20 +1245,6 @@ private struct DietCompiler(TRANSLATE...)
 		assert(false);
 	}
 
-	private string skipUntilClosingClamp(in ref string s, ref size_t idx)
-	{
-		int level = 0;
-		auto start = idx;
-		while( idx < s.length ){
-			if( s[idx] == '(' ) level++;
-			else if( s[idx] == ')' ) level--;
-			if( level < 0 ) return s[start .. idx];
-			idx++;
-		}
-		assertp(false, "Missing closing clamp");
-		assert(false);
-	}
-
 	private string skipAttribString(in ref string s, ref size_t idx, char delimiter)
 	{
 		size_t start = idx;
@@ -1182,6 +1256,7 @@ private struct DietCompiler(TRANSLATE...)
 			} else if( s[idx] == delimiter ) break;
 			idx++;
 		}
+		assertp(idx < s.length, "Unterminated attribute string: "~s[start-1 .. $]~"||");
 		return s[start .. idx];
 	}
 
@@ -1189,12 +1264,13 @@ private struct DietCompiler(TRANSLATE...)
 	{
 		string clamp_stack;
 		size_t start = idx;
-		while( idx < s.length ){
-			switch( s[idx] ){
+		outer:
+		while (idx < s.length) {
+			switch (s[idx]) {
 				default: break;
 				case ',':
-					if( clamp_stack.length == 0 )
-						return s[start .. idx];
+					if (clamp_stack.length == 0)
+						break outer;
 					break;
 				case '"', '\'':
 					idx++;
@@ -1204,8 +1280,8 @@ private struct DietCompiler(TRANSLATE...)
 				case '[': clamp_stack ~= ']'; break;
 				case '{': clamp_stack ~= '}'; break;
 				case ')', ']', '}':
-					if( s[idx] == ')' && clamp_stack.length == 0 )
-						return s[start .. idx];
+					if (s[idx] == ')' && clamp_stack.length == 0)
+						break outer;
 					assertp(clamp_stack.length > 0 && clamp_stack[$-1] == s[idx],
 						"Unexpected '"~s[idx]~"'");
 					clamp_stack.length--;
@@ -1215,7 +1291,7 @@ private struct DietCompiler(TRANSLATE...)
 		}
 
 		assertp(clamp_stack.length == 0, "Expected '"~clamp_stack[$-1]~"' before end of attribute expression.");
-		return s[start .. $];
+		return ctstrip(s[start .. idx]);
 	}
 
 	private string unindent(in ref string str, in ref string indent)
@@ -1377,6 +1453,10 @@ unittest {
 	assert(compile!(`script= 5`) == `<script>5</script>`);
 	assert(compile!(`style= 5`) == `<style>5</style>`);
 	assert(compile!(`include #{"p Hello"}`) == "<p>Hello</p>");
+	assert(compile!(`<p>Hello</p>`) == "<p>Hello</p>");
+	assert(compile!(`// I show up`) == "<!-- I show up\n -->");
+	assert(compile!(`//-I don't show up`) == "");
+	assert(compile!(`//- I don't show up`) == "");
 
 	// issue 372
 	assert(compile!(`div(class="")`) == `<div></div>`);
@@ -1401,7 +1481,7 @@ unittest {
 	assert(compile!("pre.test. foo") == "<pre class=\"test\"></pre>");
 	assert(compile!("pre().\n\tfoo") == "<pre>\nfoo</pre>");
 	assert(compile!("pre#foo.test(data-img=\"sth\",class=\"meh\"). something\n\tmeh") ==
-	       "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
+		   "<pre id=\"foo\" data-img=\"sth\" class=\"meh test\">\nmeh</pre>");
 
 	assert(compile!("input(autofocus)").length);
 
@@ -1409,6 +1489,34 @@ unittest {
 			== `<input type="text" value="&amp;&quot;"/>`);
 	assert(compile!("- auto param = \"t=1&u=1\";\na(href=\"/?#{param}&v=1\") foo")
 			== `<a href="/?t=1&amp;u=1&amp;v=1">foo</a>`);
+
+	// issue #1021
+	assert(compile!("html( lang=\"en\" )")
+		== "<html lang=\"en\"></html>");
+
+	// issue #1033
+	assert(compile!("input(placeholder=')')")
+		== "<input placeholder=\")\"/>");
+	assert(compile!("input(placeholder='(')")
+		== "<input placeholder=\"(\"/>");
+}
+
+unittest { // blocks and extensions
+	static string compilePair(string extension, string base, ALIASES...)() {
+		import vibe.stream.memory;
+		auto dst = new MemoryOutputStream;
+		compileDietStrings!(Group!(extension, "extension.dt", base, "base.dt"), ALIASES)(dst);
+		return strip(cast(string)(dst.data));
+	}
+
+	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test")
+		 == "<body>\n\t<p>Hello</p>\n</body>");
+	assert(compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Hello</p>\n</body>", compilePair!("extends base\nblock test\n\tp Hello", "body\n\tblock test\n\t\tp Default"));
+	assert(compilePair!("extends base", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Default</p>\n</body>");
+	assert(compilePair!("extends base\nprepend test\n\tp Hello", "body\n\tblock test\n\t\tp Default")
+		 == "<body>\n\t<p>Hello</p>\n\t<p>Default</p>\n</body>");
 }
 
 

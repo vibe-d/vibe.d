@@ -1,7 +1,9 @@
 /**
-	Pattern based URL router.
+	Pattern based URL router for HTTP request.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	See `URLRouter` for more details.
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -13,12 +15,18 @@ import vibe.core.log;
 
 import std.functional;
 
-version (VibeOldRouterImpl) {}
+version (VibeOldRouterImpl) {
+	pragma(msg, "-version=VibeOldRouterImpl is deprecated and will be removed in the next release.");
+}
 else version = VibeRouterTreeMatch;
 
 
 /**
 	An interface for HTTP request routers.
+
+	As of 0.7.24, the interface has been replaced with a deprecated alias to URLRouter.
+	This will break any code relying on HTTPRouter being an interface, but won't
+	break signatures.
 
 	Removal_notice:
 
@@ -27,80 +35,51 @@ else version = VibeRouterTreeMatch;
 	string format) must be considered part of the interface. However, this removes the
 	prime argument for having an interface in the first place.
 */
-interface HTTPRouter : HTTPServerRequestHandler {
-	@property string prefix() const;
-
-	/// Adds a new route for request that match the path and method
-	HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb);
-	/// ditto
-	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter match(HTTPMethod method, string path, HTTPServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
-
-	/// Handles the HTTP request by dispatching it to the registered request handlers.
-	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
-
-	/// Adds a new route for GET requests matching the specified pattern.
-	final HTTPRouter get(string url_match, HTTPServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter get(string url_match, HTTPServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
-	/// ditto
-	final HTTPRouter get(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.GET, url_match, cb); }
-
-	/// Adds a new route for POST requests matching the specified pattern.
-	final HTTPRouter post(string url_match, HTTPServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter post(string url_match, HTTPServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
-	/// ditto
-	final HTTPRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
-
-	/// Adds a new route for PUT requests matching the specified pattern.
-	final HTTPRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter put(string url_match, HTTPServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
-	/// ditto
-	final HTTPRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
-
-	/// Adds a new route for DELETE requests matching the specified pattern.
-	final HTTPRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter delete_(string url_match, HTTPServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
-	/// ditto
-	final HTTPRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
-
-	/// Adds a new route for PATCH requests matching the specified pattern.
-	final HTTPRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter patch(string url_match, HTTPServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
-	/// ditto
-	final HTTPRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
-
-	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
-	final HTTPRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
-	/// ditto
-	final HTTPRouter any(string url_match, HTTPServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
-	/// ditto
-	final HTTPRouter any(string url_match, HTTPServerRequestDelegate cb)
-	{
-		return get(url_match, cb).post(url_match, cb)
-			.put(url_match, cb).delete_(url_match, cb).patch(url_match, cb);
-	}
-}
-
+deprecated("Will be removed in 0.7.25. See removal notice for more information.")
+public alias HTTPRouter = URLRouter;
 
 /**
 	Routes HTTP requests based on the request method and URL.
 
-	Routes are matched using a special URL match string that supports two forms of placeholders.
-	The following example shows how these are used.
+	Routes are matched using a special URL match string that supports two forms
+	of placeholders. See the sections below for more details.
 
-	Registered routes are matched in the same sequence as initially specified.
-	Matching ends as soon as a route handler writes a response using res.writeBody()
-	or similar means. If no route matches or if no route handler writes a response,
-	the router will simply not handle the request and the HTTP server will generate
-	a 404 error.
+	Registered routes are matched according to the same sequence as initially
+	specified using `match`, `get`, `post` etc. Matching ends as soon as a route
+	handler writes a response using `res.writeBody()` or similar means. If no
+	route matches or if no route handler writes a response, the router will
+	simply not handle the request and the HTTP server will automatically
+	generate a 404 error.
+
+	Match_patterns:
+		Match patterns are character sequences that can optionally contain
+		placeholders or raw wildcards ("*"). Raw wild cards match any character
+		sequence, while placeholders match only sequences containing no slash
+		("/") characters.
+
+		Placeholders are started using a colon (":") and are directly followed
+		by their name. The first "/" character (or the end of the match string)
+		denotes the end of the placeholder name. The part of the string that
+		matches a placeholder will be stored in the `HTTPServerRequest.params`
+		map using the placeholder name as the key.
+
+		Match strings are subject to the following rules:
+		$(UL
+			$(LI A raw wildcard ("*") may only occur at the end of the match string)
+			$(LI At least one character must be placed between any two placeholders or wildcards)
+			$(LI The maximum allowed number of placeholders in a single match string is 64)
+		)
+
+	Match_String_Examples:
+		$(UL
+			$(LI `"/foo/bar"` matches only `"/foo/bar"` itself)
+			$(LI `"/foo/*"` matches `"/foo/"`, `"/foo/bar"`, `"/foo/bar/baz"` or _any other string beginning with `"/foo/"`)
+			$(LI `"/:x/"` matches `"/foo/"`, `"/bar/"` and similar strings (and stores `"foo"`/`"bar"` in `req.params["x"]`), but not `"/foo/bar/"`)
+			$(LI Matching partial path entries with wildcards is possible: `"/foo:x"` matches `"/foo"`, `"/foobar"`, but not `"/foo/bar"`)
+			$(LI Multiple placeholders and raw wildcards can be combined: `"/:x/:y/*"`)
+		)
 */
-final class URLRouter : HTTPRouter {
+final class URLRouter : HTTPServerRequestHandler {
 	private {
 		version (VibeRouterTreeMatch) MatchTree!Route m_routes;
 		else Route[] m_routes;
@@ -114,9 +93,42 @@ final class URLRouter : HTTPRouter {
 
 	@property string prefix() const { return m_prefix; }
 
+	/// Returns a single route handle to conveniently register multiple methods.
+	URLRoute route(string path)
+	in { assert(path.length, "Cannot register null or empty path!"); }
+	body { return URLRoute(this, path); }
+
+	///
+	unittest {
+		void getFoo(scope HTTPServerRequest req, scope HTTPServerResponse res) { /* ... */ }
+		void postFoo(scope HTTPServerRequest req, scope HTTPServerResponse res) { /* ... */ }
+		void deleteFoo(scope HTTPServerRequest req, scope HTTPServerResponse res) { /* ... */ }
+
+		auto r = new URLRouter;
+
+		// using 'with' statement
+		with (r.route("/foo")) {
+			get(&getFoo);
+			post(&postFoo);
+			delete_(&deleteFoo);
+		}
+
+		// using method chaining
+		r.route("/foo")
+			.get(&getFoo)
+			.post(&postFoo)
+			.delete_(&deleteFoo);
+
+		// without using route()
+		r.get("/foo", &getFoo);
+		r.post("/foo", &postFoo);
+		r.delete_("/foo", &deleteFoo);
+	}
+
 	/// Adds a new route for requests matching the specified HTTP method and pattern.
 	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegate cb)
-	{
+	in { assert(path.length, "Cannot register null or empty path!"); }
+	body {
 		import std.algorithm;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		logDebug("add route %s %s", method, path);
@@ -124,8 +136,104 @@ final class URLRouter : HTTPRouter {
 		else m_routes ~= Route(method, path, cb);
 		return this;
 	}
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestHandler cb) { return match(method, path, &cb.handleRequest); }
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestFunction cb) { return match(method, path, toDelegate(cb)); }
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestDelegateS cb) { return match(method, path, cast(HTTPServerRequestDelegate)cb); }
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestHandlerS cb) { return match(method, path, &cb.handleRequest); }
+	/// ditto
+	URLRouter match(HTTPMethod method, string path, HTTPServerRequestFunctionS cb) { return match(method, path, toDelegate(cb)); }
 
-	alias match = HTTPRouter.match;
+	/// Adds a new route for GET requests matching the specified pattern.
+	URLRouter get(string url_match, HTTPServerRequestHandler cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter get(string url_match, HTTPServerRequestFunction cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter get(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.GET, url_match, cb); }
+	/// ditto
+	URLRouter get(string url_match, HTTPServerRequestHandlerS cb) { return get(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter get(string url_match, HTTPServerRequestFunctionS cb) { return get(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter get(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.GET, url_match, cb); }
+
+	/// Adds a new route for POST requests matching the specified pattern.
+	URLRouter post(string url_match, HTTPServerRequestHandler cb) { return post(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter post(string url_match, HTTPServerRequestFunction cb) { return post(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter post(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.POST, url_match, cb); }
+	/// ditto
+	URLRouter post(string url_match, HTTPServerRequestHandlerS cb) { return post(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter post(string url_match, HTTPServerRequestFunctionS cb) { return post(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter post(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.POST, url_match, cb); }
+
+	/// Adds a new route for PUT requests matching the specified pattern.
+	URLRouter put(string url_match, HTTPServerRequestHandler cb) { return put(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter put(string url_match, HTTPServerRequestFunction cb) { return put(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter put(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PUT, url_match, cb); }
+	/// ditto
+	URLRouter put(string url_match, HTTPServerRequestHandlerS cb) { return put(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter put(string url_match, HTTPServerRequestFunctionS cb) { return put(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter put(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.PUT, url_match, cb); }
+
+	/// Adds a new route for DELETE requests matching the specified pattern.
+	URLRouter delete_(string url_match, HTTPServerRequestHandler cb) { return delete_(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter delete_(string url_match, HTTPServerRequestFunction cb) { return delete_(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter delete_(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.DELETE, url_match, cb); }
+	/// ditto
+	URLRouter delete_(string url_match, HTTPServerRequestHandlerS cb) { return delete_(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter delete_(string url_match, HTTPServerRequestFunctionS cb) { return delete_(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter delete_(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.DELETE, url_match, cb); }
+
+	/// Adds a new route for PATCH requests matching the specified pattern.
+	URLRouter patch(string url_match, HTTPServerRequestHandler cb) { return patch(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter patch(string url_match, HTTPServerRequestFunction cb) { return patch(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter patch(string url_match, HTTPServerRequestDelegate cb) { return match(HTTPMethod.PATCH, url_match, cb); }
+	/// ditto
+	URLRouter patch(string url_match, HTTPServerRequestHandlerS cb) { return patch(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter patch(string url_match, HTTPServerRequestFunctionS cb) { return patch(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter patch(string url_match, HTTPServerRequestDelegateS cb) { return match(HTTPMethod.PATCH, url_match, cb); }
+
+	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
+	URLRouter any(string url_match, HTTPServerRequestHandler cb) { return any(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter any(string url_match, HTTPServerRequestFunction cb) { return any(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter any(string url_match, HTTPServerRequestDelegate cb)
+	{
+		import std.traits;
+		static HTTPMethod[] all_methods = [EnumMembers!HTTPMethod];
+
+		foreach(immutable method; all_methods)
+			match(method, url_match, cb);
+
+		return this;
+	}
+	/// ditto
+	URLRouter any(string url_match, HTTPServerRequestHandlerS cb) { return any(url_match, &cb.handleRequest); }
+	/// ditto
+	URLRouter any(string url_match, HTTPServerRequestFunctionS cb) { return any(url_match, toDelegate(cb)); }
+	/// ditto
+	URLRouter any(string url_match, HTTPServerRequestDelegateS cb) { return any(url_match, cast(HTTPServerRequestDelegate)cb); }
+
 
 	/** Rebuilds the internal matching structures to account for newly added routes.
 
@@ -228,7 +336,7 @@ unittest {
 		// the place holders in req.params as 'username' and 'groupname'.
 		router.get("/users/:username/groups/:groupname", &addGroup);
 
-		// Natches all requests. This can be useful for authorization and
+		// Matches all requests. This can be useful for authorization and
 		// similar tasks. The auth method will only write a response if the
 		// user is _not_ authorized. Otherwise, the router will fall through
 		// and continue with the following routes.
@@ -293,7 +401,7 @@ unittest {
 		// now the following routes will be matched:
 		// / -> showHome
 		// /component1/ -> showComponentHome
-		// /component1/:user -> showComponentUser
+		// /component1/users/:user -> showComponentUser
 
 		// Start the HTTP server
 		auto settings = new HTTPServerSettings;
@@ -353,6 +461,26 @@ unittest {
 	router.handleRequest(createTestHTTPServerRequest(URL("http://localhost/test/y")), res);
 	assert(result == "AB");
 }
+
+
+/**
+	Convenience abstraction for a single `URLRouter` route.
+
+	See `URLRouter.route` for a usage example.
+*/
+struct URLRoute {
+	URLRouter router;
+	string path;
+
+	ref URLRoute get(Handler)(Handler h) { router.get(path, h); return this; }
+	ref URLRoute post(Handler)(Handler h) { router.post(path, h); return this; }
+	ref URLRoute put(Handler)(Handler h) { router.put(path, h); return this; }
+	ref URLRoute delete_(Handler)(Handler h) { router.delete_(path, h); return this; }
+	ref URLRoute patch(Handler)(Handler h) { router.patch(path, h); return this; }
+	ref URLRoute any(Handler)(Handler h) { router.any(path, h); return this; }
+	ref URLRoute match(Handler)(HTTPMethod method, Handler h) { router.match(method, path, h); return this; }
+}
+
 
 private enum maxRouteParameters = 64;
 
@@ -440,7 +568,6 @@ private struct MatchTree(T) {
 
 		enum TerminalChar = 0;
 		bool m_upToDate = false;
-		string[maxRouteParameters] m_varBuffer = void;
 	}
 
 	@property size_t terminalCount() const { return m_terminals.length; }
@@ -453,23 +580,10 @@ private struct MatchTree(T) {
 
 	void match(string text, scope void delegate(size_t terminal, scope string[] vars) del)
 	{
-		import std.algorithm : canFind;
-
 		// lazily update the match graph
 		if (!m_upToDate) rebuildGraph();
 
-		// first, determine the end node, if any
-		auto n = matchTerminals(text);
-		if (!n) return;
-
-		// then, go through the terminals and match their variables
-		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
-			auto term = &m_terminals[t.index];
-			auto vars = m_varBuffer[0 .. term.varNames.length];
-			matchVars(vars, term, text);
-			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
-			del(t.index, vars);
-		}
+		doMatch(text, del);
 	}
 
 	const(string)[] getTerminalVarNames(size_t terminal) const { return m_terminals[terminal].varNames; }
@@ -520,8 +634,28 @@ private struct MatchTree(T) {
 		}
 	}
 
-	private Node* matchTerminals(string text)
-	{
+	private void doMatch(string text, scope void delegate(size_t terminal, scope string[] vars) del)
+	const {
+		string[maxRouteParameters] vars_buf = void;
+
+		import std.algorithm : canFind;
+
+		// first, determine the end node, if any
+		auto n = matchTerminals(text);
+		if (!n) return;
+
+		// then, go through the terminals and match their variables
+		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
+			auto term = &m_terminals[t.index];
+			auto vars = vars_buf[0 .. term.varNames.length];
+			matchVars(vars, term, text);
+			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
+			del(t.index, vars);
+		}
+	}
+
+	private inout(Node)* matchTerminals(string text)
+	inout {
 		if (!m_nodes.length) return null;
 
 		auto n = &m_nodes[0];
@@ -540,8 +674,8 @@ private struct MatchTree(T) {
 		return n;
 	}
 
-	private void matchVars(string[] dst, Terminal* term, string text)
-	{
+	private void matchVars(string[] dst, in Terminal* term, string text)
+	const {
 		auto nidx = 0;
 		size_t activevar = size_t.max;
 		size_t activevarstart;

@@ -46,7 +46,7 @@ void distTask()
 	static shared int s_threadCount = 0;
 	static shared int s_token = 0;
 	int id = atomicOp!"+="(s_threadCount, 1) - 1;
-	
+
 	while (true) {
 		while (atomicLoad(s_token) != id && g_concurrency > 0) {}
 		if (g_concurrency == 0) break;
@@ -93,9 +93,9 @@ void benchmark()
 void main()
 {
 	import vibe.core.args;
-	getOption("c", &g_concurrency, "The maximum number of concurrent requests");
-	getOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
-	getOption("k", &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
+	readOption("c", &g_concurrency, "The maximum number of concurrent requests");
+	readOption("d", &g_requestDelay, "Artificial request delay in milliseconds");
+	readOption("k", &g_maxKeepAliveRequests, "Maximum number of keep-alive requests for each connection");
 	if (!finalizeCommandLineOptions()) return;
 	runTask(toDelegate(&benchmark));
 	runEventLoop();

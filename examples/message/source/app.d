@@ -32,7 +32,7 @@ shared static this()
 		sleep(1.seconds());
 		logInfo("send Hello World");
 		t1.send("Hello, World!");
-		
+
 		sleep(1.seconds());
 		logInfo("send int 1");
 		t1.send(1);
@@ -40,15 +40,15 @@ shared static this()
 		sleep(1.seconds());
 		logInfo("send double 1.2");
 		t1.send(1.2);
-		
+
 		sleep(1.seconds());
 		logInfo("send int 2");
 		t1.send(2);
-		
+
 		sleep(1.seconds());
 		logInfo("send 3xint 1 2 3");
 		t1.send(1, 2, 3);
-		
+
 		sleep(1.seconds());
 		logInfo("send string Bye bye");
 		t1.send("Bye bye");

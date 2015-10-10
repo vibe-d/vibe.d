@@ -76,7 +76,7 @@ struct ValidUsername {
 		ret.nullify();
 
 		auto err = appender!string(); // TODO: avoid allocations when possible
-		if (validateUserName(str)) ret = ValidUsername(str);
+		if (validateUserName(err, str)) ret = ValidUsername(str);
 		else *error = err.data;
 		return ret;
 	}
@@ -120,7 +120,7 @@ struct ValidPassword {
 		ret.nullify();
 
 		auto err = appender!string(); // TODO: avoid allocations when possible
-		if (validatePassword(str, str)) ret = ValidPassword(str);
+		if (validatePassword(err, str, str)) ret = ValidPassword(str);
 		else *error = err.data;
 		return ret;
 	}

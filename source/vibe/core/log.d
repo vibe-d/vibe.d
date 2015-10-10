@@ -28,8 +28,8 @@ import std.traits : isSomeString;
 */
 void setLogLevel(LogLevel level)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled due to missing console.");
-	ss_stdoutLogger.lock().minLevel = level;
+	if (ss_stdoutLogger)
+		ss_stdoutLogger.lock().minLevel = level;
 }
 
 
@@ -40,10 +40,11 @@ nothrow @safe {
 */
 void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.Format.plain)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
-	auto l = ss_stdoutLogger.lock();
-	l.format = fmt;
-	l.infoFormat = infoFmt;
+	if (ss_stdoutLogger) {
+		auto l = ss_stdoutLogger.lock();
+		l.format = fmt;
+		l.infoFormat = infoFmt;
+	}
 }
 
 
@@ -109,7 +110,7 @@ nothrow {
 		args = Any input values needed for formatting
 */
 void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args)
-	nothrow @safe if (isSomeString!S)
+	nothrow if (isSomeString!S)
 {
 	static assert(level != LogLevel.none);
 	try {
@@ -123,27 +124,27 @@ void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*
 	} catch(Exception e) debug assert(false, e.msg);
 }
 /// ditto
-void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
+void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
+void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
+void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
+void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
+void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.warn/*, mod, func*/, file, line)(fmt, args); }
+void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.warn/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
+void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
+void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
 void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
 
 ///
 @safe unittest {
-	void test()
+	void test() nothrow
 	{
 		logInfo("Hello, World!");
 		logWarn("This may not be %s.", "good");
@@ -212,7 +213,7 @@ final class FileLogger : Logger {
 	}
 
 	Format format = Format.thread;
-    Format infoFormat = Format.plain;
+	Format infoFormat = Format.plain;
 
 	this(File info_file, File diag_file)
 	{
@@ -504,8 +505,8 @@ final class SyslogLogger : Logger {
 	*/
 	this(OutputStream stream, Facility facility, string appName = null, string hostName = hostName())
 	{
-		m_hostName = hostName ? hostName : NILVALUE;
-		m_appName = appName ? appName : NILVALUE;
+		m_hostName = hostName != "" ? hostName : NILVALUE;
+		m_appName = appName != "" ? appName : NILVALUE;
 		m_ostream = stream;
 		m_facility = facility;
 		this.minLevel = LogLevel.debug_;
@@ -540,6 +541,7 @@ final class SyslogLogger : Logger {
 		}
 
 		assert(msg.level >= LogLevel.debug_);
+		import std.conv : to; // temporary workaround for issue 1016 (DMD cross-module template overloads error out before second attempted module)
 		auto priVal = (m_facility * 8 + syslogSeverity).to!string();
 
 		alias procId = NILVALUE;
@@ -549,7 +551,7 @@ final class SyslogLogger : Logger {
 		auto text = msg.text;
 		import std.string : format;
 		m_ostream.write(SYSLOG_MESSAGE_FORMAT_VERSION1.format(
-		              priVal, timestamp, m_hostName, BOM ~ m_appName, procId, msgId, structuredData, BOM ~ text) ~ "\n");
+					  priVal, timestamp, m_hostName, BOM ~ m_appName, procId, msgId, structuredData, BOM ~ text) ~ "\n");
 		m_ostream.flush();
 	}
 
@@ -680,10 +682,13 @@ package void initializeLogModule()
 		registerLogger(ss_stdoutLogger);
 
 		bool[4] verbose;
-		getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
-		getOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
-		getOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
-		getOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+		version (VibeNoDefaultArgs) {}
+		else {
+			readOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
+			readOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
+			readOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
+			readOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+		}
 
 		foreach_reverse (i, v; verbose)
 			if (v) {

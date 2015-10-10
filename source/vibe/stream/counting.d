@@ -29,7 +29,7 @@ class LimitedInputStream : InputStream {
 			stream: the input stream to be wrapped
 			byte_limit: the maximum number of bytes readable from the constructed stream
 			silent_limit: if set, the stream will behave exactly like the original stream, but
-				will throw an exception as soon as the limit is reached.		
+				will throw an exception as soon as the limit is reached.
 	*/
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	{
@@ -62,7 +62,7 @@ class LimitedInputStream : InputStream {
 		m_input.read(dst);
 		m_sizeLimit -= dst.length;
 	}
-	
+
 	protected void onSizeLimitReached() {
 		throw new LimitException("Size limit reached", m_sizeLimit);
 	}
@@ -90,7 +90,7 @@ class CountingOutputStream : OutputStream {
 		m_bytesWritten += bytes;
 	}
 
-	void write(in ubyte[] bytes) 
+	void write(in ubyte[] bytes)
 	{
 		m_out.write(bytes);
 		m_bytesWritten += bytes.length;

@@ -1,6 +1,215 @@
 ﻿Changelog
 =========
 
+v0.7.24 - 2015-07-
+--------------------
+
+### Features and improvements ###
+
+ - Fixed compilation on DMD 2.068 (most fixes by Mathias Lang)
+ - Web interface generator (`vibe.web.web`)
+   - Added support for `WebSocket` routes - [issue #952][issue952]
+   - Doesn't intercept `HTTPStatusException`s thrown during parameter assembly anymore
+   - Replaced the deprecated form interface example project with a `vibe.web.web` based "web_ajax" example
+   - Added support for the `@path` attribute on registered classes
+ - REST interface generator (`vibe.web.rest`)
+   - Removed support for `index()` methods (use `get()` or `@path("/")`) (by Mathias Lang) - [pull #1010][issue1010]
+   - Deprecated the `@rootPath` attribute (use `@path` instead) (by Mathias Lang) - [pull #999][issue999]
+ - Deprecated symbols that were scheduled for deprecation and removed deprecated symbols
+ - Added version `VibeNoDefaultArgs` to disable the built-in command line options
+ - Renamed "SSL" to "TLS" in most places
+ - Scheduled `Json.opDispatch` and `Bson.opDispatch` for deprecation (use `opIndex` instead)
+ - Added `Bson.tryIndex` (by Marc Schütz) - [pull #1032][issue1032]
+ - Added support for all standard HTTP methods (RFC) (by Szabo Bogdan) - [pull #1068][issue1068], [pull #1082][issue1082]
+ - Added overloads for `scope` based HTTP server callbacks
+   - These will later be used for safe, allocation-less HTTP request processing
+   - Always prefer this over the non-`scope` callbacks, as these will imply a performance impact in later versions
+ - Added `vibe.core.stream.nullSink` as a convenient way to get a generic data sink stream
+ - Added overloads of `writeFormData` and `writeFormBody` that accept ranges of key/value tuples (by Tobias Pankrath)
+ - Added `HTTPClientResponse.switchProtocol` (by Luca Niccoli) - [pull #945][issue945]
+ - `listenHTTP` now returns a `HTTPListener` instance that can be used to stop listening - [issue #1074][issue1074]
+ - Added an `AppenderResetMode` parameter to `MemoryOutputStream.reset()` (by Etienne Cimon)
+ - Changed `urlEncode` to only allocate if necessary (by Marc Schütz) - [pull #1076][issue1076]
+ - Optimize multi-part form decoding for cases where "Content-Length" is given (by Etienne Cimon) - [pull #1101][issue1101]
+ - Added serialization support for `std.typecons.BitFlags!T`
+ - Removed the `HTTPRouter` interface (now just a compatibility alias to `URLRouter`) (by Mathias Lang) - [pull #1106][issue1106]
+ - Added `HTTPStatus.tooManyRequests` (by Jack Applegame) - [pull #1103][issue1103]
+ - Added optional `code` and `reason` parameters to `WebSocket.close()` (by Steven Dwy) - [pull #1107][issue1107]
+ - Added an optional copy+delete fallback to `moveFile()` (by Etienne Cimon and Martin Nowak)
+ - Let `ConnectionProxyStream` work without an underlying `ConnectionStream` (by Etienne Cimon)
+ - Added a `ConnectionProxyStream` constructor taking separate input and output streams
+ - Updated the OpenSSL Windows binaries to 1.0.1m
+ - Added `BigInt` support to the JSON module (by Igor Stepanov) - [pull #1118][issue1118]
+ - The event loop of the win32 driver can now be stopped by sending a `WM_QUIT` message (by Денис Хлякин aka aka-demik) - [pull #1120][issue1120]
+ - Marked `vibe.inet.path` as `pure` and removed casts that became superfluous
+ - Added an `InputStream` based overload of `HTTPServerResponse.writeBody`
+ - Added all Redis modules to the `vibe.vibe` module
+ - Added a version of `FixedRingBuffer.opApply` that supports an index (by Tomáš Chaloupka) - [pull #1198][issue1198]
+
+### Bug fixes ###
+
+ - Fixed listening on IPv6 interfaces for the win32 driver
+ - Fixed `URL.localURI` updating the query string and anchor parts properly - [issue #1044][issue1044]
+ - Fixed `Task.join()` to work outside of a running event loop
+ - Fixed the automatic redirection in `vibe.web.web` in case of mismatching trailing slash
+ - Fixed `MongoCollection.count()` when used with MongoDB 3.x - [issue #1058][issue1058]
+ - Fixed detection of non-copyable, but movable types for `runTask`
+ - Fixed processing of translation strings with escape sequences in `vibe.web.web` (by Andrey Zelenchuk) - [pull #1067][issue1067]
+ - Fixed unnecessarily closing HTTP client connections
+ - Fixed using `TCPConnection.close()` with a concurrent `read()` operation (libevent driver)
+ - Fixed parsing of HTTP digest authentication headers with different whitespace padding or differing case (by Денис Хлякин aka aka-demik) - [pull 1083][issue1083]
+ - Fixed parsing various HTTP request headers case insensitively
+ - Fixed validation of untrusted certificates without `TLSPeerValidationMode.checkTrust` for `OpenSSLStream`
+ - Fixed TLS certificate host/address validation in the SMTP client
+ - Fixed `@bodyParam` parameters with default value in the REST interface generator (by Mathias Lang) - [issue #1125][issue1125], [pull #1129][issue1129]
+ - Fixed running the TLS context setup for STARTTLS SMTP connections (by Nathan Christenson) - [pull #1132][issue1132]
+ - Fixed JSON serialization of `const(Json)` (by Jack Applegame) - [pull #1109][issue1109]
+ - Fixed runtime error for Windows GUI apps that use the Visual Studio runtime
+ - Various fixes in the libasync event driver (by Etienne Cimon)
+ - Fixed the REST interface generator to treat `get`/`post`/... methods as `@path("/")` (by Mathias Lang) - [pull #1135][issue1135]
+ - Fixed `URL`'s internal encoding of the path string (by Igor Stepanov) - [pull #1148][issue1148]
+ - Fixed decoding query parameters in the REST interface generator (by Igor Stepanov) - [pull #1143][issue1143]
+ - Fixed a possible range violation when writing long HTTP access log messages (by Márcio Martins) - [pull #1156][issue1156]
+ - Fixed support of typesafe variadic methods in the REST interface generator (by Mathias Lang) - [issue #1144][issue1144], [pull #1159][issue1159]
+ - Fixed `getConfig`, `setConfig` and `configResetStat` in `RedisClient` (by Henning Pohl) - [pull #1158][issue1158]
+ - Fixed possible CPU hog in timer code for periodic timer events that were triggered too fast
+ - Fixed a possible memory leak and wrongly reported request times for HTTP connections that get terminated before finishing a response - [issue #1157][issue1157]
+ - Fixed `vibe.web.web.redirect()` to work properly for relative paths with query strings
+ - Fixed invalid JSON syntax in dub.json - [issue #1172][issue1172]
+ - Fixed `LibasyncFileStream` when used with `FileMode.createTrunc` (by Etienne Cimon) - [pull #1176][issue1176]
+ - Fixed `deserialize` when operating on a struct/class that is annotated with `@asArray` (by Colden Cullen) - [pull #1182][issue1182]
+ - Fixed parsing quoted HTTP multi part form boundaries (by Mathias L. Baumann aka Marenz) - [pull #1183][issue1183]
+ - Fixed `LibasyncFileStream.peek()` to always return `null` (by Etienne Cimon) - [pull #1179][issue1179]
+ - Fixed `ThreadedFile.seek` for 32-bit Windows applications (libevent driver) - [issue #1189][issue1189]
+ - Fixed parsing of relative `file://` URLs
+ - Fixed a possible `RangeError` in the JSON parser (by Takaaki Seki) - [pull #1199][issue1199]
+ - Fixed a possible resource leak in `HashMap` (destructors not run)
+ - Fixed `pipeRealtime` to always adhere to the maximum latency
+ - Fixed deserialization of `immutable` fields (by Jack Applegame) - [pull #1190][issue1190]
+
+
+[issue945]: https://github.com/rejectedsoftware/vibe.d/issues/945
+[issue952]: https://github.com/rejectedsoftware/vibe.d/issues/952
+[issue999]: https://github.com/rejectedsoftware/vibe.d/issues/999
+[issue1010]: https://github.com/rejectedsoftware/vibe.d/issues/1010
+[issue1032]: https://github.com/rejectedsoftware/vibe.d/issues/1032
+[issue1044]: https://github.com/rejectedsoftware/vibe.d/issues/1044
+[issue1058]: https://github.com/rejectedsoftware/vibe.d/issues/1058
+[issue1067]: https://github.com/rejectedsoftware/vibe.d/issues/1067
+[issue1068]: https://github.com/rejectedsoftware/vibe.d/issues/1068
+[issue1074]: https://github.com/rejectedsoftware/vibe.d/issues/1074
+[issue1076]: https://github.com/rejectedsoftware/vibe.d/issues/1076
+[issue1082]: https://github.com/rejectedsoftware/vibe.d/issues/1082
+[issue1083]: https://github.com/rejectedsoftware/vibe.d/issues/1083
+[issue1101]: https://github.com/rejectedsoftware/vibe.d/issues/1101
+[issue1103]: https://github.com/rejectedsoftware/vibe.d/issues/1103
+[issue1106]: https://github.com/rejectedsoftware/vibe.d/issues/1106
+[issue1107]: https://github.com/rejectedsoftware/vibe.d/issues/1107
+[issue1109]: https://github.com/rejectedsoftware/vibe.d/issues/1109
+[issue1118]: https://github.com/rejectedsoftware/vibe.d/issues/1118
+[issue1120]: https://github.com/rejectedsoftware/vibe.d/issues/1120
+[issue1125]: https://github.com/rejectedsoftware/vibe.d/issues/1125
+[issue1129]: https://github.com/rejectedsoftware/vibe.d/issues/1129
+[issue1132]: https://github.com/rejectedsoftware/vibe.d/issues/1132
+[issue1135]: https://github.com/rejectedsoftware/vibe.d/issues/1135
+[issue1143]: https://github.com/rejectedsoftware/vibe.d/issues/1143
+[issue1144]: https://github.com/rejectedsoftware/vibe.d/issues/1144
+[issue1148]: https://github.com/rejectedsoftware/vibe.d/issues/1148
+[issue1156]: https://github.com/rejectedsoftware/vibe.d/issues/1156
+[issue1157]: https://github.com/rejectedsoftware/vibe.d/issues/1157
+[issue1158]: https://github.com/rejectedsoftware/vibe.d/issues/1158
+[issue1159]: https://github.com/rejectedsoftware/vibe.d/issues/1159
+[issue1172]: https://github.com/rejectedsoftware/vibe.d/issues/1172
+[issue1176]: https://github.com/rejectedsoftware/vibe.d/issues/1176
+[issue1179]: https://github.com/rejectedsoftware/vibe.d/issues/1179
+[issue1182]: https://github.com/rejectedsoftware/vibe.d/issues/1182
+[issue1183]: https://github.com/rejectedsoftware/vibe.d/issues/1183
+[issue1189]: https://github.com/rejectedsoftware/vibe.d/issues/1189
+[issue1190]: https://github.com/rejectedsoftware/vibe.d/issues/1190
+[issue1198]: https://github.com/rejectedsoftware/vibe.d/issues/1198
+[issue1199]: https://github.com/rejectedsoftware/vibe.d/issues/1199
+
+
+v0.7.23 - 2015-03-25
+--------------------
+
+Apart from fixing compilation on DMD 2.067 and revamping the `vibe.core.sync` module to support `nothrow`, notable changes are extended parameter support in `vibe.web.rest`, improved translation support in `vibe.web.web` and new support for policy based customization of (de-)serialization. The Diet template parser has also received a good chunk of fixes and improvements in this release.
+
+### Features and improvements ###
+
+ - Compiles on DMD frontend 2.065 up to 2.067 (most fixes for 2.067 are by Mathias Lang) - [pull #972][pull 972], [pull #992][issue992]
+ - Changed semantics of `TaskMutex` and `TaskCondition` - **this can be a breaking change for certain applications**
+   - The classes are now `nothrow` to stay forward compatible with D's `Mutex` and `Condition` classes,
+   - Interruption using `Task.interrupt()` now gets deferred to the next wait/yield operation
+   - The old behavior can be achieved using the new `InterruptipleTaskMutex` and `InterruptibleTaskCondition` classes
+ - Definition of either `VibeCustomMain` or `VibeDefaultMain` is now a hard requirement - this is the final deprecation phase for `VibeCustomMain`
+ - Added an overload of `lowerPrivileges` that takes explicit user/group arguments (by Darius Clark) - [pull #948][issue948]
+ - Added `handleWebSocket` as a procedural alternative to `handleWebSockets` (by Luca Niccoli) - [pull #946][issue946]
+ - Added support for "msgctxt" in .po files for the `vibe.web.web` translation framework (by Nathan Coe) - [pull #896][issue896]
+ - Added overloads of `HTTPServerResponse.writeBody` and `writeRawBody` with an additional status code parameter (by Martin Nowak) - [pull #980][issue980]
+ - Added `@queryParam` and `@bodyParam` to the `vibe.web.rest` module (by Mathias Lang) - [pull #969][issue969]
+ - Added support for serving an "index.html" file when requesting a directory (by Martin Nowak) - [pull #902][issue902]
+ - Added policy based customization for `vibe.data.serialization` (by Luca Niccoli) - [pull #937][issue937]
+ - Added `SSLStream.peerCertificate` and `HTTPServerRequest.clientCertificate` properties (by Rico Huijbers) - [pull #965][issue965]
+ - Added `RedisDatabase.zrangeByLex` (by Etienne Cimon) - [pull #993][issue993]
+ - Added support for HTTP digest authentication (by Kai Nacke aka redstar) - [pull #1000][issue1000]
+ - Diet template features
+ 	- Added support for plain text lines starting with `<` (plain HTML lines) (by Kai Nacke aka redstar) - [pull #1007][issue1007]
+ 	- Added support for default and "prepend" modes for blocks (help from Kai Nacke aka redstar) - [issue #905][issue905], [pull #1002][issue1002]
+ 	- Multiple "id" attributes are now explicitly disallowed (by Kai Nacke aka redstar) - [pull #1008][issue1008]
+
+### Bug fixes ###
+
+ - Fixed ping handling for WebSockets and added automatic keep-alive pinging (by Luca Niccoli) - [pull #947][issue947]
+ - Fixed wrapped texts in .po files for the `vibe.web.web` translation framework (by Nathan Coe) - [pull #896][issue896]
+ - Fixed a crash issue when storing a `Timer` in a class instance that does not get destroyed before application exit - [issue #978][issue978]
+ - Fixed `HTTPRouter.any` to match all supported HTTP verbs (by Szabo Bogdan) - [pull #984][issue984]
+ - Fixed setting `TCPConnection.localAddr` in the libasync driver (by Etienne Cimon) - [issue #961][issue961], [pull #962][issue962]
+ - Fixed some cases of missing destructor calls in `vibe.utils.memory` (partially by Etienne Cimon) - [pull #987][issue987]
+ - Fixed some failed incoming SSL connection attempts by setting a default session context ID (by Rico Huijbers) - [pull #970][issue970]
+ - Fixed `RedisSessionStore.create()` (by Yusuke Suzuki) - [pull #996][issue996]
+ - Fixed HTML output of `//` style comments in Diet templates (by Kai Nacke) - [pull #1004][issue1004]
+ - Fixed the error message for mismatched `@path` placeholder parameters in `vibe.web.rest` (by Mathias Lang aka Geod24) - [issue #949][issue949], [pull #1001][issue1001]
+ - Fixed parsing of hidden comments in Diet templates that have no leading space (by Kai Nacke) - [pull #1012][issue1012]
+ - Fixed serialization of `const(Json)` values
+ - Fixed handling of struct parameter types in `vibe.web.rest` that implicitly convert to `string`, but not vice-versa
+ - Fixed HTTP request parsing with uppercase letters in the "Transfer-Encoding" header (by Szabo Bogdan) - [pull #1015][issue1015]
+ - Fixed parsing of Diet attributes that are followed by whitespace - [issue #1021][issue1021]
+ - Fixed parsing of Diet string literal attributes that contain unbalanced parenthesis - [issue #1033][issue1033]
+
+[issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
+[issue896]: https://github.com/rejectedsoftware/vibe.d/issues/896
+[issue902]: https://github.com/rejectedsoftware/vibe.d/issues/902
+[issue905]: https://github.com/rejectedsoftware/vibe.d/issues/905
+[issue937]: https://github.com/rejectedsoftware/vibe.d/issues/937
+[issue946]: https://github.com/rejectedsoftware/vibe.d/issues/946
+[issue947]: https://github.com/rejectedsoftware/vibe.d/issues/947
+[issue948]: https://github.com/rejectedsoftware/vibe.d/issues/948
+[issue949]: https://github.com/rejectedsoftware/vibe.d/issues/949
+[issue961]: https://github.com/rejectedsoftware/vibe.d/issues/961
+[issue962]: https://github.com/rejectedsoftware/vibe.d/issues/962
+[issue965]: https://github.com/rejectedsoftware/vibe.d/issues/965
+[issue969]: https://github.com/rejectedsoftware/vibe.d/issues/969
+[issue970]: https://github.com/rejectedsoftware/vibe.d/issues/970
+[issue978]: https://github.com/rejectedsoftware/vibe.d/issues/978
+[issue980]: https://github.com/rejectedsoftware/vibe.d/issues/980
+[issue984]: https://github.com/rejectedsoftware/vibe.d/issues/984
+[issue987]: https://github.com/rejectedsoftware/vibe.d/issues/987
+[issue992]: https://github.com/rejectedsoftware/vibe.d/issues/992
+[issue993]: https://github.com/rejectedsoftware/vibe.d/issues/993
+[issue996]: https://github.com/rejectedsoftware/vibe.d/issues/996
+[issue1000]: https://github.com/rejectedsoftware/vibe.d/issues/1000
+[issue1001]: https://github.com/rejectedsoftware/vibe.d/issues/1001
+[issue1002]: https://github.com/rejectedsoftware/vibe.d/issues/1002
+[issue1004]: https://github.com/rejectedsoftware/vibe.d/issues/1004
+[issue1007]: https://github.com/rejectedsoftware/vibe.d/issues/1007
+[issue1008]: https://github.com/rejectedsoftware/vibe.d/issues/1008
+[issue1012]: https://github.com/rejectedsoftware/vibe.d/issues/1012
+[issue1015]: https://github.com/rejectedsoftware/vibe.d/issues/1015
+[issue1021]: https://github.com/rejectedsoftware/vibe.d/issues/1021
+[issue1033]: https://github.com/rejectedsoftware/vibe.d/issues/1033
+
+
 v0.7.22 - 2015-01-12
 --------------------
 

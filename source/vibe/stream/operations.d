@@ -74,7 +74,7 @@ void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, s
 
 	Remarks:
 		This function uses an algorithm inspired by the
-		$(LINK2 http://en.wikipedia.org/wiki/Boyer%E2%80%93Moore_string_search_algorithm, 
+		$(LINK2 http://en.wikipedia.org/wiki/Boyer%E2%80%93Moore_string_search_algorithm,
 		Boyer-Moore string search algorithm). However, contrary to the original
 		algorithm, it will scan the whole input string exactly once, without
 		jumping over portions of it. This allows the algorithm to work with
@@ -105,13 +105,13 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 	if (isOutputRange!(R, ubyte))
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
-	
+
 	// allocate internal jump table to optimize the number of comparisons
-	size_t[8] nmatchoffsetbuffer;
+	size_t[8] nmatchoffsetbuffer = void;
 	size_t[] nmatchoffset;
 	if (end_marker.length <= nmatchoffsetbuffer.length) nmatchoffset = nmatchoffsetbuffer[0 .. end_marker.length];
 	else nmatchoffset = new size_t[end_marker.length];
-	
+
 	// precompute the jump table
 	nmatchoffset[0] = 0;
 	foreach( i; 1 .. end_marker.length ){
@@ -188,7 +188,7 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 			if( nmatched <= i ) dst.put(end_marker[0 .. nmatched_start]);
 			else dst.put(end_marker[0 .. nmatched_start-nmatched+i]);
 		}
-		
+
 		// write out any unmatched part of the current block
 		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
 
@@ -232,7 +232,7 @@ unittest {
 		test("114", 70);
 		test("111111111114", 61);
 	}
-	// TODO: test 
+	// TODO: test
 }
 
 /**
@@ -298,9 +298,9 @@ string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes =
 		destination = The destination stram to pipe into
 		source =      The source stream to read data from
 		nbytes =      Number of bytes to pipe through. The default of zero means to pipe
-		              the whole input stream.
+					  the whole input stream.
 		max_latency = The maximum time before data is flushed to destination. The default value
-		              of 0 s will flush after each chunk of data read from source.
+					  of 0 s will flush after each chunk of data read from source.
 
 	See_also: OutputStream.write
 */
@@ -322,7 +322,11 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 		destination.write(buffer[0 .. chunk]);
 		if (nbytes > 0) nbytes -= chunk;
 
-		if (max_latency <= 0.seconds || cast(Duration)sw.peek() >= max_latency || !source.waitForData(max_latency)) {
+		auto remaining_latency = max_latency - cast(Duration)sw.peek();
+		if (remaining_latency > 0.seconds)
+			source.waitForData(remaining_latency);
+
+		if (cast(Duration)sw.peek >= max_latency) {
 			logTrace("pipeRealtime flushing.");
 			destination.flush();
 			sw.reset();

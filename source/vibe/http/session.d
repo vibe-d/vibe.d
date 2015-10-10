@@ -60,7 +60,7 @@ final struct Session {
 	unittest {
 		import vibe.http.server;
 
-		void login(HTTPServerRequest req, HTTPServerResponse res)
+		void login(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
 			// TODO: validate username+password
 
@@ -95,49 +95,24 @@ final struct Session {
 	}
 
 	/**
-		Enables foreach-iteration over all key/value pairs of the session.
-
-		Note that this overload is deprecated and works only for
-		MemorySessionStore.
-
-		Examples:
-		---
-		// sends all session entries to the requesting browser
-		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
-		{
-			res.contentType = "text/plain";
-			foreach(key, value; req.session)
-				res.bodyWriter.write(key ~ ": " ~ value ~ "\n");
-		}
-		---
-	*/
-	deprecated("Manage a separate array field with all keys instead.")
-	int opApply(int delegate(ref string key, ref Variant value) del)
-	{
-		foreach (key, ref value; m_store.iterateSession(m_id))
-			if (auto ret = del(key, value))
-				return ret;
-		return 0;
-	}
-
-	/**
 		Enables foreach-iteration over all keys of the session.
+	*/
+	int opApply(scope int delegate(string key) del)
+	{
+		return m_store.iterateSession(m_id, del);
+	}
+	///
+	unittest {
+		import vibe.http.server;
 
-		Examples:
-		---
 		// sends all session entries to the requesting browser
 		// assumes that all entries are strings
-		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+		void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
 			res.contentType = "text/plain";
 			foreach(key; req.session)
 				res.bodyWriter.write(key ~ ": " ~ req.session.get!string(key) ~ "\n");
 		}
-		---
-	*/
-	int opApply(scope int delegate(string key) del)
-	{
-		return m_store.iterateSession(m_id, del);
 	}
 
 	/**
@@ -217,9 +192,6 @@ interface SessionStore {
 
 	/// Terminates the given sessiom.
 	void destroy(string id);
-
-	/// Iterates all key/value pairs stored in the given session (deprecated, implement as assert(false)).
-	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id);
 
 	/// Iterates all keys stored in the given session.
 	int iterateSession(string id, scope int delegate(string key) del);

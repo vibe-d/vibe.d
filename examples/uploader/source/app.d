@@ -7,7 +7,7 @@ import vibe.http.server;
 import std.exception;
 
 
-void uploadFile(HTTPServerRequest req, HTTPServerResponse res)
+void uploadFile(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	auto pf = "file" in req.files;
 	enforce(pf !is null, "No file uploaded!");

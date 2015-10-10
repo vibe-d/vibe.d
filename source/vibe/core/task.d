@@ -34,18 +34,24 @@ struct Task {
 		}
 	}
 
-	private this(TaskFiber fiber, size_t task_counter)
+	private this(TaskFiber fiber, size_t task_counter) nothrow
 	{
 		m_fiber = cast(shared)fiber;
 		m_taskCounter = task_counter;
 	}
 
-	this(in Task other) { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
+	this(in Task other) nothrow { m_fiber = cast(shared(TaskFiber))other.m_fiber; m_taskCounter = other.m_taskCounter; }
 
 	/** Returns the Task instance belonging to the calling task.
 	*/
-	static Task getThis()
+	static Task getThis() nothrow
 	{
+		// In 2067, synchronized statements where annotated nothrow.
+		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
+		// However, they were "logically" nothrow before.
+		static if (__VERSION__ <= 2066)
+			scope (failure) assert(0, "Internal error: function should be nothrow");
+
 		auto fiber = Fiber.getThis();
 		if (!fiber) return Task.init;
 		auto tfiber = cast(TaskFiber)fiber;
@@ -63,7 +69,7 @@ struct Task {
 		*/
 		@property bool running()
 		const {
-			assert(m_fiber, "Invalid task handle");
+			assert(m_fiber !is null, "Invalid task handle");
 			try if (this.fiber.state == Fiber.State.TERM) return false; catch (Throwable) {}
 			return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
 		}
@@ -78,7 +84,7 @@ struct Task {
 	}
 
 	/// Reserved for internal use!
-	@property inout(MessageQueue) messageQueue() inout { assert(running); return fiber.messageQueue; }
+	@property inout(MessageQueue) messageQueue() inout { assert(running, "Task is not running"); return fiber.messageQueue; }
 
 	T opCast(T)() const nothrow if (is(T == bool)) { return m_fiber !is null; }
 
@@ -145,6 +151,12 @@ class TaskFiber : Fiber {
 	/** Terminates the task without notice as soon as it calls a blocking function.
 	*/
 	abstract void terminate();
+
+	void bumpTaskCounter()
+	{
+		import core.atomic : atomicOp;
+		atomicOp!"+="(this.m_taskCounter, 1);
+	}
 }
 
 
@@ -160,8 +172,8 @@ class InterruptException : Exception {
 
 class MessageQueue {
 	private {
-		TaskMutex m_mutex;
-		TaskCondition m_condition;
+		InterruptibleTaskMutex m_mutex;
+		InterruptibleTaskCondition m_condition;
 		FixedRingBuffer!Variant m_queue;
 		FixedRingBuffer!Variant m_priorityQueue;
 		size_t m_maxMailboxSize = 0;
@@ -170,8 +182,8 @@ class MessageQueue {
 
 	this()
 	{
-		m_mutex = new TaskMutex;
-		m_condition = new TaskCondition(m_mutex);
+		m_mutex = new InterruptibleTaskMutex;
+		m_condition = new InterruptibleTaskCondition(m_mutex);
 		m_queue.capacity = 32;
 		m_priorityQueue.capacity = 8;
 	}
@@ -180,10 +192,10 @@ class MessageQueue {
 
 	void clear()
 	{
-		synchronized(m_mutex){
+		m_mutex.performLocked!({
 			m_queue.clear();
 			m_priorityQueue.clear();
-		}
+		});
 		m_condition.notifyAll();
 	}
 
@@ -196,7 +208,7 @@ class MessageQueue {
 	void send(Variant msg)
 	{
 		import vibe.core.log;
-		synchronized(m_mutex){
+		m_mutex.performLocked!({
 			if( this.full ){
 				if( !m_onCrowding ){
 					while(this.full)
@@ -211,17 +223,17 @@ class MessageQueue {
 				m_queue.capacity = (m_queue.capacity * 3) / 2;
 
 			m_queue.put(msg);
-		}
+		});
 		m_condition.notify();
 	}
 
 	void prioritySend(Variant msg)
 	{
-		synchronized (m_mutex) {
+		m_mutex.performLocked!({
 			if (m_priorityQueue.full)
 				m_priorityQueue.capacity = (m_priorityQueue.capacity * 3) / 2;
 			m_priorityQueue.put(msg);
-		}
+		});
 		m_condition.notify();
 	}
 
@@ -231,7 +243,7 @@ class MessageQueue {
 		scope (exit) if (notify) m_condition.notify();
 
 		Variant args;
-		synchronized (m_mutex) {
+		m_mutex.performLocked!({
 			notify = this.full;
 			while (true) {
 				import vibe.core.log;
@@ -242,7 +254,7 @@ class MessageQueue {
 				m_condition.wait();
 				notify = this.full;
 			}
-		}
+		});
 
 		handler(args);
 	}
@@ -255,7 +267,7 @@ class MessageQueue {
 		scope (exit) if (notify) m_condition.notify();
 		auto limit_time = Clock.currTime(UTC()) + timeout;
 		Variant args;
-		synchronized (m_mutex) {
+		if (!m_mutex.performLocked!({
 			notify = this.full;
 			while (true) {
 				if (receiveQueue(m_priorityQueue, args, filter)) break;
@@ -265,7 +277,8 @@ class MessageQueue {
 				m_condition.wait(limit_time - now);
 				notify = this.full;
 			}
-		}
+			return true;
+		})) return false;
 
 		handler(args);
 		return true;

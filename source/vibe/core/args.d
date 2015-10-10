@@ -47,13 +47,13 @@ import core.runtime;
 bool readOption(T)(string names, T* pvalue, string help_text)
 {
 	// May happen due to http://d.puremagic.com/issues/show_bug.cgi?id=9881
-	if (!g_args) init();
+	if (g_args is null) init();
 
 	OptionInfo info;
 	info.names = names.split("|").sort!((a, b) => a.length < b.length)().array();
 	info.hasValue = !is(T == bool);
 	info.helpText = help_text;
-	assert(!g_options.any!(o => o.names == info.names)(), "getOption() may only be called once per option name.");
+	assert(!g_options.any!(o => o.names == info.names)(), "readOption() may only be called once per option name.");
 	g_options ~= info;
 
 	immutable olen = g_args.length;
@@ -72,11 +72,11 @@ bool readOption(T)(string names, T* pvalue, string help_text)
 }
 
 /// Compatibility alias
-alias getOption = readOption;
+deprecated("Use readOption instead.") alias getOption = readOption;
 
 
 /**
-	The same as getOption, but throws an exception if the given option is missing.
+	The same as readOption, but throws an exception if the given option is missing.
 
 	See_Also: readOption
 */
@@ -141,8 +141,8 @@ void printCommandLineHelp()
 
 	Params:
 		args_out = Optional parameter for storing any arguments not handled
-		           by any getOption call. If this is left to null, an error
-		           will be triggered whenever unhandled arguments exist.
+				   by any readOption call. If this is left to null, an error
+				   will be triggered whenever unhandled arguments exist.
 
 	Returns:
 		If "--help" was passed, the function returns false. In all other
@@ -194,7 +194,7 @@ private string[] getConfigPaths()
 	return result;
 }
 
-// this is invoked by the first getOption call (at least vibe.core will perform one)
+// this is invoked by the first readOption call (at least vibe.core will perform one)
 private void init()
 {
 	version (VibeDisableCommandLineParsing) {}
@@ -218,7 +218,7 @@ private void init()
 	if (!g_haveConfig)
 		logDiagnostic("No config file found in %s", searchpaths);
 
-	getOption("h|help", &g_help, "Prints this help screen.");
+	readOption("h|help", &g_help, "Prints this help screen.");
 }
 
 private enum configName = "vibe.conf";

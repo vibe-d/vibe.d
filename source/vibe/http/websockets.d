@@ -64,18 +64,18 @@ class WebSocketException: Exception
 }
 
 /**
-    Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
+	Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
 */
-void handleWebsocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRequest req, HTTPServerResponse res)
+void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	auto pUpgrade = "Upgrade" in req.headers;
 	auto pConnection = "Connection" in req.headers;
 	auto pKey = "Sec-WebSocket-Key" in req.headers;
 	//auto pProtocol = "Sec-WebSocket-Protocol" in req.headers;
 	auto pVersion = "Sec-WebSocket-Version" in req.headers;
-	
+
 	auto isUpgrade = false;
-	
+
 	if( pConnection ) {
 		auto connectionTypes = split(*pConnection, ",");
 		foreach( t ; connectionTypes ) {
@@ -86,9 +86,9 @@ void handleWebsocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRe
 		}
 	}
 	if( !(isUpgrade &&
-	      pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
-	      pKey &&
-	      pVersion && *pVersion == "13") )
+		  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
+		  pKey &&
+		  pVersion && *pVersion == "13") )
 	{
 		logDebug("Browser sent invalid WebSocket request.");
 		res.statusCode = HTTPStatus.badRequest;
@@ -113,24 +113,14 @@ void handleWebsocket(scope WebSocketHandshakeDelegate on_handshake, HTTPServerRe
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegate handleWebSockets(WebSocketHandshakeDelegate on_handshake)
-{
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
-	{
-		handleWebsocket(on_handshake, req, res);
-	}
-	return &callback;
-}
-/// ditto
-HTTPServerRequestDelegate handleWebSockets(void function(scope WebSocket) on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) on_handshake)
 {
 	return handleWebSockets(toDelegate(on_handshake));
 }
 /// ditto
-deprecated("Please add 'scope' to the WebSocket parameter of the callback.")
-HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake)
+HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handshake)
 {
-	void callback(HTTPServerRequest req, HTTPServerResponse res)
+	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
@@ -165,6 +155,7 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 		res.headers["Connection"] = "Upgrade";
 		ConnectionStream conn = res.switchProtocol("websocket");
 
+		// TODO: put back 'scope' once it is actually enforced by DMD
 		/*scope*/ auto socket = new WebSocket(conn, req);
 		try on_handshake(socket);
 		catch (Exception e) {
@@ -178,12 +169,6 @@ HTTPServerRequestDelegate handleWebSockets(void delegate(WebSocket) on_handshake
 	}
 	return &callback;
 }
-/// ditto
-deprecated("Please add 'scope' to the WebSocket parameter of the callback.")
-HTTPServerRequestDelegate handleWebSockets(void function(WebSocket) on_handshake)
-{
-	return handleWebSockets(toDelegate(on_handshake));
-}
 
 
 /**
@@ -196,8 +181,8 @@ final class WebSocket {
 		IncomingWebSocketMessage m_nextMessage = null;
 		const HTTPServerRequest m_request;
 		Task m_reader;
-		TaskMutex m_readMutex, m_writeMutex;
-		TaskCondition m_readCondition;
+		InterruptibleTaskMutex m_readMutex, m_writeMutex;
+		InterruptibleTaskCondition m_readCondition;
 		Timer m_pingTimer;
 		uint m_lastPingIndex;
 		bool m_pongReceived;
@@ -210,9 +195,9 @@ final class WebSocket {
 		m_request = request;
 		assert(m_conn);
 		m_reader = runTask(&startReader);
-		m_writeMutex = new TaskMutex;
-		m_readMutex = new TaskMutex;
-		m_readCondition = new TaskCondition(m_readMutex);
+		m_writeMutex = new InterruptibleTaskMutex;
+		m_readMutex = new InterruptibleTaskMutex;
+		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
 		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
 			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			m_pongReceived = true;
@@ -248,10 +233,10 @@ final class WebSocket {
 	{
 		if (m_nextMessage) return true;
 
-		synchronized (m_readMutex) {
+		m_readMutex.performLocked!({
 			while (connected && m_nextMessage is null)
 				m_readCondition.wait();
-		}
+		});
 		return m_nextMessage !is null;
 	}
 
@@ -264,12 +249,12 @@ final class WebSocket {
 
 		immutable limit_time = Clock.currTime(UTC()) + timeout;
 
-		synchronized (m_readMutex) {
+		m_readMutex.performLocked!({
 			while (connected && m_nextMessage is null && timeout > 0.seconds) {
 				m_readCondition.wait(timeout);
 				timeout = limit_time - Clock.currTime(UTC());
 			}
-		}
+		});
 		return m_nextMessage !is null;
 	}
 
@@ -301,27 +286,36 @@ final class WebSocket {
 	*/
 	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
-		synchronized (m_writeMutex) {
+		m_writeMutex.performLocked!({
 			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
 			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode);
 			scope(exit) message.finalize();
 			sender(message);
-		}
+		});
 	}
 
 	/**
 		Actively closes the connection.
+
+		Params:
+			code = Numeric code indicating a termination reason.
+			reason = Message describing why the connection was terminated.
 	*/
-	void close()
+	void close(short code = 0, string reason = "")
 	{
+		//control frame payloads are limited to 125 bytes
+		assert(reason.length <= 123);
+
 		if (connected) {
-			synchronized (m_writeMutex) {
+			m_writeMutex.performLocked!({
 				m_sentCloseFrame = true;
 				Frame frame;
 				frame.opcode = FrameOpcode.close;
+				if(code != 0)
+					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(ubyte[])reason;
 				frame.fin = true;
 				frame.writeFrame(m_conn);
-			}
+			});
 		}
 		if (m_pingTimer) m_pingTimer.stop();
 		if (Task.getThis() != m_reader) m_reader.join();
@@ -363,7 +357,7 @@ final class WebSocket {
 	*/
 	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
 	{
-		synchronized (m_readMutex) {
+		m_readMutex.performLocked!({
 			while (!m_nextMessage) {
 				enforceEx!WebSocketException(connected, "Connection closed while reading message.");
 				m_readCondition.wait();
@@ -371,7 +365,7 @@ final class WebSocket {
 			receiver(m_nextMessage);
 			m_nextMessage = null;
 			m_readCondition.notifyAll();
-		}
+		});
 	}
 
 	private void startReader()
@@ -383,9 +377,9 @@ final class WebSocket {
 				if (m_pingTimer) {
 					if (m_pongSkipped) {
 						logDebug("Pong not received, closing connection");
-						synchronized(m_writeMutex) {
+						m_writeMutex.performLocked!({
 							m_conn.close();
-						}
+						});
 						return;
 					}
 					if (!m_conn.waitForData(request.serverSettings.webSocketPingInterval))
@@ -405,11 +399,11 @@ final class WebSocket {
 					m_conn.close();
 					return;
 				}
-				synchronized (m_readMutex) {
+				m_readMutex.performLocked!({
 					m_nextMessage = msg;
 					m_readCondition.notifyAll();
 					while (m_nextMessage) m_readCondition.wait();
-				}
+				});
 			}
 		} catch (Exception e) {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
@@ -425,16 +419,15 @@ final class WebSocket {
 			m_pingTimer.stop();
 			return;
 		}
-		synchronized(m_writeMutex) {
+		m_writeMutex.performLocked!({
 			m_pongReceived = false;
 			Frame ping;
 			ping.opcode = FrameOpcode.ping;
 			ping.fin = true;
 			ping.payload = nativeToLittleEndian(++m_lastPingIndex);
-
 			ping.writeFrame(m_conn);
 			logDebug("Ping sent");
-		}
+		});
 	}
 }
 

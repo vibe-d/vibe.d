@@ -21,7 +21,7 @@ import vibe.inet.url;
 import vibe.inet.webform;
 import vibe.stream.counting;
 import vibe.stream.operations;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;
@@ -29,6 +29,7 @@ import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
 
+import core.atomic;
 import core.vararg;
 import std.array;
 import std.conv;
@@ -67,12 +68,18 @@ import std.uri;
 		settings = Customizes the HTTP servers functionality.
 		request_handler = This callback is invoked for each incoming request and is responsible
 			for generating the response.
+
+	Returns:
+		A handle is returned that can be used to stop listening for further HTTP
+		requests with the supplied settings. Another call to `listenHTTP` can be
+		used afterwards to start listening again.
 */
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
+HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 {
 	enforce(settings.bindAddresses.length, "Must provide at least one bind address for a HTTP server.");
 
 	HTTPServerContext ctx;
+	ctx.id = atomicOp!"+="(g_contextIDCounter, 1);
 	ctx.settings = settings;
 	ctx.requestHandler = request_handler;
 
@@ -81,7 +88,8 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_h
 	if (settings.accessLogFile.length)
 		ctx.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
 
-	g_contexts ~= ctx;
+	synchronized (g_listenersMutex)
+		addContext(ctx);
 
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
@@ -90,112 +98,43 @@ void listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_h
 	} else {
 		listenHTTPPlain(settings);
 	}
+
+	return HTTPListener(ctx.id);
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
+HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
 {
-	listenHTTP(settings, toDelegate(request_handler));
+	return listenHTTP(settings, toDelegate(request_handler));
 }
 /// ditto
-void listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
+HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
 {
-	listenHTTP(settings, &request_handler.handleRequest);
+	return listenHTTP(settings, &request_handler.handleRequest);
 }
-
-
-/**
-	[private] Starts a HTTP server listening on the specified port.
-
-	This is the same as listenHTTP() except that it does not use a VibeDist host for
-	remote listening, even if specified on the command line.
-*/
-private void listenHTTPPlain(HTTPServerSettings settings)
+/// ditto
+HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegateS request_handler)
 {
-	import std.algorithm : canFind;
-
-	static bool doListen(HTTPServerSettings settings, size_t listener_idx, string addr)
-	{
-		try {
-			bool dist = (settings.options & HTTPServerOption.distribute) != 0;
-			listenTCP(settings.port, (TCPConnection conn){ handleHTTPConnection(conn, g_listeners[listener_idx]); }, addr, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
-			logInfo("Listening for HTTP%s requests on %s:%s", settings.sslContext ? "S" : "", addr, settings.port);
-			return true;
-		} catch( Exception e ) {
-			logWarn("Failed to listen on %s:%s", addr, settings.port);
-			return false;
-		}
-	}
-
-	void addVHost(ref HTTPServerListener lst)
-	{
-		SSLContext onSNI(string servername)
-		{
-			foreach (ctx; g_contexts)
-				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
-					&& ctx.settings.port == lst.bindPort
-					&& ctx.settings.hostName.icmp(servername) == 0)
-				{
-					logDebug("Found context for SNI host '%s'.", servername);
-					return ctx.settings.sslContext;
-				}
-			logDebug("No context found for SNI host '%s'.", servername);
-			return null;
-		}
-
-		if (settings.sslContext !is lst.sslContext && lst.sslContext.kind != SSLContextKind.serverSNI) {
-			logDebug("Create SNI SSL context for %s, port %s", lst.bindAddress, lst.bindPort);
-			lst.sslContext = createSSLContext(SSLContextKind.serverSNI);
-			lst.sslContext.sniCallback = &onSNI;
-		}
-
-		foreach (ctx; g_contexts) {
-			if (ctx.settings.port != settings.port) continue;
-			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
-			/*enforce(ctx.settings.hostName != settings.hostName,
-				"A server with the host name '"~settings.hostName~"' is already "
-				"listening on "~addr~":"~to!string(settings.port)~".");*/
-		}
-	}
-
-	bool any_successful = false;
-
-	// Check for every bind address/port, if a new listening socket needs to be created and
-	// check for conflicting servers
-	foreach (addr; settings.bindAddresses) {
-		bool found_listener = false;
-		foreach (i, ref lst; g_listeners) {
-			if (lst.bindAddress == addr && lst.bindPort == settings.port) {
-				addVHost(lst);
-				assert(!settings.sslContext || settings.sslContext is lst.sslContext
-					|| lst.sslContext.kind == SSLContextKind.serverSNI,
-					format("Got multiple overlapping SSL bind addresses (port %s), but no SNI SSL context!?", settings.port));
-				found_listener = true;
-				any_successful = true;
-				break;
-			}
-		}
-		if (!found_listener) {
-			auto listener = HTTPServerListener(addr, settings.port, settings.sslContext);
-			if (doListen(settings, g_listeners.length, addr)) // DMD BUG 2043
-			{
-				found_listener = true;
-				any_successful = true;
-				g_listeners ~= listener;
-			}
-		}
-	}
-
-	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+	return listenHTTP(settings, cast(HTTPServerRequestDelegate)request_handler);
+}
+/// ditto
+HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunctionS request_handler)
+{
+	return listenHTTP(settings, toDelegate(request_handler));
+}
+/// ditto
+HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS request_handler)
+{
+	return listenHTTP(settings, &request_handler.handleRequest);
 }
 
 
 /**
 	Provides a HTTP request handler that responds with a static Diet template.
 */
-@property HTTPServerRequestDelegate staticTemplate(string template_file)()
+@property HTTPServerRequestDelegateS staticTemplate(string template_file)()
 {
 	import vibe.templ.diet;
-	return (HTTPServerRequest req, HTTPServerResponse res){
+	return (scope HTTPServerRequest req, scope HTTPServerResponse res){
 		res.render!(template_file, req);
 	};
 }
@@ -282,15 +221,15 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method = HTTPM
 /// ditto
 HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHeaderMap headers, InputStream data = null)
 {
-	auto ssl = url.schema == "https";
-	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : ssl ? 443 : 80);
+	auto tls = url.schema == "https";
+	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
 	ret.path = url.pathString;
 	ret.queryString = url.queryString;
 	ret.username = url.username;
 	ret.password = url.password;
 	ret.requestURL = url.localURI;
 	ret.method = method;
-	ret.ssl = ssl;
+	ret.tls = tls;
 	ret.headers = headers;
 	ret.bodyReader = data;
 	return ret;
@@ -329,6 +268,20 @@ interface HTTPServerRequestHandler {
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res);
 }
 
+/// Delegate based request handler with scoped parameters
+alias HTTPServerRequestDelegateS = void delegate(scope HTTPServerRequest req, scope HTTPServerResponse res);
+/// Static function based request handler with scoped parameters
+alias HTTPServerRequestFunctionS = void function(scope HTTPServerRequest req, scope HTTPServerResponse res);
+/// Interface for class based request handlers with scoped parameters
+interface HTTPServerRequestHandlerS {
+	/// Handles incoming HTTP requests
+	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res);
+}
+
+unittest {
+	static assert(is(HTTPServerRequestDelegateS : HTTPServerRequestDelegate));
+	static assert(is(HTTPServerRequestFunctionS : HTTPServerRequestFunction));
+}
 
 /// Aggregates all information about an HTTP error status.
 final class HTTPServerErrorInfo {
@@ -419,7 +372,7 @@ enum HTTPServerOption {
 final class HTTPServerSettings {
 	/** The port on which the HTTP server is listening.
 
-		The default value is 80. If you are running a SSL enabled server you may want to set this
+		The default value is 80. If you are running a TLS enabled server you may want to set this
 		to 443 instead.
 	*/
 	ushort port = 80;
@@ -470,7 +423,10 @@ final class HTTPServerSettings {
 	HTTPServerErrorPageHandler errorPageHandler = null;
 
 	/// If set, a HTTPS server will be started instead of plain HTTP.
-	SSLContext sslContext;
+	TLSContext tlsContext;
+
+	/// Compatibility alias - use `tlsContext` instead.
+	alias sslContext = tlsContext;
 
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
@@ -595,8 +551,18 @@ final class HTTPServerRequest : HTTPRequest {
 		/// ditto
 		NetworkAddress clientAddress;
 
-		/// Determines if the request was issued over an SSL encrypted channel.
-		bool ssl;
+		/// Determines if the request was issued over an TLS encrypted channel.
+		bool tls;
+
+		/// Compatibility alias - use `tls` instead.
+		alias ssl = tls;
+
+		/** Information about the TLS certificate provided by the client.
+
+			Remarks: This field is only set if `tls` is true, and the peer
+			presented a client certificate.
+		*/
+		TLSCertificateInformation clientCertificate;
 
 		/** The _path part of the URL.
 
@@ -743,7 +709,7 @@ final class HTTPServerRequest : HTTPRequest {
 			else if (!m_settings.hostName.empty) url.host = m_settings.hostName;
 			else url.host = m_settings.bindAddresses[0];
 
-			if (this.ssl) {
+			if (this.tls) {
 				url.schema = "https";
 				if (m_port != 443) url.port = m_port;
 			} else {
@@ -792,7 +758,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Session m_session;
 		bool m_headerWritten = false;
 		bool m_isHeadResponse = false;
-		bool m_ssl;
+		bool m_tls;
 		SysTime m_timeFinalized;
 	}
 
@@ -817,12 +783,15 @@ final class HTTPServerResponse : HTTPResponse {
 
 	/** Determines if the response is sent over an encrypted connection.
 	*/
-	bool ssl() const { return m_ssl; }
+	bool tls() const { return m_tls; }
+
+	/// Compatibility alias - use `tls` instead.
+	alias ssl = tls;
 
 	/// Writes the entire response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
-		if (content_type) headers["Content-Type"] = content_type;
+		if (content_type != "") headers["Content-Type"] = content_type;
 		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", data.length);
 		bodyWriter.write(data);
 	}
@@ -830,6 +799,24 @@ final class HTTPServerResponse : HTTPResponse {
 	void writeBody(string data, string content_type = "text/plain; charset=UTF-8")
 	{
 		writeBody(cast(ubyte[])data, content_type);
+	}
+	/// ditto
+	void writeBody(in ubyte[] data, int status, string content_type = null)
+	{
+		statusCode = status;
+		writeBody(data, content_type);
+	}
+	/// ditto
+	void writeBody(string data, int status, string content_type = "text/plain; charset=UTF-8")
+	{
+		statusCode = status;
+		writeBody(data, content_type);
+	}
+	/// ditto
+	void writeBody(scope InputStream data, string content_type = null)
+	{
+		if (content_type != "") headers["Content-Type"] = content_type;
+		bodyWriter.write(data);
 	}
 
 	/** Writes the whole response body at once, without doing any further encoding.
@@ -863,6 +850,18 @@ final class HTTPServerResponse : HTTPResponse {
 			m_conn.write(stream, num_bytes);
 			m_countingWriter.increment(num_bytes);
 		} else  m_countingWriter.write(stream, num_bytes);
+	}
+	/// ditto
+	void writeRawBody(RandomAccessStream stream, int status)
+	{
+		statusCode = status;
+		writeRawBody(stream);
+	}
+	/// ditto
+	void writeRawBody(InputStream stream, int status, size_t num_bytes = 0)
+	{
+		statusCode = status;
+		writeRawBody(stream, num_bytes);
 	}
 
 	/// Writes a JSON message with the specified status
@@ -948,10 +947,10 @@ final class HTTPServerResponse : HTTPResponse {
 		}
 
 		if (auto pce = "Content-Encoding" in headers) {
-			if (*pce == "gzip") {
+			if (icmp2(*pce, "gzip") == 0) {
 				m_gzipOutputStream = FreeListRef!GzipOutputStream(m_bodyWriter);
 				m_bodyWriter = m_gzipOutputStream;
-			} else if (*pce == "deflate") {
+			} else if (icmp2(*pce, "deflate") == 0) {
 				m_deflateOutputStream = FreeListRef!DeflateOutputStream(m_bodyWriter);
 				m_bodyWriter = m_deflateOutputStream;
 			} else {
@@ -1045,7 +1044,7 @@ final class HTTPServerResponse : HTTPResponse {
 		bool secure;
 		if (options & SessionOption.secure) secure = true;
 		else if (options & SessionOption.noSecure) secure = false;
-		else secure = this.ssl;
+		else secure = this.tls;
 
 		m_session = m_settings.sessionStore.create();
 		m_session.set("$sessionCookiePath", path);
@@ -1071,11 +1070,9 @@ final class HTTPServerResponse : HTTPResponse {
 	@property ulong bytesWritten() { return m_countingWriter.bytesWritten; }
 
 	/**
-		Compatibility version of render() that takes a list of explicit names and types instead
-		of variable aliases.
+		Scheduled for deprecation - use `render` instead.
 
-		This version of render() works around a compiler bug in DMD (Issue 2962). You should use
-		this method instead of render() as long as this bug is not fixed.
+		This version of render() works around an old compiler bug in DMD < 2.064 (Issue 2962).
 
 		The first template argument is the name of the template file. All following arguments
 		must be pairs of a type and a string, each specifying one parameter. Parameter values
@@ -1136,15 +1133,16 @@ final class HTTPServerResponse : HTTPResponse {
 		// ignore exceptions caused by an already closed connection - the client
 		// may have closed the connection already and this doesn't usually indicate
 		// a problem.
-		try m_conn.flush();
-		catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
+		if (m_rawConnection && m_rawConnection.connected) {
+			try if (m_conn) m_conn.flush();
+			catch (Exception e) logDebug("Failed to flush connection after finishing HTTP response: %s", e.msg);
+			if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
+				logDebug("HTTP response only written partially before finalization. Terminating connection.");
+				m_rawConnection.close();
+			}
+		}
 
 		m_timeFinalized = Clock.currTime(UTC());
-
-		if (!isHeadResponse && bytesWritten < headers.get("Content-Length", "0").to!long) {
-			logDebug("HTTP response only written partially before finalization. Terminating connection.");
-			m_rawConnection.close();
-		}
 
 		m_conn = null;
 		m_rawConnection = null;
@@ -1195,6 +1193,53 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 }
 
+/**
+	Represents the request listener for a specific `listenHTTP` call.
+
+	This struct can be used to stop listening for HTTP requests at runtime.
+*/
+struct HTTPListener {
+	private {
+		size_t m_contextID;
+	}
+
+	private this(size_t id) { m_contextID = id; }
+
+	/** Stops handling HTTP requests and closes the TCP listening port if
+		possible.
+	*/
+	void stopListening()
+	{
+		import std.algorithm : countUntil;
+
+		synchronized (g_listenersMutex) {
+			auto contexts = getContexts();
+
+			auto idx = contexts.countUntil!(c => c.id == m_contextID);
+			if (idx < 0) return;
+
+			// remove context entry
+			auto ctx = getContexts()[idx];
+			removeContext(idx);
+
+			// stop listening on all unused TCP ports
+			auto port = ctx.settings.port;
+			foreach (addr; ctx.settings.bindAddresses) {
+				// any other context still occupying the same addr/port?
+				if (getContexts().canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
+					continue;
+
+				auto lidx = g_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
+				if (lidx >= 0) {
+					g_listeners[lidx].listener.stopListening();
+					logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
+					g_listeners = g_listeners[0 .. lidx] ~ g_listeners[lidx+1 .. $];
+				}
+			}
+		}
+	}
+}
+
 
 /**************************************************************************************************/
 /* Private types                                                                                  */
@@ -1204,12 +1249,14 @@ private struct HTTPServerContext {
 	HTTPServerRequestDelegate requestHandler;
 	HTTPServerSettings settings;
 	HTTPLogger[] loggers;
+	size_t id;
 }
 
-private struct HTTPServerListener {
+private struct HTTPListenInfo {
+	TCPListener listener;
 	string bindAddress;
 	ushort bindPort;
-	SSLContext sslContext;
+	TLSContext tlsContext;
 }
 
 private enum MaxHTTPHeaderLineLength = 4096;
@@ -1265,19 +1312,152 @@ private final class TimeoutHTTPInputStream : InputStream {
 /**************************************************************************************************/
 
 private {
+	import core.sync.mutex;
+
 	shared string s_distHost;
 	shared ushort s_distPort = 11000;
-	__gshared HTTPServerContext[] g_contexts;
-	__gshared HTTPServerListener[] g_listeners;
+	shared size_t g_contextIDCounter = 1;
+
+	// protects g_listeners and *write* accesses to g_contexts
+	__gshared Mutex g_listenersMutex;
+	__gshared HTTPListenInfo[] g_listeners;
+
+	// accessed for every request, needs to be kept thread-safe by only atomically assigning new
+	// arrays (COW). shared immutable(HTTPServerContext)[] would be the right candidate here, but
+	// is impractical due to type system limitations.
+	shared HTTPServerContext[] g_contexts;
+
+	HTTPServerContext[] getContexts()
+	{
+		static if (__VERSION__ >= 2067) {
+			version (Win64) return cast(HTTPServerContext[])g_contexts;
+			else return cast(HTTPServerContext[])atomicLoad(g_contexts);
+		}
+		else
+			return cast(HTTPServerContext[])g_contexts;
+	}
+
+	void addContext(HTTPServerContext ctx)
+	{
+		synchronized (g_listenersMutex) {
+			static if (__VERSION__ >= 2067)
+				atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
+			else
+				g_contexts = g_contexts ~ cast(shared)ctx;
+		}
+	}
+
+	void removeContext(size_t idx)
+	{
+		// write a new complete array reference to avoid race conditions during removal
+		auto contexts = g_contexts;
+		auto newarr = contexts[0 .. idx] ~ contexts[idx+1 .. $];
+		static if (__VERSION__ >= 2067)
+			atomicStore(g_contexts, newarr);
+		else
+			g_contexts = newarr;
+	}
 }
 
-private void handleHTTPConnection(TCPConnection connection, HTTPServerListener listen_info)
+/**
+	[private] Starts a HTTP server listening on the specified port.
+
+	This is the same as listenHTTP() except that it does not use a VibeDist host for
+	remote listening, even if specified on the command line.
+*/
+private void listenHTTPPlain(HTTPServerSettings settings)
+{
+	import std.algorithm : canFind;
+
+	static TCPListener doListen(HTTPListenInfo listen_info, bool dist)
+	{
+		try {
+			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) {
+					handleHTTPConnection(conn, listen_info);
+				}, listen_info.bindAddress, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
+			logInfo("Listening for HTTP%s requests on %s:%s", listen_info.tlsContext ? "S" : "", listen_info.bindAddress, listen_info.bindPort);
+			return ret;
+		} catch( Exception e ) {
+			logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
+			return null;
+		}
+	}
+
+	void addVHost(ref HTTPListenInfo lst)
+	{
+		auto contexts = getContexts();
+
+		TLSContext onSNI(string servername)
+		{
+			foreach (ctx; contexts)
+				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
+					&& ctx.settings.port == lst.bindPort
+					&& ctx.settings.hostName.icmp(servername) == 0)
+				{
+					logDebug("Found context for SNI host '%s'.", servername);
+					return ctx.settings.tlsContext;
+				}
+			logDebug("No context found for SNI host '%s'.", servername);
+			return null;
+		}
+
+		if (settings.tlsContext !is lst.tlsContext && lst.tlsContext.kind != TLSContextKind.serverSNI) {
+			logDebug("Create SNI TLS context for %s, port %s", lst.bindAddress, lst.bindPort);
+			lst.tlsContext = createTLSContext(TLSContextKind.serverSNI);
+			lst.tlsContext.sniCallback = &onSNI;
+		}
+
+		foreach (ctx; contexts) {
+			if (ctx.settings.port != settings.port) continue;
+			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
+			/*enforce(ctx.settings.hostName != settings.hostName,
+				"A server with the host name '"~settings.hostName~"' is already "
+				"listening on "~addr~":"~to!string(settings.port)~".");*/
+		}
+	}
+
+	bool any_successful = false;
+
+	synchronized (g_listenersMutex) {
+		// Check for every bind address/port, if a new listening socket needs to be created and
+		// check for conflicting servers
+		foreach (addr; settings.bindAddresses) {
+			bool found_listener = false;
+			foreach (i, ref lst; g_listeners) {
+				if (lst.bindAddress == addr && lst.bindPort == settings.port) {
+					addVHost(lst);
+					assert(!settings.tlsContext || settings.tlsContext is lst.tlsContext
+						|| lst.tlsContext.kind == TLSContextKind.serverSNI,
+						format("Got multiple overlapping TLS bind addresses (port %s), but no SNI TLS context!?", settings.port));
+					found_listener = true;
+					any_successful = true;
+					break;
+				}
+			}
+			if (!found_listener) {
+				auto linfo = HTTPListenInfo(null, addr, settings.port, settings.tlsContext);
+				if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0)) // DMD BUG 2043
+				{
+					linfo.listener = tcp_lst;
+					found_listener = true;
+					any_successful = true;
+					g_listeners ~= linfo;
+				}
+			}
+		}
+	}
+
+	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+}
+
+
+private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo listen_info)
 {
 	Stream http_stream = connection;
 
 	version(VibeNoSSL) {} else {
 		import std.traits : ReturnType;
-		ReturnType!createSSLStreamFL ssl_stream;
+		ReturnType!createTLSStreamFL tls_stream;
 	}
 
 	if (!connection.waitForData(10.seconds())) {
@@ -1285,14 +1465,14 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 		return;
 	}
 
-	// If this is a HTTPS server, initiate SSL
-	if (listen_info.sslContext) {
-		version (VibeNoSSL) assert(false, "No SSL support compiled in (VibeNoSSL)");
+	// If this is a HTTPS server, initiate TLS
+	if (listen_info.tlsContext) {
+		version (VibeNoSSL) assert(false, "No TLS support compiled in (VibeNoSSL)");
 		else {
-			logDebug("Accept SSL connection: %s", listen_info.sslContext.kind);
-			// TODO: reverse DNS lookup for peer_name of the incoming connection for SSL client certificate verification purposes
-			ssl_stream = createSSLStreamFL(http_stream, listen_info.sslContext, SSLStreamState.accepting, null, connection.remoteAddress);
-			http_stream = ssl_stream;
+			logDebug("Accept TLS connection: %s", listen_info.tlsContext.kind);
+			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
+			tls_stream = createTLSStreamFL(http_stream, listen_info.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
+			http_stream = tls_stream;
 		}
 	}
 
@@ -1314,12 +1494,10 @@ private void handleHTTPConnection(TCPConnection connection, HTTPServerListener l
 	logTrace("Done handling connection.");
 }
 
-private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPServerListener listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
+private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
 	import std.algorithm : canFind;
 
-	auto peer_address_string = tcp_connection.peerAddress;
-	auto peer_address = tcp_connection.remoteAddress;
 	SysTime reqtime = Clock.currTime(UTC());
 
 	//auto request_allocator = scoped!(PoolAllocator)(1024, defaultAllocator());
@@ -1332,10 +1510,17 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	FreeListRef!LimitedHTTPInputStream limited_http_input_stream;
 	FreeListRef!ChunkedInputStream chunked_input_stream;
 
+	// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
+	auto peer_address_string = tcp_connection.peerAddress;
+	if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(":") < 0)
+		req.peer = peer_address_string[7 .. $];
+	else req.peer = peer_address_string;
+	req.clientAddress = tcp_connection.remoteAddress;
+
 	// Default to the first virtual host for this listener
 	HTTPServerRequestDelegate request_task;
 	HTTPServerContext context;
-	foreach (ctx; g_contexts)
+	foreach (ctx; getContexts())
 		if (ctx.settings.port == listen_info.bindPort) {
 			bool found = false;
 			foreach (addr; ctx.settings.bindAddresses)
@@ -1348,9 +1533,16 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			break;
 		}
 
+	if (!settings) {
+		logWarn("Didn't find a HTTP listening context for incoming connection. Dropping.");
+		keep_alive = false;
+		return false;
+	}
+
 	// Create the response object
 	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
-	req.ssl = res.m_ssl = listen_info.sslContext !is null;
+	req.tls = res.m_tls = listen_info.tlsContext !is null;
+	if (req.tls) req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
 
 	// Error page handler
 	void errorOut(int code, string msg, string debug_msg, Throwable ex){
@@ -1388,12 +1580,6 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			reqReader = timeout_http_input_stream;
 		}
 
-		// store the IP address (IPv4 addresses forwarded over IPv6 are stored in IPv4 format)
-		if (peer_address_string.startsWith("::ffff:") && peer_address_string[7 .. $].indexOf(":") < 0)
-			req.peer = peer_address_string[7 .. $];
-		else req.peer = peer_address_string;
-		req.clientAddress = peer_address;
-
 		// basic request parsing
 		parseRequestHeader(req, reqReader, request_allocator, settings.maxRequestHeaderSize);
 		logTrace("Got request header.");
@@ -1401,11 +1587,12 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		// find the matching virtual host
 		string reqhost;
 		ushort reqport = 0;
+		import std.algorithm : splitter;
 		auto reqhostparts = req.host.splitter(":");
 		if (!reqhostparts.empty) { reqhost = reqhostparts.front; reqhostparts.popFront(); }
 		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }
 		enforce(reqhostparts.empty, "Invalid suffix found in host header");
-		foreach (ctx; g_contexts)
+		foreach (ctx; getContexts())
 			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
 			{
@@ -1442,7 +1629,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			enforceBadRequest(settings.maxRequestSize <= 0 || contentLength <= settings.maxRequestSize, "Request size too big");
 			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(reqReader, contentLength);
 		} else if (auto pt = "Transfer-Encoding" in req.headers) {
-			enforceBadRequest(*pt == "chunked");
+			enforceBadRequest(icmp(*pt, "chunked") == 0);
 			chunked_input_stream = FreeListRef!ChunkedInputStream(reqReader);
 			limited_http_input_stream = FreeListRef!LimitedHTTPInputStream(chunked_input_stream, settings.maxRequestSize, true);
 		} else {
@@ -1452,7 +1639,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 
 		// handle Expect header
 		if (auto pv = "Expect" in req.headers) {
-			if (*pv == "100-continue") {
+			if (icmp2(*pv, "100-continue") == 0) {
 				logTrace("sending 100 continue");
 				http_stream.write("HTTP/1.1 100 Continue\r\n\r\n");
 			}
@@ -1500,7 +1687,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 
 		if (settings.options & HTTPServerOption.parseJsonBody) {
-			if (req.contentType == "application/json") {
+			if (icmp2(req.contentType, "application/json") == 0) {
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				if (!bodyStr.empty) req.json = parseJson(bodyStr);
 			}
@@ -1534,7 +1721,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	} catch (HTTPStatusException err) {
 		string dbg_msg;
 		if (settings.options & HTTPServerOption.errorStackTraces) {
-			if (err.debugMessage) dbg_msg = err.debugMessage;
+			if (err.debugMessage != "") dbg_msg = err.debugMessage;
 			else dbg_msg = err.toString().sanitize;
 		}
 		if (!res.headerWritten) errorOut(err.status, err.msg, dbg_msg, err);
@@ -1558,10 +1745,10 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			nullWriter.write(req.bodyReader);
 			logTrace("dropped body");
 		}
-
-		// finalize (e.g. for chunked encoding)
-		res.finalize();
 	}
+
+	// finalize (e.g. for chunked encoding)
+	res.finalize();
 
 	foreach (k, v ; req.files) {
 		if (existsFile(v.tempPath)) {
@@ -1631,13 +1818,17 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 
 shared static this()
 {
-	import vibe.core.args : getOption;
+	g_listenersMutex = new Mutex;
 
-	string disthost = s_distHost;
-	ushort distport = s_distPort;
-	getOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
-	getOption("distport", &distport, "Sets the port used for load balancing.");
-	setVibeDistHost(disthost, distport);
+	version (VibeNoDefaultArgs) {}
+	else {
+		string disthost = s_distHost;
+		ushort distport = s_distPort;
+		import vibe.core.args : readOption;
+		readOption("disthost|d", &disthost, "Sets the name of a vibedist server to use for load balancing.");
+		readOption("distport", &distport, "Sets the port used for load balancing.");
+		setVibeDistHost(disthost, distport);
+	}
 }
 
 private string formatRFC822DateAlloc(Allocator alloc, SysTime time)
