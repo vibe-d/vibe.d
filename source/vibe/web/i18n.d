@@ -125,12 +125,20 @@ mixin template translationModule(string FILENAME)
 	mixin file_mixin!0;
 }
 
+/**
+	Performs the string translation for a statically given language.
+
+	The second overload takes a plural form and a number to select from a set
+	of translations based on the plural forms of the target language.
+*/
 string tr(CTX, string LANG)(string key, string context = null)
 {
-	return tr_plural!(CTX,LANG)(key, null, 0, context);
+	return tr!(CTX,LANG)(key, null, 0, context);
 }
 
-string tr_plural(CTX, string LANG)(string key, string key_plural, int n, string context = null) {
+/// ditto
+string tr(CTX, string LANG)(string key, string key_plural, int n, string context = null)
+{
 	static assert([CTX.languages].canFind(LANG), "Unknown language: "~LANG);
 
 	foreach (i, mname; __traits(allMembers, CTX)) {
@@ -175,7 +183,7 @@ string tr_plural(CTX, string LANG)(string key, string key_plural, int n, string 
 		}
 		assert(false, "Missing translation key for "~LANG~"; "~context~": "~key);
 	} else {
-		return key;
+		return n == 1 || !key_plural.length ? key : key_plural;
 	}
 }
 
@@ -295,7 +303,7 @@ private struct LangComponents {
  * msgstr[2] - ditto and etc...
  */
 
-private LangComponents extractDeclStrings(string text)
+LangComponents extractDeclStrings(string text)
 {
 	DeclString[] declStrings;
 	string nplurals_expr;
@@ -559,7 +567,7 @@ msgstr[1] "%d files were created."
 	}
 	
 	auto newTr(string msgid, string msgid_plural, int count, string msgcntxt = null) {
-		return tr_plural!(TranslationContext, "en_US")(msgid, msgid_plural, count, msgcntxt);
+		return tr!(TranslationContext, "en_US")(msgid, msgid_plural, count, msgcntxt);
 	}
 
 	string expected = "1 file was deleted.";

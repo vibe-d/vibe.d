@@ -366,12 +366,28 @@ void terminateSession()
 /**
 	Translates text based on the language of the current web request.
 
+	The first overload performs a direct translation of the given translation
+	key/text. The second overload can select from a set of plural forms
+	based on the given integer value (msgid_plural).
+
+	Params:
+		text = The translation key
+		context = Optional context/namespace identifier (msgctxt)
+		plural_text = Plural form of the translation key
+		count = The quantity used to select the proper plural form of a translation
+
 	See_also: $(D vibe.web.i18n.translationContext)
 */
 string trWeb(string text, string context = null)
 {
 	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
 	return s_requestContext.tr(text, context);
+}
+
+/// ditto
+string trWeb(string text, string plural_text, int count, string context = null) {
+	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
+	return s_requestContext.tr_plural(text, plural_text, count, context);
 }
 
 ///
@@ -389,18 +405,6 @@ unittest {
 			res.writeBody(trWeb("This text will be translated!"));
 		}
 	}
-}
-
-/**
- * Translates text based on the language of the current web request.
- * This overload handles translations where the form of the translation changes based on
- * a quantity.
- * 
- * See_also: $(D vibe.web.i18n.translationContext)
-*/
-string trWeb(string text, string plural_text, int count, string context = null) {
-	assert(s_requestContext.req !is null, "trWeb() used outside of a web interface request!");
-	return s_requestContext.tr_plural(text, plural_text, count, context);
 }
 
 /**
@@ -759,24 +763,24 @@ private RequestContext createRequestContext(alias handler)(HTTPServerRequest req
 			switch (ret.language) {
 				default:
 					ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]);
-					ret.tr_plural = &tr_plural!(TranslateContext, TranslateContext.languages[0]);
+					ret.tr_plural = &tr!(TranslateContext, TranslateContext.languages[0]);
 					break;
 				foreach (lang; TranslateContext.languages[1 .. $]) {
 					case lang:
 						ret.tr = &tr!(TranslateContext, lang);
-						ret.tr_plural = &tr_plural!(TranslateContext, lang);
+						ret.tr_plural = &tr!(TranslateContext, lang);
 						break;
 				}
 			}
 		} else {
 			ret.tr = &tr!(TranslateContext, TranslateContext.languages[0]);
-			ret.tr_plural = &tr_plural!(TranslateContext, TranslateContext.languages[0]);
+			ret.tr_plural = &tr!(TranslateContext, TranslateContext.languages[0]);
 		}
 	} else {
 		ret.tr = (t,c) => t;
 		// Without more knowledge about the requested language, the best we can do is return the msgid as a hint
 		// that either a po file is needed for the language, or that a translation entry does not exist for the msgid.
-		ret.tr_plural = (txt,ptxt,cnt,ctx) => txt;
+		ret.tr_plural = (txt,ptxt,cnt,ctx) => !ptxt.length || cnt == 1 ? txt : ptxt;
 	}
 
 	return ret;
