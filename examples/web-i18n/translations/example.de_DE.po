@@ -1,3 +1,7 @@
+msgid ""
+msgstr ""
+"Plural-Forms: nplurals=2; plural=n != 1;\\n"
+
 msgid "Welcome to the i18n example app!"
 msgstr "Willkommen zum i18n-Beispiel!"
 
@@ -47,3 +51,12 @@ msgstr "Emil"
 msgctxt "letter"
 msgid "W"
 msgstr "Wilhelm"
+
+msgid "Plural forms:"
+msgstr "Pluralformen:"
+
+msgid "One file created."
+msgid_plural "Several files created."
+msgstr "Eine Datei erstellt."
+msgstr[0] "%d Datei erstellt wurde."
+msgstr[1] "%d Dateien erstellt wurden."
