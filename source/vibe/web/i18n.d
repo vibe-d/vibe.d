@@ -131,59 +131,61 @@ mixin template translationModule(string FILENAME)
 	The second overload takes a plural form and a number to select from a set
 	of translations based on the plural forms of the target language.
 */
-string tr(CTX, string LANG)(string key, string context = null)
+template tr(CTX, string LANG)
 {
-	return tr!(CTX,LANG)(key, null, 0, context);
-}
+	string tr(string key, string context = null)
+	{
+		return tr!(CTX, LANG)(key, null, 0, context);
+	}
 
-/// ditto
-string tr(CTX, string LANG)(string key, string key_plural, int n, string context = null)
-{
-	static assert([CTX.languages].canFind(LANG), "Unknown language: "~LANG);
+	string tr(string key, string key_plural, int n, string context = null)
+	{
+		static assert([CTX.languages].canFind(LANG), "Unknown language: "~LANG);
 
-	foreach (i, mname; __traits(allMembers, CTX)) {
-		static if (mname.startsWith(LANG~"_")) {
-			enum langComponents = __traits(getMember, CTX, mname);
-			foreach (entry; langComponents.messages) {
-				if ((context is null) == (entry.context is null)) {
-					if (context is null || entry.context == context) {
-						if (entry.key == key) {
-							if (key_plural !is null) {
-								if (entry.pluralKey !is null && entry.pluralKey == key_plural) {
-									static if (langComponents.nplurals_expr !is null && langComponents.plural_func_expr !is null) {
-										mixin("int nplurals = "~langComponents.nplurals_expr~";");
-										if (nplurals > 0) {
-											mixin("int index = "~langComponents.plural_func_expr~";");
-											return entry.pluralValues[index];
+		foreach (i, mname; __traits(allMembers, CTX)) {
+			static if (mname.startsWith(LANG~"_")) {
+				enum langComponents = __traits(getMember, CTX, mname);
+				foreach (entry; langComponents.messages) {
+					if ((context is null) == (entry.context is null)) {
+						if (context is null || entry.context == context) {
+							if (entry.key == key) {
+								if (key_plural !is null) {
+									if (entry.pluralKey !is null && entry.pluralKey == key_plural) {
+										static if (langComponents.nplurals_expr !is null && langComponents.plural_func_expr !is null) {
+											mixin("int nplurals = "~langComponents.nplurals_expr~";");
+											if (nplurals > 0) {
+												mixin("int index = "~langComponents.plural_func_expr~";");
+												return entry.pluralValues[index];
+											}
+											return entry.value;
 										}
-										return entry.value;
+										assert(false, "Plural translations are not supported when the po file does not contain an entry for Plural-Forms.");
 									}
-									assert(false, "Plural translations are not supported when the po file does not contain an entry for Plural-Forms.");
+								} else {
+									return entry.value;
 								}
-							} else {
-								return entry.value;
 							}
 						}
 					}
 				}
 			}
 		}
-	}
 
-	static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys) {
-		if (key_plural !is null) {
-			if (context is null) {
-				assert(false, "Missing translation keys for "~LANG~": "~key~"&"~key_plural);
+		static if (is(typeof(CTX.enforceExistingKeys)) && CTX.enforceExistingKeys) {
+			if (key_plural !is null) {
+				if (context is null) {
+					assert(false, "Missing translation keys for "~LANG~": "~key~"&"~key_plural);
+				}
+				assert(false, "Missing translation key for "~LANG~"; "~context~": "~key~"&"~key_plural);
 			}
-			assert(false, "Missing translation key for "~LANG~"; "~context~": "~key~"&"~key_plural);
-		}
 
-		if (context is null) {
-			assert(false, "Missing translation key for "~LANG~": "~key);
+			if (context is null) {
+				assert(false, "Missing translation key for "~LANG~": "~key);
+			}
+			assert(false, "Missing translation key for "~LANG~"; "~context~": "~key);
+		} else {
+			return n == 1 || !key_plural.length ? key : key_plural;
 		}
-		assert(false, "Missing translation key for "~LANG~"; "~context~": "~key);
-	} else {
-		return n == 1 || !key_plural.length ? key : key_plural;
 	}
 }
 
