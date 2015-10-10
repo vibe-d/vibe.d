@@ -307,7 +307,9 @@ class RestInterfaceClient(I) : I
 	mixin(generateModuleImports!I());
 
 	private {
-		RestInterface!I m_intf;
+		// storing this struct directly causes a segfault when built with
+		// LDC 0.15.x, so we are using a pointer here:
+		RestInterface!I* m_intf;
 		RequestFilter m_requestFilter;
 		staticMap!(RestInterfaceClient, Info.SubInterfaceTypes) m_subInterfaces;
 	}
@@ -319,7 +321,7 @@ class RestInterfaceClient(I) : I
 	*/
 	this(RestInterfaceSettings settings)
 	{
-		m_intf = Info(settings, true);
+		m_intf = new Info(settings, true);
 
 		foreach (i, SI; Info.SubInterfaceTypes)
 			m_subInterfaces[i] = new RestInterfaceClient!SI(m_intf.subInterfaces[i].settings);
@@ -642,7 +644,7 @@ private string generateRestClientMethods(I)()
 
 		ret ~= q{
 				mixin CloneFunction!(Info.RouteFunctions[%1$s], q{
-					return executeClientMethod!(I, %1$s%2$s)(m_intf, m_requestFilter);
+					return executeClientMethod!(I, %1$s%2$s)(*m_intf, m_requestFilter);
 				});
 			}.format(i, pnames);
 	}
