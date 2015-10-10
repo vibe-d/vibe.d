@@ -362,9 +362,9 @@ struct RedisLock {
 		m_key = lock_key;
 		m_scriptSHA = m_db.scriptLoad(
 `if redis.call("get",KEYS[1]) == ARGV[1] then
-    return redis.call("del",KEYS[1])
+	return redis.call("del",KEYS[1])
 else
-    return 0
+	return 0
 end`);
 	}
 
@@ -424,15 +424,28 @@ struct LazyString(T...) {
 	To reconstruct the full struct type, use the $(D RedisStripped.unstrip)
 	method.
 */
-RedisStripped!T redisStrip(T)(in T val) { return RedisStripped!T(val); }
+RedisStripped!(T, strip_id) redisStrip(bool strip_id = true, T)(in T val) { return RedisStripped!(T, strip_id)(val); }
 
 /**
 	Represents the stripped type of a struct.
 
+	Strips all fields that cannot be directly stored as values in the Redis
+	database. By default, any field named `id` or `_id` is also stripped. Set
+	the `strip_id` parameter to `false` to keep those fields.
+
 	See_also: $(D redisStrip)
 */
-struct RedisStripped(T) {
+struct RedisStripped(T, bool strip_id = true) {
+	import std.traits : Select, select;
 	import std.typetuple;
+
+	//pragma(msg, membersString!());
+	mixin(membersString());
+
+	alias StrippedMembers = FilterToType!(Select!(strip_id, isNonRedisTypeOrID, isNonRedisType), T.tupleof);
+	alias UnstrippedMembers = FilterToType!(Select!(strip_id, isRedisTypeAndNotID, isRedisType), T.tupleof);
+	alias strippedMemberIndices = indicesOf!(Select!(strip_id, isNonRedisTypeOrID, isNonRedisType), T.tupleof);
+	alias unstrippedMemberIndices = indicesOf!(Select!(strip_id, isRedisTypeAndNotID, isRedisType), T.tupleof);
 
 	this(in T src) { foreach (i, idx; unstrippedMemberIndices) this.tupleof[i] = src.tupleof[idx]; }
 
@@ -460,27 +473,19 @@ struct RedisStripped(T) {
 			dst.tupleof[strippedMemberIndices[i]] = v;
 	}
 
-	//pragma(msg, membersString!());
-	mixin(membersString!());
-
-	alias StrippedMembers = FilterToType!(isNonRedisType, T.tupleof);
-	alias UnstrippedMembers = FilterToType!(isRedisType, T.tupleof);
-	alias strippedMemberIndices = indicesOf!(isNonRedisType, T.tupleof);
-	alias unstrippedMemberIndices = indicesOf!(isRedisType, T.tupleof);
 
 	/*pragma(msg, T);
 	pragma(msg, "stripped: "~StrippedMembers.stringof~" - "~strippedMemberIndices.stringof);
 	pragma(msg, "unstripped: "~UnstrippedMembers.stringof~" - "~unstrippedMemberIndices.stringof);*/
 
-	template membersString() {
-		template impl(size_t i) {
-			static if (i < T.tupleof.length) {
-				enum m = __traits(identifier, T.tupleof[i]);
-				static if (isRedisType!(T.tupleof[i])) enum impl = "typeof(T."~m~") "~m~";\n" ~ impl!(i+1);
-				else enum impl = impl!(i+1);
-			} else enum impl = "";
+	private static string membersString()
+	{
+		string ret;
+		foreach (idx; unstrippedMemberIndices) {
+			enum name = __traits(identifier, T.tupleof[idx]);
+			ret ~= "typeof(T."~name~") "~name~";\n";
 		}
-		enum membersString = impl!0;
+		return ret;
 	}
 }
 
@@ -517,9 +522,14 @@ private template FilterToType(alias PRED, T...) {
 	}
 	alias FilterToType = impl!0;
 }
-private template isRedisType(alias F) { import std.algorithm; enum isRedisType = !__traits(identifier, F).among("_id", "id") && is(typeof(&toRedis!(typeof(F)))); }
+private template isRedisType(alias F) { enum isRedisType = is(typeof(&toRedis!(typeof(F)))); }
 private template isNonRedisType(alias F) { enum isNonRedisType = !isRedisType!F; }
 static assert(isRedisType!(int.init) && isRedisType!(string.init));
+static assert(!isRedisType!((float[]).init));
+
+private template isRedisTypeAndNotID(alias F) { import std.algorithm; enum isRedisTypeAndNotID = !__traits(identifier, F).among("_id", "id") && isRedisType!F; }
+private template isNonRedisTypeOrID(alias F) { enum isNonRedisTypeOrID = !isRedisTypeAndNotID!F; }
+static assert(isRedisTypeAndNotID!(int.init) && isRedisTypeAndNotID!(string.init));
 
 private auto toTuple(size_t N, T)(T[N] values)
 {

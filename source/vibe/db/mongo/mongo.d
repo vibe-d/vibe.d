@@ -27,14 +27,22 @@ import std.algorithm;
 	safe updates, but no fsync. By specifying a URL instead, it is possible to
 	fully customize the settings. See
 	$(LINK http://www.mongodb.org/display/DOCS/Connections) for the complete set
-	of options. Note that 'sslverifycertificate' is only present in some client 
+	of options. Note that 'sslverifycertificate' is only present in some client
 	bindings, including here.
-	
 
 	Note that the returned MongoClient uses a vibe.core.connectionpool.ConnectionPool
 	internally to create and reuse connections as necessary. Thus, the
 	MongoClient instance can - and should - be shared among all fibers in a
 	thread by storing in in a thread local variable.
+
+	Authentication:
+		Authenticated connections are supported by using a URL connection string
+		such as "mongodb://user:password@host". Note that the driver currently
+		only supports the "MongoDB-CR" authentication mechanism. Since new
+		MongoDB versions, starting with 3.0, default to the new "SCRAM-SHA-1"
+		method, it is necessary to manually switch to the old method. See
+		$(WEB http://stackoverflow.com/questions/29006887/mongodb-cr-authentication-failed)
+		for more information.
 
 	Examples:
 		---
@@ -61,10 +69,10 @@ import std.algorithm;
 
 	Returns:
 		A new MongoClient instance that can be used to access the database.
-  
+
  	Throws:
  		Throws an exception if a mongodb:// URL is given and the URL cannot be parsed.
- 		An exception will not be thrown if called with a hostname and port. 
+ 		An exception will not be thrown if called with a hostname and port.
 */
 MongoClient connectMongoDB(string host, ushort port)
 {

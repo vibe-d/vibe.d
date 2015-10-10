@@ -1,16 +1,31 @@
 language: d
 
 d:
-  - dmd-2.065.0
+  - dmd-2.069.0-b1
+  - dmd-2.068.2
+  - dmd-2.067.1
   - dmd-2.066.1
-  - ldc-0.14.0
   - ldc-0.15.1
-  - gdc-4.9.0
+  - gdc-4.9.2
 
-script:
-  - dub test --compiler=$DC
-  - for ex in `\ls -1 examples/`; do (echo "[INFO] Building example $ex"; cd examples/$ex && dub build --compiler=$DC) || exit 1; done
-  - for ex in `\ls -1 tests/`; do (echo "[INFO] Running test $ex"; cd tests/$ex && dub --compiler=$DC) || exit 1; done
+addons:
+  apt:
+    packages:
+    - libev-dev
+
+env:
+  - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
+  - VIBED_DRIVER=libev BUILD_EXAMPLE=0 RUN_TEST=0
+  - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+
+matrix:
+  exclude:
+    - d: ldc-0.15.1
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+    - d: gdc-4.9.2
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+
+script: ./travis-ci.sh
 
 services:
   - mongodb

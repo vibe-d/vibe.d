@@ -20,7 +20,7 @@ class MulticastStream : OutputStream {
 	}
 
 	this(OutputStream[] outputs ...)
-	{ 
+	{
 		// NOTE: investigate .dup dmd workaround
 		m_outputs = outputs.dup;
 	}

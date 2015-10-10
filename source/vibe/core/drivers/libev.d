@@ -56,13 +56,13 @@ final class LibevDriver : EventDriver {
 		static bool ms_alreadyDeinitialized;
 	}
 
-	this(DriverCore core)
+	this(DriverCore core) nothrow
 	{
 		m_core = core;
 		ms_core = core;
 		ev_set_allocator(&myrealloc);
 		m_loop = ev_loop_new(EVFLAG_AUTO);
-		enforce(m_loop !is null, "Failed to create libev loop");
+		assert(m_loop !is null, "Failed to create libev loop");
 		logInfo("Got libev backend: %d", ev_backend(m_loop));
 	}
 
@@ -285,6 +285,7 @@ final class LibevManualEvent : ManualEvent {
 
 	void emit()
 	{
+		scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below, AA.opApply is not nothrow
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
 			foreach (sl; m_waiters)
@@ -292,28 +293,11 @@ final class LibevManualEvent : ManualEvent {
 		}
 	}
 
-	void wait()
-	{
-		wait(m_emitCount);
-	}
-
-	int wait(int reference_emit_count)
-	{
-		assert(!amOwner());
-		acquire();
-		scope(exit) release();
-		auto ec = this.emitCount;
-		while( ec == reference_emit_count ){
-			LibevDriver.ms_core.yieldForEvent();
-			ec = this.emitCount;
-		}
-		return ec;
-	}
-
-	int wait(Duration timeout, int reference_emit_count)
-	{
-		assert(false, "Not implemented!");
-	}
+	void wait() { wait(m_emitCount); }
+	int wait(int reference_emit_count) { return doWait!true(reference_emit_count); }
+	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
+	int waitUninterruptible(int reference_emit_count) { return doWait!false(reference_emit_count); }
+	int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
 
 	void acquire()
 	{
@@ -352,6 +336,27 @@ final class LibevManualEvent : ManualEvent {
 	}
 
 	@property int emitCount() const { return atomicLoad(m_emitCount); }
+
+	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
+	{
+		static if (!INTERRUPTIBLE) scope (failure) assert(false); // some functions are still not annotated nothrow
+		assert(!amOwner());
+		acquire();
+		scope(exit) release();
+		auto ec = this.emitCount;
+		while( ec == reference_emit_count ){
+			static if (INTERRUPTIBLE) LibevDriver.ms_core.yieldForEvent();
+			else LibevDriver.ms_core.yieldForEventDeferThrow();
+			ec = this.emitCount;
+		}
+		return ec;
+	}
+
+	private int doWait(bool INTERRUPTIBLE)(Duration timeout, int reference_emit_count)
+	{
+		assert(false, "Not implemented!");
+	}
+
 
 	private static nothrow extern(C)
 	void onSignal(ev_loop_t* loop, ev_async* w, int revents)

@@ -78,9 +78,9 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 	Establishes a connection to the given host/port.
 */
 TCPConnection connectTCP(string host, ushort port)
-{	
+{
 	NetworkAddress addr = resolveHost(host);
-	addr.port = port; 
+	addr.port = port;
 	return connectTCP(addr);
 }
 /// ditto
@@ -166,6 +166,7 @@ struct NetworkAddress {
 		import std.array : appender;
 		import std.string : format;
 		import std.format : formattedWrite;
+		ubyte[2] _dummy = void; // Workaround for DMD regression in master
 
 		switch (this.family) {
 			default: assert(false, "toAddressString() called for invalid address family.");
@@ -178,7 +179,8 @@ struct NetworkAddress {
 				ret.reserve(40);
 				foreach (i; 0 .. 8) {
 					if (i > 0) ret.put(':');
-					ret.formattedWrite("%x", bigEndianToNative!ushort(cast(ubyte[2])ip[i*2 .. i*2+2]));
+					_dummy[] = ip[i*2 .. i*2+2];
+					ret.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
 				}
 				return ret.data;
 		}
@@ -196,14 +198,17 @@ struct NetworkAddress {
 		}
 	}
 
-	unittest {
-		void test(string ip) {
-			auto res = resolveHost(ip, AF_UNSPEC, false).toAddressString();
-			assert(res == ip,
-				"IP "~ip~" yielded wrong string representation: "~res);
+	version(Have_libev) {}
+	else {
+		unittest {
+			void test(string ip) {
+				auto res = resolveHost(ip, AF_UNSPEC, false).toAddressString();
+				assert(res == ip,
+					   "IP "~ip~" yielded wrong string representation: "~res);
+			}
+			test("1.2.3.4");
+			test("102:304:506:708:90a:b0c:d0e:f10");
 		}
-		test("1.2.3.4");
-		test("102:304:506:708:90a:b0c:d0e:f10");
 	}
 }
 }
@@ -312,7 +317,7 @@ enum TCPListenOptions {
 
 private pure nothrow {
 	import std.bitmanip;
-	
+
 	ushort ntoh(ushort val)
 	{
 		version (LittleEndian) return swapEndian(val);

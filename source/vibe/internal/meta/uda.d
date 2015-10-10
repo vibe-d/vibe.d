@@ -65,10 +65,10 @@ template findNextUDA(alias UDA, alias Symbol, long idx, bool allow_types = false
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
-	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
+	static assert(idx >= 0, "Index given to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
 
-	private template extract(size_t index, list...)
+	public template extract(size_t index, list...)
 	{
 		static if (!list.length) enum extract = UdaSearchResult!(null)(false, -1);
 		else {
@@ -99,10 +99,10 @@ template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 
 	private alias udaTuple = TypeTuple!(__traits(getAttributes, Symbol));
 
-	static assert(idx >= 0, "Index givent to findNextUDA can't be negative");
+	static assert(idx >= 0, "Index given to findNextUDA can't be negative");
 	static assert(idx <= udaTuple.length, "Index given to findNextUDA is above the number of attribute");
 
-	private template extract(size_t index, list...)
+	public template extract(size_t index, list...)
 	{
 		static if (!list.length) enum extract = UdaSearchResult!(null)(false, -1);
 		else {
@@ -121,7 +121,7 @@ template findNextUDA(UDA, alias Symbol, long idx, bool allow_types = false)
 				} else enum extract = extract!(index + 1, list[1..$]);
 			}
 		}
-    }
+	}
 
 	enum findNextUDA = extract!(idx, udaTuple[idx .. $]);
 }

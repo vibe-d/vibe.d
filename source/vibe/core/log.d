@@ -28,8 +28,8 @@ import std.traits : isSomeString;
 */
 void setLogLevel(LogLevel level)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled due to missing console.");
-	ss_stdoutLogger.lock().minLevel = level;
+	if (ss_stdoutLogger)
+		ss_stdoutLogger.lock().minLevel = level;
 }
 
 
@@ -37,13 +37,18 @@ nothrow @safe {
 	Sets the log format used for the default console logger.
 
 	This level applies to the default stdout/stderr logger only.
+
+	Params:
+		fmt = The log format for the stderr (default is `FileLogger.Format.thread`)
+		infoFmt = The log format for the stdout (default is `FileLogger.Format.plain`)
 */
 void setLogFormat(FileLogger.Format fmt, FileLogger.Format infoFmt = FileLogger.Format.plain)
 nothrow @safe {
-	assert(ss_stdoutLogger !is null, "Console logging disabled du to missing console.");
-	auto l = ss_stdoutLogger.lock();
-	l.format = fmt;
-	l.infoFormat = infoFmt;
+	if (ss_stdoutLogger) {
+		auto l = ss_stdoutLogger.lock();
+		l.format = fmt;
+		l.infoFormat = infoFmt;
+	}
 }
 
 
@@ -109,41 +114,42 @@ nothrow {
 		args = Any input values needed for formatting
 */
 void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args)
-	nothrow @safe if (isSomeString!S)
+	nothrow if (isSomeString!S)
 {
 	static assert(level != LogLevel.none);
 	try {
 		foreach (l; getLoggers())
 			if (l.minLevel <= level) { // WARNING: TYPE SYSTEM HOLE: accessing field of shared class!
-				auto app = appender!string();
-				() @trusted { formattedWrite(app, fmt, args); }(); // not @safe as of 2.065
-				rawLog(/*mod, func,*/ file, line, level, app.data);
+				auto ll = l.lock();
+				auto rng = LogOutputRange(ll, file, line, level);
+				/*() @trusted {*/ rng.formattedWrite(fmt, args); //} (); // formattedWrite is not @safe at least up to 2.068.0
+				rng.finalize();
 				break;
 			}
 	} catch(Exception e) debug assert(false, e.msg);
 }
 /// ditto
-void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
+void logTrace(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.trace/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
+void logDebugV(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.debugV/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
+void logDebug(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.debug_/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
+void logDiagnostic(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.diagnostic/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
+void logInfo(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.info/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.warn/*, mod, func*/, file, line)(fmt, args); }
+void logWarn(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.warn/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
+void logError(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.error/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
-void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow @safe { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
+void logCritical(/*string mod = __MODULE__, string func = __FUNCTION__,*/ string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.critical/*, mod, func*/, file, line)(fmt, args); }
 /// ditto
 void logFatal(string file = __FILE__, int line = __LINE__, S, T...)(S fmt, lazy T args) nothrow { log!(LogLevel.fatal, file, line)(fmt, args); }
 
 ///
 @safe unittest {
-	void test()
+	void test() nothrow
 	{
 		logInfo("Hello, World!");
 		logWarn("This may not be %s.", "good");
@@ -183,16 +189,48 @@ struct LogLine {
 	Fiber fiber;
 	uint fiberID;
 	SysTime time;
-	string text;
+	string text; /// Legacy field used in `Logger.log`
 }
 
 /// Abstract base class for all loggers
 class Logger {
 	LogLevel minLevel = LogLevel.min;
 
+	private {
+		LogLine m_curLine;
+		Appender!string m_curLineText;
+	}
+
 	final bool acceptsLevel(LogLevel value) nothrow pure @safe { return value >= this.minLevel; }
 
-	abstract void log(ref LogLine message) @safe;
+	/** Legacy logging interface relying on dynamic memory allocation.
+		
+		Override `beginLine`, `put`, `endLine` instead for a more efficient and
+		possibly allocation-free implementation.
+	*/
+	void log(ref LogLine line) @safe {}
+
+	/// Starts a new log line.
+	void beginLine(ref LogLine line_info)
+	@safe {
+		m_curLine = line_info;
+		m_curLineText = appender!string();
+	}
+
+	/// Writes part of a log line message.
+	void put(scope const(char)[] text)
+	@safe {
+		m_curLineText.put(text);
+	}
+
+	/// Finalizes a log line.
+	void endLine()
+	@safe {
+		m_curLine.text = m_curLineText.data;
+		log(m_curLine);
+		m_curLine.text = null;
+		m_curLineText = Appender!string.init;
+	}
 }
 
 
@@ -200,19 +238,21 @@ class Logger {
 	Plain-text based logger for logging to regular files or stdout/stderr
 */
 final class FileLogger : Logger {
+	/// The log format used by the FileLogger
 	enum Format {
-		plain,
-		thread,
-		threadTime
+		plain,      /// Output only the plain log message
+		thread,     /// Prefix "[thread-id:fiber-id loglevel]"
+		threadTime  /// Prefix "[thread-id:fiber-id timestamp loglevel]"
 	}
 
 	private {
 		File m_infoFile;
 		File m_diagFile;
+		File m_curFile;
 	}
 
 	Format format = Format.thread;
-    Format infoFormat = Format.plain;
+	Format infoFormat = Format.plain;
 
 	this(File info_file, File diag_file)
 	{
@@ -226,38 +266,53 @@ final class FileLogger : Logger {
 		m_diagFile = m_infoFile;
 	}
 
-	override void log(ref LogLine msg)
+	override void beginLine(ref LogLine msg)
 		@trusted // FILE isn't @safe (as of DMD 2.065)
 	{
 		string pref;
-		File file;
 		final switch (msg.level) {
-			case LogLevel.trace: pref = "trc"; file = m_diagFile; break;
-			case LogLevel.debugV: pref = "dbv"; file = m_diagFile; break;
-			case LogLevel.debug_: pref = "dbg"; file = m_diagFile; break;
-			case LogLevel.diagnostic: pref = "dia"; file = m_diagFile; break;
-			case LogLevel.info: pref = "INF"; file = m_infoFile; break;
-			case LogLevel.warn: pref = "WRN"; file = m_diagFile; break;
-			case LogLevel.error: pref = "ERR"; file = m_diagFile; break;
-			case LogLevel.critical: pref = "CRITICAL"; file = m_diagFile; break;
-			case LogLevel.fatal: pref = "FATAL"; file = m_diagFile; break;
+			case LogLevel.trace: pref = "trc"; m_curFile = m_diagFile; break;
+			case LogLevel.debugV: pref = "dbv"; m_curFile = m_diagFile; break;
+			case LogLevel.debug_: pref = "dbg"; m_curFile = m_diagFile; break;
+			case LogLevel.diagnostic: pref = "dia"; m_curFile = m_diagFile; break;
+			case LogLevel.info: pref = "INF"; m_curFile = m_infoFile; break;
+			case LogLevel.warn: pref = "WRN"; m_curFile = m_diagFile; break;
+			case LogLevel.error: pref = "ERR"; m_curFile = m_diagFile; break;
+			case LogLevel.critical: pref = "CRITICAL"; m_curFile = m_diagFile; break;
+			case LogLevel.fatal: pref = "FATAL"; m_curFile = m_diagFile; break;
 			case LogLevel.none: assert(false);
 		}
 
-		auto fmt = (file is m_diagFile) ? this.format : this.infoFormat;
+		auto fmt = (m_curFile is m_diagFile) ? this.format : this.infoFormat;
 
 		final switch (fmt) {
-			case Format.plain: file.writeln(msg.text); break;
-			case Format.thread: file.writefln("[%08X:%08X %s] %s", msg.threadID, msg.fiberID, pref, msg.text); break;
+			case Format.plain: break;
+			case Format.thread: m_curFile.writef("[%08X:%08X %s] ", msg.threadID, msg.fiberID, pref); break;
 			case Format.threadTime:
 				auto tm = msg.time;
-				file.writefln("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] %s",
+				static if (is(typeof(tm.fracSecs))) auto msecs = tm.fracSecs.total!"msecs"; // 2.069 has deprecated "fracSec"
+				else auto msecs = tm.fracSec.msecs;
+				m_curFile.writef("[%08X:%08X %d.%02d.%02d %02d:%02d:%02d.%03d %s] ",
 					msg.threadID, msg.fiberID,
-					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, tm.fracSec.msecs,
-					pref, msg.text);
+					tm.year, tm.month, tm.day, tm.hour, tm.minute, tm.second, msecs,
+					pref);
 				break;
 		}
-		file.flush();
+	}
+
+	override void put(scope const(char)[] text)
+	{
+		static if (__VERSION__ <= 2066)
+			() @trusted { m_curFile.write(text); } ();
+		else m_curFile.write(text);
+	}
+
+	override void endLine()
+	{
+		static if (__VERSION__ <= 2066)
+			() @trusted { m_curFile.writeln(); } ();
+		else m_curFile.writeln();
+		m_curFile.flush();
 	}
 }
 
@@ -287,7 +342,7 @@ final class HTMLLogger : Logger {
 
 	@property void minLogLevel(LogLevel value) pure nothrow @safe { this.minLevel = value; }
 
-	override void log(ref LogLine msg)
+	override void beginLine(ref LogLine msg)
 		@trusted // FILE isn't @safe (as of DMD 2.065)
 	{
 		if( !m_logFile.isOpen ) return;
@@ -308,18 +363,25 @@ final class HTMLLogger : Logger {
 		if (msg.thread)
 			m_logFile.writef(`<div class="threadName">%s</div>`, msg.thread.name);
 		m_logFile.write(`<div class="message">`);
-		{
-			auto dst = m_logFile.lockingTextWriter();
-			auto txt = msg.text;
-			while (!txt.empty && (txt.front == ' ' || txt.front == '\t')) {
-				foreach (i; 0 .. txt.front == ' ' ? 1 : 4)
-					dst.put("&nbsp;");
-				txt.popFront();
-			}
-			filterHTMLEscape(dst, txt);
+	}
+
+	override void put(scope const(char)[] text)
+	{
+		auto dst = () @trusted { return m_logFile.lockingTextWriter(); } (); // LockingTextWriter not @safe for DMD 2.066
+		while (!text.empty && (text.front == ' ' || text.front == '\t')) {
+			foreach (i; 0 .. text.front == ' ' ? 1 : 4)
+				() @trusted { dst.put("&nbsp;"); } (); // LockingTextWriter not @safe for DMD 2.066
+			text.popFront();
 		}
-		m_logFile.write(`</div>`);
-		m_logFile.writeln(`</div>`);
+		() @trusted { filterHTMLEscape(dst, text); } (); // LockingTextWriter not @safe for DMD 2.066
+	}
+
+	override void endLine()
+	{
+		() @trusted { // not @safe for DMD 2.066
+			m_logFile.write(`</div>`);
+			m_logFile.writeln(`</div>`);
+		} ();
 		m_logFile.flush();
 	}
 
@@ -504,8 +566,8 @@ final class SyslogLogger : Logger {
 	*/
 	this(OutputStream stream, Facility facility, string appName = null, string hostName = hostName())
 	{
-		m_hostName = hostName ? hostName : NILVALUE;
-		m_appName = appName ? appName : NILVALUE;
+		m_hostName = hostName != "" ? hostName : NILVALUE;
+		m_appName = appName != "" ? appName : NILVALUE;
 		m_ostream = stream;
 		m_facility = facility;
 		this.minLevel = LogLevel.debug_;
@@ -516,12 +578,13 @@ final class SyslogLogger : Logger {
 
 		It uses the msg's time, level, and text field.
 	*/
-	override void log(ref LogLine msg)
+	override void beginLine(ref LogLine msg)
 	@trusted { // OutputStream isn't @safe
 		auto tm = msg.time;
 		import core.time;
 		// at most 6 digits for fractional seconds according to RFC
-		tm.fracSec = FracSec.from!"usecs"(tm.fracSec.usecs);
+		static if (is(typeof(tm.fracSecs))) tm.fracSecs = tm.fracSecs.total!"usecs".dur!"usecs";
+		else tm.fracSec = FracSec.from!"usecs"(tm.fracSec.usecs);
 		auto timestamp = tm.toISOExtString();
 
 		Severity syslogSeverity;
@@ -540,16 +603,30 @@ final class SyslogLogger : Logger {
 		}
 
 		assert(msg.level >= LogLevel.debug_);
-		auto priVal = (m_facility * 8 + syslogSeverity).to!string();
+		import std.conv : to; // temporary workaround for issue 1016 (DMD cross-module template overloads error out before second attempted module)
+		auto priVal = m_facility * 8 + syslogSeverity;
 
 		alias procId = NILVALUE;
 		alias msgId = NILVALUE;
 		alias structuredData = NILVALUE;
 
 		auto text = msg.text;
-		import std.string : format;
-		m_ostream.write(SYSLOG_MESSAGE_FORMAT_VERSION1.format(
-		              priVal, timestamp, m_hostName, BOM ~ m_appName, procId, msgId, structuredData, BOM ~ text) ~ "\n");
+		import std.format : formattedWrite;
+		import vibe.stream.wrapper : StreamOutputRange;
+		auto str = StreamOutputRange(m_ostream);
+		(&str).formattedWrite(SYSLOG_MESSAGE_FORMAT_VERSION1, priVal,
+			timestamp, m_hostName, BOM ~ m_appName, procId, msgId,
+			structuredData, BOM);
+	}
+
+	override void put(scope const(char)[] text)
+	@trusted {
+		m_ostream.write(text);
+	}
+
+	override void endLine()
+	@trusted {
+		m_ostream.write("\n");
 		m_ostream.flush();
 	}
 
@@ -561,23 +638,16 @@ final class SyslogLogger : Logger {
 		LogLine msg;
 		import std.datetime;
 		import core.thread;
-		msg.time = SysTime(DateTime(0, 1, 1, 0, 0, 0), FracSec.from!"usecs"(1));
-		msg.text = "αβγ";
+		static if (is(typeof(SysTime.init.fracSecs))) auto fs = 1.dur!"usecs";
+		else auto fs = FracSec.from!"usecs"(1);
+		msg.time = SysTime(DateTime(0, 1, 1, 0, 0, 0), fs);
 
-		msg.level = LogLevel.debug_;
-		logger.log(msg);
-		msg.level = LogLevel.diagnostic;
-		logger.log(msg);
-		msg.level = LogLevel.info;
-		logger.log(msg);
-		msg.level = LogLevel.warn;
-		logger.log(msg);
-		msg.level = LogLevel.error;
-		logger.log(msg);
-		msg.level = LogLevel.critical;
-		logger.log(msg);
-		msg.level = LogLevel.fatal;
-		logger.log(msg);
+		foreach (lvl; [LogLevel.debug_, LogLevel.diagnostic, LogLevel.info, LogLevel.warn, LogLevel.error, LogLevel.critical, LogLevel.fatal]) {
+			msg.level = lvl;
+			logger.beginLine(msg);
+			logger.put("αβγ");
+			logger.endLine();
+		}
 		fstream.close();
 
 		import std.file;
@@ -625,41 +695,6 @@ private {
 
 private shared(Logger)[] getLoggers() nothrow @trusted { return ss_loggers; }
 
-private void rawLog(/*string mod, string func,*/ string file, int line, LogLevel level, string text)
-nothrow @safe {
-	static uint makeid(T)(T ptr) @trusted { return (cast(ulong)cast(void*)ptr & 0xFFFFFFFF) ^ (cast(ulong)cast(void*)ptr >> 32); }
-
-	LogLine msg;
-	try {
-		() @trusted { msg.time = Clock.currTime(UTC()); }(); // not @safe as of 2.065
-		//msg.mod = mod;
-		//msg.func = func;
-		msg.file = file;
-		msg.line = line;
-		msg.level = level;
-		msg.thread = () @trusted { return Thread.getThis(); }(); // not @safe as of 2.065
-		msg.threadID = makeid(msg.thread);
-		msg.fiber = () @trusted { return Fiber.getThis(); }(); // not @safe as of 2.065
-		msg.fiberID = makeid(msg.fiber);
-
-		() @trusted { // splitter not @safe as of 2.065
-			foreach (ln; text.splitter("\n")) {
-				msg.text = ln;
-				foreach (l; getLoggers()) {
-					auto ll = l.lock();
-					if (ll.acceptsLevel(msg.level))
-						ll.log(msg);
-				}
-			}
-		}();
-	} catch (Exception e) {
-		try {
-			() @trusted { writefln("Error during logging: %s", e.toString()); }(); // not @safe as of 2.065
-		} catch(Exception) {}
-		assert(false, "Exception during logging: "~e.msg);
-	}
-}
-
 package void initializeLogModule()
 {
 	version (Windows) {
@@ -680,10 +715,13 @@ package void initializeLogModule()
 		registerLogger(ss_stdoutLogger);
 
 		bool[4] verbose;
-		getOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
-		getOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
-		getOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
-		getOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+		version (VibeNoDefaultArgs) {}
+		else {
+			readOption("verbose|v"  , &verbose[0], "Enables diagnostic messages (verbosity level 1).");
+			readOption("vverbose|vv", &verbose[1], "Enables debugging output (verbosity level 2).");
+			readOption("vvv"        , &verbose[2], "Enables high frequency debugging output (verbosity level 3).");
+			readOption("vvvv"       , &verbose[3], "Enables high frequency trace output (verbosity level 4).");
+		}
 
 		foreach_reverse (i, v; verbose)
 			if (v) {
@@ -694,9 +732,87 @@ package void initializeLogModule()
 	}
 }
 
+private struct LogOutputRange {
+	LogLine info;
+	ScopedLock!Logger* logger;
+
+	@safe:
+
+	this(ref ScopedLock!Logger logger, string file, int line, LogLevel level)
+	{
+		() @trusted { this.logger = &logger; } ();
+		try {
+			() @trusted { this.info.time = Clock.currTime(UTC()); }(); // not @safe as of 2.065
+			//this.info.mod = mod;
+			//this.info.func = func;
+			this.info.file = file;
+			this.info.line = line;
+			this.info.level = level;
+			this.info.thread = () @trusted { return Thread.getThis(); }(); // not @safe as of 2.065
+			this.info.threadID = makeid(this.info.thread);
+			this.info.fiber = () @trusted { return Fiber.getThis(); }(); // not @safe as of 2.065
+			this.info.fiberID = makeid(this.info.fiber);
+		} catch (Exception e) {
+			try {
+				() @trusted { writefln("Error during logging: %s", e.toString()); }(); // not @safe as of 2.065
+			} catch(Exception) {}
+			assert(false, "Exception during logging: "~e.msg);
+		}
+
+		this.logger.beginLine(info);
+	}
+
+	void finalize()
+	{
+		logger.endLine();
+	}
+
+	void put(scope const(char)[] text)
+	{
+		import std.string : indexOf;
+		auto idx = text.indexOf('\n');
+		if (idx >= 0) {
+			logger.put(text[0 .. idx]);
+			logger.endLine();
+			logger.beginLine(info);
+			logger.put(text[idx+1 .. $]);
+		} else logger.put(text);
+	}
+
+	void put(char ch) @trusted { put((&ch)[0 .. 1]); }
+
+	void put(dchar ch)
+	{
+		if (ch < 128) put(cast(char)ch);
+		else {
+			char[4] buf;
+			auto len = std.utf.encode(buf, ch);
+			put(buf[0 .. len]);
+		}
+	}
+
+	private uint makeid(T)(T ptr) @trusted { return (cast(ulong)cast(void*)ptr & 0xFFFFFFFF) ^ (cast(ulong)cast(void*)ptr >> 32); }
+}
+
 private version (Windows) {
 	import core.sys.windows.windows;
 	enum STD_OUTPUT_HANDLE = cast(DWORD)-11;
 	enum STD_ERROR_HANDLE = cast(DWORD)-12;
 	extern(System) HANDLE GetStdHandle(DWORD nStdHandle);
+}
+
+unittest { // make sure the default logger doesn't allocate/is usable within finalizers
+	bool destroyed = false;
+
+	class Test {
+		~this()
+		{
+			logInfo("logInfo doesn't allocate.");
+			destroyed = true;
+		}
+	}
+
+	auto t = new Test;
+	destroy(t);
+	assert(destroyed);
 }

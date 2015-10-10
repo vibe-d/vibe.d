@@ -1,6 +1,7 @@
 import vibe.vibe;
 import std.file, std.process;
 import std.algorithm : canFind, all;
+import std.typecons : No, Yes;
 
 void runTest()
 {

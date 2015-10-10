@@ -13,10 +13,10 @@ import std.traits;
 
 /**
 	TypeTuple which does not auto-expand.
-	
+
 	Useful when you need
 	to multiple several type tuples as different template argument
-	list parameters, without merging those.	
+	list parameters, without merging those.
 */
 template Group(T...)
 {
@@ -47,7 +47,7 @@ version (unittest) // NOTE: GDC complains about template definitions in unittest
 {
 	alias group = Group!(int, double, string);
 	alias group2 = Group!();
-	
+
 	template Fake(T...)
 	{
 		int[] expand;
@@ -65,32 +65,32 @@ version (unittest) // NOTE: GDC complains about template definitions in unittest
 /* Copied from Phobos as it is private there.
  */
 private template isSame(ab...)
-    if (ab.length == 2)
+	if (ab.length == 2)
 {
-    static if (is(ab[0]) && is(ab[1]))
-    {
-        enum isSame = is(ab[0] == ab[1]);
-    }
-    else static if (!is(ab[0]) &&
-                    !is(ab[1]) &&
-                    is(typeof(ab[0] == ab[1]) == bool) &&
+	static if (is(ab[0]) && is(ab[1]))
+	{
+		enum isSame = is(ab[0] == ab[1]);
+	}
+	else static if (!is(ab[0]) &&
+					!is(ab[1]) &&
+					is(typeof(ab[0] == ab[1]) == bool) &&
 					(ab[0] == ab[1]))
-    {
-        static if (!__traits(compiles, &ab[0]) ||
-                   !__traits(compiles, &ab[1]))
-            enum isSame = (ab[0] == ab[1]);
-        else
-            enum isSame = __traits(isSame, ab[0], ab[1]);
-    }
-    else
-    {
-        enum isSame = __traits(isSame, ab[0], ab[1]);
-    }
+	{
+		static if (!__traits(compiles, &ab[0]) ||
+				   !__traits(compiles, &ab[1]))
+			enum isSame = (ab[0] == ab[1]);
+		else
+			enum isSame = __traits(isSame, ab[0], ab[1]);
+	}
+	else
+	{
+		enum isSame = __traits(isSame, ab[0], ab[1]);
+	}
 }
 
 /**
 	Compares two groups for element identity
-	
+
 	Params:
 		Group1, Group2 = any instances of `Group`
 
@@ -101,23 +101,15 @@ private template isSame(ab...)
 template Compare(alias Group1, alias Group2)
 	if (isGroup!Group1 && isGroup!Group2)
 {
-	private bool implementation()
+	private template implementation(size_t index)
 	{
-		static if (Group1.expand.length == Group2.expand.length) {
-			foreach (index, element; Group1.expand)
-			{
-				static if (!isSame!(Group1.expand[index], Group2.expand[index])) {
-					return false;
-				}
-			}
-			return true;
-		}
-		else {
-			return false;
-		}
+		static if (Group1.expand.length != Group2.expand.length) enum implementation = false;
+		else static if (index >= Group1.expand.length) enum implementation = true;
+		else static if (!isSame!(Group1.expand[index], Group2.expand[index])) enum implementation = false;
+		else enum implementation = implementation!(index+1);
 	}
 
-	enum Compare = implementation();
+	enum Compare = implementation!0;
 }
 
 ///

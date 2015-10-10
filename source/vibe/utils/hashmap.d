@@ -20,12 +20,36 @@ struct DefaultHashMapTraits(Key) {
 		static if (is(Key == class)) return a is b;
 		else return a == b;
 	}
+	static size_t hashOf(in ref Key k)
+	{
+		static if (is(Key == class) && &Key.toHash == &Object.toHash)
+			return cast(size_t)cast(void*)k;
+		else static if (__traits(compiles, Key.init.toHash()))
+			return k.toHash();
+		else static if (__traits(compiles, Key.init.toHashShared()))
+			return k.toHashShared();
+		else {
+			// evil casts to be able to get the most basic operations of
+			// HashMap nothrow and @nogc
+			static size_t hashWrapper(in ref Key k) {
+				static typeinfo = typeid(Key);
+				return typeinfo.getHash(&k);
+			}
+			static @nogc nothrow size_t properlyTypedWrapper(in ref Key k) { return 0; }
+			return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k);
+		}
+	}
 }
 
-struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
+struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 {
+	import vibe.internal.meta.traits : isOpApplyDg;
+
+	alias Key = TKey;
+	alias Value = TValue;
+
 	struct TableEntry {
-		UnConst!Key key;
+		UnConst!Key key = Traits.clearValue;
 		Value value;
 
 		this(Key key, Value value) { this.key = cast(UnConst!Key)key; this.value = value; }
@@ -34,7 +58,6 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
 		Allocator m_allocator;
-		hash_t delegate(Key) m_hasher;
 		bool m_resizing;
 	}
 
@@ -45,7 +68,8 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 
 	~this()
 	{
-		if (m_table) freeArray(m_allocator, m_table);
+		clear();
+		if (m_table.ptr !is null) freeArray(m_allocator, m_table);
 	}
 
 	@disable this(this);
@@ -68,13 +92,21 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 					m_length--;
 					return;
 				}
-				r = m_hasher(m_table[i].key) & (m_table.length-1);
+				r = Traits.hashOf(m_table[i].key) & (m_table.length-1);
 			} while ((j<r && r<=i) || (i<j && j<r) || (r<=i && i<j));
 			m_table[j] = m_table[i];
 		}
 	}
 
 	Value get(Key key, lazy Value default_value = Value.init)
+	{
+		auto idx = findIndex(key);
+		if (idx == size_t.max) return default_value;
+		return m_table[idx].value;
+	}
+
+	/// Workaround #12647
+	package Value getNothrow(Key key, Value default_value = Value.init)
 	{
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return default_value;
@@ -123,46 +155,27 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 		return &m_table[idx].value;
 	}
 
-	int opApply(int delegate(ref Value) del)
+	int opApply(DG)(scope DG del) if (isOpApplyDg!(DG, Key, Value))
 	{
+		import std.traits : arity;
 		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Value) del)
-	const {
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, ref Value) del)
-	{
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].key, m_table[i].value))
-					return ret;
-		return 0;
-	}
-
-	int opApply(int delegate(in ref Key, in ref Value) del)
-	const {
-		foreach (i; 0 .. m_table.length)
-			if (!Traits.equals(m_table[i].key, Traits.clearValue))
-				if (auto ret = del(m_table[i].key, m_table[i].value))
-					return ret;
+			if (!Traits.equals(m_table[i].key, Traits.clearValue)) {
+				static assert(arity!del >= 1 && arity!del <= 2,
+						  "isOpApplyDg should have prevented this");
+				static if (arity!del == 1) {
+					if (int ret = del(m_table[i].value))
+						return ret;
+				} else
+					if (int ret = del(m_table[i].key, m_table[i].value))
+						return ret;
+			}
 		return 0;
 	}
 
 	private size_t findIndex(Key key)
 	const {
 		if (m_length == 0) return size_t.max;
-		size_t start = m_hasher(key) & (m_table.length-1);
+		size_t start = Traits.hashOf(key) & (m_table.length-1);
 		auto i = start;
 		while (!Traits.equals(m_table[i].key, key)) {
 			if (Traits.equals(m_table[i].key, Traits.clearValue)) return size_t.max;
@@ -174,7 +187,7 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 
 	private size_t findInsertIndex(Key key)
 	const {
-		auto hash = m_hasher(key);
+		auto hash = Traits.hashOf(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
 		while (!Traits.equals(m_table[i].key, Traits.clearValue) && !Traits.equals(m_table[i].key, key)) {
@@ -194,45 +207,31 @@ struct HashMap(Key, Value, Traits = DefaultHashMapTraits!Key)
 	}
 
 	private void resize(size_t new_size)
-	{
+	@trusted {
 		assert(!m_resizing);
 		m_resizing = true;
 		scope(exit) m_resizing = false;
 
 		if (!m_allocator) m_allocator = defaultAllocator();
-		if (!m_hasher) {
-			static if (__traits(compiles, (){ Key t; size_t hash = t.toHash(); }())) {
-				static if (isPointer!Key || is(Unqual!Key == class)) m_hasher = k => k ? k.toHash() : 0;
-				else m_hasher = k => k.toHash();
-			} else static if (__traits(compiles, (){ Key t; size_t hash = t.toHashShared(); }())) {
-				static if (isPointer!Key || is(Unqual!Key == class)) m_hasher = k => k ? k.toHashShared() : 0;
-				else m_hasher = k => k.toHashShared();
-			} else {
-				auto typeinfo = typeid(Key);
-				m_hasher = k => typeinfo.getHash(&k);
-			}
-		}
 
 		uint pot = 0;
 		while (new_size > 1) pot++, new_size /= 2;
 		new_size = 1 << pot;
 
 		auto oldtable = m_table;
+
+		// allocate the new array, automatically initializes with empty entries (Traits.clearValue)
 		m_table = allocArray!TableEntry(m_allocator, new_size);
-		foreach (ref el; m_table) {
-			static if (is(Key == struct)) {
-				emplace(cast(UnConst!Key*)&el.key);
-				static if (Traits.clearValue !is Key.init)
-					el.key = cast(UnConst!Key)Traits.clearValue;
-			} else el.key = cast(UnConst!Key)Traits.clearValue;
-			emplace(&el.value);
-		}
+
+		// perform a move operation of all non-empty elements from the old array to the new one
 		foreach (ref el; oldtable)
 			if (!Traits.equals(el.key, Traits.clearValue)) {
 				auto idx = findInsertIndex(el.key);
 				(cast(ubyte[])(&m_table[idx])[0 .. 1])[] = (cast(ubyte[])(&el)[0 .. 1])[];
 			}
-		if (oldtable) freeArray(m_allocator, oldtable);
+
+		// all elements have been moved to the new array, so free the old one without calling destructors
+		if (oldtable !is null) freeArray(m_allocator, oldtable, false);
 	}
 }
 
@@ -266,6 +265,105 @@ unittest {
 	}
 }
 
+// test for nothrow/@nogc compliance
+static if (__VERSION__ >= 2066)
+nothrow unittest {
+	HashMap!(int, int) map1;
+	HashMap!(string, string) map2;
+	map1[1] = 2;
+	map2["1"] = "2";
+
+	@nogc nothrow void performNoGCOps()
+	{
+		foreach (int v; map1) {}
+		foreach (int k, int v; map1) {}
+		assert(1 in map1);
+		assert(map1.length == 1);
+		assert(map1[1] == 2);
+		assert(map1.getNothrow(1, -1) == 2);
+
+		foreach (string v; map2) {}
+		foreach (string k, string v; map2) {}
+		assert("1" in map2);
+		assert(map2.length == 1);
+		assert(map2["1"] == "2");
+		assert(map2.getNothrow("1", "") == "2");
+	}
+
+	performNoGCOps();
+}
+
+unittest { // test for proper use of constructor/post-blit/destructor
+	static struct Test {
+		static size_t constructedCounter = 0;
+		bool constructed = false;
+		this(int) { constructed = true; constructedCounter++; }
+		this(this) { if (constructed) constructedCounter++; }
+		~this() { if (constructed) constructedCounter--; }
+	}
+
+	assert(Test.constructedCounter == 0);
+
+	{ // sanity check
+		Test t;
+		assert(Test.constructedCounter == 0);
+		t = Test(1);
+		assert(Test.constructedCounter == 1);
+		auto u = t;
+		assert(Test.constructedCounter == 2);
+		t = Test.init;
+		assert(Test.constructedCounter == 1);
+	}
+	assert(Test.constructedCounter == 0);
+
+	{ // basic insertion and hash map resizing
+		HashMap!(int, Test) map;
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+	}
+
+	assert(Test.constructedCounter == 0);
+
+	{ // test clear() and overwriting existing entries
+		HashMap!(int, Test) map;
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+		map.clear();
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == 66);
+		}
+	}
+
+	assert(Test.constructedCounter == 0);
+
+	{ // test removing entries and adding entries after remove
+		HashMap!(int, Test) map;
+		foreach (i; 1 .. 67) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i);
+		}
+		foreach (i; 1 .. 33) {
+			map.remove(i);
+			assert(Test.constructedCounter == 66 - i);
+		}
+		foreach (i; 67 .. 130) {
+			map[i] = Test(1);
+			assert(Test.constructedCounter == i - 32);
+		}
+	}
+
+	assert(Test.constructedCounter == 0);
+}
+
 private template UnConst(T) {
 	static if (is(T U == const(U))) {
 		alias UnConst = U;
@@ -273,3 +371,5 @@ private template UnConst(T) {
 		alias UnConst = V;
 	} else alias UnConst = T;
 }
+
+static if (__VERSION__ < 2066) private static bool nogc() { return false; }

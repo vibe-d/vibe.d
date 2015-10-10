@@ -1,5 +1,7 @@
-import vibe.d;
+import vibe.core.core;
+import vibe.core.file;
 import std.stdio;
+
 shared static this()
 {
 	FileStream fs = openFile("./hello.txt", FileMode.createTrunc);
@@ -21,6 +23,7 @@ shared static this()
 			fs.write("Some string is being written here ..");
 		}
 		writeln("Task 1: Final offset: ", fs.tell(), "B, file size: ", fs.size(), "B", ", total time: ", sw.peek().msecs, " ms");
+		fs.close();
 		finished = true;
 	});
 

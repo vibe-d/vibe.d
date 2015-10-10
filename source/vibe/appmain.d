@@ -20,12 +20,7 @@
 */
 module vibe.appmain;
 
-// only include main if VibeCustomMain is not set
-version (VibeCustomMain) {}
-else:
-
-version (VibeDefaultMain) {}
-else { pragma(msg, "Warning: -version=VibeDefaultMain will be required in the future to use vibe.d's default main(). Please update your build scripts."); }
+version (VibeDefaultMain):
 
 /**
 	The predefined vibe.d application entry point.
@@ -65,6 +60,7 @@ int main()
 		} else {
 			status = runEventLoop();
 		}
+
 		logDiagnostic("Event loop exited with status %d.", status);
 		return status;
 	}

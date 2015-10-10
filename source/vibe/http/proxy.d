@@ -49,7 +49,7 @@ void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host
 /**
 	Returns a HTTP request handler that forwards any request to the specified host/port.
 */
-HTTPServerRequestDelegate reverseProxyRequest(HTTPReverseProxySettings settings)
+HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings)
 {
 	static immutable string[] non_forward_headers = ["Content-Length", "Transfer-Encoding", "Content-Encoding", "Connection"];
 	static InetHeaderMap non_forward_headers_map;
@@ -62,7 +62,7 @@ HTTPServerRequestDelegate reverseProxyRequest(HTTPReverseProxySettings settings)
 	url.host = settings.destinationHost;
 	url.port = settings.destinationPort;
 
-	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
+	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
 		auto rurl = url;
 		rurl.localURI = req.requestURL;
@@ -76,7 +76,7 @@ HTTPServerRequestDelegate reverseProxyRequest(HTTPReverseProxySettings settings)
 			if (settings.avoidCompressedRequests && "Accept-Encoding" in creq.headers)
 				creq.headers.remove("Accept-Encoding");
 			if (auto pfh = "X-Forwarded-Host" !in creq.headers) creq.headers["X-Forwarded-Host"] = req.headers["Host"];
-			if (auto pfp = "X-Forwarded-Proto" !in creq.headers) creq.headers["X-Forwarded-Proto"] = req.ssl ? "https" : "http";
+			if (auto pfp = "X-Forwarded-Proto" !in creq.headers) creq.headers["X-Forwarded-Proto"] = req.tls ? "https" : "http";
 			if (auto pff = "X-Forwarded-For" in req.headers) creq.headers["X-Forwarded-For"] = *pff ~ ", " ~ req.peer;
 			else creq.headers["X-Forwarded-For"] = req.peer;
 			creq.bodyWriter.write(req.bodyReader);
@@ -147,7 +147,7 @@ HTTPServerRequestDelegate reverseProxyRequest(HTTPReverseProxySettings settings)
 	return &handleRequest;
 }
 /// ditto
-HTTPServerRequestDelegate reverseProxyRequest(string destination_host, ushort destination_port)
+HTTPServerRequestDelegateS reverseProxyRequest(string destination_host, ushort destination_port)
 {
 	auto settings = new HTTPReverseProxySettings;
 	settings.destinationHost = destination_host;

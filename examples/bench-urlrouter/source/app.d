@@ -6,7 +6,7 @@ import std.datetime;
 import std.string : format;
 
 
-void req(HTTPServerRequest req, HTTPServerResponse res)
+void req(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
 	if (!res.headerWritten)
 		res.writeVoidBody();

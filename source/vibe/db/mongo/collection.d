@@ -28,28 +28,6 @@ import std.typecons : Tuple, tuple;
   All methods take arbitrary types for Bson arguments. serializeToBson() is implicitly called on
   them before they are send to the database. The following example shows some possible ways
   to specify objects.
-
-Examples:
-
----
-MongoClient client = connectMongoDB("127.0.0.1");
-MongoCollection users = client.getCollection("myapp.users");
-
-// canonical version using a Bson object
-users.insert(Bson(["name": Bson("admin"), "password": Bson("secret")]));
-
-// short version using a string[string] AA that is automatically
-// serialized to Bson
-users.insert(["name": "admin", "password": "secret"]);
-
-// BSON specific types are also serialized automatically
-BsonObjectId uid = ...;
-Bson usr = users.find(["_id": uid]);
-
-// JSON is another possibility
-Json jusr = parseJson("{\"name\": \"admin\", \"password\": \"secret\"}");
-users.insert(jusr);
----
  */
 struct MongoCollection {
 	private {
@@ -241,8 +219,13 @@ struct MongoCollection {
 		cmd.count = m_name;
 		cmd.query = query;
 		auto reply = database.runCommand(cmd);
-		enforce(reply.ok.get!double == 1, "Count command failed.");
-		return cast(ulong)reply.n.get!double;
+		enforce(reply.ok.opt!double == 1 || reply.ok.opt!int == 1, "Count command failed.");
+		switch (reply.n.type) with (Bson.Type) {
+			default: assert(false, "Unsupported data type in BSON reply for COUNT");
+			case double_: return cast(ulong)reply.n.get!double; // v2.x
+			case int_: return reply.n.get!int; // v3.x
+			case long_: return reply.n.get!long; // just in case
+		}
 	}
 
 	/**
@@ -371,7 +354,7 @@ struct MongoCollection {
 		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
 	}
 
-    void drop() {
+	void drop() {
 		static struct CMD {
 			string drop;
 		}
@@ -380,7 +363,35 @@ struct MongoCollection {
 		cmd.drop = m_name;
 		auto reply = database.runCommand(cmd);
 		enforce(reply.ok.get!double == 1, "drop command failed.");
-    }
+	}
+}
+
+///
+unittest {
+	import vibe.data.bson;
+	import vibe.data.json;
+	import vibe.db.mongo.mongo;
+
+	void test()
+	{
+		MongoClient client = connectMongoDB("127.0.0.1");
+		MongoCollection users = client.getCollection("myapp.users");
+
+		// canonical version using a Bson object
+		users.insert(Bson(["name": Bson("admin"), "password": Bson("secret")]));
+
+		// short version using a string[string] AA that is automatically
+		// serialized to Bson
+		users.insert(["name": "admin", "password": "secret"]);
+
+		// BSON specific types are also serialized automatically
+		auto uid = BsonObjectID.fromString("507f1f77bcf86cd799439011");
+		Bson usr = users.findOne(["_id": uid]);
+
+		// JSON is another possibility
+		Json jusr = parseJsonString(`{"name": "admin", "password": "secret"}`);
+		users.insert(jusr);
+	}
 }
 
 enum IndexFlags {

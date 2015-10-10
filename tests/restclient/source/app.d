@@ -4,6 +4,8 @@ import vibe.vibe;
 
 interface ITestAPI
 {
+	@property ISub sub();
+
 	@method(HTTPMethod.POST) @path("other/path")
 	string info();
 	string getInfo();
@@ -15,18 +17,34 @@ interface ITestAPI
 	int testID1(int _id);
 	@path("idtest2")
 	int testID2(int id); // the special "id" parameter
+	int get(int id); // the special "id" parameter on "/"" path
 	int testKeyword(int body_, int const_);
+}
+
+interface ISub {
+	int get(int id);
 }
 
 class TestAPI : ITestAPI
 {
+	SubAPI m_sub;
+
+	this() { m_sub = new SubAPI; }
+
+	@property SubAPI sub() { return m_sub; }
+
 	string getInfo() { return "description"; }
 	string info() { return "description2"; }
 	string customParameters(string _param, string _param2) { return _param ~ _param2; }
 	int customParameters2(int _param, bool _param2) { return _param2 ? _param : -_param; }
 	int testID1(int _id) { return _id; }
 	int testID2(int id) { return id; }
+	int get(int id) { return id; }
 	int testKeyword(int body_, int const_) { return body_ + const_; }
+}
+
+class SubAPI : ISub {
+	int get(int id) { return id; }
 }
 
 void runTest()
@@ -47,6 +65,8 @@ void runTest()
 	assert(api.customParameters2(10, true) == 10);
 	assert(api.testID1(2) == 2);
 	assert(api.testID2(3) == 3);
+	assert(api.get(4) == 4);
+	assert(api.sub.get(5) == 5);
 	assert(api.testKeyword(3, 4) == 7);
 	exitEventLoop(true);
 }

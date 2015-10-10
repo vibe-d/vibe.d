@@ -13,8 +13,7 @@ public import vibe.inet.url;
 import vibe.core.drivers.threadedfile; // temporarily needed tp get mkstemps to work
 import vibe.core.driver;
 
-import std.conv;
-import std.c.stdio;
+import core.stdc.stdio;
 import std.datetime;
 import std.exception;
 import std.file;
@@ -136,6 +135,7 @@ void writeFileUTF8(Path path, string contents)
 FileStream createTempFile(string suffix = null)
 {
 	version(Windows){
+		import std.conv : to;
 		char[L_tmpnam] tmp;
 		tmpnam(tmp.ptr);
 		auto tmpname = to!string(tmp.ptr);
@@ -157,15 +157,30 @@ FileStream createTempFile(string suffix = null)
 
 /**
 	Moves or renames a file.
+
+	Params:
+		from = Path to the file/directory to move/rename.
+		to = The target path
+		copy_fallback = Determines if copy/remove should be used in case of the
+			source and destination path pointing to different devices.
 */
-void moveFile(Path from, Path to)
+void moveFile(Path from, Path to, bool copy_fallback = false)
 {
-	moveFile(from.toNativeString(), to.toNativeString());
+	moveFile(from.toNativeString(), to.toNativeString(), copy_fallback);
 }
 /// ditto
-void moveFile(string from, string to)
+void moveFile(string from, string to, bool copy_fallback = false)
 {
-	std.file.rename(from, to);
+	if (!copy_fallback) {
+		std.file.rename(from, to);
+	} else {
+		try {
+			std.file.rename(from, to);
+		} catch (FileException e) {
+			std.file.copy(from, to);
+			std.file.remove(from);
+		}
+	}
 }
 
 /**
@@ -210,31 +225,34 @@ void removeFile(Path path)
 	removeFile(path.toNativeString());
 }
 /// ditto
-void removeFile(string path) {
+void removeFile(string path)
+{
 	std.file.remove(path);
 }
 
 /**
 	Checks if a file exists
 */
-bool existsFile(Path path) {
+bool existsFile(Path path) nothrow
+{
 	return existsFile(path.toNativeString());
 }
 /// ditto
-bool existsFile(string path)
+bool existsFile(string path) nothrow
 {
+	// This was *annotated* nothrow in 2.067.
+	static if (__VERSION__ < 2067)
+		scope(failure) assert(0, "Error: existsFile should never throw");
 	return std.file.exists(path);
 }
 
 /** Stores information about the specified file/directory into 'info'
 
-	Returns false if the file does not exist.
+	Throws: A `FileException` is thrown if the file does not exist.
 */
 FileInfo getFileInfo(Path path)
 {
-	DirEntry ent;
-	static if (!is(typeof({ DirEntry de = {}; }))) ent = DirEntry(path.toNativeString()); // DMD 2.064 and up
-	else ent = std.file.dirEntry(path.toNativeString());
+	auto ent = DirEntry(path.toNativeString());
 	return makeFileInfo(ent);
 }
 /// ditto
@@ -429,4 +447,3 @@ private FileInfo makeFileInfo(DirEntry ent)
 	ret.isDirectory = ent.isDir;
 	return ret;
 }
-

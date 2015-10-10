@@ -15,7 +15,7 @@ shared static this()
 			logInfo("Got packet: %s", cast(string)pack);
 		}
 	});
-	
+
 	runTask({
 		auto udp_sender = listenUDP(0);
 		udp_sender.connect("127.0.0.1", 1234);

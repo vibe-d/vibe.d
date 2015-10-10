@@ -34,7 +34,7 @@ enum HTTPVersion {
 
 
 enum HTTPMethod {
-	// HTTP standard
+	// HTTP standard, RFC 2616
 	GET,
 	HEAD,
 	PUT,
@@ -44,15 +44,34 @@ enum HTTPMethod {
 	OPTIONS,
 	TRACE,
 	CONNECT,
-	
-	// WEBDAV extensions
-	COPY,
-	LOCK,
-	MKCOL,
-	MOVE,
+
+	// WEBDAV extensions, RFC 2518
 	PROPFIND,
 	PROPPATCH,
-	UNLOCK
+	MKCOL,
+	COPY,
+	MOVE,
+	LOCK,
+	UNLOCK,
+
+	// Versioning Extensions to WebDAV, RFC 3253
+	VERSIONCONTROL,
+	REPORT,
+	CHECKOUT,
+	CHECKIN,
+	UNCHECKOUT,
+	MKWORKSPACE,
+	UPDATE,
+	LABEL,
+	MERGE,
+	BASELINECONTROL,
+	MKACTIVITY,
+
+	// Ordered Collections Protocol, RFC 3648
+	ORDERPATCH,
+
+	// Access Control Protocol, RFC 3744
+	ACL
 }
 
 
@@ -61,7 +80,11 @@ enum HTTPMethod {
 */
 string httpMethodString(HTTPMethod m)
 {
-	return to!string(m);
+	switch(m){
+		case HTTPMethod.BASELINECONTROL: return "BASELINE-CONTROL";
+		case HTTPMethod.VERSIONCONTROL: return "VERSION-CONTROL";
+		default: return to!string(m);
+	}
 }
 
 /**
@@ -71,6 +94,7 @@ HTTPMethod httpMethodFromString(string str)
 {
 	switch(str){
 		default: throw new Exception("Invalid HTTP method: "~str);
+		// HTTP standard, RFC 2616
 		case "GET": return HTTPMethod.GET;
 		case "HEAD": return HTTPMethod.HEAD;
 		case "PUT": return HTTPMethod.PUT;
@@ -80,22 +104,46 @@ HTTPMethod httpMethodFromString(string str)
 		case "OPTIONS": return HTTPMethod.OPTIONS;
 		case "TRACE": return HTTPMethod.TRACE;
 		case "CONNECT": return HTTPMethod.CONNECT;
-		case "COPY": return HTTPMethod.COPY;
-		case "LOCK": return HTTPMethod.LOCK;
-		case "MKCOL": return HTTPMethod.MKCOL;
-		case "MOVE": return HTTPMethod.MOVE;
+
+		// WEBDAV extensions, RFC 2518
 		case "PROPFIND": return HTTPMethod.PROPFIND;
 		case "PROPPATCH": return HTTPMethod.PROPPATCH;
+		case "MKCOL": return HTTPMethod.MKCOL;
+		case "COPY": return HTTPMethod.COPY;
+		case "MOVE": return HTTPMethod.MOVE;
+		case "LOCK": return HTTPMethod.LOCK;
 		case "UNLOCK": return HTTPMethod.UNLOCK;
+
+		// Versioning Extensions to WebDAV, RFC 3253
+		case "VERSION-CONTROL": return HTTPMethod.VERSIONCONTROL;
+		case "REPORT": return HTTPMethod.REPORT;
+		case "CHECKOUT": return HTTPMethod.CHECKOUT;
+		case "CHECKIN": return HTTPMethod.CHECKIN;
+		case "UNCHECKOUT": return HTTPMethod.UNCHECKOUT;
+		case "MKWORKSPACE": return HTTPMethod.MKWORKSPACE;
+		case "UPDATE": return HTTPMethod.UPDATE;
+		case "LABEL": return HTTPMethod.LABEL;
+		case "MERGE": return HTTPMethod.MERGE;
+		case "BASELINE-CONTROL": return HTTPMethod.BASELINECONTROL;
+		case "MKACTIVITY": return HTTPMethod.MKACTIVITY;
+
+		// Ordered Collections Protocol, RFC 3648
+		case "ORDERPATCH": return HTTPMethod.ORDERPATCH;
+
+		// Access Control Protocol, RFC 3744
+		case "ACL": return HTTPMethod.ACL;
 	}
 }
 
-unittest 
+unittest
 {
 	assert(httpMethodString(HTTPMethod.GET) == "GET");
 	assert(httpMethodString(HTTPMethod.UNLOCK) == "UNLOCK");
+	assert(httpMethodString(HTTPMethod.VERSIONCONTROL) == "VERSION-CONTROL");
+	assert(httpMethodString(HTTPMethod.BASELINECONTROL) == "BASELINE-CONTROL");
 	assert(httpMethodFromString("GET") == HTTPMethod.GET);
 	assert(httpMethodFromString("UNLOCK") == HTTPMethod.UNLOCK);
+	assert(httpMethodFromString("VERSION-CONTROL") == HTTPMethod.VERSIONCONTROL);
 }
 
 
@@ -123,7 +171,7 @@ class HTTPRequest {
 	protected {
 		Stream m_conn;
 	}
-	
+
 	public {
 		/// The HTTP protocol version used for the request
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
@@ -142,12 +190,12 @@ class HTTPRequest {
 		/// All request _headers
 		InetHeaderMap headers;
 	}
-	
+
 	protected this(Stream conn)
 	{
 		m_conn = conn;
 	}
-	
+
 	protected this()
 	{
 	}
@@ -195,7 +243,7 @@ class HTTPRequest {
 
 	/** Determines if the connection persists across requests.
 	*/
-	@property bool persistent() const 
+	@property bool persistent() const
 	{
 		auto ph = "connection" in headers;
 		switch(httpVersion) {
@@ -205,7 +253,7 @@ class HTTPRequest {
 			case HTTPVersion.HTTP_1_1:
 				if (ph && toLower(*ph) == "close") return false;
 				return true;
-			default: 
+			default:
 				return false;
 		}
 	}
@@ -263,10 +311,10 @@ class HTTPStatusException : Exception {
 
 	this(int status, string message = null, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
-		super(message ? message : httpStatusText(status), file, line, next);
+		super(message != "" ? message : httpStatusText(status), file, line, next);
 		m_status = status;
 	}
-	
+
 	/// The HTTP status code
 	@property int status() const { return m_status; }
 
@@ -276,7 +324,7 @@ class HTTPStatusException : Exception {
 
 final class MultiPart {
 	string contentType;
-	
+
 	InputStream stream;
 	//JsonValue json;
 	string[string] form;
@@ -299,7 +347,7 @@ HTTPVersion parseHTTPVersion(ref string str)
 	enforceBadRequest(str.startsWith("."));
 	str = str[1 .. $];
 	int minorVersion = parse!int(str);
-	
+
 	enforceBadRequest( majorVersion == 1 && (minorVersion == 0 || minorVersion == 1) );
 	return minorVersion == 0 ? HTTPVersion.HTTP_1_0 : HTTPVersion.HTTP_1_1;
 }
@@ -384,7 +432,7 @@ final class ChunkedOutputStream : OutputStream {
 		size_t m_maxBufferSize = 512*1024;
 		bool m_finalized = false;
 	}
-	
+
 	this(OutputStream stream, Allocator alloc = defaultAllocator())
 	{
 		m_out = stream;
@@ -416,7 +464,7 @@ final class ChunkedOutputStream : OutputStream {
 				flush();
 		}
 	}
-	
+
 	void write(InputStream data, ulong nbytes = 0)
 	{
 		assert(!m_finalized);
@@ -438,7 +486,7 @@ final class ChunkedOutputStream : OutputStream {
 		}
 	}
 
-	void flush() 
+	void flush()
 	{
 		assert(!m_finalized);
 		auto data = m_buffer.data();
@@ -455,7 +503,7 @@ final class ChunkedOutputStream : OutputStream {
 	{
 		if (m_finalized) return;
 		flush();
-		m_buffer.reset(AppenderResetMode.freeData);		
+		m_buffer.reset(AppenderResetMode.freeData);
 		m_finalized = true;
 		m_out.write("0\r\n\r\n");
 		m_out.flush();
@@ -476,7 +524,12 @@ final class Cookie {
 		string m_expires;
 		long m_maxAge;
 		bool m_secure;
-		bool m_httpOnly; 
+		bool m_httpOnly;
+	}
+
+	enum Encoding {
+		url,
+		none
 	}
 
 	@property void value(string value) { m_value = value; }
@@ -500,22 +553,28 @@ final class Cookie {
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
 
-	void writeString(R)(R dst, string name)
+	void writeString(R)(R dst, string name, Encoding encoding = Encoding.url)
 		if (isOutputRange!(R, char))
 	{
 		import vibe.textfilter.urlencode;
 		dst.put(name);
 		dst.put('=');
-		filterURLEncode(dst, this.value);
-		if (this.domain) {
+		final switch (encoding) {
+			case Encoding.url: filterURLEncode(dst, this.value); break;
+			case Encoding.none:
+				assert(!this.value.canFind(';') && !this.value.canFind('"'));
+				dst.put(this.value);
+				break;
+		}
+		if (this.domain && this.domain != "") {
 			dst.put("; Domain=");
 			dst.put(this.domain);
 		}
-		if (this.path) {
+		if (this.path != "") {
 			dst.put("; Path=");
 			dst.put(this.path);
 		}
-		if (this.expires) {
+		if (this.expires != "") {
 			dst.put("; Expires=");
 			dst.put(this.expires);
 		}
@@ -526,7 +585,7 @@ final class Cookie {
 }
 
 
-/** 
+/**
 */
 struct CookieValueMap {
 	struct Cookie {
@@ -601,9 +660,13 @@ struct CookieValueMap {
 
 	inout(string)* opBinaryRight(string op)(string name) inout if(op == "in")
 	{
-		foreach(c; m_entries)
-			if( c.name == name )
-				return &c.value;
+		foreach(ref c; m_entries)
+			if( c.name == name ) {
+				static if (__VERSION__ < 2066)
+					return cast(inout(string)*)&c.value;
+				else
+					return &c.value;
+			}
 		return null;
 	}
 }

@@ -1,7 +1,7 @@
 /**
 	This module contains the core functionality of the vibe.d framework.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -17,6 +17,7 @@ import vibe.utils.array;
 import std.algorithm;
 import std.conv;
 import std.encoding;
+import core.exception;
 import std.exception;
 import std.functional;
 import std.range : empty, front, popFront;
@@ -29,6 +30,7 @@ import core.sync.mutex;
 import core.stdc.stdlib;
 import core.thread;
 
+alias TaskEventCb = void function(TaskEvent, Task) nothrow;
 
 version(Posix)
 {
@@ -73,6 +75,7 @@ version (Windows)
 */
 int runEventLoop()
 {
+	logDebug("Starting event loop.");
 	s_eventLoopRunning = true;
 	scope (exit) {
 		s_eventLoopRunning = false;
@@ -86,9 +89,10 @@ int runEventLoop()
 	s_core.notifyIdle();
 	if (getExitFlag()) return 0;
 
-	// handle worker tasks and st_term
-	runTask(toDelegate(&handleWorkerTasks));
-	if (getExitFlag()) return 0;
+	// handle exit flag in the main thread to exit when
+	// exitEventLoop(true) is called from a thread)
+	if (Thread.getThis() is st_threads[0].thread)
+		runTask(toDelegate(&watchExitFlag));
 
 	if (auto err = getEventDriver().runEventLoop() != 0) {
 		if (err == 1) {
@@ -98,6 +102,8 @@ int runEventLoop()
 		logError("Error running event loop: %d", err);
 		return 1;
 	}
+
+	logDebug("Event loop done.");
 	return 0;
 }
 
@@ -115,6 +121,8 @@ int runEventLoop()
 */
 void exitEventLoop(bool shutdown_all_threads = false)
 {
+	logDebug("exitEventLoop called (%s)", shutdown_all_threads);
+
 	assert(s_eventLoopRunning || shutdown_all_threads);
 	if (shutdown_all_threads) {
 		atomicStore(st_term, true);
@@ -131,7 +139,7 @@ void exitEventLoop(bool shutdown_all_threads = false)
 
 	Checks if events are ready to trigger immediately, and run their callbacks if so.
 
-	Returns: Returns false iff exitEventLoop was called in the process.
+	Returns: Returns false $(I iff) exitEventLoop was called in the process.
 */
 bool processEvents()
 {
@@ -165,7 +173,7 @@ void setIdleHandler(bool delegate() del)
 	continue to run until vibeYield() or any of the I/O or wait functions is
 	called.
 
-	Note that the maximum size of all args must not exceed MaxTaskParameterSize.
+	Note that the maximum size of all args must not exceed `maxTaskParameterSize`.
 */
 Task runTask(ARGS...)(void delegate(ARGS) task, ARGS args)
 {
@@ -187,14 +195,14 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 	if (f is null) {
 		// if there is no fiber available, create one.
 		if (s_availableFibers.capacity == 0) s_availableFibers.capacity = 1024;
-		logDebug("Creating new fiber...");
+		logDebugV("Creating new fiber...");
 		s_fiberCount++;
 		f = new CoreTask;
 	}
 
 	f.m_taskFunc = tfi;
 
-	atomicOp!"+="(f.m_taskCounter, 1);
+	f.bumpTaskCounter();
 	auto handle = f.task();
 
 	debug Task self = Task.getThis();
@@ -249,6 +257,7 @@ Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 
 	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
+	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
@@ -268,6 +277,7 @@ Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS ar
 
 	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
+	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
 		caller.prioritySend(callee);
@@ -443,7 +453,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
 	static assert(TARGS.sizeof <= maxTaskParameterSize,
 		"The arguments passed to run(Worker)Task must not exceed "~
-		MaxTaskParameterSize.to!string~" bytes in total size.");
+		maxTaskParameterSize.to!string~" bytes in total size.");
 
 	static void callDelegate(TaskFuncInfo* tfi) {
 		assert(tfi.func is &callDelegate);
@@ -484,6 +494,9 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 */
 void yield()
 {
+	// throw any deferred exceptions
+	s_core.processDeferredExceptions();
+
 	auto t = CoreTask.getThis();
 	if (t && t !is CoreTask.ms_coreTask) {
 		// it can happen that a task with the same fiber was
@@ -648,7 +661,7 @@ void setTaskStackSize(size_t sz)
 void lowerPrivileges(string uname, string gname)
 {
 	if (!isRoot()) return;
-	if (uname || gname) {
+	if (uname != "" || gname != "") {
 		static bool tryParse(T)(string s, out T n)
 		{
 			import std.conv, std.ascii;
@@ -657,8 +670,8 @@ void lowerPrivileges(string uname, string gname)
 			return s.length==0;
 		}
 		int uid = -1, gid = -1;
-		if (uname && !tryParse(uname, uid)) uid = getUID(uname);
-		if (gname && !tryParse(gname, gid)) gid = getGID(gname);
+		if (uname != "" && !tryParse(uname, uid)) uid = getUID(uname);
+		if (gname != "" && !tryParse(gname, gid)) gid = getGID(gname);
 		setUID(uid, gid);
 	} else logWarn("Vibe was run as root, and no user/group has been specified for privilege lowering. Running with full permissions.");
 }
@@ -677,7 +690,7 @@ void lowerPrivileges()
 	analyze the life time of tasks, including task switches. Note that
 	the callback will only be called for debug builds.
 */
-void setTaskEventCallback(void function(TaskEvent, Task) func)
+void setTaskEventCallback(TaskEventCb func)
 {
 	debug s_taskEventCallback = func;
 }
@@ -686,10 +699,8 @@ void setTaskEventCallback(void function(TaskEvent, Task) func)
 /**
 	A version string representing the current vibe version
 */
-enum vibeVersionString = "0.7.22";
+enum vibeVersionString = "0.7.25";
 
-/// Compatibility alias
-deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersionString;
 
 /**
 	The maximum combined size of all parameters passed to a task delegate
@@ -698,8 +709,6 @@ deprecated("Use vibeVersionString instead.") alias VibeVersionString = vibeVersi
 */
 enum maxTaskParameterSize = 128;
 
-/// Compatibility alias
-deprecated("Use maxTaskParameterSize instead.") alias MaxTaskParameterSize = maxTaskParameterSize;
 
 /**
 	Represents a timer.
@@ -726,7 +735,7 @@ struct Timer {
 	~this()
 	{
 		debug assert(m_magicNumber == 0x4d34f916);
-		if (m_driver) m_driver.releaseTimer(m_id);
+		if (m_driver && s_core) m_driver.releaseTimer(m_id);
 	}
 
 	/// True if the timer is yet to fire.
@@ -954,7 +963,6 @@ private class CoreTask : TaskFiber {
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					if (!s_eventLoopRunning) {
 						logTrace("Event loop not running at task start - yielding.");
-						assert(!m_queue);
 						.yield();
 						logTrace("Initial resume of task.");
 					}
@@ -965,6 +973,16 @@ private class CoreTask : TaskFiber {
 					import std.encoding;
 					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
+				}
+
+				// check for any unhandled deferred exceptions
+				if (m_exception !is null) {
+					if (cast(InterruptException)m_exception) {
+						logDebug("InterruptException not handled by task before exit.");
+					} else {
+						logCritical("Deferred exception not handled by task before exit: %s", m_exception.msg);
+						logDebug("Full error: %s", m_exception.toString().sanitize());
+					}
 				}
 
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
@@ -998,16 +1016,15 @@ private class CoreTask : TaskFiber {
 	override void join()
 	{
 		auto caller = Task.getThis();
+		if (!m_running) return;
 		if (caller != Task.init) {
 			assert(caller.fiber !is this, "A task cannot join itself.");
 			assert(caller.thread is this.thread, "Joining tasks in foreign threads is currently not supported.");
 			m_yielders ~= caller;
 		} else assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
 		auto run_count = m_taskCounter;
-		if (m_running && run_count == m_taskCounter) {
-			s_core.resumeTask(this.task);
-			while (m_running && run_count == m_taskCounter) rawYield();
-		}
+		if (caller == Task.init) s_core.resumeTask(this.task);
+		while (m_running && run_count == m_taskCounter) rawYield();
 	}
 
 	override void interrupt()
@@ -1017,7 +1034,7 @@ private class CoreTask : TaskFiber {
 			assert(caller != this.task, "A task cannot interrupt itself.");
 			assert(caller.thread is this.thread, "Interrupting tasks in different threads is not yet supported.");
 		} else assert(Thread.getThis() is this.thread, "Interrupting tasks in different threads is not yet supported.");
-		s_core.resumeTask(this.task, new InterruptException);
+		s_core.yieldAndResumeTask(this.task, new InterruptException);
 	}
 
 	override void terminate()
@@ -1043,40 +1060,46 @@ private class VibeDriverCore : DriverCore {
 
 	@property void eventException(Exception e) { m_eventException = e; }
 
+	void yieldForEventDeferThrow()
+	nothrow {
+		yieldForEventDeferThrow(Task.getThis());
+	}
+
+	void processDeferredExceptions()
+	{
+		processDeferredExceptions(Task.getThis());
+	}
+
 	void yieldForEvent()
 	{
 		auto task = Task.getThis();
-		if (task != Task.init) {
-			auto fiber = cast(CoreTask)task.fiber;
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
-			fiber.yield();
-			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
-			auto e = fiber.m_exception;
-			if( e ){
-				fiber.m_exception = null;
-				throw e;
-			}
-		} else {
-			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
-			m_eventException = null;
-			if (auto err = getEventDriver().runEventLoopOnce()) {
-				if (err == 1) {
-					logDebug("No events registered, exiting event loop.");
-					throw new Exception("No events registered in vibeYieldForEvent.");
-				}
-				logError("Error running event loop: %d", err);
-				throw new Exception("Error waiting for events.");
-			}
-			if (auto e = m_eventException) {
-				m_eventException = null;
-				throw e;
-			}
-		}
+		processDeferredExceptions(task);
+		yieldForEventDeferThrow(task);
+		processDeferredExceptions(task);
 	}
 
 	void resumeTask(Task task, Exception event_exception = null)
 	{
+		assert(Task.getThis() == Task.init, "Calling resumeTask from another task.");
 		resumeTask(task, event_exception, false);
+	}
+
+	void yieldAndResumeTask(Task task, Exception event_exception = null)
+	{
+		auto thisct = CoreTask.getThis();
+
+		if (thisct is null || thisct == CoreTask.ms_coreTask) {
+			resumeTask(task, event_exception);
+			return;
+		}
+
+		auto otherct = cast(CoreTask)task.fiber;
+		assert(!thisct || otherct.thread == thisct.thread, "Resuming task in foreign thread.");
+		assert(otherct.state == Fiber.State.HOLD, "Resuming fiber that is not on HOLD.");
+
+		if (event_exception) otherct.m_exception = event_exception;
+		if (!otherct.m_queue) s_yieldedTasks.insertBack(otherct);
+		yield();
 	}
 
 	void resumeTask(Task task, Exception event_exception, bool initial_resume)
@@ -1088,16 +1111,20 @@ private class VibeDriverCore : DriverCore {
 	void resumeCoreTask(CoreTask ctask, Exception event_exception = null)
 	{
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
-		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is " ~ to!string(ctask.state));
+		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
 
 		if( event_exception ){
 			extrap();
 			ctask.m_exception = event_exception;
 		}
 
-		auto uncaught_exception = ctask.call(false);
+		static if (__VERSION__ > 2066)
+			auto uncaught_exception = ctask.call!(Fiber.Rethrow.no)();
+		else
+			auto uncaught_exception = ctask.call(false);
 		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
+
 			assert(ctask.state == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", th.msg);
 			logDebug("Full error: %s", th.toString().sanitize);
@@ -1118,20 +1145,61 @@ private class VibeDriverCore : DriverCore {
 			for (auto limit = s_yieldedTasks.length; limit > 0 && !s_yieldedTasks.empty; limit--) {
 				auto tf = s_yieldedTasks.front;
 				s_yieldedTasks.popFront();
-				resumeCoreTask(tf);
+				if (tf.state == Fiber.State.HOLD) resumeCoreTask(tf);
 			}
 
 			again = (again || !s_yieldedTasks.empty) && !getExitFlag();
 
 			if (again && !getEventDriver().processEvents()) {
+				logDebug("Setting exit flag due to driver signalling exit");
 				s_exitEventLoop = true;
 				return;
 			}
 		}
+		if (!s_yieldedTasks.empty) logDebug("Exiting from idle processing although there are still yielded tasks");
 
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
 		} else m_ignoreIdleForGC = false;
+	}
+
+	private void yieldForEventDeferThrow(Task task)
+	nothrow {
+		if (task != Task.init) {
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.yield, task);
+			static if (__VERSION__ < 2067) scope (failure) assert(false); // Fiber.yield() not nothrow on 2.066 and below
+			task.fiber.yield();
+			debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.resume, task);
+			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
+		} else {
+			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
+			m_eventException = null;
+			try if (auto err = getEventDriver().runEventLoopOnce()) {
+				logError("Error running event loop: %d", err);
+				assert(err != 1, "No events registered, exiting event loop.");
+				assert(false, "Error waiting for events.");
+			}
+			catch (Exception e) {
+				assert(false, "Driver.runEventLoopOnce() threw: "~e.msg);
+			}
+			// leave m_eventException untouched, so that it gets thrown on the next yieldForEvent call
+		}
+	}
+
+	private void processDeferredExceptions(Task task)
+	{
+		if (task != Task.init) {
+			auto fiber = cast(CoreTask)task.fiber;
+			if (auto e = fiber.m_exception) {
+				fiber.m_exception = null;
+				throw e;
+			}
+		} else {
+			if (auto e = m_eventException) {
+				m_eventException = null;
+				throw e;
+			}
+		}
 	}
 
 	private void collectGarbage()
@@ -1200,7 +1268,7 @@ private {
 	__gshared ThreadContext[] st_threads;
 	__gshared TaskFuncInfo[] st_workerTasks;
 	__gshared Condition st_threadShutdownCondition;
-	__gshared debug void function(TaskEvent, Task) s_taskEventCallback;
+	__gshared debug TaskEventCb s_taskEventCallback;
 	shared bool st_term = false;
 
 	bool s_exitEventLoop = false;
@@ -1240,7 +1308,7 @@ shared static this()
 	// COMPILER BUG: Must be some kind of module constructor order issue:
 	//    without this, the stdout/stderr handles are not initialized before
 	//    the log module is set up.
-	import std.stdio; write("");
+	import std.stdio; File f; f.close();
 
 	initializeLogModule();
 
@@ -1287,8 +1355,11 @@ shared static this()
 		s_core.setupGcTimer();
 	}
 
-	getOption("uid|user", &s_privilegeLoweringUserName, "Sets the user name or id used for privilege lowering.");
-	getOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
+	version (VibeNoDefaultArgs) {}
+	else {
+		readOption("uid|user", &s_privilegeLoweringUserName, "Sets the user name or id used for privilege lowering.");
+		readOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
+	}
 
 	static if (newStdConcurrency) {
 		import std.concurrency;
@@ -1300,16 +1371,19 @@ shared static ~this()
 {
 	deleteEventDriver();
 
-	bool tasks_left = false;
+	size_t tasks_left;
 
 	synchronized (st_threadsMutex) {
-		if( !st_workerTasks.empty ) tasks_left = true;
+		if( !st_workerTasks.empty ) tasks_left = st_workerTasks.length;
 	}
 
-	if (!s_yieldedTasks.empty) tasks_left = true;
-	if (tasks_left) logWarn("There are still tasks running at exit.");
+	if (!s_yieldedTasks.empty) tasks_left += s_yieldedTasks.length;
+	if (tasks_left > 0) {
+		logWarn("There were still %d tasks running at exit.", tasks_left);
+	}
 
-	delete s_core;
+	destroy(s_core);
+	s_core = null;
 }
 
 // per thread setup
@@ -1319,7 +1393,7 @@ static this()
 	// object.Exception@src/rt/minfo.d(162): Aborting: Cycle detected between modules with ctors/dtors:
 	// vibe.core.core -> vibe.core.drivers.native -> vibe.core.drivers.libasync -> vibe.core.core
 	if (Thread.getThis().isDaemon && Thread.getThis().name == "CmdProcessor") return;
-			
+
 	assert(s_core !is null);
 
 	auto thisthr = Thread.getThis();
@@ -1334,13 +1408,18 @@ static this()
 
 static ~this()
 {
+	version(VibeLibasyncDriver) {
+		import vibe.core.drivers.libasync;
+		if (LibasyncDriver.isControlThread)
+			return;
+	}
 	auto thisthr = Thread.getThis();
 
 	bool is_main_thread = false;
 
 	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
-		assert(idx >= 0);
+		assert(idx >= 0, "No more threads registered");
 		if (idx >= 0) {
 			st_threads[idx] = st_threads[$-1];
 			st_threads.length--;
@@ -1352,8 +1431,12 @@ static ~this()
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
 			// wait for all non-daemon threads to shut down
-			while (st_threads.any!(th => !th.thread.isDaemon))
+			while (st_threads.any!(th => !th.thread.isDaemon)) {
+				logDiagnostic("Main thread still waiting for other threads: %s",
+					st_threads.map!(t => t.thread.name ~ (t.isWorker ? " (worker thread)" : "")).join(", "));
 				st_threadShutdownCondition.wait();
+			}
+			logDiagnostic("Main thread exiting");
 		}
 	}
 
@@ -1394,14 +1477,30 @@ private void setupWorkerThreads()
 }
 
 private void workerThreadFunc()
-{
-	assert(s_core !is null);
-	if (getExitFlag()) return;
-	logDebug("entering worker thread");
-	runTask(toDelegate(&handleWorkerTasks));
-	logDebug("running event loop");
-	if (!getExitFlag()) runEventLoop();
-	logDebug("Worker thread exit.");
+nothrow {
+	try {
+		assert(s_core !is null);
+		if (getExitFlag()) return;
+		logDebug("entering worker thread");
+		runTask(toDelegate(&handleWorkerTasks));
+		logDebug("running event loop");
+		if (!getExitFlag()) runEventLoop();
+		logDebug("Worker thread exit.");
+	} catch (Exception e) {
+		scope (failure) exit(-1);
+		logFatal("Worker thread terminated due to uncaught exception: %s", e.msg);
+		logDebug("Full error: %s", e.toString().sanitize());
+	} catch (InvalidMemoryOperationError e) {
+		import std.stdio;
+		scope(failure) assert(false);
+		writeln("Error message: ", e.msg);
+		writeln("Full error: ", e.toString().sanitize());
+		exit(-1);
+	} catch (Throwable th) {
+		logFatal("Worker thread terminated due to uncaught error: %s", th.msg);
+		logDebug("Full error: %s", th.toString().sanitize());
+		exit(-1);
+	}
 }
 
 private void handleWorkerTasks()
@@ -1447,6 +1546,20 @@ private void handleWorkerTasks()
 	getEventDriver().exitEventLoop();
 }
 
+private void watchExitFlag()
+{
+	auto emit_count = st_threadsSignal.emitCount;
+	while (true) {
+		synchronized (st_threadsMutex) {
+			if (getExitFlag()) break;
+		}
+
+		emit_count = st_threadsSignal.wait(emit_count);
+	}
+
+	logDebug("main thread exit");
+	getEventDriver().exitEventLoop();
+}
 
 private extern(C) void extrap()
 nothrow {
@@ -1533,8 +1646,8 @@ private struct CoreTaskQueue {
 
 	void insertBack(CoreTask task)
 	{
-		assert(task.m_queue == null);
-		assert(task.m_nextInQueue is null);
+		assert(task.m_queue == null, "Task is already scheduled to be resumed!");
+		assert(task.m_nextInQueue is null, "Task has m_nextInQueue set without being in a queue!?");
 		task.m_queue = &this;
 		if (empty)
 			first = task;
@@ -1572,6 +1685,43 @@ private string callWithMove(ARGS...)(string func, string args)
 
 private template needsMove(T)
 {
-	// FIXME: reverse the condition and only call .move for non-copyable types!
-	enum needsMove = is(typeof(T.init.move));
+	template isCopyable(T)
+	{
+		enum isCopyable = __traits(compiles, (T a) { return a; });
+	}
+
+	template isMoveable(T)
+	{
+		enum isMoveable = __traits(compiles, (T a) { return a.move; });
+	}
+
+	enum needsMove = !isCopyable!T;
+
+	static assert(isCopyable!T || isMoveable!T,
+				  "Non-copyable type "~T.stringof~" must be movable with a .move property.");
+}
+
+unittest {
+	enum E { a, move }
+	static struct S {
+		@disable this(this);
+		@property S move() { return S.init; }
+	}
+	static struct T { @property T move() { return T.init; } }
+	static struct U { }
+	static struct V {
+		@disable this();
+		@disable this(this);
+		@property V move() { return V.init; }
+	}
+	static struct W { @disable this(); }
+
+	static assert(needsMove!S);
+	static assert(!needsMove!int);
+	static assert(!needsMove!string);
+	static assert(!needsMove!E);
+	static assert(!needsMove!T);
+	static assert(!needsMove!U);
+	static assert(needsMove!V);
+	static assert(!needsMove!W);
 }

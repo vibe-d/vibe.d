@@ -1,8 +1,8 @@
 {
 	"name": "vibe-d",
-	"description": "Asynchronous I/O framework",
+	"description": "Event driven web and concurrency framework",
 	"license": "MIT",
-	"copyright": "Copyright © 2012-2014 rejectedsoftware e.K.",
+	"copyright": "Copyright © 2012-2015 rejectedsoftware e.K.",
 	"homepage": "http://vibed.org/",
 	"authors": [
 		"Sönke Ludwig",
@@ -13,7 +13,11 @@
 
 	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
 	"dependencies": {
-		"openssl": ">=1.0.0+1.0.0e"
+		"openssl": ">=1.0.0+1.0.0e",
+		"botan": {
+			"version": "~>1.12.0",
+			"optional": true
+		}
 	},
 
 	"targetType": "library",
@@ -29,46 +33,38 @@
 		{
 			"name": "libevent",
 			"dependencies": {"libevent": "~>2.0.1+2.0.16"},
+			"platforms": ["windows-x86", "posix"],
 			"versions": ["VibeLibeventDriver"],
 			"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
 			"copyFiles-windows-x86": ["lib/win-i386/libevent.dll"],
 			"sourceFiles-windows-x86_64": ["lib/win-amd64/event2.lib"],
 			"copyFiles-windows-x86_64": ["lib/win-amd64/libevent.dll"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32"]
 		},
 		{
 			"name": "libasync",
-			"dependencies": {
-			  "libasync": { "version": "0.6.6" }
-			},
+			"dependencies": {"libasync": "0.7.5"},
 			"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
 		},
 		{
 			"name": "libev",
-			"dependencies": {"libev": "~>4.0.0+4.04"},
+			"dependencies": {"libev": "~>5.0.0+4.04"},
 			"platforms": ["posix"],
-			"versions": ["VibeLibevDriver", "LIBEV4"],
+			"versions": ["VibeLibevDriver", "LIBEV4"]
 		},
 		{
 			"name": "win32",
 			"platforms": ["windows"],
 			"versions": ["VibeWin32Driver"],
-			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"],
+			"libs-windows": ["wsock32", "ws2_32", "advapi32", "user32"]
 		},
 		{
 			"name": "winrt",
 			"platforms": ["windows"],
 			"versions": ["VibeWinrtDriver"],
-			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"],
+			"sourceFiles-windows-x86": ["lib/win-i386/runtimeobject.lib"]
 		}
 	],
-
-	"buildTypes": {
-		"unittest": {
-			"buildOptions": ["unittests", "debugMode"],
-			"buildOptions-posix": ["debugInfo"]
-		}
-	},
 
 	"-ddoxFilterArgs": ["--unittest-examples", "--min-protection=Protected", "--ex", "vibe.core.drivers.", "--ex", "vibe.internal."]
 }

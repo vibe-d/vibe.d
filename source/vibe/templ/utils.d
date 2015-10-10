@@ -56,7 +56,7 @@ import std.typecons : Rebindable;
 		{
 			auto router = new URLRouter;
 			router.get("/", inject!(page, authInjector, somethingInjector));
-		} 
+		}
 		---
 */
 @property auto inject(alias Page, Injectors...)()
@@ -117,7 +117,7 @@ template localAliasesCompat(int i, TYPES_AND_NAMES...)
 		enum TYPE = "TYPES_AND_NAMES["~cttostring(i)~"]";
 		enum NAME = TYPES_AND_NAMES[i+1];
 		enum INDEX = cttostring(i/2);
-		enum string localAliasesCompat = 
+		enum string localAliasesCompat =
 			"Rebindable2!("~TYPE~") "~NAME~";\n"~
 			"if( _arguments["~INDEX~"] == typeid(Variant) )\n"~
 			"\t"~NAME~" = *va_arg!Variant(_argptr).peek!("~TYPE~")();\n"~

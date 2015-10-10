@@ -53,7 +53,8 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 			addPreviousHeader();
 
 			auto colonpos = ln.indexOf(':');
-			enforce(colonpos > 0 && colonpos < ln.length-1, "Header is missing ':'.");
+			enforce(colonpos >= 0, "Header is missing ':'.");
+			enforce(colonpos > 0, "Header name is empty.");
 			hdr = ln[0..colonpos].stripA();
 			hdrvalue = ln[colonpos+1..$].stripA();
 		} else {
@@ -61,6 +62,25 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 		}
 	}
 	addPreviousHeader();
+}
+
+unittest { // test usual, empty and multiline header
+	import vibe.stream.memory;
+	ubyte[] hdr = cast(ubyte[])"A: a \r\nB: \r\nC:\r\n\tc\r\n\r\n".dup;
+	InetHeaderMap map;
+	parseRFC5322Header(new MemoryStream(hdr), map);
+	assert(map.length == 3);
+	assert(map["A"] == "a");
+	assert(map["B"] == "");
+	assert(map["C"] == " c");
+}
+
+unittest { // fail for empty header names
+	import std.exception;
+	import vibe.stream.memory;
+	auto hdr = cast(ubyte[])": test\r\n\r\n".dup;
+	InetHeaderMap map;
+	assertThrown(parseRFC5322Header(new MemoryStream(hdr), map));
 }
 
 
@@ -143,47 +163,53 @@ string toRFC822DateTimeString(SysTime time)
 	return ret.data;
 }
 
-/**
-	Parses a date+time string according to RFC-822/5322.
-*/
-SysTime parseRFC822DateTimeString(string str)
+static if (__VERSION__ >= 2066)
 {
-	auto idx = str.indexOf(',');
-	if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
+	/// Parses a date+time string according to RFC-822/5322.
+	alias parseRFC822DateTimeString = parseRFC822DateTime;
+}
+else
+{
+	/// Parses a date+time string according to RFC-822/5322.
+	SysTime parseRFC822DateTimeString(string str)
+	{
+		auto idx = str.indexOf(',');
+		if( idx != -1 ) str = str[idx+1 .. $].stripLeft();
 
-	str = str.stripLeft();
-	auto day = parse!int(str);
-	str = str.stripLeft();
-	int month = -1;
-	foreach( i, ms; monthStrings )
-		if( str.startsWith(ms) ){
-			month = cast(int)i+1;
-			str = str[ms.length .. $];
-			break;
+		str = str.stripLeft();
+		auto day = parse!int(str);
+		str = str.stripLeft();
+		int month = -1;
+		foreach( i, ms; monthStrings )
+			if( str.startsWith(ms) ){
+				month = cast(int)i+1;
+				str = str[ms.length .. $];
+				break;
+			}
+		enforce(month > 0);
+		str = str.stripLeft();
+		auto year = str.parse!int();
+		str = str.stripLeft();
+
+		int hour, minute, second, tzoffset = 0;
+		hour = str.parse!int();
+		enforce(str.startsWith(':'));
+		str = str[1 .. $];
+		minute = str.parse!int();
+		enforce(str.startsWith(':'));
+		str = str[1 .. $];
+		second = str.parse!int();
+		str = str.stripLeft();
+		enforce(str.length > 0);
+		if( str != "GMT" ){
+			if( str.startsWith('+') ) str = str[1 .. $];
+			tzoffset = str.parse!int();
 		}
-	enforce(month > 0);
-	str = str.stripLeft();
-	auto year = str.parse!int();
-	str = str.stripLeft();
 
-	int hour, minute, second, tzoffset = 0;
-	hour = str.parse!int();
-	enforce(str.startsWith(':'));
-	str = str[1 .. $];
-	minute = str.parse!int();
-	enforce(str.startsWith(':'));
-	str = str[1 .. $];
-	second = str.parse!int();
-	str = str.stripLeft();
-	enforce(str.length > 0);
-	if( str != "GMT" ){
-		if( str.startsWith('+') ) str = str[1 .. $];
-		tzoffset = str.parse!int();
+		auto dt = DateTime(year, month, day, hour, minute, second);
+		if( tzoffset == 0 ) return SysTime(dt, UTC());
+		else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100).hours + (tzoffset % 100).minutes));
 	}
-
-	auto dt = DateTime(year, month, day, hour, minute, second);
-	if( tzoffset == 0 ) return SysTime(dt, UTC());
-	else return SysTime(dt, new immutable SimpleTimeZone((tzoffset / 100).hours + (tzoffset % 100).minutes));
 }
 
 unittest {

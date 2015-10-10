@@ -1,7 +1,11 @@
 /**
 	Downloading and uploading of data from/to URLs.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Note that this module is scheduled for deprecation and will be replaced by
+	another module in the future. All functions are defined as templates to
+	avoid this dependency issue when building the library.
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -9,7 +13,6 @@ module vibe.inet.urltransfer;
 
 import vibe.core.log;
 import vibe.core.file;
-import vibe.http.client;
 import vibe.inet.url;
 import vibe.core.stream;
 
@@ -23,13 +26,17 @@ import std.string;
 	Any redirects will be followed until the actual file resource is reached or if the redirection
 	limit of 10 is reached. Note that only HTTP(S) is currently supported.
 */
-void download(URL url, scope void delegate(scope InputStream) callback, HTTPClient client = null)
+void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStream) callback, HTTPClient_ client_ = null)
 {
+	import vibe.http.client;
+
 	assert(url.username.length == 0 && url.password.length == 0, "Auth not supported yet.");
 	assert(url.schema == "http" || url.schema == "https", "Only http(s):// supported for now.");
 
+	HTTPClient client;
+	static if (is(HTTPClient_ == HTTPClient)) client = client_;
 	if(!client) client = new HTTPClient();
-	
+
 	foreach( i; 0 .. 10 ){
 		bool ssl = url.schema == "https";
 		client.connect(url.host, url.port ? url.port : ssl ? 443 : 80, ssl);
@@ -73,13 +80,13 @@ void download(URL url, scope void delegate(scope InputStream) callback, HTTPClie
 }
 
 /// ditto
-void download(string url, scope void delegate(scope InputStream) callback, HTTPClient client = null)
+void download(HTTPClient_ = void*)(string url, scope void delegate(scope InputStream) callback, HTTPClient_ client_ = null)
 {
-	download(URL(url), callback, client);
+	download(URL(url), callback, client_);
 }
 
 /// ditto
-void download(string url, string filename)
+void download()(string url, string filename)
 {
 	download(url, (scope input){
 		auto fil = openFile(filename, FileMode.createTrunc);
@@ -89,7 +96,7 @@ void download(string url, string filename)
 }
 
 /// ditto
-void download(URL url, Path filename)
+void download()(URL url, Path filename)
 {
 	download(url.toString(), filename.toNativeString());
 }

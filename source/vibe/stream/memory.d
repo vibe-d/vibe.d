@@ -34,9 +34,9 @@ final class MemoryOutputStream : OutputStream {
 	@property ubyte[] data() { return m_destination.data(); }
 
 	/// Resets the stream to its initial state containing no data.
-	void reset()
+	void reset(AppenderResetMode mode = AppenderResetMode.keepData)
 	{
-		m_destination.reset();
+		m_destination.reset(mode);
 	}
 
 	/// Reserves space for data - useful for optimization.

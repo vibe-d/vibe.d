@@ -28,8 +28,10 @@ version(Windows){
 	import std.c.windows.stat;
 
 	private {
-		extern(C){
-			alias off_t = long;
+		// TODO: use CreateFile/HANDLE instead of the Posix API on Windows
+
+		extern(C) {
+			alias off_t = sizediff_t;
 			int open(in char* name, int mode, ...);
 			int chmod(in char* name, int mode);
 			int close(int fd);
@@ -37,7 +39,7 @@ version(Windows){
 			int write(int fd, in void *buffer, uint count);
 			off_t lseek(int fd, off_t offset, int whence);
 		}
-		
+
 		enum O_RDONLY = 0;
 		enum O_WRONLY = 1;
 		enum O_RDWR = 2;
@@ -71,7 +73,7 @@ final class ThreadedFileStream : FileStream {
 		FileMode m_mode;
 		bool m_ownFD = true;
 	}
-	
+
 	this(Path path, FileMode mode)
 	{
 		auto pathstr = path.toNativeString();
@@ -92,7 +94,7 @@ final class ThreadedFileStream : FileStream {
 		if( m_fileDescriptor < 0 )
 			//throw new Exception(format("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
 			throw new Exception("Failed to open file '"~pathstr~"'.");
-		
+
 		this(m_fileDescriptor, path, mode);
 	}
 
@@ -110,7 +112,7 @@ final class ThreadedFileStream : FileStream {
 			stat_t st;
 			fstat(m_fileDescriptor, &st);
 			m_size = st.st_size;
-			
+
 			// (at least) on windows, the created file is write protected
 			version(Windows){
 				if( mode == FileMode.createTrunc )
@@ -118,7 +120,7 @@ final class ThreadedFileStream : FileStream {
 			}
 		}
 		lseek(m_fileDescriptor, 0, SEEK_SET);
-		
+
 		logDebug("opened file %s with %d bytes as %d", path.toNativeString(), m_size, m_fileDescriptor);
 	}
 
@@ -126,7 +128,7 @@ final class ThreadedFileStream : FileStream {
 	{
 		close();
 	}
-	
+
 	@property int fd() { return m_fileDescriptor; }
 	@property Path path() const { return m_path; }
 	@property bool isOpen() const { return m_fileDescriptor >= 0; }
@@ -142,12 +144,16 @@ final class ThreadedFileStream : FileStream {
 
 	void seek(ulong offset)
 	{
-		enforce(.lseek(m_fileDescriptor, offset, SEEK_SET) == offset, "Failed to seek in file.");
+		version (Win32) {
+			enforce(offset <= off_t.max, "Cannot seek above 4GB on Windows x32.");
+			auto pos = .lseek(m_fileDescriptor, cast(off_t)offset, SEEK_SET);
+		} else auto pos = .lseek(m_fileDescriptor, offset, SEEK_SET);
+		enforce(pos == offset, "Failed to seek in file.");
 		m_ptr = offset;
 	}
 
 	ulong tell() { return m_ptr; }
-	
+
 	void close()
 	{
 		if( m_fileDescriptor != -1 && m_ownFD ){
@@ -207,4 +213,17 @@ final class ThreadedFileStream : FileStream {
 	{
 		flush();
 	}
+}
+
+unittest { // issue #1189
+	auto fil = new ThreadedFileStream(Path(".unittest.tmp"), FileMode.createTrunc);
+	scope (exit) {
+		fil.close();
+		removeFile(".unittest.tmp");
+	}
+	fil.write([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+	fil.seek(5);
+	ubyte[3] buf;
+	fil.read(buf);
+	assert(buf == [5, 6, 7]);
 }

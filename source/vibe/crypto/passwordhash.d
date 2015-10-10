@@ -47,10 +47,10 @@ string generateSimplePasswordHash(string password, string additional_salt = null
 	Tests a password hash generated using generateSimplePasswordHash.
 
 	Params:
-		hashstring: The string that was returned by a call to
+		hashstring = The string that was returned by a call to
 			generateSimplePasswordHash
-		password: Password string to test against the hash
-		additional_salt: The same optional salt that was given to the original
+		password = Password string to test against the hash
+		additional_salt = The same optional salt that was given to the original
 			call to generateSimplePasswordHash
 
 	Returns:
@@ -62,6 +62,7 @@ string generateSimplePasswordHash(string password, string additional_salt = null
 deprecated("This function is considered insecure and will be removed. The DUB packages dauth or scrypt may be suitable alternatives.")
 bool testSimplePasswordHash(string hashstring, string password, string additional_salt = null)
 {
+	import std.string : format;
 	ubyte[] upass = Base64.decode(hashstring);
 	enforce(upass.length == 20, format("Invalid binary password hash length: %s", upass.length));
 	auto salt = upass[0 .. 4];

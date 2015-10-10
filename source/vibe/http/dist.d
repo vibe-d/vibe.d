@@ -21,7 +21,7 @@ import std.process;
 /**
 	Listens for HTTP connections on the spefified load balancer using the given HTTP server settings.
 
-	This function is usable as direct replacement of 
+	This function is usable as direct replacement of
 */
 void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
