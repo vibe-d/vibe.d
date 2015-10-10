@@ -171,10 +171,18 @@ struct MongoCollection {
 	void remove()() { remove(Bson.emptyObject); }
 
 	/**
-	  Combines a modify and find operation to a single atomic operation.
+		Combines a modify and find operation to a single atomic operation.
 
-	  Throws Exception if a DB communication error occured.
-	  See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
+		Params:
+			query = MongoDB query expression to identify the matched document
+			update = Update expression for the matched document
+			returnFieldSelector = Optional map of fields to return in the response
+
+		Throws:
+			An `Exception` will be thrown if an error occurs in the
+			communication with the database server.
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	 */
 	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
 	{
@@ -198,6 +206,49 @@ struct MongoCollection {
 	Bson findAndModify(T, U)(T query, U update)
 	{
 		return findAndModify(query, update, null);
+	}
+
+	/**
+		Combines a modify and find operation to a single atomic operation with generic options support.
+
+		Params:
+			query = MongoDB query expression to identify the matched document
+			update = Update expression for the matched document
+			options = Generic BSON object that contains additional options
+				fields, such as `"new": true`
+
+		Throws:
+			An `Exception` will be thrown if an error occurs in the
+			communication with the database server.
+
+		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
+	 */
+	Bson findAndModifyExt(T, U, V)(T query, U update, V options)
+	{
+		auto bopt = serializeToBson(options);
+		assert(bopt.type == Bson.Type.object,
+			"The options parameter to findAndModifyExt must be a BSON object.");
+		
+		Bson cmd = Bson.emptyObject;
+		cmd["findAndModify"] = m_name;
+		cmd["query"] = serializeToBson(query);
+		cmd["update"] = serializeToBson(update);
+		foreach (string key, value; bopt)
+			cmd[key] = value;
+		auto ret = database.runCommand(cmd);
+		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed.");
+		return ret["value"];
+	}
+
+	///
+	unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			coll.findAndModifyExt(["name": "foo"], ["$set": ["value": "bar"]], ["new": true]);
+		}
 	}
 
 	/**
