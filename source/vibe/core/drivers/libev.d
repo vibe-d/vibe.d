@@ -305,11 +305,12 @@ final class LibevManualEvent : ManualEvent {
 		auto thread = task.thread;
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
-				ThreadSlot slot;
+				m_waiters[thread] = ThreadSlot.init;
+				auto slot = thread in m_waiters;
 				slot.driver = cast(LibevDriver)getEventDriver();
 				ev_async_init(&slot.signal, &onSignal);
+				ev_async_start(slot.driver.m_loop, &slot.signal);
 				slot.signal.data = cast(void*)this;
-				m_waiters[thread] = slot;
 			}
 			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
 			m_waiters[thread].tasks[task] = true;
