@@ -1150,10 +1150,6 @@ private struct ReadWriteMutexState(bool INTERRUPTIBLE)
  *  any given time. Locks on `reader` and `writer` are mutually exclusive (i.e. whenever a 
  *  writer is active, no readers can be active at the same time, and vice versa).
  * 
- *  The class is implemented as a template with an empty parameter list 
- *  to allow the automatical inference of shared members. To instantiate it,
- *  use the alias $(D TaskReadWriteMutex) defined in this module.
- * 
  *  Notice:
  *      Mutexes implemented by this class cannot be interrupted
  *      using $(D vibe.core.task.Task.interrupt()). The corresponding
@@ -1165,7 +1161,7 @@ private struct ReadWriteMutexState(bool INTERRUPTIBLE)
  * 
  *  cf. $(D core.sync.mutex.ReadWriteMutex)
  */
-class TaskReadWriteMutexImpl()
+class TaskReadWriteMutex
 {
     private {
         alias State = ReadWriteMutexState!false;
@@ -1223,25 +1219,14 @@ class TaskReadWriteMutexImpl()
     @property Policy policy() const { return m_state.policy; }
 }
 
-/** A simple alias for $(D TaskReadWriteMutexImpl).
- *
- *  Use this alias to avoid providing an empty template parameter list when
- *  instantiating a mutex.
- */
-alias TaskReadWriteMutex = TaskReadWriteMutexImpl!();
-
-/** Alternative to TaskReadWriteMutex that supports interruption.
+/** Alternative to $(D TaskReadWriteMutex) that supports interruption.
  *
  *  This class supports the use of $(D vibe.core.task.Task.interrupt()) while
  *  waiting in the `lock()` method.
  * 
- *  The class is implemented as a template with an empty parameter list 
- *  to allow the automatical inference of shared members. To instantiate it,
- *  use the alias $(D InterruptibleTaskReadWriteMutex) defined in this module.
- * 
  *  cf. $(D core.sync.mutex.ReadWriteMutex)
  */
-class InterruptibleTaskReadWriteMutexImpl()
+class InterruptibleTaskReadWriteMutex
 {
     private {
         alias State = ReadWriteMutexState!true;
@@ -1299,10 +1284,3 @@ class InterruptibleTaskReadWriteMutexImpl()
     /** The policy with which the lock has been created. */
     @property Policy policy() const { return m_state.policy; }
 }
-
-/** A simple alias for $(D InterruptibleTaskReadWriteMutexImpl).
- *
- *  Use this alias to avoid providing an empty template parameter list when
- *  instantiating a mutex.
- */
-alias InterruptibleTaskReadWriteMutex = InterruptibleTaskReadWriteMutexImpl!();
