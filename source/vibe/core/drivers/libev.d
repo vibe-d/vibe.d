@@ -72,7 +72,7 @@ final class LibevDriver : EventDriver {
 		m_timer.data = cast(void*)this;
 		assert(m_loop !is null, "Failed to create libev loop");
 		debug m_ownerThread = Thread.getThis();
-		logInfo("Got libev backend: %d", ev_backend(m_loop));
+		logDiagnostic("Got libev backend: %d", ev_backend(m_loop));
 	}
 
 	void dispose()
@@ -87,7 +87,7 @@ final class LibevDriver : EventDriver {
 			m_core.notifyIdle();
 		}
 		m_break = false;
-		logInfo("Event loop exit", m_break);
+		logDebug("Event loop exit", m_break);
 		return 0;
 	}
 
@@ -110,7 +110,7 @@ final class LibevDriver : EventDriver {
 
 	void exitEventLoop()
 	{
-		logInfo("Exiting (%s)", m_break);
+		logDebug("Exiting (%s)", m_break);
 		m_break = true;
 		ev_break(m_loop, EVBREAK_ALL);
 	}
@@ -335,7 +335,7 @@ final class LibevManualEvent : ManualEvent {
 		}
 		shared int m_emitCount = 0;
 		__gshared core.sync.mutex.Mutex m_mutex;
-		__gshared ThreadSlot[Thread] m_waiters;
+		__gshared ThreadSlot*[Thread] m_waiters;
 	}
 
 	this()
@@ -357,8 +357,11 @@ final class LibevManualEvent : ManualEvent {
 		scope (failure) assert(false); // synchronized is not nothrow on DMD 2.066 and below, AA.opApply is not nothrow
 		atomicOp!"+="(m_emitCount, 1);
 		synchronized (m_mutex) {
-			foreach (sl; m_waiters)
-				ev_async_send(sl.driver.m_loop, &sl.signal);
+			foreach (th, sl; m_waiters) {
+				if (!sl.tasks.length) continue;
+				if (!ev_async_pending(&sl.signal))
+					ev_async_send(sl.driver.m_loop, &sl.signal);
+			}
 		}
 	}
 
@@ -374,8 +377,8 @@ final class LibevManualEvent : ManualEvent {
 		auto thread = task.thread;
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
-				m_waiters[thread] = ThreadSlot.init;
-				auto slot = thread in m_waiters;
+				auto slot = new ThreadSlot;
+				m_waiters[thread] = slot;
 				slot.driver = cast(LibevDriver)getEventDriver();
 				ev_async_init(&slot.signal, &onSignal);
 				ev_async_start(slot.driver.m_loop, &slot.signal);
