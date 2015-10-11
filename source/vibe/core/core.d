@@ -1368,6 +1368,7 @@ shared static this()
 
 	auto thisthr = Thread.getThis();
 	thisthr.name = "Main";
+	assert(st_threads.length == 0, "Main thread not the first thread!?");
 	st_threads ~= ThreadContext(thisthr, false);
 
 	setupDriver();
@@ -1443,11 +1444,6 @@ static ~this()
 
 	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
-		assert(idx >= 0, "No more threads registered");
-		if (idx >= 0) {
-			st_threads[idx] = st_threads[$-1];
-			st_threads.length--;
-		}
 
 		// if we are the main thread, wait for all others before terminating
 		is_main_thread = idx == 0;
@@ -1455,12 +1451,18 @@ static ~this()
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
 			// wait for all non-daemon threads to shut down
-			while (st_threads.any!(th => !th.thread.isDaemon)) {
+			while (st_threads[1 .. $].any!(th => !th.thread.isDaemon)) {
 				logDiagnostic("Main thread still waiting for other threads: %s",
-					st_threads.map!(t => t.thread.name ~ (t.isWorker ? " (worker thread)" : "")).join(", "));
+					st_threads[1 .. $].map!(t => t.thread.name ~ (t.isWorker ? " (worker thread)" : "")).join(", "));
 				st_threadShutdownCondition.wait();
 			}
 			logDiagnostic("Main thread exiting");
+		}
+
+		assert(idx >= 0, "No more threads registered");
+		if (idx >= 0) {
+			st_threads[idx] = st_threads[$-1];
+			st_threads.length--;
 		}
 	}
 
