@@ -922,6 +922,7 @@ private struct ReadWriteMutexState(bool INTERRUPTIBLE)
         /** Print out debug information during lock operations. */
         void printInfo(string OP, LockingIntent INTENT)() nothrow
         {
+        	import std.string;
             try
             {
                 import std.stdio;
