@@ -13,12 +13,14 @@ version(VibeLibevDriver)
 import vibe.core.core;
 import vibe.core.driver;
 import vibe.core.drivers.threadedfile;
+import vibe.core.drivers.timerqueue;
 import vibe.core.log;
 
 import deimos.ev;
 
 import std.algorithm : min;
 import std.array;
+import std.datetime;
 import std.encoding;
 import std.exception;
 import std.conv;
@@ -54,6 +56,10 @@ final class LibevDriver : EventDriver {
 		bool m_break = false;
 		static __gshared DriverCore ms_core;
 		static bool ms_alreadyDeinitialized;
+		ev_timer m_timer;
+		SysTime m_timerTimeout = SysTime.max;
+		TimerQueue!TimerInfo m_timers;
+		debug Thread m_ownerThread;
 	}
 
 	this(DriverCore core) nothrow
@@ -62,7 +68,10 @@ final class LibevDriver : EventDriver {
 		ms_core = core;
 		ev_set_allocator(&myrealloc);
 		m_loop = ev_loop_new(EVFLAG_AUTO);
+		ev_timer_init(&m_timer, &onTimerTimeout, 0, 0);
+		m_timer.data = cast(void*)this;
 		assert(m_loop !is null, "Failed to create libev loop");
+		debug m_ownerThread = Thread.getThis();
 		logInfo("Got libev backend: %d", ev_backend(m_loop));
 	}
 
@@ -183,39 +192,99 @@ final class LibevDriver : EventDriver {
 		assert(false);
 	}
 
-	size_t createTimer(void delegate() callback)
-	{
-		assert(false);
-	}
+	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
 
-	void acquireTimer(size_t timer_id)
-	{
-		assert(false);
-	}
-
+	void acquireTimer(size_t timer_id) { m_timers.getUserData(timer_id).refCount++; }
 	void releaseTimer(size_t timer_id)
 	{
-		assert(false);
+		debug assert(m_ownerThread is Thread.getThis());
+		if (!--m_timers.getUserData(timer_id).refCount)
+			m_timers.destroy(timer_id);
 	}
 
-	bool isTimerPending(size_t timer_id)
-	{
-		assert(false);
-	}
+	bool isTimerPending(size_t timer_id) { return m_timers.isPending(timer_id); }
 
 	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
 	{
-		assert(false);
+		debug assert(m_ownerThread is Thread.getThis());
+		if (!isTimerPending(timer_id)) acquireTimer(timer_id);
+		m_timers.schedule(timer_id, dur, periodic);
+		rescheduleTimerEvent(Clock.currTime(UTC()));
 	}
 
 	void stopTimer(size_t timer_id)
 	{
-		assert(false);
+		logTrace("Stopping timer %s", timer_id);
+		if (m_timers.isPending(timer_id)) {
+			m_timers.unschedule(timer_id);
+			releaseTimer(timer_id);
+		}
 	}
 
 	void waitTimer(size_t timer_id)
 	{
-		assert(false);
+		debug assert(m_ownerThread is Thread.getThis());
+		while (true) {
+			assert(!m_timers.isPeriodic(timer_id), "Cannot wait for a periodic timer.");
+			if (!m_timers.isPending(timer_id)) return;
+			auto data = &m_timers.getUserData(timer_id);
+			assert(data.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
+			data.owner = Task.getThis();
+			scope (exit) m_timers.getUserData(timer_id).owner = Task.init;
+			m_core.yieldForEvent();
+		}
+	}
+
+	private void processTimers()
+	{
+		if (!m_timers.anyPending) return;
+
+		logTrace("Processing due timers");
+		// process all timers that have expired up to now
+		auto now = Clock.currTime(UTC());
+		m_timers.consumeTimeouts(now, (timer, periodic, ref data) {
+			Task owner = data.owner;
+			auto callback = data.callback;
+
+			logTrace("Timer %s fired (%s/%s)", timer, owner != Task.init, callback !is null);
+
+			if (!periodic) releaseTimer(timer);
+
+			if (owner && owner.running) m_core.resumeTask(owner);
+			if (callback) runTask(callback);
+		});
+
+		rescheduleTimerEvent(now);
+	}
+
+	private void rescheduleTimerEvent(SysTime now)
+	{
+		auto next = m_timers.getFirstTimeout();
+		if (next == SysTime.max || next == m_timerTimeout) return;
+
+		m_timerTimeout = now;
+		auto dur = next - now;
+		assert(dur.total!"seconds"() <= int.max);
+		dur += 9.hnsecs(); // round up to the next usec to avoid premature timer events
+		ev_timer_stop(m_loop, &m_timer);
+		ev_timer_set(&m_timer, dur.total!"usecs" * 1e-6, 0);
+		ev_timer_start(m_loop, &m_timer);
+
+		logTrace("Rescheduled timer event for %s seconds", dur.total!"usecs" * 1e-6);
+	}
+
+	private static nothrow extern(C)
+	void onTimerTimeout(ev_loop_t *loop, ev_timer *w, int revents)
+	{
+		import std.encoding : sanitize;
+
+		logTrace("timer event fired");
+		auto drv = cast(LibevDriver)w.data;
+		try drv.processTimers();
+		catch (Exception e) {
+			logError("Failed to process timers: %s", e.msg);
+			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
+		}
 	}
 
 	private LibevTCPListener listenTCPGeneric(SOCKADDR)(int af, SOCKADDR* sock_addr, ushort port, void delegate(TCPConnection conn) connection_callback, TCPListenOptions options)
@@ -717,6 +786,13 @@ final class LibevTCPConnection : TCPConnection {
 	}
 }
 
+private struct TimerInfo {
+	size_t refCount = 1;
+	void delegate() callback;
+	Task owner;
+
+	this(void delegate() callback) { this.callback = callback; }
+}
 
 private extern(C){
 	void accept_cb(ev_loop_t *loop, ev_io *watcher, int revents)
