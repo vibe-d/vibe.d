@@ -17,7 +17,7 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 	}
 
 	//This method naively simulates access to a shared resource protected
-	//by a TaskReadWriteMutex. Read operations are performed recently (95%) 
+	//by a TaskReadWriteMutex. Read operations are performed frequently (95%) 
 	//and finish quickly (1ms wait time), while write operations occur rarely
 	//(5%) and take much longer to process (50ms wait time).
 	int getIndex()
