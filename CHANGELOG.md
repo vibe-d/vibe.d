@@ -1,10 +1,56 @@
 ﻿Changelog
 =========
 
+v0.7.26 - 2015-
+--------------------
+
+A large revamp of the REST interface generator was done in this release, which will enable faster future developments. The new JavaScript client generator is the first feature made possible by this. Apart from a good chunk of functional improvements in various areas, a notable change on the build level is that the `VibeCustomMain` version is no longer required for projects that implement their own `main` function.
+
+### Features and improvements ###
+
+- Compiles on 2.066.x up to 2.069.0
+- Removed deprecated symbols and deprecated those that were scheduled for deprecation
+- The `VibeCustomMain` version identifier is now a no-op and the new default behavior
+- Added `vibe.http.fileserver.sendFile`
+- Added a JavaScript REST client generator to `vibe.web.rest` - [pull #1209][issue1209]
+- Added translation support for plural forms in `vibe.web.i18n` (by Nathan Coe) - [pull #1290][issue1290]
+- Added ALPN support to the TLS module (by Etienne Cimon)
+- Added an optional [Botan](https://github.com/etcimon/botan) based TLS implementation (by Etienne Cimon)
+- Switched the `vibe.core.log` module to support allocation-less logging (range like interface)
+- Removed all intrinsic dynamic allocations in all built-in logger implementations - this makes it possible to log from within class finalizers
+- Added `Cookie.toString()` (by Etienne Cimon)
+- Added `MarkdownSettings.urlFilter` in order to be able to customize contained links
+- Made `Json.toString` `@safe` so that `Json` values can be logged using `std.experimental.logger`
+- Added `HTTPServerRequest.noLog`, usable to disable access logging for particular requests (by Márcio Martins) - [pull #1281][issue1281]
+- Added support for static array parameters in `vibe.web.web`
+- Added `LocalTaskSemaphore`, a single-threaded task-compatible semaphore implementation (by Etienne Cimon)
+- Added `ConnectionPool.maxConcurrency` (by Etienne Cimon)
+- Added `MongoCollection.findAndModifyExt`, which takes a parameter with custom options - [issue #911][issue911]
+- `TLSVersion.any` now only matches TLS 1.0 and up; SSL 3 is explicitly excluded (by Márcio Martins) - [pull #1280][issue1280]
+- Removed some bad dependencies to prepare for splitting up the library (dependency cycles between low-level and high-level packages)
+
+### Bug fixes ###
+
+- Fixes in the libasync driver (by Etienne Cimon)
+  - Various correctness and crash fixes
+  - Fixed handling files with non-ASCII characters on Windows (by Etienne Cimon) - [pull #1273][issue1273]
+  - Fixed timers with a zero timeout - [pull #1204][issue1204]
+- Missing HTML form parameters are now properly handled by `@errorDisplay` in the web interface generator
+- Fixed bogus Diet template dependencies caused by interpreting *all* lines that started with "extends ..." as extension directives
+
+[issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
+[issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
+[issue1209]: https://github.com/rejectedsoftware/vibe.d/issues/1209
+[issue1273]: https://github.com/rejectedsoftware/vibe.d/issues/1273
+[issue1280]: https://github.com/rejectedsoftware/vibe.d/issues/1280
+[issue1281]: https://github.com/rejectedsoftware/vibe.d/issues/1281
+[issue1290]: https://github.com/rejectedsoftware/vibe.d/issues/1290
+
+
 v0.7.25 - 2015-09-20
 --------------------
 
-Mostly a bugfix release, including a regression fix in the web form parser. This release also drops official support for the DMD 2.065.0 front end (released February 2014), although it may continue to work for some time.
+Mostly a bugfix release, including a regression fix in the web form parser, this release also drops official support for the DMD 2.065.0 front end (released February 2014). Most functionality will probably still stay functional on 2.065.0 for a while.
 
 ### Features and improvements ###
 
