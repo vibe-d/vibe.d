@@ -61,28 +61,29 @@ shared static this()
 
 	listenHTTP(settings, routes);
 
-	//Wait for a second for the server to be initialized properly and then start
-	//multiple concurrent threads that simultaneously start queries on the rest
-	//interface defined above.
-	setTimer(1.seconds, {
-		import std.parallelism : totalCPUs;
+	//Wait for a couple of seconds for the server to be initialized properly and then start
+	//multiple concurrent threads that simultaneously start queries on the rest interface defined above.
+	setTimer(5.seconds, {
+        import core.atomic;
 
-		for (int cpu = 0; cpu < totalCPUs; ++cpu)
-		{
-			auto val = async({
-					auto api = new RestInterfaceClient!MyBlockingRestInterface("http://127.0.0.1:8080");
+		scope(exit)
+			exitEventLoop(true);
 
-					for (int i = 0; i < 100000; ++i)
-						api.getIndex();
+        auto runningTasks = new shared(int)(0);
+        runWorkerTaskDist(function(typeof(runningTasks) runningTasks) {
+                atomicOp!"+="(*runningTasks,1);
+                scope(exit)
+                    atomicOp!"-="(*runningTasks,1);
 
-					//Since we can't join threads in a setTimer call,
-					//exit the event loop after the first thread has complete all
-					//of it's requests. In any other code, this is propably a bad idea.
-					scope(exit)
-						exitEventLoop(true);
+                auto api = new RestInterfaceClient!MyBlockingRestInterface("http://127.0.0.1:8080");
+                for (int i = 0; i < 1000; ++i)
+                    api.getIndex();
 
-					return 0;
-				});
-		}
+            }, runningTasks);
+         
+        //Join all worker tasks. Currently, it's not possible to join tasks from non-vibe threads.
+        do 
+            sleep(3.seconds);
+        while(atomicLoad(*runningTasks) > 0);        
 	});
 }
