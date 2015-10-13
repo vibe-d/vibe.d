@@ -257,6 +257,14 @@ Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 
 	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
+
+	// workaround for runWorkerTaskH to work when called outside of a task
+	if (caller == Task.init) {
+		Task ret;
+		runTask({ ret = runWorkerTaskH(func, args); }).join();
+		return ret;
+	}
+
 	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
@@ -277,6 +285,14 @@ Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS ar
 
 	alias PrivateTask = Typedef!(Task, Task.init, __PRETTY_FUNCTION__);
 	Task caller = Task.getThis();
+
+	// workaround for runWorkerTaskH to work when called outside of a task
+	if (caller == Task.init) {
+		Task ret;
+		runTask({ ret = runWorkerTaskH!method(object, args); }).join();
+		return ret;
+	}
+
 	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
@@ -378,6 +394,14 @@ unittest {
 		auto cls = new shared Class719;
 		runWorkerTaskH!(Class719.work)(cls, cast(ubyte)42);
 	}
+}
+
+unittest { // run and join worker task from outside of a task
+	__gshared int i = 0;
+	auto t = runWorkerTaskH({ sleep(5.msecs); i = 1; });
+	// FIXME: joining between threads not yet supported
+	//t.join();
+	//assert(i == 1);
 }
 
 private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS args)
@@ -1344,6 +1368,7 @@ shared static this()
 
 	auto thisthr = Thread.getThis();
 	thisthr.name = "Main";
+	assert(st_threads.length == 0, "Main thread not the first thread!?");
 	st_threads ~= ThreadContext(thisthr, false);
 
 	setupDriver();
@@ -1419,11 +1444,6 @@ static ~this()
 
 	synchronized (st_threadsMutex) {
 		auto idx = st_threads.countUntil!(c => c.thread is thisthr);
-		assert(idx >= 0, "No more threads registered");
-		if (idx >= 0) {
-			st_threads[idx] = st_threads[$-1];
-			st_threads.length--;
-		}
 
 		// if we are the main thread, wait for all others before terminating
 		is_main_thread = idx == 0;
@@ -1431,12 +1451,18 @@ static ~this()
 			atomicStore(st_term, true);
 			st_threadsSignal.emit();
 			// wait for all non-daemon threads to shut down
-			while (st_threads.any!(th => !th.thread.isDaemon)) {
+			while (st_threads[1 .. $].any!(th => !th.thread.isDaemon)) {
 				logDiagnostic("Main thread still waiting for other threads: %s",
-					st_threads.map!(t => t.thread.name ~ (t.isWorker ? " (worker thread)" : "")).join(", "));
+					st_threads[1 .. $].map!(t => t.thread.name ~ (t.isWorker ? " (worker thread)" : "")).join(", "));
 				st_threadShutdownCondition.wait();
 			}
 			logDiagnostic("Main thread exiting");
+		}
+
+		assert(idx >= 0, "No more threads registered");
+		if (idx >= 0) {
+			st_threads[idx] = st_threads[$-1];
+			st_threads.length--;
 		}
 	}
 
