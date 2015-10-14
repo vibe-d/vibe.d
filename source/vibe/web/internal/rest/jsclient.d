@@ -82,7 +82,7 @@ import vibe.web.rest;
 		// XHR setup
 		output.put("    var xhr = new XMLHttpRequest();\n");
 		output.formattedWrite("    xhr.open('%s', url, true);\n", route.method.to!string.toUpper);
-		static if (!is(RT == void)) {
+		static if (!is(ReturnType!FT == void)) {
 			output.put("    xhr.onload = function () { if (this.status >= 400) { if (on_error) on_error(JSON.parse(this.responseText)); else console.log(this.responseText); } else on_result(JSON.parse(this.responseText)); };\n");
 		}
 
