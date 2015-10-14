@@ -114,3 +114,22 @@ version (unittest) {
 		app.generateInterface!DUMMY(null, null);
 	}
 }
+
+unittest { // issue #1293
+	import std.algorithm : canFind, find;
+	import std.array : appender;
+	import vibe.inet.url;
+
+	interface I {
+		int test1();
+		void test2();
+	}
+	auto settings = new RestInterfaceSettings;
+	settings.baseURL = URL("http://localhost/");
+	auto app = appender!string();
+	app.generateInterface!I(null, settings);
+	assert(app.data.canFind("this.test1 = function(on_result, on_error)"));
+	assert(app.data.find("this.test1 = function").canFind("xhr.onload ="));
+	assert(app.data.canFind("this.test2 = function(on_error)"));
+	assert(!app.data.find("this.test2 = function").canFind("xhr.onload ="));
+}
