@@ -124,7 +124,6 @@ void log(LogLevel level, /*string mod = __MODULE__, string func = __FUNCTION__,*
 				auto rng = LogOutputRange(ll, file, line, level);
 				/*() @trusted {*/ rng.formattedWrite(fmt, args); //} (); // formattedWrite is not @safe at least up to 2.068.0
 				rng.finalize();
-				break;
 			}
 	} catch(Exception e) debug assert(false, e.msg);
 }
