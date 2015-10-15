@@ -515,12 +515,39 @@ class RestInterfaceSettings {
 
 
 /**
-	Makes item collection interfaces accessible using `opIndex`.
+	Models REST collection interfaces using natural D syntax.
+
+	Use this type as the return value of a REST interface getter method/property
+	to model a collection of objects. `opIndex` is used to make the individual
+	entries accessible using the `[index]` syntax. Nested collections are
+	supported.
+
+	The interface `I` needs to define a struct named `CollectionIndices`. The
+	members of this struct denote the types and names of the indexes that lead
+	to a particular resource. If a collection is nested within another
+	collection, the order of these members must match the nesting order
+	(outermost first).
+
+	The parameter list of all of `I`'s methods must begin with all but the last
+	entry in `CollectionIndices`. Methods that also match the last entry will be
+	considered methods of a collection item (`collection[index].method()`),
+	wheres all other methods will be considered methods of the collection
+	itself (`collection.method()`).
+
+	The name of the index parameters affects the default path of a method's
+	route. Normal parameter names will be subject to the same rules as usual
+	routes (see `registerRestInterface`) and will be mapped to query or form
+	parameters at the protocol level. Names starting with an underscore will
+	instead be mapped to path placeholders. For example,
+	`void getName(int __item_id)` will be mapped to a GET request to the
+	path `":item_id/name"`.
 */
 struct Collection(I)
 	if (is(I == interface))
 {
 	import std.typetuple;
+
+	static assert(is(I.CollectionIndices == struct), "Collection interfaces must define a CollectionIndices struct.");
 
 	alias Interface = I;
 	alias AllIDs = TypeTuple!(typeof(I.CollectionIndices.tupleof));
@@ -532,6 +559,14 @@ struct Collection(I)
 		ParentIDs m_parentIDs;
 	}
 
+	/** Constructs a new collection instance that is tied to a particular
+		parent collection entry.
+
+		Params:
+			api = The target interface imstance to be mapped as a collection
+			pids = The indexes of all collections in which this collection is
+				nested (if any)
+	*/
 	this(I api, ParentIDs pids)
 	{
 		m_interface = api;
@@ -564,6 +599,30 @@ struct Collection(I)
 		} ());
 	}
 
+	// Note: the example causes a recursive template instantiation if done as a documented unit test:
+	/** Accesses a single collection entry.
+
+		Example:
+		---
+		interface IMain {
+			@property Collection!IItem items();
+		}
+
+		interface IItem {
+			struct CollectionIndices {
+				int _itemID;
+			}
+
+			@method(HTTPMethod.GET)
+			string name(int _itemID);
+		}
+
+		void test(IMain main)
+		{
+			auto item_name = main.items[23].name; // equivalent to IItem.name(23)
+		}
+		---
+	*/
 	Item opIndex(ItemID id)
 	{
 		return Item(m_interface, m_parentIDs, id);
@@ -586,39 +645,125 @@ struct Collection(I)
 	} ());
 }
 
-///
+/// Model two nested collections using path based indexes
 unittest {
-
+	//
 	// API definition
-
+	//
 	interface SubItemAPI {
+		// Define the index path that leads to a sub item
 		struct CollectionIndices {
+			// The ID of the base item. This must match the definition in
+			// ItemAPI.CollectionIndices
+			string _item;
+			// The index if the sub item
+			int _index;
+		}
+
+		// GET /items/:item/subItems/length
+		@property int length(string _item);
+
+		// GET /items/:item/subItems/:index/squared_position
+		int getSquaredPosition(string _item, int _index);
+	}
+
+	interface ItemAPI {
+		// Define the index that identifies an item
+		struct CollectionIndices {
+			string _item;
+		}
+
+		// base path /items/:item/subItems
+		Collection!SubItemAPI subItems(string _item);
+
+		// GET /items/:item/name
+		@property string name(string _item);
+	}
+
+	interface API {
+		// a collection of items at the base path /items/
+		Collection!ItemAPI items();
+	}
+
+	//
+	// Local API implementation
+	//
+	class SubItemAPIImpl : SubItemAPI {
+		@property int length(string _item) { return 10; }
+
+		int getSquaredPosition(string _item, int _index) { return _index ^^ 2; }
+	}
+
+	class ItemAPIImpl : ItemAPI {
+		private SubItemAPIImpl m_subItems;
+
+		this() { m_subItems = new SubItemAPIImpl; }
+
+		Collection!SubItemAPI subItems(string _item) { return Collection!SubItemAPI(m_subItems, _item); }
+
+		string name(string _item) { return _item; }
+	}
+
+	class APIImpl : API {
+		private ItemAPIImpl m_items;
+
+		this() { m_items = new ItemAPIImpl; }
+
+		Collection!ItemAPI items() { return Collection!ItemAPI(m_items); }
+	}
+
+	//
+	// Resulting API usage
+	//
+	API api = new APIImpl; // A RestInterfaceClient!API would work just as well
+	assert(api.items["foo"].name == "foo");
+	assert(api.items["foo"].subItems.length == 10);
+	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
+}
+
+/// Model two nested collections using normal query parameters as indexes
+unittest {
+	//
+	// API definition
+	//
+	interface SubItemAPI {
+		// Define the index path that leads to a sub item
+		struct CollectionIndices {
+			// The ID of the base item. This must match the definition in
+			// ItemAPI.CollectionIndices
 			string item;
+			// The index if the sub item
 			int index;
 		}
 
+		// GET /items/subItems/length?item=...
 		@property int length(string item);
 
+		// GET /items/subItems/squared_position?item=...&index=...
 		int getSquaredPosition(string item, int index);
 	}
 
 	interface ItemAPI {
+		// Define the index that identifies an item
 		struct CollectionIndices {
 			string item;
 		}
 
+		// base path /items/subItems?item=...
 		Collection!SubItemAPI subItems(string item);
 
-		string name(string item);
+		// GET /items/name?item=...
+		@property string name(string item);
 	}
 
 	interface API {
+		// a collection of items at the base path /items/
 		Collection!ItemAPI items();
 	}
 
-
+	//
 	// Local API implementation
-
+	//
 	class SubItemAPIImpl : SubItemAPI {
 		@property int length(string item) { return 10; }
 
@@ -643,9 +788,10 @@ unittest {
 		Collection!ItemAPI items() { return Collection!ItemAPI(m_items); }
 	}
 
-	// API usage
-
-	API api = new APIImpl;
+	//
+	// Resulting API usage
+	//
+	API api = new APIImpl; // A RestInterfaceClient!API would work just as well
 	assert(api.items["foo"].name == "foo");
 	assert(api.items["foo"].subItems.length == 10);
 	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
