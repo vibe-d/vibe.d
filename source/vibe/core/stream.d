@@ -1,7 +1,11 @@
 /**
 	Generic stream interface used by several stream-like classes.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	This module defines the basic stream primitives. For concrete stream types, take a look at the
+	`vibe.stream` package. The `vibe.stream.operations` module contains additional high-level
+	operations on streams, such as reading streams by line or as a whole.
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
