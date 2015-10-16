@@ -1,11 +1,226 @@
 /**
-	Automatic REST interface and client code generation facilities.
-
-	Copyright: © 2012-2013 RejectedSoftware e.K.
-	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
-	Authors: Sönke Ludwig, Михаил Страшун
-*/
+ * Module to work with RESTful API, from both server and client side.
+ *
+ * This modules aims to provide a typesafe way to deal with REST API.
+ * As they are quite a lot of similarities between them, this module use
+ * D interfaces as the way to represent REST API.
+ * While REST is not HTTP specific, the vast majority of use cases rely on it,
+ * and so does this module.
+ *
+ * This module, while being usable and more convenient from both client and
+ * server side, is also usable solely for its client or server implementation.
+ * The following documentation will explain in details how this module work,
+ * without any specifics about the client or server side.
+ * Since each implementation only require the use of one symbol from here,
+ * specifics are explained on those. You can thus find server only
+ * documentation on $(D registerRestInterface) and client only documentation
+ * on $(D RestInterfaceClient).
+ *
+ * There are few advantages in using this module over manual handling:
+ * - Automatic client generation: once the interface is defined, it will be used
+ *   both by the client side and the server side, which means there is no way
+ *   to have a mismatch between your client and server code.
+ * - Automatic route generation for the server: one of the job of the
+ *   REST module is to generate the route for your API.
+ * - Automatic serialization / deserialization: Instead of doing your own
+ *   serialization and deserialization, you just design normal member functions
+ *   and let us take care of the heavy lifting. You still have the possibility
+ *   to send direct JSON input by defining a parameter as Json, or pure string
+ *   by returning a string.
+ * - Higher level representation integrated into D: Some concepts of the
+ *   interfaces, such as optional parameter or header return values feat
+ *   nicely in D by the use of `std.typecons.Nullable` and `out` parameters.
+ *
+ *
+ * The most basic interface that can be defined is as follow:
+ * ----
+ * @path("/api/")
+ * interface APIRoot {
+ *     string get();
+ * }
+ * ----
+ *
+ * It defines an API that will be constitued of a single route (see below),
+ * 'GET /api/', so if your API sits on 'http://api.example.com', performing
+ * a ' GET http://api.example.com/foo' will call your foo method, and the
+ * returned string will be passed verbatim in the response body.
+ *
+ *
+ * Route_generation:
+ * A route is a combination of an HTTP method, GET, POST, PUT, DELETE,
+ * PATCH, HEAD, OPTIONS being the most common one, but we supports any method
+ * defined in `vibe.http.common.HTTPMethod`.
+ * For each public method of the interface, a route, and only one route,
+ * has to be set. It can be done explicitly through the use of
+ * two user defined attributes, `path` and `method`.
+ *
+ * Example of an explicit route:
+ * ----
+ * @path("/api/")
+ * interface APIRoot {
+ *     // Here we use a POST method
+ *     @method(HTTPMethod.POST)
+ *	   // Our method will located at '/api/foo'
+ *	   @path("/foo")
+ * }
+ * ----
+ *
+ * When you specify an explicit path, you have full control over the route.
+ * For trivial cases such as the one shown above, it might however not be
+ * necessary, as will be shown below, but there's one case where it is:
+ * path entry.
+ *
+ * Path entries are path of the form: `@path("/users/:name")`. They are useful
+ * when one of the component of the path is a parameter to the API.
+ *
+ * ----
+ * @path("/users/")
+ * interface UsersAPI {
+ *     @path(":name")
+ *     Json getUserByName(string _name);
+ * }
+ * ----
+ *
+ * Note that the parameter is called '_name'. It is a requirement that the
+ * parameter have the same name as the path entry, with the leading ':' being
+ * replaced by an underscore. All path entries must be mapped to a parameter,
+ * and if they're not, you will get an error at compile time that'll tell you
+ * which parameter is missing on which method of which interface.
+ *
+ *
+ * Prefix:
+ * When there's no path entry involved and you do not want to fiddle with the
+ * route, you can rely on the default behaviour of the generator, which is to
+ * look for a prefix in the method name, and use the rest of the method name
+ * as the path definition.
+ * For example, a method called `getfoo` will automatically be mapped to a
+ * 'GET /foo' request. The prefix used are as follow:
+ *
+ * $(TABLE
+ *      $(TR $(TH Prefix) $(TH HTTP verb))
+ *      $(TR $(TD get)	  $(TD GET))
+ *		$(TR $(TD query)  $(TD GET))
+ *		$(TR $(TD set)    $(TD PUT))
+ *		$(TR $(TD put)    $(TD PUT))
+ *		$(TR $(TD update) $(TD PATCH))
+ *		$(TR $(TD patch)  $(TD PATCH))
+ *		$(TR $(TD add)    $(TD POST))
+ *		$(TR $(TD create) $(TD POST))
+ *		$(TR $(TD post)   $(TD POST))
+ * )
+ *
+ * Member functions that have no valid prefix default as 'POST'.
+ * A function can be partly explicit, and partly rely on the default,
+ * for example:
+ *
+ * ----
+ * @method(HTTPMethod.POST)
+ * void getfoo();
+ * ----
+ *
+ * In the above case, as 'POST' is set explicitly, the route would be
+ * 'POST /getfoo', as the prefix 'get' won't be trimmed. On the other hand,
+ * if the declaration had been:
+ *
+ * ----
+ * @path("/bar")
+ * void getfoo();
+ * ----
+ *
+ * The route generated would be 'GET /bar', as the prefix would be recognized.
+ *
+ *
+ * Property:
+ * `@property` function have a special mapping: property getters
+ * (which have a return type) are mapped as GET function, and property setters
+ * (where the return type is void) are mapped as POST. The is no prefix
+ * trimmering on property function.
+ *
+ *
+ * MethodStyle:
+ * Automatic path matching behave according to a 'MethodStyle'.
+ * The default style is `MethodStyle.lowerUnderscored`, so that a function
+ * named `getFooBar` will match the route 'GET /foo_bar'.
+ * See the `vibe.web.common.MethodStyle` enum for more information about
+ * which styles are available.
+ *
+ *
+ * Parameters_passing:
+ * By default, parameter are passed via different methods depending on the type
+ * of request. For POST and PATCH requests, they are currently passed via
+ * the body as a JSON object, while for GET and PUT they are passed via
+ * the query string.
+ * However, if you have to rely on a certain parameter passing convetion, for
+ * example for interoperability with an existing API, there exists various way
+ * to override / force them:
+ * - @headerParam("name", "field"): Applied on a function, it will serialize
+ *   the parameter named 'name' to the headers, on the field named'field'.
+ *   It is the only way to pass a parameter via the headers.
+ *   If the parameter is `ref`, it will be send and returned. If the
+ *   parameter is `out`, it will only be returned.
+ * - @queryParam("name", "field"): Applied on a function, it will serialize
+ *   the parameter named 'name' to the query string, on the field named 'field'.
+ * - @bodyParam("name", "field"): Applied on a function, it will serialize
+ *   the parameter named 'name' to the as a field named 'field' of a Json object
+ *   which will be passed as the body argument.
+ *
+ * ----
+ * @path("/api/")
+ * interface APIRoot {
+ *     // GET /api/header with 'Authorization' set
+ *	   @headerParam("param", "Authorization")
+ *     string getHeader(string param);
+ *
+ *     // GET /api/foo?param=...
+ *     @queryParam("param", "param")
+ *     string getFoo(int param);
+ *
+ *     // GET /api/body with body set to { "myFoo": {...} }
+ *     @bodyParam("myFoo", "parameter")
+ *     string getBody(FooType myFoo);
+ * }
+ * ----
+ *
+ *
+ * Default_values:
+ * Default values behave as expected. If you set one on the interface,
+ * you won't need to provide an explicit value when calling from the client code,
+ * and if no value is provided via the request, the default will be used.
+ * Note however that they can suffer from DMD bug #14369 (Vibe.d: #1043).
+ *
+ *
+ * Aggregates:
+ * When passing aggregates as parameters, those are serialized differently
+ * depending on the way they are passed. Unless you are interfacing with
+ * another API, you probably don't need to care about those details.
+ * The rules are the following:
+ * - If the parameter is passed via the headers or the query, either implicitly
+ *   or explicitly, the aggregate is viewed as a collection of single fields.
+ *   Each member is serialized following the usual rules: the name of a field
+ *   is the (possibly empty) field name of `@headerParam` or `@queryParam`,
+ *   to which the field name, or the value given via the `@name` UDA, if present,
+ *   is used.
+ * - If the parameter is passed via the body, the datastructure is serialized
+ *   as a Json sub-object of the root one. Its field name is either the one
+ *   given via `@bodyParam` or the parameter name.
+ *
+ * Server:
+ * To see how to implement the server side in detail, jump to
+ * $(D registerRestInterface) which is the sole function needed.
+ *
+ *
+ * Client:
+ * To see how to implement the client side in detail, jump to
+ * $(RestInterfaceClient)'s documentation.
+ *
+ *
+ * Copyright: © 2012-2015 RejectedSoftware e.K.
+ * License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
+ * Authors: Sönke Ludwig, Михаил Страшун, Mathias 'Geod24' Lang
+ */
 module vibe.web.rest;
+
+// TODO: sub-interfaces
 
 public import vibe.internal.meta.funcattr : before, after;
 public import vibe.web.common;
@@ -26,43 +241,77 @@ import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
 /**
-	Registers a REST interface and connects it the the given instance.
-
-	Each method of the given class instance is mapped to the corresponing HTTP
-	verb. Property methods are mapped to GET/PUT and all other methods are
-	mapped according to their prefix verb. If the method has no known prefix,
-	POST is used.
-
-	The following table lists the mappings from prefix verb to HTTP verb:
-
-	$(TABLE
-		$(TR $(TH HTTP method) $(TH Recognized prefixes))
-		$(TR $(TD GET)	  $(TD get, query))
-		$(TR $(TD PUT)    $(TD set, put))
-		$(TR $(TD POST)   $(TD add, create, post))
-		$(TR $(TD DELETE) $(TD remove, erase, delete))
-		$(TR $(TD PATCH)  $(TD update, patch))
-	)
-
-	If a method has its first parameter named 'id', it will be mapped to ':id/method' and
-	'id' is expected to be part of the URL instead of a JSON request. Parameters with default
-	values will be optional in the corresponding JSON request.
-
-	Any interface that you return from a getter will be made available with the
-	base url and its name appended.
-
-	Params:
-		router = The HTTP router on which the interface will be registered
-		instance = Class instance to use for the REST mapping - Note that TImpl
-			must either be an interface type, or a class which derives from a
-			single interface
-		settings = Additional settings, such as the $(D MethodStyle), or the prefix.
-			See $(D RestInterfaceSettings) for more details.
-
-	See_Also:
-		$(D RestInterfaceClient) class for a seamless way to access such a generated API
-
-*/
+ * Registers a server matching a REST interface.
+ *
+ * Servers are implementation of an interface. Consequently, they are classes
+ * that implement an interface that obey the rule defined in this module's
+ * documentation.
+ *
+ * A basic 'hello world' API can be defined as follow:
+ * ----
+ * @path("/api/")
+ * interface APIRoot {
+ *     string get();
+ * }
+ *
+ * class API : APIRoot {
+ *     override string get() { return "Hello, World"; }
+ * }
+ *
+ * shared static this() {
+ *     auto settings = new HTTPServerSettings;
+ *     settings.port = 8080;
+ *     settings.bindAddresses = ["::1", "127.0.0.1"];
+ *     auto router = new URLRouter;
+ *
+ *     // -- Where the magic happens --
+ *     router.registerRestInterface(new API());
+ *     // Now you just need to GET /api/ and you'll get 'Hello, World'.
+ *     listenHTTP(settings, router);
+ * }
+ * ----
+ *
+ * As you can see, REST's logic can be written inside the object without any
+ * concern for HTTP matters.
+ *
+ * Return_value:
+ * By default, all method that return a value send a 200 code, or 204 if no
+ * value is being returned for the body.
+ *
+ * Non-success:
+ * In the case where you want to return an error code, you can throw an
+ * `HTTPStatusException` from within your business code. It will be turned into
+ * a Json object that'll have a `statusMessage` with the exception message.
+ * In the case of other exception being thrown, a Json object containing a
+ * `statusMessage` set to the exception message and a `statusDebugMessage`
+ * set to the complete string representation of the `Exception` (== `toString`)
+ * will be returned, with an error code of 500.
+ *
+ *
+ * If you wish to return data, you can either use the body through the return
+ * value, or `ref` / `out` parameters for headers, as described in the
+ * general docs.
+ * In addition, in case of non-success, it is guaranteed that non optional
+ * headers and optional headers that are set will be returned to the caller,
+ * hence scheme such as basic auth can be implemented without trouble.
+ *
+ * Template_Params:
+ *     TImpl = Either an interface type, or a class that derives from an
+ *		       interface. If the class derives from multiple interfaces,
+ *             the first one will be assumed to be the API description
+ *             and a warning will be issued.
+ *
+ * Params:
+ *     router   = The HTTP router on which the interface will be registered
+ *     instance = Server instance to use
+ *     settings = Additional settings, such as the $(D MethodStyle),
+ *                or the prefix.
+ *                See $(D RestInterfaceSettings) for more details.
+ *
+ * See_Also:
+ * $(D RestInterfaceClient) class for a seamless way to access such a
+ * generated API
+ */
 URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
 	import std.algorithm : filter, map;
@@ -622,7 +871,7 @@ private string generateRestClientMethods(I)()
 	import std.string : format;
 
 	alias Info = RestInterface!I;
-	
+
 	string ret = q{
 		import vibe.internal.meta.codegen : CloneFunction;
 	};
