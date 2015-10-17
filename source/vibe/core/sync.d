@@ -536,10 +536,13 @@ private void runMutexUnitTests(M)()
 		Because this class is annotated nothrow, it cannot be interrupted
 		using $(D vibe.core.task.Task.interrupt()). The corresponding
 		$(D InterruptException) will be deferred until the next blocking
-		operation yields the event loop.
+		operation yields to the event loop.
 
 		Use $(D InterruptibleTaskCondition) as an alternative that can be
 		interrupted.
+
+		Note that it is generally not safe to use a `TaskCondition` together with an
+		interruptible mutex type.
 
 	See_Also: InterruptibleTaskCondition
 */
@@ -554,15 +557,55 @@ class TaskCondition : core.sync.condition.Condition {
 	override void notifyAll() { m_impl.notifyAll(); }
 }
 
+/** This example shows the typical usage pattern using a `while` loop to make
+	sure that the final condition is reached.
+*/
+unittest {
+	import vibe.core.core;
+
+	__gshared Mutex mutex;
+	__gshared TaskCondition condition;
+	__gshared int workers_still_running = 0;
+
+	// setup the task condition
+	mutex = new Mutex;
+	condition = new TaskCondition(mutex);
+
+	// start up the workers and count how many are running
+	foreach (i; 0 .. 4) {
+		workers_still_running++;
+		runWorkerTask({
+			// simulate some work
+			sleep(100.msecs);
+
+			// notify the waiter that we're finished
+			synchronized (mutex)
+				workers_still_running--;
+			condition.notify();
+		});
+	}
+
+	// wait until all tasks have decremented the counter back to zero
+	synchronized (mutex) {
+		while (workers_still_running > 0)
+			condition.wait();
+	}
+}
+
 
 /**
-	Alternative to $(D TaskCondition) that supports interruption.
+	Alternative to `TaskCondition` that supports interruption.
 
-	This class supports the use of $(D vibe.core.task.Task.interrupt()) while
-	waiting in the $(D lock()) method. However, because the interface is not
-	$(D nothrow), it cannot be used as an object monitor.
+	This class supports the use of `vibe.core.task.Task.interrupt()` while
+	waiting in the `wait()` method.
 
-	See_Also: $(D TaskCondition)
+	See `TaskCondition` for an example.
+
+	Notice:
+		Note that it is generally not safe to use an
+		`InterruptibleTaskCondition` together with an interruptible mutex type.
+
+	See_Also: `TaskCondition`
 */
 final class InterruptibleTaskCondition {
 	private TaskConditionImpl!(true, Lockable) m_impl;
