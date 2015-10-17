@@ -374,7 +374,7 @@ final class LibevManualEvent : ManualEvent {
 	void acquire()
 	{
 		auto task = Task.getThis();
-		auto thread = task.thread;
+		auto thread = task == Task() ? Thread.getThis() : task.thread;
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
 				auto slot = new ThreadSlot;
@@ -385,13 +385,16 @@ final class LibevManualEvent : ManualEvent {
 				slot.signal.data = cast(void*)this;
 			}
 			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
-			m_waiters[thread].tasks[task] = true;
+			if (task != Task.init)
+				m_waiters[thread].tasks[task] = true;
 		}
 	}
 
 	void release()
 	{
 		auto self = Task.getThis();
+		if (self == Task.init) return;
+
 		synchronized (m_mutex) {
 			assert(self.thread in m_waiters && self in m_waiters[self.thread].tasks,
 				"Releasing non-acquired signal.");
@@ -402,6 +405,8 @@ final class LibevManualEvent : ManualEvent {
 	bool amOwner()
 	{
 		auto self = Task.getThis();
+		if (self == Task.init) return false;
+
 		synchronized (m_mutex) {
 			if (self.thread !in m_waiters) return false;
 			return (self in m_waiters[self.thread].tasks) !is null;
@@ -441,7 +446,7 @@ final class LibevManualEvent : ManualEvent {
 
 			bool[Task] lst;
 			synchronized (sig.m_mutex) {
-				assert(thread in sig.m_waiters);
+				assert(thread in sig.m_waiters, "Thread \""~thread.name~"\" not in waiter list, yet received a signal?");
 				lst = sig.m_waiters[thread].tasks.dup;
 			}
 
