@@ -41,7 +41,9 @@ import vibe.http.websockets;
 	route. Property methods are mapped to GET/PUT and all other methods are
 	mapped according to their prefix verb. If the method has no known prefix,
 	POST is used. The rest of the name is mapped to the path of the route
-	according to the given `method_style`.
+	according to the given `method_style`. Note that the prefix word must be
+	all-lowercase and is delimited by either an upper case character, a
+	non-alphabetic character, or the end of the string.
 
 	The following table lists the mappings from prefix verb to HTTP verb:
 

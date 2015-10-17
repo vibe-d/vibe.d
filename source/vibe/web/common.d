@@ -168,7 +168,7 @@ auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 	];
 
 	enum name = __traits(identifier, Func);
-	alias T = typeof(&Func) ;
+	alias T = typeof(&Func);
 
 	Nullable!HTTPMethod udmethod;
 	Nullable!string udurl;
@@ -209,7 +209,8 @@ auto extractHTTPMethodAndName(alias Func, bool indexSpecialCase)()
 	else {
 		foreach (method, prefixes; httpMethodPrefixes) {
 			foreach (prefix; prefixes) {
-				if (name.startsWith(prefix)) {
+				import std.uni : isLower;
+				if (name.startsWith(prefix) && (name.length == prefix.length || !name[prefix.length].isLower)) {
 					string tmp = name[prefix.length..$];
 					return udaOverride(method, tmp.length ? tmp : "/");
 				}
@@ -240,6 +241,10 @@ unittest
 		string mattersnot();
 
 		string get();
+
+		string posts();
+
+		string patches();
 	}
 
 	enum ret1 = extractHTTPMethodAndName!(Sample.getInfo, false,);
@@ -266,6 +271,14 @@ unittest
 	static assert (ret6.hadPathUDA == false);
 	static assert (ret6.method == HTTPMethod.GET);
 	static assert (ret6.url == "/");
+	enum ret7 = extractHTTPMethodAndName!(Sample.posts, false);
+	static assert(ret7.hadPathUDA == false);
+	static assert(ret7.method == HTTPMethod.POST);
+	static assert(ret7.url == "posts");
+	enum ret8 = extractHTTPMethodAndName!(Sample.patches, false);
+	static assert(ret8.hadPathUDA == false);
+	static assert(ret8.method == HTTPMethod.POST);
+	static assert(ret8.url == "patches");
 }
 
 
