@@ -551,8 +551,15 @@ struct Collection(I)
 
 	alias Interface = I;
 	alias AllIDs = TypeTuple!(typeof(I.CollectionIndices.tupleof));
+	static if (__VERSION__ >= 2067)
+		alias AllIDNames = FieldNameTuple!(I.CollectionIndices);
+	else
+		alias AllIDNames = TypeTuple!(__traits(allMembers, I.CollectionIndices));
+	static assert(AllIDs.length >= 1, I.stringof~".CollectionIndices must define at least one member.");
+	static assert(AllIDNames.length == AllIDs.length);
 	alias ItemID = AllIDs[$-1];
 	alias ParentIDs = AllIDs[0 .. $-1];
+	alias ParentIDNames = AllIDNames[0 .. $-1];
 
 	private {
 		I m_interface;
@@ -591,7 +598,7 @@ struct Collection(I)
 			foreach (m; __traits(allMembers, I)) {
 				foreach (ovrld; MemberFunctionsTuple!(I, m)) {
 					alias PT = ParameterTypeTuple!ovrld;
-					static if (is(PT[0 .. AllIDs.length] == AllIDs))
+					static if (matchesAllIDs!ovrld)
 						ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_id, args); }\n";
 				}
 			}
@@ -634,8 +641,8 @@ struct Collection(I)
 		foreach (m; __traits(allMembers, I)) {
 			foreach (ovrld; MemberFunctionsTuple!(I, m)) {
 				alias PT = ParameterTypeTuple!ovrld;
-				static if (!is(PT[0 .. AllIDs.length] == AllIDs)) {
-					static assert(is(PT[0 .. ParentIDs.length] == ParentIDs),
+				static if (!matchesAllIDs!ovrld) {
+					static assert(matchesParentIDs!ovrld,
 						"Collection methods must take all parent IDs as the first parameters."~PT.stringof~"   "~ParentIDs.stringof);
 					ret ~= "auto "~m~"(ARGS...)(ARGS args) { return m_interface."~m~"(m_parentIDs, args); }\n";
 				}
@@ -643,6 +650,23 @@ struct Collection(I)
 		}
 		return ret;
 	} ());
+
+	private template matchesParentIDs(alias func) {
+		static if (is(ParameterTypeTuple!func[0 .. ParentIDs.length] == ParentIDs)) {
+			static if (ParentIDNames.length == 0) enum matchesParentIDs = true;
+			else static if (ParameterIdentifierTuple!func[0 .. ParentIDNames.length] == ParentIDNames)
+				enum matchesParentIDs = true;
+			else enum matchesParentIDs = false;
+		} else enum matchesParentIDs = false;
+	}
+
+	private template matchesAllIDs(alias func) {
+		static if (is(ParameterTypeTuple!func[0 .. AllIDs.length] == AllIDs)) {
+			static if (ParameterIdentifierTuple!func[0 .. AllIDNames.length] == AllIDNames)
+				enum matchesAllIDs = true;
+			else enum matchesAllIDs = false;
+		} else enum matchesAllIDs = false;
+	}
 }
 
 /// Model two nested collections using path based indexes
@@ -719,6 +743,30 @@ unittest {
 	assert(api.items["foo"].name == "foo");
 	assert(api.items["foo"].subItems.length == 10);
 	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
+}
+
+unittest {
+	interface I {
+		struct CollectionIndices {
+			int id1;
+			string id2;
+		}
+
+		void a(int id1, string id2);
+		void b(int id1, int id2);
+		void c(int id1, string p);
+		void d(int id1, string id2, int p);
+		void e(int id1, int id2, int p);
+		void f(int id1, string p, int q);
+	}
+
+	Collection!I coll;
+	static assert(is(typeof(coll["x"].a()) == void));
+	static assert(is(typeof(coll.b(42)) == void));
+	static assert(is(typeof(coll.c("foo")) == void));
+	static assert(is(typeof(coll["x"].d(42)) == void));
+	static assert(is(typeof(coll.e(42, 42)) == void));
+	static assert(is(typeof(coll.f("foo", 42)) == void));
 }
 
 /// Model two nested collections using normal query parameters as indexes
