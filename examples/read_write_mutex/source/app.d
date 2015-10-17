@@ -49,8 +49,18 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 	}
 }
 
+
+__gshared {
+    TaskMutex s_taskMutex;
+    TaskCondition s_taskCondition;
+    int s_runningTasks = 0;
+}
+
 shared static this()
 {
+    s_taskMutex = new TaskMutex();
+    s_taskCondition = new TaskCondition(s_taskMutex);
+
 	auto routes = new URLRouter;
 	registerRestInterface(routes, new RestInterfaceImplementation());
 
@@ -65,25 +75,34 @@ shared static this()
 	//multiple concurrent threads that simultaneously start queries on the rest interface defined above.
 	setTimer(5.seconds, {
         import core.atomic;
+        import core.thread; 
+        import std.parallelism;
+        import std.stdio;
 
 		scope(exit)
 			exitEventLoop(true);
 
-        auto runningTasks = new shared(int)(0);
-        runWorkerTaskDist(function(typeof(runningTasks) runningTasks) {
-                atomicOp!"+="(*runningTasks,1);
-                scope(exit)
-                    atomicOp!"-="(*runningTasks,1);
+        //Start multiple tasks performing requests on "http://localhost:8080/" concurrently
+        runWorkerTaskDist({
 
+                //Keep track of the number of currently running tasks
+                synchronized(s_taskMutex) s_runningTasks += 1;
+                scope(exit) {
+                    synchronized(s_taskMutex) s_runningTasks -= 1;
+                    s_taskCondition.notifyAll();
+                }
+
+                //Perform a couple of request to the rest interface
                 auto api = new RestInterfaceClient!MyBlockingRestInterface("http://127.0.0.1:8080");
                 for (int i = 0; i < 1000; ++i)
                     api.getIndex();
 
-            }, runningTasks);
+            });
          
-        //Join all worker tasks. Currently, it's not possible to join tasks from non-vibe threads.
-        do 
-            sleep(3.seconds);
-        while(atomicLoad(*runningTasks) > 0);        
+        //Wait for all tasks to complete
+        synchronized(s_taskMutex) {
+            do s_taskCondition.wait();
+            while(s_runningTasks > 0);
+        }
 	});
 }
