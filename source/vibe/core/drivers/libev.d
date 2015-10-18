@@ -1,7 +1,15 @@
 /**
-	libev based driver implementation
+	Driver implementation for the libev library
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Libev is a high-performance C library modeled after libevent.
+	Note that this module is not well tested and not fully implemented.
+	Operation such as TCP client and directory watcher are assert(0).
+
+	See_Also:
+		`vibe.core.driver` = interface definition
+		http://software.schmorp.de/pkg/libev.html = Official website
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
