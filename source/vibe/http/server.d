@@ -634,7 +634,7 @@ final class HTTPServerRequest : HTTPRequest {
 			Remarks:
 				This field is only set if HTTPServerOption.parseJsonBody is set.
 
-				A JSON request must have the Content-Type "application/json".
+				A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
 		*/
 		Json json;
 
@@ -1692,7 +1692,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		}
 
 		if (settings.options & HTTPServerOption.parseJsonBody) {
-			if (icmp2(req.contentType, "application/json") == 0) {
+			if (icmp2(req.contentType, "application/json") == 0 || icmp2(req.contentType, "application/vnd.api+json") == 0 ) {
 				auto bodyStr = cast(string)req.bodyReader.readAll();
 				if (!bodyStr.empty) req.json = parseJson(bodyStr);
 			}
