@@ -1,7 +1,14 @@
 /**
-	Uses libasync
+	Driver implementation for the libasync library
 
-	Copyright: © 2014 RejectedSoftware e.K., GlobecSys Inc
+	Libasync is an asynchronous library completely written in D.
+
+	See_Also:
+		`vibe.core.driver` = interface definition
+		https://github.com/etcimon/libasync = Github repository
+
+
+	Copyright: © 2014-2015 RejectedSoftware e.K., GlobecSys Inc
 	Authors: Sönke Ludwig, Etienne Cimon
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */

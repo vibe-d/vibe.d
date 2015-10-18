@@ -1,7 +1,10 @@
 /**
-	Win32 driver implementation using WSAAsyncSelect
+	Driver implementation for Win32 using WSAAsyncSelect
 
-	Copyright: © 2012-2014 Sönke Ludwig
+	See_Also:
+		`vibe.core.driver` = interface definition
+
+	Copyright: © 2012-2015 Sönke Ludwig
 	Authors: Sönke Ludwig, Leonid Kramer
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */

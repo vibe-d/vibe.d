@@ -1,7 +1,9 @@
 /**
-	libevent based driver
+	TCP side of  the libevent driver
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	For the base driver implementation, see `vibe.core.drivers.libevent2`.
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */

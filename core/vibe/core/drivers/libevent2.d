@@ -1,7 +1,15 @@
 /**
-	libevent based driver
+	Driver implementation for the libevent library
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Libevent is a well-established event notification library.
+	It is currently the default driver for Vibe.d
+
+	See_Also:
+		`vibe.core.driver` = interface definition
+		http://libevent.org/ = Official website
+		`vibe.core.drivers.libevent2_tcp` = Implementation of TCPConnection and TCPListener
+
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */

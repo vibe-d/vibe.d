@@ -1,5 +1,11 @@
 /**
-	Contains interfaces and enums for evented I/O drivers.
+	Contains interfaces and enums for asynchronous drivers.
+
+	At the lowest level of Vibe.d sits a library which handle all the
+	asynchronous I/O operations.
+	There are currently 3 supported I/O backend: libasync, libevent and libev.
+	This module define the interface such a library must conform with
+	to work with Vibe.d
 
 	Copyright: © 2012-2015 RejectedSoftware e.K.
 	Authors: Sönke Ludwig
