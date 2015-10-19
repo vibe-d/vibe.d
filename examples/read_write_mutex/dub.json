@@ -1,0 +1,12 @@
+﻿{
+	"name": "rwmutex-example",
+	"description": "Randomly locks a TaskReadWriteMutex for reading or writing and logs the according operations and it's state.",
+	"authors": [ "Manuel Frischknecht" ],
+	"dependencies": {
+		"vibe-d": {"version": "~master", "path": "../../"}
+	},
+	"versions": [
+		"VibeDefaultMain",
+		"RWMutexPrint",
+	],
+}
