@@ -1320,7 +1320,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		if (m_buffer) {
 			ubyte[] buf = m_buffer[m_slice.length .. $];
 			uint ret = conn.recv(buf);
-			//logTrace("Received: %s", buf[0 .. ret]);
+			logTrace("Received: %s", buf[0 .. ret]);
 			// check for overflow
 			if (ret == buf.length) {
 				logTrace("Overflow detected, revert to ring buffer");
@@ -1358,17 +1358,28 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		assert(!m_slice);
 
 		logTrace("OnRead with %s", m_readBuffer.freeSpace);
-
-
+		
 		while( m_readBuffer.freeSpace > 0 ) {
 			ubyte[] dst = m_readBuffer.peekDst();
 			assert(dst.length <= int.max);
 			logTrace("Try to read up to bytes: %s", dst.length);
-			uint ret = conn.recv(dst);
-			if( ret > 0 ){
-				logTrace("received bytes: %s", ret);
-				m_readBuffer.putN(ret);
-				if (ret < dst.length) { // the kernel's buffer is too empty...
+			bool read_more;
+			uint total_read;
+			do
+			{
+				uint ret = conn.recv(dst);
+				total_read += ret;
+				read_more = ret == m_readBuffer.capacity;
+				if (read_more)
+				{
+					m_readBuffer.capacity = m_readBuffer.capacity*2;
+					dst = m_readBuffer.peekDst();
+				}
+			} while( read_more );
+			if( total_read > 0 ){
+				logTrace("received bytes: %s", total_read);
+				m_readBuffer.putN(total_read);
+				if (total_read < dst.length) { // the kernel's buffer is too empty...
 					m_mustRecv = false; // ..so we have everything!
 					break;
 				}
