@@ -1369,11 +1369,12 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 			{
 				uint ret = conn.recv(dst);
 				total_read += ret;
-				read_more = ret == m_readBuffer.capacity;
+				read_more = ret == dst.length;
 				if (read_more)
 				{
-					m_readBuffer.capacity = m_readBuffer.capacity*2;
+					if (m_readBuffer.freeSpace == 0) m_readBuffer.capacity = m_readBuffer.capacity*2;
 					dst = m_readBuffer.peekDst();
+					
 				}
 			} while( read_more );
 			if( total_read > 0 ){
