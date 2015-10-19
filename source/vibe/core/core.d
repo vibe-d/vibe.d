@@ -429,6 +429,9 @@ private void runWorkerTask_unsafe(CALLABLE, ARGS...)(CALLABLE callable, ref ARGS
 	This function is mainly useful for long-living tasks that distribute their
 	work across all CPU cores. Only function pointers with weakly isolated
 	arguments are allowed to be able to guarantee thread-safety.
+
+	The number of tasks started is guaranteed to be equal to
+	`workerThreadCount`.
 */
 void runWorkerTaskDist(FT, ARGS...)(FT func, auto ref ARGS args)
 	if (is(typeof(*func) == function))
@@ -667,10 +670,19 @@ void setTaskStackSize(size_t sz)
 
 
 /**
-	The number of worker threads.
+	The number of worker threads used for processing worker tasks.
+
+	The number of worker threads equals `core.cpuid.threadsPerCPU`.
+
+	Note that this function will cause the worker threads to be started,
+	if they haven't	already.
+
+	See_also: `runWorkerTask`, `runWorkerTaskH`, `runWorkerTaskDist`
 */
 @property size_t workerThreadCount()
-{
+	out(count) { assert(count > 0); }
+body {
+	setupWorkerThreads();
 	return st_threads.count!(c => c.isWorker);
 }
 
