@@ -74,10 +74,6 @@ shared static this()
 	//Wait for a couple of seconds for the server to be initialized properly and then start
 	//multiple concurrent threads that simultaneously start queries on the rest interface defined above.
 	setTimer(5.seconds, {
-        import core.atomic;
-        import core.thread; 
-        import std.parallelism;
-        import std.stdio;
 
 		scope(exit)
 			exitEventLoop(true);
