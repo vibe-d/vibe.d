@@ -25,7 +25,7 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 	    import std.random;
 	    import std.stdio;
 	    auto i = uniform(0,20);
-	    if (i == 1) //In a rare case, lock for writing
+	    if (i == 0) //In a rare case, lock for writing
 	    {
 	        synchronized(m_mutex.writer)
 	        {
