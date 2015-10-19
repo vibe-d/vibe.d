@@ -32,7 +32,7 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 	        	version(PrintRequests)
 	        		writeln("Blocked for writing!");
 	        	//Simulate a slow operation
-	            vibe.core.core.sleep(50.msecs);
+	            vibe.core.core.sleep(100.msecs);
 	        }
 	    }
 	    else //More regularly, lock for reading
