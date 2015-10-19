@@ -53,7 +53,7 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 __gshared {
     TaskMutex s_taskMutex;
     TaskCondition s_taskCondition;
-    int s_runningTasks = 0;
+    ulong s_runningTasks;
 }
 
 shared static this()
@@ -83,10 +83,9 @@ shared static this()
 			exitEventLoop(true);
 
         //Start multiple tasks performing requests on "http://localhost:8080/" concurrently
+        synchronized(s_taskMutex) s_runningTasks = workerThreadCount();
         runWorkerTaskDist({
-
                 //Keep track of the number of currently running tasks
-                synchronized(s_taskMutex) s_runningTasks += 1;
                 scope(exit) {
                     synchronized(s_taskMutex) s_runningTasks -= 1;
                     s_taskCondition.notifyAll();
@@ -96,9 +95,8 @@ shared static this()
                 auto api = new RestInterfaceClient!MyBlockingRestInterface("http://127.0.0.1:8080");
                 for (int i = 0; i < 1000; ++i)
                     api.getIndex();
-
             });
-         
+        
         //Wait for all tasks to complete
         synchronized(s_taskMutex) {
             do s_taskCondition.wait();
