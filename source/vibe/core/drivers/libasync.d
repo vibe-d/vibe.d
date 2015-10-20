@@ -1364,27 +1364,24 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 			assert(dst.length <= int.max);
 			logTrace("Try to read up to bytes: %s", dst.length);
 			bool read_more;
-			uint total_read;
-			do
-			{
+			do {
 				uint ret = conn.recv(dst);
-				total_read += ret;
+				if( ret > 0 ){
+					logTrace("received bytes: %s", ret);
+					m_readBuffer.putN(ret);
+				} 
 				read_more = ret == dst.length;
-				if (read_more)
-				{
-					if (m_readBuffer.freeSpace == 0) m_readBuffer.capacity = m_readBuffer.capacity*2;
+				// ret == 0! let's look for some errors
+				if (read_more) {
+					if (m_readBuffer.freeSpace == 0) 
+						m_readBuffer.capacity = m_readBuffer.capacity*2;
 					dst = m_readBuffer.peekDst();
-					
 				}
 			} while( read_more );
-			if( total_read > 0 ){
-				logTrace("received bytes: %s", total_read);
-				m_readBuffer.putN(total_read);
-				if (total_read < dst.length) { // the kernel's buffer is too empty...
-					m_mustRecv = false; // ..so we have everything!
-					break;
-				}
-			}
+			if (conn.status.code == Status.ASYNC) {
+				m_mustRecv = false; // we'll have to wait
+				break; // the kernel's buffer is empty
+			}			
 			// ret == 0! let's look for some errors
 			else if (conn.status.code == Status.ASYNC) {
 				m_mustRecv = false; // we'll have to wait
