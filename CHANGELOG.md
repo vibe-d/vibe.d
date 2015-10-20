@@ -11,9 +11,10 @@ A large revamp of the REST interface generator was done in this release, which w
 - Compiles on 2.066.x up to 2.069.0
 - Removed deprecated symbols and deprecated those that were scheduled for deprecation
 - The `VibeCustomMain` version identifier is now a no-op and the new default behavior
-- Added `vibe.http.fileserver.sendFile`
 - Added a JavaScript REST client generator to `vibe.web.rest` - [pull #1209][issue1209]
 - Added translation support for plural forms in `vibe.web.i18n` (by Nathan Coe) - [pull #1290][issue1290]
+- Added a fiber compatible read-write mutex implementation (`TaskReadWriteMutex`) (by Manuel Frischknecht) - [pull #1287][issue1287]
+- Added `vibe.http.fileserver.sendFile`
 - Added ALPN support to the TLS module (by Etienne Cimon)
 - Added an optional [Botan](https://github.com/etcimon/botan) based TLS implementation (by Etienne Cimon)
 - Switched the `vibe.core.log` module to support allocation-less logging (range like interface)
@@ -28,6 +29,9 @@ A large revamp of the REST interface generator was done in this release, which w
 - Added `MongoCollection.findAndModifyExt`, which takes a parameter with custom options - [issue #911][issue911]
 - `TLSVersion.any` now only matches TLS 1.0 and up; SSL 3 is explicitly excluded (by Márcio Martins) - [pull #1280][issue1280]
 - Removed some bad dependencies to prepare for splitting up the library (dependency cycles between low-level and high-level packages)
+- Implemented timer support for the libev driver - [pull #1206][issue1206]
+- Improved the method prefix semantics in the web/REST interface generators, so that only whole words are recognized
+- Mime type `"application/vnd.api+json"` is now recognized to have a JSON body in the HTTP server (by Szabo Bogdan) - [pull #1296][issue1296]
 
 ### Bug fixes ###
 
@@ -37,14 +41,23 @@ A large revamp of the REST interface generator was done in this release, which w
   - Fixed timers with a zero timeout - [pull #1204][issue1204]
 - Missing HTML form parameters are now properly handled by `@errorDisplay` in the web interface generator
 - Fixed bogus Diet template dependencies caused by interpreting *all* lines that started with "extends ..." as extension directives
+- Fixed `runWorkerTaskH` to be callable outside of a task context - [pull #1206][issue1206]
+- Fixed `LibevManualEvent` to actually work across threads - [pull #1206][issue1206]
+- Fixed a bug in the shutdown sequence that could cause the application to hang if worker threads had been started - [pull #1206][issue1206]
+- Fixed multiple loggers not working - [issue #1294][issue1294]
+- Fixed `workerThreadCount` to always return a non-zero number by letting it start up the workers if necessary
 
 [issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
 [issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
+[issue1206]: https://github.com/rejectedsoftware/vibe.d/issues/1206
 [issue1209]: https://github.com/rejectedsoftware/vibe.d/issues/1209
 [issue1273]: https://github.com/rejectedsoftware/vibe.d/issues/1273
 [issue1280]: https://github.com/rejectedsoftware/vibe.d/issues/1280
 [issue1281]: https://github.com/rejectedsoftware/vibe.d/issues/1281
+[issue1287]: https://github.com/rejectedsoftware/vibe.d/issues/1287
 [issue1290]: https://github.com/rejectedsoftware/vibe.d/issues/1290
+[issue1294]: https://github.com/rejectedsoftware/vibe.d/issues/1294
+[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1296
 
 
 v0.7.25 - 2015-09-20
