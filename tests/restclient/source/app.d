@@ -47,10 +47,142 @@ class SubAPI : ISub {
 	int get(int id) { return id; }
 }
 
+interface ITestAPICors
+{
+	string getFoo();
+	string setFoo();
+	string addFoo();
+	@path("bar/:param3") string addBar(int _param3);
+	@path("bar/:param4") string removeBar(int _param4);
+	@path("bar/:param5") string updateBar(int _param5);
+	string setFoo(int id);
+	string addFoo(int id);
+	string removeFoo(int id);
+}
+
+class TestAPICors : ITestAPICors
+{
+	string getFoo() { return "foo"; };
+	string setFoo() { return "foo"; };
+	string addFoo() { return "foo"; };
+	string addBar(int _param3) { return "bar"; };
+	string removeBar(int _param4) { return "bar"; };
+	string updateBar(int _param5) { return "bar"; };
+	string setFoo(int id) { return "foo"; };
+	string addFoo(int id) { return "foo"; };
+	string removeFoo(int id) { return "foo"; };
+}
+
+enum ShouldFail
+{
+	Yes,
+	No
+}
+
+void assertHeader(ref InetHeaderMap headers, ShouldFail shouldFail, string header, string value)
+{
+	import std.algorithm : equal;
+	auto h = header in headers;
+	if (shouldFail == ShouldFail.Yes)
+	{
+		assert(h is null);
+		return;
+	}
+	assert(h !is null);
+	assert(equal((*h),value));
+}
+
+void assertCorsHeaders(string url, HTTPMethod method, ShouldFail shouldFail)
+{
+	// preflight request
+	requestHTTP(url, 
+		(scope HTTPClientRequest req) {
+			req.method = HTTPMethod.OPTIONS;
+			req.headers["Origin"] = "www.example.com";
+			req.headers["Access-Control-Request-Method"] = method.to!string;
+			req.headers["Access-Control-Request-Headers"] = "Authorization";
+		}, 
+		(scope HTTPClientResponse res) {
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin","www.example.com");
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Credentials","true");
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Methods",method.to!string);
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Headers","Authorization");
+			res.dropBody();
+		});
+
+	// normal request
+	requestHTTP(url, 
+		(scope HTTPClientRequest req) {
+			req.method = method;
+			req.headers["Origin"] = "www.example.com";
+		}, 
+		(scope HTTPClientResponse res) {
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin","www.example.com");
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Credentials","true");
+			res.dropBody();
+		});
+}
+
+void assertCorsPasses(string url, HTTPMethod method)
+{
+	assertCorsHeaders(url, method, ShouldFail.No);
+}
+
+void assertCorsFails(string url, HTTPMethod method)
+{
+	assertCorsHeaders(url, method, ShouldFail.Yes);
+}
+
+void testAllowedOrigins(string url, HTTPMethod method, RestInterfaceSettings settings)
+{
+	// all tests use the www.example.com as origin, so this should fail
+	settings.allowedOrigins = ["non-existent.com"];
+	assertCorsFails(url, method);
+
+	// all these should pass
+	settings.allowedOrigins = [];
+	assertCorsPasses(url, method);
+
+	//settings.allowedOrigins = ["WWW.EXAMPLE.COM"];
+	//assertCorsPasses(url, method);
+
+	settings.allowedOrigins = ["www.example.com"];
+	assertCorsPasses(url, method);
+}
+
+// According to specs, when a resource is requested with the OPTIONS method the server should
+// return the Allow header that specifies all methods available on that resource.
+// Since a CORS preflight also uses the OPTIONS method, we implemented the Allow header as well.
+void testAllowHeader(string url, HTTPMethod[] methods)
+{
+	import std.algorithm : joiner;
+	import std.conv : text;
+	string allow = methods.map!(m=>m.to!string).joiner(",").text;
+	requestHTTP(url, 
+		(scope HTTPClientRequest req) {
+			req.method = HTTPMethod.OPTIONS;
+		}, 
+		(scope HTTPClientResponse res) {
+			res.headers.assertHeader(ShouldFail.No,"Allow",allow);
+			res.dropBody();
+		});
+}
+
+void testCors(string url, HTTPMethod[] methods)
+{
+	foreach(method; methods)
+		assertCorsPasses(url, method);
+}
+
 void runTest()
 {
 	auto router = new URLRouter;
 	registerRestInterface!ITestAPI(router, new TestAPI, "/root/");
+
+	auto corsRestSettings = new RestInterfaceSettings();
+	corsRestSettings.baseURL = URL("http://127.0.0.1/cors/");
+	corsRestSettings.methodStyle = MethodStyle.lowerUnderscored;
+	registerRestInterface!ITestAPICors(router, new TestAPICors, corsRestSettings);
 
 	auto settings = new HTTPServerSettings;
 	settings.disableDistHost = true;
@@ -68,6 +200,15 @@ void runTest()
 	assert(api.get(4) == 4);
 	assert(api.sub.get(5) == 5);
 	assert(api.testKeyword(3, 4) == 7);
+
+	testAllowedOrigins("http://127.0.0.1:8000/cors/foo", HTTPMethod.GET, corsRestSettings);
+	testAllowHeader("http://127.0.0.1:8000/cors/foo",   [HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
+	testAllowHeader("http://127.0.0.1:8000/cors/bar/6", [HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
+	testAllowHeader("http://127.0.0.1:8000/cors/7/foo", [HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
+	testCors("http://127.0.0.1:8000/cors/foo", 			[HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
+	testCors("http://127.0.0.1:8000/cors/bar/6", 		[HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
+	testCors("http://127.0.0.1:8000/cors/7/foo", 		[HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
+
 	exitEventLoop(true);
 }
 
