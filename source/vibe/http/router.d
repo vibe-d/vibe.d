@@ -251,6 +251,7 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
+		req.prefix = m_prefix;
 		auto method = req.method;
 
 		auto path = req.path;

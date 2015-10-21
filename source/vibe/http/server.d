@@ -543,6 +543,7 @@ final class HTTPServerRequest : HTTPRequest {
 		FixedAppender!(string, 31) m_dateAppender;
 		HTTPServerSettings m_settings;
 		ushort m_port;
+		string m_prefix;
 	}
 
 	public {
@@ -676,6 +677,13 @@ final class HTTPServerRequest : HTTPRequest {
 		{
 			return m_settings;
 		}
+		
+		/** The prefix used by this request's router.
+		*/
+		@property string prefix(string newValue)
+		{
+			return m_prefix = newValue;
+		}
 	}
 
 	this(SysTime time, ushort port)
@@ -740,6 +748,21 @@ final class HTTPServerRequest : HTTPRequest {
 		if (path.length == 0) return "./";
 		auto depth = count(path[1 .. $], '/');
 		return depth == 0 ? "./" : replicate("../", depth);
+	}
+	
+	/** The relative path to the root folder for this request's router.
+		
+		The returned string always ends with a slash.
+	*/
+	@property string routerRootDir() const {
+		string combined = rootDir ~ m_prefix;
+		string result;
+		
+		foreach(part; combined.split("/"))
+			if(part != null)
+				result ~= part ~ "/";
+		
+		return result;
 	}
 }
 
