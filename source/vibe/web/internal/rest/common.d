@@ -201,21 +201,36 @@ import vibe.web.rest;
 	*/
 	auto getRoutesGroupedByPattern()
 	{
-		import std.algorithm : map, sort, chunkBy, filter, any;
+		import std.algorithm : map, sort, filter, any;
 		import std.array : array;
 		import std.typecons : tuple;
-		// since /foo/:bar and /foo/:baz are the same route, we first normalize the patterns (by replacing each variable with just ':')
-		// after that we sort and chunkBy, in order to group the related route
-		// Note: could probably also use schwartzSort
-		return routes[].map!((route){
-				return tuple!("route","normalizedPath")(route,route.fullPathParts.map!((part){
+		// since /foo/:bar and /foo/:baz are the same route, we first normalize the patterns (by replacing each param with just ':')
+		// after that we sort and chunkBy/groupBy, in order to group the related route
+		auto sorted = routes[].map!((route){
+				return tuple(route,route.fullPathParts.map!((part){
 					return part.isParameter ? ":" : part.text;
-				}).array()); // can probably remove the array here if we rewrite the comparision functions below (in sort and chunkBy) to work on ranges
+				}).array()); // can probably remove the array here if we rewrite the comparison functions (in sort and in the foreach) to work on ranges
 			})
 			.array
-			.sort!((a,b) => a.normalizedPath < b.normalizedPath)
-			.chunkBy!((a,b) => a.normalizedPath == b.normalizedPath)
-			.map!((group) => group.map!(tuple => tuple.route));
+			.sort!((a,b) => a[1] < b[1]);
+		
+		typeof(sorted)[] groups;
+		
+		// NOTE: we want to support 2.066 but it doesn't have chunkBy, so we do the classic loop thingy
+		size_t start, idx = 1;
+		foreach(route, path; sorted[1..$])
+		{
+			if (sorted[idx-1][1] != path)
+			{
+				groups ~= sorted[start..idx];
+				start = idx;
+			}
+			++idx;
+		}
+		if (sorted.length > 0)
+			groups ~= sorted[start..$];
+
+		return groups.map!(group => group.map!(tuple => tuple[0]));
 	}
 
 	private static StaticRoute[routeCount] computeStaticRoutes()
