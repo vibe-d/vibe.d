@@ -251,8 +251,21 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
 	void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
 	{
-		req.prefix = m_prefix;
 		auto method = req.method;
+
+		string calcBasePath()
+		{
+			import std.string: split;
+			
+			string combined = req.rootDir ~ m_prefix;
+			string result;
+			
+			foreach(part; combined.split("/"))
+				if(part != null)
+					result ~= part ~ "/";
+			
+			return result;
+		}
 
 		auto path = req.path;
 		if (path.length < m_prefix.length || path[0 .. m_prefix.length] != m_prefix) return;
@@ -268,6 +281,7 @@ final class URLRouter : HTTPServerRequestHandler {
 						logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
 						// TODO: use a different map type that avoids allocations for small amounts of keys
 						foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
+						req.params["routerRootDir"] = calcBasePath;
 						r.cb(req, res);
 						done = res.headerWritten;
 					}
@@ -284,6 +298,7 @@ final class URLRouter : HTTPServerRequestHandler {
 					if (r.method == method && r.matches(path, req.params)) {
 						logTrace("route match: %s -> %s %s", req.path, r.method, r.pattern);
 						// .. parse fields ..
+						req.params["routerRootDir"] = calcBasePath;
 						r.cb(req, res);
 						if (res.headerWritten) return;
 					}
