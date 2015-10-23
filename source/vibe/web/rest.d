@@ -70,6 +70,7 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInt
 {
 	import std.algorithm : filter, map, all;
 	import std.array : array;
+	import std.range : front;
 	import vibe.web.internal.rest.common : ParameterKind;
 
 	auto intf = RestInterface!TImpl(settings, false);
@@ -587,6 +588,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 		void handleCors()
 		{
 			import std.algorithm : any;
+			import std.uni : sicmp;
 
 			if (req.method == HTTPMethod.OPTIONS)
 				return;
@@ -594,12 +596,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			if (origin is null)
 				return;
 
-			import std.algorithm : equal;
-			import std.uni : toLower;
-			auto originLowerCased = (*origin).toLower;
 			if (settings !is null &&
 				settings.allowedOrigins.length != 0 &&
-				!settings.allowedOrigins.any!(org => org.toLower.equal(originLowerCased)))
+				!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
 				return;
 
 			res.headers["Access-Control-Allow-Origin"] = *origin;
@@ -690,17 +689,15 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 	void handlePreflightedCors(HTTPServerRequest req, HTTPServerResponse res, ref HTTPMethod[] methods, RestInterfaceSettings settings = null)
 	{
 		import std.algorithm : among;
+		import std.uni : sicmp;
 
 		auto origin = "Origin" in req.headers;
 		if (origin is null)
 			return;
 
-		import std.algorithm : equal;
-		import std.uni : toLower;
-		auto originLowerCased = (*origin).toLower;
 		if (settings !is null &&
 			settings.allowedOrigins.length != 0 &&
-			!settings.allowedOrigins.any!(org => org.toLower.equal(originLowerCased)))
+			!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
 			return;
 		
 		auto method = "Access-Control-Request-Method" in req.headers;
