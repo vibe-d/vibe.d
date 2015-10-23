@@ -213,22 +213,23 @@ import vibe.web.rest;
 			})
 			.array
 			.sort!((a,b) => a[1] < b[1]);
-		
+
 		typeof(sorted)[] groups;
-		
-		// NOTE: we want to support 2.066 but it doesn't have chunkBy, so we do the classic loop thingy
-		size_t start, idx = 1;
-		foreach(route, path; sorted[1..$])
-		{
-			if (sorted[idx-1][1] != path)
-			{
-				groups ~= sorted[start..idx];
-				start = idx;
-			}
-			++idx;
-		}
 		if (sorted.length > 0)
+		{
+			// NOTE: we want to support 2.066 but it doesn't have chunkBy, so we do the classic loop thingy
+			size_t start, idx = 1;
+			foreach(route, path; sorted[1..$])
+			{
+				if (sorted[idx-1][1] != path)
+				{
+					groups ~= sorted[start..idx];
+					start = idx;
+				}
+				++idx;
+			}
 			groups ~= sorted[start..$];
+		}
 
 		return groups.map!(group => group.map!(tuple => tuple[0]));
 	}
