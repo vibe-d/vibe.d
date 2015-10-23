@@ -255,16 +255,14 @@ final class URLRouter : HTTPServerRequestHandler {
 
 		string calcBasePath()
 		{
-			import std.string: split;
-			
-			string combined = req.rootDir ~ m_prefix;
-			string result;
-			
-			foreach(part; combined.split("/"))
-				if(part != null)
-					result ~= part ~ "/";
-			
-			return result;
+			import vibe.inet.path;
+			auto prefix = m_prefix;
+			if(prefix == null) prefix = "/";
+			auto path = Path(req.path);
+			if(!path.endsWithSlash) path = path[0 .. $ - 1];
+			auto result = Path(prefix).relativeTo(path);
+			result.endsWithSlash = true;
+			return result.toString;
 		}
 
 		auto path = req.path;
