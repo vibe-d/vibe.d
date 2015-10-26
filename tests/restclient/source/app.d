@@ -92,18 +92,18 @@ void assertHeader(ref InetHeaderMap headers, ShouldFail shouldFail, string heade
 	assert(equal((*h),value));
 }
 
-void assertCorsHeaders(string url, HTTPMethod method, ShouldFail shouldFail)
+void assertCorsHeaders(string url, HTTPMethod method, ShouldFail shouldFail, string origin)
 {
 	// preflight request
 	requestHTTP(url, 
 		(scope HTTPClientRequest req) {
 			req.method = HTTPMethod.OPTIONS;
-			req.headers["Origin"] = "www.example.com";
+			req.headers["Origin"] = origin;
 			req.headers["Access-Control-Request-Method"] = method.to!string;
 			req.headers["Access-Control-Request-Headers"] = "Authorization";
 		}, 
 		(scope HTTPClientResponse res) {
-			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin","www.example.com");
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin",origin);
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Credentials","true");
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Methods",method.to!string);
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Headers","Authorization");
@@ -114,42 +114,24 @@ void assertCorsHeaders(string url, HTTPMethod method, ShouldFail shouldFail)
 	requestHTTP(url, 
 		(scope HTTPClientRequest req) {
 			req.method = method;
-			req.headers["Origin"] = "www.example.com";
+			req.headers["Origin"] = origin;
 		}, 
 		(scope HTTPClientResponse res) {
-			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin","www.example.com");
+			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Origin",origin);
 			res.headers.assertHeader(shouldFail,"Access-Control-Allow-Credentials","true");
 			res.dropBody();
 		});
 }
 
-void assertCorsPasses(string url, HTTPMethod method)
+void assertCorsPasses(string url, HTTPMethod method, string origin = "www.example.com")
 {
-	assertCorsHeaders(url, method, ShouldFail.No);
+	assertCorsHeaders(url, method, ShouldFail.No, origin);
 }
 
-void assertCorsFails(string url, HTTPMethod method)
+void assertCorsFails(string url, HTTPMethod method, string origin = "www.example.com")
 {
-	assertCorsHeaders(url, method, ShouldFail.Yes);
+	assertCorsHeaders(url, method, ShouldFail.Yes, origin);
 }
-
-void testAllowedOrigins(string url, HTTPMethod method, RestInterfaceSettings settings)
-{
-	// all tests use the www.example.com as origin, so this should fail
-	settings.allowedOrigins = ["non-existent.com"];
-	assertCorsFails(url, method);
-
-	// all these should pass
-	settings.allowedOrigins = [];
-	assertCorsPasses(url, method);
-
-	//settings.allowedOrigins = ["WWW.EXAMPLE.COM"];
-	//assertCorsPasses(url, method);
-
-	settings.allowedOrigins = ["www.example.com"];
-	assertCorsPasses(url, method);
-}
-
 // According to specs, when a resource is requested with the OPTIONS method the server should
 // return the Allow header that specifies all methods available on that resource.
 // Since a CORS preflight also uses the OPTIONS method, we implemented the Allow header as well.
@@ -174,15 +156,24 @@ void testCors(string url, HTTPMethod[] methods)
 		assertCorsPasses(url, method);
 }
 
+void createRestTestInterface(URLRouter router, string path, string[] allowedOrigins)
+{
+	auto corsRestSettings = new RestInterfaceSettings();
+	corsRestSettings.baseURL = URL(path);
+	corsRestSettings.methodStyle = MethodStyle.lowerUnderscored;
+	corsRestSettings.allowedOrigins = allowedOrigins.dup;
+	registerRestInterface!ITestAPICors(router, new TestAPICors, corsRestSettings);	
+}
+
 void runTest()
 {
 	auto router = new URLRouter;
 	registerRestInterface!ITestAPI(router, new TestAPI, "/root/");
 
-	auto corsRestSettings = new RestInterfaceSettings();
-	corsRestSettings.baseURL = URL("http://127.0.0.1/cors/");
-	corsRestSettings.methodStyle = MethodStyle.lowerUnderscored;
-	registerRestInterface!ITestAPICors(router, new TestAPICors, corsRestSettings);
+	// we create 3 api's to test the allowed origins
+	router.createRestTestInterface("http://127.0.0.1/cors1/",["www.foobar.com","www.example.com"]);
+	router.createRestTestInterface("http://127.0.0.1/cors2/",[]);
+	router.createRestTestInterface("http://127.0.0.1/cors3/",["www.foobar.com"]);
 
 	auto settings = new HTTPServerSettings;
 	settings.disableDistHost = true;
@@ -201,13 +192,19 @@ void runTest()
 	assert(api.sub.get(5) == 5);
 	assert(api.testKeyword(3, 4) == 7);
 
-	testAllowedOrigins("http://127.0.0.1:8000/cors/foo", HTTPMethod.GET, corsRestSettings);
-	testAllowHeader("http://127.0.0.1:8000/cors/foo",   [HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
-	testAllowHeader("http://127.0.0.1:8000/cors/bar/6", [HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
-	testAllowHeader("http://127.0.0.1:8000/cors/7/foo", [HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
-	testCors("http://127.0.0.1:8000/cors/foo", 			[HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
-	testCors("http://127.0.0.1:8000/cors/bar/6", 		[HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
-	testCors("http://127.0.0.1:8000/cors/7/foo", 		[HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
+	assertCorsFails("http://127.0.0.1:8000/cors1/foo", HTTPMethod.GET, "www.non-existent.com");
+	assertCorsPasses("http://127.0.0.1:8000/cors1/foo", HTTPMethod.GET, "www.foobar.com");
+	assertCorsPasses("http://127.0.0.1:8000/cors1/foo", HTTPMethod.GET, "www.example.com");
+	assertCorsPasses("http://127.0.0.1:8000/cors2/foo", HTTPMethod.GET, "www.abcdefg.com");
+	assertCorsPasses("http://127.0.0.1:8000/cors3/foo", HTTPMethod.GET, "www.foobar.com");
+	assertCorsFails("http://127.0.0.1:8000/cors3/foo", HTTPMethod.GET, "www.bazbaz.com");
+
+	testAllowHeader("http://127.0.0.1:8000/cors1/foo",   [HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
+	testAllowHeader("http://127.0.0.1:8000/cors1/bar/6", [HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
+	testAllowHeader("http://127.0.0.1:8000/cors1/7/foo", [HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
+	testCors("http://127.0.0.1:8000/cors1/foo", 			[HTTPMethod.GET,HTTPMethod.PUT,HTTPMethod.POST]);
+	testCors("http://127.0.0.1:8000/cors1/bar/6", 		[HTTPMethod.POST,HTTPMethod.DELETE,HTTPMethod.PATCH]);
+	testCors("http://127.0.0.1:8000/cors1/7/foo", 		[HTTPMethod.PUT,HTTPMethod.POST,HTTPMethod.DELETE]);
 
 	exitEventLoop(true);
 }

@@ -85,7 +85,7 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInt
 		auto route = intf.routes[i];
 
 		// normal handler
-		auto handler = jsonMethodHandler!(func, i)(instance, intf, settings);
+		auto handler = jsonMethodHandler!(func, i)(instance, intf);
 
 		auto diagparams = route.parameters.filter!(p => p.kind != ParameterKind.internal).map!(p => p.fieldName).array;
 		logDiagnostic("REST route: %s %s %s", route.method, route.fullPattern, diagparams);
@@ -524,7 +524,7 @@ class RestInterfaceSettings {
  * Returns:
  *	A delegate suitable to use as an handler for an HTTP request.
  */
-private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(T inst, ref RestInterface!T intf, RestInterfaceSettings settings = null)
+private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(T inst, ref RestInterface!T intf)
 {
 	import std.string : format;
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
@@ -540,6 +540,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	alias RT = ReturnType!(FunctionTypeOf!Func);
 	static const sroute = RestInterface!T.staticRoutes[ridx];
 	auto route = intf.routes[ridx];
+	auto settings = intf.settings;
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -596,8 +597,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			if (origin is null)
 				return;
 
-			if (settings !is null &&
-				settings.allowedOrigins.length != 0 &&
+			if (settings.allowedOrigins.length != 0 &&
 				!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
 				return;
 
