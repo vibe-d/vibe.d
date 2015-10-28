@@ -188,6 +188,7 @@ struct MongoCollection {
 	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector, bool modified = false)
 	{
 		static struct CMD {
+			import vibe.data.serialization : name;
 			string findAndModify;
 			T query;
 			U update;
