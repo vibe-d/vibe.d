@@ -177,6 +177,7 @@ struct MongoCollection {
 			query = MongoDB query expression to identify the matched document
 			update = Update expression for the matched document
 			returnFieldSelector = Optional map of fields to return in the response
+			modified = Optional, specifies whether to return the document before or after update 
 
 		Throws:
 			An `Exception` will be thrown if an error occurs in the
