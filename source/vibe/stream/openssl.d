@@ -375,8 +375,10 @@ final class OpenSSLContext : TLSContext {
 					case TLSVersion.any: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: method = SSLv3_client_method(); break;
 					case TLSVersion.tls1: method = TLSv1_client_method(); break;
-					case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
-					case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
+					//case TLSVersion.tls1_1: method = TLSv1_1_client_method(); break;
+					//case TLSVersion.tls1_2: method = TLSv1_2_client_method(); break;
+					case TLSVersion.tls1_1: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; break;
+					case TLSVersion.tls1_2: method = SSLv23_client_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; break;
 					case TLSVersion.dtls1: method = DTLSv1_client_method(); break;
 				}
 				break;
@@ -386,8 +388,10 @@ final class OpenSSLContext : TLSContext {
 					case TLSVersion.any: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3; break;
 					case TLSVersion.ssl3: method = SSLv3_server_method(); break;
 					case TLSVersion.tls1: method = TLSv1_server_method(); break;
-					case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
-					case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
+					case TLSVersion.tls1_1: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_2; break;
+					case TLSVersion.tls1_2: method = SSLv23_server_method(); options |= SSL_OP_NO_SSLv3|SSL_OP_NO_TLSv1|SSL_OP_NO_TLSv1_1; break;
+					//case TLSVersion.tls1_1: method = TLSv1_1_server_method(); break;
+					//case TLSVersion.tls1_2: method = TLSv1_2_server_method(); break;
 					case TLSVersion.dtls1: method = DTLSv1_server_method(); break;
 				}
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
