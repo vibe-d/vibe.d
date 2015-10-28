@@ -90,7 +90,8 @@ struct Path {
 	/// Converts the Path back to a string representation using slashes.
 	string toString()
 	const {
-		if( m_nodes.empty ) return absolute ? "/" : "";
+		if (m_nodes.empty)
+			return absolute ? "/" : endsWithSlash ? "./" : "";
 
 		Appender!string ret;
 
@@ -355,6 +356,15 @@ unittest
 			assert(p1.relativeTo(p3) == Path("\\\\server\\share"));
 			assert(p1.relativeTo(p4) == Path("\\\\server\\share"));
 		}
+	}
+
+	{ // relative path, trailing slash
+		auto p1 = Path("/some/path");
+		auto p2 = Path("/some/path/");
+		assert(p1.relativeTo(p1).toString() == "");
+		assert(p1.relativeTo(p2).toString() == "");
+		assert(p2.relativeTo(p2).toString() == "./");
+		assert(p2.relativeTo(p1).toString() == "./");
 	}
 }
 
