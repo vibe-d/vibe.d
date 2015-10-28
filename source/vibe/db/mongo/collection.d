@@ -184,28 +184,31 @@ struct MongoCollection {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	 */
-	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
+	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector, bool modified = false)
 	{
 		static struct CMD {
 			string findAndModify;
 			T query;
 			U update;
 			V fields;
+			@name("new") bool modified;
 		}
 		CMD cmd;
 		cmd.findAndModify = m_name;
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
+		cmd.modified = modified;
+
 		auto ret = database.runCommand(cmd);
 		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
 		return ret.value;
 	}
 
 	/// ditto
-	Bson findAndModify(T, U)(T query, U update)
+	Bson findAndModify(T, U)(T query, U update, bool modified = false)
 	{
-		return findAndModify(query, update, null);
+		return findAndModify(query, update, null, modified);
 	}
 
 	/**
