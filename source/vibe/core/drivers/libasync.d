@@ -517,9 +517,9 @@ final class LibasyncFileStream : FileStream {
 		}
 		m_started = false;
 		if (m_task != Task() && Task.getThis() != Task())
-			getDriverCore().yieldAndResumeTask(m_task, new ConnectionClosedException("The file was closed during an operation"));
+			getDriverCore().yieldAndResumeTask(m_task, new Exception("The file was closed during an operation"));
 		else if (m_task != Task() && Task.getThis() == Task())
-			getDriverCore().resumeTask(m_task, new ConnectionClosedException("The file was closed during an operation"));
+			getDriverCore().resumeTask(m_task, new Exception("The file was closed during an operation"));
 		
 	}
 
@@ -534,7 +534,6 @@ final class LibasyncFileStream : FileStream {
 
 	void read(ubyte[] dst)
 	{
-		mixin(Trace);
 		scope(failure)
 			close();
 		assert(this.readable, "To read a file, it must be opened in a read-enabled mode.");
@@ -566,7 +565,6 @@ final class LibasyncFileStream : FileStream {
 	void write(in ubyte[] bytes_)
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");
-		mixin(Trace);
 		
 		shared const(ubyte)[] bytes = cast(shared const(ubyte)[]) bytes_;
 		
@@ -606,7 +604,6 @@ final class LibasyncFileStream : FileStream {
 
 	void write(InputStream stream, ulong nbytes = 0)
 	{
-		mixin(Trace);
 		writeDefault(stream, nbytes);
 	}
 
