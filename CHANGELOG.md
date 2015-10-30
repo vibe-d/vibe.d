@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.26 - 2015-
+v0.7.26 - 2015-11-
 --------------------
 
 A large revamp of the REST interface generator was done in this release, which will enable faster future developments. The new JavaScript client generator is the first feature made possible by this. Apart from a good chunk of functional improvements in various areas, a notable change on the build level is that the `VibeCustomMain` version is no longer required for projects that implement their own `main` function.
@@ -37,8 +37,11 @@ A large revamp of the REST interface generator was done in this release, which w
 
 - Fixes in the libasync driver (by Etienne Cimon)
   - Various correctness and crash fixes
-  - Fixed handling files with non-ASCII characters on Windows (by Etienne Cimon) - [pull #1273][issue1273]
+  - Fixed handling files with non-ASCII characters on Windows - [pull #1273][issue1273]
   - Fixed timers with a zero timeout - [pull #1204][issue1204]
+  - Fixed a possible TCP connection stall for blocking writes - [pull #1247][issue1247]
+  - Fixed partially dropped data for TCP connections - [issue #1297][issue1297], [pull #1298][issue1298]
+  - Fixed properly waiting for blocking operations - [issue #1227][issue1227]
 - Missing HTML form parameters are now properly handled by `@errorDisplay` in the web interface generator
 - Fixed bogus Diet template dependencies caused by interpreting *all* lines that started with "extends ..." as extension directives
 - Fixed `runWorkerTaskH` to be callable outside of a task context - [pull #1206][issue1206]
@@ -46,6 +49,7 @@ A large revamp of the REST interface generator was done in this release, which w
 - Fixed a bug in the shutdown sequence that could cause the application to hang if worker threads had been started - [pull #1206][issue1206]
 - Fixed multiple loggers not working - [issue #1294][issue1294]
 - Fixed `workerThreadCount` to always return a non-zero number by letting it start up the workers if necessary
+- Fixed `Path.toString()` to output trailing slashes if required for empty paths
 
 [issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
 [issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
@@ -57,7 +61,11 @@ A large revamp of the REST interface generator was done in this release, which w
 [issue1287]: https://github.com/rejectedsoftware/vibe.d/issues/1287
 [issue1290]: https://github.com/rejectedsoftware/vibe.d/issues/1290
 [issue1294]: https://github.com/rejectedsoftware/vibe.d/issues/1294
+[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1227
+[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1247
 [issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1296
+[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1297
+[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1298
 
 
 v0.7.25 - 2015-09-20
