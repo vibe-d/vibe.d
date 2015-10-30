@@ -47,7 +47,10 @@ private EventLoop s_evLoop;
 private DriverCore s_driverCore;
 private shared int s_refCount; // will destroy async threads when 0
 
-version(Windows) extern(C) FILE* _wfopen(const(wchar)* filename, in wchar* mode);
+version(Windows) extern(C) {
+	FILE* _wfopen(const(wchar)* filename, in wchar* mode);
+	int _wchmod(in wchar*, int);
+}
 
 EventLoop getEventLoop() nothrow
 {
@@ -440,17 +443,18 @@ final class LibasyncDriver : EventDriver {
 	}
 }
 
-
+/// Writes or reads asynchronously (in another thread) for sizes > 64kb to benefit from kernel page cache
+/// in lower size operations.
 final class LibasyncFileStream : FileStream {
 	private {
 		Path m_path;
 		ulong m_size;
 		ulong m_offset = 0;
 		FileMode m_mode;
-
 		Task m_task;
+		Exception m_ex;
 		shared AsyncFile m_impl;
-
+		
 		bool m_started;
 		bool m_truncated;
 		bool m_finished;
@@ -463,12 +467,15 @@ final class LibasyncFileStream : FileStream {
 			m_size = getSize(path.toNativeString());
 		else {
 			auto path_str = path.toNativeString();
-			if (!exists(path_str))
+			if (exists(path_str))
+				removeFile(path);
 			{ // touch
 				import std.string : toStringz;
 				version(Windows) {
 					import std.utf : toUTF16z;
-					FILE* f = _wfopen(path_str.toUTF16z(), "w");
+					auto path_str_utf = path_str.toUTF16z();
+					FILE* f = _wfopen(path_str_utf, "w");
+					_wchmod(path_str_utf, S_IREAD|S_IWRITE);
 				}
 				else FILE * f = fopen(path_str.toStringz, "w");
 				fclose(f);
@@ -477,18 +484,18 @@ final class LibasyncFileStream : FileStream {
 		} 
 		m_path = path;
 		m_mode = mode;
-
+		
 		m_impl = new shared AsyncFile(getEventLoop());
 		m_impl.onReady(&handler);
-
+		
 		m_started = true;
 	}
-
+	
 	~this()
 	{
-		close();
+		try close(); catch {}
 	}
-
+	
 	@property Path path() const { return m_path; }
 	@property bool isOpen() const { return m_started; }
 	@property ulong size() const { return m_size; }
@@ -509,8 +516,11 @@ final class LibasyncFileStream : FileStream {
 			m_impl = null;
 		}
 		m_started = false;
-		if (m_task != Task() && Task.getThis() == Task())
-        		getDriverCore().yieldAndResumeTask(m_task, new Exception("The file was closed during an operation"));
+		if (m_task != Task() && Task.getThis() != Task())
+			getDriverCore().yieldAndResumeTask(m_task, new Exception("The file was closed during an operation"));
+		else if (m_task != Task() && Task.getThis() == Task())
+			getDriverCore().resumeTask(m_task, new Exception("The file was closed during an operation"));
+		
 	}
 
 	@property bool empty() const { assert(this.readable); return m_offset >= m_size; }
@@ -524,6 +534,8 @@ final class LibasyncFileStream : FileStream {
 
 	void read(ubyte[] dst)
 	{
+		scope(failure)
+			close();
 		assert(this.readable, "To read a file, it must be opened in a read-enabled mode.");
 		shared ubyte[] bytes = cast(shared) dst;
 		bool truncate_if_exists;
@@ -535,23 +547,27 @@ final class LibasyncFileStream : FileStream {
 		m_finished = false;
 		enforce(dst.length <= leastSize);
 		enforce(m_impl.read(m_path.toNativeString(), bytes, m_offset, true, truncate_if_exists), "Failed to read data from disk: " ~ m_impl.error);
-
-		{
+		
+		if (!m_finished) {
 			acquire();
 			scope(exit) release();
-			while(!m_finished) getDriverCore().yieldForEvent();
+			getDriverCore().yieldForEvent();
 		}
 		m_finished = false;
+		
+		if (m_ex) throw m_ex;
+		
 		m_offset += dst.length;
 		assert(m_impl.offset == m_offset, "Incoherent offset returned from file reader: " ~ m_offset.to!string ~ "B assumed but the implementation is at: " ~ m_impl.offset.to!string ~ "B");
 	}
 
-	alias write = Stream.write;
+	alias Stream.write write;
 	void write(in ubyte[] bytes_)
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");
+		
 		shared const(ubyte)[] bytes = cast(shared const(ubyte)[]) bytes_;
-
+		
 		bool truncate_if_exists;
 		if (!m_truncated && m_mode == FileMode.createTrunc) {
 			truncate_if_exists = true;
@@ -559,17 +575,21 @@ final class LibasyncFileStream : FileStream {
 			m_size = 0;
 		}
 		m_finished = false;
+		
 		if (m_mode == FileMode.append)
 			enforce(m_impl.append(m_path.toNativeString(), cast(shared ubyte[]) bytes, true, truncate_if_exists), "Failed to write data to disk: " ~ m_impl.error);
 		else
 			enforce(m_impl.write(m_path.toNativeString(), bytes, m_offset, true, truncate_if_exists), "Failed to write data to disk: " ~ m_impl.error);
-		{
+		
+		if (!m_finished) {
 			acquire();
 			scope(exit) release();
-			while(!m_finished) getDriverCore().yieldForEvent();
+			getDriverCore().yieldForEvent();
 		}
 		m_finished = false;
-
+		
+		if (m_ex) throw m_ex;
+		
 		if (m_mode == FileMode.append) {
 			m_size += bytes.length;
 		}
@@ -579,7 +599,7 @@ final class LibasyncFileStream : FileStream {
 				m_size += m_offset - m_size;
 			assert(m_impl.offset == m_offset, "Incoherent offset returned from file writer.");
 		}
-		// too slow: assert(getSize(m_path.toNativeString()) == m_size, "Incoherency between local size and filesize: " ~ m_size.to!string ~ "B assumed for a file of size " ~ getSize(m_path.toNativeString()).to!string ~ "B");
+		//assert(getSize(m_path.toNativeString()) == m_size, "Incoherency between local size and filesize: " ~ m_size.to!string ~ "B assumed for a file of size " ~ getSize(m_path.toNativeString()).to!string ~ "B");
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
@@ -590,6 +610,7 @@ final class LibasyncFileStream : FileStream {
 	void flush()
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");
+		
 	}
 
 	void finalize()
@@ -609,23 +630,17 @@ final class LibasyncFileStream : FileStream {
 		assert(Task.getThis() == Task() || m_task == Task(), "Acquiring FileStream that is already owned.");
 		m_task = Task.getThis();
 	}
-
-	bool amOwner()
-	{
-		return m_task == Task.getThis();
-	}
-
+	
 	private void handler() {
+		// This may be called by the event loop if read/write > 64kb and another thread was delegated
 		Exception ex;
+		
 		if (m_impl.status.code != Status.OK)
 			ex = new Exception(m_impl.error);
 		m_finished = true;
-		if (m_task != Task.init && m_task.running) {
-			try getDriverCore().resumeTask(m_task, ex);
-			catch (Exception e) {
-				logError("Error returning from file read: %s", e.toString());
-			}
-		}
+		if (m_task != Task())
+			getDriverCore().resumeTask(m_task, ex);
+		else m_ex = ex;
 	}
 }
 
