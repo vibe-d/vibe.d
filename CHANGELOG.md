@@ -50,6 +50,7 @@ A large revamp of the REST interface generator was done in this release, which w
 - Fixed multiple loggers not working - [issue #1294][issue1294]
 - Fixed `workerThreadCount` to always return a non-zero number by letting it start up the workers if necessary
 - Fixed `Path.toString()` to output trailing slashes if required for empty paths
+- Fixed an TLS connection failure in the OpenSSL based implementation when no `peer_name` was set
 
 [issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
 [issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
