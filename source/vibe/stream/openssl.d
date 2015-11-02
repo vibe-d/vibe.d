@@ -96,14 +96,15 @@ final class OpenSSLStream : TLSStream {
 			final switch (state) {
 				case TLSStreamState.accepting:
 					//SSL_set_accept_state(m_tls);
-					enforceSSL(SSL_accept(m_tls), "Failed to accept SSL tunnel");
+					checkSSLRet(SSL_accept(m_tls), "Accepting SSL tunnel");
 					break;
 				case TLSStreamState.connecting:
 					// a client stream can override the default ALPN setting for this context
 					if (alpn.length) setClientALPN(alpn);
-					SSL_ctrl(m_tls, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
+					if (peer_name.length)
+						SSL_ctrl(m_tls, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
 					//SSL_set_connect_state(m_tls);
-					enforceSSL(SSL_connect(m_tls), "Failed to connect TLS tunnel.");
+					checkSSLRet(SSL_connect(m_tls), "Connecting TLS tunnel");
 					break;
 				case TLSStreamState.connected:
 					break;
@@ -202,7 +203,7 @@ final class OpenSSLStream : TLSStream {
 	{
 		while( dst.length > 0 ){
 			int readlen = min(dst.length, int.max);
-			auto ret = checkSSLRet("SSL_read", SSL_read(m_tls, dst.ptr, readlen));
+			auto ret = checkSSLRet(SSL_read(m_tls, dst.ptr, readlen), "Reading from TLS stream");
 			//logTrace("SSL read %d/%d", ret, dst.length);
 			dst = dst[ret .. $];
 		}
@@ -213,7 +214,7 @@ final class OpenSSLStream : TLSStream {
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
 			int writelen = min(bytes.length, int.max);
-			auto ret = checkSSLRet("SSL_write", SSL_write(m_tls, bytes.ptr, writelen));
+			auto ret = checkSSLRet(SSL_write(m_tls, bytes.ptr, writelen), "Writing to TLS stream");
 			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
 		}
@@ -244,22 +245,39 @@ final class OpenSSLStream : TLSStream {
 		writeDefault(stream, nbytes);
 	}
 
-	private int checkSSLRet(string what, int ret)
+	private int checkSSLRet(int ret, string what)
 	{
 		checkExceptions();
-		if (ret <= 0) {
-			const(char)* file = null, data = null;
-			int line;
-			int flags;
-			c_ulong eret;
-			char[120] ebuf;
-			while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
-				ERR_error_string(eret, ebuf.ptr);
-				logDiagnostic("%s error at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
-			}
+		if (ret > 0) return ret;
+
+		string desc;
+		auto err = SSL_get_error(m_tls, ret);
+		switch (err) {
+			default: desc = format("Unknown error (%s)", err); break;
+			case SSL_ERROR_NONE: desc = "No error"; break;
+			case SSL_ERROR_ZERO_RETURN: desc = "SSL/TLS tunnel closed"; break;
+			case SSL_ERROR_WANT_READ: desc = "Need to block for read"; break;
+			case SSL_ERROR_WANT_WRITE: desc = "Need to block for write"; break;
+			case SSL_ERROR_WANT_CONNECT: desc = "Need to block for connect"; break;
+			case SSL_ERROR_WANT_ACCEPT: desc = "Need to block for accept"; break;
+			case SSL_ERROR_WANT_X509_LOOKUP: desc = "Need to block for certificate lookup"; break;
+			case SSL_ERROR_SYSCALL:
+			case SSL_ERROR_SSL:
+				return enforceSSL(ret, what);
 		}
+
+		const(char)* file = null, data = null;
+		int line;
+		int flags;
+		c_ulong eret;
+		char[120] ebuf;
+		while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
+			ERR_error_string(eret, ebuf.ptr);
+			logDiagnostic("%s error at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
+		}
+
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
-		enforce(ret >= 0, format("%s returned an error: %s", what, SSL_get_error(m_tls, ret)));
+		enforce(ret >= 0, format("%s returned an error: %s", what, desc));
 		return ret;
 	}
 
@@ -742,6 +760,11 @@ final class OpenSSLContext : TLSContext {
 
 			if (err != X509_V_OK)
 				logDebug("SSL cert initial error: %s", X509_verify_cert_error_string(err).to!string);
+
+			if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY) {
+				logDebug("SSL certificate not accepted by remote.");
+				return false;
+			}
 
 			if (!valid) {
 				switch (err) {
