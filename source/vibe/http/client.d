@@ -512,7 +512,13 @@ final class HTTPClient {
 				m_conn = connectTCP(m_server, m_port);
 
 			m_stream = m_conn;
-			if (m_tls) m_stream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
+			if (m_tls) {
+				try m_stream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
+				catch (Exception e) {
+					m_conn.close();
+					throw e;
+				}
+			}
 		}
 
 		auto req = scoped!HTTPClientRequest(m_stream, m_conn.localAddress);
