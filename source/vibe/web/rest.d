@@ -18,7 +18,7 @@ import vibe.http.status : isSuccessCode;
 import vibe.internal.meta.uda;
 import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
-import vibe.web.internal.rest.common : RestInterface;
+import vibe.web.internal.rest.common : RestInterface, Route;
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
@@ -68,8 +68,9 @@ import std.traits;
 */
 URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInterfaceSettings settings = null)
 {
-	import std.algorithm : filter, map;
+	import std.algorithm : filter, map, all;
 	import std.array : array;
+	import std.range : front;
 	import vibe.web.internal.rest.common : ParameterKind;
 
 	auto intf = RestInterface!TImpl(settings, false);
@@ -78,6 +79,7 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInt
 		enum fname = __traits(identifier, intf.SubInterfaceFunctions[i]);
 		router.registerRestInterface!T(__traits(getMember, instance, fname)(), intf.subInterfaces[i].settings);
 	}
+
 
 	foreach (i, func; intf.RouteFunctions) {
 		auto route = intf.routes[i];
@@ -88,6 +90,18 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, RestInt
 		auto diagparams = route.parameters.filter!(p => p.kind != ParameterKind.internal).map!(p => p.fieldName).array;
 		logDiagnostic("REST route: %s %s %s", route.method, route.fullPattern, diagparams);
 		router.match(route.method, route.fullPattern, handler);
+	}
+
+	// here we filter our already existing OPTIONS routes, so we don't overwrite whenever the user explicitly made his own OPTIONS route
+	auto routesGroupedByPattern = intf.getRoutesGroupedByPattern.filter!(rs => rs.all!(r => r.method != HTTPMethod.OPTIONS));
+
+	foreach(routes; routesGroupedByPattern){
+		auto route = routes.front;
+		auto handler = optionsMethodHandler(routes, settings);
+
+		auto diagparams = route.parameters.filter!(p => p.kind != ParameterKind.internal).map!(p => p.fieldName).array;
+		logDiagnostic("REST route: %s %s %s", HTTPMethod.OPTIONS, route.fullPattern, diagparams);
+		router.match(HTTPMethod.OPTIONS, route.fullPattern, handler);
 	}
 	return router;
 }
@@ -451,6 +465,12 @@ class RestInterfaceSettings {
 	*/
 	URL baseURL;
 
+	/** List of allowed origins for CORS
+
+		Empty list is interpreted as allowing all origins (e.g. *)
+	*/
+	string[] allowedOrigins;
+
 	/** Naming convention used for the generated URLs.
 	*/
 	MethodStyle methodStyle = MethodStyle.lowerUnderscored;
@@ -468,6 +488,7 @@ class RestInterfaceSettings {
 		ret.baseURL = this.baseURL;
 		ret.methodStyle = this.methodStyle;
 		ret.stripTrailingUnderscore = this.stripTrailingUnderscore;
+		ret.allowedOrigins = this.allowedOrigins.dup;
 		return ret;
 	}
 }
@@ -519,6 +540,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	alias RT = ReturnType!(FunctionTypeOf!Func);
 	static const sroute = RestInterface!T.staticRoutes[ridx];
 	auto route = intf.routes[ridx];
+	auto settings = intf.settings;
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
 	{
@@ -564,9 +586,28 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			} else params[i] = v;
 		}
 
+		void handleCors()
+		{
+			import std.algorithm : any;
+			import std.uni : sicmp;
+
+			if (req.method == HTTPMethod.OPTIONS)
+				return;
+			auto origin = "Origin" in req.headers;
+			if (origin is null)
+				return;
+
+			if (settings.allowedOrigins.length != 0 &&
+				!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
+				return;
+
+			res.headers["Access-Control-Allow-Origin"] = *origin;
+			res.headers["Access-Control-Allow-Credentials"] = "true";
+		}
 		// Anti copy-paste
 		void returnHeaders()
 		{
+			handleCors();
 			foreach (i, P; PTypes) {
 				static if (sroute.parameters[i].isOut) {
 					static assert (sroute.parameters[i].kind == ParameterKind.header);
@@ -618,6 +659,86 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	return &handler;
 }
 
+/**
+ * Generate an handler that will wrap the server's method
+ *
+ * This function returns an handler that handles the http OPTIONS method.
+ *
+ * It will return the ALLOW header with all the methods on this resource
+ * And it will handle Preflight CORS.
+ *
+ * Params:
+ *	routes = a range of Routes were each route has the same resource/URI
+ *				just different method.
+ *	settings = REST server configuration.
+ *
+ * Returns:
+ *	A delegate suitable to use as an handler for an HTTP request.
+ */
+private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange routes, RestInterfaceSettings settings = null)
+{
+	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+	import std.algorithm : map, joiner, any;
+	import std.conv : text;
+	import std.array : array;
+	import vibe.http.common : httpMethodString, httpMethodFromString;
+	// NOTE: don't know what is better, to keep this in memory, or generate on each request
+	auto allow = routes.map!(r => r.method.httpMethodString).joiner(",").text();
+	auto methods = routes.map!(r => r.method).array();
+
+	void handlePreflightedCors(HTTPServerRequest req, HTTPServerResponse res, ref HTTPMethod[] methods, RestInterfaceSettings settings = null)
+	{
+		import std.algorithm : among;
+		import std.uni : sicmp;
+
+		auto origin = "Origin" in req.headers;
+		if (origin is null)
+			return;
+
+		if (settings !is null &&
+			settings.allowedOrigins.length != 0 &&
+			!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
+			return;
+		
+		auto method = "Access-Control-Request-Method" in req.headers;
+		if (method is null)
+			return;
+
+		auto httpMethod = httpMethodFromString(*method);
+
+		if (!methods.any!(m => m == httpMethod))
+			return;
+
+		res.headers["Access-Control-Allow-Origin"] = *origin;
+
+		// there is no way to know if the specific resource supports credentials
+		// (either cookies, HTTP authentication, or client-side SSL certificates), 
+		// so we always assume it does
+		res.headers["Access-Control-Allow-Credentials"] = "true";
+		res.headers["Access-Control-Max-Age"] = "1728000";
+		res.headers["Access-Control-Allow-Methods"] = *method;
+
+		// we have no way to reliably determine what headers the resource allows
+		// so we simply copy whatever the client requested
+		if (auto headers = "Access-Control-Request-Headers" in req.headers)
+			res.headers["Access-Control-Allow-Headers"] = *headers;
+	}
+
+	void handler(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		// since this is a OPTIONS request, we have to return the ALLOW headers to tell which methods we have
+		res.headers["Allow"] = allow;
+		
+		// handle CORS preflighted requests
+		handlePreflightedCors(req,res,methods,settings);
+
+		// NOTE: besides just returning the allowed methods and handling CORS preflighted requests,
+		// this would be a nice place to describe what kind of resources are on this route, 
+		// the params each accepts, the headers, etc... think WSDL but then for REST.
+		res.writeBody("");
+	}
+	return &handler;
+}
 
 private string generateRestClientMethods(I)()
 {
