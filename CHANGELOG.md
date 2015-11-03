@@ -51,6 +51,7 @@ A large revamp of the REST interface generator was done in this release, which w
 - Fixed `workerThreadCount` to always return a non-zero number by letting it start up the workers if necessary
 - Fixed `Path.toString()` to output trailing slashes if required for empty paths
 - Fixed an TLS connection failure in the OpenSSL based implementation when no `peer_name` was set
+- Fixed linking on Debian, which has removed certain public OpenSSL functions (by Luca Niccoli) - [issue #1315][issue1315], [pull #1316][issue1316]
 
 [issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
 [issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
@@ -62,11 +63,13 @@ A large revamp of the REST interface generator was done in this release, which w
 [issue1287]: https://github.com/rejectedsoftware/vibe.d/issues/1287
 [issue1290]: https://github.com/rejectedsoftware/vibe.d/issues/1290
 [issue1294]: https://github.com/rejectedsoftware/vibe.d/issues/1294
-[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1227
-[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1247
+[issue1227]: https://github.com/rejectedsoftware/vibe.d/issues/1227
+[issue1247]: https://github.com/rejectedsoftware/vibe.d/issues/1247
 [issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1296
-[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1297
-[issue1296]: https://github.com/rejectedsoftware/vibe.d/issues/1298
+[issue1297]: https://github.com/rejectedsoftware/vibe.d/issues/1297
+[issue1298]: https://github.com/rejectedsoftware/vibe.d/issues/1298
+[issue1315]: https://github.com/rejectedsoftware/vibe.d/issues/1315
+[issue1316]: https://github.com/rejectedsoftware/vibe.d/issues/1316
 
 
 v0.7.25 - 2015-09-20
