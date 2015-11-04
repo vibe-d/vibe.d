@@ -17,6 +17,7 @@ Support
 
 Vibe.d aims to support the 3 latest minor releases of D.
 At the moment, it means that the following compilers are supported and tested:
+- DMD 2.069
 - DMD 2.068
 - DMD 2.067
 - DMD 2.066
