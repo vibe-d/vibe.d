@@ -115,7 +115,7 @@ struct URL {
 
 	invariant()
 	{
-		assert(isURLEncoded(m_pathString), "Wrong encoding of '"~m_pathString~"'");
+		assert(isURLEncoded(m_pathString), "Wrong URL encoding of '"~m_pathString~"'");
 	}
 
 	/// The schema/protocol part of the URL
@@ -129,7 +129,7 @@ struct URL {
 	/// Set the path part of the URL. It should be properly encoded.
 	@property void pathString(string s)
 	{
-		enforce(isURLEncoded(m_pathString), "Wrong encoding of '"~m_pathString~"'");
+		enforce(isURLEncoded(s), "Wrong URL encoding of the path string '"~s~"'");
 		m_pathString = s;
 	}
 
@@ -350,4 +350,11 @@ unittest {
 	assert(URL("file://test").path.toString() == "test");
 	assert(URL("file://./test").pathString == "./test");
 	assert(URL("file://./test").path.toString() == "./test");
+}
+
+unittest { // issue #1318
+	try {
+		URL("http://something/inval%id");
+		assert(false, "Expected to throw an exception.");
+	} catch (Exception e) {}
 }

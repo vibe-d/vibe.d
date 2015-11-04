@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.26 - 2015-11-
+v0.7.26 - 2015-11-04
 --------------------
 
 A large revamp of the REST interface generator was done in this release, which will enable faster future developments. The new JavaScript client generator is the first feature made possible by this. Apart from a good chunk of functional improvements in various areas, a notable change on the build level is that the `VibeCustomMain` version is no longer required for projects that implement their own `main` function.
@@ -52,6 +52,7 @@ A large revamp of the REST interface generator was done in this release, which w
 - Fixed `Path.toString()` to output trailing slashes if required for empty paths
 - Fixed an TLS connection failure in the OpenSSL based implementation when no `peer_name` was set
 - Fixed linking on Debian, which has removed certain public OpenSSL functions (by Luca Niccoli) - [issue #1315][issue1315], [pull #1316][issue1316]
+- Fixed an assertion happening when parsing malformed URLs - [issue #1318][issue1318]
 
 [issue911]: https://github.com/rejectedsoftware/vibe.d/issues/911
 [issue1204]: https://github.com/rejectedsoftware/vibe.d/issues/1204
@@ -70,6 +71,7 @@ A large revamp of the REST interface generator was done in this release, which w
 [issue1298]: https://github.com/rejectedsoftware/vibe.d/issues/1298
 [issue1315]: https://github.com/rejectedsoftware/vibe.d/issues/1315
 [issue1316]: https://github.com/rejectedsoftware/vibe.d/issues/1316
+[issue1318]: https://github.com/rejectedsoftware/vibe.d/issues/1318
 
 
 v0.7.25 - 2015-09-20
