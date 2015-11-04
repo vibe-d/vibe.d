@@ -351,3 +351,10 @@ unittest {
 	assert(URL("file://./test").pathString == "./test");
 	assert(URL("file://./test").path.toString() == "./test");
 }
+
+unittest { // issue #1318
+	try {
+		URL("http://something/inval%id");
+		assert(false, "Expected to throw an exception.");
+	} catch (Exception e) {}
+}
