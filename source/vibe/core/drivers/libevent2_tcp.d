@@ -376,6 +376,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		if (m_ctx && m_ctx.state == ConnectionState.passiveClose) {
 			if (m_ctx.event) bufferevent_free(m_ctx.event);
 			TCPContextAlloc.free(m_ctx);
+			m_ctx = null;
 		}
 	}
 
