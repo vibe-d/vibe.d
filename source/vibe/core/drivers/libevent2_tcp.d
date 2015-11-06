@@ -85,10 +85,12 @@ package final class Libevent2TCPConnection : TCPConnection {
 		bufferevent_setwatermark(m_ctx.event, EV_READ, 0, 65536);
 	}
 
-	/*~this()
+	~this()
 	{
+		if (m_ctx && m_ctx.state == ConnectionState.passiveClose)
+			TCPContextAlloc.free(m_ctx);
 		//assert(m_ctx is null, "Leaking TCPContext because it has not been cleaned up and we are not allowed to touch the GC in finalizers..");
-	}*/
+	}
 
 	@property void tcpNoDelay(bool enabled)
 	{
