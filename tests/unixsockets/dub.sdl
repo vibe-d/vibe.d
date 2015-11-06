@@ -1,0 +1,3 @@
+name "unixsockets"
+dependency "vibe-d" path="../../"
+versions "VibeDefaultMain"
