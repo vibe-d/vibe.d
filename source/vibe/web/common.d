@@ -718,19 +718,27 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 }
 
 package bool webConvTo(T)(string str, ref T dst, ref ParamError err)
-{
+nothrow {
 	import std.conv;
 	import std.exception;
-	static if (is(typeof(T.fromStringValidate(str, &err.text)))) {
-		static assert(is(typeof(T.fromStringValidate(str, &err.text)) == Nullable!T));
-		auto res = T.fromStringValidate(str, &err.text);
-		if (res.isNull()) return false;
-		dst.setVoid(res);
-	} else static if (is(typeof(T.fromString(str)))) {
-		static assert(is(typeof(T.fromString(str)) == T));
-		dst.setVoid(T.fromString(str));
-	} else {
-		dst.setVoid(str.to!T());
+	try {
+		static if (is(typeof(T.fromStringValidate(str, &err.text)))) {
+			static assert(is(typeof(T.fromStringValidate(str, &err.text)) == Nullable!T));
+			auto res = T.fromStringValidate(str, &err.text);
+			if (res.isNull()) return false;
+			dst.setVoid(res);
+		} else static if (is(typeof(T.fromString(str)))) {
+			static assert(is(typeof(T.fromString(str)) == T));
+			dst.setVoid(T.fromString(str));
+		} else {
+			dst.setVoid(str.to!T());
+		}
+	} catch (Exception e) {
+		import std.encoding : sanitize;
+		err.text = e.msg;
+		try err.debugText = e.toString().sanitize;
+		catch (Exception) {}
+		return false;
 	}
 	return true;
 }

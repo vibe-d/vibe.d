@@ -631,6 +631,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			else static if (param_names[i].startsWith("_")) {
 				if (auto pv = param_names[i][1 .. $] in req.params) {
 					got_error = !webConvTo(*pv, params[i], err);
+					// treat errors in route parameters as non-match
+					// FIXME: verify that the parameter is actually a route parameter!
+					if (got_error) return;
 				} else static if (!is(default_values[i] == void)) params[i].setVoid(default_values[i]);
 				else static if (!isNullable!PT) enforceHTTP(false, HTTPStatus.badRequest, "Missing request parameter for "~param_names[i]);
 			} else static if (is(PT == bool)) {
