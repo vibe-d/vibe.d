@@ -1,7 +1,7 @@
 /**
 	Contains routines for high level path handling.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -12,6 +12,76 @@ import std.array;
 import std.conv;
 import std.exception;
 import std.string;
+
+
+/** Computes the relative path from `base_path` to this path.
+
+	Params:
+		path = The destination path
+		base_path = The path from which the relative path starts
+
+	See_also: `relativeToWeb`
+*/
+Path relativeTo(Path path, Path base_path)
+{
+	assert(path.absolute && base_path.absolute);
+	version (Windows) {
+		// a path such as ..\C:\windows is not valid, so force the path to stay absolute in this case
+		if (path.absolute && !path.empty &&
+			(path[0].toString().endsWith(":") && !base_path.startsWith(path[0 .. 1]) ||
+			path[0] == "\\" && !base_path.startsWith(path[0 .. min(2, $)])))
+		{
+			return path;
+		}
+	}
+	int nup = 0;
+	while (base_path.length > nup && !path.startsWith(base_path[0 .. base_path.length-nup])) {
+		nup++;
+	}
+
+	Path ret = Path(null, false);
+	ret.m_endsWithSlash = true;
+	foreach (i; 0 .. nup) ret ~= "..";
+	ret ~= Path(path.nodes[base_path.length-nup .. $], false);
+	ret.m_endsWithSlash = path.m_endsWithSlash;
+	return ret;
+}
+
+///
+unittest {
+	assert(Path("/some/path").relativeTo(Path("/")) == Path("some/path"));
+	assert(Path("/some/path/").relativeTo(Path("/some/other/path/")) == Path("../../path/"));
+	assert(Path("/some/path/").relativeTo(Path("/some/other/path")) == Path("../../path/"));
+}
+
+
+/** Computes the relative path to this path from `base_path` using web path rules.
+
+	The difference to `relativeTo` is that a path not ending in a slash
+	will not be considered as a path to a directory and the parent path
+	will instead be used.
+
+	Params:
+		path = The destination path
+		base_path = The path from which the relative path starts
+
+	See_also: `relativeTo`
+*/
+Path relativeToWeb(Path path, Path base_path)
+{
+	if (!base_path.endsWithSlash) {
+		if (base_path.length > 0) base_path = base_path[0 .. $-1];
+		else base_path = Path("/");
+	}
+	return path.relativeTo(base_path);
+}
+
+///
+unittest {
+	assert(Path("/some/path").relativeToWeb(Path("/")) == Path("some/path"));
+	assert(Path("/some/path/").relativeToWeb(Path("/some/other/path/")) == Path("../../path/"));
+	assert(Path("/some/path/").relativeToWeb(Path("/some/other/path")) == Path("../path/"));
+}
 
 
 /**
@@ -139,30 +209,6 @@ struct Path {
 			if( m_nodes[i] != rhs.m_nodes[i] )
 				return false;
 		return true;
-	}
-
-	/// Computes the relative path from `parentPath` to this path.
-	Path relativeTo(const Path parentPath) const {
-		assert(this.absolute && parentPath.absolute);
-		version(Windows){
-			// a path such as ..\C:\windows is not valid, so force the path to stay absolute in this case
-			if( this.absolute && !this.empty &&
-				(m_nodes[0].toString().endsWith(":") && !parentPath.startsWith(this[0 .. 1]) ||
-				m_nodes[0] == "\\" && !parentPath.startsWith(this[0 .. min(2, $)])))
-			{
-				return this;
-			}
-		}
-		int nup = 0;
-		while( parentPath.length > nup && !startsWith(parentPath[0 .. parentPath.length-nup]) ){
-			nup++;
-		}
-		Path ret = Path(null, false);
-		ret.m_endsWithSlash = true;
-		foreach( i; 0 .. nup ) ret ~= "..";
-		ret ~= Path(m_nodes[parentPath.length-nup .. $], false);
-		ret.m_endsWithSlash = this.m_endsWithSlash;
-		return ret;
 	}
 
 	/// The last entry of the path
@@ -450,5 +496,3 @@ pure {
 	assert(eidx == nelements);
 	return storage;
 }
-
-
