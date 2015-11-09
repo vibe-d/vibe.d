@@ -256,13 +256,9 @@ final class URLRouter : HTTPServerRequestHandler {
 		string calcBasePath()
 		{
 			import vibe.inet.path;
-			auto prefix = m_prefix;
-			if(prefix == null) prefix = "/";
-			auto path = Path(req.path);
-			if(!path.endsWithSlash) path = path[0 .. $ - 1];
-			auto result = Path(prefix).relativeTo(path);
-			result.endsWithSlash = true;
-			return result.toString;
+			auto p = Path(prefix.length ? prefix : "/");
+			p.endsWithSlash = true;
+			return p.relativeToWeb(Path(req.path)).toString();
 		}
 
 		auto path = req.path;
@@ -279,7 +275,7 @@ final class URLRouter : HTTPServerRequestHandler {
 						logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
 						// TODO: use a different map type that avoids allocations for small amounts of keys
 						foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
-						req.params["routerRootDir"] = calcBasePath;
+						req.params["routerRootDir"] = calcBasePath();
 						r.cb(req, res);
 						done = res.headerWritten;
 					}
