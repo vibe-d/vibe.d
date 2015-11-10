@@ -147,7 +147,7 @@ import vibe.web.rest;
 			route.method = sroute.method;
 
 			static if (sroute.pathOverride) route.pattern = sroute.rawName;
-			else route.pattern = adjustMethodStyle(stripTUnderscore(sroute.rawName, settings), settings.methodStyle);
+			else route.pattern = computeDefaultPath!RF(sroute.rawName);
 			route.method = sroute.method;
 			extractPathParts(route.fullPathParts, this.basePath.endsWith("/") ? this.basePath : this.basePath ~ "/");
 
@@ -309,7 +309,7 @@ import vibe.web.rest;
 			enum meta = extractHTTPMethodAndName!(func, false)();
 
 			static if (meta.hadPathUDA) string url = meta.url;
-			else string url = adjustMethodStyle(stripTUnderscore(meta.url, settings), settings.methodStyle);
+			else string url = computeDefaultPath!func(meta.url);
 
 			SubInterface si;
 			si.settings = settings.dup;
@@ -323,8 +323,8 @@ import vibe.web.rest;
 	private template GetSubInterfaceFunctions() {
 		template Impl(size_t idx) {
 			static if (idx < AllMethods.length) {
-				alias R = ReturnType!(AllMethods[idx]);
-				static if (is(R == interface)) {
+				alias SI = SubInterfaceType!(AllMethods[idx]);
+				static if (!is(SI == void)) {
 					alias Impl = TypeTuple!(AllMethods[idx], Impl!(idx+1));
 				} else {
 					alias Impl = Impl!(idx+1);
@@ -337,9 +337,9 @@ import vibe.web.rest;
 	private template GetSubInterfaceTypes() {
 		template Impl(size_t idx) {
 			static if (idx < AllMethods.length) {
-				alias R = ReturnType!(FunctionTypeOf!(AllMethods[idx]));
-				static if (is(R == interface)) {
-					alias Impl = TypeTuple!(R, Impl!(idx+1));
+				alias SI = SubInterfaceType!(AllMethods[idx]);
+				static if (!is(SI == void)) {
+					alias Impl = TypeTuple!(SI, Impl!(idx+1));
 				} else {
 					alias Impl = Impl!(idx+1);
 				}
@@ -352,7 +352,8 @@ import vibe.web.rest;
 		template Impl(size_t idx) {
 			static if (idx < AllMethods.length) {
 				alias F = AllMethods[idx];
-				static if (!is(ReturnType!(FunctionTypeOf!F) == interface))
+				alias SI = SubInterfaceType!F;
+				static if (is(SI == void))
 					alias Impl = TypeTuple!(F, Impl!(idx+1));
 				else alias Impl = Impl!(idx+1);
 			} else alias Impl = TypeTuple!();
@@ -371,6 +372,21 @@ import vibe.web.rest;
 			} else alias Impl = TypeTuple!();
 		}
 		alias GetAllMethods = Impl!0;
+	}
+
+	private string computeDefaultPath(alias method)(string name)
+	{
+		auto ret = adjustMethodStyle(stripTUnderscore(name, settings), settings.methodStyle);
+		static if (is(I.CollectionIndices)) {
+			alias IdxTypes = typeof(I.CollectionIndices.tupleof);
+			alias PTypes = ParameterTypeTuple!method;
+			enum has_index_param = PTypes.length >= IdxTypes.length && is(PTypes[0 .. IdxTypes.length] == IdxTypes);
+			enum index_name = __traits(identifier, I.CollectionIndices.tupleof[$-1]);
+
+			static if (has_index_param && index_name.startsWith("_"))
+				ret = (":" ~ index_name[1 .. $] ~ "/").concatURL(ret);
+		}
+		return ret;
 	}
 }
 
@@ -428,6 +444,14 @@ enum ParameterKind {
 
 struct SubInterface {
 	RestInterfaceSettings settings;
+}
+
+template SubInterfaceType(alias F) {
+	import std.traits : ReturnType, isInstanceOf;
+	alias RT = ReturnType!F;
+	static if (is(RT == interface)) alias SubInterfaceType = RT;
+	else static if (isInstanceOf!(Collection, RT)) alias SubInterfaceType = RT.Interface;
+	else alias SubInterfaceType = void;
 }
 
 private bool extractPathParts(ref PathPart[] parts, string pattern)
@@ -598,4 +622,45 @@ unittest { // #1285
 	static assert(!RI.staticRoutes[0].parameters[1].isIn && RI.staticRoutes[0].parameters[1].isOut);
 	static assert(RI.staticRoutes[0].parameters[2].name == "c");
 	static assert(RI.staticRoutes[0].parameters[2].isIn && RI.staticRoutes[0].parameters[2].isOut);
+}
+
+unittest {
+	interface Baz {
+		struct CollectionIndices {
+			string _barid;
+			int _bazid;
+		}
+
+		void test(string _barid, int _bazid);
+		void test2(string _barid);
+	}
+
+	interface Bar {
+		struct CollectionIndices {
+			string _barid;
+		}
+
+		Collection!Baz baz(string _barid);
+
+		void test(string _barid);
+		void test2();
+	}
+
+	interface Foo {
+		Collection!Bar bar();
+	}
+
+	auto foo = RestInterface!Foo(null, false);
+	assert(foo.subInterfaceCount == 1);
+
+	auto bar = RestInterface!Bar(foo.subInterfaces[0].settings, false);
+	assert(bar.routeCount == 2);
+	assert(bar.routes[0].fullPattern == "/bar/:barid/test");
+	assert(bar.routes[1].fullPattern == "/bar/test2", bar.routes[1].fullPattern);
+	assert(bar.subInterfaceCount == 1);
+
+	auto baz = RestInterface!Baz(bar.subInterfaces[0].settings, false);
+	assert(baz.routeCount == 2);
+	assert(baz.routes[0].fullPattern == "/bar/:barid/baz/:bazid/test");
+	assert(baz.routes[1].fullPattern == "/bar/:barid/baz/test2");
 }
