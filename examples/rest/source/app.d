@@ -106,7 +106,7 @@ interface Example2API
 	}
 
 	/* As you may see, using aggregate types in parameters is just as easy.
-	 * Macthing request for this function will be "GET /ACCUMULATE_ALL?input=<encoded json data>"
+	 * Matching request for this function will be "GET /ACCUMULATE_ALL?input=<encoded json data>"
 	 * Answer will be of "application/json" type.
 	 */
 	Aggregate queryAccumulateAll(Aggregate[] input);
