@@ -1,6 +1,16 @@
 ﻿Changelog
 =========
 
+v0.7.27 - 2015-
+--------------------
+
+- Implemented CORS support for the REST interface server (by Sebastian Koppe) - [pull #1299][issue1299]
+- The `URLRouter` now adds a `"routerRootDir"` entry with the relative path to the router base directory to `HTTPServerRequest.params` (by Steven Dwy) - [pull #1301][issue1301]
+- Added `Path.relativeToWeb`, a version of `relativeTo` with web semantics
+- Conversion errors for path parameters (e.g. `@path("/foo/:someparam")`) in REST interfaces now result in a 404 error instead of 500
+- Added support for REST collections with natural D syntax using the new `Collection!I` type - [pull #1268][issue1268]
+
+
 v0.7.26 - 2015-11-04
 --------------------
 
