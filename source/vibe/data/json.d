@@ -13,10 +13,10 @@ module vibe.data.json;
 
 ///
 unittest {
-	import vibe.core.log : logInfo;
-
 	void manipulateJson(Json j)
 	{
+		import std.stdio;
+
 		// retrieving the values is done using get()
 		assert(j["name"].get!string == "Example");
 		assert(j["id"].get!int == 1);
@@ -27,12 +27,11 @@ unittest {
 		// prints:
 		// name: "Example"
 		// id: 1
-		foreach (string key, value; j) {
-			logInfo("%s: %s", key, value);
-		}
+		foreach (string key, value; j)
+			writefln("%s: %s", key, value);
 
 		// print out as JSON: {"name": "Example", "id": 1}
-		logInfo("JSON: %s", j.toString());
+		writefln("JSON: %s", j.toString());
 
 		// DEPRECATED: object members can be accessed using member syntax, just like in JavaScript
 		//j = Json.emptyObject;
@@ -2253,4 +2252,27 @@ private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool co
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int* err_line)
 {
 	enforceJson!(file, line)(cond, message, err_file, err_line ? *err_line : -1);
+}
+
+// test for vibe.utils.DictionaryList
+unittest {
+	import vibe.utils.dictionarylist;
+
+	static assert(isCustomSerializable!(DictionaryList!int));
+
+	DictionaryList!(int, false) b;
+	b.addField("a", 1);
+	b.addField("A", 2);
+	auto app = appender!string();
+	serializeToJson(app, b);
+	assert(app.data == `[{"key":"a","value":1},{"key":"A","value":2}]`, app.data);
+
+	DictionaryList!(int, true, 2) c;
+	c.addField("a", 1);
+	c.addField("b", 2);
+	c.addField("a", 3);
+	c.remove("b");
+	auto appc = appender!string();
+	serializeToJson(appc, c);
+	assert(appc.data == `[{"key":"a","value":1},{"key":"a","value":3}]`, appc.data);
 }

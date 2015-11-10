@@ -1,9 +1,8 @@
 ﻿{
 	"name": "https-sni-server-example",
 	"description": "Uses SNI to serve multiple virtual hosts in a single HTTPS port.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

@@ -1,9 +1,8 @@
 ﻿{
 	"name": "uploader-example",
 	"description": "Simple form based file upload example.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:diet": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

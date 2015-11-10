@@ -1,9 +1,8 @@
 ﻿{
 	"name": "auth-digest-example",
 	"description": "Demonstrates digest authentication.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:diet": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

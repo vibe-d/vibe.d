@@ -1,9 +1,9 @@
 {
 	"name": "serialization-example",
 	"description": "Example of data (de-)serialization.",
-	"authors": ["Sönke Ludwig"],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:core": {"path": "../../"},
+		"vibe-d:data": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }

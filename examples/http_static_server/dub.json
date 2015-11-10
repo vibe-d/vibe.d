@@ -1,9 +1,8 @@
 ﻿{
 	"name": "http-static-server-example",
 	"description": "Simple HTTP server that serves static files.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

@@ -1,9 +1,8 @@
 ﻿{
 	"name": "redis-example",
 	"description": "Basic Redis usage example.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:redis": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }

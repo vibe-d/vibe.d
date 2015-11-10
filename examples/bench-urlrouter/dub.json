@@ -2,7 +2,7 @@
 	"name": "bench-urlrouter",
 	"description": "Benchmark for the URLRouter class",
 	"dependencies": {
-		"vibe-d": { "path": "../../", "version": "~master" }
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain", "VibeRouterTreeMatch"]
 }

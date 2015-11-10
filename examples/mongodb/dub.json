@@ -1,9 +1,8 @@
 ﻿{
 	"name": "mongodb-example",
 	"description": "Basic MongoDB usage example.",
-	"authors": [ "Sönke Ludwig" ],
 	"dependencies": {
-		"vibe-d": {"version": "~master", "path": "../../"}
+		"vibe-d:mongodb": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }
