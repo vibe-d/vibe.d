@@ -154,6 +154,36 @@ class GzipInputStream : ZlibInputStream {
 	}
 }
 
+unittest {
+	import vibe.stream.memory;
+	import vibe.stream.operations;
+
+	auto raw = cast(ubyte[])"Hello, World!\n".dup;
+	ubyte[] gzip = [
+		0x1F, 0x8B, 0x08, 0x08, 0xAF, 0x12, 0x42, 0x56, 0x00, 0x03, 0x74, 0x65, 0x73, 0x74, 0x2E, 0x74,
+		0x78, 0x74, 0x00, 0xF3, 0x48, 0xCD, 0xC9, 0xC9, 0xD7, 0x51, 0x08, 0xCF, 0x2F, 0xCA, 0x49, 0x51,
+		0xE4, 0x02, 0x00, 0x84, 0x9E, 0xE8, 0xB4, 0x0E, 0x00, 0x00, 0x00];
+
+	auto gzipin = new GzipInputStream(new MemoryStream(gzip));
+	assert(gzipin.readAll() == raw);
+}
+
+unittest {
+	import vibe.stream.memory;
+	import vibe.stream.operations;
+
+	ubyte[] gzip_partial = [
+		0x1F, 0x8B, 0x08, 0x08, 0xAF, 0x12, 0x42, 0x56, 0x00, 0x03, 0x74, 0x65, 0x73, 0x74, 0x2E, 0x74,
+		0x78, 0x74, 0x00, 0xF3, 0x48, 0xCD, 0xC9, 0xC9, 0xD7, 0x51, 0x08, 0xCF, 0x2F, 0xCA, 0x49, 0x51,
+	];
+
+	auto gzipin = new GzipInputStream(new MemoryStream(gzip_partial));
+	try {
+		gzipin.readAll();
+		assert(false, "Expected exception.");
+	} catch (Exception e) {}
+	assert(gzipin.empty);
+}
 
 /**
 	Generic zlib input stream.
@@ -202,6 +232,7 @@ class ZlibInputStream : InputStream {
 		if (m_outbuffer.length > 0) return m_outbuffer.length;
 		if (m_finished) return 0;
 		readChunk();
+		assert(m_outbuffer.length || m_finished);
 
 		return m_outbuffer.length;
 	}
@@ -227,7 +258,7 @@ class ZlibInputStream : InputStream {
 		}
 	}
 
-	void readChunk()
+	private void readChunk()
 	{
 		assert(m_outbuffer.length == 0, "Buffer must be empty to read the next chunk.");
 		assert(m_outbuffer.peekDst().length > 0);
@@ -239,6 +270,10 @@ class ZlibInputStream : InputStream {
 		while (!m_outbuffer.length) {
 			if (m_zstream.avail_in == 0) {
 				auto clen = min(m_inbuffer.length, m_in.leastSize);
+				if (clen == 0) {
+					m_finished = true;
+					throw new Exception("Premature end of compressed input.");
+				}
 				m_in.read(m_inbuffer[0 .. clen]);
 				m_zstream.next_in = m_inbuffer.ptr;
 				m_zstream.avail_in = cast(uint)clen;
