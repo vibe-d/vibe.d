@@ -53,7 +53,10 @@ final struct Session {
 
 	///
 	unittest {
-		import vibe.http.server;
+		//import vibe.http.server;
+		// workaround for cyclic module ctor compiler error
+		class HTTPServerRequest { Session session; string[string] form; }
+		class HTTPServerResponse { Session startSession() { assert(false); } }
 
 		void login(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
@@ -98,7 +101,10 @@ final struct Session {
 	}
 	///
 	unittest {
-		import vibe.http.server;
+		//import vibe.http.server;
+		// workaround for cyclic module ctor compiler error
+		class HTTPServerRequest { Session session; }
+		class HTTPServerResponse { import vibe.core.stream; OutputStream bodyWriter() { assert(false); } string contentType; }
 
 		// sends all session entries to the requesting browser
 		// assumes that all entries are strings
