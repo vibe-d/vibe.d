@@ -1271,6 +1271,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	{
 		logTrace("%s", "finalize");
 		flush();
+		destroy(m_readBuffer);
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
@@ -1431,7 +1432,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 			if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected) {
 				m_tcpImpl.conn.kill(Task.getThis() != Task.init); // close the connection
-				destroy(m_readBuffer);
 				m_tcpImpl.conn = null;
 			}
 		}
