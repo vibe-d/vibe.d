@@ -1202,16 +1202,26 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 
 	bool waitForData(Duration timeout)
 	{
+		if (timeout == 0.seconds)
+			logDebug("Warning: use Duration.max as an argument to waitForData() to wait infinitely, not 0.seconds.");
+
 		acquireReader();
 		scope(exit) releaseReader();
-		auto tm = m_driver.createTimer(null);
-		scope(exit) m_driver.releaseTimer(tm);
-		m_driver.m_timers.getUserData(tm).owner = Task.getThis();
-		m_driver.rearmTimer(tm, timeout, false);
-		while (m_readBuffer.empty) {
-			if (!connected) return false;
-			m_driver.m_core.yieldForEvent();
-			if (!m_driver.isTimerPending(tm)) return false;
+		if (timeout != Duration.max && timeout != 0.seconds) {
+			auto tm = m_driver.createTimer(null);
+			scope(exit) m_driver.releaseTimer(tm);
+			m_driver.m_timers.getUserData(tm).owner = Task.getThis();
+			m_driver.rearmTimer(tm, timeout, false);
+			while (m_readBuffer.empty) {
+				if (!connected) return false;
+				m_driver.m_core.yieldForEvent();
+				if (!m_driver.isTimerPending(tm)) return false;
+			}
+		} else {
+			while (m_readBuffer.empty) {
+				if (!connected) return false;
+				m_driver.m_core.yieldForEvent();
+			}
 		}
 		return true;
 	}

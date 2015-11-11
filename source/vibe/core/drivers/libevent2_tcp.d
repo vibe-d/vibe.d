@@ -273,6 +273,9 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 	bool waitForData(Duration timeout)
 	{
+		if (timeout == 0.seconds)
+			logDebug("Warning: use Duration.max as an argument to waitForData() to wait infinitely, not 0.seconds.");
+
 		if (!m_ctx || !m_ctx.event) return false;
 		assert(m_ctx !is null);
 		auto inbuf = bufferevent_get_input(m_ctx.event);
@@ -282,15 +285,22 @@ package final class Libevent2TCPConnection : TCPConnection {
 		acquireReader();
 		scope(exit) releaseReader();
 		m_timeout_triggered = false;
-		event* evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
-		assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
-		timeval t = timeout.toTimeVal();
-		logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
-		event_add(evtmout, &t);
-		scope (exit) {
-			event_del(evtmout);
-			event_free(evtmout);
+
+		event* evtmout;
+		if (timeout != 0.seconds && timeout != Duration.max) { // 0.seconds is for compatibility with old code
+			evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
+			assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
+			timeval t = timeout.toTimeVal();
+			logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
+			event_add(evtmout, &t);
 		}
+
+		scope (exit)
+			if (evtmout) {
+				event_del(evtmout);
+				event_free(evtmout);
+			}
+
 		logTrace("wait for data");
 		while (m_ctx && m_ctx.event) {
 			if (evbuffer_get_length(inbuf) > 0) return true;
@@ -304,6 +314,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 				logDiagnostic("Connection error during waitForData: %s", e.toString());
 			}
 		}
+
 		return false;
 	}
 

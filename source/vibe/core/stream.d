@@ -172,8 +172,22 @@ interface ConnectionStream : Stream {
 	*/
 	void close();
 
-	/// Sets a timeout until data has to be availabe for read. Returns false on timeout.
-	bool waitForData(Duration timeout = 0.seconds);
+	/** Blocks until data becomes available for read.
+
+		The maximum wait time can be customized with the `timeout` parameter.
+		If there is already data availabe for read, or if the connection is
+		closed, the function will return immediately without blocking.
+
+		Params:
+			timeout = Optional timeout, the default value of `Duration.max`
+				indicates an infinite timeout
+
+		Returns:
+			The function will return `true` if data becomes available before the
+			timeout is reached. If the connection gets closed, or the timeout
+			gets reached, `false` is returned instead.
+	*/
+	bool waitForData(Duration timeout = Duration.max);
 }
 
 
