@@ -290,6 +290,7 @@ final class Libevent2Driver : EventDriver {
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
 
 		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, bind_addr, addr);
+		scope(failure) TCPContextAlloc.free(cctx);
 		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
 		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
 			throw new Exception("Error enabling buffered I/O event for socket.");
@@ -364,6 +365,7 @@ final class Libevent2Driver : EventDriver {
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
 			auto ctx = TCPContextAlloc.alloc(core, evloop, handler_context.listenfd, null, handler_context.bind_addr, NetworkAddress());
+			scope(failure) TCPContextAlloc.free(ctx);
 			ctx.connectionCallback = handler_context.connection_callback;
 			ctx.listenEvent = event_new(evloop, handler_context.listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
 			ctx.listenOptions = handler_context.options;
@@ -889,7 +891,7 @@ final class Libevent2UDPConnection : UDPConnection {
 
 		// create a context for storing connection information
 		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress());
-
+		scope(failure) TCPContextAlloc.free(m_ctx);
 		m_ctx.listenEvent = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
 		if (!m_ctx.listenEvent) throw new Exception("Failed to create buffer event for socket.");
 	}
