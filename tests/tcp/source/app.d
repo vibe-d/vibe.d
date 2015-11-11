@@ -21,8 +21,10 @@ void test1()
 	scope (failure) assert(false);
 
 	Test test;
+	Task lt;
 
 	listenTCP(port, (conn) {
+		lt = Task.getThis();
 		while (conn.connected) {
 			assert(conn.readLine() == "next");
 			auto curtest = test;
@@ -61,6 +63,7 @@ void test1()
 					assert(conn.waitForData(2.seconds) == false);
 					assert(cast(Duration)sw.peek < 2.seconds); // connection should be closed instantly
 					assert(!conn.connected);
+					conn.close();
 					return;
 			}
 			conn.write("ok\r\n");
@@ -104,6 +107,8 @@ void test1()
 	conn.write("next\r\n");
 	assert(conn.readLine() == "continue");
 	conn.close();
+
+	lt.join();
 }
 
 void test2()
@@ -119,11 +124,14 @@ void test2()
 		assert(cast(Duration)sw.peek < 500.msecs); // waitForData should return immediately
 		assert(conn.dataAvailableForRead);
 		assert(conn.readAll() == "test");
+		conn.close();
 	}, "127.0.0.1");
 
 	auto conn = connectTCP("127.0.0.1", port+1);
 	conn.write("test");
 	conn.close();
+
+	sleep(100.msecs);
 
 	assert(lt != Task.init);
 	lt.join();
