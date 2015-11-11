@@ -1,0 +1,5 @@
+name "tests"
+description "TCP semantics tests"
+copyright "Copyright © 2015, rejectedsoftware e.K."
+dependency "vibe-d:core" path="../../"
+//subConfiguration "vibe-d:core" "libasync"
