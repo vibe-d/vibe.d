@@ -1059,7 +1059,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 		if (buffer) {
 			m_buffer = buffer;
-			destroy(m_readBuffer);
+			m_readBuffer.dispose();
 		}
 
 		leastSize();
@@ -1073,7 +1073,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	in { assert(conn !is null); }
 	body {
 		m_settings.onConnect = cb;
-		m_readBuffer.freeOnDestruct = true;
 		m_readBuffer.capacity = 64*1024;
 	}
 
@@ -1151,7 +1150,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		scope(exit) releaseWriter();
 
 		// checkConnected();
-		destroy(m_readBuffer);
+		m_readBuffer.dispose();
 		onClose(null, false);
 	}
 
@@ -1340,7 +1339,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 			if (ret == buf.length) {
 				logTrace("Overflow detected, revert to ring buffer");
 				m_slice = null;
-				m_readBuffer.freeOnDestruct = true;
 				m_readBuffer.capacity = 64*1024;
 				m_readBuffer.put(buf);
 				m_buffer = null;
@@ -1473,7 +1471,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 				logError("%s", e.toString);
 				throw e;
 			}
-			if (inbound) onClose();
+			if (inbound) close();
 		}
 		logTrace("Finished callback");
 	}
