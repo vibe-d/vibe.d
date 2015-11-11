@@ -16,7 +16,7 @@ enum Test {
   close
 }
 
-void test()
+void test1()
 {
 	scope (failure) assert(false);
 
@@ -104,7 +104,35 @@ void test()
 	conn.write("next\r\n");
 	assert(conn.readLine() == "continue");
 	conn.close();
+}
 
+void test2()
+{
+	Task lt;
+	logInfo("Perform test \"disconnect with pending data\"");
+	listenTCP(port+1, (conn) {
+		lt = Task.getThis();
+		sleep(1.seconds);
+		StopWatch sw;
+		sw.start();
+		assert(conn.waitForData() == true);
+		assert(cast(Duration)sw.peek < 500.msecs); // waitForData should return immediately
+		assert(conn.dataAvailableForRead);
+		assert(conn.readAll() == "test");
+	}, "127.0.0.1");
+
+	auto conn = connectTCP("127.0.0.1", port+1);
+	conn.write("test");
+	conn.close();
+
+	assert(lt != Task.init);
+	lt.join();
+}
+
+void test()
+{
+	test1();
+	test2();
 	exitEventLoop();
 }
 
