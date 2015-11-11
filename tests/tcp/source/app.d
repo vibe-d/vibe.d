@@ -24,11 +24,12 @@ void test()
 	listenTCP(port, (conn) {
 		while (conn.connected) {
 			assert(conn.readLine() == "next");
+			auto curtest = test;
 			conn.write("continue\r\n");
-			logInfo("Perform test %s", test);
+			logInfo("Perform test %s", curtest);
 			StopWatch sw;
 			sw.start();
-			final switch (test) {
+			final switch (curtest) {
 				case Test.receive:
 					assert(conn.waitForData(2.seconds) == true);
 					assert(cast(Duration)sw.peek < 2.seconds); // should receive something instantly
