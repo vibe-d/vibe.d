@@ -1151,7 +1151,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		scope(exit) releaseWriter();
 
 		// checkConnected();
-
+		destroy(m_readBuffer);
 		onClose(null, false);
 	}
 
@@ -1271,7 +1271,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	{
 		logTrace("%s", "finalize");
 		flush();
-		destroy(m_readBuffer);
 	}
 
 	void write(InputStream stream, ulong nbytes = 0)
