@@ -1151,7 +1151,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		scope(exit) releaseWriter();
 
 		// checkConnected();
-
+		destroy(m_readBuffer);
 		onClose(null, false);
 	}
 
@@ -1431,7 +1431,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 			if (m_tcpImpl.conn && m_tcpImpl.conn.isConnected) {
 				m_tcpImpl.conn.kill(Task.getThis() != Task.init); // close the connection
-				destroy(m_readBuffer);
 				m_tcpImpl.conn = null;
 			}
 		}
