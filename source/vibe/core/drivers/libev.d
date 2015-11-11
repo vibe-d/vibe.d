@@ -129,12 +129,29 @@ final class LibevDriver : EventDriver {
 	*/
 	NetworkAddress resolveHost(string host, ushort family, bool use_dns)
 	{
-		assert(false);
+		NetworkAddress addr;
+		addr.family = AF_INET;
+		enforce(inet_pton(AF_INET, toStringz(host), &addr.sockAddrInet4.sin_addr) == 1, "Only IP4 addresses supported by the libev backend at the moment.");
+		return addr;
 	}
 
 	TCPConnection connectTCP(NetworkAddress addr)
 	{
-		assert(false);
+		int client_sd = socket(addr.family, SOCK_STREAM, 0);
+		enforce(client_sd != -1, "Error creating socket.");
+
+		// FIXME: perform connection in non-blocking mode!
+		enforce(connect(client_sd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect to host.");
+
+		setNonBlocking(client_sd);
+
+		ev_io* r_client = new ev_io;
+		ev_io* w_client = new ev_io;
+		ev_io_init(r_client, &read_cb, client_sd, EV_READ);
+		ev_io_init(w_client, &read_cb, client_sd, EV_WRITE);
+
+
+		return new LibevTCPConnection(this, client_sd, r_client, w_client);
 	}
 
 	LibevTCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string address, TCPListenOptions options)
@@ -658,17 +675,32 @@ final class LibevTCPConnection : TCPConnection {
 
 	bool waitForData(Duration timeout)
 	{
+		if (timeout == 0.seconds)
+			logDebug("Warning: use Duration.max as an argument to waitForData() to wait infinitely, not 0.seconds.");
+
 		if (!m_readBufferContent.empty) return true;
 
 		logTrace("wait for data");
 
 		auto timer = m_driver.createTimer(null);
 		scope (exit) m_driver.releaseTimer(timer);
-//		m_driver.m_timers[timer].owner = Task.getThis();
-		if (timeout > 0.seconds())
+		if (timeout > 0.seconds() && timeout != Duration.max) {
+			m_driver.m_timers.getUserData(timer).owner = Task.getThis();
 			m_driver.rearmTimer(timer, timeout, false);
+		}
 
-		yieldFor(EV_READ);
+		while (this.connected) {
+			if (readChunk(true))
+				return true;
+
+			// wait for read event
+			yieldFor(EV_READ);
+
+			// check for timeout
+			if (timeout > 0.seconds && timeout != Duration.max && !m_driver.isTimerPending(timer))
+				return false;
+		}
+
 		return readChunk(true);
 	}
 
@@ -761,9 +793,9 @@ final class LibevTCPConnection : TCPConnection {
 
 		logTrace(" <%s>", cast(string)m_readBuffer[0 .. nbytes]);
 		if( nbytes == 0 ){
-			logInfo("detected connection close during read!");
-			/*close();
-			return;*/
+			logDebug("detected connection close during read!");
+			close();
+			return false;
 		}
 		m_readBufferContent = m_readBuffer[0 .. nbytes];
 		return true;
