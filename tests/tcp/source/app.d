@@ -36,7 +36,7 @@ void test()
 					break;
 				case Test.timeout:
 					assert(conn.waitForData(2.seconds) == false);
-					assert(cast(Duration)sw.peek >= 2.seconds); // should wait for at least 2 seconds
+					assert(cast(Duration)sw.peek > 1900.msecs); // should wait for at least 2 seconds
 					assert(conn.connected);
 					break;
 				case Test.noTimeout:
