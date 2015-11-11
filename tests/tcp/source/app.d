@@ -9,6 +9,7 @@ enum port = 12675;
 
 enum Test {
   receive,
+  receiveExisting,
   timeout,
   noTimeout,
   noTimeoutCompat,
@@ -35,6 +36,12 @@ void test()
 					assert(cast(Duration)sw.peek < 2.seconds); // should receive something instantly
 					assert(conn.readLine() == "receive");
 					break;
+				case Test.receiveExisting:
+					assert(conn.waitForData(2.seconds) == true);
+					// TODO: validate that waitForData didn't yield!
+					assert(cast(Duration)sw.peek < 2.seconds); // should receive something instantly
+					assert(conn.readLine() == "receiveExisting");
+					break;
 				case Test.timeout:
 					assert(conn.waitForData(2.seconds) == false);
 					assert(cast(Duration)sw.peek > 1900.msecs); // should wait for at least 2 seconds
@@ -54,7 +61,7 @@ void test()
 					assert(conn.waitForData(2.seconds) == false);
 					assert(cast(Duration)sw.peek < 2.seconds); // connection should be closed instantly
 					assert(!conn.connected);
-					break;
+					return;
 			}
 			conn.write("ok\r\n");
 		}
@@ -66,6 +73,11 @@ void test()
 	conn.write("next\r\n");
 	assert(conn.readLine() == "continue");
 	conn.write("receive\r\n");
+	assert(conn.readLine() == "ok");
+
+	test = Test.receiveExisting;
+	conn.write("next\r\nreceiveExisting\r\n");
+	assert(conn.readLine() == "continue");
 	assert(conn.readLine() == "ok");
 
 	test = Test.timeout;
