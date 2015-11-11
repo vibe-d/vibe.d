@@ -4,11 +4,30 @@
 v0.7.27 - 2015-
 --------------------
 
+### Features and improvements ###
+
+- Split up the library into sub packages - this prepares for a deeper split that is going to happen in the next release
 - Implemented CORS support for the REST interface server (by Sebastian Koppe) - [pull #1299][issue1299]
 - The `URLRouter` now adds a `"routerRootDir"` entry with the relative path to the router base directory to `HTTPServerRequest.params` (by Steven Dwy) - [pull #1301][issue1301]
 - Added `Path.relativeToWeb`, a version of `relativeTo` with web semantics
 - Conversion errors for path parameters (e.g. `@path("/foo/:someparam")`) in REST interfaces now result in a 404 error instead of 500
 - Added support for REST collections with natural D syntax using the new `Collection!I` type - [pull #1268][issue1268]
+
+### Bug fixes ###
+
+- Fixed behavior of `ZlibInputStream` in case of premature end of input
+- Fixed a memory leak in `ZlibInputStream` (by Etienne Cimon) - [pull #1116][issue1116]
+- Fixed a regression in the OpenSSL certificate validation code - [issue #1325][issue1325]
+- Fixed the behavior of `TCPConnection.waitForData` in all drivers - [issue #1326][issue1326]
+- Fixed a memory leak in `Libevent2Driver.connectTCP` on connection failure (by Etienne Cimon) - [pull #1322][issue1322]
+
+[issue1116]: https://github.com/rejectedsoftware/vibe.d/issues/1116
+[issue1268]: https://github.com/rejectedsoftware/vibe.d/issues/1268
+[issue1299]: https://github.com/rejectedsoftware/vibe.d/issues/1299
+[issue1301]: https://github.com/rejectedsoftware/vibe.d/issues/1301
+[issue1322]: https://github.com/rejectedsoftware/vibe.d/issues/1322
+[issue1325]: https://github.com/rejectedsoftware/vibe.d/issues/1325
+[issue1326]: https://github.com/rejectedsoftware/vibe.d/issues/1326
 
 
 v0.7.26 - 2015-11-04
