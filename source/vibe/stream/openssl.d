@@ -123,7 +123,7 @@ final class OpenSSLStream : TLSStream {
 						version(Windows) import std.c.windows.winsock;
 						else import core.sys.posix.netinet.in_;
 
-						logWarn("peer name '%s' couldn't be verified, trying IP address.", vdata.peerName);
+						logDiagnostic("TLS peer name '%s' couldn't be verified, trying IP address.", vdata.peerName);
 						char* addr;
 						int addrlen;
 						switch (vdata.peerAddress.family) {
@@ -139,7 +139,7 @@ final class OpenSSLStream : TLSStream {
 						}
 
 						if (!verifyCertName(peer, GENERAL_NAME.GEN_IPADD, addr[0 .. addrlen])) {
-							logWarn("Error validating peer address");
+							logDiagnostic("Error validating TLS peer address");
 							result = X509_V_ERR_APPLICATION_VERIFICATION;
 						}
 					}
@@ -760,11 +760,6 @@ final class OpenSSLContext : TLSContext {
 
 			if (err != X509_V_OK)
 				logDebug("SSL cert initial error: %s", X509_verify_cert_error_string(err).to!string);
-
-			if (err == X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY) {
-				logDebug("SSL certificate not accepted by remote.");
-				return false;
-			}
 
 			if (!valid) {
 				switch (err) {
