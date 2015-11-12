@@ -73,7 +73,54 @@ class WebSocketException: Exception
 /**
 	Returns a WebSocket client object that is connected to the specified host.
 */
+WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSettings)
+{
+    auto host = url.host;
+    auto port = url.port;
+    bool use_tls = (url.schema == "wss") ? true : false;
 
+    if (port == 0) 
+        port = (use_tls) ? 443 : 80;
+
+    static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
+    static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+    auto   ckey = ConnInfo(host, port, use_tls, settings ? settings.proxyURL.host : null, settings ? settings.proxyURL.port : 0);
+
+    ConnectionPool!HTTPClient pool;
+    foreach (c; s_connections)
+        if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+            pool = c[1];
+
+    if (!pool)
+    {
+        logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, (settings) ? settings.proxyURL.host : string.init, (settings) ? settings.proxyURL.port : 0);
+        pool = new ConnectionPool!HTTPClient({
+            auto ret = new HTTPClient;
+            ret.connect(host, port, use_tls, settings);
+            return ret;
+        });
+        if (s_connections.full)
+            s_connections.popFront();
+        s_connections.put(tuple(ckey, pool));
+    }
+
+    auto challengeKey = generateChallengeKey();
+    auto answerKey = computeAcceptKey(challengeKey);
+    auto cl = pool.lockConnection();
+    auto res = cl.request((scope req){
+        req.requestURL = (url.localURI == "") ? "/" : url.localURI;
+        req.method = HTTPMethod.GET;
+        req.headers["Upgrade"] = "websocket";
+        req.headers["Connection"] = "Upgrade";
+        req.headers["Sec-WebSocket-Version"] = "13";
+        req.headers["Sec-WebSocket-Key"] = challengeKey;
+    });
+
+    auto key = "sec-websocket-accept" in res.headers;
+    assert(key, answerKey);
+    auto ws = new WebSocket(res.switchProtocol("websocket"), null, false);
+    return ws;
+}
 
 
 /**
@@ -203,11 +250,11 @@ final class WebSocket {
 		bool m_isServer = true;
 	}
 
-	this(ConnectionStream conn, in HTTPServerRequest request, bool isServer = true)
+	this(ConnectionStream conn, in HTTPServerRequest request, bool is_server = true)
 	{
 		m_conn = conn;
 		m_request = request;
-		m_isServer = isServer;
+		m_isServer = is_server;
 		assert(m_conn);
 		m_reader = runTask(&startReader);
 		m_writeMutex = new InterruptibleTaskMutex;
@@ -478,7 +525,6 @@ final class OutgoingWebSocketMessage : OutputStream {
 	{
 		assert(!m_finalized);
 		Frame frame;
-		logInfo("new frame, isServer?: ", m_isServer);
 		frame.isServer = m_isServer;
 		frame.opcode = m_frameOpcode;
 		frame.fin = false;
@@ -684,61 +730,6 @@ struct Frame {
 // This object is a placeholder and should to never be modified.
 // copied from client.d not sure how to make visible for websockets.d so we avoid creating a new object
 private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
-
-
-/**
-	Returns a WebSocket object that is connected to the specified host.
-*/
-WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSettings)
-{
-    auto host = url.host;
-    auto port = url.port;
-    bool use_tls = (url.schema == "wss") ? true : false;
-
-    if (port == 0) 
-        port = (use_tls) ? 443 : 80;
-
-    static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
-    static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-    auto   ckey = ConnInfo(host, port, use_tls, settings ? settings.proxyURL.host : null, settings ? settings.proxyURL.port : 0);
-
-    ConnectionPool!HTTPClient pool;
-    foreach (c; s_connections)
-        if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
-            pool = c[1];
-
-    if (!pool)
-    {
-        logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, (settings) ? settings.proxyURL.host : string.init, (settings) ? settings.proxyURL.port : 0);
-        pool = new ConnectionPool!HTTPClient({
-            auto ret = new HTTPClient;
-            ret.connect(host, port, use_tls, settings);
-            return ret;
-        });
-        if (s_connections.full)
-            s_connections.popFront();
-        s_connections.put(tuple(ckey, pool));
-    }
-
-    auto challengeKey = generateChallengeKey();
-    auto answerKey = computeAcceptKey(challengeKey);
-    auto cl = pool.lockConnection();
-    auto res = cl.request((scope req){
-        req.requestURL = (url.localURI == "") ? "/" : url.localURI;
-        req.method = HTTPMethod.GET;
-        req.headers["Upgrade"] = "websocket";
-        req.headers["Connection"] = "Upgrade";
-        req.headers["Sec-WebSocket-Version"] = "13";
-        req.headers["Sec-WebSocket-Key"] = challengeKey;
-    });
-
-    auto key = "sec-websocket-accept" in res.headers;
-    assert(key, answerKey);
-    auto ws = new WebSocket(res.switchProtocol("websocket"), null, false);
-    return ws;
-}
-
-
 
 private ubyte[] generateNewMaskKey()
 {
