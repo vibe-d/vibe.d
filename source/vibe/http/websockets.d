@@ -48,11 +48,10 @@ import std.bitmanip;
 import std.digest.sha;
 import std.string;
 import std.functional;
-import std.random;
 import std.uuid;
 import std.base64;
 import std.digest.sha;
-
+import vibe.crypto.cryptorand;
 
 /// Exception thrown by $(D vibe.http.websockets).
 class WebSocketException: Exception
@@ -734,7 +733,7 @@ private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
 private ubyte[] generateNewMaskKey() 
 {
 	auto rng = new SystemRNG();
-    ubyte[4] buffer;
+    auto buffer = new ubyte[4];
     rng.read(buffer);
     return buffer;
 }
