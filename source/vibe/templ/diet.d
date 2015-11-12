@@ -412,6 +412,7 @@ private class OutputContext {
 	void writeRawString(string str) { enterState(State.String); m_result ~= str; }
 	void writeString(string str) { writeRawString(dstringEscape(str)); }
 	void writeStringHtmlEscaped(string str) { writeString(htmlEscape(str)); }
+	void writeStringHtmlAttribEscaped(string str) { writeString(htmlAttribEscape(str)); }
 	void writeIndent(size_t stack_depth = size_t.max)
 	{
 		import std.algorithm : min;
@@ -1055,43 +1056,66 @@ private struct DietCompiler(TRANSLATE...)
 			output.writeIndent(level);
 		}
 		output.writeString("<" ~ tag);
+
+		string extra_class;
+		foreach (a; attribs)
+			if (a.key == "$class") {
+				extra_class = a.value;
+				break;
+			}
+
+
 		foreach( att; attribs ){
 			if( att.key[0] == '$' ) continue; // ignore special attributes
+
+			void handleExtraClasses()
+			{
+				// output extra classes given as .class
+				if (att.key == "class" && extra_class.length)
+					output.writeStringHtmlAttribEscaped(" " ~ extra_class);
+			}
+
 			if( isStringLiteral(att.value) ){
 				output.writeString(" "~att.key~"=\"");
 				if( !hasInterpolations(att.value) ) output.writeString(htmlAttribEscape(dstringUnescape(att.value[1 .. $-1])));
 				else buildInterpolatedString(output, att.value[1 .. $-1], true);
 
-				// output extra classes given as .class
-				if( att.key == "class" ){
-					foreach( a; attribs )
-						if( a.key == "$class" ){
-							output.writeString(" " ~ a.value);
-							break;
-						}
-				}
-
+				handleExtraClasses();
 				output.writeString("\"");
 			} else {
+				// Boolean value
 				output.writeCodeLine("static if(is(typeof("~att.value~") == bool)){ if("~att.value~"){");
-				if (!output.m_isHTML5)
-					output.writeString(` `~att.key~`="`~att.key~`"`);
-				else
-					output.writeString(` `~att.key);
+					if (!output.m_isHTML5)
+						output.writeString(` `~att.key~`="`~att.key~`"`);
+					else
+						output.writeString(` `~att.key);
+				// String array value
 				output.writeCodeLine("}} else static if(is(typeof("~att.value~") == string[])){\n");
-				output.writeString(` `~att.key~`="`);
-				output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
-				output.writeString(`"`);
+					output.writeString(` `~att.key~`="`);
+					output.writeExprHtmlAttribEscaped(`join(`~att.value~`, " ")`);
+					handleExtraClasses();
+					output.writeString(`"`);
+				// String value
 				output.writeCodeLine("} else static if(is(typeof("~att.value~") == string)) {");
-				output.writeCodeLine("if (("~att.value~") != \"\"){");
-				output.writeString(` `~att.key~`="`);
-				output.writeExprHtmlAttribEscaped(att.value);
-				output.writeString(`"`);
-				output.writeCodeLine("}");
+					output.writeCodeLine("if (("~att.value~") != \"\"){");
+					output.writeString(` `~att.key~`="`);
+					output.writeExprHtmlAttribEscaped(att.value);
+					handleExtraClasses();
+					output.writeString(`"`);
+					output.writeCodeLine("}");
+					if (att.key == "class" && extra_class.length) {
+						output.writeCodeLine("else {");
+						output.writeString(` `~att.key~`="`);
+						output.writeStringHtmlAttribEscaped(extra_class);
+						output.writeString(`"`);
+						output.writeCodeLine("}");
+					}
+				// Any other type of value
 				output.writeCodeLine("} else {");
-				output.writeString(` `~att.key~`="`);
-				output.writeExprHtmlAttribEscaped(att.value);
-				output.writeString(`"`);
+					output.writeString(` `~att.key~`="`);
+					output.writeExprHtmlAttribEscaped(att.value);
+					handleExtraClasses();
+					output.writeString(`"`);
 				output.writeCodeLine("}");
 			}
 		}
@@ -1466,6 +1490,14 @@ unittest {
 	assert(compile!(`div.foo(class="bar")`) == `<div class="bar foo"></div>`);
 	assert(compile!(`div(class="foo")`) == `<div class="foo"></div>`);
 	assert(compile!(`div#foo(class='')`) == `<div id="foo"></div>`);
+
+	// issue 1312
+	assert(compile!(`div.foo(class=true?"bar":"")`) == `<div class="bar foo"></div>`);
+	assert(compile!(`div.foo(class=true?12:13)`) == `<div class="12 foo"></div>`);
+	assert(compile!(`div.foo(class=true?["bar", "baz"]:[])`) == `<div class="bar baz foo"></div>`);
+	assert(compile!(`div.foo(class=false?"bar":"")`) == `<div class="foo"></div>`);
+	assert(compile!(`div(class="")`) == `<div></div>`);
+	assert(compile!(`div.foo(class="")`) == `<div class="foo"></div>`);
 
 	// issue 520
 	assert(compile!("- auto cond = true;\ndiv(someattr=cond ? \"foo\" : null)") == "<div someattr=\"foo\"></div>");
