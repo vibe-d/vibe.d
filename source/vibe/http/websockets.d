@@ -731,11 +731,12 @@ struct Frame {
 // copied from client.d not sure how to make visible for websockets.d so we avoid creating a new object
 private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
 
-private ubyte[] generateNewMaskKey()
+private ubyte[] generateNewMaskKey() 
 {
-    auto gen = Random(unpredictableSeed);
-    auto a  = uniform(0, 4294967295, gen);
-    return [ cast(ubyte) a, cast(ubyte) (a >> 8), cast(ubyte) (a >> 16), cast(ubyte) (a >> 24) ];
+	auto rng = new SystemRNG();
+    ubyte[4] buffer;
+    rng.read(buffer);
+    return buffer;
 }
 
 private string generateChallengeKey()
