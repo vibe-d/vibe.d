@@ -309,6 +309,9 @@ final class Libevent2Driver : EventDriver {
 
 			while (cctx.status == 0)
 				m_core.yieldForEvent();
+		} catch (InterruptException e) {
+			bufferevent_free(buf_event);
+			throw e;
 		} catch (Exception e) {
 			throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
 		}
