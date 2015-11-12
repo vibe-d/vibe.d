@@ -507,12 +507,12 @@ final class OutgoingWebSocketMessage : OutputStream {
 		bool m_isServer;
 	}
 
-	this( Stream conn, FrameOpcode frameOpcode, bool isServer = true )
+	this( Stream conn, FrameOpcode frameOpcode, bool is_server = true )
 	{
 		assert(conn !is null);
 		m_conn = conn;
 		m_frameOpcode = frameOpcode;
-		m_isServer = isServer;
+		m_isServer = is_server;
 	}
 
 	void write(in ubyte[] bytes)
