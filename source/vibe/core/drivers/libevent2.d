@@ -288,6 +288,7 @@ final class Libevent2Driver : EventDriver {
 
 		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
 		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
+		scope (failure) bufferevent_free(buf_event);
 
 		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, bind_addr, addr);
 		scope(failure) TCPContextAlloc.free(cctx);
@@ -310,7 +311,6 @@ final class Libevent2Driver : EventDriver {
 			while (cctx.status == 0)
 				m_core.yieldForEvent();
 		} catch (InterruptException e) {
-			bufferevent_free(buf_event);
 			throw e;
 		} catch (Exception e) {
 			throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
