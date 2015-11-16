@@ -74,51 +74,51 @@ class WebSocketException: Exception
 */
 WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSettings)
 {
-    auto host = url.host;
-    auto port = url.port;
-    bool use_tls = (url.schema == "wss") ? true : false;
+	auto host = url.host;
+	auto port = url.port;
+	bool use_tls = (url.schema == "wss") ? true : false;
 
-    if (port == 0) 
-        port = (use_tls) ? 443 : 80;
+	if (port == 0) 
+		port = (use_tls) ? 443 : 80;
 
-    static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
-    static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
-    auto   ckey = ConnInfo(host, port, use_tls, settings ? settings.proxyURL.host : null, settings ? settings.proxyURL.port : 0);
+	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
+	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+	auto   ckey = ConnInfo(host, port, use_tls, settings ? settings.proxyURL.host : null, settings ? settings.proxyURL.port : 0);
 
-    ConnectionPool!HTTPClient pool;
-    foreach (c; s_connections)
-        if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
-            pool = c[1];
+	ConnectionPool!HTTPClient pool;
+	foreach (c; s_connections)
+		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+			pool = c[1];
 
-    if (!pool)
-    {
-        logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, (settings) ? settings.proxyURL.host : string.init, (settings) ? settings.proxyURL.port : 0);
-        pool = new ConnectionPool!HTTPClient({
-            auto ret = new HTTPClient;
-            ret.connect(host, port, use_tls, settings);
-            return ret;
-        });
-        if (s_connections.full)
-            s_connections.popFront();
-        s_connections.put(tuple(ckey, pool));
-    }
+	if (!pool)
+	{
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, (settings) ? settings.proxyURL.host : string.init, (settings) ? settings.proxyURL.port : 0);
+		pool = new ConnectionPool!HTTPClient({
+			auto ret = new HTTPClient;
+			ret.connect(host, port, use_tls, settings);
+			return ret;
+		});
+		if (s_connections.full)
+			s_connections.popFront();
+		s_connections.put(tuple(ckey, pool));
+	}
 
-    auto challengeKey = generateChallengeKey();
-    auto answerKey = computeAcceptKey(challengeKey);
-    auto cl = pool.lockConnection();
-    auto res = cl.request((scope req){
-        req.requestURL = (url.localURI == "") ? "/" : url.localURI;
-        req.method = HTTPMethod.GET;
-        req.headers["Upgrade"] = "websocket";
-        req.headers["Connection"] = "Upgrade";
-        req.headers["Sec-WebSocket-Version"] = "13";
-        req.headers["Sec-WebSocket-Key"] = challengeKey;
-    });
+	auto challengeKey = generateChallengeKey();
+	auto answerKey = computeAcceptKey(challengeKey);
+	auto cl = pool.lockConnection();
+	auto res = cl.request((scope req){
+		req.requestURL = (url.localURI == "") ? "/" : url.localURI;
+		req.method = HTTPMethod.GET;
+		req.headers["Upgrade"] = "websocket";
+		req.headers["Connection"] = "Upgrade";
+		req.headers["Sec-WebSocket-Version"] = "13";
+		req.headers["Sec-WebSocket-Key"] = challengeKey;
+	});
 
-    auto key = "sec-websocket-accept" in res.headers;
-    assert(key, answerKey);
-    auto ws = new WebSocket(res.switchProtocol("websocket"), null, false);
-    return ws;
+	auto key = "sec-websocket-accept" in res.headers;
+	enforce(*key == answerKey, "Response has wrong accept key");
+	auto ws = new WebSocket(res.switchProtocol("websocket"), null, false);
+	return ws;
 }
 
 
@@ -733,27 +733,27 @@ private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
 private ubyte[] generateNewMaskKey() 
 {
 	auto rng = new SystemRNG();
-    auto buffer = new ubyte[4];
-    rng.read(buffer);
-    return buffer;
+	auto buffer = new ubyte[4];
+	rng.read(buffer);
+	return buffer;
 }
 
 private string generateChallengeKey()
 {
-    auto uuid = randomUUID().toString();
-    immutable(ubyte)[] b = uuid.representation;
-    auto result = Base64.encode(b);
-    return to!(string)(result);
+	auto uuid = randomUUID().toString();
+	immutable(ubyte)[] b = uuid.representation;
+	auto result = Base64.encode(b);
+	return to!(string)(result);
 }
 
 private string computeAcceptKey(string challengekey)
 {
-    immutable(ubyte)[] b = challengekey.representation;
-    immutable(ubyte)[] a = s_webSocketGuid.representation;
-    SHA1 hash;
-    hash.start();
-    hash.put(b);
-    hash.put(a);
-    auto result = Base64.encode(hash.finish());
-    return to!(string)(result);
+	immutable(ubyte)[] b = challengekey.representation;
+	immutable(ubyte)[] a = s_webSocketGuid.representation;
+	SHA1 hash;
+	hash.start();
+	hash.put(b);
+	hash.put(a);
+	auto result = Base64.encode(hash.finish());
+	return to!(string)(result);
 }
