@@ -1810,6 +1810,7 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 
 private void parseCookies(string str, ref CookieValueMap cookies)
 {
+	import std.encoding : sanitize;
 	while(str.length > 0) {
 		auto idx = str.indexOf('=');
 		enforceBadRequest(idx > 0, "Expected name=value.");
@@ -1818,9 +1819,21 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 
 		for (idx = 0; idx < str.length && str[idx] != ';'; idx++) {}
 		string value = str[0 .. idx].strip();
-		cookies[name] = urlDecode(value);
+		try {
+			cookies[name] = value.urlDecode();
+		} catch (Exception e) {
+			cookies[name] = value.sanitize();
+		}
 		str = idx < str.length ? str[idx+1 .. $] : null;
 	}
+}
+
+unittest
+{
+	auto cvm = CookieValueMap();
+	string nonUrlEncodedCookie = "test=%%pX;";
+	parseCookies(nonUrlEncodedCookie, cvm);
+	assert(cvm["test"] == "%%pX" );
 }
 
 shared static this()
