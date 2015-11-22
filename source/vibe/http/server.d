@@ -1811,16 +1811,13 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 private void parseCookies(string str, ref CookieValueMap cookies)
 {
 	import std.encoding : sanitize;
-	while(str.length > 0) {
-		auto idx = str.indexOf('=');
-		enforceBadRequest(idx > 0, "Expected name=value.");
-		string name = str[0 .. idx].strip().sanitize();
-		str = str[idx+1 .. $];
-		for (idx = 0; idx < str.length && str[idx] != ';'; idx++) {}
-		string value = str[0 .. idx].strip().sanitize();
-		cookies[name] = value;
-		str = idx < str.length ? str[idx+1 .. $] : null;
-	}
+	import std.array : split;
+	import std.string : strip;
+	import std.algorithm.iteration : map, filter, each;
+	str.sanitize.split(";")
+		.map!(kv => kv.strip.split("="))
+		.filter!(kv => kv.length == 2) //ignore illegal cookies
+		.each!(kv => cookies[kv[0]] = kv[1] );
 }
 
 shared static this()
