@@ -1814,26 +1814,13 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 	while(str.length > 0) {
 		auto idx = str.indexOf('=');
 		enforceBadRequest(idx > 0, "Expected name=value.");
-		string name = str[0 .. idx].strip();
+		string name = str[0 .. idx].strip().sanitize();
 		str = str[idx+1 .. $];
-
 		for (idx = 0; idx < str.length && str[idx] != ';'; idx++) {}
-		string value = str[0 .. idx].strip();
-		try {
-			cookies[name] = value.urlDecode();
-		} catch (Exception e) {
-			cookies[name] = value.sanitize();
-		}
+		string value = str[0 .. idx].strip().sanitize();
+		cookies[name] = value;
 		str = idx < str.length ? str[idx+1 .. $] : null;
 	}
-}
-
-unittest
-{
-	auto cvm = CookieValueMap();
-	string nonUrlEncodedCookie = "test=%%pX;";
-	parseCookies(nonUrlEncodedCookie, cvm);
-	assert(cvm["test"] == "%%pX" );
 }
 
 shared static this()
