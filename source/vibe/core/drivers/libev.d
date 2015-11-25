@@ -776,7 +776,8 @@ final class LibevTCPConnection : TCPConnection {
 
 	private bool readChunk(bool try_only = false)
 	{
-		checkConnected();
+		if (try_only && !connected) return false;
+		else checkConnected();
 		logTrace("Reading next chunk!");
 		assert(m_readBufferContent.length == 0);
 		ptrdiff_t nbytes;
@@ -786,8 +787,8 @@ final class LibevTCPConnection : TCPConnection {
 			logTrace(" .. got %d, %d", nbytes, errno);
 			if( nbytes >= 0 ) break;
 			int err = errno;
-			enforce(err == EWOULDBLOCK || err == EAGAIN, "Socket error on read: "~to!string(err));
 			if (try_only) return false;
+			enforce(err == EWOULDBLOCK || err == EAGAIN, "Socket error on read: "~to!string(err));
 			yieldFor(EV_READ);
 		}
 
