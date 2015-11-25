@@ -36,6 +36,29 @@ unittest {
 	}
 }
 
+/// Constructing `Bson` objects
+unittest {
+	// construct a BSON object {"field1": "foo", "field2": 42, "field3": true}
+
+	// using the constructor
+	Bson b1 = Bson(["field1": Bson("foo"), "field2": Bson(42), "field3": Bson(true)]);
+
+	// using piecewise construction
+	Bson b2 = Bson.emptyObject;
+	b2["field1"] = "foo";
+	b2["field2"] = 42;
+	b2["field3"] = true;
+
+	// using serialization
+	struct S {
+		string field1;
+		int field2;
+		bool field3;
+	}
+	Bson b3 = S("foo", 42, true).serializeToBson();
+}
+
+
 public import vibe.data.json;
 
 import std.algorithm;

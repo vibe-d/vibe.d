@@ -40,6 +40,32 @@ unittest {
 	}
 }
 
+/// Constructing `Json` objects
+unittest {
+	// construct a JSON object {"field1": "foo", "field2": 42, "field3": true}
+
+	// using the constructor
+	Json j1 = Json(["field1": Json("foo"), "field2": Json(42), "field3": Json(true)]);
+
+	// using piecewise construction
+	Json j2 = Json.emptyObject;
+	j2["field1"] = "foo";
+	j2["field2"] = 42.0;
+	j2["field3"] = true;
+
+	// using serialization
+	struct S {
+		string field1;
+		double field2;
+		bool field3;
+	}
+	Json j3 = S("foo", 42, true).serializeToJson();
+
+	// using serialization, converting directly to a JSON string
+	string j4 = S("foo", 32, true).serializeToJsonString();
+}
+
+
 public import vibe.data.serialization;
 
 public import std.json : JSONException;
