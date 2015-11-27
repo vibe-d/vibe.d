@@ -29,7 +29,8 @@ import std.typecons;
 
 enum HTTPVersion {
 	HTTP_1_0,
-	HTTP_1_1
+	HTTP_1_1,
+	HTTP_2
 }
 
 
@@ -168,9 +169,6 @@ T enforceBadRequest(T)(T condition, lazy string message = null, string file = __
 	Represents an HTTP request made to a server.
 */
 class HTTPRequest {
-	protected {
-		Stream m_conn;
-	}
 
 	public {
 		/// The HTTP protocol version used for the request
@@ -189,11 +187,6 @@ class HTTPRequest {
 
 		/// All request _headers
 		InetHeaderMap headers;
-	}
-
-	protected this(Stream conn)
-	{
-		m_conn = conn;
 	}
 
 	protected this()
@@ -246,14 +239,14 @@ class HTTPRequest {
 	@property bool persistent() const
 	{
 		auto ph = "connection" in headers;
-		switch(httpVersion) {
+		final switch(httpVersion) {
 			case HTTPVersion.HTTP_1_0:
-				if (ph && toLower(*ph) == "keep-alive") return true;
+				if (ph && icmp2(*ph, "keep-alive") == 0) return true;
 				return false;
 			case HTTPVersion.HTTP_1_1:
-				if (ph && toLower(*ph) == "close") return false;
+				if (ph && icmp2(*ph, "close") == 0) return false;
 				return true;
-			default:
+			case HTTPVersion.HTTP_2:
 				return false;
 		}
 	}
@@ -335,6 +328,7 @@ string getHTTPVersionString(HTTPVersion ver)
 	final switch(ver){
 		case HTTPVersion.HTTP_1_0: return "HTTP/1.0";
 		case HTTPVersion.HTTP_1_1: return "HTTP/1.1";
+		case HTTPVersion.HTTP_2: return "HTTP/2";
 	}
 }
 
@@ -669,4 +663,16 @@ struct CookieValueMap {
 			}
 		return null;
 	}
+}
+
+interface CookieStore
+{
+	/// Send the '; '-joined concatenation of the cookies corresponding to the URL into sink
+	void get(string host, string path, bool secure, scope void delegate(string) send_to) const;
+
+	/// Send each matching cookie value individually to the specified sink
+	void get(string host, string path, bool secure, scope void delegate(string[]) send_to) const;
+
+	/// Sets the cookies using the provided Set-Cookie: header value entry
+	void set(string host, string set_cookie);
 }

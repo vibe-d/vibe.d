@@ -125,7 +125,7 @@ interface OutputStream {
 				write(buffer[0 .. chunk]);
 			}
 		} else {
-			while( nbytes > 0 ){
+			while( stream !is null && nbytes > 0 ){
 				size_t chunk = min(nbytes, buffer.length);
 				//logTrace("read pipe chunk %d", chunk);
 				stream.read(buffer[0 .. chunk]);
@@ -142,6 +142,12 @@ interface OutputStream {
 interface Stream : InputStream, OutputStream {
 }
 
+/// Interface for streams allowing buffer overrides
+/*interface Buffered {
+	/// Reads at least 1 byte into buf and returns the slice, or 
+	/// returns an empty array if this operation is impossible.
+	ubyte[] readChunk(ubyte[] buf);
+}*/
 
 /**
 	Interface for streams based on a connection.

@@ -50,7 +50,10 @@ void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host
 	Returns a HTTP request handler that forwards any request to the specified host/port.
 */
 HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings)
-{
+in {
+	assert(settings !is null, "You must provide HTTPReverseProxySettings");
+}
+body {
 	static immutable string[] non_forward_headers = ["Content-Length", "Transfer-Encoding", "Content-Encoding", "Connection"];
 	static InetHeaderMap non_forward_headers_map;
 	if (non_forward_headers_map.length == 0)
@@ -58,7 +61,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			non_forward_headers_map[n] = "";
 
 	URL url;
-	url.schema = "http";
+	url.schema = (settings.clientSettings && settings.clientSettings.tlsContext) ? "https" : "http";
 	url.host = settings.destinationHost;
 	url.port = settings.destinationPort;
 
@@ -70,8 +73,14 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 		void setupClientRequest(scope HTTPClientRequest creq)
 		{
 			creq.method = req.method;
+			
+			// We must allow an override of HTTPServerRequest headers for http/2 upgrade over cleartext to take place. 
+			if (auto pc = "Connection" in creq.headers) req.headers["Connection"] = *pc;
+			if (auto pu = "Upgrade" in creq.headers) req.headers["Upgrade"] = *pu;
+			if (auto ps = "HTTP2-Settings" in creq.headers) req.headers["HTTP2-Settings"] = *ps;
+			
 			creq.headers = req.headers.dup;
-			creq.headers["Connection"] = "keep-alive";
+			// creq.headers["Connection"] = "keep-alive"; // - Forcing this can break http/2 and h2c upgrade
 			creq.headers["Host"] = settings.destinationHost;
 			if (settings.avoidCompressedRequests && "Accept-Encoding" in creq.headers)
 				creq.headers.remove("Accept-Encoding");
@@ -90,8 +99,8 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			res.statusCode = cres.statusCode;
 
 
-			// special case for empty response bodies
-			if ("Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HTTPMethod.HEAD) {
+			// special case for empty response bodies. Content-Encoding also indicates that a body exists
+			if ("Content-Encoding" !in cres.headers && "Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HTTPMethod.HEAD) {
 				foreach (key, value; cres.headers) {
 					if (icmp2(key, "Connection") != 0)
 						res.headers[key] = value;
@@ -141,7 +150,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			else res.bodyWriter.write(cres.bodyReader);
 		}
 
-		requestHTTP(rurl, &setupClientRequest, &handleClientResponse);
+		requestHTTP(rurl, &setupClientRequest, &handleClientResponse, settings.clientSettings);
 	}
 
 	return &handleRequest;
@@ -165,4 +174,7 @@ final class HTTPReverseProxySettings {
 	ushort destinationPort;
 	/// Avoids compressed transfers between proxy and destination hosts
 	bool avoidCompressedRequests;
+	/// Additional settings used for communicating with the destination host
+	HTTPClientSettings clientSettings;	
+	
 }

@@ -79,7 +79,7 @@ class CountingOutputStream : OutputStream {
 	}
 	this(OutputStream stream)
 	{
-		assert(stream !is null);
+		enforce(stream !is null);
 		m_out = stream;
 	}
 
