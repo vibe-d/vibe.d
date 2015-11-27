@@ -177,8 +177,10 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 						else formattedWrite(&ln, "%s", res.bytesWritten);
 						break;
 					case 'C': //Cookie content {cookie}
+						import std.algorithm : joiner;
 						enforce(key != "", "cookie name missing");
-						if (auto pv = key in req.cookies) ln.put(*pv);
+						auto values = req.cookies.getAll(key);
+						if (values.length) ln.formattedWrite("%s", values.joiner(";"));
 						else ln.put("-");
 						break;
 					case 'D': //The time taken to serve the request

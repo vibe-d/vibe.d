@@ -1,7 +1,7 @@
 /**
 	Common classes for HTTP clients and servers.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2015 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Jan Krüger
 */
@@ -13,6 +13,7 @@ import vibe.core.log;
 import vibe.core.net;
 import vibe.inet.message;
 import vibe.stream.operations;
+import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
 import vibe.utils.memory;
 import vibe.utils.string;
@@ -529,11 +530,15 @@ final class Cookie {
 
 	enum Encoding {
 		url,
-		none
+		raw,
+		none = raw
 	}
 
-	@property void value(string value) { m_value = value; }
-	@property string value() const { return m_value; }
+	@property void value(string value) { m_value = urlEncode(value); }
+	@property string value() const { return urlDecode(m_value); }
+
+	@property void rawValue(string value) { m_value = value; }
+	@property string rawValue() const { return m_value; }
 
 	@property void domain(string value) { m_domain = value; }
 	@property string domain() const { return m_domain; }
@@ -553,19 +558,22 @@ final class Cookie {
 	@property void httpOnly(bool value) { m_httpOnly = value; }
 	@property bool httpOnly() const { return m_httpOnly; }
 
-	void writeString(R)(R dst, string name, Encoding encoding = Encoding.url)
+	void setValue(string value, Encoding encoding)
+	{
+		final switch (encoding) {
+			case Encoding.url: m_value = urlEncode(value); break;
+			case Encoding.none: validateValue(value); m_value = value; break;
+		}
+	}
+
+	void writeString(R)(R dst, string name)
 		if (isOutputRange!(R, char))
 	{
 		import vibe.textfilter.urlencode;
 		dst.put(name);
 		dst.put('=');
-		final switch (encoding) {
-			case Encoding.url: filterURLEncode(dst, this.value); break;
-			case Encoding.none:
-				assert(!this.value.canFind(';') && !this.value.canFind('"'));
-				dst.put(this.value);
-				break;
-		}
+		validateValue(this.value);
+		dst.put(this.value);
 		if (this.domain && this.domain != "") {
 			dst.put("; Domain=");
 			dst.put(this.domain);
@@ -582,6 +590,34 @@ final class Cookie {
 		if (this.secure) dst.put("; Secure");
 		if (this.httpOnly) dst.put("; HttpOnly");
 	}
+
+	private static void validateValue(string value)
+	{
+		enforce(!value.canFind(';') && !value.canFind('"'));
+	}
+}
+
+unittest {
+	import std.exception : assertThrown;
+
+	auto c = new Cookie;
+	c.value = "foo";
+	assert(c.value == "foo");
+	assert(c.rawValue == "foo");
+
+	c.value = "foo$";
+	assert(c.value == "foo$");
+	assert(c.rawValue == "foo%24", c.rawValue);
+
+	c.value = "foo&bar=baz?";
+	assert(c.value == "foo&bar=baz?");
+	assert(c.rawValue == "foo%26bar%3Dbaz%3F", c.rawValue);
+
+	c.setValue("foo%", Cookie.Encoding.raw);
+	assert(c.rawValue == "foo%");
+	assertThrown(c.value);
+
+	assertThrown(c.setValue("foo;bar", Cookie.Encoding.raw));
 }
 
 
@@ -589,8 +625,31 @@ final class Cookie {
 */
 struct CookieValueMap {
 	struct Cookie {
+		/// Name of the cookie
 		string name;
-		string value;
+
+		/// The raw cookie value as transferred over the wire
+		string rawValue;
+
+		this(string name, string value, .Cookie.Encoding encoding = .Cookie.Encoding.url)
+		{
+			this.name = name;
+			this.setValue(value, encoding);
+		}
+
+		/// Treats the value as URL encoded
+		string value() const { return urlDecode(rawValue); }
+		/// ditto
+		void value(string val) { rawValue = urlEncode(val); }
+
+		/// Sets the cookie value, applying the specified encoding.
+		void setValue(string value, .Cookie.Encoding encoding = .Cookie.Encoding.url)
+		{
+			final switch (encoding) {
+				case .Cookie.Encoding.none: this.rawValue = value; break;
+				case .Cookie.Encoding.url: this.rawValue = urlEncode(value); break;
+			}
+		}
 	}
 
 	private {
@@ -599,9 +658,10 @@ struct CookieValueMap {
 
 	string get(string name, string def_value = null)
 	const {
-		auto pv = name in this;
-		if( !pv ) return def_value;
-		return *pv;
+		foreach (ref c; m_entries)
+			if (c.name == name)
+				return c.value;
+		return def_value;
 	}
 
 	string[] getAll(string name)
@@ -621,9 +681,10 @@ struct CookieValueMap {
 	string opIndex(string name)
 	const {
 		import core.exception : RangeError;
-		auto pv = name in this;
-		if( !pv ) throw new RangeError("Non-existent cookie: "~name);
-		return *pv;
+		foreach (ref c; m_entries)
+			if (c.name == name)
+				return c.value;
+		throw new RangeError("Non-existent cookie: "~name);
 	}
 
 	int opApply(scope int delegate(ref Cookie) del)
@@ -642,7 +703,7 @@ struct CookieValueMap {
 		return 0;
 	}
 
-	int opApply(scope int delegate(ref string name, ref string value) del)
+	int opApply(scope int delegate(string name, string value) del)
 	{
 		foreach(ref c; m_entries)
 			if( auto ret = del(c.name, c.value) )
@@ -650,7 +711,7 @@ struct CookieValueMap {
 		return 0;
 	}
 
-	int opApply(scope int delegate(ref string name, ref string value) del)
+	int opApply(scope int delegate(string name, string value) del)
 	const {
 		foreach(Cookie c; m_entries)
 			if( auto ret = del(c.name, c.value) )
@@ -658,7 +719,7 @@ struct CookieValueMap {
 		return 0;
 	}
 
-	inout(string)* opBinaryRight(string op)(string name) inout if(op == "in")
+	/*inout(string)* opBinaryRight(string op)(string name) inout if(op == "in")
 	{
 		foreach(ref c; m_entries)
 			if( c.name == name ) {
@@ -668,5 +729,14 @@ struct CookieValueMap {
 					return &c.value;
 			}
 		return null;
-	}
+	}*/
+}
+
+unittest {
+	CookieValueMap m;
+	m["foo"] = "bar;baz%1";
+	assert(m["foo"] == "bar;baz%1");
+
+	m["foo"] = "bar";
+	assert(m.getAll("foo") == ["bar;baz%1", "bar"]);
 }

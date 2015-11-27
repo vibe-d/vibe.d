@@ -1019,11 +1019,11 @@ final class HTTPServerResponse : HTTPResponse {
 			value = New cookie value - pass null to clear the cookie
 			path = Path (as seen by the client) of the directory tree in which the cookie is visible
 	*/
-	Cookie setCookie(string name, string value, string path = "/")
+	Cookie setCookie(string name, string value, string path = "/", Cookie.Encoding encoding = Cookie.Encoding.url)
 	{
 		auto cookie = new Cookie();
 		cookie.path = path;
-		cookie.value = value;
+		cookie.setValue(value, encoding);
 		if (value is null) {
 			cookie.maxAge = 0;
 			cookie.expires = "Thu, 01 Jan 1970 00:00:00 GMT";
@@ -1674,15 +1674,12 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 
 		// lookup the session
 		if (settings.sessionStore) {
-			auto pv = settings.sessionIdCookie in req.cookies;
-			if (pv) {
-				// use the first cookie that contains a valid session ID in case
-				// of multiple matching session cookies
-				foreach (v; req.cookies.getAll(settings.sessionIdCookie)) {
-					req.session = settings.sessionStore.open(v);
-					res.m_session = req.session;
-					if (req.session) break;
-				}
+			// use the first cookie that contains a valid session ID in case
+			// of multiple matching session cookies
+			foreach (val; req.cookies.getAll(settings.sessionIdCookie)) {
+				req.session = settings.sessionStore.open(val);
+				res.m_session = req.session;
+				if (req.session) break;
 			}
 		}
 
