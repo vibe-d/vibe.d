@@ -1810,18 +1810,41 @@ private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, 
 
 private void parseCookies(string str, ref CookieValueMap cookies)
 {
-	while(str.length > 0) {
-		auto idx = str.indexOf('=');
-		enforceBadRequest(idx > 0, "Expected name=value.");
-		string name = str[0 .. idx].strip();
-		str = str[idx+1 .. $];
-
-		for (idx = 0; idx < str.length && str[idx] != ';'; idx++) {}
-		string value = str[0 .. idx].strip();
-		cookies[name] = urlDecode(value);
-		str = idx < str.length ? str[idx+1 .. $] : null;
-	}
+	import std.encoding : sanitize;
+	import std.array : split;
+	import std.string : strip;
+	import std.algorithm.iteration : map, filter, each;
+	str.sanitize.split(";")
+		.map!(kv => kv.strip.split("="))
+		.filter!(kv => kv.length == 2) //ignore illegal cookies
+		.each!(kv => cookies[kv[0]] = kv[1] );
 }
+
+unittest 
+{
+
+	auto cvm = CookieValueMap();
+	parseCookies("foo=bar;; baz=zinga; öö=üü   ;   møøse=was=sacked;    onlyval1; =onlyval2; onlykey=", cvm);
+	assert(cvm["foo"] == "bar");
+	assert(cvm["baz"] == "zinga");
+	assert(cvm["öö"] == "üü");
+	assert( "møøse" ! in cvm); //illegal cookie gets ignored
+	assert( "onlyval1" ! in cvm); //illegal cookie gets ignored
+	assert(cvm["onlykey"] == "");
+	assert(cvm[""] == "onlyval2");
+	
+	assert(cvm.length() == 5);
+
+	cvm = CookieValueMap();
+	parseCookies("", cvm);
+	assert(cvm.length() == 0);
+
+	cvm = CookieValueMap();
+	parseCookies(";;=", cvm);
+	assert(cvm.length() == 1);
+	assert(cvm[""] == "");
+}
+
 
 shared static this()
 {

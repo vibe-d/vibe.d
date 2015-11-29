@@ -669,4 +669,9 @@ struct CookieValueMap {
 			}
 		return null;
 	}
+
+	auto length()
+	{ 
+		return m_entries.length;
+	}
 }
