@@ -1820,6 +1820,32 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 		.each!(kv => cookies[kv[0]] = kv[1] );
 }
 
+unittest 
+{
+
+	auto cvm = CookieValueMap();
+	parseCookies("foo=bar;; baz=zinga; öö=üü   ;   møøse=was=sacked;    onlyval1; =onlyval2; onlykey=", cvm);
+	assert(cvm["foo"] == "bar");
+	assert(cvm["baz"] == "zinga");
+	assert(cvm["öö"] == "üü");
+	assert( "møøse" ! in cvm); //illegal cookie gets ignored
+	assert( "onlyval1" ! in cvm); //illegal cookie gets ignored
+	assert(cvm["onlykey"] == "");
+	assert(cvm[""] == "onlyval2");
+	
+	assert(cvm.length() == 5);
+
+	cvm = CookieValueMap();
+	parseCookies("", cvm);
+	assert(cvm.length() == 0);
+
+	cvm = CookieValueMap();
+	parseCookies(";;=", cvm);
+	assert(cvm.length() == 1);
+	assert(cvm[""] == "");
+}
+
+
 shared static this()
 {
 	g_listenersMutex = new Mutex;
