@@ -91,14 +91,19 @@ private immutable monthStrings = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul
 */
 void writeRFC822DateString(R)(ref R dst, SysTime time)
 {
+	writeRFC822DateString(dst, cast(Date)time);
+}
+/// ditto
+void writeRFC822DateString(R)(ref R dst, Date date)
+{
 	static immutable dayStrings = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-	dst.put(dayStrings[time.dayOfWeek]);
+	dst.put(dayStrings[date.dayOfWeek]);
 	dst.put(", ");
-	writeDecimal2(dst, time.day);
+	writeDecimal2(dst, date.day);
 	dst.put(' ');
-	dst.put(monthStrings[time.month-1]);
+	dst.put(monthStrings[date.month-1]);
 	dst.put(' ');
-	writeDecimal(dst, time.year);
+	writeDecimal(dst, date.year);
 }
 
 /**
@@ -106,20 +111,23 @@ void writeRFC822DateString(R)(ref R dst, SysTime time)
 */
 void writeRFC822TimeString(R)(ref R dst, SysTime time)
 {
+	writeRFC822TimeString(dst, cast(TimeOfDay)time, getRFC822TimeZoneOffset(time));
+}
+/// ditto
+void writeRFC822TimeString(R)(ref R dst, TimeOfDay time, int tz_offset)
+{
 	writeDecimal2(dst, time.hour);
 	dst.put(':');
 	writeDecimal2(dst, time.minute);
 	dst.put(':');
 	writeDecimal2(dst, time.second);
-	if( time.timezone == UTC() ) dst.put(" GMT");
+	if (tz_offset == 0) dst.put(" GMT");
 	else {
-		auto now = Clock.currStdTime();
-		auto offset = cast(int)((time.timezone.utcToTZ(now) - now) / 600_000_000);
 		dst.put(' ');
-		dst.put(offset >= 0 ? '+' : '-');
-		if( offset < 0 ) offset = -offset;
-		writeDecimal2(dst, offset / 60);
-		writeDecimal2(dst, offset % 60);
+		dst.put(tz_offset >= 0 ? '+' : '-');
+		if (tz_offset < 0) tz_offset = -tz_offset;
+		writeDecimal2(dst, tz_offset / 60);
+		writeDecimal2(dst, tz_offset % 60);
 	}
 }
 
@@ -128,9 +136,14 @@ void writeRFC822TimeString(R)(ref R dst, SysTime time)
 */
 void writeRFC822DateTimeString(R)(ref R dst, SysTime time)
 {
-	writeRFC822DateString(dst, time);
+	writeRFC822DateTimeString(dst, cast(DateTime)time, getRFC822TimeZoneOffset(time));
+}
+/// ditto
+void writeRFC822DateTimeString(R)(ref R dst, DateTime time, int tz_offset)
+{
+	writeRFC822DateString(dst, time.date);
 	dst.put(' ');
-	writeRFC822TimeString(dst, time);
+	writeRFC822TimeString(dst, time.timeOfDay, tz_offset);
 }
 
 /**
@@ -161,6 +174,14 @@ string toRFC822DateTimeString(SysTime time)
 	auto ret = new FixedAppender!(string, 31);
 	writeRFC822DateTimeString(ret, time);
 	return ret.data;
+}
+
+/**
+	Returns the offset of the given time from UTC in minutes.
+*/
+int getRFC822TimeZoneOffset(SysTime time)
+{
+	return cast(int)time.utcOffset.total!"minutes";
 }
 
 static if (__VERSION__ >= 2066)
