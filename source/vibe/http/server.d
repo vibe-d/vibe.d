@@ -1506,7 +1506,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	SysTime reqtime = Clock.currTime(UTC());
 
 	//auto request_allocator = scoped!(PoolAllocator)(1024, defaultAllocator());
-	scope request_allocator = new PoolAllocator(1024, defaultAllocator());
+	scope request_allocator = new PoolAllocator(1024, threadLocalAllocator());
 	scope(exit) request_allocator.reset();
 
 	// some instances that live only while the request is running

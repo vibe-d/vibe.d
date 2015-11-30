@@ -1241,7 +1241,7 @@ private nothrow extern(C)
 	void* lev_alloc(size_t size)
 	{
 		try {
-			auto mem = manualAllocator().alloc(size+size_t.sizeof);
+			auto mem = threadLocalManualAllocator().alloc(size+size_t.sizeof);
 			*cast(size_t*)mem.ptr = size;
 			return mem.ptr + size_t.sizeof;
 		} catch (UncaughtException th) {
@@ -1255,7 +1255,7 @@ private nothrow extern(C)
 			if( !p ) return lev_alloc(newsize);
 			auto oldsize = *cast(size_t*)(p-size_t.sizeof);
 			auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
-			auto newmem = manualAllocator().realloc(oldmem, newsize+size_t.sizeof);
+			auto newmem = threadLocalManualAllocator().realloc(oldmem, newsize+size_t.sizeof);
 			*cast(size_t*)newmem.ptr = newsize;
 			return newmem.ptr + size_t.sizeof;
 		} catch (UncaughtException th) {
@@ -1268,7 +1268,7 @@ private nothrow extern(C)
 		try {
 			auto size = *cast(size_t*)(p-size_t.sizeof);
 			auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
-			manualAllocator().free(mem);
+			threadLocalManualAllocator().free(mem);
 		} catch (UncaughtException th) {
 			logCritical("Exception in lev_free: %s", th.msg);
 			assert(false);

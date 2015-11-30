@@ -26,7 +26,7 @@ Allocator defaultAllocator() nothrow
 		return manualAllocator();
 	} else {
 		static __gshared Allocator alloc;
-		if( !alloc ){
+		if (!alloc) {
 			alloc = new GCAllocator;
 			//alloc = new AutoFreeListAllocator(alloc);
 			//alloc = new DebugAllocator(alloc);
@@ -44,6 +44,29 @@ Allocator manualAllocator() nothrow
 		alloc = new AutoFreeListAllocator(alloc);
 		//alloc = new DebugAllocator(alloc);
 		alloc = new LockAllocator(alloc);
+	}
+	return alloc;
+}
+
+Allocator threadLocalAllocator() nothrow
+{
+	static Allocator alloc;
+	if (!alloc) {
+		version(VibeManualMemoryManagement) alloc = new MallocAllocator;
+		else alloc = new GCAllocator;
+		alloc = new AutoFreeListAllocator(alloc);
+		// alloc = new DebugAllocator(alloc);
+	}
+	return alloc;
+}
+
+Allocator threadLocalManualAllocator() nothrow
+{
+	static Allocator alloc;
+	if (!alloc) {
+		alloc = new MallocAllocator;
+		alloc = new AutoFreeListAllocator(alloc);
+		// alloc = new DebugAllocator(alloc);
 	}
 	return alloc;
 }
