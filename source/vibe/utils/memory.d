@@ -566,9 +566,10 @@ nothrow:
 	}
 }
 
-template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
+struct FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 {
 	enum ElemSize = AllocSize!T;
+	static assert(ElemSize >= Slot.sizeof);
 
 	static if( is(T == class) ){
 		alias TR = T;
@@ -576,25 +577,42 @@ template FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 		alias TR = T*;
 	}
 
-	TR alloc(ARGS...)(ARGS args)
+	struct Slot { Slot* next; }
+
+	private static Slot* s_firstFree;
+
+	static TR alloc(ARGS...)(ARGS args)
 	{
-		//logInfo("alloc %s/%d", T.stringof, ElemSize);
-		auto mem = manualAllocator().alloc(ElemSize);
-		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
-		static if( INIT ) return internalEmplace!T(mem, args);
+		void[] mem;
+		if (s_firstFree !is null) {
+			auto ret = s_firstFree;
+			s_firstFree = s_firstFree.next;
+			ret.next = null;
+			mem = (cast(void*)ret)[0 .. ElemSize];
+		} else {
+			//logInfo("alloc %s/%d", T.stringof, ElemSize);
+			mem = manualAllocator().alloc(ElemSize);
+			static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
+		}
+
+		static if (INIT) return internalEmplace!T(mem, args);
 		else return cast(TR)mem.ptr;
 	}
 
-	void free(TR obj)
+	static void free(TR obj)
 	{
-		static if( INIT ){
-			scope(failure) assert(0, "You shouldn't throw in destructors");
+		static if (INIT) {
+			scope (failure) assert(0, "You shouldn't throw in destructors");
 			auto objc = obj;
 			static if (is(TR == T*)) .destroy(*objc);//typeid(T).destroy(cast(void*)obj);
 			else .destroy(objc);
 		}
-		static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
-		manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
+
+		auto sl = cast(Slot*)obj;
+		sl.next = s_firstFree;
+		s_firstFree = sl;
+		//static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
+		//manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
 	}
 }
 
@@ -612,6 +630,7 @@ template AllocSize(T)
 
 struct FreeListRef(T, bool INIT = true)
 {
+	alias ObjAlloc = FreeListObjectAlloc!(T, true, INIT);
 	enum ElemSize = AllocSize!T;
 
 	static if( is(T == class) ){
@@ -627,10 +646,7 @@ struct FreeListRef(T, bool INIT = true)
 	{
 		//logInfo("refalloc %s/%d", T.stringof, ElemSize);
 		FreeListRef ret;
-		auto mem = manualAllocator().alloc(ElemSize + int.sizeof);
-		static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
-		static if( INIT ) ret.m_object = cast(TR)internalEmplace!(Unqual!T)(mem, args);
-		else ret.m_object = cast(TR)mem.ptr;
+		ret.m_object = ObjAlloc.alloc(args);
 		ret.refCount = 1;
 		return ret;
 	}
@@ -667,19 +683,9 @@ struct FreeListRef(T, bool INIT = true)
 	void clear()
 	{
 		checkInvariants();
-		if( m_object ){
-			if( --this.refCount == 0 ){
-				static if( INIT ){
-					//logInfo("ref %s destroy", T.stringof);
-					//typeid(T).destroy(cast(void*)m_object);
-					auto objc = m_object;
-					static if (is(TR == T)) .destroy(objc);
-					else .destroy(*objc);
-					//logInfo("ref %s destroyed", T.stringof);
-				}
-				static if( hasIndirections!T ) GC.removeRange(cast(void*)m_object);
-				manualAllocator().free((cast(void*)m_object)[0 .. ElemSize+int.sizeof]);
-			}
+		if (m_object) {
+			if (--this.refCount == 0)
+				ObjAlloc.free(m_object);
 		}
 
 		m_object = null;
