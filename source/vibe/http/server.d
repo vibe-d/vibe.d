@@ -1482,7 +1482,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 		}
 	}
 
-	do {
+	while (!connection.empty) {
 		HTTPServerSettings settings;
 		bool keep_alive;
 		handleRequest(http_stream, connection, listen_info, settings, keep_alive);
@@ -1495,7 +1495,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 			else logDebug("Keep-alive connection timed out!");
 			break;
 		}
-	} while(!connection.empty);
+	}
 
 	logTrace("Done handling connection.");
 }
