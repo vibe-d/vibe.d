@@ -93,6 +93,7 @@ unittest {
 */
 struct Path {
 	private {
+		PathEntry[4] m_staticNodes;
 		immutable(PathEntry)[] m_nodes;
 		bool m_absolute = false;
 		bool m_endsWithSlash = false;
@@ -114,8 +115,7 @@ struct Path {
 	/// Constructs a Path object by parsing a path string.
 	this(string pathstr)
 	{
-		static if (__VERSION__ < 2067) m_nodes = cast(immutable)splitPath(pathstr);
-		else m_nodes = splitPath(pathstr);
+		m_nodes = cast(immutable)splitPath(pathstr, m_staticNodes);
 		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && (m_nodes[0].toString().canFind(':') || m_nodes[0] == "\\"));
 		m_endsWithSlash = pathstr.endsWith("/");
 	}
@@ -455,7 +455,7 @@ pure {
 }
 
 /// Splits up a path string into its elements/folders
-PathEntry[] splitPath(string path)
+PathEntry[] splitPath(string path, PathEntry[] storage = null)
 pure {
 	if( path.startsWith("/") || path.startsWith("\\") ) path = path[1 .. $];
 	if( path.empty ) return null;
@@ -469,12 +469,7 @@ pure {
 	nelements++;
 
 	// reserve space for the elements
-	PathEntry[] storage;
-	/*if (alloc) {
-		auto mem = alloc.alloc(nelements * PathEntry.sizeof);
-		mem[] = 0;
-		storage = cast(PathEntry[])mem;
-	} else*/ storage = new PathEntry[nelements];
+	storage.length = nelements;
 
 	size_t startidx = 0;
 	size_t eidx = 0;

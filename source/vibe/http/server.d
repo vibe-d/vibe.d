@@ -616,7 +616,8 @@ final class HTTPServerRequest : HTTPRequest {
 			information for later stages. For example vibe.http.router.URLRouter uses this map
 			to store the value of any named placeholders.
 		*/
-		string[string] params;
+		import vibe.utils.dictionarylist;
+		DictionaryList!string params;
 
 		/** Supplies the request body as a stream.
 
