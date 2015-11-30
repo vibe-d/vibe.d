@@ -378,15 +378,15 @@ unittest {
 
 unittest {
 	Path p = Path("/foo bar/boo oom/");
-    URL url = URL("http", "example.com", 0, p); // constructor test
-    assert(url.path == p);
-    url.path = p;
-    assert(url.path == p);                       // path assignement test
-    assert(url.pathString == "/foo%20bar/boo%20oom/");
-    assert(url.toString() == "http://example.com/foo%20bar/boo%20oom/");
-    url.pathString = "/foo%20bar/boo%2foom/";
-    assert(url.pathString == "/foo%20bar/boo%2foom/");
-    assert(url.toString() == "http://example.com/foo%20bar/boo%2foom/");
+	URL url = URL("http", "example.com", 0, p); // constructor test
+	assert(url.path == p);
+	url.path = p;
+	assert(url.path == p);					   // path assignement test
+	assert(url.pathString == "/foo%20bar/boo%20oom/");
+	assert(url.toString() == "http://example.com/foo%20bar/boo%20oom/");
+	url.pathString = "/foo%20bar/boo%2foom/";
+	assert(url.pathString == "/foo%20bar/boo%2foom/");
+	assert(url.toString() == "http://example.com/foo%20bar/boo%2foom/");
 }
 
 unittest {
