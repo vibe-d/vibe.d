@@ -592,7 +592,7 @@ nothrow:
 struct FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 {
 	enum ElemSize = AllocSize!T;
-	static assert(ElemSize >= Slot.sizeof);
+	enum ElemSlotSize = max(AllocSize!T, Slot.sizeof);
 
 	static if( is(T == class) ){
 		alias TR = T;
@@ -614,11 +614,11 @@ struct FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 			mem = (cast(void*)ret)[0 .. ElemSize];
 		} else {
 			//logInfo("alloc %s/%d", T.stringof, ElemSize);
-			mem = manualAllocator().alloc(ElemSize);
-			static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSize);
+			mem = manualAllocator().alloc(ElemSlotSize);
+			static if( hasIndirections!T ) GC.addRange(mem.ptr, ElemSlotSize);
 		}
 
-		static if (INIT) return internalEmplace!T(mem, args);
+		static if (INIT) return cast(TR)internalEmplace!(Unqual!T)(mem, args); // FIXME: this emplace has issues with qualified types, but Unqual!T may result in the wrong constructor getting called.
 		else return cast(TR)mem.ptr;
 	}
 
@@ -635,7 +635,7 @@ struct FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
 		sl.next = s_firstFree;
 		s_firstFree = sl;
 		//static if( hasIndirections!T ) GC.removeRange(cast(void*)obj);
-		//manualAllocator().free((cast(void*)obj)[0 .. ElemSize]);
+		//manualAllocator().free((cast(void*)obj)[0 .. ElemSlotSize]);
 	}
 }
 
