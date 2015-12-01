@@ -152,13 +152,10 @@ package final class Libevent2TCPConnection : TCPConnection {
 		logDebug("TCP close request %s %s", m_ctx !is null, m_ctx ? m_ctx.state : ConnectionState.open);
 		if (!m_ctx || m_ctx.state == ConnectionState.activeClose) return;
 
-		// acquire write access
-		acquireWriter();
-
 		// set the closing flag
 		m_ctx.state = ConnectionState.activeClose;
 
-		// resumy any reader, so that the read operation can be ended with a failure
+		// resume any reader, so that the read operation can be ended with a failure
 		while (m_ctx.readOwner != Task.init) {
 			logTrace("resuming reader first");
 			m_ctx.core.yieldAndResumeTask(m_ctx.readOwner);
@@ -167,8 +164,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 			if (!m_ctx) return;
 		}
 
-		// acquire remaining access
-		acquireReader();
+		// acquire read+write access
+		acquire();
 
 		scope (exit) {
 			TCPContextAlloc.free(m_ctx);
