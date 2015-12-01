@@ -530,8 +530,12 @@ void yield()
 		// terminated while it was yielded.
 		assert(!t.m_queue || t.m_queue is &s_yieldedTasks);
 		if (!t.m_queue)
-			s_yieldedTasks.insertBack(CoreTask.getThis());
+			s_yieldedTasks.insertBack(t);
 		rawYield();
+		assert(t.m_queue is null, "Task not removed from yielders queue after being resumed.");
+	} else {
+		// Let yielded tasks execute
+		s_core.notifyIdle();
 	}
 }
 
@@ -1059,7 +1063,7 @@ private class CoreTask : TaskFiber {
 			m_yielders ~= caller;
 		} else assert(Thread.getThis() is this.thread, "Joining tasks in different threads is not yet supported.");
 		auto run_count = m_taskCounter;
-		if (caller == Task.init) s_core.resumeTask(this.task);
+		if (caller == Task.init) .yield(); // let the task continue (it must be yielded currently)
 		while (m_running && run_count == m_taskCounter) rawYield();
 	}
 
@@ -1148,6 +1152,7 @@ private class VibeDriverCore : DriverCore {
 	{
 		assert(ctask.thread is Thread.getThis(), "Resuming task in foreign thread.");
 		assert(ctask.state == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
+		assert(ctask.m_queue is null, "Manually resuming task that is already scheduled to resumed.");
 
 		if( event_exception ){
 			extrap();
