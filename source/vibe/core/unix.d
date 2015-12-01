@@ -206,8 +206,9 @@ public final class UnixSocket
 				cenforce(0 == .listen(this.file_descriptor, 128),
 						 "Call to listen failed");
 
-				while (this.event.wait(Duration.max, FileDescriptorEvent.Trigger.read))
+				do
 				{
+					this.event.wait(FileDescriptorEvent.Trigger.read);
 					auto fd = accept(this.file_descriptor, null, null);
 					cenforce(fd >= 0, "Call to accept failed");
 
@@ -216,7 +217,7 @@ public final class UnixSocket
 						{
 							handler(new UnixStream(fd));
 						});
-				}
+				} while (true);
 			});
 		return this;
 	}
@@ -320,7 +321,7 @@ public final class UnixStream : ConnectionStream
 		assert(this.connected,
 			   "UnixStream.waitForData called on a closed connection !");
 
-		return this.event.wait(timeout, FileDescriptorEvent.Trigger.read);
+		return this.event.wait(int.max.seconds, FileDescriptorEvent.Trigger.read);
 	}
 
 
