@@ -526,13 +526,11 @@ void yield()
 
 	auto t = CoreTask.getThis();
 	if (t && t !is CoreTask.ms_coreTask) {
-		// it can happen that a task with the same fiber was
-		// terminated while it was yielded.
-		assert(!t.m_queue || t.m_queue is &s_yieldedTasks);
+		assert(!t.m_queue, "Calling yield() whan already yielded!?");
 		if (!t.m_queue)
 			s_yieldedTasks.insertBack(t);
+		scope (exit) assert(t.m_queue is null, "Task not removed from yielders queue after being resumed.");
 		rawYield();
-		assert(t.m_queue is null, "Task not removed from yielders queue after being resumed.");
 	} else {
 		// Let yielded tasks execute
 		s_core.notifyIdle();
@@ -1028,6 +1026,12 @@ private class CoreTask : TaskFiber {
 				foreach (t; m_yielders) s_yieldedTasks.insertBack(cast(CoreTask)t.fiber);
 				m_yielders.length = 0;
 
+				// make sure that the task does not get left behind in the yielder queue if terminated during yield()
+				if (m_queue) {
+					s_core.resumeYieldedTasks();
+					assert(m_queue is null, "Still in yielder queue at the end of task after resuming all yielders!?");
+				}
+
 				// zero the fls initialization ByteArray for memory safety
 				foreach (size_t i, ref bool b; m_flsInit) {
 					if (b) {
@@ -1183,11 +1187,7 @@ private class VibeDriverCore : DriverCore {
 				again = s_idleHandler();
 			else again = false;
 
-			for (auto limit = s_yieldedTasks.length; limit > 0 && !s_yieldedTasks.empty; limit--) {
-				auto tf = s_yieldedTasks.front;
-				s_yieldedTasks.popFront();
-				if (tf.state == Fiber.State.HOLD) resumeCoreTask(tf);
-			}
+			resumeYieldedTasks();
 
 			again = (again || !s_yieldedTasks.empty) && !getExitFlag();
 
@@ -1202,6 +1202,15 @@ private class VibeDriverCore : DriverCore {
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
 		} else m_ignoreIdleForGC = false;
+	}
+
+	private void resumeYieldedTasks()
+	{
+		for (auto limit = s_yieldedTasks.length; limit > 0 && !s_yieldedTasks.empty; limit--) {
+			auto tf = s_yieldedTasks.front;
+			s_yieldedTasks.popFront();
+			if (tf.state == Fiber.State.HOLD) resumeCoreTask(tf);
+		}
 	}
 
 	private void yieldForEventDeferThrow(Task task)
