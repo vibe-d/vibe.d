@@ -1,0 +1,8 @@
+{
+	"name": "tests",
+	"description": "Tests vibe.d's std.concurrency integration",
+	"dependencies": {
+		"vibe-d:core": {"path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}
