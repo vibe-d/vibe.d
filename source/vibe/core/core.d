@@ -526,7 +526,7 @@ void yield()
 
 	auto t = CoreTask.getThis();
 	if (t && t !is CoreTask.ms_coreTask) {
-		assert(!t.m_queue, "Calling yield() whan already yielded!?");
+		assert(!t.m_queue, "Calling yield() when already yielded!?");
 		if (!t.m_queue)
 			s_yieldedTasks.insertBack(t);
 		scope (exit) assert(t.m_queue is null, "Task not removed from yielders queue after being resumed.");
