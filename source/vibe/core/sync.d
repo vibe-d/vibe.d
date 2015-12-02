@@ -549,12 +549,8 @@ private void runMutexUnitTests(M)()
 class TaskCondition : core.sync.condition.Condition {
 	private TaskConditionImpl!(false, Mutex) m_impl;
 
-	static if (__VERSION__ >= 2067)
-		this(core.sync.mutex.Mutex mtx) nothrow { m_impl.setup(mtx); super(mtx); }
-	else
-		this(core.sync.mutex.Mutex mtx) { m_impl.setup(mtx); super(mtx); }
-
-	override @property Mutex mutex() nothrow { return m_impl.mutex; }
+	this(core.sync.mutex.Mutex mtx) { m_impl.setup(mtx); super(mtx); }
+	override @property Mutex mutex() { return m_impl.mutex; }
 	override void wait() { m_impl.wait(); }
 	override bool wait(Duration timeout) { return m_impl.wait(timeout); }
 	override void notify() { m_impl.notify(); }
@@ -614,8 +610,8 @@ unittest {
 final class InterruptibleTaskCondition {
 	private TaskConditionImpl!(true, Lockable) m_impl;
 
-	this(core.sync.mutex.Mutex mtx) nothrow { m_impl.setup(mtx); }
-	this(Lockable mtx) nothrow { m_impl.setup(mtx); }
+	this(core.sync.mutex.Mutex mtx) { m_impl.setup(mtx); }
+	this(Lockable mtx) { m_impl.setup(mtx); }
 
 	@property Lockable mutex() { return m_impl.mutex; }
 	void wait() { m_impl.wait(); }
@@ -628,7 +624,7 @@ final class InterruptibleTaskCondition {
 /** Creates a new signal that can be shared between fibers.
 */
 ManualEvent createManualEvent()
-nothrow {
+{
 	return getEventDriver().createManualEvent();
 }
 
@@ -689,7 +685,7 @@ private struct TaskMutexImpl(bool INTERRUPTIBLE) {
 	}
 
 	void setup()
-	nothrow {
+	{
 		m_signal = createManualEvent();
 	}
 
