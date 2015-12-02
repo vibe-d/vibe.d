@@ -621,6 +621,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	this(Libevent2Driver driver)
 	nothrow {
 		super(driver);
+		scope (failure) assert(false);
 		m_mutex = new core.sync.mutex.Mutex;
 		m_waiters = ThreadSlotMap(manualAllocator());
 	}

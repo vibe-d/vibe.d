@@ -268,11 +268,11 @@ Task runWorkerTaskH(FT, ARGS...)(FT func, auto ref ARGS args)
 	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
-		caller.prioritySend(callee);
+		caller.prioritySendCompat(callee);
 		mixin(callWithMove!ARGS("func", "args"));
 	}
 	runWorkerTask_unsafe(&taskFun, caller, func, args);
-	return cast(Task)receiveOnly!PrivateTask();
+	return cast(Task)receiveOnlyCompat!PrivateTask();
 }
 /// ditto
 Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS args)
@@ -296,11 +296,11 @@ Task runWorkerTaskH(alias method, T, ARGS...)(shared(T) object, auto ref ARGS ar
 	assert(caller != Task.init, "runWorkderTaskH can currently only be called from within a task.");
 	static void taskFun(Task caller, FT func, ARGS args) {
 		PrivateTask callee = Task.getThis();
-		caller.prioritySend(callee);
+		caller.prioritySendCompat(callee);
 		mixin(callWithMove!ARGS("func", "args"));
 	}
 	runWorkerTask_unsafe(&taskFun, caller, func, args);
-	return cast(Task)receiveOnly!PrivateTask();
+	return cast(Task)receiveOnlyCompat!PrivateTask();
 }
 
 /// Running a worker task using a function
@@ -343,11 +343,11 @@ unittest {
 	static void workerFunc(Task caller)
 	{
 		int counter = 10;
-		while (receiveOnly!string() == "ping" && --counter) {
+		while (receiveOnlyCompat!string() == "ping" && --counter) {
 			logInfo("pong");
-			caller.send("pong");
+			caller.sendCompat("pong");
 		}
-		caller.send("goodbye");
+		caller.sendCompat("goodbye");
 
 	}
 
@@ -356,8 +356,8 @@ unittest {
 		Task callee = runWorkerTaskH(&workerFunc, Task.getThis);
 		do {
 			logInfo("ping");
-			callee.send("ping");
-		} while (receiveOnly!string() == "pong");
+			callee.sendCompat("ping");
+		} while (receiveOnlyCompat!string() == "pong");
 	}
 
 	static void work719(int) {}
@@ -369,11 +369,11 @@ unittest {
 	static class Test {
 		void workerMethod(Task caller) shared {
 			int counter = 10;
-			while (receiveOnly!string() == "ping" && --counter) {
+			while (receiveOnlyCompat!string() == "ping" && --counter) {
 				logInfo("pong");
-				caller.send("pong");
+				caller.sendCompat("pong");
 			}
-			caller.send("goodbye");
+			caller.sendCompat("goodbye");
 		}
 	}
 
@@ -383,8 +383,8 @@ unittest {
 		Task callee = runWorkerTaskH!(Test.workerMethod)(cls, Task.getThis());
 		do {
 			logInfo("ping");
-			callee.send("ping");
-		} while (receiveOnly!string() == "pong");
+			callee.sendCompat("ping");
+		} while (receiveOnlyCompat!string() == "pong");
 	}
 
 	static class Class719 {
@@ -1498,7 +1498,7 @@ static ~this()
 	st_threadShutdownCondition.notifyAll();
 }
 
-private void setupDriver()
+package void setupDriver()
 {
 	if (getEventDriver(true) !is null) return;
 
