@@ -68,6 +68,8 @@ struct URL {
 				case "ftp":
 				case "spdy":
 				case "sftp":
+				case "ws":
+				case "wss":
 				case "file":
 					// proto://server/path style
 					enforce(str.startsWith("//"), "URL must start with proto://...");
@@ -323,6 +325,14 @@ unittest { // issue #1044
 	assert(url.queryString == "");
 	assert(url.anchor == "anchor");
 	assert(url.pathString == "/q");
+}
+
+//websocket unittest
+unittest {
+	URL url = URL("ws://127.0.0.1:8080/echo");
+	assert(url.host == "127.0.0.1");
+	assert(url.port == 8080);
+	assert(url.localURI == "/echo");
 }
 
 unittest {
