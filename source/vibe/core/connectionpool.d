@@ -29,12 +29,14 @@ class ConnectionPool(Connection)
 		Connection[] m_connections;
 		int[const(Connection)] m_lockCount;
 		FreeListRef!LocalTaskSemaphore m_sem;
+		debug Thread m_thread;
 	}
 
 	this(Connection delegate() connection_factory, uint max_concurrent = uint.max)
 	{
 		m_connectionFactory = connection_factory;
 		m_sem = FreeListRef!LocalTaskSemaphore(max_concurrent);
+		debug m_thread = Thread.getThis();
 	}
 
 	@property void maxConcurrency(uint max_concurrent) {
@@ -47,6 +49,8 @@ class ConnectionPool(Connection)
 
 	LockedConnection!Connection lockConnection()
 	{
+		debug assert(m_thread is Thread.getThis(), "ConnectionPool was called from a foreign thread!");
+
 		m_sem.lock();
 		size_t cidx = size_t.max;
 		foreach( i, c; m_connections ){
