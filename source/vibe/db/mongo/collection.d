@@ -445,6 +445,52 @@ unittest {
 	}
 }
 
+/// Using the type system to define a document "schema"
+unittest {
+	import vibe.db.mongo.mongo;
+	import vibe.data.serialization : name;
+	import std.typecons : Nullable;
+
+	// Nested object within a "User" document
+	struct Address {
+		string name;
+		string street;
+		int zipCode;
+	}
+
+	// The document structure of the "myapp.users" collection
+	struct User {
+		@name("_id") BsonObjectID id; // represented as "_id" in the database
+		string loginName;
+		string password;
+		Address address;
+	}
+
+	void test()
+	{
+		MongoClient client = connectMongoDB("127.0.0.1");
+		MongoCollection users = client.getCollection("myapp.users");
+
+		// D values are automatically serialized to the internal BSON format
+		// upon insertion - see also vibe.data.serialization
+		User usr;
+		usr.id = BsonObjectID.generate();
+		usr.loginName = "admin";
+		usr.password = "secret";
+		users.insert(usr);
+
+		// find supports direct de-serialization of the returned documents
+		foreach (usr; users.find!User()) {
+			logInfo("User: %s", usr.loginName);
+		}
+
+		// the same goes for findOne
+		Nullable!User qusr = users.findOne!User(["_id": usr.id]);
+		if (!qusr.isNull)
+			logInfo("User: %s", qusr.loginName);
+	}
+}
+
 enum IndexFlags {
 	None = 0,
 	Unique = 1<<0,
