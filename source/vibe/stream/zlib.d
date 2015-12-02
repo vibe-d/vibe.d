@@ -254,7 +254,7 @@ class ZlibInputStream : InputStream {
 			dst = dst[len .. $];
 
 			if (!m_outbuffer.length && !m_finished) readChunk();
-			enforce(dst.length == 0 || !m_finished, "Reading past end of zlib stream.");
+			enforce(dst.length == 0 || m_outbuffer.length || !m_finished, "Reading past end of zlib stream.");
 		}
 	}
 
@@ -296,6 +296,24 @@ class ZlibInputStream : InputStream {
 			}
 		}
 	}
+}
+
+unittest {
+	import vibe.stream.memory;
+
+	auto data = new ubyte[5000];
+
+	auto mos = new MemoryOutputStream();
+	auto gos = new GzipOutputStream(mos);
+	gos.write(data);
+	gos.finalize();
+
+	auto ms = new MemoryStream(mos.data, false);
+	auto gis = new GzipInputStream(ms);
+
+	auto result = new ubyte[data.length];
+	gis.read(result);
+	assert(data == result);
 }
 
 private int zlibEnforce(int result)
