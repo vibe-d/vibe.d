@@ -534,7 +534,9 @@ final class Libevent2Driver : EventDriver {
 	}
 
 	private void registerObject(Libevent2Object obj)
-	{
+	nothrow {
+		scope (failure) assert(false); // synchronized is not nothrow
+
 		debug assert(Thread.getThis() is m_ownerThread, "Event object created in foreign thread.");
 		auto key = cast(size_t)cast(void*)obj;
 		synchronized (s_threadObjectsMutex) {
@@ -544,7 +546,9 @@ final class Libevent2Driver : EventDriver {
 	}
 
 	private void unregisterObject(Libevent2Object obj)
-	{
+	nothrow {
+		scope (failure) assert(false); // synchronized is not nothrow
+
 		auto key = cast(size_t)cast(void*)obj;
 		synchronized (s_threadObjectsMutex) {
 			m_ownedObjects.remove(key);
@@ -582,7 +586,7 @@ private class Libevent2Object {
 	debug private Thread m_ownerThread;
 
 	this(Libevent2Driver driver)
-	{
+	nothrow {
 		m_driver = driver;
 		m_driver.registerObject(this);
 		debug m_ownerThread = driver.m_ownerThread;
@@ -615,7 +619,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	}
 
 	this(Libevent2Driver driver)
-	{
+	nothrow {
 		super(driver);
 		m_mutex = new core.sync.mutex.Mutex;
 		m_waiters = ThreadSlotMap(manualAllocator());

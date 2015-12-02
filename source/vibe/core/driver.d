@@ -125,7 +125,7 @@ interface EventDriver {
 
 	/** Creates a new manually triggered event.
 	*/
-	ManualEvent createManualEvent();
+	ManualEvent createManualEvent() nothrow;
 
 	/** Creates an event for waiting on a non-bocking file handle.
 	*/
