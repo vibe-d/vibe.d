@@ -3,7 +3,10 @@
 
 module app;
 
-import vibe.vibe;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.db.mongo.mongo;
+import std.encoding : sanitize;
 
 void runTest()
 {
@@ -11,6 +14,11 @@ void runTest()
 	try client = connectMongoDB("localhost");
 	catch (Exception e) {
 		logInfo("Failed to connect to local MongoDB server. Skipping test.");
+		Throwable th = e;
+		while (th) {
+			logDiagnostic("Error: %s", th.toString().sanitize);
+			th = th.next;
+		}
 		return;
 	}
 
