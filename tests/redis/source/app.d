@@ -2,7 +2,10 @@
 
 module app;
 
-import vibe.vibe;
+import vibe.core.core;
+import vibe.core.log;
+import vibe.db.redis.redis;
+import core.time;
 import std.algorithm : sort, equal;
 
 void runTest()
