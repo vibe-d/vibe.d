@@ -115,7 +115,10 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 		req.headers["Sec-WebSocket-Key"] = challengeKey;
 	});
 
+	enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
+
 	auto key = "sec-websocket-accept" in res.headers;
+	enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 	enforce(*key == answerKey, "Response has wrong accept key");
 	auto ws = new WebSocket(res.switchProtocol("websocket"), null, false);
 	return ws;
@@ -144,14 +147,17 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 			}
 		}
 	}
-	if( !(isUpgrade &&
-		  pUpgrade && icmp(*pUpgrade, "websocket") == 0 &&
-		  pKey &&
-		  pVersion && *pVersion == "13") )
-	{
-		logDebug("Browser sent invalid WebSocket request.");
+
+	string req_error;
+	if (!isUpgrade) req_error = "WebSocket endpoint only accepts \"Connection: upgrade\" requests.";
+	else if (!pUpgrade || icmp(*pUpgrade, "websocket") != 0) req_error = "WebSocket endpoint requires \"Upgrade: websocket\" header.";
+	else if (!pVersion || *pVersion != "13") req_error = "Only version 13 of the WebSocket protocol is supported.";
+	else if (!pKey) req_error = "Missing \"Sec-WebSocket-Key\" header.";
+
+	if (req_error.length) {
+		logDebug("Browser sent invalid WebSocket request: %s", req_error);
 		res.statusCode = HTTPStatus.badRequest;
-		res.writeVoidBody();
+		res.writeBody(req_error);
 		return;
 	}
 
