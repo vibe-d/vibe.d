@@ -8,7 +8,7 @@
 module vibe.core.log;
 
 import vibe.core.args;
-import vibe.core.concurrency;
+import vibe.core.concurrency : ScopedLock, lock;
 import vibe.core.sync;
 
 import std.algorithm;
