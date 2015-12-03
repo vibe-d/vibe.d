@@ -648,7 +648,7 @@ final class RedisSubscriberImpl {
 
 				bool stopped;
 				do {
-					if (!receiveTimeout(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  }))
+					if (!receiveTimeoutCompat(3.seconds, (Action act) { if (act == Action.STOP) stopped = true;  }))
 						break;
 				} while (!stopped);
 
@@ -667,7 +667,7 @@ final class RedisSubscriberImpl {
 		void impl() {
 			m_mutex.performLocked!({
 				m_stop = true;
-				m_listener.send(Action.STOP);
+				m_listener.sendCompat(Action.STOP);
 				// send a message to wake up the listenerHelper from the reply
 				if (m_subscriptions.length > 0) {
 					m_connMutex.performLocked!({
@@ -728,7 +728,7 @@ final class RedisSubscriberImpl {
 						_request_void(m_lockedConnection, "SUBSCRIBE", args);
 					});
 					while(!m_subscriptions.keys.canFind(args)) {
-						if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  }))
+						if (!receiveTimeoutCompat(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  }))
 							break;
 
 						subscribed = true;
@@ -767,7 +767,7 @@ final class RedisSubscriberImpl {
 					_request_void(m_lockedConnection, "UNSUBSCRIBE", args);
 				});
 				while(m_subscriptions.keys.canFind(args)) {
-					if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  })) {
+					if (!receiveTimeoutCompat(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  })) {
 						unsubscribed = false;
 						break;
 					}
@@ -798,7 +798,7 @@ final class RedisSubscriberImpl {
 					_request_void(m_lockedConnection, "PSUBSCRIBE", args);
 				});
 
-				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  }))
+				if (!receiveTimeoutCompat(2.seconds, (Action act) { enforce(act == Action.SUBSCRIBE);  }))
 					subscribed = false;
 				else
 					subscribed = true;
@@ -826,7 +826,7 @@ final class RedisSubscriberImpl {
 				m_connMutex.performLocked!({
 					_request_void(m_lockedConnection, "PUNSUBSCRIBE", args);
 				});
-				if (!receiveTimeout(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  }))
+				if (!receiveTimeoutCompat(2.seconds, (Action act) { enforce(act == Action.UNSUBSCRIBE);  }))
 					unsubscribed = false;
 				else
 					unsubscribed = true;
@@ -894,14 +894,14 @@ final class RedisSubscriberImpl {
 			logTrace("Callback subscribe(%s)", channel);
 			m_subscriptions[channel] = true;
 			if (m_waiter != Task())
-				m_waiter.send(Action.SUBSCRIBE);
+				m_waiter.sendCompat(Action.SUBSCRIBE);
 		}
 
 		void onUnsubscribe(string channel) {
 			logTrace("Callback unsubscribe(%s)", channel);
 			m_subscriptions.remove(channel);
 			if (m_waiter != Task())
-				m_waiter.send(Action.UNSUBSCRIBE);
+				m_waiter.sendCompat(Action.UNSUBSCRIBE);
 		}
 
 		void teardown() { // teardown
@@ -911,7 +911,7 @@ final class RedisSubscriberImpl {
 			Action act;
 			// wait for the listener helper to send its stop message
 			while (act != Action.STOP)
-				act = receiveOnly!Action();
+				act = receiveOnlyCompat!Action();
 			m_lockedConnection.conn.close();
 			m_lockedConnection.destroy();
 			m_listening = false;
@@ -1026,21 +1026,21 @@ final class RedisSubscriberImpl {
 					logTrace("Notify data arrival");
 
 					Task.getThis().messageQueue.clear();
-					m_listener.send(Action.DATA);
-					if (!receiveTimeout(5.seconds, (Action act) { assert(act == Action.DATA); }))
+					m_listener.sendCompat(Action.DATA);
+					if (!receiveTimeoutCompat(5.seconds, (Action act) { assert(act == Action.DATA); }))
 						assert(false);
 
 				} else if (m_stop || !m_lockedConnection.conn) break;
 				logTrace("No data arrival in 100 ms...");
 			}
 			logTrace("Listener Helper exit.");
-			m_listener.send(Action.STOP);
+			m_listener.sendCompat(Action.STOP);
 		} );
 
 		m_listening = true;
 		logTrace("Redis listener now listening");
 		if (m_waiter != Task())
-			m_waiter.send(Action.STARTED);
+			m_waiter.sendCompat(Action.STARTED);
 
 		if (timeout == 0.seconds)
 			timeout = 365.days; // make sure 0.seconds is considered as big.
@@ -1054,7 +1054,7 @@ final class RedisSubscriberImpl {
 			teardown();
 
 			if (m_waiter != Task())
-				m_waiter.send(Action.STOP);
+				m_waiter.sendCompat(Action.STOP);
 
 			m_listenerHelper = Task();
 			m_listener = Task();
@@ -1071,10 +1071,10 @@ final class RedisSubscriberImpl {
 				m_connMutex.performLocked!({
 					pubsub_handler(); // handles one command at a time
 				});
-				m_listenerHelper.send(Action.DATA);
+				m_listenerHelper.sendCompat(Action.DATA);
 			};
 
-			if (!receiveTimeout(timeout, handler) || m_stop) {
+			if (!receiveTimeoutCompat(timeout, handler) || m_stop) {
 				logTrace("Redis Listener stopped");
 				break;
 			}
@@ -1100,7 +1100,7 @@ final class RedisSubscriberImpl {
 				catch(Throwable e) {
 					ex = e;
 					if (m_waiter != Task() && !m_listening) {
-						m_waiter.send(Action.STARTED);
+						m_waiter.sendCompat(Action.STARTED);
 						return;
 					}
 					callback("Error", e.toString());
@@ -1108,7 +1108,7 @@ final class RedisSubscriberImpl {
 			});
 			m_mutex.performLocked!({
 				import std.datetime : usecs;
-				receiveTimeout(2.seconds, (Action act) { assert( act == Action.STARTED); });
+				receiveTimeoutCompat(2.seconds, (Action act) { assert( act == Action.STARTED); });
 				if (ex) throw ex;
 				enforce(m_listening, "Failed to start listening, timeout of 2 seconds expired");
 			});
