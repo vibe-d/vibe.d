@@ -360,8 +360,8 @@ final class HTTPClient {
 			throw new HTTPStatusException(HTTPStatus.notAcceptable, "The Proxy Server didn't allow Basic Authentication");
 		}
 
-		SysTime connected_time = Clock.currTime(UTC());
-		has_body = doRequest(requester, &close_conn, true, connected_time);
+		SysTime connected_time;
+		has_body = doRequestWithRetry(requester, true, close_conn, connected_time);
 		m_responding = true;
 
 		static if (is (T == HTTPClientResponse*))
@@ -379,12 +379,15 @@ final class HTTPClient {
 	/**
 		Performs a HTTP request.
 
-		requester is called first to populate the request with headers and the desired
+		`requester` is called first to populate the request with headers and the desired
 		HTTP method and version. After a response has been received it is then passed
 		to the caller which can in turn read the reponse body. Any part of the body
 		that has not been processed will automatically be consumed and dropped.
 
-		Note that the second form of this method (returning a HTTPClientResponse) is
+		Note that the `requester` callback might be invoked multiple times in the event
+		that a request has to be resent due to a connection failure.
+
+		Also note that the second form of this method (returning a `HTTPClientResponse`) is
 		not recommended to use as it may accidentially block a HTTP connection when
 		only part of the response body was read and also requires a heap allocation
 		for the response object. The callback based version on the other hand uses
@@ -398,10 +401,10 @@ final class HTTPClient {
 			scope(exit) request_allocator.reset();
 		} else auto request_allocator = defaultAllocator();
 
-		SysTime connected_time = Clock.currTime(UTC());
+		bool close_conn;
+		SysTime connected_time;
+		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 
-		bool close_conn = false;
-		bool has_body = doRequest(requester, &close_conn, false, connected_time);
 		m_responding = true;
 		auto res = scoped!HTTPClientResponse(this, has_body, close_conn, request_allocator, connected_time);
 
@@ -436,9 +439,9 @@ final class HTTPClient {
 	/// ditto
 	HTTPClientResponse request(scope void delegate(HTTPClientRequest) requester)
 	{
-		bool close_conn = false;
-		auto connected_time = Clock.currTime(UTC());
-		bool has_body = doRequest(requester, &close_conn, false, connected_time);
+		bool close_conn;
+		SysTime connected_time;
+		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 		m_responding = true;
 		auto res = new HTTPClientResponse(this, has_body, close_conn, defaultAllocator(), connected_time);
 
@@ -450,7 +453,31 @@ final class HTTPClient {
 		return res;
 	}
 
+	private bool doRequestWithRetry(scope void delegate(HTTPClientRequest req) requester, bool confirmed_proxy_auth /* basic only */, out bool close_conn, out SysTime connected_time)
+	{
+		if (m_conn && m_conn.connected && connected_time > m_keepAliveLimit){
+			logDebug("Disconnected to avoid timeout");
+			disconnect();
+		}
 
+		// check if this isn't the first request on a connection
+		bool is_persistent_request = m_conn && m_conn.connected;
+
+		// retry the request if the connection gets closed prematurely and this is a persistent request
+		bool has_body;
+		foreach (i; 0 .. is_persistent_request ? 2 : 1) {
+		 	connected_time = Clock.currTime(UTC());
+
+			close_conn = false;
+			has_body = doRequest(requester, &close_conn, false, connected_time);
+
+			logTrace("HTTP client waiting for response");
+			if (!m_stream.empty) break;
+			
+			enforce(i != 1, "Second attempt to send HTTP request failed.");
+		}
+		return has_body;
+	}
 
 	private bool doRequest(scope void delegate(HTTPClientRequest req) requester, bool* close_conn, bool confirmed_proxy_auth = false /* basic only */, SysTime connected_time = Clock.currTime(UTC()))
 	{
@@ -459,11 +486,6 @@ final class HTTPClient {
 
 		m_requesting = true;
 		scope(exit) m_requesting = false;
-
-		if (m_conn && m_conn.connected && connected_time > m_keepAliveLimit){
-			logDebug("Disconnected to avoid timeout");
-			disconnect();
-		}
 
 		if (!m_conn || !m_conn.connected) {
 			if (m_conn) m_conn.close(); // make sure all resources are freed
