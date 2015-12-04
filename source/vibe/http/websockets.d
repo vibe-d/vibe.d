@@ -731,11 +731,6 @@ struct Frame {
 	}
 }
 
-
-// This object is a placeholder and should to never be modified.
-// copied from client.d not sure how to make visible for websockets.d so we avoid creating a new object
-private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
-
 private ubyte[] generateNewMaskKey() 
 {
 	auto rng = new SystemRNG();
