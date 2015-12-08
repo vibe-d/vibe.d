@@ -1268,11 +1268,18 @@ private struct HTTPServerContext {
 	size_t id;
 }
 
-private struct HTTPListenInfo {
+private final class HTTPListenInfo {
 	TCPListener listener;
 	string bindAddress;
 	ushort bindPort;
 	TLSContext tlsContext;
+
+	this(string bind_address, ushort bind_port, TLSContext tls_context)
+	{
+		this.bindAddress = bind_address;
+		this.bindPort = bind_port;
+		this.tlsContext = tls_context;
+	}
 }
 
 private enum MaxHTTPHeaderLineLength = 4096;
@@ -1452,7 +1459,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 				}
 			}
 			if (!found_listener) {
-				auto linfo = HTTPListenInfo(null, addr, settings.port, settings.tlsContext);
+				auto linfo = new HTTPListenInfo(addr, settings.port, settings.tlsContext);
 				if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0)) // DMD BUG 2043
 				{
 					linfo.listener = tcp_lst;
