@@ -1409,11 +1409,9 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 
 	void addVHost(ref HTTPListenInfo lst)
 	{
-		auto contexts = getContexts();
-
 		TLSContext onSNI(string servername)
 		{
-			foreach (ctx; contexts)
+			foreach (ctx; getContexts())
 				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
 					&& ctx.settings.port == lst.bindPort
 					&& ctx.settings.hostName.icmp(servername) == 0)
@@ -1431,7 +1429,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			lst.tlsContext.sniCallback = &onSNI;
 		}
 
-		foreach (ctx; contexts) {
+		foreach (ctx; getContexts()) {
 			if (ctx.settings.port != settings.port) continue;
 			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
 			/*enforce(ctx.settings.hostName != settings.hostName,
