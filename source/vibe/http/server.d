@@ -775,6 +775,10 @@ final class HTTPServerResponse : HTTPResponse {
 		m_requestAlloc = req_alloc;
 	}
 
+	/** Returns the time at which the request was finalized.
+
+		Note that this field will only be set after `finalize` has been called.
+	*/
 	@property SysTime timeFinalized() { return m_timeFinalized; }
 
 	/** Determines if the HTTP header has already been written.
@@ -1119,8 +1123,14 @@ final class HTTPServerResponse : HTTPResponse {
 		return !m_rawConnection.connected;
 	}
 
-	// Finalizes the response. This is called automatically by the server.
-	private void finalize()
+	/**
+		Finalizes the response. This is usually called automatically by the server.
+
+		This method can be called manually after writing the response to force
+		all network traffic associated with the current request to be finalized.
+		After the call returns, the `timeFinalized` property will be set.
+	*/
+	void finalize()
 	{
 		if (m_gzipOutputStream) {
 			m_gzipOutputStream.finalize();
@@ -1145,12 +1155,13 @@ final class HTTPServerResponse : HTTPResponse {
 				logDebug("HTTP response only written partially before finalization. Terminating connection.");
 				m_rawConnection.close();
 			}
+			m_rawConnection = null;
 		}
 
-		m_timeFinalized = Clock.currTime(UTC());
-
-		m_conn = null;
-		m_rawConnection = null;
+		if (m_conn) {
+			m_conn = null;
+			m_timeFinalized = Clock.currTime(UTC());
+		}
 	}
 
 	private void writeHeader()
