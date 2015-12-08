@@ -70,21 +70,27 @@ class ProxyStream : Stream {
 	ConnectionStream. This allows wrapping embedded streams, such as
 	SSL streams in a ConnectionStream.
 */
-class ConnectionProxyStream : ProxyStream, ConnectionStream {
+class ConnectionProxyStream : ConnectionStream {
 	private {
 		ConnectionStream m_connection;
+		Stream m_underlying;
+		InputStream m_input;
+		OutputStream m_output;
 	}
 
 	this(Stream stream, ConnectionStream connection_stream)
 	in { assert(stream !is null); }
 	body {
-		super(stream);
+		m_underlying = stream;
+		m_input = stream;
+		m_output = stream;
 		m_connection = connection_stream;
 	}
 
 	this(InputStream input, OutputStream output, ConnectionStream connection_stream)
 	{
-		super(input, output);
+		m_input = input;
+		m_output = output;
 		m_connection = connection_stream;
 	}
 
@@ -115,11 +121,28 @@ class ConnectionProxyStream : ProxyStream, ConnectionStream {
 		return m_connection.waitForData(timeout);
 	}
 
-	// for some reason DMD will complain if we don't wrap these here
-	override void write(in ubyte[] bytes) { super.write(bytes); }
-	override void flush() { super.flush(); }
-	override void finalize() { super.finalize(); }
-	override void write(InputStream stream, ulong nbytes = 0) { super.write(stream, nbytes); }
+	/// The stream that is wrapped by this one
+	@property inout(Stream) underlying() inout { return m_underlying; }
+	/// ditto
+	@property void underlying(Stream value) { m_underlying = value; m_input = value; m_output = value; }
+
+	@property bool empty() { return m_input ? m_input.empty : true; }
+
+	@property ulong leastSize() { return m_input ? m_input.leastSize : 0; }
+
+	@property bool dataAvailableForRead() { return m_input ? m_input.dataAvailableForRead : false; }
+
+	const(ubyte)[] peek() { return m_input.peek(); }
+
+	void read(ubyte[] dst) { m_input.read(dst); }
+
+	void write(in ubyte[] bytes) { m_output.write(bytes); }
+
+	void flush() { m_output.flush(); }
+
+	void finalize() { m_output.finalize(); }
+
+	void write(InputStream stream, ulong nbytes = 0) { m_output.write(stream, nbytes); }
 }
 
 
