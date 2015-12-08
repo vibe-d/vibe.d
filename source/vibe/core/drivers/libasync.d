@@ -82,7 +82,7 @@ final class LibasyncDriver : EventDriver {
 		AsyncTimer m_timerEvent;
 		TimerQueue!TimerInfo m_timers;
 		SysTime m_nextSched;
-		AsyncSignal m_exitSignal;
+		shared AsyncSignal m_exitSignal;
 	}
 
 	this(DriverCore core) nothrow
@@ -115,7 +115,7 @@ final class LibasyncDriver : EventDriver {
 		if (!gs_evLoop)
 			gs_evLoop = s_evLoop;
 			
-		AsyncSignal m_exitSignal = new AsyncSignal(getEventLoop());
+		m_exitSignal = new shared AsyncSignal(getEventLoop());
 		m_exitSignal.run({
 				m_break = true;
 			});
