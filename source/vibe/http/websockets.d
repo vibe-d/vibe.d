@@ -120,10 +120,40 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 	auto key = "sec-websocket-accept" in res.headers;
 	enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 	enforce(*key == answerKey, "Response has wrong accept key");
-	auto ws = new WebSocket(res.switchProtocol("websocket"), null, false);
+	auto conn = res.switchProtocol("websocket");
+	auto ws = new WebSocket(conn, null, false);
 	return ws;
 }
 
+/// ditto
+void connectWebSocket(URL url, scope void delegate(scope WebSocket sock) del, HTTPClientSettings settings = defaultSettings)
+{
+	bool use_tls = (url.schema == "wss") ? true : false;
+	url.schema = use_tls ? "https" : "http";
+
+	auto challengeKey = generateChallengeKey();
+	auto answerKey = computeAcceptKey(challengeKey);
+
+	requestHTTP(url,
+		(scope req) {
+			req.method = HTTPMethod.GET;
+			req.headers["Upgrade"] = "websocket";
+			req.headers["Connection"] = "Upgrade";
+			req.headers["Sec-WebSocket-Version"] = "13";
+			req.headers["Sec-WebSocket-Key"] = challengeKey;
+		},
+		(scope res) {
+			enforce(res.statusCode == HTTPStatus.switchingProtocols, "Server didn't accept the protocol upgrade request.");
+			auto key = "sec-websocket-accept" in res.headers;
+			enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
+			enforce(*key == answerKey, "Response has wrong accept key");
+			res.switchProtocol("websocket", (conn) {
+				scope ws = new WebSocket(conn, null, false);
+				del(ws);
+			});
+		}
+	);
+}
 
 /**
 	Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
@@ -218,19 +248,19 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 		auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
 		res.headers["Sec-WebSocket-Accept"] = accept;
 		res.headers["Connection"] = "Upgrade";
-		ConnectionStream conn = res.switchProtocol("websocket");
-
-		// TODO: put back 'scope' once it is actually enforced by DMD
-		/*scope*/ auto socket = new WebSocket(conn, req);
-		try on_handshake(socket);
-		catch (Exception e) {
-			logDiagnostic("WebSocket handler failed: %s", e.msg);
-		} catch (Throwable th) {
-			// pretend to have sent a closing frame so that any further sends will fail
-			socket.m_sentCloseFrame = true;
-			throw th;
-		}
-		socket.close();
+		res.switchProtocol("websocket", (scope conn) {
+			// TODO: put back 'scope' once it is actually enforced by DMD
+			/*scope*/ auto socket = new WebSocket(conn, req);
+			try on_handshake(socket);
+			catch (Exception e) {
+				logDiagnostic("WebSocket handler failed: %s", e.msg);
+			} catch (Throwable th) {
+				// pretend to have sent a closing frame so that any further sends will fail
+				socket.m_sentCloseFrame = true;
+				throw th;
+			}
+			socket.close();
+		});
 	}
 	return &callback;
 }
