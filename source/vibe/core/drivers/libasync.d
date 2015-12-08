@@ -82,6 +82,7 @@ final class LibasyncDriver : EventDriver {
 		AsyncTimer m_timerEvent;
 		TimerQueue!TimerInfo m_timers;
 		SysTime m_nextSched;
+		AsyncSignal m_exitSignal;
 	}
 
 	this(DriverCore core) nothrow
@@ -113,6 +114,11 @@ final class LibasyncDriver : EventDriver {
 		s_evLoop = getThreadEventLoop();
 		if (!gs_evLoop)
 			gs_evLoop = s_evLoop;
+			
+		AsyncSignal m_exitSignal = new AsyncSignal(getEventLoop());
+		m_exitSignal.run({
+				m_break = true;
+			});
 		logTrace("Loaded libasync backend in thread %s", Thread.getThis().name);
 
 	}
@@ -166,7 +172,7 @@ final class LibasyncDriver : EventDriver {
 	void exitEventLoop()
 	{
 		logDebug("Exiting (%s)", m_break);
-		m_break = true;
+		m_exitSignal.trigger();
 
 	}
 
