@@ -145,7 +145,7 @@ final class LibasyncDriver : EventDriver {
 
 	int runEventLoopOnce()
 	{
-		getEventLoop().loop(0.seconds);
+		getEventLoop().loop(100.msecs);
 		processTimers();
 		getDriverCore().notifyIdle();
 		logTrace("runEventLoopOnce exit");
