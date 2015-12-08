@@ -927,19 +927,40 @@ final class HTTPClientResponse : HTTPResponse {
 
 		The caller caller gets ownership of the ConnectionStream and is responsible
 		for closing it.
+
+		Notice:
+			When using the overload that returns a `ConnectionStream`, the caller
+			must make sure that the stream is not used after the
+			`HTTPClientRequest` has been destroyed.
+		
 		Params:
-			newProtocol = The protocol to which the connection is expected to upgrade. Should match the Upgrade header of the request.
+			new_protocol = The protocol to which the connection is expected to
+				upgrade. Should match the Upgrade header of the request.
 	*/
-	ConnectionStream switchProtocol(in string newProtocol)
+	ConnectionStream switchProtocol(in string new_protocol)
 	{
 		enforce(statusCode == HTTPStatus.switchingProtocols, "Server did not send a 101 - Switching Protocols response");
 		string *resNewProto = "Upgrade" in headers;
 		enforce(resNewProto, "Server did not send an Upgrade header");
-		enforce(*resNewProto == newProtocol, "Expected Upgrade: " ~ newProtocol ~", received Upgrade: " ~ *resNewProto);
+		enforce(*resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
 		auto stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
 		m_client.m_responding = false;
 		m_client = null;
+		m_closeConn = true; // cannot reuse connection for further requests!
 		return stream;
+	}
+	/// ditto
+	void switchProtocol(string new_protocol, scope void delegate(ConnectionStream str) del)
+	{
+		enforce(statusCode == HTTPStatus.switchingProtocols, "Server did not send a 101 - Switching Protocols response");
+		string *resNewProto = "Upgrade" in headers;
+		enforce(resNewProto, "Server did not send an Upgrade header");
+		enforce(*resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
+		scope stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
+		m_client.m_responding = false;
+		m_client = null;
+		m_closeConn = true;
+		del(stream);
 	}
 
 	private void finalize()
