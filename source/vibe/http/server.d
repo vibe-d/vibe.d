@@ -1008,6 +1008,10 @@ final class HTTPServerResponse : HTTPResponse {
 
 
 	/** Special method sending a SWITCHING_PROTOCOLS response to the client.
+
+		Notice: For the overload that returns a `ConnectionStream`, it must be
+			ensured that the returned instance doesn't outlive the request
+			handler callback.
 	*/
 	ConnectionStream switchProtocol(string protocol)
 	{
@@ -1015,6 +1019,17 @@ final class HTTPServerResponse : HTTPResponse {
 		headers["Upgrade"] = protocol;
 		writeVoidBody();
 		return new ConnectionProxyStream(m_conn, m_rawConnection);
+	}
+	/// ditto
+	void switchProtocol(string protocol, scope void delegate(scope ConnectionStream) del)
+	{
+		statusCode = HTTPStatus.SwitchingProtocols;
+		headers["Upgrade"] = protocol;
+		writeVoidBody();
+		scope conn = new ConnectionProxyStream(m_conn, m_rawConnection);
+		del(conn);
+		finalize();
+		m_rawConnection.close(); // connection not reusable after a protocol upgrade
 	}
 
 	/** Sets the specified cookie value.
