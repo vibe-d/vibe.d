@@ -5,7 +5,9 @@ d:
   - dmd-2.068.2
   - dmd-2.067.1
   - dmd-2.066.1
+  - ldc-0.16.1
   - ldc-0.15.1
+  - gdc-5.2.0
   - gdc-4.9.2
 
 addons:
@@ -20,7 +22,11 @@ env:
 
 matrix:
   exclude:
+    - d: ldc-0.16.1
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: ldc-0.15.1
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+    - d: gdc-5.2.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: gdc-4.9.2
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
