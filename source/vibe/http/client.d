@@ -987,4 +987,4 @@ final class HTTPClientResponse : HTTPResponse {
 }
 
 // This object is a placeholder and should to never be modified.
-private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
+package __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;

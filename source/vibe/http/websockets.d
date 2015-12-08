@@ -87,7 +87,7 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && (settings is null || (c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port)))
 			pool = c[1];
 
 	if (!pool)
@@ -760,11 +760,6 @@ struct Frame {
 		return frame;
 	}
 }
-
-
-// This object is a placeholder and should to never be modified.
-// copied from client.d not sure how to make visible for websockets.d so we avoid creating a new object
-private __gshared HTTPClientSettings defaultSettings = new HTTPClientSettings;
 
 private ubyte[] generateNewMaskKey() 
 {
