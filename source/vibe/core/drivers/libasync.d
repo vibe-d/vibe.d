@@ -81,7 +81,7 @@ final class LibasyncDriver : EventDriver {
 		debug Thread m_ownerThread;
 		AsyncTimer m_timerEvent;
 		TimerQueue!TimerInfo m_timers;
-		SysTime m_nextSched;
+		SysTime m_nextSched = SysTime.max;
 		shared AsyncSignal m_exitSignal;
 	}
 
@@ -383,11 +383,12 @@ final class LibasyncDriver : EventDriver {
 	private void processTimers()
 	{
 		if (!m_timers.anyPending) return;
-
 		logTrace("Processing due timers");
 		// process all timers that have expired up to now
 		auto now = Clock.currTime(UTC());
-
+		// event loop timer will need to be rescheduled because we'll process everything until now
+		m_nextSched = SysTime.max;
+		
 		m_timers.consumeTimeouts(now, (timer, periodic, ref data) {
 			Task owner = data.owner;
 			auto callback = data.callback;
@@ -411,7 +412,7 @@ final class LibasyncDriver : EventDriver {
 		logTrace("Rescheduling timer event %s", Task.getThis());
 		
 		// don't bother scheduling, the timers will be processed before leaving for the event loop
-		if (m_nextSched <= Clock.currTime())
+		if (m_nextSched <= Clock.currTime(UTC()))
 			return;
 		
 		bool first;
@@ -419,7 +420,9 @@ final class LibasyncDriver : EventDriver {
 		Duration dur;
 		if (next == SysTime.max) return;
 		dur = next - now;
-		m_nextSched = next;
+		if (m_nextSched != next)
+			m_nextSched = next;
+		else return;
 		if (dur.total!"seconds"() >= int.max)
 			return; // will never trigger, don't bother
 		if (!m_timerEvent) {
