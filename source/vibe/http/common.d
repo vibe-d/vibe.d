@@ -427,11 +427,13 @@ final class ChunkedInputStream : InputStream {
 	Outputs data to an output stream in HTTP chunked format.
 */
 final class ChunkedOutputStream : OutputStream {
+	alias ChunkExtensionCallback = string delegate(in ubyte[] data);
 	private {
 		OutputStream m_out;
 		AllocAppender!(ubyte[]) m_buffer;
 		size_t m_maxBufferSize = 512*1024;
 		bool m_finalized = false;
+		ChunkExtensionCallback m_chunkExtensionCallback = null;
 	}
 
 	this(OutputStream stream, Allocator alloc = defaultAllocator())
@@ -449,18 +451,51 @@ final class ChunkedOutputStream : OutputStream {
 	/// ditto
 	@property void maxBufferSize(size_t bytes) { m_maxBufferSize = bytes; if (m_buffer.data.length >= m_maxBufferSize) flush(); }
 
+	/** A delegate used to specify the extensions for each chunk written to the underlying stream.
+	 	
+	 	The delegate has to be of type `string delegate(in const(ubyte)[] data)` and gets handed the
+	 	data of each chunk before it is written to the underlying stream. If it's return value is non-empty,
+	 	it will be added to the chunk's header line.
+
+	 	The returned chunk extension string should be of the format `key1=value1;key2=value2;[...];keyN=valueN`
+	 	and **not contain any carriage return or newline characters**.
+
+	 	Also note that the delegate should accept the passed data through a scoped argument. Thus, **no references
+	 	to the provided data should be stored in the delegate**. If the data has to be stored for later use,
+	 	it needs to be copied first.
+	 */
+	@property ChunkExtensionCallback chunkExtensionCallback() const { return m_chunkExtensionCallback; }
+	/// ditto
+	@property void chunkExtensionCallback(ChunkExtensionCallback cb) { m_chunkExtensionCallback = cb; }
+
+	private void append(scope void delegate(scope ubyte[] dst) del, ulong nbytes)
+	{
+		assert(del !is null);
+		auto sz = nbytes;
+		if (m_maxBufferSize > 0 && m_maxBufferSize < m_buffer.data.length + sz)
+			sz = m_maxBufferSize - min(m_buffer.data.length, m_maxBufferSize);
+
+		if (sz > 0)
+		{
+			m_buffer.reserve(sz);
+			m_buffer.append((scope ubyte[] dst) {
+					debug assert(dst.length >= sz);
+					del(dst[0..sz]);
+					return sz;
+				});
+		}
+	}
+
 	void write(in ubyte[] bytes_)
 	{
 		assert(!m_finalized);
 		const(ubyte)[] bytes = bytes_;
 		while (bytes.length > 0) {
-			auto sz = bytes.length;
-			if (m_maxBufferSize > 0 && m_maxBufferSize < m_buffer.data.length + sz)
-				sz = m_maxBufferSize - min(m_buffer.data.length, m_maxBufferSize);
-			if (sz > 0) {
-				m_buffer.put(bytes[0 .. sz]);
-				bytes = bytes[sz .. $];
-			}
+			append((scope ubyte[] dst) {
+					auto n = dst.length;
+					dst[] = bytes[0..n];
+					bytes = bytes[n..$];
+				}, bytes.length);
 			if (bytes.length > 0)
 				flush();
 		}
@@ -470,20 +505,22 @@ final class ChunkedOutputStream : OutputStream {
 	{
 		assert(!m_finalized);
 		if( m_buffer.data.length > 0 ) flush();
-		if( nbytes == 0 ){
-			while( !data.empty ){
+		if( nbytes == 0 ) {
+			while( !data.empty ) {
 				auto sz = data.leastSize;
 				assert(sz > 0);
-				writeChunkSize(sz);
-				m_out.write(data, sz);
-				m_out.write("\r\n");
-				m_out.flush();
+				write(data,sz);
 			}
 		} else {
-			writeChunkSize(nbytes);
-			m_out.write(data, nbytes);
-			m_out.write("\r\n");
-			m_out.flush();
+			while(nbytes > 0)
+			{
+				append((scope ubyte[] dst) {
+						nbytes -= dst.length;
+						data.read(dst);
+					}, nbytes);
+				if (nbytes > 0)
+					flush();
+			}
 		}
 	}
 
@@ -492,9 +529,7 @@ final class ChunkedOutputStream : OutputStream {
 		assert(!m_finalized);
 		auto data = m_buffer.data();
 		if( data.length ){
-			writeChunkSize(data.length);
-			m_out.write(data);
-			m_out.write("\r\n");
+			writeChunk(data);
 		}
 		m_out.flush();
 		m_buffer.reset(AppenderResetMode.reuseData);
@@ -506,14 +541,27 @@ final class ChunkedOutputStream : OutputStream {
 		flush();
 		m_buffer.reset(AppenderResetMode.freeData);
 		m_finalized = true;
-		m_out.write("0\r\n\r\n");
+		writeChunk([]);
 		m_out.flush();
 	}
-	private void writeChunkSize(long length)
+
+	private void writeChunk(in ubyte[] data)
 	{
 		import vibe.stream.wrapper;
 		auto rng = StreamOutputRange(m_out);
-		formattedWrite(&rng, "%x\r\n", length);
+		formattedWrite(&rng, "%x", data.length);
+		if (m_chunkExtensionCallback !is null)
+		{
+			rng.put(';');
+			auto extension = m_chunkExtensionCallback(data);
+			assert(!extension.startsWith(';'));
+			debug assert(extension.indexOf('\r') < 0);
+			debug assert(extension.indexOf('\n') < 0);
+			rng.put(extension);
+		}
+		rng.put("\r\n");
+		rng.put(data);
+		rng.put("\r\n");
 	}
 }
 
