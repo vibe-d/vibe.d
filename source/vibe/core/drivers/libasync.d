@@ -21,7 +21,7 @@ import libasync;
 import libasync.internals.memory;
 import libasync.types : Status;
 
-import std.algorithm : min;
+import std.algorithm : min, max;
 import std.array;
 import std.container : Array;
 import std.conv;
@@ -419,7 +419,7 @@ final class LibasyncDriver : EventDriver {
 		auto next = m_timers.getFirstTimeout();
 		Duration dur;
 		if (next == SysTime.max) return;
-		dur = next - now;
+		dur = max(1.msecs, next - now);
 		if (m_nextSched != next)
 			m_nextSched = next;
 		else return;
