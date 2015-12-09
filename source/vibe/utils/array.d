@@ -67,22 +67,29 @@ struct AllocAppender(ArrayType : E[], E) {
 		m_remaining = m_data;
 	}
 
-	void reserve(size_t amt)
+	/** Grows the capacity of the internal buffer so that it can hold a minumum amount of elements.
+
+		Params:
+			amount = The minimum amount of elements that shall be appendable without
+				triggering a re-allocation.
+
+	*/
+	void reserve(size_t amount)
 	{
 		size_t nelems = m_data.length - m_remaining.length;
 		if (!m_data.length) {
-			m_data = cast(ElemType[])m_alloc.alloc(amt*E.sizeof);
+			m_data = cast(ElemType[])m_alloc.alloc(amount*E.sizeof);
 			m_remaining = m_data;
 			m_allocatedBuffer = true;
 		}
-		if (m_remaining.length < amt) {
+		if (m_remaining.length < amount) {
 			debug {
 				import std.digest.crc;
 				auto checksum = crc32Of(m_data[0 .. nelems]);
 			}
-			if (m_allocatedBuffer) m_data = cast(ElemType[])m_alloc.realloc(m_data, (nelems+amt)*E.sizeof);
+			if (m_allocatedBuffer) m_data = cast(ElemType[])m_alloc.realloc(m_data, (nelems+amount)*E.sizeof);
 			else {
-				auto newdata = cast(ElemType[])m_alloc.alloc((nelems+amt)*E.sizeof);
+				auto newdata = cast(ElemType[])m_alloc.alloc((nelems+amount)*E.sizeof);
 				newdata[0 .. nelems] = m_data[0 .. nelems];
 				m_data = newdata;
 				m_allocatedBuffer = true;
@@ -136,6 +143,23 @@ struct AllocAppender(ArrayType : E[], E) {
 		}
 	}
 
+	static if (!is(E == immutable) || !hasAliasing!E) {
+		/** Appends a number of bytes in-place.
+
+			The delegate will get the memory slice of the memory that follows
+			the already written data. Use `reserve` to ensure that this slice
+			has enough room. The delegate should overwrite as much of the
+			slice as desired and then has to return the number of elements
+			that should be appended (counting from the start of the slice).
+		*/
+		void append(scope size_t delegate(scope ElemType[] dst) del)
+		{
+			auto n = del(m_remaining);
+			assert(n <= m_remaining.length);
+			m_remaining = m_remaining[n .. $];
+		}
+	}
+
 	void grow(size_t min_free)
 	{
 		if( !m_data.length && min_free < 16 ) min_free = 16;
@@ -179,6 +203,32 @@ unittest {
 	assert(a.data == "Hello");
 	assert(a.data.ptr != buf.ptr);
 }
+
+unittest {
+	auto app = AllocAppender!(int[])(defaultAllocator);
+	app.reserve(2);
+	app.append((scope mem) {
+		assert(mem.length >= 2);
+		mem[0] = 1;
+		mem[1] = 2;
+		return 2;
+	});
+	assert(app.data == [1, 2]);
+}
+
+unittest {
+	auto app = AllocAppender!string(defaultAllocator);
+	app.reserve(3);
+	app.append((scope mem) {
+		assert(mem.length >= 3);
+		mem[0] = 'f';
+		mem[1] = 'o';
+		mem[2] = 'o';
+		return 3;
+	});
+	assert(app.data == "foo");
+}
+
 
 struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 	alias ElemType = Unqual!E;
