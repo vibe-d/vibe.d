@@ -391,7 +391,7 @@ final class LibevManualEvent : ManualEvent {
 	void acquire()
 	{
 		auto task = Task.getThis();
-		auto thread = task == Task() ? Thread.getThis() : task.thread;
+		auto thread = task == Task.init ? Thread.getThis() : task.thread;
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
 				auto slot = new ThreadSlot;
@@ -402,27 +402,25 @@ final class LibevManualEvent : ManualEvent {
 				slot.signal.data = cast(void*)this;
 			}
 			assert(task !in m_waiters[thread].tasks, "Double acquisition of signal.");
-			if (task != Task.init)
-				m_waiters[thread].tasks[task] = true;
+			m_waiters[thread].tasks[task] = true;
 		}
 	}
 
 	void release()
 	{
 		auto self = Task.getThis();
-		if (self == Task.init) return;
+		auto thread = self == Task.init ? Thread.getThis() : self.thread;
 
 		synchronized (m_mutex) {
-			assert(self.thread in m_waiters && self in m_waiters[self.thread].tasks,
+			assert(thread in m_waiters && self in m_waiters[thread].tasks,
 				"Releasing non-acquired signal.");
-			m_waiters[self.thread].tasks.remove(self);
+			m_waiters[thread].tasks.remove(self);
 		}
 	}
 
 	bool amOwner()
 	{
 		auto self = Task.getThis();
-		if (self == Task.init) return false;
 
 		synchronized (m_mutex) {
 			if (self.thread !in m_waiters) return false;
@@ -468,7 +466,8 @@ final class LibevManualEvent : ManualEvent {
 			}
 
 			foreach (l; lst.byKey)
-				core.resumeTask(l);
+				if (l != Task.init)
+					core.resumeTask(l);
 		} catch (Exception e) {
 			logError("Exception while handling signal event: %s", e.msg);
 			try logDebug("Full error: %s", sanitize(e.msg));
