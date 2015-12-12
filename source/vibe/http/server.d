@@ -1012,11 +1012,15 @@ final class HTTPServerResponse : HTTPResponse {
 		Notice: For the overload that returns a `ConnectionStream`, it must be
 			ensured that the returned instance doesn't outlive the request
 			handler callback.
+
+		Params:
+			protocol = The protocol set in the "Upgrade" header of the response.
+				Use an empty string to skip setting this field.
 	*/
 	ConnectionStream switchProtocol(string protocol)
 	{
 		statusCode = HTTPStatus.SwitchingProtocols;
-		headers["Upgrade"] = protocol;
+		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		return new ConnectionProxyStream(m_conn, m_rawConnection);
 	}
@@ -1024,7 +1028,7 @@ final class HTTPServerResponse : HTTPResponse {
 	void switchProtocol(string protocol, scope void delegate(scope ConnectionStream) del)
 	{
 		statusCode = HTTPStatus.SwitchingProtocols;
-		headers["Upgrade"] = protocol;
+		if (protocol.length) headers["Upgrade"] = protocol;
 		writeVoidBody();
 		scope conn = new ConnectionProxyStream(m_conn, m_rawConnection);
 		del(conn);

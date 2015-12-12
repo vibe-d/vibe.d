@@ -935,14 +935,16 @@ final class HTTPClientResponse : HTTPResponse {
 		
 		Params:
 			new_protocol = The protocol to which the connection is expected to
-				upgrade. Should match the Upgrade header of the request.
+				upgrade. Should match the Upgrade header of the request. If an
+				empty string is passed, the "Upgrade" header will be ignored and
+				should be checked by other means.
 	*/
-	ConnectionStream switchProtocol(in string new_protocol)
+	ConnectionStream switchProtocol(string new_protocol)
 	{
 		enforce(statusCode == HTTPStatus.switchingProtocols, "Server did not send a 101 - Switching Protocols response");
 		string *resNewProto = "Upgrade" in headers;
 		enforce(resNewProto, "Server did not send an Upgrade header");
-		enforce(*resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
+		enforce(!new_protocol.length || *resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
 		auto stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
 		m_client.m_responding = false;
 		m_client = null;
@@ -955,7 +957,7 @@ final class HTTPClientResponse : HTTPResponse {
 		enforce(statusCode == HTTPStatus.switchingProtocols, "Server did not send a 101 - Switching Protocols response");
 		string *resNewProto = "Upgrade" in headers;
 		enforce(resNewProto, "Server did not send an Upgrade header");
-		enforce(*resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
+		enforce(!new_protocol.length || *resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
 		scope stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
 		m_client.m_responding = false;
 		m_client = null;
