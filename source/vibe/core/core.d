@@ -511,6 +511,39 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 	return tfi;
 }
 
+import core.cpuid : threadsPerCPU;
+/**
+	Sets up num worker threads.
+
+	This function gives explicit control over the number of worker threads.
+	Note, to have an effect the function must be called prior to related worker
+	tasks functions which set up the default number of worker threads
+	implicitly.
+
+	Params:
+		num = The number of worker threads to initialize. Defaults to
+			core.cpuid.threadsPerCPU.
+	See_also: `runWorkerTask`, `runWorkerTaskH`, `runWorkerTaskDist`
+*/
+public void setupWorkerThreads(uint num = threadsPerCPU)
+{
+	static bool s_workerThreadsStarted = false;
+	if (s_workerThreadsStarted) return;
+	s_workerThreadsStarted = true;
+
+	synchronized (st_threadsMutex) {
+		if (st_threads.any!(t => t.isWorker))
+			return;
+
+		foreach (i; 0 .. num) {
+			auto thr = new Thread(&workerThreadFunc);
+			thr.name = format("Vibe Task Worker #%s", i);
+			st_threads ~= ThreadContext(thr, true);
+			thr.start();
+		}
+	}
+}
+
 /**
 	Suspends the execution of the calling task to let other tasks and events be
 	handled.
@@ -674,12 +707,11 @@ void setTaskStackSize(size_t sz)
 /**
 	The number of worker threads used for processing worker tasks.
 
-	The number of worker threads equals `core.cpuid.threadsPerCPU`.
-
 	Note that this function will cause the worker threads to be started,
 	if they haven't	already.
 
-	See_also: `runWorkerTask`, `runWorkerTaskH`, `runWorkerTaskDist`
+	See_also: `runWorkerTask`, `runWorkerTaskH`, `runWorkerTaskDist`,
+	`setupWorkerThreads`
 */
 @property size_t workerThreadCount()
 	out(count) { assert(count > 0); }
@@ -1505,27 +1537,6 @@ private void setupDriver()
 	logTrace("create driver");
 	setupEventDriver(s_core);
 	logTrace("driver %s created", (cast(Object)getEventDriver()).classinfo.name);
-}
-
-private void setupWorkerThreads()
-{
-	import core.cpuid;
-
-	static bool s_workerThreadsStarted = false;
-	if (s_workerThreadsStarted) return;
-	s_workerThreadsStarted = true;
-
-	synchronized (st_threadsMutex) {
-		if (st_threads.any!(t => t.isWorker))
-			return;
-
-		foreach (i; 0 .. threadsPerCPU) {
-			auto thr = new Thread(&workerThreadFunc);
-			thr.name = format("Vibe Task Worker #%s", i);
-			st_threads ~= ThreadContext(thr, true);
-			thr.start();
-		}
-	}
 }
 
 private void workerThreadFunc()
