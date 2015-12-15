@@ -619,7 +619,8 @@ unittest {
 /**
 	Attribute for marking non-serialized fields.
 */
-@property IgnoreAttribute!T ignore(T)()
+private alias None = typeof(null);
+@property IgnoreAttribute!T ignore(T = None)()
 {
 	return IgnoreAttribute!T();
 }
@@ -994,9 +995,12 @@ private template FilterSerializableFields(Serializer, COMPOSITE, FIELDS...)
 			static if (Tup.length != 1) {
 				alias FilterSerializableFields = TypeTuple!(mname);
 			} else {
-				static if (!hasAttribute!(IgnoreAttribute!(Serializer.Type), __traits(getMember, T, mname)))
+				static if (!hasAttribute!(IgnoreAttribute!(Serializer.Type), __traits(getMember, T, mname)) &&
+						   !hasAttribute!(IgnoreAttribute!None, __traits(getMember, T, mname))) {
 					alias FilterSerializableFields = TypeTuple!(mname);
-				else alias FilterSerializableFields = TypeTuple!();
+				} else {
+					alias FilterSerializableFields = TypeTuple!();
+				}
 			}
 		} else alias FilterSerializableFields = TypeTuple!();
 	} else alias FilterSerializableFields = TypeTuple!();
