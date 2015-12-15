@@ -381,7 +381,7 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 	} else static if (isStringSerializable!TU) {
 		serializer.writeValue(value.toString());
 	} else static if (is(TU == struct) || is(TU == class)) {
-		static if (!hasSerializableFields!TU)
+		static if (!hasSerializableFields!(Serializer, TU))
 			pragma(msg, "Serializing composite type "~T.stringof~" which has no serializable fields");
 		static if (is(TU == class)) {
 			if (value is null) {
@@ -390,10 +390,10 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 			}
 		}
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
-			enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
+			enum nfields = getExpandedFieldCount!(TU, SerializableFields!(Serializer, TU));
 			serializer.beginWriteArray!TU(nfields);
 			size_t fcount = 0;
-			foreach (mname; SerializableFields!TU) {
+			foreach (mname; SerializableFields!(Serializer, TU)) {
 				alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				foreach (j, TM; TMS) {
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
@@ -406,12 +406,12 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 			serializer.endWriteArray!TU();
 		} else {
 			static if (__traits(compiles, serializer.beginWriteDictionary!TU(0))) {
-				enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
+				enum nfields = getExpandedFieldCount!(TU, SerializableFields!(Serializer, TU));
 				serializer.beginWriteDictionary!TU(nfields);
 			} else {
 				serializer.beginWriteDictionary!TU();
 			}
-			foreach (mname; SerializableFields!TU) {
+			foreach (mname; SerializableFields!(Serializer, TU)) {
 				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				static if (TM.length == 1) {
 					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
@@ -529,10 +529,10 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
 			size_t idx = 0;
 			deserializer.readArray!T((sz){}, {
-				static if (hasSerializableFields!T) {
+				static if (hasSerializableFields!(Serializer, T)) {
 					switch (idx++) {
 						default: break;
-						foreach (i, mname; SerializableFields!T) {
+						foreach (i, mname; SerializableFields!(Serializer, T)) {
 							alias TM = typeof(__traits(getMember, ret, mname));
 							alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
 							case i:
@@ -549,10 +549,10 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 			});
 		} else {
 			deserializer.readDictionary!T((name) {
-				static if (hasSerializableFields!T) {
+				static if (hasSerializableFields!(Serializer, T)) {
 					switch (name) {
 						default: break;
-						foreach (i, mname; SerializableFields!T) {
+						foreach (i, mname; SerializableFields!(Serializer, T)) {
 							alias TM = typeof(__traits(getMember, ret, mname));
 							alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
 							enum fname = getAttribute!(T, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
@@ -569,7 +569,7 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 				}
 			});
 		}
-		foreach (i, mname; SerializableFields!T)
+		foreach (i, mname; SerializableFields!(Serializer, T))
 			static if (!hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
 				enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"'.");
 		return ret;
@@ -619,9 +619,9 @@ unittest {
 /**
 	Attribute for marking non-serialized fields.
 */
-@property IgnoreAttribute ignore()
+@property IgnoreAttribute!T ignore(T)()
 {
-	return IgnoreAttribute();
+	return IgnoreAttribute!T();
 }
 ///
 unittest {
@@ -705,7 +705,7 @@ struct NameAttribute { string name; }
 /// ditto
 struct OptionalAttribute {}
 /// ditto
-struct IgnoreAttribute {}
+struct IgnoreAttribute(T) {alias T Type;}
 /// ditto
 struct ByNameAttribute {}
 /// ditto
@@ -964,9 +964,9 @@ private string underscoreStrip(string field_name)
 }
 
 
-private template hasSerializableFields(T, size_t idx = 0)
+private template hasSerializableFields(Serializer, T, size_t idx = 0)
 {
-	enum hasSerializableFields = SerializableFields!(T).length > 0;
+	enum hasSerializableFields = SerializableFields!(Serializer, T).length > 0;
 	/*static if (idx < __traits(allMembers, T).length) {
 		enum mname = __traits(allMembers, T)[idx];
 		static if (!isRWPlainField!(T, mname) && !isRWField!(T, mname)) enum hasSerializableFields = hasSerializableFields!(T, idx+1);
@@ -975,17 +975,17 @@ private template hasSerializableFields(T, size_t idx = 0)
 	} else enum hasSerializableFields = false;*/
 }
 
-private template SerializableFields(COMPOSITE)
+private template SerializableFields(Serializer, COMPOSITE)
 {
-	alias SerializableFields = FilterSerializableFields!(COMPOSITE, __traits(allMembers, COMPOSITE));
+	alias SerializableFields = FilterSerializableFields!(Serializer, COMPOSITE, __traits(allMembers, COMPOSITE));
 }
 
-private template FilterSerializableFields(COMPOSITE, FIELDS...)
+private template FilterSerializableFields(Serializer, COMPOSITE, FIELDS...)
 {
 	static if (FIELDS.length > 1) {
 		alias FilterSerializableFields = TypeTuple!(
-			FilterSerializableFields!(COMPOSITE, FIELDS[0 .. $/2]),
-			FilterSerializableFields!(COMPOSITE, FIELDS[$/2 .. $]));
+			FilterSerializableFields!(Serializer, COMPOSITE, FIELDS[0 .. $/2]),
+			FilterSerializableFields!(Serializer, COMPOSITE, FIELDS[$/2 .. $]));
 	} else static if (FIELDS.length == 1) {
 		alias T = COMPOSITE;
 		enum mname = FIELDS[0];
@@ -994,7 +994,7 @@ private template FilterSerializableFields(COMPOSITE, FIELDS...)
 			static if (Tup.length != 1) {
 				alias FilterSerializableFields = TypeTuple!(mname);
 			} else {
-				static if (!hasAttribute!(IgnoreAttribute, __traits(getMember, T, mname)))
+				static if (!hasAttribute!(IgnoreAttribute!(Serializer.Type), __traits(getMember, T, mname)))
 					alias FilterSerializableFields = TypeTuple!(mname);
 				else alias FilterSerializableFields = TypeTuple!();
 			}

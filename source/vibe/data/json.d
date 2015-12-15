@@ -1557,6 +1557,7 @@ unittest { // const and mutable json
 	See_Also: vibe.data.serialization.serialize, vibe.data.serialization.deserialize, serializeToJson, deserializeJson
 */
 struct JsonSerializer {
+	alias Type = Json;
 	template isJsonBasicType(T) { enum isJsonBasicType = isNumeric!T || isBoolean!T || is(T == string) || is(T == typeof(null)) || isJsonSerializable!T; }
 
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
@@ -1649,6 +1650,7 @@ struct JsonSerializer {
 struct JsonStringSerializer(R, bool pretty = false)
 	if (isInputRange!R || isOutputRange!(R, char))
 {
+	alias Type = Json;
 	private {
 		R m_range;
 		size_t m_level = 0;

@@ -1250,6 +1250,7 @@ unittest { // issue #793
 */
 struct BsonSerializer {
 	import vibe.utils.array : AllocAppender;
+	alias Type = Bson;
 
 	private {
 		AllocAppender!(ubyte[]) m_dst;
