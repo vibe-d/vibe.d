@@ -1021,6 +1021,8 @@ version (unittest) {
 	private struct TestSerializer {
 		import std.array, std.conv, std.string;
 
+		alias Type = string;
+
 		string result;
 
 		enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null)) || is(T == float) || is (T == int);
