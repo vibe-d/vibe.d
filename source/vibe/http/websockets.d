@@ -294,11 +294,13 @@ final class WebSocket {
 		m_writeMutex = new InterruptibleTaskMutex;
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
-		m_reader = runTask(&startReader);
 		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
 			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			m_pongReceived = true;
 		}
+		m_writeMutex.performLocked!({
+			m_reader = runTask(&startReader);
+		});
 	}
 
 	/**
@@ -402,7 +404,6 @@ final class WebSocket {
 	{
 		//control frame payloads are limited to 125 bytes
 		assert(reason.length <= 123);
-
 		if (connected) {
 			m_writeMutex.performLocked!({
 				m_sentCloseFrame = true;
@@ -416,7 +417,9 @@ final class WebSocket {
 			});
 		}
 		if (m_pingTimer) m_pingTimer.stop();
-		if (Task.getThis() != m_reader) m_reader.join();
+		m_readMutex.performLocked!({
+			if (Task.getThis() != m_reader) m_reader.join();
+		});
 	}
 
 	/**
@@ -468,6 +471,9 @@ final class WebSocket {
 
 	private void startReader()
 	{
+		scope(exit) m_writeMutex.performLocked!({
+			m_conn.close();
+		});
 		scope (exit) m_readCondition.notifyAll();
 		try {
 			while (!m_conn.empty) {
@@ -475,9 +481,6 @@ final class WebSocket {
 				if (m_pingTimer) {
 					if (m_pongSkipped) {
 						logDebug("Pong not received, closing connection");
-						m_writeMutex.performLocked!({
-							m_conn.close();
-						});
 						return;
 					}
 					if (!m_conn.waitForData(request.serverSettings.webSocketPingInterval))
@@ -494,7 +497,6 @@ final class WebSocket {
 					logDebug("Got closing frame (%s)", m_sentCloseFrame);
 					if(!m_sentCloseFrame) close();
 					logDebug("Terminating connection (%s)", m_sentCloseFrame);
-					m_conn.close();
 					return;
 				}
 				m_readMutex.performLocked!({
@@ -507,7 +509,6 @@ final class WebSocket {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
 			logDiagnostic("Closing connection.");
 		}
-		m_conn.close();
 	}
 
 	private void sendPing() {
