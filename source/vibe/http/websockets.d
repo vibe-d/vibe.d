@@ -294,11 +294,11 @@ final class WebSocket {
 		m_writeMutex = new InterruptibleTaskMutex;
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
+		m_reader = runTask(&startReader);
 		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
 			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			m_pongReceived = true;
 		}
-		m_reader = runTask(&startReader);
 	}
 
 	/**
