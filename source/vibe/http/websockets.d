@@ -291,7 +291,6 @@ final class WebSocket {
 		m_request = request;
 		m_isServer = is_server;
 		assert(m_conn);
-		m_reader = runTask(&startReader);
 		m_writeMutex = new InterruptibleTaskMutex;
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
@@ -299,6 +298,7 @@ final class WebSocket {
 			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			m_pongReceived = true;
 		}
+		m_reader = runTask(&startReader);
 	}
 
 	/**
