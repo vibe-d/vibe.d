@@ -291,14 +291,16 @@ final class WebSocket {
 		m_request = request;
 		m_isServer = is_server;
 		assert(m_conn);
-		m_reader = runTask(&startReader);
 		m_writeMutex = new InterruptibleTaskMutex;
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
-		if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
-			m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
-			m_pongReceived = true;
-		}
+		m_readMutex.performLocked!({
+			m_reader = runTask(&startReader);
+			if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
+				m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
+				m_pongReceived = true;
+			}
+		});
 	}
 
 	/**
@@ -468,6 +470,7 @@ final class WebSocket {
 
 	private void startReader()
 	{
+		m_readMutex.performLocked!({}); //Wait until initialization
 		scope (exit) m_readCondition.notifyAll();
 		try {
 			while (!m_conn.empty) {
