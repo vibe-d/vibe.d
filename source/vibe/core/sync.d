@@ -94,7 +94,7 @@ struct ScopedMutexLock
 		Returns the value returned from $(D PROC), if any.
 */
 /// private
-ReturnType!PROC performLocked(alias PROC, MUTEX)(MUTEX mutex)
+package(vibe) ReturnType!PROC performLocked(alias PROC, MUTEX)(MUTEX mutex)
 {
 	mutex.lock();
 	scope (exit) mutex.unlock();
