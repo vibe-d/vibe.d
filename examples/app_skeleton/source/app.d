@@ -7,9 +7,6 @@ import index;
 void showError(HTTPServerRequest req, HTTPServerResponse res, HTTPServerErrorInfo error)
 {
 	res.render!("error.dt", req, error);
-	//res.renderCompat!("error.dt",
-	//	HTTPServerRequest, "req",
-	//	HTTPServerErrorInfo, "error")(req, error);
 }
 
 shared static this()
@@ -20,6 +17,7 @@ shared static this()
 	router.get("*", serveStaticFiles("public"));
 
 	auto settings = new HTTPServerSettings;
+	settings.bindAddresses = ["127.0.0.1"];
 	settings.port = 8080;
 	settings.errorPageHandler = toDelegate(&showError);
 
