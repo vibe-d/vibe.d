@@ -396,7 +396,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 		case BlockType.Header:
 			assert(block.blocks.length == 0);
 			auto hlvl = block.headerLevel + (settings ? settings.headingBaseLevel-1 : 0);
-			dst.formattedWrite("<h%s>", hlvl);
+			dst.formattedWrite("<h%s id=\"%s\">", hlvl, block.text[0].asSlug);
 			assert(block.text.length == 1);
 			writeMarkdownEscaped(dst, block.text[0], links, settings);
 			dst.formattedWrite("</h%s>\n", hlvl);
@@ -974,6 +974,82 @@ pure @safe {
 	return ret;
 }
 
+
+/**
+	Generates an identifier suitable to use as within a URL.
+
+	The resulting string will contain only ASCII lower case alphabetic or
+	numeric characters, as well as dashes (-). Every sequence of
+	non-alphanumeric characters will be replaced by a single dash. No dashes
+	will be at either the front or the back of the result string.
+*/
+auto asSlug(R)(R text)
+	if (isInputRange!R && is(typeof(R.init.front) == dchar))
+{
+	static struct SlugRange {
+		private {
+			R _input;
+			bool _dash;
+		}
+
+		this(R input)
+		{
+			_input = input;
+			skipNonAlphaNum();
+		}
+
+		@property bool empty() const { return _dash ? false : _input.empty; }
+		@property char front() const {
+			if (_dash) return '-';
+
+			char r = cast(char)_input.front;
+			if (r >= 'A' && r <= 'Z') return cast(char)(r + ('a' - 'A'));
+			return r;
+		}
+
+		void popFront()
+		{
+			if (_dash) {
+				_dash = false;
+				return;
+			}
+
+			_input.popFront();
+			auto na = skipNonAlphaNum();
+			if (na && !_input.empty)
+				_dash = true;
+		}
+
+		private bool skipNonAlphaNum()
+		{
+			bool have_skipped = false;
+			while (!_input.empty) {
+				switch (_input.front) {
+					default:
+						_input.popFront();
+						have_skipped = true;
+						break;
+					case 'a': .. case 'z':
+					case 'A': .. case 'Z':
+					case '0': .. case '9':
+						return have_skipped;
+				}
+			}
+			return have_skipped;
+		}
+	}
+	return SlugRange(text);
+}
+
+unittest {
+	import std.algorithm : equal;
+	assert("".asSlug.equal(""));
+	assert(".,-".asSlug.equal(""));
+	assert("abc".asSlug.equal("abc"));
+	assert("aBc123".asSlug.equal("abc123"));
+	assert("....aBc...123...".asSlug.equal("abc-123"));
+}
+
 private struct LinkRef {
 	string id;
 	string url;
@@ -1002,7 +1078,7 @@ private struct Link {
 
 @safe unittest { // check CTFE-ability
 	enum res = filterMarkdown("### some markdown\n[foo][]\n[foo]: /bar");
-	assert(res == "<h3> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
+	assert(res == "<h3 id=\"some-markdown\"> some markdown</h3>\n<p><a href=\"/bar\">foo</a>\n</p>\n", res);
 }
 
 @safe unittest { // correct line breaks in restrictive mode
@@ -1026,3 +1102,7 @@ private struct Link {
 	assert(filterMarkdown(">     this\n    is code") ==
 		"<blockquote><pre><code>this\nis code</code></pre></blockquote>\n");
 }*/
+
+@safe unittest {
+	assert(filterMarkdown("## Hello, World!") == "<h2 id=\"hello-world\"> Hello, World!</h2>\n", filterMarkdown("## Hello, World!"));
+}
