@@ -65,8 +65,7 @@ void filterMarkdown(R)(ref R dst, string src, MarkdownFlags flags)
 /// ditto
 void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = null)
 {
-	auto defsettings = new MarkdownSettings;
-	if (!settings) settings = defsettings;
+	if (!settings) settings = new MarkdownSettings;
 
 	auto all_lines = splitLines(src);
 	auto links = scanForReferences(all_lines);
@@ -74,6 +73,51 @@ void filterMarkdown(R)(ref R dst, string src, scope MarkdownSettings settings = 
 	Block root_block;
 	parseBlocks(root_block, lines, null, settings);
 	writeBlock(dst, root_block, links, settings);
+}
+
+/**
+	Returns the hierarchy of sections
+*/
+Section[] getMarkdownOutline(string markdown_source, scope MarkdownSettings settings = null)
+{
+	import std.conv : to;
+
+	if (!settings) settings = new MarkdownSettings;
+	auto all_lines = splitLines(markdown_source);
+	auto lines = parseLines(all_lines, settings);
+	Block root_block;
+	parseBlocks(root_block, lines, null, settings);
+	Section root;
+
+	foreach (ref sb; root_block.blocks) {
+		if (sb.type == BlockType.Header) {
+			auto s = &root;
+			while (true) {
+				if (s.subSections.length == 0) break;
+				if (s.subSections[$-1].headingLevel >= sb.headerLevel) break;
+				s = &s.subSections[$-1];
+			}
+			s.subSections ~= Section(sb.headerLevel, sb.text[0], sb.text[0].asSlug.to!string);
+		}
+	}
+
+	return root.subSections;
+}
+
+///
+unittest {
+	import std.conv : to;
+	assert(getMarkdownOutline("## first\n## second\n### third\n# fourth\n### fifth") ==
+		[
+			Section(2, " first", "first"),
+			Section(2, " second", "second", [
+				Section(3, " third", "third")
+			]),
+			Section(1, " fourth", "fourth", [
+				Section(3, " fifth", "fifth")
+			])
+		]
+	);
 }
 
 final class MarkdownSettings {
@@ -96,6 +140,13 @@ enum MarkdownFlags {
 	//allowUnsafeHtml = 1<<4,
 	vanillaMarkdown = none,
 	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
+}
+
+struct Section {
+	size_t headingLevel;
+	string caption;
+	string anchor;
+	Section[] subSections;
 }
 
 private {
