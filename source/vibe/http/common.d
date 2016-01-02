@@ -693,10 +693,21 @@ struct CookieValueMap {
 		/// Sets the cookie value, applying the specified encoding.
 		void setValue(string value, .Cookie.Encoding encoding = .Cookie.Encoding.url)
 		{
-			final switch (encoding) {
-				case .Cookie.Encoding.none: this.rawValue = value; break;
-				case .Cookie.Encoding.url: this.rawValue = urlEncode(value); break;
+			import std.encoding : sanitize;
+			final switch (encoding) 
+			{
+				case .Cookie.Encoding.none: this.rawValue = value.sanitize(); break;
+				case .Cookie.Encoding.url: 
+				{
+					try {
+						this.rawValue = urlEncode(value); 
+					} catch (Exception e) {
+						this.rawValue = value.sanitize(); //fallback to raw Encoding
+					}
+					break;
+				}			
 			}
+			
 		}
 	}
 
