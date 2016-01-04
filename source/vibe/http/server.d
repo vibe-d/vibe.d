@@ -1496,6 +1496,13 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 {
 	Stream http_stream = connection;
 
+	// Set NODELAY to true, to avoid delays caused by sending the response
+	// header and body in separate chunks. Note that to avoid other performance
+	// issues (caused by tiny packets), this requires using an output buffer in
+	// the event driver, which is the case at least for the default libevent
+	// based driver.
+	connection.tcpNoDelay = true;
+
 	version(VibeNoSSL) {} else {
 		import std.traits : ReturnType;
 		ReturnType!createTLSStreamFL tls_stream;
