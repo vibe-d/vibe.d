@@ -104,6 +104,8 @@ version(VibeLibasyncDriver) {
 	Represents a network/socket address.
 */
 struct NetworkAddress {
+	@safe:
+
 	private union {
 		sockaddr addr;
 		sockaddr_in addr_ip4;
@@ -120,19 +122,22 @@ struct NetworkAddress {
 	*/
 	@property ushort port()
 	const pure nothrow {
+		ushort nport;
 		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
-			case AF_INET: return ntoh(addr_ip4.sin_port);
-			case AF_INET6: return ntoh(addr_ip6.sin6_port);
+			case AF_INET: nport = addr_ip4.sin_port; break;
+			case AF_INET6: nport = addr_ip6.sin6_port; break;
 		}
+		return () @trusted { return ntoh(nport); } ();
 	}
 	/// ditto
 	@property void port(ushort val)
 	pure nothrow {
+		auto nport = () @trusted { return hton(val); } ();
 		switch (this.family) {
 			default: assert(false, "port() called for invalid address family.");
-			case AF_INET: addr_ip4.sin_port = hton(val); break;
-			case AF_INET6: addr_ip6.sin6_port = hton(val); break;
+			case AF_INET: addr_ip4.sin_port = nport; break;
+			case AF_INET6: addr_ip6.sin6_port = nport; break;
 		}
 	}
 
@@ -171,7 +176,7 @@ struct NetworkAddress {
 		switch (this.family) {
 			default: assert(false, "toAddressString() called for invalid address family.");
 			case AF_INET:
-				ubyte[4] ip = (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4];
+				ubyte[4] ip = () @trusted { return (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4]; } ();
 				return format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
 			case AF_INET6:
 				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr;
@@ -202,7 +207,7 @@ struct NetworkAddress {
 	else {
 		unittest {
 			void test(string ip) {
-				auto res = resolveHost(ip, AF_UNSPEC, false).toAddressString();
+				auto res = () @trusted { return resolveHost(ip, AF_UNSPEC, false); } ().toAddressString();
 				assert(res == ip,
 					   "IP "~ip~" yielded wrong string representation: "~res);
 			}
