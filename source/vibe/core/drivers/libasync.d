@@ -655,6 +655,8 @@ final class LibasyncFileStream : FileStream {
 
 
 final class LibasyncDirectoryWatcher : DirectoryWatcher {
+	import std.array: Appender;
+
 	private {
 		Path m_path;
 		bool m_recursive;
@@ -699,9 +701,16 @@ final class LibasyncDirectoryWatcher : DirectoryWatcher {
 		return m_task == Task.getThis();
 	}
 
-	bool readChanges(ref DirectoryChange[] dst, Duration timeout)
+	bool readChanges(out DirectoryChange[] dst, Duration timeout)
 	{
-		dst.length = 0;
+		Appender!(DirectoryChange[]) app;
+		auto ret = readChanges(app, timeout);
+		dst = app.data;
+		return ret;
+	}
+
+	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout);
+	{
 		assert(!amOwner());
 		if (m_error)
 			throw m_error;
@@ -711,17 +720,10 @@ final class LibasyncDirectoryWatcher : DirectoryWatcher {
 			if (m_impl.status.code == Status.ERROR) {
 				throw new Exception(m_impl.error);
 			}
-
-			foreach (ref change; m_changes[]) {
-				//logTrace("Adding change: %s", change.to!string);
-				dst ~= change;
-			}
-
-			//logTrace("Consumed change 1: %s", dst.to!string);
-			import std.array : array;
 			import std.algorithm : uniq;
-			dst = cast(DirectoryChange[]) uniq!((a, b) => a.path == b.path && a.type == b.type)(dst).array;
-			logTrace("Consumed change: %s", dst.to!string);
+			immutable dl = app.data.length;
+			app.put(m_changes[].uniq!((a, b) => a.path == b.path && a.type == b.type));
+			logTrace("Consumed changes count: %s", app.data.length - dl);
 			m_changes.clear();
 		}
 

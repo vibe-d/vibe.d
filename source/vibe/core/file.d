@@ -387,6 +387,8 @@ interface FileStream : RandomAccessStream {
 	for changes, such as file additions, deletions or modifications.
 */
 interface DirectoryWatcher {
+	import std.array: Appender;
+
 	/// The path of the watched directory
 	@property Path path() const;
 
@@ -400,13 +402,18 @@ interface DirectoryWatcher {
 		wait without a timeout.
 
 		Params:
-			dst = The destination array to which the changes will be appended
+			app = The destination appender to which the changes will be appended
+			dst = The destination array to which the changes will be writed
 			timeout = Optional timeout for the read operation
 
 		Returns:
 			If the call completed successfully, true is returned.
 	*/
-	bool readChanges(ref DirectoryChange[] dst, Duration timeout = dur!"seconds"(-1));
+	bool readChanges(
+		Appender!(DirectoryChange[]) app, /+Appender has ref semantic+/
+		Duration timeout = dur!"seconds"(-1));
+	/// ditto
+	bool readChanges(out DirectoryChange[] dst, Duration timeout = dur!"seconds"(-1));
 }
 
 
