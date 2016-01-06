@@ -1109,7 +1109,7 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 		return ret;
 	}
 
-	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout);
+	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout)
 	{
 		import core.stdc.stdio : FILENAME_MAX;
 		import core.stdc.string : strlen;

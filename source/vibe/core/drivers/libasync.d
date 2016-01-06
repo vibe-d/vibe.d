@@ -709,7 +709,7 @@ final class LibasyncDirectoryWatcher : DirectoryWatcher {
 		return ret;
 	}
 
-	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout);
+	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout)
 	{
 		assert(!amOwner());
 		if (m_error)
