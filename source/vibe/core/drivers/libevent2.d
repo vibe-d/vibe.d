@@ -1126,6 +1126,10 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 			for (auto p = buf.ptr; p < buf.ptr + nread; )
 			{
 				auto ev = cast(inotify_event*)p;
+				if (ev.wd !in m_watches) {
+					logDebug("Got unknown inotify watch ID %s. Ignoring.", ev.wd);
+					continue;
+				}
 
 				DirectoryChangeType type;
 				if (ev.mask & (IN_CREATE|IN_MOVED_TO))
