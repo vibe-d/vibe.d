@@ -28,8 +28,8 @@ version (VibeUseNativeDriverType) {
 /**
 	Returns the active event driver
 */
-StoredEventDriver getEventDriver(bool ignore_unloaded = false) nothrow
-{
+StoredEventDriver getEventDriver(bool ignore_unloaded = false)
+@safe nothrow {
 	assert(ignore_unloaded || s_driver !is null, "No event driver loaded. Did the vibe.core.core module constructor run?");
 	return s_driver;
 }
@@ -199,7 +199,7 @@ interface DriverCore {
 
 		See_also: $(D yieldAndResumeTask)
 	*/
-	void resumeTask(Task task, Exception event_exception = null);
+	void resumeTask(Task task, Exception event_exception = null) @safe nothrow;
 
 	/** Yields the current task and resumes another one.
 
@@ -207,9 +207,13 @@ interface DriverCore {
 		If called from a task, that task will be yielded first before resuming
 		the other one.
 
+		Throws:
+			May throw an `InterruptException` if the calling task gets
+			interrupted using `Task.interrupt()`.
+
 		See_also: $(D resumeTask)
 	*/
-	void yieldAndResumeTask(Task task, Exception event_exception = null);
+	void yieldAndResumeTask(Task task, Exception event_exception = null) @safe;
 
 	/** Notifies the core that all events have been processed.
 

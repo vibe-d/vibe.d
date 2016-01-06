@@ -34,9 +34,9 @@ struct Task {
 		}
 	}
 
-	private this(TaskFiber fiber, size_t task_counter) nothrow
-	{
-		m_fiber = cast(shared)fiber;
+	private this(TaskFiber fiber, size_t task_counter)
+	@safe nothrow {
+		() @trusted { m_fiber = cast(shared)fiber; } ();
 		m_taskCounter = task_counter;
 	}
 
@@ -44,7 +44,7 @@ struct Task {
 
 	/** Returns the Task instance belonging to the calling task.
 	*/
-	static Task getThis() nothrow
+	static Task getThis() nothrow @safe
 	{
 		// In 2067, synchronized statements where annotated nothrow.
 		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
@@ -52,23 +52,23 @@ struct Task {
 		static if (__VERSION__ <= 2066)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
 
-		auto fiber = Fiber.getThis();
+		auto fiber = () @trusted { return Fiber.getThis(); } ();
 		if (!fiber) return Task.init;
 		auto tfiber = cast(TaskFiber)fiber;
 		assert(tfiber !is null, "Invalid or null fiber used to construct Task handle.");
 		if (!tfiber.m_running) return Task.init;
-		return Task(tfiber, tfiber.m_taskCounter);
+		return () @trusted { return Task(tfiber, tfiber.m_taskCounter); } ();
 	}
 
 	nothrow {
-		@property inout(TaskFiber) fiber() inout { return cast(inout(TaskFiber))m_fiber; }
-		@property size_t taskCounter() const { return m_taskCounter; }
-		@property inout(Thread) thread() inout { if (m_fiber) return this.fiber.thread; return null; }
+		@property inout(TaskFiber) fiber() inout @trusted { return cast(inout(TaskFiber))m_fiber; }
+		@property size_t taskCounter() const @safe { return m_taskCounter; }
+		@property inout(Thread) thread() inout @safe { if (m_fiber) return this.fiber.thread; return null; }
 
 		/** Determines if the task is still running.
 		*/
 		@property bool running()
-		const {
+		const @trusted {
 			assert(m_fiber !is null, "Invalid task handle");
 			try if (this.fiber.state == Fiber.State.TERM) return false; catch (Throwable) {}
 			return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
@@ -121,19 +121,20 @@ class TaskFiber : Fiber {
 	}
 
 	protected this(void delegate() fun, size_t stack_size)
-	{
+	nothrow {
 		super(fun, stack_size);
 		m_thread = Thread.getThis();
+		scope (failure) assert(false);
 		m_messageQueue = new MessageQueue;
 	}
 
 	/** Returns the thread that owns this task.
 	*/
-	@property inout(Thread) thread() inout nothrow { return m_thread; }
+	@property inout(Thread) thread() inout @safe nothrow { return m_thread; }
 
 	/** Returns the handle of the current Task running on this fiber.
 	*/
-	@property Task task() { return Task(this, m_taskCounter); }
+	@property Task task() @safe nothrow { return Task(this, m_taskCounter); }
 
 	/// Reserved for internal use!
 	@property inout(MessageQueue) messageQueue() inout { return m_messageQueue; }
@@ -153,9 +154,9 @@ class TaskFiber : Fiber {
 	abstract void terminate();
 
 	void bumpTaskCounter()
-	{
+	@safe nothrow {
 		import core.atomic : atomicOp;
-		atomicOp!"+="(this.m_taskCounter, 1);
+		() @trusted { atomicOp!"+="(this.m_taskCounter, 1); } ();
 	}
 }
 
