@@ -164,7 +164,7 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 
 		// go through the current block trying to match the marker
 		size_t i = 0;
-		for( i = 0; i < str.length; i++ ){
+		for (i = 0; i < str.length; i++) {
 			auto ch = str[i];
 			// if we have a mismatch, use the jump table to try other possible prefixes
 			// of the marker
@@ -172,14 +172,11 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 				nmatched -= nmatchoffset[nmatched];
 
 			// if we then have a match, increase the match count and test for full match
-			if( ch == end_marker[nmatched] ){
-				if( ++nmatched == end_marker.length ){
-					// in case of a full match skip data in the stream until the end of
-					// the marker
-					skip(++i - nread);
+			if (ch == end_marker[nmatched])
+				if (++nmatched == end_marker.length) {
+					i++;
 					break;
 				}
-			}
 		}
 
 
@@ -193,7 +190,12 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
 
 		// got a full, match => out
-		if( nmatched >= end_marker.length ) return;
+		if (nmatched >= end_marker.length) {
+			// in case of a full match skip data in the stream until the end of
+			// the marker
+			skip(i - nread);
+			return;
+		}
 
 		// otherwise skip this block in the stream
 		skip(str.length - nread);
