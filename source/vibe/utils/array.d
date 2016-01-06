@@ -288,10 +288,12 @@ struct FixedAppender(ArrayType : E[], size_t NELEM, E) {
 /**
 	TODO: clear ring buffer fields upon removal (to run struct destructors, if T is a struct)
 */
-struct FixedRingBuffer(T, size_t N = 0) {
+struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 	private {
-		static if( N > 0 ) T[N] m_buffer;
-		else T[] m_buffer;
+		static if( N > 0 ) {
+			static if (INITIALIZE) T[N] m_buffer;
+			else T[N] m_buffer = void;
+		} else T[] m_buffer;
 		size_t m_start = 0;
 		size_t m_fill = 0;
 	}
