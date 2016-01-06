@@ -189,7 +189,7 @@ private Task runTask_internal(ref TaskFuncInfo tfi)
 	while (!f && !s_availableFibers.empty) {
 		f = s_availableFibers.back;
 		s_availableFibers.popBack();
-		if (() @trusted { return f.state; } () != Fiber.State.HOLD) f = null;
+		if (() @trusted nothrow { return f.state; } () != Fiber.State.HOLD) f = null;
 	}
 
 	if (f is null) {
@@ -1002,7 +1002,7 @@ private class CoreTask : TaskFiber {
 
 	static CoreTask getThis()
 	@safe nothrow {
-		auto f = () @trusted { return Fiber.getThis(); } ();
+		auto f = () @trusted nothrow { return Fiber.getThis(); } ();
 		if (f) return cast(CoreTask)f;
 		if (!ms_coreTask) ms_coreTask = new CoreTask;
 		return ms_coreTask;
@@ -1193,7 +1193,7 @@ private class VibeDriverCore : DriverCore {
 	void resumeCoreTask(CoreTask ctask, Exception event_exception = null)
 	nothrow @safe {
 		assert(ctask.thread is () @trusted { return Thread.getThis(); } (), "Resuming task in foreign thread.");
-		assert(() @trusted { return ctask.state; } () == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
+		assert(() @trusted nothrow { return ctask.state; } () == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
 		assert(ctask.m_queue is null, "Manually resuming task that is already scheduled to resumed.");
 
 		if( event_exception ){
@@ -1202,13 +1202,13 @@ private class VibeDriverCore : DriverCore {
 		}
 
 		static if (__VERSION__ > 2066)
-			auto uncaught_exception = () @trusted { return ctask.call!(Fiber.Rethrow.no)(); } ();
+			auto uncaught_exception = () @trusted nothrow { return ctask.call!(Fiber.Rethrow.no)(); } ();
 		else
-			auto uncaught_exception = () @trusted { return ctask.call(false); } ();
+			auto uncaught_exception = () @trusted nothrow { return ctask.call(false); } ();
 		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
 
-			assert(() @trusted { return ctask.state; } () == Fiber.State.TERM);
+			assert(() @trusted nothrow { return ctask.state; } () == Fiber.State.TERM);
 			logError("Task terminated with unhandled exception: %s", th.msg);
 			logDebug("Full error: %s", () @trusted { return th.toString().sanitize; } ());
 
