@@ -141,7 +141,7 @@ void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 }
 
 alias FormFields = DictionaryList!(string, true, 16);
-alias FilePartFormFields = DictionaryList!(FilePart, true, 1);
+alias FilePartFormFields = DictionaryList!(FilePart, true, 0);
 
 unittest
 {

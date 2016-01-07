@@ -385,7 +385,7 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 	Note that despite case not being relevant for matching keyse, iterating over the map will yield
 	the original case of the key that was put in.
 */
-alias InetHeaderMap = DictionaryList!(string, false);
+alias InetHeaderMap = DictionaryList!(string, false, 12);
 
 
 
