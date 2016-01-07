@@ -748,7 +748,7 @@ final class Win32FileStream : FileStream {
 /******************************************************************************/
 
 final class Win32DirectoryWatcher : DirectoryWatcher {
-	import std.array: Appender;
+	import std.array: Appender, appender;
 
 	private {
 		Path m_path;
@@ -806,7 +806,7 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 
 	bool readChanges(out DirectoryChange[] dst, Duration timeout)
 	{
-		Appender!(DirectoryChange[]) app;
+		auto app = appender!(DirectoryChange[]);
 		auto ret = readChanges(app, timeout);
 		dst = app.data;
 		return ret;

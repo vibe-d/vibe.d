@@ -1045,7 +1045,7 @@ final class Libevent2UDPConnection : UDPConnection {
 version (linux)
 final class InotifyDirectoryWatcher : DirectoryWatcher {
 	import core.sys.posix.fcntl, core.sys.posix.unistd, core.sys.linux.sys.inotify;
-	import std.array: Appender;
+	import std.array: Appender, appender;
 	import std.file;
 
 	private {
@@ -1103,7 +1103,7 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 
 	bool readChanges(out DirectoryChange[] dst, Duration timeout)
 	{
-		Appender!(DirectoryChange[]) app;
+		auto app = appender!(DirectoryChange[]);
 		auto ret = readChanges(app, timeout);
 		dst = app.data;
 		return ret;
