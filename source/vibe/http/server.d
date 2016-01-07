@@ -540,7 +540,6 @@ enum SessionOption {
 final class HTTPServerRequest : HTTPRequest {
 	private {
 		SysTime m_timeCreated;
-		FixedAppender!(string, 31) m_dateAppender;
 		HTTPServerSettings m_settings;
 		ushort m_port;
 	}
@@ -683,8 +682,6 @@ final class HTTPServerRequest : HTTPRequest {
 	{
 		m_timeCreated = time.toUTC();
 		m_port = port;
-		writeRFC822DateTimeString(m_dateAppender, time);
-		this.headers["Date"] = m_dateAppender.data();
 	}
 
 	/** Time when this request started processing.
@@ -913,6 +910,7 @@ final class HTTPServerResponse : HTTPResponse {
 		}
 		assert(!headerWritten);
 		writeHeader();
+		m_conn.flush();
 	}
 
 	/** A stream for writing the body of the HTTP response.
@@ -1209,8 +1207,13 @@ final class HTTPServerResponse : HTTPResponse {
 			this.statusPhrase.length ? this.statusPhrase : httpStatusText(this.statusCode));
 
 		// write all normal headers
-		foreach (k, v; this.headers)
-			writeLine("%s: %s", k, v);
+		foreach (k, v; this.headers) {
+			dst.put(k);
+			dst.put(": ");
+			dst.put(v);
+			dst.put("\r\n");
+			logTrace("%s: %s", k, v);
+		}
 
 		logTrace("---------------------");
 
@@ -1223,8 +1226,6 @@ final class HTTPServerResponse : HTTPResponse {
 
 		// finalize response header
 		dst.put("\r\n");
-		dst.flush();
-		m_conn.flush();
 	}
 }
 
