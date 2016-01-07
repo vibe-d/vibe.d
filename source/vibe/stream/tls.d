@@ -410,7 +410,7 @@ struct TLSCertificateInformation {
 		Maps fields to their values. For example, typical fields on a
 		certificate will be 'commonName', 'countryName', 'emailAddress', etc.
 	*/
-	DictionaryList!(string, false) subjectName;
+	DictionaryList!(string, false, 8) subjectName;
 }
 
 struct TLSPeerValidationData {
