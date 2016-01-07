@@ -617,7 +617,7 @@ final class HTTPServerRequest : HTTPRequest {
 			to store the value of any named placeholders.
 		*/
 		import vibe.utils.dictionarylist;
-		DictionaryList!string params;
+		DictionaryList!(string, true, 8) params;
 
 		/** Supplies the request body as a stream.
 
