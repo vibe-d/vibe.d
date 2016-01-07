@@ -27,15 +27,22 @@ import std.exception : enforce;
 
 	Insertion and lookup has O(n) complexity.
 */
-struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELDS = 32) {
+struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELDS = 32, bool USE_HASHSUM = false) {
 	import std.typecons : Tuple;
 
 	private {
-		static struct Field { uint keyCheckSum; string key; VALUE value; }
+		static struct Field {
+			static if (USE_HASHSUM) uint keyCheckSum;
+			else {
+				enum keyCheckSum = 0;
+				this(uint, string key, VALUE value) { this.key = key; this.value = value; }
+			}
+			string key;
+			VALUE value;
+		}
 		Field[NUM_STATIC_FIELDS] m_fields;
 		size_t m_fieldCount = 0;
 		Field[] m_extendedFields;
-		static char[256] s_keyBuffer;
 	}
 
 	alias ValueType = VALUE;
@@ -64,7 +71,8 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	*/
 	void remove(string key)
 	{
-		auto keysum = computeCheckSumI(key);
+		static if (USE_HASHSUM) auto keysum = computeCheckSumI(key);
+		enum keysum = 0;
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ){
 			auto slice = m_fields[0 .. m_fieldCount];
@@ -81,7 +89,8 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	*/
 	void removeAll(string key)
 	{
-		auto keysum = computeCheckSumI(key);
+		static if (USE_HASHSUM) auto keysum = computeCheckSumI(key);
+		else enum keysum = 0;
 		for (size_t i = 0; i < m_fieldCount;) {
 			if (m_fields[i].keyCheckSum == keysum && matches(m_fields[i].key, key)) {
 				auto slice = m_fields[0 .. m_fieldCount];
@@ -105,7 +114,8 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	*/
 	void addField(string key, ValueType value)
 	{
-		auto keysum = computeCheckSumI(key);
+		static if (USE_HASHSUM) auto keysum = computeCheckSumI(key);
+		else enum keysum = 0;
 		if (m_fieldCount < m_fields.length)
 			m_fields[m_fieldCount++] = Field(keysum, key, value);
 		else m_extendedFields ~= Field(keysum, key, value);
@@ -135,13 +145,16 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	/// ditto
 	void getAll(string key, scope void delegate(const(ValueType)) del)
 	const {
-		uint keysum = computeCheckSumI(key);
+		static if (USE_HASHSUM) uint keysum = computeCheckSumI(key);
+		else enum keysum = 0;
 		foreach (ref f; m_fields[0 .. m_fieldCount]) {
-			if (f.keyCheckSum != keysum) continue;
+			static if (USE_HASHSUM)
+				if (f.keyCheckSum != keysum) continue;
 			if (matches(f.key, key)) del(f.value);
 		}
 		foreach (ref f; m_extendedFields) {
-			if (f.keyCheckSum != keysum) continue;
+			static if (USE_HASHSUM)
+				if (f.keyCheckSum != keysum) continue;
 			if (matches(f.key, key)) del(f.value);
 		}
 	}
@@ -159,17 +172,21 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	*/
 	ValueType opIndexAssign(ValueType val, string key)
 	{
+		static if (USE_HASHSUM) auto keysum = computeCheckSumI(key);
+		else enum keysum = 0;
 		auto pitm = key in this;
-		if( pitm ) *pitm = val;
-		else if( m_fieldCount < m_fields.length ) m_fields[m_fieldCount++] = Field(computeCheckSumI(key), key, val);
-		else m_extendedFields ~= Field(computeCheckSumI(key), key, val);
+		if (pitm) *pitm = val;
+		else if (m_fieldCount < m_fields.length) m_fields[m_fieldCount++] = Field(keysum, key, val);
+		else m_extendedFields ~= Field(keysum, key, val);
 		return val;
 	}
 
 	/** Returns a pointer to the first field that matches the given key.
 	*/
-	inout(ValueType)* opBinaryRight(string op)(string key) inout if(op == "in") {
-		uint keysum = computeCheckSumI(key);
+	inout(ValueType)* opBinaryRight(string op)(string key) inout if(op == "in")
+	{
+		static if (USE_HASHSUM) uint keysum = computeCheckSumI(key);
+		else enum keysum = 0;
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
 		if( idx >= 0 ) return &m_fields[idx].value;
 		idx = getIndex(m_extendedFields, key, keysum);
@@ -230,7 +247,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	private ptrdiff_t getIndex(in Field[] map, string key, uint keysum)
 	const {
 		foreach (i, ref const(Field) entry; map) {
-			if (entry.keyCheckSum != keysum) continue;
+			static if (USE_HASHSUM) if (entry.keyCheckSum != keysum) continue;
 			if (matches(entry.key, key)) return i;
 		}
 		return -1;
@@ -239,12 +256,12 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	private static bool matches(string a, string b)
 	{
 		static if (case_sensitive) return a == b;
-		else return icmp2(a, b) == 0;
+		else return a.length == b.length && icmp2(a, b) == 0;
 	}
 
 	// very simple check sum function with a good chance to match
 	// strings with different case equal
-	private static uint computeCheckSumI(string s)
+	static if (USE_HASHSUM) private static uint computeCheckSumI(string s)
 	@trusted {
 		uint csum = 0;
 		immutable(char)* pc = s.ptr, pe = s.ptr + s.length;
