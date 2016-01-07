@@ -179,7 +179,7 @@ interface DriverCore {
 			exception that is passed to the $(D resumeTask) call that wakes
 			up the task.
 	*/
-	void yieldForEvent();
+	void yieldForEvent() @safe;
 
 	/** Yields execution until the event loop receives an event.
 
@@ -189,7 +189,7 @@ interface DriverCore {
 			are stored and thrown on the next call to $(D yieldForEvent).
 
 	*/
-	void yieldForEventDeferThrow() nothrow;
+	void yieldForEventDeferThrow() nothrow @safe;
 
 	/** Resumes the given task.
 
