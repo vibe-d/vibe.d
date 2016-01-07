@@ -794,6 +794,7 @@ unittest {
 		m.match(str, (t, scope vals) {
 			mterms ~= t;
 			mvars ~= vals;
+			return false;
 		});
 		assert(mterms == terms, format("Mismatched terminals: %s (expected %s)", mterms, terms));
 		assert(mvars == vars, format("Mismatched variables; %s (expected %s)", mvars, vars));
