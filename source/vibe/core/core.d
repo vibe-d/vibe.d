@@ -1002,7 +1002,10 @@ private class CoreTask : TaskFiber {
 
 	static CoreTask getThis()
 	@safe nothrow {
-		auto f = () @trusted nothrow { return Fiber.getThis(); } ();
+		auto f = () @trusted nothrow {
+			static if (__VERSION__ <= 2066) scope (failure) assert(false);
+			return Fiber.getThis();
+		} ();
 		if (f) return cast(CoreTask)f;
 		if (!ms_coreTask) ms_coreTask = new CoreTask;
 		return ms_coreTask;
@@ -1011,6 +1014,12 @@ private class CoreTask : TaskFiber {
 	this()
 	@trusted nothrow {
 		super(&run, s_taskStackSize);
+	}
+
+	@property State state()
+	@trusted const nothrow {
+		static if (__VERSION__ <= 2066) scope (failure) assert(false);
+		return super.state;
 	}
 
 	@property size_t taskCounter() const { return m_taskCounter; }
@@ -1204,7 +1213,8 @@ private class VibeDriverCore : DriverCore {
 		static if (__VERSION__ > 2066)
 			auto uncaught_exception = () @trusted nothrow { return ctask.call!(Fiber.Rethrow.no)(); } ();
 		else
-			auto uncaught_exception = () @trusted nothrow { return ctask.call(false); } ();
+			auto uncaught_exception = () @trusted nothrow { scope (failure) assert(false); return ctask.call(false); } ();
+
 		if (auto th = cast(Throwable)uncaught_exception) {
 			extrap();
 
