@@ -524,10 +524,10 @@ import core.cpuid : threadsPerCPU;
 
 	Params:
 		num = The number of worker threads to initialize. Defaults to
-			core.cpuid.threadsPerCPU.
+			`logicalProcessorCount`.
 	See_also: `runWorkerTask`, `runWorkerTaskH`, `runWorkerTaskDist`
 */
-public void setupWorkerThreads(uint num = threadsPerCPU)
+public void setupWorkerThreads(uint num = logicalProcessorCount())
 {
 	static bool s_workerThreadsStarted = false;
 	if (s_workerThreadsStarted) return;
@@ -545,6 +545,31 @@ public void setupWorkerThreads(uint num = threadsPerCPU)
 		}
 	}
 }
+
+
+/**
+	Determines the number of logical processors in the system.
+
+	This number includes virtual cores on hyper-threading enabled CPUs.
+*/
+public @property uint logicalProcessorCount()
+{
+	version (linux) {
+		import core.sys.linux.sys.sysinfo;
+		return get_nprocs();
+	} else version (OSX) {
+		int count;
+		size_t count_len = sizeof(count);
+		sysctlbyname("hw.logicalcpu", &count, &count_len, NULL, 0);
+		return cast(uint)count_len;
+	} else version (Windows) {
+		import core.sys.windows.windows;
+		SYSTEM_INFO sysinfo;
+		GetSystemInfo(&sysinfo);
+		return sysinfo.dwNumberOfProcessors;
+	} else static assert(false, "Unsupported OS!");
+}
+version (OSX) private extern(C) int sysctl(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
 
 /**
 	Suspends the execution of the calling task to let other tasks and events be
