@@ -555,7 +555,7 @@ public void setupWorkerThreads(uint num = logicalProcessorCount())
 public @property uint logicalProcessorCount()
 {
 	version (linux) {
-		import core.sys.linux.sys.sysinfo;
+		static if (__VERSION__ >= 2067) import core.sys.linux.sys.sysinfo;
 		return get_nprocs();
 	} else version (OSX) {
 		int count;
@@ -570,6 +570,7 @@ public @property uint logicalProcessorCount()
 	} else static assert(false, "Unsupported OS!");
 }
 version (OSX) private extern(C) int sysctl(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
+version (linux) static if (__VERSION__ <= 2066) private extern(C) int get_nprocs();
 
 /**
 	Suspends the execution of the calling task to let other tasks and events be
