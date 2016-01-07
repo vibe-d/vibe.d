@@ -84,6 +84,7 @@ final class URLRouter : HTTPServerRequestHandler {
 		version (VibeRouterTreeMatch) MatchTree!Route m_routes;
 		else Route[] m_routes;
 		string m_prefix;
+		bool m_computeBasePath;
 	}
 
 	this(string prefix = null)
@@ -91,7 +92,23 @@ final class URLRouter : HTTPServerRequestHandler {
 		m_prefix = prefix;
 	}
 
+	/** Sets a common prefix for all registered routes.
+
+		All routes will implicitly have this prefix prepended before being
+		matched against incoming requests.
+	*/
 	@property string prefix() const { return m_prefix; }
+
+	/** Controls the computation of the "routerRootDir" parameter.
+
+		This parameter is available as `req.params["routerRootDir"]` and
+		contains the relative path to the base path of the router. The base
+		path is determined by the `prefix` property.
+
+		Note that this feature currently is requires dynamic memory allocations
+		and is opt-in for this reason.
+	*/
+	@property void enableRootDir(bool enable) { m_computeBasePath = enable; }
 
 	/// Returns a single route handle to conveniently register multiple methods.
 	URLRoute route(string path)
@@ -267,18 +284,15 @@ final class URLRouter : HTTPServerRequestHandler {
 
 		version (VibeRouterTreeMatch) {
 			while (true) {
-				bool done = false;
-				m_routes.match(path, (ridx, scope values) {
-					if (done) return;
+				bool done = m_routes.match(path, (ridx, scope values) {
 					auto r = &m_routes.getTerminalData(ridx);
-					if (r.method == method) {
-						logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
-						// TODO: use a different map type that avoids allocations for small amounts of keys
-						foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
-						req.params["routerRootDir"] = calcBasePath();
-						r.cb(req, res);
-						done = res.headerWritten;
-					}
+					if (r.method != method) return false;
+
+					logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
+					foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
+					if (m_computeBasePath) req.params["routerRootDir"] = calcBasePath();
+					r.cb(req, res);
+					return res.headerWritten;
 				});
 				if (done) return;
 
@@ -588,12 +602,12 @@ private struct MatchTree(T) {
 		m_upToDate = false;
 	}
 
-	void match(string text, scope void delegate(size_t terminal, scope string[] vars) del)
+	bool match(string text, scope bool delegate(size_t terminal, scope string[] vars) del)
 	{
 		// lazily update the match graph
 		if (!m_upToDate) rebuildGraph();
 
-		doMatch(text, del);
+		return doMatch(text, del);
 	}
 
 	const(string)[] getTerminalVarNames(size_t terminal) const { return m_terminals[terminal].varNames; }
@@ -644,7 +658,7 @@ private struct MatchTree(T) {
 		}
 	}
 
-	private void doMatch(string text, scope void delegate(size_t terminal, scope string[] vars) del)
+	private bool doMatch(string text, scope bool delegate(size_t terminal, scope string[] vars) del)
 	const {
 		string[maxRouteParameters] vars_buf = void;
 
@@ -652,7 +666,7 @@ private struct MatchTree(T) {
 
 		// first, determine the end node, if any
 		auto n = matchTerminals(text);
-		if (!n) return;
+		if (!n) return false;
 
 		// then, go through the terminals and match their variables
 		foreach (ref t; m_terminalTags[n.terminalsStart .. n.terminalsEnd]) {
@@ -660,8 +674,9 @@ private struct MatchTree(T) {
 			auto vars = vars_buf[0 .. term.varNames.length];
 			matchVars(vars, term, text);
 			if (vars.canFind!(v => v.length == 0)) continue; // all variables must be non-empty to match
-			del(t.index, vars);
+			if (del(t.index, vars)) return true;
 		}
+		return false;
 	}
 
 	private inout(Node)* matchTerminals(string text)
