@@ -39,13 +39,33 @@ ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string lin
 /// ditto
 void readLine()(InputStream stream, OutputStream dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
 {
-	readUntil(stream, dst, max_bytes, linesep);
+	readUntil(stream, dst, cast(const(ubyte)[])linesep, max_bytes);
 }
 /// ditto
 void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
 	if (isOutputRange!(R, ubyte))
 {
-	readUntil(stream, dst, max_bytes, linesep);
+	readUntil(stream, dst, cast(const(ubyte)[])linesep, max_bytes);
+}
+
+unittest {
+	auto inp = new MemoryStream(cast(ubyte[])"Hello, World!\r\nThis is a test.\r\nNot a full line.".dup);
+	assert(inp.readLine() == cast(const(ubyte)[])"Hello, World!");
+	assert(inp.readLine() == cast(const(ubyte)[])"This is a test.");
+	assertThrown(inp.readLine);
+
+	// start over
+	inp.seek(0);
+
+	// read into an output buffer
+	auto app = appender!(ubyte[]);
+	inp.readLine(app);
+	assert(app.data == cast(const(ubyte)[])"Hello, World!");
+
+	// read into an output stream
+	auto os = new MemoryOutputStream;
+	inp.readLine(os);
+	assert(os.data == cast(const(ubyte)[])"This is a test.");
 }
 
 
