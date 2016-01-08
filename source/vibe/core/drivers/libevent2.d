@@ -126,6 +126,7 @@ final class Libevent2Driver : EventDriver {
 
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
 		if( !m_dnsBase ) logError("Failed to initialize DNS lookup.");
+		evdns_base_set_option(m_dnsBase, "randomize-case:", "0");
 
 		string hosts_file;
 		version (Windows) hosts_file = `C:\Windows\System32\drivers\etc\hosts`;
