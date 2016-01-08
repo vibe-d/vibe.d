@@ -64,11 +64,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 		Duration m_readTimeout;
 		char[64] m_peerAddressBuf;
 		NetworkAddress m_localAddress, m_remoteAddress;
+		event* m_waitDataEvent;
 	}
 
 	this(TCPContext* ctx)
 	{
 		m_ctx = ctx;
+		m_waitDataEvent = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 
 		assert(!amOwner());
 
@@ -283,20 +285,16 @@ package final class Libevent2TCPConnection : TCPConnection {
 		scope(exit) releaseReader();
 		m_timeout_triggered = false;
 
-		event* evtmout;
 		if (timeout != 0.seconds && timeout != Duration.max) { // 0.seconds is for compatibility with old code
-			evtmout = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
 			assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
 			timeval t = timeout.toTimeVal();
 			logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
-			event_add(evtmout, &t);
+			event_add(m_waitDataEvent, &t);
 		}
 
 		scope (exit)
-			if (evtmout) {
-				event_del(evtmout);
-				event_free(evtmout);
-			}
+			if (timeout != 0.seconds && timeout != Duration.max)
+				event_del(m_waitDataEvent);
 
 		logTrace("wait for data");
 		while (m_ctx && m_ctx.event) {
