@@ -94,9 +94,9 @@ package final class Libevent2TCPConnection : TCPConnection {
 	{
 		m_tcpNoDelay = enabled;
 		auto fd = m_ctx.socketfd;
-		ubyte opt = enabled;
+		int opt = enabled;
 		assert(fd <= int.max, "Socket descriptor > int.max");
-		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, &opt, opt.sizeof);
+		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, cast(ubyte*)&opt, opt.sizeof);
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
