@@ -290,11 +290,10 @@ package final class Libevent2TCPConnection : TCPConnection {
 			timeval t = timeout.toTimeVal();
 			logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
 			event_add(m_waitDataEvent, &t);
+			// NOTE: we don't remove the timer event at the end, but instead
+			//       just ignore timeouts that happen too late. This avoids some
+			//       synchronization overhead.
 		}
-
-		scope (exit)
-			if (timeout != 0.seconds && timeout != Duration.max)
-				event_del(m_waitDataEvent);
 
 		logTrace("wait for data");
 		while (m_ctx && m_ctx.event) {
