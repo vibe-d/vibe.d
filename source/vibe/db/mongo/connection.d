@@ -104,12 +104,15 @@ class MongoAuthException : MongoException
   Note that a MongoConnection may only be used from one fiber/thread at a time.
  */
 final class MongoConnection {
+	import vibe.stream.wrapper : StreamOutputRange;
+
 	private {
 		MongoClientSettings m_settings;
 		TCPConnection m_conn;
 		Stream m_stream;
 		ulong m_bytesRead;
 		int m_msgid = 1;
+		StreamOutputRange m_outRange;
 	}
 
 	enum ushort defaultPort = 27017;
@@ -139,6 +142,7 @@ final class MongoConnection {
 		 */
 		try {
 			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
+			m_conn.tcpNoDelay = true;
 			if (m_settings.ssl) {
 				auto ctx =  createSSLContext(SSLContextKind.client);
 				if (!m_settings.sslverifycertificate) {
@@ -150,6 +154,7 @@ final class MongoConnection {
 			else {
 				m_stream = m_conn;
 			}
+			m_outRange = StreamOutputRange(m_stream);
 		}
 		catch (Exception e) {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
@@ -371,7 +376,7 @@ final class MongoConnection {
 		sendValue(response_to);
 		sendValue(cast(int)code);
 		foreach (a; args) sendValue(a);
-		m_stream.flush();
+		m_outRange.flush();
 		return id;
 	}
 
@@ -390,7 +395,7 @@ final class MongoConnection {
 		} else static assert(false, "Unexpected type: "~T.stringof);
 	}
 
-	private void sendBytes(in ubyte[] data){ m_stream.write(data); }
+	private void sendBytes(in ubyte[] data){ m_outRange.put(data); }
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
