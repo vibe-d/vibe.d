@@ -363,14 +363,14 @@ final class AutoFreeListAllocator : Allocator {
 	{
 		//logTrace("AFL free %08X(%s)", data.ptr, data.length);
 		auto idx = getAllocatorIndex(data.length);
-		if (idx < freeListCount) m_freeLists[idx].free(data);
+		if (idx < freeListCount) m_freeLists[idx].free(data.ptr[0 .. 1 << (idx + minExponent)]);
 		else m_baseAlloc.free(data);
 	}
 
 	// does a CT optimized binary search for the right allocater
 	private int getAllocatorIndex(size_t sz)
 	@safe nothrow @nogc {
-		pragma(msg, getAllocatorIndexStr!(0, freeListCount));
+		//pragma(msg, getAllocatorIndexStr!(0, freeListCount));
 		return mixin(getAllocatorIndexStr!(0, freeListCount));
 	}
 
