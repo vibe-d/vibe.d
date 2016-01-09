@@ -431,7 +431,7 @@ final class ChunkedOutputStream : OutputStream {
 	private {
 		OutputStream m_out;
 		AllocAppender!(ubyte[]) m_buffer;
-		size_t m_maxBufferSize = 512*1024;
+		size_t m_maxBufferSize = 4*1024;
 		bool m_finalized = false;
 		ChunkExtensionCallback m_chunkExtensionCallback = null;
 	}
