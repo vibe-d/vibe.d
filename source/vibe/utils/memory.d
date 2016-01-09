@@ -331,49 +331,70 @@ final class AutoFreeListAllocator : Allocator {
 
 	void[] alloc(size_t sz)
 	{
-		if (sz > nthFreeListSize!(freeListCount-1)) return m_baseAlloc.alloc(sz);
-		foreach (i; iotaTuple!freeListCount)
-			if (sz <= nthFreeListSize!(i))
-				return m_freeLists[i].alloc().ptr[0 .. sz];
-		//logTrace("AFL alloc %08X(%d)", ret.ptr, sz);
-		assert(false);
+		auto idx = getAllocatorIndex(sz);
+		return idx < freeListCount ? m_freeLists[idx].alloc()[0 .. sz] : m_baseAlloc.alloc(sz);
 	}
 
 	void[] realloc(void[] data, size_t sz)
 	{
-		foreach (fl; m_freeLists) {
-			if (data.length <= fl.elementSize) {
+		auto curidx = getAllocatorIndex(data.length);
+		auto newidx = getAllocatorIndex(sz);
+		
+		if (curidx == newidx) {
+			if (curidx == freeListCount) {
+				// forward large blocks to the base allocator
+				return m_baseAlloc.realloc(data, sz);
+			} else {
 				// just grow the slice if it still fits into the free list slot
-				if (sz <= fl.elementSize)
-					return data.ptr[0 .. sz];
-
-				// otherwise re-allocate
-				auto newd = alloc(sz);
-				assert(newd.ptr+sz <= data.ptr || newd.ptr >= data.ptr+data.length, "New block overlaps old one!?");
-				auto len = min(data.length, sz);
-				newd[0 .. len] = data[0 .. len];
-				free(data);
-				return newd;
+				return data.ptr[0 .. sz];
 			}
 		}
-		// forward large blocks to the base allocator
-		return m_baseAlloc.realloc(data, sz);
+
+		// otherwise re-allocate manually
+		auto newd = alloc(sz);
+		assert(newd.ptr+sz <= data.ptr || newd.ptr >= data.ptr+data.length, "New block overlaps old one!?");
+		auto len = min(data.length, sz);
+		newd[0 .. len] = data[0 .. len];
+		free(data);
+		return newd;
 	}
 
 	void free(void[] data)
 	{
 		//logTrace("AFL free %08X(%s)", data.ptr, data.length);
-		if (data.length > nthFreeListSize!(freeListCount-1)) {
-			m_baseAlloc.free(data);
-			return;
+		auto idx = getAllocatorIndex(data.length);
+		if (idx < freeListCount) m_freeLists[idx].free(data);
+		else m_baseAlloc.free(data);
+	}
+
+	// does a CT optimized binary search for the right allocater
+	private int getAllocatorIndex(size_t sz)
+	@safe nothrow @nogc {
+		pragma(msg, getAllocatorIndexStr!(0, freeListCount));
+		return mixin(getAllocatorIndexStr!(0, freeListCount));
+	}
+
+	private template getAllocatorIndexStr(int low, int high)
+	{
+		import std.format : format;
+		static if (low == high) enum getAllocatorIndexStr = format("%s", low);
+		else {
+			enum mid = (low + high) / 2;
+			enum getAllocatorIndexStr =
+				"sz > nthFreeListSize!%s ? %s : %s"
+				.format(mid, getAllocatorIndexStr!(mid+1, high), getAllocatorIndexStr!(low, mid));
 		}
-		foreach(i; iotaTuple!freeListCount) {
-			if (data.length <= nthFreeListSize!i) {
-				m_freeLists[i].free(data.ptr[0 .. nthFreeListSize!i]);
-				return;
-			}
+	}
+
+	unittest {
+		auto a = new AutoFreeListAllocator(null);
+		assert(a.getAllocatorIndex(0) == 0);
+		foreach (i; iotaTuple!freeListCount) {
+			assert(a.getAllocatorIndex(nthFreeListSize!i-1) == i);
+			assert(a.getAllocatorIndex(nthFreeListSize!i) == i);
+			assert(a.getAllocatorIndex(nthFreeListSize!i+1) == i+1);
 		}
-		assert(false);
+		assert(a.getAllocatorIndex(size_t.max) == freeListCount);
 	}
 
 	private static pure size_t nthFreeListSize(size_t i)() { return 1 << (i + minExponent); }
@@ -530,11 +551,11 @@ final class FreeListAlloc : Allocator
 nothrow:
 	private static struct FreeListSlot { FreeListSlot* next; }
 	private {
-		immutable size_t m_elemSize;
-		Allocator m_baseAlloc;
 		FreeListSlot* m_firstFree = null;
 		size_t m_nalloc = 0;
 		size_t m_nfree = 0;
+		Allocator m_baseAlloc;
+		immutable size_t m_elemSize;
 	}
 
 	this(size_t elem_size, Allocator base_allocator)
@@ -561,12 +582,12 @@ nothrow:
 			m_firstFree = slot.next;
 			slot.next = null;
 			mem = (cast(void*)slot)[0 .. m_elemSize];
-			m_nfree--;
+			debug m_nfree--;
 		} else {
 			mem = m_baseAlloc.alloc(m_elemSize);
 			//logInfo("Alloc %d bytes: alloc: %d, free: %d", SZ, s_nalloc, s_nfree);
 		}
-		m_nalloc++;
+		debug m_nalloc++;
 		//logInfo("Alloc %d bytes: alloc: %d, free: %d", SZ, s_nalloc, s_nfree);
 		return mem;
 	}
