@@ -8,6 +8,7 @@
 module vibe.core.net;
 
 public import vibe.core.stream;
+public import std.socket : AddressFamily;
 
 import vibe.core.driver;
 import vibe.core.log;
@@ -26,7 +27,12 @@ version(Windows) import std.c.windows.winsock;
 	Setting use_dns to false will only allow IP address strings but also guarantees
 	that the call will not block.
 */
-NetworkAddress resolveHost(string host, ushort address_family = AF_UNSPEC, bool use_dns = true)
+NetworkAddress resolveHost(string host, AddressFamily address_family = AddressFamily.UNSPEC, bool use_dns = true)
+{
+	return resolveHost(host, cast(ushort)address_family, use_dns);
+}
+/// ditto
+NetworkAddress resolveHost(string host, ushort address_family, bool use_dns = true)
 {
 	return getEventDriver().resolveHost(host, address_family, use_dns);
 }
@@ -112,9 +118,11 @@ struct NetworkAddress {
 		sockaddr_in6 addr_ip6;
 	}
 
-	/** Family (AF_) of the socket address.
+	/** Family of the socket address.
 	*/
 	@property ushort family() const pure nothrow { return addr.sa_family; }
+	/// ditto
+	@property void family(AddressFamily val) pure nothrow { addr.sa_family = cast(ubyte)val; }
 	/// ditto
 	@property void family(ushort val) pure nothrow { addr.sa_family = cast(ubyte)val; }
 
