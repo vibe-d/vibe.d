@@ -86,6 +86,11 @@ struct MongoCollection {
 	/**
 	  Inserts new documents into the collection.
 
+	  Note that if the `_id` field of the document(s) is not set, typically
+	  using `BsonObjectID.generate()`, the server will generate IDs
+	  automatically. If you need to know the IDs of the inserted documents,
+	  you need to generate them locally.
+
 	  Throws: Exception if a DB communication error occured.
 	  See_Also: $(LINK http://www.mongodb.org/display/DOCS/Inserting)
 	 */
