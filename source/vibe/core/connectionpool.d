@@ -17,10 +17,16 @@ import vibe.utils.memory;
 /**
 	Generic connection pool class.
 
-	The connection pool is creating connections using the supplied factory function as needed
-	whenever lockConnection() is called. Connections are associated to the calling fiber, as long
-	as any copy of the returned LockedConnection object still exists. Connections that are not
-	associated
+	The connection pool is creating connections using the supplied factory
+	function as needed whenever `lockConnection` is called. Connections are
+	associated to the calling fiber, as long as any copy of the returned
+	`LockedConnection` object still exists. Connections that are not associated
+	to any fiber will be kept in a pool of open connections for later reuse.
+
+	Note that, after retrieving a connection with `lockConnection`, the caller
+	has to make sure that the connection is actually physically open and to
+	reopen it if necessary. The `ConnectionPool` class has no knowledge of the
+	internals of the connection objects.
 */
 class ConnectionPool(Connection)
 {
@@ -39,14 +45,25 @@ class ConnectionPool(Connection)
 		debug m_thread = Thread.getThis();
 	}
 
+	/** Determines the maximum number of concurrently open connections.
+
+		Attempting to lock more connections that this number will cause the
+		calling fiber to be blocked until one of the locked connections
+		becomes available for reuse.
+	*/
 	@property void maxConcurrency(uint max_concurrent) {
 		m_sem.maxLocks = max_concurrent;
 	}
-
+	/// ditto
 	@property uint maxConcurrency() {
 		return m_sem.maxLocks;
 	}
 
+	/** Retrieves a connection to temporarily associate with the calling fiber.
+
+		The returned `LockedConnection` object uses RAII and reference counting
+		to determine when to unlock the connection.
+	*/
 	LockedConnection!Connection lockConnection()
 	{
 		debug assert(m_thread is Thread.getThis(), "ConnectionPool was called from a foreign thread!");
