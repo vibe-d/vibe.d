@@ -116,7 +116,7 @@ final class MongoClient {
 
 
 	/**
-	 	Return string array representing all current database names.
+	 	Return a handle to all databases of the server.
 
 	 	Returns:
 	 		An input range of $(D MongoDatabase) objects.
