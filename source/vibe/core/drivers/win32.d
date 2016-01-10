@@ -89,7 +89,13 @@ final class Win32EventDriver : EventDriver {
 	int runEventLoop()
 	{
 		m_exit = false;
-		while( !m_exit && haveEvents() )
+
+		// clear all possibly outstanding WM_QUIT messages to avoid
+		// them having an influence this runEventLoop()
+		MSG msg;
+		while (PeekMessageW(&msg, null, WM_QUIT, WM_QUIT, PM_REMOVE)) {}
+
+		while (!m_exit && haveEvents())
 			runEventLoopOnce();
 		return 0;
 	}
