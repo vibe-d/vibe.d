@@ -1580,12 +1580,12 @@ private string filterJavaScript(string text, size_t indent)
 	auto lines = splitLines(text);
 
 	string indent_string = "\n";
-	while( indent-- > 0 ) indent_string ~= '\t';
+	while (indent-- > 0) indent_string ~= '\t';
 
-	string ret = indent_string[0 .. $-1]~"<script type=\"application/javascript\">";
-	ret ~= indent_string~"//<![CDATA[";
-	foreach( ln; lines ) ret ~= indent_string ~ ln;
-	ret ~= indent_string ~ "//]]>"~indent_string[0 .. $-1]~"</script>";
+	string ret = indent_string~"<script type=\"application/javascript\">";
+	ret ~= indent_string~'\t' ~ "//<![CDATA[";
+	foreach (ln; lines) ret ~= indent_string ~ '\t' ~ ln;
+	ret ~= indent_string ~ '\t' ~ "//]]>" ~ indent_string ~ "</script>";
 
 	return ret;
 }
