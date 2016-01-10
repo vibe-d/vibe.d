@@ -376,7 +376,8 @@ final class AutoFreeListAllocator : Allocator {
 
 	private template getAllocatorIndexStr(int low, int high)
 	{
-		import std.format : format;
+		static if (__VERSION__ <= 2066) import std.string : format;
+		else import std.format : format;
 		static if (low == high) enum getAllocatorIndexStr = format("%s", low);
 		else {
 			enum mid = (low + high) / 2;
