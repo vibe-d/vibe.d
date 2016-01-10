@@ -1317,11 +1317,15 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		if( auto fstream = cast(Win32FileStream)stream ){
 			if( fstream.tell() == 0 && fstream.size <= 1<<31 ){
 				acquireWriter();
-				scope(exit) releaseWriter();
-				logDebug("Using sendfile! %s %s %s", fstream.m_handle, fstream.tell(), fstream.size);
-
 				m_bytesTransferred = 0;
 				m_driver.m_fileWriters[this] = true;
+				scope(exit) {
+					if (this in m_driver.m_fileWriters)
+						m_driver.m_fileWriters.remove(this);
+					releaseWriter();
+				}
+				logDebug("Using sendfile! %s %s %s", fstream.m_handle, fstream.tell(), fstream.size);
+
 				if( TransmitFile(m_socket, fstream.m_handle, 0, 0, &m_fileOverlapped, null, 0) )
 					m_bytesTransferred = 1;
 
@@ -1352,12 +1356,15 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 	{
 		if( !GetOverlappedResult(m_transferredFile, &m_fileOverlapped, &m_bytesTransferred, false) ){
 			if( GetLastError() != ERROR_IO_PENDING ){
-				m_driver.m_core.resumeTask(m_writeOwner, new Exception("File transfer over TCP failed."));
-				return true;
+				auto ex = new Exception("File transfer over TCP failed.");
+				if (m_writeOwner != Task.init) {
+					m_driver.m_core.resumeTask(m_writeOwner, ex);
+					return true;
+				} else throw ex;
 			}
 			return false;
 		} else {
-			m_driver.m_core.resumeTask(m_writeOwner);
+			if (m_writeOwner != Task.init) m_driver.m_core.resumeTask(m_writeOwner);
 			return true;
 		}
 	}
