@@ -1085,7 +1085,7 @@ final class HTTPServerResponse : HTTPResponse {
 	*/
 	void terminateSession()
 	{
-		assert(m_session, "Try to terminate a session, but none is started.");
+		if (!m_session) return;
 		auto cookie = setCookie(m_settings.sessionIdCookie, null, m_session.get!string("$sessionCookiePath"));
 		cookie.secure = m_session.get!bool("$sessionCookieSecure");
 		m_session.destroy();
