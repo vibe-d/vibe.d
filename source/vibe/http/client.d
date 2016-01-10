@@ -838,16 +838,18 @@ final class HTTPClientResponse : HTTPResponse {
 		assert (m_client, "Response was already read or no response body, may not use bodyReader.");
 
 		// prepare body the reader
-		if( auto pte = "Transfer-Encoding" in this.headers ){
+		if (auto pte = "Transfer-Encoding" in this.headers) {
 			enforce(*pte == "chunked");
 			m_chunkedInputStream = FreeListRef!ChunkedInputStream(m_client.m_stream);
 			m_bodyReader = this.m_chunkedInputStream;
-		} else if( auto pcl = "Content-Length" in this.headers ){
+		} else if (auto pcl = "Content-Length" in this.headers) {
 			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.m_stream, to!ulong(*pcl));
 			m_bodyReader = m_limitedInputStream;
-		} else {
+		} else if (isKeepAliveResponse) {
 			m_limitedInputStream = FreeListRef!LimitedInputStream(m_client.m_stream, 0);
 			m_bodyReader = m_limitedInputStream;
+		} else {
+			m_bodyReader = m_client.m_stream;
 		}
 
 		if( auto pce = "Content-Encoding" in this.headers ){
@@ -963,6 +965,12 @@ final class HTTPClientResponse : HTTPResponse {
 		m_client = null;
 		m_closeConn = true;
 		del(stream);
+	}
+
+	private @property isKeepAliveResponse()
+	const {
+		if (this.httpVersion == HTTPVersion.HTTP_1_0) return this.headers.get("Connection", "close") != "close";
+		else return this.headers.get("Connection", "keep-alive") != "close";
 	}
 
 	private void finalize()
