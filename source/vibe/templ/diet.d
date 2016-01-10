@@ -1582,7 +1582,7 @@ private string filterJavaScript(string text, size_t indent)
 	string indent_string = "\n";
 	while( indent-- > 0 ) indent_string ~= '\t';
 
-	string ret = indent_string[0 .. $-1]~"<script type=\"text/javascript\">";
+	string ret = indent_string[0 .. $-1]~"<script type=\"application/javascript\">";
 	ret ~= indent_string~"//<![CDATA[";
 	foreach( ln; lines ) ret ~= indent_string ~ ln;
 	ret ~= indent_string ~ "//]]>"~indent_string[0 .. $-1]~"</script>";
