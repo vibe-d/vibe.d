@@ -1419,7 +1419,9 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 					handleHTTPConnection(conn, listen_info);
 				}, listen_info.bindAddress, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
 			auto proto = listen_info.tlsContext ? "https" : "http";
-			logInfo("Listening for requests on %s://%s:%s", proto, listen_info.bindAddress, listen_info.bindPort);
+			auto urladdr = listen_info.bindAddress;
+			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
+			logInfo("Listening for requests on %s://%s:%s/", proto, urladdr, listen_info.bindPort);
 			return ret;
 		} catch( Exception e ) {
 			logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
@@ -1485,6 +1487,11 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 					any_successful = true;
 					g_listeners ~= linfo;
 				}
+			}
+			if (settings.hostName.length) {
+				auto proto = settings.tlsContext ? "https" : "http";
+				auto port = settings.tlsContext && settings.port == 443 || !settings.tlsContext && settings.port == 80 ? "" : ":" ~ settings.port.to!string;
+				logInfo("Added virtual host %s://%s%s/ (%s)", proto, settings.hostName, port, addr);
 			}
 		}
 	}
