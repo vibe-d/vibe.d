@@ -468,7 +468,7 @@ final class ChunkedOutputStream : OutputStream {
 	/// ditto
 	@property void chunkExtensionCallback(ChunkExtensionCallback cb) { m_chunkExtensionCallback = cb; }
 
-	private void append(scope void delegate(scope ubyte[] dst) del, ulong nbytes)
+	private void append(scope void delegate(scope ubyte[] dst) del, size_t nbytes)
 	{
 		assert(del !is null);
 		auto sz = nbytes;
@@ -517,7 +517,7 @@ final class ChunkedOutputStream : OutputStream {
 				append((scope ubyte[] dst) {
 						nbytes -= dst.length;
 						data.read(dst);
-					}, nbytes);
+					}, min(nbytes, size_t.max));
 				if (nbytes > 0)
 					flush();
 			}
