@@ -14,6 +14,7 @@ public import vibe.db.mongo.database;
 import vibe.core.connectionpool;
 import vibe.core.log;
 import vibe.db.mongo.connection;
+import vibe.db.mongo.settings;
 
 import core.thread;
 
@@ -66,7 +67,7 @@ final class MongoClient {
 		lockConnection();
 	}
 
-	public this(MongoClientSettings settings)
+	package this(MongoClientSettings settings)
 	{
 		m_connections = new ConnectionPool!MongoConnection({
 			auto ret = new MongoConnection(settings);
