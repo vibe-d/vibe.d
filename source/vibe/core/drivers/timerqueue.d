@@ -69,9 +69,9 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 
 	ref inout(DATA) getUserData(size_t timer_id) inout { return m_timers[timer_id].data; }
 
-	bool isPending(size_t timer_id) const { return m_timers[timer_id].pending; }
+	bool isPending(size_t timer_id) const { return m_timers.length > 0 && m_timers[timer_id].pending; }
 
-	bool isPeriodic(size_t timer_id) const { return m_timers[timer_id].repeatDuration > 0; }
+	bool isPeriodic(size_t timer_id) const { return m_timers.length > 0 && m_timers[timer_id].repeatDuration > 0; }
 
 	SysTime getFirstTimeout()
 	{
