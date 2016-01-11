@@ -17,6 +17,7 @@
 module vibe.db.mongo.mongo;
 
 public import vibe.db.mongo.client;
+public import vibe.db.mongo.settings;
 
 import std.algorithm;
 
@@ -87,7 +88,7 @@ MongoClient connectMongoDB(string host_or_url)
 	if(host_or_url.startsWith("mongodb://")){
 		return new MongoClient(host_or_url);
 	} else {
-		return new MongoClient(host_or_url, MongoConnection.defaultPort);
+		return new MongoClient(host_or_url, MongoClientSettings.defaultPort);
 	}
 }
 /// ditto

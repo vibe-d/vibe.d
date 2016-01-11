@@ -116,7 +116,7 @@ final class MongoConnection {
 		StreamOutputRange m_outRange;
 	}
 
-	enum ushort defaultPort = 27017;
+	enum ushort defaultPort = MongoClientSettings.defaultPort;
 
 	/// Simplified constructor overload, with no m_settings
 	this(string server, ushort port = defaultPort)

@@ -7,8 +7,16 @@
 */
 module vibe.db.mongo.settings;
 
+import vibe.core.log;
 import vibe.data.bson;
 import vibe.db.mongo.connection : QueryFlags;
+import vibe.inet.webform;
+
+import std.digest.digest : toHexString;
+import std.digest.md : md5Of;
+import std.algorithm : splitter, startsWith;
+import std.string : icmp, indexOf, toLower;
+
 
 /**
  * Parses the given string as a mongodb URL. The URL must be in the form documented at
@@ -76,7 +84,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 			auto hostPort = splitter(entry, ":");
 			string host = hostPort.front;
 			hostPort.popFront();
-			ushort port = MongoConnection.defaultPort;
+			ushort port = MongoClientSettings.defaultPort;
 			if (!hostPort.empty) {
 				port = to!ushort(hostPort.front);
 				hostPort.popFront();
@@ -287,6 +295,8 @@ unittest
 
 class MongoClientSettings
 {
+	enum ushort defaultPort = 27017;
+
 	string username;
 	string digest;
 	MongoHost[] hosts;
