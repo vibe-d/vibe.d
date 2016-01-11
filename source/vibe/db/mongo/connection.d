@@ -148,8 +148,15 @@ final class MongoConnection {
 				if (!m_settings.sslverifycertificate) {
 					ctx.peerValidationMode = SSLPeerValidationMode.none;
 				}
+				if (m_settings.sslPEMKeyFile) {
+					ctx.useCertificateChainFile(m_settings.sslPEMKeyFile);
+					ctx.usePrivateKeyFile(m_settings.sslPEMKeyFile);
+				}
+				if (m_settings.sslCAFile) {
+					ctx.useTrustedCertificateFile(m_settings.sslCAFile);
+				}
 
-				m_stream = createSSLStream(m_conn, ctx);
+				m_stream = createSSLStream(m_conn, ctx, m_settings.hosts[0].name);
 			}
 			else {
 				m_stream = m_conn;
@@ -164,6 +171,10 @@ final class MongoConnection {
 		if(m_settings.digest != string.init)
 		{
 			authenticate();
+		}
+		else if (m_settings.sslPEMKeyFile != null && m_settings.username != null)
+		{
+			certAuthenticate();
 		}
 	}
 
@@ -419,6 +430,24 @@ final class MongoConnection {
 		enforce(
 			err.code < 0,
 			new MongoDBException(err)
+		);
+	}
+
+	private void certAuthenticate()
+	{
+		Bson cmd = Bson.emptyObject;
+		cmd["authenticate"] = Bson(1);
+		cmd["mechanism"] = Bson("MONGODB-X509");
+		cmd["user"] = Bson(m_settings.username);
+		query!Bson("$external.$cmd", QueryFlags.None, 0, -1, cmd, Bson(null),
+			(cursor, flags, first_doc, num_docs) {
+				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
+					throw new MongoDriverException("Calling authenticate failed.");
+			},
+			(idx, ref doc) {
+				if (doc["ok"].get!double != 1.0)
+					throw new MongoAuthException("Authentication failed.");
+			}
 		);
 	}
 
@@ -829,6 +858,8 @@ class MongoClientSettings
 	long socketTimeoutMS;
 	bool ssl;
 	bool sslverifycertificate = true;
+	string sslPEMKeyFile;
+	string sslCAFile;
 
 	static string makeDigest(string username, string password)
 	{
@@ -843,7 +874,7 @@ struct MongoDBInfo
 	bool empty;
 }
 
-private struct MongoHost
+public struct MongoHost
 {
 	string name;
 	ushort port;
