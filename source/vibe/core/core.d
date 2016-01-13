@@ -559,8 +559,8 @@ public @property uint logicalProcessorCount()
 		return get_nprocs();
 	} else version (OSX) {
 		int count;
-		size_t count_len = sizeof(count);
-		sysctlbyname("hw.logicalcpu", &count, &count_len, NULL, 0);
+		size_t count_len = count.sizeof;
+		sysctlbyname("hw.logicalcpu", &count, &count_len, null, 0);
 		return cast(uint)count_len;
 	} else version (Windows) {
 		import core.sys.windows.windows;
@@ -569,7 +569,7 @@ public @property uint logicalProcessorCount()
 		return sysinfo.dwNumberOfProcessors;
 	} else static assert(false, "Unsupported OS!");
 }
-version (OSX) private extern(C) int sysctl(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
+version (OSX) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
 version (linux) static if (__VERSION__ <= 2066) private extern(C) int get_nprocs();
 
 /**
