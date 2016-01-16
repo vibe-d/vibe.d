@@ -761,6 +761,8 @@ final class Win32FileStream : FileStream {
 /******************************************************************************/
 
 final class Win32DirectoryWatcher : DirectoryWatcher {
+	import std.array: Appender, appender;
+
 	private {
 		Path m_path;
 		bool m_recursive;
@@ -815,7 +817,15 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 		return m_task == Task.getThis();
 	}
 
-	bool readChanges(ref DirectoryChange[] dst, Duration timeout)
+	bool readChanges(out DirectoryChange[] dst, Duration timeout)
+	{
+		auto app = appender!(DirectoryChange[]);
+		auto ret = readChanges(app, timeout);
+		dst = app.data;
+		return ret;
+	}
+
+	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout)
 	{
 		OVERLAPPED overlapped;
 		overlapped.Internal = 0;
@@ -851,7 +861,7 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 				case 0x5: kind = DirectoryChangeType.added; break;
 			}
 			string filename = to!string(fni.FileName.ptr[0 .. fni.FileNameLength/2]);
-			dst ~= DirectoryChange(kind, Path(filename));
+			app.put(DirectoryChange(kind, Path(filename)));
 			//logTrace("File changed: %s", fni.FileName.ptr[0 .. fni.FileNameLength/2]);
 			if( fni.NextEntryOffset == 0 ) break;
 			result = result[fni.NextEntryOffset .. $];

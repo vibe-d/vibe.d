@@ -1046,6 +1046,7 @@ final class Libevent2UDPConnection : UDPConnection {
 version (linux)
 final class InotifyDirectoryWatcher : DirectoryWatcher {
 	import core.sys.posix.fcntl, core.sys.posix.unistd, core.sys.linux.sys.inotify;
+	import std.array: Appender, appender;
 	import std.file;
 
 	private {
@@ -1101,7 +1102,15 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 		return m_owner == Task.getThis();
 	}
 
-	bool readChanges(ref DirectoryChange[] dst, Duration timeout)
+	bool readChanges(out DirectoryChange[] dst, Duration timeout)
+	{
+		auto app = appender!(DirectoryChange[]);
+		auto ret = readChanges(app, timeout);
+		dst = app.data;
+		return ret;
+	}
+
+	bool readChanges(Appender!(DirectoryChange[]) app, Duration timeout)
 	{
 		import core.stdc.stdio : FILENAME_MAX;
 		import core.stdc.string : strlen;
@@ -1121,7 +1130,6 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 		errnoEnforce(nread != -1, "Error while reading inotify handle.");
 		assert(nread > 0);
 
-		dst.length = 0;
 		do
 		{
 			for (auto p = buf.ptr; p < buf.ptr + nread; )
@@ -1144,7 +1152,7 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 				auto name = ev.name.ptr[0 .. ev.name.ptr.strlen];
 				auto path = Path(buildPath(m_watches[ev.wd], name));
 
-				dst ~= DirectoryChange(type, path);
+				app.put(DirectoryChange(type, path));
 
 				p += inotify_event.sizeof + ev.len;
 			}
