@@ -1,7 +1,7 @@
 /**
 	High level stream manipulation functions.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -10,15 +10,15 @@ module vibe.stream.operations;
 public import vibe.core.stream;
 
 import vibe.core.log;
-import vibe.stream.memory;
+import vibe.utils.array : AllocAppender;
 import vibe.utils.memory;
+import vibe.stream.wrapper : ProxyStream;
 
 import std.algorithm;
 import std.array;
 import std.datetime;
 import std.exception;
 import std.range : isOutputRange;
-import std.typecons;
 
 
 /**************************************************************************************************/
@@ -34,12 +34,17 @@ import std.typecons;
 */
 ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
-	return readUntil(stream, cast(const(ubyte)[])linesep, max_bytes, alloc);
+	auto output = AllocAppender!(ubyte[])(alloc);
+	output.reserve(max_bytes < 64 ? max_bytes : 64);
+	readLine(stream, output, max_bytes, linesep);
+	return output.data();
 }
 /// ditto
 void readLine()(InputStream stream, OutputStream dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
 {
-	readUntil(stream, dst, cast(const(ubyte)[])linesep, max_bytes);
+	import vibe.stream.wrapper;
+	auto dstrng = StreamOutputRange(dst);
+	readLine(stream, dstrng, max_bytes, linesep);
 }
 /// ditto
 void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
@@ -49,6 +54,8 @@ void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, s
 }
 
 unittest {
+	import vibe.stream.memory : MemoryOutputStream, MemoryStream;
+
 	auto inp = new MemoryStream(cast(ubyte[])"Hello, World!\r\nThis is a test.\r\nNot a full line.".dup);
 	assert(inp.readLine() == cast(const(ubyte)[])"Hello, World!");
 	assert(inp.readLine() == cast(const(ubyte)[])"This is a test.");
@@ -108,7 +115,7 @@ unittest {
 */
 ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
 {
-	auto output = scoped!MemoryOutputStream(alloc);
+	auto output = AllocAppender!(ubyte[])(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
 	readUntil(stream, output, end_marker, max_bytes);
 	return output.data();
@@ -126,103 +133,12 @@ void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong ma
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
 
-	// allocate internal jump table to optimize the number of comparisons
-	size_t[8] nmatchoffsetbuffer = void;
-	size_t[] nmatchoffset;
-	if (end_marker.length <= nmatchoffsetbuffer.length) nmatchoffset = nmatchoffsetbuffer[0 .. end_marker.length];
-	else nmatchoffset = new size_t[end_marker.length];
-
-	// precompute the jump table
-	nmatchoffset[0] = 0;
-	foreach( i; 1 .. end_marker.length ){
-		nmatchoffset[i] = i;
-		foreach_reverse( j; 1 .. i )
-			if( end_marker[j .. i] == end_marker[0 .. i-j] ){
-				nmatchoffset[i] = i-j;
-				break;
-			}
-		assert(nmatchoffset[i] > 0 && nmatchoffset[i] <= i);
-	}
-
-	size_t nmatched = 0;
-	auto bufferobj = FreeListRef!(Buffer, false)();
-	auto buf = bufferobj.bytes[];
-
-	ulong bytes_read = 0;
-
-	void skip(size_t nbytes)
-	{
-		bytes_read += nbytes;
-		while( nbytes > 0 ){
-			auto n = min(nbytes, buf.length);
-			stream.read(buf[0 .. n]);
-			nbytes -= n;
-		}
-	}
-
-	while( !stream.empty ){
-		enforce(bytes_read < max_bytes, "Reached byte limit before reaching end marker.");
-
-		// try to get as much data as possible, either by peeking into the stream or
-		// by reading as much as isguaranteed to not exceed the end marker length
-		// the block size is also always limited by the max_bytes parameter.
-		size_t nread = 0;
-		auto least_size = stream.leastSize(); // NOTE: blocks until data is available
-		auto max_read = max_bytes - bytes_read;
-		auto str = stream.peek(); // try to get some data for free
-		if( str.length == 0 ){ // if not, read as much as possible without reading past the end
-			nread = min(least_size, end_marker.length-nmatched, buf.length, max_read);
-			stream.read(buf[0 .. nread]);
-			str = buf[0 .. nread];
-			bytes_read += nread;
-		} else if( str.length > max_read ){
-			str.length = cast(size_t)max_read;
-		}
-
-		// remember how much of the marker was already matched before processing the current block
-		size_t nmatched_start = nmatched;
-
-		// go through the current block trying to match the marker
-		size_t i = 0;
-		for (i = 0; i < str.length; i++) {
-			auto ch = str[i];
-			// if we have a mismatch, use the jump table to try other possible prefixes
-			// of the marker
-			while( nmatched > 0 && ch != end_marker[nmatched] )
-				nmatched -= nmatchoffset[nmatched];
-
-			// if we then have a match, increase the match count and test for full match
-			if (ch == end_marker[nmatched])
-				if (++nmatched == end_marker.length) {
-					i++;
-					break;
-				}
-		}
-
-
-		// write out any false match part of previous blocks
-		if( nmatched_start > 0 ){
-			if( nmatched <= i ) dst.put(end_marker[0 .. nmatched_start]);
-			else dst.put(end_marker[0 .. nmatched_start-nmatched+i]);
-		}
-
-		// write out any unmatched part of the current block
-		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
-
-		// got a full, match => out
-		if (nmatched >= end_marker.length) {
-			// in case of a full match skip data in the stream until the end of
-			// the marker
-			skip(i - nread);
-			return;
-		}
-
-		// otherwise skip this block in the stream
-		skip(str.length - nread);
-	}
-
-	enforce(false, "Reached EOF before reaching end marker.");
+	if (end_marker.length <= 2)
+		readUntilSmall(stream, dst, end_marker, max_bytes);
+	else
+		readUntilGeneric(stream, dst, end_marker, max_bytes);
 }
+
 
 
 unittest {
@@ -233,6 +149,13 @@ unittest {
 	void test(string s, size_t expected){
 		stream.seek(0);
 		auto result = cast(string)readUntil(stream, cast(ubyte[])s);
+		assert(result.length == expected, "Wrong result index");
+		assert(result == text[0 .. result.length], "Wrong result contents: "~result~" vs "~text[0 .. result.length]);
+		assert(stream.leastSize() == stream.size() - expected - s.length, "Wrong number of bytes left in stream");
+
+		stream.seek(0);
+		auto inp2 = new NoPeekProxy(stream);
+		result = cast(string)readUntil(inp2, cast(const(ubyte)[])s);
 		assert(result.length == expected, "Wrong result index");
 		assert(result == text[0 .. result.length], "Wrong result contents: "~result~" vs "~text[0 .. result.length]);
 		assert(stream.leastSize() == stream.size() - expected - s.length, "Wrong number of bytes left in stream");
@@ -255,6 +178,33 @@ unittest {
 		test("111111111114", 61);
 	}
 	// TODO: test
+}
+
+unittest {
+	import vibe.stream.memory : MemoryOutputStream, MemoryStream;
+	import vibe.stream.wrapper : ProxyStream;
+
+	auto text = cast(ubyte[])"ab\nc\rd\r\ne".dup;
+	void test(string marker, size_t idx)
+	{
+		// code path for peek support
+		auto inp = new MemoryStream(text);
+		auto dst = appender!(ubyte[]);
+		readUntil(inp, dst, cast(const(ubyte)[])marker);
+		assert(dst.data == text[0 .. idx]);
+		assert(inp.peek == text[idx+marker.length .. $]);
+
+		// code path for no peek support
+		inp.seek(0);
+		dst = appender!(ubyte[]);
+		auto inp2 = new NoPeekProxy(inp);
+		readUntil(inp2, dst, cast(const(ubyte)[])marker);
+		assert(dst.data == text[0 .. idx]);
+		assert(inp.readAll() == text[idx+marker.length .. $]);
+	}
+	test("\r\n", 6);
+	test("\r", 4);
+	test("\n", 2);
 }
 
 /**
@@ -386,3 +336,174 @@ bool skipBytes(InputStream stream, const(ubyte)[] bytes)
 }
 
 private struct Buffer { ubyte[64*1024-4] bytes = void; } // 64k - 4 bytes for reference count
+
+private void readUntilSmall(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max)
+{
+	assert(end_marker.length >= 1 && end_marker.length <= 2);
+
+	size_t nmatched = 0;
+	size_t nmarker = end_marker.length;
+
+	while (true) {
+		enforce(!stream.empty, "Reached EOF while searching for end marker.");
+		enforce(max_bytes > 0, "Reached maximum number of bytes while searching for end marker.");
+		auto max_peek = max(max_bytes, max_bytes+nmarker); // account for integer overflow
+		auto pm = stream.peek()[0 .. min($, max_bytes)];
+		if (!pm.length) { // no peek support - inefficient route
+			ubyte[2] buf = void;
+			auto l = nmarker - nmatched;
+			stream.read(buf[0 .. l]);
+			foreach (i; 0 .. l) {
+				if (buf[i] == end_marker[nmatched]) {
+					nmatched++;
+				} else if (buf[i] == end_marker[0]) {
+					foreach (j; 0 .. nmatched) dst.put(end_marker[j]);
+					nmatched = 1;
+				} else {
+					foreach (j; 0 .. nmatched) dst.put(end_marker[j]);
+					nmatched = 0;
+					dst.put(buf[i]);
+				}
+				if (nmatched == nmarker) return;
+			}
+		} else {
+			auto idx = pm.countUntil(end_marker[0]);
+			if (idx < 0) {
+				dst.put(pm);
+				max_bytes -= pm.length;
+				stream.skip(pm.length);
+			} else {
+				dst.put(pm[0 .. idx]);
+				stream.skip(idx+1);
+				if (nmarker == 2) {
+					ubyte[1] next;
+					stream.read(next);
+					if (next[0] == end_marker[1])
+						return;
+					dst.put(end_marker[0]);
+					dst.put(next[0]);
+				} else return;
+			}
+		}
+	}
+}
+
+
+private void readUntilGeneric(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+	if (isOutputRange!(R, ubyte))
+{
+	// allocate internal jump table to optimize the number of comparisons
+	size_t[8] nmatchoffsetbuffer = void;
+	size_t[] nmatchoffset;
+	if (end_marker.length <= nmatchoffsetbuffer.length) nmatchoffset = nmatchoffsetbuffer[0 .. end_marker.length];
+	else nmatchoffset = new size_t[end_marker.length];
+
+	// precompute the jump table
+	nmatchoffset[0] = 0;
+	foreach( i; 1 .. end_marker.length ){
+		nmatchoffset[i] = i;
+		foreach_reverse( j; 1 .. i )
+			if( end_marker[j .. i] == end_marker[0 .. i-j] ){
+				nmatchoffset[i] = i-j;
+				break;
+			}
+		assert(nmatchoffset[i] > 0 && nmatchoffset[i] <= i);
+	}
+
+	size_t nmatched = 0;
+	auto bufferobj = FreeListRef!(Buffer, false)();
+	auto buf = bufferobj.bytes[];
+
+	ulong bytes_read = 0;
+
+	void skip2(size_t nbytes)
+	{
+		bytes_read += nbytes;
+		stream.skip(nbytes);
+	}
+
+	while( !stream.empty ){
+		enforce(bytes_read < max_bytes, "Reached byte limit before reaching end marker.");
+
+		// try to get as much data as possible, either by peeking into the stream or
+		// by reading as much as isguaranteed to not exceed the end marker length
+		// the block size is also always limited by the max_bytes parameter.
+		size_t nread = 0;
+		auto least_size = stream.leastSize(); // NOTE: blocks until data is available
+		auto max_read = max_bytes - bytes_read;
+		auto str = stream.peek(); // try to get some data for free
+		if( str.length == 0 ){ // if not, read as much as possible without reading past the end
+			nread = min(least_size, end_marker.length-nmatched, buf.length, max_read);
+			stream.read(buf[0 .. nread]);
+			str = buf[0 .. nread];
+			bytes_read += nread;
+		} else if( str.length > max_read ){
+			str.length = cast(size_t)max_read;
+		}
+
+		// remember how much of the marker was already matched before processing the current block
+		size_t nmatched_start = nmatched;
+
+		// go through the current block trying to match the marker
+		size_t i = 0;
+		for (i = 0; i < str.length; i++) {
+			auto ch = str[i];
+			// if we have a mismatch, use the jump table to try other possible prefixes
+			// of the marker
+			while( nmatched > 0 && ch != end_marker[nmatched] )
+				nmatched -= nmatchoffset[nmatched];
+
+			// if we then have a match, increase the match count and test for full match
+			if (ch == end_marker[nmatched])
+				if (++nmatched == end_marker.length) {
+					i++;
+					break;
+				}
+		}
+
+
+		// write out any false match part of previous blocks
+		if( nmatched_start > 0 ){
+			if( nmatched <= i ) dst.put(end_marker[0 .. nmatched_start]);
+			else dst.put(end_marker[0 .. nmatched_start-nmatched+i]);
+		}
+
+		// write out any unmatched part of the current block
+		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
+
+		// got a full, match => out
+		if (nmatched >= end_marker.length) {
+			// in case of a full match skip data in the stream until the end of
+			// the marker
+			skip2(i - nread);
+			return;
+		}
+
+		// otherwise skip this block in the stream
+		skip2(str.length - nread);
+	}
+
+	enforce(false, "Reached EOF before reaching end marker.");
+}
+
+static if (!is(typeof(InputStream.init.skip(0))))
+{
+	private void skip(InputStream str, ulong count)
+	{
+		ubyte[156] buf = void;
+		while (count > 0) {
+			auto n = min(buf.length, count);
+			str.read(buf[0 .. n]);
+			count -= n;
+		}
+	}
+}
+
+private class NoPeekProxy : ProxyStream {
+	this(InputStream stream)
+	{
+		super(stream, null);
+	}
+
+	override const(ubyte)[] peek() { return null; }
+}
