@@ -316,6 +316,15 @@ final class LibevDriver : EventDriver {
 			logError("Error enabling socket address reuse on listening socket");
 			return null;
 		}
+		version(linux) {
+			if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof)) {
+				// ignore invalid and not supported errors
+				if (errno != EINVAL && errno != ENOPROTOOPT) {
+					logError("Error enabling socket port reuse on listening socket");
+					return null;
+				}
+			}
+		}
 		if( bind(listenfd, cast(
 sockaddr*)sock_addr, SOCKADDR.sizeof) ){
 			logError("Error binding listening socket");

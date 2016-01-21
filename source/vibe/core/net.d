@@ -321,11 +321,15 @@ interface UDPConnection {
 */
 enum TCPListenOptions {
 	/// Don't enable any particular option
-	defaults = 0,
+	defaults = reusePort,
 	/// Causes incoming connections to be distributed across the thread pool
 	distribute = 1<<0,
 	/// Disables automatic closing of the connection when the connection callback exits
 	disableAutoClose = 1<<1,
+	/** Enable port reuse on linux kernel version >=3.9, do nothing on other OS
+	    Does not affect libasync driver because it is always enabled by libasync.
+	*/
+	reusePort = 1<<2,
 }
 
 private pure nothrow {
