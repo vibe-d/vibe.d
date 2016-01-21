@@ -207,7 +207,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		}
 		acquireReader();
 		scope(exit) releaseReader();
-		fillReadBuffer(true);
+		fillReadBuffer(true, false);
 		return m_readBuffer.length;
 	}
 
@@ -396,6 +396,10 @@ package final class Libevent2TCPConnection : TCPConnection {
 			m_readBuffer.putN(nbytes);
 			if (m_readBuffer.length || !block) break;
 			if (throw_on_fail) checkConnected(false);
+			else if (!m_ctx || !m_ctx.event) return false;
+			else if (m_ctx.state != ConnectionState.open
+				&& evbuffer_get_length(bufferevent_get_input(m_ctx.event)) == 0)
+					return false;
 			if (wait_for_timeout && m_timeout_triggered) return true;
 			m_ctx.core.yieldForEvent();
 		}
