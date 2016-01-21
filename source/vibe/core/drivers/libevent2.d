@@ -338,6 +338,20 @@ final class Libevent2Driver : EventDriver {
 		int tmp_reuse = 1;
 		socketEnforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
 			"Error enabling socket address reuse on listening socket");
+		version (Posix) {
+			enum { SO_REUSEPORT = 15 }
+			if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof)) {
+				do {
+					version(linux) {
+						// ignore invalid and not supported errors on linux
+						if (errno == EINVAL || errno == ENOPROTOOPT) {
+							break;
+						}						
+					}
+					socketEnforce(false, "Error enabling socket port reuse on listening socket");
+				} while(0);
+			}
+		}
 		socketEnforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
 			"Error binding listening socket");
 		socketEnforce(listen(listenfd, 128) == 0,
