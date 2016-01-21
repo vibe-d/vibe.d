@@ -120,11 +120,15 @@ void test2()
 		sleep(1.seconds);
 		StopWatch sw;
 		sw.start();
-		assert(conn.waitForData() == true);
-		assert(cast(Duration)sw.peek < 500.msecs); // waitForData should return immediately
-		assert(conn.dataAvailableForRead);
-		assert(conn.readAll() == "test");
-		conn.close();
+		try {
+			assert(conn.waitForData() == true);
+			assert(cast(Duration)sw.peek < 500.msecs); // waitForData should return immediately
+			assert(conn.dataAvailableForRead);
+			assert(conn.readAll() == "test");
+			conn.close();
+		} catch (Exception e) {
+			assert(false, "Failed to read pending data: " ~ e.msg);
+		}
 	}, "127.0.0.1");
 
 	auto conn = connectTCP("127.0.0.1", port+1);
