@@ -311,8 +311,10 @@ package final class Libevent2TCPConnection : TCPConnection {
 		while (m_ctx && m_ctx.event) {
 			if (m_readBuffer.length) return true;
 			if (m_ctx.state != ConnectionState.open) return false;
-			try fillReadBuffer(true, false);
-			catch (Exception e) {
+			try {
+				if (fillReadBuffer(true, false, true))
+					return false;
+			} catch (Exception e) {
 				logDiagnostic("Connection error during waitForData: %s", e.toString());
 			}
 		}
@@ -384,9 +386,9 @@ package final class Libevent2TCPConnection : TCPConnection {
 		flush();
 	}
 
-	private void fillReadBuffer(bool block, bool throw_on_fail = true)
+	private bool fillReadBuffer(bool block, bool throw_on_fail = true, bool wait_for_timeout = false)
 	{
-		if (m_readBuffer.length) return;
+		if (m_readBuffer.length) return false;
 		m_readBuffer.clear();
 		assert(m_readBuffer.peekDst.length > 0);
 		while (m_ctx && m_ctx.event) {
@@ -394,8 +396,10 @@ package final class Libevent2TCPConnection : TCPConnection {
 			m_readBuffer.putN(nbytes);
 			if (m_readBuffer.length || !block) break;
 			if (throw_on_fail) checkConnected(false);
+			if (wait_for_timeout && m_timeout_triggered) return true;
 			m_ctx.core.yieldForEvent();
 		}
+		return false;
 	}
 
 	private void checkReader() { assert(m_ctx.readOwner == Task(), "Acquiring reader of already owned connection."); }
