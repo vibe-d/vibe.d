@@ -850,7 +850,7 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 				case 0x4: kind = DirectoryChangeType.removed; break;
 				case 0x5: kind = DirectoryChangeType.added; break;
 			}
-			string filename = to!string(fni.FileName.ptr[0 .. fni.FileNameLength/2]);
+			string filename = to!string(fni.FileName[0 .. fni.FileNameLength/2]);
 			dst ~= DirectoryChange(kind, Path(filename));
 			//logTrace("File changed: %s", fni.FileName.ptr[0 .. fni.FileNameLength/2]);
 			if( fni.NextEntryOffset == 0 ) break;
