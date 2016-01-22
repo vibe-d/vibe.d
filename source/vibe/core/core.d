@@ -1241,7 +1241,9 @@ private class VibeDriverCore : DriverCore {
 		else
 			auto uncaught_exception = () @trusted nothrow { scope (failure) assert(false); return ctask.call(false); } ();
 
-		if (auto th = cast(Throwable)uncaught_exception) {
+		if (uncaught_exception) {
+			auto th = cast(Throwable)uncaught_exception;
+			assert(th, "Fiber returned exception object that is not a Throwable!?");
 			extrap();
 
 			assert(() @trusted nothrow { return ctask.state; } () == Fiber.State.TERM);
@@ -1250,7 +1252,7 @@ private class VibeDriverCore : DriverCore {
 
 			// always pass Errors on
 			if (auto err = cast(Error)th) throw err;
-		} else assert(!uncaught_exception, "Fiber returned exception object that is not a Throwable!?");
+		}
 	}
 
 	void notifyIdle()
