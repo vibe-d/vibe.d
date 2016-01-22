@@ -1,33 +1,98 @@
 ﻿Changelog
 =========
 
-v0.7.27 - 2015-
+v0.7.27 - 2016-01-
 --------------------
+
+In preparation for a full separation of the individual library components, this release splits up the code logically into multiple DUB sub packages. This enables dependent code to reduce the dependency footprint and compile times. In addition to this and a bunch of further improvements, a lot of performance tuning and some important REST interface additions went into this release.
 
 ### Features and improvements ###
 
 - Split up the library into sub packages - this prepares for a deeper split that is going to happen in the next release
-- Implemented CORS support for the REST interface server (by Sebastian Koppe) - [pull #1299][issue1299]
-- The `URLRouter` now adds a `"routerRootDir"` entry with the relative path to the router base directory to `HTTPServerRequest.params` (by Steven Dwy) - [pull #1301][issue1301]
+- A lot of performance tuning went into the network and HTTP code, leading to a 50% increase in single-core HTTP performance and a lot more in the multi-threaded case over 0.7.26
+- Marked more of the API `@safe` and `nothrow`
+- REST interface generator changes
+  - Added support for REST collections with natural D syntax using the new `Collection!I` type - [pull #1268][issue1268]
+  - Implemented CORS support for the REST interface server (by Sebastian Koppe) - [pull #1299][issue1299]
+  - Conversion errors for path parameters (e.g. `@path("/foo/:someparam")`) in REST interfaces now result in a 404 error instead of 500
+- HTTP server/client changes
+  - The `URLRouter` now adds a `"routerRootDir"` entry with the relative path to the router base directory to `HTTPServerRequest.params` (by Steven Dwy) - [pull #1301][issue1301]
+  - Added a WebSocket client implementation (by Kemonozume) - [pull #1332][issue1332]
+  - Added the possibility to access cookie contents as a raw string
+  - The HTTP client now retries a request if a keep-alive connection gets closed before the response gets read
+  - Added `HTTPServerResponse.finalize` to manually force sending and finalization of the response - [issue #1347][issue1347]
+  - Added `scope` callback based overloads of `switchProtocol` in `HTTPServerResponse` and `HTTPClientResponse`
+  - Added `ChunkedOutputStream.chunkExtensionCallback` to control HTTP chunk-extensions (by Manuel Frischknecht and Yannick Koechlin) - [pull #1340][issue1340]
+  - Passing an empty string to `HTTPClientResponse.switchProtocol` now skips the "Upgrade" header validation
+  - Enabled TCP no-delay in the HTTP server
+  - Redundant calls to `HTTPServerResponse.terminateSession` are now ignored instead of triggering an assertion - [issue #472][issue472]
+  - Added log output for newly registered HTTP virtual hosts - [issue #1271][issue1271]
+- The Markdown compiler now adds "id" attributes to headers to enable cross-referencing
+- Added `getMarkdownOutline`, which returns a tree of sections in a Markdown document
 - Added `Path.relativeToWeb`, a version of `relativeTo` with web semantics
-- Conversion errors for path parameters (e.g. `@path("/foo/:someparam")`) in REST interfaces now result in a 404 error instead of 500
-- Added support for REST collections with natural D syntax using the new `Collection!I` type - [pull #1268][issue1268]
+- Re-enabled integration with `std.concurrency` - [issue #1343][issue1343]
+- Added `vibe.core.core.setupWorkerThreads` to customize the number of worker threads on startup (by Jens K. Mueller) - [pull #1350][issue1350]
+- Added support for parsing IPv6 URLs (by Mathias L. Baumann aka Marenz) - [pull #1341][issue3141]
+- Enabled TCP no-delay in the Redis client (by Etienne Cimon) - [pull #1361][issue1361]
+- Switch the `:javascript` Diet filter to use "application/json" as the content type - [issue #717][issue717]
+- `NetworkAddress` now accepts `std.socket.AddressFamily` constants in addition to the `AF_` ones - [issue #925][issue925]
+- Added support for X509 authentication in the MongoDB client (by machindertech) - [pull #1235][issue1235]
 
 ### Bug fixes ###
 
-- Fixed behavior of `ZlibInputStream` in case of premature end of input
+- Fixed behavior of `ZlibInputStream` in case of premature end of input - [issue #1116][issue1116]
 - Fixed a memory leak in `ZlibInputStream` (by Etienne Cimon) - [pull #1116][issue1116]
 - Fixed a regression in the OpenSSL certificate validation code - [issue #1325][issue1325]
 - Fixed the behavior of `TCPConnection.waitForData` in all drivers - [issue #1326][issue1326]
-- Fixed a memory leak in `Libevent2Driver.connectTCP` on connection failure (by Etienne Cimon) - [pull #1322][issue1322]
+- Fixed a memory leak in `Libevent2Driver.connectTCP` on connection failure (by Etienne Cimon) - [pull #1322][issue1322], [issue #1321][issue1321]
+- Fixed concatenation of static and dynamic class attributes in Diet templates - [issue #1312][issue1312]
+- Fixed resource leaks in `connectTCP` for libevent when the task gets interrupted - [issue #1331][issue1331]
+- Fixed `ZlibInputStream` in case of the target buffer matching up exactly with the uncompressed data (by Ilya Lyubimov aka villytiger) - [pull #1339][issue1339]
+- Fixed some issues with triggering assertions on yielded tasks
+- Fixed TLS SNI functionality in the HTTP server
+- Fixed excessive CPU usage in the libasync driver (by Etienne Cimon) - [pull #1348][issue1348]
+- Fixed exiting multi-thread event loops for the libasync driver (by Etienne Cimon) - [pull #1349][issue1349]
+- Fixed the default number of worker threads to equal all logical cores in the system
+- Fixed an assertion failure in the WebSocket server (by Ilya Yaroshenko aka 9il) - [pull #1356][issue1356], [issue #1354][issue1354]
+- Fixed a range violation error in `InotifyDirectoryWatcher` - [issue #1364][issue1364]
+- Fixed `readUntil` to not use the buffer returned by `InputStream.peek()` after a call to `InputStream.read()` - [issue #960][issue960]
+- Disabled the case randomization feature of libevent's DNS resolver to work around issues with certain servers - [pull #1366][issue1366]
+- Fixed the behavior of multiple `runEventLoop`/`exitEventLoop` calls in sequence for the win32 driver
+- Fixed reading response bodies for "Connection: close" connections without a "Content-Length" in the HTTP client - [issue #604][issue604]
+- Fixed indentation of `:javascript` blocks in Diet templates - [issue #837][issue837]
+- Fixed assertion failure in the win32 driver when sending files over TCP - [issue #932][issue932]
 
+[issue472]: https://github.com/rejectedsoftware/vibe.d/issues/472
+[issue604]: https://github.com/rejectedsoftware/vibe.d/issues/604
+[issue717]: https://github.com/rejectedsoftware/vibe.d/issues/717
+[issue837]: https://github.com/rejectedsoftware/vibe.d/issues/837
+[issue925]: https://github.com/rejectedsoftware/vibe.d/issues/925
+[issue960]: https://github.com/rejectedsoftware/vibe.d/issues/960
 [issue1116]: https://github.com/rejectedsoftware/vibe.d/issues/1116
+[issue1235]: https://github.com/rejectedsoftware/vibe.d/issues/1235
 [issue1268]: https://github.com/rejectedsoftware/vibe.d/issues/1268
+[issue1271]: https://github.com/rejectedsoftware/vibe.d/issues/1271
 [issue1299]: https://github.com/rejectedsoftware/vibe.d/issues/1299
 [issue1301]: https://github.com/rejectedsoftware/vibe.d/issues/1301
+[issue1312]: https://github.com/rejectedsoftware/vibe.d/issues/1312
+[issue1321]: https://github.com/rejectedsoftware/vibe.d/issues/1321
 [issue1322]: https://github.com/rejectedsoftware/vibe.d/issues/1322
 [issue1325]: https://github.com/rejectedsoftware/vibe.d/issues/1325
 [issue1326]: https://github.com/rejectedsoftware/vibe.d/issues/1326
+[issue1331]: https://github.com/rejectedsoftware/vibe.d/issues/1331
+[issue1332]: https://github.com/rejectedsoftware/vibe.d/issues/1332
+[issue1340]: https://github.com/rejectedsoftware/vibe.d/issues/1340
+[issue1341]: https://github.com/rejectedsoftware/vibe.d/issues/1341
+[issue1343]: https://github.com/rejectedsoftware/vibe.d/issues/1343
+[issue1347]: https://github.com/rejectedsoftware/vibe.d/issues/1347
+[issue1348]: https://github.com/rejectedsoftware/vibe.d/issues/1348
+[issue1349]: https://github.com/rejectedsoftware/vibe.d/issues/1349
+[issue1350]: https://github.com/rejectedsoftware/vibe.d/issues/1350
+[issue1354]: https://github.com/rejectedsoftware/vibe.d/issues/1354
+[issue1356]: https://github.com/rejectedsoftware/vibe.d/issues/1356
+[issue1361]: https://github.com/rejectedsoftware/vibe.d/issues/1361
+[issue1364]: https://github.com/rejectedsoftware/vibe.d/issues/1364
+[issue1366]: https://github.com/rejectedsoftware/vibe.d/issues/1366
 
 
 v0.7.26 - 2015-11-04
