@@ -17,12 +17,12 @@ void testProtocol(TCPConnection server, bool terminate)
 			server.write(str);
 			server.write("\r\n");
 			auto reply = server.readLine();
-			assert(reply == format("Hash: %08X", typeid(string).getHash(&str)));
+			assert(reply == format("Hash: %08X", typeid(string).getHash(&str)), "Unexpected reply");
 		}
 		sleep(10.msecs);
 	}
 
-	assert(!server.dataAvailableForRead);
+	assert(!server.dataAvailableForRead, "Still data available.");
 
 	if (terminate) {
 		// forcefully close connection
@@ -32,7 +32,7 @@ void testProtocol(TCPConnection server, bool terminate)
 		enforce(server.readLine() == "Bye bye!");
 		// should have closed within 500 ms
 		enforce(!server.waitForData(500.msecs));
-		assert(!server.connected);
+		assert(!server.connected, "Server still connected.");
 	}
 }
 
@@ -60,6 +60,7 @@ void runTest()
 		auto t = runTask({
 			scope (exit) client.close();
 			client.write(server);
+			logInfo("Proxy 2 out");
 		});
 
 		// pipe client to server as long as the client connection is alive
@@ -68,6 +69,7 @@ void runTest()
 			t.join();
 		}
 		server.write(client);
+		logInfo("Proxy out");
 	});
 
 	// test server
