@@ -191,7 +191,7 @@ interface SessionStore {
 	/// Determines if a certain session key is set.
 	bool isKeySet(string id, string key);
 
-	/// Terminates the given sessiom.
+	/// Terminates the given session.
 	void destroy(string id);
 
 	/// Iterates all keys stored in the given session.
