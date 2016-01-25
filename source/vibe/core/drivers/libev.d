@@ -317,6 +317,7 @@ final class LibevDriver : EventDriver {
 			return null;
 		}
 		version(linux) {
+			import vibe.core.drivers.utils;
 			if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof)) {
 				// ignore invalid and not supported errors
 				if (errno != EINVAL && errno != ENOPROTOOPT) {

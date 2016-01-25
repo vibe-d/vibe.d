@@ -347,8 +347,7 @@ enum HTTPServerOption {
 		parseJsonBody |
 		parseMultiPartBody |
 		parseCookies |
-		errorStackTraces |
-		reusePort,
+		errorStackTraces,
 
 	/// deprecated
 	None = none,
