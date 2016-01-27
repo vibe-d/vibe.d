@@ -660,7 +660,7 @@ package nothrow extern(C)
 
 		auto f = ctx.readOwner;
 		try {
-			if (f && f.running)
+			if (f && f.running && ctx.state != ConnectionState.activeClose)
 				ctx.core.resumeTask(f);
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
@@ -698,7 +698,8 @@ package nothrow extern(C)
 			string errorMessage;
 			if (status & BEV_EVENT_EOF) {
 				logDebug("Connection was closed (fd %d).", ctx.socketfd);
-				ctx.state = ConnectionState.passiveClose;
+				if (ctx.state != ConnectionState.activeClose)
+					ctx.state = ConnectionState.passiveClose;
 				evbuffer* buf = bufferevent_get_input(buf_event);
 				if (evbuffer_get_length(buf) == 0) free_event = true;
 			} else if (status & BEV_EVENT_TIMEOUT) {
@@ -719,7 +720,7 @@ package nothrow extern(C)
 
 			ctx.core.eventException = ex;
 
-			if (ctx.readOwner && ctx.readOwner.running) {
+			if (ctx.readOwner && ctx.readOwner.running && ctx.state != ConnectionState.activeClose) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
 				if (ctx.readOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
 				else ctx.core.resumeTask(ctx.readOwner, ex);
