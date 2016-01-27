@@ -64,7 +64,7 @@ static if (__VERSION__ >= 2070) {
 		DWORD Action;
 		DWORD FileNameLength;
 	    WCHAR _FileName;
-	    WCHAR* FileName() return { return &_FileName; }
+	    WCHAR* FileName() { return &_FileName; }
 	}
 
 	BOOL ReadDirectoryChangesW(HANDLE hDirectory, void* lpBuffer, DWORD nBufferLength, BOOL bWatchSubtree, DWORD dwNotifyFilter, LPDWORD lpBytesReturned, void* lpOverlapped, void* lpCompletionRoutine);
