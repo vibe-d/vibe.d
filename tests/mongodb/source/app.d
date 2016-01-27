@@ -54,7 +54,6 @@ void runTest()
 	auto names = client.getDatabases().map!(dbs => dbs.name).array;
 	assert(!find(names, "test").empty);
 	assert(!find(names, "local").empty);
-	assert(!find(names, "admin").empty);
 }
 
 int main()
@@ -62,10 +61,7 @@ int main()
 	int ret = 0;
 	runTask({
 		try runTest();
-		catch (Throwable th) {
-			logError("Test failed: %s", th.msg);
-			ret = 1;
-		} finally exitEventLoop(true);
+		finally exitEventLoop(true);
 	});
 	runEventLoop();
 	return ret;
