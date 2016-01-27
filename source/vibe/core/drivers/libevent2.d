@@ -76,6 +76,8 @@ final class Libevent2Driver : EventDriver {
 		TimerQueue!TimerInfo m_timers;
 		DList!AddressInfo m_addressInfoCache;
 		size_t m_addressInfoCacheLength = 0;
+
+		bool m_running = false; // runEventLoop in progress?
 	}
 
 	this(DriverCore core) nothrow
@@ -178,6 +180,9 @@ final class Libevent2Driver : EventDriver {
 
 	int runEventLoop()
 	{
+		m_running = true;
+		scope (exit) m_running = false;
+
 		int ret;
 		m_exit = false;
 		while (!m_exit && (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0) {
@@ -203,7 +208,8 @@ final class Libevent2Driver : EventDriver {
 		processTimers();
 		logDebugV("processed events with exit == %s", m_exit);
 		if (m_exit) {
-			m_exit = false;
+			// leave the flag set, if the event loop is still running to let it exit, too
+			if (!m_running) m_exit = false;
 			return false;
 		}
 		return true;
