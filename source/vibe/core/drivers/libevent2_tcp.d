@@ -294,7 +294,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 			logDebug("Warning: use Duration.max as an argument to waitForData() to wait infinitely, not 0.seconds.");
 
 		if (dataAvailableForRead) return true;
-		if (m_ctx.state != ConnectionState.open) return false;
+		if (!m_ctx || m_ctx.state != ConnectionState.open) return false;
 
 		acquireReader();
 		scope(exit) releaseReader();
