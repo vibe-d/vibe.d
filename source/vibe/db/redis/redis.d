@@ -1273,6 +1273,7 @@ struct RedisReply(T = ubyte[]) {
 		auto ctx = &m_conn.m_replyContext;
 		assert(!ctx.initialized);
 		ctx.initialized = true;
+		scope (failure) drop();
 
 		auto ln = cast(string)m_conn.conn.readLine();
 
