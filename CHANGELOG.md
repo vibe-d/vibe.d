@@ -11,6 +11,7 @@ In preparation for a full separation of the individual library components, this 
 - Split up the library into sub packages - this prepares for a deeper split that is going to happen in the next release
 - A lot of performance tuning went into the network and HTTP code, leading to a 50% increase in single-core HTTP performance and a lot more in the multi-threaded case over 0.7.26
 - Marked more of the API `@safe` and `nothrow`
+- Re-enabled the `std.concurrency` integration that went MIA a while ago - `std.concurrency` can now be used transparently in vibe.d applications - [issue #1343][issue1343], [pull #1345][issue1345]
 - REST interface generator changes
   - Added support for REST collections with natural D syntax using the new `Collection!I` type - [pull #1268][issue1268]
   - Implemented CORS support for the REST interface server (by Sebastian Koppe) - [pull #1299][issue1299]
@@ -30,7 +31,6 @@ In preparation for a full separation of the individual library components, this 
 - The Markdown compiler now adds "id" attributes to headers to enable cross-referencing
 - Added `getMarkdownOutline`, which returns a tree of sections in a Markdown document
 - Added `Path.relativeToWeb`, a version of `relativeTo` with web semantics
-- Re-enabled integration with `std.concurrency` - [issue #1343][issue1343]
 - Added `vibe.core.core.setupWorkerThreads` to customize the number of worker threads on startup (by Jens K. Mueller) - [pull #1350][issue1350]
 - Added support for parsing IPv6 URLs (by Mathias L. Baumann aka Marenz) - [pull #1341][issue3141]
 - Enabled TCP no-delay in the Redis client (by Etienne Cimon) - [pull #1361][issue1361]
@@ -89,6 +89,7 @@ In preparation for a full separation of the individual library components, this 
 [issue1340]: https://github.com/rejectedsoftware/vibe.d/issues/1340
 [issue1341]: https://github.com/rejectedsoftware/vibe.d/issues/1341
 [issue1343]: https://github.com/rejectedsoftware/vibe.d/issues/1343
+[issue1345]: https://github.com/rejectedsoftware/vibe.d/issues/1345
 [issue1347]: https://github.com/rejectedsoftware/vibe.d/issues/1347
 [issue1348]: https://github.com/rejectedsoftware/vibe.d/issues/1348
 [issue1349]: https://github.com/rejectedsoftware/vibe.d/issues/1349
