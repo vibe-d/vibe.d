@@ -809,6 +809,7 @@ final class LibasyncManualEvent : ManualEvent {
 
 	this(LibasyncDriver driver)
 	nothrow {
+		static if (__VERSION__ <= 2066) scope (failure) assert(false);
 		m_mutex = new core.sync.mutex.Mutex;
 		m_instance = generateID();
 		assert(m_instance != 0);
