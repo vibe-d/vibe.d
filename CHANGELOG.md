@@ -37,6 +37,7 @@ In preparation for a full separation of the individual library components, this 
 - Switch the `:javascript` Diet filter to use "application/json" as the content type - [issue #717][issue717]
 - `NetworkAddress` now accepts `std.socket.AddressFamily` constants in addition to the `AF_` ones - [issue #925][issue925]
 - Added support for X509 authentication in the MongoDB client (by machindertech) - [pull #1235][issue1235]
+- Added `TCPListenOptions.reusePort` to enable port reuse as an OS supported means for load-balancing (by Soar Qin) - [pull #1379][issue1379]
 
 ### Bug fixes ###
 
@@ -61,6 +62,10 @@ In preparation for a full separation of the individual library components, this 
 - Fixed reading response bodies for "Connection: close" connections without a "Content-Length" in the HTTP client - [issue #604][issue604]
 - Fixed indentation of `:javascript` blocks in Diet templates - [issue #837][issue837]
 - Fixed assertion failure in the win32 driver when sending files over TCP - [issue #932][issue932]
+- Fixed `exitEventLoop` having no effect if called while the event loop is in the idle handler
+- Fixed an assertion failure in the libevent driver when actively closing a connection that is currently being read from - [issue #1376][issue1376]
+- Fixed a null-pointer dereference when `waitForData` gets called on a fully closed TCP connection - [issue #1384][issue1384]
+- Fixed a crash at exit caused by a bad module destructor call sequence when `std.parallelism.TaskPool` is used - [issue #1374][issue1374]
 
 [issue472]: https://github.com/rejectedsoftware/vibe.d/issues/472
 [issue604]: https://github.com/rejectedsoftware/vibe.d/issues/604
@@ -93,6 +98,10 @@ In preparation for a full separation of the individual library components, this 
 [issue1361]: https://github.com/rejectedsoftware/vibe.d/issues/1361
 [issue1364]: https://github.com/rejectedsoftware/vibe.d/issues/1364
 [issue1366]: https://github.com/rejectedsoftware/vibe.d/issues/1366
+[issue1374]: https://github.com/rejectedsoftware/vibe.d/issues/1374
+[issue1376]: https://github.com/rejectedsoftware/vibe.d/issues/1376
+[issue1379]: https://github.com/rejectedsoftware/vibe.d/issues/1379
+[issue1384]: https://github.com/rejectedsoftware/vibe.d/issues/1384
 
 
 v0.7.26 - 2015-11-04
