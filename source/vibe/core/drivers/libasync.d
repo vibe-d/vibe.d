@@ -808,7 +808,8 @@ final class LibasyncManualEvent : ManualEvent {
 	}
 
 	this(LibasyncDriver driver)
-	{
+	nothrow {
+		static if (__VERSION__ <= 2066) scope (failure) assert(false);
 		m_mutex = new core.sync.mutex.Mutex;
 		m_instance = generateID();
 		assert(m_instance != 0);
@@ -1726,7 +1727,8 @@ __gshared Array!size_t gs_availID;
 __gshared size_t gs_maxID;
 __gshared core.sync.mutex.Mutex gs_mutex;
 
-private size_t generateID() {
+private size_t generateID()
+nothrow {
 	size_t idx;
 	import std.algorithm : max;
 	try {
