@@ -368,7 +368,7 @@ final class LibevManualEvent : ManualEvent {
 	}
 
 	this()
-	{
+	nothrow {
 		m_mutex = new core.sync.mutex.Mutex;
 	}
 
