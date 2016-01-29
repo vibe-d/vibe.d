@@ -257,7 +257,7 @@ private template dietParser(string template_file, int base_indent, TRANSLATE...)
 	}
 
 	enum hash = computeTemplateHash();
-	enum cache_file_name = "-cached-"~template_file~"-"~hash.to!string~".d";
+	enum cache_file_name = "_cached_"~template_file~"_"~hash.to!string~".d";
 
 	static if (use_cache && is(typeof(import(cache_file_name)))) {
 		enum dietParser = import(cache_file_name);
