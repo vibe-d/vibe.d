@@ -318,11 +318,13 @@ final class LibevDriver : EventDriver {
 		}
 		version(linux) {
 			import vibe.core.drivers.utils;
-			if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof)) {
-				// ignore invalid and not supported errors
-				if (errno != EINVAL && errno != ENOPROTOOPT) {
-					logError("Error enabling socket port reuse on listening socket");
-					return null;
+			if (options & TCPListenOptions.reusePort) {
+				if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof)) {
+					// ignore invalid and not supported errors
+					if (errno != EINVAL && errno != ENOPROTOOPT) {
+						logError("Error enabling socket port reuse on listening socket");
+						return null;
+					}
 				}
 			}
 		}
