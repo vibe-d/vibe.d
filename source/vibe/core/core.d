@@ -1537,6 +1537,9 @@ static this()
 
 static ~this()
 {
+	// Issue #1374: Sometimes Druntime for some reason calls `static ~this` after `shared static ~this`
+	if (!s_core) return; 
+
 	version(VibeLibasyncDriver) {
 		import vibe.core.drivers.libasync;
 		if (LibasyncDriver.isControlThread)
