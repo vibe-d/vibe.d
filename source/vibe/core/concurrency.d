@@ -1184,7 +1184,16 @@ static if (newStdConcurrency) {
 		override void spawn(void delegate() op) { runTask(op); }
 		override void yield() {}
 		override @property ref ThreadInfo thisInfo() { return Task.getThis().tidInfo; }
-		override TaskCondition newCondition(Mutex m) { scope(failure) assert(false); setupDriver(); return new TaskCondition(m); }
+		override TaskCondition newCondition(Mutex m) {
+			scope (failure) assert(false);
+			version (VibeLibasyncDriver) {
+				import vibe.core.drivers.libasync;
+				if (LibasyncDriver.isControlThread)
+					return null;
+			}
+			setupDriver();
+			return new TaskCondition(m);
+		}
 	}
 } else {
 	alias Tid = Task;
