@@ -26,7 +26,7 @@ import std.utf;
 /**
 	Returns a RedisClient that can be used to communicate to the specified database server.
 */
-RedisClient connectRedis(string host, ushort port = 6379)
+RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 {
 	return new RedisClient(host, port);
 }
@@ -42,7 +42,9 @@ final class RedisClient {
 		long m_selectedDB;
 	}
 
-	this(string host = "127.0.0.1", ushort port = 6379)
+	enum defaultPort = 6379;
+
+	this(string host = "127.0.0.1", ushort port = defaultPort)
 	{
 		m_connections = new ConnectionPool!RedisConnection({
 			return new RedisConnection(host, port);

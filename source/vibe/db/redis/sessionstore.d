@@ -14,9 +14,16 @@ final class RedisSessionStore : SessionStore {
 		Duration m_expirationTime = Duration.max;
 	}
 
-	this(string redis_url, long database)
+	/** Constructs a new Redis session store.
+
+		Params:
+			host = Host name of the Redis instance to connect to
+			database = Database number to select on the server
+			port = Optional port number to use when connecting to the server
+	*/
+	this(string host, long database, ushort port = RedisClient.defaultPort)
 	{
-		m_db = connectRedis(redis_url).getDatabase(database);
+		m_db = connectRedis(host, port).getDatabase(database);
 	}
 
 	/** The duration without access after which a session expires.
