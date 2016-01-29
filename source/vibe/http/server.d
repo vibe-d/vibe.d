@@ -333,6 +333,8 @@ enum HTTPServerOption {
 		help an attacker to abuse possible security holes.
 	*/
 	errorStackTraces          = 1<<7,
+	/// Enable port reuse in listenTCP()
+	reusePort                 = 1<<8,
 
 	/** The default set of options.
 
@@ -1412,12 +1414,15 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 {
 	import std.algorithm : canFind;
 
-	static TCPListener doListen(HTTPListenInfo listen_info, bool dist)
+	static TCPListener doListen(HTTPListenInfo listen_info, bool dist, bool reusePort)
 	{
 		try {
+			TCPListenOptions options = TCPListenOptions.defaults;
+			if(dist) options |= TCPListenOptions.distribute; else options &= ~TCPListenOptions.distribute;
+			if(reusePort) options |= TCPListenOptions.reusePort; else options &= ~TCPListenOptions.reusePort;
 			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) {
 					handleHTTPConnection(conn, listen_info);
-				}, listen_info.bindAddress, dist ? TCPListenOptions.distribute : TCPListenOptions.defaults);
+				}, listen_info.bindAddress, options);
 			auto proto = listen_info.tlsContext ? "https" : "http";
 			auto urladdr = listen_info.bindAddress;
 			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
@@ -1480,7 +1485,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			}
 			if (!found_listener) {
 				auto linfo = new HTTPListenInfo(addr, settings.port, settings.tlsContext);
-				if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0)) // DMD BUG 2043
+				if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
 				{
 					linfo.listener = tcp_lst;
 					found_listener = true;

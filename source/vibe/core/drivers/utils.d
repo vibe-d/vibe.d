@@ -43,6 +43,12 @@ version (Windows) {
 	alias SystemSocketException = WSAErrorException;
 } else alias SystemSocketException = ErrnoException;
 
+version (linux) {
+	static if (!is(typeof(SO_REUSEPORT))) {
+		enum { SO_REUSEPORT = 15 }
+	}
+}
+
 T socketEnforce(T)(T value, lazy string msg = null, string file = __FILE__, size_t line = __LINE__)
 {
 	return enforceEx!SystemSocketException(value, msg, file, line);
