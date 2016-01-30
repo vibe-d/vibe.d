@@ -36,7 +36,7 @@ interface Example1API
 
 	/* Parameters are supported in a similar fashion.
 	 * Despite this is only an interface, make sure parameter names are not omitted, those are used for serialization.
-	 * If it is a GET reuqest, parameters are embedded into query URL.
+	 * If it is a GET request, parameters are embedded into query URL.
 	 * Stored in POST data for POST, of course.
 	 */
 	int postSum(int a, int b);
