@@ -859,7 +859,7 @@ final class LibasyncManualEvent : ManualEvent {
 
 		bool signal_exists;
 
-		if (s_eventWaiters.length <= m_instance) {
+		if (s_eventWaiters.length <= m_instance + 1) {
 			expandWaiters();
 		}
 		logTrace("Acquire event ID#%d", m_instance);
@@ -893,7 +893,7 @@ final class LibasyncManualEvent : ManualEvent {
 	bool amOwner()
 	{
 		import std.algorithm : countUntil;
-		if (s_eventWaiters.length <= m_instance) return false;
+		if (s_eventWaiters.length <= m_instance + 1) return false;
 		auto taskList = s_eventWaiters[m_instance];
 		if (taskList.length == 0) return false;
 
