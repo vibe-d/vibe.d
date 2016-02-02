@@ -231,13 +231,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 		return m_readBuffer.peek();
 	}
 
-	void skip(ulong count)
+	void skip(size_t count)
 	{
 		checkConnected(false);
 
 		if (m_readBuffer.length >= count) {
 			checkReader();
-			m_readBuffer.popFrontN(cast(size_t)count);
+			m_readBuffer.popFrontN(count);
 			if (m_readBuffer.empty) m_readBuffer.clear(); // start filling at index 0 again
 			return;
 		}
@@ -247,7 +247,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 		while (true) {
 			auto nbytes = min(count, m_readBuffer.length);
-			m_readBuffer.popFrontN(cast(size_t)count);
+			m_readBuffer.popFrontN(count);
 			if (m_readBuffer.empty) m_readBuffer.clear(); // start filling at index 0 again
 			count -= nbytes;
 
