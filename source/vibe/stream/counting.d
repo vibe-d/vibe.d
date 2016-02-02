@@ -75,23 +75,45 @@ class LimitedInputStream : InputStream {
 class CountingOutputStream : OutputStream {
 	private {
 		ulong m_bytesWritten;
+		ulong m_writeLimit;
 		OutputStream m_out;
 	}
-	this(OutputStream stream)
+
+	/** Constructs a new counting stream.
+
+		Params:
+			stream: The output stream to forward all writes to.
+			write_limit: Optional limit of bytes to write to the destination
+				stream. Writing past this limit will cause `write` to throw
+				an exception.
+	*/
+	this(OutputStream stream, ulong write_limit = ulong.max)
 	{
 		assert(stream !is null);
+		m_writeLimit = write_limit;
 		m_out = stream;
 	}
 
+	/// Returns the total number of bytes written.
 	@property ulong bytesWritten() const { return m_bytesWritten; }
 
+	/// The maximum number of bytes to write
+	@property ulong writeLimit() const { return m_writeLimit; }
+	/// ditto
+	@property void writeLimit(ulong value) { m_writeLimit = value; }
+
+	/** Manually increments the write counter without actually writing data.
+	*/
 	void increment(ulong bytes)
 	{
+		enforce(m_bytesWritten + bytes <= m_writeLimit, "Incrementing past end of output stream.");
 		m_bytesWritten += bytes;
 	}
 
 	void write(in ubyte[] bytes)
 	{
+		enforce(m_bytesWritten + bytes.length <= m_writeLimit, "Writing past end of output stream.");
+
 		m_out.write(bytes);
 		m_bytesWritten += bytes.length;
 	}
@@ -104,6 +126,7 @@ class CountingOutputStream : OutputStream {
 	void flush() { m_out.flush(); }
 	void finalize() { m_out.flush(); }
 }
+
 
 /**
 	Wraps an existing input stream, counting the bytes that are written.
