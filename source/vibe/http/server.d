@@ -944,9 +944,10 @@ final class HTTPServerResponse : HTTPResponse {
 			headers.remove("Content-Length");
 		}
 
-		if ("Content-Length" in headers) {
+		if (auto pcl = "Content-Length" in headers) {
 			writeHeader();
-			m_bodyWriter = m_countingWriter; // TODO: LimitedOutputStream(m_conn, content_length)
+			m_countingWriter.writeLimit = (*pcl).to!ulong;
+			m_bodyWriter = m_countingWriter;
 		} else {
 			headers["Transfer-Encoding"] = "chunked";
 			writeHeader();
@@ -979,8 +980,7 @@ final class HTTPServerResponse : HTTPResponse {
 	{
 		statusCode = status;
 		headers["Location"] = url;
-		headers["Content-Length"] = "14";
-		bodyWriter.write("redirecting...");
+		writeBody("redirecting...");
 	}
 	/// ditto
 	void redirect(URL url, int status = HTTPStatus.Found)
