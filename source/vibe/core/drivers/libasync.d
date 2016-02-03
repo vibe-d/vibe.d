@@ -1,7 +1,14 @@
 /**
-	Uses libasync
+	Driver implementation for the libasync library
 
-	Copyright: © 2014 RejectedSoftware e.K., GlobecSys Inc
+	Libasync is an asynchronous library completely written in D.
+
+	See_Also:
+		`vibe.core.driver` = interface definition
+		https://github.com/etcimon/libasync = Github repository
+
+
+	Copyright: © 2014-2015 RejectedSoftware e.K., GlobecSys Inc
 	Authors: Sönke Ludwig, Etienne Cimon
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
@@ -88,7 +95,7 @@ final class LibasyncDriver : EventDriver {
 	this(DriverCore core) nothrow
 	{
 		assert(!isControlThread, "Libasync driver created in control thread");
-		try {			
+		try {
 			import core.atomic : atomicOp;
 			s_refCount.atomicOp!"+="(1);
 			if (!gs_mutex) {
@@ -196,7 +203,7 @@ final class LibasyncDriver : EventDriver {
 			is_ipv6 = isIPv6.yes;
 		else
 			is_ipv6 = isIPv6.no;
-		
+
 		import std.regex : regex, Captures, Regex, matchFirst, ctRegex;
 		import std.traits : ReturnType;
 
@@ -219,7 +226,7 @@ final class LibasyncDriver : EventDriver {
 		{
 			use_dns = true;
 		}
-		
+
 		NetworkAddress ret;
 
 		if (use_dns) {
@@ -235,12 +242,12 @@ final class LibasyncDriver : EventDriver {
 						getDriverCore().resumeTask(waiter);
 				}
 			}
-			
+
 			DNSCallback* cb = FreeListObjectAlloc!DNSCallback.alloc();
 			cb.waiter = Task.getThis();
 			cb.address = &ret;
 			cb.finished = &done;
-			
+
 			// todo: remove the shared attribute to avoid GC?
 			shared AsyncDNS dns = new shared AsyncDNS(getEventLoop());
 			scope(exit) dns.destroy();
@@ -255,10 +262,10 @@ final class LibasyncDriver : EventDriver {
 			assert(ret.family != 0);
 			logTrace("Async resolved address %s", ret.toString());
 			FreeListObjectAlloc!DNSCallback.free(cb);
-			
+
 			if (ret.family == 0)
 				ret.family = family;
-			
+
 			return ret;
 		}
 		else {
@@ -396,7 +403,7 @@ final class LibasyncDriver : EventDriver {
 			logTrace("Timer %s fired (%s/%s)", timer, owner != Task.init, callback !is null);
 
 			if (!periodic) releaseTimer(timer);
-			
+
 			if (owner && owner.running && owner != Task.getThis()) {
 				if (Task.getThis == Task.init) getDriverCore().resumeTask(owner);
 				else getDriverCore().yieldAndResumeTask(owner);
@@ -410,11 +417,11 @@ final class LibasyncDriver : EventDriver {
 	private void rescheduleTimerEvent(SysTime now)
 	{
 		logTrace("Rescheduling timer event %s", Task.getThis());
-		
+
 		// don't bother scheduling, the timers will be processed before leaving for the event loop
 		if (m_nextSched <= Clock.currTime(UTC()))
 			return;
-		
+
 		bool first;
 		auto next = m_timers.getFirstTimeout();
 		Duration dur;
@@ -490,7 +497,7 @@ final class LibasyncFileStream : FileStream {
 				fclose(f);
 				m_truncated = true;
 			}
-		} 
+		}
 		m_path = path;
 		m_mode = mode;
 		
@@ -1173,7 +1180,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		acquireReader();
 		auto _driver = getEventDriver();
 		auto tm = _driver.createTimer(null);
-		scope(exit) { 
+		scope(exit) {
 			_driver.stopTimer(tm);
 			_driver.releaseTimer(tm);
 			releaseReader();
@@ -1355,8 +1362,8 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 				return false; // cancel slices and revert to the fixed ring buffer
 			}
 
-			if (m_slice.length > 0) { 
-				//logDebug("post-assign m_slice "); 
+			if (m_slice.length > 0) {
+				//logDebug("post-assign m_slice ");
 				m_slice = m_slice.ptr[0 .. m_slice.length + ret];
 			}
 			else {
@@ -1364,7 +1371,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 				m_slice = m_buffer[0 .. ret];
 			}
 			return true;
-		}	
+		}
 		logTrace("TryReadBuf exit with %d bytes in m_slice, %d bytes in m_readBuffer ", m_slice.length, m_readBuffer.length);
 
 		return false;

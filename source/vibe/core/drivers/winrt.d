@@ -1,7 +1,12 @@
 /**
-	WinRT driver implementation
+	Driver implentation for WinRT
 
-	Copyright: © 2012-2013 Sönke Ludwig
+	This is only implemented for timers and files.
+
+	See_Also:
+		`vibe.core.driver` = interface definition
+
+	Copyright: © 2012-2015 Sönke Ludwig
 	Authors: Sönke Ludwig
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 */
