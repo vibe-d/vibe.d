@@ -704,6 +704,10 @@ struct CookieValueMap {
 		Cookie[] m_entries;
 	}
 
+	auto length(){ 
+		return m_entries.length;
+	}
+
 	string get(string name, string def_value = null)
 	const {
 		foreach (ref c; m_entries)
@@ -719,6 +723,10 @@ struct CookieValueMap {
 			if( c.name == name )
 				ret ~= c.value;
 		return ret;
+	}
+
+	void append(string name, string value, .Cookie.Encoding encoding = .Cookie.Encoding.url){
+		m_entries ~= Cookie(name, value, encoding);
 	}
 
 	void opIndexAssign(string value, string name)
