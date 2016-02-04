@@ -725,7 +725,7 @@ struct CookieValueMap {
 		return ret;
 	}
 
-	void append(string name, string value, .Cookie.Encoding encoding = .Cookie.Encoding.url){
+	void add(string name, string value, .Cookie.Encoding encoding = .Cookie.Encoding.url){
 		m_entries ~= Cookie(name, value, encoding);
 	}
 

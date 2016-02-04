@@ -1871,7 +1871,7 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 	str.sanitize.split(";")
 		.map!(kv => kv.strip.split("="))
 		.filter!(kv => kv.length == 2) //ignore illegal cookies
-		.each!(kv => cookies.append(kv[0], kv[1], Cookie.Encoding.raw) );
+		.each!(kv => cookies.add(kv[0], kv[1], Cookie.Encoding.raw) );
 }
 
 unittest 
