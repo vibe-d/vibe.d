@@ -598,7 +598,7 @@ struct Bson {
 	unittest {
 		auto srcUuid = UUID("00010203-0405-0607-0809-0a0b0c0d0e0f");
 
-		auto b = Bson(srcUuid);
+		Bson b = srcUuid;
 		auto u = b.get!UUID();
 
 		assert(b.type == Bson.Type.binData);
