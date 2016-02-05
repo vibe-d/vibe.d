@@ -436,8 +436,8 @@ struct Bson {
 		}
 		else static if( is(T == UUID) ){
 			checkType(Type.binData);
-			auto bbd = bson.get!BsonBinData();
-			enforce(bbd.type != BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
+			auto bbd = this.get!BsonBinData();
+			enforce(bbd.type == BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
 			const ubyte[16] b = bbd.rawData;
 			return UUID(b);
 		}
@@ -592,6 +592,18 @@ struct Bson {
 		assert(value["a"] == Bson(1));
 		assert(value["b"] == Bson(true));
 		assert(value["c"] == Bson("foo"));
+	}
+
+	///
+	unittest {
+		auto srcUuid = UUID("00010203-0405-0607-0809-0a0b0c0d0e0f");
+
+		auto b = Bson(srcUuid);
+		auto u = b.get!UUID();
+
+		assert(b.type == Bson.Type.binData);
+		assert(b.get!BsonBinData().type == BsonBinData.Type.uuid);
+		assert(u == srcUuid);
 	}
 
 	/** Allows index based access of a BSON array value.
