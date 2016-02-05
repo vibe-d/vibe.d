@@ -67,6 +67,7 @@ import std.base64;
 import std.bitmanip;
 import std.conv;
 import std.datetime;
+import std.uuid: UUID;
 import std.exception;
 import std.range;
 import std.traits;
@@ -213,6 +214,8 @@ struct Bson {
 	this(long value) { opAssign(value); }
 	/// ditto
 	this(in Json value) { opAssign(value); }
+	/// ditto
+	this(in UUID value) { opAssign(value); }
 
 	/**
 		Assigns a D type to a BSON value.
@@ -343,6 +346,11 @@ struct Bson {
 		m_type = writeBson(app, value);
 		m_data = app.data;
 	}
+	/// ditto
+	void opAssign(in UUID value)
+	{
+		opAssign(BsonBinData(BsonBinData.Type.uuid, value.data.idup));
+	}
 
 	/**
 		Returns the BSON type of this value.
@@ -425,6 +433,13 @@ struct Bson {
 		else static if( is(T == Json) ){
 			pragma(msg, "Bson.get!Json() and Bson.opCast!Json() will soon be removed. Please use Bson.toJson() instead.");
 			return this.toJson();
+		}
+		else static if( is(T == UUID) ){
+			checkType(Type.binData);
+			auto bbd = bson.get!BsonBinData();
+			enforce(bbd.type != BsonBinData.Type.uuid, "BsonBinData value is type '"~to!string(bbd.type)~"', expected to be uuid");
+			const ubyte[16] b = bbd.rawData;
+			return UUID(b);
 		}
 		else static assert(false, "Cannot cast "~typeof(this).stringof~" to '"~T.stringof~"'.");
 	}
