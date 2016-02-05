@@ -509,45 +509,45 @@ struct URLRoute {
 private enum maxRouteParameters = 64;
 
 private struct Route {
+  import std.regex;
 	HTTPMethod method;
-	string pattern;
+	Regex!char pattern;
 	HTTPServerRequestDelegate cb;
+
+  this(HTTPMethod method, string url_match, HTTPServerRequestDelegate cb){
+    /***
+    * Convert the url_match into a regex before storing to minimize compiles.
+    * The regex should preserve variable names that start with ":".
+    * The regex will be terminated by any "*" within the string,
+    * so if the "*" was intended as a regex "*",
+    * use the regex version of this method instead.
+    ***/
+    this.method = method;
+    this.cb = cb;
+    this.pattern = regex(replaceAll!(p => "(P<"~p[1]~">(?!/).*)")("^" ~ replaceFirst(url_match, regex(r"\*.*"), ""), regex(":((?!/).+)")));
+  }
+
+  this(HTTPMethod method, Regex!char url_match, HTTPServerRequestDelegate cb){
+    this.method = method;
+    this.cb = cb;
+    this.pattern = url_match;
+  }
 
 	bool matches(string url, ref string[string] params)
 	const {
-		size_t i, j;
-
-		// store parameters until a full match is confirmed
-		import std.typecons;
-		Tuple!(string, string)[maxRouteParameters] tmpparams;
-		size_t tmppparams_length = 0;
-
-		for (i = 0, j = 0; i < url.length && j < pattern.length;) {
-			if (pattern[j] == '*') {
-				foreach (t; tmpparams[0 .. tmppparams_length])
-					params[t[0]] = t[1];
-				return true;
-			}
-			if (url[i] == pattern[j]) {
-				i++;
-				j++;
-			} else if(pattern[j] == ':') {
-				j++;
-				string name = skipPathNode(pattern, j);
-				string match = skipPathNode(url, i);
-				assert(tmppparams_length < maxRouteParameters, "Maximum number of route parameters exceeded.");
-				tmpparams[tmppparams_length++] = tuple(name, match);
-			} else return false;
-		}
-
-		if ((j < pattern.length && pattern[j] == '*') || (i == url.length && j == pattern.length)) {
-			foreach (t; tmpparams[0 .. tmppparams_length])
-				params[t[0]] = t[1];
-			return true;
-		}
-
-		return false;
-	}
+    /***
+    * Runs the regex stored in this.pattern against the url.
+    * If it matches, populate params with any captures returned by the regex,
+    * including named captures.
+    ***/
+    Captures!(string) cap = url.matchFirst(this.pattern);
+    if (!cap.length) return false;
+    assert(cap.length < maxRouteParameters, "Maximum number of route parameters exceeded.");
+    foreach(n; this.pattern.namedCaptures)
+      params[n] = cap[n];
+    params ~= cap[1..$];
+    return true;
+  }
 }
 
 
