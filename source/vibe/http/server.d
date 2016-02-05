@@ -41,7 +41,7 @@ import std.functional;
 import std.string;
 import std.typecons;
 import std.uri;
-
+import std.algorithm.searching: find;
 
 /**************************************************************************************************/
 /* Public functions                                                                               */
@@ -1648,11 +1648,56 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		// find the matching virtual host
 		string reqhost;
 		ushort reqport = 0;
-		import std.algorithm : splitter;
-		auto reqhostparts = req.host.splitter(":");
-		if (!reqhostparts.empty) { reqhost = reqhostparts.front; reqhostparts.popFront(); }
-		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }
-		enforce(reqhostparts.empty, "Invalid suffix found in host header");
+		enum { BEFORE_BRACKET,
+			   IN_BRACKET,
+			   AFTER_BRACKET
+		} state = BEFORE_BRACKET;
+		ulong bracket, colon, close_bracket;
+		ulong i;
+		const(char)[] reqhostarr = req.host;
+		delegate void foundit(ulong i) {
+			enforce(i > 1, "Must specify a host before the :");
+			enforce(i + 2 < reqhostarr.length,
+					"Must specify a port after the :");
+			reqhost = reqhostarr[0..i];
+			reqport = reqhostarr[i+1..$].to!ulong;
+		}
+		for(i=0;i<reqhostarr.length;++i) {
+			char c = reqhostarr[i];
+			switch(state) {
+			case BEFORE_BRACKET:
+				switch(c) {
+				case '[':
+					state = IN_BRACKET;
+					continue;
+				case ':':
+					state = AFTER_BRACKET;
+					foundit(i);
+					break;
+				}
+			case IN_BRACKET:
+				if(c==']') {
+					state = AFTER_BRACKET;
+					if(i+1 < reqhostarr.length) {
+						enforce(reqhostarr[i+1]==':',
+								"Must specify a : after ]");
+						foundit(i);
+						break;
+					} else {
+						reqhost = req.host;
+						break;
+					}
+				}
+				continue;
+			}
+		}
+		if(state == BEFORE_BRACKET) {
+			reqhost = req.host;
+		} else {
+			enforce(state != IN_BRACKET,
+					"Unterminated IPv6 address (no closing ])");
+		}
+
 		foreach (ctx; getContexts())
 			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
