@@ -1573,13 +1573,13 @@ HostPort parseHostPort(string s) {
 	ulong i;
 	void foundit(ulong i) {
 		enforce(i > 1, "Must specify a host before the :");
-		enforce(i + 2 < reqhostarr.length,
+		enforce(i + 2 < arr.length,
 				"Must specify a port after the :");
-		res.host = reqhostarr[0..i].to!string;
-		res.port = reqhostarr[i+1..$].to!ushort;
+		res.host = arr[0..i].to!string;
+		res.port = arr[i+1..$].to!ushort;
 	}
 	for(i=0;i<arr.length;++i) {
-		char c = reqhostarr[i];
+		char c = arr[i];
 		final switch(state) {
 		case BEFORE_BRACKET:
 			switch(c) {
@@ -1593,7 +1593,6 @@ HostPort parseHostPort(string s) {
 			default:
 				continue;
 			}
-			continue;
 		case IN_BRACKET:
 			if(c==']') {
 				state = AFTER_BRACKET;
@@ -1603,8 +1602,7 @@ HostPort parseHostPort(string s) {
 					foundit(i);
 					return res;
 				} else {
-					res.host = s;
-					re
+					res.host = s;					
 				}
 			}
 			continue;
@@ -1622,8 +1620,18 @@ HostPort parseHostPort(string s) {
 	return res;
 }
 
-
-
+unittest {
+	HostPort res = parseHostPort("hostname");
+	assert(res.host == "hostname" && res.port == 0);
+	res = parseHostPort("host:4234");
+	assert(res.host == "host" && res.port == 4234);
+	res = parseHostPort("1.2.3.4:4234");
+	assert(res.host == "1.2.3.4" && res.port == 4234);
+	res = parseHostPort("[12:3::424:3:]:4234");
+	assert(res.host == "[12:3::424:3:]" && res.port == 4234);
+	import std.stdio;
+	stdout.write("Okay yay!\n");
+}
 private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
 	import std.algorithm : canFind;
