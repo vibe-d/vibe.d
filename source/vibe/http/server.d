@@ -1555,6 +1555,75 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	logTrace("Done handling connection.");
 }
 
+struct HostPort {
+	string host;
+	ulong port;
+};
+
+HostPort parseHostPort(string s) {
+	HostPort res;
+	const(char)[] arr = s.to!(const(char)[]);
+	enum {
+		BEFORE_BRACKET,
+		IN_BRACKET,
+		AFTER_BRACKET
+	}
+	auto state = BEFORE_BRACKET;
+	ulong bracket, colon, close_bracket;
+	ulong i;
+	void foundit(ulong i) {
+		enforce(i > 1, "Must specify a host before the :");
+		enforce(i + 2 < reqhostarr.length,
+				"Must specify a port after the :");
+		res.host = reqhostarr[0..i].to!string;
+		res.port = reqhostarr[i+1..$].to!ushort;
+	}
+	for(i=0;i<arr.length;++i) {
+		char c = reqhostarr[i];
+		final switch(state) {
+		case BEFORE_BRACKET:
+			switch(c) {
+			case '[':
+				state = IN_BRACKET;
+				continue;
+			case ':':
+				state = AFTER_BRACKET;
+				foundit(i);
+				return res;
+			default:
+				continue;
+			}
+			continue;
+		case IN_BRACKET:
+			if(c==']') {
+				state = AFTER_BRACKET;
+				if(i+1 < arr.length) {
+					enforce(arr[i+1]==':',
+							"Must specify a : after ]");
+					foundit(i);
+					return res;
+				} else {
+					res.host = s;
+					re
+				}
+			}
+			continue;
+		case AFTER_BRACKET:
+			return res;
+		}
+	}
+
+	if(state == BEFORE_BRACKET) {
+		res.host = s;
+	} else {
+		enforce(state != IN_BRACKET,
+				"Unterminated IPv6 address (no closing ])");
+	}
+	return res;
+}
+
+
+
 private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
 	import std.algorithm : canFind;
@@ -1646,61 +1715,11 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		logTrace("Got request header.");
 
 		// find the matching virtual host
-		string reqhost;
-		ushort reqport = 0;
-		enum { BEFORE_BRACKET,
-			   IN_BRACKET,
-			   AFTER_BRACKET
-		} state = BEFORE_BRACKET;
-		ulong bracket, colon, close_bracket;
-		ulong i;
-		const(char)[] reqhostarr = req.host;
-		delegate void foundit(ulong i) {
-			enforce(i > 1, "Must specify a host before the :");
-			enforce(i + 2 < reqhostarr.length,
-					"Must specify a port after the :");
-			reqhost = reqhostarr[0..i];
-			reqport = reqhostarr[i+1..$].to!ulong;
-		}
-		for(i=0;i<reqhostarr.length;++i) {
-			char c = reqhostarr[i];
-			switch(state) {
-			case BEFORE_BRACKET:
-				switch(c) {
-				case '[':
-					state = IN_BRACKET;
-					continue;
-				case ':':
-					state = AFTER_BRACKET;
-					foundit(i);
-					break;
-				}
-			case IN_BRACKET:
-				if(c==']') {
-					state = AFTER_BRACKET;
-					if(i+1 < reqhostarr.length) {
-						enforce(reqhostarr[i+1]==':',
-								"Must specify a : after ]");
-						foundit(i);
-						break;
-					} else {
-						reqhost = req.host;
-						break;
-					}
-				}
-				continue;
-			}
-		}
-		if(state == BEFORE_BRACKET) {
-			reqhost = req.host;
-		} else {
-			enforce(state != IN_BRACKET,
-					"Unterminated IPv6 address (no closing ])");
-		}
+		HostPort hp = parseHostPort(req.host);
 
 		foreach (ctx; getContexts())
-			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
-				(!reqport || reqport == ctx.settings.port))
+			if (icmp2(ctx.settings.hostName, hp.host) == 0 &&
+				(!hp.port || hp.port == ctx.settings.port))
 			{
 				if (ctx.settings.port != listen_info.bindPort) continue;
 				bool found = false;
