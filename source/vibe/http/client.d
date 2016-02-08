@@ -205,6 +205,9 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 class HTTPClientSettings {
 	URL proxyURL;
 	Duration defaultKeepAliveTimeout = 10.seconds;
+
+	/// Forces a specific network interface to use for outgoing connections.
+	NetworkAddress networkInterface;
 }
 
 ///
@@ -524,10 +527,13 @@ final class HTTPClient {
 
 				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
 				proxyAddr.port = m_settings.proxyURL.port;
-				m_conn = connectTCP(proxyAddr);
+				m_conn = connectTCP(proxyAddr, m_settings.networkInterface);
 			}
-			else
-				m_conn = connectTCP(m_server, m_port);
+			else {
+				auto addr = resolveHost(m_server);
+				addr.port = m_port;
+				m_conn = connectTCP(addr, m_settings.networkInterface);
+			}
 
 			m_stream = m_conn;
 			if (m_tls) {
