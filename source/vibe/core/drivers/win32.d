@@ -277,17 +277,13 @@ final class Win32EventDriver : EventDriver {
 		return addr;
 	}
 
-	Win32TCPConnection connectTCP(NetworkAddress addr)
+	Win32TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_addr)
 	{
 		assert(m_tid == GetCurrentThreadId());
 
 		auto sock = WSASocketW(AF_INET, SOCK_STREAM, IPPROTO_TCP, null, 0, WSA_FLAG_OVERLAPPED);
 		socketEnforce(sock != INVALID_SOCKET, "Failed to create socket");
 
-		NetworkAddress bind_addr;
-		bind_addr.family = addr.family;
-		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
-		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
 		socketEnforce(bind(sock, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket");
 
 		auto conn = new Win32TCPConnection(this, sock, addr);

@@ -281,8 +281,9 @@ final class Libevent2Driver : EventDriver {
 		return msg.addr;
 	}
 
-	Libevent2TCPConnection connectTCP(NetworkAddress addr)
+	Libevent2TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_addr)
 	{
+		assert(addr.family == bind_addr.family, "Mismatching bind and target address.");
 
 		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
@@ -290,10 +291,6 @@ final class Libevent2Driver : EventDriver {
 		auto sockfd = cast(int)sockfd_raw;
 		socketEnforce(sockfd != -1, "Failed to create socket.");
 
-		NetworkAddress bind_addr;
-		bind_addr.family = addr.family;
-		if (addr.family == AF_INET) bind_addr.sockAddrInet4.sin_addr.s_addr = 0;
-		else bind_addr.sockAddrInet6.sin6_addr.s6_addr[] = 0;
 		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
 		socklen_t balen = bind_addr.sockAddrLen;
 		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
