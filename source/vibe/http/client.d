@@ -170,14 +170,16 @@ unittest {
 */
 auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
 {
-	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
+	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 	if( port == 0 ) port = use_tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, use_tls, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
+	auto ckey = ConnInfo(host, port, use_tls,
+		settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0,
+		settings ? settings.networkInterface : NetworkAddress.init);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+		if (c[0] == ckey)
 			pool = c[1];
 
 	if (!pool) {
