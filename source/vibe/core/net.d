@@ -103,9 +103,9 @@ TCPConnection connectTCP(string host, ushort port, string bind_interface = null,
 	return getEventDriver().connectTCP(addr, bind_address);
 }
 /// ditto
-TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_address = NetworkAddress.init)
+TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_address = anyAddress)
 {
-	if (bind_address == NetworkAddress.init) {
+	if (bind_address.family == AF_UNSPEC) {
 		bind_address.family = addr.family;
 		if (addr.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
 		else bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
@@ -122,6 +122,13 @@ TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_address = Netw
 UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 {
 	return getEventDriver().listenUDP(port, bind_address);
+}
+
+NetworkAddress anyAddress()
+{
+	NetworkAddress ret;
+	ret.family = AF_UNSPEC;
+	return ret;
 }
 
 version(VibeLibasyncDriver) {

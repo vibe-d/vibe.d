@@ -175,7 +175,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 	if( port == 0 ) port = use_tls ? 443 : 80;
 	auto ckey = ConnInfo(host, port, use_tls,
 		settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0,
-		settings ? settings.networkInterface : NetworkAddress.init);
+		settings ? settings.networkInterface : anyAddress);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
@@ -209,7 +209,7 @@ class HTTPClientSettings {
 	Duration defaultKeepAliveTimeout = 10.seconds;
 
 	/// Forces a specific network interface to use for outgoing connections.
-	NetworkAddress networkInterface;
+	NetworkAddress networkInterface = anyAddress;
 }
 
 ///
