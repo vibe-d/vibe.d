@@ -71,9 +71,9 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file(indent));
 	static if (is(typeof(diet_translate__)))
-		mixin(dietParser!(template_file, diet_translate__)(indent));
+		mixin(dietParser!(template_file, indent, diet_translate__));
 	else
-		mixin(dietParser!template_file(indent));
+		mixin(dietParser!(template_file, indent));
 }
 
 /// compatibility alias
@@ -110,7 +110,7 @@ void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStre
 
 	// Generate the D source code for the diet template
 	//pragma(msg, dietParser!template_file());
-	mixin(dietParser!template_file(0));
+	mixin(dietParser!(template_file, 0));
 }
 
 /// compatibility alias
@@ -147,7 +147,7 @@ template compileDietFileMixin(string template_file, string stream_variable, size
 		"import vibe.stream.wrapper;\n" ~
 		"OutputStream stream__ = "~stream_variable~";\n" ~
 		"auto output__ = StreamOutputRange(stream__);\n" ~
-		dietParser!template_file(base_indent);
+		dietParser!(template_file, base_indent);
 }
 
 
@@ -231,12 +231,52 @@ static this()
 }
 
 
-private string dietParser(string template_file, TRANSLATE...)(size_t base_indent)
+private template dietParser(string template_file, int base_indent, TRANSLATE...)
 {
-	TemplateBlock[] files;
-	readFileRec!(template_file)(files);
-	auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
-	return compiler.buildWriter(base_indent);
+	private immutable all_files = readFileRec!template_file();
+
+	version (VibeCacheDietTemplates) enum use_cache = true;
+	else enum use_cache = false;
+
+	ulong computeTemplateHash()
+	{
+		ulong ret = base_indent;
+		void hash(string s)
+		{
+			foreach (char c; s) {
+				ret *= 9198984547192449281;
+				ret += c * 7576889555963512219;
+			}
+		}
+		foreach (ref f; all_files) {
+			hash(f.name);
+			foreach (ref l; f.lines)
+				hash(l.text);
+		}
+		return ret;
+	}
+
+	enum hash = computeTemplateHash();
+	enum cache_file_name = "_cached_"~template_file~"_"~hash.to!string~".d";
+
+	static if (use_cache && is(typeof(import(cache_file_name)))) {
+		enum dietParser = import(cache_file_name);
+	} else {
+		enum dietParser = () {
+			auto files = all_files;
+			auto compiler = DietCompiler!TRANSLATE(&files[0], &files, new BlockStore);
+			return compiler.buildWriter(base_indent);
+		} ();
+
+		static if (use_cache) {
+			shared static this()
+			{
+				import std.file : exists, write;
+				if (!exists("views/"~cache_file_name))
+					write("views/"~cache_file_name, dietParser);
+			}
+		}
+	}
 }
 
 private string dietStringParser(TEXT_NAME_PAIRS_AND_TRANSLATE...)(size_t base_indent)
@@ -285,7 +325,7 @@ private struct TemplateBlock {
 	string name;
 	int mode = 0; // -1: prepend, 0: replace, 1: append
 	string indentStyle;
-	Line[] lines;
+	const(Line)[] lines;
 }
 
 private class BlockStore {
@@ -310,6 +350,14 @@ private void readFileRec(string FILE, ALREADY_READ...)(ref TemplateBlock[] dst)
 	}
 }
 
+// private
+private TemplateBlock[] readFileRec(string FILE, ALREADY_READ...)()
+{
+	TemplateBlock[] dst;
+	readFileRec!(FILE, ALREADY_READ)(dst);
+	return dst;
+}
+
 /// private
 private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 {
@@ -317,6 +365,14 @@ private void readFilesRec(alias FILES, ALREADY_READ...)(ref TemplateBlock[] dst)
 		readFileRec!(FILES[0], ALREADY_READ)(dst);
 		readFilesRec!(FILES[1 .. $], ALREADY_READ, FILES[0])(dst);
 	}
+}
+
+/// private
+private TemplateBlock[] readFilesRec(alias FILES, ALREADY_READ...)()
+{
+	TemplateBlock[] dst;
+	readFilesRec!(FILES, ALREADY_READ)(dst);
+	return dst;
 }
 
 /// private
@@ -466,21 +522,21 @@ private struct DietCompiler(TRANSLATE...)
 {
 	private {
 		size_t m_lineIndex = 0;
-		TemplateBlock* m_block;
-		TemplateBlock[]* m_files;
+		const(TemplateBlock)* m_block;
+		const(TemplateBlock[])* m_files;
 		BlockStore m_blocks;
 	}
 
-	@property ref string indentStyle() { return m_block.indentStyle; }
+	@property ref const(string) indentStyle() { return m_block.indentStyle; }
 	@property size_t lineCount() { return m_block.lines.length; }
-	ref Line line(size_t ln) { return m_block.lines[ln]; }
-	ref Line currLine() { return m_block.lines[m_lineIndex]; }
-	ref string currLineText() { return m_block.lines[m_lineIndex].text; }
-	Line[] lineRange(size_t from, size_t to) { return m_block.lines[from .. to]; }
+	ref const(Line) line(size_t ln) { return m_block.lines[ln]; }
+	ref const(Line) currLine() { return m_block.lines[m_lineIndex]; }
+	ref const(string) currLineText() { return m_block.lines[m_lineIndex].text; }
+	const(Line)[] lineRange(size_t from, size_t to) { return m_block.lines[from .. to]; }
 
 	@disable this();
 
-	this(TemplateBlock* block, TemplateBlock[]* files, BlockStore blocks)
+	this(const(TemplateBlock)* block, const(TemplateBlock[])* files, BlockStore blocks)
 	{
 		m_block = block;
 		m_files = files;
@@ -712,7 +768,7 @@ private struct DietCompiler(TRANSLATE...)
 							assertp(content.endsWith("}"), "Missing closing '}'.");
 							output.writeCodeLine("mixin(dietStringParser!(Group!("~content[2 .. $-1]~", \""~replace(content, `"`, `'`)~"\"), TRANSLATE)("~to!string(level)~"));");
 						} else {
-							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\", TRANSLATE)("~to!string(level)~"));");
+							output.writeCodeLine("mixin(dietParser!(\""~content~".dt\", "~to!string(level)~", TRANSLATE));");
 						}
 						break;
 					case "script":
@@ -1356,7 +1412,7 @@ private struct DietCompiler(TRANSLATE...)
 		assert(cond, "template "~ln.file~" line "~cttostring(ln.number)~": "~text~"("~file~":"~cttostring(cline)~")");
 	}
 
-	private TemplateBlock* getFile(string filename)
+	private const(TemplateBlock)* getFile(string filename)
 	{
 		foreach( i; 0 .. m_files.length )
 			if( (*m_files)[i].name == filename )
@@ -1365,7 +1421,7 @@ private struct DietCompiler(TRANSLATE...)
 		assert(false);
 	}
 
-	private TemplateBlock* getBlock(string name)
+	private const(TemplateBlock)* getBlock(string name)
 	{
 		foreach( i; 0 .. m_blocks.blocks.length )
 			if( m_blocks.blocks[i].name == name )
