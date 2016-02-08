@@ -292,8 +292,6 @@ final class Libevent2Driver : EventDriver {
 		socketEnforce(sockfd != -1, "Failed to create socket.");
 
 		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
-		socklen_t balen = bind_addr.sockAddrLen;
-		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
 
 		if( evutil_make_socket_nonblocking(sockfd) )
 			throw new Exception("Failed to make socket non-blocking.");
@@ -329,6 +327,10 @@ final class Libevent2Driver : EventDriver {
 		} catch (Exception e) {
 			throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
 		}
+
+		socklen_t balen = bind_addr.sockAddrLen;
+		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
+		cctx.local_addr = bind_addr;
 
 		logTrace("Connect result status: %d", cctx.status);
 		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
