@@ -2,7 +2,14 @@
 
 set -e -o pipefail
 
-dub build -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
+# test for successful release build
+dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
+
+# test for successful 32-bit build
+if [ $DC -eq "dmd" ]; then
+	dub build --combined --arch=x86
+fi
+
 dub test --compiler=$DC #--config=${VIBED_DRIVER=libevent}
 dub test :utils --compiler=$DC #--config=${VIBED_DRIVER}
 dub test :data --compiler=$DC #--config=${VIBED_DRIVER}
