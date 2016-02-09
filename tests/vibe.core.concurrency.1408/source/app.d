@@ -1,7 +1,7 @@
+import vibe.core.concurrency;
 import vibe.core.core;
 import vibe.core.log;
 import core.time : msecs;
-import std.concurrency;
 import std.functional : toDelegate;
 
 void test()

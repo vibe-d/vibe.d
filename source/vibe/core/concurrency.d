@@ -1173,7 +1173,9 @@ unittest {
 
 static if (newStdConcurrency) {
 	void send(ARGS...)(Task task, ARGS args) { std.concurrency.send(task.tidInfo.ident, args); }
+	void send(ARGS...)(Tid tid, ARGS args) { std.concurrency.send(tid, args); }
 	void prioritySend(ARGS...)(Task task, ARGS args) { std.concurrency.prioritySend(task.tidInfo.ident, args); }
+	void prioritySend(ARGS...)(Tid tid, ARGS args) { std.concurrency.prioritySend(tid, args); }
 
 	package class VibedScheduler : Scheduler {
 		import core.sync.mutex;
