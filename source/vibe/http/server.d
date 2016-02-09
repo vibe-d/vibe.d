@@ -561,6 +561,7 @@ final class HTTPServerRequest : HTTPRequest {
 		bool tls;
 
 		/// Compatibility alias - use `tls` instead.
+		deprecated("Use .tls instead.")
 		alias ssl = tls;
 
 		/** Information about the TLS certificate provided by the client.
@@ -795,6 +796,7 @@ final class HTTPServerResponse : HTTPResponse {
 	bool tls() const { return m_tls; }
 
 	/// Compatibility alias - use `tls` instead.
+	deprecated("Use .tls instead.")
 	alias ssl = tls;
 
 	/// Writes the entire response body at once.
