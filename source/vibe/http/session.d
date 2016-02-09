@@ -116,28 +116,6 @@ final struct Session {
 		}
 	}
 
-	/**
-		Gets/sets a key/value pair stored within the session.
-
-		Returns null if the specified key is not set.
-
-		Examples:
-		---
-		void handleRequest(HTTPServerRequest req, HTTPServerResponse res)
-		{
-			res.contentType = "text/plain";
-			res.bodyWriter.write("Username: " ~ req.session["userName"]);
-			res.bodyWriter.write("Request count: " ~ req.session["requestCount"]);
-			req.session["requestCount"] = to!string(req.session["requestCount"].to!int + 1);
-		}
-		---
-	*/
-	deprecated("Use get() instead.")
-	string opIndex(string name) { return m_store.get(m_id, name, Variant(string.init)).get!string; }
-	/// ditto
-	deprecated("Use set() instead.")
-	void opIndexAssign(string value, string name) { m_store.set(m_id, name, Variant(value)); }
-
 	package void destroy() { m_store.destroy(m_id); }
 
 	private Variant serialize(T)(T val)

@@ -1097,37 +1097,6 @@ final class HTTPServerResponse : HTTPResponse {
 	@property ulong bytesWritten() { return m_countingWriter.bytesWritten; }
 
 	/**
-		Deprecated - use `render` instead.
-
-		This version of render() works around an old compiler bug in DMD < 2.064 (Issue 2962).
-
-		The first template argument is the name of the template file. All following arguments
-		must be pairs of a type and a string, each specifying one parameter. Parameter values
-		can be passed either as a value of the same type as specified by the template
-		arguments, or as a Variant which has the same type stored.
-
-		Note that the variables are copied and not referenced inside of the template - any
-		modification you do on them from within the template will get lost.
-
-		Examples:
-			---
-			string title = "Hello, World!";
-			int pageNumber = 1;
-			res.renderCompat!("mytemplate.jd",
-				string, "title",
-				int, "pageNumber")
-				(title, pageNumber);
-			---
-	*/
-	deprecated("Use the non-compatibility render() call instead.")
-	void renderCompat(string template_file, TYPES_AND_NAMES...)(...)
-	{
-		import vibe.templ.diet;
-		headers["Content-Type"] = "text/html; charset=UTF-8";
-		compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(bodyWriter, _argptr, _arguments);
-	}
-
-	/**
 		Waits until either the connection closes or until the given timeout is
 		reached.
 

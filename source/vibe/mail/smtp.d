@@ -90,16 +90,10 @@ final class SMTPClientSettings {
 
 	/// Determines how the server certificate gets validated.
 	TLSPeerValidationMode tlsValidationMode = TLSPeerValidationMode.trustedCert;
-	/// Deprecated will be deprecated soon.
-	deprecated("Use tlsValidationMode instead.")
-	alias sslValidationMode = tlsValidationMode;
 	/// Version(s) of the TLS/SSL protocol to use
 	TLSVersion tlsVersion = TLSVersion.any;
 	/// Callback to invoke to enable additional setup of the TLS context.
 	void delegate(scope TLSContext) tlsContextSetup;
-	/// Deprecated compatibility alias.
-	deprecated("Use tlsContextSetup instead.")
-	alias sslContextSetup = tlsContextSetup;
 
 	/// User name to use for authentication
 	string username;

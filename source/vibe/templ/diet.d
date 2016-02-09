@@ -76,46 +76,6 @@ void compileDietFileIndent(string template_file, size_t indent, ALIASES...)(Outp
 		mixin(dietParser!template_file(indent));
 }
 
-/// compatibility alias
-deprecated("Use compileDietFile instead.")
-alias parseDietFile = compileDietFile;
-
-/**
-	Deprecated Compatibility version of `compileDietFile`.
-
-	This function should only be called indirectly through `HTTPServerResponse.renderCompat()`.	
-*/
-deprecated("Use compileDietFile instead.")
-void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
-{
-	compileDietFileCompatV!(template_file, TYPES_AND_NAMES)(stream__, _argptr, _arguments);
-}
-/// ditto
-deprecated("Use compileDietFile instead.")
-void compileDietFileCompatV(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, va_list _argptr, TypeInfo[] _arguments)
-{
-	// some imports to make available by default inside templates
-	import vibe.http.common;
-	import vibe.stream.wrapper;
-	import vibe.utils.string;
-
-	pragma(msg, "Compiling diet template '"~template_file~"' (compat)...");
-	//pragma(msg, localAliasesCompat!(0, TYPES_AND_NAMES));
-	mixin(localAliasesCompat!(0, TYPES_AND_NAMES));
-
-	static if (is(typeof(diet_translate__))) alias TRANSLATE = TypeTuple!(diet_translate__);
-	else alias TRANSLATE = TypeTuple!();
-
-	auto output__ = StreamOutputRange(stream__);
-
-	// Generate the D source code for the diet template
-	//pragma(msg, dietParser!template_file());
-	mixin(dietParser!template_file(0));
-}
-
-/// compatibility alias
-deprecated("Use compileDietFile instead.")
-alias parseDietFileCompat = compileDietFileCompat;
 
 /**
 	Generates a diet template compiler to use as a mixin.

@@ -368,20 +368,6 @@ unittest {
 }
 
 
-/**
-	Deprecated - use @$(D path) instead.
-
-	See_Also: $(D path)
- */
-deprecated("Use @path instead.")
-PathAttribute rootPath(string path)
-{
-	if (!__ctfe)
-		assert(false, onlyAsUda!__FUNCTION__);
-	return PathAttribute(path);
-}
-
-
 /// Convenience alias to generate a name from the interface's name.
 @property PathAttribute rootPathFromName()
 {

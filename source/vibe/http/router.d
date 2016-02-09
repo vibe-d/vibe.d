@@ -15,28 +15,6 @@ import vibe.core.log;
 
 import std.functional;
 
-version (VibeOldRouterImpl) {
-	pragma(msg, "-version=VibeOldRouterImpl is deprecated and will be removed in the next release.");
-}
-else version = VibeRouterTreeMatch;
-
-
-/**
-	An interface for HTTP request routers.
-
-	As of 0.7.24, the interface has been replaced with a deprecated alias to URLRouter.
-	This will break any code relying on HTTPRouter being an interface, but won't
-	break signatures.
-
-	Removal_notice:
-
-	Note that this is planned to be removed, due to interface/behavior considerations.
-	In particular, the exact behavior of the router (most importantly, the route match
-	string format) must be considered part of the interface. However, this removes the
-	prime argument for having an interface in the first place.
-*/
-deprecated("Will be removed in 0.7.25. See removal notice for more information.")
-public alias HTTPRouter = URLRouter;
 
 /**
 	Routes HTTP requests based on the request method and URL.
@@ -81,8 +59,7 @@ public alias HTTPRouter = URLRouter;
 */
 final class URLRouter : HTTPServerRequestHandler {
 	private {
-		version (VibeRouterTreeMatch) MatchTree!Route m_routes;
-		else Route[] m_routes;
+		MatchTree!Route m_routes;
 		string m_prefix;
 		bool m_computeBasePath;
 	}
@@ -149,8 +126,7 @@ final class URLRouter : HTTPServerRequestHandler {
 		import std.algorithm;
 		assert(count(path, ':') <= maxRouteParameters, "Too many route parameters");
 		logDebug("add route %s %s", method, path);
-		version (VibeRouterTreeMatch) m_routes.addTerminal(path, Route(method, path, cb));
-		else m_routes ~= Route(method, path, cb);
+		m_routes.addTerminal(path, Route(method, path, cb));
 		return this;
 	}
 	/// ditto
@@ -261,8 +237,7 @@ final class URLRouter : HTTPServerRequestHandler {
 	*/
 	void rebuild()
 	{
-		version (VibeRouterTreeMatch)
-			m_routes.rebuildGraph();
+		m_routes.rebuildGraph();
 	}
 
 	/// Handles a HTTP request by dispatching it to the registered route handlers.
@@ -282,39 +257,21 @@ final class URLRouter : HTTPServerRequestHandler {
 		if (path.length < m_prefix.length || path[0 .. m_prefix.length] != m_prefix) return;
 		path = path[m_prefix.length .. $];
 
-		version (VibeRouterTreeMatch) {
-			while (true) {
-				bool done = m_routes.match(path, (ridx, scope values) {
-					auto r = &m_routes.getTerminalData(ridx);
-					if (r.method != method) return false;
+		while (true) {
+			bool done = m_routes.match(path, (ridx, scope values) {
+				auto r = &m_routes.getTerminalData(ridx);
+				if (r.method != method) return false;
 
-					logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
-					foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
-					if (m_computeBasePath) req.params["routerRootDir"] = calcBasePath();
-					r.cb(req, res);
-					return res.headerWritten;
-				});
-				if (done) return;
+				logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
+				foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
+				if (m_computeBasePath) req.params["routerRootDir"] = calcBasePath();
+				r.cb(req, res);
+				return res.headerWritten;
+			});
+			if (done) return;
 
-				if (method == HTTPMethod.HEAD) method = HTTPMethod.GET;
-				else break;
-			}
-		} else {
-			while(true)
-			{
-				foreach (ref r; m_routes) {
-					if (r.method == method && r.matches(path, req.params)) {
-						logTrace("route match: %s -> %s %s", req.path, r.method, r.pattern);
-						// .. parse fields ..
-						req.params["routerRootDir"] = calcBasePath;
-						r.cb(req, res);
-						if (res.headerWritten) return;
-					}
-				}
-				if (method == HTTPMethod.HEAD) method = HTTPMethod.GET;
-				//else if (method == HTTPMethod.OPTIONS)
-				else break;
-			}
+			if (method == HTTPMethod.HEAD) method = HTTPMethod.GET;
+			else break;
 		}
 
 		logDebug("no route match: %s %s", req.method, req.requestURL);
@@ -323,12 +280,10 @@ final class URLRouter : HTTPServerRequestHandler {
 	/// Returns all registered routes as const AA
 	const(Route)[] getAllRoutes()
 	{
-		version (VibeRouterTreeMatch) {
-			auto routes = new Route[m_routes.terminalCount];
-			foreach (i, ref r; routes)
-				r = m_routes.getTerminalData(i);
-			return routes;
-		} else return m_routes;
+		auto routes = new Route[m_routes.terminalCount];
+		foreach (i, ref r; routes)
+			r = m_routes.getTerminalData(i);
+		return routes;
 	}
 }
 
@@ -507,49 +462,6 @@ struct URLRoute {
 
 
 private enum maxRouteParameters = 64;
-
-private struct Route {
-	HTTPMethod method;
-	string pattern;
-	HTTPServerRequestDelegate cb;
-
-	bool matches(string url, ref string[string] params)
-	const {
-		size_t i, j;
-
-		// store parameters until a full match is confirmed
-		import std.typecons;
-		Tuple!(string, string)[maxRouteParameters] tmpparams;
-		size_t tmppparams_length = 0;
-
-		for (i = 0, j = 0; i < url.length && j < pattern.length;) {
-			if (pattern[j] == '*') {
-				foreach (t; tmpparams[0 .. tmppparams_length])
-					params[t[0]] = t[1];
-				return true;
-			}
-			if (url[i] == pattern[j]) {
-				i++;
-				j++;
-			} else if(pattern[j] == ':') {
-				j++;
-				string name = skipPathNode(pattern, j);
-				string match = skipPathNode(url, i);
-				assert(tmppparams_length < maxRouteParameters, "Maximum number of route parameters exceeded.");
-				tmpparams[tmppparams_length++] = tuple(name, match);
-			} else return false;
-		}
-
-		if ((j < pattern.length && pattern[j] == '*') || (i == url.length && j == pattern.length)) {
-			foreach (t; tmpparams[0 .. tmppparams_length])
-				params[t[0]] = t[1];
-			return true;
-		}
-
-		return false;
-	}
-}
-
 
 private string skipPathNode(string str, ref size_t idx)
 {

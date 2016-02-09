@@ -355,8 +355,8 @@ struct MongoCollection {
 	/**
 		Creates or updates an index.
 
-		Note that the overload taking an associative array of field orders is
-		scheduled for deprecation. Since the order of fields matters, it is
+		Note that the overload taking an associative array of field orders
+		will be removed. Since the order of fields matters, it is
 		only suitable for single-field indices.
 	*/
 	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.None, Duration expire_time = 0.seconds)
@@ -388,6 +388,7 @@ struct MongoCollection {
 		database["system.indexes"].insert(doc);
 	}
 	/// ditto
+	deprecated("Use the overload taking an array of field_orders instead.")
 	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None, ulong expireAfterSeconds = 0)
 	{
 		Tuple!(string, int)[] orders;
