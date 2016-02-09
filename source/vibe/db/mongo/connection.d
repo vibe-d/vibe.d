@@ -13,7 +13,7 @@ import vibe.core.log;
 import vibe.core.net;
 import vibe.db.mongo.settings;
 import vibe.inet.webform;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
 import std.algorithm : map, splitter;
 import std.array;
@@ -145,9 +145,9 @@ final class MongoConnection {
 			m_conn = connectTCP(m_settings.hosts[0].name, m_settings.hosts[0].port);
 			m_conn.tcpNoDelay = true;
 			if (m_settings.ssl) {
-				auto ctx =  createSSLContext(SSLContextKind.client);
+				auto ctx =  createTLSContext(TLSContextKind.client);
 				if (!m_settings.sslverifycertificate) {
-					ctx.peerValidationMode = SSLPeerValidationMode.none;
+					ctx.peerValidationMode = TLSPeerValidationMode.none;
 				}
 				if (m_settings.sslPEMKeyFile) {
 					ctx.useCertificateChainFile(m_settings.sslPEMKeyFile);
@@ -157,7 +157,7 @@ final class MongoConnection {
 					ctx.useTrustedCertificateFile(m_settings.sslCAFile);
 				}
 
-				m_stream = createSSLStream(m_conn, ctx, m_settings.hosts[0].name);
+				m_stream = createTLSStream(m_conn, ctx, m_settings.hosts[0].name);
 			}
 			else {
 				m_stream = m_conn;

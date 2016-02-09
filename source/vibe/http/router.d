@@ -463,6 +463,12 @@ struct URLRoute {
 
 private enum maxRouteParameters = 64;
 
+private struct Route {
+	HTTPMethod method;
+	string pattern;
+	HTTPServerRequestDelegate cb;
+}
+
 private string skipPathNode(string str, ref size_t idx)
 {
 	size_t start = idx;

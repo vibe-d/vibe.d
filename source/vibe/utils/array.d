@@ -328,12 +328,10 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 				auto dst = newbuffer;
 				auto newfill = min(m_fill, new_size);
 				read(dst[0 .. newfill]);
-				if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer;
 				m_buffer = newbuffer;
 				m_start = 0;
 				m_fill = newfill;
 			} else {
-				if (m_freeOnDestruct && m_buffer.length > 0) delete m_buffer;
 				m_buffer = new T[new_size];
 			}
 		}
