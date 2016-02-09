@@ -83,7 +83,7 @@ alias parseDietFile = compileDietFile;
 /**
 	Deprecated Compatibility version of `compileDietFile`.
 
-	This function should only be called indirectly through `HTTPServerResponse.renderCompat()`.	
+	This function should only be called indirectly through `HTTPServerResponse.renderCompat()`.
 */
 deprecated("Use compileDietFile instead.")
 void compileDietFileCompat(string template_file, TYPES_AND_NAMES...)(OutputStream stream__, ...)
@@ -1123,11 +1123,92 @@ private struct DietCompiler(TRANSLATE...)
 		output.writeString(is_singular_tag ? "/>" : ">");
 	}
 
+	/*private string indexOfAnyMultiLineString(const ref string str,
+		   	ref size_t i)
+	{
+		auto app = appender!string();
+		size_t iC = i;
+		while(true) {
+			auto e = str[iC .. $].indexOfAny(",)");
+			if(e != -1) {
+				app.put(str[iC .. $]);
+				++m_lineIndex;
+				iC = 0;
+			} else {
+
+			}
+		}
+	}*/
+
+	private HTMLAttribute splitAttribute(string str) {
+		auto e = str.indexOf('=');
+		if(e != -1) {
+			return HTMLAttribute(
+				str[0 .. e].strip(),
+				str[e + 1 .. $].strip()
+			);
+		} else {
+			return HTMLAttribute(
+				str.strip(),
+				"true"
+			);
+		}
+	}
+
+	private string parseIdent(in ref string str, ref size_t start,
+		   	string breakChars)
+	{
+		/* The stack is used to keep track of opening and
+		closing character pairs, so that when we hit a break char of
+		breakChars we know if we can actually break parseIdent.
+		*/
+		char[] stack;
+		size_t i = start;
+		outer: while(i < str.length) {
+			if(stack.length == 0) {
+				foreach(char it; breakChars) {
+					if(str[i] == it) {
+						break outer;
+					}
+				}
+			}
+
+			if(stack.length && stack.back == str[i]) {
+				stack = stack[0 .. $ - 1];
+			} else if(str[i] == '"') {
+				stack ~= '"';
+			} else if(str[i] == '(') {
+				stack ~= ')';
+			} else if(str[i] == '[') {
+				stack ~= ']';
+			} else if(str[i] == '{') {
+				stack ~= '}';
+			}
+			++i;
+		}
+
+		/* We could have consumed the complete string and still have elements
+		on the stack or have ended non breakChars character.
+		*/
+		if(stack.length == 0) {
+			foreach(char it; breakChars) {
+				if(str[i] == it) {
+					size_t startC = start;
+					start = i;
+					return str[startC .. i];
+				}
+			}
+		}
+		assertp(false, "Identifier was not ended by any of these characters: "
+			~ breakChars);
+		assert(false);
+	}
+
 	private void parseAttributes(in ref string str, ref size_t i, ref HTMLAttribute[] attribs)
 	{
 		skipWhitespace(str, i);
 		while (i < str.length && str[i] != ')') {
-			string name = skipIdent(str, i, "-:");
+			string name = parseIdent(str, i, ",)=");
 			string value;
 			skipWhitespace(str, i);
 			if( i < str.length && str[i] == '=' ){
@@ -1143,7 +1224,10 @@ private struct DietCompiler(TRANSLATE...)
 			} else value = "true";
 
 			assertp(i < str.length, "Unterminated attribute section.");
-			assertp(str[i] == ')' || str[i] == ',', "Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')");
+			assertp(str[i] == ')' || str[i] == ',',
+				"Unexpected text following attribute: '"~str[0..i]~"' ('"~str[i..$]~"')"
+			);
+
 			if (str[i] == ',') {
 				i++;
 				skipWhitespace(str, i);
@@ -1533,6 +1617,26 @@ unittest {
 		== "<input placeholder=\")\"/>");
 	assert(compile!("input(placeholder='(')")
 		== "<input placeholder=\"(\"/>");
+
+	// angular2 html attributes tests
+	assert(compile!("div([value]=\"firstName\")") ==
+		"<div [value]=\"firstName\"></div>");
+
+	assert(compile!("div([attr.role]=\"myAriaRole\")") ==
+		"<div [attr.role]=\"myAriaRole\"></div>");
+	assert(compile!("div([class.extra-sparkle]=\"isDelightful\")") ==
+		"<div [class.extra-sparkle]=\"isDelightful\"></div>");
+
+	assert(compile!("div((click)=\"readRainbow($event)\")") ==
+		"<div (click)=\"readRainbow($event)\"></div>");
+	assert(compile!("div([(title)]=\"name\")") ==
+		"<div [(title)]=\"name\"></div>");
+	assert(compile!("div(*myUnless=\"myExpression\")") ==
+		"<div *myUnless=\"myExpression\"></div>");
+	assert(compile!("div(*ngFor=\"#item of list\")") ==
+		"<div *ngFor=\"#item of list\"></div>");
+	assert(compile!("div([ngClass]=\"{active: isActive, disabled: isDisabled}\")") ==
+		"<div [ngClass]=\"{active: isActive, disabled: isDisabled}\"></div>");
 }
 
 unittest { // blocks and extensions
