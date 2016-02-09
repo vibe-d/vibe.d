@@ -22,6 +22,7 @@ At the moment, it means that the following compilers are supported and tested:
 - DMD 2.067
 - DMD 2.066
 - GDC 4.9.2 (FE: 2.066)
+- LDC 0.16.1 (FE: 2.067)
 - LDC 0.15.1 (FE: 2.066)
 
 
