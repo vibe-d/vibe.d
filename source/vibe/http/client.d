@@ -168,14 +168,15 @@ unittest {
 	usually requestHTTP should be used for making requests instead of manually using a
 	HTTPClient to do so.
 */
-auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
+auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = null)
 {
 	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+
+	if (!settings) settings = defaultSettings;
+
 	if( port == 0 ) port = use_tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, use_tls,
-		settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0,
-		settings ? settings.networkInterface : anyAddress);
+	auto ckey = ConnInfo(host, port, use_tls, settings.proxyURL.host, settings.proxyURL.port, settings.networkInterface);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
@@ -183,7 +184,7 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 			pool = c[1];
 
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, settings.proxyURL.host, settings.proxyURL.port);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
 				ret.connect(host, port, use_tls, settings);
