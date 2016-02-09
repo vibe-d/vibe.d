@@ -1071,6 +1071,9 @@ private class CoreTask : TaskFiber {
 				try {
 					m_running = true;
 					scope(exit) m_running = false;
+
+					std.concurrency.thisTid; // force creation of a new Tid
+
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					if (!s_eventLoopRunning) {
 						logTrace("Event loop not running at task start - yielding.");
@@ -1085,6 +1088,8 @@ private class CoreTask : TaskFiber {
 					logCritical("Task terminated with uncaught exception: %s", e.msg);
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
+
+				this.tidInfo.ident = Tid.init; // reset Tid
 
 				// check for any unhandled deferred exceptions
 				if (m_exception !is null) {
@@ -1491,8 +1496,8 @@ shared static this()
 	}
 
 	static if (newStdConcurrency) {
-		import std.concurrency;
-		scheduler = new VibedScheduler;
+		static import std.concurrency;
+		std.concurrency.scheduler = new VibedScheduler;
 	}
 }
 
