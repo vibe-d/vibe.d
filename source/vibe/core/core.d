@@ -1072,7 +1072,8 @@ private class CoreTask : TaskFiber {
 					m_running = true;
 					scope(exit) m_running = false;
 
-					std.concurrency.thisTid; // force creation of a new Tid
+					static if (newStdConcurrency)
+						std.concurrency.thisTid; // force creation of a new Tid
 
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					if (!s_eventLoopRunning) {
@@ -1089,7 +1090,8 @@ private class CoreTask : TaskFiber {
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
 
-				this.tidInfo.ident = Tid.init; // reset Tid
+				static if (newStdConcurrency)
+					this.tidInfo.ident = Tid.init; // reset Tid
 
 				// check for any unhandled deferred exceptions
 				if (m_exception !is null) {
