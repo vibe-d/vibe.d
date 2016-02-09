@@ -28,13 +28,19 @@ import core.time;
 import core.thread;
 import std.algorithm;
 import std.conv;
-import std.c.windows.windows;
-import std.c.windows.winsock;
 import std.datetime;
 import std.exception;
 import std.string : lastIndexOf;
 import std.typecons;
 import std.utf;
+
+static if (__VERSION__ >= 2070) {
+	import core.sys.windows.windows;
+	import core.sys.windows.winsock2;
+} else {
+	import std.c.windows.windows;
+	import std.c.windows.winsock;
+}
 
 enum WM_USER_SIGNAL = WM_USER+101;
 enum WM_USER_SOCKET = WM_USER+102;
@@ -447,7 +453,8 @@ final class Win32ManualEvent : ManualEvent {
 	}
 
 	this(Win32EventDriver driver)
-	{
+	nothrow {
+		scope (failure) assert(false); // Mutex.this() now nothrow < 2.070
 		m_mutex = new core.sync.mutex.Mutex;
 		m_driver = driver;
 	}
@@ -1565,7 +1572,7 @@ private {
 void setupWindowClass() nothrow
 {
 	if( s_setupWindowClass ) return;
-	WNDCLASS wc;
+	WNDCLASSA wc;
 	wc.lpfnWndProc = &Win32EventDriver.onMessage;
 	wc.lpszClassName = "VibeWin32MessageWindow";
 	RegisterClassA(&wc);

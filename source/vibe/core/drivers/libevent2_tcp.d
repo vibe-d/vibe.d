@@ -37,8 +37,11 @@ import core.sys.posix.sys.socket;
 
 
 private {
-	version(Windows){
-		import std.c.windows.winsock;
+	version (Windows) {
+		static if (__VERSION__ >= 2070)
+			import core.sys.windows.winsock2;
+		else
+			import std.c.windows.winsock;
 		enum EWOULDBLOCK = WSAEWOULDBLOCK;
 
 		// make some neccessary parts of the socket interface public

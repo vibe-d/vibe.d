@@ -18,7 +18,12 @@ import core.time;
 import std.exception;
 import std.functional;
 import std.string;
-version(Windows) import std.c.windows.winsock;
+version(Windows) {
+	static if (__VERSION__ >= 2070)
+		import std.c.windows.winsock;
+	else
+		import core.sys.windows.winsock2;
+}
 
 
 /**

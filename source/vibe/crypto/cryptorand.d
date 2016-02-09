@@ -460,11 +460,15 @@ class CryptoException : Exception
 
 version(Windows)
 {
-	private import std.c.windows.windows;
+	static if (__VERSION__ >= 2070) {
+		import core.sys.windows.windows;
+	} else {
+		import std.c.windows.windows;
+	}
 
 	private extern(Windows) nothrow
 	{
-		alias HCRYPTPROV = ULONG_PTR;
+		alias HCRYPTPROV = size_t;
 
 		enum LPCTSTR NULL = cast(LPCTSTR)0;
 		enum DWORD PROV_RSA_FULL = 1;
