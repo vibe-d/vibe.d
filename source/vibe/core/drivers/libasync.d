@@ -805,20 +805,22 @@ final class LibasyncManualEvent : ManualEvent {
 		Array!(void*) ms_signals;
 
 		core.sync.mutex.Mutex m_mutex;
+
+		@property size_t instanceID() nothrow { return atomicLoad(m_instance); }
+		@property void instanceID(size_t instance) nothrow{ atomicStore(m_instance, instance); }
 	}
 
 	this(LibasyncDriver driver)
 	nothrow {
 		static if (__VERSION__ <= 2066) scope (failure) assert(false);
 		m_mutex = new core.sync.mutex.Mutex;
-		m_instance = generateID();
-		assert(m_instance != 0);
+		instanceID = generateID();
 	}
 
 	~this()
 	{
 		try {
-			recycleID(m_instance);
+			recycleID(instanceID);
 
 			foreach (ref signal; ms_signals[]) {
 				if (signal) {
@@ -859,11 +861,12 @@ final class LibasyncManualEvent : ManualEvent {
 
 		bool signal_exists;
 
-		if (s_eventWaiters.length <= m_instance) {
+		size_t instance = instanceID;
+		if (s_eventWaiters.length <= instance)
 			expandWaiters();
-		}
-		logTrace("Acquire event ID#%d", m_instance);
-		auto taskList = s_eventWaiters[m_instance];
+
+		logTrace("Acquire event ID#%d", instance);
+		auto taskList = s_eventWaiters[instance];
 		if (taskList.length > 0)
 			signal_exists = true;
 
@@ -872,7 +875,7 @@ final class LibasyncManualEvent : ManualEvent {
 			sig.run(&onSignal);
 			synchronized (m_mutex) ms_signals.insertBack(cast(void*)sig);
 		}
-		s_eventWaiters[m_instance].insertBack(Task.getThis());
+		s_eventWaiters[instance].insertBack(Task.getThis());
 	}
 
 	void release()
@@ -880,12 +883,14 @@ final class LibasyncManualEvent : ManualEvent {
 		assert(amOwner(), "Releasing non-acquired signal.");
 
 		import std.algorithm : countUntil;
-		auto taskList = s_eventWaiters[m_instance];
-		auto idx = taskList[].countUntil!((a, b) => a == b)(Task.getThis());
-		logTrace("Release event ID#%d", m_instance);
-		s_eventWaiters[m_instance].linearRemove(taskList[idx .. idx+1]);
 
-		if (s_eventWaiters[m_instance].empty) {
+		size_t instance = instanceID;
+		auto taskList = s_eventWaiters[instance];
+		auto idx = taskList[].countUntil!((a, b) => a == b)(Task.getThis());
+		logTrace("Release event ID#%d", instance);
+		s_eventWaiters[instance].linearRemove(taskList[idx .. idx+1]);
+
+		if (s_eventWaiters[instance].empty) {
 			removeMySignal();
 		}
 	}
@@ -893,8 +898,9 @@ final class LibasyncManualEvent : ManualEvent {
 	bool amOwner()
 	{
 		import std.algorithm : countUntil;
-		if (s_eventWaiters.length <= m_instance) return false;
-		auto taskList = s_eventWaiters[m_instance];
+		size_t instance = instanceID;
+		if (s_eventWaiters.length <= instance) return false;
+		auto taskList = s_eventWaiters[instance];
 		if (taskList.length == 0) return false;
 
 		auto idx = taskList[].countUntil!((a, b) => a == b)(Task.getThis());
@@ -952,9 +958,12 @@ final class LibasyncManualEvent : ManualEvent {
 	private void expandWaiters() {
 		size_t maxID;
 		synchronized(gs_mutex) maxID = gs_maxID;
-		s_eventWaiters.reserve(maxID + 1);
+		s_eventWaiters.reserve(maxID);
 		logTrace("gs_maxID: %d", maxID);
-		foreach (i; s_eventWaiters.length .. s_eventWaiters.capacity) {
+		size_t s_ev_len = s_eventWaiters.length;
+		size_t s_ev_cap = s_eventWaiters.capacity;
+		assert(maxID > s_eventWaiters.length);
+		foreach (i; s_ev_len .. s_ev_cap) {
 			s_eventWaiters.insertBack(Array!Task.init);
 		}
 	}
@@ -966,8 +975,9 @@ final class LibasyncManualEvent : ManualEvent {
 			auto thread = Thread.getThis();
 			auto core = getDriverCore();
 
-			logTrace("Got context: %d", m_instance);
-			foreach (Task task; s_eventWaiters[m_instance][]) {
+			size_t instance = instanceID;
+			logTrace("Got context: %d", instance);
+			foreach (Task task; s_eventWaiters[instance][]) {
 				logTrace("Task Found");
 				core.resumeTask(task);
 			}
@@ -1745,7 +1755,7 @@ nothrow {
 			idx = getIdx();
 			if (idx == 0) {
 				import std.range : iota;
-				gs_availID.insert( iota(gs_maxID + 1, max(32, gs_maxID * 2), 1) );
+				gs_availID.insert( iota(gs_maxID + 1, max(32, gs_maxID * 2 + 1), 1) );
 				gs_maxID = gs_availID[$-1];
 				idx = getIdx();
 			}
@@ -1754,12 +1764,12 @@ nothrow {
 		assert(false, "Failed to generate necessary ID for Manual Event waiters: " ~ e.msg);
 	}
 
-	return idx;
+	return idx - 1;
 }
 
 void recycleID(size_t id) {
 	try {
-		synchronized(gs_mutex) gs_availID.insert(id);
+		synchronized(gs_mutex) gs_availID.insert(id+1);
 	}
 	catch (Exception e) {
 		assert(false, "Error destroying Manual Event ID: " ~ id.to!string ~ " [" ~ e.msg ~ "]");
