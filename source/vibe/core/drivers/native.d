@@ -7,10 +7,7 @@
 */
 module vibe.core.drivers.native;
 
-version (VibeLibevDriver) {
-	import vibe.core.drivers.libev;
-	alias NativeEventDriver = LibevDriver;
-} else version (VibeLibeventDriver) {
+version (VibeLibeventDriver) {
 	import vibe.core.drivers.libevent2;
 	alias NativeEventDriver = Libevent2Driver;
 } else version (VibeLibasyncDriver) {

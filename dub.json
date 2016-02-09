@@ -11,7 +11,7 @@
 		"see github for more"
 	],
 
-	"systemDependencies": "libevent 2.0.x or libev, OpenSSL 0.9.x or 1.0.x",
+	"systemDependencies": "Optionally libevent 2.0.x, OpenSSL 1.0.x",
 
 	"dependencies": {
 		":utils": "*",
@@ -32,7 +32,6 @@
 	"configurations": [
 		{"name": "libevent", "subConfigurations": {"vibe-d:core": "libevent"}},
 		{"name": "libasync", "subConfigurations": {"vibe-d:core": "libasync"}},
-		{"name": "libev", "subConfigurations": {"vibe-d:core": "libev"}},
 		{"name": "win32", "subConfigurations": {"vibe-d:core": "win32"}},
 		{"name": "winrt", "subConfigurations": {"vibe-d:core": "winrt"}}
 	],
@@ -86,12 +85,6 @@
 					  "libasync": { "version": "~>0.7.8" }
 					},
 					"versions": ["VibeUseNativeDriverType", "VibeLibasyncDriver"]
-				},
-				{
-					"name": "libev",
-					"dependencies": {"libev": "~>5.0.0+4.04"},
-					"platforms": ["posix"],
-					"versions": ["VibeLibevDriver", "LIBEV4"],
 				},
 				{
 					"name": "win32",

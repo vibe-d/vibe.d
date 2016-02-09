@@ -7,14 +7,8 @@ d:
   - dmd-2.067.1
   - ldc-0.16.1
 
-addons:
-  apt:
-    packages:
-    - libev-dev
-
 env:
   - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
-  - VIBED_DRIVER=libev BUILD_EXAMPLE=0 RUN_TEST=0
   - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 matrix:
