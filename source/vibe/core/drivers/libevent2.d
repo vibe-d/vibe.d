@@ -167,8 +167,11 @@ final class Libevent2Driver : EventDriver {
 				auto obj = cast(Libevent2Object)cast(void*)key;
 				debug assert(obj.m_ownerThread !is m_ownerThread, "Live object of this thread detected after all owned mutexes have been destroyed.");
 				debug assert(obj.m_driver !is this, "Live object of this driver detected with different thread ID after all owned mutexes have been destroyed.");
+				// WORKAROUND for a possible race-condition in case of concurrent GC collections
+				// Since this only occurs on shutdown and rarely, this should be an acceptable
+				// "solution" until this is all switched to RC.
 				if (auto me = cast(Libevent2ManualEvent)obj)
-					assert(me.m_mutex !is null, "Already destroyed object still in s_threadObjects.");
+					if (!me.m_mutex) continue;
 				obj.onThreadShutdown();
 			}
 		}
@@ -649,7 +652,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	~this()
 	{
-		m_mutex = null; // attempt to detect a crash that is either caused by a bad shutdown sequence, or by a race-condition
+		m_mutex = null; // Optimistic race-condition detection (see Libevent2Driver.dispose())
 		foreach (ref m_waiters.Value ts; m_waiters)
 			event_free(ts.event);
 	}
