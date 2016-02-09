@@ -2266,8 +2266,7 @@ package template isJsonSerializable(T) { enum isJsonSerializable = is(typeof(T.i
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message = "JSON exception")
 {
-	static if (__VERSION__ >= 2065) enforceEx!JSONException(cond, message, file, line);
-	else if (!cond) throw new JSONException(message);
+	enforceEx!JSONException(cond, message, file, line);
 }
 
 private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool cond, lazy string message, string err_file, int err_line)

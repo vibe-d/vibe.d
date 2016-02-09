@@ -24,14 +24,8 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 		size_t m_timerIDCounter = 1;
 		HashMap!(size_t, TimerInfo) m_timers;
 
-		static if (__VERSION__ >= 2065) {
-			import std.container : Array, BinaryHeap;
-			BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
-		} else {
-			// Workaround for ICE/Linker errors
-			import std.container : DList;
-			DList!TimeoutEntry m_timeoutHeap;
-		}
+		import std.container : Array, BinaryHeap;
+		BinaryHeap!(Array!TimeoutEntry, "a.timeout > b.timeout") m_timeoutHeap;
 	}
 
 	@property bool anyPending() { return !m_timeoutHeap.empty; }
@@ -112,14 +106,7 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 	{
 		//logTrace("Schedule timer %s", id);
 		auto entry = TimeoutEntry(timeout, id);
-		static if (__VERSION__ >= 2065) {
-			m_timeoutHeap.insert(entry);
-		} else {
-			auto existing = m_timeoutHeap[];
-			while (!existing.empty && existing.front.timeout < entry.timeout)
-				existing.popFront();
-			m_timeoutHeap.insertBefore(existing, entry);
-		}
+		m_timeoutHeap.insert(entry);
 		//logDebugV("first timer %s in %s s", id, (timeout - now) * 1e-7);
 	}
 }

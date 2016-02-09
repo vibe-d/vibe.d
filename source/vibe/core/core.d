@@ -1685,9 +1685,6 @@ private extern(C) void extrap()
 	logTrace("exception trap");
 }
 
-// backwards compatibility with DMD < 2.066
-static if (__VERSION__ <= 2065) @property bool nogc() { return false; }
-
 private extern(C) void onSignal(int signal)
 nothrow {
 	atomicStore(st_term, true);

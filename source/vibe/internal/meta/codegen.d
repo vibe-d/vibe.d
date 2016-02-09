@@ -262,31 +262,8 @@ unittest
 /// so we have to resort on string for functions attributes.
 template FuncAttributes(alias Func)
 {
-	static if (__VERSION__ <= 2065)
-	{
-		import std.traits;
-		enum FuncAttributes = {
-			alias FA = FunctionAttribute;
-			string res;
-			enum attr = functionAttributes!Func;
-			if (attr & FA.nothrow_) res ~= "nothrow ";
-			if (attr & FA.property) res ~= "@property ";
-			if (attr & FA.pure_) res ~= "pure ";
-			if (attr & FA.ref_) res ~= "ref ";
-			if (attr & FA.safe) res ~= "@safe ";
-			if (attr & FA.trusted) res ~= "@trusted ";
-			static if (is(FunctionTypeOf!Func == const)) res ~= "const ";
-			static if (is(FunctionTypeOf!Func == immutable)) res ~= "immutable ";
-			static if (is(FunctionTypeOf!Func == inout)) res ~= "inout ";
-			static if (is(FunctionTypeOf!Func == shared)) res ~= "shared ";
-			return res.length ? res[0 .. $-1] : res;
-		}();
-	}
-	else
-	{
-		import std.array : join;
-		enum FuncAttributes = [__traits(getFunctionAttributes, Func)].join(" ");
-	}
+	import std.array : join;
+	enum FuncAttributes = [__traits(getFunctionAttributes, Func)].join(" ");
 }
 
 

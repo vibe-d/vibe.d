@@ -49,16 +49,6 @@ static if (__VERSION__ >= 2070) {
 	BOOL GetOverlappedResult(HANDLE hFile, OVERLAPPED* lpOverlapped, DWORD* lpNumberOfBytesTransferred, BOOL bWait);
 	BOOL PostMessageW(HWND hwnd, UINT msg, WPARAM wPara, LPARAM lParam);
 
-	static if (__VERSION__ < 2065) {
-		BOOL PeekMessageW(MSG *lpMsg, HWND hWnd, UINT wMsgFilterMin, UINT wMsgFilterMax, UINT wRemoveMsg);
-		LONG DispatchMessageW(MSG *lpMsg);
-
-		enum {
-			ERROR_ALREADY_EXISTS = 183,
-			ERROR_IO_PENDING = 997
-		}
-	}
-
 	struct FILE_NOTIFY_INFORMATION {
 		DWORD NextEntryOffset;
 		DWORD Action;

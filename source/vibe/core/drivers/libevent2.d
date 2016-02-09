@@ -1244,8 +1244,6 @@ package DriverCore getThreadLibeventDriverCore() nothrow
 private int getLastSocketError() nothrow
 {
 	version(Windows) {
-		static if (__VERSION__ < 2066)
-			scope (failure) assert(false); // assert nothrow condition
 		return WSAGetLastError();
 	} else {
 		import core.stdc.errno;
@@ -1475,12 +1473,7 @@ private nothrow extern(C)
 package timeval toTimeVal(Duration dur)
 {
 	timeval tvdur;
-	static if (__VERSION__ < 2066) {
-		tvdur.tv_sec = cast(int)dur.total!"seconds"();
-		tvdur.tv_usec = dur.fracSec().usecs();
-	} else {
-		dur.split!("seconds", "usecs")(tvdur.tv_sec, tvdur.tv_usec);
-	}
+	dur.split!("seconds", "usecs")(tvdur.tv_sec, tvdur.tv_usec);
 	return tvdur;
 }
 
