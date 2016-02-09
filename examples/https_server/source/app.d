@@ -1,6 +1,6 @@
 import vibe.appmain;
 import vibe.http.server;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
 void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 {
@@ -12,9 +12,9 @@ shared static this()
 	auto settings = new HTTPServerSettings;
 	settings.port = 8080;
 	settings.bindAddresses = ["::1", "127.0.0.1"];
-	settings.sslContext = createSSLContext(SSLContextKind.server);
-	settings.sslContext.useCertificateChainFile("server.crt");
-	settings.sslContext.usePrivateKeyFile("server.key");
+	settings.tlsContext = createTLSContext(TLSContextKind.server);
+	settings.tlsContext.useCertificateChainFile("server.crt");
+	settings.tlsContext.usePrivateKeyFile("server.key");
 
 	listenHTTP(settings, &handleRequest);
 }

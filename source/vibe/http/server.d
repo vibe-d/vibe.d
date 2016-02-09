@@ -428,6 +428,7 @@ final class HTTPServerSettings {
 	TLSContext tlsContext;
 
 	/// Compatibility alias - use `tlsContext` instead.
+	deprecated("Use tlsContext instead.")
 	alias sslContext = tlsContext;
 
 	/// Session management is enabled if a session store instance is provided
@@ -459,7 +460,8 @@ final class HTTPServerSettings {
 	{
 		auto ret = new HTTPServerSettings;
 		foreach (mem; __traits(allMembers, HTTPServerSettings)) {
-			static if (mem == "bindAddresses") ret.bindAddresses = bindAddresses.dup;
+			static if (mem == "sslContext") {}
+			else static if (mem == "bindAddresses") ret.bindAddresses = bindAddresses.dup;
 			else static if (__traits(compiles, __traits(getMember, ret, mem) = __traits(getMember, this, mem)))
 				__traits(getMember, ret, mem) = __traits(getMember, this, mem);
 		}
