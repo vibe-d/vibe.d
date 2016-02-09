@@ -206,7 +206,7 @@ void setVibeDistHost(string host, ushort port)
 {
 	import vibe.templ.diet;
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
-	parseDietFile!(template_file, ALIASES)(res.bodyWriter);
+	compileDietFile!(template_file, ALIASES)(res.bodyWriter);
 }
 
 
