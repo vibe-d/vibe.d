@@ -67,12 +67,43 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 		auto rurl = url;
 		rurl.localURI = req.requestURL;
 
+		//handle connect tunnels
+		if (req.method == HTTPMethod.CONNECT) {
+			if (!settings.handleConnectRequests)
+			{
+				throw new HTTPStatusException(HTTPStatus.methodNotAllowed);
+			}
+
+			auto ccon = connectTCP(settings.destinationHost, settings.destinationPort);
+			auto scon = res.connectProxy();
+			assert (scon);
+
+			import vibe.core.core : runTask;
+			runTask({ ccon.write(scon); });
+
+			scon.write(ccon);
+			return;
+		}
+
+		//handle protocol upgrades
+		auto pUpgrade = "Upgrade" in req.headers;
+		auto pConnection = "Connection" in req.headers;
+
+
+		import std.algorithm : splitter, canFind;
+		import vibe.utils.string : icmp2;
+		bool isUpgrade = pConnection && (*pConnection).splitter(',').canFind!(a => a.icmp2("upgrade"));
+
 		void setupClientRequest(scope HTTPClientRequest creq)
 		{
 			creq.method = req.method;
 			creq.headers = req.headers.dup;
-			creq.headers["Connection"] = "keep-alive";
 			creq.headers["Host"] = settings.destinationHost;
+
+			//handle protocol upgrades
+			if (!isUpgrade) {
+				creq.headers["Connection"] = "keep-alive";
+			}
 			if (settings.avoidCompressedRequests && "Accept-Encoding" in creq.headers)
 				creq.headers.remove("Accept-Encoding");
 			if (auto pfh = "X-Forwarded-Host" !in creq.headers) creq.headers["X-Forwarded-Host"] = req.headers["Host"];
@@ -89,6 +120,19 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			// copy the response to the original requester
 			res.statusCode = cres.statusCode;
 
+			//handle protocol upgrades
+			if (cres.statusCode == HTTPStatus.switchingProtocols && isUpgrade) {
+				res.headers = cres.headers.dup;
+
+				auto scon = res.switchProtocol("");
+				auto ccon = cres.switchProtocol("");
+
+				import vibe.core.core : runTask;
+				runTask({ scon.write(ccon); });
+
+				ccon.write(scon);
+				return;
+			}
 
 			// special case for empty response bodies
 			if ("Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HTTPMethod.HEAD) {
@@ -165,4 +209,6 @@ final class HTTPReverseProxySettings {
 	ushort destinationPort;
 	/// Avoids compressed transfers between proxy and destination hosts
 	bool avoidCompressedRequests;
+	/// Handle CONNECT requests for creating a tunnel to the destination host
+	bool handleConnectRequests;
 }

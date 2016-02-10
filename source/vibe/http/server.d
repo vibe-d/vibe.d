@@ -1040,6 +1040,25 @@ final class HTTPServerResponse : HTTPResponse {
 		m_rawConnection.close(); // connection not reusable after a protocol upgrade
 	}
 
+	/** Special method for handling CONNECT proxy tunnel
+
+		Notice: For the overload that returns a `ConnectionStream`, it must be
+			ensured that the returned instance doesn't outlive the request
+			handler callback.
+	*/
+	ConnectionStream connectProxy()
+	{
+		return new ConnectionProxyStream(m_conn, m_rawConnection);
+	}
+	/// ditto
+	void connectProxy(scope void delegate(scope ConnectionStream) del)
+	{
+		scope conn = new ConnectionProxyStream(m_conn, m_rawConnection);
+		del(conn);
+		finalize();
+		m_rawConnection.close(); // connection not reusable after a protocol upgrade
+	}
+
 	/** Sets the specified cookie value.
 
 		Params:
