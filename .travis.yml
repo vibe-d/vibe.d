@@ -1,11 +1,16 @@
 language: d
 
 d:
+  # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions
+  # this way the overall test time gets cut down (GDC/LDC are a lot
+  # slower tham DMD, so they should be started early), while still
+  # catching most DMD version related build failures early
   - dmd-2.070.0
+  - dmd-2.067.12
+  - ldc-0.17.0-beta2
+  - ldc-0.16.1
   - dmd-2.069.2
   - dmd-2.068.2
-  - dmd-2.067.1
-  - ldc-0.16.1
 
 env:
   - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
@@ -14,6 +19,8 @@ env:
 matrix:
   exclude:
     - d: ldc-0.16.1
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+    - d: ldc-0.17.0-beta2
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
