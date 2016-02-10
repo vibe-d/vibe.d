@@ -20,9 +20,6 @@
 */
 module vibe.appmain;
 
-// Workaround for obscure linker error (missing Nullable!int.Nullable.__init)
-import std.typecons; private alias dummy = Nullable!int;
-
 version (VibeDefaultMain):
 
 /**

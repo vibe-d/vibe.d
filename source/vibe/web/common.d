@@ -609,24 +609,13 @@ unittest {
 }
 
 
-// Little wrapper for Nullable!T to enable more comfortable initialization.
-/// private
-struct NullableW(T) {
-	Nullable!T storage;
-	alias storage this;
-
-	this(typeof(null)) {}
-	this(T val) { storage = val; }
-}
-
 /// private
 template isNullable(T) {
 	import std.traits;
-	enum isNullable = isInstanceOf!(Nullable, T) || isInstanceOf!(NullableW, T);
+	enum isNullable = isInstanceOf!(Nullable, T);
 }
 
 static assert(isNullable!(Nullable!int));
-static assert(isNullable!(NullableW!int));
 
 package struct ParamError {
 	string field;
