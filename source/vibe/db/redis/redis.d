@@ -524,13 +524,13 @@ struct RedisDatabase {
 		LUA Scripts
 	*/
 	/// Execute a Lua script server side
-	RedisReply!T eval(T = string, ARGS...)(string lua_code, scope const(string)[] keys, scope ARGS args)
+	RedisReply!T eval(T = string, ARGS...)(string lua_code, scope string[] keys, scope ARGS args)
 		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVAL", lua_code, keys.length, keys, args);
 	}
 	/// Evaluates a script cached on the server side by its SHA1 digest. Scripts are cached on the server side using the scriptLoad function.
-	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope const(string)[] keys, scope ARGS args)
+	RedisReply!T evalSHA(T = string, ARGS...)(string sha, scope string[] keys, scope ARGS args)
 		if(isValidRedisValueType!T)
 	{
 		return request!(RedisReply!T)("EVALSHA", sha, keys.length, keys, args);
