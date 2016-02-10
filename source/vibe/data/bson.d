@@ -737,10 +737,24 @@ struct BsonBinData {
 struct BsonObjectID {
 	private {
 		ubyte[12] m_bytes;
-		static int ms_pid = -1;
+		static immutable uint MACHINE_ID;
+		static immutable int ms_pid;
 		static uint ms_inc = 0;
-		static uint MACHINE_ID = 0;
 	}
+
+    shared static this()
+    {
+		import std.process;
+		import std.random;
+        MACHINE_ID = uniform(0, 0xffffff);
+        ms_pid = thisProcessID;
+    }
+
+    static this()
+    {
+		import std.random;
+        ms_inc = uniform(0, 0xffffff);
+    }
 
 	/** Constructs a new object ID from the given raw byte array.
 	*/
@@ -788,11 +802,6 @@ struct BsonObjectID {
 	static BsonObjectID generate(in SysTime time = Clock.currTime(UTC()))
 	{
 		import std.datetime;
-		import std.process;
-		import std.random;
-
-		if( ms_pid == -1 ) ms_pid = thisProcessID;
-		if( MACHINE_ID == 0 ) MACHINE_ID = uniform(0, 0xffffff);
 
 		BsonObjectID ret = void;
 		ret.m_bytes[0 .. 4] = toBigEndianData(cast(uint)time.toUnixTime())[];
