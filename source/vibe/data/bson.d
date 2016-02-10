@@ -434,11 +434,18 @@ struct Bson {
 		If the runtime type does not match the given native type, the 'def' parameter is returned
 		instead.
 	*/
-	inout(T) opt(T)(T def = T.init) inout {
-		if( isNull() ) return def;
-		try def = cast(T)this;
-		catch( Exception e ) {}
-		return def;
+	T opt(T)(T def = T.init)
+	{
+		if (isNull()) return def;
+		try return cast(T)this;
+		catch (Exception e) return def;
+	}
+	/// ditto
+	const(T) opt(T)(const(T) def = const(T).init)
+	const {
+		if (isNull()) return def;
+		try return cast(T)this;
+		catch (Exception e) return def;
 	}
 
 	/** Returns the length of a BSON value of type String, Array, Object or BinData.
@@ -888,6 +895,20 @@ unittest {
 	id = BsonObjectID.generate(SysTime(dt, UTC()));
 	assert(id.timeStamp == SysTime(dt, UTC()));
 }
+
+unittest {
+	auto b = Bson(true);
+	assert(b.opt!bool(false) == true);
+	assert(b.opt!int(12) == 12);
+	assert(b.opt!(Bson[])(null).length == 0);
+
+	const c = b;
+	assert(c.opt!bool(false) == true);
+	assert(c.opt!int(12) == 12);
+	assert(c.opt!(Bson[])(null).length == 0);
+}
+
+
 
 /**
 	Represents a BSON date value (`Bson.Type.date`).
