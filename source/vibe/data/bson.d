@@ -434,7 +434,7 @@ struct Bson {
 		If the runtime type does not match the given native type, the 'def' parameter is returned
 		instead.
 	*/
-	inout(T) opt(T)(T def = T.init) inout {
+	T opt(T)(T def = T.init) {
 		if( isNull() ) return def;
 		try def = cast(T)this;
 		catch( Exception e ) {}
