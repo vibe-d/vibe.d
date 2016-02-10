@@ -15,14 +15,20 @@ Visit the website at <http://vibed.org/> for more information.
 Support
 -------
 
-Vibe.d aims to support the 3 latest minor releases of D.
-At the moment, it means that the following compilers are supported and tested:
-- DMD 2.069
-- DMD 2.068
-- DMD 2.067
+Vibe.d aims to support at least the 3 latest minor releases of D.
+At the moment, the following compilers are supported and tested:
+- DMD 2.070.0
+- DMD 2.069.2
+- DMD 2.068.2
+- DMD 2.067.1
+- LDC 0.17.0-beta.2 (FE: 2.068.2)
+- LDC 0.16.1 (FE: 2.067.1)
+
+Up to 0.7.27:
 - DMD 2.066
-- GDC 4.9.2 (FE: 2.066)
-- LDC 0.15.1 (FE: 2.066)
+- GDC 5.2.0
+- GDC 4.9.2
+- LDC 0.15.1
 
 
 Installation
