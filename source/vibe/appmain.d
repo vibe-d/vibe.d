@@ -20,6 +20,8 @@
 */
 module vibe.appmain;
 
+version (unittest){}
+else
 version (VibeDefaultMain):
 
 /**
