@@ -965,8 +965,10 @@ final class HTTPClientResponse : HTTPResponse {
 
 	private @property isKeepAliveResponse()
 	const {
-		if (this.httpVersion == HTTPVersion.HTTP_1_0) return this.headers.get("Connection", "close") != "close";
-		else return this.headers.get("Connection", "keep-alive") != "close";
+		string conn;
+		if (this.httpVersion == HTTPVersion.HTTP_1_0) conn = this.headers.get("Connection", "close");
+		else conn = this.headers.get("Connection", "keep-alive");
+		return icmp(conn, "close") != 0;
 	}
 
 	private void finalize()
