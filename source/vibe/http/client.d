@@ -168,20 +168,23 @@ unittest {
 	usually requestHTTP should be used for making requests instead of manually using a
 	HTTPClient to do so.
 */
-auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
+auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = null)
 {
-	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
+	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+
+	if (!settings) settings = defaultSettings;
+
 	if( port == 0 ) port = use_tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, use_tls, settings?settings.proxyURL.host:null, settings?settings.proxyURL.port:0);
+	auto ckey = ConnInfo(host, port, use_tls, settings.proxyURL.host, settings.proxyURL.port, settings.networkInterface);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
-		if (c[0].host == host && c[0].port == port && c[0].useTLS == use_tls && ((c[0].proxyIP == settings.proxyURL.host && c[0].proxyPort == settings.proxyURL.port) || settings is null))
+		if (c[0] == ckey)
 			pool = c[1];
 
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, ( settings ) ? settings.proxyURL.host : string.init, ( settings ) ? settings.proxyURL.port : 0);
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, settings.proxyURL.host, settings.proxyURL.port);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
 				ret.connect(host, port, use_tls, settings);
@@ -205,6 +208,9 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 class HTTPClientSettings {
 	URL proxyURL;
 	Duration defaultKeepAliveTimeout = 10.seconds;
+
+	/// Forces a specific network interface to use for outgoing connections.
+	NetworkAddress networkInterface = anyAddress;
 }
 
 ///
@@ -524,10 +530,13 @@ final class HTTPClient {
 
 				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
 				proxyAddr.port = m_settings.proxyURL.port;
-				m_conn = connectTCP(proxyAddr);
+				m_conn = connectTCP(proxyAddr, m_settings.networkInterface);
 			}
-			else
-				m_conn = connectTCP(m_server, m_port);
+			else {
+				auto addr = resolveHost(m_server);
+				addr.port = m_port;
+				m_conn = connectTCP(addr, m_settings.networkInterface);
+			}
 
 			m_stream = m_conn;
 			if (m_tls) {

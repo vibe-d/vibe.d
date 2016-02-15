@@ -108,7 +108,7 @@ interface EventDriver {
 
 	/** Establiches a tcp connection on the specified host/port.
 	*/
-	TCPConnection connectTCP(NetworkAddress address);
+	TCPConnection connectTCP(NetworkAddress address, NetworkAddress bind_address);
 
 	/** Listens on the specified port and interface for TCP connections.
 

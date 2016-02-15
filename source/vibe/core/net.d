@@ -88,15 +88,31 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 /**
 	Establishes a connection to the given host/port.
 */
-TCPConnection connectTCP(string host, ushort port)
+TCPConnection connectTCP(string host, ushort port, string bind_interface = null, ushort bind_port = 0)
 {
 	NetworkAddress addr = resolveHost(host);
 	addr.port = port;
-	return connectTCP(addr);
+	NetworkAddress bind_address;
+	if (bind_interface.length) bind_address = resolveHost(bind_interface, addr.family);
+	else {
+		bind_address.family = addr.family;
+		if (addr.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
+		else bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+	}
+	bind_address.port = bind_port;
+	return getEventDriver().connectTCP(addr, bind_address);
 }
 /// ditto
-TCPConnection connectTCP(NetworkAddress addr) {
-	return getEventDriver().connectTCP(addr);
+TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_address = anyAddress)
+{
+	if (bind_address.family == AF_UNSPEC) {
+		bind_address.family = addr.family;
+		if (addr.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
+		else bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+		bind_address.port = 0;
+	}
+	enforce(addr.family == bind_address.family, "Destination address and bind address have different address families.");
+	return getEventDriver().connectTCP(addr, bind_address);
 }
 
 
@@ -106,6 +122,13 @@ TCPConnection connectTCP(NetworkAddress addr) {
 UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 {
 	return getEventDriver().listenUDP(port, bind_address);
+}
+
+NetworkAddress anyAddress()
+{
+	NetworkAddress ret;
+	ret.family = AF_UNSPEC;
+	return ret;
 }
 
 version(VibeLibasyncDriver) {

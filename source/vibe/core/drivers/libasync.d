@@ -270,7 +270,7 @@ final class LibasyncDriver : EventDriver {
 
 	}
 
-	LibasyncTCPConnection connectTCP(NetworkAddress addr)
+	LibasyncTCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_addr)
 	{
 		AsyncTCPConnection conn = new AsyncTCPConnection(getEventLoop());
 
@@ -285,6 +285,8 @@ final class LibasyncDriver : EventDriver {
 			tcp_connection.acquireWriter();
 
 		tcp_connection.m_tcpImpl.conn = conn;
+		//conn.local = bind_addr;
+		conn.ip(bind_addr.toAddressString(), bind_addr.port);
 		conn.peer = addr;
 
 		enforce(conn.run(&tcp_connection.handler), "An error occured while starting a new connection: " ~ conn.error);
