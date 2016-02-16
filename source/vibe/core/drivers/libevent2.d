@@ -1009,8 +1009,8 @@ final class Libevent2UDPConnection : UDPConnection {
 		size_t tm = size_t.max;
 		if (timeout >= 0.seconds && timeout != Duration.max) {
 			tm = m_driver.createTimer(null);
+			m_driver.m_timers.getUserData(tm).owner = Task.getThis();
 			m_driver.rearmTimer(tm, timeout, false);
-			m_driver.acquireTimer(tm);
 		}
 
 		acquire();
