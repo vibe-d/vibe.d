@@ -611,10 +611,10 @@ nothrow:
 	}
 }
 
-struct FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true)
+struct FreeListObjectAlloc(T, bool USE_GC = true, bool INIT = true, EXTRA = void)
 {
 	enum ElemSize = AllocSize!T;
-	enum ElemSlotSize = max(AllocSize!T, Slot.sizeof);
+	enum ElemSlotSize = max(AllocSize!T + AllocSize!EXTRA, Slot.sizeof);
 
 	static if( is(T == class) ){
 		alias TR = T;
@@ -675,7 +675,7 @@ template AllocSize(T)
 
 struct FreeListRef(T, bool INIT = true)
 {
-	alias ObjAlloc = FreeListObjectAlloc!(T, true, INIT);
+	alias ObjAlloc = FreeListObjectAlloc!(T, true, INIT, int);
 	enum ElemSize = AllocSize!T;
 
 	static if( is(T == class) ){
