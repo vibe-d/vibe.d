@@ -91,7 +91,7 @@ import vibe.web.rest;
 			output.formattedWrite("    xhr.setRequestHeader(%s, %s);\n", Json(p.fieldName), p.name);
 
 		// submit request
-		if (route.method == HTTPMethod.GET)
+		if (route.method == HTTPMethod.GET || !route.bodyParameters.length)
 			output.put("    xhr.send();\n");
 		else {
 			output.put("    xhr.setRequestHeader('Content-Type', 'application/json');\n");
