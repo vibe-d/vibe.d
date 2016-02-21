@@ -9,7 +9,7 @@ module vibe.db.mongo.settings;
 
 import vibe.core.log;
 import vibe.data.bson;
-import vibe.db.mongo.connection : QueryFlags;
+import vibe.db.mongo.flags : QueryFlags;
 import vibe.inet.webform;
 
 import std.digest.digest : toHexString;
