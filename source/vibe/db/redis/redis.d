@@ -494,6 +494,19 @@ struct RedisDatabase {
 	{
 		return request!(RedisReply!T)("ZSCORE", key, member);
 	}
+
+	/*
+		Hyperloglog
+	*/
+	/// Adds all the element arguments to the HyperLogLog data structure stored at the variable name specified as first argument.
+	long pfadd(ARGS...)(string key, ARGS args) { return request!long("PFADD", key, args); }
+	/// When called with a single key, returns the approximated cardinality computed by the HyperLogLog data structure stored at the specified variable, which is 0 if the variable does not exist.
+	/// When called with multiple keys, returns the approximated cardinality of the union of the HyperLogLogs passed, by internally merging the HyperLogLogs stored at the provided keys into a temporary HyperLogLog.
+	long pfcount(scope string[] keys...) { return request!long("PFCOUNT", keys); }
+	/// Merge multiple HyperLogLog values into an unique value that will approximate the cardinality of the union of the observed Sets of the source HyperLogLog structures.
+	void pfmerge(ARGS...)(string destkey, ARGS args) { request("PFMERGE", destkey, args); }
+
+
 	//TODO: zunionstore
 
 	/*
