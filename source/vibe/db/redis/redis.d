@@ -501,8 +501,20 @@ struct RedisDatabase {
 
 	/// Adds one or more Keys to a HyperLogLog data structure .
 	long pfadd(ARGS...)(string key, ARGS args) { return request!long("PFADD", key, args); }
-	/// Returns the approximated cardinality computed by the HyperLogLog data structure stored at the specified key.
+
+	/** Returns the approximated cardinality computed by the HyperLogLog data
+		structure stored at the specified key.
+
+		When called with a single key, returns the approximated cardinality
+		computed by the HyperLogLog data structure stored at the specified
+		variable, which is 0 if the variable does not exist.
+
+		When called with multiple keys, returns the approximated cardinality
+		of the union of the HyperLogLogs passed, by internally merging the
+		HyperLogLogs stored at the provided keys into a temporary HyperLogLog.
+	*/
 	long pfcount(scope string[] keys...) { return request!long("PFCOUNT", keys); }
+
 	/// Merge multiple HyperLogLog values into a new one.
 	void pfmerge(ARGS...)(string destkey, ARGS args) { request("PFMERGE", destkey, args); }
 
