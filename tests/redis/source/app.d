@@ -85,7 +85,7 @@ void runTest()
 		// test blpop
 		assert(db.blpop("nonexistent", 1).isNull());
 		db.lpush("test_list", "foo");
-		assert(db.blpop("test_list", 1) == tuple("test_list", "foo"));
+		assert(db.blpop("test_list", 1).get() == tuple("test_list", "foo"));
 		db.del("test_list");
 	}
 	
