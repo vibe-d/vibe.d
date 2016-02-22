@@ -1,7 +1,7 @@
 /**
 	Redis database client implementation.
 
-	Copyright: © 2012-2014 RejectedSoftware e.K.
+	Copyright: © 2012-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger, Sönke Ludwig, Michael Eisendle, Etienne Cimon
 */
@@ -20,6 +20,7 @@ import std.format;
 import std.range : isInputRange, isOutputRange;
 import std.string;
 import std.traits;
+import std.typecons : Nullable;
 import std.utf;
 
 
@@ -347,7 +348,16 @@ struct RedisDatabase {
 	T lpop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("LPOP", key); }
 	/// BLPOP is a blocking list pop primitive. It is the blocking version of LPOP because it blocks
 	/// the connection when there are no elements to pop from any of the given lists.
-	T blpop(T = string)(string key, long seconds) if(isValidRedisValueReturn!T) { return request!T("BLPOP", key, seconds); }
+	Nullable!(Tuple!(string, T)) blpop(T = string)(string key, long seconds) if(isValidRedisValueReturn!T)
+	{
+		auto reply = request!(RedisReply!(ubyte[]))("BLPOP", key, seconds);
+		Nullable!(Tuple!(string, T)) ret;
+		if (reply.empty || reply.frontIsNull) return ret;
+		string rkey = reply.front.convertToType!string();
+		reply.popFront();
+		ret = tuple(rkey, reply.front.convertToType!T());
+		return ret;
+	}
 	/// Atomically returns and removes the last element (tail) of the list stored at source,
 	/// and pushes the element at the first element (head) of the list stored at destination.
 	T rpoplpush(T = string)(string key, string destination) if(isValidRedisValueReturn!T) { return request!T("RPOPLPUSH", key, destination); }
@@ -1213,16 +1223,7 @@ struct RedisReply(T = ubyte[]) {
 
 		ubyte[] ret = ctx.data;
 
-		static if (isSomeString!T) validate(cast(T)ret);
-
-		static if (is(T == ubyte[])) return ret;
-		else static if (is(T == string)) return cast(T)ret.idup;
-		else static if (is(T == bool)) return ret[0] == '1';
-		else static if (is(T == int) || is(T == long) || is(T == size_t) || is(T == double)) {
-			auto str = cast(string)ret;
-			return parse!T(str);
-		}
-		else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
+		return convertToType!T(ret);
 	}
 
 	@property bool frontIsNull()
@@ -1525,6 +1526,20 @@ private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string com
 		auto reply = _request_reply!T(conn, command, args);
 		return reply.front;
 	}
+}
+
+private T convertToType(T)(ubyte[] data)
+{
+	static if (isSomeString!T) validate(cast(T)data);
+
+	static if (is(T == ubyte[])) return data;
+	else static if (is(T == string)) return cast(T)data.idup;
+	else static if (is(T == bool)) return data[0] == '1';
+	else static if (is(T == int) || is(T == long) || is(T == size_t) || is(T == double)) {
+		auto str = cast(string)data;
+		return parse!T(str);
+	}
+	else static assert(false, "Unsupported Redis reply type: " ~ T.stringof);
 }
 
 private template typeFormatString(T)

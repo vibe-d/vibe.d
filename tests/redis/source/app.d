@@ -81,6 +81,12 @@ void runTest()
 		assert(db.smembers("test1").empty);
 		assert(db.smembers("test2").empty);
 		assert(!db.smembers("test1").hasNext());
+
+		// test blpop
+		assert(db.blpop("nonexistent", 1).isNull());
+		db.lpush("test_list", "foo");
+		assert(db.blpop("test_list", 1) == tuple("test_list", "foo"));
+		db.del("test_list");
 	}
 	
 	testLocking(redis.getDatabase(0));
