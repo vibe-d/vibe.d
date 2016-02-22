@@ -1178,14 +1178,13 @@ struct RedisReply(T = ubyte[]) {
 
 	alias ElementType = T;
 
-	this(RedisConnection conn)
+	private this(RedisConnection conn)
 	{
 		m_conn = conn;
 		auto ctx = &conn.m_replyContext;
 		assert(ctx.refCount == 0);
 		*ctx = RedisReplyContext.init;
 		ctx.refCount++;
-		initialize();
 	}
 
 	this(this)
@@ -1303,7 +1302,9 @@ struct RedisReply(T = ubyte[]) {
 		auto ln = cast(string)m_conn.conn.readLine();
 
 		switch (ln[0]) {
-			default: throw new Exception(format("Unknown reply type: %s", ln[0]));
+			default:
+				m_conn.conn.close();
+				throw new Exception(format("Unknown reply type: %s", ln[0]));
 			case '+': ctx.data = cast(ubyte[])ln[1 .. $]; ctx.hasData = true; break;
 			case '-': throw new Exception(ln[1 .. $]);
 			case ':': ctx.data = cast(ubyte[])ln[1 .. $]; ctx.hasData = true; break;
@@ -1315,6 +1316,7 @@ struct RedisReply(T = ubyte[]) {
 					ctx.length = 0; // TODO: make this NIL reply distinguishable from a 0-length array
 				} else {
 					ctx.multi = true;
+					scope (failure) m_conn.conn.close();
 					ctx.length = to!long(ln[ 1 .. $ ]);
 				}
 				break;
@@ -1361,6 +1363,13 @@ template isValidRedisValueReturn(T)
 template isValidRedisValueType(T)
 {
 	enum isValidRedisValueType = is(T : const(char)[]) || is(T : const(ubyte)[]) || is(T == long) || is(T == double) || is(T == bool);
+}
+
+private RedisReply!T getReply(T = ubyte)(RedisConnection conn)
+{
+	auto repl = RedisReply!T(conn);
+	repl.initialize();
+	return repl;
 }
 
 private struct RedisReplyContext {
@@ -1504,7 +1513,7 @@ private RedisReply!T _request_reply(T = ubyte[], ARGS...)(RedisConnection conn, 
 	RedisConnection.writeArgs(&rng, args);
 	rng.flush();
 
-	return RedisReply!T(conn);
+	return conn.getReply!T;
 }
 
 private T _request(T, ARGS...)(LockedConnection!RedisConnection conn, string command, scope ARGS args)

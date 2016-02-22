@@ -7,6 +7,7 @@ import vibe.core.log;
 import vibe.db.redis.redis;
 import core.time;
 import std.algorithm : sort, equal;
+import std.exception : assertThrown;
 
 void runTest()
 {
@@ -121,6 +122,10 @@ void runTest()
 	logInfo("LISTEN Stopped");
 	assert(!sub.isListening);
 	redis.getDatabase(0).publish("SomeChannel", "Messageeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee");
+
+	assertThrown(redis.getDatabase(0).eval("foo!!!", null));
+	assert(redis.getDatabase(0).get("test1") == "");
+
 	logInfo("Redis Test Succeeded.");
 }
 
