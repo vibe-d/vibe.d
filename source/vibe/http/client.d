@@ -60,12 +60,12 @@ import std.datetime;
 
 	See_also: `vibe.inet.urltransfer.download`
 */
-HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null, HTTPClientSettings settings = defaultSettings)
+HTTPClientResponse requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester = null, const(HTTPClientSettings) settings = defaultSettings)
 {
 	return requestHTTP(URL.parse(url), requester, settings);
 }
 /// ditto
-HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null, HTTPClientSettings settings = defaultSettings)
+HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester = null, const(HTTPClientSettings) settings = defaultSettings)
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
@@ -101,12 +101,12 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 	return res;
 }
 /// ditto
-void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, HTTPClientSettings settings = defaultSettings)
+void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
 	requestHTTP(URL(url), requester, responder, settings);
 }
 /// ditto
-void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, HTTPClientSettings settings = defaultSettings)
+void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
 	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
 	enforce(url.host.length > 0, "URL must contain a host name.");
@@ -168,15 +168,15 @@ unittest {
 	usually requestHTTP should be used for making requests instead of manually using a
 	HTTPClient to do so.
 */
-auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientSettings settings = null)
+auto connectHTTP(string host, ushort port = 0, bool use_tls = false, const(HTTPClientSettings) settings = null)
 {
 	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; NetworkAddress bind_addr; }
 	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 
-	if (!settings) settings = defaultSettings;
+	auto sttngs = settings ? settings : defaultSettings;
 
 	if( port == 0 ) port = use_tls ? 443 : 80;
-	auto ckey = ConnInfo(host, port, use_tls, settings.proxyURL.host, settings.proxyURL.port, settings.networkInterface);
+	auto ckey = ConnInfo(host, port, use_tls, sttngs.proxyURL.host, sttngs.proxyURL.port, sttngs.networkInterface);
 
 	ConnectionPool!HTTPClient pool;
 	foreach (c; s_connections)
@@ -184,10 +184,10 @@ auto connectHTTP(string host, ushort port = 0, bool use_tls = false, HTTPClientS
 			pool = c[1];
 
 	if (!pool) {
-		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, settings.proxyURL.host, settings.proxyURL.port);
+		logDebug("Create HTTP client pool %s:%s %s proxy %s:%d", host, port, use_tls, sttngs.proxyURL.host, sttngs.proxyURL.port);
 		pool = new ConnectionPool!HTTPClient({
 				auto ret = new HTTPClient;
-				ret.connect(host, port, use_tls, settings);
+				ret.connect(host, port, use_tls, sttngs);
 				return ret;
 			});
 		if (s_connections.full) s_connections.popFront();
@@ -247,7 +247,7 @@ final class HTTPClient {
 	enum maxHeaderLineLength = 4096;
 
 	private {
-		HTTPClientSettings m_settings;
+		Rebindable!(const(HTTPClientSettings)) m_settings;
 		string m_server;
 		ushort m_port;
 		TCPConnection m_conn;
@@ -283,7 +283,7 @@ final class HTTPClient {
 
 		This method may only be called if any previous connection has been closed.
 	*/
-	void connect(string server, ushort port = 80, bool use_tls = false, HTTPClientSettings settings = defaultSettings)
+	void connect(string server, ushort port = 80, bool use_tls = false, const(HTTPClientSettings) settings = defaultSettings)
 	{
 		assert(m_conn is null);
 		assert(port != 0);
