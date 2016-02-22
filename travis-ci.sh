@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e -o pipefail
+set -e -x -o pipefail
 
 # test for successful release build
 dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
