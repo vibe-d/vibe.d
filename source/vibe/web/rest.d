@@ -12,6 +12,7 @@ public import vibe.web.common;
 
 import vibe.core.log;
 import vibe.http.router : URLRouter;
+import vibe.http.client : HTTPClientSettings;
 import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
@@ -434,7 +435,10 @@ class RestInterfaceClient(I) : I
 					path ~= '/' ~ name;
 			}
 
-			return .request(URL(m_intf.baseURL), m_requestFilter, verb, path, hdrs, query, body_, reqReturnHdrs, optReturnHdrs);
+			auto httpsettings = m_intf.settings.httpClientSettings;
+
+			return .request(URL(m_intf.baseURL), m_requestFilter, verb, path,
+				hdrs, query, body_, reqReturnHdrs, optReturnHdrs, httpsettings);
 		}
 	}
 }
@@ -501,6 +505,9 @@ class RestInterfaceSettings {
 		REST interface that are reserved words in D.
 	*/
 	bool stripTrailingUnderscore = true;
+
+	/// Overrides the default HTTP client settings used by the `RestInterfaceClient`.
+	HTTPClientSettings httpClientSettings;
 
 	@property RestInterfaceSettings dup()
 	const {
@@ -1239,7 +1246,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	auto jret = request(URL(intf.baseURL), request_filter, sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs);
+	auto jret = request(URL(intf.baseURL), request_filter, sroute.method, url, headers, query.data, body_, reqhdrs, opthdrs, intf.settings.httpClientSettings);
 
 	static if (!is(RT == void))
 		return deserializeJson!RT(jret);
@@ -1277,7 +1284,8 @@ import vibe.http.client : HTTPClientRequest;
 private Json request(URL base_url,
 	void delegate(HTTPClientRequest) request_filter, HTTPMethod verb,
 	string path, in ref InetHeaderMap hdrs, string query, string body_,
-	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs)
+	ref InetHeaderMap reqReturnHdrs, ref InetHeaderMap optReturnHdrs,
+	in HTTPClientSettings http_settings)
 {
 	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
@@ -1337,7 +1345,8 @@ private Json request(URL base_url,
 			throw new RestException(res.statusCode, ret);
 	};
 
-	requestHTTP(url, reqdg, resdg);
+	if (http_settings) requestHTTP(url, reqdg, resdg, http_settings);
+	else requestHTTP(url, reqdg, resdg);
 
 	return ret;
 }
