@@ -211,6 +211,9 @@ class HTTPClientSettings {
 
 	/// Forces a specific network interface to use for outgoing connections.
 	NetworkAddress networkInterface = anyAddress;
+
+	/// Can be used to force looking up IPv4/IPv6 addresses for host names.
+	AddressFamily dnsAddressFamily = AddressFamily.UNSPEC;
 }
 
 ///
@@ -528,12 +531,12 @@ final class HTTPClient {
 					use_dns = true;
 				}
 
-				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, 0, use_dns);
+				NetworkAddress proxyAddr = resolveHost(m_settings.proxyURL.host, m_settings.dnsAddressFamily, use_dns);
 				proxyAddr.port = m_settings.proxyURL.port;
 				m_conn = connectTCP(proxyAddr, m_settings.networkInterface);
 			}
 			else {
-				auto addr = resolveHost(m_server);
+				auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
 				addr.port = m_port;
 				m_conn = connectTCP(addr, m_settings.networkInterface);
 			}
