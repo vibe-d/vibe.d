@@ -222,6 +222,41 @@ struct MongoCollection {
 		return findAndModify(query, update, null);
 	}
 
+	/// ditto
+	Bson findAndModify(T)(T arguments)
+	{
+		auto bargs = serializeToBson(arguments);
+		assert(bargs.type == Bson.Type.object,
+			"The arguments parameter to findAndModify must be a BSON object.");
+
+		Bson cmd = Bson.emptyObject;
+		cmd["findAndModify"] = m_name;
+
+		foreach (string key, value; bargs) {
+			import std.algorithm : canFind;
+
+			immutable supported_fields = ["query", "sort", "remove", "new", "fields", "upsert",
+				"bypassDocumentValidation", "writeConcern"];
+			assert(supported_fields.canFind(key), "Field '" ~ key ~ "' is not supported.");
+
+			cmd[key] = value;
+		}
+
+		auto ret = database.runCommand(cmd);
+		enforce(ret["ok"].get!double != 0, "findAndModify failed.");
+		return ret["value"];
+	}
+
+	unittest {
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto coll = connectMongoDB("127.0.0.1").getCollection("test");
+			coll.findAndModify(["query": Bson(["name": Bson("foo")]), "remove": Bson(true)]);
+		}
+	}
+
 	/**
 		Counts the results of the specified query expression.
 
