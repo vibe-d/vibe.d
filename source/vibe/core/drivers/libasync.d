@@ -1021,6 +1021,8 @@ final class LibasyncTCPListener : TCPListener {
 
 	}
 
+	@property NetworkAddress bindAddress() { return m_local; }
+
 	@property void delegate(TCPConnection) connectionCallback() { return m_connectionCallback; }
 
 	private void delegate(TCPEvent) initConnection(AsyncTCPConnection conn) {

@@ -442,6 +442,17 @@ package final class Libevent2TCPConnection : TCPConnection {
 final class Libevent2TCPListener : TCPListener {
 	private {
 		TCPContext*[] m_ctx;
+		NetworkAddress m_bindAddress;
+	}
+
+	this(NetworkAddress bind_address)
+	{
+		m_bindAddress = bind_address;
+	}
+
+	@property NetworkAddress bindAddress()
+	{
+		return m_bindAddress;
 	}
 
 	void addContext(TCPContext* ctx)

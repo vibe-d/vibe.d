@@ -289,6 +289,9 @@ interface TCPConnection : ConnectionStream {
 	Represents a listening TCP socket.
 */
 interface TCPListener {
+	/// The local address at which TCP connections are accepted.
+	@property NetworkAddress bindAddress();
+
 	/// Stops listening and closes the socket.
 	void stopListening();
 }

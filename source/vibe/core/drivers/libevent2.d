@@ -362,6 +362,7 @@ final class Libevent2Driver : EventDriver {
 		}
 		socketEnforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
 			"Error binding listening socket");
+		
 		socketEnforce(listen(listenfd, 128) == 0,
 			"Error listening to listening socket");
 
@@ -369,7 +370,10 @@ final class Libevent2Driver : EventDriver {
 		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
 			"Error setting listening socket to non-blocking I/O.");
 
-		auto ret = new Libevent2TCPListener;
+		socklen_t balen = bind_addr.sockAddrLen;
+		socketEnforce(getsockname(listenfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
+
+		auto ret = new Libevent2TCPListener(bind_addr);
 
 		static final class HandlerContext {
 			Libevent2TCPListener listener;
