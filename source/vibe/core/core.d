@@ -1236,7 +1236,7 @@ private class VibeDriverCore : DriverCore {
 	nothrow @safe {
 		assert(ctask.thread is () @trusted { return Thread.getThis(); } (), "Resuming task in foreign thread.");
 		assert(() @trusted nothrow { return ctask.state; } () == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
-		assert(ctask.m_queue is null, "Manually resuming task that is already scheduled to resumed.");
+		assert(ctask.m_queue is null, "Manually resuming task that is already scheduled to be resumed.");
 
 		if( event_exception ){
 			extrap();
@@ -1285,6 +1285,14 @@ private class VibeDriverCore : DriverCore {
 		if( !m_ignoreIdleForGC && m_gcTimer ){
 			m_gcTimer.rearm(m_gcCollectTimeout);
 		} else m_ignoreIdleForGC = false;
+	}
+
+	bool isScheduledForResume(Task t)
+	{
+		if (t == Task.init) return false;
+		if (!t.running) return false;
+		auto cf = cast(CoreTask)t.fiber;
+		return cf.m_queue !is null;
 	}
 
 	private void resumeYieldedTasks()

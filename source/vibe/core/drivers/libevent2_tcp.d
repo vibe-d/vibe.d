@@ -423,6 +423,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 			cleanup();
 			throw new Exception(format("Connection error while %s TCPConnection.", write ? "writing to" : "reading from"));
 		}
+		if (m_ctx.state == ConnectionState.activeClose) throw new Exception("Connection was actively closed.");
 		enforce (!write || m_ctx.state == ConnectionState.open, "Remote hung up while writing to TCPConnection.");
 		if (!write && m_ctx.state == ConnectionState.passiveClose) {
 			auto buf = bufferevent_get_input(m_ctx.event);
@@ -663,7 +664,7 @@ package nothrow extern(C)
 
 		auto f = ctx.readOwner;
 		try {
-			if (f && f.running && ctx.state != ConnectionState.activeClose)
+			if (f && f.running && !ctx.core.isScheduledForResume(f))
 				ctx.core.resumeTask(f);
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketRead: %s", e.msg);
@@ -677,7 +678,7 @@ package nothrow extern(C)
 			assert(ctx.magic__ == TCPContext.MAGIC);
 			assert(ctx.event is buf_event, "Write event on bufferevent that does not match the TCPContext");
 			logTrace("socket %d write event (%s)!", ctx.socketfd, ctx.shutdown);
-			if (ctx.writeOwner != Task.init && ctx.writeOwner.running) {
+			if (ctx.writeOwner != Task.init && ctx.writeOwner.running && !ctx.core.isScheduledForResume(ctx.writeOwner)) {
 				bufferevent_flush(buf_event, EV_WRITE, bufferevent_flush_mode.BEV_FLUSH);
 				ctx.core.resumeTask(ctx.writeOwner);
 			}
@@ -700,7 +701,7 @@ package nothrow extern(C)
 
 			string errorMessage;
 			if (status & BEV_EVENT_EOF) {
-				logDebug("Connection was closed (fd %d).", ctx.socketfd);
+				logDebug("Connection was closed by remote peer (fd %d).", ctx.socketfd);
 				if (ctx.state != ConnectionState.activeClose)
 					ctx.state = ConnectionState.passiveClose;
 				evbuffer* buf = bufferevent_get_input(buf_event);
@@ -723,7 +724,7 @@ package nothrow extern(C)
 
 			ctx.core.eventException = ex;
 
-			if (ctx.readOwner && ctx.readOwner.running && ctx.state != ConnectionState.activeClose) {
+			if (ctx.readOwner && ctx.readOwner.running && !ctx.core.isScheduledForResume(ctx.readOwner)) {
 				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
 				if (ctx.readOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
 				else ctx.core.resumeTask(ctx.readOwner, ex);
