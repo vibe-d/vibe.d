@@ -298,7 +298,7 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 	alias TU = Unqual!T;
 
 	static if (is(TU == enum)) {
-		static if (hasAttributeL!(ByNameAttribute, ATTRIBUTES)) {
+		static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 			serializeImpl!(Serializer, Policy, string)(serializer, value.to!string());
 		} else {
 			serializeImpl!(Serializer, Policy, OriginalType!TU)(serializer, cast(OriginalType!TU)value);
@@ -381,7 +381,7 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 	} else static if (isStringSerializable!TU) {
 		serializer.writeValue(value.toString());
 	} else static if (is(TU == struct) || is(TU == class)) {
-		static if (!hasSerializableFields!TU)
+		static if (!hasSerializableFields!(TU, Policy))
 			pragma(msg, "Serializing composite type "~T.stringof~" which has no serializable fields");
 		static if (is(TU == class)) {
 			if (value is null) {
@@ -389,11 +389,11 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 				return;
 			}
 		}
-		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
-			enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
+		static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
+			enum nfields = getExpandedFieldCount!(TU, SerializableFields!(TU, Policy));
 			serializer.beginWriteArray!TU(nfields);
 			size_t fcount = 0;
-			foreach (mname; SerializableFields!TU) {
+			foreach (mname; SerializableFields!(TU, Policy)) {
 				alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				foreach (j, TM; TMS) {
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
@@ -406,16 +406,16 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 			serializer.endWriteArray!TU();
 		} else {
 			static if (__traits(compiles, serializer.beginWriteDictionary!TU(0))) {
-				enum nfields = getExpandedFieldCount!(TU, SerializableFields!TU);
+				enum nfields = getExpandedFieldCount!(TU, SerializableFields!(TU, Policy));
 				serializer.beginWriteDictionary!TU(nfields);
 			} else {
 				serializer.beginWriteDictionary!TU();
 			}
-			foreach (mname; SerializableFields!TU) {
+			foreach (mname; SerializableFields!(TU, Policy)) {
 				alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
 				static if (TM.length == 1) {
 					alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
-					enum name = getAttribute!(TU, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
+					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 					auto vt = __traits(getMember, value, mname);
 					serializer.beginWriteDictionaryEntry!(typeof(vt))(name);
 					serializeImpl!(Serializer, Policy, typeof(vt), TA)(serializer, vt);
@@ -460,7 +460,7 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
 	static if (is(T == enum)) {
-		static if (hasAttributeL!(ByNameAttribute, ATTRIBUTES)) {
+		static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 			return deserializeImpl!(string, Policy, Serializer)(deserializer).to!T();
 		} else {
 			return cast(T)deserializeImpl!(OriginalType!T, Policy, Serializer)(deserializer);
@@ -526,17 +526,17 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 		T ret;
 		static if (is(T == class)) ret = new T;
 
-		static if (hasAttributeL!(AsArrayAttribute, ATTRIBUTES)) {
+		static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
 			size_t idx = 0;
 			deserializer.readArray!T((sz){}, {
-				static if (hasSerializableFields!T) {
+				static if (hasSerializableFields!(T, Policy)) {
 					switch (idx++) {
 						default: break;
-						foreach (i, mname; SerializableFields!T) {
+						foreach (i, mname; SerializableFields!(T, Policy)) {
 							alias TM = typeof(__traits(getMember, ret, mname));
 							alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
 							case i:
-								static if (hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
+								static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
 									if (deserializer.tryReadNull()) return;
 								set[i] = true;
 								__traits(getMember, ret, mname) = deserializeImpl!(TM, Policy, Serializer, TA)(deserializer);
@@ -549,15 +549,15 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 			});
 		} else {
 			deserializer.readDictionary!T((name) {
-				static if (hasSerializableFields!T) {
+				static if (hasSerializableFields!(T, Policy)) {
 					switch (name) {
 						default: break;
-						foreach (i, mname; SerializableFields!T) {
+						foreach (i, mname; SerializableFields!(T, Policy)) {
 							alias TM = typeof(__traits(getMember, ret, mname));
 							alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
-							enum fname = getAttribute!(T, mname, NameAttribute)(NameAttribute(underscoreStrip(mname))).name;
+							enum fname = getPolicyAttribute!(T, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 							case fname:
-								static if (hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
+								static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
 									if (deserializer.tryReadNull()) return;
 								set[i] = true;
 								__traits(getMember, ret, mname) = deserializeImpl!(TM, Policy, Serializer, TA)(deserializer);
@@ -569,9 +569,9 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 				}
 			});
 		}
-		foreach (i, mname; SerializableFields!T)
-			static if (!hasAttribute!(OptionalAttribute, __traits(getMember, T, mname)))
-				enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"'.");
+		foreach (i, mname; SerializableFields!(T, Policy))
+			static if (!hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
+				enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
 		return ret;
 	} else static if (isPointer!T) {
 		if (deserializer.tryReadNull()) return null;
@@ -588,9 +588,9 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 /**
 	Attribute for overriding the field name during (de-)serialization.
 */
-NameAttribute name(string name)
+NameAttribute!Policy name(alias Policy = DefaultPolicy)(string name)
 {
-	return NameAttribute(name);
+	return NameAttribute!Policy(name);
 }
 ///
 unittest {
@@ -603,9 +603,9 @@ unittest {
 /**
 	Attribute marking a field as optional during deserialization.
 */
-@property OptionalAttribute optional()
+@property OptionalAttribute!Policy optional(alias Policy = DefaultPolicy)()
 {
-	return OptionalAttribute();
+	return OptionalAttribute!Policy();
 }
 ///
 unittest {
@@ -619,9 +619,9 @@ unittest {
 /**
 	Attribute for marking non-serialized fields.
 */
-@property IgnoreAttribute ignore()
+@property IgnoreAttribute!Policy ignore(alias Policy = DefaultPolicy)()
 {
-	return IgnoreAttribute();
+	return IgnoreAttribute!Policy();
 }
 ///
 unittest {
@@ -630,14 +630,26 @@ unittest {
 		@ignore int screenSize;
 	}
 }
+///
+unittest {
+	template CustomPolicy(T) {
+		// ...
+	}
+
+	struct Test {
+		// not (de)serialized for serializeWithPolicy!(Test, CustomPolicy)
+		// but for other policies or when serialized without a policy
+		@ignore!CustomPolicy int screenSize;
+	}
+}
 
 
 /**
 	Attribute for forcing serialization of enum fields by name instead of by value.
 */
-@property ByNameAttribute byName()
+@property ByNameAttribute!Policy byName(alias Policy = DefaultPolicy)()
 {
-	return ByNameAttribute();
+	return ByNameAttribute!Policy();
 }
 ///
 unittest {
@@ -668,9 +680,9 @@ unittest {
 	as a flat array instead. Note that changing the layout will make any
 	already serialized data mismatch when this attribute is used.
 */
-@property AsArrayAttribute asArray()
+@property AsArrayAttribute!Policy asArray(alias Policy = DefaultPolicy)()
 {
-	return AsArrayAttribute();
+	return AsArrayAttribute!Policy();
 }
 ///
 unittest {
@@ -701,15 +713,15 @@ enum FieldExistence
 }
 
 /// User defined attribute (not intended for direct use)
-struct NameAttribute { string name; }
+struct NameAttribute(alias POLICY) { alias Policy = POLICY; string name; }
 /// ditto
-struct OptionalAttribute {}
+struct OptionalAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
-struct IgnoreAttribute {}
+struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
-struct ByNameAttribute {}
+struct ByNameAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
-struct AsArrayAttribute {}
+struct AsArrayAttribute(alias POLICY) { alias Policy = POLICY; }
 
 /**
 	Checks if a given type has a custom serialization representation.
@@ -930,10 +942,29 @@ private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!
 
 unittest {
 	@asArray int i1;
-	static assert(hasAttribute!(AsArrayAttribute, i1));
+	static assert(hasAttribute!(AsArrayAttribute!DefaultPolicy, i1));
 	int i2;
-	static assert(!hasAttribute!(AsArrayAttribute, i2));
+	static assert(!hasAttribute!(AsArrayAttribute!DefaultPolicy, i2));
 }
+
+private template hasPolicyAttribute(alias T, alias POLICY, alias decl)
+{
+	enum hasPolicyAttribute = hasAttribute!(T!POLICY, decl) || hasAttribute!(T!DefaultPolicy, decl);
+}
+
+unittest {
+	template CP(T) {}
+	@asArray!CP int i1;
+	@asArray int i2;
+	int i3;
+	static assert(hasPolicyAttribute!(AsArrayAttribute, CP, i1));
+	static assert(hasPolicyAttribute!(AsArrayAttribute, CP, i2));
+	static assert(!hasPolicyAttribute!(AsArrayAttribute, CP, i3));
+	static assert(!hasPolicyAttribute!(AsArrayAttribute, DefaultPolicy, i1));
+	static assert(hasPolicyAttribute!(AsArrayAttribute, DefaultPolicy, i2));
+	static assert(!hasPolicyAttribute!(AsArrayAttribute, DefaultPolicy, i3));
+}
+
 
 private template hasAttributeL(T, ATTRIBUTES...) {
 	static if (ATTRIBUTES.length == 1) {
@@ -946,8 +977,13 @@ private template hasAttributeL(T, ATTRIBUTES...) {
 }
 
 unittest {
-	static assert(hasAttributeL!(AsArrayAttribute, byName, asArray));
-	static assert(!hasAttributeL!(AsArrayAttribute, byName));
+	static assert(hasAttributeL!(AsArrayAttribute!DefaultPolicy, byName, asArray));
+	static assert(!hasAttributeL!(AsArrayAttribute!DefaultPolicy, byName));
+}
+
+private template hasPolicyAttributeL(alias T, alias POLICY, ATTRIBUTES...)
+{
+	enum hasPolicyAttributeL = hasAttributeL!(T!POLICY, ATTRIBUTES) || hasAttributeL!(T!DefaultPolicy, ATTRIBUTES);
 }
 
 private static T getAttribute(TT, string mname, T)(T default_value)
@@ -957,6 +993,17 @@ private static T getAttribute(TT, string mname, T)(T default_value)
 	else return default_value;
 }
 
+private static auto getPolicyAttribute(TT, string mname, alias Attribute, alias Policy)(Attribute!DefaultPolicy default_value)
+{
+	enum val = findFirstUDA!(Attribute!Policy, __traits(getMember, TT, mname));
+	static if (val.found) return val.value;
+	else {
+		enum val2 = findFirstUDA!(Attribute!DefaultPolicy, __traits(getMember, TT, mname));
+		static if (val2.found) return val2.value;
+		else return default_value;
+	}
+}
+
 private string underscoreStrip(string field_name)
 {
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
@@ -964,9 +1011,9 @@ private string underscoreStrip(string field_name)
 }
 
 
-private template hasSerializableFields(T, size_t idx = 0)
+private template hasSerializableFields(T, alias POLICY, size_t idx = 0)
 {
-	enum hasSerializableFields = SerializableFields!(T).length > 0;
+	enum hasSerializableFields = SerializableFields!(T, POLICY).length > 0;
 	/*static if (idx < __traits(allMembers, T).length) {
 		enum mname = __traits(allMembers, T)[idx];
 		static if (!isRWPlainField!(T, mname) && !isRWField!(T, mname)) enum hasSerializableFields = hasSerializableFields!(T, idx+1);
@@ -975,17 +1022,17 @@ private template hasSerializableFields(T, size_t idx = 0)
 	} else enum hasSerializableFields = false;*/
 }
 
-private template SerializableFields(COMPOSITE)
+private template SerializableFields(COMPOSITE, alias POLICY)
 {
-	alias SerializableFields = FilterSerializableFields!(COMPOSITE, __traits(allMembers, COMPOSITE));
+	alias SerializableFields = FilterSerializableFields!(COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
 }
 
-private template FilterSerializableFields(COMPOSITE, FIELDS...)
+private template FilterSerializableFields(COMPOSITE, alias POLICY, FIELDS...)
 {
 	static if (FIELDS.length > 1) {
 		alias FilterSerializableFields = TypeTuple!(
-			FilterSerializableFields!(COMPOSITE, FIELDS[0 .. $/2]),
-			FilterSerializableFields!(COMPOSITE, FIELDS[$/2 .. $]));
+			FilterSerializableFields!(COMPOSITE, POLICY, FIELDS[0 .. $/2]),
+			FilterSerializableFields!(COMPOSITE, POLICY, FIELDS[$/2 .. $]));
 	} else static if (FIELDS.length == 1) {
 		alias T = COMPOSITE;
 		enum mname = FIELDS[0];
@@ -994,9 +1041,10 @@ private template FilterSerializableFields(COMPOSITE, FIELDS...)
 			static if (Tup.length != 1) {
 				alias FilterSerializableFields = TypeTuple!(mname);
 			} else {
-				static if (!hasAttribute!(IgnoreAttribute, __traits(getMember, T, mname)))
+				static if (!hasPolicyAttribute!(IgnoreAttribute, POLICY, __traits(getMember, T, mname)))
+				{
 					alias FilterSerializableFields = TypeTuple!(mname);
-				else alias FilterSerializableFields = TypeTuple!();
+				} else alias FilterSerializableFields = TypeTuple!();
 			}
 		} else alias FilterSerializableFields = TypeTuple!();
 	} else alias FilterSerializableFields = TypeTuple!();
@@ -1345,4 +1393,40 @@ unittest { // issue #1182
 	auto serialized = serialize!TestSerializer(s);
 	assert(serialized == s_ser, serialized);
 	assert(deserialize!(TestSerializer, S)(serialized) == s);
+}
+
+unittest { // issue #1352 - ingore per policy
+	struct P1 {}
+	struct P2 {}
+
+	struct T {
+		@ignore int a = 5;
+		@ignore!P1 @ignore!P2 int b = 6;
+		@ignore!P1 c = 7;
+		int d = 8;
+	}
+
+	auto t = T(1, 2, 3, 4);
+	auto Tm = T.mangleof;
+	auto t_ser_plain = "D("~Tm~"){DE(i,b)(V(i)(2))DE(i,b)DE(i,c)(V(i)(3))DE(i,c)DE(i,d)(V(i)(4))DE(i,d)}D("~Tm~")";
+	auto t_ser_p1 = "D("~Tm~"){DE(i,d)(V(i)(4))DE(i,d)}D("~Tm~")";
+	auto t_ser_p2 = "D("~Tm~"){DE(i,c)(V(i)(3))DE(i,c)DE(i,d)(V(i)(4))DE(i,d)}D("~Tm~")";
+
+	{
+		auto serialized_plain = serialize!TestSerializer(t);
+		assert(serialized_plain == t_ser_plain);
+		assert(deserialize!(TestSerializer, T)(serialized_plain) == T(5, 2, 3, 4));
+	}
+
+	{
+		auto serialized_p1 = serializeWithPolicy!(TestSerializer, P1)(t);
+		assert(serialized_p1 == t_ser_p1, serialized_p1);
+		assert(deserializeWithPolicy!(TestSerializer, P1, T)(serialized_p1) == T(5, 6, 7, 4));
+	}
+
+	{
+		auto serialized_p2 = serializeWithPolicy!(TestSerializer, P2)(t);
+		assert(serialized_p2 == t_ser_p2);
+		assert(deserializeWithPolicy!(TestSerializer, P2, T)(serialized_p2) == T(5, 6, 3, 4));
+	}
 }
