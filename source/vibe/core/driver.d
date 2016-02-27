@@ -223,6 +223,8 @@ interface DriverCore {
 		fully processed.
 	*/
 	void notifyIdle();
+
+	bool isScheduledForResume(Task t);
 }
 
 
