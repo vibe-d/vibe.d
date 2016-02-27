@@ -1,6 +1,24 @@
 ﻿Changelog
 =========
 
+v0.7.28 - 2016-02-27
+--------------------
+
+This is a hotfix release, which fixes two critical regressions. The first one resulted in memory leaks or memory corruption, while the second one could cause TCP connections to hang indefinitely in the `close` method for the libevent driver.
+
+### Bug fixes ###
+
+- Fixed a regression in `FreeListRef` which caused the reference count to live outside of the allocated memory bounds - [issue #1432][issue1432]
+- Fixed a task starvation regression in the libevent driver that happened when a connection got closed by the TCP remote peer while there was still data in the write buffer - [issue #1441][issue1441]
+- Fixed recognizing "Connection: close" headers for non-lowercase spelling of "close" - [issue #1426][issue1426]
+- Fixed the UDP receive timeout to actually work in the libevent driver - [issue #1429][issue1429]
+
+[issue1426]: https://github.com/rejectedsoftware/vibe.d/issues/1426
+[issue1429]: https://github.com/rejectedsoftware/vibe.d/issues/1429
+[issue1432]: https://github.com/rejectedsoftware/vibe.d/issues/1432
+[issue1441]: https://github.com/rejectedsoftware/vibe.d/issues/1441
+
+
 v0.7.27 - 2016-02-09
 --------------------
 
