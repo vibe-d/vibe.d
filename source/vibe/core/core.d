@@ -1236,12 +1236,15 @@ private class VibeDriverCore : DriverCore {
 	nothrow @safe {
 		assert(ctask.thread is () @trusted { return Thread.getThis(); } (), "Resuming task in foreign thread.");
 		assert(() @trusted nothrow { return ctask.state; } () == Fiber.State.HOLD, "Resuming fiber that is not on HOLD");
-		assert(ctask.m_queue is null, "Manually resuming task that is already scheduled to be resumed.");
 
-		if( event_exception ){
+		if (event_exception) {
 			extrap();
+			assert(!ctask.m_exception, "Resuming task with exception that is already scheduled to be resumed with exception.");
 			ctask.m_exception = event_exception;
 		}
+
+		// do nothing if the task is aready scheduled to be resumed
+		if (ctask.m_queue) return;
 
 		static if (__VERSION__ > 2066)
 			auto uncaught_exception = () @trusted nothrow { return ctask.call!(Fiber.Rethrow.no)(); } ();
