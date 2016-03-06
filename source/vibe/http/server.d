@@ -614,13 +614,13 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		FormFields query;
 
+		import vibe.utils.dictionarylist;
 		/** A map of general parameters for the request.
 
 			This map is supposed to be used by middleware functionality to store
 			information for later stages. For example vibe.http.router.URLRouter uses this map
 			to store the value of any named placeholders.
 		*/
-		import vibe.utils.dictionarylist;
 		DictionaryList!(string, true, 8) params;
 
 		/** Supplies the request body as a stream.
