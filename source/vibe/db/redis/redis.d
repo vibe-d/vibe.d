@@ -391,8 +391,9 @@ struct RedisDatabase {
 	T spop(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("SPOP", key ); }
 	/// Returns a random element from the set stored at key.
 	T srandMember(T = string)(string key) if(isValidRedisValueReturn!T) { return request!T("SRANDMEMBER", key ); }
+	///returns count random elements from the set stored at key
+	RedisReply!T srandMember(T = string)(string key, long count) if(isValidRedisValueReturn!T) { return request!(RedisReply!T)("SRANDMEMBER", key, count ); }
 
-	// TODO: SRANDMEMBER key [count]
 
 	/// Remove the specified members from the set stored at key.
 	long srem(ARGS...)(string key, ARGS args) { return request!long("SREM", key, args); }
