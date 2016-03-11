@@ -160,7 +160,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 		if (!getThreadLibeventEventLoop()) {
 			import std.stdio;
-			stderr.writefln("Warning: Dangling TCP connection to %s left alive at shutdown. "
+			stderr.writefln("Warning: Attempt to close dangling TCP connection to %s at shutdown. "
 				~ "Please avoid closing connections in GC finalizers.", m_remoteAddress);
 			return;
 		}
