@@ -75,6 +75,8 @@ version (Windows)
 */
 int runEventLoop()
 {
+	setupSignalHandlers();
+
 	logDebug("Starting event loop.");
 	s_eventLoopRunning = true;
 	scope (exit) {
@@ -766,6 +768,22 @@ body {
 
 
 /**
+	Disables the signal handlers usually set up by vibe.d.
+
+	During the first call to `runEventLoop`, vibe.d usually sets up a set of
+	event handlers for SIGINT, SIGTERM and SIGPIPE. Since in some situations
+	this can be undesirable, this function can be called before the first
+	invocation of the event loop to avoid this.
+
+	Calling this function after `runEventLoop` will have no effect.
+*/
+void disableDefaultSignalHandlers()
+{
+	synchronized (st_threadsMutex)
+		s_disableSignalHandlers = true;
+}
+
+/**
 	Sets the effective user and group ID to the ones configured for privilege lowering.
 
 	This function is useful for services run as root to give up on the privileges that
@@ -1437,6 +1455,7 @@ private {
 
 	string s_privilegeLoweringUserName;
 	string s_privilegeLoweringGroupName;
+	__gshared bool s_disableSignalHandlers = false;
 }
 
 private static @property VibeDriverCore driverCore() @trusted nothrow { return s_core; }
@@ -1444,6 +1463,43 @@ private static @property VibeDriverCore driverCore() @trusted nothrow { return s
 private bool getExitFlag()
 {
 	return s_exitEventLoop || atomicLoad(st_term);
+}
+
+private void setupSignalHandlers()
+{
+	__gshared bool s_setup = false;
+
+	// only initialize in main thread
+	synchronized (st_threadsMutex) {
+		if (s_setup) return;
+		s_setup = true;
+
+		if (s_disableSignalHandlers) return;
+
+		logTrace("setup signal handler");
+		version(Posix){
+			// support proper shutdown using signals
+			sigset_t sigset;
+			sigemptyset(&sigset);
+			sigaction_t siginfo;
+			siginfo.sa_handler = &onSignal;
+			siginfo.sa_mask = sigset;
+			siginfo.sa_flags = SA_RESTART;
+			sigaction(SIGINT, &siginfo, null);
+			sigaction(SIGTERM, &siginfo, null);
+
+			siginfo.sa_handler = &onBrokenPipe;
+			sigaction(SIGPIPE, &siginfo, null);
+		}
+
+		version(Windows){
+			// WORKAROUND: we don't care about viral @nogc attribute here!
+			import std.traits;
+			signal(SIGABRT, cast(ParameterTypeTuple!signal[1])&onSignal);
+			signal(SIGTERM, cast(ParameterTypeTuple!signal[1])&onSignal);
+			signal(SIGINT, cast(ParameterTypeTuple!signal[1])&onSignal);
+		}
+	}
 }
 
 // per process setup
@@ -1475,30 +1531,6 @@ shared static this()
 	s_core = new VibeDriverCore;
 	st_threadsMutex = new Mutex;
 	st_threadShutdownCondition = new Condition(st_threadsMutex);
-
-	version(Posix){
-		logTrace("setup signal handler");
-		// support proper shutdown using signals
-		sigset_t sigset;
-		sigemptyset(&sigset);
-		sigaction_t siginfo;
-		siginfo.sa_handler = &onSignal;
-		siginfo.sa_mask = sigset;
-		siginfo.sa_flags = SA_RESTART;
-		sigaction(SIGINT, &siginfo, null);
-		sigaction(SIGTERM, &siginfo, null);
-
-		siginfo.sa_handler = &onBrokenPipe;
-		sigaction(SIGPIPE, &siginfo, null);
-	}
-
-	version(Windows){
-		// WORKAROUND: we don't care about viral @nogc attribute here!
-		import std.traits;
-		signal(SIGABRT, cast(ParameterTypeTuple!signal[1])&onSignal);
-		signal(SIGTERM, cast(ParameterTypeTuple!signal[1])&onSignal);
-		signal(SIGINT, cast(ParameterTypeTuple!signal[1])&onSignal);
-	}
 
 	auto thisthr = Thread.getThis();
 	thisthr.name = "Main";
