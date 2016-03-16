@@ -205,7 +205,15 @@ struct NetworkAddress {
 	string toAddressString()
 	const {
 		import std.array : appender;
-		import std.string : format;
+		auto ret = appender!string();
+		ret.reserve(40);
+		toAddressString(str => ret.put(str));
+		return ret.data;
+	}
+	/// ditto
+	void toAddressString(scope void delegate(const(char)[]) @safe sink)
+	const {
+		import std.array : appender;
 		import std.format : formattedWrite;
 		ubyte[2] _dummy = void; // Workaround for DMD regression in master
 
@@ -213,17 +221,16 @@ struct NetworkAddress {
 			default: assert(false, "toAddressString() called for invalid address family.");
 			case AF_INET:
 				ubyte[4] ip = () @trusted { return (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4]; } ();
-				return format("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+				sink.formattedWrite("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
+				break;
 			case AF_INET6:
 				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr;
-				auto ret = appender!string();
-				ret.reserve(40);
 				foreach (i; 0 .. 8) {
-					if (i > 0) ret.put(':');
+					if (i > 0) sink(":");
 					_dummy[] = ip[i*2 .. i*2+2];
-					ret.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
+					sink.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
 				}
-				return ret.data;
+				break;
 		}
 	}
 
@@ -231,11 +238,26 @@ struct NetworkAddress {
 	*/
 	string toString()
 	const {
-		auto ret = toAddressString();
+		import std.array : appender;
+		auto ret = appender!string();
+		toString(str => ret.put(str));
+		return ret.data;
+	}
+	/// ditto
+	void toString(scope void delegate(const(char)[]) @safe sink)
+	const {
+		import std.format : formattedWrite;
 		switch (this.family) {
 			default: assert(false, "toString() called for invalid address family.");
-			case AF_INET: return ret ~ format(":%s", port);
-			case AF_INET6: return format("[%s]:%s", ret, port);
+			case AF_INET:
+				toAddressString(sink);
+				sink.formattedWrite(":%s", port);
+				break;
+			case AF_INET6:
+				sink("[");
+				toAddressString(sink);
+				sink.formattedWrite("]:%s", port);
+				break;
 		}
 	}
 

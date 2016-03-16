@@ -158,6 +158,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 		logDebug("TCP close request %s %s", m_ctx !is null, m_ctx ? m_ctx.state : ConnectionState.open);
 		if (!m_ctx || m_ctx.state == ConnectionState.activeClose) return;
 
+		if (!getThreadLibeventEventLoop()) {
+			import std.stdio;
+			stderr.writefln("Warning: Attempt to close dangling TCP connection to %s at shutdown. "
+				~ "Please avoid closing connections in GC finalizers.", m_remoteAddress);
+			return;
+		}
+
 		// set the closing flag
 		m_ctx.state = ConnectionState.activeClose;
 
