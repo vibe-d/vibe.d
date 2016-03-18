@@ -122,6 +122,7 @@ string getMimeTypeForFile(string filename)
 		case "grxml": return "application/srgs+xml";
 		case "sru": return "application/sru+xml";
 		case "ssml": return "application/ssml+xml";
+		case "sqlite","s3db","db3": return "application/x-sqlite3";
 		case "tei","teicorpus": return "application/tei+xml";
 		case "tfi": return "application/thraud+xml";
 		case "tsd": return "application/timestamped-data";
