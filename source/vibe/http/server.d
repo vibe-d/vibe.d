@@ -978,7 +978,7 @@ final class HTTPServerResponse : HTTPResponse {
 
 		Params:
 			url = The URL to redirect to
-			status = The HTTP redirect status (3xx) to send - by default this is $D(D HTTPStatus.found)
+			status = The HTTP redirect status (3xx) to send - by default this is $(D HTTPStatus.found)
 	*/
 	void redirect(string url, int status = HTTPStatus.Found)
 	{
@@ -1866,7 +1866,7 @@ private void parseCookies(string str, ref CookieValueMap cookies)
 		.each!(kv => cookies.add(kv[0], kv[1], Cookie.Encoding.raw) );
 }
 
-unittest 
+unittest
 {
   auto cvm = CookieValueMap();
   parseCookies("foo=bar;; baz=zinga; öö=üü   ;   møøse=was=sacked;    onlyval1; =onlyval2; onlykey=", cvm);
