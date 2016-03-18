@@ -46,6 +46,7 @@ enum HTTPStatus {
 	requestedrangenotsatisfiable = 416,
 	expectationFailed            = 417,
 	tooManyRequests              = 429,
+	unavailableForLegalReasons   = 451,
 	internalServerError          = 500,
 	notImplemented               = 501,
 	badGateway                   = 502,
@@ -144,6 +145,7 @@ string httpStatusText(int code)
 		case HTTPStatus.unsupportedMediaType         : return "Unsupported Media Type";
 		case HTTPStatus.requestedrangenotsatisfiable : return "Requested range not satisfiable";
 		case HTTPStatus.expectationFailed            : return "Expectation Failed";
+		case HTTPStatus.unavailableForLegalReasons   : return "Unavailable For Legal Reasons";
 		case HTTPStatus.internalServerError          : return "Internal Server Error";
 		case HTTPStatus.notImplemented               : return "Not Implemented";
 		case HTTPStatus.badGateway                   : return "Bad Gateway";
