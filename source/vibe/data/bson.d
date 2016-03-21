@@ -539,7 +539,7 @@ struct Bson {
 		return Bson(null);
 	}
 	/// ditto
-	void opIndexAssign(T)(T value, string idx){
+	void opIndexAssign(T)(in T value, string idx){
 		auto newcont = appender!bdata_t();
 		checkType(Type.object);
 		auto d = m_data[4 .. $];
