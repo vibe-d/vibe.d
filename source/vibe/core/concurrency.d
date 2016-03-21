@@ -4,7 +4,7 @@
 	This module is modeled after std.concurrency, but provides a fiber-aware alternative
 	to it. All blocking operations will yield the calling fiber instead of blocking it.
 
-	Copyright: © 2013-2014 RejectedSoftware e.K.
+	Copyright: © 2013-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -19,6 +19,7 @@ import std.string;
 import vibe.core.task;
 import vibe.utils.memory;
 import vibe.internal.newconcurrency;
+import vibe.internal.meta.traits : StripHeadConst;
 
 static if (newStdConcurrency) public import std.concurrency;
 else public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;
@@ -1124,13 +1125,13 @@ struct Future(T) {
 
 	See_also: $(D isWeaklyIsolated)
 */
-Future!(ReturnType!CALLABLE) async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
+Future!(StripHeadConst!(ReturnType!CALLABLE)) async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
 	if (is(typeof(callable(args)) == ReturnType!CALLABLE))
 {
 	import vibe.core.core;
 	import std.functional : toDelegate;
 
-	alias RET = ReturnType!CALLABLE;
+	alias RET = StripHeadConst!(ReturnType!CALLABLE);
 	Future!RET ret;
 	ret.init();
 	static void compute(FreeListRef!(shared(RET)) dst, CALLABLE callable, ARGS args) {
@@ -1186,6 +1187,14 @@ unittest {
 		// if all arguments are weakly isolated
 		assert(async(&sum2, 2, 3).getResult() == 5);
 	}
+}
+
+unittest {
+	auto f = async({
+		immutable byte b = 1;
+		return b;
+	});
+	assert(f.getResult() == 1);
 }
 
 /******************************************************************************/
