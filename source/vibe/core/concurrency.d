@@ -990,6 +990,7 @@ template isWeaklyIsolated(T...)
 		static if(is(T[0] == immutable)) enum bool isWeaklyIsolated = true;
 		else static if (is(T[0] == shared)) enum bool isWeaklyIsolated = true;
 		else static if (isInstanceOf!(Rebindable, T[0])) enum bool isWeaklyIsolated = isWeaklyIsolated!(typeof(T[0].get()));
+		else static if (is(T[0] == Tid)) enum bool isWeaklyIsolated = true; // Tid/MessageBox is not properly annotated with shared
 		else static if (is(T[0] : Throwable)) enum bool isWeaklyIsolated = true; // WARNING: this is unsafe, but needed for send/receive!
 		else static if (is(typeof(T[0].__isIsolatedType))) enum bool isWeaklyIsolated = true;
 		else static if (is(typeof(T[0].__isWeakIsolatedType))) enum bool isWeaklyIsolated = true;
@@ -1056,6 +1057,10 @@ unittest {
 	static assert(isWeaklyIsolated!G);
 	static assert(!isWeaklyIsolated!H);
 	static assert(!isWeaklyIsolated!I);
+}
+
+unittest {
+	static assert(isWeaklyIsolated!Tid);
 }
 
 
