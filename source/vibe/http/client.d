@@ -253,6 +253,7 @@ final class HTTPClient {
 		Rebindable!(const(HTTPClientSettings)) m_settings;
 		string m_server;
 		ushort m_port;
+		bool m_useTLS;
 		TCPConnection m_conn;
 		Stream m_stream;
 		TLSContext m_tls;
@@ -297,6 +298,7 @@ final class HTTPClient {
 		m_keepAliveLimit = Clock.currTime(UTC()) + m_keepAliveTimeout;
 		m_server = server;
 		m_port = port;
+		m_useTLS = use_tls;
 		if (use_tls) {
 			m_tls = createTLSContext(TLSContextKind.client);
 			// this will be changed to trustedCert once a proper root CA store is available by default
@@ -478,7 +480,7 @@ final class HTTPClient {
 
 			logTrace("HTTP client waiting for response");
 			if (!m_stream.empty) break;
-			
+
 			enforce(i != 1, "Second attempt to send HTTP request failed.");
 		}
 		return has_body;
@@ -542,7 +544,7 @@ final class HTTPClient {
 			}
 
 			m_stream = m_conn;
-			if (m_tls) {
+			if (m_useTLS) {
 				try m_stream = createTLSStream(m_conn, m_tls, TLSStreamState.connecting, m_server, m_conn.remoteAddress);
 				catch (Exception e) {
 					m_conn.close();
@@ -942,7 +944,7 @@ final class HTTPClientResponse : HTTPResponse {
 			When using the overload that returns a `ConnectionStream`, the caller
 			must make sure that the stream is not used after the
 			`HTTPClientRequest` has been destroyed.
-		
+
 		Params:
 			new_protocol = The protocol to which the connection is expected to
 				upgrade. Should match the Upgrade header of the request. If an
