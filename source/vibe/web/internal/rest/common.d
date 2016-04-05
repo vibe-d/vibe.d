@@ -260,7 +260,7 @@ import vibe.web.rest;
 
 				// Comparison template for anySatisfy
 				//template Cmp(WebParamAttribute attr) { enum Cmp = (attr.identifier == ParamNames[i]); }
-				alias CompareParamName = GenCmp!("Loop", i, parameterNames[i]);
+				alias CompareParamName = GenCmp!("Loop"~func.mangleof, i, parameterNames[i]);
 				mixin(CompareParamName.Decl);
 
 				StaticParameter pi;
