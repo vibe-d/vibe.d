@@ -877,16 +877,14 @@ private struct MatchGraphBuilder {
 				size_t ncomb = addNode();
 				combined_nodes[chnodes] = ncomb;
 
-				// sum up all edge counts
-				size_t[ubyte.max+1] lengths;
+				// allocate memory for all edges combined
+				size_t total_edge_count = 0;
 				foreach (chn; chnodes) {
 					Node* cn = &m_nodes[chn];
-					foreach (to_ch; ubyte.min .. ubyte.max+1)
-						lengths[to_ch] += cn.edges[to_ch].length;
+					foreach (edges; cn.edges)
+						total_edge_count +=edges.length;
 				}
-
-				// allocate memory for everything
-				auto mem = new size_t[lengths[].sum];
+				auto mem = new size_t[total_edge_count];
 
 				// write all edges
 				size_t idx = 0;
@@ -899,10 +897,12 @@ private struct MatchGraphBuilder {
 					}
 					m_nodes[ncomb].edges[to_ch] = mem[start .. idx];
 				}
-				foreach (chn; chnodes)
-					addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
+
+				// add terminal indices
+				foreach (chn; chnodes) addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
+				
 				m_nodes[n].edges[ch] = [ncomb];
 			}
 
