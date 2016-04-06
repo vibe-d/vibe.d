@@ -687,15 +687,16 @@ private struct MatchTree(T) {
 				m_terminals[t.index].varMap[nmidx] = var;
 			}
 			nn.terminalsEnd = m_terminalTags.length;
-			foreach (e; builder.m_nodes[n].edges)
-				nn.edges[e.ch] = process(e.to);
+			foreach (ch, nodes; builder.m_nodes[n].edges)
+				foreach (to; nodes)
+					nn.edges[ch] = process(to);
 
 			m_nodes[nmidx] = nn;
 
 			return nmidx;
 		}
-		assert(builder.m_nodes[0].edges.length == 1, "Graph must be disambiguated before purging.");
-		process(builder.m_nodes[0].edges[0].to);
+		assert(builder.m_nodes[0].edges['^'].length == 1, "Graph must be disambiguated before purging.");
+		process(builder.m_nodes[0].edges['^'][0]);
 
 		logDebug("Match tree has %s nodes, %s terminals", m_nodes.length, m_terminals.length);
 	}
@@ -791,11 +792,7 @@ private struct MatchGraphBuilder {
 		}
 		struct Node {
 			TerminalTag[] terminals;
-			Edge[] edges;
-		}
-		struct Edge {
-			ubyte ch;
-			size_t to;
+			size_t[][ubyte.max+1] edges;
 		}
 		Node[] m_nodes;
 	}
@@ -847,11 +844,14 @@ private struct MatchGraphBuilder {
 
 	void disambiguate()
 	{
+		import std.algorithm : map, sum;
+		import std.array : appender, join;
+
 //logInfo("Disambiguate");
 		if (!m_nodes.length) return;
 
 		import vibe.utils.hashmap;
-		HashMap!(immutable(size_t)[], size_t) combined_nodes;
+		HashMap!(size_t[], size_t) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
 		size_t[] node_stack = [0];
 		while (node_stack.length) {
@@ -863,46 +863,56 @@ private struct MatchGraphBuilder {
 //logInfo("Disambiguate %s", n);
 			visited[n] = true;
 
-			Edge[] newedges;
-			immutable(size_t)[][ubyte.max+1] edges;
-			foreach (e; m_nodes[n].edges) edges[e.ch] ~= e.to;
 			foreach (ch_; ubyte.min .. ubyte.max+1) {
 				ubyte ch = cast(ubyte)ch_;
-				auto chnodes = edges[ch_];
+				auto chnodes = m_nodes[n].edges[ch_];
 
 				// handle trivial cases
-				if (!chnodes.length) continue;
-				if (chnodes.length == 1) { addToArray(newedges, Edge(ch, chnodes[0])); continue; }
+				if (chnodes.length <= 1) continue;
 
 				// generate combined state for ambiguous edges
-				if (auto pn = chnodes in combined_nodes) { addToArray(newedges, Edge(ch, *pn)); continue; }
+				if (auto pn = chnodes in combined_nodes) { m_nodes[n].edges[ch] = [*pn]; continue; }
 
 				// for new combinations, create a new node
 				size_t ncomb = addNode();
 				combined_nodes[chnodes] = ncomb;
-				bool[ubyte][size_t] nc_edges;
+
+				// sum up all edge counts
+				size_t[ubyte.max+1] lengths;
 				foreach (chn; chnodes) {
-					foreach (e; m_nodes[chn].edges) {
-						if (auto pv = e.to in nc_edges) {
-							if (auto pw = e.ch in *pv)
-								continue;
-							else (*pv)[e.ch] = true;
-						} else nc_edges[e.to][e.ch] = true;
-						m_nodes[ncomb].edges ~= e;
-					}
-					addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
+					Node* cn = &m_nodes[chn];
+					foreach (to_ch; ubyte.min .. ubyte.max+1)
+						lengths[to_ch] += cn.edges[to_ch].length;
 				}
+
+				// allocate memory for everything
+				auto mem = new size_t[lengths[].sum];
+
+				// write all edges
+				size_t idx = 0;
+				foreach (to_ch; ubyte.min .. ubyte.max+1) {
+					size_t start = idx;
+					foreach (chn; chnodes) {
+						auto edges = m_nodes[chn].edges[to_ch];
+						mem[idx .. idx + edges.length] = edges;
+						idx += edges.length;
+					}
+					m_nodes[ncomb].edges[to_ch] = mem[start .. idx];
+				}
+				foreach (chn; chnodes)
+					addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
-				newedges ~= Edge(ch, ncomb);
+				m_nodes[n].edges[ch] = [ncomb];
 			}
-			m_nodes[n].edges = newedges;
 
 			// process nodes recursively
 			node_stack.assumeSafeAppend();
-			foreach (e; newedges) node_stack ~= e.to;
+			foreach (ch; ubyte.min .. ubyte.max+1)
+				if (m_nodes[n].edges[ch].length)
+					node_stack ~= m_nodes[n].edges[ch];
 		}
-//logInfo("Disambiguate done");
+		logInfo("Disambiguate done: %s nodes", m_nodes.length);
 	}
 
 	void print()
@@ -923,14 +933,15 @@ private struct MatchGraphBuilder {
 				return ch.to!string;
 			}
 			logInfo("  %s %s", i, n.terminals.map!(t => format("T%s%s", t.index, t.var.length ? "("~t.var~")" : "")).join(" "));
-			foreach (e; n.edges)
-				logInfo("    %s -> %s", mapChar(e.ch), e.to);
+			foreach (ch, tnodes; n.edges)
+				foreach (tn; tnodes)
+					logInfo("    %s -> %s", mapChar(cast(ubyte)ch), tn);
 		}
 	}
 
 	private void addEdge(size_t from, size_t to, ubyte ch, size_t terminal, string var)
 	{
-		m_nodes[from].edges ~= Edge(ch, to);
+		m_nodes[from].edges[ch] ~= to;
 		addTerminal(to, terminal, var);
 	}
 
@@ -938,7 +949,7 @@ private struct MatchGraphBuilder {
 	{
 		import std.algorithm : canFind;
 		import std.string : format;
-		assert(!m_nodes[from].edges.canFind!(e => e.ch == ch), format("%s is in %s", ch, m_nodes[from].edges));
+		assert(!m_nodes[from].edges[ch].length > 0, format("%s is in %s", ch, m_nodes[from].edges));
 		auto nidx = addNode();
 		addEdge(from, nidx, ch, terminal, var);
 		return nidx;
