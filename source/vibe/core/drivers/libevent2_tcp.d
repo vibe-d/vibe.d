@@ -428,9 +428,9 @@ package final class Libevent2TCPConnection : TCPConnection {
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if (m_ctx.event is null) {
 			cleanup();
-			throw new Exception(format("Connection error while %s TCPConnection.", write ? "writing to" : "reading from"));
+			throw new ConnectionException(format("Connection error while %s TCPConnection.", write ? "writing to" : "reading from"));
 		}
-		if (m_ctx.state == ConnectionState.activeClose) throw new Exception("Connection was actively closed.");
+		if (m_ctx.state == ConnectionState.activeClose) throw new ConnectionException("Connection was actively closed.");
 		enforce (!write || m_ctx.state == ConnectionState.open, "Remote hung up while writing to TCPConnection.");
 		if (!write && m_ctx.state == ConnectionState.passiveClose) {
 			auto buf = bufferevent_get_input(m_ctx.event);

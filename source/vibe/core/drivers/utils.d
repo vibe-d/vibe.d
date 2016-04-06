@@ -9,6 +9,17 @@ module vibe.core.drivers.utils;
 
 import std.exception;
 
+/**
+ * Whenever Something goes wrong with the connection
+ */
+class ConnectionException : Exception
+{
+	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	{
+		super(message, file, line, next);
+	}
+}
+
 version (Windows) {
 	static if (__VERSION__ >= 2070) {
 		import core.sys.windows.windows;
