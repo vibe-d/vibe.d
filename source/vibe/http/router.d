@@ -942,7 +942,9 @@ private struct MatchGraphBuilder {
 
 	private void addEdge(size_t from, size_t to, ubyte ch, size_t terminal, string var)
 	{
-		m_nodes[from].edges[ch] ~= to;
+		auto e = &m_nodes[from].edges[ch];
+		if (!(*e).length) *e = singleNodeArray(to);
+		else *e ~= to;
 		addTerminal(to, terminal, var);
 	}
 
