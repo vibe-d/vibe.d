@@ -791,6 +791,7 @@ private struct MatchGraphBuilder {
 			bool opEquals(in ref TerminalTag other) const { return index == other.index && var == other.var; }
 		}
 		struct Node {
+			size_t idx;
 			TerminalTag[] terminals;
 			size_t[][ubyte.max+1] edges;
 		}
@@ -871,7 +872,7 @@ private struct MatchGraphBuilder {
 				if (chnodes.length <= 1) continue;
 
 				// generate combined state for ambiguous edges
-				if (auto pn = chnodes in combined_nodes) { m_nodes[n].edges[ch] = [*pn]; continue; }
+				if (auto pn = chnodes in combined_nodes) { m_nodes[n].edges[ch] = singleNodeArray(*pn); continue; }
 
 				// for new combinations, create a new node
 				size_t ncomb = addNode();
@@ -903,7 +904,7 @@ private struct MatchGraphBuilder {
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
 				
-				m_nodes[n].edges[ch] = [ncomb];
+				m_nodes[n].edges[ch] = singleNodeArray(ncomb);
 			}
 
 			// process nodes recursively
@@ -970,8 +971,13 @@ private struct MatchGraphBuilder {
 	private size_t addNode()
 	{
 		auto idx = m_nodes.length;
-		m_nodes ~= Node(null, null);
+		m_nodes ~= Node(idx, null, null);
 		return idx;
+	}
+
+	private size_t[] singleNodeArray(size_t node)
+	{
+		return (&m_nodes[node].idx)[0 .. 1];
 	}
 
 	private static addToArray(T)(ref T[] arr, T[] elems) { foreach (e; elems) addToArray(arr, e); }
