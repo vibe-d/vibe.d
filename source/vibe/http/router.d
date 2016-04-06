@@ -605,7 +605,7 @@ private struct MatchTree(T) {
 
 		// follow the path through the match graph
 		foreach (i, char ch; text) {
-			auto nidx = n.edges[cast(ubyte)ch];
+			auto nidx = n.edges[cast(size_t)ch];
 			if (nidx == uint.max) return null;
 			n = &m_nodes[nidx];
 		}
@@ -627,7 +627,7 @@ private struct MatchTree(T) {
 
 		// folow the path throgh the match graph
 		foreach (i, char ch; text) {
-			auto var = term.varMap[nidx];
+			auto var = term.varMap.get(nidx, size_t.max);
 
 			// detect end of variable
 			if (var != activevar && activevar != size_t.max) {
@@ -646,7 +646,7 @@ private struct MatchTree(T) {
 		}
 
 		// terminate any active varible with the end of the input string or with the last character
-		auto var = term.varMap[nidx];
+		auto var = term.varMap.get(nidx, size_t.max);
 		if (activevar != size_t.max) dst[activevar] = text[activevarstart .. (var == activevar ? $ : $-1)];
 	}
 
@@ -684,7 +684,8 @@ private struct MatchTree(T) {
 				auto var = t.var.length ? m_terminals[t.index].varNames.countUntil(t.var) : size_t.max;
 				assert(!m_terminalTags[nn.terminalsStart .. $].canFind!(u => u.index == t.index && u.var == var));
 				m_terminalTags ~= TerminalTag(t.index, var);
-				m_terminals[t.index].varMap[nmidx] = var;
+				if (var != size_t.max)
+					m_terminals[t.index].varMap[nmidx] = var;
 			}
 			nn.terminalsEnd = m_terminalTags.length;
 			foreach (ch, nodes; builder.m_nodes[n].edges)
