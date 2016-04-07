@@ -914,7 +914,7 @@ private struct MatchGraphBuilder {
 				if (m_nodes[n].edges[ch].length)
 					node_stack ~= m_nodes[n].edges[ch];
 		}
-		logInfo("Disambiguate done: %s nodes", m_nodes.length);
+//logInfo("Disambiguate done: %s nodes", m_nodes.length);
 	}
 
 	void print()
