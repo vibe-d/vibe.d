@@ -13,6 +13,8 @@ import vibe.http.server;
 import vibe.web.rest;
 
 import core.time;
+import std.typecons : Nullable;
+
 
 /* --------- EXAMPLE 1 ---------- */
 
@@ -409,6 +411,7 @@ override:
 
 	string getConcat(FooType myFoo)
 	{
+		import std.conv : to;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
 	}
 }
