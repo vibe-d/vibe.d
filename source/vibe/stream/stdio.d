@@ -134,6 +134,8 @@ class StdFileStream : ConnectionStream {
 
 	private void writeThreadFunc()
 	{
+		import std.algorithm : min;
+		
 		bool loop_flag = false;
 		runTask({
 			ubyte[1024] buf;

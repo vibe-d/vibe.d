@@ -797,6 +797,8 @@ private struct LogOutputRange {
 
 	void put(dchar ch)
 	{
+		static import std.utf;
+		
 		if (ch < 128) put(cast(char)ch);
 		else {
 			char[4] buf;

@@ -7,7 +7,11 @@
 */
 module vibe.web.internal.rest.common;
 
+import vibe.http.common : HTTPMethod;
 import vibe.web.rest;
+
+import std.algorithm : endsWith, startsWith;
+import std.meta : anySatisfy, Filter;
 
 
 /**
@@ -236,6 +240,8 @@ import vibe.web.rest;
 
 	private static StaticRoute[routeCount] computeStaticRoutes()
 	{
+		static import std.traits;
+
 		assert(__ctfe);
 
 		StaticRoute[routeCount] ret;

@@ -12,6 +12,8 @@ module vibe.db.redis.idioms;
 import vibe.db.redis.redis;
 import vibe.db.redis.types;
 
+import core.time : msecs, seconds;
+
 
 /**
 */

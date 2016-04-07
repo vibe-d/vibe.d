@@ -23,6 +23,7 @@ import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
+import std.typecons : Nullable;
 import std.typetuple : anySatisfy, Filter;
 import std.traits;
 
@@ -305,6 +306,8 @@ unittest {
 
 	void generateJSClientImpl()
 	{
+		import std.array : appender;
+		
 		auto app = appender!string;
 		generateRestJSClient!MyAPI(app);
 		writeFileUTF8(Path("myapi.js"), app.data);
@@ -1155,6 +1158,7 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 {
 	import vibe.web.internal.rest.common : ParameterKind;
 	import vibe.textfilter.urlencode : filterURLEncode, urlEncode;
+	import std.array : appender;
 
 	alias Info = RestInterface!I;
 	alias Func = Info.RouteFunctions[ridx];

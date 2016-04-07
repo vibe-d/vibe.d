@@ -9,9 +9,12 @@
 */
 module vibe.db.redis.types;
 
-import core.time : Duration, msecs, seconds;
-import std.datetime : SysTime;
 import vibe.db.redis.redis;
+
+import std.conv : to;
+import std.datetime : SysTime;
+import std.typecons : Nullable;
+import core.time : Duration, msecs, seconds;
 
 
 /** Returns a handle to a string type value.

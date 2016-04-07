@@ -26,6 +26,8 @@ import vibe.http.router;
 import vibe.http.server;
 import vibe.http.websockets;
 
+import std.encoding : sanitize;
+
 /*
 	TODO:
 		- conversion errors of path place holder parameters should result in 404

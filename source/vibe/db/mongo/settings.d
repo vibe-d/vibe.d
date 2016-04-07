@@ -12,6 +12,7 @@ import vibe.data.bson;
 import vibe.db.mongo.flags : QueryFlags;
 import vibe.inet.webform;
 
+import std.conv : to;
 import std.digest.digest : toHexString;
 import std.digest.md : md5Of;
 import std.algorithm : splitter, startsWith;
@@ -32,6 +33,8 @@ import std.string : icmp, indexOf, toLower;
  */
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 {
+	import std.exception : enforce;
+	
 	cfg = new MongoClientSettings();
 
 	string tmpUrl = url[0..$]; // Slice of the url (not a copy)

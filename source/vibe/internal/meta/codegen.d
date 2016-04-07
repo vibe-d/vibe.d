@@ -374,18 +374,18 @@ mixin template CloneFunctionDecl(alias Func, bool keepUDA = true, string identif
 	import vibe.internal.meta.codegen : ParameterTuple, FuncAttributes;
 
 	static if (keepUDA)
-		private alias UDA = TypeTuple!(__traits(getAttributes, Func));
+		private enum UDA = q{@(TypeTuple!(__traits(getAttributes, Func)))};
 	else
-		private alias UDA = TypeTuple!();
+		private enum UDA = "";
 
 	static if (variadicFunctionStyle!Func == Variadic.no) {
 		mixin(q{
-				@(UDA) ReturnType!Func %s(ParameterTuple!Func) %s;
-			}.format(identifier, FuncAttributes!Func));
+				%s ReturnType!Func %s(ParameterTuple!Func) %s;
+			}.format(UDA, identifier, FuncAttributes!Func));
 	} else static if (variadicFunctionStyle!Func == Variadic.typesafe) {
 		mixin(q{
-				@(UDA) ReturnType!Func %s(ParameterTuple!Func...) %s;
-			}.format(identifier, FuncAttributes!Func));
+				%s ReturnType!Func %s(ParameterTuple!Func...) %s;
+			}.format(UDA, identifier, FuncAttributes!Func));
 	} else
 		static assert(0, "Variadic style " ~ variadicFunctionStyle!Func.stringof
 					  ~ " not implemented.");

@@ -7,8 +7,10 @@
 */
 module vibe.web.validation;
 
-import std.typecons : Nullable;
 import vibe.utils.validation;
+
+import std.array : appender;
+import std.typecons : Nullable;
 
 
 /**

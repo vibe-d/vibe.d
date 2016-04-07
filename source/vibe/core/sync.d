@@ -177,6 +177,8 @@ class LocalTaskSemaphore
 	*/
 	void lock(ubyte priority = 0)
 	{ 
+		import std.algorithm : min;
+
 		if (tryLock())
 			return;
 		

@@ -1102,8 +1102,10 @@ private class CoreTask : TaskFiber {
 					m_running = true;
 					scope(exit) m_running = false;
 
-					static if (newStdConcurrency)
+					static if (newStdConcurrency) {
+						static import std.concurrency;
 						std.concurrency.thisTid; // force creation of a new Tid
+					}
 
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					if (!s_eventLoopRunning) {

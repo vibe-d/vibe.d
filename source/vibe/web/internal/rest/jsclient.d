@@ -9,6 +9,8 @@ module vibe.web.internal.rest.jsclient;
 
 import vibe.web.rest;
 
+import std.conv : to;
+
 
 /**
 	Generates JavaScript code suitable for accessing a REST interface using XHR.
@@ -22,6 +24,7 @@ import vibe.web.rest;
 	import std.traits : FunctionTypeOf, ReturnType;
 	import vibe.data.json : Json, serializeToJson;
 	import vibe.internal.meta.uda;
+	import vibe.http.common : HTTPMethod;
 	import vibe.web.internal.rest.common;
 	import vibe.web.common;
 

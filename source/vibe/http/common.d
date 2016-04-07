@@ -24,6 +24,7 @@ import std.conv;
 import std.datetime;
 import std.exception;
 import std.format;
+import std.range : isOutputRange;
 import std.string;
 import std.typecons;
 

@@ -74,6 +74,8 @@ class WebSocketException: Exception
 */
 WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSettings)
 {
+	import std.typecons : Tuple, tuple;
+	
 	auto host = url.host;
 	auto port = url.port;
 	bool use_tls = (url.schema == "wss") ? true : false;

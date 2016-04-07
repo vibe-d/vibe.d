@@ -31,6 +31,7 @@ import vibe.utils.string;
 
 import core.atomic;
 import core.vararg;
+import std.algorithm : canFind;
 import std.array;
 import std.conv;
 import std.datetime;
