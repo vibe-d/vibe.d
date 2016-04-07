@@ -11,7 +11,8 @@ import vibe.http.common : HTTPMethod;
 import vibe.web.rest;
 
 import std.algorithm : endsWith, startsWith;
-import std.meta : anySatisfy, Filter;
+static if (__VERSION__ >= 2068) import std.meta : anySatisfy, Filter;
+else import std.typetuple : anySatisfy, Filter;
 
 
 /**
