@@ -12,6 +12,7 @@ import vibe.http.router;
 import vibe.http.server;
 import vibe.web.rest;
 
+import std.typecons : Nullable;
 import core.time;
 
 /* --------- EXAMPLE 1 ---------- */
@@ -409,6 +410,7 @@ override:
 
 	string getConcat(FooType myFoo)
 	{
+		import std.conv : to;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
 	}
 }
@@ -594,6 +596,7 @@ shared static this()
 			logInfo("Success.");
 		} catch (Exception e) {
 			import core.stdc.stdlib : exit;
+			import std.encoding : sanitize;
 			logError("Fail: %s", e.toString().sanitize);
 			exit(1);
 		} finally {
