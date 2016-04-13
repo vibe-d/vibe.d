@@ -1136,6 +1136,15 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	/**
+		Returns $(D true) if remote peer is still connected and $(D false) when
+		remote peer closed the connection.
+	*/
+	@property bool connected() {
+		if (!m_rawConnection) return false;
+		return m_rawConnection.connected;
+	}
+
+	/**
 		Finalizes the response. This is usually called automatically by the server.
 
 		This method can be called manually after writing the response to force
