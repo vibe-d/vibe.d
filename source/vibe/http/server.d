@@ -1121,12 +1121,14 @@ final class HTTPServerResponse : HTTPResponse {
 	@property ulong bytesWritten() { return m_countingWriter.bytesWritten; }
 
 	/**
-		Waits until either the connection closes or until the given timeout is
-		reached.
+		Waits until either the connection closes, data arrives, or until the
+		given timeout is reached.
 
 		Returns:
-			$(D true) if the connection was closed and $(D false) when the
-			timeout was reached.
+			$(D true) if the connection was closed and $(D false) if either the
+			timeout was reached, or if data has arrived for consumption.
+
+		See_Also: `connected`
 	*/
 	bool waitForConnectionClose(Duration timeout = Duration.max)
 	{
@@ -1136,10 +1138,15 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 	/**
-		Returns $(D true) if remote peer is still connected and $(D false) when
-		remote peer closed the connection.
+		Determines if the underlying connection is still alive.
+
+		Returns $(D true) if the remote peer is still connected and $(D false)
+		if the remote peer closed the connection.
+
+		See_Also: `waitForConnectionClose`
 	*/
-	@property bool connected() {
+	@property bool connected()
+	{
 		if (!m_rawConnection) return false;
 		return m_rawConnection.connected;
 	}
