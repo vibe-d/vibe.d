@@ -866,11 +866,11 @@ final class HTTPClientResponse : HTTPResponse {
 			if( *pce == "deflate" ){
 				m_deflateInputStream = FreeListRef!DeflateInputStream(m_bodyReader);
 				m_bodyReader = m_deflateInputStream;
-			} else if( *pce == "gzip" ){
+			} else if( *pce == "gzip" || *pce == "x-gzip"){
 				m_gzipInputStream = FreeListRef!GzipInputStream(m_bodyReader);
 				m_bodyReader = m_gzipInputStream;
 			}
-			else enforce(*pce == "identity", "Unsuported content encoding: "~*pce);
+			else enforce(*pce == "identity" || *pce == "", "Unsuported content encoding: "~*pce);
 		}
 
 		// be sure to free resouces as soon as the response has been read
