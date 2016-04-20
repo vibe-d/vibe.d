@@ -766,6 +766,11 @@ final class HTTPClientResponse : HTTPResponse {
 		int m_maxRequests;
 	}
 
+	enum DecodeContent {
+		Strict, // Known encodings are decoded, unknown throw
+		Known,  // Known encodings are decoded, unknown are forwarded untouched
+		None 		// No Content is decoded at all
+	}
 	/// Contains the keep-alive 'max' parameter, indicates how many requests a client can
 	/// make before the server closes the connection.
 	@property int maxRequests() const {
@@ -841,7 +846,7 @@ final class HTTPClientResponse : HTTPResponse {
 	/**
 		An input stream suitable for reading the response body.
 	*/
-	@property InputStream bodyReader()
+	@property InputStream bodyReader(DecodeContent decodeContent= DecodeContent.Strict)
 	{
 		if( m_bodyReader ) return m_bodyReader;
 
@@ -862,17 +867,20 @@ final class HTTPClientResponse : HTTPResponse {
 			m_bodyReader = m_client.m_stream;
 		}
 
-		if( auto pce = "Content-Encoding" in this.headers ){
-			if( *pce == "deflate" ){
-				m_deflateInputStream = FreeListRef!DeflateInputStream(m_bodyReader);
-				m_bodyReader = m_deflateInputStream;
-			} else if( *pce == "gzip" ){
-				m_gzipInputStream = FreeListRef!GzipInputStream(m_bodyReader);
-				m_bodyReader = m_gzipInputStream;
+		if(decodeContent != DecodeContent.None ) {
+			if( auto pce = "Content-Encoding" in this.headers ){
+				if( *pce == "deflate" ){
+					m_deflateInputStream = FreeListRef!DeflateInputStream(m_bodyReader);
+					m_bodyReader = m_deflateInputStream;
+				} else if( *pce == "gzip" || *pce == "x-gzip"){
+					m_gzipInputStream = FreeListRef!GzipInputStream(m_bodyReader);
+					m_bodyReader = m_gzipInputStream;
+				}
+				else if(decodeContent == DecodeContent.Strict) {
+					enforce(*pce == "identity" || *pce == "", "Unsuported content encoding: "~*pce);
+				}
 			}
-			else enforce(*pce == "identity", "Unsuported content encoding: "~*pce);
 		}
-
 		// be sure to free resouces as soon as the response has been read
 		m_endCallback = FreeListRef!EndCallbackInputStream(m_bodyReader, &this.finalize);
 		m_bodyReader = m_endCallback;
