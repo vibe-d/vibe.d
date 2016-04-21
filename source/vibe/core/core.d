@@ -1317,9 +1317,11 @@ private class VibeDriverCore : DriverCore {
 		}
 		if (!s_yieldedTasks.empty) logDebug("Exiting from idle processing although there are still yielded tasks");
 
-		if( !m_ignoreIdleForGC && m_gcTimer ){
-			m_gcTimer.rearm(m_gcCollectTimeout);
-		} else m_ignoreIdleForGC = false;
+		if (Thread.getThis() is st_mainThread) {
+			if (!m_ignoreIdleForGC && m_gcTimer) {
+				m_gcTimer.rearm(m_gcCollectTimeout);
+			} else m_ignoreIdleForGC = false;
+		}
 	}
 
 	bool isScheduledForResume(Task t)
@@ -1441,6 +1443,7 @@ private {
 
 	__gshared core.sync.mutex.Mutex st_threadsMutex;
 	__gshared ManualEvent st_threadsSignal;
+	__gshared Thread st_mainThread;
 	__gshared ThreadContext[] st_threads;
 	__gshared TaskFuncInfo[] st_workerTasks;
 	__gshared Condition st_threadShutdownCondition;
@@ -1507,6 +1510,8 @@ private void setupSignalHandlers()
 // per process setup
 shared static this()
 {
+	st_mainThread = Thread.getThis();
+
 	version(Windows){
 		version(VibeLibeventDriver) enum need_wsa = true;
 		else version(VibeWin32Driver) enum need_wsa = true;
