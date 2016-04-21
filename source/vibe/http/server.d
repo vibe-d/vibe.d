@@ -1657,11 +1657,23 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		// find the matching virtual host
 		string reqhost;
 		ushort reqport = 0;
-		import std.algorithm : splitter;
-		auto reqhostparts = req.host.splitter(":");
-		if (!reqhostparts.empty) { reqhost = reqhostparts.front; reqhostparts.popFront(); }
-		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }
-		enforce(reqhostparts.empty, "Invalid suffix found in host header");
+		{
+			string s = req.host;
+			if (s.startsWith('[')) { // IPv6 address
+				auto idx = s.indexOf(']');
+				enforce(idx > 0, "Missing closing ']' for IPv6 address.");
+				reqhost = s[1 .. idx];
+				s = s[idx+1 .. $];
+			} else { // host name or IPv4 address
+				auto idx = s.indexOf(':');
+				if (idx < 0) idx = s.length;
+				enforce(idx > 0, "Missing host name.");
+				reqhost = s[0 .. idx];
+				s = s[idx .. $];
+			}
+			if (s.startsWith(':')) reqport = s[1 .. $].to!ushort;
+		}
+
 		foreach (ctx; getContexts())
 			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
