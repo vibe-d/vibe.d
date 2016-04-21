@@ -7,6 +7,7 @@ d:
   # catching most DMD version related build failures early
   - dmd-2.071.0
   - dmd-2.067.1
+  - ldc-1.0.0-alpha1
   - ldc-0.17.0
   - ldc-0.16.1
   - dmd-2.070.0
@@ -15,7 +16,7 @@ d:
 
 env:
   - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
-  - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+  - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=1
 
 matrix:
   exclude:
@@ -24,6 +25,8 @@ matrix:
     - d: ldc-0.16.1
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: ldc-0.17.0
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+    - d: ldc-1.0.0-alpha1
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
