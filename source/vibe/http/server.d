@@ -42,7 +42,7 @@ import std.functional;
 import std.string;
 import std.typecons;
 import std.uri;
-
+import std.algorithm.searching: find;
 
 /**************************************************************************************************/
 /* Public functions                                                                               */
@@ -1564,6 +1564,83 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	logTrace("Done handling connection.");
 }
 
+struct HostPort {
+	string host;
+	ulong port;
+};
+
+HostPort parseHostPort(string s) {
+	HostPort res;
+	const(char)[] arr = s.to!(const(char)[]);
+	enum {
+		BEFORE_BRACKET,
+		IN_BRACKET,
+		AFTER_BRACKET
+	}
+	auto state = BEFORE_BRACKET;
+	ulong bracket, colon, close_bracket;
+	ulong i;
+	void foundit(ulong i) {
+		enforce(i > 1, "Must specify a host before the :");
+		enforce(i + 2 < arr.length,
+				"Must specify a port after the :");
+		res.host = arr[0..i].to!string;
+		res.port = arr[i+1..$].to!ushort;
+	}
+	for(i=0;i<arr.length;++i) {
+		char c = arr[i];
+		final switch(state) {
+		case BEFORE_BRACKET:
+			switch(c) {
+			case '[':
+				state = IN_BRACKET;
+				continue;
+			case ':':
+				state = AFTER_BRACKET;
+				foundit(i);
+				return res;
+			default:
+				continue;
+			}
+		case IN_BRACKET:
+			if(c==']') {
+				state = AFTER_BRACKET;
+				if(i+1 < arr.length) {
+					enforce(arr[i+1]==':',
+							"Must specify a : after ]");
+					foundit(i);
+					return res;
+				} else {
+					res.host = s;					
+				}
+			}
+			continue;
+		case AFTER_BRACKET:
+			return res;
+		}
+	}
+
+	if(state == BEFORE_BRACKET) {
+		res.host = s;
+	} else {
+		enforce(state != IN_BRACKET,
+				"Unterminated IPv6 address (no closing ])");
+	}
+	return res;
+}
+
+unittest {
+	HostPort res = parseHostPort("hostname");
+	assert(res.host == "hostname" && res.port == 0);
+	res = parseHostPort("host:4234");
+	assert(res.host == "host" && res.port == 4234);
+	res = parseHostPort("1.2.3.4:4234");
+	assert(res.host == "1.2.3.4" && res.port == 4234);
+	res = parseHostPort("[12:3::424:3:]:4234");
+	assert(res.host == "[12:3::424:3:]" && res.port == 4234);
+	import std.stdio;
+	stdout.write("Okay yay!\n");
+}
 private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
 	import std.algorithm : canFind;
@@ -1655,16 +1732,11 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		logTrace("Got request header.");
 
 		// find the matching virtual host
-		string reqhost;
-		ushort reqport = 0;
-		import std.algorithm : splitter;
-		auto reqhostparts = req.host.splitter(":");
-		if (!reqhostparts.empty) { reqhost = reqhostparts.front; reqhostparts.popFront(); }
-		if (!reqhostparts.empty) { reqport = reqhostparts.front.to!ushort; reqhostparts.popFront(); }
-		enforce(reqhostparts.empty, "Invalid suffix found in host header");
+		HostPort hp = parseHostPort(req.host);
+
 		foreach (ctx; getContexts())
-			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
-				(!reqport || reqport == ctx.settings.port))
+			if (icmp2(ctx.settings.hostName, hp.host) == 0 &&
+				(!hp.port || hp.port == ctx.settings.port))
 			{
 				if (ctx.settings.port != listen_info.bindPort) continue;
 				bool found = false;
