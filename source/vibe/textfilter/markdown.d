@@ -613,8 +613,11 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				} else {
 					if (ln.startsWith("<br>")) {
 						// always support line breaks, since we embed them here ourselves!
-						dst.put("<br>");
+						dst.put("<br/>");
 						ln = ln[4 .. $];
+					} else if(ln.startsWith("<br/>")) {
+						dst.put("<br/>");
+						ln = ln[5 .. $];
 					} else {
 						if( settings.flags & MarkdownFlags.noInlineHtml ) dst.put("&lt;");
 						else dst.put(ln[0]);
@@ -1134,7 +1137,7 @@ private struct Link {
 
 @safe unittest { // correct line breaks in restrictive mode
 	auto res = filterMarkdown("hello\nworld", MarkdownFlags.forumDefault);
-	assert(res == "<p>hello<br>world\n</p>\n", res);
+	assert(res == "<p>hello<br/>world\n</p>\n", res);
 }
 
 /*@safe unittest { // code blocks and blockquotes
