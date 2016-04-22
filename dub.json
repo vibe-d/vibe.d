@@ -71,6 +71,7 @@
 			"configurations": [
 				{
 					"name": "libevent",
+					"platforms": ["windows-x86-dmd", "posix"],
 					"dependencies": {"libevent": "~>2.0.1+2.0.16"},
 					"versions": ["VibeLibeventDriver"],
 					"sourceFiles-windows-x86": ["lib/win-i386/event2.lib"],
