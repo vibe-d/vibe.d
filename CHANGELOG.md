@@ -1,6 +1,82 @@
 ﻿Changelog
 =========
 
+v0.7.29 - 2016-05-
+--------------------
+
+### Features and improvements ###
+
+- Dropped support for DMD frontend versions below 2.067.x - supports 2.067.1 up to 2.071.0 now
+- Removed the libev driver
+- Removed all deprecated symbols
+- Heavily optimized the `URLRouter` (>5x faster initial match graph building and around 60% faster route match performance)
+- Added CONNECT and `Connection: Upgrade` support to the reverse proxy module (by Georgi Dimitrov) - [pull #1392][issue1392]
+- Added support for using an explicit network interface for outgoing TCP and HTTP connections - [pull #1407][issue1407]
+- Cookies are now stored with their raw value, enabling handling of non-base64 encoded values (by Yannick Koechlin) - [pull #1401][issue1401]
+- Added HyperLogLog functions to the Redis client (by Yannick Koechlin) - [pull #1435][issue1435]
+- Added `RestInterfaceSettings.httpClientSettings`
+- Added `HTTPClientSettings.dnsAddressFamily`
+- Added `TCPListener.bindAddress`
+- Made `@ignore`, `@name`, `@optional`, `@byName` and `@asArray` serialization attributes customizable per serialization policy - [pull #1438][issue1438], [issue #1352][issue1352]
+- Added `HTTPStatus.unavailableForLegalReasons` (by Andrew Benton) - [pull #1358][issue1358]
+- Added support or logger implementations that can log multiple lines per log call (by Martin Nowak) - [pull #1428][issue1428]
+- Added `HTTPServerResponse.connected` (by Alexander Tumin) - [pull #1474][issue1474]
+- Added allocation free string conversion methods to `NetworkAddress`
+- Added diagnostics in case of connections getting closed during process shutdown (after the driver is already shut down) - [issue #1452][issue1452]
+- Added `disableDefaultSignalHandlers` that can be used to avoid vibe.d registering its default signal handlers - [pull #1454][issue1454], [issue #1333][issue1333]
+- Added detection of SQLite data base extensions for `getMimeTypeForFile` (by Stefan Koch) - [pull #1456][issue1456]
+- The markdown module now emits XHTML compatible `<br/>` tags (by Stefan Schmidt) - [pull #1461][issue1461]
+- Added `RedisDatabase.srandMember` overload taking a count (by Yannick Koechlin) - [pull #1447][issue1447]
+- The HTTP client now accepts `const` settings
+
+### Bug fixes ###
+
+- Fixed the internal `BsonObjectID` counter to be initialized with a random value (by machindertech) - [pull #1128][issue1128]
+- Fixed a possible race condition for ID assignment in the libasync driver (by Etienne Cimon) - [pull #1399][issue1399]
+- Fixed compilation of `Bson.opt` for both const and non-const AAs/arrays - [issue #1394][issue1394]
+- Fixed handling of POST methods in the REST JavaScript client for methods with no parameters - [issue #1434][issue1434]
+- Fixed `RedisDatabase.blpop` and `RedisList.removeFrontBlock`
+- Fixed a protocol error/assertion failure when a redis reply threw an exception - [pull #1416][issue1416], [issue #1412][issue1412]
+- Fixed possible assertion failures "Manually resuming taks that is already scheduled"
+- Fixed FreeBSD and NetBSD support (by Nikolay Tolstokulakov) - [pull #1448][issue1448]
+- Fixed handling of multiple methods with `@headerParam` parameters with the same name (by Irenej Marc) - [pull #1453][issue1453]
+- Fixed calling `async()` with an unshared delegate or with a callback that returns a `const`/`immutable` result
+- Fixed `Tid` to be considered safe to pass between threads (for worker tasks or `vibe.core.concurrency`)
+- Fixed the `HTTPClient`/`download()` to properly use TLS when redirects happen between HTTP and HTTPS (by Martin Nowak) - [pull #1265][issue1265]
+- Fixed recognizing certain HTTP content encoding strings ("x-gzip" and "") (by Ilya Yaroshenko) - [pull #1477][issue1477]
+- Fixed parsing IPv6 "Host" headers in the HTTP server - [issue #1388][issue1388], [issue #1402][issue1402]
+- Fixed an assertion failure when using threads together with `VibeIdleCollect` - [issue #1476][issue1476]
+
+[issue1128]: https://github.com/rejectedsoftware/vibe.d/issues/1128
+[issue1265]: https://github.com/rejectedsoftware/vibe.d/issues/1265
+[issue1333]: https://github.com/rejectedsoftware/vibe.d/issues/1333
+[issue1352]: https://github.com/rejectedsoftware/vibe.d/issues/1352
+[issue1358]: https://github.com/rejectedsoftware/vibe.d/issues/1358
+[issue1388]: https://github.com/rejectedsoftware/vibe.d/issues/1388
+[issue1392]: https://github.com/rejectedsoftware/vibe.d/issues/1392
+[issue1394]: https://github.com/rejectedsoftware/vibe.d/issues/1394
+[issue1399]: https://github.com/rejectedsoftware/vibe.d/issues/1399
+[issue1401]: https://github.com/rejectedsoftware/vibe.d/issues/1401
+[issue1402]: https://github.com/rejectedsoftware/vibe.d/issues/1402
+[issue1407]: https://github.com/rejectedsoftware/vibe.d/issues/1407
+[issue1412]: https://github.com/rejectedsoftware/vibe.d/issues/1412
+[issue1416]: https://github.com/rejectedsoftware/vibe.d/issues/1416
+[issue1428]: https://github.com/rejectedsoftware/vibe.d/issues/1428
+[issue1434]: https://github.com/rejectedsoftware/vibe.d/issues/1434
+[issue1435]: https://github.com/rejectedsoftware/vibe.d/issues/1435
+[issue1438]: https://github.com/rejectedsoftware/vibe.d/issues/1438
+[issue1447]: https://github.com/rejectedsoftware/vibe.d/issues/1447
+[issue1448]: https://github.com/rejectedsoftware/vibe.d/issues/1448
+[issue1452]: https://github.com/rejectedsoftware/vibe.d/issues/1452
+[issue1453]: https://github.com/rejectedsoftware/vibe.d/issues/1453
+[issue1454]: https://github.com/rejectedsoftware/vibe.d/issues/1454
+[issue1456]: https://github.com/rejectedsoftware/vibe.d/issues/1456
+[issue1461]: https://github.com/rejectedsoftware/vibe.d/issues/1461
+[issue1474]: https://github.com/rejectedsoftware/vibe.d/issues/1474
+[issue1476]: https://github.com/rejectedsoftware/vibe.d/issues/1476
+[issue1477]: https://github.com/rejectedsoftware/vibe.d/issues/1477
+
+
 v0.7.28 - 2016-02-27
 --------------------
 
@@ -9,14 +85,16 @@ This is a hotfix release, which fixes two critical regressions. The first one re
 ### Bug fixes ###
 
 - Fixed a regression in `FreeListRef` which caused the reference count to live outside of the allocated memory bounds - [issue #1432][issue1432]
-- Fixed a task starvation regression in the libevent driver that happened when a connection got closed by the TCP remote peer while there was still data in the write buffer - [issue #1441][issue1441]
+- Fixed a task starvation regression in the libevent driver that happened when a connection got closed by the TCP remote peer while there was still data in the write buffer - [pull #1443][issue1443], [issue #1441][issue1441]
 - Fixed recognizing "Connection: close" headers for non-lowercase spelling of "close" - [issue #1426][issue1426]
 - Fixed the UDP receive timeout to actually work in the libevent driver - [issue #1429][issue1429]
+- Fixed handling of the "Connection" header in the HTTP server to be case insensitive - [issue #1426][issue1426]
 
 [issue1426]: https://github.com/rejectedsoftware/vibe.d/issues/1426
 [issue1429]: https://github.com/rejectedsoftware/vibe.d/issues/1429
 [issue1432]: https://github.com/rejectedsoftware/vibe.d/issues/1432
 [issue1441]: https://github.com/rejectedsoftware/vibe.d/issues/1441
+[issue1443]: https://github.com/rejectedsoftware/vibe.d/issues/1443
 
 
 v0.7.27 - 2016-02-09
