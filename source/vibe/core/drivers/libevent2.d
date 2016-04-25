@@ -328,12 +328,12 @@ final class Libevent2Driver : EventDriver {
 			throw new Exception(format("Failed to connect to %s: %s", addr.toString(), e.msg));
 		}
 
+		logTrace("Connect result status: %d", cctx.status);
+		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
+
 		socklen_t balen = bind_addr.sockAddrLen;
 		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
 		cctx.local_addr = bind_addr;
-
-		logTrace("Connect result status: %d", cctx.status);
-		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
 
 		return new Libevent2TCPConnection(cctx);
 	}
