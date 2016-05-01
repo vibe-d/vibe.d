@@ -9,7 +9,7 @@
 
 	See $(D registerWebInterface) for an overview of how the system works.
 
-	Copyright: © 2013-2015 RejectedSoftware e.K.
+	Copyright: © 2013-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -25,6 +25,7 @@ import vibe.http.common;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.http.websockets;
+import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAuthenticated;
 
 import std.encoding : sanitize;
 
@@ -633,10 +634,16 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	alias RET = ReturnType!overload;
 	alias PARAMS = ParameterTypeTuple!overload;
 	alias default_values = ParameterDefaultValueTuple!overload;
+	alias AuthInfoType = AuthInfo!C;
 	enum param_names = [ParameterIdentifierTuple!overload];
 	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
 
 	s_requestContext = createRequestContext!overload(req, res);
+
+	static if (isAuthenticated!(C, overload)) {
+		auto auth_info = handleAuthentication!overload(instance, req, res);
+		if (res.headerWritten) return;
+	}
 
 	// collect all parameter values
 	PARAMS params = void; // FIXME: in case of errors, destructors could be called on uninitialized variables!
@@ -645,7 +652,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		ParamError err;
 		err.field = param_names[i];
 		try {
-			static if (IsAttributedParameter!(overload, param_names[i])) {
+			static if (is(PT == AuthInfoType)) {
+				params[i] = auth_info;
+			} else static if (IsAttributedParameter!(overload, param_names[i])) {
 				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
 				if (res.headerWritten) return;
 			}
@@ -736,6 +745,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			}
 		}
 	}
+
+	static if (isAuthenticated!(C, overload))
+		handleAuthorization!(C, overload, params)(auth_info);
 
 	// execute the method and write the result
 	try {

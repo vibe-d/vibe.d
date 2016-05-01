@@ -1,7 +1,7 @@
 /**
 	Automatic REST interface and client code generation facilities.
 
-	Copyright: © 2012-2013 RejectedSoftware e.K.
+	Copyright: © 2012-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig, Михаил Страшун
 */
@@ -20,6 +20,7 @@ import vibe.internal.meta.uda;
 import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
 import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
+import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAuthenticated;
 
 import std.algorithm : startsWith, endsWith;
 import std.range : isOutputRange;
@@ -916,6 +917,11 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				"The request body must contain a JSON object with an entry for each parameter.");
 		}
 
+		static if (isAuthenticated!(T, Func)) {
+			auto auth_info = handleAuthentication!Func(inst, req, res);
+			if (res.headerWritten) return;
+		}
+
 		PTypes params;
 
 		foreach (i, PT; PTypes) {
@@ -925,7 +931,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			static if (isInstanceOf!(Nullable, PT)) PT v;
 			else Nullable!PT v;
 
-			static if (sparam.kind == ParameterKind.query) {
+			static if (sparam.kind == ParameterKind.auth) {
+				v = auth_info;
+			} else static if (sparam.kind == ParameterKind.query) {
 				if (auto pv = fieldname in req.query)
 					v = fromRestString!PT(*pv);
 			} else static if (sparam.kind == ParameterKind.body_) {
@@ -947,6 +955,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				else enforceBadRequest(false, "Missing non-optional "~sparam.kind.to!string~" parameter '"~(fieldname.length?fieldname:sparam.name)~"'.");
 			} else params[i] = v;
 		}
+
+		static if (isAuthenticated!(T, Func))
+			handleAuthorization!(T, Func, params)(auth_info);
 
 		void handleCors()
 		{
