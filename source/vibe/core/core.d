@@ -574,6 +574,8 @@ public @property uint logicalProcessorCount()
                 size_t count_len = count.sizeof;
                 sysctlbyname("hw.logicalcpu", &count, &count_len, null, 0);
                 return cast(uint)count_len;
+    } else version (Solaris) {
+        return get_nprocs();
 	} else version (Windows) {
 		import core.sys.windows.windows;
 		SYSTEM_INFO sysinfo;
@@ -585,6 +587,7 @@ version (OSX) private extern(C) int sysctlbyname(const(char)* name, void* oldp, 
 version (FreeBSD) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
 version (NetBSD) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
 version (linux) static if (__VERSION__ <= 2066) private extern(C) int get_nprocs();
+version (Solaris) private extern(C) int get_nprocs();
 
 /**
 	Suspends the execution of the calling task to let other tasks and events be
