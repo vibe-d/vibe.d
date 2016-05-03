@@ -202,7 +202,10 @@ auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
 */
 auto computeAttributedParameterCtx(alias FUNCTION, string NAME, T, ARGS...)(T ctx, ARGS args)
 {
-	import std.typetuple : AliasSeq, Filter;
+	static if (__VERSION__ >= 2072)
+		import std.typetuple : AliasSeq, Filter;
+	else
+		import std.typetuple : AliasSeq = TypeTuple, Filter;
 	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
 	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
 	foreach (att; input_attributes)
