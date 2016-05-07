@@ -477,7 +477,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 	import std.algorithm : move;
 	import std.traits : hasElaborateAssign;
 
-	struct TARGS { ARGS expand; }
+	static struct TARGS { ARGS expand; }
 
 	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
 	static assert(TARGS.sizeof <= maxTaskParameterSize,
