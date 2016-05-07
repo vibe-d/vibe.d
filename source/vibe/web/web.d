@@ -142,7 +142,7 @@ import std.encoding : sanitize;
 		instance = Class instance to use for the web interface mapping
 		settings = Optional parameter to customize the mapping process
 */
-URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.lowerUnderscored)(URLRouter router, C instance, WebInterfaceSettings settings = null)
+URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyle.lowerUnderscored, alias readFormParamRecImpl = readFormParamRec)(URLRouter router, C instance, WebInterfaceSettings settings = null)
 {
 	import std.algorithm : endsWith;
 	import std.traits;
@@ -174,11 +174,11 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 					);
 					auto subsettings = settings.dup;
 					subsettings.urlPrefix = concatURL(url_prefix, url, true);
-					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
+					registerWebInterface!(RT, method_style, readFormParamRecImpl)(router, __traits(getMember, instance, M)(), subsettings);
 				} else {
 					auto fullurl = concatURL(url_prefix, url);
 					router.match(minfo.method, fullurl, (req, res) {
-						handleRequest!(M, overload)(req, res, instance, settings);
+						handleRequest!(M, overload, readFormParamRecImpl)(req, res, instance, settings);
 					});
 					if (settings.ignoreTrailingSlash && !fullurl.endsWith("*") && fullurl != "/") {
 						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
@@ -190,7 +190,7 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 								redurl.path = redpath;
 								res.redirect(redurl);
 							} else {
-								handleRequest!(M, overload)(req, res, instance, settings);
+								handleRequest!(M, overload, readFormParamRecImpl)(req, res, instance, settings);
 							}
 						});
 					}
@@ -589,7 +589,7 @@ private struct RequestContext {
 	string function(string, string, int, string) tr_plural;
 }
 
-private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
+private void handleRequest(string M, alias overload, alias readFormParamRecImpl, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
 	if (ERROR.length <= 1)
 {
 	import std.algorithm : countUntil, startsWith;
@@ -642,7 +642,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
 				enum has_default = !is(default_values[i] == void);
-				ParamResult pres = readFormParamRec(req, params[i], param_names[i], !has_default, err);
+				ParamResult pres = readFormParamRecImpl(req, params[i], param_names[i], !has_default, err);
 				static if (has_default) {
 					if (pres == ParamResult.skipped)
 						params[i].setVoid(default_values[i]);
@@ -662,7 +662,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		if (got_error) {
 			static if (erruda.found && ERROR.length == 0) {
 				auto errnfo = erruda.value.getError(new Exception(err.text), err.field);
-				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, errnfo);
+				handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod, readFormParamRecImpl)(req, res, instance, settings, errnfo);
 				return;
 			} else {
 				auto hex = new HTTPStatusException(HTTPStatus.badRequest, "Error handling field "~err.field~": "~err.text);
@@ -697,7 +697,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				auto ex = new Exception("Comfirmation field mismatch.");
 				static if (erruda.found && ERROR.length == 0) {
 					auto err = erruda.value.getError(ex, param_names[i]);
-					handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+					handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod, readFormParamRecImpl)(req, res, instance, settings, err);
 					return;
 				} else {
 					throw new HTTPStatusException(HTTPStatus.badRequest, ex.msg);
@@ -743,7 +743,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		logDebug("Web handler %s has thrown: %s", M, ex);
 		static if (erruda.found && ERROR.length == 0) {
 			auto err = erruda.value.getError(ex, null);
-			handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod)(req, res, instance, settings, err);
+			handleRequest!(erruda.value.displayMethodName, erruda.value.displayMethod, readFormParamRecImpl)(req, res, instance, settings, err);
 		} else throw ex;
 	}
 }
