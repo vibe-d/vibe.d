@@ -104,8 +104,11 @@ struct Json {
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
 		// because of internal pointers. This crude workaround seems to fix
 		// the issues.
-		void*[max((BigInt.sizeof+(void*).sizeof-1)/(void*).sizeof, 2)] m_data;
-		ref inout(T) getDataAs(T)() inout { static assert(T.sizeof <= m_data.sizeof); return *cast(inout(T)*)m_data.ptr; }
+		void[max((BigInt.sizeof+(void*).sizeof), 2)] m_data;
+		ref inout(T) getDataAs(T)() inout {
+			static assert(T.sizeof <= m_data.sizeof);
+			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
+		}
 
 		@property ref inout(BigInt) m_bigInt() inout { return getDataAs!BigInt(); }
 		@property ref inout(long) m_int() inout { return getDataAs!long(); }
