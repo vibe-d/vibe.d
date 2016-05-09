@@ -104,7 +104,11 @@ struct Json {
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
 		// because of internal pointers. This crude workaround seems to fix
 		// the issues.
-		void[max((BigInt.sizeof+(void*).sizeof), 2)] m_data;
+		enum m_size = max((BigInt.sizeof+(void*).sizeof), 2);
+		// NOTE : DMD 2.067.1 doesn't seem to init void[] correctly on its own.
+		// Explicity initializing it works around this issue.
+		void[m_size] m_data = (void[m_size]).init;
+
 		ref inout(T) getDataAs(T)() inout {
 			static assert(T.sizeof <= m_data.sizeof);
 			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
