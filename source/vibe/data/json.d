@@ -1048,11 +1048,10 @@ struct Json {
 
 	private void initBigInt()
 	{
-		// BigInt is a struct, and it have a special BigInt.init value,  differs the null.
-		// m_data has no special initializer and when we tries to first access to BigInt
+		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
+		// m_data has no special initializer and when it tries to first access to BigInt
 		// via m_bigInt(), we should explicitly initialize m_data with BigInt.init
-		BigInt init_;
-		(cast(ubyte*)m_data.ptr)[0 .. BigInt.sizeof] = (cast(ubyte*)&init_)[0 .. BigInt.sizeof];
+		(cast(BigInt[1])m_data[0 .. BigInt.sizeof])[0] = BigInt.init;
 	}
 
 	private void runDestructors()
