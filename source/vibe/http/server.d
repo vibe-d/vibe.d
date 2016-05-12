@@ -1254,7 +1254,7 @@ struct HTTPListener {
 			if (idx < 0) return;
 
 			// remove context entry
-			auto ctx = g_contextCollection.all[idx];
+			auto ctx = g_contextCollection.get(idx);
 			g_contextCollection.remove(idx);
 
 			// stop listening on all unused TCP ports
@@ -1399,6 +1399,16 @@ private {
 			}
 			else
 				return cast(HTTPServerContext[])m_contexts;
+		}
+
+		HTTPServerContext get(size_t idx)
+		{
+			static if (__VERSION__ >= 2067) {
+				version (Win64) return cast(HTTPServerContext)m_contexts[idx];
+				else return cast(HTTPServerContext)atomicLoad(m_contexts)[idx];
+			}
+			else
+				return cast(HTTPServerContext)m_contexts[idx];
 		}
 
 		void add(HTTPServerContext ctx)
