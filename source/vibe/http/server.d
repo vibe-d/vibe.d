@@ -707,28 +707,53 @@ final class HTTPServerRequest : HTTPRequest {
 	@property URL fullURL()
 	const {
 		URL url;
-		auto fh = this.headers.get("X-Forwarded-Host", "");
-		if (!fh.empty) {
-			url.schema = this.headers.get("X-Forwarded-Proto", "http");
-			url.host = fh;
-		} else {
-			if (!this.host.empty) url.host = this.host;
-			else if (!m_settings.hostName.empty) url.host = m_settings.hostName;
-			else url.host = m_settings.bindAddresses[0];
 
-			if (this.tls) {
-				url.schema = "https";
-				if (m_port != 443) url.port = m_port;
-			} else {
-				url.schema = "http";
-				if (m_port != 80) url.port = m_port;
+		// Set URL host segment.
+		if (auto xfh = this.headers.get("X-Forwarded-Host")) {
+			url.host = xfh;
+		} else if (!this.host.empty) {
+			url.host = this.host;
+		} else if (!m_settings.hostName.empty) {
+			url.host = m_settings.hostName;
+		} else {
+			url.host = m_settings.bindAddresses[0];
+		}
+
+		// Set URL schema segment.
+		if (auto xfp = this.headers.get("X-Forwarded-Proto")) {
+			url.schema = xfp;
+		} else if (this.tls) {
+			url.schema = "https";
+		} else {
+			url.schema = "http";
+		}
+
+		// Set URL port segment.
+		Nullable!ushort port;
+		if (auto xfp = this.headers.get("X-Forwarded-Port")) {
+			try {
+				port = xfp.to!ushort;
+			} catch (ConvException) {
+				// Value was not ushort.
 			}
 		}
+		if (port.isNull) {
+			if (url.schema == "https") {
+				if (m_port != 443U) port = m_port;
+			} else {
+				if (m_port != 80U)  port = m_port;
+			}
+		}
+		if (!port.isNull) {
+			url.port = port.get;
+		}
+
 		url.host = url.host.split(":")[0];
 		url.username = this.username;
 		url.password = this.password;
 		url.path = Path(path);
 		url.queryString = queryString;
+
 		return url;
 	}
 
