@@ -1247,28 +1247,28 @@ struct HTTPListener {
 	{
 		import std.algorithm : countUntil;
 
-		synchronized (g_contextCollection.g_listenersMutex) {
-			auto contexts = g_contextCollection.get();
+		synchronized (g_contextCollection.m_listenersMutex) {
+			auto contexts = g_contextCollection.all;
 
 			auto idx = contexts.countUntil!(c => c.id == m_contextID);
 			if (idx < 0) return;
 
 			// remove context entry
-			auto ctx = g_contextCollection.get()[idx];
+			auto ctx = g_contextCollection.all[idx];
 			g_contextCollection.remove(idx);
 
 			// stop listening on all unused TCP ports
 			auto port = ctx.settings.port;
 			foreach (addr; ctx.settings.bindAddresses) {
 				// any other context still occupying the same addr/port?
-				if (g_contextCollection.get.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
+				if (g_contextCollection.all.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
 					continue;
 
-				auto lidx = g_contextCollection.g_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
+				auto lidx = g_contextCollection.m_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
 				if (lidx >= 0) {
-					g_contextCollection.g_listeners[lidx].listener.stopListening();
+					g_contextCollection.m_listeners[lidx].listener.stopListening();
 					logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
-					g_contextCollection.g_listeners = g_contextCollection.g_listeners[0 .. lidx] ~ g_contextCollection.g_listeners[lidx+1 .. $];
+					g_contextCollection.m_listeners = g_contextCollection.m_listeners[0 .. lidx] ~ g_contextCollection.m_listeners[lidx+1 .. $];
 				}
 			}
 		}
@@ -1362,21 +1362,21 @@ private {
 	shared ushort s_distPort = 11000;
 
 	struct HTTPServerContextCollection {
-		shared size_t g_contextIDCounter = 1;
+		shared size_t m_contextIDCounter = 1;
 
-		// protects g_listeners and *write* accesses to g_contexts
-		__gshared Mutex g_listenersMutex;
-		__gshared HTTPListenInfo[] g_listeners;
+		// protects m_listeners and *write* accesses to m_contexts
+		__gshared Mutex m_listenersMutex;
+		__gshared HTTPListenInfo[] m_listeners;
 
 		// accessed for every request, needs to be kept thread-safe by only atomically assigning new
 		// arrays (COW). shared immutable(HTTPServerContext)[] would be the right candidate here, but
 		// is impractical due to type system limitations.
-		align(16) shared HTTPServerContext[] g_contexts;
+		align(16) shared HTTPServerContext[] m_contexts;
 
 		HTTPServerContext create(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
 		{
 			auto ctx = HTTPServerContext();
-			ctx.id = atomicOp!"+="(g_contextIDCounter, 1);
+			ctx.id = atomicOp!"+="(m_contextIDCounter, 1);
 			ctx.settings = settings;
 			ctx.requestHandler = request_handler;
 
@@ -1385,41 +1385,41 @@ private {
 			if (settings.accessLogFile.length)
 				ctx.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
 
-			synchronized (g_listenersMutex)
+			synchronized (m_listenersMutex)
 				add(ctx);
 
 			return ctx;
 		}
 
-		HTTPServerContext[] get()
+		HTTPServerContext[] all()
 		{
 			static if (__VERSION__ >= 2067) {
-				version (Win64) return cast(HTTPServerContext[])g_contexts;
-				else return cast(HTTPServerContext[])atomicLoad(g_contexts);
+				version (Win64) return cast(HTTPServerContext[])m_contexts;
+				else return cast(HTTPServerContext[])atomicLoad(m_contexts);
 			}
 			else
-				return cast(HTTPServerContext[])g_contexts;
+				return cast(HTTPServerContext[])m_contexts;
 		}
 
 		void add(HTTPServerContext ctx)
 		{
-			synchronized (g_listenersMutex) {
+			synchronized (m_listenersMutex) {
 				static if (__VERSION__ >= 2067)
-					atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
+					atomicStore(m_contexts, m_contexts ~ cast(shared)ctx);
 				else
-					g_contexts = g_contexts ~ cast(shared)ctx;
+					m_contexts = m_contexts ~ cast(shared)ctx;
 			}
 		}
 
 		void remove(size_t idx)
 		{
 			// write a new complete array reference to avoid race conditions during removal
-			auto contexts = g_contexts;
+			auto contexts = m_contexts;
 			auto newarr = contexts[0 .. idx] ~ contexts[idx+1 .. $];
 			static if (__VERSION__ >= 2067)
-				atomicStore(g_contexts, newarr);
+				atomicStore(m_contexts, newarr);
 			else
-				g_contexts = newarr;
+				m_contexts = newarr;
 		}
 	}
 }
@@ -1458,7 +1458,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 	{
 		TLSContext onSNI(string servername)
 		{
-			foreach (ctx; g_contextCollection.get)
+			foreach (ctx; g_contextCollection.all)
 				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
 					&& ctx.settings.port == lst.bindPort
 					&& ctx.settings.hostName.icmp(servername) == 0)
@@ -1476,7 +1476,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 			lst.tlsContext.sniCallback = &onSNI;
 		}
 
-		foreach (ctx; g_contextCollection.get) {
+		foreach (ctx; g_contextCollection.all) {
 			if (ctx.settings.port != settings.port) continue;
 			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
 			/*enforce(ctx.settings.hostName != settings.hostName,
@@ -1487,12 +1487,12 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 
 	bool any_successful = false;
 
-	synchronized (g_contextCollection.g_listenersMutex) {
+	synchronized (g_contextCollection.m_listenersMutex) {
 		// Check for every bind address/port, if a new listening socket needs to be created and
 		// check for conflicting servers
 		foreach (addr; settings.bindAddresses) {
 			bool found_listener = false;
-			foreach (i, ref lst; g_contextCollection.g_listeners) {
+			foreach (i, ref lst; g_contextCollection.m_listeners) {
 				if (lst.bindAddress == addr && lst.bindPort == settings.port) {
 					addVHost(lst);
 					assert(!settings.tlsContext || settings.tlsContext is lst.tlsContext
@@ -1510,7 +1510,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 					linfo.listener = tcp_lst;
 					found_listener = true;
 					any_successful = true;
-					g_contextCollection.g_listeners ~= linfo;
+					g_contextCollection.m_listeners ~= linfo;
 				}
 			}
 			if (settings.hostName.length) {
@@ -1601,7 +1601,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	// Default to the first virtual host for this listener
 	HTTPServerRequestDelegate request_task;
 	HTTPServerContext context;
-	foreach (ctx; g_contextCollection.get)
+	foreach (ctx; g_contextCollection.all)
 		if (ctx.settings.port == listen_info.bindPort) {
 			bool found = false;
 			foreach (addr; ctx.settings.bindAddresses)
@@ -1685,7 +1685,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			if (s.startsWith(':')) reqport = s[1 .. $].to!ushort;
 		}
 
-		foreach (ctx; g_contextCollection.get)
+		foreach (ctx; g_contextCollection.all)
 			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
 			{
@@ -1929,7 +1929,7 @@ unittest
 
 shared static this()
 {
-	g_contextCollection.g_listenersMutex = new Mutex;
+	g_contextCollection.m_listenersMutex = new Mutex;
 
 	version (VibeNoDefaultArgs) {}
 	else {
