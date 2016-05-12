@@ -104,8 +104,15 @@ struct Json {
 		// memory leaks and, worse, std.algorithm.swap triggering an assertion
 		// because of internal pointers. This crude workaround seems to fix
 		// the issues.
-		void*[max((BigInt.sizeof+(void*).sizeof-1)/(void*).sizeof, 2)] m_data;
-		ref inout(T) getDataAs(T)() inout { static assert(T.sizeof <= m_data.sizeof); return *cast(inout(T)*)m_data.ptr; }
+		enum m_size = max((BigInt.sizeof+(void*).sizeof), 2);
+		// NOTE : DMD 2.067.1 doesn't seem to init void[] correctly on its own.
+		// Explicity initializing it works around this issue.
+		void[m_size] m_data = (void[m_size]).init;
+
+		ref inout(T) getDataAs(T)() inout {
+			static assert(T.sizeof <= m_data.sizeof);
+			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
+		}
 
 		@property ref inout(BigInt) m_bigInt() inout { return getDataAs!BigInt(); }
 		@property ref inout(long) m_int() inout { return getDataAs!long(); }
@@ -1045,11 +1052,11 @@ struct Json {
 
 	private void initBigInt()
 	{
-		// BigInt is a struct, and it have a special BigInt.init value,  differs the null.
-		// m_data has no special initializer and when we tries to first access to BigInt
+		BigInt[1] init_;
+		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
+		// m_data has no special initializer and when it tries to first access to BigInt
 		// via m_bigInt(), we should explicitly initialize m_data with BigInt.init
-		BigInt init_;
-		(cast(ubyte*)m_data.ptr)[0 .. BigInt.sizeof] = (cast(ubyte*)&init_)[0 .. BigInt.sizeof];
+		m_data[0 .. BigInt.sizeof] = cast(void[])init_;
 	}
 
 	private void runDestructors()
@@ -2300,4 +2307,25 @@ unittest {
 	auto appc = appender!string();
 	serializeToJson(appc, c);
 	assert(appc.data == `[{"key":"a","value":1},{"key":"a","value":3}]`, appc.data);
+}
+
+// make sure Json is usable for CTFE
+unittest {
+	static assert(is(typeof({
+		struct Test {
+			Json object_ = Json.emptyObject;
+			Json array   = Json.emptyArray;
+		}
+	})), "CTFE for Json type failed.");
+
+	static Json test() {
+		Json j;
+		j = Json(42);
+		j = Json([Json(true)]);
+		j = Json(["foo": Json(null)]);
+		j = Json("foo");
+		return j;
+	}
+	enum j = test();
+	static assert(j == Json("foo"));
 }
