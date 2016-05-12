@@ -1052,10 +1052,11 @@ struct Json {
 
 	private void initBigInt()
 	{
+		BigInt[1] init_;
 		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
 		// m_data has no special initializer and when it tries to first access to BigInt
 		// via m_bigInt(), we should explicitly initialize m_data with BigInt.init
-		(cast(BigInt[1])m_data[0 .. BigInt.sizeof])[0] = BigInt.init;
+		m_data[0 .. BigInt.sizeof] = cast(void[])init_;
 	}
 
 	private void runDestructors()
@@ -2306,4 +2307,25 @@ unittest {
 	auto appc = appender!string();
 	serializeToJson(appc, c);
 	assert(appc.data == `[{"key":"a","value":1},{"key":"a","value":3}]`, appc.data);
+}
+
+// make sure Json is usable for CTFE
+unittest {
+	static assert(is(typeof({
+		struct Test {
+			Json object_ = Json.emptyObject;
+			Json array   = Json.emptyArray;
+		}
+	})), "CTFE for Json type failed.");
+
+	static Json test() {
+		Json j;
+		j = Json(42);
+		j = Json([Json(true)]);
+		j = Json(["foo": Json(null)]);
+		j = Json("foo");
+		return j;
+	}
+	enum j = test();
+	static assert(j == Json("foo"));
 }
