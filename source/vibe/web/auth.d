@@ -10,7 +10,10 @@ module vibe.web.auth;
 import vibe.http.common : HTTPStatusException;
 import vibe.http.status : HTTPStatus;
 import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
-import std.traits : hasUDA;
+import vibe.internal.meta.uda : findFirstUDA;
+
+static if (__VERSION__ <= 2067) import std.typetuple : AliasSeq = TypeTuple, staticIndexOf;
+else import std.meta : AliasSeq, staticIndexOf;
 
 ///
 unittest {
@@ -121,14 +124,14 @@ struct Role {
 
 package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTPServerResponse res)
 {
-	import std.traits : MemberFunctionsTuple, hasUDA;
+	import std.traits : MemberFunctionsTuple;
 
 	alias AI = AuthInfo!C;
 	enum funname = __traits(identifier, fun);
 
 	static if (!is(AI == void)) {
 		alias AR = GetAuthAttribute!fun;
-		static if (hasUDA!(fun, NoAuthAttribute)) {
+		static if (findFirstUDA!(NoAuthAttribute, fun).found) {
 			static assert (is(AR == void), "Method "~funname~" specifies both, @noAuth and @auth(...)/@anyAuth attributes.");
 			static assert(!hasParameterType!(fun, AI), "Method "~funname~" is attributed @noAuth, but also has an "~AI.stringof~" paramter.");
 			// nothing to do
@@ -141,7 +144,7 @@ package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTP
 		foreach (mem; __traits(allMembers, C))
 			foreach (fun; MemberFunctionsTuple!(C, mem)) {
 				static if (__traits(getProtection, fun) == "public") {
-					static assert (!hasUDA!(C, NoAuthAttribute),
+					static assert (!findFirstUDA!(NoAuthAttribute, C).found,
 						"@noAuth attribute on method "~funname~" is not allowed without annotating "~C.stringof~" with @authorized.");
 					static assert (is(GetAuthAttribute!fun == void),
 						"@auth(...)/@anyAuth attribute on method "~funname~" is not allowed without annotating "~C.stringof~" with @authorized.");
@@ -152,14 +155,14 @@ package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTP
 
 package void handleAuthorization(C, alias fun, PARAMS...)(AuthInfo!C auth_info)
 {
-	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple, hasUDA;
+	import std.traits : MemberFunctionsTuple, ParameterIdentifierTuple;
 	import vibe.internal.meta.typetuple : Group;
 
 	alias AI = AuthInfo!C;
 	alias ParamNames = Group!(ParameterIdentifierTuple!fun);
 
 	static if (!is(AI == void)) {
-		static if (!hasUDA!(fun, NoAuthAttribute)) {
+		static if (!findFirstUDA!(NoAuthAttribute, fun).found) {
 			alias AR = GetAuthAttribute!fun;
 			static if (!is(AR.Roles == void))
 				if (!evaluate!(__traits(identifier, fun), AR.Roles, AI, ParamNames, PARAMS)(auth_info))
@@ -169,11 +172,10 @@ package void handleAuthorization(C, alias fun, PARAMS...)(AuthInfo!C auth_info)
 	}
 }
 
-package enum bool isAuthenticated(C, alias fun) = !is(AuthInfo!C == void) && !hasUDA!(fun, NoAuthAttribute);
+package enum bool isAuthenticated(C, alias fun) = !is(AuthInfo!C == void) && !findFirstUDA!(NoAuthAttribute, fun).found;
 
 package template AuthInfo(C)
 {
-	import std.meta : AliasSeq;
 	import std.traits : isInstanceOf;
 	alias ATTS = AliasSeq!(__traits(getAttributes, C));
 
@@ -212,7 +214,6 @@ unittest {
 
 private template GetAuthAttribute(alias fun)
 {
-	import std.meta : AliasSeq;
 	import std.traits : isInstanceOf;
 	alias ATTS = AliasSeq!(__traits(getAttributes, fun));
 
@@ -257,7 +258,6 @@ private struct R(Op op_, string ident_, Left_, Right_) {
 private bool evaluate(string methodname, R, A, alias ParamNames, PARAMS...)(ref A a)
 {
 	import std.ascii : toUpper;
-	import std.meta : AliasSeq, staticIndexOf;
 	import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
 
 	static if (R.op == Op.ident) {
@@ -282,7 +282,6 @@ private bool evaluate(string methodname, R, A, alias ParamNames, PARAMS...)(ref 
 }
 
 unittest {
-	import std.meta : AliasSeq;
 	import vibe.internal.meta.typetuple : Group;
 
 	static struct AuthInfo {
