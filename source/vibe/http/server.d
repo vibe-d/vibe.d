@@ -1609,6 +1609,9 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		return false;
 	}
 
+	// temporarily set to the default settings, the virtual host specific settings will be set further down
+	req.m_settings = settings;
+
 	// Create the response object
 	auto res = FreeListRef!HTTPServerResponse(http_stream, tcp_connection, settings, request_allocator/*.Scoped_payload*/);
 	req.tls = res.m_tls = listen_info.tlsContext !is null;
@@ -1630,7 +1633,9 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			err.exception = ex;
 			settings.errorPageHandler(req, res, err);
 		} else {
-			res.writeBody(format("%s - %s\n\n%s\n\nInternal error information:\n%s", code, httpStatusText(code), msg, debug_msg));
+			if (debug_msg.length)
+				res.writeBody(format("%s - %s\n\n%s\n\nInternal error information:\n%s", code, httpStatusText(code), msg, debug_msg));
+			else res.writeBody(format("%s - %s\n\n%s", code, httpStatusText(code), msg));
 		}
 		assert(res.headerWritten);
 	}
@@ -1659,15 +1664,16 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 		ushort reqport = 0;
 		{
 			string s = req.host;
+			enforceHTTP(s.length > 0 || req.httpVersion <= HTTPVersion.HTTP_1_0, HTTPStatus.badRequest, "Missing Host header.");
 			if (s.startsWith('[')) { // IPv6 address
 				auto idx = s.indexOf(']');
 				enforce(idx > 0, "Missing closing ']' for IPv6 address.");
 				reqhost = s[1 .. idx];
 				s = s[idx+1 .. $];
-			} else { // host name or IPv4 address
+			} else if (s.length) { // host name or IPv4 address
 				auto idx = s.indexOf(':');
 				if (idx < 0) idx = s.length;
-				enforce(idx > 0, "Missing host name.");
+				enforceHTTP(idx > 0, HTTPStatus.badRequest, "Missing Host header.");
 				reqhost = s[0 .. idx];
 				s = s[idx .. $];
 			}
