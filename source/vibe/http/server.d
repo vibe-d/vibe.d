@@ -1429,14 +1429,14 @@ private {
 				auto port = ctx.settings.port;
 				foreach (addr; ctx.settings.bindAddresses) {
 					// any other context still occupying the same addr/port?
-					if (g_contextCollection.all.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
+					if (all.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
 						continue;
 
-					auto lidx = g_contextCollection.m_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
+					auto lidx = m_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
 					if (lidx >= 0) {
 						m_listeners[lidx].listener.stopListening();
 						logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
-						m_listeners = m_listeners[0 .. lidx] ~ g_contextCollection.m_listeners[lidx+1 .. $];
+						m_listeners = m_listeners[0 .. lidx] ~ m_listeners[lidx+1 .. $];
 					}
 				}
 			}
