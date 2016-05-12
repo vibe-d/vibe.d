@@ -1245,33 +1245,7 @@ struct HTTPListener {
 	*/
 	void stopListening()
 	{
-		import std.algorithm : countUntil;
-
-		synchronized (g_contextCollection.m_listenersMutex) {
-			auto contexts = g_contextCollection.all;
-
-			auto idx = contexts.countUntil!(c => c.id == m_contextID);
-			if (idx < 0) return;
-
-			// remove context entry
-			auto ctx = g_contextCollection.get(idx);
-			g_contextCollection.remove(idx);
-
-			// stop listening on all unused TCP ports
-			auto port = ctx.settings.port;
-			foreach (addr; ctx.settings.bindAddresses) {
-				// any other context still occupying the same addr/port?
-				if (g_contextCollection.all.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
-					continue;
-
-				auto lidx = g_contextCollection.m_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
-				if (lidx >= 0) {
-					g_contextCollection.m_listeners[lidx].listener.stopListening();
-					logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
-					g_contextCollection.m_listeners = g_contextCollection.m_listeners[0 .. lidx] ~ g_contextCollection.m_listeners[lidx+1 .. $];
-				}
-			}
-		}
+		g_contextCollection.stopListening(m_contextID);
 	}
 }
 
@@ -1430,6 +1404,42 @@ private {
 				atomicStore(m_contexts, newarr);
 			else
 				m_contexts = newarr;
+		}
+
+		size_t indexById(size_t id) {
+			import std.algorithm : countUntil;
+
+			synchronized (m_listenersMutex) {
+				return all.countUntil!(c => c.id == id);
+			}
+		}
+
+		void stopListening(size_t id) {
+			import std.algorithm : countUntil;
+
+			auto idx = indexById(id);
+			if (idx < 0) return;
+
+			synchronized (m_listenersMutex) {
+				// remove context entry
+				auto ctx = m_contexts[idx];
+				remove(idx);
+
+				// stop listening on all unused TCP ports
+				auto port = ctx.settings.port;
+				foreach (addr; ctx.settings.bindAddresses) {
+					// any other context still occupying the same addr/port?
+					if (g_contextCollection.all.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
+						continue;
+
+					auto lidx = g_contextCollection.m_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
+					if (lidx >= 0) {
+						m_listeners[lidx].listener.stopListening();
+						logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
+						m_listeners = m_listeners[0 .. lidx] ~ g_contextCollection.m_listeners[lidx+1 .. $];
+					}
+				}
+			}
 		}
 	}
 }
