@@ -166,7 +166,10 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 				enum minfo = extractHTTPMethodAndName!(overload, true)();
 				enum url = minfo.hadPathUDA ? minfo.url : adjustMethodStyle(minfo.url, method_style);
 
-				static if (is(RT == class) || is(RT == interface)) {
+				static if (findFirstUDA!(NoRouteAttribute, overload).found) {
+					import vibe.core.log : logDebug;
+					logDebug("Method %s.%s annotated with @noRoute - not generating a route entry.", C.stringof, M);
+				} else static if (is(RT == class) || is(RT == interface)) {
 					// nested API
 					static assert(
 						ParameterTypeTuple!overload.length == 0,
@@ -411,6 +414,33 @@ unittest {
 	}
 }
 
+
+/**
+	Methods marked with this attribute will not be treated as web endpoints.
+
+	This attribute enables the definition of public methods that do not take
+	part in the interface genration process.
+*/
+@property NoRouteAttribute noRoute()
+{
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return NoRouteAttribute.init;
+}
+
+///
+unittest {
+	interface IAPI {
+		// Accessible as "GET /info"
+		string getInfo();
+
+		// Not accessible over HTTP
+		@noRoute
+		int getFoo();
+	}
+}
+
+
 /**
 	Attribute to customize how errors/exceptions are displayed.
 
@@ -547,6 +577,7 @@ struct SessionVar(T, string name) {
 	alias value this;
 }
 
+private struct NoRouteAttribute {}
 
 struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 	import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
