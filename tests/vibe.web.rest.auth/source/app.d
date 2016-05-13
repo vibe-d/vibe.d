@@ -64,18 +64,12 @@ shared static this()
 
 struct Auth {
     string username;
-    static Auth authenticate(IService svc, HTTPServerRequest req, HTTPServerResponse res)
-    {
-        Auth ret;
-        ret.username = performBasicAuth(req, res, "test", (user, pw) { return pw == "secret"; });
-        return ret;
-    }
 
     bool isAdmin() { return username == "admin"; }
     bool isMember() { return username == "peter"; }
 }
 
-@authorized!Auth
+@authorized
 interface IService {
     @noAuth int getPublic();
     @anyAuth int getAny();
@@ -96,4 +90,11 @@ class Service : IService {
     int getMember() { return 42; }
     int getAdminMember() { return 42; }
     int getNobody() { return 42; }
+
+    Auth authenticate(HTTPServerRequest req, HTTPServerResponse res)
+    {
+        Auth ret;
+        ret.username = performBasicAuth(req, res, "test", (user, pw) { return pw == "secret"; });
+        return ret;
+    }
 }

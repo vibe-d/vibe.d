@@ -61,18 +61,12 @@ shared static this()
 
 struct Auth {
     string username;
-    static Auth authenticate(Service svc, HTTPServerRequest req, HTTPServerResponse res)
-    {
-        Auth ret;
-        ret.username = performBasicAuth(req, res, "test", (user, pw) { return pw == "secret"; });
-        return ret;
-    }
 
     bool isAdmin() { return username == "admin"; }
     bool isMember() { return username == "peter"; }
 }
 
-@authorized!Auth
+@authorized
 class Service {
     @noAuth void getPublic(HTTPServerResponse res) { res.writeBody("success"); }
     @anyAuth void getAny(HTTPServerResponse res) { res.writeBody("success"); }
@@ -81,4 +75,11 @@ class Service {
     @auth(Role.admin) void getAdminA(HTTPServerResponse res, Auth auth) { assert(auth.username == "admin"); res.writeBody("success"); }
     @auth(Role.member) void getMember(HTTPServerResponse res) { res.writeBody("success"); }
     @auth(Role.admin | Role.member) void getAdminMember(HTTPServerResponse res) { res.writeBody("success"); }
+
+    @noRoute Auth authenticate(HTTPServerRequest req, HTTPServerResponse res)
+    {
+        Auth ret;
+        ret.username = performBasicAuth(req, res, "test", (user, pw) { return pw == "secret"; });
+        return ret;
+    }
 }

@@ -424,6 +424,7 @@ unittest {
 */
 @property NoRouteAttribute noRoute()
 {
+	import vibe.web.common : onlyAsUda;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return NoRouteAttribute.init;

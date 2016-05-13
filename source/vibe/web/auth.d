@@ -21,30 +21,30 @@ else import std.meta : AliasSeq, staticIndexOf;
 ///
 unittest {
 	import vibe.http.router : URLRouter;
-	import vibe.web.web : registerWebInterface;
+	import vibe.web.web : noRoute, registerWebInterface;
 
-	@authorized!(ChatWebService.AuthInfo)
+	static struct AuthInfo {
+		string userName;
+
+		bool isAdmin() { return this.userName == "tom"; }
+		bool isRoomMember(int chat_room) {
+			if (chat_room == 0)
+				return this.userName == "macy" || this.userName == "peter";
+			else if (chat_room == 1)
+				return this.userName == "macy";
+			else
+				return false;
+		}
+		bool isPremiumUser() { return this.userName == "peter"; }
+	}
+
+	@authorized
 	static class ChatWebService {
-		static struct AuthInfo {
-			string userName;
-
-			static AuthInfo authenticate(ChatWebService svc, scope HTTPServerRequest req, scope HTTPServerResponse res)
-			{
-				if (req.headers["AuthToken"] == "foobar")
-					return AuthInfo(req.headers["AuthUser"]);
-				throw new HTTPStatusException(HTTPStatus.unauthorized);
-			}
-			
-			bool isAdmin() { return this.userName == "tom"; }
-			bool isRoomMember(int chat_room) {
-				if (chat_room == 0)
-					return this.userName == "macy" || this.userName == "peter";
-				else if (chat_room == 1)
-					return this.userName == "macy";
-				else
-					return false;
-			}
-			bool isPremiumUser() { return this.userName == "peter"; }
+		@noRoute AuthInfo authenticate(scope HTTPServerRequest req, scope HTTPServerResponse res)
+		{
+			if (req.headers["AuthToken"] == "foobar")
+				return AuthInfo(req.headers["AuthUser"]);
+			throw new HTTPStatusException(HTTPStatus.unauthorized);
 		}
 
 		@noAuth
@@ -92,7 +92,7 @@ unittest {
 	to specify either the `@auth` or the `@noAuth` attribute for every public
 	method.
 */
-@property AuthorizedAttribute!T authorized(T)() { return AuthorizedAttribute!T.init; }
+@property AuthorizedAttribute authorized() { return AuthorizedAttribute.init; }
 
 /** Enforces authentication and authorization.
 
@@ -111,7 +111,7 @@ AuthAttribute!R auth(R)(R roles) { return AuthAttribute!R.init; }
 @property NoAuthAttribute noAuth() { return NoAuthAttribute.init; }
 
 /// private
-struct AuthorizedAttribute(T) { alias AuthInfo = T; }
+struct AuthorizedAttribute {}
 
 /// private
 struct AuthAttribute(R) { alias Roles = R; }
@@ -149,7 +149,7 @@ package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTP
 			// nothing to do
 		} else {
 			static assert(!is(AR == void), "Missing @auth(...)/@anyAuth attribute for method "~funname~".");
-			return AI.authenticate(c, req, res);
+			return c.authenticate(req, res);
 		}
 	} else {
 		// make sure that there are no @auth/@noAuth annotations for non-authorizing classes
@@ -184,28 +184,67 @@ package void handleAuthorization(C, alias fun, PARAMS...)(AuthInfo!C auth_info)
 	}
 }
 
-package enum bool isAuthenticated(C, alias fun) = !is(AuthInfo!C == void) && !findFirstUDA!(NoAuthAttribute, fun).found;
+package template isAuthenticated(C, alias fun) {
+	static if (is(AuthInfo!C == void)) {
+		static assert(!findFirstUDA!(NoAuthAttribute, fun).found && !findFirstUDA!(AuthAttribute, fun).found,
+			C.stringof~"."~__traits(identifier, fun)~": @auth/@anyAuth/@noAuth attributes require @authorized attribute on the containing class.");
+		enum isAuthenticated = false;
+	} else {
+		static assert(findFirstUDA!(NoAuthAttribute, fun).found || findFirstUDA!(AuthAttribute, fun).found,
+			C.stringof~"."~__traits(identifier, fun)~": Endpoint method must be annotated with either of @auth/@anyAuth/@noAuth.");
+		enum isAuthenticated = !findFirstUDA!(NoAuthAttribute, fun).found;
+	}
+}
 
-package template AuthInfo(C)
+unittest {
+	class C {
+		@noAuth void a() {}
+		@auth(Role.test) void b() {}
+		@anyAuth void c() {}
+		void d() {}
+	}
+
+	static assert(!is(typeof(isAuthenticated!(C, C.a))));
+	static assert(!is(typeof(isAuthenticated!(C, C.b))));
+	static assert(!is(typeof(isAuthenticated!(C, C.c))));
+	static assert(!isAuthenticated!(C, C.d));
+
+	@authorized
+	class D {
+		@noAuth void a() {}
+		@auth(Role.test) void b() {}
+		@anyAuth void c() {}
+		void d() {}
+	}
+
+	static assert(!isAuthenticated!(D, D.a));
+	static assert(isAuthenticated!(D, D.b));
+	static assert(isAuthenticated!(D, D.c));
+	static assert(!is(typeof(isAuthenticated!(D, D.d))));
+}
+
+
+package template AuthInfo(C, CA = C)
 {
 	import std.traits : BaseTypeTuple, isInstanceOf;
-	alias ATTS = AliasSeq!(__traits(getAttributes, C));
-	alias BASES = BaseTypeTuple!C;
+	alias ATTS = AliasSeq!(__traits(getAttributes, CA));
+	alias BASES = BaseTypeTuple!CA;
 
 	template impl(size_t idx) {
 		static if (idx < ATTS.length) {
-			static if (is(typeof(ATTS[idx])) && isInstanceOf!(AuthorizedAttribute, typeof(ATTS[idx]))) {
-				alias impl = typeof(ATTS[idx]).AuthInfo;
-				static assert (is(typeof(impl.authenticate(C.init, HTTPServerRequest.init, HTTPServerResponse.init)) == impl),
-					"@authorized!"~impl.stringof~" for "~C.stringof~" specifies a type that is missing a properly defined authenticate() static method.");
-				static assert(is(impl!(idx+1) == void), "Class "~C.stringof~" defines multiple @authorized attributes.");
+			static if (is(typeof(ATTS[idx])) && is(typeof(ATTS[idx]) == AuthorizedAttribute)) {
+				static if (is(typeof(C.init.authenticate(HTTPServerRequest.init, HTTPServerResponse.init))))
+					alias impl = typeof(C.init.authenticate(HTTPServerRequest.init, HTTPServerResponse.init));
+				else
+					static assert (false,
+						C.stringof~" must have an authenticate(...) method that takes HTTPServerRequest/HTTPServerResponse parameters and returns an authentication information object.");
 			} else alias impl = impl!(idx+1);
 		} else alias impl = void;
 	}
 
 	template cimpl(size_t idx) {
 		static if (idx < BASES.length) {
-			alias AI = AuthInfo!(BASES[idx]);
+			alias AI = AuthInfo!(C, BASES[idx]);
 			static if (is(AI == void)) alias cimpl = cimpl!(idx+1);
 			else alias cimpl = AI;
 		} else alias cimpl = void;
@@ -216,17 +255,17 @@ package template AuthInfo(C)
 }
 
 unittest {
-	@authorized!(I.A)
+	@authorized
 	static class I {
 		static struct A {}
 	}
 	static assert (!is(AuthInfo!I)); // missing authenticate method
 
-	@authorized!(J.A)
+	@authorized
 	static class J {
 		static struct A {
-			static A authenticate(J, HTTPServerRequest, HTTPServerResponse) { return A.init; }
 		}
+		A authenticate(HTTPServerRequest, HTTPServerResponse) { return A.init; }
 	}
 	static assert (is(AuthInfo!J == J.A));
 
@@ -236,13 +275,14 @@ unittest {
 	static class L : J {}
 	static assert (is(AuthInfo!L == J.A));
 
-	@authorized!(M.A)
+	@authorized
 	interface M {
 		static struct A {
-			static A authenticate(M, HTTPServerRequest, HTTPServerResponse) { return A.init; }
 		}
 	}
-	static class N : M {}
+	static class N : M {
+		A authenticate(HTTPServerRequest, HTTPServerResponse) { return A.init; }
+	}
 	static assert (is(AuthInfo!N == M.A));
 }
 
