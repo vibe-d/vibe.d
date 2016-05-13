@@ -7,6 +7,9 @@
 */
 module vibe.web.auth;
 
+// TODO: instead of AuthInfo.authenticate(Service, ...), use Service.authenticate(AuthInfo, ...) to avoid cyclic dependency
+// TODO: Insert validity checks into isAuthenticated (@authorized attribute requires all methods to be attributed and no-@authorized means no methods may be attributed)
+
 import vibe.http.common : HTTPStatusException;
 import vibe.http.status : HTTPStatus;
 import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
@@ -17,6 +20,9 @@ else import std.meta : AliasSeq, staticIndexOf;
 
 ///
 unittest {
+	import vibe.http.router : URLRouter;
+	import vibe.web.web : registerWebInterface;
+
 	@authorized!(ChatWebService.AuthInfo)
 	static class ChatWebService {
 		static struct AuthInfo {
@@ -47,7 +53,7 @@ unittest {
 			// code that can be executed for any client
 		}
 
-		@auth
+		@anyAuth
 		void getOverview()
 		{
 			// code that can be executed by any registered user
@@ -71,10 +77,16 @@ unittest {
 			// code that may only execute for users that are members of a room and have a premium subscription
 		}
 	}
+
+	void registerService(URLRouter router)
+	{
+		router.registerWebInterface(new ChatWebService);
+	}
 }
 
 
-/** Enables authentication and authorization checks for an interface class.
+/**
+	Enables authentication and authorization checks for an interface class.
 
 	Web/REST interface classes that have authentication enabled are required
 	to specify either the `@auth` or the `@noAuth` attribute for every public
@@ -176,8 +188,9 @@ package enum bool isAuthenticated(C, alias fun) = !is(AuthInfo!C == void) && !fi
 
 package template AuthInfo(C)
 {
-	import std.traits : isInstanceOf;
+	import std.traits : BaseTypeTuple, isInstanceOf;
 	alias ATTS = AliasSeq!(__traits(getAttributes, C));
+	alias BASES = BaseTypeTuple!C;
 
 	template impl(size_t idx) {
 		static if (idx < ATTS.length) {
@@ -189,7 +202,17 @@ package template AuthInfo(C)
 			} else alias impl = impl!(idx+1);
 		} else alias impl = void;
 	}
-	alias AuthInfo = impl!0;
+
+	template cimpl(size_t idx) {
+		static if (idx < BASES.length) {
+			alias AI = AuthInfo!(BASES[idx]);
+			static if (is(AI == void)) alias cimpl = cimpl!(idx+1);
+			else alias cimpl = AI;
+		} else alias cimpl = void;
+	}
+
+	static if (!is(impl!0 == void)) alias AuthInfo = impl!0;
+	else alias AuthInfo = cimpl!0;
 }
 
 unittest {
@@ -207,9 +230,20 @@ unittest {
 	}
 	static assert (is(AuthInfo!J == J.A));
 
-	static class K {
-	}
+	static class K {}
 	static assert (is(AuthInfo!K == void));
+
+	static class L : J {}
+	static assert (is(AuthInfo!L == J.A));
+
+	@authorized!(M.A)
+	interface M {
+		static struct A {
+			static A authenticate(M, HTTPServerRequest, HTTPServerResponse) { return A.init; }
+		}
+	}
+	static class N : M {}
+	static assert (is(AuthInfo!N == M.A));
 }
 
 private template GetAuthAttribute(alias fun)
