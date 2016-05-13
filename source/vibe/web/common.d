@@ -89,7 +89,7 @@ string adjustMethodStyle(string name, MethodStyle style)
 					std.utf.decode(name, i);
 				}
 			}
-			if (i < name.length) {
+			if (start < name.length) {
 				ret ~= "_" ~ name[start .. $];
 			}
 			return style == MethodStyle.lowerUnderscored ?
@@ -122,6 +122,7 @@ unittest
 	assert(adjustMethodStyle("IDTest", MethodStyle.lowerUnderscored) == "id_test");
 	assert(adjustMethodStyle("IDTest", MethodStyle.pascalCase) == "IDTest");
 	assert(adjustMethodStyle("IDTest", MethodStyle.camelCase) == "idTest");
+	assert(adjustMethodStyle("anyA", MethodStyle.lowerUnderscored) == "any_a", adjustMethodStyle("anyA", MethodStyle.lowerUnderscored));
 }
 
 
