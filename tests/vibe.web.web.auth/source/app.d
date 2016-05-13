@@ -66,7 +66,7 @@ struct Auth {
     bool isMember() { return username == "peter"; }
 }
 
-@authorized
+@requiresAuth
 class Service {
     @noAuth void getPublic(HTTPServerResponse res) { res.writeBody("success"); }
     @anyAuth void getAny(HTTPServerResponse res) { res.writeBody("success"); }

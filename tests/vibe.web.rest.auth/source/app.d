@@ -69,7 +69,7 @@ struct Auth {
     bool isMember() { return username == "peter"; }
 }
 
-@authorized
+@requiresAuth
 interface IService {
     @noAuth int getPublic();
     @anyAuth int getAny();
