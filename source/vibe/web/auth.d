@@ -89,7 +89,10 @@ unittest {
 	to specify either the `@auth` or the `@noAuth` attribute for every public
 	method.
 */
-@property RequiresAuthAttribute requiresAuth() { return RequiresAuthAttribute.init; }
+@property RequiresAuthAttribute requiresAuth()
+{
+	return RequiresAuthAttribute.init;
+}
 
 /** Enforces authentication and authorization.
 
