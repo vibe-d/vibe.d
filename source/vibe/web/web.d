@@ -9,7 +9,7 @@
 
 	See $(D registerWebInterface) for an overview of how the system works.
 
-	Copyright: © 2013-2015 RejectedSoftware e.K.
+	Copyright: © 2013-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -25,6 +25,7 @@ import vibe.http.common;
 import vibe.http.router;
 import vibe.http.server;
 import vibe.http.websockets;
+import vibe.web.auth : AuthInfo, handleAuthentication, handleAuthorization, isAuthenticated;
 
 import std.encoding : sanitize;
 
@@ -166,7 +167,10 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 				enum minfo = extractHTTPMethodAndName!(overload, true)();
 				enum url = minfo.hadPathUDA ? minfo.url : adjustMethodStyle(minfo.url, method_style);
 
-				static if (is(RT == class) || is(RT == interface)) {
+				static if (findFirstUDA!(NoRouteAttribute, overload).found) {
+					import vibe.core.log : logDebug;
+					logDebug("Method %s.%s annotated with @noRoute - not generating a route entry.", C.stringof, M);
+				} else static if (is(RT == class) || is(RT == interface)) {
 					// nested API
 					static assert(
 						ParameterTypeTuple!overload.length == 0,
@@ -411,6 +415,34 @@ unittest {
 	}
 }
 
+
+/**
+	Methods marked with this attribute will not be treated as web endpoints.
+
+	This attribute enables the definition of public methods that do not take
+	part in the interface genration process.
+*/
+@property NoRouteAttribute noRoute()
+{
+	import vibe.web.common : onlyAsUda;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return NoRouteAttribute.init;
+}
+
+///
+unittest {
+	interface IAPI {
+		// Accessible as "GET /info"
+		string getInfo();
+
+		// Not accessible over HTTP
+		@noRoute
+		int getFoo();
+	}
+}
+
+
 /**
 	Attribute to customize how errors/exceptions are displayed.
 
@@ -547,6 +579,7 @@ struct SessionVar(T, string name) {
 	alias value this;
 }
 
+private struct NoRouteAttribute {}
 
 struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 	import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
@@ -602,10 +635,16 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	alias RET = ReturnType!overload;
 	alias PARAMS = ParameterTypeTuple!overload;
 	alias default_values = ParameterDefaultValueTuple!overload;
+	alias AuthInfoType = AuthInfo!C;
 	enum param_names = [ParameterIdentifierTuple!overload];
 	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
 
 	s_requestContext = createRequestContext!overload(req, res);
+
+	static if (isAuthenticated!(C, overload)) {
+		auto auth_info = handleAuthentication!overload(instance, req, res);
+		if (res.headerWritten) return;
+	}
 
 	// collect all parameter values
 	PARAMS params = void; // FIXME: in case of errors, destructors could be called on uninitialized variables!
@@ -614,7 +653,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		ParamError err;
 		err.field = param_names[i];
 		try {
-			static if (IsAttributedParameter!(overload, param_names[i])) {
+			static if (is(PT == AuthInfoType)) {
+				params[i] = auth_info;
+			} else static if (IsAttributedParameter!(overload, param_names[i])) {
 				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
 				if (res.headerWritten) return;
 			}
@@ -705,6 +746,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 			}
 		}
 	}
+
+	static if (isAuthenticated!(C, overload))
+		handleAuthorization!(C, overload, params)(auth_info);
 
 	// execute the method and write the result
 	try {

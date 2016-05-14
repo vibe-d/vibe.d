@@ -1,7 +1,7 @@
 /**
 	Internal module with common functionality for REST interface generators.
 
-	Copyright: © 2015 RejectedSoftware e.K.
+	Copyright: © 2015-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -190,6 +190,7 @@ else import std.typetuple : anySatisfy, Filter;
 					case ParameterKind.header: route.headerParameters ~= pi; break;
 					case ParameterKind.internal: route.internalParameters ~= pi; break;
 					case ParameterKind.attributed: route.attributedParameters ~= pi; break;
+					case ParameterKind.auth: route.authParameters ~= pi; break;
 				}
 			}
 
@@ -242,10 +243,13 @@ else import std.typetuple : anySatisfy, Filter;
 	private static StaticRoute[routeCount] computeStaticRoutes()
 	{
 		static import std.traits;
+		import vibe.web.auth : AuthInfo;
 
 		assert(__ctfe);
 
 		StaticRoute[routeCount] ret;
+
+		alias AUTHTP = AuthInfo!TImpl;
 
 		foreach (fi, func; RouteFunctions) {
 			StaticRoute route;
@@ -285,7 +289,9 @@ else import std.typetuple : anySatisfy, Filter;
 				}
 
 				// determine parameter source/destination
-				if (IsAttributedParameter!(func, pname)) {
+				if (is(PT == AUTHTP)) {
+					pi.kind = ParameterKind.auth;
+				} else if (IsAttributedParameter!(func, pname)) {
 					pi.kind = ParameterKind.attributed;
 				} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
 					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
@@ -411,6 +417,7 @@ struct Route {
 	Parameter[] headerParameters;
 	Parameter[] attributedParameters;
 	Parameter[] internalParameters;
+	Parameter[] authParameters;
 }
 
 struct PathPart {
@@ -446,7 +453,8 @@ enum ParameterKind {
 	body_,       // JSON body
 	header,      // req.header[]
 	attributed,  // @before
-	internal     // req.params[]
+	internal,    // req.params[]
+	auth         // @authrorized!T
 }
 
 struct SubInterface {

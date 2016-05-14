@@ -215,7 +215,10 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		if (!m_allocator) m_allocator = defaultAllocator();
 
 		uint pot = 0;
-		while (new_size > 1) pot++, new_size /= 2;
+		while (new_size > 1) {
+			pot++;
+			new_size /= 2;
+		}
 		new_size = 1 << pot;
 
 		auto oldtable = m_table;

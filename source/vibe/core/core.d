@@ -477,7 +477,7 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 	import std.algorithm : move;
 	import std.traits : hasElaborateAssign;
 
-	struct TARGS { ARGS expand; }
+	static struct TARGS { ARGS expand; }
 
 	static assert(CALLABLE.sizeof <= TaskFuncInfo.callable.length);
 	static assert(TARGS.sizeof <= maxTaskParameterSize,
@@ -1610,7 +1610,7 @@ static this()
 static ~this()
 {
 	// Issue #1374: Sometimes Druntime for some reason calls `static ~this` after `shared static ~this`
-	if (!s_core) return; 
+	if (!s_core) return;
 
 	version(VibeLibasyncDriver) {
 		import vibe.core.drivers.libasync;
