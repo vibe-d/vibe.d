@@ -729,23 +729,17 @@ final class HTTPServerRequest : HTTPRequest {
 		}
 
 		// Set URL port segment.
-		Nullable!ushort port;
 		if (auto xfp = this.headers.get("X-Forwarded-Port")) {
 			try {
-				port = xfp.to!ushort;
+				url.port = xfp.to!ushort;
 			} catch (ConvException) {
-				// Value was not ushort.
+				// TODO : Consider responding with a 400/etc. error from here.
+				logWarn("X-Forwarded-Port header was not valid port (%s)", xfp);
 			}
-		}
-		if (port.isNull) {
-			if (url.schema == "https") {
-				if (m_port != 443U) port = m_port;
-			} else {
-				if (m_port != 80U)  port = m_port;
-			}
-		}
-		if (!port.isNull) {
-			url.port = port.get;
+		} else if (url.schema == "https") {
+			if (m_port != 443U) url.port = m_port;
+		} else {
+			if (m_port != 80U)  url.port = m_port;
 		}
 
 		url.host = url.host.split(":")[0];
