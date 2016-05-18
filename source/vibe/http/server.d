@@ -877,12 +877,14 @@ final class HTTPServerResponse : HTTPResponse {
 	}
 
 
+	/// Writes a JSON message with the specified status
 	void writeJsonBody(T)(T data, int status, string content_type = "application/json; charset=UTF-8", bool allow_chunked = false)
 	{
 		statusCode = status;
 		writeJsonBody(data, content_type, allow_chunked);
 	}
-	/// Writes a JSON message with the specified status
+	
+	/// ditto
 	void writeJsonBody(T)(T data, string content_type = "application/json; charset=UTF-8", bool allow_chunked = false)
 	{
 		import std.traits;
