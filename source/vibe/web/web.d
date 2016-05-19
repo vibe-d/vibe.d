@@ -499,6 +499,32 @@ unittest {
 	}
 }
 
+/** Determines how nested D fields/array entries are mapped to form field names.
+*/
+NestedNameStyleAttribute nestedNameStyle(NestedNameStyle style)
+{
+	import vibe.web.common : onlyAsUda;
+	if (!__ctfe) assert(false, onlyAsUda!__FUNCTION__);
+	return NestedNameStyleAttribute(style);
+}
+
+///
+unittest {
+	struct Items {
+		int[] entries;
+	}
+
+	@nestedNameStyle(NestedNameStyle.d)
+	class MyService {
+		// expects fields in D native style:
+		// "items.entries[0]", "items.entries[1]", ...
+		void postItems(Items items)
+		{
+
+		}
+	}
+}
+
 
 /**
 	Encapsulates settings used to customize the generated web interface.
@@ -581,7 +607,7 @@ struct SessionVar(T, string name) {
 
 private struct NoRouteAttribute {}
 
-struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
+private struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 	import std.traits : ParameterTypeTuple, ParameterIdentifierTuple;
 
 	alias displayMethod = DISPLAY_METHOD;
@@ -608,6 +634,8 @@ struct ErrorDisplayAttribute(alias DISPLAY_METHOD) {
 		else static assert(false, "Error parameter type %s does not have the required constructor.");
 	}
 }
+
+private struct NestedNameStyleAttribute { NestedNameStyle value; }
 
 
 private {
@@ -638,6 +666,10 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	alias AuthInfoType = AuthInfo!C;
 	enum param_names = [ParameterIdentifierTuple!overload];
 	enum erruda = findFirstUDA!(ErrorDisplayAttribute, overload);
+
+	static if (findFirstUDA!(NestedNameStyleAttribute, C).found)
+		enum nested_style = findFirstUDA!(NestedNameStyleAttribute, C).value.value;
+	else enum nested_style = NestedNameStyle.underscore;
 
 	s_requestContext = createRequestContext!overload(req, res);
 
@@ -683,7 +715,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 				params[i] = param_names[i] in req.form || param_names[i] in req.query;
 			} else {
 				enum has_default = !is(default_values[i] == void);
-				ParamResult pres = readFormParamRec(req, params[i], param_names[i], !has_default, err);
+				ParamResult pres = readFormParamRec(req, params[i], param_names[i], !has_default, nested_style, err);
 				static if (has_default) {
 					if (pres == ParamResult.skipped)
 						params[i].setVoid(default_values[i]);

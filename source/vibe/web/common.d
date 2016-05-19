@@ -572,6 +572,13 @@ enum MethodStyle
 }
 
 
+/// Speficies how D fields are mapped to form field names
+enum NestedNameStyle {
+	underscore, /// Use underscores to separate fields and array indices
+	d           /// Use native D style and separate fields by dots and put array indices into brackets
+}
+
+
 // concatenates two URL parts avoiding any duplicate slashes
 // in resulting URL. `trailing` defines of result URL must
 // end with slash
@@ -631,9 +638,8 @@ package enum ParamResult {
 }
 
 // NOTE: dst is assumed to be uninitialized
-package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required, ref ParamError err)
+package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, string fieldname, bool required, NestedNameStyle style, ref ParamError err)
 {
-	import std.string;
 	import std.traits;
 	import std.typecons;
 	import vibe.data.serialization;
@@ -647,7 +653,7 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		dst = T.init;
 		while (true) {
 			EL el = void;
-			auto r = readFormParamRec(req, el, format("%s_%s", fieldname, idx), false, err);
+			auto r = readFormParamRec(req, el, style.getArrayFieldName(fieldname, idx), false, style, err);
 			if (r == ParamResult.error) return r;
 			if (r == ParamResult.skipped) break;
 			dst ~= el;
@@ -655,19 +661,23 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 		}
 	} else static if (isStaticArray!T) {
 		foreach (i; 0 .. T.length) {
-			auto r = readFormParamRec(req, dst[i], format("%s_%s", fieldname, i), true, err);
+			auto r = readFormParamRec(req, dst[i], style.getArrayFieldName(fieldname, i), true, style, err);
 			if (r == ParamResult.error) return r;
 			assert(r != ParamResult.skipped); break;
 		}
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
-		auto r = readFormParamRec(req, el, fieldname, false, err);
+		auto r = readFormParamRec(req, el, fieldname, false, style, err);
 		if (r == ParamResult.ok)
 			dst.setVoid(el);
 		else dst.setVoid(T.init);
-	} else static if (is(T == struct) && !is(typeof(T.fromString(string.init))) && !is(typeof(T.fromStringValidate(string.init, null)))) {
+	} else static if (is(T == struct) &&
+		!is(typeof(T.fromString(string.init))) &&
+		!is(typeof(T.fromStringValidate(string.init, null))) &&
+		!is(typeof(T.fromISOExtString(string.init))))
+	{
 		foreach (m; __traits(allMembers, T)) {
-			auto r = readFormParamRec(req, __traits(getMember, dst, m), fieldname~"_"~m, required, err);
+			auto r = readFormParamRec(req, __traits(getMember, dst, m), style.getMemberFieldName(fieldname, m), required, style, err);
 			if (r != ParamResult.ok)
 				return r; // FIXME: in case of errors the struct will be only partially initialized! All previous fields should be deinitialized first.
 		}
@@ -706,6 +716,9 @@ nothrow {
 		} else static if (is(typeof(T.fromString(str)))) {
 			static assert(is(typeof(T.fromString(str)) == T));
 			dst.setVoid(T.fromString(str));
+		} else static if (is(typeof(T.fromISOExtString(str)))) {
+			static assert(is(typeof(T.fromISOExtString(str)) == T));
+			dst.setVoid(T.fromISOExtString(str));
 		} else {
 			dst.setVoid(str.to!T());
 		}
@@ -736,6 +749,24 @@ package void setVoid(T, U)(ref T dst, U value)
 }
 
 unittest {
-	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, err); }));
-	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, err); }));
+	static assert(!__traits(compiles, { bool[] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
+	static assert(__traits(compiles, { bool[2] barr; ParamError err;readFormParamRec(null, barr, "f", true, NestedNameStyle.d, err); }));
+}
+
+private string getArrayFieldName(T)(NestedNameStyle style, string prefix, T index)
+{
+	import std.format : format;
+	final switch (style) {
+		case NestedNameStyle.underscore: return format("%s_%s", prefix, index);
+		case NestedNameStyle.d: return format("%s[%s]", prefix, index);
+	}
+}
+
+private string getMemberFieldName(NestedNameStyle style, string prefix, string member)
+{
+	import std.format : format;
+	final switch (style) {
+		case NestedNameStyle.underscore: return format("%s_%s", prefix, member);
+		case NestedNameStyle.d: return format("%s.%s", prefix, member);
+	}
 }

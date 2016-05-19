@@ -856,6 +856,30 @@ unittest {
 	assert(api.items["foo"].subItems[2].getSquaredPosition() == 4);
 }
 
+unittest {
+	interface C {
+		struct CollectionIndices {
+			int _ax;
+			int _b;
+		}
+		void testB(int _ax, int _b);
+	}
+
+	interface B {
+		struct CollectionIndices {
+			int _a;
+		}
+		Collection!C c();
+		void testA(int _a);
+	}
+
+	interface A {
+		Collection!B b();
+	}
+
+	static assert (!is(typeof(A.init.b[1].c[2].testB())));
+}
+
 
 /**
  * Generate an handler that will wrap the server's method
