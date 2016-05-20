@@ -6,6 +6,7 @@ module app;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.db.mongo.mongo;
+import std.algorithm : map, equal;
 import std.encoding : sanitize;
 
 void runTest()
@@ -50,10 +51,18 @@ void runTest()
 	assert(!converted.empty);
 	assert(converted.front == "value1value2");
 
-	import std.algorithm;
 	auto names = client.getDatabases().map!(dbs => dbs.name).array;
 	assert(!find(names, "test").empty);
 	assert(!find(names, "local").empty);
+
+	// test distinct()
+	coll.drop();
+	coll.insert(["a": "first", "b": "foo"]);
+	coll.insert(["a": "first", "b": "bar"]);
+	coll.insert(["a": "first", "b": "bar"]);
+	coll.insert(["a": "second", "b": "baz"]);
+	coll.insert(["a": "second", "b": "bam"]);
+	assert(coll.distinct!string("b", ["a": "first"]).equal(["foo", "bar"]));
 }
 
 int main()

@@ -354,6 +354,63 @@ struct MongoCollection {
 	}
 
 	/**
+		Returns an input range of all unique values for a certain field for
+		records matching the given query.
+
+		Params:
+			key = Name of the field for which to collect unique values
+			query = The query used to select records
+
+		Returns:
+			An input range with items of type `R` (`Bson` by default) is
+			returned.
+	*/
+	auto distinct(R = Bson, Q)(string key, Q query)
+	{
+		import std.algorithm : map;
+
+		static struct CMD {
+			string distinct;
+			string key;
+			Q query;
+		}
+		CMD cmd;
+		cmd.distinct = m_name;
+		cmd.key = key;
+		cmd.query = query;
+		auto res = m_db.runCommand(cmd);
+
+		enforce(res["ok"].get!double != 0, "Distinct query failed: "~res["errmsg"].opt!string);
+
+		// TODO: avoid dynamic array allocation
+		static if (is(R == Bson)) return res["values"].get!(Bson[]);
+		else return res["values"].get!(Bson[]).map!(b => deserializeBson!R(b));
+	}
+
+	///
+	unittest {
+		import std.algorithm : equal;
+		import vibe.db.mongo.mongo;
+
+		void test()
+		{
+			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
+			auto coll = db["collection"];
+
+			coll.drop();
+			coll.insert(["a": "first", "b": "foo"]);
+			coll.insert(["a": "first", "b": "bar"]);
+			coll.insert(["a": "first", "b": "bar"]);
+			coll.insert(["a": "second", "b": "baz"]);
+			coll.insert(["a": "second", "b": "bam"]);
+
+			auto result = coll.distinct!string("b", ["a": "first"]);
+
+			assert(result.equal(["foo", "bar"]));
+		}
+	}
+
+	/**
 		Creates or updates an index.
 
 		Note that the overload taking an associative array of field orders
