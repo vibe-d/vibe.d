@@ -692,7 +692,14 @@ final class IncomingWebSocketMessage : InputStream {
 
 private immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-enum FrameOpcode {
+/**
+ * The Opcode is 4 bytes, as defined in Section 5.2
+ *
+ * Values are defined in section 11.8
+ * Currently only 6 values are defined, however the opcode is defined as
+ * taking 4 bytes.
+ */
+enum FrameOpcode : uint {
 	continuation = 0x0,
 	text = 0x1,
 	binary = 0x2,
