@@ -75,12 +75,12 @@ class WebSocketException: Exception
 WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSettings)
 {
 	import std.typecons : Tuple, tuple;
-	
+
 	auto host = url.host;
 	auto port = url.port;
 	bool use_tls = (url.schema == "wss") ? true : false;
 
-	if (port == 0) 
+	if (port == 0)
 		port = (use_tls) ? 443 : 80;
 
 	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
@@ -766,7 +766,7 @@ struct Frame {
 	}
 }
 
-private ubyte[] generateNewMaskKey() 
+private ubyte[] generateNewMaskKey()
 {
 	auto rng = new SystemRNG();
 	auto buffer = new ubyte[4];
