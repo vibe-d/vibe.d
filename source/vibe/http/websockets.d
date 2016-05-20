@@ -307,6 +307,7 @@ final class WebSocket {
 		bool m_pongReceived;
 		bool m_pongSkipped;
 		bool m_isServer = true;
+        SystemRNG m_rng;
 	}
 
 	this(ConnectionStream conn, in HTTPServerRequest request, bool is_server = true)
@@ -315,6 +316,7 @@ final class WebSocket {
 		m_request = request;
 		m_isServer = is_server;
 		assert(m_conn);
+        m_rng = new SystemRNG;
 		m_writeMutex = new InterruptibleTaskMutex;
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
@@ -411,7 +413,7 @@ final class WebSocket {
 	{
 		m_writeMutex.performLocked!({
 			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
-			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_isServer);
+			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_rng, m_isServer);
 			scope(exit) message.finalize();
 			sender(message);
 		});
@@ -438,7 +440,7 @@ final class WebSocket {
 				if(code != 0)
 					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(const ubyte[])reason;
 				frame.fin = true;
-				frame.writeFrame(m_conn);
+				frame.writeFrame(m_conn, m_rng);
 			});
 		}
 		if (m_pingTimer) m_pingTimer.stop();
@@ -510,7 +512,7 @@ final class WebSocket {
 					if (!m_conn.waitForData(request.serverSettings.webSocketPingInterval))
 						continue;
 				}
-				scope msg = new IncomingWebSocketMessage(m_conn);
+				scope msg = new IncomingWebSocketMessage(m_conn, m_rng);
 				if (msg.frameOpcode == FrameOpcode.pong) {
 					enforce(msg.peek().length == uint.sizeof, "Pong payload has wrong length");
 					enforce(m_lastPingIndex == littleEndianToNative!uint(msg.peek()[0..uint.sizeof]), "Pong payload has wrong value");
@@ -551,7 +553,7 @@ final class WebSocket {
 			ping.opcode = FrameOpcode.ping;
 			ping.fin = true;
 			ping.payload = nativeToLittleEndian(++m_lastPingIndex);
-			ping.writeFrame(m_conn);
+			ping.writeFrame(m_conn, m_rng);
 			logDebug("Ping sent");
 		});
 	}
@@ -562,6 +564,7 @@ final class WebSocket {
 */
 final class OutgoingWebSocketMessage : OutputStream {
 	private {
+        SystemRNG m_rng;
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
@@ -569,12 +572,14 @@ final class OutgoingWebSocketMessage : OutputStream {
 		bool m_isServer;
 	}
 
-	this( Stream conn, FrameOpcode frameOpcode, bool is_server = true )
+	this( Stream conn, FrameOpcode frameOpcode, SystemRNG rng, bool is_server = true )
 	{
 		assert(conn !is null);
+        assert(rng !is null);
 		m_conn = conn;
 		m_frameOpcode = frameOpcode;
 		m_isServer = is_server;
+        m_rng = rng;
 	}
 
 	void write(in ubyte[] bytes)
@@ -591,7 +596,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 		frame.opcode = m_frameOpcode;
 		frame.fin = false;
 		frame.payload = m_buffer.data;
-		frame.writeFrame(m_conn);
+		frame.writeFrame(m_conn, m_rng);
 		m_buffer.clear();
 		m_conn.flush();
 	}
@@ -606,7 +611,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 		frame.fin = true;
 		frame.opcode = m_frameOpcode;
 		frame.payload = m_buffer.data;
-		frame.writeFrame(m_conn);
+		frame.writeFrame(m_conn, m_rng);
 		m_buffer.clear();
 		m_conn.flush();
 	}
@@ -624,15 +629,18 @@ final class OutgoingWebSocketMessage : OutputStream {
 */
 final class IncomingWebSocketMessage : InputStream {
 	private {
+        SystemRNG m_rng;
 		Stream m_conn;
 		Frame m_currentFrame;
 	}
 
-	this(Stream conn)
+	this(Stream conn, SystemRNG rng)
 	{
 		assert(conn !is null);
+        assert(rng !is null);
 		m_conn = conn;
-		readFrame();
+        m_rng = rng;
+        readFrame();
 	}
 
 	@property bool empty() const { return m_currentFrame.payload.length == 0; }
@@ -680,7 +688,7 @@ final class IncomingWebSocketMessage : InputStream {
 					pong.fin = true;
 					pong.payload = frame.payload;
 
-					pong.writeFrame(m_conn);
+					pong.writeFrame(m_conn, m_rng);
 					break;
 				default:
 					throw new WebSocketException("unknown frame opcode");
@@ -716,13 +724,13 @@ struct Frame {
 	bool isServer = true;
 
 
-	void writeFrame(OutputStream stream)
+	void writeFrame(OutputStream stream, SystemRNG sys_rng)
 	{
 		import vibe.stream.wrapper;
 
 		auto rng = StreamOutputRange(stream);
 
-        ubyte[1] buff;
+        ubyte[4] buff;
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
 		rng.put(firstByte);
@@ -736,19 +744,19 @@ struct Frame {
 			rng.put(std.bitmanip.nativeToBigEndian(cast(ubyte)(b1 | payload.length)));
 		} else if( payload.length <= 65536 ) {
             buff[0] = cast(ubyte) (b1 | 126);
-			rng.put(buff);
+			rng.put(buff[0 .. 1]);
 			rng.put(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
 		} else {
             buff[0] = cast(ubyte) (b1 | 127);
-			rng.put(buff);
+			rng.put(buff[0 .. 1]);
 			rng.put(std.bitmanip.nativeToBigEndian(payload.length));
 		}
 
 		if (!isServer) {
-			auto key = generateNewMaskKey();
-			rng.put(key);
+            sys_rng.read(buff);
+			rng.put(buff);
 			for (size_t i = 0; i < payload.length; i++) {
-				payload[i] ^= key[i % 4];
+				payload[i] ^= buff[i % 4];
 			}
 			rng.put(payload);
 		}else {
@@ -796,14 +804,6 @@ struct Frame {
 
 		return frame;
 	}
-}
-
-private ubyte[] generateNewMaskKey()
-{
-	auto rng = new SystemRNG();
-	auto buffer = new ubyte[4];
-	rng.read(buffer);
-	return buffer;
 }
 
 private string generateChallengeKey()
