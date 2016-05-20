@@ -269,8 +269,29 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 
 
 /**
-	Represents a single _WebSocket connection.
-*/
+ * Represents a single _WebSocket connection.
+ *
+ * ---
+ * shared static this ()
+ * {
+ *   runTask(() => connectToWS());
+ * }
+ *
+ * void connectToWS ()
+ * {
+ *   auto ws_url = URL("wss://websockets.example.com/websocket/auth_token");
+ *   auto ws = connectWebSocket(ws_url);
+ *   logInfo("WebSocket connected");
+ *
+ *   while (ws.waitForData())
+ *   {
+ *     auto txt = ws.receiveText;
+ *     logInfo("Received: %s", txt);
+ *   }
+ *   logFatal("Connection lost!");
+ * }
+ * ---
+ */
 final class WebSocket {
 	private {
 		ConnectionStream m_conn;
