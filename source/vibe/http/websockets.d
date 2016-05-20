@@ -722,6 +722,7 @@ struct Frame {
 
 		auto rng = StreamOutputRange(stream);
 
+        ubyte[1] buff;
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
 		rng.put(firstByte);
@@ -734,10 +735,12 @@ struct Frame {
 		if( payload.length < 126 ) {
 			rng.put(std.bitmanip.nativeToBigEndian(cast(ubyte)(b1 | payload.length)));
 		} else if( payload.length <= 65536 ) {
-			rng.put(cast(ubyte[])[(b1 | 126)]);
+            buff[0] = cast(ubyte) (b1 | 126);
+			rng.put(buff);
 			rng.put(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
 		} else {
-			rng.put(cast(ubyte[])[(b1 | 127)]);
+            buff[0] = cast(ubyte) (b1 | 127);
+			rng.put(buff);
 			rng.put(std.bitmanip.nativeToBigEndian(payload.length));
 		}
 
