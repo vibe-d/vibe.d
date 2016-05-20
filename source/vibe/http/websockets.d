@@ -386,9 +386,9 @@ final class WebSocket {
 		On the JavaScript side, the text will be available as message.data (type string).
 		Throws: WebSocketException if the connection is closed.
 	*/
-	void send(string data)
+	void send(scope const(char)[] data)
 	{
-		send((scope message){ message.write(cast(ubyte[])data); });
+		send((scope message){ message.write(cast(const ubyte[])data); });
 	}
 
 	/**
@@ -423,7 +423,7 @@ final class WebSocket {
 			code = Numeric code indicating a termination reason.
 			reason = Message describing why the connection was terminated.
 	*/
-	void close(short code = 0, string reason = "")
+	void close(short code = 0, scope const(char)[] reason = "")
 	{
 		//control frame payloads are limited to 125 bytes
 		assert(reason.length <= 123);
@@ -435,7 +435,7 @@ final class WebSocket {
 				frame.isServer = m_isServer;
 				frame.opcode = FrameOpcode.close;
 				if(code != 0)
-					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(ubyte[])reason;
+					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(const ubyte[])reason;
 				frame.fin = true;
 				frame.writeFrame(m_conn);
 			});
