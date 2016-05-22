@@ -269,12 +269,21 @@ unittest {
 /**
 	Renders a Diet template file to the current HTTP response.
 
-	This function is equivalent to vibe.http.server.render, but implicitly
+	This function is equivalent to `vibe.http.server.render`, but implicitly
 	writes the result to the response object of the currently processed
 	request.
 
 	Note that this may only be called from a function/method
-	registered using registerWebInterface.
+	registered using `registerWebInterface`.
+
+	In addition to the vanilla `render` function, this one also makes additional
+	functionality available within the template:
+
+	$(UL
+		$(LI The `req` variable that holds the current request object)
+		$(LI If the `@translationContext` attribute us used, enables the
+		     built-in i18n support of Diet templates)
+	)
 */
 template render(string diet_file, ALIASES...) {
 	void render(string MODULE = __MODULE__, string FUNCTION = __FUNCTION__)()
