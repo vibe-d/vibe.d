@@ -708,8 +708,12 @@ final class HTTPServerRequest : HTTPRequest {
 	const {
 		URL url;
 
+		auto xfh = this.headers.get("X-Forwarded-Host");
+		auto xfp = this.headers.get("X-Forwarded-Port");
+		auto xfpr = this.headers.get("X-Forwarded-Proto");
+
 		// Set URL host segment.
-		if (auto xfh = this.headers.get("X-Forwarded-Host")) {
+		if (xfh) {
 			url.host = xfh;
 		} else if (!this.host.empty) {
 			url.host = this.host;
@@ -720,7 +724,7 @@ final class HTTPServerRequest : HTTPRequest {
 		}
 
 		// Set URL schema segment.
-		if (auto xfp = this.headers.get("X-Forwarded-Proto")) {
+		if (auto xfpr) {
 			url.schema = xfp;
 		} else if (this.tls) {
 			url.schema = "https";
@@ -729,17 +733,19 @@ final class HTTPServerRequest : HTTPRequest {
 		}
 
 		// Set URL port segment.
-		if (auto xfp = this.headers.get("X-Forwarded-Port")) {
+		if (xfp) {
 			try {
 				url.port = xfp.to!ushort;
 			} catch (ConvException) {
 				// TODO : Consider responding with a 400/etc. error from here.
 				logWarn("X-Forwarded-Port header was not valid port (%s)", xfp);
 			}
-		} else if (url.schema == "https") {
-			if (m_port != 443U) url.port = m_port;
-		} else {
-			if (m_port != 80U)  url.port = m_port;
+		} else if (!xfh) {
+			if (url.schema == "https") {
+				if (m_port != 443U) url.port = m_port;
+			} else {
+				if (m_port != 80U)  url.port = m_port;
+			}
 		}
 
 		url.host = url.host.split(":")[0];
