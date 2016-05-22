@@ -713,7 +713,7 @@ final class HTTPServerRequest : HTTPRequest {
 		auto xfpr = this.headers.get("X-Forwarded-Proto");
 
 		// Set URL host segment.
-		if (xfh) {
+		if (xfh.length) {
 			url.host = xfh;
 		} else if (!this.host.empty) {
 			url.host = this.host;
@@ -724,8 +724,8 @@ final class HTTPServerRequest : HTTPRequest {
 		}
 
 		// Set URL schema segment.
-		if (auto xfpr) {
-			url.schema = xfp;
+		if (xfpr.length) {
+			url.schema = xfpr;
 		} else if (this.tls) {
 			url.schema = "https";
 		} else {
@@ -733,7 +733,7 @@ final class HTTPServerRequest : HTTPRequest {
 		}
 
 		// Set URL port segment.
-		if (xfp) {
+		if (xfp.length) {
 			try {
 				url.port = xfp.to!ushort;
 			} catch (ConvException) {
