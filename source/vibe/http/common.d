@@ -311,7 +311,7 @@ class HTTPStatusException : Exception {
 		int m_status;
 	}
 
-	this(int status, string message = null, string file = __FILE__, int line = __LINE__, Throwable next = null)
+	this(int status, string message = null, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
 		super(message != "" ? message : httpStatusText(status), file, line, next);
 		m_status = status;
