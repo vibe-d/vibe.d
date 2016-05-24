@@ -362,7 +362,7 @@ final class Libevent2Driver : EventDriver {
 		}
 		socketEnforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
 			"Error binding listening socket");
-		
+
 		socketEnforce(listen(listenfd, 128) == 0,
 			"Error listening to listening socket");
 
@@ -1231,6 +1231,8 @@ private {
 	__gshared DriverCore s_driverCore;
 	__gshared Mutex s_threadObjectsMutex;
 	__gshared ArraySet!size_t s_threadObjects;
+	debug __gshared size_t[void*] s_mutexes;
+	debug __gshared Mutex s_mutexesLock;
 	bool s_alreadyDeinitialized = false;
 }
 
@@ -1311,9 +1313,6 @@ private nothrow extern(C)
 			assert(false);
 		}
 	}
-
-	debug __gshared size_t[void*] s_mutexes;
-	debug __gshared Mutex s_mutexesLock;
 
 	void* lev_alloc_mutex(uint locktype)
 	{
