@@ -297,7 +297,10 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 
 	alias TU = Unqual!T;
 
-	static if (is(TU == enum)) {
+	static if (isPolicySerializable!(Policy, TU)) {
+		alias CustomType = typeof(Policy!TU.toRepresentation(TU.init));
+		serializeImpl!(Serializer, Policy, CustomType, ATTRIBUTES)(serializer, Policy!TU.toRepresentation(value));
+	} else static if (is(TU == enum)) {
 		static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 			serializeImpl!(Serializer, Policy, string)(serializer, value.to!string());
 		} else {
@@ -370,9 +373,6 @@ private void serializeImpl(Serializer, alias Policy, T, ATTRIBUTES...)(ref Seria
 				cnt++;
 			}
 		serializer.endWriteArray!(E[])();
-	} else static if (isPolicySerializable!(Policy, TU)) {
-		alias CustomType = typeof(Policy!TU.toRepresentation(TU.init));
-		serializeImpl!(Serializer, Policy, CustomType, ATTRIBUTES)(serializer, Policy!TU.toRepresentation(value));
 	} else static if (isCustomSerializable!TU) {
 		alias CustomType = typeof(T.init.toRepresentation());
 		serializeImpl!(Serializer, Policy, CustomType, ATTRIBUTES)(serializer, value.toRepresentation());
@@ -459,7 +459,10 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
-	static if (is(T == enum)) {
+	static if (isPolicySerializable!(Policy, T)) {
+		alias CustomType = typeof(Policy!T.toRepresentation(T.init));
+		return Policy!T.fromRepresentation(deserializeImpl!(CustomType, Policy, Serializer, ATTRIBUTES)(deserializer));
+	} else static if (is(T == enum)) {
 		static if (hasPolicyAttributeL!(ByNameAttribute, Policy, ATTRIBUTES)) {
 			return deserializeImpl!(string, Policy, Serializer)(deserializer).to!T();
 		} else {
@@ -506,9 +509,6 @@ private T deserializeImpl(T, alias Policy, Serializer, ATTRIBUTES...)(ref Serial
 			ret |= deserializeImpl!(E, Policy, Serializer, ATTRIBUTES)(deserializer);
 		});
 		return ret;
-	} else static if (isPolicySerializable!(Policy, T)) {
-		alias CustomType = typeof(Policy!T.toRepresentation(T.init));
-		return Policy!T.fromRepresentation(deserializeImpl!(CustomType, Policy, Serializer, ATTRIBUTES)(deserializer));
 	} else static if (isCustomSerializable!T) {
 		alias CustomType = typeof(T.init.toRepresentation());
 		return T.fromRepresentation(deserializeImpl!(CustomType, Policy, Serializer, ATTRIBUTES)(deserializer));
