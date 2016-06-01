@@ -384,7 +384,7 @@ struct Json {
 	/**
 		Allows foreach iterating over JSON objects and arrays.
 	*/
-	int opApply(int delegate(ref Json obj) del)
+	int opApply(scope int delegate(ref Json obj) del)
 	@trusted {
 		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
@@ -401,7 +401,7 @@ struct Json {
 		}
 	}
 	/// ditto
-	int opApply(int delegate(ref const Json obj) del)
+	int opApply(scope int delegate(ref const Json obj) del)
 	const @trusted {
 		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
@@ -418,7 +418,7 @@ struct Json {
 		}
 	}
 	/// ditto
-	int opApply(int delegate(ref size_t idx, ref Json obj) del)
+	int opApply(scope int delegate(ref size_t idx, ref Json obj) del)
 	@trusted {
 		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
@@ -427,7 +427,7 @@ struct Json {
 		return 0;
 	}
 	/// ditto
-	int opApply(int delegate(ref size_t idx, ref const Json obj) del)
+	int opApply(scope int delegate(ref size_t idx, ref const Json obj) del)
 	const @trusted {
 		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
@@ -436,7 +436,7 @@ struct Json {
 		return 0;
 	}
 	/// ditto
-	int opApply(int delegate(ref string idx, ref Json obj) del)
+	int opApply(scope int delegate(ref string idx, ref Json obj) del)
 	@trusted {
 		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
@@ -446,7 +446,7 @@ struct Json {
 		return 0;
 	}
 	/// ditto
-	int opApply(int delegate(ref string idx, ref const Json obj) del)
+	int opApply(scope int delegate(ref string idx, ref const Json obj) del)
 	const @trusted {
 		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
@@ -1152,7 +1152,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			ret = skipJsonString(range);
 			break;
 		case '[':
-			Json[] arr;
+			auto arr = appender!(Json[]);
 			range.popFront();
 			while (true) {
 				skipWhitespace(range, line);
@@ -1167,7 +1167,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 				else range.popFront();
 			}
 			range.popFront();
-			ret = arr;
+			ret = arr.data;
 			break;
 		case '{':
 			Json[string] obj;
