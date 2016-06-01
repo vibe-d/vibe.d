@@ -1430,3 +1430,29 @@ unittest { // issue #1352 - ingore per policy
 		assert(deserializeWithPolicy!(TestSerializer, P2, T)(serialized_p2) == T(5, 6, 3, 4));
 	}
 }
+
+unittest {
+	import std.conv : to;
+	import std.string : toLower, toUpper;
+
+	template P(T) if (is(T == enum)) {
+		static string toRepresentation(T v) { return v.to!string.toLower(); }
+		static T fromRepresentation(string str) { return str.toUpper().to!T; }
+	}
+
+
+	enum E {
+		RED,
+		GREEN
+	}
+
+	assert(P!E.fromRepresentation("green") == E.GREEN);
+	static assert(isPolicySerializable!(P, E));
+
+	auto ser_red = "V(Aya)(red)";
+	assert(serializeWithPolicy!(TestSerializer, P)(E.RED) == ser_red, serializeWithPolicy!(TestSerializer, P)(E.RED));
+	assert(deserializeWithPolicy!(TestSerializer, P, E)(ser_red) == E.RED);
+	
+	import vibe.data.json : Json, JsonSerializer;
+	assert(serializeWithPolicy!(JsonSerializer, P)(E.RED) == Json("red"));
+}
