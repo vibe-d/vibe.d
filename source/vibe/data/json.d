@@ -94,7 +94,7 @@ import std.bigint;
 	a JSONException. Additionally, an explicit cast or using get!() or to!() is
 	required to convert a JSON value to the corresponding static D type.
 */
-
+align(8) // ensures that pointers stay on 64-bit boundaries on x64 so that they get scanned by the GC
 struct Json {
 	static assert(!hasElaborateDestructor!BigInt && !hasElaborateCopyConstructor!BigInt,
 		"struct Json is missing required ~this and/or this(this) members for BigInt.");
@@ -106,8 +106,12 @@ struct Json {
 		// the issues.
 		enum m_size = max((BigInt.sizeof+(void*).sizeof), 2);
 		// NOTE : DMD 2.067.1 doesn't seem to init void[] correctly on its own.
-		// Explicity initializing it works around this issue.
+		// Explicity initializing it works around this issue. Using a void[]
+		// array here to guarantee that it's scanned by the GC.
 		void[m_size] m_data = (void[m_size]).init;
+
+		static assert(m_data.offsetof == 0, "m_data must be the first struct member.");
+		static assert(BigInt.alignof <= 8, "Json struct alignment of 8 isn't sufficient to store BigInt.");
 
 		ref inout(T) getDataAs(T)() inout {
 			static assert(T.sizeof <= m_data.sizeof);
