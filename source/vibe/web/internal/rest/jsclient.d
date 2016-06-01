@@ -35,7 +35,7 @@ import std.conv : to;
 	output.put("var toRestString = function(v) { return v; }\n");
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
-		output.generateInterface!SI(intf.subInterfaces[i].name, intf.subInterfaces[i].settings);
+		output.generateInterface!SI(__traits(identifier, intf.SubInterfaceFunctions[i]), intf.subInterfaces[i].settings);
 	}
 
 	foreach (i, F; intf.RouteFunctions) {
@@ -123,7 +123,12 @@ unittest { // issue #1293
 	import std.array : appender;
 	import vibe.inet.url;
 
+	interface S {
+		void test();
+	}
+
 	interface I {
+		@property S s();
 		int test1();
 		void test2();
 	}
