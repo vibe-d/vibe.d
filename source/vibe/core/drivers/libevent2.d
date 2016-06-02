@@ -329,7 +329,9 @@ final class Libevent2Driver : EventDriver {
 		}
 
 		logTrace("Connect result status: %d", cctx.status);
-		enforce(cctx.status == BEV_EVENT_CONNECTED, format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
+		enforce(cctx.status == BEV_EVENT_CONNECTED, cctx.statusMessage
+			? format("Failed to connect to host %s: %s", addr.toString(), cctx.statusMessage.to!string)
+			: format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
 
 		socklen_t balen = bind_addr.sockAddrLen;
 		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");

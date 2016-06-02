@@ -529,6 +529,7 @@ package struct TCPContext
 	bool shutdown = false;
 	int socketfd = -1;
 	int status = 0;
+	const(char)* statusMessage;
 	Task readOwner;
 	Task writeOwner;
 	Exception exception; // set during onSocketEvent calls that were emitted synchronously
@@ -732,6 +733,7 @@ package nothrow extern(C)
 				//	(status & BEV_EVENT_READING) ? "reading from" : (status & BEV_EVENT_WRITING) ? "writing to" : "on",
 				//	ctx.socketfd);
 				//ex = new SystemSocketException(msg);
+				ctx.statusMessage = evutil_socket_error_to_string(EVUTIL_SOCKET_ERROR());
 				free_event = true;
 			}
 
