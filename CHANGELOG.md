@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.29 - 2016-05-
+v0.7.29 - 2016-06-
 --------------------
 
 ### Features and improvements ###
@@ -28,6 +28,8 @@ v0.7.29 - 2016-05-
 - The markdown module now emits XHTML compatible `<br/>` tags (by Stefan Schmidt) - [pull #1461][issue1461]
 - Added `RedisDatabase.srandMember` overload taking a count (by Yannick Koechlin) - [pull #1447][issue1447]
 - The HTTP client now accepts `const` settings
+- Removed the libevent/Win64 configuration as the libevent binaries for that platform never existed - [issue #832][issue832]
+- Improvements to the WebSockets module, most notably reduction of memory allocations (by Mathias Lang) - [pull #1497][issue1497]
 
 ### Bug fixes ###
 
@@ -46,7 +48,15 @@ v0.7.29 - 2016-05-
 - Fixed recognizing certain HTTP content encoding strings ("x-gzip" and "") (by Ilya Yaroshenko) - [pull #1477][issue1477]
 - Fixed parsing IPv6 "Host" headers in the HTTP server - [issue #1388][issue1388], [issue #1402][issue1402]
 - Fixed an assertion failure when using threads together with `VibeIdleCollect` - [issue #1476][issue1476]
+- Fixed parsing of `vibe.conf` files that contain a UTF BOM - [issue #1470][issue1470]
+- Fixed `@before`/`@after` annotations to work for template member functions
+- Fixed "Host" header handling in the HTTP server (now optional for HTTP/1.0 and responds with "bad request" if missing)
+- Fixed `Json` to work at CTFE (by Mihail-K) - [pull #1489][issue1489]
+- Fixed `adjustMethodStyle` (used throughout `vibe.web`) for method names with trailing upper case characters
+- Fixed alignment of the `Json` type on x64, fixes possible dangling pointers due to the GC not recognizing unaligned pointers - [issue #1504][issue1504]
+- Fixed serialization policies to work for enums and other built-in types (by Tomáš Chaloupka) - [pull #1500][issue1500]
 
+[issue832]: https://github.com/rejectedsoftware/vibe.d/issues/832
 [issue1128]: https://github.com/rejectedsoftware/vibe.d/issues/1128
 [issue1265]: https://github.com/rejectedsoftware/vibe.d/issues/1265
 [issue1333]: https://github.com/rejectedsoftware/vibe.d/issues/1333
@@ -72,9 +82,13 @@ v0.7.29 - 2016-05-
 [issue1454]: https://github.com/rejectedsoftware/vibe.d/issues/1454
 [issue1456]: https://github.com/rejectedsoftware/vibe.d/issues/1456
 [issue1461]: https://github.com/rejectedsoftware/vibe.d/issues/1461
+[issue1470]: https://github.com/rejectedsoftware/vibe.d/issues/1470
 [issue1474]: https://github.com/rejectedsoftware/vibe.d/issues/1474
 [issue1476]: https://github.com/rejectedsoftware/vibe.d/issues/1476
 [issue1477]: https://github.com/rejectedsoftware/vibe.d/issues/1477
+[issue1489]: https://github.com/rejectedsoftware/vibe.d/issues/1489
+[issue1500]: https://github.com/rejectedsoftware/vibe.d/issues/1500
+[issue1504]: https://github.com/rejectedsoftware/vibe.d/issues/1504
 
 
 v0.7.28 - 2016-02-27
