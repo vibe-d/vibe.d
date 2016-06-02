@@ -124,7 +124,7 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 	enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 	enforce(*key == answerKey, "Response has wrong accept key");
 	auto conn = res.switchProtocol("websocket");
-	auto ws = new WebSocket(conn, null, false);
+	auto ws = new WebSocket(conn, null, new SystemRNG);
 	return ws;
 }
 
@@ -151,7 +151,8 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket sock) del, HT
 			enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 			enforce(*key == answerKey, "Response has wrong accept key");
 			res.switchProtocol("websocket", (conn) {
-				scope ws = new WebSocket(conn, null, false);
+				scope rng = new SystemRNG;
+				scope ws = new WebSocket(conn, null, rng);
 				del(ws);
 			});
 		}
@@ -199,7 +200,7 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	res.headers["Connection"] = "Upgrade";
 	ConnectionStream conn = res.switchProtocol("websocket");
 
-	WebSocket socket = new WebSocket(conn, req);
+	WebSocket socket = new WebSocket(conn, req, null);
 	try {
 		on_handshake(socket);
 	} catch (Exception e) {
@@ -253,7 +254,7 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 		res.headers["Connection"] = "Upgrade";
 		res.switchProtocol("websocket", (scope conn) {
 			// TODO: put back 'scope' once it is actually enforced by DMD
-			/*scope*/ auto socket = new WebSocket(conn, req);
+			/*scope*/ auto socket = new WebSocket(conn, req, null);
 			try on_handshake(socket);
 			catch (Exception e) {
 				logDiagnostic("WebSocket handler failed: %s", e.msg);
@@ -306,17 +307,24 @@ final class WebSocket {
 		uint m_lastPingIndex;
 		bool m_pongReceived;
 		bool m_pongSkipped;
-		bool m_isServer = true;
         SystemRNG m_rng;
 	}
 
-	this(ConnectionStream conn, in HTTPServerRequest request, bool is_server = true)
+	/**
+	 * Private constructor, called from `connectWebSocket`.
+	 *
+	 * Params:
+	 *	 conn = Underlying connection string
+	 *	 request = HTTP request used to establish the connection
+	 *	 rng = Source of entropy to use.  If null, assume we're a server socket
+	 */
+	private this(ConnectionStream conn, in HTTPServerRequest request,
+				 SystemRNG rng)
 	{
 		m_conn = conn;
 		m_request = request;
-		m_isServer = is_server;
 		assert(m_conn);
-        m_rng = new SystemRNG;
+		m_rng = rng;
 		m_writeMutex = new InterruptibleTaskMutex;
 		m_readMutex = new InterruptibleTaskMutex;
 		m_readCondition = new InterruptibleTaskCondition(m_readMutex);
@@ -413,7 +421,7 @@ final class WebSocket {
 	{
 		m_writeMutex.performLocked!({
 			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
-			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_rng, m_isServer);
+			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_rng);
 			scope(exit) message.finalize();
 			sender(message);
 		});
@@ -435,7 +443,6 @@ final class WebSocket {
 			m_writeMutex.performLocked!({
 				m_sentCloseFrame = true;
 				Frame frame;
-				frame.isServer = m_isServer;
 				frame.opcode = FrameOpcode.close;
 				if(code != 0)
 					frame.payload = std.bitmanip.nativeToBigEndian(code) ~ cast(const ubyte[])reason;
@@ -549,7 +556,6 @@ final class WebSocket {
 		m_writeMutex.performLocked!({
 			m_pongReceived = false;
 			Frame ping;
-			ping.isServer = m_isServer;
 			ping.opcode = FrameOpcode.ping;
 			ping.fin = true;
 			ping.payload = nativeToLittleEndian(++m_lastPingIndex);
@@ -569,16 +575,13 @@ final class OutgoingWebSocketMessage : OutputStream {
 		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
 		bool m_finalized = false;
-		bool m_isServer;
 	}
 
-	this( Stream conn, FrameOpcode frameOpcode, SystemRNG rng, bool is_server = true )
+	this( Stream conn, FrameOpcode frameOpcode, SystemRNG rng )
 	{
 		assert(conn !is null);
-        assert(rng !is null);
 		m_conn = conn;
 		m_frameOpcode = frameOpcode;
-		m_isServer = is_server;
         m_rng = rng;
 	}
 
@@ -592,7 +595,6 @@ final class OutgoingWebSocketMessage : OutputStream {
 	{
 		assert(!m_finalized);
 		Frame frame;
-		frame.isServer = m_isServer;
 		frame.opcode = m_frameOpcode;
 		frame.fin = false;
 		frame.payload = m_buffer.data;
@@ -607,7 +609,6 @@ final class OutgoingWebSocketMessage : OutputStream {
 		m_finalized = true;
 
 		Frame frame;
-		frame.isServer = m_isServer;
 		frame.fin = true;
 		frame.opcode = m_frameOpcode;
 		frame.payload = m_buffer.data;
@@ -620,7 +621,6 @@ final class OutgoingWebSocketMessage : OutputStream {
 	{
 		writeDefault(stream, nbytes);
 	}
-
 }
 
 
@@ -637,7 +637,6 @@ final class IncomingWebSocketMessage : InputStream {
 	this(Stream conn, SystemRNG rng)
 	{
 		assert(conn !is null);
-        assert(rng !is null);
 		m_conn = conn;
         m_rng = rng;
         readFrame();
@@ -721,8 +720,6 @@ struct Frame {
 	bool fin;
 	FrameOpcode opcode;
 	ubyte[] payload;
-	bool isServer = true;
-
 
 	void writeFrame(OutputStream stream, SystemRNG sys_rng)
 	{
@@ -736,7 +733,7 @@ struct Frame {
 		rng.put(firstByte);
 
 		auto b1 = 0;
-		if (!isServer) {
+		if (sys_rng) {
 			b1 = 0x80;
 		}
 
@@ -752,7 +749,7 @@ struct Frame {
 			rng.put(std.bitmanip.nativeToBigEndian(payload.length));
 		}
 
-		if (!isServer) {
+		if (sys_rng) {
             sys_rng.read(buff);
 			rng.put(buff);
 			for (size_t i = 0; i < payload.length; i++) {
