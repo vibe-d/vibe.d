@@ -106,7 +106,8 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 		s_connections.put(tuple(ckey, pool));
 	}
 
-	auto challengeKey = generateChallengeKey();
+	auto rng = new SystemRNG;
+	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 	auto cl = pool.lockConnection();
 	auto res = cl.request((scope req){
@@ -124,7 +125,7 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 	enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 	enforce(*key == answerKey, "Response has wrong accept key");
 	auto conn = res.switchProtocol("websocket");
-	auto ws = new WebSocket(conn, null, new SystemRNG);
+	auto ws = new WebSocket(conn, null, rng);
 	return ws;
 }
 
@@ -134,7 +135,8 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket sock) del, HT
 	bool use_tls = (url.schema == "wss") ? true : false;
 	url.schema = use_tls ? "https" : "http";
 
-	auto challengeKey = generateChallengeKey();
+	scope rng = new SystemRNG;
+	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 
 	requestHTTP(url,
@@ -151,7 +153,6 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket sock) del, HT
 			enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 			enforce(*key == answerKey, "Response has wrong accept key");
 			res.switchProtocol("websocket", (conn) {
-				scope rng = new SystemRNG;
 				scope ws = new WebSocket(conn, null, rng);
 				del(ws);
 			});
@@ -803,12 +804,14 @@ struct Frame {
 	}
 }
 
-private string generateChallengeKey()
+/**
+ * Generate a challenge key for the protocol upgrade phase.
+ */
+private string generateChallengeKey(scope SystemRNG rng)
 {
-	auto uuid = randomUUID().toString();
-	immutable(ubyte)[] b = uuid.representation;
-	auto result = Base64.encode(b);
-	return to!(string)(result);
+	ubyte[16] buffer;
+	rng.read(buffer);
+	return Base64.encode(buffer);
 }
 
 private string computeAcceptKey(string challengekey)
