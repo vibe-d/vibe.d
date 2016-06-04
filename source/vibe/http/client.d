@@ -970,7 +970,8 @@ final class HTTPClientResponse : HTTPResponse {
 		enforce(statusCode == HTTPStatus.switchingProtocols, "Server did not send a 101 - Switching Protocols response");
 		string *resNewProto = "Upgrade" in headers;
 		enforce(resNewProto, "Server did not send an Upgrade header");
-		enforce(!new_protocol.length || *resNewProto == new_protocol, "Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
+		enforce(!new_protocol.length || !icmp(*resNewProto, new_protocol),
+			"Expected Upgrade: " ~ new_protocol ~", received Upgrade: " ~ *resNewProto);
 		scope stream = new ConnectionProxyStream(m_client.m_stream, m_client.m_conn);
 		m_client.m_responding = false;
 		m_client = null;
