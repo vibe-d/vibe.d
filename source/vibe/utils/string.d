@@ -49,7 +49,7 @@ string sanitizeUTF8(in ubyte[] str)
 	Strips the byte order mark of an UTF8 encoded string.
 	This is useful when the string is coming from a file.
 */
-string stripUTF8Bom(string str)
+inout(char)[] stripUTF8Bom(inout(char)[] str)
 @safe pure nothrow {
 	if (str.length >= 3 && str[0 .. 3] == [0xEF, 0xBB, 0xBF])
 		return str[3 ..$];
@@ -60,7 +60,7 @@ string stripUTF8Bom(string str)
 /**
 	Checks if all characters in 'str' are contained in 'chars'.
 */
-bool allOf(string str, string chars)
+bool allOf(const(char)[] str, const(char)[] chars)
 @safe pure {
 	foreach (dchar ch; str)
 		if (!chars.canFind(ch))
@@ -98,7 +98,7 @@ ptrdiff_t indexOfCT(Char)(in Char[] s, in Char[] needle)
 /**
 	Checks if any character in 'str' is contained in 'chars'.
 */
-bool anyOf(string str, string chars)
+bool anyOf(const(char)[] str, const(char)[] chars)
 @safe pure {
 	foreach (ch; str)
 		if (chars.canFind(ch))
@@ -108,7 +108,7 @@ bool anyOf(string str, string chars)
 
 
 /// ASCII whitespace trimming (space and tab)
-string stripLeftA(string s)
+inout(char)[] stripLeftA(inout(char)[] s)
 @safe pure nothrow {
 	while (s.length > 0 && (s[0] == ' ' || s[0] == '\t'))
 		s = s[1 .. $];
@@ -116,7 +116,7 @@ string stripLeftA(string s)
 }
 
 /// ASCII whitespace trimming (space and tab)
-string stripRightA(string s)
+inout(char)[] stripRightA(inout(char)[] s)
 @safe pure nothrow {
 	while (s.length > 0 && (s[$-1] == ' ' || s[$-1] == '\t'))
 		s = s[0 .. $-1];
@@ -124,13 +124,13 @@ string stripRightA(string s)
 }
 
 /// ASCII whitespace trimming (space and tab)
-string stripA(string s)
+inout(char)[] stripA(inout(char)[] s)
 @safe pure nothrow {
 	return stripLeftA(stripRightA(s));
 }
 
 /// Finds the first occurence of any of the characters in `chars`
-sizediff_t indexOfAny(string str, string chars)
+sizediff_t indexOfAny(const(char)[] str, const(char)[] chars)
 @safe pure {
 	foreach (i, char ch; str)
 		if (chars.canFind(ch))
@@ -149,7 +149,7 @@ alias countUntilAny = indexOfAny;
 		The index of the closing bracket or -1 for unbalanced strings
 		and strings that don't start with a bracket.
 */
-sizediff_t matchBracket(string str, bool nested = true)
+sizediff_t matchBracket(const(char)[] str, bool nested = true)
 @safe pure nothrow {
 	if (str.length < 2) return -1;
 
@@ -194,7 +194,7 @@ string formatAlloc(ARGS...)(Allocator alloc, string fmt, ARGS args)
 }
 
 /// Special version of icmp() with optimization for ASCII characters
-int icmp2(string a, string b)
+int icmp2(const(char)[] a, const(char)[] b)
 @safe pure {
 	size_t i = 0, j = 0;
 

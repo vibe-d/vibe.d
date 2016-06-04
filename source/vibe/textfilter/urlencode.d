@@ -16,10 +16,12 @@ import std.exception;
 import std.format;
 
 
-/** Returns the URL encoded version of a given string.
-*/
-string urlEncode(string str, string allowed_chars = null)
-@safe {
+/**
+ * Returns:
+ *   the URL encoded version of a given string, in a newly-allocated string.
+ */
+T[] urlEncode(T)(T[] str, const(char)[] allowed_chars = null) if (is(T[] : const(char)[]))
+{
 	foreach (char c; str) {
 		switch(c) {
 			case '-':
@@ -31,7 +33,7 @@ string urlEncode(string str, string allowed_chars = null)
 			case '~':
 				break;
 			default:
-				auto dst = appender!string();
+				auto dst = appender!(T[]);
 				dst.reserve(str.length);
 				filterURLEncode(dst, str, allowed_chars);
 				return dst.data;
@@ -40,12 +42,12 @@ string urlEncode(string str, string allowed_chars = null)
 	return str;
 }
 
-unittest {
+@safe unittest {
 	string s = "hello-world";
 	assert(s.urlEncode().ptr == s.ptr);
 }
 
-private bool isCorrectHexNum(string str)
+private auto isCorrectHexNum(const(char)[] str)
 @safe {
 	foreach (char c; str) {
 		switch(c) {
@@ -62,7 +64,7 @@ private bool isCorrectHexNum(string str)
 
 /** Checks whether a given string has valid URL encoding.
 */
-bool isURLEncoded(string str, string reserved_chars = null)
+bool isURLEncoded(const(char)[] str, const(char)[] reserved_chars = null)
 @safe {
 	for (size_t i = 0; i < str.length; i++) {
 		switch(str[i]) {
@@ -90,7 +92,7 @@ bool isURLEncoded(string str, string reserved_chars = null)
 	return true;
 }
 
-unittest {
+@safe unittest {
 	assert(isURLEncoded("hello-world"));
 	assert(isURLEncoded("he%2F%af"));
 	assert(!isURLEncoded("hello world", " "));
@@ -100,10 +102,10 @@ unittest {
 
 /** Returns the decoded version of a given URL encoded string.
 */
-string urlDecode(string str)
-@safe {
+T[] urlDecode(T)(T[] str) if (is(T[] : const(char)[]))
+{
 	if (!str.anyOf("%")) return str;
-	auto dst = appender!string();
+	auto dst = appender!(T[]);
 	dst.reserve(str.length);
 	filterURLDecode(dst, str);
 	return dst.data;
@@ -117,9 +119,9 @@ string urlDecode(string str)
 	Note that newlines should always be represented as \r\n sequences
 	according to the HTTP standard.
 */
-string formEncode(string str, string allowed_chars = null)
-@safe {
-	auto dst = appender!string();
+T[] formEncode(T)(T[] str, const(char)[] allowed_chars = null) if (is(T[] : const(char)[]))
+{
+	auto dst = appender!(T[]);
 	dst.reserve(str.length);
 	filterURLEncode(dst, str, allowed_chars, true);
 	return dst.data;
@@ -130,8 +132,8 @@ string formEncode(string str, string allowed_chars = null)
 	Form encoding is the same as normal URL encoding, except that
 	spaces are replaced by plus characters.
 */
-string formDecode(string str)
-@safe {
+T[] formDecode(T)(T[] str) if (is(T[] : const(char)[]))
+{
 	if (!str.anyOf("%+")) return str;
 	auto dst = appender!string();
 	dst.reserve(str.length);
@@ -141,7 +143,9 @@ string formDecode(string str)
 
 /** Writes the URL encoded version of the given string to an output range.
 */
-void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool form_encoding = false)
+void filterURLEncode(R)(ref R dst, const(char)[] str,
+                        const(char)[] allowed_chars = null,
+                        bool form_encoding = false)
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
@@ -168,7 +172,7 @@ void filterURLEncode(R)(ref R dst, string str, string allowed_chars = null, bool
 
 /** Writes the decoded version of the given URL encoded string to an output range.
 */
-void filterURLDecode(R)(ref R dst, string str, bool form_encoding = false)
+void filterURLDecode(R)(ref R dst, const(char)[] str, bool form_encoding = false)
 {
 	while( str.length > 0 ) {
 		switch(str[0]) {
