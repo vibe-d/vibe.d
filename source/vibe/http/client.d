@@ -84,7 +84,13 @@ HTTPClientResponse requestHTTP(URL url, scope void delegate(scope HTTPClientRequ
 			}
 			if (settings.proxyURL.schema !is null)
 				req.requestURL = url.toString(); // proxy exception to the URL representation
-			req.headers["Host"] = url.host;
+
+			// Provide port number when it is not the default one (RFC2616 section 14.23)
+			if (url.port && url.port != url.defaultPort)
+				req.headers["Host"] = format("%s:%d", url.host, url.port);
+			else
+				req.headers["Host"] = url.host;
+
 			if ("authorization" !in req.headers && url.username != "") {
 				import std.base64;
 				string pwstr = url.username ~ ":" ~ url.password;
@@ -125,7 +131,13 @@ void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) reque
 		}
 		if (settings.proxyURL.schema !is null)
 			req.requestURL = url.toString(); // proxy exception to the URL representation
-		req.headers["Host"] = url.host;
+
+		// Provide port number when it is not the default one (RFC2616 section 14.23)
+		if (url.port && url.port != url.defaultPort)
+			req.headers["Host"] = format("%s:%d", url.host, url.port);
+		else
+			req.headers["Host"] = url.host;
+
 		if ("authorization" !in req.headers && url.username != "") {
 			import std.base64;
 			string pwstr = url.username ~ ":" ~ url.password;
