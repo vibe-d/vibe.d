@@ -1158,7 +1158,6 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_tcpNoDelay = enabled;
 		BOOL eni = enabled;
 		setsockopt(m_socket, IPPROTO_TCP, TCP_NODELAY, &eni, eni.sizeof);
-		assert(false);
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
@@ -1177,7 +1176,6 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_keepAlive = enabled;
 		BOOL eni = enabled;
 		setsockopt(m_socket, SOL_SOCKET, SO_KEEPALIVE, &eni, eni.sizeof);
-		assert(false);
 	}
 	@property bool keepAlive() const { return m_keepAlive; }
 
