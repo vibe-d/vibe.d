@@ -462,7 +462,7 @@ final class WebSocket {
 			A `WebSocketException` is thrown if the connection gets closed
 			before or during the transfer of the message.
 	*/
-	void send(ubyte[] data)
+	void send(in ubyte[] data)
 	{
 		send((scope message){ message.write(data); }, FrameOpcode.binary);
 	}
