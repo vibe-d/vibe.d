@@ -409,7 +409,7 @@ final class WebSocket {
 		On the JavaScript side, the text will be available as message.data (type Blob).
 		Throws: WebSocketException if the connection is closed.
 	*/
-	void send(ubyte[] data)
+	void send(in ubyte[] data)
 	{
 		send((scope message){ message.write(data); }, FrameOpcode.binary);
 	}
