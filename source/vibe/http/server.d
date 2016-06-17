@@ -79,28 +79,20 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate r
 {
 	enforce(settings.bindAddresses.length, "Must provide at least one bind address for a HTTP server.");
 
-	HTTPServerContext ctx;
-	ctx.id = atomicOp!"+="(g_contextIDCounter, 1);
-	ctx.settings = settings;
-	ctx.requestHandler = request_handler;
-
-	if (settings.accessLogToConsole)
-		ctx.loggers ~= new HTTPConsoleLogger(settings, settings.accessLogFormat);
-	if (settings.accessLogFile.length)
-		ctx.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
-
-	synchronized (g_listenersMutex)
-		addContext(ctx);
-
 	// if a VibeDist host was specified on the command line, register there instead of listening
 	// directly.
 	if (s_distHost.length && !settings.disableDistHost) {
 		listenHTTPDist(settings, request_handler, s_distHost, s_distPort);
-	} else {
-		listenHTTPPlain(settings);
+	}
+	else
+	{
+		auto listener = new HTTPListenerPlain(settings, request_handler);
+		listener.start();
+
+		return listener;
 	}
 
-	return HTTPListener(ctx.id);
+	return new HTTPListener(settings, request_handler);
 }
 /// ditto
 HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
@@ -127,7 +119,6 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS r
 {
 	return listenHTTP(settings, &request_handler.handleRequest);
 }
-
 
 /**
 	Provides a HTTP request handler that responds with a static Diet template.
@@ -1277,48 +1268,169 @@ final class HTTPServerResponse : HTTPResponse {
 
 	This struct can be used to stop listening for HTTP requests at runtime.
 */
-struct HTTPListener {
-	private {
+class HTTPListener
+{
+	protected
+	{
 		size_t m_contextID;
+
+		HTTPServerSettings settings;
+		HTTPServerRequestDelegate request_handler;
 	}
 
-	private this(size_t id) { m_contextID = id; }
+	private this(size_t id)
+	{
+		m_contextID = id;
+	}
 
+	this(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
+	{
+		HTTPServerContext ctx = g_contextCollection.create(settings, request_handler);
+
+		m_contextID = ctx.id;
+		this.settings = settings;
+		this.request_handler = request_handler;
+	}
 	/** Stops handling HTTP requests and closes the TCP listening port if
 		possible.
 	*/
 	void stopListening()
 	{
-		import std.algorithm : countUntil;
+		g_contextCollection.stopListening(m_contextID);
+	}
 
-		synchronized (g_listenersMutex) {
-			auto contexts = getContexts();
-
-			auto idx = contexts.countUntil!(c => c.id == m_contextID);
-			if (idx < 0) return;
-
-			// remove context entry
-			auto ctx = getContexts()[idx];
-			removeContext(idx);
-
-			// stop listening on all unused TCP ports
-			auto port = ctx.settings.port;
-			foreach (addr; ctx.settings.bindAddresses) {
-				// any other context still occupying the same addr/port?
-				if (getContexts().canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
-					continue;
-
-				auto lidx = g_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
-				if (lidx >= 0) {
-					g_listeners[lidx].listener.stopListening();
-					logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
-					g_listeners = g_listeners[0 .. lidx] ~ g_listeners[lidx+1 .. $];
-				}
-			}
-		}
+	void start()
+	{
+		throw new Exception("Not implemented.");
 	}
 }
 
+class HTTPListenerPlain : HTTPListener
+{
+
+	this(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
+	{
+		super(settings, request_handler);
+	}
+
+	private void addVHost(ref HTTPListenInfo lst)
+	{
+		TLSContext onSNI(string servername)
+		{
+			foreach (ctx; g_contextCollection.all)
+				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
+						&& ctx.settings.port == lst.bindPort
+						&& ctx.settings.hostName.icmp(servername) == 0)
+				{
+					logDebug("Found context for SNI host '%s'.", servername);
+					return ctx.settings.tlsContext;
+				}
+			logDebug("No context found for SNI host '%s'.", servername);
+			return null;
+		}
+
+		if (settings.tlsContext !is lst.tlsContext && lst.tlsContext.kind
+				!= TLSContextKind.serverSNI)
+		{
+			logDebug("Create SNI TLS context for %s, port %s", lst.bindAddress, lst.bindPort);
+			lst.tlsContext = createTLSContext(TLSContextKind.serverSNI);
+			lst.tlsContext.sniCallback = &onSNI;
+		}
+
+		foreach (ctx; g_contextCollection.all)
+		{
+			if (ctx.settings.port != settings.port)
+				continue;
+			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress))
+				continue;
+			/*enforce(ctx.settings.hostName != settings.hostName,
+				"A server with the host name '"~settings.hostName~"' is already "
+				"listening on "~addr~":"~to!string(settings.port)~".");*/
+		}
+	}
+
+	override void start()
+	{
+		import std.algorithm : canFind;
+
+		static TCPListener doListen(HTTPListenInfo listen_info, bool dist, bool reusePort)
+		{
+			try
+			{
+				TCPListenOptions options = TCPListenOptions.defaults;
+				if (dist)
+					options |= TCPListenOptions.distribute;
+				else
+					options &= ~TCPListenOptions.distribute;
+				if (reusePort)
+					options |= TCPListenOptions.reusePort;
+				else
+					options &= ~TCPListenOptions.reusePort;
+
+				auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) {
+					handleHTTPConnection(conn, listen_info);
+				}, listen_info.bindAddress, options);
+
+				auto proto = listen_info.tlsContext ? "https" : "http";
+				auto urladdr = listen_info.bindAddress;
+				if (urladdr.canFind(':'))
+					urladdr = "[" ~ urladdr ~ "]";
+				logInfo("Listening for requests on %s://%s:%s/", proto,
+						urladdr, listen_info.bindPort);
+				return ret;
+			}
+			catch (Exception e)
+			{
+				logWarn("Failed to listen on %s:%s", listen_info.bindAddress,
+						listen_info.bindPort);
+				return null;
+			}
+		}
+
+		bool any_successful;
+
+		synchronized (g_contextCollection.m_listenersMutex)
+		{
+			// Check for every bind address/port, if a new listening socket needs to be created and
+			// check for conflicting servers
+			foreach (addr; settings.bindAddresses)
+			{
+				auto listener = g_contextCollection.getListener(addr, settings.port);
+
+				if (listener !is null)
+				{
+					addVHost(listener);
+					assert(!settings.tlsContext || settings.tlsContext is listener.tlsContext
+							|| listener.tlsContext.kind == TLSContextKind.serverSNI,
+							format("Got multiple overlapping TLS bind addresses (port %s), but no SNI TLS context!?",
+								settings.port));
+					any_successful = true;
+				} else {
+					auto linfo = new HTTPListenInfo(addr, settings.port, settings.tlsContext);
+					if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0,
+							(settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
+							{
+						linfo.listener = tcp_lst;
+						any_successful = true;
+						g_contextCollection.m_listeners ~= linfo;
+					}
+				}
+
+				if (settings.hostName.length)
+				{
+					auto proto = settings.tlsContext ? "https" : "http";
+					auto port = settings.tlsContext && settings.port == 443 || !settings.tlsContext
+						&& settings.port == 80 ? "" : ":" ~ settings.port.to!string;
+					logInfo("Added virtual host %s://%s%s/ (%s)", proto,
+							settings.hostName, port, addr);
+				}
+			}
+		}
+
+		enforce(any_successful,
+				"Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
+	}
+}
 
 /**************************************************************************************************/
 /* Private types                                                                                  */
@@ -1400,151 +1512,136 @@ private final class TimeoutHTTPInputStream : InputStream {
 private {
 	import core.sync.mutex;
 
+	__gshared HTTPServerContextCollection g_contextCollection;
+
 	shared string s_distHost;
 	shared ushort s_distPort = 11000;
-	shared size_t g_contextIDCounter = 1;
 
-	// protects g_listeners and *write* accesses to g_contexts
-	__gshared Mutex g_listenersMutex;
-	__gshared HTTPListenInfo[] g_listeners;
+	struct HTTPServerContextCollection {
+		shared size_t m_contextIDCounter = 1;
 
-	// accessed for every request, needs to be kept thread-safe by only atomically assigning new
-	// arrays (COW). shared immutable(HTTPServerContext)[] would be the right candidate here, but
-	// is impractical due to type system limitations.
-	align(16) shared HTTPServerContext[] g_contexts;
+		// protects m_listeners and *write* accesses to m_contexts
+		__gshared Mutex m_listenersMutex;
+		__gshared HTTPListenInfo[] m_listeners;
 
-	HTTPServerContext[] getContexts()
-	{
-		static if (__VERSION__ >= 2067) {
-			version (Win64) return cast(HTTPServerContext[])g_contexts;
-			else return cast(HTTPServerContext[])atomicLoad(g_contexts);
-		}
-		else
-			return cast(HTTPServerContext[])g_contexts;
-	}
+		// accessed for every request, needs to be kept thread-safe by only atomically assigning new
+		// arrays (COW). shared immutable(HTTPServerContext)[] would be the right candidate here, but
+		// is impractical due to type system limitations.
+		align(16) shared HTTPServerContext[] m_contexts;
 
-	void addContext(HTTPServerContext ctx)
-	{
-		synchronized (g_listenersMutex) {
-			static if (__VERSION__ >= 2067)
-				atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
-			else
-				g_contexts = g_contexts ~ cast(shared)ctx;
-		}
-	}
-
-	void removeContext(size_t idx)
-	{
-		// write a new complete array reference to avoid race conditions during removal
-		auto contexts = g_contexts;
-		auto newarr = contexts[0 .. idx] ~ contexts[idx+1 .. $];
-		static if (__VERSION__ >= 2067)
-			atomicStore(g_contexts, newarr);
-		else
-			g_contexts = newarr;
-	}
-}
-
-/**
-	[private] Starts a HTTP server listening on the specified port.
-
-	This is the same as listenHTTP() except that it does not use a VibeDist host for
-	remote listening, even if specified on the command line.
-*/
-private void listenHTTPPlain(HTTPServerSettings settings)
-{
-	import std.algorithm : canFind;
-
-	static TCPListener doListen(HTTPListenInfo listen_info, bool dist, bool reusePort)
-	{
-		try {
-			TCPListenOptions options = TCPListenOptions.defaults;
-			if(dist) options |= TCPListenOptions.distribute; else options &= ~TCPListenOptions.distribute;
-			if(reusePort) options |= TCPListenOptions.reusePort; else options &= ~TCPListenOptions.reusePort;
-			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) {
-					handleHTTPConnection(conn, listen_info);
-				}, listen_info.bindAddress, options);
-			auto proto = listen_info.tlsContext ? "https" : "http";
-			auto urladdr = listen_info.bindAddress;
-			if (urladdr.canFind(':')) urladdr = "["~urladdr~"]";
-			logInfo("Listening for requests on %s://%s:%s/", proto, urladdr, listen_info.bindPort);
-			return ret;
-		} catch( Exception e ) {
-			logWarn("Failed to listen on %s:%s", listen_info.bindAddress, listen_info.bindPort);
-			return null;
-		}
-	}
-
-	void addVHost(ref HTTPListenInfo lst)
-	{
-		TLSContext onSNI(string servername)
+		auto getListener(string bindAddress, ushort bindPort)
 		{
-			foreach (ctx; getContexts())
-				if (ctx.settings.bindAddresses.canFind(lst.bindAddress)
-					&& ctx.settings.port == lst.bindPort
-					&& ctx.settings.hostName.icmp(servername) == 0)
+			synchronized (g_contextCollection.m_listenersMutex)
+			{
+				foreach (i, ref lst; m_listeners)
 				{
-					logDebug("Found context for SNI host '%s'.", servername);
-					return ctx.settings.tlsContext;
+					if (lst.bindAddress == bindAddress && lst.bindPort == bindPort)
+					{
+						return lst;
+					}
 				}
-			logDebug("No context found for SNI host '%s'.", servername);
+			}
+
 			return null;
 		}
 
-		if (settings.tlsContext !is lst.tlsContext && lst.tlsContext.kind != TLSContextKind.serverSNI) {
-			logDebug("Create SNI TLS context for %s, port %s", lst.bindAddress, lst.bindPort);
-			lst.tlsContext = createTLSContext(TLSContextKind.serverSNI);
-			lst.tlsContext.sniCallback = &onSNI;
+		HTTPServerContext create(HTTPServerSettings settings,
+				HTTPServerRequestDelegate request_handler)
+		{
+			auto ctx = HTTPServerContext();
+			ctx.id = atomicOp!"+="(m_contextIDCounter, 1);
+			ctx.settings = settings;
+			ctx.requestHandler = request_handler;
+
+			if (settings.accessLogToConsole)
+				ctx.loggers ~= new HTTPConsoleLogger(settings, settings.accessLogFormat);
+			if (settings.accessLogFile.length)
+				ctx.loggers ~= new HTTPFileLogger(settings, settings.accessLogFormat, settings.accessLogFile);
+
+			synchronized (m_listenersMutex)
+				add(ctx);
+
+			return ctx;
 		}
 
-		foreach (ctx; getContexts()) {
-			if (ctx.settings.port != settings.port) continue;
-			if (!ctx.settings.bindAddresses.canFind(lst.bindAddress)) continue;
-			/*enforce(ctx.settings.hostName != settings.hostName,
-				"A server with the host name '"~settings.hostName~"' is already "
-				"listening on "~addr~":"~to!string(settings.port)~".");*/
+		HTTPServerContext[] all()
+		{
+			static if (__VERSION__ >= 2067) {
+				version (Win64) return cast(HTTPServerContext[])m_contexts;
+				else return cast(HTTPServerContext[])atomicLoad(m_contexts);
+			}
+			else
+				return cast(HTTPServerContext[])m_contexts;
 		}
-	}
 
-	bool any_successful = false;
+		HTTPServerContext get(size_t idx)
+		{
+			static if (__VERSION__ >= 2067) {
+				version (Win64) return cast(HTTPServerContext)m_contexts[idx];
+				else return cast(HTTPServerContext)atomicLoad(m_contexts)[idx];
+			}
+			else
+				return cast(HTTPServerContext)m_contexts[idx];
+		}
 
-	synchronized (g_listenersMutex) {
-		// Check for every bind address/port, if a new listening socket needs to be created and
-		// check for conflicting servers
-		foreach (addr; settings.bindAddresses) {
-			bool found_listener = false;
-			foreach (i, ref lst; g_listeners) {
-				if (lst.bindAddress == addr && lst.bindPort == settings.port) {
-					addVHost(lst);
-					assert(!settings.tlsContext || settings.tlsContext is lst.tlsContext
-						|| lst.tlsContext.kind == TLSContextKind.serverSNI,
-						format("Got multiple overlapping TLS bind addresses (port %s), but no SNI TLS context!?", settings.port));
-					found_listener = true;
-					any_successful = true;
-					break;
+		void add(HTTPServerContext ctx)
+		{
+			synchronized (m_listenersMutex) {
+				static if (__VERSION__ >= 2067)
+					atomicStore(m_contexts, m_contexts ~ cast(shared)ctx);
+				else
+					m_contexts = m_contexts ~ cast(shared)ctx;
+			}
+		}
+
+		void remove(size_t idx)
+		{
+			// write a new complete array reference to avoid race conditions during removal
+			auto contexts = m_contexts;
+			auto newarr = contexts[0 .. idx] ~ contexts[idx+1 .. $];
+			static if (__VERSION__ >= 2067)
+				atomicStore(m_contexts, newarr);
+			else
+				m_contexts = newarr;
+		}
+
+		size_t indexById(size_t id) {
+			import std.algorithm : countUntil;
+
+			synchronized (m_listenersMutex) {
+				return all.countUntil!(c => c.id == id);
+			}
+		}
+
+		void stopListening(size_t id) {
+			import std.algorithm : countUntil;
+
+			auto idx = indexById(id);
+			if (idx < 0) return;
+
+			synchronized (m_listenersMutex) {
+				// remove context entry
+				auto ctx = m_contexts[idx];
+				remove(idx);
+
+				// stop listening on all unused TCP ports
+				auto port = ctx.settings.port;
+				foreach (addr; ctx.settings.bindAddresses) {
+					// any other context still occupying the same addr/port?
+					if (all.canFind!(c => c.settings.port == port && c.settings.bindAddresses.canFind(addr)))
+						continue;
+
+					auto lidx = m_listeners.countUntil!(l => l.bindAddress == addr && l.bindPort == port);
+					if (lidx >= 0) {
+						m_listeners[lidx].listener.stopListening();
+						logInfo("Stopped to listen for HTTP%s requests on %s:%s", ctx.settings.tlsContext ? "S": "", addr, port);
+						m_listeners = m_listeners[0 .. lidx] ~ m_listeners[lidx+1 .. $];
+					}
 				}
 			}
-			if (!found_listener) {
-				auto linfo = new HTTPListenInfo(addr, settings.port, settings.tlsContext);
-				if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
-				{
-					linfo.listener = tcp_lst;
-					found_listener = true;
-					any_successful = true;
-					g_listeners ~= linfo;
-				}
-			}
-			if (settings.hostName.length) {
-				auto proto = settings.tlsContext ? "https" : "http";
-				auto port = settings.tlsContext && settings.port == 443 || !settings.tlsContext && settings.port == 80 ? "" : ":" ~ settings.port.to!string;
-				logInfo("Added virtual host %s://%s%s/ (%s)", proto, settings.hostName, port, addr);
-			}
 		}
 	}
-
-	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
-
 
 private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo listen_info)
 {
@@ -1622,7 +1719,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 	// Default to the first virtual host for this listener
 	HTTPServerRequestDelegate request_task;
 	HTTPServerContext context;
-	foreach (ctx; getContexts())
+	foreach (ctx; g_contextCollection.all)
 		if (ctx.settings.port == listen_info.bindPort) {
 			bool found = false;
 			foreach (addr; ctx.settings.bindAddresses)
@@ -1712,7 +1809,7 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			if (s.startsWith(':')) reqport = s[1 .. $].to!ushort;
 		}
 
-		foreach (ctx; getContexts())
+		foreach (ctx; g_contextCollection.all)
 			if (icmp2(ctx.settings.hostName, reqhost) == 0 &&
 				(!reqport || reqport == ctx.settings.port))
 			{
@@ -1956,7 +2053,7 @@ unittest
 
 shared static this()
 {
-	g_listenersMutex = new Mutex;
+	g_contextCollection.m_listenersMutex = new Mutex;
 
 	version (VibeNoDefaultArgs) {}
 	else {
