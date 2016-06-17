@@ -952,7 +952,7 @@ template haveTypeAlready(T, TYPES...)
 	Determines if the given list of types has any non-immutable aliasing outside of their object tree.
 
 	The types in particular may only contain plain data, pointers or arrays to immutable data, or references
-	encapsulated in stdx.typecons.Isolated.
+	encapsulated in `vibe.core.concurrency.Isolated`.
 */
 template isStronglyIsolated(T...)
 {
@@ -979,7 +979,7 @@ template isStronglyIsolated(T...)
 	Determines if the given list of types has any non-immutable and unshared aliasing outside of their object tree.
 
 	The types in particular may only contain plain data, pointers or arrays to immutable or shared data, or references
-	encapsulated in stdx.typecons.Isolated. Values that do not have unshared and unisolated aliasing are safe to be passed
+	encapsulated in `vibe.core.concurrency.Isolated`. Values that do not have unshared and unisolated aliasing are safe to be passed
 	between threads.
 */
 template isWeaklyIsolated(T...)
