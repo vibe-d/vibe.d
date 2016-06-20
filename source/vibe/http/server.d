@@ -84,6 +84,7 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate r
 	ctx.settings = settings;
 	ctx.requestHandler = request_handler;
 
+	if (settings.accessLogger) ctx.loggers ~= settings.accessLogger;
 	if (settings.accessLogToConsole)
 		ctx.loggers ~= new HTTPConsoleLogger(settings, settings.accessLogFormat);
 	if (settings.accessLogFile.length)
@@ -455,6 +456,10 @@ final class HTTPServerSettings {
 
 	/// If set, access log entries will be output to the console.
 	bool accessLogToConsole = false;
+
+	/** Specifies a custom access logger instance.
+	*/
+	HTTPLogger accessLogger;
 
 	/// Returns a duplicate of the settings object.
 	@property HTTPServerSettings dup()
