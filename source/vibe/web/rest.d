@@ -308,7 +308,7 @@ unittest {
 	void generateJSClientImpl()
 	{
 		import std.array : appender;
-		
+
 		auto app = appender!string;
 		generateRestJSClient!MyAPI(app);
 		writeFileUTF8(Path("myapi.js"), app.data);
@@ -428,7 +428,7 @@ class RestInterfaceClient(I) : I
 					 ref InetHeaderMap optReturnHdrs) const
 		{
 			auto path = URL(m_intf.baseURL).pathString;
-			
+
 			if (name.length)
 			{
 				if (path.length && path[$ - 1] == '/' && name[0] == '/')
@@ -1182,7 +1182,7 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 			settings.allowedOrigins.length != 0 &&
 			!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
 			return;
-		
+
 		auto method = "Access-Control-Request-Method" in req.headers;
 		if (method is null)
 			return;
@@ -1195,7 +1195,7 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 		res.headers["Access-Control-Allow-Origin"] = *origin;
 
 		// there is no way to know if the specific resource supports credentials
-		// (either cookies, HTTP authentication, or client-side SSL certificates), 
+		// (either cookies, HTTP authentication, or client-side SSL certificates),
 		// so we always assume it does
 		res.headers["Access-Control-Allow-Credentials"] = "true";
 		res.headers["Access-Control-Max-Age"] = "1728000";
@@ -1211,12 +1211,12 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 	{
 		// since this is a OPTIONS request, we have to return the ALLOW headers to tell which methods we have
 		res.headers["Allow"] = allow;
-		
+
 		// handle CORS preflighted requests
 		handlePreflightedCors(req,res,methods,settings);
 
 		// NOTE: besides just returning the allowed methods and handling CORS preflighted requests,
-		// this would be a nice place to describe what kind of resources are on this route, 
+		// this would be a nice place to describe what kind of resources are on this route,
 		// the params each accepts, the headers, etc... think WSDL but then for REST.
 		res.writeBody("");
 	}
@@ -1230,7 +1230,7 @@ private string generateRestClientMethods(I)()
 	import std.traits : fullyQualifiedName, isInstanceOf;
 
 	alias Info = RestInterface!I;
-	
+
 	string ret = q{
 		import vibe.internal.meta.codegen : CloneFunction;
 	};
