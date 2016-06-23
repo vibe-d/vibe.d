@@ -669,17 +669,22 @@ struct Bson {
 		return 0;
 	}
 
-	/** Deprecated, please use `opIndex` instead.
+	// If VibeDataNoOpDispatch is declared, don't include the depracted functions. This allows UFCS to be used on a Bson object
+	version (VibeDataNoOpDispatch) {
+	}
+	else {
+		/** Deprecated, please use `opIndex` instead.
 
-		Allows to access existing fields of a JSON object using dot syntax.
+			Allows to access existing fields of a JSON object using dot syntax.
 
-		Returns a null value for non-existent fields.
-	*/
-	deprecated("Use opIndex instead.")
-	@property inout(Bson) opDispatch(string prop)() inout { return opIndex(prop); }
-	/// ditto
-	deprecated("Use opIndexAssign instead.")
-	@property void opDispatch(string prop, T)(T val) { opIndexAssign(val, prop); }
+			Returns a null value for non-existent fields.
+		*/
+		deprecated("Use opIndex instead.")
+		@property inout(Bson) opDispatch(string prop)() inout { return opIndex(prop); }
+		/// ditto
+		deprecated("Use opIndexAssign instead.")
+		@property void opDispatch(string prop, T)(T val) { opIndexAssign(val, prop); }
+	}
 
 	///
 	bool opEquals(ref const Bson other) const {
