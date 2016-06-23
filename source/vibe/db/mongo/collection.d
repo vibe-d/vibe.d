@@ -409,7 +409,7 @@ struct MongoCollection {
 		cmd.dropIndexes = m_name;
 		cmd.index = name;
 		auto reply = database.runCommand(cmd);
-		enforce(reply.ok.get!double == 1, "dropIndex command failed.");
+		enforce(reply["ok"].get!double == 1, "dropIndex command failed.");
 	}
 
 	void drop() {
@@ -420,7 +420,7 @@ struct MongoCollection {
 		CMD cmd;
 		cmd.drop = m_name;
 		auto reply = database.runCommand(cmd);
-		enforce(reply.ok.get!double == 1, "drop command failed.");
+		enforce(reply["ok"].get!double == 1, "drop command failed.");
 	}
 }
 

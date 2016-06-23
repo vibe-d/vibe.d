@@ -26,10 +26,10 @@ import std.process;
 void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handler, string balancer_address, ushort balancer_port = 11000)
 {
 	Json regmsg = Json.emptyObject;
-	regmsg.host_name = settings.hostName;
-	regmsg.port = settings.port;
-	regmsg.ssl_settings = "";
-	regmsg.pid = thisProcessID;
+	regmsg["host_name"] = settings.hostName;
+	regmsg["port"] = settings.port;
+	regmsg["ssl_settings"] = "";
+	regmsg["pid"] = thisProcessID;
 	//regmsg.sslContext = settings.sslContext; // TODO: send key/cert contents
 
 	HTTPServerSettings local_settings = settings.dup;
@@ -40,8 +40,8 @@ void listenHTTPDist(HTTPServerSettings settings, HTTPServerRequestDelegate handl
 
 	requestHTTP(URL("http://"~balancer_address~":"~to!string(balancer_port)~"/register"), (scope req){
 			logInfo("Listening for VibeDist connections on port %d", req.localAddress.port);
-			regmsg.local_address = "127.0.0.1";
-			regmsg.local_port = req.localAddress.port;
+			regmsg["local_address"] = "127.0.0.1";
+			regmsg["local_port"] = req.localAddress.port;
 			req.method = HTTPMethod.POST;
 			req.writeJsonBody(regmsg);
 		}, (scope res){
