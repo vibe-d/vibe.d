@@ -55,6 +55,7 @@ v0.7.29 - 2016-06-
 - Fixed `adjustMethodStyle` (used throughout `vibe.web`) for method names with trailing upper case characters
 - Fixed alignment of the `Json` type on x64, fixes possible dangling pointers due to the GC not recognizing unaligned pointers - [issue #1504][issue1504]
 - Fixed serialization policies to work for enums and other built-in types (by Tomáš Chaloupka) - [pull #1500][issue1500]
+- Fixed a bogus assertion error in `Win32TCPConnection.tcpNoDelay` and `.keepAlive` (by Денис Хлякин aka aka-demik) - [pull #1514][issue1514]
 
 [issue832]: https://github.com/rejectedsoftware/vibe.d/issues/832
 [issue1128]: https://github.com/rejectedsoftware/vibe.d/issues/1128
@@ -89,6 +90,7 @@ v0.7.29 - 2016-06-
 [issue1489]: https://github.com/rejectedsoftware/vibe.d/issues/1489
 [issue1500]: https://github.com/rejectedsoftware/vibe.d/issues/1500
 [issue1504]: https://github.com/rejectedsoftware/vibe.d/issues/1504
+[issue1514]: https://github.com/rejectedsoftware/vibe.d/issues/1514
 
 
 v0.7.28 - 2016-02-27
