@@ -679,11 +679,17 @@ struct Bson {
 
 			Returns a null value for non-existent fields.
 		*/
-		deprecated("Use opIndex instead.")
-		@property inout(Bson) opDispatch(string prop)() inout { return opIndex(prop); }
+		deprecated("Use opIndex instead")
+		@property const(Bson) opDispatch(string prop, string file = __FILE__, int line = __LINE__)() const {
+			pragma(msg, file~"("~line.stringof~"): Bson.opDispatch is deprecated, use opIndex instead.");
+			return opIndex(prop);
+		}
 		/// ditto
-		deprecated("Use opIndexAssign instead.")
-		@property void opDispatch(string prop, T)(T val) { opIndexAssign(val, prop); }
+		deprecated("Use opIndex instead")
+		@property void opDispatch(string prop, T)(T val) {
+			pragma(msg, file~"("~line.stringof~"): Bson.opDispatch is deprecated, use opIndexAssign instead.");
+			opIndexAssign(val, prop);
+		}
 	}
 
 	///
@@ -1168,8 +1174,8 @@ unittest {
 	static struct E { ubyte[4] bytes; ubyte[] more; }
 	auto e = E([1, 2, 3, 4], [5, 6]);
 	auto eb = serializeToBson(e);
-	assert(eb.bytes.type == Bson.Type.binData);
-	assert(eb.more.type == Bson.Type.binData);
+	assert(eb["bytes"].type == Bson.Type.binData);
+	assert(eb["more"].type == Bson.Type.binData);
 	assert(e == deserializeBson!E(eb));
 }
 
