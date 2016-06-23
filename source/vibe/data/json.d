@@ -873,10 +873,16 @@ struct Json {
 			Allows to access existing fields of a JSON object using dot syntax.
 		*/
 		deprecated("Use opIndex instead")
-		@property const(Json) opDispatch(string prop)() const { return opIndex(prop); }
+		@property const(Json) opDispatch(string prop, string file = __FILE__, int line = __LINE__)() const {
+			pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
+			return opIndex(prop);
+		}
 		/// ditto
 		deprecated("Use opIndex instead")
-		@property ref Json opDispatch(string prop)() { return opIndex(prop); }
+		@property ref Json opDispatch(string prop, string file = __FILE__, int line = __LINE__)() {
+			pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
+			return opIndex(prop);
+		}
 	}
 
 	/**
@@ -1391,7 +1397,7 @@ T deserializeJson(T)(Json src)
 }
 /// ditto
 T deserializeJson(T, R)(R input)
-	if (isInputRange!R && !is(R == Json))
+	if (!is(R == Json) && isInputRange!R)
 {
 	return deserialize!(JsonStringSerializer!R, T)(input);
 }
@@ -1534,8 +1540,8 @@ unittest {
 	s.a = 2;
 
 	auto j = serializeToJson(s);
-	assert(j.a.type == Json.Type.int_);
-	assert(j.b.type == Json.Type.null_);
+	assert(j["a"].type == Json.Type.int_);
+	assert(j["b"].type == Json.Type.null_);
 
 	auto t = deserializeJson!S(j);
 	assert(!t.a.isNull() && t.a == 2);
@@ -1951,10 +1957,10 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 
 unittest {
 	auto a = Json.emptyObject;
-	a.a = Json.emptyArray;
-	a.b = Json.emptyArray;
-	a.b ~= Json(1);
-	a.b ~= Json.emptyObject;
+	a["a"] = Json.emptyArray;
+	a["b"] = Json.emptyArray;
+	a["b"] ~= Json(1);
+	a["b"] ~= Json.emptyObject;
 
 	assert(a.toString() == `{"a":[],"b":[1,{}]}` || a.toString() == `{"b":[1,{}],"a":[]}`);
 	assert(a.toPrettyString() ==
