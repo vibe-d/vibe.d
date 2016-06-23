@@ -278,11 +278,11 @@ final class MongoConnection {
 			(idx, ref error) {
 				try {
 					ret = MongoErrorDescription(
-						error.err.opt!string(""),
-						error.code.opt!int(-1),
-						error.connectionId.opt!int(-1),
-						error.n.get!int(),
-						error.ok.get!double()
+						error["err"].opt!string(""),
+						error["code"].opt!int(-1),
+						error["connectionId"].opt!int(-1),
+						error["n"].get!int(),
+						error["ok"].get!double()
 					);
 				} catch (Exception e) {
 					throw new MongoDriverException(e.msg);

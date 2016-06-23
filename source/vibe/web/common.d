@@ -415,8 +415,8 @@ class RestException : HTTPStatusException {
 	///
 	this(int status, Json jsonResult, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
-		if (jsonResult.type == Json.Type.Object && jsonResult.statusMessage.type == Json.Type.String) {
-			super(status, jsonResult.statusMessage.get!string, file, line, next);
+		if (jsonResult.type == Json.Type.Object && jsonResult["statusMessage"].type == Json.Type.String) {
+			super(status, jsonResult["statusMessage"].get!string, file, line, next);
 		}
 		else {
 			super(status, httpStatusText(status) ~ " (" ~ jsonResult.toString() ~ ")", file, line, next);
