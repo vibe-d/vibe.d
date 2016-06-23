@@ -138,8 +138,9 @@ enum MarkdownFlags {
 	noInlineHtml = 1<<2,
 	//noLinks = 1<<3,
 	//allowUnsafeHtml = 1<<4,
+	tables = 1<<5,
 	vanillaMarkdown = none,
-	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml
+	forumDefault = keepLineBreaks|backtickCodeBlocks|noInlineHtml|tables
 }
 
 struct Section {
@@ -165,6 +166,7 @@ private enum LineType {
 	Hline,
 	AtxHeader,
 	SetextHeader,
+	TableSeparator,
 	UList,
 	OList,
 	HtmlBlock,
@@ -226,6 +228,7 @@ pure @safe {
 		if( (settings.flags & MarkdownFlags.backtickCodeBlocks) && isCodeBlockDelimiter(ln) ) lninfo.type = LineType.CodeBlockDelimiter;
 		else if( isAtxHeaderLine(ln) ) lninfo.type = LineType.AtxHeader;
 		else if( isSetextHeaderLine(ln) ) lninfo.type = LineType.SetextHeader;
+		else if( (settings.flags & MarkdownFlags.tables) && isTableSeparatorLine(ln) ) lninfo.type = LineType.TableSeparator;
 		else if( isHlineLine(ln) ) lninfo.type = LineType.Hline;
 		else if( isOListLine(ln) ) lninfo.type = LineType.OList;
 		else if( isUListLine(ln) ) lninfo.type = LineType.UList;
@@ -243,6 +246,7 @@ private enum BlockType {
 	Text,
 	Paragraph,
 	Header,
+	Table,
 	OList,
 	UList,
 	ListItem,
@@ -255,6 +259,15 @@ private struct Block {
 	string[] text;
 	Block[] blocks;
 	size_t headerLevel;
+	Alignment[] columns;
+}
+
+
+private enum Alignment {
+	none = 0,
+	left = 1<<0,
+	right = 1<<1,
+	center = left | right
 }
 
 private void parseBlocks(ref Block root, ref Line[] lines, IndentType[] base_indent, scope MarkdownSettings settings)
@@ -302,6 +315,24 @@ pure @safe {
 						b.text = [ln.unindented];
 						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
 						lines.popFrontN(2);
+					} else if( lines.length >= 2 && lines[1].type == LineType.TableSeparator
+						&& countTableColumns(ln.unindented) == countTableColumns(lines[1].unindented))
+					{
+						auto setln = lines[1].unindented;
+						b.type = BlockType.Table;
+						b.text = [ln.unindented];
+						foreach (c; getTableColumns(setln)) {
+							Alignment a = Alignment.none;
+							if (c.startsWith(':')) a |= Alignment.left;
+							if (c.endsWith(':')) a |= Alignment.right;
+							b.columns ~= a;
+						}
+
+						lines.popFrontN(2);
+						while (!lines.empty && countTableColumns(lines[0].unindented) == b.columns.length) {
+							b.text ~= lines.front.unindented;
+							lines.popFront();
+						}
 					} else {
 						b.type = BlockType.Paragraph;
 						b.text = skipText(lines, base_indent);
@@ -326,6 +357,9 @@ pure @safe {
 					lines.popFront();
 					break;
 				case LineType.SetextHeader:
+					lines.popFront();
+					break;
+				case LineType.TableSeparator:
 					lines.popFront();
 					break;
 				case LineType.UList:
@@ -451,6 +485,38 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 			assert(block.text.length == 1);
 			writeMarkdownEscaped(dst, block.text[0], links, settings);
 			dst.formattedWrite("</h%s>\n", hlvl);
+			break;
+		case BlockType.Table:
+			import std.algorithm.iteration : splitter;
+
+			static string[Alignment.max+1] alstr = ["", " align=\"left\"", " align=\"right\"", " align=\"center\""];
+
+			dst.put("<table>\n");
+			dst.put("<tr>");
+			size_t i = 0;
+			foreach (col; block.text[0].getTableColumns()) {
+				dst.put("<th");
+				dst.put(alstr[block.columns[i]]);
+				dst.put('>');
+				dst.writeMarkdownEscaped(col, links, settings);
+				dst.put("</th>");
+				i++;
+			}
+			dst.put("</tr>\n");
+			foreach (ln; block.text[1 .. $]) {
+				dst.put("<tr>");
+				i = 0;
+				foreach (col; ln.getTableColumns()) {
+					dst.put("<td");
+					dst.put(alstr[block.columns[i]]);
+					dst.put('>');
+					dst.writeMarkdownEscaped(col, links, settings);
+					dst.put("</td>");
+					i++;
+				}
+				dst.put("</tr>\n");
+			}
+			dst.put("</table>\n");
 			break;
 		case BlockType.OList:
 			dst.put("<ol>\n");
@@ -657,6 +723,41 @@ pure @safe {
 	while( i < ln.length && ln[i] == '#' ) i++;
 	if( i < 1 || i > 6 || i >= ln.length ) return false;
 	return ln[i] == ' ';
+}
+
+private bool isTableSeparatorLine(string ln)
+pure @safe {
+	import std.algorithm.iteration : splitter;
+
+	ln = strip(ln);
+	if (ln.startsWith("|")) ln = ln[1 .. $];
+	if (ln.endsWith("|")) ln = ln[0 .. $-1];
+
+	auto cols = ln.splitter('|');
+	size_t cnt = 0;
+	foreach (c; cols) {
+		if (c.startsWith(':')) c = c[1 .. $];
+		if (c.endsWith(':')) c = c[0 .. $-1];
+		if (c.length < 3 || !c.allOf("-"))
+			return false;
+		cnt++;
+	}
+	return cnt >= 2;
+}
+
+private auto getTableColumns(string line)
+{
+	import std.algorithm.iteration : map, splitter;
+	
+	line = strip(line);
+	if (line.startsWith("|")) line = line[1 .. $];
+	if (line.endsWith("|")) line = line[0 .. $-1];
+	return line.splitter('|').map!(s => s.strip());
+}
+
+private size_t countTableColumns(string line)
+pure @safe {
+	return getTableColumns(line).count();
 }
 
 private bool isHlineLine(string ln)
@@ -1159,4 +1260,20 @@ private struct Link {
 
 @safe unittest {
 	assert(filterMarkdown("## Hello, World!") == "<h2 id=\"hello-world\"> Hello, World!</h2>\n", filterMarkdown("## Hello, World!"));
+}
+
+@safe unittest { // tables
+	assert(filterMarkdown("foo|bar\n---|---", MarkdownFlags.tables)
+		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n</table>\n");
+	assert(filterMarkdown(" *foo* | bar \n---|---\n baz|bam", MarkdownFlags.tables)
+		== "<table>\n<tr><th><em>foo</em></th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
+	assert(filterMarkdown("|foo|bar|\n---|---\n baz|bam", MarkdownFlags.tables)
+		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
+	assert(filterMarkdown("foo|bar\n|---|---|\nbaz|bam", MarkdownFlags.tables)
+		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
+	assert(filterMarkdown("foo|bar\n---|---\n|baz|bam|", MarkdownFlags.tables)
+		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td><td>bam</td></tr>\n</table>\n");
+	assert(filterMarkdown("foo|bar|baz\n:---|---:|:---:\n|baz|bam|bap|", MarkdownFlags.tables)
+		== "<table>\n<tr><th align=\"left\">foo</th><th align=\"right\">bar</th><th align=\"center\">baz</th></tr>\n"
+		~ "<tr><td align=\"left\">baz</td><td align=\"right\">bam</td><td align=\"center\">bap</td></tr>\n</table>\n");
 }
