@@ -28,6 +28,7 @@
 	"targetType": "library",
 	"sourcePaths": [],
 	"sourceFiles": ["source/vibe/d.d", "source/vibe/vibe.d"],
+	"excludedSourceFiles-windows": [ "source/vibe/core/unix.d" ],
 
 	"configurations": [
 		{"name": "libevent", "subConfigurations": {"vibe-d:core": "libevent"}},
