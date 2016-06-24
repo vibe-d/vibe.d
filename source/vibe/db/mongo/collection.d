@@ -204,8 +204,8 @@ struct MongoCollection {
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
 		auto ret = database.runCommand(cmd);
-		if( !ret.ok.get!double ) throw new Exception("findAndModify failed.");
-		return ret.value;
+		if( !ret["ok"].get!double ) throw new Exception("findAndModify failed.");
+		return ret["value"];
 	}
 
 	/// ditto
@@ -318,8 +318,8 @@ struct MongoCollection {
 			cmd.pipeline = pipeline[0];
 		else cmd.pipeline.args = pipeline;
 		auto ret = database.runCommand(cmd);
-		enforce(ret.ok.get!double == 1, "Aggregate command failed.");
-		return ret.result;
+		enforce(ret["ok"].get!double == 1, "Aggregate command failed.");
+		return ret["result"];
 	}
 
 	/// Example taken from the MongoDB documentation
