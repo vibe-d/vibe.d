@@ -864,27 +864,6 @@ struct Json {
 		m_array ~= element;
 	}
 
-	// If VibeDataNoOpDispatch is declared, don't include the depracted functions. This allows UFCS to be used on a Json object
-	version (VibeDataNoOpDispatch) {
-	}
-	else {
-		/** Deprecated, please use `opIndex` instead.
-
-			Allows to access existing fields of a JSON object using dot syntax.
-		*/
-		deprecated("Use opIndex instead")
-		@property const(Json) opDispatch(string prop, string file = __FILE__, int line = __LINE__)() const {
-			pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
-			return opIndex(prop);
-		}
-		/// ditto
-		deprecated("Use opIndex instead")
-		@property ref Json opDispatch(string prop, string file = __FILE__, int line = __LINE__)() {
-			pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
-			return opIndex(prop);
-		}
-	}
-
 	/**
 		Compares two JSON values for equality.
 
