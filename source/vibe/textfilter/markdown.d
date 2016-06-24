@@ -216,9 +216,9 @@ pure @safe {
 				lninfo.indent ~= IndentType.White;
 				ln.popFrontN(4);
 			} else {
-				ln = ln.stripLeft();
-				if( ln.startsWith(">") ){
+				if( ln.stripLeft().startsWith(">") ){
 					lninfo.indent ~= IndentType.Quote;
+					ln = ln.stripLeft();
 					ln.popFront();
 				} else break;
 			}
@@ -316,7 +316,7 @@ pure @safe {
 						b.headerLevel = setln.strip()[0] == '=' ? 1 : 2;
 						lines.popFrontN(2);
 					} else if( lines.length >= 2 && lines[1].type == LineType.TableSeparator
-						&& countTableColumns(ln.unindented) == countTableColumns(lines[1].unindented))
+						&& ln.unindented.indexOf('|') >= 0 )
 					{
 						auto setln = lines[1].unindented;
 						b.type = BlockType.Table;
@@ -329,7 +329,7 @@ pure @safe {
 						}
 
 						lines.popFrontN(2);
-						while (!lines.empty && countTableColumns(lines[0].unindented) == b.columns.length) {
+						while (!lines.empty && lines[0].unindented.indexOf('|') >= 0) {
 							b.text ~= lines.front.unindented;
 							lines.popFront();
 						}
@@ -749,7 +749,6 @@ private auto getTableColumns(string line)
 {
 	import std.algorithm.iteration : map, splitter;
 	
-	line = strip(line);
 	if (line.startsWith("|")) line = line[1 .. $];
 	if (line.endsWith("|")) line = line[0 .. $-1];
 	return line.splitter('|').map!(s => s.strip());
@@ -1276,4 +1275,8 @@ private struct Link {
 	assert(filterMarkdown("foo|bar|baz\n:---|---:|:---:\n|baz|bam|bap|", MarkdownFlags.tables)
 		== "<table>\n<tr><th align=\"left\">foo</th><th align=\"right\">bar</th><th align=\"center\">baz</th></tr>\n"
 		~ "<tr><td align=\"left\">baz</td><td align=\"right\">bam</td><td align=\"center\">bap</td></tr>\n</table>\n");
+	assert(filterMarkdown(" |bar\n---|---", MarkdownFlags.tables)
+		== "<table>\n<tr><th></th><th>bar</th></tr>\n</table>\n");
+	assert(filterMarkdown("foo|bar\n---|---\nbaz|", MarkdownFlags.tables)
+		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td></tr>\n</table>\n");
 }
