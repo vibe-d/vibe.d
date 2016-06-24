@@ -681,13 +681,17 @@ struct Bson {
 		*/
 		deprecated("Use opIndex instead")
 		@property const(Bson) opDispatch(string prop, string file = __FILE__, int line = __LINE__)() const {
-			pragma(msg, file~"("~line.stringof~"): Bson.opDispatch is deprecated, use opIndex instead.");
+			import std.algorithm.searching : endsWith;
+			static if (!file.endsWith("/std/range/primitives.d") && !file.endsWith("/std/array.d"))
+				pragma(msg, file~"("~line.stringof~"): Bson.opDispatch is deprecated, use opIndex instead.");
 			return opIndex(prop);
 		}
 		/// ditto
 		deprecated("Use opIndex instead")
-		@property void opDispatch(string prop, T)(T val) {
-			pragma(msg, file~"("~line.stringof~"): Bson.opDispatch is deprecated, use opIndexAssign instead.");
+		@property void opDispatch(string prop, T, string file = __FILE__, int line = __LINE__)(T val) {
+			import std.algorithm.searching : endsWith;
+			static if (!file.endsWith("/std/range/primitives.d") && !file.endsWith("/std/array.d"))
+				pragma(msg, file~"("~line.stringof~"): Bson.opDispatch is deprecated, use opIndexAssign instead.");
 			opIndexAssign(val, prop);
 		}
 	}

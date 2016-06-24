@@ -874,13 +874,15 @@ struct Json {
 		*/
 		deprecated("Use opIndex instead")
 		@property const(Json) opDispatch(string prop, string file = __FILE__, int line = __LINE__)() const {
-			pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
+			static if (!file.endsWith("/std/range/primitives.d") && !file.endsWith("/std/array.d"))
+				pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
 			return opIndex(prop);
 		}
 		/// ditto
 		deprecated("Use opIndex instead")
 		@property ref Json opDispatch(string prop, string file = __FILE__, int line = __LINE__)() {
-			pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
+			static if (!file.endsWith("/std/range/primitives.d") && !file.endsWith("/std/array.d"))
+				pragma(msg, file~"("~line.stringof~"): Json.opDispatch is deprecated, use opIndex instead.");
 			return opIndex(prop);
 		}
 	}
