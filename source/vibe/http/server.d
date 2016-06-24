@@ -1075,7 +1075,8 @@ final class HTTPServerResponse : HTTPResponse {
 		scope conn = new ConnectionProxyStream(m_conn, m_rawConnection);
 		del(conn);
 		finalize();
-		m_rawConnection.close(); // connection not reusable after a protocol upgrade
+		if (m_rawConnection !is null && m_rawConnection.connected)
+			m_rawConnection.close(); // connection not reusable after a protocol upgrade
 	}
 
 	/** Special method for handling CONNECT proxy tunnel
