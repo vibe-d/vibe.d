@@ -26,6 +26,8 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: ldc-0.17.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+    - d: ldc-1.0.0
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
 
