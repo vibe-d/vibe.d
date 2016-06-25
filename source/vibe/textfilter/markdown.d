@@ -746,7 +746,7 @@ pure @safe {
 }
 
 private auto getTableColumns(string line)
-{
+pure @safe nothrow {
 	import std.algorithm.iteration : map, splitter;
 	
 	if (line.startsWith("|")) line = line[1 .. $];
