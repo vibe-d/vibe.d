@@ -35,7 +35,7 @@ else version(Have_openssl) version = OpenSSL;
 /// A simple TLS client
 unittest {
 	import vibe.core.net;
-	import vibe.stream.ssl;
+	import vibe.stream.tls;
 
 	void sendTLSMessage()
 	{
@@ -53,7 +53,7 @@ unittest {
 	import vibe.core.log;
 	import vibe.core.net;
 	import vibe.stream.operations;
-	import vibe.stream.ssl;
+	import vibe.stream.tls;
 
 	void listenForTLS()
 	{
