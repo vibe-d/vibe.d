@@ -429,10 +429,6 @@ final class HTTPServerSettings {
 	/// If set, a HTTPS server will be started instead of plain HTTP.
 	TLSContext tlsContext;
 
-	/// Compatibility alias - use `tlsContext` instead.
-	deprecated("Use tlsContext instead.")
-	alias sslContext = tlsContext;
-
 	/// Session management is enabled if a session store instance is provided
 	SessionStore sessionStore;
 	string sessionIdCookie = "vibe.session_id";
@@ -565,10 +561,6 @@ final class HTTPServerRequest : HTTPRequest {
 
 		/// Determines if the request was issued over an TLS encrypted channel.
 		bool tls;
-
-		/// Compatibility alias - use `tls` instead.
-		deprecated("Use .tls instead.")
-		alias ssl = tls;
 
 		/** Information about the TLS certificate provided by the client.
 
@@ -825,10 +817,6 @@ final class HTTPServerResponse : HTTPResponse {
 	/** Determines if the response is sent over an encrypted connection.
 	*/
 	bool tls() const { return m_tls; }
-
-	/// Compatibility alias - use `tls` instead.
-	deprecated("Use .tls instead.")
-	alias ssl = tls;
 
 	/// Writes the entire response body at once.
 	void writeBody(in ubyte[] data, string content_type = null)

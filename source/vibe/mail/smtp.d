@@ -27,7 +27,6 @@ enum SMTPConnectionType {
 	plain,
 	tls,
 	startTLS,
-	ssl = tls /// deprecated
 }
 
 
