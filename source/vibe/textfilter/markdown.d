@@ -291,10 +291,10 @@ pure @safe {
 			if( ln.indent == cindent ){
 				Block cblock;
 				cblock.type = BlockType.Code;
-				while( !lines.empty && lines.front.indent.length >= cindent.length
-						&& lines.front.indent[0 .. cindent.length] == cindent)
+				while( !lines.empty && (lines.front.unindented.strip.empty ||
+					lines.front.indent.length >= cindent.length	&& lines.front.indent[0 .. cindent.length] == cindent))
 				{
-					cblock.text ~= lines.front.unindent(cindent.length);
+					cblock.text ~= lines.front.indent.length >= cindent.length ? lines.front.unindent(cindent.length) : "";
 					lines.popFront();
 				}
 				root.blocks ~= cblock;
@@ -544,7 +544,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 				filterHTMLEscape(dst, ln);
 				dst.put("\n");
 			}
-			dst.put("</code></pre>");
+			dst.put("</code></pre>\n");
 			break;
 		case BlockType.Quote:
 			dst.put("<blockquote>");
@@ -1279,4 +1279,9 @@ private struct Link {
 		== "<table>\n<tr><th></th><th>bar</th></tr>\n</table>\n");
 	assert(filterMarkdown("foo|bar\n---|---\nbaz|", MarkdownFlags.tables)
 		== "<table>\n<tr><th>foo</th><th>bar</th></tr>\n<tr><td>baz</td></tr>\n</table>\n");
+}
+
+@safe unittest { // issue #1527 - blank lines in code blocks
+	assert(filterMarkdown("    foo\n\n    bar\n") ==
+		"<pre class=\"prettyprint\"><code>foo\n\nbar\n</code></pre>\n");
 }
