@@ -1,7 +1,7 @@
 import vibe.appmain;
 import vibe.core.log;
 import vibe.http.server;
-import vibe.stream.ssl;
+import vibe.stream.tls;
 
 
 shared static this()
