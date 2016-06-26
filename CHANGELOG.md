@@ -30,6 +30,8 @@ v0.7.29 - 2016-06-
 - The HTTP client now accepts `const` settings
 - Removed the libevent/Win64 configuration as the libevent binaries for that platform never existed - [issue #832][issue832]
 - Improvements to the WebSockets module, most notably reduction of memory allocations (by Mathias Lang) - [pull #1497][issue1497]
+- Added version `VibeNoOpDispatch` to force removal of `opDispatch` for `Json` and `Bson` (by David Monagle) - [pull #1526][issue1526]
+- Added a manual deprecation message for `Json.opDispatch`/`Bson.opDispatch` because `deprecated` did not have an effect
 
 ### Bug fixes ###
 
@@ -55,6 +57,8 @@ v0.7.29 - 2016-06-
 - Fixed `adjustMethodStyle` (used throughout `vibe.web`) for method names with trailing upper case characters
 - Fixed alignment of the `Json` type on x64, fixes possible dangling pointers due to the GC not recognizing unaligned pointers - [issue #1504][issue1504]
 - Fixed serialization policies to work for enums and other built-in types (by Tomáš Chaloupka) - [pull #1500][issue1500]
+- Fixed a bogus assertion error in `Win32TCPConnection.tcpNoDelay` and `.keepAlive` (by Денис Хлякин aka aka-demik) - [pull #1514][issue1514]
+- Fixed a deadlock in `TaskPipe` - [issue #1501][issue1501]
 
 [issue832]: https://github.com/rejectedsoftware/vibe.d/issues/832
 [issue1128]: https://github.com/rejectedsoftware/vibe.d/issues/1128
@@ -89,6 +93,8 @@ v0.7.29 - 2016-06-
 [issue1489]: https://github.com/rejectedsoftware/vibe.d/issues/1489
 [issue1500]: https://github.com/rejectedsoftware/vibe.d/issues/1500
 [issue1504]: https://github.com/rejectedsoftware/vibe.d/issues/1504
+[issue1514]: https://github.com/rejectedsoftware/vibe.d/issues/1514
+[issue1526]: https://github.com/rejectedsoftware/vibe.d/issues/1526
 
 
 v0.7.28 - 2016-02-27

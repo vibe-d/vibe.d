@@ -908,7 +908,7 @@ final class HTTPServerResponse : HTTPResponse {
 		import std.traits;
 		import vibe.stream.wrapper;
 
-		static if (is(typeof(data.data())) && isArray!(typeof(data.data()))) {
+		static if (!is(T == Json) && is(typeof(data.data())) && isArray!(typeof(data.data()))) {
 			static assert(!is(T == Appender!(typeof(data.data()))), "Passed an Appender!T to writeJsonBody - this is most probably not doing what's indended.");
 		}
 
