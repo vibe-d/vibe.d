@@ -124,12 +124,13 @@ private final class TaskPipeImpl {
 		while (data.length > 0){
 			bool need_signal;
 			synchronized (m_mutex) {
-				if (m_buffer.empty) need_signal = true;
-				else if (m_growWhenFull && m_buffer.full) {
+				if (m_growWhenFull && m_buffer.full) {
 					size_t new_sz = m_buffer.capacity;
 					while (new_sz - m_buffer.capacity < data.length) new_sz += 2;
 					m_buffer.capacity = new_sz;
 				} else while (m_buffer.full) m_condition.wait();
+				
+				need_signal = m_buffer.empty;
 				auto len = min(m_buffer.freeSpace, data.length);
 				m_buffer.put(data[0 .. len]);
 				data = data[len .. $];
@@ -161,8 +162,9 @@ private final class TaskPipeImpl {
 			bool need_signal;
 			size_t len;
 			synchronized (m_mutex) {
-				if (m_buffer.full) need_signal = true;
-				else while (m_buffer.empty && !m_closed) m_condition.wait();
+				while (m_buffer.empty && !m_closed) m_condition.wait();
+
+				need_signal = m_buffer.full;
 				enforce(!m_buffer.empty, "Reading past end of closed pipe.");
 				len = min(dst.length, m_buffer.length);
 				m_buffer.read(dst[0 .. len]);
@@ -171,5 +173,31 @@ private final class TaskPipeImpl {
 			dst = dst[len .. $];
 		}
 		vibe.core.core.yield();
+	}
+}
+
+unittest { // issue #1501 - deadlock in TaskPipe
+	import std.datetime : Clock, UTC;
+	import core.time : msecs;
+
+	// test read after write and write after read
+	foreach (i; 0 .. 2) {
+		auto p = new TaskPipe;
+		p.bufferSize = 2048;
+
+		Task a, b;
+		a = runTask({ ubyte[2100] buf; if (i == 0) p.read(buf); else p.write(buf); });
+		b = runTask({ ubyte[2100] buf; if (i == 0) p.write(buf); else p.read(buf); });
+
+		auto joiner = runTask({
+			auto starttime = Clock.currTime(UTC());
+			while (a.running || b.running) {
+				if (Clock.currTime(UTC()) - starttime > 500.msecs)
+					assert(false, "TaskPipe is dead locked.");
+				yield();
+			}
+		});
+
+		joiner.join();
 	}
 }
