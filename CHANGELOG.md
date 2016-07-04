@@ -1,6 +1,44 @@
 ﻿Changelog
 =========
 
+v0.7.30 - 2016-08-
+--------------------
+
+### Features and improvements ###
+
+- Compiles on DMD 2.072.0
+- Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
+- Removed `Json.opDispatch` and `Bson.opDispatch`
+- Added `vibe.web.auth` as a generic way to express authrorizazion rules and to provide a common hook for authentication
+- Added `@noRoute` attribute for `registerWebInterface` to keep methods from generating a HTTP endpoint
+- Added `@nestedNameStyle` to choose between the classical underscore mapping and D style mapping for form parameter names in `registerWebInterface`
+- Added support for tables in the Markdown compiler - [issue #1493][issue1493]
+- Added `HTTPServerSettings.accessLogger` to enable using custom logger implementations
+- Added support for the "X-Forwarded-Port" header used by reverse proxies (by Mihail-K) - [issue #1409][issue1490], [pull #1491][issue1491]
+- Added an overload of `HTTPServerResponse.writeJsonBody` that doesn't set the response status (by Irenej Marc) - [pull #1488][issue1488]
+- Added `MongoCollection.distict()`
+
+### Bug fixes ###
+
+- Fixed a compile error that happened when using the JavaScript REST interface generator for sub interfaces - [issue #1506][issue1506]
+- Fixed protocol violations in the WebSocket module (by Mathias Lang) - [pull #1508][issue1508], [pull #1511][issue1511]
+- The HTTP client now correctly appends the port in the "Host" header - [issue #1507][issue1507], [pull #1510][issue1510]
+- Fixed a possible null pointer error in `HTTPServerResponse.switchProtocol` - [issue #1502][issue1502]
+- Fixed parsing of indented Markdown code blocks (empty lines don't interrupt the block anymore) - [issue #1527][issue1527]
+
+[issue1488]: https://github.com/rejectedsoftware/vibe.d/issues/1488
+[issue1490]: https://github.com/rejectedsoftware/vibe.d/issues/1490
+[issue1491]: https://github.com/rejectedsoftware/vibe.d/issues/1491
+[issue1493]: https://github.com/rejectedsoftware/vibe.d/issues/1493
+[issue1502]: https://github.com/rejectedsoftware/vibe.d/issues/1502
+[issue1506]: https://github.com/rejectedsoftware/vibe.d/issues/1506
+[issue1507]: https://github.com/rejectedsoftware/vibe.d/issues/1507
+[issue1508]: https://github.com/rejectedsoftware/vibe.d/issues/1508
+[issue1510]: https://github.com/rejectedsoftware/vibe.d/issues/1510
+[issue1511]: https://github.com/rejectedsoftware/vibe.d/issues/1511
+[issue1527]: https://github.com/rejectedsoftware/vibe.d/issues/1527
+
+
 v0.7.29 - 2016-07-04
 --------------------
 
