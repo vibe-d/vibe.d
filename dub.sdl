@@ -18,6 +18,8 @@ dependency ":http" version="*"
 dependency ":mail" version="*"
 
 targetType "library"
+targetName "vibed"
+
 // NOTE: "lib" is a path with no D sources to work around an issue in DUB 1.0.0
 //       and below that results in the standard "source/" path to be added even
 //       if an explicit "sourcePaths" directive is given.
