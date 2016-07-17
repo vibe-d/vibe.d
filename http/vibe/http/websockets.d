@@ -1,7 +1,7 @@
 /**
 	Implements WebSocket support and fallbacks for older browsers.
 
-    Standards: $(LINK2 https://tools.ietf.org/html/rfc6455, RFC6455)
+	Standards: $(LINK2 https://tools.ietf.org/html/rfc6455, RFC6455)
 	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger
@@ -337,7 +337,9 @@ final class WebSocket {
 		bool m_pongSkipped;
 		short m_closeCode;
 		const(char)[] m_closeReason;
-        RandomNumberStream m_rng;
+		/// The entropy generator to use
+		/// If not null, it means this is a server socket.
+		RandomNumberStream m_rng;
 	}
 
 	/**
@@ -649,7 +651,7 @@ final class WebSocket {
 final class OutgoingWebSocketMessage : OutputStream {
 @safe:
 	private {
-        RandomNumberStream m_rng;
+		RandomNumberStream m_rng;
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
@@ -661,7 +663,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 		assert(conn !is null);
 		m_conn = conn;
 		m_frameOpcode = frameOpcode;
-        m_rng = rng;
+		m_rng = rng;
 	}
 
 	size_t write(in ubyte[] bytes, IOMode mode)
@@ -720,7 +722,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 final class IncomingWebSocketMessage : InputStream {
 @safe:
 	private {
-        RandomNumberStream m_rng;
+		RandomNumberStream m_rng;
 		Stream m_conn;
 		Frame m_currentFrame;
 	}
@@ -729,8 +731,8 @@ final class IncomingWebSocketMessage : InputStream {
 	{
 		assert(conn !is null);
 		m_conn = conn;
-        m_rng = rng;
-        readFrame();
+		m_rng = rng;
+		readFrame();
 	}
 
 	@property bool empty() const { return m_currentFrame.payload.length == 0; }
@@ -819,8 +821,9 @@ final class IncomingWebSocketMessage : InputStream {
 	}
 }
 
+/// Magic string defined by the RFC for challenging the server during upgrade
+private static immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-private immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /**
  * The Opcode is 4 bytes, as defined in Section 5.2
@@ -859,7 +862,7 @@ private struct Frame {
 
 	void writeHeader(ubyte[] dst, RandomNumberStream sys_rng)
 	{
-        ubyte[4] buff;
+		ubyte[4] buff;
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
 		dst[0] = firstByte;
