@@ -62,7 +62,7 @@ alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
 /// Exception thrown by $(D vibe.http.websockets).
 class WebSocketException: Exception
 {
-@safe:
+	@safe pure nothrow:
 
 	///
 	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
