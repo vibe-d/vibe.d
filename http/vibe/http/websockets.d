@@ -835,13 +835,13 @@ private static immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11
 
 
 /**
- * The Opcode is 4 bytes, as defined in Section 5.2
+ * The Opcode is 4 bits, as defined in Section 5.2
  *
  * Values are defined in section 11.8
  * Currently only 6 values are defined, however the opcode is defined as
- * taking 4 bytes.
+ * taking 4 bits.
  */
-private enum FrameOpcode : uint {
+private enum FrameOpcode : ubyte {
 	continuation = 0x0,
 	text = 0x1,
 	binary = 0x2,
@@ -849,6 +849,7 @@ private enum FrameOpcode : uint {
 	ping = 0x9,
 	pong = 0xA
 }
+static assert(FrameOpcode.max < 0b1111, "FrameOpcode is only 4 bits");
 
 
 private struct Frame {
@@ -859,6 +860,32 @@ private struct Frame {
 	FrameOpcode opcode;
 	ubyte[] payload;
 
+    /**
+     * Return the header length encoded with the expected amount of bits
+     *
+     * The WebSocket RFC define a variable-length payload length.
+     * In short, it means that:
+     * - If the length is <= 125, it is stored as the 7 least significant
+     *   bits of the second header byte.  The first bit is reserved for MASK.
+     * - If the length is <= 65_536 (so it fits in 2 bytes), a magic value of
+     *   126 is stored in the aforementioned 7 bits, and the actual length
+     *   is stored in the next two bytes, resulting in a 4 bytes header
+     *   ( + masking key, if any).
+     * - If the length is > 65_536, a magic value of 127 will be used for
+     *   the 7-bit field, and the next 8 bytes are expected to be the length,
+     *   resulting in a 10 bytes header ( + masking key, if any).
+     *
+     * Those functions encapsulate all this logic and allow to just get the
+     * length with the desired size.
+     *
+     * Return:
+     * - For `ubyte`, the value to store in the 7 bits field, either the
+     *   length or a magic value (126 or 127).
+     * - For `ushort`, a value in the range [126; 65_536].
+     *   If payload.length is not in this bound, an assertion will be triggered.
+     * - For `ulong`, a value in the range [65_537; size_t.max].
+     *   If payload.length is not in this bound, an assertion will be triggered.
+     */
 	size_t getHeaderSize(bool mask)
 	{
 		size_t ret = 1;
