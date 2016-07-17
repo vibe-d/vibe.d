@@ -57,6 +57,7 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 					case HTTPStatus.OK:
 						done = true;
 						callback(res.bodyReader);
+						client.disconnect();
 						break;
 					case HTTPStatus.movedPermanently:
 					case HTTPStatus.found:
