@@ -889,7 +889,6 @@ private struct Frame {
 		bool masked = (data2[1] & 0x80) == 0x80;
 		frame.opcode = cast(FrameOpcode)(data2[0] & 0xf);
 
-		logDebug("Read frame: %s %s", frame.opcode, frame.fin);
 		//parsing length
 		ulong length = data2[1] & 0x7f;
 		if( length == 126 ) {
@@ -899,6 +898,11 @@ private struct Frame {
 			stream.read(data8);
 			length = bigEndianToNative!ulong(data8);
 		}
+		logDebug("Read frame: %s %s %s length=%d",
+				 frame.opcode,
+				 frame.fin ? "final frame" : "continuation",
+				 masked ? "masked" : "not masked",
+				 length);
 
 		//masking key
 		ubyte[4] maskingKey;
