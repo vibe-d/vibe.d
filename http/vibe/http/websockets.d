@@ -57,6 +57,9 @@ import vibe.crypto.cryptorand;
 /// Exception thrown by $(D vibe.http.websockets).
 class WebSocketException: Exception
 {
+	// @nogc cannot be applied to 2.067 because Exception.ctor is not @nogc
+	@safe pure nothrow:
+
 	///
 	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
