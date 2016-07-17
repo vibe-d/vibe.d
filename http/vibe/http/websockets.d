@@ -657,6 +657,27 @@ final class IncomingWebSocketMessage : InputStream {
 
 	const(ubyte)[] peek() { return m_currentFrame.payload; }
 
+	/**
+	 * Retrieve the next websocket frame of the stream and discard the current
+	 * one
+	 *
+	 * This function is helpful if one wish to process frames by frames,
+	 * or minimize memory allocation, as `peek` will only return the current
+	 * frame data, and read requires a pre-allocated buffer.
+	 *
+	 * Returns:
+	 * `false` if the current frame is the final one, `true` if a new frame
+	 * was read.
+	 */
+	bool skipFrame()
+	{
+		if (m_currentFrame.fin)
+			return false;
+
+		m_currentFrame = Frame.readFrame(m_conn);
+		return true;
+	}
+
 	void read(ubyte[] dst)
 	{
 		while( dst.length > 0 ) {
@@ -669,7 +690,8 @@ final class IncomingWebSocketMessage : InputStream {
 			dst = dst[sz .. $];
 			m_currentFrame.payload = m_currentFrame.payload[sz .. $];
 
-			if( leastSize == 0 && !m_currentFrame.fin ) m_currentFrame = Frame.readFrame(m_conn);
+			if (leastSize == 0)
+				this.skipFrame();
 		}
 	}
 
