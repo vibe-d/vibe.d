@@ -918,22 +918,28 @@ struct Frame {
 	static Frame readFrame(InputStream stream)
 	{
 		Frame frame;
-		ubyte[2] data2;
-		ubyte[8] data8;
-		stream.read(data2);
-		//enforceEx!WebSocketException( (data[0] & 0x70) != 0, "reserved bits must be unset" );
-		frame.fin = (data2[0] & 0x80) == 0x80;
-		bool masked = (data2[1] & 0x80) == 0x80;
-		frame.opcode = cast(FrameOpcode)(data2[0] & 0xf);
+		ubyte[8] data;
+
+		stream.read(data[0 .. 2]);
+		frame.fin_rsv_opcode = data[0];
+
+		bool masked = !!(data[1] & 0b1000_0000);
 
 		//parsing length
-		ulong length = data2[1] & 0x7f;
-		if( length == 126 ) {
-			stream.read(data2);
-			length = bigEndianToNative!ushort(data2);
-		} else if( length == 127 ) {
-			stream.read(data8);
-			length = bigEndianToNative!ulong(data8);
+		ulong length = data[1] & 0b0111_1111;
+		if (length == 126) {
+			stream.read(data[0 .. 2]);
+			length = bigEndianToNative!ushort(data[0 .. 2]);
+		} else if (length == 127) {
+			stream.read(data);
+			length = bigEndianToNative!ulong(data);
+
+			// RFC 6455, 5.2, 'Payload length': If 127, the following 8 bytes
+			// interpreted as a 64-bit unsigned integer (the most significant
+			// bit MUST be 0)
+			enforceEx!WebSocketException(!(length >> 63),
+				"Received length has a non-zero most significant bit");
+
 		}
 		logDebug("Read frame: %s %s %s length=%d",
 				 frame.opcode,
@@ -941,19 +947,21 @@ struct Frame {
 				 masked ? "masked" : "not masked",
 				 length);
 
-		//masking key
-		ubyte[4] maskingKey;
-		if( masked ) stream.read(maskingKey);
+		// Masking key is 32 bits / uint
+		if (masked)
+			stream.read(data[0 .. 4]);
 
-		//payload
+		// Read payload
+		// TODO: Provide a way to limit the size read, easy
+		// DOS for server code here (rejectedsoftware/vibe.d#1496).
 		enforceEx!WebSocketException(length <= size_t.max);
-		frame.payload = new ubyte[cast(size_t)length];
+		frame.payload = new ubyte[](cast(size_t)length);
 		stream.read(frame.payload);
 
 		//de-masking
-		for( size_t i = 0; i < length; ++i ) {
-			frame.payload[i] = frame.payload[i] ^ maskingKey[i % 4];
-		}
+		if (masked)
+			foreach (size_t i; 0 .. cast(size_t)length)
+				frame.payload[i] = frame.payload[i] ^ data[i % 4];
 
 		return frame;
 	}
