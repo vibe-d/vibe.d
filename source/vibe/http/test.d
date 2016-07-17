@@ -127,14 +127,14 @@ final class TestRouter
 	*/
 	TestRouter expectHeader(string name, string value, string file = __FILE__, size_t line = __LINE__)
 	{
-    void expectation(TestResponse res) {
-      enforce(name in res.headers, "Response header `" ~ name ~ "` is missing.", file, line);
+		void expectation(TestResponse res) {
+			enforce(name in res.headers, "Response header `" ~ name ~ "` is missing.", file, line);
 			enforce(res.headers[name] == value, "Response header `" ~ name ~
-        "` has an unexpected value. Expected `" ~ value ~ "` != `" ~
-        res.headers[name].to!string ~ "`", file, line);
-    }
+				"` has an unexpected value. Expected `" ~ value ~ "` != `" ~
+				res.headers[name].to!string ~ "`", file, line);
+		}
 
-    expectations ~= &expectation;
+		expectations ~= &expectation;
 
 		return this;
 	}
@@ -145,14 +145,14 @@ final class TestRouter
 	*/
 	TestRouter expectHeaderContains(string name, string value, string file = __FILE__, size_t line = __LINE__)
 	{
-    void expectation(TestResponse res) {
-      enforce(name in res.headers, "Response header `" ~ name ~ "` is missing.", file, line);
+		void expectation(TestResponse res) {
+			enforce(name in res.headers, "Response header `" ~ name ~ "` is missing.", file, line);
 			enforce(res.headers[name].indexOf(value) != -1, "Response header `" ~ name ~
-      "` has an unexpected value. Expected `" ~ value ~ "` not found in `" ~
-      res.headers[name].to!string ~ "`", file, line);
-    }
+			"` has an unexpected value. Expected `" ~ value ~ "` not found in `" ~
+			res.headers[name].to!string ~ "`", file, line);
+		}
 
-    expectations ~= &expectation;
+		expectations ~= &expectation;
 
 		return this;
 	}
@@ -162,13 +162,13 @@ final class TestRouter
 	*/
 	TestRouter expectStatusCode(int code, string file = __FILE__, size_t line = __LINE__)
 	{
-    void expectation(TestResponse res) {
-      enforce(code == res.statusCode, "Expected status code `" ~
-        code.to!string ~ "` not found. Got `" ~
-        res.statusCode.to!string ~ "` instead", file, line);
-    }
+		void expectation(TestResponse res) {
+			enforce(code == res.statusCode, "Expected status code `" ~
+				code.to!string ~ "` not found. Got `" ~
+				res.statusCode.to!string ~ "` instead", file, line);
+		}
 
-    expectations ~= &expectation;
+		expectations ~= &expectation;
 
 		return this;
 	}
@@ -178,9 +178,9 @@ final class TestRouter
 	*/
 	private void performExpected(TestResponse res)
 	{
-    foreach(expectation; expectations) {
-      expectation(res);
-    }
+		foreach(expectation; expectations) {
+			expectation(res);
+		}
 	}
 
 	/*
@@ -345,7 +345,7 @@ unittest {
 	request(router)
 		.put("/")
 		.send(data)
-    .expectHeaderContains("Content-Type", "application/json")
+		.expectHeaderContains("Content-Type", "application/json")
 		.expectStatusCode(200)
 		.end((TestResponse response) => {
 			assert(response.bodyJson["message"] == "success");
