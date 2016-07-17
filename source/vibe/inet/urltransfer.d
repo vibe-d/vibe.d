@@ -35,6 +35,7 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 
 	HTTPClient client;
 	static if (is(HTTPClient_ == HTTPClient)) client = client_;
+	bool usingPassedClient = client !is null;
 	if(!client) client = new HTTPClient();
 	if (!url.port)
 		url.port = url.defaultPort;
@@ -57,7 +58,7 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 					case HTTPStatus.OK:
 						done = true;
 						callback(res.bodyReader);
-						client.disconnect();
+						if(!usingPassedClient) client.disconnect();
 						break;
 					case HTTPStatus.movedPermanently:
 					case HTTPStatus.found:
