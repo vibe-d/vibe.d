@@ -15,6 +15,10 @@ import vibe.stream.memory;
 
 import std.conv, std.string, std.array;
 import std.stdio;
+import std.exception;
+
+alias TestExpectation = void delegate(TestResponse res);
+
 
 /**
 	A nicer sintax to create a TestRouter.
@@ -35,9 +39,7 @@ final class TestRouter
 		URLRouter router;
 		HTTPServerRequest preparedRequest;
 
-		string[string] expectHeaders;
-		string[string] expectHeadersContains;
-		int expectedStatusCode;
+		TestExpectation[] expectations;
 
 		string responseBody;
 	}
@@ -76,13 +78,13 @@ final class TestRouter
 		return request!(HTTPMethod.POST)(URL("http://localhost" ~ path));
 	}
 
-  /*
-    Mock a PUT request
-  */
-  TestRouter put(string path)
-  {
-    return request!(HTTPMethod.PUT)(URL("http://localhost" ~ path));
-  }
+	/*
+		Mock a PUT request
+	*/
+	TestRouter put(string path)
+	{
+		return request!(HTTPMethod.PUT)(URL("http://localhost" ~ path));
+	}
 
 	/*
 		Mock a PATCH request
@@ -123,9 +125,17 @@ final class TestRouter
 		Set an expected response header. This method will match the full text inside
 		the header value
 	*/
-	TestRouter expectHeader(string name, string value)
+	TestRouter expectHeader(string name, string value, string file = __FILE__, size_t line = __LINE__)
 	{
-		expectHeaders[name] = value;
+    void expectation(TestResponse res) {
+      enforce(name in res.headers, "Response header `" ~ name ~ "` is missing.", file, line);
+			enforce(res.headers[name] == value, "Response header `" ~ name ~
+        "` has an unexpected value. Expected `" ~ value ~ "` != `" ~
+        res.headers[name].to!string ~ "`", file, line);
+    }
+
+    expectations ~= &expectation;
+
 		return this;
 	}
 
@@ -133,18 +143,33 @@ final class TestRouter
 		Set an expected response header. This method will match a part inside the
 		header value
 	*/
-	TestRouter expectHeaderContains(string name, string value)
+	TestRouter expectHeaderContains(string name, string value, string file = __FILE__, size_t line = __LINE__)
 	{
-		expectHeadersContains[name] = value;
+    void expectation(TestResponse res) {
+      enforce(name in res.headers, "Response header `" ~ name ~ "` is missing.", file, line);
+			enforce(res.headers[name].indexOf(value) != -1, "Response header `" ~ name ~
+      "` has an unexpected value. Expected `" ~ value ~ "` not found in `" ~
+      res.headers[name].to!string ~ "`", file, line);
+    }
+
+    expectations ~= &expectation;
+
 		return this;
 	}
 
 	/*
 		Set an expected response code.
 	*/
-	TestRouter expectStatusCode(int code)
+	TestRouter expectStatusCode(int code, string file = __FILE__, size_t line = __LINE__)
 	{
-		expectedStatusCode = code;
+    void expectation(TestResponse res) {
+      enforce(code == res.statusCode, "Expected status code `" ~
+        code.to!string ~ "` not found. Got `" ~
+        res.statusCode.to!string ~ "` instead", file, line);
+    }
+
+    expectations ~= &expectation;
+
 		return this;
 	}
 
@@ -153,30 +178,9 @@ final class TestRouter
 	*/
 	private void performExpected(TestResponse res)
 	{
-
-		if (expectedStatusCode != 0)
-		{
-			assert(expectedStatusCode == res.statusCode,
-					"Expected status code `" ~ expectedStatusCode.to!string
-					~ "` not found. Got `" ~ res.statusCode.to!string ~ "` instead");
-		}
-
-		foreach (string key, value; expectHeaders)
-		{
-			assert(key in res.headers, "Response header `" ~ key ~ "` is missing.");
-			assert(res.headers[key] == value,
-					"Response header `" ~ key ~ "` has an unexpected value. Expected `"
-					~ value ~ "` != `" ~ res.headers[key].to!string ~ "`");
-		}
-
-		foreach (string key, value; expectHeadersContains)
-		{
-			assert(key in res.headers, "Response header `" ~ key ~ "` is missing.");
-			assert(res.headers[key].indexOf(value) != -1,
-					"Response header `" ~ key ~ "` has an unexpected value. Expected `"
-					~ value ~ "` not found in `" ~ res.headers[key].to!string ~ "`");
-		}
-
+    foreach(expectation; expectations) {
+      expectation(res);
+    }
 	}
 
 	/*
@@ -246,104 +250,104 @@ class TestResponse
 }
 
 version(unittest) {
-  void successResponse(HTTPServerRequest req, HTTPServerResponse res)
+	void successResponse(HTTPServerRequest req, HTTPServerResponse res)
 	{
-    res.statusCode = 200;
+		res.statusCode = 200;
 		res.writeBody("success");
 	}
 
-  void echoResponse(HTTPServerRequest req, HTTPServerResponse res)
+	void echoResponse(HTTPServerRequest req, HTTPServerResponse res)
 	{
-    res.statusCode = 200;
+		res.statusCode = 200;
 		res.writeJsonBody(req.json);
 	}
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.get("/", &successResponse);
+	auto router = new URLRouter();
+	router.get("/", &successResponse);
 
-  request(router)
-    .get("/")
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      assert(response.bodyString == "success");
-    });
+	request(router)
+		.get("/")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyString == "success");
+		});
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.get("/", &successResponse);
+	auto router = new URLRouter();
+	router.get("/", &successResponse);
 
-  request(router)
-    .get("/")
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      assert(response.bodyString == "success");
-    });
+	request(router)
+		.get("/")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyString == "success");
+		});
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.post("/", &successResponse);
+	auto router = new URLRouter();
+	router.post("/", &successResponse);
 
-  request(router)
-    .post("/")
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      assert(response.bodyString == "success");
-    });
+	request(router)
+		.post("/")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyString == "success");
+		});
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.delete_("/", &successResponse);
+	auto router = new URLRouter();
+	router.delete_("/", &successResponse);
 
-  request(router)
-    .delete_("/")
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      assert(response.bodyString == "success");
-    });
+	request(router)
+		.delete_("/")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyString == "success");
+		});
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.patch("/", &successResponse);
+	auto router = new URLRouter();
+	router.patch("/", &successResponse);
 
-  request(router)
-    .patch("/")
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      assert(response.bodyString == "success");
-    });
+	request(router)
+		.patch("/")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyString == "success");
+		});
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.put("/", &successResponse);
+	auto router = new URLRouter();
+	router.put("/", &successResponse);
 
-  request(router)
-    .put("/")
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      assert(response.bodyString == "success");
-    });
+	request(router)
+		.put("/")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyString == "success");
+		});
 }
 
 unittest {
-  auto router = new URLRouter();
-  router.put("/", &echoResponse);
+	auto router = new URLRouter();
+	router.put("/", &echoResponse);
 
-  Json data = Json.emptyObject;
-  data["message"] = "success";
+	Json data = Json.emptyObject;
+	data["message"] = "success";
 
-  request(router)
-    .put("/")
-    .send(data)
-    .expectStatusCode(200)
-    .end((TestResponse response) => {
-      writeln("===>", response.bodyString);
-      assert(response.bodyJson["message"] == "success");
-    });
+	request(router)
+		.put("/")
+		.send(data)
+    .expectHeaderContains("Content-Type", "application/json")
+		.expectStatusCode(200)
+		.end((TestResponse response) => {
+			assert(response.bodyJson["message"] == "success");
+		});
 }
