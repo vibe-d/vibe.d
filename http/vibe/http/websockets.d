@@ -1,7 +1,7 @@
 /**
 	Implements WebSocket support and fallbacks for older browsers.
 
-    Standards: $(LINK2 https://tools.ietf.org/html/rfc6455, RFC6455)
+	Standards: $(LINK2 https://tools.ietf.org/html/rfc6455, RFC6455)
 	Copyright: © 2012-2014 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Jan Krüger
@@ -311,7 +311,9 @@ final class WebSocket {
 		uint m_lastPingIndex;
 		bool m_pongReceived;
 		bool m_pongSkipped;
-        SystemRNG m_rng;
+		/// The entropy generator to use
+		/// If not null, it means this is a server socket.
+		SystemRNG m_rng;
 	}
 
 	/**
@@ -574,7 +576,7 @@ final class WebSocket {
 */
 final class OutgoingWebSocketMessage : OutputStream {
 	private {
-        SystemRNG m_rng;
+		SystemRNG m_rng;
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
@@ -586,7 +588,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 		assert(conn !is null);
 		m_conn = conn;
 		m_frameOpcode = frameOpcode;
-        m_rng = rng;
+		m_rng = rng;
 	}
 
 	void write(in ubyte[] bytes)
@@ -633,7 +635,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 */
 final class IncomingWebSocketMessage : InputStream {
 	private {
-        SystemRNG m_rng;
+		SystemRNG m_rng;
 		Stream m_conn;
 		Frame m_currentFrame;
 	}
@@ -642,8 +644,8 @@ final class IncomingWebSocketMessage : InputStream {
 	{
 		assert(conn !is null);
 		m_conn = conn;
-        m_rng = rng;
-        readFrame();
+		m_rng = rng;
+		readFrame();
 	}
 
 	@property bool empty() const { return m_currentFrame.payload.length == 0; }
@@ -722,8 +724,9 @@ final class IncomingWebSocketMessage : InputStream {
 	}
 }
 
+/// Magic string defined by the RFC for challenging the server during upgrade
+private static immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-private immutable s_webSocketGuid = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 /**
  * The Opcode is 4 bytes, as defined in Section 5.2
@@ -753,7 +756,7 @@ struct Frame {
 
 		auto rng = StreamOutputRange(stream);
 
-        ubyte[4] buff;
+		ubyte[4] buff;
 		ubyte firstByte = cast(ubyte)opcode;
 		if (fin) firstByte |= 0x80;
 		rng.put(firstByte);
@@ -766,17 +769,17 @@ struct Frame {
 		if( payload.length < 126 ) {
 			rng.put(std.bitmanip.nativeToBigEndian(cast(ubyte)(b1 | payload.length)));
 		} else if( payload.length <= 65536 ) {
-            buff[0] = cast(ubyte) (b1 | 126);
+			buff[0] = cast(ubyte) (b1 | 126);
 			rng.put(buff[0 .. 1]);
 			rng.put(std.bitmanip.nativeToBigEndian(cast(ushort)payload.length));
 		} else {
-            buff[0] = cast(ubyte) (b1 | 127);
+			buff[0] = cast(ubyte) (b1 | 127);
 			rng.put(buff[0 .. 1]);
 			rng.put(std.bitmanip.nativeToBigEndian(payload.length));
 		}
 
 		if (sys_rng) {
-            sys_rng.read(buff);
+			sys_rng.read(buff);
 			rng.put(buff);
 			for (size_t i = 0; i < payload.length; i++) {
 				payload[i] ^= buff[i % 4];
