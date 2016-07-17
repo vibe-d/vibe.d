@@ -405,7 +405,9 @@ final class WebSocket {
 	*/
 	void send(scope const(char)[] data)
 	{
-		send((scope message){ message.write(cast(const ubyte[])data); });
+		send(
+			(scope message) { message.write(cast(const ubyte[])data); },
+			FrameOpcode.text);
 	}
 
 	/**
@@ -423,7 +425,8 @@ final class WebSocket {
 		Sends a message using an output stream.
 		Throws: WebSocketException if the connection is closed.
 	*/
-	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
+	void send(scope void delegate(scope OutgoingWebSocketMessage) sender,
+			  FrameOpcode frameOpcode)
 	{
 		m_writeMutex.performLocked!({
 			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
@@ -431,6 +434,13 @@ final class WebSocket {
 			scope(exit) message.finalize();
 			sender(message);
 		});
+	}
+
+	/// Compatibility overload - will be removed soon.
+	deprecated("Call the overload which requires an explicit FrameOpcode.")
+	void send(scope void delegate(scope OutgoingWebSocketMessage) sender)
+	{
+		send(sender, FrameOpcode.text);
 	}
 
 	/**
