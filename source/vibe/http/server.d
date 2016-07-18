@@ -415,7 +415,7 @@ final class HTTPServerSettings {
 	Duration keepAliveTimeout;// = dur!"seconds"(10);
 
 	/// Maximum number of transferred bytes per request after which the connection is closed with
-	/// an error; not supported yet
+	/// an error
 	ulong maxRequestSize = 2097152;
 
 
