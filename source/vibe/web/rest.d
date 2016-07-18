@@ -7,7 +7,6 @@
 */
 module vibe.web.rest;
 
-public import vibe.internal.meta.funcattr : before, after;
 public import vibe.web.common;
 
 import vibe.core.log;
@@ -17,6 +16,7 @@ import vibe.http.common : HTTPMethod;
 import vibe.http.server : HTTPServerRequestDelegate;
 import vibe.http.status : isSuccessCode;
 import vibe.internal.meta.uda;
+import vibe.internal.meta.funcattr;
 import vibe.inet.url;
 import vibe.inet.message : InetHeaderMap;
 import vibe.web.internal.rest.common : RestInterface, Route, SubInterfaceType;
@@ -880,6 +880,92 @@ unittest {
 	static assert (!is(typeof(A.init.b[1].c[2].testB())));
 }
 
+/** Allows processing the server request/response before the handler method is called.
+
+	Note that this attribute is only used by `registerRestInterface`, but not
+	by the client generators. This attribute expects the name of a parameter that
+	will receive its return value.
+
+	Writing to the response body from within the specified hander function
+	causes any further processing of the request to be skipped. In particular,
+	the route handler method will not be called.
+
+	Note:
+		The example shows the drawback of this attribute. It generally is a
+		leaky abstraction that propagates to the base interface. For this
+		reason the use of this attribute is not recommended, unless there is
+		no suitable alternative.
+*/
+alias before = vibe.internal.meta.funcattr.before;
+
+///
+unittest {
+	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+
+	interface MyService {
+		long getHeaderCount(size_t foo = 0);
+	}
+
+	size_t handler(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		return req.headers.length;
+	}
+
+	class MyServiceImpl : MyService {
+		// the "foo" parameter will receive the number of request headers
+		@before!handler("foo")
+		long getHeaderCount(size_t foo)
+		{
+			return foo;
+		}
+	}
+
+	void test(URLRouter router)
+	{
+		router.registerRestInterface(new MyServiceImpl);
+	}
+}
+
+
+/** Allows processing the return value of a handler method and the request/response objects.
+
+	The value returned by the REST API will be the value returned by the last
+	`@after` handler, which allows to post process the results of the handler
+	method.
+
+	Writing to the response body from within the specified handler function
+	causes any further processing of the request ot be skipped, including
+	any other `@after` annotations and writing the result value.
+*/
+alias after = vibe.internal.meta.funcattr.after;
+
+///
+unittest {
+	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
+	
+	interface MyService {
+		long getMagic();
+	}
+
+	long handler(long ret, HTTPServerRequest req, HTTPServerResponse res)
+	{
+		return ret * 2;
+	}
+
+	class MyServiceImpl : MyService{
+		// the result reported by the REST API will be 42
+		@after!handler
+		long getMagic()
+		{
+			return 21;
+		}
+	}
+
+	void test(URLRouter router)
+	{
+		router.registerRestInterface(new MyServiceImpl);
+	}
+}
 
 /**
  * Generate an handler that will wrap the server's method
