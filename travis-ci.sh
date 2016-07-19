@@ -20,7 +20,9 @@ if [ ${BUILD_EXAMPLE=1} -eq 1 ]; then
 fi
 if [ ${RUN_TEST=1} -eq 1 ]; then
     for ex in `\ls -1 tests/`; do
-        echo "[INFO] Running test $ex"
-        (cd tests/$ex && dub --compiler=$DC && dub clean)
+        if [ -r test/$ex/dub.json ] || [ -r test/$ex/dub.sdl ]; then
+            echo "[INFO] Running test $ex"
+            (cd tests/$ex && dub --compiler=$DC && dub clean)
+        fi
     done
 fi
