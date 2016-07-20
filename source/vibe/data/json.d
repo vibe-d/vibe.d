@@ -502,7 +502,7 @@ struct Json {
 				return cast(T)m_int;
 			}
 		}
-		else static assert("JSON can only be cast to (bool, long, std.bigint.BigInt, double, string, Json[] or Json[string]. Not "~T.stringof~".");
+		else static assert(0, "JSON can only be cast to (bool, long, std.bigint.BigInt, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 
 	/**
@@ -623,7 +623,7 @@ struct Json {
 				case Type.array: return BigInt(0);
 				case Type.object: return BigInt(0);
 			}
-		} else static assert("JSON can only be cast to (bool, long, std.bigint.BigInt, double, string, Json[] or Json[string]. Not "~T.stringof~".");
+		} else static assert(0, "JSON can only be cast to (bool, long, std.bigint.BigInt, double, string, Json[] or Json[string]. Not "~T.stringof~".");
 	}
 
 	/**
@@ -652,7 +652,7 @@ struct Json {
 			else if( m_type == Type.bigInt ) mixin("return Json("~op~"m_bigInt);");
 			else if( m_type == Type.float_ ) mixin("return Json("~op~"m_float);");
 			else assert(false);
-		} else static assert("Unsupported operator '"~op~"' for type JSON.");
+		} else static assert(0, "Unsupported operator '"~op~"' for type JSON.");
 	}
 	/**
 		Performs binary operations between JSON values.
@@ -715,7 +715,7 @@ struct Json {
 			if( m_type == Type.string ) return Json(m_string ~ other.m_string);
 			else if (m_type == Type.array) return Json(m_array ~ other.m_array);
 			else assert(false);
-		} else static assert("Unsupported operator '"~op~"' for type JSON.");
+		} else static assert(0, "Unsupported operator '"~op~"' for type JSON.");
 	}
 	/// ditto
 	Json opBinary(string op)(Json other)
@@ -726,7 +726,7 @@ struct Json {
 			if( m_type == Type.string ) return Json(m_string ~ other.m_string);
 			else if( m_type == Type.array ) return Json(m_array ~ other.m_array);
 			else assert(false);
-		} else static assert("Unsupported operator '"~op~"' for type JSON.");
+		} else static assert(0, "Unsupported operator '"~op~"' for type JSON.");
 	}
 	/// ditto
 	void opOpAssign(string op)(Json other)
@@ -765,7 +765,7 @@ struct Json {
 				if (other.m_type == Type.array) m_array ~= other.m_array;
 				else appendArrayElement(other);
 			} else enforceJson(false, "'~=' only allowed for string and array types, not "~.to!string(m_type)~".");
-		} else static assert("Unsupported operator '"~op~"=' for type JSON.");
+		} else static assert(0, "Unsupported operator '"~op~"=' for type JSON.");
 	}
 	/// ditto
 	void opOpAssign(string op, T)(T other)
