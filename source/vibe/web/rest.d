@@ -942,7 +942,7 @@ alias after = vibe.internal.meta.funcattr.after;
 ///
 unittest {
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
-	
+
 	interface MyService {
 		long getMagic();
 	}
@@ -1047,8 +1047,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				if (auto pv = fieldname in req.query)
 					v = fromRestString!PT(*pv);
 			} else static if (sparam.kind == ParameterKind.body_) {
-				if (auto pv = fieldname in req.json)
-					v = deserializeJson!PT(*pv);
+				if (auto pv = fieldname in req.json) {
+					try
+						v = deserializeJson!PT(*pv);
+					catch (JSONException e)
+						enforceBadRequest(false, e.msg);
+                }
 			} else static if (sparam.kind == ParameterKind.header) {
 				if (auto pv = fieldname in req.headers)
 					v = fromRestString!PT(*pv);
@@ -1506,7 +1510,39 @@ private {
 			else return deserializeJson!T(parseJson(value));
 		} catch (ConvException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
+		} catch (JSONException e) {
+			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		}
+	}
+
+	// Converting from invalid JSON string to aggregate should throw bad request
+	unittest {
+		import vibe.web.common : HTTPStatusException, HTTPStatus;
+
+		void assertHTTPStatus(E)(lazy E expression, HTTPStatus expectedStatus,
+			string file = __FILE__, size_t line = __LINE__)
+		{
+			import core.exception : AssertError;
+			import std.format : format;
+
+			try
+				expression();
+			catch (HTTPStatusException e)
+			{
+				if (e.status != expectedStatus)
+					throw new AssertError(format("assertHTTPStatus failed: " ~
+						"status expected %d but was %d", expectedStatus, e.status),
+						file, line);
+
+				return;
+			}
+
+			throw new AssertError("assertHTTPStatus failed: No " ~
+				"'HTTPStatusException' exception was thrown", file, line);
+		}
+
+		struct Foo { int bar; }
+		assertHTTPStatus(fromRestString!(Foo)("foo"), HTTPStatus.badRequest);
 	}
 }
 
