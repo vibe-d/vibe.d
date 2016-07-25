@@ -135,7 +135,6 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS r
 */
 @property HTTPServerRequestDelegateS staticTemplate(string template_file)()
 {
-	import vibe.templ.diet;
 	return (scope HTTPServerRequest req, scope HTTPServerResponse res){
 		res.render!(template_file, req);
 	};
@@ -206,9 +205,16 @@ void setVibeDistHost(string host, ushort port)
 */
 @property void render(string template_file, ALIASES...)(HTTPServerResponse res)
 {
-	import vibe.templ.diet;
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
-	compileDietFile!(template_file, ALIASES)(res.bodyWriter);
+	version (Have_diet_ng) {
+		import vibe.stream.wrapper : StreamOutputRange;
+		import diet.html : compileHTMLDietFile;
+		auto output = StreamOutputRange(res.bodyWriter);
+		compileHTMLDietFile!(template_file, ALIASES)(output);
+	} else {
+		import vibe.templ.diet;
+		compileDietFile!(template_file, ALIASES)(res.bodyWriter);
+	}
 }
 
 
