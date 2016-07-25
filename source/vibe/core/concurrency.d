@@ -1220,7 +1220,12 @@ static if (newStdConcurrency) {
 		import vibe.core.sync;
 
 		override void start(void delegate() op) { op(); }
-		override void spawn(void delegate() op) { runTask(op); }
+		override void spawn(void delegate() op) {
+			static void wrapper(shared(void delegate()) op) {
+				(cast(void delegate())op)();
+			}
+			runWorkerTask(&wrapper, cast(shared)op);
+		}
 		override void yield() {}
 		override @property ref ThreadInfo thisInfo() { return Task.getThis().tidInfo; }
 		override TaskCondition newCondition(Mutex m) {
