@@ -308,7 +308,7 @@ unittest {
 	void generateJSClientImpl()
 	{
 		import std.array : appender;
-		
+
 		auto app = appender!string;
 		generateRestJSClient!MyAPI(app);
 		writeFileUTF8(Path("myapi.js"), app.data);
@@ -428,7 +428,7 @@ class RestInterfaceClient(I) : I
 					 ref InetHeaderMap optReturnHdrs) const
 		{
 			auto path = URL(m_intf.baseURL).pathString;
-			
+
 			if (name.length)
 			{
 				if (path.length && path[$ - 1] == '/' && name[0] == '/')
@@ -942,7 +942,7 @@ alias after = vibe.internal.meta.funcattr.after;
 ///
 unittest {
 	import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
-	
+
 	interface MyService {
 		long getMagic();
 	}
@@ -1047,8 +1047,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				if (auto pv = fieldname in req.query)
 					v = fromRestString!PT(*pv);
 			} else static if (sparam.kind == ParameterKind.body_) {
-				if (auto pv = fieldname in req.json)
-					v = deserializeJson!PT(*pv);
+				if (auto pv = fieldname in req.json) {
+					try
+						v = deserializeJson!PT(*pv);
+					catch (JSONException e)
+						enforceBadRequest(false, e.msg);
+                }
 			} else static if (sparam.kind == ParameterKind.header) {
 				if (auto pv = fieldname in req.headers)
 					v = fromRestString!PT(*pv);
@@ -1182,7 +1186,7 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 			settings.allowedOrigins.length != 0 &&
 			!settings.allowedOrigins.any!(org => org.sicmp((*origin)) == 0))
 			return;
-		
+
 		auto method = "Access-Control-Request-Method" in req.headers;
 		if (method is null)
 			return;
@@ -1195,7 +1199,7 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 		res.headers["Access-Control-Allow-Origin"] = *origin;
 
 		// there is no way to know if the specific resource supports credentials
-		// (either cookies, HTTP authentication, or client-side SSL certificates), 
+		// (either cookies, HTTP authentication, or client-side SSL certificates),
 		// so we always assume it does
 		res.headers["Access-Control-Allow-Credentials"] = "true";
 		res.headers["Access-Control-Max-Age"] = "1728000";
@@ -1211,12 +1215,12 @@ private HTTPServerRequestDelegate optionsMethodHandler(RouteRange)(RouteRange ro
 	{
 		// since this is a OPTIONS request, we have to return the ALLOW headers to tell which methods we have
 		res.headers["Allow"] = allow;
-		
+
 		// handle CORS preflighted requests
 		handlePreflightedCors(req,res,methods,settings);
 
 		// NOTE: besides just returning the allowed methods and handling CORS preflighted requests,
-		// this would be a nice place to describe what kind of resources are on this route, 
+		// this would be a nice place to describe what kind of resources are on this route,
 		// the params each accepts, the headers, etc... think WSDL but then for REST.
 		res.writeBody("");
 	}
@@ -1230,7 +1234,7 @@ private string generateRestClientMethods(I)()
 	import std.traits : fullyQualifiedName, isInstanceOf;
 
 	alias Info = RestInterface!I;
-	
+
 	string ret = q{
 		import vibe.internal.meta.codegen : CloneFunction;
 	};
@@ -1506,7 +1510,39 @@ private {
 			else return deserializeJson!T(parseJson(value));
 		} catch (ConvException e) {
 			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
+		} catch (JSONException e) {
+			throw new HTTPStatusException(HTTPStatus.badRequest, e.msg);
 		}
+	}
+
+	// Converting from invalid JSON string to aggregate should throw bad request
+	unittest {
+		import vibe.web.common : HTTPStatusException, HTTPStatus;
+
+		void assertHTTPStatus(E)(lazy E expression, HTTPStatus expectedStatus,
+			string file = __FILE__, size_t line = __LINE__)
+		{
+			import core.exception : AssertError;
+			import std.format : format;
+
+			try
+				expression();
+			catch (HTTPStatusException e)
+			{
+				if (e.status != expectedStatus)
+					throw new AssertError(format("assertHTTPStatus failed: " ~
+						"status expected %d but was %d", expectedStatus, e.status),
+						file, line);
+
+				return;
+			}
+
+			throw new AssertError("assertHTTPStatus failed: No " ~
+				"'HTTPStatusException' exception was thrown", file, line);
+		}
+
+		struct Foo { int bar; }
+		assertHTTPStatus(fromRestString!(Foo)("foo"), HTTPStatus.badRequest);
 	}
 }
 
