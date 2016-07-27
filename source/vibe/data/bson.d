@@ -610,6 +610,50 @@ struct Bson {
 		assert(value[2] == Bson("foo"));
 	}
 
+	/** Removes an entry from a BSON obect.
+
+		If the key doesn't exit, this function will be a no-op.
+	*/
+	void remove(string key)
+	{
+		checkType(Type.object);
+		auto d = m_data[4 .. $];
+		while (d.length > 0) {
+			size_t start_remainder = d.length;
+			auto tp = cast(Type)d[0];
+			if (tp == Type.end) break;
+			d = d[1 .. $];
+			auto ekey = skipCString(d);
+			auto evalue = Bson(tp, d);
+			d = d[evalue.data.length .. $];
+
+			if (ekey == key) {
+				m_data = m_data[0 .. $-start_remainder] ~ d;
+				break;
+			}
+		}
+	}
+
+	unittest {
+		auto o = Bson.emptyObject;
+		o["a"] = Bson(1);
+		o["b"] = Bson(2);
+		o["c"] = Bson(3);
+		assert(o.length == 3);
+		o.remove("b");
+		assert(o.length == 2);
+		assert(o["a"] == Bson(1));
+		assert(o["c"] == Bson(3));
+		o.remove("c");
+		assert(o.length == 1);
+		assert(o["a"] == Bson(1));
+		o.remove("c");
+		assert(o.length == 1);
+		assert(o["a"] == Bson(1));
+		o.remove("a");
+		assert(o.length == 0);
+	}
+
 	/**
 		Allows foreach iterating over BSON objects and arrays.
 	*/
@@ -895,7 +939,6 @@ unittest {
 	assert(c.opt!int(12) == 12);
 	assert(c.opt!(Bson[])(null).length == 0);
 }
-
 
 
 /**
