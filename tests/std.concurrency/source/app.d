@@ -11,16 +11,10 @@ shared watchdog_count = 0;
 
 shared static this()
 {
-	import vibe.internal.newconcurrency;
-	if (!newStdConcurrency) {
-		logInfo("std.concurrency integration not enabled for this compiled version. Skipping test.");
-		exit(0);
-	}
-
 	t1 = spawn({
 		// ensure that asynchronous operations run in parallel to receive()
 		int wc = 0;
-		runTask({ while (true) { sleep(250.msecs); wc++; logInfo("Watchdog receiver"); } });
+		runTask({ while (true) { sleep(250.msecs); wc++; logInfo("Watchdog receiver %s", wc); } });
 
 		bool finished = false;
 		try while (!finished) {
