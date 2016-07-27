@@ -18,11 +18,9 @@ import std.variant;
 import std.string;
 import vibe.core.task;
 import vibe.utils.memory;
-import vibe.internal.newconcurrency;
 import vibe.internal.meta.traits : StripHeadConst;
 
-static if (newStdConcurrency) public import std.concurrency;
-else public import std.concurrency : MessageMismatch, OwnerTerminated, LinkTerminated, PriorityMessageException, MailboxFull, OnCrowding;
+public import std.concurrency;
 
 private extern (C) pure nothrow void _d_monitorenter(Object h);
 private extern (C) pure nothrow void _d_monitorexit(Object h);
@@ -1208,83 +1206,67 @@ unittest {
 /******************************************************************************/
 /******************************************************************************/
 
-static if (newStdConcurrency) {
+enum ConcurrencyPrimitive {
+	task,       // Task run in the caller's thread (`runTask`)
+	workerTask, // Task run in the worker thread pool (`runWorkerTask`)
+	thread      // Separate thread
+}
 
-	enum ConcurrencyPrimitive {
-		task,       // Task run in the caller's thread (`runTask`)
-		workerTask, // Task run in the worker thread pool (`runWorkerTask`)
-		thread      // Separate thread
-	}
+/** Sets the concurrency primitive to use for `śtd.concurrency.spawn()`.
 
-	/** Sets the concurrency primitive to use for `śtd.concurrency.spawn()`.
+	By default, `spawn()` will start a thread for each call, mimicking the
+	default behavior of `std.concurrency`.
+*/
+void setConcurrencyPrimitive(ConcurrencyPrimitive primitive)
+{
+	import core.atomic : atomicStore;
+	atomicStore(st_concurrencyPrimitive, primitive);
+}
 
-		By default, `spawn()` will start a thread for each call, mimicking the
-		default behavior of `std.concurrency`.
-	*/
-	void setConcurrencyPrimitive(ConcurrencyPrimitive primitive)
+private shared ConcurrencyPrimitive st_concurrencyPrimitive = ConcurrencyPrimitive.thread;
+
+void send(ARGS...)(Task task, ARGS args) { std.concurrency.send(task.tidInfo.ident, args); }
+void send(ARGS...)(Tid tid, ARGS args) { std.concurrency.send(tid, args); }
+void prioritySend(ARGS...)(Task task, ARGS args) { std.concurrency.prioritySend(task.tidInfo.ident, args); }
+void prioritySend(ARGS...)(Tid tid, ARGS args) { std.concurrency.prioritySend(tid, args); }
+
+package class VibedScheduler : Scheduler {
+	import core.sync.mutex;
+	import vibe.core.core;
+	import vibe.core.sync;
+
+	override void start(void delegate() op) { op(); }
+	override void spawn(void delegate() op)
 	{
-		import core.atomic : atomicStore;
-		atomicStore(st_concurrencyPrimitive, primitive);
-	}
+		import core.thread : Thread;
 
-	private shared ConcurrencyPrimitive st_concurrencyPrimitive = ConcurrencyPrimitive.thread;
-
-	void send(ARGS...)(Task task, ARGS args) { std.concurrency.send(task.tidInfo.ident, args); }
-	void send(ARGS...)(Tid tid, ARGS args) { std.concurrency.send(tid, args); }
-	void prioritySend(ARGS...)(Task task, ARGS args) { std.concurrency.prioritySend(task.tidInfo.ident, args); }
-	void prioritySend(ARGS...)(Tid tid, ARGS args) { std.concurrency.prioritySend(tid, args); }
-
-	package class VibedScheduler : Scheduler {
-		import core.sync.mutex;
-		import vibe.core.core;
-		import vibe.core.sync;
-
-		override void start(void delegate() op) { op(); }
-		override void spawn(void delegate() op)
-		{
-			import core.thread : Thread;
-
-			final switch (st_concurrencyPrimitive) with (ConcurrencyPrimitive) {
-				case task: runTask(op); break;
-				case workerTask: 
-					static void wrapper(shared(void delegate()) op) {
-						(cast(void delegate())op)();
-					}
-					runWorkerTask(&wrapper, cast(shared)op);
-					break;
-				case thread:
-					auto t = new Thread(op);
-					t.start();
-					break;
-			}
-		}
-		override void yield() {}
-		override @property ref ThreadInfo thisInfo() { return Task.getThis().tidInfo; }
-		override TaskCondition newCondition(Mutex m)
-		{
-			scope (failure) assert(false);
-			version (VibeLibasyncDriver) {
-				import vibe.core.drivers.libasync;
-				if (LibasyncDriver.isControlThread)
-					return null;
-			}
-			setupDriver();
-			return new TaskCondition(m);
+		final switch (st_concurrencyPrimitive) with (ConcurrencyPrimitive) {
+			case task: runTask(op); break;
+			case workerTask: 
+				static void wrapper(shared(void delegate()) op) {
+					(cast(void delegate())op)();
+				}
+				runWorkerTask(&wrapper, cast(shared)op);
+				break;
+			case thread:
+				auto t = new Thread(op);
+				t.start();
+				break;
 		}
 	}
-} else {
-	alias Tid = Task;
-
-	/// Returns the Tid of the caller (same as Task.getThis())
-	@property Tid thisTid() { return Task.getThis(); }
-
-	void send(ARGS...)(Tid tid, ARGS args) { sendCompat(tid, args); }
-	void prioritySend(ARGS...)(Tid tid, ARGS args) { prioritySendCompat(tid, args); }
-	void receive(OPS...)(OPS ops) { receiveCompat(ops); }
-	auto receiveOnly(ARGS...)() { return receiveOnlyCompat!ARGS(); }
-	bool receiveTimeout(OPS...)(Duration timeout, OPS ops) { return receiveTimeoutCompat(timeout, ops); }
-	void setMaxMailboxSize(Tid tid, size_t messages, OnCrowding on_crowding) { setMaxMailboxSizeCompat(tid, messages, on_crowding); }
-	void setMaxMailboxSize(Tid tid, size_t messages, bool function(Tid) on_crowding) { setMaxMailboxSizeCompat(tid, messages, on_crowding); }
+	override void yield() {}
+	override @property ref ThreadInfo thisInfo() { return Task.getThis().tidInfo; }
+	override TaskCondition newCondition(Mutex m)
+	{
+		scope (failure) assert(false);
+		version (VibeLibasyncDriver) {
+			import vibe.core.drivers.libasync;
+			if (LibasyncDriver.isControlThread)
+				return null;
+		}
+		setupDriver();
+		return new TaskCondition(m);
+	}
 }
 
 

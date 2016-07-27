@@ -12,7 +12,6 @@ public import vibe.core.driver;
 import vibe.core.args;
 import vibe.core.concurrency;
 import vibe.core.log;
-import vibe.internal.newconcurrency;
 import vibe.utils.array;
 import std.algorithm;
 import std.conv;
@@ -1105,10 +1104,8 @@ private class CoreTask : TaskFiber {
 					m_running = true;
 					scope(exit) m_running = false;
 
-					static if (newStdConcurrency) {
-						static import std.concurrency;
-						std.concurrency.thisTid; // force creation of a new Tid
-					}
+					static import std.concurrency;
+					std.concurrency.thisTid; // force creation of a new Tid
 
 					debug if (s_taskEventCallback) s_taskEventCallback(TaskEvent.start, handle);
 					if (!s_eventLoopRunning) {
@@ -1125,8 +1122,7 @@ private class CoreTask : TaskFiber {
 					logDebug("Full error: %s", e.toString().sanitize());
 				}
 
-				static if (newStdConcurrency)
-					this.tidInfo.ident = Tid.init; // reset Tid
+				this.tidInfo.ident = Tid.init; // reset Tid
 
 				// check for any unhandled deferred exceptions
 				if (m_exception !is null) {
@@ -1562,10 +1558,9 @@ shared static this()
 		readOption("gid|group", &s_privilegeLoweringGroupName, "Sets the group name or id used for privilege lowering.");
 	}
 
-	static if (newStdConcurrency) {
-		static import std.concurrency;
-		std.concurrency.scheduler = new VibedScheduler;
-	}
+	// set up vibe.d compatibility for std.concurrency
+	static import std.concurrency;
+	std.concurrency.scheduler = new VibedScheduler;
 }
 
 shared static ~this()

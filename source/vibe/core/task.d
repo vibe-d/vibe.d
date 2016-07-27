@@ -8,7 +8,6 @@
 module vibe.core.task;
 
 import vibe.core.sync;
-import vibe.internal.newconcurrency : newStdConcurrency;
 import vibe.utils.array;
 
 import core.thread;
@@ -28,10 +27,8 @@ struct Task {
 	private {
 		shared(TaskFiber) m_fiber;
 		size_t m_taskCounter;
-		static if (newStdConcurrency) {
-			import std.concurrency : ThreadInfo, Tid;
-			static ThreadInfo s_tidInfo;
-		}
+		import std.concurrency : ThreadInfo, Tid;
+		static ThreadInfo s_tidInfo;
 	}
 
 	private this(TaskFiber fiber, size_t task_counter)
@@ -74,13 +71,9 @@ struct Task {
 			return this.fiber.m_running && this.fiber.m_taskCounter == m_taskCounter;
 		}
 
-		static if (newStdConcurrency) {
-			// FIXME: this is not thread safe!
-			@property ref ThreadInfo tidInfo() { return m_fiber ? fiber.tidInfo : s_tidInfo; }
-			@property Tid tid() { return tidInfo.ident; }
-		} else {
-			@property Task tid() { return this; }
-		}
+		// FIXME: this is not thread safe!
+		@property ref ThreadInfo tidInfo() { return m_fiber ? fiber.tidInfo : s_tidInfo; }
+		@property Tid tid() { return tidInfo.ident; }
 	}
 
 	/// Reserved for internal use!
@@ -107,11 +100,9 @@ struct Task {
 */
 class TaskFiber : Fiber {
 	private {
+		import std.concurrency : ThreadInfo;
 		Thread m_thread;
-		static if (newStdConcurrency) {
-			import std.concurrency : ThreadInfo;
-			ThreadInfo m_tidInfo;
-		}
+		ThreadInfo m_tidInfo;
 		MessageQueue m_messageQueue;
 	}
 
@@ -140,7 +131,7 @@ class TaskFiber : Fiber {
 	/// Reserved for internal use!
 	@property inout(MessageQueue) messageQueue() inout { return m_messageQueue; }
 
-	static if (newStdConcurrency) @property ref inout(ThreadInfo) tidInfo() inout nothrow { return m_tidInfo; }
+	@property ref inout(ThreadInfo) tidInfo() inout nothrow { return m_tidInfo; }
 
 	/** Blocks until the task has ended.
 	*/
