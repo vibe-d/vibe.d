@@ -96,7 +96,7 @@ unittest
 	Returns:
 		internal attribute struct that embeds supplied information
 */
-auto after(alias Function)()
+@property auto after(alias Function)()
 {
 	return OutputAttribute!Function();
 }
