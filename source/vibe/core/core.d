@@ -1314,7 +1314,7 @@ private class VibeDriverCore : DriverCore {
 				return;
 			}
 		}
-		if (!s_yieldedTasks.empty) logDebug("Exiting from idle processing although there are still yielded tasks");
+		if (!s_yieldedTasks.empty) logDebug("Exiting from idle processing although there are still yielded tasks (exit=%s)", getExitFlag());
 
 		if (Thread.getThis() is st_mainThread) {
 			if (!m_ignoreIdleForGC && m_gcTimer) {
@@ -1332,7 +1332,7 @@ private class VibeDriverCore : DriverCore {
 	}
 
 	private void resumeYieldedTasks()
-	{
+	nothrow {
 		for (auto limit = s_yieldedTasks.length; limit > 0 && !s_yieldedTasks.empty; limit--) {
 			auto tf = s_yieldedTasks.front;
 			s_yieldedTasks.popFront();
@@ -1351,6 +1351,7 @@ private class VibeDriverCore : DriverCore {
 		} else {
 			assert(!s_eventLoopRunning, "Event processing outside of a fiber should only happen before the event loop is running!?");
 			m_eventException = null;
+			() @trusted nothrow { resumeYieldedTasks(); } (); // let tasks that yielded because they were started outside of an event loop
 			try if (auto err = () @trusted { return getEventDriver().runEventLoopOnce(); } ()) {
 				logError("Error running event loop: %d", err);
 				assert(err != 1, "No events registered, exiting event loop.");
