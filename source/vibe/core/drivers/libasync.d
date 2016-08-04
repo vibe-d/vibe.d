@@ -1309,7 +1309,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		logTrace("%s", "Acquire Reader");
 		assert(!amReadOwner());
 		m_settings.reader.task = Task.getThis();
-		logTrace("Task waiting in: " ~ (cast(void*)cast(LibasyncTCPConnection)this).to!string);
+		logTrace("Task waiting in: %p", this);
 		m_settings.reader.isWaiting = true;
 	}
 
