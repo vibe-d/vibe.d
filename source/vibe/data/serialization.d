@@ -67,6 +67,8 @@
 
 			// serialization
 			auto getSerializedResult();
+			void beginWriteDocument(TypeTraits)();
+			void endWriteDocument(TypeTraits)();
 			void beginWriteDictionary(T)();
 			void endWriteDictionary(T)();
 			void beginWriteDictionaryEntry(T)(string name);
@@ -169,7 +171,11 @@ auto serializeWithPolicy(Serializer, alias Policy, T, ARGS...)(T value, ARGS arg
 /// ditto
 void serializeWithPolicy(Serializer, alias Policy, T)(ref Serializer serializer, T value)
 {
+	static if (is(typeof(serializer.beginWriteDocument!T())))
+		serializer.beginWriteDocument!T();
 	serializeValueImpl!(Serializer, Policy).serializeValue!T(serializer, value);
+	static if (is(typeof(serializer.endWriteDocument!T())))
+		serializer.endWriteDocument!T();
 }
 ///
 version (unittest)
