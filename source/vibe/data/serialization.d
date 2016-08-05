@@ -80,8 +80,12 @@
 			void writeValue(TypeTraits, T)(T value);
 
 			// deserialization
-			void readDictionary(ElementTypeTraits)(scope void delegate(string) entry_callback);
-			void readArray(ElementTypeTraits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback);
+			void readDictionary(TypeTraits, alias on_entry)();
+			void beginReadDictionaryEntry(ElementTypeTraits)(string);
+			void endReadDictionaryEntry(ElementTypeTraits)(string);
+			void readArray(TypeTraits, alias on_size, alias on_entry)();
+			void beginReadArrayEntry(ElementTypeTraits)(size_t index);
+			void endReadArrayEntry(ElementTypeTraits)(size_t index);
 			T readValue(TypeTraits, T)();
 			bool tryReadNull(TypeTraits)();
 		}
@@ -508,24 +512,33 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			return ser.readValue!(Traits, T)();
 		} else static if (isStaticArray!T) {
 			alias TV = typeof(T.init[0]);
+			alias STraits = SubTraits!(Traits, TV);
 			T ret;
 			size_t i = 0;
 			ser.readArray!Traits((sz) { assert(sz == 0 || sz == T.length); }, {
 				assert(i < T.length);
-				ret[i++] = ser.deserializeValue!(TV, ATTRIBUTES);
+				ser.beginReadArrayEntry!STraits(i);
+				ret[i] = ser.deserializeValue!(TV, ATTRIBUTES);
+				ser.endReadArrayEntry!STraits(i);
+				i++;
 			});
 			return ret;
 		} else static if (isDynamicArray!T) {
 			alias TV = typeof(T.init[0]);
+			alias STraits = SubTraits!(Traits, TV);
 			//auto ret = appender!T();
 			T ret; // Cannot use appender because of DMD BUG 10690/10859/11357
 			ser.readArray!Traits((sz) { ret.reserve(sz); }, () {
+				size_t i = ret.length;
+				ser.beginReadArrayEntry!STraits(i);
 				ret ~= ser.deserializeValue!(TV, ATTRIBUTES);
+				ser.endReadArrayEntry!STraits(i);
 			});
 			return ret;//cast(T)ret.data;
 		} else static if (isAssociativeArray!T) {
 			alias TK = KeyType!T;
 			alias TV = ValueType!T;
+			alias STraits = SubTraits!(Traits, TV);
 
 			T ret;
 			ser.readDictionary!Traits((name) {
@@ -534,16 +547,23 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				else static if (is(TK : real) || is(TK : long) || is(TK == enum)) key = name.to!TK;
 				else static if (isStringSerializable!TK) key = TK.fromString(name);
 				else static assert(false, "Associative array keys must be strings, numbers, enums, or have toString/fromString methods.");
+				ser.beginReadDictionaryEntry!STraits(name);
 				ret[key] = ser.deserializeValue!(TV, ATTRIBUTES);
+				ser.endReadDictionaryEntry!STraits(name);
 			});
 			return ret;
 		} else static if (isInstanceOf!(Nullable, T)) {
 			if (ser.tryReadNull!Traits()) return T.init;
 			return T(ser.deserializeValue!(typeof(T.init.get()), ATTRIBUTES));
 		} else static if (__VERSION__ >= 2067 && is(T == BitFlags!E, E)) {
+			alias STraits = SubTraits!(Traits, E);
 			T ret;
+			size_t i = 0;
 			ser.readArray!Traits((sz) {}, {
+				ser.beginReadArrayEntry!STraits(i);
 				ret |= ser.deserializeValue!(E, ATTRIBUTES);
+				ser.endReadArrayEntry!STraits(i);
+				i++;
 			});
 			return ret;
 		} else static if (isCustomSerializable!T) {
@@ -572,11 +592,14 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 							foreach (i, mname; SerializableFields!(T, Policy)) {
 								alias TM = typeof(__traits(getMember, ret, mname));
 								alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
+								alias STraits = SubTraits!(Traits, TM, TA);
 								case i:
 									static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
 										if (ser.tryReadNull!SubTraits()) return;
 									set[i] = true;
+									ser.beginReadArrayEntry!STraits(i);
 									__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
+									ser.endReadArrayEntry!STraits(i);
 									break;
 							}
 						}
@@ -592,13 +615,15 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 							foreach (i, mname; SerializableFields!(T, Policy)) {
 								alias TM = typeof(__traits(getMember, ret, mname));
 								alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
-								enum fname = getPolicyAttribute!(T, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 								alias STraits = SubTraits!(Traits, TM, TA);
+								enum fname = getPolicyAttribute!(T, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 								case fname:
 									static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
 										if (ser.tryReadNull!STraits()) return;
 									set[i] = true;
+									ser.beginReadDictionaryEntry!STraits(fname);
 									__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
+									ser.endReadDictionaryEntry!STraits(fname);
 									break;
 							}
 						}
@@ -1143,6 +1168,9 @@ version (unittest) {
 			skip("}D("~Traits.Type.mangleof~")");
 		}
 
+		void beginReadDictionaryEntry(Traits)(string name) {}
+		void endReadDictionaryEntry(Traits)(string name) {}
+
 		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 		{
 			skip("A("~Traits.Type.mangleof~")[");
@@ -1169,6 +1197,9 @@ version (unittest) {
 
 			assert(i == cnt);
 		}
+
+		void beginReadArrayEntry(Traits)(size_t index) {}
+		void endReadArrayEntry(Traits)(size_t index) {}
 
 		T readValue(Traits, T)()
 		{

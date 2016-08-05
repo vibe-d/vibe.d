@@ -1439,6 +1439,9 @@ struct BsonSerializer {
 		m_inputData = old;
 	}
 
+	void beginReadDictionaryEntry(Traits)(string name) {}
+	void endReadDictionaryEntry(Traits)(string name) {}
+
 	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
 		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.to!string());
@@ -1449,6 +1452,9 @@ struct BsonSerializer {
 		}
 		m_inputData = old;
 	}
+
+	void beginReadArrayEntry(Traits)(size_t index) {}
+	void endReadArrayEntry(Traits)(size_t index) {}
 
 	T readValue(Traits, T)()
 	{

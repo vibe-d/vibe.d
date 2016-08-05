@@ -1609,6 +1609,9 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
+	void beginReadDictionaryEntry(Traits)(string name) {}
+	void endReadDictionaryEntry(Traits)(string name) {}
+
 	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
 		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
@@ -1620,6 +1623,9 @@ struct JsonSerializer {
 		}
 		m_current = old;
 	}
+
+	void beginReadArrayEntry(Traits)(size_t index) {}
+	void endReadArrayEntry(Traits)(size_t index) {}
 
 	T readValue(Traits, T)()
 	{
@@ -1778,6 +1784,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 		}
 
+		void beginReadDictionaryEntry(Traits)(string name) {}
+		void endReadDictionaryEntry(Traits)(string name) {}
+
 		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
@@ -1798,6 +1807,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 				entry_callback();
 			}
 		}
+
+		void beginReadArrayEntry(Traits)(size_t index) {}
+		void endReadArrayEntry(Traits)(size_t index) {}
 
 		T readValue(Traits, T)()
 		{
