@@ -1575,30 +1575,30 @@ struct JsonSerializer {
 	// serialization
 	//
 	Json getSerializedResult() { return m_current; }
-	void beginWriteDictionary(T)() { m_compositeStack ~= Json.emptyObject; }
-	void endWriteDictionary(T)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
-	void beginWriteDictionaryEntry(T)(string name) {}
-	void endWriteDictionaryEntry(T)(string name) { m_compositeStack[$-1][name] = m_current; }
+	void beginWriteDictionary(Traits)() { m_compositeStack ~= Json.emptyObject; }
+	void endWriteDictionary(Traits)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
+	void beginWriteDictionaryEntry(Traits)(string name) {}
+	void endWriteDictionaryEntry(Traits)(string name) { m_compositeStack[$-1][name] = m_current; }
 
-	void beginWriteArray(T)(size_t) { m_compositeStack ~= Json.emptyArray; }
-	void endWriteArray(T)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
-	void beginWriteArrayEntry(T)(size_t) {}
-	void endWriteArrayEntry(T)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
+	void beginWriteArray(Traits)(size_t) { m_compositeStack ~= Json.emptyArray; }
+	void endWriteArray(Traits)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
+	void beginWriteArrayEntry(Traits)(size_t) {}
+	void endWriteArrayEntry(Traits)(size_t) { m_compositeStack[$-1].appendArrayElement(m_current); }
 
-	void writeValue(T)(in T value)
+	void writeValue(Traits, T)(in T value)
 		if (!is(T == Json))
 	{
 		static if (isJsonSerializable!T) m_current = value.toJson();
 		else m_current = Json(value);
 	}
 
-	void writeValue(T)(Json value) if (is(T == Json)) { m_current = value; }
-	void writeValue(T)(in Json value) if (is(T == Json)) { m_current = value.clone; }
+	void writeValue(Traits, T)(Json value) if (is(T == Json)) { m_current = value; }
+	void writeValue(Traits, T)(in Json value) if (is(T == Json)) { m_current = value.clone; }
 
 	//
 	// deserialization
 	//
-	void readDictionary(T)(scope void delegate(string) field_handler)
+	void readDictionary(Traits)(scope void delegate(string) field_handler)
 	{
 		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
@@ -1609,7 +1609,7 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
 		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
 		auto old = m_current;
@@ -1621,7 +1621,7 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	T readValue(T)()
+	T readValue(Traits, T)()
 	{
 		static if (is(T == Json)) return m_current;
 		else static if (isJsonSerializable!T) return T.fromJson(m_current);
@@ -1638,7 +1638,7 @@ struct JsonSerializer {
 		}
 	}
 
-	bool tryReadNull() { return m_current.type == Json.Type.null_; }
+	bool tryReadNull(Traits)() { return m_current.type == Json.Type.null_; }
 }
 
 
@@ -1676,9 +1676,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 		void getSerializedResult() {}
 
-		void beginWriteDictionary(T)() { startComposite(); m_range.put('{'); }
-		void endWriteDictionary(T)() { endComposite(); m_range.put("}"); }
-		void beginWriteDictionaryEntry(T)(string name)
+		void beginWriteDictionary(Traits)() { startComposite(); m_range.put('{'); }
+		void endWriteDictionary(Traits)() { endComposite(); m_range.put("}"); }
+		void beginWriteDictionaryEntry(Traits)(string name)
 		{
 			startCompositeEntry();
 			m_range.put('"');
@@ -1686,14 +1686,14 @@ struct JsonStringSerializer(R, bool pretty = false)
 			static if (pretty) m_range.put(`": `);
 			else m_range.put(`":`);
 		}
-		void endWriteDictionaryEntry(T)(string name) {}
+		void endWriteDictionaryEntry(Traits)(string name) {}
 
-		void beginWriteArray(T)(size_t) { startComposite(); m_range.put('['); }
-		void endWriteArray(T)() { endComposite(); m_range.put(']'); }
-		void beginWriteArrayEntry(T)(size_t) { startCompositeEntry(); }
-		void endWriteArrayEntry(T)(size_t) {}
+		void beginWriteArray(Traits)(size_t) { startComposite(); m_range.put('['); }
+		void endWriteArray(Traits)() { endComposite(); m_range.put(']'); }
+		void beginWriteArrayEntry(Traits)(size_t) { startCompositeEntry(); }
+		void endWriteArrayEntry(Traits)(size_t) {}
 
-		void writeValue(T)(in T value)
+		void writeValue(Traits, T)(in T value)
 		{
 			static if (is(T == typeof(null))) m_range.put("null");
 			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
@@ -1750,7 +1750,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			int m_line = 0;
 		}
 
-		void readDictionary(T)(scope void delegate(string) entry_callback)
+		void readDictionary(Traits)(scope void delegate(string) entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
 			enforceJson(!m_range.empty && m_range.front == '{', "Expecting object.");
@@ -1778,7 +1778,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 		}
 
-		void readArray(T)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
 			enforceJson(!m_range.empty && m_range.front == '[', "Expecting array.");
@@ -1799,7 +1799,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 		}
 
-		T readValue(T)()
+		T readValue(Traits, T)()
 		{
 			m_range.skipWhitespace(&m_line);
 			static if (is(T == typeof(null))) { enforceJson(m_range.take(4).equal("null"), "Expecting 'null'."); return null; }
@@ -1836,7 +1836,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			else static assert(false, "Unsupported type: " ~ T.stringof);
 		}
 
-		bool tryReadNull()
+		bool tryReadNull(Traits)()
 		{
 			m_range.skipWhitespace(&m_line);
 			if (m_range.front != 'n') return false;
