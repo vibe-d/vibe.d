@@ -30,6 +30,7 @@ import core.thread;
 
 version (VibeNoSSL) {}
 else version(Have_openssl) version = OpenSSL;
+else version(Have_botan) version = Botan;
 
 
 /// A simple TLS client
@@ -89,7 +90,7 @@ TLSContext createTLSContext(TLSContextKind kind, TLSVersion ver = TLSVersion.any
 		}
 		if (!gs_sslContextFactory)
 			setTLSContextFactory(&createOpenSSLContext);
-	} else version(Have_botan) {
+	} else version(Botan) {
 		static TLSContext createBotanContext(TLSContextKind kind, TLSVersion ver) {
 			import vibe.stream.botan;
 			return new BotanTLSContext(kind);
@@ -150,7 +151,7 @@ auto createTLSStreamFL(Stream underlying, TLSContext ctx, TLSStreamState state, 
 		static assert(AllocSize!TLSStream > 0);
 		return FreeListRef!OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
-	} else version (Have_botan) {
+	} else version (Botan) {
 		import vibe.utils.memory;
 		import vibe.stream.botan;
 		return FreeListRef!BotanTLSStream(cast(ConnectionStream) underlying, cast(BotanTLSContext) ctx, state, peer_name, peer_address);
