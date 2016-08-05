@@ -80,16 +80,29 @@
 			void writeValue(TypeTraits, T)(T value);
 
 			// deserialization
-			void readDictionary(TypeTraits, alias on_entry)();
+			void readDictionary(TypeTraits)(scope void delegate(string) entry_callback);
 			void beginReadDictionaryEntry(ElementTypeTraits)(string);
 			void endReadDictionaryEntry(ElementTypeTraits)(string);
-			void readArray(TypeTraits, alias on_size, alias on_entry)();
+			void readArray(TypeTraits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback);
 			void beginReadArrayEntry(ElementTypeTraits)(size_t index);
 			void endReadArrayEntry(ElementTypeTraits)(size_t index);
 			T readValue(TypeTraits, T)();
 			bool tryReadNull(TypeTraits)();
 		}
 		---
+
+		The `TypeTraits` type passed to the individual methods has the following members:
+		$(UL
+			$(LI `Type`: The original type of the field to serialize)
+			$(LI `Attributes`: User defined attributes attached to the field)
+			$(LI `Policy`: An alias to the policy used for the serialization process)
+		)
+
+		`ElementTypeTraits` have the following additional members:
+		$(UL
+			$(LI `ContainerType`: The original type of the enclosing container type)
+			$(LI `ContainerAttributes`: User defined attributes attached to the enclosing container)
+		)
 
 	Copyright: © 2013-2016 rejectedsoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
@@ -184,16 +197,23 @@ void serializeWithPolicy(Serializer, alias Policy, T)(ref Serializer serializer,
 ///
 version (unittest)
 {
+}
+
+///
+unittest {
+	import vibe.data.json;
+
 	template SizePol(T)
+		if (__traits(allMembers, T) == AliasSeq!("x", "y"))
 	{
 		import std.conv;
 		import std.array;
 
-		string toRepresentation(T value) {
+		static string toRepresentation(T value) {
 			return to!string(value.x) ~ "x" ~ to!string(value.y);
 		}
 
-		T fromRepresentation(string value) {
+		static T fromRepresentation(string value) {
 			string[] fields = value.split('x');
 			alias fieldT = typeof(T.x);
 			auto x = to!fieldT(fields[0]);
@@ -201,11 +221,6 @@ version (unittest)
 			return T(x, y);
 		}
 	}
-}
-
-///
-unittest {
-	import vibe.data.json;
 
 	static struct SizeI {
 		int x;
@@ -275,6 +290,27 @@ T deserializeWithPolicy(Serializer, alias Policy, T, ARGS...)(ARGS args)
 ///
 unittest {
 	import vibe.data.json;
+
+	template SizePol(T)
+		if (__traits(allMembers, T) == AliasSeq!("x", "y"))
+	{
+		import std.conv;
+		import std.array;
+
+		static string toRepresentation(T value)
+		{
+			return to!string(value.x) ~ "x" ~ to!string(value.y);
+		}
+
+		static T fromRepresentation(string value)
+		{
+			string[] fields = value.split('x');
+			alias fieldT = typeof(T.x);
+			auto x = to!fieldT(fields[0]);
+			auto y = to!fieldT(fields[1]);
+			return T(x, y);
+		}
+	}
 
 	static struct SizeI {
 		int x;
