@@ -241,7 +241,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		return m_readBuffer.peek();
 	}
 
-	void skip(ulong count)
+	void skip(size_t count)
 	{
 		checkConnected(false);
 
