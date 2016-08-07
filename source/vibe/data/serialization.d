@@ -204,7 +204,7 @@ unittest {
 	import vibe.data.json;
 
 	template SizePol(T)
-		if (__traits(allMembers, T) == AliasSeq!("x", "y"))
+		if (__traits(allMembers, T) == TypeTuple!("x", "y"))
 	{
 		import std.conv;
 		import std.array;
@@ -292,7 +292,7 @@ unittest {
 	import vibe.data.json;
 
 	template SizePol(T)
-		if (__traits(allMembers, T) == AliasSeq!("x", "y"))
+		if (__traits(allMembers, T) == TypeTuple!("x", "y"))
 	{
 		import std.conv;
 		import std.array;
