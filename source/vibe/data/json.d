@@ -1170,7 +1170,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 				skipWhitespace(range, line);
 				enforceJson(!range.empty, "Missing '}' before EOF.", filename, line);
 				if(range.front == '}') break;
-				string key = skipJsonString(range);
+				string key = skipJsonKey(range);
 				skipWhitespace(range, line);
 				enforceJson(range.startsWith(":"), "Expected ':' for key '" ~ key ~ "'", filename, line);
 				range.popFront();
@@ -1225,6 +1225,7 @@ unittest {
 	assert(parseJsonString(`"\\\/\b\f\n\r\t\u1234"`).get!string == "\\/\b\f\n\r\t\u1234");
 	auto json = parseJsonString(`{"hey": "This is @à test éhééhhéhéé !%/??*&?\ud83d\udcec"}`);
 	assert(json.toPrettyString() == parseJsonString(json.toPrettyString()).toPrettyString());
+    assert(parseJsonString("{ field: 42 }") == Json(["field" : Json(42)]));
 }
 
 unittest {
@@ -2231,6 +2232,31 @@ private string skipJsonString(R)(ref R s, int* line = null)
 	enforceJson(!s.empty && s.front == '"', "Expected '\"' to terminate string.");
 	s.popFront();
 	return ret;
+}
+
+/// private
+private string skipJsonKey(R)(ref R s, int* line = null)
+{
+    enforceJson(!s.empty, "Expected identifier, got end of string");
+    if (s.front == '"')
+        return skipJsonString(s, line);
+
+    static isLetter(dchar ch)
+    {
+        return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+    }
+
+    enforceJson(isLetter(s.front), "Object key must start with either '\"' or ASCII letter");
+
+    size_t idx = 0;
+    while (idx < s.length && (isDigit(s[idx]) || isLetter(s[idx])))
+        ++idx;
+
+    enforceJson(idx < s.length, "Expected whitespace or ':', got end of string");
+
+    auto ret = s[0 .. idx];
+    s = s[idx .. $];
+    return ret;
 }
 
 /// private
