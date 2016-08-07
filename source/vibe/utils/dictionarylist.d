@@ -230,6 +230,16 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	{
 		return (cast() this).opApply(cast(int delegate(ref ValueType)) del);
 	}
+	
+	Value[string] asAA() @property 
+	{
+		Value[string] aa;
+		foreach (ref kv; m_fields[ 0 .. m_fieldCount] ) 
+		{
+			aa[kv.key] = kv.value;
+		}
+	return aa;
+	}
 
 	static if (is(typeof({ const(ValueType) v; ValueType w; w = v; }))) {
 		/** Duplicates the header map.
