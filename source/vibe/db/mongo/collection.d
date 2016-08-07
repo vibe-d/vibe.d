@@ -183,6 +183,8 @@ struct MongoCollection {
 			query = MongoDB query expression to identify the matched document
 			update = Update expression for the matched document
 			returnFieldSelector = Optional map of fields to return in the response
+			modified = Optional, specifies whether to return the document before or after update 
+			upsert = Optional, specifies whether the document should be created if none is found 
 
 		Throws:
 			An `Exception` will be thrown if an error occurs in the
@@ -190,28 +192,34 @@ struct MongoCollection {
 
 		See_Also: $(LINK http://docs.mongodb.org/manual/reference/command/findAndModify)
 	 */
-	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector)
+	Bson findAndModify(T, U, V)(T query, U update, V returnFieldSelector, bool modified = false, bool upsert = false)
 	{
 		static struct CMD {
+			import vibe.data.serialization : name;
 			string findAndModify;
 			T query;
 			U update;
 			V fields;
+			@name("new") bool modified;
+			bool upsert;
 		}
 		CMD cmd;
 		cmd.findAndModify = m_name;
 		cmd.query = query;
 		cmd.update = update;
 		cmd.fields = returnFieldSelector;
+		cmd.modified = modified;
+		cmd.upsert = upsert;
+
 		auto ret = database.runCommand(cmd);
 		if( !ret["ok"].get!double ) throw new Exception("findAndModify failed.");
 		return ret["value"];
 	}
 
 	/// ditto
-	Bson findAndModify(T, U)(T query, U update)
+	Bson findAndModify(T, U)(T query, U update, bool modified = false, bool upsert = false)
 	{
-		return findAndModify(query, update, null);
+		return findAndModify(query, update, null, modified, upsert);
 	}
 
 	/**
