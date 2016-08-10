@@ -114,7 +114,11 @@ void requestHTTP(string url, scope void delegate(scope HTTPClientRequest req) re
 /// ditto
 void requestHTTP(URL url, scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse req) responder, const(HTTPClientSettings) settings = defaultSettings)
 {
-	enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	version(Posix) {
+		enforce(url.schema == "http" || url.schema == "https" || url.schema == "unix", "URL schema must be http(s) or unix.");
+	} else {
+		enforce(url.schema == "http" || url.schema == "https", "URL schema must be http(s).");
+	}
 	enforce(url.host.length > 0, "URL must contain a host name.");
 	bool use_tls;
 
@@ -550,9 +554,41 @@ final class HTTPClient {
 				m_conn = connectTCP(proxyAddr, m_settings.networkInterface);
 			}
 			else {
-				auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
-				addr.port = m_port;
-				m_conn = connectTCP(addr, m_settings.networkInterface);
+				version(Posix)
+				{
+					version(VibeLibeventDriver)
+					{
+						import core.sys.posix.sys.un;
+						import core.sys.posix.sys.socket;
+						import std.regex : regex, Captures, Regex, matchFirst, ctRegex;
+						import core.stdc.string : strcpy;
+
+						NetworkAddress addr;
+						if (m_server[0] == '/')
+						{
+							addr.family = AF_UNIX;
+							sockaddr_un* s = addr.sockAddrUnix();
+							enforce(s.sun_path.length > m_server.length, "Unix sockets cannot have that long a name.");
+							s.sun_family = AF_UNIX;
+							strcpy(cast(char*)s.sun_path.ptr,m_server.toStringz());
+						} else
+						{
+							addr = resolveHost(m_server, m_settings.dnsAddressFamily);
+							addr.port = m_port;
+						}
+						m_conn = connectTCP(addr, m_settings.networkInterface);
+					} else
+					{
+						auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
+						addr.port = m_port;
+						m_conn = connectTCP(addr, m_settings.networkInterface);
+					}
+				} else
+				{
+					auto addr = resolveHost(m_server, m_settings.dnsAddressFamily);
+					addr.port = m_port;
+					m_conn = connectTCP(addr, m_settings.networkInterface);
+				}
 			}
 
 			m_stream = m_conn;

@@ -63,6 +63,12 @@ struct URL {
 			bool requires_host = false;
 
 			switch(m_schema){
+				case "unix":
+					enforce(str.startsWith("//"), "Unix socket URL must start with unix://...");
+					m_host = str[2 .. $];
+					enforce(m_host.length > 0,"Empty socket path in URL.");
+					str = "/";
+					break;
 				case "http":
 				case "https":
 				case "ftp":
@@ -270,6 +276,7 @@ struct URL {
 			case "ftp":
 			case "spdy":
 			case "sftp":
+			case "unix":
 				dst.put("//");
 				break;
 		}
@@ -425,4 +432,11 @@ unittest { // issue #1318
 		URL("http://something/inval%id");
 		assert(false, "Expected to throw an exception.");
 	} catch (Exception e) {}
+}
+
+unittest {
+	assert(URL("unix:///var/run/docker.sock").schema == "unix");
+	assert(URL("unix:///var/run/docker.sock").host == "/var/run/docker.sock");
+	assert(URL("unix:///var/run/docker.sock").pathString == "/");
+	assert((URL("unix:///var/run/docker.sock") ~ Path("containers/json")).pathString == "/containers/json");
 }
