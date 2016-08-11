@@ -705,6 +705,8 @@ final class HTTPClientRequest : HTTPRequest {
 
 		writeHeader();
 		m_bodyWriter = m_conn;
+		if (headers.get("Content-Encoding", null) == "gzip")
+			m_bodyWriter = new GzipOutputStream(m_bodyWriter);
 
 		if (headers.get("Transfer-Encoding", null) == "chunked")
 			m_bodyWriter = new ChunkedOutputStream(m_bodyWriter);
