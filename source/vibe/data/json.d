@@ -1628,6 +1628,7 @@ struct JsonSerializer {
 		else static if (is(T == float) || is(T == double)) {
 			switch (m_current.type) {
 				default: return cast(T)m_current.get!long;
+				case Json.Type.null_: goto case;
 				case Json.Type.undefined: return T.nan;
 				case Json.Type.float_: return cast(T)m_current.get!double;
 				case Json.Type.bigInt: return cast(T)m_current.bigIntToLong();
@@ -1877,7 +1878,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.float_:
 			auto d = json.get!double;
 			if (d != d)
-				dst.put("undefined"); // JSON has no NaN value so set null
+				dst.put("null"); // JSON has no NaN value so set null
 			else
 				formattedWrite(dst, "%.16g", json.get!double);
 			break;
@@ -1992,12 +1993,14 @@ unittest {
 unittest {
 	auto j = Json(double.init);
 
-	assert(j.toString == "undefined"); // A double nan should serialize to undefined
+	assert(j.toString == "null"); // A double nan should serialize to null
 	j = 17.04f;
 	assert(j.toString == "17.04");	// A proper double should serialize correctly
 
 	double d;
 	deserializeJson(d, Json.undefined); // Json.undefined should deserialize to nan
+	assert(d != d);
+	deserializeJson(d, Json(null)); // Json.undefined should deserialize to nan
 	assert(d != d);
 }
 /**
