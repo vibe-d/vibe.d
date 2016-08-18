@@ -20,10 +20,13 @@
 */
 module vibe.appmain;
 
-version (VibeCustomMain) version (VibeDefaultMain)
-	static assert(false, "versions VibeCustomMain and VibeDefaultMain cannot both be defined");
-
 version (VibeDefaultMain):
+
+version (VibeCustomMain) {
+	static assert(false, "Both, VibeCustomMain and VibeDefaultMain are defined. "
+		~ "Either define only VibeDefaultMain, or nothing at all (VibeCustomMain "
+		~ "has no effect since 0.7.26).");
+}
 
 /**
 	The predefined vibe.d application entry point.
