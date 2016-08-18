@@ -20,6 +20,9 @@
 */
 module vibe.appmain;
 
+version (VibeCustomMain) version (VibeDefaultMain)
+	static assert(false, "versions VibeCustomMain and VibeDefaultMain cannot both be defined");
+
 version (VibeDefaultMain):
 
 /**
