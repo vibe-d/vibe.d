@@ -28,7 +28,7 @@ alias Base64URLNoPadding = Base64Impl!('-', '_', Base64.NoPadding);
 
 	Indexing the session object with string keys allows to store arbitrary key/value pairs.
 */
-final struct Session {
+struct Session {
 	private {
 		SessionStore m_store;
 		string m_id;
