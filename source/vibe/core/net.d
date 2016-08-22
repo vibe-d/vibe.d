@@ -24,7 +24,10 @@ version(Windows) {
 	else
 		import core.sys.windows.winsock2;
 }
-
+version(Posix)
+{
+	import core.sys.posix.sys.un;
+}
 
 /**
 	Resolves the given host name/IP address string.
@@ -91,15 +94,17 @@ TCPListener listenTCP_s(ushort port, void function(TCPConnection stream) connect
 TCPConnection connectTCP(string host, ushort port, string bind_interface = null, ushort bind_port = 0)
 {
 	NetworkAddress addr = resolveHost(host);
-	addr.port = port;
+	if (addr.family != AF_UNIX)
+		addr.port = port;
 	NetworkAddress bind_address;
 	if (bind_interface.length) bind_address = resolveHost(bind_interface, addr.family);
 	else {
 		bind_address.family = addr.family;
-		if (addr.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
-		else bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+		if (bind_address.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
+		else if (bind_address.family != AF_UNIX) bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
 	}
-	bind_address.port = bind_port;
+	if (addr.family != AF_UNIX)
+		bind_address.port = bind_port;
 	return getEventDriver().connectTCP(addr, bind_address);
 }
 /// ditto
@@ -107,9 +112,10 @@ TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_address = anyA
 {
 	if (bind_address.family == AF_UNSPEC) {
 		bind_address.family = addr.family;
-		if (addr.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
-		else bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
-		bind_address.port = 0;
+		if (bind_address.family == AF_INET) bind_address.sockAddrInet4.sin_addr.s_addr = 0;
+		else if (bind_address.family != AF_UNIX) bind_address.sockAddrInet6.sin6_addr.s6_addr[] = 0;
+		if (bind_address.family != AF_UNIX)
+			bind_address.port = 0;
 	}
 	enforce(addr.family == bind_address.family, "Destination address and bind address have different address families.");
 	return getEventDriver().connectTCP(addr, bind_address);
@@ -142,6 +148,7 @@ struct NetworkAddress {
 
 	private union {
 		sockaddr addr;
+		sockaddr_un addr_unix;
 		sockaddr_in addr_ip4;
 		sockaddr_in6 addr_ip6;
 	}
@@ -187,6 +194,7 @@ struct NetworkAddress {
 	const pure nothrow {
 		switch (this.family) {
 			default: assert(false, "sockAddrLen() called for invalid address family.");
+			case AF_UNIX: return addr_unix.sizeof;
 			case AF_INET: return addr_ip4.sizeof;
 			case AF_INET6: return addr_ip6.sizeof;
 		}
@@ -199,6 +207,10 @@ struct NetworkAddress {
 	@property inout(sockaddr_in6)* sockAddrInet6() inout pure nothrow
 		in { assert (family == AF_INET6); }
 		body { return &addr_ip6; }
+
+	@property inout(sockaddr_un)* sockAddrUnix() inout pure nothrow
+		in { assert (family == AF_UNIX); }
+		body { return &addr_unix; }
 
 	/** Returns a string representation of the IP address
 	*/
@@ -231,6 +243,13 @@ struct NetworkAddress {
 					sink.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
 				}
 				break;
+			case AF_UNIX:
+				import std.traits : hasMember;
+				static if (hasMember!(sockaddr_un, "sun_len"))
+					sink.formattedWrite("%s",() @trusted { return cast(char[])addr_unix.sun_path[0..addr_unix.sun_len]; } ());
+				else
+					sink.formattedWrite("%s",() @trusted { return (cast(char*)addr_unix.sun_path.ptr).fromStringz; } ());
+				break;
 		}
 	}
 
@@ -257,6 +276,9 @@ struct NetworkAddress {
 				sink("[");
 				toAddressString(sink);
 				sink.formattedWrite("]:%s", port);
+				break;
+			case AF_UNIX:
+				toAddressString(sink);
 				break;
 		}
 	}

@@ -1,0 +1,11 @@
+{
+	"name": "unit-socket-example",
+	"description": "Example for sending http requests to unix sockets",
+	"dependencies": {
+		"vibe-d:http": {"path": "../../"},
+		"vibe-d:web": {"path": "../../"},
+		"vibe-d:core": {"path": "../../"}
+	},
+	"versions": ["VibeNoSSL"],
+	"subConfigurations": { "vibe-d:core": "libevent"}
+}
