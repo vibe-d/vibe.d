@@ -1851,7 +1851,10 @@ struct JsonStringSerializer(R, bool pretty = false)
 	}
 }
 
-
+unittest
+{
+	assert(serializeToJsonString(double.nan) == "null");
+}
 
 /**
 	Writes the given JSON object as a JSON string into the destination range.
