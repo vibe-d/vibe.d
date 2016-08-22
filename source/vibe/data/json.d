@@ -1634,6 +1634,7 @@ struct JsonSerializer {
 		else static if (is(T == float) || is(T == double)) {
 			switch (m_current.type) {
 				default: return cast(T)m_current.get!long;
+				case Json.Type.null_: goto case;
 				case Json.Type.undefined: return T.nan;
 				case Json.Type.float_: return cast(T)m_current.get!double;
 				case Json.Type.bigInt: return cast(T)m_current.bigIntToLong();
@@ -1705,7 +1706,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
 			else static if (is(T : long)) m_range.formattedWrite("%s", value);
 			else static if (is(T == BigInt)) m_range.formattedWrite("%d", value);
-			else static if (is(T : real)) m_range.formattedWrite("%.16g", value);
+			else static if (is(T : real)) value == value ? m_range.formattedWrite("%.16g", value) : m_range.put("null");
 			else static if (is(T == string)) {
 				m_range.put('"');
 				m_range.jsonEscape(value);
@@ -1862,7 +1863,10 @@ struct JsonStringSerializer(R, bool pretty = false)
 	}
 }
 
-
+unittest
+{
+	assert(serializeToJsonString(double.nan) == "null");
+}
 
 /**
 	Writes the given JSON object as a JSON string into the destination range.
@@ -1889,7 +1893,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.float_:
 			auto d = json.get!double;
 			if (d != d)
-				dst.put("undefined"); // JSON has no NaN value so set null
+				dst.put("null"); // JSON has no NaN value so set null
 			else
 				formattedWrite(dst, "%.16g", json.get!double);
 			break;
@@ -2004,12 +2008,14 @@ unittest {
 unittest {
 	auto j = Json(double.init);
 
-	assert(j.toString == "undefined"); // A double nan should serialize to undefined
+	assert(j.toString == "null"); // A double nan should serialize to null
 	j = 17.04f;
 	assert(j.toString == "17.04");	// A proper double should serialize correctly
 
 	double d;
 	deserializeJson(d, Json.undefined); // Json.undefined should deserialize to nan
+	assert(d != d);
+	deserializeJson(d, Json(null)); // Json.undefined should deserialize to nan
 	assert(d != d);
 }
 /**
