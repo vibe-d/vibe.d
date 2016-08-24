@@ -148,7 +148,7 @@ struct NetworkAddress {
 
 	private union {
 		sockaddr addr;
-		sockaddr_un addr_unix;
+		version (Posix) sockaddr_un addr_unix;
 		sockaddr_in addr_ip4;
 		sockaddr_in6 addr_ip6;
 	}
@@ -194,7 +194,9 @@ struct NetworkAddress {
 	const pure nothrow {
 		switch (this.family) {
 			default: assert(false, "sockAddrLen() called for invalid address family.");
-			case AF_UNIX: return addr_unix.sizeof;
+			version (Posix) {
+				case AF_UNIX: return addr_unix.sizeof;
+			}
 			case AF_INET: return addr_ip4.sizeof;
 			case AF_INET6: return addr_ip6.sizeof;
 		}
@@ -208,9 +210,11 @@ struct NetworkAddress {
 		in { assert (family == AF_INET6); }
 		body { return &addr_ip6; }
 
-	@property inout(sockaddr_un)* sockAddrUnix() inout pure nothrow
-		in { assert (family == AF_UNIX); }
-		body { return &addr_unix; }
+	version (Posix) {
+		@property inout(sockaddr_un)* sockAddrUnix() inout pure nothrow
+			in { assert (family == AF_UNIX); }
+			body { return &addr_unix; }
+	}
 
 	/** Returns a string representation of the IP address
 	*/
@@ -243,13 +247,15 @@ struct NetworkAddress {
 					sink.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
 				}
 				break;
-			case AF_UNIX:
-				import std.traits : hasMember;
-				static if (hasMember!(sockaddr_un, "sun_len"))
-					sink.formattedWrite("%s",() @trusted { return cast(char[])addr_unix.sun_path[0..addr_unix.sun_len]; } ());
-				else
-					sink.formattedWrite("%s",() @trusted { return (cast(char*)addr_unix.sun_path.ptr).fromStringz; } ());
-				break;
+			version (Posix) {
+				case AF_UNIX:
+					import std.traits : hasMember;
+					static if (hasMember!(sockaddr_un, "sun_len"))
+						sink.formattedWrite("%s",() @trusted { return cast(char[])addr_unix.sun_path[0..addr_unix.sun_len]; } ());
+					else
+						sink.formattedWrite("%s",() @trusted { return (cast(char*)addr_unix.sun_path.ptr).fromStringz; } ());
+					break;
+			}
 		}
 	}
 

@@ -82,9 +82,14 @@ package final class Libevent2TCPConnection : TCPConnection {
 		m_remoteAddress = ctx.remote_addr;
 
 		void* ptr;
-		if( ctx.remote_addr.family == AF_INET ) ptr = &ctx.remote_addr.sockAddrInet4.sin_addr;
-		else if (ctx.remote_addr.family == AF_UNIX ) ptr = &ctx.remote_addr.sockAddrUnix.sun_path;
-		else ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr;
+		switch (ctx.remote_addr.family) {
+			default: throw new Exception("Unsupported address family.");
+			case AF_INET: ptr = &ctx.remote_addr.sockAddrInet4.sin_addr; break;
+			case AF_INET6: ptr = &ctx.remote_addr.sockAddrInet6.sin6_addr; break;
+			version (Posix) {
+				case AF_UNIX: ptr = &ctx.remote_addr.sockAddrUnix.sun_path; break;
+			}
+		}
 
 		if (evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length) !is null)
 			m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf[].indexOf('\0')];
