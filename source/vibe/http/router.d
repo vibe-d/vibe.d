@@ -652,6 +652,8 @@ private struct MatchTree(T) {
 
 	private void rebuildGraph()
 	{
+		import std.array : appender;
+		
 		if (m_upToDate) return;
 		m_upToDate = true;
 
@@ -669,14 +671,17 @@ private struct MatchTree(T) {
 		auto nodemap = new uint[builder.m_nodes.length];
 		nodemap[] = uint.max;
 
+		auto nodes = appender!(Node[]);
+		nodes.reserve(1024);
+
 		uint process(size_t n)
 		{
 			import std.algorithm : canFind;
 
 			if (nodemap[n] != uint.max) return nodemap[n];
-			auto nmidx = cast(uint)m_nodes.length;
+			auto nmidx = cast(uint)nodes.data.length;
 			nodemap[n] = nmidx;
-			m_nodes.length++;
+			nodes.put(Node.init);
 
 			Node nn;
 			nn.terminalsStart = m_terminalTags.length;
@@ -688,18 +693,20 @@ private struct MatchTree(T) {
 					m_terminals[t.index].varMap[nmidx] = var;
 			}
 			nn.terminalsEnd = m_terminalTags.length;
-			foreach (ch, nodes; builder.m_nodes[n].edges)
-				foreach (to; nodes)
+			foreach (ch, targets; builder.m_nodes[n].edges)
+				foreach (to; targets)
 					nn.edges[ch] = process(to);
 
-			m_nodes[nmidx] = nn;
+			nodes.data[nmidx] = nn;
 
 			return nmidx;
 		}
 		assert(builder.m_nodes[0].edges['^'].length == 1, "Graph must be disambiguated before purging.");
 		process(builder.m_nodes[0].edges['^'][0]);
 
-		logDebug("Match tree has %s nodes, %s terminals", m_nodes.length, m_terminals.length);
+		m_nodes = nodes.data;
+
+		logDebug("Match tree has %s(%s) nodes, %s terminals", m_nodes.length, builder.m_nodes.length, m_terminals.length);
 	}
 }
 
@@ -855,10 +862,11 @@ private struct MatchGraphBuilder {
 		import vibe.utils.hashmap;
 		HashMap!(size_t[], size_t) combined_nodes;
 		auto visited = new bool[m_nodes.length * 2];
-		size_t[] node_stack = [0];
-		while (node_stack.length) {
-			auto n = node_stack[$-1];
-			node_stack.length--;
+		Stack!size_t node_stack;
+		node_stack.reserve(m_nodes.length);
+		node_stack.push(0);
+		while (!node_stack.empty) {
+			auto n = node_stack.pop();
 
 			while (n >= visited.length) visited.length = visited.length * 2;
 			if (visited[n]) continue;
@@ -909,12 +917,10 @@ private struct MatchGraphBuilder {
 			}
 
 			// process nodes recursively
-			node_stack.assumeSafeAppend();
 			foreach (ch; ubyte.min .. ubyte.max+1)
-				if (m_nodes[n].edges[ch].length)
-					node_stack ~= m_nodes[n].edges[ch];
+				node_stack.push(m_nodes[n].edges[ch]);
 		}
-//logInfo("Disambiguate done: %s nodes", m_nodes.length);
+		debug logDebug("Disambiguate done: %s nodes, %s max stack size", m_nodes.length, node_stack.maxSize);
 	}
 
 	void print()
@@ -988,5 +994,49 @@ private struct MatchGraphBuilder {
 	{
 		import std.algorithm : canFind;
 		if (!arr.canFind(elem)) arr ~= elem;
+	}
+}
+
+private struct Stack(E)
+{
+	private {
+		E[] m_storage;
+		size_t m_fill;
+		debug size_t m_maxFill;
+	}
+
+	@property bool empty() const { return m_fill == 0; }
+
+	debug @property size_t maxSize() const { return m_maxFill; }
+
+	void reserve(size_t amt)
+	{
+		auto minsz = m_fill + amt;
+		if (m_storage.length < minsz) {
+			auto newlength = 64;
+			while (newlength < minsz) newlength *= 2;
+			m_storage.length = newlength;
+		}
+	}
+
+	void push(E el)
+	{
+		reserve(1);
+		m_storage[m_fill++] = el;
+		debug if (m_fill > m_maxFill) m_maxFill = m_fill;
+	}
+
+	void push(E[] els)
+	{
+		reserve(els.length);
+		foreach (el; els)
+			m_storage[m_fill++] = el;
+		debug if (m_fill > m_maxFill) m_maxFill = m_fill;
+	}
+
+	E pop()
+	{
+		assert(!empty, "Stack underflow.");
+		return m_storage[--m_fill];
 	}
 }
