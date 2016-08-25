@@ -921,7 +921,10 @@ unittest {
 	static assert(isPolicySerializable!(BoxPol, Box!int));
 }
 
-private template DefaultPolicy(T)
+
+/** Default policy (performs no customization).
+*/
+template DefaultPolicy(T)
 {
 }
 
