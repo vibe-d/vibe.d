@@ -132,9 +132,9 @@ void printCommandLineHelp()
 /**
 	Checks for unrecognized command line options and display a help screen.
 
-	This function is called automatically from vibe.appmain to check for
-	correct command line usage. It will print a help screen in case of
-	unrecognized options.
+	This function is called automatically from `vibe.appmain` and from
+	`vibe.core.core.runApplication` to check for correct command line usage.
+	It will print a help screen in case of unrecognized options.
 
 	Params:
 		args_out = Optional parameter for storing any arguments not handled

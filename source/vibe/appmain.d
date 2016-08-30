@@ -14,7 +14,7 @@
 	calls to vibe.core.args.finalizeCommandLineOptions and vibe.core.core.lowerPrivileges to get the
 	same behavior.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -36,38 +36,11 @@ version (VibeCustomMain) {
 */
 int main()
 {
-	import vibe.core.args : finalizeCommandLineOptions;
-	import vibe.core.core : runEventLoop, lowerPrivileges;
-	import vibe.core.log;
-	import std.encoding : sanitize;
+	import vibe.core.core : runApplication;
 
 	version (unittest) {
-		logInfo("All unit tests were successful.");
 		return 0;
 	} else {
-		try if (!finalizeCommandLineOptions()) return 0;
-		catch (Exception e) {
-			logDiagnostic("Error processing command line: %s", e.msg);
-			return 1;
-		}
-
-		lowerPrivileges();
-
-		logDiagnostic("Running event loop...");
-		int status;
-		version (VibeDebugCatchAll) {
-			try {
-				status = runEventLoop();
-			} catch( Throwable th ){
-				logError("Unhandled exception in event loop: %s", th.msg);
-				logDiagnostic("Full exception: %s", th.toString().sanitize());
-				return 1;
-			}
-		} else {
-			status = runEventLoop();
-		}
-
-		logDiagnostic("Event loop exited with status %d.", status);
-		return status;
+		return runApplication();
 	}
 }

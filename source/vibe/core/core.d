@@ -1,7 +1,10 @@
 /**
 	This module contains the core functionality of the vibe.d framework.
 
-	Copyright: © 2012-2015 RejectedSoftware e.K.
+	See `runApplication` for the main entry point for typical vibe.d
+	server or GUI applications.
+
+	Copyright: © 2012-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -64,13 +67,115 @@ version (Windows)
 /**************************************************************************************************/
 
 /**
-	Starts the vibe event loop.
+	Performs final initialization and runs the event loop.
 
-	Note that this function is usually called automatically by the vibe framework. However, if
-	you provide your own main() function, you need to call it manually.
+	This function performs three tasks:
+	$(OL
+		$(LI Makes sure that no unrecognized command line options are passed to
+			the application and potentially displays command line help. See also
+			`vibe.core.args.finalizeCommandLineOptions`.)
+		$(LI Performs privilege lowering if required.)
+		$(LI Runs the event loop and blocks until it finishes.)
+	)
 
-	The event loop will continue running during the whole life time of the application.
-	Tasks will be started and handled from within the event loop.
+	Params:
+		args_out = Optional parameter to receive unrecognized command line
+			arguments. If left to `null`, an error will be reported if
+			any unrecognized argument is passed.
+
+	See_also: ` vibe.core.args.finalizeCommandLineOptions`, `lowerPrivileges`,
+		`runEventLoop`
+*/
+int runApplication(string[]* args_out = null)
+{
+	try if (!finalizeCommandLineOptions()) return 0;
+	catch (Exception e) {
+		logDiagnostic("Error processing command line: %s", e.msg);
+		return 1;
+	}
+
+	lowerPrivileges();
+
+	logDiagnostic("Running event loop...");
+	int status;
+	version (VibeDebugCatchAll) {
+		try {
+			status = runEventLoop();
+		} catch( Throwable th ){
+			logError("Unhandled exception in event loop: %s", th.msg);
+			logDiagnostic("Full exception: %s", th.toString().sanitize());
+			return 1;
+		}
+	} else {
+		status = runEventLoop();
+	}
+
+	logDiagnostic("Event loop exited with status %d.", status);
+	return status;
+}
+
+/// A simple echo server, listening on a privileged TCP port.
+unittest {
+	import vibe.core.core;
+	import vibe.core.net;
+
+	int main()
+	{
+		// first, perform any application specific setup (privileged ports still
+		// available if run as root)
+		listenTCP(7, (conn) { conn.write(conn); });
+
+		// then use runApplication to perform the remaining initialization and
+		// to run the event loop
+		return runApplication();
+	}
+}
+
+/** The same as above, but performing the initialization sequence manually.
+
+	This allows to skip any additional initialization (opening the listening
+	port) if an invalid command line argument or the `--help`  switch is
+	passed to the application.
+*/
+unittest {
+	import vibe.core.core;
+	import vibe.core.net;
+
+	int main()
+	{
+		// process the command line first, to be able to skip the application
+		// setup if not required
+		if (!finalizeCommandLineOptions()) return 0;
+
+		// then set up the application
+		listenTCP(7, (conn) { conn.write(conn); });
+
+		// finally, perform privilege lowering (safe to skip for non-server
+		// applications)
+		lowerPrivileges();
+
+		// and start the event loop
+		return runEventLoop();
+	}
+}
+
+/**
+	Starts the vibe.d event loop for the calling thread.
+
+	Note that this function is usually called automatically by the vibe.d
+	framework. However, if you provide your own `main()` function, you may need
+	to call either this or `runApplication` manually.
+
+	The event loop will by default continue running during the whole life time
+	of the application, but calling `runEventLoop` multiple times in sequence
+	is allowed. Tasks will be started and handled only while the event loop is
+	running.
+
+	Returns:
+		The returned value is the suggested code to return to the operating
+		system from the `main` function.
+
+	See_Also: `runApplication`
 */
 int runEventLoop()
 {
@@ -791,6 +896,9 @@ void disableDefaultSignalHandlers()
 	This function is useful for services run as root to give up on the privileges that
 	they only need for initialization (such as listening on ports <= 1024 or opening
 	system log files).
+
+	Note that this function is called automatically by vibe.d's default main
+	implementation, as well as by `runApplication`.
 */
 void lowerPrivileges(string uname, string gname)
 {
