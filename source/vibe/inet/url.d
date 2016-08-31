@@ -73,6 +73,7 @@ struct URL {
 				case "file":
 				case "http+unix":
 				case "https+unix":
+				case "redis":
 					// proto://server/path style
 					enforce(str.startsWith("//"), "URL must start with proto://...");
 					requires_host = true;
@@ -133,6 +134,11 @@ struct URL {
 	}
 	/// ditto
 	static URL parse(string url_string)
+	{
+		return URL(url_string);
+	}
+	/// ditto
+	static URL fromString(string url_string)
 	{
 		return URL(url_string);
 	}
@@ -439,4 +445,9 @@ unittest {
 	assert(URL("http+unix://%2Fvar%2Frun%2Fdocker.sock/container/json").pathString == "/container/json");
 	auto url = URL("http+unix://%2Fvar%2Frun%2Fdocker.sock/container/json");
 	assert(URL(url.toString()) == url);
+}
+
+unittest {
+	import vibe.data.serialization;
+	static assert(isStringSerializable!URL);
 }
