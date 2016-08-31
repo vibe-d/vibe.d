@@ -1,22 +1,40 @@
 ﻿Changelog
 =========
 
-v0.7.30 - 2016-08-
+v0.7.30 - 2016-09-
 --------------------
 
 ### Features and improvements ###
 
-- Compiles on DMD 2.072.0
-- Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
+- General changes
+  - Compiles on DMD 2.072.0
+  - Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
+  - Defining both, `VibeDefaultMain` and `VibeCustomMain`, results in a compile-time error to help uncover hidden build issues (by John Colvin) - [pull #1551][issue1551]
+- Web/REST interface generator
+  - Added `vibe.web.auth` as a generic way to express authrorizazion rules and to provide a common hook for authentication
+  - Added `@noRoute` attribute for `registerWebInterface` to keep methods from generating a HTTP endpoint
+  - Added `@nestedNameStyle` to choose between the classical underscore mapping and D style mapping for form parameter names in `registerWebInterface`
+- Serialization framework (`vibe.data.serialization`)
+  - All hooks now get a traits struct that carries additional information, such as user defined attributes - note that this is a breaking change for any serializer implementation! - [pull #1542][issue1542]
+  - Added `beginWriteDocument` and `endWriteDocument` hooks - [pull #1542][issue1542]
+  - Added `(begin/end)WriteDictionaryEntry` and `(begin/end)WriteArrayEntry` hooks - [pull #1542][issue1542]
+  - Exposed `vibe.data.serialization.DefaultPolicy` publicly
+- HTTP server
+  - Added `HTTPServerSettings.accessLogger` to enable using custom logger implementations
+  - Added support for the "X-Forwarded-Port" header used by reverse proxies (by Mihail-K) - [issue #1409][issue1490], [pull #1491][issue1491]
+  - Added an overload of `HTTPServerResponse.writeJsonBody` that doesn't set the response status (by Irenej Marc) - [pull #1488][issue1488]
+- Added `runApplication` as a single API entry point to properly initiailze and run a vibe.d application (this will serve as the basis for slowly fading out 
+- Added partial Unix client socket support, HTTP client support in particular (use `http+unix://...`) (by Sebastian Koppe) - [pull #1547][issue1547]
 - Removed `Json.opDispatch` and `Bson.opDispatch`
-- Added `vibe.web.auth` as a generic way to express authrorizazion rules and to provide a common hook for authentication
-- Added `@noRoute` attribute for `registerWebInterface` to keep methods from generating a HTTP endpoint
-- Added `@nestedNameStyle` to choose between the classical underscore mapping and D style mapping for form parameter names in `registerWebInterface`
+- Added `Bson.remove` to remove elements from a BSON object - [issue #345][issue345]
+- Can now optionally use the new [diet-ng][diet-ng] package in `render()` (just add it as a dependency)
+the use of `VibeDefaultMain`)
 - Added support for tables in the Markdown compiler - [issue #1493][issue1493]
-- Added `HTTPServerSettings.accessLogger` to enable using custom logger implementations
-- Added support for the "X-Forwarded-Port" header used by reverse proxies (by Mihail-K) - [issue #1409][issue1490], [pull #1491][issue1491]
-- Added an overload of `HTTPServerResponse.writeJsonBody` that doesn't set the response status (by Irenej Marc) - [pull #1488][issue1488]
 - Added `MongoCollection.distict()`
+- The `std.concurrency` integration code now let's the behavior of `spawn()` be configurable, defaulting now to `runWorkerTask` instead of the previous `runTask`
+- Using `VibeNoSSL` now also disables Botan support in addition to OpenSSL (by Martin Nowak) - [pull #1444][issue1444]
+- Use a minimum protocol version of TLS 1.0 for Botan, fixes compilation on Botan 1.12.6 (by Tomáš Chaloupka) - [pull #1553][issue1553]
+- Some more `URLRouter` memory/performance optimization
 
 ### Bug fixes ###
 
@@ -25,7 +43,17 @@ v0.7.30 - 2016-08-
 - The HTTP client now correctly appends the port in the "Host" header - [issue #1507][issue1507], [pull #1510][issue1510]
 - Fixed a possible null pointer error in `HTTPServerResponse.switchProtocol` - [issue #1502][issue1502]
 - Fixed parsing of indented Markdown code blocks (empty lines don't interrupt the block anymore) - [issue #1527][issue1527]
+- Fixed open TCP connections being left alive by `download()` (by Steven Dwy) - [pull #1532][issue1532]
+- Fixed the error message for invalid types in `Json.get` (by Charles Thibaut) - [pull #1537][issue1537]
+- Fixed the HTTP status code for invalid JSON in the REST interface generator (bad request instead of internal server error) (by Jacob Carlborg) - [pull #1538][issue1538]
+- Fixed yielded task execution in case no explicit event loop is used
+- Fixed a mempory hog/leak in the libasync driver (by Martin Nowak) - [pull #1543][issue1543]
+- Fixed the JSON module to output NaN as `null` instead of `undefined` (by John Colvin) - [pull #1548][issue1548], [issue #1442][issue1442], [issue #958][issue958]
 
+[issue345]: https://github.com/rejectedsoftware/vibe.d/issues/345
+[issue958]: https://github.com/rejectedsoftware/vibe.d/issues/958
+[issue1442]: https://github.com/rejectedsoftware/vibe.d/issues/1442
+[issue1444]: https://github.com/rejectedsoftware/vibe.d/issues/1444
 [issue1488]: https://github.com/rejectedsoftware/vibe.d/issues/1488
 [issue1490]: https://github.com/rejectedsoftware/vibe.d/issues/1490
 [issue1491]: https://github.com/rejectedsoftware/vibe.d/issues/1491
@@ -37,6 +65,16 @@ v0.7.30 - 2016-08-
 [issue1510]: https://github.com/rejectedsoftware/vibe.d/issues/1510
 [issue1511]: https://github.com/rejectedsoftware/vibe.d/issues/1511
 [issue1527]: https://github.com/rejectedsoftware/vibe.d/issues/1527
+[issue1532]: https://github.com/rejectedsoftware/vibe.d/issues/1532
+[issue1537]: https://github.com/rejectedsoftware/vibe.d/issues/1537
+[issue1538]: https://github.com/rejectedsoftware/vibe.d/issues/1538
+[issue1542]: https://github.com/rejectedsoftware/vibe.d/issues/1542
+[issue1543]: https://github.com/rejectedsoftware/vibe.d/issues/1543
+[issue1547]: https://github.com/rejectedsoftware/vibe.d/issues/1547
+[issue1548]: https://github.com/rejectedsoftware/vibe.d/issues/1548
+[issue1551]: https://github.com/rejectedsoftware/vibe.d/issues/1551
+[issue1553]: https://github.com/rejectedsoftware/vibe.d/issues/1553
+[diet-ng]: https://github.com/rejectedsoftware/diet-ng
 
 
 v0.7.29 - 2016-07-04
