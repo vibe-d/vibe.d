@@ -210,10 +210,97 @@ void setVibeDistHost(string host, ushort port)
 		import vibe.stream.wrapper : StreamOutputRange;
 		import diet.html : compileHTMLDietFile;
 		auto output = StreamOutputRange(res.bodyWriter);
-		compileHTMLDietFile!(template_file, ALIASES)(output);
+		compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
 	} else {
 		import vibe.templ.diet;
 		compileDietFile!(template_file, ALIASES)(res.bodyWriter);
+	}
+}
+
+version (Have_diet_ng)
+{
+	import diet.traits;
+
+	@dietTraits
+	private struct DefaultFilters {
+		import std.string : splitLines;
+
+		static string filterCss(I)(I text, size_t indent = 0)
+		{
+			auto lines = splitLines(text);
+
+			string indent_string = "\n";
+			while (indent-- > 0) indent_string ~= '\t';
+
+			string ret = indent_string~"<style type=\"text/css\"><!--";
+			indent_string = indent_string ~ '\t';
+			foreach (ln; lines) ret ~= indent_string ~ ln;
+			indent_string = indent_string[0 .. $-1];
+			ret ~= indent_string ~ "--></style>";
+
+			return ret;
+		}
+
+
+		static string filterJavascript(I)(I text, size_t indent = 0)
+		{
+			auto lines = splitLines(text);
+
+			string indent_string = "\n";
+			while (indent-- > 0) indent_string ~= '\t';
+
+			string ret = indent_string~"<script type=\"application/javascript\">";
+			ret ~= indent_string~'\t' ~ "//<![CDATA[";
+			foreach (ln; lines) ret ~= indent_string ~ '\t' ~ ln;
+			ret ~= indent_string ~ '\t' ~ "//]]>" ~ indent_string ~ "</script>";
+
+			return ret;
+		}
+
+		static string filterMarkdown(I)(I text)
+		{
+			import vibe.textfilter.markdown : markdown = filterMarkdown;
+			// TODO: indent
+			return markdown(text);
+		}
+
+		static string filterHtmlescape(I)(I text)
+		{
+			import vibe.textfilter.html : htmlEscape;
+			// TODO: indent
+			return htmlEscape(text);
+		}
+
+		static this()
+		{
+			filters["css"] = (input, scope output) { output(filterCss(input)); };
+			filters["javascript"] = (input, scope output) { output(filterJavascript(input)); };
+			filters["markdown"] = (input, scope output) { output(filterMarkdown(cast(string)input)); };
+			filters["htmlescape"] = (input, scope output) { output(filterHtmlescape(input)); };
+		}
+
+		static FilterCallback[string] filters;
+	}
+
+
+	unittest {
+		static string compile(string diet)() {
+			import std.array : appender;
+			import std.string : strip;
+			import diet.html : compileHTMLDietString;
+			auto dst = appender!string;
+			dst.compileHTMLDietString!(diet, DefaultFilters);
+			return strip(cast(string)(dst.data));
+		}
+
+		assert(compile!":css .test" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
+		assert(compile!":javascript test();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+		assert(compile!":markdown **test**" == "<p><strong>test</strong>\n</p>");
+		assert(compile!":htmlescape <test>" == "&lt;test&gt;");
+		assert(compile!":css !{\".test\"}" == "<style type=\"text/css\"><!--\n\t.test\n--></style>");
+		assert(compile!":javascript !{\"test();\"}" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
+		assert(compile!":markdown !{\"**test**\"}" == "<p><strong>test</strong>\n</p>");
+		assert(compile!":htmlescape !{\"<test>\"}" == "&lt;test&gt;");
 	}
 }
 
