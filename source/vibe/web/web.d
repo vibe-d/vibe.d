@@ -301,25 +301,39 @@ template render(string diet_file, ALIASES...) {
 		assert(s_requestContext.req !is null, "render() used outside of a web interface request!");
 		auto req = s_requestContext.req;
 
+		struct TranslateCTX(string lang)
+		{
+			version (Have_diet_ng) {
+				import diet.traits : dietTraits;
+				@dietTraits static struct diet_translate__ {
+					static string translate(string key, string context=null) { return tr!(TranslateContext, lang)(key, context); }
+				}
+			} else static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, lang)(key, context); }
+
+			void render()
+			{
+				vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res);
+			}
+		}
+
 		static if (is(TranslateContext) && TranslateContext.languages.length) {
 			static if (TranslateContext.languages.length > 1) {
 				switch (s_requestContext.language) {
 					default: {
-						static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, TranslateContext.languages[0])(key,context); }
-						vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res);
+						TranslateCTX!(TranslateContext.languages[0]) renderctx;
+						renderctx.render();
 						return;
 						}
 					foreach (lang; TranslateContext.languages[1 .. $])
 						case lang: {
-							mixin("struct "~lang~" { static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, lang)(key,context); } void render() { vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res); } }");
-							mixin(lang~" renderctx;");
+							TranslateCTX!lang renderctx;
 							renderctx.render();
 							return;
 							}
 				}
 			} else {
-				static string diet_translate__(string key,string context=null) { return tr!(TranslateContext, TranslateContext.languages[0])(key,context); }
-				vibe.http.server.render!(diet_file, req, ALIASES, diet_translate__)(s_requestContext.res);
+				TranslateCTX!(TranslateContext.languages[0]) renderctx;
+				renderctx.render();
 			}
 		} else {
 			vibe.http.server.render!(diet_file, req, ALIASES)(s_requestContext.res);
