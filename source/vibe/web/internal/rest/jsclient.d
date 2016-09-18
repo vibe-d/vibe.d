@@ -41,7 +41,8 @@ import std.conv : to;
 	auto inner1 = indent ~ indentStep;
 	auto inner2 = inner1 ~ indentStep;
 
-	output.put(indent ~ "var toRestString = function(v) { return JSON.stringify(v); }\n");
+	if (!child)
+		output.put(indent ~ "var toRestString = function(v) { return JSON.stringify(v); }\n");
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
 		output.put("\n");
