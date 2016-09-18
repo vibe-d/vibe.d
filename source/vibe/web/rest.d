@@ -269,6 +269,8 @@ unittest {
 
 		auto router = new URLRouter;
 		router.get("/myapi.js", serveRestJSClient!MyAPI(restsettings));
+		//router.get("/myapi.js", serveRestJSClient!MyAPI(URL("http://api.example.org/")));
+		//router.get("/myapi.js", serveRestJSClient!MyAPI("http://api.example.org/"));
 		//router.get("/", staticTemplate!"index.dt");
 
 		listenHTTP(new HTTPServerSettings, router);
@@ -279,7 +281,7 @@ unittest {
 		html
 			head
 				title JS REST client test
-				script(src="test.js")
+				script(src="myapi.js")
 			body
 				button(onclick="MyAPI.postBar('hello');")
 	*/
