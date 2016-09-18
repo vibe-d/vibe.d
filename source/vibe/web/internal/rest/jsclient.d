@@ -15,7 +15,7 @@ import std.conv : to;
 /**
 	Generates JavaScript code suitable for accessing a REST interface using XHR.
 */
-/*package(vibe.web.web)*/ void generateInterface(TImpl, R)(ref R output, string name, RestInterfaceSettings settings)
+/*package(vibe.web.web)*/ void generateInterface(TImpl, R)(ref R output, string name, RestInterfaceSettings settings, bool child=false)
 {
 	// TODO: handle attributed parameters and filter out internal parameters that have no path placeholder assigned to them
 
@@ -30,12 +30,12 @@ import std.conv : to;
 
 	auto intf = RestInterface!TImpl(settings, true);
 
-	output.formattedWrite("%s = new function() {\n", name.length ? name : intf.I.stringof);
+	output.formattedWrite("%s%s = new function() {\n", child ? "this." : "", name.length ? name : intf.I.stringof);
 
 	output.put("var toRestString = function(v) { return v; }\n");
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
-		output.generateInterface!SI(__traits(identifier, intf.SubInterfaceFunctions[i]), intf.subInterfaces[i].settings);
+		output.generateInterface!SI(__traits(identifier, intf.SubInterfaceFunctions[i]), intf.subInterfaces[i].settings, true);
 	}
 
 	foreach (i, F; intf.RouteFunctions) {
@@ -62,7 +62,19 @@ import std.conv : to;
 			}
 			output.put(";\n");
 		} else {
-			output.formattedWrite("    var url = %s;\n", Json(concatURL(intf.baseURL, route.pattern)));
+			import std.traits;
+			string[] pit = [ParameterIdentifierTuple!F];
+			if (pit.length == 0)
+				output.formattedWrite("    var url = %s;\n", Json(concatURL(intf.baseURL, route.pattern)));
+			else
+			{
+				import std.algorithm;
+				import std.array;
+				char[] sink = route.pattern.dup;
+				foreach (param; pit.filter!(a=>a[0]=='_').map!(a=>a[1..$]))
+					sink = replace(sink, ":" ~ param, "${_" ~ param ~ "}");
+				output.formattedWrite("    var url = `%s`;\n", intf.baseURL ~ sink.idup); // use `` instead ""
+			}
 		}
 
 		// query parameters
