@@ -37,7 +37,7 @@ import std.conv : to;
 	auto inner1 = indent ~ indentStep;
 	auto inner2 = inner1 ~ indentStep;
 
-	output.put(indent ~ "var toRestString = function(v) { return v; }\n");
+	output.put(indent ~ "var toRestString = function(v) { return JSON.stringify(v); }\n");
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
 		output.put("\n");
@@ -70,17 +70,19 @@ import std.conv : to;
 				else output.formattedWrite("encodeURIComponent(toRestString(%s))", p.text);
 			}
 		} else {
-			import std.algorithm;
-			auto rpn = route.parameters.map!"a.name".filter!(a=>a[0]=='_').map!"a[1..$]";
-			if (rpn.save.count == 0)
-				output.formattedWrite("%s", Json(concatURL(intf.baseURL, route.pattern.dup)));
-			else {
-				import std.array;
-				char[] sink = route.pattern.dup;
-				foreach (param; rpn)
-					sink = replace(sink, ":" ~ param, "${_" ~ param ~ "}");
-				output.formattedWrite("`%s`", concatURL(intf.baseURL, sink.idup)); // use `` instead ""
-			}
+			import std.algorithm : filter, map;
+			import std.range : chain;
+			import std.array : replace;
+			import std.typecons : tuple;
+			auto rpn = route.parameters
+				.map!"a.name"
+				.filter!(a => a[0] == '_')
+				.map!"a[1..$]"
+				.map!(a => tuple(":"~a, "${_"~a~"}"));
+			char[] sink = route.pattern.dup;
+			foreach (p; rpn)
+				sink = replace(sink, p[0], p[1]);
+			output.formattedWrite("`%s`", concatURL(intf.baseURL, sink.idup)); // use `` instead ""
 		}
 		output.put(";\n");
 
@@ -97,7 +99,7 @@ import std.conv : to;
 		if (route.bodyParameters.length) {
 			output.put(inner1 ~ "var postbody = {\n");
 			foreach (p; route.bodyParameters)
-				output.formattedWrite("%s%s: toRestString(%s),\n", inner2, Json(p.fieldName), p.name);
+				output.formattedWrite("%s%s: %s,\n", inner2, Json(p.fieldName), p.name);
 			output.put(inner1 ~ "};\n");
 		}
 
