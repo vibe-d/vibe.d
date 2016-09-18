@@ -23,6 +23,10 @@ import std.conv : to;
 	import std.format : formattedWrite;
 	import std.string : toUpper;
 	import std.traits : FunctionTypeOf, ReturnType;
+	import std.algorithm : filter, map;
+	import std.array : replace;
+	import std.typecons : tuple;
+
 	import vibe.data.json : Json, serializeToJson;
 	import vibe.internal.meta.uda;
 	import vibe.http.common : HTTPMethod;
@@ -70,10 +74,6 @@ import std.conv : to;
 				else output.formattedWrite("encodeURIComponent(toRestString(%s))", p.text);
 			}
 		} else {
-			import std.algorithm : filter, map;
-			import std.range : chain;
-			import std.array : replace;
-			import std.typecons : tuple;
 			auto rpn = route.parameters
 				.map!"a.name"
 				.filter!(a => a[0] == '_')
