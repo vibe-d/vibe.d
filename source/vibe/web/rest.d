@@ -243,14 +243,14 @@ HTTPServerRequestDelegate serveRestJSClient(I)(URL base_url)
 {
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = base_url;
-	return serveRestJSClient(settings);
+	return serveRestJSClient!I(settings);
 }
 /// ditto
 HTTPServerRequestDelegate serveRestJSClient(I)(string base_url)
 {
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = URL(base_url);
-	return serveRestJSClient(settings);
+	return serveRestJSClient!I(settings);
 }
 
 ///
