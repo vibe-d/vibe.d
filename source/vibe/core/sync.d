@@ -184,27 +184,26 @@ class LocalTaskSemaphore
 		
 		Waiter w;
 		w.signal = getEventDriver().createManualEvent();
+		scope(exit)
+			destroy(w.signal);
 		w.priority = priority;
 		w.seq = min(0, m_seq - w.priority);
 		if (++m_seq == uint.max)
 			rewindSeq();
 		
 		m_waiters.insert(w);
-		do w.signal.wait(); while (!tryLock());
-		// on resume:
-		destroy(w.signal);
+		w.signal.waitUninterruptible(w.signal.emitCount);
 	}
 
 	/** Gives up an existing lock.
 	*/
 	void unlock() 
-	{
-		m_locks--;
-		if (m_waiters.length > 0 && available > 0) {
-			Waiter w = m_waiters.front();
-			w.signal.emit(); // resume one
+	{		
+		if (m_waiters.length > 0) {
+			ManualEvent s = m_waiters.front().signal;
 			m_waiters.removeFront();
-		}
+			s.emit(); // resume one
+		} else m_locks--;
 	}
 
 	// if true, a goes after b. ie. b comes out front()
