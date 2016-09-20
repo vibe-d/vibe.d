@@ -11,12 +11,35 @@ import vibe.web.rest;
 
 import std.conv : to;
 
+///
+class JSRestClientGenerateSettings
+{
+	///
+	string indentStep;
+	///
+	string name;
+	///
+	bool parent;
+
+	///
+	this(string indentStep="    ", string name=null, bool parent=true)
+	{
+		this.name = name;
+		this.parent = parent;
+		this.indentStep = indentStep;
+	}
+
+	auto child(string cname)
+	{
+		return new JSRestClientGenerateSettings(indentStep, cname, false);
+	}
+}
 
 /**
 	Generates JavaScript code suitable for accessing a REST interface using XHR.
 */
-/*package(vibe.web.web)*/ void generateInterface(TImpl, R)(ref R output, string name, RestInterfaceSettings settings,
-		string baseIndent="", string indentStep = "    ", bool child=false)
+/*package(vibe.web.web)*/ void generateInterface(TImpl, R)(ref R output, RestInterfaceSettings settings,
+		JSRestClientGenerateSettings jsgenset)
 {
 	// TODO: handle attributed parameters and filter out internal parameters that have no path placeholder assigned to them
 
@@ -35,19 +58,18 @@ import std.conv : to;
 
 	auto intf = RestInterface!TImpl(settings, true);
 
-	output.formattedWrite("%s%s%s = new function() {\n", baseIndent, child ? "this." : "", name.length ? name : intf.I.stringof);
+	auto fout = indentSink(output, jsgenset.indentStep);
 
-	auto indent = baseIndent ~ indentStep;
-	auto inner1 = indent ~ indentStep;
-	auto inner2 = inner1 ~ indentStep;
+	fout.formattedWrite("%s%s = new function() {\n", jsgenset.parent ? "" : "this.",
+			jsgenset.name.length ? jsgenset.name : intf.I.stringof);
 
-	if (!child)
-		output.put(indent ~ "var toRestString = function(v) { return JSON.stringify(v); }\n");
+	if (jsgenset.parent)
+		fout.put("var toRestString = function(v) { return JSON.stringify(v); }\n");
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
-		output.put("\n");
-		output.generateInterface!SI(__traits(identifier, intf.SubInterfaceFunctions[i]),
-				intf.subInterfaces[i].settings, indent, indentStep, true);
+		fout.put("\n");
+		auto childjsset = jsgenset.child(__traits(identifier, intf.SubInterfaceFunctions[i]));
+		fout.generateInterface!SI(intf.subInterfaces[i].settings, childjsset);
 	}
 
 	foreach (i, F; intf.RouteFunctions) {
@@ -55,24 +77,24 @@ import std.conv : to;
 		auto route = intf.routes[i];
 
 		// function signature
-		output.put("\n");
-		output.formattedWrite("%sthis.%s = function(", indent, route.functionName);
+		fout.put("\n");
+		fout.formattedWrite("this.%s = function(", route.functionName);
 		foreach (j, param; route.parameters) {
-			output.put(param.name);
-			output.put(", ");
+			fout.put(param.name);
+			fout.put(", ");
 		}
-		static if (!is(ReturnType!FT == void)) output.put("on_result, ");
+		static if (!is(ReturnType!FT == void)) fout.put("on_result, ");
 
-		output.put("on_error) {\n");
+		fout.put("on_error) {\n");
 
 		// url assembly
-		output.put(inner1 ~ "var url = ");
+		fout.put("var url = ");
 		if (route.pathHasPlaceholders) {
-			output.serializeToJson(intf.baseURL);
+			fout.serializeToJson(intf.baseURL);
 			foreach (p; route.pathParts) {
-				output.put(" + ");
-				if (!p.isParameter) output.serializeToJson(p.text);
-				else output.formattedWrite("encodeURIComponent(toRestString(%s))", p.text);
+				fout.put(" + ");
+				if (!p.isParameter) fout.serializeToJson(p.text);
+				else fout.formattedWrite("encodeURIComponent(toRestString(%s))", p.text);
 			}
 		} else {
 			auto rpn = route.parameters
@@ -83,53 +105,51 @@ import std.conv : to;
 			char[] sink = route.pattern.dup;
 			foreach (p; rpn)
 				sink = replace(sink, p[0], p[1]);
-			output.formattedWrite("`%s`", concatURL(intf.baseURL, sink.idup)); // use `` instead ""
+			fout.formattedWrite("`%s`", concatURL(intf.baseURL, sink.idup)); // use `` instead ""
 		}
-		output.put(";\n");
+		fout.put(";\n");
 
 		// query parameters
 		if (route.queryParameters.length) {
-			output.put(inner1 ~ "url = url");
+			fout.put("url = url");
 			foreach (j, p; route.queryParameters)
-				output.formattedWrite(" + \"%s%s=\" + encodeURIComponent(toRestString(%s))",
+				fout.formattedWrite(" + \"%s%s=\" + encodeURIComponent(toRestString(%s))",
 					j == 0 ? '?' : '&', p.fieldName, p.name);
-			output.put(";\n");
+			fout.put(";\n");
 		}
 
 		// body parameters
 		if (route.bodyParameters.length) {
-			output.put(inner1 ~ "var postbody = {\n");
+			fout.put("var postbody = {\n");
 			foreach (p; route.bodyParameters)
-				output.formattedWrite("%s%s: %s,\n", inner2, Json(p.fieldName), p.name);
-			output.put(inner1 ~ "};\n");
+				fout.formattedWrite("%s: %s,\n", Json(p.fieldName), p.name);
+			fout.put("};\n");
 		}
 
 		// XHR setup
-		output.put(inner1 ~ "var xhr = new XMLHttpRequest();\n");
-		output.formattedWrite("%sxhr.open('%s', url, true);\n", inner1, route.method.to!string.toUpper);
+		fout.put("var xhr = new XMLHttpRequest();\n");
+		fout.formattedWrite("xhr.open('%s', url, true);\n", route.method.to!string.toUpper);
 		static if (!is(ReturnType!FT == void)) {
-			output.put(inner1 ~ "xhr.onload = function () {\n");
-			output.put(inner2 ~ "if (this.status >= 400) { if (on_error) on_error(JSON.parse(this.responseText)); else console.log(this.responseText); }\n");
-			output.put(inner2 ~ "else on_result(JSON.parse(this.responseText));\n");
-			output.put(inner1 ~ "};\n");
+			fout.put("xhr.onload = function () {\n");
+			fout.put("if (this.status >= 400) { if (on_error) on_error(JSON.parse(this.responseText)); else console.log(this.responseText); }\n");
+			fout.put("else on_result(JSON.parse(this.responseText));\n");
+			fout.put("};\n");
 		}
 
 		// header parameters
 		foreach (p; route.headerParameters)
-			output.formattedWrite("%sxhr.setRequestHeader(%s, %s);\n", inner1, Json(p.fieldName), p.name);
+			fout.formattedWrite("xhr.setRequestHeader(%s, %s);\n", Json(p.fieldName), p.name);
 
 		// submit request
 		if (route.method == HTTPMethod.GET || !route.bodyParameters.length)
-			output.put(inner1 ~ "xhr.send();\n");
+			fout.put("xhr.send();\n");
 		else {
-			output.put(inner1 ~ "xhr.setRequestHeader('Content-Type', 'application/json');\n");
-			output.put(inner1 ~ "xhr.send(JSON.stringify(postbody));\n");
+			fout.put("xhr.setRequestHeader('Content-Type', 'application/json');\n");
+			fout.put("xhr.send(JSON.stringify(postbody));\n");
 		}
-
-		output.put(indent ~ "}\n");
+		fout.put("}\n");
 	}
-
-	output.put(baseIndent ~ "}\n");
+	fout.put("}\n");
 }
 
 version (unittest) {
@@ -160,9 +180,106 @@ unittest { // issue #1293
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = URL("http://localhost/");
 	auto app = appender!string();
-	app.generateInterface!I(null, settings);
+	auto jsgenset = new JSRestClientGenerateSettings;
+	app.generateInterface!I(settings, jsgenset);
+	assert(app.data.canFind("this.s = new function()"));
 	assert(app.data.canFind("this.test1 = function(on_result, on_error)"));
 	assert(app.data.find("this.test1 = function").canFind("xhr.onload ="));
 	assert(app.data.canFind("this.test2 = function(on_error)"));
 	assert(!app.data.find("this.test2 = function").canFind("xhr.onload ="));
+}
+
+private auto indentSink(O)(ref O output, string step)
+{
+	static struct IndentSink(R)
+	{
+		import std.string : strip;
+
+		R* base;
+		string step, indent, tempIndent;
+		alias orig this;
+
+		this(R* base, string step)
+		{
+			this.base = base;
+			this.step = step;
+		}
+
+		void pushIndent()
+		{
+			indent ~= step;
+			tempIndent ~= step;
+		}
+
+		void popIndent()
+		{
+			indent = indent[0..$-step.length];
+			if (tempIndent.length)
+				tempIndent = indent;
+		}
+
+		void postPut(const(char)[] s)
+		{
+			auto ss = s.strip;
+			if (ss.length && ss[$-1] == '{')
+				pushIndent();
+
+			if (s.length && s[$-1] == '\n')
+				tempIndent = indent;
+		}
+
+		void prePut(const(char)[] s)
+		{
+			auto ss = s.strip;
+			if (ss.length && ss[0] == '}')
+				popIndent();
+
+			orig.put(tempIndent);
+			tempIndent = "";
+		}
+
+		void put(const(char)[] s) { prePut(s); orig.put(s); postPut(s); }
+
+		void put(char c) { prePut([c]); orig.put(c); postPut([c]); }
+
+		void formattedWrite(Args...)(string fmt, Args args)
+		{
+			import std.format : formattedWrite;
+
+			prePut(fmt);
+			orig.formattedWrite(fmt, args);
+			postPut(fmt);
+		}
+
+		ref R orig() @property { return *base; }
+	}
+
+	static if (is(typeof(output.prePut)) && is(typeof(output.postPut))) // is IndentSink
+		return output;
+	else
+		return IndentSink!O(&output, step);
+}
+
+unittest {
+	import std.array : appender;
+	import std.format : formattedWrite;
+	auto buf = appender!string();
+	auto ind = indentSink(buf, "\t");
+	ind.put("class A {\n");
+	ind.put("int func() { return 12; }\n");
+
+	auto ind2 = indentSink(ind, "    "); // return itself, not override indentStep
+
+	ind2.formattedWrite("void %s(%-(%s, %)) {\n", "func2", ["int a", "float b", "char c"]);
+	ind2.formattedWrite("if (%s == %s) {\n", "a", "0");
+	ind2.put("action();\n");
+	ind2.put("}\n");
+	ind2.put("}\n");
+	ind.put("}\n");
+
+	auto res = "class A {\n\tint func() { return 12; }\n\tvoid func2(int a, float b, char c) {\n\t\t" ~
+		"if (a == 0) {\n\t\t\taction();\n\t\t}\n\t}\n}\n";
+
+	import std.algorithm : equals;
+	assert(equal(res, buf.data));
 }
