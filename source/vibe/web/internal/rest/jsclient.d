@@ -263,6 +263,8 @@ private auto indentSink(O)(ref O output, string step)
 unittest {
 	import std.array : appender;
 	import std.format : formattedWrite;
+	import std.algorithm : equal;
+
 	auto buf = appender!string();
 	auto ind = indentSink(buf, "\t");
 	ind.put("class A {\n");
@@ -280,6 +282,5 @@ unittest {
 	auto res = "class A {\n\tint func() { return 12; }\n\tvoid func2(int a, float b, char c) {\n\t\t" ~
 		"if (a == 0) {\n\t\t\taction();\n\t\t}\n\t}\n}\n";
 
-	import std.algorithm : equals;
 	assert(equal(res, buf.data));
 }
