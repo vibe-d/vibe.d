@@ -243,14 +243,14 @@ HTTPServerRequestDelegate serveRestJSClient(I)(URL base_url)
 {
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = base_url;
-	return serveRestJSClient(settings);
+	return serveRestJSClient!I(settings);
 }
 /// ditto
 HTTPServerRequestDelegate serveRestJSClient(I)(string base_url)
 {
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = URL(base_url);
-	return serveRestJSClient(settings);
+	return serveRestJSClient!I(settings);
 }
 
 ///
@@ -269,6 +269,8 @@ unittest {
 
 		auto router = new URLRouter;
 		router.get("/myapi.js", serveRestJSClient!MyAPI(restsettings));
+		//router.get("/myapi.js", serveRestJSClient!MyAPI(URL("http://api.example.org/")));
+		//router.get("/myapi.js", serveRestJSClient!MyAPI("http://api.example.org/"));
 		//router.get("/", staticTemplate!"index.dt");
 
 		listenHTTP(new HTTPServerSettings, router);
@@ -279,7 +281,7 @@ unittest {
 		html
 			head
 				title JS REST client test
-				script(src="test.js")
+				script(src="myapi.js")
 			body
 				button(onclick="MyAPI.postBar('hello');")
 	*/
@@ -289,11 +291,12 @@ unittest {
 /**
 	Generates JavaScript code to access a REST interface from the browser.
 */
-void generateRestJSClient(I, R)(ref R output, RestInterfaceSettings settings = null)
+void generateRestJSClient(I, R)(ref R output, RestInterfaceSettings settings)
 	if (is(I == interface) && isOutputRange!(R, char))
 {
-	import vibe.web.internal.rest.jsclient : generateInterface;
-	output.generateInterface!I(null, settings);
+	import vibe.web.internal.rest.jsclient : generateInterface, JSRestClientGenerateSettings;
+	auto jsgenset = new JSRestClientGenerateSettings;
+	output.generateInterface!I(settings, jsgenset);
 }
 
 /// Writes a JavaScript REST client to a local .js file.
@@ -310,9 +313,12 @@ unittest {
 		import std.array : appender;
 
 		auto app = appender!string;
-		generateRestJSClient!MyAPI(app);
-		writeFileUTF8(Path("myapi.js"), app.data);
+		auto settings = new RestInterfaceSettings;
+		settings.baseURL = URL("http://localhost/");
+		generateRestJSClient!MyAPI(app, settings);
 	}
+
+	generateJSClientImpl();
 }
 
 
