@@ -1,12 +1,13 @@
 /**
 	Internal module with functions to generate JavaScript REST interfaces.
 
-	Copyright: © 2015 RejectedSoftware e.K.
+	Copyright: © 2015-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
 module vibe.web.internal.rest.jsclient;
 
+import vibe.inet.url : URL;
 import vibe.web.rest;
 
 import std.conv : to;
@@ -53,9 +54,13 @@ import std.conv : to;
 
 		// url assembly
 		if (route.pathHasPlaceholders) {
+			// extract the server part of the URL
 			output.put("    var url = ");
-			output.serializeToJson(intf.baseURL);
-			foreach (p; route.pathParts) {
+			auto burl = URL(intf.baseURL);
+			burl.pathString = "/";
+			output.serializeToJson(burl.toString()[0 .. $-1]);
+			// and then assemble the full path piece-wise
+			foreach (p; route.fullPathParts) {
 				output.put(" + ");
 				if (!p.isParameter) output.serializeToJson(p.text);
 				else output.formattedWrite("encodeURIComponent(toRestString(%s))", p.text);
