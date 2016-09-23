@@ -145,6 +145,8 @@ else import std.typetuple : anySatisfy, Filter;
 
 	private void computeRoutes()
 	{
+		import std.algorithm.searching : any;
+
 		foreach (si, RF; RouteFunctions) {
 			enum sroute = staticRoutes[si];
 			Route route;
@@ -179,7 +181,6 @@ else import std.typetuple : anySatisfy, Filter;
 						route.pattern = '/' ~ route.pattern;
 					route.pathParts ~= PathPart(true, "id");
 					route.fullPathParts ~= PathPart(true, "id");
-					route.pathHasPlaceholders = true;
 				}
 
 				route.parameters[i] = pi;
@@ -198,6 +199,7 @@ else import std.typetuple : anySatisfy, Filter;
 			extractPathParts(route.fullPathParts, !prefix_id && route.pattern.startsWith("/") ? route.pattern[1 .. $] : route.pattern);
 			if (prefix_id) route.pattern = ":id" ~ route.pattern;
 			route.fullPattern = concatURL(this.basePath, route.pattern);
+			route.pathHasPlaceholders = route.fullPathParts.any!(p => p.isParameter);
 
 			routes[si] = route;
 		}
@@ -671,11 +673,15 @@ unittest {
 	auto bar = RestInterface!Bar(foo.subInterfaces[0].settings, false);
 	assert(bar.routeCount == 2);
 	assert(bar.routes[0].fullPattern == "/bar/:barid/test");
+	assert(bar.routes[0].pathHasPlaceholders);
 	assert(bar.routes[1].fullPattern == "/bar/test2", bar.routes[1].fullPattern);
+	assert(!bar.routes[1].pathHasPlaceholders);
 	assert(bar.subInterfaceCount == 1);
 
 	auto baz = RestInterface!Baz(bar.subInterfaces[0].settings, false);
 	assert(baz.routeCount == 2);
 	assert(baz.routes[0].fullPattern == "/bar/:barid/baz/:bazid/test");
+	assert(baz.routes[0].pathHasPlaceholders);
 	assert(baz.routes[1].fullPattern == "/bar/:barid/baz/test2");
+	assert(baz.routes[1].pathHasPlaceholders);
 }

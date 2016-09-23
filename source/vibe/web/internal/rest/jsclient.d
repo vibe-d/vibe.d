@@ -1,12 +1,13 @@
 /**
 	Internal module with functions to generate JavaScript REST interfaces.
 
-	Copyright: © 2015 RejectedSoftware e.K.
+	Copyright: © 2015-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
 module vibe.web.internal.rest.jsclient;
 
+import vibe.inet.url : URL;
 import vibe.web.rest;
 
 import std.conv : to;
@@ -90,22 +91,18 @@ class JSRestClientGenerateSettings
 		// url assembly
 		fout.put("var url = ");
 		if (route.pathHasPlaceholders) {
-			fout.serializeToJson(intf.baseURL);
-			foreach (p; route.pathParts) {
+			// extract the server part of the URL
+			auto burl = URL(intf.baseURL);
+			burl.pathString = "/";
+			fout.serializeToJson(burl.toString()[0 .. $-1]);
+			// and then assemble the full path piece-wise
+			foreach (p; route.fullPathParts) {
 				fout.put(" + ");
 				if (!p.isParameter) fout.serializeToJson(p.text);
-				else fout.formattedWrite("encodeURIComponent(toRestString(%s))", p.text);
+				else fout.formattedWrite("encodeURIComponent(%s)", p.text);
 			}
 		} else {
-			auto rpn = route.parameters
-				.map!"a.name"
-				.filter!(a => a[0] == '_')
-				.map!"a[1..$]"
-				.map!(a => tuple(":"~a, "${_"~a~"}"));
-			char[] sink = route.pattern.dup;
-			foreach (p; rpn)
-				sink = replace(sink, p[0], p[1]);
-			fout.formattedWrite("`%s`", concatURL(intf.baseURL, sink.idup)); // use `` instead ""
+			fout.formattedWrite(`"%s"`, concatURL(intf.baseURL, route.pattern));
 		}
 		fout.put(";\n");
 
