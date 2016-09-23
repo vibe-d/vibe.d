@@ -45,7 +45,7 @@ class JSRestClientGenerateSettings
 	// TODO: handle attributed parameters and filter out internal parameters that have no path placeholder assigned to them
 
 	import std.format : formattedWrite;
-	import std.string : toUpper;
+	import std.string : toUpper, strip, splitLines;
 	import std.traits : FunctionTypeOf, ReturnType;
 	import std.algorithm : filter, map;
 	import std.array : replace;
@@ -64,8 +64,19 @@ class JSRestClientGenerateSettings
 	fout.formattedWrite("%s%s = new function() {\n", jsgenset.parent ? "" : "this.",
 			jsgenset.name.length ? jsgenset.name : intf.I.stringof);
 
-	if (jsgenset.parent)
-		fout.put("var toRestString = function(v) { return JSON.stringify(v); }\n");
+	if (jsgenset.parent) {
+		auto lns = `
+			var toRestString = function(v) {
+				var res;
+				switch(typeof(v)) {
+					case "object": res = JSON.stringify(v); break;
+					default: res = v;
+				}
+				return encodeURIComponent(res);
+			}`;
+		foreach(ln; lns.splitLines.map!(a=>a.strip ~ "\n"))
+			fout.put(ln);
+	}
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
 		fout.put("\n");
@@ -99,7 +110,7 @@ class JSRestClientGenerateSettings
 			foreach (p; route.fullPathParts) {
 				fout.put(" + ");
 				if (!p.isParameter) fout.serializeToJson(p.text);
-				else fout.formattedWrite("encodeURIComponent(%s)", p.text);
+				else fout.formattedWrite("toRestString(%s)", p.text);
 			}
 		} else {
 			fout.formattedWrite(`"%s"`, concatURL(intf.baseURL, route.pattern));
@@ -110,7 +121,7 @@ class JSRestClientGenerateSettings
 		if (route.queryParameters.length) {
 			fout.put("url = url");
 			foreach (j, p; route.queryParameters)
-				fout.formattedWrite(" + \"%s%s=\" + encodeURIComponent(toRestString(%s))",
+				fout.formattedWrite(" + \"%s%s=\" + toRestString(%s)",
 					j == 0 ? '?' : '&', p.fieldName, p.name);
 			fout.put(";\n");
 		}
