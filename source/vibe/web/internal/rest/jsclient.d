@@ -202,28 +202,33 @@ private auto indentSink(O)(ref O output, string step)
 	static struct IndentSink(R)
 	{
 		import std.string : strip;
+		import std.algorithm : joiner;
+		import std.range : repeat;
 
 		R* base;
-		string step, indent, tempIndent;
+		string indent;
+		size_t level, tempLevel;
 		alias orig this;
 
-		this(R* base, string step)
+		this(R* base, string indent)
 		{
 			this.base = base;
-			this.step = step;
+			this.indent = indent;
 		}
 
 		void pushIndent()
 		{
-			indent ~= step;
-			tempIndent ~= step;
+			level++;
+			tempLevel++;
 		}
 
 		void popIndent()
 		{
-			indent = indent[0..$-step.length];
-			if (tempIndent.length)
-				tempIndent = indent;
+			if (!level) return;
+
+			level--;
+			if (tempLevel)
+				tempLevel = level;
 		}
 
 		void postPut(const(char)[] s)
@@ -233,7 +238,7 @@ private auto indentSink(O)(ref O output, string step)
 				pushIndent();
 
 			if (s.length && s[$-1] == '\n')
-				tempIndent = indent;
+				tempLevel = level;
 		}
 
 		void prePut(const(char)[] s)
@@ -242,8 +247,8 @@ private auto indentSink(O)(ref O output, string step)
 			if (ss.length && ss[0] == '}')
 				popIndent();
 
-			orig.put(tempIndent);
-			tempIndent = "";
+			orig.put(indent.repeat(tempLevel).joiner());
+			tempLevel = 0;
 		}
 
 		void put(const(char)[] s) { prePut(s); orig.put(s); postPut(s); }
