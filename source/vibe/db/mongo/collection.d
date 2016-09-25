@@ -417,7 +417,7 @@ struct MongoCollection {
 		will be removed. Since the order of fields matters, it is
 		only suitable for single-field indices.
 	*/
-	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.None, Duration expire_time = 0.seconds)
+	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.none, Duration expire_time = 0.seconds)
 	{
 		// TODO: support 2d indexes
 
@@ -438,16 +438,16 @@ struct MongoCollection {
 		doc["key"] = key;
 		doc["ns"] = m_fullPath;
 		doc["name"] = indexname.data;
-		if (flags & IndexFlags.Unique) doc["unique"] = true;
-		if (flags & IndexFlags.DropDuplicates) doc["dropDups"] = true;
-		if (flags & IndexFlags.Background) doc["background"] = true;
-		if (flags & IndexFlags.Sparse) doc["sparse"] = true;
-		if (flags & IndexFlags.ExpireAfterSeconds) doc["expireAfterSeconds"] = expire_time.total!"seconds";
+		if (flags & IndexFlags.unique) doc["unique"] = true;
+		if (flags & IndexFlags.dropDuplicates) doc["dropDups"] = true;
+		if (flags & IndexFlags.background) doc["background"] = true;
+		if (flags & IndexFlags.sparse) doc["sparse"] = true;
+		if (flags & IndexFlags.expireAfterSeconds) doc["expireAfterSeconds"] = expire_time.total!"seconds";
 		database["system.indexes"].insert(doc);
 	}
 	/// ditto
 	deprecated("Use the overload taking an array of field_orders instead.")
-	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.None, ulong expireAfterSeconds = 0)
+	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.none, ulong expireAfterSeconds = 0)
 	{
 		Tuple!(string, int)[] orders;
 		foreach (k, v; field_orders)
@@ -553,13 +553,4 @@ unittest {
 		if (!qusr.isNull)
 			logInfo("User: %s", qusr.loginName);
 	}
-}
-
-enum IndexFlags {
-	None = 0,
-	Unique = 1<<0,
-	DropDuplicates = 1<<2,
-	Background = 1<<3,
-	Sparse = 1<<4,
-	ExpireAfterSeconds = 1<<5
 }
