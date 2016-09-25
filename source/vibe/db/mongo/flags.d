@@ -23,7 +23,7 @@ enum IndexFlags {
 	dropDuplicates = 1<<2,
 	background = 1<<3,
 	sparse = 1<<4,
-	expireAfterSeconds = 1<<5
+	expireAfterSeconds = 1<<5,
 
 	None = none, /// Deprecated compatibility alias, use `none` instead.
 	Unique = unique, /// Deprecated compatibility alias, use `unique` instead.
