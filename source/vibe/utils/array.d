@@ -374,8 +374,9 @@ struct FixedRingBuffer(T, size_t N = 0, bool INITIALIZE = true) {
 	void removeAt(Range r)
 	{
 		assert(r.m_buffer is m_buffer);
+		if (r.m_start == m_start) { popFront(); return; }
 		if( m_start + m_fill > m_buffer.length ){
-			assert(r.m_start >= m_start && r.m_start < m_buffer.length || r.m_start < mod(m_start+m_fill));
+			assert(r.m_start > m_start && r.m_start < m_buffer.length || r.m_start < mod(m_start+m_fill));
 			if( r.m_start > m_start ){
 				foreach(i; r.m_start .. m_buffer.length-1)
 					m_buffer[i] = m_buffer[i+1];
@@ -540,6 +541,22 @@ unittest {
 	{
 		assert(i == item);
 	}
+
+	assert(buf.front == 0);
+	assert(buf.full);
+	buf.removeAt(buf[0..1]); //4 .|1 2 3
+	foreach(i, item; buf)
+	{
+		assert(i == item - 1);
+	}
+
+	buf.put(5); // 4 5|1 2 3
+	buf.removeAt(buf[3..4]); // 5 .|1 2 3
+	assert(buf.front == 1); buf.popFront();
+	assert(buf.front == 2); buf.popFront();
+	assert(buf.front == 3); buf.popFront();
+	assert(buf.front == 5); buf.popFront();
+	assert(buf.empty);
 }
 
 
