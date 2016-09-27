@@ -430,6 +430,7 @@ private void readUntilGeneric(R)(InputStream stream, ref R dst, in ubyte[] end_m
 		// the block size is also always limited by the max_bytes parameter.
 		size_t nread = 0;
 		auto least_size = stream.leastSize(); // NOTE: blocks until data is available
+		enforce(least_size > 0, "leastSize() returned 0 unexpectedly");
 		auto max_read = max_bytes - bytes_read;
 		auto str = stream.peek(); // try to get some data for free
 		if( str.length == 0 ){ // if not, read as much as possible without reading past the end
