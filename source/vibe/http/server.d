@@ -301,6 +301,7 @@ version (Have_diet_ng)
 		assert(compile!":javascript !{\"test();\"}" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 		assert(compile!":markdown !{\"**test**\"}" == "<p><strong>test</strong>\n</p>");
 		assert(compile!":htmlescape !{\"<test>\"}" == "&lt;test&gt;");
+		assert(compile!":javascript\n\ttest();" == "<script type=\"application/javascript\">\n\t//<![CDATA[\n\ttest();\n\t//]]>\n</script>");
 	}
 }
 
