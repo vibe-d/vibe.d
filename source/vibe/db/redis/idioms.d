@@ -344,7 +344,7 @@ template RedisListCollection(T, RedisCollectionOptions OPTIONS = RedisCollection
 
 
 */
-template RedisStringCollection(T, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
+template RedisStringCollection(T = string, RedisCollectionOptions OPTIONS = RedisCollectionOptions.defaults, size_t ID_LENGTH = 1)
 {
 	alias RedisStringCollection = RedisCollection!(RedisString!T, OPTIONS, ID_LENGTH);
 }
@@ -400,6 +400,7 @@ struct JsonEncoded(T) {
 	static assert(isStringSerializable!JsonEncoded);
 }
 JsonEncoded!T jsonEncoded(T)(T value) { return JsonEncoded!T(value); }
+
 
 // utility structure, temporarily placed here
 struct LazyString(T...) {
