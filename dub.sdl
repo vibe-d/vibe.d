@@ -113,7 +113,7 @@ subPackage {
 	description "HTTP server and client implementation and higher level HTTP functionality"
 	dependency "vibe-d:core" version=">=0.0.0"
 	dependency "vibe-d:data" version=">=0.0.0"
-	dependency "diet-ng" version="~>1.0.0-alpha.2" optional=true
+	dependency "diet-ng" version="~>1.0" optional=true default=true
 	targetType "library"
 	sourcePaths "source/vibe/http"
 }
