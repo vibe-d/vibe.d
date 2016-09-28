@@ -33,6 +33,18 @@ RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 }
 
 /**
+	Returns a Redis database connecction instance corresponding to the given URL.
+
+	The URL must be of the format "redis://server[:port]/dbnum".
+*/
+RedisDatabase connectRedisDB(URL url)
+{
+	auto cli = connectRedis(url.host, url.port != 0 ? url.port : RedisClient.defaultPort);
+	// TODO: support password
+	return cli.getDatabase(url.localURI[1 .. $].to!long);
+}
+
+/**
 	A redis client with connection pooling.
 */
 final class RedisClient {
