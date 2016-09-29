@@ -13,26 +13,20 @@ import vibe.web.rest;
 import std.conv : to;
 
 ///
-class JSRestClientGenerateSettings
+class JSRestClientSettings
 {
 	///
 	string indentStep;
 	///
 	string name;
-	///
-	bool parent;
 
 	///
-	this(string indentStep="    ", string name=null, bool parent=true)
-	{
-		this.name = name;
-		this.parent = parent;
-		this.indentStep = indentStep;
-	}
-
-	auto child(string cname)
-	{
-		return new JSRestClientGenerateSettings(indentStep, cname, false);
+	@property JSRestClientSettings dup()
+	const {
+		auto ret = new JSRestClientSettings;
+		ret.indentStep = this.indentStep;
+		ret.name = this.name;
+		return ret;
 	}
 }
 
@@ -40,7 +34,7 @@ class JSRestClientGenerateSettings
 	Generates JavaScript code suitable for accessing a REST interface using XHR.
 */
 /*package(vibe.web.web)*/ void generateInterface(TImpl, R)(ref R output, RestInterfaceSettings settings,
-		JSRestClientGenerateSettings jsgenset)
+		JSRestClientSettings jsgenset, bool parent)
 {
 	// TODO: handle attributed parameters and filter out internal parameters that have no path placeholder assigned to them
 
@@ -61,10 +55,10 @@ class JSRestClientGenerateSettings
 
 	auto fout = indentSink(output, jsgenset.indentStep);
 
-	fout.formattedWrite("%s%s = new function() {\n", jsgenset.parent ? "" : "this.",
+	fout.formattedWrite("%s%s = new function() {\n", parent ? "" : "this.",
 			jsgenset.name.length ? jsgenset.name : intf.I.stringof);
 
-	if (jsgenset.parent) {
+	if (parent) {
 		auto lns = `
 			var toRestString = function(v) {
 				var res;
@@ -80,8 +74,9 @@ class JSRestClientGenerateSettings
 
 	foreach (i, SI; intf.SubInterfaceTypes) {
 		fout.put("\n");
-		auto childjsset = jsgenset.child(__traits(identifier, intf.SubInterfaceFunctions[i]));
-		fout.generateInterface!SI(intf.subInterfaces[i].settings, childjsset);
+		auto chset = jsgenset.dup;
+		chset.name = __traits(identifier, intf.SubInterfaceFunctions[i]);
+		fout.generateInterface!SI(intf.subInterfaces[i].settings, chset, false);
 	}
 
 	foreach (i, F; intf.RouteFunctions) {
@@ -167,7 +162,7 @@ version (unittest) {
 	{
 		import std.array;
 		auto app = appender!string();
-		app.generateInterface!DUMMY(null, null);
+		app.generateInterface!DUMMY(null, null, true);
 	}
 }
 
@@ -188,8 +183,8 @@ unittest { // issue #1293
 	auto settings = new RestInterfaceSettings;
 	settings.baseURL = URL("http://localhost/");
 	auto app = appender!string();
-	auto jsgenset = new JSRestClientGenerateSettings;
-	app.generateInterface!I(settings, jsgenset);
+	auto jsgenset = new JSRestClientSettings;
+	app.generateInterface!I(settings, jsgenset, true);
 	assert(app.data.canFind("this.s = new function()"));
 	assert(app.data.canFind("this.test1 = function(on_result, on_error)"));
 	assert(app.data.find("this.test1 = function").canFind("xhr.onload ="));

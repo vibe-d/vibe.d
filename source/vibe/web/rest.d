@@ -291,12 +291,12 @@ unittest {
 /**
 	Generates JavaScript code to access a REST interface from the browser.
 */
-void generateRestJSClient(I, R)(ref R output, RestInterfaceSettings settings)
+void generateRestJSClient(I, R)(ref R output, RestInterfaceSettings settings = null)
 	if (is(I == interface) && isOutputRange!(R, char))
 {
-	import vibe.web.internal.rest.jsclient : generateInterface, JSRestClientGenerateSettings;
-	auto jsgenset = new JSRestClientGenerateSettings;
-	output.generateInterface!I(settings, jsgenset);
+	import vibe.web.internal.rest.jsclient : generateInterface, JSRestClientSettings;
+	auto jsgenset = new JSRestClientSettings;
+	output.generateInterface!I(settings, jsgenset, true);
 }
 
 /// Writes a JavaScript REST client to a local .js file.
