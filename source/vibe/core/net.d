@@ -142,6 +142,10 @@ version(VibeLibasyncDriver) {
 } else {
 /**
 	Represents a network/socket address.
+
+	To construct a `NetworkAddress`, use either `resolveHost` or set the
+	`family` property accordingly, followed by setting the fields of
+	`sockAddrInet4`/`sockAddrInet6`/`sockAddrUnix`.
 */
 struct NetworkAddress {
 	@safe:
