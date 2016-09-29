@@ -339,8 +339,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 
 	private void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value)
 	{
-		import std.typecons : Nullable, Tuple, tuple;
-		static if (__VERSION__ >= 2067) import std.typecons : BitFlags;
+		import std.typecons : BitFlags, Nullable, Tuple, tuple;
 
 		alias TU = Unqual!T;
 
@@ -414,7 +413,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 		} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 			if (value.isNull()) ser.serializeValue!(typeof(null))(null);
 			else ser.serializeValue!(typeof(value.get()), ATTRIBUTES)(value.get());
-		} else static if (__VERSION__ >= 2067 && is(TU == BitFlags!E, E)) {
+		} else static if (is(TU == BitFlags!E, E)) {
 			alias STraits = SubTraits!(Traits, E);
 
 			size_t cnt = 0;
@@ -526,8 +525,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 
 	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) if(isMutable!T) 
 	{
-		import std.typecons : Nullable;
-		static if (__VERSION__ >= 2067) import std.typecons : BitFlags;
+		import std.typecons : BitFlags, Nullable;
 
 		static struct Traits {
 			alias Type = T;
@@ -591,7 +589,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 		} else static if (isInstanceOf!(Nullable, T)) {
 			if (ser.tryReadNull!Traits()) return T.init;
 			return T(ser.deserializeValue!(typeof(T.init.get()), ATTRIBUTES));
-		} else static if (__VERSION__ >= 2067 && is(T == BitFlags!E, E)) {
+		} else static if (is(T == BitFlags!E, E)) {
 			alias STraits = SubTraits!(Traits, E);
 			T ret;
 			size_t i = 0;
@@ -1454,7 +1452,6 @@ unittest // Immutable data deserialization
 	assert(d.arr == c.arr);
 }
 
-static if (__VERSION__ >= 2067)
 unittest { // test BitFlags serialization
 	import std.typecons : BitFlags;
 

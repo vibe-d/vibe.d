@@ -293,10 +293,8 @@ unittest {
 	});
 	assert(!mutex.m_impl.m_locked);
 
-	static if (__VERSION__ >= 2067) {
-		with(mutex.ScopedMutexLock) {
-			assert(mutex.m_impl.m_locked);
-		}
+	with(mutex.ScopedMutexLock) {
+		assert(mutex.m_impl.m_locked);
 	}
 }
 
@@ -545,10 +543,7 @@ private void runMutexUnitTests(M)()
 class TaskCondition : core.sync.condition.Condition {
 	private TaskConditionImpl!(false, Mutex) m_impl;
 
-	static if (__VERSION__ >= 2067)
-		this(core.sync.mutex.Mutex mtx) nothrow { m_impl.setup(mtx); super(mtx); }
-	else
-		this(core.sync.mutex.Mutex mtx) { m_impl.setup(mtx); super(mtx); }
+	this(core.sync.mutex.Mutex mtx) nothrow { m_impl.setup(mtx); super(mtx); }
 
 	override @property Mutex mutex() nothrow { return m_impl.mutex; }
 	override void wait() { m_impl.wait(); }

@@ -12,8 +12,7 @@ import vibe.http.status : HTTPStatus;
 import vibe.http.server : HTTPServerRequest, HTTPServerResponse;
 import vibe.internal.meta.uda : findFirstUDA;
 
-static if (__VERSION__ <= 2067) import std.typetuple : AliasSeq = TypeTuple, staticIndexOf;
-else import std.meta : AliasSeq, staticIndexOf;
+import std.meta : AliasSeq, staticIndexOf;
 
 ///
 unittest {

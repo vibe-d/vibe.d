@@ -568,10 +568,7 @@ struct Collection(I)
 
 	alias Interface = I;
 	alias AllIDs = TypeTuple!(typeof(I.CollectionIndices.tupleof));
-	static if (__VERSION__ >= 2067)
-		alias AllIDNames = FieldNameTuple!(I.CollectionIndices);
-	else
-		alias AllIDNames = TypeTuple!(__traits(allMembers, I.CollectionIndices));
+	alias AllIDNames = FieldNameTuple!(I.CollectionIndices);
 	static assert(AllIDs.length >= 1, I.stringof~".CollectionIndices must define at least one member.");
 	static assert(AllIDNames.length == AllIDs.length);
 	alias ItemID = AllIDs[$-1];
@@ -1734,10 +1731,7 @@ unittest {
 
 // Missing parameter name
 unittest {
-	static if (__VERSION__ < 2067)
-		enum msg = "A parameter has no name.";
-	else
-		enum msg = "Parameter 0 has no name.";
+	enum msg = "Parameter 0 has no name.";
 
 	interface IMissingName1 {
 		string getResponse(string = "troublemaker");
@@ -1843,13 +1837,8 @@ unittest {
 }
 
 private string stripTestIdent(string msg) {
-	static if (__VERSION__ <= 2066) {
-		import vibe.utils.string;
-		auto idx = msg.indexOfCT(": ");
-	} else {
-		import std.string;
-		auto idx = msg.indexOf(": ");
-	}
+	import std.string;
+	auto idx = msg.indexOf(": ");
 	return idx >= 0 ? msg[idx+2 .. $] : msg;
 }
 

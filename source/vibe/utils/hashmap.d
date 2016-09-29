@@ -269,7 +269,6 @@ unittest {
 }
 
 // test for nothrow/@nogc compliance
-static if (__VERSION__ >= 2066)
 nothrow unittest {
 	HashMap!(int, int) map1;
 	HashMap!(string, string) map2;
@@ -374,5 +373,3 @@ private template UnConst(T) {
 		alias UnConst = V;
 	} else alias UnConst = T;
 }
-
-static if (__VERSION__ < 2066) private static bool nogc() { return false; }

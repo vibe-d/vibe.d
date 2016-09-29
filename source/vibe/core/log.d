@@ -307,16 +307,12 @@ final class FileLogger : Logger {
 
 	override void put(scope const(char)[] text)
 	{
-		static if (__VERSION__ <= 2066)
-			() @trusted { m_curFile.write(text); } ();
-		else m_curFile.write(text);
+		m_curFile.write(text);
 	}
 
 	override void endLine()
 	{
-		static if (__VERSION__ <= 2066)
-			() @trusted { m_curFile.writeln(); } ();
-		else m_curFile.writeln();
+		m_curFile.writeln();
 		m_curFile.flush();
 	}
 }

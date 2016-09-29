@@ -114,8 +114,7 @@ struct Path {
 	/// Constructs a Path object by parsing a path string.
 	this(string pathstr)
 	{
-		static if (__VERSION__ < 2067) m_nodes = cast(immutable)splitPath(pathstr);
-		else m_nodes = splitPath(pathstr);
+		m_nodes = splitPath(pathstr);
 		m_absolute = (pathstr.startsWith("/") || m_nodes.length > 0 && (m_nodes[0].toString().canFind(':') || m_nodes[0] == "\\"));
 		m_endsWithSlash = pathstr.endsWith("/");
 	}

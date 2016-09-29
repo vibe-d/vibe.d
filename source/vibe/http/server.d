@@ -1503,21 +1503,14 @@ private {
 
 	HTTPServerContext[] getContexts()
 	{
-		static if (__VERSION__ >= 2067) {
-			version (Win64) return cast(HTTPServerContext[])g_contexts;
-			else return cast(HTTPServerContext[])atomicLoad(g_contexts);
-		}
-		else
-			return cast(HTTPServerContext[])g_contexts;
+		version (Win64) return cast(HTTPServerContext[])g_contexts;
+		else return cast(HTTPServerContext[])atomicLoad(g_contexts);
 	}
 
 	void addContext(HTTPServerContext ctx)
 	{
 		synchronized (g_listenersMutex) {
-			static if (__VERSION__ >= 2067)
-				atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
-			else
-				g_contexts = g_contexts ~ cast(shared)ctx;
+			atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
 		}
 	}
 
@@ -1526,10 +1519,7 @@ private {
 		// write a new complete array reference to avoid race conditions during removal
 		auto contexts = g_contexts;
 		auto newarr = contexts[0 .. idx] ~ contexts[idx+1 .. $];
-		static if (__VERSION__ >= 2067)
-			atomicStore(g_contexts, newarr);
-		else
-			g_contexts = newarr;
+		atomicStore(g_contexts, newarr);
 	}
 }
 

@@ -43,12 +43,6 @@ struct Task {
 	*/
 	static Task getThis() nothrow @safe
 	{
-		// In 2067, synchronized statements where annotated nothrow.
-		// DMD#4115, Druntime#1013, Druntime#1021, Phobos#2704
-		// However, they were "logically" nothrow before.
-		static if (__VERSION__ <= 2066)
-			scope (failure) assert(0, "Internal error: function should be nothrow");
-
 		auto fiber = () @trusted { return Fiber.getThis(); } ();
 		if (!fiber) return Task.init;
 		auto tfiber = cast(TaskFiber)fiber;
@@ -113,7 +107,6 @@ class TaskFiber : Fiber {
 
 	protected this(void delegate() fun, size_t stack_size)
 	nothrow {
-		static if (__VERSION__ <= 2066) scope (failure) assert(false);
 		super(fun, stack_size);
 		m_thread = Thread.getThis();
 		scope (failure) assert(false);

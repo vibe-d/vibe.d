@@ -661,7 +661,7 @@ public void setupWorkerThreads(uint num = logicalProcessorCount())
 public @property uint logicalProcessorCount()
 {
 	version (linux) {
-		static if (__VERSION__ >= 2067) import core.sys.linux.sys.sysinfo;
+		import core.sys.linux.sys.sysinfo;
 		return get_nprocs();
 	} else version (OSX) {
 		int count;
@@ -690,7 +690,6 @@ public @property uint logicalProcessorCount()
 version (OSX) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
 version (FreeBSD) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
 version (NetBSD) private extern(C) int sysctlbyname(const(char)* name, void* oldp, size_t* oldlen, void* newp, size_t newlen);
-version (linux) static if (__VERSION__ <= 2066) private extern(C) int get_nprocs();
 version (Solaris) private extern(C) int get_nprocs();
 
 /**
@@ -1169,7 +1168,6 @@ private class CoreTask : TaskFiber {
 	static CoreTask getThis()
 	@safe nothrow {
 		auto f = () @trusted nothrow {
-			static if (__VERSION__ <= 2066) scope (failure) assert(false);
 			return Fiber.getThis();
 		} ();
 		if (f) return cast(CoreTask)f;
@@ -1184,7 +1182,6 @@ private class CoreTask : TaskFiber {
 
 	@property State state()
 	@trusted const nothrow {
-		static if (__VERSION__ <= 2066) scope (failure) assert(false);
 		return super.state;
 	}
 
@@ -1385,10 +1382,7 @@ private class VibeDriverCore : DriverCore {
 		// do nothing if the task is aready scheduled to be resumed
 		if (ctask.m_queue) return;
 
-		static if (__VERSION__ > 2066)
-			auto uncaught_exception = () @trusted nothrow { return ctask.call!(Fiber.Rethrow.no)(); } ();
-		else
-			auto uncaught_exception = () @trusted nothrow { scope (failure) assert(false); return ctask.call(false); } ();
+		auto uncaught_exception = () @trusted nothrow { return ctask.call!(Fiber.Rethrow.no)(); } ();
 
 		if (uncaught_exception) {
 			auto th = cast(Throwable)uncaught_exception;
@@ -1452,7 +1446,6 @@ private class VibeDriverCore : DriverCore {
 	@safe nothrow {
 		if (task != Task.init) {
 			debug if (s_taskEventCallback) () @trusted { s_taskEventCallback(TaskEvent.yield, task); } ();
-			static if (__VERSION__ < 2067) scope (failure) assert(false); // Fiber.yield() not nothrow on 2.066 and below
 			() @trusted { task.fiber.yield(); } ();
 			debug if (s_taskEventCallback) () @trusted { s_taskEventCallback(TaskEvent.resume, task); } ();
 			// leave fiber.m_exception untouched, so that it gets thrown on the next yieldForEvent call
