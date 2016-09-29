@@ -1,20 +1,21 @@
 ﻿Changelog
 =========
 
-v0.7.30 - 2016-09-
+v0.7.30 - 2016-10-
 --------------------
 
 ### Features and improvements ###
 
 - General changes
-  - Compiles on DMD 2.072.0
+  - Compiles on DMD 2.068.2 up to 2.071.2 (with some fixes for DMD master)
+  - Added `runApplication` as a single API entry point to properly initiailze and run a vibe.d application (this will serve as the basis for slowly fading out 
   - Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
   - Defining both, `VibeDefaultMain` and `VibeCustomMain`, results in a compile-time error to help uncover hidden build issues (by John Colvin) - [pull #1551][issue1551]
 - Web/REST interface generator
   - Added `vibe.web.auth` as a generic way to express authrorizazion rules and to provide a common hook for authentication
   - Added `@noRoute` attribute for `registerWebInterface` to keep methods from generating a HTTP endpoint
   - Added `@nestedNameStyle` to choose between the classical underscore mapping and D style mapping for form parameter names in `registerWebInterface`
-- Serialization framework (`vibe.data.serialization`)
+- Serialization framework
   - All hooks now get a traits struct that carries additional information, such as user defined attributes - note that this is a breaking change for any serializer implementation! - [pull #1542][issue1542]
   - Added `beginWriteDocument` and `endWriteDocument` hooks - [pull #1542][issue1542]
   - Added `(begin/end)WriteDictionaryEntry` and `(begin/end)WriteArrayEntry` hooks - [pull #1542][issue1542]
@@ -23,11 +24,13 @@ v0.7.30 - 2016-09-
   - Added `HTTPServerSettings.accessLogger` to enable using custom logger implementations
   - Added support for the "X-Forwarded-Port" header used by reverse proxies (by Mihail-K) - [issue #1409][issue1490], [pull #1491][issue1491]
   - Added an overload of `HTTPServerResponse.writeJsonBody` that doesn't set the response status (by Irenej Marc) - [pull #1488][issue1488]
-- Added `runApplication` as a single API entry point to properly initiailze and run a vibe.d application (this will serve as the basis for slowly fading out 
+- Can now use the new [diet-ng][diet-ng] package in `render()`
+  - To force using it on existing projects, simply add "diet-ng" as a dependency
+  - "diet-ng" is an optional dependency of vibe.d that is chosen by default - to avoid that, remove the "diet-ng" entry from dub.selections.json.
+  - Related issues [issue #1554][issue1554], [issue #1555][issue1555]
 - Added partial Unix client socket support, HTTP client support in particular (use `http+unix://...`) (by Sebastian Koppe) - [pull #1547][issue1547]
 - Removed `Json.opDispatch` and `Bson.opDispatch`
 - Added `Bson.remove` to remove elements from a BSON object - [issue #345][issue345]
-- Can now optionally use the new [diet-ng][diet-ng] package in `render()` (just add it as a dependency)
 the use of `VibeDefaultMain`)
 - Added support for tables in the Markdown compiler - [issue #1493][issue1493]
 - Added `MongoCollection.distict()`
@@ -35,6 +38,8 @@ the use of `VibeDefaultMain`)
 - Using `VibeNoSSL` now also disables Botan support in addition to OpenSSL (by Martin Nowak) - [pull #1444][issue1444]
 - Use a minimum protocol version of TLS 1.0 for Botan, fixes compilation on Botan 1.12.6 (by Tomáš Chaloupka) - [pull #1553][issue1553]
 - Some more `URLRouter` memory/performance optimization
+- Corrected the naming convention of `vibe.db.mongo.flags.IndexFlags` - [issue #1571][issue1571]
+- Added `connectRedisDB`, taking a Redis database URL
 
 ### Bug fixes ###
 
@@ -49,6 +54,10 @@ the use of `VibeDefaultMain`)
 - Fixed yielded task execution in case no explicit event loop is used
 - Fixed a mempory hog/leak in the libasync driver (by Martin Nowak) - [pull #1543][issue1543]
 - Fixed the JSON module to output NaN as `null` instead of `undefined` (by John Colvin) - [pull #1548][issue1548], [issue #1442][issue1442], [issue #958][issue958]
+- Fixed a possible deadlock in `LocalTaskSemaphore` (by Etienne Cimon) - [pull #1563][issue1563]
+- Fixed URL generation for paths with placeholders in the JavaScript REST client generator - [issue #1564][issue1564]
+- Fixed code generation errors in the JavaScript REST client generator and added `JSRestClientSettings` (by Oleg B. aka deviator) - [pull #1566][issue1566]
+- Fixed a bug in `FixedRingBuffer.removeAt` which potentially affected the task scheduler (by Tomáš Chaloupka) - [pull #1572][issue1572]
 
 [issue345]: https://github.com/rejectedsoftware/vibe.d/issues/345
 [issue958]: https://github.com/rejectedsoftware/vibe.d/issues/958
@@ -74,6 +83,13 @@ the use of `VibeDefaultMain`)
 [issue1548]: https://github.com/rejectedsoftware/vibe.d/issues/1548
 [issue1551]: https://github.com/rejectedsoftware/vibe.d/issues/1551
 [issue1553]: https://github.com/rejectedsoftware/vibe.d/issues/1553
+[issue1554]: https://github.com/rejectedsoftware/vibe.d/issues/1554
+[issue1555]: https://github.com/rejectedsoftware/vibe.d/issues/1555
+[issue1563]: https://github.com/rejectedsoftware/vibe.d/issues/1563
+[issue1564]: https://github.com/rejectedsoftware/vibe.d/issues/1564
+[issue1566]: https://github.com/rejectedsoftware/vibe.d/issues/1566
+[issue1571]: https://github.com/rejectedsoftware/vibe.d/issues/1571
+[issue1572]: https://github.com/rejectedsoftware/vibe.d/issues/1572
 [diet-ng]: https://github.com/rejectedsoftware/diet-ng
 
 
