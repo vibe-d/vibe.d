@@ -1197,7 +1197,16 @@ unittest {
 		immutable byte b = 1;
 		return b;
 	});
+	sleep(10.msecs); // let it finish first
 	assert(f.getResult() == 1);
+
+	// currently not possible because Task.join only works within a single thread.
+	/*f = async({
+		immutable byte b = 2;
+		sleep(10.msecs); // let the caller wait a little
+		return b;
+	});
+	assert(f.getResult() == 1);*/
 }
 
 /******************************************************************************/
