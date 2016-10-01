@@ -67,7 +67,7 @@ bool validateEmail(R)(ref R error_sink, string str, size_t max_length = 64)
 		return false;
 	}
 
-	if (() @trusted { return isEmail(str) != EmailStatusCode.valid; }()) {
+	if (() @trusted { return !isEmail(str); }()) {
 		error_sink.put("The email address is invalid.");
 		return false;
 	}
