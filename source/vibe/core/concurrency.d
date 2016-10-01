@@ -1193,6 +1193,8 @@ unittest {
 }
 
 unittest {
+	import vibe.core.core : sleep;
+	
 	auto f = async({
 		immutable byte b = 1;
 		return b;
