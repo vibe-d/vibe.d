@@ -969,7 +969,7 @@ private nothrow extern(C)
 
 		string alpn;
 
-		try { alpn = ctx.m_alpnCallback(alpn_list.data); } catch { }
+		try { alpn = ctx.m_alpnCallback(alpn_list.data); } catch (Exception e) { }
 		if (alpn) {
 			i = 0;
 			while (i < inlen)

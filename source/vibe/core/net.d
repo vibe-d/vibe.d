@@ -239,18 +239,18 @@ struct NetworkAddress {
 
 		switch (this.family) {
 			default: assert(false, "toAddressString() called for invalid address family.");
-			case AF_INET:
+			case AF_INET: {
 				ubyte[4] ip = () @trusted { return (cast(ubyte*)&addr_ip4.sin_addr.s_addr)[0 .. 4]; } ();
 				sink.formattedWrite("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3]);
-				break;
-			case AF_INET6:
+				} break;
+			case AF_INET6: {
 				ubyte[16] ip = addr_ip6.sin6_addr.s6_addr;
 				foreach (i; 0 .. 8) {
 					if (i > 0) sink(":");
 					_dummy[] = ip[i*2 .. i*2+2];
 					sink.formattedWrite("%x", bigEndianToNative!ushort(_dummy));
 				}
-				break;
+				} break;
 			version (Posix) {
 				case AF_UNIX:
 					import std.traits : hasMember;
