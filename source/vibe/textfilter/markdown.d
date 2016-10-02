@@ -40,7 +40,7 @@ version(MarkdownTest)
 /** Returns a Markdown filtered HTML string.
 */
 string filterMarkdown()(string str, MarkdownFlags flags)
-{
+@trusted { // scope class is not @safe for DMD 2.072
 	scope settings = new MarkdownSettings;
 	settings.flags = flags;
 	return filterMarkdown(str, settings);
@@ -558,7 +558,7 @@ private void writeBlock(R)(ref R dst, ref const Block block, LinkRef[string] lin
 
 private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRef[string] links, scope MarkdownSettings settings)
 {
-	auto lines = cast(string[])block.text;
+	auto lines = () @trusted { return cast(string[])block.text; } ();
 	auto text = settings.flags & MarkdownFlags.keepLineBreaks ? lines.join("<br>") : lines.join("\n");
 	writeMarkdownEscaped(dst, text, links, settings);
 	if (lines.length) dst.put("\n");

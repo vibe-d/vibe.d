@@ -1667,6 +1667,7 @@ body {
 				auto str = pathAttr.value.data;
 				if (str.canFind("//")) return "%s: Path '%s' contains empty entries.".format(FuncId, pathAttr.value);
 				str = str.strip('/');
+				if (!str.length) return null;
 				foreach (elem; str.splitter('/')) {
 					assert(elem.length, "Empty path entry not caught yet!?");
 
