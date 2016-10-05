@@ -252,10 +252,10 @@ interface FileDescriptorEvent {
 			timeout = Maximum time to wait for an event
 
 		Returns:
-			The overload taking the timeout parameter returns true if
-			an event was received on time and false otherwise.
+			If events occurs, returns a mask of these events.
+			If the timeout expired, returns the `Trigger.none`
 	*/
-	void wait(Trigger which = Trigger.any);
+	Trigger wait(Trigger which = Trigger.any);
 	/// ditto
-	bool wait(Duration timeout, Trigger which = Trigger.any);
+	Trigger wait(Duration timeout, Trigger which = Trigger.any);
 }

@@ -826,7 +826,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		event_free(m_event);
 	}
 
-	void wait(Trigger which)
+	Trigger wait(Trigger which)
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
@@ -837,9 +837,10 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 
 		while ((m_activeEvents & which) == Trigger.none)
 			getThreadLibeventDriverCore().yieldForEvent();
+		return m_activeEvents & which;
 	}
 
-	bool wait(Duration timeout, Trigger which)
+	Trigger wait(Duration timeout, Trigger which)
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
@@ -857,7 +858,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 			getThreadLibeventDriverCore().yieldForEvent();
 			if (!m_driver.isTimerPending(tm)) break;
 		}
-		return (m_activeEvents & which) != Trigger.none;
+		return m_activeEvents & which;
 	}
 
 	private static nothrow extern(C)
