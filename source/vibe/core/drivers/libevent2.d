@@ -206,7 +206,7 @@ final class Libevent2Driver : EventDriver {
 	bool processEvents()
 	{
 		logDebugV("process events with exit == %s", m_exit);
-		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK);
+		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK|EVLOOP_ONCE);
 		processTimers();
 		logDebugV("processed events with exit == %s", m_exit);
 		if (m_exit) {
