@@ -1,0 +1,3 @@
+name "tests"
+description "Semaphore hang"
+dependency "vibe-d:core" path="../../"
