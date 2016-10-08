@@ -24,3 +24,15 @@ if [ ${RUN_TEST=1} -eq 1 ]; then
         (cd tests/$ex && dub --compiler=$DC && dub clean)
     done
 fi
+
+# Test the Meson build system
+git clone --depth 4 https://github.com/mesonbuild/meson.git meson-src
+cd meson-src
+python3 setup.py build
+cd ..
+
+mkdir build && cd build
+../meson-src/meson.py -Derrorlogs=true ..
+ninja
+ninja test
+DESTDIR=/tmp/installtest ninja install

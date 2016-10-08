@@ -1,4 +1,6 @@
 language: d
+dist: trusty
+sudo: true
 
 d:
   # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions
@@ -28,10 +30,13 @@ matrix:
     - d: ldc-1.0.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
+before_script:
+ - sudo add-apt-repository -y ppa:ximion/tests
+ - sudo apt-get update
+ - sudo apt-get install -y ninja-build libevent-dev
+
 script: ./travis-ci.sh
 
 services:
   - mongodb
   - redis-server
-
-sudo: false
