@@ -422,9 +422,9 @@ final class Libevent2Driver : EventDriver {
 		return new Libevent2ManualEvent(this);
 	}
 
-	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events)
+	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events, bool persist)
 	{
-		return new Libevent2FileDescriptorEvent(this, fd, events);
+		return new Libevent2FileDescriptorEvent(this, fd, events, persist);
 	}
 
 	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
@@ -806,19 +806,21 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		int m_fd;
 		deimos.event2.event.event* m_event;
 		Trigger m_activeEvents;
+		bool m_persist;
 		Task m_waiter;
 	}
 
-	this(Libevent2Driver driver, int file_descriptor, Trigger events)
+	this(Libevent2Driver driver, int file_descriptor, Trigger events, bool persist)
 	{
 		assert(events != Trigger.none);
 		super(driver);
 		m_fd = file_descriptor;
+		m_persist = persist;
 		short evts = 0;
 		if (events & Trigger.read) evts |= EV_READ;
 		if (events & Trigger.write) evts |= EV_WRITE;
 		m_event = event_new(driver.eventLoop, file_descriptor, evts|EV_PERSIST, &onFileTriggered, cast(void*)this);
-		event_add(m_event, null);
+		if(m_persist) event_add(m_event, null);
 	}
 
 	~this()
@@ -830,9 +832,11 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
+		if(!m_persist) event_add(m_event, null);
 		scope (exit) {
 			m_waiter = Task.init;
 			m_activeEvents &= ~which;
+			if(!m_persist) event_del(m_event);
 		}
 
 		while ((m_activeEvents & which) == Trigger.none)
@@ -844,9 +848,11 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 	{
 		assert(!m_waiter, "Only one task may wait on a Libevent2FileEvent.");
 		m_waiter = Task.getThis();
+		if(!m_persist) event_add(m_event, null);
 		scope (exit) {
 			m_waiter = Task.init;
 			m_activeEvents &= ~which;
+			if(!m_persist) event_del(m_event);
 		}
 
 		auto tm = m_driver.createTimer(null);

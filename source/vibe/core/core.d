@@ -826,10 +826,10 @@ Timer createTimer(void delegate() callback)
 		Returns a newly created FileDescriptorEvent associated with the given
 		file descriptor.
 */
-FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger event_mask)
+FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger event_mask, bool persist = true)
 {
 	auto drv = getEventDriver();
-	return drv.createFileDescriptorEvent(file_descriptor, event_mask);
+	return drv.createFileDescriptorEvent(file_descriptor, event_mask, persist);
 }
 
 
