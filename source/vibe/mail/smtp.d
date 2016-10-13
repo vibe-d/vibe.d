@@ -120,7 +120,7 @@ final class Mail {
 
 	Valid headers can be found at http://tools.ietf.org/html/rfc4021
 */
-void sendMail(SMTPClientSettings settings, Mail mail)
+void sendMail(in SMTPClientSettings settings, Mail mail)
 {
 	TCPConnection raw_conn;
 	try {
