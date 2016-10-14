@@ -7,7 +7,7 @@ v0.7.30 - 2016-10-
 ### Features and improvements ###
 
 - General changes
-  - Compiles on DMD 2.068.2 up to 2.071.2 (with some fixes for DMD master)
+  - Compiles on DMD 2.068.2 up to 2.072.0
   - Added `runApplication` as a single API entry point to properly initiailze and run a vibe.d application (this will serve as the basis for slowly fading out 
   - Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
   - Defining both, `VibeDefaultMain` and `VibeCustomMain`, results in a compile-time error to help uncover hidden build issues (by John Colvin) - [pull #1551][issue1551]
@@ -40,6 +40,7 @@ the use of `VibeDefaultMain`)
 - Some more `URLRouter` memory/performance optimization
 - Corrected the naming convention of `vibe.db.mongo.flags.IndexFlags` - [issue #1571][issue1571]
 - Added `connectRedisDB`, taking a Redis database URL
+- `FileDescriptorEvent.wait()` now returns which triggers have fired (by Jack Applegame) - [pull #1586][issue1586]
 
 ### Bug fixes ###
 
@@ -58,6 +59,9 @@ the use of `VibeDefaultMain`)
 - Fixed URL generation for paths with placeholders in the JavaScript REST client generator - [issue #1564][issue1564]
 - Fixed code generation errors in the JavaScript REST client generator and added `JSRestClientSettings` (by Oleg B. aka deviator) - [pull #1566][issue1566]
 - Fixed a bug in `FixedRingBuffer.removeAt` which potentially affected the task scheduler (by Tomáš Chaloupka) - [pull #1572][issue1572]
+- Fixed `validateEmail` to properly use `isEmail` (which used to be brokeb) (by Stanislav Blinov aka radcapricorn) - [issue #1580][issue1580], [pull #1582][issue1582]
+- Fixed `yield()` to always return after a single event loop iteration - [issue #1583][issue1583]
+
 
 [issue345]: https://github.com/rejectedsoftware/vibe.d/issues/345
 [issue958]: https://github.com/rejectedsoftware/vibe.d/issues/958
@@ -90,6 +94,9 @@ the use of `VibeDefaultMain`)
 [issue1566]: https://github.com/rejectedsoftware/vibe.d/issues/1566
 [issue1571]: https://github.com/rejectedsoftware/vibe.d/issues/1571
 [issue1572]: https://github.com/rejectedsoftware/vibe.d/issues/1572
+[issue1580]: https://github.com/rejectedsoftware/vibe.d/issues/1580
+[issue1582]: https://github.com/rejectedsoftware/vibe.d/issues/1582
+[issue1583]: https://github.com/rejectedsoftware/vibe.d/issues/1583
 [diet-ng]: https://github.com/rejectedsoftware/diet-ng
 
 
