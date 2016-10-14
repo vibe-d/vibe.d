@@ -602,7 +602,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			return ret;
 		} else static if (isCustomSerializable!T) {
 			alias CustomType = typeof(T.init.toRepresentation());
-			return T.fromRepresentation(ser.deserializeValue!(Serializer, ATTRIBUTES));
+			return T.fromRepresentation(ser.deserializeValue!(CustomType, ATTRIBUTES));
 		} else static if (isISOExtStringSerializable!T) {
 			return T.fromISOExtString(ser.readValue!(Traits, string)());
 		} else static if (isStringSerializable!T) {
@@ -1561,4 +1561,20 @@ unittest {
 	
 	import vibe.data.json : Json, JsonSerializer;
 	assert(serializeWithPolicy!(JsonSerializer, P)(E.RED) == Json("red"));
+}
+
+unittest {
+	static struct R { int y; }
+	static struct Custom {
+		int x;
+		R toRepresentation() const { return R(x); }
+		static Custom fromRepresentation(R r) { return Custom(r.y); }
+	}
+
+	auto c = Custom(42);
+	auto Rn = R.mangleof;
+	auto ser = serialize!TestSerializer(c);
+	assert(ser == "D("~Rn~"){DE(i,y)(V(i)(42))DE(i,y)}D("~Rn~")");
+	auto deser = deserialize!(TestSerializer, Custom)(ser);
+	assert(deser.x == 42);
 }
