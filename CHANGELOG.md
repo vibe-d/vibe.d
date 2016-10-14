@@ -8,11 +8,11 @@ v0.7.30 - 2016-10-
 
 - General changes
   - Compiles on DMD 2.068.2 up to 2.072.0
-  - Added `runApplication` as a single API entry point to properly initiailze and run a vibe.d application (this will serve as the basis for slowly fading out 
+  - Added `runApplication` as a single API entry point to properly initialize and run a vibe.d application (this will serve as the basis for slowly fading out 
   - Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
   - Defining both, `VibeDefaultMain` and `VibeCustomMain`, results in a compile-time error to help uncover hidden build issues (by John Colvin) - [pull #1551][issue1551]
 - Web/REST interface generator
-  - Added `vibe.web.auth` as a generic way to express authrorizazion rules and to provide a common hook for authentication
+  - Added `vibe.web.auth` as a generic way to express authorization rules and to provide a common hook for authentication
   - Added `@noRoute` attribute for `registerWebInterface` to keep methods from generating a HTTP endpoint
   - Added `@nestedNameStyle` to choose between the classical underscore mapping and D style mapping for form parameter names in `registerWebInterface`
 - Serialization framework
@@ -33,7 +33,7 @@ v0.7.30 - 2016-10-
 - Added `Bson.remove` to remove elements from a BSON object - [issue #345][issue345]
 the use of `VibeDefaultMain`)
 - Added support for tables in the Markdown compiler - [issue #1493][issue1493]
-- Added `MongoCollection.distict()`
+- Added `MongoCollection.distinct()`
 - The `std.concurrency` integration code now let's the behavior of `spawn()` be configurable, defaulting now to `runWorkerTask` instead of the previous `runTask`
 - Using `VibeNoSSL` now also disables Botan support in addition to OpenSSL (by Martin Nowak) - [pull #1444][issue1444]
 - Use a minimum protocol version of TLS 1.0 for Botan, fixes compilation on Botan 1.12.6 (by Tomáš Chaloupka) - [pull #1553][issue1553]
@@ -53,13 +53,13 @@ the use of `VibeDefaultMain`)
 - Fixed the error message for invalid types in `Json.get` (by Charles Thibaut) - [pull #1537][issue1537]
 - Fixed the HTTP status code for invalid JSON in the REST interface generator (bad request instead of internal server error) (by Jacob Carlborg) - [pull #1538][issue1538]
 - Fixed yielded task execution in case no explicit event loop is used
-- Fixed a mempory hog/leak in the libasync driver (by Martin Nowak) - [pull #1543][issue1543]
+- Fixed a memory hog/leak in the libasync driver (by Martin Nowak) - [pull #1543][issue1543]
 - Fixed the JSON module to output NaN as `null` instead of `undefined` (by John Colvin) - [pull #1548][issue1548], [issue #1442][issue1442], [issue #958][issue958]
 - Fixed a possible deadlock in `LocalTaskSemaphore` (by Etienne Cimon) - [pull #1563][issue1563]
 - Fixed URL generation for paths with placeholders in the JavaScript REST client generator - [issue #1564][issue1564]
 - Fixed code generation errors in the JavaScript REST client generator and added `JSRestClientSettings` (by Oleg B. aka deviator) - [pull #1566][issue1566]
 - Fixed a bug in `FixedRingBuffer.removeAt` which potentially affected the task scheduler (by Tomáš Chaloupka) - [pull #1572][issue1572]
-- Fixed `validateEmail` to properly use `isEmail` (which used to be brokeb) (by Stanislav Blinov aka radcapricorn) - [issue #1580][issue1580], [pull #1582][issue1582]
+- Fixed `validateEmail` to properly use `isEmail` (which used to be broken) (by Stanislav Blinov aka radcapricorn) - [issue #1580][issue1580], [pull #1582][issue1582]
 - Fixed `yield()` to always return after a single event loop iteration - [issue #1583][issue1583]
 
 
@@ -139,7 +139,7 @@ v0.7.29 - 2016-07-04
 - Fixed compilation of `Bson.opt` for both const and non-const AAs/arrays - [issue #1394][issue1394]
 - Fixed handling of POST methods in the REST JavaScript client for methods with no parameters - [issue #1434][issue1434]
 - Fixed `RedisDatabase.blpop` and `RedisList.removeFrontBlock`
-- Fixed a protocol error/assertion failure when a redis reply threw an exception - [pull #1416][issue1416], [issue #1412][issue1412]
+- Fixed a protocol error/assertion failure when a Redis reply threw an exception - [pull #1416][issue1416], [issue #1412][issue1412]
 - Fixed possible assertion failures "Manually resuming taks that is already scheduled"
 - Fixed FreeBSD and NetBSD support (by Nikolay Tolstokulakov) - [pull #1448][issue1448]
 - Fixed handling of multiple methods with `@headerParam` parameters with the same name (by Irenej Marc) - [pull #1453][issue1453]
