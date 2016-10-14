@@ -191,6 +191,8 @@ private struct Line {
 					break;
 				case IndentType.Quote:
 					ln = ln.stripLeft()[1 .. $];
+					if (ln.startsWith(' '))
+						ln.popFront();
 					break;
 			}
 		}
@@ -198,7 +200,7 @@ private struct Line {
 	}
 }
 
-private Line[] parseLines(ref string[] lines, scope MarkdownSettings settings)
+private Line[] parseLines(string[] lines, scope MarkdownSettings settings)
 pure @safe {
 	Line[] ret;
 	while( !lines.empty ){
@@ -220,6 +222,8 @@ pure @safe {
 					lninfo.indent ~= IndentType.Quote;
 					ln = ln.stripLeft();
 					ln.popFront();
+					if (ln.startsWith(' '))
+						ln.popFront();
 				} else break;
 			}
 		}
@@ -239,6 +243,28 @@ pure @safe {
 		ret ~= lninfo;
 	}
 	return ret;
+}
+
+unittest {
+	import std.conv : to;
+	auto s = new MarkdownSettings;
+	s.flags = MarkdownFlags.forumDefault;
+	auto lns = [">```D"];
+	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote], lns[0], "```D")]);
+	lns = ["> ```D"];
+	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote], lns[0], "```D")]);
+	lns = [">    ```D"];
+	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote], lns[0], "   ```D")]);
+	lns = [">     ```D"];
+	assert(parseLines(lns, s) == [Line(LineType.CodeBlockDelimiter, [IndentType.Quote, IndentType.White], lns[0], "```D")]);
+	lns = [">test"];
+	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote], lns[0], "test")]);
+	lns = ["> test"];
+	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote], lns[0], "test")]);
+	lns = [">    test"];
+	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote], lns[0], "   test")]);
+	lns = [">     test"];
+	assert(parseLines(lns, s) == [Line(LineType.Plain, [IndentType.Quote, IndentType.White], lns[0], "test")]);
 }
 
 private enum BlockType {
@@ -873,7 +899,7 @@ pure @safe {
 
 private bool isCodeBlockDelimiter(string ln)
 pure @safe {
-	return ln.startsWith("```");
+	return ln.stripLeft.startsWith("```");
 }
 
 private string getHtmlTagName(string ln)
@@ -1284,4 +1310,9 @@ private struct Link {
 @safe unittest { // issue #1527 - blank lines in code blocks
 	assert(filterMarkdown("    foo\n\n    bar\n") ==
 		"<pre class=\"prettyprint\"><code>foo\n\nbar\n</code></pre>\n");
+}
+
+@safe unittest {
+	assert(filterMarkdown("> ```\r\n> test\r\n> ```", MarkdownFlags.forumDefault) ==
+		"<blockquote><pre class=\"prettyprint\"><code>test\n</code></pre>\n</blockquote>\n");
 }
