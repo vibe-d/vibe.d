@@ -746,8 +746,9 @@ final class OpenSSLContext : TLSContext {
 		SSL* ssl = cast(SSL*)X509_STORE_CTX_get_ex_data(ctx, SSL_get_ex_data_X509_STORE_CTX_idx());
 		VerifyData* vdata = cast(VerifyData*)SSL_get_ex_data(ssl, gs_verifyDataIndex);
 
-		char[256] buf;
+		char[1024] buf;
 		X509_NAME_oneline(X509_get_subject_name(err_cert), buf.ptr, 256);
+		buf[$-1] = 0;
 
 		try {
 			logDebug("validate callback for %s", buf.ptr.to!string);
@@ -767,7 +768,9 @@ final class OpenSSLContext : TLSContext {
 					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
 					case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
 					case X509_V_ERR_CERT_UNTRUSTED:
-						X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, 256);
+						assert(ctx.current_cert !is null);
+						X509_NAME_oneline(X509_get_issuer_name(ctx.current_cert), buf.ptr, buf.length);
+						buf[$-1] = 0;
 						logDebug("SSL cert not trusted or unknown issuer: %s", buf.ptr.to!string);
 						if (!(vdata.validationMode & TLSPeerValidationMode.checkTrust)) {
 							valid = true;
