@@ -355,7 +355,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
 		auto outbuf = bufferevent_get_output(m_ctx.event);
 		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
-			throw new Exception("Failed to write data to buffer");
+			throw new ConnectionException(format("Failed to write data to buffer for peer %s", m_ctx.remote_addr.toString()));
 
 		// wait for the data to be written up the the low watermark
 		while (evbuffer_get_length(outbuf) > 4096) {
@@ -434,10 +434,12 @@ package final class Libevent2TCPConnection : TCPConnection {
 	{
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if (m_ctx.event is null) {
+			string peer = m_ctx.remote_addr.toString();
 			cleanup();
-			throw new Exception(format("Connection error while %s TCPConnection.", write ? "writing to" : "reading from"));
+			throw new ConnectionException(
+				format("Connection error while %s TCPConnection. Remote: %s", write ? "writing to" : "reading from", peer));
 		}
-		if (m_ctx.state == ConnectionState.activeClose) throw new Exception("Connection was actively closed.");
+		if (m_ctx.state == ConnectionState.activeClose) throw new ConnectionException(format("Connection with %s was actively closed.", m_ctx.remote_addr.toString()));
 		enforce (!write || m_ctx.state == ConnectionState.open, "Remote hung up while writing to TCPConnection.");
 		if (!write && m_ctx.state == ConnectionState.passiveClose) {
 			auto buf = bufferevent_get_input(m_ctx.event);
