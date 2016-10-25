@@ -715,6 +715,20 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		DictionaryList!(string, true, 8) params;
 
+        import std.variant : Variant;
+        /** A map of context items for the request.
+
+            This is especially useful for passing application specific data down
+            the chain of processors along with the request itself.
+
+            For example, a generic route may be defined to check user login status,
+            if the user is logged in, add a reference to user specific data to the
+            context.
+
+            This is implemented with std.variant.Variant to allow any type of data.
+        */
+        Variant[string] context;
+
 		/** Supplies the request body as a stream.
 
 			Note that when certain server options are set (such as
