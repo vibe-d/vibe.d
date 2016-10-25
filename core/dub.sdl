@@ -18,6 +18,8 @@ libs "z" platform="ldc"
 copyFiles "../lib/win-i386/libeay32.dll" "../lib/win-i386/ssleay32.dll" platform="windows-x86"
 copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platform="windows-x86_64"
 
+mainSourceFile "vibe/appmain.d"
+
 configuration "libevent" {
 	platforms "windows-x86-dmd" "posix"
 	dependency "libevent" version="~>2.0.1"
