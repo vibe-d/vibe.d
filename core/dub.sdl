@@ -1,0 +1,51 @@
+name "core"
+description "Basic I/O and concurrency primitives, as well as low level utility functions"
+
+dependency "vibe-d:data" version=">=0.0.0"
+dependency "vibe-d:utils" version=">=0.0.0"
+dependency "openssl" version=">=1.0.0+1.0.0e" optional=true default=true
+dependency "botan" version="~>1.12.0" optional=true
+
+lflags "-L/usr/local/opt/openssl/lib" platform="osx"
+
+targetType "library"
+buildRequirements "requireBoundsCheck"
+sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="windows-x86"
+sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
+sourcePaths "."
+importPaths "."
+libs "z" platform="ldc"
+copyFiles "../lib/win-i386/libeay32.dll" "../lib/win-i386/ssleay32.dll" platform="windows-x86"
+copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platform="windows-x86_64"
+
+configuration "libevent" {
+	platforms "windows-x86-dmd" "posix"
+	dependency "libevent" version="~>2.0.1"
+	targetType "library"
+	libs "wsock32" "ws2_32" "advapi32" platform="windows"
+	sourceFiles "../lib/win-i386/event2.lib" platform="windows-x86"
+	sourceFiles "../lib/win-amd64/event2.lib" platform="windows-x86_64"
+	copyFiles "../lib/win-i386/libevent.dll" platform="windows-x86"
+	copyFiles "../lib/win-amd64/libevent.dll" platform="windows-x86_64"
+	versions "VibeLibeventDriver"
+}
+
+configuration "libasync" {
+	dependency "libasync" version="~>0.7.8"
+	targetType "library"
+	versions "VibeUseNativeDriverType" "VibeLibasyncDriver"
+}
+
+configuration "win32" {
+	platforms "windows"
+	targetType "library"
+	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
+	versions "VibeWin32Driver"
+}
+
+configuration "winrt" {
+	platforms "windows"
+	targetType "library"
+	sourceFiles "../lib/win-i386/runtimeobject.lib" platform="windows-x86"
+	versions "VibeWinrtDriver"
+}

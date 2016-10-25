@@ -1,0 +1,6 @@
+name "diet"
+description "Diet HTML template system"
+dependency "vibe-d:http" version=">=0.0.0"
+targetType "library"
+sourcePaths "."
+importPaths "."

@@ -28,6 +28,8 @@ sourceFiles "source/vibe/d.d" "source/vibe/vibe.d"
 
 x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected" "--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."
 
+mainSourceFile "source/vibe/appmain.d"
+
 configuration "libevent" {
 	subConfiguration "vibe-d:core" "libevent"
 }
@@ -41,122 +43,12 @@ configuration "winrt" {
 	subConfiguration "vibe-d:core" "winrt"
 }
 
-subPackage {
-	name "core"
-	description "Basic I/O and concurrency primitives, as well as low level utility functions"
-	
-	dependency "vibe-d:data" version=">=0.0.0"
-	dependency "vibe-d:utils" version=">=0.0.0"
-	dependency "openssl" version=">=1.0.0+1.0.0e" optional=true default=true
-	dependency "botan" version="~>1.12.0" optional=true
-
-	lflags "-L/usr/local/opt/openssl/lib" platform="osx"
-	
-	targetType "library"
-	buildRequirements "requireBoundsCheck"
-	mainSourceFile "source/vibe/appmain.d"
-	sourceFiles "lib/win-i386/eay.lib" "lib/win-i386/ssl.lib" platform="windows-x86"
-	sourceFiles "lib/win-amd64/libeay32.lib" "lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
-	sourcePaths "source/vibe/core" "source/vibe/crypto" "source/vibe/inet" "source/vibe/stream" "source/vibe/textfilter"
-	libs "z" platform="ldc"
-	copyFiles "lib/win-i386/libeay32.dll" "lib/win-i386/ssleay32.dll" platform="windows-x86"
-	copyFiles "lib/win-amd64/libeay32.dll" "lib/win-amd64/ssleay32.dll" platform="windows-x86_64"
-	
-	configuration "libevent" {
-		platforms "windows-x86-dmd" "posix"
-		dependency "libevent" version="~>2.0.1"
-		targetType "library"
-		libs "wsock32" "ws2_32" "advapi32" platform="windows"
-		sourceFiles "lib/win-i386/event2.lib" platform="windows-x86"
-		sourceFiles "lib/win-amd64/event2.lib" platform="windows-x86_64"
-		copyFiles "lib/win-i386/libevent.dll" platform="windows-x86"
-		copyFiles "lib/win-amd64/libevent.dll" platform="windows-x86_64"
-		versions "VibeLibeventDriver"
-	}
-	
-	configuration "libasync" {
-		dependency "libasync" version="~>0.7.8"
-		targetType "library"
-		versions "VibeUseNativeDriverType" "VibeLibasyncDriver"
-	}
-	
-	configuration "win32" {
-		platforms "windows"
-		targetType "library"
-		libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
-		versions "VibeWin32Driver"
-	}
-	
-	configuration "winrt" {
-		platforms "windows"
-		targetType "library"
-		sourceFiles "lib/win-i386/runtimeobject.lib" platform="windows-x86"
-		versions "VibeWinrtDriver"
-	}
-}
-
-subPackage {
-	name "utils"
-	description "Low level utility functionality"
-	targetType "library"
-	sourcePaths "source/vibe/utils" "source/vibe/internal"
-}
-
-subPackage {
-	name "data"
-	description "Data format and serialization support"
-	dependency "vibe-d:utils" version=">=0.0.0"
-	targetType "library"
-	sourcePaths "source/vibe/data"
-}
-
-subPackage {
-	name "http"
-	description "HTTP server and client implementation and higher level HTTP functionality"
-	dependency "vibe-d:core" version=">=0.0.0"
-	dependency "vibe-d:data" version=">=0.0.0"
-	dependency "diet-ng" version="~>1.1" optional=true default=true
-	targetType "library"
-	sourcePaths "source/vibe/http"
-}
-
-subPackage {
-	name "mail"
-	description "SMTP client support"
-	dependency "vibe-d:core" version=">=0.0.0"
-	targetType "library"
-	sourcePaths "source/vibe/mail"
-}
-
-subPackage {
-	name "diet"
-	description "Diet HTML template system"
-	dependency "vibe-d:http" version=">=0.0.0"
-	targetType "library"
-	sourcePaths "source/vibe/templ"
-}
-
-subPackage {
-	name "mongodb"
-	description "MongoDB database client implementation"
-	dependency "vibe-d:http" version=">=0.0.0"
-	targetType "library"
-	sourcePaths "source/vibe/db/mongo"
-}
-
-subPackage {
-	name "redis"
-	description "Redis database client implementation"
-	dependency "vibe-d:http" version=">=0.0.0"
-	targetType "library"
-	sourcePaths "source/vibe/db/redis"
-}
-
-subPackage {
-	name "web"
-	description "High level web and REST service framework"
-	dependency "vibe-d:http" version=">=0.0.0"
-	dependency "vibe-d:diet" version=">=0.0.0"
-	targetType "library"
-	sourcePaths "source/vibe/web"
-}
+subPackage "core"
+subPackage "utils"
+subPackage "data"
+subPackage "http"
+subPackage "mail"
+subPackage "diet"
+subPackage "mongodb"
+subPackage "redis"
+subPackage "web"
