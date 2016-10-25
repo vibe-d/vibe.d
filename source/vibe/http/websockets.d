@@ -205,7 +205,7 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	try {
 		on_handshake(socket);
 	} catch (Exception e) {
-		logDiagnostic("WebSocket handler failed: %s", e.msg);
+		logError("WebSocket handler failed: %s", e);
 	}
 	socket.close();
 }
@@ -258,7 +258,7 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 			/*scope*/ auto socket = new WebSocket(conn, req, null);
 			try on_handshake(socket);
 			catch (Exception e) {
-				logDiagnostic("WebSocket handler failed: %s", e.msg);
+				logError("WebSocket handler failed: %s", e);
 			} catch (Throwable th) {
 				// pretend to have sent a closing frame so that any further sends will fail
 				socket.m_sentCloseFrame = true;
