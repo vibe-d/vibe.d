@@ -1,0 +1,17 @@
+name "stream"
+description "Library of various pluggable stream implementations"
+
+dependency "vibe-d:core" version="*"
+dependency "openssl" version=">=1.0.0+1.0.0e" optional=true default=true
+dependency "botan" version="~>1.12.0" optional=true
+
+lflags "-L/usr/local/opt/openssl/lib" platform="osx"
+
+targetType "library"
+sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="windows-x86"
+sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
+sourcePaths "."
+importPaths "."
+libs "z" platform="ldc"
+copyFiles "../lib/win-i386/libeay32.dll" "../lib/win-i386/ssleay32.dll" platform="windows-x86"
+copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platform="windows-x86_64"

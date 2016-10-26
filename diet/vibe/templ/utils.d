@@ -7,8 +7,6 @@
 */
 module vibe.templ.utils;
 
-import vibe.http.server;
-
 import std.traits;
 import std.typecons : Rebindable;
 
@@ -61,7 +59,7 @@ import std.typecons : Rebindable;
 */
 @property auto inject(alias Page, Injectors...)()
 {
-	return &injectReverse!(Injectors, reqInjector, Page);
+	return &injectReverse!(Injectors, reqInjector!(ParameterTypeTuple!Page), Page);
 }
 
 /**
@@ -163,7 +161,9 @@ private template injectReverse(Injectors...)
 }
 
 /// private
-void reqInjector(alias Next, Vars...)(HTTPServerRequest req, HTTPServerResponse res)
-{
-	Next!(Vars, req)(req, res);
+template reqInjector(HTTPServerRequest, HTTPServerResponse) {
+	void reqInjector(alias Next, Vars...)(HTTPServerRequest req, HTTPServerResponse res)
+	{
+		Next!(Vars, req)(req, res);
+	}
 }

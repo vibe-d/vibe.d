@@ -8,7 +8,6 @@
 module vibe.core.file;
 
 public import vibe.core.stream;
-public import vibe.inet.url;
 
 import vibe.core.drivers.threadedfile; // temporarily needed tp get mkstemps to work
 import vibe.core.driver;

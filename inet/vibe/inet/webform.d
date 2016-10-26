@@ -9,6 +9,7 @@ module vibe.inet.webform;
 
 import vibe.core.file;
 import vibe.core.log;
+import vibe.core.path;
 import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode;

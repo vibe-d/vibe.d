@@ -112,7 +112,6 @@ template compileDietFileMixin(string template_file, string stream_variable, size
 void compileDietString(string diet_code, ALIASES...)(OutputStream stream__)
 {
 	// some imports to make available by default inside templates
-	import vibe.http.common;
 	import vibe.stream.wrapper;
 	import vibe.utils.string;
 	import std.typetuple;
@@ -138,7 +137,6 @@ private void compileDietStrings(SOURCE_AND_ALIASES...)(OutputStream stream__)
 	if (SOURCE_AND_ALIASES.length >= 1 && isGroup!(SOURCE_AND_ALIASES[0]))
 {
 	// some imports to make available by default inside templates
-	import vibe.http.common;
 	import vibe.stream.wrapper;
 	import vibe.utils.string;
 	import std.typetuple;

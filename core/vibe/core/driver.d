@@ -9,11 +9,10 @@ module vibe.core.driver;
 
 public import vibe.core.file;
 public import vibe.core.net;
+public import vibe.core.path;
 public import vibe.core.sync;
 public import vibe.core.stream;
 public import vibe.core.task;
-
-import vibe.inet.url;
 
 import core.time;
 import std.exception;

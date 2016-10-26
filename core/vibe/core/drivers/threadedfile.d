@@ -10,7 +10,6 @@ module vibe.core.drivers.threadedfile;
 import vibe.core.core : yield;
 import vibe.core.log;
 import vibe.core.driver;
-import vibe.inet.url;
 import vibe.utils.string;
 
 import std.algorithm;

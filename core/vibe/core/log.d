@@ -317,8 +317,6 @@ final class FileLogger : Logger {
 	}
 }
 
-import vibe.textfilter.html; // http://d.puremagic.com/issues/show_bug.cgi?id=7016
-
 /**
 	Logger implementation for logging to an HTML file with dynamic filtering support.
 */
@@ -485,6 +483,19 @@ final class HTMLLogger : Logger {
 </html>`);
 		m_logFile.flush();
 	}
+
+	private static void filterHTMLEscape(R, S)(ref R dst, S str)
+	{
+		for (;!str.empty;str.popFront()) {
+			auto ch = str.front;
+			switch (ch) {
+				default: dst.put(ch); break;
+				case '<': dst.put("&lt;"); break;
+				case '>': dst.put("&gt;"); break;
+				case '&': dst.put("&amp;"); break;
+			}
+		}
+	}
 }
 
 import std.conv;
@@ -613,11 +624,11 @@ final class SyslogLogger : Logger {
 
 		auto text = msg.text;
 		import std.format : formattedWrite;
-		import vibe.stream.wrapper : StreamOutputRange;
-		auto str = StreamOutputRange(m_ostream);
+		auto str = appender!string(); // FIXME: avoid GC allocation
 		(&str).formattedWrite(SYSLOG_MESSAGE_FORMAT_VERSION1, priVal,
 			timestamp, m_hostName, BOM ~ m_appName, procId, msgId,
 			structuredData, BOM);
+		m_ostream.write(str.data);
 	}
 
 	override void put(scope const(char)[] text)

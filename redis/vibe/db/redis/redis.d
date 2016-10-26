@@ -12,6 +12,7 @@ public import vibe.core.net;
 import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
+import vibe.inet.url;
 import vibe.utils.memory : allocArray, freeArray, manualAllocator, defaultAllocator;
 import vibe.stream.operations;
 import std.conv;

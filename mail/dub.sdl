@@ -1,6 +1,6 @@
 name "mail"
 description "SMTP client support"
-dependency "vibe-d:core" version=">=0.0.0"
+dependency "vibe-d:inet" version=">=0.0.0"
 targetType "library"
 sourcePaths "."
 importPaths "."

@@ -5,7 +5,7 @@
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
-module vibe.inet.path;
+module vibe.core.path;
 
 import std.algorithm : canFind, min;
 import std.array;

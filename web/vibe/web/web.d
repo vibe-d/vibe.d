@@ -21,6 +21,7 @@ public import vibe.web.i18n;
 public import vibe.web.validation;
 
 import vibe.core.core;
+import vibe.inet.url;
 import vibe.http.common;
 import vibe.http.router;
 import vibe.http.server;
