@@ -7,7 +7,7 @@
 */
 module vibe.inet.url;
 
-public import vibe.inet.path;
+public import vibe.core.path;
 
 import vibe.textfilter.urlencode;
 import vibe.utils.string;

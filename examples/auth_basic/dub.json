@@ -2,7 +2,7 @@
 	"name": "auth-basic-example",
 	"description": "Demonstrates basic authentication.",
 	"dependencies": {
-		"vibe-d:diet": {"path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }

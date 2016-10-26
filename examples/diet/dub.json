@@ -2,7 +2,7 @@
 	"name": "diet-example",
 	"description": "Displays a page using a Diet template.",
 	"dependencies": {
-		"vibe-d:diet": {"path": "../../"}
+		"vibe-d:http": {"path": "../../"}
 	},
 	"versions": ["VibeDefaultMain"]
 }
