@@ -901,22 +901,16 @@ template isStringSerializable(T)
 unittest {
 	import std.conv;
 
-	// represented as the boxed value when serialized
-	static struct Box(T) {
-		T value;
+	// represented as a string when serialized
+	static struct S {
+		int value;
+
+		// dummy example implementations
+		string toString() const { return value.to!string(); }
+		static S fromString(string s) { return S(s.to!int()); }
 	}
 
-	template BoxPol(S)
-	{
-		auto toRepresentation(S s) {
-			return s.value;
-		}
-
-		S fromRepresentation(typeof(S.init.value) v) {
-			return S(v);
-		}
-	}
-	static assert(isPolicySerializable!(BoxPol, Box!int));
+	static assert(isStringSerializable!S);
 }
 
 
@@ -949,17 +943,24 @@ template isPolicySerializable(alias Policy, T)
 unittest {
 	import std.conv;
 
-	// represented as a string when serialized
-	static struct S {
-		int value;
-
-		// dummy example implementations
-		string toString() const { return value.to!string(); }
-		static S fromString(string s) { return S(s.to!int()); }
+	// represented as the boxed value when serialized
+	static struct Box(T) {
+		T value;
 	}
 
-	static assert(isStringSerializable!S);
+	template BoxPol(S)
+	{
+		auto toRepresentation(S s) {
+			return s.value;
+		}
+
+		S fromRepresentation(typeof(S.init.value) v) {
+			return S(v);
+		}
+	}
+	static assert(isPolicySerializable!(BoxPol, Box!int));
 }
+
 
 /**
 	Chains serialization policy.
