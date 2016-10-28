@@ -1,4 +1,9 @@
 language: d
+sudo: false
+
+services:
+  - mongodb
+  - redis-server
 
 d:
   # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions
@@ -27,11 +32,7 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: ldc-1.0.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+  allow_failures:
+    - d: dmd-beta
 
 script: ./travis-ci.sh
-
-services:
-  - mongodb
-  - redis-server
-
-sudo: false
