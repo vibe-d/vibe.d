@@ -148,7 +148,10 @@ package auto handleAuthentication(alias fun, C)(C c, HTTPServerRequest req, HTTP
 			// nothing to do
 		} else {
 			static assert(!is(AR == void), "Missing @auth(...)/@anyAuth attribute for method "~funname~".");
-			return c.authenticate(req, res);
+
+			static if (!__traits(compiles, () @safe { c.authenticate(req, res); } ()))
+				pragma(msg, "Non-@safe .authenticate() methods are deprecated - annotate "~C.stringof~".authenticate() with @safe or @trusted.");
+			return () @trusted { return c.authenticate(req, res); } ();
 		}
 	} else {
 		// make sure that there are no @auth/@noAuth annotations for non-authorizing classes
@@ -175,9 +178,12 @@ package void handleAuthorization(C, alias fun, PARAMS...)(AuthInfo!C auth_info)
 	static if (!is(AI == void)) {
 		static if (!findFirstUDA!(NoAuthAttribute, fun).found) {
 			alias AR = GetAuthAttribute!fun;
-			static if (!is(AR.Roles == void))
-				if (!evaluate!(__traits(identifier, fun), AR.Roles, AI, ParamNames, PARAMS)(auth_info))
+			static if (!is(AR.Roles == void)) {
+				static if (!__traits(compiles, () @safe { evaluate!(__traits(identifier, fun), AR.Roles, AI, ParamNames, PARAMS)(auth_info); } ()))
+					pragma(msg, "Non-@safe role evaluator methods are deprecated - annotate "~C.stringof~"."~__traits(identifier, fun)~"() with @safe or @trusted.");
+				if (!() @trusted { return evaluate!(__traits(identifier, fun), AR.Roles, AI, ParamNames, PARAMS)(auth_info); } ())
 					throw new HTTPStatusException(HTTPStatus.forbidden, "Not allowed to access this resource.");
+			}
 			// successfully authorized, fall-through
 		}
 	}

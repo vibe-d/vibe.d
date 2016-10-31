@@ -75,11 +75,11 @@ struct Task {
 
 	T opCast(T)() const nothrow if (is(T == bool)) { return m_fiber !is null; }
 
-	void join() { if (running) fiber.join(); }
+	void join() @safe { if (running) fiber.join(); }
 	void interrupt() { if (running) fiber.interrupt(); }
 	void terminate() { if (running) fiber.terminate(); }
 
-	string toString() const { import std.string; return format("%s:%s", cast(void*)m_fiber, m_taskCounter); }
+	string toString() const @safe { import std.string; return format("%s:%s", () @trusted { return cast(void*)m_fiber; } (), m_taskCounter); }
 
 	bool opEquals(in ref Task other) const nothrow @safe { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
 	bool opEquals(in Task other) const nothrow @safe { return m_fiber is other.m_fiber && m_taskCounter == other.m_taskCounter; }
@@ -128,7 +128,7 @@ class TaskFiber : Fiber {
 
 	/** Blocks until the task has ended.
 	*/
-	abstract void join();
+	abstract void join() @safe;
 
 	/** Throws an InterruptExeption within the task as soon as it calls a blocking function.
 	*/

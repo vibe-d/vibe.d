@@ -17,13 +17,14 @@ import std.string;
 	Any unknown file extension will map to "application/octet-stream".
 */
 string getMimeTypeForFile(string filename)
+	@safe pure
 {
 	string ext = extension(filename);
 	if( ext.length == 0 ) return "application/octet-stream";
 
 	assert(ext[0] == '.');
 
-	switch(toLower(ext[1 .. $])){
+	switch (toLower(ext[1 .. $])) {
 		default: return "application/octet-stream";
 		case "ez": return "application/andrew-inset";
 		case "aw": return "application/applixware";
@@ -739,6 +740,7 @@ string getMimeTypeForFile(string filename)
 	This function is useful for avoiding redundant compression.
 */
 bool isCompressedFormat(string mimetype)
+	@safe nothrow pure @nogc
 {
 	switch(mimetype){
 		default: return false;

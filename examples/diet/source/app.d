@@ -2,7 +2,7 @@ import vibe.appmain;
 import vibe.http.server;
 
 void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
-{
+@safe {
 	string local_var = "Hello, World!";
 	bool is_admin = false;
 	res.headers["Content-Type"] = "text/html";

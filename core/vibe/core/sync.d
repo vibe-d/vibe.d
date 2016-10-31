@@ -35,6 +35,7 @@ interface Lockable {
 */
 struct ScopedMutexLock
 {
+@safe:
 	@disable this(this);
 	private {
 		Mutex m_mutex;
@@ -71,14 +72,14 @@ struct ScopedMutexLock
 	bool tryLock()
 	{
 		enforce(!m_locked);
-		return m_locked = m_mutex.tryLock();
+		return m_locked = () @trusted { return m_mutex.tryLock(); } ();
 	}
 
 	void lock()
 	{
 		enforce(!m_locked);
 		m_locked = true;
-		m_mutex.lock();
+		() @trusted { m_mutex.lock(); } ();
 	}
 }
 
@@ -120,6 +121,8 @@ unittest {
 */
 class LocalTaskSemaphore
 {
+@safe:
+
 	// requires a queue
 	import std.container.binaryheap;
 	import std.container.array;
@@ -184,13 +187,13 @@ class LocalTaskSemaphore
 		Waiter w;
 		w.signal = getEventDriver().createManualEvent();
 		scope(exit)
-			destroy(w.signal);
+			() @trusted { return destroy(w.signal); } ();
 		w.priority = priority;
 		w.seq = min(0, m_seq - w.priority);
 		if (++m_seq == uint.max)
 			rewindSeq();
 		
-		m_waiters.insert(w);
+		() @trusted { m_waiters.insert(w); } ();
 		w.signal.waitUninterruptible(w.signal.emitCount);
 	}
 
@@ -200,7 +203,7 @@ class LocalTaskSemaphore
 	{		
 		if (m_waiters.length > 0) {
 			ManualEvent s = m_waiters.front().signal;
-			m_waiters.removeFront();
+			() @trusted { m_waiters.removeFront(); } ();
 			s.emit(); // resume one
 		} else m_locks--;
 	}
@@ -222,7 +225,7 @@ class LocalTaskSemaphore
 	}
 
 	private void rewindSeq()
-	{
+	@trusted {
 		Array!Waiter waiters = m_waiters.release();
 		ushort min_seq;
 		import std.algorithm : min;
@@ -254,10 +257,12 @@ class LocalTaskSemaphore
 	See_Also: InterruptibleTaskMutex, RecursiveTaskMutex, core.sync.mutex.Mutex
 */
 class TaskMutex : core.sync.mutex.Mutex, Lockable {
+@safe:
+
 	private TaskMutexImpl!false m_impl;
 
-	this(Object o) { m_impl.setup(); super(o); }
-	this() { m_impl.setup(); }
+	this(Object o) @trusted { m_impl.setup(); super(o); }
+	this() @trusted { m_impl.setup(); }
 
 	override bool tryLock() nothrow { return m_impl.tryLock(); }
 	override void lock() nothrow { m_impl.lock(); }
@@ -348,6 +353,8 @@ unittest {
 	See_Also: $(D TaskMutex), $(D InterruptibleRecursiveTaskMutex)
 */
 final class InterruptibleTaskMutex : Lockable {
+@safe:
+
 	private TaskMutexImpl!true m_impl;
 
 	this() { m_impl.setup(); }
@@ -381,6 +388,8 @@ unittest {
 	See_Also: TaskMutex, core.sync.mutex.Mutex
 */
 class RecursiveTaskMutex : core.sync.mutex.Mutex, Lockable {
+@safe:
+
 	private RecursiveTaskMutexImpl!false m_impl;
 
 	this(Object o) { m_impl.setup(); super(o); }
@@ -406,6 +415,8 @@ unittest {
 	See_Also: $(D RecursiveTaskMutex), $(D InterruptibleTaskMutex)
 */
 final class InterruptibleRecursiveTaskMutex : Lockable {
+@safe:
+
 	private RecursiveTaskMutexImpl!true m_impl;
 
 	this() { m_impl.setup(); }
@@ -540,6 +551,8 @@ private void runMutexUnitTests(M)()
 	See_Also: InterruptibleTaskCondition
 */
 class TaskCondition : core.sync.condition.Condition {
+@safe:
+
 	private TaskConditionImpl!(false, Mutex) m_impl;
 
 	this(core.sync.mutex.Mutex mtx) nothrow { m_impl.setup(mtx); super(mtx); }
@@ -602,6 +615,8 @@ unittest {
 	See_Also: `TaskCondition`
 */
 final class InterruptibleTaskCondition {
+@safe:
+
 	private TaskConditionImpl!(true, Lockable) m_impl;
 
 	this(core.sync.mutex.Mutex mtx) nothrow { m_impl.setup(mtx); }
@@ -618,7 +633,7 @@ final class InterruptibleTaskCondition {
 /** Creates a new signal that can be shared between fibers.
 */
 ManualEvent createManualEvent()
-nothrow {
+@safe nothrow {
 	return getEventDriver().createManualEvent();
 }
 
@@ -627,6 +642,8 @@ nothrow {
 	Note: the ownership can be shared between multiple fibers and threads.
 */
 interface ManualEvent {
+@safe:
+
 	/// A counter that is increased with every emit() call
 	@property int emitCount() const nothrow;
 
@@ -879,6 +896,7 @@ private struct TaskConditionImpl(bool INTERRUPTIBLE, LOCKABLE) {
  */
 private struct ReadWriteMutexState(bool INTERRUPTIBLE)
 {
+@safe:
     /** The policy with which the mutex should operate.
      *
      *  The policy determines how the acquisition of the locks is 
@@ -970,7 +988,7 @@ private struct ReadWriteMutexState(bool INTERRUPTIBLE)
                     m_waitingForReadLock, m_waitingForWriteLock
                     );
             }
-            catch (Throwable t){}
+            catch (Exception t){}
         }
     }
     
@@ -1201,6 +1219,8 @@ private struct ReadWriteMutexState(bool INTERRUPTIBLE)
  */
 class TaskReadWriteMutex
 {
+@safe:
+
     private {
         alias State = ReadWriteMutexState!false;
         alias LockingIntent = State.LockingIntent;
@@ -1266,6 +1286,8 @@ class TaskReadWriteMutex
  */
 class InterruptibleTaskReadWriteMutex
 {
+@safe:
+
     private {
         alias State = ReadWriteMutexState!true;
         alias LockingIntent = State.LockingIntent;

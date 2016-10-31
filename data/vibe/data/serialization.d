@@ -298,12 +298,12 @@ unittest {
 		import std.array;
 
 		static string toRepresentation(T value)
-		{
+		@safe {
 			return to!string(value.x) ~ "x" ~ to!string(value.y);
 		}
 
 		static T fromRepresentation(string value)
-		{
+		@safe {
 			string[] fields = value.split('x');
 			alias fieldT = typeof(T.x);
 			auto x = to!fieldT(fields[0]);
@@ -518,12 +518,12 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) if(!isMutable!T)
+	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(!isMutable!T)
 	{
-		return cast(T) deserializeValue!(Unqual!T, ATTRIBUTES)(ser);
+		return () @trusted { return cast(T) deserializeValue!(Unqual!T, ATTRIBUTES)(ser); } ();
 	}
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) if(isMutable!T) 
+	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T) 
 	{
 		import std.typecons : BitFlags, Nullable;
 
@@ -575,7 +575,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			alias STraits = SubTraits!(Traits, TV);
 
 			T ret;
-			ser.readDictionary!Traits((name) {
+			ser.readDictionary!Traits((name) @safe {
 				TK key;
 				static if (is(TK == string)) key = name;
 				else static if (is(TK : real) || is(TK : long) || is(TK == enum)) key = name.to!TK;
@@ -642,7 +642,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					}
 				});
 			} else {
-				ser.readDictionary!Traits((name) {
+				ser.readDictionary!Traits((name) @safe {
 					static if (hasSerializableFields!(T, Policy)) {
 						switch (name) {
 							default: break;
@@ -1189,7 +1189,7 @@ version (unittest) {
 		}
 
 		// deserialization
-		void readDictionary(Traits)(scope void delegate(string) entry_callback)
+		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 		{
 			skip("D("~Traits.Type.mangleof~"){");
 			while (result.startsWith("DE(")) {
@@ -1209,7 +1209,7 @@ version (unittest) {
 		void beginReadDictionaryEntry(Traits)(string name) {}
 		void endReadDictionaryEntry(Traits)(string name) {}
 
-		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+		void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 		{
 			skip("A("~Traits.Type.mangleof~")[");
 			auto bidx = result.indexOf("][");
@@ -1250,7 +1250,7 @@ version (unittest) {
 		}
 
 		void skip(string prefix)
-		{
+		@safe {
 			assert(result.startsWith(prefix), prefix ~ " vs. " ~result);
 			result = result[prefix.length .. $];
 		}
@@ -1424,6 +1424,7 @@ unittest // Make sure serializing through properties still works
 
 	static struct S
 	{
+		@safe:
 		public int i;
 		private int privateJ;
 
@@ -1543,6 +1544,7 @@ unittest {
 	import std.string : toLower, toUpper;
 
 	template P(T) if (is(T == enum)) {
+		@safe:
 		static string toRepresentation(T v) { return v.to!string.toLower(); }
 		static T fromRepresentation(string str) { return str.toUpper().to!T; }
 	}
@@ -1567,6 +1569,7 @@ unittest {
 unittest {
 	static struct R { int y; }
 	static struct Custom {
+		@safe:
 		int x;
 		R toRepresentation() const { return R(x); }
 		static Custom fromRepresentation(R r) { return Custom(r.y); }

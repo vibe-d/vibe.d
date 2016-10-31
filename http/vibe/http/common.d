@@ -16,6 +16,7 @@ import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
 import vibe.internal.allocator;
+import vibe.internal.freelistref;
 import vibe.utils.string;
 
 import std.algorithm;
@@ -81,11 +82,13 @@ enum HTTPMethod {
 	Returns the string representation of the given HttpMethod.
 */
 string httpMethodString(HTTPMethod m)
-{
+@safe nothrow {
 	switch(m){
 		case HTTPMethod.BASELINECONTROL: return "BASELINE-CONTROL";
 		case HTTPMethod.VERSIONCONTROL: return "VERSION-CONTROL";
-		default: return to!string(m);
+		default:
+			try return to!string(m);
+			catch (Exception e) assert(false, e.msg);
 	}
 }
 
@@ -93,7 +96,7 @@ string httpMethodString(HTTPMethod m)
 	Returns the HttpMethod value matching the given HTTP method string.
 */
 HTTPMethod httpMethodFromString(string str)
-{
+@safe {
 	switch(str){
 		default: throw new Exception("Invalid HTTP method: "~str);
 		// HTTP standard, RFC 2616
@@ -170,6 +173,8 @@ T enforceBadRequest(T)(T condition, lazy string message = null, string file = __
 	Represents an HTTP request made to a server.
 */
 class HTTPRequest {
+	@safe:
+
 	protected {
 		Stream m_conn;
 	}
@@ -266,6 +271,8 @@ class HTTPRequest {
 	Represents the HTTP response from the server back to the client.
 */
 class HTTPResponse {
+	@safe:
+
 	public {
 		/// The protocol version of the response - should not be changed
 		HTTPVersion httpVersion = HTTPVersion.HTTP_1_1;
@@ -307,6 +314,8 @@ class HTTPResponse {
 	Throwing this exception from within a request handler will produce a matching error page.
 */
 class HTTPStatusException : Exception {
+	@safe:
+
 	private {
 		int m_status;
 	}
@@ -333,7 +342,7 @@ final class MultiPart {
 }
 
 string getHTTPVersionString(HTTPVersion ver)
-{
+@safe nothrow {
 	final switch(ver){
 		case HTTPVersion.HTTP_1_0: return "HTTP/1.0";
 		case HTTPVersion.HTTP_1_1: return "HTTP/1.1";
@@ -342,7 +351,7 @@ string getHTTPVersionString(HTTPVersion ver)
 
 
 HTTPVersion parseHTTPVersion(ref string str)
-{
+@safe {
 	enforceBadRequest(str.startsWith("HTTP/"));
 	str = str[5 .. $];
 	int majorVersion = parse!int(str);
@@ -358,13 +367,23 @@ HTTPVersion parseHTTPVersion(ref string str)
 /**
 	Takes an input stream that contains data in HTTP chunked format and outputs the raw data.
 */
-final class ChunkedInputStream : InputStream {
+final class ChunkedInputStream : InputStream
+{
+	@safe:
+
 	private {
 		InputStream m_in;
 		ulong m_bytesInCurrentChunk = 0;
 	}
 
+	deprecated("Use createChunkedInputStream() instead.")
 	this(InputStream stream)
+	{
+		this(stream, true);
+	}
+
+	/// private
+	this(InputStream stream, bool dummy)
 	{
 		assert(stream !is null);
 		m_in = stream;
@@ -409,7 +428,7 @@ final class ChunkedInputStream : InputStream {
 		assert(m_bytesInCurrentChunk == 0);
 		// read chunk header
 		logTrace("read next chunk header");
-		auto ln = cast(string)m_in.readLine();
+		auto ln = () @trusted { return cast(string)m_in.readLine(); } ();
 		logTrace("got chunk header: %s", ln);
 		m_bytesInCurrentChunk = parse!ulong(ln, 16u);
 
@@ -423,11 +442,27 @@ final class ChunkedInputStream : InputStream {
 	}
 }
 
+/// Creates a new `ChunkedInputStream` instance.
+ChunkedInputStream chunkedInputStream(IS)(IS source_stream) if (isInputStream!IS)
+{
+	import vibe.internal.interfaceproxy : asInterface;
+	return new ChunkedInputStream(source_stream.asInterface!InputStream, true);
+}
+
+/// Creates a new `ChunkedInputStream` instance.
+FreeListRef!ChunkedInputStream createChunkedInputStreamFL(IS)(IS source_stream) if (isInputStream!IS)
+{
+	import vibe.internal.interfaceproxy : asInterface;
+	return () @trusted { return FreeListRef!ChunkedInputStream(source_stream.asInterface!InputStream, true); } ();
+}
+
 
 /**
 	Outputs data to an output stream in HTTP chunked format.
 */
 final class ChunkedOutputStream : OutputStream {
+	@safe:
+
 	alias ChunkExtensionCallback = string delegate(in ubyte[] data);
 	private {
 		OutputStream m_out;
@@ -437,7 +472,14 @@ final class ChunkedOutputStream : OutputStream {
 		ChunkExtensionCallback m_chunkExtensionCallback = null;
 	}
 
+	deprecated("Use createChunkedOutputStream() instead.")
 	this(OutputStream stream, IAllocator alloc = theAllocator())
+	{
+		this(stream, alloc, true);
+	}
+
+	/// private
+	this(OutputStream stream, IAllocator alloc, bool dummy)
 	{
 		m_out = stream;
 		m_buffer = AllocAppender!(ubyte[])(alloc);
@@ -469,7 +511,7 @@ final class ChunkedOutputStream : OutputStream {
 	/// ditto
 	@property void chunkExtensionCallback(ChunkExtensionCallback cb) { m_chunkExtensionCallback = cb; }
 
-	private void append(scope void delegate(scope ubyte[] dst) del, size_t nbytes)
+	private void append(scope void delegate(scope ubyte[] dst) @safe del, size_t nbytes)
 	{
 		assert(del !is null);
 		auto sz = nbytes;
@@ -479,11 +521,13 @@ final class ChunkedOutputStream : OutputStream {
 		if (sz > 0)
 		{
 			m_buffer.reserve(sz);
-			m_buffer.append((scope ubyte[] dst) {
+			() @trusted {
+				m_buffer.append((scope ubyte[] dst) {
 					debug assert(dst.length >= sz);
 					del(dst[0..sz]);
 					return sz;
 				});
+			} ();
 		}
 	}
 
@@ -533,14 +577,14 @@ final class ChunkedOutputStream : OutputStream {
 			writeChunk(data);
 		}
 		m_out.flush();
-		m_buffer.reset(AppenderResetMode.reuseData);
+		() @trusted { m_buffer.reset(AppenderResetMode.reuseData); } ();
 	}
 
 	void finalize()
 	{
 		if (m_finalized) return;
 		flush();
-		m_buffer.reset(AppenderResetMode.freeData);
+		() @trusted { m_buffer.reset(AppenderResetMode.freeData); } ();
 		m_finalized = true;
 		writeChunk([]);
 		m_out.flush();
@@ -550,7 +594,7 @@ final class ChunkedOutputStream : OutputStream {
 	{
 		import vibe.stream.wrapper;
 		auto rng = StreamOutputRange(m_out);
-		formattedWrite(&rng, "%x", data.length);
+		formattedWrite(() @trusted { return &rng; } (), "%x", data.length);
 		if (m_chunkExtensionCallback !is null)
 		{
 			rng.put(';');
@@ -566,7 +610,24 @@ final class ChunkedOutputStream : OutputStream {
 	}
 }
 
+/// Creates a new `ChunkedInputStream` instance.
+ChunkedOutputStream createChunkedOutputStream(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
+{
+	import vibe.internal.interfaceproxy : asInterface;
+	return new ChunkedOutputStream(destination_stream.asInterface!OutputStream, allocator, true);
+}
+
+/// Creates a new `ChunkedOutputStream` instance.
+FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
+{
+	import vibe.internal.interfaceproxy : asInterface;
+	return FreeListRef!ChunkedOutputStream(destination_stream.asInterface!OutputStream, allocator, true);
+}
+
+
 final class Cookie {
+	@safe:
+
 	private {
 		string m_value;
 		string m_domain;
@@ -673,6 +734,8 @@ unittest {
 /**
 */
 struct CookieValueMap {
+	@safe:
+
 	struct Cookie {
 		/// Name of the cookie
 		string name;
@@ -744,7 +807,7 @@ struct CookieValueMap {
 		throw new RangeError("Non-existent cookie: "~name);
 	}
 
-	int opApply(scope int delegate(ref Cookie) del)
+	int opApply(scope int delegate(ref Cookie) @safe del)
 	{
 		foreach(ref c; m_entries)
 			if( auto ret = del(c) )
@@ -752,7 +815,7 @@ struct CookieValueMap {
 		return 0;
 	}
 
-	int opApply(scope int delegate(ref Cookie) del)
+	int opApply(scope int delegate(ref Cookie) @safe del)
 	const {
 		foreach(Cookie c; m_entries)
 			if( auto ret = del(c) )
@@ -760,7 +823,7 @@ struct CookieValueMap {
 		return 0;
 	}
 
-	int opApply(scope int delegate(string name, string value) del)
+	int opApply(scope int delegate(string name, string value) @safe del)
 	{
 		foreach(ref c; m_entries)
 			if( auto ret = del(c.name, c.value) )
@@ -768,7 +831,7 @@ struct CookieValueMap {
 		return 0;
 	}
 
-	int opApply(scope int delegate(string name, string value) del)
+	int opApply(scope int delegate(string name, string value) @safe del)
 	const {
 		foreach(Cookie c; m_entries)
 			if( auto ret = del(c.name, c.value) )

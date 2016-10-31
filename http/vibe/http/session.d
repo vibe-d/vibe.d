@@ -37,7 +37,7 @@ struct Session {
 
 	// created by the SessionStore using SessionStore.createSessionInstance
 	private this(SessionStore store, string id = null)
-	{
+	@safe {
 		assert(id.length > 0);
 		m_store = store;
 		m_id = id;
@@ -49,7 +49,7 @@ struct Session {
 		This operator enables a $(D Session) value to be used in conditionals
 		to check if they are actially valid/active.
 	*/
-	bool opCast() const { return m_store !is null; }
+	bool opCast() const @safe { return m_store !is null; }
 
 	///
 	unittest {
@@ -71,17 +71,18 @@ struct Session {
 	}
 
 	/// Returns the unique session id of this session.
-	@property string id() const { return m_id; }
+	@property string id() const @safe { return m_id; }
 
 	/// Queries the session for the existence of a particular key.
-	bool isKeySet(string key) { return m_store.isKeySet(m_id, key); }
+	bool isKeySet(string key) @safe { return m_store.isKeySet(m_id, key); }
 
 	/** Gets a typed field from the session.
 	*/
 	const(T) get(T)(string key, lazy T def_value = T.init)
-	{
+	@trusted { // Variant, deserializeJson/deserializeBson
 		static assert(!hasAliasing!T, "Type "~T.stringof~" contains references, which is not supported for session storage.");
-		return deserialize!T(m_store.get(m_id, key, serialize(def_value)));
+		auto val = m_store.get(m_id, key, serialize(def_value));
+		return deserialize!T(val);
 	}
 
 	/** Sets a typed field to the session.
@@ -95,8 +96,8 @@ struct Session {
 	/**
 		Enables foreach-iteration over all keys of the session.
 	*/
-	int opApply(scope int delegate(string key) del)
-	{
+	int opApply(scope int delegate(string key) @safe del)
+	@safe {
 		return m_store.iterateSession(m_id, del);
 	}
 	///
@@ -104,19 +105,21 @@ struct Session {
 		//import vibe.http.server;
 		// workaround for cyclic module ctor compiler error
 		class HTTPServerRequest { Session session; }
-		class HTTPServerResponse { import vibe.core.stream; OutputStream bodyWriter() { assert(false); } string contentType; }
+		class HTTPServerResponse { import vibe.core.stream; OutputStream bodyWriter() @safe { assert(false); } string contentType; }
 
 		// sends all session entries to the requesting browser
 		// assumes that all entries are strings
 		void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 		{
 			res.contentType = "text/plain";
-			foreach(key; req.session)
+			req.session.opApply((key) @safe {
 				res.bodyWriter.write(key ~ ": " ~ req.session.get!string(key) ~ "\n");
+				return 0;
+			});
 		}
 	}
 
-	package void destroy() { m_store.destroy(m_id); }
+	package void destroy() @safe { m_store.destroy(m_id); }
 
 	private Variant serialize(T)(T val)
 	{
@@ -124,21 +127,21 @@ struct Session {
 		import vibe.data.bson;
 
 		final switch (m_storageType) with (SessionStorageType) {
-			case native: return Variant(val);
-			case json: return Variant(serializeToJson(val));
-			case bson: return Variant(serializeToBson(val));
+			case native: return () @trusted { return Variant(val); } ();
+			case json: return () @trusted { return Variant(serializeToJson(val)); } ();
+			case bson: return () @trusted { return Variant(serializeToBson(val)); } ();
 		}
 	}
 
-	private T deserialize(T)(Variant val)
+	private T deserialize(T)(ref Variant val)
 	{
 		import vibe.data.json;
 		import vibe.data.bson;
 
 		final switch (m_storageType) with (SessionStorageType) {
-			case native: return val.get!T;
-			case json: return deserializeJson!T(val.get!Json);
-			case bson: return deserializeBson!T(val.get!Bson);
+			case native: return () @trusted { return val.get!T; } ();
+			case json: return () @trusted { return deserializeJson!T(val.get!Json); } ();
+			case bson: return () @trusted { return deserializeBson!T(val.get!Bson); } ();
 		}
 	}
 }
@@ -151,6 +154,8 @@ struct Session {
 	session.
 */
 interface SessionStore {
+@safe:
+
 	/// Returns the internal type used for storing session keys.
 	@property SessionStorageType storageType() const;
 
@@ -173,7 +178,7 @@ interface SessionStore {
 	void destroy(string id);
 
 	/// Iterates all keys stored in the given session.
-	int iterateSession(string id, scope int delegate(string key) del);
+	int iterateSession(string id, scope int delegate(string key) @safe del);
 
 	/// Creates a new Session object which sources its contents from this store.
 	protected final Session createSessionInstance(string id = null)
@@ -182,7 +187,7 @@ interface SessionStore {
 			ubyte[64] rand;
 			if (!g_rng) g_rng = new SHA1HashMixerRNG();
 			g_rng.read(rand);
-			id = cast(immutable)Base64URLNoPadding.encode(rand);
+			id = () @trusted { return cast(immutable)Base64URLNoPadding.encode(rand); } ();
 		}
 		return Session(this, id);
 	}
@@ -203,6 +208,8 @@ enum SessionStorageType {
 	a persistent session store based on a database is necessary.
 */
 final class MemorySessionStore : SessionStore {
+@safe:
+
 	private {
 		Variant[string][string] m_sessions;
 	}
@@ -226,13 +233,13 @@ final class MemorySessionStore : SessionStore {
 	}
 
 	void set(string id, string name, Variant value)
-	{
+	@trusted { // Variant
 		m_sessions[id][name] = value;
 		foreach(k, v; m_sessions[id]) logTrace("Csession[%s][%s] = %s", id, k, v);
 	}
 
 	Variant get(string id, string name, lazy Variant defaultVal)
-	{
+	@trusted { // Variant
 		assert(id in m_sessions, "session not in store");
 		foreach(k, v; m_sessions[id]) logTrace("Dsession[%s][%s] = %s", id, k, v);
 		if (auto pv = name in m_sessions[id]) {
@@ -252,11 +259,11 @@ final class MemorySessionStore : SessionStore {
 		m_sessions.remove(id);
 	}
 
-	int delegate(int delegate(ref string key, ref Variant value)) iterateSession(string id, )
+	int delegate(int delegate(ref string key, ref Variant value) @safe) @safe iterateSession(string id)
 	{
 		assert(id in m_sessions, "session not in store");
-		int iterator(int delegate(ref string key, ref Variant value) del)
-		{
+		int iterator(int delegate(ref string key, ref Variant value) @safe del)
+		@safe {
 			foreach( key, ref value; m_sessions[id] )
 				if( auto ret = del(key, value) != 0 )
 					return ret;
@@ -265,8 +272,8 @@ final class MemorySessionStore : SessionStore {
 		return &iterator;
 	}
 
-	int iterateSession(string id, scope int delegate(string key) del)
-	{
+	int iterateSession(string id, scope int delegate(string key) @safe del)
+	@trusted { // hash map iteration
 		assert(id in m_sessions, "session not in store");
 		foreach (key; m_sessions[id].byKey)
 			if (auto ret = del(key))

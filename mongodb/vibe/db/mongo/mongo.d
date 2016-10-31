@@ -21,6 +21,9 @@ public import vibe.db.mongo.settings;
 
 import std.algorithm;
 
+@safe:
+
+
 /**
 	Connects to a MongoDB instance.
 

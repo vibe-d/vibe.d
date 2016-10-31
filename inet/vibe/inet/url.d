@@ -22,6 +22,8 @@ import std.string;
 	Represents a URL decomposed into its components.
 */
 struct URL {
+@safe:
+
 	private {
 		string m_schema;
 		string m_pathString;

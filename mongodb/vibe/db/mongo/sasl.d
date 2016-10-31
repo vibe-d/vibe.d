@@ -18,10 +18,14 @@ import std.string;
 import std.utf;
 import vibe.crypto.cryptorand;
 
+@safe:
+
 private SHA1HashMixerRNG g_rng;
 
 package struct ScramState
 {
+	@safe:
+
 	private string m_firstMessageBare;
 	private string m_nonce;
 	private DigestType!SHA1 m_saltedPassword;
@@ -94,7 +98,7 @@ package struct ScramState
 			} else if (buffer)
 				encode(buffer, ch);
 		}
-		return buffer ? assumeUnique(buffer) : user;
+		return buffer ? () @trusted { return assumeUnique(buffer); } () : user;
 	}
 
 	unittest
@@ -110,9 +114,9 @@ package struct ScramState
 
 	private static auto getClientProof(DigestType!SHA1 saltedPassword, string authMessage)
 	{
-		auto clientKey = hmac!SHA1("Client Key".representation, saltedPassword);
+		auto clientKey = () @trusted { return hmac!SHA1("Client Key".representation, saltedPassword); } ();
 		auto storedKey = sha1Of(clientKey);
-		auto clientSignature = hmac!SHA1(authMessage.representation, storedKey);
+		auto clientSignature = () @trusted { return hmac!SHA1(authMessage.representation, storedKey); } ();
 		
 		foreach (i; 0 .. clientKey.length)
 		{
@@ -122,7 +126,7 @@ package struct ScramState
 	}
 
 	private static bool verifyServerSignature(ubyte[] signature, DigestType!SHA1 saltedPassword, string authMessage)
-	{
+	@trusted {
 		auto serverKey = hmac!SHA1("Server Key".representation, saltedPassword);
 		auto serverSignature = hmac!SHA1(authMessage.representation, serverKey);
 		return serverSignature == signature;
@@ -134,11 +138,11 @@ private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int i
 	import std.bitmanip;
 
 	ubyte[4] intBytes = [0, 0, 0, 1];
-	auto last = hmac!SHA1(salt, intBytes[], password);
+	auto last = () @trusted { return hmac!SHA1(salt, intBytes[], password); } ();
 	auto current = last;
 	foreach (i; 1 .. iterations)
 	{
-		last = hmac!SHA1(last[], password);
+		last = () @trusted { return hmac!SHA1(last[], password); } ();
 		foreach (j; 0 .. current.length)
 		{
 			current[j] = current[j] ^ last[j];

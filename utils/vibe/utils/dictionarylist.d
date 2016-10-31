@@ -136,14 +136,14 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		Note that the version returning an array will allocate for each call.
 	*/
 	const(ValueType)[] getAll(string key)
-	const {
+	const @trusted { // appender
 		import std.array;
 		auto ret = appender!(const(ValueType)[])();
-		getAll(key, (v) { ret.put(v); });
+		getAll(key, (v) @trusted { ret.put(v); });
 		return ret.data;
 	}
 	/// ditto
-	void getAll(string key, scope void delegate(const(ValueType)) del)
+	void getAll(string key, scope void delegate(const(ValueType)) @safe del)
 	const {
 		static if (USE_HASHSUM) uint keysum = computeCheckSumI(key);
 		else enum keysum = 0;
@@ -200,7 +200,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 
 	/** Iterates over all fields, including duplicates.
 	*/
-	int opApply(scope int delegate(string key, ref ValueType val) del)
+	int opApply(scope int delegate(string key, ref ValueType val) @safe del)
 	{
 		foreach (ref kv; m_fields[0 .. m_fieldCount]) {
 			if (auto ret = del(kv.key, kv.value))
@@ -214,21 +214,21 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	}
 
 	/// ditto
-	int opApply(scope int delegate(ref ValueType val) del)
+	int opApply(scope int delegate(ref ValueType val) @safe del)
 	{
 		return this.opApply((string key, ref ValueType val) { return del(val); });
 	}
 
 	/// ditto
-	int opApply(scope int delegate(string key, ref const(ValueType) val) del) const
-	{
-		return (cast() this).opApply(cast(int delegate(string, ref ValueType)) del);
+	int opApply(scope int delegate(string key, ref const(ValueType) val) @safe del) const
+	@trusted {
+		return (cast() this).opApply(cast(int delegate(string, ref ValueType) @safe) del);
 	}
 
 	/// ditto
-	int opApply(scope int delegate(ref const(ValueType) val) del) const
-	{
-		return (cast() this).opApply(cast(int delegate(ref ValueType)) del);
+	int opApply(scope int delegate(ref const(ValueType) val) @safe del) const
+	@trusted {
+		return (cast() this).opApply(cast(int delegate(ref ValueType) @safe) del);
 	}
 
 	static if (is(typeof({ const(ValueType) v; ValueType w; w = v; }))) {

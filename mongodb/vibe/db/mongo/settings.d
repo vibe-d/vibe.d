@@ -32,7 +32,7 @@ import std.string : icmp, indexOf, toLower;
  * incomplete and should not be used.
  */
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
-{
+@safe {
 	import std.exception : enforce;
 	
 	cfg = new MongoClientSettings();
@@ -306,7 +306,7 @@ enum MongoAuthMechanism
 }
 
 private MongoAuthMechanism parseAuthMechanism(string str)
-{
+@safe {
 	switch (str) {
 		case "SCRAM-SHA-1": return MongoAuthMechanism.scramSHA1;
 		case "MONGODB-CR": return MongoAuthMechanism.mongoDBCR;
@@ -339,7 +339,7 @@ class MongoClientSettings
 	MongoAuthMechanism authMechanism;
 
 	static string makeDigest(string username, string password)
-	{
+	@safe {
 		return md5Of(username ~ ":mongo:" ~ password).toHexString().idup.toLower();
 	}
 }

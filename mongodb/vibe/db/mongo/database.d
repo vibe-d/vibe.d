@@ -19,6 +19,8 @@ import vibe.data.bson;
 */
 struct MongoDatabase
 {
+@safe:
+
 	private {
 		string m_name;
 		string m_commandCollection;

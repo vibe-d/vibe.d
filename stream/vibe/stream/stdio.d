@@ -105,8 +105,8 @@ class StdFileStream : ConnectionStream {
 		writeDefault(stream, nbytes);
 	}
 
-	void enforceReadable() { enforce(m_readPipe, "Stream is not readable!"); }
-	void enforceWritable() { enforce(m_writePipe, "Stream is not writable!"); }
+	void enforceReadable() @safe { enforce(m_readPipe, "Stream is not readable!"); }
+	void enforceWritable() @safe { enforce(m_writePipe, "Stream is not writable!"); }
 
 	private void readThreadFunc()
 	{

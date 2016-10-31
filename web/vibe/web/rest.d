@@ -141,11 +141,12 @@ URLRouter registerRestInterface(TImpl)(URLRouter router, TImpl instance, string 
 
 	All details related to HTTP are inferred from the interface declaration.
 */
-unittest
+@safe unittest
 {
 	@path("/")
 	interface IMyAPI
 	{
+		@safe:
 		// GET /api/greeting
 		@property string greeting();
 
@@ -520,7 +521,7 @@ class RestInterfaceSettings {
 	HTTPClientSettings httpClientSettings;
 
 	@property RestInterfaceSettings dup()
-	const {
+	const @safe {
 		auto ret = new RestInterfaceSettings;
 		ret.baseURL = this.baseURL;
 		ret.methodStyle = this.methodStyle;
@@ -1019,7 +1020,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 	auto settings = intf.settings;
 
 	void handler(HTTPServerRequest req, HTTPServerResponse res)
-	{
+	@safe {
 		if (route.bodyParameters.length) {
 			logDebug("BODYPARAMS: %s %s", Method, route.bodyParameters.length);
 			/*enforceBadRequest(req.contentType == "application/json",
@@ -1060,7 +1061,9 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				if (auto pv = fieldname in req.headers)
 					v = fromRestString!PT(*pv);
 			} else static if (sparam.kind == ParameterKind.attributed) {
-				v = computeAttributedParameterCtx!(Func, pname)(inst, req, res);
+				static if (!__traits(compiles, () @safe { computeAttributedParameterCtx!(Func, pname)(inst, req, res); } ()))
+					pragma(msg, "Non-@safe @before evaluators are deprecated - annotate evaluator function for parameter "~pname~" of "~T.stringof~"."~Method~" as @safe.");
+				v = () @trusted { return computeAttributedParameterCtx!(Func, pname)(inst, req, res); } ();
 			} else static if (sparam.kind == ParameterKind.internal) {
 				if (auto pv = fieldname in req.params)
 					v = fromRestString!PT(urlDecode(*pv));
@@ -1114,13 +1117,20 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 		try {
 			import vibe.internal.meta.funcattr;
 
+			static if (!__traits(compiles, () @safe { __traits(getMember, inst, Method)(params); }))
+				pragma(msg, "Non-@safe methods are deprecated in REST interfaces - Mark "~T.stringof~"."~Method~" as @safe.");
+
 			static if (is(RT == void)) {
-				__traits(getMember, inst, Method)(params);
+				() @trusted { __traits(getMember, inst, Method)(params); } (); // TODO: remove after deprecation period
 				returnHeaders();
 				res.writeVoidBody();
 			} else {
-				auto ret = __traits(getMember, inst, Method)(params);
-				ret = evaluateOutputModifiers!Func(ret, req, res);
+				auto ret = () @trusted { return __traits(getMember, inst, Method)(params); } (); // TODO: remove after deprecation period
+
+				static if (!__traits(compiles, () @safe { evaluateOutputModifiers!Func(ret, req, res); } ()))
+					pragma(msg, "Non-@safe @after evaluators are deprecated - annotate @after evaluator function for "~T.stringof~"."~Method~" as @safe.");
+
+				ret = () @trusted { return evaluateOutputModifiers!Func(ret, req, res); } ();
 				returnHeaders();
 				debug res.writePrettyJsonBody(ret);
 				else res.writeJsonBody(ret);
@@ -1134,13 +1144,13 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			}
 		} catch (Exception e) {
 			// TODO: better error description!
-			logDebug("REST handler exception: %s", e.toString());
+			logDebug("REST handler exception: %s", () @trusted { return e.toString(); } ());
 			if (res.headerWritten) logDebug("Response already started. Client will not receive an error code!");
 			else
 			{
 				returnHeaders();
 				debug res.writeJsonBody(
-						[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
+						[ "statusMessage": e.msg, "statusDebugMessage": () @trusted { return sanitizeUTF8(cast(ubyte[])e.toString()); } () ],
 						HTTPStatus.internalServerError
 					);
 				else res.writeJsonBody(["statusMessage": e.msg], HTTPStatus.internalServerError);
@@ -1844,7 +1854,8 @@ unittest {
 	// parameter, so we don't need to check it here.
 }
 
-private string stripTestIdent(string msg) {
+private string stripTestIdent(string msg)
+@safe {
 	import std.string;
 	auto idx = msg.indexOf(": ");
 	return idx >= 0 ? msg[idx+2 .. $] : msg;
@@ -1852,7 +1863,7 @@ private string stripTestIdent(string msg) {
 
 // Small helper for client code generation
 private string paramCTMap(string[string] params)
-{
+@safe {
 	import std.array : appender, join;
 	if (!__ctfe)
 		assert (false, "This helper is only supposed to be called for codegen in RestClientInterface.");
@@ -1864,7 +1875,8 @@ private string paramCTMap(string[string] params)
 	return app.data.join(", ");
 }
 
-package string stripTUnderscore(string name, RestInterfaceSettings settings) {
+package string stripTUnderscore(string name, RestInterfaceSettings settings)
+@safe {
 	if ((settings is null || settings.stripTrailingUnderscore)
 	    && name.endsWith("_"))
 		return name[0 .. $-1];

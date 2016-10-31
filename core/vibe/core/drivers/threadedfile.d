@@ -67,6 +67,8 @@ private {
 }
 
 final class ThreadedFileStream : FileStream {
+@safe:
+
 	private {
 		int m_fileDescriptor;
 		Path m_path;
@@ -79,20 +81,23 @@ final class ThreadedFileStream : FileStream {
 	this(Path path, FileMode mode)
 	{
 		auto pathstr = path.toNativeString();
-		final switch(mode){
-			case FileMode.read:
-				m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
-				break;
-			case FileMode.readWrite:
-				m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_BINARY);
-				break;
-			case FileMode.createTrunc:
-				m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_CREAT|O_TRUNC|O_BINARY, octal!644);
-				break;
-			case FileMode.append:
-				m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
-				break;
-		}
+		() @trusted {
+			final switch(mode) {
+				case FileMode.read:
+					m_fileDescriptor = open(pathstr.toStringz(), O_RDONLY|O_BINARY);
+					break;
+				case FileMode.readWrite:
+					m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_BINARY);
+					break;
+				case FileMode.createTrunc:
+					m_fileDescriptor = open(pathstr.toStringz(), O_RDWR|O_CREAT|O_TRUNC|O_BINARY, octal!644);
+					break;
+				case FileMode.append:
+					m_fileDescriptor = open(pathstr.toStringz(), O_WRONLY|O_CREAT|O_APPEND|O_BINARY, octal!644);
+					break;
+			}
+		} ();
+		
 		if( m_fileDescriptor < 0 )
 			//throw new Exception(format("Failed to open '%s' with %s: %d", pathstr, cast(int)mode, errno));
 			throw new Exception("Failed to open file '"~pathstr~"'.");
@@ -112,16 +117,16 @@ final class ThreadedFileStream : FileStream {
 			m_size = .lseek(m_fileDescriptor, 0, SEEK_END);
 		} else {
 			stat_t st;
-			fstat(m_fileDescriptor, &st);
+			() @trusted { fstat(m_fileDescriptor, &st); } ();
 			m_size = st.st_size;
 
 			// (at least) on windows, the created file is write protected
 			version(Windows){
 				if( mode == FileMode.createTrunc )
-					chmod(path.toNativeString().toStringz(), S_IREAD|S_IWRITE);
+					() @trusted { chmod(path.toNativeString().toStringz(), S_IREAD|S_IWRITE); } ();
 			}
 		}
-		lseek(m_fileDescriptor, 0, SEEK_SET);
+		() @trusted { lseek(m_fileDescriptor, 0, SEEK_SET); } ();
 
 		logDebug("opened file %s with %d bytes as %d", path.toNativeString(), m_size, m_fileDescriptor);
 	}
@@ -148,8 +153,8 @@ final class ThreadedFileStream : FileStream {
 	{
 		version (Win32) {
 			enforce(offset <= off_t.max, "Cannot seek above 4GB on Windows x32.");
-			auto pos = .lseek(m_fileDescriptor, cast(off_t)offset, SEEK_SET);
-		} else auto pos = .lseek(m_fileDescriptor, offset, SEEK_SET);
+			auto pos = () @trusted { return .lseek(m_fileDescriptor, cast(off_t)offset, SEEK_SET); } ();
+		} else auto pos = () @trusted { return .lseek(m_fileDescriptor, offset, SEEK_SET); } ();
 		enforce(pos == offset, "Failed to seek in file.");
 		m_ptr = offset;
 	}
@@ -159,7 +164,7 @@ final class ThreadedFileStream : FileStream {
 	void close()
 	{
 		if( m_fileDescriptor != -1 && m_ownFD ){
-			.close(m_fileDescriptor);
+			() @trusted { .close(m_fileDescriptor); } ();
 			m_fileDescriptor = -1;
 		}
 	}
@@ -179,7 +184,7 @@ final class ThreadedFileStream : FileStream {
 		while (dst.length > 0) {
 			enforce(dst.length <= leastSize);
 			auto sz = min(dst.length, 4096);
-			enforce(.read(m_fileDescriptor, dst.ptr, cast(int)sz) == sz, "Failed to read data from disk.");
+			enforce(() @trusted { return .read(m_fileDescriptor, dst.ptr, cast(int)sz); } () == sz, "Failed to read data from disk.");
 			dst = dst[sz .. $];
 			m_ptr += sz;
 			yield();
@@ -193,7 +198,7 @@ final class ThreadedFileStream : FileStream {
 		assert(this.writable);
 		while (bytes.length > 0) {
 			auto sz = min(bytes.length, 4096);
-			auto ret = .write(m_fileDescriptor, bytes.ptr, cast(int)sz);
+			auto ret = () @trusted { return .write(m_fileDescriptor, bytes.ptr, cast(int)sz); } ();
 			enforce(ret == sz, "Failed to write data to disk."~to!string(sz)~" "~to!string(errno)~" "~to!string(ret)~" "~to!string(m_fileDescriptor));
 			bytes = bytes[sz .. $];
 			m_ptr += sz;

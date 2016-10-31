@@ -23,7 +23,7 @@ import std.string;
 	See_also: `relativeToWeb`
 */
 Path relativeTo(Path path, Path base_path)
-{
+@safe{
 	assert(path.absolute && base_path.absolute);
 	version (Windows) {
 		// a path such as ..\C:\windows is not valid, so force the path to stay absolute in this case
@@ -68,7 +68,7 @@ unittest {
 	See_also: `relativeTo`
 */
 Path relativeToWeb(Path path, Path base_path)
-{
+@safe {
 	if (!base_path.endsWithSlash) {
 		if (base_path.length > 0) base_path = base_path[0 .. $-1];
 		else base_path = Path("/");
@@ -92,6 +92,8 @@ unittest {
 	validates path strings and allows for easy checking of malicious relative paths.
 */
 struct Path {
+@safe:
+
 	private {
 		immutable(PathEntry)[] m_nodes;
 		bool m_absolute = false;
@@ -415,11 +417,11 @@ unittest
 
 
 struct PathEntry {
+@safe: pure:
+
 	private {
 		string m_name;
 	}
-
-	pure:
 
 	this(string str)
 	{
@@ -439,7 +441,7 @@ struct PathEntry {
 }
 
 private bool isValidFilename(string str)
-pure {
+pure @safe {
 	foreach( ch; str )
 		if( ch == '/' || /*ch == ':' ||*/ ch == '\\' ) return false;
 	return true;
@@ -447,7 +449,7 @@ pure {
 
 /// Joins two path strings. subpath must be relative.
 string joinPath(string basepath, string subpath)
-pure {
+pure @safe {
 	Path p1 = Path(basepath);
 	Path p2 = Path(subpath);
 	return (p1 ~ p2).toString();
@@ -455,7 +457,7 @@ pure {
 
 /// Splits up a path string into its elements/folders
 PathEntry[] splitPath(string path)
-pure {
+pure @safe {
 	if( path.startsWith("/") || path.startsWith("\\") ) path = path[1 .. $];
 	if( path.empty ) return null;
 	if( path.endsWith("/") || path.endsWith("\\") ) path = path[0 .. $-1];

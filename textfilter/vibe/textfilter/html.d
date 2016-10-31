@@ -16,7 +16,7 @@ import std.range;
 
 /** Returns the HTML escaped version of a given string.
 */
-string htmlEscape(R)(R str)
+string htmlEscape(R)(R str) @trusted
 	if (isInputRange!R)
 {
 	if (__ctfe) { // appender is a performance/memory hog in ctfe
@@ -48,7 +48,7 @@ void filterHTMLEscape(R, S)(ref R dst, S str, HTMLEscapeFlags flags = HTMLEscape
 
 /** Returns the HTML escaped version of a given string (also escapes double quotes).
 */
-string htmlAttribEscape(R)(R str)
+string htmlAttribEscape(R)(R str) @trusted
 	if (isInputRange!R)
 {
 	if (__ctfe) { // appender is a performance/memory hog in ctfe
@@ -80,7 +80,7 @@ void filterHTMLAttribEscape(R, S)(ref R dst, S str)
 
 /** Returns the HTML escaped version of a given string (escapes every character).
 */
-string htmlAllEscape(R)(R str)
+string htmlAllEscape(R)(R str) @trusted
 	if (isInputRange!R)
 {
 	if (__ctfe) { // appender is a performance/memory hog in ctfe
@@ -116,7 +116,7 @@ void filterHTMLAllEscape(R, S)(ref R dst, S str)
 /**
 	Minimally escapes a text so that no HTML tags appear in it.
 */
-string htmlEscapeMin(R)(R str)
+string htmlEscapeMin(R)(R str) @trusted
 	if (isInputRange!R)
 {
 	auto dst = appender!string();
@@ -177,6 +177,8 @@ enum HTMLEscapeFlags {
 }
 
 private struct StringAppender {
+@safe:
+
 	string data;
 	void put(string s) { data ~= s; }
 	void put(char ch) { data ~= ch; }

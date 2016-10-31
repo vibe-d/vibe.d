@@ -83,23 +83,23 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 	*/
 	MongoCursor sort(T)(T order)
 	{
-		m_data.sort(serializeToBson(order));
+		m_data.sort(() @trusted { return serializeToBson(order); } ());
 		return this;
 	}
 
 	///
-	unittest {
+	@safe unittest {
 		import vibe.core.log;
 		import vibe.db.mongo.mongo;
 
 		void test()
-		{
+		@safe {
 			auto db = connectMongoDB("127.0.0.1").getDatabase("test");
 			auto coll = db["testcoll"];
 
 			// find all entries in reverse date order
 			foreach (entry; coll.find().sort(["date": -1]))
-				logInfo("Entry: %s", entry);
+				() @safe { logInfo("Entry: %s", entry); } ();
 
 			// the same, but using a struct to avoid memory allocations
 			static struct Order { int date; }
@@ -164,8 +164,8 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	int opApply(int delegate(ref R doc) del)
-	{
+	int opApply(scope int delegate(ref R doc) @safe del)
+	@safe {
 		if (!m_data) return 0;
 
 		while (!m_data.empty) {
@@ -185,8 +185,8 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	int opApply(int delegate(ref size_t idx, ref R doc) del)
-	{
+	int opApply(scope int delegate(size_t idx, ref R doc) @safe del)
+	@safe {
 		if (!m_data) return 0;
 
 		while (!m_data.empty) {
@@ -236,7 +236,7 @@ private class MongoCursorData(Q, R, S) {
 	}
 
 	@property bool empty()
-	{
+	@safe {
 		if (!m_iterationStarted) startIterating();
 		if (m_limit > 0 && m_currentDoc >= m_limit) {
 			destroy();
@@ -253,19 +253,19 @@ private class MongoCursorData(Q, R, S) {
 	}
 
 	@property size_t index()
-	{
+	@safe {
 		return m_offset + m_currentDoc;
 	}
 
 	@property R front()
-	{
+	@safe {
 		if (!m_iterationStarted) startIterating();
 		assert(!empty(), "Cursor has no more data.");
 		return m_documents[m_currentDoc];
 	}
 
 	void sort(Bson order)
-	{
+	@safe {
 		assert(!m_iterationStarted, "Cursor cannot be modified after beginning iteration");
 		m_sort = order;
 	}
@@ -287,25 +287,26 @@ private class MongoCursorData(Q, R, S) {
 	}
 
 	void popFront()
-	{
+	@safe {
 		if (!m_iterationStarted) startIterating();
 		assert(!empty(), "Cursor has no more data.");
 		m_currentDoc++;
 	}
 
-	private void startIterating() {
+	private void startIterating()
+	@safe {
 		auto conn = m_client.lockConnection();
 
 		ubyte[256] selector_buf = void;
 		ubyte[256] query_buf = void;
 
-		Bson selector = serializeToBson(m_returnFieldSelector, selector_buf);
+		Bson selector = () @trusted { return serializeToBson(m_returnFieldSelector, selector_buf); } ();
 
 		Bson query;
 		static if (is(Q == Bson)) {
 			query = m_query;
 		} else {
-			query = serializeToBson(m_query, query_buf);
+			query = () @trusted { return serializeToBson(m_query, query_buf); } ();
 		}
 
 		Bson full_query;
@@ -326,10 +327,10 @@ private class MongoCursorData(Q, R, S) {
 	}
 
 	private void destroy()
-	{
+	@safe {
 		if (m_cursor == 0) return;
 		auto conn = m_client.lockConnection();
-		conn.killCursors((&m_cursor)[0 .. 1]);
+		conn.killCursors(() @trusted { return (&m_cursor)[0 .. 1]; } ());
 		m_cursor = 0;
 	}
 

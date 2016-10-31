@@ -96,6 +96,8 @@ import std.bigint;
 */
 align(8) // ensures that pointers stay on 64-bit boundaries on x64 so that they get scanned by the GC
 struct Json {
+@safe:
+
 	static assert(!hasElaborateDestructor!BigInt && !hasElaborateCopyConstructor!BigInt,
 		"struct Json is missing required ~this and/or this(this) members for BigInt.");
 
@@ -113,7 +115,7 @@ struct Json {
 		static assert(m_data.offsetof == 0, "m_data must be the first struct member.");
 		static assert(BigInt.alignof <= 8, "Json struct alignment of 8 isn't sufficient to store BigInt.");
 
-		ref inout(T) getDataAs(T)() inout {
+		ref inout(T) getDataAs(T)() inout @trusted {
 			static assert(T.sizeof <= m_data.sizeof);
 			return (cast(inout(T)[1])m_data[0 .. T.sizeof])[0];
 		}
@@ -683,31 +685,31 @@ struct Json {
 		} else static if( op == "+" ){
 			checkType!(BigInt, long, double)(op);
 			if( m_type == Type.int_ ) return Json(m_int + other.m_int);
-			else if( m_type == Type.bigInt ) return Json(m_bigInt + other.m_bigInt);
+			else if( m_type == Type.bigInt ) return Json(() @trusted { return m_bigInt + other.m_bigInt; } ());
 			else if( m_type == Type.float_ ) return Json(m_float + other.m_float);
 			else assert(false);
 		} else static if( op == "-" ){
 			checkType!(BigInt, long, double)(op);
 			if( m_type == Type.int_ ) return Json(m_int - other.m_int);
-			else if( m_type == Type.bigInt ) return Json(m_bigInt - other.m_bigInt);
+			else if( m_type == Type.bigInt ) return Json(() @trusted { return m_bigInt - other.m_bigInt; } ());
 			else if( m_type == Type.float_ ) return Json(m_float - other.m_float);
 			else assert(false);
 		} else static if( op == "*" ){
 			checkType!(BigInt, long, double)(op);
 			if( m_type == Type.int_ ) return Json(m_int * other.m_int);
-			else if( m_type == Type.bigInt ) return Json(m_bigInt * other.m_bigInt);
+			else if( m_type == Type.bigInt ) return Json(() @trusted { return m_bigInt * other.m_bigInt; } ());
 			else if( m_type == Type.float_ ) return Json(m_float * other.m_float);
 			else assert(false);
 		} else static if( op == "/" ){
 			checkType!(BigInt, long, double)(op);
 			if( m_type == Type.int_ ) return Json(m_int / other.m_int);
-			else if( m_type == Type.bigInt ) return Json(m_bigInt / other.m_bigInt);
+			else if( m_type == Type.bigInt ) return Json(() @trusted { return m_bigInt / other.m_bigInt; } ());
 			else if( m_type == Type.float_ ) return Json(m_float / other.m_float);
 			else assert(false);
 		} else static if( op == "%" ){
 			checkType!(BigInt, long, double)(op);
 			if( m_type == Type.int_ ) return Json(m_int % other.m_int);
-			else if( m_type == Type.bigInt ) return Json(m_bigInt % other.m_bigInt);
+			else if( m_type == Type.bigInt ) return Json(() @trusted { return m_bigInt % other.m_bigInt; } ());
 			else if( m_type == Type.float_ ) return Json(m_float % other.m_float);
 			else assert(false);
 		} else static if( op == "~" ){
@@ -922,7 +924,7 @@ struct Json {
 			case Type.null_: return 0;
 			case Type.bool_: return m_bool < other.m_bool ? -1 : m_bool == other.m_bool ? 0 : 1;
 			case Type.int_: return m_int < other.m_int ? -1 : m_int == other.m_int ? 0 : 1;
-			case Type.bigInt: return m_bigInt < other.m_bigInt ? -1 : m_bigInt == other.m_bigInt ? 0 : 1;
+			case Type.bigInt: return () @trusted { return m_bigInt < other.m_bigInt; } () ? -1 : m_bigInt == other.m_bigInt ? 0 : 1;
 			case Type.float_: return m_float < other.m_float ? -1 : m_float == other.m_float ? 0 : 1;
 			case Type.string: return m_string < other.m_string ? -1 : m_string == other.m_string ? 0 : 1;
 			case Type.array: return m_array < other.m_array ? -1 : m_array == other.m_array ? 0 : 1;
@@ -981,11 +983,12 @@ struct Json {
 	}
 	/// ditto
 	void toString(scope void delegate(const(char)[]) @system sink, FormatSpec!char fmt)
-	{
+	@system {
 		// DMD BUG: this should actually be all @safe, but for some reason
 		// @safe inference for writeJsonString doesn't work.
 		static struct DummyRange {
 			void delegate(const(char)[]) sink;
+			@trusted:
 			void put(const(char)[] str) { sink(str); }
 			void put(char ch) { sink((&ch)[0 .. 1]); }
 		}
@@ -1013,7 +1016,7 @@ struct Json {
 		See_Also: writePrettyJsonString, toString
 	*/
 	string toPrettyString(int level = 0)
-	const {
+	const @trusted {
 		auto ret = appender!string();
 		writePrettyJsonString(ret, this, level);
 		return ret.data;
@@ -1045,7 +1048,7 @@ struct Json {
 	}
 
 	private void initBigInt()
-	{
+	@trusted {
 		BigInt[1] init_;
 		// BigInt is a struct, and it has a special BigInt.init value, which differs from null.
 		// m_data has no special initializer and when it tries to first access to BigInt
@@ -1137,7 +1140,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 			if( is_float ) {
 				ret = to!double(num);
 			} else if (is_long_overflow) {
-				ret = BigInt(num);
+				ret = () @trusted { return BigInt(num); } ();
 			} else {
 				ret = to!long(num);
 			}
@@ -1382,7 +1385,7 @@ T deserializeJson(T, R)(R input)
 }
 
 ///
-unittest {
+@safe unittest {
 	struct Foo {
 		int number;
 		string str;
@@ -1392,7 +1395,7 @@ unittest {
 	assert(f.str == "hello");
 }
 
-unittest {
+@safe unittest {
 	import std.stdio;
 	enum Foo : string { k = "test" }
 	enum Boo : int { l = 5 }
@@ -1414,7 +1417,7 @@ unittest {
 	assert(t.l == u.l);
 }
 
-unittest
+@safe unittest
 {
 	assert(uint.max == serializeToJson(uint.max).deserializeJson!uint);
 	assert(ulong.max == serializeToJson(ulong.max).deserializeJson!ulong);
@@ -1457,6 +1460,7 @@ unittest {
 
 unittest {
 	static class C {
+		@safe:
 		int a;
 		private int _b;
 		@property int b() const { return _b; }
@@ -1477,10 +1481,11 @@ unittest {
 }
 
 unittest {
-	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	static struct C { @safe: int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
 	enum Color { Red, Green, Blue }
 	{
 		static class T {
+			@safe:
 			string[Color] enumIndexedMap;
 			string[C] stringableIndexedMap;
 			this() {
@@ -1534,6 +1539,7 @@ unittest { // #840
 
 unittest { // #1109
 	static class C {
+		@safe:
 		int mem;
 		this(int m) { mem = m; }
 		static C fromJson(Json j) { return new C(j.get!int-1); }
@@ -1567,14 +1573,14 @@ struct JsonSerializer {
 		Json[] m_compositeStack;
 	}
 
-	this(Json data) { m_current = data; }
+	this(Json data) @safe { m_current = data; }
 
 	@disable this(this);
 
 	//
 	// serialization
 	//
-	Json getSerializedResult() { return m_current; }
+	Json getSerializedResult() @safe { return m_current; }
 	void beginWriteDictionary(Traits)() { m_compositeStack ~= Json.emptyObject; }
 	void endWriteDictionary(Traits)() { m_current = m_compositeStack[$-1]; m_compositeStack.length--; }
 	void beginWriteDictionaryEntry(Traits)(string name) {}
@@ -1588,8 +1594,11 @@ struct JsonSerializer {
 	void writeValue(Traits, T)(in T value)
 		if (!is(T == Json))
 	{
-		static if (isJsonSerializable!T) m_current = value.toJson();
-		else m_current = Json(value);
+		static if (isJsonSerializable!T) {
+			static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
+				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
+			m_current = () @trusted { return value.toJson(); } ();
+		} else m_current = Json(value);
 	}
 
 	void writeValue(Traits, T)(Json value) if (is(T == Json)) { m_current = value; }
@@ -1598,7 +1607,7 @@ struct JsonSerializer {
 	//
 	// deserialization
 	//
-	void readDictionary(Traits)(scope void delegate(string) field_handler)
+	void readDictionary(Traits)(scope void delegate(string) @safe field_handler)
 	{
 		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
@@ -1612,7 +1621,7 @@ struct JsonSerializer {
 	void beginReadDictionaryEntry(Traits)(string name) {}
 	void endReadDictionaryEntry(Traits)(string name) {}
 
-	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+	void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 	{
 		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
 		auto old = m_current;
@@ -1628,10 +1637,13 @@ struct JsonSerializer {
 	void endReadArrayEntry(Traits)(size_t index) {}
 
 	T readValue(Traits, T)()
-	{
+	@safe {
 		static if (is(T == Json)) return m_current;
-		else static if (isJsonSerializable!T) return T.fromJson(m_current);
-		else static if (is(T == float) || is(T == double)) {
+		else static if (isJsonSerializable!T) {
+			static if (!__traits(compiles, () @safe { return T.fromJson(m_current); } ()))
+				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
+			return () @trusted { return T.fromJson(m_current); } ();
+		} else static if (is(T == float) || is(T == double)) {
 			switch (m_current.type) {
 				default: return cast(T)m_current.get!long;
 				case Json.Type.null_: goto case;
@@ -1705,7 +1717,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			static if (is(T == typeof(null))) m_range.put("null");
 			else static if (is(T == bool)) m_range.put(value ? "true" : "false");
 			else static if (is(T : long)) m_range.formattedWrite("%s", value);
-			else static if (is(T == BigInt)) m_range.formattedWrite("%d", value);
+			else static if (is(T == BigInt)) () @trusted { m_range.formattedWrite("%d", value); } ();
 			else static if (is(T : real)) value == value ? m_range.formattedWrite("%.16g", value) : m_range.put("null");
 			else static if (is(T == string)) {
 				m_range.put('"');
@@ -1713,8 +1725,11 @@ struct JsonStringSerializer(R, bool pretty = false)
 				m_range.put('"');
 			}
 			else static if (is(T == Json)) m_range.writeJsonString(value);
-			else static if (isJsonSerializable!T) m_range.writeJsonString!(R, pretty)(value.toJson(), m_level);
-			else static assert(false, "Unsupported type: " ~ T.stringof);
+			else static if (isJsonSerializable!T) {
+				static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
+					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
+				m_range.writeJsonString!(R, pretty)(() @trusted { return value.toJson(); } (), m_level);
+			} else static assert(false, "Unsupported type: " ~ T.stringof);
 		}
 
 		private void startComposite()
@@ -1757,7 +1772,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 			int m_line = 0;
 		}
 
-		void readDictionary(Traits)(scope void delegate(string) entry_callback)
+		void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
 			enforceJson(!m_range.empty && m_range.front == '{', "Expecting object.");
@@ -1788,7 +1803,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 		void beginReadDictionaryEntry(Traits)(string name) {}
 		void endReadDictionaryEntry(Traits)(string name) {}
 
-		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+		void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
 			enforceJson(!m_range.empty && m_range.front == '[', "Expecting array.");
@@ -1845,8 +1860,11 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 			else static if (is(T == string)) return m_range.skipJsonString(&m_line);
 			else static if (is(T == Json)) return m_range.parseJson(&m_line);
-			else static if (isJsonSerializable!T) return T.fromJson(m_range.parseJson(&m_line));
-			else static assert(false, "Unsupported type: " ~ T.stringof);
+			else static if (isJsonSerializable!T) {
+				static if (!__traits(compiles, () @safe { return T.fromJson(Json.init); } ()))
+					pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
+				return () @trusted { return T.fromJson(m_range.parseJson(&m_line)); } ();
+			} else static assert(false, "Unsupported type: " ~ T.stringof);
 		}
 
 		bool tryReadNull(Traits)()
@@ -1882,12 +1900,12 @@ unittest
 	See_Also: Json.toString, writePrettyJsonString
 */
 void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t level = 0)
-//	if( isOutputRange!R && is(ElementEncodingType!R == char) )
+@safe //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
 		case Json.Type.undefined: dst.put("undefined"); break;
 		case Json.Type.null_: dst.put("null"); break;
-		case Json.Type.bool_: dst.put(cast(bool)json ? "true" : "false"); break;
+		case Json.Type.bool_: dst.put(json.get!bool ? "true" : "false"); break;
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
 		case Json.Type.bigInt: () @trusted { formattedWrite(dst, "%d", json.get!BigInt); } (); break;
 		case Json.Type.float_:
@@ -1899,7 +1917,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 			break;
 		case Json.Type.string:
 			dst.put('\"');
-			jsonEscape(dst, cast(string)json);
+			jsonEscape(dst, json.get!string);
 			dst.put('\"');
 			break;
 		case Json.Type.array:
@@ -2061,15 +2079,12 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 					if (ch > 0x20 && ch < 0x80) dst.put(ch);
 					else {
 						import std.utf : decode;
-						char[13] buf;
 						int len;
 						dchar codepoint = decode(s, pos);
-						import std.c.stdio : sprintf;
 						/* codepoint is in BMP */
 						if(codepoint < 0x10000)
 						{
-							sprintf(&buf[0], "\\u%04X", codepoint);
-							len = 6;
+							dst.formattedWrite("\\u%04X", codepoint);
 						}
 						/* not in BMP -> construct a UTF-16 surrogate pair */
 						else
@@ -2080,13 +2095,10 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 							first = 0xD800 | ((codepoint & 0xffc00) >> 10);
 							last = 0xDC00 | (codepoint & 0x003ff);
 
-							sprintf(&buf[0], "\\u%04X\\u%04X", first, last);
-							len = 12;
+							dst.formattedWrite("\\u%04X\\u%04X", first, last);
 						}
 
 						pos -= 1;
-						foreach (i; 0 .. len)
-							dst.put(buf[i]);
 
 					}
 				} else {
@@ -2272,10 +2284,10 @@ private void skipWhitespace(R)(ref R s, int* line = null)
 	}
 }
 
-private bool isDigit(dchar ch) { return ch >= '0' && ch <= '9'; }
+private bool isDigit(dchar ch) @safe nothrow pure { return ch >= '0' && ch <= '9'; }
 
 private string underscoreStrip(string field_name)
-{
+@safe nothrow pure {
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
 	else return field_name[0 .. $-1];
 }

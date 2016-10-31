@@ -22,6 +22,8 @@ import std.meta : anySatisfy, Filter;
 /*package(vibe.web.web)*/ struct RestInterface(TImpl)
 	if (is(TImpl == class) || is(TImpl == interface))
 {
+@safe:
+
 	import std.traits : FunctionTypeOf, InterfacesTuple, MemberFunctionsTuple,
 		ParameterIdentifierTuple, ParameterStorageClass,
 		ParameterStorageClassTuple, ParameterTypeTuple, ReturnType;
@@ -471,7 +473,7 @@ template SubInterfaceType(alias F) {
 }
 
 private bool extractPathParts(ref PathPart[] parts, string pattern)
-{
+@safe {
 	import std.string : indexOf;
 
 	string p = pattern;

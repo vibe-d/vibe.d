@@ -38,16 +38,21 @@ import core.sys.posix.sys.socket;
 
 private {
 	version (Windows) {
-		static if (__VERSION__ >= 2070)
+		static if (__VERSION__ >= 2070) {
 			import core.sys.windows.winsock2;
-		else
+			// make some neccessary parts of the socket interface public
+			alias in6_addr = core.sys.windows.winsock2.in6_addr;
+			alias INADDR_ANY = core.sys.windows.winsock2.INADDR_ANY;
+			alias IN6ADDR_ANY = core.sys.windows.winsock2.IN6ADDR_ANY;
+		} else {
 			import std.c.windows.winsock;
-		enum EWOULDBLOCK = WSAEWOULDBLOCK;
+			// make some neccessary parts of the socket interface public
+			alias in6_addr = std.c.windows.winsock.in6_addr;
+			alias INADDR_ANY = std.c.windows.winsock.INADDR_ANY;
+			alias IN6ADDR_ANY = std.c.windows.winsock.IN6ADDR_ANY;
+		}
 
-		// make some neccessary parts of the socket interface public
-		alias in6_addr = std.c.windows.winsock.in6_addr;
-		alias INADDR_ANY = std.c.windows.winsock.INADDR_ANY;
-		alias IN6ADDR_ANY = std.c.windows.winsock.IN6ADDR_ANY;
+		enum EWOULDBLOCK = WSAEWOULDBLOCK;
 	} else {
 		alias in6_addr = core.sys.posix.netinet.in_.in6_addr;
 		alias IN6ADDR_ANY = core.sys.posix.netinet.in_.in6addr_any;
@@ -57,6 +62,8 @@ private {
 }
 
 package final class Libevent2TCPConnection : TCPConnection {
+@safe:
+
 	import vibe.utils.array : FixedRingBuffer;
 	private {
 		bool m_timeout_triggered;
@@ -74,7 +81,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 	this(TCPContext* ctx)
 	{
 		m_ctx = ctx;
-		m_waitDataEvent = event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this);
+		m_waitDataEvent = () @trusted { return event_new(m_ctx.eventLoop, -1, 0, &onTimeout, cast(void*)this); } ();
 
 		assert(!amOwner());
 
@@ -91,11 +98,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 			}
 		}
 
-		if (evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length) !is null)
-			m_peerAddress = cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf[].indexOf('\0')];
+		if (() @trusted { return evutil_inet_ntop(ctx.remote_addr.family, ptr, m_peerAddressBuf.ptr, m_peerAddressBuf.length); } () !is null)
+			m_peerAddress = () @trusted { return cast(string)m_peerAddressBuf[0 .. m_peerAddressBuf[].indexOf('\0')]; } ();
 
-		bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
-		bufferevent_setwatermark(m_ctx.event, EV_READ, 0, 65536);
+		() @trusted {
+			bufferevent_setwatermark(m_ctx.event, EV_WRITE, 4096, 65536);
+			bufferevent_setwatermark(m_ctx.event, EV_READ, 0, 65536);
+		} ();
 	}
 
 	/*~this()
@@ -109,7 +118,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		auto fd = m_ctx.socketfd;
 		int opt = enabled;
 		assert(fd <= int.max, "Socket descriptor > int.max");
-		setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, cast(char*)&opt, opt.sizeof);
+		() @trusted { setsockopt(cast(int)fd, IPPROTO_TCP, TCP_NODELAY, cast(char*)&opt, opt.sizeof); } ();
 	}
 	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
@@ -117,11 +126,11 @@ package final class Libevent2TCPConnection : TCPConnection {
 	{
 		m_readTimeout = v;
 		if( v == dur!"seconds"(0) ){
-			bufferevent_set_timeouts(m_ctx.event, null, null);
+			() @trusted { bufferevent_set_timeouts(m_ctx.event, null, null); } ();
 		} else {
 			assert(v.total!"seconds" <= int.max);
 			timeval toread = v.toTimeVal();
-			bufferevent_set_timeouts(m_ctx.event, &toread, null);
+			() @trusted { bufferevent_set_timeouts(m_ctx.event, &toread, null); } ();
 		}
 	}
 	@property Duration readTimeout() const { return m_readTimeout; }
@@ -132,7 +141,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		auto fd = m_ctx.socketfd;
 		ubyte opt = enable;
 		assert(fd <= int.max, "Socket descriptor > int.max");
-		setsockopt(cast(int)fd, SOL_SOCKET, SO_KEEPALIVE, &opt, opt.sizeof);
+		() @trusted { setsockopt(cast(int)fd, SOL_SOCKET, SO_KEEPALIVE, &opt, opt.sizeof); } ();
 	}
 	@property bool keepAlive() const { return m_tcpKeepAlive; }
 
@@ -140,14 +149,14 @@ package final class Libevent2TCPConnection : TCPConnection {
 	@property NetworkAddress remoteAddress() const { return m_remoteAddress; }
 
 	private void acquire()
-	{
+	@safe {
 		assert(m_ctx, "Trying to acquire a closed TCP connection.");
 		assert(m_ctx.readOwner == Task() && m_ctx.writeOwner == Task(), "Trying to acquire a TCP connection that is currently owned.");
 		m_ctx.readOwner = m_ctx.writeOwner = Task.getThis();
 	}
 
 	private void release()
-	{
+	@safe {
 		if( !m_ctx ) return;
 		assert(m_ctx.readOwner != Task() && m_ctx.writeOwner != Task(), "Trying to release a TCP connection that is not owned.");
 		assert(m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner, "Trying to release a foreign TCP connection.");
@@ -155,7 +164,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 	}
 
 	private bool amOwner()
-	{
+	@safe {
 		return m_ctx !is null && m_ctx.readOwner != Task() && m_ctx.readOwner == Task.getThis() && m_ctx.readOwner == m_ctx.writeOwner;
 	}
 
@@ -167,8 +176,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 		if (!getThreadLibeventEventLoop()) {
 			import std.stdio;
-			stderr.writefln("Warning: Attempt to close dangling TCP connection to %s at shutdown. "
-				~ "Please avoid closing connections in GC finalizers.", m_remoteAddress);
+			() @trusted { stderr.writefln("Warning: Attempt to close dangling TCP connection to %s at shutdown. "
+				~ "Please avoid closing connections in GC finalizers.", m_remoteAddress); } ();
 			return;
 		}
 
@@ -193,19 +202,21 @@ package final class Libevent2TCPConnection : TCPConnection {
 			logDiagnostic("Actively closing TCP connection");
 			auto fd = m_ctx.socketfd;
 
-			scope (exit) {
+			scope (exit) () @trusted {
 				version(Windows) shutdown(m_ctx.socketfd, SD_SEND);
 				else shutdown(m_ctx.socketfd, SHUT_WR);
 				if (m_ctx.event) bufferevent_free(m_ctx.event);
 				logTrace("...socket %d closed.", fd);
-			}
+			} ();
 
 			m_ctx.shutdown = true;
-			bufferevent_setwatermark(m_ctx.event, EV_WRITE, 1, 0);
-			bufferevent_flush(m_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
+			() @trusted {
+				bufferevent_setwatermark(m_ctx.event, EV_WRITE, 1, 0);
+				bufferevent_flush(m_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_FINISHED);
+			} ();
 			logTrace("Closing socket %d...", fd);
-			auto buf = bufferevent_get_output(m_ctx.event);
-			while (m_ctx.event && evbuffer_get_length(buf) > 0)
+			auto buf = () @trusted { return bufferevent_get_output(m_ctx.event); } ();
+			while (m_ctx.event && () @trusted { return evbuffer_get_length(buf); } () > 0)
 				m_ctx.core.yieldForEvent();
 		}
 	}
@@ -321,7 +332,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 			assert(timeout.total!"seconds"() <= int.max, "Timeouts must not be larger than int.max seconds!");
 			timeval t = timeout.toTimeVal();
 			logTrace("add timeout event with %d/%d", t.tv_sec, t.tv_usec);
-			event_add(m_waitDataEvent, &t);
+			() @trusted { event_add(m_waitDataEvent, &t); } ();
 		}
 
 		logTrace("wait for data");
@@ -332,7 +343,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 				if (fillReadBuffer(true, false, true))
 					return false;
 			} catch (Exception e) {
-				logDiagnostic("Connection error during waitForData: %s", e.toString());
+				logDiagnostic("Connection error during waitForData: %s", e.msg);
 			}
 		}
 
@@ -353,12 +364,12 @@ package final class Libevent2TCPConnection : TCPConnection {
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
-		auto outbuf = bufferevent_get_output(m_ctx.event);
-		if( bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length) != 0 )
+		auto outbuf = () @trusted { return bufferevent_get_output(m_ctx.event); } ();
+		if (() @trusted { return bufferevent_write(m_ctx.event, cast(char*)bytes.ptr, bytes.length); } () != 0 )
 			throw new Exception("Failed to write data to buffer");
 
 		// wait for the data to be written up the the low watermark
-		while (evbuffer_get_length(outbuf) > 4096) {
+		while (() @trusted { return evbuffer_get_length(outbuf); } () > 4096) {
 			rawYield();
 			checkConnected();
 		}
@@ -395,7 +406,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 		acquireWriter();
 		scope(exit) releaseWriter();
 		logTrace("bufferevent_flush");
-		bufferevent_flush(m_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL);
+		() @trusted { bufferevent_flush(m_ctx.event, EV_WRITE, bufferevent_flush_mode.BEV_NORMAL); } ();
 	}
 
 	void finalize()
@@ -404,18 +415,18 @@ package final class Libevent2TCPConnection : TCPConnection {
 	}
 
 	private bool fillReadBuffer(bool block, bool throw_on_fail = true, bool wait_for_timeout = false)
-	{
+	@safe {
 		if (m_readBuffer.length) return false;
 		m_readBuffer.clear();
 		assert(m_readBuffer.peekDst.length > 0);
 		while (m_ctx && m_ctx.event) {
-			auto nbytes = bufferevent_read(m_ctx.event, m_readBuffer.peekDst.ptr, m_readBuffer.peekDst.length);
+			auto nbytes = () @trusted { return bufferevent_read(m_ctx.event, m_readBuffer.peekDst.ptr, m_readBuffer.peekDst.length); } ();
 			m_readBuffer.putN(nbytes);
 			if (m_readBuffer.length || !block) break;
 			if (throw_on_fail) checkConnected(false);
 			else if (!m_ctx || !m_ctx.event) return false;
 			else if (m_ctx.state != ConnectionState.open
-				&& evbuffer_get_length(bufferevent_get_input(m_ctx.event)) == 0)
+				&& () @trusted { return evbuffer_get_length(bufferevent_get_input(m_ctx.event)); } () == 0)
 					return false;
 			if (wait_for_timeout && m_timeout_triggered) return true;
 			m_ctx.core.yieldForEvent();
@@ -423,15 +434,15 @@ package final class Libevent2TCPConnection : TCPConnection {
 		return false;
 	}
 
-	private void checkReader() { assert(m_ctx.readOwner == Task(), "Acquiring reader of already owned connection."); }
-	private void acquireReader() { checkReader(); m_ctx.readOwner = Task.getThis(); }
-	private void releaseReader() { if (!m_ctx) return; assert(m_ctx.readOwner == Task.getThis(), "Releasing reader of unowned connection."); m_ctx.readOwner = Task(); }
+	private void checkReader() @safe { assert(m_ctx.readOwner == Task(), "Acquiring reader of already owned connection."); }
+	private void acquireReader() @safe { checkReader(); m_ctx.readOwner = Task.getThis(); }
+	private void releaseReader() @safe { if (!m_ctx) return; assert(m_ctx.readOwner == Task.getThis(), "Releasing reader of unowned connection."); m_ctx.readOwner = Task(); }
 
-	private void acquireWriter() { assert(m_ctx.writeOwner == Task(), "Acquiring writer of already owned connection."); m_ctx.writeOwner = Task.getThis(); }
-	private void releaseWriter() { if (!m_ctx) return; assert(m_ctx.writeOwner == Task.getThis(), "Releasing reader of already unowned connection."); m_ctx.writeOwner = Task(); }
+	private void acquireWriter() @safe { assert(m_ctx.writeOwner == Task(), "Acquiring writer of already owned connection."); m_ctx.writeOwner = Task.getThis(); }
+	private void releaseWriter() @safe { if (!m_ctx) return; assert(m_ctx.writeOwner == Task.getThis(), "Releasing reader of already unowned connection."); m_ctx.writeOwner = Task(); }
 
 	private void checkConnected(bool write = true)
-	{
+	@safe {
 		enforce(m_ctx !is null, "Operating on closed TCPConnection.");
 		if (m_ctx.event is null) {
 			cleanup();
@@ -440,21 +451,25 @@ package final class Libevent2TCPConnection : TCPConnection {
 		if (m_ctx.state == ConnectionState.activeClose) throw new Exception("Connection was actively closed.");
 		enforce (!write || m_ctx.state == ConnectionState.open, "Remote hung up while writing to TCPConnection.");
 		if (!write && m_ctx.state == ConnectionState.passiveClose) {
-			auto buf = bufferevent_get_input(m_ctx.event);
-			auto data_left = m_readBuffer.length > 0 || evbuffer_get_length(buf) > 0;
+			auto buf = () @trusted { return bufferevent_get_input(m_ctx.event); } ();
+			auto data_left = m_readBuffer.length > 0 || () @trusted { return evbuffer_get_length(buf); } () > 0;
 			enforce(data_left, "Remote hung up while reading from TCPConnection.");
 		}
 	}
 
 	private void cleanup()
-	{
-		event_free(m_waitDataEvent);
-		TCPContextAlloc.free(m_ctx);
+	@safe {
+		() @trusted {
+			event_free(m_waitDataEvent);
+			TCPContextAlloc.free(m_ctx);
+		} ();
 		m_ctx = null;
 	}
 }
 
 final class Libevent2TCPListener : TCPListener {
+@safe:
+
 	private {
 		TCPContext*[] m_ctx;
 		NetworkAddress m_bindAddress;
@@ -479,11 +494,11 @@ final class Libevent2TCPListener : TCPListener {
 	{
 		synchronized(this)
 		{
-			foreach (ctx; m_ctx) {
+			foreach (ctx; m_ctx) () @trusted {
 				event_free(ctx.listenEvent);
 				evutil_closesocket(ctx.socketfd);
 				TCPContextAlloc.free(ctx);
-			}
+			} ();
 			m_ctx = null;
 		}
 	}
@@ -496,6 +511,8 @@ final class Libevent2TCPListener : TCPListener {
 
 package struct TCPContext
 {
+	@safe:
+
 	this(DriverCore c, event_base* evbase, int sock, bufferevent* evt, NetworkAddress bindaddr, NetworkAddress peeraddr){
 		core = c;
 		eventLoop = evbase;

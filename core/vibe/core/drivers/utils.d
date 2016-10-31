@@ -55,6 +55,6 @@ version (linux) {
 }
 
 T socketEnforce(T)(T value, lazy string msg = null, string file = __FILE__, size_t line = __LINE__)
-{
+@trusted {
 	return enforceEx!SystemSocketException(value, msg, file, line);
 }

@@ -1,6 +1,8 @@
 module vibe.internal.rangeutil;
 
 struct RangeCounter {
+@safe:
+
 	import std.utf;
 	long* length;
 
@@ -12,10 +14,10 @@ struct RangeCounter {
 	void put(dstring str) { foreach (ch; str) put(ch); }
 }
 
-unittest {
+@safe unittest {
 	static long writeLength(ARGS...)(ARGS args) {
 		long len = 0;
-		auto rng = RangeCounter(&len);
+		auto rng = RangeCounter(() @trusted { return &len; } ());
 		foreach (a; args) rng.put(a);
 		return len;
 	}

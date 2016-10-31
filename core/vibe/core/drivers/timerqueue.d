@@ -13,6 +13,8 @@ import std.datetime;
 
 
 struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
+@safe:
+
 	static struct TimerInfo {
 		long timeout; // standard time
 		long repeatDuration; // hnsecs
@@ -73,14 +75,14 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 		else return SysTime(m_timeoutHeap.front.timeout, UTC());
 	}
 
-	void consumeTimeouts(SysTime now, scope void delegate(size_t timer, bool periodic, ref DATA data) del)
+	void consumeTimeouts(SysTime now, scope void delegate(size_t timer, bool periodic, ref DATA data) @safe del)
 	{
 		//if (m_timeoutHeap.empty) logTrace("no timers scheduled");
 		//else logTrace("first timeout: %s", (m_timeoutHeap.front.timeout - now) * 1e-7);
 
 		while (!m_timeoutHeap.empty && (m_timeoutHeap.front.timeout - now.stdTime) / TIMER_RESOLUTION <= 0) {
 			auto tm = m_timeoutHeap.front;
-			m_timeoutHeap.removeFront();
+			() @trusted { m_timeoutHeap.removeFront(); } ();
 
 			auto pt = tm.id in m_timers;
 			if (!pt || !pt.pending || pt.timeout != tm.timeout) continue;
@@ -106,7 +108,7 @@ struct TimerQueue(DATA, long TIMER_RESOLUTION = 10_000) {
 	{
 		//logTrace("Schedule timer %s", id);
 		auto entry = TimeoutEntry(timeout, id);
-		m_timeoutHeap.insert(entry);
+		() @trusted { m_timeoutHeap.insert(entry); } ();
 		//logDebugV("first timer %s in %s s", id, (timeout - now) * 1e-7);
 	}
 }

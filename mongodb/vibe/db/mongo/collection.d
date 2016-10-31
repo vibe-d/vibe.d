@@ -39,7 +39,7 @@ struct MongoCollection {
 	}
 
 	this(MongoClient client, string fullPath)
-	{
+	@safe {
 		assert(client !is null);
 		m_client = client;
 
@@ -52,7 +52,7 @@ struct MongoCollection {
 	}
 
 	this(ref MongoDatabase db, string name)
-	{
+	@safe {
 		assert(db.client !is null);
 		m_client = db.client;
 		m_fullPath = db.name ~ "." ~ name;
@@ -63,12 +63,12 @@ struct MongoCollection {
 	/**
 	  Returns: Root database to which this collection belongs.
 	 */
-	@property MongoDatabase database() { return m_db; }
+	@property MongoDatabase database() @safe { return m_db; }
 
 	/**
 	  Returns: Name of this collection (excluding the database name).
 	 */
-	@property string name() const { return m_name; }
+	@property string name() const @safe { return m_name; }
 
 	/**
 	  Performs an update operation on documents matching 'selector', updating them with 'update'.
@@ -100,9 +100,9 @@ struct MongoCollection {
 		assert(m_client !is null, "Inserting into uninitialized MongoCollection.");
 		auto conn = m_client.lockConnection();
 		Bson[] docs;
-		Bson bdocs = serializeToBson(document_or_documents);
+		Bson bdocs = () @trusted { return serializeToBson(document_or_documents); } ();
 		if( bdocs.type == Bson.Type.Array ) docs = cast(Bson[])bdocs;
-		else docs = (&bdocs)[0 .. 1];
+		else docs = () @trusted { return (&bdocs)[0 .. 1]; } ();
 		conn.insert(m_fullPath, flags, docs);
 	}
 
@@ -239,8 +239,10 @@ struct MongoCollection {
 		cmd["findAndModify"] = m_name;
 		cmd["query"] = serializeToBson(query);
 		cmd["update"] = serializeToBson(update);
-		foreach (string key, value; bopt)
+		bopt.opApply(delegate int(string key, Bson value) @safe {
 			cmd[key] = value;
+			return 0;
+		});	
 		auto ret = database.runCommand(cmd);
 		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed.");
 		return ret["value"];
@@ -418,7 +420,7 @@ struct MongoCollection {
 		only suitable for single-field indices.
 	*/
 	void ensureIndex(scope const(Tuple!(string, int))[] field_orders, IndexFlags flags = IndexFlags.none, Duration expire_time = 0.seconds)
-	{
+	@safe {
 		// TODO: support 2d indexes
 
 		auto key = Bson.emptyObject;
@@ -448,7 +450,7 @@ struct MongoCollection {
 	/// ditto
 	deprecated("Use the overload taking an array of field_orders instead.")
 	void ensureIndex(int[string] field_orders, IndexFlags flags = IndexFlags.none, ulong expireAfterSeconds = 0)
-	{
+	@safe {
 		Tuple!(string, int)[] orders;
 		foreach (k, v; field_orders)
 			orders ~= tuple(k, v);
@@ -456,7 +458,7 @@ struct MongoCollection {
 	}
 
 	void dropIndex(string name)
-	{
+	@safe {
 		static struct CMD {
 			string dropIndexes;
 			string index;
@@ -469,7 +471,8 @@ struct MongoCollection {
 		enforce(reply["ok"].get!double == 1, "dropIndex command failed.");
 	}
 
-	void drop() {
+	void drop()
+	@safe {
 		static struct CMD {
 			string drop;
 		}

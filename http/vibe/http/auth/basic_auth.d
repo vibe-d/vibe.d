@@ -14,25 +14,27 @@ import std.base64;
 import std.exception;
 import std.string;
 
+@safe:
+
 
 /**
 	Returns a request handler that enforces request to be authenticated using HTTP Basic Auth.
 */
-HTTPServerRequestDelegateS performBasicAuth(string realm, bool delegate(string user, string name) pwcheck)
+HTTPServerRequestDelegateS performBasicAuth(string realm, PasswordVerifyCallback pwcheck)
 {
 	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
-	{
+	@safe {
 		auto pauth = "Authorization" in req.headers;
 
 		if( pauth && (*pauth).startsWith("Basic ") ){
-			string user_pw = cast(string)Base64.decode((*pauth)[6 .. $]);
+			string user_pw = () @trusted { return cast(string)Base64.decode((*pauth)[6 .. $]); } ();
 
 			auto idx = user_pw.indexOf(":");
 			enforceBadRequest(idx >= 0, "Invalid auth string format!");
 			string user = user_pw[0 .. idx];
 			string password = user_pw[idx+1 .. $];
 
-			if( pwcheck(user, password) ){
+			if (pwcheck(user, password)) {
 				req.username = user;
 				// let the next stage handle the request
 				return;
@@ -46,6 +48,12 @@ HTTPServerRequestDelegateS performBasicAuth(string realm, bool delegate(string u
 		res.bodyWriter.write("Authorization required");
 	}
 	return &handleRequest;
+}
+/// ditto
+deprecated("Use an @safe password verification callback.")
+HTTPServerRequestDelegateS performBasicAuth(string realm, bool delegate(string, string) @system pwcheck)
+{
+	return performBasicAuth(realm, (u, p) @trusted => pwcheck(u, p));
 }
 
 
@@ -62,11 +70,11 @@ HTTPServerRequestDelegateS performBasicAuth(string realm, bool delegate(string u
 
 	Throws: Throws a HTTPStatusExeption in case of an authentication failure.
 */
-string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, string realm, scope bool delegate(string user, string name) pwcheck)
+string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, string realm, scope PasswordVerifyCallback pwcheck)
 {
 	auto pauth = "Authorization" in req.headers;
 	if( pauth && (*pauth).startsWith("Basic ") ){
-		string user_pw = cast(string)Base64.decode((*pauth)[6 .. $]);
+		string user_pw = () @trusted { return cast(string)Base64.decode((*pauth)[6 .. $]); } ();
 
 		auto idx = user_pw.indexOf(":");
 		enforceBadRequest(idx >= 0, "Invalid auth string format!");
@@ -82,6 +90,12 @@ string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse re
 	res.headers["WWW-Authenticate"] = "Basic realm=\""~realm~"\"";
 	throw new HTTPStatusException(HTTPStatus.unauthorized);
 }
+/// ditto
+deprecated("Use an @safe password verification callback.")
+string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, string realm, scope bool delegate(string, string) @system pwcheck)
+{
+	return performBasicAuth(req, res, realm, (u, p) @trusted => pwcheck(u, p));
+}
 
 
 /**
@@ -90,6 +104,8 @@ string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse re
 void addBasicAuth(scope HTTPRequest req, string user, string password)
 {
 	string pwstr = user ~ ":" ~ password;
-	string authstr = cast(string)Base64.encode(cast(ubyte[])pwstr);
+	string authstr = () @trusted { return cast(string)Base64.encode(cast(ubyte[])pwstr); } ();
 	req.headers["Authorization"] = "Basic " ~ authstr;
 }
+
+alias PasswordVerifyCallback = bool delegate(string user, string password);

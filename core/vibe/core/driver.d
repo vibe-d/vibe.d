@@ -64,6 +64,8 @@ private {
 	not intended to be used directly by users of the library.
 */
 interface EventDriver {
+@safe:
+
 	/** Frees all resources of the driver and prepares it for consumption by the GC.
 
 		Note that the driver will not be usable after calling this method. Any
@@ -115,7 +117,7 @@ interface EventDriver {
 		interface. conn_callback is called for every incoming connection, each time from a
 		new task.
 	*/
-	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options);
+	TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) @safe conn_callback, string bind_address, TCPListenOptions options);
 
 	/** Creates a new UDP socket and sets the specified address/port as the destination for packets.
 
@@ -138,7 +140,7 @@ interface EventDriver {
 		The initial reference count is 1, use releaseTimer to free all resources
 		associated with the timer.
 	*/
-	size_t createTimer(void delegate() callback);
+	size_t createTimer(void delegate() @safe callback);
 
 	/// Increases the reference count by one.
 	void acquireTimer(size_t timer_id);
@@ -153,7 +155,7 @@ interface EventDriver {
 	void rearmTimer(size_t timer_id, Duration dur, bool periodic);
 
 	/// Stops the timer.
-	void stopTimer(size_t timer_id);
+	void stopTimer(size_t timer_id) nothrow;
 
 	/// Waits for the pending timer to expire.
 	void waitTimer(size_t timer_id);
@@ -164,6 +166,8 @@ interface EventDriver {
 	Provides an event driver with core functions for task/fiber control.
 */
 interface DriverCore {
+@safe:
+
 	/** Sets an exception to be thrown on the next call to $(D yieldForEvent).
 
 		Note that this only has an effect if $(D yieldForEvent) is called
@@ -235,6 +239,8 @@ interface DriverCore {
 	based file descriptors.
 */
 interface FileDescriptorEvent {
+@safe:
+
 	/** Event mask selecting the kind of events to listen for.
 	*/
 	enum Trigger {

@@ -52,6 +52,7 @@ pragma(lib, "ws2_32");
 /******************************************************************************/
 
 final class Win32EventDriver : EventDriver {
+@trusted:
 	import std.container : Array, BinaryHeap, heapify;
 	import std.datetime : Clock;
 
@@ -86,14 +87,14 @@ final class Win32EventDriver : EventDriver {
 		m_registeredEvents ~= m_fileCompletionEvent;
 	}
 
-	void dispose()
+	override void dispose()
 	{
 //		DestroyWindow(m_hwnd);
 	}
 
-	int runEventLoop()
+	override int runEventLoop()
 	{
-		void removePendingQuitMessages() {
+		void removePendingQuitMessages() @trusted {
 			MSG msg;
 			while (PeekMessageW(&msg, null, WM_QUIT, WM_QUIT, PM_REMOVE)) {}
 		}
@@ -112,19 +113,19 @@ final class Win32EventDriver : EventDriver {
 		return 0;
 	}
 
-	int runEventLoopOnce()
+	override int runEventLoopOnce()
 	{
 		doProcessEvents(INFINITE);
 		return 0;
 	}
 
-	bool processEvents()
+	override bool processEvents()
 	{
 		return doProcessEvents(0);
 	}
 
 	bool doProcessEvents(uint timeout_msecs)
-	{
+	@trusted {
 		assert(m_tid == GetCurrentThreadId());
 
 		waitForEvents(timeout_msecs);
@@ -153,7 +154,7 @@ final class Win32EventDriver : EventDriver {
 	}
 
 	private bool haveEvents()
-	{
+	@safe {
 		version(VibePartialAutoExit)
 			return !m_fileWriters.byKey.empty || !m_socketHandlers.byKey.empty;
 		else return true;
@@ -196,25 +197,25 @@ final class Win32EventDriver : EventDriver {
 		});
 	}
 
-	void exitEventLoop()
+	override void exitEventLoop()
 	{
 		m_exit = true;
 		PostThreadMessageW(m_tid, WM_QUIT, 0, 0);
 	}
 
-	Win32FileStream openFile(Path path, FileMode mode)
+	override Win32FileStream openFile(Path path, FileMode mode)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		return new Win32FileStream(m_core, path, mode);
 	}
 
-	DirectoryWatcher watchDirectory(Path path, bool recursive)
+	override DirectoryWatcher watchDirectory(Path path, bool recursive)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		return new Win32DirectoryWatcher(m_core, path, recursive);
 	}
 
-	NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
+	override NetworkAddress resolveHost(string host, ushort family = AF_UNSPEC, bool use_dns = true)
 	{
 		static immutable ushort[] addrfamilies = [AF_INET, AF_INET6];
 
@@ -276,7 +277,7 @@ final class Win32EventDriver : EventDriver {
 		return addr;
 	}
 
-	Win32TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_addr)
+	override Win32TCPConnection connectTCP(NetworkAddress addr, NetworkAddress bind_addr)
 	{
 		assert(m_tid == GetCurrentThreadId());
 
@@ -290,7 +291,7 @@ final class Win32EventDriver : EventDriver {
 		return conn;
 	}
 
-	Win32TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) conn_callback, string bind_address, TCPListenOptions options)
+	override Win32TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) @safe conn_callback, string bind_address, TCPListenOptions options)
 	{
 		assert(m_tid == GetCurrentThreadId());
 		auto addr = resolveHost(bind_address);
@@ -313,7 +314,7 @@ final class Win32EventDriver : EventDriver {
 		return new Win32TCPListener(this, sock, addr, conn_callback, options);
 	}
 
-	Win32UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
+	override Win32UDPConnection listenUDP(ushort port, string bind_address = "0.0.0.0")
 	{
 		assert(m_tid == GetCurrentThreadId());
 		/*auto addr = resolveHost(bind_address);
@@ -322,43 +323,43 @@ final class Win32EventDriver : EventDriver {
 		assert(false);
 	}
 
-	Win32ManualEvent createManualEvent()
+	override Win32ManualEvent createManualEvent()
 	{
 		assert(m_tid == GetCurrentThreadId());
 		return new Win32ManualEvent(this);
 	}
 
-	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger events, FileDescriptorEvent.Mode mode)
+	override FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger events, FileDescriptorEvent.Mode mode)
 	{
 		assert(false, "Not implemented.");
 	}
 
-	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
+	override size_t createTimer(void delegate() @safe callback) { return m_timers.create(TimerInfo(callback)); }
 
-	void acquireTimer(size_t timer_id) { m_timers.getUserData(timer_id).refCount++; }
-	void releaseTimer(size_t timer_id)
-	{
+	override void acquireTimer(size_t timer_id) { m_timers.getUserData(timer_id).refCount++; }
+	override void releaseTimer(size_t timer_id)
+	nothrow {
 		if (!--m_timers.getUserData(timer_id).refCount)
 			m_timers.destroy(timer_id);
 	}
 
-	bool isTimerPending(size_t timer_id) { return m_timers.isPending(timer_id); }
+	override bool isTimerPending(size_t timer_id) { return m_timers.isPending(timer_id); }
 
-	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
+	override void rearmTimer(size_t timer_id, Duration dur, bool periodic)
 	{
 		if (!m_timers.isPending(timer_id))
 			acquireTimer(timer_id);
 		m_timers.schedule(timer_id, dur, periodic);
 	}
 
-	void stopTimer(size_t timer_id)
+	override void stopTimer(size_t timer_id)
 	{
 		if (m_timers.isPending(timer_id))
 			releaseTimer(timer_id);
 		m_timers.unschedule(timer_id);
 	}
 
-	void waitTimer(size_t timer_id)
+	override void waitTimer(size_t timer_id)
 	{
 		while (true) {
 			auto data = &m_timers.getUserData(timer_id);
@@ -441,6 +442,7 @@ private struct TimerInfo {
 /******************************************************************************/
 
 final class Win32ManualEvent : ManualEvent {
+@trusted:
 	private {
 		core.sync.mutex.Mutex m_mutex;
 		Win32EventDriver m_driver;
@@ -457,7 +459,7 @@ final class Win32ManualEvent : ManualEvent {
 		m_driver = driver;
 	}
 
-	void emit()
+	override void emit()
 	{
 		scope (failure) assert(false); // AA.opApply is not nothrow
 		/*auto newcnt =*/ atomicOp!"+="(m_emitCount, 1);
@@ -472,11 +474,11 @@ final class Win32ManualEvent : ManualEvent {
 				logWarn("Failed to post thread message.");
 	}
 
-	void wait() { wait(m_emitCount); }
-	int wait(int reference_emit_count) { return  doWait!true(reference_emit_count); }
-	int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
-	int waitUninterruptible(int reference_emit_count) { return  doWait!false(reference_emit_count); }
-	int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
+	override void wait() { wait(m_emitCount); }
+	override int wait(int reference_emit_count) { return  doWait!true(reference_emit_count); }
+	override int wait(Duration timeout, int reference_emit_count) { return doWait!true(timeout, reference_emit_count); }
+	override int waitUninterruptible(int reference_emit_count) { return  doWait!false(reference_emit_count); }
+	override int waitUninterruptible(Duration timeout, int reference_emit_count) { return doWait!false(timeout, reference_emit_count); }
 
 	void acquire()
 	nothrow {
@@ -513,7 +515,7 @@ final class Win32ManualEvent : ManualEvent {
 		}
 	}
 
-	@property int emitCount() const { return atomicLoad(m_emitCount); }
+	override @property int emitCount() const { return atomicLoad(m_emitCount); }
 
 	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
 	{
@@ -558,6 +560,7 @@ final class Win32ManualEvent : ManualEvent {
 /******************************************************************************/
 
 final class Win32FileStream : FileStream {
+@trusted:
 	private {
 		Path m_path;
 		HANDLE m_handle;
@@ -630,7 +633,7 @@ final class Win32FileStream : FileStream {
 		return m_task == Task.getThis();
 	}
 
-	void close()
+	override void close()
 	{
 		if(m_handle == INVALID_HANDLE_VALUE)
 			return;
@@ -638,41 +641,41 @@ final class Win32FileStream : FileStream {
 		m_handle = INVALID_HANDLE_VALUE;
 	}
 
-	ulong tell() { return m_ptr; }
+	override ulong tell() { return m_ptr; }
 
-	@property Path path() const { return m_path; }
+	override @property Path path() const { return m_path; }
 
-	@property bool isOpen() const { return m_handle != INVALID_HANDLE_VALUE; }
+	override @property bool isOpen() const { return m_handle != INVALID_HANDLE_VALUE; }
 
-	@property ulong size() const { return m_size; }
+	override @property ulong size() const { return m_size; }
 
-	@property bool readable()
+	override @property bool readable()
 	const {
 		return m_mode != FileMode.append;
 	}
 
-	@property bool writable()
+	override @property bool writable()
 	const {
 		return m_mode == FileMode.append || m_mode == FileMode.createTrunc || m_mode == FileMode.readWrite;
 	}
 
-	void seek(ulong offset)
+	override void seek(ulong offset)
 	{
 		m_ptr = offset;
 	}
 
 
-	@property bool empty() const { assert(this.readable); return m_ptr >= m_size; }
-	@property ulong leastSize() const { assert(this.readable); return m_size - m_ptr; }
-	@property bool dataAvailableForRead(){
+	override @property bool empty() const { assert(this.readable); return m_ptr >= m_size; }
+	override @property ulong leastSize() const { assert(this.readable); return m_size - m_ptr; }
+	override @property bool dataAvailableForRead(){
 		return leastSize() > 0;
 	}
 
-	const(ubyte)[] peek(){
+	override const(ubyte)[] peek(){
 		assert(false);
 	}
 
-	void read(ubyte[] dst)
+	override void read(ubyte[] dst)
 	{
 		assert(this.readable);
 		acquire();
@@ -702,7 +705,7 @@ final class Win32FileStream : FileStream {
 		}
 	}
 
-	void write(in ubyte[] bytes_)
+	override void write(in ubyte[] bytes_)
 	{
 		assert(this.writable, "File is not writable");
 		acquire();
@@ -734,11 +737,11 @@ final class Win32FileStream : FileStream {
 		if(m_ptr > m_size) m_size = m_ptr;
 	}
 
-	void flush(){}
+	override void flush(){}
 
-	void finalize(){}
+	override void finalize(){}
 
-	void write(InputStream stream, ulong nbytes = 0)
+	override void write(InputStream stream, ulong nbytes = 0)
 	{
 		writeDefault(stream, nbytes);
 	}
@@ -766,6 +769,7 @@ final class Win32FileStream : FileStream {
 /******************************************************************************/
 
 final class Win32DirectoryWatcher : DirectoryWatcher {
+@trusted:
 	private {
 		Path m_path;
 		bool m_recursive;
@@ -800,8 +804,8 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 		CloseHandle(m_handle);
 	}
 
-	@property Path path() const { return m_path; }
-	@property bool recursive() const { return m_recursive; }
+	override @property Path path() const { return m_path; }
+	override @property bool recursive() const { return m_recursive; }
 
 	void release()
 	{
@@ -820,7 +824,7 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 		return m_task == Task.getThis();
 	}
 
-	bool readChanges(ref DirectoryChange[] dst, Duration timeout)
+	override bool readChanges(ref DirectoryChange[] dst, Duration timeout)
 	{
 		OVERLAPPED overlapped;
 		overlapped.Internal = 0;
@@ -890,6 +894,7 @@ final class Win32DirectoryWatcher : DirectoryWatcher {
 /******************************************************************************/
 
 final class Win32UDPConnection : UDPConnection, SocketEventHandler {
+@trusted:
 	private {
 		Task m_task;
 		Win32EventDriver m_driver;
@@ -911,7 +916,7 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 
 	@property SOCKET socket() { return m_socket; }
 
-	@property string bindAddress() const {
+	override @property string bindAddress() const {
 		// NOTE: using WSAAddressToStringW instead of inet_ntop because that is only available from Vista up
 		wchar[64] buf;
 		DWORD buf_len = 64;
@@ -921,10 +926,10 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		return ret;
 	}
 
-	@property NetworkAddress localAddress() const { return m_bindAddress; }
+	override @property NetworkAddress localAddress() const { return m_bindAddress; }
 
-	@property bool canBroadcast() const { return m_canBroadcast; }
-	@property void canBroadcast(bool val)
+	override @property bool canBroadcast() const { return m_canBroadcast; }
+	override @property void canBroadcast(bool val)
 	{
 		int tmp_broad = val;
 		socketEnforce(setsockopt(m_socket, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
@@ -932,7 +937,7 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		m_canBroadcast = val;
 	}
 
-	void close()
+	override void close()
 	{
 		if (m_socket == INVALID_SOCKET) return;
 		closesocket(m_socket);
@@ -956,18 +961,18 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		m_task = Task();
 	}
 
-	void connect(string host, ushort port)
+	override void connect(string host, ushort port)
 	{
 		NetworkAddress addr = m_driver.resolveHost(host, m_bindAddress.family);
 		addr.port = port;
 		connect(addr);
 	}
-	void connect(NetworkAddress addr)
+	override void connect(NetworkAddress addr)
 	{
 		socketEnforce(.connect(m_socket, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket");
 	}
 
-	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
+	override void send(in ubyte[] data, in NetworkAddress* peer_address = null)
 	{
 		assert(data.length <= int.max);
 		sizediff_t ret;
@@ -981,12 +986,12 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		enforce(ret == data.length, "Unable to send full packet.");
 	}
 
-	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
+	override ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
 		return recv(Duration.max, buf, peer_address);
 	}
 
-	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null)
+	override ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null)
 	{
 		size_t tm;
 		if (timeout != Duration.max && timeout > 0.seconds) {
@@ -1054,6 +1059,7 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 enum ConnectionStatus { Initialized, Connected, Disconnected }
 
 final class Win32TCPConnection : TCPConnection, SocketEventHandler {
+@trusted:
 	private {
 		Win32EventDriver m_driver;
 		Task m_readOwner;
@@ -1152,15 +1158,15 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 
 	bool amOwner() { return Task.getThis() == m_readOwner && m_readOwner == m_writeOwner; }
 
-	@property void tcpNoDelay(bool enabled)
+	override @property void tcpNoDelay(bool enabled)
 	{
 		m_tcpNoDelay = enabled;
 		BOOL eni = enabled;
 		setsockopt(m_socket, IPPROTO_TCP, TCP_NODELAY, &eni, eni.sizeof);
 	}
-	@property bool tcpNoDelay() const { return m_tcpNoDelay; }
+	override @property bool tcpNoDelay() const { return m_tcpNoDelay; }
 
-	@property void readTimeout(Duration v)
+	override @property void readTimeout(Duration v)
 	{
 		m_readTimeout = v;
 		auto msecs = v.total!"msecs"();
@@ -1168,26 +1174,26 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		DWORD vdw = cast(DWORD)msecs;
 		setsockopt(m_socket, SOL_SOCKET, SO_RCVTIMEO, &vdw, vdw.sizeof);
 	}
-	@property Duration readTimeout() const { return m_readTimeout; }
+	override @property Duration readTimeout() const { return m_readTimeout; }
 
-	@property void keepAlive(bool enabled)
+	override @property void keepAlive(bool enabled)
 	{
 		m_keepAlive = enabled;
 		BOOL eni = enabled;
 		setsockopt(m_socket, SOL_SOCKET, SO_KEEPALIVE, &eni, eni.sizeof);
 	}
-	@property bool keepAlive() const { return m_keepAlive; }
+	override @property bool keepAlive() const { return m_keepAlive; }
 
-	@property bool connected() const { return m_status == ConnectionStatus.Connected; }
+	override @property bool connected() const { return m_status == ConnectionStatus.Connected; }
 
-	@property string peerAddress() const { return m_peerAddressString; }
+	override @property string peerAddress() const { return m_peerAddressString; }
 
-	@property NetworkAddress localAddress() const { return m_localAddress; }
-	@property NetworkAddress remoteAddress() const { return m_peerAddress; }
+	override @property NetworkAddress localAddress() const { return m_localAddress; }
+	override @property NetworkAddress remoteAddress() const { return m_peerAddress; }
 
-	@property bool empty() { return leastSize == 0; }
+	override @property bool empty() { return leastSize == 0; }
 
-	@property ulong leastSize()
+	override @property ulong leastSize()
 	{
 		acquireReader();
 		scope(exit) releaseReader();
@@ -1199,14 +1205,14 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		return m_readBuffer.length;
 	}
 
-	@property bool dataAvailableForRead()
+	override @property bool dataAvailableForRead()
 	{
 		acquireReader();
 		scope(exit) releaseReader();
 		return !m_readBuffer.empty;
 	}
 
-	void close()
+	override void close()
 	{
 		acquire();
 		scope(exit) release();
@@ -1216,7 +1222,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		m_status = ConnectionStatus.Disconnected;
 	}
 
-	bool waitForData(Duration timeout)
+	override bool waitForData(Duration timeout)
 	{
 		if (timeout == 0.seconds)
 			logDebug("Warning: use Duration.max as an argument to waitForData() to wait infinitely, not 0.seconds.");
@@ -1242,14 +1248,14 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		return true;
 	}
 
-	const(ubyte)[] peek()
+	override const(ubyte)[] peek()
 	{
 		acquireReader();
 		scope(exit) releaseReader();
 		return m_readBuffer.peek();
 	}
 
-	void read(ubyte[] dst)
+	override void read(ubyte[] dst)
 	{
 		acquireReader();
 		scope(exit) releaseReader();
@@ -1266,7 +1272,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		}
 	}
 
-	void write(in ubyte[] bytes_)
+	override void write(in ubyte[] bytes_)
 	{
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -1301,7 +1307,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		}
 	}
 
-	void flush()
+	override void flush()
 	{
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -1309,12 +1315,12 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		checkConnected();
 	}
 
-	void finalize()
+	override void finalize()
 	{
 		flush();
 	}
 
-	void write(InputStream stream, ulong nbytes = 0)
+	override void write(InputStream stream, ulong nbytes = 0)
 	{
 		// special case sending of files
 		if( auto fstream = cast(Win32FileStream)stream ){
@@ -1499,6 +1505,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 /******************************************************************************/
 
 final class Win32TCPListener : TCPListener, SocketEventHandler {
+@trusted:
 	private {
 		Win32EventDriver m_driver;
 		SOCKET m_socket;
@@ -1507,7 +1514,7 @@ final class Win32TCPListener : TCPListener, SocketEventHandler {
 		TCPListenOptions m_options;
 	}
 
-	this(Win32EventDriver driver, SOCKET sock, NetworkAddress bind_addr, void delegate(TCPConnection conn) conn_callback, TCPListenOptions options)
+	this(Win32EventDriver driver, SOCKET sock, NetworkAddress bind_addr, void delegate(TCPConnection conn) @safe conn_callback, TCPListenOptions options)
 	{
 		m_driver = driver;
 		m_socket = sock;
@@ -1519,12 +1526,12 @@ final class Win32TCPListener : TCPListener, SocketEventHandler {
 		WSAAsyncSelect(sock, m_driver.m_hwnd, WM_USER_SOCKET, FD_ACCEPT);
 	}
 
-	@property NetworkAddress bindAddress()
+	override @property NetworkAddress bindAddress()
 	{
 		return m_bindAddress;
 	}
 
-	void stopListening()
+	override void stopListening()
 	{
 		if( m_socket == -1 ) return;
 		closesocket(m_socket);
@@ -1569,7 +1576,7 @@ private {
 }
 
 void setupWindowClass() nothrow
-{
+@trusted {
 	if( s_setupWindowClass ) return;
 	WNDCLASSA wc;
 	wc.lpfnWndProc = &Win32EventDriver.onMessage;

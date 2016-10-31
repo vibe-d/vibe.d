@@ -53,6 +53,8 @@ enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 		tunnel is properly closed first.
 */
 final class OpenSSLStream : TLSStream {
+@safe:
+
 	private {
 		Stream m_stream;
 		TLSContext m_tlsCtx;
@@ -71,17 +73,17 @@ final class OpenSSLStream : TLSStream {
 		m_tlsCtx = ctx;
 		m_tls = ctx.createClientCtx();
 		scope (failure) {
-			SSL_free(m_tls);
+			() @trusted { SSL_free(m_tls); } ();
 			m_tls = null;
 		}
 
-		m_bio = BIO_new(&s_bio_methods);
+		m_bio = () @trusted { return BIO_new(&s_bio_methods); } ();
 		enforce(m_bio !is null, "SSL failed: failed to create BIO structure.");
 		m_bio.init_ = 1;
-		m_bio.ptr = cast(void*)this;
+		m_bio.ptr = () @trusted { return cast(void*)this; } (); // lifetime is shorter than this, so no GC.addRange needed.
 		m_bio.shutdown = 0;
 
-		SSL_set_bio(m_tls, m_bio, m_bio);
+		() @trusted { SSL_set_bio(m_tls, m_bio, m_bio); } ();
 
 		if (state != TLSStreamState.connected) {
 			OpenSSLContext.VerifyData vdata;
@@ -90,34 +92,34 @@ final class OpenSSLStream : TLSStream {
 			vdata.callback = ctx.peerValidationCallback;
 			vdata.peerName = peer_name;
 			vdata.peerAddress = peer_address;
-			SSL_set_ex_data(m_tls, gs_verifyDataIndex, &vdata);
-			scope (exit) SSL_set_ex_data(m_tls, gs_verifyDataIndex, null);
+			() @trusted { SSL_set_ex_data(m_tls, gs_verifyDataIndex, &vdata); } ();
+			scope (exit) () @trusted { SSL_set_ex_data(m_tls, gs_verifyDataIndex, null); } ();
 
 			final switch (state) {
 				case TLSStreamState.accepting:
 					//SSL_set_accept_state(m_tls);
-					checkSSLRet(SSL_accept(m_tls), "Accepting SSL tunnel");
+					checkSSLRet(() @trusted { return SSL_accept(m_tls); } (), "Accepting SSL tunnel");
 					break;
 				case TLSStreamState.connecting:
 					// a client stream can override the default ALPN setting for this context
 					if (alpn.length) setClientALPN(alpn);
 					if (peer_name.length)
-						SSL_ctrl(m_tls, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz);
+						() @trusted { return SSL_ctrl(m_tls, SSL_CTRL_SET_TLSEXT_HOSTNAME, TLSEXT_NAMETYPE_host_name, cast(void*)peer_name.toStringz); } ();
 					//SSL_set_connect_state(m_tls);
-					checkSSLRet(SSL_connect(m_tls), "Connecting TLS tunnel");
+					checkSSLRet(() @trusted { return SSL_connect(m_tls); } (), "Connecting TLS tunnel");
 					break;
 				case TLSStreamState.connected:
 					break;
 			}
 
 			// ensure that the SSL tunnel gets terminated when an error happens during verification
-			scope (failure) SSL_shutdown(m_tls);
+			scope (failure) () @trusted { SSL_shutdown(m_tls); } ();
 
-			if (auto peer = SSL_get_peer_certificate(m_tls)) {
-				scope(exit) X509_free(peer);
+			if (auto peer = () @trusted { return SSL_get_peer_certificate(m_tls); } ()) {
+				scope(exit) () @trusted { X509_free(peer); } ();
 
 				readPeerCertInfo(peer);
-				auto result = SSL_get_verify_result(m_tls);
+				auto result = () @trusted { return SSL_get_verify_result(m_tls); } ();
 				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
 					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
 						version(Windows) import std.c.windows.winsock;
@@ -138,7 +140,7 @@ final class OpenSSLStream : TLSStream {
 								break;
 						}
 
-						if (!verifyCertName(peer, GENERAL_NAME.GEN_IPADD, addr[0 .. addrlen])) {
+						if (!verifyCertName(peer, GENERAL_NAME.GEN_IPADD, () @trusted { return addr[0 .. addrlen]; } ())) {
 							logDiagnostic("Error validating TLS peer address");
 							result = X509_V_ERR_APPLICATION_VERIFICATION;
 						}
@@ -155,17 +157,16 @@ final class OpenSSLStream : TLSStream {
 	/** Read certificate info into the clientInformation field */
 	private void readPeerCertInfo(X509 *cert)
 	{
-		X509_NAME* name = X509_get_subject_name(cert);
+		X509_NAME* name = () @trusted { return X509_get_subject_name(cert); } ();
 
-		int c = X509_NAME_entry_count(name);
+		int c = () @trusted { return X509_NAME_entry_count(name); } ();
 		foreach (i; 0 .. c) {
-			X509_NAME_ENTRY *e = X509_NAME_get_entry(name, i);
+			X509_NAME_ENTRY *e = () @trusted { return X509_NAME_get_entry(name, i); } ();
+			ASN1_OBJECT *obj = () @trusted { return X509_NAME_ENTRY_get_object(e); } ();
+			ASN1_STRING *val = () @trusted { return X509_NAME_ENTRY_get_data(e); } ();
 
-			ASN1_OBJECT *obj = X509_NAME_ENTRY_get_object(e);
-			ASN1_STRING *val = X509_NAME_ENTRY_get_data(e);
-
-			auto longName = OBJ_nid2ln(OBJ_obj2nid(obj)).to!string;
-			auto valStr = cast(string)val.data[0 .. val.length];
+			auto longName = () @trusted { return OBJ_nid2ln(OBJ_obj2nid(obj)).to!string; } ();
+			auto valStr = () @trusted { return cast(string)val.data[0 .. val.length]; } (); // FIXME: .idup?
 
 			m_peerCertificate.subjectName.addField(longName, valStr);
 		}
@@ -173,7 +174,7 @@ final class OpenSSLStream : TLSStream {
 
 	~this()
 	{
-		if (m_tls) SSL_free(m_tls);
+		if (m_tls) () @trusted { SSL_free(m_tls); } ();
 	}
 
 	@property bool empty()
@@ -183,18 +184,18 @@ final class OpenSSLStream : TLSStream {
 
 	@property ulong leastSize()
 	{
-		auto ret = SSL_pending(m_tls);
+		auto ret = () @trusted { return SSL_pending(m_tls); } ();
 		return ret > 0 ? ret : m_stream.empty ? 0 : 1;
 	}
 
 	@property bool dataAvailableForRead()
 	{
-		return SSL_pending(m_tls) > 0 || m_stream.dataAvailableForRead;
+		return () @trusted { return SSL_pending(m_tls); } () > 0 || m_stream.dataAvailableForRead;
 	}
 
 	const(ubyte)[] peek()
 	{
-		auto ret = SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length);
+		auto ret = () @trusted { return SSL_peek(m_tls, m_peekBuffer.ptr, m_peekBuffer.length); } ();
 		checkExceptions();
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
@@ -203,7 +204,7 @@ final class OpenSSLStream : TLSStream {
 	{
 		while( dst.length > 0 ){
 			int readlen = min(dst.length, int.max);
-			auto ret = checkSSLRet(SSL_read(m_tls, dst.ptr, readlen), "Reading from TLS stream");
+			auto ret = checkSSLRet(() @trusted { return SSL_read(m_tls, dst.ptr, readlen); } (), "Reading from TLS stream");
 			//logTrace("SSL read %d/%d", ret, dst.length);
 			dst = dst[ret .. $];
 		}
@@ -214,7 +215,7 @@ final class OpenSSLStream : TLSStream {
 		const(ubyte)[] bytes = bytes_;
 		while( bytes.length > 0 ){
 			int writelen = min(bytes.length, int.max);
-			auto ret = checkSSLRet(SSL_write(m_tls, bytes.ptr, writelen), "Writing to TLS stream");
+			auto ret = checkSSLRet(() @trusted { return SSL_write(m_tls, bytes.ptr, writelen); } (), "Writing to TLS stream");
 			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
 		}
@@ -232,8 +233,10 @@ final class OpenSSLStream : TLSStream {
 		if( !m_tls ) return;
 		logTrace("OpenSSLStream finalize");
 
-		SSL_shutdown(m_tls);
-		SSL_free(m_tls);
+		() @trusted {
+			SSL_shutdown(m_tls);
+			SSL_free(m_tls);
+		} ();
 
 		m_tls = null;
 
@@ -246,12 +249,12 @@ final class OpenSSLStream : TLSStream {
 	}
 
 	private int checkSSLRet(int ret, string what)
-	{
+	@safe {
 		checkExceptions();
 		if (ret > 0) return ret;
 
 		string desc;
-		auto err = SSL_get_error(m_tls, ret);
+		auto err = () @trusted { return SSL_get_error(m_tls, ret); } ();
 		switch (err) {
 			default: desc = format("Unknown error (%s)", err); break;
 			case SSL_ERROR_NONE: desc = "No error"; break;
@@ -271,9 +274,12 @@ final class OpenSSLStream : TLSStream {
 		int flags;
 		c_ulong eret;
 		char[120] ebuf;
-		while( (eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0 ){
-			ERR_error_string(eret, ebuf.ptr);
-			logDiagnostic("%s error at %s:%d: %s (%s)", what, to!string(file), line, to!string(ebuf.ptr), flags & ERR_TXT_STRING ? to!string(data) : "-");
+		while( (eret = () @trusted { return ERR_get_error_line_data(&file, &line, &data, &flags); } ()) != 0 ){
+			() @trusted { ERR_error_string(eret, ebuf.ptr); } ();
+			logDiagnostic("%s error at %s:%d: %s (%s)", what,
+				() @trusted { return to!string(file); } (), line,
+				() @trusted { return to!string(ebuf.ptr); } (),
+				flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
 		}
 
 		enforce(ret != 0, format("%s was unsuccessful with ret 0", what));
@@ -282,7 +288,7 @@ final class OpenSSLStream : TLSStream {
 	}
 
 	private int enforceSSL(int ret, string message)
-	{
+	@safe {
 		if (ret > 0) return ret;
 
 		c_ulong eret;
@@ -292,22 +298,24 @@ final class OpenSSLStream : TLSStream {
 		string estr;
 		char[120] ebuf = 0;
 
-		while ((eret = ERR_get_error_line_data(&file, &line, &data, &flags)) != 0) {
-			ERR_error_string_n(eret, ebuf.ptr, ebuf.length);
-			estr = ebuf.ptr.to!string;
+		while ((eret = () @trusted { return ERR_get_error_line_data(&file, &line, &data, &flags); } ()) != 0) {
+			() @trusted { ERR_error_string_n(eret, ebuf.ptr, ebuf.length); } ();
+			estr = () @trusted { return ebuf.ptr.to!string; } ();
 			// throw the last error code as an exception
-			if (!ERR_peek_error()) break;
-			logDiagnostic("OpenSSL error at %s:%d: %s (%s)", file.to!string, line, estr, flags & ERR_TXT_STRING ? to!string(data) : "-");
+			if (!() @trusted { return ERR_peek_error(); } ()) break;
+			logDiagnostic("OpenSSL error at %s:%d: %s (%s)",
+				() @trusted { return file.to!string; } (), line, estr,
+				flags & ERR_TXT_STRING ? () @trusted { return to!string(data); } () : "-");
 		}
 
 		throw new Exception(format("%s: %s (%s)", message, estr, eret));
 	}
 
 	private void checkExceptions()
-	{
+	@safe {
 		if( m_exceptions.length > 0 ){
 			foreach( e; m_exceptions )
-				logDiagnostic("Exception occured on SSL source stream: %s", e.toString());
+				logDiagnostic("Exception occured on SSL source stream: %s", () @trusted { return e.toString(); } ());
 			throw m_exceptions[0];
 		}
 	}
@@ -324,7 +332,7 @@ final class OpenSSLStream : TLSStream {
 			char[32] data;
 			uint datalen;
 
-			SSL_get0_alpn_selected(m_ssl, cast(const char*) data.ptr, &datalen);
+			() @trusted { SSL_get0_alpn_selected(m_ssl, cast(const char*) data.ptr, &datalen); } ();
 			logDebug("alpn selected: ", data.to!string);
 			if (datalen > 0)
 				return data[0..datalen].idup;
@@ -341,13 +349,13 @@ final class OpenSSLStream : TLSStream {
 		size_t len;
 		foreach (string alpn_val; alpn_list)
 			len += alpn_val.length + 1;
-		alpn = processAllocator.makeArray!ubyte(len);
+		alpn = () @trusted { return processAllocator.makeArray!ubyte(len); } ();
 
 		size_t i;
 		foreach (string alpn_val; alpn_list)
 		{
 			alpn[i++] = cast(ubyte)alpn_val.length;
-			alpn[i .. i+alpn_val.length] = cast(ubyte[])alpn_val;
+			alpn[i .. i+alpn_val.length] = cast(immutable(ubyte)[])alpn_val;
 			i += alpn_val.length;
 		}
 		assert(i == len);
@@ -355,7 +363,7 @@ final class OpenSSLStream : TLSStream {
 		static if (haveALPN)
 			SSL_set_alpn_protos(m_ssl, cast(const char*) alpn.ptr, cast(uint) len);
 
-		processAllocator.dispose(alpn);
+		() @trusted { processAllocator.dispose(alpn); } ();
 	}
 }
 
@@ -369,6 +377,8 @@ final class OpenSSLStream : TLSStream {
 	useTrustedCertificateFile to add those.
 */
 final class OpenSSLContext : TLSContext {
+@safe:
+
 	private {
 		TLSContextKind m_kind;
 		ssl_ctx_st* m_ctx;
@@ -387,6 +397,7 @@ final class OpenSSLContext : TLSContext {
 		c_long options = SSL_OP_NO_SSLv2|SSL_OP_NO_COMPRESSION|
 			SSL_OP_SINGLE_DH_USE|SSL_OP_SINGLE_ECDH_USE;
 
+		() @trusted {
 		final switch (kind) {
 			case TLSContextKind.client:
 				final switch (ver) {
@@ -415,9 +426,10 @@ final class OpenSSLContext : TLSContext {
 				options |= SSL_OP_CIPHER_SERVER_PREFERENCE;
 				break;
 		}
+		} ();
 
-		m_ctx = SSL_CTX_new(method);
-		SSL_CTX_set_options!()(m_ctx, options);
+		m_ctx = () @trusted { return SSL_CTX_new(method); } ();
+		() @trusted { SSL_CTX_set_options!()(m_ctx, options); }();
 		if (kind == TLSContextKind.server) {
 			setDHParams();
 			static if (haveECDH) setECDHCurve();
@@ -460,7 +472,7 @@ final class OpenSSLContext : TLSContext {
 
 	~this()
 	{
-		SSL_CTX_free(m_ctx);
+		() @trusted { SSL_CTX_free(m_ctx); } ();
 		m_ctx = null;
 	}
 
@@ -469,7 +481,7 @@ final class OpenSSLContext : TLSContext {
 	@property TLSContextKind kind() const { return m_kind; }
 
 	/// Callback function invoked by server to choose alpn
-	@property void alpnCallback(string delegate(string[]) alpn_chooser)
+	@property void alpnCallback(TLSALPNCallback alpn_chooser)
 	{
 		logDebug("Choosing ALPN callback");
 		m_alpnCallback = alpn_chooser;
@@ -480,7 +492,7 @@ final class OpenSSLContext : TLSContext {
 	}
 
 	/// Get the current ALPN callback function
-	@property string delegate(string[]) alpnCallback() const { return m_alpnCallback; }
+	@property TLSALPNCallback alpnCallback() const { return m_alpnCallback; }
 
 	/// Invoked by client to offer alpn
 	void setClientALPN(string[] alpn_list)
@@ -529,7 +541,7 @@ final class OpenSSLContext : TLSContext {
 			}
 		}
 
-		SSL_CTX_set_verify(m_ctx, sslmode, &verify_callback);
+		() @trusted { SSL_CTX_set_verify(m_ctx, sslmode, &verify_callback); } ();
 	}
 	/// ditto
 	@property TLSPeerValidationMode peerValidationMode() const { return m_validationMode; }
@@ -546,7 +558,7 @@ final class OpenSSLContext : TLSContext {
 	{
 		m_verifyDepth = val;
 		// + 1 to let the validation callback handle the error
-		SSL_CTX_set_verify_depth(m_ctx, val + 1);
+		() @trusted { SSL_CTX_set_verify_depth(m_ctx, val + 1); } ();
 	}
 
 	/// ditto
@@ -569,8 +581,10 @@ final class OpenSSLContext : TLSContext {
 	{
 		m_sniCallback = callback;
 		if (m_kind == TLSContextKind.serverSNI) {
-			SSL_CTX_callback_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_CB, cast(OSSLCallback)&onContextForServerName);
-			SSL_CTX_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_ARG, 0, cast(void*)this);
+			() @trusted {
+				SSL_CTX_callback_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_CB, cast(OSSLCallback)&onContextForServerName);
+				SSL_CTX_ctrl(m_ctx, SSL_CTRL_SET_TLSEXT_SERVERNAME_ARG, 0, cast(void*)this);
+			} ();
 		}
 	}
 	@property inout(TLSServerNameCallback) sniCallback() inout { return m_sniCallback; }
@@ -578,12 +592,12 @@ final class OpenSSLContext : TLSContext {
 	private extern(C) alias OSSLCallback = void function();
 	private static extern(C) int onContextForServerName(SSL *s, int *ad, void *arg)
 	{
-		auto ctx = cast(OpenSSLContext)arg;
-		auto servername = SSL_get_servername(s, TLSEXT_NAMETYPE_host_name);
+		auto ctx = () @trusted { return cast(OpenSSLContext)arg; } ();
+		auto servername = () @trusted { return SSL_get_servername(s, TLSEXT_NAMETYPE_host_name); } ();
 		if (!servername) return SSL_TLSEXT_ERR_NOACK;
-		auto newctx = cast(OpenSSLContext)ctx.m_sniCallback(servername.to!string);
+		auto newctx = cast(OpenSSLContext)ctx.m_sniCallback(() @trusted { return servername.to!string; } ());
 		if (!newctx) return SSL_TLSEXT_ERR_NOACK;
-		SSL_set_SSL_CTX(s, newctx.m_ctx);
+		() @trusted { SSL_set_SSL_CTX(s, newctx.m_ctx); } ();
 		return SSL_TLSEXT_ERR_OK;
 	}
 
@@ -601,6 +615,7 @@ final class OpenSSLContext : TLSContext {
 		See_also: $(LINK https://www.openssl.org/docs/apps/ciphers.html#CIPHER_LIST_FORMAT)
 	*/
 	void setCipherList(string list = null)
+		@trusted
 	{
 		if (list is null)
 			SSL_CTX_set_cipher_list(m_ctx,
@@ -620,6 +635,7 @@ final class OpenSSLContext : TLSContext {
 		Currently, this is achieved by taking the hostname.
 	*/
 	private void guessSessionIDContext()
+		@trusted
 	{
 		string contextID = Socket.hostName;
 		SSL_CTX_set_session_id_context(m_ctx, cast(ubyte*)contextID.toStringz(), cast(uint)contextID.length);
@@ -634,7 +650,7 @@ final class OpenSSLContext : TLSContext {
 	 *    this function without argument will restore the default.
 	 */
 	void setDHParams(string pem_file=null)
-	{
+	@trusted {
 		DH* dh;
 		scope(exit) DH_free(dh);
 
@@ -664,7 +680,7 @@ final class OpenSSLContext : TLSContext {
 	 *
 	 */
 	void setECDHCurve(string curve = null)
-	{
+	@trusted {
 		static if (haveECDH) {
 			static if (OPENSSL_VERSION_NUMBER >= 0x10200000) {
 				// use automatic ecdh curve selection by default
@@ -691,14 +707,14 @@ final class OpenSSLContext : TLSContext {
 	/// Sets a certificate file to use for authenticating to the remote peer
 	void useCertificateChainFile(string path)
 	{
-		enforce(SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(path)), "Failed to load certificate file " ~ path);
+		enforce(() @trusted { return SSL_CTX_use_certificate_chain_file(m_ctx, toStringz(path)); } (), "Failed to load certificate file " ~ path);
 	}
 
 	/// Sets the private key to use for authenticating to the remote peer based
 	/// on the configured certificate chain file.
 	void usePrivateKeyFile(string path)
 	{
-		enforce(SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(path), SSL_FILETYPE_PEM), "Failed to load private key file " ~ path);
+		enforce(() @trusted { return SSL_CTX_use_PrivateKey_file(m_ctx, toStringz(path), SSL_FILETYPE_PEM); } (), "Failed to load private key file " ~ path);
 	}
 
 	/** Sets the list of trusted certificates for verifying peer certificates.
@@ -711,7 +727,7 @@ final class OpenSSLContext : TLSContext {
 		"/etc/pki/tls/certs/ca-bundle.crt", or "/etc/ssl/ca-bundle.pem".
 	*/
 	void useTrustedCertificateFile(string path)
-	{
+	@trusted {
 		immutable cPath = toStringz(path);
 		enforce(SSL_CTX_load_verify_locations(m_ctx, cPath, null),
 			"Failed to load trusted certificate file " ~ path);
@@ -725,7 +741,7 @@ final class OpenSSLContext : TLSContext {
 
 	private SSLState createClientCtx()
 	{
-		return SSL_new(m_ctx);
+		return () @trusted { return SSL_new(m_ctx); } ();
 	}
 
 	private static struct VerifyData {
@@ -738,7 +754,7 @@ final class OpenSSLContext : TLSContext {
 
 	private static extern(C) nothrow
 	int verify_callback(int valid, X509_STORE_CTX* ctx)
-	{
+	@trusted {
 		X509* err_cert = X509_STORE_CTX_get_current_cert(ctx);
 		int err = X509_STORE_CTX_get_error(ctx);
 		int depth = X509_STORE_CTX_get_error_depth(ctx);
@@ -850,8 +866,8 @@ shared static this()
 }
 
 private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_wildcards = true)
-{
-	bool delegate(in char[]) str_match;
+@trusted {
+	bool delegate(in char[]) @safe str_match;
 
 	bool check_value(ASN1_STRING* str, int type) {
 		if (!str.data || !str.length) return false;
@@ -908,7 +924,7 @@ private bool verifyCertName(X509* cert, int field, in char[] value, bool allow_w
 }
 
 private bool matchWildcard(const(char)[] str, const(char)[] pattern)
-{
+@safe {
 	auto strparts = str.split(".");
 	auto patternparts = pattern.split(".");
 	if (strparts.length != patternparts.length) return false;
@@ -949,14 +965,16 @@ unittest {
 }
 
 
-private nothrow extern(C)
+private nothrow @safe extern(C)
 {
 	import core.stdc.config;
 
 
-	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input, uint inlen, void* arg) {
-		logDebug("Got chooser input: %s", input[0 .. inlen]);
-		OpenSSLContext ctx = cast(OpenSSLContext) arg;
+	int chooser(SSL* ssl, const(char)** output, ubyte* outlen, const(char) *input_, uint inlen, void* arg) {
+		const(char)[] input = () @trusted { return input_[0 .. inlen]; } ();
+
+		logDebug("Got chooser input: %s", input);
+		OpenSSLContext ctx = () @trusted { return cast(OpenSSLContext) arg; } ();
 		import vibe.utils.array : AllocAppender, AppenderResetMode;
 		size_t i;
 		size_t len;
@@ -965,9 +983,9 @@ private nothrow extern(C)
 		{
 			len = cast(size_t) input[i];
 			++i;
-			ubyte[] proto = cast(ubyte[]) input[i .. i+len];
+			auto proto = input[i .. i+len];
 			i += len;
-			alpn_list ~= cast(string)proto;
+			() @trusted { alpn_list ~= cast(string)proto; } ();
 		}
 
 		string alpn;
@@ -979,19 +997,20 @@ private nothrow extern(C)
 			{
 				len = input[i];
 				++i;
-				ubyte[] proto = cast(ubyte[]) input[i .. i+len];
+				auto proto = input[i .. i+len];
 				i += len;
-				if (cast(string) proto == alpn) {
-					*output = cast(const(char)*)proto.ptr;
+				if (proto == alpn) {
+					*output = &proto[0];
 					*outlen = cast(ubyte) proto.length;
 				}
 			}
 		}
 
 		if (!output) {
-			logError("None of the proposed ALPN were selected: %s / falling back on HTTP/1.1", input[0 .. inlen]);
-			*output = cast(const(char)*)("http/1.1".ptr);
-			*outlen = cast(ubyte)("http/1.1".length);
+			logError("None of the proposed ALPN were selected: %s / falling back on HTTP/1.1", input);
+			enum hdr = "http/1.1";
+			*output = &hdr[0];
+			*outlen = cast(ubyte)hdr.length;
 		}
 
 		return 0;
@@ -1000,7 +1019,7 @@ private nothrow extern(C)
 	c_ulong onCryptoGetThreadID()
 	{
 		try {
-			return cast(c_ulong)(cast(size_t)cast(void*)Thread.getThis() * 0x35d2c57);
+			return cast(c_ulong)(cast(size_t)() @trusted { return cast(void*)Thread.getThis(); } () * 0x35d2c57);
 		} catch (Exception e) {
 			logWarn("OpenSSL: failed to get current thread ID: %s", e.msg);
 			return 0;
@@ -1010,8 +1029,8 @@ private nothrow extern(C)
 	void onCryptoLock(int mode, int n, const(char)* file, int line)
 	{
 		try {
-			enforce(n >= 0 && n < g_cryptoMutexes.length, "Mutex index out of range.");
-			auto mutex = g_cryptoMutexes[n];
+			enforce(n >= 0 && n < () @trusted { return g_cryptoMutexes; } ().length, "Mutex index out of range.");
+			auto mutex = () @trusted { return g_cryptoMutexes[n]; } ();
 			assert(mutex !is null);
 			if (mode & CRYPTO_LOCK) mutex.lock();
 			else mutex.unlock();
@@ -1043,11 +1062,11 @@ private nothrow extern(C)
 
 	int onBioRead(BIO *b, char *outb, int outlen)
 	{
-		auto stream = cast(OpenSSLStream)b.ptr;
+		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
 
 		try {
 			outlen = min(outlen, stream.m_stream.leastSize);
-			stream.m_stream.read(cast(ubyte[])outb[0 .. outlen]);
+			stream.m_stream.read(() @trusted { return cast(ubyte[])outb[0 .. outlen]; } ());
 		} catch(Exception e){
 			stream.m_exceptions ~= e;
 			return -1;
@@ -1057,9 +1076,9 @@ private nothrow extern(C)
 
 	int onBioWrite(BIO *b, const(char) *inb, int inlen)
 	{
-		auto stream = cast(OpenSSLStream)b.ptr;
+		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
 		try {
-			stream.m_stream.write(inb[0 .. inlen]);
+			stream.m_stream.write(() @trusted { return inb[0 .. inlen]; } ());
 		} catch(Exception e){
 			stream.m_exceptions ~= e;
 			return -1;
@@ -1069,7 +1088,7 @@ private nothrow extern(C)
 
 	c_long onBioCtrl(BIO *b, int cmd, c_long num, void *ptr)
 	{
-		auto stream = cast(OpenSSLStream)b.ptr;
+		auto stream = () @trusted { return cast(OpenSSLStream)b.ptr; } ();
 		c_long ret = 1;
 
 		switch(cmd){
@@ -1100,7 +1119,7 @@ private nothrow extern(C)
 
 	int onBioPuts(BIO *b, const(char) *s)
 	{
-		return onBioWrite(b, s, cast(int)strlen(s));
+		return onBioWrite(b, s, cast(int)() @trusted { return strlen(s); } ());
 	}
 }
 

@@ -103,6 +103,8 @@ enum HTTPStatus {
 }
 
 
+@safe nothrow @nogc pure:
+
 /**
 	Returns a standard text description of the specified HTTP status code.
 */
@@ -171,7 +173,8 @@ string httpStatusText(int code)
 /**
 	Determines if the given status code justifies closing the connection (e.g. evil big request bodies)
 */
-bool justifiesConnectionClose(int status) {
+bool justifiesConnectionClose(int status)
+{
 	switch(status) {
 		default: return false;
 		case HTTPStatus.requestEntityTooLarge:
@@ -184,7 +187,8 @@ bool justifiesConnectionClose(int status) {
 /**
 	Determines if status code is generally successful (>= 200 && < 300)
 */
-bool isSuccessCode(HTTPStatus status) {
+bool isSuccessCode(HTTPStatus status)
+{
 	return status >= 200 && status < 300;
 }
 
