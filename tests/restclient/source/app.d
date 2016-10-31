@@ -137,15 +137,15 @@ void assertCorsFails(string url, HTTPMethod method, string origin = "www.example
 // Since a CORS preflight also uses the OPTIONS method, we implemented the Allow header as well.
 void testAllowHeader(string url, HTTPMethod[] methods)
 {
-	import std.algorithm : joiner;
+	import std.algorithm : equal, joiner;
 	import std.conv : text;
-	string allow = methods.map!(m=>m.to!string).joiner(",").text;
-	requestHTTP(url, 
+	auto allow = methods.map!(m=>m.to!string);
+	requestHTTP(url,
 		(scope HTTPClientRequest req) {
 			req.method = HTTPMethod.OPTIONS;
-		}, 
+		},
 		(scope HTTPClientResponse res) {
-			res.headers.assertHeader(ShouldFail.No,"Allow",allow);
+			assert(equal(res.headers["Allow"].split(",").sort(), allow.array.sort()));
 			res.dropBody();
 		});
 }
