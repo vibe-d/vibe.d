@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.30 - 2016-10-
+v0.7.30 - 2016-10-31
 --------------------
 
 ### Features and improvements ###
@@ -61,6 +61,8 @@ the use of `VibeDefaultMain`)
 - Fixed a bug in `FixedRingBuffer.removeAt` which potentially affected the task scheduler (by Tomáš Chaloupka) - [pull #1572][issue1572]
 - Fixed `validateEmail` to properly use `isEmail` (which used to be broken) (by Stanislav Blinov aka radcapricorn) - [issue #1580][issue1580], [pull #1582][issue1582]
 - Fixed `yield()` to always return after a single event loop iteration - [issue #1583][issue1583]
+- Fixed parsing of Markdown text nested in blockquotes, code in particular
+- Fixed a buffer read overflow in `OpenSSLContext` - [issue #1577][issue1577]
 
 
 [issue345]: https://github.com/rejectedsoftware/vibe.d/issues/345
@@ -94,6 +96,7 @@ the use of `VibeDefaultMain`)
 [issue1566]: https://github.com/rejectedsoftware/vibe.d/issues/1566
 [issue1571]: https://github.com/rejectedsoftware/vibe.d/issues/1571
 [issue1572]: https://github.com/rejectedsoftware/vibe.d/issues/1572
+[issue1577]: https://github.com/rejectedsoftware/vibe.d/issues/1577
 [issue1580]: https://github.com/rejectedsoftware/vibe.d/issues/1580
 [issue1582]: https://github.com/rejectedsoftware/vibe.d/issues/1582
 [issue1583]: https://github.com/rejectedsoftware/vibe.d/issues/1583
@@ -221,7 +224,7 @@ v0.7.27 - 2016-02-09
 
 In preparation for a full separation of the individual library components, this release splits up the code logically into multiple DUB sub packages. This enables dependent code to reduce the dependency footprint and compile times. In addition to this and a bunch of further improvements, a lot of performance tuning and some important REST interface additions went into this release.
 
-Note that the integration code for `std.concurrency` has been re-enabled with this release. This means that you can use `std.concurrency` without worrying about blocking the event loop now. However, there are a few imcompatibilities between `std.concurrency` and vibe.d's own version in `vibe.core.concurrency`, such as `std.concurrency` not supporting certain `shared(T)` or `Isolated!T` to be passed to spawned tasks. If you hit any issues that cannot be easily resolved, the usual vibe.d behavior is available in the form of "Compat" suffixed functions (i.e. `sendCompat`, `receiveCompat` etc.). But note that these functions operate on separate message queue structures, so mixing the "Compat" functions with non-"Compat" versions will not work.
+Note that the integration code for `std.concurrency` has been re-enabled with this release. This means that you can use `std.concurrency` without worrying about blocking the event loop now. However, there are a few incompatibilities between `std.concurrency` and vibe.d's own version in `vibe.core.concurrency`, such as `std.concurrency` not supporting certain `shared(T)` or `Isolated!T` to be passed to spawned tasks. If you hit any issues that cannot be easily resolved, the usual vibe.d behavior is available in the form of "Compat" suffixed functions (i.e. `sendCompat`, `receiveCompat` etc.). But note that these functions operate on separate message queue structures, so mixing the "Compat" functions with non-"Compat" versions will not work.
 
 ### Features and improvements ###
 
@@ -1957,7 +1960,7 @@ The most important improvements are easier setup on Linux and Mac and an importa
  
  - A good amount of performance tuning of the HTTP server
  - Implemented `vibe.core.core.yield()`. This can be used to break up long computations into smaller parts to reduce latency for other tasks
- - Added setup-linux.sh and setup-mac.sh scripts that set a symlink in /usr/bin and a config file in /etc/vibe (Thanks to Jordi Sayol)
+ - Added setup-linux.sh and setup-mac.sh scripts that set a symlink in /usr/bin and a configuration file in /etc/vibe (Thanks to Jordi Sayol)
  - Installed VPM modules are now passed as version identifiers "VPM_package_xyz" to the application to allow for optional features
  - Improved serialization of structs/classes to JSON/BSON - properties are now serialized and all non-field/property members are now ignored
  - Added directory handling functions to `vibe.core.file` (not using asynchronous operations, yet)
