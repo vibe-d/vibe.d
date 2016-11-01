@@ -8,7 +8,7 @@ v0.7.30 - 2016-10-31
 
 - General changes
   - Compiles on DMD 2.068.2 up to 2.072.0
-  - Added `runApplication` as a single API entry point to properly initialize and run a vibe.d application (this will serve as the basis for slowly fading out 
+  - Added `runApplication` as a single API entry point to properly initialize and run a vibe.d application (this will serve as the basis for slowly phasing out the `VibeDefaultMain` convenience mechanism)
   - Started using an SDLang based DUB package recipe (upgrade to DUB 1.0.0 if you haven't already)
   - Defining both, `VibeDefaultMain` and `VibeCustomMain`, results in a compile-time error to help uncover hidden build issues (by John Colvin) - [pull #1551][issue1551]
 - Web/REST interface generator
