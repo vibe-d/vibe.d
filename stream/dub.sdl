@@ -13,5 +13,6 @@ sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" plat
 sourcePaths "."
 importPaths "."
 libs "z" platform="ldc"
+libs "z" platform="gdc"
 copyFiles "../lib/win-i386/libeay32.dll" "../lib/win-i386/ssleay32.dll" platform="windows-x86"
 copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platform="windows-x86_64"
