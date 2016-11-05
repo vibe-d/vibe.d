@@ -1,5 +1,6 @@
 import vibe.core.core;
 import vibe.core.log;
+import vibe.inet.url;
 import vibe.http.server;
 import vibe.http.websockets;
 

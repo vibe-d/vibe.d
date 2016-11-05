@@ -1,0 +1,8 @@
+name "inet"
+description "Internet standard functionality"
+targetType "library"
+dependency "vibe-d:core" version="*"
+dependency "vibe-d:stream" version="*"
+dependency "vibe-d:textfilter" version="*"
+sourcePaths "."
+importPaths "."

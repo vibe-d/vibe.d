@@ -1,6 +1,7 @@
 import vibe.appmain;
 import vibe.core.file;
 import vibe.core.log;
+import vibe.core.path;
 import vibe.http.router;
 import vibe.http.server;
 

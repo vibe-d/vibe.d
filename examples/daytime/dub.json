@@ -2,7 +2,7 @@
 	"name": "daytime-example",
 	"description": "Requests the current time using the daytime protocol.",
 	"dependencies": {
-		"vibe-d:core": {"path": "../../"}
+		"vibe-d:stream": {"path": "../../"}
 	},
 	"versions": ["VibeCustomMain"]
 }

@@ -1,0 +1,6 @@
+name "data"
+description "Data format and serialization support"
+dependency "vibe-d:utils" version=">=0.0.0"
+targetType "library"
+sourcePaths "."
+importPaths "."
