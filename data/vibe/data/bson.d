@@ -1328,8 +1328,8 @@ struct BsonSerializer {
 
 	this(ubyte[] buffer)
 	{
-		import vibe.utils.memory;
-		m_dst = AllocAppender!(ubyte[])(defaultAllocator(), buffer);
+		import vibe.internal.utilallocator;
+		m_dst = AllocAppender!(ubyte[])(processAllocator(), buffer);
 	}
 
 	@disable this(this);

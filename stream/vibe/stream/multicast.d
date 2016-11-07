@@ -9,7 +9,6 @@ module vibe.stream.multicast;
 
 import vibe.core.core;
 import vibe.core.stream;
-import vibe.utils.memory;
 
 import std.exception;
 

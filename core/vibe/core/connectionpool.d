@@ -12,7 +12,7 @@ import vibe.core.driver;
 
 import core.thread;
 import vibe.core.sync;
-import vibe.utils.memory;
+import vibe.internal.freelistref;
 
 /**
 	Generic connection pool class.

@@ -26,7 +26,8 @@ import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.textfilter.urlencode;
 import vibe.utils.array;
-import vibe.utils.memory;
+import vibe.internal.allocator;
+import vibe.internal.freelistref;
 import vibe.utils.string;
 
 import core.atomic;
@@ -345,7 +346,7 @@ HTTPServerResponse createTestHTTPServerResponse(OutputStream data_sink = null, S
 	}
 	if (!data_sink) data_sink = new NullOutputStream;
 	auto stream = new ProxyStream(null, data_sink);
-	auto ret = new HTTPServerResponse(stream, null, settings, defaultAllocator());
+	auto ret = new HTTPServerResponse(stream, null, settings, processAllocator());
 	return ret;
 }
 
@@ -872,7 +873,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Stream m_conn;
 		ConnectionStream m_rawConnection;
 		OutputStream m_bodyWriter;
-		Allocator m_requestAlloc;
+		IAllocator m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
 		FreeListRef!CountingOutputStream m_countingWriter;
 		FreeListRef!GzipOutputStream m_gzipOutputStream;
@@ -885,7 +886,7 @@ final class HTTPServerResponse : HTTPResponse {
 		SysTime m_timeFinalized;
 	}
 
-	this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, Allocator req_alloc)
+	this(Stream conn, ConnectionStream raw_connection, HTTPServerSettings settings, IAllocator req_alloc)
 	{
 		m_conn = conn;
 		m_rawConnection = raw_connection;
@@ -1676,13 +1677,14 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 
 private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive)
 {
-	import std.algorithm : canFind;
+	import std.algorithm.searching : canFind;
+	import std.algorithm.comparison : max;
 
 	SysTime reqtime = Clock.currTime(UTC());
 
 	//auto request_allocator = scoped!(PoolAllocator)(1024, defaultAllocator());
-	scope request_allocator = new PoolAllocator(1024, threadLocalAllocator());
-	scope(exit) request_allocator.reset();
+	auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
+	scope request_allocator = request_allocator_s.allocatorObject;
 
 	// some instances that live only while the request is running
 	FreeListRef!HTTPServerRequest req = FreeListRef!HTTPServerRequest(reqtime, listen_info.bindPort);
@@ -1958,12 +1960,13 @@ private bool handleRequest(Stream http_stream, TCPConnection tcp_connection, HTT
 			log.log(req, res);
 	}
 
-	logTrace("return %s (used pool memory: %s/%s)", keep_alive, request_allocator.allocatedSize, request_allocator.totalSize);
+	//logTrace("return %s (used pool memory: %s/%s)", keep_alive, request_allocator.allocatedSize, request_allocator.totalSize);
+	logTrace("return %s", keep_alive);
 	return keep_alive != false;
 }
 
 
-private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, Allocator alloc, ulong max_header_size)
+private void parseRequestHeader(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size)
 {
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 
@@ -2047,7 +2050,7 @@ shared static this()
 	}
 }
 
-private string formatRFC822DateAlloc(Allocator alloc, SysTime time)
+private string formatRFC822DateAlloc(IAllocator alloc, SysTime time)
 {
 	auto app = AllocAppender!string(alloc);
 	writeRFC822DateTimeString(app, time);

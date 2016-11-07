@@ -17,7 +17,7 @@ import std.typetuple;
 import std.variant;
 import std.string;
 import vibe.core.task;
-import vibe.utils.memory;
+import vibe.internal.allocator;
 import vibe.internal.meta.traits : StripHeadConst;
 
 public import std.concurrency;
@@ -1080,6 +1080,8 @@ template isCopyable(T)
 	value.
 */
 struct Future(T) {
+	import vibe.internal.freelistref : FreeListRef;
+
 	private {
 		FreeListRef!(shared(T)) m_result;
 		Task m_task;
@@ -1131,6 +1133,8 @@ struct Future(T) {
 Future!(StripHeadConst!(ReturnType!CALLABLE)) async(CALLABLE, ARGS...)(CALLABLE callable, ARGS args)
 	if (is(typeof(callable(args)) == ReturnType!CALLABLE))
 {
+	import vibe.internal.freelistref : FreeListRef;
+
 	import vibe.core.core;
 	import std.functional : toDelegate;
 

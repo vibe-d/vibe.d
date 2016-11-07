@@ -23,7 +23,8 @@ import vibe.stream.operations;
 import vibe.stream.wrapper : ConnectionProxyStream;
 import vibe.stream.zlib;
 import vibe.utils.array;
-import vibe.utils.memory;
+import vibe.internal.allocator;
+import vibe.internal.freelistref;
 
 import core.exception : AssertError;
 import std.algorithm : splitter;
@@ -368,9 +369,10 @@ final class HTTPClient {
 	private void doProxyRequest(T, U)(T* res, U requester, ref bool close_conn, ref bool has_body)
 	{
 		version (VibeManualMemoryManagement) {
-			scope request_allocator = new PoolAllocator(1024, defaultAllocator());
-			scope(exit) request_allocator.reset();
-		} else auto request_allocator = defaultAllocator();
+			import std.algorithm.comparison : max;
+			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
+			scope request_allocator = request_allocator_s.allocatorObject;
+		} else auto request_allocator = GCAllocator.instance.allocatorObject;
 		import std.conv : to;
 
 		res.dropBody();
@@ -440,9 +442,10 @@ final class HTTPClient {
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	{
 		version (VibeManualMemoryManagement) {
-			scope request_allocator = new PoolAllocator(1024, defaultAllocator());
-			scope(exit) request_allocator.reset();
-		} else auto request_allocator = defaultAllocator();
+			import std.algorithm.comparison : max;
+			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
+			scope request_allocator = request_allocator_s.allocatorObject;
+		} else auto request_allocator = GCAllocator.instance.allocatorObject;
 
 		bool close_conn;
 		SysTime connected_time;
@@ -486,7 +489,7 @@ final class HTTPClient {
 		SysTime connected_time;
 		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 		m_responding = true;
-		auto res = new HTTPClientResponse(this, has_body, close_conn, defaultAllocator(), connected_time);
+		auto res = new HTTPClientResponse(this, has_body, close_conn, processAllocator(), connected_time);
 
 		// proxy implementation
 		if (res.headers.get("Proxy-Authenticate", null) !is null) {
@@ -833,7 +836,7 @@ final class HTTPClientResponse : HTTPResponse {
 	}
 
 	/// private
-	this(HTTPClient client, bool has_body, bool close_conn, Allocator alloc = defaultAllocator(), SysTime connected_time = Clock.currTime(UTC()))
+	this(HTTPClient client, bool has_body, bool close_conn, IAllocator alloc, SysTime connected_time = Clock.currTime(UTC()))
 	{
 		m_client = client;
 		m_closeConn = close_conn;

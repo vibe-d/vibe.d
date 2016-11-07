@@ -11,7 +11,7 @@ import vibe.core.log;
 import vibe.core.stream;
 import vibe.stream.operations;
 import vibe.utils.array;
-import vibe.utils.memory;
+import vibe.internal.allocator;
 import vibe.utils.string;
 import vibe.utils.dictionarylist;
 
@@ -32,7 +32,7 @@ import std.string;
 		alloc = Custom allocator to use for allocating strings
 		rfc822_compatible = Flag indicating that duplicate fields should be merged using a comma
 */
-void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, Allocator alloc = defaultAllocator(), bool rfc822_compatible = true)
+void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, IAllocator alloc = processAllocator(), bool rfc822_compatible = true)
 {
 	string hdr, hdrvalue;
 

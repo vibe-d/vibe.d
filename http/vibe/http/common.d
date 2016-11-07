@@ -15,7 +15,7 @@ import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
-import vibe.utils.memory;
+import vibe.internal.allocator;
 import vibe.utils.string;
 
 import std.algorithm;
@@ -437,7 +437,7 @@ final class ChunkedOutputStream : OutputStream {
 		ChunkExtensionCallback m_chunkExtensionCallback = null;
 	}
 
-	this(OutputStream stream, Allocator alloc = defaultAllocator())
+	this(OutputStream stream, IAllocator alloc = theAllocator())
 	{
 		m_out = stream;
 		m_buffer = AllocAppender!(ubyte[])(alloc);

@@ -7,7 +7,7 @@
 */
 module vibe.utils.array;
 
-import vibe.utils.memory;
+import vibe.internal.utilallocator;
 
 import std.algorithm;
 import std.range : isInputRange, isOutputRange;
@@ -45,11 +45,11 @@ struct AllocAppender(ArrayType : E[], E) {
 	private {
 		ElemType[] m_data;
 		ElemType[] m_remaining;
-		Allocator m_alloc;
+		IAllocator m_alloc;
 		bool m_allocatedBuffer = false;
 	}
 
-	this(Allocator alloc, ElemType[] initial_buffer = null)
+	this(IAllocator alloc, ElemType[] initial_buffer = null)
 	{
 		m_alloc = alloc;
 		m_data = initial_buffer;
@@ -63,7 +63,7 @@ struct AllocAppender(ArrayType : E[], E) {
 	void reset(AppenderResetMode reset_mode = AppenderResetMode.keepData)
 	{
 		if (reset_mode == AppenderResetMode.keepData) m_data = null;
-		else if (reset_mode == AppenderResetMode.freeData) { if (m_allocatedBuffer) m_alloc.free(m_data); m_data = null; }
+		else if (reset_mode == AppenderResetMode.freeData) { if (m_allocatedBuffer) m_alloc.deallocate(m_data); m_data = null; }
 		m_remaining = m_data;
 	}
 
@@ -78,7 +78,7 @@ struct AllocAppender(ArrayType : E[], E) {
 	{
 		size_t nelems = m_data.length - m_remaining.length;
 		if (!m_data.length) {
-			m_data = cast(ElemType[])m_alloc.alloc(amount*E.sizeof);
+			m_data = cast(ElemType[])m_alloc.allocate(amount*E.sizeof);
 			m_remaining = m_data;
 			m_allocatedBuffer = true;
 		}
@@ -87,9 +87,12 @@ struct AllocAppender(ArrayType : E[], E) {
 				import std.digest.crc;
 				auto checksum = crc32Of(m_data[0 .. nelems]);
 			}
-			if (m_allocatedBuffer) m_data = cast(ElemType[])m_alloc.realloc(m_data, (nelems+amount)*E.sizeof);
-			else {
-				auto newdata = cast(ElemType[])m_alloc.alloc((nelems+amount)*E.sizeof);
+			if (m_allocatedBuffer) {
+				void[] vdata = m_data;
+				m_alloc.reallocate(vdata, (nelems+amount)*E.sizeof);
+				m_data = () @trusted { return cast(ElemType[])vdata; } ();
+			} else {
+				auto newdata = cast(ElemType[])m_alloc.allocate((nelems+amount)*E.sizeof);
 				newdata[0 .. nelems] = m_data[0 .. nelems];
 				m_data = newdata;
 				m_allocatedBuffer = true;
@@ -173,7 +176,7 @@ struct AllocAppender(ArrayType : E[], E) {
 }
 
 unittest {
-	auto a = AllocAppender!string(defaultAllocator());
+	auto a = AllocAppender!string(theAllocator());
 	a.put("Hello");
 	a.put(' ');
 	a.put("World");
@@ -184,7 +187,7 @@ unittest {
 
 unittest {
 	char[4] buf;
-	auto a = AllocAppender!string(defaultAllocator(), buf);
+	auto a = AllocAppender!string(theAllocator(), buf);
 	a.put("He");
 	assert(a.data == "He");
 	assert(a.data.ptr == buf.ptr);
@@ -198,14 +201,14 @@ unittest {
 
 unittest {
 	char[4] buf;
-	auto a = AllocAppender!string(defaultAllocator(), buf);
+	auto a = AllocAppender!string(theAllocator(), buf);
 	a.put("Hello");
 	assert(a.data == "Hello");
 	assert(a.data.ptr != buf.ptr);
 }
 
 unittest {
-	auto app = AllocAppender!(int[])(defaultAllocator);
+	auto app = AllocAppender!(int[])(theAllocator);
 	app.reserve(2);
 	app.append((scope mem) {
 		assert(mem.length >= 2);
@@ -217,7 +220,7 @@ unittest {
 }
 
 unittest {
-	auto app = AllocAppender!string(defaultAllocator);
+	auto app = AllocAppender!string(theAllocator);
 	app.reserve(3);
 	app.append((scope mem) {
 		assert(mem.length >= 3);

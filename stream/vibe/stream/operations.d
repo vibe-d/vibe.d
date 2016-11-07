@@ -11,7 +11,8 @@ public import vibe.core.stream;
 
 import vibe.core.log;
 import vibe.utils.array : AllocAppender;
-import vibe.utils.memory;
+import vibe.internal.allocator;
+import vibe.internal.freelistref;
 import vibe.stream.wrapper : ProxyStream;
 
 import std.algorithm;
@@ -32,7 +33,7 @@ import std.range : isOutputRange;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", Allocator alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", IAllocator alloc = processAllocator()) /*@ufcs*/
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -113,7 +114,7 @@ unittest {
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, Allocator alloc = defaultAllocator()) /*@ufcs*/
+ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = processAllocator()) /*@ufcs*/
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -215,6 +216,8 @@ unittest {
 */
 ubyte[] readAll(InputStream stream, size_t max_bytes = size_t.max, size_t reserve_bytes = 0) /*@ufcs*/
 {
+	import vibe.internal.freelistref;
+
 	if (max_bytes == 0) logDebug("Deprecated behavior: readAll() called with max_bytes==0, use max_bytes==size_t.max instead.");
 
 	// prepare output buffer
@@ -278,6 +281,8 @@ string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes =
 */
 void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbytes = 0, Duration max_latency = 0.seconds)
 {
+	import vibe.internal.freelistref;
+
 	static struct Buffer { ubyte[64*1024] bytes = void; }
 	auto bufferobj = FreeListRef!(Buffer, false)();
 	auto buffer = bufferobj.bytes[];
