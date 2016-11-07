@@ -2,7 +2,7 @@ HTTP
 ====
 
  - defer writing the header of server responses to the second written chunk in case of using bodyWriter() - if only one chunk is ever written, write non-chunked instead
- - implement generators for http.rest to generate a JavaScript client and "documentation" with all possible requests.
+ - implement generators for http.rest to "documentation" with all possible requests.
  - support pipelining for HttpClient
 
 TCP
@@ -21,17 +21,9 @@ GENERAL
  - HTTP server comparison to nginx
  - Mention the API used for Diet templates on the /templates page
  - Implement a soft-shutdown in case of catching an Error (in conjunction with vibedist)
- - Add support for an entry "lowerPrivileges" to package.json which will use the system's 'vibe' user for priviledge lowering
  - Document the different -version specifiers that are possible
-
-DIET TEMPLATES
-==============
-
- - block comments
- - block default contents
  
 MARKDOWN FILTER
 ===============
 
- - see markdown.d
  - add SmartyPants support
