@@ -123,7 +123,6 @@ class LocalTaskSemaphore
 	// requires a queue
 	import std.container.binaryheap;
 	import std.container.array;
-	import vibe.utils.memory;
 
 	private {
 		struct Waiter {

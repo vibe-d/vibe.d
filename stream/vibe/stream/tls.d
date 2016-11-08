@@ -146,13 +146,13 @@ auto createTLSStreamFL(Stream underlying, TLSContext ctx, TLSStreamState state, 
 	// will have to semantically analyse it and subsequently will import the TLS
 	// implementation headers.
 	version (OpenSSL) {
-		import vibe.utils.memory;
+		import vibe.internal.freelistref;
 		import vibe.stream.openssl;
 		static assert(AllocSize!TLSStream > 0);
 		return FreeListRef!OpenSSLStream(underlying, cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
 	} else version (Botan) {
-		import vibe.utils.memory;
+		import vibe.internal.freelistref;
 		import vibe.stream.botan;
 		return FreeListRef!BotanTLSStream(cast(ConnectionStream) underlying, cast(BotanTLSContext) ctx, state, peer_name, peer_address);
 	} else assert(false, "No TLS support compiled in (VibeNoTLS)");

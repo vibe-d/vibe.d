@@ -11,8 +11,6 @@
 */
 module vibe.core.stream;
 
-import vibe.utils.memory : FreeListRef;
-
 import core.time;
 import std.algorithm;
 import std.conv;
@@ -111,8 +109,11 @@ interface OutputStream {
 
 	protected final void writeDefault(InputStream stream, ulong nbytes = 0)
 	{
+		import vibe.internal.allocator : dispose, make, theAllocator;
+
 		static struct Buffer { ubyte[64*1024] bytes = void; }
-		auto bufferobj = FreeListRef!(Buffer, false)();
+		auto bufferobj = theAllocator.make!Buffer;
+		scope (exit) theAllocator.dispose(bufferobj);
 		auto buffer = bufferobj.bytes[];
 
 		//logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);

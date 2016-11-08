@@ -336,12 +336,12 @@ final class OpenSSLStream : TLSStream {
 	private void setClientALPN(string[] alpn_list)
 	{
 		logDebug("SetClientALPN: ", alpn_list);
-		import vibe.utils.memory : allocArray, freeArray, manualAllocator;
+		import vibe.internal.allocator : dispose, makeArray, processAllocator;
 		ubyte[] alpn;
 		size_t len;
 		foreach (string alpn_val; alpn_list)
 			len += alpn_val.length + 1;
-		alpn = allocArray!ubyte(manualAllocator(), len);
+		alpn = processAllocator.makeArray!ubyte(len);
 
 		size_t i;
 		foreach (string alpn_val; alpn_list)
@@ -355,7 +355,7 @@ final class OpenSSLStream : TLSStream {
 		static if (haveALPN)
 			SSL_set_alpn_protos(m_ssl, cast(const char*) alpn.ptr, cast(uint) len);
 
-		freeArray(manualAllocator(), alpn);
+		processAllocator.dispose(alpn);
 	}
 }
 

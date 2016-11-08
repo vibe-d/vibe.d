@@ -9,7 +9,6 @@ module vibe.stream.zlib;
 
 import vibe.core.stream;
 import vibe.utils.array;
-import vibe.utils.memory;
 
 import std.algorithm;
 import std.exception;

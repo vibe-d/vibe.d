@@ -19,7 +19,8 @@ import vibe.core.log;
 import vibe.internal.meta.traits : synchronizedIsNothrow;
 import vibe.utils.array : ArraySet;
 import vibe.utils.hashmap;
-import vibe.utils.memory;
+import vibe.internal.allocator;
+import vibe.internal.freelistref;
 
 import core.memory;
 import core.atomic;
@@ -81,6 +82,8 @@ final class Libevent2Driver : EventDriver {
 		size_t m_addressInfoCacheLength = 0;
 
 		bool m_running = false; // runEventLoop in progress?
+
+		IAllocator m_allocator;
 	}
 
 	this(DriverCore core) nothrow
@@ -88,6 +91,9 @@ final class Libevent2Driver : EventDriver {
 		debug m_ownerThread = Thread.getThis();
 		m_core = core;
 		s_driverCore = core;
+
+		m_allocator = Mallocator.instance.allocatorObject;
+		s_driver = this;
 
 		synchronized if (!s_threadObjectsMutex) {
 			s_threadObjectsMutex = new Mutex;
@@ -646,7 +652,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		super(driver);
 		scope (failure) assert(false);
 		m_mutex = new core.sync.mutex.Mutex;
-		m_waiters = ThreadSlotMap(manualAllocator());
+		m_waiters = ThreadSlotMap(driver.m_allocator);
 	}
 
 	~this()
@@ -1224,7 +1230,9 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 
 
 private {
+
 	event_base* s_eventLoop; // TLS
+	Libevent2Driver s_driver;
 	__gshared DriverCore s_driverCore;
 	__gshared Mutex s_threadObjectsMutex;
 	__gshared ArraySet!size_t s_threadObjects;
@@ -1277,7 +1285,7 @@ private nothrow extern(C)
 	void* lev_alloc(size_t size)
 	{
 		try {
-			auto mem = threadLocalManualAllocator().alloc(size+size_t.sizeof);
+			auto mem = s_driver.m_allocator.allocate(size+size_t.sizeof);
 			*cast(size_t*)mem.ptr = size;
 			return mem.ptr + size_t.sizeof;
 		} catch (UncaughtException th) {
@@ -1291,7 +1299,8 @@ private nothrow extern(C)
 			if( !p ) return lev_alloc(newsize);
 			auto oldsize = *cast(size_t*)(p-size_t.sizeof);
 			auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
-			auto newmem = threadLocalManualAllocator().realloc(oldmem, newsize+size_t.sizeof);
+			auto newmem = oldmem;
+			s_driver.m_allocator.reallocate(newmem, newsize+size_t.sizeof);
 			*cast(size_t*)newmem.ptr = newsize;
 			return newmem.ptr + size_t.sizeof;
 		} catch (UncaughtException th) {
@@ -1304,7 +1313,7 @@ private nothrow extern(C)
 		try {
 			auto size = *cast(size_t*)(p-size_t.sizeof);
 			auto mem = (p-size_t.sizeof)[0 .. size+size_t.sizeof];
-			threadLocalManualAllocator().free(mem);
+			s_driver.m_allocator.deallocate(mem);
 		} catch (UncaughtException th) {
 			logCritical("Exception in lev_free: %s", th.msg);
 			assert(false);

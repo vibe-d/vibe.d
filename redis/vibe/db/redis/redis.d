@@ -13,7 +13,8 @@ import vibe.core.connectionpool;
 import vibe.core.core;
 import vibe.core.log;
 import vibe.inet.url;
-import vibe.utils.memory : allocArray, freeArray, manualAllocator, defaultAllocator;
+import vibe.internal.allocator;
+import vibe.internal.freelistref;
 import vibe.stream.operations;
 import std.conv;
 import std.exception;
@@ -633,8 +634,6 @@ import std.algorithm : canFind;
 import std.range : takeOne;
 import std.array : array;
 
-import vibe.utils.memory;
-
 alias RedisSubscriber = FreeListRef!RedisSubscriberImpl;
 
 final class RedisSubscriberImpl {
@@ -989,16 +988,13 @@ final class RedisSubscriberImpl {
 
 		void pubsub_handler() {
 			TCPConnection conn = m_lockedConnection.conn;
-			ubyte[] newLine = allocArray!ubyte(manualAllocator(), 1);
-			scope(exit) freeArray(manualAllocator(), newLine);
 			logTrace("Pubsub handler");
 			void delegate() dropCRLF = {
-				conn.read(newLine);
-				conn.read(newLine);
+				ubyte[2] crlf;
+				conn.read(crlf);
 			};
 			size_t delegate() readArgs = {
-				char[] ucnt = allocArray!char(manualAllocator(), 8);
-				scope(exit) freeArray(manualAllocator(), ucnt);
+				char[8] ucnt;
 				ubyte num;
 				size_t i;
 				do {
@@ -1009,7 +1005,8 @@ final class RedisSubscriberImpl {
 					i++;
 				}
 				while (true); // ascii
-				conn.read(newLine);
+				ubyte[1] b;
+				conn.read(b);
 				logTrace("Found %s", ucnt);
 				// the new line is consumed when num is not in range.
 				return ucnt[0 .. i].to!size_t;
@@ -1023,30 +1020,29 @@ final class RedisSubscriberImpl {
 			conn.read((&symbol)[0 .. 1]);
 			enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
 			size_t cnt = readArgs();
-			ubyte[] cmd = allocArray!ubyte(manualAllocator(), cnt);
-			scope(exit) freeArray(manualAllocator(), cmd);
+			ubyte[] cmd = theAllocator.makeArray!ubyte(cnt);
+			scope(exit) theAllocator.dispose(cmd);
 			conn.read(cmd);
 			dropCRLF();
 			// find the channel
 			conn.read((&symbol)[0 .. 1]);
 			enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
 			cnt = readArgs();
-			ubyte[] str = allocArray!ubyte(manualAllocator(), cnt);
+			ubyte[] str = new ubyte[cnt];
 			conn.read(str);
 			dropCRLF();
-			string channel = cast(string) str.idup; // copy to GC to avoid bugs
-			freeArray(manualAllocator(), str);
+			string channel = cast(string)str;
 			logTrace("chan: %s", channel);
 
 			if (cmd == "message") { // find the message
 				conn.read((&symbol)[0 .. 1]);
 				enforce(symbol == '$', "Expected '$', got '" ~ symbol.to!string ~ "'");
 				cnt = readArgs();
-				str = allocArray!ubyte(manualAllocator(), cnt);
+				str = theAllocator.makeArray!ubyte(cnt);
 				conn.read(str); // channel
 				string message = cast(string) str.idup; // copy to GC to avoid bugs
 				logTrace("msg: %s", message);
-				freeArray(manualAllocator(), str);
+				theAllocator.dispose(str);
 				dropCRLF();
 				onMessage(channel, message);
 			}
@@ -1180,8 +1176,6 @@ final class RedisSubscriberImpl {
 /** Range interface to a single Redis reply.
 */
 struct RedisReply(T = ubyte[]) {
-	import vibe.utils.memory : FreeListRef;
-
 	static assert(isInputRange!RedisReply);
 
 	private {

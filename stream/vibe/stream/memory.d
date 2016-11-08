@@ -9,7 +9,7 @@ module vibe.stream.memory;
 
 import vibe.core.stream;
 import vibe.utils.array;
-import vibe.utils.memory;
+import vibe.internal.allocator;
 
 import std.algorithm;
 import std.array;
@@ -25,7 +25,7 @@ final class MemoryOutputStream : OutputStream {
 		AllocAppender!(ubyte[]) m_destination;
 	}
 
-	this(Allocator alloc = defaultAllocator())
+	this(IAllocator alloc = processAllocator())
 	{
 		m_destination = AllocAppender!(ubyte[])(alloc);
 	}

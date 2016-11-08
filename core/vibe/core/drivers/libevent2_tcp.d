@@ -15,7 +15,7 @@ public import vibe.core.core;
 import vibe.core.log;
 import vibe.core.drivers.libevent2;
 import vibe.core.drivers.utils;
-import vibe.utils.memory;
+import vibe.internal.freelistref;
 
 import deimos.event2.buffer;
 import deimos.event2.bufferevent;
