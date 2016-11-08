@@ -15,7 +15,6 @@ import vibe.core.driver;
 import vibe.core.drivers.timerqueue;
 import vibe.core.drivers.utils;
 import vibe.core.log;
-import vibe.inet.url;
 import vibe.internal.win32;
 import vibe.internal.meta.traits : synchronizedIsNothrow;
 import vibe.utils.array;
