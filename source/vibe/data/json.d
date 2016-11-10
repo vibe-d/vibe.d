@@ -971,12 +971,12 @@ struct Json {
 	@trusted {
 		// DMD BUG: this should actually be all @safe, but for some reason
 		// @safe inference for writeJsonString doesn't work.
-		static struct DummyRange {
+		static struct DummyRangeS {
 			void delegate(const(char)[]) @safe sink;
 			void put(const(char)[] str) @safe { sink(str); }
 			void put(char ch) @trusted { sink((&ch)[0 .. 1]); }
 		}
-		auto r = DummyRange(sink);
+		auto r = DummyRangeS(sink);
 		writeJsonString(r, this);
 	}
 	/// ditto
