@@ -15,163 +15,165 @@ pkgc = import('pkgconfig')
 src_dir = include_directories('source/')
 
 vibe_main_src = [
-    'source/vibe/appmain.d',
     'source/vibe/d.d',
     'source/vibe/vibe.d'
 ]
 install_headers(vibe_main_src, subdir: 'd/vibe')
 
 vibe_core_src = [
-    'source/vibe/core/task.d',
-    'source/vibe/core/sync.d',
-    'source/vibe/core/concurrency.d',
-    'source/vibe/core/file.d',
-    'source/vibe/core/log.d',
-    'source/vibe/core/connectionpool.d',
-    'source/vibe/core/args.d',
-    'source/vibe/core/stream.d',
-    'source/vibe/core/drivers/libasync.d',
-    'source/vibe/core/drivers/utils.d',
-    'source/vibe/core/drivers/native.d',
-    'source/vibe/core/drivers/threadedfile.d',
-    'source/vibe/core/drivers/libevent2.d',
-    'source/vibe/core/drivers/winrt.d',
-    'source/vibe/core/drivers/timerqueue.d',
-    'source/vibe/core/drivers/win32.d',
-    'source/vibe/core/drivers/libevent2_tcp.d',
-    'source/vibe/core/net.d',
-    'source/vibe/core/core.d',
-    'source/vibe/core/driver.d'
+    'core/source/vibe/appmain.d',
+    'core/source/vibe/core/task.d',
+    'core/source/vibe/core/sync.d',
+    'core/source/vibe/core/concurrency.d',
+    'core/source/vibe/core/file.d',
+    'core/source/vibe/core/log.d',
+    'core/source/vibe/core/connectionpool.d',
+    'core/source/vibe/core/args.d',
+    'core/source/vibe/core/stream.d',
+    'core/source/vibe/core/drivers/libasync.d',
+    'core/source/vibe/core/drivers/utils.d',
+    'core/source/vibe/core/drivers/native.d',
+    'core/source/vibe/core/drivers/threadedfile.d',
+    'core/source/vibe/core/drivers/libevent2.d',
+    'core/source/vibe/core/drivers/winrt.d',
+    'core/source/vibe/core/drivers/timerqueue.d',
+    'core/source/vibe/core/drivers/win32.d',
+    'core/source/vibe/core/drivers/libevent2_tcp.d',
+    'core/source/vibe/core/net.d',
+    'core/source/vibe/core/core.d',
+    'core/source/vibe/core/driver.d',
+    'core/source/vibe/internal/allocator.d',
+    'core/source/vibe/internal/freelistref.d'
 ]
 install_headers(vibe_core_src, subdir: 'd/vibe/core')
 
 vibe_crypto_src = [
-    'source/vibe/crypto/passwordhash.d',
-    'source/vibe/crypto/cryptorand.d'
+    'crypto/source/vibe/crypto/passwordhash.d',
+    'crypto/source/vibe/crypto/cryptorand.d'
 ]
 install_headers(vibe_crypto_src, subdir: 'd/vibe/crypto')
 
 vibe_inet_src = [
-    'source/vibe/inet/path.d',
-    'source/vibe/inet/url.d',
-    'source/vibe/inet/mimetypes.d',
-    'source/vibe/inet/webform.d',
-    'source/vibe/inet/urltransfer.d',
-    'source/vibe/inet/message.d'
+    'inet/source/vibe/inet/path.d',
+    'inet/source/vibe/inet/url.d',
+    'inet/source/vibe/inet/mimetypes.d',
+    'inet/source/vibe/inet/webform.d',
+    'inet/source/vibe/inet/urltransfer.d',
+    'inet/source/vibe/inet/message.d'
 ]
 install_headers(vibe_inet_src, subdir: 'd/vibe/inet')
 
 vibe_stream_src = [
-    'source/vibe/stream/botan.d',
-    'source/vibe/stream/counting.d',
-    'source/vibe/stream/taskpipe.d',
-    'source/vibe/stream/base64.d',
-    'source/vibe/stream/zlib.d',
-    'source/vibe/stream/stdio.d',
-    'source/vibe/stream/multicast.d',
-    'source/vibe/stream/openssl.d',
-    'source/vibe/stream/tls.d',
-    'source/vibe/stream/operations.d',
-    'source/vibe/stream/memory.d',
-    'source/vibe/stream/wrapper.d'
+    'stream/source/vibe/stream/botan.d',
+    'stream/source/vibe/stream/counting.d',
+    'stream/source/vibe/stream/taskpipe.d',
+    'stream/source/vibe/stream/base64.d',
+    'stream/source/vibe/stream/zlib.d',
+    'stream/source/vibe/stream/stdio.d',
+    'stream/source/vibe/stream/multicast.d',
+    'stream/source/vibe/stream/openssl.d',
+    'stream/source/vibe/stream/tls.d',
+    'stream/source/vibe/stream/operations.d',
+    'stream/source/vibe/stream/memory.d',
+    'stream/source/vibe/stream/wrapper.d'
 ]
 install_headers(vibe_stream_src, subdir: 'd/vibe/stream')
 
 vibe_textfilter_src = [
-    'source/vibe/textfilter/markdown.d',
-    'source/vibe/textfilter/urlencode.d',
-    'source/vibe/textfilter/html.d'
+    'textfilter/source/vibe/textfilter/markdown.d',
+    'textfilter/source/vibe/textfilter/urlencode.d',
+    'textfilter/source/vibe/textfilter/html.d'
 ]
 install_headers(vibe_textfilter_src, subdir: 'd/vibe/textfilter')
 
 vibe_utils_src = [
-    'source/vibe/utils/validation.d',
-    'source/vibe/utils/hashmap.d',
-    'source/vibe/utils/array.d',
-    'source/vibe/utils/dictionarylist.d',
-    'source/vibe/utils/memory.d',
-    'source/vibe/utils/string.d'
+    'utils/source/vibe/utils/validation.d',
+    'utils/source/vibe/utils/hashmap.d',
+    'utils/source/vibe/utils/array.d',
+    'utils/source/vibe/utils/dictionarylist.d',
+    'utils/source/vibe/utils/memory.d',
+    'utils/source/vibe/utils/string.d'
 ]
 install_headers(vibe_utils_src, subdir: 'd/vibe/utils')
 
 vibe_internal_src = [
-    'source/vibe/internal/win32.d',
-    'source/vibe/internal/meta/funcattr.d',
-    'source/vibe/internal/meta/traits.d',
-    'source/vibe/internal/meta/typetuple.d',
-    'source/vibe/internal/meta/codegen.d',
-    'source/vibe/internal/meta/all.d',
-    'source/vibe/internal/meta/uda.d',
-    'source/vibe/internal/rangeutil.d'
+    'utils/source/vibe/internal/win32.d',
+    'utils/source/vibe/internal/meta/funcattr.d',
+    'utils/source/vibe/internal/meta/traits.d',
+    'utils/source/vibe/internal/meta/typetuple.d',
+    'utils/source/vibe/internal/meta/codegen.d',
+    'utils/source/vibe/internal/meta/all.d',
+    'utils/source/vibe/internal/meta/uda.d',
+    'utils/source/vibe/internal/rangeutil.d'
 ]
 install_headers(vibe_internal_src, subdir: 'd/vibe/internal')
 
 vibe_data_src = [
-    'source/vibe/data/bson.d',
-    'source/vibe/data/serialization.d',
-    'source/vibe/data/json.d'
+    'data/source/vibe/data/bson.d',
+    'data/source/vibe/data/serialization.d',
+    'data/source/vibe/data/json.d'
 ]
 install_headers(vibe_data_src, subdir: 'd/vibe/data')
 
 vibe_http_src = [
-    'source/vibe/http/session.d',
-    'source/vibe/http/proxy.d',
-    'source/vibe/http/dist.d',
-    'source/vibe/http/router.d',
-    'source/vibe/http/common.d',
-    'source/vibe/http/server.d',
-    'source/vibe/http/log.d',
-    'source/vibe/http/auth/basic_auth.d',
-    'source/vibe/http/auth/digest_auth.d',
-    'source/vibe/http/websockets.d',
-    'source/vibe/http/client.d',
-    'source/vibe/http/form.d',
-    'source/vibe/http/fileserver.d',
-    'source/vibe/http/status.d'
+    'http/source/vibe/http/session.d',
+    'http/source/vibe/http/proxy.d',
+    'http/source/vibe/http/dist.d',
+    'http/source/vibe/http/router.d',
+    'http/source/vibe/http/common.d',
+    'http/source/vibe/http/server.d',
+    'http/source/vibe/http/log.d',
+    'http/source/vibe/http/auth/basic_auth.d',
+    'http/source/vibe/http/auth/digest_auth.d',
+    'http/source/vibe/http/websockets.d',
+    'http/source/vibe/http/client.d',
+    'http/source/vibe/http/form.d',
+    'http/source/vibe/http/fileserver.d',
+    'http/source/vibe/http/status.d'
 ]
 install_headers(vibe_http_src, subdir: 'd/vibe/http')
 
 vibe_mail_src = [
-    'source/vibe/mail/smtp.d',
+    'mail/source/vibe/mail/smtp.d',
 ]
 install_headers(vibe_mail_src, subdir: 'd/vibe/mail')
 
 vibe_diet_src = [
-    'source/vibe/templ/parsertools.d',
-    'source/vibe/templ/utils.d',
-    'source/vibe/templ/diet.d'
+    'templ/source/vibe/templ/parsertools.d',
+    'templ/source/vibe/templ/utils.d',
+    'templ/source/vibe/templ/diet.d'
 ]
 install_headers(vibe_diet_src, subdir: 'd/vibe/templ')
 
 vibe_db_mongo_src = [
-    'source/vibe/db/mongo/connection.d',
-    'source/vibe/db/mongo/database.d',
-    'source/vibe/db/mongo/cursor.d',
-    'source/vibe/db/mongo/collection.d',
-    'source/vibe/db/mongo/client.d',
-    'source/vibe/db/mongo/mongo.d',
-    'source/vibe/db/mongo/settings.d',
-    'source/vibe/db/mongo/flags.d'
+    'mongo/source/vibe/db/mongo/connection.d',
+    'mongo/source/vibe/db/mongo/database.d',
+    'mongo/source/vibe/db/mongo/cursor.d',
+    'mongo/source/vibe/db/mongo/collection.d',
+    'mongo/source/vibe/db/mongo/client.d',
+    'mongo/source/vibe/db/mongo/mongo.d',
+    'mongo/source/vibe/db/mongo/settings.d',
+    'mongo/source/vibe/db/mongo/flags.d'
 ]
 install_headers(vibe_db_mongo_src, subdir: 'd/vibe/db/mongo')
 
 vibe_db_redis_src = [
-    'source/vibe/db/redis/idioms.d',
-    'source/vibe/db/redis/types.d',
-    'source/vibe/db/redis/sessionstore.d',
-    'source/vibe/db/redis/redis.d'
+    'redis/source/vibe/db/redis/idioms.d',
+    'redis/source/vibe/db/redis/types.d',
+    'redis/source/vibe/db/redis/sessionstore.d',
+    'redis/source/vibe/db/redis/redis.d'
 ]
 install_headers(vibe_db_redis_src, subdir: 'd/vibe/db/redis')
 
 vibe_web_src = [
-    'source/vibe/web/validation.d',
-    'source/vibe/web/common.d',
-    'source/vibe/web/web.d',
-    'source/vibe/web/internal/rest/common.d',
-    'source/vibe/web/internal/rest/jsclient.d',
-    'source/vibe/web/auth.d',
-    'source/vibe/web/rest.d',
-    'source/vibe/web/i18n.d'
+    'web/source/vibe/web/validation.d',
+    'web/source/vibe/web/common.d',
+    'web/source/vibe/web/web.d',
+    'web/source/vibe/web/internal/rest/common.d',
+    'web/source/vibe/web/internal/rest/jsclient.d',
+    'web/source/vibe/web/auth.d',
+    'web/source/vibe/web/rest.d',
+    'web/source/vibe/web/i18n.d'
 ]
 install_headers(vibe_web_src, subdir: 'd/vibe/web')
 
