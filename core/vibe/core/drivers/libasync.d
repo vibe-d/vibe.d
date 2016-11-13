@@ -14,7 +14,6 @@ import vibe.core.driver;
 import vibe.core.drivers.threadedfile;
 import vibe.core.drivers.timerqueue;
 import vibe.core.log;
-import vibe.inet.path;
 import vibe.utils.array : FixedRingBuffer;
 
 import libasync;
