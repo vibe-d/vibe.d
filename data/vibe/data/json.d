@@ -1551,6 +1551,28 @@ unittest { // const and mutable json
 	assert(serializeToJson(k) == Json(2));
 }
 
+unittest {
+	import std.stdio;
+
+	bool hasException;
+
+	struct Child {
+		string b;
+	}
+	struct Item {
+		Child c;
+	}
+
+	try {
+		Item a = deserializeJson!Item("{ \"c\": 3}");
+	} catch(Exception e) {
+		assert(e.msg == "Expecting `c` to be object.");
+		hasException = true;
+	}
+
+	assert(hasException);
+}
+
 
 /**
 	Serializer for a plain Json representation.
@@ -1563,6 +1585,7 @@ struct JsonSerializer {
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	private {
+		string m_currentFieldName;
 		Json m_current;
 		Json[] m_compositeStack;
 	}
@@ -1600,7 +1623,7 @@ struct JsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) field_handler)
 	{
-		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
+		enforceJson(m_current.type == Json.Type.object, "Expected `" ~ m_currentFieldName ~ "` to be JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
 		foreach (string key, value; m_current) {
 			m_current = value;
@@ -1609,7 +1632,9 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	void beginReadDictionaryEntry(Traits)(string name) {}
+	void beginReadDictionaryEntry(Traits)(string name) {
+		m_currentFieldName = name;
+	}
 	void endReadDictionaryEntry(Traits)(string name) {}
 
 	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
@@ -1755,12 +1780,13 @@ struct JsonStringSerializer(R, bool pretty = false)
 	static if (isInputRange!(R)) {
 		private {
 			int m_line = 0;
+			string m_currentFieldName;
 		}
 
 		void readDictionary(Traits)(scope void delegate(string) entry_callback)
 		{
 			m_range.skipWhitespace(&m_line);
-			enforceJson(!m_range.empty && m_range.front == '{', "Expecting object.");
+			enforceJson(!m_range.empty && m_range.front == '{', "Expecting `" ~ m_currentFieldName ~ "` to be object.");
 			m_range.popFront();
 			bool first = true;
 			while(true) {
@@ -1785,7 +1811,9 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 		}
 
-		void beginReadDictionaryEntry(Traits)(string name) {}
+		void beginReadDictionaryEntry(Traits)(string name) {
+			m_currentFieldName = name;
+		}
 		void endReadDictionaryEntry(Traits)(string name) {}
 
 		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
