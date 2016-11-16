@@ -1562,6 +1562,7 @@ struct JsonSerializer {
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	private {
+		string[] m_currentPath;
 		Json m_current;
 		Json[] m_compositeStack;
 	}
@@ -1569,6 +1570,11 @@ struct JsonSerializer {
 	this(Json data) { m_current = data; }
 
 	@disable this(this);
+
+	private string addCurrentPath(string msg) {
+		auto path = m_currentPath.join(".") ~ ": ";
+		return msg.indexOf(path) == -1 ? path ~ msg : msg;
+	}
 
 	//
 	// serialization
@@ -1599,7 +1605,7 @@ struct JsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) field_handler)
 	{
-		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
+		enforceJson(m_current.type == Json.Type.object, addCurrentPath("Expected JSON object, got " ~ m_current.type.to!string));
 		auto old = m_current;
 		foreach (string key, value; m_current) {
 			m_current = value;
@@ -1608,13 +1614,12 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	void beginReadDictionaryEntry(Traits)(string name) {
-	}
-	void endReadDictionaryEntry(Traits)(string name) {}
+	void beginReadDictionaryEntry(Traits)(string name) { m_currentPath ~= name; }
+	void endReadDictionaryEntry(Traits)(string name) { m_currentPath.length--; }
 
 	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
-		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
+		enforceJson(m_current.type == Json.Type.array, addCurrentPath("Expected JSON array, got "~m_current.type.to!string));
 		auto old = m_current;
 		size_callback(m_current.length);
 		foreach (ent; old) {
@@ -1624,30 +1629,34 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	void beginReadArrayEntry(Traits)(size_t index) {}
-	void endReadArrayEntry(Traits)(size_t index) {}
+	void beginReadArrayEntry(Traits)(size_t index) { m_currentPath ~= index.to!string; }
+	void endReadArrayEntry(Traits)(size_t index) { m_currentPath.length--; }
 
 	T readValue(Traits, T)()
 	{
-		static if (is(T == Json)) return m_current;
-		else static if (isJsonSerializable!T) return T.fromJson(m_current);
-		else static if (is(T == float) || is(T == double)) {
-			switch (m_current.type) {
-				default: return cast(T)m_current.get!long;
-				case Json.Type.null_: goto case;
-				case Json.Type.undefined: return T.nan;
-				case Json.Type.float_: return cast(T)m_current.get!double;
-				case Json.Type.bigInt: return cast(T)m_current.bigIntToLong();
+		try {
+			static if (is(T == Json)) return m_current;
+			else static if (isJsonSerializable!T) return T.fromJson(m_current);
+			else static if (is(T == float) || is(T == double)) {
+				switch (m_current.type) {
+					default: return cast(T)m_current.get!long;
+					case Json.Type.null_: goto case;
+					case Json.Type.undefined: return T.nan;
+					case Json.Type.float_: return cast(T)m_current.get!double;
+					case Json.Type.bigInt: return cast(T)m_current.bigIntToLong();
+				}
 			}
-		}
-		else {
-			return m_current.get!T();
+			else {
+				return m_current.get!T();
+			}
+		} catch (JSONException e) {
+			e.msg = addCurrentPath(e.msg);
+			throw e;
 		}
 	}
 
 	bool tryReadNull(Traits)() { return m_current.type == Json.Type.null_; }
 }
-
 
 unittest {
 	import std.stdio;
@@ -1660,20 +1669,22 @@ unittest {
 		Child[] d;
 	}
 
-	try "{ \"c\": 3 }".deserializeJson!Item;
-	catch(Exception e) assert(e.msg == "c: Expecting to be object.");
+	auto obj = "{ \"c\": 3 }".parseJsonString;
+	try obj.deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "c: Expected JSON object, got int_");
 
-	try "{ \"c\": { \"b\": 1 }}}".deserializeJson!Item;
-	catch(Exception e) assert(e.msg == "c.b: Expected '\"' to start string.");
+	obj = "{ \"c\": { \"b\": 1 }}".parseJsonString;
+	try obj.deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "c.b: Got JSON of type int_, expected string.");
 
-	try "{ \"d\": 1 }".deserializeJson!Item;
-	catch(Exception e) assert(e.msg == "d: Expecting array.");
+	obj = "{ \"d\": 1 }".parseJsonString;
+	try obj.deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "d: Expected JSON array, got int_");
 
-
-	try "{ \"d\": [{\"b\": 4 }] }".deserializeJson!Item;
-	catch(Exception e) assert(e.msg == "d.0.b: Expected '\"' to start string.");
+	obj = "{ \"d\": [{\"b\": 4 }] }".parseJsonString;
+	try obj.deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "d.0.b: Got JSON of type int_, expected string.");
 }
-
 
 /**
 	Serializer for a range based plain JSON string representation.
@@ -1900,6 +1911,30 @@ struct JsonStringSerializer(R, bool pretty = false)
 			return true;
 		}
 	}
+}
+
+unittest {
+	import std.stdio;
+
+	struct Child {
+		string b;
+	}
+	struct Item {
+		Child c;
+		Child[] d;
+	}
+
+	try "{ \"c\": 3 }".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "c: Expecting to be object.");
+
+	try "{ \"c\": { \"b\": 1 }}}".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "c.b: Expected '\"' to start string.");
+
+	try "{ \"d\": 1 }".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "d: Expecting array.");
+
+	try "{ \"d\": [{\"b\": 4 }] }".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "d.0.b: Expected '\"' to start string.");
 }
 
 unittest
