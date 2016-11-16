@@ -1551,29 +1551,6 @@ unittest { // const and mutable json
 	assert(serializeToJson(k) == Json(2));
 }
 
-unittest {
-	import std.stdio;
-
-	bool hasException;
-
-	struct Child {
-		string b;
-	}
-	struct Item {
-		Child c;
-	}
-
-	try {
-		Item a = deserializeJson!Item("{ \"c\": 3}");
-	} catch(Exception e) {
-		assert(e.msg == "Expecting `c` to be object.");
-		hasException = true;
-	}
-
-	assert(hasException);
-}
-
-
 /**
 	Serializer for a plain Json representation.
 
@@ -1585,7 +1562,6 @@ struct JsonSerializer {
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	private {
-		string m_currentFieldName;
 		Json m_current;
 		Json[] m_compositeStack;
 	}
@@ -1623,7 +1599,7 @@ struct JsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) field_handler)
 	{
-		enforceJson(m_current.type == Json.Type.object, "Expected `" ~ m_currentFieldName ~ "` to be JSON object, got "~m_current.type.to!string);
+		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
 		foreach (string key, value; m_current) {
 			m_current = value;
@@ -1633,7 +1609,6 @@ struct JsonSerializer {
 	}
 
 	void beginReadDictionaryEntry(Traits)(string name) {
-		m_currentFieldName = name;
 	}
 	void endReadDictionaryEntry(Traits)(string name) {}
 
@@ -1674,6 +1649,32 @@ struct JsonSerializer {
 }
 
 
+unittest {
+	import std.stdio;
+
+	struct Child {
+		string b;
+	}
+	struct Item {
+		Child c;
+		Child[] d;
+	}
+
+	try "{ \"c\": 3 }".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "c: Expecting to be object.");
+
+	try "{ \"c\": { \"b\": 1 }}}".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "c.b: Expected '\"' to start string.");
+
+	try "{ \"d\": 1 }".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "d: Expecting array.");
+
+
+	try "{ \"d\": [{\"b\": 4 }] }".deserializeJson!Item;
+	catch(Exception e) assert(e.msg == "d.0.b: Expected '\"' to start string.");
+}
+
+
 /**
 	Serializer for a range based plain JSON string representation.
 
@@ -1683,6 +1684,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 	if (isInputRange!R || isOutputRange!(R, char))
 {
 	private {
+		string[] m_currentPath;
 		R m_range;
 		size_t m_level = 0;
 	}
@@ -1697,6 +1699,11 @@ struct JsonStringSerializer(R, bool pretty = false)
 	}
 
 	@disable this(this);
+
+	private string addCurrentPath(string msg) {
+		auto path = m_currentPath.join(".") ~ ": ";
+		return msg.indexOf(path) == -1 ? path ~ msg : msg;
+	}
 
 	//
 	// serialization
@@ -1780,41 +1787,45 @@ struct JsonStringSerializer(R, bool pretty = false)
 	static if (isInputRange!(R)) {
 		private {
 			int m_line = 0;
-			string m_currentFieldName;
 		}
 
 		void readDictionary(Traits)(scope void delegate(string) entry_callback)
 		{
-			m_range.skipWhitespace(&m_line);
-			enforceJson(!m_range.empty && m_range.front == '{', "Expecting `" ~ m_currentFieldName ~ "` to be object.");
-			m_range.popFront();
-			bool first = true;
-			while(true) {
+			try {
 				m_range.skipWhitespace(&m_line);
-				enforceJson(!m_range.empty, "Missing '}'.");
-				if (m_range.front == '}') {
-					m_range.popFront();
-					break;
-				} else if (!first) {
-					enforceJson(m_range.front == ',', "Expecting ',' or '}', not '"~m_range.front.to!string~"'.");
-					m_range.popFront();
-					m_range.skipWhitespace(&m_line);
-				} else first = false;
-
-				auto name = m_range.skipJsonString(&m_line);
-
-				m_range.skipWhitespace(&m_line);
-				enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
+				enforceJson(!m_range.empty && m_range.front == '{', "Expecting to be object.");
 				m_range.popFront();
+				bool first = true;
+				while(true) {
+					m_range.skipWhitespace(&m_line);
+					enforceJson(!m_range.empty, "Missing '}'.");
+					if (m_range.front == '}') {
+						m_range.popFront();
+						break;
+					} else if (!first) {
+						enforceJson(m_range.front == ',', "Expecting ',' or '}', not '"~m_range.front.to!string~"'.");
+						m_range.popFront();
+						m_range.skipWhitespace(&m_line);
+					} else first = false;
 
-				entry_callback(name);
+					auto name = m_range.skipJsonString(&m_line);
+
+					m_range.skipWhitespace(&m_line);
+					enforceJson(!m_range.empty && m_range.front == ':', "Expecting ':', not '"~m_range.front.to!string~"'.");
+					m_range.popFront();
+
+					entry_callback(name);
+				}
+			} catch(JSONException e) {
+				e.msg = addCurrentPath(e.msg);
+				throw e;
 			}
 		}
 
 		void beginReadDictionaryEntry(Traits)(string name) {
-			m_currentFieldName = name;
+			m_currentPath ~= name;
 		}
-		void endReadDictionaryEntry(Traits)(string name) {}
+		void endReadDictionaryEntry(Traits)(string name) { m_currentPath.length--; }
 
 		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 		{
@@ -1837,8 +1848,8 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 		}
 
-		void beginReadArrayEntry(Traits)(size_t index) {}
-		void endReadArrayEntry(Traits)(size_t index) {}
+		void beginReadArrayEntry(Traits)(size_t index) { m_currentPath ~= index.to!string; }
+		void endReadArrayEntry(Traits)(size_t index) { m_currentPath.length--; }
 
 		T readValue(Traits, T)()
 		{
