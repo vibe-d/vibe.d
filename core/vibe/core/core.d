@@ -621,12 +621,12 @@ private TaskFuncInfo makeTaskFuncInfo(CALLABLE, ARGS...)(ref CALLABLE callable, 
 
 import core.cpuid : threadsPerCPU;
 /**
-	Sets up num worker threads.
+	Sets up the thread pool used for executing worker tasks.
 
 	This function gives explicit control over the number of worker threads.
-	Note, to have an effect the function must be called prior to related worker
-	tasks functions which set up the default number of worker threads
-	implicitly.
+	Note, to have an effect the function must be called before any worker
+	tasks are started. Otherwise the default number of worker threads
+	(`logicalProcessorCount`) will be used automatically.
 
 	Params:
 		num = The number of worker threads to initialize. Defaults to
