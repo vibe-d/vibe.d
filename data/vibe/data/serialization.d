@@ -629,7 +629,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 								alias STraits = SubTraits!(Traits, TM, TA);
 								case i:
 									static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
-										if (ser.tryReadNull!SubTraits()) return;
+										if (ser.tryReadNull!STraits()) return;
 									set[i] = true;
 									ser.beginReadArrayEntry!STraits(i);
 									__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
