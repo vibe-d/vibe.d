@@ -163,6 +163,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
+				case "authmechanism": cfg.authMechanism = value; break;
 				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
 				case "w":
 					try {
@@ -317,6 +318,7 @@ class MongoClientSettings
 	bool sslverifycertificate = true;
 	string sslPEMKeyFile;
 	string sslCAFile;
+	string authMechanism;
 
 	static string makeDigest(string username, string password)
 	{
