@@ -322,19 +322,25 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		if (range.canFind(','))
 			throw new HTTPStatusException(HTTPStatus.notImplemented);
 		auto s = range.split("-");
+		if (s.length != 2)
+			throw new HTTPStatusException(HTTPStatus.badRequest);
 		// https://tools.ietf.org/html/rfc7233
 		// Range can be in form "-\d", "\d-" or "\d-\d"
-		if (s[0].length) {
-			rangeStart = s[0].to!ulong;
-			rangeEnd = s[1].length ? s[1].to!ulong : dirent.size;
-		} else if (s[1].length) {
-			rangeEnd = dirent.size;
-			auto len = s[1].to!ulong;
-			if (len >= rangeEnd)
-				rangeStart = 0;
-			else
-				rangeStart = rangeEnd - len;
-		} else {
+		try {
+			if (s[0].length) {
+				rangeStart = s[0].to!ulong;
+				rangeEnd = s[1].length ? s[1].to!ulong : dirent.size;
+			} else if (s[1].length) {
+				rangeEnd = dirent.size;
+				auto len = s[1].to!ulong;
+				if (len >= rangeEnd)
+					rangeStart = 0;
+				else
+					rangeStart = rangeEnd - len;
+			} else {
+				throw new HTTPStatusException(HTTPStatus.badRequest);
+			}
+		} catch (ConvException) {
 			throw new HTTPStatusException(HTTPStatus.badRequest);
 		}
 		if (rangeEnd > dirent.size)
