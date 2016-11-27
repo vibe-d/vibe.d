@@ -172,7 +172,7 @@ final class MongoConnection {
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
 		{
-			if (m_settings.authMechanism == "SCRAM-SHA-1")
+			if (m_settings.authMechanism == MongoAuthMechanism.scramSHA1)
 				scramAuthenticate();
 			else
 				authenticate();

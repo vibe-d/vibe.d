@@ -20,7 +20,7 @@ import vibe.crypto.cryptorand;
 
 private SHA1HashMixerRNG g_rng;
 
-struct ScramState
+package struct ScramState
 {
 	private string m_firstMessageBare;
 	private string m_nonce;

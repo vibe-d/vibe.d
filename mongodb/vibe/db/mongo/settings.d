@@ -163,7 +163,7 @@ bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 				case "sockettimeoutms": setLong(cfg.socketTimeoutMS); warnNotImplemented(); break;
 				case "ssl": setBool(cfg.ssl); break;
 				case "sslverifycertificate": setBool(cfg.sslverifycertificate); break;
-				case "authmechanism": cfg.authMechanism = value; break;
+				case "authmechanism": cfg.authMechanism = parseAuthMechanism(value); break;
 				case "wtimeoutms": setLong(cfg.wTimeoutMS); break;
 				case "w":
 					try {
@@ -297,6 +297,24 @@ unittest
 	assert(cfg.hosts[0].port == 27017);
 }
 
+enum MongoAuthMechanism
+{
+	none,
+	scramSHA1,
+	mongoDBCR,
+	mongoDBX509
+}
+
+private MongoAuthMechanism parseAuthMechanism(string str)
+{
+	switch (str) {
+		case "SCRAM-SHA-1": return MongoAuthMechanism.scramSHA1;
+		case "MONGODB-CR": return MongoAuthMechanism.mongoDBCR;
+		case "MONGODB-X509": return MongoAuthMechanism.mongoDBX509;
+		default: throw new Exception("Auth mechanism \"" ~ str ~ "\" not supported");
+	}
+}
+
 class MongoClientSettings
 {
 	enum ushort defaultPort = 27017;
@@ -318,7 +336,7 @@ class MongoClientSettings
 	bool sslverifycertificate = true;
 	string sslPEMKeyFile;
 	string sslCAFile;
-	string authMechanism;
+	MongoAuthMechanism authMechanism;
 
 	static string makeDigest(string username, string password)
 	{
