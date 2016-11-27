@@ -12,6 +12,8 @@ module vibe.http.router;
 public import vibe.http.server;
 
 import vibe.core.log;
+import vibe.inet.url;
+import vibe.textfilter.urlencode;
 
 import std.functional;
 
@@ -253,7 +255,7 @@ final class URLRouter : HTTPServerRequestHandler {
 			return p.relativeToWeb(Path(req.path)).toString();
 		}
 
-		auto path = req.path;
+		auto path = URL.parse(req.requestURL).pathString; // get the encoded raw url string to allow escaped / inside variables
 		if (path.length < m_prefix.length || path[0 .. m_prefix.length] != m_prefix) return;
 		path = path[m_prefix.length .. $];
 
@@ -263,7 +265,7 @@ final class URLRouter : HTTPServerRequestHandler {
 				if (r.method != method) return false;
 
 				logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
-				foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
+				foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = urlDecode(v); // decode because using raw url
 				if (m_computeBasePath) req.params["routerRootDir"] = calcBasePath();
 				r.cb(req, res);
 				return res.headerWritten;

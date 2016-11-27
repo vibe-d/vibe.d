@@ -1,0 +1,4 @@
+name "tests"
+description "URL Escaping router args"
+dependency "vibe-d:http" path="../../"
+versions "VibeDefaultMain"
