@@ -18,6 +18,7 @@ import std.conv;
 import std.datetime;
 import std.digest.md;
 import std.string;
+import std.algorithm;
 
 
 /**
@@ -318,6 +319,8 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 
 	if (prange) {
 		auto range = (*prange).chompPrefix("bytes=");
+		if (range.canFind(','))
+			throw new HTTPStatusException(HTTPStatus.notImplemented);
 		auto s = range.split("-");
 		// https://tools.ietf.org/html/rfc7233
 		// Range can be in form "-\d", "\d-" or "\d-\d"
