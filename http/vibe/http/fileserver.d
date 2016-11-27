@@ -13,7 +13,6 @@ import vibe.http.server;
 import vibe.inet.message;
 import vibe.inet.mimetypes;
 import vibe.inet.url;
-import vibe.stream.counting;
 
 import std.conv;
 import std.datetime;
@@ -403,7 +402,7 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 
 	if (prange) {
 		fil.seek(rangeStart);
-		res.bodyWriter.write(new LimitedInputStream(fil, rangeEnd - rangeStart + 1));
+		res.bodyWriter.write(fil, rangeEnd - rangeStart + 1);
 		logTrace("partially sent file %d-%d, %s!", rangeStart, rangeEnd, res.headers["Content-Type"]);
 	} else {
 		if (pce && !encodedFilepath.length)
