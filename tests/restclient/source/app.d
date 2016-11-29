@@ -211,7 +211,6 @@ void runTest()
 
 int main()
 {
-	setLogLevel(LogLevel.debug_);
 	runTask(toDelegate(&runTest));
 	return runEventLoop();
 }
