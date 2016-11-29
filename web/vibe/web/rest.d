@@ -1342,8 +1342,12 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	debug body_ = jsonBody.toPrettyString();
-	else body_ = jsonBody.toString();
+	static if (sroute.method == HTTPMethod.GET) {
+		assert(jsonBody == Json.emptyObject, "GET request trying to send body parameters.");
+	} else {
+		debug body_ = jsonBody.toPrettyString();
+		else body_ = jsonBody.toString();
+	}
 
 	string url;
 	foreach (i, p; route.fullPathParts) {
