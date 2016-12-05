@@ -704,7 +704,7 @@ final class Win32FileStream : FileStream {
 
 	void write(in ubyte[] bytes_)
 	{
-		assert(this.writable);
+		assert(this.writable, "File is not writable");
 		acquire();
 		scope(exit) release();
 
