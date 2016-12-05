@@ -1117,7 +1117,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			static if (is(RT == void)) {
 				__traits(getMember, inst, Method)(params);
 				returnHeaders();
-				res.writeJsonBody(Json.emptyObject);
+				res.writeVoidBody();
 			} else {
 				auto ret = __traits(getMember, inst, Method)(params);
 				ret = evaluateOutputModifiers!Func(ret, req, res);
@@ -1446,7 +1446,8 @@ private Json request(URL base_url,
 	};
 
 	auto resdg = (scope HTTPClientResponse res) {
-		ret = res.readJson();
+		if (!res.bodyReader.empty)
+			ret = res.readJson();
 
 		logDebug(
 			 "REST call: %s %s -> %d, %s",
