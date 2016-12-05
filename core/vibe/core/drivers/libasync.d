@@ -323,7 +323,7 @@ final class LibasyncDriver : EventDriver {
 		return new LibasyncManualEvent(this);
 	}
 
-	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers)
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers, FileDescriptorEvent.Mode mode)
 	{
 		assert(false);
 	}

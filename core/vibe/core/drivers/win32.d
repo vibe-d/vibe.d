@@ -328,7 +328,7 @@ final class Win32EventDriver : EventDriver {
 		return new Win32ManualEvent(this);
 	}
 
-	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger events)
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger events, FileDescriptorEvent.Mode mode)
 	{
 		assert(false, "Not implemented.");
 	}
