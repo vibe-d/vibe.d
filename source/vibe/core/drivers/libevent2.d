@@ -422,9 +422,9 @@ final class Libevent2Driver : EventDriver {
 		return new Libevent2ManualEvent(this);
 	}
 
-	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events)
+	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events, FileDescriptorEvent.Mode mode)
 	{
-		return new Libevent2FileDescriptorEvent(this, fd, events);
+		return new Libevent2FileDescriptorEvent(this, fd, events, mode);
 	}
 
 	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
@@ -807,20 +807,24 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 	private {
 		int m_fd;
 		deimos.event2.event.event* m_event;
+		bool m_persistent;
 		Trigger m_activeEvents;
 		Task m_waiter;
 	}
 
-	this(Libevent2Driver driver, int file_descriptor, Trigger events)
+	this(Libevent2Driver driver, int file_descriptor, Trigger events, Mode mode)
 	{
 		assert(events != Trigger.none);
 		super(driver, false);
 		m_fd = file_descriptor;
+		m_persistent = mode != Mode.nonPersistent;
 		short evts = 0;
 		if (events & Trigger.read) evts |= EV_READ;
 		if (events & Trigger.write) evts |= EV_WRITE;
-		m_event = event_new(driver.eventLoop, file_descriptor, evts|EV_PERSIST, &onFileTriggered, cast(void*)this);
-		event_add(m_event, null);
+		if (m_persistent) evts |= EV_PERSIST;
+		if (mode == Mode.edgeTriggered) evts |= EV_ET;
+		m_event = event_new(driver.eventLoop, file_descriptor, evts, &onFileTriggered, cast(void*)this);
+		if (m_persistent) event_add(m_event, null);
 	}
 
 	~this()
@@ -837,8 +841,10 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 			m_activeEvents &= ~which;
 		}
 
-		while ((m_activeEvents & which) == Trigger.none)
+		while ((m_activeEvents & which) == Trigger.none) {
+			if (!m_persistent) event_add(m_event, null);
 			getThreadLibeventDriverCore().yieldForEvent();
+		}
 		return m_activeEvents & which;
 	}
 
@@ -857,6 +863,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		m_driver.rearmTimer(tm, timeout, false);
 
 		while ((m_activeEvents & which) == Trigger.none) {
+			if (!m_persistent) event_add(m_event, null);
 			getThreadLibeventDriverCore().yieldForEvent();
 			if (!m_driver.isTimerPending(tm)) break;
 		}

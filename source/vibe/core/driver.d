@@ -131,7 +131,7 @@ interface EventDriver {
 
 	/** Creates an event for waiting on a non-bocking file handle.
 	*/
-	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers);
+	FileDescriptorEvent createFileDescriptorEvent(int file_descriptor, FileDescriptorEvent.Trigger triggers, FileDescriptorEvent.Mode mode);
 
 	/** Creates a new timer.
 
@@ -243,6 +243,14 @@ interface FileDescriptorEvent {
 		read = 1<<0,      /// React on read-ready events
 		write = 1<<1,     /// React on write-ready events
 		any = read|write  /// Match any kind of event
+	}
+
+	/** Event waiting mode.
+	*/
+	enum Mode {
+		nonPersistent, /// Indicates that the event is non-persistent
+		persistent,    /// Indicates that the event is persistent
+		edgeTriggered  /// Indicates that the event should be edge-triggered
 	}
 
 	/** Waits for the selected event to occur.
