@@ -307,11 +307,15 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		}
 	}
 
-	auto mimetype = getMimeTypeForFile(pathstr);
+	auto mimetype = res.headers.get("Content-Type", getMimeTypeForFile(pathstr));
+
 	// avoid double-compression
 	if ("Content-Encoding" in res.headers && isCompressedFormat(mimetype))
 		res.headers.remove("Content-Encoding");
-	res.headers["Content-Type"] = mimetype;
+
+	if (!("Content-Type" in res.headers))
+		res.headers["Content-Type"] = mimetype;
+
 	res.headers.addField("Accept-Ranges", "bytes");
 	ulong rangeStart = 0;
 	ulong rangeEnd = 0;
