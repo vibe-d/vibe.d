@@ -13,7 +13,7 @@ d:
   - dmd-2.072.0
   - dmd-2.068.2
   - ldc-1.0.0
-  - ldc-0.17.0
+  - ldc-1.1.0-beta6
   - dmd-2.071.2
   - dmd-2.070.2
   - dmd-2.069.2
@@ -30,6 +30,7 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
   allow_failures:
     - d: dmd-beta
+    - d: ldc-1.1.0-beta6
     - d: dmd-2.072.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
