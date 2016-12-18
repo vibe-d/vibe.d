@@ -995,23 +995,31 @@ final class HTTPServerResponse : HTTPResponse {
 		statusCode = status;
 		writeJsonBody(data, allow_chunked);
 	}
-
 	/// ditto
 	void writeJsonBody(T)(T data, int status, string content_type, bool allow_chunked = false)
 	{
 		statusCode = status;
 		writeJsonBody(data, content_type, allow_chunked);
 	}
-	
+
 	/// ditto
 	void writeJsonBody(T)(T data, string content_type, bool allow_chunked = false)
 	{
 		headers["Content-Type"] = content_type;
 		writeJsonBody(data, allow_chunked);
 	}
-
 	/// ditto
 	void writeJsonBody(T)(T data, bool allow_chunked = false)
+	{
+		doWriteJsonBody!(T, false)(data, allow_chunked);
+	}
+	/// ditto
+	void writePrettyJsonBody(T)(T data, bool allow_chunked = false)
+	{
+		doWriteJsonBody!(T, true)(data, allow_chunked);
+	}
+
+	private void doWriteJsonBody(T, bool PRETTY)(T data, bool allow_chunked = false)
 	{
 		import std.traits;
 		import vibe.stream.wrapper;
@@ -1029,12 +1037,14 @@ final class HTTPServerResponse : HTTPResponse {
 			import vibe.internal.rangeutil;
 			long length = 0;
 			auto counter = RangeCounter(&length);
-			serializeToJson(counter, data);
+			static if (PRETTY) serializeToPrettyJson(counter, data);
+			else serializeToJson(counter, data);
 			headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", length);
 		}
 
 		auto rng = StreamOutputRange(bodyWriter);
-		serializeToJson(&rng, data);
+		static if (PRETTY) serializeToPrettyJson(&rng, data);
+		else serializeToJson(&rng, data);
 	}
 
 	/**
