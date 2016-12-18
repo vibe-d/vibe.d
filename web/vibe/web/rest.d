@@ -1139,10 +1139,11 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			else
 			{
 				returnHeaders();
-				res.writeJsonBody(
-					[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
-					HTTPStatus.internalServerError
+				debug res.writeJsonBody(
+						[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
+						HTTPStatus.internalServerError
 					);
+				else res.writeJsonBody(["statusMessage": e.msg], HTTPStatus.internalServerError);
 			}
 		}
 	}
