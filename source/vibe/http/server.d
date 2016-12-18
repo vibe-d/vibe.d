@@ -990,14 +990,28 @@ final class HTTPServerResponse : HTTPResponse {
 
 
 	/// Writes a JSON message with the specified status
-	void writeJsonBody(T)(T data, int status, string content_type = "application/json; charset=UTF-8", bool allow_chunked = false)
+	void writeJsonBody(T)(T data, int status, bool allow_chunked = false)
+	{
+		statusCode = status;
+		writeJsonBody(data, allow_chunked);
+	}
+
+	/// ditto
+	void writeJsonBody(T)(T data, int status, string content_type, bool allow_chunked = false)
 	{
 		statusCode = status;
 		writeJsonBody(data, content_type, allow_chunked);
 	}
 	
 	/// ditto
-	void writeJsonBody(T)(T data, string content_type = "application/json; charset=UTF-8", bool allow_chunked = false)
+	void writeJsonBody(T)(T data, string content_type, bool allow_chunked = false)
+	{
+		headers["Content-Type"] = content_type;
+		writeJsonBody(data, allow_chunked);
+	}
+
+	/// ditto
+	void writeJsonBody(T)(T data, bool allow_chunked = false)
 	{
 		import std.traits;
 		import vibe.stream.wrapper;
@@ -1006,7 +1020,9 @@ final class HTTPServerResponse : HTTPResponse {
 			static assert(!is(T == Appender!(typeof(data.data()))), "Passed an Appender!T to writeJsonBody - this is most probably not doing what's indended.");
 		}
 
-		headers["Content-Type"] = content_type;
+		if ("Content-Type" !in headers)
+			headers["Content-Type"] = "application/json; charset=UTF-8";
+
 
 		// set an explicit content-length field if chunked encoding is not allowed
 		if (!allow_chunked) {
