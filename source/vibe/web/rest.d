@@ -1122,7 +1122,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				auto ret = __traits(getMember, inst, Method)(params);
 				ret = evaluateOutputModifiers!Func(ret, req, res);
 				returnHeaders();
-				res.writeJsonBody(ret);
+				debug res.writePrettyJsonBody(ret);
+				else res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
 			if (res.headerWritten)
