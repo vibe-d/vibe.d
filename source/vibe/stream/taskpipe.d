@@ -106,13 +106,20 @@ private final class TaskPipeImpl {
 
 	/** Blocks until at least one byte of data has been written to the pipe.
 	*/
-	void waitForData(Duration timeout = 0.seconds)
+	void waitForData(Duration timeout = Duration.max)
 	{
+		import std.datetime : Clock, SysTime, UTC;
+		bool have_timeout = timeout > 0.seconds && timeout != Duration.max;
+		SysTime now = Clock.currTime(UTC());
+		SysTime timeout_target;
+		if (have_timeout) timeout_target = now + timeout;
+
 		synchronized (m_mutex) {
-			while (m_buffer.empty && !m_closed) {
-				if (timeout > 0.seconds)
-					m_condition.wait(timeout);
+			while (m_buffer.empty && !m_closed && (!have_timeout || now < timeout_target)) {
+				if (have_timeout)
+					m_condition.wait(timeout_target - now);
 				else m_condition.wait();
+				now = Clock.currTime(UTC());
 			}
 		}
 	}
@@ -200,4 +207,17 @@ unittest { // issue #1501 - deadlock in TaskPipe
 
 		joiner.join();
 	}
+}
+
+unittest { // issue #
+	auto t = runTask({
+		auto tp = new TaskPipeImpl;
+		tp.waitForData(10.msecs);
+		exitEventLoop();
+	});
+	runTask({
+		sleep(500.msecs);
+		assert(!t.running, "TaskPipeImpl.waitForData didn't timeout.");
+	});
+	runEventLoop();
 }
