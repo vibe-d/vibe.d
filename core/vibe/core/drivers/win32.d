@@ -1322,11 +1322,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 				acquireWriter();
 				m_bytesTransferred = 0;
 				m_driver.m_fileWriters[this] = true;
-				scope(exit) {
-					if (this in m_driver.m_fileWriters)
-						m_driver.m_fileWriters.remove(this);
-					releaseWriter();
-				}
+				scope(exit) releaseWriter();
 				logDebug("Using sendfile! %s %s %s", fstream.m_handle, fstream.tell(), fstream.size);
 
 				if( TransmitFile(m_socket, fstream.m_handle, 0, 0, &m_fileOverlapped, null, 0) )
