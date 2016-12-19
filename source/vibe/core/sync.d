@@ -172,7 +172,7 @@ class LocalTaskSemaphore
 
 	/** Acquires a lock.
 
-		Once the limit of concurrent locks is reaced, this method will block
+		Once the limit of concurrent locks is reached, this method will block
 		until the number of locks drops below the limit.
 	*/
 	void lock(ubyte priority = 0)
@@ -650,7 +650,7 @@ interface ManualEvent {
 	*/
 	int wait(int reference_emit_count);
 
-	/** Acquires ownership and waits until the emit count differs from the given one or until a timeout is reaced.
+	/** Acquires ownership and waits until the emit count differs from the given one or until a timeout is reached.
 
 		Throws:
 			May throw an $(D InterruptException) if the task gets interrupted
