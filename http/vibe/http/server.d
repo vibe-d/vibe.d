@@ -224,7 +224,11 @@ version (Have_diet_ng)
 
 	@dietTraits
 	private struct DefaultFilters {
+		import diet.html : HTMLOutputStyle;
 		import std.string : splitLines;
+
+		version (VibeOutputCompactHTML) enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.compact;
+		else enum HTMLOutputStyle htmlOutputStyle = HTMLOutputStyle.pretty;
 
 		static string filterCss(I)(I text, size_t indent = 0)
 		{
