@@ -1530,15 +1530,27 @@ private {
 
 	HTTPServerContext[] getContexts()
 	{
-		version (Win64) return cast(HTTPServerContext[])g_contexts;
-		else return cast(HTTPServerContext[])atomicLoad(g_contexts);
+		static if (g_contexts.sizeof == 16 && has128BitCAS || g.contexts.sizeof == 8 && has64BitCAS) {
+			return cast(HTTPServerContext[])atomicLoad(g_contexts);
+		} else {
+			synchronized (g_listenersMutex)
+				return cast(HTTPServerContext[])g_contexts;
+		}
 	}
 
 	void addContext(HTTPServerContext ctx)
 	{
-		synchronized (g_listenersMutex) {
-			atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
+		static if (g_contexts.sizeof == 16 && has128BitCAS || g.contexts.sizeof == 8 && has64BitCAS) {
+			// NOTE: could optimize this using a CAS, but not really worth it
+			synchronized (g_listenersMutex) {
+				atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
+			}
+		} else {
+			synchronized (g_listenersMutex) {
+				g_contexts = g_contexts ~ cast(shared)ctx;
+			}
 		}
+
 	}
 
 	void removeContext(size_t idx)
