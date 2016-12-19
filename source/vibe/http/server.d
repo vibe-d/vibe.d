@@ -1533,7 +1533,7 @@ private {
 
 	HTTPServerContext[] getContexts()
 	{
-		static if (g_contexts.sizeof == 16 && has128BitCAS || g.contexts.sizeof == 8 && has64BitCAS) {
+		static if (g_contexts.sizeof == 16 && has128BitCAS || g_contexts.sizeof == 8 && has64BitCAS) {
 			return cast(HTTPServerContext[])atomicLoad(g_contexts);
 		} else {
 			synchronized (g_listenersMutex)
@@ -1543,7 +1543,7 @@ private {
 
 	void addContext(HTTPServerContext ctx)
 	{
-		static if (g_contexts.sizeof == 16 && has128BitCAS || g.contexts.sizeof == 8 && has64BitCAS) {
+		static if (g_contexts.sizeof == 16 && has128BitCAS || g_contexts.sizeof == 8 && has64BitCAS) {
 			// NOTE: could optimize this using a CAS, but not really worth it
 			synchronized (g_listenersMutex) {
 				atomicStore(g_contexts, g_contexts ~ cast(shared)ctx);
