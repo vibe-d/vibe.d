@@ -10,7 +10,7 @@ d:
   # this way the overall test time gets cut down (GDC/LDC are a lot
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
-  - dmd-2.072.0
+  - dmd-2.072.1
   - ldc-1.0.0
   - ldc-1.1.0-beta6
   - dmd-2.071.2
@@ -28,7 +28,6 @@ matrix:
   allow_failures:
     - d: dmd-beta
     - d: ldc-1.1.0-beta6
-    - d: dmd-2.072.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
