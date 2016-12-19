@@ -118,21 +118,26 @@ nothrow:
 	enum size_t alignment = 0x10;
 	enum size_t alignmentMask = alignment-1;
 
-	void[] alloc(size_t sz)
-		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "alloc() returned misaligned data."); }
+	// NOTE: the contracts in this interface have two issues:
+	//       - they require an assert(false); contract in the derived class to have any effect
+	//       - there is s codegen issue that yield garbage values within the contracts defined here
+	//       For these reasons contracts need to be placed into each class individually instead
 
-	void[] realloc(void[] mem, size_t new_sz)
-		in {
+	void[] alloc(size_t sz);
+		//out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "alloc() returned misaligned data."); }
+
+	void[] realloc(void[] mem, size_t new_sz);
+		/*in {
 			assert(mem.ptr !is null, "realloc() called with null array.");
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to realloc().");
 		}
-		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "realloc() returned misaligned data."); }
+		out { assert((cast(size_t)__result.ptr & alignmentMask) == 0, "realloc() returned misaligned data."); }*/
 
-	void free(void[] mem)
-		in {
+	void free(void[] mem);
+		/*in {
 			assert(mem.ptr !is null, "free() called with null array.");
 			assert((cast(size_t)mem.ptr & alignmentMask) == 0, "misaligned pointer passed to free().");
-		}
+		}*/
 }
 
 
