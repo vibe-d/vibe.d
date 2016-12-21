@@ -9,7 +9,6 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 ### Features and improvements ###
 
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
-- Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
 - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
 - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
 - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
@@ -36,7 +35,6 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
 [issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
 [issue1629]: https://github.com/rejectedsoftware/vibe.d/issues/1629
-[issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
 [issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
 [issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642

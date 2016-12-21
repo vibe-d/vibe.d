@@ -172,11 +172,7 @@ final class MongoConnection {
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
 		{
-			if (m_settings.authMechanism == MongoAuthMechanism.scramSHA1)
-				scramAuthenticate();
-			else
-				authenticate();
-
+			authenticate();
 		}
 		else if (m_settings.sslPEMKeyFile != null && m_settings.username != null)
 		{
@@ -493,63 +489,6 @@ final class MongoConnection {
 					throw new MongoAuthException("Authentication failed.");
 			}
 		);
-	}
-
-	private void scramAuthenticate()
-	{
-		import vibe.db.mongo.sasl;
-		string cn = (m_settings.database == string.init ? "admin" : m_settings.database) ~ ".$cmd";
-
-		ScramState state;
-		string payload = state.createInitialRequest(m_settings.username);
-
-		auto cmd = Bson.emptyObject;
-		cmd["saslStart"] = Bson(1);
-		cmd["mechanism"] = Bson("SCRAM-SHA-1");
-		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		string response;
-		Bson conversationId;
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("SASL start failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-				response = cast(string)doc["payload"].get!BsonBinData().rawData;
-				conversationId = doc["conversationId"];
-			});
-		payload = state.update(m_settings.digest, response);
-		cmd = Bson.emptyObject;
-		cmd["saslContinue"] = Bson(1);
-		cmd["conversationId"] = conversationId;
-		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("SASL continue failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-				response = cast(string)doc["payload"].get!BsonBinData().rawData;
-			});
-
-		payload = state.finalize(response);
-		cmd = Bson.emptyObject;
-		cmd["saslContinue"] = Bson(1);
-		cmd["conversationId"] = conversationId;
-		cmd["payload"] = Bson(BsonBinData(BsonBinData.Type.generic, payload.representation));
-		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null),
-			(cursor, flags, first_doc, num_docs) {
-				if ((flags & ReplyFlags.QueryFailure) || num_docs != 1)
-					throw new MongoDriverException("SASL finish failed.");
-			},
-			(idx, ref doc) {
-				if (doc["ok"].get!double != 1.0)
-					throw new MongoAuthException("Authentication failed.");
-			});
 	}
 }
 
