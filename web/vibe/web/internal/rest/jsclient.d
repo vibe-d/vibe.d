@@ -139,6 +139,9 @@ class JSRestClientSettings
 			fout.put("};\n");
 		}
 
+		// error handling
+		fout.put(`xhr.onerror = function (e) { if (on_error) on_error(e); else console.log("XHR request failed"); }`~"\n");
+
 		// header parameters
 		foreach (p; route.headerParameters)
 			fout.formattedWrite("xhr.setRequestHeader(%s, %s);\n", Json(p.fieldName), p.name);
