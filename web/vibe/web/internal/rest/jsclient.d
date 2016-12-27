@@ -132,12 +132,15 @@ class JSRestClientSettings
 		// XHR setup
 		fout.put("var xhr = new XMLHttpRequest();\n");
 		fout.formattedWrite("xhr.open('%s', url, true);\n", route.method.to!string.toUpper);
+		fout.put("xhr.onload = function () {\n");
+		fout.put("if (this.status >= 400) { if (on_error) on_error(JSON.parse(this.responseText)); else console.log(this.responseText); }\n");
 		static if (!is(ReturnType!FT == void)) {
-			fout.put("xhr.onload = function () {\n");
-			fout.put("if (this.status >= 400) { if (on_error) on_error(JSON.parse(this.responseText)); else console.log(this.responseText); }\n");
 			fout.put("else on_result(JSON.parse(this.responseText));\n");
-			fout.put("};\n");
 		}
+		fout.put("};\n");
+
+		// error handling
+		fout.put(`xhr.onerror = function (e) { if (on_error) on_error(e); else console.log("XHR request failed"); }`~"\n");
 
 		// error handling
 		fout.put(`xhr.onerror = function (e) { if (on_error) on_error(e); else console.log("XHR request failed"); }\n`);
@@ -190,9 +193,9 @@ unittest { // issue #1293
 	app.generateInterface!I(settings, jsgenset, true);
 	assert(app.data.canFind("this.s = new function()"));
 	assert(app.data.canFind("this.test1 = function(on_result, on_error)"));
-	assert(app.data.find("this.test1 = function").canFind("xhr.onload ="));
+	assert(app.data.find("this.test1 = function").canFind("on_result("));
 	assert(app.data.canFind("this.test2 = function(on_error)"));
-	assert(!app.data.find("this.test2 = function").canFind("xhr.onload ="));
+	assert(!app.data.find("this.test2 = function").canFind("on_result("));
 }
 
 private auto indentSink(O)(ref O output, string step)
