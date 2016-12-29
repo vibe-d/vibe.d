@@ -1562,7 +1562,7 @@ struct JsonSerializer {
 	template isSupportedValueType(T) { enum isSupportedValueType = isJsonBasicType!T || is(T == Json); }
 
 	private {
-		string[] m_currentPath;
+		version (VibeJsonFieldNames) string[] m_currentPath;
 		Json m_current;
 		Json[] m_compositeStack;
 	}
@@ -1571,7 +1571,7 @@ struct JsonSerializer {
 
 	@disable this(this);
 
-	private string addCurrentPath(string msg) {
+	version (VibeJsonFieldNames) private string addCurrentPath(string msg) {
 		auto path = m_currentPath.join(".") ~ ": ";
 		return msg.indexOf(path) == -1 ? path ~ msg : msg;
 	}
@@ -1650,7 +1650,7 @@ struct JsonSerializer {
 				return m_current.get!T();
 			}
 		} catch (JSONException e) {
-			e.msg = addCurrentPath(e.msg);
+			version (VibeJsonFieldNames) e.msg = addCurrentPath(e.msg);
 			throw e;
 		}
 	}
@@ -1658,7 +1658,7 @@ struct JsonSerializer {
 	bool tryReadNull(Traits)() { return m_current.type == Json.Type.null_; }
 }
 
-unittest {
+version (VibeJsonFieldNames) unittest {
 	import std.stdio;
 
 	struct Child {
@@ -1695,7 +1695,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 	if (isInputRange!R || isOutputRange!(R, char))
 {
 	private {
-		string[] m_currentPath;
+		version (VibeJsonFieldNames) string[] m_currentPath;
 		R m_range;
 		size_t m_level = 0;
 	}
@@ -1711,9 +1711,11 @@ struct JsonStringSerializer(R, bool pretty = false)
 
 	@disable this(this);
 
-	private string addCurrentPath(string msg) {
-		auto path = m_currentPath.join(".") ~ ": ";
-		return msg.indexOf(path) == -1 ? path ~ msg : msg;
+	version (VibeJsonFieldNames) {
+		private string addCurrentPath(string msg) {
+			auto path = m_currentPath.join(".") ~ ": ";
+			return msg.indexOf(path) == -1 ? path ~ msg : msg;
+		}
 	}
 
 	//
@@ -1912,6 +1914,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 		}
 	}
 }
+
 
 unittest {
 	import std.stdio;
