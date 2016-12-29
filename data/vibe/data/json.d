@@ -1605,7 +1605,12 @@ struct JsonSerializer {
 	//
 	void readDictionary(Traits)(scope void delegate(string) field_handler)
 	{
-		enforceJson(m_current.type == Json.Type.object, addCurrentPath("Expected JSON object, got " ~ m_current.type.to!string));
+		version (VibeJsonFieldNames) {
+			enforceJson(m_current.type == Json.Type.object, addCurrentPath("Expected JSON object, got "~m_current.type.to!string));
+		} else {
+			enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
+		}
+
 		auto old = m_current;
 		foreach (string key, value; m_current) {
 			m_current = value;
@@ -1614,12 +1619,26 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	void beginReadDictionaryEntry(Traits)(string name) { m_currentPath ~= name; }
-	void endReadDictionaryEntry(Traits)(string name) { m_currentPath.length--; }
+	void beginReadDictionaryEntry(Traits)(string name) {
+		version (VibeJsonFieldNames) {
+			m_currentPath ~= name;
+		}
+	}
+
+	void endReadDictionaryEntry(Traits)(string name) {
+		version (VibeJsonFieldNames) {
+			m_currentPath.length--;
+		}
+	}
 
 	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 	{
-		enforceJson(m_current.type == Json.Type.array, addCurrentPath("Expected JSON array, got "~m_current.type.to!string));
+		version (VibeJsonFieldNames) {
+			enforceJson(m_current.type == Json.Type.array, addCurrentPath("Expected JSON array, got "~m_current.type.to!string));
+		} else {
+			enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
+		}
+
 		auto old = m_current;
 		size_callback(m_current.length);
 		foreach (ent; old) {
@@ -1629,8 +1648,17 @@ struct JsonSerializer {
 		m_current = old;
 	}
 
-	void beginReadArrayEntry(Traits)(size_t index) { m_currentPath ~= index.to!string; }
-	void endReadArrayEntry(Traits)(size_t index) { m_currentPath.length--; }
+	void beginReadArrayEntry(Traits)(size_t index) {
+		version (VibeJsonFieldNames) {
+			m_currentPath ~= index.to!string;
+		}
+	}
+
+	void endReadArrayEntry(Traits)(size_t index) {
+		version (VibeJsonFieldNames) {
+			m_currentPath.length--;
+		}
+	}
 
 	T readValue(Traits, T)()
 	{
@@ -1830,7 +1858,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 					entry_callback(name);
 				}
 			} catch(JSONException e) {
-				e.msg = addCurrentPath(e.msg);
+				version (VibeJsonFieldNames) e.msg = addCurrentPath(e.msg);
 				throw e;
 			}
 		}
@@ -1861,8 +1889,17 @@ struct JsonStringSerializer(R, bool pretty = false)
 			}
 		}
 
-		void beginReadArrayEntry(Traits)(size_t index) { m_currentPath ~= index.to!string; }
-		void endReadArrayEntry(Traits)(size_t index) { m_currentPath.length--; }
+		void beginReadArrayEntry(Traits)(size_t index) {
+			version (VibeJsonFieldNames) {
+				m_currentPath ~= index.to!string;
+			}
+		}
+
+		void endReadArrayEntry(Traits)(size_t index) {
+			version (VibeJsonFieldNames) {
+				m_currentPath.length--;
+			}
+		}
 
 		T readValue(Traits, T)()
 		{
@@ -1916,7 +1953,7 @@ struct JsonStringSerializer(R, bool pretty = false)
 }
 
 
-unittest {
+version (VibeJsonFieldNames)  unittest {
 	import std.stdio;
 
 	struct Child {
