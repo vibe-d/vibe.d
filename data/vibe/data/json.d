@@ -1864,9 +1864,15 @@ struct JsonStringSerializer(R, bool pretty = false)
 		}
 
 		void beginReadDictionaryEntry(Traits)(string name) {
-			m_currentPath ~= name;
+			version (VibeJsonFieldNames) {
+				m_currentPath ~= name;
+			}
 		}
-		void endReadDictionaryEntry(Traits)(string name) { m_currentPath.length--; }
+		void endReadDictionaryEntry(Traits)(string name) {
+			version (VibeJsonFieldNames) {
+				m_currentPath.length--;
+			}
+		}
 
 		void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
 		{
