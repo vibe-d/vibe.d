@@ -13,6 +13,7 @@ import botan.constants;
 import botan.cert.x509.x509cert;
 import botan.cert.x509.certstor;
 import botan.cert.x509.x509path;
+import botan.math.bigint.bigint;
 import botan.tls.blocking;
 import botan.tls.channel;
 import botan.tls.credentials_manager;
@@ -243,13 +244,15 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 
 	private ubyte[] onRead(ubyte[] buf) 
 	{
+		import std.algorithm : min;
+
 		ubyte[] ret;
 		/*if (auto buffered = cast(Buffered)m_stream) {
 			ret = buffered.readChunk(buf);
 			return ret;
 		}*/
 		
-		size_t len = std.algorithm.min(m_stream.leastSize(), buf.length);
+		size_t len = min(m_stream.leastSize(), buf.length);
 		if (len == 0) return null;
 		m_stream.read(buf[0 .. len]);
 		return buf[0 .. len];

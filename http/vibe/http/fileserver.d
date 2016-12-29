@@ -18,6 +18,7 @@ import std.conv;
 import std.datetime;
 import std.digest.md;
 import std.string;
+import std.algorithm;
 
 
 /**
@@ -306,12 +307,58 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		}
 	}
 
-	auto mimetype = getMimeTypeForFile(pathstr);
+	auto mimetype = res.headers.get("Content-Type", getMimeTypeForFile(pathstr));
+
 	// avoid double-compression
 	if ("Content-Encoding" in res.headers && isCompressedFormat(mimetype))
 		res.headers.remove("Content-Encoding");
-	res.headers["Content-Type"] = mimetype;
-	res.headers["Content-Length"] = to!string(dirent.size);
+
+	if (!("Content-Type" in res.headers))
+		res.headers["Content-Type"] = mimetype;
+
+	res.headers.addField("Accept-Ranges", "bytes");
+	ulong rangeStart = 0;
+	ulong rangeEnd = 0;
+	auto prange = "Range" in req.headers;
+
+	if (prange) {
+		auto range = (*prange).chompPrefix("bytes=");
+		if (range.canFind(','))
+			throw new HTTPStatusException(HTTPStatus.notImplemented);
+		auto s = range.split("-");
+		if (s.length != 2)
+			throw new HTTPStatusException(HTTPStatus.badRequest);
+		// https://tools.ietf.org/html/rfc7233
+		// Range can be in form "-\d", "\d-" or "\d-\d"
+		try {
+			if (s[0].length) {
+				rangeStart = s[0].to!ulong;
+				rangeEnd = s[1].length ? s[1].to!ulong : dirent.size;
+			} else if (s[1].length) {
+				rangeEnd = dirent.size;
+				auto len = s[1].to!ulong;
+				if (len >= rangeEnd)
+					rangeStart = 0;
+				else
+					rangeStart = rangeEnd - len;
+			} else {
+				throw new HTTPStatusException(HTTPStatus.badRequest);
+			}
+		} catch (ConvException) {
+			throw new HTTPStatusException(HTTPStatus.badRequest);
+		}
+		if (rangeEnd > dirent.size)
+			rangeEnd = dirent.size;
+		if (rangeStart > rangeEnd)
+			rangeStart = rangeEnd;
+		if (rangeEnd)
+			rangeEnd--; // End is inclusive, so one less than length
+		// potential integer overflow with rangeEnd - rangeStart == size_t.max is intended. This only happens with empty files, the + 1 will then put it back to 0
+		res.headers["Content-Length"] = to!string(rangeEnd - rangeStart + 1);
+		res.headers["Content-Range"] = "bytes %s-%s/%s".format(rangeStart < rangeEnd ? rangeStart : rangeEnd, rangeEnd, dirent.size);
+		res.statusCode = HTTPStatus.partialContent;
+	} else
+		res.headers["Content-Length"] = dirent.size.to!string;
 
 	// check for already encoded file if configured
 	string encodedFilepath;
@@ -366,8 +413,14 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 	}
 	scope(exit) fil.close();
 
-	if (pce && !encodedFilepath.length)
-		res.bodyWriter.write(fil);
-	else res.writeRawBody(fil);
-	logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
+	if (prange) {
+		fil.seek(rangeStart);
+		res.bodyWriter.write(fil, rangeEnd - rangeStart + 1);
+		logTrace("partially sent file %d-%d, %s!", rangeStart, rangeEnd, res.headers["Content-Type"]);
+	} else {
+		if (pce && !encodedFilepath.length)
+			res.bodyWriter.write(fil);
+		else res.writeRawBody(fil);
+		logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
+	}
 }

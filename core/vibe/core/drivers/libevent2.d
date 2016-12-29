@@ -428,9 +428,9 @@ final class Libevent2Driver : EventDriver {
 		return new Libevent2ManualEvent(this);
 	}
 
-	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events)
+	Libevent2FileDescriptorEvent createFileDescriptorEvent(int fd, FileDescriptorEvent.Trigger events, FileDescriptorEvent.Mode mode)
 	{
-		return new Libevent2FileDescriptorEvent(this, fd, events);
+		return new Libevent2FileDescriptorEvent(this, fd, events, mode);
 	}
 
 	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
@@ -568,10 +568,10 @@ final class Libevent2Driver : EventDriver {
 
 		debug assert(Thread.getThis() is m_ownerThread, "Event object created in foreign thread.");
 		auto key = cast(size_t)cast(void*)obj;
-		synchronized (s_threadObjectsMutex) {
-			m_ownedObjects.insert(key);
-			s_threadObjects.insert(key);
-		}
+		m_ownedObjects.insert(key);
+		if (obj.m_threadObject)
+			synchronized (s_threadObjectsMutex)
+				s_threadObjects.insert(key);
 	}
 
 	private void unregisterObject(Libevent2Object obj)
@@ -579,10 +579,10 @@ final class Libevent2Driver : EventDriver {
 		scope (failure) assert(false); // synchronized is not nothrow
 
 		auto key = cast(size_t)cast(void*)obj;
-		synchronized (s_threadObjectsMutex) {
-			m_ownedObjects.remove(key);
-			s_threadObjects.remove(key);
-		}
+		m_ownedObjects.remove(key);
+		if (obj.m_threadObject)
+			synchronized (s_threadObjectsMutex)
+				s_threadObjects.remove(key);
 	}
 }
 
@@ -613,9 +613,11 @@ private struct GetAddrInfoMsg {
 private class Libevent2Object {
 	protected Libevent2Driver m_driver;
 	debug private Thread m_ownerThread;
+	private bool m_threadObject;
 
-	this(Libevent2Driver driver)
+	this(Libevent2Driver driver, bool thread_object)
 	nothrow {
+		m_threadObject = thread_object;
 		m_driver = driver;
 		m_driver.registerObject(this);
 		debug m_ownerThread = driver.m_ownerThread;
@@ -649,7 +651,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 	this(Libevent2Driver driver)
 	nothrow {
-		super(driver);
+		super(driver, true);
 		scope (failure) assert(false);
 		m_mutex = new core.sync.mutex.Mutex;
 		m_waiters = ThreadSlotMap(driver.m_allocator);
@@ -811,20 +813,24 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 	private {
 		int m_fd;
 		deimos.event2.event.event* m_event;
+		bool m_persistent;
 		Trigger m_activeEvents;
 		Task m_waiter;
 	}
 
-	this(Libevent2Driver driver, int file_descriptor, Trigger events)
+	this(Libevent2Driver driver, int file_descriptor, Trigger events, Mode mode)
 	{
 		assert(events != Trigger.none);
-		super(driver);
+		super(driver, false);
 		m_fd = file_descriptor;
+		m_persistent = mode != Mode.nonPersistent;
 		short evts = 0;
 		if (events & Trigger.read) evts |= EV_READ;
 		if (events & Trigger.write) evts |= EV_WRITE;
-		m_event = event_new(driver.eventLoop, file_descriptor, evts|EV_PERSIST, &onFileTriggered, cast(void*)this);
-		event_add(m_event, null);
+		if (m_persistent) evts |= EV_PERSIST;
+		if (mode == Mode.edgeTriggered) evts |= EV_ET;
+		m_event = event_new(driver.eventLoop, file_descriptor, evts, &onFileTriggered, cast(void*)this);
+		if (m_persistent) event_add(m_event, null);
 	}
 
 	~this()
@@ -841,8 +847,10 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 			m_activeEvents &= ~which;
 		}
 
-		while ((m_activeEvents & which) == Trigger.none)
+		while ((m_activeEvents & which) == Trigger.none) {
+			if (!m_persistent) event_add(m_event, null);
 			getThreadLibeventDriverCore().yieldForEvent();
+		}
 		return m_activeEvents & which;
 	}
 
@@ -861,6 +869,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		m_driver.rearmTimer(tm, timeout, false);
 
 		while ((m_activeEvents & which) == Trigger.none) {
+			if (!m_persistent) event_add(m_event, null);
 			getThreadLibeventDriverCore().yieldForEvent();
 			if (!m_driver.isTimerPending(tm)) break;
 		}
@@ -1234,6 +1243,7 @@ private {
 	event_base* s_eventLoop; // TLS
 	Libevent2Driver s_driver;
 	__gshared DriverCore s_driverCore;
+	// protects s_threadObjects and the m_ownerThread and m_driver fields of Libevent2Object
 	__gshared Mutex s_threadObjectsMutex;
 	__gshared ArraySet!size_t s_threadObjects;
 	debug __gshared size_t[void*] s_mutexes;

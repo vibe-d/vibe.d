@@ -1,6 +1,79 @@
 ﻿Changelog
 =========
 
+v0.8.0 - 
+--------------------
+
+The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`]()) and for the code module that is currently in beta ([vibe-core](https://github.com/vibe-d/vibe-core)). The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d.
+
+### Features and improvements ###
+
+- Split up the library into fully separate sub packages/folders
+- Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
+- Reduced synchronization overhead in the libevent driver for entities that are single-threaded
+- Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
+- Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+- The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+- `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+- Added `HTTPServerResponse.writePrettyJsonBody`
+- The REST interface server now responds with prettified JSON if built in debug mode
+- Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
+- Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
+- The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+
+### Bug fixes ###
+
+- Fixed compile error for deserializing optional class/struct fields
+- Fixed GET requests in the REST client to not send a body
+- Fixed REST request responses that return void to not send a body
+- Fixed a possible idle loop in `Task.join()` if called from outside of an event loop
+- Fixed `TaskPipe.waitForData` to actually time out if a timeout value was passed - [issue #1605][issue1605]
+- Fixed a compilation error for GDC master - [issue #1602][issue1602]
+- Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
+- Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
+
+
+v0.7.31 - 
+--------------------
+
+This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bugfixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
+
+### Features and improvements ###
+
+- Reduced synchronization overhead in the libevent driver for entities that are single-threaded
+- Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
+- Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+- The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+- `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+- Added `HTTPServerResponse.writePrettyJsonBody`
+- The REST interface server now responds with prettified JSON if built in debug mode
+- Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
+- Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
+- The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+
+### Bug fixes ###
+
+- Fixed compile error for deserializing optional class/struct fields
+- Fixed GET requests in the REST client to not send a body
+- Fixed REST request responses that return void to not send a body
+- Fixed a possible idle loop in `Task.join()` if called from outside of an event loop
+- Fixed `TaskPipe.waitForData` to actually time out if a timeout value was passed - [issue #1605][issue1605]
+- Fixed a compilation error for GDC master - [issue #1602][issue1602]
+- Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
+- Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
+
+[issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
+[issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
+[issue1605]: https://github.com/rejectedsoftware/vibe.d/issues/1605
+[issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
+[issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
+[issue1629]: https://github.com/rejectedsoftware/vibe.d/issues/1629
+[issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
+[issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
+[issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
+[issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
+
+
 v0.7.30 - 2016-10-31
 --------------------
 

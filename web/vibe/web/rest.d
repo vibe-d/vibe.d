@@ -1117,12 +1117,13 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			static if (is(RT == void)) {
 				__traits(getMember, inst, Method)(params);
 				returnHeaders();
-				res.writeJsonBody(Json.emptyObject);
+				res.writeVoidBody();
 			} else {
 				auto ret = __traits(getMember, inst, Method)(params);
 				ret = evaluateOutputModifiers!Func(ret, req, res);
 				returnHeaders();
-				res.writeJsonBody(ret);
+				debug res.writePrettyJsonBody(ret);
+				else res.writeJsonBody(ret);
 			}
 		} catch (HTTPStatusException e) {
 			if (res.headerWritten)
@@ -1138,10 +1139,11 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			else
 			{
 				returnHeaders();
-				res.writeJsonBody(
-					[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
-					HTTPStatus.internalServerError
+				debug res.writeJsonBody(
+						[ "statusMessage": e.msg, "statusDebugMessage": sanitizeUTF8(cast(ubyte[])e.toString()) ],
+						HTTPStatus.internalServerError
 					);
+				else res.writeJsonBody(["statusMessage": e.msg], HTTPStatus.internalServerError);
 			}
 		}
 	}
@@ -1342,8 +1344,12 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		}
 	}
 
-	debug body_ = jsonBody.toPrettyString();
-	else body_ = jsonBody.toString();
+	static if (sroute.method == HTTPMethod.GET) {
+		assert(jsonBody == Json.emptyObject, "GET request trying to send body parameters.");
+	} else {
+		debug body_ = jsonBody.toPrettyString();
+		else body_ = jsonBody.toString();
+	}
 
 	string url;
 	foreach (i, p; route.fullPathParts) {
@@ -1442,7 +1448,8 @@ private Json request(URL base_url,
 	};
 
 	auto resdg = (scope HTTPClientResponse res) {
-		ret = res.readJson();
+		if (!res.bodyReader.empty)
+			ret = res.readJson();
 
 		logDebug(
 			 "REST call: %s %s -> %d, %s",

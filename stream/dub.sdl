@@ -12,7 +12,7 @@ sourceFiles "../lib/win-i386/eay.lib" "../lib/win-i386/ssl.lib" platform="window
 sourceFiles "../lib/win-amd64/libeay32.lib" "../lib/win-amd64/ssleay32.lib" platform="windows-x86_64"
 sourcePaths "."
 importPaths "."
-libs "z" platform="ldc"
+libs "z" platform="posix-ldc" // LDC 1.0.0 doesn't include libz in libphobos
 libs "z" platform="gdc"
 copyFiles "../lib/win-i386/libeay32.dll" "../lib/win-i386/ssleay32.dll" platform="windows-x86"
 copyFiles "../lib/win-amd64/libeay32.dll" "../lib/win-amd64/ssleay32.dll" platform="windows-x86_64"
