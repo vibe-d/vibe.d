@@ -129,6 +129,7 @@ import std.array : Appender, appender;
 import std.conv : to;
 import std.exception : enforce;
 import std.traits;
+import std.typecons : Flag;
 import std.typetuple;
 
 
@@ -524,8 +525,18 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 					static if (!isBuiltinTuple!(T, mname)) {
 						auto vt = safeGetMember!mname(value);
-					} else {
+					else
 						auto vt = tuple!TM(__traits(getMember, value, mname));
+
+					enum opt = getPolicyAttribute!(TU, mname, OptionalAttribute, Policy)(OptionalAttribute!DefaultPolicy(OptionalDirection.req)).direction;
+
+					//skip optional attributes from serialization
+					if ((opt & OptionalDirection.out_) == OptionalDirection.out_) {
+						static if (isInstanceOf!(Nullable, typeof(vt))) {
+							if (vt.isNull) continue;
+						} else {
+							if (vt == typeof(vt).init) continue;
+						}
 					}
 					alias STraits = SubTraits!(Traits, typeof(vt), TA);
 					ser.beginWriteDictionaryEntry!STraits(name);
@@ -801,6 +812,11 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			foreach (i, mname; SerializableFields!(T, Policy))
 				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
 					enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
+				else {
+					enum dir = getPolicyAttribute!(T, mname, OptionalAttribute, Policy)(OptionalAttribute!DefaultPolicy(OptionalDirection.req)).direction;
+					enforce(set[i] || ((dir & OptionalDirection.in_) == OptionalDirection.in_),
+						"Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
+				}
 			return ret;
 		} else static if (isPointer!T) {
 			if (ser.tryReadNull!Traits()) return null;
@@ -849,16 +865,29 @@ unittest {
 
 /**
 	Attribute marking a field as optional during deserialization.
+	It is possible to fine tune the direction of attribute:
+		@optional!In - it is optional only during deserialization
+		@optional!Out - it is optional only during serialization
+		@optional!InOut - optional both way - default
 */
-@property OptionalAttribute!Policy optional(alias Policy = DefaultPolicy)()
+@property OptionalAttribute!Policy optional(D = InOut, alias Policy = DefaultPolicy)()
+	if (is(D == In) || is(D == Out) || is(D == InOut))
 {
-	return OptionalAttribute!Policy();
+	static if (is(D == In)) {
+		return OptionalAttribute!Policy(OptionalDirection.in_);
+	}
+	else static if (is(D == Out)) {
+		return OptionalAttribute!Policy(OptionalDirection.out_);
+	}
+	else return OptionalAttribute!Policy(OptionalDirection.inout_);
 }
 ///
 unittest {
 	struct Test {
-		// does not need to be present during deserialization
-		@optional int screenSize = 100;
+		@optional int screenSize = 100; // does not need to be present during deserialization and serialization
+		@optional!In int toDeserialize; // does not need to be present during deserialization
+		@optional!Out int toSerialize; // does not need to be present during serialization
+		@optional!InOut int both; // does not need to be present during deserialization and serialization
 	}
 }
 
@@ -959,10 +988,24 @@ enum FieldExistence
 	defer
 }
 
+///
+enum OptionalDirection
+{
+	req = 0,
+	in_ = 1 << 0,
+	out_ = 1 << 1,
+	inout_ = in_ | out_
+}
+
+/// Aliases to simplify setting the direction of optional attribute
+alias In = Flag!"In";
+alias Out = Flag!"Out";
+alias InOut = Flag!"InOut";
+
 /// User defined attribute (not intended for direct use)
 struct NameAttribute(alias POLICY) { alias Policy = POLICY; string name; }
 /// ditto
-struct OptionalAttribute(alias POLICY) { alias Policy = POLICY; }
+struct OptionalAttribute(alias POLICY) { alias Policy = POLICY; OptionalDirection direction = OptionalDirection.inout_; }
 /// ditto
 struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
@@ -1625,17 +1668,33 @@ unittest { // named tuple serialization
 }
 
 unittest { // testing the various UDAs
+	import std.typecons : Nullable;
+
 	enum E { hello, world }
 	enum Em = E.mangleof;
 	static struct S {
 		@byName E e;
 		@ignore int i;
 		@optional float f;
+		@optional Nullable!int ni;
+		@optional!In int ii;
+		@optional!Out int io;
+		@optional!InOut int iio;
+		@optional Nullable!float nf;
 	}
 	enum Sm = S.mangleof;
-	auto s = S(E.world, 42, 1.0f);
+	auto s = S(E.world, 42, 1.0f, Nullable!int(1));
+	enum Nm = (Nullable!int).mangleof;
 	assert(serialize!TestSerializer(s) ==
-		"D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(f,f)(V(f)(1))DE(f,f)}D("~Sm~")");
+		"D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,ii)(V(i)(0))DE(i,ii)}D("~Sm~")");
+
+	enum s_ser = "D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,io)(V(i)(2))DE(i,io)}D("~Sm~")";
+	auto ds = deserialize!(TestSerializer, S)(s_ser);
+	assert(ds.e == s.e);
+	assert(ds.f == s.f);
+	assert(ds.ni == s.ni);
+	assert(ds.ii == 0);
+	assert(ds.io == 2);
 }
 
 unittest { // custom serialization support
