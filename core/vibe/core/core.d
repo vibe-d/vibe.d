@@ -229,7 +229,9 @@ void exitEventLoop(bool shutdown_all_threads = false)
 {
 	logDebug("exitEventLoop called (%s)", shutdown_all_threads);
 
-	assert(s_eventLoopRunning || shutdown_all_threads);
+	assert(s_eventLoopRunning || shutdown_all_threads,
+		"Trying to exit event loop when no loop is running.");
+	
 	if (shutdown_all_threads) {
 		atomicStore(st_term, true);
 		st_threadsSignal.emit();
