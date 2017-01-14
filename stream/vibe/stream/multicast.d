@@ -1,7 +1,7 @@
 /**
 	Multicasts an input stream to multiple output streams.
 
-	Copyright: © 2014 RejectedSoftware e.K.
+	Copyright: © 2014-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Eric Cornelius
 */
@@ -12,13 +12,25 @@ import vibe.core.stream;
 
 import std.exception;
 
+MulticastStream createMulticastStream(scope OutputStream[] outputs...)
+{
+	return new MulticastStream(outputs, true);
+}
+
 
 class MulticastStream : OutputStream {
 	private {
 		OutputStream[] m_outputs;
 	}
 
+	deprecated("Use createMulticastStream instead.")
 	this(OutputStream[] outputs ...)
+	{
+		this(outputs, true);
+	}
+
+	/// private
+	this(scope OutputStream[] outputs, bool dummy)
 	{
 		// NOTE: investigate .dup dmd workaround
 		m_outputs = outputs.dup;

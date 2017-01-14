@@ -1420,7 +1420,7 @@ private void _toStringS(alias SINK, T)(T v)
 unittest {
 	static string compile(string diet, ALIASES...)() {
 		import vibe.stream.memory;
-		auto dst = new MemoryOutputStream;
+		auto dst = createMemoryOutputStream();
 		compileDietString!(diet, ALIASES)(dst);
 		return strip(cast(string)(dst.data));
 	}
@@ -1491,7 +1491,7 @@ unittest {
 unittest { // blocks and extensions
 	static string compilePair(string extension, string base, ALIASES...)() {
 		import vibe.stream.memory;
-		auto dst = new MemoryOutputStream;
+		auto dst = createMemoryOutputStream();
 		compileDietStrings!(Group!(extension, "extension.dt", base, "base.dt"), ALIASES)(dst);
 		return strip(cast(string)(dst.data));
 	}

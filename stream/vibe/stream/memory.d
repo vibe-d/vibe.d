@@ -1,7 +1,7 @@
 /**
 	In-memory streams
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2016 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -16,6 +16,23 @@ import std.array;
 import std.exception;
 import std.typecons;
 
+MemoryOutputStream createMemoryOutputStream(IAllocator alloc = processAllocator())
+{
+	return new MemoryOutputStream(alloc, true);
+}
+
+/** Creates a new stream with the given data array as its contents.
+
+	Params:
+		data = The data array
+		writable = Flag that controls whether the data array may be changed
+		initial_size = The initial value that size returns - the file can grow up to data.length in size
+*/
+MemoryStream createMemoryStream(ubyte[] data, bool writable = true, size_t initial_size = size_t.max)
+{
+	return new MemoryStream(data, writable, initial_size, true);
+}
+
 
 /** OutputStream that collects the written data in memory and allows to query it
 	as a byte array.
@@ -25,7 +42,14 @@ final class MemoryOutputStream : OutputStream {
 		AllocAppender!(ubyte[]) m_destination;
 	}
 
+	deprecated("Use createMemoryOutputStream isntead.")
 	this(IAllocator alloc = processAllocator())
+	{
+		this(alloc, true);
+	}
+
+	/// private
+	this(IAllocator alloc, bool dummy)
 	{
 		m_destination = AllocAppender!(ubyte[])(alloc);
 	}
@@ -47,7 +71,7 @@ final class MemoryOutputStream : OutputStream {
 
 	void write(in ubyte[] bytes)
 	{
-		m_destination.put(bytes);
+		() @trusted { m_destination.put(bytes); } ();
 	}
 
 	void flush()
@@ -77,14 +101,14 @@ final class MemoryStream : RandomAccessStream {
 		size_t m_peekWindow;
 	}
 
-	/** Creates a new stream with the given data array as its contents.
-
-		Params:
-			data = The data array
-			writable = Flag that controls whether the data array may be changed
-			initial_size = The initial value that size returns - the file can grow up to data.length in size
-	*/
+	deprecated("Use createMemoryStream instead.")
 	this(ubyte[] data, bool writable = true, size_t initial_size = size_t.max)
+	{
+		this(data, writable, initial_size, true);
+	}
+
+	/// private
+	this(ubyte[] data, bool writable, size_t initial_size, bool dummy)
 	{
 		m_data = data;
 		m_size = min(initial_size, data.length);

@@ -48,6 +48,8 @@ alias MongoErrorDescription = immutable(_MongoErrorDescription);
  */
 class MongoException : Exception
 {
+@safe:
+
 	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
@@ -61,6 +63,8 @@ class MongoException : Exception
  */
 class MongoDriverException : MongoException
 {
+@safe:
+
 	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
@@ -75,6 +79,8 @@ class MongoDriverException : MongoException
  */
 class MongoDBException : MongoException
 {
+@safe:
+
 	MongoErrorDescription description;
 	alias description this;
 
@@ -93,6 +99,8 @@ class MongoDBException : MongoException
  */
 class MongoAuthException : MongoException
 {
+@safe:
+
 	this(string message, string file = __FILE__, int line = __LINE__, Throwable next = null)
 	{
 		super(message, file, line, next);
@@ -106,15 +114,19 @@ class MongoAuthException : MongoException
   Note that a MongoConnection may only be used from one fiber/thread at a time.
  */
 final class MongoConnection {
-	import vibe.stream.wrapper : StreamOutputRange;
+@safe:
+
+	import vibe.stream.wrapper : StreamOutputRange, streamOutputRange;
+	import vibe.internal.interfaceproxy;
+	import vibe.core.stream : InputStream, Stream;
 
 	private {
 		MongoClientSettings m_settings;
 		TCPConnection m_conn;
-		Stream m_stream;
+		InterfaceProxy!Stream m_stream;
 		ulong m_bytesRead;
 		int m_msgid = 1;
-		StreamOutputRange m_outRange;
+		StreamOutputRange!(InterfaceProxy!Stream) m_outRange;
 	}
 
 	enum ushort defaultPort = MongoClientSettings.defaultPort;
@@ -163,7 +175,7 @@ final class MongoConnection {
 			else {
 				m_stream = m_conn;
 			}
-			m_outRange = StreamOutputRange(m_stream);
+			m_outRange = streamOutputRange(m_stream);
 		}
 		catch (Exception e) {
 			throw new MongoDriverException(format("Failed to connect to MongoDB server at %s:%s.", m_settings.hosts[0].name, m_settings.hosts[0].port), __FILE__, __LINE__, e);
@@ -188,12 +200,12 @@ final class MongoConnection {
 	{
 		if (m_stream) {
 			m_stream.finalize();
-			m_stream = null;
+			m_stream = InterfaceProxy!Stream.init;
 		}
 
 		if (m_conn) {
 			m_conn.close();
-			m_conn = null;
+			m_conn = TCPConnection.init;
 		}
 	}
 
@@ -369,9 +381,9 @@ final class MongoConnection {
 			// TODO: directly deserialize from the wire
 			static if (!hasIndirections!T && !is(T == Bson)) {
 				ubyte[256] buf = void;
-				auto bson = recvBson(buf);
+				auto bson = () @trusted { return recvBson(buf); } ();
 			} else {
-				auto bson = recvBson(null);
+				auto bson = () @trusted { return recvBson(null); } ();
 			}
 
 			static if (is(T == Bson)) on_doc(i, bson);
@@ -404,8 +416,8 @@ final class MongoConnection {
 		else static if (is(T == long)) sendBytes(toBsonData(value));
 		else static if (is(T == Bson)) sendBytes(value.data);
 		else static if (is(T == string)) {
-			sendBytes(cast(ubyte[])value);
-			sendBytes(cast(ubyte[])"\0");
+			sendBytes(cast(const(ubyte)[])value);
+			sendBytes(cast(const(ubyte)[])"\0");
 		} else static if (isArray!T) {
 			foreach (v; value)
 				sendValue(v);
@@ -416,7 +428,8 @@ final class MongoConnection {
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
-	private Bson recvBson(ubyte[] buf) {
+	private Bson recvBson(ubyte[] buf)
+	@system {
 		int len = recvInt();
 		if (len > buf.length) buf = new ubyte[len];
 		else buf = buf[0 .. len];
@@ -565,8 +578,8 @@ private enum OpCode : int {
 	KillCursors  = 2007
 }
 
-alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs);
-template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc); }
+alias ReplyDelegate = void delegate(long cursor, ReplyFlags flags, int first_doc, int num_docs) @safe;
+template DocDelegate(T) { alias DocDelegate = void delegate(size_t idx, ref T doc) @safe; }
 
 struct MongoDBInfo
 {

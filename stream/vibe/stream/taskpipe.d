@@ -63,10 +63,12 @@ final class TaskPipe : ConnectionStream {
 	Underyling pipe implementation for TaskPipe with no Stream interface.
 */
 private final class TaskPipeImpl {
+	@safe:
+
 	private {
 		Mutex m_mutex;
 		InterruptibleTaskCondition m_condition;
-		FixedRingBuffer!ubyte m_buffer;
+		vibe.utils.array.FixedRingBuffer!ubyte m_buffer;
 		bool m_closed = false;
 		bool m_growWhenFull;
 	}
@@ -76,7 +78,7 @@ private final class TaskPipeImpl {
 	this(bool grow_when_full = false)
 	{
 		m_mutex = new Mutex;
-		m_condition = new InterruptibleTaskCondition(m_mutex);
+		() @trusted { m_condition = new InterruptibleTaskCondition(m_mutex); } ();
 		m_buffer.capacity = 2048;
 		m_growWhenFull = grow_when_full;
 	}
@@ -101,7 +103,7 @@ private final class TaskPipeImpl {
 	void close()
 	{
 		synchronized (m_mutex) m_closed = true;
-		m_condition.notifyAll();
+		() @trusted { m_condition.notifyAll(); } ();
 	}
 
 	/** Blocks until at least one byte of data has been written to the pipe.
@@ -117,8 +119,8 @@ private final class TaskPipeImpl {
 		synchronized (m_mutex) {
 			while (m_buffer.empty && !m_closed && (!have_timeout || now < timeout_target)) {
 				if (have_timeout)
-					m_condition.wait(timeout_target - now);
-				else m_condition.wait();
+					() @trusted { m_condition.wait(timeout_target - now); } ();
+				else () @trusted { m_condition.wait(); } ();
 				now = Clock.currTime(UTC());
 			}
 		}
@@ -135,14 +137,14 @@ private final class TaskPipeImpl {
 					size_t new_sz = m_buffer.capacity;
 					while (new_sz - m_buffer.capacity < data.length) new_sz += 2;
 					m_buffer.capacity = new_sz;
-				} else while (m_buffer.full) m_condition.wait();
+				} else while (m_buffer.full) () @trusted { m_condition.wait(); } ();
 				
 				need_signal = m_buffer.empty;
 				auto len = min(m_buffer.freeSpace, data.length);
 				m_buffer.put(data[0 .. len]);
 				data = data[len .. $];
 			}
-			if (need_signal) m_condition.notifyAll();
+			if (need_signal) () @trusted { m_condition.notifyAll(); } ();
 		}
 		if (!m_growWhenFull) vibe.core.core.yield();
 	}
@@ -169,14 +171,14 @@ private final class TaskPipeImpl {
 			bool need_signal;
 			size_t len;
 			synchronized (m_mutex) {
-				while (m_buffer.empty && !m_closed) m_condition.wait();
+				while (m_buffer.empty && !m_closed) () @trusted { m_condition.wait(); } ();
 
 				need_signal = m_buffer.full;
 				enforce(!m_buffer.empty, "Reading past end of closed pipe.");
 				len = min(dst.length, m_buffer.length);
 				m_buffer.read(dst[0 .. len]);
 			}
-			if (need_signal) m_condition.notifyAll();
+			if (need_signal) () @trusted { m_condition.notifyAll(); } ();
 			dst = dst[len .. $];
 		}
 		vibe.core.core.yield();
