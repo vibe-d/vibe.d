@@ -44,6 +44,9 @@ configuration "win32" {
 configuration "winrt" {
 	subConfiguration "vibe-d:core" "winrt"
 }
+configuration "vibe-core" {
+	subConfiguration "vibe-d:core" "vibe-core"
+}
 
 subPackage "utils"
 subPackage "data"
