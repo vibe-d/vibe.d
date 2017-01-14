@@ -11,11 +11,12 @@ d:
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
   - dmd-2.072.1
+  - dmd-2.069.2
   - ldc-1.0.0
   - ldc-1.1.0-beta6
   - dmd-2.071.2
   - dmd-2.070.2
-  - dmd-2.069.2
+  - dmd-beta
 
 env:
   - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
