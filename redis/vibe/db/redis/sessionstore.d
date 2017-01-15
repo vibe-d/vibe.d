@@ -51,12 +51,12 @@ final class RedisSessionStore : SessionStore {
 	}
 
 	void set(string id, string name, Variant value)
-	{
+	@trusted {
 		m_db.hset(id, name, value.get!Json.toString());
 	}
 
 	Variant get(string id, string name, lazy Variant defaultVal)
-	{
+	@trusted {
 		auto v = m_db.hget!(Nullable!string)(id, name);
 		return v.isNull ? defaultVal : Variant(parseJsonString(v.get));
 	}
@@ -76,7 +76,7 @@ final class RedisSessionStore : SessionStore {
 		assert(false, "Not available for RedisSessionStore");
 	}
 
-	int iterateSession(string id, scope int delegate(string key) del)
+	int iterateSession(string id, scope int delegate(string key) @safe del)
 	{
 		auto res = m_db.hkeys(id);
 		while (!res.empty) {

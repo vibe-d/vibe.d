@@ -30,6 +30,8 @@ import std.range;
 	fibers in a thread for optimum performance in high concurrency scenarios.
  */
 final class MongoClient {
+@safe:
+
 	private {
 		ConnectionPool!MongoConnection m_connections;
 	}
@@ -57,7 +59,7 @@ final class MongoClient {
 
 		if(!goodUrl) throw new Exception("Unable to parse mongodb URL: " ~ url);
 
-		m_connections = new ConnectionPool!MongoConnection({
+		m_connections = new ConnectionPool!MongoConnection(() @safe {
 			auto ret = new MongoConnection(settings);
 			ret.connect();
 			return ret;

@@ -1101,7 +1101,7 @@ struct Future(T) {
 	{
 		if (!ready) m_task.join();
 		assert(ready, "Task still running after join()!?");
-		return *cast(T*)m_result.get(); // casting away shared is safe, because this is a unique reference
+		return *cast(T*)&m_result.get(); // casting away shared is safe, because this is a unique reference
 	}
 
 	alias getResult this;
@@ -1142,7 +1142,7 @@ Future!(StripHeadConst!(ReturnType!CALLABLE)) async(CALLABLE, ARGS...)(CALLABLE 
 	Future!RET ret;
 	ret.init();
 	static void compute(FreeListRef!(shared(RET)) dst, CALLABLE callable, ARGS args) {
-		*dst = cast(shared(RET))callable(args);
+		dst = cast(shared(RET))callable(args);
 	}
 	static if (isWeaklyIsolated!CALLABLE && isWeaklyIsolated!ARGS) {
 		ret.m_task = runWorkerTaskH(&compute, ret.m_result, callable, args);
@@ -1434,9 +1434,9 @@ private bool callBool(F, T...)(F fnc, T args)
 	}
 }
 
-private bool delegate(Variant) opsFilter(OPS...)(OPS ops)
+private bool delegate(Variant) @safe opsFilter(OPS...)(OPS ops)
 {
-	return (Variant msg) {
+	return (Variant msg) @trusted { // Variant
 		if (msg.convertsTo!Throwable) return true;
 		foreach (i, OP; OPS)
 			if (matchesHandler!OP(msg))
@@ -1445,9 +1445,9 @@ private bool delegate(Variant) opsFilter(OPS...)(OPS ops)
 	};
 }
 
-private void delegate(Variant) opsHandler(OPS...)(OPS ops)
+private void delegate(Variant) @safe opsHandler(OPS...)(OPS ops)
 {
-	return (Variant msg) {
+	return (Variant msg) @trusted  { // Variant
 		foreach (i, OP; OPS) {
 			alias PTypes = ParameterTypeTuple!OP;
 			if (matchesHandler!OP(msg)) {

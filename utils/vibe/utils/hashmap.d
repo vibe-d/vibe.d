@@ -21,11 +21,11 @@ struct DefaultHashMapTraits(Key) {
 		else return a == b;
 	}
 	static size_t hashOf(in ref Key k)
-	{
-		static if (is(Key == class) && &Key.toHash == &Object.toHash)
-			return cast(size_t)cast(void*)k;
+	@safe {
+		static if (is(Key == class) && &Key.init.toHash is &Object.init.toHash)
+			return () @trusted { return cast(size_t)cast(void*)k; } ();
 		else static if (__traits(compiles, Key.init.toHash()))
-			return k.toHash();
+			return () @trusted { return (cast(Key)k).toHash(); } ();
 		else static if (__traits(compiles, Key.init.toHashShared()))
 			return k.toHashShared();
 		else {
@@ -36,13 +36,14 @@ struct DefaultHashMapTraits(Key) {
 				return typeinfo.getHash(&k);
 			}
 			static @nogc nothrow size_t properlyTypedWrapper(in ref Key k) { return 0; }
-			return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k);
+			return () @trusted { return (cast(typeof(&properlyTypedWrapper))&hashWrapper)(k); } ();
 		}
 	}
 }
 
 struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 {
+	import core.memory : GC;
 	import vibe.internal.meta.traits : isOpApplyDg;
 
 	alias Key = TKey;
@@ -69,10 +70,11 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	~this()
 	{
 		clear();
-		if (m_table.ptr !is null) {
+		if (m_table.ptr !is null) () @trusted {
+			static if (hasIndirections!TableEntry) GC.removeRange(m_table.ptr);
 			try m_allocator.dispose(m_table);
 			catch (Exception e) assert(false, e.msg);
-		}
+		} ();
 	}
 
 	@disable this(this);
@@ -109,7 +111,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	/// Workaround #12647
-	package Value getNothrow(Key key, Value default_value = Value.init)
+	package(vibe) Value getNothrow(Key key, Value default_value = Value.init)
 	{
 		auto idx = findIndex(key);
 		if (idx == size_t.max) return default_value;
@@ -189,7 +191,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private size_t findInsertIndex(Key key)
-	const {
+	const @safe {
 		auto hash = Traits.hashOf(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
@@ -211,8 +213,6 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 
 	private void resize(size_t new_size)
 	@trusted {
-		import core.memory : GC;
-
 		assert(!m_resizing);
 		m_resizing = true;
 		scope(exit) m_resizing = false;

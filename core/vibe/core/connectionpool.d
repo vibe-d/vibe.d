@@ -30,6 +30,7 @@ import vibe.internal.freelistref;
 */
 class ConnectionPool(Connection)
 {
+	@safe:
 	private {
 		Connection delegate() m_connectionFactory;
 		Connection[] m_connections;
@@ -38,11 +39,11 @@ class ConnectionPool(Connection)
 		debug Thread m_thread;
 	}
 
-	this(Connection delegate() connection_factory, uint max_concurrent = uint.max)
+	this(Connection delegate() @safe connection_factory, uint max_concurrent = uint.max)
 	{
 		m_connectionFactory = connection_factory;
-		m_sem = FreeListRef!LocalTaskSemaphore(max_concurrent);
-		debug m_thread = Thread.getThis();
+		() @trusted { m_sem = FreeListRef!LocalTaskSemaphore(max_concurrent); } ();
+		debug m_thread = () @trusted { return Thread.getThis(); } ();
 	}
 
 	/** Determines the maximum number of concurrently open connections.
@@ -66,7 +67,7 @@ class ConnectionPool(Connection)
 	*/
 	LockedConnection!Connection lockConnection()
 	{
-		debug assert(m_thread is Thread.getThis(), "ConnectionPool was called from a foreign thread!");
+		debug assert(m_thread is () @trusted { return Thread.getThis(); } (), "ConnectionPool was called from a foreign thread!");
 
 		m_sem.lock();
 		size_t cidx = size_t.max;
@@ -85,7 +86,7 @@ class ConnectionPool(Connection)
 		} else {
 			logDebug("creating new %s connection, all %d are in use", Connection.stringof, m_connections.length);
 			conn = m_connectionFactory(); // NOTE: may block
-			logDebug(" ... %s", cast(void*)conn);
+			logDebug(" ... %s", () @trusted { return cast(void*)conn; } ());
 		}
 		m_lockCount[conn] = 1;
 		if( cidx == size_t.max ){
@@ -98,6 +99,7 @@ class ConnectionPool(Connection)
 }
 
 struct LockedConnection(Connection) {
+	@safe:
 	private {
 		ConnectionPool!Connection m_pool;
 		Task m_task;
@@ -120,7 +122,7 @@ struct LockedConnection(Connection) {
 			auto fthis = Task.getThis();
 			assert(fthis is m_task);
 			m_pool.m_lockCount[m_conn]++;
-			logTrace("conn %s copy %d", cast(void*)m_conn, m_pool.m_lockCount[m_conn]);
+			logTrace("conn %s copy %d", () @trusted { return cast(void*)m_conn; } (), m_pool.m_lockCount[m_conn]);
 		}
 	}
 
@@ -135,7 +137,7 @@ struct LockedConnection(Connection) {
 			assert(*plc >= 1);
 			//logTrace("conn %s destroy %d", cast(void*)m_conn, *plc-1);
 			if( --*plc == 0 ){
-				m_pool.m_sem.unlock();
+				() @trusted { m_pool.m_sem.unlock(); } ();
 				//logTrace("conn %s release", cast(void*)m_conn);
 			}
 			m_conn = null;

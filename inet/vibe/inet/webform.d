@@ -39,7 +39,7 @@ import std.string;
 		max_line_length = The byte-sized maximum length of lines used as boundary delimitors in Multi-Part forms.
 */
 bool parseFormData(ref FormFields fields, ref FilePartFormFields files, string content_type, InputStream body_reader, size_t max_line_length)
-{
+@safe {
 	auto ct_entries = content_type.split(";");
 	if (!ct_entries.length) return false;
 
@@ -64,7 +64,7 @@ bool parseFormData(ref FormFields fields, ref FilePartFormFields files, string c
 	characters are considered as ' ' spaces.
 */
 void parseURLEncodedForm(string str, ref FormFields params)
-{
+@safe {
 	while (str.length > 0) {
 		// name part
 		auto idx = str.indexOf("=");
@@ -129,13 +129,13 @@ unittest
 */
 void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 	string content_type, InputStream body_reader, size_t max_line_length)
-{
+@safe {
 	import std.algorithm : strip;
 
 	auto pos = content_type.indexOf("boundary=");
 	enforce(pos >= 0 , "no boundary for multipart form found");
 	auto boundary = content_type[pos+9 .. $].strip('"');
-	auto firstBoundary = cast(string)body_reader.readLine(max_line_length);
+	auto firstBoundary = () @trusted { return cast(string)body_reader.readLine(max_line_length); } ();
 	enforce(firstBoundary == "--" ~ boundary, "Invalid multipart form data!");
 
 	while (parseMultipartFormPart(body_reader, fields, files, cast(const(ubyte)[])("\r\n--" ~ boundary), max_line_length)) {}
@@ -150,7 +150,7 @@ unittest
 
 	auto content_type = "multipart/form-data; boundary=\"AaB03x\"";
 
-	auto input = new MemoryStream(cast(ubyte[])(
+	auto input = createMemoryStream(cast(ubyte[])(
 			"--AaB03x\r\n" ~
 			"Content-Disposition: form-data; name=\"submit-name\"\r\n" ~
 			"\r\n" ~
@@ -176,7 +176,7 @@ unittest { // issue #1220 - wrong handling of Content-Length
 
 	auto content_type = "multipart/form-data; boundary=\"AaB03x\"";
 
-	auto input = new MemoryStream(cast(ubyte[])(
+	auto input = createMemoryStream(cast(ubyte[])(
 			"--AaB03x\r\n" ~
 			"Content-Disposition: form-data; name=\"submit-name\"\r\n" ~
 			"\r\n" ~
@@ -217,7 +217,7 @@ struct FilePart {
 
 
 private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref FilePartFormFields files, const(ubyte)[] boundary, size_t max_line_length)
-{
+@safe {
 	InetHeaderMap headers;
 	stream.parseRFC5322Header(headers);
 	auto pv = "Content-Disposition" in headers;
@@ -257,7 +257,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 
 		// TODO: temp files must be deleted after the request has been processed!
 	} else {
-		auto data = cast(string)stream.readUntil(boundary);
+		auto data = () @trusted { return cast(string)stream.readUntil(boundary); } ();
 		form.addField(name, data);
 	}
 	
@@ -268,7 +268,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 		nullSink().write(stream);
 		return false;
 	}
-	enforce(ub == cast(ubyte[])"\r\n");
+	enforce(ub == cast(const(ubyte)[])"\r\n");
 	return true;
 }
 

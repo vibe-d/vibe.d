@@ -189,8 +189,8 @@ sizediff_t matchBracket(const(char)[] str, bool nested = true)
 string formatAlloc(ARGS...)(IAllocator alloc, string fmt, ARGS args)
 {
 	auto app = AllocAppender!string(alloc);
-	formattedWrite(&app, fmt, args);
-	return app.data;
+	formattedWrite(() @trusted { return &app; } (), fmt, args);
+	return () @trusted { return app.data; } ();
 }
 
 /// Special version of icmp() with optimization for ASCII characters

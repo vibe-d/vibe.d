@@ -20,6 +20,8 @@ import std.string;
 
 
 class HTTPLogger {
+	@safe:
+
 	private {
 		string m_format;
 		const(HTTPServerSettings) m_settings;
@@ -39,7 +41,7 @@ class HTTPLogger {
 
 	final void log(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	{
-		m_mutex.performLocked!({
+		m_mutex.performLocked!(() @safe {
 			m_lineAppender.clear();
 			formatApacheLog(m_lineAppender, m_format, req, res, m_settings);
 			writeLine(m_lineAppender.data);
@@ -51,6 +53,8 @@ class HTTPLogger {
 
 
 final class HTTPConsoleLogger : HTTPLogger {
+@safe:
+
 	this(HTTPServerSettings settings, string format)
 	{
 		super(settings, format);
@@ -64,6 +68,8 @@ final class HTTPConsoleLogger : HTTPLogger {
 
 
 final class HTTPFileLogger : HTTPLogger {
+@safe:
+
 	private {
 		FileStream m_stream;
 	}
@@ -77,12 +83,12 @@ final class HTTPFileLogger : HTTPLogger {
 	override void close()
 	{
 		m_stream.close();
-		m_stream = null;
+		m_stream = FileStream.init;
 	}
 
 	protected override void writeLine(const(char)[] ln)
 	{
-		assert(m_stream);
+		assert(!!m_stream);
 		m_stream.write(ln);
 		m_stream.write("\n");
 		m_stream.flush();
@@ -90,7 +96,7 @@ final class HTTPFileLogger : HTTPLogger {
 }
 
 void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, scope HTTPServerResponse res, in HTTPServerSettings settings)
-{
+@safe {
 	import std.format : formattedWrite;
 	enum State {Init, Directive, Status, Key, Command}
 
@@ -174,7 +180,7 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 					//case 'B': //Size of Response in bytes, excluding headers
 					case 'b': //same as 'B' but a '-' is written if no bytes where sent
 						if (!res.bytesWritten) ln.put('-');
-						else formattedWrite(&ln, "%s", res.bytesWritten);
+						else formattedWrite(() @trusted { return &ln; } (), "%s", res.bytesWritten);
 						break;
 					case 'C': //Cookie content {cookie}
 						import std.algorithm : joiner;
@@ -185,7 +191,7 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 						break;
 					case 'D': //The time taken to serve the request
 						auto d = res.timeFinalized - req.timeCreated;
-						formattedWrite(&ln, "%s", d.total!"msecs"());
+						formattedWrite(() @trusted { return &ln; } (), "%s", d.total!"msecs"());
 						break;
 					//case 'e': //Environment variable {variable}
 					//case 'f': //Filename
@@ -209,7 +215,7 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 						else ln.put("-");
 						break;
 					case 'p': //port
-						formattedWrite(&ln, "%s", settings.port);
+						formattedWrite(() @trusted { return &ln; } (), "%s", settings.port);
 						break;
 					//case 'P': //Process ID
 					case 'q': //query string (with prepending '?')
@@ -224,14 +230,14 @@ void formatApacheLog(R)(ref R ln, string format, scope HTTPServerRequest req, sc
 						ln.put(getHTTPVersionString(req.httpVersion));
 						break;
 					case 's': //Status
-						formattedWrite(&ln, "%s", res.statusCode);
+						formattedWrite(() @trusted { return &ln; } (), "%s", res.statusCode);
 						break;
 					case 't': //Time the request was received {format}
 						ln.put(req.timeCreated.toSimpleString());
 						break;
 					case 'T': //Time taken to server the request in seconds
 						auto d = res.timeFinalized - req.timeCreated;
-						formattedWrite(&ln, "%s", d.total!"seconds");
+						formattedWrite(() @trusted { return &ln; } (), "%s", d.total!"seconds");
 						break;
 					case 'u': //Remote user
 						ln.put(req.username.length ? req.username : "-");

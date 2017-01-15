@@ -10,7 +10,24 @@ if [ "$DC" == "dmd" ]; then
 	dub build --combined --arch=x86
 fi
 
-dub test --combined --compiler=$DC --config=${VIBED_DRIVER=libevent}
+if [ "$DC" == "ldc2" ] && [ "$VIBED_DRIVER" == "vibe-core" ]; then
+	echo "Unit tests skipped until DUB 1.2.0 is out..."
+	#dub test :data --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :core --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :mongodb --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :redis --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :diet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :web --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :utils --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :http --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :mail --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :stream --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :crypto --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :textfilter --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+	#dub test :inet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+else
+	dub test --combined --compiler=$DC --config=${VIBED_DRIVER=libevent}
+fi
 
 if [ ${BUILD_EXAMPLE=1} -eq 1 ]; then
     for ex in $(\ls -1 examples/); do

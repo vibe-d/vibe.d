@@ -64,6 +64,8 @@ version(Windows)
 
 
 final class Libevent2Driver : EventDriver {
+@safe:
+
 	import std.container : DList;
 	import std.datetime : Clock;
 
@@ -86,9 +88,9 @@ final class Libevent2Driver : EventDriver {
 		IAllocator m_allocator;
 	}
 
-	this(DriverCore core) nothrow
+	this(DriverCore core) @trusted nothrow
 	{
-		debug m_ownerThread = Thread.getThis();
+		debug m_ownerThread = () @trusted { return Thread.getThis(); } ();
 		m_core = core;
 		s_driverCore = core;
 
@@ -123,10 +125,10 @@ final class Libevent2Driver : EventDriver {
 		}
 
 		// initialize libevent
-		logDiagnostic("libevent version: %s", to!string(event_get_version()));
+		logDiagnostic("libevent version: %s", event_get_version());
 		m_eventLoop = event_base_new();
 		s_eventLoop = m_eventLoop;
-		logDiagnostic("libevent is using %s for events.", to!string(event_base_get_method(m_eventLoop)));
+		logDiagnostic("libevent is using %s for events.", event_base_get_method(m_eventLoop));
 		evthread_make_base_notifiable(m_eventLoop);
 
 		m_dnsBase = evdns_base_new(m_eventLoop, 1);
@@ -141,30 +143,30 @@ final class Libevent2Driver : EventDriver {
 				logError("Failed to load hosts file at %s", hosts_file);
 		}
 
-		m_timerEvent = event_new(m_eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this);
+		m_timerEvent = () @trusted { return event_new(m_eventLoop, -1, EV_TIMEOUT, &onTimerTimeout, cast(void*)this); } ();
 	}
 
 	void dispose()
 	{
-		debug assert(Thread.getThis() is m_ownerThread, "Event loop destroyed in foreign thread.");
+		debug assert(() @trusted { return Thread.getThis(); } () is m_ownerThread, "Event loop destroyed in foreign thread.");
 
-		event_free(m_timerEvent);
+		() @trusted { event_free(m_timerEvent); } ();
 
 		// notify all other living objects about the shutdown
-		synchronized (s_threadObjectsMutex) {
+		synchronized (() @trusted { return s_threadObjectsMutex; } ()) {
 			// destroy all living objects owned by this driver
 			foreach (ref key; m_ownedObjects) {
 				assert(key);
-				auto obj = cast(Libevent2Object)cast(void*)key;
+				auto obj = () @trusted { return cast(Libevent2Object)cast(void*)key; } ();
 				debug assert(obj.m_ownerThread is m_ownerThread, "Owned object with foreign thread ID detected.");
 				debug assert(obj.m_driver is this, "Owned object with foreign driver reference detected.");
 				key = 0;
-				destroy(obj);
+				() @trusted { destroy(obj); } ();
 			}
 
-			foreach (ref key; s_threadObjects) {
+			foreach (ref key; () @trusted { return s_threadObjects; } ()) {
 				assert(key);
-				auto obj = cast(Libevent2Object)cast(void*)key;
+				auto obj = () @trusted { return cast(Libevent2Object)cast(void*)key; } ();
 				debug assert(obj.m_ownerThread !is m_ownerThread, "Live object of this thread detected after all owned mutexes have been destroyed.");
 				debug assert(obj.m_driver !is this, "Live object of this driver detected with different thread ID after all owned mutexes have been destroyed.");
 				// WORKAROUND for a possible race-condition in case of concurrent GC collections
@@ -177,8 +179,10 @@ final class Libevent2Driver : EventDriver {
 		}
 
 		// shutdown libevent for this thread
-		evdns_base_free(m_dnsBase, 1);
-		event_base_free(m_eventLoop);
+		() @trusted {
+			evdns_base_free(m_dnsBase, 1);
+			event_base_free(m_eventLoop);
+		} ();
 		s_eventLoop = null;
 		s_alreadyDeinitialized = true;
 	}
@@ -193,9 +197,9 @@ final class Libevent2Driver : EventDriver {
 
 		int ret;
 		m_exit = false;
-		while (!m_exit && (ret = event_base_loop(m_eventLoop, EVLOOP_ONCE)) == 0) {
+		while (!m_exit && (ret = () @trusted { return event_base_loop(m_eventLoop, EVLOOP_ONCE); } ()) == 0) {
 			processTimers();
-			s_driverCore.notifyIdle();
+			() @trusted { return s_driverCore; } ().notifyIdle();
 		}
 		m_exit = false;
 		return ret;
@@ -203,7 +207,7 @@ final class Libevent2Driver : EventDriver {
 
 	int runEventLoopOnce()
 	{
-		auto ret = event_base_loop(m_eventLoop, EVLOOP_ONCE);
+		auto ret = () @trusted { return event_base_loop(m_eventLoop, EVLOOP_ONCE); } ();
 		processTimers();
 		m_core.notifyIdle();
 		return ret;
@@ -212,7 +216,7 @@ final class Libevent2Driver : EventDriver {
 	bool processEvents()
 	{
 		logDebugV("process events with exit == %s", m_exit);
-		event_base_loop(m_eventLoop, EVLOOP_NONBLOCK|EVLOOP_ONCE);
+		() @trusted { event_base_loop(m_eventLoop, EVLOOP_NONBLOCK|EVLOOP_ONCE); } ();
 		processTimers();
 		logDebugV("processed events with exit == %s", m_exit);
 		if (m_exit) {
@@ -227,7 +231,7 @@ final class Libevent2Driver : EventDriver {
 	{
 		logDebug("Libevent2Driver.exitEventLoop called");
 		m_exit = true;
-		enforce(event_base_loopbreak(m_eventLoop) == 0, "Failed to exit libevent event loop.");
+		enforce(() @trusted { return event_base_loopbreak(m_eventLoop); } () == 0, "Failed to exit libevent event loop.");
 	}
 
 	ThreadedFileStream openFile(Path path, FileMode mode)
@@ -261,8 +265,8 @@ final class Libevent2Driver : EventDriver {
 		logDebug("dnsresolve %s", host);
 		GetAddrInfoMsg msg;
 		msg.core = m_core;
-		evdns_getaddrinfo_request* dnsReq = evdns_getaddrinfo(m_dnsBase, toStringz(host), null,
-			&hints, &onAddrInfo, &msg);
+		evdns_getaddrinfo_request* dnsReq = () @trusted { return evdns_getaddrinfo(m_dnsBase, toStringz(host), null,
+			&hints, &onAddrInfo, &msg); } ();
 
 		// wait if the request couldn't be fulfilled instantly
 		if (!msg.done) {
@@ -273,7 +277,7 @@ final class Libevent2Driver : EventDriver {
 		}
 
 		logDebug("dnsresolve ret");
-		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, to!string(evutil_gai_strerror(msg.err))));
+		enforce(msg.err == DNS_ERR_NONE, format("Failed to lookup host '%s': %s", host, () @trusted { return evutil_gai_strerror(msg.err); } ()));
 
 		if (m_addressInfoCacheLength >= 10) m_addressInfoCache.removeFront();
 		else m_addressInfoCacheLength++;
@@ -285,34 +289,34 @@ final class Libevent2Driver : EventDriver {
 	{
 		assert(addr.family == bind_addr.family, "Mismatching bind and target address.");
 
-		auto sockfd_raw = socket(addr.family, SOCK_STREAM, 0);
+		auto sockfd_raw = () @trusted { return socket(addr.family, SOCK_STREAM, 0); } ();
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
 		socketEnforce(sockfd != -1, "Failed to create socket.");
 
-		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind socket.");
+		socketEnforce(() @trusted { return bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen); } () == 0, "Failed to bind socket.");
 
-		if( evutil_make_socket_nonblocking(sockfd) )
+		if (() @trusted { return evutil_make_socket_nonblocking(sockfd); } ())
 			throw new Exception("Failed to make socket non-blocking.");
 
-		auto buf_event = bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE);
-		if( !buf_event ) throw new Exception("Failed to create buffer event for socket.");
+		auto buf_event = () @trusted { return bufferevent_socket_new(m_eventLoop, sockfd, bufferevent_options.BEV_OPT_CLOSE_ON_FREE); } ();
+		if (!buf_event) throw new Exception("Failed to create buffer event for socket.");
 
-		auto cctx = TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, bind_addr, addr);
-		scope(failure) {
+		auto cctx = () @trusted { return TCPContextAlloc.alloc(m_core, m_eventLoop, sockfd, buf_event, bind_addr, addr); } ();
+		scope(failure) () @trusted {
 			if (cctx.event) bufferevent_free(cctx.event);
 			TCPContextAlloc.free(cctx);
-		}
-		bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx);
-		if( bufferevent_enable(buf_event, EV_READ|EV_WRITE) )
+		} ();
+		() @trusted { bufferevent_setcb(buf_event, &onSocketRead, &onSocketWrite, &onSocketEvent, cctx); } ();
+		if (() @trusted { return bufferevent_enable(buf_event, EV_READ|EV_WRITE); } ())
 			throw new Exception("Error enabling buffered I/O event for socket.");
 
 		cctx.readOwner = Task.getThis();
 		scope(exit) cctx.readOwner = Task();
 
 		assert(cctx.exception is null);
-		socketEnforce(bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen) == 0,
+		socketEnforce(() @trusted { return bufferevent_socket_connect(buf_event, addr.sockAddr, addr.sockAddrLen); } () == 0,
 			"Failed to connect to " ~ addr.toString());
 
 		try {
@@ -330,50 +334,50 @@ final class Libevent2Driver : EventDriver {
 
 		logTrace("Connect result status: %d", cctx.status);
 		enforce(cctx.status == BEV_EVENT_CONNECTED, cctx.statusMessage
-			? format("Failed to connect to host %s: %s", addr.toString(), cctx.statusMessage.to!string)
+			? format("Failed to connect to host %s: %s", addr.toString(), cctx.statusMessage)
 			: format("Failed to connect to host %s: %s", addr.toString(), cctx.status));
 
 		socklen_t balen = bind_addr.sockAddrLen;
-		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
+		socketEnforce(() @trusted { return getsockname(sockfd, bind_addr.sockAddr, &balen); } () == 0, "getsockname failed.");
 		cctx.local_addr = bind_addr;
 
 		return new Libevent2TCPConnection(cctx);
 	}
 
-	Libevent2TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) connection_callback, string address, TCPListenOptions options)
+	Libevent2TCPListener listenTCP(ushort port, void delegate(TCPConnection conn) @safe connection_callback, string address, TCPListenOptions options)
 	{
 		auto bind_addr = resolveHost(address, AF_UNSPEC, false);
 		bind_addr.port = port;
 
-		auto listenfd_raw = socket(bind_addr.family, SOCK_STREAM, 0);
+		auto listenfd_raw = () @trusted { return socket(bind_addr.family, SOCK_STREAM, 0); } ();
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(listenfd_raw).max > int.max) assert(listenfd_raw <= int.max || listenfd_raw == ~0);
 		auto listenfd = cast(int)listenfd_raw;
 		socketEnforce(listenfd != -1, "Error creating listening socket");
 		int tmp_reuse = 1;
-		socketEnforce(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
+		socketEnforce(() @trusted { return setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof); } () == 0,
 			"Error enabling socket address reuse on listening socket");
 		version (linux) {
 			if (options & TCPListenOptions.reusePort) {
-				if (setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof)) {
+				if (() @trusted { return setsockopt(listenfd, SOL_SOCKET, SO_REUSEPORT, &tmp_reuse, tmp_reuse.sizeof); } ()) {
 					if (errno != EINVAL && errno != ENOPROTOOPT) {
 						socketEnforce(false, "Error enabling socket port reuse on listening socket");
 					}
 				}
 			}
 		}
-		socketEnforce(bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0,
+		socketEnforce(() @trusted { return bind(listenfd, bind_addr.sockAddr, bind_addr.sockAddrLen); } () == 0,
 			"Error binding listening socket");
 
-		socketEnforce(listen(listenfd, 128) == 0,
+		socketEnforce(() @trusted { return listen(listenfd, 128); } () == 0,
 			"Error listening to listening socket");
 
 		// Set socket for non-blocking I/O
-		enforce(evutil_make_socket_nonblocking(listenfd) == 0,
+		enforce(() @trusted { return evutil_make_socket_nonblocking(listenfd); } () == 0,
 			"Error setting listening socket to non-blocking I/O.");
 
 		socklen_t balen = bind_addr.sockAddrLen;
-		socketEnforce(getsockname(listenfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
+		socketEnforce(() @trusted { return getsockname(listenfd, bind_addr.sockAddr, &balen); } () == 0, "getsockname failed.");
 
 		auto ret = new Libevent2TCPListener(bind_addr);
 
@@ -381,7 +385,7 @@ final class Libevent2Driver : EventDriver {
 			Libevent2TCPListener listener;
 			int listenfd;
 			NetworkAddress bind_addr;
-			void delegate(TCPConnection) connection_callback;
+			void delegate(TCPConnection) @safe connection_callback;
 			TCPListenOptions options;
 		}
 
@@ -393,24 +397,24 @@ final class Libevent2Driver : EventDriver {
 		hc.options = options;
 
 		static void setupConnectionHandler(shared(HandlerContext) handler_context_)
-		{
-			auto handler_context = cast(HandlerContext)handler_context_;
+		@safe {
+			auto handler_context = () @trusted { return cast(HandlerContext)handler_context_; } ();
 			auto evloop = getThreadLibeventEventLoop();
 			auto core = getThreadLibeventDriverCore();
 			// Add an event to wait for connections
-			auto ctx = TCPContextAlloc.alloc(core, evloop, handler_context.listenfd, null, handler_context.bind_addr, NetworkAddress());
-			scope(failure) TCPContextAlloc.free(ctx);
+			auto ctx = () @trusted { return TCPContextAlloc.alloc(core, evloop, handler_context.listenfd, null, handler_context.bind_addr, NetworkAddress()); } ();
+			scope(failure) () @trusted { TCPContextAlloc.free(ctx); } ();
 			ctx.connectionCallback = handler_context.connection_callback;
-			ctx.listenEvent = event_new(evloop, handler_context.listenfd, EV_READ | EV_PERSIST, &onConnect, ctx);
+			ctx.listenEvent = () @trusted { return event_new(evloop, handler_context.listenfd, EV_READ | EV_PERSIST, &onConnect, ctx); } ();
 			ctx.listenOptions = handler_context.options;
-			enforce(event_add(ctx.listenEvent, null) == 0,
+			enforce(() @trusted { return event_add(ctx.listenEvent, null); } () == 0,
 				"Error scheduling connection event on the event loop.");
 			handler_context.listener.addContext(ctx);
 		}
 
 		// FIXME: the API needs improvement with proper shared annotations, so the the following casts are not necessary
-		if (options & TCPListenOptions.distribute) runWorkerTaskDist(&setupConnectionHandler, cast(shared)hc);
-		else setupConnectionHandler(cast(shared)hc);
+		if (options & TCPListenOptions.distribute) () @trusted { return runWorkerTaskDist(&setupConnectionHandler, cast(shared)hc); } ();
+		else setupConnectionHandler(() @trusted { return cast(shared)hc; } ());
 
 		return ret;
 	}
@@ -433,12 +437,12 @@ final class Libevent2Driver : EventDriver {
 		return new Libevent2FileDescriptorEvent(this, fd, events, mode);
 	}
 
-	size_t createTimer(void delegate() callback) { return m_timers.create(TimerInfo(callback)); }
+	size_t createTimer(void delegate() @safe callback) { return m_timers.create(TimerInfo(callback)); }
 
 	void acquireTimer(size_t timer_id) { m_timers.getUserData(timer_id).refCount++; }
 	void releaseTimer(size_t timer_id)
-	{
-		debug assert(m_ownerThread is Thread.getThis());
+	nothrow {
+		debug assert(m_ownerThread is () @trusted { return Thread.getThis(); } ());
 		if (!--m_timers.getUserData(timer_id).refCount)
 			m_timers.destroy(timer_id);
 	}
@@ -447,7 +451,7 @@ final class Libevent2Driver : EventDriver {
 
 	void rearmTimer(size_t timer_id, Duration dur, bool periodic)
 	{
-		debug assert(m_ownerThread is Thread.getThis());
+		debug assert(m_ownerThread is () @trusted { return Thread.getThis(); } ());
 		if (!isTimerPending(timer_id)) acquireTimer(timer_id);
 		m_timers.schedule(timer_id, dur, periodic);
 		rescheduleTimerEvent(Clock.currTime(UTC()));
@@ -464,11 +468,11 @@ final class Libevent2Driver : EventDriver {
 
 	void waitTimer(size_t timer_id)
 	{
-		debug assert(m_ownerThread is Thread.getThis());
+		debug assert(m_ownerThread is () @trusted { return Thread.getThis(); } ());
 		while (true) {
 			assert(!m_timers.isPeriodic(timer_id), "Cannot wait for a periodic timer.");
 			if (!m_timers.isPending(timer_id)) return;
-			auto data = &m_timers.getUserData(timer_id);
+			auto data = () @trusted { return &m_timers.getUserData(timer_id); } ();
 			assert(data.owner == Task.init, "Waiting for the same timer from multiple tasks is not supported.");
 			data.owner = Task.getThis();
 			scope (exit) m_timers.getUserData(timer_id).owner = Task.init;
@@ -483,7 +487,7 @@ final class Libevent2Driver : EventDriver {
 		logTrace("Processing due timers");
 		// process all timers that have expired up to now
 		auto now = Clock.currTime(UTC());
-		m_timers.consumeTimeouts(now, (timer, periodic, ref data) {
+		m_timers.consumeTimeouts(now, (timer, periodic, ref data) @safe {
 			Task owner = data.owner;
 			auto callback = data.callback;
 
@@ -492,7 +496,7 @@ final class Libevent2Driver : EventDriver {
 			if (!periodic) releaseTimer(timer);
 
 			if (owner && owner.running) m_core.resumeTask(owner);
-			if (callback) runTask(callback);
+			if (callback) () @trusted { runTask(callback); } ();
 		});
 
 		rescheduleTimerEvent(now);
@@ -505,12 +509,12 @@ final class Libevent2Driver : EventDriver {
 
 		m_timerTimeout = now;
 		auto dur = next - now;
-		event_del(m_timerEvent);
+		() @trusted { event_del(m_timerEvent); } ();
 		assert(dur.total!"seconds"() <= int.max);
 		dur += 9.hnsecs(); // round up to the next usec to avoid premature timer events
 		timeval tvdur = dur.toTimeVal();
-		event_add(m_timerEvent, &tvdur);
-		assert(event_pending(m_timerEvent, EV_TIMEOUT, null));
+		() @trusted { event_add(m_timerEvent, &tvdur); } ();
+		assert(() @trusted { return event_pending(m_timerEvent, EV_TIMEOUT, null); } ());
 		logTrace("Rescheduled timer event for %s seconds", dur.total!"usecs" * 1e-6);
 	}
 
@@ -520,22 +524,25 @@ final class Libevent2Driver : EventDriver {
 		import std.encoding : sanitize;
 
 		logTrace("timer event fired");
-		auto drv = cast(Libevent2Driver)userptr;
+		auto drv = () @trusted { return cast(Libevent2Driver)userptr; } ();
 		try drv.processTimers();
 		catch (Exception e) {
 			logError("Failed to process timers: %s", e.msg);
-			try logDiagnostic("Full error: %s", e.toString().sanitize); catch (Throwable) {}
+			try logDiagnostic("Full error: %s", () @trusted { return e.toString().sanitize; } ());
+			catch (Exception e) {
+				logError("Failed to process timers: %s", e.msg);
+			}
 		}
 	}
 
 	private static nothrow extern(C) void onAddrInfo(int err, evutil_addrinfo* res, void* arg)
 	{
-		auto msg = cast(GetAddrInfoMsg*)arg;
+		auto msg = () @trusted { return cast(GetAddrInfoMsg*)arg; } ();
 		msg.err = err;
 		msg.done = true;
 		if (err == DNS_ERR_NONE) {
 			assert(res !is null);
-			scope (exit) evutil_freeaddrinfo(res);
+			scope (exit) () @trusted { evutil_freeaddrinfo(res); } ();
 
 			// Note that we are only returning the first address and ignoring the
 			// rest. Ideally we should return all of the NetworkAddress
@@ -547,7 +554,7 @@ final class Libevent2Driver : EventDriver {
 					msg.addr.sockAddrInet4.sin_addr.s_addr = sock4.sin_addr.s_addr;
 					break;
 				case AF_INET6:
-					auto sock6 = cast(sockaddr_in6*)res.ai_addr;
+					auto sock6 = () @trusted { return cast(sockaddr_in6*)res.ai_addr; } ();
 					msg.addr.sockAddrInet6.sin6_addr.s6_addr = sock6.sin6_addr.s6_addr;
 					break;
 				default:
@@ -566,32 +573,36 @@ final class Libevent2Driver : EventDriver {
 	nothrow {
 		scope (failure) assert(false); // synchronized is not nothrow
 
-		debug assert(Thread.getThis() is m_ownerThread, "Event object created in foreign thread.");
-		auto key = cast(size_t)cast(void*)obj;
+		debug assert(() @trusted { return Thread.getThis(); } () is m_ownerThread, "Event object created in foreign thread.");
+		auto key = () @trusted { return cast(size_t)cast(void*)obj; } ();
 		m_ownedObjects.insert(key);
 		if (obj.m_threadObject)
-			synchronized (s_threadObjectsMutex)
-				s_threadObjects.insert(key);
+			() @trusted {
+				synchronized (s_threadObjectsMutex)
+					s_threadObjects.insert(key);
+			} ();
 	}
 
 	private void unregisterObject(Libevent2Object obj)
 	nothrow {
 		scope (failure) assert(false); // synchronized is not nothrow
 
-		auto key = cast(size_t)cast(void*)obj;
+		auto key = () @trusted { return cast(size_t)cast(void*)obj; } ();
 		m_ownedObjects.remove(key);
 		if (obj.m_threadObject)
-			synchronized (s_threadObjectsMutex)
-				s_threadObjects.remove(key);
+			() @trusted {
+				synchronized (s_threadObjectsMutex)
+					s_threadObjects.remove(key);
+			} ();
 	}
 }
 
 private struct TimerInfo {
 	size_t refCount = 1;
-	void delegate() callback;
+	void delegate() @safe callback;
 	Task owner;
 
-	this(void delegate() callback) { this.callback = callback; }
+	this(void delegate() @safe callback) @safe { this.callback = callback; }
 }
 
 struct AddressInfo {
@@ -616,7 +627,7 @@ private class Libevent2Object {
 	private bool m_threadObject;
 
 	this(Libevent2Driver driver, bool thread_object)
-	nothrow {
+	nothrow @safe {
 		m_threadObject = thread_object;
 		m_driver = driver;
 		m_driver.registerObject(this);
@@ -624,13 +635,13 @@ private class Libevent2Object {
 	}
 
 	~this()
-	{
+	@trusted {
 		// NOTE: m_driver will always be destroyed deterministically
 		//       in static ~this(), so it can be used here safely
 		m_driver.unregisterObject(this);
 	}
 
-	protected void onThreadShutdown() {}
+	protected void onThreadShutdown() @safe {}
 }
 
 /// private
@@ -643,6 +654,8 @@ struct ThreadSlot {
 alias ThreadSlotMap = HashMap!(Thread, ThreadSlot);
 
 final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
+@safe:
+
 	private {
 		shared(int) m_emitCount = 0;
 		core.sync.mutex.Mutex m_mutex;
@@ -661,7 +674,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	{
 		m_mutex = null; // Optimistic race-condition detection (see Libevent2Driver.dispose())
 		foreach (ref m_waiters.Value ts; m_waiters)
-			event_free(ts.event);
+			() @trusted { event_free(ts.event); } ();
 	}
 
 	void emit()
@@ -669,10 +682,10 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		static if (!synchronizedIsNothrow)
 			scope (failure) assert(0, "Internal error: function should be nothrow");
 
-		atomicOp!"+="(m_emitCount, 1);
+		() @trusted { atomicOp!"+="(m_emitCount, 1); } ();
 		synchronized (m_mutex) {
 			foreach (ref m_waiters.Value sl; m_waiters)
-				event_active(sl.event, 0, 0);
+				() @trusted { event_active(sl.event, 0, 0); } ();
 		}
 	}
 
@@ -685,14 +698,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 	void acquire()
 	{
 		auto task = Task.getThis();
-		auto thread = task == Task() ? Thread.getThis() : task.thread;
+		auto thread = task == Task() ? () @trusted { return Thread.getThis(); } () : task.thread;
 
 		synchronized (m_mutex) {
 			if (thread !in m_waiters) {
 				ThreadSlot slot;
 				slot.driver = cast(Libevent2Driver)getEventDriver();
-				slot.event = event_new(slot.driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this);
-				event_add(slot.event, null);
+				slot.event = () @trusted { return event_new(slot.driver.eventLoop, -1, EV_PERSIST, &onSignalTriggered, cast(void*)this); } ();
+				() @trusted { event_add(slot.event, null); } ();
 				m_waiters[thread] = slot;
 			}
 
@@ -725,14 +738,14 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		}
 	}
 
-	@property int emitCount() const { return atomicLoad(m_emitCount); }
+	@property int emitCount() const @trusted { return atomicLoad(m_emitCount); }
 
 	protected override void onThreadShutdown()
 	{
-		auto thr = Thread.getThis();
+		auto thr = () @trusted { return Thread.getThis(); } ();
 		synchronized (m_mutex) {
 			if (thr in m_waiters) {
-				event_free(m_waiters[thr].event);
+				() @trusted { event_free(m_waiters[thr].event); } ();
 				m_waiters.remove(thr);
 			}
 		}
@@ -787,8 +800,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 		import std.encoding : sanitize;
 
 		try {
-			auto sig = cast(Libevent2ManualEvent)userptr;
-			auto thread = Thread.getThis();
+			auto sig = () @trusted { return cast(Libevent2ManualEvent)userptr; } ();
+			auto thread = () @trusted { return Thread.getThis(); } ();
 			auto core = getThreadLibeventDriverCore();
 
 			ArraySet!Task lst;
@@ -801,7 +814,7 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 				core.resumeTask(l);
 		} catch (Exception e) {
 			logError("Exception while handling signal event: %s", e.msg);
-			try logDiagnostic("Full error: %s", sanitize(e.msg));
+			try logDiagnostic("Full error: %s", () @trusted { return sanitize(e.msg); } ());
 			catch(Exception) {}
 			debug assert(false);
 		}
@@ -810,6 +823,8 @@ final class Libevent2ManualEvent : Libevent2Object, ManualEvent {
 
 
 final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent {
+@safe:
+
 	private {
 		int m_fd;
 		deimos.event2.event.event* m_event;
@@ -829,13 +844,13 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		if (events & Trigger.write) evts |= EV_WRITE;
 		if (m_persistent) evts |= EV_PERSIST;
 		if (mode == Mode.edgeTriggered) evts |= EV_ET;
-		m_event = event_new(driver.eventLoop, file_descriptor, evts, &onFileTriggered, cast(void*)this);
-		if (m_persistent) event_add(m_event, null);
+		m_event = () @trusted { return event_new(driver.eventLoop, file_descriptor, evts, &onFileTriggered, cast(void*)this); } ();
+		if (m_persistent) () @trusted { event_add(m_event, null); } ();
 	}
 
 	~this()
 	{
-		event_free(m_event);
+		() @trusted { event_free(m_event); } ();
 	}
 
 	Trigger wait(Trigger which)
@@ -848,7 +863,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		}
 
 		while ((m_activeEvents & which) == Trigger.none) {
-			if (!m_persistent) event_add(m_event, null);
+			if (!m_persistent) () @trusted { event_add(m_event, null); } ();
 			getThreadLibeventDriverCore().yieldForEvent();
 		}
 		return m_activeEvents & which;
@@ -869,7 +884,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 		m_driver.rearmTimer(tm, timeout, false);
 
 		while ((m_activeEvents & which) == Trigger.none) {
-			if (!m_persistent) event_add(m_event, null);
+			if (!m_persistent) () @trusted { event_add(m_event, null); } ();
 			getThreadLibeventDriverCore().yieldForEvent();
 			if (!m_driver.isTimerPending(tm)) break;
 		}
@@ -883,7 +898,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 
 		try {
 			auto core = getThreadLibeventDriverCore();
-			auto evt = cast(Libevent2FileDescriptorEvent)userptr;
+			auto evt = () @trusted { return cast(Libevent2FileDescriptorEvent)userptr; } ();
 
 			evt.m_activeEvents = Trigger.none;
 			if (events & EV_READ) evt.m_activeEvents |= Trigger.read;
@@ -891,7 +906,7 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 			if (evt.m_waiter) core.resumeTask(evt.m_waiter);
 		} catch (Exception e) {
 			logError("Exception while handling file event: %s", e.msg);
-			try logDiagnostic("Full error: %s", sanitize(e.msg));
+			try logDiagnostic("Full error: %s", () @trusted { return sanitize(e.msg); } ());
 			catch(Exception) {}
 			debug assert(false);
 		}
@@ -900,6 +915,8 @@ final class Libevent2FileDescriptorEvent : Libevent2Object, FileDescriptorEvent 
 
 
 final class Libevent2UDPConnection : UDPConnection {
+@safe:
+
 	private {
 		Libevent2Driver m_driver;
 		TCPContext* m_ctx;
@@ -912,23 +929,23 @@ final class Libevent2UDPConnection : UDPConnection {
 	{
 		m_driver = driver;
 
-		auto sockfd_raw = socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP);
+		auto sockfd_raw = () @trusted { return socket(bind_addr.family, SOCK_DGRAM, IPPROTO_UDP); } ();
 		// on Win64 socket() returns a 64-bit value but libevent expects an int
 		static if (typeof(sockfd_raw).max > int.max) assert(sockfd_raw <= int.max || sockfd_raw == ~0);
 		auto sockfd = cast(int)sockfd_raw;
 		socketEnforce(sockfd != -1, "Failed to create socket.");
 
-		enforce(evutil_make_socket_nonblocking(sockfd) == 0, "Failed to make socket non-blocking.");
+		enforce(() @trusted { return evutil_make_socket_nonblocking(sockfd); } () == 0, "Failed to make socket non-blocking.");
 
 		int tmp_reuse = 1;
-		socketEnforce(setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof) == 0,
+		socketEnforce(() @trusted { return setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &tmp_reuse, tmp_reuse.sizeof); } () == 0,
 			"Error enabling socket address reuse on listening socket");
 
 		// bind the socket to a local inteface/port
-		socketEnforce(bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen) == 0, "Failed to bind UDP socket.");
+		socketEnforce(() @trusted { return bind(sockfd, bind_addr.sockAddr, bind_addr.sockAddrLen); } () == 0, "Failed to bind UDP socket.");
 		// read back the actual bind address
 		socklen_t balen = bind_addr.sockAddrLen;
-		socketEnforce(getsockname(sockfd, bind_addr.sockAddr, &balen) == 0, "getsockname failed.");
+		socketEnforce(() @trusted { return getsockname(sockfd, bind_addr.sockAddr, &balen); } () == 0, "getsockname failed.");
 
 		// generate the bind address string
 		m_bindAddress = bind_addr;
@@ -936,13 +953,13 @@ final class Libevent2UDPConnection : UDPConnection {
 		void* ptr;
 		if( bind_addr.family == AF_INET ) ptr = &bind_addr.sockAddrInet4.sin_addr;
 		else ptr = &bind_addr.sockAddrInet6.sin6_addr;
-		evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length);
-		m_bindAddressString = to!string(buf.ptr);
+		() @trusted { evutil_inet_ntop(bind_addr.family, ptr, buf.ptr, buf.length); } ();
+		m_bindAddressString = () @trusted { return to!string(buf.ptr); } ();
 
 		// create a context for storing connection information
-		m_ctx = TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress());
-		scope(failure) TCPContextAlloc.free(m_ctx);
-		m_ctx.listenEvent = event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx);
+		m_ctx = () @trusted { return TCPContextAlloc.alloc(driver.m_core, driver.m_eventLoop, sockfd, null, bind_addr, NetworkAddress()); } ();
+		scope(failure) () @trusted { TCPContextAlloc.free(m_ctx); } ();
+		m_ctx.listenEvent = () @trusted { return event_new(driver.m_eventLoop, sockfd, EV_READ|EV_PERSIST, &onUDPRead, m_ctx); } ();
 		if (!m_ctx.listenEvent) throw new Exception("Failed to create buffer event for socket.");
 	}
 
@@ -953,7 +970,7 @@ final class Libevent2UDPConnection : UDPConnection {
 	@property void canBroadcast(bool val)
 	{
 		int tmp_broad = val;
-		enforce(setsockopt(m_ctx.socketfd, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof) == 0,
+		enforce(() @trusted { return setsockopt(m_ctx.socketfd, SOL_SOCKET, SO_BROADCAST, &tmp_broad, tmp_broad.sizeof); } () == 0,
 			"Failed to change the socket broadcast flag.");
 		m_canBroadcast = val;
 	}
@@ -984,8 +1001,8 @@ final class Libevent2UDPConnection : UDPConnection {
 		if (!m_ctx) return;
 		acquire();
 
-		if (m_ctx.listenEvent) event_free(m_ctx.listenEvent);
-		TCPContextAlloc.free(m_ctx);
+		if (m_ctx.listenEvent) () @trusted { event_free(m_ctx.listenEvent); } ();
+		() @trusted { TCPContextAlloc.free(m_ctx); } ();
 		m_ctx = null;
 	}
 
@@ -998,7 +1015,7 @@ final class Libevent2UDPConnection : UDPConnection {
 
 	void connect(NetworkAddress addr)
 	{
-		enforce(.connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen) == 0, "Failed to connect UDP socket."~to!string(getLastSocketError()));
+		enforce(() @trusted { return .connect(m_ctx.socketfd, addr.sockAddr, addr.sockAddrLen); } () == 0, "Failed to connect UDP socket."~to!string(getLastSocketError()));
 	}
 
 	void send(in ubyte[] data, in NetworkAddress* peer_address = null)
@@ -1006,9 +1023,9 @@ final class Libevent2UDPConnection : UDPConnection {
 		sizediff_t ret;
 		assert(data.length <= int.max);
 		if( peer_address ){
-			ret = .sendto(m_ctx.socketfd, data.ptr, cast(int)data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen);
+			ret = () @trusted { return .sendto(m_ctx.socketfd, data.ptr, cast(int)data.length, 0, peer_address.sockAddr, peer_address.sockAddrLen); } ();
 		} else {
-			ret = .send(m_ctx.socketfd, data.ptr, cast(int)data.length, 0);
+			ret = () @trusted { return .send(m_ctx.socketfd, data.ptr, cast(int)data.length, 0); } ();
 		}
 		logTrace("send ret: %s, %s", ret, getLastSocketError());
 		enforce(ret >= 0, "Error sending UDP packet.");
@@ -1033,10 +1050,10 @@ final class Libevent2UDPConnection : UDPConnection {
 		// TODO: adds the event only when we actually read to avoid event loop
 		// spinning when data is available, see #715. Since this may be
 		// performance critical, a proper benchmark should be performed!
-		enforce(event_add(m_ctx.listenEvent, null) == 0);
+		enforce(() @trusted { return event_add(m_ctx.listenEvent, null); } () == 0);
 
 		scope (exit) {
-			event_del(m_ctx.listenEvent);
+			() @trusted { event_del(m_ctx.listenEvent); } ();
 			release();
 			if (tm != size_t.max) m_driver.releaseTimer(tm);
 		}
@@ -1048,7 +1065,7 @@ final class Libevent2UDPConnection : UDPConnection {
 		assert(buf.length <= int.max);
 		while (true) {
 			socklen_t addr_len = from.sockAddrLen;
-			auto ret = .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len);
+			auto ret = () @trusted { return .recvfrom(m_ctx.socketfd, buf.ptr, cast(int)buf.length, 0, from.sockAddr, &addr_len); } ();
 			if (ret > 0) {
 				if( peer_address ) *peer_address = from;
 				return buf[0 .. ret];
@@ -1069,14 +1086,14 @@ final class Libevent2UDPConnection : UDPConnection {
 
 	private static nothrow extern(C) void onUDPRead(evutil_socket_t sockfd, short evts, void* arg)
 	{
-		auto ctx = cast(TCPContext*)arg;
+		auto ctx = () @trusted { return cast(TCPContext*)arg; } ();
 		logTrace("udp socket %d read event!", ctx.socketfd);
 
 		try {
 			auto f = ctx.readOwner;
 			if (f && f.running)
 				ctx.core.resumeTask(f);
-		} catch( Throwable e ){
+		} catch( Exception e ){
 			logError("Exception onUDPRead: %s", e.msg);
 			debug assert(false);
 		}
@@ -1089,6 +1106,8 @@ final class Libevent2UDPConnection : UDPConnection {
 
 version (linux)
 final class InotifyDirectoryWatcher : DirectoryWatcher {
+@safe:
+
 	import core.sys.posix.fcntl, core.sys.posix.unistd, core.sys.linux.sys.inotify;
 	import std.file;
 
@@ -1108,40 +1127,42 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 		m_path = path;
 
 		enum IN_NONBLOCK = 0x800; // value in core.sys.linux.sys.inotify is incorrect
-		m_handle = inotify_init1(IN_NONBLOCK);
+		m_handle = () @trusted { return inotify_init1(IN_NONBLOCK); } ();
 		errnoEnforce(m_handle != -1, "Failed to initialize inotify.");
 
 		auto spath = m_path.toString();
 		addWatch(spath);
 		if (recursive && spath.isDir)
 		{
-			foreach (de; spath.dirEntries(SpanMode.shallow))
-				if (de.isDir) addWatch(de.name);
+			() @trusted {
+				foreach (de; spath.dirEntries(SpanMode.shallow))
+					if (de.isDir) addWatch(de.name);
+			} ();
 		}
 	}
 
 	~this()
 	{
-		errnoEnforce(close(m_handle) == 0);
+		errnoEnforce(() @trusted { return close(m_handle); } () == 0);
 	}
 
 	@property Path path() const { return m_path; }
 	@property bool recursive() const { return m_recursive; }
 
 	void release()
-	{
+	@safe {
 		assert(m_owner == Task.getThis(), "Releasing DirectoyWatcher that is not owned by the calling task.");
 		m_owner = Task();
 	}
 
 	void acquire()
-	{
+	@safe {
 		assert(m_owner == Task(), "Acquiring DirectoyWatcher that is already owned.");
 		m_owner = Task.getThis();
 	}
 
 	bool amOwner()
-	{
+	@safe {
 		return m_owner == Task.getThis();
 	}
 
@@ -1154,13 +1175,13 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 		scope(exit) release();
 
 		ubyte[inotify_event.sizeof + FILENAME_MAX + 1] buf = void;
-		auto nread = read(m_handle, buf.ptr, buf.sizeof);
+		auto nread = () @trusted { return read(m_handle, buf.ptr, buf.sizeof); } ();
 
 		if (nread == -1 && errno == EAGAIN)
 		{
 			if (!waitReadable(m_handle, timeout))
 				return false;
-			nread = read(m_handle, buf.ptr, buf.sizeof);
+			nread = () @trusted { return read(m_handle, buf.ptr, buf.sizeof); } ();
 		}
 		errnoEnforce(nread != -1, "Error while reading inotify handle.");
 		assert(nread > 0);
@@ -1168,9 +1189,8 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 		dst.length = 0;
 		do
 		{
-			for (auto p = buf.ptr; p < buf.ptr + nread; )
-			{
-				auto ev = cast(inotify_event*)p;
+			for (size_t i = 0; i < nread;) {
+				auto ev = &(cast(inotify_event[])buf[i .. i+inotify_event.sizeof])[0];
 				if (ev.wd !in m_watches) {
 					logDebug("Got unknown inotify watch ID %s. Ignoring.", ev.wd);
 					continue;
@@ -1185,25 +1205,25 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 					type = DirectoryChangeType.modified;
 
 				import std.path : buildPath;
-				auto name = ev.name.ptr[0 .. ev.name.ptr.strlen];
+				auto name = () @trusted { return ev.name.ptr[0 .. ev.name.ptr.strlen]; } ();
 				auto path = Path(buildPath(m_watches[ev.wd], name));
 
 				dst ~= DirectoryChange(type, path);
 
-				p += inotify_event.sizeof + ev.len;
+				i += inotify_event.sizeof + ev.len;
 			}
-			nread = read(m_handle, buf.ptr, buf.sizeof);
+			nread = () @trusted { return read(m_handle, buf.ptr, buf.sizeof); } ();
 			errnoEnforce(nread != -1 || errno == EAGAIN, "Error while reading inotify handle.");
 		} while (nread > 0);
 		return true;
 	}
 
 	private bool waitReadable(int fd, Duration timeout)
-	{
+	@safe {
 		static struct Args { InotifyDirectoryWatcher watcher; bool readable, timeout; }
 
 		static extern(System) void cb(int fd, short what, void* p) {
-			with (cast(Args*)p) {
+			with (() @trusted { return cast(Args*)p; } ()) {
 				if (what & EV_READ) readable = true;
 				if (what & EV_TIMEOUT) timeout = true;
 				if (watcher.m_owner)
@@ -1213,14 +1233,14 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 
 		auto loop = getThreadLibeventEventLoop();
 		auto args = Args(this);
-		auto ev = event_new(loop, fd, EV_READ, &cb, &args);
-		scope(exit) event_free(ev);
+		auto ev = () @trusted { return event_new(loop, fd, EV_READ, &cb, &args); } ();
+		scope(exit) () @trusted { event_free(ev); } ();
 
 		if (!timeout.isNegative) {
 			auto tv = timeout.toTimeVal();
-			event_add(ev, &tv);
+			() @trusted { event_add(ev, &tv); } ();
 		} else {
-			event_add(ev, null);
+			() @trusted { event_add(ev, null); } ();
 		}
 		while (!args.readable && !args.timeout)
 			m_core.yieldForEvent();
@@ -1228,10 +1248,10 @@ final class InotifyDirectoryWatcher : DirectoryWatcher {
 	}
 
 	private void addWatch(string path)
-	{
+	@safe {
 		enum EVENTS = IN_CREATE | IN_DELETE | IN_DELETE_SELF | IN_MODIFY |
 			IN_MOVE_SELF | IN_MOVED_FROM | IN_MOVED_TO;
-		immutable wd = inotify_add_watch(m_handle, path.toStringz, EVENTS);
+		immutable wd = () @trusted { return inotify_add_watch(m_handle, path.toStringz, EVENTS); } ();
 		errnoEnforce(wd != -1, "Failed to add inotify watch.");
 		m_watches[wd] = path;
 	}
@@ -1251,17 +1271,17 @@ private {
 	bool s_alreadyDeinitialized = false;
 }
 
-package event_base* getThreadLibeventEventLoop() nothrow
+package event_base* getThreadLibeventEventLoop() @safe nothrow
 {
 	return s_eventLoop;
 }
 
-package DriverCore getThreadLibeventDriverCore() nothrow
+package DriverCore getThreadLibeventDriverCore() @trusted nothrow
 {
 	return s_driverCore;
 }
 
-private int getLastSocketError() nothrow
+private int getLastSocketError() @trusted nothrow
 {
 	version(Windows) {
 		return WSAGetLastError();
@@ -1489,7 +1509,7 @@ private nothrow extern(C)
 }
 
 package timeval toTimeVal(Duration dur)
-{
+@safe {
 	timeval tvdur;
 	dur.split!("seconds", "usecs")(tvdur.tv_sec, tvdur.tv_usec);
 	return tvdur;

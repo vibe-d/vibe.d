@@ -80,6 +80,8 @@ alias bdata_t = immutable(ubyte)[];
 
 */
 struct Bson {
+@safe:
+
 	/// Represents the type of a BSON value
 	enum Type : ubyte {
 		end        = 0x00,  /// End marker - should never occur explicitly
@@ -338,7 +340,7 @@ struct Bson {
 	}
 	/// ditto
 	void opAssign(in Json value)
-	{
+	@trusted {
 		auto app = appender!bdata_t();
 		m_type = writeBson(app, value);
 		m_data = app.data;
@@ -464,7 +466,7 @@ struct Bson {
 	/** Converts a given JSON value to the corresponding BSON value.
 	*/
 	static Bson fromJson(in Json value)
-	{
+	@trusted {
 		auto app = appender!bdata_t();
 		auto tp = writeBson(app, value);
 		return Bson(tp, app.data);
@@ -491,7 +493,7 @@ struct Bson {
 				foreach( i, v; get!(Bson[])() )
 					ret[i] = v.toJson();
 				return Json(ret);
-			case Bson.Type.binData: return Json(cast(string)Base64.encode(get!BsonBinData.rawData));
+			case Bson.Type.binData: return Json(() @trusted { return cast(string)Base64.encode(get!BsonBinData.rawData); } ());
 			case Bson.Type.objectID: return Json(get!BsonObjectID().toString());
 			case Bson.Type.bool_: return Json(get!bool());
 			case Bson.Type.date: return Json(get!BsonDate.toString());
@@ -657,7 +659,7 @@ struct Bson {
 	/**
 		Allows foreach iterating over BSON objects and arrays.
 	*/
-	int opApply(int delegate(Bson obj) del)
+	int opApply(scope int delegate(Bson obj) @safe del)
 	const {
 		checkType(Type.array, Type.object);
 		if( m_type == Type.array ){
@@ -673,7 +675,7 @@ struct Bson {
 		}
 	}
 	/// ditto
-	int opApply(int delegate(ref size_t idx, Bson obj) del)
+	int opApply(scope int delegate(size_t idx, Bson obj) @safe del)
 	const {
 		checkType(Type.array);
 		auto d = m_data[4 .. $];
@@ -695,7 +697,7 @@ struct Bson {
 		return 0;
 	}
 	/// ditto
-	int opApply(int delegate(ref string idx, Bson obj) del)
+	int opApply(scope int delegate(string idx, Bson obj) @safe del)
 	const {
 		checkType(Type.object);
 		auto d = m_data[4 .. $];
@@ -738,6 +740,8 @@ struct Bson {
 	Represents a BSON binary data value (Bson.Type.binData).
 */
 struct BsonBinData {
+@safe:
+
 	enum Type : ubyte {
 		generic = 0x00,
 		function_ = 0x01,
@@ -774,6 +778,8 @@ struct BsonBinData {
 	Represents a BSON object id (Bson.Type.binData).
 */
 struct BsonObjectID {
+@safe:
+
 	private {
 		ubyte[12] m_bytes;
 		static immutable uint MACHINE_ID;
@@ -890,19 +896,19 @@ struct BsonObjectID {
 	int opCmp(ref const BsonObjectID other)
 	const {
 		import core.stdc.string;
-		return memcmp(m_bytes.ptr, other.m_bytes.ptr, m_bytes.length);
+		return () @trusted { return memcmp(m_bytes.ptr, other.m_bytes.ptr, m_bytes.length); } ();
 	}
 
 	/** Converts the ID to its standard hexa-decimal string representation.
 	*/
-	string toString() const {
+	string toString() const pure {
 		enum hexdigits = "0123456789abcdef";
 		auto ret = new char[24];
 		foreach( i, b; m_bytes ){
 			ret[i*2+0] = hexdigits[(b >> 4) & 0x0F];
 			ret[i*2+1] = hexdigits[b & 0x0F];
 		}
-		return cast(immutable)ret;
+		return ret;
 	}
 
 	ubyte[] opCast() {
@@ -948,6 +954,8 @@ unittest {
 	milliseconds from 1970/01/01.
 */
 struct BsonDate {
+@safe:
+
 	private long m_time; // milliseconds since UTC unix epoch
 
 	/** Constructs a BsonDate from the given date value.
@@ -1018,6 +1026,8 @@ struct BsonDate {
 	Represents a BSON timestamp value `(Bson.Type.timestamp)`.
 */
 struct BsonTimestamp {
+@safe:
+
 	private long m_time;
 
 	this( long time ){
@@ -1030,6 +1040,8 @@ struct BsonTimestamp {
 	Represents a BSON regular expression value `(Bson.Type.regex)`.
 */
 struct BsonRegex {
+@safe:
+
 	private {
 		string m_expr;
 		string m_options;
@@ -1201,12 +1213,13 @@ unittest {
 
 unittest {
 	static class C {
+	@safe:
 		int a;
 		private int _b;
 		@property int b() const { return _b; }
 		@property void b(int v) { _b = v; }
 
-		@property int test() const { return 10; }
+		@property int test() const @safe { return 10; }
 
 		void test2() {}
 	}
@@ -1226,10 +1239,11 @@ unittest {
 }
 
 unittest {
-	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
+	static struct C { @safe: int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
 	enum Color { Red, Green, Blue }
 	{
 		static class T {
+			@safe:
 			string[Color] enumIndexedMap;
 			string[C] stringableIndexedMap;
 			this() {
@@ -1322,14 +1336,14 @@ struct BsonSerializer {
 	}
 
 	this(Bson input)
-	{
+	@safe {
 		m_inputData = input;
 	}
 
 	this(ubyte[] buffer)
 	{
 		import vibe.internal.utilallocator;
-		m_dst = AllocAppender!(ubyte[])(processAllocator(), buffer);
+		m_dst = () @trusted { return AllocAppender!(ubyte[])(processAllocator(), buffer); } ();
 	}
 
 	@disable this(this);
@@ -1340,9 +1354,9 @@ struct BsonSerializer {
 	// serialization
 	//
 	Bson getSerializedResult()
-	{
-		auto ret = Bson(m_type, cast(immutable)m_dst.data);
-		m_dst.reset();
+	@safe {
+		auto ret = Bson(m_type, () @trusted { return cast(immutable)m_dst.data; } ());
+		() @trusted { m_dst.reset(); } ();
 		m_type = Bson.Type.null_;
 		return ret;
 	}
@@ -1394,9 +1408,15 @@ struct BsonSerializer {
 		else static if (is(T : int) && isIntegral!T) { m_dst.put(toBsonData(cast(int)value)); }
 		else static if (is(T : long) && isIntegral!T) { m_dst.put(toBsonData(value)); }
 		else static if (is(T : double) && isFloatingPoint!T) { m_dst.put(toBsonData(cast(double)value)); }
-		else static if (isBsonSerializable!T) m_dst.put(value.toBson().data);
-		else static if (isJsonSerializable!T) m_dst.put(Bson(value.toJson()).data);
-		else static if (is(T : const(ubyte)[])) { writeValueH!(BsonBinData, false)(BsonBinData(BsonBinData.Type.generic, value.idup)); }
+		else static if (isBsonSerializable!T) {
+			static if (!__traits(compiles, () @safe { return value.toBson(); } ()))
+				pragma(msg, "Non-@safe toBson/fromBson methods are deprecated - annotate "~T.stringof~".toBson() with @safe.");
+			m_dst.put(() @trusted { return value.toBson(); } ().data);
+		} else static if (isJsonSerializable!T) {
+			static if (!__traits(compiles, () @safe { return value.toJson(); } ()))
+				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".toJson() with @safe.");
+			m_dst.put(Bson(() @trusted { return value.toJson(); } ()).data);
+		} else static if (is(T : const(ubyte)[])) { writeValueH!(BsonBinData, false)(BsonBinData(BsonBinData.Type.generic, value.idup)); }
 		else static assert(false, "Unsupported type: " ~ T.stringof);
 	}
 
@@ -1428,7 +1448,7 @@ struct BsonSerializer {
 	//
 	// deserialization
 	//
-	void readDictionary(Traits)(scope void delegate(string) entry_callback)
+	void readDictionary(Traits)(scope void delegate(string) @safe entry_callback)
 	{
 		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;
@@ -1442,7 +1462,7 @@ struct BsonSerializer {
 	void beginReadDictionaryEntry(Traits)(string name) {}
 	void endReadDictionaryEntry(Traits)(string name) {}
 
-	void readArray(Traits)(scope void delegate(size_t) size_callback, scope void delegate() entry_callback)
+	void readArray(Traits)(scope void delegate(size_t) @safe size_callback, scope void delegate() @safe entry_callback)
 	{
 		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;
@@ -1479,9 +1499,17 @@ struct BsonSerializer {
 			if (m_inputData.type == Bson.Type.string) return SysTime.fromISOExtString(m_inputData.get!string);
 			else return m_inputData.get!BsonDate().toSysTime();
 		}
-		else static if (isBsonSerializable!T) return T.fromBson(readValue!(Traits, Bson));
-		else static if (isJsonSerializable!T) return T.fromJson(readValue!(Traits, Bson).toJson());
-		else static if (is(T : const(ubyte)[])) {
+		else static if (isBsonSerializable!T) {
+			static if (!__traits(compiles, () @safe { return T.fromBson(Bson.init); } ()))
+				pragma(msg, "Non-@safe toBson/fromBson methods are deprecated - annotate "~T.stringof~".fromBson() with @safe.");
+			auto bval = readValue!(Traits, Bson);
+			return () @trusted { return T.fromBson(bval); } ();
+		} else static if (isJsonSerializable!T) {
+			static if (!__traits(compiles, () @safe { return T.fromJson(Json.init); } ()))
+				pragma(msg, "Non-@safe toJson/fromJson methods are deprecated - annotate "~T.stringof~".fromJson() with @safe.");
+			auto jval = readValue!(Traits, Bson).toJson();
+			return () @trusted { return T.fromJson(jval); } ();
+		} else static if (is(T : const(ubyte)[])) {
 			auto ret = m_inputData.get!BsonBinData.rawData;
 			static if (isStaticArray!T) return cast(T)ret[0 .. T.length];
 			else static if (is(T : immutable(char)[])) return ret;
@@ -1524,7 +1552,7 @@ struct BsonSerializer {
 }
 
 private Bson.Type jsonTypeToBsonType(Json.Type tp)
-{
+@safe {
 	static immutable Bson.Type[Json.Type.max+1] JsonIDToBsonID = [
 		Bson.Type.undefined,
 		Bson.Type.null_,
@@ -1604,7 +1632,7 @@ unittest
 }
 
 private string skipCString(ref bdata_t data)
-{
+@safe {
 	auto idx = data.countUntil(0);
 	enforce(idx >= 0, "Unterminated BSON C-string.");
 	auto ret = data[0 .. idx];
@@ -1650,7 +1678,7 @@ ubyte[] toBigEndianData(T)(T v)
 }
 
 private string underscoreStrip(string field_name)
-pure {
+pure @safe {
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
 	else return field_name[0 .. $-1];
 }

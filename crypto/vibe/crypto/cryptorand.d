@@ -27,7 +27,7 @@ interface RandomNumberStream : InputStream {
 		Throws:
 			CryptoException on error.
 	*/
-	void read(ubyte[] dst);
+	void read(ubyte[] dst) @safe;
 }
 
 
@@ -46,6 +46,8 @@ interface RandomNumberStream : InputStream {
 	See_Also: $(LINK http://en.wikipedia.org/wiki/CryptGenRandom)
 */
 final class SystemRNG : RandomNumberStream {
+@safe:
+
 	version(Windows)
 	{
 		//cryptographic service provider
@@ -72,7 +74,7 @@ final class SystemRNG : RandomNumberStream {
 		version(Windows)
 		{
 			//init cryptographic service provider
-			if(0 == CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+			if(0 == () @trusted { return CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT); } ())
 			{
 				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", GetLastError()));
 			}
@@ -88,7 +90,7 @@ final class SystemRNG : RandomNumberStream {
 			}
 			catch(ErrnoException e)
 			{
-				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", e.errno, `, Error message is: "`, e.msg, `"`));
+				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", () @trusted { return e.errno; } (), `, Error message is: "`, e.msg, `"`));
 			}
 			catch(Exception e)
 			{
@@ -97,10 +99,10 @@ final class SystemRNG : RandomNumberStream {
 		}
 	}
 
-	~this()
+	version(Windows)
 	{
-		version(Windows)
-		{
+		~this()
+		@trusted {
 			CryptReleaseContext(this.hCryptProv, 0);
 		}
 	}
@@ -110,7 +112,7 @@ final class SystemRNG : RandomNumberStream {
 	@property bool dataAvailableForRead() { return true; }
 	const(ubyte)[] peek() { return null; }
 
-	void read(ubyte[] buffer)
+	void read(ubyte[] buffer) @trusted
 	in
 	{
 		assert(buffer.length, "buffer length must be larger than 0");

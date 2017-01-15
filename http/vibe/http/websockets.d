@@ -9,7 +9,7 @@
 module vibe.http.websockets;
 
 ///
-unittest {
+@safe unittest {
 	void handleConn(scope WebSocket sock)
 	{
 		// simple echo server
@@ -29,11 +29,10 @@ unittest {
 	}
 }
 
-alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
-
 import vibe.core.core;
 import vibe.core.log;
 import vibe.core.net;
+import vibe.core.sync;
 import vibe.stream.operations;
 import vibe.http.server;
 import vibe.http.client;
@@ -54,9 +53,17 @@ import std.base64;
 import std.digest.sha;
 import vibe.crypto.cryptorand;
 
+@safe:
+
+
+alias WebSocketHandshakeDelegate = void delegate(scope WebSocket);
+
+
 /// Exception thrown by $(D vibe.http.websockets).
 class WebSocketException: Exception
 {
+@safe:
+
 	///
 	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
 	{
@@ -73,8 +80,8 @@ class WebSocketException: Exception
 /**
 	Returns a WebSocket client object that is connected to the specified host.
 */
-WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSettings)
-{
+WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
 	import std.typecons : Tuple, tuple;
 
 	auto host = url.host;
@@ -85,7 +92,7 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 		port = (use_tls) ? 443 : 80;
 
 	static struct ConnInfo { string host; ushort port; bool useTLS; string proxyIP; ushort proxyPort; }
-	static FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
+	static vibe.utils.array.FixedRingBuffer!(Tuple!(ConnInfo, ConnectionPool!HTTPClient), 16) s_connections;
 	auto   ckey = ConnInfo(host, port, use_tls, settings ? settings.proxyURL.host : null, settings ? settings.proxyURL.port : 0);
 
 	ConnectionPool!HTTPClient pool;
@@ -130,12 +137,12 @@ WebSocket connectWebSocket(URL url, HTTPClientSettings settings = defaultSetting
 }
 
 /// ditto
-void connectWebSocket(URL url, scope void delegate(scope WebSocket sock) del, HTTPClientSettings settings = defaultSettings)
-{
+void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
 	bool use_tls = (url.schema == "wss") ? true : false;
 	url.schema = use_tls ? "https" : "http";
 
-	scope rng = new SystemRNG;
+	/*scope*/auto rng = new SystemRNG;
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 
@@ -152,19 +159,26 @@ void connectWebSocket(URL url, scope void delegate(scope WebSocket sock) del, HT
 			auto key = "sec-websocket-accept" in res.headers;
 			enforce(key !is null, "Response is missing the Sec-WebSocket-Accept header.");
 			enforce(*key == answerKey, "Response has wrong accept key");
-			res.switchProtocol("websocket", (conn) {
+			res.switchProtocol("websocket", (scope conn) @trusted {
 				scope ws = new WebSocket(conn, null, rng);
 				del(ws);
 			});
 		}
 	);
 }
+/// ditto
+deprecated("Use an @safe handshake callback.")
+void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
+@safe {
+	connectWebSocket(url, (scope ws) @trusted => del(ws), settings);
+}
+
 
 /**
 	Establishes a web socket conection and passes it to the $(D on_handshake) delegate.
 */
 void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
-{
+@safe {
 	auto pUpgrade = "Upgrade" in req.headers;
 	auto pConnection = "Connection" in req.headers;
 	auto pKey = "Sec-WebSocket-Key" in req.headers;
@@ -196,7 +210,7 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 		return;
 	}
 
-	auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
+	auto accept = () @trusted { return cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid)); } ();
 	res.headers["Sec-WebSocket-Accept"] = accept;
 	res.headers["Connection"] = "Upgrade";
 	ConnectionStream conn = res.switchProtocol("websocket");
@@ -209,19 +223,26 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	}
 	socket.close();
 }
+/// ditto
+deprecated("Use an @safe handshake callback.")
+void handleWebSocket(scope void delegate(scope WebSocket) @system on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
+@safe {
+	handleWebSocket((scope ws) @trusted => on_handshake(ws), req, res);
+}
+
 
 /**
 	Returns a HTTP request handler that establishes web socket conections.
 */
-HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) on_handshake)
-{
-	return handleWebSockets(toDelegate(on_handshake));
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @safe on_handshake)
+@safe {
+	return handleWebSockets(() @trusted { return toDelegate(on_handshake); } ());
 }
 /// ditto
 HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handshake)
-{
+@safe {
 	void callback(scope HTTPServerRequest req, scope HTTPServerResponse res)
-	{
+	@safe {
 		auto pUpgrade = "Upgrade" in req.headers;
 		auto pConnection = "Connection" in req.headers;
 		auto pKey = "Sec-WebSocket-Key" in req.headers;
@@ -250,7 +271,7 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 			return;
 		}
 
-		auto accept = cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid));
+		auto accept = () @trusted { return cast(string)Base64.encode(sha1Of(*pKey ~ s_webSocketGuid)); } ();
 		res.headers["Sec-WebSocket-Accept"] = accept;
 		res.headers["Connection"] = "Upgrade";
 		res.switchProtocol("websocket", (scope conn) {
@@ -259,15 +280,23 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 			try on_handshake(socket);
 			catch (Exception e) {
 				logDiagnostic("WebSocket handler failed: %s", e.msg);
-			} catch (Throwable th) {
-				// pretend to have sent a closing frame so that any further sends will fail
-				socket.m_sentCloseFrame = true;
-				throw th;
 			}
 			socket.close();
 		});
 	}
 	return &callback;
+}
+/// ditto
+deprecated("Use an @safe handshake callback.")
+HTTPServerRequestDelegateS handleWebSockets(void delegate(scope WebSocket) @system on_handshake)
+@safe {
+	return handleWebSockets(delegate (scope ws) @trusted => on_handshake(ws));
+}
+/// ditto
+deprecated("Use an @safe handshake callback.")
+HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @system on_handshake)
+@safe {
+	return handleWebSockets(delegate (scope ws) @trusted => on_handshake(ws));
 }
 
 
@@ -296,6 +325,8 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
  * ---
  */
 final class WebSocket {
+@safe:
+
 	private {
 		ConnectionStream m_conn;
 		bool m_sentCloseFrame = false;
@@ -418,11 +449,11 @@ final class WebSocket {
 		Sends a message using an output stream.
 		Throws: WebSocketException if the connection is closed.
 	*/
-	void send(scope void delegate(scope OutgoingWebSocketMessage) sender, FrameOpcode frameOpcode = FrameOpcode.text)
+	void send(scope void delegate(scope OutgoingWebSocketMessage) @safe sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
 		m_writeMutex.performLocked!({
 			enforceEx!WebSocketException(!m_sentCloseFrame, "WebSocket connection already actively closed.");
-			scope message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_rng);
+			/*scope*/auto message = new OutgoingWebSocketMessage(m_conn, frameOpcode, m_rng);
 			scope(exit) message.finalize();
 			sender(message);
 		});
@@ -489,7 +520,7 @@ final class WebSocket {
 		Receives a new message using an InputStream.
 		Throws: WebSocketException if the connection is closed.
 	*/
-	void receive(scope void delegate(scope IncomingWebSocketMessage) receiver)
+	void receive(scope void delegate(scope IncomingWebSocketMessage) @safe receiver)
 	{
 		m_readMutex.performLocked!({
 			while (!m_nextMessage) {
@@ -520,7 +551,7 @@ final class WebSocket {
 					if (!m_conn.waitForData(request.serverSettings.webSocketPingInterval))
 						continue;
 				}
-				scope msg = new IncomingWebSocketMessage(m_conn, m_rng);
+				/*scope*/auto msg = new IncomingWebSocketMessage(m_conn, m_rng);
 				if (msg.frameOpcode == FrameOpcode.pong) {
 					enforce(msg.peek().length == uint.sizeof, "Pong payload has wrong length");
 					enforce(m_lastPingIndex == littleEndianToNative!uint(msg.peek()[0..uint.sizeof]), "Pong payload has wrong value");
@@ -547,14 +578,15 @@ final class WebSocket {
 		m_conn.close();
 	}
 
-	private void sendPing() {
+	private void sendPing()
+	nothrow {
 		if (!m_pongReceived) {
 			logDebug("Pong skipped");
 			m_pongSkipped = true;
 			m_pingTimer.stop();
 			return;
 		}
-		m_writeMutex.performLocked!({
+		try m_writeMutex.performLocked!({
 			m_pongReceived = false;
 			Frame ping;
 			ping.opcode = FrameOpcode.ping;
@@ -563,6 +595,9 @@ final class WebSocket {
 			ping.writeFrame(m_conn, m_rng);
 			logDebug("Ping sent");
 		});
+		catch (Exception e) {
+			logError("Failed to acquire write mutex for sending a WebSocket ping frame: %s", e.msg);
+		}
 	}
 }
 
@@ -570,6 +605,8 @@ final class WebSocket {
 	Represents a single outgoing _WebSocket message as an OutputStream.
 */
 final class OutgoingWebSocketMessage : OutputStream {
+@safe:
+
 	private {
         SystemRNG m_rng;
 		Stream m_conn;
@@ -629,6 +666,8 @@ final class OutgoingWebSocketMessage : OutputStream {
 	Represents a single incoming _WebSocket message as an InputStream.
 */
 final class IncomingWebSocketMessage : InputStream {
+@safe:
+
 	private {
         SystemRNG m_rng;
 		Stream m_conn;
@@ -718,6 +757,8 @@ enum FrameOpcode : uint {
 
 
 struct Frame {
+@safe:
+
 	bool fin;
 	FrameOpcode opcode;
 	ubyte[] payload;

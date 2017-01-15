@@ -12,12 +12,15 @@ import vibe.core.net;
 import vibe.inet.message;
 import vibe.stream.operations;
 import vibe.stream.tls;
+import vibe.internal.interfaceproxy;
 
 import std.algorithm : map, splitter;
 import std.base64;
 import std.conv;
 import std.exception;
 import std.string;
+
+@safe:
 
 
 /**
@@ -131,7 +134,7 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 	}
 	scope(exit) raw_conn.close();
 
-	Stream conn = raw_conn;
+	InterfaceProxy!Stream conn = raw_conn;
 
 	if( settings.connectionType == SMTPConnectionType.tls ){
 		auto ctx = createTLSContext(TLSContextKind.client, settings.tlsVersion);
@@ -142,10 +145,10 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 
 	expectStatus(conn, SMTPStatus.serviceReady, "connection establishment");
 
-	void greet() {
+	void greet() @safe {
 		conn.write("EHLO "~settings.localname~"\r\n");
 		while(true){ // simple skipping of
-			auto ln = cast(string)conn.readLine();
+			auto ln = () @trusted { return cast(string)conn.readLine(); } ();
 			logDebug("EHLO response: %s", ln);
 			auto sidx = ln.indexOf(' ');
 			auto didx = ln.indexOf('-');
@@ -175,7 +178,7 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 			conn.write("AUTH PLAIN\r\n");
 			expectStatus(conn, SMTPStatus.serverAuthReady, "AUTH PLAIN");
 			logDebug("seding auth info");
-			conn.write(Base64.encode(cast(ubyte[])("\0"~settings.username~"\0"~settings.password)));
+			conn.write(Base64.encode(cast(const(ubyte)[])("\0"~settings.username~"\0"~settings.password)));
 			conn.write("\r\n");
 			expectStatus(conn, 235, "plain auth info");
 			logDebug("authed");
@@ -183,9 +186,9 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 		case SMTPAuthType.login:
 			conn.write("AUTH LOGIN\r\n");
 			expectStatus(conn, SMTPStatus.serverAuthReady, "AUTH LOGIN");
-			conn.write(Base64.encode(cast(ubyte[])settings.username) ~ "\r\n");
+			conn.write(Base64.encode(cast(const(ubyte)[])settings.username) ~ "\r\n");
 			expectStatus(conn, SMTPStatus.serverAuthReady, "login user name");
-			conn.write(Base64.encode(cast(ubyte[])settings.password) ~ "\r\n");
+			conn.write(Base64.encode(cast(const(ubyte)[])settings.password) ~ "\r\n");
 			expectStatus(conn, 235, "login password");
 			break;
 		case SMTPAuthType.cramMd5: assert(false, "TODO!");
@@ -196,7 +199,7 @@ void sendMail(in SMTPClientSettings settings, Mail mail)
 
 	static immutable rcpt_headers = ["To", "Cc", "Bcc"];
 	foreach (h; rcpt_headers) {
-		mail.headers.getAll(h, (v) {
+		mail.headers.getAll(h, (v) @safe {
 			foreach (a; v.splitter(',').map!(a => a.strip)) {
 				conn.write("RCPT TO:"~addressMailPart(a)~"\r\n");
 				expectStatus(conn, SMTPStatus.success, "RCPT TO");
@@ -245,14 +248,15 @@ unittest {
 	// testSmtp("localhost", 25);
 }
 
-private void expectStatus(InputStream conn, int expected_status, string in_response_to)
+private void expectStatus(InputStream)(InputStream conn, int expected_status, string in_response_to)
+	if (isInputStream!InputStream)
 {
 	// TODO: make the full status message available in the exception
 	//       message or for general use (e.g. determine server features)
 	string ln;
 	sizediff_t sp, dsh;
 	do {
-		ln = cast(string)conn.readLine();
+		ln = () @trusted { return cast(string)conn.readLine(); } ();
 		sp = ln.indexOf(' ');
 		if (sp < 0) sp = ln.length;
 		dsh = ln.indexOf('-');
@@ -264,7 +268,7 @@ private void expectStatus(InputStream conn, int expected_status, string in_respo
 
 private int recvStatus(InputStream conn)
 {
-	string ln = cast(string)conn.readLine();
+	string ln = () @trusted { return cast(string)conn.readLine(); } ();
 	auto sp = ln.indexOf(' ');
 	if( sp < 0 ) sp = ln.length;
 	return to!int(ln[0 .. sp]);

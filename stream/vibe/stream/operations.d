@@ -33,7 +33,8 @@ import std.range : isOutputRange;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", IAllocator alloc = processAllocator()) /*@ufcs*/
+ubyte[] readLine(InputStream)(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", IAllocator alloc = processAllocator()) /*@ufcs*/
+	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -41,23 +42,24 @@ ubyte[] readLine()(InputStream stream, size_t max_bytes = size_t.max, string lin
 	return output.data();
 }
 /// ditto
-void readLine()(InputStream stream, OutputStream dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+void readLine(InputStream, OutputStream)(InputStream stream, OutputStream dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+	if (isInputStream!InputStream && isOutputStream!OutputStream)
 {
 	import vibe.stream.wrapper;
 	auto dstrng = StreamOutputRange(dst);
 	readLine(stream, dstrng, max_bytes, linesep);
 }
 /// ditto
-void readLine(R)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
+void readLine(R, InputStream)(InputStream stream, ref R dst, size_t max_bytes = size_t.max, string linesep = "\r\n")
 	if (isOutputRange!(R, ubyte))
 {
 	readUntil(stream, dst, cast(const(ubyte)[])linesep, max_bytes);
 }
 
 unittest {
-	import vibe.stream.memory : MemoryOutputStream, MemoryStream;
+	import vibe.stream.memory : createMemoryOutputStream, createMemoryStream;
 
-	auto inp = new MemoryStream(cast(ubyte[])"Hello, World!\r\nThis is a test.\r\nNot a full line.".dup);
+	auto inp = createMemoryStream(cast(ubyte[])"Hello, World!\r\nThis is a test.\r\nNot a full line.".dup);
 	assert(inp.readLine() == cast(const(ubyte)[])"Hello, World!");
 	assert(inp.readLine() == cast(const(ubyte)[])"This is a test.");
 	assertThrown(inp.readLine);
@@ -71,7 +73,7 @@ unittest {
 	assert(app.data == cast(const(ubyte)[])"Hello, World!");
 
 	// read into an output stream
-	auto os = new MemoryOutputStream;
+	auto os = createMemoryOutputStream();
 	inp.readLine(os);
 	assert(os.data == cast(const(ubyte)[])"This is a test.");
 }
@@ -114,7 +116,8 @@ unittest {
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = processAllocator()) /*@ufcs*/
+ubyte[] readUntil(InputStream)(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = processAllocator()) /*@ufcs*/
+@safe	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
 	output.reserve(max_bytes < 64 ? max_bytes : 64);
@@ -122,15 +125,16 @@ ubyte[] readUntil()(InputStream stream, in ubyte[] end_marker, size_t max_bytes 
 	return output.data();
 }
 /// ditto
-void readUntil()(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+void readUntil(InputStream, OutputStream)(InputStream stream, OutputStream dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+	if (isInputStream!InputStream && isOutputStream!OutputStream)
 {
 	import vibe.stream.wrapper;
-	auto dstrng = StreamOutputRange(dst);
+	auto dstrng = streamOutputRange(dst);
 	readUntil(stream, dstrng, end_marker, max_bytes);
 }
 /// ditto
-void readUntil(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
-	if (isOutputRange!(R, ubyte))
+void readUntil(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+@safe	if (isOutputRange!(R, ubyte) && isInputStream!InputStream)
 {
 	assert(max_bytes > 0 && end_marker.length > 0);
 
@@ -146,7 +150,7 @@ unittest {
 	import vibe.stream.memory;
 
 	auto text = "1231234123111223123334221111112221231333123123123123123213123111111111114";
-	auto stream = new MemoryStream(cast(ubyte[])text);
+	auto stream = createMemoryStream(cast(ubyte[])text);
 	void test(string s, size_t expected){
 		stream.seek(0);
 		auto result = cast(string)readUntil(stream, cast(ubyte[])s);
@@ -155,7 +159,7 @@ unittest {
 		assert(stream.leastSize() == stream.size() - expected - s.length, "Wrong number of bytes left in stream");
 
 		stream.seek(0);
-		auto inp2 = new NoPeekProxy(stream);
+		auto inp2 = new NoPeekProxy!InputStream(stream);
 		result = cast(string)readUntil(inp2, cast(const(ubyte)[])s);
 		assert(result.length == expected, "Wrong result index");
 		assert(result == text[0 .. result.length], "Wrong result contents: "~result~" vs "~text[0 .. result.length]);
@@ -182,14 +186,14 @@ unittest {
 }
 
 unittest {
-	import vibe.stream.memory : MemoryOutputStream, MemoryStream;
+	import vibe.stream.memory : createMemoryOutputStream, createMemoryStream, MemoryStream;
 	import vibe.stream.wrapper : ProxyStream;
 
 	auto text = cast(ubyte[])"ab\nc\rd\r\ne".dup;
 	void test(string marker, size_t idx)
 	{
 		// code path for peek support
-		auto inp = new MemoryStream(text);
+		auto inp = createMemoryStream(text);
 		auto dst = appender!(ubyte[]);
 		readUntil(inp, dst, cast(const(ubyte)[])marker);
 		assert(dst.data == text[0 .. idx]);
@@ -198,7 +202,7 @@ unittest {
 		// code path for no peek support
 		inp.seek(0);
 		dst = appender!(ubyte[]);
-		auto inp2 = new NoPeekProxy(inp);
+		auto inp2 = new NoPeekProxy!MemoryStream(inp);
 		readUntil(inp2, dst, cast(const(ubyte)[])marker);
 		assert(dst.data == text[0 .. idx]);
 		assert(inp.readAll() == text[idx+marker.length .. $]);
@@ -214,26 +218,30 @@ unittest {
 	Throws:
 		An exception is thrown if the stream contains more than max_bytes data.
 */
-ubyte[] readAll(InputStream stream, size_t max_bytes = size_t.max, size_t reserve_bytes = 0) /*@ufcs*/
+ubyte[] readAll(InputStream)(InputStream stream, size_t max_bytes = size_t.max, size_t reserve_bytes = 0) /*@ufcs*/
+@safe	if (isInputStream!InputStream)
 {
 	import vibe.internal.freelistref;
 
 	if (max_bytes == 0) logDebug("Deprecated behavior: readAll() called with max_bytes==0, use max_bytes==size_t.max instead.");
 
 	// prepare output buffer
-	auto dst = appender!(ubyte[])();
+	auto dst = AllocAppender!(ubyte[])(() @trusted { return GCAllocator.instance.allocatorObject; } ());
 	reserve_bytes = max(reserve_bytes, min(max_bytes, stream.leastSize));
 	if (reserve_bytes) dst.reserve(reserve_bytes);
 
-	auto bufferobj = FreeListRef!(Buffer, false)();
-	auto buffer = bufferobj.bytes[];
+	auto buffer = new ubyte[64*1024];
+	scope (exit) () @trusted { delete buffer; } ();
 	size_t n = 0;
 	while (!stream.empty) {
-		size_t chunk = cast(size_t)min(stream.leastSize, buffer.length);
+		size_t chunk = min(stream.leastSize, size_t.max);
 		n += chunk;
 		enforce(!max_bytes || n <= max_bytes, "Input data too long!");
-		stream.read(buffer[0 .. chunk]);
-		dst.put(buffer[0 .. chunk]);
+		dst.reserve(chunk);
+		dst.append((scope buf) {
+			stream.read(buf[0 .. chunk]);
+			return chunk;
+		});
 	}
 	return dst.data;
 }
@@ -254,15 +262,17 @@ ubyte[] readAll(InputStream stream, size_t max_bytes = size_t.max, size_t reserv
 		If the sanitize parameter is fals and the stream contains invalid UTF-8 code sequences,
 		a UTFException is thrown.
 */
-string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes = size_t.max)
+string readAllUTF8(InputStream)(InputStream stream, bool sanitize = false, size_t max_bytes = size_t.max)
+@safe 	if (isInputStream!InputStream)
 {
 	import std.utf;
 	import vibe.utils.string;
 	auto data = readAll(stream, max_bytes);
 	if( sanitize ) return stripUTF8Bom(sanitizeUTF8(data));
 	else {
-		validate(cast(string)data);
-		return stripUTF8Bom(cast(string)data);
+		auto ret = () @trusted { return cast(string)data; } ();
+		validate(ret);
+		return stripUTF8Bom(ret);
 	}
 }
 
@@ -279,7 +289,8 @@ string readAllUTF8(InputStream stream, bool sanitize = false, size_t max_bytes =
 
 	See_also: OutputStream.write
 */
-void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbytes = 0, Duration max_latency = 0.seconds)
+void pipeRealtime(OutputStream, ConnectionStream)(OutputStream destination, ConnectionStream source, ulong nbytes = 0, Duration max_latency = 0.seconds)
+	if (isOutputStream!OutputStream && isConnectionStream!ConnectionStream)
 {
 	import vibe.internal.freelistref;
 
@@ -327,7 +338,8 @@ void pipeRealtime(OutputStream destination, ConnectionStream source, ulong nbyte
 	Returns: True $(I iff) the consumed bytes equal the passed array.
 	Throws: Throws an exception if reading from the stream fails.
 */
-bool skipBytes(InputStream stream, const(ubyte)[] bytes)
+bool skipBytes(InputStream)(InputStream stream, const(ubyte)[] bytes)
+	if (isInputStream!InputStream)
 {
 	bool matched = true;
 	ubyte[128] buf = void;
@@ -342,7 +354,8 @@ bool skipBytes(InputStream stream, const(ubyte)[] bytes)
 
 private struct Buffer { ubyte[64*1024-4] bytes = void; } // 64k - 4 bytes for reference count
 
-private void readUntilSmall(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max)
+private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max)
+@safe	if (isInputStream!InputStream)
 {
 	assert(end_marker.length >= 1 && end_marker.length <= 2);
 
@@ -394,8 +407,8 @@ private void readUntilSmall(R)(InputStream stream, ref R dst, in ubyte[] end_mar
 }
 
 
-private void readUntilGeneric(R)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
-	if (isOutputRange!(R, ubyte))
+private @safe void readUntilGeneric(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
+	if (isOutputRange!(R, ubyte) && isInputStream!InputStream)
 {
 	// allocate internal jump table to optimize the number of comparisons
 	size_t[8] nmatchoffsetbuffer = void;
@@ -416,7 +429,9 @@ private void readUntilGeneric(R)(InputStream stream, ref R dst, in ubyte[] end_m
 	}
 
 	size_t nmatched = 0;
-	auto bufferobj = FreeListRef!(Buffer, false)();
+	Buffer* bufferobj;
+	bufferobj = new Buffer;
+	scope (exit) () @trusted { delete bufferobj; } ();
 	auto buf = bufferobj.bytes[];
 
 	ulong bytes_read = 0;
@@ -469,12 +484,12 @@ private void readUntilGeneric(R)(InputStream stream, ref R dst, in ubyte[] end_m
 
 		// write out any false match part of previous blocks
 		if( nmatched_start > 0 ){
-			if( nmatched <= i ) dst.put(end_marker[0 .. nmatched_start]);
-			else dst.put(end_marker[0 .. nmatched_start-nmatched+i]);
+			if( nmatched <= i ) () @trusted { dst.put(end_marker[0 .. nmatched_start]); } ();
+			else () @trusted { dst.put(end_marker[0 .. nmatched_start-nmatched+i]); } ();
 		}
 
 		// write out any unmatched part of the current block
-		if( nmatched < i ) dst.put(str[0 .. i-nmatched]);
+		if( nmatched < i ) () @trusted { dst.put(str[0 .. i-nmatched]); } ();
 
 		// got a full, match => out
 		if (nmatched >= end_marker.length) {
@@ -493,7 +508,8 @@ private void readUntilGeneric(R)(InputStream stream, ref R dst, in ubyte[] end_m
 
 static if (!is(typeof(InputStream.init.skip(0))))
 {
-	private void skip(InputStream str, ulong count)
+	private void skip(InputStream)(InputStream str, ulong count)
+		if (isInputStream!InputStream)
 	{
 		ubyte[156] buf = void;
 		while (count > 0) {
@@ -504,10 +520,12 @@ static if (!is(typeof(InputStream.init.skip(0))))
 	}
 }
 
-private class NoPeekProxy : ProxyStream {
+private class NoPeekProxy(InputStream) : ProxyStream
+	if (isInputStream!InputStream)
+{
 	this(InputStream stream)
 	{
-		super(stream, null);
+		super(stream, null, true);
 	}
 
 	override const(ubyte)[] peek() { return null; }

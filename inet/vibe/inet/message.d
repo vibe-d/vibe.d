@@ -32,7 +32,8 @@ import std.string;
 		alloc = Custom allocator to use for allocating strings
 		rfc822_compatible = Flag indicating that duplicate fields should be merged using a comma
 */
-void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, IAllocator alloc = processAllocator(), bool rfc822_compatible = true)
+void parseRFC5322Header(InputStream)(InputStream input, ref InetHeaderMap dst, size_t max_line_length = 1000, IAllocator alloc = processAllocator(), bool rfc822_compatible = true)
+	if (isInputStream!InputStream)
 {
 	string hdr, hdrvalue;
 
@@ -47,8 +48,13 @@ void parseRFC5322Header(InputStream input, ref InetHeaderMap dst, size_t max_lin
 		} else dst.addField(hdr, hdrvalue);
 	}
 
+	string readStringLine() @safe {
+		auto ret = input.readLine(max_line_length, "\r\n", alloc);
+		return () @trusted { return cast(string)ret; } ();
+	}
+
 	string ln;
-	while ((ln = cast(string)input.readLine(max_line_length, "\r\n", alloc)).length > 0) {
+	while ((ln = readStringLine()).length > 0) {
 		if (ln[0] != ' ' && ln[0] != '\t') {
 			addPreviousHeader();
 
@@ -68,7 +74,7 @@ unittest { // test usual, empty and multiline header
 	import vibe.stream.memory;
 	ubyte[] hdr = cast(ubyte[])"A: a \r\nB: \r\nC:\r\n\tc\r\n\r\n".dup;
 	InetHeaderMap map;
-	parseRFC5322Header(new MemoryStream(hdr), map);
+	parseRFC5322Header(createMemoryStream(hdr), map);
 	assert(map.length == 3);
 	assert(map["A"] == "a");
 	assert(map["B"] == "");
@@ -80,7 +86,7 @@ unittest { // fail for empty header names
 	import vibe.stream.memory;
 	auto hdr = cast(ubyte[])": test\r\n\r\n".dup;
 	InetHeaderMap map;
-	assertThrown(parseRFC5322Header(new MemoryStream(hdr), map));
+	assertThrown(parseRFC5322Header(createMemoryStream(hdr), map));
 }
 
 
@@ -150,7 +156,7 @@ void writeRFC822DateTimeString(R)(ref R dst, DateTime time, int tz_offset)
 	Returns the RFC-822 time string representation of the given time.
 */
 string toRFC822TimeString(SysTime time)
-{
+@trusted {
 	auto ret = new FixedAppender!(string, 14);
 	writeRFC822TimeString(ret, time);
 	return ret.data;
@@ -160,7 +166,7 @@ string toRFC822TimeString(SysTime time)
 	Returns the RFC-822/5322 date string representation of the given time.
 */
 string toRFC822DateString(SysTime time)
-{
+@trusted {
 	auto ret = new FixedAppender!(string, 16);
 	writeRFC822DateString(ret, time);
 	return ret.data;
@@ -170,7 +176,7 @@ string toRFC822DateString(SysTime time)
 	Returns the RFC-822 date+time string representation of the given time.
 */
 string toRFC822DateTimeString(SysTime time)
-{
+@trusted {
 	auto ret = new FixedAppender!(string, 31);
 	writeRFC822DateTimeString(ret, time);
 	return ret.data;
@@ -180,7 +186,7 @@ string toRFC822DateTimeString(SysTime time)
 	Returns the offset of the given time from UTC in minutes.
 */
 int getRFC822TimeZoneOffset(SysTime time)
-{
+@safe {
 	return cast(int)time.utcOffset.total!"minutes";
 }
 

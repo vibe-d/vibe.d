@@ -182,12 +182,12 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 					registerWebInterface!RT(router, __traits(getMember, instance, M)(), subsettings);
 				} else {
 					auto fullurl = concatURL(url_prefix, url);
-					router.match(minfo.method, fullurl, (req, res) {
+					router.match(minfo.method, fullurl, (HTTPServerRequest req, HTTPServerResponse res) @trusted {
 						handleRequest!(M, overload)(req, res, instance, settings);
 					});
 					if (settings.ignoreTrailingSlash && !fullurl.endsWith("*") && fullurl != "/") {
 						auto m = fullurl.endsWith("/") ? fullurl[0 .. $-1] : fullurl ~ "/";
-						router.match(minfo.method, m, (req, res) {
+						router.match(minfo.method, m, delegate void (HTTPServerRequest req, HTTPServerResponse res) @safe {
 							static if (minfo.method == HTTPMethod.GET) {
 								URL redurl = req.fullURL;
 								auto redpath = redurl.path;
@@ -195,7 +195,7 @@ URLRouter registerWebInterface(C : Object, MethodStyle method_style = MethodStyl
 								redurl.path = redpath;
 								res.redirect(redurl);
 							} else {
-								handleRequest!(M, overload)(req, res, instance, settings);
+								() @trusted { handleRequest!(M, overload)(req, res, instance, settings); } ();
 							}
 						});
 					}
@@ -670,8 +670,8 @@ private struct RequestContext {
 	HTTPServerRequest req;
 	HTTPServerResponse res;
 	string language;
-	string function(string, string) tr;
-	string function(string, string, int, string) tr_plural;
+	string function(string, string) @safe tr;
+	string function(string, string, int, string) @safe tr_plural;
 }
 
 private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequest req, HTTPServerResponse res, C instance, WebInterfaceSettings settings, ERROR error)
@@ -680,6 +680,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	import std.algorithm : countUntil, startsWith;
 	import std.traits;
 	import std.typetuple : Filter, staticIndexOf;
+	import vibe.core.stream;
 	import vibe.data.json;
 	import vibe.internal.meta.funcattr;
 	import vibe.internal.meta.uda : findFirstUDA;
@@ -850,7 +851,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 
 
 private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
-{
+@safe {
 	RequestContext ret;
 	ret.req = req;
 	ret.res = res;
