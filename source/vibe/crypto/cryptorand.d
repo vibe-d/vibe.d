@@ -53,11 +53,12 @@ final class SystemRNG : RandomNumberStream {
 	}
 	else version(Posix)
 	{
-		private import std.stdio;
-		private import std.exception;
+		import core.stdc.errno : errno;
+		import core.stdc.stdio : FILE, _IONBF, fopen, fclose, fread, setvbuf;
+		import std.exception;
 
 		//cryptographic file stream
-		private File file;
+		private FILE* m_file;
 	}
 	else
 	{
@@ -68,40 +69,34 @@ final class SystemRNG : RandomNumberStream {
 		Creates new system random generator
 	*/
 	this()
-	{
+	@trusted {
 		version(Windows)
 		{
 			//init cryptographic service provider
-			if(0 == CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
-			{
-				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", GetLastError()));
-			}
+			enforce!CryptoException(CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) == 0,
+				text("Cannot init SystemRNG: Error id is ", GetLastError()));
 		}
 		else version(Posix)
 		{
-			try
-			{
-				//open file
-				this.file = File("/dev/urandom");
-				//do not use buffering stream to avoid possible attacks
-				this.file.setvbuf(null, _IONBF);
-			}
-			catch(ErrnoException e)
-			{
-				throw new CryptoException(text("Cannot init SystemRNG: Error id is ", e.errno, `, Error message is: "`, e.msg, `"`));
-			}
-			catch(Exception e)
-			{
-				throw new CryptoException(text("Cannot init SystemRNG: ", e.msg));
-			}
+			//open file
+			m_file = fopen("/dev/urandom", "rb");
+			enforce!CryptoException(m_file !is null, "Failed to open /dev/urandom");
+			scope (failure) fclose(m_file);
+			//do not use buffering stream to avoid possible attacks
+			enforce!CryptoException(setvbuf(m_file, null, 0, _IONBF) == 0,
+				"Failed to disable buffering for random number file handle");
 		}
 	}
 
 	~this()
-	{
+	@trusted {
 		version(Windows)
 		{
 			CryptReleaseContext(this.hCryptProv, 0);
+		}
+		else version (Posix)
+		{
+			fclose(m_file);
 		}
 	}
 
@@ -118,27 +113,17 @@ final class SystemRNG : RandomNumberStream {
 	}
 	body
 	{
-		version(Windows)
+		version (Windows)
 		{
 			if(0 == CryptGenRandom(this.hCryptProv, cast(DWORD)buffer.length, buffer.ptr))
 			{
 				throw new CryptoException(text("Cannot get next random number: Error id is ", GetLastError()));
 			}
 		}
-		else version(Posix)
+		else version (Posix)
 		{
-			try
-			{
-				this.file.rawRead(buffer);
-			}
-			catch(ErrnoException e)
-			{
-				throw new CryptoException(text("Cannot get next random number: Error id is ", e.errno, `, Error message is: "`, e.msg, `"`));
-			}
-			catch(Exception e)
-			{
-				throw new CryptoException(text("Cannot get next random number: ", e.msg));
-			}
+			enforce!CryptoException(fread(buffer.ptr, buffer.length, 1, m_file) == 1,
+				text("Failed to read next random number: ", errno));
 		}
 	}
 }
