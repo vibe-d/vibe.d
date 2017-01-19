@@ -386,7 +386,7 @@ struct RedisHash(T = string) {
 
 	bool setIfNotExist(string field, T value)
 	{
-		return m_db.hsetNX(m_key, field, value);
+		return m_db.hsetNX(m_key, field, value.toRedis());
 	}
 
 	void opIndexOpAssign(string op)(T value, string field) if (op == "+") { m_db.hincr(m_key, field, value.toRedis()); }
