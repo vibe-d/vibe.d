@@ -86,10 +86,13 @@ version (Windows)
 	See_also: ` vibe.core.args.finalizeCommandLineOptions`, `lowerPrivileges`,
 		`runEventLoop`
 */
-int runApplication(string[]* args_out = null)
+int runApplication(scope void delegate(string[]) args_out = null)
 {
-	try if (!finalizeCommandLineOptions()) return 0;
-	catch (Exception e) {
+	try {
+		string[] args;
+		if (!finalizeCommandLineOptions(args_out is null ? null : &args)) return 0;
+		if (args_out) args_out(args);
+	} catch (Exception e) {
 		logDiagnostic("Error processing command line: %s", e.msg);
 		return 1;
 	}
