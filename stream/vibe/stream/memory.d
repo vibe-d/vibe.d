@@ -75,6 +75,8 @@ final class MemoryOutputStream : OutputStream {
 		return bytes.length;
 	}
 
+	alias write = OutputStream.write;
+
 	void flush()
 	{
 	}
@@ -83,6 +85,8 @@ final class MemoryOutputStream : OutputStream {
 	{
 	}
 }
+
+mixin validateOutputStream!MemoryOutputStream;
 
 
 /**
@@ -156,3 +160,5 @@ final class MemoryStream : RandomAccessStream {
 	void flush() {}
 	void finalize() {}
 }
+
+mixin validateRandomAccessStream!MemoryStream;

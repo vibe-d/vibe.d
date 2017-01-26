@@ -525,7 +525,8 @@ private class NoPeekProxy(InputStream) : ProxyStream
 {
 	this(InputStream stream)
 	{
-		super(stream, null, true);
+		import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
+		super(interfaceProxy!(.InputStream)(stream), InterfaceProxy!OutputStream.init, true);
 	}
 
 	override const(ubyte)[] peek() { return null; }

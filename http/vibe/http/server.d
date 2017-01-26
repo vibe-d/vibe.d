@@ -1090,7 +1090,7 @@ final class HTTPServerResponse : HTTPResponse {
 			headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", length);
 		}
 
-		auto rng = StreamOutputRange(bodyWriter);
+		auto rng = streamOutputRange(bodyWriter);
 		static if (PRETTY) serializeToPrettyJson(() @trusted { return &rng; } (), data);
 		else serializeToJson(() @trusted { return &rng; } (), data);
 	}
