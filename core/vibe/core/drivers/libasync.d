@@ -549,7 +549,7 @@ final class LibasyncFileStream : FileStream {
 		return null;
 	}
 
-	override void read(ubyte[] dst)
+	override size_t read(ubyte[] dst, IOMode)
 	{
 		scope(failure)
 			close();
@@ -576,10 +576,12 @@ final class LibasyncFileStream : FileStream {
 		
 		m_offset += dst.length;
 		assert(m_impl.offset == m_offset, "Incoherent offset returned from file reader: " ~ m_offset.to!string ~ "B assumed but the implementation is at: " ~ m_impl.offset.to!string ~ "B");
+
+		return dst.length;
 	}
 
 	alias Stream.write write;
-	override void write(in ubyte[] bytes_)
+	override size_t write(in ubyte[] bytes_, IOMode)
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");
 		
@@ -617,6 +619,8 @@ final class LibasyncFileStream : FileStream {
 			assert(m_impl.offset == m_offset, "Incoherent offset returned from file writer.");
 		}
 		//assert(getSize(m_path.toNativeString()) == m_size, "Incoherency between local size and filesize: " ~ m_size.to!string ~ "B assumed for a file of size " ~ getSize(m_path.toNativeString()).to!string ~ "B");
+
+		return bytes_.length;
 	}
 
 	override void flush()
@@ -1232,12 +1236,13 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 			return null;
 	}
 
-	override void read(ubyte[] dst)
+	override size_t read(ubyte[] dst, IOMode)
 	{
-		if (!dst.length) return;
+		if (!dst.length) return 0;
 		assert(dst !is null && !m_slice);
 		logTrace("Read TCP");
 		acquireReader();
+		size_t len = 0;
 		scope(exit) releaseReader();
 		while( dst.length > 0 ){
 			while( m_readBuffer.empty ){
@@ -1253,10 +1258,13 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 			m_readBuffer.read(dst[0 .. amt]);
 			dst = dst[amt .. $];
+			len += amt;
 		}
+
+		return len;
 	}
 
-	override void write(in ubyte[] bytes_)
+	override size_t write(in ubyte[] bytes_, IOMode)
 	{
 		assert(bytes_ !is null);
 		logTrace("%s", "write enter");
@@ -1282,6 +1290,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 			first = false;
 		} while (offset != len);
 
+		return len;
 	}
 
 	override void flush()
