@@ -26,14 +26,14 @@ import vibe.internal.freelistref : FreeListRef;
 LimitedInputStream createLimitedInputStream(InputStream)(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	if (isInputStream!InputStream)
 {
-	return new LimitedInputStream(stream.asInterface!(.InputStream), byte_limit, silent_limit, true);
+	return new LimitedInputStream(InterfaceProxy!(.InputStream)(stream), byte_limit, silent_limit, true);
 }
 
 /// private
 FreeListRef!LimitedInputStream createLimitedInputStreamFL(InputStream)(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	if (isInputStream!InputStream)
 {
-	return FreeListRef!LimitedInputStream(stream.asInterface!(.InputStream), byte_limit, silent_limit, true);
+	return FreeListRef!LimitedInputStream(InterfaceProxy!(.InputStream)(stream), byte_limit, silent_limit, true);
 }
 
 /** Creates a proxy stream that counts the number of bytes written.
@@ -45,14 +45,14 @@ FreeListRef!LimitedInputStream createLimitedInputStreamFL(InputStream)(InputStre
 CountingOutputStream createCountingOutputStream(OutputStream)(OutputStream output, ulong byte_limit = ulong.max)
 	if (isOutputStream!OutputStream)
 {
-	return new CountingOutputStream(output.asInterface!(.OutputStream), byte_limit, true);
+	return new CountingOutputStream(InterfaceProxy!(.OutputStream)(output), byte_limit, true);
 }
 
 /// private
 FreeListRef!CountingOutputStream createCountingOutputStreamFL(OutputStream)(OutputStream output, ulong byte_limit = ulong.max)
 	if (isOutputStream!OutputStream)
 {
-	return FreeListRef!CountingOutputStream(output.asInterface!(.OutputStream), byte_limit, true);
+	return FreeListRef!CountingOutputStream(InterfaceProxy!(.OutputStream)(output), byte_limit, true);
 }
 
 
@@ -65,14 +65,14 @@ FreeListRef!CountingOutputStream createCountingOutputStreamFL(OutputStream)(Outp
 EndCallbackInputStream createEndCallbackInputStream(InputStream)(InputStream input, void delegate() @safe callback)
 	if (isInputStream!InputStream)
 {
-	return new EndCallbackInputStream(input.asInterface!(.InputStream), callback, true);
+	return new EndCallbackInputStream(InterfaceProxy!(.InputStream)(input), callback, true);
 }
 
 /// private
 FreeListRef!EndCallbackInputStream createEndCallbackInputStreamFL(InputStream)(InputStream input, void delegate() @safe callback)
 	if (isInputStream!InputStream)
 {
-	return FreeListRef!EndCallbackInputStream(input.asInterface!(.InputStream), callback, true);
+	return FreeListRef!EndCallbackInputStream(InterfaceProxy!(.InputStream)(input), callback, true);
 }
 
 
@@ -83,7 +83,7 @@ class LimitedInputStream : InputStream {
 @safe:
 
 	private {
-		InputStream m_input;
+		InterfaceProxy!InputStream m_input;
 		ulong m_sizeLimit;
 		bool m_silentLimit;
 	}
@@ -91,19 +91,20 @@ class LimitedInputStream : InputStream {
 	deprecated("Use createLimitedInputStream instead.")
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	{
-		this(stream, byte_limit, silent_limit, true);
+		this(InterfaceProxy!InputStream(stream), byte_limit, silent_limit, true);
 	}
 
-	this(InputStream stream, ulong byte_limit, bool silent_limit, bool dummy)
+	/// private
+	this(InterfaceProxy!InputStream stream, ulong byte_limit, bool silent_limit, bool dummy)
 	{
-		assert(stream !is null);
+		assert(!!stream);
 		m_input = stream;
 		m_sizeLimit = byte_limit;
 		m_silentLimit = silent_limit;
 	}
 
 	/// The stream that is wrapped by this one
-	@property inout(InputStream) sourceStream() inout { return m_input; }
+	@property inout(InterfaceProxy!InputStream) sourceStream() inout { return m_input; }
 
 	@property bool empty() { return m_silentLimit ? m_input.empty : (m_sizeLimit == 0); }
 
@@ -119,12 +120,15 @@ class LimitedInputStream : InputStream {
 
 	const(ubyte)[] peek() { return m_input.peek(); }
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		if (dst.length > m_sizeLimit) onSizeLimitReached();
-		m_input.read(dst);
-		m_sizeLimit -= dst.length;
+		auto ret = m_input.read(dst, mode);
+		m_sizeLimit -= ret;
+		return ret;
 	}
+
+	alias read = InputStream.read;
 
 	protected void onSizeLimitReached() @safe {
 		throw new LimitException("Size limit reached", m_sizeLimit);
@@ -141,19 +145,19 @@ class CountingOutputStream : OutputStream {
 	private {
 		ulong m_bytesWritten;
 		ulong m_writeLimit;
-		OutputStream m_out;
+		InterfaceProxy!OutputStream m_out;
 	}
 
 	deprecated("Use createCountingOutputStream instead.")
 	this(OutputStream stream, ulong write_limit = ulong.max)
 	{
-		this(stream, write_limit, true);
+		this(InterfaceProxy!OutputStream(stream), write_limit, true);
 	}
 
 	/// private
-	this(OutputStream stream, ulong write_limit, bool dummy)
+	this(InterfaceProxy!OutputStream stream, ulong write_limit, bool dummy)
 	{
-		assert(stream !is null);
+		assert(!!stream);
 		m_writeLimit = write_limit;
 		m_out = stream;
 	}
@@ -174,18 +178,16 @@ class CountingOutputStream : OutputStream {
 		m_bytesWritten += bytes;
 	}
 
-	void write(in ubyte[] bytes)
+	size_t write(in ubyte[] bytes, IOMode mode)
 	{
 		enforce(m_bytesWritten + bytes.length <= m_writeLimit, "Writing past end of output stream.");
 
-		m_out.write(bytes);
-		m_bytesWritten += bytes.length;
+		auto ret = m_out.write(bytes, mode);
+		m_bytesWritten += ret;
+		return ret;
 	}
 
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
+	alias write = OutputStream.write;
 
 	void flush() { m_out.flush(); }
 	void finalize() { m_out.flush(); }
@@ -200,19 +202,19 @@ class CountingInputStream : InputStream {
 
 	private {
 		ulong m_bytesRead;
-		InputStream m_in;
+		InterfaceProxy!InputStream m_in;
 	}
 	
 	deprecated("Use createCountingOutputStream instead.")
 	this(InputStream stream)
 	{
-		this(stream, true);
+		this(InterfaceProxy!InputStream(stream), true);
 	}
 
 	/// private
-	this(InputStream stream, bool dummy)
+	this(InterfaceProxy!InputStream stream, bool dummy)
 	{
-		assert(stream !is null);
+		assert(!!stream);
 		m_in = stream;
 	}
 
@@ -229,11 +231,14 @@ class CountingInputStream : InputStream {
 
 	const(ubyte)[] peek() { return m_in.peek(); }
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		m_in.read(dst);
-		m_bytesRead += dst.length;
+		auto ret = m_in.read(dst, mode);
+		m_bytesRead += ret;
+		return ret;
 	}
+
+	alias read = InputStream.read;
 }
 
 /**
@@ -251,7 +256,7 @@ class EndCallbackInputStream : InputStream {
 @safe:
 
 	private {
-		InputStream m_in;
+		InterfaceProxy!InputStream m_in;
 		bool m_eof = false;
 		void delegate() @safe m_callback;
 	}
@@ -259,11 +264,11 @@ class EndCallbackInputStream : InputStream {
 	deprecated("use createEndCallbackInputStream instead.")
 	this(InputStream input, void delegate() @safe callback)
 	{
-		this(input, callback, true);
+		this(InterfaceProxy!InputStream(input), callback, true);
 	}
 
 	/// private
-	this(InputStream input, void delegate() @safe callback, bool dummy)
+	this(InterfaceProxy!InputStream input, void delegate() @safe callback, bool dummy)
 	{
 		m_in = input;
 		m_callback = callback;
@@ -273,7 +278,7 @@ class EndCallbackInputStream : InputStream {
 	@property bool empty()
 	{
 		checkEOF();
-		return m_in is null;
+		return !m_in;
 	}
 
 	@property ulong leastSize()
@@ -295,18 +300,21 @@ class EndCallbackInputStream : InputStream {
 		return m_in.peek();
 	}
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		enforce(m_in !is null, "Reading past end of stream.");
-		m_in.read(dst);
+		enforce(!!m_in, "Reading past end of stream.");
+		auto ret = m_in.read(dst, mode);
 		checkEOF();
+		return ret;
 	}
+
+	alias read = InputStream.read;
 
 	private void checkEOF()
 	@safe {
 		if( !m_in ) return;
 		if( m_in.empty ){
-			m_in = null;
+			m_in = InterfaceProxy!InputStream.init;
 			m_callback();
 		}
 	}

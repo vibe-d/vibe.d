@@ -74,16 +74,16 @@ class StdFileStream : ConnectionStream {
 		return m_readPipe.peek();
 	}
 
-	override void read(ubyte[] dst)
+	override size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		enforceReadable();
-		m_readPipe.read(dst);
+		return m_readPipe.read(dst, mode);
 	}
 
-	override void write(in ubyte[] bytes_)
+	override size_t write(in ubyte[] bytes_, IOMode mode)
 	{
 		enforceWritable();
-		m_writePipe.write(bytes_);
+		return m_writePipe.write(bytes_, mode);
 	}
 
 	override void flush()
@@ -98,11 +98,6 @@ class StdFileStream : ConnectionStream {
 		if (!m_writePipe.connected) return;
 		flush();
 		m_writePipe.finalize();
-	}
-
-	override void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
 	}
 
 	void enforceReadable() @safe { enforce(m_readPipe, "Stream is not readable!"); }
@@ -122,7 +117,7 @@ class StdFileStream : ConnectionStream {
 			while (!m_file.eof) {
 				auto data = m_file.rawRead(buf);
 				if (!data.length) break;
-				m_readPipe.write(data);
+				m_readPipe.write(data, IOMode.all);
 				vibe.core.core.yield();
 			}
 		});
@@ -147,7 +142,7 @@ class StdFileStream : ConnectionStream {
 			while (m_file.isOpen && !m_writePipe.empty) {
 				auto len = min(buf.length, m_writePipe.leastSize);
 				if (!len) break;
-				m_writePipe.read(buf[0 .. len]);
+				m_writePipe.read(buf[0 .. len], IOMode.all);
 				m_file.rawWrite(buf[0 .. len]);
 				vibe.core.core.yield();
 			}

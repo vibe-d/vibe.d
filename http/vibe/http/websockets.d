@@ -623,10 +623,11 @@ final class OutgoingWebSocketMessage : OutputStream {
         m_rng = rng;
 	}
 
-	void write(in ubyte[] bytes)
+	size_t write(in ubyte[] bytes, IOMode mode)
 	{
 		assert(!m_finalized);
 		m_buffer.put(bytes);
+		return bytes.length;
 	}
 
 	void flush()
@@ -655,10 +656,7 @@ final class OutgoingWebSocketMessage : OutputStream {
 		m_conn.flush();
 	}
 
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
+	alias write = OutputStream.write;
 }
 
 
@@ -693,21 +691,32 @@ final class IncomingWebSocketMessage : InputStream {
 
 	const(ubyte)[] peek() { return m_currentFrame.payload; }
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		while( dst.length > 0 ) {
-			enforceEx!WebSocketException( !empty , "cannot read from empty stream");
-			enforceEx!WebSocketException( leastSize > 0, "no data available" );
+		size_t nread = 0;
+
+		while (dst.length > 0) {
+			enforceEx!WebSocketException(!empty , "cannot read from empty stream");
+			enforceEx!WebSocketException(leastSize > 0, "no data available" );
 
 			import std.algorithm : min;
 			auto sz = cast(size_t)min(leastSize, dst.length);
 			dst[0 .. sz] = m_currentFrame.payload[0 .. sz];
 			dst = dst[sz .. $];
 			m_currentFrame.payload = m_currentFrame.payload[sz .. $];
+			nread += sz;
 
-			if( leastSize == 0 && !m_currentFrame.fin ) m_currentFrame = Frame.readFrame(m_conn);
+			if (leastSize == 0 && !m_currentFrame.fin) {
+				if (mode == IOMode.immediate || mode == IOMode.once && nread > 0)
+					break;
+				m_currentFrame = Frame.readFrame(m_conn);
+			}
 		}
+
+		return nread;
 	}
+
+	alias read = InputStream.read;
 
 	private void readFrame() {
 		Frame frame;

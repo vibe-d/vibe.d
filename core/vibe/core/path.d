@@ -423,6 +423,12 @@ struct PathEntry {
 		string m_name;
 	}
 
+	static PathEntry validateFilename(string fname)
+	{
+		enforce(fname.indexOfAny("/\\") < 0, "File name contains forward or backward slashes: "~fname);
+		return PathEntry(fname);
+	}
+
 	this(string str)
 	{
 		assert(!str.canFind('/') && (!str.canFind('\\') || str.length == 1), "Invalid path entry: " ~ str);

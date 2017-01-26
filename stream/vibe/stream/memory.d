@@ -69,9 +69,10 @@ final class MemoryOutputStream : OutputStream {
 		m_destination.reserve(nbytes);
 	}
 
-	void write(in ubyte[] bytes)
+	size_t write(in ubyte[] bytes, IOMode)
 	{
 		() @trusted { m_destination.put(bytes); } ();
+		return bytes.length;
 	}
 
 	void flush()
@@ -80,11 +81,6 @@ final class MemoryOutputStream : OutputStream {
 
 	void finalize()
 	{
-	}
-
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
 	}
 }
 
@@ -134,23 +130,29 @@ final class MemoryStream : RandomAccessStream {
 	ulong tell() nothrow { return m_ptr; }
 	const(ubyte)[] peek() { return m_data[m_ptr .. min(m_size, m_ptr+m_peekWindow)]; }
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		assert(dst.length <= leastSize);
-		dst[] = m_data[m_ptr .. m_ptr+dst.length];
-		m_ptr += dst.length;
+		enforce(mode != IOMode.all || dst.length <= leastSize, "Reading past end of memory stream.");
+		auto len = min(leastSize, dst.length);
+		dst[0 .. len] = m_data[m_ptr .. m_ptr+len];
+		m_ptr += len;
+		return len;
 	}
 
-	void write(in ubyte[] bytes)
+	alias read = RandomAccessStream.read;
+
+	size_t write(in ubyte[] bytes, IOMode)
 	{
 		assert(writable);
 		enforce(bytes.length <= m_data.length - m_ptr, "Size limit of memory stream reached.");
 		m_data[m_ptr .. m_ptr+bytes.length] = bytes[];
 		m_ptr += bytes.length;
 		m_size = max(m_size, m_ptr);
+		return bytes.length;
 	}
+
+	alias write = RandomAccessStream.write;
 
 	void flush() {}
 	void finalize() {}
-	void write(InputStream stream, ulong nbytes = 0) { writeDefault(stream, nbytes); }
 }

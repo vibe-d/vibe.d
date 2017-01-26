@@ -741,11 +741,6 @@ final class Win32FileStream : FileStream {
 
 	override void finalize(){}
 
-	override void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
-
 	private static extern(System) nothrow
 	void onIOCompleted(DWORD dwError, DWORD cbTransferred, OVERLAPPED* overlapped)
 	{
@@ -1320,28 +1315,22 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		flush();
 	}
 
-	override void write(InputStream stream, ulong nbytes = 0)
+	void writeFile(Path filename)
 	{
-		// special case sending of files
-		if( auto fstream = cast(Win32FileStream)stream ){
-			if( fstream.tell() == 0 && fstream.size <= 1<<31 ){
-				acquireWriter();
-				m_bytesTransferred = 0;
-				m_driver.m_fileWriters[this] = true;
-				scope(exit) releaseWriter();
-				logDebug("Using sendfile! %s %s %s", fstream.m_handle, fstream.tell(), fstream.size);
+		auto fstream = m_driver.openFile(filename, FileMode.read);
+		enforce(fstream.size <= 1<<31);
+		acquireWriter();
+		m_bytesTransferred = 0;
+		m_driver.m_fileWriters[this] = true;
+		scope(exit) releaseWriter();
+		logDebug("Using sendfile! %s %s %s", fstream.m_handle, fstream.tell(), fstream.size);
 
-				if( TransmitFile(m_socket, fstream.m_handle, 0, 0, &m_fileOverlapped, null, 0) )
-					m_bytesTransferred = 1;
+		if (TransmitFile(m_socket, fstream.m_handle, 0, 0, &m_fileOverlapped, null, 0))
+			m_bytesTransferred = 1;
 
-				socketEnforce(WSAGetLastError() == WSA_IO_PENDING, "Failed to send file over TCP.");
+		socketEnforce(WSAGetLastError() == WSA_IO_PENDING, "Failed to send file over TCP.");
 
-				while( m_bytesTransferred < fstream.size ) m_driver.m_core.yieldForEvent();
-				return;
-			}
-		}
-
-		writeDefault(stream, nbytes);
+		while (m_bytesTransferred < fstream.size) m_driver.m_core.yieldForEvent();
 	}
 
 	InputStream acquireReader() { assert(m_readOwner == Task()); m_readOwner = Task.getThis(); return this; }

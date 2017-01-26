@@ -9,7 +9,7 @@ module vibe.http.fileserver;
 
 import vibe.core.file;
 import vibe.core.log;
-import vibe.core.stream : RandomAccessStream;
+import vibe.core.stream : RandomAccessStream, pipe;
 import vibe.http.server;
 import vibe.inet.message;
 import vibe.inet.mimetypes;
@@ -419,11 +419,11 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 
 	if (prange) {
 		fil.seek(rangeStart);
-		res.bodyWriter.write(fil.asInterface!RandomAccessStream, rangeEnd - rangeStart + 1);
+		fil.pipe(res.bodyWriter, rangeEnd - rangeStart + 1);
 		logTrace("partially sent file %d-%d, %s!", rangeStart, rangeEnd, res.headers["Content-Type"]);
 	} else {
 		if (pce && !encodedFilepath.length)
-			res.bodyWriter.write(fil.asInterface!RandomAccessStream);
+			fil.pipe(res.bodyWriter);
 		else res.writeRawBody(fil.asInterface!RandomAccessStream);
 		logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
 	}

@@ -47,14 +47,15 @@ class MulticastStream : OutputStream {
 			output.flush();
 	}
 
-	void write(in ubyte[] bytes)
+	size_t write(in ubyte[] bytes, IOMode mode)
 	{
-		foreach (output; m_outputs)
-			output.write(bytes);
-	}
+		if (!m_outputs.length) return bytes.length;
 
-	void write(InputStream source, ulong nbytes = 0)
-	{
-		writeDefault(source, nbytes);
+		auto ret = m_outputs[0].write(bytes, mode);
+
+		foreach (output; m_outputs[1 .. $])
+			output.write(bytes[0 .. ret]);
+
+		return ret;
 	}
 }

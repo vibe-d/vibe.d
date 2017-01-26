@@ -20,6 +20,39 @@ import std.conv;
 /* Public functions                                                                               */
 /**************************************************************************************************/
 
+/** Pipes an InputStream directly into this OutputStream.
+
+	The number of bytes written is either the whole input stream when `nbytes == 0`, or exactly
+	`nbytes` for `nbytes > 0`. If the input stream contains less than `nbytes` of data, an
+	exception is thrown.
+*/
+void pipe(InputStream source, OutputStream sink, ulong nbytes = 0)
+@safe {
+	import vibe.internal.allocator : dispose, makeArray, theAllocator;
+
+	auto buffer = () @trusted { return theAllocator.makeArray!ubyte(64*1024); } ();
+	scope (exit) () @trusted { theAllocator.dispose(buffer); } ();
+
+	//logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);
+	if (nbytes == 0 || nbytes == ulong.max) {
+		while (!source.empty) {
+			size_t chunk = min(source.leastSize, buffer.length);
+			assert(chunk > 0, "leastSize returned zero for non-empty stream.");
+			//logTrace("read pipe chunk %d", chunk);
+			source.read(buffer[0 .. chunk]);
+			sink.write(buffer[0 .. chunk]);
+		}
+	} else {
+		while (nbytes > 0) {
+			size_t chunk = min(nbytes, buffer.length);
+			//logTrace("read pipe chunk %d", chunk);
+			source.read(buffer[0 .. chunk]);
+			sink.write(buffer[0 .. chunk]);
+			nbytes -= chunk;
+		}
+	}
+}
+
 /**
 	Returns a `NullOutputStream` instance.
 
@@ -36,6 +69,17 @@ NullOutputStream nullSink()
 /**************************************************************************************************/
 /* Public types                                                                                   */
 /**************************************************************************************************/
+
+/** Controls the waiting behavior of read/write operations.
+
+	Note that this is currently ignored for all device streams. Use the "vibe-core" package if you
+	need this functionality.
+*/
+enum IOMode {
+	immediate, /// not supported
+	once,      /// not supported
+	all        /// Writes/reads the whole buffer
+}
 
 /**
 	Interface for all classes implementing readable streams.
@@ -72,7 +116,9 @@ interface InputStream {
 
 		Throws: An exception if the operation reads past the end of the stream
 	*/
-	void read(ubyte[] dst);
+	size_t read(scope ubyte[] dst, IOMode);
+	/// ditto
+	final void read(scope ubyte[] dst) { read(dst, IOMode.all); }
 }
 
 /**
@@ -83,7 +129,11 @@ interface OutputStream {
 
 	/** Writes an array of bytes to the stream.
 	*/
-	void write(in ubyte[] bytes);
+	size_t write(in ubyte[] bytes, IOMode mode);
+	/// ditto
+	final void write(in ubyte[] bytes) { write(bytes, IOMode.all); }
+	/// ditto
+	final void write(in char[] bytes) { write(cast(const(ubyte)[])bytes); }
 
 	/** Flushes the stream and makes sure that all data is being written to the output device.
 	*/
@@ -96,46 +146,16 @@ interface OutputStream {
 	*/
 	void finalize();
 
-	/** Writes an array of chars to the stream.
-	*/
-	final void write(in char[] bytes)
-	{
-		write(cast(const(ubyte)[])bytes);
-	}
-
 	/** Pipes an InputStream directly into this OutputStream.
 
 		The number of bytes written is either the whole input stream when nbytes == 0, or exactly
 		nbytes for nbytes > 0. If the input stream contains less than nbytes of data, an exception
 		is thrown.
 	*/
-	void write(InputStream stream, ulong nbytes = 0);
-
-	protected final void writeDefault(InputStream stream, ulong nbytes = 0)
+	deprecated("Use pipe(source, sink) instead.")
+	final void write(InputStream stream, ulong nbytes = 0)
 	{
-		import vibe.internal.allocator : dispose, makeArray, theAllocator;
-
-		auto buffer = () @trusted { return theAllocator.makeArray!ubyte(64*1024); } ();
-		scope (exit) () @trusted { theAllocator.dispose(buffer); } ();
-
-		//logTrace("default write %d bytes, empty=%s", nbytes, stream.empty);
-		if( nbytes == 0 ){
-			while( !stream.empty ){
-				size_t chunk = min(stream.leastSize, buffer.length);
-				assert(chunk > 0, "leastSize returned zero for non-empty stream.");
-				//logTrace("read pipe chunk %d", chunk);
-				stream.read(buffer[0 .. chunk]);
-				write(buffer[0 .. chunk]);
-			}
-		} else {
-			while( nbytes > 0 ){
-				size_t chunk = min(nbytes, buffer.length);
-				//logTrace("read pipe chunk %d", chunk);
-				stream.read(buffer[0 .. chunk]);
-				write(buffer[0 .. chunk]);
-				nbytes -= chunk;
-			}
-		}
+		stream.pipe(this, nbytes);
 	}
 }
 
@@ -226,11 +246,8 @@ interface RandomAccessStream : Stream {
 	the output of a particular stream is not needed but the stream needs to be drained.
 */
 final class NullOutputStream : OutputStream {
-	void write(in ubyte[] bytes) {}
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
+	size_t write(in ubyte[] bytes, IOMode) { return bytes.length; }
+	alias write = OutputStream.write;
 	void flush() {}
 	void finalize() {}
 }

@@ -200,25 +200,44 @@ final class OpenSSLStream : TLSStream {
 		return ret > 0 ? m_peekBuffer[0 .. ret] : null;
 	}
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
-		while( dst.length > 0 ){
+		size_t nbytes = 0;
+
+		while (dst.length > 0) {
 			int readlen = min(dst.length, int.max);
 			auto ret = checkSSLRet(() @trusted { return SSL_read(m_tls, dst.ptr, readlen); } (), "Reading from TLS stream");
 			//logTrace("SSL read %d/%d", ret, dst.length);
 			dst = dst[ret .. $];
+			nbytes += ret;
+
+			if (mode == IOMode.immediate || mode == IOMode.once)
+				break;
 		}
+
+		return nbytes;
 	}
 
-	void write(in ubyte[] bytes_)
+	alias read = Stream.read;
+
+	size_t write(in ubyte[] bytes_, IOMode mode)
 	{
 		const(ubyte)[] bytes = bytes_;
-		while( bytes.length > 0 ){
+
+		size_t nbytes = 0;
+
+		while (bytes.length > 0) {
 			int writelen = min(bytes.length, int.max);
 			auto ret = checkSSLRet(() @trusted { return SSL_write(m_tls, bytes.ptr, writelen); } (), "Writing to TLS stream");
 			//logTrace("SSL write %s", cast(string)bytes[0 .. ret]);
 			bytes = bytes[ret .. $];
+			nbytes += ret;
+
+			if (mode == IOMode.immediate || mode == IOMode.once)
+				break;
 		}
+
+		return nbytes;
 	}
 
 	alias write = Stream.write;
@@ -241,11 +260,6 @@ final class OpenSSLStream : TLSStream {
 		m_tls = null;
 
 		checkExceptions();
-	}
-
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
 	}
 
 	private int checkSSLRet(int ret, string what)

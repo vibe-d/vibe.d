@@ -141,15 +141,16 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		m_stream.flush();
 	}
 
-	void write(InputStream stream, ulong nbytes) { processException(); writeDefault(stream, nbytes); }
-
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode)
 	{ 
 		processException();
 		scope(success) 
 			processException();
 		m_tlsChannel.read(dst);
+		return dst.length;
 	}
+
+	alias read = Stream.read;
 
 	ubyte[] readChunk(ubyte[] buf)
 	{ 
@@ -159,13 +160,16 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		return m_tlsChannel.readBuf(buf);
 	}
 
-	void write(in ubyte[] src)
+	size_t write(in ubyte[] src, IOMode)
 	{
 		processException();
 		scope(success) 
 			processException();
 		m_tlsChannel.write(src);
+		return src.length;
 	}
+
+	alias write = Stream.write;
 
 	@property bool empty()
 	{

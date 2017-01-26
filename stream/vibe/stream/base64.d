@@ -84,13 +84,15 @@ final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=', OutputSt
 	}
 
 
-	void write(in ubyte[] bytes_)
+	size_t write(in ubyte[] bytes_, IOMode)
 	@trusted { // StreamOutputRange is not @safe
 		import vibe.stream.wrapper;
 
 		const(ubyte)[] bytes = bytes_;
 
 		auto rng = StreamOutputRange(m_out);
+
+		size_t nwritten = 0;
 
 		while (bytes.length > 0) {
 			if (m_bytesInCurrentLine + bytes.length >= m_maxBytesPerLine) {
@@ -99,18 +101,19 @@ final class Base64OutputStreamImpl(char C62, char C63, char CPAD = '=', OutputSt
 				rng.put("\r\n");
 				bytes = bytes[bts .. $];
 				m_bytesInCurrentLine = 0;
+				nwritten += bts;
 			} else {
 				B64.encode(bytes, &rng);
 				m_bytesInCurrentLine += bytes.length;
+				nwritten += bytes.length;
 				break;
 			}
 		}
+
+		return nwritten;
 	}
 
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
+	alias write = .OutputStream.write;
 
 	void flush()
 	{

@@ -700,14 +700,14 @@ final class HTTPClientRequest : HTTPRequest {
 	void writeBody(InputStream data)
 	{
 		headers["Transfer-Encoding"] = "chunked";
-		bodyWriter.write(data);
+		data.pipe(bodyWriter);
 		finalize();
 	}
 	/// ditto
 	void writeBody(InputStream data, ulong length)
 	{
 		headers["Content-Length"] = clengthString(length);
-		bodyWriter.write(data, length);
+		data.pipe(bodyWriter, length);
 		finalize();
 	}
 	/// ditto
@@ -994,7 +994,7 @@ final class HTTPClientResponse : HTTPResponse {
 			if( bodyReader.empty ){
 				finalize();
 			} else {
-				nullSink().write(bodyReader);
+				bodyReader.pipe(nullSink);
 				assert(!lockedConnection.__conn);
 			}
 		}

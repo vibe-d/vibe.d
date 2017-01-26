@@ -3,8 +3,9 @@ import vibe.core.core;
 import vibe.http.fileserver;
 import vibe.http.router;
 import vibe.http.server;
+import vibe.core.stream : pipe, nullSink;
 
-import std.functional;
+import std.functional : toDelegate;
 
 
 shared string data;
@@ -41,8 +42,13 @@ void quit(scope HTTPServerRequest req, scope HTTPServerResponse res)
 }
 
 void staticAnswer(TCPConnection conn)
-{
-	conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+@safe nothrow {
+	try {
+		conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+	} catch (Exception e) {
+		// increment error counter
+	}
+	conn.close();
 }
 
 pure char[] generateData()

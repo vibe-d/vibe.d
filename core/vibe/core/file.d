@@ -209,7 +209,7 @@ void copyFile(Path from, Path to, bool overwrite = false)
 		enforce(overwrite || !existsFile(to), "Destination file already exists.");
 		auto dst = openFile(to, FileMode.createTrunc);
 		scope(exit) dst.close();
-		dst.write(src);
+		src.pipe(dst);
 	}
 
 	// TODO: retain attributes and time stamps

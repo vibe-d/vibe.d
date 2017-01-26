@@ -288,7 +288,7 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 	/** Reads as many bytes as 'dst' can hold.
 	*/
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode)
 	{
 		checkConnected(false);
 
@@ -296,11 +296,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 			checkReader();
 			m_readBuffer.read(dst);
 			if (m_readBuffer.empty) m_readBuffer.clear(); // start filling at index 0 again
-			return;
+			return dst.length;
 		}
 
 		acquireReader();
 		scope(exit) releaseReader();
+
+		size_t len = dst.length;
 
 		while (true) {
 			auto nbytes = min(dst.length, m_readBuffer.length);
@@ -314,6 +316,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 			checkConnected(false);
 		}
 		logTrace("read data");
+
+		return len;
 	}
 
 	bool waitForData(Duration timeout)
@@ -354,13 +358,13 @@ package final class Libevent2TCPConnection : TCPConnection {
 
 	/** Writes the given byte array.
 	*/
-	void write(in ubyte[] bytes)
+	size_t write(in ubyte[] bytes, IOMode)
 	{
 		checkConnected();
 		acquireWriter();
 		scope(exit) releaseWriter();
 
-		if (!bytes.length) return;
+		if (!bytes.length) return 0;
 		//logTrace("evbuffer_add (fd %d): %s", m_ctx.socketfd, bytes);
 		//logTrace("evbuffer_add (fd %d): <%s>", m_ctx.socketfd, cast(string)bytes);
 		logTrace("evbuffer_add (fd %d): %d B", m_ctx.socketfd, bytes.length);
@@ -373,29 +377,8 @@ package final class Libevent2TCPConnection : TCPConnection {
 			rawYield();
 			checkConnected();
 		}
-	}
 
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		import vibe.core.drivers.threadedfile;
-		version(none){ // causes a crash on Windows
-			// special case sending of files
-			if( auto fstream = cast(ThreadedFileStream)stream ){
-				checkConnected();
-				acquireWriter();
-				scope(exit) releaseWriter();
-				logInfo("Using sendfile! %s %s %s %s", fstream.fd, fstream.tell(), fstream.size, nbytes);
-				fstream.takeOwnershipOfFD();
-				auto buf = bufferevent_get_output(m_ctx.event);
-				enforce(evbuffer_add_file(buf, fstream.fd, fstream.tell(), nbytes ? nbytes : fstream.size-fstream.tell()) == 0,
-					"Failed to send file over TCP connection.");
-				return;
-			}
-		}
-
-		logTrace("writing stream %s %s", nbytes, stream.leastSize);
-		writeDefault(stream, nbytes);
-		logTrace("wrote stream %s", nbytes);
+		return bytes.length;
 	}
 
 	/** Causes any buffered data to be written.

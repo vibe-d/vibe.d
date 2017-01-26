@@ -619,11 +619,6 @@ final class LibasyncFileStream : FileStream {
 		//assert(getSize(m_path.toNativeString()) == m_size, "Incoherency between local size and filesize: " ~ m_size.to!string ~ "B assumed for a file of size " ~ getSize(m_path.toNativeString()).to!string ~ "B");
 	}
 
-	override void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
-
 	override void flush()
 	{
 		assert(this.writable, "To write to a file, it must be opened in a write-enabled mode.");
@@ -1303,11 +1298,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	{
 		logTrace("%s", "finalize");
 		flush();
-	}
-
-	override void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
 	}
 
 	void acquireReader() {

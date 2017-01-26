@@ -402,17 +402,21 @@ final class ChunkedInputStream : InputStream
 		return dt[0 .. min(dt.length, m_bytesInCurrentChunk)];
 	}
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		enforceBadRequest(!empty, "Read past end of chunked stream.");
-		while( dst.length > 0 ){
+		size_t nbytes = 0;
+
+		while (dst.length > 0) {
 			enforceBadRequest(m_bytesInCurrentChunk > 0, "Reading past end of chunked HTTP stream.");
 
 			auto sz = cast(size_t)min(m_bytesInCurrentChunk, dst.length);
 			m_in.read(dst[0 .. sz]);
 			dst = dst[sz .. $];
 			m_bytesInCurrentChunk -= sz;
+			nbytes += sz;
 
+			// FIXME: this blocks, but shouldn't for IOMode.once/immediat
 			if( m_bytesInCurrentChunk == 0 ){
 				// skip current chunk footer and read next chunk
 				ubyte[2] crlf;
@@ -420,8 +424,14 @@ final class ChunkedInputStream : InputStream
 				enforceBadRequest(crlf[0] == '\r' && crlf[1] == '\n');
 				readChunk();
 			}
+
+			if (mode != IOMode.all) break;
 		}
+
+		return nbytes;
 	}
+
+	alias read = InputStream.read;
 
 	private void readChunk()
 	{
@@ -531,43 +541,27 @@ final class ChunkedOutputStream : OutputStream {
 		}
 	}
 
-	void write(in ubyte[] bytes_)
+	size_t write(in ubyte[] bytes_, IOMode mode)
 	{
 		assert(!m_finalized);
 		const(ubyte)[] bytes = bytes_;
+		size_t nbytes = 0;
 		while (bytes.length > 0) {
 			append((scope ubyte[] dst) {
 					auto n = dst.length;
 					dst[] = bytes[0..n];
 					bytes = bytes[n..$];
+					nbytes += n;
 				}, bytes.length);
+			if (mode == IOMode.immediate) break;
+			if (mode == IOMode.once && nbytes > 0) break;
 			if (bytes.length > 0)
 				flush();
 		}
+		return nbytes;
 	}
 
-	void write(InputStream data, ulong nbytes = 0)
-	{
-		assert(!m_finalized);
-		if( m_buffer.data.length > 0 ) flush();
-		if( nbytes == 0 ) {
-			while( !data.empty ) {
-				auto sz = data.leastSize;
-				assert(sz > 0);
-				write(data,sz);
-			}
-		} else {
-			while(nbytes > 0)
-			{
-				append((scope ubyte[] dst) {
-						nbytes -= dst.length;
-						data.read(dst);
-					}, min(nbytes, size_t.max));
-				if (nbytes > 0)
-					flush();
-			}
-		}
-	}
+	alias write = OutputStream.write;
 
 	void flush()
 	{

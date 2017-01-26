@@ -51,11 +51,10 @@ final class TaskPipe : ConnectionStream {
 		return dataAvailableForRead;
 	}
 	const(ubyte)[] peek() { return m_pipe.peek; }
-	void read(ubyte[] dst) { return m_pipe.read(dst); }
-	void write(in ubyte[] bytes) { m_pipe.write(bytes); }
+	size_t read(scope ubyte[] dst, IOMode mode) { return m_pipe.read(dst, mode); }
+	size_t write(in ubyte[] bytes, IOMode mode) { return m_pipe.write(bytes, mode); }
 	void flush() {}
 	void finalize() { m_pipe.close(); }
-	void write(InputStream stream, ulong nbytes = 0) { writeDefault(stream, nbytes); }
 }
 
 
@@ -128,8 +127,10 @@ private final class TaskPipeImpl {
 
 	/** Writes the given byte array to the pipe.
 	*/
-	void write(const(ubyte)[] data)
+	size_t write(const(ubyte)[] data, IOMode mode)
 	{
+		size_t ret = 0;
+
 		while (data.length > 0){
 			bool need_signal;
 			synchronized (m_mutex) {
@@ -137,16 +138,23 @@ private final class TaskPipeImpl {
 					size_t new_sz = m_buffer.capacity;
 					while (new_sz - m_buffer.capacity < data.length) new_sz += 2;
 					m_buffer.capacity = new_sz;
-				} else while (m_buffer.full) () @trusted { m_condition.wait(); } ();
+				} else while (m_buffer.full) {
+					if (mode == IOMode.immediate || mode == IOMode.once && ret > 0)
+						return ret;
+					() @trusted { m_condition.wait(); } ();
+				}
 				
 				need_signal = m_buffer.empty;
 				auto len = min(m_buffer.freeSpace, data.length);
 				m_buffer.put(data[0 .. len]);
 				data = data[len .. $];
+				ret += len;
 			}
 			if (need_signal) () @trusted { m_condition.notifyAll(); } ();
 		}
 		if (!m_growWhenFull) vibe.core.core.yield();
+
+		return ret;
 	}
 
 	/** Returns a temporary view of the beginning of the transfer buffer.
@@ -165,23 +173,32 @@ private final class TaskPipeImpl {
 
 		Blocks until a sufficient amount of data has been written to the pipe.
 	*/
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
+		size_t ret = 0;
+
 		while (dst.length > 0) {
 			bool need_signal;
 			size_t len;
 			synchronized (m_mutex) {
-				while (m_buffer.empty && !m_closed) () @trusted { m_condition.wait(); } ();
+				while (m_buffer.empty && !m_closed) {
+					if (mode == IOMode.immediate || mode == IOMode.once && ret > 0)
+						return ret;
+					() @trusted { m_condition.wait(); } ();
+				}
 
 				need_signal = m_buffer.full;
 				enforce(!m_buffer.empty, "Reading past end of closed pipe.");
 				len = min(dst.length, m_buffer.length);
 				m_buffer.read(dst[0 .. len]);
+				ret += len;
 			}
 			if (need_signal) () @trusted { m_condition.notifyAll(); } ();
 			dst = dst[len .. $];
 		}
 		vibe.core.core.yield();
+
+		return ret;
 	}
 }
 
@@ -195,8 +212,8 @@ unittest { // issue #1501 - deadlock in TaskPipe
 		p.bufferSize = 2048;
 
 		Task a, b;
-		a = runTask({ ubyte[2100] buf; if (i == 0) p.read(buf); else p.write(buf); });
-		b = runTask({ ubyte[2100] buf; if (i == 0) p.write(buf); else p.read(buf); });
+		a = runTask({ ubyte[2100] buf; if (i == 0) p.read(buf, IOMode.all); else p.write(buf, IOMode.all); });
+		b = runTask({ ubyte[2100] buf; if (i == 0) p.write(buf, IOMode.all); else p.read(buf, IOMode.all); });
 
 		auto joiner = runTask({
 			auto starttime = Clock.currTime(UTC());

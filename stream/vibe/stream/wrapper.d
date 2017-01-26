@@ -106,15 +106,17 @@ class ProxyStream : Stream {
 
 	const(ubyte)[] peek() { return m_input.peek(); }
 
-	void read(ubyte[] dst) { m_input.read(dst); }
+	size_t read(scope ubyte[] dst, IOMode mode) { return m_input.read(dst, mode); }
 
-	void write(in ubyte[] bytes) { m_output.write(bytes); }
+	alias read = Stream.read;
+
+	size_t write(in ubyte[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+
+	alias write = Stream.write;
 
 	void flush() { m_output.flush(); }
 
 	void finalize() { m_output.finalize(); }
-
-	void write(InputStream stream, ulong nbytes = 0) { m_output.write(stream, nbytes); }
 }
 
 
@@ -206,15 +208,17 @@ class ConnectionProxyStream : ConnectionStream {
 
 	const(ubyte)[] peek() { return m_input.peek(); }
 
-	void read(ubyte[] dst) { m_input.read(dst); }
+	size_t read(scope ubyte[] dst, IOMode mode) { return m_input.read(dst, mode); }
 
-	void write(in ubyte[] bytes) { m_output.write(bytes); }
+	alias read = ConnectionStream.read;
+
+	size_t write(in ubyte[] bytes, IOMode mode) { return m_output.write(bytes, mode); }
+
+	alias write = ConnectionStream.write;
 
 	void flush() { m_output.flush(); }
 
 	void finalize() { m_output.finalize(); }
-
-	void write(InputStream stream, ulong nbytes = 0) { m_output.write(stream, nbytes); }
 }
 
 

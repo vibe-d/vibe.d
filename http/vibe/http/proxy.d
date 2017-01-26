@@ -79,11 +79,8 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			assert (scon);
 
 			import vibe.core.core : runTask;
-			runTask({ ccon.write(scon); });
-
-			import vibe.internal.interfaceproxy : asInterface;
-			import vibe.core.stream : InputStream;
-			scon.write(ccon.asInterface!InputStream);
+			runTask({ scon.pipe(ccon); });
+			ccon.pipe(scon);
 			return;
 		}
 
@@ -112,7 +109,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			if (auto pfp = "X-Forwarded-Proto" !in creq.headers) creq.headers["X-Forwarded-Proto"] = req.tls ? "https" : "http";
 			if (auto pff = "X-Forwarded-For" in req.headers) creq.headers["X-Forwarded-For"] = *pff ~ ", " ~ req.peer;
 			else creq.headers["X-Forwarded-For"] = req.peer;
-			creq.bodyWriter.write(req.bodyReader);
+			req.bodyReader.pipe(creq.bodyWriter);
 		}
 
 		void handleClientResponse(scope HTTPClientResponse cres)
@@ -130,9 +127,9 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 				auto ccon = cres.switchProtocol("");
 
 				import vibe.core.core : runTask;
-				runTask({ scon.write(ccon); });
+				runTask({ ccon.pipe(scon); });
 
-				ccon.write(scon);
+				scon.pipe(ccon);
 				return;
 			}
 
@@ -188,7 +185,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 				return 0;
 			});
 			if (res.isHeadResponse) res.writeVoidBody();
-			else res.bodyWriter.write(cres.bodyReader);
+			else cres.bodyReader.pipe(res.bodyWriter);
 		}
 
 		requestHTTP(rurl, &setupClientRequest, &handleClientResponse);

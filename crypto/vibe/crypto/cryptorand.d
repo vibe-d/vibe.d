@@ -20,14 +20,16 @@ interface RandomNumberStream : InputStream {
 		Fills the buffer new random numbers.
 
 		Params:
-			buffer: The buffer that will be filled with random numbers.
+			dst = The buffer that will be filled with random numbers.
 				It will contain buffer.length random ubytes.
 				Supportes both heap-based and stack-based arrays.
 
 		Throws:
 			CryptoException on error.
 	*/
-	void read(ubyte[] dst) @safe;
+	override size_t read(scope ubyte[] dst, IOMode mode) @safe;
+
+	alias read = InputStream.read;
 }
 
 
@@ -107,7 +109,7 @@ final class SystemRNG : RandomNumberStream {
 	@property bool dataAvailableForRead() { return true; }
 	const(ubyte)[] peek() { return null; }
 
-	void read(ubyte[] buffer) @trusted
+	size_t read(scope ubyte[] buffer, IOMode mode) @trusted
 	in
 	{
 		assert(buffer.length, "buffer length must be larger than 0");
@@ -127,7 +129,10 @@ final class SystemRNG : RandomNumberStream {
 			enforce!CryptoException(fread(buffer.ptr, buffer.length, 1, m_file) == 1,
 				text("Failed to read next random number: ", errno));
 		}
+		return buffer.length;
 	}
+
+	alias read = RandomNumberStream.read;
 }
 
 //test heap-based arrays
@@ -252,7 +257,7 @@ final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
 	@property bool dataAvailableForRead() { return true; }
 	const(ubyte)[] peek() { return null; }
 
-	void read(ubyte[] buffer)
+	size_t read(scope ubyte[] buffer, IOMode mode)
 	in
 	{
 		assert(buffer.length, "buffer length must be larger than 0");
@@ -260,8 +265,10 @@ final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
 	}
 	body
 	{
+		auto len = buffer.length;
+
 		//use stack to allocate internal buffer
-		ubyte[factor * digestLength!Hash] internalBuffer;
+		ubyte[factor * digestLength!Hash] internalBuffer = void;
 
 		//init internal buffer
 		this.rng.read(internalBuffer);
@@ -287,7 +294,11 @@ final class HashMixerRNG(Hash, uint factor) : RandomNumberStream
 
 		//fill the buffer's end
 		buffer[0..$] = randomNumber[0..buffer.length];
+
+		return len;
 	}
+
+	alias read = RandomNumberStream.read;
 }
 
 /// A SHA-1 based mixing RNG. Alias for HashMixerRNG!(SHA1, 5).

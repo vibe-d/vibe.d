@@ -40,7 +40,7 @@ import std.datetime;
 import std.encoding : sanitize;
 import std.exception;
 import std.format;
-import std.functional;
+import std.functional : toDelegate;
 import std.string;
 import std.typecons;
 import std.uri;
@@ -984,7 +984,7 @@ final class HTTPServerResponse : HTTPResponse {
 	void writeBody(scope InputStream data, string content_type = null)
 	@safe {
 		if (content_type != "") headers["Content-Type"] = content_type;
-		bodyWriter.write(data);
+		data.pipe(bodyWriter);
 	}
 
 	/** Writes the whole response body at once, without doing any further encoding.
@@ -1004,7 +1004,7 @@ final class HTTPServerResponse : HTTPResponse {
 		if (m_isHeadResponse) return;
 
 		auto bytes = stream.size - stream.tell();
-		m_conn.write(stream);
+		stream.pipe(m_conn);
 		m_countingWriter.increment(bytes);
 	}
 	/// ditto
@@ -1015,9 +1015,9 @@ final class HTTPServerResponse : HTTPResponse {
 		if (m_isHeadResponse) return;
 
 		if (num_bytes > 0) {
-			m_conn.write(stream, num_bytes);
+			stream.pipe(m_conn, num_bytes);
 			m_countingWriter.increment(num_bytes);
-		} else  m_countingWriter.write(stream, num_bytes);
+		} else stream.pipe(m_countingWriter, num_bytes);
 	}
 	/// ditto
 	void writeRawBody(RandomAccessStream stream, int status)
@@ -1509,7 +1509,7 @@ private final class LimitedHTTPInputStream : LimitedInputStream {
 @safe:
 
 	this(InterfaceProxy!InputStream stream, ulong byte_limit, bool silent_limit = false) {
-		super(stream.asInterface!InputStream, byte_limit, silent_limit, true);
+		super(stream, byte_limit, silent_limit, true);
 	}
 	override void onSizeLimitReached() {
 		throw new HTTPStatusException(HTTPStatus.requestEntityTooLarge);
@@ -1538,12 +1538,17 @@ private final class TimeoutHTTPInputStream : InputStream {
 	@property bool dataAvailableForRead() {  enforce(m_in, "InputStream missing"); return m_in.dataAvailableForRead; }
 	const(ubyte)[] peek() { return m_in.peek(); }
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		enforce(m_in, "InputStream missing");
+		size_t nread = 0;
 		checkTimeout();
-		m_in.read(dst);
+		// FIXME: this should use ConnectionStream.waitForData to enforce the timeout during the
+		// read operation
+		return m_in.read(dst, mode);
 	}
+
+	alias read = InputStream.read;
 
 	private void checkTimeout()
 	@safe {
@@ -1757,7 +1762,9 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 			import std.algorithm.comparison : max;
 			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
 			scope request_allocator = request_allocator_s.allocatorObject;
+logInfo("handle_req in");
 			handleRequest(http_stream, connection, listen_info, settings, keep_alive, request_allocator);
+logInfo("handle_req out");
 		} ();
 		if (!keep_alive) { logTrace("No keep-alive - disconnecting client."); break; }
 
@@ -1771,10 +1778,12 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	}
 
 	logTrace("Done handling connection.");
+	//connection.close();
 }
 
 private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
 @safe {
+logInfo("%s in", __FUNCTION__); scope (exit) logInfo("%s out", __FUNCTION__);
 	import std.algorithm.searching : canFind;
 
 	SysTime reqtime = Clock.currTime(UTC());
@@ -1857,6 +1866,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 
 	// parse the request
 	try {
+logInfo("%s read request in", __FUNCTION__); scope (exit) logInfo("%s read request out", __FUNCTION__);
 		logTrace("reading request..");
 
 		// limit the total request time
@@ -2038,7 +2048,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 
 	if (tcp_connection.connected) {
 		if (req.bodyReader && !req.bodyReader.empty) {
-			nullSink.write(req.bodyReader);
+			req.bodyReader.pipe(nullSink);
 			logTrace("dropped body");
 		}
 	}
@@ -2068,6 +2078,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size)
 	if (isInputStream!InputStream)
 {
+logInfo("%s in", __FUNCTION__); scope (exit) logInfo("%s out", __FUNCTION__);
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");

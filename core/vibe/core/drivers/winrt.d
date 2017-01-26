@@ -280,11 +280,6 @@ version(VibeWinrtDriver)
 		void finalize()
 		{
 		}
-
-		void write(InputStream stream, ulong nbytes = 0)
-		{
-			writeDefault(stream, nbytes);
-		}
 	}
 
 	class WinRTTCPConnection : TCPConnection {
@@ -355,11 +350,6 @@ version(VibeWinrtDriver)
 
 		void finalize()
 		{
-		}
-
-		void write(InputStream stream, ulong nbytes = 0)
-		{
-			writeDefault(stream, nbytes);
 		}
 	}
 

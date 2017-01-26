@@ -131,9 +131,10 @@ class ZlibOutputStream : OutputStream {
 			() @trusted { deflateEnd(&m_zstream); } ();
 	}
 
-	final void write(in ubyte[] data)
+	final size_t write(in ubyte[] data, IOMode mode)
 	{
-		if (!data.length) return;
+		// TODO: support IOMode!
+		if (!data.length) return 0;
 		assert(!m_finalized);
 		assert(m_zstream.avail_in == 0);
 		m_zstream.next_in = () @trusted { return cast(ubyte*)data.ptr; } ();
@@ -142,12 +143,10 @@ class ZlibOutputStream : OutputStream {
 		doFlush(Z_NO_FLUSH);
 		assert(m_zstream.avail_in == 0);
 		m_zstream.next_in = null;
+		return data.length;
 	}
 
-	final void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
-	}
+	alias write = OutputStream.write;
 
 	final void flush()
 	{
@@ -318,19 +317,31 @@ class ZlibInputStream : InputStream {
 
 	const(ubyte)[] peek() { return m_outbuffer.peek(); }
 
-	void read(ubyte[] dst)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		enforce(dst.length == 0 || !empty, "Reading empty stream");
+
+		size_t nread = 0;
 
 		while (dst.length > 0) {
 			auto len = min(m_outbuffer.length, dst.length);
 			m_outbuffer.read(dst[0 .. len]);
 			dst = dst[len .. $];
 
-			if (!m_outbuffer.length && !m_finished) readChunk();
+			nread += len;
+
+			if (!m_outbuffer.length && !m_finished) {
+				if (mode == IOMode.immediate || mode == IOMode.once && !nread)
+					break;
+				readChunk();
+			}
 			enforce(dst.length == 0 || m_outbuffer.length || !m_finished, "Reading past end of zlib stream.");
 		}
+
+		return nread;
 	}
+
+	alias read = InputStream.read;
 
 	private void readChunk()
 	@safe {

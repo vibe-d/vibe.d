@@ -178,9 +178,11 @@ final class ThreadedFileStream : FileStream {
 		return null;
 	}
 
-	void read(ubyte[] dst)
+	alias read = Stream.read;
+	size_t read(scope ubyte[] dst, IOMode)
 	{
 		assert(this.readable);
+		size_t len = dst.length;
 		while (dst.length > 0) {
 			enforce(dst.length <= leastSize);
 			auto sz = min(dst.length, 4096);
@@ -189,13 +191,15 @@ final class ThreadedFileStream : FileStream {
 			m_ptr += sz;
 			yield();
 		}
+		return len;
 	}
 
 	alias write = Stream.write;
-	void write(in ubyte[] bytes_)
+	size_t write(in ubyte[] bytes_, IOMode)
 	{
 		const(ubyte)[] bytes = bytes_;
 		assert(this.writable);
+		size_t len = bytes_.length;
 		while (bytes.length > 0) {
 			auto sz = min(bytes.length, 4096);
 			auto ret = () @trusted { return .write(m_fileDescriptor, bytes.ptr, cast(int)sz); } ();
@@ -204,11 +208,7 @@ final class ThreadedFileStream : FileStream {
 			m_ptr += sz;
 			yield();
 		}
-	}
-
-	void write(InputStream stream, ulong nbytes = 0)
-	{
-		writeDefault(stream, nbytes);
+		return len;
 	}
 
 	void flush()
@@ -228,7 +228,8 @@ unittest { // issue #1189
 		fil.close();
 		removeFile(".unittest.tmp");
 	}
-	fil.write([0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+	immutable(ubyte)[] msg = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+	fil.write(msg);
 	fil.seek(5);
 	ubyte[3] buf;
 	fil.read(buf);

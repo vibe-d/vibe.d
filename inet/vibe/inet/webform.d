@@ -241,13 +241,13 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 	if (filename.length > 0) {
 		FilePart fp;
 		fp.headers = headers;
-		fp.filename = PathEntry(filename);
+		fp.filename = PathEntry.validateFilename(filename);
 
 		auto file = createTempFile();
 		fp.tempPath = file.path;
 		if (auto plen = "Content-Length" in headers) {
 			import std.conv : to;
-			file.write(stream, (*plen).to!long);
+			stream.pipe(file, (*plen).to!long);
 			enforce(stream.skipBytes(boundary), "Missing multi-part end boundary marker.");
 		} else stream.readUntil(file, boundary);
 		logDebug("file: %s", fp.tempPath.toString());
@@ -265,7 +265,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 	stream.read(ub);
 	if (ub == "--")
 	{
-		nullSink().write(stream);
+		stream.pipe(nullSink());
 		return false;
 	}
 	enforce(ub == cast(const(ubyte)[])"\r\n");
