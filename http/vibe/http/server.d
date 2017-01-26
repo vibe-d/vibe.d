@@ -19,7 +19,7 @@ import vibe.http.log;
 import vibe.inet.message;
 import vibe.inet.url;
 import vibe.inet.webform;
-import vibe.internal.interfaceproxy : InterfaceProxy, asInterface;
+import vibe.internal.interfaceproxy : InterfaceProxy;
 import vibe.stream.counting;
 import vibe.stream.operations;
 import vibe.stream.tls;
@@ -232,9 +232,9 @@ void setVibeDistHost(string host, ushort port)
 {
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
 	version (Have_diet_ng) {
-		import vibe.stream.wrapper : StreamOutputRange;
+		import vibe.stream.wrapper : streamOutputRange;
 		import diet.html : compileHTMLDietFile;
-		auto output = StreamOutputRange(res.bodyWriter);
+		auto output = streamOutputRange(res.bodyWriter);
 		compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
 	} else {
 		import vibe.templ.diet;
@@ -373,7 +373,7 @@ HTTPServerResponse createTestHTTPServerResponse(OutputStream data_sink = null, S
 		settings.sessionStore = session_store;
 	}
 	if (!data_sink) data_sink = new NullOutputStream;
-	auto stream = createProxyStream(null, data_sink);
+	auto stream = createProxyStream(Stream.init, data_sink);
 	auto ret = new HTTPServerResponse(stream, null, settings, () @trusted { return processAllocator(); } ());
 	return ret;
 }
@@ -909,7 +909,7 @@ final class HTTPServerResponse : HTTPResponse {
 	private {
 		InterfaceProxy!Stream m_conn;
 		InterfaceProxy!ConnectionStream m_rawConnection;
-		OutputStream m_bodyWriter;
+		InterfaceProxy!OutputStream m_bodyWriter;
 		IAllocator m_requestAlloc;
 		FreeListRef!ChunkedOutputStream m_chunkedBodyWriter;
 		FreeListRef!CountingOutputStream m_countingWriter;
@@ -997,8 +997,9 @@ final class HTTPServerResponse : HTTPResponse {
 		network card using a DMA transfer.
 
 	*/
-	void writeRawBody(RandomAccessStream stream)
-	@safe {
+	void writeRawBody(RandomAccessStream)(RandomAccessStream stream) @safe
+		if (isRandomAccessStream!RandomAccessStream)
+	{
 		assert(!m_headerWritten, "A body was already written!");
 		writeHeader();
 		if (m_isHeadResponse) return;
@@ -1008,8 +1009,9 @@ final class HTTPServerResponse : HTTPResponse {
 		m_countingWriter.increment(bytes);
 	}
 	/// ditto
-	void writeRawBody(InputStream stream, size_t num_bytes = 0)
-	@safe {
+	void writeRawBody(InputStream)(InputStream stream, size_t num_bytes = 0) @safe
+		if (isInputStream!InputStream && !isRandomAccessStream!InputStream)
+	{
 		assert(!m_headerWritten, "A body was already written!");
 		writeHeader();
 		if (m_isHeadResponse) return;
@@ -1020,14 +1022,16 @@ final class HTTPServerResponse : HTTPResponse {
 		} else stream.pipe(m_countingWriter, num_bytes);
 	}
 	/// ditto
-	void writeRawBody(RandomAccessStream stream, int status)
-	@safe {
+	void writeRawBody(RandomAccessStream)(RandomAccessStream stream, int status) @safe
+		if (isRandomAccessStream!RandomAccessStream)
+	{
 		statusCode = status;
 		writeRawBody(stream);
 	}
 	/// ditto
-	void writeRawBody(InputStream stream, int status, size_t num_bytes = 0)
-	@safe {
+	void writeRawBody(InputStream)(InputStream stream, int status, size_t num_bytes = 0) @safe
+		if (isInputStream!InputStream && !isRandomAccessStream!InputStream)
+	{
 		statusCode = status;
 		writeRawBody(stream, num_bytes);
 	}
@@ -1114,7 +1118,7 @@ final class HTTPServerResponse : HTTPResponse {
 		Note that after 'bodyWriter' has been accessed for the first time, it
 		is not allowed to change any header or the status code of the response.
 	*/
-	@property OutputStream bodyWriter()
+	@property InterfaceProxy!OutputStream bodyWriter()
 	@safe {
 		assert(!!m_conn);
 		if (m_bodyWriter) return m_bodyWriter;
@@ -1128,7 +1132,7 @@ final class HTTPServerResponse : HTTPResponse {
 			if ("Content-Length" !in headers)
 				headers["Transfer-Encoding"] = "chunked";
 			writeHeader();
-			m_bodyWriter = new NullOutputStream;
+			m_bodyWriter = nullSink;
 			return m_bodyWriter;
 		}
 
@@ -1762,9 +1766,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 			import std.algorithm.comparison : max;
 			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
 			scope request_allocator = request_allocator_s.allocatorObject;
-logInfo("handle_req in");
 			handleRequest(http_stream, connection, listen_info, settings, keep_alive, request_allocator);
-logInfo("handle_req out");
 		} ();
 		if (!keep_alive) { logTrace("No keep-alive - disconnecting client."); break; }
 
@@ -1783,7 +1785,6 @@ logInfo("handle_req out");
 
 private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
 @safe {
-logInfo("%s in", __FUNCTION__); scope (exit) logInfo("%s out", __FUNCTION__);
 	import std.algorithm.searching : canFind;
 
 	SysTime reqtime = Clock.currTime(UTC());
@@ -1866,7 +1867,6 @@ logInfo("%s in", __FUNCTION__); scope (exit) logInfo("%s out", __FUNCTION__);
 
 	// parse the request
 	try {
-logInfo("%s read request in", __FUNCTION__); scope (exit) logInfo("%s read request out", __FUNCTION__);
 		logTrace("reading request..");
 
 		// limit the total request time
@@ -2078,7 +2078,6 @@ logInfo("%s read request in", __FUNCTION__); scope (exit) logInfo("%s read reque
 private void parseRequestHeader(InputStream)(HTTPServerRequest req, InputStream http_stream, IAllocator alloc, ulong max_header_size)
 	if (isInputStream!InputStream)
 {
-logInfo("%s in", __FUNCTION__); scope (exit) logInfo("%s out", __FUNCTION__);
 	auto stream = FreeListRef!LimitedHTTPInputStream(http_stream, max_header_size);
 
 	logTrace("HTTP server reading status line");

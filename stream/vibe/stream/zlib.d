@@ -10,6 +10,7 @@ module vibe.stream.zlib;
 import vibe.core.stream;
 import vibe.utils.array;
 import vibe.internal.freelistref;
+import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
 
 import std.algorithm;
 import std.exception;
@@ -20,54 +21,62 @@ import vibe.core.log;
 
 /** Creates a new deflate uncompression stream.
 */
-ZlibInputStream createDeflateInputStream(InputStream source)
-@safe {
-	return new ZlibInputStream(source, ZlibInputStream.HeaderFormat.deflate, true);
+ZlibInputStream createDeflateInputStream(InputStream)(InputStream source) @safe
+	if (isInputStream!InputStream)
+{
+	return new ZlibInputStream(interfaceProxy!(.InputStream)(source), ZlibInputStream.HeaderFormat.deflate, true);
 }
 
 /// private
-FreeListRef!ZlibInputStream createDeflateInputStreamFL(InputStream source)
-@safe {
-	return FreeListRef!ZlibInputStream(source, ZlibInputStream.HeaderFormat.deflate, true);
+FreeListRef!ZlibInputStream createDeflateInputStreamFL(InputStream)(InputStream source) @safe
+	if (isInputStream!InputStream)
+{
+	return FreeListRef!ZlibInputStream(interfaceProxy!(.InputStream)(source), ZlibInputStream.HeaderFormat.deflate, true);
 }
 
 /** Creates a new deflate compression stream.
 */
-ZlibOutputStream createDeflateOutputStream(OutputStream destination)
-@safe {
-	return new ZlibOutputStream(destination, ZlibOutputStream.HeaderFormat.deflate, Z_DEFAULT_COMPRESSION, true);
+ZlibOutputStream createDeflateOutputStream(OutputStream)(OutputStream destination) @safe
+	if (isOutputStream!OutputStream)
+{
+	return new ZlibOutputStream(interfaceProxy!(.OutputStream)(destination), ZlibOutputStream.HeaderFormat.deflate, Z_DEFAULT_COMPRESSION, true);
 }
 
 /// private
-FreeListRef!ZlibOutputStream createDeflateOutputStreamFL(OutputStream destination)
-@safe {
-	return FreeListRef!ZlibOutputStream(destination, ZlibOutputStream.HeaderFormat.deflate, Z_DEFAULT_COMPRESSION, true);
+FreeListRef!ZlibOutputStream createDeflateOutputStreamFL(OutputStream)(OutputStream destination) @safe
+	if (isOutputStream!OutputStream)
+{
+	return FreeListRef!ZlibOutputStream(interfaceProxy!(.OutputStream)(destination), ZlibOutputStream.HeaderFormat.deflate, Z_DEFAULT_COMPRESSION, true);
 }
 
 /** Creates a new deflate uncompression stream.
 */
-ZlibInputStream createGzipInputStream(InputStream source)
-@safe {
-	return new ZlibInputStream(source, ZlibInputStream.HeaderFormat.gzip, true);
+ZlibInputStream createGzipInputStream(InputStream)(InputStream source) @safe
+	if (isInputStream!InputStream)
+{
+	return new ZlibInputStream(interfaceProxy!(.InputStream)(source), ZlibInputStream.HeaderFormat.gzip, true);
 }
 
 /// private
-FreeListRef!ZlibInputStream createGzipInputStreamFL(InputStream source)
-@safe {
-	return FreeListRef!ZlibInputStream(source, ZlibInputStream.HeaderFormat.gzip, true);
+FreeListRef!ZlibInputStream createGzipInputStreamFL(InputStream)(InputStream source) @safe
+	if (isInputStream!InputStream)
+{
+	return FreeListRef!ZlibInputStream(interfaceProxy!(.InputStream)(source), ZlibInputStream.HeaderFormat.gzip, true);
 }
 
 /** Creates a new deflate uncompression stream.
 */
-ZlibOutputStream createGzipOutputStream(OutputStream destination)
-@safe {
-	return new ZlibOutputStream(destination, ZlibOutputStream.HeaderFormat.gzip, Z_DEFAULT_COMPRESSION, true);
+ZlibOutputStream createGzipOutputStream(OutputStream)(OutputStream destination) @safe
+	if (isOutputStream!OutputStream)
+{
+	return new ZlibOutputStream(interfaceProxy!(.OutputStream)(destination), ZlibOutputStream.HeaderFormat.gzip, Z_DEFAULT_COMPRESSION, true);
 }
 
 /// private
-FreeListRef!ZlibOutputStream createGzipOutputStreamFL(OutputStream destination)
-@safe {
-	return FreeListRef!ZlibOutputStream(destination, ZlibOutputStream.HeaderFormat.gzip, Z_DEFAULT_COMPRESSION, true);
+FreeListRef!ZlibOutputStream createGzipOutputStreamFL(OutputStream)(OutputStream destination) @safe
+	if (isOutputStream!OutputStream)
+{
+	return FreeListRef!ZlibOutputStream(interfaceProxy!(.OutputStream)(destination), ZlibOutputStream.HeaderFormat.gzip, Z_DEFAULT_COMPRESSION, true);
 }
 
 
@@ -101,7 +110,7 @@ class ZlibOutputStream : OutputStream {
 @safe:
 
 	private {
-		OutputStream m_out;
+		InterfaceProxy!OutputStream m_out;
 		z_stream m_zstream;
 		ubyte[1024] m_outbuffer;
 		//ubyte[4096] m_inbuffer;
@@ -116,11 +125,11 @@ class ZlibOutputStream : OutputStream {
 	deprecated("Use createGzipOutputStream/createDeflateOutputStream instead.")
 	this(OutputStream dst, HeaderFormat type, int level = Z_DEFAULT_COMPRESSION)
 	{
-		this(dst, type, level, true);
+		this(interfaceProxy!OutputStream(dst), type, level, true);
 	}
 
 	/// private
-	this(OutputStream dst, HeaderFormat type, int level, bool dummy)
+	this(InterfaceProxy!OutputStream dst, HeaderFormat type, int level, bool dummy)
 	{
 		m_out = dst;
 		zlibEnforce(() @trusted { return deflateInit2(&m_zstream, level, Z_DEFLATED, 15 + (type == HeaderFormat.gzip ? 16 : 0), 8, Z_DEFAULT_STRATEGY); } ());
@@ -257,7 +266,7 @@ class ZlibInputStream : InputStream {
 
 	import std.zlib;
 	private {
-		InputStream m_in;
+		InterfaceProxy!InputStream m_in;
 		z_stream m_zstream;
 		FixedRingBuffer!(ubyte, 4096) m_outbuffer;
 		ubyte[1024] m_inbuffer;
@@ -274,11 +283,11 @@ class ZlibInputStream : InputStream {
 	deprecated("Use createGzipInputStream/createDeflateInputStream instead.")
 	this(InputStream src, HeaderFormat type)
 	{
-		this(src, type, true);
+		this(interfaceProxy!InputStream(src), type, true);
 	}
 
 	/// private
-	this(InputStream src, HeaderFormat type, bool dummy)
+	this(InterfaceProxy!InputStream src, HeaderFormat type, bool dummy)
 	{
 		m_in = src;
 		if (m_in.empty) {

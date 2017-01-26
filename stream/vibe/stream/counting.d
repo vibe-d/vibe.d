@@ -26,14 +26,14 @@ import vibe.internal.freelistref : FreeListRef;
 LimitedInputStream createLimitedInputStream(InputStream)(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	if (isInputStream!InputStream)
 {
-	return new LimitedInputStream(InterfaceProxy!(.InputStream)(stream), byte_limit, silent_limit, true);
+	return new LimitedInputStream(interfaceProxy!(.InputStream)(stream), byte_limit, silent_limit, true);
 }
 
 /// private
 FreeListRef!LimitedInputStream createLimitedInputStreamFL(InputStream)(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	if (isInputStream!InputStream)
 {
-	return FreeListRef!LimitedInputStream(InterfaceProxy!(.InputStream)(stream), byte_limit, silent_limit, true);
+	return FreeListRef!LimitedInputStream(interfaceProxy!(.InputStream)(stream), byte_limit, silent_limit, true);
 }
 
 /** Creates a proxy stream that counts the number of bytes written.
@@ -45,14 +45,14 @@ FreeListRef!LimitedInputStream createLimitedInputStreamFL(InputStream)(InputStre
 CountingOutputStream createCountingOutputStream(OutputStream)(OutputStream output, ulong byte_limit = ulong.max)
 	if (isOutputStream!OutputStream)
 {
-	return new CountingOutputStream(InterfaceProxy!(.OutputStream)(output), byte_limit, true);
+	return new CountingOutputStream(interfaceProxy!(.OutputStream)(output), byte_limit, true);
 }
 
 /// private
 FreeListRef!CountingOutputStream createCountingOutputStreamFL(OutputStream)(OutputStream output, ulong byte_limit = ulong.max)
 	if (isOutputStream!OutputStream)
 {
-	return FreeListRef!CountingOutputStream(InterfaceProxy!(.OutputStream)(output), byte_limit, true);
+	return FreeListRef!CountingOutputStream(interfaceProxy!(.OutputStream)(output), byte_limit, true);
 }
 
 
@@ -65,14 +65,14 @@ FreeListRef!CountingOutputStream createCountingOutputStreamFL(OutputStream)(Outp
 EndCallbackInputStream createEndCallbackInputStream(InputStream)(InputStream input, void delegate() @safe callback)
 	if (isInputStream!InputStream)
 {
-	return new EndCallbackInputStream(InterfaceProxy!(.InputStream)(input), callback, true);
+	return new EndCallbackInputStream(interfaceProxy!(.InputStream)(input), callback, true);
 }
 
 /// private
 FreeListRef!EndCallbackInputStream createEndCallbackInputStreamFL(InputStream)(InputStream input, void delegate() @safe callback)
 	if (isInputStream!InputStream)
 {
-	return FreeListRef!EndCallbackInputStream(InterfaceProxy!(.InputStream)(input), callback, true);
+	return FreeListRef!EndCallbackInputStream(interfaceProxy!(.InputStream)(input), callback, true);
 }
 
 
@@ -91,7 +91,7 @@ class LimitedInputStream : InputStream {
 	deprecated("Use createLimitedInputStream instead.")
 	this(InputStream stream, ulong byte_limit, bool silent_limit = false)
 	{
-		this(InterfaceProxy!InputStream(stream), byte_limit, silent_limit, true);
+		this(interfaceProxy!InputStream(stream), byte_limit, silent_limit, true);
 	}
 
 	/// private
@@ -151,7 +151,7 @@ class CountingOutputStream : OutputStream {
 	deprecated("Use createCountingOutputStream instead.")
 	this(OutputStream stream, ulong write_limit = ulong.max)
 	{
-		this(InterfaceProxy!OutputStream(stream), write_limit, true);
+		this(interfaceProxy!OutputStream(stream), write_limit, true);
 	}
 
 	/// private
@@ -208,7 +208,7 @@ class CountingInputStream : InputStream {
 	deprecated("Use createCountingOutputStream instead.")
 	this(InputStream stream)
 	{
-		this(InterfaceProxy!InputStream(stream), true);
+		this(interfaceProxy!InputStream(stream), true);
 	}
 
 	/// private
@@ -264,7 +264,7 @@ class EndCallbackInputStream : InputStream {
 	deprecated("use createEndCallbackInputStream instead.")
 	this(InputStream input, void delegate() @safe callback)
 	{
-		this(InterfaceProxy!InputStream(input), callback, true);
+		this(interfaceProxy!InputStream(input), callback, true);
 	}
 
 	/// private

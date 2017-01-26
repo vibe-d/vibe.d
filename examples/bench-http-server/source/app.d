@@ -45,10 +45,10 @@ void staticAnswer(TCPConnection conn)
 @safe nothrow {
 	try {
 		conn.write("HTTP/1.0 200 OK\r\nContent-Length: 0\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n");
+		conn.close();
 	} catch (Exception e) {
 		// increment error counter
 	}
-	conn.close();
 }
 
 pure char[] generateData()

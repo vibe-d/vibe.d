@@ -88,7 +88,7 @@ void writeFormBody(HTTPClientRequest req, in string[string] form)
 	writeFormData(&len, form);
 	req.contentType = "application/x-www-form-urlencoded";
 	req.contentLength = len.count;
-	auto rng = StreamOutputRange(req.bodyWriter);
+	auto rng = streamOutputRange(req.bodyWriter);
 	writeFormData(&rng, form);
 }
 

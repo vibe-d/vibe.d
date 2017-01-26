@@ -141,7 +141,7 @@ TLSStream createTLSStream(Stream)(Stream underlying, TLSContext ctx, string peer
 TLSStream createTLSStream(Stream)(Stream underlying, TLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	if (isStream!Stream)
 {
-	return ctx.createStream(underlying.asInterface!(.Stream), state, peer_name, peer_address);
+	return ctx.createStream(interfaceProxy!(.Stream)(underlying), state, peer_name, peer_address);
 }
 
 /**
@@ -158,12 +158,12 @@ auto createTLSStreamFL(Stream)(Stream underlying, TLSContext ctx, TLSStreamState
 		import vibe.internal.freelistref;
 		import vibe.stream.openssl;
 		static assert(AllocSize!TLSStream > 0);
-		return FreeListRef!OpenSSLStream(underlying.asInterface!(.Stream), cast(OpenSSLContext)ctx,
+		return FreeListRef!OpenSSLStream(interfaceProxy!(.Stream)(underlying), cast(OpenSSLContext)ctx,
 										 state, peer_name, peer_address);
 	} else version (Botan) {
 		import vibe.internal.freelistref;
 		import vibe.stream.botan;
-		return FreeListRef!BotanTLSStream(cast(ConnectionStream) underlying.asInterface!(.Stream), cast(BotanTLSContext) ctx, state, peer_name, peer_address);
+		return FreeListRef!BotanTLSStream(interfaceProxy!(.Stream)(underlying), cast(BotanTLSContext) ctx, state, peer_name, peer_address);
 	} else assert(false, "No TLS support compiled in (VibeNoTLS)");
 }
 
@@ -271,7 +271,7 @@ interface TLSContext {
 
 	/** Creates a new stream associated to this context.
 	*/
-	TLSStream createStream(Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
+	TLSStream createStream(InterfaceProxy!Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init);
 
 	/** Set the list of cipher specifications to use for TLS tunnels.
 

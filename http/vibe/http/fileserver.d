@@ -424,7 +424,7 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 	} else {
 		if (pce && !encodedFilepath.length)
 			fil.pipe(res.bodyWriter);
-		else res.writeRawBody(fil.asInterface!RandomAccessStream);
+		else res.writeRawBody(fil);
 		logTrace("sent file %d, %s!", fil.size, res.headers["Content-Type"]);
 	}
 }

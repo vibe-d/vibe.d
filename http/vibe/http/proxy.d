@@ -12,6 +12,7 @@ import vibe.http.client;
 import vibe.http.server;
 import vibe.inet.message;
 import vibe.stream.operations;
+import vibe.internal.interfaceproxy : InterfaceProxy;
 
 import std.conv;
 import std.exception;
@@ -172,7 +173,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 				});
 				auto size = cres.headers["Content-Length"].to!size_t();
 				if (res.isHeadResponse) res.writeVoidBody();
-				else cres.readRawBody((scope reader) { res.writeRawBody(reader, size); });
+				else cres.readRawBody((scope InterfaceProxy!InputStream reader) { res.writeRawBody(reader, size); });
 				assert(res.headerWritten);
 				return;
 			}

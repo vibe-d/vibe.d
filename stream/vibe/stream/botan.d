@@ -26,13 +26,14 @@ import botan.rng.auto_rng;
 import vibe.core.stream;
 import vibe.stream.tls;
 import vibe.core.net;
+import vibe.internal.interfaceproxy : InterfaceProxy;
 import std.datetime;
 import std.exception;
 
 class BotanTLSStream : TLSStream/*, Buffered*/
 {
 	private {
-		Stream m_stream;
+		InterfaceProxy!Stream m_stream;
 		TLSBlockingChannel m_tlsChannel;
 		BotanTLSContext m_ctx;
 
@@ -67,7 +68,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	@property TLSCertificateInformation peerCertificate() { assert(false, "Incompatible interface method requested"); }
 
 	// Constructs a new TLS Client Stream and connects with the specified handlers
-	this(Stream underlying, BotanTLSContext ctx, 
+	this(InterfaceProxy!Stream underlying, BotanTLSContext ctx, 
 		 void delegate(in TLSAlert alert, in ubyte[] ub) alert_cb, 
 		 bool delegate(in TLSSession session) hs_cb,
 		 string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
@@ -348,7 +349,7 @@ class BotanTLSContext : TLSContext {
 
 	/** Creates a new stream associated to this context.
 	*/
-	TLSStream createStream(Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	TLSStream createStream(InterfaceProxy!Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		if (!m_certChecked)
 			checkCert();	

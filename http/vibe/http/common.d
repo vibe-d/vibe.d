@@ -17,6 +17,7 @@ import vibe.textfilter.urlencode : urlEncode, urlDecode;
 import vibe.utils.array;
 import vibe.internal.allocator;
 import vibe.internal.freelistref;
+import vibe.internal.interfaceproxy : InterfaceProxy, interfaceProxy;
 import vibe.utils.string;
 
 import std.algorithm;
@@ -176,7 +177,7 @@ class HTTPRequest {
 	@safe:
 
 	protected {
-		Stream m_conn;
+		InterfaceProxy!Stream m_conn;
 	}
 
 	public {
@@ -198,7 +199,7 @@ class HTTPRequest {
 		InetHeaderMap headers;
 	}
 
-	protected this(Stream conn)
+	protected this(InterfaceProxy!Stream conn)
 	{
 		m_conn = conn;
 	}
@@ -372,20 +373,20 @@ final class ChunkedInputStream : InputStream
 	@safe:
 
 	private {
-		InputStream m_in;
+		InterfaceProxy!InputStream m_in;
 		ulong m_bytesInCurrentChunk = 0;
 	}
 
 	deprecated("Use createChunkedInputStream() instead.")
 	this(InputStream stream)
 	{
-		this(stream, true);
+		this(interfaceProxy!InputStream(stream), true);
 	}
 
 	/// private
-	this(InputStream stream, bool dummy)
+	this(InterfaceProxy!InputStream stream, bool dummy)
 	{
-		assert(stream !is null);
+		assert(!!stream);
 		m_in = stream;
 		readChunk();
 	}
@@ -455,15 +456,13 @@ final class ChunkedInputStream : InputStream
 /// Creates a new `ChunkedInputStream` instance.
 ChunkedInputStream chunkedInputStream(IS)(IS source_stream) if (isInputStream!IS)
 {
-	import vibe.internal.interfaceproxy : asInterface;
-	return new ChunkedInputStream(source_stream.asInterface!InputStream, true);
+	return new ChunkedInputStream(interfaceProxy!InputStream(source_stream), true);
 }
 
 /// Creates a new `ChunkedInputStream` instance.
 FreeListRef!ChunkedInputStream createChunkedInputStreamFL(IS)(IS source_stream) if (isInputStream!IS)
 {
-	import vibe.internal.interfaceproxy : asInterface;
-	return () @trusted { return FreeListRef!ChunkedInputStream(source_stream.asInterface!InputStream, true); } ();
+	return () @trusted { return FreeListRef!ChunkedInputStream(interfaceProxy!InputStream(source_stream), true); } ();
 }
 
 
@@ -475,7 +474,7 @@ final class ChunkedOutputStream : OutputStream {
 
 	alias ChunkExtensionCallback = string delegate(in ubyte[] data);
 	private {
-		OutputStream m_out;
+		InterfaceProxy!OutputStream m_out;
 		AllocAppender!(ubyte[]) m_buffer;
 		size_t m_maxBufferSize = 4*1024;
 		bool m_finalized = false;
@@ -485,11 +484,11 @@ final class ChunkedOutputStream : OutputStream {
 	deprecated("Use createChunkedOutputStream() instead.")
 	this(OutputStream stream, IAllocator alloc = theAllocator())
 	{
-		this(stream, alloc, true);
+		this(interfaceProxy!OutputStream(stream), alloc, true);
 	}
 
 	/// private
-	this(OutputStream stream, IAllocator alloc, bool dummy)
+	this(InterfaceProxy!OutputStream stream, IAllocator alloc, bool dummy)
 	{
 		m_out = stream;
 		m_buffer = AllocAppender!(ubyte[])(alloc);
@@ -587,7 +586,7 @@ final class ChunkedOutputStream : OutputStream {
 	private void writeChunk(in ubyte[] data)
 	{
 		import vibe.stream.wrapper;
-		auto rng = StreamOutputRange(m_out);
+		auto rng = streamOutputRange(m_out);
 		formattedWrite(() @trusted { return &rng; } (), "%x", data.length);
 		if (m_chunkExtensionCallback !is null)
 		{
@@ -607,15 +606,13 @@ final class ChunkedOutputStream : OutputStream {
 /// Creates a new `ChunkedInputStream` instance.
 ChunkedOutputStream createChunkedOutputStream(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
 {
-	import vibe.internal.interfaceproxy : asInterface;
-	return new ChunkedOutputStream(destination_stream.asInterface!OutputStream, allocator, true);
+	return new ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
 
 /// Creates a new `ChunkedOutputStream` instance.
 FreeListRef!ChunkedOutputStream createChunkedOutputStreamFL(OS)(OS destination_stream, IAllocator allocator = theAllocator()) if (isOutputStream!OS)
 {
-	import vibe.internal.interfaceproxy : asInterface;
-	return FreeListRef!ChunkedOutputStream(destination_stream.asInterface!OutputStream, allocator, true);
+	return FreeListRef!ChunkedOutputStream(interfaceProxy!OutputStream(destination_stream), allocator, true);
 }
 
 
