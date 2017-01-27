@@ -99,7 +99,7 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate r
 	if (s_distHost.length && !settings.disableDistHost) {
 		listenHTTPDist(settings, request_handler, s_distHost, s_distPort);
 	} else {
-		listenHTTPPlain(settings);
+		listenHTTPPlain(settings, ctx);
 	}
 
 	return HTTPListener(ctx.id);
@@ -1580,15 +1580,19 @@ private {
 	This is the same as listenHTTP() except that it does not use a VibeDist host for
 	remote listening, even if specified on the command line.
 */
-private void listenHTTPPlain(HTTPServerSettings settings)
+private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext context)
 @safe {
+	import vibe.core.core : runWorkerTaskDist;
 	import std.algorithm : canFind;
 
-	static TCPListener doListen(HTTPListenInfo listen_info, bool dist, bool reusePort)
+	static TCPListener doListen(HTTPListenInfo listen_info, HTTPServerContext context, bool dist, bool reusePort)
 	@safe {
 		try {
 			TCPListenOptions options = TCPListenOptions.defaults;
-			if(dist) options |= TCPListenOptions.distribute; else options &= ~TCPListenOptions.distribute;
+			if (dist) {
+				options |= TCPListenOptions.distribute;
+				() @trusted { runWorkerTaskDist((shared(HTTPServerContext) ctx) { s_contexts ~= cast(HTTPServerContext)ctx; }, cast(shared)context); } ();
+			} else options &= ~TCPListenOptions.distribute;
 			if(reusePort) options |= TCPListenOptions.reusePort; else options &= ~TCPListenOptions.reusePort;
 			auto ret = listenTCP(listen_info.bindPort, (TCPConnection conn) nothrow @safe {
 					try handleHTTPConnection(conn, listen_info);
@@ -1660,7 +1664,7 @@ private void listenHTTPPlain(HTTPServerSettings settings)
 		}
 		if (!found_listener) {
 			auto linfo = new HTTPListenInfo(addr, settings.port, settings.tlsContext);
-			if (auto tcp_lst = doListen(linfo, (settings.options & HTTPServerOption.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
+			if (auto tcp_lst = doListen(linfo, context, (settings.options & HTTPServerOption.distribute) != 0, (settings.options & HTTPServerOption.reusePort) != 0)) // DMD BUG 2043
 			{
 				linfo.listener = tcp_lst;
 				found_listener = true;
