@@ -126,7 +126,7 @@ unittest {
 	{
 		// first, perform any application specific setup (privileged ports still
 		// available if run as root)
-		listenTCP(7, (conn) { conn.write(conn); });
+		listenTCP(7, (conn) { conn.pipe(conn); });
 
 		// then use runApplication to perform the remaining initialization and
 		// to run the event loop
@@ -151,7 +151,7 @@ unittest {
 		if (!finalizeCommandLineOptions()) return 0;
 
 		// then set up the application
-		listenTCP(7, (conn) { conn.write(conn); });
+		listenTCP(7, (conn) { conn.pipe(conn); });
 
 		// finally, perform privilege lowering (safe to skip for non-server
 		// applications)
