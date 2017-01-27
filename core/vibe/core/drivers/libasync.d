@@ -549,7 +549,7 @@ final class LibasyncFileStream : FileStream {
 		return null;
 	}
 
-	override size_t read(ubyte[] dst, IOMode)
+	override size_t read(scope ubyte[] dst, IOMode)
 	{
 		scope(failure)
 			close();
@@ -1236,7 +1236,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 			return null;
 	}
 
-	override size_t read(ubyte[] dst, IOMode)
+	override size_t read(scope ubyte[] dst, IOMode)
 	{
 		if (!dst.length) return 0;
 		assert(dst !is null && !m_slice);
