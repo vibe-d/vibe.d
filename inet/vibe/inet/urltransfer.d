@@ -15,6 +15,7 @@ import vibe.core.log;
 import vibe.core.file;
 import vibe.inet.url;
 import vibe.core.stream;
+import vibe.internal.interfaceproxy : asInterface;
 
 import std.exception;
 import std.string;
@@ -61,7 +62,7 @@ void download(HTTPClient_ = void*)(URL url, scope void delegate(scope InputStrea
 						throw new HTTPStatusException(res.statusCode, "Server responded with "~httpStatusText(res.statusCode)~" for "~url.toString());
 					case HTTPStatus.OK:
 						done = true;
-						callback(res.bodyReader);
+						callback(res.bodyReader.asInterface!InputStream);
 						break;
 					case HTTPStatus.movedPermanently:
 					case HTTPStatus.found:
