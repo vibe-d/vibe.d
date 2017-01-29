@@ -918,7 +918,7 @@ final class RedisSubscriberImpl {
 	private void init(){
 
 		logTrace("init");
-		if (m_lockedConnection.__conn is null){
+		if (!m_lockedConnection) {
 			m_lockedConnection = m_client.m_connections.lockConnection();
 			m_lockedConnection.setAuth(m_client.m_authPassword);
 			m_lockedConnection.setDB(m_client.m_selectedDB);
@@ -1100,6 +1100,7 @@ final class RedisSubscriberImpl {
 			if (!m_stop) {
 				stop(); // notifies the listenerHelper
 			}
+			m_listenerHelper.join();
 			// close the data connections
 			teardown();
 
