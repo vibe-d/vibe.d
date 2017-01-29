@@ -372,7 +372,7 @@ interface Example6API
 	// Finally, there is @bodyParam. It works as you expect it to work,
 	// currently serializing passed data as Json and pass them through the body.
 	@bodyParam("myFoo", "parameter")
-	string getConcat(FooType myFoo);
+	string postConcat(FooType myFoo);
 
 	struct FooType {
 		int a;
@@ -409,7 +409,7 @@ override:
 		return "False";
 	}
 
-	string getConcat(FooType myFoo)
+	string postConcat(FooType myFoo)
 	{
 		import std.conv : to;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
@@ -579,7 +579,7 @@ shared static this()
 			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat",
 								   (scope r) {
 							   import vibe.data.json;
-							   r.method = HTTPMethod.GET;
+							   r.method = HTTPMethod.POST;
 							   Json obj = Json.emptyObject;
 							   obj["parameter"] = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
 							   r.writeJsonBody(obj);
@@ -588,7 +588,7 @@ shared static this()
 			assert(res.statusCode == 200);
 			assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);
 			// Then we check that both can communicate together.
-			auto answer = api.getConcat(Example6API.FooType(42, "fortySomething", 51.42));
+			auto answer = api.postConcat(Example6API.FooType(42, "fortySomething", 51.42));
 			assert(answer == expected);
 		}
 
