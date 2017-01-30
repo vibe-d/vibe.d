@@ -1557,6 +1557,24 @@ unittest { // const and mutable json
 	assert(serializeToJson(k) == Json(2));
 }
 
+unittest { // issue #1660 - deserialize AA whose key type is string-based enum
+	enum Foo: string
+	{
+		Bar = "bar",
+		Buzz = "buzz"
+	}
+
+	struct S {
+		int[Foo] f;
+	}
+
+	const s = S([Foo.Bar: 2000]);
+	assert(serializeToJson(s)["f"] == Json([Foo.Bar: Json(2000)]));
+
+	auto j = Json.emptyObject;
+	j["f"] = [Foo.Bar: Json(2000)];
+	assert(deserializeJson!S(j).f == [Foo.Bar: 2000]);
+}
 
 /**
 	Serializer for a plain Json representation.
