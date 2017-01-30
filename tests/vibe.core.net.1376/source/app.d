@@ -5,13 +5,13 @@ import core.time : msecs;
 shared static this()
 {
 	listenTCP(11375,(conn){
-		auto td = runTask({
+		auto td = runTask!TCPConnection((conn) {
 			ubyte [3] buf;
 			try {
 				conn.read(buf);
 				assert(false, "Expected read() to throw an exception.");
 			} catch (Exception) {} // expected
-		});
+		}, conn);
 		conn.close();
 	});
 
