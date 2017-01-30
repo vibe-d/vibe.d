@@ -253,7 +253,7 @@ class HTTPRequest {
 				if (ph && toLower(*ph) == "keep-alive") return true;
 				return false;
 			case HTTPVersion.HTTP_1_1:
-				if (ph && toLower(*ph) == "close") return false;
+				if (ph && toLower(*ph) != "keep-alive") return false;
 				return true;
 			default:
 				return false;
