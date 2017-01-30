@@ -1738,7 +1738,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	}
 
 	logTrace("Done handling connection.");
-	//connection.close();
+	connection.close();
 }
 
 private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_connection, HTTPListenInfo listen_info, ref HTTPServerSettings settings, ref bool keep_alive, scope IAllocator request_allocator)
