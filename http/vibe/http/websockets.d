@@ -363,8 +363,8 @@ final class WebSocket {
 		m_readMutex.performLocked!({
 			m_reader = runTask(&startReader);
 			if (request !is null && request.serverSettings.webSocketPingInterval != Duration.zero) {
-				m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 				m_pongReceived = true;
+				m_pingTimer = setTimer(request.serverSettings.webSocketPingInterval, &sendPing, true);
 			}
 		});
 	}
