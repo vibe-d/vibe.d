@@ -32,7 +32,7 @@ void testProtocol(TCPConnection server, bool terminate)
 		enforce(server.readLine() == "Bye bye!");
 		// should have closed within 500 ms
 		enforce(!server.waitForData(500.msecs));
-		assert(!server.connected, "Server still connected.");
+		assert(server.empty, "Server still connected.");
 	}
 }
 
@@ -57,11 +57,11 @@ void runTest()
 		auto server = connectTCP("127.0.0.1", 11001);
 
 		// pipe server to client as long as the server connection is alive
-		auto t = runTask({
+		auto t = runTask!(TCPConnection, TCPConnection)((client, server) {
 			scope (exit) client.close();
 			client.write(server);
 			logInfo("Proxy 2 out");
-		});
+		}, client, server);
 
 		// pipe client to server as long as the client connection is alive
 		scope (exit) {

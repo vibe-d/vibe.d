@@ -10,6 +10,7 @@ void test()
 		bool gotit;
 		receive((int i) { assert(i == 10); gotit = true; });
 		assert(gotit);
+		sleep(10.msecs);
 	});
 	
 	t.tid.send(10);
