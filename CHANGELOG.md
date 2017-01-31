@@ -47,9 +47,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 
-
-[issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
-[issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
+[issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
@@ -62,7 +60,6 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 ### Features and improvements ###
 
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
-- Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
 - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
 - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
 - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
@@ -82,6 +79,11 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed a compilation error for GDC master - [issue #1602][issue1602]
 - Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
 - Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
+- Fixed the JavaScript REST client generator to handle XHR errors (by Timoses) - [pull #1645][issue1645], [pull #1646][issue1646]
+- Fixed a possible `InvalidMemoryOperationError` in `SystemRNG`
+- Fixed `runApplication` to be able to handle extraneous command line arguments
+- Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
+- Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
@@ -89,10 +91,11 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
 [issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
 [issue1629]: https://github.com/rejectedsoftware/vibe.d/issues/1629
-[issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
 [issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
 [issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
+[issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
+[issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
 
 
 v0.7.30 - 2016-10-31
