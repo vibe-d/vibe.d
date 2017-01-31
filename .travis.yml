@@ -32,8 +32,8 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     # DUB 1.2.0 issue "trying to append absolute path" when building the sub packages separately
     - d: ldc-1.0.0
-      env: VIBED_DRIVER=vibe-core
+      env: VIBED_DRIVER=vibe-core BUILD_EXAMPLE=1 RUN_TEST=1
     - d: ldc-1.1.0-beta6
-      env: VIBED_DRIVER=vibe-core
+      env: VIBED_DRIVER=vibe-core BUILD_EXAMPLE=1 RUN_TEST=1
 
 script: ./travis-ci.sh
