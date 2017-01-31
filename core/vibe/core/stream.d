@@ -91,13 +91,15 @@ interface InputStream {
 	*/
 	@property bool empty();
 
-	/**	Returns the maximum number of bytes that are known to remain in this stream until the
-		end is reached. After leastSize() bytes have been read, the stream will either have
-		reached EOS and empty() returns true, or leastSize() returns again a number > 0.
+	/**	(Scheduled for deprecation) Returns the maximum number of bytes that are known to remain in this stream until the
+		end is reached.
+
+		After `leastSize()` bytes have been read, the stream will either have
+		reached EOS and `empty()` returns `true`, or `leastSize()` returns again a number `> 0`.
 	*/
 	@property ulong leastSize();
 
-	/** Queries if there is data available for immediate, non-blocking read.
+	/** (Scheduled for deprecation) Queries if there is data available for immediate, non-blocking read.
 	*/
 	@property bool dataAvailableForRead();
 
