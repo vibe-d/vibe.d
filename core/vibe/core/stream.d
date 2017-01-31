@@ -254,6 +254,13 @@ final class NullOutputStream : OutputStream {
 	void finalize() {}
 }
 
+
+alias InputStreamProxy = InputStream;
+alias OutputStreamProxy = OutputStream;
+alias StreamProxy = Stream;
+alias ConnectionStreamProxy = ConnectionStream;
+alias RandomAccessStreamProxy = RandomAccessStream;
+
 enum isInputStream(T) = is(T : InputStream);
 enum isOutputStream(T) = is(T : OutputStream);
 enum isStream(T) = is(T : Stream);
