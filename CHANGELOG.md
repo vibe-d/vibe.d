@@ -1,24 +1,31 @@
 ﻿Changelog
 =========
 
-v0.8.0 - 2017-01-
+v0.8.0 - 2017-02-
 --------------------
 
 The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the core module that is currently in beta ([vibe-core][vibe-core]). The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
 
 ### Features and improvements ###
 
-- Split up the library into fully separate sub packages/folders
-- Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
-- Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated
-- Added forward compatibility code to "vibe:core" so that dependent code can use either that or [vibe-core][vibe-core] as a drop-in replacement
+- Global API changes
+  - Split up the library into fully separate sub packages/folders
+  - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
+  - Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated
+  - Reworked the buffered I/O stream API
+    - The `InputStream` based overload of `OutputStream.write` has been moved to a global function `pipe()`
+    - `read` and `write` now accept an optional `IOMode` parameter (only `IOMode.all` is supported for the original `vibe:core`, but `vibe-core` supports all modes)
+    - `InputStream.leastSize` and `.dataAvailableForRead` are scheduled for deprecation - `IOMode.immediate` and `IOMode.once` can be used in their place
+  - Added forward compatibility code to "vibe:core" so that dependent code can use either that or [vibe-core][vibe-core] as a drop-in replacement
+- HTTP server
+  - Server contexts are now managed thread-locally, which means that multiple threads will attempt to listen on the same port if requested to do so - use `HTTPServerOption.reusePort` if necessary
+  - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+  - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+  - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+  - Added `HTTPServerResponse.writePrettyJsonBody`
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
-- Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
-- The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
-- `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
-- Added `HTTPServerResponse.writePrettyJsonBody`
 - The REST interface server now responds with prettified JSON if built in debug mode
 - Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
 - Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
@@ -35,6 +42,11 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
 - Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
 - Fixed the JavaScript REST client generator to handle XHR errors (by Timoses) - [pull #1645][issue1645], [pull #1646][issue1646]
+- Fixed a possible `InvalidMemoryOperationError` in `SystemRNG`
+- Fixed `runApplication` to be able to handle extraneous command line arguments
+- Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
+- Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
+
 
 [issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
 [issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
@@ -42,7 +54,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 
 
 
-v0.7.31 - 2017-01-
+v0.7.31 - 2017-02-
 --------------------
 
 This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bugfixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
