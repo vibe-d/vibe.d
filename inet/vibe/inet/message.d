@@ -218,8 +218,11 @@ unittest {
 string decodeEncodedWords()(string encoded)
 {
 	import std.array;
-	auto dst = appender!string();
-	decodeEncodedWords(dst, encoded);
+	Appender!string dst;
+	() @trusted {
+		dst = appender!string();
+		decodeEncodedWords(dst, encoded);
+	} ();
 	return dst.data;
 }
 /// ditto
@@ -270,7 +273,7 @@ void decodeEncodedWords(R)(ref R dst, string encoded)
 	Decodes a From/To header value as it appears in emails.
 */
 void decodeEmailAddressHeader(string header, out string name, out string address)
-{
+@safe {
 	import std.utf;
 
 	scope(failure) logDebug("emailbase %s", header);
@@ -303,14 +306,14 @@ void decodeEmailAddressHeader(string header, out string name, out string address
 	The result is returned as a UTF-8 string.
 */
 string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
-{
+@safe {
 	import std.algorithm;
 	import std.base64;
 
 	const(ubyte)[] msg = message_body;
 	switch (content_transfer_encoding) {
 		default: break;
-		case "quoted-printable": msg = QuotedPrintable.decode(cast(string)msg); break;
+		case "quoted-printable": msg = QuotedPrintable.decode(cast(const(char)[])msg); break;
 		case "base64":
 			try msg = Base64.decode(msg);
 			catch(Exception e){
@@ -322,8 +325,8 @@ string decodeMessage(in ubyte[] message_body, string content_transfer_encoding)
 						dec.popFront();
 					}
 				} catch(Exception e){
-					dst.put(cast(ubyte[])"\r\n-------\r\nDECODING ERROR: ");
-					dst.put(cast(ubyte[])e.toString());
+					dst.put(cast(const(ubyte)[])"\r\n-------\r\nDECODING ERROR: ");
+					dst.put(cast(const(ubyte)[])() @trusted { return e.toString(); } ());
 				}
 				msg = dst.data();
 			}
@@ -354,13 +357,13 @@ alias InetHeaderMap = DictionaryList!(string, false, 12);
 */
 struct QuotedPrintable {
 	static ubyte[] decode(in char[] input, bool in_header = false)
-	{
+	@safe {
 		auto ret = appender!(ubyte[])();
 		for( size_t i = 0; i < input.length; i++ ){
 			if( input[i] == '=' ){
 				auto code = input[i+1 .. i+3];
 				i += 2;
-				if( code != cast(ubyte[])"\r\n" )
+				if( code != cast(const(ubyte)[])"\r\n" )
 					ret.put(code.parse!ubyte(16));
 			} else if( in_header && input[i] == '_') ret.put(' ');
 			else ret.put(input[i]);

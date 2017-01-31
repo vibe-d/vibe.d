@@ -1341,7 +1341,7 @@ struct BsonSerializer {
 	}
 
 	this(ubyte[] buffer)
-	{
+	@safe {
 		import vibe.internal.utilallocator;
 		m_dst = () @trusted { return AllocAppender!(ubyte[])(processAllocator(), buffer); } ();
 	}
@@ -1421,7 +1421,7 @@ struct BsonSerializer {
 	}
 
 	private void writeCompositeEntryHeader(Bson.Type tp)
-	{
+	@safe {
 		if (!m_compositeStack.length) {
 			assert(m_type == Bson.Type.null_, "Overwriting root item.");
 			m_type = tp;
@@ -1435,6 +1435,7 @@ struct BsonSerializer {
 			import std.format;
 			m_dst.put(tp);
 			static struct Wrapper {
+				@trusted:
 				AllocAppender!(ubyte[])* app;
 				void put(char ch) { (*app).put(ch); }
 				void put(in char[] str) { (*app).put(cast(ubyte[])str); }
