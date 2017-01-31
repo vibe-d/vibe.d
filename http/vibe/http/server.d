@@ -230,14 +230,14 @@ void setVibeDistHost(string host, ushort port)
 @property void render(string template_file, ALIASES...)(HTTPServerResponse res)
 {
 	res.headers["Content-Type"] = "text/html; charset=UTF-8";
-	version (Have_diet_ng) {
+	version (VibeUseOldDiet) {
+		import vibe.templ.diet;
+		compileDietFile!(template_file.asInterface!InputStream, ALIASES)(res.bodyWriter);
+	} else {
 		import vibe.stream.wrapper : streamOutputRange;
 		import diet.html : compileHTMLDietFile;
 		auto output = streamOutputRange(res.bodyWriter);
 		compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
-	} else {
-		import vibe.templ.diet;
-		compileDietFile!(template_file, ALIASES)(res.bodyWriter);
 	}
 }
 
