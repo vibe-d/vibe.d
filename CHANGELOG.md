@@ -1,7 +1,7 @@
 ﻿Changelog
 =========
 
-v0.7.31 - 
+v0.7.31 - 2017-02-
 --------------------
 
 This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bugfixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
@@ -28,6 +28,11 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed a compilation error for GDC master - [issue #1602][issue1602]
 - Fixed a linker issue for LDC on Windows - [issue #1629][issue1629]
 - Fixed a (single-threaded) concurrent AA iteration/write issue that could result in an access violation in the Win32 driver - [issue #1608][issue1608]
+- Fixed the JavaScript REST client generator to handle XHR errors (by Timoses) - [pull #1645][issue1645], [pull #1646][issue1646]
+- Fixed a possible `InvalidMemoryOperationError` in `SystemRNG`
+- Fixed `runApplication` to be able to handle extraneous command line arguments
+- Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
+- Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
@@ -38,6 +43,8 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
 [issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
 [issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
+[issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
+[issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
 
 
 v0.7.30 - 2016-10-31
