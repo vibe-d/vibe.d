@@ -77,7 +77,7 @@ final class SystemRNG : RandomNumberStream {
 		version(Windows)
 		{
 			//init cryptographic service provider
-			enforce!CryptoException(CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) == 0,
+			enforce!CryptoException(CryptAcquireContext(&this.hCryptProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT) != 0,
 				text("Cannot init SystemRNG: Error id is ", GetLastError()));
 		}
 		else version(Posix)
