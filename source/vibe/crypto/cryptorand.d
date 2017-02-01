@@ -46,6 +46,8 @@ interface RandomNumberStream : InputStream {
 	See_Also: $(LINK http://en.wikipedia.org/wiki/CryptGenRandom)
 */
 final class SystemRNG : RandomNumberStream {
+	import std.exception;
+
 	version(Windows)
 	{
 		//cryptographic service provider
@@ -55,7 +57,6 @@ final class SystemRNG : RandomNumberStream {
 	{
 		import core.stdc.errno : errno;
 		import core.stdc.stdio : FILE, _IONBF, fopen, fclose, fread, setvbuf;
-		import std.exception;
 
 		//cryptographic file stream
 		private FILE* m_file;
