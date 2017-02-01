@@ -106,17 +106,17 @@ test_script:
  - echo %DC%
  - echo %PATH%
  - '%DC% --version'
- - dub test :utils --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :data --arch=%Darch% --compiler=%DC% --config=%CONFIG%
+ - dub test :utils --arch=%Darch% --compiler=%DC%
+ - dub test :data --arch=%Darch% --compiler=%DC%
  - dub test :core --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :stream --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :crypto --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :textfilter --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :inet --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :mail --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :diet --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :http --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :mongodb --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :redis --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :web --arch=%Darch% --compiler=%DC% --config=%CONFIG%
+ - dub test :stream --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :crypto --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :textfilter --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :inet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :mail --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :diet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :http --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :mongodb --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :redis --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :web --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - echo TODO - run the test suite
