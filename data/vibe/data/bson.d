@@ -1438,7 +1438,7 @@ struct BsonSerializer {
 				@trusted:
 				AllocAppender!(ubyte[])* app;
 				void put(char ch) { (*app).put(ch); }
-				void put(in char[] str) { (*app).put(cast(ubyte[])str); }
+				void put(in char[] str) { (*app).put(cast(const(ubyte)[])str); }
 			}
 			auto wr = Wrapper(&m_dst);
 			wr.formattedWrite("%d\0", m_entryIndex);
