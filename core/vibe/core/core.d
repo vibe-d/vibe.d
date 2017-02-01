@@ -1208,10 +1208,9 @@ private class CoreTask : TaskFiber {
 		super(&run, s_taskStackSize);
 	}
 
-	@property State state()
-	@trusted const nothrow {
-		return super.state;
-	}
+	// expose Fiber.state as @safe on older DMD versions
+	static if (!__traits(compiles, () @safe { return Fiber.init.state; } ()))
+		@property State state() @trusted const nothrow { return super.state; }
 
 	@property size_t taskCounter() const { return m_taskCounter; }
 
