@@ -46,6 +46,12 @@ class ConnectionPool(Connection)
 		debug m_thread = () @trusted { return Thread.getThis(); } ();
 	}
 
+	deprecated("Use an @safe callback instead")
+	this(Connection delegate() connection_factory, uint max_concurrent = uint.max)
+	@system {
+		this(cast(Connection delegate() @safe)connection_factory, max_concurrent);
+	}
+
 	/** Determines the maximum number of concurrently open connections.
 
 		Attempting to lock more connections that this number will cause the
