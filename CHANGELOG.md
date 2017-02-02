@@ -59,6 +59,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 
 ### Features and improvements ###
 
+- Compiles on DMD 2.068.2 up to DMD 2.073.0
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
 - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
@@ -68,6 +69,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
 - Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+- `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
 
 ### Bug fixes ###
 
@@ -84,6 +86,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed `runApplication` to be able to handle extraneous command line arguments
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
+- Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
@@ -96,6 +99,8 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
 [issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
 [issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
+[issue1648]: https://github.com/rejectedsoftware/vibe.d/issues/1648
+[issue1655]: https://github.com/rejectedsoftware/vibe.d/issues/1655
 
 
 v0.7.30 - 2016-10-31
