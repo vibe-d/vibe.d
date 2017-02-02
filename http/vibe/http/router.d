@@ -135,18 +135,28 @@ final class URLRouter : HTTPServerRequestHandler {
 
 	/// Adds a new route for GET requests matching the specified pattern.
 	URLRouter get(Handler)(string url_match, Handler handler) if (isValidHandler!Handler) { return match(HTTPMethod.GET, url_match, handler); }
+	/// ditto
+	URLRouter get(string url_match, HTTPServerRequestDelegate handler) { return match(HTTPMethod.GET, url_match, handler); }
 
 	/// Adds a new route for POST requests matching the specified pattern.
 	URLRouter post(Handler)(string url_match, Handler handler) if (isValidHandler!Handler) { return match(HTTPMethod.POST, url_match, handler); }
+	/// ditto
+	URLRouter post(string url_match, HTTPServerRequestDelegate handler) { return match(HTTPMethod.POST, url_match, handler); }
 
 	/// Adds a new route for PUT requests matching the specified pattern.
 	URLRouter put(Handler)(string url_match, Handler handler) if (isValidHandler!Handler) { return match(HTTPMethod.PUT, url_match, handler); }
+	/// ditto
+	URLRouter put(string url_match, HTTPServerRequestDelegate handler) { return match(HTTPMethod.PUT, url_match, handler); }
 
 	/// Adds a new route for DELETE requests matching the specified pattern.
 	URLRouter delete_(Handler)(string url_match, Handler handler) if (isValidHandler!Handler) { return match(HTTPMethod.DELETE, url_match, handler); }
+	/// ditto
+	URLRouter delete_(string url_match, HTTPServerRequestDelegate handler) { return match(HTTPMethod.DELETE, url_match, handler); }
 
 	/// Adds a new route for PATCH requests matching the specified pattern.
 	URLRouter patch(Handler)(string url_match, Handler handler) if (isValidHandler!Handler) { return match(HTTPMethod.PATCH, url_match, handler); }
+	/// ditto
+	URLRouter patch(string url_match, HTTPServerRequestDelegate handler) { return match(HTTPMethod.PATCH, url_match, handler); }
 
 	/// Adds a new route for requests matching the specified pattern, regardless of their HTTP verb.
 	URLRouter any(Handler)(string url_match, Handler handler)
@@ -158,6 +168,8 @@ final class URLRouter : HTTPServerRequestHandler {
 
 		return this;
 	}
+	/// ditto
+	URLRouter any(string url_match, HTTPServerRequestDelegate handler) { return any!HTTPServerRequestDelegate(url_match, handler); }
 
 
 	/** Rebuilds the internal matching structures to account for newly added routes.
@@ -252,7 +264,7 @@ final class URLRouter : HTTPServerRequestHandler {
 		import std.traits : isFunctionPointer;
 		static if (isFunctionPointer!Handler) return handlerDelegate(() @trusted { return toDelegate(handler); } ());
 		else static if (is(Handler == class) || is(Handler == interface)) return &handler.handleRequest;
-		else static if (__traits(compiles, () @safe { handler(null, null); } ())) return handler;
+		else static if (__traits(compiles, () @safe { handler(HTTPServerRequest.init, HTTPServerResponse.init); } ())) return handler;
 		else return (req, res) @trusted { handler(req, res); };
 	}
 
@@ -271,7 +283,6 @@ final class URLRouter : HTTPServerRequestHandler {
 		static assert(!isValidHandler!(int delegate(HTTPServerRequest req, HTTPServerResponse res) @safe));
 		void test(H)(H h)
 		{
-			pragma(msg, H);
 			static assert(isValidHandler!H);
 		}
 		test((HTTPServerRequest req, HTTPServerResponse res) {});
@@ -378,6 +389,25 @@ final class URLRouter : HTTPServerRequestHandler {
 		// ...
 		listenHTTP(settings, mainrouter);
 	}
+}
+
+@safe unittest { // issue #1668
+	auto r = new URLRouter;
+	r.get("/", (req, res) {
+		if ("foo" in req.headers)
+			res.writeBody("bar");
+	});
+
+	r.get("/", (scope req, scope res) {
+		if ("foo" in req.headers)
+			res.writeBody("bar");
+	});
+	r.get("/", (req, res) {});
+	r.post("/", (req, res) {});
+	r.put("/", (req, res) {});
+	r.delete_("/", (req, res) {});
+	r.patch("/", (req, res) {});
+	r.any("/", (req, res) {});
 }
 
 @safe unittest {
