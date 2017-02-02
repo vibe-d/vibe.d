@@ -23,6 +23,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
   - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
   - Added `HTTPServerResponse.writePrettyJsonBody`
+  - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
@@ -30,6 +31,8 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
 - Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+- Enabled minimal delegate syntax for `URLRouter` (e.g. `URLRouter.get("/", (req, res) { ... });`) - [issue #1668][issue1668]
+- Added serialization support for string based enum types as associative array keys (by Tomoya Tanjo) - [issue #1660][issue1660], [pull #1663][issue1663]
 
 ### Bug fixes ###
 
@@ -46,8 +49,12 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed `runApplication` to be able to handle extraneous command line arguments
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
+- Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
 
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
+[issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
+[issue1663]: https://github.com/rejectedsoftware/vibe.d/issues/1663
+[issue1668]: https://github.com/rejectedsoftware/vibe.d/issues/1668
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
