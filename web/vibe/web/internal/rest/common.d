@@ -252,7 +252,9 @@ import std.meta : anySatisfy, Filter;
 
 		StaticRoute[routeCount] ret;
 
-		alias AUTHTP = AuthInfo!TImpl;
+		static if (is(TImpl == class))
+			alias AUTHTP = AuthInfo!TImpl;
+		else alias AUTHTP = void;
 
 		foreach (fi, func; RouteFunctions) {
 			StaticRoute route;
@@ -685,4 +687,14 @@ unittest {
 	assert(baz.routes[0].pathHasPlaceholders);
 	assert(baz.routes[1].fullPattern == "/bar/:barid/baz/test2");
 	assert(baz.routes[1].pathHasPlaceholders);
+}
+
+unittest { // #1648
+	import vibe.web.auth;
+
+	@requiresAuth
+	interface I {
+		void a();
+	}
+	alias RI = RestInterface!I;
 }
