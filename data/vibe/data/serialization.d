@@ -577,7 +577,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			T ret;
 			ser.readDictionary!Traits((name) @safe {
 				TK key;
-				static if (is(TK == string)) key = name;
+				static if (is(TK == string) || (is(TK == enum) && is(OriginalType!TK == string))) key = cast(TK)name;
 				else static if (is(TK : real) || is(TK : long) || is(TK == enum)) key = name.to!TK;
 				else static if (isStringSerializable!TK) key = TK.fromString(name);
 				else static assert(false, "Associative array keys must be strings, numbers, enums, or have toString/fromString methods.");
