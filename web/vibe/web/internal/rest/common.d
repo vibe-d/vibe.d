@@ -252,7 +252,9 @@ import std.meta : anySatisfy, Filter;
 
 		StaticRoute[routeCount] ret;
 
-		alias AUTHTP = AuthInfo!TImpl;
+		static if (is(TImpl == class)) {
+			alias AUTHTP = AuthInfo!TImpl;
+		}
 
 		foreach (fi, func; RouteFunctions) {
 			StaticRoute route;
@@ -292,9 +294,14 @@ import std.meta : anySatisfy, Filter;
 				}
 
 				// determine parameter source/destination
-				if (is(PT == AUTHTP)) {
-					pi.kind = ParameterKind.auth;
-				} else if (IsAttributedParameter!(func, pname)) {
+				static if (is(TImpl == class)) {
+					if (is(PT == AUTHTP)) {
+						pi.kind = ParameterKind.auth;
+					}
+				}
+
+				if (pi.kind == ParameterKind.auth) {}
+				else if (IsAttributedParameter!(func, pname)) {
 					pi.kind = ParameterKind.attributed;
 				} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
 					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
