@@ -916,17 +916,24 @@ final class HTTPServerResponse : HTTPResponse {
 	*/
 	bool tls() const { return m_tls; }
 
-	/// Writes the entire response body at once.
+	/** Writes the entire response body at once.
+
+		Params:
+			data = The data to write as the body contents
+			status = Optional response status code to set
+			content_tyoe = Optional content type to apply to the response.
+				If no content type is given and no "Content-Type" header is
+				set in the response, this will default to
+				`"application/octet-stream"`.
+
+		See_Also: `HTTPStatusCode`
+	*/
 	void writeBody(in ubyte[] data, string content_type = null)
 	{
-		if (content_type != "") headers["Content-Type"] = content_type;
+		if (content_type.length) headers["Content-Type"] = content_type;
+		else if ("Content-Type" !in headers) headers["Content-Type"] = "application/octet-stream";
 		headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", data.length);
 		bodyWriter.write(data);
-	}
-	/// ditto
-	void writeBody(string data, string content_type = "text/plain; charset=UTF-8")
-	{
-		writeBody(cast(ubyte[])data, content_type);
 	}
 	/// ditto
 	void writeBody(in ubyte[] data, int status, string content_type = null)
@@ -935,16 +942,37 @@ final class HTTPServerResponse : HTTPResponse {
 		writeBody(data, content_type);
 	}
 	/// ditto
-	void writeBody(string data, int status, string content_type = "text/plain; charset=UTF-8")
+	void writeBody(scope InputStream data, string content_type = null)
+	{
+		if (content_type.length) headers["Content-Type"] = content_type;
+		else if ("Content-Type" !in headers) headers["Content-Type"] = "application/octet-stream";
+		bodyWriter.write(data);
+	}
+
+	/** Writes the entire response body as a single string.
+
+		Params:
+			data = The string to write as the body contents
+			status = Optional response status code to set
+			content_type = Optional content type to apply to the response.
+				If no content type is given and no "Content-Type" header is
+				set in the response, this will default to
+				`"text/plain; charset=UTF-8"`.
+
+		See_Also: `HTTPStatusCode`
+	*/
+	/// ditto
+	void writeBody(string data, string content_type = null)
+	{
+		if (!content_type.length && "Content-Type" !in headers)
+			content_type = "text/plain; charset=UTF-8";
+		writeBody(cast(const(ubyte)[])data, content_type);
+	}
+	/// ditto
+	void writeBody(string data, int status, string content_type = null)
 	{
 		statusCode = status;
 		writeBody(data, content_type);
-	}
-	/// ditto
-	void writeBody(scope InputStream data, string content_type = null)
-	{
-		if (content_type != "") headers["Content-Type"] = content_type;
-		bodyWriter.write(data);
 	}
 
 	/** Writes the whole response body at once, without doing any further encoding.
