@@ -562,7 +562,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			alias STraits = SubTraits!(Traits, TV);
 			//auto ret = appender!T();
 			T ret; // Cannot use appender because of DMD BUG 10690/10859/11357
-			ser.readArray!Traits((sz) { ret.reserve(sz); }, () {
+			ser.readArray!Traits((sz) { ret.reserve(sz); }, () @safe {
 				size_t i = ret.length;
 				ser.beginReadArrayEntry!STraits(i);
 				ret ~= ser.deserializeValue!(TV, ATTRIBUTES);
