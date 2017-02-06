@@ -32,6 +32,8 @@ import std.exception;
 
 class BotanTLSStream : TLSStream/*, Buffered*/
 {
+	@safe:
+
 	private {
 		InterfaceProxy!Stream m_stream;
 		TLSBlockingChannel m_tlsChannel;
@@ -55,7 +57,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	@property const(ubyte[]) sessionId() { return m_sess_id; } 
 
 	/// Returns the remote public certificate from the chain
-	@property const(X509Certificate) x509Certificate() const { return m_peer_cert; }
+	@property const(X509Certificate) x509Certificate() const @system { return m_peer_cert; }
 
 	/// Returns the negotiated version of the TLS Protocol
 	@property TLSProtocolVersion protocol() const { return m_ver; }
@@ -63,7 +65,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	/// Returns the complete ciphersuite details from the negotiated TLS connection
 	@property TLSCiphersuite cipher() const { return m_cipher; }
 
-	@property string alpn() const { return m_tlsChannel.underlyingChannel().applicationProtocol(); }
+	@property string alpn() const @trusted { return m_tlsChannel.underlyingChannel().applicationProtocol(); }
 
 	@property TLSCertificateInformation peerCertificate() { assert(false, "Incompatible interface method requested"); }
 
@@ -72,7 +74,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		 void delegate(in TLSAlert alert, in ubyte[] ub) alert_cb, 
 		 bool delegate(in TLSSession session) hs_cb,
 		 string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
-	{
+	@trusted {
 		m_ctx = ctx;
 		m_stream = underlying;
 		m_alertCB = alert_cb;
@@ -90,7 +92,8 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	}
 
 	// This constructor is used by the TLS Context for both server and client streams
-	this(Stream underlying, BotanTLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init) {
+	this(Stream underlying, BotanTLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	@trusted {
 		m_ctx = ctx;
 		m_stream = underlying;
 
@@ -117,7 +120,8 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		}
 	}
 	
-	~this() {
+	~this()
+	@trusted {
 		try m_tlsChannel.destroy();
 		catch (Exception e) {
 		}
@@ -131,14 +135,14 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 
 	void finalize()
 	{ 
-		if (m_tlsChannel.isClosed())
+		if (() @trusted { return m_tlsChannel.isClosed(); } ())
 			return;
 
 		processException();
 		scope(success) 
 			processException();
 
-		m_tlsChannel.close();
+		() @trusted { m_tlsChannel.close(); } ();
 		m_stream.flush();
 	}
 
@@ -147,7 +151,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		processException();
 		scope(success) 
 			processException();
-		m_tlsChannel.read(dst);
+		() @trusted { m_tlsChannel.read(dst); } ();
 		return dst.length;
 	}
 
@@ -158,7 +162,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		processException();
 		scope(success) 
 			processException();
-		return m_tlsChannel.readBuf(buf);
+		return () @trusted { return m_tlsChannel.readBuf(buf); } ();
 	}
 
 	size_t write(in ubyte[] src, IOMode)
@@ -166,7 +170,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 		processException();
 		scope(success) 
 			processException();
-		m_tlsChannel.write(src);
+		() @trusted { m_tlsChannel.write(src); } ();
 		return src.length;
 	}
 
@@ -180,12 +184,12 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	
 	@property ulong leastSize()
 	{
-		size_t ret = m_tlsChannel.pending();
+		size_t ret = () @trusted { return m_tlsChannel.pending(); } ();
 		if (ret > 0) return ret;
-		if (m_tlsChannel.isClosed() || m_ex !is null) return 0;
-		try m_tlsChannel.readBuf(null); // force an exchange
+		if (() @trusted { return m_tlsChannel.isClosed(); } () || m_ex !is null) return 0;
+		try () @trusted { m_tlsChannel.readBuf(null); } (); // force an exchange
 		catch (Exception e) { return 0; }
-		ret = m_tlsChannel.pending();
+		ret = () @trusted { return m_tlsChannel.pending(); } ();
 		//logDebug("Least size returned: ", ret);
 		return ret > 0 ? ret : m_stream.empty ? 0 : 1;
 	}
@@ -193,49 +197,51 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	@property bool dataAvailableForRead()
 	{
 		processException();
-		if (m_tlsChannel.pending() > 0) return true;
+		if (() @trusted { return m_tlsChannel.pending(); } () > 0) return true;
 		if (!m_stream.dataAvailableForRead) return false;
-		m_tlsChannel.readBuf(null); // force an exchange
-		return m_tlsChannel.pending() > 0;
+		() @trusted { m_tlsChannel.readBuf(null); } (); // force an exchange
+		return () @trusted { return m_tlsChannel.pending(); } () > 0;
 	}
 	
 	const(ubyte)[] peek()
 	{
 		processException();
-		auto peeked = m_tlsChannel.peek();
+		auto peeked = () @trusted { return m_tlsChannel.peek(); } ();
 		//logDebug("Peeked data: ", cast(ubyte[])peeked);
 		//logDebug("Peeked data ptr: ", peeked.ptr);
 		return peeked;
 	}
 	
-	@property void setAlertCallback(void delegate(in TLSAlert alert, in ubyte[] ub) alert_cb) 
-	{
+	void setAlertCallback(OnAlert alert_cb) 
+	@system {
 		processException();
 		m_alertCB = alert_cb;
 	}
 	
-	@property void setHandshakeCallback(bool delegate(in TLSSession session) hs_cb) 
-	{
+	void setHandshakeCallback(OnHandshakeComplete hs_cb) 
+	@system {
 		processException();
 		m_handshakeComplete = hs_cb;
 	}
 
 	private void processException()
-	{
+	@safe {
 		if (auto ex = m_ex) {
 			m_ex = null;
 			throw ex;
 		}
 	}
 
-	private void onAlert(in TLSAlert alert, in ubyte[] data) {
+	private void onAlert(in TLSAlert alert, in ubyte[] data)
+	@trusted {
 		if (alert.isFatal)
 			m_ex = new Exception("TLS Alert Received: " ~ alert.typeString());
 		if (m_alertCB)
 			m_alertCB(alert, data);
 	}
 
-	private bool onHandhsakeComplete(in TLSSession session) {
+	private bool onHandhsakeComplete(in TLSSession session)
+	@trusted {
 		m_sess_id = cast(ubyte[])session.sessionId()[].dup;
 		m_cipher = session.ciphersuite();
 		m_session_age = session.startTime();
@@ -342,9 +348,9 @@ class BotanTLSContext : TLSContext {
 	/// Invoked by client to offer alpn, all strings are copied on the GC
 	@property void setClientALPN(string[] alpn_list)
 	{
-		m_clientOffers.clear();
+		() @trusted { m_clientOffers.clear(); } ();
 		foreach (alpn; alpn_list)
-			m_clientOffers ~= alpn.idup;
+			() @trusted { m_clientOffers ~= alpn.idup; } ();
 	}
 
 	/** Creates a new stream associated to this context.
@@ -352,7 +358,7 @@ class BotanTLSContext : TLSContext {
 	TLSStream createStream(InterfaceProxy!Stream underlying, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	{
 		if (!m_certChecked)
-			checkCert();	
+			() @trusted { checkCert(); } ();
 		return new BotanTLSStream(underlying, this, state, peer_name, peer_address);
 	}
 
@@ -371,7 +377,7 @@ class BotanTLSContext : TLSContext {
 	}
 	/// ditto
 	@property TLSPeerValidationMode peerValidationMode() const {
-		if (auto credentials = cast(CustomTLSCredentials)m_credentials) {
+		if (auto credentials = cast(const(CustomTLSCredentials))m_credentials) {
 			return credentials.m_validationMode;
 		}
 		else assert(false, "Cannot handle peerValidationMode if CustomTLSCredentials is not used");
@@ -402,7 +408,7 @@ class BotanTLSContext : TLSContext {
 	}
 	/// ditto
 	@property int maxCertChainLength() const {
-		if (auto credentials = cast(CustomTLSCredentials)m_credentials) {
+		if (auto credentials = cast(const(CustomTLSCredentials))m_credentials) {
 			return credentials.m_max_cert_chain_length;
 		}
 		else assert(false, "Cannot handle maxCertChainLength if CustomTLSCredentials is not used");
@@ -435,7 +441,7 @@ class BotanTLSContext : TLSContext {
 	void useCertificateChainFile(string path) { 
 		if (auto credentials = cast(CustomTLSCredentials)m_credentials) {
 			m_certChecked = false;
-			credentials.m_server_cert = X509Certificate(path);
+			() @trusted { credentials.m_server_cert = X509Certificate(path); } ();
 			return;
 		}
 		else assert(false, "Cannot handle useCertificateChainFile if CustomTLSCredentials is not used");
@@ -447,7 +453,7 @@ class BotanTLSContext : TLSContext {
 	void usePrivateKeyFile(string path) { 
 		if (auto credentials = cast(CustomTLSCredentials)m_credentials) {
 			import botan.pubkey.pkcs8 : loadKey;
-			credentials.m_key = loadKey(path, m_rng);
+			credentials.m_key = () @trusted { return loadKey(path, m_rng); } ();
 			return;
 		}
 		else assert(false, "Cannot handle usePrivateKeyFile if CustomTLSCredentials is not used");
@@ -464,10 +470,10 @@ class BotanTLSContext : TLSContext {
 	*/
 	void useTrustedCertificateFile(string path) { 
 		if (auto credentials = cast(CustomTLSCredentials)m_credentials) {
-			auto store = new CertificateStoreInMemory;
+			auto store = () @trusted { return new CertificateStoreInMemory; } ();
 			
-			store.addCertificate(X509Certificate(path));
-			credentials.m_stores.pushBack(store);
+			() @trusted { store.addCertificate(X509Certificate(path)); } ();
+			() @trusted { credentials.m_stores.pushBack(store); } ();
 			return;
 		} 
 		else assert(false, "Cannot handle useTrustedCertificateFile if CustomTLSCredentials is not used");
