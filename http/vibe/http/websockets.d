@@ -339,6 +339,8 @@ final class WebSocket {
 		uint m_lastPingIndex;
 		bool m_pongReceived;
 		bool m_pongSkipped;
+		short m_closeCode;
+		const(char)[] m_closeReason;
         SystemRNG m_rng;
 	}
 
@@ -379,6 +381,22 @@ final class WebSocket {
 		See_also: $(D waitForData)
 	*/
 	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
+
+	/**
+		Returns the close code sent by the remote end.
+
+		Note that this code will only be set if the connection was closed cleanly by
+		the remote end. In all other cases this value will be 0.
+	*/
+	@property short closeCode() { return m_closeCode; }
+
+	/**
+		Returns the close reason sent by the remote end.
+
+		Note that this reason will only be set if the connection was closed cleanly by
+		the remote end. In all other cases this will be an empty array.
+	*/
+	@property const(char)[] closeReason() { return m_closeReason; }
 
 	/**
 		The HTTP request that established the web socket connection.
@@ -560,6 +578,16 @@ final class WebSocket {
 				}
 				if(msg.frameOpcode == FrameOpcode.close) {
 					logDebug("Got closing frame (%s)", m_sentCloseFrame);
+
+					// If provided in the frame, attempt to parse the close code/reason
+					if (msg.peek().length >= short.sizeof) {
+						this.m_closeCode = bigEndianToNative!short(msg.peek()[0..short.sizeof]);
+
+						if (msg.peek().length > short.sizeof) {
+							this.m_closeReason = cast(const(char) [])msg.peek()[short.sizeof..$];
+						}
+					}
+
 					if(!m_sentCloseFrame) close();
 					logDebug("Terminating connection (%s)", m_sentCloseFrame);
 					m_conn.close();
