@@ -1038,6 +1038,15 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 
 		PTypes params;
 
+		enum bool hasSingleBodyParam = {
+			int i;
+			foreach (j, PT; PTypes)
+				if (sroute.parameters[j].kind == ParameterKind.body_)
+					i++;
+
+			return i == 1;
+		}();
+
 		foreach (i, PT; PTypes) {
 			enum sparam = sroute.parameters[i];
 			enum pname = sparam.name;
@@ -1051,12 +1060,14 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 				if (auto pv = fieldname in req.query)
 					v = fromRestString!PT(*pv);
 			} else static if (sparam.kind == ParameterKind.body_) {
-				if (auto pv = fieldname in req.json) {
-					try
+				try {
+					// for @bodyParam("s") and by default the entire body should be serialized
+					if (sparam.fieldName == bodyParamWholeName || hasSingleBodyParam && sparam.fieldName.length == 0)
+						v = deserializeJson!PT(req.json);
+					else if (auto pv = fieldname in req.json)
 						v = deserializeJson!PT(*pv);
-					catch (JSONException e)
-						enforceBadRequest(false, e.msg);
-                }
+				} catch (JSONException e)
+					enforceBadRequest(false, e.msg);
 			} else static if (sparam.kind == ParameterKind.header) {
 				if (auto pv = fieldname in req.headers)
 					v = fromRestString!PT(*pv);
@@ -1317,6 +1328,15 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	auto jsonBody = Json.emptyObject;
 	string body_;
 
+	enum bool hasSingleBodyParam = {
+		int i;
+		foreach (j, PT; PTT)
+			if (sroute.parameters[j].kind == ParameterKind.body_)
+				i++;
+
+		return i == 1;
+	}();
+
 	void addQueryParam(size_t i)(string name)
 	{
 		if (query.data.length) query.put('&');
@@ -1334,7 +1354,11 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		static if (sparam.kind == ParameterKind.query) {
 			addQueryParam!i(fieldname);
 		} else static if (sparam.kind == ParameterKind.body_) {
-			jsonBody[fieldname] = serializeToJson(ARGS[i]);
+			// for @bodyParam("s") and by default the entire body should be serialized
+			if (sparam.fieldName == bodyParamWholeName || hasSingleBodyParam && sparam.fieldName.length == 0)
+				jsonBody = serializeToJson(ARGS[i]);
+			else
+				jsonBody[fieldname] = serializeToJson(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.header) {
 			// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
 			static if (sparam.isIn) {

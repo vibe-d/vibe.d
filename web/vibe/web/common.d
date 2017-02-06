@@ -463,11 +463,14 @@ package struct WebParamAttribute {
 	string field;
 }
 
+package(vibe.web) enum bodyParamWholeName = "bodyParamWhole";
+
 /**
  * Declare that a parameter will be transmitted to the API through the body.
  *
  * It will be serialized as part of a JSON object.
  * The serialization format is currently not customizable.
+ * If no fieldname is given, the entire body is serialized into the object.
  *
  * Params:
  * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
@@ -486,6 +489,15 @@ WebParamAttribute bodyParam(string identifier, string field)
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.body_, identifier, field);
+}
+
+/// ditto
+WebParamAttribute bodyParam(string identifier)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.body_, identifier, bodyParamWholeName);
 }
 
 /**
