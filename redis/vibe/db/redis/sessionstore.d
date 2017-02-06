@@ -66,6 +66,11 @@ final class RedisSessionStore : SessionStore {
 		return m_db.hexists(id, key);
 	}
 
+	void remove(string id, string key)
+	{
+		m_db.hdel(id, key);
+	}
+
 	void destroy(string id)
 	{
 		m_db.del(id);

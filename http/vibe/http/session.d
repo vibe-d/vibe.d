@@ -93,6 +93,9 @@ struct Session {
 		m_store.set(m_id, key, serialize(value));
 	}
 
+	// Removes a field from a session
+	void remove(string key) @safe { m_store.remove(m_id, key); }
+
 	/**
 		Enables foreach-iteration over all keys of the session.
 	*/
@@ -174,6 +177,9 @@ interface SessionStore {
 	/// Determines if a certain session key is set.
 	bool isKeySet(string id, string key);
 
+	/// Removes a key from a session
+	void remove(string id, string key);
+
 	/// Terminates the given session.
 	void destroy(string id);
 
@@ -252,6 +258,11 @@ final class MemorySessionStore : SessionStore {
 	bool isKeySet(string id, string key)
 	{
 		return (key in m_sessions[id]) !is null;
+	}
+
+	void remove(string id, string key)
+	{
+		m_sessions[id].remove(key);
 	}
 
 	void destroy(string id)
