@@ -1424,7 +1424,7 @@ T deserializeJson(T, R)(R input)
 }
 
 unittest {
-	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } }
+	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } @safe Json toJson() const { return Json(value); } }
 	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } }
 	static struct D { int value; }
 

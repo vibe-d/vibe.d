@@ -362,11 +362,31 @@ private template serializeValueImpl(Serializer, alias Policy) {
 			static if (is(TU == typeof(null))) ser.writeValue!Traits(null);
 			else ser.writeValue!(Traits, TU)(value);
 		} else static if (/*isInstanceOf!(Tuple, TU)*/is(T == Tuple!TPS, TPS...)) {
-			static if (TU.Types.length == 1) {
-				ser.serializeValue!(typeof(value[0]), ATTRIBUTES)(value[0]);
+			import std.algorithm.searching: all;
+			static if (all!"!a.empty"([TU.fieldNames]) &&
+					   !hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
+				static if (__traits(compiles, ser.beginWriteDictionary!TU(0))) {
+					auto nfields = value.length;
+					ser.beginWriteDictionary!Traits(nfields);
+				} else {
+					ser.beginWriteDictionary!Traits();
+				}
+				foreach (i, TV; TU.Types) {
+					alias STraits = SubTraits!(Traits, TV);
+					ser.beginWriteDictionaryEntry!STraits(TU.fieldNames[i]);
+					ser.serializeValue!(TV, ATTRIBUTES)(value[i]);
+					ser.endWriteDictionaryEntry!STraits(TU.fieldNames[i]);
+				}
+				static if (__traits(compiles, ser.endWriteDictionary!TU(0))) {
+					ser.endWriteDictionary!Traits(nfields);
+				} else {
+					ser.endWriteDictionary!Traits();
+				}
+			} else static if (TU.Types.length == 1) {
+				ser.serializeValue!(TU.Types[0], ATTRIBUTES)(value[0]);
 			} else {
 				ser.beginWriteArray!Traits(value.length);
-				foreach (i, TV; T.Types) {
+				foreach (i, TV; TU.Types) {
 					alias STraits = SubTraits!(Traits, TV);
 					ser.beginWriteArrayEntry!STraits(i);
 					ser.serializeValue!(TV, ATTRIBUTES)(value[i]);
@@ -452,12 +472,12 @@ private template serializeValueImpl(Serializer, alias Policy) {
 				ser.beginWriteArray!Traits(nfields);
 				size_t fcount = 0;
 				foreach (mname; SerializableFields!(TU, Policy)) {
-					alias TMS = TypeTuple!(typeof(__traits(getMember, value, mname)));
+					alias TMS = TypeTuple!(typeof(__traits(getMember, TU, mname)));
 					foreach (j, TM; TMS) {
-						alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[j]));
+						alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, TU, mname))[j]));
 						alias STraits = SubTraits!(Traits, TM, TA);
 						ser.beginWriteArrayEntry!STraits(fcount);
-						ser.serializeValue!(TM, TA)(tuple(__traits(getMember, value, mname))[j]);
+						ser.serializeValue!(TM, TA)(tuple!(typeof(__traits(getMember, TU, mname)))(__traits(getMember, value, mname))[j]);
 						ser.endWriteArrayEntry!STraits(fcount);
 						fcount++;
 					}
@@ -472,19 +492,17 @@ private template serializeValueImpl(Serializer, alias Policy) {
 				}
 				foreach (mname; SerializableFields!(TU, Policy)) {
 					alias TM = TypeTuple!(typeof(__traits(getMember, value, mname)));
+					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
+					enum fname = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 					static if (TM.length == 1) {
-						alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, T, mname)));
-						enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
-						auto vt = __traits(getMember, value, mname);
+						const vt = __traits(getMember, value, mname);
 					} else {
-						alias TA = TypeTuple!(); // FIXME: support attributes for tuples somehow
-						enum name = underscoreStrip(mname);
-						auto vt = tuple(__traits(getMember, value, mname));
+						const vt = tuple!(typeof(__traits(getMember, TU, mname)))(__traits(getMember, value, mname));
 					}
 					alias STraits = SubTraits!(Traits, typeof(vt), TA);
-					ser.beginWriteDictionaryEntry!STraits(name);
+					ser.beginWriteDictionaryEntry!STraits(fname);
 					ser.serializeValue!(typeof(vt), TA)(vt);
-					ser.endWriteDictionaryEntry!STraits(name);
+					ser.endWriteDictionaryEntry!STraits(fname);
 				}
 				static if (__traits(compiles, ser.endWriteDictionary!Traits(0))) {
 					ser.endWriteDictionary!Traits(nfields);
@@ -506,7 +524,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 
 private struct SubTraits(Traits, T, A...)
 {
-	alias Type = T;
+	alias Type = Unqual!T;
 	alias Attributes = TypeTuple!A;
 	alias Policy = Traits.Policy;
 	alias ContainerType = Traits.Type;
@@ -523,9 +541,9 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 		return () @trusted { return cast(T) deserializeValue!(Unqual!T, ATTRIBUTES)(ser); } ();
 	}
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T) 
+	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T)
 	{
-		import std.typecons : BitFlags, Nullable;
+		import std.typecons : BitFlags, Nullable, Tuple;
 
 		static struct Traits {
 			alias Type = T;
@@ -544,6 +562,52 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			}
 		} else static if (Serializer.isSupportedValueType!T) {
 			return ser.readValue!(Traits, T)();
+		} else static if (/*isInstanceOf!(Tuple, TU)*/is(T == Tuple!TPS, TPS...)) {
+			enum fieldsCount = T.Types.length;
+			import std.algorithm.searching: all;
+			static if (all!"!a.empty"([T.fieldNames]) &&
+					   !hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
+				T ret;
+				bool[fieldsCount] set;
+				ser.readDictionary!Traits((name) {
+					switch (name) {
+						default: break;
+						foreach (i, TV; T.Types) {
+							enum fieldName = T.fieldNames[i];
+							alias STraits = SubTraits!(Traits, TV);
+							case fieldName: {
+								ser.beginReadDictionaryEntry!STraits(fieldName);
+								ret[i] = ser.deserializeValue!(TV, ATTRIBUTES);
+								ser.endReadDictionaryEntry!STraits(fieldName);
+								set[i] = true;
+							} break;
+						}
+					}
+				});
+				foreach (i, fieldName; T.fieldNames)
+					enforce(set[i], "Missing tuple field '"~fieldName~"' of type '"~T.Types[i].stringof~"' ("~Policy.stringof~").");
+				return ret;
+			} else static if (fieldsCount == 1) {
+				return T(ser.deserializeValue!(T.Types[0], ATTRIBUTES)());
+			} else {
+				T ret;
+				size_t currentField = 0;
+				ser.readArray!Traits((sz) { assert(sz == 0 || sz == fieldsCount); }, {
+					switch (currentField++) {
+						default: break;
+						foreach (i, TV; T.Types) {
+							alias STraits = SubTraits!(Traits, TV);
+							case i: {
+								ser.beginReadArrayEntry!STraits(i);
+								ret[i] = ser.deserializeValue!(TV, ATTRIBUTES);
+								ser.endReadArrayEntry!STraits(i);
+							} break;
+						}
+					}
+				});
+				enforce(currentField == fieldsCount, "Missing tuple field(s) - expected '"~fieldsCount.stringof~"', received '"~currentField.stringof~"' ("~Policy.stringof~").");
+				return ret;
+			}
 		} else static if (isStaticArray!T) {
 			alias TV = typeof(T.init[0]);
 			alias STraits = SubTraits!(Traits, TV);
@@ -612,9 +676,9 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				if (ser.tryReadNull!Traits()) return null;
 			}
 
-			bool[__traits(allMembers, T).length] set;
-			string name;
 			T ret;
+			string name;
+			bool[getExpandedFieldsData!(T, SerializableFields!(T, Policy)).length] set;
 			static if (is(T == class)) ret = new T;
 
 			static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
@@ -623,18 +687,27 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					static if (hasSerializableFields!(T, Policy)) {
 						switch (idx++) {
 							default: break;
-							foreach (i, mname; SerializableFields!(T, Policy)) {
-								alias TM = typeof(__traits(getMember, ret, mname));
-								alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
-								alias STraits = SubTraits!(Traits, TM, TA);
-								case i:
-									static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
-										if (ser.tryReadNull!STraits()) return;
-									set[i] = true;
-									ser.beginReadArrayEntry!STraits(i);
-									__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
-									ser.endReadArrayEntry!STraits(i);
-									break;
+							foreach (i, FD; getExpandedFieldsData!(T, SerializableFields!(T, Policy))) {
+								enum mname = FD[0];
+								enum msindex = FD[1];
+								alias MT = TypeTuple!(__traits(getMember, T, mname));
+								alias MTI = MT[msindex];
+								alias TMTI = typeof(MTI);
+								alias TMTIA = TypeTuple!(__traits(getAttributes, MTI));
+								alias STraits = SubTraits!(Traits, TMTI, TMTIA);
+
+							case i:
+								static if (hasPolicyAttribute!(OptionalAttribute, Policy, MTI))
+									if (ser.tryReadNull!STraits()) return;
+								set[i] = true;
+								ser.beginReadArrayEntry!STraits(i);
+								static if (MT.length == 1) {
+									__traits(getMember, ret, mname) = ser.deserializeValue!(TMTI, TMTIA);
+								} else {
+									__traits(getMember, ret, mname)[msindex] = ser.deserializeValue!(TMTI, TMTIA);
+								}
+								ser.endReadArrayEntry!STraits(i);
+								break;
 							}
 						}
 					} else {
@@ -647,16 +720,20 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 						switch (name) {
 							default: break;
 							foreach (i, mname; SerializableFields!(T, Policy)) {
-								alias TM = typeof(__traits(getMember, ret, mname));
-								alias TA = TypeTuple!(__traits(getAttributes, __traits(getMember, ret, mname)));
+								alias TM = TypeTuple!(typeof(__traits(getMember, T, mname)));
+								alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 								alias STraits = SubTraits!(Traits, TM, TA);
 								enum fname = getPolicyAttribute!(T, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 								case fname:
-									static if (hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
+									static if (hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
 										if (ser.tryReadNull!STraits()) return;
 									set[i] = true;
 									ser.beginReadDictionaryEntry!STraits(fname);
-									__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
+									static if (TM.length == 1) {
+										__traits(getMember, ret, mname) = ser.deserializeValue!(TM, TA);
+									} else {
+										__traits(getMember, ret, mname) = ser.deserializeValue!(Tuple!TM, TA);
+									}
 									ser.endReadDictionaryEntry!STraits(fname);
 									break;
 							}
@@ -667,7 +744,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				});
 			}
 			foreach (i, mname; SerializableFields!(T, Policy))
-				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, __traits(getMember, T, mname)))
+				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
 					enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
 			return ret;
 		} else static if (isPointer!T) {
@@ -1097,10 +1174,10 @@ private static T getAttribute(TT, string mname, T)(T default_value)
 
 private static auto getPolicyAttribute(TT, string mname, alias Attribute, alias Policy)(Attribute!DefaultPolicy default_value)
 {
-	enum val = findFirstUDA!(Attribute!Policy, __traits(getMember, TT, mname));
+	enum val = findFirstUDA!(Attribute!Policy, TypeTuple!(__traits(getMember, TT, mname))[0]);
 	static if (val.found) return val.value;
 	else {
-		enum val2 = findFirstUDA!(Attribute!DefaultPolicy, __traits(getMember, TT, mname));
+		enum val2 = findFirstUDA!(Attribute!DefaultPolicy, TypeTuple!(__traits(getMember, TT, mname))[0]);
 		static if (val2.found) return val2.value;
 		else return default_value;
 	}
@@ -1157,6 +1234,16 @@ private size_t getExpandedFieldCount(T, FIELDS...)()
 	size_t ret = 0;
 	foreach (F; FIELDS) ret += TypeTuple!(__traits(getMember, T, F)).length;
 	return ret;
+}
+
+private template getExpandedFieldsData(T, FIELDS...)
+{
+	import std.meta : aliasSeqOf, staticMap;
+	import std.range : repeat, zip, iota;
+
+	enum subfieldsCount(alias F) = TypeTuple!(__traits(getMember, T, F)).length;
+	alias processSubfield(alias F) = aliasSeqOf!(zip(repeat(F), iota(subfieldsCount!F)));
+	alias getExpandedFieldsData = staticMap!(processSubfield, FIELDS);
 }
 
 /******************************************************************************/
@@ -1324,15 +1411,158 @@ unittest { // tuple serialization
 	static struct S(T...) { T f; }
 	enum Sm = S!(int, string).mangleof;
 	enum Tum = Tuple!(int, string).mangleof;
-	auto s = S!(int, string)(42, "hello");
-	assert(serialize!TestSerializer(s) ==
-		"D("~Sm~"){DE("~Tum~",f)(A("~Tum~")[2][AE(i,0)(V(i)(42))AE(i,0)AE(Aya,1)(V(Aya)(hello))AE(Aya,1)]A("~Tum~"))DE("~Tum~",f)}D("~Sm~")");
+	const s = S!(int, string)(42, "hello");
+
+	const ss = serialize!TestSerializer(s);
+	const es =
+		"D("~Sm~")"~
+		"{"~
+			"DE("~Tum~",f)"~
+			"("~
+				"A("~Tum~")[2]"~
+				"["~
+					"AE(i,0)(V(i)(42))AE(i,0)"~
+					"AE(Aya,1)(V(Aya)(hello))AE(Aya,1)"~
+				"]"~
+				"A("~Tum~")"~
+			")"~
+			"DE("~Tum~",f)"~
+		"}"~
+		"D("~Sm~")";
+	assert(ss == es);
+
+	const dss = deserialize!(TestSerializer, typeof(s))(ss);
+	assert(dss == s);
 
 	static struct T { @asArray S!(int, string) g; }
 	enum Tm = T.mangleof;
-	auto t = T(s);
-	assert(serialize!TestSerializer(t) ==
-		"D("~Tm~"){DE("~Sm~",g)(A("~Sm~")[2][AE(i,0)(V(i)(42))AE(i,0)AE(Aya,1)(V(Aya)(hello))AE(Aya,1)]A("~Sm~"))DE("~Sm~",g)}D("~Tm~")");
+	const t = T(s);
+
+	const st = serialize!TestSerializer(t);
+	const et =
+		"D("~Tm~")"~
+		"{"~
+			"DE("~Sm~",g)"~
+			"("~
+				"A("~Sm~")[2]"~
+				"["~
+					"AE(i,0)(V(i)(42))AE(i,0)"~
+					"AE(Aya,1)(V(Aya)(hello))AE(Aya,1)"~
+				"]"~
+				"A("~Sm~")"~
+			")"~
+			"DE("~Sm~",g)"~
+		"}"~
+		"D("~Tm~")";
+	assert(st == et);
+
+	const dst = deserialize!(TestSerializer, typeof(t))(st);
+	assert(dst == t);
+}
+
+unittest { // named tuple serialization
+	template NamedTuple(T)
+	{
+		import std.typecons : Tuple;
+		import vibe.internal.meta.typetuple: Group;
+		alias NamedTuple = Tuple!(
+			TypeNameSeq!(Group!(Fields!T), Group!(FieldNameTuple!T)));
+
+		import std.meta : AliasSeq;
+		template TypeNameSeq(alias TypesGroup, alias NamesGroup)
+		{
+			alias Types = TypesGroup.expand;
+			alias Names = NamesGroup.expand;
+
+			static assert (Types.length == Names.length);
+			static if (Types.length > 1)
+			{
+				alias TypeNameSeq = AliasSeq!(
+					Types[0], Names[0],
+					TypeNameSeq!(Group!(Types[1 .. $]), Group!(Names[1 .. $])));
+			}
+			else
+			{
+				alias TypeNameSeq = AliasSeq!(Types[0], Names[0]);
+			}
+		}
+	}
+
+	static struct I {
+		int i;
+	}
+
+	static struct S {
+		int x;
+		string s;
+	}
+
+	static struct T {
+		@asArray
+		NamedTuple!I tuple1AsArray;
+
+		@name(fullyQualifiedName!I)
+		NamedTuple!I tuple1AsDictionary;
+
+		@asArray
+		NamedTuple!S tuple2AsArray;
+
+		@name(fullyQualifiedName!S)
+		NamedTuple!S tuple2AsDictionary;
+	}
+
+	const i = I(42);
+	const s = S(42, "hello");
+	const T t = { i.tupleof, i.tupleof, s.tupleof, s.tupleof };
+
+	const st = serialize!TestSerializer(t);
+
+	enum Tm = T.mangleof;
+	enum TuIm = NamedTuple!I.mangleof;
+	enum TuSm = NamedTuple!S.mangleof;
+
+	assert(st ==
+		"D("~Tm~")"~
+		"{"~
+			"DE("~TuIm~",tuple1AsArray)"~
+			"("~
+				"V(i)(42)"~
+			")"~
+			"DE("~TuIm~",tuple1AsArray)"~
+			"DE("~TuIm~","~fullyQualifiedName!I~")"~
+			"("~
+				"D("~TuIm~")"~
+				"{"~
+					"DE(i,i)(V(i)(42))DE(i,i)"~
+				"}"~
+				"D("~TuIm~")"~
+			")"~
+			"DE("~TuIm~","~fullyQualifiedName!I~")"~
+			"DE("~TuSm~",tuple2AsArray)"~
+			"("~
+				"A("~TuSm~")[2]"~
+				"["~
+					"AE(i,0)(V(i)(42))AE(i,0)"~
+					"AE(Aya,1)(V(Aya)(hello))AE(Aya,1)"~
+				"]"~
+				"A("~TuSm~")"~
+			")"~
+			"DE("~TuSm~",tuple2AsArray)"~
+			"DE("~TuSm~","~fullyQualifiedName!S~")"~
+			"("~
+				"D("~TuSm~")"~
+				"{"~
+					"DE(i,x)(V(i)(42))DE(i,x)"~
+					"DE(Aya,s)(V(Aya)(hello))DE(Aya,s)"~
+				"}"~
+				"D("~TuSm~")"~
+			")"~
+			"DE("~TuSm~","~fullyQualifiedName!S~")"~
+		"}"~
+		"D("~Tm~")");
+
+	const dst = deserialize!(TestSerializer, typeof(t))(st);
+	assert(dst == t);
 }
 
 unittest { // testing the various UDAs
@@ -1439,14 +1669,14 @@ unittest // Make sure serializing through properties still works
 unittest // Immutable data deserialization
 {
 	import vibe.data.json;
-	
+
 	static struct S {
 		int a;
 	}
 	static class C {
 		immutable(S)[] arr;
 	}
-	
+
 	auto c = new C;
 	c.arr ~= S(10);
 	auto d = c.serializeToJson().deserializeJson!(immutable C);
@@ -1561,7 +1791,7 @@ unittest {
 	auto ser_red = "V(Aya)(red)";
 	assert(serializeWithPolicy!(TestSerializer, P)(E.RED) == ser_red, serializeWithPolicy!(TestSerializer, P)(E.RED));
 	assert(deserializeWithPolicy!(TestSerializer, P, E)(ser_red) == E.RED);
-	
+
 	import vibe.data.json : Json, JsonSerializer;
 	assert(serializeWithPolicy!(JsonSerializer, P)(E.RED) == Json("red"));
 }
