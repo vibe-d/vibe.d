@@ -46,6 +46,11 @@ import std.typecons;
 import std.uri;
 
 
+version (VibeNoSSL) version = HaveNoTLS;
+else version (Have_botan) {}
+else version (Have_openssl) {}
+else version = HaveNoTLS;
+
 /**************************************************************************************************/
 /* Public functions                                                                               */
 /**************************************************************************************************/
@@ -1723,7 +1728,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	// based driver.
 	connection.tcpNoDelay = true;
 
-	version(VibeNoSSL) {} else {
+	version(HaveNoTLS) {} else {
 		import std.traits : ReturnType;
 		ReturnType!(createTLSStreamFL!(typeof(http_stream))) tls_stream;
 	}
@@ -1735,7 +1740,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 
 	// If this is a HTTPS server, initiate TLS
 	if (listen_info.tlsContext) {
-		version (VibeNoSSL) assert(false, "No TLS support compiled in (VibeNoSSL)");
+		version (HaveNoTLS) assert(false, "No TLS support compiled in.");
 		else {
 			logDebug("Accept TLS connection: %s", listen_info.tlsContext.kind);
 			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes

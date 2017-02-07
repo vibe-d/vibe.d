@@ -104,7 +104,7 @@ TLSContext createTLSContext(TLSContextKind kind, TLSVersion ver = TLSVersion.any
 		if (!gs_sslContextFactory)
 			setTLSContextFactory(&createBotanContext);
 	}
-	assert(gs_sslContextFactory !is null, "No TLS context factory registered.");
+	assert(gs_sslContextFactory !is null, "No TLS context factory registered. Compile in botan or openssl dependencies, or call setTLSContextFactory first.");
 	return gs_sslContextFactory(kind, ver);
 }
 
