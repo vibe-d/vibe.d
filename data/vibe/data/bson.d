@@ -1169,20 +1169,20 @@ unittest {
 	assert(deserializeBson!Date(serializeToBson(Date(2001, 1, 1))) == Date(2001, 1, 1));
 }
 
-unittest {
-	static struct A { int value; static A fromJson(Json val) { return A(val.get!int); } Json toJson() const { return Json(value); } Bson toBson() { return Bson(); } }
+@safe unittest {
+	static struct A { int value; static A fromJson(Json val) @safe { return A(val.get!int); } Json toJson() const @safe { return Json(value); } Bson toBson() { return Bson(); } }
 	static assert(!isStringSerializable!A && isJsonSerializable!A && !isBsonSerializable!A);
 	static assert(!isStringSerializable!(const(A)) && !isJsonSerializable!(const(A)) && !isBsonSerializable!(const(A)));
 //	assert(serializeToBson(const A(123)) == Bson(123));
 //	assert(serializeToBson(A(123))       == Bson(123));
 
-	static struct B { int value; static B fromBson(Bson val) { return B(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
+	static struct B { int value; static B fromBson(Bson val) @safe { return B(val.get!int); } Bson toBson() const @safe { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!B && !isJsonSerializable!B && isBsonSerializable!B);
 	static assert(!isStringSerializable!(const(B)) && !isJsonSerializable!(const(B)) && !isBsonSerializable!(const(B)));
 	assert(serializeToBson(const B(123)) == Bson(123));
 	assert(serializeToBson(B(123))       == Bson(123));
 
-	static struct C { int value; static C fromString(string val) { return C(val.to!int); } string toString() const { return value.to!string; } Json toJson() { return Json(); } }
+	static struct C { int value; static C fromString(string val) @safe { return C(val.to!int); } string toString() const @safe { return value.to!string; } Json toJson() { return Json(); } }
 	static assert(isStringSerializable!C && !isJsonSerializable!C && !isBsonSerializable!C);
 	static assert(!isStringSerializable!(const(C)) && !isJsonSerializable!(const(C)) && !isBsonSerializable!(const(C)));
 	assert(serializeToBson(const C(123)) == Bson("123"));
@@ -1195,14 +1195,14 @@ unittest {
 	assert(serializeToBson(D(123))       == serializeToBson(["value": 123]));
 
 	// test if const(class) is serializable
-	static class E { int value; this(int v) { value = v; } static E fromBson(Bson val) { return new E(val.get!int); } Bson toBson() const { return Bson(value); } Json toJson() { return Json(); } }
+	static class E { int value; this(int v) @safe { value = v; } static E fromBson(Bson val) @safe { return new E(val.get!int); } Bson toBson() const @safe { return Bson(value); } Json toJson() { return Json(); } }
 	static assert(!isStringSerializable!E && !isJsonSerializable!E && isBsonSerializable!E);
 	static assert(!isStringSerializable!(const(E)) && !isJsonSerializable!(const(E)) && !isBsonSerializable!(const(E)));
 	assert(serializeToBson(new const E(123)) == Bson(123));
 	assert(serializeToBson(new E(123))       == Bson(123));
 }
 
-unittest {
+@safe unittest {
 	static struct E { ubyte[4] bytes; ubyte[] more; }
 	auto e = E([1, 2, 3, 4], [5, 6]);
 	auto eb = serializeToBson(e);
@@ -1211,7 +1211,7 @@ unittest {
 	assert(e == deserializeBson!E(eb));
 }
 
-unittest {
+@safe unittest {
 	static class C {
 	@safe:
 		int a;

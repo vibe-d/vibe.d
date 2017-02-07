@@ -1171,7 +1171,7 @@ version (unittest) {
 
 		enum isSupportedValueType(T) = is(T == string) || is(T == typeof(null)) || is(T == float) || is (T == int);
 
-		string getSerializedResult() { return result; }
+		string getSerializedResult() @safe { return result; }
 		void beginWriteDictionary(Traits)() { result ~= "D("~Traits.Type.mangleof~"){"; }
 		void endWriteDictionary(Traits)() { result ~= "}D("~Traits.Type.mangleof~")"; }
 		void beginWriteDictionaryEntry(Traits)(string name) { result ~= "DE("~Traits.Type.mangleof~","~name~")("; }
@@ -1360,22 +1360,24 @@ unittest { // custom serialization support
 	assert(serialize!TestSerializer(dt) == "V(Aya)(1964-01-23T06:31:23)");
 	auto st = SysTime(dt, UTC());
 	assert(serialize!TestSerializer(st) == "V(Aya)(1964-01-23T06:31:23Z)");
+}
 
+@safe unittest { // custom serialization support
 	// string
-	struct S1 { int i; string toString() const { return "hello"; } static S1 fromString(string) { return S1.init; } }
-	struct S2 { int i; string toString() const { return "hello"; } }
+	static struct S1 { int i; string toString() const @safe { return "hello"; } static S1 fromString(string) @safe { return S1.init; } }
+	static struct S2 { int i; string toString() const { return "hello"; } }
 	enum S2m = S2.mangleof;
-	struct S3 { int i; static S3 fromString(string) { return S3.init; } }
+	static struct S3 { int i; static S3 fromString(string) { return S3.init; } }
 	enum S3m = S3.mangleof;
 	assert(serialize!TestSerializer(S1.init) == "V(Aya)(hello)");
 	assert(serialize!TestSerializer(S2.init) == "D("~S2m~"){DE(i,i)(V(i)(0))DE(i,i)}D("~S2m~")");
 	assert(serialize!TestSerializer(S3.init) == "D("~S3m~"){DE(i,i)(V(i)(0))DE(i,i)}D("~S3m~")");
 
 	// custom
-	struct C1 { int i; float toRepresentation() const { return 1.0f; } static C1 fromRepresentation(float f) { return C1.init; } }
-	struct C2 { int i; float toRepresentation() const { return 1.0f; } }
+	static struct C1 { int i; float toRepresentation() const @safe { return 1.0f; } static C1 fromRepresentation(float f) @safe { return C1.init; } }
+	static struct C2 { int i; float toRepresentation() const { return 1.0f; } }
 	enum C2m = C2.mangleof;
-	struct C3 { int i; static C3 fromRepresentation(float f) { return C3.init; } }
+	static struct C3 { int i; static C3 fromRepresentation(float f) { return C3.init; } }
 	enum C3m = C3.mangleof;
 	assert(serialize!TestSerializer(C1.init) == "V(f)(1)");
 	assert(serialize!TestSerializer(C2.init) == "D("~C2m~"){DE(i,i)(V(i)(0))DE(i,i)}D("~C2m~")");
@@ -1418,7 +1420,7 @@ unittest // Testing corner case: Variadic template constructors and methods
 	assert(s.serializeToJson().deserializeJson!S() == s);
 }
 
-unittest // Make sure serializing through properties still works
+@safe unittest // Make sure serializing through properties still works
 {
 	import vibe.data.json;
 
@@ -1428,15 +1430,15 @@ unittest // Make sure serializing through properties still works
 		public int i;
 		private int privateJ;
 
-		@property int j() { return privateJ; }
-		@property void j(int j) { privateJ = j; }
+		@property int j() @safe { return privateJ; }
+		@property void j(int j) @safe { privateJ = j; }
 	}
 
 	auto s = S(1, 2);
 	assert(s.serializeToJson().deserializeJson!S() == s);
 }
 
-unittest // Immutable data deserialization
+@safe unittest // Immutable data deserialization
 {
 	import vibe.data.json;
 	
@@ -1484,7 +1486,7 @@ unittest { // test BitFlags serialization
 	assert(deserialize!(TestSerializer, S)(Sac_ser) == S(Flags(Flag.a, Flag.c)));
 }
 
-unittest { // issue #1182
+@safe unittest { // issue #1182
 	struct T {
 		int x;
 		string y;
@@ -1503,7 +1505,7 @@ unittest { // issue #1182
 	assert(deserialize!(TestSerializer, S)(serialized) == s);
 }
 
-unittest { // issue #1352 - ingore per policy
+@safe unittest { // issue #1352 - ingore per policy
 	struct P1 {}
 	struct P2 {}
 
