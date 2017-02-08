@@ -385,16 +385,17 @@ final class WebSocket {
 	/**
 		Returns the close code sent by the remote end.
 
-		Note that this code will only be set if the connection was closed cleanly by
-		the remote end. In all other cases this value will be 0.
+		Note if the connection was never opened, is still alive, or was closed
+		locally this value will be 0. If the connection was not closed cleanly by
+		the remote end, this value will be 1006.
 	*/
 	@property short closeCode() { return m_closeCode; }
 
 	/**
 		Returns the close reason sent by the remote end.
 
-		Note that this reason will only be set if the connection was closed cleanly by
-		the remote end. In all other cases this will be an empty array.
+		Note if the connection was never opened, is still alive, or was closed
+		locally this value will be an empty string.
 	*/
 	@property const(char)[] closeReason() { return m_closeReason; }
 
@@ -603,6 +604,10 @@ final class WebSocket {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
 			logDiagnostic("Closing connection.");
 		}
+
+		// If no close code was passed, e.g. this was an unclean termination
+		//  of our websocket connection, set the close code to 1006.
+		if (this.m_closeCode == 0) this.m_closeCode = 1006;
 		m_conn.close();
 	}
 
