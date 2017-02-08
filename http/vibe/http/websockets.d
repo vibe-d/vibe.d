@@ -386,8 +386,9 @@ final class WebSocket {
 		Returns the close code sent by the remote end.
 
 		Note if the connection was never opened, is still alive, or was closed
-		locally this value will be 0. If the connection was not closed cleanly by
-		the remote end, this value will be 1006.
+		locally this value will be 0. If no close code was given by the remote
+		end in the close frame, the value will be 1005. If the connection was
+		not closed cleanly by the remote end, this value will be 1006.
 	*/
 	@property short closeCode() { return m_closeCode; }
 
@@ -579,6 +580,9 @@ final class WebSocket {
 				}
 				if(msg.frameOpcode == FrameOpcode.close) {
 					logDebug("Got closing frame (%s)", m_sentCloseFrame);
+
+					// If no close code was passed, we default to 1005
+					this.m_closeCode = 1005;
 
 					// If provided in the frame, attempt to parse the close code/reason
 					if (msg.peek().length >= short.sizeof) {
