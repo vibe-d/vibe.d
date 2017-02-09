@@ -134,28 +134,25 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS r
 @safe {
 	return listenHTTP(settings, &request_handler.handleRequest);
 }
-/// ditto
-deprecated("Use an @safe request handler.")
+
+/// Scheduled for deprecation - use a `@safe` callback instead.
 HTTPListener listenHTTP(HTTPServerSettings settings, void delegate(HTTPServerRequest, HTTPServerResponse) @system request_handler)
-@safe {
+@system {
 	return listenHTTP(settings, (req, res) @trusted => request_handler(req, res));
 }
 /// ditto
-deprecated("Use an @safe request handler.")
 HTTPListener listenHTTP(HTTPServerSettings settings, void function(HTTPServerRequest, HTTPServerResponse) @system request_handler)
-@safe {
+@system {
 	return listenHTTP(settings, (req, res) @trusted => request_handler(req, res));
 }
 /// ditto
-deprecated("Use an @safe request handler.")
 HTTPListener listenHTTP(HTTPServerSettings settings, void delegate(scope HTTPServerRequest, scope HTTPServerResponse) @system request_handler)
-@safe {
+@system {
 	return listenHTTP(settings, (scope req, scope res) @trusted => request_handler(req, res));
 }
 /// ditto
-deprecated("Use an @safe request handler.")
 HTTPListener listenHTTP(HTTPServerSettings settings, void function(scope HTTPServerRequest, scope HTTPServerResponse) @system request_handler)
-@safe {
+@system {
 	return listenHTTP(settings, (scope req, scope res) @trusted => request_handler(req, res));
 }
 
@@ -554,9 +551,9 @@ final class HTTPServerSettings {
 	@property HTTPServerErrorPageHandler errorPageHandler() @safe { return errorPageHandler_; }
 	/// ditto
 	@property void errorPageHandler(HTTPServerErrorPageHandler del) @safe { errorPageHandler_ = del; }
-	/// ditto
-	deprecated("Use an @safe error handler instead.")
-	@property void errorPageHandler(void delegate(HTTPServerRequest, HTTPServerResponse, HTTPServerErrorInfo) @system del) @safe {
+	/// Scheduled for deprecation - use a `@safe` callback instead.
+	@property void errorPageHandler(void delegate(HTTPServerRequest, HTTPServerResponse, HTTPServerErrorInfo) @system del)
+	@system {
 		this.errorPageHandler = (req, res, err) @trusted { del(req, res, err); };
 	}
 

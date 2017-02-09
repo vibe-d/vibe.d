@@ -166,10 +166,9 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 		}
 	);
 }
-/// ditto
-deprecated("Use an @safe handshake callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 void connectWebSocket(URL url, scope void delegate(scope WebSocket) @system del, const(HTTPClientSettings) settings = defaultSettings)
-@safe {
+@system {
 	connectWebSocket(url, (scope ws) @trusted => del(ws), settings);
 }
 
@@ -223,10 +222,9 @@ void handleWebSocket(scope WebSocketHandshakeDelegate on_handshake, scope HTTPSe
 	}
 	socket.close();
 }
-/// ditto
-deprecated("Use an @safe handshake callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 void handleWebSocket(scope void delegate(scope WebSocket) @system on_handshake, scope HTTPServerRequest req, scope HTTPServerResponse res)
-@safe {
+@system {
 	handleWebSocket((scope ws) @trusted => on_handshake(ws), req, res);
 }
 
@@ -286,16 +284,14 @@ HTTPServerRequestDelegateS handleWebSockets(WebSocketHandshakeDelegate on_handsh
 	}
 	return &callback;
 }
-/// ditto
-deprecated("Use an @safe handshake callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 HTTPServerRequestDelegateS handleWebSockets(void delegate(scope WebSocket) @system on_handshake)
-@safe {
+@system {
 	return handleWebSockets(delegate (scope ws) @trusted => on_handshake(ws));
 }
-/// ditto
-deprecated("Use an @safe handshake callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 HTTPServerRequestDelegateS handleWebSockets(void function(scope WebSocket) @system on_handshake)
-@safe {
+@system {
 	return handleWebSockets(delegate (scope ws) @trusted => on_handshake(ws));
 }
 

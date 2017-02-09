@@ -46,7 +46,7 @@ class ConnectionPool(Connection)
 		debug m_thread = () @trusted { return Thread.getThis(); } ();
 	}
 
-	deprecated("Use an @safe callback instead")
+	/// Scheduled for deprecation - use an `@safe` callback instead
 	this(Connection delegate() connection_factory, uint max_concurrent = uint.max)
 	@system {
 		this(cast(Connection delegate() @safe)connection_factory, max_concurrent);

@@ -49,10 +49,9 @@ HTTPServerRequestDelegateS performBasicAuth(string realm, PasswordVerifyCallback
 	}
 	return &handleRequest;
 }
-/// ditto
-deprecated("Use an @safe password verification callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 HTTPServerRequestDelegateS performBasicAuth(string realm, bool delegate(string, string) @system pwcheck)
-{
+@system {
 	return performBasicAuth(realm, (u, p) @trusted => pwcheck(u, p));
 }
 
@@ -90,10 +89,9 @@ string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse re
 	res.headers["WWW-Authenticate"] = "Basic realm=\""~realm~"\"";
 	throw new HTTPStatusException(HTTPStatus.unauthorized);
 }
-/// ditto
-deprecated("Use an @safe password verification callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 string performBasicAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, string realm, scope bool delegate(string, string) @system pwcheck)
-{
+@system {
 	return performBasicAuth(req, res, realm, (u, p) @trusted => pwcheck(u, p));
 }
 

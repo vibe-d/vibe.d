@@ -50,6 +50,9 @@ NetworkAddress resolveHost(string host, ushort address_family, bool use_dns = tr
 	The address parameter can be used to specify the network
 	interface on which the server socket is supposed to listen for connections.
 	By default, all IPv4 and IPv6 interfaces will be used.
+
+	Using a `@system` callback is scheduled for deprecation. Use a `@safe`
+	callback instead.
 */
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) @safe connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
 {
@@ -67,15 +70,13 @@ TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) @safe con
 	return getEventDriver().listenTCP(port, connection_callback, address, options);
 }
 /// ditto
-deprecated("Use an @safe connection callback.")
 TCPListener[] listenTCP(ushort port, void delegate(TCPConnection stream) @system connection_callback, TCPListenOptions options = TCPListenOptions.defaults)
-{
+@system {
 	return listenTCP(port, (s) @trusted => connection_callback(s), options);
 }
 /// ditto
-deprecated("Use an @safe connection callback.")
 TCPListener listenTCP(ushort port, void delegate(TCPConnection stream) @system connection_callback, string address, TCPListenOptions options = TCPListenOptions.defaults)
-{
+@system {
 	return listenTCP(port, (s) @trusted => connection_callback(s), address, options);
 }
 

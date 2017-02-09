@@ -786,6 +786,9 @@ unittest {
 
 	Note that timers can only work if an event loop is running.
 
+	Passing a `@system` callback is scheduled for deprecation. Use a
+	`@safe` callback instead.
+
 	Params:
 		timeout = Determines the minimum amount of time that elapses before the timer fires.
 		callback = This delegate will be called when the timer fires
@@ -803,7 +806,6 @@ Timer setTimer(Duration timeout, void delegate() @safe callback, bool periodic =
 	return tm;
 }
 /// ditto
-deprecated("Use an @safe timer callback.")
 Timer setTimer(Duration timeout, void delegate() @system callback, bool periodic = false)
 @safe {
 	return setTimer(timeout, () @trusted => callback(), periodic);

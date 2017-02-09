@@ -128,10 +128,9 @@ HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, scope DigestHas
 	}
 	return &handleRequest;
 }
-/// ditto
-deprecated("Use an @safe password hash callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 HTTPServerRequestDelegate performDigestAuth(DigestAuthInfo info, scope string delegate(string, string) @system pwhash)
-{
+@system {
 	return performDigestAuth(info, (r, u) @trusted => pwhash(r, u));
 }
 
@@ -158,10 +157,9 @@ string performDigestAuth(scope HTTPServerRequest req, scope HTTPServerResponse r
 	res.headers["WWW-Authenticate"] = "Digest realm=\""~info.realm~"\", nonce=\""~info.createNonce(req)~"\", stale="~(stale?"true":"false");
 	throw new HTTPStatusException(HTTPStatus.unauthorized);
 }
-/// ditto
-deprecated("Use an @safe password hash callback.")
+/// Scheduled for deprecation - use a `@safe` callback instead.
 string performDigestAuth(scope HTTPServerRequest req, scope HTTPServerResponse res, DigestAuthInfo info, scope string delegate(string, string) @system pwhash)
-{
+@system {
 	return performDigestAuth(req, res, info, (r, u) @trusted => pwhash(r, u));
 }
 
