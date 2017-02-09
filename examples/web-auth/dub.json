@@ -1,0 +1,8 @@
+{
+	"name": "web-auth-example",
+	"description": "Simple service using the web framework.",
+	"dependencies": {
+		"vibe-d:web": {"path": "../../"}
+	},
+	"versions": ["VibeDefaultMain"]
+}

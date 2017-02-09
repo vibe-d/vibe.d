@@ -1,0 +1,9 @@
+extends layout
+
+block head
+	- auto title = "Admin area";
+
+block contents
+	a(href="#{req.rootDir}") Back
+
+	p Admin Area.
