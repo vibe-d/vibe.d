@@ -339,6 +339,8 @@ final class WebSocket {
 		uint m_lastPingIndex;
 		bool m_pongReceived;
 		bool m_pongSkipped;
+		short m_closeCode;
+		const(char)[] m_closeReason;
         SystemRNG m_rng;
 	}
 
@@ -379,6 +381,24 @@ final class WebSocket {
 		See_also: $(D waitForData)
 	*/
 	@property bool connected() { return m_conn.connected && !m_sentCloseFrame; }
+
+	/**
+		Returns the close code sent by the remote end.
+
+		Note if the connection was never opened, is still alive, or was closed
+		locally this value will be 0. If no close code was given by the remote
+		end in the close frame, the value will be 1005. If the connection was
+		not closed cleanly by the remote end, this value will be 1006.
+	*/
+	@property short closeCode() { return m_closeCode; }
+
+	/**
+		Returns the close reason sent by the remote end.
+
+		Note if the connection was never opened, is still alive, or was closed
+		locally this value will be an empty string.
+	*/
+	@property const(char)[] closeReason() { return m_closeReason; }
 
 	/**
 		The HTTP request that established the web socket connection.
@@ -560,6 +580,19 @@ final class WebSocket {
 				}
 				if(msg.frameOpcode == FrameOpcode.close) {
 					logDebug("Got closing frame (%s)", m_sentCloseFrame);
+
+					// If no close code was passed, we default to 1005
+					this.m_closeCode = 1005;
+
+					// If provided in the frame, attempt to parse the close code/reason
+					if (msg.peek().length >= short.sizeof) {
+						this.m_closeCode = bigEndianToNative!short(msg.peek()[0..short.sizeof]);
+
+						if (msg.peek().length > short.sizeof) {
+							this.m_closeReason = cast(const(char) [])msg.peek()[short.sizeof..$];
+						}
+					}
+
 					if(!m_sentCloseFrame) close();
 					logDebug("Terminating connection (%s)", m_sentCloseFrame);
 					m_conn.close();
@@ -575,6 +608,10 @@ final class WebSocket {
 			logDiagnostic("Error while reading websocket message: %s", e.msg);
 			logDiagnostic("Closing connection.");
 		}
+
+		// If no close code was passed, e.g. this was an unclean termination
+		//  of our websocket connection, set the close code to 1006.
+		if (this.m_closeCode == 0) this.m_closeCode = 1006;
 		m_conn.close();
 	}
 
