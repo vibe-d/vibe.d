@@ -697,8 +697,9 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 	else enum nested_style = NestedNameStyle.underscore;
 
 	s_requestContext = createRequestContext!overload(req, res);
+	enum hasAuth = isAuthenticated!(C, overload);
 
-	static if (isAuthenticated!(C, overload)) {
+	static if (hasAuth) {
 		auto auth_info = handleAuthentication!overload(instance, req, res);
 		if (res.headerWritten) return;
 	}
@@ -710,7 +711,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		ParamError err;
 		err.field = param_names[i];
 		try {
-			static if (is(PT == AuthInfoType)) {
+			static if (hasAuth && is(PT == AuthInfoType)) {
 				params[i] = auth_info;
 			} else static if (IsAttributedParameter!(overload, param_names[i])) {
 				params[i].setVoid(computeAttributedParameterCtx!(overload, param_names[i])(instance, req, res));
@@ -804,7 +805,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 		}
 	}
 
-	static if (isAuthenticated!(C, overload))
+	static if (hasAuth)
 		handleAuthorization!(C, overload, params)(auth_info);
 
 	// execute the method and write the result

@@ -1,0 +1,33 @@
+extends layout
+
+block head
+	- auto title = "Settings";
+
+block contents
+	a(href="#{req.rootDir}") Back
+
+	form(method="POST", action="settings")
+		div
+			- if (auth.isPremiumUser)
+				input#premium(name="premium", type="checkbox", checked)
+			- else
+				input#premium(name="premium", type="checkbox")
+			label(for="premium") Premium membership
+
+		div
+			- if (auth.isAdmin)
+				input#admin(name="admin", type="checkbox", checked)
+			- else
+				input#admin(name="admin", type="checkbox")
+			label(for="admin") Admin user
+
+		div
+			label(for="username") User name
+			br
+			input#username(name="user_name", type="text", value=auth.userName)
+
+		- if (error.length)
+			p.error= error
+
+		div
+			button(type="sumbit") OK
