@@ -24,6 +24,8 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
   - Added `HTTPServerResponse.writePrettyJsonBody`
   - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
+  - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
+  - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
@@ -50,11 +52,14 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 - Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
+- Fixed a missing `toRedis` convertion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
 
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
 [issue1663]: https://github.com/rejectedsoftware/vibe.d/issues/1663
 [issue1668]: https://github.com/rejectedsoftware/vibe.d/issues/1668
+[issue1670]: https://github.com/rejectedsoftware/vibe.d/issues/1670
+[issue1675]: https://github.com/rejectedsoftware/vibe.d/issues/1675
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
