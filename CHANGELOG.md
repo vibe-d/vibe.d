@@ -36,6 +36,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 - Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
+- Fixed a missing `toRedis` convertion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
@@ -50,6 +51,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
 [issue1648]: https://github.com/rejectedsoftware/vibe.d/issues/1648
 [issue1655]: https://github.com/rejectedsoftware/vibe.d/issues/1655
+[issue1659]: https://github.com/rejectedsoftware/vibe.d/issues/1659
 
 
 v0.7.30 - 2016-10-31
