@@ -675,13 +675,14 @@ final class Win32FileStream : FileStream {
 		assert(false);
 	}
 
-	override void read(ubyte[] dst)
+	override size_t read(ubyte[] dst, IOMode)
 	{
 		assert(this.readable);
 		acquire();
 		scope(exit) release();
 
-		while( dst.length > 0 ){
+		size_t nbytes = 0;
+		while (dst.length > 0) {
 			enforce(dst.length <= leastSize);
 			OVERLAPPED overlapped;
 			overlapped.Internal = 0;
@@ -702,10 +703,13 @@ final class Win32FileStream : FileStream {
 			assert(m_bytesTransferred <= to_read, "More bytes read than requested!?");
 			dst = dst[m_bytesTransferred .. $];
 			m_ptr += m_bytesTransferred;
+			nbytes += m_bytesTransferred;
 		}
+
+		return nbytes;
 	}
 
-	override void write(in ubyte[] bytes_)
+	override size_t write(in ubyte[] bytes_, IOMode)
 	{
 		assert(this.writable, "File is not writable");
 		acquire();
@@ -713,7 +717,8 @@ final class Win32FileStream : FileStream {
 
 		const(ubyte)[] bytes = bytes_;
 
-		while( bytes.length > 0 ){
+		size_t nbytes = 0;
+		while (bytes.length > 0) {
 			OVERLAPPED overlapped;
 			overlapped.Internal = 0;
 			overlapped.InternalHigh = 0;
@@ -733,8 +738,11 @@ final class Win32FileStream : FileStream {
 			assert(m_bytesTransferred <= to_write, "More bytes written than requested!?");
 			bytes = bytes[m_bytesTransferred .. $];
 			m_ptr += m_bytesTransferred;
+			nbytes += m_bytesTransferred;
 		}
 		if(m_ptr > m_size) m_size = m_ptr;
+
+		return nbytes;
 	}
 
 	override void flush(){}
@@ -1250,12 +1258,13 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		return m_readBuffer.peek();
 	}
 
-	override void read(ubyte[] dst)
+	override size_t read(ubyte[] dst, IOMode)
 	{
 		acquireReader();
 		scope(exit) releaseReader();
 
-		while( dst.length > 0 ){
+		size_t nbytes = 0;
+		while (dst.length > 0) {
 			while( m_readBuffer.empty ){
 				checkConnected();
 				m_driver.m_core.yieldForEvent();
@@ -1264,10 +1273,13 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 
 			m_readBuffer.read(dst[0 .. amt]);
 			dst = dst[amt .. $];
+			nbytes += amt;
 		}
+
+		return nbytes;
 	}
 
-	override void write(in ubyte[] bytes_)
+	override size_t write(in ubyte[] bytes_, IOMode)
 	{
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -1283,7 +1295,8 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		overlapped.OffsetHigh = 0;
 		overlapped.hEvent = cast(HANDLE)cast(void*)this;
 
-		while( bytes.length > 0 ){
+		size_t nbytes = 0;
+		while (bytes.length > 0) {
 			WSABUF buf;
 			buf.len = bytes.length;
 			buf.buf = cast(ubyte*)bytes.ptr;
@@ -1299,7 +1312,10 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 
 			assert(m_bytesTransferred <= bytes.length, "More data sent than requested!?");
 			bytes = bytes[m_bytesTransferred .. $];
+			nbytes += m_bytesTransferred;
 		}
+		return nbytes;
+
 	}
 
 	override void flush()
