@@ -277,6 +277,17 @@ void setIdleHandler(bool delegate() @safe del)
 	s_idleHandler = del;
 }
 
+/// Scheduled for deprecation - use a `@safe` callback instead.
+void setIdleHandler(void delegate() @system del)
+@system {
+	s_idleHandler = () @trusted { del(); return false; };
+}
+/// ditto
+void setIdleHandler(bool delegate() @system del)
+@system {
+	s_idleHandler = () @trusted => del();
+}
+
 /**
 	Runs a new asynchronous task.
 
@@ -807,7 +818,7 @@ Timer setTimer(Duration timeout, void delegate() @safe callback, bool periodic =
 }
 /// ditto
 Timer setTimer(Duration timeout, void delegate() @system callback, bool periodic = false)
-@safe {
+@system {
 	return setTimer(timeout, () @trusted => callback(), periodic);
 }
 ///
@@ -830,12 +841,20 @@ unittest {
 /**
 	Creates a new timer without arming it.
 
+	Passing a `@system` callback is scheduled for deprecation. Use a
+	`@safe` callback instead.
+
 	See_also: setTimer
 */
 Timer createTimer(void delegate() @safe callback)
 @safe {
 	auto drv = getEventDriver();
 	return Timer(drv, drv.createTimer(callback));
+}
+/// ditto
+Timer createTimer(void delegate() @system callback)
+@system {
+	return createTimer(() @trusted => callback());
 }
 
 
