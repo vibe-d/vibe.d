@@ -52,7 +52,9 @@ final class TaskPipe : ConnectionStream {
 	}
 	const(ubyte)[] peek() { return m_pipe.peek; }
 	size_t read(scope ubyte[] dst, IOMode mode) { return m_pipe.read(dst, mode); }
+	alias read = ConnectionStream.read;
 	size_t write(in ubyte[] bytes, IOMode mode) { return m_pipe.write(bytes, mode); }
+	alias write = ConnectionStream.write;
 	void flush() {}
 	void finalize() { m_pipe.close(); }
 }
