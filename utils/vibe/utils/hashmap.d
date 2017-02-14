@@ -22,7 +22,7 @@ struct DefaultHashMapTraits(Key) {
 	}
 	static size_t hashOf(in ref Key k)
 	@safe {
-		static if (is(Key == class) && &Key.init.toHash is &Object.init.toHash)
+		static if (is(Key == class) && &Unqual!Key.init.toHash is &Object.init.toHash)
 			return () @trusted { return cast(size_t)cast(void*)k; } ();
 		else static if (__traits(compiles, Key.init.toHash()))
 			return () @trusted { return (cast(Key)k).toHash(); } ();
@@ -191,7 +191,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private size_t findInsertIndex(Key key)
-	const @safe {
+	const {
 		auto hash = Traits.hashOf(key);
 		size_t target = hash & (m_table.length-1);
 		auto i = target;
