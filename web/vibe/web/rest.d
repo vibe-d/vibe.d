@@ -1123,7 +1123,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			static if (is(RT == void)) {
 				() @trusted { __traits(getMember, inst, Method)(params); } (); // TODO: remove after deprecation period
 				returnHeaders();
-				res.writeVoidBody();
+				res.writeBody(cast(ubyte[])null);
 			} else {
 				auto ret = () @trusted { return __traits(getMember, inst, Method)(params); } (); // TODO: remove after deprecation period
 
