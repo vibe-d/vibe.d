@@ -1117,7 +1117,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			static if (is(RT == void)) {
 				__traits(getMember, inst, Method)(params);
 				returnHeaders();
-				res.writeVoidBody();
+				res.writeBody(cast(ubyte[])null);
 			} else {
 				auto ret = __traits(getMember, inst, Method)(params);
 				ret = evaluateOutputModifiers!Func(ret, req, res);
