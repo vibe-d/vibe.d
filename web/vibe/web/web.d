@@ -852,7 +852,7 @@ private void handleRequest(string M, alias overload, C, ERROR...)(HTTPServerRequ
 
 
 private RequestContext createRequestContext(alias handler)(HTTPServerRequest req, HTTPServerResponse res)
-@safe {
+{
 	RequestContext ret;
 	ret.req = req;
 	ret.res = res;

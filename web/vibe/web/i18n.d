@@ -31,6 +31,9 @@ import std.algorithm : canFind, min, startsWith;
 
 ///
 unittest {
+	import vibe.http.router : URLRouter;
+	import vibe.web.web : registerWebInterface;
+
 	struct TranslationContext {
 		import std.typetuple;
 		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
@@ -45,11 +48,18 @@ unittest {
 			//render!("home.dt")
 		}
 	}
+
+	void test(URLRouter router)
+	{
+		router.registerWebInterface(new MyWebInterface);
+	}
 }
 
 /// Defining a custom function for determining the language.
 unittest {
+	import vibe.http.router : URLRouter;
 	import vibe.http.server;
+	import vibe.web.web : registerWebInterface;
 
 	struct TranslationContext {
 		import std.typetuple;
@@ -73,6 +83,29 @@ unittest {
 			//render!("home.dt")
 		}
 	}
+
+	void test(URLRouter router)
+	{
+		router.registerWebInterface(new MyWebInterface);
+	}
+}
+
+@safe unittest {
+	import vibe.http.router : URLRouter;
+	import vibe.http.server : HTTPServerRequest;
+	import vibe.web.web : registerWebInterface;
+
+	struct TranslationContext {
+		import std.typetuple;
+		alias languages = TypeTuple!("en_US", "de_DE", "fr_FR");
+		static string determineLanguage(scope HTTPServerRequest req) { return "en_US"; }
+	}
+
+	@translationContext!TranslationContext
+	class MyWebInterface { void getHome() @safe {} }
+
+	auto router = new URLRouter;
+	router.registerWebInterface(new MyWebInterface);
 }
 
 
