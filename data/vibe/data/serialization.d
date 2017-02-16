@@ -57,6 +57,17 @@
 		as multiple copies. When in turn deserializing the data, they will also
 		end up as separate copies in memory.
 
+	Field_names:
+		By default, the field name of the serialized D type (for `struct` and
+		`class` aggregates) is represented as-is in the serialized result. To
+		circumvent name clashes with D's keywords, a single trailing underscore of
+		any field name is stipped, so that a field name of `version_` results in
+		just `"version"` as the serialized value. Names can also be freely
+		customized using the `@name` annotation.
+
+		Associative array keys are always represented using their direct string
+		representation.
+
 	Serializer_implementation:
 		Serializers are implemented in terms of a struct with template methods that
 		get called by the serialization framework:
@@ -685,6 +696,11 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 
 /**
 	Attribute for overriding the field name during (de-)serialization.
+
+	Note that without the `@name` attribute there is a shorter alternative
+	for using names that collide with a D keyword. A single trailing
+	underscore will automatically be stripped when determining a field
+	name.
 */
 NameAttribute!Policy name(alias Policy = DefaultPolicy)(string name)
 {
@@ -692,8 +708,20 @@ NameAttribute!Policy name(alias Policy = DefaultPolicy)(string name)
 }
 ///
 unittest {
+	struct CustomPolicy {}
+
 	struct Test {
+		// serialized as "screen-size":
 		@name("screen-size") int screenSize;
+
+		// serialized as "print-size" by default,
+		// but as "PRINTSIZE" if CustomPolicy is used for serialization.
+		@name("print-size")
+		@name!CustomPolicy("PRINTSIZE")
+		int printSize;
+
+		// serialized as "version"
+		int version_;
 	}
 }
 
