@@ -1358,14 +1358,22 @@ unittest { // tuple serialization
 	enum Sm = S!(int, string).mangleof;
 	enum Tum = Tuple!(int, string).mangleof;
 	auto s = S!(int, string)(42, "hello");
-	assert(serialize!TestSerializer(s) ==
+
+	auto ss = serialize!TestSerializer(s);
+	assert(ss ==
 		"D("~Sm~"){DE("~Tum~",f)(A("~Tum~")[2][AE(i,0)(V(i)(42))AE(i,0)AE(Aya,1)(V(Aya)(hello))AE(Aya,1)]A("~Tum~"))DE("~Tum~",f)}D("~Sm~")");
+
+	assert(s == deserialize!(TestSerializer, typeof(s))(ss));
 
 	static struct T { @asArray S!(int, string) g; }
 	enum Tm = T.mangleof;
 	auto t = T(s);
-	assert(serialize!TestSerializer(t) ==
+	
+	auto st = serialize!TestSerializer(t);
+	assert(st ==
 		"D("~Tm~"){DE("~Sm~",g)(A("~Sm~")[2][AE(i,0)(V(i)(42))AE(i,0)AE(Aya,1)(V(Aya)(hello))AE(Aya,1)]A("~Sm~"))DE("~Sm~",g)}D("~Tm~")");
+
+	assert(t == deserialize!(TestSerializer, typeof(t))(st));
 }
 
 unittest { // testing the various UDAs
