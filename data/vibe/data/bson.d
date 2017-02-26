@@ -803,7 +803,8 @@ struct BsonObjectID {
 
 	/** Constructs a new object ID from the given raw byte array.
 	*/
-	this( in ubyte[] bytes ){
+	this(in ubyte[] bytes)
+	{
 		assert(bytes.length == 12);
 		m_bytes[] = bytes[];
 	}
@@ -886,7 +887,7 @@ struct BsonObjectID {
 		this will return the associated time stamp.
 	*/
 	@property SysTime timeStamp()
-	{
+	const {
 		ubyte[4] tm = m_bytes[0 .. 4];
 		return SysTime(unixTimeToStdTime(bigEndianToNative!uint(tm)));
 	}
@@ -911,9 +912,7 @@ struct BsonObjectID {
 		return ret;
 	}
 
-	ubyte[] opCast() {
-		return m_bytes;
-	}
+	inout(ubyte)[] opCast() inout { return m_bytes; }
 }
 
 unittest {
@@ -1525,7 +1524,7 @@ struct BsonSerializer {
 	}
 
 	private static Bson.Type getBsonTypeID(T, bool accept_ao = false)(/*auto ref const*/ in T value)
-	{
+	@safe {
 		Bson.Type tp;
 		static if (is(T == Bson)) tp = value.type;
 		else static if (is(T == Json)) tp = jsonTypeToBsonType(value.type);

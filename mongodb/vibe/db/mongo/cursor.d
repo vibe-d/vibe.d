@@ -164,39 +164,16 @@ struct MongoCursor(Q = Bson, R = Bson, S = Bson) {
 
 		Throws: An exception if there is a query or communication error.
 	*/
-	int opApply(scope int delegate(ref R doc) @safe del)
-	@safe {
-		if (!m_data) return 0;
-
-		while (!m_data.empty) {
-			auto doc = m_data.front;
-			m_data.popFront();
-			if (auto ret = del(doc))
-				return ret;
+	auto byPair()
+	{
+		import std.typecons : Tuple, tuple;
+		static struct Rng {
+			private MongoCursorData!(Q, R, S) data;
+			@property bool empty() { return data.empty; }
+			@property Tuple!(size_t, R) front() { return tuple(data.index, data.front); }
+			void popFront() { data.popFront(); }
 		}
-		return 0;
-	}
-
-	/**
-		Iterates over all remaining documents.
-
-		Note that iteration is one-way - elements that have already been visited
-		will not be visited again if another iteration is done.
-
-		Throws: An exception if there is a query or communication error.
-	*/
-	int opApply(scope int delegate(size_t idx, ref R doc) @safe del)
-	@safe {
-		if (!m_data) return 0;
-
-		while (!m_data.empty) {
-			auto idx = m_data.index;
-			auto doc = m_data.front;
-			m_data.popFront();
-			if (auto ret = del(idx, doc))
-				return ret;
-		}
-		return 0;
+		return Rng(m_data);
 	}
 }
 
