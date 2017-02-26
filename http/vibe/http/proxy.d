@@ -136,11 +136,9 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 
 			// special case for empty response bodies
 			if ("Content-Length" !in cres.headers && "Transfer-Encoding" !in cres.headers || req.method == HTTPMethod.HEAD) {
-				cres.headers.opApply((key, in ref value) {
+				foreach (key, ref value; cres.headers)
 					if (icmp2(key, "Connection") != 0)
 						res.headers[key] = value;
-					return 0;
-				});
 				res.writeVoidBody();
 				return;
 			}
@@ -149,11 +147,9 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			// (Squid and some other proxies)
 			if (res.httpVersion == HTTPVersion.HTTP_1_0 && ("Transfer-Encoding" in cres.headers || "Content-Length" !in cres.headers)) {
 				// copy all headers that may pass from upstream to client
-				cres.headers.opApply((n, in ref v) {
+				foreach (n, ref v; cres.headers)
 					if (n !in non_forward_headers_map)
 						res.headers[n] = v;
-					return 0;
-				});
 
 				if ("Transfer-Encoding" in res.headers) res.headers.remove("Transfer-Encoding");
 				auto content = cres.bodyReader.readAll(1024*1024);
@@ -166,11 +162,9 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			// to perform a verbatim copy of the client response
 			if ("Content-Length" in cres.headers) {
 				if ("Content-Encoding" in res.headers) res.headers.remove("Content-Encoding");
-				cres.headers.opApply((key, in ref value) {
+				foreach (key, ref value; cres.headers)
 					if (icmp2(key, "Connection") != 0)
 						res.headers[key] = value;
-					return 0;
-				});
 				auto size = cres.headers["Content-Length"].to!size_t();
 				if (res.isHeadResponse) res.writeVoidBody();
 				else cres.readRawBody((scope InterfaceProxy!InputStream reader) { res.writeRawBody(reader, size); });
@@ -180,11 +174,9 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 
 			// fall back to a generic re-encoding of the response
 			// copy all headers that may pass from upstream to client
-			cres.headers.opApply((n, in ref v) {
+			foreach (n, ref v; cres.headers)
 				if (n !in non_forward_headers_map)
 					res.headers[n] = v;
-				return 0;
-			});
 			if (res.isHeadResponse) res.writeVoidBody();
 			else cres.bodyReader.pipe(res.bodyWriter);
 		}

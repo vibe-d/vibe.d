@@ -39,6 +39,8 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 			}
 			string key;
 			VALUE value;
+			Tuple!(string, ValueType) toTuple() { return Tuple!(string, ValueType)(key, value); }
+			Tuple!(string, const(ValueType)) toTuple() const { return Tuple!(string, const(ValueType))(key, value); }
 		}
 		Field[NUM_STATIC_FIELDS] m_fields;
 		size_t m_fieldCount = 0;
@@ -200,73 +202,47 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		return !(key in this);
 	}
 
-	static if (safeValueCopy) {
-		/** Iterates over all fields, including duplicates.
-		*/
-		int opApply(scope int delegate(string key, ref ValueType val) @safe del)
-		{
-			foreach (ref kv; m_fields[0 .. m_fieldCount]) {
-				if (auto ret = del(kv.key, kv.value))
-					return ret;
+	/** Iterates over all fields, including duplicates.
+	*/
+	auto byKey() inout { import std.algorithm.iteration : map; return byPair().map!(p => p[0]); }
+	auto byValue() inout { import std.algorithm.iteration : map; return byPair().map!(p => p[1]); }
+
+	auto byPair()
+	{
+		static struct Rng {
+			DictionaryList* list;
+			size_t idx;
+
+			@property bool empty() const { return idx >= list.length; }
+			@property Tuple!(string, ValueType) front() {
+				if (idx < list.m_fieldCount)
+					return list.m_fields[idx].toTuple;
+				return list.m_extendedFields[idx - list.m_fieldCount].toTuple;
 			}
-			foreach (ref kv; m_extendedFields) {
-				if (auto ret = del(kv.key, kv.value))
-					return ret;
-			}
-			return 0;
+			void popFront() { idx++; }
 		}
-
-		/// ditto
-		int opApply(scope int delegate(ref ValueType val) @safe del)
-		{
-			return this.opApply((string key, ref ValueType val) { return del(val); });
-		}
-
-		/// ditto
-		int opApply(scope int delegate(string key, ref const(ValueType) val) @safe del) const
-		@trusted {
-			return (cast() this).opApply(cast(int delegate(string, ref ValueType) @safe) del);
-		}
-
-		/// ditto
-		int opApply(scope int delegate(ref const(ValueType) val) @safe del) const
-		@trusted {
-			return (cast() this).opApply(cast(int delegate(ref ValueType) @safe) del);
-		}
-	} else {
-		/** Iterates over all fields, including duplicates.
-		*/
-		int opApply(scope int delegate(string key, ref ValueType val) del)
-		{
-			foreach (ref kv; m_fields[0 .. m_fieldCount]) {
-				if (auto ret = del(kv.key, kv.value))
-					return ret;
-			}
-			foreach (ref kv; m_extendedFields) {
-				if (auto ret = del(kv.key, kv.value))
-					return ret;
-			}
-			return 0;
-		}
-
-		/// ditto
-		int opApply(scope int delegate(ref ValueType val) del)
-		{
-			return this.opApply((string key, ref ValueType val) { return del(val); });
-		}
-
-		/// ditto
-		int opApply(scope int delegate(string key, ref const(ValueType) val) del) const
-		{
-			return (cast() this).opApply(cast(int delegate(string, ref ValueType)) del);
-		}
-
-		/// ditto
-		int opApply(scope int delegate(ref const(ValueType) val) del) const
-		{
-			return (cast() this).opApply(cast(int delegate(ref ValueType)) del);
-		}
+		return Rng(&this, 0);
 	}
+
+	auto byPair()
+	const {
+		static struct Rng {
+			const(DictionaryList)* list;
+			size_t idx;
+
+			@property bool empty() const { return idx >= list.length; }
+			@property Tuple!(string, const(ValueType)) front() {
+				if (idx < list.m_fieldCount)
+					return list.m_fields[idx].toTuple;
+				return list.m_extendedFields[idx - list.m_fieldCount].toTuple;
+			}
+			void popFront() { idx++; }
+		}
+		return Rng(&this, 0);
+	}
+
+	// Enables foreach iteration over a `DictionaryList` with two loop variables.
+	alias byPair this;
 
 	static if (is(typeof({ const(ValueType) v; ValueType w; w = v; }))) {
 		/** Duplicates the header map.
