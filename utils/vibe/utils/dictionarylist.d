@@ -37,10 +37,9 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 				enum keyCheckSum = 0;
 				this(uint, string key, VALUE value) { this.key = key; this.value = value; }
 			}
-			string key;
-			VALUE value;
-			Tuple!(string, ValueType) toTuple() { return Tuple!(string, ValueType)(key, value); }
-			Tuple!(string, const(ValueType)) toTuple() const { return Tuple!(string, const(ValueType))(key, value); }
+			Tuple!(string, VALUE) tuple;
+			@property ref inout(string) key() inout { return tuple[0]; }
+			@property ref inout(VALUE) value() inout { return tuple[1]; }
 		}
 		Field[NUM_STATIC_FIELDS] m_fields;
 		size_t m_fieldCount = 0;
@@ -192,9 +191,9 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		static if (USE_HASHSUM) uint keysum = computeCheckSumI(key);
 		else enum keysum = 0;
 		auto idx = getIndex(m_fields[0 .. m_fieldCount], key, keysum);
-		if( idx >= 0 ) return &m_fields[idx].value;
+		if (idx >= 0) return &m_fields[idx].tuple[1];
 		idx = getIndex(m_extendedFields, key, keysum);
-		if( idx >= 0 ) return &m_extendedFields[idx].value;
+		if (idx >= 0) return &m_extendedFields[idx].tuple[1];
 		return null;
 	}
 	/// ditto
@@ -204,37 +203,37 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 
 	/** Iterates over all fields, including duplicates.
 	*/
-	auto byKey() inout { import std.algorithm.iteration : map; return byPair().map!(p => p[0]); }
-	auto byValue() inout { import std.algorithm.iteration : map; return byPair().map!(p => p[1]); }
+	auto byKey() inout { import std.algorithm.iteration : map; return byKeyValue().map!(p => p[0]); }
+	auto byValue() inout { import std.algorithm.iteration : map; return byKeyValue().map!(p => p[1]); }
 
-	auto byPair()
+	auto byKeyValue()
 	{
 		static struct Rng {
 			DictionaryList* list;
 			size_t idx;
 
 			@property bool empty() const { return idx >= list.length; }
-			@property Tuple!(string, ValueType) front() {
+			@property ref Tuple!(string, ValueType) front() {
 				if (idx < list.m_fieldCount)
-					return list.m_fields[idx].toTuple;
-				return list.m_extendedFields[idx - list.m_fieldCount].toTuple;
+					return list.m_fields[idx].tuple;
+				return list.m_extendedFields[idx - list.m_fieldCount].tuple;
 			}
 			void popFront() { idx++; }
 		}
 		return Rng(&this, 0);
 	}
 
-	auto byPair()
+	auto byKeyValue()
 	const {
 		static struct Rng {
 			const(DictionaryList)* list;
 			size_t idx;
 
 			@property bool empty() const { return idx >= list.length; }
-			@property Tuple!(string, const(ValueType)) front() {
+			@property ref const(Tuple!(string, ValueType)) front() {
 				if (idx < list.m_fieldCount)
-					return list.m_fields[idx].toTuple;
-				return list.m_extendedFields[idx - list.m_fieldCount].toTuple;
+					return list.m_fields[idx].tuple;
+				return list.m_extendedFields[idx - list.m_fieldCount].tuple;
 			}
 			void popFront() { idx++; }
 		}
@@ -242,7 +241,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	}
 
 	// Enables foreach iteration over a `DictionaryList` with two loop variables.
-	alias byPair this;
+	alias byKeyValue this;
 
 	static if (is(typeof({ const(ValueType) v; ValueType w; w = v; }))) {
 		/** Duplicates the header map.
