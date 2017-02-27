@@ -30,7 +30,9 @@ targetName "vibed"
 sourcePaths "lib"
 sourceFiles "source/vibe/d.d" "source/vibe/vibe.d"
 
-x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected" "--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."
+x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
+	"--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."\
+	"--ex" "diet.internal"
 
 configuration "libevent" {
 	subConfiguration "vibe-d:core" "libevent"
