@@ -70,6 +70,7 @@ import std.datetime;
 import std.exception;
 import std.range;
 import std.traits;
+import std.typecons : Tuple, tuple;
 
 
 alias bdata_t = immutable(ubyte)[];
@@ -524,7 +525,7 @@ struct Bson {
 	*/
 	Nullable!Bson tryIndex(string key) const {
 		checkType(Type.object);
-		foreach(string idx, v; this)
+		foreach (string idx, v; this.byKeyValue)
 			if(idx == key)
 				return Nullable!Bson(v);
 		return Nullable!Bson.init;
@@ -535,7 +536,7 @@ struct Bson {
 		Returns a null value if the specified field does not exist.
 	*/
 	inout(Bson) opIndex(string idx) inout {
-		foreach( string key, v; this )
+		foreach (string key, v; this.byKeyValue)
 			if( key == idx )
 				return v;
 		return Bson(null);
@@ -593,8 +594,8 @@ struct Bson {
 		Returns a null value if the index is out of bounds.
 	*/
 	inout(Bson) opIndex(size_t idx) inout {
-		foreach( size_t i, v; this )
-			if( i == idx )
+		foreach (size_t i, v; this.byIndexValue)
+			if (i == idx)
 				return v;
 		return Bson(null);
 	}
@@ -659,60 +660,63 @@ struct Bson {
 	/**
 		Allows foreach iterating over BSON objects and arrays.
 	*/
-	int opApply(scope int delegate(Bson obj) @safe del)
-	const {
-		checkType(Type.array, Type.object);
-		if( m_type == Type.array ){
-			foreach( size_t idx, v; this )
-				if( auto ret = del(v) )
-					return ret;
-			return 0;
-		} else {
-			foreach( string idx, v; this )
-				if( auto ret = del(v) )
-					return ret;
-			return 0;
-		}
-	}
-	/// ditto
-	int opApply(scope int delegate(size_t idx, Bson obj) @safe del)
-	const {
-		checkType(Type.array);
-		auto d = m_data[4 .. $];
-		size_t i = 0;
-		while( d.length > 0 ){
-			auto tp = cast(Type)d[0];
-			if( tp == Type.end ) break;
-			d = d[1 .. $];
-			skipCString(d);
-			auto value = Bson(tp, d);
-			d = d[value.data.length .. $];
-
-			auto icopy = i;
-			if( auto ret = del(icopy, value) )
+	int opApply(scope int delegate(Bson obj) del)
+	const @system {
+		foreach (value; byValue)
+			if (auto ret = del(value))
 				return ret;
-
-			i++;
-		}
 		return 0;
 	}
 	/// ditto
-	int opApply(scope int delegate(string idx, Bson obj) @safe del)
-	const {
-		checkType(Type.object);
-		auto d = m_data[4 .. $];
-		while( d.length > 0 ){
-			auto tp = cast(Type)d[0];
-			if( tp == Type.end ) break;
-			d = d[1 .. $];
-			auto key = skipCString(d);
-			auto value = Bson(tp, d);
-			d = d[value.data.length .. $];
-
-			if( auto ret = del(key, value) )
+	int opApply(scope int delegate(size_t idx, Bson obj) del)
+	const @system {
+		foreach (index, value; byIndexValue)
+			if (auto ret = del(index, value))
 				return ret;
-		}
 		return 0;
+	}
+	/// ditto
+	int opApply(scope int delegate(string idx, Bson obj) del)
+	const @system {
+		foreach (key, value; byKeyValue)
+			if (auto ret = del(key, value))
+				return ret;
+		return 0;
+	}
+
+	auto byValue() const { checkType(Type.array, Type.object); return byKeyValueImpl().map!(t => t[1]); }
+	auto byIndexValue() const { checkType(Type.array); return byKeyValueImpl().map!(t => tuple(t[0].to!size_t, t[1])); }
+	auto byKeyValue() const { checkType(Type.object); return byKeyValueImpl(); }
+
+	private auto byKeyValueImpl()
+	const {
+		checkType(Type.object, Type.array);
+		
+		static struct Rng {
+			private {
+				immutable(ubyte)[] data;
+				string key;
+				Bson value;
+			}
+
+			@property bool empty() const { return data.length == 0; }
+			@property Tuple!(string, Bson) front() { return tuple(key, value); }
+			@property Rng save() const { return this; }
+
+			void popFront()
+			{
+				auto tp = cast(Type)data[0];
+				data = data[1 .. $];
+				if (tp == Type.end) return;
+				key = skipCString(data);
+				value = Bson(tp, data);
+				data = data[value.data.length .. $];
+			}
+		}
+
+		auto ret = Rng(m_data[4 .. $]);
+		ret.popFront();
+		return ret;
 	}
 
 	///
@@ -1452,7 +1456,7 @@ struct BsonSerializer {
 	{
 		enforce(m_inputData.type == Bson.Type.object, "Expected object instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;
-		foreach (string name, value; old) {
+		foreach (string name, value; old.byKeyValue) {
 			m_inputData = value;
 			entry_callback(name);
 		}
@@ -1466,7 +1470,7 @@ struct BsonSerializer {
 	{
 		enforce(m_inputData.type == Bson.Type.array, "Expected array instead of "~m_inputData.type.to!string());
 		auto old = m_inputData;
-		foreach (value; old) {
+		foreach (value; old.byValue) {
 			m_inputData = value;
 			entry_callback();
 		}
