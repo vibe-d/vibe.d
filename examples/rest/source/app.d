@@ -353,8 +353,7 @@ unittest
  * However, it makes no sense to have 'ref' or 'out' parameters on
  * body or query parameter, so those are treated as error at compile time.
  *
- * To serialize the entire Json body into one parameter, simply name the
- * parameter "foo"
+ * If no Json fieldname is passed to @bodyParam, the entire Json body is deserialized into the respective field.
  */
 @rootPathFromName
 interface Example6API
