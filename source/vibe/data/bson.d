@@ -70,6 +70,7 @@ import std.datetime;
 import std.exception;
 import std.range;
 import std.traits;
+import std.typecons : Tuple, tuple;
 
 
 alias bdata_t = immutable(ubyte)[];
@@ -712,6 +713,46 @@ struct Bson {
 		}
 		return 0;
 	}
+
+
+	/// Iterates over all values of an object or array.
+	auto byValue() const { checkType(Type.array, Type.object); return byKeyValueImpl().map!(t => t[1]); }
+	/// Iterates over all index/value pairs of an array.
+	auto byIndexValue() const { checkType(Type.array); return byKeyValueImpl().map!(t => tuple(t[0].to!size_t, t[1])); }
+	/// Iterates over all key/value pairs of an object.
+	auto byKeyValue() const { checkType(Type.object); return byKeyValueImpl(); }
+
+	private auto byKeyValueImpl()
+	const {
+		checkType(Type.object, Type.array);
+		
+		static struct Rng {
+			private {
+				immutable(ubyte)[] data;
+				string key;
+				Bson value;
+			}
+
+			@property bool empty() const { return data.length == 0; }
+			@property Tuple!(string, Bson) front() { return tuple(key, value); }
+			@property Rng save() const { return this; }
+
+			void popFront()
+			{
+				auto tp = cast(Type)data[0];
+				data = data[1 .. $];
+				if (tp == Type.end) return;
+				key = skipCString(data);
+				value = Bson(tp, data);
+				data = data[value.data.length .. $];
+			}
+		}
+
+		auto ret = Rng(m_data[4 .. $]);
+		ret.popFront();
+		return ret;
+	}
+
 
 	///
 	bool opEquals(ref const Bson other) const {
