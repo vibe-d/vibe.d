@@ -1028,7 +1028,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			enforceBadRequest(req.json.type != Json.Type.undefined,
 				"The request body does not contain a valid JSON value.");
 			enforceBadRequest(req.json.type == Json.Type.object,
-				"The request body must contain a JSON object with an entry for each parameter.");
+				"The request body must contain a JSON object.");
 		}
 
 		static if (isAuthenticated!(T, Func)) {
@@ -1037,15 +1037,6 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 		}
 
 		PTypes params;
-
-		enum bool hasSingleBodyParam = {
-			int i;
-			foreach (j, PT; PTypes)
-				if (sroute.parameters[j].kind == ParameterKind.body_)
-					i++;
-
-			return i == 1;
-		}();
 
 		foreach (i, PT; PTypes) {
 			enum sparam = sroute.parameters[i];
@@ -1061,8 +1052,8 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 					v = fromRestString!PT(*pv);
 			} else static if (sparam.kind == ParameterKind.body_) {
 				try {
-					// for @bodyParam("s") and by default the entire body should be serialized
-					if (sparam.fieldName == bodyParamWholeName || hasSingleBodyParam && sparam.fieldName.length == 0)
+					// for @bodyParam(<name>) the entire body should be serialized
+					if (fieldname.length == 0)
 						v = deserializeJson!PT(req.json);
 					else if (auto pv = fieldname in req.json)
 						v = deserializeJson!PT(*pv);
@@ -1328,15 +1319,6 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 	auto jsonBody = Json.emptyObject;
 	string body_;
 
-	enum bool hasSingleBodyParam = {
-		int i;
-		foreach (j, PT; PTT)
-			if (sroute.parameters[j].kind == ParameterKind.body_)
-				i++;
-
-		return i == 1;
-	}();
-
 	void addQueryParam(size_t i)(string name)
 	{
 		if (query.data.length) query.put('&');
@@ -1354,8 +1336,8 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		static if (sparam.kind == ParameterKind.query) {
 			addQueryParam!i(fieldname);
 		} else static if (sparam.kind == ParameterKind.body_) {
-			// for @bodyParam("s") and by default the entire body should be serialized
-			if (sparam.fieldName == bodyParamWholeName || hasSingleBodyParam && sparam.fieldName.length == 0)
+			// for @bodyParam(<name>) the entire body should be serialized
+			if (fieldname.length == 0)
 				jsonBody = serializeToJson(ARGS[i]);
 			else
 				jsonBody[fieldname] = serializeToJson(ARGS[i]);

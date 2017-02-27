@@ -377,9 +377,6 @@ interface Example6API
 	@bodyParam("obj")
 	string postConcatBody(FooType obj);
 
-	// expects the entire body (by default)
-	string postConcatBody2(FooType obj);
-
 	struct FooType {
 		int a;
 		string s;
@@ -422,11 +419,6 @@ override:
 	}
 
 	string postConcatBody(FooType obj)
-	{
-		return postConcat(obj);
-	}
-
-	string postConcatBody2(FooType obj)
 	{
 		return postConcat(obj);
 	}

@@ -463,7 +463,6 @@ package struct WebParamAttribute {
 	string field;
 }
 
-package(vibe.web) enum bodyParamWholeName = "bodyParamWhole";
 
 /**
  * Declare that a parameter will be transmitted to the API through the body.
@@ -483,8 +482,12 @@ package(vibe.web) enum bodyParamWholeName = "bodyParamWhole";
  * // { "package": 42 }
  * ----
  */
-WebParamAttribute bodyParam(string identifier, string field)
-@safe {
+WebParamAttribute bodyParam(string identifier, string field) @safe
+in {
+	assert(field.length > 0, "fieldname can't be empty.");
+}
+body
+{
 	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
@@ -497,7 +500,7 @@ WebParamAttribute bodyParam(string identifier)
 	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
-	return WebParamAttribute(ParameterKind.body_, identifier, bodyParamWholeName);
+	return WebParamAttribute(ParameterKind.body_, identifier, "");
 }
 
 /**
