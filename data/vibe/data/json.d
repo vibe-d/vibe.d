@@ -12,7 +12,7 @@
 module vibe.data.json;
 
 ///
-unittest {
+@safe unittest {
 	void manipulateJson(Json j)
 	{
 		import std.stdio;
@@ -27,7 +27,7 @@ unittest {
 		// prints:
 		// name: "Example"
 		// id: 1
-		foreach (string key, value; j)
+		foreach (key, value; j.byKeyValue)
 			writefln("%s: %s", key, value);
 
 		// print out as JSON: {"name": "Example", "id": 1}
@@ -41,7 +41,7 @@ unittest {
 }
 
 /// Constructing `Json` objects
-unittest {
+@safe unittest {
 	// construct a JSON object {"field1": "foo", "field2": 42, "field3": true}
 
 	// using the constructor
@@ -78,6 +78,7 @@ import std.format;
 import std.string;
 import std.range;
 import std.traits;
+import std.typecons : tuple;
 import std.bigint;
 
 /******************************************************************************/
@@ -296,11 +297,11 @@ struct Json {
 			case Type.string: return Json(m_string);
 			case Type.array:
 				auto ret = Json.emptyArray;
-				foreach (v; this) ret ~= v.clone();
+				foreach (v; this.byValue) ret ~= v.clone();
 				return ret;
 			case Type.object:
 				auto ret = Json.emptyObject;
-				foreach (string name, v; this) ret[name] = v.clone();
+				foreach (name, v; this.byKeyValue) ret[name] = v.clone();
 				return ret;
 		}
 	}
@@ -391,7 +392,7 @@ struct Json {
 		Allows foreach iterating over JSON objects and arrays.
 	*/
 	int opApply(scope int delegate(ref Json obj) del)
-	@trusted {
+	@system {
 		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
 			foreach( ref v; m_array )
@@ -408,7 +409,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(scope int delegate(ref const Json obj) del)
-	const @trusted {
+	const @system {
 		checkType!(Json[], Json[string])("opApply");
 		if( m_type == Type.array ){
 			foreach( ref v; m_array )
@@ -425,7 +426,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(scope int delegate(ref size_t idx, ref Json obj) del)
-	@trusted {
+	@system {
 		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
 			if( auto ret = del(idx, v) )
@@ -434,7 +435,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(scope int delegate(ref size_t idx, ref const Json obj) del)
-	const @trusted {
+	const @system {
 		checkType!(Json[])("opApply");
 		foreach( idx, ref v; m_array )
 			if( auto ret = del(idx, v) )
@@ -443,7 +444,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(scope int delegate(ref string idx, ref Json obj) del)
-	@trusted {
+	@system {
 		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
 			if( v.type != Type.undefined )
@@ -453,7 +454,7 @@ struct Json {
 	}
 	/// ditto
 	int opApply(scope int delegate(ref string idx, ref const Json obj) del)
-	const @trusted {
+	const @system {
 		checkType!(Json[string])("opApply");
 		foreach( idx, ref v; m_object )
 			if( v.type != Type.undefined )
@@ -463,13 +464,49 @@ struct Json {
 	}
 
 	/// Iterates over all key/value pairs of an object.
-	@property auto byKeyValue() @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue; }
+	@property auto byKeyValue() @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => tuple(kv.key, kv.value)).trustedRange; }
+	/// ditto
+	@property auto byKeyValue() const @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => tuple(kv.key, kv.value)).trustedRange; }
 	/// Iterates over all index/value pairs of an array.
 	@property auto byIndexValue() { checkType!(Json[])("byIndexValue"); return zip(iota(0, m_array.length), m_array); }
+	/// ditto
+	@property auto byIndexValue() const { checkType!(Json[])("byIndexValue"); return zip(iota(0, m_array.length), m_array); }
 	/// Iterates over all values of an object or array.
 	@property auto byValue() @trusted {
 		checkType!(Json[], Json[string])("byValue");
-		return choose(m_type == Type.array, m_array, m_object.byValue);
+		static struct Rng {
+			private {
+				bool isArray;
+				Json[] array;
+				typeof(Json.init.m_object.byValue) object;
+			}
+
+			bool empty() @trusted { if (isArray) return array.length == 0; else return object.empty; }
+			auto front() @trusted { if (isArray) return array[0]; else return object.front; }
+			void popFront() @trusted { if (isArray) array = array[1 .. $]; else object.popFront(); }
+		}
+
+		if (m_type == Type.array) return Rng(true, m_array);
+		else return Rng(false, null, m_object.byValue);
+	}
+	/// ditto
+	@property auto byValue() const @trusted {
+		checkType!(Json[], Json[string])("byValue");
+		static struct Rng {
+		@safe:
+			private {
+				bool isArray;
+				const(Json)[] array;
+				typeof(const(Json).init.m_object.byValue) object;
+			}
+
+			bool empty() @trusted { if (isArray) return array.length == 0; else return object.empty; }
+			auto front() @trusted { if (isArray) return array[0]; else return object.front; }
+			void popFront() @trusted { if (isArray) array = array[1 .. $]; else object.popFront(); }
+		}
+
+		if (m_type == Type.array) return Rng(true, m_array);
+		else return Rng(false, null, m_object.byValue);
 	}
 
 	/**
@@ -1639,7 +1676,7 @@ struct JsonSerializer {
 	{
 		enforceJson(m_current.type == Json.Type.object, "Expected JSON object, got "~m_current.type.to!string);
 		auto old = m_current;
-		foreach (string key, value; m_current) {
+		foreach (string key, value; m_current.get!(Json[string])) {
 			m_current = value;
 			field_handler(key);
 		}
@@ -1654,7 +1691,7 @@ struct JsonSerializer {
 		enforceJson(m_current.type == Json.Type.array, "Expected JSON array, got "~m_current.type.to!string);
 		auto old = m_current;
 		size_callback(m_current.length);
-		foreach (ent; old) {
+		foreach (ent; old.get!(Json[])) {
 			m_current = ent;
 			entry_callback();
 		}
@@ -1951,7 +1988,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.array:
 			dst.put('[');
 			bool first = true;
-			foreach (ref const Json e; json) {
+			foreach (ref const Json e; json.byValue) {
 				if( !first ) dst.put(",");
 				first = false;
 				static if (pretty) {
@@ -1972,7 +2009,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 		case Json.Type.object:
 			dst.put('{');
 			bool first = true;
-			foreach( string k, ref const Json e; json ){
+			foreach (string k, ref const Json e; json.byKeyValue) {
 				if( e.type == Json.Type.undefined ) continue;
 				if( !first ) dst.put(',');
 				first = false;
@@ -2338,8 +2375,19 @@ private void enforceJson(string file = __FILE__, size_t line = __LINE__)(bool co
 	enforceJson!(file, line)(cond, message, err_file, err_line ? *err_line : -1);
 }
 
+private auto trustedRange(R)(R range)
+{
+	static struct Rng {
+		private R range;
+		@property bool empty() @trusted { return range.empty; }
+		@property auto front() @trusted { return range.front; }
+		void popFront() @trusted { range.popFront(); }
+	}
+	return Rng(range);
+}
+
 // test for vibe.utils.DictionaryList
-unittest {
+@safe unittest {
 	import vibe.utils.dictionarylist;
 
 	static assert(isCustomSerializable!(DictionaryList!int));
@@ -2362,7 +2410,7 @@ unittest {
 }
 
 // make sure Json is usable for CTFE
-unittest {
+@safe unittest {
 	static assert(is(typeof({
 		struct Test {
 			Json object_ = Json.emptyObject;
