@@ -547,8 +547,8 @@ unittest {
 		users.insert(usr);
 
 		// find supports direct de-serialization of the returned documents
-		foreach (usr; users.find!User()) {
-			logInfo("User: %s", usr.loginName);
+		foreach (usr2; users.find!User()) {
+			logInfo("User: %s", usr2.loginName);
 		}
 
 		// the same goes for findOne
