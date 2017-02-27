@@ -430,27 +430,27 @@ alias HTTPServerErrorPageHandler = void delegate(HTTPServerRequest req, HTTPServ
 
 	Disabling unneeded features can speed up the server or reduce its memory usage.
 
-	Note that the options parseFormBody, parseJsonBody and parseMultiPartBody
-	will also drain the HTTPServerRequest.bodyReader stream whenever a request
+	Note that the options `parseFormBody`, `parseJsonBody` and `parseMultiPartBody`
+	will also drain the `HTTPServerRequest.bodyReader` stream whenever a request
 	body with form or JSON data is encountered.
 */
 enum HTTPServerOption {
 	none                      = 0,
-	/// Fills the .path, .queryString fields in the request
+	/// Fills the `.path` and `.queryString` fields in the request
 	parseURL                  = 1<<0,
-	/// Fills the .query field in the request
+	/// Fills the `.query` field in the request
 	parseQueryString          = 1<<1 | parseURL,
-	/// Fills the .form field in the request
+	/// Fills the `.form` field in the request
 	parseFormBody             = 1<<2,
-	/// Fills the .json field in the request
+	/// Fills the `.json` field in the request
 	parseJsonBody             = 1<<3,
-	/// Enables use of the .nextPart() method in the request
+	/// Fills the `.files` field of the request for "multipart/mixed" requests
 	parseMultiPartBody        = 1<<4, // todo
-	/// Fills the .cookies field in the request
+	/// Fills the `.cookies` field in the request
 	parseCookies              = 1<<5,
 	/// Distributes request processing among worker threads
 	distribute                = 1<<6,
-	/** Enables stack traces (HTTPServerErrorInfo.debugMessage).
+	/** Enables stack traces (`HTTPServerErrorInfo.debugMessage`).
 
 		Note that generating the stack traces are generally a costly
 		operation that should usually be avoided in production
@@ -459,7 +459,7 @@ enum HTTPServerOption {
 		help an attacker to abuse possible security holes.
 	*/
 	errorStackTraces          = 1<<7,
-	/// Enable port reuse in listenTCP()
+	/// Enable port reuse in `listenTCP()`
 	reusePort                 = 1<<8,
 
 	/** The default set of options.
