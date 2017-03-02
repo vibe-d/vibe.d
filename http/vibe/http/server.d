@@ -305,11 +305,11 @@ version (Have_diet_ng)
 		{
 			filters["css"] = (input, scope output) { output(filterCss(input)); };
 			filters["javascript"] = (input, scope output) { output(filterJavascript(input)); };
-			filters["markdown"] = (input, scope output) { output(filterMarkdown(cast(string)input)); };
+			filters["markdown"] = (input, scope output) { output(filterMarkdown(() @trusted { return cast(string)input; } ())); };
 			filters["htmlescape"] = (input, scope output) { output(filterHtmlescape(input)); };
 		}
 
-		static FilterCallback[string] filters;
+		static SafeFilterCallback[string] filters;
 	}
 
 
