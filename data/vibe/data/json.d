@@ -1252,7 +1252,7 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 
 	Throws a JSONException if any parsing error occurs.
 */
-Json parseJsonString(string str, string filename = null)
+Json parseJsonString(string str, string filename = null) @trusted
 {
 	auto strcopy = str;
 	int line = 0;
