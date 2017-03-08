@@ -127,9 +127,10 @@ unittest
 		body_reader = A valid $(D InputSteram) data stream consumed by the parser.
 		max_line_length = The byte-sized maximum length of lines used as boundary delimitors in Multi-Part forms.
 */
-void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
+void parseMultiPartForm(InputStream)(ref FormFields fields, ref FilePartFormFields files,
 	string content_type, InputStream body_reader, size_t max_line_length)
-@safe {
+	if (isInputStream!InputStream)
+{
 	import std.algorithm : strip;
 
 	auto pos = content_type.indexOf("boundary=");
@@ -144,7 +145,7 @@ void parseMultiPartForm(ref FormFields fields, ref FilePartFormFields files,
 alias FormFields = DictionaryList!(string, true, 16);
 alias FilePartFormFields = DictionaryList!(FilePart, true, 0);
 
-unittest
+@safe unittest
 {
 	import vibe.stream.memory;
 
@@ -216,8 +217,9 @@ struct FilePart {
 }
 
 
-private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref FilePartFormFields files, const(ubyte)[] boundary, size_t max_line_length)
-@safe {
+private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFields form, ref FilePartFormFields files, const(ubyte)[] boundary, size_t max_line_length)
+	if (isInputStream!InputStream)
+{
 	InetHeaderMap headers;
 	stream.parseRFC5322Header(headers);
 	auto pv = "Content-Disposition" in headers;
@@ -262,7 +264,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 	}
 	
 	ubyte[2] ub;
-	stream.read(ub);
+	stream.read(ub, IOMode.all);
 	if (ub == "--")
 	{
 		stream.pipe(nullSink());

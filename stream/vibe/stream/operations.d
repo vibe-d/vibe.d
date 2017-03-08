@@ -345,7 +345,7 @@ bool skipBytes(InputStream)(InputStream stream, const(ubyte)[] bytes)
 	ubyte[128] buf = void;
 	while (bytes.length) {
 		auto len = min(buf.length, bytes.length);
-		stream.read(buf[0 .. len]);
+		stream.read(buf[0 .. len], IOMode.all);
 		if (buf[0 .. len] != bytes[0 .. len]) matched = false;
 		bytes = bytes[len .. $];
 	}
@@ -370,7 +370,7 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 		if (!pm.length) { // no peek support - inefficient route
 			ubyte[2] buf = void;
 			auto l = nmarker - nmatched;
-			stream.read(buf[0 .. l]);
+			stream.read(buf[0 .. l], IOMode.all);
 			foreach (i; 0 .. l) {
 				if (buf[i] == end_marker[nmatched]) {
 					nmatched++;
@@ -395,7 +395,7 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 				stream.skip(idx+1);
 				if (nmarker == 2) {
 					ubyte[1] next;
-					stream.read(next);
+					stream.read(next, IOMode.all);
 					if (next[0] == end_marker[1])
 						return;
 					dst.put(end_marker[0]);
@@ -506,17 +506,14 @@ private @safe void readUntilGeneric(R, InputStream)(InputStream stream, ref R ds
 	enforce(false, "Reached EOF before reaching end marker.");
 }
 
-static if (!is(typeof(InputStream.init.skip(0))))
+private void skip(InputStream)(InputStream str, ulong count)
+	if (isInputStream!InputStream)
 {
-	private void skip(InputStream)(InputStream str, ulong count)
-		if (isInputStream!InputStream)
-	{
-		ubyte[156] buf = void;
-		while (count > 0) {
-			auto n = min(buf.length, count);
-			str.read(buf[0 .. n]);
-			count -= n;
-		}
+	ubyte[256] buf = void;
+	while (count > 0) {
+		auto n = min(buf.length, count);
+		str.read(buf[0 .. n], IOMode.all);
+		count -= n;
 	}
 }
 
