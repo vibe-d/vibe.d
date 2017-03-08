@@ -17,7 +17,7 @@ import std.exception;
 import std.typecons;
 
 MemoryOutputStream createMemoryOutputStream(IAllocator alloc = processAllocator())
-{
+@safe nothrow {
 	return new MemoryOutputStream(alloc, true);
 }
 
@@ -29,7 +29,7 @@ MemoryOutputStream createMemoryOutputStream(IAllocator alloc = processAllocator(
 		initial_size = The initial value that size returns - the file can grow up to data.length in size
 */
 MemoryStream createMemoryStream(ubyte[] data, bool writable = true, size_t initial_size = size_t.max)
-{
+@safe nothrow {
 	return new MemoryStream(data, writable, initial_size, true);
 }
 
@@ -38,6 +38,8 @@ MemoryStream createMemoryStream(ubyte[] data, bool writable = true, size_t initi
 	as a byte array.
 */
 final class MemoryOutputStream : OutputStream {
+@safe:
+
 	private {
 		AllocAppender!(ubyte[]) m_destination;
 	}
@@ -50,16 +52,16 @@ final class MemoryOutputStream : OutputStream {
 
 	/// private
 	this(IAllocator alloc, bool dummy)
-	{
+	nothrow {
 		m_destination = AllocAppender!(ubyte[])(alloc);
 	}
 
 	/// An array with all data written to the stream so far.
-	@property ubyte[] data() { return m_destination.data(); }
+	@property ubyte[] data() nothrow { return m_destination.data(); }
 
 	/// Resets the stream to its initial state containing no data.
 	void reset(AppenderResetMode mode = AppenderResetMode.keepData)
-	{
+	@system {
 		m_destination.reset(mode);
 	}
 
@@ -78,11 +80,11 @@ final class MemoryOutputStream : OutputStream {
 	alias write = OutputStream.write;
 
 	void flush()
-	{
+	nothrow {
 	}
 
 	void finalize()
-	{
+	nothrow {
 	}
 }
 
@@ -93,6 +95,8 @@ mixin validateOutputStream!MemoryOutputStream;
 	Provides a random access stream interface for accessing an array of bytes.
 */
 final class MemoryStream : RandomAccessStream {
+@safe:
+
 	private {
 		ubyte[] m_data;
 		size_t m_size;
@@ -109,7 +113,7 @@ final class MemoryStream : RandomAccessStream {
 
 	/// private
 	this(ubyte[] data, bool writable, size_t initial_size, bool dummy)
-	{
+	nothrow {
 		m_data = data;
 		m_size = min(initial_size, data.length);
 		m_writable = writable;
