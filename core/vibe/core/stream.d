@@ -26,7 +26,7 @@ import std.conv;
 	`nbytes` for `nbytes > 0`. If the input stream contains less than `nbytes` of data, an
 	exception is thrown.
 */
-void pipe(InputStream source, OutputStream sink, ulong nbytes = 0)
+void pipe(IS : InputStream, OS : OutputStream)(IS source, OS sink, ulong nbytes = 0)
 @safe {
 	import vibe.internal.allocator : dispose, makeArray, theAllocator;
 
@@ -39,15 +39,15 @@ void pipe(InputStream source, OutputStream sink, ulong nbytes = 0)
 			size_t chunk = min(source.leastSize, buffer.length);
 			assert(chunk > 0, "leastSize returned zero for non-empty stream.");
 			//logTrace("read pipe chunk %d", chunk);
-			source.read(buffer[0 .. chunk]);
-			sink.write(buffer[0 .. chunk]);
+			source.read(buffer[0 .. chunk], IOMode.all);
+			sink.write(buffer[0 .. chunk], IOMode.all);
 		}
 	} else {
 		while (nbytes > 0) {
 			size_t chunk = min(nbytes, buffer.length);
 			//logTrace("read pipe chunk %d", chunk);
-			source.read(buffer[0 .. chunk]);
-			sink.write(buffer[0 .. chunk]);
+			source.read(buffer[0 .. chunk], IOMode.all);
+			sink.write(buffer[0 .. chunk], IOMode.all);
 			nbytes -= chunk;
 		}
 	}
