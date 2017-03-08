@@ -1252,22 +1252,22 @@ Json parseJson(R)(ref R range, int* line = null, string filename = null)
 
 	Throws a JSONException if any parsing error occurs.
 */
-Json parseJsonString(string str, string filename = null) @trusted
-{
+Json parseJsonString(string str, string filename = null)
+@safe {
 	auto strcopy = str;
 	int line = 0;
-	auto ret = parseJson(strcopy, &line, filename);
+	auto ret = parseJson(strcopy, () @trusted { return &line; } (), filename);
 	enforceJson(strcopy.strip().length == 0, "Expected end of string after JSON value.", filename, line);
 	return ret;
 }
 
-unittest {
+@safe unittest {
 	assert(parseJsonString("null") == Json(null));
 	assert(parseJsonString("true") == Json(true));
 	assert(parseJsonString("false") == Json(false));
 	assert(parseJsonString("1") == Json(1));
 	assert(parseJsonString("17559991181826658461") == Json(BigInt(17559991181826658461UL)));
-	assert(parseJsonString("99999999999999999999999999") == Json(BigInt("99999999999999999999999999")));
+	assert(parseJsonString("99999999999999999999999999") == () @trusted { return Json(BigInt("99999999999999999999999999")); } ());
 	assert(parseJsonString("2.0") == Json(2.0));
 	assert(parseJsonString("\"test\"") == Json("test"));
 	assert(parseJsonString("[1, 2, 3]") == Json([Json(1), Json(2), Json(3)]));
@@ -1277,7 +1277,7 @@ unittest {
 	assert(json.toPrettyString() == parseJsonString(json.toPrettyString()).toPrettyString());
 }
 
-unittest {
+@safe unittest {
 	try parseJsonString(" \t\n ");
 	catch (Exception e) assert(e.msg.endsWith("JSON string contains only whitespaces."));
 	try parseJsonString(`{"a": 1`);
@@ -1350,7 +1350,7 @@ string serializeToJsonString(T)(T value)
 }
 
 ///
-unittest {
+@safe unittest {
 	struct Foo {
 		int number;
 		string str;
@@ -1389,7 +1389,7 @@ string serializeToPrettyJson(T)(T value)
 }
 
 ///
-unittest {
+@safe unittest {
 	struct Foo {
 		int number;
 		string str;
