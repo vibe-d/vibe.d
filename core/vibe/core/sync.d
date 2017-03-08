@@ -307,21 +307,28 @@ unittest { // test deferred throwing
 
 	auto mutex = new TaskMutex;
 	auto t1 = runTask({
-		scope (failure) assert(false, "No exception expected in first task!");
-		mutex.lock();
-		scope (exit) mutex.unlock();
-		sleep(20.msecs);
+		try {
+			mutex.lock();
+			scope (exit) mutex.unlock();
+			sleep(20.msecs);
+		} catch (Exception e) {
+			assert(false, "No exception expected in first task: "~e.msg);
+		}
 	});
 
 	auto t2 = runTask({
-		scope (failure) assert(false, "Only InterruptException supposed to be thrown!");
-		mutex.lock();
+		try mutex.lock();
+		catch (Exception e) {
+			assert(false, "No exception supposed to be thrown: "~e.msg);
+		}
 		scope (exit) mutex.unlock();
 		try {
 			yield();
 			assert(false, "Yield is supposed to have thrown an InterruptException.");
 		} catch (InterruptException) {
 			// as expected!
+		} catch (Exception e) {
+			assert(false, "Only InterruptException supposed to be thrown: "~e.msg);
 		}
 	});
 

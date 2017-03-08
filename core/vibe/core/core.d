@@ -1318,6 +1318,10 @@ private class CoreTask : TaskFiber {
 			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
 			logDiagnostic("Full error: %s", th.toString().sanitize());
 			s_fiberCount--;
+		} catch (Throwable th) {
+			logCritical("CoreTaskFiber was terminated unexpectedly: %s", th.msg);
+			logDiagnostic("Full error: %s", th.toString().sanitize());
+			exit(-1);
 		}
 	}
 
@@ -1432,19 +1436,13 @@ private class VibeDriverCore : DriverCore {
 		// do nothing if the task is aready scheduled to be resumed
 		if (ctask.m_queue) return;
 
-		auto uncaught_exception = () @trusted nothrow { return ctask.call!(Fiber.Rethrow.no)(); } ();
-
-		if (uncaught_exception) {
-			auto th = cast(Throwable)uncaught_exception;
-			assert(th, "Fiber returned exception object that is not a Throwable!?");
+		try () @trusted { ctask.call!(Fiber.Rethrow.yes)(); } ();
+		catch (Exception e) {
 			extrap();
 
 			assert(() @trusted nothrow { return ctask.state; } () == Fiber.State.TERM);
-			logError("Task terminated with unhandled exception: %s", th.msg);
-			logDebug("Full error: %s", () @trusted { return th.toString().sanitize; } ());
-
-			// always pass Errors on
-			if (auto err = cast(Error)th) throw err;
+			logError("Task terminated with unhandled exception: %s", e.msg);
+			logDebug("Full error: %s", () @trusted { return e.toString().sanitize; } ());
 		}
 	}
 

@@ -920,18 +920,23 @@ final class LibasyncManualEvent : ManualEvent {
 
 	private int doWait(bool INTERRUPTIBLE)(int reference_emit_count)
 	{
-		static if (!INTERRUPTIBLE) scope (failure) assert(false); // still some function calls not marked nothrow
-		assert(!amOwner());
-		acquire();
-		scope(exit) release();
-		auto ec = this.emitCount;
-		while( ec == reference_emit_count ){
-			//synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
-			static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
-			else getDriverCore().yieldForEventDeferThrow();
-			ec = this.emitCount;
+		try {
+			assert(!amOwner());
+			acquire();
+			scope(exit) release();
+			auto ec = this.emitCount;
+			while( ec == reference_emit_count ){
+				//synchronized(m_mutex) logTrace("Waiting for event with signal count: " ~ ms_signals.length.to!string);
+				static if (INTERRUPTIBLE) getDriverCore().yieldForEvent();
+				else getDriverCore().yieldForEventDeferThrow();
+				ec = this.emitCount;
+			}
+			return ec;
+		} catch (Exception e) {
+			static if (!INTERRUPTIBLE)
+				assert(false, e.msg); // still some function calls not marked nothrow
+			else throw e;
 		}
-		return ec;
 	}
 
 	private int doWait(bool INTERRUPTIBLE)(Duration timeout, int reference_emit_count)
