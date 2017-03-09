@@ -94,6 +94,10 @@ before_build:
             $env:compilersetupargs = "x86";
             $env:Darch = "x86";
           }
+        elseif($env:arch -eq "x86_mscoff"){
+            $env:compilersetupargs = "x86";
+            $env:Darch = "x86_mscoff";
+        }
         elseif($env:arch -eq "x64"){
             $env:compilersetupargs = "amd64";
             $env:Darch = "x86_64";
