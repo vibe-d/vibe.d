@@ -75,7 +75,11 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 				throw new HTTPStatusException(HTTPStatus.methodNotAllowed);
 			}
 
-			auto ccon = connectTCP(settings.destinationHost, settings.destinationPort);
+			TCPConnection ccon;
+			try ccon = connectTCP(settings.destinationHost, settings.destinationPort);
+			catch (Exception e) {
+				throw new HTTPStatusException(HTTPStatus.badGateway, "Connection to upstream server failed: "~e.msg);
+			}
 			auto scon = res.connectProxy();
 			assert (scon);
 
@@ -181,7 +185,10 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			else cres.bodyReader.pipe(res.bodyWriter);
 		}
 
-		requestHTTP(rurl, &setupClientRequest, &handleClientResponse);
+		try requestHTTP(rurl, &setupClientRequest, &handleClientResponse);
+		catch (Exception e) {
+			throw new HTTPStatusException(HTTPStatus.badGateway, "Connection to upstream server failed: "~e.msg);
+		}
 	}
 
 	return &handleRequest;
