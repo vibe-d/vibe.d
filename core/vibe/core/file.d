@@ -138,9 +138,9 @@ FileStream createTempFile(string suffix = null)
 		import std.conv : to;
 		string tmpname;
 		() @trusted {
-			char[L_tmpnam] tmp;
-			tmpnam(tmp.ptr);
-			tmpname = to!string(tmp.ptr);
+			auto fn = tmpnam(null);
+			enforce(fn !is null, "Failed to generate temporary name.");
+			tmpname = to!string(fn);
 		} ();
 		if( tmpname.startsWith("\\") ) tmpname = tmpname[1 .. $];
 		tmpname ~= suffix;
