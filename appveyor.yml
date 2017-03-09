@@ -2,12 +2,24 @@ platform: x64
 environment:
  matrix:
   - DC: dmd
-    DVersion: 2.073.0
+    DVersion: 2.073.1
     arch: x64
     config: win32
   - DC: dmd
-    DVersion: 2.073.0
+    DVersion: 2.073.1
     arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86_mscoff
+    config: win32
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86
+    config: vibe-core
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86_mscoff
     config: vibe-core
   - DC: dmd
     DVersion: 2.072.2
