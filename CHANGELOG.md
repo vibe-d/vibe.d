@@ -1,13 +1,14 @@
 ﻿Changelog
 =========
 
-v0.8.0 - 2017-02-
+v0.8.0 - 2017-03-
 --------------------
 
 The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the core module that is currently in beta ([vibe-core][vibe-core]). The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
 
 ### Features and improvements ###
 
+- Compiles on DMD 2.070.2 up to DMD 2.073.2, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
 - Global API changes
   - Split up the library into fully separate sub packages/folders
   - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
@@ -26,21 +27,26 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
   - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
   - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
+  - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [pull #1550][issue1550]
+  - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
+  - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`)
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
 - The REST interface server now responds with prettified JSON if built in debug mode
-- Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
 - Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
 - Enabled minimal delegate syntax for `URLRouter` (e.g. `URLRouter.get("/", (req, res) { ... });`) - [issue #1668][issue1668]
 - Added serialization support for string based enum types as associative array keys (by Tomoya Tanjo) - [issue #1660][issue1660], [pull #1663][issue1663]
+- Added `DictionaryList!T.byKeyValue` to replace `opApply` based iteration
+- Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
+- Updated the Windows OpenSSL binaries to 1.0.2k
 
 ### Bug fixes ###
 
 - Fixed compile error for deserializing optional class/struct fields
 - Fixed GET requests in the REST client to not send a body
-- Fixed REST request responses that return void to not send a body
+- Fixed REST request responses that return void to send an empty body (see also [issue #1682](issue1682))
 - Fixed a possible idle loop in `Task.join()` if called from outside of an event loop
 - Fixed `TaskPipe.waitForData` to actually time out if a timeout value was passed - [issue #1605][issue1605]
 - Fixed a compilation error for GDC master - [issue #1602][issue1602]
@@ -52,14 +58,21 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 - Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
-- Fixed a missing `toRedis` convertion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
+- Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
+- Fixed `createTempFile` on Windows
+- Fixed the HTTP reverse proxy to send 502 (bad gateway) instead of 500 (internal server error) for upstream errors
 
+[issue1449]: https://github.com/rejectedsoftware/vibe.d/issues/1449
+[issue1550]: https://github.com/rejectedsoftware/vibe.d/issues/1550
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
 [issue1663]: https://github.com/rejectedsoftware/vibe.d/issues/1663
 [issue1668]: https://github.com/rejectedsoftware/vibe.d/issues/1668
 [issue1670]: https://github.com/rejectedsoftware/vibe.d/issues/1670
 [issue1675]: https://github.com/rejectedsoftware/vibe.d/issues/1675
+[issue1682]: https://github.com/rejectedsoftware/vibe.d/issues/1682
+[issue1687]: https://github.com/rejectedsoftware/vibe.d/issues/1687
+[issue1688]: https://github.com/rejectedsoftware/vibe.d/issues/1688
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
@@ -72,16 +85,17 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 ### Features and improvements ###
 
 - Compiles on DMD 2.068.2 up to DMD 2.073.0
+- HTTP server
+  - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
+  - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
+  - `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
+  - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
+  - Added `HTTPServerResponse.writePrettyJsonBody`
+  - Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
-- Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
-- The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
-- `HTTPServerResponse.writeJsonBody` only sets a default content type header if none was already set
-- Added `HTTPServerResponse.writePrettyJsonBody`
 - The REST interface server now responds with prettified JSON if built in debug mode
-- Diet templates are rendered as pretty HTML by default if diet-ng is used (can be disabled using `VibeOutputCompactHTML`)
 - Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
-- `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
 
 ### Bug fixes ###
 
@@ -99,7 +113,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed a possible crash in `RedisSubscriber.blisten` due to a faulty shutdown procedure
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 - Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
-- Fixed a missing `toRedis` convertion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
+- Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
