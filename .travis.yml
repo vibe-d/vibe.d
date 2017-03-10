@@ -10,7 +10,7 @@ d:
   # this way the overall test time gets cut down (GDC/LDC are a lot
   # slower tham DMD, so they should be started early), while still
   # catching most DMD version related build failures early
-  - dmd-2.073.0
+  - dmd-2.073.2
   - dmd-2.068.2
   - ldc-1.0.0
   - ldc-1.1.0
@@ -25,8 +25,6 @@ env:
 
 matrix:
   exclude:
-    - d: ldc-0.17.0
-      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: ldc-1.0.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
   allow_failures:
