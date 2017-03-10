@@ -72,19 +72,17 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1675]: https://github.com/rejectedsoftware/vibe.d/issues/1675
 [issue1682]: https://github.com/rejectedsoftware/vibe.d/issues/1682
 [issue1687]: https://github.com/rejectedsoftware/vibe.d/issues/1687
-[issue1688]: https://github.com/rejectedsoftware/vibe.d/issues/1688
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
-
-v0.7.31 - 2017-02-
+v0.7.31 - 2017-03-
 --------------------
 
 This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bugfixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
 
 ### Features and improvements ###
 
-- Compiles on DMD 2.068.2 up to DMD 2.073.0
+- Compiles on DMD 2.068.2 up to DMD 2.073.2
 - HTTP server
   - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
   - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
@@ -96,6 +94,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - The REST interface server now responds with prettified JSON if built in debug mode
 - Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
+- Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
 
 ### Bug fixes ###
 
@@ -129,6 +128,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1648]: https://github.com/rejectedsoftware/vibe.d/issues/1648
 [issue1655]: https://github.com/rejectedsoftware/vibe.d/issues/1655
 [issue1659]: https://github.com/rejectedsoftware/vibe.d/issues/1659
+[issue1688]: https://github.com/rejectedsoftware/vibe.d/issues/1688
 
 
 v0.7.30 - 2016-10-31
