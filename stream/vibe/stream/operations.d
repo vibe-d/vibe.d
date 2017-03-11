@@ -230,8 +230,6 @@ ubyte[] readAll(InputStream)(InputStream stream, size_t max_bytes = size_t.max, 
 	reserve_bytes = max(reserve_bytes, min(max_bytes, stream.leastSize));
 	if (reserve_bytes) dst.reserve(reserve_bytes);
 
-	auto buffer = new ubyte[64*1024];
-	scope (exit) () @trusted { delete buffer; } ();
 	size_t n = 0;
 	while (!stream.empty) {
 		size_t chunk = min(stream.leastSize, size_t.max);

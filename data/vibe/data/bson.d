@@ -457,8 +457,8 @@ struct Bson {
 		switch( m_type ){
 			default: enforce(false, "Bson objects of type "~to!string(m_type)~" do not have a length field."); break;
 			case Type.string, Type.code, Type.symbol: return (cast(string)this).length;
-			case Type.array: return (cast(const(Bson)[])this).length; // TODO: optimize!
-			case Type.object: return (cast(const(Bson)[string])this).length; // TODO: optimize!
+			case Type.array: return byValue.walkLength;
+			case Type.object: return byValue.walkLength;
 			case Type.binData: assert(false); //return (cast(BsonBinData)this).length; break;
 		}
 		assert(false);
@@ -486,12 +486,12 @@ struct Bson {
 			case Bson.Type.string: return Json(get!string());
 			case Bson.Type.object:
 				Json[string] ret;
-				foreach( k, v; get!(Bson[string])() )
+				foreach (k, v; this.byKeyValue)
 					ret[k] = v.toJson();
 				return Json(ret);
 			case Bson.Type.array:
 				auto ret = new Json[this.length];
-				foreach( i, v; get!(Bson[])() )
+				foreach (i, v; this.byIndexValue)
 					ret[i] = v.toJson();
 				return Json(ret);
 			case Bson.Type.binData: return Json(() @trusted { return cast(string)Base64.encode(get!BsonBinData.rawData); } ());

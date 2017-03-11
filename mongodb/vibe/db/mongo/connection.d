@@ -325,7 +325,7 @@ final class MongoConnection {
 				throw new MongoDriverException("Calling listDatabases failed.");
 		}
 
-		MongoDBInfo toInfo(const(Bson) db_doc) {
+		static MongoDBInfo toInfo(const(Bson) db_doc) {
 			return MongoDBInfo(
 				db_doc["name"].get!string,
 				db_doc["sizeOnDisk"].get!double,
@@ -333,17 +333,17 @@ final class MongoConnection {
 			);
 		}
 
-		typeof((const(Bson)[]).init.map!toInfo) result;
+		Bson result;
 		void on_doc(size_t idx, ref Bson doc) {
 			if (doc["ok"].get!double != 1.0)
 				throw new MongoAuthException("listDatabases failed.");
 
-			result = doc["databases"].get!(const(Bson)[]).map!toInfo;
+			result = doc["databases"];
 		}
 
 		query!Bson(cn, QueryFlags.None, 0, -1, cmd, Bson(null), &on_msg, &on_doc);
 
-		return result;
+		return result.byValue.map!toInfo;
 	}
 
 	private int recvReply(T)(int reqid, scope ReplyDelegate on_msg, scope DocDelegate!T on_doc)
@@ -377,13 +377,15 @@ final class MongoConnection {
 		}
 
 		on_msg(cursor, flags, start, numret);
+		static if (hasIndirections!T || is(T == Bson))
+			auto buf = new ubyte[msglen - (m_bytesRead - bytes_read)];
 		foreach (i; 0 .. cast(size_t)numret) {
 			// TODO: directly deserialize from the wire
 			static if (!hasIndirections!T && !is(T == Bson)) {
 				ubyte[256] buf = void;
 				auto bson = () @trusted { return recvBson(buf); } ();
 			} else {
-				auto bson = () @trusted { return recvBson(null); } ();
+				auto bson = () @trusted { return recvBson(buf); } ();
 			}
 
 			static if (is(T == Bson)) on_doc(i, bson);
@@ -428,14 +430,18 @@ final class MongoConnection {
 
 	private int recvInt() { ubyte[int.sizeof] ret; recv(ret); return fromBsonData!int(ret); }
 	private long recvLong() { ubyte[long.sizeof] ret; recv(ret); return fromBsonData!long(ret); }
-	private Bson recvBson(ubyte[] buf)
+	private Bson recvBson(ref ubyte[] buf)
 	@system {
 		int len = recvInt();
-		if (len > buf.length) buf = new ubyte[len];
-		else buf = buf[0 .. len];
-		buf[0 .. 4] = toBsonData(len)[];
-		recv(buf[4 .. $]);
-		return Bson(Bson.Type.Object, cast(immutable)buf);
+		ubyte[] dst;
+		if (len > buf.length) dst = new ubyte[len];
+		else {
+			dst = buf[0 .. len];
+			buf = buf[len .. $];
+		}
+		dst[0 .. 4] = toBsonData(len)[];
+		recv(dst[4 .. $]);
+		return Bson(Bson.Type.Object, cast(immutable)dst);
 	}
 	private void recv(ubyte[] dst) { enforce(m_stream); m_stream.read(dst); m_bytesRead += dst.length; }
 

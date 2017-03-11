@@ -384,9 +384,8 @@ struct MongoCollection {
 
 		enforce(res["ok"].get!double != 0, "Distinct query failed: "~res["errmsg"].opt!string);
 
-		// TODO: avoid dynamic array allocation
-		static if (is(R == Bson)) return res["values"].get!(Bson[]);
-		else return res["values"].get!(Bson[]).map!(b => deserializeBson!R(b));
+		static if (is(R == Bson)) return res["values"].byValue;
+		else return res["values"].byValue.map!(b => deserializeBson!R(b));
 	}
 
 	///
