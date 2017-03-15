@@ -750,10 +750,10 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 			static if (hasPolicyAttributeL!(AsArrayAttribute, Policy, ATTRIBUTES)) {
 				size_t idx = 0;
 				ser.readArray!Traits((sz){}, {
-					static if (hasSerializableFields!(T, Policy)) {
+					static if (hasDeserializableFields!(T, Policy)) {
 						switch (idx++) {
 							default: break;
-							foreach (i, FD; getExpandedFieldsData!(T, SerializableFields!(T, Policy))) {
+							foreach (i, FD; getExpandedFieldsData!(T, DeserializableFields!(T, Policy))) {
 								enum mname = FD[0];
 								enum msindex = FD[1];
 								alias MT = TypeTuple!(__traits(getMember, T, mname));
@@ -782,10 +782,10 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				});
 			} else {
 				ser.readDictionary!Traits((name) {
-					static if (hasSerializableFields!(T, Policy)) {
+					static if (hasDeserializableFields!(T, Policy)) {
 						switch (name) {
 							default: break;
-							foreach (i, mname; SerializableFields!(T, Policy)) {
+							foreach (i, mname; DeserializableFields!(T, Policy)) {
 								alias TM = TypeTuple!(typeof(__traits(getMember, T, mname)));
 								alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 								alias STraits = SubTraits!(Traits, TM, TA);
@@ -809,7 +809,8 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					}
 				});
 			}
-			foreach (i, mname; SerializableFields!(T, Policy))
+
+			foreach (i, mname; DeserializableFields!(T, Policy))
 				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
 					enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
 				else {
@@ -864,7 +865,7 @@ unittest {
 
 
 /**
-	Attribute marking a field as optional during deserialization.
+	Attribute marking a field as optional during de/serialization.
 	It is possible to fine tune the direction of attribute:
 		@optional!In - it is optional only during deserialization
 		@optional!Out - it is optional only during serialization
@@ -881,6 +882,7 @@ unittest {
 	}
 	else return OptionalAttribute!Policy(OptionalDirection.inout_);
 }
+
 ///
 unittest {
 	struct Test {
@@ -894,17 +896,33 @@ unittest {
 
 /**
 	Attribute for marking non-serialized fields.
+	It is possible to fine tune the direction of attribute:
+		@ignore!In - it is ignored only during deserialization
+		@ignore!Out - it is ignored only during serialization
+		@ignore!InOut - ignored both way - default
 */
-@property IgnoreAttribute!Policy ignore(alias Policy = DefaultPolicy)()
+@property IgnoreAttribute!Policy ignore(D = InOut, alias Policy = DefaultPolicy)()
+	if (is(D == In) || is(D == Out) || is(D == InOut))
 {
-	return IgnoreAttribute!Policy();
+	static if (is(D == In)) {
+		return IgnoreAttribute!Policy(IgnoreDirection.in_);
+	}
+	else static if (is(D == Out)) {
+		return IgnoreAttribute!Policy(IgnoreDirection.out_);
+	}
+	else return IgnoreAttribute!Policy(IgnoreDirection.inout_);
 }
+
 ///
 unittest {
 	struct Test {
-		// is neither serialized not deserialized
-		@ignore int screenSize;
+		@ignore int screenSize; // is neither serialized not deserialized
+		@ignore!In int toDeserialize; // is only used when serializing
+		@ignore!Out int toSerialize; // is only used when deserializing
+		@ignore!InOut int both; // is neither serialized not deserialized
 	}
+
+	assert(ignore.direction == IgnoreDirection.inout_);
 }
 ///
 unittest {
@@ -915,7 +933,7 @@ unittest {
 	struct Test {
 		// not (de)serialized for serializeWithPolicy!(Test, CustomPolicy)
 		// but for other policies or when serialized without a policy
-		@ignore!CustomPolicy int screenSize;
+		@ignore!(InOut,CustomPolicy) int screenSize;
 	}
 }
 
@@ -997,6 +1015,9 @@ enum OptionalDirection
 	inout_ = in_ | out_
 }
 
+///
+alias IgnoreDirection = OptionalDirection;
+
 /// Aliases to simplify setting the direction of optional attribute
 alias In = Flag!"In";
 alias Out = Flag!"Out";
@@ -1007,7 +1028,7 @@ struct NameAttribute(alias POLICY) { alias Policy = POLICY; string name; }
 /// ditto
 struct OptionalAttribute(alias POLICY) { alias Policy = POLICY; OptionalDirection direction = OptionalDirection.inout_; }
 /// ditto
-struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; }
+struct IgnoreAttribute(alias POLICY) { alias Policy = POLICY; IgnoreDirection direction = IgnoreDirection.inout_; }
 /// ditto
 struct ByNameAttribute(alias POLICY) { alias Policy = POLICY; }
 /// ditto
@@ -1332,17 +1353,27 @@ private template hasSerializableFields(T, alias POLICY, size_t idx = 0)
 	} else enum hasSerializableFields = false;*/
 }
 
-private template SerializableFields(COMPOSITE, alias POLICY)
+private template hasDeserializableFields(T, alias POLICY, size_t idx = 0)
 {
-	alias SerializableFields = FilterSerializableFields!(COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
+	enum hasDeserializableFields = DeserializableFields!(T, POLICY).length > 0;
 }
 
-private template FilterSerializableFields(COMPOSITE, alias POLICY, FIELDS...)
+private template SerializableFields(COMPOSITE, alias POLICY)
+{
+	alias SerializableFields = FilterSerializableFields!(true, COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
+}
+
+private template DeserializableFields(COMPOSITE, alias POLICY)
+{
+	alias DeserializableFields = FilterSerializableFields!(false, COMPOSITE, POLICY, __traits(allMembers, COMPOSITE));
+}
+
+private template FilterSerializableFields(bool toSerialize, COMPOSITE, alias POLICY, FIELDS...)
 {
 	static if (FIELDS.length > 1) {
 		alias FilterSerializableFields = TypeTuple!(
-			FilterSerializableFields!(COMPOSITE, POLICY, FIELDS[0 .. $/2]),
-			FilterSerializableFields!(COMPOSITE, POLICY, FIELDS[$/2 .. $]));
+			FilterSerializableFields!(toSerialize, COMPOSITE, POLICY, FIELDS[0 .. $/2]),
+			FilterSerializableFields!(toSerialize, COMPOSITE, POLICY, FIELDS[$/2 .. $]));
 	} else static if (FIELDS.length == 1) {
 		alias T = COMPOSITE;
 		enum mname = FIELDS[0];
@@ -1351,7 +1382,9 @@ private template FilterSerializableFields(COMPOSITE, alias POLICY, FIELDS...)
 			static if (Tup.length != 1) {
 				alias FilterSerializableFields = TypeTuple!(mname);
 			} else {
-				static if (!hasPolicyAttribute!(IgnoreAttribute, POLICY, __traits(getMember, T, mname)))
+				enum ig = getPolicyAttribute!(T, mname, IgnoreAttribute, POLICY)(IgnoreAttribute!DefaultPolicy(IgnoreDirection.req)).direction;
+				static if ((toSerialize && ((ig & IgnoreDirection.out_) != IgnoreDirection.out_))
+					|| (!toSerialize && ((ig & IgnoreDirection.in_) != IgnoreDirection.in_)))
 				{
 					alias FilterSerializableFields = TypeTuple!(mname);
 				} else alias FilterSerializableFields = TypeTuple!();
@@ -1675,6 +1708,9 @@ unittest { // testing the various UDAs
 	static struct S {
 		@byName E e;
 		@ignore int i;
+		@ignore!In int igin;
+		@ignore!Out int igout;
+		@ignore!InOut int iginout;
 		@optional float f;
 		@optional Nullable!int ni;
 		@optional!In int ii;
@@ -1683,18 +1719,19 @@ unittest { // testing the various UDAs
 		@optional Nullable!float nf;
 	}
 	enum Sm = S.mangleof;
-	auto s = S(E.world, 42, 1.0f, Nullable!int(1));
+	auto s = S(E.world, 42, 5, 4, 3, 1.0f, Nullable!int(1));
 	enum Nm = (Nullable!int).mangleof;
 	assert(serialize!TestSerializer(s) ==
-		"D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,ii)(V(i)(0))DE(i,ii)}D("~Sm~")");
+		"D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(i,igin)(V(i)(5))DE(i,igin)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,ii)(V(i)(0))DE(i,ii)}D("~Sm~")");
 
-	enum s_ser = "D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,io)(V(i)(2))DE(i,io)}D("~Sm~")";
+	enum s_ser = "D("~Sm~"){DE("~Em~",e)(V(Aya)(world))DE("~Em~",e)DE(i,igout)(V(i)(7))DE(i,igout)DE(f,f)(V(f)(1))DE(f,f)DE("~Nm~",ni)(V(i)(1))DE("~Nm~",ni)DE(i,io)(V(i)(2))DE(i,io)}D("~Sm~")";
 	auto ds = deserialize!(TestSerializer, S)(s_ser);
 	assert(ds.e == s.e);
 	assert(ds.f == s.f);
 	assert(ds.ni == s.ni);
 	assert(ds.ii == 0);
 	assert(ds.io == 2);
+	assert(ds.igout == 7);
 }
 
 unittest { // custom serialization support
@@ -1859,8 +1896,8 @@ unittest { // test BitFlags serialization
 
 	struct T {
 		@ignore int a = 5;
-		@ignore!P1 @ignore!P2 int b = 6;
-		@ignore!P1 c = 7;
+		@ignore!(InOut,P1) @ignore!(InOut,P2) int b = 6;
+		@ignore!(InOut,P1) c = 7;
 		int d = 8;
 	}
 
