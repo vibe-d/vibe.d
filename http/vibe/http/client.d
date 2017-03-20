@@ -724,7 +724,7 @@ final class HTTPClientRequest : HTTPRequest {
 	*/
 	void writeJsonBody(T)(T data, bool allow_chunked = false)
 	{
-		import vibe.stream.wrapper;
+		import vibe.stream.wrapper : streamOutputRange;
 
 		headers["Content-Type"] = "application/json";
 
@@ -741,6 +741,25 @@ final class HTTPClientRequest : HTTPRequest {
 		() @trusted { serializeToJson(&rng, data); } ();
 		rng.flush();
 		finalize();
+	}
+
+	/** Writes the response body as form data.
+	*/
+	void writeFormBody(T)(T key_value_map)
+	{
+		import vibe.inet.webform : formEncode;
+		import vibe.stream.wrapper : streamOutputRange;
+
+		headers["Content-Type"] = "application/x-www-form-urlencoded";
+		auto dst = streamOutputRange(bodyWriter);
+		() @trusted { return &dst; } ().formEncode(key_value_map);
+	}
+
+	///
+	unittest {
+		void test(HTTPClientRequest req) {
+			req.writeFormBody(["foo": "bar"]);
+		}
 	}
 
 	void writePart(MultiPart part)
