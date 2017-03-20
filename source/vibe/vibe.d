@@ -44,6 +44,7 @@ public import vibe.stream.counting;
 public import vibe.stream.memory;
 public import vibe.stream.operations;
 public import vibe.stream.tls;
+public import vibe.stream.wrapper;
 public import vibe.stream.zlib;
 public import vibe.templ.diet;
 public import vibe.templ.utils;
