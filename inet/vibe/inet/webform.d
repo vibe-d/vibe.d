@@ -285,8 +285,8 @@ private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFie
 		map	= An iterable key-value map iterable with $(D foreach(string key, string value; map)).
 		sep	= A valid form separator, common values are '&' or ';'
 */
-void formEncode(R, T)(ref R dst, T map, char sep = '&')
-	if (isFormMap!T)
+void formEncode(R, T)(auto ref R dst, T map, char sep = '&')
+	if (isFormMap!T && isOutputRange!(R, char))
 {
 	formEncodeImpl(dst, map, sep, true);
 }
@@ -330,8 +330,8 @@ string formEncode(T)(T map, char sep = '&')
 		dst	= The destination $(D OutputRange) where the resulting string must be written to.
 		map	= An iterable key-value map iterable with $(D foreach(string key, string value; map)).
 */
-void urlEncode(R, T)(ref R dst, T map)
-	if (isFormMap!T)
+void urlEncode(R, T)(auto ref R dst, T map)
+	if (isFormMap!T && isOutputRange!(R, char))
 {
 	formEncodeImpl(dst, map, "&", false);
 }
@@ -434,7 +434,7 @@ private string formEncodeImpl(T)(T map, char sep, bool form_encode)
 	return dst.data;
 }
 
-private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
+private void formEncodeImpl(R, T)(auto ref R dst, T map, char sep, bool form_encode)
 	if (isOutputRange!(R, string) && isStringMap!T)
 {
 	bool flag;
@@ -450,7 +450,7 @@ private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
 	}
 }
 
-private void formEncodeImpl(R, T)(ref R dst, T map, char sep, bool form_encode)
+private void formEncodeImpl(R, T)(auto ref R dst, T map, char sep, bool form_encode)
 	if (isOutputRange!(R, string) && isJsonLike!T)
 {
 	bool flag;
