@@ -383,7 +383,8 @@ final class MongoConnection {
 			// TODO: directly deserialize from the wire
 			static if (!hasIndirections!T && !is(T == Bson)) {
 				ubyte[256] buf = void;
-				auto bson = () @trusted { return recvBson(buf); } ();
+				ubyte[] bufsl = buf;
+				auto bson = () @trusted { return recvBson(bufsl); } ();
 			} else {
 				auto bson = () @trusted { return recvBson(buf); } ();
 			}
