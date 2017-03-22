@@ -378,7 +378,7 @@ final class MongoConnection {
 
 		on_msg(cursor, flags, start, numret);
 		static if (hasIndirections!T || is(T == Bson))
-			auto buf = new ubyte[msglen - (m_bytesRead - bytes_read)];
+			auto buf = new ubyte[msglen - cast(size_t)(m_bytesRead - bytes_read)];
 		foreach (i; 0 .. cast(size_t)numret) {
 			// TODO: directly deserialize from the wire
 			static if (!hasIndirections!T && !is(T == Bson)) {
