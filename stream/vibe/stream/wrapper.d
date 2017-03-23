@@ -319,6 +319,11 @@ struct StreamOutputRange(OutputStream)
 		m_fill = 0;
 	}
 
+	void drop()
+	{
+		m_fill = 0;
+	}
+
 	void put(ubyte bt)
 	{
 		m_data[m_fill++] = bt;
