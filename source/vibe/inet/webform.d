@@ -240,7 +240,7 @@ private bool parseMultipartFormPart(InputStream stream, ref FormFields form, ref
 	if (filename.length > 0) {
 		FilePart fp;
 		fp.headers = headers;
-		fp.filename = PathEntry(filename);
+		fp.filename = PathEntry.validateFilename(filename);
 
 		auto file = createTempFile();
 		fp.tempPath = file.path;
