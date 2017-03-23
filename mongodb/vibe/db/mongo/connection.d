@@ -198,15 +198,19 @@ final class MongoConnection {
 
 	void disconnect()
 	{
-		if (m_stream) {
-			m_stream.finalize();
-			m_stream = InterfaceProxy!Stream.init;
-		}
-
 		if (m_conn) {
+			if (m_stream && m_conn.connected) {
+				m_outRange.flush();
+
+				m_stream.finalize();
+				m_stream = InterfaceProxy!Stream.init;
+			}
+
 			m_conn.close();
 			m_conn = TCPConnection.init;
 		}
+
+		m_outRange.drop();
 	}
 
 	@property bool connected() const { return m_conn && m_conn.connected; }
