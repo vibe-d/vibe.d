@@ -63,7 +63,7 @@ bool readOption(T)(string names, T* pvalue, string help_text)
 	if (g_haveConfig) {
 		foreach (name; info.names)
 			if (auto pv = name in g_config) {
-				*pvalue = pv.to!T;
+				*pvalue = deserializeJson!T(*pv);
 				return true;
 			}
 	}
