@@ -1130,6 +1130,11 @@ final class HTTPServerResponse : HTTPResponse {
 			writeHeader();
 			m_countingWriter.writeLimit = (*pcl).to!ulong;
 			m_bodyWriter = m_countingWriter;
+		} else if (httpVersion <= HTTPVersion.HTTP_1_0) {
+			if ("Connection" in headers)
+				headers.remove("Connection"); // default to "close"
+			writeHeader();
+			m_bodyWriter = m_conn;
 		} else {
 			headers["Transfer-Encoding"] = "chunked";
 			writeHeader();
