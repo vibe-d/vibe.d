@@ -1,0 +1,139 @@
+platform: x64
+environment:
+ matrix:
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x64
+    config: win32
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86_mscoff
+    config: win32
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86
+    config: libevent
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86
+    config: libasync
+  - DC: dmd
+    DVersion: 2.073.1
+    arch: x86_mscoff
+    config: win32
+  - DC: dmd
+    DVersion: 2.072.2
+    arch: x64
+    config: win32
+  - DC: dmd
+    DVersion: 2.071.1
+    arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: 2.070.0
+    arch: x64
+    config: win32
+  - DC: ldc
+    DVersion: 1.1.0
+    arch: x64
+    config: win32
+  - DC: ldc
+    DVersion: 1.0.0
+    arch: x64
+    config: win32
+
+skip_tags: false
+branches:
+  only:
+    - master
+
+install:
+  - ps: function SetUpDCompiler
+        {
+            if($env:DC -eq "dmd"){
+              if($env:arch -eq "x86"){
+                $env:DConf = "m32";
+              }
+              elseif($env:arch -eq "x64"){
+                $env:DConf = "m64";
+              }
+              echo "downloading ...";
+              $env:toolchain = "msvc";
+              $version = $env:DVersion;
+              Invoke-WebRequest "http://downloads.dlang.org/releases/2.x/$($version)/dmd.$($version).windows.7z" -OutFile "c:\dmd.7z";
+              echo "finished.";
+              pushd c:\\;
+              7z x dmd.7z > $null;
+              popd;
+            }
+            elseif($env:DC -eq "ldc"){
+              echo "downloading ...";
+              if($env:arch -eq "x86"){
+                $env:DConf = "m32";
+              }
+              elseif($env:arch -eq "x64"){
+                $env:DConf = "m64";
+              }
+              $env:toolchain = "msvc";
+              $version = $env:DVersion;
+              Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-win64-msvc.zip" -OutFile "c:\ldc.zip";
+              echo "finished.";
+              pushd c:\\;
+              7z x ldc.zip > $null;
+              popd;
+            }
+        }
+  - ps: SetUpDCompiler
+  - powershell -Command Invoke-WebRequest https://code.dlang.org/files/dub-1.2.1-windows-x86.zip -OutFile dub.zip
+  - 7z x dub.zip -odub > nul
+  - set PATH=%CD%\%binpath%;%CD%\dub;%PATH%
+  - dub --version
+
+before_build:
+  - ps: if($env:arch -eq "x86"){
+            $env:compilersetupargs = "x86";
+            $env:Darch = "x86";
+          }
+        elseif($env:arch -eq "x86_mscoff"){
+            $env:compilersetupargs = "x86";
+            $env:Darch = "x86_mscoff";
+        }
+        elseif($env:arch -eq "x64"){
+            $env:compilersetupargs = "amd64";
+            $env:Darch = "x86_64";
+        }
+  - ps : if($env:DC -eq "dmd"){
+           $env:PATH += ";C:\dmd2\windows\bin;";
+         }
+         elseif($env:DC -eq "ldc"){
+           $version = $env:DVersion;
+           $env:PATH += ";C:\ldc2-$($version)-win64-msvc\bin";
+           $env:DC = "ldc2";
+         }
+  - ps: $env:compilersetup = "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall";
+  - '"%compilersetup%" %compilersetupargs%'
+
+build_script:
+ - echo dummy build script - don't remove me
+
+test_script:
+ - echo %PLATFORM%
+ - echo %Darch%
+ - echo %DC%
+ - echo %PATH%
+ - '%DC% --version'
+
+ - dub test :utils --arch=%Darch% --compiler=%DC%
+ - dub test :data --arch=%Darch% --compiler=%DC%
+ - dub test :core --arch=%Darch% --compiler=%DC% --config=%CONFIG%
+ - dub test :mail --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :diet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :http --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :mongodb --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :redis --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :web --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - echo TODO - run the test suite
