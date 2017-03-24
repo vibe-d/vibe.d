@@ -588,24 +588,6 @@ void runTests()
 			auto answer = api.postConcatBody(Example6API.FooType(42, "fortySomething", 51.42));
 			assert(answer == expected);
 		}
-
-		// suppling the whole body (default parameter)
-		{
-			// First we make sure parameters are transmitted via query.
-			auto res = requestHTTP("http://127.0.0.1:8080/example6_api/concat_body2",
-								   (scope r) {
-							   import vibe.data.json;
-							   r.method = HTTPMethod.POST;
-							   Json obj = serializeToJson(Example6API.FooType(42, "fortySomething", 51.42));
-							   r.writeJsonBody(obj);
-						   });
-
-			assert(res.statusCode == 200);
-			assert(res.bodyReader.readAllUTF8() == `"`~expected~`"`);
-			// Then we check that both can communicate together.
-			auto answer = api.postConcatBody2(Example6API.FooType(42, "fortySomething", 51.42));
-			assert(answer == expected);
-		}
 	}
 }
 
