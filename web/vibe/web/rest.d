@@ -1050,12 +1050,12 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			} else static if (sparam.kind == ParameterKind.query) {
 				if (auto pv = fieldname in req.query)
 					v = fromRestString!PT(*pv);
+			} else static if (sparam.kind == ParameterKind.wholeBody) {
+				try v = deserializeJson!PT(req.json);
+				catch (JSONException e) enforceBadRequest(false, e.msg);
 			} else static if (sparam.kind == ParameterKind.body_) {
 				try {
-					// for @bodyParam(<name>) the entire body should be serialized
-					if (fieldname.length == 0)
-						v = deserializeJson!PT(req.json);
-					else if (auto pv = fieldname in req.json)
+					if (auto pv = fieldname in req.json)
 						v = deserializeJson!PT(*pv);
 				} catch (JSONException e)
 					enforceBadRequest(false, e.msg);
@@ -1335,12 +1335,10 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		auto fieldname = route.parameters[i].fieldName;
 		static if (sparam.kind == ParameterKind.query) {
 			addQueryParam!i(fieldname);
+		} else static if (sparam.kind == ParameterKind.wholeBody) {
+			jsonBody = serializeToJson(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.body_) {
-			// for @bodyParam(<name>) the entire body should be serialized
-			if (fieldname.length == 0)
-				jsonBody = serializeToJson(ARGS[i]);
-			else
-				jsonBody[fieldname] = serializeToJson(ARGS[i]);
+			jsonBody[fieldname] = serializeToJson(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.header) {
 			// Don't send 'out' parameter, as they should be default init anyway and it might confuse some server
 			static if (sparam.isIn) {
