@@ -39,6 +39,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed detection of non-keep-alive connections in the HTTP server (upgraded connections were treated as keep-alive)
 - Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
 - Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
+- Fixed an assertion failure for malformed HTML form upload filenames - [issue #1630][issue1630]
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
@@ -46,6 +47,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
 [issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
 [issue1629]: https://github.com/rejectedsoftware/vibe.d/issues/1629
+[issue1630]: https://github.com/rejectedsoftware/vibe.d/issues/1630
 [issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
 [issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
 [issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
