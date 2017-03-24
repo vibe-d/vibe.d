@@ -675,7 +675,7 @@ final class Win32FileStream : FileStream {
 		assert(false);
 	}
 
-	override size_t read(ubyte[] dst, IOMode)
+	override size_t read(scope ubyte[] dst, IOMode)
 	{
 		assert(this.readable);
 		acquire();
@@ -1258,7 +1258,7 @@ final class Win32TCPConnection : TCPConnection, SocketEventHandler {
 		return m_readBuffer.peek();
 	}
 
-	override size_t read(ubyte[] dst, IOMode)
+	override size_t read(scope ubyte[] dst, IOMode)
 	{
 		acquireReader();
 		scope(exit) releaseReader();
