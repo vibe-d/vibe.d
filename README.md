@@ -9,7 +9,8 @@ available.
 
 Visit the website at <http://vibed.org/> for more information.
 
-[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=master)](https://travis-ci.org/rejectedsoftware/vibe.d)
+[![Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=0.7.x)](https://travis-ci.org/rejectedsoftware/vibe.d)
+[![Windows Build Status](https://ci.appveyor.com/api/projects/status/cp2kxg70h54pga9d/branch/0.7.x?svg=true)](https://ci.appveyor.com/project/s-ludwig/vibe-d/branch/0.7.x)
 
 
 Support
