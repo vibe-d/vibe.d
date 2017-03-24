@@ -422,10 +422,10 @@ struct PathEntry {
 	pure:
 
 	static PathEntry validateFilename(string fname)
-	@safe {
+	{
 		import std.string : indexOfAny;
 		enforce(fname.indexOfAny("/\\") < 0, "File name contains forward or backward slashes: "~fname);
-		return PathEntry(fname, PathType.inet);
+		return PathEntry(fname);
 	}
 
 	this(string str)
