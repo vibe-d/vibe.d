@@ -463,11 +463,13 @@ package struct WebParamAttribute {
 	string field;
 }
 
+
 /**
  * Declare that a parameter will be transmitted to the API through the body.
  *
  * It will be serialized as part of a JSON object.
  * The serialization format is currently not customizable.
+ * If no fieldname is given, the entire body is serialized into the object.
  *
  * Params:
  * - identifier: The name of the parameter to customize. A compiler error will be issued on mismatch.
@@ -480,12 +482,25 @@ package struct WebParamAttribute {
  * // { "package": 42 }
  * ----
  */
-WebParamAttribute bodyParam(string identifier, string field)
-@safe {
+WebParamAttribute bodyParam(string identifier, string field) @safe
+in {
+	assert(field.length > 0, "fieldname can't be empty.");
+}
+body
+{
 	import vibe.web.internal.rest.common : ParameterKind;
 	if (!__ctfe)
 		assert(false, onlyAsUda!__FUNCTION__);
 	return WebParamAttribute(ParameterKind.body_, identifier, field);
+}
+
+/// ditto
+WebParamAttribute bodyParam(string identifier)
+@safe {
+	import vibe.web.internal.rest.common : ParameterKind;
+	if (!__ctfe)
+		assert(false, onlyAsUda!__FUNCTION__);
+	return WebParamAttribute(ParameterKind.body_, identifier, "");
 }
 
 /**

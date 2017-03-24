@@ -352,6 +352,8 @@ unittest
  * This is to be consistent with the way D 'out' and 'ref' works.
  * However, it makes no sense to have 'ref' or 'out' parameters on
  * body or query parameter, so those are treated as error at compile time.
+ *
+ * If no Json fieldname is passed to @bodyParam, the entire Json body is deserialized into the respective field.
  */
 @rootPathFromName
 interface Example6API
@@ -373,6 +375,13 @@ interface Example6API
 	// currently serializing passed data as Json and pass them through the body.
 	@bodyParam("myFoo", "parameter")
 	string postConcat(FooType myFoo);
+
+	// If no field name is passed to @bodyParam the entire json object is
+	// serialized into the parameter.
+	// Moreover if only one bodyParameter is present, this is the default
+	// behavior.
+	@bodyParam("obj")
+	string postConcatBody(FooType obj);
 
 	struct FooType {
 		int a;
@@ -413,6 +422,11 @@ override:
 	{
 		import std.conv : to;
 		return to!string(myFoo.a)~myFoo.s~to!string(myFoo.d);
+	}
+
+	string postConcatBody(FooType obj)
+	{
+		return postConcat(obj);
 	}
 }
 
@@ -558,6 +572,11 @@ shared static this()
 			auto api = new RestInterfaceClient!Example6API("http://127.0.0.1:8080");
 			auto answer = api.postAnswer("IDK");
 			assert(answer == "False");
+
+			Example6API.FooType fType = {a: 1, s: "str", d: 3.14};
+			auto expected = "1str3.14";
+			assert(api.postConcat(fType) == expected);
+			assert(api.postConcatBody(fType) == expected);
 		}
 
 		// Example 7 -- Custom JSON response
