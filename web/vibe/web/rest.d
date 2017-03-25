@@ -1028,7 +1028,7 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			enforceBadRequest(req.json.type != Json.Type.undefined,
 				"The request body does not contain a valid JSON value.");
 			enforceBadRequest(req.json.type == Json.Type.object,
-				"The request body must contain a JSON object with an entry for each parameter.");
+				"The request body must contain a JSON object.");
 		}
 
 		static if (isAuthenticated!(T, Func)) {
@@ -1050,13 +1050,15 @@ private HTTPServerRequestDelegate jsonMethodHandler(alias Func, size_t ridx, T)(
 			} else static if (sparam.kind == ParameterKind.query) {
 				if (auto pv = fieldname in req.query)
 					v = fromRestString!PT(*pv);
+			} else static if (sparam.kind == ParameterKind.wholeBody) {
+				try v = deserializeJson!PT(req.json);
+				catch (JSONException e) enforceBadRequest(false, e.msg);
 			} else static if (sparam.kind == ParameterKind.body_) {
-				if (auto pv = fieldname in req.json) {
-					try
+				try {
+					if (auto pv = fieldname in req.json)
 						v = deserializeJson!PT(*pv);
-					catch (JSONException e)
-						enforceBadRequest(false, e.msg);
-                }
+				} catch (JSONException e)
+					enforceBadRequest(false, e.msg);
 			} else static if (sparam.kind == ParameterKind.header) {
 				if (auto pv = fieldname in req.headers)
 					v = fromRestString!PT(*pv);
@@ -1333,6 +1335,8 @@ private auto executeClientMethod(I, size_t ridx, ARGS...)
 		auto fieldname = route.parameters[i].fieldName;
 		static if (sparam.kind == ParameterKind.query) {
 			addQueryParam!i(fieldname);
+		} else static if (sparam.kind == ParameterKind.wholeBody) {
+			jsonBody = serializeToJson(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.body_) {
 			jsonBody[fieldname] = serializeToJson(ARGS[i]);
 		} else static if (sparam.kind == ParameterKind.header) {

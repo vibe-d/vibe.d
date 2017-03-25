@@ -189,6 +189,7 @@ import std.meta : anySatisfy, Filter;
 				final switch (pi.kind) {
 					case ParameterKind.query: route.queryParameters ~= pi; break;
 					case ParameterKind.body_: route.bodyParameters ~= pi; break;
+					case ParameterKind.wholeBody: route.wholeBodyParameter = pi; break;
 					case ParameterKind.header: route.headerParameters ~= pi; break;
 					case ParameterKind.internal: route.internalParameters ~= pi; break;
 					case ParameterKind.attributed: route.attributedParameters ~= pi; break;
@@ -247,6 +248,7 @@ import std.meta : anySatisfy, Filter;
 	{
 		static import std.traits;
 		import vibe.web.auth : AuthInfo;
+		import std.algorithm.searching : any, count;
 
 		assert(__ctfe);
 
@@ -302,6 +304,8 @@ import std.meta : anySatisfy, Filter;
 					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
 					pi.kind = PWPAT[0].origin;
 					pi.fieldName = PWPAT[0].field;
+					if (pi.kind == ParameterKind.body_ && pi.fieldName == "")
+						pi.kind = ParameterKind.wholeBody;
 				} else static if (pname.startsWith("_")) {
 					pi.kind = ParameterKind.internal;
 					pi.fieldName = parameterNames[i][1 .. $];
@@ -314,6 +318,11 @@ import std.meta : anySatisfy, Filter;
 
 				route.parameters ~= pi;
 			}
+
+			auto nhb = route.parameters.count!(p => p.kind == ParameterKind.wholeBody);
+			assert(nhb <= 1, "Multiple whole-body parameters defined for "~route.functionName~".");
+			assert(nhb == 0 || !route.parameters.any!(p => p.kind == ParameterKind.body_),
+				"Normal body parameters and a whole-body parameter defined at the same time for "~route.functionName~".");
 
 			ret[fi] = route;
 		}
@@ -417,6 +426,7 @@ struct Route {
 	PathPart[] pathParts; // path separated into text and placeholder parts
 	PathPart[] fullPathParts; // full path separated into text and placeholder parts
 	Parameter[] parameters;
+	Parameter wholeBodyParameter;
 	Parameter[] queryParameters;
 	Parameter[] bodyParameters;
 	Parameter[] headerParameters;
@@ -455,7 +465,8 @@ struct StaticParameter {
 
 enum ParameterKind {
 	query,       // req.query[]
-	body_,       // JSON body
+	body_,       // JSON body (single field)
+	wholeBody,   // JSON body
 	header,      // req.header[]
 	attributed,  // @before
 	internal,    // req.params[]
@@ -697,4 +708,14 @@ unittest { // #1648
 		void a();
 	}
 	alias RI = RestInterface!I;
+}
+
+unittest {
+	interface I1 { @bodyParam("foo") void a(int foo); }
+	alias RI = RestInterface!I1;
+	interface I2 { @bodyParam("foo") void a(int foo, int bar); }
+	interface I3 { @bodyParam("foo") @bodyParam("bar") void a(int foo, int bar); }
+	static assert(__traits(compiles, RestInterface!I1.init));
+	static assert(!__traits(compiles, RestInterface!I2.init));
+	static assert(!__traits(compiles, RestInterface!I3.init));
 }

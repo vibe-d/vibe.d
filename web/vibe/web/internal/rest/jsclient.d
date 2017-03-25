@@ -122,7 +122,9 @@ class JSRestClientSettings
 		}
 
 		// body parameters
-		if (route.bodyParameters.length) {
+		if (route.wholeBodyParameter.name.length) {
+			fout.formattedWrite("var bostbody = %s;\n", route.wholeBodyParameter.name);
+		} else if (route.bodyParameters.length) {
 			fout.put("var postbody = {\n");
 			foreach (p; route.bodyParameters)
 				fout.formattedWrite("%s: %s,\n", Json(p.fieldName), p.name);
