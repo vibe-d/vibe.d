@@ -40,6 +40,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 - Fixed bogus static assertion failure in `RestInterfaceClient!I` when `I` is annotated with `@requiresAuth` - [issue #1648][issue1648]
 - Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
 - Fixed an assertion failure for malformed HTML form upload filenames - [issue #1630][issue1630]
+- Fixed the HTTP server to not use chunked encoding for HTTP/1.0 requests - [issue #1721][issue1721], [pull #1722][issue1722]
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
@@ -57,6 +58,8 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 [issue1655]: https://github.com/rejectedsoftware/vibe.d/issues/1655
 [issue1659]: https://github.com/rejectedsoftware/vibe.d/issues/1659
 [issue1688]: https://github.com/rejectedsoftware/vibe.d/issues/1688
+[issue1721]: https://github.com/rejectedsoftware/vibe.d/issues/1721
+[issue1722]: https://github.com/rejectedsoftware/vibe.d/issues/1722
 
 
 v0.7.30 - 2016-10-31
