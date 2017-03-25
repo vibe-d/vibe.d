@@ -30,16 +30,21 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [pull #1550][issue1550]
   - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
   - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`)
+  - Added `HTTPClientRequest.writeFormBody`
+- REST interface generator
+  - Added single-argument `@bodyParam` to let a single parameter represent the whole request body (by Sebastian Wilzbach) - [issue #1549][issue1549], [pull #1723][issue1723]
+  - Boolean parameters now accept "1" and case insensitive "true" as `true` - [pull #1712][issue1712]
+  - Server responses now output prettified JSON if built in debug mode
+  - Stack traces are only written in debug mode - [issue #1623][issue1623]
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
-- The REST interface server now responds with prettified JSON if built in debug mode
-- Stack traces are only written in REST server responses in debug mode - [issue #1623][issue1623]
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
 - Enabled minimal delegate syntax for `URLRouter` (e.g. `URLRouter.get("/", (req, res) { ... });`) - [issue #1668][issue1668]
 - Added serialization support for string based enum types as associative array keys (by Tomoya Tanjo) - [issue #1660][issue1660], [pull #1663][issue1663]
 - Added `DictionaryList!T.byKeyValue` to replace `opApply` based iteration
 - Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
+- Added `StreamOutputRange.drop()`
 - Updated the Windows OpenSSL binaries to 1.0.2k
 
 ### Bug fixes ###
@@ -61,8 +66,11 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed a missing `toRedis` conversion in `RedisHash.setIfNotExist` (by Tuukka Kurtti aka Soletek) - [pull #1659][issue1659]
 - Fixed `createTempFile` on Windows
 - Fixed the HTTP reverse proxy to send 502 (bad gateway) instead of 500 (internal server error) for upstream errors
+- Fixed a possible `InvalidMemoryOperationError` on shutdown for failed MongoDB requests - [issue #1707][issue1707]
+- Fixed `readOption!T` to work for array types - [issue #1713][issue1713]
 
 [issue1449]: https://github.com/rejectedsoftware/vibe.d/issues/1449
+[issue1549]: https://github.com/rejectedsoftware/vibe.d/issues/1549
 [issue1550]: https://github.com/rejectedsoftware/vibe.d/issues/1550
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
@@ -72,6 +80,10 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1675]: https://github.com/rejectedsoftware/vibe.d/issues/1675
 [issue1682]: https://github.com/rejectedsoftware/vibe.d/issues/1682
 [issue1687]: https://github.com/rejectedsoftware/vibe.d/issues/1687
+[issue1707]: https://github.com/rejectedsoftware/vibe.d/issues/1707
+[issue1712]: https://github.com/rejectedsoftware/vibe.d/issues/1712
+[issue1713]: https://github.com/rejectedsoftware/vibe.d/issues/1713
+[issue1723]: https://github.com/rejectedsoftware/vibe.d/issues/1723
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
