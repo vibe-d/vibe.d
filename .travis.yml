@@ -1,9 +1,18 @@
 language: d
 sudo: false
+dist: trusty
 
 services:
   - mongodb
   - redis-server
+
+addons:
+  apt:
+    packages:
+    - libevent-dev
+    - libssl-dev
+    - pkg-config
+    - zlib1g-dev
 
 d:
   # order: latest DMD, oldest DMD, LDC/GDC, remaining DMD versions
@@ -13,7 +22,8 @@ d:
   - dmd-2.073.2
   - dmd-2.068.2
   - ldc-1.0.0
-  - ldc-1.1.0
+  - ldc-1.1.1
+  - ldc-1.2.0-beta1
   - dmd-2.072.2
   - dmd-2.071.2
   - dmd-2.070.2
@@ -29,9 +39,22 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
   allow_failures:
     - d: dmd-beta
-    - d: ldc-1.1.0
+    - d: ldc-1.2.0-beta1
+      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+    - d: ldc-1.1.1
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
     - d: dmd-2.068.2
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+
+before_install:
+  - pip3 install meson
+
+install:
+  - mkdir .ntmp
+  - curl -L https://github.com/ninja-build/ninja/releases/download/v1.7.2/ninja-linux.zip -o .ntmp/ninja-linux.zip
+  - unzip .ntmp/ninja-linux.zip -d .ntmp
+
+before_script:
+  - export PATH=$PATH:$PWD/.ntmp
 
 script: ./travis-ci.sh

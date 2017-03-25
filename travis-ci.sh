@@ -33,3 +33,25 @@ if [ ${RUN_TEST=1} -eq 1 ]; then
         (cd tests/$ex && dub --compiler=$DC && dub clean)
     done
 fi
+
+# test building with Meson
+if [[ ${VIBED_DRIVER=libevent} = libevent ]]; then
+    mkdir build && cd build
+    meson ..
+
+    # looks like Meson doesn't work well when building shared libraries with DMD at time, so we limit the
+    # actual build to LDC.
+    if [[ ${DC=dmd} = ldc2 ]]; then
+        dc_version=$("$DC" --version | sed -n '1,${s/[^0-9.]*\([0-9.]*\).*/\1/; p; q;}')
+
+        # we can not compile with LDC 1.0 on Travis since the version there has static Phobos/DRuntime built
+        # without PIC, which makes the linker fail. All other LDC builds do not have this issue.
+        if [[ ${dc_version} != "1.0.0" ]]; then
+            # we limit the number of Ninja jobs to 3, so Travis doesn't kill us
+            ninja -j3
+            ninja test -v
+            DESTDIR=/tmp/vibe-install ninja install
+        fi
+    fi
+    cd ..
+fi
