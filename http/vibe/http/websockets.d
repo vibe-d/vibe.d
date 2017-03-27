@@ -113,7 +113,7 @@ WebSocket connectWebSocket(URL url, const(HTTPClientSettings) settings = default
 		s_connections.put(tuple(ckey, pool));
 	}
 
-	auto rng = new SystemRNG;
+	auto rng = secureRNG();
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 	auto cl = pool.lockConnection();
@@ -142,7 +142,7 @@ void connectWebSocket(URL url, scope WebSocketHandshakeDelegate del, const(HTTPC
 	bool use_tls = (url.schema == "wss") ? true : false;
 	url.schema = use_tls ? "https" : "http";
 
-	/*scope*/auto rng = new SystemRNG;
+	/*scope*/auto rng = secureRNG();
 	auto challengeKey = generateChallengeKey(rng);
 	auto answerKey = computeAcceptKey(challengeKey);
 
@@ -337,7 +337,7 @@ final class WebSocket {
 		bool m_pongSkipped;
 		short m_closeCode;
 		const(char)[] m_closeReason;
-        SystemRNG m_rng;
+        RandomNumberStream m_rng;
 	}
 
 	/**
@@ -349,7 +349,7 @@ final class WebSocket {
 	 *	 rng = Source of entropy to use.  If null, assume we're a server socket
 	 */
 	private this(ConnectionStream conn, in HTTPServerRequest request,
-				 SystemRNG rng)
+				 RandomNumberStream rng)
 	{
 		m_conn = conn;
 		m_request = request;
@@ -641,14 +641,14 @@ final class OutgoingWebSocketMessage : OutputStream {
 @safe:
 
 	private {
-        SystemRNG m_rng;
+        RandomNumberStream m_rng;
 		Stream m_conn;
 		FrameOpcode m_frameOpcode;
 		Appender!(ubyte[]) m_buffer;
 		bool m_finalized = false;
 	}
 
-	this( Stream conn, FrameOpcode frameOpcode, SystemRNG rng )
+	this( Stream conn, FrameOpcode frameOpcode, RandomNumberStream rng )
 	{
 		assert(conn !is null);
 		m_conn = conn;
@@ -700,12 +700,12 @@ final class IncomingWebSocketMessage : InputStream {
 @safe:
 
 	private {
-        SystemRNG m_rng;
+        RandomNumberStream m_rng;
 		Stream m_conn;
 		Frame m_currentFrame;
 	}
 
-	this(Stream conn, SystemRNG rng)
+	this(Stream conn, RandomNumberStream rng)
 	{
 		assert(conn !is null);
 		m_conn = conn;
@@ -805,7 +805,7 @@ struct Frame {
 	FrameOpcode opcode;
 	ubyte[] payload;
 
-	void writeFrame(OutputStream stream, SystemRNG sys_rng)
+	void writeFrame(OutputStream stream, RandomNumberStream sys_rng)
 	{
 		import vibe.stream.wrapper;
 
@@ -890,7 +890,7 @@ struct Frame {
 /**
  * Generate a challenge key for the protocol upgrade phase.
  */
-private string generateChallengeKey(scope SystemRNG rng)
+private string generateChallengeKey(scope RandomNumberStream rng)
 {
 	ubyte[16] buffer;
 	rng.read(buffer);

@@ -12,6 +12,20 @@ import std.digest.sha;
 import vibe.core.stream;
 
 
+/** Creates a cryptographically secure random number generator.
+
+	Note that the returned RNG will operate in a non-blocking mode, which means
+	that if no sufficient entropy has been generated, new random numbers will be
+	generated from previous state.
+*/
+RandomNumberStream secureRNG()
+@safe {
+	static SystemRNG m_rng;
+	if (!m_rng) m_rng = new SystemRNG;
+	return m_rng;
+}
+
+
 /**
 	Base interface for all cryptographically secure RNGs.
 */
