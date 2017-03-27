@@ -456,6 +456,8 @@ final class LibasyncDriver : EventDriver {
 /// Writes or reads asynchronously (in another thread) for sizes > 64kb to benefit from kernel page cache
 /// in lower size operations.
 final class LibasyncFileStream : FileStream {
+	import vibe.inet.path : Path;
+
 	private {
 		Path m_path;
 		ulong m_size;
