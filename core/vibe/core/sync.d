@@ -644,6 +644,15 @@ ManualEvent createManualEvent()
 	return getEventDriver().createManualEvent();
 }
 
+/** Creates a new signal that can be shared between fibers.
+*/
+LocalManualEvent createLocalManualEvent()
+@safe nothrow {
+	return getEventDriver().createManualEvent();
+}
+
+alias LocalManualEvent = ManualEvent;
+
 /** A manually triggered cross-task event.
 
 	Note: the ownership can be shared between multiple fibers and threads.
