@@ -759,14 +759,14 @@ package nothrow extern(C)
 			if (ex && (reader && reader.fiber.state == Fiber.State.EXEC || writer && writer.fiber.state == Fiber.State.EXEC))
 				ctx.exception = ex;
 
-			if (reader && reader.running && !core.isScheduledForResume(reader) && reader.fiber.state != Fiber.State.EXEC) {
-				logTrace("resuming corresponding read task%s...", ex is null ? "" : " with exception");
-				core.resumeTask(reader, ex);
-			}
-
-			if (writer && writer != reader && writer.running && writer.fiber.state != Fiber.State.EXEC) {
+			if (writer && writer.running && writer.fiber.state != Fiber.State.EXEC) {
 				logTrace("resuming corresponding write task%s...", ex is null ? "" : " with exception");
 				core.resumeTask(writer, ex);
+			}
+
+			if (reader && writer != reader && reader.running && !core.isScheduledForResume(reader) && reader.fiber.state != Fiber.State.EXEC) {
+				logTrace("resuming corresponding read task%s...", ex is null ? "" : " with exception");
+				core.resumeTask(reader, ex);
 			}
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
