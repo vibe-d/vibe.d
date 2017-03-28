@@ -751,15 +751,22 @@ package nothrow extern(C)
 
 			ctx.core.eventException = ex;
 
-			if (ctx.readOwner && ctx.readOwner.running && !ctx.core.isScheduledForResume(ctx.readOwner)) {
-				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
-				if (ctx.readOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
-				else ctx.core.resumeTask(ctx.readOwner, ex);
+			// ctx can be destroyed after resuming the reader, so get everything that is required from it first
+			auto reader = ctx.readOwner;
+			auto writer = ctx.writeOwner;
+			auto core = ctx.core;
+
+			if (ex && (reader && reader.fiber.state == Fiber.State.EXEC || writer && writer.fiber.state == Fiber.State.EXEC))
+				ctx.exception = ex;
+
+			if (reader && reader.running && !core.isScheduledForResume(reader) && reader.fiber.state != Fiber.State.EXEC) {
+				logTrace("resuming corresponding read task%s...", ex is null ? "" : " with exception");
+				core.resumeTask(reader, ex);
 			}
-			if (ctx.writeOwner && ctx.writeOwner != ctx.readOwner && ctx.writeOwner.running) {
-				logTrace("resuming corresponding task%s...", ex is null ? "" : " with exception");
-				if (ctx.writeOwner.fiber.state == Fiber.State.EXEC) ctx.exception = ex;
-				else ctx.core.resumeTask(ctx.writeOwner, ex);
+
+			if (writer && writer != reader && writer.running && writer.fiber.state != Fiber.State.EXEC) {
+				logTrace("resuming corresponding write task%s...", ex is null ? "" : " with exception");
+				core.resumeTask(writer, ex);
 			}
 		} catch (UncaughtException e) {
 			logWarn("Got exception when resuming task onSocketEvent: %s", e.msg);
