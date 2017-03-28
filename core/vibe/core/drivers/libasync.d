@@ -1182,6 +1182,20 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	override void close()
 	{
 		logTrace("Close TCP enter");
+
+		// resume any reader, so that the read operation can be ended with a failure
+		Task reader = m_settings.reader.task;
+		while (m_settings.reader.isWaiting && reader.running) {
+			logTrace("resuming reader first");
+			getDriverCore().yieldAndResumeTask(reader);
+		}
+
+		// test if the connection is already closed
+		if (m_closed) {
+			logTrace("connection already closed.");
+			return;
+		}
+
 		//logTrace("closing");
 		acquireWriter();
 		scope(exit) releaseWriter();
@@ -1315,6 +1329,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	}
 
 	void acquireReader() {
+		assert(!m_settings.writer.isWaiting, "Acquiring reader that is already in use.");
 		if (Task.getThis() == Task()) {
 			logTrace("Reading without task");
 			return;
@@ -1329,7 +1344,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	void releaseReader() {
 		if (Task.getThis() == Task()) return;
 		logTrace("%s", "Release Reader");
-		assert(amReadOwner());
+		assert(amReadOwner(), "Reader release by non-owner.");
 		m_settings.reader.isWaiting = false;
 	}
 
@@ -1340,6 +1355,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	}
 
 	void acquireWriter() {
+		assert(!m_settings.writer.isWaiting, "Acquiring waiter that is already in use.");
 		if (Task.getThis() == Task()) return;
 		logTrace("%s", "Acquire Writer");
 		assert(!amWriteOwner(), "Failed to acquire writer in task: " ~ Task.getThis().fiber.to!string ~ ", it was busy with: " ~ m_settings.writer.task.to!string);
@@ -1350,7 +1366,7 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	void releaseWriter() {
 		if (Task.getThis() == Task()) return;
 		logTrace("%s", "Release Writer");
-		assert(amWriteOwner());
+		assert(amWriteOwner(), "Writer release by non-owner.");
 		m_settings.writer.isWaiting = false;
 	}
 
@@ -1484,11 +1500,11 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		bool hasUniqueReader = m_settings.reader.isWaiting;
 		bool hasUniqueWriter = m_settings.writer.isWaiting && reader != writer;
 
-		if (hasUniqueReader && Task.getThis() != reader) {
-			getDriverCore().resumeTask(reader, m_settings.reader.noExcept?null:ex);
-		}
 		if (hasUniqueWriter && Task.getThis() != writer && wake_ex) {
 			getDriverCore().resumeTask(writer, ex);
+		}
+		if (hasUniqueReader && Task.getThis() != reader) {
+			getDriverCore().resumeTask(reader, m_settings.reader.noExcept?null:ex);
 		}
 	}
 
