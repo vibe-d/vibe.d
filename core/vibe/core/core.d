@@ -1614,7 +1614,11 @@ private {
 	__gshared bool s_disableSignalHandlers = false;
 }
 
-private static @property VibeDriverCore driverCore() @trusted nothrow { return s_core; }
+private static @property VibeDriverCore driverCore()
+@trusted nothrow {
+	assert(s_core !is null, "Vibe.d invoked before thread initialization or after to thread shutdown!");
+	return s_core;
+}
 
 private bool getExitFlag()
 @trusted {
