@@ -177,18 +177,9 @@ crypto_dep = dependency('libcrypto')
 ssl_dep = dependency('libssl')
 libevent_dep = dependency('libevent')
 
-# stupid hack to generate a relative path to the build directory, since newer
-# Meson does not allow absolute paths to the build directory in include_directories()
-# anymore.
-# FIXME: Needs to be reported upstream as an issue.
-
-external_subprojects_dir = build_root + '/subprojects'
-relpath_hack = run_command('python3', '-c', 'import os.path; print(os.path.relpath(\'' + build_root + '\', \'' + source_root + '\'))')
-if relpath_hack.returncode() == 0
-    external_subprojects_dir = relpath_hack.stdout().strip() + '/subprojects'
-else
-    error('Unable to determine relative path to build directory: ' + relpath_hack.stderr().strip())
-endif
+# directory where the external dependencies are included from.
+# Meson will search for this dir in both build_root and source_root
+external_subprojects_dir = 'subprojects'
 
 # Try to find system OpenSSL bindings, if not found, download
 # a Git copy.
