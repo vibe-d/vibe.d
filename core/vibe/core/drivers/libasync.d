@@ -286,7 +286,7 @@ final class LibasyncDriver : EventDriver {
 		});
 
 		if (Task.getThis() != Task())
-			tcp_connection.acquireWriter();
+			tcp_connection.m_settings.writer.acquire();
 
 		tcp_connection.m_tcpImpl.conn = conn;
 		//conn.local = bind_addr;
@@ -300,7 +300,7 @@ final class LibasyncDriver : EventDriver {
 		tcp_connection.m_tcpImpl.localAddr = NetworkAddress(conn.local);
 
 		if (Task.getThis() != Task())
-			tcp_connection.releaseWriter();
+			tcp_connection.m_settings.writer.release();
 		return tcp_connection;
 	}
 
@@ -1147,8 +1147,8 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 
 	override @property bool dataAvailableForRead(){
 		logTrace("dataAvailableForRead");
-		acquireReader();
-		scope(exit) releaseReader();
+		m_settings.reader.acquire();
+		scope(exit) m_settings.reader.release();
 		return !readEmpty;
 	}
 
@@ -1166,8 +1166,8 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	override @property ulong leastSize()
 	{
 		logTrace("leastSize TCP");
-		acquireReader();
-		scope(exit) releaseReader();
+		m_settings.reader.acquire();
+		scope(exit) m_settings.reader.release();
 
 		while( m_readBuffer.empty ){
 			if (!connected)
@@ -1182,9 +1182,23 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	override void close()
 	{
 		logTrace("Close TCP enter");
+
+		// resume any reader, so that the read operation can be ended with a failure
+		Task reader = m_settings.reader.task;
+		while (m_settings.reader.isWaiting && reader.running) {
+			logTrace("resuming reader first");
+			getDriverCore().yieldAndResumeTask(reader);
+		}
+
+		// test if the connection is already closed
+		if (m_closed) {
+			logTrace("connection already closed.");
+			return;
+		}
+
 		//logTrace("closing");
-		acquireWriter();
-		scope(exit) releaseWriter();
+		m_settings.writer.acquire();
+		scope(exit) m_settings.writer.release();
 
 		// checkConnected();
 		m_readBuffer.dispose();
@@ -1197,13 +1211,13 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		if (timeout == 0.seconds)
 			timeout = Duration.max;
 		logTrace("WaitForData enter, timeout %s :: Ptr %s",  timeout.toString(), (cast(void*)this).to!string);
-		acquireReader();
+		m_settings.reader.acquire();
 		auto _driver = getEventDriver();
 		auto tm = _driver.createTimer(null);
 		scope(exit) { 
 			_driver.stopTimer(tm);
 			_driver.releaseTimer(tm);
-			releaseReader();
+			m_settings.reader.release();
 		}
 		_driver.m_timers.getUserData(tm).owner = Task.getThis();
 		if (timeout != Duration.max) _driver.rearmTimer(tm, timeout, false);
@@ -1232,8 +1246,8 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	override const(ubyte)[] peek()
 	{
 		logTrace("Peek TCP enter");
-		acquireReader();
-		scope(exit) releaseReader();
+		m_settings.reader.acquire();
+		scope(exit) m_settings.reader.release();
 
 		if (!readEmpty)
 			return (m_slice.length > 0) ? cast(const(ubyte)[]) m_slice : m_readBuffer.peek();
@@ -1246,9 +1260,9 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		if (!dst.length) return 0;
 		assert(dst !is null && !m_slice);
 		logTrace("Read TCP");
-		acquireReader();
+		m_settings.reader.acquire();
 		size_t len = 0;
-		scope(exit) releaseReader();
+		scope(exit) m_settings.reader.release();
 		while( dst.length > 0 ){
 			while( m_readBuffer.empty ){
 				checkConnected();
@@ -1273,8 +1287,8 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	{
 		assert(bytes_ !is null);
 		logTrace("%s", "write enter");
-		acquireWriter();
-		scope(exit) releaseWriter();
+		m_settings.writer.acquire();
+		scope(exit) m_settings.writer.release();
 		checkConnected();
 		const(ubyte)[] bytes = bytes_;
 		logTrace("TCP write with %s bytes called", bytes.length);
@@ -1301,8 +1315,8 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	override void flush()
 	{
 		logTrace("%s", "Flush");
-		acquireWriter();
-		scope(exit) releaseWriter();
+		m_settings.writer.acquire();
+		scope(exit) m_settings.writer.release();
 
 		checkConnected();
 
@@ -1312,52 +1326,6 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 	{
 		logTrace("%s", "finalize");
 		flush();
-	}
-
-	void acquireReader() {
-		if (Task.getThis() == Task()) {
-			logTrace("Reading without task");
-			return;
-		}
-		logTrace("%s", "Acquire Reader");
-		assert(!amReadOwner());
-		m_settings.reader.task = Task.getThis();
-		logTrace("Task waiting in: %X", cast(void*) this);
-		m_settings.reader.isWaiting = true;
-	}
-
-	void releaseReader() {
-		if (Task.getThis() == Task()) return;
-		logTrace("%s", "Release Reader");
-		assert(amReadOwner());
-		m_settings.reader.isWaiting = false;
-	}
-
-	bool amReadOwner() const {
-		if (m_settings.reader.isWaiting && m_settings.reader.task == Task.getThis())
-			return true;
-		return false;
-	}
-
-	void acquireWriter() {
-		if (Task.getThis() == Task()) return;
-		logTrace("%s", "Acquire Writer");
-		assert(!amWriteOwner(), "Failed to acquire writer in task: " ~ Task.getThis().fiber.to!string ~ ", it was busy with: " ~ m_settings.writer.task.to!string);
-		m_settings.writer.task = Task.getThis();
-		m_settings.writer.isWaiting = true;
-	}
-
-	void releaseWriter() {
-		if (Task.getThis() == Task()) return;
-		logTrace("%s", "Release Writer");
-		assert(amWriteOwner());
-		m_settings.writer.isWaiting = false;
-	}
-
-	bool amWriteOwner() const {
-		if (m_settings.writer.isWaiting && m_settings.writer.task == Task.getThis())
-			return true;
-		return false;
 	}
 
 	private void checkConnected()
@@ -1484,11 +1452,11 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		bool hasUniqueReader = m_settings.reader.isWaiting;
 		bool hasUniqueWriter = m_settings.writer.isWaiting && reader != writer;
 
-		if (hasUniqueReader && Task.getThis() != reader) {
-			getDriverCore().resumeTask(reader, m_settings.reader.noExcept?null:ex);
-		}
 		if (hasUniqueWriter && Task.getThis() != writer && wake_ex) {
 			getDriverCore().resumeTask(writer, ex);
+		}
+		if (hasUniqueReader && Task.getThis() != reader) {
+			getDriverCore().resumeTask(reader, m_settings.reader.noExcept?null:ex);
 		}
 	}
 
@@ -1560,6 +1528,28 @@ final class LibasyncTCPConnection : TCPConnection/*, Buffered*/ {
 		Task task; // we can only have one task waiting for read/write operations
 		bool isWaiting; // if a task is actively waiting
 		bool noExcept;
+
+		void acquire() {
+			assert(!this.isWaiting, "Acquiring waiter that is already in use.");
+			if (Task.getThis() == Task()) return;
+			logTrace("%s", "Acquire waiter");
+			assert(!amOwner(), "Failed to acquire waiter in task: " ~ Task.getThis().fiber.to!string ~ ", it was busy with: " ~ this.task.to!string);
+			this.task = Task.getThis();
+			this.isWaiting = true;
+		}
+
+		void release() {
+			if (Task.getThis() == Task()) return;
+			logTrace("%s", "Release waiter");
+			assert(amOwner());
+			this.isWaiting = false;
+		}
+
+		bool amOwner() const {
+			if (this.isWaiting && this.task == Task.getThis())
+				return true;
+			return false;
+		}
 	}
 
 	struct Settings {
