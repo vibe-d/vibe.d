@@ -690,7 +690,7 @@ final class HTTPClientRequest : HTTPRequest {
 	}
 
 	/**
-		Writes the whole response body at once using raw bytes.
+		Writes the whole request body at once using raw bytes.
 	*/
 	void writeBody(RandomAccessStream data)
 	{
@@ -720,7 +720,7 @@ final class HTTPClientRequest : HTTPRequest {
 	}
 
 	/**
-		Writes the response body as JSON data.
+		Writes the request body as JSON data.
 	*/
 	void writeJsonBody(T)(T data, bool allow_chunked = false)
 	{
@@ -743,7 +743,7 @@ final class HTTPClientRequest : HTTPRequest {
 		finalize();
 	}
 
-	/** Writes the response body as form data.
+	/** Writes the request body as form data.
 	*/
 	void writeFormBody(T)(T key_value_map)
 	{
