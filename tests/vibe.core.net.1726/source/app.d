@@ -36,18 +36,17 @@ shared static this()
 		wt.join();
 		assert(read_ex, "No read exception thrown");
 		assert(write_ex, "No write exception thrown");
-		done = true;
+		exitEventLoop();
 	});
-
 
 	runTask({
 		try {
 			auto conn = connectTCP("127.0.0.1", 11375);
 			conn.close();
 		} catch (Exception e) assert(false, e.msg);
-		sleep(50.msecs);
-		assert(done, "Not done");
+	});
 
-		exitEventLoop();
+	setTimer(1000.msecs, {
+		assert(false, "Test has hung.");
 	});
 }
