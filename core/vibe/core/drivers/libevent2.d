@@ -1316,6 +1316,7 @@ private nothrow extern(C)
 	{
 		try {
 			auto mem = s_driver.m_allocator.allocate(size+size_t.sizeof);
+			if (!mem.ptr) return null;
 			*cast(size_t*)mem.ptr = size;
 			return mem.ptr + size_t.sizeof;
 		} catch (UncaughtException th) {
@@ -1330,7 +1331,8 @@ private nothrow extern(C)
 			auto oldsize = *cast(size_t*)(p-size_t.sizeof);
 			auto oldmem = (p-size_t.sizeof)[0 .. oldsize+size_t.sizeof];
 			auto newmem = oldmem;
-			s_driver.m_allocator.reallocate(newmem, newsize+size_t.sizeof);
+			if (!s_driver.m_allocator.reallocate(newmem, newsize+size_t.sizeof))
+				return null;
 			*cast(size_t*)newmem.ptr = newsize;
 			return newmem.ptr + size_t.sizeof;
 		} catch (UncaughtException th) {
