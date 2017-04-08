@@ -523,17 +523,22 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					alias TM = TypeTuple!(typeof(__traits(getMember, TU, mname)));
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
-					static if (!isBuiltinTuple!(T, mname)) {
+					static if (!isBuiltinTuple!(T, mname))
 						auto vt = safeGetMember!mname(value);
 					else
 						auto vt = tuple!TM(__traits(getMember, value, mname));
-
 					enum opt = getPolicyAttribute!(TU, mname, OptionalAttribute, Policy)(OptionalAttribute!DefaultPolicy(OptionalDirection.req)).direction;
 
 					//skip optional attributes from serialization
 					if ((opt & OptionalDirection.out_) == OptionalDirection.out_) {
+						import vibe.data.json : Json;
+						import vibe.data.bson : Bson;
 						static if (isInstanceOf!(Nullable, typeof(vt))) {
 							if (vt.isNull) continue;
+						} else static if (is(typeof(vt) == Json)) {
+							if (vt.type == Json.Type.undefined || vt.type == Json.Type.null_ || (vt.type == Json.Type.object && !vt.length)) continue;
+						} else static if (is(typeof(vt) == Bson)) {
+							if (vt.type == Bson.Type.undefined || vt.type == Bson.Type.null_ || (vt.type == Bson.Type.object && !vt.length)) continue;
 						} else {
 							if (vt == typeof(vt).init) continue;
 						}
@@ -2062,4 +2067,24 @@ unittest { // issue #2110 - single-element tuples
 		auto a = deserialize!(TestSerializer, T)(b);
 		assert(a.fields[0] == 42);
 	}
+}
+
+unittest {
+	import vibe.data.json;
+	struct Foo {
+		@optional
+		Json bar;
+	}
+	Foo f;
+	assert(serializeToJsonString(f) == "{}");
+}
+
+unittest {
+	import vibe.data.bson;
+	struct Foo {
+		@optional
+		Bson bar;
+	}
+	Foo f;
+	assert(serializeToJsonString(f) == "{}");
 }
