@@ -130,6 +130,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 
 [issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
+[issue1602]: https://github.com/rejectedsoftware/vibe.d/issues/1602
 [issue1605]: https://github.com/rejectedsoftware/vibe.d/issues/1605
 [issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
 [issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
