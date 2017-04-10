@@ -4,7 +4,7 @@ source_root = meson.source_root()
 build_root = meson.build_root()
 
 project_version      = '0.7.30'
-project_version_name = '0.7.30~beta.1'
+project_version_name = '0.7.30'
 project_soversion    = '0'
 
 pkgc = import('pkgconfig')
@@ -45,13 +45,11 @@ vibe_core_src = [
     'core/source/vibe/internal/allocator.d',
     'core/source/vibe/internal/freelistref.d'
 ]
-install_headers(vibe_core_src, subdir: 'd/vibe/core')
 
 vibe_crypto_src = [
     'crypto/source/vibe/crypto/passwordhash.d',
     'crypto/source/vibe/crypto/cryptorand.d'
 ]
-install_headers(vibe_crypto_src, subdir: 'd/vibe/crypto')
 
 vibe_inet_src = [
     'inet/source/vibe/inet/path.d',
@@ -61,7 +59,6 @@ vibe_inet_src = [
     'inet/source/vibe/inet/urltransfer.d',
     'inet/source/vibe/inet/message.d'
 ]
-install_headers(vibe_inet_src, subdir: 'd/vibe/inet')
 
 vibe_stream_src = [
     'stream/source/vibe/stream/botan.d',
@@ -77,14 +74,12 @@ vibe_stream_src = [
     'stream/source/vibe/stream/memory.d',
     'stream/source/vibe/stream/wrapper.d'
 ]
-install_headers(vibe_stream_src, subdir: 'd/vibe/stream')
 
 vibe_textfilter_src = [
     'textfilter/source/vibe/textfilter/markdown.d',
     'textfilter/source/vibe/textfilter/urlencode.d',
     'textfilter/source/vibe/textfilter/html.d'
 ]
-install_headers(vibe_textfilter_src, subdir: 'd/vibe/textfilter')
 
 vibe_utils_src = [
     'utils/source/vibe/utils/validation.d',
@@ -94,7 +89,6 @@ vibe_utils_src = [
     'utils/source/vibe/utils/memory.d',
     'utils/source/vibe/utils/string.d'
 ]
-install_headers(vibe_utils_src, subdir: 'd/vibe/utils')
 
 vibe_internal_src = [
     'utils/source/vibe/internal/win32.d',
@@ -106,14 +100,12 @@ vibe_internal_src = [
     'utils/source/vibe/internal/meta/uda.d',
     'utils/source/vibe/internal/rangeutil.d'
 ]
-install_headers(vibe_internal_src, subdir: 'd/vibe/internal')
 
 vibe_data_src = [
     'data/source/vibe/data/bson.d',
     'data/source/vibe/data/serialization.d',
     'data/source/vibe/data/json.d'
 ]
-install_headers(vibe_data_src, subdir: 'd/vibe/data')
 
 vibe_http_src = [
     'http/source/vibe/http/session.d',
@@ -131,19 +123,16 @@ vibe_http_src = [
     'http/source/vibe/http/fileserver.d',
     'http/source/vibe/http/status.d'
 ]
-install_headers(vibe_http_src, subdir: 'd/vibe/http')
 
 vibe_mail_src = [
     'mail/source/vibe/mail/smtp.d',
 ]
-install_headers(vibe_mail_src, subdir: 'd/vibe/mail')
 
 vibe_diet_src = [
     'templ/source/vibe/templ/parsertools.d',
     'templ/source/vibe/templ/utils.d',
     'templ/source/vibe/templ/diet.d'
 ]
-install_headers(vibe_diet_src, subdir: 'd/vibe/templ')
 
 vibe_db_mongo_src = [
     'mongo/source/vibe/db/mongo/connection.d',
@@ -155,7 +144,6 @@ vibe_db_mongo_src = [
     'mongo/source/vibe/db/mongo/settings.d',
     'mongo/source/vibe/db/mongo/flags.d'
 ]
-install_headers(vibe_db_mongo_src, subdir: 'd/vibe/db/mongo')
 
 vibe_db_redis_src = [
     'redis/source/vibe/db/redis/idioms.d',
@@ -163,7 +151,6 @@ vibe_db_redis_src = [
     'redis/source/vibe/db/redis/sessionstore.d',
     'redis/source/vibe/db/redis/redis.d'
 ]
-install_headers(vibe_db_redis_src, subdir: 'd/vibe/db/redis')
 
 vibe_web_src = [
     'web/source/vibe/web/validation.d',
@@ -175,7 +162,14 @@ vibe_web_src = [
     'web/source/vibe/web/rest.d',
     'web/source/vibe/web/i18n.d'
 ]
-install_headers(vibe_web_src, subdir: 'd/vibe/web')
+
+#
+# Includes
+#
+# It's easier to just install the whole source-tree then use
+# install_headers and forget to include all subdirectories
+# along the way.
+install_subdir('source/vibe/', install_dir: 'include/d/')
 
 #
 # Dependencies
@@ -185,7 +179,9 @@ crypto_dep = dependency('libcrypto')
 ssl_dep = dependency('libssl')
 libevent_dep = dependency('libevent')
 
-external_subprojects_dir = build_root + '/subprojects'
+# directory where the external dependencies are included from.
+# Meson will search for this dir in both build_root and source_root
+external_subprojects_dir = 'subprojects'
 
 # Try to find system OpenSSL bindings, if not found, download
 # a Git copy.
@@ -202,7 +198,7 @@ else
         endif
     endif
 
-    message('Using non-system of OpenSSL D bindings.')
+    message('Using non-system OpenSSL D bindings.')
 endif
 openssl_inc = include_directories(openssl_src_dir)
 
@@ -221,7 +217,7 @@ else
         endif
     endif
 
-    message('Using non-system of LibEvent D bindings.')
+    message('Using non-system LibEvent D bindings.')
 endif
 libevent_inc = include_directories(libevent_src_dir)
 

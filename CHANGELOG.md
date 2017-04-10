@@ -87,14 +87,14 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
-v0.7.31 - 2017-03-
+v0.7.31 - 2017-04-10
 --------------------
 
-This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bugfixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
+This release is a backport release of the smaller changes that got into 0.8.0. The 0.7.x branch will continue to be maintained for a short while, but only bug fixes will be included from now on. Applications should switch to the 0.8.x branch as soon as possible.
 
 ### Features and improvements ###
 
-- Compiles on DMD 2.068.2 up to DMD 2.073.2
+- Compiles on DMD 2.068.2 up to DMD 2.074.0
 - HTTP server
   - Added support for simple range queries in the HTTP file server (by Jan Jurzitza aka WebFreak001) - [issue #716][issue716], [pull #1634][issue1634], [pull #1636][issue1636]
   - The HTTP file server only sets a default content type header if none was already set (by Remi A. Solås aka rexso) - [pull #1642][issue1642]
@@ -110,7 +110,7 @@ This release is a backport release of the smaller changes that got into 0.8.0. T
 
 ### Bug fixes ###
 
-- Fixed compile error for deserializing optional class/struct fields
+- Fixed compile error for deserializing optional `class`/ struct` fields
 - Fixed GET requests in the REST client to not send a body
 - Fixed REST request responses that return void to not send a body
 - Fixed a possible idle loop in `Task.join()` if called from outside of an event loop
