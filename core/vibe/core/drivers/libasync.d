@@ -462,7 +462,7 @@ final class LibasyncDriver : EventDriver {
 /// in lower size operations.
 final class LibasyncFileStream : FileStream {
 @trusted:
-	import vibe.inet.path : Path;
+	import vibe.core.path : Path;
 
 	private {
 		Path m_path;
