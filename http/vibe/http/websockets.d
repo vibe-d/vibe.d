@@ -443,7 +443,10 @@ final class WebSocket {
 		Sends a text message.
 
 		On the JavaScript side, the text will be available as message.data (type string).
-		Throws: WebSocketException if the connection is closed.
+
+		Throws:
+			A `WebSocketException` is thrown if the connection gets closed
+			before or during the transfer of the message.
 	*/
 	void send(scope const(char)[] data)
 	{
@@ -454,7 +457,10 @@ final class WebSocket {
 		Sends a binary message.
 
 		On the JavaScript side, the text will be available as message.data (type Blob).
-		Throws: WebSocketException if the connection is closed.
+
+		Throws:
+			A `WebSocketException` is thrown if the connection gets closed
+			before or during the transfer of the message.
 	*/
 	void send(ubyte[] data)
 	{
@@ -463,7 +469,10 @@ final class WebSocket {
 
 	/**
 		Sends a message using an output stream.
-		Throws: WebSocketException if the connection is closed.
+
+		Throws:
+			A `WebSocketException` is thrown if the connection gets closed
+			before or during the transfer of the message.
 	*/
 	void send(scope void delegate(scope OutgoingWebSocketMessage) @safe sender, FrameOpcode frameOpcode = FrameOpcode.text)
 	{
