@@ -26,9 +26,8 @@ void handleWebSocketConnection(scope WebSocket socket)
 {
 	int counter = 0;
 	logInfo("Got new web socket connection.");
-	while (true) {
+	while (socket.connected) {
 		sleep(1.seconds);
-		if (!socket.connected) break;
 		counter++;
 		logInfo("Sending '%s'.", counter);
 		socket.send(counter.to!string);
