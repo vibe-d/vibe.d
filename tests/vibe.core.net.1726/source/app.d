@@ -1,6 +1,6 @@
 import vibe.core.core;
 import vibe.core.net;
-import core.time : msecs;
+import core.time : seconds;
 import vibe.core.log;
 
 shared static this()
@@ -46,7 +46,7 @@ shared static this()
 		} catch (Exception e) assert(false, e.msg);
 	});
 
-	setTimer(1000.msecs, {
+	setTimer(2.seconds, {
 		assert(false, "Test has hung.");
 	});
 }
