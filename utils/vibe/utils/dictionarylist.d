@@ -140,11 +140,20 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		return def_val;
 	}
 
+	// DMD bug: cannot set T.init as default value for def_val parameter,
+	// because compilation fails with message:
+	//      Error: undefined identifier 'T'
 	/// ditto
-	inout(T) get(T)(string key, lazy inout(T) def_val = T.init)
+	inout(T) get(T)(string key, lazy inout(T) def_val)
 	inout if (typedGet!T) {
 		if (auto pv = key in this) return (*pv).get!T;
 		return def_val;
+	}
+
+	/// ditto
+	inout(T) get(T)(string key) // Work around DMD bug
+	inout if (typedGet!T) {
+		return get!T(key, T.init);
 	}
 
 	/** Returns all values matching the given key.
@@ -341,4 +350,5 @@ unittest {
 
 	assert(c.get("a").type == typeid(bool));
 	assert(c.get!string("b") == "Hello");
+	assert(c.get!int("c") == int.init);
 }
