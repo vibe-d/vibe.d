@@ -130,6 +130,13 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		else m_extendedFields ~= Field(keysum, key, value);
 	}
 
+	void addField(T)(string key, T value)
+	if (canAssign!T)
+	{
+		ValueType convertedValue = value;
+		addField(key, convertedValue);
+	}
+
 	/** Returns the first field that matches the given key.
 
 		If no field is found, def_val is returned.
@@ -347,8 +354,10 @@ unittest {
 	DictionaryList!(Variant) c;
 	c["a"] = true;
 	c["b"] = "Hello";
-
 	assert(c.get("a").type == typeid(bool));
 	assert(c.get!string("b") == "Hello");
 	assert(c.get!int("c") == int.init);
+	c.addField("d", 9);
+	c.addField("d", "bar");
+	assert(c.getAll("d") == [ cast(Variant) 9, cast(Variant) "bar" ]);
 }
