@@ -1,4 +1,4 @@
-project('Vibe.d', 'd')
+project('Vibe.d', 'd', meson_version: '>=0.40.0')
 
 source_root = meson.source_root()
 build_root = meson.build_root()
