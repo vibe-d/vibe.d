@@ -26,6 +26,7 @@ configuration "windows-optlink" {
 }
 
 configuration "generic" {
-	libs "z" platform="posix-ldc" // LDC 1.0.0 doesn't include libz in libphobos
+	// LDC 1.0.0 doesn't include libz in libphobos
+	libs "z" platform="posix-ldc"
 	libs "z" platform="gdc"
 }
