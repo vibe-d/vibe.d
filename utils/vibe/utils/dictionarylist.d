@@ -46,6 +46,12 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		Field[] m_extendedFields;
 
 		enum bool safeValueCopy = __traits(compiles, (VALUE v) @safe { VALUE vc; vc = v; });
+		template typedGet(T) {
+			enum typedGet = __traits(compiles, (VALUE v) { return v.get!T; });
+		}
+		template canAssign(T) {
+			enum canAssign = __traits(compiles, (T t) { VALUE v = t; });
+		}
 	}
 
 	alias ValueType = VALUE;
@@ -124,6 +130,13 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		else m_extendedFields ~= Field(keysum, key, value);
 	}
 
+	void addField(T)(string key, T value)
+	if (canAssign!T)
+	{
+		ValueType convertedValue = value;
+		addField(key, convertedValue);
+	}
+
 	/** Returns the first field that matches the given key.
 
 		If no field is found, def_val is returned.
@@ -132,6 +145,22 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	inout {
 		if (auto pv = key in this) return *pv;
 		return def_val;
+	}
+
+	// DMD bug: cannot set T.init as default value for def_val parameter,
+	// because compilation fails with message:
+	//      Error: undefined identifier 'T'
+	/// ditto
+	inout(T) get(T)(string key, lazy inout(T) def_val)
+	inout if (typedGet!T) {
+		if (auto pv = key in this) return (*pv).get!T;
+		return def_val;
+	}
+
+	/// ditto
+	inout(T) get(T)(string key) // Work around DMD bug
+	inout if (typedGet!T) {
+		return get!T(key, T.init);
 	}
 
 	/** Returns all values matching the given key.
@@ -182,6 +211,14 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 		else if (m_fieldCount < m_fields.length) m_fields[m_fieldCount++] = Field(keysum, key, val);
 		else m_extendedFields ~= Field(keysum, key, val);
 		return val;
+	}
+
+	/// ditto
+	ValueType opIndexAssign(T)(T val, string key)
+	if (canAssign!T)
+	{
+		ValueType convertedVal = val;
+		return opIndexAssign(convertedVal, key);
 	}
 
 	/** Returns a pointer to the first field that matches the given key.
@@ -310,4 +347,17 @@ static assert(DictionaryList!(string, true, 2).safeValueCopy);
 	b.addField("A", 2);
 	assert(b["A"] == 1);
 	assert(b.getAll("a") == [1, 2]);
+}
+
+unittest {
+	import std.variant : Variant;
+	DictionaryList!(Variant) c;
+	c["a"] = true;
+	c["b"] = "Hello";
+	assert(c.get("a").type == typeid(bool));
+	assert(c.get!string("b") == "Hello");
+	assert(c.get!int("c") == int.init);
+	c.addField("d", 9);
+	c.addField("d", "bar");
+	assert(c.getAll("d") == [ cast(Variant) 9, cast(Variant) "bar" ]);
 }
