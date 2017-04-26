@@ -62,71 +62,59 @@ struct URL {
 			str = str[idx+1 .. $];
 			bool requires_host = false;
 
-			switch(m_schema){
-				case "http":
-				case "https":
-				case "ftp":
-				case "spdy":
-				case "sftp":
-				case "ws":
-				case "wss":
-				case "file":
-				case "http+unix":
-				case "https+unix":
-				case "redis":
-					// proto://server/path style
-					enforce(str.startsWith("//"), "URL must start with proto://...");
-					requires_host = true;
-					str = str[2 .. $];
-					if (m_schema == "file")
-						break;
-					goto default;
-				default:
-					auto si = str.indexOfCT('/');
-					if( si < 0 ) si = str.length;
-					auto ai = str[0 .. si].indexOfCT('@');
-					sizediff_t hs = 0;
-					if( ai >= 0 ){
-						hs = ai+1;
-						auto ci = str[0 .. ai].indexOfCT(':');
-						if( ci >= 0 ){
-							m_username = str[0 .. ci];
-							m_password = str[ci+1 .. ai];
-						} else m_username = str[0 .. ai];
-						enforce(m_username.length > 0, "Empty user name in URL.");
+			if (isDoubleSlashSchema(m_schema)) {
+				// proto://server/path style
+				enforce(str.startsWith("//"), "URL must start with proto://...");
+				requires_host = true;
+				str = str[2 .. $];
+			}
+
+			if (schema != "file") {
+				auto si = str.indexOfCT('/');
+				if( si < 0 ) si = str.length;
+				auto ai = str[0 .. si].indexOfCT('@');
+				sizediff_t hs = 0;
+				if( ai >= 0 ){
+					hs = ai+1;
+					auto ci = str[0 .. ai].indexOfCT(':');
+					if( ci >= 0 ){
+						m_username = str[0 .. ci];
+						m_password = str[ci+1 .. ai];
+					} else m_username = str[0 .. ai];
+					enforce(m_username.length > 0, "Empty user name in URL.");
+				}
+
+				m_host = str[hs .. si];
+
+				auto findPort ( string src )
+				{
+					auto pi = src.indexOfCT(':');
+					if(pi > 0) {
+						enforce(pi < src.length-1, "Empty port in URL.");
+						m_port = to!ushort(src[pi+1..$]);
 					}
+					return pi;
+				}
 
-					m_host = str[hs .. si];
 
-					auto findPort ( string src )
-					{
-						auto pi = src.indexOfCT(':');
-						if(pi > 0) {
-							enforce(pi < src.length-1, "Empty port in URL.");
-							m_port = to!ushort(src[pi+1..$]);
-						}
-						return pi;
+				auto ip6 = m_host.indexOfCT('[');
+				if (ip6 == 0) { // [ must be first char
+					auto pe = m_host.indexOfCT(']');
+					if (pe > 0) {
+						findPort(m_host[pe..$]);
+						m_host = m_host[1 .. pe];
 					}
-
-
-					auto ip6 = m_host.indexOfCT('[');
-					if (ip6 == 0) { // [ must be first char
-						auto pe = m_host.indexOfCT(']');
-						if (pe > 0) {
-							findPort(m_host[pe..$]);
-							m_host = m_host[1 .. pe];
-						}
+				}
+				else {
+					auto pi = findPort(m_host);
+					if(pi > 0) {
+						m_host = m_host[0 .. pi];
 					}
-					else {
-						auto pi = findPort(m_host);
-						if(pi > 0) {
-							m_host = m_host[0 .. pi];
-						}
-					}
+				}
 
-					enforce(!requires_host || m_schema == "file" || m_host.length > 0,
-							"Empty server name in URL.");
-					str = str[si .. $];
+				enforce(!requires_host || m_schema == "file" || m_host.length > 0,
+						"Empty server name in URL.");
+				str = str[si .. $];
 			}
 		}
 
@@ -270,19 +258,8 @@ struct URL {
 		auto dst = appender!string();
 		dst.put(schema);
 		dst.put(":");
-		switch(schema){
-			default: break;
-			case "file":
-			case "http":
-			case "https":
-			case "ftp":
-			case "spdy":
-			case "sftp":
-			case "http+unix":
-			case "https+unix":
-				dst.put("//");
-				break;
-		}
+		if (isDoubleSlashSchema(schema))
+			dst.put("//");
 		if (m_username.length || m_password.length) {
 			dst.put(username);
 			dst.put(':');
@@ -329,6 +306,17 @@ struct URL {
 		if( m_host != rhs.m_host ) return m_host.cmp(rhs.m_host);
 		if( m_pathString != rhs.m_pathString ) return cmp(m_pathString, rhs.m_pathString);
 		return true;
+	}
+}
+
+private bool isDoubleSlashSchema(string schema)
+@safe nothrow @nogc {
+	switch (schema) {
+		case "ftp", "http", "https", "http+unix", "https+unix":
+		case "spdy", "sftp", "ws", "wss", "file", "redis", "tcp":
+			return true;
+		default:
+			return false;
 	}
 }
 
@@ -450,4 +438,10 @@ unittest {
 unittest {
 	import vibe.data.serialization;
 	static assert(isStringSerializable!URL);
+}
+
+unittest { // issue #1732
+	auto url = URL("tcp://0.0.0.0:1234");
+	url.port = 4321;
+	assert(url.toString == "tcp://0.0.0.0:4321", url.toString);
 }
