@@ -30,6 +30,7 @@ import std.meta : anySatisfy, Filter;
 	import std.typetuple : TypeTuple;
 	import vibe.inet.url : URL;
 	import vibe.internal.meta.funcattr : IsAttributedParameter;
+	import vibe.internal.meta.traits : derivedMethod;
 	import vibe.internal.meta.uda;
 
 	/// The settings used to generate the interface
@@ -249,6 +250,7 @@ import std.meta : anySatisfy, Filter;
 		static import std.traits;
 		import vibe.web.auth : AuthInfo;
 		import std.algorithm.searching : any, count;
+		import std.meta : AliasSeq;
 
 		assert(__ctfe);
 
@@ -261,6 +263,11 @@ import std.meta : anySatisfy, Filter;
 		foreach (fi, func; RouteFunctions) {
 			StaticRoute route;
 			route.functionName = __traits(identifier, func);
+
+			static if (!is(TImpl == I))
+				alias cfunc = derivedMethod!(TImpl, func);
+			else
+				alias cfunc = func;
 
 			alias FuncType = FunctionTypeOf!func;
 			alias ParameterTypes = ParameterTypeTuple!FuncType;
@@ -296,9 +303,11 @@ import std.meta : anySatisfy, Filter;
 				}
 
 				// determine parameter source/destination
-				if (is(PT == AUTHTP)) {
+				static if (is(PT == AUTHTP)) {
 					pi.kind = ParameterKind.auth;
-				} else if (IsAttributedParameter!(func, pname)) {
+				} else static if (IsAttributedParameter!(func, pname)) {
+					pi.kind = ParameterKind.attributed;
+				} else static if (AliasSeq!(cfunc).length > 0 && IsAttributedParameter!(cfunc, pname)) {
 					pi.kind = ParameterKind.attributed;
 				} else static if (anySatisfy!(mixin(CompareParamName.Name), WPAT)) {
 					alias PWPAT = Filter!(mixin(CompareParamName.Name), WPAT);
@@ -718,4 +727,13 @@ unittest {
 	static assert(__traits(compiles, RestInterface!I1.init));
 	static assert(!__traits(compiles, RestInterface!I2.init));
 	static assert(!__traits(compiles, RestInterface!I3.init));
+}
+
+unittest {
+	import vibe.http.server : HTTPServerResponse, HTTPServerRequest;
+	int foocomp(HTTPServerRequest, HTTPServerResponse) { return 42; }
+	interface I { void test(int foo); }
+	class C : I { @before!foocomp("foo") void test(int foo) { assert(foo == 42); }}
+	alias RI = RestInterface!C;
+	static assert(RI.staticRoutes[0].parameters[0].kind == ParameterKind.attributed);
 }

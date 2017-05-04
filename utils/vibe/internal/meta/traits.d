@@ -398,3 +398,26 @@ unittest {
 	static assert(is(StripHeadConst!(const(immutable(int))) == int));
 	static assert(is(StripHeadConst!(const(int[])) == const(int)[]));
 }
+
+template derivedMethod(C, alias method)
+{
+	import std.traits : FunctionTypeOf, MemberFunctionsTuple, ParameterTypeTuple;
+
+	enum fname = __traits(identifier, method);
+	alias overloads = MemberFunctionsTuple!(C, fname);
+	alias PTypes = ParameterTypeTuple!method;
+
+	template impl(size_t i) {
+		static if (i >= overloads.length)
+			static assert(false, "Derived class "~C.stringof~" doesn't have a derived member function "~fname~"!?");
+		else {
+			alias FT = FunctionTypeOf!(overloads[i]);
+			static if (__traits(compiles, FT(PTypes.init)))
+				alias impl = overloads[i];
+			else
+				alias impl = impl!(i+1);
+		}
+	}
+
+	alias derivedMethod = impl!0;
+}
