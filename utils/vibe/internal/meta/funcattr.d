@@ -12,6 +12,7 @@
 module vibe.internal.meta.funcattr;
 
 import std.traits : isInstanceOf, ReturnType;
+import vibe.internal.meta.traits : RecursiveFunctionAttributes;
 
 /// example
 unittest
@@ -184,7 +185,7 @@ auto computeAttributedParameter(alias FUNCTION, string NAME, ARGS...)(ARGS args)
 {
 	import std.typetuple : Filter;
 	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
-	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
+	alias input_attributes = Filter!(isInputAttribute, RecursiveFunctionAttributes!FUNCTION);
 	foreach (att; input_attributes)
 		static if (att.parameter == NAME) {
 			return att.evaluator(args);
@@ -207,7 +208,7 @@ auto computeAttributedParameterCtx(alias FUNCTION, string NAME, T, ARGS...)(T ct
 	else
 		import std.typetuple : AliasSeq = TypeTuple, Filter;
 	static assert(IsAttributedParameter!(FUNCTION, NAME), "Missing @before attribute for parameter "~NAME);
-	alias input_attributes = Filter!(isInputAttribute, __traits(getAttributes, FUNCTION));
+	alias input_attributes = Filter!(isInputAttribute, RecursiveFunctionAttributes!FUNCTION);
 	foreach (att; input_attributes)
 		static if (att.parameter == NAME) {
 			static if (!__traits(isStaticFunction, att.evaluator)) {
@@ -255,7 +256,7 @@ ReturnType!FUNCTION evaluateOutputModifiers(alias FUNCTION, ARGS...)(ReturnType!
 	import std.typetuple : Filter;
 	import vibe.internal.meta.typetuple : Compare, Group;
 
-	alias output_attributes = Filter!(isOutputAttribute, __traits(getAttributes, FUNCTION));
+	alias output_attributes = Filter!(isOutputAttribute, RecursiveFunctionAttributes!FUNCTION);
 	foreach (OA; output_attributes) {
 		import std.typetuple : TypeTuple;
 
@@ -379,7 +380,7 @@ private {
 
 		private alias attributes = Filter!(
 			isInputAttribute,
-			__traits(getAttributes, Function)
+			RecursiveFunctionAttributes!Function
 		);
 
 		private	alias parameter_names = ParameterIdentifierTuple!Function;
