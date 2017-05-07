@@ -569,14 +569,76 @@ unittest {
 
 struct ArraySet(Key)
 {
+	import std.experimental.allocator : makeArray, expandArray, dispose, processAllocator;
+	import std.experimental.allocator.building_blocks.affix_allocator : AffixAllocator;
+
 	private {
+		static if (__VERSION__ < 2074) {
+			struct AW { // work around AffixAllocator limitations
+				IAllocator alloc;
+				alias alloc this;
+				enum alignment = max(Key.alignof, int.alignof);
+				void[] resolveInternalPointer(void* p) { void[] ret; alloc.resolveInternalPointer(p, ret); return ret; }
+			}
+			alias AllocatorType = AffixAllocator!(AW, int);
+		} else {
+			IAllocator AW(IAllocator a) { return a; }
+			alias AllocatorType = AffixAllocator!(IAllocator, int);
+		}
 		Key[4] m_staticEntries;
 		Key[] m_entries;
+		AllocatorType m_allocator;
+	}
+
+	~this()
+	@trusted {
+		static if (__VERSION__ <= 2071)
+			scope (failure) assert(false);
+		if (m_entries.ptr) {
+			if (--allocator.prefix(m_entries) <= 0) {
+				try allocator.dispose(m_entries);
+				catch (Exception e) assert(false, e.msg); // should never happen
+			}
+		}
+	}
+
+	this(this)
+	@trusted {
+		static if (__VERSION__ <= 2071)
+			scope (failure) assert(false);
+		if (m_entries.ptr) {
+			allocator.prefix(m_entries)++;
+		}
 	}
 
 	@property ArraySet dup()
 	{
-		return ArraySet(m_staticEntries, m_entries.dup);
+		static if (__VERSION__ <= 2071)
+			scope (failure) assert(false);
+		ArraySet ret;
+		ret.m_staticEntries = m_staticEntries;
+		ret.m_allocator = m_allocator;
+
+		if (m_entries.length) {
+			Key[] duped;
+			() @trusted {
+				try duped = allocator.makeArray!(Key)(m_entries.length);
+				catch (Exception e) assert(false, e.msg);
+				if (!duped.length)
+					assert(false, "Failed to allocate memory for duplicated "~ArraySet.stringof);
+				allocator.prefix(duped) = 1;
+			} ();
+			duped[] = m_entries[];
+			ret.m_entries = duped;
+		}
+
+		return ret;
+	}
+
+	void setAllocator(IAllocator allocator)
+	in { assert(m_entries.ptr is null, "Cannot set allocator after elements have been inserted."); }
+	body {
+		m_allocator = AllocatorType(AW(allocator));
 	}
 
 	bool opBinaryRight(string op)(Key key) if (op == "in") { return contains(key); }
@@ -604,17 +666,37 @@ struct ArraySet(Key)
 	void insert(Key key)
 	{
 		if (contains(key)) return;
+
 		foreach (ref k; m_staticEntries)
 			if (k == Key.init) {
 				k = key;
 				return;
 			}
+
 		foreach (ref k; m_entries)
 			if (k == Key.init) {
 				k = key;
 				return;
 			}
-		m_entries ~= key;
+
+		size_t oldlen = m_entries.length;
+
+		() @trusted {
+			try {
+				if (!oldlen) {
+					m_entries = allocator.makeArray!Key(64);
+					assert(m_entries.length, "Failed to allocate memory for "~ArraySet.stringof);
+					allocator.prefix(m_entries) = 1;
+				} else {
+					int oldrc = allocator.prefix(m_entries);
+					if (!allocator.expandArray(m_entries, max(64, oldlen * 3 / 4)))
+						assert(false, "Failed to allocate memory for "~ArraySet.stringof);
+					allocator.prefix(m_entries) = oldrc;
+				}
+			} catch (Exception e) assert(false, e.msg);
+		} ();
+
+		m_entries[oldlen] = key;
 	}
 
 	void remove(Key key)
@@ -622,4 +704,69 @@ struct ArraySet(Key)
 		foreach (ref k; m_staticEntries) if (k == key) { k = Key.init; return; }
 		foreach (ref k; m_entries) if (k == key) { k = Key.init; return; }
 	}
+
+	ref allocator()
+	nothrow @trusted {
+		try {
+			static if (__VERSION__ < 2074) auto palloc = m_allocator.parent;
+			else auto palloc = m_allocator._parent;
+			if (!palloc) {
+				assert(processAllocator !is null, "No theAllocator set!?");
+				m_allocator = AllocatorType(AW(processAllocator));
+			}
+		} catch (Exception e) assert(false, e.msg); // should never throw
+		return m_allocator;
+	}
+}
+
+@safe nothrow unittest {
+	import std.experimental.allocator : allocatorObject;
+	import std.experimental.allocator.mallocator : Mallocator;
+
+	ArraySet!int s;
+	s.setAllocator(() @trusted { return Mallocator.instance.allocatorObject; } ());
+
+	ArraySet!int t;
+	t = s;
+
+	s.insert(1);
+	s.insert(2);
+	s.insert(3);
+	s.insert(4);
+	assert(s.contains(1));
+	assert(s.contains(2));
+	assert(s.contains(3));
+	assert(s.contains(4));
+	assert(!t.contains(1));
+
+	s.insert(5);
+	assert(s.contains(5));
+
+	t = s;
+	assert(t.contains(5));
+	assert(t.contains(1));
+
+	s.insert(6);
+	assert(s.contains(6));
+	assert(t.contains(6));
+
+	s = ArraySet!int.init;
+	assert(!s.contains(1));
+	assert(t.contains(1));
+	assert(t.contains(6));
+
+	s = t.dup;
+	assert(s.contains(1));
+	assert(s.contains(6));
+
+	t.remove(1);
+	assert(!t.contains(1));
+	assert(s.contains(1));
+	assert(t.contains(2));
+	assert(t.contains(6));
+
+	t.remove(6);
+	assert(!t.contains(6));
+	assert(s.contains(6));
+	assert(t.contains(5));
 }
