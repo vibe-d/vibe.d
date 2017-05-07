@@ -240,7 +240,10 @@ template isPublicMember(T, string M)
 	static if (!__traits(compiles, TypeTuple!(__traits(getMember, T, M)))) enum isPublicMember = false;
 	else {
 		alias MEM = TypeTuple!(__traits(getMember, T, M));
-		enum isPublicMember = __traits(getProtection, MEM).among("public", "export");
+		static if (__traits(compiles, __traits(getProtection, MEM)))
+			enum isPublicMember = __traits(getProtection, MEM).among("public", "export");
+		else
+			enum isPublicMember = true;
 	}
 }
 
@@ -397,4 +400,71 @@ unittest {
 	static assert(is(StripHeadConst!(immutable(int)) == int));
 	static assert(is(StripHeadConst!(const(immutable(int))) == int));
 	static assert(is(StripHeadConst!(const(int[])) == const(int)[]));
+}
+
+template derivedMethod(C, alias method)
+{
+	import std.traits : FunctionTypeOf, MemberFunctionsTuple, ParameterTypeTuple;
+	import std.meta : AliasSeq;
+
+	enum fname = __traits(identifier, method);
+	alias overloads = MemberFunctionsTuple!(C, fname);
+	alias PTypes = ParameterTypeTuple!method;
+
+	template impl(size_t i) {
+		static if (i >= overloads.length)
+			alias impl = AliasSeq!();
+		else {
+			alias FT = FunctionTypeOf!(overloads[i]);
+			static if (__traits(compiles, FT(PTypes.init)))
+				alias impl = overloads[i];
+			else
+				alias impl = impl!(i+1);
+		}
+	}
+
+	alias derivedMethod = impl!0;
+}
+
+template RecursiveFunctionAttributes(alias func)
+{
+	import std.meta : AliasSeq, staticMap;
+	import std.traits : BaseTypeTuple;
+
+	static if (is(AliasSeq!(__traits(parent, func))[0])) {
+		alias C = AliasSeq!(__traits(parent, func))[0];
+		template rimpl(T) {
+			alias DF = derivedMethod!(T, func);
+			static if (AliasSeq!(DF).length > 0)
+				alias rimpl = RecursiveFunctionAttributes!DF;
+			else alias rimpl = AliasSeq!();
+		}
+		alias RecursiveFunctionAttributes = AliasSeq!(
+			__traits(getAttributes, func),
+			staticMap!(rimpl, BaseTypeTuple!C)
+		);
+	} else {
+		alias RecursiveFunctionAttributes = AliasSeq!(__traits(getAttributes, func));
+	}
+}
+
+unittest {
+	interface I {
+		@(1) void test();
+	}
+
+	interface J {
+		@(4) void test(int);
+	}
+
+	class C : I, J {
+		override @(2) void test() {}
+		override void test(int) {}
+	}
+
+	class D : C {
+		override @(3) void test() {}
+	}
+
+	static assert([RecursiveFunctionAttributes!(D.test)] == [3, 2, 1]);
 }
