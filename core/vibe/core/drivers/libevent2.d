@@ -99,6 +99,7 @@ final class Libevent2Driver : EventDriver {
 
 		synchronized if (!s_threadObjectsMutex) {
 			s_threadObjectsMutex = new Mutex;
+			s_threadObjects.setAllocator(m_allocator);
 
 			// set the malloc/free versions of our runtime so we don't run into trouble
 			// because the libevent DLL uses a different one.
@@ -164,7 +165,9 @@ final class Libevent2Driver : EventDriver {
 				() @trusted { destroy(obj); } ();
 			}
 
-			foreach (ref key; () @trusted { return s_threadObjects; } ()) {
+			ref getThreadObjects() @trusted { return s_threadObjects; }
+
+			foreach (ref key; getThreadObjects()) {
 				assert(key);
 				auto obj = () @trusted { return cast(Libevent2Object)cast(void*)key; } ();
 				debug assert(obj.m_ownerThread !is m_ownerThread, "Live object of this thread detected after all owned mutexes have been destroyed.");
@@ -571,13 +574,12 @@ final class Libevent2Driver : EventDriver {
 
 	private void registerObject(Libevent2Object obj)
 	nothrow {
-		scope (failure) assert(false); // synchronized is not nothrow
-
 		debug assert(() @trusted { return Thread.getThis(); } () is m_ownerThread, "Event object created in foreign thread.");
 		auto key = () @trusted { return cast(size_t)cast(void*)obj; } ();
 		m_ownedObjects.insert(key);
 		if (obj.m_threadObject)
 			() @trusted {
+				scope (failure) assert(false); // synchronized is not nothrow
 				synchronized (s_threadObjectsMutex)
 					s_threadObjects.insert(key);
 			} ();
