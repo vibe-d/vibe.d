@@ -38,6 +38,11 @@ struct RedisCollection(T /*: RedisValue*/, RedisCollectionOptions OPTIONS = Redi
 
 	this(RedisDatabase db, Replicate!(string, ID_LENGTH) name, string suffix = null)
 	{
+		initialize(db, name, suffix);
+	}
+
+	void initialize(RedisDatabase db, Replicate!(string, ID_LENGTH) name, string suffix = null)
+	{
 		m_db = db;
 		foreach (i, N; name) {
 			if (i == 0) m_prefix[i] = name[i] ~ ":";
