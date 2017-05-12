@@ -24,6 +24,7 @@ dub.selections.json
 vibe-d
 tests/*/tests
 __test__*__
+vibe-d-test*
 
 # Examples
 examples/app_skeleton/__test__library__
