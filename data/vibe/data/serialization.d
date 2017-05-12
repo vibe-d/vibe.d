@@ -23,6 +23,7 @@
 				and will always be serialized as a string.)
 			$(LI Any `Nullable!T` will be serialized as either `null`, or
 				as the contained value (subject to these rules again).)
+			$(LI Any `Typedef!T` will be serialized as if it were just `T`.)
 			$(LI Any `BitFlags!T` value will be serialized as `T[]`)
 			$(LI Types satisfying the `isPolicySerializable` trait for the
 				supplied `Policy` will be serialized as the value returned
@@ -350,7 +351,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 
 	private void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value)
 	{
-		import std.typecons : BitFlags, Nullable, Tuple, tuple;
+		import std.typecons : BitFlags, Nullable, Tuple, Typedef, TypedefType, tuple;
 
 		alias TU = Unqual!T;
 
@@ -424,6 +425,8 @@ private template serializeValueImpl(Serializer, alias Policy) {
 		} else static if (/*isInstanceOf!(Nullable, TU)*/is(T == Nullable!TPS, TPS...)) {
 			if (value.isNull()) ser.serializeValue!(typeof(null))(null);
 			else ser.serializeValue!(typeof(value.get()), ATTRIBUTES)(value.get());
+		} else static if (isInstanceOf!(Typedef, TU)) {
+			ser.serializeValue!(TypedefType!TU, ATTRIBUTES)(cast(TypedefType!TU)value);
 		} else static if (is(TU == BitFlags!E, E)) {
 			alias STraits = SubTraits!(Traits, E);
 
@@ -536,7 +539,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 
 	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T) 
 	{
-		import std.typecons : BitFlags, Nullable;
+		import std.typecons : BitFlags, Nullable, Typedef, TypedefType;
 
 		static struct Traits {
 			alias Type = T;
@@ -600,6 +603,8 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 		} else static if (isInstanceOf!(Nullable, T)) {
 			if (ser.tryReadNull!Traits()) return T.init;
 			return T(ser.deserializeValue!(typeof(T.init.get()), ATTRIBUTES));
+		} else static if (isInstanceOf!(Typedef, T)) {
+			return T(ser.deserializeValue!(TypedefType!T, ATTRIBUTES));
 		} else static if (is(T == BitFlags!E, E)) {
 			alias STraits = SubTraits!(Traits, E);
 			T ret;
@@ -1611,4 +1616,13 @@ unittest {
 	assert(ser == "D("~Rn~"){DE(i,y)(V(i)(42))DE(i,y)}D("~Rn~")");
 	auto deser = deserialize!(TestSerializer, Custom)(ser);
 	assert(deser.x == 42);
+}
+
+unittest {
+	import std.typecons : Typedef;
+	alias T = Typedef!int;
+	auto ser = serialize!TestSerializer(T(42));
+	assert(ser == "V(i)(42)", ser);
+	auto deser = deserialize!(TestSerializer, T)(ser);
+	assert(deser == 42);
 }
