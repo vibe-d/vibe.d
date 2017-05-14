@@ -796,7 +796,8 @@ unittest {
 	test_align(ptr++, 0x10);
 }
 
-private size_t alignedSize(size_t sz) nothrow
+/// private
+size_t alignedSize(size_t sz) nothrow
 {
 	return ((sz + Allocator.alignment - 1) / Allocator.alignment) * Allocator.alignment;
 }
