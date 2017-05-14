@@ -365,7 +365,7 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 		enforce(max_bytes > 0, "Reached maximum number of bytes while searching for end marker.");
 		auto max_peek = max(max_bytes, max_bytes+nmarker); // account for integer overflow
 		auto pm = stream.peek()[0 .. min($, max_bytes)];
-		if (!pm.length) { // no peek support - inefficient route
+		if (!pm.length || nmatched == 1) { // no peek support - inefficient route
 			ubyte[2] buf = void;
 			auto l = nmarker - nmatched;
 			stream.read(buf[0 .. l], IOMode.all);
@@ -383,6 +383,8 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 				if (nmatched == nmarker) return;
 			}
 		} else {
+			assert(nmatched == 0);
+			
 			auto idx = pm.countUntil(end_marker[0]);
 			if (idx < 0) {
 				dst.put(pm);
@@ -391,14 +393,7 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 			} else {
 				dst.put(pm[0 .. idx]);
 				stream.skip(idx+1);
-				if (nmarker == 2) {
-					ubyte[1] next;
-					stream.read(next, IOMode.all);
-					if (next[0] == end_marker[1])
-						return;
-					dst.put(end_marker[0]);
-					dst.put(next[0]);
-				} else return;
+				if (++nmatched == nmarker) return;
 			}
 		}
 	}
