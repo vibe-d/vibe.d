@@ -392,8 +392,17 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 				stream.skip(pm.length);
 			} else {
 				dst.put(pm[0 .. idx]);
-				stream.skip(idx+1);
-				if (++nmatched == nmarker) return;
+				if (nmarker == 1) {
+					stream.skip(idx+1);
+					return;
+				} else if (idx+1 < pm.length && pm[idx+1] == end_marker[1]) {
+					assert(nmarker == 2);
+					stream.skip(idx+2);
+					return;
+				} else {
+					nmatched++;
+					stream.skip(idx+1);
+				}
 			}
 		}
 	}
