@@ -1770,9 +1770,13 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 		bool keep_alive;
 
 		() @trusted {
-			import std.algorithm.comparison : max;
-			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
-			scope request_allocator = request_allocator_s.allocatorObject;
+			import vibe.internal.utilallocator: RegionListAllocator;
+
+			version (VibeManualMemoryManagement)
+				scope request_allocator = new RegionListAllocator!(shared(Mallocator))(1024, Mallocator.instance);
+			else
+				scope request_allocator = new RegionListAllocator!(shared(GCAllocator))(1024, GCAllocator.instance);
+
 			handleRequest(http_stream, connection, listen_info, settings, keep_alive, request_allocator);
 		} ();
 		if (!keep_alive) { logTrace("No keep-alive - disconnecting client."); break; }
