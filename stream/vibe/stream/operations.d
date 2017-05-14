@@ -404,6 +404,38 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 	}
 }
 
+unittest { // issue #1741
+	static class S : InputStream {
+		ubyte[] src;
+		ubyte[] buf;
+		size_t nread;
+
+		this(scope ubyte[] bytes...)
+		{
+			src = bytes.dup;
+		}
+
+		@property bool empty() { return nread >= src.length; }
+		@property ulong leastSize() { if (!buf.length && !nread) buf = src; return src.length - nread; }
+		@property bool dataAvailableForRead() { return buf.length > 0; }
+		const(ubyte)[] peek() { return buf; }
+		size_t read(scope ubyte[] dst, IOMode) {
+			if (!buf.length) buf = src;
+			dst[] = buf[0 .. dst.length];
+			nread += dst.length;
+			buf = buf[dst.length .. $];
+			return dst.length;
+		}
+		alias InputStream.read read;
+	}
+
+
+	auto s = new S('X', '\r', '\n');
+	auto dst = appender!(ubyte[]);
+	readUntilSmall(s, dst, ['\r', '\n']);
+	assert(dst.data == ['X']);
+}
+
 
 private @safe void readUntilGeneric(R, InputStream)(InputStream stream, ref R dst, in ubyte[] end_marker, ulong max_bytes = ulong.max) /*@ufcs*/
 	if (isOutputRange!(R, ubyte) && isInputStream!InputStream)
