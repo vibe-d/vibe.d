@@ -22,6 +22,7 @@ shared static this()
 			} // expected
 		}, conn);
 		auto wt = runTask!TCPConnection((conn) {
+			sleep(1.msecs); // give the connection time to establish 
 			try {
 				conn.write(buf);
 				assert(false, "Expected read() to throw an exception.");
@@ -37,16 +38,17 @@ shared static this()
 		assert(read_ex, "No read exception thrown");
 		assert(write_ex, "No write exception thrown");
 		exitEventLoop();
-	});
+	}, "127.0.0.1");
 
 	runTask({
 		try {
 			auto conn = connectTCP("127.0.0.1", 11375);
+			sleep(10.msecs);
 			conn.close();
 		} catch (Exception e) assert(false, e.msg);
 	});
 
-	setTimer(1000.msecs, {
+	setTimer(2000.msecs, {
 		assert(false, "Test has hung.");
 	});
 }
