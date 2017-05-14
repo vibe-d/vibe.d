@@ -349,7 +349,7 @@ private template serializeValueImpl(Serializer, alias Policy) {
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
-	private void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value)
+	private void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value) @safe
 	{
 		import std.typecons : BitFlags, Nullable, Tuple, Typedef, TypedefType, tuple;
 
@@ -1679,4 +1679,9 @@ unittest {
 	assert(ser == "V(i)(42)", ser);
 	auto deser = deserialize!(TestSerializer, T)(ser);
 	assert(deser == 42);
+}
+
+@safe unittest {
+	static struct Foo { Foo[] foos; }
+	serialize!TestSerializer(Foo());
 }
