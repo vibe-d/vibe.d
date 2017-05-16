@@ -687,13 +687,15 @@ struct Bson {
 	/// Iterates over all values of an object or array.
 	auto byValue() const { checkType(Type.array, Type.object); return byKeyValueImpl().map!(t => t[1]); }
 	/// Iterates over all index/value pairs of an array.
-	auto byIndexValue() const { checkType(Type.array); return byKeyValueImpl().map!(t => tuple(t[0].to!size_t, t[1])); }
+	auto byIndexValue() const { checkType(Type.array); return byKeyValueImpl().map!(t => Tuple!(size_t, "key", Bson, "value")(t[0].to!size_t, t[1])); }
 	/// Iterates over all key/value pairs of an object.
 	auto byKeyValue() const { checkType(Type.object); return byKeyValueImpl(); }
 
 	private auto byKeyValueImpl()
 	const {
 		checkType(Type.object, Type.array);
+
+		alias T = Tuple!(string, "key", Bson, "value");
 		
 		static struct Rng {
 			private {
@@ -703,7 +705,7 @@ struct Bson {
 			}
 
 			@property bool empty() const { return data.length == 0; }
-			@property Tuple!(string, Bson) front() { return tuple(key, value); }
+			@property T front() { return T(key, value); }
 			@property Rng save() const { return this; }
 
 			void popFront()
