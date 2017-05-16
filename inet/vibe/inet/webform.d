@@ -204,6 +204,33 @@ unittest { // issue #1220 - wrong handling of Content-Length
 	assert(files["files"].filename == "file1.txt");
 }
 
+unittest { // use of unquoted strings in Content-Disposition
+	import vibe.stream.memory;
+
+	auto content_type = "multipart/form-data; boundary=\"AaB03x\"";
+
+	auto input = createMemoryStream(cast(ubyte[])(
+			"--AaB03x\r\n" ~
+			"Content-Disposition: form-data; name=submitname\r\n" ~
+			"\r\n" ~
+			"Larry\r\n" ~
+			"--AaB03x\r\n" ~
+			"Content-Disposition: form-data; name=files; filename=file1.txt\r\n" ~
+			"Content-Type: text/plain\r\n" ~
+			"Content-Length: 29\r\n" ~
+			"\r\n" ~
+			"... contents of file1.txt ...\r\n" ~
+			"--AaB03x--\r\n").dup, false);
+
+	FormFields fields;
+	FilePartFormFields files;
+
+	parseMultiPartForm(fields, files, content_type, input, 4096);
+
+	assert(fields["submitname"] == "Larry");
+	assert(files["files"].filename == "file1.txt");
+}
+
 /**
 	Single part of a multipart form.
 
@@ -220,24 +247,52 @@ struct FilePart {
 private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFields form, ref FilePartFormFields files, const(ubyte)[] boundary, size_t max_line_length)
 	if (isInputStream!InputStream)
 {
+	//find end of quoted string
+	auto indexOfQuote(string str) {
+		foreach (i, ch; str) {
+			if (ch == '"' && (i == 0 || str[i-1] != '\\')) return i;
+		}
+		return -1;
+	}
+
+	auto parseValue(ref string str) {
+		string res;
+		if (str[0]=='"') {
+			str = str[1..$];
+			auto pos = indexOfQuote(str);
+			res = str[0..pos].replace(`\"`, `"`);
+			str = str[pos..$];
+		}
+		else {
+			auto pos = str.indexOf(';');
+			if (pos < 0) {
+				res = str;
+				str = "";
+			} else {
+				res = str[0 .. pos];
+				str = str[pos..$];
+			}
+		}
+
+		return res;
+	}
+
 	InetHeaderMap headers;
 	stream.parseRFC5322Header(headers);
 	auto pv = "Content-Disposition" in headers;
 	enforce(pv, "invalid multipart");
 	auto cd = *pv;
 	string name;
-	auto pos = cd.indexOf("name=\"");
+	auto pos = cd.indexOf("name=");
 	if (pos >= 0) {
-		cd = cd[pos+6 .. $];
-		pos = cd.indexOf("\"");
-		name = cd[0 .. pos];
+		cd = cd[pos+5 .. $];
+		name = parseValue(cd);
 	}
 	string filename;
-	pos = cd.indexOf("filename=\"");
+	pos = cd.indexOf("filename=");
 	if (pos >= 0) {
-		cd = cd[pos+10 .. $];
-		pos = cd.indexOf("\"");
-		filename = cd[0 .. pos];
+		cd = cd[pos+9 .. $];
+		filename = parseValue(cd);
 	}
 
 	if (filename.length > 0) {
