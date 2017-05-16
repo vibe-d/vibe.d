@@ -1949,6 +1949,12 @@ struct JsonStringSerializer(R, bool pretty = false)
 unittest
 {
 	assert(serializeToJsonString(double.nan) == "null");
+	assert(serializeToJsonString(Json()) == "null");
+	assert(serializeToJsonString(Json(["bar":Json("baz"),"foo":Json()])) == `{"bar":"baz"}`);
+
+	struct Foo{Json bar = Json();}
+	Foo f;
+	assert(serializeToJsonString(f) == `{"bar":null}`);
 }
 
 /**
@@ -1968,7 +1974,7 @@ void writeJsonString(R, bool pretty = false)(ref R dst, in Json json, size_t lev
 @safe //	if( isOutputRange!R && is(ElementEncodingType!R == char) )
 {
 	final switch( json.type ){
-		case Json.Type.undefined: dst.put("undefined"); break;
+		case Json.Type.undefined: dst.put("null"); break;
 		case Json.Type.null_: dst.put("null"); break;
 		case Json.Type.bool_: dst.put(json.get!bool ? "true" : "false"); break;
 		case Json.Type.int_: formattedWrite(dst, "%d", json.get!long); break;
