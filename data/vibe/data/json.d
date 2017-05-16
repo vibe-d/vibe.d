@@ -78,7 +78,7 @@ import std.format;
 import std.string;
 import std.range;
 import std.traits;
-import std.typecons : tuple;
+import std.typecons : Tuple;
 import std.bigint;
 
 /******************************************************************************/
@@ -463,10 +463,12 @@ struct Json {
 		return 0;
 	}
 
+	private alias KeyValue = Tuple!(string, "key", Json, "value");
+
 	/// Iterates over all key/value pairs of an object.
-	@property auto byKeyValue() @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => tuple(kv.key, kv.value)).trustedRange; }
+	@property auto byKeyValue() @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => KeyValue(kv.key, kv.value)).trustedRange; }
 	/// ditto
-	@property auto byKeyValue() const @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => tuple(kv.key, kv.value)).trustedRange; }
+	@property auto byKeyValue() const @trusted { checkType!(Json[string])("byKeyValue"); return m_object.byKeyValue.map!(kv => const(KeyValue)(kv.key, kv.value)).trustedRange; }
 	/// Iterates over all index/value pairs of an array.
 	@property auto byIndexValue() { checkType!(Json[])("byIndexValue"); return zip(iota(0, m_array.length), m_array); }
 	/// ditto

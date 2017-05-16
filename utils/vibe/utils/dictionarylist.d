@@ -31,15 +31,17 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 	import std.typecons : Tuple;
 
 	private {
+		alias KeyValue = Tuple!(string, "key", ValueType, "value");
+		
 		static struct Field {
 			static if (USE_HASHSUM) uint keyCheckSum;
 			else {
 				enum keyCheckSum = 0;
 				this(uint, string key, VALUE value) { this.key = key; this.value = value; }
 			}
-			Tuple!(string, VALUE) tuple;
-			@property ref inout(string) key() inout { return tuple[0]; }
-			@property ref inout(VALUE) value() inout { return tuple[1]; }
+			KeyValue tuple;
+			@property ref inout(string) key() inout { return tuple.key; }
+			@property ref inout(VALUE) value() inout { return tuple.value; }
 		}
 		Field[NUM_STATIC_FIELDS] m_fields;
 		size_t m_fieldCount = 0;
@@ -250,7 +252,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 			size_t idx;
 
 			@property bool empty() const { return idx >= list.length; }
-			@property ref Tuple!(string, ValueType) front() {
+			@property ref KeyValue front() {
 				if (idx < list.m_fieldCount)
 					return list.m_fields[idx].tuple;
 				return list.m_extendedFields[idx - list.m_fieldCount].tuple;
@@ -267,7 +269,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 			size_t idx;
 
 			@property bool empty() const { return idx >= list.length; }
-			@property ref const(Tuple!(string, ValueType)) front() {
+			@property ref const(KeyValue) front() {
 				if (idx < list.m_fieldCount)
 					return list.m_fields[idx].tuple;
 				return list.m_extendedFields[idx - list.m_fieldCount].tuple;
