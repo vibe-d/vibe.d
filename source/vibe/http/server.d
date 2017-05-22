@@ -1710,7 +1710,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	// based driver.
 	connection.tcpNoDelay = true;
 
-	version(VibeNoSSL) {} else {
+	static if (!is(ReturnType!createTLSStreamFL == void)) {
 		import std.traits : ReturnType;
 		ReturnType!createTLSStreamFL tls_stream;
 	}
@@ -1722,13 +1722,12 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 
 	// If this is a HTTPS server, initiate TLS
 	if (listen_info.tlsContext) {
-		version (VibeNoSSL) assert(false, "No TLS support compiled in (VibeNoSSL)");
-		else {
+		static if (is(typeof(tls_stream))) {
 			logDebug("Accept TLS connection: %s", listen_info.tlsContext.kind);
 			// TODO: reverse DNS lookup for peer_name of the incoming connection for TLS client certificate verification purposes
 			tls_stream = createTLSStreamFL(http_stream, listen_info.tlsContext, TLSStreamState.accepting, null, connection.remoteAddress);
 			http_stream = tls_stream;
-		}
+		} else assert(false, "No TLS support compiled in.");
 	}
 
 	while (!connection.empty) {
