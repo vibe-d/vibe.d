@@ -40,9 +40,12 @@ void listenHTTPReverseProxy(HTTPServerSettings settings, HTTPReverseProxySetting
 /// ditto
 void listenHTTPReverseProxy(HTTPServerSettings settings, string destination_host, ushort destination_port)
 {
+	URL url;
+	url.schema = "http";
+	url.host = destination_host;
+	url.port = destination_port;
 	auto proxy_settings = new HTTPReverseProxySettings;
-	proxy_settings.destinationHost = destination_host;
-	proxy_settings.destinationPort = destination_port;
+	proxy_settings.destination = url;
 	listenHTTPReverseProxy(settings, proxy_settings);
 }
 
@@ -58,10 +61,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 		foreach (n; non_forward_headers)
 			non_forward_headers_map[n] = "";
 
-	URL url;
-	url.schema = "http";
-	url.host = settings.destinationHost;
-	url.port = settings.destinationPort;
+	auto url = settings.destination;
 
 	void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res)
 	@safe {
@@ -76,7 +76,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 			}
 
 			TCPConnection ccon;
-			try ccon = connectTCP(settings.destinationHost, settings.destinationPort);
+			try ccon = connectTCP(url.getFilteredHost, url.port);
 			catch (Exception e) {
 				throw new HTTPStatusException(HTTPStatus.badGateway, "Connection to upstream server failed: "~e.msg);
 			}
@@ -102,7 +102,7 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 		{
 			creq.method = req.method;
 			creq.headers = req.headers.dup;
-			creq.headers["Host"] = settings.destinationHost;
+			creq.headers["Host"] = url.getFilteredHost;
 
 			//handle protocol upgrades
 			if (!isUpgrade) {
@@ -196,9 +196,20 @@ HTTPServerRequestDelegateS reverseProxyRequest(HTTPReverseProxySettings settings
 /// ditto
 HTTPServerRequestDelegateS reverseProxyRequest(string destination_host, ushort destination_port)
 {
+	URL url;
+	url.schema = "http";
+	url.host = destination_host;
+	url.port = destination_port;
 	auto settings = new HTTPReverseProxySettings;
-	settings.destinationHost = destination_host;
-	settings.destinationPort = destination_port;
+	settings.destination = url;
+	return reverseProxyRequest(settings);
+}
+
+/// ditto
+HTTPServerRequestDelegateS reverseProxyRequest(URL destination)
+{
+	auto settings = new HTTPReverseProxySettings;
+	settings.destination = destination;
 	return reverseProxyRequest(settings);
 }
 
@@ -206,10 +217,17 @@ HTTPServerRequestDelegateS reverseProxyRequest(string destination_host, ushort d
 	Provides advanced configuration facilities for reverse proxy servers.
 */
 final class HTTPReverseProxySettings {
-	/// The destination host to forward requests to
-	string destinationHost;
-	/// The destination port to forward requests to
-	ushort destinationPort;
+	/// Scheduled for deprecation - use `destination.host` instead.
+	@property string destinationHost() const { return destination.host; }
+	/// ditto
+	@property void destinationHost(string host) { destination.host = host; }
+	/// Scheduled for deprecation - use `destination.port` instead.
+	@property ushort destinationPort() const { return destination.port; }
+	/// ditto
+	@property void destinationPort(ushort port) { destination.port = port; }
+
+	/// The destination URL to forward requests to
+	URL destination = URL("http", Path(""));
 	/// Avoids compressed transfers between proxy and destination hosts
 	bool avoidCompressedRequests;
 	/// Handle CONNECT requests for creating a tunnel to the destination host
