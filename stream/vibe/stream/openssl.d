@@ -6,7 +6,11 @@
 	Authors: Sönke Ludwig
 */
 module vibe.stream.openssl;
-version(Have_openssl):
+version(Have_botan)
+{
+} else version(VibeNoSSL)
+{
+} else version(Have_openssl):
 import vibe.core.log;
 import vibe.core.net;
 import vibe.core.stream;
