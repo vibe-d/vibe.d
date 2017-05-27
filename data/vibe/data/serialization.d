@@ -221,7 +221,7 @@ unittest {
 		import std.conv;
 		import std.array;
 
-		static string toRepresentation(T value) {
+		static string toRepresentation(T value) @safe {
 			return to!string(value.x) ~ "x" ~ to!string(value.y);
 		}
 
