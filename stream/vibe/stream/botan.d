@@ -295,7 +295,7 @@ class BotanTLSContext : TLSContext {
 		 TLSPolicy policy = null, 
 		 TLSSessionManager session_manager = null,
 		 bool is_datagram = false)
-	{
+	@trusted {
 		if (!credentials)
 			credentials = new CustomTLSCredentials();
 		m_kind = kind;
