@@ -1,14 +1,14 @@
 ﻿Changelog
 =========
 
-v0.8.0 - 2017-03-
+v0.8.0 - 2017-06-
 --------------------
 
 The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the core module that is currently in beta ([vibe-core][vibe-core]). The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
 
 ### Features and improvements ###
 
-- Compiles on DMD 2.070.2 up to DMD 2.073.2, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
+- Compiles on DMD 2.070.2 up to DMD 2.074.1, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
 - Global API changes
   - Split up the library into fully separate sub packages/folders
   - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
@@ -28,6 +28,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
   - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
   - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [pull #1550][issue1550]
+    - Usability improvements by Harry T. Vennik aka thaven - [pull #1745][issue1745]
   - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
   - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`)
   - Added `HTTPClientRequest.writeFormBody`
@@ -39,9 +40,11 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
+- Added `RedisCollection.initialize`
 - The trigger mode for `FileDescriptorEvent` can now be configured (by Jack Applegame) - [pull #1596][issue1596]
 - Enabled minimal delegate syntax for `URLRouter` (e.g. `URLRouter.get("/", (req, res) { ... });`) - [issue #1668][issue1668]
 - Added serialization support for string based enum types as associative array keys (by Tomoya Tanjo) - [issue #1660][issue1660], [pull #1663][issue1663]
+- Added serialization support for `Typedef!T` - [pull #1617][issue1617]
 - Added `DictionaryList!T.byKeyValue` to replace `opApply` based iteration
 - Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
 - Added `StreamOutputRange.drop()`
@@ -68,10 +71,19 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed the HTTP reverse proxy to send 502 (bad gateway) instead of 500 (internal server error) for upstream errors
 - Fixed a possible `InvalidMemoryOperationError` on shutdown for failed MongoDB requests - [issue #1707][issue1707]
 - Fixed `readOption!T` to work for array types - [issue #1713][issue1713]
+- Fixed handling of remote TCP connection close during concurrent read/write - [issue #1726][issue1726], [pull #1727][issue1727]
+- Fixed libevent driver to properly handle allocator `null` return values
+- Fixed invoking vibe.d functionality from a plain `Fiber` - [issue #1742][issue1742]
+- Fixed parsing of "tcp://" URLs - [issue #1732][issue1732], [pull #1733][issue1733]
+- Fixed handling `@before` attributes on REST interface classes and intermediate interfaces - [issue #1753][issue1753], [pull #1754][issue1754]
+- Fixed a deadlock situation in the libevent driver - [pull #1756][issue1756]
+- Fixed `readUntilSmall`/`readLine` to handle alternating availability of a peek buffer - [issue #1741][issue1741], [pull #1761][issue1761]
+- Fixed `parseMultiPartForm` to handle unquoted strings in the "Content-Disposition" header (by Tomáš Chaloupka) - [pull #1725][issue1725]
 
 [issue1449]: https://github.com/rejectedsoftware/vibe.d/issues/1449
 [issue1549]: https://github.com/rejectedsoftware/vibe.d/issues/1549
 [issue1550]: https://github.com/rejectedsoftware/vibe.d/issues/1550
+[issue1617]: https://github.com/rejectedsoftware/vibe.d/issues/1617
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
 [issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
 [issue1663]: https://github.com/rejectedsoftware/vibe.d/issues/1663
@@ -84,6 +96,18 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1712]: https://github.com/rejectedsoftware/vibe.d/issues/1712
 [issue1713]: https://github.com/rejectedsoftware/vibe.d/issues/1713
 [issue1723]: https://github.com/rejectedsoftware/vibe.d/issues/1723
+[issue1725]: https://github.com/rejectedsoftware/vibe.d/issues/1725
+[issue1726]: https://github.com/rejectedsoftware/vibe.d/issues/1726
+[issue1727]: https://github.com/rejectedsoftware/vibe.d/issues/1727
+[issue1732]: https://github.com/rejectedsoftware/vibe.d/issues/1732
+[issue1733]: https://github.com/rejectedsoftware/vibe.d/issues/1733
+[issue1741]: https://github.com/rejectedsoftware/vibe.d/issues/1741
+[issue1742]: https://github.com/rejectedsoftware/vibe.d/issues/1742
+[issue1745]: https://github.com/rejectedsoftware/vibe.d/issues/1745
+[issue1753]: https://github.com/rejectedsoftware/vibe.d/issues/1753
+[issue1754]: https://github.com/rejectedsoftware/vibe.d/issues/1754
+[issue1756]: https://github.com/rejectedsoftware/vibe.d/issues/1756
+[issue1761]: https://github.com/rejectedsoftware/vibe.d/issues/1761
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
