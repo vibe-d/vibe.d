@@ -19,18 +19,38 @@ environment:
     config: win32
   - DC: dmd
     DVersion: 2.073.2
-    arch: x86_mscoff
+    arch: x64
     config: win32
+  - DC: dmd
+    DVersion: 2.073.2
+    arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: stable
+    arch: x64
+    config: win32
+  - DC: dmd
+    DVersion: 2.072.2
+    arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: 2.072.2
+    arch: x64
+    config: win32
+  - DC: dmd
+    DVersion: stable
+    arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: nightly
+    arch: x64
+    config: vibe-core
   - DC: dmd
     DVersion: 2.073.2
     arch: x86
     config: vibe-core
   - DC: dmd
-    DVersion: 2.073.2
-    arch: x86_mscoff
-    config: vibe-core
-  - DC: dmd
-    DVersion: 2.072.2
+    DVersion: beta
     arch: x64
     config: vibe-core
   - DC: dmd
@@ -49,31 +69,77 @@ environment:
     DVersion: 1.2.0
     arch: x64
     config: vibe-core
+  - DC: dmd
+    DVersion: stable
+    arch: x86
+    config: vibe-core
+  - DC: dmd
+    DVersion: 2.072.2
+    arch: x64
+    config: vibe-core
+  - DC: dmd
+    DVersion: 2.072.2
+    arch: x86
+    config: vibe-core
   - DC: ldc
-    DVersion: 1.1.0
+    DVersion: beta
     arch: x64
     config: vibe-core
   - DC: ldc
-    DVersion: 1.0.0
+    DVersion: stable
+    arch: x64
+    config: vibe-core
+  - DC: ldc
+    DVersion: 1.2.0
     arch: x64
     config: vibe-core
 
 skip_tags: false
 
 install:
+  - ps: function ResolveLatestDMD
+        {
+            $version = $env:DVersion;
+            if($version -eq "stable") {
+                $latest = (Invoke-WebRequest "http://downloads.dlang.org/releases/LATEST").toString();
+                $url = "http://downloads.dlang.org/releases/2.x/$($latest)/dmd.$($latest).windows.7z";
+            }elseif($version -eq "beta") {
+                $latest = (Invoke-WebRequest "http://downloads.dlang.org/pre-releases/LATEST").toString();
+                $latestVersion = $latest.split("-")[0].split("~")[0];
+                $url = "http://downloads.dlang.org/pre-releases/2.x/$($latestVersion)/dmd.$($latest).windows.7z";
+            }elseif($version -eq "nightly") {
+                $url = "http://nightlies.dlang.org/dmd-master-2017-05-20/dmd.master.windows.7z"
+            }else {
+                $url = "http://downloads.dlang.org/releases/2.x/$($version)/dmd.$($version).windows.7z";
+            }
+            $env:PATH += ";C:\dmd2\windows\bin;";
+            return $url;
+        }
+  - ps: function ResolveLatestLDC
+        {
+            $version = $env:DVersion;
+            if($version -eq "stable") {
+                $latest = (Invoke-WebRequest "https://ldc-developers.github.io/LATEST").toString().replace("`n","").replace("`r","");
+                $url = "https://github.com/ldc-developers/ldc/releases/download/v$($latest)/ldc2-$($latest)-win64-msvc.zip";
+            }elseif($version -eq "beta") {
+                $latest = (Invoke-WebRequest "https://ldc-developers.github.io/LATEST_BETA").toString().replace("`n","").replace("`r","");
+                $url = "https://github.com/ldc-developers/ldc/releases/download/v$($latest)/ldc2-$($latest)-win64-msvc.zip";
+            } else {
+                $latest = $version;
+                $url = "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-win64-msvc.zip";
+            }
+            $env:PATH += ";C:\ldc2-$($latest)-win64-msvc\bin";
+            $env:DC = "ldc2";
+            return $url;
+        }
   - ps: function SetUpDCompiler
         {
+            $env:toolchain = "msvc";
             if($env:DC -eq "dmd"){
-              if($env:arch -eq "x86"){
-                $env:DConf = "m32";
-              }
-              elseif($env:arch -eq "x64"){
-                $env:DConf = "m64";
-              }
               echo "downloading ...";
-              $env:toolchain = "msvc";
-              $version = $env:DVersion;
-              Invoke-WebRequest "http://downloads.dlang.org/releases/2.x/$($version)/dmd.$($version).windows.7z" -OutFile "c:\dmd.7z";
+              $url = ResolveLatestDMD;
+              echo $url;
+              Invoke-WebRequest $url -OutFile "c:\dmd.7z";
               echo "finished.";
               pushd c:\\;
               7z x dmd.7z > $null;
@@ -81,15 +147,9 @@ install:
             }
             elseif($env:DC -eq "ldc"){
               echo "downloading ...";
-              if($env:arch -eq "x86"){
-                $env:DConf = "m32";
-              }
-              elseif($env:arch -eq "x64"){
-                $env:DConf = "m64";
-              }
-              $env:toolchain = "msvc";
-              $version = $env:DVersion;
-              Invoke-WebRequest "https://github.com/ldc-developers/ldc/releases/download/v$($version)/ldc2-$($version)-win64-msvc.zip" -OutFile "c:\ldc.zip";
+              $url = ResolveLatestLDC;
+              echo $url;
+              Invoke-WebRequest $url -OutFile "c:\ldc.zip";
               echo "finished.";
               pushd c:\\;
               7z x ldc.zip > $null;
@@ -97,37 +157,19 @@ install:
             }
         }
   - ps: SetUpDCompiler
-  - powershell -Command Invoke-WebRequest https://code.dlang.org/files/dub-1.2.1-windows-x86.zip -OutFile dub.zip
-  - 7z x dub.zip -odub > nul
-  - set PATH=%CD%\%binpath%;%CD%\dub;%PATH%
-  - dub --version
 
-before_build:
+build_script:
   - ps: if($env:arch -eq "x86"){
             $env:compilersetupargs = "x86";
             $env:Darch = "x86";
-          }
-        elseif($env:arch -eq "x86_mscoff"){
-            $env:compilersetupargs = "x86";
-            $env:Darch = "x86_mscoff";
-        }
-        elseif($env:arch -eq "x64"){
+            $env:DConf = "m32";
+        }elseif($env:arch -eq "x64"){
             $env:compilersetupargs = "amd64";
             $env:Darch = "x86_64";
+            $env:DConf = "m64";
         }
-  - ps : if($env:DC -eq "dmd"){
-           $env:PATH += ";C:\dmd2\windows\bin;";
-         }
-         elseif($env:DC -eq "ldc"){
-           $version = $env:DVersion;
-           $env:PATH += ";C:\ldc2-$($version)-win64-msvc\bin";
-           $env:DC = "ldc2";
-         }
   - ps: $env:compilersetup = "C:\Program Files (x86)\Microsoft Visual Studio 14.0\VC\vcvarsall";
   - '"%compilersetup%" %compilersetupargs%'
-
-build_script:
- - echo dummy build script - don't remove me
 
 test_script:
  - echo %PLATFORM%
@@ -135,17 +177,5 @@ test_script:
  - echo %DC%
  - echo %PATH%
  - '%DC% --version'
- - dub test :utils --arch=%Darch% --compiler=%DC%
- - dub test :data --arch=%Darch% --compiler=%DC%
- - dub test :core --arch=%Darch% --compiler=%DC% --config=%CONFIG%
- - dub test :stream --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :crypto --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test --arch=%Darch% --compiler=%DC%
  - dub test :tls --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :textfilter --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :inet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :mail --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :http --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :mongodb --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :redis --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :web --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - echo TODO - run the test suite
