@@ -9,6 +9,12 @@ DUB_ARGS=${DUB_ARGS:-}
 # Check for trailing whitespace"
 grep -nrI --include=*.d '\s$'  && (echo "Trailing whitespace found"; exit 1)
 
+if [ "${VIBED_SSL:-openssl}" == "botan" ]; then
+    grep -qF "Have_botan" stream/dub.sdl || echo 'versions "Have_botan"' >> stream/dub.sdl
+    # Make botan mandatory (i.e. non-optional)
+    sed -E 's/(dependency "botan".*) optional=true/\1/' -i stream/dub.sdl
+fi
+
 # test for successful release build
 dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
 dub clean --all-packages

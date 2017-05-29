@@ -28,18 +28,21 @@ d:
   - dmd-2.073.2
   - dmd-2.072.2
   - dmd-2.071.2
-  - dmd-beta
 
 env:
-  - VIBED_DRIVER=libevent BUILD_EXAMPLE=1 RUN_TEST=1
-  - VIBED_DRIVER=vibe-core BUILD_EXAMPLE=1 RUN_TEST=1
-  - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
+  - VIBED_DRIVER=libevent VIBED_SSL=openssl BUILD_EXAMPLE=1 RUN_TEST=1
+  - VIBED_DRIVER=vibe-core VIBED_SSL=openssl BUILD_EXAMPLE=1 RUN_TEST=1
+  - VIBED_DRIVER=libasync VIBED_SSL=openssl BUILD_EXAMPLE=0 RUN_TEST=0
 
 matrix:
   include:
     - d: dmd
       # https://issues.dlang.org/show_bug.cgi?id=13742
       env: DFLAGS="-cov -version=VibedSetCoverageMerge" DUB_BUILD_MODE="singleFile"
+    - d: dmd
+    - env: VIBED_SSL=botan BUILD_EXAMPLE=0 RUN_TEST=1
+    - d: ldc
+    - env: VIBED_SSL=botan BUILD_EXAMPLE=0 RUN_TEST=1
   exclude:
     - d: ldc-1.2.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
@@ -50,7 +53,6 @@ matrix:
   allow_failures:
     - d: dmd-beta
     - d: ldc-1.3.0
-      env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
 after_success:
