@@ -464,7 +464,8 @@ enum HTTPServerOption {
 
 	/** The default set of options.
 
-		Includes all options, except for distribute.
+		Includes all parsing options, as well as the `errorStackTraces`
+		option if the code is compiled in debug mode.
 	*/
 	defaults =
 		parseURL |
@@ -473,7 +474,7 @@ enum HTTPServerOption {
 		parseJsonBody |
 		parseMultiPartBody |
 		parseCookies |
-		errorStackTraces,
+		() { debug return errorStackTraces; else return none; } (),
 
 	/// deprecated
 	None = none,
@@ -2037,12 +2038,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			errorOut(HTTPStatus.notFound, httpStatusText(HTTPStatus.notFound), dbg_msg, null);
 		}
 	} catch (HTTPStatusException err) {
-		string dbg_msg;
-		if (settings.options & HTTPServerOption.errorStackTraces) {
-			if (err.debugMessage != "") dbg_msg = err.debugMessage;
-			else dbg_msg = () @trusted { return err.toString().sanitize; } ();
-		}
-		if (!res.headerWritten) errorOut(err.status, err.msg, dbg_msg, err);
+		if (!res.headerWritten) errorOut(err.status, err.msg, err.debugMessage, err);
 		else logDiagnostic("HTTPSterrorOutatusException while writing the response: %s", err.msg);
 		debug logDebug("Exception while handling request %s %s: %s", req.method, req.requestURL, () @trusted { return err.toString().sanitize; } ());
 		if (!parsed || res.headerWritten || justifiesConnectionClose(err.status))
