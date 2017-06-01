@@ -2143,6 +2143,7 @@ string convertJsonToASCII(string json)
 /// private
 private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 {
+	char lastch;
 	for (size_t pos = 0; pos < s.length; pos++) {
 		immutable(char) ch = s[pos];
 
@@ -2184,7 +2185,14 @@ private void jsonEscape(bool escape_unicode = false, R)(ref R dst, string s)
 			case '\n': dst.put("\\n"); break;
 			case '\t': dst.put("\\t"); break;
 			case '\"': dst.put("\\\""); break;
+			case '/':
+				// this avoids the sequence "</" in the output, which is prone
+				// to cross site scripting attacks when inserted into web pages
+				if (lastch == '<') dst.put("\\/");
+				else dst.put(ch);
+				break;
 		}
+		lastch = ch;
 	}
 }
 
@@ -2436,4 +2444,9 @@ private auto trustedRange(R)(R range)
 	}
 	enum j = test();
 	static assert(j == Json("foo"));
+}
+
+@safe unittest { // XSS prevention
+	assert(Json("</script>some/path").toString() == `"<\/script>some/path"`);
+	assert(serializeToJsonString("</script>some/path") == `"<\/script>some/path"`);
 }
