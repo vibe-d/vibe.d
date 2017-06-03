@@ -1,9 +1,22 @@
 module vibe.internal.utilallocator;
 
-public import std.experimental.allocator;
+public import std.experimental.allocator : allocatorObject, CAllocatorImpl, dispose,
+	   expandArray, IAllocator, make, makeArray, shrinkArray, theAllocator;
 public import std.experimental.allocator.mallocator;
 public import std.experimental.allocator.building_blocks.affix_allocator;
 
+__gshared IAllocator _processAllocator;
+
+shared static this()
+{
+    import std.experimental.allocator.gc_allocator : GCAllocator;
+    _processAllocator = allocatorObject(GCAllocator.instance);
+}
+
+@property IAllocator processAllocator()
+{
+    return _processAllocator;
+}
 
 final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	import vibe.internal.memory_legacy : AllocSize, alignedSize;
