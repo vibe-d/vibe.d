@@ -111,7 +111,13 @@ final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	override void[] allocateAll() { return null; }
 	override @property Ternary empty() const { return m_fullPools !is null ? Ternary.no : Ternary.yes; }
 	override size_t goodAllocSize(size_t s) { return alignedSize(s); }
-	override Ternary resolveInternalPointer(void* p, ref void[] result) { return Ternary.unknown; }
+
+	import std.traits : Parameters;
+	static if (is(Parameters!(IAllocator.resolveInternalPointer)[0] == const(void*))) {
+		override Ternary resolveInternalPointer(const void* p, ref void[] result) { return Ternary.unknown; }
+	} else {
+		override Ternary resolveInternalPointer(void* p, ref void[] result) { return Ternary.unknown; }
+	}
 	override Ternary owns(void[] b) { return Ternary.unknown; }
 
 
