@@ -45,6 +45,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 {
 	import core.memory : GC;
 	import vibe.internal.meta.traits : isOpApplyDg;
+	import std.algorithm.iteration : filter, map;
 
 	alias Key = TKey;
 	alias Value = TValue;
@@ -53,36 +54,49 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		UnConst!Key key = Traits.clearValue;
 		Value value;
 
-		this(Key key, Value value) { this.key = cast(UnConst!Key)key; this.value = value; }
+		this(ref Key key, ref Value value)
+		{
+			import std.algorithm.mutation : move;
+			this.key = cast(UnConst!Key)key;
+			this.value = value.move;
+		}
 	}
 	private {
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
-		IAllocator m_allocator;
+		AffixAllocator!(IAllocator, int) m_allocator;
 		bool m_resizing;
 	}
 
 	this(IAllocator allocator)
 	{
-		m_allocator = allocator;
+		m_allocator = typeof(m_allocator)(allocator);
 	}
 
 	~this()
 	{
-		clear();
-		if (m_table.ptr !is null) () @trusted {
-			static if (hasIndirections!TableEntry) GC.removeRange(m_table.ptr);
-			try m_allocator.dispose(m_table);
-			catch (Exception e) assert(false, e.msg);
-		} ();
+		if (m_table.ptr && () @trusted { return --m_allocator.prefix(m_table); } () == 0) {
+			clear();
+			if (m_table.ptr !is null) () @trusted {
+				static if (hasIndirections!TableEntry) GC.removeRange(m_table.ptr);
+				try m_allocator.dispose(m_table);
+				catch (Exception e) assert(false, e.msg);
+			} ();
+		}
 	}
 
-	@disable this(this);
+	this(this)
+	@trusted {
+		if (m_table.ptr)
+			m_allocator.prefix(m_table)++;
+	}
 
 	@property size_t length() const { return m_length; }
 
 	void remove(Key key)
 	{
+		import std.algorithm.mutation : move;
+
 		auto idx = findIndex(key);
 		assert (idx != size_t.max, "Removing non-existent element.");
 		auto i = idx;
@@ -99,7 +113,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 				}
 				r = Traits.hashOf(m_table[i].key) & (m_table.length-1);
 			} while ((j<r && r<=i) || (i<j && j<r) || (r<=i && i<j));
-			m_table[j] = m_table[i];
+			m_table[j] = m_table[i].move;
 		}
 	}
 
@@ -137,13 +151,16 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		m_length = 0;
 	}
 
-	void opIndexAssign(Value value, Key key)
+	void opIndexAssign(T)(T value, Key key)
 	{
+		import std.algorithm.mutation : move;
+
 		assert(!Traits.equals(key, Traits.clearValue), "Inserting clear value into hash map.");
 		grow(1);
 		auto i = findInsertIndex(key);
 		if (!Traits.equals(m_table[i].key, key)) m_length++;
-		m_table[i] = TableEntry(key, value);
+		m_table[i].key = () @trusted { return cast(UnConst!Key)key; } ();
+		m_table[i].value = value;
 	}
 
 	ref inout(Value) opIndex(Key key)
@@ -177,6 +194,16 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		return 0;
 	}
 
+	auto byKey() { return bySlot.map!(e => e.key); }
+	auto byKey() const { return bySlot.map!(e => e.key); }
+	auto byValue() { return bySlot.map!(e => e.value); }
+	auto byValue() const { return bySlot.map!(e => e.value); }
+	auto byKeyValue() { import std.typecons : Tuple; return bySlot.map!(e => Tuple!(Key, "key", Value, "value")(e.key, e.value)); }
+	auto byKeyValue() const { import std.typecons : Tuple; return bySlot.map!(e => Tuple!(const(Key), "key", const(Value), "value")(e.key, e.value)); }
+
+	private auto bySlot() { return m_table[].filter!(e => !Traits.equals(e.key, Traits.clearValue)); }
+	private auto bySlot() const { return m_table[].filter!(e => !Traits.equals(e.key, Traits.clearValue)); }
+
 	private size_t findIndex(Key key)
 	const {
 		if (m_length == 0) return size_t.max;
@@ -203,9 +230,28 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private void grow(size_t amount)
-	{
+	@trusted {
+		if (!m_allocator._parent) {
+			try m_allocator = typeof(m_allocator)(processAllocator());
+			catch (Exception e) assert(false, e.msg);
+		}
+
 		auto newsize = m_length + amount;
-		if (newsize < (m_table.length*2)/3) return;
+		if (newsize < (m_table.length*2)/3) {
+			if (m_allocator.prefix(m_table) > 1) {
+				// enforce copy-on-write
+				auto oldtable = m_table;
+				try {
+					m_table = m_allocator.makeArray!TableEntry(m_table.length);
+					m_table[] = oldtable;
+					m_allocator.prefix(oldtable)--;
+					m_allocator.prefix(m_table) = 1;
+				} catch (Exception e) {
+					assert(false, e.msg);
+				}
+			}
+			return;
+		}
 		auto newcap = m_table.length ? m_table.length : 16;
 		while (newsize >= (newcap*2)/3) newcap *= 2;
 		resize(newcap);
@@ -217,11 +263,6 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		m_resizing = true;
 		scope(exit) m_resizing = false;
 
-		if (!m_allocator) {
-			try m_allocator = processAllocator();
-			catch (Exception e) assert(false, e.msg);
-		}
-
 		uint pot = 0;
 		while (new_size > 1) {
 			pot++;
@@ -232,8 +273,10 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 		auto oldtable = m_table;
 
 		// allocate the new array, automatically initializes with empty entries (Traits.clearValue)
-		try m_table = m_allocator.makeArray!TableEntry(new_size);
-		catch (Exception e) assert(false, e.msg);
+		try {
+			m_table = m_allocator.makeArray!TableEntry(new_size);
+			m_allocator.prefix(m_table) = 1;
+		} catch (Exception e) assert(false, e.msg);
 		static if (hasIndirections!TableEntry) GC.addRange(m_table.ptr, m_table.length * TableEntry.sizeof);
 		// perform a move operation of all non-empty elements from the old array to the new one
 		foreach (ref el; oldtable)
@@ -243,7 +286,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 			}
 
 		// all elements have been moved to the new array, so free the old one without calling destructors
-		if (oldtable !is null) {
+		if (oldtable !is null && --m_allocator.prefix(oldtable) == 0) {
 			static if (hasIndirections!TableEntry) GC.removeRange(oldtable.ptr);
 			try m_allocator.deallocate(oldtable);
 			catch (Exception e) assert(false, e.msg);

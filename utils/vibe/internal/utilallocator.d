@@ -2,6 +2,7 @@ module vibe.internal.utilallocator;
 
 public import std.experimental.allocator;
 public import std.experimental.allocator.mallocator;
+public import std.experimental.allocator.building_blocks.affix_allocator;
 
 
 final class RegionListAllocator(Allocator) : IAllocator {
