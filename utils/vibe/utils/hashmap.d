@@ -50,6 +50,20 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	alias Key = TKey;
 	alias Value = TValue;
 
+	static if (__VERSION__ < 2074) {
+		struct AW { // work around AffixAllocator limitations
+			import std.algorithm.comparison : max;
+			IAllocator alloc;
+			alias alloc this;
+			enum alignment = max(Key.alignof, int.alignof);
+			void[] resolveInternalPointer(void* p) { void[] ret; alloc.resolveInternalPointer(p, ret); return ret; }
+		}
+		alias AllocatorType = AffixAllocator!(AW, int);
+	} else {
+		IAllocator AW(IAllocator a) { return a; }
+		alias AllocatorType = AffixAllocator!(IAllocator, int);
+	}
+
 	struct TableEntry {
 		UnConst!Key key = Traits.clearValue;
 		Value value;
@@ -64,18 +78,22 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	private {
 		TableEntry[] m_table; // NOTE: capacity is always POT
 		size_t m_length;
-		AffixAllocator!(IAllocator, int) m_allocator;
+		AllocatorType m_allocator;
 		bool m_resizing;
 	}
 
 	this(IAllocator allocator)
 	{
-		m_allocator = typeof(m_allocator)(allocator);
+		m_allocator = typeof(m_allocator)(AW(allocator));
 	}
 
 	~this()
 	{
-		if (m_table.ptr && () @trusted { return --m_allocator.prefix(m_table); } () == 0) {
+		int rc;
+		try rc = () @trusted { return --m_allocator.prefix(m_table); } ();
+		catch (Exception e) assert(false, e.msg);
+
+		if (m_table.ptr && rc == 0) {
 			clear();
 			if (m_table.ptr !is null) () @trusted {
 				static if (hasIndirections!TableEntry) GC.removeRange(m_table.ptr);
@@ -87,8 +105,10 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 
 	this(this)
 	@trusted {
-		if (m_table.ptr)
-			m_allocator.prefix(m_table)++;
+		if (m_table.ptr) {
+			try m_allocator.prefix(m_table)++;
+			catch (Exception e) assert(false, e.msg);
+		}
 	}
 
 	@property size_t length() const { return m_length; }
@@ -230,15 +250,24 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private void grow(size_t amount)
-	@trusted {
-		if (!m_allocator._parent) {
-			try m_allocator = typeof(m_allocator)(processAllocator());
-			catch (Exception e) assert(false, e.msg);
+	@trusted nothrow {
+		try {
+				static if (__VERSION__ < 2074) auto palloc = m_allocator.parent;
+				else auto palloc = m_allocator._parent;
+			if (!palloc) {
+				try m_allocator = typeof(m_allocator)(AW(processAllocator()));
+				catch (Exception e) assert(false, e.msg);
+			}
+		} catch (Exception e) {
+			assert(false, e.msg);
 		}
 
 		auto newsize = m_length + amount;
 		if (newsize < (m_table.length*2)/3) {
-			if (m_allocator.prefix(m_table) > 1) {
+			int rc;
+			try rc = m_allocator.prefix(m_table);
+			catch (Exception e) assert(false, e.msg);
+			if (rc > 1) {
 				// enforce copy-on-write
 				auto oldtable = m_table;
 				try {
@@ -258,7 +287,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private void resize(size_t new_size)
-	@trusted {
+	@trusted nothrow {
 		assert(!m_resizing);
 		m_resizing = true;
 		scope(exit) m_resizing = false;
@@ -286,7 +315,10 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 			}
 
 		// all elements have been moved to the new array, so free the old one without calling destructors
-		if (oldtable !is null && --m_allocator.prefix(oldtable) == 0) {
+		int rc;
+		try rc = oldtable is null ? 1 : --m_allocator.prefix(oldtable);
+		catch (Exception e) assert(false, e.msg);
+		if (rc == 0) {
 			static if (hasIndirections!TableEntry) GC.removeRange(oldtable.ptr);
 			try m_allocator.deallocate(oldtable);
 			catch (Exception e) assert(false, e.msg);
