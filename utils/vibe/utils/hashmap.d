@@ -90,10 +90,10 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	~this()
 	{
 		int rc;
-		try rc = () @trusted { return --m_allocator.prefix(m_table); } ();
+		try rc = m_table is null ? 1 : () @trusted { return --m_allocator.prefix(m_table); } ();
 		catch (Exception e) assert(false, e.msg);
 
-		if (m_table.ptr && rc == 0) {
+		if (rc == 0) {
 			clear();
 			if (m_table.ptr !is null) () @trusted {
 				static if (hasIndirections!TableEntry) GC.removeRange(m_table.ptr);
@@ -250,7 +250,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private void grow(size_t amount)
-	@trusted nothrow {
+	@trusted {
 		try {
 				static if (__VERSION__ < 2074) auto palloc = m_allocator.parent;
 				else auto palloc = m_allocator._parent;
@@ -287,7 +287,7 @@ struct HashMap(TKey, TValue, Traits = DefaultHashMapTraits!TKey)
 	}
 
 	private void resize(size_t new_size)
-	@trusted nothrow {
+	@trusted {
 		assert(!m_resizing);
 		m_resizing = true;
 		scope(exit) m_resizing = false;
