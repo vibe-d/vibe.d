@@ -154,7 +154,12 @@ struct URL {
 	}
 
 	/// The path part of the URL
-	@property Path path() const { return Path(urlDecode(m_pathString)); }
+	@property Path path() const {
+		version (Have_vibe_core)
+			return Path(urlDecode(m_pathString), PathType.inet);
+		else
+			return Path(urlDecode(m_pathString));
+	}
 	/// ditto
 	@property void path(Path p)
 	{
