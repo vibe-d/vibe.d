@@ -41,7 +41,10 @@ struct URL {
 		m_schema = schema;
 		m_host = host;
 		m_port = port;
-		m_pathString = urlEncode(path.toString(), "/");
+		version (Have_vibe_core)
+			m_pathString = urlEncode(path.toString(PathType.inet), "/");
+		else
+			m_pathString = urlEncode(path.toString(), "/");
 	}
 	/// ditto
 	this(string schema, Path path)
@@ -163,7 +166,10 @@ struct URL {
 	/// ditto
 	@property void path(Path p)
 	{
-		auto pstr = p.toString();
+		version (Have_vibe_core)
+			auto pstr = p.toString(PathType.inet);
+		else
+			auto pstr = p.toString();
 		m_pathString = urlEncode(pstr, "/");
 	}
 
