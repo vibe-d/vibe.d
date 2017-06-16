@@ -1774,9 +1774,9 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 			import vibe.internal.utilallocator: RegionListAllocator;
 
 			version (VibeManualMemoryManagement)
-				scope request_allocator = new RegionListAllocator!(shared(Mallocator))(1024, Mallocator.instance);
+				scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
 			else
-				scope request_allocator = new RegionListAllocator!(shared(GCAllocator))(1024, GCAllocator.instance);
+				scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
 
 			handleRequest(http_stream, connection, listen_info, settings, keep_alive, request_allocator);
 		} ();

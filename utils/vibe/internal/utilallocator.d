@@ -5,7 +5,7 @@ public import std.experimental.allocator.mallocator;
 public import std.experimental.allocator.building_blocks.affix_allocator;
 
 
-final class RegionListAllocator(Allocator) : IAllocator {
+final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	import vibe.internal.memory_legacy : AllocSize, alignedSize;
 	import std.algorithm.comparison : min, max;
 	import std.conv : emplace;
@@ -154,8 +154,10 @@ final class RegionListAllocator(Allocator) : IAllocator {
 		Pool* pnext;
 		for (auto p = cast(Pool*)m_freePools; p; p = pnext) {
 			pnext = p.next;
-			m_baseAllocator.deallocate(p.data);
-			m_baseAllocator.deallocate((cast(void*)p)[0 .. AllocSize!Pool]);
+			static if (!leak) {
+				m_baseAllocator.deallocate(p.data);
+				m_baseAllocator.deallocate((cast(void*)p)[0 .. AllocSize!Pool]);
+			}
 		}
 		m_freePools = null;
 
