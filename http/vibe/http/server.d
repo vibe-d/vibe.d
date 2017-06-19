@@ -896,7 +896,7 @@ final class HTTPServerRequest : HTTPRequest {
 		url.host = url.host.split(":")[0];
 		url.username = this.username;
 		url.password = this.password;
-		url.path = Path(path);
+		url.pathString = path;
 		url.queryString = queryString;
 
 		return url;

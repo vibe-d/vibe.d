@@ -41,8 +41,9 @@ import std.algorithm;
 
 	See_Also: `serveStaticFile`, `sendFile`
 */
-HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFiles(NativePath local_path, HTTPFileServerSettings settings = null)
 {
+	import std.range.primitives : front;
 	if (!settings) settings = new HTTPFileServerSettings;
 	if (!settings.serverPathPrefix.endsWith("/")) settings.serverPathPrefix ~= "/";
 
@@ -59,7 +60,7 @@ HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSetti
 		}
 
 		auto rel_path = srv_path[settings.serverPathPrefix.length .. $];
-		auto rpath = Path(rel_path);
+		auto rpath = PosixPath(rel_path);
 		logTrace("Processing '%s'", srv_path);
 
 		rpath.normalize();
@@ -67,7 +68,7 @@ HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSetti
 		if (rpath.absolute) {
 			logDebug("Path is absolute, not responding");
 			return;
-		} else if (!rpath.empty && rpath[0] == "..")
+		} else if (!rpath.empty && rpath.bySegment.front.name == "..")
 			return; // don't respond to relative paths outside of the root path
 
 		sendFileImpl(req, res, local_path ~ rpath, settings);
@@ -78,7 +79,7 @@ HTTPServerRequestDelegateS serveStaticFiles(Path local_path, HTTPFileServerSetti
 /// ditto
 HTTPServerRequestDelegateS serveStaticFiles(string local_path, HTTPFileServerSettings settings = null)
 {
-	return serveStaticFiles(Path(local_path), settings);
+	return serveStaticFiles(NativePath(local_path), settings);
 }
 
 ///
@@ -138,7 +139,7 @@ unittest {
 
 	See_Also: `serveStaticFiles`, `sendFile`
 */
-HTTPServerRequestDelegateS serveStaticFile(Path local_path, HTTPFileServerSettings settings = null)
+HTTPServerRequestDelegateS serveStaticFile(NativePath local_path, HTTPFileServerSettings settings = null)
 {
 	if (!settings) settings = new HTTPFileServerSettings;
 	assert(settings.serverPathPrefix == "/", "serverPathPrefix is not supported for single file serving.");
@@ -153,7 +154,7 @@ HTTPServerRequestDelegateS serveStaticFile(Path local_path, HTTPFileServerSettin
 /// ditto
 HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSettings settings = null)
 {
-	return serveStaticFile(Path(local_path), settings);
+	return serveStaticFile(NativePath(local_path), settings);
 }
 
 
@@ -180,7 +181,7 @@ HTTPServerRequestDelegateS serveStaticFile(string local_path, HTTPFileServerSett
 		settings = Optional settings object enabling customization of how the
 			file gets served.
 */
-void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings = null)
+void sendFile(scope HTTPServerRequest req, scope HTTPServerResponse res, NativePath path, HTTPFileServerSettings settings = null)
 {
 	static HTTPFileServerSettings default_settings;
 	if (!settings) {
@@ -257,7 +258,7 @@ enum HTTPFileServerOption {
 }
 
 
-private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse res, Path path, HTTPFileServerSettings settings = null)
+private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse res, NativePath path, HTTPFileServerSettings settings = null)
 {
 	auto pathstr = path.toNativeString();
 
@@ -386,7 +387,7 @@ private void sendFileImpl(scope HTTPServerRequest req, scope HTTPServerResponse 
 		// encoded file must be younger than original else warn
 		if (dirent.timeModified.toUTC() >= origLastModified){
 			logTrace("Using already encoded file '%s' -> '%s'", path, encodedFilepath);
-			path = Path(encodedFilepath);
+			path = NativePath(encodedFilepath);
 			res.headers["Content-Length"] = to!string(dirent.size);
 		} else {
 			logWarn("Encoded file '%s' is older than the original '%s'. Ignoring it.", encodedFilepath, path);

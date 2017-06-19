@@ -84,6 +84,16 @@ unittest {
 }
 
 
+/// Forward compatibility alias for vibe-core
+alias NativePath = Path;
+/// ditto
+alias PosixPath = Path;
+/// ditto
+alias WindowsPath = Path;
+/// ditto
+alias InetPath = Path;
+
+
 /**
 	Represents an absolute or relative file system path.
 
@@ -93,6 +103,8 @@ unittest {
 */
 struct Path {
 @safe:
+	/// Forward compatibility alias for vibe-core
+	alias Segment = PathEntry;
 
 	private {
 		immutable(PathEntry)[] m_nodes;
@@ -137,6 +149,9 @@ struct Path {
 
 	/// Determines if the path is absolute.
 	@property bool absolute() const { return m_absolute; }
+
+	/// Forward compatibility property for vibe-code
+	@property immutable(PathEntry)[] bySegment() { return nodes; }
 
 	/// Resolves all '.' and '..' path entries as far as possible.
 	void normalize()
@@ -438,6 +453,8 @@ struct PathEntry {
 	string toString() const nothrow { return m_name; }
 
 	Path opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return Path([this, rhs], false); }
+
+	@property string name() const nothrow { return m_name; }
 
 	bool opEquals(ref const PathEntry rhs) const { return m_name == rhs.m_name; }
 	bool opEquals(PathEntry rhs) const { return m_name == rhs.m_name; }

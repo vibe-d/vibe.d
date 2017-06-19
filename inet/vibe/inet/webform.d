@@ -24,7 +24,7 @@ import std.string;
 
 
 /**
-	Parses form data according to an HTTP Content-Type header.
+	Parses form data according 	to an HTTP Content-Type header.
 
 	Writes the form fields into a key-value of type $(D FormFields), parsed from the
 	specified $(D InputStream) and using the corresponding Content-Type header. Parsing
@@ -239,8 +239,8 @@ unittest { // use of unquoted strings in Content-Disposition
 */
 struct FilePart {
 	InetHeaderMap headers;
-	PathEntry filename;
-	Path tempPath;
+	NativePath.Segment filename;
+	NativePath tempPath;
 }
 
 
@@ -298,7 +298,10 @@ private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFie
 	if (filename.length > 0) {
 		FilePart fp;
 		fp.headers = headers;
-		fp.filename = PathEntry.validateFilename(filename);
+		version (Have_vibe_core)
+			fp.filename = NativePath.Segment(filename);
+		else
+			fp.filename = PathEntry.validateFilename(filename);
 
 		auto file = createTempFile();
 		fp.tempPath = file.path;
