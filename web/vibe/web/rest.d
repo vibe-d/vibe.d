@@ -333,7 +333,7 @@ unittest {
 */
 class RestInterfaceClient(I) : I
 {
-	import vibe.inet.url : URL, PathEntry;
+	import vibe.inet.url : URL;
 	import vibe.http.client : HTTPClientRequest;
 	import std.typetuple : staticMap;
 
@@ -1446,7 +1446,6 @@ private Json request(URL base_url,
 {
 	import vibe.http.client : HTTPClientRequest, HTTPClientResponse, requestHTTP;
 	import vibe.http.common : HTTPStatusException, HTTPStatus, httpMethodString, httpStatusText;
-	import vibe.inet.url : Path;
 
 	URL url = base_url;
 	url.pathString = path;

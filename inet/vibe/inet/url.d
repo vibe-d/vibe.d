@@ -1,7 +1,7 @@
 /**
 	URL parsing routines.
 
-	Copyright: © 2012 RejectedSoftware e.K.
+	Copyright: © 2012-2017 RejectedSoftware e.K.
 	License: Subject to the terms of the MIT license, as written in the included LICENSE.txt file.
 	Authors: Sönke Ludwig
 */
@@ -16,6 +16,7 @@ import std.array;
 import std.conv;
 import std.exception;
 import std.string;
+import std.traits : isInstanceOf;
 
 
 /**
@@ -23,7 +24,6 @@ import std.string;
 */
 struct URL {
 @safe:
-
 	private {
 		string m_schema;
 		string m_pathString;
@@ -36,20 +36,41 @@ struct URL {
 	}
 
 	/// Constructs a new URL object from its components.
-	this(string schema, string host, ushort port, Path path)
+	this(string schema, string host, ushort port, InetPath path)
 	{
 		m_schema = schema;
 		m_host = host;
 		m_port = port;
-		version (Have_vibe_core)
-			m_pathString = urlEncode(path.toString(PathType.inet), "/");
-		else
-			m_pathString = urlEncode(path.toString(), "/");
+		version (Have_vibe_core) m_pathString = path.toString();
+		else m_pathString = urlEncode(path.toString(), "/");
 	}
 	/// ditto
-	this(string schema, Path path)
+	this(string schema, InetPath path)
 	{
 		this(schema, null, 0, path);
+	}
+
+	version (Have_vibe_core) {
+		/// ditto
+		this(string schema, string host, ushort port, PosixPath path)
+		{
+			this(schema, host, port, cast(InetPath)path);
+		}
+		/// ditto
+		this(string schema, PosixPath path)
+		{
+			this(schema, null, 0, cast(InetPath)path);
+		}
+		/// ditto
+		this(string schema, string host, ushort port, WindowsPath path)
+		{
+			this(schema, host, port, cast(InetPath)path);
+		}
+		/// ditto
+		this(string schema, WindowsPath path)
+		{
+			this(schema, null, 0, cast(InetPath)path);
+		}
 	}
 
 	/** Constructs a URL from its string representation.
@@ -157,20 +178,25 @@ struct URL {
 	}
 
 	/// The path part of the URL
-	@property Path path() const {
+	@property InetPath path() const {
 		version (Have_vibe_core)
-			return Path(urlDecode(m_pathString), PathType.inet);
+			return InetPath(m_pathString);
 		else
 			return Path(urlDecode(m_pathString));
 	}
-	/// ditto
-	@property void path(Path p)
-	{
-		version (Have_vibe_core)
-			auto pstr = p.toString(PathType.inet);
-		else
-			auto pstr = p.toString();
-		m_pathString = urlEncode(pstr, "/");
+	version (Have_vibe_core) {
+		/// ditto
+		@property void path(Path)(Path p)
+			if (isInstanceOf!(GenericPath, Path))
+		{
+			m_pathString = (cast(InetPath)p).toString();
+		}
+	} else {
+		/// ditto
+		@property void path(Path p)
+		{
+			m_pathString = p.toString().urlEncode("/");
+		}
 	}
 
 	/// The host part of the URL (depends on the schema)
@@ -296,13 +322,15 @@ struct URL {
 		if( m_schema != rhs.m_schema ) return false;
 		if( m_host != rhs.m_host ) return false;
 		// FIXME: also consider user, port, querystring, anchor etc
-		return this.path.startsWith(rhs.path);
+		version (Have_vibe_core)
+			return this.path.bySegment.startsWith(rhs.path.bySegment);
+		else return this.path.startsWith(rhs.path);
 	}
 
-	URL opBinary(string OP)(Path rhs) const if( OP == "~" ) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
-	URL opBinary(string OP)(PathEntry rhs) const if( OP == "~" ) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
-	void opOpAssign(string OP)(Path rhs) if( OP == "~" ) { this.path = this.path ~ rhs; }
-	void opOpAssign(string OP)(PathEntry rhs) if( OP == "~" ) { this.path = this.path ~ rhs; }
+	URL opBinary(string OP, Path)(Path rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
+	URL opBinary(string OP, Path)(Path.Segment rhs) const if (OP == "~" && isAnyPath!Path) { return URL(m_schema, m_host, m_port, this.path ~ rhs); }
+	void opOpAssign(string OP, Path)(Path rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
+	void opOpAssign(string OP, Path)(Path.Segment rhs) if (OP == "~" && isAnyPath!Path) { this.path = this.path ~ rhs; }
 
 	/// Tests two URLs for equality using '=='.
 	bool opEquals(ref const URL rhs) const {
@@ -322,6 +350,8 @@ struct URL {
 	}
 }
 
+private enum isAnyPath(P) = is(P == InetPath) || is(P == PosixPath) || is(P == WindowsPath);
+
 private bool isDoubleSlashSchema(string schema)
 @safe nothrow @nogc {
 	switch (schema) {
@@ -339,7 +369,7 @@ unittest { // IPv6
 	assert(url.schema == "http", url.schema);
 	assert(url.host == "2003:46:1a7b:6c01:64b:80ff:fe80:8003", url.host);
 	assert(url.port == 8091);
-	assert(url.path == Path("/abc"), url.path.toString());
+	assert(url.path == InetPath("/abc"), url.path.toString());
 	assert(url.toString == urlstr);
 
 	url.host = "abcd:46:1a7b:6c01:64b:80ff:fe80:8abc";
@@ -353,7 +383,7 @@ unittest {
 	auto url = URL.parse(urlstr);
 	assert(url.schema == "https", url.schema);
 	assert(url.host == "www.example.net", url.host);
-	assert(url.path == Path("/index.html"), url.path.toString());
+	assert(url.path == InetPath("/index.html"), url.path.toString());
 	assert(url.toString == urlstr);
 
 	urlstr = "http://jo.doe:password@sub.www.example.net:4711/sub2/index.html?query#anchor";
@@ -405,11 +435,11 @@ unittest {
 }
 
 unittest {
-	Path p = Path("/foo bar/boo oom/");
+	auto p = PosixPath("/foo bar/boo oom/");
 	URL url = URL("http", "example.com", 0, p); // constructor test
-	assert(url.path == p);
+	assert(url.path == cast(InetPath)p);
 	url.path = p;
-	assert(url.path == p);					   // path assignement test
+	assert(url.path == cast(InetPath)p);					   // path assignement test
 	assert(url.pathString == "/foo%20bar/boo%20oom/");
 	assert(url.toString() == "http://example.com/foo%20bar/boo%20oom/");
 	url.pathString = "/foo%20bar/boo%2foom/";
@@ -419,7 +449,7 @@ unittest {
 
 unittest {
 	auto url = URL("http://example.com/some%2bpath");
-	assert(url.path.toString() == "/some+path", url.path.toString());
+	assert((cast(PosixPath)url.path).toString() == "/some+path", url.path.toString());
 }
 
 unittest {

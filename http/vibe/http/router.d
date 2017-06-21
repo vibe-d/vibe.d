@@ -192,9 +192,9 @@ final class URLRouter : HTTPServerRequestHandler {
 		string calcBasePath()
 		@safe {
 			import vibe.inet.path;
-			auto p = Path(prefix.length ? prefix : "/");
+			auto p = InetPath(prefix.length ? prefix : "/");
 			p.endsWithSlash = true;
-			return p.relativeToWeb(Path(req.path)).toString();
+			return p.relativeToWeb(InetPath(req.path)).toString();
 		}
 
 		auto path = req.path;

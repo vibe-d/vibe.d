@@ -42,6 +42,13 @@ environment:
     arch: x64
     config: vibe-core
 
+matrix:
+  allow_failures:
+    - DC: dmd
+      DVersion: 2.073.1
+      arch: x86
+      config: win32
+
 skip_tags: false
 branches:
   only:
