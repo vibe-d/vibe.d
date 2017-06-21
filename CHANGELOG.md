@@ -32,12 +32,14 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
   - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`)
   - Added `HTTPClientRequest.writeFormBody`
+  - Disabled stack traces on the default error page for non-debug builds by default (`HTTPServerOption.defaults`)
 - REST interface generator
   - Added single-argument `@bodyParam` to let a single parameter represent the whole request body (by Sebastian Wilzbach) - [issue #1549][issue1549], [pull #1723][issue1723]
   - Boolean parameters now accept "1" and case insensitive "true" as `true` - [pull #1712][issue1712]
   - Server responses now output prettified JSON if built in debug mode
   - Stack traces are only written in debug mode - [issue #1623][issue1623]
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
+- The string sequence `</` is now encoded as `<\/` by the JSON module to avoid a common XSS attack vector
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
 - Added support for MongoDB SCRAM-SHA1 authentication (by Nicolas Gurrola) - [pull #1632][issue1632]
 - Added `RedisCollection.initialize`
@@ -49,6 +51,9 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Added `.byValue`/`.byKeyValue`/`.byIndexValue` properties to `Bson` and `Json` as a replacement for `opApply` based iteration (see [issue #1688][issue1688])
 - Added `StreamOutputRange.drop()`
 - Updated the Windows OpenSSL binaries to 1.0.2k
+- The session life time in `RedisSessionStore` is now refreshed on every access to the session (by Steven Schveighoffer) - [pull #1778][issue1778]
+- Reduced session storate overhead in `RedisSessionStore` (by Steven Schveighoffer) - [pull #1777][issue1777]
+- Enabled `HashMap`'s postblit constructor, supported by a reference counting + copy-on-write strategy
 
 ### Bug fixes ###
 
@@ -108,6 +113,8 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1754]: https://github.com/rejectedsoftware/vibe.d/issues/1754
 [issue1756]: https://github.com/rejectedsoftware/vibe.d/issues/1756
 [issue1761]: https://github.com/rejectedsoftware/vibe.d/issues/1761
+[issue1777]: https://github.com/rejectedsoftware/vibe.d/issues/1777
+[issue1778]: https://github.com/rejectedsoftware/vibe.d/issues/1778
 [vibe-core]: https://github.com/vibe-d/vibe-core
 
 
