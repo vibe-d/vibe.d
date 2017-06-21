@@ -18,7 +18,6 @@ vibe_main_src = [
     'source/vibe/d.d',
     'source/vibe/vibe.d'
 ]
-install_headers(vibe_main_src, subdir: 'd/vibe')
 
 vibe_core_src = [
     'core/source/vibe/appmain.d',
@@ -166,7 +165,7 @@ vibe_web_src = [
 #
 # Includes
 #
-# It's easier to just install the whole source-tree then use
+# It's easier to just install the whole source-tree than use
 # install_headers and forget to include all subdirectories
 # along the way.
 install_subdir('source/vibe/', install_dir: 'include/d/')
