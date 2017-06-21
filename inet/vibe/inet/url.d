@@ -52,12 +52,22 @@ struct URL {
 
 	version (Have_vibe_core) {
 		/// ditto
-		this(string schema, string host, ushort port, NativePath path)
+		this(string schema, string host, ushort port, PosixPath path)
 		{
 			this(schema, host, port, cast(InetPath)path);
 		}
 		/// ditto
-		this(string schema, NativePath path)
+		this(string schema, PosixPath path)
+		{
+			this(schema, null, 0, cast(InetPath)path);
+		}
+		/// ditto
+		this(string schema, string host, ushort port, WindowsPath path)
+		{
+			this(schema, host, port, cast(InetPath)path);
+		}
+		/// ditto
+		this(string schema, WindowsPath path)
 		{
 			this(schema, null, 0, cast(InetPath)path);
 		}
