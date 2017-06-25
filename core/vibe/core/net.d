@@ -434,6 +434,22 @@ interface UDPConnection {
 	ubyte[] recv(ubyte[] buf = null, NetworkAddress* peer_address = null);
 	/// ditto
 	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null);
+
+	/** Become member of IP multicast group 
+		
+		The multiaddr parameter should be in the range 239.0.0.0-239.255.255.255.
+		See https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xml#multicast-addresses-12
+		and https://www.iana.org/assignments/ipv6-multicast-addresses/ipv6-multicast-addresses.xhtml
+	*/
+	void addMembership(ref NetworkAddress multiaddr);
+
+	/** Set IP multicast loopback 
+
+		This is on by default.
+		All packets send will also loopback if enabled.
+		Useful if more than one application is running on same host and both need each other's packets.
+	*/
+	@property void multicastLoopback(bool loop);
 }
 
 
