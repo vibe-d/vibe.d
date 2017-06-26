@@ -893,7 +893,15 @@ final class HTTPServerRequest : HTTPRequest {
 			}
 		}
 
-		url.host = url.host.split(":")[0];
+		if (url.host.startsWith('[')) { // handle IPv6 address
+			auto idx = url.host.indexOf(']');
+			if (idx >= 0 && idx+1 < url.host.length && url.host[idx+1] == ':')
+				url.host = url.host[1 .. idx];
+		} else { // handle normal host names or IPv4 address
+			auto idx = url.host.indexOf(':');
+			if (idx >= 0) url.host = url.host[0 .. idx];
+		}
+
 		url.username = this.username;
 		url.password = this.password;
 		url.pathString = path;
