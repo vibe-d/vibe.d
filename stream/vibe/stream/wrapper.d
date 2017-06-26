@@ -332,6 +332,13 @@ struct StreamOutputRange(OutputStream)
 
 	void put(const(ubyte)[] bts)
 	{
+		// avoid writing more chunks than necessary
+		if (bts.length + m_fill >= m_data.length * 2) {
+			flush();
+			m_stream.write(bts);
+			return;
+		}
+
 		while (bts.length) {
 			auto len = min(m_data.length - m_fill, bts.length);
 			m_data[m_fill .. m_fill + len] = bts[0 .. len];
