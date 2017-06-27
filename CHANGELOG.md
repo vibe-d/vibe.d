@@ -38,6 +38,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - Boolean parameters now accept "1" and case insensitive "true" as `true` - [pull #1712][issue1712]
   - Server responses now output prettified JSON if built in debug mode
   - Stack traces are only written in debug mode - [issue #1623][issue1623]
+  - Reduced the number of chunks written by `StreamOutputRange.put` for large input buffers (affects WebSockets and chunked HTTP responses)
 - Switched to `std.experimental.allocator` instead of the integrated `vibe.utils.memory` module
 - The string sequence `</` is now encoded as `<\/` by the JSON module to avoid a common XSS attack vector
 - Reduced synchronization overhead in the libevent driver for entities that are single-threaded
@@ -84,6 +85,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed a deadlock situation in the libevent driver - [pull #1756][issue1756]
 - Fixed `readUntilSmall`/`readLine` to handle alternating availability of a peek buffer - [issue #1741][issue1741], [pull #1761][issue1761]
 - Fixed `parseMultiPartForm` to handle unquoted strings in the "Content-Disposition" header (by Tomáš Chaloupka) - [pull #1725][issue1725]
+- Fixed `HTTPServerRequest.fullURL` for IPv6 address based host strings
 
 [issue1449]: https://github.com/rejectedsoftware/vibe.d/issues/1449
 [issue1549]: https://github.com/rejectedsoftware/vibe.d/issues/1549
