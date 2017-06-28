@@ -8,7 +8,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 
 ### Features and improvements ###
 
-- Compiles on DMD 2.070.2 up to DMD 2.074.1, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
+- Compiles on DMD 2.070.2 up to DMD 2.075.0-b1, this release also adds support for `-m32mscoff` builds ("x86_mscoff")
 - Global API changes
   - Split up the library into fully separate sub packages/folders
   - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
