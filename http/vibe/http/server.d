@@ -375,7 +375,7 @@ HTTPServerResponse createTestHTTPServerResponse(OutputStream data_sink = null, S
 	}
 	if (!data_sink) data_sink = new NullOutputStream;
 	auto stream = createProxyStream(Stream.init, data_sink);
-	auto ret = new HTTPServerResponse(stream, null, settings, () @trusted { return processAllocator(); } ());
+	auto ret = new HTTPServerResponse(stream, null, settings, () @trusted { return vibeThreadAllocator(); } ());
 	return ret;
 }
 

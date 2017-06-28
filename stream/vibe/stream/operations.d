@@ -33,7 +33,7 @@ import std.range : isOutputRange;
 		An exception if either the stream end was hit without hitting a newline first, or
 		if more than max_bytes have been read from the stream.
 */
-ubyte[] readLine(InputStream)(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", IAllocator alloc = processAllocator()) /*@ufcs*/
+ubyte[] readLine(InputStream)(InputStream stream, size_t max_bytes = size_t.max, string linesep = "\r\n", IAllocator alloc = vibeThreadAllocator()) /*@ufcs*/
 	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);
@@ -116,7 +116,7 @@ unittest {
 		O(n+m) in typical cases, with n being the length of the scanned input
 		string and m the length of the marker.
 */
-ubyte[] readUntil(InputStream)(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = processAllocator()) /*@ufcs*/
+ubyte[] readUntil(InputStream)(InputStream stream, in ubyte[] end_marker, size_t max_bytes = size_t.max, IAllocator alloc = vibeThreadAllocator()) /*@ufcs*/
 @safe	if (isInputStream!InputStream)
 {
 	auto output = AllocAppender!(ubyte[])(alloc);

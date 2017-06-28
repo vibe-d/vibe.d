@@ -711,8 +711,8 @@ struct ArraySet(Key)
 			static if (__VERSION__ < 2074) auto palloc = m_allocator.parent;
 			else auto palloc = m_allocator._parent;
 			if (!palloc) {
-				assert(processAllocator !is null, "No theAllocator set!?");
-				m_allocator = AllocatorType(AW(processAllocator));
+				assert(vibeThreadAllocator !is null, "No theAllocator set!?");
+				m_allocator = AllocatorType(AW(vibeThreadAllocator));
 			}
 		} catch (Exception e) assert(false, e.msg); // should never throw
 		return m_allocator;

@@ -16,7 +16,7 @@ import std.array;
 import std.exception;
 import std.typecons;
 
-MemoryOutputStream createMemoryOutputStream(IAllocator alloc = processAllocator())
+MemoryOutputStream createMemoryOutputStream(IAllocator alloc = vibeThreadAllocator())
 @safe nothrow {
 	return new MemoryOutputStream(alloc, true);
 }
@@ -45,7 +45,7 @@ final class MemoryOutputStream : OutputStream {
 	}
 
 	deprecated("Use createMemoryOutputStream isntead.")
-	this(IAllocator alloc = processAllocator())
+	this(IAllocator alloc = vibeThreadAllocator())
 	{
 		this(alloc, true);
 	}
