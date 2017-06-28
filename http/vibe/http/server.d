@@ -42,6 +42,7 @@ import std.exception;
 import std.format;
 import std.functional : toDelegate;
 import std.string;
+import std.traits : ReturnType;
 import std.typecons;
 import std.uri;
 
@@ -1740,6 +1741,8 @@ private void listenHTTPPlain(HTTPServerSettings settings, HTTPServerContext cont
 	enforce(any_successful, "Failed to listen for incoming HTTP connections on any of the supplied interfaces.");
 }
 
+private alias TLSStreamType = ReturnType!(createTLSStreamFL!(InterfaceProxy!Stream));
+
 
 private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo listen_info)
 @safe {
@@ -1754,8 +1757,7 @@ private void handleHTTPConnection(TCPConnection connection, HTTPListenInfo liste
 	connection.tcpNoDelay = true;
 
 	version(HaveNoTLS) {} else {
-		import std.traits : ReturnType;
-		ReturnType!(createTLSStreamFL!(typeof(http_stream))) tls_stream;
+		TLSStreamType tls_stream;
 	}
 
 	if (!connection.waitForData(10.seconds())) {
@@ -1852,10 +1854,13 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	auto res = FreeListRef!HTTPServerResponse(http_stream, cproxy, settings, request_allocator/*.Scoped_payload*/);
 	req.tls = res.m_tls = listen_info.tlsContext !is null;
 	if (req.tls) {
-		static if (is(InterfaceProxy!ConnectionStream == ConnectionStream))
-			req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
-		else
-			req.clientCertificate = http_stream.extract!(FreeListRef!TLSStream).peerCertificate;
+		version (HaveNoTLS) assert(false);
+		else {
+			static if (is(InterfaceProxy!ConnectionStream == ConnectionStream))
+				req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
+			else
+				req.clientCertificate = http_stream.extract!TLSStreamType.peerCertificate;
+		}
 	}
 
 	// Error page handler
