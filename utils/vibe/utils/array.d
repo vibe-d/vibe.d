@@ -569,7 +569,7 @@ unittest {
 
 struct ArraySet(Key)
 {
-	import std.experimental.allocator : makeArray, expandArray, dispose, processAllocator;
+	import std.experimental.allocator : makeArray, expandArray, dispose;
 	import std.experimental.allocator.building_blocks.affix_allocator : AffixAllocator;
 
 	private {

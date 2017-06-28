@@ -1,9 +1,22 @@
 module vibe.internal.utilallocator;
 
-public import std.experimental.allocator;
+public import std.experimental.allocator : allocatorObject, CAllocatorImpl, dispose,
+	   expandArray, IAllocator, make, makeArray, shrinkArray, theAllocator;
 public import std.experimental.allocator.mallocator;
 public import std.experimental.allocator.building_blocks.affix_allocator;
 
+__gshared IAllocator _processAllocator;
+
+shared static this()
+{
+    import std.experimental.allocator.gc_allocator : GCAllocator;
+    _processAllocator = allocatorObject(GCAllocator.instance);
+}
+
+@property IAllocator processAllocator()
+{
+    return _processAllocator;
+}
 
 final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	import vibe.internal.memory_legacy : AllocSize, alignedSize;
@@ -98,7 +111,13 @@ final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {
 	override void[] allocateAll() { return null; }
 	override @property Ternary empty() const { return m_fullPools !is null ? Ternary.no : Ternary.yes; }
 	override size_t goodAllocSize(size_t s) { return alignedSize(s); }
-	override Ternary resolveInternalPointer(void* p, ref void[] result) { return Ternary.unknown; }
+
+	import std.traits : Parameters;
+	static if (is(Parameters!(IAllocator.resolveInternalPointer)[0] == const(void*))) {
+		override Ternary resolveInternalPointer(const void* p, ref void[] result) { return Ternary.unknown; }
+	} else {
+		override Ternary resolveInternalPointer(void* p, ref void[] result) { return Ternary.unknown; }
+	}
 	override Ternary owns(void[] b) { return Ternary.unknown; }
 
 
