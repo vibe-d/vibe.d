@@ -45,5 +45,5 @@ configuration "winrt" {
 
 configuration "vibe-core" {
 	targetType "none"
-	dependency "vibe-core" version="~>1.0.0-alpha.2"
+	dependency "vibe-core" version="~>1.0.0-rc.3"
 }
