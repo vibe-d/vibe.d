@@ -1854,10 +1854,13 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 	auto res = FreeListRef!HTTPServerResponse(http_stream, cproxy, settings, request_allocator/*.Scoped_payload*/);
 	req.tls = res.m_tls = listen_info.tlsContext !is null;
 	if (req.tls) {
-		static if (is(InterfaceProxy!ConnectionStream == ConnectionStream))
-			req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
-		else
-			req.clientCertificate = http_stream.extract!TLSStreamType.peerCertificate;
+		version (HaveNoTLS) assert(false);
+		else {
+			static if (is(InterfaceProxy!ConnectionStream == ConnectionStream))
+				req.clientCertificate = (cast(TLSStream)http_stream).peerCertificate;
+			else
+				req.clientCertificate = http_stream.extract!TLSStreamType.peerCertificate;
+		}
 	}
 
 	// Error page handler
