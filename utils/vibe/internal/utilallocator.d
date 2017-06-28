@@ -5,17 +5,14 @@ public import std.experimental.allocator : allocatorObject, CAllocatorImpl, disp
 public import std.experimental.allocator.mallocator;
 public import std.experimental.allocator.building_blocks.affix_allocator;
 
-__gshared IAllocator _processAllocator;
-
-shared static this()
-{
-    import std.experimental.allocator.gc_allocator : GCAllocator;
-    _processAllocator = allocatorObject(GCAllocator.instance);
-}
-
-@property IAllocator processAllocator()
-{
-    return _processAllocator;
+// NOTE: this needs to be used instead of theAllocator due to Phobos issue 17564
+@property IAllocator vibeThreadAllocator()
+@safe nothrow @nogc {
+	import std.experimental.allocator.gc_allocator;
+	static IAllocator s_threadAllocator;
+	if (!s_threadAllocator)
+		s_threadAllocator = () @trusted { return allocatorObject(GCAllocator.instance); } ();
+	return s_threadAllocator;
 }
 
 final class RegionListAllocator(Allocator, bool leak = false) : IAllocator {

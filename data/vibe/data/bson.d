@@ -1351,7 +1351,7 @@ struct BsonSerializer {
 	this(ubyte[] buffer)
 	@safe {
 		import vibe.internal.utilallocator;
-		m_dst = () @trusted { return AllocAppender!(ubyte[])(processAllocator(), buffer); } ();
+		m_dst = () @trusted { return AllocAppender!(ubyte[])(vibeThreadAllocator(), buffer); } ();
 	}
 
 	@disable this(this);

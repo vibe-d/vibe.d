@@ -498,7 +498,7 @@ final class HTTPClient {
 		SysTime connected_time;
 		bool has_body = doRequestWithRetry(requester, false, close_conn, connected_time);
 		m_responding = true;
-		auto res = new HTTPClientResponse(this, has_body, close_conn, () @trusted { return processAllocator(); } (), connected_time);
+		auto res = new HTTPClientResponse(this, has_body, close_conn, () @trusted { return vibeThreadAllocator(); } (), connected_time);
 
 		// proxy implementation
 		if (res.headers.get("Proxy-Authenticate", null) !is null) {
