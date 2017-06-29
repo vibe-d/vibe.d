@@ -257,7 +257,7 @@ ubyte[] readAll(InputStream)(InputStream stream, size_t max_bytes = size_t.max, 
 
 	Throws:
 		An exception is thrown if max_bytes != 0 and the stream contains more than max_bytes data.
-		If the sanitize parameter is fals and the stream contains invalid UTF-8 code sequences,
+		If the sanitize parameter is false and the stream contains invalid UTF-8 code sequences,
 		a UTFException is thrown.
 */
 string readAllUTF8(InputStream)(InputStream stream, bool sanitize = false, size_t max_bytes = size_t.max)
