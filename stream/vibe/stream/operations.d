@@ -384,7 +384,7 @@ private void readUntilSmall(R, InputStream)(InputStream stream, ref R dst, in ub
 			}
 		} else {
 			assert(nmatched == 0);
-			
+
 			auto idx = pm.countUntil(end_marker[0]);
 			if (idx < 0) {
 				dst.put(pm);

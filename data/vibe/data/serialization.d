@@ -537,7 +537,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 		return () @trusted { return cast(T) deserializeValue!(Unqual!T, ATTRIBUTES)(ser); } ();
 	}
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T) 
+	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T)
 	{
 		import std.typecons : BitFlags, Nullable, Typedef, TypedefType, Tuple;
 
@@ -1528,14 +1528,14 @@ unittest // Testing corner case: Variadic template constructors and methods
 @safe unittest // Immutable data deserialization
 {
 	import vibe.data.json;
-	
+
 	static struct S {
 		int a;
 	}
 	static class C {
 		immutable(S)[] arr;
 	}
-	
+
 	auto c = new C;
 	c.arr ~= S(10);
 	auto d = c.serializeToJson().deserializeJson!(immutable C);
@@ -1650,7 +1650,7 @@ unittest {
 	auto ser_red = "V(Aya)(red)";
 	assert(serializeWithPolicy!(TestSerializer, P)(E.RED) == ser_red, serializeWithPolicy!(TestSerializer, P)(E.RED));
 	assert(deserializeWithPolicy!(TestSerializer, P, E)(ser_red) == E.RED);
-	
+
 	import vibe.data.json : Json, JsonSerializer;
 	assert(serializeWithPolicy!(JsonSerializer, P)(E.RED) == Json("red"));
 }

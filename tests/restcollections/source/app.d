@@ -63,7 +63,7 @@ class LocalSubItemAPI : SubItemAPI {
 	{
 		m_manager = manager;
 	}
-	
+
 	@property int length(string _item) { return cast(int)m_manager.items[_item].length; }
 
 	string name(string _item, int _index) { return m_manager.items[_item][_index]; }

@@ -459,7 +459,7 @@ struct Parameter {
 
 struct StaticRoute {
 	string functionName; // D name of the function
-	string rawName; // raw name as returned 
+	string rawName; // raw name as returned
 	bool pathOverride; // @path UDA was used
 	HTTPMethod method;
 	StaticParameter[] parameters;

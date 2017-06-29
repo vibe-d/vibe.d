@@ -17,7 +17,7 @@ class RestInterfaceImplementation : MyBlockingRestInterface {
 	}
 
 	//This method naively simulates access to a shared resource protected
-	//by a TaskReadWriteMutex. Read operations are performed frequently (95%) 
+	//by a TaskReadWriteMutex. Read operations are performed frequently (95%)
 	//and finish quickly (1ms wait time), while write operations occur rarely
 	//(5%) and take much longer to process (50ms wait time).
 	int getIndex()
@@ -74,7 +74,7 @@ shared static this()
 
 		listenHTTP(settings, routes);
 	});
-	
+
 	//Wait for a couple of seconds for the server to be initialized properly and then start
 	//multiple concurrent threads that simultaneously start queries on the rest interface defined above.
 	setTimer(500.msecs, () @trusted  {
@@ -101,7 +101,7 @@ shared static this()
 					logError("Performing client request failed: %s", e.msg);
 				}
 			});
-		 
+
 		//Wait for all tasks to complete
 		synchronized(s_taskMutex) {
 			do s_taskCondition.wait();

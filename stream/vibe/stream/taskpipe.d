@@ -145,7 +145,7 @@ private final class TaskPipeImpl {
 						return ret;
 					() @trusted { m_condition.wait(); } ();
 				}
-				
+
 				need_signal = m_buffer.empty;
 				auto len = min(m_buffer.freeSpace, data.length);
 				m_buffer.put(data[0 .. len]);
