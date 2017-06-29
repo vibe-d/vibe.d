@@ -232,7 +232,7 @@ void setVibeDistHost(string host, ushort port)
 */
 @property void render(string template_file, ALIASES...)(HTTPServerResponse res)
 {
-	res.headers["Content-Type"] = "text/html; charset=UTF-8";
+	res.contentType = "text/html; charset=UTF-8";
 	version (VibeUseOldDiet) {
 		import vibe.templ.diet;
 		compileDietFile!(template_file.asInterface!InputStream, ALIASES)(res.bodyWriter);
@@ -532,13 +532,13 @@ final class HTTPServerSettings {
 
 		The default limit of 0 means that the request time is not limited.
 	*/
-	Duration maxRequestTime;// = dur!"seconds"(0);
+	Duration maxRequestTime = 0.seconds;
 
 	/** Maximum time between two request on a keep-alive connection
 
 		The default value is 10 seconds.
 	*/
-	Duration keepAliveTimeout;// = dur!"seconds"(10);
+	Duration keepAliveTimeout = 10.seconds;
 
 	/// Maximum number of transferred bytes per request after which the connection is closed with
 	/// an error
@@ -624,15 +624,7 @@ final class HTTPServerSettings {
 
 		The default value is 60 seconds; set to Duration.zero to disable pings.
 	*/
-	Duration webSocketPingInterval;// = dur!"seconds"(60);
-
-	this()
-	@safe {
-		// need to use the contructor because the Ubuntu 13.10 GDC cannot CTFE dur()
-		maxRequestTime = 0.seconds;
-		keepAliveTimeout = 10.seconds;
-		webSocketPingInterval = 60.seconds;
-	}
+	Duration webSocketPingInterval = 60.seconds;
 }
 
 
@@ -838,7 +830,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 	/** Time when this request started processing.
 	*/
-	@property inout(SysTime) timeCreated() inout @safe { return m_timeCreated; }
+	@property SysTime timeCreated() const @safe { return m_timeCreated; }
 
 
 	/** The full URL that corresponds to this request.
@@ -967,7 +959,7 @@ final class HTTPServerResponse : HTTPResponse {
 
 		Note that this field will only be set after `finalize` has been called.
 	*/
-	@property SysTime timeFinalized() @safe { return m_timeFinalized; }
+	@property SysTime timeFinalized() const @safe { return m_timeFinalized; }
 
 	/** Determines if the HTTP header has already been written.
 	*/
@@ -1374,7 +1366,7 @@ final class HTTPServerResponse : HTTPResponse {
 		m_session = Session.init;
 	}
 
-	@property ulong bytesWritten() @safe { return m_countingWriter.bytesWritten; }
+	@property ulong bytesWritten() @safe const { return m_countingWriter.bytesWritten; }
 
 	/**
 		Waits until either the connection closes, data arrives, or until the
@@ -1402,7 +1394,7 @@ final class HTTPServerResponse : HTTPResponse {
 		See_Also: `waitForConnectionClose`
 	*/
 	@property bool connected()
-	@safe {
+	@safe const {
 		if (!m_rawConnection) return false;
 		return m_rawConnection.connected;
 	}
@@ -1585,7 +1577,7 @@ private final class TimeoutHTTPInputStream : InputStream {
 
 	this(InterfaceProxy!InputStream stream, Duration timeleft, SysTime reftime)
 	{
-		enforce(timeleft > dur!"seconds"(0), "Timeout required");
+		enforce(timeleft > 0.seconds, "Timeout required");
 		m_in = stream;
 		m_timeleft = timeleft.total!"hnsecs"();
 		m_timeref = reftime.stdTime();
