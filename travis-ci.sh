@@ -2,6 +2,8 @@
 
 set -e -x -o pipefail
 
+DUB_ARGS=${DUB_ARGS:-}
+
 ./scripts/test_version.sh
 
 # Check for trailing whitespace"
@@ -17,19 +19,19 @@ if [ "$DC" == "dmd" ]; then
 	dub clean --all-packages
 fi
 
-dub test :data --compiler=$DC
-dub test :core --compiler=$DC --config=${VIBED_DRIVER=libevent}
-dub test :mongodb --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :redis --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :diet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :web --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :utils --compiler=$DC
-dub test :http --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :mail --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :stream --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :crypto --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :textfilter --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
-dub test :inet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent}
+dub test :data --compiler=$DC $DUB_ARGS
+dub test :core --compiler=$DC --config=${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :mongodb --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :redis --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :diet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :web --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :utils --compiler=$DC $DUB_ARGS
+dub test :http --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :mail --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :stream --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :crypto --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :textfilter --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :inet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub clean --all-packages
 
 if [ ${BUILD_EXAMPLE=1} -eq 1 ]; then
