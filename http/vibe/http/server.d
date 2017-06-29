@@ -443,7 +443,7 @@ enum HTTPServerOption {
 	parseQueryString          = 1<<1 | parseURL,
 	/// Fills the `.form` field in the request
 	parseFormBody             = 1<<2,
-	/// Fills the `.json` field in the request
+	/// Fills the `.json` field in the request (Deprecated, lazily parsed)
 	parseJsonBody             = 1<<3,
 	/// Fills the `.files` field of the request for "multipart/mixed" requests
 	parseMultiPartBody        = 1<<4, // todo
@@ -783,12 +783,21 @@ final class HTTPServerRequest : HTTPRequest {
 
 		/** Contains the parsed Json for a JSON request.
 
-			Remarks:
-				This field is only set if HTTPServerOption.parseJsonBody is set.
-
-				A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
+			A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
 		*/
-		Json json;
+		@property ref const(Json) json() @safe {
+			if (_json.isNull) {
+				if (icmp2(contentType, "application/json") == 0 || icmp2(contentType, "application/vnd.api+json") == 0 ) {
+					auto bodyStr = bodyReader.readAllUTF8();
+					if (!bodyStr.empty) _json = parseJson(bodyStr);
+				} else {
+					_json = Json.undefined;
+				}
+			}
+			return _json.get;
+		}
+
+		private Nullable!Json _json;
 
 		/** Contains the parsed parameters of a HTML POST _form request.
 
@@ -2016,13 +2025,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		if (settings.options & HTTPServerOption.parseFormBody) {
 			auto ptype = "Content-Type" in req.headers;
 			if (ptype) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHTTPHeaderLineLength);
-		}
-
-		if (settings.options & HTTPServerOption.parseJsonBody) {
-			if (icmp2(req.contentType, "application/json") == 0 || icmp2(req.contentType, "application/vnd.api+json") == 0 ) {
-				auto bodyStr = req.bodyReader.readAllUTF8;
-				if (!bodyStr.empty) req.json = parseJson(bodyStr);
-			}
 		}
 
 		// write default headers
