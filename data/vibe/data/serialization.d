@@ -1414,7 +1414,7 @@ unittest { // tuple serialization
 	static struct T { @asArray S!(int, string) g; }
 	enum Tm = T.mangleof;
 	auto t = T(s);
-	
+
 	auto st = serialize!TestSerializer(t);
 	assert(st ==
 		"D("~Tm~"){DE("~Sm~",g)(A("~Sm~")[2][AE(i,0)(V(i)(42))AE(i,0)AE(Aya,1)(V(Aya)(hello))AE(Aya,1)]A("~Sm~"))DE("~Sm~",g)}D("~Tm~")");
