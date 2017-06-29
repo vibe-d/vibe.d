@@ -43,13 +43,13 @@ enum InsertFlags {
 
 enum QueryFlags {
 	none             = 0,    /// Normal query
-	tailableCursor   = 1<<1, /// 
-	slaveOk          = 1<<2, /// 
-	oplogReplay      = 1<<3, /// 
-	noCursorTimeout  = 1<<4, /// 
-	awaitData        = 1<<5, /// 
-	exhaust          = 1<<6, /// 
-	partial          = 1<<7, /// 
+	tailableCursor   = 1<<1, ///
+	slaveOk          = 1<<2, ///
+	oplogReplay      = 1<<3, ///
+	noCursorTimeout  = 1<<4, ///
+	awaitData        = 1<<5, ///
+	exhaust          = 1<<6, ///
+	partial          = 1<<7, ///
 
 	None = none, /// Deprecated compatibility alias
 	TailableCursor = tailableCursor, /// Deprecated compatibility alias

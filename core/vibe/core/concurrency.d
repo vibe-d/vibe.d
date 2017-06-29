@@ -1198,7 +1198,7 @@ unittest {
 
 unittest {
 	import vibe.core.core : sleep;
-	
+
 	auto f = async({
 		immutable byte b = 1;
 		return b;
@@ -1257,7 +1257,7 @@ package class VibedScheduler : Scheduler {
 
 		final switch (st_concurrencyPrimitive) with (ConcurrencyPrimitive) {
 			case task: runTask(op); break;
-			case workerTask: 
+			case workerTask:
 				static void wrapper(shared(void delegate()) op) {
 					(cast(void delegate())op)();
 				}

@@ -53,13 +53,13 @@ void runTest()
 	remove(bar);
 	watcher = Path(dir).watchDirectory(Yes.recursive);
 	write(foo, null);
-	sleep(1.seconds); 
+	sleep(1.seconds);
 	write(foo, [0, 1]);
 	sleep(100.msecs);
 	remove(foo);
 
 	write(bar, null);
-	sleep(1.seconds); 
+	sleep(1.seconds);
 	write(bar, [0, 1]);
 	sleep(100.msecs);
 	remove(bar);

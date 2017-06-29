@@ -204,7 +204,7 @@ class CountingInputStream : InputStream {
 		ulong m_bytesRead;
 		InterfaceProxy!InputStream m_in;
 	}
-	
+
 	deprecated("Use createCountingOutputStream instead.")
 	this(InputStream stream)
 	{

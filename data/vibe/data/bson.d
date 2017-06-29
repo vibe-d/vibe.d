@@ -696,7 +696,7 @@ struct Bson {
 		checkType(Type.object, Type.array);
 
 		alias T = Tuple!(string, "key", Bson, "value");
-		
+
 		static struct Rng {
 			private {
 				immutable(ubyte)[] data;

@@ -600,7 +600,7 @@ msgstr[1] "%d files were created."
 		// Note that this is normally handled by mixing in an external file.
 		enum en_US_unittest2 = components;
 	}
-	
+
 	auto newTr(string msgid, string msgid_plural, int count, string msgcntxt = null) {
 		return tr!(TranslationContext, "en_US")(msgid, msgid_plural, count, msgcntxt);
 	}

@@ -22,7 +22,7 @@ shared static this()
 			} // expected
 		}, conn);
 		auto wt = runTask!TCPConnection((conn) {
-			sleep(1.msecs); // give the connection time to establish 
+			sleep(1.msecs); // give the connection time to establish
 			try {
 				conn.write(buf);
 				assert(false, "Expected read() to throw an exception.");

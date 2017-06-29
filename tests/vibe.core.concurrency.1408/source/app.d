@@ -12,7 +12,7 @@ void test()
 		assert(gotit);
 		sleep(10.msecs);
 	});
-	
+
 	t.tid.send(10);
 	t.tid.send(11); // never received
 	t.join();
@@ -35,9 +35,9 @@ void test()
 
 	t3.tid.send(13);
 	sleep(10.msecs);
-	
+
 	logInfo("Success.");
-	
+
 	exitEventLoop(true);
 }
 

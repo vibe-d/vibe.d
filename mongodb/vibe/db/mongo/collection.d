@@ -234,7 +234,7 @@ struct MongoCollection {
 		auto bopt = serializeToBson(options);
 		assert(bopt.type == Bson.Type.object,
 			"The options parameter to findAndModifyExt must be a BSON object.");
-		
+
 		Bson cmd = Bson.emptyObject;
 		cmd["findAndModify"] = m_name;
 		cmd["query"] = serializeToBson(query);
@@ -242,7 +242,7 @@ struct MongoCollection {
 		bopt.opApply(delegate int(string key, Bson value) @safe {
 			cmd[key] = value;
 			return 0;
-		});	
+		});
 		auto ret = database.runCommand(cmd);
 		enforce(ret["ok"].get!double != 0, "findAndModifyExt failed.");
 		return ret["value"];
