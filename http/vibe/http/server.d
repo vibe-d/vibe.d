@@ -2020,7 +2020,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 
 		if (settings.options & HTTPServerOption.parseJsonBody) {
 			if (icmp2(req.contentType, "application/json") == 0 || icmp2(req.contentType, "application/vnd.api+json") == 0 ) {
-				auto bodyStr = () @trusted { return cast(string)req.bodyReader.readAll(); } ();
+				auto bodyStr = req.bodyReader.readAllUTF8;
 				if (!bodyStr.empty) req.json = parseJson(bodyStr);
 			}
 		}
