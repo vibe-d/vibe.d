@@ -79,7 +79,7 @@ Installation
 ------------
 
 Instead of explicitly installing vibe.d, it is recommended to use
-[DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
+[DUB](https://github.com/dlang/dub) for building vibe.d based
 applications. Once DUB is installed, you can create and run a new project
 using the following shell commands:
 
