@@ -22,7 +22,7 @@ shared static this()
 				conn.close();
 			}
 		}, conn);
-		
+
 		try {
 			while (!conn.empty) {
 				auto ln = cast(const(char)[])conn.readLine();

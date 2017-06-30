@@ -32,7 +32,7 @@ struct DictionaryList(VALUE, bool case_sensitive = true, size_t NUM_STATIC_FIELD
 
 	private {
 		alias KeyValue = Tuple!(string, "key", ValueType, "value");
-		
+
 		static struct Field {
 			static if (USE_HASHSUM) uint keyCheckSum;
 			else {

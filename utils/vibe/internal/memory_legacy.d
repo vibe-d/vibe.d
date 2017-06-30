@@ -335,7 +335,7 @@ final class AutoFreeListAllocator : Allocator {
 	{
 		auto curidx = getAllocatorIndex(data.length);
 		auto newidx = getAllocatorIndex(sz);
-		
+
 		if (curidx == newidx) {
 			if (curidx == freeListCount) {
 				// forward large blocks to the base allocator

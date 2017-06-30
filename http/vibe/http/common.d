@@ -504,7 +504,7 @@ final class ChunkedOutputStream : OutputStream {
 	@property void maxBufferSize(size_t bytes) { m_maxBufferSize = bytes; if (m_buffer.data.length >= m_maxBufferSize) flush(); }
 
 	/** A delegate used to specify the extensions for each chunk written to the underlying stream.
-	 	
+
 	 	The delegate has to be of type `string delegate(in const(ubyte)[] data)` and gets handed the
 	 	data of each chunk before it is written to the underlying stream. If it's return value is non-empty,
 	 	it will be added to the chunk's header line.
@@ -759,7 +759,7 @@ struct CookieValueMap {
 		Cookie[] m_entries;
 	}
 
-	auto length(){ 
+	auto length(){
 		return m_entries.length;
 	}
 

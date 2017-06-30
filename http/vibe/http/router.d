@@ -678,7 +678,7 @@ private struct MatchTree(T) {
 	private void rebuildGraph()
 	{
 		import std.array : appender;
-		
+
 		if (m_upToDate) return;
 		m_upToDate = true;
 
@@ -939,7 +939,7 @@ private struct MatchGraphBuilder {
 				foreach (chn; chnodes) addToArray(m_nodes[ncomb].terminals, m_nodes[chn].terminals);
 				foreach (i; 1 .. m_nodes[ncomb].terminals.length)
 					assert(m_nodes[ncomb].terminals[0] != m_nodes[ncomb].terminals[i]);
-				
+
 				m_nodes[n].edges[ch] = singleNodeArray(ncomb);
 			}
 

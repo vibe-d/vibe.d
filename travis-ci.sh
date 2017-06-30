@@ -4,6 +4,9 @@ set -e -x -o pipefail
 
 ./scripts/test_version.sh
 
+# Check for trailing whitespace"
+grep -nrI --include=*.d '\s$'  && (echo "Trailing whitespace found"; exit 1)
+
 # test for successful release build
 dub build --combined -b release --compiler=$DC --config=${VIBED_DRIVER=libevent}
 dub clean --all-packages

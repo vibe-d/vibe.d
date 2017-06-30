@@ -117,7 +117,7 @@ package struct ScramState
 		auto clientKey = () @trusted { return hmac!SHA1("Client Key".representation, saltedPassword); } ();
 		auto storedKey = sha1Of(clientKey);
 		auto clientSignature = () @trusted { return hmac!SHA1(authMessage.representation, storedKey); } ();
-		
+
 		foreach (i; 0 .. clientKey.length)
 		{
 			clientKey[i] = clientKey[i] ^ clientSignature[i];

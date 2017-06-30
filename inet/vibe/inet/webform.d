@@ -320,7 +320,7 @@ private bool parseMultipartFormPart(InputStream)(InputStream stream, ref FormFie
 		auto data = () @trusted { return cast(string)stream.readUntil(boundary); } ();
 		form.addField(name, data);
 	}
-	
+
 	ubyte[2] ub;
 	stream.read(ub, IOMode.all);
 	if (ub == "--")

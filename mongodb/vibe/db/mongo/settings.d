@@ -34,7 +34,7 @@ import std.string : icmp, indexOf, toLower;
 bool parseMongoDBUrl(out MongoClientSettings cfg, string url)
 @safe {
 	import std.exception : enforce;
-	
+
 	cfg = new MongoClientSettings();
 
 	string tmpUrl = url[0..$]; // Slice of the url (not a copy)
