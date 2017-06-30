@@ -2,23 +2,31 @@ platform: x64
 environment:
  matrix:
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.074.1
+    arch: x86_mscoff
+    config: vibe-core
+  - DC: dmd
+    DVersion: 2.074.1
+    arch: x86
+    config: win32
+  - DC: dmd
+    DVersion: 2.074.1
     arch: x64
     config: win32
   - DC: dmd
-    DVersion: 2.073.1
-    arch: x86
-    config: win32
-  - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.074.1
     arch: x86_mscoff
     config: win32
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.073.2
+    arch: x86_mscoff
+    config: win32
+  - DC: dmd
+    DVersion: 2.073.2
     arch: x86
     config: vibe-core
   - DC: dmd
-    DVersion: 2.073.1
+    DVersion: 2.073.2
     arch: x86_mscoff
     config: vibe-core
   - DC: dmd
@@ -26,11 +34,15 @@ environment:
     arch: x64
     config: vibe-core
   - DC: dmd
-    DVersion: 2.071.1
+    DVersion: 2.071.2
     arch: x86
     config: vibe-core
   - DC: dmd
-    DVersion: 2.070.0
+    DVersion: 2.070.2
+    arch: x64
+    config: vibe-core
+  - DC: ldc
+    DVersion: 1.2.0
     arch: x64
     config: vibe-core
   - DC: ldc
@@ -41,13 +53,6 @@ environment:
     DVersion: 1.0.0
     arch: x64
     config: vibe-core
-
-matrix:
-  allow_failures:
-    - DC: dmd
-      DVersion: 2.073.1
-      arch: x86
-      config: win32
 
 skip_tags: false
 branches:
