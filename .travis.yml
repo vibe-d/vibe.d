@@ -34,6 +34,10 @@ env:
   - VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 matrix:
+  include:
+    - d: dmd
+      # https://issues.dlang.org/show_bug.cgi?id=13742
+      env: DUB_ARGS="--build=unittest-cov --build-mode=singleFile"
   exclude:
     - d: ldc-1.0.0
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
@@ -45,3 +49,5 @@ matrix:
       env: VIBED_DRIVER=libasync BUILD_EXAMPLE=0 RUN_TEST=0
 
 script: ./travis-ci.sh
+after_success:
+ - bash <(curl -s https://codecov.io/bash)
