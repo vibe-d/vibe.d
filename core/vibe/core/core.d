@@ -2055,3 +2055,13 @@ unittest {
 	static assert(needsMove!V);
 	static assert(!needsMove!W);
 }
+
+// DMD currently has no option to set merging of coverage files at compile-time
+// This needs to be done via a Druntime API
+// As this option is solely for Vibed's internal testsuite, it's hidden behind
+// a long version
+version(VibedSetCoverageMerge)
+shared static this() {
+	import core.runtime : dmd_coverSetMerge;
+	dmd_coverSetMerge(true);
+}
