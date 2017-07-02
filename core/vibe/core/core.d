@@ -946,7 +946,7 @@ void disableDefaultSignalHandlers()
 	Note that this function is called automatically by vibe.d's default main
 	implementation, as well as by `runApplication`.
 */
-void lowerPrivileges(string uname, string gname)
+void lowerPrivileges(string uname, string gname) @safe
 {
 	if (!isRoot()) return;
 	if (uname != "" || gname != "") {
@@ -965,7 +965,7 @@ void lowerPrivileges(string uname, string gname)
 }
 
 // ditto
-void lowerPrivileges()
+void lowerPrivileges() @safe
 {
 	lowerPrivileges(s_privilegeLoweringUserName, s_privilegeLoweringGroupName);
 }
@@ -1912,50 +1912,50 @@ nothrow {
 
 version(Posix)
 {
-	private bool isRoot() { return geteuid() == 0; }
+	private bool isRoot() @safe { return geteuid() == 0; }
 
-	private void setUID(int uid, int gid)
+	private void setUID(int uid, int gid) @safe
 	{
 		logInfo("Lowering privileges to uid=%d, gid=%d...", uid, gid);
 		if (gid >= 0) {
-			enforce(getgrgid(gid) !is null, "Invalid group id!");
+			enforce(() @trusted { return getgrgid(gid); }() !is null, "Invalid group id!");
 			enforce(setegid(gid) == 0, "Error setting group id!");
 		}
 		//if( initgroups(const char *user, gid_t group);
 		if (uid >= 0) {
-			enforce(getpwuid(uid) !is null, "Invalid user id!");
+			enforce(() @trusted { return getpwuid(uid); }() !is null, "Invalid user id!");
 			enforce(seteuid(uid) == 0, "Error setting user id!");
 		}
 	}
 
-	private int getUID(string name)
+	private int getUID(string name) @safe
 	{
-		auto pw = getpwnam(name.toStringz());
+		auto pw = () @trusted { return getpwnam(name.toStringz()); }();
 		enforce(pw !is null, "Unknown user name: "~name);
 		return pw.pw_uid;
 	}
 
-	private int getGID(string name)
+	private int getGID(string name) @safe
 	{
-		auto gr = getgrnam(name.toStringz());
+		auto gr = () @trusted { return getgrnam(name.toStringz()); }();
 		enforce(gr !is null, "Unknown group name: "~name);
 		return gr.gr_gid;
 	}
 } else version(Windows){
-	private bool isRoot() { return false; }
+	private bool isRoot() @safe { return false; }
 
-	private void setUID(int uid, int gid)
+	private void setUID(int uid, int gid) @safe
 	{
 		enforce(false, "UID/GID not supported on Windows.");
 	}
 
-	private int getUID(string name)
+	private int getUID(string name) @safe
 	{
 		enforce(false, "Privilege lowering not supported on Windows.");
 		assert(false);
 	}
 
-	private int getGID(string name)
+	private int getGID(string name) @safe
 	{
 		enforce(false, "Privilege lowering not supported on Windows.");
 		assert(false);
