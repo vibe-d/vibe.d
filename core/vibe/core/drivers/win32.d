@@ -37,8 +37,8 @@ static if (__VERSION__ >= 2070) {
 	import core.sys.windows.windows;
 	import core.sys.windows.winsock2;
 } else {
-	import std.c.windows.windows;
-	import std.c.windows.winsock;
+	import core.sys.windows.windows;
+	import core.sys.windows.winsock2;
 }
 
 enum WM_USER_SIGNAL = WM_USER+101;

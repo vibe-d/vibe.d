@@ -1670,7 +1670,7 @@ shared static this()
 		static if (need_wsa) {
 			logTrace("init winsock");
 			// initialize WinSock2
-			import std.c.windows.winsock;
+			import core.sys.windows.winsock2;
 			WSADATA data;
 			WSAStartup(0x0202, &data);
 

@@ -8,8 +8,8 @@ static if (__VERSION__ >= 2070) {
 	public import core.sys.windows.winsock2;
 } else {
 	public import core.sys.windows.windows;
-	public import std.c.windows.windows;
-	public import std.c.windows.winsock;
+	public import core.sys.windows.windows;
+	public import core.sys.windows.winsock2;
 
 	extern(System) nothrow:
 	enum HWND HWND_MESSAGE = cast(HWND)-3;

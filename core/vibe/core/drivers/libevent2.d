@@ -57,7 +57,7 @@ version(Windows)
 	static if (__VERSION__ >= 2070)
 		import core.sys.windows.winsock2;
 	else
-		import std.c.windows.winsock;
+		import core.sys.windows.winsock2;
 
 	alias EWOULDBLOCK = WSAEWOULDBLOCK;
 }
