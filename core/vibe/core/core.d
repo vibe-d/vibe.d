@@ -2062,6 +2062,9 @@ unittest {
 // a long version
 version(VibedSetCoverageMerge)
 shared static this() {
-	import core.runtime : dmd_coverSetMerge;
+	import core.runtime : dmd_coverDestPath, dmd_coverSetMerge;
+	import std.path : buildPath, dirName;
 	dmd_coverSetMerge(true);
+	static immutable coverageDestDir = __FILE_FULL_PATH__.dirName.buildPath("..", "..", "..");
+	dmd_coverDestPath(coverageDestDir);
 }
