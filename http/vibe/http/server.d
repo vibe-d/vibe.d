@@ -625,6 +625,57 @@ final class HTTPServerSettings {
 		The default value is 60 seconds; set to Duration.zero to disable pings.
 	*/
 	Duration webSocketPingInterval = 60.seconds;
+
+	/** Constructs a new settings object with default values.
+	*/
+	this() @safe {}
+
+	/** Constructs a new settings object with a custom bind interface and/or port.
+
+		The syntax of `bind_string` is `[<IP address>][:<port>]`, where either of
+		the two parts can be left off. IPv6 addresses must be enclosed in square
+		brackets, as they would within a URL.
+
+		Throws:
+			An exception is thrown if `bind_string` is malformed.
+	*/
+	this(string bind_string)
+	@safe {
+		this();
+
+		if (bind_string.startsWith('[')) {
+			auto idx = bind_string.indexOf(']');
+			enforce(idx > 0, "Missing closing bracket for IPv6 address.");
+			bindAddresses = [bind_string[1 .. idx]];
+			bind_string = bind_string[idx+1 .. $];
+
+			enforce(bind_string.length == 0 || bind_string.startsWith(':'),
+				"Only a colon may follow the IPv6 address.");
+		}
+
+		auto idx = bind_string.indexOf(':');
+		if (idx < 0) {
+			if (bind_string.length > 0) bindAddresses = [bind_string];
+		} else {
+			if (idx > 0) bindAddresses = [bind_string[0 .. idx]];
+			port = bind_string[idx+1 .. $].to!ushort;
+		}
+	}
+
+	///
+	unittest {
+		auto s = new HTTPServerSettings(":8080");
+		assert(s.bindAddresses == ["::", "0.0.0.0"]); // default bind addresses
+		assert(s.port == 8080);
+
+		s = new HTTPServerSettings("123.123.123.123");
+		assert(s.bindAddresses == ["123.123.123.123"]);
+		assert(s.port == 80);
+
+		s = new HTTPServerSettings("[::1]:443");
+		assert(s.bindAddresses == ["::1"]);
+		assert(s.port == 443);
+	}
 }
 
 
