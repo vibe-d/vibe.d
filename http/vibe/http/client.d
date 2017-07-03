@@ -1118,7 +1118,7 @@ final class HTTPClientResponse : HTTPResponse {
 }
 
 /** Returns clean host string. In case of unix socket it performs urlDecode on host. */
-private auto getFilteredHost(URL url)
+package auto getFilteredHost(URL url)
 {
 	version(UnixSocket)
 	{
