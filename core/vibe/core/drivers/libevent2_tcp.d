@@ -45,11 +45,11 @@ private {
 			alias INADDR_ANY = core.sys.windows.winsock2.INADDR_ANY;
 			alias IN6ADDR_ANY = core.sys.windows.winsock2.IN6ADDR_ANY;
 		} else {
-			import std.c.windows.winsock;
+			import core.sys.windows.winsock2;
 			// make some neccessary parts of the socket interface public
-			alias in6_addr = std.c.windows.winsock.in6_addr;
-			alias INADDR_ANY = std.c.windows.winsock.INADDR_ANY;
-			alias IN6ADDR_ANY = std.c.windows.winsock.IN6ADDR_ANY;
+			alias in6_addr = core.sys.windows.winsock2.in6_addr;
+			alias INADDR_ANY = core.sys.windows.winsock2.INADDR_ANY;
+			alias IN6ADDR_ANY = core.sys.windows.winsock2.IN6ADDR_ANY;
 		}
 
 		enum EWOULDBLOCK = WSAEWOULDBLOCK;

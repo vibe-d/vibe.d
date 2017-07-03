@@ -475,7 +475,7 @@ version(Windows)
 	static if (__VERSION__ >= 2070) {
 		import core.sys.windows.windows;
 	} else {
-		import std.c.windows.windows;
+		import core.sys.windows.windows;
 	}
 
 	private extern(Windows) nothrow

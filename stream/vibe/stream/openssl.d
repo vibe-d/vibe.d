@@ -123,7 +123,7 @@ final class OpenSSLStream : TLSStream {
 				auto result = () @trusted { return SSL_get_verify_result(m_tls); } ();
 				if (result == X509_V_OK && (ctx.peerValidationMode & TLSPeerValidationMode.checkPeer)) {
 					if (!verifyCertName(peer, GENERAL_NAME.GEN_DNS, vdata.peerName)) {
-						version(Windows) import std.c.windows.winsock;
+						version(Windows) import core.sys.windows.winsock2;
 						else import core.sys.posix.netinet.in_;
 
 						logDiagnostic("TLS peer name '%s' couldn't be verified, trying IP address.", vdata.peerName);

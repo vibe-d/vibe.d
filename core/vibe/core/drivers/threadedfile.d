@@ -27,7 +27,7 @@ version(Windows){
 	static if (__VERSION__ >= 2070)
 		import core.sys.windows.stat;
 	else
-		import std.c.windows.stat;
+		import core.sys.windows.stat;
 
 	private {
 		// TODO: use CreateFile/HANDLE instead of the Posix API on Windows
