@@ -34,7 +34,6 @@ import std.encoding : sanitize;
 	TODO:
 		- conversion errors of path place holder parameters should result in 404
 		- support format patterns for redirect()
-		- add a way to specify response headers without explicit access to "res"
 */
 
 
@@ -224,6 +223,7 @@ unittest {
 		@path("/")
 		void getIndex(string _error = null)
 		{
+			header("Access-Control-Allow-Origin", "Access-Control-Allow-Origin: *");
 			//render!("index.dt", _error);
 		}
 
@@ -243,6 +243,7 @@ unittest {
 		void postLogout()
 		{
 			terminateSession();
+			status(201);
 			redirect("/");
 		}
 
@@ -378,6 +379,111 @@ void redirect(string url)
 	ctx.res.redirect(fullurl);
 }
 
+///
+unittest {
+	import vibe.data.json : Json;
+
+	class WebService {
+		// POST /item
+		void postItem() {
+			redirect("/item/1");
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
+
+/**
+	Sets a response header.
+
+	Params:
+		name = name of the header to set
+		value = value of the header to set
+
+	Note that this may only be called from a function/method
+	registered using registerWebInterface.
+*/
+void header(string name, string value)
+{
+	assert(s_requestContext.req !is null, "header() used outside of a web interface request!");
+	alias ctx = s_requestContext;
+	ctx.res.headers[name] = value;
+}
+
+///
+unittest {
+	import vibe.data.json : Json;
+
+	class WebService {
+		// POST /item
+		Json postItem() {
+			header("X-RateLimit-Remaining", "59");
+			return Json(["id": Json(100)]);
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
+
+/**
+	Sets the response status code.
+
+	Params:
+		statusCode = the HTTPStatus code to send to the client
+
+	Note that this may only be called from a function/method
+	registered using registerWebInterface.
+*/
+void status(int statusCode)
+in
+{
+	assert(100 <= statusCode && statusCode < 600);
+}
+body
+{
+	assert(s_requestContext.req !is null, "status() used outside of a web interface request!");
+	alias ctx = s_requestContext;
+	ctx.res.statusCode = statusCode;
+}
+
+///
+unittest {
+	import vibe.data.json : Json;
+
+	class WebService {
+		// POST /item
+		Json postItem() {
+			status(HTTPStatus.created);
+			return Json(["id": Json(100)]);
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
 
 /**
 	Terminates the currently active session (if any).
@@ -394,6 +500,28 @@ void terminateSession()
 	}
 }
 
+///
+unittest {
+	class WebService {
+		// automatically mapped to: POST /logout
+		void postLogout()
+		{
+			terminateSession();
+			201.status;
+			redirect("/");
+		}
+	}
+
+	void run()
+	{
+		auto router = new URLRouter;
+		router.registerWebInterface(new WebService);
+
+		auto settings = new HTTPServerSettings;
+		settings.port = 8080;
+		listenHTTP(settings, router);
+	}
+}
 
 /**
 	Translates text based on the language of the current web request.
