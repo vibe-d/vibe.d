@@ -441,13 +441,13 @@ enum HTTPServerOption {
 	parseURL                  = 1<<0,
 	/// Fills the `.query` field in the request
 	parseQueryString          = 1<<1 | parseURL,
-	/// Fills the `.form` field in the request
+	/// Fills the `.form` field in the request (deprecated)
 	parseFormBody             = 1<<2,
 	/// Fills the `.json` field in the request (Deprecated, lazily parsed)
 	parseJsonBody             = 1<<3,
-	/// Fills the `.files` field of the request for "multipart/mixed" requests
+	/// Fills the `.files` field of the request for "multipart/mixed" requests (deprecated)
 	parseMultiPartBody        = 1<<4, // todo
-	/// Fills the `.cookies` field in the request
+	/// Fills the `.cookies` field in the request (deprecated)
 	parseCookies              = 1<<5,
 	/// Distributes request processing among worker threads
 	distribute                = 1<<6,
@@ -777,10 +777,18 @@ final class HTTPServerRequest : HTTPRequest {
 			cookies have that name but different paths or domains that all match
 			the request URI. By default, the first cookie will be returned, which is
 			the or one of the cookies with the closest path match.
-
-			Remarks: This field is only set if HTTPServerOption.parseCookies is set.
 		*/
-		CookieValueMap cookies;
+		@property ref const(CookieValueMap) cookies() @safe {
+			if (_cookies.isNull) {
+				auto pv = "cookie" in headers;
+				if (pv)
+					parseCookies(*pv, _cookies);
+				else
+					_cookies = CookieValueMap.init;
+			}
+			return _cookies.get;
+		}
+		private Nullable!CookieValueMap _cookies;
 
 		/** Contains all _form fields supplied using the _query string.
 
@@ -847,20 +855,34 @@ final class HTTPServerRequest : HTTPRequest {
 			The fields are stored in the same order as they are received.
 
 			Remarks:
-				This field is only set if HTTPServerOption.parseFormBody is set.
-
 				A form request must either have the Content-Type
 				"application/x-www-form-urlencoded" or "multipart/form-data".
 		*/
-		FormFields form;
+		@property ref const(FormFields) form() @safe {
+			if (_form.isNull)
+				parseFormAndFiles;
+
+			return _form.get;
+		}
+
+		private Nullable!FormFields _form;
+
+		private void parseFormAndFiles() @safe {
+			_form = FormFields.init;
+			parseFormData(_form, _files, contentType, bodyReader, MaxHTTPHeaderLineLength);
+		}
 
 		/** Contains information about any uploaded file for a HTML _form request.
-
-			Remarks:
-				This field is only set if HTTPServerOption.parseFormBody is set
-				and if the Content-Type is "multipart/form-data".
 		*/
-		FilePartFormFields files;
+		@property ref const(FilePartFormFields) files() @safe {
+			// _form and _files are parsed in one step
+			if (_form.isNull)
+				parseFormAndFiles;
+
+            return _files;
+		}
+
+		private FilePartFormFields _files;
 
 		/** The current Session object.
 
@@ -2048,12 +2070,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			parseURLEncodedForm(req.queryString, req.query);
 		}
 
-		// cookie parsing if desired
-		if (settings.options & HTTPServerOption.parseCookies) {
-			auto pv = "cookie" in req.headers;
-			if (pv) parseCookies(*pv, req.cookies);
-		}
-
 		// lookup the session
 		if (settings.sessionStore) {
 			// use the first cookie that contains a valid session ID in case
@@ -2063,11 +2079,6 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 				res.m_session = req.session;
 				if (req.session) break;
 			}
-		}
-
-		if (settings.options & HTTPServerOption.parseFormBody) {
-			auto ptype = "Content-Type" in req.headers;
-			if (ptype) parseFormData(req.form, req.files, *ptype, req.bodyReader, MaxHTTPHeaderLineLength);
 		}
 
 		// write default headers
