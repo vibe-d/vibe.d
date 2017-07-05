@@ -13,6 +13,34 @@ Visit the website at <http://vibed.org/> for more information.
 [![Posix Build Status](https://travis-ci.org/rejectedsoftware/vibe.d.svg?branch=master)](https://travis-ci.org/rejectedsoftware/vibe.d)
 [![Windows Build Status](https://ci.appveyor.com/api/projects/status/cp2kxg70h54pga9d/branch/master?svg=true)](https://ci.appveyor.com/project/s-ludwig/vibe-d/branch/master)
 
+Hello Vibe.d
+------------
+
+```d
+#!/usr/bin/env dub
+/+ dub.sdl:
+name "hello_vibed"
+dependency "vibe-d" version="~>0.8.0"
++/
+import vibe.d;
+
+void main()
+{
+    auto settings = new HTTPServerSettings;
+    settings.port = 8080;
+
+    listenHTTP(settings, (req, res) { res.writeBody("Hello Vibe.d: " ~ req.path); });
+    runApplication();
+}
+```
+
+Download this file as `hello.d` and run it with [DUB](https://github.com/dlang/dub):
+
+```
+> dub hello.d
+```
+
+(or `chmod +x` and execute it: `./hello.d`)
 
 Support
 -------
@@ -51,7 +79,7 @@ Installation
 ------------
 
 Instead of explicitly installing vibe.d, it is recommended to use
-[DUB](https://github.com/rejectedsoftware/dub) for building vibe.d based
+[DUB](https://github.com/dlang/dub) for building vibe.d based
 applications. Once DUB is installed, you can create and run a new project
 using the following shell commands:
 
