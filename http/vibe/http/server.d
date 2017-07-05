@@ -74,7 +74,7 @@ else version = HaveNoTLS;
 	use listenHTTPPlain() instead.
 
 	Params:
-		settings = Customizes the HTTP servers functionality.
+		settings = Customizes the HTTP servers functionality (host string or HTTPServerSettings object)
 		request_handler = This callback is invoked for each incoming request and is responsible
 			for generating the response.
 
@@ -83,8 +83,15 @@ else version = HaveNoTLS;
 		requests with the supplied settings. Another call to `listenHTTP` can be
 		used afterwards to start listening again.
 */
-HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate request_handler)
-@safe {
+HTTPListener listenHTTP(Settings)(Settings _settings, HTTPServerRequestDelegate request_handler)
+@safe
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
+	// auto-construct HTTPServerSettings
+	static if (is(Settings == string))
+		auto settings = new HTTPServerSettings(_settings);
+	else
+		alias settings = _settings;
+
 	enforce(settings.bindAddresses.length, "Must provide at least one bind address for a HTTP server.");
 
 	HTTPServerContext ctx;
@@ -111,50 +118,81 @@ HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegate r
 	return HTTPListener(ctx.id);
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunction request_handler)
-@safe {
+HTTPListener listenHTTP(Settings)(Settings settings, HTTPServerRequestFunction request_handler)
+@safe
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, () @trusted { return toDelegate(request_handler); } ());
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandler request_handler)
-@safe {
+HTTPListener listenHTTP(Settings)(Settings settings, HTTPServerRequestHandler request_handler)
+@safe
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, &request_handler.handleRequest);
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestDelegateS request_handler)
-@safe {
+HTTPListener listenHTTP(Settings)(Settings settings, HTTPServerRequestDelegateS request_handler)
+@safe
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, cast(HTTPServerRequestDelegate)request_handler);
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestFunctionS request_handler)
-@safe {
+HTTPListener listenHTTP(Settings)(Settings settings, HTTPServerRequestFunctionS request_handler)
+@safe
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, () @trusted { return toDelegate(request_handler); } ());
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, HTTPServerRequestHandlerS request_handler)
-@safe {
+HTTPListener listenHTTP(Settings)(Settings settings, HTTPServerRequestHandlerS request_handler)
+@safe
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, &request_handler.handleRequest);
 }
 
 /// Scheduled for deprecation - use a `@safe` callback instead.
-HTTPListener listenHTTP(HTTPServerSettings settings, void delegate(HTTPServerRequest, HTTPServerResponse) @system request_handler)
-@system {
+HTTPListener listenHTTP(Settings)(Settings settings, void delegate(HTTPServerRequest, HTTPServerResponse) @system request_handler)
+@system
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, (req, res) @trusted => request_handler(req, res));
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, void function(HTTPServerRequest, HTTPServerResponse) @system request_handler)
-@system {
+HTTPListener listenHTTP(Settings)(Settings settings, void function(HTTPServerRequest, HTTPServerResponse) @system request_handler)
+@system
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, (req, res) @trusted => request_handler(req, res));
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, void delegate(scope HTTPServerRequest, scope HTTPServerResponse) @system request_handler)
-@system {
+HTTPListener listenHTTP(Settings)(Settings settings, void delegate(scope HTTPServerRequest, scope HTTPServerResponse) @system request_handler)
+@system
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, (scope req, scope res) @trusted => request_handler(req, res));
 }
 /// ditto
-HTTPListener listenHTTP(HTTPServerSettings settings, void function(scope HTTPServerRequest, scope HTTPServerResponse) @system request_handler)
-@system {
+HTTPListener listenHTTP(Settings)(Settings settings, void function(scope HTTPServerRequest, scope HTTPServerResponse) @system request_handler)
+@system
+if (is(Settings == string) || is(Settings == HTTPServerSettings)) {
 	return listenHTTP(settings, (scope req, scope res) @trusted => request_handler(req, res));
+}
+
+unittest
+{
+	void test()
+	{
+		static void testSafeFunction(HTTPServerRequest req, HTTPServerResponse res) @safe {}
+		listenHTTP("0.0.0.0:8080", &testSafeFunction);
+		listenHTTP(":8080", new class HTTPServerRequestHandler {
+			void handleRequest(HTTPServerRequest req, HTTPServerResponse res) @safe {}
+		});
+		listenHTTP(":8080", (req, res) {});
+
+		static void testSafeFunctionS(scope HTTPServerRequest req, scope HTTPServerResponse res) @safe {}
+		listenHTTP(":8080", &testSafeFunctionS);
+		void testSafeDelegateS(scope HTTPServerRequest req, scope HTTPServerResponse res) @safe {}
+		listenHTTP(":8080", &testSafeDelegateS);
+		listenHTTP(":8080", new class HTTPServerRequestHandler {
+			void handleRequest(scope HTTPServerRequest req, scope HTTPServerResponse res) @safe {}
+		});
+		listenHTTP(":8080", (scope req, scope res) {});
+	}
 }
 
 /**
