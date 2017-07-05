@@ -441,15 +441,30 @@ enum HTTPServerOption {
 	parseURL                  = 1<<0,
 	/// Fills the `.query` field in the request
 	parseQueryString          = 1<<1 | parseURL,
-	/// Fills the `.form` field in the request (deprecated)
+	/// Deprecated: Fills the `.form` field in the request
 	parseFormBody             = 1<<2,
-	/// Fills the `.json` field in the request (Deprecated, lazily parsed)
+	/// Deprecated: Fills the `.json` field in the request
 	parseJsonBody             = 1<<3,
-	/// Fills the `.files` field of the request for "multipart/mixed" requests (deprecated)
-	parseMultiPartBody        = 1<<4, // todo
-	/// Fills the `.cookies` field in the request (deprecated)
+	/// Deprecated: Fills the `.files` field of the request for "multipart/mixed" requests
+	parseMultiPartBody        = 1<<4,
+	/// Deprecated: Fills the `.cookies` field in the request
 	parseCookies              = 1<<5,
-	/// Distributes request processing among worker threads
+	/** Deprecated: Distributes request processing among worker threads
+
+		Note that this functionality assumes that the request handler
+		is implemented in a thread-safe way. However, the D type system
+		is bypassed, so that no static verification takes place.
+
+		For this reason, it is recommended to instead use
+		`vibe.core.core.runWorkerTaskDist` and call `listenHTTP`
+		from each task/thread individually. If the `reusePort` option
+		is set, then all threads will be able to listen on the same port,
+		with the operating system distributing the incoming connections.
+
+		If possible, instead of threads, the use of separate processes
+		is more robust and often faster. The `reusePort` option works
+		the same way in this scenario.
+	*/
 	distribute                = 1<<6,
 	/** Enables stack traces (`HTTPServerErrorInfo.debugMessage`).
 
