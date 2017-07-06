@@ -15,7 +15,7 @@ configuration "win32_mscoff" {
 	// this configuration works around the problem that x88_mscoff
 	// will also match the libevent configuration, even if no
 	// libevent binaries exist as MSCOFF - see also dub/#228
-	platforms "windows-x88_mscoff-dmd"
+	platforms "windows-x86_mscoff-dmd"
 	targetType "library"
 	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
 	versions "VibeWin32Driver"
