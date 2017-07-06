@@ -326,7 +326,7 @@ struct Json {
 	/**
 		Allows direct indexing of object typed JSON values using a string as
 		the key.
-		
+
 		Returns an object of `Type.undefined` if the key was not found.
 	*/
 	const(Json) opIndex(string key)
