@@ -750,6 +750,11 @@ final class HTTPClientRequest : HTTPRequest {
 		import vibe.inet.webform : formEncode;
 		import vibe.stream.wrapper : streamOutputRange;
 
+		import vibe.internal.rangeutil;
+		long length = 0;
+		auto counter = () @trusted { return RangeCounter(&length); } ();
+		counter.formEncode(key_value_map);
+		headers["Content-Length"] = clengthString(length);
 		headers["Content-Type"] = "application/x-www-form-urlencoded";
 		auto dst = streamOutputRange(bodyWriter);
 		() @trusted { return &dst; } ().formEncode(key_value_map);
