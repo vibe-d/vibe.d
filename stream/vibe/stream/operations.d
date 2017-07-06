@@ -488,7 +488,7 @@ private @safe void readUntilGeneric(R, InputStream)(InputStream stream, ref R ds
 		auto str = stream.peek(); // try to get some data for free
 		if( str.length == 0 ){ // if not, read as much as possible without reading past the end
 			nread = min(least_size, end_marker.length-nmatched, buf.length, max_read);
-			stream.read(buf[0 .. nread]);
+			stream.read(buf[0 .. nread], IOMode.all);
 			str = buf[0 .. nread];
 			bytes_read += nread;
 		} else if( str.length > max_read ){
