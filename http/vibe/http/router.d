@@ -207,7 +207,7 @@ final class URLRouter : HTTPServerRequestHandler {
 				if (r.method != method) return false;
 
 				logDebugV("route match: %s -> %s %s %s", req.path, r.method, r.pattern, values);
-				foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = v;
+				foreach (i, v; values) req.params[m_routes.getTerminalVarNames(ridx)[i]] = urlDecode(v);
 				if (m_computeBasePath) req.params["routerRootDir"] = calcBasePath();
 				r.cb(req, res);
 				return res.headerWritten;

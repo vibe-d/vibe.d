@@ -2110,7 +2110,7 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 		// URL parsing if desired
 		if (settings.options & HTTPServerOption.parseURL) {
 			auto url = URL.parse(req.requestURL);
-			req.path = urlDecode(url.pathString);
+			req.path = url.pathString;
 			req.queryString = url.queryString;
 			req.username = url.username;
 			req.password = url.password;
