@@ -436,7 +436,7 @@ interface UDPConnection {
 	ubyte[] recv(Duration timeout, ubyte[] buf = null, NetworkAddress* peer_address = null);
 
 	/** Become member of IP multicast group 
-		
+
 		The multiaddr parameter should be in the range 239.0.0.0-239.255.255.255.
 		See https://www.iana.org/assignments/multicast-addresses/multicast-addresses.xml#multicast-addresses-12
 		and https://www.iana.org/assignments/ipv6-multicast-addresses/ipv6-multicast-addresses.xhtml
