@@ -509,9 +509,9 @@ private template serializeValueImpl(Serializer, alias Policy) {
 					alias TA = TypeTuple!(__traits(getAttributes, TypeTuple!(__traits(getMember, T, mname))[0]));
 					enum name = getPolicyAttribute!(TU, mname, NameAttribute, Policy)(NameAttribute!DefaultPolicy(underscoreStrip(mname))).name;
 					static if (TM.length == 1) {
-						const vt = __traits(getMember, value, mname);
+						auto vt = __traits(getMember, value, mname);
 					} else {
-						const vt = tuple!TM(__traits(getMember, value, mname));
+						auto vt = tuple!TM(__traits(getMember, value, mname));
 					}
 					alias STraits = SubTraits!(Traits, typeof(vt), TA);
 					ser.beginWriteDictionaryEntry!STraits(name);
@@ -1827,5 +1827,7 @@ unittest {
 
 @safe unittest {
 	static struct Foo { Foo[] foos; }
-	serialize!TestSerializer(Foo());
+	Foo f;
+	string ser = serialize!TestSerializer(f);
+	assert(deserialize!(TestSerializer, Foo)(ser) == f);
 }
