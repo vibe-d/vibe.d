@@ -2113,13 +2113,15 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			}
 		}
 
+        // eagerly parse the URL as its lightweight and defacto @nogc
+		auto url = URL.parse(req.requestURL);
+		req.queryString = url.queryString;
+		req.username = url.username;
+		req.password = url.password;
+
 		// URL parsing if desired
 		if (settings.options & HTTPServerOption.parseURL) {
-			auto url = URL.parse(req.requestURL);
 			req.path = urlDecode(url.pathString);
-			req.queryString = url.queryString;
-			req.username = url.username;
-			req.password = url.password;
 		}
 
 		// lookup the session
