@@ -477,7 +477,7 @@ enum HTTPServerOption {
 	none                      = 0,
 	/// Fills the `.path` and `.queryString` fields in the request
 	parseURL                  = 1<<0,
-	/// Fills the `.query` field in the request
+	/// Deprecated: Fills the `.query` field in the request
 	parseQueryString          = 1<<1 | parseURL,
 	/// Deprecated: Fills the `.form` field in the request
 	parseFormBody             = 1<<2,
@@ -846,10 +846,16 @@ final class HTTPServerRequest : HTTPRequest {
 		/** Contains all _form fields supplied using the _query string.
 
 			The fields are stored in the same order as they are received.
-
-			Remarks: This field is only set if HTTPServerOption.parseQueryString is set.
 		*/
-		FormFields query;
+		@property ref const(FormFields) query() @safe {
+			if (_query.isNull) {
+				_query = FormFields.init;
+				parseURLEncodedForm(queryString, _query);
+			}
+
+			return _query.get;
+		}
+		Nullable!FormFields _query;
 
 		import vibe.utils.dictionarylist;
 		/** A map of general parameters for the request.
@@ -2107,20 +2113,15 @@ private bool handleRequest(InterfaceProxy!Stream http_stream, TCPConnection tcp_
 			}
 		}
 
+        // eagerly parse the URL as its lightweight and defacto @nogc
+		auto url = URL.parse(req.requestURL);
+		req.queryString = url.queryString;
+		req.username = url.username;
+		req.password = url.password;
+
 		// URL parsing if desired
 		if (settings.options & HTTPServerOption.parseURL) {
-			auto url = URL.parse(req.requestURL);
 			req.path = urlDecode(url.pathString);
-			req.queryString = url.queryString;
-			req.username = url.username;
-			req.password = url.password;
-		}
-
-		// query string parsing if desired
-		if (settings.options & HTTPServerOption.parseQueryString) {
-			if (!(settings.options & HTTPServerOption.parseURL))
-				logWarn("Query string parsing requested but URL parsing is disabled!");
-			parseURLEncodedForm(req.queryString, req.query);
 		}
 
 		// lookup the session
