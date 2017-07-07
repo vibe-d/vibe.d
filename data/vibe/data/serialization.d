@@ -349,17 +349,20 @@ private template serializeValueImpl(Serializer, alias Policy) {
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
-	private void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value) @safe
+	// work around https://issues.dlang.org/show_bug.cgi?id=16528
+	static if (isSafeSerializer!Serializer) {
+		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value) @safe { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
+	} else {
+		void serializeValue(T, ATTRIBUTES...)(ref Serializer ser, T value) { serializeValueDeduced!(T, ATTRIBUTES)(ser, value); }
+	}
+
+	private void serializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser, T value)
 	{
 		import std.typecons : BitFlags, Nullable, Tuple, Typedef, TypedefType, tuple;
 
 		alias TU = Unqual!T;
 
-		static struct Traits {
-			alias Type = TU;
-			alias Attributes = TypeTuple!ATTRIBUTES;
-			alias Policy = _Policy;
-		}
+		alias Traits = .Traits!(TU, _Policy, ATTRIBUTES);
 
 		static if (isPolicySerializable!(Policy, TU)) {
 			alias CustomType = typeof(Policy!TU.toRepresentation(TU.init));
@@ -536,6 +539,13 @@ private template serializeValueImpl(Serializer, alias Policy) {
 	}
 }
 
+private struct Traits(T, alias POL, ATTRIBUTES...)
+{
+	alias Type = T;
+	alias Policy = POL;
+	alias Attributes = TypeTuple!ATTRIBUTES;
+}
+
 private struct SubTraits(Traits, T, A...)
 {
 	alias Type = Unqual!T;
@@ -550,20 +560,25 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 	static assert(Serializer.isSupportedValueType!string, "All serializers must support string values.");
 	static assert(Serializer.isSupportedValueType!(typeof(null)), "All serializers must support null values.");
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(!isMutable!T)
-	{
-		return () @trusted { return cast(T) deserializeValue!(Unqual!T, ATTRIBUTES)(ser); } ();
+	// work around https://issues.dlang.org/show_bug.cgi?id=16528
+	static if (isSafeSerializer!Serializer) {
+		T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe { return deserializeValueDeduced!(T, ATTRIBUTES)(ser); }
+	} else {
+		T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) { return deserializeValueDeduced!(T, ATTRIBUTES)(ser); }
 	}
 
-	T deserializeValue(T, ATTRIBUTES...)(ref Serializer ser) @safe if(isMutable!T)
+	T deserializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser) if(!isMutable!T)
+	{
+		import std.algorithm.mutation : move;
+		auto ret = deserializeValue!(Unqual!T, ATTRIBUTES)(ser);
+		return () @trusted { return cast(T)ret.move; } ();
+	}
+
+	T deserializeValueDeduced(T, ATTRIBUTES...)(ref Serializer ser) if(isMutable!T)
 	{
 		import std.typecons : BitFlags, Nullable, Typedef, TypedefType, Tuple;
 
-		static struct Traits {
-			alias Type = T;
-			alias Attributes = TypeTuple!ATTRIBUTES;
-			alias Policy = _Policy;
-		}
+		alias Traits = .Traits!(T, _Policy, ATTRIBUTES);
 
 		static if (isPolicySerializable!(Policy, T)) {
 			alias CustomType = typeof(Policy!T.toRepresentation(T.init));
@@ -731,7 +746,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					}
 				});
 			} else {
-				ser.readDictionary!Traits((name) @safe {
+				ser.readDictionary!Traits((name) {
 					static if (hasSerializableFields!(T, Policy)) {
 						switch (name) {
 							default: break;
@@ -1149,6 +1164,15 @@ private template ChainedPolicyImpl(alias Primary, alias Fallback)
 	}
 	alias ChainedPolicyImpl = Pol;
 }
+
+// heuristically determines @safe'ty of the serializer by testing readValue and writeValue for type int
+private enum isSafeSerializer(S) = __traits(compiles, (S s) @safe {
+	alias T = Traits!(int, DefaultPolicy);
+	s.writeValue!T(42);
+	s.readValue!(T, int)();
+});
+
+static assert(isSafeSerializer!TestSerializer);
 
 private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
@@ -1830,4 +1854,21 @@ unittest {
 	Foo f;
 	string ser = serialize!TestSerializer(f);
 	assert(deserialize!(TestSerializer, Foo)(ser) == f);
+}
+
+@system unittest {
+	static struct SystemSerializer {
+		TestSerializer ser;
+		alias ser this;
+		this(string s) { ser.result = s; }
+		T readValue(Traits, T)() @system { return ser.readValue!(Traits, T); }
+		void writeValue(Traits, T)(T value) @system { ser.writeValue!(Traits, T)(value); }
+		void readDictionary(Traits)(scope void delegate(string) @system entry_callback) { ser.readDictionary!Traits((s) @trusted { entry_callback(s); }); }
+		void readArray(Traits)(scope void delegate(size_t) @system size_callback, scope void delegate() @system entry_callback) { ser.readArray!Traits((s) @trusted { size_callback(s); }, () @trusted { entry_callback(); }); }
+	}
+
+	static struct Bar { Bar[] foos; int i; }
+	Bar f;
+	string ser = serialize!SystemSerializer(f);
+	assert(deserialize!(SystemSerializer, Bar)(ser) == f);
 }
