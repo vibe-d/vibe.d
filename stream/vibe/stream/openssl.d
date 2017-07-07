@@ -185,7 +185,7 @@ final class OpenSSLStream : TLSStream {
 
 	@property ulong leastSize()
 	{
-		SSL_peek(m_tls, m_peekBuffer.ptr, 1);
+		() @trusted { SSL_peek(m_tls, m_peekBuffer.ptr, 1); } ();
 		checkExceptions();
 		return SSL_pending(m_tls);
 	}
