@@ -760,7 +760,8 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 				});
 			}
 			foreach (i, mname; SerializableFields!(T, Policy))
-				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]))
+				static if (!hasPolicyAttribute!(OptionalAttribute, Policy, TypeTuple!(__traits(getMember, T, mname))[0]) &&
+						   !isInstanceOf!(Nullable, TypeTuple!(typeof(__traits(getMember, T, mname)))[0]))
 					enforce(set[i], "Missing non-optional field '"~mname~"' of type '"~T.stringof~"' ("~Policy.stringof~").");
 			return ret;
 		} else static if (isPointer!T) {
@@ -810,6 +811,7 @@ unittest {
 
 /**
 	Attribute marking a field as optional during deserialization.
+	Nullable is marked as `@optional` as well.
 */
 @property OptionalAttribute!Policy optional(alias Policy = DefaultPolicy)()
 {
@@ -1413,6 +1415,27 @@ unittest { // basic serialization behavior
 	test(j, "null");
 	j = 42;
 	test(j, "V(i)(42)");
+}
+
+unittest
+{
+	import std.typecons : Nullable;
+	Nullable!int k;
+	static struct S {
+		Nullable!int f;
+	}
+	enum Sm = S.mangleof;
+	enum fm = typeof(S.f).mangleof;
+	auto s = S();
+	enum s_ser = "D("~Sm~"){DE("~fm~",f)(null)DE("~fm~",f)}D("~Sm~")";
+	assert(serialize!TestSerializer(s) == s_ser);
+	assert(deserialize!(TestSerializer, S)(s_ser).f.isNull);
+
+	enum s_ser42 = "D("~Sm~"){DE("~fm~",f)(V(i)(42))DE("~fm~",f)}D("~Sm~")";
+	assert(deserialize!(TestSerializer, S)(s_ser42).f == 42);
+
+	enum s_ser_without = "D("~Sm~"){}D("~Sm~")";
+	assert(deserialize!(TestSerializer, S)(s_ser_without).f.isNull);
 }
 
 unittest { // basic user defined types
