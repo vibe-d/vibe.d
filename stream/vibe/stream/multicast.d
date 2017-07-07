@@ -58,4 +58,6 @@ class MulticastStream : OutputStream {
 
 		return ret;
 	}
+
+	alias write = OutputStream.write;
 }

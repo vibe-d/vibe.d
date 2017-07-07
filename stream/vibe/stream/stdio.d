@@ -80,11 +80,15 @@ class StdFileStream : ConnectionStream {
 		return m_readPipe.read(dst, mode);
 	}
 
+	alias read = ConnectionStream.read;
+
 	override size_t write(in ubyte[] bytes_, IOMode mode)
 	{
 		enforceWritable();
 		return m_writePipe.write(bytes_, mode);
 	}
+
+	alias write = ConnectionStream.write;
 
 	override void flush()
 	{
