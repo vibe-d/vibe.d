@@ -1,6 +1,49 @@
 ﻿Changelog
 =========
 
+v0.8.1 - 2017-
+-------------------
+
+### Features and improvements ###
+
+- The HTTP server now accepts a UTF-8 BOM for JSON requests (by Sebanstian Wilzbach) - [pull #1799][issue1799]
+- Added support deserialization support for unnamed `Tuple!(...)` (by Dentcho Bankov) - [pull #1693][issue1693]
+- Added serialization support for named `Tuple!(...)` (by Dentcho Bankov) - [pull #1662][issue1662]
+- Most parsing features activated by `HTTPServerOption` (for `HTTPServerRequest`) are now evaluated lazily instead - the corresponding options are now deprecated (by Sebastian Wilzbach):
+  - `.json` / `HTTPServerOption.parseJsonBody` - [pull #1677][issue1677]
+  - `.cookies` / `HTTPServerOption.parseCookies` - [pull #1801][issue1801]
+  - `.form` / `HTTPServerOption.parseFormBody` - [pull #1801][issue1801]
+  - `.files` / `HTTPServerOption.parseMultiPartBody` - [pull #1801][issue1801]
+  - `.query` / `HTTPServerOption.parseQueryString` - [pull #1821][issue1821]
+  - `.queryString`, `.username` and `.password` are now always filled, regardless of `HTTPServerOption.parseURL` - [pull #1821][issue1821]
+- Deprecated `HTTPServerOption.distribute` because of its non-thread-safe design
+- The `HTTPServerSettings` constructor now accepts a convenient string to set the bind address - [pull #1810][issue1810]
+- `listenHTTP` accepts the same convenience string as `HTTPServerSettings` (by Sebastian Wilzbach) - [pull #1816][issue1816]
+- Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
+- Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
+- `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
+
+### Bug fixes ###
+
+- Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
+- [PROBABLY IN 0.8.0] Fixed a compilation failure in the serializer for self-referential types (by Tomáš Chaloupka) - [pull #1674][issue1674]
+
+[issue1124]: https://github.com/rejectedsoftware/vibe.d/issues/1124
+[issue1395]: https://github.com/rejectedsoftware/vibe.d/issues/1395
+[issue1662]: https://github.com/rejectedsoftware/vibe.d/issues/1662
+[issue1674]: https://github.com/rejectedsoftware/vibe.d/issues/1674
+[issue1677]: https://github.com/rejectedsoftware/vibe.d/issues/1677
+[issue1693]: https://github.com/rejectedsoftware/vibe.d/issues/1693
+[issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
+[issue1799]: https://github.com/rejectedsoftware/vibe.d/issues/1799
+[issue1801]: https://github.com/rejectedsoftware/vibe.d/issues/1801
+[issue1807]: https://github.com/rejectedsoftware/vibe.d/issues/1807
+[issue1810]: https://github.com/rejectedsoftware/vibe.d/issues/1810
+[issue1813]: https://github.com/rejectedsoftware/vibe.d/issues/1813
+[issue1816]: https://github.com/rejectedsoftware/vibe.d/issues/1816
+[issue1821]: https://github.com/rejectedsoftware/vibe.d/issues/1821
+
+
 v0.8.0 - 2017-06-
 --------------------
 
