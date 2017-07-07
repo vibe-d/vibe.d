@@ -185,7 +185,7 @@ final class OpenSSLStream : TLSStream {
 	{
 		() @trusted { SSL_peek(m_tls, m_peekBuffer.ptr, 1); } ();
 		checkExceptions();
-		return SSL_pending(m_tls);
+		return () @trusted { return SSL_pending(m_tls); } ();
 	}
 
 	@property bool dataAvailableForRead()
