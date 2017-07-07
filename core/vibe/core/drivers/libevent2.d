@@ -1100,16 +1100,33 @@ final class Libevent2UDPConnection : UDPConnection {
 	{
 		if (multiaddr.family == AF_INET)
 		{
-			static import core.sys.posix.arpa.inet;
-			struct ip_mreq {
-				core.sys.posix.arpa.inet.in_addr imr_multiaddr;   /* IP multicast address of group */
-				core.sys.posix.arpa.inet.in_addr imr_interface;   /* local IP address of interface */
+			version (Windows)
+			{
+				alias in_addr = core.sys.windows.winsock2.in_addr;
+			} else
+			{
+				static import core.sys.posix.arpa.inet;
+				alias in_addr = core.sys.posix.arpa.inet.in_addr;
 			}
-			auto mreq = ip_mreq(multiaddr.sockAddrInet4.sin_addr, core.sys.posix.arpa.inet.in_addr(htonl(INADDR_ANY)));
+			struct ip_mreq {
+				in_addr imr_multiaddr;   /* IP multicast address of group */
+				in_addr imr_interface;   /* local IP address of interface */
+			}
+			auto inaddr = in_addr();
+			inaddr.s_addr = htonl(INADDR_ANY);
+			auto mreq = ip_mreq(multiaddr.sockAddrInet4.sin_addr, inaddr);
 			enforce(() @trusted { return setsockopt (m_ctx.socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, ip_mreq.sizeof); } () == 0,
 				"Failed to add to multicast group");
 		} else
 		{
+			version (Windows)
+			{
+				alias in6_addr = core.sys.windows.winsock2.in6_addr;
+				struct ipv6_mreq {
+					in6_addr ipv6mr_multiaddr;
+					uint ipv6mr_interface;
+				}
+			}
 			auto mreq = ipv6_mreq(multiaddr.sockAddrInet6.sin6_addr, 0);
 			enforce(() @trusted { return setsockopt (m_ctx.socketfd, IPPROTO_IP, IPV6_JOIN_GROUP, &mreq, ipv6_mreq.sizeof); } () == 0,
 				"Failed to add to multicast group");
