@@ -1172,8 +1172,6 @@ private enum isSafeSerializer(S) = __traits(compiles, (S s) @safe {
 	s.readValue!(T, int)();
 });
 
-static assert(isSafeSerializer!TestSerializer);
-
 private template hasAttribute(T, alias decl) { enum hasAttribute = findFirstUDA!(T, decl).found; }
 
 unittest {
@@ -1308,6 +1306,8 @@ private template getExpandedFieldsData(T, FIELDS...)
 /******************************************************************************/
 
 version (unittest) {
+	static assert(isSafeSerializer!TestSerializer);
+
 	private struct TestSerializer {
 		import std.array, std.conv, std.string;
 
