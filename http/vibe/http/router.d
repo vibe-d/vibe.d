@@ -462,6 +462,37 @@ final class URLRouter : HTTPServerRequestHandler {
 	assert(result == "AB");
 }
 
+@safe unittest {
+	string ensureMatch(string pattern, string local_uri, string[string] expected_params = null)
+	{
+		import vibe.inet.url : URL;
+		string ret = local_uri ~ " did not match " ~ pattern;
+		auto r = new URLRouter;
+		r.get(pattern, (req, res) {
+			ret = null;
+			foreach (k, v; expected_params) {
+				if (k !in req.params) { ret = "Parameter "~k~" was not matched."; return; }
+				if (req.params[k] != v) { ret = "Parameter "~k~" is '"~req.params[k]~"' instead of '"~v~"'."; return; }
+			}
+		});
+		auto req = createTestHTTPServerRequest(URL("http://localhost"~local_uri));
+		auto res = createTestHTTPServerResponse();
+		r.handleRequest(req, res);
+		return ret;
+	}
+
+	assert(ensureMatch("/foo bar/", "/foo%20bar/") is null);   // normalized pattern: "/foo%20bar/"
+	//assert(ensureMatch("/foo%20bar/", "/foo%20bar/") is null); // normalized pattern: "/foo%20bar/"
+	assert(ensureMatch("/foo/bar/", "/foo/bar/") is null);     // normalized pattern: "/foo/bar/"
+	//assert(ensureMatch("/foo/bar/", "/foo%2fbar/") !is null);
+	//assert(ensureMatch("/foo%2fbar/", "/foo%2fbar/") is null); // normalized pattern: "/foo%2Fbar/"
+	//assert(ensureMatch("/foo%2Fbar/", "/foo%2fbar/") is null); // normalized pattern: "/foo%2Fbar/"
+	//assert(ensureMatch("/foo%2fbar/", "/foo%2Fbar/") is null);
+	//assert(ensureMatch("/foo%2fbar/", "/foo/bar/") !is null);
+	//assert(ensureMatch("/:foo/", "/foo%2Fbar/") is null);
+	assert(ensureMatch("/:foo/", "/foo/bar/") !is null);
+}
+
 
 /**
 	Convenience abstraction for a single `URLRouter` route.

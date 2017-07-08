@@ -388,7 +388,7 @@ HTTPServerRequest createTestHTTPServerRequest(URL url, HTTPMethod method, InetHe
 @safe {
 	auto tls = url.schema == "https";
 	auto ret = new HTTPServerRequest(Clock.currTime(UTC()), url.port ? url.port : tls ? 443 : 80);
-	ret.path = url.pathString;
+	ret.path = urlDecode(url.pathString);
 	ret.queryString = url.queryString;
 	ret.username = url.username;
 	ret.password = url.password;
