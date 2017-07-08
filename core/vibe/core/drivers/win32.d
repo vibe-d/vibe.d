@@ -1038,6 +1038,16 @@ final class Win32UDPConnection : UDPConnection, SocketEventHandler {
 		assert(false);
 	}
 
+	void addMembership(ref NetworkAddress multiaddr)
+	{
+		assert(false, "TODO!");
+	}
+
+	@property void multicastLoopback(bool loop)
+	{
+		assert(false, "TODO!");
+	}
+
 	private static nothrow extern(C) void onUDPRead(SOCKET sockfd, short evts, void* arg)
 	{
 		/*auto ctx = cast(TCPContext*)arg;

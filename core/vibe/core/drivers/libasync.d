@@ -1712,6 +1712,16 @@ final class LibasyncUDPConnection : UDPConnection {
 		}
 	}
 
+	void addMembership(ref NetworkAddress multiaddr)
+	{
+		assert(false, "TODO!");
+	}
+
+	@property void multicastLoopback(bool loop)
+	{
+		assert(false, "TODO!");
+	}
+
 	private void handler(UDPEvent ev)
 	{
 		logTrace("UDPConnection %p event", this);

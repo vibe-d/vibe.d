@@ -62,6 +62,16 @@ version(Windows)
 	alias EWOULDBLOCK = WSAEWOULDBLOCK;
 }
 
+version(OSX)
+{
+	import std.c.osx.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+} else version(Posix)
+{
+    import std.c.linux.socket : IP_ADD_MEMBERSHIP, IP_MULTICAST_LOOP;
+} else version(Windows)
+{
+	// IP_ADD_MEMBERSHIP and IP_MULTICAST_LOOP are included in winsock(2) import above
+}
 
 final class Libevent2Driver : EventDriver {
 @safe:
@@ -1084,6 +1094,50 @@ final class Libevent2UDPConnection : UDPConnection {
 			}
 			m_ctx.core.yieldForEvent();
 		}
+	}
+
+	override void addMembership(ref NetworkAddress multiaddr)
+	{
+		if (multiaddr.family == AF_INET)
+		{
+			version (Windows)
+			{
+				alias in_addr = core.sys.windows.winsock2.in_addr;
+			} else
+			{
+				static import core.sys.posix.arpa.inet;
+				alias in_addr = core.sys.posix.arpa.inet.in_addr;
+			}
+			struct ip_mreq {
+				in_addr imr_multiaddr;   /* IP multicast address of group */
+				in_addr imr_interface;   /* local IP address of interface */
+			}
+			auto inaddr = in_addr();
+			inaddr.s_addr = htonl(INADDR_ANY);
+			auto mreq = ip_mreq(multiaddr.sockAddrInet4.sin_addr, inaddr);
+			enforce(() @trusted { return setsockopt (m_ctx.socketfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, ip_mreq.sizeof); } () == 0,
+				"Failed to add to multicast group");
+		} else
+		{
+			version (Windows)
+			{
+				alias in6_addr = core.sys.windows.winsock2.in6_addr;
+				struct ipv6_mreq {
+					in6_addr ipv6mr_multiaddr;
+					uint ipv6mr_interface;
+				}
+			}
+			auto mreq = ipv6_mreq(multiaddr.sockAddrInet6.sin6_addr, 0);
+			enforce(() @trusted { return setsockopt (m_ctx.socketfd, IPPROTO_IP, IPV6_JOIN_GROUP, &mreq, ipv6_mreq.sizeof); } () == 0,
+				"Failed to add to multicast group");
+		}
+	}
+
+	@property void multicastLoopback(bool loop)
+	{
+		int tmp_loop = loop;
+		enforce(() @trusted { return setsockopt (m_ctx.socketfd, IPPROTO_IP, IP_MULTICAST_LOOP, &tmp_loop, tmp_loop.sizeof); } () == 0,
+			"Failed to add to multicast loopback");
 	}
 
 	private static nothrow extern(C) void onUDPRead(evutil_socket_t sockfd, short evts, void* arg)
