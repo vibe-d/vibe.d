@@ -489,7 +489,7 @@ final class URLRouter : HTTPServerRequestHandler {
 	//assert(ensureMatch("/foo%2Fbar/", "/foo%2fbar/") is null); // normalized pattern: "/foo%2Fbar/"
 	//assert(ensureMatch("/foo%2fbar/", "/foo%2Fbar/") is null);
 	//assert(ensureMatch("/foo%2fbar/", "/foo/bar/") !is null);
-	//assert(ensureMatch("/:foo/", "/foo%2Fbar/") is null);
+	//assert(ensureMatch("/:foo/", "/foo%2Fbar/", ["foo": "foo/bar"]) is null);
 	assert(ensureMatch("/:foo/", "/foo/bar/") !is null);
 }
 
