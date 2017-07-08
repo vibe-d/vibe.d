@@ -222,7 +222,7 @@ struct URL {
 		}
 	}
 	/// ditto
-	ushort defaultPort() {
+	ushort defaultPort() const {
 		return defaultPort(m_schema);
 	}
 
