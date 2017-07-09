@@ -46,6 +46,77 @@ version(VibeForceALPN) enum alpn_forced = true;
 else enum alpn_forced = false;
 enum haveALPN = OPENSSL_VERSION_NUMBER >= 0x10200000 || alpn_forced;
 
+// openssl 1.1.0 hack
+version (Have_openssl) {
+extern(C) const(SSL_METHOD)* TLS_client_method();
+
+const(SSL_METHOD)* SSLv23_client_method() {
+	return TLS_client_method();
+}
+
+extern(C) const(SSL_METHOD)* TLS_server_method();
+
+const(SSL_METHOD)* SSLv23_server_method() {
+	return TLS_server_method();
+}
+
+// this does nothing in > openssl 1.1.0
+void SSL_load_error_strings() {}
+
+extern(C)  int OPENSSL_init_ssl(ulong opts, const void* settings);
+
+// # define SSL_library_init() OPENSSL_init_ssl(0, NULL)
+int SSL_library_init() {
+	return OPENSSL_init_ssl(0, null);
+}
+
+//#  define CRYPTO_num_locks()            (1)
+int CRYPTO_num_locks() {
+	return 1;
+}
+
+void CRYPTO_set_id_callback(T)(T t) {
+}
+
+void CRYPTO_set_locking_callback(T)(T t) {
+
+}
+
+// #define SSL_get_ex_new_index(l, p, newf, dupf, freef) \
+//    CRYPTO_get_ex_new_index(CRYPTO_EX_INDEX_SSL, l, p, newf, dupf, freef)
+
+extern(C) int CRYPTO_get_ex_new_index(int class_index, long argl, void *argp,
+                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
+                            CRYPTO_EX_free *free_func);
+
+int SSL_get_ex_new_index(long argl, void *argp,
+                            CRYPTO_EX_new *new_func, CRYPTO_EX_dup *dup_func,
+                            CRYPTO_EX_free *free_func) {
+	// # define CRYPTO_EX_INDEX_SSL              0
+	return CRYPTO_get_ex_new_index(0, argl, argp, new_func, dup_func,
+			free_func);
+}
+
+extern(C) BIGNUM* BN_get_rfc3526_prime_2048(BIGNUM *bn);
+
+BIGNUM* get_rfc3526_prime_2048(BIGNUM *bn) {
+	return BN_get_rfc3526_prime_2048(bn);
+}
+
+// #  define sk_num OPENSSL_sk_num
+extern(C) int OPENSSL_sk_num(const void *);
+extern(C) int sk_num(const void *a) {
+	return OPENSSL_sk_num(a);
+}
+
+// #  define sk_value OPENSSL_sk_value
+extern(C) void *OPENSSL_sk_value(const void *, int);
+
+extern(C) void *sk_value(const void *s, int l) {
+	return OPENSSL_sk_value(s, l);
+}
+
+}
 
 /**
 	Creates an SSL/TLS tunnel within an existing stream.
