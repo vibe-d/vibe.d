@@ -30,8 +30,8 @@ import core.sync.mutex;
 import core.thread;
 
 version (VibeNoSSL) {}
-else version(Have_openssl) version = OpenSSL;
 else version(Have_botan) version = Botan;
+else version(Have_openssl) version = OpenSSL;
 
 
 /// A simple TLS client
