@@ -686,9 +686,11 @@ package ParamResult readFormParamRec(T)(scope HTTPServerRequest req, ref T dst, 
 	} else static if (isNullable!T) {
 		typeof(dst.get()) el = void;
 		auto r = readFormParamRec(req, el, fieldname, false, style, err);
-		if (r == ParamResult.ok)
-			dst.setVoid(el);
-		else dst.setVoid(T.init);
+		final switch (r) {
+			case ParamResult.ok: dst.setVoid(el); break;
+			case ParamResult.skipped: dst.setVoid(T.init); break;
+			case ParamResult.error: return ParamResult.error;
+		}
 	} else static if (is(T == struct) &&
 		!is(typeof(T.fromString(string.init))) &&
 		!is(typeof(T.fromStringValidate(string.init, null))) &&
