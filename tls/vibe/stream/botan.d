@@ -92,7 +92,7 @@ class BotanTLSStream : TLSStream/*, Buffered*/
 	}
 
 	// This constructor is used by the TLS Context for both server and client streams
-	this(Stream underlying, BotanTLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
+	this(InterfaceProxy!Stream underlying, BotanTLSContext ctx, TLSStreamState state, string peer_name = null, NetworkAddress peer_address = NetworkAddress.init)
 	@trusted {
 		m_ctx = ctx;
 		m_stream = underlying;
