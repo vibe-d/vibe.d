@@ -22,11 +22,13 @@ v0.8.1 - 2017-
 - Added `HTTPReverseProxySettings.destination` (`URL`) to made UDS destinations work (by Georgi Dimitrov) - [pull #1813][issue1813]
 - Added convenience functions `status` and `header` to `vibe.web.web` (by Sebastian Wilzbach) - [pull #1696][issue1696]
 - `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
+- Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
+- Added UDP multicast properties (implemented for libevent, by Sebastian Koppe) - [pull #1806][issue1806]
 
 ### Bug fixes ###
 
 - Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
-- [PROBABLY IN 0.8.0] Fixed a compilation failure in the serializer for self-referential types (by Tomáš Chaloupka) - [pull #1674][issue1674]
+- Fixed handling of `Nullable!T` in the web interface generator - invalid values are treated as an error now instead of as a null value
 
 [issue1124]: https://github.com/rejectedsoftware/vibe.d/issues/1124
 [issue1395]: https://github.com/rejectedsoftware/vibe.d/issues/1395
@@ -37,11 +39,13 @@ v0.8.1 - 2017-
 [issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
 [issue1799]: https://github.com/rejectedsoftware/vibe.d/issues/1799
 [issue1801]: https://github.com/rejectedsoftware/vibe.d/issues/1801
+[issue1806]: https://github.com/rejectedsoftware/vibe.d/issues/1806
 [issue1807]: https://github.com/rejectedsoftware/vibe.d/issues/1807
 [issue1810]: https://github.com/rejectedsoftware/vibe.d/issues/1810
 [issue1813]: https://github.com/rejectedsoftware/vibe.d/issues/1813
 [issue1816]: https://github.com/rejectedsoftware/vibe.d/issues/1816
 [issue1821]: https://github.com/rejectedsoftware/vibe.d/issues/1821
+[issue1828]: https://github.com/rejectedsoftware/vibe.d/issues/1828
 
 
 v0.8.0 - 2017-06-
