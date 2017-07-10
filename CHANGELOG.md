@@ -1,10 +1,10 @@
 ﻿Changelog
 =========
 
-v0.8.0 - 2017-07-
---------------------
+v0.8.0 - 2017-07-10
+-------------------
 
-The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the core module that is currently in beta ([vibe-core][vibe-core]). The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
+The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the new [vibe-core][vibe-core] package that is released simultaneously. The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
 
 ### Features and improvements ###
 
@@ -88,16 +88,31 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed `HTTPServerRequest.fullURL` for IPv6 address based host strings
 - Fixed building on Windows with x86_mscoff (the win32 configuration is chosen by default now) - [issue #1771][issue1771]
 
+[issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1449]: https://github.com/rejectedsoftware/vibe.d/issues/1449
 [issue1529]: https://github.com/rejectedsoftware/vibe.d/issues/1529
 [issue1549]: https://github.com/rejectedsoftware/vibe.d/issues/1549
 [issue1550]: https://github.com/rejectedsoftware/vibe.d/issues/1550
 [issue1562]: https://github.com/rejectedsoftware/vibe.d/issues/1562
 [issue1595]: https://github.com/rejectedsoftware/vibe.d/issues/1595
+[issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
+[issue1602]: https://github.com/rejectedsoftware/vibe.d/issues/1602
+[issue1605]: https://github.com/rejectedsoftware/vibe.d/issues/1605
+[issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
 [issue1616]: https://github.com/rejectedsoftware/vibe.d/issues/1616
 [issue1617]: https://github.com/rejectedsoftware/vibe.d/issues/1617
 [issue1618]: https://github.com/rejectedsoftware/vibe.d/issues/1618
+[issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
+[issue1629]: https://github.com/rejectedsoftware/vibe.d/issues/1629
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
+[issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
+[issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
+[issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
+[issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
+[issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
+[issue1648]: https://github.com/rejectedsoftware/vibe.d/issues/1648
+[issue1655]: https://github.com/rejectedsoftware/vibe.d/issues/1655
+[issue1659]: https://github.com/rejectedsoftware/vibe.d/issues/1659
 [issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
 [issue1663]: https://github.com/rejectedsoftware/vibe.d/issues/1663
 [issue1668]: https://github.com/rejectedsoftware/vibe.d/issues/1668
@@ -105,6 +120,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1675]: https://github.com/rejectedsoftware/vibe.d/issues/1675
 [issue1682]: https://github.com/rejectedsoftware/vibe.d/issues/1682
 [issue1687]: https://github.com/rejectedsoftware/vibe.d/issues/1687
+[issue1688]: https://github.com/rejectedsoftware/vibe.d/issues/1688
 [issue1707]: https://github.com/rejectedsoftware/vibe.d/issues/1707
 [issue1712]: https://github.com/rejectedsoftware/vibe.d/issues/1712
 [issue1713]: https://github.com/rejectedsoftware/vibe.d/issues/1713
