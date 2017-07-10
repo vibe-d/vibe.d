@@ -227,7 +227,7 @@ final class HTTPReverseProxySettings {
 	@property void destinationPort(ushort port) { destination.port = port; }
 
 	/// The destination URL to forward requests to
-	URL destination = URL("http", Path(""));
+	URL destination = URL("http", InetPath(""));
 	/// Avoids compressed transfers between proxy and destination hosts
 	bool avoidCompressedRequests;
 	/// Handle CONNECT requests for creating a tunnel to the destination host
