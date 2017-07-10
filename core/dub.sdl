@@ -11,6 +11,16 @@ importPaths "."
 
 mainSourceFile "vibe/appmain.d"
 
+configuration "win32_mscoff" {
+	// this configuration works around the problem that x88_mscoff
+	// will also match the libevent configuration, even if no
+	// libevent binaries exist as MSCOFF - see also dub/#228
+	platforms "windows-x86_mscoff-dmd"
+	targetType "library"
+	libs "wsock32" "ws2_32" "advapi32" "user32" platform="windows"
+	versions "VibeWin32Driver"
+}
+
 configuration "libevent" {
 	platforms "windows-x86-dmd" "posix"
 	dependency "libevent" version="~>2.0.1"

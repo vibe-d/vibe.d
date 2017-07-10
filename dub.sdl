@@ -17,6 +17,7 @@ dependency ":utils" version="*"
 dependency ":http" version="*"
 dependency ":mail" version="*"
 dependency ":stream" version="*"
+dependency ":tls" version="*"
 dependency ":crypto" version="*"
 dependency ":textfilter" version="*"
 dependency ":inet" version="*"
@@ -34,6 +35,9 @@ x:ddoxFilterArgs "--unittest-examples" "--min-protection=Protected"\
 	"--ex" "vibe.core.drivers." "--ex" "vibe.internal." "--ex" "vibe.web.internal."\
 	"--ex" "diet.internal"
 
+configuration "win32_mscoff" {
+	subConfiguration "vibe-d:core" "win32_mscoff"
+}
 configuration "libevent" {
 	subConfiguration "vibe-d:core" "libevent"
 }
@@ -54,6 +58,7 @@ subPackage "utils"
 subPackage "data"
 subPackage "core"
 subPackage "stream"
+subPackage "tls"
 subPackage "crypto"
 subPackage "textfilter"
 subPackage "inet"

@@ -48,10 +48,10 @@ v0.8.1 - 2017-
 [issue1828]: https://github.com/rejectedsoftware/vibe.d/issues/1828
 
 
-v0.8.0 - 2017-06-
---------------------
+v0.8.0 - 2017-07-10
+-------------------
 
-The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the core module that is currently in beta ([vibe-core][vibe-core]). The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
+The 0.8.x branch marks the final step before switching each individual sub package to version 1.0.0. This has already been done for the Diet template module (now [`diet-ng`][diet-ng]) and for the new [vibe-core][vibe-core] package that is released simultaneously. The most prominent changes in this release are a full separation of all sub modules into individual folders, as well as the use of `@safe` annotations throughout the code base. The former change may require build adjustments for projects that don't use DUB to build vibe.d, the latter leads to some breaking API changes.
 
 ### Features and improvements ###
 
@@ -59,7 +59,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Global API changes
   - Split up the library into fully separate sub packages/folders
   - Added a "vibe-core" configuration to "vibe-d" and "vibe-d:core" that uses the new [vibe-core][vibe-core] package
-  - Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated
+  - Added `@safe` and `nothrow` annotations in many places of the API - this is a breaking change in cases where callbacks were annotated - [pull #1618][issue1618], [issue 1595][issue1595]
   - Reworked the buffered I/O stream API
     - The `InputStream` based overload of `OutputStream.write` has been moved to a global function `pipe()`
     - `read` and `write` now accept an optional `IOMode` parameter (only `IOMode.all` is supported for the original `vibe:core`, but `vibe-core` supports all modes)
@@ -74,10 +74,10 @@ The 0.8.x branch marks the final step before switching each individual sub packa
   - `HTTPServerResponse.writeBody` only sets a default content type if none is already set - [issue #1655][issue1655]
   - Added `Session.remove` to remove session keys (by Sebastian Wilzbach) - [pull #1670][issue1670]
   - Added `WebSocket.closeCode` and `closeReason` properties (by Andrei Zbikowski aka b1naryth1ef) - [pull #1675][issue1675]
-  - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [pull #1550][issue1550]
+  - Added a `Variant` dictionary as `HTTPServerRequest.context` for custom value storage by high level code - [issue1529][issue1529] [pull #1550][issue1550]
     - Usability improvements by Harry T. Vennik aka thaven - [pull #1745][issue1745]
   - Added `checkBasicAuth` as a non-enforcing counterpart of `performBasicAuth` - [issue #1449][issue1449], [pull #1687][issue1687]
-  - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`)
+  - Diet templates are rendered as pretty HTML by default if "diet-ng" is used (can be disabled using `VibeOutputCompactHTML`) - [issue #1616][issue1616]
   - Added `HTTPClientRequest.writeFormBody`
   - Disabled stack traces on the default error page for non-debug builds by default (`HTTPServerOption.defaults`)
 - REST interface generator
@@ -131,14 +131,35 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 - Fixed handling `@before` attributes on REST interface classes and intermediate interfaces - [issue #1753][issue1753], [pull #1754][issue1754]
 - Fixed a deadlock situation in the libevent driver - [pull #1756][issue1756]
 - Fixed `readUntilSmall`/`readLine` to handle alternating availability of a peek buffer - [issue #1741][issue1741], [pull #1761][issue1761]
-- Fixed `parseMultiPartForm` to handle unquoted strings in the "Content-Disposition" header (by Tomáš Chaloupka) - [pull #1725][issue1725]
+- Fixed `parseMultiPartForm` to handle unquoted strings in the "Content-Disposition" header (by Tomáš Chaloupka) - [issue #1562][issue1562] [pull #1725][issue1725]
 - Fixed `HTTPServerRequest.fullURL` for IPv6 address based host strings
+- Fixed building on Windows with x86_mscoff (the win32 configuration is chosen by default now) - [issue #1771][issue1771]
 
+[issue716]: https://github.com/rejectedsoftware/vibe.d/issues/716
 [issue1449]: https://github.com/rejectedsoftware/vibe.d/issues/1449
+[issue1529]: https://github.com/rejectedsoftware/vibe.d/issues/1529
 [issue1549]: https://github.com/rejectedsoftware/vibe.d/issues/1549
 [issue1550]: https://github.com/rejectedsoftware/vibe.d/issues/1550
+[issue1562]: https://github.com/rejectedsoftware/vibe.d/issues/1562
+[issue1595]: https://github.com/rejectedsoftware/vibe.d/issues/1595
+[issue1596]: https://github.com/rejectedsoftware/vibe.d/issues/1596
+[issue1602]: https://github.com/rejectedsoftware/vibe.d/issues/1602
+[issue1605]: https://github.com/rejectedsoftware/vibe.d/issues/1605
+[issue1608]: https://github.com/rejectedsoftware/vibe.d/issues/1608
+[issue1616]: https://github.com/rejectedsoftware/vibe.d/issues/1616
 [issue1617]: https://github.com/rejectedsoftware/vibe.d/issues/1617
+[issue1618]: https://github.com/rejectedsoftware/vibe.d/issues/1618
+[issue1623]: https://github.com/rejectedsoftware/vibe.d/issues/1623
+[issue1629]: https://github.com/rejectedsoftware/vibe.d/issues/1629
 [issue1632]: https://github.com/rejectedsoftware/vibe.d/issues/1632
+[issue1634]: https://github.com/rejectedsoftware/vibe.d/issues/1634
+[issue1636]: https://github.com/rejectedsoftware/vibe.d/issues/1636
+[issue1642]: https://github.com/rejectedsoftware/vibe.d/issues/1642
+[issue1645]: https://github.com/rejectedsoftware/vibe.d/issues/1645
+[issue1646]: https://github.com/rejectedsoftware/vibe.d/issues/1646
+[issue1648]: https://github.com/rejectedsoftware/vibe.d/issues/1648
+[issue1655]: https://github.com/rejectedsoftware/vibe.d/issues/1655
+[issue1659]: https://github.com/rejectedsoftware/vibe.d/issues/1659
 [issue1660]: https://github.com/rejectedsoftware/vibe.d/issues/1660
 [issue1663]: https://github.com/rejectedsoftware/vibe.d/issues/1663
 [issue1668]: https://github.com/rejectedsoftware/vibe.d/issues/1668
@@ -146,6 +167,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1675]: https://github.com/rejectedsoftware/vibe.d/issues/1675
 [issue1682]: https://github.com/rejectedsoftware/vibe.d/issues/1682
 [issue1687]: https://github.com/rejectedsoftware/vibe.d/issues/1687
+[issue1688]: https://github.com/rejectedsoftware/vibe.d/issues/1688
 [issue1707]: https://github.com/rejectedsoftware/vibe.d/issues/1707
 [issue1712]: https://github.com/rejectedsoftware/vibe.d/issues/1712
 [issue1713]: https://github.com/rejectedsoftware/vibe.d/issues/1713
@@ -162,6 +184,7 @@ The 0.8.x branch marks the final step before switching each individual sub packa
 [issue1754]: https://github.com/rejectedsoftware/vibe.d/issues/1754
 [issue1756]: https://github.com/rejectedsoftware/vibe.d/issues/1756
 [issue1761]: https://github.com/rejectedsoftware/vibe.d/issues/1761
+[issue1771]: https://github.com/rejectedsoftware/vibe.d/issues/1771
 [issue1777]: https://github.com/rejectedsoftware/vibe.d/issues/1777
 [issue1778]: https://github.com/rejectedsoftware/vibe.d/issues/1778
 [vibe-core]: https://github.com/vibe-d/vibe-core
@@ -709,7 +732,7 @@ Adds DMD 2.068.0 compatibility and contains a number of additions and fixes in a
  - Added `BigInt` support to the JSON module (by Igor Stepanov) - [pull #1118][issue1118]
  - The event loop of the win32 driver can now be stopped by sending a `WM_QUIT` message (by Денис Хлякин aka aka-demik) - [pull #1120][issue1120]
  - Marked `vibe.inet.path` as `pure` and removed casts that became superfluous
- - Added an `InputStream` based overload of `HTTPServerResponse.writeBody`
+ - Added an `InputStream` based overload of `HTTPServerResponse.writeBody` - [issue #1594][issue1594]
  - Added all Redis modules to the `vibe.vibe` module
  - Added a version of `FixedRingBuffer.opApply` that supports an index (by Tomáš Chaloupka) - [pull #1198][issue1198]
 

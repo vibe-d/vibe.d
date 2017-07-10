@@ -55,9 +55,6 @@ environment:
     config: vibe-core
 
 skip_tags: false
-branches:
-  only:
-    - master
 
 install:
   - ps: function SetUpDCompiler
