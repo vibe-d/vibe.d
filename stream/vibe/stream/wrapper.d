@@ -289,7 +289,7 @@ struct StreamInputRange {
 */
 StreamOutputRange!OutputStream StreamOutputRange()(OutputStream stream) { return StreamOutputRange!OutputStream(stream); }
 /// ditto
-struct StreamOutputRange(OutputStream)
+struct StreamOutputRange(OutputStream, size_t buffer_size = 256)
 	if (isOutputStream!OutputStream)
 {
 @safe:
@@ -297,7 +297,7 @@ struct StreamOutputRange(OutputStream)
 	private {
 		OutputStream m_stream;
 		size_t m_fill = 0;
-		ubyte[256] m_data = void;
+		ubyte[buffer_size] m_data = void;
 	}
 
 	@disable this(this);
@@ -362,10 +362,10 @@ struct StreamOutputRange(OutputStream)
 	void put(const(dchar)[] elems) { foreach( ch; elems ) put(ch); }
 }
 /// ditto
-auto streamOutputRange(OutputStream)(OutputStream stream)
+auto streamOutputRange(size_t buffer_size = 256, OutputStream)(OutputStream stream)
 	if (isOutputStream!OutputStream)
 {
-	return StreamOutputRange!OutputStream(stream);
+	return StreamOutputRange!(OutputStream, buffer_size)(stream);
 }
 
 unittest {
