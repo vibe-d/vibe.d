@@ -944,7 +944,8 @@ private struct Frame {
 		ubyte[8] data;
 
 		stream.read(data[0 .. 2]);
-		frame.fin_rsv_opcode = data[0];
+		frame.fin = (data[0] & 0x80) != 0;
+		frame.opcode = cast(FrameOpcode)(data[0] & 0x0F);
 
 		bool masked = !!(data[1] & 0b1000_0000);
 
