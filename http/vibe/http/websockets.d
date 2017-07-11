@@ -830,7 +830,7 @@ private struct Frame {
 	{
 		size_t ret = 1;
 		if (payload.length < 126) ret += 1;
-		else if (payload.length <= 65536) ret += 3;
+		else if (payload.length < 65536) ret += 3;
 		else ret += 9;
 		if (mask) ret += 4;
 		return ret;
@@ -849,7 +849,7 @@ private struct Frame {
 		if (payload.length < 126) {
 			dst[0] = cast(ubyte)(b1 | payload.length);
 			dst = dst[1 .. $];
-		} else if (payload.length <= 65536) {
+		} else if (payload.length < 65536) {
 			dst[0] = cast(ubyte) (b1 | 126);
 			dst[1 .. 3] = std.bitmanip.nativeToBigEndian(cast(ushort)payload.length);
 			dst = dst[3 .. $];
@@ -916,6 +916,73 @@ private struct Frame {
 
 		return frame;
 	}
+}
+
+unittest {
+	import std.algorithm.searching : all;
+
+	final class DummyRNG : RandomNumberStream {
+	@safe:
+		@property bool empty() { return false; }
+		@property ulong leastSize() { return ulong.max; }
+		@property bool dataAvailableForRead() { return true; }
+		const(ubyte)[] peek() { return null; }
+		size_t read(scope ubyte[] buffer, IOMode mode) @trusted { buffer[] = 13; return buffer.length; }
+		alias read = RandomNumberStream.read;
+	}
+
+	ubyte[14] hdrbuf;
+	auto rng = new DummyRNG;
+
+	Frame f;
+	f.payload = new ubyte[125];
+
+	assert(f.getHeaderSize(false) == 2);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 2], null);
+	assert(hdrbuf[0 .. 2] == [0, 125]);
+
+	assert(f.getHeaderSize(true) == 6);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 6], rng);
+	assert(hdrbuf[0 .. 2] == [0, 128|125]);
+	assert(hdrbuf[2 .. 6].all!(b => b == 13));
+
+	f.payload = new ubyte[126];
+	assert(f.getHeaderSize(false) == 4);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 4], null);
+	assert(hdrbuf[0 .. 4] == [0, 126, 0, 126]);
+
+	assert(f.getHeaderSize(true) == 8);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 8], rng);
+	assert(hdrbuf[0 .. 4] == [0, 128|126, 0, 126]);
+	assert(hdrbuf[4 .. 8].all!(b => b == 13));
+
+	f.payload = new ubyte[65535];
+	assert(f.getHeaderSize(false) == 4);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 4], null);
+	assert(hdrbuf[0 .. 4] == [0, 126, 255, 255]);
+
+	assert(f.getHeaderSize(true) == 8);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 8], rng);
+	assert(hdrbuf[0 .. 4] == [0, 128|126, 255, 255]);
+	assert(hdrbuf[4 .. 8].all!(b => b == 13));
+
+	f.payload = new ubyte[65536];
+	assert(f.getHeaderSize(false) == 10);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 10], null);
+	assert(hdrbuf[0 .. 10] == [0, 127, 0, 0, 0, 0, 0, 1, 0, 0]);
+
+	assert(f.getHeaderSize(true) == 14);
+	hdrbuf[] = 0;
+	f.writeHeader(hdrbuf[0 .. 14], rng);
+	assert(hdrbuf[0 .. 10] == [0, 128|127, 0, 0, 0, 0, 0, 1, 0, 0]);
+	assert(hdrbuf[10 .. 14].all!(b => b == 13));
 }
 
 /**
