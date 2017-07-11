@@ -831,7 +831,7 @@ final class HTTPServerRequest : HTTPRequest {
 			the request URI. By default, the first cookie will be returned, which is
 			the or one of the cookies with the closest path match.
 		*/
-		@property ref const(CookieValueMap) cookies() @safe {
+		@property ref CookieValueMap cookies() @safe {
 			if (_cookies.isNull) {
 				auto pv = "cookie" in headers;
 				if (pv)
@@ -847,7 +847,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 			The fields are stored in the same order as they are received.
 		*/
-		@property ref const(FormFields) query() @safe {
+		@property ref FormFields query() @safe {
 			if (_query.isNull) {
 				_query = FormFields.init;
 				parseURLEncodedForm(queryString, _query);
@@ -895,7 +895,7 @@ final class HTTPServerRequest : HTTPRequest {
 
 			A JSON request must have the Content-Type "application/json" or "application/vnd.api+json".
 		*/
-		@property ref const(Json) json() @safe {
+		@property ref Json json() @safe {
 			if (_json.isNull) {
 				if (icmp2(contentType, "application/json") == 0 || icmp2(contentType, "application/vnd.api+json") == 0 ) {
 					auto bodyStr = bodyReader.readAllUTF8();
@@ -917,9 +917,9 @@ final class HTTPServerRequest : HTTPRequest {
 				A form request must either have the Content-Type
 				"application/x-www-form-urlencoded" or "multipart/form-data".
 		*/
-		@property ref const(FormFields) form() @safe {
+		@property ref FormFields form() @safe {
 			if (_form.isNull)
-				parseFormAndFiles;
+				parseFormAndFiles();
 
 			return _form.get;
 		}
@@ -933,10 +933,10 @@ final class HTTPServerRequest : HTTPRequest {
 
 		/** Contains information about any uploaded file for a HTML _form request.
 		*/
-		@property ref const(FilePartFormFields) files() @safe {
+		@property ref FilePartFormFields files() @safe {
 			// _form and _files are parsed in one step
 			if (_form.isNull)
-				parseFormAndFiles;
+				parseFormAndFiles();
 
             return _files;
 		}
