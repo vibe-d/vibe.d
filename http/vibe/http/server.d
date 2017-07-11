@@ -833,11 +833,9 @@ final class HTTPServerRequest : HTTPRequest {
 		*/
 		@property ref CookieValueMap cookies() @safe {
 			if (_cookies.isNull) {
-				auto pv = "cookie" in headers;
-				if (pv)
+				_cookies = CookieValueMap.init;
+				if (auto pv = "cookie" in headers)
 					parseCookies(*pv, _cookies);
-				else
-					_cookies = CookieValueMap.init;
 			}
 			return _cookies.get;
 		}
