@@ -259,7 +259,7 @@ void setVibeDistHost(string host, ushort port)
 	You can call this function as a pseudo-member of `HTTPServerResponse` using
 	D's uniform function call syntax.
 
-	See_also: `vibe.templ.diet.compileDietFile`
+	See_also: `diet.html.compileHTMLDietFile`
 
 	Examples:
 		---
@@ -271,15 +271,12 @@ void setVibeDistHost(string host, ushort port)
 @property void render(string template_file, ALIASES...)(HTTPServerResponse res)
 {
 	res.contentType = "text/html; charset=UTF-8";
-	version (VibeUseOldDiet) {
-		import vibe.templ.diet;
-		compileDietFile!(template_file.asInterface!InputStream, ALIASES)(res.bodyWriter);
-	} else {
-		import vibe.stream.wrapper : streamOutputRange;
-		import diet.html : compileHTMLDietFile;
-		auto output = streamOutputRange!1024(res.bodyWriter);
-		compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
-	}
+	version (VibeUseOldDiet)
+		pragma(msg, "VibeUseOldDiet is not supported anymore. Please undefine in the package recipe.");
+	import vibe.stream.wrapper : streamOutputRange;
+	import diet.html : compileHTMLDietFile;
+	auto output = streamOutputRange!1024(res.bodyWriter);
+	compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
 }
 
 version (Have_diet_ng)

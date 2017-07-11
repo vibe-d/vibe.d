@@ -8,7 +8,6 @@
 module vibe.web.i18n;
 
 import vibe.http.server : HTTPServerRequest;
-import vibe.templ.parsertools;
 
 import std.algorithm : canFind, min, startsWith;
 
@@ -739,4 +738,32 @@ body {
 unittest {
 	auto res = parse_plural_expression("Plural-Forms: nplurals=2; plural=n != 1;\n");
 	assert(res == "n != 1", "Failed to parse the plural expression for a language.");
+}
+
+private string dstringUnescape(in string str)
+{
+	string ret;
+	size_t i, start = 0;
+	for( i = 0; i < str.length; i++ )
+		if( str[i] == '\\' ){
+			if( i > start ){
+				if( start > 0 ) ret ~= str[start .. i];
+				else ret = str[0 .. i];
+			}
+			assert(i+1 < str.length, "The string ends with the escape char: " ~ str);
+			switch(str[i+1]){
+				default: ret ~= str[i+1]; break;
+				case 'r': ret ~= '\r'; break;
+				case 'n': ret ~= '\n'; break;
+				case 't': ret ~= '\t'; break;
+			}
+			i++;
+			start = i+1;
+		}
+
+	if( i > start ){
+		if( start == 0 ) return str;
+		else ret ~= str[start .. i];
+	}
+	return ret;
 }
