@@ -25,13 +25,13 @@ dub test :data --compiler=$DC $DUB_ARGS
 dub test :core --compiler=$DC --config=${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :mongodb --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :redis --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
-dub test :diet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :web --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :utils --compiler=$DC $DUB_ARGS
 dub test :http --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :mail --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :stream --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :crypto --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
+dub test :tls --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :textfilter --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub test :inet --compiler=$DC --override-config=vibe-d:core/${VIBED_DRIVER=libevent} $DUB_ARGS
 dub clean --all-packages
