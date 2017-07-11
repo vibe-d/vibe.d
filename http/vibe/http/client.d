@@ -377,12 +377,12 @@ final class HTTPClient {
 
 	private void doProxyRequest(T, U)(ref T res, U requester, ref bool close_conn, ref bool has_body)
 	@trusted { // scope new
-		version (VibeManualMemoryManagement) {
-			import std.algorithm.comparison : max;
-			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
-			scope request_allocator = request_allocator_s.allocatorObject;
-		} else auto request_allocator = GCAllocator.instance.allocatorObject;
 		import std.conv : to;
+		import vibe.internal.utilallocator: RegionListAllocator;
+		version (VibeManualMemoryManagement)
+			scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
+		else
+			scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
 
 		res.dropBody();
 		scope(failure)
@@ -450,11 +450,11 @@ final class HTTPClient {
 	*/
 	void request(scope void delegate(scope HTTPClientRequest req) requester, scope void delegate(scope HTTPClientResponse) responder)
 	@trusted { // scope new
-		version (VibeManualMemoryManagement) {
-			import std.algorithm.comparison : max;
-			auto request_allocator_s = AllocatorList!((n) => Region!GCAllocator(max(n, 1024)), NullAllocator).init;
-			scope request_allocator = request_allocator_s.allocatorObject;
-		} else auto request_allocator = GCAllocator.instance.allocatorObject;
+		import vibe.internal.utilallocator: RegionListAllocator;
+		version (VibeManualMemoryManagement)
+			scope request_allocator = new RegionListAllocator!(shared(Mallocator), false)(1024, Mallocator.instance);
+		else
+			scope request_allocator = new RegionListAllocator!(shared(GCAllocator), true)(1024, GCAllocator.instance);
 
 		bool close_conn;
 		SysTime connected_time;
