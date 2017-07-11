@@ -776,7 +776,7 @@ final class IncomingWebSocketMessage : InputStream {
 		return true;
 	}
 
-	void read(scope ubyte[] dst, IOMode mode)
+	size_t read(scope ubyte[] dst, IOMode mode)
 	{
 		size_t nread = 0;
 
