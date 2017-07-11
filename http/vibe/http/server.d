@@ -277,7 +277,7 @@ void setVibeDistHost(string host, ushort port)
 	} else {
 		import vibe.stream.wrapper : streamOutputRange;
 		import diet.html : compileHTMLDietFile;
-		auto output = streamOutputRange(res.bodyWriter);
+		auto output = streamOutputRange!1024(res.bodyWriter);
 		compileHTMLDietFile!(template_file, ALIASES, DefaultFilters)(output);
 	}
 }
@@ -1274,7 +1274,7 @@ final class HTTPServerResponse : HTTPResponse {
 			headers["Content-Length"] = formatAlloc(m_requestAlloc, "%d", length);
 		}
 
-		auto rng = streamOutputRange(bodyWriter);
+		auto rng = streamOutputRange!1024(bodyWriter);
 		static if (PRETTY) serializeToPrettyJson(() @trusted { return &rng; } (), data);
 		else serializeToJson(() @trusted { return &rng; } (), data);
 	}
@@ -1581,7 +1581,7 @@ final class HTTPServerResponse : HTTPResponse {
 
 		assert(!m_bodyWriter && !m_headerWritten, "Try to write header after body has already begun.");
 		m_headerWritten = true;
-		auto dst = StreamOutputRange!(InterfaceProxy!Stream)(m_conn);
+		auto dst = streamOutputRange!1024(m_conn);
 
 		void writeLine(T...)(string fmt, T args)
 		@safe {

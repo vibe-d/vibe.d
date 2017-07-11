@@ -737,7 +737,7 @@ final class HTTPClientRequest : HTTPRequest {
 			headers["Content-Length"] = clengthString(length);
 		}
 
-		auto rng = streamOutputRange(bodyWriter);
+		auto rng = streamOutputRange!1024(bodyWriter);
 		() @trusted { serializeToJson(&rng, data); } ();
 		rng.flush();
 		finalize();
@@ -756,7 +756,7 @@ final class HTTPClientRequest : HTTPRequest {
 		counter.formEncode(key_value_map);
 		headers["Content-Length"] = clengthString(length);
 		headers["Content-Type"] = "application/x-www-form-urlencoded";
-		auto dst = streamOutputRange(bodyWriter);
+		auto dst = streamOutputRange!1024(bodyWriter);
 		() @trusted { return &dst; } ().formEncode(key_value_map);
 	}
 
@@ -808,7 +808,7 @@ final class HTTPClientRequest : HTTPRequest {
 		assert(!m_headerWritten, "HTTPClient tried to write headers twice.");
 		m_headerWritten = true;
 
-		auto output = streamOutputRange(m_conn);
+		auto output = streamOutputRange!1024(m_conn);
 
 		formattedWrite(() @trusted { return &output; } (), "%s %s %s\r\n", httpMethodString(method), requestURL, getHTTPVersionString(httpVersion));
 		logTrace("--------------------");
