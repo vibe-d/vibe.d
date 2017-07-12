@@ -136,10 +136,10 @@ test_script:
  - dub test :core --arch=%Darch% --compiler=%DC% --config=%CONFIG%
  - dub test :stream --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :crypto --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
+ - dub test :tls --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :textfilter --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :inet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :mail --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
- - dub test :diet --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :http --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :mongodb --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%
  - dub test :redis --arch=%Darch% --compiler=%DC% --override-config=vibe-d:core/%CONFIG%

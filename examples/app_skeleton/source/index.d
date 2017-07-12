@@ -1,7 +1,6 @@
 module index;
 
 import vibe.http.server;
-import vibe.templ.diet;
 
 
 void showHome(HTTPServerRequest req, HTTPServerResponse res)

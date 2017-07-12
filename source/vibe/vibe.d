@@ -46,8 +46,6 @@ public import vibe.stream.operations;
 public import vibe.stream.tls;
 public import vibe.stream.wrapper;
 public import vibe.stream.zlib;
-public import vibe.templ.diet;
-public import vibe.templ.utils;
 public import vibe.textfilter.html;
 public import vibe.textfilter.markdown;
 public import vibe.textfilter.urlencode;
