@@ -3,9 +3,8 @@ import vibe.core.net;
 import core.time : msecs;
 import vibe.core.log;
 
-shared static this()
+void performTest(bool reverse)
 {
-	bool done = false;
 	auto buf = new ubyte[512*1024*1024];
 
 	listenTCP(11375, (conn) {
@@ -22,10 +21,10 @@ shared static this()
 			} // expected
 		}, conn);
 		auto wt = runTask!TCPConnection((conn) {
-			sleep(1.msecs); // give the connection time to establish
+			sleep(reverse ? 100.msecs : 20.msecs); // give the connection time to establish
 			try {
 				conn.write(buf);
-				assert(false, "Expected read() to throw an exception.");
+				assert(false, "Expected write() to throw an exception.");
 			} catch (Exception) {
 				write_ex = true;
 				conn.close();
@@ -44,10 +43,16 @@ shared static this()
 	runTask({
 		try {
 			auto conn = connectTCP("127.0.0.1", 11375);
-			sleep(10.msecs);
+			sleep(reverse ? 20.msecs : 100.msecs);
 			conn.close();
 		} catch (Exception e) assert(false, e.msg);
 	});
+}
+
+shared static this()
+{
+	performTest(false);
+	performTest(true);
 
 	setTimer(10000.msecs, {
 		assert(false, "Test has hung.");
