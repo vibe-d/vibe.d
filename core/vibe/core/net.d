@@ -154,10 +154,7 @@ NetworkAddress anyAddress()
 */
 struct NetworkAddress {
 	version(Windows) {
-		static if (__VERSION__ >= 2070)
-			import core.sys.windows.winsock2 : sockaddr, sockaddr_in, sockaddr_in6;
-		else
-			import core.sys.windows.winsock2 : sockaddr, sockaddr_in, sockaddr_in6;
+		import core.sys.windows.winsock2 : sockaddr, sockaddr_in, sockaddr_in6;
 	}
 	version(Posix)
 	{

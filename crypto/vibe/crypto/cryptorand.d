@@ -472,11 +472,7 @@ class CryptoException : Exception
 
 version(Windows)
 {
-	static if (__VERSION__ >= 2070) {
-		import core.sys.windows.windows;
-	} else {
-		import core.sys.windows.windows;
-	}
+	import core.sys.windows.windows;
 
 	private extern(Windows) nothrow
 	{
