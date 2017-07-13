@@ -33,13 +33,8 @@ import std.string : lastIndexOf;
 import std.typecons;
 import std.utf;
 
-static if (__VERSION__ >= 2070) {
-	import core.sys.windows.windows;
-	import core.sys.windows.winsock2;
-} else {
-	import core.sys.windows.windows;
-	import core.sys.windows.winsock2;
-}
+import core.sys.windows.windows;
+import core.sys.windows.winsock2;
 
 enum WM_USER_SIGNAL = WM_USER+101;
 enum WM_USER_SOCKET = WM_USER+102;
