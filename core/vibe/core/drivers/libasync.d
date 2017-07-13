@@ -47,7 +47,6 @@ version (Windows) import core.sys.windows.winsock2;
 private __gshared EventLoop gs_evLoop;
 private EventLoop s_evLoop;
 private DriverCore s_driverCore;
-private shared int s_refCount; // will destroy async threads when 0
 
 version(Windows) extern(C) {
 	FILE* _wfopen(const(wchar)* filename, in wchar* mode);
@@ -93,7 +92,6 @@ final class LibasyncDriver : EventDriver {
 		assert(!isControlThread, "Libasync driver created in control thread");
 		try {
 			import core.atomic : atomicOp;
-			s_refCount.atomicOp!"+="(1);
 			if (!gs_mutex) {
 				import core.sync.mutex;
 				gs_mutex = new core.sync.mutex.Mutex;
@@ -136,10 +134,6 @@ final class LibasyncDriver : EventDriver {
 		logTrace("Deleting event driver");
 		m_break = true;
 		getMainEventLoop().exit();
-		if (s_refCount.atomicOp!"-="(1) == 0) {
-			import libasync.threads : destroyAsyncThreads;
-			destroyAsyncThreads();
-		}
 	}
 
 	override int runEventLoop()
