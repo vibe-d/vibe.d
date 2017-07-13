@@ -8,7 +8,7 @@ shared static this()
 	bool done = false;
 	auto buf = new ubyte[512*1024*1024];
 
-	listenTCP(11375,(conn) {
+	listenTCP(11375, (conn) {
 		bool read_ex = false;
 		bool write_ex = false;
 		auto rt = runTask!TCPConnection((conn) {
@@ -37,6 +37,7 @@ shared static this()
 		wt.join();
 		assert(read_ex, "No read exception thrown");
 		assert(write_ex, "No write exception thrown");
+		logInfo("Test has finished successfully.");
 		exitEventLoop();
 	}, "127.0.0.1");
 
@@ -48,7 +49,7 @@ shared static this()
 		} catch (Exception e) assert(false, e.msg);
 	});
 
-	setTimer(2000.msecs, {
+	setTimer(10000.msecs, {
 		assert(false, "Test has hung.");
 	});
 }
