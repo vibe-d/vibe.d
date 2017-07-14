@@ -24,17 +24,31 @@ v0.8.1 - 2017-
 - `lowerPrivileges` is now marked `@safe` (by Sebastian Wilzbach) - [pull #1807][issue1807]
 - Improved `urlDecode` to return a slice of its input if possible - [pull #1828][issue1828]
 - Added UDP multicast properties (implemented for libevent, by Sebastian Koppe) - [pull #1806][issue1806]
+- Increased the network output chunk sizes from 256 to 1024 in the HTTP client/server
+- WebSocket messages now produce only a single network packet of possible (header and payload sent at once) - [issue #1791][issue1791], [pull #1792][issue1792]
+- WebSocket API improvements (by Mathias Lang aka Geod24) - [pull #1534][issue1534], [pull #1836][issue1836]
+- Removed vibe-d:diet sub package (superceded by diet-ng) - [pull #1835][issue1835]
 
 ### Bug fixes ###
 
 - Fixed "SSL_read was unsuccessful with ret 0" errors in the OpenSSL TLS implementation (by machindertech) - [issue #1124][issue1124], [pull #1395][issue1395]
-- Fixed handling of `Nullable!T` in the web interface generator - invalid values are treated as an error now instead of as a null value
+- Fixed handling of `Nullable!T` in the web interface generator - invalid values are treated as an error now instead of as a 
+null value
+- Fixed a compilation error in the Botan based TLS implementation
+- Fixed an assertion in the HTTP client by using a custom allocator instead of the buggy `RegionAllocator`
+- Fixed sending of WebSocket messages with a payload length of 65536
+- Fixed an intermittent failure at shutdown when using libasync - [pull #1837][issue1837]
+- Fixed MongoDB SASL authentication when used within `shared static this` (by Sebastian Wilzbach) - [pull #1841][issue1841]
+
 
 [issue1124]: https://github.com/rejectedsoftware/vibe.d/issues/1124
 [issue1395]: https://github.com/rejectedsoftware/vibe.d/issues/1395
+[issue1534]: https://github.com/rejectedsoftware/vibe.d/issues/1534
 [issue1662]: https://github.com/rejectedsoftware/vibe.d/issues/1662
 [issue1674]: https://github.com/rejectedsoftware/vibe.d/issues/1674
 [issue1677]: https://github.com/rejectedsoftware/vibe.d/issues/1677
+[issue1691]: https://github.com/rejectedsoftware/vibe.d/issues/1691
+[issue1692]: https://github.com/rejectedsoftware/vibe.d/issues/1692
 [issue1693]: https://github.com/rejectedsoftware/vibe.d/issues/1693
 [issue1696]: https://github.com/rejectedsoftware/vibe.d/issues/1696
 [issue1799]: https://github.com/rejectedsoftware/vibe.d/issues/1799
@@ -46,6 +60,10 @@ v0.8.1 - 2017-
 [issue1816]: https://github.com/rejectedsoftware/vibe.d/issues/1816
 [issue1821]: https://github.com/rejectedsoftware/vibe.d/issues/1821
 [issue1828]: https://github.com/rejectedsoftware/vibe.d/issues/1828
+[issue1835]: https://github.com/rejectedsoftware/vibe.d/issues/1835
+[issue1836]: https://github.com/rejectedsoftware/vibe.d/issues/1836
+[issue1837]: https://github.com/rejectedsoftware/vibe.d/issues/1837
+[issue1841]: https://github.com/rejectedsoftware/vibe.d/issues/1841
 
 
 v0.8.0 - 2017-07-10
