@@ -20,7 +20,12 @@ import vibe.crypto.cryptorand;
 
 @safe:
 
-private SHA1HashMixerRNG g_rng;
+private SHA1HashMixerRNG g_rng()
+{
+	static SHA1HashMixerRNG m_rng;
+	if (!m_rng) m_rng = new SHA1HashMixerRNG;
+	return m_rng;
+}
 
 package struct ScramState
 {
@@ -149,9 +154,4 @@ private DigestType!SHA1 pbkdf2(const ubyte[] password, const ubyte[] salt, int i
 		}
 	}
 	return current;
-}
-
-static this()
-{
-	g_rng = new SHA1HashMixerRNG();
 }
