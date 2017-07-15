@@ -184,10 +184,20 @@ final class MongoConnection {
 		m_bytesRead = 0;
 		if(m_settings.digest != string.init)
 		{
-			if (m_settings.authMechanism == MongoAuthMechanism.scramSHA1)
-				scramAuthenticate();
-			else
+			if (m_settings.authMechanism == MongoAuthMechanism.none)
 				authenticate();
+			else {
+				/**
+				SCRAM-SHA-1 was released in March 2015 and on a properly
+				configured Mongo instance Authentication.none is disabled.
+				However, as a fallback to avoid breakage with old setups,
+				no authentication is tried in case of an error.
+				*/
+				try
+					scramAuthenticate();
+				catch (MongoAuthException e)
+					authenticate();
+			}
 
 		}
 		else if (m_settings.sslPEMKeyFile != null && m_settings.username != null)
