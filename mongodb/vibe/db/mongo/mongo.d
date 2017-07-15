@@ -41,12 +41,7 @@ import std.algorithm;
 
 	Authentication:
 		Authenticated connections are supported by using a URL connection string
-		such as "mongodb://user:password@host". Note that the driver currently
-		only supports the "MongoDB-CR" authentication mechanism. Since new
-		MongoDB versions, starting with 3.0, default to the new "SCRAM-SHA-1"
-		method, it is necessary to manually switch to the old method. See
-		$(WEB http://stackoverflow.com/questions/29006887/mongodb-cr-authentication-failed)
-		for more information.
+		such as "mongodb://user:password@host". SCRAM-SHA-1 is used by default.
 
 	Examples:
 		---
