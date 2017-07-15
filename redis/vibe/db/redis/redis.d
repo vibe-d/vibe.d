@@ -40,12 +40,53 @@ RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 	Returns a Redis database connecction instance corresponding to the given URL.
 
 	The URL must be of the format "redis://server[:port]/dbnum".
+
+	See_also: $(LINK2 https://www.iana.org/assignments/uri-schemes/prov/redis, Redis URI scheme)
 */
 RedisDatabase connectRedisDB(URL url)
 {
 	auto cli = connectRedis(url.host, url.port != 0 ? url.port : RedisClient.defaultPort);
-	// TODO: support password
-	return cli.getDatabase(url.localURI[1 .. $].to!long);
+
+	if (!url.queryString.empty)
+	{
+		import vibe.inet.webform : FormFields, parseURLEncodedForm;
+		auto query = FormFields.init;
+		parseURLEncodedForm(url.queryString, query);
+		foreach (param, val; query.byKeyValue)
+		{
+			switch (param)
+			{
+				/**
+				The password to use for the Redis AUTH command comes from either the
+				password portion of the "userinfo" URI field or the value from the
+				key-value pair from the "query" URI field with the key "password".
+				If both the password portion of the "userinfo" URI field and a
+				"query" URI field key-value pair with the key "password" are present,
+				the semantics for what password to use for authentication are not
+				well-defined.  Such situations therefore ought to be avoided.
+				*/
+				case "password":
+					if (!url.password.empty)
+						cli.auth(val);
+					break;
+				default:
+					throw new Exception(`Redis config parameter "` ~ param ~ `" isn't supported`);
+			}
+		}
+	}
+
+	/*
+	Redis' current optional authentication mechanism does not employ a
+	username, but this might change in the future
+	*/
+	if (!url.password.empty)
+		cli.auth(url.password);
+
+	long databaseIndex;
+	if (url.localURI.length >= 2)
+		databaseIndex = url.pathString[1 .. $].to!long;
+
+	return cli.getDatabase(databaseIndex);
 }
 
 /**
