@@ -37,9 +37,31 @@ RedisClient connectRedis(string host, ushort port = RedisClient.defaultPort)
 }
 
 /**
-	Returns a Redis database connecction instance corresponding to the given URL.
+	Returns a Redis database connection instance corresponding to the given URL.
 
 	The URL must be of the format "redis://server[:port]/dbnum".
+
+	Authentication:
+		Authenticated connections are supported by using a URL connection string
+		such as "redis://password@host".
+
+	Examples:
+		---
+		// connecting with default settings:
+		auto redisDB = connectRedisDB("redis://127.0.0.1");
+		---
+
+		---
+		// connecting using the URL form with custom settings
+		auto redisDB = connectRedisDB("redis://password:myremotehost/3?maxmemory=10000000");
+		---
+
+	Params:
+		url = Redis URI scheme for a Redis database instance
+		host_or_url = Can either be a host name, in which case the default port will be used, or a URL with the redis:// scheme.
+
+	Returns:
+		A new RedisDatabase instance that can be used to access the database.
 
 	See_also: $(LINK2 https://www.iana.org/assignments/uri-schemes/prov/redis, Redis URI scheme)
 */
