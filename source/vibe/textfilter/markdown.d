@@ -129,6 +129,9 @@ final class MarkdownSettings {
 
 	/// Called for every link/image URL to perform arbitrary transformations.
 	string delegate(string url_or_path, bool is_image) urlFilter;
+
+	/// White list of URI schemas that can occur in link/image targets
+	string[] allowedURISchemas = ["http", "https", "ftp", "mailto"];
 }
 
 enum MarkdownFlags {
@@ -593,8 +596,18 @@ private void writeMarkdownEscaped(R)(ref R dst, ref const Block block, in LinkRe
 /// private
 private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] linkrefs, scope MarkdownSettings settings)
 {
+	bool isAllowedURI(string lnk) {
+		auto idx = lnk.indexOf('/');
+		auto cidx = lnk.indexOf(':');
+		// always allow local URIs
+		if (cidx < 0 || idx >= 0 && cidx > idx) return true;
+		return settings.allowedURISchemas.canFind(lnk[0 .. cidx]);
+	}
+
 	string filterLink(string lnk, bool is_image) {
-		return settings.urlFilter ? settings.urlFilter(lnk, is_image) : lnk;
+		if (isAllowedURI(lnk))
+			return settings.urlFilter ? settings.urlFilter(lnk, is_image) : lnk;
+		return "#"; // replace link with unknown schema with dummy URI
 	}
 
 	bool br = ln.endsWith("  ");
@@ -696,10 +709,10 @@ private void writeMarkdownEscaped(R)(ref R dst, string ln, in LinkRef[string] li
 				if( parseAutoLink(ln, url) ){
 					bool is_email = url.startsWith("mailto:");
 					dst.put("<a href=\"");
-					if( is_email ) filterHTMLAllEscape(dst, url);
+					if (is_email) filterHTMLAllEscape(dst, url);
 					else filterHTMLAttribEscape(dst, filterLink(url, false));
 					dst.put("\">");
-					if( is_email ) filterHTMLAllEscape(dst, url[7 .. $]);
+					if (is_email) filterHTMLAllEscape(dst, url[7 .. $]);
 					else filterHTMLEscape(dst, url, HTMLEscapeFlags.escapeMinimal);
 					dst.put("</a>");
 				} else {
@@ -1315,4 +1328,21 @@ private struct Link {
 @safe unittest {
 	assert(filterMarkdown("> ```\r\n> test\r\n> ```", MarkdownFlags.forumDefault) ==
 		"<blockquote><pre class=\"prettyprint\"><code>test\n</code></pre>\n</blockquote>\n");
+}
+
+@safe unittest { // issue #1845 - malicious URI targets
+	assert(filterMarkdown("[foo](javascript:foo) ![bar](javascript:bar) <javascript:baz>", MarkdownFlags.forumDefault) ==
+		"<p><a href=\"#\">foo</a> <img src=\"#\" alt=\"bar\"> <a href=\"#\">javascript:baz</a>\n</p>\n");
+	assert(filterMarkdown("[foo][foo] ![foo][foo]\n[foo]: javascript:foo", MarkdownFlags.forumDefault) ==
+		"<p><a href=\"#\">foo</a> <img src=\"#\" alt=\"foo\">\n</p>\n");
+	assert(filterMarkdown("[foo](javascript%3Abar)", MarkdownFlags.forumDefault) ==
+		"<p><a href=\"javascript%3Abar\">foo</a>\n</p>\n");
+
+	// extra XSS regression tests
+	assert(filterMarkdown("[<script></script>](bar)", MarkdownFlags.forumDefault) ==
+		"<p><a href=\"bar\">&lt;script&gt;&lt;/script&gt;</a>\n</p>\n");
+	assert(filterMarkdown("[foo](\"><script></script><span foo=\")", MarkdownFlags.forumDefault) ==
+		"<p><a href=\"&quot;&gt;&lt;script&gt;&lt;/script&gt;&lt;span foo=&quot;\">foo</a>\n</p>\n");
+	assert(filterMarkdown("[foo](javascript&#58;bar)", MarkdownFlags.forumDefault) ==
+		"<p><a href=\"javascript&amp;#58;bar\">foo</a>\n</p>\n");
 }
