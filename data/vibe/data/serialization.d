@@ -388,9 +388,9 @@ private template serializeValueImpl(Serializer, alias Policy) {
 				}
 				foreach (i, TV; TU.Types) {
 					alias STraits = SubTraits!(Traits, TV);
-					ser.beginWriteDictionaryEntry!STraits(TU.fieldNames[i]);
+					ser.beginWriteDictionaryEntry!STraits(underscoreStrip(TU.fieldNames[i]));
 					ser.serializeValue!(TV, ATTRIBUTES)(value[i]);
-					ser.endWriteDictionaryEntry!STraits(TU.fieldNames[i]);
+					ser.endWriteDictionaryEntry!STraits(underscoreStrip(TU.fieldNames[i]));
 				}
 				static if (__traits(compiles, ser.endWriteDictionary!TU(0))) {
 					ser.endWriteDictionary!Traits(nfields);
@@ -602,7 +602,7 @@ private template deserializeValueImpl(Serializer, alias Policy) {
 					switch (name) {
 						default: break;
 						foreach (i, TV; T.Types) {
-							enum fieldName = T.fieldNames[i];
+							enum fieldName = underscoreStrip(T.fieldNames[i]);
 							alias STraits = SubTraits!(Traits, TV);
 							case fieldName: {
 								ser.beginReadDictionaryEntry!STraits(fieldName);
@@ -1239,7 +1239,7 @@ private static auto getPolicyAttribute(TT, string mname, alias Attribute, alias 
 }
 
 private string underscoreStrip(string field_name)
-{
+@safe nothrow @nogc {
 	if( field_name.length < 1 || field_name[$-1] != '_' ) return field_name;
 	else return field_name[0 .. $-1];
 }
@@ -1498,7 +1498,7 @@ unittest { // named tuple serialization
 
 	static struct S {
 		int x;
-		string s;
+		string s_;
 	}
 
 	static struct T {
@@ -1871,4 +1871,24 @@ unittest {
 	Bar f;
 	string ser = serialize!SystemSerializer(f);
 	assert(deserialize!(SystemSerializer, Bar)(ser) == f);
+}
+
+@safe unittest {
+	static struct S { @name("+foo") int bar; }
+	auto Sn = S.mangleof;
+	auto s = S(42);
+	string ser = serialize!TestSerializer(s);
+	assert(ser == "D("~Sn~"){DE(i,+foo)(V(i)(42))DE(i,+foo)}D("~Sn~")", ser);
+	auto deser = deserialize!(TestSerializer, S)(ser);
+	assert(deser.bar == 42);
+}
+
+@safe unittest {
+	static struct S { int bar_; }
+	auto Sn = S.mangleof;
+	auto s = S(42);
+	string ser = serialize!TestSerializer(s);
+	assert(ser == "D("~Sn~"){DE(i,bar)(V(i)(42))DE(i,bar)}D("~Sn~")", ser);
+	auto deser = deserialize!(TestSerializer, S)(ser);
+	assert(deser.bar_ == 42);
 }
