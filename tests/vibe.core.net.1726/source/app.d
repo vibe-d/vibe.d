@@ -3,11 +3,11 @@ import vibe.core.net;
 import core.time : msecs;
 import vibe.core.log;
 
+ubyte[] buf;
+
 void performTest(bool reverse)
 {
-	auto buf = new ubyte[512*1024*1024];
-
-	listenTCP(11375, (conn) {
+	auto l = listenTCP(11375, (conn) {
 		bool read_ex = false;
 		bool write_ex = false;
 		auto rt = runTask!TCPConnection((conn) {
@@ -47,14 +47,17 @@ void performTest(bool reverse)
 			conn.close();
 		} catch (Exception e) assert(false, e.msg);
 	});
+
+	runEventLoop();
+
+	l.stopListening();
 }
 
-shared static this()
+void main()
 {
+	setTimer(10000.msecs, { assert(false, "Test has hung."); });
+	buf = new ubyte[512*1024*1024];
+
 	performTest(false);
 	performTest(true);
-
-	setTimer(10000.msecs, {
-		assert(false, "Test has hung.");
-	});
 }
